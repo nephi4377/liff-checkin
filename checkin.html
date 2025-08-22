@@ -1,51 +1,55 @@
 
-
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>添心設計 | 員工打卡</title>
+    <title>添心設計 | 員工打卡 (偵錯模式)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+    <!-- =============================================================== -->
+    <!-- ========================= 環境設定 ============================ -->
+    <!--  請在此處填寫您的 LIFF ID 與 Apps Script 網址              -->
+    <!-- =============================================================== -->
+    <script>
+        const LIFF_ID = '2007974938-jVxn6y37';
+        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwE_zSOSWqmU-mxsVKyDDOlMRoxgTxRg4Pm0SGGBe_Knq8JqV6gsVp3BGezsBqHtpqU6A/exec';
+    </script>
+    <!-- =============================================================== -->
+
     <style>
-        /* 確保在各種裝置上都有良好的字體顯示 */
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        }
-        /* 按鈕的呼吸效果，提示使用者可以點擊 */
-        .btn-pulse {
-            animation: pulse 2s infinite;
-        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        .btn-pulse { animation: pulse 2s infinite; }
         @keyframes pulse {
             0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
             70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
             100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
         }
-        /* 讀取中的旋轉圖示 */
-        .spinner {
-            border-top-color: #3498db;
-            animation: spin 1s ease-in-out infinite;
+        .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        /* 新增的偵錯日誌樣式 */
+        #debug-log-container {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            max-height: 200px;
         }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
+        .log-success { color: #22c55e; }
+        .log-error { color: #ef4444; }
+        .log-info { color: #6b7280; }
     </style>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen">
     <div class="w-full max-w-md mx-auto bg-white rounded-xl shadow-lg p-8 text-center">
         
-        <!-- 公司 Logo 與標題 -->
         <div class="mb-6">
-            <svg class="mx-auto h-16 w-auto text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <svg class="mx-auto h-12 w-auto text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             <h1 class="text-2xl font-bold text-gray-800 mt-2">添心設計</h1>
             <p class="text-gray-500">員工專用打卡系統</p>
         </div>
 
-        <!-- 狀態顯示區域 -->
-        <div id="status-container" class="mb-8 p-4 rounded-lg bg-gray-50 min-h-[120px] flex items-center justify-center">
+        <div id="status-container" class="mb-8 p-4 rounded-lg bg-gray-50 min-h-[100px] flex items-center justify-center">
             <div id="message" class="text-gray-700">歡迎，<span id="displayName" class="font-semibold">員工</span>！<br>請點擊下方按鈕進行打卡。</div>
             <div id="loading" class="hidden">
                 <div class="spinner w-8 h-8 border-4 border-gray-200 rounded-full"></div>
@@ -53,88 +57,113 @@
             </div>
         </div>
 
-        <!-- 打卡按鈕 -->
-        <button id="checkin-button" class="w-full bg-blue-600 text-white font-bold py-4 px-6 rounded-lg text-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none btn-pulse" disabled>
-            上班打卡
-        </button>
+        <button id="checkin-button" class="w-full bg-blue-600 text-white font-bold py-4 px-6 rounded-lg text-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none btn-pulse" disabled>上班打卡</button>
         
-        <p id="error-log" class="text-red-500 text-sm mt-4"></p>
+        <!-- 新增的偵錯日誌顯示區域 -->
+        <div class="mt-6 text-left">
+            <h3 class="font-semibold text-gray-600 border-b pb-1 mb-2">執行日誌 (Debug Log)</h3>
+            <div id="debug-log-container" class="bg-gray-800 text-white p-3 rounded-md overflow-y-auto">
+                <div id="debug-log"></div>
+            </div>
+        </div>
     </div>
 
     <script>
         // ===============================================================
         // ================     添心設計 LIFF 打卡系統     ================
-        // ===================     前端程式碼 (LIFF)     ==================
+        // ===================  前端程式碼 (頁面偵錯版)  ===================
         // ===============================================================
 
-        // ========================= 環境設定 ============================
-        // 請將 'YOUR_LIFF_ID' 替換成您在 LINE Developers Console 註冊後取得的 LIFF ID
-        const LIFF_ID = '2007974938-jVxn6y37';
+        // (環境設定已移至 <head> 區塊，方便修改)
 
-        // 請將 'YOUR_GAS_WEB_APP_URL' 替換成您部署 Apps Script 後取得的 Web App 網址
-        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwE_zSOSWqmU-mxsVKyDDOlMRoxgTxRg4Pm0SGGBe_Knq8JqV6gsVp3BGezsBqHtpqU6A/exec';
-        // ===============================================================
-
-
-        // 取得頁面上的各個元件
         const displayNameElement = document.getElementById('displayName');
         const messageElement = document.getElementById('message');
         const loadingElement = document.getElementById('loading');
         const loadingTextElement = document.getElementById('loading-text');
         const checkinButton = document.getElementById('checkin-button');
-        const errorLogElement = document.getElementById('error-log');
+        const debugLogElement = document.getElementById('debug-log');
 
-        // 主函式：初始化 LIFF
+        // 新增的頁面日誌函式
+        function pageLog(message, type = 'info') {
+            const logEntry = document.createElement('div');
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logEntry.classList.add(`log-${type}`);
+            debugLogElement.appendChild(logEntry);
+            // 自動捲動到最底部
+            debugLogElement.parentElement.scrollTop = debugLogElement.parentElement.scrollHeight;
+        }
+
         async function main() {
             try {
+                pageLog('程式開始執行...');
                 showLoading('正在初始化 LIFF...');
+                pageLog('步驟: liff.init() 開始');
                 await liff.init({ liffId: LIFF_ID });
+                pageLog('步驟: liff.init() 成功', 'success');
 
                 if (!liff.isLoggedIn()) {
+                    pageLog('狀態: 未登入，準備跳轉登入頁面', 'error');
                     updateMessage('您尚未登入 LINE，請登入後再試。');
                     checkinButton.disabled = true;
-                    liff.login(); // 如果未登入，自動導向登入頁面
+                    liff.login();
                     return;
                 }
+                pageLog('狀態: 已登入');
 
+                pageLog('步驟: liff.getProfile() 開始');
                 const profile = await liff.getProfile();
+                pageLog('步驟: liff.getProfile() 成功', 'success');
                 displayNameElement.textContent = profile.displayName;
-                checkinButton.disabled = false; // 初始化成功後才啟用按鈕
+                checkinButton.disabled = false;
                 hideLoading();
+                pageLog('初始化完成，等待使用者操作...');
 
             } catch (err) {
+                pageLog(`嚴重錯誤: LIFF 初始化失敗 - ${err.message}`, 'error');
                 console.error('LIFF Initialization Error:', err);
                 showError('LIFF 初始化失敗，請在本機 LINE App 中開啟。');
             }
         }
 
-        // 監聽打卡按鈕的點擊事件
         checkinButton.addEventListener('click', async () => {
             try {
                 checkinButton.disabled = true;
+                pageLog('事件: 打卡按鈕被點擊');
+                
                 showLoading('正在取得您的 GPS 位置...');
-
-                // 透過 LIFF SDK 取得 GPS 位置
+                pageLog('步驟: liff.getLocation() 開始');
                 const location = await liff.getLocation();
                 const { latitude, longitude } = location;
+                pageLog(`步驟: liff.getLocation() 成功 - 座標: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, 'success');
                 
                 showLoading('正在傳送打卡資訊...');
+                pageLog('步驟: liff.getProfile() 開始 (用於傳送)');
                 const profile = await liff.getProfile();
+                pageLog(`步驟: liff.getProfile() 成功 - UserID: ${profile.userId}`, 'success');
 
-                // 組合要傳送到後端的網址
                 const url = `${GAS_WEB_APP_URL}?userId=${profile.userId}&userName=${encodeURIComponent(profile.displayName)}&lat=${latitude}&lon=${longitude}`;
-                
-                // 發送請求到 Apps Script 後端
+                pageLog(`步驟: 準備發送請求到後端...`);
+                pageLog(`目標 URL: ${GAS_WEB_APP_URL}`); // 只顯示主機，避免完整 URL 過長
+
                 const response = await fetch(url);
+                pageLog(`後端回應狀態碼: ${response.status}`, 'success');
+                
                 if (!response.ok) {
+                    pageLog(`錯誤: 後端回應不成功 (HTTP ${response.status})`, 'error');
                     throw new Error(`伺服器回應錯誤: ${response.statusText}`);
                 }
+                
+                pageLog('步驟: 正在解析後端回傳的 JSON...');
                 const result = await response.json();
+                pageLog('步驟: 解析 JSON 成功', 'success');
 
                 hideLoading();
-                handleCheckInResult(result); // 處理後端回傳的結果
+                handleCheckInResult(result);
 
             } catch (err) {
+                // 這是最關鍵的偵錯部分
+                pageLog(`嚴重錯誤: 打卡流程中斷 - ${err.message}`, 'error');
+                pageLog(`錯誤物件: ${JSON.stringify(err)}`, 'error');
                 console.error('Check-in Error:', err);
                 let errorMessage = '打卡失敗，發生未知錯誤。';
                 if (err.code === 'PERMISSION_DENIED') {
@@ -147,60 +176,29 @@
             }
         });
 
-        // 根據後端回傳的結果更新 UI
+        // (此處省略 handleCheckInResult, showLoading, hideLoading, updateMessage, showError 等輔助函式，它們與前一版相同)
         function handleCheckInResult(result) {
             const container = document.getElementById('status-container');
             container.classList.remove('bg-gray-50', 'bg-green-100', 'bg-red-100');
-            
+            pageLog(`處理後端結果: ${result.status}`);
             if (result.status === 'success') {
                 container.classList.add('bg-green-100');
                 updateMessage(result.message, 'text-green-800');
                 checkinButton.textContent = '打卡完成';
                 checkinButton.classList.remove('bg-blue-600', 'btn-pulse');
                 checkinButton.classList.add('bg-green-600');
-            } else if (result.status === 'fail') {
+            } else {
                 container.classList.add('bg-red-100');
-                updateMessage(result.message, 'text-red-800');
+                updateMessage(result.message || `系統錯誤：${result.message}`, 'text-red-800');
                 checkinButton.textContent = '重新打卡';
-                checkinButton.disabled = false;
-            } else { // error
-                container.classList.add('bg-red-100');
-                updateMessage(`系統錯誤：${result.message}`, 'text-red-800');
-                checkinButton.textContent = '發生錯誤，請重試';
                 checkinButton.disabled = false;
             }
         }
+        function showLoading(text) { messageElement.style.display = 'none'; loadingElement.style.display = 'block'; loadingTextElement.textContent = text; }
+        function hideLoading() { loadingElement.style.display = 'none'; messageElement.style.display = 'block'; }
+        function updateMessage(text, colorClass = 'text-gray-700') { messageElement.innerHTML = text.replace(/\n/g, '<br>'); messageElement.className = ''; messageElement.classList.add(colorClass); }
+        function showError(text) { hideLoading(); const container = document.getElementById('status-container'); container.classList.add('bg-red-100'); updateMessage(text, 'text-red-800'); checkinButton.disabled = false; }
 
-        // 輔助函式：顯示讀取中狀態
-        function showLoading(text) {
-            messageElement.style.display = 'none';
-            loadingElement.style.display = 'block';
-            loadingTextElement.textContent = text;
-        }
-
-        // 輔助函式：隱藏讀取中狀態
-        function hideLoading() {
-            loadingElement.style.display = 'none';
-            messageElement.style.display = 'block';
-        }
-
-        // 輔助函式：更新訊息文字
-        function updateMessage(text, colorClass = 'text-gray-700') {
-            messageElement.innerHTML = text.replace(/\n/g, '<br>');
-            messageElement.className = ''; // 清除所有 class
-            messageElement.classList.add(colorClass);
-        }
-
-        // 輔助函式：顯示錯誤訊息
-        function showError(text) {
-            hideLoading();
-            const container = document.getElementById('status-container');
-            container.classList.add('bg-red-100');
-            updateMessage(text, 'text-red-800');
-            checkinButton.disabled = false;
-        }
-
-        // 執行主函式
         main();
     </script>
 </body>
