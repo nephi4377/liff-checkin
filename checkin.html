@@ -131,10 +131,13 @@
                 pageLog('事件: 打卡按鈕被點擊');
                 
                 showLoading('正在取得您的 GPS 位置...');
-                pageLog('步驟: liff.getLocation() 開始');
-                const location = await liff.getLocation();
-                const { latitude, longitude } = location;
-                pageLog(`步驟: liff.getLocation() 成功 - 座標: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, 'success');
+                // ================== 【錯誤修正】 ==================
+                // 將 liff.getLocation() 修正為 liff.getGeolocation()
+                // ================================================
+                pageLog('步驟: liff.getGeolocation() 開始');
+                const location = await liff.getGeolocation();
+                const { latitude, longitude } = location.coords; // 注意：座標在 location.coords 物件中
+                pageLog(`步驟: liff.getGeolocation() 成功 - 座標: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, 'success');
                 
                 showLoading('正在傳送打卡資訊...');
                 pageLog('步驟: liff.getProfile() 開始 (用於傳送)');
