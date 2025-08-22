@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添心設計 | 員工打卡</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        .btn-pulse {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+        .spinner {
+            border-top-color: #3498db;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="w-full max-w-md mx-auto bg-white rounded-xl shadow-lg p-8 text-center">
+        
+        <!-- Logo -->
+        <div class="mb-6">
+            <svg class="mx-auto h-16 w-auto text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h1 class="text-2xl font-bold text-gray-800 mt-2">添心設計</h1>
+            <p class="text-gray-500">員工專用打卡系統</p>
+        </div>
+
+        <!-- 狀態顯示區域 -->
+        <div id="status-container" class="mb-8 p-4 rounded-lg bg-gray-50 min-h-[120px] flex items-center justify-center">
+            <div id="message" class="text-gray-700">歡迎，<span id="displayName" class="font-semibold">員工</span>！<br>請點擊下方按鈕進行打卡。</div>
+            <div id="loading" class="hidden">
+                <div class="spinner w-8 h-8 border-4 border-gray-200 rounded-full"></div>
+                <p id="loading-text" class="mt-2 text-gray-600">正在初始化...</p>
+            </div>
+        </div>
+
+        <!-- 打卡按鈕 -->
+        <button id="checkin-button" class="w-full bg-blue-600 text-white font-bold py-4 px-6 rounded-lg text-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none btn-pulse" disabled>
+            上班打卡
+        </button>
+        
+        <p id="error-log" class="text-red-500 text-sm mt-4"></p>
+    </div>
+
+    <script>
+        // ===============================================================
+        // ================     添心設計 LIFF 打卡系統     ================
+        // ===================     前端程式碼 (LIFF)     ==================
+        // ===============================================================
+
+        // ========================= 環境設定 ============================
+        // 請將 'YOUR_LIFF_ID' 替換成您在 LINE Developers Console 註冊後取得的 LIFF ID
+        const LIFF_ID = '2007974938-jVxn6y37';
+
+        // 請將 'YOUR_GAS_WEB_APP_URL' 替換成您部署 Apps Script 後取得的 Web App 網址
+        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwE_zSOSWqmU-mxsVKyDDOlMRoxgTxRg4Pm0SGGBe_Knq8JqV6gsVp3BGezsBqHtpqU6A/exec';
+        // ===============================================================
+
+        const displayNameElement = document.getElementById('displayName');
+        const messageElement = document.getElementById('message');
+        const loadingElement = document.getElementById('loading');
+        const loadingTextElement = document.getElementById('loading-text');
+        const checkinButton = document.getElementById('checkin-button');
+        const errorLogElement = document.getElementById('error-log');
+
+        async function main() {
+            try {
+                showLoading('正在初始化 LIFF...');
+                await liff.init({ liffId: LIFF_ID });
+
+                if (!liff.isLoggedIn()) {
+                    updateMessage('您尚未登入 LINE，請登入後再試。');
+                    checkinButton.disabled = true;
+                    liff.login(); // 自動導向登入
+                    return;
+                }
+
+                const profile = await liff.getProfile();
+                displayNameElement.textContent = profile.displayName;
+                checkinButton.disabled = false;
+                hideLoading();
+
+            } catch (err) {
+                console.error('LIFF Initialization Error:', err);
+                showError('LIFF 初始化失敗，請在本機 LINE App 中開啟。');
+            }
+        }
+
+        checkinButton.addEventListener('click', async () => {
+            try {
+                checkinButton.disabled = true;
+                showLoading('正在取得您的 GPS 位置...');
+
+                const location = await liff.getLocation();
+                const { latitude, longitude } = location;
+                
+                showLoading('正在傳送打卡資訊...');
+                const profile = await liff.getProfile();
+
+                const url = `${GAS_WEB_APP_URL}?userId=${profile.userId}&userName=${encodeURIComponent(profile.displayName)}&lat=${latitude}&lon=${longitude}`;
+                
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`伺服器回應錯誤: ${response.statusText}`);
+                }
+                const result = await response.json();
+
+                hideLoading();
+                handleCheckInResult(result);
+
+            } catch (err) {
+                console.error('Check-in Error:', err);
+                let errorMessage = '打卡失敗，發生未知錯誤。';
+                if (err.code === 'PERMISSION_DENIED') {
+                    errorMessage = '您拒絕了位置資訊授權，無法進行打卡。';
+                } else if (err.code === 'TIMEOUT') {
+                    errorMessage = '取得位置資訊逾時，請檢查您的網路與 GPS 設定。';
+                }
+                showError(errorMessage);
+                checkinButton.disabled = false;
+            }
+        });
+
+        function handleCheckInResult(result) {
+            const container = document.getElementById('status-container');
+            container.classList.remove('bg-gray-50', 'bg-green-100', 'bg-red-100');
+            
+            if (result.status === 'success') {
+                container.classList.add('bg-green-100');
+                updateMessage(result.message, 'text-green-800');
+                checkinButton.textContent = '打卡完成';
+                checkinButton.classList.remove('bg-blue-600', 'btn-pulse');
+                checkinButton.classList.add('bg-green-600');
+            } else if (result.status === 'fail') {
+                container.classList.add('bg-red-100');
+                updateMessage(result.message, 'text-red-800');
+                checkinButton.textContent = '重新打卡';
+                checkinButton.disabled = false;
+            } else { // error
+                container.classList.add('bg-red-100');
+                updateMessage(`系統錯誤：${result.message}`, 'text-red-800');
+                checkinButton.textContent = '發生錯誤，請重試';
+                checkinButton.disabled = false;
+            }
+        }
+
+        function showLoading(text) {
+            messageElement.style.display = 'none';
+            loadingElement.style.display = 'block';
+            loadingTextElement.textContent = text;
+        }
+
+        function hideLoading() {
+            loadingElement.style.display = 'none';
+            messageElement.style.display = 'block';
+        }
+
+        function updateMessage(text, colorClass = 'text-gray-700') {
+            messageElement.innerHTML = text.replace(/\n/g, '<br>');
+            messageElement.className = ''; // 清除所有 class
+            messageElement.classList.add(colorClass);
+        }
+
+        function showError(text) {
+            hideLoading();
+            const container = document.getElementById('status-container');
+            container.classList.add('bg-red-100');
+            updateMessage(text, 'text-red-800');
+            checkinButton.disabled = false;
+        }
+
+        main();
+    </script>
+</body>
+</html>
