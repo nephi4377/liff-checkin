@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -7,9 +9,11 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
+        /* 確保在各種裝置上都有良好的字體顯示 */
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         }
+        /* 按鈕的呼吸效果，提示使用者可以點擊 */
         .btn-pulse {
             animation: pulse 2s infinite;
         }
@@ -18,6 +22,7 @@
             70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
             100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
         }
+        /* 讀取中的旋轉圖示 */
         .spinner {
             border-top-color: #3498db;
             animation: spin 1s ease-in-out infinite;
@@ -30,7 +35,7 @@
 <body class="bg-gray-100 flex items-center justify-center min-h-screen">
     <div class="w-full max-w-md mx-auto bg-white rounded-xl shadow-lg p-8 text-center">
         
-        <!-- Logo -->
+        <!-- 公司 Logo 與標題 -->
         <div class="mb-6">
             <svg class="mx-auto h-16 w-auto text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -70,6 +75,8 @@
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwE_zSOSWqmU-mxsVKyDDOlMRoxgTxRg4Pm0SGGBe_Knq8JqV6gsVp3BGezsBqHtpqU6A/exec';
         // ===============================================================
 
+
+        // 取得頁面上的各個元件
         const displayNameElement = document.getElementById('displayName');
         const messageElement = document.getElementById('message');
         const loadingElement = document.getElementById('loading');
@@ -77,6 +84,7 @@
         const checkinButton = document.getElementById('checkin-button');
         const errorLogElement = document.getElementById('error-log');
 
+        // 主函式：初始化 LIFF
         async function main() {
             try {
                 showLoading('正在初始化 LIFF...');
@@ -85,13 +93,13 @@
                 if (!liff.isLoggedIn()) {
                     updateMessage('您尚未登入 LINE，請登入後再試。');
                     checkinButton.disabled = true;
-                    liff.login(); // 自動導向登入
+                    liff.login(); // 如果未登入，自動導向登入頁面
                     return;
                 }
 
                 const profile = await liff.getProfile();
                 displayNameElement.textContent = profile.displayName;
-                checkinButton.disabled = false;
+                checkinButton.disabled = false; // 初始化成功後才啟用按鈕
                 hideLoading();
 
             } catch (err) {
@@ -100,19 +108,23 @@
             }
         }
 
+        // 監聽打卡按鈕的點擊事件
         checkinButton.addEventListener('click', async () => {
             try {
                 checkinButton.disabled = true;
                 showLoading('正在取得您的 GPS 位置...');
 
+                // 透過 LIFF SDK 取得 GPS 位置
                 const location = await liff.getLocation();
                 const { latitude, longitude } = location;
                 
                 showLoading('正在傳送打卡資訊...');
                 const profile = await liff.getProfile();
 
+                // 組合要傳送到後端的網址
                 const url = `${GAS_WEB_APP_URL}?userId=${profile.userId}&userName=${encodeURIComponent(profile.displayName)}&lat=${latitude}&lon=${longitude}`;
                 
+                // 發送請求到 Apps Script 後端
                 const response = await fetch(url);
                 if (!response.ok) {
                     throw new Error(`伺服器回應錯誤: ${response.statusText}`);
@@ -120,7 +132,7 @@
                 const result = await response.json();
 
                 hideLoading();
-                handleCheckInResult(result);
+                handleCheckInResult(result); // 處理後端回傳的結果
 
             } catch (err) {
                 console.error('Check-in Error:', err);
@@ -135,6 +147,7 @@
             }
         });
 
+        // 根據後端回傳的結果更新 UI
         function handleCheckInResult(result) {
             const container = document.getElementById('status-container');
             container.classList.remove('bg-gray-50', 'bg-green-100', 'bg-red-100');
@@ -158,23 +171,27 @@
             }
         }
 
+        // 輔助函式：顯示讀取中狀態
         function showLoading(text) {
             messageElement.style.display = 'none';
             loadingElement.style.display = 'block';
             loadingTextElement.textContent = text;
         }
 
+        // 輔助函式：隱藏讀取中狀態
         function hideLoading() {
             loadingElement.style.display = 'none';
             messageElement.style.display = 'block';
         }
 
+        // 輔助函式：更新訊息文字
         function updateMessage(text, colorClass = 'text-gray-700') {
             messageElement.innerHTML = text.replace(/\n/g, '<br>');
             messageElement.className = ''; // 清除所有 class
             messageElement.classList.add(colorClass);
         }
 
+        // 輔助函式：顯示錯誤訊息
         function showError(text) {
             hideLoading();
             const container = document.getElementById('status-container');
@@ -183,6 +200,7 @@
             checkinButton.disabled = false;
         }
 
+        // 執行主函式
         main();
     </script>
 </body>
