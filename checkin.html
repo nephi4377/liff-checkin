@@ -89,7 +89,6 @@
             logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
             logEntry.classList.add(`log-${type}`);
             debugLogElement.appendChild(logEntry);
-            // 自動捲動到最底部
             debugLogElement.parentElement.scrollTop = debugLogElement.parentElement.scrollHeight;
         }
 
@@ -124,6 +123,47 @@
                 showError('LIFF 初始化失敗，請在本機 LINE App 中開啟。');
             }
         }
+        
+        // ================== 【錯誤修正 v3】 ==================
+        // 使用 Promise 包裝標準的 Geolocation API，使其能搭配 async/await 使用
+        // ===================================================
+        function getGeoLocationPromise() {
+            return new Promise((resolve, reject) => {
+                if (!navigator.geolocation) {
+                    reject({ code: 'NOT_SUPPORTED', message: '您的瀏覽器不支援地理位置功能。' });
+                    return;
+                }
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        resolve(position);
+                    },
+                    (error) => {
+                        // 將標準 error object 轉換為我們需要的格式
+                        let code = '';
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                code = 'PERMISSION_DENIED';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                code = 'POSITION_UNAVAILABLE';
+                                break;
+                            case error.TIMEOUT:
+                                code = 'TIMEOUT';
+                                break;
+                            default:
+                                code = 'UNKNOWN_ERROR';
+                        }
+                        reject({ code: code, message: error.message });
+                    },
+                    { // 定位選項
+                        enableHighAccuracy: true,
+                        timeout: 10000, // 10秒超時
+                        maximumAge: 0
+                    }
+                );
+            });
+        }
+
 
         checkinButton.addEventListener('click', async () => {
             try {
@@ -131,13 +171,10 @@
                 pageLog('事件: 打卡按鈕被點擊');
                 
                 showLoading('正在取得您的 GPS 位置...');
-                // ================== 【錯誤修正】 ==================
-                // 將 liff.getLocation() 修正為 liff.getGeolocation()
-                // ================================================
-                pageLog('步驟: liff.getGeolocation() 開始');
-                const location = await liff.getGeolocation();
-                const { latitude, longitude } = location.coords; // 注意：座標在 location.coords 物件中
-                pageLog(`步驟: liff.getGeolocation() 成功 - 座標: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, 'success');
+                pageLog('步驟: navigator.geolocation.getCurrentPosition() 開始');
+                const location = await getGeoLocationPromise(); // 使用新的 Promise 函式
+                const { latitude, longitude } = location.coords;
+                pageLog(`步驟: 取得 GPS 成功 - 座標: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, 'success');
                 
                 showLoading('正在傳送打卡資訊...');
                 pageLog('步驟: liff.getProfile() 開始 (用於傳送)');
@@ -146,7 +183,7 @@
 
                 const url = `${GAS_WEB_APP_URL}?userId=${profile.userId}&userName=${encodeURIComponent(profile.displayName)}&lat=${latitude}&lon=${longitude}`;
                 pageLog(`步驟: 準備發送請求到後端...`);
-                pageLog(`目標 URL: ${GAS_WEB_APP_URL}`); // 只顯示主機，避免完整 URL 過長
+                pageLog(`目標 URL: ${GAS_WEB_APP_URL}`);
 
                 const response = await fetch(url);
                 pageLog(`後端回應狀態碼: ${response.status}`, 'success');
@@ -164,7 +201,6 @@
                 handleCheckInResult(result);
 
             } catch (err) {
-                // 這是最關鍵的偵錯部分
                 pageLog(`嚴重錯誤: 打卡流程中斷 - ${err.message}`, 'error');
                 pageLog(`錯誤物件: ${JSON.stringify(err)}`, 'error');
                 console.error('Check-in Error:', err);
@@ -179,7 +215,6 @@
             }
         });
 
-        // (此處省略 handleCheckInResult, showLoading, hideLoading, updateMessage, showError 等輔助函式，它們與前一版相同)
         function handleCheckInResult(result) {
             const container = document.getElementById('status-container');
             container.classList.remove('bg-gray-50', 'bg-green-100', 'bg-red-100');
@@ -206,3 +241,4 @@
     </script>
 </body>
 </html>
+
