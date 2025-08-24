@@ -11,8 +11,10 @@
 
     <!-- ========================= 環境設定 ============================ -->
     <script>
-        const LIFF_ID = 'YOUR_REPORT_LIFF_ID'; // 注意：這是回報專用的 LIFF ID
-        const GAS_WEB_APP_URL = 'YOUR_GAS_WEB_APP_URL'; // 這與打卡的 URL 相同
+        // 注意：您需要為此回報頁面，在 LINE Developers Console 中建立一個【新的】LIFF App
+        const LIFF_ID = 'YOUR_REPORT_LIFF_ID'; 
+        // 這個網址與打卡系統的網址是【同一個】
+        const GAS_WEB_APP_URL = 'YOUR_GAS_WEB_APP_URL'; 
     </script>
     <!-- =============================================================== -->
 
@@ -69,7 +71,6 @@
     </div>
 
     <script>
-        // ... (JavaScript 邏輯) ...
         const sitePhotosInput = document.getElementById('site-photos');
         const problemPhotosInput = document.getElementById('problem-photos');
         const reportForm = document.getElementById('report-form');
@@ -94,43 +95,37 @@
         }
         initializeLiff();
 
+        function createPreview(file, fileArray, previewElement) {
+            let reader = new FileReader();
+            reader.onload = (e) => {
+                const container = document.createElement('div');
+                container.className = 'preview-image-container';
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                img.className = 'w-full h-24 object-cover rounded-md';
+                const removeBtn = document.createElement('div');
+                removeBtn.className = 'remove-btn';
+                removeBtn.innerHTML = '&times;';
+                removeBtn.onclick = () => {
+                    const index = fileArray.findIndex(item => item.name === file.name && item.size === file.size);
+                    if (index > -1) {
+                        fileArray.splice(index, 1);
+                        container.remove();
+                    }
+                };
+                container.appendChild(img);
+                container.appendChild(removeBtn);
+                previewElement.appendChild(container);
+            };
+            reader.readAsDataURL(file);
+        }
+
         function handleFileSelection(event, fileArray, previewElementId) {
             const preview = document.getElementById(previewElementId);
-            preview.innerHTML = '';
-            fileArray.length = 0; // 清空陣列
-            
             for (const file of event.target.files) {
                 fileArray.push(file);
-                let reader = new FileReader();
-                reader.onload = (e) => {
-                    const container = document.createElement('div');
-                    container.className = 'preview-image-container';
-                    const img = document.createElement('img');
-                    img.src = e.target.result;
-                    img.className = 'w-full h-24 object-cover rounded-md';
-                    const removeBtn = document.createElement('div');
-                    removeBtn.className = 'remove-btn';
-                    removeBtn.innerHTML = '&times;';
-                    removeBtn.onclick = () => {
-                        // 從陣列中移除檔案並重新渲染預覽
-                        const index = fileArray.indexOf(file);
-                        if (index > -1) {
-                            fileArray.splice(index, 1);
-                            renderPreviews();
-                        }
-                    };
-                    container.appendChild(img);
-                    container.appendChild(removeBtn);
-                    preview.appendChild(container);
-                };
-                reader.readAsDataURL(file);
+                createPreview(file, fileArray, preview);
             }
-        }
-        
-        // 需要一個函式來重新渲染預覽，因為直接移除DOM元素不會更新fileArray
-        function renderPreviews() {
-            // 簡單起見，這裡先不實作複雜的重新渲染，僅提示使用者重新選擇
-            // 實際專案中會需要更完整的預覽管理
         }
 
         sitePhotosInput.addEventListener('change', (e) => handleFileSelection(e, sitePhotoFiles, 'site-photos-preview'));
@@ -147,7 +142,7 @@
                 
                 const processFile = async (file) => {
                     const options = {
-                        maxSizeMB: 1,
+                        maxSizeMB: 1.5,
                         maxWidthOrHeight: 1920,
                         useWebWorker: true
                     };
@@ -156,7 +151,7 @@
                     return {
                         name: file.name,
                         type: compressedFile.type,
-                        data: base64.split(',')[1] // 去掉 dataURL 的前綴
+                        data: base64.split(',')[1]
                     };
                 };
 
@@ -164,6 +159,7 @@
                 const problemPhotosData = await Promise.all(problemPhotoFiles.map(processFile));
 
                 const payload = {
+                    source: 'liff_report_form', // 新增一個來源標記，方便後端判斷
                     userId: profile.userId,
                     userName: profile.displayName,
                     projectId: document.getElementById('project-id').value,
@@ -175,18 +171,16 @@
 
                 const response = await fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
-                    mode: 'no-cors', // Apps Script Web App 需要 no-cors
-                    cache: 'no-cache',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(payload),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Apps Script doPost 的特殊要求
                 });
                 
-                // 因為 no-cors 模式無法讀取回應，我們假設請求已發送
-                // 實際後端應設計一個方式來通知前端處理結果 (例如 LINE Push Message)
-                alert('回報已提交！後端正在處理中。');
+                alert('回報已提交！後端正在處理中，完成後您會收到 LINE 通知。');
                 submitText.textContent = '提交成功';
                 submitButton.classList.remove('bg-blue-600');
                 submitButton.classList.add('bg-green-600');
+                // 成功後可以考慮關閉 LIFF 視窗
+                setTimeout(() => liff.closeWindow(), 1500);
 
             } catch (err) {
                 console.error(err);
