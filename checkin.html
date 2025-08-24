@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -8,16 +7,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 
-    <!-- =============================================================== -->
-    <!-- ========================= 環境設定 ============================ -->
-    <!--  請在此處填寫您的 LIFF ID 與 Apps Script 網址              -->
-    <!-- =============================================================== -->
     <script>
         const LIFF_ID = '2007974938-jVxn6y37';
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwE_zSOSWqmU-mxsVKyDDOlMRoxgTxRg4Pm0SGGBe_Knq8JqV6gsVp3BGezsBqHtpqU6A/exec';
     </script>
-    <!-- =============================================================== -->
-
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
         .btn-pulse { animation: pulse 2s infinite; }
@@ -28,7 +21,6 @@
         }
         .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        /* 新增的偵錯日誌樣式 */
         #debug-log-container {
             font-family: 'Courier New', Courier, monospace;
             font-size: 12px;
@@ -59,7 +51,6 @@
 
         <button id="checkin-button" class="w-full bg-blue-600 text-white font-bold py-4 px-6 rounded-lg text-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none btn-pulse" disabled>上班打卡</button>
         
-        <!-- 新增的偵錯日誌顯示區域 -->
         <div class="mt-6 text-left">
             <h3 class="font-semibold text-gray-600 border-b pb-1 mb-2">執行日誌 (Debug Log)</h3>
             <div id="debug-log-container" class="bg-gray-800 text-white p-3 rounded-md overflow-y-auto">
@@ -69,13 +60,6 @@
     </div>
 
     <script>
-        // ===============================================================
-        // ================     添心設計 LIFF 打卡系統     ================
-        // ===================  前端程式碼 (頁面偵錯版)  ===================
-        // ===============================================================
-
-        // (環境設定已移至 <head> 區塊，方便修改)
-
         const displayNameElement = document.getElementById('displayName');
         const messageElement = document.getElementById('message');
         const loadingElement = document.getElementById('loading');
@@ -83,7 +67,6 @@
         const checkinButton = document.getElementById('checkin-button');
         const debugLogElement = document.getElementById('debug-log');
 
-        // 新增的頁面日誌函式
         function pageLog(message, type = 'info') {
             const logEntry = document.createElement('div');
             logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
@@ -120,13 +103,10 @@
             } catch (err) {
                 pageLog(`嚴重錯誤: LIFF 初始化失敗 - ${err.message}`, 'error');
                 console.error('LIFF Initialization Error:', err);
-                showError('LIFF 初始化失敗，請在本機 LINE App 中開啟。');
+                showError('LIFF 初始化失敗，請在手機 LINE App 中開啟此頁面。');
             }
         }
         
-        // ================== 【錯誤修正 v3】 ==================
-        // 使用 Promise 包裝標準的 Geolocation API，使其能搭配 async/await 使用
-        // ===================================================
         function getGeoLocationPromise() {
             return new Promise((resolve, reject) => {
                 if (!navigator.geolocation) {
@@ -134,83 +114,99 @@
                     return;
                 }
                 navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        resolve(position);
-                    },
+                    (position) => { resolve(position); },
                     (error) => {
-                        // 將標準 error object 轉換為我們需要的格式
                         let code = '';
                         switch(error.code) {
-                            case error.PERMISSION_DENIED:
-                                code = 'PERMISSION_DENIED';
-                                break;
-                            case error.POSITION_UNAVAILABLE:
-                                code = 'POSITION_UNAVAILABLE';
-                                break;
-                            case error.TIMEOUT:
-                                code = 'TIMEOUT';
-                                break;
-                            default:
-                                code = 'UNKNOWN_ERROR';
+                            case error.PERMISSION_DENIED: code = 'PERMISSION_DENIED'; break;
+                            case error.POSITION_UNAVAILABLE: code = 'POSITION_UNAVAILABLE'; break;
+                            case error.TIMEOUT: code = 'TIMEOUT'; break;
+                            default: code = 'UNKNOWN_ERROR';
                         }
                         reject({ code: code, message: error.message });
                     },
-                    { // 定位選項
-                        enableHighAccuracy: true,
-                        timeout: 10000, // 10秒超時
-                        maximumAge: 0
-                    }
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                 );
             });
         }
 
-
         checkinButton.addEventListener('click', async () => {
+            checkinButton.disabled = true;
+            pageLog('事件: 打卡按鈕被點擊');
+
             try {
-                checkinButton.disabled = true;
-                pageLog('事件: 打卡按鈕被點擊');
-                
+                // --- 步驟 1: 取得 GPS 位置 ---
                 showLoading('正在取得您的 GPS 位置...');
-                pageLog('步驟: navigator.geolocation.getCurrentPosition() 開始');
-                const location = await getGeoLocationPromise(); // 使用新的 Promise 函式
+                pageLog('步驟: getGeoLocationPromise() 開始');
+                const location = await getGeoLocationPromise();
                 const { latitude, longitude } = location.coords;
                 pageLog(`步驟: 取得 GPS 成功 - 座標: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, 'success');
                 
-                showLoading('正在傳送打卡資訊...');
+                // --- 步驟 2: 取得 LINE 個人資料 ---
+                showLoading('正在驗證您的身分...');
                 pageLog('步驟: liff.getProfile() 開始 (用於傳送)');
                 const profile = await liff.getProfile();
                 pageLog(`步驟: liff.getProfile() 成功 - UserID: ${profile.userId}`, 'success');
 
+                // --- 步驟 3: 呼叫後端 Apps Script ---
+                showLoading('正在傳送打卡資訊...');
                 const url = `${GAS_WEB_APP_URL}?userId=${profile.userId}&userName=${encodeURIComponent(profile.displayName)}&lat=${latitude}&lon=${longitude}`;
-                pageLog(`步驟: 準備發送請求到後端...`);
                 pageLog(`目標 URL: ${GAS_WEB_APP_URL}`);
-
-                const response = await fetch(url);
-                pageLog(`後端回應狀態碼: ${response.status}`, 'success');
                 
+                const response = await fetch(url);
+                pageLog(`後端回應狀態碼: ${response.status}`, response.ok ? 'success' : 'error');
+                
+                // 【修改】如果 HTTP 狀態不是 200-299，直接拋出錯誤
                 if (!response.ok) {
-                    pageLog(`錯誤: 後端回應不成功 (HTTP ${response.status})`, 'error');
-                    throw new Error(`伺服器回應錯誤: ${response.statusText}`);
+                    throw new Error(`SERVER_ERROR_${response.status}`);
                 }
                 
-                pageLog('步驟: 正在解析後端回傳的 JSON...');
-                const result = await response.json();
-                pageLog('步驟: 解析 JSON 成功', 'success');
-
+                // 【修改】嘗試解析 JSON，如果失敗 (例如後端回傳HTML錯誤頁)，也拋出錯誤
+                let result;
+                try {
+                    result = await response.json();
+                    pageLog('步驟: 解析 JSON 成功', 'success');
+                } catch (jsonError) {
+                    throw new Error('INVALID_JSON_RESPONSE');
+                }
+                
+                // --- 步驟 4: 處理後端回傳的結果 ---
                 hideLoading();
                 handleCheckInResult(result);
 
             } catch (err) {
+                // ===============================================================
+                // ================== 【修改】全新的錯誤處理邏輯 ==================
+                // ===============================================================
                 pageLog(`嚴重錯誤: 打卡流程中斷 - ${err.message}`, 'error');
-                pageLog(`錯誤物件: ${JSON.stringify(err)}`, 'error');
                 console.error('Check-in Error:', err);
-                let errorMessage = '打卡失敗，發生未知錯誤。';
+
+                let errorMessage = '打卡失敗，發生未知錯誤。'; // 預設訊息
+
+                // 判斷 GPS 相關錯誤
                 if (err.code === 'PERMISSION_DENIED') {
-                    errorMessage = '您拒絕了位置資訊授權，無法進行打卡。';
+                    errorMessage = '您拒絕了位置資訊授權，無法進行打卡。<br>請至手機設定允許 LINE 取用位置。';
                 } else if (err.code === 'TIMEOUT') {
-                    errorMessage = '取得位置資訊逾時，請檢查您的網路與 GPS 設定。';
+                    errorMessage = '取得位置資訊逾時，請檢查您的網路與 GPS 設定後再試。';
+                } else if (err.code === 'POSITION_UNAVAILABLE') {
+                    errorMessage = '無法偵測到您的目前位置，請移至訊號較佳處再試。';
                 }
+                // 判斷網路連線或 CORS 錯誤 (fetch 本身失敗)
+                else if (err instanceof TypeError && err.message.toLowerCase().includes('failed to fetch')) {
+                    errorMessage = '無法連接到打卡主機。<br>請檢查您的網路連線，若問題持續，請聯繫管理員。(部署/CORS 問題)';
+                }
+                // 判斷後端伺服器錯誤 (HTTP 狀態碼 4xx/5xx)
+                else if (err.message.startsWith('SERVER_ERROR_')) {
+                    const statusCode = err.message.split('_')[2];
+                    errorMessage = `後端伺服器發生錯誤 (代碼: ${statusCode})。<br>請稍後再試，或聯繫管理員。`;
+                }
+                // 判斷後端回傳格式錯誤
+                else if (err.message === 'INVALID_JSON_RESPONSE') {
+                    errorMessage = '後端主機回傳格式不正確。<br>可能正在維護中，請聯繫管理員。';
+                }
+
                 showError(errorMessage);
+                checkinButton.textContent = '重新打卡';
                 checkinButton.disabled = false;
             }
         });
@@ -225,9 +221,9 @@
                 checkinButton.textContent = '打卡完成';
                 checkinButton.classList.remove('bg-blue-600', 'btn-pulse');
                 checkinButton.classList.add('bg-green-600');
-            } else {
+            } else { // 包含 status: 'fail' 或 'error'
                 container.classList.add('bg-red-100');
-                updateMessage(result.message || `系統錯誤：${result.message}`, 'text-red-800');
+                updateMessage(result.message || '後端回報了一個錯誤，但未提供詳細訊息。', 'text-red-800');
                 checkinButton.textContent = '重新打卡';
                 checkinButton.disabled = false;
             }
@@ -235,10 +231,9 @@
         function showLoading(text) { messageElement.style.display = 'none'; loadingElement.style.display = 'block'; loadingTextElement.textContent = text; }
         function hideLoading() { loadingElement.style.display = 'none'; messageElement.style.display = 'block'; }
         function updateMessage(text, colorClass = 'text-gray-700') { messageElement.innerHTML = text.replace(/\n/g, '<br>'); messageElement.className = ''; messageElement.classList.add(colorClass); }
-        function showError(text) { hideLoading(); const container = document.getElementById('status-container'); container.classList.add('bg-red-100'); updateMessage(text, 'text-red-800'); checkinButton.disabled = false; }
+        function showError(text) { hideLoading(); const container = document.getElementById('status-container'); container.classList.add('bg-red-100'); updateMessage(text, 'text-red-800'); }
 
         main();
     </script>
 </body>
 </html>
-
