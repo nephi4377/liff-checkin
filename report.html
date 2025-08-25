@@ -6,18 +6,12 @@
     <title>添心設計 | 施工回報</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-    <!-- 引入圖片壓縮函式庫 -->
     <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.1/dist/browser-image-compression.js"></script>
     
-    <!-- ========================= 環境設定 ============================ -->
     <script>
-        // 注意：您需要為此回報頁面，在 LINE Developers Console 中建立一個【新的】LIFF App
         const LIFF_ID = '2007974938-gOrjlzna'; 
-        // 這個網址與打卡系統的網址是【同一個】
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwMAt_FuA0ELlQUhuz73T3dvJkxXuycqV5DoXP2teQ60CnyZQ-IvkEM9V-FFjlrc1df7Q/exec'; 
     </script>
-    <!-- =============================================================== -->
-    
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
         .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
@@ -76,6 +70,11 @@
                     <input type="file" id="problemPhotos" multiple accept="image/*" class="w-full text-sm text-gray-500">
                 </div>
 
+                <div class="flex items-center mb-4">
+                    <input id="compressImages" type="checkbox" checked class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    <label for="compressImages" class="ml-2 block text-sm text-gray-900">壓縮相片以加快上傳</label>
+                </div>
+
                 <div id="status-message" class="text-center mb-4 min-h-[24px]"></div>
 
                 <button type="submit" id="submit-button" class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed">
@@ -96,7 +95,6 @@
         let userProfile = null;
 
         // --- 核心功能函式 ---
-
         async function initializeLiff() {
             try {
                 await liff.init({ liffId: LIFF_ID });
@@ -123,27 +121,41 @@
             setLoadingState(true);
 
             try {
+                // 【修改】取得壓縮選項的值
+                const shouldCompress = document.getElementById('compressImages').checked;
+
                 const formData = {
                     source: 'liff_report_form',
                     userId: userProfile.userId,
                     userName: userProfile.displayName,
                     projectId: document.getElementById('projectId').value,
+                    projectNameRaw: document.getElementById('projectId').value, // 暫時用案號作為原始名稱
                     workType: document.getElementById('workType').value,
                     workDescription: document.getElementById('workDescription').value,
                     problemDescription: document.getElementById('problemDescription').value,
-                    sitePhotos: await processFiles(document.getElementById('sitePhotos').files),
-                    problemPhotos: await processFiles(document.getElementById('problemPhotos').files)
+                    sitePhotos: await processFiles(document.getElementById('sitePhotos').files, shouldCompress),
+                    problemPhotos: await processFiles(document.getElementById('problemPhotos').files, shouldCompress)
                 };
-
-                fetch(GAS_WEB_APP_URL, {
+                
+                // 【修改】修正 fetch 請求，移除 mode: 'no-cors'
+                const response = await fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
-                    mode: 'no-cors',
+                    // mode: 'no-cors', // <-- 已移除
                     cache: 'no-cache',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 改為 text/plain 避免觸發 CORS 預檢
                     body: JSON.stringify(formData)
                 });
+                
+                if (!response.ok) {
+                    throw new Error(`伺服器錯誤 (HTTP ${response.status})`);
+                }
 
                 updateStatus('回報已提交！後續正在處理中，完成後您會收到 LINE 通知。', 'success');
+                
+                // 【新增】延遲 1.5 秒後自動關閉視窗
+                setTimeout(() => {
+                    liff.closeWindow();
+                }, 1500);
                 
             } catch (error) {
                 console.error('表單處理失敗', error);
@@ -153,37 +165,38 @@
         });
 
         // --- 輔助函式 ---
-
         /**
-         * 【修改點】處理檔案陣列，現在包含「圖片壓縮」和「轉換Base64」兩步驟。
+         * 【修改】處理檔案陣列，加入是否壓縮的判斷
          */
-        async function processFiles(fileList) {
+        async function processFiles(fileList, shouldCompress) {
             const photoArray = [];
             
-            // 壓縮選項
-            const options = {
-                maxSizeMB: 1,          // 最大檔案大小 (1MB)
-                maxWidthOrHeight: 1920, // 最大寬度或高度
-                useWebWorker: true     // 使用 Web Worker 提升效能
-            };
+            if (!shouldCompress) {
+                updateStatus('正在處理原始圖片...', 'info');
+            }
 
             for (const file of fileList) {
                 try {
-                    // 步驟 1: 壓縮圖片
-                    updateStatus(`正在壓縮圖片 ${file.name}...`, 'info');
-                    const compressedFile = await imageCompression(file, options);
+                    let processedFile = file;
+                    if (shouldCompress) {
+                        updateStatus(`正在壓縮圖片 ${file.name}...`, 'info');
+                        const options = {
+                            maxSizeMB: 1,
+                            maxWidthOrHeight: 1920,
+                            useWebWorker: true
+                        };
+                        processedFile = await imageCompression(file, options);
+                    }
                     
-                    // 步驟 2: 將壓縮後的檔案轉換為 Base64
-                    const base64 = await readFileAsBase64(compressedFile);
+                    const base64 = await readFileAsBase64(processedFile);
                     
                     photoArray.push({
-                        name: file.name, // 仍保留原始檔名
-                        type: compressedFile.type,
+                        name: file.name,
+                        type: processedFile.type,
                         data: base64
                     });
                 } catch (error) {
                     console.error('圖片處理失敗:', error);
-                    // 如果單一圖片處理失敗，可以選擇跳過或顯示錯誤
                     updateStatus(`圖片 ${file.name} 處理失敗，已跳過。`, 'error');
                 }
             }
