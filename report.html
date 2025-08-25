@@ -86,7 +86,6 @@
     </div>
 
     <script>
-        // --- 全域變數定義 ---
         const form = document.getElementById('report-form');
         const submitButton = document.getElementById('submit-button');
         const buttonText = document.getElementById('button-text');
@@ -94,7 +93,6 @@
         const statusMessage = document.getElementById('status-message');
         let userProfile = null;
 
-        // --- 核心功能函式 ---
         async function initializeLiff() {
             try {
                 await liff.init({ liffId: LIFF_ID });
@@ -121,7 +119,6 @@
             setLoadingState(true);
 
             try {
-                // 【修改】取得壓縮選項的值
                 const shouldCompress = document.getElementById('compressImages').checked;
 
                 const formData = {
@@ -129,7 +126,7 @@
                     userId: userProfile.userId,
                     userName: userProfile.displayName,
                     projectId: document.getElementById('projectId').value,
-                    projectNameRaw: document.getElementById('projectId').value, // 暫時用案號作為原始名稱
+                    projectNameRaw: document.getElementById('projectId').value,
                     workType: document.getElementById('workType').value,
                     workDescription: document.getElementById('workDescription').value,
                     problemDescription: document.getElementById('problemDescription').value,
@@ -137,12 +134,10 @@
                     problemPhotos: await processFiles(document.getElementById('problemPhotos').files, shouldCompress)
                 };
                 
-                // 【修改】修正 fetch 請求，移除 mode: 'no-cors'
                 const response = await fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
-                    // mode: 'no-cors', // <-- 已移除
                     cache: 'no-cache',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 改為 text/plain 避免觸發 CORS 預檢
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify(formData)
                 });
                 
@@ -152,7 +147,6 @@
 
                 updateStatus('回報已提交！後續正在處理中，完成後您會收到 LINE 通知。', 'success');
                 
-                // 【新增】延遲 1.5 秒後自動關閉視窗
                 setTimeout(() => {
                     liff.closeWindow();
                 }, 1500);
@@ -164,42 +158,60 @@
             }
         });
 
-        // --- 輔助函式 ---
+        // ===============================================================
+        // ======================= 【核心修改處】 ========================
+        // ===============================================================
+        
         /**
-         * 【修改】處理檔案陣列，加入是否壓縮的判斷
+         * 【最終方案：分塊處理 + 圖片壓縮】
+         * - 解決大量照片導致記憶體不足和 UI 凍結的問題。
+         * - 將所有檔案分成 N 個區塊 (chunk)，一次只處理一個區塊，有效控制記憶體。
+         * - 保留了圖片壓縮選項，可在處理每個區塊時應用。
          */
         async function processFiles(fileList, shouldCompress) {
             const photoArray = [];
-            
-            if (!shouldCompress) {
-                updateStatus('正在處理原始圖片...', 'info');
-            }
+            const allFiles = Array.from(fileList);
+            const totalFiles = allFiles.length;
+            const CHUNK_SIZE = 5; // 每次處理 5 張照片
 
-            for (const file of fileList) {
-                try {
+            for (let i = 0; i < totalFiles; i += CHUNK_SIZE) {
+                const chunk = allFiles.slice(i, i + CHUNK_SIZE);
+                
+                const chunkPromises = chunk.map(async (file, index) => {
+                    const currentIndex = i + index + 1;
                     let processedFile = file;
-                    if (shouldCompress) {
-                        updateStatus(`正在壓縮圖片 ${file.name}...`, 'info');
-                        const options = {
-                            maxSizeMB: 1,
-                            maxWidthOrHeight: 1920,
-                            useWebWorker: true
+                    
+                    try {
+                        if (shouldCompress) {
+                            updateStatus(`正在壓縮第 ${currentIndex} / ${totalFiles} 張照片...`, 'info');
+                            const options = {
+                                maxSizeMB: 1,
+                                maxWidthOrHeight: 1920,
+                                useWebWorker: true
+                            };
+                            processedFile = await imageCompression(file, options);
+                        } else {
+                            updateStatus(`正在處理第 ${currentIndex} / ${totalFiles} 張照片...`, 'info');
+                        }
+
+                        const base64 = await readFileAsBase64(processedFile);
+                        return {
+                            name: file.name,
+                            type: processedFile.type,
+                            data: base64
                         };
-                        processedFile = await imageCompression(file, options);
+                    } catch (error) {
+                        console.error(`圖片 ${file.name} 處理失敗:`, error);
+                        updateStatus(`圖片 ${file.name} 處理失敗，已跳過。`, 'error');
+                        return null;
                     }
-                    
-                    const base64 = await readFileAsBase64(processedFile);
-                    
-                    photoArray.push({
-                        name: file.name,
-                        type: processedFile.type,
-                        data: base64
-                    });
-                } catch (error) {
-                    console.error('圖片處理失敗:', error);
-                    updateStatus(`圖片 ${file.name} 處理失敗，已跳過。`, 'error');
-                }
+                });
+
+                const processedChunk = await Promise.all(chunkPromises);
+                photoArray.push(...processedChunk.filter(p => p !== null));
+                await new Promise(resolve => setTimeout(resolve, 10));
             }
+            
             return photoArray;
         }
 
@@ -235,7 +247,6 @@
             }
         }
 
-        // --- 程式進入點 ---
         initializeLiff();
     </script>
 </body>
