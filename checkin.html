@@ -9,7 +9,8 @@
 
     <script>
         const LIFF_ID = '2007974938-jVxn6y37';
-        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwE_zSOSWqmU-mxsVKyDDOlMRoxgTxRg4Pm0SGGBe_Knq8JqV6gsVp3BGezsBqHtpqU6A/exec';
+        // 【重要】請務必將此處換成您部署「JSONP版本 checkin.gs」後產生的「新」網址
+        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfy.../exec';
     </script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
@@ -79,20 +80,16 @@
             try {
                 pageLog('程式開始執行...');
                 showLoading('正在初始化 LIFF...');
-                pageLog('步驟: liff.init() 開始');
                 await liff.init({ liffId: LIFF_ID });
                 pageLog('步驟: liff.init() 成功', 'success');
 
                 if (!liff.isLoggedIn()) {
                     pageLog('狀態: 未登入，準備跳轉登入頁面', 'error');
-                    updateMessage('您尚未登入 LINE，請登入後再試。');
-                    checkinButton.disabled = true;
                     liff.login();
                     return;
                 }
                 pageLog('狀態: 已登入');
 
-                pageLog('步驟: liff.getProfile() 開始');
                 const profile = await liff.getProfile();
                 pageLog('步驟: liff.getProfile() 成功', 'success');
                 displayNameElement.textContent = profile.displayName;
@@ -130,86 +127,88 @@
             });
         }
 
+        // ===============================================================
+        // ======================= 【核心修改處】 ========================
+        // ===============================================================
+
+        /**
+         * 【新增的函式】
+         * 這是一個放在全域範圍的函式，專門用來接收後端 JSONP 的回應。
+         * @param {object} result - 由後端 Apps Script 傳回的 JSON 物件
+         */
+        function handleGasResponse(result) {
+            pageLog('步驟: 後端透過 JSONP 回應成功', 'success');
+            hideLoading();
+            handleCheckInResult(result);
+
+            // 清理動態產生的 script 標籤，避免頁面殘留
+            const scriptTag = document.getElementById('jsonp-script');
+            if (scriptTag) {
+                scriptTag.remove();
+            }
+        }
+
+        /**
+         * 【修改過的函式】
+         * 打卡按鈕的點擊事件處理器。
+         * 原本的 fetch 請求，已被替換為動態建立 <script> 標籤的 JSONP 請求方式。
+         */
         checkinButton.addEventListener('click', async () => {
             checkinButton.disabled = true;
             pageLog('事件: 打卡按鈕被點擊');
 
             try {
-                // --- 步驟 1: 取得 GPS 位置 ---
+                // --- 步驟 1 & 2: 取得 GPS 和 LINE Profile (這部分不變) ---
                 showLoading('正在取得您的 GPS 位置...');
-                pageLog('步驟: getGeoLocationPromise() 開始');
                 const location = await getGeoLocationPromise();
                 const { latitude, longitude } = location.coords;
-                pageLog(`步驟: 取得 GPS 成功 - 座標: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, 'success');
-                
-                // --- 步驟 2: 取得 LINE 個人資料 ---
-                showLoading('正在驗證您的身分...');
-                pageLog('步驟: liff.getProfile() 開始 (用於傳送)');
-                const profile = await liff.getProfile();
-                pageLog(`步驟: liff.getProfile() 成功 - UserID: ${profile.userId}`, 'success');
+                pageLog(`步驟: 取得 GPS 成功`, 'success');
 
-                // --- 步驟 3: 呼叫後端 Apps Script ---
+                showLoading('正在驗證您的身分...');
+                const profile = await liff.getProfile();
+                pageLog(`步驟: liff.getProfile() 成功`, 'success');
+
+                // --- 步驟 3: 發送 JSONP 請求 ---
                 showLoading('正在傳送打卡資訊...');
-                const url = `${GAS_WEB_APP_URL}?userId=${profile.userId}&userName=${encodeURIComponent(profile.displayName)}&lat=${latitude}&lon=${longitude}`;
-                pageLog(`目標 URL: ${GAS_WEB_APP_URL}`);
+                const callbackName = 'handleGasResponse'; // 對應到我們新增的全域函式
+                let url = `${GAS_WEB_APP_URL}?userId=${profile.userId}&userName=${encodeURIComponent(profile.displayName)}&lat=${latitude}&lon=${longitude}&callback=${callbackName}`;
+                pageLog(`目標 URL (JSONP): ${url}`);
+
+                // 動態建立一個 script 標籤
+                const script = document.createElement('script');
+                script.id = 'jsonp-script';
+                script.src = url;
+
+                // 處理載入失敗的情況 (網路錯誤等)
+                script.onerror = function() {
+                    pageLog('嚴重錯誤: JSONP 腳本載入失敗 (網路問題)', 'error');
+                    showError('無法連接到打卡主機。<br>請檢查您的網路連線。');
+                    checkinButton.textContent = '重新打卡';
+                    checkinButton.disabled = false;
+                    script.remove();
+                };
                 
-                const response = await fetch(url);
-                pageLog(`後端回應狀態碼: ${response.status}`, response.ok ? 'success' : 'error');
-                
-                // 【修改】如果 HTTP 狀態不是 200-299，直接拋出錯誤
-                if (!response.ok) {
-                    throw new Error(`SERVER_ERROR_${response.status}`);
-                }
-                
-                // 【修改】嘗試解析 JSON，如果失敗 (例如後端回傳HTML錯誤頁)，也拋出錯誤
-                let result;
-                try {
-                    result = await response.json();
-                    pageLog('步驟: 解析 JSON 成功', 'success');
-                } catch (jsonError) {
-                    throw new Error('INVALID_JSON_RESPONSE');
-                }
-                
-                // --- 步驟 4: 處理後端回傳的結果 ---
-                hideLoading();
-                handleCheckInResult(result);
+                // 將 script 標籤加入到頁面中，瀏覽器會自動發出請求
+                document.head.appendChild(script);
 
             } catch (err) {
-                // ===============================================================
-                // ================== 【修改】全新的錯誤處理邏輯 ==================
-                // ===============================================================
+                // 這個 catch 區塊主要處理 getGeoLocationPromise 或 liff.getProfile 的錯誤
                 pageLog(`嚴重錯誤: 打卡流程中斷 - ${err.message}`, 'error');
                 console.error('Check-in Error:', err);
-
-                let errorMessage = '打卡失敗，發生未知錯誤。'; // 預設訊息
-
-                // 判斷 GPS 相關錯誤
+                let errorMessage = '打卡失敗，發生未知錯誤。';
                 if (err.code === 'PERMISSION_DENIED') {
-                    errorMessage = '您拒絕了位置資訊授權，無法進行打卡。<br>請至手機設定允許 LINE 取用位置。';
+                    errorMessage = '您拒絕了位置資訊授權，無法進行打卡。';
                 } else if (err.code === 'TIMEOUT') {
-                    errorMessage = '取得位置資訊逾時，請檢查您的網路與 GPS 設定後再試。';
-                } else if (err.code === 'POSITION_UNAVAILABLE') {
-                    errorMessage = '無法偵測到您的目前位置，請移至訊號較佳處再試。';
+                    errorMessage = '取得位置資訊逾時，請檢查您的網路與 GPS 設定。';
                 }
-                // 判斷網路連線或 CORS 錯誤 (fetch 本身失敗)
-                else if (err instanceof TypeError && err.message.toLowerCase().includes('failed to fetch')) {
-                    errorMessage = '無法連接到打卡主機。<br>請檢查您的網路連線，若問題持續，請聯繫管理員。(部署/CORS 問題)';
-                }
-                // 判斷後端伺服器錯誤 (HTTP 狀態碼 4xx/5xx)
-                else if (err.message.startsWith('SERVER_ERROR_')) {
-                    const statusCode = err.message.split('_')[2];
-                    errorMessage = `後端伺服器發生錯誤 (代碼: ${statusCode})。<br>請稍後再試，或聯繫管理員。`;
-                }
-                // 判斷後端回傳格式錯誤
-                else if (err.message === 'INVALID_JSON_RESPONSE') {
-                    errorMessage = '後端主機回傳格式不正確。<br>可能正在維護中，請聯繫管理員。';
-                }
-
                 showError(errorMessage);
-                checkinButton.textContent = '重新打卡';
                 checkinButton.disabled = false;
             }
         });
+
+        // ===============================================================
+        // ==================== 以下為輔助函式 (不變) ====================
+        // ===============================================================
 
         function handleCheckInResult(result) {
             const container = document.getElementById('status-container');
@@ -221,13 +220,14 @@
                 checkinButton.textContent = '打卡完成';
                 checkinButton.classList.remove('bg-blue-600', 'btn-pulse');
                 checkinButton.classList.add('bg-green-600');
-            } else { // 包含 status: 'fail' 或 'error'
+            } else {
                 container.classList.add('bg-red-100');
                 updateMessage(result.message || '後端回報了一個錯誤，但未提供詳細訊息。', 'text-red-800');
                 checkinButton.textContent = '重新打卡';
                 checkinButton.disabled = false;
             }
         }
+
         function showLoading(text) { messageElement.style.display = 'none'; loadingElement.style.display = 'block'; loadingTextElement.textContent = text; }
         function hideLoading() { loadingElement.style.display = 'none'; messageElement.style.display = 'block'; }
         function updateMessage(text, colorClass = 'text-gray-700') { messageElement.innerHTML = text.replace(/\n/g, '<br>'); messageElement.className = ''; messageElement.classList.add(colorClass); }
