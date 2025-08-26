@@ -1,25 +1,27 @@
-
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>添心設計 | 施工回報 V3.0</title>
+    <title>添心設計 | 施工回報 v4.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.1/dist/browser-image-compression.js"></script>
-    
+   
     <script>
-        const LIFF_ID = '2007974938-gOrjlzna'; // 您的施工回報 LIFF ID
-        // 【重要】請務必將此處換成您部署「新版 line_reply.gs」後產生的「新」網址
-        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwMAt_FuA0ELlQUhuz73T3dvJkxXuycqV5DoXP2teQ60CnyZQ-IvkEM9V-FFjlrc1df7Q/exec'; 
+    const LIFF_ID = '2007974938-gOrjlzna'; // 您的施工回報 LIFF ID
+    // 【重要】請務必將此處換成您部署「新版 line_reply.gs」後產生的「新」網址
+    const GAS_WEB_APP_URL = '<https://script.google.com/macros/s/AKfycbwMAt_FuA0ELlQUhuz73T3dvJkxXuycqV5DoXP2teQ60CnyZQ-IvkEM9V-FFjlrc1df7Q/exec>';
     </script>
+    
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
         .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        input[type="file"]::file-selector-button { background-color: #e5e7eb; color: #374151; border: 1px solid #d1d5db; padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; transition: background-color 0.2s; }
-        input[type="file"]::file-selector-button:hover { background-color: #d1d5db; }
+        /* 優化後的檔案選擇按鈕樣式 */
+        .file-input-label { display: inline-block; background-color: #3b82f6; color: white; border: 1px solid #3b82f6; padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; transition: background-color 0.2s; font-weight: 600; }
+        .file-input-label:hover { background-color: #2563eb; }
+        .file-input-label.selected { background-color: #6b7280; border-color: #6b7280; cursor: default; }
     </style>
 </head>
 
@@ -30,7 +32,7 @@
                 <h1 class="text-2xl font-bold text-gray-800">添心設計｜施工回報</h1>
             </div>
 
-            <form id="report-form">
+            <form id="report-form" novalidate>
                 <div class="mb-4">
                     <label for="projectId" class="block text-gray-700 font-semibold mb-2">案號 <span class="text-red-500">*</span></label>
                     <input type="text" id="projectId" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
@@ -58,8 +60,12 @@
                 </div>
                 
                 <div class="mb-4">
-                    <label for="sitePhotos" class="block text-gray-700 font-semibold mb-2">現場照片 (可多選)</label>
-                    <input type="file" id="sitePhotos" multiple accept="image/*" class="w-full text-sm text-gray-500">
+                    <label class="block text-gray-700 font-semibold mb-2">現場照片 (可多選)</label>
+                    <div class="flex items-center">
+                        <label for="sitePhotos" id="sitePhotosLabel" class="file-input-label">選擇檔案</label>
+                        <span id="sitePhotosCount" class="ml-3 text-gray-600">未選取檔案</span>
+                        <input type="file" id="sitePhotos" multiple accept="image/*" class="hidden">
+                    </div>
                 </div>
 
                 <div class="mb-4">
@@ -68,8 +74,12 @@
                 </div>
                 
                 <div class="mb-6">
-                    <label for="problemPhotos" class="block text-gray-700 font-semibold mb-2">問題照片 (可多選)</label>
-                    <input type="file" id="problemPhotos" multiple accept="image/*" class="w-full text-sm text-gray-500">
+                    <label class="block text-gray-700 font-semibold mb-2">問題照片 (可多選)</label>
+                     <div class="flex items-center">
+                        <label for="problemPhotos" id="problemPhotosLabel" class="file-input-label">選擇檔案</label>
+                        <span id="problemPhotosCount" class="ml-3 text-gray-600">未選取檔案</span>
+                        <input type="file" id="problemPhotos" multiple accept="image/*" class="hidden">
+                    </div>
                 </div>
 
                 <div class="flex items-center mb-4">
@@ -88,6 +98,7 @@
     </div>
 
     <script>
+        // --- 變數定義 ---
         const form = document.getElementById('report-form');
         const submitButton = document.getElementById('submit-button');
         const buttonText = document.getElementById('button-text');
@@ -95,23 +106,68 @@
         const statusMessage = document.getElementById('status-message');
         let userProfile = null;
 
-        async function initializeLiff() { /* ... (此函式不變) ... */ }
+        // --- 初始化函式 ---
+        
+        // 設定檔案選擇按鈕的 UI 互動
+        function setupFileInputUI(inputId, labelId, countId) {
+            const input = document.getElementById(inputId);
+            const label = document.getElementById(labelId);
+            const count = document.getElementById(countId);
+            input.addEventListener('change', () => {
+                if (input.files.length > 0) {
+                    label.classList.add('selected');
+                    count.textContent = `已選擇 ${input.files.length} 張照片`;
+                } else {
+                    label.classList.remove('selected');
+                    count.textContent = '未選取檔案';
+                }
+            });
+        }
 
-        // ===============================================================
-        // ======================= 【核心修改處】 ========================
-        // ===============================================================
+        // LIFF 初始化
+        async function initializeLiff() {
+            try {
+                await liff.init({ liffId: LIFF_ID });
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                    return;
+                }
+                userProfile = await liff.getProfile();
+                // LIFF 初始化成功後才啟用檔案按鈕
+                setupFileInputUI('sitePhotos', 'sitePhotosLabel', 'sitePhotosCount');
+                setupFileInputUI('problemPhotos', 'problemPhotosLabel', 'problemPhotosCount');
+            } catch (error) {
+                console.error('LIFF 初始化失敗', error);
+                updateStatus('LIFF 初始化失敗，請在 LINE 中開啟。', 'error');
+                submitButton.disabled = true;
+            }
+        }
+
+        // --- 核心功能 ---
+
+        // 表單提交事件監聽器
         form.addEventListener('submit', async function(event) {
             event.preventDefault();
-            if (!userProfile) { updateStatus('無法取得使用者資訊，請重新載入頁面。', 'error'); return; }
+            
+            // 點擊後立刻更新UI，防止重複點擊並提供即時反饋
             setLoadingState(true);
+
+            if (!userProfile) {
+                updateStatus('無法取得使用者資訊，請重新載入頁面。', 'error');
+                setLoadingState(false);
+                return;
+            }
+
             try {
                 const shouldCompress = document.getElementById('compressImages').checked;
+                const projectNameRaw = document.getElementById('projectId').value;
+
                 const formData = {
                     source: 'liff_report_form',
                     userId: userProfile.userId,
                     userName: userProfile.displayName,
                     projectId: document.getElementById('projectId').value,
-                    projectNameRaw: document.getElementById('projectId').value,
+                    projectNameRaw: projectNameRaw,
                     workType: document.getElementById('workType').value,
                     workDescription: document.getElementById('workDescription').value,
                     problemDescription: document.getElementById('problemDescription').value,
@@ -119,55 +175,58 @@
                     problemPhotos: await processFiles(document.getElementById('problemPhotos').files, shouldCompress)
                 };
                 
+                updateStatus('正在提交資料...', 'info');
                 await fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
                     cache: 'no-cache',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify(formData)
                 });
-
-                // 正常情況下，因為後端回應沒有CORS標頭，程式碼會直接跳到 catch 區塊
-                // 但如果網路順利，沒有其他錯誤，我們仍然可以在這裡處理成功邏輯
+                
+                // 正常情況下，程式碼會直接跳到 catch 區塊
                 handleSuccess();
 
             } catch (error) {
                 console.error('表單處理失敗', error);
-                
-                // 【核心修改】判斷這個錯誤是否為我們預期的 CORS 錯誤
                 if (error instanceof TypeError && error.message.toLowerCase().includes('failed to fetch')) {
-                    // 如果是 "Load failed" 錯誤，我們將其視為「已成功送入佇列」
                     console.log('捕捉到預期的 Fetch 錯誤，將其視為提交成功。');
-                    handleSuccess(); // <-- 即使出錯也呼叫成功處理函式
+                    handleSuccess();
                 } else {
-                    // 如果是其他非預期的錯誤 (例如網路中斷)，則顯示失敗
                     updateStatus(`提交失敗：${error.message}`, 'error');
                     setLoadingState(false);
                 }
             }
         });
 
+        // --- 輔助函式 (完整版) ---
+
+        // 成功處理函式
         function handleSuccess() {
             updateStatus('回報已提交！後續正在處理中，完成後您會收到 LINE 通知。', 'success');
-            setTimeout(() => { liff.closeWindow(); }, 1500);
+            setTimeout(() => {
+                liff.closeWindow();
+            }, 1500);
         }
 
+        // 【最終方案：分塊處理 + 圖片壓縮】
         async function processFiles(fileList, shouldCompress) {
             const photoArray = [];
             const allFiles = Array.from(fileList);
             const totalFiles = allFiles.length;
-            const CHUNK_SIZE = 5;
+            const CHUNK_SIZE = 5; // 每次處理 5 張照片
+
             for (let i = 0; i < totalFiles; i += CHUNK_SIZE) {
                 const chunk = allFiles.slice(i, i + CHUNK_SIZE);
                 const chunkPromises = chunk.map(async (file, index) => {
                     const currentIndex = i + index + 1;
                     let processedFile = file;
                     try {
+                        const statusText = shouldCompress ? '正在壓縮' : '正在處理';
+                        updateStatus(`${statusText}第 ${currentIndex} / ${totalFiles} 張照片...`, 'info');
+
                         if (shouldCompress) {
-                            updateStatus(`正在壓縮第 ${currentIndex} / ${totalFiles} 張照片...`, 'info');
                             const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
                             processedFile = await imageCompression(file, options);
-                        } else {
-                            updateStatus(`正在處理第 ${currentIndex} / ${totalFiles} 張照片...`, 'info');
                         }
                         const base64 = await readFileAsBase64(processedFile);
                         return { name: file.name, type: processedFile.type, data: base64 };
@@ -184,10 +243,42 @@
             return photoArray;
         }
 
-        function readFileAsBase64(file) { /* ... (此函式不變) ... */ }
-        function setLoadingState(isLoading) { /* ... (此函式不變) ... */ }
-        function updateStatus(message, type) { /* ... (此函式不變) ... */ }
-        // 為了簡潔，省略了部分不變的輔助函式，請保留您檔案中原有的版本
+        // 將檔案轉為 Base64
+        function readFileAsBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // 設定按鈕和狀態的載入中 UI
+        function setLoadingState(isLoading) {
+            submitButton.disabled = isLoading;
+            if (isLoading) {
+                buttonText.classList.add('hidden');
+                buttonSpinner.classList.remove('hidden');
+                updateStatus('正在處理中，請稍候...', 'info');
+            } else {
+                buttonText.classList.remove('hidden');
+                buttonSpinner.classList.add('hidden');
+            }
+        }
+
+        // 更新狀態訊息
+        function updateStatus(message, type) {
+            statusMessage.textContent = message;
+            if (type === 'success') {
+                statusMessage.className = 'text-green-600 font-semibold';
+            } else if (type === 'error') {
+                statusMessage.className = 'text-red-500 font-semibold';
+            } else {
+                statusMessage.className = 'text-gray-600';
+            }
+        }
+
+        // --- 程式進入點 ---
         initializeLiff();
     </script>
 </body>
