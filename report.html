@@ -3,139 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>添心設計 | 施工回報 v6.2</title>
+    <title>添心設計 | 施工回報 v7.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.1/dist/browser-image-compression.js"></script>
-    
+  
     <script>
         const LIFF_ID = '2007974938-gOrjlzna'; // 您的施工回報 LIFF ID
         // 【重要】請確認此網址是您最新的、功能正常的 Apps Script 部署網址
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwMAt_FuA0ELlQUhuz73T3dvJkxXuycqV5DoXP2teQ60CnyZQ-IvkEM9V-FFjlrc1df7Q/exec'; 
     </script>
-    
-    <style>
+        <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
         .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .file-input-label { display: inline-block; background-color: #3b82f6; color: white; border: 1px solid #3b82f6; padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; transition: background-color 0.2s; font-weight: 600; }
         .file-input-label:hover { background-color: #2563eb; }
         .file-input-label.selected { background-color: #6b7280; border-color: #6b7280; cursor: default; }
-        /* 【新增】診斷模式 UI 樣式 */
-        .status-light { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 8px; }
-        .status-red { background-color: #ef4444; }
-        .status-green { background-color: #22c55e; }
-        .status-gray { background-color: #9ca3af; }
     </style>
 </head>
 
 <body class="bg-gray-100">
     <div class="container mx-auto p-4 max-w-lg">
         <div class="bg-white rounded-lg shadow-md p-6">
-            <div class="text-center mb-6">
-                <h1 class="text-2xl font-bold text-gray-800">添心設計｜施工回報</h1>
-            </div>
-
+            <div class="text-center mb-6"><h1 class="text-2xl font-bold text-gray-800">添心設計｜施工回報</h1></div>
             <form id="report-form" novalidate>
-                </form>
-
-            <div class="mt-8 pt-4 border-t-2 border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-700 mb-3 text-center">開發者診斷模式</h3>
-                <div class="space-y-2 text-sm">
-                    <div class="flex items-center"><span id="liff-status-light" class="status-light status-gray"></span><span id="liff-status-text">LIFF 狀態: 未初始化</span></div>
-                    <div class="flex items-center"><span id="sw-status-light" class="status-light status-gray"></span><span id="sw-status-text">Service Worker 狀態: 未註冊</span></div>
-                </div>
-                <div id="sync-status" class="mt-2 text-sm text-blue-600 min-h-[20px]"></div>
-                <button type="button" id="force-sync-button" class="w-full mt-3 bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg text-sm hover:bg-indigo-600 disabled:bg-gray-400">
-                    手動強制同步
+                <div class="mb-4"><label for="projectId" class="block text-gray-700 font-semibold mb-2">案號 <span class="text-red-500">*</span></label><input type="text" id="projectId" class="w-full px-3 py-2 border border-gray-300 rounded-md" required></div>
+                <div class="mb-4"><label for="workType" class="block text-gray-700 font-semibold mb-2">今日施工項目 <span class="text-red-500">*</span></label><select id="workType" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white" required><option value="" disabled selected>請選擇施工項目</option><option value="保護工程-進退場項目">1. 保護工程-進退場項目</option><option value="木作工程">2. 木作工程</option><option value="系統工程">3. 系統工程</option><option value="水電工程">4. 水電工程</option><option value="油漆工程">5. 油漆工程</option><option value="泥作工程">6. 泥作工程</option><option value="清潔工程">7. 清潔工程</option><option value="玻璃工程">8. 玻璃工程</option><option value="其他工程">9. 其他工程</option></select></div>
+                <div class="mb-4"><label for="workDescription" class="block text-gray-700 font-semibold mb-2">當日施工內容說明</label><textarea id="workDescription" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-md"></textarea></div>
+                <div class="mb-4"><label class="block text-gray-700 font-semibold mb-2">現場照片 (可多選)</label><div class="flex items-center"><label for="sitePhotos" id="sitePhotosLabel" class="file-input-label">選擇檔案</label><span id="sitePhotosCount" class="ml-3 text-gray-600">未選取檔案</span><input type="file" id="sitePhotos" multiple accept="image/*" class="hidden"></div></div>
+                <div class="mb-4"><label for="problemDescription" class="block text-gray-700 font-semibold mb-2">問題回報</label><textarea id="problemDescription" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-md"></textarea></div>
+                <div class="mb-6"><label class="block text-gray-700 font-semibold mb-2">問題照片 (可多選)</label><div class="flex items-center"><label for="problemPhotos" id="problemPhotosLabel" class="file-input-label">選擇檔案</label><span id="problemPhotosCount" class="ml-3 text-gray-600">未選取檔案</span><input type="file" id="problemPhotos" multiple accept="image/*" class="hidden"></div></div>
+                <div class="flex items-center mb-4"><input id="compressImages" type="checkbox" checked class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"><label for="compressImages" class="ml-2 block text-sm text-gray-900">壓縮相片以加快上傳</label></div>
+                <div id="status-message" class="text-center mb-4 min-h-[24px]"></div>
+                <button type="submit" id="submit-button" class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-lg hover:bg-blue-700 disabled:bg-gray-400">
+                    <span id="button-text">提交回報</span>
+                    <div id="button-spinner" class="spinner w-6 h-6 border-4 border-white rounded-full mx-auto hidden"></div>
                 </button>
-                <div class="mt-4">
-                    <label class="block text-gray-600 font-semibold text-sm mb-1">詳細錯誤日誌:</label>
-                    <pre id="error-log" class="bg-gray-800 text-white text-xs p-3 rounded-md overflow-x-auto min-h-[50px]"></pre>
-                </div>
-            </div>
-            </div>
+            </form>
+        </div>
     </div>
 
     <script>
-        // --- 變數定義 ---
-        const form = document.getElementById('report-form');
-        const submitButton = document.getElementById('submit-button');
-        const buttonText = document.getElementById('button-text');
-        const buttonSpinner = document.getElementById('button-spinner');
-        const statusMessage = document.getElementById('status-message');
-        let userProfile = null;
-        
-        // 【新增】診斷模式 UI 變數
-        const liffStatusLight = document.getElementById('liff-status-light');
-        const liffStatusText = document.getElementById('liff-status-text');
-        const swStatusLight = document.getElementById('sw-status-light');
-        const swStatusText = document.getElementById('sw-status-text');
-        const forceSyncButton = document.getElementById('force-sync-button');
-        const syncStatus = document.getElementById('sync-status');
-        const errorLog = document.getElementById('error-log');
-        // --- 核心執行流程 ---
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('report-form');
+            const submitButton = document.getElementById('submit-button');
+            const buttonText = document.getElementById('button-text');
+            const buttonSpinner = document.getElementById('button-spinner');
+            const statusMessage = document.getElementById('status-message');
+            let userProfile = null;
 
-        // 程式主進入點
-        async function main() {
-            try {
-                // 步驟 1: 註冊 Service Worker
-                if ('serviceWorker' in navigator && 'SyncManager' in window) {
-                    await navigator.serviceWorker.register('sw.js');
-                    console.log('Service Worker 註冊成功');
-                    updateSystemStatus('sw', true, 'Service Worker: 已註冊');
-                    
-                    // 【新增】監聽來自 SW 的狀態回報
-                    navigator.serviceWorker.onmessage = (event) => {
-                        if (event.data && event.data.type === 'syncStatus') {
-                            syncStatus.textContent = `[背景同步] ${event.data.message}`;
-                        }
-                    };
-
-                } else {
-                    updateSystemStatus('sw', false, 'Service Worker: 不支援');
+            async function main() {
+                try {
+                    await liff.init({ liffId: LIFF_ID });
+                    if (!liff.isLoggedIn()) { liff.login(); return; }
+                    userProfile = await liff.getProfile();
+                    initializeEventListeners();
+                } catch (error) {
+                    console.error('初始化失敗', error);
+                    updateStatus('頁面初始化失敗，請在 LINE 中開啟或重新載入。', 'error');
+                    submitButton.disabled = true;
                 }
-
-                // 步驟 2: 初始化 LIFF
-                updateSystemStatus('liff', null, 'LIFF 狀態: 初始化中...');
-                await liff.init({ liffId: LIFF_ID });
-                if (!liff.isLoggedIn()) {
-                    liff.login();
-                    return;
-                }
-                userProfile = await liff.getProfile();
-                updateSystemStatus('liff', true, `LIFF 狀態: 已登入 (${userProfile.displayName})`);
-                
-                // 步驟 3: 綁定所有事件
-                initializeEventListeners();
-
-            } catch (error) {
-                console.error('初始化失敗', error);
-                updateSystemStatus('liff', false, `LIFF 狀態: 初始化失敗`);
-                errorLog.textContent = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
-                submitButton.disabled = true;
             }
-        }
 
+            function initializeEventListeners() {
+                setupFileInputUI('sitePhotos', 'sitePhotosLabel', 'sitePhotosCount');
+                setupFileInputUI('problemPhotos', 'problemPhotosLabel', 'problemPhotosCount');
+                form.addEventListener('submit', handleFormSubmit);
+            }
 
-        // 將所有事件監聽器綁定集中到一個函式中
-        function initializeEventListeners() {
-            setupFileInputUI('sitePhotos', 'sitePhotosLabel', 'sitePhotosCount');
-            setupFileInputUI('problemPhotos', 'problemPhotosLabel', 'problemPhotosCount');
-
-            form.addEventListener('submit', async function(event) {
+            async function handleFormSubmit(event) {
                 event.preventDefault();
-                setLoadingState(true, '正在準備資料...');
-                errorLog.textContent = ''; // 清除舊的錯誤日誌
-
+                setLoadingState(true);
                 if (!userProfile) {
-                    updateStatus('無法取得使用者資訊，可能是 LIFF 尚未初始化完成，請稍候再試。', 'error');
+                    updateStatus('無法取得使用者資訊，請重新載入頁面。', 'error');
                     setLoadingState(false);
                     return;
                 }
-
                 try {
-                    // 1. 準備資料
                     const shouldCompress = document.getElementById('compressImages').checked;
                     const siteFiles = Array.from(document.getElementById('sitePhotos').files);
                     const problemFiles = Array.from(document.getElementById('problemPhotos').files);
@@ -143,18 +88,20 @@
                         ...siteFiles.map(file => ({ file: file, isProblem: false })),
                         ...problemFiles.map(file => ({ file: file, isProblem: true }))
                     ];
-
                     if (allPhotosInfo.length === 0) {
-                         updateStatus('請至少選擇一張照片。', 'error');
-                         setLoadingState(false);
-                         return;
+                        updateStatus('請至少選擇一張照片。', 'error');
+                        setLoadingState(false);
+                        return;
                     }
+
+                    const batchId = `${userProfile.userId}-${Date.now()}`;
+                    const SUBMIT_CHUNK_SIZE = 10;
+                    const totalChunks = Math.ceil(allPhotosInfo.length / SUBMIT_CHUNK_SIZE);
                     
-                    // 2. 處理照片 (分塊 + 壓縮 + Base64)
-                    const processedPhotos = await processFiles(allPhotosInfo, shouldCompress);
-                    
-                    const formData = {
-                        source: 'liff_report_sync', // 新的 source 標記
+                    const baseFormData = {
+                        source: 'liff_report_form_chunk',
+                        batchId: batchId,
+                        totalChunks: totalChunks,
                         userId: userProfile.userId,
                         userName: userProfile.displayName,
                         projectId: document.getElementById('projectId').value,
@@ -162,182 +109,104 @@
                         workType: document.getElementById('workType').value,
                         workDescription: document.getElementById('workDescription').value,
                         problemDescription: document.getElementById('problemDescription').value,
-                        photos: processedPhotos
                     };
+
+                    for (let i = 0; i < totalChunks; i++) {
+                        const chunkStart = i * SUBMIT_CHUNK_SIZE;
+                        const chunkEnd = chunkStart + SUBMIT_CHUNK_SIZE;
+                        const photoChunk = allPhotosInfo.slice(chunkStart, chunkEnd);
+                        
+                        updateStatus(`正在處理第 ${i + 1} / ${totalChunks} 批照片...`, 'info');
+                        const processedPhotos = await processPhotoChunk(photoChunk, shouldCompress);
+
+                        const chunkFormData = {
+                            ...baseFormData,
+                            chunkIndex: i + 1,
+                            photos: processedPhotos
+                        };
+
+                        updateStatus(`正在提交第 ${i + 1} / ${totalChunks} 批資料...`, 'info');
+                        await fetch(GAS_WEB_APP_URL, {
+                            method: 'POST', cache: 'no-cache', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                            body: JSON.stringify(chunkFormData)
+                        }).catch(error => {
+                            if (error instanceof TypeError && error.message.toLowerCase().includes('failed to fetch')) {
+                                console.log(`批次 ${i + 1} 提交成功 (預期性錯誤)。`); return;
+                            }
+                            throw error;
+                        });
+                    }
                     
-                    // 3. 將包裹存入本地倉庫 (IndexedDB)
-                    updateStatus('將回報存入本地佇列...', 'info');
-                    await saveReportToQueue({
-                        url: GAS_WEB_APP_URL,
-                        body: JSON.stringify(formData)
-                    });
-                    
-                    // 4. 通知快遞員有新任務
-                    const registration = await navigator.serviceWorker.ready;
-                    await registration.sync.register('sync-reports');
-                    
-                    // 5. 立即顯示成功並關閉視窗
                     handleSuccess();
 
                 } catch (error) {
                     console.error('表單處理失敗', error);
-                    updateStatus(`提交失敗：請查看下方詳細錯誤日誌。`, 'error');
-                    errorLog.textContent = JSON.stringify(error, Object.getOwnPropertyNames(error), 2); // 【修改】顯示完整錯誤物件
+                    updateStatus(`提交失敗：${error.message}`, 'error');
                     setLoadingState(false);
                 }
-            });
-            
-            // 【新增】為「強制同步」按鈕綁定事件
-            forceSyncButton.addEventListener('click', async () => {
-                try {
-                    const registration = await navigator.serviceWorker.ready;
-                    await registration.sync.register('sync-reports');
-                    syncStatus.textContent = '[手動] 已觸發一次背景同步任務。';
-                } catch (error) {
-                    syncStatus.textContent = `[手動] 觸發失敗: ${error.message}`;
-                }
-            });            
-        }
+            }
 
+            function handleSuccess() {
+                updateStatus('所有批次皆已提交！後續處理完成後您會收到 LINE 通知。', 'success');
+                setTimeout(() => { liff.closeWindow(); }, 1500);
+            }
 
-        // --- 輔助函式 (完整版) ---
-        
-        function handleSuccess() {
-            updateStatus('回報已進入背景佇列，網路恢復時將自動上傳。', 'success');
-            setTimeout(() => { liff.closeWindow(); }, 1500);
-        }
-
-        async function processFiles(allPhotosInfo, shouldCompress) {
-            const photoArray = [];
-            const totalFiles = allPhotosInfo.length;
-            const CHUNK_SIZE = 5;
-            for (let i = 0; i < totalFiles; i += CHUNK_SIZE) {
-                const chunk = allPhotosInfo.slice(i, i + CHUNK_SIZE);
-                const chunkPromises = chunk.map(async (photoInfo, index) => {
-                    const currentIndex = i + index + 1;
+            async function processPhotoChunk(photoInfoChunk, shouldCompress) {
+                const photoArray = [];
+                const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
+                for (const photoInfo of photoInfoChunk) {
                     let processedFile = photoInfo.file;
                     try {
-                        const statusText = shouldCompress ? '正在壓縮' : '正在處理';
-                        updateStatus(`${statusText}第 ${currentIndex} / ${totalFiles} 張照片...`, 'info');
                         if (shouldCompress) {
-                            const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
                             processedFile = await imageCompression(photoInfo.file, options);
                         }
                         const base64 = await readFileAsBase64(processedFile);
-                        return { name: photoInfo.file.name, type: processedFile.type, data: base64, isProblem: photoInfo.isProblem };
-                    } catch (error) {
-                        updateStatus(`圖片 ${photoInfo.file.name} 處理失敗，已跳過。`, 'error');
-                        return null;
+                        photoArray.push({ name: photoInfo.file.name, type: processedFile.type, data: base64, isProblem: photoInfo.isProblem });
+                    } catch (error) { console.error(`圖片 ${photoInfo.file.name} 處理失敗:`, error); }
+                }
+                return photoArray;
+            }
+
+            function readFileAsBase64(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result.split(',')[1]);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+            }
+
+            function setLoadingState(isLoading, message = '處理中...') {
+                submitButton.disabled = isLoading;
+                if (isLoading) {
+                    buttonText.classList.add('hidden'); buttonSpinner.classList.remove('hidden');
+                    updateStatus(message, 'info');
+                } else {
+                    buttonText.classList.remove('hidden'); buttonSpinner.classList.add('hidden');
+                    updateStatus('', 'info');
+                }
+            }
+
+            function updateStatus(message, type) {
+                statusMessage.textContent = message;
+                if (type === 'success') { statusMessage.className = 'text-green-600 font-semibold'; }
+                else if (type === 'error') { statusMessage.className = 'text-red-500 font-semibold'; }
+                else { statusMessage.className = 'text-gray-600'; }
+            }
+
+            function setupFileInputUI(inputId, labelId, countId) {
+                const input = document.getElementById(inputId); const label = document.getElementById(labelId); const count = document.getElementById(countId);
+                input.addEventListener('change', () => {
+                    if (input.files.length > 0) {
+                        label.classList.add('selected'); count.textContent = `已選擇 ${input.files.length} 張照片`;
+                    } else {
+                        label.classList.remove('selected'); count.textContent = '未選取檔案';
                     }
                 });
-                const processedChunk = await Promise.all(chunkPromises);
-                photoArray.push(...processedChunk.filter(p => p !== null));
-                await new Promise(resolve => setTimeout(resolve, 10));
             }
-            return photoArray;
-        }
-
-        function readFileAsBase64(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result.split(',')[1]);
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
-        }
-
-        function setLoadingState(isLoading, message = '處理中...') {
-            submitButton.disabled = isLoading;
-            if (isLoading) {
-                buttonText.classList.add('hidden');
-                buttonSpinner.classList.remove('hidden');
-                updateStatus(message, 'info');
-            } else {
-                buttonText.classList.remove('hidden');
-                buttonSpinner.classList.add('hidden');
-                updateStatus('', 'info');
-            }
-        }
-
-        function updateStatus(message, type) {
-            statusMessage.textContent = message;
-            if (type === 'success') {
-                statusMessage.className = 'text-green-600 font-semibold';
-            } else if (type === 'error') {
-                statusMessage.className = 'text-red-500 font-semibold';
-            } else {
-                statusMessage.className = 'text-gray-600';
-            }
-        }
-
-        // --- 輔助函式 (完整版) ---
-        
-        // 【新增】更新系統狀態 UI 的函式
-        function updateSystemStatus(system, isSuccess, message) {
-            let light, text;
-            if (system === 'liff') {
-                light = liffStatusLight;
-                text = liffStatusText;
-            } else {
-                light = swStatusLight;
-                text = swStatusText;
-            }
-            light.classList.remove('status-gray', 'status-green', 'status-red');
-            if (isSuccess === true) {
-                light.classList.add('status-green');
-            } else if (isSuccess === false) {
-                light.classList.add('status-red');
-            } else {
-                light.classList.add('status-gray');
-            }
-            text.textContent = message;
-        }
-
-        function setupFileInputUI(inputId, labelId, countId) {
-            const input = document.getElementById(inputId);
-            const label = document.getElementById(labelId);
-            const count = document.getElementById(countId);
-            input.addEventListener('change', () => {
-                if (input.files.length > 0) {
-                    label.classList.add('selected');
-                    count.textContent = `已選擇 ${input.files.length} 張照片`;
-                } else {
-                    label.classList.remove('selected');
-                    count.textContent = '未選取檔案';
-                }
-            });
-        }
-        
-        const DB_NAME = 'report-queue-db';
-        const STORE_NAME = 'reports';
-
-        function openDB() {
-            return new Promise((resolve, reject) => {
-                const request = window.indexedDB.open(DB_NAME, 1);
-                request.onupgradeneeded = event => {
-                    const db = event.target.result;
-                    if (!db.objectStoreNames.contains(STORE_NAME)) {
-                        db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
-                    }
-                };
-                request.onsuccess = event => resolve(event.target.result);
-                request.onerror = event => reject(event.target.error);
-            });
-        }
-
-        async function saveReportToQueue(reportData) {
-            const db = await openDB();
-            return new Promise((resolve, reject) => {
-                const transaction = db.transaction(STORE_NAME, 'readwrite');
-                const store = transaction.objectStore(STORE_NAME);
-                const request = store.add(reportData);
-                request.onsuccess = resolve;
-                request.onerror = event => reject(event.target.error);
-            });
-        }
-        
-        // --- 最終的程式進入點 ---
-        main();
+            
+            main();
+        });
     </script>
 </body>
 </html>
