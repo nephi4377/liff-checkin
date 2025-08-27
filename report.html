@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>添心設計 | 施工回報 v6.0</title>
+    <title>添心設計 | 施工回報 v6.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.1/dist/browser-image-compression.js"></script>
@@ -105,7 +105,6 @@
                 }
 
                 try {
-                    // 1. 準備資料
                     const shouldCompress = document.getElementById('compressImages').checked;
                     const siteFiles = Array.from(document.getElementById('sitePhotos').files);
                     const problemFiles = Array.from(document.getElementById('problemPhotos').files);
@@ -120,7 +119,6 @@
                          return;
                     }
                     
-                    // 2. 處理照片 (分塊 + 壓縮 + Base64)
                     const processedPhotos = await processFiles(allPhotosInfo, shouldCompress);
                     
                     const formData = {
@@ -135,18 +133,15 @@
                         photos: processedPhotos
                     };
                     
-                    // 3. 將包裹存入本地倉庫 (IndexedDB)
                     updateStatus('將回報存入本地佇列...', 'info');
                     await saveReportToQueue({
                         url: GAS_WEB_APP_URL,
                         body: JSON.stringify(formData)
                     });
                     
-                    // 4. 通知快遞員有新任務
                     const registration = await navigator.serviceWorker.ready;
                     await registration.sync.register('sync-reports');
                     
-                    // 5. 立即顯示成功並關閉視窗
                     handleSuccess();
 
                 } catch (error) {
@@ -270,7 +265,8 @@
             });
         }
         
-        main(); // 執行主函式
+        // --- 最終的程式進入點 ---
+        main();
     </script>
 </body>
 </html>
