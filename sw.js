@@ -1,34 +1,32 @@
 // ===================================================
-// 版本: v1.0 (Service Worker)
-// 更新時間: 2025/08/28 14:30
+// 版本: v1.1 (狀態回報)
+// 更新時間: 2025/08/28 16:25
 // 說明: 這是施工回報系統的背景快遞員 (Service Worker)。
-//       負責處理背景同步，將暫存在本地資料庫的回報可靠地送出。
+//       - 【新增】在同步的不同階段，透過 postMessage 將狀態回報給主頁面。
 // ===================================================
 
-// --- 步驟 1: 監聽 "sync" 事件 ---
-// 當瀏覽器認為網路狀況良好，且我們註冊了同步任務時，這個事件就會被觸發
+// --- 監聽 "sync" 事件 ---
 self.addEventListener('sync', function(event) {
-    console.log('[Service Worker] 背景同步事件觸發！', event);
-    // 我們為所有施工回報的同步任務，統一定義一個標籤 (tag)
     if (event.tag === 'sync-reports') {
-        // event.waitUntil() 會確保 Service Worker 在非同步操作完成前不會被終止
         event.waitUntil(syncReports());
     }
 });
 
-// --- 步驟 2: 定義同步處理函式 ---
 async function syncReports() {
-    console.log('[Service Worker] 開始同步施工回報...');
+    // 【新增】向主頁面回報：同步已開始
+    await postStatusToClients('背景同步處理中...');
+    
     const db = await openDB();
-    // 從本地資料庫中，讀取所有待辦的回報
     const reports = await getAllReports(db);
 
-    // 逐一處理每一筆待辦的回報
+    if (reports.length === 0) {
+        await postStatusToClients('佇列為空，無需同步。');
+        return;
+    }
+
     for (const report of reports) {
         try {
-            console.log(`[Service Worker] 正在嘗試提交 ID 為 ${report.id} 的回報...`);
-            
-            // 執行真正的網路請求
+            await postStatusToClients(`正在提交佇列中的回報 ID: ${report.id}...`);
             const response = await fetch(report.url, {
                 method: 'POST',
                 cache: 'no-cache',
@@ -36,26 +34,37 @@ async function syncReports() {
                 body: report.body
             });
 
-            // 雖然因為平台異常，我們可能無法讀取到 response.ok
-            // 但只要 fetch 沒有直接拋出網路錯誤，我們就視為成功送達
-            console.log(`[Service Worker] ID 為 ${report.id} 的回報提交成功！`);
-            // 提交成功後，從本地資料庫中刪除這筆已完成的任務
+            // 我們依然假設，只要 fetch 沒有拋出網路層級的錯誤，就代表成功
             await deleteReport(db, report.id);
+            await postStatusToClients(`回報 ID: ${report.id} 同步成功！`);
 
         } catch (error) {
             console.error(`[Service Worker] 提交 ID 為 ${report.id} 的回報失敗:`, error);
-            // 如果提交失敗（例如伺服器剛好 500 錯誤），
-            // 我們會在此處中斷，這筆任務會被保留在資料庫中，
-            // Service Worker 會在下一次 sync 事件時自動重試。
+            // 【新增】向主頁面回報：同步失敗，並附上錯誤訊息
+            await postStatusToClients(`回報 ID: ${report.id} 同步失敗: ${error.message}`);
+            // 中斷迴圈，等待下一次網路恢復時重試
             break; 
         }
     }
-    console.log('[Service Worker] 本次同步處理完成。');
+}
+
+/**
+ * 【新增函式】向所有可見的頁面客戶端廣播狀態訊息
+ * @param {string} message - 要發送的訊息
+ */
+async function postStatusToClients(message) {
+    const clients = await self.clients.matchAll({
+        includeUncontrolled: true,
+        type: 'window',
+    });
+    clients.forEach((client) => {
+        client.postMessage({ type: 'syncStatus', message: message });
+    });
 }
 
 
 // ===================================================
-// ========= IndexedDB 本地資料庫輔助函式 =========
+// ========= IndexedDB 本地資料庫輔助函式 (不變) =========
 // ===================================================
 
 const DB_NAME = 'report-queue-db';
