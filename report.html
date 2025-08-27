@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>添心設計 | 施工回報 v6.1</title>
+    <title>添心設計 | 施工回報 v6.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.1/dist/browser-image-compression.js"></script>
@@ -21,6 +21,11 @@
         .file-input-label { display: inline-block; background-color: #3b82f6; color: white; border: 1px solid #3b82f6; padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; transition: background-color 0.2s; font-weight: 600; }
         .file-input-label:hover { background-color: #2563eb; }
         .file-input-label.selected { background-color: #6b7280; border-color: #6b7280; cursor: default; }
+        /* 【新增】診斷模式 UI 樣式 */
+        .status-light { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+        .status-red { background-color: #ef4444; }
+        .status-green { background-color: #22c55e; }
+        .status-gray { background-color: #9ca3af; }
     </style>
 </head>
 
@@ -32,20 +37,24 @@
             </div>
 
             <form id="report-form" novalidate>
-                <div class="mb-4"><label for="projectId" class="block text-gray-700 font-semibold mb-2">案號 <span class="text-red-500">*</span></label><input type="text" id="projectId" class="w-full px-3 py-2 border border-gray-300 rounded-md" required></div>
-                <div class="mb-4"><label for="workType" class="block text-gray-700 font-semibold mb-2">今日施工項目 <span class="text-red-500">*</span></label><select id="workType" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white" required><option value="" disabled selected>請選擇施工項目</option><option value="保護工程-進退場項目">1. 保護工程-進退場項目</option><option value="木作工程">2. 木作工程</option><option value="系統工程">3. 系統工程</option><option value="水電工程">4. 水電工程</option><option value="油漆工程">5. 油漆工程</option><option value="泥作工程">6. 泥作工程</option><option value="清潔工程">7. 清潔工程</option><option value="玻璃工程">8. 玻璃工程</option><option value="其他工程">9. 其他工程</option></select></div>
-                <div class="mb-4"><label for="workDescription" class="block text-gray-700 font-semibold mb-2">當日施工內容說明</label><textarea id="workDescription" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-md"></textarea></div>
-                <div class="mb-4"><label class="block text-gray-700 font-semibold mb-2">現場照片 (可多選)</label><div class="flex items-center"><label for="sitePhotos" id="sitePhotosLabel" class="file-input-label">選擇檔案</label><span id="sitePhotosCount" class="ml-3 text-gray-600">未選取檔案</span><input type="file" id="sitePhotos" multiple accept="image/*" class="hidden"></div></div>
-                <div class="mb-4"><label for="problemDescription" class="block text-gray-700 font-semibold mb-2">問題回報</label><textarea id="problemDescription" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-md"></textarea></div>
-                <div class="mb-6"><label class="block text-gray-700 font-semibold mb-2">問題照片 (可多選)</label><div class="flex items-center"><label for="problemPhotos" id="problemPhotosLabel" class="file-input-label">選擇檔案</label><span id="problemPhotosCount" class="ml-3 text-gray-600">未選取檔案</span><input type="file" id="problemPhotos" multiple accept="image/*" class="hidden"></div></div>
-                <div class="flex items-center mb-4"><input id="compressImages" type="checkbox" checked class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"><label for="compressImages" class="ml-2 block text-sm text-gray-900">壓縮相片以加快上傳</label></div>
-                <div id="status-message" class="text-center mb-4 min-h-[24px]"></div>
-                <button type="submit" id="submit-button" class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-lg hover:bg-blue-700 disabled:bg-gray-400">
-                    <span id="button-text">提交回報</span>
-                    <div id="button-spinner" class="spinner w-6 h-6 border-4 border-white rounded-full mx-auto hidden"></div>
+                </form>
+
+            <div class="mt-8 pt-4 border-t-2 border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-700 mb-3 text-center">開發者診斷模式</h3>
+                <div class="space-y-2 text-sm">
+                    <div class="flex items-center"><span id="liff-status-light" class="status-light status-gray"></span><span id="liff-status-text">LIFF 狀態: 未初始化</span></div>
+                    <div class="flex items-center"><span id="sw-status-light" class="status-light status-gray"></span><span id="sw-status-text">Service Worker 狀態: 未註冊</span></div>
+                </div>
+                <div id="sync-status" class="mt-2 text-sm text-blue-600 min-h-[20px]"></div>
+                <button type="button" id="force-sync-button" class="w-full mt-3 bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg text-sm hover:bg-indigo-600 disabled:bg-gray-400">
+                    手動強制同步
                 </button>
-            </form>
-        </div>
+                <div class="mt-4">
+                    <label class="block text-gray-600 font-semibold text-sm mb-1">詳細錯誤日誌:</label>
+                    <pre id="error-log" class="bg-gray-800 text-white text-xs p-3 rounded-md overflow-x-auto min-h-[50px]"></pre>
+                </div>
+            </div>
+            </div>
     </div>
 
     <script>
@@ -56,38 +65,58 @@
         const buttonSpinner = document.getElementById('button-spinner');
         const statusMessage = document.getElementById('status-message');
         let userProfile = null;
-
+        
+        // 【新增】診斷模式 UI 變數
+        const liffStatusLight = document.getElementById('liff-status-light');
+        const liffStatusText = document.getElementById('liff-status-text');
+        const swStatusLight = document.getElementById('sw-status-light');
+        const swStatusText = document.getElementById('sw-status-text');
+        const forceSyncButton = document.getElementById('force-sync-button');
+        const syncStatus = document.getElementById('sync-status');
+        const errorLog = document.getElementById('error-log');
         // --- 核心執行流程 ---
 
         // 程式主進入點
         async function main() {
             try {
-                // 步驟 1: 註冊 Service Worker (快遞員)，讓他在背景待命
+                // 步驟 1: 註冊 Service Worker
                 if ('serviceWorker' in navigator && 'SyncManager' in window) {
                     await navigator.serviceWorker.register('sw.js');
                     console.log('Service Worker 註冊成功');
+                    updateSystemStatus('sw', true, 'Service Worker: 已註冊');
+                    
+                    // 【新增】監聽來自 SW 的狀態回報
+                    navigator.serviceWorker.onmessage = (event) => {
+                        if (event.data && event.data.type === 'syncStatus') {
+                            syncStatus.textContent = `[背景同步] ${event.data.message}`;
+                        }
+                    };
+
                 } else {
-                    console.warn('此瀏覽器不支援 Service Worker 或背景同步。');
-                    // 在此可以選擇性地提示使用者
+                    updateSystemStatus('sw', false, 'Service Worker: 不支援');
                 }
 
-                // 步驟 2: 初始化 LIFF 並取得使用者資料
+                // 步驟 2: 初始化 LIFF
+                updateSystemStatus('liff', null, 'LIFF 狀態: 初始化中...');
                 await liff.init({ liffId: LIFF_ID });
                 if (!liff.isLoggedIn()) {
                     liff.login();
                     return;
                 }
                 userProfile = await liff.getProfile();
+                updateSystemStatus('liff', true, `LIFF 狀態: 已登入 (${userProfile.displayName})`);
                 
-                // 步驟 3: 在所有前置作業都完成後，才綁定所有互動事件
+                // 步驟 3: 綁定所有事件
                 initializeEventListeners();
 
             } catch (error) {
                 console.error('初始化失敗', error);
-                updateStatus('頁面初始化失敗，請在 LINE 中開啟或重新載入。', 'error');
+                updateSystemStatus('liff', false, `LIFF 狀態: 初始化失敗`);
+                errorLog.textContent = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
                 submitButton.disabled = true;
             }
         }
+
 
         // 將所有事件監聽器綁定集中到一個函式中
         function initializeEventListeners() {
@@ -97,6 +126,7 @@
             form.addEventListener('submit', async function(event) {
                 event.preventDefault();
                 setLoadingState(true, '正在準備資料...');
+                errorLog.textContent = ''; // 清除舊的錯誤日誌
 
                 if (!userProfile) {
                     updateStatus('無法取得使用者資訊，可能是 LIFF 尚未初始化完成，請稍候再試。', 'error');
@@ -151,10 +181,22 @@
 
                 } catch (error) {
                     console.error('表單處理失敗', error);
-                    updateStatus(`提交失敗：${error.message}`, 'error');
+                    updateStatus(`提交失敗：請查看下方詳細錯誤日誌。`, 'error');
+                    errorLog.textContent = JSON.stringify(error, Object.getOwnPropertyNames(error), 2); // 【修改】顯示完整錯誤物件
                     setLoadingState(false);
                 }
             });
+            
+            // 【新增】為「強制同步」按鈕綁定事件
+            forceSyncButton.addEventListener('click', async () => {
+                try {
+                    const registration = await navigator.serviceWorker.ready;
+                    await registration.sync.register('sync-reports');
+                    syncStatus.textContent = '[手動] 已觸發一次背景同步任務。';
+                } catch (error) {
+                    syncStatus.textContent = `[手動] 觸發失敗: ${error.message}`;
+                }
+            });            
         }
 
 
@@ -226,6 +268,29 @@
             } else {
                 statusMessage.className = 'text-gray-600';
             }
+        }
+
+        // --- 輔助函式 (完整版) ---
+        
+        // 【新增】更新系統狀態 UI 的函式
+        function updateSystemStatus(system, isSuccess, message) {
+            let light, text;
+            if (system === 'liff') {
+                light = liffStatusLight;
+                text = liffStatusText;
+            } else {
+                light = swStatusLight;
+                text = swStatusText;
+            }
+            light.classList.remove('status-gray', 'status-green', 'status-red');
+            if (isSuccess === true) {
+                light.classList.add('status-green');
+            } else if (isSuccess === false) {
+                light.classList.add('status-red');
+            } else {
+                light.classList.add('status-gray');
+            }
+            text.textContent = message;
         }
 
         function setupFileInputUI(inputId, labelId, countId) {
