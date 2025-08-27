@@ -68,7 +68,7 @@
                     console.log('Service Worker 註冊成功');
                 } else {
                     console.warn('此瀏覽器不支援 Service Worker 或背景同步。');
-                    updateStatus('警告：您的瀏覽器不支援離線提交功能。', 'error');
+                    // 在此可以選擇性地提示使用者
                 }
 
                 // 步驟 2: 初始化 LIFF 並取得使用者資料
@@ -105,6 +105,7 @@
                 }
 
                 try {
+                    // 1. 準備資料
                     const shouldCompress = document.getElementById('compressImages').checked;
                     const siteFiles = Array.from(document.getElementById('sitePhotos').files);
                     const problemFiles = Array.from(document.getElementById('problemPhotos').files);
@@ -119,10 +120,11 @@
                          return;
                     }
                     
+                    // 2. 處理照片 (分塊 + 壓縮 + Base64)
                     const processedPhotos = await processFiles(allPhotosInfo, shouldCompress);
                     
                     const formData = {
-                        source: 'liff_report_sync',
+                        source: 'liff_report_sync', // 新的 source 標記
                         userId: userProfile.userId,
                         userName: userProfile.displayName,
                         projectId: document.getElementById('projectId').value,
@@ -133,15 +135,18 @@
                         photos: processedPhotos
                     };
                     
+                    // 3. 將包裹存入本地倉庫 (IndexedDB)
                     updateStatus('將回報存入本地佇列...', 'info');
                     await saveReportToQueue({
                         url: GAS_WEB_APP_URL,
                         body: JSON.stringify(formData)
                     });
                     
+                    // 4. 通知快遞員有新任務
                     const registration = await navigator.serviceWorker.ready;
                     await registration.sync.register('sync-reports');
                     
+                    // 5. 立即顯示成功並關閉視窗
                     handleSuccess();
 
                 } catch (error) {
@@ -151,6 +156,7 @@
                 }
             });
         }
+
 
         // --- 輔助函式 (完整版) ---
         
