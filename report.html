@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>添心設計 | 施工回報 v4.0</title>
+    <title>添心設計 | 施工回報 v4.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.1/dist/browser-image-compression.js"></script>
-   
+    
     <script>
-    const LIFF_ID = '2007974938-gOrjlzna'; // 您的施工回報 LIFF ID
-    // 【重要】請務必將此處換成您部署「新版 line_reply.gs」後產生的「新」網址
-    const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwMAt_FuA0ELlQUhuz73T3dvJkxXuycqV5DoXP2teQ60CnyZQ-IvkEM9V-FFjlrc1df7Q/exec';
+        const LIFF_ID = '2007974938-gOrjlzna'; // 您的施工回報 LIFF ID
+        // 【重要】請務必確認此處是您「最新的」、「功能正常的」Apps Script 部署網址
+        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwMAt_FuA0ELlQUhuz73T3dvJkxXuycqV5DoXP2teQ60CnyZQ-IvkEM9V-FFjlrc1df7Q/exec';
     </script>
     
     <style>
@@ -106,98 +106,6 @@
         const statusMessage = document.getElementById('status-message');
         let userProfile = null;
 
-        // --- 初始化函式 ---
-        
-        // 設定檔案選擇按鈕的 UI 互動
-        function setupFileInputUI(inputId, labelId, countId) {
-            const input = document.getElementById(inputId);
-            const label = document.getElementById(labelId);
-            const count = document.getElementById(countId);
-            input.addEventListener('change', () => {
-                if (input.files.length > 0) {
-                    label.classList.add('selected');
-                    count.textContent = `已選擇 ${input.files.length} 張照片`;
-                } else {
-                    label.classList.remove('selected');
-                    count.textContent = '未選取檔案';
-                }
-            });
-        }
-
-        // LIFF 初始化
-        async function initializeLiff() {
-            try {
-                await liff.init({ liffId: LIFF_ID });
-                if (!liff.isLoggedIn()) {
-                    liff.login();
-                    return;
-                }
-                userProfile = await liff.getProfile();
-                // LIFF 初始化成功後才啟用檔案按鈕
-                setupFileInputUI('sitePhotos', 'sitePhotosLabel', 'sitePhotosCount');
-                setupFileInputUI('problemPhotos', 'problemPhotosLabel', 'problemPhotosCount');
-            } catch (error) {
-                console.error('LIFF 初始化失敗', error);
-                updateStatus('LIFF 初始化失敗，請在 LINE 中開啟。', 'error');
-                submitButton.disabled = true;
-            }
-        }
-
-        // --- 核心功能 ---
-
-        // 表單提交事件監聽器
-        form.addEventListener('submit', async function(event) {
-            event.preventDefault();
-            
-            // 點擊後立刻更新UI，防止重複點擊並提供即時反饋
-            setLoadingState(true);
-
-            if (!userProfile) {
-                updateStatus('無法取得使用者資訊，請重新載入頁面。', 'error');
-                setLoadingState(false);
-                return;
-            }
-
-            try {
-                const shouldCompress = document.getElementById('compressImages').checked;
-                const projectNameRaw = document.getElementById('projectId').value;
-
-                const formData = {
-                    source: 'liff_report_form',
-                    userId: userProfile.userId,
-                    userName: userProfile.displayName,
-                    projectId: document.getElementById('projectId').value,
-                    projectNameRaw: projectNameRaw,
-                    workType: document.getElementById('workType').value,
-                    workDescription: document.getElementById('workDescription').value,
-                    problemDescription: document.getElementById('problemDescription').value,
-                    sitePhotos: await processFiles(document.getElementById('sitePhotos').files, shouldCompress),
-                    problemPhotos: await processFiles(document.getElementById('problemPhotos').files, shouldCompress)
-                };
-                
-                updateStatus('正在提交資料...', 'info');
-                await fetch(GAS_WEB_APP_URL, {
-                    method: 'POST',
-                    cache: 'no-cache',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify(formData)
-                });
-                
-                // 正常情況下，程式碼會直接跳到 catch 區塊
-                handleSuccess();
-
-            } catch (error) {
-                console.error('表單處理失敗', error);
-                if (error instanceof TypeError && error.message.toLowerCase().includes('failed to fetch')) {
-                    console.log('捕捉到預期的 Fetch 錯誤，將其視為提交成功。');
-                    handleSuccess();
-                } else {
-                    updateStatus(`提交失敗：${error.message}`, 'error');
-                    setLoadingState(false);
-                }
-            }
-        });
-
         // --- 輔助函式 (完整版) ---
 
         // 成功處理函式
@@ -208,7 +116,7 @@
             }, 1500);
         }
 
-        // 【最終方案：分塊處理 + 圖片壓縮】
+        // 分塊處理 + 圖片壓縮
         async function processFiles(fileList, shouldCompress) {
             const photoArray = [];
             const allFiles = Array.from(fileList);
@@ -263,6 +171,7 @@
             } else {
                 buttonText.classList.remove('hidden');
                 buttonSpinner.classList.add('hidden');
+                updateStatus('', 'info'); // 清除狀態訊息
             }
         }
 
@@ -277,9 +186,96 @@
                 statusMessage.className = 'text-gray-600';
             }
         }
+        
+        // --- 核心初始化與事件綁定 ---
 
-        // --- 程式進入點 ---
-        initializeLiff();
+        // 設定檔案選擇按鈕的 UI 互動
+        function setupFileInputUI(inputId, labelId, countId) {
+            const input = document.getElementById(inputId);
+            const label = document.getElementById(labelId);
+            const count = document.getElementById(countId);
+            input.addEventListener('change', () => {
+                if (input.files.length > 0) {
+                    label.classList.add('selected');
+                    count.textContent = `已選擇 ${input.files.length} 張照片`;
+                } else {
+                    label.classList.remove('selected');
+                    count.textContent = '未選取檔案';
+                }
+            });
+        }
+
+        // 程式主進入點
+        async function main() {
+            try {
+                await liff.init({ liffId: LIFF_ID });
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                    return;
+                }
+                userProfile = await liff.getProfile();
+                
+                // 【核心修正】在 LIFF 完全準備好之後，才綁定所有事件
+                setupFileInputUI('sitePhotos', 'sitePhotosLabel', 'sitePhotosCount');
+                setupFileInputUI('problemPhotos', 'problemPhotosLabel', 'problemPhotosCount');
+
+                form.addEventListener('submit', async function(event) {
+                    event.preventDefault();
+                    setLoadingState(true);
+
+                    if (!userProfile) {
+                        updateStatus('無法取得使用者資訊，請重新載入頁面。', 'error');
+                        setLoadingState(false);
+                        return;
+                    }
+
+                    try {
+                        const shouldCompress = document.getElementById('compressImages').checked;
+                        const projectNameRaw = document.getElementById('projectId').value;
+
+                        const formData = {
+                            source: 'liff_report_form',
+                            userId: userProfile.userId,
+                            userName: userProfile.displayName,
+                            projectId: document.getElementById('projectId').value,
+                            projectNameRaw: projectNameRaw,
+                            workType: document.getElementById('workType').value,
+                            workDescription: document.getElementById('workDescription').value,
+                            problemDescription: document.getElementById('problemDescription').value,
+                            sitePhotos: await processFiles(document.getElementById('sitePhotos').files, shouldCompress),
+                            problemPhotos: await processFiles(document.getElementById('problemPhotos').files, shouldCompress)
+                        };
+                        
+                        updateStatus('正在提交資料...', 'info');
+                        await fetch(GAS_WEB_APP_URL, {
+                            method: 'POST',
+                            cache: 'no-cache',
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                            body: JSON.stringify(formData)
+                        });
+                        
+                        handleSuccess();
+
+                    } catch (error) {
+                        console.error('表單處理失敗', error);
+                        if (error instanceof TypeError && error.message.toLowerCase().includes('failed to fetch')) {
+                            console.log('捕捉到預期的 Fetch 錯誤，將其視為提交成功。');
+                            handleSuccess();
+                        } else {
+                            updateStatus(`提交失敗：${error.message}`, 'error');
+                            setLoadingState(false);
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error('LIFF 初始化失敗', error);
+                updateStatus('LIFF 初始化失敗，請在 LINE 中開啟。', 'error');
+                submitButton.disabled = true;
+            }
+        }
+
+        main();
     </script>
 </body>
 </html>
