@@ -57,118 +57,90 @@
         const statusMessage = document.getElementById('status-message');
         let userProfile = null;
 
-        // --- 核心執行流程 ---
+        // --- 【核心修改】---
 
-        // 程式主進入點
-        async function main() {
+        // 步驟 A: 註冊 Service Worker (快遞員)
+        if ('serviceWorker' in navigator && 'SyncManager' in window) {
+            navigator.serviceWorker.register('sw.js')
+                .then(function(registration) {
+                    console.log('Service Worker 註冊成功:', registration);
+                })
+                .catch(function(error) {
+                    console.error('Service Worker 註冊失敗:', error);
+                });
+        } else {
+            console.warn('此瀏覽器不支援 Service Worker 或背景同步。');
+            // 在不支援的瀏覽器中，可以考慮提供一個提示或退回舊的提交方式
+        }
+        
+        // 步驟 B: 修改表單提交事件，將包裹交給快遞員
+        form.addEventListener('submit', async function(event) {
+            event.preventDefault();
+            setLoadingState(true, '正在準備資料...');
+            if (!userProfile) {
+                updateStatus('無法取得使用者資訊，請稍候再試。', 'error');
+                setLoadingState(false);
+                return;
+            }
+
             try {
-                await liff.init({ liffId: LIFF_ID });
-                if (!liff.isLoggedIn()) {
-                    liff.login();
-                    return;
+                // 1. 準備資料 (與之前相同)
+                const shouldCompress = document.getElementById('compressImages').checked;
+                // ... (收集所有表單文字與照片檔案)
+                 const siteFiles = Array.from(document.getElementById('sitePhotos').files);
+                const problemFiles = Array.from(document.getElementById('problemPhotos').files);
+                const allPhotosInfo = [
+                    ...siteFiles.map(file => ({ file: file, isProblem: false })),
+                    ...problemFiles.map(file => ({ file: file, isProblem: true }))
+                ];
+
+                if (allPhotosInfo.length === 0) {
+                     updateStatus('請至少選擇一張照片。', 'error');
+                     setLoadingState(false);
+                     return;
                 }
-                userProfile = await liff.getProfile();
                 
-                // 【核心修正】在 LIFF 完全準備好之後，才綁定所有事件
-                initializeEventListeners();
+                // 2. 處理照片 (分塊 + 壓縮 + Base64)
+                // 注意：這裡依然需要在前端處理照片，因為我們需要將處理完的資料存入本地
+                const processedPhotos = await processFiles(allPhotosInfo, shouldCompress);
+                
+                const formData = {
+                    source: 'liff_report_sync', // 新的 source 標記
+                    userId: userProfile.userId,
+                    userName: userProfile.displayName,
+                    projectId: document.getElementById('projectId').value,
+                    projectNameRaw: document.getElementById('projectId').value,
+                    workType: document.getElementById('workType').value,
+                    workDescription: document.getElementById('workDescription').value,
+                    problemDescription: document.getElementById('problemDescription').value,
+                    photos: processedPhotos
+                };
+                
+                // 3. 將包裹存入本地倉庫 (IndexedDB)
+                updateStatus('將回報存入本地佇列...', 'info');
+                await saveReportToQueue({
+                    url: GAS_WEB_APP_URL,
+                    body: JSON.stringify(formData)
+                });
+                
+                // 4. 通知快遞員有新任務
+                const registration = await navigator.serviceWorker.ready;
+                await registration.sync.register('sync-reports');
+                
+                // 5. 立即顯示成功並關閉視窗
+                handleSuccess();
 
             } catch (error) {
-                console.error('LIFF 初始化失敗', error);
-                updateStatus('LIFF 初始化失敗，請在 LINE 中開啟。', 'error');
-                submitButton.disabled = true;
+                console.error('表單處理失敗', error);
+                updateStatus(`提交失敗：${error.message}`, 'error');
+                setLoadingState(false);
             }
-        }
+        });
 
-        // 將所有事件監聽器綁定集中到一個函式中
-        function initializeEventListeners() {
-            setupFileInputUI('sitePhotos', 'sitePhotosLabel', 'sitePhotosCount');
-            setupFileInputUI('problemPhotos', 'problemPhotosLabel', 'problemPhotosCount');
+       // --- 輔助函式 (包含 IndexedDB 操作) ---
 
-            form.addEventListener('submit', async function(event) {
-                event.preventDefault();
-                setLoadingState(true);
-
-                if (!userProfile) {
-                    updateStatus('無法取得使用者資訊，可能是 LIFF 尚未初始化完成，請稍候再試。', 'error');
-                    setLoadingState(false);
-                    return;
-                }
-
-                try {
-                    const shouldCompress = document.getElementById('compressImages').checked;
-                    const siteFiles = Array.from(document.getElementById('sitePhotos').files);
-                    const problemFiles = Array.from(document.getElementById('problemPhotos').files);
-                    const allPhotosInfo = [
-                        ...siteFiles.map(file => ({ file: file, isProblem: false })),
-                        ...problemFiles.map(file => ({ file: file, isProblem: true }))
-                    ];
-
-                    if (allPhotosInfo.length === 0) {
-                         updateStatus('請至少選擇一張照片。', 'error');
-                         setLoadingState(false);
-                         return;
-                    }
-
-                    const batchId = `${userProfile.userId}-${Date.now()}`;
-                    const SUBMIT_CHUNK_SIZE = 10;
-                    const totalChunks = Math.ceil(allPhotosInfo.length / SUBMIT_CHUNK_SIZE);
-                    
-                    const baseFormData = {
-                        source: 'liff_report_form_chunk',
-                        batchId: batchId,
-                        totalChunks: totalChunks,
-                        userId: userProfile.userId,
-                        userName: userProfile.displayName,
-                        projectId: document.getElementById('projectId').value,
-                        projectNameRaw: document.getElementById('projectId').value,
-                        workType: document.getElementById('workType').value,
-                        workDescription: document.getElementById('workDescription').value,
-                        problemDescription: document.getElementById('problemDescription').value,
-                    };
-
-                    for (let i = 0; i < totalChunks; i++) {
-                        const chunkStart = i * SUBMIT_CHUNK_SIZE;
-                        const chunkEnd = chunkStart + SUBMIT_CHUNK_SIZE;
-                        const photoChunk = allPhotosInfo.slice(chunkStart, chunkEnd);
-                        
-                        updateStatus(`正在處理第 ${i + 1} / ${totalChunks} 批照片...`, 'info');
-                        const processedPhotos = await processPhotoChunk(photoChunk, shouldCompress);
-
-                        const chunkFormData = {
-                            ...baseFormData,
-                            chunkIndex: i + 1,
-                            photos: processedPhotos
-                        };
-
-                        updateStatus(`正在提交第 ${i + 1} / ${totalChunks} 批資料...`, 'info');
-                        await fetch(GAS_WEB_APP_URL, {
-                            method: 'POST',
-                            cache: 'no-cache',
-                            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                            body: JSON.stringify(chunkFormData)
-                        }).catch(error => {
-                            if (error instanceof TypeError && error.message.toLowerCase().includes('failed to fetch')) {
-                                console.log(`批次 ${i + 1} 提交成功 (預期性錯誤)。`);
-                                return;
-                            }
-                            throw error;
-                        });
-                    }
-                    
-                    handleSuccess();
-
-                } catch (error) {
-                    console.error('表單處理失敗', error);
-                    updateStatus(`提交失敗：${error.message}`, 'error');
-                    setLoadingState(false);
-                }
-            });
-        }
-
-        // --- 輔助函式 (完整版) ---
-        
         function handleSuccess() {
-            updateStatus('所有批次皆已提交！後續處理完成後您會收到 LINE 通知。', 'success');
+            updateStatus('回報已進入背景佇列，網路恢復時將自動上傳。', 'success');
             setTimeout(() => { liff.closeWindow(); }, 1500);
         }
 
@@ -236,6 +208,66 @@
             });
         }
 
+                async function processFiles(allPhotosInfo, shouldCompress) {
+            // 這個函式與 v5.1 版本中的 processFiles 邏輯完全相同
+            // 包含分塊處理與進度提示
+            const photoArray = [];
+            const totalFiles = allPhotosInfo.length;
+            const CHUNK_SIZE = 5;
+            for (let i = 0; i < totalFiles; i += CHUNK_SIZE) {
+                const chunk = allPhotosInfo.slice(i, i + CHUNK_SIZE);
+                const chunkPromises = chunk.map(async (photoInfo, index) => {
+                    const currentIndex = i + index + 1;
+                    let processedFile = photoInfo.file;
+                    try {
+                        const statusText = shouldCompress ? '正在壓縮' : '正在處理';
+                        updateStatus(`${statusText}第 ${currentIndex} / ${totalFiles} 張照片...`, 'info');
+                        if (shouldCompress) {
+                            const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
+                            processedFile = await imageCompression(photoInfo.file, options);
+                        }
+                        const base64 = await readFileAsBase64(processedFile);
+                        return { name: photoInfo.file.name, type: processedFile.type, data: base64, isProblem: photoInfo.isProblem };
+                    } catch (error) {
+                        updateStatus(`圖片 ${photoInfo.file.name} 處理失敗，已跳過。`, 'error');
+                        return null;
+                    }
+                });
+                const processedChunk = await Promise.all(chunkPromises);
+                photoArray.push(...processedChunk.filter(p => p !== null));
+                await new Promise(resolve => setTimeout(resolve, 10));
+            }
+            return photoArray;
+        }
+
+        // 【新增】IndexedDB 相關輔助函式
+        const DB_NAME = 'report-queue-db';
+        const STORE_NAME = 'reports';
+
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const request = window.indexedDB.open(DB_NAME, 1);
+                request.onupgradeneeded = event => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                    }
+                };
+                request.onsuccess = event => resolve(event.target.result);
+                request.onerror = event => reject(event.target.error);
+            });
+        }
+
+        async function saveReportToQueue(reportData) {
+            const db = await openDB();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction(STORE_NAME, 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.add(reportData);
+                request.onsuccess = resolve;
+                request.onerror = event => reject(event.target.error);
+            });
+        }
         main(); // 執行主函式
     </script>
 </body>
