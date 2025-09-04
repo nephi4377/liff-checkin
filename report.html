@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>添心設計 | 施工回報 v7.3</title>
+  <title>添心設計 | 施工回報 v7.5</title>
 
   <!-- UI / SDK -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -44,11 +44,11 @@
             type="text"
             id="projectId"
             class="w-full px-3 py-2 border border-gray-300 rounded-md"
-            inputmode="numeric"           <!-- 手機彈數字鍵盤 -->
-            pattern="^\d+$"               <!-- 僅允許數字 -->
+            inputmode="numeric"
+            pattern="[0-9]+"
             placeholder="例如：715；非案場請填 9999"
             required
-          />
+          >
           <p class="text-sm text-gray-500 mt-1">
             僅允許數字（例：<span class="font-semibold">715</span>）。若為非案場，請填 <span class="font-semibold">9999</span>。
           </p>
