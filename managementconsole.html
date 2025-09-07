@@ -2,6 +2,10 @@
 <html lang="zh-Hant">
 
 <head>
+  <div style="margin:.5rem 0 1rem 0;">
+  <button onclick="runDiagnostics()">執行連線診斷</button>
+  <small style="color:#6b7280;margin-left:.5rem;">（測試 JSONP 與圖片代理）</small>
+</div>
   <script>
     // 【全域設定】請將 YOUR_APPS_SCRIPT_API_URL 換成您部署後的真實網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
@@ -176,17 +180,30 @@
       thumbLog('IMG OK ' + embedUrl);
     }
 
-    /* ====================== 連結正規化（前端） ====================== */
+/* ====================== 連結正規化（前端）====================== */
 function toEmbeddableImageUrl(url) {
   if (!url || typeof url !== 'string') return '';
   var u = url.trim();
 
-  // 1) 已是 usercontent → 直接回傳（不要再改回 drive.google.com）
-  if (u.indexOf('drive.usercontent.google.com') !== -1) {
-    return u;
+  // 取得 fileId 的小工具
+  function pickId(s) {
+    var m;
+    m = s.match(/[?&](?:id|fileId)=([a-zA-Z0-9_-]+)/);
+    if (m && m[1]) return m[1];
+    m = s.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (m && m[1]) return m[1];
+    m = s.match(/uc\?id=([a-zA-Z0-9_-]+)/);
+    if (m && m[1]) return m[1];
+    return '';
   }
 
-  // 2) Dropbox 分享 → 轉 raw
+  // 1) 任何 Google Drive/Googleusercontent 連結 → 走 GAS 代理（免權限、免 CORS）
+  if (u.indexOf('drive.google.com') !== -1 || u.indexOf('googleusercontent.com') !== -1) {
+    var id = pickId(u);
+    return id ? (API_BASE_URL + '?img=' + encodeURIComponent(id) + '&w=300') : u;
+  }
+
+  // 2) Dropbox：仍維持原本 raw 轉換
   if (u.indexOf('dropbox.com') !== -1) {
     try {
       var db = u.replace('://www.dropbox.com/', '://dl.dropboxusercontent.com/');
@@ -201,20 +218,37 @@ function toEmbeddableImageUrl(url) {
     return '';
   }
 
-  // 3) Google Drive：抽出 fileId → 統一改用 usercontent 端點
-  var m = u.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if (m && m[1]) return 'https://drive.usercontent.google.com/uc?id=' + m[1] + '&export=view';
-
-  m = u.match(/[?&](?:id|fileId)=([a-zA-Z0-9_-]+)/);
-  if (m && m[1]) return 'https://drive.usercontent.google.com/uc?id=' + m[1] + '&export=view';
-
-  // 4) 看起來已是可直連的圖片
+  // 3) 其它已可直連的圖片副檔名
   if (/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(u)) return u;
 
-  // 5) 其它來源 → 不處理，回原樣（前端會顯示為「🔗 照片」連結）
+  // 4) 其它未知來源 → 不處理，回原樣（前端會顯示為「🔗 照片」連結）
   return u;
 }
+    /* ====================== JSONP 幫手 ====================== */
+function loadJsonp(url, cbName) {
+  return new Promise((resolve, reject) => {
+    const name = cbName || ('cb_' + Math.random().toString(36).slice(2));
+    const s = document.createElement('script');
+    s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + name;
+    s.async = true;
 
+    const t0 = Date.now();
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('JSONP timeout (' + (Date.now() - t0) + 'ms)'));
+    }, 15000);
+
+    function cleanup() {
+      clearTimeout(timer);
+      s.remove();
+      try { delete window[name]; } catch(_) { window[name] = undefined; }
+    }
+
+    window[name] = (data) => { cleanup(); resolve(data); };
+    s.onerror = () => { cleanup(); reject(new Error('JSONP load error')); };
+    document.head.appendChild(s);
+  });
+}
 
     /* ====================== 共用：頁面 logger ====================== */
     function logToPage(message) {
@@ -395,31 +429,20 @@ function toEmbeddableImageUrl(url) {
       const fetchUrl = `${API_BASE_URL}?page=project&id=${id}`;
 
       if (id === '0' || id) {
-        logToPage('準備呼叫 API: ' + fetchUrl);
-        fetch(fetchUrl)
-          .then(response => {
-            if (!response.ok) {
-              // 如果伺服器回應不是 2xx，也當作錯誤拋出
-              throw new Error(`伺服器回應錯誤，狀態碼: ${response.status} ${response.statusText}`);
-            }
-            return response.json();
-          })
-          .then(data => {
-            if (data.success === false) {
-                // 如果後端回傳了格式正確但內容是失敗的 JSON
-                throw new Error('後端 API 回報錯誤: ' + data.message);
-            }
-            
-            if (id === '0') {
-              displayDrafts(data);
-            } else {
-              displayPublished(data);
-            }
-          })
-          .catch(err => {
-            // 所有錯誤都會被這個 catch 捕捉到
-            displayError(err);
-          });
+      logToPage('準備呼叫 API(JSONP): ' + fetchUrl);
+      loadJsonp(fetchUrl)
+      .then(data => {
+        // JSONP 成功回來的就是原本的 JSON 內容
+        if (id === '0') {
+          displayDrafts(data);
+        } else {
+          displayPublished(data);
+        }
+      })
+      .catch(err => {
+        // JSONP 若失敗，會丟 timeout / load error
+        displayError(err);
+      });
       } else {
         displayError({ message: '未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。' });
       }
@@ -451,6 +474,39 @@ function toEmbeddableImageUrl(url) {
         }
     }
   </script>
+  <script>
+/* ====================== 連線診斷 ====================== */
+function runDiagnostics() {
+  var base = API_BASE_URL;
+  logToPage('=== 開始診斷 ===');
+  logToPage('API_BASE_URL = ' + base);
+
+  // 1) JSONP 診斷（抓草稿 id=0）
+  var url = base + '?page=project&id=0';
+  logToPage('[JSONP] 測試 URL: ' + url);
+  var t0 = Date.now();
+  loadJsonp(url).then(data => {
+    logToPage('[JSONP] OK，用時 ' + (Date.now()-t0) + 'ms，回傳筆數=' + (Array.isArray(data)?data.length:0));
+  }).catch(err => {
+    logToPage('[JSONP] 失敗：' + err.message);
+  }).finally(() => {
+    // 2) 圖片代理診斷（用一個已知可讀的 fileId）
+    var testId = '1kl1GWuBEE-AKS4e4tdHGz8_90Au04vua'; // 你先前貼過的示例
+    var imgUrl = base + '?img=' + encodeURIComponent(testId) + '&w=300';
+    logToPage('[IMG] 測試代理：' + imgUrl);
+    var img = new Image();
+    var t1 = Date.now();
+    img.onload = function(){
+      logToPage('[IMG] OK，用時 ' + (Date.now()-t1) + 'ms，尺寸=' + img.naturalWidth + 'x' + img.naturalHeight);
+    };
+    img.onerror = function(){
+      logToPage('[IMG] 失敗（可能是權限或非圖片格式）');
+    };
+    img.src = imgUrl + '&_=' + Date.now(); // 防快取
+  });
+}
+</script>
+
 </body>
 
 </html>
