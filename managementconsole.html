@@ -154,6 +154,39 @@
     body{ padding: 1rem; }
     .photo-grid{ gap: .5rem; }
   }
+  /* === Lightbox（彈出看大圖） === */
+#lightbox {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.7);
+  display: none;             /* 以 JS 控制顯示 */
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 2rem;
+}
+#lightbox.open { display: flex; }
+
+#lightbox .lb-wrap {
+  position: relative;
+  max-width: min(96vw, 1200px);
+  max-height: 90vh;
+}
+#lightbox img.lb-img {
+  display: block;
+  max-width: 100%;
+  max-height: 90vh;
+  border-radius: .5rem;
+  background: #fff;
+}
+#lightbox button.lb-close {
+  position: absolute; top: -.75rem; right: -.75rem;
+  background: rgba(0,0,0,.6);
+  color:#fff; border:0; border-radius:9999px;
+  width: 36px; height: 36px; cursor: pointer; font-size: 18px;
+}
+
+/* 讓縮圖 hover 有可點提示 */
+.photo-thumb { cursor: zoom-in; }
 </style>
 
 </head>
@@ -233,46 +266,41 @@ function renderSmartImg(urls) {
   const wrap = document.createElement('div');
   wrap.className = 'photo-item';
 
-  const aImg = document.createElement('a');
-  aImg.target = '_blank';
-  aImg.rel = 'noopener noreferrer';
-
   const img = document.createElement('img');
   img.className = 'photo-thumb';
 
   let i = 0;
   function use(idx) {
     if (idx >= urls.length) {
-      // 全部失敗 → 顯示佔位 + 純連結
       const ph = document.createElement('div');
       ph.className = 'photo-placeholder';
-      ph.textContent = '無法載入縮圖';
-      wrap.replaceChildren(ph, buildLink(urls[0]));
+      ph.textContent = '無法載入縮圖（點此開啟原圖）';
+      ph.style.cursor = 'pointer';
+      ph.onclick = () => window.open(urls[0], '_blank', 'noopener,noreferrer');
+      wrap.replaceChildren(ph);
       thumbLog('ALL FAILED → ' + urls.join(' | '));
       return;
     }
-    aImg.href = urls[idx];
-    img.src = urls[idx] + (urls[idx].includes('?') ? '&' : '?') + '_=' + Date.now(); // 防快取
-    thumbLog('TRY ' + urls[idx]);
+    const u = urls[idx] + (urls[idx].includes('?') ? '&' : '?') + '_=' + Date.now(); // 防快取
+    img.src = u;
+    img.dataset.full = urls[0]; // 原圖/大圖連結
+    thumbLog('TRY ' + u);
   }
 
-  img.onload  = () => thumbOk(img, img.src);
+  // 成功：綁定點擊開 Lightbox
+  img.onload  = () => {
+    thumbOk(img, img.src);
+    img.onclick = () => window.__openLightbox__(img.dataset.full);
+  };
+
+  // 失敗：換候選
   img.onerror = () => { thumbError(img, urls[0], img.src); use(++i); };
 
-  aImg.appendChild(img);
-  wrap.appendChild(aImg);
-  wrap.appendChild(buildLink(urls[0]));   // 圖片下方的小「照片」連結
+  wrap.appendChild(img);
   use(0);
   return wrap;
-
-  function buildLink(href) {
-    const a = document.createElement('a');
-    a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer';
-    a.textContent = '照片';
-    a.className = 'photo-link';
-    return a;
-  }
 }
+
 
     
 /* ====================== 連結正規化（前端）====================== */
@@ -635,6 +663,41 @@ function runDiagnostics() {
     img.src = imgUrl + '&_=' + Date.now(); // 防快取
   });
 }
+</script>
+<!-- Lightbox 容器 -->
+<div id="lightbox" aria-hidden="true">
+  <div class="lb-wrap">
+    <img class="lb-img" alt="preview">
+    <button class="lb-close" aria-label="關閉">✕</button>
+  </div>
+</div>
+
+<script>
+// 簡易 Lightbox：開啟 / 關閉
+(function(){
+  const lb = document.getElementById('lightbox');
+  const img = lb.querySelector('.lb-img');
+  const btn = lb.querySelector('.lb-close');
+
+  function openLightbox(src) {
+    img.src = '';            // 先清掉，避免殘影
+    img.src = src;
+    lb.classList.add('open');
+    lb.setAttribute('aria-hidden','false');
+  }
+  function closeLightbox() {
+    lb.classList.remove('open');
+    lb.setAttribute('aria-hidden','true');
+    img.src = '';
+  }
+  // 點背景/關閉鈕/ESC 關閉
+  lb.addEventListener('click', (e)=>{ if (e.target === lb) closeLightbox(); });
+  btn.addEventListener('click', closeLightbox);
+  window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && lb.classList.contains('open')) closeLightbox(); });
+
+  // 暴露到全域，讓縮圖可呼叫
+  window.__openLightbox__ = openLightbox;
+})();
 </script>
 
 </body>
