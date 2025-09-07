@@ -7,7 +7,7 @@
   <script>
     // 【全域設定】請換成你的正式網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v7.10-beta';
+    const FRONTEND_VERSION = 'v7.11-beta';
   </script>
 
   <style>
@@ -144,13 +144,12 @@
         thumbLog('TRY ' + u);
       }
     
-      img.onload  = () => {
-        thumbLog('IMG OK ' + img.src);
-        img.onclick = () => (window.__openLightbox__ ? window.__openLightbox__(img.dataset.full)
-                                                     : window.open(img.dataset.full,'_blank'));
-      };
-      img.onerror = () => { thumbLog('IMG ERROR ' + img.src); use(++i); };
-    
+            // ✅ 這裡加上 Lightbox 開啟
+              img.onload = () => {
+              img.onclick = () => window.__openLightbox__(img.dataset.full, urls);
+            };
+            img.onerror = () => { thumbLog('IMG ERROR ' + img.src); use(++i); };
+          
       wrap.appendChild(img);
       use(0);
       return wrap;
@@ -394,29 +393,70 @@
       <button class="lb-close" aria-label="關閉">✕</button>
     </div>
   </div>
-  <script>
-    (function(){
-      const lb  = document.getElementById('lightbox');
-      const img = lb.querySelector('.lb-img');
-      const btn = lb.querySelector('.lb-close');
+<script>
+(function(){
+  const lb = document.getElementById('lightbox');
+  if(!lb){ console.warn('[Lightbox] #lightbox not found'); return; }
+  const img = lb.querySelector('.lb-img');
+  const btn = lb.querySelector('.lb-close');
 
-      function openLightbox(src){
-        img.src = '';
-        img.src = src;
-        lb.classList.add('open');
-        lb.setAttribute('aria-hidden','false');
-      }
-      function closeLightbox(){
-        lb.classList.remove('open');
-        lb.setAttribute('aria-hidden','true');
-        img.src = '';
-      }
-      lb.addEventListener('click', e => { if(e.target === lb) closeLightbox(); });
-      btn.addEventListener('click', closeLightbox);
-      window.addEventListener('keydown', e => { if(e.key === 'Escape' && lb.classList.contains('open')) closeLightbox(); });
+  let gallery = [];   // 目前相簿的大圖 URL 清單
+  let current = -1;   // 目前索引
 
-      window.__openLightbox__ = openLightbox;
-    })();
-  </script>
+  function openFromThumb(thumbEl){
+    // 在同一張卡片（.photo-grid）內收集所有縮圖的大圖連結
+    const grid = thumbEl.closest('.photo-grid');
+    gallery = Array.from(grid.querySelectorAll('img.photo-thumb'))
+                   .map(el => el.dataset.full || el.src)
+                   .filter(Boolean);
+    current = Math.max(0, gallery.indexOf(thumbEl.dataset.full || thumbEl.src));
+    show(current);
+    lb.classList.add('open'); lb.setAttribute('aria-hidden','false');
+  }
+
+  function show(idx){
+    if(!gallery.length) return;
+    if(idx < 0) idx = gallery.length - 1;
+    if(idx >= gallery.length) idx = 0;
+    current = idx;
+    img.src = '';              // 先清掉避免殘影
+    img.src = gallery[current];
+  }
+
+  function close(){
+    lb.classList.remove('open');
+    lb.setAttribute('aria-hidden','true');
+    img.src = '';
+    gallery = []; current = -1;
+  }
+
+  // 事件委派：點任何縮圖開啟 Lightbox
+  window.addEventListener('click', (e)=>{
+    const t = e.target;
+    if(t && t.matches('img.photo-thumb')){
+      e.preventDefault();
+      openFromThumb(t);
+    }
+  });
+
+  // 背景點擊 / 關閉鈕 / 鍵盤操作
+  lb.addEventListener('click', (e)=>{ if(e.target === lb) close(); });
+  btn.addEventListener('click', close);
+  window.addEventListener('keydown', (e)=>{
+    if(!lb.classList.contains('open')) return;
+    if(e.key === 'Escape') close();
+    if(e.key === 'ArrowLeft') show(current - 1);
+    if(e.key === 'ArrowRight') show(current + 1);
+  });
+
+  // 若你其他地方需要手動開啟，也可呼叫這個：
+  window.__openLightbox__ = function(srcListOrSingle){
+    gallery = Array.isArray(srcListOrSingle) ? srcListOrSingle : [String(srcListOrSingle)];
+    current = 0; show(0);
+    lb.classList.add('open'); lb.setAttribute('aria-hidden','false');
+  };
+})();
+</script>
+
 </body>
 </html>
