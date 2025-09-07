@@ -2,14 +2,15 @@
 <html lang="zh-Hant">
 
 <head>
+  <script>
+    // 【全域設定】請將 YOUR_APPS_SCRIPT_API_URL 換成您部署後的真實網址
+    const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
+    const FRONTEND_VERSION = 'v7.0-beta'; // 前端版本號
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <title>專案日誌管理主控台</title>
-
-          <script>
-      // 【全域設定】請將 YOUR_APPS_SCRIPT_API_URL 換成您部署後的真實網址
-      const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-  </script>
+  <p id="version-display" style="font-size: 0.8rem; color: #6b7280;"></p> <p>用 <code>?id=</code> 分流：<code>id=0</code>＝草稿審核；其他＝依案號顯示已發布內容。</p>
 
   <!--
     ===========================================================
@@ -378,10 +379,12 @@ function toEmbeddableImageUrl(url) {
       });
     }
 
-/* ====================== 入口：讀 URL 參數，依 id 分流 (v2.0 - API Fetch) ====================== */
+/* ====================== 入口：讀 URL 參數，依 id 分流 (v2.1 - Enhanced Error Handling) ====================== */
     window.addEventListener('load', function () {
-      logToPage('頁面載入完成，開始讀取 URL 參數');
+      // 顯示版本號
+      document.getElementById('version-display').textContent = '版本: ' + (typeof FRONTEND_VERSION !== 'undefined' ? FRONTEND_VERSION : '未知');
 
+      logToPage('頁面載入完成，開始讀取 URL 參數');
       const urlParams = new URLSearchParams(window.location.search);
       const id = urlParams.get('id') || '';
       logToPage('URL id=' + (id || '(未帶入)'));
@@ -389,7 +392,6 @@ function toEmbeddableImageUrl(url) {
       var status = document.getElementById('status-message');
       if (status) status.style.display = 'block';
       
-      // 我們的後端 API 現在需要 page=project 參數來觸發
       const fetchUrl = `${API_BASE_URL}?page=project&id=${id}`;
 
       if (id === '0' || id) {
@@ -397,36 +399,56 @@ function toEmbeddableImageUrl(url) {
         fetch(fetchUrl)
           .then(response => {
             if (!response.ok) {
-              throw new Error('網路回應錯誤，狀態碼: ' + response.status);
+              // 如果伺服器回應不是 2xx，也當作錯誤拋出
+              throw new Error(`伺服器回應錯誤，狀態碼: ${response.status} ${response.statusText}`);
             }
             return response.json();
           })
           .then(data => {
-            if (data.success === false) throw new Error(data.message);
+            if (data.success === false) {
+                // 如果後端回傳了格式正確但內容是失敗的 JSON
+                throw new Error('後端 API 回報錯誤: ' + data.message);
+            }
             
             if (id === '0') {
               displayDrafts(data);
-              logToPage('草稿載入完成');
             } else {
               displayPublished(data);
-              logToPage('已發布載入完成（案：' + id + '）');
             }
           })
-          .catch(err => displayError(err));
+          .catch(err => {
+            // 所有錯誤都會被這個 catch 捕捉到
+            displayError(err);
+          });
       } else {
         displayError({ message: '未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。' });
       }
     });
 
+    /* ====================== 錯誤顯示 (v2.0 - Enhanced) ====================== */
     function displayError(error) {
-      thumbLog('PAGE ERROR: ' + (error && error.message ? error.message : '未知錯誤'));
-      var statusMessage = document.getElementById('status-message');
-      if (statusMessage) {
-        statusMessage.innerHTML =
-          '<div style="border:1px solid red;background:#ffebee;color:#c62828;padding:1rem;">' +
-          '<strong>載入失敗！</strong><br>' + (error && error.message ? error.message : '發生未知錯誤。') +
-          '</div>';
-      }
+        const errorMsg = (error && error.message) ? error.message : '發生未知錯誤。';
+        logToPage('PAGE ERROR: ' + errorMsg);
+        
+        // 偵測是否為網路層級的錯誤 (CORS 或網路問題)
+        let advice = '請檢查 Apps Script 後端日誌是否有錯誤紀錄。';
+        if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+            advice = '這通常是 CORS 跨域請求問題或網路連線錯誤。\n' +
+                     '請確認：\n' + 
+                     '1. Apps Script 已部署為「任何人」可存取。\n' +
+                     '2. Apps Script 後端程式碼中的 CORS 標頭已正確部署。\n' +
+                     '3. 瀏覽器的開發者工具 (F12) Console 中是否有更詳細的錯誤訊息。';
+        }
+
+        var statusMessage = document.getElementById('status-message');
+        if (statusMessage) {
+            statusMessage.innerHTML =
+            '<div style="border:1px solid red;background:#ffebee;color:#c62828;padding:1rem;white-space:pre-wrap;">' +
+            '<strong>載入失敗！</strong>\n\n' +
+            '<strong>錯誤訊息：</strong>\n' + errorMsg + '\n\n' +
+            '<strong>可能原因與建議：</strong>\n' + advice +
+            '</div>';
+        }
     }
   </script>
 </body>
