@@ -390,38 +390,38 @@ function displayPublished(logs) {
 
 
     /* ---------- 發布 ---------- */
-    function handlePublish(logId) {
-      const button = document.getElementById('btn-' + logId);
-      if (button) { button.disabled = true; button.textContent = '發布中...'; }
-    
-      const postUrl = `${API_BASE_URL}?page=publish`;
-    
-      fetch(postUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json;charset=utf-8' },
-        body: JSON.stringify({ logId, newStatus: '已發布' })
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data && data.success) {
-          const card = document.getElementById('log-' + logId);
-          if (card) {
-            card.style.transition = 'opacity .5s ease';
-            card.style.opacity = '0';
-            setTimeout(() => card.parentNode && card.parentNode.removeChild(card), 500);
-          }
-          alert(`日誌 ${logId} 已成功發布！`);
-        } else {
-          throw new Error(data && data.message ? data.message : '未知原因');
-        }
-      })
-      .catch(err => {
-        alert('發布失敗：' + err.message);
-      })
-      .finally(() => {
-        if (button) { button.disabled = false; button.textContent = '審核與發布'; }
-      });
+function handlePublish(logId) {
+  const button = document.getElementById('btn-' + logId);
+  if (button) { button.disabled = true; button.textContent = '發布中...'; }
+
+  const postUrl = `${API_BASE_URL}?page=publish`;
+
+  fetch(postUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json;charset=utf-8' }, // ✅ 改這裡
+    body: JSON.stringify({ logId, newStatus: '已發布' })            // ✅ JSON 格式送出
+  })
+  .then(r => r.json())  // ✅ 接收 JSON
+  .then(data => {
+    if (data && data.success) {
+      const card = document.getElementById('log-' + logId);
+      if (card) {
+        card.style.transition = 'opacity .5s ease';
+        card.style.opacity = '0';
+        setTimeout(() => card.parentNode && card.parentNode.removeChild(card), 500);
+      }
+      alert(`日誌 ${logId} 已成功發布！`);
+    } else {
+      throw new Error(data && data.message ? data.message : '未知原因');
     }
+  })
+  .catch(err => {
+    alert('發布失敗：' + err.message);
+  })
+  .finally(() => {
+    if (button) { button.disabled = false; button.textContent = '審核與發布'; }
+  });
+}
 
     /* ---------- 入口 ---------- */
     window.addEventListener('load', function(){
