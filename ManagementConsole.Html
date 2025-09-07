@@ -341,62 +341,86 @@ function toEmbeddableImageUrl(url) {
       });
     }
 
-    /* ====================== 發布（保留你的寫法，防重複） ====================== */
-    function handlePublish(logId) {
-      var button = document.getElementById('btn-' + logId);
-      if (button) { button.disabled = true; button.textContent = '發布中...'; }
+/* ====================== 發布 (v2.0 - API Fetch) ====================== */
+    function handlePublish(logId) {
+      var button = document.getElementById('btn-' + logId);
+      if (button) { button.disabled = true; button.textContent = '發布中...'; }
 
-      google.script.run
-        .withSuccessHandler(function (response) {
-          if (response && response.success) {
-            var card = document.getElementById('log-' + logId);
-            if (card) {
-              card.style.transition = 'opacity .5s ease';
-              card.style.opacity = '0';
-              setTimeout(function(){ card.parentNode && card.parentNode.removeChild(card); }, 500);
-            }
-            alert('日誌 ' + logId + ' 已成功發布！');
-          } else {
-            alert('發布失敗：\n' + (response && response.message ? response.message : '未知原因'));
-            if (button) { button.disabled = false; button.textContent = '審核與發布'; }
-          }
-        })
-        .withFailureHandler(function (err) {
-          alert('發布通訊錯誤：\n' + (err && err.message ? err.message : err));
-          if (button) { button.disabled = false; button.textContent = '審核與發布'; }
-        })
-        .updateLogStatus(logId, '已發布');
-    }
+      // 【請務必修改】將 YOUR_APPS_SCRIPT_API_URL 換成您之前複製的同一個網址
+      const API_BASE_URL = 'YOUR_APPS_SCRIPT_API_URL';
+      
+      // 注意：發布功能需要一個不同的 page 參數，我們需要在後端新增這個路由
+      const postUrl = `${API_BASE_URL}?page=publish`;
 
-    /* ====================== 入口：讀 URL 參數，依 id 分流 ====================== */
-    window.addEventListener('load', function () {
-      logToPage('頁面載入完成，開始讀取 URL 參數');
-      google.script.url.getLocation(function (loc) {
-        var id = (loc && loc.parameter && typeof loc.parameter.id !== 'undefined')
-                 ? String(loc.parameter.id).trim()
-                 : '';
-        logToPage('URL id=' + (id || '(未帶入)'));
+      fetch(postUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8', // Apps Script doPost 的特殊要求
+        },
+        // 將要更新的資訊用 POST 的 body 傳過去
+        body: JSON.stringify({ logId: logId, newStatus: '已發布' })
+      })
+      .then(response => response.json())
+      .then(response => {
+          if (response && response.success) {
+            var card = document.getElementById('log-' + logId);
+            if (card) {
+              card.style.transition = 'opacity .5s ease';
+              card.style.opacity = '0';
+              setTimeout(function(){ card.parentNode && card.parentNode.removeChild(card); }, 500);
+            }
+            alert('日誌 ' + logId + ' 已成功發布！');
+          } else {
+            alert('發布失敗：\n' + (response && response.message ? response.message : '未知原因'));
+            if (button) { button.disabled = false; button.textContent = '審核與發布'; }
+          }
+      })
+      .catch(err => {
+        alert('發布通訊錯誤：\n' + (err && err.message ? err.message : err));
+        if (button) { button.disabled = false; button.textContent = '審核與發布'; }
+      });
+    }
 
-        var status = document.getElementById('status-message');
-        if (status) status.style.display = 'block';
+/* ====================== 入口：讀 URL 參數，依 id 分流 (v2.0 - API Fetch) ====================== */
+    window.addEventListener('load', function () {
+      logToPage('頁面載入完成，開始讀取 URL 參數');
 
-        if (id === '0') {
-          google.script.run
-            .withSuccessHandler(function (data) { displayDrafts(data); logToPage('草稿載入完成'); })
-            .withFailureHandler(function (err) { displayError(err); })
-            .getDraftLogs();
-          logToPage('已呼叫 getDraftLogs()');
-        } else if (id) {
-          google.script.run
-            .withSuccessHandler(function (data) { displayPublished(data); logToPage('已發布載入完成（案：' + id + '）'); })
-            .withFailureHandler(function (err) { displayError(err); })
-            .getLogsByProject_V3_FINAL(id);
-          logToPage('已呼叫 getLogsByProject_V3_FINAL(' + id + ')');
-        } else {
-          displayError({ message: '未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。' });
-        }
-      });
-    });
+      const urlParams = new URLSearchParams(window.location.search);
+      const id = urlParams.get('id') || '';
+      logToPage('URL id=' + (id || '(未帶入)'));
+
+      var status = document.getElementById('status-message');
+      if (status) status.style.display = 'block';
+      
+      // 我們的後端 API 現在需要 page=project 參數來觸發
+      // id 會在這裡一起傳過去 (例如 ?page=project&id=0 或 ?page=project&id=案號)
+      const fetchUrl = `${API_BASE_URL}?page=project&id=${id}`;
+
+      if (id === '0' || id) {
+        logToPage('準備呼叫 API: ' + fetchUrl);
+        fetch(fetchUrl)
+          .then(response => {
+            if (!response.ok) {
+              throw new Error('網路回應錯誤，狀態碼: ' + response.status);
+            }
+            return response.json();
+          })
+          .then(data => {
+            if (data.success === false) throw new Error(data.message);
+            
+            if (id === '0') {
+              displayDrafts(data);
+              logToPage('草稿載入完成');
+            } else {
+              displayPublished(data);
+              logToPage('已發布載入完成（案：' + id + '）');
+            }
+          })
+          .catch(err => displayError(err));
+      } else {
+        displayError({ message: '未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。' });
+      }
+    });
 
     function displayError(error) {
       thumbLog('PAGE ERROR: ' + (error && error.message ? error.message : '未知錯誤'));
