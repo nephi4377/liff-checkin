@@ -1,203 +1,64 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
-
 <head>
-  <div style="margin:.5rem 0 1rem 0;">
-  <button onclick="runDiagnostics()">執行連線診斷</button>
-  <small style="color:#6b7280;margin-left:.5rem;">（測試 JSONP 與圖片代理）</small>
-</div>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>專案日誌管理主控台</title>
   <script>
-    // 【全域設定】請將 YOUR_APPS_SCRIPT_API_URL 換成您部署後的真實網址
+    // 【全域設定】請換成你的正式網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v7.7-beta'; // 前端版本號
-  </script>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>專案日誌管理主控台</title>
-  <p id="version-display" style="font-size: 0.8rem; color: #6b7280;"></p> <p>用 <code>?id=</code> 分流：<code>id=0</code>＝草稿審核；其他＝依案號顯示已發布內容。</p>
+    const FRONTEND_VERSION = 'v7.9-beta';
+  </script>
 
-  <!--
-    ===========================================================
-    ManagementConsole.html
-    版本：v6.2 (THUMB-DEBUG Enabled)
-    更新時間：2025-09-07 14:30 (Asia/Taipei)
-    變更摘要：
-    - 新增縮圖偵錯：thumbLog / thumbOk / thumbError（可開關）。
-    - toEmbeddableImageUrl：支援多種 Drive/Dropbox 連結正規化。
-    - <img> 失敗時自動退回為純連結，避免破圖。
-    - 其餘流程（草稿審核 / 已發布顯示 / 發布 API）維持不變。
-    ===========================================================
-  -->
+  <style>
+    :root{
+      --bg:#f3f4f6; --fg:#1f2937; --muted:#6b7280; --muted-2:#9ca3af;
+      --card:#ffffff; --primary:#3b82f6; --shadow:0 1px 2px rgba(0,0,0,.06);
+      --radius:.5rem;
+    }
+    *{ box-sizing: border-box; }
+    body{ font-family: Arial, sans-serif; background:var(--bg); color:var(--fg); margin:0; padding:2rem; }
+    .container{ max-width:900px; margin:0 auto; }
+    header{ margin-bottom:2rem; display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; }
+    h1{ font-size:1.875rem; font-weight:bold; margin:0; }
+    .muted{ color:var(--muted); font-size:.9rem; }
 
-<style>
-  /* 版面與字體 */
-  :root{
-    --bg:#f3f4f6;
-    --fg:#1f2937;
-    --muted:#6b7280;
-    --muted-2:#9ca3af;
-    --card:#ffffff;
-    --primary:#3b82f6;
-    --shadow:0 1px 2px rgba(0,0,0,.06);
-    --radius:.5rem;
-  }
+    .spinner{ margin:2rem auto; width:3rem; height:3rem; border-radius:50%; border:4px solid #e5e7eb; border-top-color:var(--primary); animation:spin 1s linear infinite; }
+    @keyframes spin{ to{ transform:rotate(360deg) } }
 
-  * { box-sizing: border-box; }
+    #debug-log{ background:#111827; color:#e5e7eb; font-family:monospace; font-size:.75rem; padding:1rem; border-radius:var(--radius); margin-top:1rem; height:16rem; overflow-y:auto; white-space:pre-wrap; }
 
-  body{
-    font-family: Arial, sans-serif;
-    background-color: var(--bg);
-    color: var(--fg);
-    margin: 0;
-    padding: 2rem;
-  }
+    .card{ background:var(--card); border-radius:var(--radius); padding:1rem; margin-bottom:1rem; box-shadow:var(--shadow); }
 
-  .container{ max-width: 900px; margin: 0 auto; }
-  header{ margin-bottom: 2rem; }
-  h1{ font-size: 1.875rem; font-weight: bold; margin: 0; }
+    .photo-grid{
+      display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:.75rem;
+    }
+    .photo-item{ display:flex; flex-direction:column; gap:.25rem; }
+    .photo-thumb{ width:100%; aspect-ratio:4/3; object-fit:cover; background:#e5e7eb; border-radius:var(--radius); display:block; cursor:zoom-in; }
+    .photo-placeholder{ width:100%; aspect-ratio:4/3; border-radius:var(--radius); background:#f3f4f6; display:flex; align-items:center; justify-content:center; color:var(--muted-2); font-size:.9rem; text-align:center; padding:0 .5rem; }
+    button{ background:var(--primary); color:#fff; border:0; padding:.5rem .75rem; border-radius:.375rem; cursor:pointer; }
+    button[disabled]{ opacity:.6; cursor:not-allowed; }
 
-  /* 載入指示器 */
-  .spinner{
-    margin: 2rem auto;
-    width: 3rem; height: 3rem;
-    border-radius: 50%;
-    border: 4px solid #e5e7eb;
-    border-top-color: var(--primary);
-    animation: spin 1s linear infinite;
-  }
-  @keyframes spin{ to{ transform: rotate(360deg); } }
+    @media (max-width:640px){ body{ padding:1rem } .photo-grid{ gap:.5rem } }
 
-  /* 除錯面板 */
-  #debug-log{
-    background-color: #111827;
-    color: #e5e7eb;
-    font-family: monospace;
-    font-size: .75rem;
-    padding: 1rem;
-    border-radius: var(--radius);
-    margin-top: 1rem;
-    height: 16rem;
-    overflow-y: auto;
-    white-space: pre-wrap;
-  }
-
-  /* 卡片 */
-  .card{
-    background: var(--card);
-    border-radius: var(--radius);
-    padding: 1rem;
-    margin-bottom: 1rem;
-    box-shadow: var(--shadow);
-  }
-
-  /* === 照片牆：整齊網格 + 固定比例縮圖 === */
-  .photo-grid{
-    display: grid;
-    /* 自適應欄數；每格至少 180px */
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: .75rem;
-  }
-
-  /* 每一張圖片項目（圖片 + 小連結） */
-  .photo-item{
-    display: flex;
-    flex-direction: column;
-    gap: .25rem;
-  }
-
-  /* 固定比例 4:3 的縮圖，統一高度、齊排 */
-  .photo-thumb{
-    width: 100%;
-    aspect-ratio: 4 / 3;
-    object-fit: cover;
-    background: #e5e7eb;
-    border-radius: var(--radius);
-    display: block;
-  }
-
-  /* 圖片載入失敗時的佔位 */
-  .photo-placeholder{
-    width: 100%;
-    aspect-ratio: 4 / 3;
-    border-radius: var(--radius);
-    background: #f3f4f6;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--muted-2);
-    font-size: .9rem;
-    text-align: center;
-    padding: 0 .5rem;
-  }
-
-  /* 圖片下方的小連結「照片」 */
-  .photo-link{
-    font-size: .8rem;
-    color: var(--muted);
-    text-decoration: underline;
-    align-self: flex-start;
-  }
-
-  /* 按鈕 */
-  button{
-    background: var(--primary);
-    color: #fff;
-    border: 0;
-    padding: .5rem .75rem;
-    border-radius: .375rem;
-    cursor: pointer;
-  }
-  button[disabled]{ opacity:.6; cursor:not-allowed; }
-
-  /* ===== 響應式微調 ===== */
-  @media (max-width: 640px){
-    body{ padding: 1rem; }
-    .photo-grid{ gap: .5rem; }
-  }
-  /* === Lightbox（彈出看大圖） === */
-#lightbox {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,.7);
-  display: none;             /* 以 JS 控制顯示 */
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  padding: 2rem;
-}
-#lightbox.open { display: flex; }
-
-#lightbox .lb-wrap {
-  position: relative;
-  max-width: min(96vw, 1200px);
-  max-height: 90vh;
-}
-#lightbox img.lb-img {
-  display: block;
-  max-width: 100%;
-  max-height: 90vh;
-  border-radius: .5rem;
-  background: #fff;
-}
-#lightbox button.lb-close {
-  position: absolute; top: -.75rem; right: -.75rem;
-  background: rgba(0,0,0,.6);
-  color:#fff; border:0; border-radius:9999px;
-  width: 36px; height: 36px; cursor: pointer; font-size: 18px;
-}
-
-/* 讓縮圖 hover 有可點提示 */
-.photo-thumb { cursor: zoom-in; }
-</style>
-
+    /* Lightbox */
+    #lightbox{ position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; align-items:center; justify-content:center; z-index:9999; padding:2rem; }
+    #lightbox.open{ display:flex }
+    #lightbox .lb-wrap{ position:relative; max-width:min(96vw,1200px); max-height:90vh; }
+    #lightbox img.lb-img{ display:block; max-width:100%; max-height:90vh; border-radius:.5rem; background:#fff; }
+    #lightbox button.lb-close{ position:absolute; top:-.75rem; right:-.75rem; background:rgba(0,0,0,.6); color:#fff; border:0; border-radius:9999px; width:36px; height:36px; cursor:pointer; font-size:18px; }
+  </style>
 </head>
 
-<body class="bg-gray-100">
-
+<body>
   <div class="container">
     <header>
       <h1>專案日誌管理主控台</h1>
-      <p>用 <code>?id=</code> 分流：<code>id=0</code>＝草稿審核；其他＝依案號顯示已發布內容。</p>
+      <button onclick="runDiagnostics()">執行連線診斷</button>
+      <span class="muted">（測試 JSONP 與圖片代理）</span>
     </header>
+    <p class="muted" id="version-display"></p>
+    <p class="muted">用 <code>?id=</code> 分流：<code>id=0</code>＝草稿審核；其他＝依案號顯示已發布內容。</p>
 
     <main id="main-content">
       <div id="status-message">
@@ -214,366 +75,248 @@
   </div>
 
   <script>
-    /* ====================== 縮圖偵錯工具 ====================== */
+    /* ---------- 縮圖偵錯 ---------- */
     var DEBUG_THUMBS = true;
-    function thumbLog(msg) {
-      if (!DEBUG_THUMBS) return;
+    function thumbLog(msg){
+      if(!DEBUG_THUMBS) return;
       console.log('[THUMB]', msg);
-      var logEl = document.getElementById('debug-log');
-      if (logEl) {
-        var t = new Date().toLocaleTimeString('zh-TW');
-        logEl.textContent += '[' + t + '][THUMB] ' + msg + '\n';
-        logEl.scrollTop = logEl.scrollHeight;
+      const el = document.getElementById('debug-log');
+      if(!el) return;
+      const t = new Date().toLocaleTimeString('zh-TW');
+      el.textContent += `[${t}][THUMB] ${msg}\n`;
+      el.scrollTop = el.scrollHeight;
+    }
+    function logToPage(message){
+      const el = document.getElementById('debug-log');
+      if(!el) return;
+      const t = new Date().toLocaleTimeString('zh-TW');
+      el.textContent += `[${t}] ${message}\n`;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    /* ---------- Drive 工具 ---------- */
+    function driveFileId(u){
+      if(!u) return '';
+      u = String(u).trim();
+      let m;
+      m = u.match(/[?&](?:id|fileId)=([a-zA-Z0-9_-]+)/); if(m) return m[1];
+      m = u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);       if(m) return m[1];
+      m = u.match(/\/open\?id=([a-zA-Z0-9_-]+)/);       if(m) return m[1];
+      return '';
+    }
+    function buildPublicThumbUrls(fileId, w){
+      const W = Math.max(64, w|0 || 300);
+      return [
+        `https://drive.google.com/thumbnail?id=${fileId}&sz=w${W}-h${W}`,
+        `https://drive.usercontent.google.com/uc?id=${fileId}&export=view`,
+        `https://drive.google.com/uc?export=download&id=${fileId}`,
+      ];
+    }
+
+    /* ---------- 渲染：Drive 縮圖（帶候選/備援 + 點擊 Lightbox） ---------- */
+    function renderSmartImg(urls){
+      const wrap = document.createElement('div');
+      wrap.className = 'photo-item';
+
+      const img = document.createElement('img');
+      img.className = 'photo-thumb';
+
+      let i = 0;
+      function use(idx){
+        if(idx >= urls.length){
+          const ph = document.createElement('div');
+          ph.className = 'photo-placeholder';
+          ph.textContent = '無法載入縮圖（點此開啟原圖）';
+          ph.style.cursor = 'pointer';
+          ph.onclick = () => window.open(urls[0], '_blank', 'noopener,noreferrer');
+          wrap.replaceChildren(ph);
+          thumbLog('ALL FAILED → ' + urls.join(' | '));
+          return;
+        }
+        const u = urls[idx] + (urls[idx].includes('?') ? '&' : '?') + '_=' + Date.now();
+        img.src = u;
+        img.dataset.full = urls[0];
+        thumbLog('TRY ' + u);
       }
-    }
-    function thumbError(imgEl, originalUrl, embedUrl) {
-      thumbLog('IMG ERROR src=' + embedUrl + ' (from=' + originalUrl + ') → fallback link');
-      if (!imgEl || !imgEl.parentNode) return;
-      var a = document.createElement('a');
-      a.href = originalUrl;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      a.textContent = '🔗 照片（無法內嵌，點我開啟）';
-      imgEl.parentNode.replaceChild(a, imgEl);
-    }
-    function thumbOk(imgEl, embedUrl) {
-      thumbLog('IMG OK ' + embedUrl);
+
+      img.onload  = () => { thumbLog('IMG OK ' + img.src); img.onclick = () => (window.__openLightbox__ ? window.__openLightbox__(img.dataset.full) : window.open(img.dataset.full, '_blank')); };
+      img.onerror = () => { thumbLog('IMG ERROR ' + img.src); use(++i); };
+
+      wrap.appendChild(img);
+      use(0);
+      return wrap;
     }
 
-// 取出 Drive 檔案 ID：接受 uc?id=、file/d/.../view 等各式連結
-function driveFileId(u) {
-  if (!u) return '';
-  u = String(u).trim();
-  let m;
-  m = u.match(/[?&](?:id|fileId)=([a-zA-Z0-9_-]+)/); if (m) return m[1];
-  m = u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);       if (m) return m[1];
-  m = u.match(/\/open\?id=([a-zA-Z0-9_-]+)/);       if (m) return m[1];
-  return '';
-}
+    /* ---------- 渲染：一般圖片（非 Drive） ---------- */
+    function renderDirectImg(src){
+      const wrap = document.createElement('div');
+      wrap.className = 'photo-item';
 
-// 產生公開可讀情境下可用的縮圖候選清單（依序嘗試）
-function buildPublicThumbUrls(fileId, w) {
-  const W = Math.max(64, w|0 || 300);
-  return [
-    `https://drive.google.com/thumbnail?id=${fileId}&sz=w${W}-h${W}`,
-    `https://drive.usercontent.google.com/uc?id=${fileId}&export=view`,
-    `https://drive.google.com/uc?id=${fileId}&export=view`,
-    `https://drive.google.com/uc?export=download&id=${fileId}`,
-  ];
-}
+      const img = document.createElement('img');
+      img.className  = 'photo-thumb';
+      img.src        = src + (src.includes('?') ? '&' : '?') + '_=' + Date.now();
+      img.dataset.full = src;
 
-function renderSmartImg(urls) {
-  const wrap = document.createElement('div');
-  wrap.className = 'photo-item';
+      // 成功/失敗處理
+      img.onload  = () => { thumbLog('IMG OK ' + img.src); };
+      img.onerror = () => {
+        const ph = document.createElement('div');
+        ph.className = 'photo-placeholder';
+        ph.textContent = '無法載入縮圖（點此開啟原圖）';
+        ph.style.cursor = 'pointer';
+        ph.onclick = () => window.open(src, '_blank', 'noopener,noreferrer');
+        wrap.replaceChildren(ph);
+        thumbLog('IMG ERROR ' + img.src);
+      };
 
-  const img = document.createElement('img');
-  img.className = 'photo-thumb';
+      // 點擊看大圖（優先 Lightbox）
+      img.addEventListener('click', () => {
+        if(window.__openLightbox__) window.__openLightbox__(img.dataset.full);
+        else window.open(img.dataset.full, '_blank', 'noopener,noreferrer');
+      });
 
-  let i = 0;
-  function use(idx) {
-    if (idx >= urls.length) {
-      const ph = document.createElement('div');
-      ph.className = 'photo-placeholder';
-      ph.textContent = '無法載入縮圖（點此開啟原圖）';
-      ph.style.cursor = 'pointer';
-      ph.onclick = () => window.open(urls[0], '_blank', 'noopener,noreferrer');
-      wrap.replaceChildren(ph);
-      thumbLog('ALL FAILED → ' + urls.join(' | '));
-      return;
-    }
-    const u = urls[idx] + (urls[idx].includes('?') ? '&' : '?') + '_=' + Date.now(); // 防快取
-    img.src = u;
-    img.dataset.full = urls[0]; // 原圖/大圖連結
-    thumbLog('TRY ' + u);
-  }
-
-  // 成功：綁定點擊開 Lightbox
-  img.onload  = () => {
-    thumbOk(img, img.src);
-    img.onclick = () => window.__openLightbox__(img.dataset.full);
-  };
-
-  // 失敗：換候選
-  img.onerror = () => { thumbError(img, urls[0], img.src); use(++i); };
-
-  wrap.appendChild(img);
-  use(0);
-  return wrap;
-}
-
-
-    
-/* ====================== 連結正規化（前端）====================== */
-function toEmbeddableImageUrl(url) {
-  if (!url || typeof url !== 'string') return '';
-  var u = url.trim();
-
-  // 取得 fileId 的小工具
-  function pickId(s) {
-    var m;
-    m = s.match(/[?&](?:id|fileId)=([a-zA-Z0-9_-]+)/);
-    if (m && m[1]) return m[1];
-    m = s.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
-    if (m && m[1]) return m[1];
-    m = s.match(/uc\?id=([a-zA-Z0-9_-]+)/);
-    if (m && m[1]) return m[1];
-    return '';
-  }
-
-  // 1) 任何 Google Drive/Googleusercontent 連結 → 走 GAS 代理（免權限、免 CORS）
-  if (u.indexOf('drive.google.com') !== -1 || u.indexOf('googleusercontent.com') !== -1) {
-    var id = pickId(u);
-    return id ? (API_BASE_URL + '?img=' + encodeURIComponent(id) + '&w=300') : u;
-  }
-
-  // 2) Dropbox：仍維持原本 raw 轉換
-  if (u.indexOf('dropbox.com') !== -1) {
-    try {
-      var db = u.replace('://www.dropbox.com/', '://dl.dropboxusercontent.com/');
-      if (db.indexOf('?') === -1) {
-        db += '?raw=1';
-      } else {
-        db = db.replace(/(\?|&)dl=\d/ig, '$1raw=1').replace(/(\?|&)raw=\d/ig, '$1raw=1');
-        if (db.indexOf('raw=1') === -1) db += '&raw=1';
-      }
-      return db;
-    } catch (_) {}
-    return '';
-  }
-
-  // 3) 其它已可直連的圖片副檔名
-  if (/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(u)) return u;
-
-  // 4) 其它未知來源 → 不處理，回原樣（前端會顯示為「🔗 照片」連結）
-  return u;
-}
-    /* ====================== JSONP 幫手 ====================== */
-function loadJsonp(url, cbName) {
-  return new Promise((resolve, reject) => {
-    const name = cbName || ('cb_' + Math.random().toString(36).slice(2));
-    const s = document.createElement('script');
-    s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + name;
-    s.async = true;
-
-    const t0 = Date.now();
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error('JSONP timeout (' + (Date.now() - t0) + 'ms)'));
-    }, 15000);
-
-    function cleanup() {
-      clearTimeout(timer);
-      s.remove();
-      try { delete window[name]; } catch(_) { window[name] = undefined; }
+      wrap.appendChild(img);
+      return wrap;
     }
 
-    window[name] = (data) => { cleanup(); resolve(data); };
-    s.onerror = () => { cleanup(); reject(new Error('JSONP load error')); };
-    document.head.appendChild(s);
-  });
-}
+    /* ---------- JSONP ---------- */
+    function loadJsonp(url, cbName){
+      return new Promise((resolve, reject) => {
+        const name = cbName || ('cb_' + Math.random().toString(36).slice(2));
+        const s = document.createElement('script');
+        s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + name;
+        s.async = true;
 
-    /* ====================== 共用：頁面 logger ====================== */
-    function logToPage(message) {
-      var logContainer = document.getElementById('debug-log');
-      if (!logContainer) return;
-      var time = new Date().toLocaleTimeString('zh-TW');
-      logContainer.textContent += '[' + time + '] ' + message + '\n';
-      logContainer.scrollTop = logContainer.scrollHeight;
+        const t0 = Date.now();
+        const timer = setTimeout(()=>{ cleanup(); reject(new Error('JSONP timeout ('+(Date.now()-t0)+'ms)')); }, 15000);
+
+        function cleanup(){ clearTimeout(timer); s.remove(); try{ delete window[name]; }catch(_){ window[name] = undefined; } }
+        window[name] = (data)=>{ cleanup(); resolve(data); };
+        s.onerror = ()=>{ cleanup(); reject(new Error('JSONP load error')); };
+        document.head.appendChild(s);
+      });
     }
 
-    /* ====================== 草稿渲染（審核） ====================== */
-    function displayDrafts(drafts) {
-      logToPage('displayDrafts：收到 ' + (Array.isArray(drafts) ? drafts.length : 0) + ' 筆草稿');
-      var container = document.getElementById('drafts-container');
-      var statusMessage = document.getElementById('status-message');
-      if (statusMessage) statusMessage.style.display = 'none';
+    /* ---------- UI：草稿 / 已發布 ---------- */
+    function buildPhotoGrid(htmlLinksCsv){
+      const container = document.createElement('div');
+      container.className = 'photo-grid';
+
+      if(!htmlLinksCsv) return container;
+      String(htmlLinksCsv).split(',').forEach(link => {
+        const u = (link || '').trim();
+        if(!u) return;
+        if(u.charAt(0) === '/'){
+          const ph = document.createElement('div');
+          ph.className = 'photo-placeholder';
+          ph.textContent = '此為 Dropbox 路徑（非網址），僅顯示佔位';
+          container.appendChild(ph);
+          return;
+        }
+        const id = driveFileId(u);
+        if(id){
+          container.appendChild( renderSmartImg( buildPublicThumbUrls(id, 300) ) );
+        }else{
+          container.appendChild( renderDirectImg(u) );
+        }
+      });
+      return container;
+    }
+
+    function displayDrafts(drafts){
+      logToPage('displayDrafts：收到 ' + (Array.isArray(drafts)?drafts.length:0) + ' 筆草稿');
+      const container = document.getElementById('drafts-container');
+      const status = document.getElementById('status-message');
+      if(status) status.style.display = 'none';
       container.innerHTML = '';
 
-      if (!Array.isArray(drafts) || drafts.length === 0) {
+      if(!Array.isArray(drafts) || drafts.length === 0){
         container.innerHTML = '<p style="text-align:center;">目前沒有任何可處理的日誌草稿。</p>';
         return;
       }
 
-      drafts.forEach(function(log) {
-        var card = document.createElement('div');
+      drafts.forEach(log => {
+        const card = document.createElement('div');
         card.className = 'card';
         card.id = 'log-' + log.LogID;
 
-        var timestamp = log.Timestamp ? new Date(log.Timestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) : '';
-        var photosHtml = '';
+        const ts = log.Timestamp ? new Date(log.Timestamp).toLocaleString('zh-TW', { timeZone:'Asia/Taipei' }) : '';
+        const head =
+          `<h3>${log.Title || '無標題'}</h3>
+           <small>案場: ${log.ProjectName || '未知'}｜回報人: ${log.UserName || '未知'}${ts ? '｜'+ts : ''}</small>
+           <hr><p style="white-space:pre-wrap;">${log.Content || '無內容'}</p>`;
 
-        if (log.PhotoLinks) {
-          var links = String(log.PhotoLinks).split(',');
-          photosHtml += '<div class="photo-grid">';
-          links.forEach(function(link) {
-            if (!link || !link.trim()) return;
-            var trimmed = link.trim();
-            if (trimmed.charAt(0) === '/') {
-              photosHtml += '<div class="photo-placeholder">此為 Dropbox 路徑（非網址），僅顯示佔位</div>';
-            } else {
-              var id = driveFileId(trimmed);
-              if (id) {
-                var urls = buildPublicThumbUrls(id, 300);
-                photosHtml += renderSmartImg(urls).outerHTML;
-              } else {
-                // 非 Drive 連結（例如 Dropbox / 外站），保留你原本的規則
-                var embed = toEmbeddableImageUrl(trimmed);
-                if (embed) {
-                  photosHtml += '<a href="' + trimmed + '" target="_blank" rel="noopener noreferrer">'
-                              + '<img src="' + embed + '" alt="照片"'
-                              + ' onload="thumbOk(this, \'' + embed.replace(/'/g, "\\'") + '\')"'
-                              + ' onerror="thumbError(this, \'' + trimmed.replace(/'/g, "\\'") + '\', \'' + embed.replace(/'/g, "\\'") + '\')"'
-                              + '>'
-                              + '</a>';
-                } else {
-                  photosHtml += '<a href="' + trimmed + '" target="_blank" rel="noopener noreferrer">🔗 照片</a>';
-                }
-              }
-              if (embed) {
-                photosHtml += '<a href="' + trimmed + '" target="_blank" rel="noopener noreferrer">'
-                            + '<img src="' + embed + '" alt="照片"'
-                            + ' onload="thumbOk(this, \'' + embed.replace(/'/g, "\\'") + '\')"'
-                            + ' onerror="thumbError(this, \'' + trimmed.replace(/'/g, "\\'") + '\', \'' + embed.replace(/'/g, "\\'") + '\')"'
-                            + '>'
-                            + '</a>';
-              } else {
-                photosHtml += '<a href="' + trimmed + '" target="_blank" rel="noopener noreferrer">🔗 照片</a>';
-                thumbLog('EMBED FAIL (draft), fallback link only: ' + trimmed);
-              }
-            }
-          });
-          photosHtml += '</div>';
-        }
+        card.innerHTML = head;
+        card.appendChild( buildPhotoGrid(log.PhotoLinks) );
 
-        card.innerHTML =
-          '<h3>' + (log.Title || '無標題') + '</h3>' +
-          '<small>案場: ' + (log.ProjectName || '未知') + '｜回報人: ' + (log.UserName || '未知') + (timestamp ? '｜' + timestamp : '') + '</small>' +
-          '<hr>' +
-          '<p style="white-space:pre-wrap;">' + (log.Content || '無內容') + '</p>' +
-          photosHtml +
-          '<div style="text-align:right;margin-top:1rem;">' +
-            '<button id="btn-' + log.LogID + '" onclick="handlePublish(\'' + log.LogID + '\')">審核與發布</button>' +
-          '</div>';
+        const btnBar = document.createElement('div');
+        btnBar.style.textAlign = 'right';
+        btnBar.style.marginTop = '1rem';
+        btnBar.innerHTML = `<button id="btn-${log.LogID}">審核與發布</button>`;
+        btnBar.querySelector('button').onclick = () => handlePublish(log.LogID);
 
+        card.appendChild(btnBar);
         container.appendChild(card);
       });
     }
 
-    /* ====================== 已發布渲染（公開檢視） ====================== */
-    function displayPublished(logs) {
-      logToPage('displayPublished：收到 ' + (Array.isArray(logs) ? logs.length : 0) + ' 筆公開資料');
-      var container = document.getElementById('drafts-container');
-      var status = document.getElementById('status-message');
-      if (status) status.style.display = 'none';
+    function displayPublished(logs){
+      logToPage('displayPublished：收到 ' + (Array.isArray(logs)?logs.length:0) + ' 筆公開資料');
+      const container = document.getElementById('drafts-container');
+      const status = document.getElementById('status-message');
+      if(status) status.style.display = 'none';
       container.innerHTML = '';
 
-      if (!Array.isArray(logs) || logs.length === 0) {
+      if(!Array.isArray(logs) || logs.length === 0){
         container.innerHTML = '<p style="text-align:center;">目前尚無已發布內容。</p>';
         return;
       }
 
-      logs.forEach(function(log) {
-        var card = document.createElement('div');
+      logs.forEach(log => {
+        const card = document.createElement('div');
         card.className = 'card';
-        var ts = log.Timestamp ? new Date(log.Timestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) : '';
-        var photosHtml = '';
 
-        if (log.PhotoLinks) {
-          var links = String(log.PhotoLinks).split(',');
-          photosHtml += '<div class="photo-grid">';
-          links.forEach(function(link) {
-            if (!link || !link.trim()) return;
-            var trimmed = link.trim();
-            if (trimmed.charAt(0) === '/') {
-              photosHtml += '<div class="photo-placeholder">此為 Dropbox 路徑（非網址），僅顯示佔位</div>';
-            } else {
-              var id = driveFileId(trimmed);
-              if (id) {
-                var urls = buildPublicThumbUrls(id, 300);
-                photosHtml += renderSmartImg(urls).outerHTML;
-              } else {
-                // 非 Drive 連結（例如 Dropbox / 外站），保留你原本的規則
-                var embed = toEmbeddableImageUrl(trimmed);
-                if (embed) {
-                  photosHtml += '<a href="' + trimmed + '" target="_blank" rel="noopener noreferrer">'
-                              + '<img src="' + embed + '" alt="照片"'
-                              + ' onload="thumbOk(this, \'' + embed.replace(/'/g, "\\'") + '\')"'
-                              + ' onerror="thumbError(this, \'' + trimmed.replace(/'/g, "\\'") + '\', \'' + embed.replace(/'/g, "\\'") + '\')"'
-                              + '>'
-                              + '</a>';
-                } else {
-                  photosHtml += '<a href="' + trimmed + '" target="_blank" rel="noopener noreferrer">🔗 照片</a>';
-                }
-              }
+        const ts = log.Timestamp ? new Date(log.Timestamp).toLocaleString('zh-TW', { timeZone:'Asia/Taipei' }) : '';
+        const head =
+          `<h3>${log.Title || '無標題'}</h3>
+           <small>案場：${log.ProjectName || '未填'}${ts ? '｜'+ts : ''}</small>
+           <hr><p style="white-space:pre-wrap;">${log.Content || ''}</p>`;
 
-              if (embed) {
-                photosHtml += '<a href="' + trimmed + '" target="_blank" rel="noopener noreferrer">'
-                            + '<img src="' + embed + '" alt="照片"'
-                            + ' onload="thumbOk(this, \'' + embed.replace(/'/g, "\\'") + '\')"'
-                            + ' onerror="thumbError(this, \'' + trimmed.replace(/'/g, "\\'") + '\', \'' + embed.replace(/'/g, "\\'") + '\')"'
-                            + '>'
-                            + '</a>';
-              } else {
-                photosHtml += '<a href="' + trimmed + '" target="_blank" rel="noopener noreferrer">🔗 照片</a>';
-                thumbLog('EMBED FAIL (published), fallback link only: ' + trimmed);
-              }
-            }
-          });
-          photosHtml += '</div>';
-        }
-
-        card.innerHTML =
-          '<h3>' + (log.Title || '無標題') + '</h3>' +
-          '<small>案場：' + (log.ProjectName || '未填') + (ts ? '｜' + ts : '') + '</small>' +
-          '<hr>' +
-          '<p style="white-space:pre-wrap;">' + (log.Content || '') + '</p>' +
-          photosHtml;
-
+        card.innerHTML = head;
+        card.appendChild( buildPhotoGrid(log.PhotoLinks) );
         container.appendChild(card);
       });
     }
 
-    /* ====================== 發布 (v2.0 - API Fetch) ====================== */
-    function handlePublish(logId) {
-      var button = document.getElementById('btn-' + logId);
-      if (button) { button.disabled = true; button.textContent = '發布中...'; }
-      
-      // 注意：發布功能使用不同的 page 參數，並透過 POST 請求
-      const postUrl = `${API_BASE_URL}?page=publish`;
+    /* ---------- 發布 ---------- */
+    function handlePublish(logId){
+      const btn = document.getElementById('btn-'+logId);
+      if(btn){ btn.disabled = true; btn.textContent = '發布中...'; }
 
-      fetch(postUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8', // Apps Script doPost 的特殊要求
-        },
-        // 將要更新的資訊用 POST 的 body 傳過去
-        body: JSON.stringify({ logId: logId, newStatus: '已發布' })
+      fetch(`${API_BASE_URL}?page=publish`, {
+        method:'POST',
+        headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+        body: JSON.stringify({ logId, newStatus:'已發布' })
       })
-      .then(response => response.json())
-      .then(response => {
-          if (response && response.success) {
-            var card = document.getElementById('log-' + logId);
-            if (card) {
-              card.style.transition = 'opacity .5s ease';
-              card.style.opacity = '0';
-              setTimeout(function(){ card.parentNode && card.parentNode.removeChild(card); }, 500);
-            }
-            alert('日誌 ' + logId + ' 已成功發布！');
-          } else {
-            alert('發布失敗：\n' + (response && response.message ? response.message : '未知原因'));
-            if (button) { button.disabled = false; button.textContent = '審核與發布'; }
-          }
+      .then(r => r.json())
+      .then(r => {
+        if(r && r.success){
+          const card = document.getElementById('log-'+logId);
+          if(card){ card.style.transition='opacity .5s'; card.style.opacity='0'; setTimeout(()=>card.remove(), 500); }
+          alert(`日誌 ${logId} 已成功發布！`);
+        }else{
+          alert('發布失敗：\n' + (r && r.message ? r.message : '未知原因'));
+          if(btn){ btn.disabled=false; btn.textContent='審核與發布'; }
+        }
       })
       .catch(err => {
         alert('發布通訊錯誤：\n' + (err && err.message ? err.message : err));
-        if (button) { button.disabled = false; button.textContent = '審核與發布'; }
+        if(btn){ btn.disabled=false; btn.textContent='審核與發布'; }
       });
     }
 
-/* ====================== 入口：讀 URL 參數，依 id 分流 (v2.1 - Enhanced Error Handling) ====================== */
-    window.addEventListener('load', function () {
-      // 顯示版本號
+    /* ---------- 入口 ---------- */
+    window.addEventListener('load', function(){
       document.getElementById('version-display').textContent = '版本: ' + (typeof FRONTEND_VERSION !== 'undefined' ? FRONTEND_VERSION : '未知');
 
       logToPage('頁面載入完成，開始讀取 URL 參數');
@@ -581,125 +324,90 @@ function loadJsonp(url, cbName) {
       const id = urlParams.get('id') || '';
       logToPage('URL id=' + (id || '(未帶入)'));
 
-      var status = document.getElementById('status-message');
-      if (status) status.style.display = 'block';
-      
-      const fetchUrl = `${API_BASE_URL}?page=project&id=${id}`;
+      const status = document.getElementById('status-message');
+      if(status) status.style.display = 'block';
 
-      if (id === '0' || id) {
-      logToPage('準備呼叫 API(JSONP): ' + fetchUrl);
-      loadJsonp(fetchUrl)
-      .then(data => {
-        // JSONP 成功回來的就是原本的 JSON 內容
-        if (id === '0') {
-          displayDrafts(data);
-        } else {
-          displayPublished(data);
-        }
-      })
-      .catch(err => {
-        // JSONP 若失敗，會丟 timeout / load error
-        displayError(err);
-      });
-      } else {
-        displayError({ message: '未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。' });
+      const fetchUrl = `${API_BASE_URL}?page=project&id=${id}`;
+      if(id === '0' || id){
+        logToPage('準備呼叫 API(JSONP): ' + fetchUrl);
+        loadJsonp(fetchUrl)
+          .then(data => { if(id === '0') displayDrafts(data); else displayPublished(data); })
+          .catch(err => displayError(err));
+      }else{
+        displayError({ message:'未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。' });
       }
     });
 
-    /* ====================== 錯誤顯示 (v2.0 - Enhanced) ====================== */
-    function displayError(error) {
-        const errorMsg = (error && error.message) ? error.message : '發生未知錯誤。';
-        logToPage('PAGE ERROR: ' + errorMsg);
-        
-        // 偵測是否為網路層級的錯誤 (CORS 或網路問題)
-        let advice = '請檢查 Apps Script 後端日誌是否有錯誤紀錄。';
-        if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-            advice = '這通常是 CORS 跨域請求問題或網路連線錯誤。\n' +
-                     '請確認：\n' + 
-                     '1. Apps Script 已部署為「任何人」可存取。\n' +
-                     '2. Apps Script 後端程式碼中的 CORS 標頭已正確部署。\n' +
-                     '3. 瀏覽器的開發者工具 (F12) Console 中是否有更詳細的錯誤訊息。';
-        }
+    function displayError(error){
+      const msg = (error && error.message) ? error.message : '發生未知錯誤。';
+      logToPage('PAGE ERROR: ' + msg);
+      const status = document.getElementById('status-message');
+      if(status){
+        status.innerHTML =
+          '<div style="border:1px solid red;background:#ffebee;color:#c62828;padding:1rem;white-space:pre-wrap;">' +
+          '<strong>載入失敗！</strong>\n\n' +
+          '<strong>錯誤訊息：</strong>\n' + msg + '\n\n' +
+          '<strong>可能原因與建議：</strong>\n請檢查 Apps Script 後端日誌是否有錯誤紀錄。\n' +
+          '</div>';
+      }
+    }
 
-        var statusMessage = document.getElementById('status-message');
-        if (statusMessage) {
-            statusMessage.innerHTML =
-            '<div style="border:1px solid red;background:#ffebee;color:#c62828;padding:1rem;white-space:pre-wrap;">' +
-            '<strong>載入失敗！</strong>\n\n' +
-            '<strong>錯誤訊息：</strong>\n' + errorMsg + '\n\n' +
-            '<strong>可能原因與建議：</strong>\n' + advice +
-            '</div>';
-        }
+    /* ---------- 診斷 ---------- */
+    function runDiagnostics(){
+      const base = API_BASE_URL;
+      logToPage('=== 開始診斷 ===');
+      logToPage('API_BASE_URL = ' + base);
+
+      const url = base + '?page=project&id=0';
+      logToPage('[JSONP] 測試 URL: ' + url);
+      const t0 = Date.now();
+      loadJsonp(url).then(d => {
+        logToPage('[JSONP] OK，用時 ' + (Date.now()-t0) + 'ms，回傳筆數=' + (Array.isArray(d)?d.length:0));
+      }).catch(err => {
+        logToPage('[JSONP] 失敗：' + err.message);
+      }).finally(() => {
+        const testId = '1kl1GWuBEE-AKS4e4tdHGz8_90Au04vua';
+        const imgUrl = base + '?img=' + encodeURIComponent(testId) + '&w=300';
+        logToPage('[IMG] 測試代理：' + imgUrl);
+        const img = new Image();
+        const t1 = Date.now();
+        img.onload  = ()=> logToPage('[IMG] OK，用時 ' + (Date.now()-t1) + 'ms，尺寸=' + img.naturalWidth + 'x' + img.naturalHeight);
+        img.onerror = ()=> logToPage('[IMG] 失敗（可能是權限或非圖片格式）');
+        img.src = imgUrl + '&_=' + Date.now();
+      });
     }
   </script>
-  <script>
-/* ====================== 連線診斷 ====================== */
-function runDiagnostics() {
-  var base = API_BASE_URL;
-  logToPage('=== 開始診斷 ===');
-  logToPage('API_BASE_URL = ' + base);
 
-  // 1) JSONP 診斷（抓草稿 id=0）
-  var url = base + '?page=project&id=0';
-  logToPage('[JSONP] 測試 URL: ' + url);
-  var t0 = Date.now();
-  loadJsonp(url).then(data => {
-    logToPage('[JSONP] OK，用時 ' + (Date.now()-t0) + 'ms，回傳筆數=' + (Array.isArray(data)?data.length:0));
-  }).catch(err => {
-    logToPage('[JSONP] 失敗：' + err.message);
-  }).finally(() => {
-    // 2) 圖片代理診斷（用一個已知可讀的 fileId）
-    var testId = '1kl1GWuBEE-AKS4e4tdHGz8_90Au04vua'; // 你先前貼過的示例
-    var imgUrl = base + '?img=' + encodeURIComponent(testId) + '&w=300';
-    logToPage('[IMG] 測試代理：' + imgUrl);
-    var img = new Image();
-    var t1 = Date.now();
-    img.onload = function(){
-      logToPage('[IMG] OK，用時 ' + (Date.now()-t1) + 'ms，尺寸=' + img.naturalWidth + 'x' + img.naturalHeight);
-    };
-    img.onerror = function(){
-      logToPage('[IMG] 失敗（可能是權限或非圖片格式）');
-    };
-    img.src = imgUrl + '&_=' + Date.now(); // 防快取
-  });
-}
-</script>
-<!-- Lightbox 容器 -->
-<div id="lightbox" aria-hidden="true">
-  <div class="lb-wrap">
-    <img class="lb-img" alt="preview">
-    <button class="lb-close" aria-label="關閉">✕</button>
+  <!-- Lightbox -->
+  <div id="lightbox" aria-hidden="true">
+    <div class="lb-wrap">
+      <img class="lb-img" alt="preview">
+      <button class="lb-close" aria-label="關閉">✕</button>
+    </div>
   </div>
-</div>
+  <script>
+    (function(){
+      const lb  = document.getElementById('lightbox');
+      const img = lb.querySelector('.lb-img');
+      const btn = lb.querySelector('.lb-close');
 
-<script>
-// 簡易 Lightbox：開啟 / 關閉
-(function(){
-  const lb = document.getElementById('lightbox');
-  const img = lb.querySelector('.lb-img');
-  const btn = lb.querySelector('.lb-close');
+      function openLightbox(src){
+        img.src = '';
+        img.src = src;
+        lb.classList.add('open');
+        lb.setAttribute('aria-hidden','false');
+      }
+      function closeLightbox(){
+        lb.classList.remove('open');
+        lb.setAttribute('aria-hidden','true');
+        img.src = '';
+      }
+      lb.addEventListener('click', e => { if(e.target === lb) closeLightbox(); });
+      btn.addEventListener('click', closeLightbox);
+      window.addEventListener('keydown', e => { if(e.key === 'Escape' && lb.classList.contains('open')) closeLightbox(); });
 
-  function openLightbox(src) {
-    img.src = '';            // 先清掉，避免殘影
-    img.src = src;
-    lb.classList.add('open');
-    lb.setAttribute('aria-hidden','false');
-  }
-  function closeLightbox() {
-    lb.classList.remove('open');
-    lb.setAttribute('aria-hidden','true');
-    img.src = '';
-  }
-  // 點背景/關閉鈕/ESC 關閉
-  lb.addEventListener('click', (e)=>{ if (e.target === lb) closeLightbox(); });
-  btn.addEventListener('click', closeLightbox);
-  window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && lb.classList.contains('open')) closeLightbox(); });
-
-  // 暴露到全域，讓縮圖可呼叫
-  window.__openLightbox__ = openLightbox;
-})();
-</script>
-
+      window.__openLightbox__ = openLightbox;
+    })();
+  </script>
 </body>
-
 </html>
