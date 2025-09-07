@@ -390,29 +390,36 @@ function displayPublished(logs) {
 
 
     /* ---------- 發布 ---------- */
-    function handlePublish(logId){
-      const btn = document.getElementById('btn-'+logId);
-      if(btn){ btn.disabled = true; btn.textContent = '發布中...'; }
-
-      fetch(`${API_BASE_URL}?page=publish`, {
-        method:'POST',
-        headers:{ 'Content-Type':'text/plain;charset=utf-8' },
-        body: JSON.stringify({ logId, newStatus:'已發布' })
+    function handlePublish(logId) {
+      const button = document.getElementById('btn-' + logId);
+      if (button) { button.disabled = true; button.textContent = '發布中...'; }
+    
+      const postUrl = `${API_BASE_URL}?page=publish`;
+    
+      fetch(postUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json;charset=utf-8' },
+        body: JSON.stringify({ logId, newStatus: '已發布' })
       })
       .then(r => r.json())
-      .then(r => {
-        if(r && r.success){
-          const card = document.getElementById('log-'+logId);
-          if(card){ card.style.transition='opacity .5s'; card.style.opacity='0'; setTimeout(()=>card.remove(), 500); }
+      .then(data => {
+        if (data && data.success) {
+          const card = document.getElementById('log-' + logId);
+          if (card) {
+            card.style.transition = 'opacity .5s ease';
+            card.style.opacity = '0';
+            setTimeout(() => card.parentNode && card.parentNode.removeChild(card), 500);
+          }
           alert(`日誌 ${logId} 已成功發布！`);
-        }else{
-          alert('發布失敗：\n' + (r && r.message ? r.message : '未知原因'));
-          if(btn){ btn.disabled=false; btn.textContent='審核與發布'; }
+        } else {
+          throw new Error(data && data.message ? data.message : '未知原因');
         }
       })
       .catch(err => {
-        alert('發布通訊錯誤：\n' + (err && err.message ? err.message : err));
-        if(btn){ btn.disabled=false; btn.textContent='審核與發布'; }
+        alert('發布失敗：' + err.message);
+      })
+      .finally(() => {
+        if (button) { button.disabled = false; button.textContent = '審核與發布'; }
       });
     }
 
