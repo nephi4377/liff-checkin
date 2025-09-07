@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>專案日誌管理主控台</title>
+
+          <script>
+      // 【全域設定】請將 YOUR_APPS_SCRIPT_API_URL 換成您部署後的真實網址
+      const API_BASE_URL = 'YOUR_APPS_SCRIPT_API_URL';
+  </script>
+
+  <!--
+    ===========================================================
+    ManagementConsole.html
+    版本：v6.2 (THUMB-DEBUG Enabled)
+    更新時間：2025-09-07 14:30 (Asia/Taipei)
+    變更摘要：
+    - 新增縮圖偵錯：thumbLog / thumbOk / thumbError（可開關）。
+    - toEmbeddableImageUrl：支援多種 Drive/Dropbox 連結正規化。
+    - <img> 失敗時自動退回為純連結，避免破圖。
+    - 其餘流程（草稿審核 / 已發布顯示 / 發布 API）維持不變。
+    ===========================================================
+  -->
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f3f4f6;
+      color: #1f2937;
+      margin: 0;
+      padding: 2rem;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: auto;
+    }
+
+    header {
+      margin-bottom: 2rem;
+    }
+
+    h1 {
+      font-size: 1.875rem;
+      font-weight: bold;
+    }
+
+    .spinner {
+      margin: 2rem auto;
+      width: 3rem;
+      height: 3rem;
+      border-radius: 50%;
+      border: 4px solid #e5e7eb;
+      border-top-color: #3b82f6;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    #debug-log {
+      background-color: #111827;
+      color: #e5e7eb;
+      font-family: monospace;
+      font-size: 0.75rem;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      margin-top: 1rem;
+      height: 16rem;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: .5rem;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
+    }
+
+    .photo-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: .5rem;
+    }
+
+    .photo-grid img {
+      width: 100%;
+      height: 140px;
+      object-fit: cover;
+      border-radius: .375rem;
+    }
+
+    .photo-placeholder {
+      background: #e5e7eb;
+      height: 140px;
+      border-radius: .375rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #6b7280;
+      font-size: .875rem;
+      text-align: center;
+      padding: 0 .5rem;
+    }
+
+    button {
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      padding: .5rem .75rem;
+      border-radius: .375rem;
+      cursor: pointer;
+    }
+
+    button[disabled] {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+
+<body class="bg-gray-100">
+
+  <div class="container">
+    <header>
+      <h1>專案日誌管理主控台</h1>
+      <p>用 <code>?id=</code> 分流：<code>id=0</code>＝草稿審核；其他＝依案號顯示已發布內容。</p>
+    </header>
+
+    <main id="main-content">
+      <div id="status-message">
+        <div class="spinner"></div>
+        <p style="text-align:center;">正在載入資料...</p>
+      </div>
+      <div id="drafts-container"></div>
+
+      <div>
+        <h3 style="margin-top:2rem;font-weight:600;">執行狀態日誌：</h3>
+        <pre id="debug-log"></pre>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    /* ====================== 縮圖偵錯工具 ====================== */
+    var DEBUG_THUMBS = true;
+    function thumbLog(msg) {
+      if (!DEBUG_THUMBS) return;
+      console.log('[THUMB]', msg);
+      var logEl = document.getElementById('debug-log');
+      if (logEl) {
+        var t = new Date().toLocaleTimeString('zh-TW');
+        logEl.textContent += '[' + t + '][THUMB] ' + msg + '\n';
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+    }
+    function thumbError(imgEl, originalUrl, embedUrl) {
+      thumbLog('IMG ERROR src=' + embedUrl + ' (from=' + originalUrl + ') → fallback link');
+      if (!imgEl || !imgEl.parentNode) return;
+      var a = document.createElement('a');
+      a.href = originalUrl;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = '🔗 照片（無法內嵌，點我開啟）';
+      imgEl.parentNode.replaceChild(a, imgEl);
+    }
+    function thumbOk(imgEl, embedUrl) {
+      thumbLog('IMG OK ' + embedUrl);
+    }
+
+    /* ====================== 連結正規化（前端） ====================== */
+function toEmbeddableImageUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  var u = url.trim();
+
+  // 1) 已是 usercontent → 直接回傳（不要再改回 drive.google.com）
+  if (u.indexOf('drive.usercontent.google.com') !== -1) {
+    return u;
+  }
+
+  // 2) Dropbox 分享 → 轉 raw
+  if (u.indexOf('dropbox.com') !== -1) {
+    try {
+      var db = u.replace('://www.dropbox.com/', '://dl.dropboxusercontent.com/');
+      if (db.indexOf('?') === -1) {
+        db += '?raw=1';
+      } else {
+        db = db.replace(/(\?|&)dl=\d/ig, '$1raw=1').replace(/(\?|&)raw=\d/ig, '$1raw=1');
+        if (db.indexOf('raw=1') === -1) db += '&raw=1';
+      }
+      return db;
+    } catch (_) {}
+    return '';
+  }
+
+  // 3) Google Drive：抽出 fileId → 統一改用 usercontent 端點
+  var m = u.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (m && m[1]) return 'https://drive.usercontent.google.com/uc?id=' + m[1] + '&export=view';
+
+  m = u.match(/[?&](?:id|fileId)=([a-zA-Z0-9_-]+)/);
+  if (m && m[1]) return 'https://drive.usercontent.google.com/uc?id=' + m[1] + '&export=view';
+
+  // 4) 看起來已是可直連的圖片
+  if (/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(u)) return u;
+
+  // 5) 其它來源 → 不處理，回原樣（前端會顯示為「🔗 照片」連結）
+  return u;
+}
+
+
+    /* ====================== 共用：頁面 logger ====================== */
+    function logToPage(message) {
+      var logContainer = document.getElementById('debug-log');
+      if (!logContainer) return;
+      var time = new Date().toLocaleTimeString('zh-TW');
+      logContainer.textContent += '[' + time + '] ' + message + '\n';
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    /* ====================== 草稿渲染（審核） ====================== */
+    function displayDrafts(drafts) {
+      logToPage('displayDrafts：收到 ' + (Array.isArray(drafts) ? drafts.length : 0) + ' 筆草稿');
+      var container = document.getElementById('drafts-container');
+      var statusMessage = document.getElementById('status-message');
+      if (statusMessage) statusMessage.style.display = 'none';
+      container.innerHTML = '';
+
+      if (!Array.isArray(drafts) || drafts.length === 0) {
+        container.innerHTML = '<p style="text-align:center;">目前沒有任何可處理的日誌草稿。</p>';
+        return;
+      }
+
+      drafts.forEach(function(log) {
+        var card = document.createElement('div');
+        card.className = 'card';
+        card.id = 'log-' + log.LogID;
+
+        var timestamp = log.Timestamp ? new Date(log.Timestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) : '';
+        var photosHtml = '';
+
+        if (log.PhotoLinks) {
+          var links = String(log.PhotoLinks).split(',');
+          photosHtml += '<div class="photo-grid">';
+          links.forEach(function(link) {
+            if (!link || !link.trim()) return;
+            var trimmed = link.trim();
+            if (trimmed.charAt(0) === '/') {
+              photosHtml += '<div class="photo-placeholder">此為 Dropbox 路徑（非網址），僅顯示佔位</div>';
+            } else {
+              var embed = toEmbeddableImageUrl(trimmed);
+              if (embed) {
+                photosHtml += '<a href="' + trimmed + '" target="_blank" rel="noopener noreferrer">'
+                            + '<img src="' + embed + '" alt="照片"'
+                            + ' onload="thumbOk(this, \'' + embed.replace(/'/g, "\\'") + '\')"'
+                            + ' onerror="thumbError(this, \'' + trimmed.replace(/'/g, "\\'") + '\', \'' + embed.replace(/'/g, "\\'") + '\')"'
+                            + '>'
+                            + '</a>';
+              } else {
+                photosHtml += '<a href="' + trimmed + '" target="_blank" rel="noopener noreferrer">🔗 照片</a>';
+                thumbLog('EMBED FAIL (draft), fallback link only: ' + trimmed);
+              }
+            }
+          });
+          photosHtml += '</div>';
+        }
+
+        card.innerHTML =
+          '<h3>' + (log.Title || '無標題') + '</h3>' +
+          '<small>案場: ' + (log.ProjectName || '未知') + '｜回報人: ' + (log.UserName || '未知') + (timestamp ? '｜' + timestamp : '') + '</small>' +
+          '<hr>' +
+          '<p style="white-space:pre-wrap;">' + (log.Content || '無內容') + '</p>' +
+          photosHtml +
+          '<div style="text-align:right;margin-top:1rem;">' +
+            '<button id="btn-' + log.LogID + '" onclick="handlePublish(\'' + log.LogID + '\')">審核與發布</button>' +
+          '</div>';
+
+        container.appendChild(card);
+      });
+    }
+
+    /* ====================== 已發布渲染（公開檢視） ====================== */
+    function displayPublished(logs) {
+      logToPage('displayPublished：收到 ' + (Array.isArray(logs) ? logs.length : 0) + ' 筆公開資料');
+      var container = document.getElementById('drafts-container');
+      var status = document.getElementById('status-message');
+      if (status) status.style.display = 'none';
+      container.innerHTML = '';
+
+      if (!Array.isArray(logs) || logs.length === 0) {
+        container.innerHTML = '<p style="text-align:center;">目前尚無已發布內容。</p>';
+        return;
+      }
+
+      logs.forEach(function(log) {
+        var card = document.createElement('div');
+        card.className = 'card';
+        var ts = log.Timestamp ? new Date(log.Timestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) : '';
+        var photosHtml = '';
+
+        if (log.PhotoLinks) {
+          var links = String(log.PhotoLinks).split(',');
+          photosHtml += '<div class="photo-grid">';
+          links.forEach(function(link) {
+            if (!link || !link.trim()) return;
+            var trimmed = link.trim();
+            if (trimmed.charAt(0) === '/') {
+              photosHtml += '<div class="photo-placeholder">此為 Dropbox 路徑（非網址），僅顯示佔位</div>';
+            } else {
+              var embed = toEmbeddableImageUrl(trimmed);
+              if (embed) {
+                photosHtml += '<a href="' + trimmed + '" target="_blank" rel="noopener noreferrer">'
+                            + '<img src="' + embed + '" alt="照片"'
+                            + ' onload="thumbOk(this, \'' + embed.replace(/'/g, "\\'") + '\')"'
+                            + ' onerror="thumbError(this, \'' + trimmed.replace(/'/g, "\\'") + '\', \'' + embed.replace(/'/g, "\\'") + '\')"'
+                            + '>'
+                            + '</a>';
+              } else {
+                photosHtml += '<a href="' + trimmed + '" target="_blank" rel="noopener noreferrer">🔗 照片</a>';
+                thumbLog('EMBED FAIL (published), fallback link only: ' + trimmed);
+              }
+            }
+          });
+          photosHtml += '</div>';
+        }
+
+        card.innerHTML =
+          '<h3>' + (log.Title || '無標題') + '</h3>' +
+          '<small>案場：' + (log.ProjectName || '未填') + (ts ? '｜' + ts : '') + '</small>' +
+          '<hr>' +
+          '<p style="white-space:pre-wrap;">' + (log.Content || '') + '</p>' +
+          photosHtml;
+
+        container.appendChild(card);
+      });
+    }
+
+    /* ====================== 發布（保留你的寫法，防重複） ====================== */
+    function handlePublish(logId) {
+      var button = document.getElementById('btn-' + logId);
+      if (button) { button.disabled = true; button.textContent = '發布中...'; }
+
+      google.script.run
+        .withSuccessHandler(function (response) {
+          if (response && response.success) {
+            var card = document.getElementById('log-' + logId);
+            if (card) {
+              card.style.transition = 'opacity .5s ease';
+              card.style.opacity = '0';
+              setTimeout(function(){ card.parentNode && card.parentNode.removeChild(card); }, 500);
+            }
+            alert('日誌 ' + logId + ' 已成功發布！');
+          } else {
+            alert('發布失敗：\n' + (response && response.message ? response.message : '未知原因'));
+            if (button) { button.disabled = false; button.textContent = '審核與發布'; }
+          }
+        })
+        .withFailureHandler(function (err) {
+          alert('發布通訊錯誤：\n' + (err && err.message ? err.message : err));
+          if (button) { button.disabled = false; button.textContent = '審核與發布'; }
+        })
+        .updateLogStatus(logId, '已發布');
+    }
+
+    /* ====================== 入口：讀 URL 參數，依 id 分流 ====================== */
+    window.addEventListener('load', function () {
+      logToPage('頁面載入完成，開始讀取 URL 參數');
+      google.script.url.getLocation(function (loc) {
+        var id = (loc && loc.parameter && typeof loc.parameter.id !== 'undefined')
+                 ? String(loc.parameter.id).trim()
+                 : '';
+        logToPage('URL id=' + (id || '(未帶入)'));
+
+        var status = document.getElementById('status-message');
+        if (status) status.style.display = 'block';
+
+        if (id === '0') {
+          google.script.run
+            .withSuccessHandler(function (data) { displayDrafts(data); logToPage('草稿載入完成'); })
+            .withFailureHandler(function (err) { displayError(err); })
+            .getDraftLogs();
+          logToPage('已呼叫 getDraftLogs()');
+        } else if (id) {
+          google.script.run
+            .withSuccessHandler(function (data) { displayPublished(data); logToPage('已發布載入完成（案：' + id + '）'); })
+            .withFailureHandler(function (err) { displayError(err); })
+            .getLogsByProject_V3_FINAL(id);
+          logToPage('已呼叫 getLogsByProject_V3_FINAL(' + id + ')');
+        } else {
+          displayError({ message: '未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。' });
+        }
+      });
+    });
+
+    function displayError(error) {
+      thumbLog('PAGE ERROR: ' + (error && error.message ? error.message : '未知錯誤'));
+      var statusMessage = document.getElementById('status-message');
+      if (statusMessage) {
+        statusMessage.innerHTML =
+          '<div style="border:1px solid red;background:#ffebee;color:#c62828;padding:1rem;">' +
+          '<strong>載入失敗！</strong><br>' + (error && error.message ? error.message : '發生未知錯誤。') +
+          '</div>';
+      }
+    }
+  </script>
+</body>
+
+</html>
