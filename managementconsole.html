@@ -9,7 +9,7 @@
   <script>
     // 【全域設定】請將 YOUR_APPS_SCRIPT_API_URL 換成您部署後的真實網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v7.3-beta'; // 前端版本號
+    const FRONTEND_VERSION = 'v7.4-beta'; // 前端版本號
   </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
@@ -179,6 +179,32 @@
     function thumbOk(imgEl, embedUrl) {
       thumbLog('IMG OK ' + embedUrl);
     }
+
+// 取出 Drive 檔案 ID：接受 uc?id=、file/d/.../view 等各式連結
+function driveFileId(u) {
+  if (!u) return '';
+  u = String(u).trim();
+  let m;
+  m = u.match(/[?&](?:id|fileId)=([a-zA-Z0-9_-]+)/);     if (m) return m[1];
+  m = u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);           if (m) return m[1];
+  m = u.match(/\/open\?id=([a-zA-Z0-9_-]+)/);           if (m) return m[1];
+  return '';
+}
+
+// 產生「公開可讀」下可用的縮圖候選清單（依序嘗試）
+function buildPublicThumbUrls(fileId, w) {
+  const W = Math.max(64, w|0 || 300);
+  return [
+    // ① Google Drive 內建縮圖（你剛測試成功的那個）
+    `https://drive.google.com/thumbnail?id=${fileId}&sz=w${W}-h${W}`,
+    // ② googleusercontent uc（常見公開直連）
+    `https://drive.usercontent.google.com/uc?id=${fileId}&export=view`,
+    // ③ drive uc（有些環境也能吃）
+    `https://drive.google.com/uc?id=${fileId}&export=view`,
+    // ④ 下載路徑（有時可顯示、有時觸發下載，但作為最後備援）
+    `https://drive.google.com/uc?export=download&id=${fileId}`,
+  ];
+}
     
 /* ====================== 連結正規化（前端）====================== */
 function toEmbeddableImageUrl(url) {
@@ -289,7 +315,25 @@ function loadJsonp(url, cbName) {
             if (trimmed.charAt(0) === '/') {
               photosHtml += '<div class="photo-placeholder">此為 Dropbox 路徑（非網址），僅顯示佔位</div>';
             } else {
-              var embed = toEmbeddableImageUrl(trimmed);
+              var id = driveFileId(trimmed);
+              if (id) {
+                var urls = buildPublicThumbUrls(id, 300);
+                // 用前端備援 <img>
+                photosHtml += renderSmartImg(urls, 'Drive 公開縮圖').outerHTML;
+              } else {
+                // 非 Drive 連結（例如 Dropbox / 外站），保留你原本的規則
+                var embed = toEmbeddableImageUrl(trimmed);
+                if (embed) {
+                  photosHtml += '<a href="' + trimmed + '" target="_blank" rel="noopener noreferrer">'
+                              + '<img src="' + embed + '" alt="照片"'
+                              + ' onload="thumbOk(this, \'' + embed.replace(/'/g, "\\'") + '\')"'
+                              + ' onerror="thumbError(this, \'' + trimmed.replace(/'/g, "\\'") + '\', \'' + embed.replace(/'/g, "\\'") + '\')"'
+                              + '>'
+                              + '</a>';
+                } else {
+                  photosHtml += '<a href="' + trimmed + '" target="_blank" rel="noopener noreferrer">🔗 照片</a>';
+                }
+              }
               if (embed) {
                 photosHtml += '<a href="' + trimmed + '" target="_blank" rel="noopener noreferrer">'
                             + '<img src="' + embed + '" alt="照片"'
@@ -348,7 +392,26 @@ function loadJsonp(url, cbName) {
             if (trimmed.charAt(0) === '/') {
               photosHtml += '<div class="photo-placeholder">此為 Dropbox 路徑（非網址），僅顯示佔位</div>';
             } else {
-              var embed = toEmbeddableImageUrl(trimmed);
+              var id = driveFileId(trimmed);
+              if (id) {
+                var urls = buildPublicThumbUrls(id, 300);
+                // 用前端備援 <img>
+                photosHtml += renderSmartImg(urls, 'Drive 公開縮圖').outerHTML;
+              } else {
+                // 非 Drive 連結（例如 Dropbox / 外站），保留你原本的規則
+                var embed = toEmbeddableImageUrl(trimmed);
+                if (embed) {
+                  photosHtml += '<a href="' + trimmed + '" target="_blank" rel="noopener noreferrer">'
+                              + '<img src="' + embed + '" alt="照片"'
+                              + ' onload="thumbOk(this, \'' + embed.replace(/'/g, "\\'") + '\')"'
+                              + ' onerror="thumbError(this, \'' + trimmed.replace(/'/g, "\\'") + '\', \'' + embed.replace(/'/g, "\\'") + '\')"'
+                              + '>'
+                              + '</a>';
+                } else {
+                  photosHtml += '<a href="' + trimmed + '" target="_blank" rel="noopener noreferrer">🔗 照片</a>';
+                }
+              }
+
               if (embed) {
                 photosHtml += '<a href="' + trimmed + '" target="_blank" rel="noopener noreferrer">'
                             + '<img src="' + embed + '" alt="照片"'
