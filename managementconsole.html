@@ -9,7 +9,7 @@
   <script>
     // 【全域設定】請將 YOUR_APPS_SCRIPT_API_URL 換成您部署後的真實網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v7.4-beta'; // 前端版本號
+    const FRONTEND_VERSION = 'v7.5-beta'; // 前端版本號
   </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
@@ -185,25 +185,67 @@ function driveFileId(u) {
   if (!u) return '';
   u = String(u).trim();
   let m;
-  m = u.match(/[?&](?:id|fileId)=([a-zA-Z0-9_-]+)/);     if (m) return m[1];
-  m = u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);           if (m) return m[1];
-  m = u.match(/\/open\?id=([a-zA-Z0-9_-]+)/);           if (m) return m[1];
+  m = u.match(/[?&](?:id|fileId)=([a-zA-Z0-9_-]+)/); if (m) return m[1];
+  m = u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);       if (m) return m[1];
+  m = u.match(/\/open\?id=([a-zA-Z0-9_-]+)/);       if (m) return m[1];
   return '';
 }
 
-// 產生「公開可讀」下可用的縮圖候選清單（依序嘗試）
+// 產生公開可讀情境下可用的縮圖候選清單（依序嘗試）
 function buildPublicThumbUrls(fileId, w) {
   const W = Math.max(64, w|0 || 300);
   return [
-    // ① Google Drive 內建縮圖（你剛測試成功的那個）
     `https://drive.google.com/thumbnail?id=${fileId}&sz=w${W}-h${W}`,
-    // ② googleusercontent uc（常見公開直連）
     `https://drive.usercontent.google.com/uc?id=${fileId}&export=view`,
-    // ③ drive uc（有些環境也能吃）
     `https://drive.google.com/uc?id=${fileId}&export=view`,
-    // ④ 下載路徑（有時可顯示、有時觸發下載，但作為最後備援）
     `https://drive.google.com/uc?export=download&id=${fileId}`,
   ];
+}
+
+// 會自動備援的 <img>：失敗就換下一個 URL，最後改為純連結
+function renderSmartImg(urls, labelText) {
+  const wrap = document.createElement('div');
+  wrap.style.display = 'flex';
+  wrap.style.flexDirection = 'column';
+  wrap.style.gap = '6px';
+
+  if (labelText) {
+    const cap = document.createElement('small');
+    cap.textContent = labelText;
+    cap.style.color = '#6b7280';
+    wrap.appendChild(cap);
+  }
+
+  const a = document.createElement('a'); a.target = '_blank'; a.rel = 'noopener noreferrer';
+  const img = document.createElement('img');
+  img.style.width = '100%';
+  img.style.height = '140px';
+  img.style.objectFit = 'cover';
+  img.style.borderRadius = '.375rem';
+
+  let i = 0;
+  function use(idx) {
+    if (idx >= urls.length) {
+      const fallback = document.createElement('a');
+      fallback.href = urls[0]; fallback.target = '_blank'; fallback.rel = 'noopener noreferrer';
+      fallback.textContent = '🔗 照片（無法內嵌，點我開啟）';
+      if (wrap.contains(a)) wrap.removeChild(a);
+      wrap.appendChild(fallback);
+      thumbLog('ALL FAILED → ' + urls.join(' | '));
+      return;
+    }
+    a.href = urls[idx];
+    img.src = urls[idx] + (urls[idx].includes('?') ? '&' : '?') + '_=' + Date.now();
+    thumbLog('TRY ' + urls[idx]);
+  }
+
+  img.onload  = () => thumbOk(img, img.src);
+  img.onerror = () => { thumbError(img, urls[0], img.src); use(++i); };
+
+  a.appendChild(img);
+  wrap.appendChild(a);
+  use(0);
+  return wrap;
 }
     
 /* ====================== 連結正規化（前端）====================== */
