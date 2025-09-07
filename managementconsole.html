@@ -7,7 +7,7 @@
   <script>
     // 【全域設定】請換成你的正式網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v7.9-beta';
+    const FRONTEND_VERSION = 'v7.10-beta';
   </script>
 
   <style>
@@ -40,13 +40,14 @@
     button[disabled]{ opacity:.6; cursor:not-allowed; }
 
     @media (max-width:640px){ body{ padding:1rem } .photo-grid{ gap:.5rem } }
-
+    
     /* Lightbox */
-    #lightbox{ position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; align-items:center; justify-content:center; z-index:9999; padding:2rem; }
-    #lightbox.open{ display:flex }
-    #lightbox .lb-wrap{ position:relative; max-width:min(96vw,1200px); max-height:90vh; }
-    #lightbox img.lb-img{ display:block; max-width:100%; max-height:90vh; border-radius:.5rem; background:#fff; }
-    #lightbox button.lb-close{ position:absolute; top:-.75rem; right:-.75rem; background:rgba(0,0,0,.6); color:#fff; border:0; border-radius:9999px; width:36px; height:36px; cursor:pointer; font-size:18px; }
+    #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:9999;padding:1rem;}
+    #lightbox.open{display:flex}
+    #lightbox .lb-wrap{position:relative;max-width:98vw;max-height:95vh;display:flex;align-items:center;justify-content:center;}
+    #lightbox img.lb-img{display:block;max-width:98vw;max-height:95vh;object-fit:contain;border-radius:.5rem;background:#fff;box-shadow:0 4px 20px rgba(0,0,0,.6);}
+    #lightbox button.lb-close{position:absolute;top:-.5rem;right:-.5rem;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:9999px;width:40px;height:40px;cursor:pointer;font-size:20px;line-height:40px;text-align:center;}
+
   </style>
 </head>
 
@@ -115,12 +116,16 @@
 
     /* ---------- 渲染：Drive 縮圖（帶候選/備援 + 點擊 Lightbox） ---------- */
     function renderSmartImg(urls){
+      // urls 目前是 [ thumbnail, usercontent-view, uc?download ]
       const wrap = document.createElement('div');
       wrap.className = 'photo-item';
-
+    
       const img = document.createElement('img');
       img.className = 'photo-thumb';
-
+    
+      // ★ 這裡選「大圖候選」，優先不是縮圖的那個
+      const fullUrl = urls[1] || urls[2] || urls[0];
+    
       let i = 0;
       function use(idx){
         if(idx >= urls.length){
@@ -128,20 +133,24 @@
           ph.className = 'photo-placeholder';
           ph.textContent = '無法載入縮圖（點此開啟原圖）';
           ph.style.cursor = 'pointer';
-          ph.onclick = () => window.open(urls[0], '_blank', 'noopener,noreferrer');
+          ph.onclick = () => window.open(fullUrl, '_blank', 'noopener,noreferrer');
           wrap.replaceChildren(ph);
           thumbLog('ALL FAILED → ' + urls.join(' | '));
           return;
         }
         const u = urls[idx] + (urls[idx].includes('?') ? '&' : '?') + '_=' + Date.now();
         img.src = u;
-        img.dataset.full = urls[0];
+        img.dataset.full = fullUrl;     // ★ Lightbox 用的大圖網址
         thumbLog('TRY ' + u);
       }
-
-      img.onload  = () => { thumbLog('IMG OK ' + img.src); img.onclick = () => (window.__openLightbox__ ? window.__openLightbox__(img.dataset.full) : window.open(img.dataset.full, '_blank')); };
+    
+      img.onload  = () => {
+        thumbLog('IMG OK ' + img.src);
+        img.onclick = () => (window.__openLightbox__ ? window.__openLightbox__(img.dataset.full)
+                                                     : window.open(img.dataset.full,'_blank'));
+      };
       img.onerror = () => { thumbLog('IMG ERROR ' + img.src); use(++i); };
-
+    
       wrap.appendChild(img);
       use(0);
       return wrap;
