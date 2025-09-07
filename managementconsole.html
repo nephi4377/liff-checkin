@@ -7,7 +7,7 @@
   <script>
     // 【全域設定】請換成你的正式網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v7.11-beta';
+    const FRONTEND_VERSION = 'v7.12-beta';
   </script>
 
   <style>
@@ -115,45 +115,40 @@
     }
 
     /* ---------- 渲染：Drive 縮圖（帶候選/備援 + 點擊 Lightbox） ---------- */
-    function renderSmartImg(urls){
-      // urls 目前是 [ thumbnail, usercontent-view, uc?download ]
+    function renderSmartImg(urls) {
       const wrap = document.createElement('div');
       wrap.className = 'photo-item';
     
       const img = document.createElement('img');
       img.className = 'photo-thumb';
     
-      // ★ 這裡選「大圖候選」，優先不是縮圖的那個
-      const fullUrl = urls[1] || urls[2] || urls[0];
-    
       let i = 0;
-      function use(idx){
-        if(idx >= urls.length){
+      function use(idx) {
+        if (idx >= urls.length) {
           const ph = document.createElement('div');
           ph.className = 'photo-placeholder';
           ph.textContent = '無法載入縮圖（點此開啟原圖）';
           ph.style.cursor = 'pointer';
-          ph.onclick = () => window.open(fullUrl, '_blank', 'noopener,noreferrer');
+          ph.onclick = () => window.open(urls[0], '_blank', 'noopener,noreferrer');
           wrap.replaceChildren(ph);
-          thumbLog('ALL FAILED → ' + urls.join(' | '));
           return;
         }
-        const u = urls[idx] + (urls[idx].includes('?') ? '&' : '?') + '_=' + Date.now();
-        img.src = u;
-        img.dataset.full = fullUrl;     // ★ Lightbox 用的大圖網址
-        thumbLog('TRY ' + u);
+        // 防快取可加可不加
+        img.src = urls[idx];
+        img.dataset.full = urls[0]; // 以第一個當大圖 / 原圖
       }
     
-            // ✅ 這裡加上 Lightbox 開啟
-              img.onload = () => {
-              img.onclick = () => window.__openLightbox__(img.dataset.full, urls);
-            };
-            img.onerror = () => { thumbLog('IMG ERROR ' + img.src); use(++i); };
-          
+      img.onload  = () => {
+        // ✅ 點縮圖開 lightbox，並把同組 URL 帶進去（讓 ← → 可切換）
+        img.onclick = () => window.__openLightbox__(img.dataset.full, urls);
+      };
+      img.onerror = () => { use(++i); };
+    
       wrap.appendChild(img);
       use(0);
-      return wrap;
+      return wrap; // ✅ 回傳 DOM 節點
     }
+
 
     /* ---------- 渲染：一般圖片（非 Drive） ---------- */
     function renderDirectImg(src){
@@ -231,70 +226,168 @@
       return container;
     }
 
-    function displayDrafts(drafts){
-      logToPage('displayDrafts：收到 ' + (Array.isArray(drafts)?drafts.length:0) + ' 筆草稿');
-      const container = document.getElementById('drafts-container');
-      const status = document.getElementById('status-message');
-      if(status) status.style.display = 'none';
-      container.innerHTML = '';
+function displayDrafts(drafts) {
+  logToPage('displayDrafts：收到 ' + (Array.isArray(drafts) ? drafts.length : 0) + ' 筆草稿');
+  const container = document.getElementById('drafts-container');
+  const statusMessage = document.getElementById('status-message');
+  if (statusMessage) statusMessage.style.display = 'none';
+  container.innerHTML = '';
 
-      if(!Array.isArray(drafts) || drafts.length === 0){
-        container.innerHTML = '<p style="text-align:center;">目前沒有任何可處理的日誌草稿。</p>';
-        return;
+  if (!Array.isArray(drafts) || drafts.length === 0) {
+    container.innerHTML = '<p style="text-align:center;">目前沒有任何可處理的日誌草稿。</p>';
+    return;
+  }
+
+  drafts.forEach(log => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.id = 'log-' + log.LogID;
+
+    const timestamp = log.Timestamp ? new Date(log.Timestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) : '';
+
+    // 上半部文字
+    const head = document.createElement('div');
+    head.innerHTML =
+      '<h3>' + (log.Title || '無標題') + '</h3>' +
+      '<small>案場: ' + (log.ProjectName || '未知') + '｜回報人: ' + (log.UserName || '未知') + (timestamp ? '｜' + timestamp : '') + '</small>' +
+      '<hr>' +
+      '<p style="white-space:pre-wrap;">' + (log.Content || '無內容') + '</p>';
+    card.appendChild(head);
+
+    // ✅ 照片牆：用 DOM 建一個容器，把每張圖 append 進來
+    if (log.PhotoLinks) {
+      const links = String(log.PhotoLinks).split(',').map(s => s.trim()).filter(Boolean);
+      if (links.length) {
+        const grid = document.createElement('div');
+        grid.className = 'photo-grid';
+
+        links.forEach(trimmed => {
+          if (trimmed.charAt(0) === '/') {
+            const ph = document.createElement('div');
+            ph.className = 'photo-placeholder';
+            ph.textContent = '此為 Dropbox 路徑（非網址），僅顯示佔位';
+            grid.appendChild(ph);
+            return;
+          }
+
+          const id = driveFileId(trimmed);
+          if (id) {
+            const urls = buildPublicThumbUrls(id, 1200); // 給大一點尺寸
+            grid.appendChild(renderSmartImg(urls));      // ✅ 直接 append DOM
+          } else {
+            // 非 Drive 的（Dropbox/raw/外站），用原本的轉換
+            const embed = toEmbeddableImageUrl(trimmed);
+            if (embed) {
+              const a = document.createElement('a');
+              a.href = trimmed; a.target = '_blank'; a.rel = 'noopener noreferrer';
+
+              const img = document.createElement('img');
+              img.className = 'photo-thumb';
+              img.src = embed;
+              img.onload = () => thumbOk(img, embed);
+              img.onerror = () => thumbError(img, trimmed, embed);
+              // 也可開 lightbox：img.onclick = () => window.__openLightbox__(trimmed, [trimmed]);
+
+              a.appendChild(img);
+              grid.appendChild(a);
+            } else {
+              const a = document.createElement('a');
+              a.href = trimmed; a.target = '_blank'; a.rel = 'noopener noreferrer';
+              a.textContent = '🔗 照片';
+              grid.appendChild(a);
+            }
+          }
+        });
+
+        card.appendChild(grid);
       }
-
-      drafts.forEach(log => {
-        const card = document.createElement('div');
-        card.className = 'card';
-        card.id = 'log-' + log.LogID;
-
-        const ts = log.Timestamp ? new Date(log.Timestamp).toLocaleString('zh-TW', { timeZone:'Asia/Taipei' }) : '';
-        const head =
-          `<h3>${log.Title || '無標題'}</h3>
-           <small>案場: ${log.ProjectName || '未知'}｜回報人: ${log.UserName || '未知'}${ts ? '｜'+ts : ''}</small>
-           <hr><p style="white-space:pre-wrap;">${log.Content || '無內容'}</p>`;
-
-        card.innerHTML = head;
-        card.appendChild( buildPhotoGrid(log.PhotoLinks) );
-
-        const btnBar = document.createElement('div');
-        btnBar.style.textAlign = 'right';
-        btnBar.style.marginTop = '1rem';
-        btnBar.innerHTML = `<button id="btn-${log.LogID}">審核與發布</button>`;
-        btnBar.querySelector('button').onclick = () => handlePublish(log.LogID);
-
-        card.appendChild(btnBar);
-        container.appendChild(card);
-      });
     }
 
-    function displayPublished(logs){
-      logToPage('displayPublished：收到 ' + (Array.isArray(logs)?logs.length:0) + ' 筆公開資料');
-      const container = document.getElementById('drafts-container');
-      const status = document.getElementById('status-message');
-      if(status) status.style.display = 'none';
-      container.innerHTML = '';
+    // 底部按鈕
+    const actions = document.createElement('div');
+    actions.style.textAlign = 'right';
+    actions.style.marginTop = '1rem';
+    actions.innerHTML = '<button id="btn-' + log.LogID + '" onclick="handlePublish(\'' + log.LogID + '\')">審核與發布</button>';
+    card.appendChild(actions);
 
-      if(!Array.isArray(logs) || logs.length === 0){
-        container.innerHTML = '<p style="text-align:center;">目前尚無已發布內容。</p>';
-        return;
+    container.appendChild(card);
+  });
+}
+
+
+function displayPublished(logs) {
+  logToPage('displayPublished：收到 ' + (Array.isArray(logs) ? logs.length : 0) + ' 筆公開資料');
+  const container = document.getElementById('drafts-container');
+  const status = document.getElementById('status-message');
+  if (status) status.style.display = 'none';
+  container.innerHTML = '';
+
+  if (!Array.isArray(logs) || logs.length === 0) {
+    container.innerHTML = '<p style="text-align:center;">目前尚無已發布內容。</p>';
+    return;
+  }
+
+  logs.forEach(log => {
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    const ts = log.Timestamp ? new Date(log.Timestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) : '';
+    const head = document.createElement('div');
+    head.innerHTML =
+      '<h3>' + (log.Title || '無標題') + '</h3>' +
+      '<small>案場：' + (log.ProjectName || '未填') + (ts ? '｜' + ts : '') + '</small>' +
+      '<hr>' +
+      '<p style="white-space:pre-wrap;">' + (log.Content || '') + '</p>';
+    card.appendChild(head);
+
+    if (log.PhotoLinks) {
+      const links = String(log.PhotoLinks).split(',').map(s => s.trim()).filter(Boolean);
+      if (links.length) {
+        const grid = document.createElement('div');
+        grid.className = 'photo-grid';
+
+        links.forEach(trimmed => {
+          if (trimmed.charAt(0) === '/') {
+            const ph = document.createElement('div');
+            ph.className = 'photo-placeholder';
+            ph.textContent = '此為 Dropbox 路徑（非網址），僅顯示佔位';
+            grid.appendChild(ph);
+            return;
+          }
+
+          const id = driveFileId(trimmed);
+          if (id) {
+            const urls = buildPublicThumbUrls(id, 1200);
+            grid.appendChild(renderSmartImg(urls));
+          } else {
+            const embed = toEmbeddableImageUrl(trimmed);
+            if (embed) {
+              const a = document.createElement('a');
+              a.href = trimmed; a.target = '_blank'; a.rel = 'noopener noreferrer';
+              const img = document.createElement('img');
+              img.className = 'photo-thumb';
+              img.src = embed;
+              img.onload = () => thumbOk(img, embed);
+              img.onerror = () => thumbError(img, trimmed, embed);
+              a.appendChild(img);
+              grid.appendChild(a);
+            } else {
+              const a = document.createElement('a');
+              a.href = trimmed; a.target = '_blank'; a.rel = 'noopener noreferrer';
+              a.textContent = '🔗 照片';
+              grid.appendChild(a);
+            }
+          }
+        });
+
+        card.appendChild(grid);
       }
-
-      logs.forEach(log => {
-        const card = document.createElement('div');
-        card.className = 'card';
-
-        const ts = log.Timestamp ? new Date(log.Timestamp).toLocaleString('zh-TW', { timeZone:'Asia/Taipei' }) : '';
-        const head =
-          `<h3>${log.Title || '無標題'}</h3>
-           <small>案場：${log.ProjectName || '未填'}${ts ? '｜'+ts : ''}</small>
-           <hr><p style="white-space:pre-wrap;">${log.Content || ''}</p>`;
-
-        card.innerHTML = head;
-        card.appendChild( buildPhotoGrid(log.PhotoLinks) );
-        container.appendChild(card);
-      });
     }
+
+    container.appendChild(card);
+  });
+}
+
 
     /* ---------- 發布 ---------- */
     function handlePublish(logId){
