@@ -7,7 +7,7 @@
   <script>
     // 【全域設定】請換成你的正式網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v7.13-beta';
+    const FRONTEND_VERSION = 'v7.14-beta';
   </script>
 
   <style>
@@ -389,38 +389,59 @@ function displayPublished(logs) {
 }
 
 
-    /* ---------- 發布 ---------- */
+/* ====================== 發布 (v3.0 - JSONP 版) ====================== */
 function handlePublish(logId) {
-  const button = document.getElementById('btn-' + logId);
+  var button = document.getElementById('btn-' + logId);
   if (button) { button.disabled = true; button.textContent = '發布中...'; }
 
-  const postUrl = `${API_BASE_URL}?page=publish`;
-
-  fetch(postUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json;charset=utf-8' }, // ✅ 改這裡
-    body: JSON.stringify({ logId, newStatus: '已發布' })            // ✅ JSON 格式送出
-  })
-  .then(r => r.json())  // ✅ 接收 JSON
-  .then(data => {
-    if (data && data.success) {
-      const card = document.getElementById('log-' + logId);
-      if (card) {
-        card.style.transition = 'opacity .5s ease';
-        card.style.opacity = '0';
-        setTimeout(() => card.parentNode && card.parentNode.removeChild(card), 500);
-      }
-      alert(`日誌 ${logId} 已成功發布！`);
-    } else {
-      throw new Error(data && data.message ? data.message : '未知原因');
-    }
-  })
-  .catch(err => {
-    alert('發布失敗：' + err.message);
-  })
-  .finally(() => {
-    if (button) { button.disabled = false; button.textContent = '審核與發布'; }
+  // 1. 組合包含所有參數的 GET 請求 URL (與 checkin.html 做法相同)
+  const params = new URLSearchParams({
+    page: 'publish',
+    logId: logId,
+    newStatus: '已發布',
+    callback: 'publishCallback' // 指定回呼函式的名稱
   });
+  const requestUrl = `${API_BASE_URL}?${params.toString()}`;
+  logToPage(`發起發布請求 (JSONP): ${requestUrl}`);
+
+  // 2. 動態建立一個 <script> 標籤 (與 checkin.html 做法相同)
+  var script = document.createElement('script');
+  script.src = requestUrl;
+
+  // 3. 處理成功或失敗 (與 checkin.html 做法相同)
+  script.onload = function() {
+    document.body.removeChild(script); // 清理
+  };
+  script.onerror = function() {
+    alert('發布請求失敗！請檢查網路連線或後端日誌。');
+    if (button) { button.disabled = false; button.textContent = '審核與發布'; }
+    document.body.removeChild(script); // 清理
+  };
+
+  // 4. 將 script 標籤插入頁面，觸發請求 (與 checkin.html 做法相同)
+  document.body.appendChild(script);
+}
+
+/**
+ * [新增] 發布動作的回呼函式 (類似 checkin.html 中的 handleGasResponse)
+ * 當後端 doGet 執行完畢後，會回傳並執行這個函式
+ */
+function publishCallback(response) {
+  logToPage('收到發布回覆: ' + JSON.stringify(response));
+  const logId = response.logId;
+  var button = document.getElementById('btn-' + logId);
+
+  if (response && response.success) {
+    var card = document.getElementById('log-' + logId);
+    if (card) {
+      card.style.transition = 'opacity .5s ease';
+      card.style.opacity = '0';
+      setTimeout(function(){ card.parentNode && card.parentNode.removeChild(card); }, 500);
+    }
+  } else {
+    alert('發布失敗：\n' + (response && response.message ? response.message : '未知原因'));
+    if (button) { button.disabled = false; button.textContent = '審核與發布'; }
+  }
 }
 
     /* ---------- 入口 ---------- */
