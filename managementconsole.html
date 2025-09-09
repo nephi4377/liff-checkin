@@ -8,7 +8,7 @@
   <script>
     // 【全域設定】請確認此網址為您最新部署的 Apps Script 網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v7.18-debug'; // 前端版本號
+    const FRONTEND_VERSION = 'v7.20-debug'; // 前端版本號
   </script>
 
   <style>
@@ -358,7 +358,8 @@
       buttonContainer.querySelector('.bg-green-600').textContent = '儲存中...';
       
       const params = new URLSearchParams({ page: 'updateLogText', id: logId, content: newContent });
-      loadJsonp(`${API_BASE_URL}?${params.toString()}`, 'editTextCallback')
+      loadJsonp(`${API_BASE_URL}?${params.toString()}`)
+        .then(editTextCallback)
         .catch(err => alert('儲存失敗: ' + err.message));
     }
 
@@ -381,7 +382,9 @@
           item.className = 'modal-photo-item';
           item.dataset.link = link;
           const img = document.createElement('img');
-          img.src = toEmbeddableImageUrl(link);
+          // 版本號：v1.1
+          // 修改時間：2025-09-09 16:50 (Asia/Taipei)
+          img.src = link;
           img.loading = 'lazy';
           const delBtn = document.createElement('button');
           delBtn.className = 'delete-photo-btn';
@@ -418,8 +421,9 @@
         const updatedPhotoLinksCsv = remainingLinks.join(',');
         
         const params = new URLSearchParams({ page: 'updateLogPhotos', id: currentEditingLogId, links: updatedPhotoLinksCsv });
-        loadJsonp(`${API_BASE_URL}?${params.toString()}`, 'editPhotosCallback')
-            .catch(err => alert('儲存照片變更失敗: ' + err.message));
+        loadJsonp(`${API_BASE_URL}?${params.toString()}`)
+          .then(editPhotosCallback)
+          .catch(err => alert('儲存照片變更失敗: ' + err.message));
     };
 
     function editPhotosCallback(response) {
@@ -434,7 +438,9 @@
       const requestUrl = `${API_BASE_URL}?${params.toString()}`;
       logToPage(`發起發布請求: ${requestUrl}`);
       
-      loadJsonp(requestUrl, 'publishCallback').catch(err => {
+      loadJsonp(requestUrl)
+      .then(publishCallback)
+      .catch(err => {
         alert('發布請求失敗！請檢查網路連線或後端日誌。');
         if (button) { button.disabled = false; button.textContent = '審核與發布'; }
       });
@@ -479,8 +485,9 @@ function publishCallback(response) {
       logToPage('準備呼叫 API(JSONP): ' + fetchUrl);
       
       // 統一呼叫新的 loadJsonp 工具
-      loadJsonp(fetchUrl, 'loadDataCallback')
-        .catch(err => displayError(err));
+      loadJsonp(fetchUrl)
+        .then(loadDataCallback)
+        .catch(displayError);
     });
 
 // 版本號：v2.0
