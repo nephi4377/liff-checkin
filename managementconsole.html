@@ -8,7 +8,7 @@
   <script>
     // 【全域設定】請確認此網址為您最新部署的 Apps Script 網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v7.16-debug'; // 前端版本號
+    const FRONTEND_VERSION = 'v7.17-debug'; // 前端版本號
   </script>
 
   <style>
@@ -38,8 +38,9 @@
     .button-group { display:flex; gap:0.5rem; justify-content:flex-end; flex-wrap:wrap; }
     @media (max-width:640px){ body{ padding:1rem } .photo-grid{ gap:.5rem } }
     
-    /* Lightbox (您原有的樣式) */
-    #lightbox.open{display:flex}
+/* Lightbox (您原有的樣式) */
+#lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:9999;padding:1rem;}
+#lightbox.open{display:flex}
     #lightbox .lb-wrap{position:relative;max-width:98vw;max-height:95vh;display:flex;align-items:center;justify-content:center;}
     #lightbox img.lb-img{display:block;max-width:98vw;max-height:95vh;object-fit:contain;border-radius:.5rem;background:#fff;box-shadow:0 4px 20px rgba(0,0,0,.6);}
     #lightbox button.lb-close{position:absolute;top:-.5rem;right:-.5rem;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:9999px;width:40px;height:40px;cursor:pointer;font-size:20px;line-height:40px;text-align:center;}
