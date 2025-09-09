@@ -243,23 +243,31 @@
 
     /* ====================== 【⭐️ 核心修改：渲染與編輯邏輯 ⭐️】 ====================== */
 
-    // --- 渲染主函式 (已整合編輯按鈕) ---
+    // --- 渲染主函式 (偵錯強化版) ---
     function displayLogs(logs, isDraftMode) {
-      // 偵錯日誌
-      console.log('displayLogs: Function started. Received logs:', logs);
+      logToPage('➡️ displayLogs: 開始渲染畫面...');
 
       const container = document.getElementById('logs-container');
       const statusMessage = document.getElementById('status-message');
-      if (statusMessage) statusMessage.style.display = 'none';
+      
+      if (statusMessage) {
+        statusMessage.style.display = 'none';
+        logToPage('...已隱藏「載入中」訊息');
+      }
+      
       container.innerHTML = '';
+      logToPage('...已清空舊內容');
+
       if (!Array.isArray(logs) || logs.length === 0) {
-        console.log('displayLogs: No logs to display. Exiting.');
+        logToPage('⚠️ 偵測到沒有日誌資料，已停止渲染。');
+        container.innerHTML = '<div class="card"><p class="muted" style="text-align:center;">沒有可顯示的日誌。</p></div>';
         return; 
       }
+      
+      logToPage(`...偵測到 ${logs.length} 筆日誌，開始遍歷處理...`);
 
-      logs.forEach(function(log) {
-        // 偵錯日誌
-        console.log('displayLogs: Processing log item:', log.LogID, log);
+      logs.forEach(function(log, index) {
+        logToPage(`[${index + 1}/${logs.length}] 正在處理 LogID: ${log.LogID}`);
 
         const card = document.createElement('div');
         card.className = 'card';
@@ -276,16 +284,17 @@
            <hr class="my-3">
            <div id="content-${log.LogID}" style="white-space:pre-wrap;">${log.Content || '無內容'}</div>`;
         card.appendChild(head);
+        logToPage(`...[${log.LogID}] 已建立文字內容`);
 
         if (log.PhotoLinks) {
           card.appendChild(buildPhotoGrid(log.PhotoLinks));
+          logToPage(`...[${log.LogID}] 已建立照片牆`);
         }
 
         const actions = document.createElement('div');
         actions.className = 'button-group';
         actions.style.marginTop = '1rem';
         
-        // 建立編輯按鈕
         const btnEditText = document.createElement('button');
         btnEditText.textContent = '編輯文字';
         btnEditText.onclick = () => handleEditText(log.LogID);
@@ -300,16 +309,19 @@
           const btnPublish = document.createElement('button');
           btnPublish.id = 'btn-' + log.LogID;
           btnPublish.textContent = '審核與發布';
-          btnPublish.style.backgroundColor = '#16a34a'; // 綠色
+          btnPublish.style.backgroundColor = '#16a34a';
           btnPublish.onclick = () => handlePublish(log.LogID);
           actions.appendChild(btnPublish);
         }
         
         card.appendChild(actions);
+        logToPage(`...[${log.LogID}] 已建立操作按鈕`);
+
         container.appendChild(card);
+        logToPage(`...✅ 已將 ${log.LogID} 的卡片插入頁面`);
       });
-      // 偵錯日誌
-      console.log('displayLogs: Function finished.');
+      
+      logToPage('✅ displayLogs: 所有項目渲染完畢。');
     }
     // --- [新增] 原地編輯文字 ---
     function handleEditText(logId) {
@@ -471,17 +483,21 @@ function publishCallback(response) {
         .catch(err => displayError(err));
     });
 
-    // 唯一的資料載入回呼函式
+// 版本號：v2.0
+// 修改時間：2025-09-09 16:30 (Asia/Taipei)
+
+    // 唯一的資料載入回呼函式 (偵錯強化版)
     function loadDataCallback(data) {
-        // 偵錯日誌
-        console.log('loadDataCallback: Received data, about to call displayLogs.', data);
+        // 將執行訊息顯示在頁面上
+        logToPage('✅ 收到後端資料，準備呼叫 displayLogs 函式...');
+        logToPage('收到的原始資料: ' + JSON.stringify(data, null, 2));
+
         const urlParams = new URLSearchParams(window.location.search);
         const id = urlParams.get('id');
-        if (data && data.success === false) { // 檢查後端是否回報業務邏輯錯誤
+        if (data && data.success === false) { 
+            logToPage('❌ 後端回報業務邏輯錯誤: ' + data.message);
             displayError({ message: '後端 API 回報錯誤: ' + data.message });
         } else {
-            // 【⭐️ 核心修改 ⭐️】
-            // 不論 id 為何，都呼叫唯一的 displayLogs 函式
             displayLogs(data, id === '0'); 
         }
     }
