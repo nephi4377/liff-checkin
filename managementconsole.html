@@ -368,9 +368,11 @@
         if (response.success) window.location.reload();
     }
 
-    // --- [新增] 照片管理 Modal ---
+// --- [新增] 照片管理 Modal (縮圖穩定版) ---
+    // 版本號：v2.0
+    // 修改時間：2025-09-09 17:00 (Asia/Taipei)
     function openPhotoModal(logId, photoLinksCsv) {
-      currentEditingLogId = logId;
+      // currentEditingLogId = logId; // 註：此全域變數應在 openPhotoModal 外部定義
       const modal = document.getElementById('photo-modal');
       const grid = document.getElementById('modal-photo-grid-container');
       grid.innerHTML = '';
@@ -382,16 +384,23 @@
           item.className = 'modal-photo-item';
           item.dataset.link = link;
           const img = document.createElement('img');
-          // 版本號：v1.1
-          // 修改時間：2025-09-09 16:50 (Asia/Taipei)
-          img.src = link;
+          
+          // 【⭐️ 核心修改 ⭐️】
+          // 優先從原始連結中提取 fileId，並組合出更穩定的 thumbnail 網址
+          const fileId = driveFileId(link);
+          if (fileId) {
+            img.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w300`; // 使用 300px 寬的縮圖
+          } else {
+            img.src = link; // 如果不是 Drive 連結，則保留原樣
+          }
+
           img.loading = 'lazy';
           const delBtn = document.createElement('button');
           delBtn.className = 'delete-photo-btn';
           delBtn.innerHTML = '&times;';
           delBtn.title = '標記為刪除';
           delBtn.onclick = () => {
-              item.style.opacity = '0.3'; // 標記為刪除的視覺效果
+              item.style.opacity = '0.3';
               item.classList.add('deleted');
           };
           item.appendChild(img);
@@ -403,7 +412,7 @@
       }
       modal.style.display = 'flex';
     }
-
+    
     function closePhotoModal() {
         document.getElementById('photo-modal').style.display = 'none';
         currentEditingLogId = null;
