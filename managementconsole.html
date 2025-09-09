@@ -8,11 +8,11 @@
   <script>
     // 【全域設定】請確認此網址為您最新部署的 Apps Script 網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v7.16'; // 前端版本號
+    const FRONTEND_VERSION = 'v7.16-debug'; // 前端版本號
   </script>
 
   <style>
-    /* ========== 您原有的優秀樣式 (完整保留) ========== */
+    /* ========== 樣式 (無變更) ========== */
     :root{
       --bg:#f3f4f6; --fg:#1f2937; --muted:#6b7280; --muted-2:#9ca3af;
       --card:#ffffff; --primary:#3b82f6; --shadow:0 1px 2px rgba(0,0,0,.06);
@@ -39,7 +39,6 @@
     @media (max-width:640px){ body{ padding:1rem } .photo-grid{ gap:.5rem } }
     
     /* Lightbox (您原有的樣式) */
-    #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:9999;padding:1rem;}
     #lightbox.open{display:flex}
     #lightbox .lb-wrap{position:relative;max-width:98vw;max-height:95vh;display:flex;align-items:center;justify-content:center;}
     #lightbox img.lb-img{display:block;max-width:98vw;max-height:95vh;object-fit:contain;border-radius:.5rem;background:#fff;box-shadow:0 4px 20px rgba(0,0,0,.6);}
@@ -56,7 +55,6 @@
     .delete-photo-btn:hover { transform: scale(1.1); }
   </style>
 </head>
-
 
 <body>
       <header>
@@ -246,13 +244,22 @@
 
     // --- 渲染主函式 (已整合編輯按鈕) ---
     function displayLogs(logs, isDraftMode) {
+      // 偵錯日誌
+      console.log('displayLogs: Function started. Received logs:', logs);
+
       const container = document.getElementById('logs-container');
       const statusMessage = document.getElementById('status-message');
       if (statusMessage) statusMessage.style.display = 'none';
       container.innerHTML = '';
-      if (!Array.isArray(logs) || logs.length === 0) { /* ... */ return; }
+      if (!Array.isArray(logs) || logs.length === 0) {
+        console.log('displayLogs: No logs to display. Exiting.');
+        return; 
+      }
 
       logs.forEach(function(log) {
+        // 偵錯日誌
+        console.log('displayLogs: Processing log item:', log.LogID, log);
+
         const card = document.createElement('div');
         card.className = 'card';
         card.id = 'log-' + log.LogID;
@@ -300,6 +307,8 @@
         card.appendChild(actions);
         container.appendChild(card);
       });
+      // 偵錯日誌
+      console.log('displayLogs: Function finished.');
     }
     // --- [新增] 原地編輯文字 ---
     function handleEditText(logId) {
@@ -463,6 +472,8 @@ function publishCallback(response) {
 
     // 唯一的資料載入回呼函式
     function loadDataCallback(data) {
+        // 偵錯日誌
+        console.log('loadDataCallback: Received data, about to call displayLogs.', data);
         const urlParams = new URLSearchParams(window.location.search);
         const id = urlParams.get('id');
         if (data && data.success === false) { // 檢查後端是否回報業務邏輯錯誤
@@ -513,7 +524,6 @@ function publishCallback(response) {
     }
   </script>
 
-  <!-- Lightbox -->
   <div id="lightbox" aria-hidden="true">
     <div class="lb-wrap">
       <img class="lb-img" alt="preview">
@@ -568,7 +578,9 @@ function publishCallback(response) {
 
   // 背景點擊 / 關閉鈕 / 鍵盤操作
   lb.addEventListener('click', (e)=>{ if(e.target === lb) close(); });
-  btn.addEventListener('click', close);
+  if (btn) {
+      btn.addEventListener('click', close);
+  }
   window.addEventListener('keydown', (e)=>{
     if(!lb.classList.contains('open')) return;
     if(e.key === 'Escape') close();
