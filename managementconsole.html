@@ -4,13 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <title>專案日誌管理主控台</title>
+
   <script>
-    // 【全域設定】請換成你的正式網址
+    // 【全域設定】請確認此網址為您最新部署的 Apps Script 網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v7.14-beta';
+    const FRONTEND_VERSION = 'v7.15'; // 前端版本號
   </script>
 
   <style>
+    /* ========== 您原有的優秀樣式 (完整保留) ========== */
     :root{
       --bg:#f3f4f6; --fg:#1f2937; --muted:#6b7280; --muted-2:#9ca3af;
       --card:#ffffff; --primary:#3b82f6; --shadow:0 1px 2px rgba(0,0,0,.06);
@@ -22,58 +24,66 @@
     header{ margin-bottom:2rem; display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; }
     h1{ font-size:1.875rem; font-weight:bold; margin:0; }
     .muted{ color:var(--muted); font-size:.9rem; }
-
     .spinner{ margin:2rem auto; width:3rem; height:3rem; border-radius:50%; border:4px solid #e5e7eb; border-top-color:var(--primary); animation:spin 1s linear infinite; }
     @keyframes spin{ to{ transform:rotate(360deg) } }
-
     #debug-log{ background:#111827; color:#e5e7eb; font-family:monospace; font-size:.75rem; padding:1rem; border-radius:var(--radius); margin-top:1rem; height:16rem; overflow-y:auto; white-space:pre-wrap; }
-
-    .card{ background:var(--card); border-radius:var(--radius); padding:1rem; margin-bottom:1rem; box-shadow:var(--shadow); }
-
-    .photo-grid{
-      display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:.75rem;
-    }
+    .card{ background:var(--card); border-radius:var(--radius); padding:1.5rem; margin-bottom:1rem; box-shadow:var(--shadow); }
+    .photo-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:.75rem; margin-top: 1rem; }
     .photo-item{ display:flex; flex-direction:column; gap:.25rem; }
     .photo-thumb{ width:100%; aspect-ratio:4/3; object-fit:cover; background:#e5e7eb; border-radius:var(--radius); display:block; cursor:zoom-in; }
     .photo-placeholder{ width:100%; aspect-ratio:4/3; border-radius:var(--radius); background:#f3f4f6; display:flex; align-items:center; justify-content:center; color:var(--muted-2); font-size:.9rem; text-align:center; padding:0 .5rem; }
-    button{ background:var(--primary); color:#fff; border:0; padding:.5rem .75rem; border-radius:.375rem; cursor:pointer; }
+    button{ background:var(--primary); color:#fff; border:0; padding:.5rem .75rem; border-radius:.375rem; cursor:pointer; font-weight: 600; transition: opacity .2s; }
+    button:hover { opacity: 0.85; }
     button[disabled]{ opacity:.6; cursor:not-allowed; }
-
+    .button-group { display:flex; gap:0.5rem; justify-content:flex-end; flex-wrap:wrap; }
     @media (max-width:640px){ body{ padding:1rem } .photo-grid{ gap:.5rem } }
     
-    /* Lightbox */
+    /* Lightbox (您原有的樣式) */
     #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:9999;padding:1rem;}
     #lightbox.open{display:flex}
     #lightbox .lb-wrap{position:relative;max-width:98vw;max-height:95vh;display:flex;align-items:center;justify-content:center;}
     #lightbox img.lb-img{display:block;max-width:98vw;max-height:95vh;object-fit:contain;border-radius:.5rem;background:#fff;box-shadow:0 4px 20px rgba(0,0,0,.6);}
     #lightbox button.lb-close{position:absolute;top:-.5rem;right:-.5rem;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:9999px;width:40px;height:40px;cursor:pointer;font-size:20px;line-height:40px;text-align:center;}
 
+    /* ========== 【⭐️ 新增功能所需的樣式 ⭐️】 ========== */
+    /* 照片管理 Modal */
+    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+    .modal-content { background-color: #fefefe; padding: 20px; border-radius: 0.5rem; width: 90%; max-width: 800px; box-shadow: 0 4px 20px rgba(0,0,0,.4); }
+    .modal-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; max-height: 60vh; overflow-y: auto; padding: 1rem; background: #f3f4f6; border-radius: var(--radius); }
+    .modal-photo-item { position: relative; }
+    .modal-photo-item img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 0.25rem; }
+    .delete-photo-btn { position: absolute; top: 5px; right: 5px; background: rgba(239, 68, 68, 0.8); color: white; border: 2px solid white; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; font-weight: bold; font-size: 16px; display: flex; align-items: center; justify-content: center; line-height: 1; transition: transform .2s; }
+    .delete-photo-btn:hover { transform: scale(1.1); }
   </style>
 </head>
 
+
 <body>
   <div class="container">
-    <header>
-      <h1>專案日誌管理主控台</h1>
-      <button onclick="runDiagnostics()">執行連線診斷</button>
-      <span class="muted">（測試 JSONP 與圖片代理）</span>
-    </header>
-    <p class="muted" id="version-display"></p>
-    <p class="muted">用 <code>?id=</code> 分流：<code>id=0</code>＝草稿審核；其他＝依案號顯示已發布內容。</p>
-
     <main id="main-content">
       <div id="status-message">
         <div class="spinner"></div>
         <p style="text-align:center;">正在載入資料...</p>
       </div>
-      <div id="drafts-container"></div>
-
-      <div>
+      <div id="logs-container"></div> <div>
         <h3 style="margin-top:2rem;font-weight:600;">執行狀態日誌：</h3>
         <pre id="debug-log"></pre>
       </div>
     </main>
   </div>
+
+  <div id="photo-modal" class="modal">
+    <div class="modal-content">
+      <h2 class="text-xl font-semibold mb-4">管理照片</h2>
+      <div id="modal-photo-grid-container" class="modal-photo-grid mb-4"></div>
+      <div class="text-right space-x-2 mt-4">
+        <button onclick="closePhotoModal()" class="bg-gray-500 hover:bg-gray-600">取消</button>
+        <button id="save-photos-button" class="bg-blue-600 hover:bg-blue-700">儲存變更</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="lightbox" aria-hidden="true"> </div>
 
   <script>
     /* ---------- 縮圖偵錯 ---------- */
@@ -388,39 +398,181 @@ function displayPublished(logs) {
   });
 }
 
+    /* ====================== 【⭐️ 核心修改：渲染與編輯邏輯 ⭐️】 ====================== */
 
-/* ====================== 發布 (v3.0 - JSONP 版) ====================== */
-function handlePublish(logId) {
-  var button = document.getElementById('btn-' + logId);
-  if (button) { button.disabled = true; button.textContent = '發布中...'; }
+    // --- 渲染主函式 (已整合編輯按鈕) ---
+    function displayLogs(logs, isDraftMode) {
+      const container = document.getElementById('logs-container');
+      const statusMessage = document.getElementById('status-message');
+      if (statusMessage) statusMessage.style.display = 'none';
+      container.innerHTML = '';
+      if (!Array.isArray(logs) || logs.length === 0) { /* ... */ return; }
 
-  // 1. 組合包含所有參數的 GET 請求 URL (與 checkin.html 做法相同)
-  const params = new URLSearchParams({
-    page: 'publish',
-    logId: logId,
-    newStatus: '已發布',
-    callback: 'publishCallback' // 指定回呼函式的名稱
-  });
-  const requestUrl = `${API_BASE_URL}?${params.toString()}`;
-  logToPage(`發起發布請求 (JSONP): ${requestUrl}`);
+      logs.forEach(function(log) {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.id = 'log-' + log.LogID;
+        
+        const timestamp = log.Timestamp ? new Date(log.Timestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) : '未知';
+        const lastModified = log.LastModified ? new Date(log.LastModified).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) : '無';
 
-  // 2. 動態建立一個 <script> 標籤 (與 checkin.html 做法相同)
-  var script = document.createElement('script');
-  script.src = requestUrl;
+        const head = document.createElement('div');
+        head.innerHTML =
+          `<h3>${log.Title || '無標題'}</h3>
+           <small class="muted">案場: ${log.ProjectName || '未知'}｜回報人: ${log.UserName || '未知'}</small>
+           <small class="muted block text-xs mt-1">建立: ${timestamp}｜最後更新: ${lastModified}</small>
+           <hr class="my-3">
+           <div id="content-${log.LogID}" style="white-space:pre-wrap;">${log.Content || '無內容'}</div>`;
+        card.appendChild(head);
 
-  // 3. 處理成功或失敗 (與 checkin.html 做法相同)
-  script.onload = function() {
-    document.body.removeChild(script); // 清理
-  };
-  script.onerror = function() {
-    alert('發布請求失敗！請檢查網路連線或後端日誌。');
-    if (button) { button.disabled = false; button.textContent = '審核與發布'; }
-    document.body.removeChild(script); // 清理
-  };
+        if (log.PhotoLinks) {
+          card.appendChild(buildPhotoGrid(log.PhotoLinks));
+        }
 
-  // 4. 將 script 標籤插入頁面，觸發請求 (與 checkin.html 做法相同)
-  document.body.appendChild(script);
-}
+        const actions = document.createElement('div');
+        actions.className = 'button-group';
+        actions.style.marginTop = '1rem';
+        
+        // 建立編輯按鈕
+        const btnEditText = document.createElement('button');
+        btnEditText.textContent = '編輯文字';
+        btnEditText.onclick = () => handleEditText(log.LogID);
+        actions.appendChild(btnEditText);
+
+        const btnManagePhotos = document.createElement('button');
+        btnManagePhotos.textContent = '管理照片';
+        btnManagePhotos.onclick = () => openPhotoModal(log.LogID, log.PhotoLinks || '');
+        actions.appendChild(btnManagePhotos);
+
+        if (isDraftMode) {
+          const btnPublish = document.createElement('button');
+          btnPublish.id = 'btn-' + log.LogID;
+          btnPublish.textContent = '審核與發布';
+          btnPublish.style.backgroundColor = '#16a34a'; // 綠色
+          btnPublish.onclick = () => handlePublish(log.LogID);
+          actions.appendChild(btnPublish);
+        }
+        
+        card.appendChild(actions);
+        container.appendChild(card);
+      });
+    }
+    // --- [新增] 原地編輯文字 ---
+    function handleEditText(logId) {
+      const contentDiv = document.getElementById(`content-${logId}`);
+      const buttonContainer = contentDiv.parentElement.parentElement.querySelector('.button-group');
+      const originalContent = contentDiv.innerText;
+      const originalButtons = buttonContainer.innerHTML;
+
+      contentDiv.contentEditable = true;
+      contentDiv.focus();
+      contentDiv.style.cssText += 'border: 1px solid #3b82f6; padding: 0.5rem; border-radius: 0.25rem;';
+
+      buttonContainer.innerHTML = `
+          <button class="bg-gray-500">取消</button>
+          <button class="bg-green-600">儲存文字</button>
+      `;
+      buttonContainer.querySelector('.bg-gray-500').onclick = () => handleCancelEdit(logId, originalContent, originalButtons);
+      buttonContainer.querySelector('.bg-green-600').onclick = () => handleSaveText(logId, originalButtons);
+    }
+    
+    function handleCancelEdit(logId, originalContent, originalButtons) {
+      const contentDiv = document.getElementById(`content-${logId}`);
+      contentDiv.contentEditable = false;
+      contentDiv.style.border = 'none';
+      contentDiv.style.padding = '0';
+      contentDiv.innerText = originalContent;
+      contentDiv.parentElement.parentElement.querySelector('.button-group').innerHTML = originalButtons;
+    }
+
+    function handleSaveText(logId, originalButtons) {
+      const contentDiv = document.getElementById(`content-${logId}`);
+      const newContent = contentDiv.innerText;
+      const buttonContainer = contentDiv.parentElement.parentElement.querySelector('.button-group');
+      buttonContainer.querySelector('.bg-green-600').textContent = '儲存中...';
+      
+      const params = new URLSearchParams({ page: 'updateLogText', id: logId, content: newContent });
+      loadJsonp(`${API_BASE_URL}?${params.toString()}`, 'editTextCallback')
+        .catch(err => alert('儲存失敗: ' + err.message));
+    }
+
+    function editTextCallback(response) {
+        alert(response.message);
+        if (response.success) window.location.reload();
+    }
+
+    // --- [新增] 照片管理 Modal ---
+    function openPhotoModal(logId, photoLinksCsv) {
+      currentEditingLogId = logId;
+      const modal = document.getElementById('photo-modal');
+      const grid = document.getElementById('modal-photo-grid-container');
+      grid.innerHTML = '';
+      
+      const links = photoLinksCsv ? photoLinksCsv.split(',').filter(link => link.trim()) : [];
+      if (links.length > 0) {
+        links.forEach(link => {
+          const item = document.createElement('div');
+          item.className = 'modal-photo-item';
+          item.dataset.link = link;
+          const img = document.createElement('img');
+          img.src = toEmbeddableImageUrl(link);
+          img.loading = 'lazy';
+          const delBtn = document.createElement('button');
+          delBtn.className = 'delete-photo-btn';
+          delBtn.innerHTML = '&times;';
+          delBtn.title = '標記為刪除';
+          delBtn.onclick = () => {
+              item.style.opacity = '0.3'; // 標記為刪除的視覺效果
+              item.classList.add('deleted');
+          };
+          item.appendChild(img);
+          item.appendChild(delBtn);
+          grid.appendChild(item);
+        });
+      } else {
+        grid.innerHTML = '<p class="muted">目前沒有照片可供管理。</p>';
+      }
+      modal.style.display = 'flex';
+    }
+
+    function closePhotoModal() {
+        document.getElementById('photo-modal').style.display = 'none';
+        currentEditingLogId = null;
+    }
+
+    document.getElementById('save-photos-button').onclick = function() {
+        const grid = document.getElementById('modal-photo-grid-container');
+        const items = grid.querySelectorAll('.modal-photo-item');
+        const remainingLinks = [];
+        items.forEach(item => {
+            if (!item.classList.contains('deleted')) {
+                remainingLinks.push(item.dataset.link);
+            }
+        });
+        const updatedPhotoLinksCsv = remainingLinks.join(',');
+        
+        const params = new URLSearchParams({ page: 'updateLogPhotos', id: currentEditingLogId, links: updatedPhotoLinksCsv });
+        loadJsonp(`${API_BASE_URL}?${params.toString()}`, 'editPhotosCallback')
+            .catch(err => alert('儲存照片變更失敗: ' + err.message));
+    };
+
+    function editPhotosCallback(response) {
+        alert(response.message);
+        if (response.success) window.location.reload();
+    }
+    // --- 發布日誌 (已升級為使用 loadJsonp) ---
+    function handlePublish(logId) {
+      const button = document.getElementById('btn-' + logId);
+      if (button) { button.disabled = true; button.textContent = '發布中...'; }
+      const params = new URLSearchParams({ page: 'publish', logId: logId, newStatus: '已發布' });
+      const requestUrl = `${API_BASE_URL}?${params.toString()}`;
+      logToPage(`發起發布請求: ${requestUrl}`);
+      
+      loadJsonp(requestUrl, 'publishCallback').catch(err => {
+        alert('發布請求失敗！請檢查網路連線或後端日誌。');
+        if (button) { button.disabled = false; button.textContent = '審核與發布'; }
+      });
+    }
 
 /**
  * [新增] 發布動作的回呼函式 (類似 checkin.html 中的 handleGasResponse)
