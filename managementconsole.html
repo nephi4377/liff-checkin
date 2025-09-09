@@ -596,29 +596,39 @@ function publishCallback(response) {
   }
 }
 
-    /* ---------- 入口 ---------- */
+    /* ====================== 【⭐️ 核心修改：入口函式 ⭐️】 ====================== */
     window.addEventListener('load', function(){
       document.getElementById('version-display').textContent = '版本: ' + (typeof FRONTEND_VERSION !== 'undefined' ? FRONTEND_VERSION : '未知');
-
       logToPage('頁面載入完成，開始讀取 URL 參數');
       const urlParams = new URLSearchParams(window.location.search);
-      const id = urlParams.get('id') || '';
+      const id = urlParams.get('id');
       logToPage('URL id=' + (id || '(未帶入)'));
-
-      const status = document.getElementById('status-message');
-      if(status) status.style.display = 'block';
+      
+      if (!id) {
+        displayError({ message:'未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。' });
+        return;
+      }
 
       const fetchUrl = `${API_BASE_URL}?page=project&id=${id}`;
-      if(id === '0' || id){
-        logToPage('準備呼叫 API(JSONP): ' + fetchUrl);
-        loadJsonp(fetchUrl)
-          .then(data => { if(id === '0') displayDrafts(data); else displayPublished(data); })
-          .catch(err => displayError(err));
-      }else{
-        displayError({ message:'未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。' });
-      }
+      logToPage('準備呼叫 API(JSONP): ' + fetchUrl);
+      
+      // 統一呼叫新的 loadJsonp 工具
+      loadJsonp(fetchUrl, 'loadDataCallback')
+        .catch(err => displayError(err));
     });
 
+    // 唯一的資料載入回呼函式
+    function loadDataCallback(data) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const id = urlParams.get('id');
+        if (data && data.success === false) { // 檢查後端是否回報業務邏輯錯誤
+            displayError({ message: '後端 API 回報錯誤: ' + data.message });
+        } else {
+            // 【⭐️ 核心修改 ⭐️】
+            // 不論 id 為何，都呼叫唯一的 displayLogs 函式
+            displayLogs(data, id === '0'); 
+        }
+    }
     function displayError(error){
       const msg = (error && error.message) ? error.message : '發生未知錯誤。';
       logToPage('PAGE ERROR: ' + msg);
