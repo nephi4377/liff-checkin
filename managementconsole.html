@@ -8,7 +8,7 @@
   <script>
     // 【全域設定】請確認此網址為您最新部署的 Apps Script 網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v7.21'; // 前端版本號
+    const FRONTEND_VERSION = 'v7.22'; // 前端版本號
   </script>
 
   <style>
@@ -93,6 +93,7 @@
   <script>
     /* ---------- 縮圖偵錯 ---------- */
     var DEBUG_THUMBS = true;
+    let currentEditingLogId = null; // ✅ 請加上這一行
     function thumbLog(msg){
       if(!DEBUG_THUMBS) return;
       console.log('[THUMB]', msg);
@@ -372,7 +373,7 @@
     // 版本號：v2.0
     // 修改時間：2025-09-09 17:00 (Asia/Taipei)
     function openPhotoModal(logId, photoLinksCsv) {
-      // currentEditingLogId = logId; // 註：此全域變數應在 openPhotoModal 外部定義
+      currentEditingLogId = logId; // ✅ 請確保這一行是有效的 (沒有 // 在前面)
       const modal = document.getElementById('photo-modal');
       const grid = document.getElementById('modal-photo-grid-container');
       grid.innerHTML = '';
