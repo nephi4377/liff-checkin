@@ -8,7 +8,7 @@
   <script>
     // 【全域設定】請確認此網址為您最新部署的 Apps Script 網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v7.26'; // 前端版本號
+    const FRONTEND_VERSION = 'v7.27'; // 前端版本號
   </script>
 
   <style>
@@ -350,6 +350,8 @@
 
 // 版本號：v1.1
 // 修改時間：2025-09-09 17:50 (Asia/Taipei)
+// 版本號：v2.0
+// 修改時間：2025-09-10 11:45 (Asia/Taipei)
 function handleSaveText(logId, originalButtons) {
   const contentDiv = document.getElementById(`content-${logId}`);
   const newContent = contentDiv.innerText;
@@ -357,26 +359,25 @@ function handleSaveText(logId, originalButtons) {
   const saveButton = buttonContainer.querySelector('.bg-green-600');
   saveButton.textContent = '儲存中...';
   saveButton.disabled = true;
-  
+
   const params = new URLSearchParams({ page: 'updateLogText', id: logId, content: newContent });
-  
+
   loadJsonp(`${API_BASE_URL}?${params.toString()}`)
     .then(response => {
-      // 【⭐️ 核心修改 ⭐️】
-      // 直接在 Promise 的 .then() 中處理成功後續
-      alert(response.message);
       if (response.success) {
-        // 如果成功，手動將介面恢復到「檢視」狀態，而不是重新載入
-        handleCancelEdit(logId, newContent, originalButtons);
+        // 【⭐️ 核心修改 ⭐️】
+        // 1. 不再跳出 alert
+        // 2. 使用後端回傳的 response.finalContent 來更新畫面，確保內容絕對正確
+        handleCancelEdit(logId, response.finalContent, originalButtons);
       } else {
-        // 如果失敗，也恢復按鈕狀態
+        alert('儲存失敗: ' + (response.message || '未知錯誤'));
+        // 失敗時，恢復按鈕狀態，但不恢復文字內容，讓使用者可以重試
         saveButton.textContent = '儲存文字';
         saveButton.disabled = false;
       }
     })
     .catch(err => {
       alert('儲存失敗: ' + err.message);
-      // 發生網路錯誤時，恢復按鈕
       saveButton.textContent = '儲存文字';
       saveButton.disabled = false;
     });
@@ -434,6 +435,8 @@ function handleSaveText(logId, originalButtons) {
 
     // 版本號：v1.1
     // 修改時間：2025-09-09 17:50 (Asia/Taipei)
+    // 版本號：v2.0
+    // 修改時間：2025-09-10 11:30 (Asia/Taipei)
     document.getElementById('save-photos-button').onclick = function() {
         const saveButton = this;
         saveButton.textContent = '儲存中...';
@@ -453,23 +456,32 @@ function handleSaveText(logId, originalButtons) {
     
         loadJsonp(`${API_BASE_URL}?${params.toString()}`)
             .then(response => {
-                // 【⭐️ 核心修改 ⭐️】
-                alert(response.message);
                 if (response.success) {
-                    // 關閉彈出視窗
+                    // 【⭐️ 核心修改 ⭐️】
+                    // 1. 成功後不再跳出 alert
+                    // 2. 關閉彈出視窗
                     closePhotoModal();
-                    // 找到對應的卡片
+                    
+                    // 3. 即時更新主頁面上的照片牆
                     const card = document.getElementById('log-' + currentEditingLogId);
                     if (card) {
-                        // 移除舊的照片牆
+                        // 先移除舊的照片牆
                         const oldGrid = card.querySelector('.photo-grid');
                         if (oldGrid) oldGrid.remove();
-                        // 建立並插入新的照片牆
-                        const newGrid = buildPhotoGrid(updatedPhotoLinksCsv);
-                        // 找到卡片頭部，將新照片牆插入到它後面
-                        const headDiv = card.querySelector('div:first-child');
-                        if(headDiv) headDiv.after(newGrid);
+                        
+                        // 如果還有照片，就建立並插入新的照片牆
+                        if (updatedPhotoLinksCsv) {
+                            const newGrid = buildPhotoGrid(updatedPhotoLinksCsv);
+                            const actionsDiv = card.querySelector('.button-group');
+                            // 將新照片牆插入到按鈕區塊的前面
+                            if (actionsDiv) {
+                                actionsDiv.parentNode.insertBefore(newGrid, actionsDiv);
+                            }
+                        }
                     }
+                } else {
+                    // 只在失敗時才跳出提示
+                    alert('儲存失敗: ' + (response.message || '未知錯誤'));
                 }
             })
             .catch(err => alert('儲存照片變更失敗: ' + err.message))
