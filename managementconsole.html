@@ -352,22 +352,39 @@
       contentDiv.parentElement.parentElement.querySelector('.button-group').innerHTML = originalButtons;
     }
 
-    function handleSaveText(logId, originalButtons) {
-      const contentDiv = document.getElementById(`content-${logId}`);
-      const newContent = contentDiv.innerText;
-      const buttonContainer = contentDiv.parentElement.parentElement.querySelector('.button-group');
-      buttonContainer.querySelector('.bg-green-600').textContent = '儲存中...';
-      
-      const params = new URLSearchParams({ page: 'updateLogText', id: logId, content: newContent });
-      loadJsonp(`${API_BASE_URL}?${params.toString()}`)
-        .then(editTextCallback)
-        .catch(err => alert('儲存失敗: ' + err.message));
-    }
-
-    function editTextCallback(response) {
-        alert(response.message);
-        if (response.success) window.location.reload();
-    }
+// 版本號：v1.1
+// 修改時間：2025-09-09 17:50 (Asia/Taipei)
+function handleSaveText(logId, originalButtons) {
+  const contentDiv = document.getElementById(`content-${logId}`);
+  const newContent = contentDiv.innerText;
+  const buttonContainer = contentDiv.parentElement.parentElement.querySelector('.button-group');
+  const saveButton = buttonContainer.querySelector('.bg-green-600');
+  saveButton.textContent = '儲存中...';
+  saveButton.disabled = true;
+  
+  const params = new URLSearchParams({ page: 'updateLogText', id: logId, content: newContent });
+  
+  loadJsonp(`${API_BASE_URL}?${params.toString()}`)
+    .then(response => {
+      // 【⭐️ 核心修改 ⭐️】
+      // 直接在 Promise 的 .then() 中處理成功後續
+      alert(response.message);
+      if (response.success) {
+        // 如果成功，手動將介面恢復到「檢視」狀態，而不是重新載入
+        handleCancelEdit(logId, newContent, originalButtons);
+      } else {
+        // 如果失敗，也恢復按鈕狀態
+        saveButton.textContent = '儲存文字';
+        saveButton.disabled = false;
+      }
+    })
+    .catch(err => {
+      alert('儲存失敗: ' + err.message);
+      // 發生網路錯誤時，恢復按鈕
+      saveButton.textContent = '儲存文字';
+      saveButton.disabled = false;
+    });
+}
 
 // --- [新增] 照片管理 Modal (縮圖穩定版) ---
     // 版本號：v2.0
@@ -419,7 +436,13 @@
         currentEditingLogId = null;
     }
 
+    // 版本號：v1.1
+    // 修改時間：2025-09-09 17:50 (Asia/Taipei)
     document.getElementById('save-photos-button').onclick = function() {
+        const saveButton = this;
+        saveButton.textContent = '儲存中...';
+        saveButton.disabled = true;
+    
         const grid = document.getElementById('modal-photo-grid-container');
         const items = grid.querySelectorAll('.modal-photo-item');
         const remainingLinks = [];
@@ -431,9 +454,34 @@
         const updatedPhotoLinksCsv = remainingLinks.join(',');
         
         const params = new URLSearchParams({ page: 'updateLogPhotos', id: currentEditingLogId, links: updatedPhotoLinksCsv });
+    
         loadJsonp(`${API_BASE_URL}?${params.toString()}`)
-          .then(editPhotosCallback)
-          .catch(err => alert('儲存照片變更失敗: ' + err.message));
+            .then(response => {
+                // 【⭐️ 核心修改 ⭐️】
+                alert(response.message);
+                if (response.success) {
+                    // 關閉彈出視窗
+                    closePhotoModal();
+                    // 找到對應的卡片
+                    const card = document.getElementById('log-' + currentEditingLogId);
+                    if (card) {
+                        // 移除舊的照片牆
+                        const oldGrid = card.querySelector('.photo-grid');
+                        if (oldGrid) oldGrid.remove();
+                        // 建立並插入新的照片牆
+                        const newGrid = buildPhotoGrid(updatedPhotoLinksCsv);
+                        // 找到卡片頭部，將新照片牆插入到它後面
+                        const headDiv = card.querySelector('div:first-child');
+                        if(headDiv) headDiv.after(newGrid);
+                    }
+                }
+            })
+            .catch(err => alert('儲存照片變更失敗: ' + err.message))
+            .finally(() => {
+                // 無論成功或失敗，最後都恢復按鈕狀態
+                saveButton.textContent = '儲存變更';
+                saveButton.disabled = false;
+            });
     };
 
     function editPhotosCallback(response) {
