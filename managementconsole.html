@@ -8,7 +8,7 @@
   <script>
     // 【全域設定】請確認此網址為您最新部署的 Apps Script 網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v7.25'; // 前端版本號
+    const FRONTEND_VERSION = 'v7.26'; // 前端版本號
   </script>
 
   <style>
@@ -62,8 +62,6 @@
         <h1>專案日誌管理主控台</h1>
         <div>
             <p id="version-display" class="muted"></p>
-            <button onclick="runDiagnostics()" style="font-size:12px; padding:4px 8px; background-color: #6b7280;">執行連線診斷</button>
-            <button onclick="startImageTest()" style="font-size:12px; padding:4px 8px; background-color: #16a34a;">測試圖片顯示</button>
         </div>
     </header>
 
@@ -92,91 +90,6 @@
   </div>
 
   <script>
-    // ==========================================================
-    // ========== 圖片顯示的獨立測試工具 ==========
-    // ==========================================================
-    function startImageTest() {
-      const testId = prompt("請提供一個已設為「知道連結的任何人」皆可檢視的 Google Drive 檔案 ID：");
-      if (testId && testId.trim()) {
-        runImageDisplayTest(testId.trim());
-      }
-    }
-
-// ==========================================================
-    // ========== 圖片顯示的獨立測試工具 (v2 - 擴充版) ==========
-    // ==========================================================
-    // 版本號：v2.0
-    // 修改時間：2025-09-10 11:00 (Asia/Taipei)
-    function runImageDisplayTest(testFileId) {
-      const container = document.getElementById('main-content');
-      // 移除舊的測試結果
-      const oldTest = document.getElementById('image-test-container');
-      if(oldTest) oldTest.remove();
-
-      const testDiv = document.createElement('div');
-      testDiv.id = 'image-test-container';
-      testDiv.style.cssText = 'margin-top: 2rem; padding: 1rem; border: 1px solid #ccc; background: #fff; border-radius: 0.5rem;';
-      
-      const methods = [
-        {
-          name: '方案一：低解析度縮圖連結',
-          description: '直接使用 drive.google.com/thumbnail 的小尺寸連結。',
-          url: `https://drive.google.com/thumbnail?id=${testFileId}&sz=w300`
-        },
-        {
-          name: '方案二：高解析度內容連結',
-          description: '直接使用 drive.usercontent.google.com 的內容連結。',
-          url: `https://drive.usercontent.google.com/uc?id=${testFileId}&export=view`
-        },
-        {
-          name: '方案三：請求高解析度縮圖 (新測試)',
-          description: '向 thumbnail 連結請求一個較大的尺寸 (1200px)。',
-          url: `https://drive.google.com/thumbnail?id=${testFileId}&sz=w1200`
-        },
-        {
-          name: '方案四：後端代理 (小尺寸)',
-          description: '透過您自己的 Apps Script 後端請求 300px 的圖片。',
-          url: `${API_BASE_URL}?img=${testFileId}&w=300`
-        },
-        {
-          name: '方案五：後端代理 (大尺寸)',
-          description: '透過您自己的 Apps Script 後端請求 1200px 的圖片。',
-          url: `${API_BASE_URL}?img=${testFileId}&w=1200`
-        }
-      ];
-
-      testDiv.innerHTML = '<h2>圖片顯示方法測試結果：</h2><p>請觀察以下五種方法，哪一種能成功載入圖片。</p>';
-
-      methods.forEach(method => {
-        const itemDiv = document.createElement('div');
-        itemDiv.style.cssText = 'margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid #eee;';
-        itemDiv.innerHTML = `<b>${method.name}</b><br><small style="color:#666;">${method.description}</small>`;
-        
-        const img = document.createElement('img');
-        img.style.cssText = 'display:block; max-width:300px; max-height:300px; border: 2px solid #ddd; margin-top: 0.5rem;';
-        
-        const resultSpan = document.createElement('span');
-        resultSpan.style.marginLeft = '1rem';
-        
-        img.onload = () => {
-          resultSpan.textContent = ' ✅ 載入成功';
-          resultSpan.style.color = 'green';
-        };
-        img.onerror = () => {
-          resultSpan.textContent = ' ❌ 載入失敗';
-          resultSpan.style.color = 'red';
-          img.style.display = 'none'; // 失敗時隱藏破圖圖示
-        };
-
-        itemDiv.appendChild(resultSpan);
-        itemDiv.appendChild(img);
-        img.src = method.url + '&ts=' + Date.now(); // 加上時間戳以禁用快取
-        
-        testDiv.appendChild(itemDiv);
-      });
-
-      container.appendChild(testDiv);
-    }
     /* ---------- 縮圖偵錯 ---------- */
     var DEBUG_THUMBS = true;
     let currentEditingLogId = null; // ✅ 請加上這一行
@@ -663,30 +576,6 @@ function publishCallback(response) {
       }
     }
 
-    /* ---------- 診斷 ---------- */
-    function runDiagnostics(){
-      const base = API_BASE_URL;
-      logToPage('=== 開始診斷 ===');
-      logToPage('API_BASE_URL = ' + base);
-
-      const url = base + '?page=project&id=0';
-      logToPage('[JSONP] 測試 URL: ' + url);
-      const t0 = Date.now();
-      loadJsonp(url).then(d => {
-        logToPage('[JSONP] OK，用時 ' + (Date.now()-t0) + 'ms，回傳筆數=' + (Array.isArray(d)?d.length:0));
-      }).catch(err => {
-        logToPage('[JSONP] 失敗：' + err.message);
-      }).finally(() => {
-        const testId = '1kl1GWuBEE-AKS4e4tdHGz8_90Au04vua';
-        const imgUrl = base + '?img=' + encodeURIComponent(testId) + '&w=300';
-        logToPage('[IMG] 測試代理：' + imgUrl);
-        const img = new Image();
-        const t1 = Date.now();
-        img.onload  = ()=> logToPage('[IMG] OK，用時 ' + (Date.now()-t1) + 'ms，尺寸=' + img.naturalWidth + 'x' + img.naturalHeight);
-        img.onerror = ()=> logToPage('[IMG] 失敗（可能是權限或非圖片格式）');
-        img.src = imgUrl + '&_=' + Date.now();
-      });
-    }
   </script>
 
   <div id="lightbox" aria-hidden="true">
