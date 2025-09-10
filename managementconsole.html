@@ -216,46 +216,36 @@
       ];
     }
 
-    /* ---------- 渲染：Drive 縮圖（帶候選/備援 + 點擊 Lightbox） ---------- */
-    // 版本號：v2.0
-    // 修改時間：2025-09-10 10:20 (Asia/Taipei)
-    function renderSmartImg(urls, fileId) { // ✅ 接收新的 fileId 參數
+// 版本號：v3.0
+    // 修改時間：2025-09-10 11:15 (Asia/Taipei)
+    function renderSmartImg(fileId) {
       const wrap = document.createElement('div');
       wrap.className = 'photo-item';
     
       const img = document.createElement('img');
       img.className = 'photo-thumb';
-    
+
       // 【⭐️ 核心修改 ⭐️】
-      // 組合出指向我們後端代理服務的、高解析度的大圖網址
-      const largeImageUrl = `${API_BASE_URL}?img=${fileId}&w=1200`;
-    
-      let i = 0;
-      function use(idx) {
-        if (idx >= urls.length) {
-          const ph = document.createElement('div');
-          ph.className = 'photo-placeholder';
-          ph.textContent = '無法載入縮圖（點此開啟原圖）';
-          ph.style.cursor = 'pointer';
-          ph.onclick = () => window.open(largeImageUrl, '_blank', 'noopener,noreferrer');
-          wrap.replaceChildren(ph);
-          return;
-        }
-        img.src = urls[idx];
-        // 將 data-full 屬性設定為我們可靠的代理網址
-        img.dataset.full = largeImageUrl; 
-      }
-    
-      img.onload  = () => {
-        // 這部分不需要修改，燈箱會自動讀取 data-full 屬性
+      // 直接使用測試成功的「方案三」來組合圖片網址
+      const thumbnailUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w300`;
+      const largeImageUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`;
+
+      // 將大圖網址存入 data-full 屬性，供燈箱使用
+      img.dataset.full = largeImageUrl;
+      
+      // 縮圖直接使用 thumbnail 連結
+      img.src = thumbnailUrl;
+      
+      img.onerror = () => {
+        const ph = document.createElement('div');
+        ph.className = 'photo-placeholder';
+        ph.textContent = '縮圖載入失敗';
+        wrap.replaceChildren(ph);
       };
-      img.onerror = () => { use(++i); };
     
       wrap.appendChild(img);
-      use(0);
       return wrap;
     }
-
 
     /* ---------- 渲染：一般圖片（非 Drive） ---------- */
     function renderDirectImg(src){
@@ -325,9 +315,9 @@
         }
         const id = driveFileId(u);
         if(id){
-          // 版本號：v1.1
-          // 修改時間：2025-09-10 10:20 (Asia/Taipei)
-          container.appendChild( renderSmartImg( buildPublicThumbUrls(id, 300), id ) );
+          // 版本號：v2.0
+          // 修改時間：2025-09-10 11:15 (Asia/Taipei)
+          container.appendChild( renderSmartImg(id) );
         }else{
           container.appendChild( renderDirectImg(u) );
         }
