@@ -8,7 +8,7 @@
   <script>
     // 【全域設定】請確認此網址為您最新部署的 Apps Script 網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v7.27'; // 前端版本號
+    const FRONTEND_VERSION = 'v7.28'; // 前端版本號
   </script>
 
   <style>
@@ -82,7 +82,12 @@
     <div class="modal-content">
       <h2 class="text-xl font-semibold mb-4">管理照片</h2>
       <div id="modal-photo-grid-container" class="modal-photo-grid mb-4"></div>
+    // 版本號：v1.1
+    // 修改時間：2025-09-10 11:35 (Asia/Taipei)
       <div class="text-right space-x-2 mt-4">
+        <input type="file" id="photo-file-input" multiple accept="image/*" style="display: none;">
+    
+        <button id="add-photos-button" class="bg-green-600 hover:bg-green-700">新增照片</button>
         <button onclick="closePhotoModal()" class="bg-gray-500 hover:bg-gray-600">取消</button>
         <button id="save-photos-button" class="bg-blue-600 hover:bg-blue-700">儲存變更</button>
       </div>
@@ -432,65 +437,78 @@ function handleSaveText(logId, originalButtons) {
         document.getElementById('photo-modal').style.display = 'none';
         currentEditingLogId = null;
     }
-
-    // 版本號：v1.1
-    // 修改時間：2025-09-09 17:50 (Asia/Taipei)
-    // 版本號：v2.0
-    // 修改時間：2025-09-10 11:30 (Asia/Taipei)
+    // 版本號：v3.0
+    // 修改時間：2025-09-10 11:55 (Asia/Taipei)
+    
+    // =======================================================
+    // 【⭐️ 請取代 save-photos-button 的整個 onclick 區塊 ⭐️】
+    // (約從第 382 行開始)
+    // =======================================================
     document.getElementById('save-photos-button').onclick = function() {
         const saveButton = this;
         saveButton.textContent = '儲存中...';
         saveButton.disabled = true;
     
         const grid = document.getElementById('modal-photo-grid-container');
-        const items = grid.querySelectorAll('.modal-photo-item');
+        
+        // 1. 收集要保留的「舊照片」連結
+        const existingItems = grid.querySelectorAll('.modal-photo-item:not(.new-photo)');
         const remainingLinks = [];
-        items.forEach(item => {
+        existingItems.forEach(item => {
             if (!item.classList.contains('deleted')) {
                 remainingLinks.push(item.dataset.link);
             }
         });
-        const updatedPhotoLinksCsv = remainingLinks.join(',');
-        
-        const params = new URLSearchParams({ page: 'updateLogPhotos', id: currentEditingLogId, links: updatedPhotoLinksCsv });
+        const existingLinksCsv = remainingLinks.join(',');
     
-        loadJsonp(`${API_BASE_URL}?${params.toString()}`)
-            .then(response => {
-                if (response.success) {
-                    // 【⭐️ 核心修改 ⭐️】
-                    // 1. 成功後不再跳出 alert
-                    // 2. 關閉彈出視窗
-                    closePhotoModal();
-                    
-                    // 3. 即時更新主頁面上的照片牆
-                    const card = document.getElementById('log-' + currentEditingLogId);
-                    if (card) {
-                        // 先移除舊的照片牆
-                        const oldGrid = card.querySelector('.photo-grid');
-                        if (oldGrid) oldGrid.remove();
-                        
-                        // 如果還有照片，就建立並插入新的照片牆
-                        if (updatedPhotoLinksCsv) {
-                            const newGrid = buildPhotoGrid(updatedPhotoLinksCsv);
-                            const actionsDiv = card.querySelector('.button-group');
-                            // 將新照片牆插入到按鈕區塊的前面
-                            if (actionsDiv) {
-                                actionsDiv.parentNode.insertBefore(newGrid, actionsDiv);
-                            }
-                        }
-                    }
-                } else {
-                    // 只在失敗時才跳出提示
-                    alert('儲存失敗: ' + (response.message || '未知錯誤'));
-                }
-            })
-            .catch(err => alert('儲存照片變更失敗: ' + err.message))
-            .finally(() => {
-                // 無論成功或失敗，最後都恢復按鈕狀態
+        // 2. 收集要上傳的「新照片」Base64 資料
+        const newItems = grid.querySelectorAll('.modal-photo-item.new-photo');
+        const newPhotosBase64Array = [];
+        newItems.forEach(item => {
+            // 不需包含 "data:image/jpeg;base64," 這段前綴
+            newPhotosBase64Array.push(item.dataset.base64);
+        });
+        
+        // 3. 改用 google.script.run 呼叫後端
+        google.script.run
+            .withSuccessHandler(handlePhotoSaveSuccess)
+            .withFailureHandler(err => {
+                alert('上傳失敗: ' + err.message);
                 saveButton.textContent = '儲存變更';
                 saveButton.disabled = false;
-            });
+            })
+            .updateLogPhotosWithUploads(currentEditingLogId, existingLinksCsv, newPhotosBase64Array);
     };
+    
+    
+    // =======================================================
+    // 【⭐️ 請在檔案中「新增」這個用來處理成功回應的函式 ⭐️】
+    // (可以放在 onclick 區塊的下方)
+    // =======================================================
+    function handlePhotoSaveSuccess(response) {
+        if (response.success) {
+            closePhotoModal();
+            const card = document.getElementById('log-' + currentEditingLogId);
+            if (card) {
+                const oldGrid = card.querySelector('.photo-grid');
+                if (oldGrid) oldGrid.remove();
+                
+                if (response.finalLinks) {
+                    const newGrid = buildPhotoGrid(response.finalLinks);
+                    const actionsDiv = card.querySelector('.button-group');
+                    if (actionsDiv) {
+                        actionsDiv.parentNode.insertBefore(newGrid, actionsDiv);
+                    }
+                }
+            }
+        } else {
+            alert('儲存失敗: ' + (response.message || '未知錯誤'));
+        }
+        // 恢復按鈕（無論成功或失敗）
+        const saveButton = document.getElementById('save-photos-button');
+        saveButton.textContent = '儲存變更';
+        saveButton.disabled = false;
+    }            
 
     function editPhotosCallback(response) {
         alert(response.message);
@@ -554,6 +572,70 @@ function publishCallback(response) {
       loadJsonp(fetchUrl)
         .then(loadDataCallback)
         .catch(displayError);
+      // 版本號：v1.1
+      // 修改時間：2025-09-10 11:35 (Asia/Taipei)
+      
+        // --- 【⭐️ 新增：初始化新增照片按鈕的邏輯 ⭐️】---
+        const addPhotosBtn = document.getElementById('add-photos-button');
+        const photoFileInput = document.getElementById('photo-file-input');
+      
+        addPhotosBtn.onclick = () => {
+          photoFileInput.click(); // 點擊按鈕時，觸發隱藏的檔案選擇器
+        };
+      
+        // 版本號：v1.2
+        // 修改時間：2025-09-10 11:42 (Asia/Taipei)
+              photoFileInput.onchange = (event) => {
+                const files = event.target.files;
+                const grid = document.getElementById('modal-photo-grid-container');
+        
+                if (files.length > 0) {
+                  // 如果原本顯示「沒有照片」，先清空它
+                  const noPhotosMsg = grid.querySelector('p.muted');
+                  if (noPhotosMsg) noPhotosMsg.remove();
+        
+                  for (const file of files) {
+                    // 確保檔案是圖片格式
+                    if (!file.type.startsWith('image/')){
+                      continue;
+                    }
+        
+                    const reader = new FileReader();
+        
+                    // 當檔案讀取完成後執行
+                    reader.onload = (e) => {
+                      const base64String = e.target.result;
+        
+                      // 建立預覽卡片的所有 HTML 元素
+                      const item = document.createElement('div');
+                      item.className = 'modal-photo-item new-photo'; // ⭐️ 標記為新照片
+                      item.dataset.base64 = base64String; // ⭐️ 將 Base64 資料暫存在元素上
+        
+                      const img = document.createElement('img');
+                      img.src = base64String;
+        
+                      const delBtn = document.createElement('button');
+                      delBtn.className = 'delete-photo-btn';
+                      delBtn.innerHTML = '&times;';
+                      delBtn.title = '移除這張新照片';
+                      
+                      // 點擊X號，直接移除這個預覽卡片
+                      delBtn.onclick = () => {
+                          item.remove();
+                      };
+        
+                      item.appendChild(img);
+                      item.appendChild(delBtn);
+                      grid.appendChild(item);
+                    };
+        
+                    // 開始讀取檔案
+                    reader.readAsDataURL(file);
+                  }
+                }
+                // 清空選擇器的值，以便使用者可以重複選擇相同的檔案
+                event.target.value = '';
+              };
     });
 
 // 版本號：v2.0
