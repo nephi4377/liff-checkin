@@ -8,7 +8,7 @@
   <script>
     // 【全域設定】請確認此網址為您最新部署的 Apps Script 網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v7.23'; // 前端版本號
+    const FRONTEND_VERSION = 'v7.24'; // 前端版本號
   </script>
 
   <style>
@@ -63,6 +63,7 @@
         <div>
             <p id="version-display" class="muted"></p>
             <button onclick="runDiagnostics()" style="font-size:12px; padding:4px 8px; background-color: #6b7280;">執行連線診斷</button>
+            <button onclick="startImageTest()" style="font-size:12px; padding:4px 8px; background-color: #16a34a;">測試圖片顯示</button>
         </div>
     </header>
 
@@ -91,6 +92,71 @@
   </div>
 
   <script>
+    // ==========================================================
+    // ========== 圖片顯示的獨立測試工具 ==========
+    // ==========================================================
+    function startImageTest() {
+      const testId = prompt("請提供一個已設為「知道連結的任何人」皆可檢視的 Google Drive 檔案 ID：");
+      if (testId && testId.trim()) {
+        runImageDisplayTest(testId.trim());
+      }
+    }
+
+    function runImageDisplayTest(testFileId) {
+      const container = document.getElementById('main-content');
+      // 移除舊的測試結果
+      const oldTest = document.getElementById('image-test-container');
+      if(oldTest) oldTest.remove();
+
+      const testDiv = document.createElement('div');
+      testDiv.id = 'image-test-container';
+      testDiv.style.cssText = 'margin-top: 2rem; padding: 1rem; border: 1px solid #ccc; background: #fff; border-radius: 0.5rem;';
+      
+      const methods = [
+        {
+          name: '方法一：低解析度縮圖連結 (urls[0])',
+          url: `https://drive.google.com/thumbnail?id=${testFileId}&sz=w300`
+        },
+        {
+          name: '方法二：高解析度內容連結 (urls[1])',
+          url: `https://drive.usercontent.google.com/uc?id=${testFileId}&export=view`
+        },
+        {
+          name: '方法三：後端代理服務 (建議方案)',
+          url: `${API_BASE_URL}?img=${testFileId}&w=300`
+        }
+      ];
+
+      testDiv.innerHTML = '<h2>圖片顯示方法測試結果：</h2>';
+
+      methods.forEach(method => {
+        const itemDiv = document.createElement('div');
+        itemDiv.style.marginBottom = '1rem';
+        itemDiv.innerHTML = `<b>${method.name}</b>`;
+        
+        const img = document.createElement('img');
+        img.style.cssText = 'max-width:300px; max-height:300px; border: 2px solid #ddd; margin-top: 0.5rem;';
+        
+        img.onload = () => {
+          const successMsg = document.createElement('span');
+          successMsg.textContent = ' ✅ 載入成功';
+          successMsg.style.color = 'green';
+          itemDiv.appendChild(successMsg);
+        };
+        img.onerror = () => {
+          const errorMsg = document.createElement('span');
+          errorMsg.textContent = ' ❌ 載入失敗';
+          errorMsg.style.color = 'red';
+          itemDiv.replaceChild(errorMsg, img); // 用錯誤訊息取代圖片
+        };
+
+        img.src = method.url;
+        itemDiv.appendChild(img);
+        testDiv.appendChild(itemDiv);
+      });
+
+      container.appendChild(testDiv);
+    }
     /* ---------- 縮圖偵錯 ---------- */
     var DEBUG_THUMBS = true;
     let currentEditingLogId = null; // ✅ 請加上這一行
