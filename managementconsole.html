@@ -151,7 +151,7 @@
         }
         // 防快取可加可不加
         img.src = urls[idx];
-        img.dataset.full = urls[0]; // 以第一個當大圖 / 原圖
+        img.dataset.full = urls[1]; // ✅ 修改：使用第2個更高品質的連結當作大圖
       }
     
       img.onload  = () => {
