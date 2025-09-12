@@ -8,7 +8,7 @@
   <script>
     // 【全域設定】請確認此網址為您最新部署的 Apps Script 網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v8.3'; // 前端版本號
+    const FRONTEND_VERSION = 'v8.4'; // 前端版本號
   </script>
 
   <style>
@@ -292,11 +292,13 @@
             <div class="button-group" style="margin-top: 1rem;"></div>
         `;
 
-        // 核心修改2：正確地將照片牆(photoGrid)放入預留的容器中
-        const photoContainer = card.querySelector('.photo-grid-container');
-        if (log.PhotoLinks) {
-            photoContainer.appendChild(buildPhotoGrid(log.PhotoLinks));
-        }
+        // 渲染照片
+        const photoContainer = card.querySelector(`#photos-${log.LogID}`);
+        if (log.PhotoLinks && photoContainer) {
+           photoContainer.appendChild(buildPhotoGrid(log.PhotoLinks)); // <-- 修正：附加到預留的照片容器中
+            // (假設您有 buildPhotoGrid 函式)
+          logToPage(`...[${log.LogID}] 已建立照片牆`);
+        }
 
         // 核心修改3：正確地將按鈕放入預留的容器中
         const buttonContainer = card.querySelector('.button-group');
