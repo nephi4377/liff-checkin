@@ -8,7 +8,7 @@
   <script>
     // 【全域設定】請確認此網址為您最新部署的 Apps Script 網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v8.5'; // 前端版本號
+    const FRONTEND_VERSION = 'v8.6'; // 前端版本號
   </script>
 
   <style>
@@ -349,13 +349,20 @@
         
         return card;
     }
-    // --- 渲染主函式 (偵錯強化版) ---
-    // 主渲染函式
+    
+    // --- 渲染主函式 (最終修正版) ---
     function displayLogs(logs, isDraftMode) {
         logToPage(`➡️ displayLogs: 開始渲染畫面...`);
         const container = document.getElementById('logs-container');
-        container.innerHTML = '';
-        logToPage(`...已清空舊內容`);
+        const statusMessage = document.getElementById('status-message');
+
+        // 【⭐️ 核心修正：在渲染前，先移除「載入中」的區塊 ⭐️】
+        if (statusMessage) {
+            statusMessage.remove();
+        }
+        
+        container.innerHTML = ''; // 清空舊內容
+        logToPage(`...已移除載入訊息並清空舊內容`);
 
         if (!Array.isArray(logs) || logs.length === 0) {
             logToPage('⚠️ 偵測到沒有日誌資料，停止渲染。');
