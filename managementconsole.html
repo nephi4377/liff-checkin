@@ -197,22 +197,17 @@
       return wrap;
     }
 
-    /* ---------- JSONP ---------- */
-    function loadJsonp(url, cbName){
-      return new Promise((resolve, reject) => {
-        const name = cbName || ('cb_' + Math.random().toString(36).slice(2));
-        const s = document.createElement('script');
-        s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + name;
-        s.async = true;
-
-        const t0 = Date.now();
-        const timer = setTimeout(()=>{ cleanup(); reject(new Error('JSONP timeout ('+(Date.now()-t0)+'ms)')); }, 15000);
-
-        function cleanup(){ clearTimeout(timer); s.remove(); try{ delete window[name]; }catch(_){ window[name] = undefined; } }
-        window[name] = (data)=>{ cleanup(); resolve(data); };
-        s.onerror = ()=>{ cleanup(); reject(new Error('JSONP load error')); };
-        document.head.appendChild(s);
-      });
+    // JSONP 呼叫器
+    function loadJsonp(url, callback) {
+        const callbackName = 'jsonp_callback_' + Math.floor(Math.random() * 100000);
+        window[callbackName] = function(data) {
+            delete window[callbackName];
+            document.body.removeChild(script);
+            callback(data);
+        };
+        const script = document.createElement('script');
+        script.src = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'callback=' + callbackName;
+        document.body.appendChild(script);
     }
 
     /* ---------- UI：草稿 / 已發布 ---------- */
@@ -244,150 +239,175 @@
     }
 
     /* ====================== 【⭐️ 核心修改：渲染與編輯邏輯 ⭐️】 ====================== */
+    /* ============================================================
+     核心渲染邏輯 ( Partial Update Ready )
+     ============================================================
+    */
 
-    // --- 渲染主函式 (偵錯強化版) ---
-    function displayLogs(logs, isDraftMode) {
-      logToPage('➡️ displayLogs: 開始渲染畫面...');
-
-      const container = document.getElementById('logs-container');
-      const statusMessage = document.getElementById('status-message');
-      
-      if (statusMessage) {
-        statusMessage.style.display = 'none';
-        logToPage('...已隱藏「載入中」訊息');
-      }
-      
-      container.innerHTML = '';
-      logToPage('...已清空舊內容');
-
-      if (!Array.isArray(logs) || logs.length === 0) {
-        logToPage('⚠️ 偵測到沒有日誌資料，已停止渲染。');
-        container.innerHTML = '<div class="card"><p class="muted" style="text-align:center;">沒有可顯示的日誌。</p></div>';
-        return; 
-      }
-      
-      logToPage(`...偵測到 ${logs.length} 筆日誌，開始遍歷處理...`);
-
-      logs.forEach(function(log, index) {
-        logToPage(`[${index + 1}/${logs.length}] 正在處理 LogID: ${log.LogID}`);
-
+    // [新] 根據單筆日誌資料，建立一個新的卡片 DOM 元素
+    function _buildLogCard(log, isDraftMode) {
         const card = document.createElement('div');
         card.className = 'card';
         card.id = 'log-' + log.LogID;
+
+        const timestamp = new Date(log.Timestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
         
-        const timestamp = log.Timestamp ? new Date(log.Timestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) : '未知';
-        const lastModified = log.LastModified ? new Date(log.LastModified).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) : '無';
+        // 處理內容中的時間戳，避免重複顯示
+        const updatedTimestampMatch = (log.Content || '').match(/^\[更新 (.*?)\]\n/);
+        const displayContent = (log.Content || '無內容').replace(/^\[更新 .*?\]\n/, '');
+        const lastModifiedDisplay = updatedTimestampMatch ? updatedTimestampMatch[1] : '無';
 
-        const head = document.createElement('div');
-        head.innerHTML =
-          `<h3>${log.Title || '無標題'}</h3>
-           <small class="muted">案場: ${log.ProjectName || '未知'}｜回報人: ${log.UserName || '未知'}</small>
-           <small class="muted block text-xs mt-1">建立: ${timestamp}｜最後更新: ${lastModified}</small>
-           <hr class="my-3">
-           <div id="content-${log.LogID}" style="white-space:pre-wrap;">${log.Content || '無內容'}</div>`;
-        card.appendChild(head);
-        logToPage(`...[${log.LogID}] 已建立文字內容`);
+        card.innerHTML = `
+            <h3>${log.Title || '無標題'}</h3>
+            <small class="muted">案場: ${log.ProjectName || '未知'}｜回報人: ${log.UserName || '未知'}</small>
+            <small class="muted block text-xs mt-1">建立: ${timestamp}｜最後更新: ${lastModifiedDisplay}</small>
+            <hr class="my-3">
+            <div id="content-${log.LogID}" style="white-space:pre-wrap;">${displayContent}</div>
+            <div class="photo-grid" id="photos-${log.LogID}"></div>
+            <div class="button-group" style="margin-top: 1rem;"></div>
+        `;
 
+        // 渲染照片
+        const photoContainer = card.querySelector(`#photos-${log.LogID}`);
         if (log.PhotoLinks) {
-          card.appendChild(buildPhotoGrid(log.PhotoLinks));
+           card.appendChild(buildPhotoGrid(log.PhotoLinks));
+            // (假設您有 buildPhotoGrid 函式)
           logToPage(`...[${log.LogID}] 已建立照片牆`);
         }
 
-        const actions = document.createElement('div');
-        actions.className = 'button-group';
-        actions.style.marginTop = '1rem';
-        
+        // 渲染按鈕
+        const buttonContainer = card.querySelector('.button-group');
         const btnEditText = document.createElement('button');
         btnEditText.textContent = '編輯文字';
         btnEditText.onclick = () => handleEditText(log.LogID);
-        actions.appendChild(btnEditText);
-
-        const btnManagePhotos = document.createElement('button');
-        btnManagePhotos.textContent = '管理照片';
-        btnManagePhotos.onclick = () => openPhotoModal(log.LogID, log.PhotoLinks || '');
-        actions.appendChild(btnManagePhotos);
+        buttonContainer.appendChild(btnEditText);
 
         if (isDraftMode) {
-          const btnPublish = document.createElement('button');
-          btnPublish.id = 'btn-' + log.LogID;
-          btnPublish.textContent = '審核與發布';
-          btnPublish.style.backgroundColor = '#16a34a';
-          btnPublish.onclick = () => handlePublish(log.LogID);
-          actions.appendChild(btnPublish);
+            const btnPublish = document.createElement('button');
+            btnPublish.id = 'btn-' + log.LogID;
+            btnPublish.textContent = '審核與發布';
+            btnPublish.style.backgroundColor = '#16a34a';
+            btnPublish.onclick = () => handlePublish(log.LogID);
+            buttonContainer.appendChild(btnPublish);
         }
         
-        card.appendChild(actions);
-        logToPage(`...[${log.LogID}] 已建立操作按鈕`);
-
-        container.appendChild(card);
-        logToPage(`...✅ 已將 ${log.LogID} 的卡片插入頁面`);
-      });
-      
-      logToPage('✅ displayLogs: 所有項目渲染完畢。');
+        return card;
     }
-    // --- [新增] 原地編輯文字 ---
-    function handleEditText(logId) {
-      const contentDiv = document.getElementById(`content-${logId}`);
-      const buttonContainer = contentDiv.parentElement.parentElement.querySelector('.button-group');
-      const originalContent = contentDiv.innerText;
-      const originalButtons = buttonContainer.innerHTML;
+    // --- 渲染主函式 (偵錯強化版) ---
+    // 主渲染函式
+    function displayLogs(logs, isDraftMode) {
+        logToPage(`➡️ displayLogs: 開始渲染畫面...`);
+        const container = document.getElementById('logs-container');
+        container.innerHTML = '';
+        logToPage(`...已清空舊內容`);
 
-      contentDiv.contentEditable = true;
-      contentDiv.focus();
-      contentDiv.style.cssText += 'border: 1px solid #3b82f6; padding: 0.5rem; border-radius: 0.25rem;';
-
-      buttonContainer.innerHTML = `
-          <button class="bg-gray-500">取消</button>
-          <button class="bg-green-600">儲存文字</button>
-      `;
-      buttonContainer.querySelector('.bg-gray-500').onclick = () => handleCancelEdit(logId, originalContent, originalButtons);
-      buttonContainer.querySelector('.bg-green-600').onclick = () => handleSaveText(logId, originalButtons);
+        if (!Array.isArray(logs) || logs.length === 0) {
+            logToPage('⚠️ 偵測到沒有日誌資料，停止渲染。');
+            container.innerHTML = '<div class="card"><p class="muted" style="text-align:center;">沒有可顯示的日誌。</p></div>';
+            return;
+        }
+        
+        logToPage(`...偵測到 ${logs.length} 筆日誌，開始遍歷處理...`);
+        currentLogsData = logs; // 儲存全域資料
+        logs.forEach((log, index) => {
+            const card = _buildLogCard(log, isDraftMode);
+            container.appendChild(card);
+            logToPage(`   [${index+1}/${logs.length}] 已渲染卡片 LogID: ${log.LogID}`);
+        });
+        logToPage('✅ 所有日誌渲染完畢。');
     }
     
-    function handleCancelEdit(logId, originalContent, originalButtons) {
-      const contentDiv = document.getElementById(`content-${logId}`);
-      contentDiv.contentEditable = false;
-      contentDiv.style.border = 'none';
-      contentDiv.style.padding = '0';
-      contentDiv.innerText = originalContent;
-      contentDiv.parentElement.parentElement.querySelector('.button-group').innerHTML = originalButtons;
+    // --- [新增] 原地編輯文字 ---
+    /* ============================================================
+     編輯功能 (無刷新局部更新版)
+     ============================================================
+    */
+
+    function handleEditText(logId) {
+        logToPage(`✏️ handleEditText: 啟用 LogID ${logId} 的編輯模式`);
+        const contentDiv = document.getElementById(`content-${logId}`);
+        const buttonContainer = contentDiv.closest('.card').querySelector('.button-group');
+        const originalButtons = Array.from(buttonContainer.childNodes);
+
+        contentDiv.dataset.originalContent = contentDiv.innerText; // 暫存原始內文
+        contentDiv.contentEditable = true;
+        contentDiv.focus();
+        contentDiv.style.cssText += 'border: 1px solid #3b82f6; padding: 0.5rem; border-radius: 0.25rem; background: #f9fafb;';
+
+        const btnCancel = document.createElement('button');
+        btnCancel.textContent = '取消';
+        btnCancel.className = 'bg-gray-500';
+        btnCancel.onclick = () => handleCancelEdit(logId, originalButtons);
+
+        const btnSave = document.createElement('button');
+        btnSave.textContent = '儲存文字';
+        btnSave.className = 'bg-green-600';
+        btnSave.onclick = () => handleSaveText(logId, originalButtons);
+
+        buttonContainer.innerHTML = '';
+        buttonContainer.appendChild(btnCancel);
+        buttonContainer.appendChild(btnSave);
+    }
+        function handleCancelEdit(logId, originalButtons) {
+        logToPage(`🚫 handleCancelEdit: 取消 LogID ${logId} 的編輯`);
+        const contentDiv = document.getElementById(`content-${logId}`);
+        const buttonContainer = contentDiv.closest('.card').querySelector('.button-group');
+
+        contentDiv.contentEditable = false;
+        contentDiv.style.border = 'none';
+        contentDiv.style.padding = '0';
+        contentDiv.style.background = 'transparent';
+        contentDiv.innerText = contentDiv.dataset.originalContent; // 從暫存還原
+
+        buttonContainer.innerHTML = '';
+        originalButtons.forEach(btn => buttonContainer.appendChild(btn));
     }
 
-// 版本號：v1.1
-// 修改時間：2025-09-09 17:50 (Asia/Taipei)
-// 版本號：v2.0
-// 修改時間：2025-09-10 11:45 (Asia/Taipei)
-function handleSaveText(logId, originalButtons) {
-  const contentDiv = document.getElementById(`content-${logId}`);
-  const newContent = contentDiv.innerText;
-  const buttonContainer = contentDiv.parentElement.parentElement.querySelector('.button-group');
-  const saveButton = buttonContainer.querySelector('.bg-green-600');
-  saveButton.textContent = '儲存中...';
-  saveButton.disabled = true;
+    function handleSaveText(logId, originalButtons) {
+        logToPage(`💾 handleSaveText: 準備儲存 LogID ${logId} 的新內容...`);
+        const contentDiv = document.getElementById(`content-${logId}`);
+        const newContent = contentDiv.innerText.trim();
+        const buttonContainer = contentDiv.closest('.card').querySelector('.button-group');
+        
+        const btnSave = buttonContainer.querySelector('.bg-green-600');
+        if(btnSave) {
+            btnSave.textContent = '儲存中...';
+            btnSave.disabled = true;
+        }
 
-  const params = new URLSearchParams({ page: 'updateLogText', id: logId, content: newContent });
-
-  loadJsonp(`${API_BASE_URL}?${params.toString()}`)
-    .then(response => {
-      if (response.success) {
-        // 【⭐️ 核心修改 ⭐️】
-        // 1. 不再跳出 alert
-        // 2. 使用後端回傳的 response.finalContent 來更新畫面，確保內容絕對正確
-        handleCancelEdit(logId, response.finalContent, originalButtons);
-      } else {
-        alert('儲存失敗: ' + (response.message || '未知錯誤'));
-        // 失敗時，恢復按鈕狀態，但不恢復文字內容，讓使用者可以重試
-        saveButton.textContent = '儲存文字';
-        saveButton.disabled = false;
-      }
-    })
-    .catch(err => {
-      alert('儲存失敗: ' + err.message);
-      saveButton.textContent = '儲存文字';
-      saveButton.disabled = false;
-    });
-}
-
+        const params = new URLSearchParams({ page: 'updateLogText', id: logId, content: newContent });
+        loadJsonp(`${API_BASE_URL}?${params.toString()}`, (response) => editTextCallback(response, logId, originalButtons));
+    }
+    // 儲存成功後的回呼函式，執行局部更新
+    function editTextCallback(response, logId, originalButtons) {
+        if (response && response.success) {
+            logToPage(`✅ 後端儲存成功，準備請求最新資料進行局部更新...`);
+            const params = new URLSearchParams({ page: 'getSingleLog', id: logId });
+            
+            loadJsonp(`${API_BASE_URL}?${params.toString()}`, (newLogData) => {
+                if (newLogData) {
+                    logToPage(`...已取得 LogID ${logId} 的最新資料，開始局部渲染`);
+                    const index = currentLogsData.findIndex(log => log.LogID === logId);
+                    if (index !== -1) currentLogsData[index] = newLogData;
+                    
+                    const newCard = _buildLogCard(newLogData, newLogData.Status === '草稿');
+                    const oldCard = document.getElementById('log-' + logId);
+                    if (oldCard) {
+                        oldCard.replaceWith(newCard);
+                        logToPage(`   卡片 ${logId} 已成功局部更新。`);
+                    }
+                } else {
+                    logToPage(`❌ 局部更新失敗：後端未回傳 LogID ${logId} 的資料。`);
+                    alert('局部更新失敗，將為您重新整理頁面。');
+                    window.location.reload();
+                }
+            });
+        } else {
+            logToPage(`❌ 後端儲存失敗: ${response ? response.message : '未知錯誤'}`);
+            alert('儲存失敗：' + (response ? response.message : '未知錯誤'));
+            handleCancelEdit(logId, originalButtons); // 儲存失敗時還原
+        }
+    }
 // --- [新增] 照片管理 Modal (縮圖穩定版) ---
     // 版本號：v2.0
     // 修改時間：2025-09-09 17:00 (Asia/Taipei)
