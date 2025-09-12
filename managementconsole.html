@@ -8,7 +8,7 @@
   <script>
     // 【全域設定】請確認此網址為您最新部署的 Apps Script 網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v8.1'; // 前端版本號
+    const FRONTEND_VERSION = 'v8.2'; // 前端版本號
   </script>
 
   <style>
@@ -684,25 +684,20 @@ function publishCallback(response) {
               };
     });
 
-// 版本號：v2.0
-// 修改時間：2025-09-09 16:30 (Asia/Taipei)
+// 版本號：v2.1 (修正遞迴錯誤)
+// 修改時間：2025/09/12
 
-    // 頁面載入時，呼叫此函式取得資料 (Promise 版本)
-    function loadDataCallback(projectId, isDraftMode) {
-        logToPage(`➡️ loadDataCallback: 開始向後端請求資料... (案號: ${projectId})`);
-        document.getElementById('status-message').style.display = 'block';
+    // 當 loadJsonp 成功後，會呼叫此函式來處理收到的資料
+    function loadDataCallback(logs) {
+        logToPage('✅ 成功從後端取得資料。');
         
-        const url = `${API_BASE_URL}?page=project&id=${projectId}`;
-        
-        loadJsonp(url)
-          .then(logs => {
-            logToPage('✅ 成功從後端取得資料。');
-            displayLogs(logs, isDraftMode);
-          })
-          .catch(error => {
-            logToPage(`❌ 載入資料時發生嚴重錯誤: ${error.message}`);
-            displayError(error.message); // 將錯誤訊息顯示在畫面上
-          });
+        // 取得 isDraftMode 的狀態
+        const urlParams = new URLSearchParams(window.location.search);
+        const id = urlParams.get('id');
+        const isDraftMode = (id === '0');
+
+        // 將收到的資料交給 displayLogs 函式去渲染畫面
+        displayLogs(logs, isDraftMode);
     }
     function displayError(error){
       const msg = (error && error.message) ? error.message : '發生未知錯誤。';
