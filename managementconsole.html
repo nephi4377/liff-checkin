@@ -8,7 +8,7 @@
   <script>
     // 【全域設定】請確認此網址為您最新部署的 Apps Script 網址
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'v8.2'; // 前端版本號
+    const FRONTEND_VERSION = 'v8.3'; // 前端版本號
   </script>
 
   <style>
@@ -270,44 +270,53 @@
      ============================================================
     */
 
-    // [新] 根據單筆日誌資料，建立一個新的卡片 DOM 元素
+// [新] 根據單筆日誌資料，建立一個新的卡片 DOM 元素 (v3 - 最終穩定版)
     function _buildLogCard(log, isDraftMode) {
         const card = document.createElement('div');
         card.className = 'card';
         card.id = 'log-' + log.LogID;
 
         const timestamp = new Date(log.Timestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
-        
-        // 處理內容中的時間戳，避免重複顯示
         const updatedTimestampMatch = (log.Content || '').match(/^\[更新 (.*?)\]\n/);
         const displayContent = (log.Content || '無內容').replace(/^\[更新 .*?\]\n/, '');
         const lastModifiedDisplay = updatedTimestampMatch ? updatedTimestampMatch[1] : '無';
 
+        // 核心修改1：直接使用您檔案中原有的 HTML 結構，確保相容性
         card.innerHTML = `
             <h3>${log.Title || '無標題'}</h3>
             <small class="muted">案場: ${log.ProjectName || '未知'}｜回報人: ${log.UserName || '未知'}</small>
             <small class="muted block text-xs mt-1">建立: ${timestamp}｜最後更新: ${lastModifiedDisplay}</small>
             <hr class="my-3">
             <div id="content-${log.LogID}" style="white-space:pre-wrap;">${displayContent}</div>
-            <div class="photo-grid" id="photos-${log.LogID}"></div>
+            <div class="photo-grid-container"></div>
             <div class="button-group" style="margin-top: 1rem;"></div>
         `;
 
-        // 渲染照片
-        const photoContainer = card.querySelector(`#photos-${log.LogID}`);
+        // 核心修改2：正確地將照片牆(photoGrid)放入預留的容器中
+        const photoContainer = card.querySelector('.photo-grid-container');
         if (log.PhotoLinks) {
-           card.appendChild(buildPhotoGrid(log.PhotoLinks));
-            // (假設您有 buildPhotoGrid 函式)
-          logToPage(`...[${log.LogID}] 已建立照片牆`);
+            photoContainer.appendChild(buildPhotoGrid(log.PhotoLinks));
         }
 
-        // 渲染按鈕
+        // 核心修改3：正確地將按鈕放入預留的容器中
         const buttonContainer = card.querySelector('.button-group');
+        
+        // --- 將所有需要的按鈕在這裡建立並加入 ---
+
+        // 1. 管理相片按鈕
+        const btnManagePhotos = document.createElement('button');
+        btnManagePhotos.textContent = '管理相片';
+        btnManagePhotos.style.backgroundColor = '#f59e0b';
+        btnManagePhotos.onclick = () => openPhotoModal(log.LogID, log.PhotoLinks);
+        buttonContainer.appendChild(btnManagePhotos);
+
+        // 2. 編輯文字按鈕
         const btnEditText = document.createElement('button');
         btnEditText.textContent = '編輯文字';
         btnEditText.onclick = () => handleEditText(log.LogID);
         buttonContainer.appendChild(btnEditText);
 
+        // 3. 發布按鈕 (僅草稿模式)
         if (isDraftMode) {
             const btnPublish = document.createElement('button');
             btnPublish.id = 'btn-' + log.LogID;
@@ -699,6 +708,7 @@ function publishCallback(response) {
         // 將收到的資料交給 displayLogs 函式去渲染畫面
         displayLogs(logs, isDraftMode);
     }
+    
     function displayError(error){
       const msg = (error && error.message) ? error.message : '發生未知錯誤。';
       logToPage('PAGE ERROR: ' + msg);
