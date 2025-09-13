@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>添心設計 | 施工回報 v7.6</title>
+  <title>添心設計 | 施工回報 v8.0</title>
 
   <!-- UI / SDK -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -118,6 +118,10 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      // ====================== 【⭐️ 新增設定常數 ⭐️】 ======================
+      const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024; // 5 MB
+      const CHUNK_SIZE = 2 * 1024 * 1024; // 2 MB per chunk
+
       const form = document.getElementById('report-form');
       const submitButton = document.getElementById('submit-button');
       const buttonText = document.getElementById('button-text');
@@ -187,7 +191,7 @@
         return v;
       }
 
-      // === 送出處理 ===
+      // ====================== 【⭐️ 全面升級的提交邏輯 ⭐️】 ======================
       async function handleFormSubmit(event) {
         event.preventDefault();
         setLoadingState(true);
@@ -198,73 +202,49 @@
           return;
         }
 
-        // 1) 先驗證案號（純數字；非案場請填 9999）
         const cleanProjectId = getValidProjectId();
         if (!cleanProjectId) {
           setLoadingState(false);
-          return; // 中止提交
+          return;
         }
 
         try {
-          const shouldCompress = document.getElementById('compressImages').checked;
-
           const siteFiles = Array.from(document.getElementById('sitePhotos').files);
           const problemFiles = Array.from(document.getElementById('problemPhotos').files);
-          const allPhotosInfo = [
+          const allFiles = [
             ...siteFiles.map(file => ({ file, isProblem: false })),
             ...problemFiles.map(file => ({ file, isProblem: true }))
           ];
 
-          if (allPhotosInfo.length === 0) {
+          if (allFiles.length === 0) {
             updateStatus('請至少選擇一張照片。', 'error');
             setLoadingState(false);
             return;
           }
-
-          // 批次設定
-          const batchId = `${userProfile.userId}-${Date.now()}`;
-          const SUBMIT_CHUNK_SIZE = 10;
-          const totalChunks = Math.ceil(allPhotosInfo.length / SUBMIT_CHUNK_SIZE);
-
-          // 基本表單資料（案號使用清洗後的純數字）
+          
           const baseFormData = {
-            source: 'liff_report_form_chunk',
-            batchId,
-            totalChunks,
-            userId: userProfile.userId,
-            userName: userProfile.displayName,
-            projectId: cleanProjectId,          // ✅ 只送乾淨數字（含 9999）
-            projectNameRaw: cleanProjectId,     // 如需保留原輸入可另設欄位
-            workType: document.getElementById('workType').value,
-            workDescription: document.getElementById('workDescription').value,
-            problemDescription: document.getElementById('problemDescription').value,
+              userId: userProfile.userId,
+              userName: userProfile.displayName,
+              projectId: cleanProjectId,
+              projectNameRaw: cleanProjectId,
+              workType: document.getElementById('workType').value,
+              workDescription: document.getElementById('workDescription').value,
+              problemDescription: document.getElementById('problemDescription').value,
           };
 
-          // 逐批處理與送出
-          for (let i = 0; i < totalChunks; i++) {
-            const chunkStart = i * SUBMIT_CHUNK_SIZE;
-            const chunkEnd = chunkStart + SUBMIT_CHUNK_SIZE;
-            const photoChunk = allPhotosInfo.slice(chunkStart, chunkEnd);
+          // 遍歷所有檔案，根據大小決定上傳策略
+          for (let i = 0; i < allFiles.length; i++) {
+            const { file, isProblem } = allFiles[i];
+            const fileProgress = `(檔案 ${i + 1}/${allFiles.length}: ${file.name})`;
+            updateStatus(`準備上傳 ${fileProgress}`, 'info');
 
-            updateStatus(`正在處理第 ${i + 1} / ${totalChunks} 批照片...`, 'info');
-            const processedPhotos = await processPhotoChunk(photoChunk, shouldCompress);
-
-            const chunkFormData = { ...baseFormData, chunkIndex: i + 1, photos: processedPhotos };
-
-            updateStatus(`正在提交第 ${i + 1} / ${totalChunks} 批資料...`, 'info');
-            await fetch(GAS_WEB_APP_URL, {
-              method: 'POST',
-              cache: 'no-cache',
-              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-              body: JSON.stringify(chunkFormData)
-            }).catch(error => {
-              // LIFF+GAS 在某些裝置會出現 fetch 類型錯誤但實際已送達
-              if (error instanceof TypeError && String(error.message || '').toLowerCase().includes('failed to fetch')) {
-                console.log(`批次 ${i + 1} 提交成功 (預期性錯誤)。`);
-                return;
-              }
-              throw error;
-            });
+            if (file.size > LARGE_FILE_THRESHOLD) {
+              // --- 大檔案：走分塊上傳 ---
+              await uploadFileInChunks(file, isProblem, baseFormData, fileProgress);
+            } else {
+              // --- 小檔案：走原始的單次提交 ---
+              await uploadFileAtOnce(file, isProblem, baseFormData, fileProgress);
+            }
           }
 
           handleSuccess();
@@ -276,13 +256,104 @@
         }
       }
 
+              
+      /**
+       * [新增] 小檔案處理函式 (單次提交)
+       */
+      async function uploadFileAtOnce(file, isProblem, baseFormData, progressText) {
+        updateStatus(`正在處理 ${progressText}...`, 'info');
+        const shouldCompress = document.getElementById('compressImages').checked;
+        let processedFile = file;
+        if (shouldCompress) {
+          processedFile = await imageCompression(file, { maxSizeMB: 1, maxWidthOrHeight: 1920 });
+        }
+        const base64 = await readFileAsBase64(processedFile);
+        
+        const payload = {
+          source: 'liff_report_form_chunk',
+          ...baseFormData,
+          photos: [{
+            name: file.name,
+            type: processedFile.type,
+            data: base64,
+            isProblem: isProblem
+          }]
+        };
+        
+        updateStatus(`正在提交 ${progressText}...`, 'info');
+        await postToServer(payload);
+      }
+
+      /**
+       * [新增] 大檔案處理函式 (分塊上傳)
+       */
+      async function uploadFileInChunks(file, isProblem, baseFormData, progressText) {
+        // 步驟 1: 初始化，取得 uploadId
+        updateStatus(`初始化大檔案上傳 ${progressText}...`, 'info');
+        const initResponse = await postToServer({
+          action: 'chunk_init',
+          userId: userProfile.userId
+        });
+        const { uploadId } = await initResponse.json();
+        if (!uploadId) throw new Error('無法從伺服器取得 uploadId');
+
+        // 步驟 2: 分割檔案並逐塊上傳
+        const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+        for (let i = 0; i < totalChunks; i++) {
+          updateStatus(`正在上傳區塊 ${i + 1}/${totalChunks} ${progressText}...`, 'info');
+          const start = i * CHUNK_SIZE;
+          const end = Math.min(start + CHUNK_SIZE, file.size);
+          const chunk = file.slice(start, end);
+          const chunkBase64 = await readFileAsBase64(chunk);
+          
+          await postToServer({
+            action: 'chunk_append',
+            uploadId: uploadId,
+            chunkIndex: i + 1,
+            totalChunks: totalChunks,
+            chunkData: chunkBase64,
+            fileName: file.name
+          });
+        }
+        
+        // 步驟 3: 完成上傳，通知後端合併
+        updateStatus(`完成上傳，通知伺服器合併 ${progressText}...`, 'info');
+        await postToServer({
+          action: 'chunk_finalize',
+          uploadId: uploadId,
+          reportData: {
+            form: baseFormData,
+            fileName: file.name,
+            fileType: file.type,
+            isProblem: isProblem
+          }
+        });
+      }
+            /**
+       * [新增] 統一的 fetch 函式
+       */
+      function postToServer(payload) {
+        return fetch(GAS_WEB_APP_URL, {
+          method: 'POST',
+          cache: 'no-cache',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        }).catch(error => {
+          if (error instanceof TypeError) { // 處理 LIFF 特有的 fetch 錯誤
+            console.log(`請求成功 (預期性錯誤):`, payload.action || payload.source);
+            return new Response(JSON.stringify({ status: 'success_fallback' }), { status: 200 });
+          }
+          throw error;
+        });
+      }
+      
       // === 成功後處理 ===
       function handleSuccess() {
         updateStatus('所有批次皆已提交！後續處理完成後您會收到 LINE 通知。', 'success');
         setTimeout(() => { liff.closeWindow(); }, 1500);
       }
 
-      // === 單批相片處理（壓縮→轉 Base64） ===
+            // === 單批相片處理（壓縮→轉 Base64） ===
       async function processPhotoChunk(photoInfoChunk, shouldCompress) {
         const photoArray = [];
         const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
