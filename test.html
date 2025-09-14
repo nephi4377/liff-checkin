@@ -505,6 +505,7 @@
     });
 
     function handleDataResponse(data){
+      document.getElementById('debug-log').textContent = JSON.stringify(data, null, 2);
       logToPage('✅ 後端回應成功');
       document.getElementById('status-message')?.remove();
       if(data && data.error){ displayError({message:data.error}); return; }
