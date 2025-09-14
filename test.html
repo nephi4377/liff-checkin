@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>專案日誌管理主控台</title>
+
+    <script>
+        // 版本號：v12.0 (最終完整版)
+        // 修改時間：2025/09/14 (Asia/Taipei)
+        const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
+        const FRONTEND_VERSION = 'v12.0';
+    </script>
+
+    <style>
+        :root{
+          --bg:#f3f4f6; --fg:#1f2937; --muted:#6b7280; --muted-2:#9ca3af;
+          --card:#ffffff; --primary:#3b82f6; --shadow:0 1px 2px rgba(0,0,0,.06);
+          --radius:.5rem;
+        }
+        *{ box-sizing: border-box; }
+        body{ font-family: Arial, sans-serif; background:var(--bg); color:var(--fg); margin:0; padding:2rem; }
+        .container{ max-width:900px; margin:0 auto; }
+        header{ margin-bottom:2rem; display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; }
+        h1{ font-size:1.875rem; font-weight:bold; margin:0; }
+        .muted{ color:var(--muted); font-size:.9rem; }
+        .spinner{ margin:2rem auto; width:3rem; height:3rem; border-radius:50%; border:4px solid #e5e7eb; border-top-color:var(--primary); animation:spin 1s linear infinite; }
+        @keyframes spin{ to{ transform:rotate(360deg) } }
+        #debug-log{ background:#111827; color:#e5e7eb; font-family:monospace; font-size:.75rem; padding:1rem; border-radius:var(--radius); margin-top:1rem; height:16rem; overflow-y:auto; white-space:pre-wrap; }
+        .card{ background:var(--card); border-radius:var(--radius); padding:1.5rem; margin-bottom:1rem; box-shadow:var(--shadow); }
+        .photo-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:.75rem; margin-top: 1rem; }
+        .photo-item{ display:flex; flex-direction:column; gap:.25rem; }
+        .photo-thumb{ width:100%; aspect-ratio:4/3; object-fit:cover; background:#e5e7eb; border-radius:var(--radius); display:block; cursor:zoom-in; }
+        button{ background:var(--primary); color:#fff; border:0; padding:.5rem .75rem; border-radius:.375rem; cursor:pointer; font-weight: 600; transition: opacity .2s; }
+        .button-group { display:flex; gap:0.5rem; justify-content:flex-end; flex-wrap:wrap; }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>專案日誌管理主控台</h1>
+    </header>
+
+    <div class="container">
+        <main id="main-content">
+            <div id="status-message">
+                <div class="spinner"></div>
+                <p style="text-align:center;">正在載入資料...</p>
+            </div>
+            <div id="logs-container"></div>
+            <div>
+                <h3 style="margin-top:2rem;font-weight:600;">執行狀態日誌：</h3>
+                <pre id="debug-log"></pre>
+            </div>
+        </main>
+    </div>
+
+    <!-- (您原有的 photo-modal 和 lightbox 的 HTML 結構維持不變) -->
+
+    <script>
+        let currentLogsData = [];
+        let currentEditingLogId = null;
+
+        function logToPage(message){
+            const el = document.getElementById('debug-log');
+            if(!el) return;
+            const t = new Date().toLocaleTimeString('zh-TW');
+            el.textContent += `[${t}] ${message}\n`;
+            el.scrollTop = el.scrollHeight;
+        }
+
+        function loadJsonp(url) {
+            return new Promise((resolve, reject) => {
+                const callbackName = 'jsonp_callback_' + Math.random().toString(36).substr(2, 9);
+                const timeoutId = setTimeout(() => {
+                    cleanup();
+                    reject(new Error('請求後端資料超時 (15秒)，請檢查後端日誌。'));
+                }, 15000);
+                function cleanup() {
+                    clearTimeout(timeoutId);
+                    delete window[callbackName];
+                    if (script.parentNode) script.parentNode.removeChild(script);
+                }
+                window[callbackName] = (data) => {
+                    cleanup();
+                    resolve(data);
+                };
+                const script = document.createElement('script');
+                script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + callbackName;
+                script.onerror = () => {
+                    cleanup();
+                    reject(new Error('載入後端資料失敗，請檢查網路或後端日誌。'));
+                };
+                document.body.appendChild(script);
+            });
+        }
+
+        function driveFileId(u){
+            if(!u) return '';
+            const m = String(u).match(/[\/=&](?:id|fileId|ids)=([a-zA-Z0-9_-]{20,})/);
+            return m ? m[1] : '';
+        }
+        
+        function buildPhotoGrid(linksCsv) {
+            const grid = document.createElement('div');
+            grid.className = 'photo-grid';
+            const urls = (linksCsv || '').split(',').map(s => s.trim()).filter(Boolean);
+
+            urls.forEach(url => {
+                const a = document.createElement('a');
+                a.href = url.replace(/&export=view$/, '');
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                a.className = 'photo-item';
+                
+                const img = document.createElement('img');
+                img.className = 'photo-thumb';
+                img.loading = 'lazy';
+                const fileId = driveFileId(url);
+                if (fileId) {
+                    img.src = `${API_BASE_URL}?img=${fileId}&w=300`;
+                } else {
+                    img.src = url;
+                }
+                a.appendChild(img);
+                grid.appendChild(a);
+            });
+            return grid;
+        }
+
+        function _buildLogCard(log, isDraftMode) {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.id = 'log-' + log.LogID;
+
+            const timestamp = new Date(log.Timestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+            const updatedTimestampMatch = (log.Content || '').match(/^\[更新 (.*?)\]\n/);
+            const displayContent = (log.Content || '無內容').replace(/^\[更新 .*?\]\n/, '');
+            const lastModifiedDisplay = updatedTimestampMatch ? updatedTimestampMatch[1] : '無';
+
+            const contentWrapper = document.createElement('div');
+            contentWrapper.innerHTML = `
+                <h3>${log.Title || '無標題'}</h3>
+                <small class="muted">案場: ${log.ProjectName || '未知'}｜回報人: ${log.UserName || '未知'}</small>
+                <small class="muted block text-xs mt-1">建立: ${timestamp}｜最後更新: ${lastModifiedDisplay}</small>
+                <hr style="margin: 1rem 0;">
+                <div id="content-${log.LogID}" style="white-space:pre-wrap;">${displayContent}</div>
+            `;
+            card.appendChild(contentWrapper);
+
+            if (log.PhotoLinks) {
+                card.appendChild(buildPhotoGrid(log.PhotoLinks));
+            }
+
+            const buttonContainer = document.createElement('div');
+            buttonContainer.className = 'button-group';
+            
+            const btnManagePhotos = document.createElement('button');
+            btnManagePhotos.textContent = '管理相片';
+            btnManagePhotos.style.backgroundColor = '#f59e0b';
+            btnManagePhotos.onclick = () => openPhotoModal(log.LogID, log.PhotoLinks);
+            buttonContainer.appendChild(btnManagePhotos);
+
+            const btnEditText = document.createElement('button');
+            btnEditText.textContent = '編輯文字';
+            btnEditText.onclick = () => handleEditText(log.LogID);
+            buttonContainer.appendChild(btnEditText);
+
+            if (isDraftMode) {
+                const btnPublish = document.createElement('button');
+                btnPublish.id = 'btn-' + log.LogID;
+                btnPublish.textContent = '審核與發布';
+                btnPublish.style.backgroundColor = '#16a34a';
+                btnPublish.onclick = () => handlePublish(log.LogID);
+                buttonContainer.appendChild(btnPublish);
+            }
+            card.appendChild(buttonContainer);
+            return card;
+        }
+
+        function displayLogs(logs, isDraftMode) {
+            logToPage(`➡️ displayLogs: 開始渲染畫面...`);
+            const container = document.getElementById('logs-container');
+            const statusMessage = document.getElementById('status-message');
+
+            if (statusMessage) {
+                statusMessage.remove();
+            }
+            container.innerHTML = '';
+            logToPage(`...已移除載入訊息並清空舊內容`);
+
+            if (!Array.isArray(logs) || logs.length === 0) {
+                logToPage('⚠️ 偵測到沒有日誌資料，停止渲染。');
+                container.innerHTML = '<div class="card"><p class="muted" style="text-align:center;">沒有可顯示的日誌。</p></div>';
+                return;
+            }
+            
+            logToPage(`...偵測到 ${logs.length} 筆日誌，開始遍歷處理...`);
+            currentLogsData = logs;
+            logs.forEach((log, index) => {
+                const card = _buildLogCard(log, isDraftMode);
+                container.appendChild(card);
+                logToPage(`   [${index+1}/${logs.length}] 已渲染卡片 LogID: ${log.LogID}`);
+            });
+            logToPage('✅ 所有日誌渲染完畢。');
+        }
+
+        window.addEventListener('load', function(){
+            logToPage('頁面載入完成，開始讀取 URL 參數...');
+            const urlParams = new URLSearchParams(window.location.search);
+            const id = urlParams.get('id');
+            if (!id) {
+                displayError({ message:'未指定 id。' });
+                return;
+            }
+            const isDraftMode = (id === '0');
+            const fetchUrl = `${API_BASE_URL}?page=project&id=${id}`;
+            logToPage('準備呼叫 API: ' + fetchUrl);
+            
+            loadJsonp(fetchUrl)
+                .then(logs => {
+                    handleDataResponse(logs, isDraftMode);
+                })
+                .catch(displayError);
+        });
+
+        function handleDataResponse(logs, isDraftMode) {
+            logToPage('✅ 成功從後端取得資料。');
+            displayLogs(logs, isDraftMode);
+        }
+
+        function displayError(error){
+            const msg = (error && error.message) ? error.message : '發生未知錯誤。';
+            logToPage('PAGE ERROR: ' + msg);
+            const status = document.getElementById('status-message');
+            if(status){
+                status.innerHTML = `<div style="border:1px solid red;background:#ffebee;color:#c62828;padding:1rem;"><strong>載入失敗！</strong><br><br>${msg}</div>`;
+            }
+        }
+        
+        // --- 【⭐️ 核心修正：將所有功能函式加回來 ⭐️】---
+
+        // --- 編輯文字相關 ---
+        function handleEditText(logId) {
+            logToPage(`✏️ handleEditText: 啟用 LogID ${logId} 的編輯模式`);
+            const contentDiv = document.getElementById(`content-${logId}`);
+            const buttonContainer = contentDiv.closest('.card').querySelector('.button-group');
+            const originalButtons = Array.from(buttonContainer.childNodes);
+
+            contentDiv.dataset.originalContent = contentDiv.innerText;
+            contentDiv.contentEditable = true;
+            contentDiv.focus();
+            contentDiv.style.cssText += 'border: 1px solid #3b82f6; padding: 0.5rem; border-radius: 0.25rem; background: #f9fafb;';
+
+            const btnCancel = document.createElement('button');
+            btnCancel.textContent = '取消';
+            btnCancel.style.backgroundColor = '#6b7280';
+            btnCancel.onclick = () => handleCancelEdit(logId, originalButtons);
+
+            const btnSave = document.createElement('button');
+            btnSave.textContent = '儲存文字';
+            btnSave.style.backgroundColor = '#16a34a';
+            btnSave.onclick = () => handleSaveText(logId);
+
+            buttonContainer.innerHTML = '';
+            buttonContainer.appendChild(btnCancel);
+            buttonContainer.appendChild(btnSave);
+        }
+
+        function handleCancelEdit(logId, originalButtons) {
+            logToPage(`🚫 handleCancelEdit: 取消 LogID ${logId} 的編輯`);
+            const contentDiv = document.getElementById(`content-${logId}`);
+            const buttonContainer = contentDiv.closest('.card').querySelector('.button-group');
+
+            contentDiv.contentEditable = false;
+            contentDiv.style.border = 'none';
+            contentDiv.style.padding = '0';
+            contentDiv.style.background = 'transparent';
+            contentDiv.innerText = contentDiv.dataset.originalContent;
+
+            buttonContainer.innerHTML = '';
+            originalButtons.forEach(btn => buttonContainer.appendChild(btn));
+        }
+
+        function handleSaveText(logId) {
+            logToPage(`💾 handleSaveText: 準備儲存 LogID ${logId}...`);
+            const contentDiv = document.getElementById(`content-${logId}`);
+            const newContent = contentDiv.innerText.trim();
+            const params = new URLSearchParams({ page: 'updateLogText', id: logId, content: newContent });
+            
+            loadJsonp(`${API_BASE_URL}?${params.toString()}`)
+                .then(response => editTextCallback(response, logId))
+                .catch(err => alert('儲存請求失敗: ' + err.message));
+        }
+
+        function editTextCallback(response, logId) {
+            if (response && response.success) {
+                logToPage(`✅ 後端儲存成功，準備局部更新...`);
+                const params = new URLSearchParams({ page: 'getSingleLog', id: logId });
+                
+                loadJsonp(`${API_BASE_URL}?${params.toString()}`)
+                    .then(newLogData => {
+                        if (newLogData) {
+                            const index = currentLogsData.findIndex(log => log.LogID === logId);
+                            if (index !== -1) currentLogsData[index] = newLogData;
+                            
+                            const newCard = _buildLogCard(newLogData, newLogData.Status === '草稿');
+                            const oldCard = document.getElementById('log-' + logId);
+                            if (oldCard) {
+                                oldCard.replaceWith(newCard);
+                                logToPage(`   卡片 ${logId} 已成功局部更新。`);
+                            }
+                        }
+                    });
+            } else {
+                alert('儲存失敗：' + (response ? response.message : '未知錯誤'));
+            }
+        }
+
+        // --- 發布日誌相關 ---
+        function handlePublish(logId) {
+            const button = document.getElementById('btn-' + logId);
+            if (button) { button.disabled = true; button.textContent = '發布中...'; }
+            const params = new URLSearchParams({ page: 'publish', logId: logId, newStatus: '已發布' });
+            loadJsonp(`${API_BASE_URL}?${params.toString()}`)
+                .then(response => publishCallback(response, logId))
+                .catch(err => {
+                    alert('發布請求失敗！');
+                    if (button) { button.disabled = false; button.textContent = '審核與發布'; }
+                });
+        }
+
+        function publishCallback(response, logId) {
+            if (response && response.success) {
+                const card = document.getElementById('log-' + logId);
+                if (card) {
+                    card.style.transition = 'opacity .5s ease';
+                    card.style.opacity = '0';
+                    setTimeout(() => card.remove(), 500);
+                }
+            } else {
+                alert('發布失敗：' + (response ? response.message : '未知原因'));
+                const button = document.getElementById('btn-' + logId);
+                if (button) { button.disabled = false; button.textContent = '審核與發布'; }
+            }
+        }
+
+// --- [新增] 照片管理 Modal (縮圖穩定版) ---
+    // 版本號：v2.0
+    // 修改時間：2025-09-09 17:00 (Asia/Taipei)
+    function openPhotoModal(logId, photoLinksCsv) {
+      currentEditingLogId = logId; // ✅ 請確保這一行是有效的 (沒有 // 在前面)
+      const modal = document.getElementById('photo-modal');
+      const grid = document.getElementById('modal-photo-grid-container');
+      grid.innerHTML = '';
+      
+      const links = photoLinksCsv ? photoLinksCsv.split(',').filter(link => link.trim()) : [];
+      if (links.length > 0) {
+        links.forEach(link => {
+          const item = document.createElement('div');
+          item.className = 'modal-photo-item';
+          item.dataset.link = link;
+          const img = document.createElement('img');
+          
+          // 【⭐️ 核心修改 ⭐️】
+          // 優先從原始連結中提取 fileId，並組合出更穩定的 thumbnail 網址
+          const fileId = driveFileId(link);
+          if (fileId) {
+            img.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w300`; // 使用 300px 寬的縮圖
+          } else {
+            img.src = link; // 如果不是 Drive 連結，則保留原樣
+          }
+
+          img.loading = 'lazy';
+          const delBtn = document.createElement('button');
+          delBtn.className = 'delete-photo-btn';
+          delBtn.innerHTML = '&times;';
+          delBtn.title = '標記為刪除';
+          delBtn.onclick = () => {
+              item.style.opacity = '0.3';
+              item.classList.add('deleted');
+          };
+          item.appendChild(img);
+          item.appendChild(delBtn);
+          grid.appendChild(item);
+        });
+      } else {
+        grid.innerHTML = '<p class="muted">目前沒有照片可供管理。</p>';
+      }
+      modal.style.display = 'flex';
+    }
+    
+    function closePhotoModal() {
+        document.getElementById('photo-modal').style.display = 'none';
+        currentEditingLogId = null;
+    }
+    // 版本號：v3.0
+    // 修改時間：2025-09-10 11:55 (Asia/Taipei)
+    
+    // =======================================================
+    // 【⭐️ 請取代 save-photos-button 的整個 onclick 區塊 ⭐️】
+    // (約從第 382 行開始)
+    // =======================================================
+    document.getElementById('save-photos-button').onclick = function() {
+        const saveButton = this;
+        saveButton.textContent = '儲存中...';
+        saveButton.disabled = true;
+    
+        const grid = document.getElementById('modal-photo-grid-container');
+        
+        // 1. 收集要保留的「舊照片」連結
+        const existingItems = grid.querySelectorAll('.modal-photo-item:not(.new-photo)');
+        const remainingLinks = [];
+        existingItems.forEach(item => {
+            if (!item.classList.contains('deleted')) {
+                remainingLinks.push(item.dataset.link);
+            }
+        });
+        const existingLinksCsv = remainingLinks.join(',');
+    
+        // 2. 收集要上傳的「新照片」Base64 資料
+        const newItems = grid.querySelectorAll('.modal-photo-item.new-photo');
+        const newPhotosBase64Array = [];
+        newItems.forEach(item => {
+            // 不需包含 "data:image/jpeg;base64," 這段前綴
+            newPhotosBase64Array.push(item.dataset.base64);
+        });
+        
+        // 3. 改用 google.script.run 呼叫後端
+        google.script.run
+            .withSuccessHandler(handlePhotoSaveSuccess)
+            .withFailureHandler(err => {
+                alert('上傳失敗: ' + err.message);
+                saveButton.textContent = '儲存變更';
+                saveButton.disabled = false;
+            })
+            .updateLogPhotosWithUploads(currentEditingLogId, existingLinksCsv, newPhotosBase64Array);
+    };
+    
+    
+    // =======================================================
+    // 【⭐️ 請在檔案中「新增」這個用來處理成功回應的函式 ⭐️】
+    // (可以放在 onclick 區塊的下方)
+    // =======================================================
+    function handlePhotoSaveSuccess(response) {
+        if (response.success) {
+            closePhotoModal();
+            const card = document.getElementById('log-' + currentEditingLogId);
+            if (card) {
+                const oldGrid = card.querySelector('.photo-grid');
+                if (oldGrid) oldGrid.remove();
+                
+                if (response.finalLinks) {
+                    const newGrid = buildPhotoGrid(response.finalLinks);
+                    const actionsDiv = card.querySelector('.button-group');
+                    if (actionsDiv) {
+                        actionsDiv.parentNode.insertBefore(newGrid, actionsDiv);
+                    }
+                }
+            }
+        } else {
+            alert('儲存失敗: ' + (response.message || '未知錯誤'));
+        }
+        // 恢復按鈕（無論成功或失敗）
+        const saveButton = document.getElementById('save-photos-button');
+        saveButton.textContent = '儲存變更';
+        saveButton.disabled = false;
+    }            
+
+    function editPhotosCallback(response) {
+        alert(response.message);
+        if (response.success) window.location.reload();
+    }
+    // --- 發布日誌 (已升級為使用 loadJsonp) ---
+    function handlePublish(logId) {
+      const button = document.getElementById('btn-' + logId);
+      if (button) { button.disabled = true; button.textContent = '發布中...'; }
+      const params = new URLSearchParams({ page: 'publish', logId: logId, newStatus: '已發布' });
+      const requestUrl = `${API_BASE_URL}?${params.toString()}`;
+      logToPage(`發起發布請求: ${requestUrl}`);
+      
+      loadJsonp(requestUrl)
+      .then(publishCallback)
+      .catch(err => {
+        alert('發布請求失敗！請檢查網路連線或後端日誌。');
+        if (button) { button.disabled = false; button.textContent = '審核與發布'; }
+      });
+    }
+
+/**
+ * [新增] 發布動作的回呼函式 (類似 checkin.html 中的 handleGasResponse)
+ * 當後端 doGet 執行完畢後，會回傳並執行這個函式
+ */
+function publishCallback(response) {
+  logToPage('收到發布回覆: ' + JSON.stringify(response));
+  const logId = response.logId;
+  var button = document.getElementById('btn-' + logId);
+
+  if (response && response.success) {
+    var card = document.getElementById('log-' + logId);
+    if (card) {
+      card.style.transition = 'opacity .5s ease';
+      card.style.opacity = '0';
+      setTimeout(function(){ card.parentNode && card.parentNode.removeChild(card); }, 500);
+    }
+  } else {
+    alert('發布失敗：\n' + (response && response.message ? response.message : '未知原因'));
+    if (button) { button.disabled = false; button.textContent = '審核與發布'; }
+  }
+}
+
+    /* ====================== 【⭐️ 核心修改：入口函式 ⭐️】 ====================== */
+    window.addEventListener('load', function(){
+      document.getElementById('version-display').textContent = '版本: ' + (typeof FRONTEND_VERSION !== 'undefined' ? FRONTEND_VERSION : '未知');
+      logToPage('頁面載入完成，開始讀取 URL 參數');
+      const urlParams = new URLSearchParams(window.location.search);
+      const id = urlParams.get('id');
+      logToPage('URL id=' + (id || '(未帶入)'));
+      
+      if (!id) {
+        displayError({ message:'未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。' });
+        return;
+      }
+
+      const fetchUrl = `${API_BASE_URL}?page=project&id=${id}`;
+      logToPage('準備呼叫 API(JSONP): ' + fetchUrl);
+      
+      // 統一呼叫新的 loadJsonp 工具
+      loadJsonp(fetchUrl)
+        .then(loadDataCallback)
+        .catch(displayError);
+      // 版本號：v1.1
+      // 修改時間：2025-09-10 11:35 (Asia/Taipei)
+      
+        // --- 【⭐️ 新增：初始化新增照片按鈕的邏輯 ⭐️】---
+        const addPhotosBtn = document.getElementById('add-photos-button');
+        const photoFileInput = document.getElementById('photo-file-input');
+      
+        addPhotosBtn.onclick = () => {
+          photoFileInput.click(); // 點擊按鈕時，觸發隱藏的檔案選擇器
+        };
+      
+        // 版本號：v1.2
+        // 修改時間：2025-09-10 11:42 (Asia/Taipei)
+              photoFileInput.onchange = (event) => {
+                const files = event.target.files;
+                const grid = document.getElementById('modal-photo-grid-container');
+        
+                if (files.length > 0) {
+                  // 如果原本顯示「沒有照片」，先清空它
+                  const noPhotosMsg = grid.querySelector('p.muted');
+                  if (noPhotosMsg) noPhotosMsg.remove();
+        
+                  for (const file of files) {
+                    // 確保檔案是圖片格式
+                    if (!file.type.startsWith('image/')){
+                      continue;
+                    }
+        
+                    const reader = new FileReader();
+        
+                    // 當檔案讀取完成後執行
+                    reader.onload = (e) => {
+                      const base64String = e.target.result;
+        
+                      // 建立預覽卡片的所有 HTML 元素
+                      const item = document.createElement('div');
+                      item.className = 'modal-photo-item new-photo'; // ⭐️ 標記為新照片
+                      item.dataset.base64 = base64String; // ⭐️ 將 Base64 資料暫存在元素上
+        
+                      const img = document.createElement('img');
+                      img.src = base64String;
+        
+                      const delBtn = document.createElement('button');
+                      delBtn.className = 'delete-photo-btn';
+                      delBtn.innerHTML = '&times;';
+                      delBtn.title = '移除這張新照片';
+                      
+                      // 點擊X號，直接移除這個預覽卡片
+                      delBtn.onclick = () => {
+                          item.remove();
+                      };
+        
+                      item.appendChild(img);
+                      item.appendChild(delBtn);
+                      grid.appendChild(item);
+                    };
+        
+                    // 開始讀取檔案
+                    reader.readAsDataURL(file);
+                  }
+                }
+                // 清空選擇器的值，以便使用者可以重複選擇相同的檔案
+                event.target.value = '';
+              };
+    });
+
+// 版本號：v2.1 (修正遞迴錯誤)
+// 修改時間：2025/09/12
+
+    // 當 loadJsonp 成功後，會呼叫此函式來處理收到的資料
+    function loadDataCallback(logs) {
+        logToPage('✅ 成功從後端取得資料。');
+        
+        // 取得 isDraftMode 的狀態
+        const urlParams = new URLSearchParams(window.location.search);
+        const id = urlParams.get('id');
+        const isDraftMode = (id === '0');
+
+        // 將收到的資料交給 displayLogs 函式去渲染畫面
+        displayLogs(logs, isDraftMode);
+    }
+    
+    function displayError(error){
+      const msg = (error && error.message) ? error.message : '發生未知錯誤。';
+      logToPage('PAGE ERROR: ' + msg);
+      const status = document.getElementById('status-message');
+      if(status){
+        status.innerHTML =
+          '<div style="border:1px solid red;background:#ffebee;color:#c62828;padding:1rem;white-space:pre-wrap;">' +
+          '<strong>載入失敗！</strong>\n\n' +
+          '<strong>錯誤訊息：</strong>\n' + msg + '\n\n' +
+          '<strong>可能原因與建議：</strong>\n請檢查 Apps Script 後端日誌是否有錯誤紀錄。\n' +
+          '</div>';
+      }
+    }
+
+  </script>
+
+  <div id="lightbox" aria-hidden="true">
+    <div class="lb-wrap">
+      <img class="lb-img" alt="preview">
+      <button class="lb-close" aria-label="關閉">✕</button>
+    </div>
+  </div>
+// 版本號：v2.0 (支援手機滑動)
+// 修改時間：2025-09-10 11:31 (Asia/Taipei)
+<script>
+(function(){
+  const lb = document.getElementById('lightbox');
+  if(!lb){ console.warn('[Lightbox] #lightbox not found'); return; }
+  const img = lb.querySelector('.lb-img');
+  const btn = lb.querySelector('.lb-close');
+
+  let gallery = [];
+  let current = -1;
+  
+  // 【⭐️ 新增：滑動偵測所需變數 ⭐️】
+  let touchstartX = 0;
+  let touchendX = 0;
+
+  function openFromThumb(thumbEl){
+    const grid = thumbEl.closest('.photo-grid');
+    gallery = Array.from(grid.querySelectorAll('img.photo-thumb'))
+                   .map(el => el.dataset.full || el.src)
+                   .filter(Boolean);
+    current = Math.max(0, gallery.indexOf(thumbEl.dataset.full || thumbEl.src));
+    show(current);
+    lb.classList.add('open'); lb.setAttribute('aria-hidden','false');
+  }
+
+  function show(idx){
+    if(!gallery.length) return;
+    if(idx < 0) idx = gallery.length - 1;
+    if(idx >= gallery.length) idx = 0;
+    current = idx;
+    img.src = '';
+    img.src = gallery[current];
+  }
+
+  function close(){
+    lb.classList.remove('open');
+    lb.setAttribute('aria-hidden','true');
+    img.src = '';
+    gallery = []; current = -1;
+  }
+  
+  // 【⭐️ 新增：處理滑動手勢的函式 ⭐️】
+  function handleGesture() {
+    const threshold = 50; // 滑動超過 50px 才觸發
+    if (touchendX < touchstartX - threshold) {
+      show(current + 1); // 向左滑，看下一張
+    }
+    if (touchendX > touchstartX + threshold) {
+      show(current - 1); // 向右滑，看上一張
+    }
+  }
+
+  // --- 事件監聽區 ---
+  window.addEventListener('click', (e)=>{
+    const t = e.target;
+    if(t && t.matches('img.photo-thumb')){
+      e.preventDefault();
+      openFromThumb(t);
+    }
+  });
+
+  lb.addEventListener('click', (e)=>{ if(e.target === lb) close(); });
+  if (btn) {
+      btn.addEventListener('click', close);
+  }
+  
+  // 鍵盤左右鍵 (維持不變)
+  window.addEventListener('keydown', (e)=>{
+    if(!lb.classList.contains('open')) return;
+    if(e.key === 'Escape') close();
+    if(e.key === 'ArrowLeft') show(current - 1);
+    if(e.key === 'ArrowRight') show(current + 1);
+  });
+  
+  // 【⭐️ 新增：觸控事件監聽 ⭐️】
+  lb.addEventListener('touchstart', e => {
+    touchstartX = e.changedTouches[0].screenX;
+  }, { passive: true });
+
+  lb.addEventListener('touchend', e => {
+    touchendX = e.changedTouches[0].screenX;
+    handleGesture();
+  });
+
+  window.__openLightbox__ = function(srcListOrSingle){
+    gallery = Array.isArray(srcListOrSingle) ? srcListOrSingle : [String(srcListOrSingle)];
+    current = 0; show(0);
+    lb.classList.add('open'); lb.setAttribute('aria-hidden','false');
+  };
+})();
+
+    </script>
+</body>
+</html>
+
