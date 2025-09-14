@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>專案日誌管理主控台（v11.2）</title>
+  <title>專案日誌管理主控台（v11.3）</title>
   <script>
     // 前端版本：test-v11.1（等同 v11 功能；資料讀取路由保留 project_test）
     // 時區：Asia/Taipei，更新：2025-09-14
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'test-v11.2';
+    const FRONTEND_VERSION = 'test-v11.3';
   </script>
   <style>
     :root {
@@ -399,10 +399,13 @@
             const originalTask = currentScheduleData[row.dataset.taskIndex];
             return { ...originalTask, ...task };
         });
-
-        const payload = { projectId, scheduleData };
-
-        fetch(`${API_BASE_URL}?page=updateSchedule`, {
+      
+        const payload = {
+            action: 'updateSchedule', // [新增] 指定後端動作
+            projectId, 
+            scheduleData 
+        };
+        fetch(`${API_BASE_URL}?page=project_test`, { // [修改] 指向新路由
             method: 'POST',
             body: JSON.stringify(payload),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -678,12 +681,13 @@
       actionsContainer.innerHTML = '<p style="align-self: center; color: var(--primary); font-weight: 600;">自動排程計算中，請稍候...</p>';
 
       const payload = {
+        action: 'createFromTemplate', // [新增] 指定後端動作
         projectId: projectId,
         templateType: templateType,
-        startDate: startDate // 帶上開工日期
+        startDate: startDate
       };
 
-      fetch(`${API_BASE_URL}?page=createSchedule`, {
+      fetch(`${API_BASE_URL}?page=project_test`, { // [修改] 指向新路由
         method: 'POST',
         body: JSON.stringify(payload),
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
