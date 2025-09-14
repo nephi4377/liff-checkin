@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>專案日誌管理主控台（v11.4）</title>
+  <title>專案日誌管理主控台（v11.5）</title>
   <script>
     // 前端版本：test-v11.1（等同 v11 功能；資料讀取路由保留 project_test）
     // 時區：Asia/Taipei，更新：2025-09-14
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'test-v11.4';
+    const FRONTEND_VERSION = 'test-v11.5';
   </script>
   <style>
     :root {
@@ -51,8 +51,9 @@
     .progress-label{font-size:.9rem}
     .schedule-details{max-height:300px;overflow-y:auto;border:1px solid #e5e7eb;border-top:none;border-bottom-left-radius:var(--radius);border-bottom-right-radius:var(--radius)}
     .schedule-table{width:100%;border-collapse:collapse;font-size:14px}
-    .schedule-table th,.schedule-table td{padding:.75rem;text-align:left;border-bottom:1px solid #e5e7eb; vertical-align: middle;}
-    .schedule-table input[type="date"] { padding: .25rem; border-radius: .25rem; border: 1px solid #d1d5db; font-family: inherit; font-size: 14px; }
+    .schedule-table th,.schedule-table td{padding:.5rem .75rem; text-align:left; border-bottom:1px solid #e5e7eb; vertical-align: middle;}
+    .schedule-table input, .schedule-table select { width: 100%; padding: .25rem; border-radius: .25rem; border: 1px solid #d1d5db; font-family: inherit; font-size: 14px; background-color: #f9fafb; }
+    .schedule-table input:focus, .schedule-table select:focus { border-color: var(--primary); outline: none; background-color: #fff; }
     .schedule-table th{background:#f9fafb;font-weight:600;position:sticky;top:0;z-index:1}
     .schedule-table tr:last-child td{border-bottom:none}
     .status-badge{font-weight:700;padding:.25rem .5rem;border-radius:99px;font-size:12px;display:inline-block}
@@ -292,6 +293,7 @@
         '後期裝修階段': '#f59e0b', '室內精裝階段': '#16a34a', '驗收': '#8b5cf6', '預設': '#d1d5db'
       };
 
+      // ... (進度條與 summary 相關的程式碼維持不變)
       const startDate = new Date(overview['專案起始日']);
       const endDate   = new Date(overview['預計完工日']);
       const today     = new Date();
@@ -326,30 +328,57 @@
 
       summary.innerHTML = `<div class="progress-label"><strong>目前階段: ${currentPhase}</strong></div>`;
       summary.appendChild(timeline);
+      // ... (以上進度條程式碼不變)
 
       const tableContainer = document.createElement('div'); tableContainer.className='schedule-details';
       const table = document.createElement('table'); table.className='schedule-table';
-      const headers = ['工種', '任務項目', '任務說明', '負責人/工班', '預計開始日', '預計完成日', '狀態', '備註'];
+      // [修改] 將「負責人/工班」改為「工班」
+      const headers = ['工種', '任務項目', '任務說明', '工班', '預計開始日', '預計完成日', '狀態', '備註'];
       table.innerHTML = `<thead><tr><th>${headers.join('</th><th>')}</th></tr></thead>`;
       const tbody = document.createElement('tbody');
 
-      // [修改] 將日期改為 input，並為每一行加上 data-task-index
+      // [核心修改] 將靜態欄位改為可互動的輸入元件
       schedule.forEach((task, index) => {
         const row = tbody.insertRow();
-        row.dataset.taskIndex = index; // 標記原始索引
-
+        row.dataset.taskIndex = index;
+        
         headers.forEach(header => {
             const cell = row.insertCell();
-            const value = task[header];
-            if (header === '預計開始日' || header === '預計完成日') {
-                const dateInput = document.createElement('input');
-                dateInput.type = 'date';
-                dateInput.value = value ? new Date(value).toLocaleDateString('sv') : '';
-                dateInput.dataset.field = header; // 標記欄位名
-                dateInput.onchange = enableSaveButton; // 修改時觸發
-                cell.appendChild(dateInput);
-            } else {
-                cell.textContent = value || '-';
+            const value = task[header] || '';
+
+            // 根據欄位名稱，產生不同的輸入元件
+            switch(header) {
+                case '預計開始日':
+                case '預計完成日':
+                    const dateInput = document.createElement('input');
+                    dateInput.type = 'date';
+                    dateInput.value = value ? new Date(value).toLocaleDateString('sv') : '';
+                    dateInput.onchange = enableSaveButton;
+                    cell.appendChild(dateInput);
+                    break;
+                case '狀態':
+                    const selectInput = document.createElement('select');
+                    const options = ['未完成', '施工中', '已完成'];
+                    options.forEach(opt => {
+                        const optionEl = document.createElement('option');
+                        optionEl.value = opt;
+                        optionEl.text = opt;
+                        if (value === opt) optionEl.selected = true;
+                        selectInput.appendChild(optionEl);
+                    });
+                    selectInput.onchange = enableSaveButton;
+                    cell.appendChild(selectInput);
+                    break;
+                case '工班':
+                case '備註':
+                    const textInput = document.createElement('input');
+                    textInput.type = 'text';
+                    textInput.value = value;
+                    textInput.onchange = enableSaveButton;
+                    cell.appendChild(textInput);
+                    break;
+                default:
+                    cell.textContent = value || '-'; // 其他欄位維持靜態
             }
         });
       });
@@ -362,10 +391,9 @@
       details.appendChild(tableContainer);
       container.appendChild(details);
 
-      // [修改] 將儲存按鈕的事件監聽放在這裡
       document.getElementById('save-schedule-btn').onclick = handleSaveSchedule;
     }
-
+    
     // [新增] 啟用儲存按鈕的函式
     function enableSaveButton() {
         const btn = document.getElementById('save-schedule-btn');
@@ -388,32 +416,27 @@
             const task = {};
             row.querySelectorAll('td').forEach((cell, i) => {
                 const header = headers[i];
-                const input = cell.querySelector('input');
+                const input = cell.querySelector('input, select');
                 if (input) {
                     task[header] = input.value;
                 } else {
                     task[header] = cell.textContent === '-' ? '' : cell.textContent;
                 }
             });
-            // 從全域資料中補回原始範本中可能未顯示的欄位
             const originalTask = currentScheduleData[row.dataset.taskIndex];
             return { ...originalTask, ...task };
         });
-      
-        const payload = {
-            action: 'updateSchedule', // [新增] 指定後端動作
-            projectId, 
-            scheduleData 
-        };
-        fetch(`${API_BASE_URL}?page=project_test`, { // [修改] 指向新路由
-            method: 'POST',
-            body: JSON.stringify(payload),
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            mode: 'no-cors'
+
+        const payload = { action: 'updateSchedule', projectId, scheduleData };
+
+        fetch(`${API_BASE_URL}?page=project_test`, {
+            method: 'POST', body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, mode: 'no-cors'
         })
         .then(() => {
-            alert('排程已成功儲存！頁面將重新整理。');
-            setTimeout(() => window.location.reload(), 500);
+            logToPage('✅ 排程儲存成功，正在局部刷新...');
+            alert('排程已成功儲存！');
+            refreshScheduleData(); // [核心修改] 呼叫局部刷新函式，取代頁面重整
         })
         .catch(error => {
             console.error('儲存排程時發生錯誤:', error);
@@ -421,6 +444,34 @@
             btn.textContent = '儲存排程變更';
             btn.disabled = false;
         });
+    }
+        // [新增] 局部刷新函式
+    function refreshScheduleData() {
+        const id = new URLSearchParams(location.search).get('id');
+        const fetchUrl = API_BASE_URL + '?page=project_test&id=' + encodeURIComponent(id);
+        logToPage('➡️ 正在請求最新排程資料...');
+
+        const saveBtn = document.getElementById('save-schedule-btn');
+        if (saveBtn) {
+            saveBtn.textContent = '儲存排程變更';
+            saveBtn.disabled = false;
+            saveBtn.style.display = 'none';
+        }
+
+        loadJsonp(fetchUrl)
+            .then(data => {
+                if (data && !data.error) {
+                    currentScheduleData = data.schedule || [];
+                    displaySchedule(data.overview, currentScheduleData);
+                    logToPage('✅ 排程面板已刷新完畢。');
+                } else {
+                    throw new Error(data.error || '後端回傳資料格式錯誤');
+                }
+            })
+            .catch(err => {
+                logToPage(`❌ 局部刷新失敗: ${err.message}`);
+                alert('刷新資料失敗，建議手動重新整理頁面。');
+            });
     }
     function filterLogsByWorkType(workType){
       logToPage('篩選：工種 "' + workType + '"');
