@@ -51,7 +51,8 @@
     .progress-label{font-size:.9rem}
     .schedule-details{max-height:300px;overflow-y:auto;border:1px solid #e5e7eb;border-top:none;border-bottom-left-radius:var(--radius);border-bottom-right-radius:var(--radius)}
     .schedule-table{width:100%;border-collapse:collapse;font-size:14px}
-    .schedule-table th,.schedule-table td{padding:.75rem;text-align:left;border-bottom:1px solid #e5e7eb}
+    .schedule-table th,.schedule-table td{padding:.75rem;text-align:left;border-bottom:1px solid #e5e7eb; vertical-align: middle;}
+    .schedule-table input[type="date"] { padding: .25rem; border-radius: .25rem; border: 1px solid #d1d5db; font-family: inherit; font-size: 14px; }
     .schedule-table th{background:#f9fafb;font-weight:600;position:sticky;top:0;z-index:1}
     .schedule-table tr:last-child td{border-bottom:none}
     .status-badge{font-weight:700;padding:.25rem .5rem;border-radius:99px;font-size:12px;display:inline-block}
@@ -282,9 +283,10 @@
       if(!overview || !schedule || schedule.length===0 || !overview['專案起始日']){
         container.style.display='none'; container.innerHTML=''; return;
       }
-      container.style.display='block'; container.innerHTML='';
+      container.style.display='block';
+      // [修改] 加上儲存按鈕的 HTML 結構，預設隱藏
+      container.innerHTML='<div class="button-group" style="margin-bottom: 1rem;"><button id="save-schedule-btn" style="display:none; background-color: #dc2626;">儲存排程變更</button></div>';
 
-      // --- 視覺優化 ---
       const PHASE_COLORS = {
         '前置作業': '#3b82f6', '泥作工程': '#6b7280', '木作工程': '#964B00',
         '後期裝修階段': '#f59e0b', '室內精裝階段': '#16a34a', '驗收': '#8b5cf6', '預設': '#d1d5db'
@@ -294,8 +296,6 @@
       const endDate   = new Date(overview['預計完工日']);
       const today     = new Date();
       const totalDuration = Math.max(1, endDate - startDate);
-
-      // --- 邏輯修改：目前任務改為顯示「階段」 ---
       const firstUnfinishedTask = schedule.find(t => t['狀態'] !== '已完成');
       const currentPhase = firstUnfinishedTask ? firstUnfinishedTask['階段'] : '專案已完工';
 
@@ -303,22 +303,21 @@
       const timeline = document.createElement('div');
       timeline.className = 'progress-timeline';
 
-      // --- 邏輯修改：產生多色進度條 ---
       let accumulatedDuration = 0;
-      const phases = [...new Set(schedule.map(t => t['階段']))]; // 取得所有不重複的階段
+      const phases = [...new Set(schedule.map(t => t['階段']))];
       phases.forEach(phase => {
         const tasksInPhase = schedule.filter(t => t['階段'] === phase);
         const phaseStartDate = new Date(Math.min(...tasksInPhase.map(t => new Date(t['預計開始日']))));
         const phaseEndDate = new Date(Math.max(...tasksInPhase.map(t => new Date(t['預計完成日']))));
+        if (isNaN(phaseStartDate) || isNaN(phaseEndDate)) return;
         const phaseDuration = Math.max(0, phaseEndDate - phaseStartDate);
-        const phaseWidth = (phaseDuration / totalDuration) * 100;
-
+        
         const segment = document.createElement('div');
         segment.className = 'progress-segment';
-        segment.style.width = `${phaseWidth}%`;
+        segment.style.width = `${(phaseDuration / totalDuration) * 100}%`;
         segment.style.left = `${( (phaseStartDate - startDate) / totalDuration) * 100}%`;
         segment.style.backgroundColor = PHASE_COLORS[phase] || PHASE_COLORS['預設'];
-        segment.title = `${phase}: ${Math.round(phaseDuration / (1000*60*60*24))}天`;
+        segment.title = `${phase}: ${Math.round(phaseDuration / (1000*60*60*24)) + 1}天`;
         timeline.appendChild(segment);
       });
       
@@ -330,20 +329,29 @@
 
       const tableContainer = document.createElement('div'); tableContainer.className='schedule-details';
       const table = document.createElement('table'); table.className='schedule-table';
-      // --- 邏輯修改：確保顯示所有必要欄位 ---
-      table.innerHTML = '<thead><tr><th>工種</th><th>任務項目</th><th>任務說明</th><th>負責人/工班</th><th>預計開始日</th><th>預計完成日</th><th>狀態</th><th>備註</th></tr></thead>';
+      const headers = ['工種', '任務項目', '任務說明', '負責人/工班', '預計開始日', '預計完成日', '狀態', '備註'];
+      table.innerHTML = `<thead><tr><th>${headers.join('</th><th>')}</th></tr></thead>`;
       const tbody = document.createElement('tbody');
 
-      schedule.forEach(task => {
+      // [修改] 將日期改為 input，並為每一行加上 data-task-index
+      schedule.forEach((task, index) => {
         const row = tbody.insertRow();
-        const wt  = row.insertCell(); wt.textContent = task['工種']; wt.className='clickable-work-type'; wt.onclick = () => filterLogsByWorkType(task['工種']);
-        row.insertCell().textContent = task['任務項目'] || '-';
-        row.insertCell().textContent = task['任務說明'] || '-';
-        row.insertCell().textContent = task['負責人/工班'] || '-';
-        row.insertCell().textContent = task['預計開始日'] ? new Date(task['預計開始日']).toLocaleDateString('sv') : '-';
-        row.insertCell().textContent = task['預計完成日'] ? new Date(task['預計完成日']).toLocaleDateString('sv') : '-';
-        const statusCell = row.insertCell(); const s = document.createElement('span'); s.className='status-badge'; s.textContent = task['狀態'] || '未設定'; statusCell.appendChild(s);
-        row.insertCell().textContent = task['備註'] || '-';
+        row.dataset.taskIndex = index; // 標記原始索引
+
+        headers.forEach(header => {
+            const cell = row.insertCell();
+            const value = task[header];
+            if (header === '預計開始日' || header === '預計完成日') {
+                const dateInput = document.createElement('input');
+                dateInput.type = 'date';
+                dateInput.value = value ? new Date(value).toLocaleDateString('sv') : '';
+                dateInput.dataset.field = header; // 標記欄位名
+                dateInput.onchange = enableSaveButton; // 修改時觸發
+                cell.appendChild(dateInput);
+            } else {
+                cell.textContent = value || '-';
+            }
+        });
       });
 
       table.appendChild(tbody);
@@ -353,8 +361,64 @@
       details.appendChild(summary);
       details.appendChild(tableContainer);
       container.appendChild(details);
+
+      // [修改] 將儲存按鈕的事件監聽放在這裡
+      document.getElementById('save-schedule-btn').onclick = handleSaveSchedule;
     }
 
+    // [新增] 啟用儲存按鈕的函式
+    function enableSaveButton() {
+        const btn = document.getElementById('save-schedule-btn');
+        if (btn) {
+            btn.style.display = 'block';
+        }
+    }
+
+    // [新增] 處理儲存排程的函式
+    function handleSaveSchedule() {
+        const btn = document.getElementById('save-schedule-btn');
+        btn.textContent = '儲存中...';
+        btn.disabled = true;
+
+        const projectId = new URLSearchParams(window.location.search).get('id');
+        const tableRows = document.querySelectorAll('.schedule-table tbody tr');
+        const headers = Array.from(document.querySelectorAll('.schedule-table th')).map(th => th.textContent);
+        
+        const scheduleData = Array.from(tableRows).map(row => {
+            const task = {};
+            row.querySelectorAll('td').forEach((cell, i) => {
+                const header = headers[i];
+                const input = cell.querySelector('input');
+                if (input) {
+                    task[header] = input.value;
+                } else {
+                    task[header] = cell.textContent === '-' ? '' : cell.textContent;
+                }
+            });
+            // 從全域資料中補回原始範本中可能未顯示的欄位
+            const originalTask = currentScheduleData[row.dataset.taskIndex];
+            return { ...originalTask, ...task };
+        });
+
+        const payload = { projectId, scheduleData };
+
+        fetch(`${API_BASE_URL}?page=updateSchedule`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            mode: 'no-cors'
+        })
+        .then(() => {
+            alert('排程已成功儲存！頁面將重新整理。');
+            setTimeout(() => window.location.reload(), 500);
+        })
+        .catch(error => {
+            console.error('儲存排程時發生錯誤:', error);
+            alert('儲存失敗，請檢查網路連線或後端日誌。');
+            btn.textContent = '儲存排程變更';
+            btn.disabled = false;
+        });
+    }
     function filterLogsByWorkType(workType){
       logToPage('篩選：工種 "' + workType + '"');
       document.getElementById('filter-reset-button')?.remove();
