@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>專案日誌管理主控台（v11.8）</title>
+  <title>專案日誌管理主控台（v11.9）</title>
   <script>
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'test-v11.8';
+    const FRONTEND_VERSION = 'test-v11.9';
   </script>
   <style>
     :root {
@@ -76,9 +76,6 @@
       .task-card .task-dates { grid-column: 1 / -1; } /* 日期佔滿整行 */
       .task-card .task-remarks { grid-column: 1 / -1; } /* 備註佔滿整行 */
     }
-    /* [新增] 用於隱藏非焦點任務的樣式 */
-    .task-hidden { display: none; }
-    .show-all-btn { background-color: var(--muted-2); color: var(--fg); margin-top: 1rem; width: 100%; }
     .schedule-table th{background:#f9fafb;font-weight:600;position:sticky;top:0;z-index:1}
     .schedule-table tr:last-child td{border-bottom:none}
     .status-badge{font-weight:700;padding:.25rem .5rem;border-radius:99px;font-size:12px;display:inline-block}
@@ -414,10 +411,6 @@
             card.id = `task-card-${index}`;
             card.dataset.taskIndex = index;
 
-            if (Math.abs(index - currentTaskIndex) > 1 && schedule.length > 3) {
-                card.classList.add('task-hidden');
-            }
-            
             // [核心修復] 使用正確的欄位名稱 '負責人/工班'
             card.innerHTML = `
                 <div><label>工種</label><div>${task['工種']}</div></div>
@@ -455,17 +448,6 @@
             listContainer.appendChild(card);
         });
         
-        if (schedule.length > 3) {
-            const showAllBtn = document.createElement('button');
-            showAllBtn.textContent = '顯示全部任務';
-            showAllBtn.className = 'show-all-btn';
-            showAllBtn.onclick = () => {
-                listContainer.querySelectorAll('.task-hidden').forEach(el => el.classList.remove('task-hidden'));
-                showAllBtn.remove();
-            };
-            listContainer.appendChild(showAllBtn);
-        }
-
         details.appendChild(summary);
         details.appendChild(listWrapper);
         container.appendChild(buttonGroup);
