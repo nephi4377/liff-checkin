@@ -330,17 +330,20 @@
 
       const tableContainer = document.createElement('div'); tableContainer.className='schedule-details';
       const table = document.createElement('table'); table.className='schedule-table';
-      // --- 邏輯修改：表格中移除「階段」欄位 ---
-      table.innerHTML = '<thead><tr><th>工種</th><th>任務項目</th><th>預計開始日</th><th>預計完成日</th><th>狀態</th></tr></thead>';
+      // --- 邏輯修改：確保顯示所有必要欄位 ---
+      table.innerHTML = '<thead><tr><th>工種</th><th>任務項目</th><th>任務說明</th><th>負責人/工班</th><th>預計開始日</th><th>預計完成日</th><th>狀態</th><th>備註</th></tr></thead>';
       const tbody = document.createElement('tbody');
 
       schedule.forEach(task => {
         const row = tbody.insertRow();
         const wt  = row.insertCell(); wt.textContent = task['工種']; wt.className='clickable-work-type'; wt.onclick = () => filterLogsByWorkType(task['工種']);
         row.insertCell().textContent = task['任務項目'] || '-';
-        row.insertCell().textContent = task['預計開始日'] ? new Date(task['預計開始日']).toLocaleDateString() : '-';
-        row.insertCell().textContent = task['預計完成日'] ? new Date(task['預計完成日']).toLocaleDateString() : '-';
+        row.insertCell().textContent = task['任務說明'] || '-';
+        row.insertCell().textContent = task['負責人/工班'] || '-';
+        row.insertCell().textContent = task['預計開始日'] ? new Date(task['預計開始日']).toLocaleDateString('sv') : '-';
+        row.insertCell().textContent = task['預計完成日'] ? new Date(task['預計完成日']).toLocaleDateString('sv') : '-';
         const statusCell = row.insertCell(); const s = document.createElement('span'); s.className='status-badge'; s.textContent = task['狀態'] || '未設定'; statusCell.appendChild(s);
+        row.insertCell().textContent = task['備註'] || '-';
       });
 
       table.appendChild(tbody);
@@ -565,6 +568,35 @@
       }
     }
 
+    // [新函式] 顯示日期選擇器
+    function showStartDatePicker(templateType) {
+      const actionsContainer = document.getElementById('actions-container');
+      const originalButtons = actionsContainer.innerHTML; // 保存原始按鈕
+      
+      actionsContainer.innerHTML = `
+        <label for="start-date-picker" style="align-self: center; margin-right: 5px; font-weight: 600;">請選擇開工日:</label>
+        <input type="date" id="start-date-picker" value="${new Date().toISOString().split('T')[0]}" style="padding: 0.4rem; border-radius: 0.25rem; border: 1px solid #ccc;"/>
+        <button id="confirm-import-btn" style="background-color: #2563eb;">確認送出</button>
+        <button id="cancel-import-btn" style="background-color: #6b7280;">取消</button>
+      `;
+
+      document.getElementById('confirm-import-btn').onclick = () => {
+        const startDate = document.getElementById('start-date-picker').value;
+        if (!startDate) {
+          alert('請務必選擇一個開工日期！');
+          return;
+        }
+        handleImportTemplate(templateType, startDate);
+      };
+
+      document.getElementById('cancel-import-btn').onclick = () => {
+        actionsContainer.innerHTML = originalButtons;
+        // 需要重新綁定事件
+        document.getElementById('btn-import-new').onclick = () => showStartDatePicker('新屋案');
+        document.getElementById('btn-import-old').onclick = () => showStartDatePicker('老屋案');
+      };
+    }
+
     /*
     * 版本: v1.0
     * 修改時間: 2025-09-14 18:33 (Asia/Taipei)
@@ -574,28 +606,24 @@
 
     // [新功能] 處理 "套用範本" 按鈕點擊事件
     // [新增] 處理 "套用範本" 按鈕點擊事件的完整邏輯
-    function handleImportTemplate(templateType) {
+    // [修改後] 的 handleImportTemplate 函式
+    function handleImportTemplate(templateType, startDate) {
       const projectId = new URLSearchParams(window.location.search).get('id');
-      if (!projectId || projectId === '0') {
-        alert('錯誤：無法對「草稿區」套用範本。');
-        return;
-      }
+      const actionsContainer = document.getElementById('actions-container');
       
-      const confirmMessage = `確定要為案號「${projectId}」套用「${templateType}」的進度範本嗎？\n\n此操作無法復原。`;
-      if (!confirm(confirmMessage)) return;
+      actionsContainer.innerHTML = '<p style="align-self: center; color: var(--primary); font-weight: 600;">自動排程計算中，請稍候...</p>';
 
-      const btnNew = document.getElementById('btn-import-new');
-      const btnOld = document.getElementById('btn-import-old');
-      btnNew.textContent = '處理中...'; btnNew.disabled = true;
-      btnOld.textContent = '處理中...'; btnOld.disabled = true;
-
-      const payload = { projectId: projectId, templateType: templateType };
+      const payload = {
+        projectId: projectId,
+        templateType: templateType,
+        startDate: startDate // 帶上開工日期
+      };
 
       fetch(`${API_BASE_URL}?page=createSchedule`, {
         method: 'POST',
         body: JSON.stringify(payload),
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 使用 text/plain 避免 CORS preflight
-        mode: 'no-cors' // 為了簡化，直接用 no-cors，並依賴後端一定會成功
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        mode: 'no-cors'
       })
       .then(() => {
         alert(`已成功送出「${templateType}」範本套用請求，頁面即將重新整理以載入最新資料。`);
@@ -607,6 +635,14 @@
         setTimeout(() => window.location.reload(), 5000);
       });
     }
+
+    // [修改後] 的 window load 事件
+    window.addEventListener('load', () => {
+      // ... (原有的 window.load 內容) ...
+      // 改為呼叫顯示日期選擇器的函式
+      document.getElementById('btn-import-new').onclick = () => showStartDatePicker('新屋案');
+      document.getElementById('btn-import-old').onclick = () => showStartDatePicker('老屋案');
+    });
 
    // 將事件綁定到按鈕上
     window.addEventListener('load', () => {
