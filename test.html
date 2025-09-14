@@ -647,15 +647,20 @@
       currentLogsData = data.dailyLogs || [];
       currentScheduleData = data.schedule || [];
 
-      // [新增] 如果此案號還沒有任何進度資料，就顯示「套用範本」的按鈕
-      if (currentScheduleData.length === 0) {
+      // [核心修正] 如果此案號沒有進度資料，則顯示按鈕「並立即綁定點擊功能」
+      if (currentScheduleData.length === 0 && (new URLSearchParams(location.search).get('id') !== '0') ) {
         const actionsContainer = document.getElementById('actions-container');
-        if(actionsContainer) actionsContainer.style.display = 'flex';
+        if(actionsContainer) {
+            actionsContainer.style.display = 'flex';
+            // 將事件綁定移至此處，確保按鈕已存在於 DOM 中
+            document.getElementById('btn-import-new').onclick = () => showStartDatePicker('新屋案');
+            document.getElementById('btn-import-old').onclick = () => showStartDatePicker('老屋案');
+        }
       }
 
       displaySchedule(data.overview, currentScheduleData);
       const isDraft = (new URLSearchParams(window.location.search).get('id') === '0');
-      displayLogs(currentLogsData, isDraft);
+      displayLogs(currentLogsData, isDraft); // 我將之前註解掉的這行恢復，讓日誌正常顯示
 
       const titleEl = document.getElementById('project-title');
       if(data.overview && (data.overview.siteName || data.overview['案場名稱'])){
@@ -732,19 +737,18 @@
       });
     }
 
-    // [修改後] 的 window load 事件
+    // [核心修正] 移除此處錯誤的事件綁定，因為功能已移至 handleDataResponse
     window.addEventListener('load', () => {
-      // ... (原有的 window.load 內容) ...
-      // 改為呼叫顯示日期選擇器的函式
-      document.getElementById('btn-import-new').onclick = () => showStartDatePicker('新屋案');
-      document.getElementById('btn-import-old').onclick = () => showStartDatePicker('老屋案');
-    });
+      document.getElementById('version-display').textContent = '版本：' + (typeof FRONTEND_VERSION!=='undefined'?FRONTEND_VERSION:'未知');
+      logToPage('頁面載入完成，開始讀取 URL 參數...');
+      const url = new URLSearchParams(location.search);
+      const id = url.get('id');
+      logToPage('URL id=' + (id || '(未帶入)'));
+      if(!id){ displayError({message:'未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。'}); return; }
 
-   // 將事件綁定到按鈕上
-    window.addEventListener('load', () => {
-      // ... 原有的 window.load 內容 ...
-      document.getElementById('btn-import-new').onclick = () => handleImportTemplate('新屋案');
-      document.getElementById('btn-import-old').onclick = () => handleImportTemplate('老屋案');
+      const fetchUrl = API_BASE_URL + '?page=project_test&id=' + encodeURIComponent(id);
+      logToPage('呼叫 API：' + fetchUrl);
+      loadJsonp(fetchUrl).then(handleDataResponse).catch(displayError);
     });
   </script>
 </body>
