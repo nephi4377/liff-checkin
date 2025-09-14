@@ -331,109 +331,153 @@
 * - [移除] 根據指示，移除了「工種」的點擊篩選功能。
 * - [修復] 徹底修正「工班」欄位無法正確讀取初始值的 Bug。
 */
-function displaySchedule(overview, schedule) {
-    const container = document.getElementById('schedule-container');
-    if (!container) return;
-    container.innerHTML = ''; 
-    if (!overview || !schedule || schedule.length === 0 || !overview['專案起始日']) {
-        container.style.display = 'none';
-        return;
-    }
-    container.style.display = 'block';
+        /*
+    * 版本: v11.9 (穩定修復版)
+    * 修改時間: 2025-09-15 01:29 (Asia/Taipei)
+    * 說明:
+    * - [修復] 恢復並修正了多色進度條的完整渲染邏輯。
+    * - [修復] 徹底修正「工班」欄位無法讀取原始值的問題，改用正確的 '負責人/工班' 欄位名。
+    * - [新增] 恢復並實現了「預設僅顯示當前任務前後三項」的聚焦佈局。
+    * - [新增] 恢復了「顯示全部任務」按鈕。
+    */
+        /* ===== 核心渲染與互動函式 ===== */
+    function displaySchedule(overview, schedule) {
+        const container = document.getElementById('schedule-container');
+        if (!container) return;
+        container.innerHTML = ''; 
+        if (!overview || !schedule || schedule.length === 0 || !overview['專案起始日']) {
+            container.style.display = 'none';
+            return;
+        }
+        container.style.display = 'block';
 
-    // 1. 建立主要結構元件
-    const buttonGroup = document.createElement('div');
-    buttonGroup.className = 'button-group';
-    buttonGroup.style.marginBottom = '1rem';
-    buttonGroup.innerHTML = '<button id="save-schedule-btn" style="display:none; background-color: #dc2626;">儲存排程變更</button>';
+        // 1. 建立主要結構元件
+        const buttonGroup = document.createElement('div');
+        buttonGroup.className = 'button-group';
+        buttonGroup.style.marginBottom = '1rem';
+        buttonGroup.innerHTML = '<button id="save-schedule-btn" style="display:none; background-color: #dc2626;">儲存排程變更</button>';
 
-    const details = document.createElement('details');
-    details.className = 'schedule-accordion';
-    details.open = true;
+        const details = document.createElement('details');
+        details.className = 'schedule-accordion';
+        details.open = true;
 
-    const summary = document.createElement('summary');
-    // ... (進度條的視覺邏輯不變，您可以保留原版本，此處為確保完整性再次提供)
-    const firstUnfinishedTask = schedule.find(t => t['狀態'] !== '已完成');
-    const currentPhase = firstUnfinishedTask ? firstUnfinishedTask['階段'] : '專案已完工';
-    summary.innerHTML = `<div class="progress-label"><strong>目前階段: ${currentPhase}</strong></div>`;
-    const timeline = document.createElement('div');
-    timeline.className = 'progress-timeline';
-    // ... (此處應有產生多色進度條的完整邏輯) ...
-    summary.appendChild(timeline);
-    
-    // 2. 建立滾動容器
-    const listWrapper = document.createElement('div');
-    listWrapper.className = 'schedule-list-wrapper';
-    
-    const listContainer = document.createElement('div');
-    listContainer.id = 'schedule-list-container';
-    listContainer.className = 'schedule-list';
-    listWrapper.appendChild(listContainer);
-
-    let currentTaskIndex = schedule.findIndex(t => t['狀態'] !== '已完成');
-    if (currentTaskIndex === -1) currentTaskIndex = schedule.length - 1;
-
-    // 3. 遍歷資料，產生卡片
-    schedule.forEach((task, index) => {
-        const card = document.createElement('div');
-        card.className = 'task-card';
-        card.id = `task-card-${index}`;
-        card.dataset.taskIndex = index;
-
-        // 依序建立卡片的各個欄位
-        card.innerHTML = `
-            <div><label>工種</label><div>${task['工種']}</div></div>
-            <div class="task-main"><label>任務項目</label><div class="task-title">${task['任務項目']}</div><div class="task-description">${task['任務說明'] || ''}</div></div>
-            <div><label>工班</label><input type="text" data-field="工班" value="${task['工班'] || ''}"></div>
-            <div class="task-dates">
-                <label>預計開始日 / 完成日</label>
-                <input type="date" data-field="預計開始日" value="${task['預計開始日'] ? new Date(task['預計開始日']).toLocaleDateString('sv') : ''}">
-                <input type="date" data-field="預計完成日" value="${task['預計完成日'] ? new Date(task['預計完成日']).toLocaleDateString('sv') : ''}">
-            </div>
-            <div>
-                <label>狀態</label>
-                <div class="status-cell" id="status-cell-${index}">
-                    <select data-field="狀態">
-                        <option value="未完成">未完成</option>
-                        <option value="施工中">施工中</option>
-                        <option value="已完成">已完成</option>
-                    </select>
-                </div>
-            </div>
-            <div class="task-remarks"><label>備註</label><textarea data-field="備註">${task['備註'] || ''}</textarea></div>
-        `;
+        const summary = document.createElement('summary');
+        const firstUnfinishedTask = schedule.find(t => t['狀態'] !== '已完成');
+        const currentPhase = firstUnfinishedTask ? firstUnfinishedTask['階段'] : '專案已完工';
+        summary.innerHTML = `<div class="progress-label"><strong>目前階段: ${currentPhase}</strong></div>`;
         
-        // 設定狀態下拉選單的預設值與顏色
-        const statusSelect = card.querySelector('select[data-field="狀態"]');
-        statusSelect.value = task['狀態'] || '未完成';
-        const statusCell = card.querySelector('.status-cell');
-        const setStatusColor = () => statusCell.className = `status-cell status-${statusSelect.value}`;
-        setStatusColor();
+        // [核心修復] 恢復並提供完整的多色進度條渲染邏輯
+        const timeline = document.createElement('div');
+        timeline.className = 'progress-timeline';
+        const PHASE_COLORS = {
+            '前置作業': '#3b82f6', '泥作工程': '#6b7280', '木作工程': '#964B00',
+            '後期裝修階段': '#f59e0b', '室內精裝階段': '#16a34a', '驗收': '#8b5cf6', '預設': '#d1d5db'
+        };
+        const startDate = new Date(overview['專案起始日']);
+        const endDate   = new Date(overview['預計完工日']);
+        const totalDuration = Math.max(1, endDate - startDate);
+        const phases = [...new Set(schedule.map(t => t['階段']))];
+        phases.forEach(phase => {
+            const tasksInPhase = schedule.filter(t => t['階段'] === phase && t['預計開始日'] && t['預計完成日']);
+            if (tasksInPhase.length === 0) return;
+            const phaseStartDate = new Date(Math.min(...tasksInPhase.map(t => new Date(t['預計開始日']))));
+            const phaseEndDate = new Date(Math.max(...tasksInPhase.map(t => new Date(t['預計完成日']))));
+            if (isNaN(phaseStartDate) || isNaN(phaseEndDate)) return;
+            const phaseDuration = Math.max(0, phaseEndDate - phaseStartDate);
+            
+            const segment = document.createElement('div');
+            segment.className = 'progress-segment';
+            segment.style.width = `${(phaseDuration / totalDuration) * 100}%`;
+            segment.style.left = `${( (phaseStartDate - startDate) / totalDuration) * 100}%`;
+            segment.style.backgroundColor = PHASE_COLORS[phase] || PHASE_COLORS['預設'];
+            segment.title = `${phase}: ${Math.round(phaseDuration / (1000*60*60*24)) + 1}天`;
+            timeline.appendChild(segment);
+        });
+        const todayMarkerPosition = Math.max(0, Math.min(100, ((new Date() - startDate) / totalDuration) * 100));
+        timeline.innerHTML += `<div class="today-marker" style="left:${todayMarkerPosition}%;"></div>`;
+        summary.appendChild(timeline);
 
-        // 為所有可編輯欄位綁定事件
-        card.querySelectorAll('input, select, textarea').forEach(el => {
-            el.onchange = enableSaveButton; // onchange 即可
-            if(el.tagName === 'SELECT') el.onchange = () => { enableSaveButton(); setStatusColor(); };
+        const listWrapper = document.createElement('div');
+        listWrapper.className = 'schedule-list-wrapper';
+        
+        const listContainer = document.createElement('div');
+        listContainer.id = 'schedule-list-container';
+        listContainer.className = 'schedule-list';
+        listWrapper.appendChild(listContainer);
+
+        let currentTaskIndex = schedule.findIndex(t => t['狀態'] !== '已完成');
+        if (currentTaskIndex === -1) currentTaskIndex = schedule.length - 1;
+
+        schedule.forEach((task, index) => {
+            const card = document.createElement('div');
+            card.className = 'task-card';
+            card.id = `task-card-${index}`;
+            card.dataset.taskIndex = index;
+
+            if (Math.abs(index - currentTaskIndex) > 1 && schedule.length > 3) {
+                card.classList.add('task-hidden');
+            }
+            
+            // [核心修復] 使用正確的欄位名稱 '負責人/工班'
+            card.innerHTML = `
+                <div><label>工種</label><div>${task['工種']}</div></div>
+                <div class="task-main"><label>任務項目</label><div class="task-title">${task['任務項目']}</div><div class="task-description">${task['任務說明'] || ''}</div></div>
+                <div><label>工班</label><input type="text" data-field="負責人/工班" value="${task['負責人/工班'] || ''}"></div>
+                <div class="task-dates">
+                    <label>預計開始日 / 完成日</label>
+                    <input type="date" data-field="預計開始日" value="${task['預計開始日'] ? new Date(task['預計開始日']).toLocaleDateString('sv') : ''}">
+                    <input type="date" data-field="預計完成日" value="${task['預計完成日'] ? new Date(task['預計完成日']).toLocaleDateString('sv') : ''}">
+                </div>
+                <div>
+                    <label>狀態</label>
+                    <div class="status-cell" id="status-cell-${index}">
+                        <select data-field="狀態">
+                            <option value="未完成">未完成</option>
+                            <option value="施工中">施工中</option>
+                            <option value="已完成">已完成</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="task-remarks"><label>備註</label><textarea data-field="備註">${task['備註'] || ''}</textarea></div>
+            `;
+            
+            const statusSelect = card.querySelector('select[data-field="狀態"]');
+            statusSelect.value = task['狀態'] || '未完成';
+            const statusCell = card.querySelector('.status-cell');
+            const setStatusColor = () => statusCell.className = `status-cell status-${statusSelect.value}`;
+            setStatusColor();
+
+            card.querySelectorAll('input, select, textarea').forEach(el => {
+                el.onchange = enableSaveButton;
+                if(el.tagName === 'SELECT') el.onchange = () => { enableSaveButton(); setStatusColor(); };
+            });
+            
+            listContainer.appendChild(card);
         });
         
-        listContainer.appendChild(card);
-    });
+        if (schedule.length > 3) {
+            const showAllBtn = document.createElement('button');
+            showAllBtn.textContent = '顯示全部任務';
+            showAllBtn.className = 'show-all-btn';
+            showAllBtn.onclick = () => {
+                listContainer.querySelectorAll('.task-hidden').forEach(el => el.classList.remove('task-hidden'));
+                showAllBtn.remove();
+            };
+            listContainer.appendChild(showAllBtn);
+        }
 
-    // 4. 將所有元件依序加入頁面
-    details.appendChild(summary);
-    details.appendChild(listWrapper);
-    container.appendChild(buttonGroup);
-    container.appendChild(details);
+        details.appendChild(summary);
+        details.appendChild(listWrapper);
+        container.appendChild(buttonGroup);
+        container.appendChild(details);
 
-    // 5. 綁定儲存按鈕並執行滾動
-    document.getElementById('save-schedule-btn').onclick = handleSaveSchedule;
-    
-    const currentCard = document.getElementById(`task-card-${currentTaskIndex}`);
-    if (currentCard) {
-        // 使用 setTimeout 確保瀏覽器有時間渲染完畢再滾動
-        setTimeout(() => currentCard.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
+        document.getElementById('save-schedule-btn').onclick = handleSaveSchedule;
+        
+        const currentCard = document.getElementById(`task-card-${currentTaskIndex}`);
+        if (currentCard) {
+            setTimeout(() => currentCard.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
+        }
     }
-}
         // [新增] 輔助函式，用於建立卡片中的每一個欄位，解決「工班」bug
     function createTaskCardField(header, task) {
         const div = document.createElement('div');
