@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>專案日誌管理主控台（v11.17）</title>
+  <title>專案日誌管理主控台（v11.18）</title>
   <script>
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'test-v11.17';
+    const FRONTEND_VERSION = 'test-v11.18';
   </script>
   <style>
     :root {
@@ -194,7 +194,7 @@
           '<div style="border:1px solid red;background:#ffebee;color:#c62828;padding:1rem;white-space:pre-wrap;">' +
           '<strong>載入失敗！</strong>\n\n' +
           '<strong>錯誤訊息：</strong>\n' + msg + '\n\n' +
-          '<strong>建議：</strong>請檢查 Apps Script 後端日誌與路由設定（project_test）。' +
+          '<strong>建議：</strong>請檢查 Apps Script 後端日誌與路由設定（project）。' +
           '</div>';
       }
     }
@@ -667,7 +667,7 @@ function handleSaveSchedule() {
 
         const payload = { action: 'updateSchedule', projectId, scheduleData };
 
-        fetch(`${API_BASE_URL}?page=project_test`, {
+        fetch(`${API_BASE_URL}?page=project`, {
             method: 'POST', body: JSON.stringify(payload),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' }, mode: 'no-cors'
         })
@@ -854,7 +854,7 @@ function refreshScheduleData() {
     * 版本: v11.0
     * 修改時間: 2025-09-14 23:38 (Asia/Taipei)
     * 說明:
-    * - [重構] 將發布請求改為使用 POST 方法，並指向統一的 project_test 路由。
+    * - [重構] 將發布請求改為使用 POST 方法，並指向統一的 project 路由。
     */
     function handlePublish(logId){
       const btn = document.getElementById('btn-' + logId);
@@ -867,7 +867,7 @@ function refreshScheduleData() {
       };
 
       // 使用 fetch 傳送 POST 請求
-      fetch(`${API_BASE_URL}?page=project_test`, {
+      fetch(`${API_BASE_URL}?page=project`, {
         method: 'POST',
         body: JSON.stringify(payload),
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -926,7 +926,6 @@ function refreshScheduleData() {
       logToPage('URL id=' + (id || '(未帶入)'));
       if(!id){ displayError({message:'未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。'}); return; }
 
-      // ★ 保留測試路由：project_test
       const fetchUrl = API_BASE_URL + '?page=project&id=' + encodeURIComponent(id); // [修改] 使用 project 主路由
       logToPage('呼叫 API：' + fetchUrl);
       loadJsonp(fetchUrl).then(handleDataResponse).catch(displayError);
@@ -1037,7 +1036,7 @@ function refreshScheduleData() {
         startDate: startDate
       };
 
-      fetch(`${API_BASE_URL}?page=project_test`, { // [修改] 指向新路由
+      fetch(`${API_BASE_URL}?page=project`, { // [修改] 指向新路由
         method: 'POST',
         body: JSON.stringify(payload),
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
