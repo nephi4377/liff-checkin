@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>專案日誌管理主控台（v11.13）</title>
+  <title>專案日誌管理主控台（v11.14）</title>
   <script>
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'test-v11.13';
+    const FRONTEND_VERSION = 'test-v11.14';
   </script>
   <style>
     :root {
@@ -119,16 +119,8 @@
     <main id="main-content">
       <div id="schedule-container" class="card" style="display:none;"></div>
       
-      <div id="add-task-container" class="card" style="display: none;">
-        <div style="display: flex; gap: 1rem; align-items: center;">
-          <select id="task-template-select" style="flex-grow: 1; padding: .5rem; border-radius: .375rem; border: 1px solid #d1d5db;"></select>
-          <button id="add-task-btn" class="add-task-btn">＋ 新增選取項目</button>
-        </div>
-      </div>
-
       <div id="logs-container"></div>
-      <div><h3 style="margin-top:2rem;font-weight:600;">執行狀態日誌：</h3><pre id="debug-log"></pre></div>
-    </main>
+      </main>
   </div>
 
   <!-- 照片管理 Modal -->
@@ -445,13 +437,28 @@
         schedule.forEach((task, index) => {
             listContainer.appendChild(renderTaskCard(task, index));
         });
+       
+        // [核心修改] 將「新增任務」的介面建立在此處
+        const addTaskDiv = document.createElement('div');
+        addTaskDiv.id = 'add-task-controls';
+        addTaskDiv.style.marginTop = '1rem';
+        addTaskDiv.innerHTML = `
+            <div style="display: flex; gap: 1rem; align-items: center; border-top: 1px solid #e5e7eb; padding-top: 1rem;">
+                <select id="task-template-select" style="flex-grow: 1; padding: .5rem; border-radius: .375rem; border: 1px solid #d1d5db;"></select>
+                <button id="add-task-btn" class="add-task-btn">＋ 新增</button>
+            </div>
+        `;
+        listWrapper.appendChild(addTaskDiv); // 將其放入滾動容器的底部
 
+        // 將所有元件依序加入頁面
+       
         details.appendChild(summary);
         details.appendChild(listWrapper);
         container.appendChild(buttonGroup);
         container.appendChild(details);
 
         document.getElementById('save-schedule-btn').onclick = handleSaveSchedule;
+        document.getElementById('add-task-btn').onclick = handleAddTask; // 綁定新增按鈕事件
         
         if (focusTaskIndex !== -1) {
             const focusCard = document.getElementById(`task-card-${focusTaskIndex}`);
@@ -923,40 +930,37 @@ function refreshScheduleData() {
     });
 
     function handleDataResponse(data){
-        logToPage('✅ 後端回應成功');
-        document.getElementById('status-message')?.remove();
-        if(data && data.error){ displayError({message:data.error}); return; }
-
-        currentLogsData = data.dailyLogs || [];
-        currentScheduleData = data.schedule || [];
-        templateTasks = data.templates || []; // [核心修正] 從 API 取得範本資料
-
-        // [核心修正] 改用正確的邏輯來顯示「新增」介面
-        const addTaskContainer = document.getElementById('add-task-container');
-        if (currentScheduleData.length > 0 && templateTasks.length > 0) {
-            addTaskContainer.style.display = 'block';
-            
-            // 填充下拉選單
-            const select = document.getElementById('task-template-select');
-            select.innerHTML = '<option value="">-- 請選擇要新增的任務範本 --</option>';
-            templateTasks.forEach((task, index) => {
-                const optionText = `${task['工種']} - ${task['任務項目']}`;
-                select.innerHTML += `<option value="${index}">${optionText}</option>`;
-            });
-            
-            document.getElementById('add-task-btn').onclick = handleAddTask;
-        } else {
-           addTaskContainer.style.display = 'none';
-        }
-
-        displaySchedule(data.overview, currentScheduleData, false);
-        const isDraft = (new URLSearchParams(window.location.search).get('id') === '0');
-        displayLogs(currentLogsData, isDraft);
-
-        const titleEl = document.getElementById('project-title');
-        if(data.overview && (data.overview.siteName || data.overview['案場名稱'])){
-            titleEl.textContent = '主控台: ' + (data.overview.siteName || data.overview['案場名稱']);
-        }
+      logToPage('✅ 後端回應成功');
+      document.getElementById('status-message')?.remove();
+      if(data && data.error){ displayError({message:data.error}); return; }
+      
+      currentLogsData = data.dailyLogs || [];
+      currentScheduleData = data.schedule || [];
+      templateTasks = data.templates || [];
+      
+      // [核心修改] 直接呼叫 displaySchedule，讓它自己處理新增介面的顯示
+      displaySchedule(data.overview, currentScheduleData, false);
+      
+      // [核心修改] 在 displaySchedule 執行後，才填充下拉選單
+      const addTaskControls = document.getElementById('add-task-controls');
+      if (addTaskControls && templateTasks.length > 0) {
+           const select = document.getElementById('task-template-select');
+           select.innerHTML = '<option value="">-- 請選擇要新增的任務範本 --</option>';
+           templateTasks.forEach((task, index) => {
+               const optionText = `${task['工種']} - ${task['任務項目']}`;
+               select.innerHTML += `<option value="${index}">${optionText}</option>`;
+           });
+      } else if (addTaskControls) {
+          addTaskControls.style.display = 'none'; // 如果沒有範本，就隱藏新增區塊
+      }
+      
+      const isDraft = (new URLSearchParams(window.location.search).get('id') === '0');
+      displayLogs(currentLogsData, isDraft);
+      
+      const titleEl = document.getElementById('project-title');
+      if(data.overview && (data.overview.siteName || data.overview['案場名稱'])){
+          titleEl.textContent = '主控台: ' + (data.overview.siteName || data.overview['案場名稱']);
+      }
     }
 
     // [新函式] 顯示日期選擇器
