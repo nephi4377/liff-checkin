@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>互動式甘特圖沙盒（test.html v0.2.3）</title>
+  <title>互動式甘特圖沙盒（test.html v0.2.4）</title>
 
   <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.css">
@@ -25,18 +25,20 @@
     .gantt-modal-content{background:#fff;border-radius:var(--radius);width:95%;max-width:1400px;height:90vh;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.35);padding:1rem}
     .gantt-modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem}
     .gantt-modal-header h2{margin:0;font-size:1.1rem}
-    .gantt-chart-wrapper{flex:1;overflow:auto}
     .toolbar{display:flex;gap:.5rem;align-items:center}
     .toolbar select{padding:.35rem .5rem;border:1px solid #d1d5db;border-radius:.4rem;background:#fff}
     .right{margin-left:auto;display:flex;gap:.5rem}
     pre#debug-log{background:#0b1020;color:#e5e7eb;border-radius:.5rem;padding:.75rem;height:12rem;overflow:auto;white-space:pre-wrap}
-    .gantt-host { display: grid; grid-template-columns: 280px 1fr; gap: .75rem; height: 100%; }
-    .left-rail { background:#f8fafc; border: 1px solid #e2e8f0; border-radius: var(--radius); overflow-y: hidden; } /* 改為 hidden，由 JS 控制 */
-    .left-rail .row { padding:.5rem .75rem; border-bottom:1px solid #f1f5f9; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; font-size:.9rem; height: 36px; display: flex; align-items: center;}
-    .gantt-pane { display:flex; flex-direction:column; }
+    
+    /* [核心修正] 佈局與滾動樣式 */
+    .gantt-host { display: grid; grid-template-columns: 280px 1fr; gap: .75rem; height: 100%; overflow: hidden; }
+    .left-rail { overflow-y: hidden; } /* 隱藏自己的垂直滾動條 */
+    .left-rail .row { padding: 0 .75rem; border-bottom:1px solid #f1f5f9; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; font-size:.9rem; height: 36px; display: flex; align-items: center; background-color: #f8fafc;}
+    .gantt-pane { display:flex; flex-direction:column; min-width: 0; }
     .gantt-chart-wrapper{ flex: 1; overflow: auto; border: 1px solid #e2e8f0; border-radius: var(--radius); background:#fff; }
     .xscroller { height: 18px; background:#e5e7eb; border-radius: 9px; position: relative; overflow:auto; margin-top: .5rem; }
     .xscroller .spacer { height: 1px; }
+    
     .gantt .grid .nonwork-rect { fill: #fecaca; opacity: .4; }
     .legend { display:flex; align-items:center; gap:.5rem; font-size:.85rem; color:var(--muted); }
     .legend .swatch { width:12px; height:12px; background:#fecaca; border:1px solid #fca5a5; border-radius:2px }
@@ -123,8 +125,7 @@
         document.body.appendChild(script);
       });
     }
-
-    // [核心修正] 強化的日期格式化函式
+    
     const toYYYYMMDD = (dateString) => {
         if (!dateString) return null;
         try {
@@ -150,7 +151,7 @@
       return schedule.map((t, i) => {
           const startDate = toYYYYMMDD(t['預計開始日']);
           const endDate = toYYYYMMDD(t['預計完成日']);
-          if (!startDate || !endDate) return null; // 過濾掉無效日期的任務
+          if (!startDate || !endDate) return null;
 
           return {
             id: `task-${i}`,
@@ -158,15 +159,15 @@
             start: startDate,
             end: endDate,
             progress: statusToProgress(t['狀態']),
-            custom: { index: i } // 儲存原始索引
+            custom: { index: i }
           };
-        }).filter(Boolean); // 移除 null
+        }).filter(Boolean);
     }
 
     function openGanttModal(){ document.getElementById('gantt-modal').style.display = 'flex'; }
     function closeGanttModal(){ document.getElementById('gantt-modal').style.display = 'none'; }
 
-    function initGanttFromSchedule(schedule, viewMode = 'Day'){ // [修改] 預設為 Day
+    function initGanttFromSchedule(schedule, viewMode = 'Day'){
       if (typeof Gantt !== 'function') { alert('甘特圖套件未載入'); return; }
       const tasks = scheduleToGanttTasks(schedule);
       if (tasks.length === 0) {
@@ -181,6 +182,7 @@
         view_mode: viewMode,
         language: 'zh',
         bar_height: 28,
+        padding: 4, // 調整 bar 之間的垂直間距
         header_height: 50,
         on_date_change: (task, start, end) => {
           const idx = task.custom.index;
@@ -198,11 +200,10 @@
         }
       });
       
-      // 使用 setTimeout 確保 DOM 渲染完成後再執行同步
       setTimeout(() => {
         syncLeftRail();
         paintNonWorking(gantt);
-        syncHorizontalScroller();
+        syncScrollers(); // [修改] 改為呼叫統一的滾動同步函式
       }, 0);
     }
 
@@ -214,7 +215,9 @@
         const svg = document.getElementById('gantt-chart');
         const gridLayer = svg.querySelector('.grid');
         if(!gridLayer) return;
-        const contentHeight = svg.getBBox().height || 800;
+        
+        // [修正] 更可靠地取得 SVG 總高度
+        const contentHeight = g.tasks.length * (g.options.bar_height + g.options.padding * 2) + g.options.header_height + g.options.padding;
         
         gridLayer.querySelectorAll('.nonwork-rect').forEach(n => n.remove());
         
@@ -226,10 +229,11 @@
           
           const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
           rect.setAttribute('class','nonwork-rect');
-          rect.setAttribute('x', g.get_x(new Date(d)) - g.options.column_width / 2);
-          rect.setAttribute('y', 0);
+          // [修正] x 座標的計算方式，使其更精準對齊日期格子
+          rect.setAttribute('x', g.get_x(d) - g.options.column_width / 2);
+          rect.setAttribute('y', g.options.header_height);
           rect.setAttribute('width', g.options.column_width);
-          rect.setAttribute('height', contentHeight);
+          rect.setAttribute('height', contentHeight - g.options.header_height);
           gridLayer.appendChild(rect);
         }
       }catch(e){ console.warn('paintNonWorking error', e); }
@@ -246,31 +250,32 @@
             leftRail.appendChild(div);
         });
     }
-
-    function syncHorizontalScroller(){
+    
+    // [核心修正] 統一的滾動同步函式
+    function syncScrollers(){
       const wrapper = document.getElementById('gantt-wrapper');
-      const scroller = document.getElementById('gantt-scroll-x');
-      const spacer = scroller.querySelector('.spacer');
+      const scrollerX = document.getElementById('gantt-scroll-x');
+      const spacer = scrollerX.querySelector('.spacer');
       const leftRail = document.getElementById('left-rail');
       
-      const contentWidth = wrapper.scrollWidth;
-      spacer.style.width = contentWidth + 'px';
+      spacer.style.width = wrapper.scrollWidth + 'px';
       
-      let lock = false;
-      const syncScroll = () => {
-        if (lock) return;
-        lock = true;
-        scroller.scrollLeft = wrapper.scrollLeft;
+      let isSyncing = false;
+      
+      wrapper.onscroll = () => {
+        if (isSyncing) return;
+        isSyncing = true;
+        // 同步水平和垂直滾動
+        scrollerX.scrollLeft = wrapper.scrollLeft;
         leftRail.scrollTop = wrapper.scrollTop;
-        lock = false;
+        requestAnimationFrame(() => { isSyncing = false; });
       };
       
-      wrapper.onscroll = syncScroll;
-      scroller.onscroll = () => {
-        if (lock) return;
-        lock = true;
-        wrapper.scrollLeft = scroller.scrollLeft;
-        lock = false;
+      scrollerX.onscroll = () => {
+        if (isSyncing) return;
+        isSyncing = true;
+        wrapper.scrollLeft = scrollerX.scrollLeft;
+        requestAnimationFrame(() => { isSyncing = false; });
       };
     }
 
@@ -285,7 +290,9 @@
     }
 
     const demoTasks = [
-        // ... (Demo 資料與前版相同，此處省略以節省篇幅)
+      { '任務項目':'丈量與放樣','工種':'行政','預計開始日':'2025-09-16','預計完成日':'2025-09-18','狀態':'未完成' },
+      { '任務項目':'拆除工程','工種':'拆除','預計開始日':'2025-09-19','預計完成日':'2025-09-21','狀態':'施工中' },
+      { '任務項目':'水電配管','工種':'水電','預計開始日':'2025-09-22','預計完成日':'2025-09-26','狀態':'未完成' }
     ];
 
     async function loadScheduleById(projectId){
@@ -296,7 +303,6 @@
       
       currentScheduleData = data.schedule;
       
-      // [新增] 載入假日資料
       if (data.holidays && Array.isArray(data.holidays)) {
         TAIWAN_HOLIDAYS = new Set(data.holidays);
         logToPage(`已成功載入 ${TAIWAN_HOLIDAYS.size} 筆國定假日資料。`);
@@ -312,7 +318,7 @@
       document.getElementById('subtitle').textContent = 'Demo 模式';
       document.getElementById('schedule-brief').textContent = `已載入 ${currentScheduleData.length} 筆 Demo 任務。`;
       enableGanttButton();
-      TAIWAN_HOLIDAYS = new Set(['2025-10-10']); // Demo 模式給一個假資料
+      TAIWAN_HOLIDAYS = new Set(['2025-10-10']);
       logToPage('已載入 Demo 假日 (10/10)。');
     }
 
@@ -360,7 +366,7 @@
             gantt.change_view_mode(e.target.value);
             setTimeout(() => {
                 paintNonWorking(gantt);
-                syncHorizontalScroller();
+                syncScrollers();
             }, 0);
         }
       });
