@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>專案日誌管理主控台（v11.10）</title>
+  <title>專案日誌管理主控台（v11.11）</title>
   <script>
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'test-v11.10';
+    const FRONTEND_VERSION = 'test-v11.11';
   </script>
   <style>
     :root {
@@ -344,7 +344,7 @@
     * - [新增] 恢復了「顯示全部任務」按鈕。
     */
         /* ===== 核心渲染與互動函式 ===== */
-    function displaySchedule(overview, schedule) {
+     function displaySchedule(overview, schedule, keepOpen = false){ // [核心修改] 新增參數，預設為 false
         const container = document.getElementById('schedule-container');
         if (!container) return;
         container.innerHTML = ''; 
