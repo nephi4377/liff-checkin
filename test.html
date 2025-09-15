@@ -1,33 +1,10 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <!--
-    test.html（互動式甘特圖沙盒 v0.2.1）
-    目的：
-    1) 在獨立沙盒頁面驗證「彈出式甘特圖」可視化與互動（拖曳、調整長度、進度）。
-    2) 與現有資料結構（currentScheduleData / ?page=project）對接。
-    3) 驗證回寫策略：在甘特互動後同步更新 currentScheduleData，
-       交由既有的「儲存排程」流程（POST ?page=project）統一送出。
-
-    使用方式：
-    A. Demo 模式（無 id 參數）
-       直接開啟檔案或以 http(s) 方式載入，頁面會用內建的 demoTasks 陣列示範。
-    B. 實戰模式（帶 id 參數）
-       以 URL 參數 ?id=專案案號 開啟，例如：
-       test.html?id=715
-       頁面會透過 JSONP 呼叫 API_BASE_URL?page=project&id=<id> 取得 schedule，並渲染甘特圖。
-
-    注意：
-    - 本頁僅為沙盒，無需完整的日誌/照片模組。
-    - 正式版請把「甘特圖按鈕 + Modal + 三支核心函式」移植到 managementconsole.html。
-    - CDN：使用 frappe-gantt（與 v11.22 測試版一致），避免 CORS 問題。
-  -->
-
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>互動式甘特圖沙盒（test.html v0.2.1）</title>
+  <title>互動式甘特圖沙盒（test.html v0.2.2 - 修正版）</title>
 
-  <!-- 甘特圖套件（與正式頁一致的 CDN 版本） -->
   <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.css">
 
@@ -53,18 +30,15 @@
     .toolbar select{padding:.35rem .5rem;border:1px solid #d1d5db;border-radius:.4rem;background:#fff}
     .right{margin-left:auto;display:flex;gap:.5rem}
     pre#debug-log{background:#0b1020;color:#e5e7eb;border-radius:.5rem;padding:.75rem;height:12rem;overflow:auto;white-space:pre-wrap}
-      /* 左側任務名稱固定欄（與甘特圖垂直同步） */
     .gantt-host { display: grid; grid-template-columns: 260px 1fr; gap: .75rem; height: 100%; }
     .left-rail { background:#fff; border-radius: var(--radius); box-shadow: var(--shadow); overflow: auto; }
     .left-rail .row { padding:.5rem .75rem; border-bottom:1px solid #f1f5f9; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; font-size:.9rem }
     .left-rail .row:nth-child(odd){ background:#fafafa }
     .gantt-pane { display:flex; flex-direction:column; }
     .gantt-chart-wrapper{ flex: 1; overflow: auto; border-radius: var(--radius); background:#fff; box-shadow: var(--shadow) }
-    /* 底部水平滑桿（不需把頁面滾到最底） */
     .xscroller { height: 18px; background:#e5e7eb; border-radius: 9px; position: relative; overflow:auto; }
     .xscroller .spacer { height: 1px; }
-    /* 週末/國定假日色塊提示 */
-    .gantt .grid .nonwork-rect { fill: #fecaca; /* 紅色淡化 */ opacity: .35; }
+    .gantt .grid .nonwork-rect { fill: #fecaca; opacity: .35; }
     .legend { display:flex; align-items:center; gap:.5rem; font-size:.85rem; color:var(--muted); }
     .legend .swatch { width:12px; height:12px; background:#fecaca; border:1px solid #fca5a5; border-radius:2px }
   </style>
@@ -77,7 +51,6 @@
         <div class="muted" id="subtitle">Demo 模式</div>
       </div>
       <div class="right">
-        <!-- 只在本頁示範：直接在 header 放檢視鈕，也可改為列表區右上角放置 -->
         <button id="view-gantt-btn" style="background:var(--green);display:none">📊 檢視甘特圖</button>
       </div>
     </header>
@@ -107,8 +80,7 @@
     </section>
   </div>
 
-  <!-- 甘特圖 Modal -->
-    <div id="gantt-modal" class="gantt-modal-overlay" aria-hidden="true">
+  <div id="gantt-modal" class="gantt-modal-overlay" aria-hidden="true">
     <div class="gantt-modal-content" role="dialog" aria-modal="true" aria-labelledby="gantt-modal-title">
       <div class="gantt-modal-header">
         <h2 id="gantt-modal-title">專案甘特圖</h2>
@@ -122,13 +94,11 @@
         </div>
       </div>
       <div class="gantt-host">
-        <!-- 左側任務名稱固定欄：與右側圖一起垂直滾動、但不受水平滾動影響 -->
         <div id="left-rail" class="left-rail" aria-hidden="false"></div>
         <div class="gantt-pane">
           <div class="gantt-chart-wrapper" id="gantt-wrapper">
             <svg id="gantt-chart"></svg>
           </div>
-          <!-- 底部水平滑桿：同步控制上方 SVG 的水平位移 -->
           <div id="gantt-scroll-x" class="xscroller" aria-label="水平捲動控制"><div class="spacer"></div></div>
         </div>
       </div>
@@ -136,16 +106,10 @@
   </div>
 
   <script>
-    /* =========================================================
-       全域狀態（與正式頁對齊的命名）
-       ========================================================= */
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    let currentScheduleData = [];   // 從 API 或 Demo 取得的排程列表（物件陣列）
-    let gantt = null;               // frappe-gantt 實例
+    let currentScheduleData = [];
+    let gantt = null;
 
-    /* =========================================================
-       公用：頁面訊息 & JSONP 讀取器（與正式頁一致設計）
-       ========================================================= */
     function logToPage(msg){
       const t = new Date().toLocaleTimeString('zh-TW');
       const el = document.getElementById('debug-log');
@@ -166,17 +130,10 @@
       });
     }
 
-    /* =========================================================
-       映射：把你的 schedule[] 轉為甘特 tasks[]
-       ---------------------------------------------------------
-       你的欄位：
-       - 任務項目、工種、預計開始日(YYYY-MM-DD)、預計完成日(YYYY-MM-DD)、狀態(未完成/施工中/已完成)
-       - 其餘欄位（例如工班、備註）保持在 raw 內以便回寫。
-       ========================================================= */
     function statusToProgress(status){
       if(status === '已完成') return 100;
       if(status === '施工中') return 50;
-      return 0; // 未完成
+      return 0;
     }
 
     function progressToStatus(p){
@@ -198,9 +155,6 @@
         }));
     }
 
-    /* =========================================================
-       甘特：初始化、互動事件、視圖切換
-       ========================================================= */
     function openGanttModal(){ document.getElementById('gantt-modal').style.display = 'flex'; }
     function closeGanttModal(){ document.getElementById('gantt-modal').style.display = 'none'; }
 
@@ -214,7 +168,7 @@
       leftRail.innerHTML = '';
 
       gantt = new Gantt(svg, tasks, {
-        view_mode: viewMode, // 僅提供 Day/Week，預設 Week
+        view_mode: viewMode,
         language: 'zh',
         custom_popup_html: (task) => (
           `<div class="details-container" style="padding:.5rem .75rem">
@@ -239,7 +193,6 @@
         }
       });
 
-      // 1) 左側任務欄：依圖上每個 bar 的 Y 座標建立對齊的列（加強容錯）
       requestAnimationFrame(() => {
         const bars = (gantt && Array.isArray(gantt.bars)) ? gantt.bars : [];
         const rows = [];
@@ -260,17 +213,14 @@
         leftRail.scrollTop = wrapper.scrollTop;
       });
 
-      // 2) 加入週末與國定假日底色
       paintNonWorking(gantt);
-
-      // 3) 設定底部水平滑桿同步
       syncHorizontalScroller();
     }
 
-    // 建立非工作日標記（週末 + 可選國定假日）
-    const TAIWAN_HOLIDAYS = window.TAIWAN_HOLIDAYS || new Set(); // 允許外部注入
+    const TAIWAN_HOLIDAYS = window.TAIWAN_HOLIDAYS || new Set();
     function isWeekend(d){ const day = d.getDay(); return day === 0 || day === 6; }
     function isHoliday(d){ return TAIWAN_HOLIDAYS.has(d.toISOString().slice(0,10)); }
+
     function paintNonWorking(g){
       try{
         const svg = document.getElementById('gantt-chart');
@@ -279,9 +229,7 @@
         const wrapper = document.getElementById('gantt-wrapper');
         const bbox = svg.getBBox();
         const contentHeight = bbox.height || (svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.height) || wrapper.clientHeight || 600;
-        // 清空既有標記
         gridLayer.querySelectorAll('.nonwork-rect').forEach(n => n.remove());
-        // 取甘特起迄（frappe-gantt 內部屬性：gantt_start/gantt_end）
         const start = new Date(g.gantt_start || g.start);
         const end   = new Date(g.gantt_end   || g.end);
         for(let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)){
@@ -303,7 +251,6 @@
       const wrapper = document.getElementById('gantt-wrapper');
       const scroller = document.getElementById('gantt-scroll-x');
       const spacer = scroller.querySelector('.spacer');
-      // 設定 spacer 寬度等於 SVG 內容寬度（以 wrapper.scrollWidth 近似）
       const contentWidth = wrapper.scrollWidth;
       spacer.style.width = contentWidth + 'px';
       let lock = false;
@@ -312,12 +259,6 @@
         if(!lock){ lock = true; scroller.scrollLeft = wrapper.scrollLeft; lock = false; }
         document.getElementById('left-rail').scrollTop = wrapper.scrollTop;
       };
-    }
-        // 垂直同步：左欄
-        document.getElementById('left-rail').scrollTop = wrapper.scrollTop;
-      };
-    }
-      });
     }
 
     function enableGanttButton(){
@@ -331,9 +272,6 @@
       };
     }
 
-    /* =========================================================
-       資料載入：Demo / API(JSONP)
-       ========================================================= */
     const demoTasks = [
       { '任務項目':'丈量與放樣','工種':'行政','預計開始日':'2025-09-16','預計完成日':'2025-09-18','狀態':'未完成','工班':'','備註':'' },
       { '任務項目':'拆除工程','工種':'拆除','預計開始日':'2025-09-19','預計完成日':'2025-09-21','狀態':'施工中','工班':'A 隊','備註':'同步清運' },
@@ -356,20 +294,12 @@
     }
 
     function useDemoData(){
-      currentScheduleData = JSON.parse(JSON.stringify(demoTasks)); // 深拷貝避免汙染
+      currentScheduleData = JSON.parse(JSON.stringify(demoTasks));
       document.getElementById('subtitle').textContent = 'Demo 模式';
       document.getElementById('schedule-brief').textContent = `已載入 ${currentScheduleData.length} 筆 Demo 任務。`;
       enableGanttButton();
     }
 
-    /* =========================================================
-       回寫：呼叫既有的 updateSchedule API（可選）
-       ---------------------------------------------------------
-       - 本沙盒提供一顆「儲存排程變更」按鈕，直接 POST 到
-         ?page=project（action: 'updateSchedule'）。
-       - Apps Script Web App 若無 CORS 設定，維持 no-cors 並以後台記錄為主。
-       - 正式頁仍以你的 handleSaveSchedule() 為準。
-       ========================================================= */
     async function saveScheduleChanges(projectId){
       if(!projectId){ alert('請先輸入案號'); return; }
       const payload = { action:'updateSchedule', projectId, scheduleData: currentScheduleData };
@@ -377,7 +307,7 @@
       logToPage('POST → ' + endpoint);
       try{
         await fetch(endpoint, {
-          method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+          method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload)
         });
         logToPage('已送出更新（no-cors，不讀回應）。請至 Apps Script 日誌確認。');
         alert('已送出更新！');
@@ -387,27 +317,30 @@
       }
     }
 
-    /* =========================================================
-       事件綁定 & 啟動流程
-       ========================================================= */
     document.addEventListener('DOMContentLoaded', () => {
-      // URL 參數
       const params = new URLSearchParams(location.search);
       const idParam = params.get('id');
       const projectInput = document.getElementById('project-id-input');
-      if(idParam){ projectInput.value = idParam; loadScheduleById(idParam).catch(e => logToPage(e.message)); }
-      else { useDemoData(); }
+      
+      if(idParam){ 
+        projectInput.value = idParam; 
+        loadScheduleById(idParam).catch(e => {
+            logToPage('錯誤: ' + e.message);
+            alert('載入專案資料失敗: ' + e.message);
+        });
+      } else { 
+        useDemoData(); 
+      }
 
-      // Header 檢視鈕在 enableGanttButton() 內才會顯示
       document.getElementById('modal-close-btn').onclick = closeGanttModal;
 
-      document.getElementById('view-mode-select').addEventListener('change', (e) => {
-        // 僅變更預設視圖；實際 Modal 內另有一個選擇器
-      });
       document.getElementById('modal-view-mode-select').addEventListener('change', (e) => {
-        const mode = e.target.value; // 限定 Day / Week
-        if(gantt){ gantt.change_view_mode(mode); paintNonWorking(gantt); syncHorizontalScroller(); }
-      }); }
+        const mode = e.target.value;
+        if(gantt){ 
+            gantt.change_view_mode(mode); 
+            paintNonWorking(gantt); 
+            syncHorizontalScroller(); 
+        }
       });
 
       document.getElementById('load-btn').onclick = () => {
@@ -415,7 +348,9 @@
         if(!pid){ alert('請輸入案號'); return; }
         loadScheduleById(pid).catch(err => alert(err.message));
       };
+      
       document.getElementById('use-demo-btn').onclick = useDemoData;
+      
       document.getElementById('save-btn').onclick = () => {
         const pid = projectInput.value.trim();
         saveScheduleChanges(pid);
