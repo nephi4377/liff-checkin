@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>專案日誌管理主控台（v11.14）</title>
+  <title>專案日誌管理主控台（v11.15）</title>
   <script>
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'test-v11.14';
+    const FRONTEND_VERSION = 'test-v11.15';
   </script>
   <style>
     :root {
@@ -422,17 +422,14 @@
         listContainer.className = 'schedule-list';
         listWrapper.appendChild(listContainer);
         
-        // [核心修正] 滾動目標改為「已完成的最後一項」
-        let focusTaskIndex = -1;
-        for (let i = schedule.length - 1; i >= 0; i--) {
-            if (schedule[i]['狀態'] === '已完成') {
-                focusTaskIndex = i;
-                break;
-            }
+        // [核心修正] 滾動目標恢復為「未完成的第一項」，確保穩定性
+        let focusTaskIndex = schedule.findIndex(t => t['狀態'] !== '已完成');
+        // 如果全部都完成了，或找不到，則聚焦在最後一項
+        if (focusTaskIndex === -1 && schedule.length > 0) {
+            focusTaskIndex = schedule.length - 1;
+        } else if (focusTaskIndex === -1) {
+            focusTaskIndex = 0; // 處理 schedule 為空的情況
         }
-
-        // 如果沒有任何已完成的項目，則聚焦在第一項
-       if (focusTaskIndex === -1 && schedule.length > 0) focusTaskIndex = 0;
 
         schedule.forEach((task, index) => {
             listContainer.appendChild(renderTaskCard(task, index));
@@ -937,7 +934,26 @@ function refreshScheduleData() {
       currentLogsData = data.dailyLogs || [];
       currentScheduleData = data.schedule || [];
       templateTasks = data.templates || [];
-      
+      // [核心新增] 根據您指定的規則對排程資料進行排序
+      currentScheduleData.sort((a, b) => {
+          // 建立狀態的排序權重：「已完成」最前，「施工中」其次
+          const statusOrder = { '已完成': 1, '施工中': 2, '未完成': 3 };
+          const statusA = statusOrder[a['狀態']] || 99; // 如果有其他狀態，排在最後
+          const statusB = statusOrder[b['狀態']] || 99;
+  
+          // 規則一：比較狀態
+          if (statusA !== statusB) {
+              return statusA - statusB;
+          }
+  
+          // 規則二：如果狀態相同，則比較「預計開始日」
+          const dateA = new Date(a['預計開始日']);
+          const dateB = new Date(b['預計開始日']);
+          if (isNaN(dateA.getTime())) return 1; // 無效日期排最後
+          if (isNaN(dateB.getTime())) return -1;
+          return dateA - dateB;
+      });
+        
       // [核心修改] 直接呼叫 displaySchedule，讓它自己處理新增介面的顯示
       displaySchedule(data.overview, currentScheduleData, false);
       
