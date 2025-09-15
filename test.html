@@ -65,6 +65,12 @@
     /* [修改] 狀態欄位樣式，改為對整個容器上色 */
     .task-card .status-cell { border-radius: .25rem; padding: .25rem; text-align: center; }
     .task-card .status-cell select { background: transparent; border: none; font-weight: bold; text-align: center; -webkit-appearance: none; appearance: none; }
+    /* [新增] 新增與刪除按鈕樣式 */
+    .delete-task-btn { background-color: transparent; color: #ef4444; border: none; cursor: pointer; font-size: 1.5rem; line-height: 1; position: absolute; top: .5rem; right: .5rem; padding: 0 .5rem; }
+    .delete-task-btn:hover { color: #b91c1c; }
+    .add-task-btn { background-color: var(--primary); color: #fff; border: none; border-radius: .375rem; padding: .5rem 1rem; cursor: pointer; font-weight: 600; margin-top: 1rem; width: 100%; }
+    .add-task-btn:hover { opacity: 0.9; }
+    .task-card { position: relative; /* 為了讓刪除按鈕可以定位 */ }
     .status-未完成 { background-color: #f3f4f6; color: #4b5563; }
     .status-施工中 { background-color: #dbeafe; color: #1e40af; }
     .status-已完成 { background-color: #dcfce7; color: #166534; }
@@ -356,7 +362,8 @@
 
         const details = document.createElement('details');
         details.className = 'schedule-accordion';
-        details.open = true;
+        // [核心修改] 移除 .open = true，讓進度表預設為折疊
+        //details.open = true;
 
         const summary = document.createElement('summary');
         const firstUnfinishedTask = schedule.find(t => t['狀態'] !== '已完成');
@@ -405,8 +412,24 @@
         let currentTaskIndex = schedule.findIndex(t => t['狀態'] !== '已完成');
         if (currentTaskIndex === -1) currentTaskIndex = schedule.length - 1;
 
-        schedule.forEach((task, index) => {
+        // 將渲染單張卡片的邏輯抽成函式，方便「新增」時呼叫
+        const renderTaskCard = (task, index) => {
             const card = document.createElement('div');
+            card.className = 'task-card';
+            card.id = `task-card-${index}`;
+            card.dataset.taskIndex = index;
+            
+            // [新增] 刪除按鈕
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-task-btn';
+            deleteBtn.innerHTML = '&times;'; // "x" 符號
+            deleteBtn.title = '刪除此任務';
+            deleteBtn.onclick = () => {
+                if (confirm(`確定要刪除任務「${task['任務項目'] || '新任務'}」嗎？`)) {
+                    card.remove();
+                    enableSaveButton();
+                }
+            };
             card.className = 'task-card';
             card.id = `task-card-${index}`;
             card.dataset.taskIndex = index;
@@ -445,9 +468,29 @@
                 if(el.tagName === 'SELECT') el.onchange = () => { enableSaveButton(); setStatusColor(); };
             });
             
-            listContainer.appendChild(card);
-        });
+            card.appendChild(deleteBtn); // 將刪除按鈕加入卡片
+            return card;
+        };
         
+        schedule.forEach((task, index) => {
+            listContainer.appendChild(renderTaskCard(task, index));
+        });
+
+        // [新增] 「新增任務」按鈕
+        const addTaskBtn = document.createElement('button');
+        addTaskBtn.id = 'add-task-btn';
+        addTaskBtn.className = 'add-task-btn';
+        addTaskBtn.textContent = '＋ 新增任務項目';
+        addTaskBtn.onclick = () => {
+            const newIndex = listContainer.children.length;
+            const newTaskData = { '案號': new URLSearchParams(location.search).get('id') }; // 帶入案號
+            const newCard = renderTaskCard(newTaskData, newIndex);
+            listContainer.appendChild(newCard);
+            newCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            enableSaveButton();
+        };
+        listWrapper.appendChild(addTaskBtn); // 將按鈕放在滾動區底部
+
         details.appendChild(summary);
         details.appendChild(listWrapper);
         container.appendChild(buttonGroup);
@@ -455,9 +498,11 @@
 
         document.getElementById('save-schedule-btn').onclick = handleSaveSchedule;
         
-        const currentCard = document.getElementById(`task-card-${currentTaskIndex}`);
-        if (currentCard) {
-            setTimeout(() => currentCard.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
+        if (currentTaskIndex !== -1) {
+            const currentCard = document.getElementById(`task-card-${currentTaskIndex}`);
+            if (currentCard) {
+                setTimeout(() => currentCard.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
+            }
         }
     }
         // [新增] 輔助函式，用於建立卡片中的每一個欄位，解決「工班」bug
