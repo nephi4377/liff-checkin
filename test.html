@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>專案日誌管理主控台（v11.9）</title>
+  <title>專案日誌管理主控台（v11.10）</title>
   <script>
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'test-v11.9';
+    const FRONTEND_VERSION = 'test-v11.10';
   </script>
   <style>
     :root {
@@ -362,8 +362,12 @@
 
         const details = document.createElement('details');
         details.className = 'schedule-accordion';
-        // [核心修改] 移除 .open = true，讓進度表預設為折疊
-        //details.open = true;
+        // [核心修改] 根據傳入的參數決定是否展開
+        // 如果是第一次載入，keepOpen 為 false，預設折疊
+        // 如果是儲存後刷新，keepOpen 為 true，維持展開
+        if (keepOpen) {
+            details.open = true;
+        }
 
         const summary = document.createElement('summary');
         const firstUnfinishedTask = schedule.find(t => t['狀態'] !== '已完成');
@@ -586,47 +590,66 @@
     // [新增] 處理儲存排程的函式
 
 function handleSaveSchedule() {
-    const btn = document.getElementById('save-schedule-btn');
-    btn.textContent = '儲存中...'; btn.disabled = true;
+        const btn = document.getElementById('save-schedule-btn');
+        btn.textContent = '儲存中...'; btn.disabled = true;
 
-    const projectId = new URLSearchParams(window.location.search).get('id');
-    const cards = document.querySelectorAll('.task-card');
-    
-    const scheduleData = Array.from(cards).map(card => {
-        const index = card.dataset.taskIndex;
-        const originalTask = currentScheduleData[index];
-        const updatedTask = {};
+        const projectId = new URLSearchParams(window.location.search).get('id');
+        const cards = document.querySelectorAll('.task-card');
         
-        card.querySelectorAll('[data-field]').forEach(input => {
-            const fieldName = input.dataset.field;
-            updatedTask[fieldName] = input.value;
+        let scheduleData = Array.from(cards).map(card => {
+            // 為了避免 originalTask 汙染，我們只讀取畫面上的最新資料
+            const task = {};
+            card.querySelectorAll('[data-field]').forEach(input => {
+                const fieldName = input.dataset.field;
+                task[fieldName] = input.value;
+            });
+            // 從原始資料補回不會被編輯的欄位
+            const originalTask = currentScheduleData[card.dataset.taskIndex] || {};
+            task['階段'] = originalTask['階段'];
+            task['工種'] = originalTask['工種'];
+            task['任務項目'] = originalTask['任務項目'];
+            task['任務說明'] = originalTask['任務說明'];
+            task['案號'] = originalTask['案號'];
+            
+            return task;
         });
-        
-        return { ...originalTask, ...updatedTask };
-    });
 
-    const payload = { action: 'updateSchedule', projectId, scheduleData };
+        // [核心新增] 根據「預計開始日」對所有任務進行排序
+        scheduleData.sort((a, b) => {
+            const dateA = new Date(a['預計開始日']);
+            const dateB = new Date(b['預計開始日']);
+            // 處理無效日期，將其排在最後
+            if (isNaN(dateA.getTime())) return 1;
+            if (isNaN(dateB.getTime())) return -1;
+            return dateA - dateB;
+        });
 
-    fetch(`${API_BASE_URL}?page=project_test`, {
-        method: 'POST', body: JSON.stringify(payload),
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, mode: 'no-cors'
-    })
-    .then(() => {
-        logToPage('✅ 排程儲存成功，正在局部刷新...');
-        alert('排程已成功儲存！');
-        refreshScheduleData();
-    })
-    .catch(error => {
-        console.error('儲存排程時發生錯誤:', error);
-        alert('儲存失敗，請檢查網路連線或後端日誌。');
-        btn.textContent = '儲存排程變更'; btn.disabled = false;
-    });
-}
+        const payload = { action: 'updateSchedule', projectId, scheduleData };
+
+        fetch(`${API_BASE_URL}?page=project_test`, {
+            method: 'POST', body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, mode: 'no-cors'
+        })
+        .then(() => {
+            logToPage('✅ 排程儲存成功，正在局部刷新...');
+            alert('排程已成功儲存！');
+            refreshScheduleData();
+        })
+        .catch(error => {
+            console.error('儲存排程時發生錯誤:', error);
+            alert('儲存失敗，請檢查網路連線或後端日誌。');
+            btn.textContent = '儲存排程變更'; btn.disabled = false;
+        });
+    }
         // [新增] 局部刷新函式
-    function refreshScheduleData() {
+function refreshScheduleData() {
         const id = new URLSearchParams(location.search).get('id');
         const fetchUrl = API_BASE_URL + '?page=project_test&id=' + encodeURIComponent(id);
         logToPage('➡️ 正在請求最新排程資料...');
+
+        // [核心新增] 在刷新前，先記錄當前的摺疊狀態
+        const scheduleDetails = document.querySelector('.schedule-accordion');
+        const wasOpen = scheduleDetails ? scheduleDetails.open : false;
 
         const saveBtn = document.getElementById('save-schedule-btn');
         if (saveBtn) {
@@ -639,7 +662,8 @@ function handleSaveSchedule() {
             .then(data => {
                 if (data && !data.error) {
                     currentScheduleData = data.schedule || [];
-                    displaySchedule(data.overview, currentScheduleData);
+                    // [核心修改] 將「維持展開」的狀態傳遞給渲染函式
+                    displaySchedule(data.overview, currentScheduleData, wasOpen);
                     logToPage('✅ 排程面板已刷新完畢。');
                 } else {
                     throw new Error(data.error || '後端回傳資料格式錯誤');
