@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>專案日誌管理主控台（v11.19）</title>
+  <title>專案日誌管理主控台（v11.20）</title>
   <script>
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'test-v11.19';
+    const FRONTEND_VERSION = 'test-v11.20';
   </script>
   <style>
     :root {
@@ -454,14 +454,32 @@
         container.appendChild(buttonGroup);
         container.appendChild(details);
 
+        // 綁定儲存按鈕
         document.getElementById('save-schedule-btn').onclick = handleSaveSchedule;
         document.getElementById('add-task-btn').onclick = handleAddTask; // 綁定新增按鈕事件
         
-        if (focusTaskIndex !== -1) {
-            const focusCard = document.getElementById(`task-card-${focusTaskIndex}`);
-            if (focusCard) {
-                setTimeout(() => focusCard.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
-            }
+        // [核心修復] 為摺疊面板新增「點擊監聽」，在正確的時機觸發滾動
+        const detailsElement = container.querySelector('.schedule-accordion');
+        if (detailsElement) {
+            detailsElement.addEventListener('toggle', (event) => {
+                // 只在「展開」時執行
+                if (detailsElement.open) {
+                    // 重新計算目標索引，確保它是最新的
+                    let focusTaskIndex = currentScheduleData.findIndex(t => t['狀態'] !== '已完成');
+                    if (focusTaskIndex === -1 && currentScheduleData.length > 0) {
+                        focusTaskIndex = currentScheduleData.length - 1;
+                    }
+
+                    const focusCard = document.getElementById(`task-card-${focusTaskIndex}`);
+                    if (focusCard) {
+                        // 使用一個短延遲，確保展開動畫流暢
+                        setTimeout(() => {
+                            focusCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            logToPage(`✅ 已自動滾動至任務 #${focusTaskIndex + 1}`);
+                        }, 100);
+                    }
+                }
+            });
         }
     }
 
