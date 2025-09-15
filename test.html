@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>專案日誌管理主控台（v11.12）</title>
+  <title>專案日誌管理主控台（v11.13）</title>
   <script>
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'test-v11.12';
+    const FRONTEND_VERSION = 'test-v11.13';
   </script>
   <style>
     :root {
@@ -430,7 +430,7 @@
         listContainer.className = 'schedule-list';
         listWrapper.appendChild(listContainer);
         
-        // [核心修改] 找出最後一個已完成任務的索引
+        // [核心修正] 滾動目標改為「已完成的最後一項」
         let focusTaskIndex = -1;
         for (let i = schedule.length - 1; i >= 0; i--) {
             if (schedule[i]['狀態'] === '已完成') {
@@ -438,7 +438,9 @@
                 break;
             }
         }
-        if (focusTaskIndex === -1 && schedule.length > 0) focusTaskIndex = 0;
+
+        // 如果沒有任何已完成的項目，則聚焦在第一項
+       if (focusTaskIndex === -1 && schedule.length > 0) focusTaskIndex = 0;
 
         schedule.forEach((task, index) => {
             listContainer.appendChild(renderTaskCard(task, index));
@@ -921,32 +923,40 @@ function refreshScheduleData() {
     });
 
     function handleDataResponse(data){
-      logToPage('✅ 後端回應成功');
-      document.getElementById('status-message')?.remove();
-      if(data && data.error){ displayError({message:data.error}); return; }
+        logToPage('✅ 後端回應成功');
+        document.getElementById('status-message')?.remove();
+        if(data && data.error){ displayError({message:data.error}); return; }
 
-      currentLogsData = data.dailyLogs || [];
-      currentScheduleData = data.schedule || [];
+        currentLogsData = data.dailyLogs || [];
+        currentScheduleData = data.schedule || [];
+        templateTasks = data.templates || []; // [核心修正] 從 API 取得範本資料
 
-      // [核心修正] 如果此案號沒有進度資料，則顯示按鈕「並立即綁定點擊功能」
-      if (currentScheduleData.length === 0 && (new URLSearchParams(location.search).get('id') !== '0') ) {
-        const actionsContainer = document.getElementById('actions-container');
-        if(actionsContainer) {
-            actionsContainer.style.display = 'flex';
-            // 將事件綁定移至此處，確保按鈕已存在於 DOM 中
-            document.getElementById('btn-import-new').onclick = () => showStartDatePicker('新屋案');
-            document.getElementById('btn-import-old').onclick = () => showStartDatePicker('老屋案');
+        // [核心修正] 改用正確的邏輯來顯示「新增」介面
+        const addTaskContainer = document.getElementById('add-task-container');
+        if (currentScheduleData.length > 0 && templateTasks.length > 0) {
+            addTaskContainer.style.display = 'block';
+            
+            // 填充下拉選單
+            const select = document.getElementById('task-template-select');
+            select.innerHTML = '<option value="">-- 請選擇要新增的任務範本 --</option>';
+            templateTasks.forEach((task, index) => {
+                const optionText = `${task['工種']} - ${task['任務項目']}`;
+                select.innerHTML += `<option value="${index}">${optionText}</option>`;
+            });
+            
+            document.getElementById('add-task-btn').onclick = handleAddTask;
+        } else {
+           addTaskContainer.style.display = 'none';
         }
-      }
 
-      displaySchedule(data.overview, currentScheduleData);
-      const isDraft = (new URLSearchParams(window.location.search).get('id') === '0');
-      displayLogs(currentLogsData, isDraft); // 我將之前註解掉的這行恢復，讓日誌正常顯示
+        displaySchedule(data.overview, currentScheduleData, false);
+        const isDraft = (new URLSearchParams(window.location.search).get('id') === '0');
+        displayLogs(currentLogsData, isDraft);
 
-      const titleEl = document.getElementById('project-title');
-      if(data.overview && (data.overview.siteName || data.overview['案場名稱'])){
-        titleEl.textContent = '專案主控台: ' + (data.overview.siteName || data.overview['案場名稱']);
-      }
+        const titleEl = document.getElementById('project-title');
+        if(data.overview && (data.overview.siteName || data.overview['案場名稱'])){
+            titleEl.textContent = '主控台: ' + (data.overview.siteName || data.overview['案場名稱']);
+        }
     }
 
     // [新函式] 顯示日期選擇器
