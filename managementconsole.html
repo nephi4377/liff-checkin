@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>專案日誌管理主控台（v11.16）</title>
+  <title>專案日誌管理主控台（v11.17）</title>
   <script>
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'test-v11.16';
+    const FRONTEND_VERSION = 'test-v11.17';
   </script>
   <style>
     :root {
@@ -685,7 +685,7 @@ function handleSaveSchedule() {
         // [新增] 局部刷新函式
 function refreshScheduleData() {
         const id = new URLSearchParams(location.search).get('id');
-        const fetchUrl = API_BASE_URL + '?page=project_test&id=' + encodeURIComponent(id);
+        const fetchUrl = API_BASE_URL + '?page=project&id=' + encodeURIComponent(id);
         logToPage('➡️ 正在請求最新排程資料...');
 
         // [核心新增] 在刷新前，先記錄當前的摺疊狀態
@@ -927,7 +927,7 @@ function refreshScheduleData() {
       if(!id){ displayError({message:'未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。'}); return; }
 
       // ★ 保留測試路由：project_test
-      const fetchUrl = API_BASE_URL + '?page=project_test&id=' + encodeURIComponent(id);
+      const fetchUrl = API_BASE_URL + '?page=project&id=' + encodeURIComponent(id); // [修改] 使用 project 主路由
       logToPage('呼叫 API：' + fetchUrl);
       loadJsonp(fetchUrl).then(handleDataResponse).catch(displayError);
     });
@@ -1063,7 +1063,7 @@ function refreshScheduleData() {
       logToPage('URL id=' + (id || '(未帶入)'));
       if(!id){ displayError({message:'未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。'}); return; }
 
-      const fetchUrl = API_BASE_URL + '?page=project_test&id=' + encodeURIComponent(id);
+      const fetchUrl = API_BASE_URL + '?page=project&id=' + encodeURIComponent(id);
       logToPage('呼叫 API：' + fetchUrl);
       loadJsonp(fetchUrl).then(handleDataResponse).catch(displayError);
     });
