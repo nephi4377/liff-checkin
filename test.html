@@ -117,8 +117,15 @@
       </div>
     </header>
     <main id="main-content">
-      <div id="status-message"><div class="spinner"></div><p style="text-align:center;">正在載入資料...</p></div>
       <div id="schedule-container" class="card" style="display:none;"></div>
+      
+      <div id="add-task-container" class="card" style="display: none;">
+        <div style="display: flex; gap: 1rem; align-items: center;">
+          <select id="task-template-select" style="flex-grow: 1; padding: .5rem; border-radius: .375rem; border: 1px solid #d1d5db;"></select>
+          <button id="add-task-btn" class="add-task-btn">＋ 新增選取項目</button>
+        </div>
+      </div>
+
       <div id="logs-container"></div>
       <div><h3 style="margin-top:2rem;font-weight:600;">執行狀態日誌：</h3><pre id="debug-log"></pre></div>
     </main>
@@ -151,6 +158,7 @@
     let currentEditingLogId = null;
     let currentLogsData = [];
     let currentScheduleData = [];
+    let templateTasks = []; // 儲存從範本中解析出的可選任務列表
     const DEBUG_THUMBS = true;
 
     /* ===== 工具：除錯輸出 ===== */
@@ -343,7 +351,16 @@
     * - [新增] 恢復並實現了「預設僅顯示當前任務前後三項」的聚焦佈局。
     * - [新增] 恢復了「顯示全部任務」按鈕。
     */
-        /* ===== 核心渲染與互動函式 ===== */
+    /*
+    * 版本: v12.0 (原型最終版)
+    * 修改時間: 2025-09-15 08:40 (Asia/Taipei)
+    * 說明:
+    * - [新增] 完整的「智慧新增任務」功能，可從範本下拉選單中選取並新增任務。
+    * - [新增] 實現「打開時自動滾動至最後一項已完成任務」的邏輯。
+    * - [修復] 徹底修正「工班」等欄位在新增時無法編輯或沒有預設值的問題。
+    * - [優化] 程式碼結構調整，將渲染與資料處理邏輯分離得更清晰。
+    */
+    /* ===== 核心渲染與互動函式 ===== */
      function displaySchedule(overview, schedule, keepOpen = false){ // [核心修改] 新增參數，預設為 false
         const container = document.getElementById('schedule-container');
         if (!container) return;
@@ -412,88 +429,20 @@
         listContainer.id = 'schedule-list-container';
         listContainer.className = 'schedule-list';
         listWrapper.appendChild(listContainer);
-
-        let currentTaskIndex = schedule.findIndex(t => t['狀態'] !== '已完成');
-        if (currentTaskIndex === -1) currentTaskIndex = schedule.length - 1;
-
-        // 將渲染單張卡片的邏輯抽成函式，方便「新增」時呼叫
-        const renderTaskCard = (task, index) => {
-            const card = document.createElement('div');
-            card.className = 'task-card';
-            card.id = `task-card-${index}`;
-            card.dataset.taskIndex = index;
-            
-            // [新增] 刪除按鈕
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'delete-task-btn';
-            deleteBtn.innerHTML = '&times;'; // "x" 符號
-            deleteBtn.title = '刪除此任務';
-            deleteBtn.onclick = () => {
-                if (confirm(`確定要刪除任務「${task['任務項目'] || '新任務'}」嗎？`)) {
-                    card.remove();
-                    enableSaveButton();
-                }
-            };
-            card.className = 'task-card';
-            card.id = `task-card-${index}`;
-            card.dataset.taskIndex = index;
-
-            // [核心修復] 使用正確的欄位名稱 '負責人/工班'
-            card.innerHTML = `
-                <div><label>工種</label><div>${task['工種']}</div></div>
-                <div class="task-main"><label>任務項目</label><div class="task-title">${task['任務項目']}</div><div class="task-description">${task['任務說明'] || ''}</div></div>
-                <div><label>工班</label><input type="text" data-field="負責人/工班" value="${task['負責人/工班'] || ''}"></div>
-                <div class="task-dates">
-                    <label>預計開始日 / 完成日</label>
-                    <input type="date" data-field="預計開始日" value="${task['預計開始日'] ? new Date(task['預計開始日']).toLocaleDateString('sv') : ''}">
-                    <input type="date" data-field="預計完成日" value="${task['預計完成日'] ? new Date(task['預計完成日']).toLocaleDateString('sv') : ''}">
-                </div>
-                <div>
-                    <label>狀態</label>
-                    <div class="status-cell" id="status-cell-${index}">
-                        <select data-field="狀態">
-                            <option value="未完成">未完成</option>
-                            <option value="施工中">施工中</option>
-                            <option value="已完成">已完成</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="task-remarks"><label>備註</label><textarea data-field="備註">${task['備註'] || ''}</textarea></div>
-            `;
-            
-            const statusSelect = card.querySelector('select[data-field="狀態"]');
-            statusSelect.value = task['狀態'] || '未完成';
-            const statusCell = card.querySelector('.status-cell');
-            const setStatusColor = () => statusCell.className = `status-cell status-${statusSelect.value}`;
-            setStatusColor();
-
-            card.querySelectorAll('input, select, textarea').forEach(el => {
-                el.onchange = enableSaveButton;
-                if(el.tagName === 'SELECT') el.onchange = () => { enableSaveButton(); setStatusColor(); };
-            });
-            
-            card.appendChild(deleteBtn); // 將刪除按鈕加入卡片
-            return card;
-        };
         
+        // [核心修改] 找出最後一個已完成任務的索引
+        let focusTaskIndex = -1;
+        for (let i = schedule.length - 1; i >= 0; i--) {
+            if (schedule[i]['狀態'] === '已完成') {
+                focusTaskIndex = i;
+                break;
+            }
+        }
+        if (focusTaskIndex === -1 && schedule.length > 0) focusTaskIndex = 0;
+
         schedule.forEach((task, index) => {
             listContainer.appendChild(renderTaskCard(task, index));
         });
-
-        // [新增] 「新增任務」按鈕
-        const addTaskBtn = document.createElement('button');
-        addTaskBtn.id = 'add-task-btn';
-        addTaskBtn.className = 'add-task-btn';
-        addTaskBtn.textContent = '＋ 新增任務項目';
-        addTaskBtn.onclick = () => {
-            const newIndex = listContainer.children.length;
-            const newTaskData = { '案號': new URLSearchParams(location.search).get('id') }; // 帶入案號
-            const newCard = renderTaskCard(newTaskData, newIndex);
-            listContainer.appendChild(newCard);
-            newCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            enableSaveButton();
-        };
-        listWrapper.appendChild(addTaskBtn); // 將按鈕放在滾動區底部
 
         details.appendChild(summary);
         details.appendChild(listWrapper);
@@ -502,13 +451,93 @@
 
         document.getElementById('save-schedule-btn').onclick = handleSaveSchedule;
         
-        if (currentTaskIndex !== -1) {
-            const currentCard = document.getElementById(`task-card-${currentTaskIndex}`);
-            if (currentCard) {
-                setTimeout(() => currentCard.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
+        if (focusTaskIndex !== -1) {
+            const focusCard = document.getElementById(`task-card-${focusTaskIndex}`);
+            if (focusCard) {
+                setTimeout(() => focusCard.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
             }
         }
     }
+
+    // 將渲染單張卡片的邏輯抽成獨立函式
+    function renderTaskCard(task, index) {
+        const card = document.createElement('div');
+        card.className = 'task-card';
+        card.id = `task-card-${index}`;
+        card.dataset.taskIndex = index;
+
+        // [核心修復] 建立卡片時，所有可編輯欄位都產生為輸入元件
+        card.innerHTML = `
+            <div><label>工種</label><input type="text" data-field="工種" value="${task['工種'] || ''}"></div>
+            <div class="task-main">
+                <label>任務項目</label><input type="text" class="task-title" data-field="任務項目" value="${task['任務項目'] || ''}">
+                <label style="margin-top:5px;">任務說明</label><textarea data-field="任務說明" style="font-size: .8rem; min-height: 40px;">${task['任務說明'] || ''}</textarea>
+            </div>
+            <div><label>工班</label><input type="text" data-field="負責人/工班" value="${task['負責人/工班'] || ''}"></div>
+            <div class="task-dates">
+                <label>預計開始日 / 完成日</label>
+                <input type="date" data-field="預計開始日" value="${task['預計開始日'] ? new Date(task['預計開始日']).toLocaleDateString('sv') : ''}">
+                <input type="date" data-field="預計完成日" value="${task['預計完成日'] ? new Date(task['預計完成日']).toLocaleDateString('sv') : ''}">
+            </div>
+            <div>
+                <label>狀態</label>
+                <div class="status-cell">
+                    <select data-field="狀態">
+                        <option value="未完成">未完成</option><option value="施工中">施工中</option><option value="已完成">已完成</option>
+                    </select>
+                </div>
+            </div>
+            <div class="task-remarks"><label>備註</label><textarea data-field="備註">${task['備註'] || ''}</textarea></div>
+            <button class="delete-task-btn" title="刪除此任務">&times;</button>
+        `;
+        
+        const statusSelect = card.querySelector('select[data-field="狀態"]');
+        statusSelect.value = task['狀態'] || '未完成';
+        const statusCell = card.querySelector('.status-cell');
+        const setStatusColor = () => statusCell.className = `status-cell status-${statusSelect.value}`;
+        setStatusColor();
+
+        card.querySelectorAll('input, select, textarea').forEach(el => el.oninput = enableSaveButton);
+        statusSelect.onchange = () => { enableSaveButton(); setStatusColor(); };
+
+        card.querySelector('.delete-task-btn').onclick = () => {
+            if (confirm(`確定要刪除任務「${task['任務項目'] || '新任務'}」嗎？`)) {
+                card.remove();
+                enableSaveButton();
+            }
+        };
+        return card;
+    }
+
+    // [核心修改] 新增智慧新增任務的處理函式
+    function handleAddTask() {
+        const select = document.getElementById('task-template-select');
+        const selectedIndex = select.value;
+        if (selectedIndex === "") return;
+
+        const templateTask = templateTasks[selectedIndex];
+        
+        const newTaskData = {
+            ...templateTask, // 帶入範本中的 階段, 工種, 任務項目, 任務說明 etc.
+            '案號': new URLSearchParams(location.search).get('id'),
+            '預計開始日': '',
+            '預計完成日': '',
+            '狀態': '未完成',
+            '負責人/工班': '',
+            '備註': ''
+        };
+        
+        currentScheduleData.push(newTaskData);
+        // 重新渲染整個列表以加入新卡片
+        const overviewData = { '專案起始日': document.querySelector('input[data-field="預計開始日"]')?.value || new Date() };
+        displaySchedule(overviewData, currentScheduleData, true);
+        enableSaveButton();
+
+        // 滾動到最底部的新卡片
+        const newCard = document.getElementById(`task-card-${currentScheduleData.length - 1}`);
+        if (newCard) newCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+    
         // [新增] 輔助函式，用於建立卡片中的每一個欄位，解決「工班」bug
     function createTaskCardField(header, task) {
         const div = document.createElement('div');
