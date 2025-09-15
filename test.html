@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <!--
-    test.html（互動式甘特圖沙盒 v0.2）
+    test.html（互動式甘特圖沙盒 v0.2.1）
     目的：
     1) 在獨立沙盒頁面驗證「彈出式甘特圖」可視化與互動（拖曳、調整長度、進度）。
     2) 與現有資料結構（currentScheduleData / ?page=project）對接。
@@ -25,7 +25,7 @@
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>互動式甘特圖沙盒（test.html v0.2）</title>
+  <title>互動式甘特圖沙盒（test.html v0.2.1）</title>
 
   <!-- 甘特圖套件（與正式頁一致的 CDN 版本） -->
   <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
@@ -205,6 +205,7 @@
     function closeGanttModal(){ document.getElementById('gantt-modal').style.display = 'none'; }
 
     function initGanttFromSchedule(schedule, viewMode = 'Week'){
+      if (typeof Gantt !== 'function') { alert('甘特圖套件未載入（CDN 失敗）'); return; }
       const tasks = scheduleToGanttTasks(schedule);
       const svg = document.getElementById('gantt-chart');
       const wrapper = document.getElementById('gantt-wrapper');
@@ -229,7 +230,6 @@
           currentScheduleData[idx]['預計開始日'] = iso(start);
           currentScheduleData[idx]['預計完成日'] = iso(end);
           logToPage(`日期變更：#${idx+1} → ${iso(start)} ~ ${iso(end)}`);
-          // 重新著色非工作日
           paintNonWorking(gantt);
         },
         on_progress_change: (task, progress) => {
@@ -239,19 +239,24 @@
         }
       });
 
-      // 1) 左側任務欄：依圖上每個 bar 的 Y 座標建立對齊的列
+      // 1) 左側任務欄：依圖上每個 bar 的 Y 座標建立對齊的列（加強容錯）
       requestAnimationFrame(() => {
-        const bars = gantt.bars || [];
-        const rows = bars.map(b => ({ y: b.group.getBBox().y, h: b.group.getBBox().height, label: b.task.name }));
+        const bars = (gantt && Array.isArray(gantt.bars)) ? gantt.bars : [];
+        const rows = [];
+        bars.forEach(b => {
+          try {
+            const bb = b.group.getBBox();
+            rows.push({ y: bb.y, h: bb.height || 28, label: b.task.name });
+          } catch(e){ rows.push({ y: rows.length*32, h: 32, label: b.task ? b.task.name : '任務' }); }
+        });
         rows.sort((a,b)=>a.y-b.y);
         rows.forEach(r => {
           const div = document.createElement('div');
           div.className = 'row';
           div.style.height = Math.max(28, Math.round(r.h)) + 'px';
-          div.textContent = r.label; // 預設 name 已含「工種｜任務項目」
+          div.textContent = r.label;
           leftRail.appendChild(div);
         });
-        // 左右兩側垂直同步
         leftRail.scrollTop = wrapper.scrollTop;
       });
 
@@ -263,22 +268,26 @@
     }
 
     // 建立非工作日標記（週末 + 可選國定假日）
-    const TAIWAN_HOLIDAYS = window.TAIWAN_HOLIDAYS || new Set(); // 允許外部注入：如 new Set(['2025-01-01','2025-02-28'])
+    const TAIWAN_HOLIDAYS = window.TAIWAN_HOLIDAYS || new Set(); // 允許外部注入
     function isWeekend(d){ const day = d.getDay(); return day === 0 || day === 6; }
     function isHoliday(d){ return TAIWAN_HOLIDAYS.has(d.toISOString().slice(0,10)); }
     function paintNonWorking(g){
       try{
-        const gridLayer = g.layers.grid;
-        const contentHeight = g.canvas.getBBox().height; // 含所有列的高度
-        // 先清空既有標記（避免重複堆疊）
+        const svg = document.getElementById('gantt-chart');
+        const gridLayer = (g.layers && g.layers.grid) ? g.layers.grid : svg.querySelector('.grid');
+        if(!gridLayer) return;
+        const wrapper = document.getElementById('gantt-wrapper');
+        const bbox = svg.getBBox();
+        const contentHeight = bbox.height || (svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.height) || wrapper.clientHeight || 600;
+        // 清空既有標記
         gridLayer.querySelectorAll('.nonwork-rect').forEach(n => n.remove());
-        // 取甘特起迄範圍
-        const start = new Date(g.start);
-        const end   = new Date(g.end);
+        // 取甘特起迄（frappe-gantt 內部屬性：gantt_start/gantt_end）
+        const start = new Date(g.gantt_start || g.start);
+        const end   = new Date(g.gantt_end   || g.end);
         for(let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)){
           const nonwork = isWeekend(d) || isHoliday(d);
           if(!nonwork) continue;
-          const x = g.get_x(d); // 以 frappe-gantt 的座標換算
+          const x = g.get_x(new Date(d));
           const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
           rect.setAttribute('class','nonwork-rect');
           rect.setAttribute('x', x);
@@ -294,15 +303,16 @@
       const wrapper = document.getElementById('gantt-wrapper');
       const scroller = document.getElementById('gantt-scroll-x');
       const spacer = scroller.querySelector('.spacer');
-      // 設定 spacer 寬度等於 SVG 內容寬度，以產生捲軸
+      // 設定 spacer 寬度等於 SVG 內容寬度（以 wrapper.scrollWidth 近似）
       const contentWidth = wrapper.scrollWidth;
       spacer.style.width = contentWidth + 'px';
-      // 雙向同步：滑桿 ↔ 圖
       let lock = false;
       scroller.onscroll = () => { if(lock) return; lock = true; wrapper.scrollLeft = scroller.scrollLeft; lock = false; };
       wrapper.onscroll  = () => {
-        // 水平同步
         if(!lock){ lock = true; scroller.scrollLeft = wrapper.scrollLeft; lock = false; }
+        document.getElementById('left-rail').scrollTop = wrapper.scrollTop;
+      };
+    }
         // 垂直同步：左欄
         document.getElementById('left-rail').scrollTop = wrapper.scrollTop;
       };
