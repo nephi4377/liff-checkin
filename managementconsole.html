@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>專案日誌管理主控台（v11.20）</title>
+  <title>專案日誌管理主控台（v11.21）</title>
   <script>
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'test-v11.20';
+    const FRONTEND_VERSION = 'test-v11.21';
   </script>
   <style>
     :root {
@@ -653,31 +653,26 @@ function handleSaveSchedule() {
         btn.textContent = '儲存中...'; btn.disabled = true;
 
         const projectId = new URLSearchParams(window.location.search).get('id');
-        const cards = document.querySelectorAll('.task-card');
         
-        let scheduleData = Array.from(cards).map(card => {
-            // 為了避免 originalTask 汙染，我們只讀取畫面上的最新資料
+        // [核心修正] 完全信任 DOM，從畫面上重新建立一份最準確的資料
+        let scheduleData = Array.from(document.querySelectorAll('.task-card')).map(card => {
             const task = {};
+            // 讀取卡片上所有帶有 data-field 屬性的輸入元件
             card.querySelectorAll('[data-field]').forEach(input => {
                 const fieldName = input.dataset.field;
                 task[fieldName] = input.value;
             });
-            // 從原始資料補回不會被編輯的欄位
-            const originalTask = currentScheduleData[card.dataset.taskIndex] || {};
-            task['階段'] = originalTask['階段'];
-            task['工種'] = originalTask['工種'];
-            task['任務項目'] = originalTask['任務項目'];
-            task['任務說明'] = originalTask['任務說明'];
-            task['案號'] = originalTask['案號'];
-            
+            // 補回畫面上沒有，但後端需要的固定欄位
+            task['案號'] = projectId;
+            const originalTask = currentScheduleData.find(t => t['任務項目'] === task['任務項目']) || {};
+            task['階段'] = originalTask['階段']; // 階段是從範本帶入，不允許編輯
             return task;
         });
 
-        // [核心新增] 根據「預計開始日」對所有任務進行排序
+        // 根據「預計開始日」對所有任務進行排序
         scheduleData.sort((a, b) => {
             const dateA = new Date(a['預計開始日']);
             const dateB = new Date(b['預計開始日']);
-            // 處理無效日期，將其排在最後
             if (isNaN(dateA.getTime())) return 1;
             if (isNaN(dateB.getTime())) return -1;
             return dateA - dateB;
