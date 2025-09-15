@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>專案日誌管理主控台（v11.15）</title>
+  <title>專案日誌管理主控台（v11.16）</title>
   <script>
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const FRONTEND_VERSION = 'test-v11.15';
+    const FRONTEND_VERSION = 'test-v11.16';
   </script>
   <style>
     :root {
@@ -539,11 +539,17 @@
         displaySchedule(overviewData, currentScheduleData, true);
         enableSaveButton();
 
-        // 滾動到最底部的新卡片
-        const newCard = document.getElementById(`task-card-${currentScheduleData.length - 1}`);
-        if (newCard) newCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        // [核心修復] 使用更可靠的方式，確保在畫面渲染完成後才執行滾動
+        const focusCardId = `task-card-${focusTaskIndex}`;
+        // 使用一個極短的 setTimeout (0毫秒)，可以將滾動指令推遲到瀏覽器完成所有渲染任務之後執行
+        setTimeout(() => {
+            const focusCard = document.getElementById(focusCardId);
+            if (focusCard) {
+                focusCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                logToPage(`✅ 已自動滾動至任務 #${focusTaskIndex + 1}`);
+            }
+        }, 0);
     }
-    
         // [新增] 輔助函式，用於建立卡片中的每一個欄位，解決「工班」bug
     function createTaskCardField(header, task) {
         const div = document.createElement('div');
