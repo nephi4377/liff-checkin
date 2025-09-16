@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>互動式甘特圖沙盒（test.html v0.2.8）</title>
+  <title>互動式甘特圖沙盒（test.html v0.2.9）</title>
 
   <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.css">
@@ -24,23 +24,23 @@
     .gantt-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:2000}
     .gantt-modal-content{background:#fff;border-radius:var(--radius);width:95%;max-width:1400px;height:90vh;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,.35);padding:1rem}
     .gantt-modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;flex-shrink:0;}
-    .gantt-modal-header h2{margin:0;font-size:1.1rem}
     .toolbar{display:flex;gap:.5rem;align-items:center}
     .toolbar select{padding:.35rem .5rem;border:1px solid #d1d5db;border-radius:.4rem;background:#fff}
     .right{margin-left:auto;display:flex;gap:.5rem}
     pre#debug-log{background:#0b1020;color:#e5e7eb;border-radius:.5rem;padding:.75rem;height:12rem;overflow:auto;white-space:pre-wrap}
     
-    .gantt-host { display: grid; grid-template-columns: 280px 1fr; gap: .75rem; flex-grow: 1; overflow: hidden; }
+    /* [核心修正] 移除 .gantt-host 的 overflow: hidden */
+    .gantt-host { display: grid; grid-template-columns: 280px 1fr; gap: .75rem; flex-grow: 1; min-height: 0;}
     .left-rail, .gantt-chart-wrapper { border: 1px solid #e2e8f0; border-radius: var(--radius); background-color: #fff; }
     .left-rail { overflow: hidden; position: relative; }
     .left-rail-header { font-weight: 600; padding: 0 .75rem; border-bottom: 1px solid #e2e8f0; height: 50px; display:flex; align-items:center; background-color:#f8fafc; position:absolute; top:0; left:0; right:0; z-index: 1;}
     .left-rail-content { position: absolute; width: 100%; top: 50px; left:0; right:0; bottom:0; overflow: hidden;}
-    .left-rail-content-inner { position: relative; } /* [新增] 滾動內容的容器 */
+    .left-rail-content-inner { position: relative; }
     .left-rail .phase-header { font-weight: 600; background-color: #f1f5f9; padding: .5rem .75rem; font-size: .9rem; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; position: absolute; width: 100%;}
     .left-rail .row { padding: 0 .75rem; border-bottom:1px solid #f1f5f9; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; font-size:.9rem; position: absolute; width:100%; display: flex; align-items: center;}
     
     .gantt-pane { display:flex; flex-direction:column; min-width: 0; }
-    .gantt-chart-wrapper{ flex: 1; overflow: auto; }
+    .gantt-chart-wrapper{ flex: 1; overflow: auto; } /* 這個 overflow: auto; 會產生捲動條 */
     .xscroller { height: 18px; background:#e5e7eb; border-radius: 9px; position: relative; overflow:auto; margin-top: .5rem; flex-shrink: 0;}
     .xscroller .spacer { height: 1px; }
     
@@ -55,7 +55,7 @@
 </head>
 <body>
   <div class="container">
-     <header>
+    <header>
       <div><h1>互動式甘特圖沙盒</h1><div class="muted" id="subtitle">Demo 模式</div></div>
       <div class="right"><button id="view-gantt-btn" style="background:var(--green);display:none">📊 檢視甘特圖</button></div>
     </header>
@@ -101,8 +101,8 @@
     let currentScheduleData = [];
     let gantt = null;
     let TAIWAN_HOLIDAYS = new Set();
-
-    // --- (公用函式維持不變) ---
+    
+    // --- (公用函式與資料轉換邏輯維持不變) ---
     function logToPage(msg){ const t = new Date().toLocaleTimeString('zh-TW'); const el = document.getElementById('debug-log'); el.textContent += `[${t}] ${msg}\n`; el.scrollTop = el.scrollHeight; }
     function loadJsonp(url){ return new Promise((resolve, reject) => { const cb = 'jsonp_' + Math.random().toString(36).slice(2); const timer = setTimeout(() => { cleanup(); reject(new Error('請求逾時 (15s)')); }, 15000); function cleanup(){ clearTimeout(timer); delete window[cb]; script.remove(); } window[cb] = (data) => { cleanup(); resolve(data); }; const script = document.createElement('script'); script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb; script.onerror = () => { cleanup(); reject(new Error('載入失敗')); }; document.body.appendChild(script); }); }
     const toYYYYMMDD = (dateString) => { if (!dateString) return null; try { const d = new Date(dateString); if (isNaN(d.getTime())) return null; return d.toISOString().slice(0, 10); } catch (e) { return null; } };
@@ -112,6 +112,7 @@
     function openGanttModal(){ document.getElementById('gantt-modal').style.display = 'flex'; }
     function closeGanttModal(){ document.getElementById('gantt-modal').style.display = 'none'; }
     
+    // --- (初始化與渲染函式維持不變) ---
     function initGanttFromSchedule(schedule, viewMode = 'Day'){
       if (typeof Gantt !== 'function') { alert('甘特圖套件未載入'); return; }
       const tasks = scheduleToGanttTasks(schedule);
@@ -127,7 +128,7 @@
       
       setTimeout(() => {
         paintNonWorking(gantt);
-        syncLeftRail(gantt.bars); // [修正] 直接傳入渲染後的 bars
+        syncLeftRail(gantt.bars);
         syncScrollers();
       }, 100);
     }
@@ -135,7 +136,6 @@
     function isWeekend(d){ const day = d.getDay(); return day === 0 || day === 6; }
     function isHoliday(d){ return TAIWAN_HOLIDAYS.has(d.toISOString().slice(0,10)); }
 
-    // [核心修正] 假日標示渲染邏輯
     function paintNonWorking(g){
       try{
         const gridLayer = g.$svg.querySelector('.grid');
@@ -161,7 +161,6 @@
       }catch(e){ console.warn('paintNonWorking error', e); }
     }
     
-    // [核心修正] 左側欄位分組與對齊邏輯
     const phaseNameMapping = { '前置作業': 'P1. 設計籌備', '泥作工程': 'P2. 基礎工程', '木作工程': 'P2. 基礎工程', '後期裝修階段': 'P3. 裝修工程', '室內精裝階段': 'P4. 細部安裝', '驗收': 'P5. 驗收收尾' };
     const getPhaseDisplayName = (phase) => phaseNameMapping[phase] || phase;
 
@@ -180,16 +179,17 @@
                 const header = document.createElement('div');
                 header.className = 'phase-header';
                 header.textContent = getPhaseDisplayName(currentPhase);
-                header.style.top = (bar.y - (headerHeight - bar.height)/2 - 2) + 'px';
+                header.style.top = yOffset + 'px';
                 header.style.height = headerHeight + 'px';
                 leftRailContent.appendChild(header);
+                yOffset += headerHeight;
                 lastPhase = currentPhase;
             }
             
             const div = document.createElement('div');
             div.className = 'row';
             div.textContent = bar.task.name;
-            div.style.top = bar.y + 'px';
+            div.style.top = yOffset + bar.y + 'px';
             div.style.height = bar.height + 'px';
             leftRailContent.appendChild(div);
         });
@@ -220,7 +220,7 @@
       };
     }
     
-    // --- (其餘啟動與事件綁定邏輯維持不變) ---
+    // --- (啟動與事件綁定邏輯維持不變) ---
     function enableGanttButton(){ const btn = document.getElementById('view-gantt-btn'); if(!btn) return; btn.style.display = ''; btn.onclick = () => { initGanttFromSchedule(currentScheduleData); openGanttModal(); }; }
     const demoTasks = [ { '任務項目':'丈量與放樣', '階段': '前置作業', '預計開始日':'2025-09-16','預計完成日':'2025-09-18','狀態':'未完成' }, { '任務項目':'拆除工程', '階段': '前置作業', '預計開始日':'2025-09-19','預計完成日':'2025-09-21','狀態':'施工中' }, { '任務項目':'木作進場', '階段': '木作工程', '預計開始日':'2025-09-22','預計完成日':'2025-09-28','狀態':'未完成' } ];
     async function loadScheduleById(projectId){ const url = `${API_BASE_URL}?page=project&id=${encodeURIComponent(projectId)}`; logToPage('呼叫 API：' + url); const data = await loadJsonp(url); if(!data || !Array.isArray(data.schedule)) throw new Error('API 回傳無 schedule'); currentScheduleData = data.schedule; if (data.holidays && Array.isArray(data.holidays)) { TAIWAN_HOLIDAYS = new Set(data.holidays); logToPage(`已成功載入 ${TAIWAN_HOLIDAYS.size} 筆假日資料。`); } document.getElementById('subtitle').textContent = `實戰模式（案號：${projectId}）`; document.getElementById('schedule-brief').textContent = `已載入 ${currentScheduleData.length} 筆任務。`; enableGanttButton(); }
