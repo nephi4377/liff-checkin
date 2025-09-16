@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>互動式甘特圖沙盒（test.html v0.2.6）</title>
+  <title>互動式甘特圖沙盒（test.html v0.2.7）</title>
 
   <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.css">
@@ -31,16 +31,27 @@
     pre#debug-log{background:#0b1020;color:#e5e7eb;border-radius:.5rem;padding:.75rem;height:12rem;overflow:auto;white-space:pre-wrap}
     
     .gantt-host { display: grid; grid-template-columns: 280px 1fr; gap: .75rem; flex-grow: 1; overflow: hidden; }
-    .left-rail { overflow: hidden; position: relative; border: 1px solid #e2e8f0; border-radius: var(--radius); background-color: #f8fafc;}
-    .left-rail-header { font-weight: 600; padding: .5rem .75rem; border-bottom: 1px solid #ddd; height: 50px; display:flex; align-items:center;}
-    .left-rail-content { position: absolute; width: 100%; top: 50px; /* 預留給 header 的空間 */ }
+    /* [核心修正] 統一左右兩側樣式 */
+    .left-rail, .gantt-chart-wrapper { border: 1px solid #e2e8f0; border-radius: var(--radius); background-color: #fff; }
+    .left-rail { overflow: hidden; position: relative; }
+    .left-rail-header { font-weight: 600; padding: 0 .75rem; border-bottom: 1px solid #e2e8f0; height: 50px; display:flex; align-items:center; background-color:#f8fafc; }
+    .left-rail-content { position: absolute; width: 100%; top: 50px; left:0; right:0; bottom:0; }
+    /* [核心新增] 階段標題樣式 */
+    .left-rail .phase-header { font-weight: 600; background-color: #f1f5f9; padding: .25rem .75rem; font-size: .9rem; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; }
     .left-rail .row { padding: 0 .75rem; border-bottom:1px solid #f1f5f9; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; font-size:.9rem; position: absolute; width:100%; display: flex; align-items: center;}
+    
     .gantt-pane { display:flex; flex-direction:column; min-width: 0; }
-    .gantt-chart-wrapper{ flex: 1; overflow: auto; border: 1px solid #e2e8f0; border-radius: var(--radius); background:#fff; }
+    .gantt-chart-wrapper{ flex: 1; overflow: auto; }
     .xscroller { height: 18px; background:#e5e7eb; border-radius: 9px; position: relative; overflow:auto; margin-top: .5rem; flex-shrink: 0;}
     .xscroller .spacer { height: 1px; }
     
     .gantt .grid .nonwork-rect { fill: #fecaca; opacity: .4; }
+    /* [核心新增] 強化進度 BAR 拖曳點視覺 */
+    .gantt .bar-progress { fill: var(--primary); opacity: 0.8; }
+    .gantt .bar-handle { fill: var(--primary); cursor: ew-resize; opacity: 0; transition: opacity 0.2s; }
+    .gantt .bar-wrapper:hover .bar-handle { opacity: 1; }
+
+
     .legend { display:flex; align-items:center; gap:.5rem; font-size:.85rem; color:var(--muted); }
     .legend .swatch { width:12px; height:12px; background:#fecaca; border:1px solid #fca5a5; border-radius:2px }
   </style>
@@ -97,7 +108,7 @@
     const toYYYYMMDD = (dateString) => { if (!dateString) return null; try { const d = new Date(dateString); if (isNaN(d.getTime())) return null; return d.toISOString().slice(0, 10); } catch (e) { return null; } };
     function statusToProgress(status){ if(status === '已完成') return 100; if(status === '施工中') return 50; return 0; }
     function progressToStatus(p){ if(p >= 100) return '已完成'; if(p > 0) return '施工中'; return '未完成'; }
-    function scheduleToGanttTasks(schedule){ return schedule.map((t, i) => { const startDate = toYYYYMMDD(t['預計開始日']); const endDate = toYYYYMMDD(t['預計完成日']); if (!startDate || !endDate) return null; return { id: `task-${i}`, name: t['任務項目'] || `任務${i+1}`, start: startDate, end: endDate, progress: statusToProgress(t['狀態']), custom: { index: i } }; }).filter(Boolean); }
+    function scheduleToGanttTasks(schedule){ return schedule.map((t, i) => { const startDate = toYYYYMMDD(t['預計開始日']); const endDate = toYYYYMMDD(t['預計完成日']); if (!startDate || !endDate) return null; return { id: `task-${i}`, name: t['任務項目'] || `任務${i+1}`, start: startDate, end: endDate, progress: statusToProgress(t['狀態']), custom: { index: i, raw: t } }; }).filter(Boolean); }
     function openGanttModal(){ document.getElementById('gantt-modal').style.display = 'flex'; }
     function closeGanttModal(){ document.getElementById('gantt-modal').style.display = 'none'; }
     
@@ -109,29 +120,28 @@
       svg.innerHTML = '';
       
       gantt = new Gantt(svg, tasks, {
-        view_mode: viewMode, language: 'zh', bar_height: 28, padding: 4, header_height: 50,
+        view_mode: viewMode, language: 'zh', bar_height: 28, padding: 8, header_height: 50,
         on_date_change: (task, start, end) => { const idx = task.custom.index; const iso = d => new Date(d).toISOString().slice(0,10); currentScheduleData[idx]['預計開始日'] = iso(start); currentScheduleData[idx]['預計完成日'] = iso(end); logToPage(`日期變更：#${idx+1} → ${iso(start)} ~ ${iso(end)}`); document.getElementById('save-btn').style.display = ''; },
         on_progress_change: (task, progress) => { const idx = task.custom.index; currentScheduleData[idx]['狀態'] = progressToStatus(progress); logToPage(`進度變更：#${idx+1} → ${progress}%（狀態：${currentScheduleData[idx]['狀態']}）`); document.getElementById('save-btn').style.display = ''; }
       });
       
       setTimeout(() => {
-        syncLeftRail();
+        syncLeftRail(gantt.tasks); // 傳入排序後的 tasks
         paintNonWorking(gantt);
         syncScrollers();
-      }, 100); // 增加延遲，確保 SVG 完全渲染
+      }, 100);
     }
 
     function isWeekend(d){ const day = d.getDay(); return day === 0 || day === 6; }
     function isHoliday(d){ return TAIWAN_HOLIDAYS.has(d.toISOString().slice(0,10)); }
 
-    // [核心修正] 假日標示渲染邏輯
     function paintNonWorking(g){
       try{
         const svg = document.getElementById('gantt-chart');
         const gridLayer = svg.querySelector('.grid');
         if(!gridLayer) return;
         
-        const taskAreaHeight = g.tasks.length * (g.options.bar_height + g.options.padding * 2);
+        const taskAreaHeight = g.tasks.length * (g.options.bar_height + g.options.padding);
         gridLayer.querySelectorAll('.nonwork-rect').forEach(n => n.remove());
         
         const start = new Date(g.gantt_start);
@@ -146,23 +156,47 @@
           rect.setAttribute('y', g.options.header_height);
           rect.setAttribute('width', g.options.column_width);
           rect.setAttribute('height', taskAreaHeight);
-          gridLayer.appendChild(rect);
+          gridLayer.insertBefore(rect, gridLayer.firstChild);
         }
       }catch(e){ console.warn('paintNonWorking error', e); }
     }
     
-    // [核心修正] 左側欄位與滾動同步邏輯
-    function syncLeftRail() {
+    // [核心修正] 左側欄位分組、對齊與滾動同步邏輯
+    const phaseNameMapping = { '前置作業': '前置', '木作工程': '1段', '後期裝修階段': '2段', '室內精裝階段': '3段', '驗收': '驗收' };
+    const getPhaseDisplayName = (phase) => phaseNameMapping[phase] || phase;
+
+    function syncLeftRail(sortedTasks) {
         const leftRailContent = document.getElementById('left-rail-content');
         leftRailContent.innerHTML = '';
-        if (!gantt || !gantt.bars) return;
+        if (!gantt || !gantt.bars || !sortedTasks) return;
 
-        // 直接讀取渲染後的 bar 物件，確保順序與位置絕對正確
-        gantt.bars.forEach(bar => {
+        let lastPhase = null;
+        let yOffset = 0; // 記錄階段標題所佔據的額外高度
+
+        const barMap = new Map(gantt.bars.map(b => [b.task.id, b]));
+
+        sortedTasks.forEach(task => {
+            const bar = barMap.get(task.id);
+            if (!bar) return;
+
+            const currentPhase = task.custom.raw['階段'];
+            if (currentPhase !== lastPhase) {
+                const header = document.createElement('div');
+                header.className = 'phase-header';
+                header.textContent = getPhaseDisplayName(currentPhase);
+                header.style.top = (bar.y + yOffset) + 'px';
+                // 假設階段標題高度為 30px
+                const headerHeight = 30;
+                header.style.height = headerHeight + 'px';
+                leftRailContent.appendChild(header);
+                yOffset += headerHeight;
+                lastPhase = currentPhase;
+            }
+
             const div = document.createElement('div');
             div.className = 'row';
             div.textContent = bar.task.name;
-            div.style.top = bar.y + 'px';
+            div.style.top = (bar.y + yOffset) + 'px';
             div.style.height = bar.height + 'px';
             leftRailContent.appendChild(div);
         });
@@ -195,10 +229,10 @@
     
     // --- (其餘啟動與事件綁定邏輯維持不變) ---
     function enableGanttButton(){ const btn = document.getElementById('view-gantt-btn'); if(!btn) return; btn.style.display = ''; btn.onclick = () => { initGanttFromSchedule(currentScheduleData); openGanttModal(); }; }
-    const demoTasks = [ { '任務項目':'丈量與放樣','工種':'行政','預計開始日':'2025-09-16','預計完成日':'2025-09-18','狀態':'未完成' }, { '任務項目':'拆除工程','工種':'拆除','預計開始日':'2025-09-19','預計完成日':'2025-09-21','狀態':'施工中' } ];
+    const demoTasks = [ { '任務項目':'丈量與放樣','工種':'行政','預計開始日':'2025-09-16','預計完成日':'2025-09-18','狀態':'未完成', '階段': '前置作業' }, { '任務項目':'拆除工程','工種':'拆除','預計開始日':'2025-09-19','預計完成日':'2025-09-21','狀態':'施工中', '階段': '前置作業' }, { '任務項目':'木作進場','工種':'木作','預計開始日':'2025-09-22','預計完成日':'2025-09-28','狀態':'未完成', '階段': '木作工程' } ];
     async function loadScheduleById(projectId){ const url = `${API_BASE_URL}?page=project&id=${encodeURIComponent(projectId)}`; logToPage('呼叫 API：' + url); const data = await loadJsonp(url); if(!data || !Array.isArray(data.schedule)) throw new Error('API 回傳無 schedule'); currentScheduleData = data.schedule; if (data.holidays && Array.isArray(data.holidays)) { TAIWAN_HOLIDAYS = new Set(data.holidays); logToPage(`已成功載入 ${TAIWAN_HOLIDAYS.size} 筆假日資料。`); } document.getElementById('subtitle').textContent = `實戰模式（案號：${projectId}）`; document.getElementById('schedule-brief').textContent = `已載入 ${currentScheduleData.length} 筆任務。`; enableGanttButton(); }
     function useDemoData(){ currentScheduleData = JSON.parse(JSON.stringify(demoTasks)); document.getElementById('subtitle').textContent = 'Demo 模式'; document.getElementById('schedule-brief').textContent = `已載入 ${currentScheduleData.length} 筆 Demo 任務。`; enableGanttButton(); TAIWAN_HOLIDAYS = new Set(['2025-10-10']); logToPage('已載入 Demo 假日 (10/10)。'); }
-    async function saveScheduleChanges(projectId){ if(!projectId){ alert('請先輸入案號'); return; } const btn = document.getElementById('save-btn'); btn.textContent = '儲存中...'; btn.disabled = true; const payload = { action:'updateSchedule', projectId, scheduleData: currentScheduleData }; const endpoint = `${API_BASE_URL}?page=project`; logToPage('POST → ' + endpoint); try{ await fetch(endpoint, { method:'POST', mode:'no-cors', body: JSON.stringify(payload), headers:{'Content-Type':'text/plain;charset=utf-8'} }); logToPage('已送出更新。'); alert('儲存成功！'); btn.style.display = 'none'; } catch(err){ logToPage('送出失敗：' + err.message); alert('送出失敗：' + err.message); } finally { btn.textContent = '儲存排程變更'; btn.disabled = false; } }
+    async function saveScheduleChanges(projectId){ if(!projectId){ alert('請先輸入案號'); return; } const btn = document.getElementById('save-btn'); btn.textContent = '儲存中...'; btn.disabled = true; const payload = { action:'updateSchedule', projectId, scheduleData: currentScheduleData }; const endpoint = `${API_BASE_URL}?page=project`; logToPage('POST → ' + endpoint); try{ await fetch(endpoint, { method:'POST', mode:'no-cors', body: JSON.stringify(payload), headers:{'Content-Type':'text/plain;charset=utf-8'} }); logToPage('已送出更新。'); alert('儲存成功！'); btn.style.display = 'none'; } catch(err){ logToPage('送出失敗：' + err.message); alert('儲存失敗：' + err.message); } finally { btn.textContent = '儲存排程變更'; btn.disabled = false; } }
     document.addEventListener('DOMContentLoaded', () => { const params = new URLSearchParams(location.search); const idParam = params.get('id'); const projectInput = document.getElementById('project-id-input'); if(idParam){ projectInput.value = idParam; loadScheduleById(idParam).catch(e => alert('載入專案資料失敗: ' + e.message)); } else { useDemoData(); } document.getElementById('modal-close-btn').onclick = closeGanttModal; document.getElementById('modal-view-mode-select').addEventListener('change', (e) => { if(gantt){ gantt.change_view_mode(e.target.value); setTimeout(() => { paintNonWorking(gantt); syncScrollers(); }, 0); } }); document.getElementById('load-btn').onclick = () => { const pid = projectInput.value.trim(); if(!pid){ alert('請輸入案號'); return; } loadScheduleById(pid).catch(err => alert(err.message)); }; document.getElementById('use-demo-btn').onclick = useDemoData; document.getElementById('save-btn').onclick = () => { const pid = projectInput.value.trim(); saveScheduleChanges(pid); }; });
   </script>
 </body>
