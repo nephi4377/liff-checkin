@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>出勤管理主控台</title>
+    <title>出勤管理主控台 V2.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .summary-card { transition: all 0.3s ease; }
@@ -41,10 +41,12 @@
             </div>
         </div>
 
-        <div id="summary-section" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總遲到分鐘數</div><div id="total-late" class="mt-1 text-3xl font-semibold text-yellow-600">0</div></div>
-            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總早退分鐘數</div><div id="total-early" class="mt-1 text-3xl font-semibold text-blue-600">0</div></div>
-            <div id="absent-summary" class="bg-white p-4 rounded-lg shadow summary-card" style="display: none;"><div class="text-sm font-medium text-gray-500">總缺勤天數</div><div id="total-absent" class="mt-1 text-3xl font-semibold text-red-600">0</div></div>
+        <div id="summary-section" class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">應到天數</div><div id="total-workdays" class="mt-1 text-3xl font-semibold text-gray-700">0</div></div>
+            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">實到天數</div><div id="total-attended" class="mt-1 text-3xl font-semibold text-green-600">0</div></div>
+            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總遲到(分)</div><div id="total-late" class="mt-1 text-3xl font-semibold text-orange-500">0</div></div>
+            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總早退(分)</div><div id="total-early" class="mt-1 text-3xl font-semibold text-blue-500">0</div></div>
+            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總缺勤(天)</div><div id="total-absent" class="mt-1 text-3xl font-semibold text-red-600">0</div></div>
         </div>
 
         <div id="results-container" class="bg-white p-6 rounded-lg shadow-md">
@@ -158,12 +160,10 @@
             time: document.getElementById('modal-time').value,
             eventType: document.getElementById('modal-event-type').value,
         };
-
         if(!payload.date || !payload.time) {
             alert('請填寫完整的日期與時間。');
             return;
         }
-
         fetch(`${API_BASE_URL}?page=attendance_api`, {
             method: 'POST',
             body: JSON.stringify(payload),
@@ -192,7 +192,7 @@
             .then(data => {
                 spinner.style.display = 'none';
                 renderSummary(data.summary);
-                renderReportTable(data.records);
+                renderReportTable(data.records, new Set(data.holidays || [])); 
                 if (typeof google !== 'undefined' && userId && data.records[userId] && data.records[userId].mapPoints.length > 0) {
                     initMap(data.records[userId].mapPoints);
                 }
@@ -206,24 +206,21 @@
 
     function renderSummary(summary) {
         document.getElementById('summary-section').style.display = 'grid';
+        document.getElementById('total-workdays').textContent = summary.totalWorkDays || 0;
+        document.getElementById('total-attended').textContent = summary.totalAttendedDays || 0;
         document.getElementById('total-late').textContent = summary.totalLateMinutes || 0;
         document.getElementById('total-early').textContent = summary.totalEarlyMinutes || 0;
-        const absentCard = document.getElementById('absent-summary');
-        if (summary.totalAbsentDays !== undefined) {
-             absentCard.style.display = 'block';
-             document.getElementById('total-absent').textContent = summary.totalAbsentDays || 0;
-        } else {
-            absentCard.style.display = 'none';
-        }
+        document.getElementById('total-absent').textContent = summary.totalAbsentDays || 0;
     }
     
-    function renderReportTable(recordsByUser) {
+    function renderReportTable(recordsByUser, holidays) {
         const container = document.getElementById('report-table-container');
         if (!recordsByUser || Object.keys(recordsByUser).length === 0) {
             container.innerHTML = '<p class="text-center text-gray-500">此範圍內無出勤紀錄。</p>';
             return;
         }
 
+        const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
         let html = '<div class="bg-white p-6 rounded-lg shadow-md"><h2 class="text-xl font-semibold mb-4">出勤明細</h2><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">';
         html += '<thead class="bg-gray-50"><tr>' +
             '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">員工姓名</th>' +
@@ -234,18 +231,28 @@
             '<th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">遲到(分)</th>' +
             '<th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">早退(分)</th>' +
             '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-
+        
         for (const userId in recordsByUser) {
             const userData = recordsByUser[userId];
             const dailyData = userData.dailyData || {};
-            for (const date in dailyData) {
-                const day = dailyData[date];
+            // [修改] 取得所有日期的鍵並排序，確保顯示順序正確
+            const sortedDates = Object.keys(dailyData).sort();
+
+            for (const dateStr of sortedDates) {
+                const day = dailyData[dateStr];
+                const dateObj = new Date(dateStr);
+                dateObj.setMinutes(dateObj.getMinutes() + dateObj.getTimezoneOffset());
+                const dayOfWeek = dateObj.getDay();
+
+                const isHoliday = holidays.has(dateStr) || dayOfWeek === 0 || dayOfWeek === 6;
+                const dateClass = isHoliday ? 'text-red-600 font-bold' : '';
+
                 const lateClass = day.late > 0 ? 'text-orange-600 font-bold' : '';
                 const earlyClass = day.early > 0 ? 'text-blue-600 font-bold' : '';
 
                 html += `<tr>
                     <td class="px-6 py-4 whitespace-nowrap font-medium">${userData.userName}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${date}</td>
+                    <td class="px-6 py-4 whitespace-nowrap ${dateClass}">${dateStr} (${weekdays[dayOfWeek]})</td>
                     <td class="px-6 py-4 whitespace-nowrap text-center">${day.checkIn || '---'}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-center">${day.checkOut || '---'}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${day.status}</td>
@@ -254,33 +261,25 @@
                 </tr>`;
             }
         }
-        
         html += '</tbody></table></div></div>';
         container.innerHTML = html;
     }
 
-    /**
-     * [新增] 根據事件類型和狀態，回傳對應的地圖圖示設定
-     */
     function getMarkerIcon(eventType, status) {
-        // 預設顏色 (灰色，用於不屬於上下班的「位置回報」)
         let color = '#707070'; 
-        
         if (eventType === '上班') {
-            color = (status === '遲到') ? '#F97316' : '#22C55E'; // 遲到為橙色，準點為綠色
+            color = (status === '遲到') ? '#F97316' : '#22C55E';
         } else if (eventType === '下班') {
-            color = (status === '早退') ? '#EF4444' : '#3B82F6'; // 早退為紅色，準點為藍色
+            color = (status === '早退') ? '#EF4444' : '#3B82F6';
         }
-
-        // 回傳一個 SVG 圖示物件，Google Maps API 可以直接使用
         return {
-            path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z', // 水滴圖形
+            path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
             fillColor: color,
             fillOpacity: 0.9,
             strokeWeight: 0,
             rotation: 0,
             scale: 1.5,
-            anchor: new google.maps.Point(12, 22), // 圖示錨點
+            anchor: new google.maps.Point(12, 22),
         };
     }
 
@@ -289,34 +288,25 @@
         if (!points || !Array.isArray(points) || points.length === 0 || 
             typeof points[0] !== 'object' || points[0] === null || 
             typeof points[0].lat !== 'number' || typeof points[0].lng !== 'number') {
-            
             console.error('[DEBUG] 收到的地圖座標資料無效或格式不符:', points);
             mapContainer.style.display = 'none';
             return;
         }
-
         mapContainer.style.display = 'block';
-
         const map = new google.maps.Map(document.getElementById("map"), {
             zoom: 15,
             center: { lat: points[0].lat, lng: points[0].lng },
         });
-
         const infoWindow = new google.maps.InfoWindow();
-
         points.forEach(point => {
             const position = { lat: point.lat, lng: point.lng };
-            
-            // [修改] 建立標記時，呼叫 getMarkerIcon 函式取得圖示
             const marker = new google.maps.Marker({ 
                 position: position, 
                 map: map,
                 title: `${point.eventType} - ${point.time}`,
                 icon: getMarkerIcon(point.eventType, point.status) 
             });
-
             marker.addListener('click', () => {
-                // [修改] 在資訊窗中顯示更豐富的狀態
                 const statusText = (point.status === '準點') ? '' : `<span class="font-bold" style="color: ${getMarkerIcon(point.eventType, point.status).fillColor};">(${point.status})</span>`;
                 const contentString = `
                     <div class="p-1" style="max-width: 250px;">
