@@ -11,7 +11,6 @@
         #map { height: 400px; width: 100%; border-radius: 0.5rem; margin-top: 1rem; }
         .modal { display: none; }
         .modal.is-open { display: flex; align-items: center; justify-content: center; }
-        .map-error-overlay { background-color: #f3f4f6; color: #6b7280; display: flex; align-items: center; justify-content: center; text-align: center; padding: 2rem; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -26,22 +25,22 @@
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                 <div>
                     <label for="start-date" class="block text-sm font-medium text-gray-700">開始日期</label>
-                    <input type="date" id="start-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                    <input type="date" id="start-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                 </div>
                 <div>
                     <label for="end-date" class="block text-sm font-medium text-gray-700">結束日期</label>
-                    <input type="date" id="end-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                    <input type="date" id="end-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                 </div>
                 <div>
                     <label for="employee-select" class="block text-sm font-medium text-gray-700">選擇員工</label>
-                    <select id="employee-select" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                    <select id="employee-select" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                         <option value="">所有員工</option>
                     </select>
                 </div>
-                <button id="query-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700">查詢</button>
+                <button id="query-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700 transition duration-300">查詢</button>
             </div>
         </div>
-        
+
         <div id="summary-section" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總遲到分鐘數</div><div id="total-late" class="mt-1 text-3xl font-semibold text-yellow-600">0</div></div>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總早退分鐘數</div><div id="total-early" class="mt-1 text-3xl font-semibold text-blue-600">0</div></div>
@@ -54,18 +53,18 @@
              <div id="map-container" style="display: none;">
                  <h3 class="text-lg font-semibold mt-4">打卡地圖</h3>
                  <div id="map"></div>
-            </div>
+             </div>
         </div>
     </div>
     
     <div id="checkin-modal" class="modal fixed inset-0 bg-gray-600 bg-opacity-50 h-full w-full">
-      <div class="relative p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+      <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <h3 class="text-lg font-semibold">手動補打卡</h3>
         <div class="mt-4 space-y-4">
-          <div><label for="modal-employee-select" class="text-sm">員工</label><select id="modal-employee-select" class="mt-1 block w-full rounded-md border-gray-300"></select></div>
-          <div><label for="modal-date" class="text-sm">日期</label><input type="date" id="modal-date" class="mt-1 block w-full rounded-md border-gray-300"></div>
-          <div><label for="modal-time" class="text-sm">時間 (HH:mm)</label><input type="time" id="modal-time" class="mt-1 block w-full rounded-md border-gray-300"></div>
-          <div><label for="modal-event-type" class="text-sm">事件</label><select id="modal-event-type" class="mt-1 block w-full rounded-md border-gray-300"><option value="上班">上班</option><option value="下班">下班</option></select></div>
+          <div><label for="modal-employee-select">員工</label><select id="modal-employee-select" class="mt-1 block w-full rounded-md border-gray-300"></select></div>
+          <div><label for="modal-date">日期</label><input type="date" id="modal-date" class="mt-1 block w-full rounded-md border-gray-300"></div>
+          <div><label for="modal-time">時間 (HH:mm)</label><input type="time" id="modal-time" class="mt-1 block w-full rounded-md border-gray-300"></div>
+          <div><label for="modal-event-type">事件</label><select id="modal-event-type" class="mt-1 block w-full rounded-md border-gray-300"><option value="上班">上班</option><option value="下班">下班</option></select></div>
         </div>
         <div class="mt-6 flex justify-end space-x-2">
           <button id="modal-cancel-btn" class="px-4 py-2 bg-gray-200 rounded-md">取消</button>
@@ -76,50 +75,62 @@
 
 <script>
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    let map;
-    let markers = [];
 
-    function initGoogleMap() {
-        const centerPoint = { lat: 22.997, lng: 120.211 };
-        map = new google.maps.Map(document.getElementById("map"), {
-            zoom: 12,
-            center: centerPoint,
-        });
-    }
-
-    function handleMapError() {
-        console.error("Google Maps API 金鑰驗證失敗。");
-        const mapDiv = document.getElementById("map");
-        if(mapDiv) {
-            mapDiv.innerHTML = `
-                <div class="map-error-overlay h-full">
-                    <div>
-                        <p class="font-semibold">無法載入地圖</p>
-                        <p class="text-sm mt-1">Google Maps API 金鑰無效或設定錯誤，請聯繫系統管理員檢查後台設定。</p>
-                    </div>
-                </div>
-            `;
-        }
-    }
-    
     function loadJsonp(url) {
         return new Promise((resolve, reject) => {
             const cb = 'jsonp_' + Math.random().toString(36).slice(2);
-            const timer = setTimeout(() => { cleanup(); reject(new Error('請求後端資料超時 (15秒)。')); }, 15000);
-            function cleanup(){ clearTimeout(timer); delete window[cb]; if(script.parentNode) script.parentNode.removeChild(script); }
-            window[cb] = (data) => { cleanup(); resolve(data); };
+            const timer = setTimeout(() => { 
+                cleanup(); 
+                reject(new Error('請求後端資料超時 (15秒)。')); 
+            }, 15000);
+            
+            function cleanup(){ 
+                clearTimeout(timer); 
+                delete window[cb]; 
+                if(script.parentNode) script.parentNode.removeChild(script); 
+            }
+
+            window[cb] = (data) => { 
+                cleanup(); 
+                resolve(data); 
+            };
+
             const script = document.createElement('script');
             script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
-            script.onerror = () => { cleanup(); reject(new Error('載入後端資料失敗。')); };
+            script.onerror = () => { 
+                cleanup(); 
+                reject(new Error('載入後端資料失敗。')); 
+            };
             document.body.appendChild(script);
         });
     }
 
+    function loadGoogleMapsAPI(apiKey) {
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker`;
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         const today = new Date();
-        const todayStr = today.toLocaleDateString('sv'); // 'sv' format is yyyy-mm-dd
-        document.getElementById('start-date').value = todayStr;
-        document.getElementById('end-date').value = todayStr;
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        document.getElementById('start-date').value = firstDayOfMonth.toLocaleDateString('sv');
+        document.getElementById('end-date').value = today.toLocaleDateString('sv');
+
+        loadJsonp(`${API_BASE_URL}?page=attendance_api&action=get_config`)
+            .then(config => {
+                if (config && config.googleMapsApiKey) {
+                    loadGoogleMapsAPI(config.googleMapsApiKey);
+                } else {
+                    throw new Error('後端未回傳 API Key。');
+                }
+            })
+            .catch(error => {
+                console.error('[DEBUG] 無法載入 Google Maps API Key:', error);
+                alert('無法載入地圖設定，地圖功能將無法使用。');
+            });
 
         loadJsonp(`${API_BASE_URL}?page=attendance_api&action=get_employees`)
             .then(employees => {
@@ -130,13 +141,40 @@
                     select.innerHTML += option;
                     modalSelect.innerHTML += option;
                 });
-            });
+            })
+            .catch(error => console.error('[DEBUG] 載入員工列表失敗:', error));
 
         document.getElementById('query-btn').onclick = fetchReportData;
         document.getElementById('add-checkin-btn').onclick = () => document.getElementById('checkin-modal').classList.add('is-open');
         document.getElementById('modal-cancel-btn').onclick = () => document.getElementById('checkin-modal').classList.remove('is-open');
         document.getElementById('modal-submit-btn').onclick = handleManualCheckinSubmit;
     });
+
+    function handleManualCheckinSubmit() {
+        const payload = {
+            action: 'add_manual_checkin',
+            userId: document.getElementById('modal-employee-select').value,
+            date: document.getElementById('modal-date').value,
+            time: document.getElementById('modal-time').value,
+            eventType: document.getElementById('modal-event-type').value,
+        };
+
+        if(!payload.date || !payload.time) {
+            alert('請填寫完整的日期與時間。');
+            return;
+        }
+
+        fetch(`${API_BASE_URL}?page=attendance_api`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            mode: 'no-cors'
+        }).then(() => {
+            alert('補打卡請求已送出！報表將重新整理。');
+            document.getElementById('checkin-modal').classList.remove('is-open');
+            fetchReportData();
+        }).catch(err => alert('送出失敗: ' + err));
+    }
 
     function fetchReportData() {
         const startDate = document.getElementById('start-date').value;
@@ -146,95 +184,152 @@
         
         spinner.style.display = 'block';
         document.getElementById('report-table-container').innerHTML = '';
+        document.getElementById('summary-section').style.display = 'none';
         document.getElementById('map-container').style.display = 'none';
 
-        const params = new URLSearchParams({ page: 'attendance_api', startDate, endDate, userId });
+        const params = new URLSearchParams({ page: 'attendance_api', action:'get_report', startDate, endDate, userId });
         loadJsonp(`${API_BASE_URL}?${params.toString()}`)
             .then(data => {
                 spinner.style.display = 'none';
                 renderSummary(data.summary);
                 renderReportTable(data.records);
-                if (userId && data.records[userId] && data.records[userId].mapPoints.length > 0) {
-                    updateMap(data.records[userId].mapPoints);
+                if (typeof google !== 'undefined' && userId && data.records[userId] && data.records[userId].mapPoints.length > 0) {
+                    initMap(data.records[userId].mapPoints);
                 }
+            })
+            .catch(error => {
+                spinner.style.display = 'none';
+                console.error("查詢報表資料失敗:", error);
+                document.getElementById('report-table-container').innerHTML = `<p class="text-center text-red-500">查詢資料失敗：${error.message}</p>`;
             });
-    }
-    
-    function handleManualCheckinSubmit() {
-        const payload = {
-            action: 'add_manual_checkin',
-            userId: document.getElementById('modal-employee-select').value,
-            date: document.getElementById('modal-date').value,
-            time: document.getElementById('modal-time').value,
-            eventType: document.getElementById('modal-event-type').value,
-        };
-        fetch(`${API_BASE_URL}?page=attendance_api`, {
-            method: 'POST', body: JSON.stringify(payload),
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, mode: 'no-cors'
-        }).then(() => {
-            alert('補打卡請求已送出！');
-            document.getElementById('checkin-modal').classList.remove('is-open');
-            fetchReportData();
-        }).catch(err => alert('送出失敗: ' + err));
     }
 
     function renderSummary(summary) {
         document.getElementById('summary-section').style.display = 'grid';
         document.getElementById('total-late').textContent = summary.totalLateMinutes || 0;
         document.getElementById('total-early').textContent = summary.totalEarlyMinutes || 0;
-        
         const absentCard = document.getElementById('absent-summary');
-        const startDate = new Date(document.getElementById('start-date').value);
-        const endDate = new Date(document.getElementById('end-date').value);
-        if (startDate.getDate() === 1 && endDate.getDate() === new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0).getDate()) {
-            absentCard.style.display = 'block';
-            document.getElementById('total-absent').textContent = summary.totalAbsentDays || 0;
+        if (summary.totalAbsentDays !== undefined) {
+             absentCard.style.display = 'block';
+             document.getElementById('total-absent').textContent = summary.totalAbsentDays || 0;
         } else {
             absentCard.style.display = 'none';
         }
     }
-
-    function renderReportTable(records) {
+    
+    function renderReportTable(recordsByUser) {
         const container = document.getElementById('report-table-container');
-        let html = '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">';
-        html += '<thead class="bg-gray-50"><tr><th>員工姓名</th><th>日期</th><th>上班</th><th>下班</th><th>狀態</th><th>遲到(分)</th><th>早退(分)</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+        if (!recordsByUser || Object.keys(recordsByUser).length === 0) {
+            container.innerHTML = '<p class="text-center text-gray-500">此範圍內無出勤紀錄。</p>';
+            return;
+        }
 
-        for (const userId in records) {
-            const userData = records[userId];
-            const dailyData = userData.dailyData;
+        let html = '<div class="bg-white p-6 rounded-lg shadow-md"><h2 class="text-xl font-semibold mb-4">出勤明細</h2><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">';
+        html += '<thead class="bg-gray-50"><tr>' +
+            '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">員工姓名</th>' +
+            '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">日期</th>' +
+            '<th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">上班</th>' +
+            '<th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">下班</th>' +
+            '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">狀態</th>' +
+            '<th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">遲到(分)</th>' +
+            '<th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">早退(分)</th>' +
+            '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+
+        for (const userId in recordsByUser) {
+            const userData = recordsByUser[userId];
+            const dailyData = userData.dailyData || {};
             for (const date in dailyData) {
                 const day = dailyData[date];
-                html += `<tr><td>${userData.userName}</td><td>${date}</td><td>${day.checkIn || '---'}</td><td>${day.checkOut || '---'}</td><td>${day.status}</td><td>${day.late}</td><td>${day.early}</td></tr>`;
+                const lateClass = day.late > 0 ? 'text-orange-600 font-bold' : '';
+                const earlyClass = day.early > 0 ? 'text-blue-600 font-bold' : '';
+
+                html += `<tr>
+                    <td class="px-6 py-4 whitespace-nowrap font-medium">${userData.userName}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${date}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center">${day.checkIn || '---'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center">${day.checkOut || '---'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${day.status}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center ${lateClass}">${day.late}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center ${earlyClass}">${day.early}</td>
+                </tr>`;
             }
         }
         
-        html += '</tbody></table></div>';
+        html += '</tbody></table></div></div>';
         container.innerHTML = html;
     }
 
-    function updateMap(points) {
+    /**
+     * [新增] 根據事件類型和狀態，回傳對應的地圖圖示設定
+     */
+    function getMarkerIcon(eventType, status) {
+        // 預設顏色 (灰色，用於不屬於上下班的「位置回報」)
+        let color = '#707070'; 
+        
+        if (eventType === '上班') {
+            color = (status === '遲到') ? '#F97316' : '#22C55E'; // 遲到為橙色，準點為綠色
+        } else if (eventType === '下班') {
+            color = (status === '早退') ? '#EF4444' : '#3B82F6'; // 早退為紅色，準點為藍色
+        }
+
+        // 回傳一個 SVG 圖示物件，Google Maps API 可以直接使用
+        return {
+            path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z', // 水滴圖形
+            fillColor: color,
+            fillOpacity: 0.9,
+            strokeWeight: 0,
+            rotation: 0,
+            scale: 1.5,
+            anchor: new google.maps.Point(12, 22), // 圖示錨點
+        };
+    }
+
+    function initMap(points) {
         const mapContainer = document.getElementById('map-container');
-        if (!map || !points || points.length === 0) {
+        if (!points || !Array.isArray(points) || points.length === 0 || 
+            typeof points[0] !== 'object' || points[0] === null || 
+            typeof points[0].lat !== 'number' || typeof points[0].lng !== 'number') {
+            
+            console.error('[DEBUG] 收到的地圖座標資料無效或格式不符:', points);
             mapContainer.style.display = 'none';
             return;
         }
+
         mapContainer.style.display = 'block';
 
-        markers.forEach(marker => marker.setMap(null));
-        markers = [];
-
-        const bounds = new google.maps.LatLngBounds();
-        points.forEach(point => {
-            const marker = new google.maps.Marker({ position: point, map: map });
-            markers.push(marker);
-            bounds.extend(point);
+        const map = new google.maps.Map(document.getElementById("map"), {
+            zoom: 15,
+            center: { lat: points[0].lat, lng: points[0].lng },
         });
 
-        map.fitBounds(bounds);
-        if (points.length === 1) map.setZoom(15);
+        const infoWindow = new google.maps.InfoWindow();
+
+        points.forEach(point => {
+            const position = { lat: point.lat, lng: point.lng };
+            
+            // [修改] 建立標記時，呼叫 getMarkerIcon 函式取得圖示
+            const marker = new google.maps.Marker({ 
+                position: position, 
+                map: map,
+                title: `${point.eventType} - ${point.time}`,
+                icon: getMarkerIcon(point.eventType, point.status) 
+            });
+
+            marker.addListener('click', () => {
+                // [修改] 在資訊窗中顯示更豐富的狀態
+                const statusText = (point.status === '準點') ? '' : `<span class="font-bold" style="color: ${getMarkerIcon(point.eventType, point.status).fillColor};">(${point.status})</span>`;
+                const contentString = `
+                    <div class="p-1" style="max-width: 250px;">
+                        <div class="font-bold">${point.eventType} ${statusText}</div>
+                        <div class="text-sm text-gray-600">${point.time || '無時間資訊'}</div>
+                        <div class="text-xs text-gray-800 mt-1">${point.address || '無地址資訊'}</div>
+                    </div>`;
+                infoWindow.setContent(contentString);
+                infoWindow.open(map, marker);
+            });
+        });
     }
 </script>
-<script src="https://maps.googleapis.com/maps/api/js?key=<?= getGoogleMapsApiKey_() ?>&libraries=marker&callback=initGoogleMap" async defer onerror="handleMapError()"></script>
 </body>
 </html>
 
