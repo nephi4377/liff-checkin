@@ -1,0 +1,475 @@
+/*
+ * 版本號: v1.1
+ * 修改時間: 2025-09-26 20:00 (Asia/Taipei)
+ * 說明:
+ * - [修復] 移除此檔案中的 <script> 標籤與 HTML 註解，使其成為純粹的 JavaScript 檔案，
+ * 以解決 'Unexpected token <' 的語法錯誤。
+*/
+/* ===== 全域狀態變數 ===== */
+let currentLogsData = [];
+let currentScheduleData = [];
+let templateTasks = [];
+
+/* ===== 核心功能：畫面渲染 ===== */
+
+// 渲染單筆日誌卡片
+function _buildLogCard(log){
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.id = 'log-' + log.LogID;
+  const timestamp = log.Timestamp ? new Date(log.Timestamp).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}) : '-';
+  const displayContent = (log.Content || '無內容').replace(/^\[更新 .*?\]\n/, '');
+
+  card.innerHTML = `
+    <h3 class="text-lg font-bold">${log.Title || '無標題'}</h3>
+    <small class="muted">案場: ${log.ProjectName || '未知'}｜回報人: ${log.UserName || '未知'}</small><br>
+    <small class="muted">建立時間: ${timestamp}</small>
+    <hr class="my-3">
+    <div style="white-space: pre-wrap;">${displayContent}</div>
+  `;
+  if(log.PhotoLinks){
+    card.appendChild(buildPhotoGrid(log.PhotoLinks));
+  }
+  return card;
+}
+
+// 渲染所有日誌
+function displayLogs(logs){
+  const container = document.getElementById('logs-container');
+  container.innerHTML = '';
+  if(!Array.isArray(logs) || logs.length === 0){
+    container.innerHTML = '<div class="card"><p class="muted text-center">沒有可顯示的日誌。</p></div>';
+    return;
+  }
+  logs.forEach(log => container.appendChild(_buildLogCard(log)));
+}
+
+// 渲染進度總覽與任務列表
+function displaySchedule(overview, schedule, keepOpen = false){
+    const container = document.getElementById('schedule-container');
+    if (!container) return;
+    container.innerHTML = ''; 
+    if (!overview || !schedule || !overview['專案起始日']) {
+        container.style.display = 'none';
+        return;
+    }
+    container.style.display = 'block';
+
+    const buttonGroup = document.createElement('div');
+    buttonGroup.className = 'button-group';
+    buttonGroup.style.marginBottom = '1rem';
+    buttonGroup.innerHTML = '<button id="save-schedule-btn" style="display:none; background-color: #dc2626;">儲存排程變更</button>';
+
+    const details = document.createElement('details');
+    details.className = 'schedule-accordion';
+    if (keepOpen) details.open = true;
+
+    const summary = document.createElement('summary');
+    const firstUnfinishedTask = schedule.find(t => t['狀態'] !== '已完成');
+    const currentPhase = firstUnfinishedTask ? firstUnfinishedTask['階段'] : '專案已完工';
+    summary.innerHTML = `<div class="progress-label"><strong>目前階段: ${currentPhase}</strong></div>`;
+    
+    const timeline = document.createElement('div');
+    timeline.className = 'progress-timeline';
+    if (schedule.length > 0) {
+        const PHASE_COLORS = { '前置作業': '#3b82f6', '泥作工程': '#6b7280', '木作工程': '#964B00', '後期裝修階段': '#f59e0b', '室內精裝階段': '#16a34a', '驗收': '#8b5cf6', '預設': '#d1d5db' };
+        const startDate = new Date(overview['專案起始日']);
+        const endDate   = new Date(overview['預計完工日']);
+        const totalDuration = Math.max(1, endDate - startDate);
+        const phases = [...new Set(schedule.map(t => t['階段']))];
+        phases.forEach(phase => {
+            const tasksInPhase = schedule.filter(t => t['階段'] === phase && t['預計開始日'] && t['預計完成日']);
+            if (tasksInPhase.length === 0) return;
+            const phaseStartDate = new Date(Math.min(...tasksInPhase.map(t => new Date(t['預計開始日']))));
+            const phaseEndDate = new Date(Math.max(...tasksInPhase.map(t => new Date(t['預計完成日']))));
+            if (isNaN(phaseStartDate) || isNaN(phaseEndDate)) return;
+            const phaseDuration = Math.max(0, phaseEndDate - phaseStartDate);
+            const segment = document.createElement('div');
+            segment.className = 'progress-segment';
+            segment.style.width = `${(phaseDuration / totalDuration) * 100}%`;
+            segment.style.left = `${( (phaseStartDate - startDate) / totalDuration) * 100}%`;
+            segment.style.backgroundColor = PHASE_COLORS[phase] || PHASE_COLORS['預設'];
+            segment.title = `${phase}: ${Math.round(phaseDuration / (1000*60*60*24)) + 1}天`;
+            timeline.appendChild(segment);
+        });
+        const todayMarkerPosition = Math.max(0, Math.min(100, ((new Date() - startDate) / totalDuration) * 100));
+        timeline.innerHTML += `<div class="today-marker" style="left:${todayMarkerPosition}%;"></div>`;
+    }
+    summary.appendChild(timeline);
+
+    const listWrapper = document.createElement('div');
+    listWrapper.className = 'schedule-list-wrapper';
+    
+    const listContainer = document.createElement('div');
+    listContainer.id = 'schedule-list-container';
+    listContainer.className = 'schedule-list';
+    listWrapper.appendChild(listContainer);
+    
+    schedule.forEach((task, index) => {
+        listContainer.appendChild(renderTaskCard(task, index));
+    });
+   
+    const addTaskDiv = document.createElement('div');
+    addTaskDiv.id = 'add-task-controls';
+    addTaskDiv.style.marginTop = '1rem';
+    addTaskDiv.innerHTML = `
+        <div style="display: flex; gap: 1rem; align-items: center; border-top: 1px solid #e5e7eb; padding-top: 1rem;">
+            <select id="task-template-select" style="flex-grow: 1; padding: .5rem; border-radius: .375rem; border: 1px solid #d1d5db;"></select>
+            <button id="add-task-btn" class="add-task-btn">＋ 新增</button>
+        </div>
+    `;
+    listWrapper.appendChild(addTaskDiv);
+
+    details.appendChild(summary);
+    details.appendChild(listWrapper);
+    container.appendChild(buttonGroup);
+    container.appendChild(details);
+
+    document.getElementById('save-schedule-btn').onclick = handleSaveSchedule;
+    document.getElementById('add-task-btn').onclick = handleAddTask;
+    
+    details.addEventListener('toggle', (event) => {
+        if (details.open) {
+            let focusTaskIndex = currentScheduleData.findIndex(t => t['狀態'] !== '已完成');
+            if (focusTaskIndex === -1 && currentScheduleData.length > 0) focusTaskIndex = currentScheduleData.length - 1;
+            const focusCard = document.getElementById(`task-card-${focusTaskIndex}`);
+            if (focusCard) {
+                setTimeout(() => {
+                    focusCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+            }
+        }
+    });
+}
+
+// 渲染單張可編輯的任務卡片
+function renderTaskCard(task, index) {
+    const card = document.createElement('div');
+    card.className = 'task-card';
+    card.id = `task-card-${index}`;
+    card.dataset.taskIndex = index;
+    card.innerHTML = `
+        <div><label>工種</label><input type="text" data-field="工種" value="${task['工種'] || ''}"></div>
+        <div class="task-main">
+            <label>任務項目</label><input type="text" class="task-title" data-field="任務項目" value="${task['任務項目'] || ''}">
+            <label style="margin-top:5px;">任務說明</label><textarea data-field="任務說明" style="font-size: .8rem; min-height: 40px;">${task['任務說明'] || ''}</textarea>
+        </div>
+        <div><label>工班</label><input type="text" data-field="負責人/工班" value="${task['負責人/工班'] || ''}"></div>
+        <div class="task-dates">
+            <label>預計開始日 / 完成日</label>
+            <input type="date" data-field="預計開始日" value="${task['預計開始日'] ? new Date(task['預計開始日']).toLocaleDateString('sv') : ''}">
+            <input type="date" data-field="預計完成日" value="${task['預計完成日'] ? new Date(task['預計完成日']).toLocaleDateString('sv') : ''}">
+        </div>
+        <div>
+            <label>狀態</label>
+            <div class="status-cell">
+                <select data-field="狀態">
+                    <option value="未完成">未完成</option><option value="施工中">施工中</option><option value="已完成">已完成</option>
+                </select>
+            </div>
+        </div>
+        <div class="task-remarks"><label>備註</label><textarea data-field="備註">${task['備註'] || ''}</textarea></div>
+        <button class="delete-task-btn" title="刪除此任務">&times;</button>
+    `;
+    const statusSelect = card.querySelector('select[data-field="狀態"]');
+    statusSelect.value = task['狀態'] || '未完成';
+    const statusCell = card.querySelector('.status-cell');
+    const setStatusColor = () => statusCell.className = `status-cell status-${statusSelect.value}`;
+    setStatusColor();
+    card.querySelectorAll('input, select, textarea').forEach(el => el.oninput = enableSaveButton);
+    statusSelect.onchange = () => { enableSaveButton(); setStatusColor(); };
+    card.querySelector('.delete-task-btn').onclick = () => {
+        if (confirm(`確定要刪除任務「${task['任務項目'] || '新任務'}」嗎？`)) {
+            card.remove();
+            enableSaveButton();
+        }
+    };
+    return card;
+}
+
+/* ===== 核心功能：互動處理 ===== */
+
+function enableSaveButton() {
+    const btn = document.getElementById('save-schedule-btn');
+    if (btn) btn.style.display = 'block';
+}
+
+function handleAddTask() {
+    const select = document.getElementById('task-template-select');
+    const selectedIndex = select.value;
+    if (selectedIndex === "") return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const projectId = urlParams.get('id');
+    const templateTask = templateTasks[selectedIndex];
+    const newTaskData = { ...templateTask, '案號': projectId, '預計開始日': '', '預計完成日': '', '狀態': '未完成', '負責人/工班': '', '備註': '' };
+    currentScheduleData.push(newTaskData);
+    displaySchedule({ '專案起始日': document.querySelector('input[data-field="預計開始日"]')?.value || new Date() }, currentScheduleData, true);
+    enableSaveButton();
+    setTimeout(() => {
+        const newCard = document.getElementById(`task-card-${currentScheduleData.length - 1}`);
+        if(newCard) newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+}
+
+function handleSaveSchedule() {
+    const btn = document.getElementById('save-schedule-btn');
+    btn.textContent = '儲存中...'; btn.disabled = true;
+    const urlParams = new URLSearchParams(window.location.search);
+    const projectId = urlParams.get('id');
+    let scheduleData = Array.from(document.querySelectorAll('.task-card')).map(card => {
+        const task = {};
+        card.querySelectorAll('[data-field]').forEach(input => {
+            const fieldName = input.dataset.field;
+            task[fieldName] = input.value;
+        });
+        task['案號'] = projectId;
+        const originalTask = currentScheduleData[card.dataset.taskIndex] || {};
+        task['階段'] = originalTask['階段'];
+        return task;
+    });
+    scheduleData.sort((a, b) => {
+        const dateA = new Date(a['預計開始日']); const dateB = new Date(b['預計開始日']);
+        if (isNaN(dateA.getTime())) return 1; if (isNaN(dateB.getTime())) return -1;
+        return dateA - dateB;
+    });
+    const payload = { action: 'updateSchedule', projectId: projectId, scheduleData };
+    fetch(`${API_BASE_URL}?page=project`, {
+        method: 'POST', body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, mode: 'no-cors'
+    })
+    .then(() => {
+        alert('排程已成功儲存！');
+        refreshScheduleData();
+    })
+    .catch(error => {
+        console.error('儲存排程時發生錯誤:', error);
+        alert('儲存失敗，請檢查網路連線或後端日誌。');
+        btn.textContent = '儲存排程變更'; btn.disabled = false;
+    });
+}
+
+// 送出新日誌
+async function submitNewLog() {
+    const btn = document.getElementById('submit-log-button');
+    const btnText = document.getElementById('log-button-text');
+    const btnSpinner = document.getElementById('log-button-spinner');
+    const content = document.getElementById('log-content-input').value;
+    const photoFiles = document.getElementById('log-photo-input').files;
+    const urlParams = new URLSearchParams(window.location.search);
+    const projectId = urlParams.get('id');
+
+    if (!content && photoFiles.length === 0) {
+        alert("請至少輸入文字或上傳一張照片。");
+        return;
+    }
+
+    btn.disabled = true;
+    btnText.style.display = 'none';
+    btnSpinner.style.display = 'inline-block';
+
+    const photosBase64 = [];
+    for (const file of photoFiles) {
+        photosBase64.push(await toBase64(file));
+    }
+
+    const payload = {
+        action: "createLogEntry",
+        projectId: projectId,
+        content: content,
+        photos: photosBase64
+    };
+
+    try {
+        // 【⭐️ 核心修改處 ⭐️】
+        // 還原為與系統其他功能 (施工回報、儲存排程) 一致的 no-cors 模式，以確保請求能送達後端
+        await fetch(`${API_BASE_URL}?page=project`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            mode: 'no-cors' 
+        });
+        
+        // 因為是 no-cors，我們無法讀取回應，所以直接假設成功
+        alert("日誌已成功送出！頁面將自動重新整理以顯示最新內容。");
+        setTimeout(() => window.location.reload(), 500);
+
+    } catch (error) {
+        console.error('傳送失敗:', error);
+        alert(`傳送請求時發生錯誤，但資料可能已送達。請稍後手動重新整理頁面。\n\n錯誤訊息: ${error.message}`);
+        btn.disabled = false;
+        btnText.style.display = 'inline-block';
+        btnSpinner.style.display = 'none';
+    }
+}
+
+/* ===== 核心功能：資料處理 ===== */
+
+// 局部刷新排程資料
+function refreshScheduleData() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const id = urlParams.get('id');
+    const fetchUrl = `${API_BASE_URL}?page=project&id=${encodeURIComponent(id)}`;
+    const wasOpen = document.querySelector('.schedule-accordion')?.open || false;
+    const saveBtn = document.getElementById('save-schedule-btn');
+    if (saveBtn) { saveBtn.textContent = '儲存排程變更'; saveBtn.disabled = false; saveBtn.style.display = 'none'; }
+    loadJsonp(fetchUrl).then(data => {
+        if (data && !data.error) {
+            currentScheduleData = data.schedule || [];
+            displaySchedule(data.overview, currentScheduleData, wasOpen);
+        } else { throw new Error(data.error || '後端回傳資料格式錯誤'); }
+    }).catch(err => { alert('刷新資料失敗，建議手動重新整理頁面。'); });
+}
+
+// 處理從後端收到的完整資料
+function handleDataResponse(data) {
+    if(data && data.error){
+        displayError({message:data.error});
+        return;
+    }
+    
+    // 將後端資料存到全域變數
+    currentLogsData = data.dailyLogs || [];
+    currentScheduleData = data.schedule || [];
+    templateTasks = data.templates || [];
+
+    // 動態建立頁面主要內容
+    const mainContent = document.getElementById('main-content');
+    const urlParams = new URLSearchParams(window.location.search);
+    const projectId = urlParams.get('id');
+    mainContent.innerHTML = `
+      <div id="schedule-container" class="card" style="display:none;"></div>
+      <div id="add-log-container" class="card">
+        <h2>新增日誌紀錄 (案號: ${projectId})</h2>
+        <div class="log-form-container mt-4">
+          <textarea id="log-content-input" placeholder="在此輸入文字說明..."></textarea>
+          <div>
+            <label for="log-photo-input" class="file-label">上傳照片</label>
+            <input type="file" id="log-photo-input" multiple accept="image/*">
+            <div id="log-photo-preview" class="preview-container"></div>
+          </div>
+          <button id="submit-log-button" class="bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 disabled:bg-gray-400">
+            <span id="log-button-text">送出日誌</span>
+            <div id="log-button-spinner" class="spinner w-5 h-5 border-2 border-white rounded-full mx-auto" style="display: none;"></div>
+          </button>
+        </div>
+      </div>
+      <div id="logs-container"></div>
+    `;
+
+    // 為動態建立的元件綁定事件
+    document.getElementById('log-photo-input').addEventListener('change', (event) => {
+      const previewContainer = document.getElementById('log-photo-preview');
+      previewContainer.innerHTML = '';
+      for (const file of event.target.files) {
+        const reader = new FileReader();
+        reader.onload = e => { 
+          const img = document.createElement('img');
+          img.src = e.target.result;
+          img.className = 'preview-image';
+          previewContainer.appendChild(img);
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+    document.getElementById('submit-log-button').addEventListener('click', submitNewLog);
+    
+    // 判斷是否為空專案，以決定是否顯示「套用範本」按鈕
+    if (currentScheduleData.length === 0 && (projectId !== '0')) {
+      const actionsContainer = document.getElementById('actions-container');
+      if (actionsContainer) {
+          actionsContainer.style.display = 'flex';
+          document.getElementById('btn-import-new').onclick = () => showStartDatePicker('新屋案');
+          document.getElementById('btn-import-old').onclick = () => showStartDatePicker('老屋案');
+      }
+    }
+
+    // 渲染進度總覽與日誌
+    displaySchedule(data.overview, currentScheduleData, false);
+    displayLogs(currentLogsData);
+    
+    // 填充範本下拉選單
+    const addTaskControls = document.getElementById('add-task-controls');
+    if (addTaskControls && templateTasks.length > 0) {
+       const select = document.getElementById('task-template-select');
+       select.innerHTML = '<option value="">-- 請選擇要新增的任務範本 --</option>';
+       templateTasks.forEach((task, index) => {
+           const optionText = `${task['工種']} - ${task['任務項目']}`;
+           select.innerHTML += `<option value="${index}">${optionText}</option>`;
+       });
+    } else if (addTaskControls) {
+        addTaskControls.style.display = 'none';
+    }
+  
+    // 更新頁面標題
+    const titleEl = document.getElementById('project-title');
+    if(data.overview && (data.overview.siteName || data.overview['案場名稱'])){
+        titleEl.textContent = `主控台: ${data.overview.siteName || data.overview['案場名稱']} (${projectId})`;
+    } else {
+        titleEl.textContent = `主控台 (案號: ${projectId})`;
+    }
+}
+
+// 顯示開工日選擇器
+function showStartDatePicker(templateType) {
+    const actionsContainer = document.getElementById('actions-container');
+    const originalButtons = actionsContainer.innerHTML;
+    actionsContainer.innerHTML = `
+        <label for="start-date-picker" style="align-self: center; margin-right: 5px; font-weight: 600;">請選擇開工日:</label>
+        <input type="date" id="start-date-picker" value="${new Date().toISOString().split('T')[0]}" style="padding: 0.4rem; border-radius: 0.25rem; border: 1px solid #ccc;"/>
+        <button id="confirm-import-btn" style="background-color: #2563eb;">確認送出</button>
+        <button id="cancel-import-btn" style="background-color: #6b7280;">取消</button>
+    `;
+    document.getElementById('confirm-import-btn').onclick = () => {
+        const startDate = document.getElementById('start-date-picker').value;
+        if (!startDate) {
+            alert('請務必選擇一個開工日期！');
+            return;
+        }
+        handleImportTemplate(templateType, startDate);
+    };
+    document.getElementById('cancel-import-btn').onclick = () => {
+        actionsContainer.innerHTML = originalButtons;
+        document.getElementById('btn-import-new').onclick = () => showStartDatePicker('新屋案');
+        document.getElementById('btn-import-old').onclick = () => showStartDatePicker('老屋案');
+    };
+}
+
+// 處理套用範本
+function handleImportTemplate(templateType, startDate) {
+    const projectId = new URLSearchParams(window.location.search).get('id');
+    const actionsContainer = document.getElementById('actions-container');
+    actionsContainer.innerHTML = '<p style="align-self: center; color: var(--primary); font-weight: 600;">自動排程計算中，請稍候...</p>';
+    const payload = { action: 'createFromTemplate', projectId, templateType, startDate };
+    fetch(`${API_BASE_URL}?page=project`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        mode: 'no-cors'
+    })
+    .then(() => {
+        alert(`已成功送出「${templateType}」範本套用請求，頁面即將重新整理以載入最新資料。`);
+        setTimeout(() => window.location.reload(), 500);
+    })
+    .catch(error => {
+        console.error('匯入範本時發生錯誤:', error);
+        alert('與後端通訊時發生錯誤，但請求可能已送出。頁面將在5秒後嘗試重新整理。');
+        setTimeout(() => window.location.reload(), 5000);
+    });
+}
+
+
+/* ===== 入口：頁面載入後執行 ===== */
+window.addEventListener('load', () => {
+  document.getElementById('version-display').textContent = '版本：' + (typeof FRONTEND_VERSION !== 'undefined' ? FRONTEND_VERSION : '未知');
+  const urlParams = new URLSearchParams(window.location.search);
+  const id = urlParams.get('id');
+  logToPage('URL id=' + (id || '(未帶入)'));
+  if(!id){
+    displayError({message:'未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。'});
+    return;
+  }
+  const fetchUrl = `${API_BASE_URL}?page=project&id=${encodeURIComponent(id)}`;
+  logToPage('呼叫 API：' + fetchUrl);
+  loadJsonp(fetchUrl).then(handleDataResponse).catch(displayError);
+});
+
