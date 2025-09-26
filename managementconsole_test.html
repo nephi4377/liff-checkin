@@ -1,1 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <!-- 版本號: v13.1 -->
+  <!-- 修改時間: 2025-09-26 20:00 (Asia/Taipei) -->
+  <!-- 說明: -->
+  <!-- - 此檔案為專案主控台的主要進入點，僅包含 HTML 結構與 CSS 樣式。 -->
+  <!-- - 所有的 JavaScript 功能邏輯已全數移至 console_utils_js.html 與 console_main_js.html。 -->
+  <title>專案日誌管理主控台</title>
+  <script>
+    // 全域設定，讓所有 JS 檔案都能讀取
+    const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
+    const FRONTEND_VERSION = 'v13.1-refactor';
+  </script>
+  <style>
+    :root {
+      --bg:#f3f4f6; --fg:#1f2937; --muted:#6b7280; --muted-2:#9ca3af; --card:#ffffff;
+      --primary:#3b82f6; --green:#16a34a; --red:#dc2626; --yellow:#f59e0b;
+      --shadow:0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+      --radius:.5rem;
+    }
+    *{box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--fg);margin:0;padding:1.5rem}
+    .container{max-width:900px;margin:0 auto}
+    header{margin-bottom:1.5rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
+    h1{font-size:1.75rem;font-weight:700;margin:0}
+    .muted{color:var(--muted);font-size:.9rem}
+    .card{background:var(--card);border-radius:var(--radius);padding:1.5rem;margin-bottom:1rem;box-shadow:var(--shadow)}
+    .spinner{margin:2rem auto;width:3rem;height:3rem;border-radius:50%;border:4px solid #e5e7eb;border-top-color:var(--primary);animation:spin 1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.75rem;margin-top:1rem}
+    .photo-item{display:flex;flex-direction:column;gap:.25rem}
+    .photo-thumb{width:100%;aspect-ratio:4/3;object-fit:cover;background:#e5e7eb;border-radius:.5rem;display:block;cursor:zoom-in}
+    .photo-placeholder{width:100%;aspect-ratio:4/3;border-radius:.5rem;background:#f3f4f6;display:flex;align-items:center;justify-content:center;color:var(--muted-2);font-size:.9rem;text-align:center;padding:0 .5rem}
+    button{background:var(--primary);color:#fff;border:0;padding:.5rem .75rem;border-radius:.375rem;cursor:pointer;font-weight:600;transition:opacity .2s}
+    button:hover{opacity:.85}
+    button[disabled]{opacity:.6;cursor:not-allowed}
+    .button-group{display:flex;gap:.5rem;justify-content:flex-end;flex-wrap:wrap}
+    details.schedule-accordion{border-radius:var(--radius);overflow:hidden}
+    details.schedule-accordion>summary{list-style:none;cursor:pointer;padding:1rem;background:#f9fafb;transition:background-color .2s;border:1px solid #e5e7eb;border-radius:var(--radius)}
+    details.schedule-accordion>summary::-webkit-details-marker{display:none}
+    details.schedule-accordion[open]>summary{border-bottom-left-radius:0;border-bottom-right-radius:0}
+    .progress-timeline{position:relative;width:100%;height:18px;background:#e5e7eb;border-radius:9px;overflow:hidden;margin:.5rem 0}
+    .progress-segment{position:absolute;height:100%}
+    .today-marker{position:absolute;top:-5px;width:3px;height:28px;background:var(--red);border-radius:2px;box-shadow:0 0 5px rgba(0,0,0,.3)}
+    .today-marker::after{content:'今天';position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--red);font-weight:700;background:#fff;padding:0 3px;border-radius:3px}
+    .progress-label{font-size:.9rem}
+    .schedule-list-wrapper { max-height: 450px; overflow-y: auto; padding-right: 10px; margin: -1rem; padding: 1rem; }
+    .schedule-list { display: flex; flex-direction: column; gap: 1rem; }
+    .task-card { background: #fff; border-radius: .5rem; box-shadow: var(--shadow); padding: 1rem; display: grid; grid-template-columns: 1fr 2fr 1fr 1.5fr 1fr 1fr; gap: 1rem; align-items: center;}
+    .task-card > div { display: flex; flex-direction: column; gap: .25rem; }
+    .task-card label { font-size: .75rem; color: var(--muted); font-weight: 600; }
+    .task-card .task-title { font-weight: 600; font-size: .9rem; }
+    .task-card .task-description { font-size: .8rem; color: #4b5563; }
+    .task-card input, .task-card select, .task-card textarea { width: 100%; padding: .25rem; border-radius: .25rem; border: 1px solid #d1d5db; font-family: inherit; font-size: .85rem; background-color: #f9fafb; }
+    .task-card textarea { min-height: 50px; resize: vertical; }
+    .task-card .status-cell { border-radius: .25rem; padding: .25rem; text-align: center; }
+    .task-card .status-cell select { background: transparent; border: none; font-weight: bold; text-align: center; -webkit-appearance: none; appearance: none; }
+    .delete-task-btn { background-color: transparent; color: #ef4444; border: none; cursor: pointer; font-size: 1.5rem; line-height: 1; position: absolute; top: .5rem; right: .5rem; padding: 0 .5rem; }
+    .delete-task-btn:hover { color: #b91c1c; }
+    .add-task-btn { background-color: var(--primary); color: #fff; border: none; border-radius: .375rem; padding: .5rem 1rem; cursor: pointer; font-weight: 600; margin-top: 1rem; width: 100%; }
+    .add-task-btn:hover { opacity: 0.9; }
+    .task-card { position: relative; }
+    .status-未完成 { background-color: #f3f4f6; color: #4b5563; }
+    .status-施工中 { background-color: #dbeafe; color: #1e40af; }
+    .status-已完成 { background-color: #dcfce7; color: #166534; }
+    @media (max-width: 768px) {
+      .task-card { grid-template-columns: 1fr 1fr; }
+      .task-card .task-main { grid-column: 1 / -1; }
+      .task-card .task-dates { grid-column: 1 / -1; }
+      .task-card .task-remarks { grid-column: 1 / -1; }
+    }
+    #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:9999;padding:1rem}
+    #lightbox.open{display:flex}
+    #lightbox .lb-wrap{position:relative;max-width:98vw;max-height:95vh;display:flex;align-items:center;justify-content:center}
+    #lightbox img.lb-img{display:block;max-width:98vw;max-height:95vh;object-fit:contain;border-radius:.5rem;background:#fff;box-shadow:0 4px 20px rgba(0,0,0,.6)}
+    #lightbox button.lb-close{position:absolute;top:-.5rem;right:-.5rem;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:9999px;width:40px;height:40px;cursor:pointer;font-size:20px;line-height:40px;text-align:center}
+    .log-form-container { display: flex; flex-direction: column; gap: 1rem; }
+    .log-form-container textarea { width: 100%; min-height: 80px; padding: .5rem; border-radius: .375rem; border: 1px solid #d1d5db; }
+    .log-form-container input[type="file"] { display: none; }
+    .log-form-container .file-label { background-color: var(--muted); cursor: pointer; padding: .5rem 1rem; border-radius: .375rem; color: white; text-align: center; }
+    .preview-container { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
+    .preview-image { width: 80px; height: 80px; object-fit: cover; border-radius: .25rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1 id="project-title">專案日誌管理主控台</h1>
+        <p id="version-display" class="muted"></p>
+      </div>
+       <div id="actions-container" style="margin-left: auto; display: none;">
+        <button id="btn-import-new" style="background-color: #16a34a;">套用新屋案範本</button>
+        <button id="btn-import-old" style="background-color: #d97706;">套用老屋案範本</button>
+      </div>
+    </header>
+    <main id="main-content">
+      <!-- 內容將由 JavaScript 動態生成 -->
+      <div class="spinner"></div>
+    </main>
+  </div>
+
+  <div id="lightbox" aria-hidden="true">
+    <div class="lb-wrap">
+      <img class="lb-img" alt="preview">
+      <button class="lb-close" aria-label="關閉">✕</button>
+    </div>
+  </div>
+
+  <script>
+    <?!= HtmlService.createHtmlOutputFromFile('console_utils_js').getContent(); ?>
+  </script>
+  <script>
+    <?!= HtmlService.createHtmlOutputFromFile('console_main_js').getContent(); ?>
+  </script>
+
+</body>
+</html>
 
