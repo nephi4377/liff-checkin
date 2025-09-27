@@ -767,20 +767,6 @@ function publishCallback(resp){
   window.__openLightbox__ = (srcOrList) => { gallery = Array.isArray(srcOrList) ? srcOrList : [String(srcOrList)]; current=0; show(0); lb.classList.add('open'); lb.setAttribute('aria-hidden','false'); };
 })();
 
-/* ===== 入口 ===== */
-window.addEventListener('load', () => {
-  document.getElementById('version-display').textContent = '版本：' + (typeof FRONTEND_VERSION!=='undefined'?FRONTEND_VERSION:'未知');
-  logToPage('頁面載入完成，開始讀取 URL 參數...');
-  const url = new URLSearchParams(location.search);
-  const id = url.get('id');
-  logToPage('URL id=' + (id || '(未帶入)'));
-  if(!id){ displayError({message:'未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。'}); return; }
-
-  const fetchUrl = API_BASE_URL + '?page=project&id=' + encodeURIComponent(id); // [修改] 使用 project 主路由
-  logToPage('呼叫 API：' + fetchUrl);
-  loadJsonp(fetchUrl).then().catch(displayError);
-});
-
 function handleDataResponse(data){
   logToPage('✅ 後端回應成功');
   document.getElementById('status-message')?.remove();
@@ -904,10 +890,19 @@ function handleImportTemplate(templateType, startDate) {
   });
 }
 
-// [核心修正] 移除此處錯誤的事件綁定，因為功能已移至 handleDataResponse
+/*
+* 版本: v12.4
+* 修改時間: 2025-09-27 10:24 (Asia/Taipei)
+* 說明: 在請求 API 資料前，先呼叫 displaySkeletonLoader 函式。
+*/
+/* ===== 入口 ===== */
 window.addEventListener('load', () => {
   document.getElementById('version-display').textContent = '版本：' + (typeof FRONTEND_VERSION!=='undefined'?FRONTEND_VERSION:'未知');
   logToPage('頁面載入完成，開始讀取 URL 參數...');
+
+  // [修改] 在請求資料前，先顯示骨架屏
+  displaySkeletonLoader();
+
   const url = new URLSearchParams(location.search);
   const id = url.get('id');
   logToPage('URL id=' + (id || '(未帶入)'));
