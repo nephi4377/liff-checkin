@@ -872,3 +872,17 @@ function handleImportTemplate(templateType, startDate) {
     setTimeout(() => window.location.reload(), 5000);
   });
 }
+
+// [核心修正] 移除此處錯誤的事件綁定，因為功能已移至 handleDataResponse
+window.addEventListener('load', () => {
+  document.getElementById('version-display').textContent = '版本：' + (typeof FRONTEND_VERSION!=='undefined'?FRONTEND_VERSION:'未知');
+  logToPage('頁面載入完成，開始讀取 URL 參數...');
+  const url = new URLSearchParams(location.search);
+  const id = url.get('id');
+  logToPage('URL id=' + (id || '(未帶入)'));
+  if(!id){ displayError({message:'未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。'}); return; }
+
+  const fetchUrl = API_BASE_URL + '?page=project&id=' + encodeURIComponent(id);
+  logToPage('呼叫 API：' + fetchUrl);
+  loadJsonp(fetchUrl).then(handleDataResponse).catch(displayError);
+});
