@@ -42,6 +42,37 @@ function loadJsonp(url){
   });
 }
 
+/*
+* 版本: v12.4
+* 修改時間: 2025-09-27 10:24 (Asia/Taipei)
+* 說明: 新增用於顯示骨架屏的函式。
+*/
+// --- 這是新函式，請將其加入 main.js ---
+function displaySkeletonLoader() {
+  const scheduleContainer = document.getElementById('schedule-container');
+  const logsContainer = document.getElementById('logs-container');
+
+  // 產生單張骨架卡片的 HTML
+  const skeletonCardHTML = `
+    <div class="skeleton-card">
+      <div class="skeleton title"></div>
+      <div class="skeleton line"></div>
+      <div class="skeleton line"></div>
+      <div class="skeleton line-short"></div>
+    </div>
+  `;
+
+  // 清空並填入骨架屏
+  if (scheduleContainer) {
+    scheduleContainer.innerHTML = `<div class="skeleton-wrapper">${skeletonCardHTML}</div>`;
+    scheduleContainer.style.display = 'block';
+  }
+  if (logsContainer) {
+    logsContainer.innerHTML = `<div class="skeleton-wrapper">${skeletonCardHTML.repeat(3)}</div>`;
+  }
+}
+
+
 function displayError(err){
   const msg = (err && err.message) ? err.message : '發生未知錯誤。';
   logToPage('PAGE ERROR: ' + msg);
