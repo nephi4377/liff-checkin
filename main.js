@@ -1008,7 +1008,13 @@ function lazyLoadImages() {
 */
 // --- 新增全域變數 ---
 let currentPage = 1;
-const LOGS_PER_PAGE = 8; // 每頁載入8篇日誌
+// [新增] 建立一個簡單的函式來判斷是否為行動裝置
+function isMobile() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+// [修改] 根據裝置類型，動態設定每頁載入的日誌筆數
+const LOGS_PER_PAGE = isMobile() ? 3 : 8; 
 let isLoadingNextPage = false; // 避免重複觸發載入
 let scrollObserver; // 滾動觀察者
 
