@@ -1,4 +1,29 @@
 /*
+* =============================================================================
+* 檔案名稱: main.js
+* 專案名稱: 專案日誌管理主控台
+* 版本: v13.0 (穩定版)
+* 修改時間: 2025-09-27 10:54 (Asia/Taipei)
+*
+* 核心功能:
+* 1.  **資料處理與API串接**:
+* - 透過 JSONP 從 Google Apps Script 後端獲取專案總覽、排程、日誌與範本資料。
+* - 處理後端回傳的資料，並將其存入前端狀態變數。
+* - 負責將前端的修改（如文字編輯、照片管理、排程變更）傳送回後端儲存。
+*
+* 2.  **UI渲染與互動**:
+* - **排程管理**: 顯示多色進度條、可編輯的任務卡片列表、並可從範本新增任務。
+* - **日誌顯示**: 將日誌資料渲染成卡片列表，包含照片牆。
+* - **互動功能**: 提供文字即時編輯、照片管理模組 (Modal)、圖片燈箱 (Lightbox) 等功能。
+*
+* 3.  **效能優化**:
+* - **骨架屏 (Skeleton Screen)**: 在等待API資料時，顯示頁面輪廓以改善使用者體驗。
+* - **圖片懶加載 (Lazy Loading)**: 日誌中的圖片會等到滾動至可視範圍才載入。
+* - **日誌分頁 (Pagination)**: 日誌列表採用前端分頁，滾動到底部時自動載入下一批，避免一次性渲染大量DOM。
+* =============================================================================
+*/
+
+/*
 * 版本: v12.0 (Refactored)
 * 修改時間: 2025-09-26 17:50 (Asia/Taipei)
 * 說明: 從 HTML 中分離出的獨立 JavaScript 檔案。
@@ -97,19 +122,31 @@ function driveFileId(u){
   m = u.match(/\/open\?id=([a-zA-Z0-9_-]+)/);      if(m) return m[1];
   return '';
 }
+/*
+* 版本: v12.5
+* 修改時間: 2025-09-27 10:31 (Asia/Taipei)
+* 說明: 實作圖片懶加載。將圖片的真實 src 存放在 data-src 中，並加上 'lazy' class。
+*/
 function renderSmartImg(fileId){
   const wrap = document.createElement('div'); wrap.className = 'photo-item';
-  const img = document.createElement('img'); img.className = 'photo-thumb';
+  const img = document.createElement('img');
+  // [修改] 加上 lazy class，並將真實 src 存入 data-src
+  img.className = 'photo-thumb lazy';
   const thumbnailUrl = 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w300';
   const largeUrl     = 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w1200';
-  img.dataset.full = largeUrl; img.src = thumbnailUrl;
+  img.dataset.full = largeUrl;
+  img.dataset.src = thumbnailUrl; // [修改]
   img.onerror = () => { const ph = document.createElement('div'); ph.className='photo-placeholder'; ph.textContent='縮圖載入失敗'; wrap.replaceChildren(ph); };
   wrap.appendChild(img); return wrap;
 }
+
 function renderDirectImg(src){
   const wrap = document.createElement('div'); wrap.className = 'photo-item';
-  const img  = document.createElement('img'); img.className  = 'photo-thumb';
-  img.src = src + (src.includes('?') ? '&' : '?') + '_=' + Date.now();
+  const img  = document.createElement('img');
+  // [修改] 加上 lazy class，並將真實 src 存入 data-src
+  img.className  = 'photo-thumb lazy';
+  const lazySrc = src + (src.includes('?') ? '&' : '?') + '_=' + Date.now();
+  img.dataset.src = lazySrc; // [修改]
   img.dataset.full = src;
   img.onload  = () => thumbLog('IMG OK ' + img.src);
   img.onerror = () => {
@@ -121,6 +158,7 @@ function renderDirectImg(src){
   img.addEventListener('click', () => { window.__openLightbox__ ? __openLightbox__(img.dataset.full) : window.open(img.dataset.full, '_blank'); });
   wrap.appendChild(img); return wrap;
 }
+
 function buildPhotoGrid(htmlLinksCsv){
   const container = document.createElement('div'); container.className = 'photo-grid';
   if(!htmlLinksCsv) return container;
@@ -767,16 +805,46 @@ function publishCallback(resp){
   window.__openLightbox__ = (srcOrList) => { gallery = Array.isArray(srcOrList) ? srcOrList : [String(srcOrList)]; current=0; show(0); lb.classList.add('open'); lb.setAttribute('aria-hidden','false'); };
 })();
 
+/*
+* 版本: v13.0 (穩定版)
+* 修改時間: 2025-09-27 10:59 (Asia/Taipei)
+* 說明: 為 handleDataResponse 函式加上專業的 DocBlock 註解。
+*/
+
+/**
+ * @description 處理從後端 API (Google Apps Script) 成功獲取資料後的核心回呼函式 (Callback)。
+ * 此函式是整個應用程式的入口點，負責解析後端資料，並依序觸發所有 UI 的渲染與更新。
+ *
+ * @param {object} data - 從後端 JSONP 傳回的資料物件，其結構應包含：
+ * @param {object} [data.overview] - 專案總覽資訊，如案場名稱、起訖日期。
+ * @param {Array<object>} [data.schedule] - 專案排程的任務列表。
+ * @param {Array<object>} [data.dailyLogs] - 專案的每日日誌列表。
+ * @param {Array<object>} [data.templates] - 可用於新增任務的範本列表。
+ *
+ * @returns {void} 此函式無回傳值。其主要作用是產生副作用 (Side Effect)，即更新頁面上的 DOM 元素。
+ *
+ * @functionality
+ * 1.  將後端資料存入前端的全域變數 (currentLogsData, currentScheduleData, templateTasks)。
+ * 2.  檢查專案排程是否為空，若是，則顯示「套用範本」按鈕。
+ * 3.  對排程資料進行排序 (依狀態 > 依日期)。
+ * 4.  呼叫 `displaySchedule()` 渲染排程區塊。
+ * 5.  將任務範本資料填充至「新增任務」下拉選單。
+ * 6.  初始化日誌分頁，並呼叫 `renderLogPage()` 僅渲染第一頁的日誌。
+ * 7.  若日誌總數多於一頁，則呼叫 `setupScrollListener()` 啟動無限滾動功能。
+ * 8.  更新頁面主標題。
+ */
 function handleDataResponse(data){
   logToPage('✅ 後端回應成功');
+  // 清除任何可能存在的舊錯誤訊息
   document.getElementById('status-message')?.remove();
   if(data && data.error){ displayError({message:data.error}); return; }
-  
+
+  // 將從後端接收到的資料，分別存入前端的全域變數中，方便後續使用
   currentLogsData = data.dailyLogs || [];
   currentScheduleData = data.schedule || [];
   templateTasks = data.templates || [];
-  
-  // [核心修正] 在排序前，先判斷是否為空專案，以決定是否顯示「套用範本」按鈕
+
+  // 業務邏輯：如果這是一個沒有任何排程的既有專案，則顯示「套用範本」的按鈕
   if (currentScheduleData.length === 0 && (new URLSearchParams(location.search).get('id') !== '0')) {
     const actionsContainer = document.getElementById('actions-container');
     if (actionsContainer) {
@@ -785,30 +853,26 @@ function handleDataResponse(data){
         document.getElementById('btn-import-old').onclick = () => showStartDatePicker('老屋案');
     }
   }
-  // [核心新增] 根據您指定的規則對排程資料進行排序
+  
+  // 業務邏輯：對排程資料進行排序，規則為：1. 依狀態 (已完成 > 施工中 > 未完成) 2. 依預計開始日期
   currentScheduleData.sort((a, b) => {
-      // 建立狀態的排序權重：「已完成」最前，「施工中」其次
       const statusOrder = { '已完成': 1, '施工中': 2, '未完成': 3 };
-      const statusA = statusOrder[a['狀態']] || 99; // 如果有其他狀態，排在最後
+      const statusA = statusOrder[a['狀態']] || 99;
       const statusB = statusOrder[b['狀態']] || 99;
-
-      // 規則一：比較狀態
       if (statusA !== statusB) {
           return statusA - statusB;
       }
-
-      // 規則二：如果狀態相同，則比較「預計開始日」
       const dateA = new Date(a['預計開始日']);
       const dateB = new Date(b['預計開始日']);
-      if (isNaN(dateA.getTime())) return 1; // 無效日期排最後
+      if (isNaN(dateA.getTime())) return 1;
       if (isNaN(dateB.getTime())) return -1;
       return dateA - dateB;
   });
     
-  // [核心修改] 直接呼叫 displaySchedule，讓它自己處理新增介面的顯示
+  // 渲染UI：呼叫 displaySchedule 函式，將排序好的排程資料渲染成畫面
   displaySchedule(data.overview, currentScheduleData, false);
   
-  // [核心修改] 在 displaySchedule 執行後，才填充下拉選單
+  // 渲染UI：如果後端有提供任務範本，則將其填充至「新增任務」的下拉選單中
   const addTaskControls = document.getElementById('add-task-controls');
   if (addTaskControls && templateTasks.length > 0) {
       const select = document.getElementById('task-template-select');
@@ -818,12 +882,19 @@ function handleDataResponse(data){
           select.innerHTML += `<option value="${index}">${optionText}</option>`;
       });
   } else if (addTaskControls) {
-    addTaskControls.style.display = 'none'; // 如果沒有範本，就隱藏新增區塊
+    addTaskControls.style.display = 'none';
   }
   
-  const isDraft = (new URLSearchParams(window.location.search).get('id') === '0');
-  displayLogs(currentLogsData, isDraft);
+  // 效能優化：初始化分頁計數器，並呼叫 renderLogPage 函式僅渲染第一頁的日誌
+  currentPage = 1;
+  renderLogPage();
   
+  // 效能優化：如果日誌總數超過一頁的數量，則啟動滾動監聽，用於實現無限滾動加載
+  if (currentLogsData.length > LOGS_PER_PAGE) {
+      setupScrollListener();
+  }
+
+  // 渲染UI：使用後端提供的案場名稱，更新頁面的主標題
   const titleEl = document.getElementById('project-title');
   if(data.overview && (data.overview.siteName || data.overview['案場名稱'])){
       titleEl.textContent = '主控台: ' + (data.overview.siteName || data.overview['案場名稱']);
@@ -888,6 +959,119 @@ function handleImportTemplate(templateType, startDate) {
     alert('與後端通訊時發生錯誤，但請求可能已送出。頁面將在5秒後嘗試重新整理。');
     setTimeout(() => window.location.reload(), 5000);
   });
+}
+
+/*
+* 版本: v12.5
+* 修改時間: 2025-09-27 10:31 (Asia/Taipei)
+* 說明: 新增圖片懶加載的核心邏輯與啟動函式。
+*/
+// --- 這是新函式，請將其加入 main.js ---
+let lazyImageObserver;
+
+function lazyLoadImages() {
+  const lazyImages = document.querySelectorAll('img.lazy');
+
+  if ("IntersectionObserver" in window) {
+    // 如果已有觀察者，先中斷舊的
+    if (lazyImageObserver) {
+      lazyImageObserver.disconnect();
+    }
+
+    lazyImageObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const lazyImage = entry.target;
+          lazyImage.src = lazyImage.dataset.src;
+          lazyImage.classList.remove("lazy");
+          observer.unobserve(lazyImage);
+        }
+      });
+    });
+
+    lazyImages.forEach((lazyImage) => {
+      lazyImageObserver.observe(lazyImage);
+    });
+  } else {
+    // Fallback for older browsers
+    lazyImages.forEach((lazyImage) => {
+        lazyImage.src = lazyImage.dataset.src;
+        lazyImage.classList.remove("lazy");
+    });
+  }
+}
+
+/*
+* 版本: v12.6
+* 修改時間: 2025-09-27 10:43 (Asia/Taipei)
+* 說明: 實作純前端分頁載入。
+*/
+// --- 新增全域變數 ---
+let currentPage = 1;
+const LOGS_PER_PAGE = 8; // 每頁載入8篇日誌
+let isLoadingNextPage = false; // 避免重複觸發載入
+let scrollObserver; // 滾動觀察者
+
+// --- 新增的核心函式 ---
+function renderLogPage() {
+  if (isLoadingNextPage) return;
+  isLoadingNextPage = true;
+
+  const logsContainer = document.getElementById('logs-container');
+  const startIndex = (currentPage - 1) * LOGS_PER_PAGE;
+  const endIndex = startIndex + LOGS_PER_PAGE;
+  const logsToShow = currentLogsData.slice(startIndex, endIndex);
+
+  // 如果是第一頁，先清空容器 (移除骨架屏)
+  if (currentPage === 1) {
+    logsContainer.innerHTML = '';
+  }
+
+  // 移除舊的加載提示
+  const oldLoader = document.getElementById('log-loader');
+  if (oldLoader) {
+    oldLoader.remove();
+  }
+
+  // 渲染日誌
+  if (logsToShow.length > 0) {
+    const isDraftMode = (new URLSearchParams(window.location.search).get('id') === '0');
+    logsToShow.forEach(log => {
+      logsContainer.appendChild(_buildLogCard(log, isDraftMode));
+    });
+    // 渲染完後，立即對新加入的圖片啟動懶加載
+    lazyLoadImages();
+  }
+  
+  // 如果還有更多日誌，則在末尾加上載提示，用於觸發下一次加載
+  if (endIndex < currentLogsData.length) {
+    const loaderElement = document.createElement('div');
+    loaderElement.id = 'log-loader';
+    loaderElement.innerHTML = '<div class="spinner" style="width:2rem;height:2rem;margin:1rem auto;"></div>';
+    logsContainer.appendChild(loaderElement);
+    // 觀察這個新的加載提示
+    if (scrollObserver) {
+        scrollObserver.observe(loaderElement);
+    }
+  }
+
+  isLoadingNextPage = false;
+}
+
+function setupScrollListener() {
+    scrollObserver = new IntersectionObserver((entries) => {
+        const entry = entries[0];
+        if (entry.isIntersecting) {
+            currentPage++;
+            logToPage(`滾動到底部，載入第 ${currentPage} 頁...`);
+            renderLogPage();
+        }
+    }, { threshold: 0.1 });
+
+    const initialLoader = document.getElementById('log-loader');
+    if (initialLoader) {
+        scrollObserver.observe(initialLoader);
+    }
 }
 
 /*
