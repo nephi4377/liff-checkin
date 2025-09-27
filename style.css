@@ -96,3 +96,57 @@ details.schedule-accordion[open]>summary{border-bottom-left-radius:0;border-bott
 .modal-photo-item img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:.25rem}
 .delete-photo-btn{position:absolute;top:5px;right:5px;background:rgba(239,68,68,.8);color:#fff;border:2px solid #fff;border-radius:50%;width:28px;height:28px;cursor:pointer;font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:center;line-height:1;transition:transform .2s}
 .delete-photo-btn:hover{transform:scale(1.1)}
+
+/*
+* 版本: v12.4
+* 修改時間: 2025-09-27 10:24 (Asia/Taipei)
+* 說明: 新增骨架屏 (Skeleton Screen) 相關樣式。
+*/
+
+/* 骨架屏容器 */
+.skeleton-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* 骨架卡片 */
+.skeleton-card {
+  background-color: #ffffff;
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* 骨架線條 */
+.skeleton {
+  background-color: #e5e7eb;
+  border-radius: 0.25rem;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* 脈動動畫 */
+@keyframes pulse {
+  50% {
+    opacity: .5;
+  }
+}
+
+.skeleton.title {
+  width: 40%;
+  height: 1.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.skeleton.line {
+  width: 100%;
+  height: 0.875rem;
+}
+
+.skeleton.line-short {
+  width: 60%;
+  height: 0.875rem;
+}
