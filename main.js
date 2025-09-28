@@ -89,11 +89,14 @@ function displaySkeletonLoader() {
 
   // 清空並填入骨架屏
   if (scheduleContainer) {
+    // [核心修正] 骨架屏只應在對應區塊產生，不應改變其容器的可見性。
+    // 由於排程頁非預設顯示，此處不應主動顯示它。
     scheduleContainer.innerHTML = `<div class="skeleton-wrapper">${skeletonCardHTML}</div>`;
-    scheduleContainer.style.display = 'block';
   }
   if (logsContainer) {
     logsContainer.innerHTML = `<div class="skeleton-wrapper">${skeletonCardHTML.repeat(3)}</div>`;
+    // [核心修正] 確保在骨架屏階段，只有日誌區塊是可見的。
+    logsContainer.style.display = 'block';
   }
 }
 
@@ -237,34 +240,22 @@ function displayLogsFiltered(logs, isFiltered=false){
 function displaySchedule(overview, schedule, keepOpen = false){ // [核心修改] 新增參數，預設為 false
   const container = document.getElementById('schedule-container');
   if (!container) return;
-  container.innerHTML = ''; 
+  container.innerHTML = '';
   if (!overview || !schedule || schedule.length === 0 || !overview['專案起始日']) {
       container.style.display = 'none';
       return;
   }
-  container.style.display = 'block';
 
-  // 1. 建立主要結構元件
-  const buttonGroup = document.createElement('div');
-  buttonGroup.className = 'button-group';
-  buttonGroup.style.marginBottom = '1rem';
-  buttonGroup.innerHTML = '<button id="save-schedule-btn" style="display:none; background-color: #dc2626;">儲存排程變更</button>';
+  // [核心修改 1] 建立獨立的進度條容器
+  const progressWrapper = document.createElement('div');
+  // [核心需求 1] 加上 sticky 樣式，讓進度條鎖定在頂部
+  progressWrapper.className = 'card p-6 mb-4';
+  progressWrapper.style.cssText = 'position: sticky; top: 0; z-index: 20;';
 
-  const details = document.createElement('details');
-  details.className = 'schedule-accordion';
-  // [核心修改] 根據傳入的參數決定是否展開
-  // 如果是第一次載入，keepOpen 為 false，預設折疊
-  // 如果是儲存後刷新，keepOpen 為 true，維持展開
-  if (keepOpen) {
-      details.open = true;
-  }
-
-  const summary = document.createElement('summary');
   const firstUnfinishedTask = schedule.find(t => t['狀態'] !== '已完成');
   const currentPhase = firstUnfinishedTask ? firstUnfinishedTask['階段'] : '專案已完工';
-  summary.innerHTML = `<div class="progress-label"><strong>目前階段: ${currentPhase}</strong></div>`;
+  progressWrapper.innerHTML = `<div class="progress-label"><strong>目前階段: ${currentPhase}</strong></div>`;
   
-  // [核心修復] 恢復並提供完整的多色進度條渲染邏輯
   const timeline = document.createElement('div');
   timeline.className = 'progress-timeline';
   const PHASE_COLORS = {
@@ -293,250 +284,282 @@ function displaySchedule(overview, schedule, keepOpen = false){ // [核心修改
   });
   const todayMarkerPosition = Math.max(0, Math.min(100, ((new Date() - startDate) / totalDuration) * 100));
   timeline.innerHTML += `<div class="today-marker" style="left:${todayMarkerPosition}%;"></div>`;
-  summary.appendChild(timeline);
+  progressWrapper.appendChild(timeline);
 
   const listWrapper = document.createElement('div');
-  listWrapper.className = 'schedule-list-wrapper';
+  listWrapper.className = 'schedule-list-wrapper card p-6'; // 直接使用 card 樣式
   
   const listContainer = document.createElement('div');
   listContainer.id = 'schedule-list-container';
   listContainer.className = 'schedule-list';
   listWrapper.appendChild(listContainer);
-  
-  // [核心修正] 滾動目標恢復為「未完成的第一項」，確保穩定性
-  let focusTaskIndex = schedule.findIndex(t => t['狀態'] !== '已完成');
-  // 如果全部都完成了，或找不到，則聚焦在最後一項
-  if (focusTaskIndex === -1 && schedule.length > 0) {
-      focusTaskIndex = schedule.length - 1;
-  } else if (focusTaskIndex === -1) {
-      focusTaskIndex = 0; // 處理 schedule 為空的情況
-  }
 
   schedule.forEach((task, index) => {
       listContainer.appendChild(renderTaskCard(task, index));
   });
   
-  // [核心修改] 將「新增任務」的介面建立在此處
   const addTaskDiv = document.createElement('div');
-  addTaskDiv.id = 'add-task-controls';
-  addTaskDiv.style.marginTop = '1rem';
+  // [核心修正] 將儲存按鈕整合到新增任務的控制區塊中
+  addTaskDiv.className = 'add-task-controls mt-4 pt-4 border-t flex justify-end items-center gap-4';
   addTaskDiv.innerHTML = `
-      <div style="display: flex; gap: 1rem; align-items: center; border-top: 1px solid #e5e7eb; padding-top: 1rem;">
-          <select id="task-template-select" style="flex-grow: 1; padding: .5rem; border-radius: .375rem; border: 1px solid #d1d5db;"></select>
-          <button id="add-task-btn" class="add-task-btn">＋ 新增</button>
-      </div>
+    <button id="save-schedule-btn" class="btn btn-danger hidden">儲存排程變更</button>
+    <button id="add-task-btn" class="btn btn-primary w-full md:w-auto">＋ 新增任務</button>
   `;
-  listWrapper.appendChild(addTaskDiv); // 將其放入滾動容器的底部
+  listWrapper.appendChild(addTaskDiv);
 
   // 將所有元件依序加入頁面
-  
-  details.appendChild(summary);
-  details.appendChild(listWrapper);
-  container.appendChild(buttonGroup);
-  container.appendChild(details);
+  container.appendChild(progressWrapper); // [核心修改 1] 將獨立的進度條放在最前面
+  container.appendChild(listWrapper); // 直接加入任務列表，不再有摺疊面板
 
-  // 綁定儲存按鈕
+  // 綁定事件
   document.getElementById('save-schedule-btn').onclick = handleSaveSchedule;
-  document.getElementById('add-task-btn').onclick = handleAddTask; // 綁定新增按鈕事件
-  
-  // [核心修復] 為摺疊面板新增「點擊監聽」，在正確的時機觸發滾動
-  const detailsElement = container.querySelector('.schedule-accordion');
-  if (detailsElement) {
-      detailsElement.addEventListener('toggle', (event) => {
-          // 只在「展開」時執行
-          if (detailsElement.open) {
-              // 重新計算目標索引，確保它是最新的
-              let focusTaskIndex = currentScheduleData.findIndex(t => t['狀態'] !== '已完成');
-              if (focusTaskIndex === -1 && currentScheduleData.length > 0) {
-                  focusTaskIndex = currentScheduleData.length - 1;
-              }
-
-              const focusCard = document.getElementById(`task-card-${focusTaskIndex}`);
-              if (focusCard) {
-                  // 使用一個短延遲，確保展開動畫流暢
-                  setTimeout(() => {
-                      focusCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                      logToPage(`✅ 已自動滾動至任務 #${focusTaskIndex + 1}`);
-                  }, 100);
-              }
-          }
-      });
-  }
+  document.getElementById('add-task-btn').onclick = handleAddTask;
 }
 
 // 將渲染單張卡片的邏輯抽成獨立函式
 function renderTaskCard(task, index) {
+  // [重構] 使用 utility classes 來定義卡片樣式
   const card = document.createElement('div');
-  card.className = 'task-card';
+  // [修復] 加上 bg-white 和 shadow class 來恢復卡片視覺感
+  card.className = 'task-card bg-white p-4 rounded-lg shadow grid grid-cols-1 md:grid-cols-5 gap-4 relative';
   card.id = `task-card-${index}`;
   card.dataset.taskIndex = index;
 
-  // [核心修復] 建立卡片時，所有可編輯欄位都產生為輸入元件
+  // [重構] 使用 utility classes 和模板字串來建構內部 HTML
   card.innerHTML = `
-      <div><label>工種</label><input type="text" data-field="工種" value="${task['工種'] || ''}"></div>
-      <div class="task-main">
-          <label>任務項目</label><input type="text" class="task-title" data-field="任務項目" value="${task['任務項目'] || ''}">
-          <label style="margin-top:5px;">任務說明</label><textarea data-field="任務說明" style="font-size: .8rem; min-height: 40px;">${task['任務說明'] || ''}</textarea>
-      </div>
-      <div><label>工班</label><input type="text" data-field="負責人/工班" value="${task['負責人/工班'] || ''}"></div>
-      <div class="task-dates">
-          <label>預計開始日 / 完成日</label>
-          <input type="date" data-field="預計開始日" value="${task['預計開始日'] ? new Date(task['預計開始日']).toLocaleDateString('sv') : ''}">
-          <input type="date" data-field="預計完成日" value="${task['預計完成日'] ? new Date(task['預計完成日']).toLocaleDateString('sv') : ''}">
-      </div>
-      <div>
-          <label>狀態</label>
-          <div class="status-cell">
-              <select data-field="狀態">
-                  <option value="未完成">未完成</option><option value="施工中">施工中</option><option value="已完成">已完成</option>
-              </select>
-          </div>
-      </div>
-      <div class="task-remarks"><label>備註</label><textarea data-field="備註">${task['備註'] || ''}</textarea></div>
-      <button class="delete-task-btn" title="刪除此任務">&times;</button>
+    <!-- 區塊 1: 階段/工種 -->
+    <div class="flex flex-col gap-1">
+      <label class="form-label">階段 / 工種</label>
+      <div class="phase-tag">${task['階段'] || '未分類'}</div>
+      <!-- [核心需求] 將工種輸入框與 datalist 綁定 -->
+      <input type="text" data-field="工種" value="${task['工種'] || ''}" class="form-input" list="trade-datalist" autocomplete="off">
+    </div>
+    <!-- 區塊 2: 任務項目 (在桌面版跨越兩欄) -->
+    <div class="md:col-span-2 flex flex-col gap-1">
+      <label class="form-label">任務項目 / 說明</label>
+      <input type="text" class="form-input font-semibold" data-field="任務項目" value="${task['任務項目'] || ''}" placeholder="請輸入任務項目">
+      <textarea data-field="任務說明" class="form-textarea" placeholder="任務的詳細說明...">${task['任務說明'] || ''}</textarea>
+    </div>
+    <!-- 區塊 3: 工班/狀態 -->
+    <div class="flex flex-col gap-1">
+        <label class="form-label">工班 / 狀態</label>
+        <input type="text" data-field="負責人/工班" value="${task['負責人/工班'] || ''}" class="form-input" placeholder="請輸入工班">
+        <div class="status-cell mt-1">
+            <select data-field="狀態" class="form-select">
+                <option value="未完成">未完成</option>
+                <option value="施工中">施工中</option>
+                <option value="已完成">已完成</option>
+            </select>
+        </div>
+    </div>
+    <!-- 區塊 4: 日期/備註/操作 -->
+    <div class="flex flex-col gap-1">
+      <label class="form-label">預計時程 / 備註</label>
+      <input type="text" class="date-range-picker form-input" placeholder="點擊選擇日期範圍">
+      <!-- [核心修正] 新增兩個隱藏的 input，專門用來給 handleSaveSchedule 讀取日期 -->
+      <!-- [核心修正] 在渲染時就對日期格式進行標準化，只取 YYYY-MM-DD 部分 -->
+      <input type="hidden" data-field="預計開始日" value="${(task['預計開始日'] || '').split('T')[0]}">
+      <input type="hidden" data-field="預計完成日" value="${(task['預計完成日'] || '').split('T')[0]}">
+      <textarea data-field="備註" class="form-textarea" placeholder="備註...">${task['備註'] || ''}</textarea>
+    </div>
+    <button class="delete-task-btn" title="刪除此任務">&times;</button>
   `;
   
+  // [新增] 初始化 flatpickr 日期範圍選擇器
+  const datePicker = card.querySelector('.date-range-picker');
+  const fpInstance = flatpickr(datePicker, {
+    mode: "range",
+    dateFormat: "Y-m-d", // 實際儲存的格式 (保持不變)
+    altInput: true,      // [新增] 產生一個用於顯示的額外輸入框
+    altFormat: "m-d",    // [新增] 設定顯示格式為「月-日」
+    defaultDate: [task['預計開始日'], task['預計完成日']].filter(Boolean), // 如果有日期就設定預設值
+    locale: "zh_tw", // 使用繁體中文語系
+    // [核心修正] onClose 取代 onChange，確保在使用者確認日期後才觸發
+    onClose: function(selectedDates, dateStr, instance) {
+      const startDateInput = card.querySelector('input[data-field="預計開始日"]');
+      const endDateInput = card.querySelector('input[data-field="預計完成日"]');
+      let newStartDate = null;
+
+      if (selectedDates.length === 2) {
+        const startDate = new Date(selectedDates[0]).toLocaleDateString('sv');
+        const endDate = new Date(selectedDates[1]).toLocaleDateString('sv');
+        if (startDateInput) startDateInput.value = startDate;
+        if (endDateInput) endDateInput.value = endDate;
+        newStartDate = selectedDates[0];
+      } else if (selectedDates.length === 1) { // 如果只選一天
+        const singleDate = new Date(selectedDates[0]).toLocaleDateString('sv');
+        if (startDateInput) startDateInput.value = singleDate;
+        if (endDateInput) endDateInput.value = singleDate;
+        newStartDate = selectedDates[0];
+      }
+
+      // [核心需求] 當日期被修改後，呼叫新函式來智慧更新階段
+      if (newStartDate) updateTaskPhaseByDate(card, newStartDate);
+
+      enableSaveButton(); // 啟用儲存按鈕
+    }
+  });
+
   const statusSelect = card.querySelector('select[data-field="狀態"]');
   statusSelect.value = task['狀態'] || '未完成';
   const statusCell = card.querySelector('.status-cell');
-  const setStatusColor = () => statusCell.className = `status-cell status-${statusSelect.value}`;
+  const setStatusColor = () => { // [修正] 使用 classList 避免覆蓋其他 class
+    statusCell.classList.remove('status-未完成', 'status-施工中', 'status-已完成');
+    statusCell.classList.add(`status-${statusSelect.value}`);
+  };
   setStatusColor();
 
-  card.querySelectorAll('input, select, textarea').forEach(el => el.oninput = enableSaveButton);
+  // [核心需求] 為工種輸入框加上特殊的 onchange 事件
+  const tradeInput = card.querySelector('input[data-field="工種"]');
+  if (tradeInput) {
+    tradeInput.onchange = (e) => {
+      const selectedTrade = e.target.value;
+      const teamInput = card.querySelector('input[data-field="負責人/工班"]');
+      
+      // [核心需求 2] 根據選擇的工種，從現有排程中智慧判斷並填入工班
+      const tradeContacts = new Map();
+      currentScheduleData.forEach(task => {
+        if (task && task['工種'] === selectedTrade && task['負責人/工班']) {
+          const person = task['負責人/工班'];
+          tradeContacts.set(person, (tradeContacts.get(person) || 0) + 1);
+        }
+      });
+
+      if (teamInput && tradeContacts.size > 0) {
+        // 找到最常出現的工班
+        const mostFrequentTeam = [...tradeContacts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+        teamInput.value = mostFrequentTeam;
+        logToPage(`已根據工種 "${selectedTrade}" 自動帶入最常用的工班: ${mostFrequentTeam}`);
+      }
+
+      // [舊邏輯] 繼續根據範本自動填入任務項目和說明
+      const matchedTemplate = templateTasks.find(t => t['工種'] === selectedTrade || t['工種'] + '工程' === selectedTrade);
+
+      if (matchedTemplate) {
+        const taskItemInput = card.querySelector('input[data-field="任務項目"]');
+        const taskDescTextarea = card.querySelector('textarea[data-field="任務說明"]');
+
+        if (taskItemInput) taskItemInput.value = matchedTemplate['任務項目'] || '';
+        if (taskDescTextarea) taskDescTextarea.value = matchedTemplate['任務說明'] || '';
+        logToPage(`已根據工種 "${selectedTrade}" 自動帶入範本資料。`);
+      }
+      enableSaveButton();
+    };
+  }
+  card.querySelectorAll('input:not([data-field="工種"]), select, textarea').forEach(el => el.oninput = enableSaveButton);
   statusSelect.onchange = () => { enableSaveButton(); setStatusColor(); };
 
   card.querySelector('.delete-task-btn').onclick = () => {
-      if (confirm(`確定要刪除任務「${task['任務項目'] || '新任務'}」嗎？`)) {
-          card.remove();
-          enableSaveButton();
-      }
+    if (confirm(`確定要刪除任務「${task['任務項目'] || '新任務'}」嗎？`)) {
+      // [核心修正] 不直接移除 DOM，而是將其隱藏並在資料層標記為 null
+      // 這樣在儲存時才能正確地從 scheduleData 中排除它
+      card.style.transition = 'opacity 0.3s ease, max-height 0.3s ease';
+      card.style.opacity = '0';
+      card.style.maxHeight = '0px';
+      setTimeout(() => card.style.display = 'none', 300);
+      currentScheduleData[index] = null; // 標記為待刪除
+      enableSaveButton();
+    }
   };
   return card;
+}
+
+// [新函式] 根據任務日期，智慧更新其所屬的階段
+function updateTaskPhaseByDate(taskCardElement, targetDate) {
+  if (!taskCardElement || !targetDate) return;
+
+  let determinedPhase = '未分類'; // 預設階段
+
+  // 遍歷所有任務（排除自己），尋找日期區間
+  const allTasks = Array.from(document.querySelectorAll('.task-card'));
+  for (const card of allTasks) {
+    // 跳過當前正在編輯的卡片
+    if (card === taskCardElement) continue;
+
+    const startDateStr = card.querySelector('input[data-field="預計開始日"]')?.value;
+    const endDateStr = card.querySelector('input[data-field="預計完成日"]')?.value;
+
+    if (startDateStr && endDateStr) {
+      const taskStart = new Date(startDateStr);
+      const taskEnd = new Date(endDateStr);
+      // 將時間設為 0，避免時區問題
+      taskStart.setHours(0, 0, 0, 0);
+      taskEnd.setHours(0, 0, 0, 0);
+      const checkDate = new Date(targetDate);
+      checkDate.setHours(0, 0, 0, 0);
+
+      if (checkDate >= taskStart && checkDate <= taskEnd) {
+        const phaseTag = card.querySelector('.phase-tag');
+        if (phaseTag) {
+          determinedPhase = phaseTag.textContent;
+          break; // 找到第一個符合的就跳出
+        }
+      }
+    }
+  }
+
+  // 更新當前卡片上的階段標籤
+  const currentPhaseTag = taskCardElement.querySelector('.phase-tag');
+  if (currentPhaseTag) {
+    currentPhaseTag.textContent = determinedPhase;
+    logToPage(`任務 "${taskCardElement.querySelector('input[data-field="任務項目"]').value}" 的階段已自動更新為: ${determinedPhase}`);
+  }
 }
 
 // [核心修改] 新增智慧新增任務的處理函式
 function handleAddTask() {
   const select = document.getElementById('task-template-select');
-  const selectedIndex = select.value;
-  if (selectedIndex === "") return;
+  const templateTask = (select && select.value !== "") ? templateTasks[select.value] : {};
 
-  const templateTask = templateTasks[selectedIndex];
-  
-  const newTaskData = {
-      ...templateTask, // 帶入範本中的 階段, 工種, 任務項目, 任務說明 etc.
-      '案號': new URLSearchParams(location.search).get('id'),
-      '預計開始日': '',
-      '預計完成日': '',
-      '狀態': '未完成',
-      '負責人/工班': '',
-      '備註': ''
+  // 組合最終的新任務資料
+  const finalNewTaskData = {
+    ...templateTask,
+    '案號': new URLSearchParams(location.search).get('id'),
+    '階段': '未分類', // [核心修正] 新增時，階段一律為「未分類」
+    '預計開始日': new Date().toLocaleDateString('sv'), // 日期預設為今天
+    '預計完成日': new Date().toLocaleDateString('sv'),
+    '狀態': '未完成',
   };
   
-  currentScheduleData.push(newTaskData);
-  // 重新渲染整個列表以加入新卡片
-  const overviewData = { '專案起始日': document.querySelector('input[data-field="預計開始日"]')?.value || new Date() };
-  displaySchedule(overviewData, currentScheduleData, true);
+  addNewTaskCard(finalNewTaskData);
+}
+
+function addNewTaskCard(taskData) {
+  // 在資料層面新增任務
+  currentScheduleData.push(taskData);
+  
+  // 在 UI 層面直接新增卡片，避免整個列表重新渲染
+  const listContainer = document.getElementById('schedule-list-container');
+  const newCardIndex = currentScheduleData.length - 1;
+  const newCard = renderTaskCard(taskData, newCardIndex);
+  listContainer.appendChild(newCard);
+
   enableSaveButton();
 
-  // [核心修復] 使用更可靠的方式，確保在畫面渲染完成後才執行滾動
-  const focusCardId = `task-card-${focusTaskIndex}`;
-  // 使用一個極短的 setTimeout (0毫秒)，可以將滾動指令推遲到瀏覽器完成所有渲染任務之後執行
   setTimeout(() => {
-      const focusCard = document.getElementById(focusCardId);
-      if (focusCard) {
-          focusCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          logToPage(`✅ 已自動滾動至任務 #${focusTaskIndex + 1}`);
-      }
+    newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, 0);
-}
-// [新增] 輔助函式，用於建立卡片中的每一個欄位，解決「工班」bug
-function createTaskCardField(header, task) {
-  const div = document.createElement('div');
-  const label = document.createElement('label');
-  label.textContent = header;
-  div.appendChild(label);
-
-  const value = task[header] || '';
-
-  switch(header) {
-      case '工種':
-          const workTypeEl = document.createElement('div');
-          workTypeEl.className = 'clickable-work-type';
-          workTypeEl.textContent = value;
-          workTypeEl.onclick = () => filterLogsByWorkType(value);
-          div.appendChild(workTypeEl);
-          break;
-      case '任務項目':
-      case '任務說明':
-          // 這兩個合併顯示，所以在外面處理
-          break;
-      case '工班':
-          const teamInput = document.createElement('input');
-          teamInput.type = 'text';
-          teamInput.value = value;
-          teamInput.dataset.field = header; // 綁定欄位名
-          teamInput.oninput = enableSaveButton;
-          div.appendChild(teamInput);
-          break;
-      case '預計開始日':
-      case '預計完成日':
-          const dateInput = document.createElement('input');
-          dateInput.type = 'date';
-          dateInput.value = value ? new Date(value).toLocaleDateString('sv') : '';
-          dateInput.dataset.field = header;
-          dateInput.onchange = enableSaveButton;
-          div.appendChild(dateInput);
-          div.className = 'task-dates'; // 合併日期樣式
-          break;
-      case '狀態':
-          const statusSelect = document.createElement('select');
-          statusSelect.className = 'status-badge-input';
-          statusSelect.dataset.field = header;
-          ['未完成', '施工中', '已完成'].forEach(opt => {
-              statusSelect.innerHTML += `<option value="${opt}" ${value === opt ? 'selected' : ''}>${opt}</option>`;
-          });
-          const setStatusColor = (el) => { el.className = 'status-badge-input'; el.classList.add(`status-${el.value}`); };
-          statusSelect.onchange = () => { enableSaveButton(); setStatusColor(statusSelect); };
-          div.appendChild(statusSelect);
-          setStatusColor(statusSelect);
-          break;
-      case '備註':
-          const remarksTextarea = document.createElement('textarea');
-          remarksTextarea.value = value;
-          remarksTextarea.dataset.field = header;
-          remarksTextarea.oninput = enableSaveButton;
-          div.appendChild(remarksTextarea);
-          div.className = 'task-remarks';
-          break;
-      default:
-          // 處理合併顯示的欄位
-          if (header === '任務項目') {
-              div.className = 'task-main';
-              div.innerHTML = `<label>任務項目</label><div class="task-title">${task['任務項目']}</div><div class="task-description">${task['任務說明'] || ''}</div>`;
-          } else {
-              return document.createDocumentFragment(); // 回傳空片段，不顯示
-          }
-  }
-  return div;
 }
 // [新增] 啟用儲存按鈕的函式
 function enableSaveButton() {
   const btn = document.getElementById('save-schedule-btn');
   if (btn) {
-      btn.style.display = 'block';
+      btn.classList.remove('hidden');
   }
 }
 
-// [新增] 處理儲存排程的函式
-
 function handleSaveSchedule() {
   const btn = document.getElementById('save-schedule-btn');
-  btn.textContent = '儲存中...'; btn.disabled = true;
+    // [核心修改 2] 立即隱藏按鈕，讓使用者可以繼續操作
+  btn.classList.add('hidden');
+  btn.disabled = true;
+  logToPage('💾 變更已送出，背景儲存中...');
 
   const projectId = new URLSearchParams(window.location.search).get('id');
   
   // [核心修正] 完全信任 DOM，從畫面上重新建立一份最準確的資料
-  let scheduleData = Array.from(document.querySelectorAll('.task-card')).map(card => {
+   const scheduleData = Array.from(document.querySelectorAll('.task-card')).map(card => {
+      if (card.style.display === 'none') return null;
       const task = {};
       // 讀取卡片上所有帶有 data-field 屬性的輸入元件
       card.querySelectorAll('[data-field]').forEach(input => {
@@ -545,10 +568,13 @@ function handleSaveSchedule() {
       });
       // 補回畫面上沒有，但後端需要的固定欄位
       task['案號'] = projectId;
-      const originalTask = currentScheduleData.find(t => t['任務項目'] === task['任務項目']) || {};
-      task['階段'] = originalTask['階段']; // 階段是從範本帶入，不允許編輯
+      // [修正] 從 DOM 中讀取不可編輯的「階段」資訊
+      const phaseTag = card.querySelector('.phase-tag');
+      if (phaseTag) {
+        task['階段'] = phaseTag.textContent;
+      }
       return task;
-  });
+  }).filter(Boolean); // 過濾掉所有為 null 的任務 (即被刪除的任務)
 
   // 根據「預計開始日」對所有任務進行排序
   scheduleData.sort((a, b) => {
@@ -561,20 +587,21 @@ function handleSaveSchedule() {
 
   const payload = { action: 'updateSchedule', projectId, scheduleData };
 
+  // [還原] 恢復為 fetch no-cors 模式，解決 URL 過長問題
   fetch(`${API_BASE_URL}?page=project`, {
       method: 'POST', body: JSON.stringify(payload),
       headers: { 'Content-Type': 'text/plain;charset=utf-8' }, mode: 'no-cors'
   })
-  .then(() => {
-      logToPage('✅ 排程儲存成功，正在局部刷新...');
-      alert('排程已成功儲存！');
-      refreshScheduleData();
-  })
-  .catch(error => {
-      console.error('儲存排程時發生錯誤:', error);
-      alert('儲存失敗，請檢查網路連線或後端日誌。');
-      btn.textContent = '儲存排程變更'; btn.disabled = false;
-  });
+    .catch(error => {
+        // 此處的 catch 只會在網路層級錯誤時觸發
+        console.error('儲存排程時發生網路錯誤:', error);
+        alert('儲存失敗！請檢查您的網路連線。排程將還原至上次儲存的狀態。');
+        refreshScheduleData(); // 重新載入，還原使用者介面
+    })
+    .finally(() => {
+        btn.textContent = '儲存排程變更'; btn.disabled = false;
+        btn.classList.add('hidden');
+    });
 }
 // [新增] 局部刷新函式
 function refreshScheduleData() {
@@ -590,15 +617,16 @@ function refreshScheduleData() {
   if (saveBtn) {
       saveBtn.textContent = '儲存排程變更';
       saveBtn.disabled = false;
-      saveBtn.style.display = 'none';
+      saveBtn.classList.add('hidden');
   }
 
   loadJsonp(fetchUrl)
       .then(data => {
           if (data && !data.error) {
-              currentScheduleData = data.schedule || [];
+              currentScheduleData = data.schedule || []; // 更新全域資料
               // [核心修改] 將「維持展開」的狀態傳遞給渲染函式
               displaySchedule(data.overview, currentScheduleData, wasOpen);
+              displayProjectInfo(data.overview, currentScheduleData);
               logToPage('✅ 排程面板已刷新完畢。');
           } else {
               throw new Error(data.error || '後端回傳資料格式錯誤');
@@ -608,17 +636,6 @@ function refreshScheduleData() {
           logToPage(`❌ 局部刷新失敗: ${err.message}`);
           alert('刷新資料失敗，建議手動重新整理頁面。');
       });
-}
-function filterLogsByWorkType(workType){
-  logToPage('篩選：工種 "' + workType + '"');
-  document.getElementById('filter-reset-button')?.remove();
-  const filtered = currentLogsData.filter(log => (log.Tags && log.Tags.includes(workType)) || (log.Title && log.Title.includes(workType)));
-  displayLogsFiltered(filtered, true);
-  const container = document.getElementById('logs-container');
-  const resetBtn = document.createElement('button'); resetBtn.id='filter-reset-button';
-  resetBtn.textContent = '清除 "'+workType+'" 篩選，顯示所有日誌'; resetBtn.style.cssText='margin:0 0 1rem 0;width:100%;background-color:var(--yellow);';
-  resetBtn.onclick = () => { container.innerHTML=''; const isDraftMode = (new URLSearchParams(window.location.search).get('id')==='0'); displayLogs(currentLogsData, isDraftMode); resetBtn.remove(); };
-  container.prepend(resetBtn);
 }
 
 /* ===== 文字編輯（局部更新） ===== */
@@ -695,6 +712,12 @@ function openPhotoModal(logId, photoLinksCsv){
   modal.style.display='flex';
 }
 function closePhotoModal(){ document.getElementById('photo-modal').style.display='none'; currentEditingLogId=null; }
+
+// [核心修正] 將關閉按鈕的事件監聽從 HTML 移至此處
+document.addEventListener('DOMContentLoaded', () => {
+    const photoModal = document.getElementById('photo-modal');
+    photoModal.querySelector('button[onclick="closePhotoModal()"]')?.addEventListener('click', closePhotoModal);
+});
 
 document.getElementById('add-photos-button').onclick = () => document.getElementById('photo-file-input').click();
 document.getElementById('photo-file-input').onchange = (e) => {
@@ -834,6 +857,37 @@ function publishCallback(resp){
  * 8.  更新頁面主標題。
  */
 function handleDataResponse(data){
+  // [核心升級] 建立專案牆的發文區塊
+  const wallPostCreatorHTML = `
+    <div class="card post-creator">
+      <textarea id="post-creator-textarea" class="form-textarea" placeholder="今天有什麼新進度嗎？"></textarea>
+      <div class="post-creator-actions">
+        <div class="action-buttons">
+          <button class="action-btn" id="add-photo-to-post-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M15.621 4.379a3 3 0 0 0-4.242 0l-7 7a3 3 0 0 0 4.241 4.243h.001l.497-.5a.75.75 0 0 1 1.064 1.057l-.498.501-.002.002a4.5 4.5 0 0 1-6.364-6.364l7-7a4.5 4.5 0 0 1 6.368 6.36l-3.455 3.553A2.625 2.625 0 1 1 9.52 9.52l3.45-3.451a.75.75 0 1 1 1.061 1.06l-3.45 3.452a1.125 1.125 0 0 1-1.591 0z" clip-rule="evenodd" /></svg>
+            <span>附加檔案</span>
+          </button>
+        </div>
+        <button id="submit-post-btn" class="btn btn-primary">發佈</button>
+      </div>
+    </div>
+  `;
+
+  const logsContainer = document.getElementById('logs-container');
+  // 檢查是否已存在發文區，避免重複加入
+  if (logsContainer && !logsContainer.querySelector('.post-creator')) {
+    logsContainer.insertAdjacentHTML('afterbegin', wallPostCreatorHTML);
+    
+    // 為新加入的按鈕綁定事件 (此處可預留未來功能)
+    document.getElementById('add-photo-to-post-btn').onclick = () => {
+      alert('附加檔案功能開發中！');
+    };
+    document.getElementById('submit-post-btn').onclick = () => {
+      const content = document.getElementById('post-creator-textarea').value;
+      alert(`準備發佈內容：\n${content}`);
+    };
+  }
+
   logToPage('✅ 後端回應成功');
   // 清除任何可能存在的舊錯誤訊息
   document.getElementById('status-message')?.remove();
@@ -871,13 +925,11 @@ function handleDataResponse(data){
     
   // 渲染UI：呼叫 displaySchedule 函式，將排序好的排程資料渲染成畫面
   displaySchedule(data.overview, currentScheduleData, false);
-  
-  // [核心修正] 移除此處錯誤的填充邏輯，此下拉選單應由 main_.js 管理
-  const addTaskControls = document.getElementById('add-task-controls');
-  if (addTaskControls && templateTasks.length === 0) {
-    addTaskControls.style.display = 'none';
-  }
-  
+
+  // [核心修正] 呼叫函式以建立「工種」欄位的 datalist 下拉建議選單
+  createOrUpdateTradeDatalist(templateTasks);
+
+  // [修復] 重新加入日誌渲染的邏輯
   // 效能優化：初始化分頁計數器，並呼叫 renderLogPage 函式僅渲染第一頁的日誌
   currentPage = 1;
   renderLogPage();
@@ -892,12 +944,115 @@ function handleDataResponse(data){
   if(data.overview && (data.overview.siteName || data.overview['案場名稱'])){
       titleEl.textContent = '主控台: ' + (data.overview.siteName || data.overview['案場名稱']);
   }
+
+  // [新增] 呼叫新函式來渲染右側的專案資訊面板
+  displayProjectInfo(data.overview, currentScheduleData);
+}
+
+/**
+ * @description 渲染右側的專案資訊面板
+ * @param {object} overview - 包含專案總覽資訊的物件
+ */
+function displayProjectInfo(overview, schedule) {
+  const panel = document.getElementById('project-info-panel');
+  if (!panel) return;
+
+  if (!overview) {
+    panel.innerHTML = '<p class="muted">無專案資訊</p>';
+    return;
+  }
+
+  // 輔助函式，避免因資料不存在而顯示 undefined
+  const get = (key) => overview[key] || '未提供';
+
+  panel.innerHTML = `
+    <div class="project-info-section">
+      <h4 class="info-header">專案基本資料</h4>
+      <ul class="info-list">
+        <li><strong>案場名稱:</strong> ${get('案場名稱')}</li>
+        <li><strong>案場地址:</strong> <a href="https://www.google.com/maps?q=${encodeURIComponent(get('案場地址'))}" target="_blank" rel="noopener noreferrer">${get('案場地址')}</a></li>
+      </ul>
+    </div>
+    <hr class="info-divider">
+    <div class="project-info-section">
+      <h4 class="info-header">團隊成員</h4>
+      <ul class="info-list">
+        <li><strong>設計師:</strong> ${get('設計師')}</li>
+        <li><strong>助理:</strong> ${get('助理')}</li>
+        <li><strong>工務:</strong> ${get('工務')}</li>
+      </ul>
+    </div>
+    <hr class="info-divider">
+    <div class="project-info-section">
+      <h4 class="info-header">現場資訊</h4>
+      <ul class="info-list">
+        <li><strong>入門方式:</strong> ${get('入門方式')}</li>
+        <li><strong>停車方式:</strong> ${get('停車方式')}</li>
+        <li><strong>施工進場時間:</strong> ${get('施工進場時間')}</li>
+        <li><strong>保證金事宜:</strong> ${get('保證金事宜')}</li>
+      </ul>
+    </div>
+    <hr class="info-divider">
+    <div class="project-info-section">
+      <h4 class="info-header">備註</h4>
+      <ul class="info-list">
+        <li><strong>管理中心電話:</strong> <a href="tel:${get('備註-管理中心電話')}">${get('備註-管理中心電話')}</a></li>
+        <li><strong>施工時間:</strong> ${get('備註-施工時間')}</li>
+        <li style="white-space: pre-wrap;"><strong>特別注意事項:</strong><br>${get('備註-特別注意事項')}</li>
+      </ul>
+    </div>
+  `;
+
+  // [修改] 動態從排程資料中產生工班資訊
+  const tradeContacts = new Map();
+  if (schedule && schedule.length > 0) {
+    schedule.forEach(task => {
+      const trade = task['工種'];
+      const person = task['負責人/工班'];
+      if (trade && person) {
+        if (!tradeContacts.has(trade)) {
+          tradeContacts.set(trade, new Set());
+        }
+        tradeContacts.get(trade).add(person);
+      }
+    });
+  }
+
+  if (tradeContacts.size > 0) {
+    let tradeHtml = '<hr class="info-divider"><div class="project-info-section"><h4 class="info-header">工班資訊</h4><ul class="info-list">';
+    tradeContacts.forEach((persons, trade) => {
+      tradeHtml += `<li><strong>${trade}:</strong> ${Array.from(persons).join(', ')}</li>`;
+    });
+    tradeHtml += '</ul></div>';
+    panel.innerHTML += tradeHtml;
+  }
+
+  logToPage('✅ 右側專案資訊面板已渲染');
+}
+
+/**
+ * @description 根據範本任務，建立或更新工種的 datalist
+ * @param {Array<object>} templates - 任務範本列表
+ */
+function createOrUpdateTradeDatalist(templates) {
+  // [核心需求] 定義固定的核心工種列表
+  const coreTrades = ['木作工程', '系統工程', '水電工程', '泥作工程', '石材工程', '玻璃工程', '窗簾工程', '保護工程', '清潔工程'];
+  let datalist = document.getElementById('trade-datalist');
+  if (!datalist) {
+    datalist = document.createElement('datalist');
+    datalist.id = 'trade-datalist';
+    document.body.appendChild(datalist);
+  }
+  datalist.innerHTML = ''; // 清空舊選項
+  coreTrades.forEach(trade => {
+    datalist.innerHTML += `<option value="${trade}"></option>`;
+  });
 }
 
 // [新函式] 顯示日期選擇器
 function showStartDatePicker(templateType) {
   const actionsContainer = document.getElementById('actions-container');
-  const originalButtons = actionsContainer.innerHTML; // 保存原始按鈕
+  const originalButtons = actionsContainer.innerHTML; // 保存原始按鈕，以便取消時恢復
   
   actionsContainer.innerHTML = `
     <label for="start-date-picker" style="align-self: center; margin-right: 5px; font-weight: 600;">請選擇開工日:</label>
@@ -937,28 +1092,24 @@ function handleImportTemplate(templateType, startDate) {
     startDate: startDate
   };
 
-  fetch(`${API_BASE_URL}?page=project`, { // [修改] 指向新路由
+  // [還原] 恢復為 fetch no-cors 模式
+  fetch(`${API_BASE_URL}?page=project`, {
     method: 'POST',
     body: JSON.stringify(payload),
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     mode: 'no-cors'
   })
-  .then(() => {
-    alert(`已成功送出「${templateType}」範本套用請求，頁面即將重新整理以載入最新資料。`);
-    setTimeout(() => window.location.reload(), 500);
-  })
-  .catch(error => {
-    console.error('匯入範本時發生錯誤:', error);
-    alert('與後端通訊時發生錯誤，但請求可能已送出。頁面將在5秒後嘗試重新整理。');
-    setTimeout(() => window.location.reload(), 5000);
-  });
+    .then(() => {
+      alert(`已成功送出「${templateType}」範本套用請求，頁面即將重新整理以載入最新資料。`);
+      setTimeout(() => window.location.reload(), 500);
+    })
+    .catch(error => {
+      console.error('匯入範本時發生錯誤:', error);
+      alert('與後端通訊時發生錯誤，但請求可能已送出。頁面將在5秒後嘗試重新整理。');
+      setTimeout(() => window.location.reload(), 5000);
+    });
 }
 
-/*
-* 版本: v12.5
-* 修改時間: 2025-09-27 10:31 (Asia/Taipei)
-* 說明: 新增圖片懶加載的核心邏輯與啟動函式。
-*/
 // --- 這是新函式，請將其加入 main.js ---
 let lazyImageObserver;
 
@@ -994,14 +1145,15 @@ function lazyLoadImages() {
   }
 }
 
-/*
-* 版本: v12.6
-* 修改時間: 2025-09-27 10:43 (Asia/Taipei)
-* 說明: 實作純前端分頁載入。
-*/
 // --- 新增全域變數 ---
 let currentPage = 1;
-const LOGS_PER_PAGE = 8; // 每頁載入8篇日誌
+// [新增] 建立一個簡單的函式來判斷是否為行動裝置
+function isMobile() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+// [修改] 根據裝置類型，動態設定每頁載入的日誌筆數
+const LOGS_PER_PAGE = isMobile() ? 3 : 8; 
 let isLoadingNextPage = false; // 避免重複觸發載入
 let scrollObserver; // 滾動觀察者
 
@@ -1067,25 +1219,128 @@ function setupScrollListener() {
     }
 }
 
-/*
-* 版本: v12.4
-* 修改時間: 2025-09-27 10:24 (Asia/Taipei)
-* 說明: 在請求 API 資料前，先呼叫 displaySkeletonLoader 函式。
-*/
 /* ===== 入口 ===== */
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
+  // [核心修正] 將 UI 初始化邏輯移到此處，並以「施工日誌」為預設
+  // 確保在任何資料載入前，頁面處於正確的初始顯示狀態
+  document.getElementById('schedule-container').style.display = 'none';
+  document.getElementById('logs-container').style.display = 'block';
+  const fab = document.getElementById('fab-add-task-btn');
+  if (fab) fab.style.display = 'none'; // 手機版懸浮按鈕預設隱藏
+
   document.getElementById('version-display').textContent = '版本：' + (typeof FRONTEND_VERSION!=='undefined'?FRONTEND_VERSION:'未知');
   logToPage('頁面載入完成，開始讀取 URL 參數...');
-
-  // [修改] 在請求資料前，先顯示骨架屏
-  displaySkeletonLoader();
 
   const url = new URLSearchParams(location.search);
   const id = url.get('id');
   logToPage('URL id=' + (id || '(未帶入)'));
   if(!id){ displayError({message:'未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。'}); return; }
 
+  const CACHE_KEY = `project_data_${id}`;
+  const CACHE_DURATION_MS = 45 * 60 * 1000; // 45 分鐘
+  let hasRenderedFromCache = false;
+
+  // 1. 嘗試從快取載入並立即渲染
+  try {
+    const cachedItem = localStorage.getItem(CACHE_KEY);
+    if (cachedItem) {
+      const { timestamp, data } = JSON.parse(cachedItem);
+      if (Date.now() - timestamp < CACHE_DURATION_MS) {
+        logToPage('⚡️ 從快取載入資料...');
+        handleDataResponse(data);
+        hasRenderedFromCache = true;
+      } else {
+        logToPage('🗑️ 快取已過期，清除中...');
+        localStorage.removeItem(CACHE_KEY);
+      }
+    }
+  } catch (e) {
+    logToPage(`❌ 讀取快取失敗: ${e.message}`, 'error');
+    localStorage.removeItem(CACHE_KEY);
+  }
+
+  // 如果沒有從快取渲染，則顯示骨架屏
+  if (!hasRenderedFromCache) {
+    displaySkeletonLoader();
+  }
+
+  // 2. 無論如何，都去後端請求最新資料
   const fetchUrl = API_BASE_URL + '?page=project&id=' + encodeURIComponent(id);
-  logToPage('呼叫 API：' + fetchUrl);
-  loadJsonp(fetchUrl).then(handleDataResponse).catch(displayError);
+  logToPage('🔄 背景同步資料中... API: ' + fetchUrl);
+  
+  try {
+    const freshData = await loadJsonp(fetchUrl);
+    logToPage('✅ 背景同步成功');
+    // 將新資料存入快取
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData }));
+    // 重新渲染畫面以顯示最新資料
+    handleDataResponse(freshData);
+  } catch (err) {
+    logToPage(`❌ 背景同步失敗: ${err.message}`, 'error');
+    // 只有在連快取都沒有的情況下才顯示錯誤
+    if (!hasRenderedFromCache) {
+      displayError(err);
+    }
+  }
+});
+
+/* ===== 新增：三欄式佈局互動 ===== */
+document.addEventListener('DOMContentLoaded', () => {
+  const navButtons = document.querySelectorAll('.nav-button');
+  const mobileNavToggle = document.getElementById('mobile-nav-toggle');
+  const leftSidebar = document.querySelector('.left-sidebar');
+  const scheduleContainer = document.getElementById('schedule-container');
+  const logsContainer = document.getElementById('logs-container');
+  const wallContainer = document.getElementById('wall-container'); // [新增] 取得專案牆容器
+  const mainContent = document.getElementById('main-content');
+
+  // 漢堡選單開關
+  if (mobileNavToggle && leftSidebar) {
+    mobileNavToggle.addEventListener('click', () => {
+      leftSidebar.classList.toggle('open');
+    });
+  }
+
+  navButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      // 移除所有按鈕的 active class
+      navButtons.forEach(btn => btn.classList.remove('active'));
+      // 為當前點擊的按鈕加上 active class
+      button.classList.add('active');
+
+      const view = button.dataset.view;
+
+      // 根據 data-view 屬性顯示或隱藏對應的區塊
+      scheduleContainer.style.display = (view === 'schedule') ? 'block' : 'none';
+      logsContainer.style.display = (view === 'logs') ? 'block' : 'none';
+
+      // [新增] 根據當前視圖，顯示或隱藏手機版的懸浮新增按鈕
+      const fab = document.getElementById('fab-add-task-btn');
+      if (fab) fab.style.display = (view === 'schedule') ? 'flex' : 'none';
+
+      // [新增] 當切換到工程排程時，觸發滾動
+      if (view === 'schedule') {
+        setTimeout(() => {
+          // [修改] 尋找第一個「未完成」或「施工中」的任務索引
+          const focusTaskIndex = currentScheduleData.findIndex(task => task['狀態'] !== '已完成');
+
+          const focusCard = document.getElementById(`task-card-${focusTaskIndex}`);
+          if (focusCard) {
+              focusCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              logToPage(`✅ 已自動滾動至任務 #${focusTaskIndex + 1}`);
+          }
+        }, 50); // 使用短延遲確保區塊顯示後再滾動
+      }
+      // [核心修正] 當切換回日誌視圖時，將主內容區的捲動條歸零
+      // 解決從排程切換回來時，日誌頁面不在頂部的問題
+      if (view === 'logs' && mainContent) {
+        mainContent.scrollTop = 0;
+      }
+
+      // 在手機版上，點擊後自動關閉選單
+      if (leftSidebar && leftSidebar.classList.contains('open')) {
+        leftSidebar.classList.remove('open');
+      }
+    });
+  });
 });
