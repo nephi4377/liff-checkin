@@ -872,16 +872,9 @@ function handleDataResponse(data){
   // 渲染UI：呼叫 displaySchedule 函式，將排序好的排程資料渲染成畫面
   displaySchedule(data.overview, currentScheduleData, false);
   
-  // 渲染UI：如果後端有提供任務範本，則將其填充至「新增任務」的下拉選單中
+  // [核心修正] 移除此處錯誤的填充邏輯，此下拉選單應由 main_.js 管理
   const addTaskControls = document.getElementById('add-task-controls');
-  if (addTaskControls && templateTasks.length > 0) {
-      const select = document.getElementById('task-template-select');
-      select.innerHTML = '<option value="">-- 請選擇要新增的任務範本 --</option>';
-      templateTasks.forEach((task, index) => {
-          const optionText = `${task['工種']} - ${task['任務項目']}`;
-          select.innerHTML += `<option value="${index}">${optionText}</option>`;
-      });
-  } else if (addTaskControls) {
+  if (addTaskControls && templateTasks.length === 0) {
     addTaskControls.style.display = 'none';
   }
   
@@ -1008,13 +1001,7 @@ function lazyLoadImages() {
 */
 // --- 新增全域變數 ---
 let currentPage = 1;
-// [新增] 建立一個簡單的函式來判斷是否為行動裝置
-function isMobile() {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-}
-
-// [修改] 根據裝置類型，動態設定每頁載入的日誌筆數
-const LOGS_PER_PAGE = isMobile() ? 3 : 8; 
+const LOGS_PER_PAGE = 8; // 每頁載入8篇日誌
 let isLoadingNextPage = false; // 避免重複觸發載入
 let scrollObserver; // 滾動觀察者
 

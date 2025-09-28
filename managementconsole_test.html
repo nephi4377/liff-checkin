@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <title>專案日誌管理主控台</title>
   <link rel="stylesheet" href="style.css">
+  <!-- [新增] 引入 flatpickr 日期選擇器樣式 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <script>
     // 全域設定值保留在 HTML 中，方便未來不同環境部署時修改
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
@@ -13,6 +15,11 @@
 </head>
 <body>
   <div class="container">
+    <!-- 新增：手機版漢堡選單按鈕 -->
+    <button id="mobile-nav-toggle" class="mobile-nav-toggle">
+      <span class="sr-only">開啟選單</span>
+      <div class="hamburger-icon"></div>
+    </button>
     <header>
       <div>
         <h1 id="project-title">專案日誌管理主控台</h1>
@@ -23,10 +30,34 @@
         <button id="btn-import-old" style="background-color: #d97706;">套用老屋案範本</button>
       </div>
     </header>
-    <main id="main-content">
-      <div id="schedule-container" class="card" style="display:none;"></div>
-      <div id="logs-container"></div>
-    </main>
+
+    <!-- 新的三欄式佈局 -->
+    <div class="app-layout">
+      <!-- 左欄：導覽列 -->
+      <aside class="left-sidebar">
+        <nav class="main-nav">
+          <button class="nav-button active" data-view="logs">
+            <span>施工日誌</span>
+          </button>
+          <button class="nav-button" data-view="schedule">
+            <span>工程排程</span>
+          </button>
+        </nav>
+      </aside>
+
+      <!-- 中欄：主要內容區 -->
+      <main id="main-content">
+        <div id="schedule-container" style="display:none;"></div>
+        <div id="logs-container"></div>
+      </main>
+
+      <!-- 右欄：專案資訊面板 -->
+      <aside class="right-sidebar card">
+        <div id="project-info-panel">
+          <!-- 專案資訊將由 JavaScript 動態填入 -->
+        </div>
+      </aside>
+    </div>
   </div>
 
   <div id="photo-modal" class="modal">
@@ -49,6 +80,9 @@
     </div>
   </div>
 
-  <script src="main_.js"></script>
+  <!-- [新增] 引入 flatpickr 函式庫與中文語系檔 -->
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh-tw.js"></script>
+  <script src="main_.js"></script> <!-- 您的主程式檔案應在最後 -->
 </body>
 </html>
