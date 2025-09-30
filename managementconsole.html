@@ -7,6 +7,8 @@
   <link rel="stylesheet" href="style.css">
   <!-- [新增] 引入 flatpickr 日期選擇器樣式 -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <!-- [核心新增] 引入 LINE LIFF SDK -->
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
     // 全域設定值保留在 HTML 中，方便未來不同環境部署時修改
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
@@ -66,7 +68,7 @@
       <div id="modal-photo-grid-container" class="modal-photo-grid mb-4"></div>
       <div class="text-right space-x-2 mt-4">
         <input type="file" id="photo-file-input" multiple accept="image/*" style="display:none;">
-        <button id="add-photos-button" class="btn" style="background-color: #16a34a;">新增照片</button>
+        <button id="add-photos-button" class="btn" style="background-color: #16a34a;">＋ 新增照片</button>
         <button id="modal-cancel-btn" class="btn" style="background-color: #6b7280;">關閉</button>
         <button id="save-photos-button">儲存變更</button>
       </div>
@@ -83,8 +85,12 @@
   <!-- [新增] 引入 flatpickr 函式庫與中文語系檔 -->
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh-tw.js"></script>
-  <!-- [核心新增] 引入 LINE LIFF SDK -->
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="main.js"></script> <!-- 您的主程式檔案應在最後 -->
+
+  <!-- =============================================================== -->
+  <!-- ======================= 【核心新增處】 ======================== -->
+  <!-- =============================================================== -->
+  <!-- [核心移除] 此區塊的邏輯已整合至 main.js 的 initializeApp() 函式中 -->
+  <!-- 您不再需要這段內嵌的 script -->
 </body>
 </html>

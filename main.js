@@ -34,7 +34,8 @@ let currentLogsData = [];
 let currentScheduleData = [];
 let templateTasks = []; // 儲存從範本中解析出的可選任務列表
 const LIFF_ID = 'YOUR_LIFF_ID_HERE'; // 【⭐️請替換我⭐️】請將此處換成您為主控台申請的 LIFF ID
-let currentUserName = '未知使用者'; // [新增] 用於儲存當前操作者名稱
+let currentUserName = '未知使用者'; // 用於儲存當前操作者名稱
+const CONSOLE_LIFF_ID = '2007974938-LgqYkQ5E'; // 您的主控台 LIFF ID
 const DEBUG_THUMBS = true;
 
 /* ===== 工具：除錯輸出 ===== */
@@ -1387,39 +1388,20 @@ function setupScrollListener() {
 }
 
 /* ===== 入口 ===== */
-window.addEventListener('load', async () => {
-  // [核心修正] 將 UI 初始化邏輯移到此處，並以「施工日誌」為預設
-  // 確保在任何資料載入前，頁面處於正確的初始顯示狀態
-  document.getElementById('schedule-container').style.display = 'none';
-  document.getElementById('logs-container').style.display = 'block';
-  const fab = document.getElementById('fab-add-task-btn');
-  if (fab) fab.style.display = 'none'; // 手機版懸浮按鈕預設隱藏
-
-  document.getElementById('version-display').textContent = '版本：' + (typeof FRONTEND_VERSION!=='undefined'?FRONTEND_VERSION:'未知');
-  logToPage('頁面載入完成，開始讀取 URL 參數...');
-
-  const url = new URLSearchParams(location.search);
-  const id = url.get('id');
-  logToPage('URL id=' + (id || '(未帶入)'));
-  if(!id){ displayError({message:'未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。'}); return; }
-
-  // [核心修改] 新增本地測試環境判斷，繞過 LIFF 驗證
+async function initializeApp() {
+  // [核心修改] 新增本地測試環境判斷，方便在本機電腦上進行開發與除錯
   const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
 
   if (isLocalTest) {
     // 本地測試環境：直接設定假的使用者，並跳過 LIFF
     currentUserName = '測試員A';
     logToPage('⚡️ [本地測試] 偵測到本地環境，已繞過 LIFF 驗證。');
-    logToPage(`✅ 操作者已設定為: ${currentUserName}`);
-    const welcomeMsg = document.createElement('p');
-    welcomeMsg.textContent = `歡迎，${currentUserName} (本地測試模式)`;
-    welcomeMsg.className = 'muted';
-    document.querySelector('header > div:first-child').appendChild(welcomeMsg);
   } else {
     // 線上正式環境：執行完整的 LIFF 初始化與身分驗證流程
     try {
       logToPage('正在初始化 LIFF...');
-      await liff.init({ liffId: LIFF_ID });
+      // [核心修正] 使用您在 HTML 中定義的 CONSOLE_LIFF_ID
+      await liff.init({ liffId: CONSOLE_LIFF_ID });
       if (!liff.isLoggedIn()) {
         logToPage('使用者未登入，將導向至 LINE 登入頁面...');
         liff.login(); // 會自動跳轉，後續程式碼不會執行
@@ -1427,16 +1409,24 @@ window.addEventListener('load', async () => {
       }
       const profile = await liff.getProfile();
       currentUserName = profile.displayName;
-      logToPage(`✅ 身分驗證成功！操作者: ${currentUserName}`);
-      const welcomeMsg = document.createElement('p');
-      welcomeMsg.textContent = `歡迎，${currentUserName}`;
-      welcomeMsg.className = 'muted';
-      document.querySelector('header > div:first-child').appendChild(welcomeMsg);
     } catch (err) {
       displayError({ message: `LIFF 初始化或身分驗證失敗: ${err.message}` });
       return;
     }
   }
+
+  // 無論是本地測試或線上環境，都顯示歡迎訊息
+  logToPage(`✅ 操作者已設定為: ${currentUserName}`);
+  const welcomeMsg = document.createElement('p');
+  welcomeMsg.textContent = `歡迎，${currentUserName}${isLocalTest ? ' (本地測試模式)' : ''}`;
+  welcomeMsg.className = 'muted';
+  document.querySelector('header > div:first-child').appendChild(welcomeMsg);
+
+  // 身分驗證成功後，才開始執行原有的資料載入邏輯
+  const url = new URLSearchParams(location.search);
+  const id = url.get('id');
+  logToPage('URL id=' + (id || '(未帶入)'));
+  if (!id) { displayError({ message: '未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。' }); return; }
 
   const CACHE_KEY = `project_data_${id}`;
   const CACHE_DURATION_MS = 45 * 60 * 1000; // 45 分鐘
@@ -1484,6 +1474,21 @@ window.addEventListener('load', async () => {
       displayError(err);
     }
   }
+}
+
+/* ===== 程式進入點 ===== */
+window.addEventListener('load', () => {
+  // 1. 立即設定好 UI 的初始狀態
+  document.getElementById('schedule-container').style.display = 'none';
+  document.getElementById('logs-container').style.display = 'block';
+  const fab = document.getElementById('fab-add-task-btn');
+  if (fab) fab.style.display = 'none'; // 手機版懸浮按鈕預設隱藏
+
+  document.getElementById('version-display').textContent = '版本：' + (typeof FRONTEND_VERSION !== 'undefined' ? FRONTEND_VERSION : '未知');
+  logToPage('頁面載入完成，準備啟動應用程式...');
+
+  // 2. 呼叫主應用程式初始化函式
+  initializeApp();
 });
 
 /* ===== 新增：三欄式佈局互動 ===== */
