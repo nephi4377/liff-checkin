@@ -944,6 +944,51 @@ function handleDataResponse(data){
   currentScheduleData = data.schedule || [];
   templateTasks = data.templates || [];
 
+  // [核心修正] 將事件綁定移至此處，確保每次資料刷新後都能正確綁定
+  const addPhotoBtn = document.getElementById('add-photo-to-post-btn');
+  const submitPostBtn = document.getElementById('submit-post-btn');
+  const photoInput = document.getElementById('new-log-photos-input');
+  const titleSelect = document.getElementById('post-title-select');
+
+  if (addPhotoBtn) {
+    addPhotoBtn.onclick = () => photoInput?.click();
+  }
+  if (submitPostBtn) {
+    submitPostBtn.onclick = handleCreateNewPost;
+  }
+  if (photoInput) {
+    photoInput.onchange = (e) => {
+      const files = e.target.files;
+      const previewContainer = document.getElementById('new-log-photo-preview');
+      if (!previewContainer) return;
+
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const base64String = event.target.result;
+          const previewItem = document.createElement('div');
+          previewItem.className = 'photo-preview-item';
+          previewItem.dataset.base64 = base64String;
+          // [核心修正] 改用 div 的背景圖來顯示縮圖，而非直接用 img 標籤
+          previewItem.style.backgroundImage = `url(${base64String})`;
+          previewItem.innerHTML = `
+            <button class="remove-preview-btn" title="移除此照片">&times;</button>
+          `;
+          previewItem.querySelector('.remove-preview-btn').onclick = () => previewItem.remove();
+          previewContainer.appendChild(previewItem);
+        };
+        reader.readAsDataURL(file);
+      }
+      e.target.value = '';
+    };
+  }
+  if (titleSelect && templateTasks.length > 0) {
+    titleSelect.innerHTML = '<option value="">-- 自動產生標題 --</option>';
+    const uniqueTrades = [...new Set(templateTasks.map(t => t['工種']))];
+    uniqueTrades.forEach(trade => titleSelect.innerHTML += `<option value="${trade}">${trade}</option>`);
+  }
+
   // 業務邏輯：如果這是一個沒有任何排程的既有專案，則顯示「套用範本」的按鈕
   if (currentScheduleData.length === 0 && (new URLSearchParams(location.search).get('id') !== '0')) {
     const actionsContainer = document.getElementById('actions-container');

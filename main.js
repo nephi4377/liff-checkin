@@ -33,6 +33,8 @@ let currentEditingLogId = null;
 let currentLogsData = [];
 let currentScheduleData = [];
 let templateTasks = []; // 儲存從範本中解析出的可選任務列表
+const LIFF_ID = 'YOUR_LIFF_ID_HERE'; // 【⭐️請替換我⭐️】請將此處換成您為主控台申請的 LIFF ID
+let currentUserName = '未知使用者'; // [新增] 用於儲存當前操作者名稱
 const DEBUG_THUMBS = true;
 
 /* ===== 工具：除錯輸出 ===== */
@@ -146,11 +148,19 @@ function renderSmartImg(fileId){
 function renderDirectImg(src){
   const wrap = document.createElement('div'); wrap.className = 'photo-item';
   const img  = document.createElement('img');
-  // [修改] 加上 lazy class，並將真實 src 存入 data-src
   img.className  = 'photo-thumb lazy';
-  const lazySrc = src + (src.includes('?') ? '&' : '?') + '_=' + Date.now();
-  img.dataset.src = lazySrc; // [修改]
-  img.dataset.full = src;
+
+  // [核心修正] 判斷傳入的是否為 Base64 Data URL
+  if (src.startsWith('data:image/')) {
+    img.dataset.src = src;
+    img.dataset.full = src;
+  } else {
+    // 如果是普通 URL，才加上 cache-busting 參數
+    const lazySrc = src + (src.includes('?') ? '&' : '?') + '_=' + Date.now();
+    img.dataset.src = lazySrc;
+    img.dataset.full = src;
+  }
+
   img.onload  = () => thumbLog('IMG OK ' + img.src);
   img.onerror = () => {
     const ph = document.createElement('div'); ph.className='photo-placeholder';
@@ -163,12 +173,20 @@ function renderDirectImg(src){
 }
 
 function buildPhotoGrid(htmlLinksCsv){
-  const container = document.createElement('div'); container.className = 'photo-grid';
-  if(!htmlLinksCsv) return container;
-  String(htmlLinksCsv).split(',').forEach(link => {
+  const container = document.createElement('div');
+  container.className = 'photo-grid';
+  if (!htmlLinksCsv) return container;
+
+  // [核心修正] 判斷傳入的是字串還是陣列
+  const links = Array.isArray(htmlLinksCsv) ? htmlLinksCsv : String(htmlLinksCsv).split(',');
+
+  links.forEach(link => {
     const u = (link || '').trim(); if(!u) return;
-    if(u.charAt(0) === '/'){ const ph = document.createElement('div'); ph.className='photo-placeholder'; ph.textContent='Dropbox 內部路徑（僅佔位）'; container.appendChild(ph); return; }
-    const id = driveFileId(u); if(id) container.appendChild(renderSmartImg(id)); else container.appendChild(renderDirectImg(u));
+    // [核心修正] 增加對 Base64 Data URL 的直接處理
+    if (u.startsWith('data:image/')) {
+      container.appendChild(renderDirectImg(u));
+    } else if (u.charAt(0) === '/') { const ph = document.createElement('div'); ph.className='photo-placeholder'; ph.textContent='Dropbox 內部路徑（僅佔位）'; container.appendChild(ph); return; }
+    else { const id = driveFileId(u); if(id) container.appendChild(renderSmartImg(id)); else container.appendChild(renderDirectImg(u)); }
   });
   return container;
 }
@@ -181,22 +199,27 @@ function _buildLogCard(log, isDraftMode){
   const updatedMatch = (log.Content || '').match(/^\[更新 (.*?)\]\n/);
   const displayContent = (log.Content || '無內容').replace(/^\[更新 .*?\]\n/, '');
   const lastModifiedDisplay = updatedMatch ? updatedMatch[1] : '無';
-
-  const h3 = document.createElement('h3'); h3.textContent = log.Title || '無標題';
-  const info1 = document.createElement('small'); info1.className='muted';
-  info1.textContent = '案場: ' + (log.ProjectName || '未知') + '｜回報人: ' + (log.UserName || '未知');
-  const info2 = document.createElement('small'); info2.className='muted'; info2.style.display='block'; info2.style.marginTop='.25rem';
-  info2.textContent = '建立: ' + timestamp + '｜最後更新: ' + lastModifiedDisplay;
-  const hr = document.createElement('hr'); hr.className='my-3';
+  
+  // [核心修改] 建立新的標題容器，並將回報人資訊放入
+  const headerDiv = document.createElement('div');
+  headerDiv.className = 'log-card-header';
+  headerDiv.innerHTML = `
+    <h3>${log.Title || '無標題'} <span class="muted">by ${log.UserName || '未知'}</span></h3>
+    <small class="muted">${timestamp}</small>
+  `;
 
   const contentDiv = document.createElement('div'); contentDiv.id = 'content-' + log.LogID;
   contentDiv.style.whiteSpace = 'pre-wrap'; contentDiv.textContent = displayContent;
+  // [核心修改] 縮小內容與標題的間距
+  contentDiv.style.marginTop = '0.75rem';
 
   const photoContainer = document.createElement('div');
   const buttonContainer = document.createElement('div'); buttonContainer.className='button-group'; buttonContainer.style.marginTop='1rem';
-
-  card.appendChild(h3); card.appendChild(info1); card.appendChild(info2); card.appendChild(hr);
-  card.appendChild(contentDiv); card.appendChild(photoContainer); card.appendChild(buttonContainer);
+  
+  card.appendChild(headerDiv);
+  card.appendChild(contentDiv);
+  card.appendChild(photoContainer);
+  card.appendChild(buttonContainer);
 
   if(log.PhotoLinks){ photoContainer.appendChild(buildPhotoGrid(log.PhotoLinks)); logToPage('...['+log.LogID+'] 照片牆已建立'); }
 
@@ -638,6 +661,98 @@ function refreshScheduleData() {
       });
 }
 
+/**
+ * @description 處理建立新日誌（發文）的函式
+ */
+function handleCreateNewPost() {
+  // [核心修正] 取得所有相關的 UI 元素
+  const textarea = document.getElementById('post-creator-textarea');
+  const submitBtn = document.getElementById('submit-post-btn');
+  const titleSelect = document.getElementById('post-title-select');
+  const photoPreviewContainer = document.getElementById('new-log-photo-preview');
+
+  const content = textarea.value.trim();
+  
+  // [核心修正] 在檢查內容前，先取得照片陣列
+  const photosBase64Array = photoPreviewContainer 
+    ? Array.from(photoPreviewContainer.querySelectorAll('.photo-preview-item')).map(item => item.dataset.base64)
+    : [];
+
+  // [核心修正] 只有在「沒有文字」也「沒有照片」時才阻止發佈
+  if (!content && photosBase64Array.length === 0) {
+    alert('請輸入一些內容或附加照片！');
+    textarea.focus();
+    return;
+  }
+
+  // [核心修正] 檢查按鈕是否存在，避免在極端情況下出錯
+  if (!submitBtn) {
+    console.error('無法找到發佈按鈕 (submit-post-btn)');
+    return;
+  }
+
+  // 樂觀更新 UI
+  submitBtn.disabled = true;
+  submitBtn.textContent = '發佈中...';
+  textarea.value = '';
+  // [核心修正] 發佈後清空預覽照片
+  if (photoPreviewContainer) {
+    photoPreviewContainer.innerHTML = '';
+  }
+
+  const projectId = new URLSearchParams(window.location.search).get('id');
+  
+  // [核心修正] 從下拉選單中取得標題
+  const title = titleSelect ? titleSelect.value : '';
+
+  const payload = {
+    action: 'createNewLog',
+    projectId: projectId,
+    content: content,
+    // [核心修正] 將標題、照片陣列、以及使用者名稱加入 payload
+    userName: currentUserName,
+    title: title,
+    photos: photosBase64Array
+  };
+
+  // 樂觀地在前端插入新卡片
+  const optimisticPost = {
+    LogID: `temp-${Date.now()}`,
+    ProjectName: document.getElementById('project-title').textContent.replace('主控台: ', ''),
+    // [核心修正] 調整標題格式以符合需求
+    Title: title 
+      ? `${new Date().toLocaleDateString('sv')} ${title} 進度回報 (主控台新增)`
+      : `${new Date().toLocaleDateString('sv')} 主控台更新`,
+    UserName: currentUserName, // [核心修正] 確保樂觀更新的卡片也使用正確的使用者名稱
+    Timestamp: new Date().toISOString(),
+    Content: content,
+    PhotoLinks: photosBase64Array // [核心修正] 直接傳遞陣列，不再使用 join(',')
+  };
+  const newCard = _buildLogCard(optimisticPost, false);
+  const logsContainer = document.getElementById('logs-container');
+  const postCreator = logsContainer.querySelector('.post-creator');
+  postCreator.insertAdjacentElement('afterend', newCard);
+  
+  // [核心修正] 新卡片加入 DOM 後，立即對其觸發一次圖片懶加載
+  lazyLoadImages();
+
+  // 背景執行後端請求 (目前使用發後不理模式)
+  fetch(`${API_BASE_URL}?page=project`, {
+    method: 'POST', body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, mode: 'no-cors'
+  }).finally(() => {
+    // 無論成功失敗，一段時間後都恢復按鈕，避免卡死
+    setTimeout(() => {
+      submitBtn.disabled = false;
+      submitBtn.textContent = '發佈';
+      // [核心修正] 如果標題選單存在，將其重設回預設選項
+      if (titleSelect) {
+        titleSelect.selectedIndex = 0;
+      }
+    }, 1000);
+  });
+}
+
 /* ===== 文字編輯（局部更新） ===== */
 function handleEditText(logId){
   logToPage('✏️ 編輯模式：LogID ' + logId);
@@ -713,10 +828,9 @@ function openPhotoModal(logId, photoLinksCsv){
 }
 function closePhotoModal(){ document.getElementById('photo-modal').style.display='none'; currentEditingLogId=null; }
 
-// [核心修正] 將關閉按鈕的事件監聽從 HTML 移至此處
 document.addEventListener('DOMContentLoaded', () => {
-    const photoModal = document.getElementById('photo-modal');
-    photoModal.querySelector('button[onclick="closePhotoModal()"]')?.addEventListener('click', closePhotoModal);
+    // [核心修正] 將照片管理視窗的取消按鈕事件綁定移至此處
+    document.getElementById('modal-cancel-btn')?.addEventListener('click', closePhotoModal);
 });
 
 document.getElementById('add-photos-button').onclick = () => document.getElementById('photo-file-input').click();
@@ -861,6 +975,15 @@ function handleDataResponse(data){
   const wallPostCreatorHTML = `
     <div class="card post-creator">
       <textarea id="post-creator-textarea" class="form-textarea" placeholder="今天有什麼新進度嗎？"></textarea>
+            <!-- [核心新增] 新增標題下拉選單 -->
+      <div class="mt-1">
+        <label for="post-title-select" class="form-label">標題 (可選)</label>
+        <select id="post-title-select" class="form-select"></select>
+      </div>
+      <!-- [核心修正] 新增照片預覽容器和隱藏的檔案輸入框 -->
+      <div id="new-log-photo-preview" class="photo-preview-container"></div>
+      <input type="file" id="new-log-photos-input" multiple accept="image/*" style="display: none;">
+      
       <div class="post-creator-actions">
         <div class="action-buttons">
           <button class="action-btn" id="add-photo-to-post-btn">
@@ -877,15 +1000,6 @@ function handleDataResponse(data){
   // 檢查是否已存在發文區，避免重複加入
   if (logsContainer && !logsContainer.querySelector('.post-creator')) {
     logsContainer.insertAdjacentHTML('afterbegin', wallPostCreatorHTML);
-    
-    // 為新加入的按鈕綁定事件 (此處可預留未來功能)
-    document.getElementById('add-photo-to-post-btn').onclick = () => {
-      alert('附加檔案功能開發中！');
-    };
-    document.getElementById('submit-post-btn').onclick = () => {
-      const content = document.getElementById('post-creator-textarea').value;
-      alert(`準備發佈內容：\n${content}`);
-    };
   }
 
   logToPage('✅ 後端回應成功');
@@ -897,6 +1011,54 @@ function handleDataResponse(data){
   currentLogsData = data.dailyLogs || [];
   currentScheduleData = data.schedule || [];
   templateTasks = data.templates || [];
+
+  // [核心修正] 將事件綁定移至此處，確保每次資料刷新後都能正確綁定
+  const addPhotoBtn = document.getElementById('add-photo-to-post-btn');
+  const submitPostBtn = document.getElementById('submit-post-btn');
+  const photoInput = document.getElementById('new-log-photos-input');
+  const titleSelect = document.getElementById('post-title-select');
+
+  if (addPhotoBtn) {
+    addPhotoBtn.onclick = () => photoInput?.click();
+  }
+  if (submitPostBtn) {
+    submitPostBtn.onclick = handleCreateNewPost;
+  }
+  if (photoInput) {
+    photoInput.onchange = (e) => {
+      const files = e.target.files;
+      const previewContainer = document.getElementById('new-log-photo-preview');
+      if (!previewContainer) return;
+
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const base64String = event.target.result;
+          const previewItem = document.createElement('div');
+          previewItem.className = 'photo-preview-item';
+          previewItem.dataset.base64 = base64String;
+          // [核心修正] 改用 div 的背景圖來顯示縮圖，而非直接用 img 標籤
+          previewItem.style.backgroundImage = `url(${base64String})`;
+          previewItem.innerHTML = `
+            <button class="remove-preview-btn" title="移除此照片">&times;</button>
+          `;
+          previewItem.querySelector('.remove-preview-btn').onclick = () => previewItem.remove();
+          previewContainer.appendChild(previewItem);
+        };
+        reader.readAsDataURL(file);
+      }
+      e.target.value = '';
+    };
+  }
+  if (titleSelect && templateTasks.length > 0) {
+    // [核心修正] 將選項精簡為幾個核心工程項目
+    titleSelect.innerHTML = '<option value="">-- 自動產生標題 --</option>';
+    const coreTrades = ['保護工程', '拆除工程', '水電工程', '泥作工程', '木作工程', '油漆工程', '系統櫃', '清潔工程', '其他事項'];
+    coreTrades.forEach(trade => {
+      titleSelect.innerHTML += `<option value="${trade}">${trade}</option>`;
+    });
+  }
 
   // 業務邏輯：如果這是一個沒有任何排程的既有專案，則顯示「套用範本」的按鈕
   if (currentScheduleData.length === 0 && (new URLSearchParams(location.search).get('id') !== '0')) {
@@ -1168,8 +1330,13 @@ function renderLogPage() {
   const logsToShow = currentLogsData.slice(startIndex, endIndex);
 
   // 如果是第一頁，先清空容器 (移除骨架屏)
+  // [核心修正] 清空時，保留發文區塊，只移除日誌卡片
   if (currentPage === 1) {
-    logsContainer.innerHTML = '';
+    const postCreator = logsContainer.querySelector('.post-creator');
+    logsContainer.innerHTML = ''; // 清空所有內容
+    if (postCreator) {
+      logsContainer.appendChild(postCreator); // 再把發文區加回來
+    }
   }
 
   // 移除舊的加載提示
@@ -1235,6 +1402,41 @@ window.addEventListener('load', async () => {
   const id = url.get('id');
   logToPage('URL id=' + (id || '(未帶入)'));
   if(!id){ displayError({message:'未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。'}); return; }
+
+  // [核心修改] 新增本地測試環境判斷，繞過 LIFF 驗證
+  const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+
+  if (isLocalTest) {
+    // 本地測試環境：直接設定假的使用者，並跳過 LIFF
+    currentUserName = '測試員A';
+    logToPage('⚡️ [本地測試] 偵測到本地環境，已繞過 LIFF 驗證。');
+    logToPage(`✅ 操作者已設定為: ${currentUserName}`);
+    const welcomeMsg = document.createElement('p');
+    welcomeMsg.textContent = `歡迎，${currentUserName} (本地測試模式)`;
+    welcomeMsg.className = 'muted';
+    document.querySelector('header > div:first-child').appendChild(welcomeMsg);
+  } else {
+    // 線上正式環境：執行完整的 LIFF 初始化與身分驗證流程
+    try {
+      logToPage('正在初始化 LIFF...');
+      await liff.init({ liffId: LIFF_ID });
+      if (!liff.isLoggedIn()) {
+        logToPage('使用者未登入，將導向至 LINE 登入頁面...');
+        liff.login(); // 會自動跳轉，後續程式碼不會執行
+        return;
+      }
+      const profile = await liff.getProfile();
+      currentUserName = profile.displayName;
+      logToPage(`✅ 身分驗證成功！操作者: ${currentUserName}`);
+      const welcomeMsg = document.createElement('p');
+      welcomeMsg.textContent = `歡迎，${currentUserName}`;
+      welcomeMsg.className = 'muted';
+      document.querySelector('header > div:first-child').appendChild(welcomeMsg);
+    } catch (err) {
+      displayError({ message: `LIFF 初始化或身分驗證失敗: ${err.message}` });
+      return;
+    }
+  }
 
   const CACHE_KEY = `project_data_${id}`;
   const CACHE_DURATION_MS = 45 * 60 * 1000; // 45 分鐘
