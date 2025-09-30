@@ -273,7 +273,8 @@ async function initializeApp() {
     try {
       // [核心修改] 步驟 1: 先從後端取得設定檔 (包含 LIFF ID)
       logToPage('正在從後端取得設定...');
-      const configUrl = `${API_BASE_URL}?page=attendance_api&action=get_config`;
+      // [核心修正] 修正 API 端點，使用專門為獲取公開設定設計的路由，而非混用 attendance_api。
+      const configUrl = `${API_BASE_URL}?page=get_config`;
       const config = await loadJsonp(configUrl);
       const consoleLiffId = config.consoleLiffId;
 
