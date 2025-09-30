@@ -33,6 +33,7 @@ let currentEditingLogId = null;
 let currentLogsData = [];
 let currentScheduleData = [];
 let templateTasks = []; // 儲存從範本中解析出的可選任務列表
+let currentUserName = '未知使用者'; // [修改] 用於儲存當前操作者名稱
 const DEBUG_THUMBS = true;
 
 /* ===== 工具：除錯輸出 ===== */
@@ -1328,6 +1329,8 @@ function renderLogPage() {
   const logsToShow = currentLogsData.slice(startIndex, endIndex);
 
   // 如果是第一頁，先清空所有舊的日誌卡片 (移除骨架屏或舊資料)
+  // 如果是第一頁，先清空容器 (移除骨架屏)
+  // [核心修正] 清空時，保留發文區塊，只移除日誌卡片
   if (currentPage === 1) {
     // 選取所有不是 .post-creator 的子元素並移除它們
     Array.from(logsContainer.children).forEach(child => {
@@ -1335,6 +1338,11 @@ function renderLogPage() {
         child.remove();
       }
     });
+    const postCreator = logsContainer.querySelector('.post-creator');
+    logsContainer.innerHTML = ''; // 清空所有內容
+    if (postCreator) {
+      logsContainer.appendChild(postCreator); // 再把發文區加回來
+    }
   }
 
   // 移除舊的加載提示
@@ -1396,9 +1404,20 @@ async function initializeApp() {
   } else {
     // 線上正式環境：執行完整的 LIFF 初始化與身分驗證流程
     try {
+      // [核心修改] 步驟 1: 先從後端取得設定檔 (包含 LIFF ID)
+      logToPage('正在從後端取得設定...');
+      const configUrl = `${API_BASE_URL}?page=attendance_api&action=get_config`;
+      const config = await loadJsonp(configUrl);
+      const consoleLiffId = config.consoleLiffId;
+
+      if (!consoleLiffId) {
+        throw new Error('後端未提供主控台 LIFF ID，請檢查 Apps Script 屬性設定。');
+      }
+      logToPage(`取得 LIFF ID: ${consoleLiffId}`);
+
+      // [核心修改] 步驟 2: 使用取得的 LIFF ID 進行初始化
       logToPage('正在初始化 LIFF...');
-      // [核心修正] 使用您在 HTML 中定義的 CONSOLE_LIFF_ID
-      await liff.init({ liffId: CONSOLE_LIFF_ID });
+      await liff.init({ liffId: consoleLiffId });
       if (!liff.isLoggedIn()) {
         logToPage('使用者未登入，將導向至 LINE 登入頁面...');
         liff.login(); // 會自動跳轉，後續程式碼不會執行
@@ -1424,6 +1443,7 @@ async function initializeApp() {
   const id = url.get('id');
   logToPage('URL id=' + (id || '(未帶入)'));
   if(!id){ displayError({message:'未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。'}); return; }
+  if (!id) { displayError({ message: '未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。' }); return; }
 
   const CACHE_KEY = `project_data_${id}`;
   const CACHE_DURATION_MS = 45 * 60 * 1000; // 45 分鐘
