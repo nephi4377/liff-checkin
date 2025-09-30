@@ -264,7 +264,7 @@ async function initializeApp() {
     }
   }
 
-  if (isLocalTest) {
+  if (1) {//isLocalTest) {
     // 本地測試環境：直接設定假的使用者，並跳過 LIFF
     state.currentUserName = '測試員A';
     logToPage('⚡️ [本地測試] 偵測到本地環境，已繞過 LIFF 驗證。');
