@@ -68,7 +68,11 @@
       <div id="modal-photo-grid-container" class="modal-photo-grid mb-4"></div>
       <div class="text-right space-x-2 mt-4">
         <input type="file" id="photo-file-input" multiple accept="image/*" style="display:none;">
+<<<<<<< HEAD
         <button id="add-photos-button" class="btn" style="background-color: #16a34a;">＋ 新增照片</button>
+=======
+        <button id="add-photos-button" class="btn" style="background-color: #16a34a;">新增照片</button>
+>>>>>>> dc21d2cb68e4f0076ffae69e7b6cac0541e2788e
         <button id="modal-cancel-btn" class="btn" style="background-color: #6b7280;">關閉</button>
         <button id="save-photos-button">儲存變更</button>
       </div>
@@ -85,6 +89,7 @@
   <!-- [新增] 引入 flatpickr 函式庫與中文語系檔 -->
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh-tw.js"></script>
+<<<<<<< HEAD
   <script src="main.js"></script> <!-- 您的主程式檔案應在最後 -->
 
   <!-- =============================================================== -->
@@ -92,5 +97,10 @@
   <!-- =============================================================== -->
   <!-- [核心移除] 此區塊的邏輯已整合至 main.js 的 initializeApp() 函式中 -->
   <!-- 您不再需要這段內嵌的 script -->
+=======
+  <!-- [核心新增] 引入 LINE LIFF SDK -->
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="main.js"></script> <!-- 您的主程式檔案應在最後 -->
+>>>>>>> dc21d2cb68e4f0076ffae69e7b6cac0541e2788e
 </body>
 </html>

@@ -33,9 +33,6 @@ let currentEditingLogId = null;
 let currentLogsData = [];
 let currentScheduleData = [];
 let templateTasks = []; // 儲存從範本中解析出的可選任務列表
-const LIFF_ID = 'YOUR_LIFF_ID_HERE'; // 【⭐️請替換我⭐️】請將此處換成您為主控台申請的 LIFF ID
-let currentUserName = '未知使用者'; // 用於儲存當前操作者名稱
-const CONSOLE_LIFF_ID = '2007974938-LgqYkQ5E'; // 您的主控台 LIFF ID
 const DEBUG_THUMBS = true;
 
 /* ===== 工具：除錯輸出 ===== */
@@ -1330,14 +1327,14 @@ function renderLogPage() {
   const endIndex = startIndex + LOGS_PER_PAGE;
   const logsToShow = currentLogsData.slice(startIndex, endIndex);
 
-  // 如果是第一頁，先清空容器 (移除骨架屏)
-  // [核心修正] 清空時，保留發文區塊，只移除日誌卡片
+  // 如果是第一頁，先清空所有舊的日誌卡片 (移除骨架屏或舊資料)
   if (currentPage === 1) {
-    const postCreator = logsContainer.querySelector('.post-creator');
-    logsContainer.innerHTML = ''; // 清空所有內容
-    if (postCreator) {
-      logsContainer.appendChild(postCreator); // 再把發文區加回來
-    }
+    // 選取所有不是 .post-creator 的子元素並移除它們
+    Array.from(logsContainer.children).forEach(child => {
+      if (!child.classList.contains('post-creator')) {
+        child.remove();
+      }
+    });
   }
 
   // 移除舊的加載提示
@@ -1426,7 +1423,7 @@ async function initializeApp() {
   const url = new URLSearchParams(location.search);
   const id = url.get('id');
   logToPage('URL id=' + (id || '(未帶入)'));
-  if (!id) { displayError({ message: '未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。' }); return; }
+  if(!id){ displayError({message:'未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。'}); return; }
 
   const CACHE_KEY = `project_data_${id}`;
   const CACHE_DURATION_MS = 45 * 60 * 1000; // 45 分鐘
