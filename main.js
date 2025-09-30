@@ -33,8 +33,8 @@ let currentEditingLogId = null;
 let currentLogsData = [];
 let currentScheduleData = [];
 let templateTasks = []; // 儲存從範本中解析出的可選任務列表
-let currentUserName = '未知使用者'; // [修改] 用於儲存當前操作者名稱
 const DEBUG_THUMBS = true;
+let currentUserName = '未知使用者'; // 用於儲存當前操作者名稱
 
 /* ===== 工具：除錯輸出 ===== */
 function thumbLog(msg){
@@ -749,7 +749,7 @@ function handleCreateNewPost() {
         titleSelect.selectedIndex = 0;
       }
     }, 1000);
-  });
+      });
 }
 
 /* ===== 文字編輯（局部更新） ===== */
@@ -1328,7 +1328,6 @@ function renderLogPage() {
   const endIndex = startIndex + LOGS_PER_PAGE;
   const logsToShow = currentLogsData.slice(startIndex, endIndex);
 
-  // 如果是第一頁，先清空所有舊的日誌卡片 (移除骨架屏或舊資料)
   // 如果是第一頁，先清空容器 (移除骨架屏)
   // [核心修正] 清空時，保留發文區塊，只移除日誌卡片
   if (currentPage === 1) {
@@ -1338,11 +1337,6 @@ function renderLogPage() {
         child.remove();
       }
     });
-    const postCreator = logsContainer.querySelector('.post-creator');
-    logsContainer.innerHTML = ''; // 清空所有內容
-    if (postCreator) {
-      logsContainer.appendChild(postCreator); // 再把發文區加回來
-    }
   }
 
   // 移除舊的加載提示
@@ -1474,12 +1468,26 @@ async function initializeApp() {
   }
 
   // 2. 無論如何，都去後端請求最新資料
-  const fetchUrl = API_BASE_URL + '?page=project&id=' + encodeURIComponent(id);
+  // [核心修改] 在請求資料時，附加上 userId 供後端驗證
+  const profile = await liff.getProfile();
+  const fetchUrl = `${API_BASE_URL}?page=project&id=${encodeURIComponent(id)}&userId=${profile.userId}`;
   logToPage('🔄 背景同步資料中... API: ' + fetchUrl);
   
   try {
     const freshData = await loadJsonp(fetchUrl);
-    logToPage('✅ 背景同步成功');
+    // [核心修改] 檢查後端是否回傳權限錯誤
+    if (freshData.error === 'Forbidden') {
+      logToPage(`❌ 權限檢查失敗，用戶 ${profile.displayName} 無權存取。`);
+      const errorHtml = `
+        <div style="text-align: center; padding: 2rem; font-size: 1.1rem; line-height: 1.6;">
+          <h2 style="font-size: 1.5rem; font-weight: bold; color: #dc2626; margin-bottom: 1rem;">存取被拒絕</h2>
+          <p>很抱歉，您的 LINE 帳號 <strong>${profile.displayName}</strong> 無法存取此專案主控台。</p>
+          <p>請確認您是否為授權的員工或廠商，<br>若有疑問請聯繫管理員。</p>
+        </div>`;
+      document.getElementById('main-content').innerHTML = errorHtml;
+      return;
+    }
+    logToPage('✅ 權限驗證通過，背景同步成功');
     // 將新資料存入快取
     localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData }));
     // 重新渲染畫面以顯示最新資料
