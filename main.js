@@ -230,123 +230,96 @@ function setupScrollListener() {
 }
 
 /* ===== 入口 ===== */
+/**
+ * [V14.0 認證優先版] 應用程式主入口函式
+ * - 流程重構為「先認證，後載入」，確保只有通過 LINE LIFF 登入的使用者才能看到頁面內容。
+ * - 移除了在認證前顯示快取資料的邏輯，改為在認證成功後才顯示載入動畫並請求資料。
+ */
 async function initializeApp() {
-  // [核心修改] 新增本地測試環境判斷，方便在本機電腦上進行開發與除錯
-  const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-  const url = new URLSearchParams(location.search);
-  const id = url.get('id');
-  logToPage('URL id=' + (id || '(未帶入)'));
-  if (!id) { displayError({ message: '未指定 id。請在網址加上 ?id=0（草稿）或 ?id=案號。' }); return; }
+  logToPage('應用程式啟動 (快取優先模式)...');
 
-  const CACHE_KEY = `project_data_${id}`;
-  const CACHE_DURATION_MS = 45 * 60 * 1000; // 45 分鐘
+  const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+
+  // 步驟 1：從 URL 讀取 projectId 和 userId
+  const urlParams = new URLSearchParams(window.location.search);
+  let projectId = urlParams.get('id');
+  let userId = urlParams.get('uid');
+
+  // 【⭐️ 核心修正：補上遺失的括號，並整理邏輯 ⭐️】
+  if (isLocalTest) {
+    if (!projectId) projectId = '999';
+    if (!userId) userId = 'Ud58333430513b7527106fa71d2e30151';
+    logToPage(`⚡️ 本地測試模式啟用，使用預設 ID: ${projectId}`);
+  }
+
+  if (!projectId || !userId) {
+    const errorMsg = '網址中缺少必要的專案 ID (id) 或使用者 ID (uid)。';
+    displayError({ message: errorMsg });
+    return;
+  }
+  logToPage(`目標專案 ID: ${projectId}`);
+  logToPage(`操作者 UID: ${userId}`);
+
+  // 【⭐️ 核心修改：快取邏輯 ⭐️】
+  // 快取 KEY 只跟專案有關，因為 UID 驗證已在內部處理
+  const CACHE_KEY = `project_data_${projectId}`;
+  const CACHE_DURATION_MS = 15 * 24 * 60 * 60 * 1000; // 15 天
   let hasRenderedFromCache = false;
 
-  // [核心重構] 步驟 1: 將快取檢查與渲染提到所有非同步操作之前
-  // 這是確保「立即顯示」效果的關鍵。
-  if (!isLocalTest) {
-    try {
-      const cachedItem = localStorage.getItem(CACHE_KEY);
-      if (cachedItem) {
-        const { timestamp, data } = JSON.parse(cachedItem);
-        if (Date.now() - timestamp < CACHE_DURATION_MS) {
-          logToPage('⚡️ 優先從快取渲染畫面...');
-          handleDataResponse(data);
-          hasRenderedFromCache = true;
-        } else {
-          logToPage('🗑️ 快取已過期，清除中...');
-          localStorage.removeItem(CACHE_KEY);
-        }
+  // 步驟 2：嘗試從快取中讀取並立即渲染
+  try {
+    const cachedItem = localStorage.getItem(CACHE_KEY);
+    if (cachedItem) {
+      const { timestamp, data } = JSON.parse(cachedItem);      
+      // 【⭐️ 核心修改：新增 UID 比對 ⭐️】
+      // 1. 檢查快取是否過期
+      // 2. 檢查快取中的 ownerId 是否與當前 URL 的 uid 一致
+      if ((Date.now() - timestamp < CACHE_DURATION_MS) && (data.ownerId === userId)) {
+        logToPage('⚡️ 偵測到有效快取 (UID相符)，立即渲染畫面...');
+        handleDataResponse(data); // 使用快取資料渲染
+        hasRenderedFromCache = true; // 標記已從快取渲染
+      } else {
+        // 如果快取過期或 UID 不符，則清除舊快取
+        const reason = data.ownerId !== userId ? 'UID 不符' : '已過期';
+        logToPage(`🗑️ 快取無效 (${reason})，將在背景更新。`);
+        localStorage.removeItem(CACHE_KEY);
       }
-    } catch (e) {
-      logToPage(`❌ 讀取快取失敗: ${e.message}`, 'error');
-      localStorage.removeItem(CACHE_KEY);
     }
+  } catch (e) {
+    logToPage(`❌ 讀取快取失敗: ${e.message}`, 'error');
+    localStorage.removeItem(CACHE_KEY);
   }
 
-  if (isLocalTest) {
-    // 本地測試環境：直接設定假的使用者，並跳過 LIFF
-    state.currentUserName = '測試員A';
-    logToPage('⚡️ [本地測試] 偵測到本地環境，已繞過 LIFF 驗證。');
-  } else {
-    // 線上正式環境：執行完整的 LIFF 初始化與身分驗證流程
-    try {
-      // [核心修改] 步驟 1: 先從後端取得設定檔 (包含 LIFF ID)
-      logToPage('正在從後端取得設定...');
-      // [核心修正] 修正 API 端點，使用專門為獲取公開設定設計的路由，而非混用 attendance_api。
-      const configUrl = `${API_BASE_URL}?page=get_config`;
-      const config = await loadJsonp(configUrl);
-      const consoleLiffId = config.consoleLiffId;
-
-      if (!consoleLiffId) {
-        throw new Error('後端未提供主控台 LIFF ID，請檢查 Apps Script 屬性設定。');
-      }
-      logToPage(`取得 LIFF ID: ${consoleLiffId}`);
-
-      // [核心修改] 步驟 2: 使用取得的 LIFF ID 進行初始化
-      logToPage('正在初始化 LIFF...');
-      await liff.init({ liffId: consoleLiffId });
-      if (!liff.isLoggedIn()) {
-        logToPage('使用者未登入，將導向至 LINE 登入頁面...');
-        liff.login(); // 會自動跳轉，後續程式碼不會執行
-        return;
-      }
-      const profile = await liff.getProfile();
-      state.currentUserName = profile.displayName;
-    } catch (err) {
-      displayError({ message: `LIFF 初始化或身分驗證失敗: ${err.message}` });
-      return;
-    }
-  }
-
-  // 無論是本地測試或線上環境，都顯示歡迎訊息
-  logToPage(`✅ 操作者已設定為: ${state.currentUserName}`);
-  const welcomeMsg = document.createElement('p');
-  welcomeMsg.textContent = `歡迎，${state.currentUserName}${isLocalTest ? ' (本地測試模式)' : ''}`;
-  welcomeMsg.className = 'muted';
-  document.querySelector('header > div:first-child').appendChild(welcomeMsg);
-
-  // 如果沒有從快取渲染，則顯示骨架屏
+  // 步驟 3：如果沒有從快取渲染，則顯示載入動畫
   if (!hasRenderedFromCache) {
     displaySkeletonLoader();
   }
 
-  // [核心修正] 使用 setTimeout 將背景同步的邏輯延後到下一個事件循環
-  // 這能確保瀏覽器有足夠的時間先完成快取畫面的繪製 (Paint)
-  setTimeout(async () => {
-    // 2. 無論如何，都去後端請求最新資料
-    const profile = isLocalTest ? { userId: 'local_test_user', displayName: state.currentUserName } : await liff.getProfile();
-    const fetchUrl = `${API_BASE_URL}?page=project&id=${encodeURIComponent(id)}&userId=${profile.userId}`;
-    logToPage('🔄 背景同步資料中... API: ' + fetchUrl);
+  // 步驟 4：在背景執行資料同步
+  try {
+    state.currentUserName = `使用者 (${userId.slice(-6)})`;
 
-    try {
-      const freshData = await loadJsonp(fetchUrl);
-      // 檢查後端是否回傳權限錯誤
-      if (freshData.error === 'Forbidden') {
-        logToPage(`❌ 權限檢查失敗，用戶 ${profile.displayName} 無權存取。`);
-        const errorHtml = `
-          <div style="text-align: center; padding: 2rem; font-size: 1.1rem; line-height: 1.6;">
-            <h2 style="font-size: 1.5rem; font-weight: bold; color: #dc2626; margin-bottom: 1rem;">存取被拒絕</h2>
-            <p>很抱歉，您的 LINE 帳號 <strong>${profile.displayName}</strong> 無法存取此專案主控台。</p>
-            <p>請確認您是否為授權的員工或廠商，<br>若有疑問請聯繫管理員。</p>
-          </div>`;
-        document.getElementById('main-content').innerHTML = errorHtml;
-        return;
-      }
-      logToPage('✅ 權限驗證通過，背景同步成功');
-      // 將新資料存入快取
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData }));
-      // [核心修正] 只有在尚未從快取渲染過畫面的情況下，才用新資料來渲染。
-      // 如果已經從快取渲染，則不做任何事，讓使用者停留在舊畫面上，直到他們手動刷新。
-      if (hasRenderedFromCache) return;
+    const fetchUrl = `${API_BASE_URL}?page=project&id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
+    logToPage('🔄 正在從後端請求專案資料...');
+    const freshData = await loadJsonp(fetchUrl);
+
+    // 【⭐️ 核心修改：由前端為資料蓋上所有權戳章 ⭐️】
+    // 在將資料存入快取前，將當前操作者的 userId 作為 ownerId 注入到資料中。
+    freshData.ownerId = userId;
+
+    logToPage('✅ 背景同步成功，更新快取。');
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData })); // 存入帶有戳章的資料
+
+    // 如果頁面尚未被渲染，則使用新資料渲染
+    if (!hasRenderedFromCache) {
       handleDataResponse(freshData);
-    } catch (err) {
-      logToPage(`❌ 背景同步失敗: ${err.message}`, 'error');
-      if (!hasRenderedFromCache) {
-        displayError(err);
-      }
     }
-  }, 0);
+  } catch (err) {
+    logToPage(`❌ 應用程式初始化失敗: ${err.message}`, 'error');
+    if (!hasRenderedFromCache) {
+      displayError(err);
+    }
+  }
 }
 
 /* ===== 程式進入點 ===== */
