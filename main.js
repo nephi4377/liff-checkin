@@ -270,41 +270,38 @@ async function initializeApp() {
   logToPage(`操作者 UID: ${userId}`);
 
   // 【⭐️ 核心修改：快取邏輯 ⭐️】
-  // 快取 KEY 只跟專案有關，因為 UID 驗證已在內部處理
-  const CACHE_KEY = `project_data_${projectId}`;
+  // 【⭐️ 核心修正：恢復 UID 至快取 KEY 中 ⭐️】
+  const CACHE_KEY = `project_data_${projectId}_${userId}`;
   const CACHE_DURATION_MS = 15 * 24 * 60 * 60 * 1000; // 15 天
   let hasRenderedFromCache = false;
 
   // 步驟 2：嘗試從快取中讀取並立即渲染
   try {
     const cachedItem = localStorage.getItem(CACHE_KEY);
-    if (cachedItem) {
-      const { timestamp, data } = JSON.parse(cachedItem);      
-      // 【⭐️ 核心修改：新增 UID 比對 ⭐️】
-      // 1. 檢查快取是否過期
-      // 2. 檢查快取中的 ownerId 是否與當前 URL 的 uid 一致
+    if (cachedItem) { // 如果快取存在
+      const { timestamp, data } = JSON.parse(cachedItem);
+      // 檢查快取是否有效 (時間內且 UID 相符)
       if ((Date.now() - timestamp < CACHE_DURATION_MS) && (data.ownerId === userId)) {
-        logToPage('⚡️ 偵測到有效快取 (UID相符)，立即渲染畫面...');
-        handleDataResponse(data); // 使用快取資料渲染
-        hasRenderedFromCache = true; // 標記已從快取渲染
-      } else {
-        // 如果快取過期或 UID 不符，則清除舊快取
-        const reason = data.ownerId !== userId ? 'UID 不符' : '已過期';
-        logToPage(`🗑️ 快取無效 (${reason})，將在背景更新。`);
-        localStorage.removeItem(CACHE_KEY);
+        logToPage('⚡️ 偵測到有效快取，立即渲染畫面...');
+        handleDataResponse(data);
+        // 【⭐️ 核心修正：快取命中後，直接結束函式 ⭐️】
+        // 我們不再需要執行背景同步，因為快取是有效的。
+        return;
       }
+      // 如果快取過期或 UID 不符，則清除舊快取
+      const reason = data.ownerId !== userId ? 'UID 不符' : '已過期';
+      logToPage(`🗑️ 快取無效 (${reason})，將繼續向後端請求新資料。`);
+      localStorage.removeItem(CACHE_KEY);
     }
   } catch (e) {
     logToPage(`❌ 讀取快取失敗: ${e.message}`, 'error');
     localStorage.removeItem(CACHE_KEY);
   }
 
-  // 步驟 3：如果沒有從快取渲染，則顯示載入動畫
-  if (!hasRenderedFromCache) {
-    displaySkeletonLoader();
-  }
+  // 【⭐️ 核心修正：將後續邏輯統一為「無快取時的標準流程」 ⭐️】
+  // 只有在沒有從快取成功渲染時，才會執行到這裡。
+  displaySkeletonLoader(); // 顯示載入動畫
 
-  // 步驟 4：在背景執行資料同步
   try {
     state.currentUserName = `使用者 (${userId.slice(-6)})`;
 
@@ -312,22 +309,18 @@ async function initializeApp() {
     logToPage('🔄 正在從後端請求專案資料...');
     const freshData = await loadJsonp(fetchUrl);
 
-    // 【⭐️ 核心修改：由前端為資料蓋上所有權戳章 ⭐️】
-    // 在將資料存入快取前，將當前操作者的 userId 作為 ownerId 注入到資料中。
+    // 由前端為新資料蓋上所有權戳章
     freshData.ownerId = userId;
 
     logToPage('✅ 背景同步成功，更新快取。');
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData })); // 存入帶有戳章的資料
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData }));
 
-    // 如果頁面尚未被渲染，則使用新資料渲染
-    if (!hasRenderedFromCache) {
-      handleDataResponse(freshData);
-    }
+    // 使用新資料渲染畫面
+    handleDataResponse(freshData);
+
   } catch (err) {
     logToPage(`❌ 應用程式初始化失敗: ${err.message}`, 'error');
-    if (!hasRenderedFromCache) {
-      displayError(err);
-    }
+    displayError(err);
   }
 }
 
