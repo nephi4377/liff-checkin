@@ -10,6 +10,10 @@
 import { state } from './state.js';
 import { thumbLog, driveFileId } from './utils.js';
 
+/**
+ * 在等待 API 資料時，於主要內容區塊顯示骨架屏（載入中的動畫效果）。
+ * @returns {void}
+ */
 /** 顯示骨架屏 */
 export function displaySkeletonLoader() {
     const scheduleContainer = document.getElementById('schedule-container');
@@ -33,6 +37,11 @@ export function displaySkeletonLoader() {
     }
 }
 
+/**
+ * 當發生嚴重錯誤時，清空主內容區塊並顯示一個格式化的錯誤訊息。
+ * @param {Error} err - 從 try-catch 捕捉到的錯誤物件。
+ * @returns {void}
+ */
 /** 顯示錯誤訊息 */
 export function displayError(err) {
     const msg = (err && err.message) ? err.message : '發生未知錯誤。';
@@ -48,6 +57,11 @@ export function displayError(err) {
     }
 }
 
+/**
+ * 專門渲染來自 Google Drive 的圖片。它會建立一個可點擊的圖片燈箱。
+ * @param {string} fileId - Google Drive 檔案的 ID。
+ * @returns {HTMLDivElement} 包含圖片的 div 容器。
+ */
 /** 渲染 Google Drive 圖片 */
 function renderSmartImg(fileId) {
     const wrap = document.createElement('div'); wrap.className = 'photo-item';
@@ -61,6 +75,11 @@ function renderSmartImg(fileId) {
     wrap.appendChild(img); return wrap;
 }
 
+/**
+ * 渲染直接的圖片連結（非 Google Drive）或 Base64 圖片。
+ * @param {string} src - 圖片的 URL 或 Base64 字串。
+ * @returns {HTMLDivElement} 包含圖片的 div 容器。
+ */
 /** 渲染一般圖片 */
 function renderDirectImg(src) {
     const wrap = document.createElement('div'); wrap.className = 'photo-item';
@@ -87,8 +106,13 @@ function renderDirectImg(src) {
     wrap.appendChild(img); return wrap;
 }
 
+/**
+ * 根據一個包含多個圖片連結的字串，建立一個包含多張圖片的照片牆。
+ * @param {string} htmlLinksCsv - 以逗號分隔的圖片 URL 字串。
+ * @returns {HTMLDivElement} 包含所有圖片的 photo-grid 容器。
+ */
 /** 建立照片牆 */
-export function buildPhotoGrid(htmlLinksCsv) {
+function buildPhotoGrid(htmlLinksCsv) {
     const container = document.createElement('div');
     container.className = 'photo-grid';
     if (!htmlLinksCsv) return container;
@@ -110,6 +134,15 @@ export function buildPhotoGrid(htmlLinksCsv) {
     return container;
 }
 
+// [核心修正] 將 buildPhotoGrid 導出，以便 handlers.js 可以呼叫
+export { buildPhotoGrid };
+
+/**
+ * 根據單筆日誌資料，建立一個完整的日誌卡片 HTML 元素。
+ * @param {object} log - 包含日誌資訊的物件 (LogID, Title, Content, PhotoLinks 等)。
+ * @param {boolean} isDraftMode - 是否為草稿模式。若是，則會顯示「發布」按鈕。
+ * @returns {HTMLDivElement} 一個 class 為 'card' 的 div 元素。
+ */
 /** 建立單張日誌卡片 */
 export function _buildLogCard(log, isDraftMode) {
     const card = document.createElement('div'); card.className = 'card'; card.id = 'log-' + log.LogID;
@@ -157,6 +190,10 @@ export function _buildLogCard(log, isDraftMode) {
 }
 
 /**
+ * 建立日誌發文區塊的 HTML 字串。
+ * @returns {string} 包含 textarea、照片預覽區和按鈕的 HTML 字串。
+ */
+/**
  * 建立或更新日誌發文區塊
  */
 export function renderPostCreator() {
@@ -186,6 +223,10 @@ export function renderPostCreator() {
     return wallPostCreatorHTML;
 }
 
+/**
+ * 根據當前的分頁狀態 (state.currentPage)，渲染對應頁數的日誌卡片。
+ * @returns {void}
+ */
 /** 渲染日誌分頁 */
 export function renderLogPage() {
     if (state.isLoadingNextPage) return;
@@ -223,6 +264,12 @@ export function renderLogPage() {
     state.isLoadingNextPage = false;
 }
 
+/**
+ * 渲染整個排程區塊，包含頂部的進度條和下方的任務卡片列表。
+ * @param {object} overview - 專案總覽資訊，主要用於計算總時程。
+ * @param {Array<object>} schedule - 包含所有任務的陣列。
+ * @returns {void}
+ */
 /** 渲染排程區塊 */
 export function displaySchedule(overview, schedule) {
     const container = document.getElementById('schedule-container');
@@ -298,6 +345,12 @@ export function displaySchedule(overview, schedule) {
     document.getElementById('add-task-btn').dataset.action = 'handleAddTask';
 }
 
+/**
+ * 根據單筆任務資料，建立一個可編輯的任務卡片 HTML 元素。
+ * @param {object} task - 包含任務資訊的物件 (階段, 工種, 任務項目 等)。
+ * @param {number} index - 該任務在排程陣列中的索引。
+ * @returns {HTMLDivElement} 一個 class 為 'task-card' 的 div 元素。
+ */
 /** 渲染單張任務卡片 */
 export function renderTaskCard(task, index) {
     const card = document.createElement('div');
@@ -404,6 +457,12 @@ export function renderTaskCard(task, index) {
     return card;
 }
 
+/**
+ * 渲染右側的專案資訊面板，顯示案場基本資料、團隊成員、現場資訊等。
+ * @param {object} overview - 專案總覽資訊物件。
+ * @param {Array<object>} schedule - 專案排程資料，用於提取工班資訊。
+ * @returns {void}
+ */
 /** 渲染右側專案資訊面板 */
 export function displayProjectInfo(overview, schedule) {
     const panel = document.getElementById('project-info-panel');
@@ -471,6 +530,10 @@ export function displayProjectInfo(overview, schedule) {
     }
 }
 
+/**
+ * 建立或更新「工種」輸入框的 datalist，提供使用者輸入建議。
+ * @returns {void}
+ */
 /** 建立或更新工種的 datalist */
 export function createOrUpdateTradeDatalist() {
     const coreTrades = ['木作工程', '系統工程', '水電工程', '泥作工程', '石材工程', '玻璃工程', '窗簾工程', '保護工程', '清潔工程'];

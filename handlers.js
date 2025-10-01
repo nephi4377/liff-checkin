@@ -7,6 +7,50 @@
 * =============================================================================
 */
 
+/**
+ * [核心] 使用 iframe + form 技巧，以非同步方式 POST 資料到 Google Apps Script 並取得回傳。
+ * @param {string} url - Apps Script Web App 的 URL。
+ * @param {object} payload - 要傳送的 JSON 物件。
+ * @returns {Promise<object>} - 一個解析後端回傳結果的 Promise。
+ */
+function postDataToGas_(url, payload) {
+    return new Promise((resolve, reject) => {
+        // 移除舊的 iframe (如果存在)，避免頁面殘留
+        const oldIframe = document.querySelector('iframe[name^="gas-post-iframe-"]');
+        if (oldIframe) oldIframe.remove();
+
+        const iframeName = 'gas-post-iframe-' + Date.now();
+        const iframe = document.createElement('iframe');
+        iframe.name = iframeName;
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+
+        const form = document.createElement('form');
+        form.method = 'post';
+        form.action = url;
+        form.target = iframeName;
+
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'payload'; // 後端將從 e.parameter.payload 取得
+        input.value = JSON.stringify(payload);
+        form.appendChild(input);
+        document.body.appendChild(form);
+
+        // 監聽來自 iframe 的訊息
+        const messageListener = (event) => {
+            if (event.source !== iframe.contentWindow) return;
+            window.removeEventListener('message', messageListener);
+            document.body.removeChild(iframe);
+            document.body.removeChild(form);
+            event.data && event.data.success ? resolve(event.data) : reject(new Error(event.data.message || '後端執行失敗'));
+        };
+        window.addEventListener('message', messageListener, false);
+
+        form.submit();
+    });
+}
+
 import { state } from './state.js';
 import { logToPage } from './utils.js';
 import { _buildLogCard } from './ui.js';
@@ -42,7 +86,7 @@ export function handleCreateNewPost() {
         action: 'createNewLog',
         projectId: projectId,
         content: content,
-        userName: state.currentUserName,
+        userName: state.currentUserName, // 【⭐️ 核心修正 ⭐️】將當前使用者名稱加入 payload
         title: title,
         photos: photosBase64Array
     };
@@ -66,18 +110,24 @@ export function handleCreateNewPost() {
     // [核心修正] 不再直接呼叫 lazyLoadImages，而是透過 window 物件，打破循環依賴
     if (window.lazyLoadImages) { window.lazyLoadImages(); }
 
-    fetch(`${API_BASE_URL}?page=project`, {
-        method: 'POST', body: JSON.stringify(payload),
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, mode: 'no-cors'
-    }).finally(() => {
-        setTimeout(() => {
+    // [核心修正] 放棄 fetch，改用 postDataToGas_ 函式來提交資料
+    postDataToGas_(`${API_BASE_URL}?page=project`, payload)
+        .then(response => {
+            logToPage(`✅ ${response.message || '日誌已成功新增！'}`);
+            // 只有在後端確認成功後，才執行這些清理 UI 的動作
             submitBtn.disabled = false;
             submitBtn.textContent = '發佈';
             textarea.value = '';
             if (photoPreviewContainer) photoPreviewContainer.innerHTML = '';
             if (titleSelect) titleSelect.selectedIndex = 0;
-        }, 1000);
-    });
+        })
+        .catch(error => {
+            alert(`新增日誌失敗: ${error.message}`);
+            logToPage(`❌ 新增日誌時發生錯誤: ${error.message}`);
+            // 即使失敗，也要恢復按鈕狀態讓使用者可以重試
+            submitBtn.disabled = false;
+            submitBtn.textContent = '發佈';
+        });
 }
 
 /** 處理文字編輯 */
@@ -125,7 +175,15 @@ function handleSaveText(logId, originalButtons) {
 
 /** 儲存文字後的回呼 */
 export function editTextCallback(resp, logId, originalButtons) {
-    // 這段邏輯現在由 handleSaveText 處理
+    if (resp && resp.success) {
+        const contentDiv = document.getElementById('content-' + logId);
+        const btnBox = contentDiv.closest('.card').querySelector('.button-group');
+        contentDiv.contentEditable = false;
+        contentDiv.style.cssText = 'white-space: pre-wrap; margin-top: 0.75rem;'; // 恢復原始樣式
+        btnBox.innerHTML = '';
+        originalButtons.forEach(b => btnBox.appendChild(b));
+        logToPage(`✅ LogID ${logId} 的文字已更新。`);
+    }
 }
 
 /** 開啟照片管理視窗 */
@@ -159,9 +217,21 @@ export function closePhotoModal() {
 /** 儲存照片後的回呼 */
 export function handlePhotoSaveSuccess(resp) {
     if (resp && resp.success) {
+        const logId = state.currentEditingLogId;
         closePhotoModal();
-        // 這裡可以進一步優化，例如直接更新 state 中的資料，而不是重新整理
-        window.location.reload();
+        
+        // [核心優化] 不再使用粗暴的 window.location.reload()
+        // 而是採用更流暢的「非同步 DOM 更新」
+        const cardPhotoContainer = document.querySelector(`#log-${logId} .photo-grid`);
+        if (cardPhotoContainer) {
+            // 1. 呼叫 ui.js 的 buildPhotoGrid，用後端回傳的最新連結建立一個「新的」照片牆。
+            const newGrid = buildPhotoGrid(resp.finalLinks); 
+            // 2. 用新的照片牆，直接替換掉畫面上舊的那個。
+            cardPhotoContainer.replaceWith(newGrid);
+            // 3. 重新觸發圖片懶加載，讓新加入的圖片也能被觀察到。
+            if (window.lazyLoadImages) { window.lazyLoadImages(); }
+        }
+        logToPage(`✅ LogID ${logId} 的照片已更新。`);
     } else {
         alert('儲存失敗：' + (resp ? (resp.message || '未知錯誤') : '未知錯誤'));
     }

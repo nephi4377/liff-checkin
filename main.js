@@ -56,12 +56,48 @@ import { state } from './state.js';
  * 7.  若日誌總數多於一頁，則呼叫 `setupScrollListener()` 啟動無限滾動功能。
  * 8.  更新頁面主標題。
  */
-function handleDataResponse(data){
+function handleDataResponse(data) {
   const logsContainer = document.getElementById('logs-container');
   // 檢查是否已存在發文區，避免重複加入
   if (logsContainer && !logsContainer.querySelector('.post-creator')) {
     // [整理] 呼叫 ui.js 中的函式來取得 HTML，讓此處程式碼更簡潔
     logsContainer.insertAdjacentHTML('afterbegin', renderPostCreator());
+
+    // 【⭐️ 核心修正：為發文框綁定事件 ⭐️】
+    const addPhotoBtn = document.getElementById('add-photo-to-post-btn');
+    const submitPostBtn = document.getElementById('submit-post-btn');
+    const photoInput = document.getElementById('new-log-photos-input');
+
+    if (addPhotoBtn) {
+      addPhotoBtn.addEventListener('click', () => photoInput?.click());
+    }
+    if (submitPostBtn) {
+      submitPostBtn.addEventListener('click', Handlers.handleCreateNewPost);
+    }
+    if (photoInput) {
+      photoInput.onchange = (e) => {
+        const files = e.target.files;
+        const previewContainer = document.getElementById('new-log-photo-preview');
+        if (!previewContainer) return;
+
+        for (const file of files) {
+          if (!file.type.startsWith('image/')) continue;
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const base64String = event.target.result;
+            const previewItem = document.createElement('div');
+            previewItem.className = 'photo-preview-item';
+            previewItem.dataset.base64 = base64String;
+            previewItem.style.backgroundImage = `url(${base64String})`;
+            previewItem.innerHTML = `<button class="remove-preview-btn" title="移除此照片">&times;</button>`;
+            previewItem.querySelector('.remove-preview-btn').onclick = () => previewItem.remove();
+            previewContainer.appendChild(previewItem);
+          };
+          reader.readAsDataURL(file);
+        }
+        e.target.value = ''; // 清空 input，以便可以再次選擇同一個檔案
+      };
+    }
   }
 
   logToPage('✅ 後端回應成功');
@@ -74,46 +110,9 @@ function handleDataResponse(data){
   state.currentScheduleData = data.schedule || [];
   state.templateTasks = data.templates || [];
 
-  // [核心修正] 將事件綁定移至此處，確保每次資料刷新後都能正確綁定
-  const addPhotoBtn = document.getElementById('add-photo-to-post-btn');
-  const submitPostBtn = document.getElementById('submit-post-btn');
-  const photoInput = document.getElementById('new-log-photos-input');
+  // 處理標題下拉選單
   const titleSelect = document.getElementById('post-title-select');
-
-  if (addPhotoBtn) {
-    addPhotoBtn.addEventListener('click', () => photoInput?.click());
-  }
-  if (submitPostBtn) {
-    submitPostBtn.addEventListener('click', Handlers.handleCreateNewPost);
-  }
-  if (photoInput) {
-    photoInput.onchange = (e) => {
-      const files = e.target.files;
-      const previewContainer = document.getElementById('new-log-photo-preview');
-      if (!previewContainer) return;
-
-      for (const file of files) {
-        if (!file.type.startsWith('image/')) continue;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const base64String = event.target.result;
-          const previewItem = document.createElement('div');
-          previewItem.className = 'photo-preview-item';
-          previewItem.dataset.base64 = base64String;
-          // [核心修正] 改用 div 的背景圖來顯示縮圖，而非直接用 img 標籤
-          previewItem.style.backgroundImage = `url(${base64String})`;
-          previewItem.innerHTML = `
-            <button class="remove-preview-btn" title="移除此照片">&times;</button>
-          `;
-          previewItem.querySelector('.remove-preview-btn').onclick = () => previewItem.remove();
-          previewContainer.appendChild(previewItem);
-        };
-        reader.readAsDataURL(file);
-      }
-      e.target.value = '';
-    };
-  }
-  if (titleSelect && state.templateTasks.length > 0) {
+  if (titleSelect) {
     // [核心修正] 將選項精簡為幾個核心工程項目
     titleSelect.innerHTML = '<option value="">-- 自動產生標題 --</option>';
     const coreTrades = ['保護工程', '拆除工程', '水電工程', '泥作工程', '木作工程', '油漆工程', '系統櫃', '清潔工程', '其他事項'];
@@ -283,6 +282,11 @@ async function initializeApp() {
       // 檢查快取是否有效 (時間內且 UID 相符)
       if ((Date.now() - timestamp < CACHE_DURATION_MS) && (data.ownerId === userId)) {
         logToPage('⚡️ 偵測到有效快取，立即渲染畫面...');
+        
+        // 【⭐️ 核心修正：從快取中設定使用者名稱 ⭐️】
+        state.currentUserName = data.userName || `使用者 (${userId.slice(-6)})`;
+        logToPage(`✅ 操作者已從快取設定: ${state.currentUserName}`);
+
         handleDataResponse(data);
         // 【⭐️ 核心修正：快取命中後，直接結束函式 ⭐️】
         // 我們不再需要執行背景同步，因為快取是有效的。
@@ -303,16 +307,18 @@ async function initializeApp() {
   displaySkeletonLoader(); // 顯示載入動畫
 
   try {
-    state.currentUserName = `使用者 (${userId.slice(-6)})`;
-
     const fetchUrl = `${API_BASE_URL}?page=project&id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
     logToPage('🔄 正在從後端請求專案資料...');
     const freshData = await loadJsonp(fetchUrl);
 
+    // 【⭐️ 核心修正：使用後端傳來的使用者名稱 ⭐️】
+    state.currentUserName = freshData.userName || `使用者 (${userId.slice(-6)})`;
+    logToPage(`✅ 操作者已設定: ${state.currentUserName}`);
+
     // 由前端為新資料蓋上所有權戳章
     freshData.ownerId = userId;
 
-    logToPage('✅ 背景同步成功，更新快取。');
+    logToPage('✅ 資料請求成功，更新快取。');
     localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData }));
 
     // 使用新資料渲染畫面
