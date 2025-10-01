@@ -245,6 +245,15 @@ async function initializeApp() {
   let projectId = urlParams.get('id');
   let userId = urlParams.get('uid');
 
+  // 【⭐️ 核心修正：處理 LIFF 重新導向的 liff.state 參數 ⭐️】
+  // LIFF 會將原始參數包在 liff.state 中，我們需要手動解析它。
+  if (urlParams.has('liff.state')) {
+    const liffState = decodeURIComponent(urlParams.get('liff.state')).replace(/^\?/, ''); // 【⭐️ 核心修正 ⭐️】先解碼 liff.state 的值，再移除開頭可能存在的 '?'
+    const liffParams = new URLSearchParams(liffState);
+    if (liffParams.has('id')) projectId = liffParams.get('id');
+    if (liffParams.has('uid')) userId = liffParams.get('uid');
+  }
+
   // 【⭐️ 核心修正：補上遺失的括號，並整理邏輯 ⭐️】
   if (isLocalTest) {
     if (!projectId) projectId = '999';
