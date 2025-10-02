@@ -237,6 +237,13 @@ button[disabled]{opacity:.6;cursor:not-allowed}
 #lightbox .lb-wrap{position:relative;max-width:98vw;max-height:95vh;display:flex;align-items:center;justify-content:center}
 #lightbox img.lb-img{display:block;max-width:98vw;max-height:95vh;object-fit:contain;border-radius:.5rem;background:#fff;box-shadow:0 4px 20px rgba(0,0,0,.6)}
 #lightbox button.lb-close{position:absolute;top:-.5rem;right:-.5rem;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:9999px;width:40px;height:40px;cursor:pointer;font-size:20px;line-height:40px;text-align:center}
+/* [新增] 燈箱左右導覽按鈕樣式 */
+#lightbox .lb-prev, #lightbox .lb-next {
+  position: absolute; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,.4); color: #fff; border: none; border-radius: 50%; width: 44px; height: 44px; font-size: 24px; cursor: pointer; transition: background .2s;
+}
+#lightbox .lb-prev { left: 1rem; }
+#lightbox .lb-next { right: 1rem; }
+#lightbox .lb-prev:hover, #lightbox .lb-next:hover { background: rgba(0,0,0,.7); }
 
 /*
 * 版本: v12.4

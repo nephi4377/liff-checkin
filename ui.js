@@ -71,6 +71,14 @@ function renderSmartImg(fileId) {
     const largeUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`;
     img.dataset.full = largeUrl;
     img.dataset.src = thumbnailUrl;
+    // [核心修正] 補上遺漏的點擊事件，使其能夠觸發圖片燈箱
+    img.addEventListener('click', (e) => {
+        const grid = e.target.closest('.photo-grid');
+        const allImages = Array.from(grid.querySelectorAll('img.photo-thumb'));
+        const urls = allImages.map(i => i.dataset.full);
+        const currentIndex = allImages.indexOf(e.target);
+        if (window.__openLightbox__) window.__openLightbox__(urls, currentIndex);
+    });
     img.onerror = () => { const ph = document.createElement('div'); ph.className = 'photo-placeholder'; ph.textContent = '縮圖載入失敗'; wrap.replaceChildren(ph); };
     wrap.appendChild(img); return wrap;
 }
@@ -102,7 +110,14 @@ function renderDirectImg(src) {
         ph.onclick = () => window.open(src, '_blank', 'noopener,noreferrer');
         wrap.replaceChildren(ph); thumbLog('IMG ERROR ' + img.src);
     };
-    img.addEventListener('click', () => { window.__openLightbox__ ? __openLightbox__(img.dataset.full) : window.open(img.dataset.full, '_blank'); });
+    // [核心修正] 修正語法錯誤，將 __openLightbox__ 改為 window.__openLightbox__
+    img.addEventListener('click', (e) => {
+        const grid = e.target.closest('.photo-grid');
+        const allImages = Array.from(grid.querySelectorAll('img.photo-thumb'));
+        const urls = allImages.map(i => i.dataset.full);
+        const currentIndex = allImages.indexOf(e.target);
+        if (window.__openLightbox__) window.__openLightbox__(urls, currentIndex);
+    });
     wrap.appendChild(img); return wrap;
 }
 
@@ -248,7 +263,7 @@ export function renderLogPage() {
     document.getElementById('log-loader')?.remove();
 
     if (logsToShow.length > 0) {
-        const isDraftMode = (new URLSearchParams(window.location.search).get('id') === '0');
+        const isDraftMode = (state.projectId === '0'); // [核心修正] 改為從全域 state 讀取 projectId
         logsToShow.forEach(log => { logsContainer.appendChild(_buildLogCard(log, isDraftMode)); });
         // [核心修正] 移除此處的呼叫，將其職責交還給 main.js
         // lazyLoadImages();
@@ -265,197 +280,12 @@ export function renderLogPage() {
 }
 
 /**
- * 渲染整個排程區塊，包含頂部的進度條和下方的任務卡片列表。
- * @param {object} overview - 專案總覽資訊，主要用於計算總時程。
- * @param {Array<object>} schedule - 包含所有任務的陣列。
- * @returns {void}
- */
-/** 渲染排程區塊 */
-export function displaySchedule(overview, schedule) {
-    const container = document.getElementById('schedule-container');
-    if (!container) return;
-    container.innerHTML = '';
-    if (!overview || !schedule || !overview['專案起始日']) {
-        container.style.display = 'none';
-        return;
-    }
-
-    const progressWrapper = document.createElement('div');
-    progressWrapper.className = 'card p-6 mb-4';
-    progressWrapper.style.cssText = 'position: sticky; top: 0; z-index: 20;';
-
-    const firstUnfinishedTask = schedule.find(t => t['狀態'] !== '已完成');
-    const currentPhase = firstUnfinishedTask ? firstUnfinishedTask['階段'] : '專案已完工';
-    progressWrapper.innerHTML = `<div class="progress-label"><strong>目前階段: ${currentPhase}</strong></div>`;
-
-    const timeline = document.createElement('div');
-    timeline.className = 'progress-timeline';
-    const PHASE_COLORS = {
-        '前置作業': '#3b82f6', '泥作工程': '#6b7280', '木作工程': '#964B00',
-        '後期裝修階段': '#f59e0b', '室內精裝階段': '#16a34a', '驗收': '#8b5cf6', '預設': '#d1d5db'
-    };
-    const startDate = new Date(overview['專案起始日']);
-    const endDate = new Date(overview['預計完工日']);
-    const totalDuration = Math.max(1, endDate - startDate);
-    const phases = [...new Set(schedule.map(t => t['階段']))];
-    phases.forEach(phase => {
-        const tasksInPhase = schedule.filter(t => t['階段'] === phase && t['預計開始日'] && t['預計完成日']);
-        if (tasksInPhase.length === 0) return;
-        const phaseStartDate = new Date(Math.min(...tasksInPhase.map(t => new Date(t['預計開始日']))));
-        const phaseEndDate = new Date(Math.max(...tasksInPhase.map(t => new Date(t['預計完成日']))));
-        if (isNaN(phaseStartDate) || isNaN(phaseEndDate)) return;
-        const phaseDuration = Math.max(0, phaseEndDate - phaseStartDate);
-
-        const segment = document.createElement('div');
-        segment.className = 'progress-segment';
-        segment.style.width = `${(phaseDuration / totalDuration) * 100}%`;
-        segment.style.left = `${((phaseStartDate - startDate) / totalDuration) * 100}%`;
-        segment.style.backgroundColor = PHASE_COLORS[phase] || PHASE_COLORS['預設'];
-        segment.title = `${phase}: ${Math.round(phaseDuration / (1000 * 60 * 60 * 24)) + 1}天`;
-        timeline.appendChild(segment);
-    });
-    const todayMarkerPosition = Math.max(0, Math.min(100, ((new Date() - startDate) / totalDuration) * 100));
-    timeline.innerHTML += `<div class="today-marker" style="left:${todayMarkerPosition}%;"></div>`;
-    progressWrapper.appendChild(timeline);
-
-    const listWrapper = document.createElement('div');
-    listWrapper.className = 'schedule-list-wrapper card p-6';
-
-    const listContainer = document.createElement('div');
-    listContainer.id = 'schedule-list-container';
-    listContainer.className = 'schedule-list';
-    listWrapper.appendChild(listContainer);
-
-    schedule.forEach((task, index) => {
-        listContainer.appendChild(renderTaskCard(task, index));
-    });
-
-    const addTaskDiv = document.createElement('div');
-    addTaskDiv.className = 'add-task-controls mt-4 pt-4 border-t flex justify-end items-center gap-4';
-    addTaskDiv.innerHTML = `
-      <button id="save-schedule-btn" class="btn btn-danger hidden">儲存排程變更</button>
-      <button id="add-task-btn" class="btn btn-primary w-full md:w-auto">＋ 新增任務</button>
-    `;
-    listWrapper.appendChild(addTaskDiv);
-
-    container.appendChild(progressWrapper);
-    container.appendChild(listWrapper);
-
-    document.getElementById('save-schedule-btn').dataset.action = 'handleSaveSchedule';
-    document.getElementById('add-task-btn').dataset.action = 'handleAddTask';
-}
-
-/**
  * 根據單筆任務資料，建立一個可編輯的任務卡片 HTML 元素。
  * @param {object} task - 包含任務資訊的物件 (階段, 工種, 任務項目 等)。
  * @param {number} index - 該任務在排程陣列中的索引。
  * @returns {HTMLDivElement} 一個 class 為 'task-card' 的 div 元素。
  */
 /** 渲染單張任務卡片 */
-export function renderTaskCard(task, index) {
-    const card = document.createElement('div');
-    card.className = 'task-card bg-white p-4 rounded-lg shadow grid grid-cols-1 md:grid-cols-5 gap-4 relative';
-    card.id = `task-card-${index}`;
-    card.dataset.taskIndex = index;
-
-    card.innerHTML = `
-      <div class="flex flex-col gap-1">
-        <label class="form-label">階段 / 工種</label>
-        <div class="phase-tag">${task['階段'] || '未分類'}</div>
-        <input type="text" data-field="工種" value="${task['工種'] || ''}" class="form-input clickable-work-type" list="trade-datalist" autocomplete="off">
-      </div>
-      <div class="md:col-span-2 flex flex-col gap-1">
-        <label class="form-label">任務項目 / 說明</label>
-        <input type="text" class="form-input font-semibold" data-field="任務項目" value="${task['任務項目'] || ''}" placeholder="請輸入任務項目">
-        <textarea data-field="任務說明" class="form-textarea" placeholder="任務的詳細說明...">${task['任務說明'] || ''}</textarea>
-      </div>
-      <div class="flex flex-col gap-1">
-          <label class="form-label">工班 / 狀態</label>
-          <input type="text" data-field="負責人/工班" value="${task['負責人/工班'] || ''}" class="form-input" placeholder="請輸入工班">
-          <div class="status-cell mt-1">
-              <select data-field="狀態" class="form-select">
-                  <option value="未完成">未完成</option>
-                  <option value="施工中">施工中</option>
-                  <option value="已完成">已完成</option>
-              </select>
-          </div>
-      </div>
-      <div class="flex flex-col gap-1">
-        <label class="form-label">預計時程 / 備註</label>
-        <input type="text" class="date-range-picker form-input" placeholder="點擊選擇日期範圍">
-        <input type="hidden" data-field="預計開始日" value="${(task['預計開始日'] || '').split('T')[0]}">
-        <input type="hidden" data-field="預計完成日" value="${(task['預計完成日'] || '').split('T')[0]}">
-        <textarea data-field="備註" class="form-textarea" placeholder="備註...">${task['備註'] || ''}</textarea>
-      </div>
-      <button class="delete-task-btn" title="刪除此任務">&times;</button>
-    `;
-
-    flatpickr(card.querySelector('.date-range-picker'), {
-        mode: "range", dateFormat: "Y-m-d", altInput: true, altFormat: "m-d",
-        defaultDate: [task['預計開始日'], task['預計完成日']].filter(Boolean),
-        locale: "zh_tw",
-        onClose: function (selectedDates) {
-            const startDateInput = card.querySelector('input[data-field="預計開始日"]');
-            const endDateInput = card.querySelector('input[data-field="預計完成日"]');
-            let newStartDate = null;
-            if (selectedDates.length >= 1) {
-                const startDate = new Date(selectedDates[0]).toLocaleDateString('sv');
-                const endDate = new Date(selectedDates[selectedDates.length - 1]).toLocaleDateString('sv');
-                if (startDateInput) startDateInput.value = startDate;
-                if (endDateInput) endDateInput.value = endDate;
-                newStartDate = selectedDates[0];
-            }
-            if (newStartDate) updateTaskPhaseByDate(card, newStartDate);
-            // enableSaveButton(); // This will be handled by the event listener in main.js
-        }
-    });
-
-    const statusSelect = card.querySelector('select[data-field="狀態"]');
-    statusSelect.value = task['狀態'] || '未完成';
-    const statusCell = card.querySelector('.status-cell');
-    const setStatusColor = () => {
-        statusCell.classList.remove('status-未完成', 'status-施工中', 'status-已完成');
-        statusCell.classList.add(`status-${statusSelect.value}`);
-    };
-    setStatusColor();
-
-    const tradeInput = card.querySelector('input[data-field="工種"]');
-    tradeInput.dataset.action = 'filterLogsByWorkType';
-    tradeInput.onchange = (e) => {
-        const selectedTrade = e.target.value;
-        const teamInput = card.querySelector('input[data-field="負責人/工班"]');
-        const tradeContacts = new Map();
-        state.currentScheduleData.forEach(t => {
-            if (t && t['工種'] === selectedTrade && t['負責人/工班']) {
-                const person = t['負責人/工班'];
-                tradeContacts.set(person, (tradeContacts.get(person) || 0) + 1);
-            }
-        });
-
-        if (teamInput && tradeContacts.size > 0) {
-            const mostFrequentTeam = [...tradeContacts.entries()].sort((a, b) => b[1] - a[1])[0][0];
-            teamInput.value = mostFrequentTeam;
-        }
-
-        const matchedTemplate = state.templateTasks.find(t => t['工種'] === selectedTrade || t['工種'] + '工程' === selectedTrade);
-        if (matchedTemplate) {
-            card.querySelector('input[data-field="任務項目"]').value = matchedTemplate['任務項目'] || '';
-            card.querySelector('textarea[data-field="任務說明"]').value = matchedTemplate['任務說明'] || '';
-        }
-        // enableSaveButton();
-    };
-
-    card.querySelectorAll('input:not([data-field="工種"]), select, textarea').forEach(el => el.dataset.action = 'enableSaveButton');
-    statusSelect.onchange = () => { setStatusColor(); };
-    statusSelect.dataset.action = 'enableSaveButton';
-
-    const deleteBtn = card.querySelector('.delete-task-btn');
-    deleteBtn.dataset.action = 'deleteTask';
-    deleteBtn.dataset.taskIndex = index;
-    deleteBtn.dataset.taskName = task['任務項目'] || '新任務';
-
-    return card;
-}
 
 /**
  * 渲染右側的專案資訊面板，顯示案場基本資料、團隊成員、現場資訊等。

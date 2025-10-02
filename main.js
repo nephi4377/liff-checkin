@@ -24,8 +24,10 @@ import { loadJsonp } from './api.js';
 * =============================================================================
 */
 import { logToPage } from './utils.js';
-import { displaySkeletonLoader, displayError, displaySchedule, renderLogPage, displayProjectInfo, createOrUpdateTradeDatalist, renderPostCreator } from './ui.js';
+import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, createOrUpdateTradeDatalist, renderPostCreator } from './ui.js';
 import * as Handlers from './handlers.js';
+import * as ScheduleActions from './scheduleActions.js';
+import * as LogActions from './logActions.js'; // [重構] 引入新的 logActions 模組
 import { state } from './state.js';
 
 /*
@@ -87,6 +89,8 @@ function handleDataResponse(data) {
             const base64String = event.target.result;
             const previewItem = document.createElement('div');
             previewItem.className = 'photo-preview-item';
+            previewItem.dataset.name = file.name; // [優化] 儲存檔名
+            previewItem.dataset.type = file.type; // [優化] 儲存檔案類型
             previewItem.dataset.base64 = base64String;
             previewItem.style.backgroundImage = `url(${base64String})`;
             previewItem.innerHTML = `<button class="remove-preview-btn" title="移除此照片">&times;</button>`;
@@ -122,12 +126,12 @@ function handleDataResponse(data) {
   }
 
   // 業務邏輯：如果這是一個沒有任何排程的既有專案，則顯示「套用範本」的按鈕
-  if (state.currentScheduleData.length === 0 && (new URLSearchParams(location.search).get('id') !== '0')) {
+  if (state.currentScheduleData.length === 0 && state.projectId !== '0') { // [核心修正] 改為從 state.projectId 讀取
     const actionsContainer = document.getElementById('actions-container');
     if (actionsContainer) {
         actionsContainer.style.display = 'flex';
-        document.getElementById('btn-import-new').addEventListener('click', () => Handlers.showStartDatePicker('新屋案'));
-        document.getElementById('btn-import-old').addEventListener('click', () => Handlers.showStartDatePicker('老屋案'));
+        document.getElementById('btn-import-new').addEventListener('click', () => ScheduleActions.showStartDatePicker('新屋案'));
+        document.getElementById('btn-import-old').addEventListener('click', () => ScheduleActions.showStartDatePicker('老屋案'));
     }
   }
   
@@ -146,8 +150,8 @@ function handleDataResponse(data) {
       return dateA - dateB;
   });
     
-  // 渲染UI：呼叫 displaySchedule 函式，將排序好的排程資料渲染成畫面
-  displaySchedule(data.overview, state.currentScheduleData);
+  // [重構] 渲染UI：呼叫 scheduleActions.js 中的函式，將排序好的排程資料渲染成畫面
+  ScheduleActions.renderSchedulePage(data.overview, state.currentScheduleData);
 
   // [核心修正] 呼叫函式以建立「工種」欄位的 datalist 下拉建議選單
   createOrUpdateTradeDatalist(state.templateTasks);
@@ -210,6 +214,85 @@ function lazyLoadImages() {
   }
 }
 
+/**
+ * [V2.0 升級] 初始化功能更完整的圖片燈箱 (Lightbox)
+ * - 支援鍵盤左右鍵、滑鼠點擊按鈕切換圖片。
+ * - 支援 Esc 鍵關閉。
+ * - 將開啟函式掛載到 window 物件，供其他模組呼叫。
+ */
+function initializeLightbox() {
+  const lightbox = document.getElementById('lightbox');
+  if (!lightbox) return;
+
+  const lightboxImg = lightbox.querySelector('.lb-img');
+  const closeBtn = lightbox.querySelector('.lb-close');
+  const prevBtn = document.createElement('button');
+  prevBtn.className = 'lb-prev'; prevBtn.ariaLabel = '上一張'; prevBtn.innerHTML = '&#10094;';
+  const nextBtn = document.createElement('button');
+  nextBtn.className = 'lb-next'; nextBtn.ariaLabel = '下一張'; nextBtn.innerHTML = '&#10095;';
+  lightbox.querySelector('.lb-wrap').append(prevBtn, nextBtn);
+
+  let currentImages = [];
+  let currentIndex = 0;
+
+  function showImage(index) {
+    // [優化] 增加保護，避免在沒有圖片時出錯
+    if (!currentImages || currentImages.length === 0) return;
+    currentIndex = index;
+    lightboxImg.src = currentImages[currentIndex];
+
+    // [核心修正] 如果圖片超過一張，則永遠顯示左右按鈕，以支援循環瀏覽
+    const showNav = currentImages.length > 1;
+    prevBtn.style.display = showNav ? 'block' : 'none';
+    nextBtn.style.display = showNav ? 'block' : 'none';
+  }
+
+  function openLightbox(urls, index) {
+    currentImages = urls;
+    showImage(index);
+    lightbox.classList.add('open');
+    lightbox.ariaHidden = 'false';
+    document.addEventListener('keydown', handleKeydown);
+  }
+
+  function closeLightbox() {
+    lightbox.classList.remove('open');
+    lightbox.ariaHidden = 'true';
+    lightboxImg.src = ''; // 清空圖片，避免殘影
+    currentImages = [];
+    document.removeEventListener('keydown', handleKeydown);
+  }
+
+  function showPrev() {
+    // [核心修正] 增加循環邏輯，當在第一張時，跳到最後一張
+    const newIndex = (currentIndex - 1 + currentImages.length) % currentImages.length;
+    showImage(newIndex);
+  }
+
+  function showNext() {
+    // [核心修正] 增加循環邏輯，當在最後一張時，跳到第一張
+    const newIndex = (currentIndex + 1) % currentImages.length;
+    showImage(newIndex);
+  }
+
+  function handleKeydown(e) {
+    if (e.key === 'Escape') closeLightbox();
+    if (e.key === 'ArrowLeft') showPrev();
+    if (e.key === 'ArrowRight') showNext();
+  }
+
+  // 綁定事件
+  closeBtn.addEventListener('click', closeLightbox);
+  prevBtn.addEventListener('click', showPrev);
+  nextBtn.addEventListener('click', showNext);
+  // 點擊燈箱背景也能關閉
+  lightbox.addEventListener('click', (e) => {
+    if (e.target === lightbox) closeLightbox();
+  });
+
+  // 將開啟函式掛載到全域，供 ui.js 呼叫
+  window.__openLightbox__ = openLightbox;
+}
 
 function setupScrollListener() {
     state.scrollObserver = new IntersectionObserver((entries) => {
@@ -253,6 +336,9 @@ async function initializeApp() {
     if (liffParams.has('uid')) userId = liffParams.get('uid');
   }
 
+  // [核心修正] 將解析後的 projectId 存入全域 state
+  state.projectId = projectId;
+
   // 【⭐️ 核心修正：補上遺失的括號，並整理邏輯 ⭐️】
   if (isLocalTest) {
     if (!projectId) projectId = '999';
@@ -282,15 +368,17 @@ async function initializeApp() {
       // 檢查快取是否有效 (時間內且 UID 相符)
       if ((Date.now() - timestamp < CACHE_DURATION_MS) && (data.ownerId === userId)) {
         logToPage('⚡️ 偵測到有效快取，立即渲染畫面...');
-        
+
+        // [核心修正] 從快取渲染時，也必須設定全域的 projectId
+        state.projectId = projectId;
+
         // 【⭐️ 核心修正：從快取中設定使用者名稱 ⭐️】
         state.currentUserName = data.userName || `使用者 (${userId.slice(-6)})`;
         logToPage(`✅ 操作者已從快取設定: ${state.currentUserName}`);
 
         handleDataResponse(data);
-        // 【⭐️ 核心修正：快取命中後，直接結束函式 ⭐️】
-        // 我們不再需要執行背景同步，因為快取是有效的。
-        return;
+        // [核心修正] 標記已從快取渲染，並結束此區塊
+        hasRenderedFromCache = true;
       }
       // 如果快取過期或 UID 不符，則清除舊快取
       const reason = data.ownerId !== userId ? 'UID 不符' : '已過期';
@@ -302,8 +390,9 @@ async function initializeApp() {
     localStorage.removeItem(CACHE_KEY);
   }
 
-  // 【⭐️ 核心修正：將後續邏輯統一為「無快取時的標準流程」 ⭐️】
-  // 只有在沒有從快取成功渲染時，才會執行到這裡。
+  // [核心修正] 只有在沒有從快取成功渲染時，才向後端請求新資料
+  if (hasRenderedFromCache) return;
+
   displaySkeletonLoader(); // 顯示載入動畫
 
   try {
@@ -341,6 +430,12 @@ window.addEventListener('load', () => {
   document.getElementById('version-display').textContent = '版本：' + (typeof FRONTEND_VERSION !== 'undefined' ? FRONTEND_VERSION : '未知');
   logToPage('頁面載入完成，準備啟動應用程式...');
 
+  // [新增] 呼叫函式來初始化燈箱功能
+  initializeLightbox();
+
+  // [重構] 呼叫函式來初始化日誌動作模組
+  LogActions.initializeLogActions();
+
   // 2. 呼叫主應用程式初始化函式
   initializeApp();
 });
@@ -362,29 +457,29 @@ document.addEventListener('click', (e) => {
                 const card = target.closest('.task-card');
                 card.style.display = 'none';
                 state.currentScheduleData[target.dataset.taskIndex] = null;
-                Handlers.enableSaveButton();
+                ScheduleActions.enableSaveButton();
             }
             break;
         case 'openPhotoModal':
-            Handlers.openPhotoModal(logId, target.dataset.photoLinks);
+            LogActions.openPhotoModal(logId, target.dataset.photoLinks);
             break;
         case 'handleEditText':
-            Handlers.handleEditText(logId);
+            LogActions.handleEditText(logId);
             break;
         case 'handlePublish':
-            Handlers.handlePublish(logId);
+            LogActions.handlePublish(logId);
             break;
         case 'handleSaveSchedule':
-            Handlers.handleSaveSchedule();
+            ScheduleActions.handleSaveSchedule();
             break;
         case 'handleAddTask':
-            Handlers.handleAddTask();
+            ScheduleActions.handleAddTask();
             break;
         case 'enableSaveButton':
-            Handlers.enableSaveButton();
+            ScheduleActions.enableSaveButton();
             break;
         case 'filterLogsByWorkType':
-            Handlers.filterLogsByWorkType(target.value);
+            LogActions.filterLogsByWorkType(target.value);
             break;
     }
 });
