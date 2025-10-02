@@ -396,10 +396,10 @@ async function initializeApp() {
     localStorage.removeItem(CACHE_KEY);
   }
 
-  // [核心修正] 只有在沒有從快取成功渲染時，才向後端請求新資料
-  if (hasRenderedFromCache) return;
-
-  displaySkeletonLoader(); // 顯示載入動畫
+  // [核心修正] 如果沒有從快取渲染，才顯示骨架屏
+  if (!hasRenderedFromCache) {
+    displaySkeletonLoader(); // 顯示載入動畫
+  }
 
   try {
     const fetchUrl = `${API_BASE_URL}?page=project&id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
@@ -416,8 +416,25 @@ async function initializeApp() {
     logToPage('✅ 資料請求成功，更新快取。');
     localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData }));
 
-    // 使用新資料渲染畫面
-    handleDataResponse(freshData);
+    // [核心修正] 只有在「沒有」從快取渲染過畫面的情況下，才直接使用新資料渲染
+    // 如果已經從快取渲染過，這裡就不再重複呼叫 handleDataResponse，
+    if (!hasRenderedFromCache) {
+      handleDataResponse(freshData);
+    } else {
+      // [核心新增] 如果畫面已由快取渲染，則在背景比對新舊資料
+      const cachedItem = localStorage.getItem(CACHE_KEY);
+      if (cachedItem) {
+        const { data: oldData } = JSON.parse(cachedItem);
+        // 為了避免因時間戳或 ownerId 不同而誤判，只比較核心資料
+        const oldDataSignature = JSON.stringify({ overview: oldData.overview, schedule: oldData.schedule, dailyLogs: oldData.dailyLogs });
+        const newDataSignature = JSON.stringify({ overview: freshData.overview, schedule: freshData.schedule, dailyLogs: freshData.dailyLogs });
+
+        if (oldDataSignature !== newDataSignature) {
+          logToPage('🔄 偵測到後端資料已更新，正在無縫刷新畫面...');
+          handleDataResponse(freshData); // 使用新資料重新渲染畫面
+        }
+      }
+    }
 
   } catch (err) {
     logToPage(`❌ 應用程式初始化失敗: ${err.message}`, 'error');
