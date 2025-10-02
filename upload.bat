@@ -1,39 +1,54 @@
 @echo off
 setlocal
 
-:: 將當前命令提示字元的字元編碼切換到 UTF-8 (65001)，以正確顯示中文字。
+:: =================================================================
+:: 前端自動化部署腳本 v2.0
+:: 功能:
+:: 1. 自動產生 YY.MM.DD.HHmm 格式的版本號。
+:: 2. 強制以 UTF-8 編碼更新 HTML 檔案中的版本號，解決亂碼問題。
+:: 3. 自動將版本號作為 commit 訊息，無需手動輸入。
+:: 4. 執行 git add, commit, pull, push 完整流程。
+:: =================================================================
+
+:: 確保命令提示字元能正確顯示中文
 chcp 65001 > nul
 
 echo [前端部署] 正在產生新的版本號...
-:: 步驟 1: 使用 PowerShell 產生格式為 vYY.MM.DD.HHmm 的版本號
 for /f "delims=" %%i in ('powershell -Command "(Get-Date).ToString('yy.MM.dd.HHmm')"') do set "NEW_VERSION=v%%i"
 echo 新版本號為: %NEW_VERSION%
 
 echo.
 echo [前端部署] 正在自動更新 managementconsole.html 中的版本號...
-:: 步驟 2: 使用 PowerShell 讀取 HTML 檔案，替換掉舊的版本號，然後寫回檔案
-powershell -Command "(Get-Content -Path 'managementconsole.html' -Raw) -replace \"const FRONTEND_VERSION = '.*';\", \"const FRONTEND_VERSION = '%NEW_VERSION%';\" | Set-Content -Path 'managementconsole.html'"
+:: [核心修正] 使用 PowerShell 讀取、替換版本號，並強制以 UTF-8 編碼寫回檔案
+powershell -Command "(Get-Content -Path 'managementconsole.html' -Raw -Encoding UTF8) -replace \"const FRONTEND_VERSION = '.*';\", \"const FRONTEND_VERSION = '%NEW_VERSION%';\" | Set-Content -Path 'managementconsole.html' -Encoding UTF8"
+if %errorlevel% neq 0 (
+    echo.
+    echo 錯誤: 更新 HTML 檔案失敗。請檢查檔案是否存在或被鎖定。
+    goto end
+)
 
 echo [前端部署] 正在將所有變更加入 Git...
-:: 步驟 3: 將所有變更加入 Git 暫存區
 git add . 
 
 echo.
-echo [前端部署] 請輸入本次的更新說明 (例如: feat(main): 新增快取功能):
-set /p commit_message=
-
-git commit -m "%commit_message%"
+echo [前端部署] 正在自動提交變更...
+:: [核心修正] 自動使用版本號作為 commit message，不再需要手動輸入
+git commit -m "Update frontend to %NEW_VERSION%"
 
 echo.
 echo [前端部署] 正在從 GitHub 同步最新變更 (rebase 模式)...
-:: 步驟 4: 先拉取遠端的最新變更，確保本地分支是基於最新版本
 git pull --rebase
+if %errorlevel% neq 0 (
+    echo.
+    echo 錯誤: 'git pull' 失敗。請手動解決合併衝突後再試一次。
+    goto end
+)
 
 echo.
 echo [前端部署] 正在推送到 GitHub...
-:: 步驟 5: 將本地的提交推送到遠端 GitHub 倉庫
 git push
 
 echo.
 echo [前端部署] 完成！
+:end
 pause 
