@@ -376,6 +376,12 @@ async function initializeApp() {
         state.currentUserName = data.userName || `使用者 (${userId.slice(-6)})`;
         logToPage(`✅ 操作者已從快取設定: ${state.currentUserName}`);
 
+        // [核心修正] 使用最新的 projectId 更新快取中的每一筆排程資料
+        if (data.schedule && Array.isArray(data.schedule)) {
+          data.schedule.forEach(task => task['案號'] = projectId);
+          logToPage('🔄 已使用最新案號更新快取排程資料...');
+        }
+
         handleDataResponse(data);
         // [核心修正] 標記已從快取渲染，並結束此區塊
         hasRenderedFromCache = true;

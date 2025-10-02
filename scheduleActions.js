@@ -201,14 +201,16 @@ function renderTaskCard(task, index) {
 
     flatpickr(card.querySelector('.date-range-picker'), {
         mode: "range", dateFormat: "Y-m-d", altInput: true, altFormat: "m-d",
+        utc: true, // [核心修正] 告知 flatpickr 所有日期都是 UTC 時間，避免時區轉換問題
         defaultDate: [task['預計開始日'], task['預計完成日']].filter(Boolean),
         locale: "zh_tw",
         onClose: function (selectedDates) {
             const startDateInput = card.querySelector('input[data-field="預計開始日"]');
             const endDateInput = card.querySelector('input[data-field="預計完成日"]');
             if (selectedDates.length >= 1) {
-                startDateInput.value = new Date(selectedDates[0]).toLocaleDateString('sv');
-                endDateInput.value = new Date(selectedDates[selectedDates.length - 1]).toLocaleDateString('sv');
+                // [核心修正] 使用 flatpickr 內建的格式化工具，確保輸出與設定一致
+                startDateInput.value = flatpickr.formatDate(selectedDates[0], "Y-m-d");
+                endDateInput.value = flatpickr.formatDate(selectedDates[selectedDates.length - 1], "Y-m-d");
                 updateTaskPhaseByDate(card, selectedDates[0]);
             }
             enableSaveButton();
@@ -254,7 +256,10 @@ export function handleSaveSchedule() {
         if (card.style.display === 'none') return null; // 忽略已刪除的卡片
         const task = {};
         card.querySelectorAll('[data-field]').forEach(input => {
-            task[input.dataset.field] = input.value;
+            // [核心修正] 只讀取 type="hidden" 或非 date-range-picker 的欄位
+            if (input.type === 'hidden' || !input.classList.contains('date-range-picker')) {
+                task[input.dataset.field] = input.value;
+            }
         });
         // [核心修正] 為每一筆任務資料填上案號
         task['案號'] = projectId;
