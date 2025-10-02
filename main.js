@@ -318,6 +318,10 @@ function setupScrollListener() {
  * - 移除了在認證前顯示快取資料的邏輯，改為在認證成功後才顯示載入動畫並請求資料。
  */
 async function initializeApp() {
+  // [核心修正] 為每一次頁面載入產生一個唯一的識別碼，用以解決競態條件
+  const pageLoadId = `load_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  window.currentPageLoadId = pageLoadId;
+
   logToPage('應用程式啟動 (快取優先模式)...');
 
   const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
@@ -364,32 +368,29 @@ async function initializeApp() {
   try {
     const cachedItem = localStorage.getItem(CACHE_KEY);
     if (cachedItem) { // 如果快取存在
-      const { timestamp, data } = JSON.parse(cachedItem);
-      // 檢查快取是否有效 (時間內且 UID 相符)
-      if ((Date.now() - timestamp < CACHE_DURATION_MS) && (data.ownerId === userId)) {
-        logToPage('⚡️ 偵測到有效快取，立即渲染畫面...');
+        const { timestamp, data } = JSON.parse(cachedItem);
+        // [核心修正] 使用 if-else 結構，確保有效和無效的邏輯互斥
+        if ((Date.now() - timestamp < CACHE_DURATION_MS) && (data.ownerId === userId)) {
+            // --- 情況一：快取有效 ---
+            logToPage('⚡️ 偵測到有效快取，立即渲染畫面...');
 
-        // [核心修正] 從快取渲染時，也必須設定全域的 projectId
-        state.projectId = projectId;
+            state.projectId = projectId;
+            state.currentUserName = data.userName || `使用者 (${userId.slice(-6)})`;
+            logToPage(`✅ 操作者已從快取設定: ${state.currentUserName}`);
 
-        // 【⭐️ 核心修正：從快取中設定使用者名稱 ⭐️】
-        state.currentUserName = data.userName || `使用者 (${userId.slice(-6)})`;
-        logToPage(`✅ 操作者已從快取設定: ${state.currentUserName}`);
+            if (data.schedule && Array.isArray(data.schedule)) {
+                data.schedule.forEach(task => task['案號'] = projectId);
+                logToPage('🔄 已使用最新案號更新快取排程資料...');
+            }
 
-        // [核心修正] 使用最新的 projectId 更新快取中的每一筆排程資料
-        if (data.schedule && Array.isArray(data.schedule)) {
-          data.schedule.forEach(task => task['案號'] = projectId);
-          logToPage('🔄 已使用最新案號更新快取排程資料...');
+            handleDataResponse(data);
+            hasRenderedFromCache = true;
+        } else {
+            // --- 情況二：快取無效 (過期或使用者不符) ---
+            const reason = data.ownerId !== userId ? 'UID 不符' : '已過期';
+            logToPage(`🗑️ 快取無效 (${reason})，將繼續向後端請求新資料。`);
+            localStorage.removeItem(CACHE_KEY);
         }
-
-        handleDataResponse(data);
-        // [核心修正] 標記已從快取渲染，並結束此區塊
-        hasRenderedFromCache = true;
-      }
-      // 如果快取過期或 UID 不符，則清除舊快取
-      const reason = data.ownerId !== userId ? 'UID 不符' : '已過期';
-      logToPage(`🗑️ 快取無效 (${reason})，將繼續向後端請求新資料。`);
-      localStorage.removeItem(CACHE_KEY);
     }
   } catch (e) {
     logToPage(`❌ 讀取快取失敗: ${e.message}`, 'error');
@@ -406,6 +407,12 @@ async function initializeApp() {
     logToPage('🔄 正在從後端請求專案資料...');
     const freshData = await loadJsonp(fetchUrl);
 
+    // [核心修正] 檢查此回呼是否屬於當前的頁面載入，若不屬於則直接中止
+    if (window.currentPageLoadId !== pageLoadId) {
+      logToPage(`🟡 偵測到過時的背景請求，已將其忽略。`);
+      return;
+    }
+
     // 【⭐️ 核心修正：使用後端傳來的使用者名稱 ⭐️】
     state.currentUserName = freshData.userName || `使用者 (${userId.slice(-6)})`;
     logToPage(`✅ 操作者已設定: ${state.currentUserName}`);
@@ -413,25 +420,25 @@ async function initializeApp() {
     // 由前端為新資料蓋上所有權戳章
     freshData.ownerId = userId;
 
-    logToPage('✅ 資料請求成功，更新快取。');
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData }));
-
-    // [核心修正] 只有在「沒有」從快取渲染過畫面的情況下，才直接使用新資料渲染
-    // 如果已經從快取渲染過，這裡就不再重複呼叫 handleDataResponse，
     if (!hasRenderedFromCache) {
+      // 情況一：沒有快取，這是第一次載入。直接渲染畫面並設定快取。
+      logToPage('✅ 首次載入資料，正在渲染畫面並建立快取...');
       handleDataResponse(freshData);
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData }));
     } else {
-      // [核心新增] 如果畫面已由快取渲染，則在背景比對新舊資料
+      // 情況二：畫面已由快取渲染，在背景比對新舊資料。
       const cachedItem = localStorage.getItem(CACHE_KEY);
       if (cachedItem) {
         const { data: oldData } = JSON.parse(cachedItem);
         // 為了避免因時間戳或 ownerId 不同而誤判，只比較核心資料
         const oldDataSignature = JSON.stringify({ overview: oldData.overview, schedule: oldData.schedule, dailyLogs: oldData.dailyLogs });
         const newDataSignature = JSON.stringify({ overview: freshData.overview, schedule: freshData.schedule, dailyLogs: freshData.dailyLogs });
-
+        
+        // [核心修正] 只有在資料確定有變動時，才執行畫面更新與快取寫入
         if (oldDataSignature !== newDataSignature) {
           logToPage('🔄 偵測到後端資料已更新，正在無縫刷新畫面...');
           handleDataResponse(freshData); // 使用新資料重新渲染畫面
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData })); // 更新快取
         }
       }
     }
