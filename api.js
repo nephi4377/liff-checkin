@@ -66,10 +66,14 @@ export function publishLog(logId) {
         newStatus: '已發布'
     };
 
-    return fetch(`${API_BASE_URL}?page=project`, {
+    // 【⭐️ 核心修正：統一為標準表單提交模式 ⭐️】
+    const formData = new URLSearchParams();
+    formData.append('payload', JSON.stringify(payload));
+
+    return fetch(API_BASE_URL, { // 【⭐️ 核心修改 ⭐️】移除 URL 中的 ?page=project
         method: 'POST',
-        body: JSON.stringify(payload),
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: formData,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' },
         mode: 'no-cors'
     });
 }

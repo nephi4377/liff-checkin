@@ -164,13 +164,23 @@
             alert('請填寫完整的日期與時間。');
             return;
         }
-        fetch(`${API_BASE_URL}?page=attendance_api`, {
+        // 【⭐️ 核心修正：遵循後端 Action-Based 路由，並統一使用 URLSearchParams ⭐️】
+        // 1. 建立一個 URLSearchParams 物件，這是與後端溝通最穩定的方式。
+        const formData = new URLSearchParams();
+        // 2. 將包含 action 的 payload 物件轉換為 JSON 字串，並放入名為 'payload' 的欄位。
+        formData.append('payload', JSON.stringify(payload));
+
+        fetch(API_BASE_URL, {
             method: 'POST',
-            body: JSON.stringify(payload),
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            mode: 'no-cors'
-        }).then(() => {
-            alert('補打卡請求已送出！報表將重新整理。');
+            body: formData,
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' },
+            // 3. 移除 no-cors 模式，以便能讀取後端的回傳值。
+        }).then(res => {
+            if (!res.ok) throw new Error(`伺服器錯誤: ${res.status}`);
+            return res.json();
+        }).then(result => {
+            if (!result.success) throw new Error(result.message || '後端處理失敗，但未提供錯誤訊息。');
+            alert('補打卡請求已成功送出！報表將自動重新整理。');
             document.getElementById('checkin-modal').classList.remove('is-open');
             fetchReportData();
         }).catch(err => alert('送出失敗: ' + err));

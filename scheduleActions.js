@@ -320,9 +320,13 @@ export function handleSaveSchedule() {
     // [核心修正] 確保 payload 中包含正確的 projectId
     const payload = { action: 'updateSchedule', projectId: projectId, scheduleData: scheduleData };
 
-    fetch(`${API_BASE_URL}?page=project`, {
-        method: 'POST', body: JSON.stringify(payload),
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, mode: 'no-cors'
+    // 【⭐️ 核心修正：改用 URLSearchParams 提交表單資料 ⭐️】
+    const formData = new URLSearchParams();
+    formData.append('payload', JSON.stringify(payload));
+
+    fetch(API_BASE_URL, { // 【⭐️ 核心修改 ⭐️】移除 URL 中的 ?page=project
+        method: 'POST', body: formData,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' }, mode: 'no-cors'
     })
         .catch(error => {
             console.error('儲存排程時發生錯誤:', error);
@@ -363,9 +367,13 @@ export function handleImportTemplate(templateType, startDate) {
     const projectId = state.projectId; // [優化] 從全域 state 讀取 projectId
     const payload = { action: 'createFromTemplate', projectId, templateType, startDate };
 
-    fetch(`${API_BASE_URL}?page=project`, {
-        method: 'POST', body: JSON.stringify(payload),
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, mode: 'no-cors'
+    // 【⭐️ 核心修正：同樣改用 URLSearchParams 提交 ⭐️】
+    const formData = new URLSearchParams();
+    formData.append('payload', JSON.stringify(payload));
+
+    fetch(API_BASE_URL, { // 【⭐️ 核心修改 ⭐️】移除 URL 中的 ?page=project
+        method: 'POST', body: formData,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' }, mode: 'no-cors'
     })
     .then(() => {
         alert(`範本「${templateType}」已成功匯入！頁面將重新載入以顯示最新排程。`);

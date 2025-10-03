@@ -470,6 +470,7 @@ window.addEventListener('load', () => {
   initializeApp();
 });
 
+
 /**
  * [新增] 統一的事件代理監聽器
  * 透過事件冒泡，在 document 層級處理所有帶有 data-action 的點擊事件。
@@ -575,3 +576,122 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 });
+
+/**
+ * [新增] 監聽來自後端 iframe 的 postMessage 事件
+ * 這是為了解決 no-cors 限制下，前端無法得知後端處理結果的問題。
+ * 所有後端 API 的回饋都會透過此管道送達。
+ */
+window.addEventListener('message', (event) => {
+  // 簡單的來源驗證，確保訊息來自我們的 Apps Script 後端
+  if (!event.origin.includes('google.com')) {
+    return;
+  }
+
+  const result = event.data;
+  if (!result || !result.action) {
+    return;
+  }
+
+  logToPage(`📬 收到後端回覆: Action=${result.action}, Success=${result.success}`);
+
+  // 根據後端回傳的 action，執行對應的 UI 更新
+  switch (result.action) {
+    case 'submit_report_chunk':
+      if (result.success) {
+        // 這個 case 代表施工回報或主控台發文的「非同步請求」已成功提交到後端佇列。
+        // 前端的 UI (如清空輸入框、跳出提示) 已在發送 fetch 後立即執行 (樂觀更新)。
+        // 此處我們可以在 console 留下記錄，或顯示一個更細微的成功提示。
+        // 【⭐️ 核心修改：改用全域通知函式 ⭐️】
+        const notificationMessage = '✅ 已成功加入上傳佇列！資料更新約需 10 分鐘後完成。';
+        showGlobalNotification(notificationMessage, 600000, 'info'); // 顯示 600,000 毫秒 = 10 分鐘
+        logToPage('✅ 後端已確認收到非同步提交請求。');
+      } else {
+        // 如果後端在接收階段就發生錯誤
+        logToPage(`❌ 非同步提交失敗: ${result.message}`, 'error');
+        alert(`提交失敗：${result.message}`);
+      }
+      break;
+
+    case 'publish':
+      if (result.success && result.logId) {
+        // 當「發布」動作成功後，將對應的草稿卡片從畫面上移除
+        const card = document.getElementById('log-' + result.logId);
+        if (card) { card.style.transition = 'opacity .5s'; card.style.opacity = '0'; setTimeout(() => card.remove(), 500); }
+      }
+      break;
+    
+    // 【⭐️ 核心修改：用通知列取代 alert ⭐️】
+    case 'createFromTemplate':
+      if (result.success) {
+        // 當從範本建立排程成功後，顯示成功訊息，並在短暫延遲後重新載入頁面
+        showGlobalNotification(result.message || '範本已成功匯入！頁面即將重新載入...', 5000, 'success');
+        setTimeout(() => window.location.reload(), 2000); // 延遲 2 秒後重載
+      } else {
+        showGlobalNotification(`匯入範本失敗：${result.message || '未知錯誤'}`, 8000, 'error');
+      }
+      break;
+
+    case 'updateSchedule':
+      if (result.success) {
+        // 當排程儲存成功後，顯示一個簡短的成功提示
+        showGlobalNotification(result.message || '排程已成功儲存！', 5000, 'success');
+      } else {
+        showGlobalNotification(`排程儲存失敗：${result.message || '未知錯誤'}`, 8000, 'error');
+      }
+      break;
+  }
+}, false);
+
+/**
+ * [重構] 在主標題下方顯示一個全域的、暫時的通知橫幅。
+ * @param {string} message - 要顯示的訊息文字。
+ * @param {number} duration - 訊息顯示的持續時間（毫秒）。
+ * @param {'info'|'success'|'error'} type - 訊息類型，決定橫幅顏色。
+ */
+function showGlobalNotification(message, duration, type = 'info') {
+  const header = document.querySelector('header');
+  if (!header) return;
+
+  // 移除任何已存在的舊通知，避免重複顯示
+  const existingNotification = document.getElementById('global-notification');
+  if (existingNotification) {
+    existingNotification.remove();
+  }
+
+  // 根據類型決定顏色
+  const colors = {
+    info:    { bg: '#dbeafe', text: '#1e40af' }, // 藍色
+    success: { bg: '#dcfce7', text: '#166534' }, // 綠色
+    error:   { bg: '#fee2e2', text: '#991b1b' }  // 紅色
+  };
+  const selectedColor = colors[type] || colors.info;
+
+  // 建立新的通知橫幅元素
+  const notificationDiv = document.createElement('div');
+  notificationDiv.id = 'global-notification';
+  notificationDiv.textContent = message;
+
+  // 設定樣式
+  notificationDiv.style.cssText = `
+    background-color: ${selectedColor.bg};
+    color: ${selectedColor.text};
+    padding: 0.75rem 1.5rem;
+    margin-top: -1rem; /* 向上移動一點，更貼近 header */
+    margin-bottom: 1rem;
+    border-radius: 0.5rem;
+    text-align: center;
+    font-weight: 600;
+    transition: opacity 0.5s ease-out;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  `;
+
+  // 將通知插入到 header 之後
+  header.parentNode.insertBefore(notificationDiv, header.nextSibling);
+
+  // 設定計時器，在指定時間後自動移除通知
+  setTimeout(() => {
+    notificationDiv.style.opacity = '0';
+    setTimeout(() => notificationDiv.remove(), 500); // 等待淡出動畫結束後再移除 DOM
+  }, duration);
+}
