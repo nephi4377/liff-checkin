@@ -164,26 +164,18 @@
             alert('請填寫完整的日期與時間。');
             return;
         }
-        // 【⭐️ 核心修正：遵循後端 Action-Based 路由，並統一使用 URLSearchParams ⭐️】
-        // 1. 建立一個 URLSearchParams 物件，這是與後端溝通最穩定的方式。
-        const formData = new URLSearchParams();
-        // 2. 將包含 action 的 payload 物件轉換為 JSON 字串，並放入名為 'payload' 的欄位。
-        formData.append('payload', JSON.stringify(payload));
 
-        fetch(API_BASE_URL, {
-            method: 'POST',
-            body: formData,
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' },
-            // 3. 移除 no-cors 模式，以便能讀取後端的回傳值。
-        }).then(res => {
-            if (!res.ok) throw new Error(`伺服器錯誤: ${res.status}`);
-            return res.json();
-        }).then(result => {
-            if (!result.success) throw new Error(result.message || '後端處理失敗，但未提供錯誤訊息。');
-            alert('補打卡請求已成功送出！報表將自動重新整理。');
-            document.getElementById('checkin-modal').classList.remove('is-open');
-            fetchReportData();
-        }).catch(err => alert('送出失敗: ' + err));
+        // 【⭐️ 核心修正：改用 iframe 提交模式，與專案主控台保持一致 ⭐️】
+        postToGas(payload);
+
+        // 由於提交是異步的，我們假設它會成功，並立即處理 UI (樂觀更新)
+        alert('補打卡請求已送出！報表將自動重新整理。');
+        document.getElementById('checkin-modal').classList.remove('is-open');
+        fetchReportData();
+
+        // 最後恢復按鈕狀態
+        btn.disabled = false;
+        btn.textContent = '送出';
     }
 
     function fetchReportData() {
@@ -332,4 +324,3 @@
 </script>
 </body>
 </html>
-

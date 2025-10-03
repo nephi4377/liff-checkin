@@ -47,20 +47,15 @@ function handleSaveText(logId, originalButtons) {
     const firstBtn = btnBox.querySelector('button');
     if (firstBtn) { firstBtn.textContent = '儲存中...'; firstBtn.disabled = true; }
     
-    api.saveText(logId, newText)
-        .then(resp => {
-            if (resp && resp.success) {
-                contentDiv.contentEditable = false;
-                contentDiv.style.cssText = 'white-space: pre-wrap; margin-top: 0.75rem;';
-                btnBox.innerHTML = '';
-                originalButtons.forEach(b => btnBox.appendChild(b));
-                logToPage(`✅ LogID ${logId} 的文字已更新。`);
-            }
-        })
-        .catch(err => {
-            alert('儲存失敗：' + err.message);
-            handleCancelEdit(logId, originalButtons);
-        });
+    // 【⭐️ 核心修正：改為非同步提交，並立即更新 UI (樂觀更新) ⭐️】
+    api.saveText(logId, newText);
+
+    // 立即還原 UI，不等待後端回覆
+    contentDiv.contentEditable = false;
+    contentDiv.style.cssText = 'white-space: pre-wrap; margin-top: 0.75rem;';
+    btnBox.innerHTML = '';
+    originalButtons.forEach(b => btnBox.appendChild(b));
+    logToPage(`✅ LogID ${logId} 的文字更新請求已送出。`);
 }
 
 /** 開啟照片管理視窗 */
@@ -101,42 +96,25 @@ function handleSavePhotos() {
     const keepLinks = Array.from(grid.querySelectorAll('.modal-photo-item:not(.deleted)'))
         .map(item => item.dataset.link);
 
-    api.savePhotos(state.currentEditingLogId, keepLinks.join(','), [])
-        .then(resp => {
-            if (resp && resp.success) {
-                closePhotoModal();
-                const cardPhotoContainer = document.querySelector(`#log-${state.currentEditingLogId} .photo-grid`);
-                if (cardPhotoContainer) {
-                    const newGrid = buildPhotoGrid(resp.finalLinks);
-                    cardPhotoContainer.replaceWith(newGrid);
-                    if (window.lazyLoadImages) window.lazyLoadImages();
-                }
-                logToPage(`✅ LogID ${state.currentEditingLogId} 的照片已更新。`);
-            } else {
-                alert('儲存失敗：' + (resp?.message || '未知錯誤'));
-            }
-        })
-        .catch(err => alert('儲存失敗：' + err.message))
-        .finally(() => {
-            btn.disabled = false;
-            btn.textContent = '儲存變更';
-        });
+    // 【⭐️ 核心修正：改為非同步提交，並等待 postMessage 回應 ⭐️】
+    // 注意：目前 'newPhotosBase64Array' 暫時傳入空陣列，因為 UI 還未實作新照片上傳。
+    api.savePhotos(state.currentEditingLogId, keepLinks.join(','), []);
+
+    // 樂觀更新：立即關閉視窗並恢復按鈕狀態，後續的卡片刷新將由 postMessage 監聽器處理。
+    closePhotoModal();
+    btn.disabled = false;
+    btn.textContent = '儲存變更';
+    logToPage(`✅ LogID ${state.currentEditingLogId} 的照片更新請求已送出。`);
 }
 
 /** 發布日誌 */
 export function handlePublish(logId) {
     const btn = document.getElementById('btn-' + logId);
     if (btn) { btn.disabled = true; btn.textContent = '發布中...'; }
-    api.publishLog(logId)
-        .then(() => {
-            const card = document.getElementById('log-' + logId);
-            if (card) { card.style.transition = 'opacity .5s'; card.style.opacity = '0'; setTimeout(() => card.remove(), 500); }
-        })
-        .catch(error => {
-            console.error('發布時發生錯誤:', error);
-            alert('發布請求失敗，請檢查網路連線。');
-            if (btn) { btn.disabled = false; btn.textContent = '審核與發布'; }
-        });
+    
+    // 【⭐️ 核心修正：改為非同步提交，後續 UI 更新由 postMessage 監聽器處理 ⭐️】
+    api.publishLog(logId);
+    logToPage(`✅ LogID ${logId} 的發布請求已送出。`);
 }
 
 /**

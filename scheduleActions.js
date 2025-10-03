@@ -11,6 +11,7 @@ import { logToPage } from './utils.js';
 import { state } from './state.js';
 import { createOrUpdateTradeDatalist } from './ui.js';
 import { loadJsonp } from './api.js'; // [重構] 導入 loadJsonp
+import { postToGas } from './api.js'; // 【⭐️ 核心修正：引入新的提交函式 ⭐️】
 
 /**
  * [重構] 渲染整個排程頁面 (取代 ui.js 中的 displaySchedule)
@@ -320,23 +321,13 @@ export function handleSaveSchedule() {
     // [核心修正] 確保 payload 中包含正確的 projectId
     const payload = { action: 'updateSchedule', projectId: projectId, scheduleData: scheduleData };
 
-    // 【⭐️ 核心修正：改用 URLSearchParams 提交表單資料 ⭐️】
-    const formData = new URLSearchParams();
-    formData.append('payload', JSON.stringify(payload));
+    // 【⭐️ 核心修正：改用 iframe 提交模式 ⭐️】
+    postToGas(payload);
 
-    fetch(API_BASE_URL, { // 【⭐️ 核心修改 ⭐️】移除 URL 中的 ?page=project
-        method: 'POST', body: formData,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' }, mode: 'no-cors'
-    })
-        .catch(error => {
-            console.error('儲存排程時發生錯誤:', error);
-            alert('儲存失敗！請檢查您的網路連線。');
-        })
-        .finally(() => {
-            btn.textContent = '儲存排程變更';
-            btn.disabled = false;
-            btn.classList.add('hidden'); // 儲存完成後，按鈕應該被隱藏，直到下一次變更
-        });
+    // 由於提交是異步的，我們直接在這裡處理 UI
+    btn.textContent = '儲存排程變更';
+    btn.disabled = false;
+    btn.classList.add('hidden');
 }
 
 export function showStartDatePicker(templateType) {    
@@ -367,20 +358,6 @@ export function handleImportTemplate(templateType, startDate) {
     const projectId = state.projectId; // [優化] 從全域 state 讀取 projectId
     const payload = { action: 'createFromTemplate', projectId, templateType, startDate };
 
-    // 【⭐️ 核心修正：同樣改用 URLSearchParams 提交 ⭐️】
-    const formData = new URLSearchParams();
-    formData.append('payload', JSON.stringify(payload));
-
-    fetch(API_BASE_URL, { // 【⭐️ 核心修改 ⭐️】移除 URL 中的 ?page=project
-        method: 'POST', body: formData,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' }, mode: 'no-cors'
-    })
-    .then(() => {
-        alert(`範本「${templateType}」已成功匯入！頁面將重新載入以顯示最新排程。`);
-        window.location.reload();
-    })
-    .catch(error => {
-        console.error('儲存排程時發生網路錯誤:', error);
-        alert('匯入範本失敗！請檢查您的網路連線或後端日誌。');
-    });
+    // 【⭐️ 核心修正：改用 iframe 提交模式 ⭐️】
+    postToGas(payload);
 }

@@ -24,7 +24,7 @@ import { loadJsonp } from './api.js';
 * =============================================================================
 */
 import { logToPage } from './utils.js';
-import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, createOrUpdateTradeDatalist, renderPostCreator } from './ui.js';
+import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, createOrUpdateTradeDatalist, renderPostCreator, _buildLogCard } from './ui.js';
 import * as Handlers from './handlers.js';
 import * as ScheduleActions from './scheduleActions.js';
 import * as LogActions from './logActions.js'; // [重構] 引入新的 logActions 模組
@@ -134,37 +134,22 @@ function handleDataResponse(data) {
         document.getElementById('btn-import-old').addEventListener('click', () => ScheduleActions.showStartDatePicker('老屋案'));
     }
   }
-  
-  // 業務邏輯：對排程資料進行排序，規則為：1. 依狀態 (已完成 > 施工中 > 未完成) 2. 依預計開始日期
-  state.currentScheduleData.sort((a, b) => {
-      const statusOrder = { '已完成': 1, '施工中': 2, '未完成': 3 };
-      const statusA = statusOrder[a['狀態']] || 99;
-      const statusB = statusOrder[b['狀態']] || 99;
-      if (statusA !== statusB) {
-          return statusA - statusB;
-      }
-      const dateA = new Date(a['預計開始日']);
-      const dateB = new Date(b['預計開始日']);
-      if (isNaN(dateA.getTime())) return 1;
-      if (isNaN(dateB.getTime())) return -1;
-      return dateA - dateB;
-  });
-    
-  // [重構] 渲染UI：呼叫 scheduleActions.js 中的函式，將排序好的排程資料渲染成畫面
-  ScheduleActions.renderSchedulePage(data.overview, state.currentScheduleData);
-
-  // [核心修正] 呼叫函式以建立「工種」欄位的 datalist 下拉建議選單
-  createOrUpdateTradeDatalist(state.templateTasks);
-
-  // [修復] 重新加入日誌渲染的邏輯
-  // 效能優化：初始化分頁計數器，並呼叫 renderLogPage 函式僅渲染第一頁的日誌
-  state.currentPage = 1;
-  renderLogPage();
-  lazyLoadImages(); // [核心修正] 在渲染第一頁後，立即觸發一次懶加載
-  
-  // 效能優化：如果日誌總數超過一頁的數量，則啟動滾動監聽，用於實現無限滾動加載
-  if (state.currentLogsData.length > state.LOGS_PER_PAGE) {
-      setupScrollListener();
+    // 業務邏輯：對排程資料進行排序，規則為：1. 依狀態 (已完成 > 施工中 > 未完成) 2. 依預計開始日期
+  // 【⭐️ 核心修正：補上遺失的括號，並整理後續呼叫流程 ⭐️】
+  if (Array.isArray(state.currentScheduleData)) {
+    state.currentScheduleData.sort((a, b) => {
+        const statusOrder = { '已完成': 1, '施工中': 2, '未完成': 3 };
+        const statusA = statusOrder[a['狀態']] || 99;
+        const statusB = statusOrder[b['狀態']] || 99;
+        if (statusA !== statusB) {
+            return statusA - statusB;
+        }
+        const dateA = new Date(a['預計開始日']);
+        const dateB = new Date(b['預計開始日']);
+        if (isNaN(dateA.getTime())) return 1;
+        if (isNaN(dateB.getTime())) return -1;
+        return dateA - dateB;
+    });
   }
 
   // 渲染UI：使用後端提供的案場名稱，更新頁面的主標題
@@ -175,6 +160,22 @@ function handleDataResponse(data) {
 
   // [新增] 呼叫新函式來渲染右側的專案資訊面板
   displayProjectInfo(data.overview, state.currentScheduleData);
+
+  // [重構] 渲染UI：呼叫 scheduleActions.js 中的函式，將排序好的排程資料渲染成畫面
+  ScheduleActions.renderSchedulePage(data.overview, state.currentScheduleData);
+
+  // [重構] 渲染UI：初始化日誌分頁，並渲染第一頁
+  state.currentPage = 1;
+  renderLogPage();
+
+  // [重構] 如果日誌超過一頁，則設定無限滾動監聽器
+  if (state.currentLogsData.length > state.LOGS_PER_PAGE) {
+    setupScrollListener();
+  }
+
+  // [核心修正] 在每次資料渲染完成後，都手動觸發一次圖片懶加載。
+  // 這解決了從快取渲染時，圖片不會被載入的問題。
+  lazyLoadImages();
 }
 
 // [核心修正] 將 lazyLoadImages 掛載到 window 物件上，使其成為一個全域可用的函式
@@ -324,6 +325,10 @@ async function initializeApp() {
 
   logToPage('應用程式啟動 (快取優先模式)...');
 
+  // 【⭐️ 核心修改：加入啟動時的通知測試 ⭐️】
+  // 根據您的要求，在應用程式啟動時立即顯示一條測試通知，以確認其功能正常。
+  showGlobalNotification('這是一條測試通知，用於確認顯示功能是否正常。', 10000, 'info');
+
   const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
 
   // 步驟 1：從 URL 讀取 projectId 和 userId
@@ -342,6 +347,7 @@ async function initializeApp() {
 
   // [核心修正] 將解析後的 projectId 存入全域 state
   state.projectId = projectId;
+  state.currentUserId = userId; // 【⭐️ 核心修正：將 userId 也存入全域 state ⭐️】
 
   // 【⭐️ 核心修正：補上遺失的括號，並整理邏輯 ⭐️】
   if (isLocalTest) {
@@ -373,17 +379,20 @@ async function initializeApp() {
         if ((Date.now() - timestamp < CACHE_DURATION_MS) && (data.ownerId === userId)) {
             // --- 情況一：快取有效 ---
             logToPage('⚡️ 偵測到有效快取，立即渲染畫面...');
-
+ 
             state.projectId = projectId;
-            state.currentUserName = data.userName || `使用者 (${userId.slice(-6)})`;
-            logToPage(`✅ 操作者已從快取設定: ${state.currentUserName}`);
+            // 【⭐️ 核心修正：不要修改原始 data 物件，而是將處理結果存入 state ⭐️】
+            state.currentUserName = data.userName || `使用者 (${userId.slice(-6)})`; // 優先使用快取中的名稱
 
-            if (data.schedule && Array.isArray(data.schedule)) {
-                data.schedule.forEach(task => task['案號'] = projectId);
+            // 【⭐️ 核心修正：建立一個 data 的深層複本來進行操作，保持原始 data 的純淨性 ⭐️】
+            const dataForRender = JSON.parse(JSON.stringify(data));
+
+            // 使用複本來更新案號，這樣就不會污染原始的 data 物件
+            if (dataForRender.schedule && Array.isArray(dataForRender.schedule)) {
+                dataForRender.schedule.forEach(task => task['案號'] = projectId);
                 logToPage('🔄 已使用最新案號更新快取排程資料...');
             }
-
-            handleDataResponse(data);
+            handleDataResponse(dataForRender); // 使用處理過的複本來渲染畫面
             hasRenderedFromCache = true;
         } else {
             // --- 情況二：快取無效 (過期或使用者不符) ---
@@ -437,7 +446,17 @@ async function initializeApp() {
         // [核心修正] 只有在資料確定有變動時，才執行畫面更新與快取寫入
         if (oldDataSignature !== newDataSignature) {
           logToPage('🔄 偵測到後端資料已更新，正在無縫刷新畫面...');
+          
+          // 【⭐️ 核心修正：保留樂觀更新的卡片 ⭐️】
+          // 在重新渲染前，先找出所有「處理中」的卡片並暫存起來。
+          const optimisticCards = Array.from(document.querySelectorAll('.card[id^="temp-"]'));
+          
           handleDataResponse(freshData); // 使用新資料重新渲染畫面
+          
+          // 如果有暫存的卡片，將它們重新插入到列表頂部。
+          const logsContainer = document.getElementById('logs-container');
+          optimisticCards.reverse().forEach(card => logsContainer.insertBefore(card, logsContainer.children[1]));
+
           localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData })); // 更新快取
         }
       }
@@ -548,7 +567,6 @@ document.addEventListener('DOMContentLoaded', () => {
       // [新增] 根據當前視圖，顯示或隱藏手機版的懸浮新增按鈕
       const fab = document.getElementById('fab-add-task-btn');
       if (fab) fab.style.display = (view === 'schedule') ? 'flex' : 'none';
-
       // [新增] 當切換到工程排程時，觸發滾動
       if (view === 'schedule') {
         setTimeout(() => {
@@ -584,12 +602,23 @@ document.addEventListener('DOMContentLoaded', () => {
  */
 window.addEventListener('message', (event) => {
   // 簡單的來源驗證，確保訊息來自我們的 Apps Script 後端
+  // [優化] 在收到任何後端訊息時，顯示一個除錯通知，方便確認通訊是否成功
+    // 【⭐️ 除錯新增：在 Console 中印出收到的完整事件物件 ⭐️】
+  // 這可以讓我們看到訊息的來源(origin)、資料(data)等所有細節。
+  console.log('📬 成功收到來自 iframe 的 postMessage 事件:', event);
+  
+  // 【⭐️ 除錯新增：單獨印出最重要的資料部分 ⭐️】
+  // event.data 就是您後端 result 物件的內容。
+  console.log('📦 後端回傳的資料 (event.data):', event.data);
+  showGlobalNotification(`📬 收到後端回覆: ${JSON.stringify(event.data)}`, 8000, 'info');
   if (!event.origin.includes('google.com')) {
     return;
   }
 
   const result = event.data;
-  if (!result || !result.action) {
+  // [核心修正] 增加更嚴格的檢查，並將除錯通知的呼叫移至此處
+  if (!result || typeof result !== 'object') { // 暫時放寬 action 檢查，以便觀察所有訊息
+    logToPage(`📬 收到一個無效的後端回覆: ${JSON.stringify(result)}`);
     return;
   }
 
@@ -606,6 +635,10 @@ window.addEventListener('message', (event) => {
         const notificationMessage = '✅ 已成功加入上傳佇列！資料更新約需 10 分鐘後完成。';
         showGlobalNotification(notificationMessage, 600000, 'info'); // 顯示 600,000 毫秒 = 10 分鐘
         logToPage('✅ 後端已確認收到非同步提交請求。');
+        
+        // 【⭐️ 核心修改：移除在此處建立卡片的邏輯 ⭐️】
+        // 卡片建立的動作已移至 handlers.js，在點擊發佈時立即執行。
+        // 此處只負責顯示後端已收到請求的通知。
       } else {
         // 如果後端在接收階段就發生錯誤
         logToPage(`❌ 非同步提交失敗: ${result.message}`, 'error');
@@ -640,6 +673,12 @@ window.addEventListener('message', (event) => {
         showGlobalNotification(`排程儲存失敗：${result.message || '未知錯誤'}`, 8000, 'error');
       }
       break;
+    // [核心修正] 新增 default 區塊，處理未知的 action
+    default:
+      const errorMessage = `收到未知的後端動作: "${result.action}"`;
+      logToPage(`❌ ${errorMessage}`);
+      showGlobalNotification(errorMessage, 10000, 'error');
+      break;
   }
 }, false);
 
@@ -650,16 +689,34 @@ window.addEventListener('message', (event) => {
  * @param {'info'|'success'|'error'} type - 訊息類型，決定橫幅顏色。
  */
 function showGlobalNotification(message, duration, type = 'info') {
-  const header = document.querySelector('header');
-  if (!header) return;
+  
+  const targetElement = document.getElementById('project-title');
+  if (!targetElement) return;
 
-  // 移除任何已存在的舊通知，避免重複顯示
-  const existingNotification = document.getElementById('global-notification');
-  if (existingNotification) {
-    existingNotification.remove();
+  // [核心重構] 尋找或建立一個專門用來放置所有通知的容器
+  let notificationContainer = document.getElementById('global-notification-container');
+  if (!notificationContainer) {
+    notificationContainer = document.createElement('div');
+    notificationContainer.id = 'global-notification-container';
+    // [核心修正] 將容器改為 fixed 定位，使其漂浮在頁面頂部中央，不影響其他內容佈局。
+    notificationContainer.style.cssText = `
+      position: fixed;
+      top: 1rem; /* 距離視窗頂部 1rem */
+      left: 50%;
+      transform: translateX(-50%); /* 水平置中 */
+      z-index: 9999; /* 確保在最上層 */
+      display: flex;
+      flex-direction: column;
+      align-items: center; /* 讓通知項目在容器內置中 */
+      gap: 0.5rem; /* 通知之間的間距 */
+    `;
+    // [核心修正] 將容器直接附加到 body，使其獨立於頁面其他元素的佈局。
+    document.body.appendChild(notificationContainer);
   }
 
-  // 根據類型決定顏色
+  // [核心重構] 移除「刪除舊通知」的邏輯，以允許訊息堆疊
+
+  // 根據類型決定顏色 (邏輯不變)
   const colors = {
     info:    { bg: '#dbeafe', text: '#1e40af' }, // 藍色
     success: { bg: '#dcfce7', text: '#166534' }, // 綠色
@@ -668,30 +725,31 @@ function showGlobalNotification(message, duration, type = 'info') {
   const selectedColor = colors[type] || colors.info;
 
   // 建立新的通知橫幅元素
-  const notificationDiv = document.createElement('div');
-  notificationDiv.id = 'global-notification';
-  notificationDiv.textContent = message;
+  const notificationItem = document.createElement('div');
+  // [核心重構] 使用 class 而不是 id，允許多個通知存在
+  notificationItem.className = 'global-notification-item';
+  notificationItem.textContent = message;
 
   // 設定樣式
-  notificationDiv.style.cssText = `
+  notificationItem.style.cssText = `
     background-color: ${selectedColor.bg};
     color: ${selectedColor.text};
-    padding: 0.75rem 1.5rem;
-    margin-top: -1rem; /* 向上移動一點，更貼近 header */
-    margin-bottom: 1rem;
+    padding: 0.75rem 1.5rem; /* 稍微增加左右內距，讓外觀更舒適 */
     border-radius: 0.5rem;
     text-align: center;
     font-weight: 600;
-    transition: opacity 0.5s ease-out;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1); /* 增加更明顯的陰影，突顯漂浮感 */
+    min-width: 300px; /* 設定最小寬度，避免訊息太短時過窄 */
   `;
 
-  // 將通知插入到 header 之後
-  header.parentNode.insertBefore(notificationDiv, header.nextSibling);
+  // [核心重構] 將新的通知項目附加到容器的末尾
+  notificationContainer.appendChild(notificationItem);
 
   // 設定計時器，在指定時間後自動移除通知
   setTimeout(() => {
-    notificationDiv.style.opacity = '0';
-    setTimeout(() => notificationDiv.remove(), 500); // 等待淡出動畫結束後再移除 DOM
+    notificationItem.style.opacity = '0';
+    notificationItem.style.transform = 'translateY(-20px)'; // 加上向上移出的動畫效果
+    setTimeout(() => notificationItem.remove(), 500); // 等待淡出動畫結束後再移除 DOM
   }, duration);
 }

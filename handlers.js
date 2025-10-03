@@ -9,6 +9,8 @@
 
 import { state } from './state.js';
 import { logToPage } from './utils.js';
+import { _buildLogCard } from './ui.js'; // 【⭐️ 核心修改：引入建立卡片的函式 ⭐️】
+import { postToGas } from './api.js'; // 【⭐️ 核心修正：引入新的提交函式 ⭐️】
 
 /**
  * [新增] 圖片壓縮輔助函式
@@ -92,6 +94,31 @@ export function handleCreateNewPost() {
     problemDescription: '', // 主控台沒有這個欄位，留空
   };
 
+  // 【⭐️ 核心修改：在送出請求的當下，立即建立並顯示「處理中」卡片 ⭐️】
+  const displayTitle = title
+    ? `${new Date().toLocaleDateString('sv')} ${title} 進度回報 (處理中...)`
+    : `${new Date().toLocaleDateString('sv')} 主控台更新 (處理中...)`;
+
+  const optimisticLog = {
+    LogID: `temp-${Date.now()}`,
+    Title: displayTitle,
+    Content: content,
+    UserName: state.currentUserName || '管理員',
+    Timestamp: new Date().toISOString(),
+    PhotoLinks: ''
+  };
+
+  // 呼叫 ui.js 的函式來建立卡片 DOM 元素
+  const newCard = _buildLogCard(optimisticLog, false);
+  newCard.style.opacity = '0.7'; // 讓處理中的卡片呈現半透明狀態
+
+  // 將新卡片插入到列表最頂端 (發文框下方)
+  const logsContainer = document.getElementById('logs-container');
+  const postCreator = logsContainer.querySelector('.post-creator');
+  if (logsContainer && postCreator) {
+    logsContainer.insertBefore(newCard, postCreator.nextSibling);
+  }
+
   (async () => {
     try {
       logToPage('⏳ 開始處理發文請求...');
@@ -111,23 +138,12 @@ export function handleCreateNewPost() {
         
         logToPage(`正在提交第 ${i + 1} / ${totalChunks} 批資料...`);
 
-        // 【⭐️ 核心修正：改用 URLSearchParams 提交，與其他 API 請求保持一致 ⭐️】
-        const formData = new URLSearchParams();
-        // 注意：此處我們不使用 'payload' 作為鍵，因為後端是直接解析整個請求主體
-        // 而是將整個 chunkFormData 物件轉為字串，讓後端 doPost 能直接解析
-        // 為了與後端 doPost 的 `JSON.parse(e.postData.contents)` 兼容，我們仍需發送原始 JSON
-        // 但為了統一，我們將所有 POST 都改為 URLSearchParams
-        await fetch(`${API_BASE_URL}`, {
-          method: 'POST',
-          body: JSON.stringify(chunkFormData),
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 保持 text/plain 以便後端解析
-          mode: 'no-cors'
-        });
+        // 【⭐️ 核心修正：改用 iframe 提交模式 ⭐️】
+        // 注意：由於 iframe 提交本身是異步的，我們這裡不再需要 await
+        postToGas(chunkFormData);
       }
 
       // 【⭐️ 核心修改：樂觀更新與使用者提示 ⭐️】
-      // 1. 提示使用者後端已收到請求
-      alert('請求已成功送出！\n後端將在背景處理資料，約需 1-2 分鐘，請稍後刷新頁面查看結果。');
       logToPage('✅ 所有資料批次皆已提交！後端將在背景非同步處理。');
       submitBtn.disabled = false;
       submitBtn.textContent = '發佈';
