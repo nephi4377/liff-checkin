@@ -11,6 +11,17 @@
         #map { height: 400px; width: 100%; border-radius: 0.5rem; margin-top: 1rem; }
         .modal { display: none; }
         .modal.is-open { display: flex; align-items: center; justify-content: center; }
+        /* 【⭐️ 核心新增：優化日期/時間輸入框體驗 ⭐️】 */
+        /* 讓整個輸入框都能點擊以打開選擇器 */
+        input[type="date"], input[type="time"] {
+            cursor: pointer;
+        }
+        /* 【⭐️ 核心修正：移除會導致預設值看不見的樣式 ⭐️】 */
+        /* 移除 opacity: 0，讓 JavaScript 設定的預設值可以正常顯示 */
+        input[type="date"]::-webkit-datetime-edit,
+        input[type="time"]::-webkit-datetime-edit {
+            /* opacity: 0; */
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -66,6 +77,12 @@
           <div><label for="modal-employee-select">員工</label><select id="modal-employee-select" class="mt-1 block w-full rounded-md border-gray-300"></select></div>
           <div><label for="modal-date">日期</label><input type="date" id="modal-date" class="mt-1 block w-full rounded-md border-gray-300"></div>
           <div><label for="modal-time">時間 (HH:mm)</label><input type="time" id="modal-time" class="mt-1 block w-full rounded-md border-gray-300"></div>
+          <!-- 【⭐️ 核心新增：快速帶入時間按鈕 ⭐️】 -->
+          <div id="shift-time-buttons" class="flex items-center gap-2 mt-1">
+              <button id="btn-set-shift-start" class="text-xs bg-sky-100 text-sky-700 px-4 py-1 rounded-md hover:bg-sky-200">上班</button>
+              <button id="btn-set-shift-end" class="text-xs bg-amber-100 text-amber-700 px-4 py-1 rounded-md hover:bg-amber-200">下班</button>
+          </div>
+          <!-- 【新增結束】 -->
           <div><label for="modal-event-type">事件</label><select id="modal-event-type" class="mt-1 block w-full rounded-md border-gray-300"><option value="上班">上班</option><option value="下班">下班</option></select></div>
         </div>
         <div class="mt-6 flex justify-end space-x-2">
@@ -76,6 +93,9 @@
     </div>
 
 <script>
+    // 【⭐️ 核心新增：全域變數，用於儲存員工班表資料 ⭐️】
+    let employeeShiftData = {};
+
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
 
     function loadJsonp(url) {
@@ -148,19 +168,59 @@
             .then(employees => {
                 const select = document.getElementById('employee-select');
                 const modalSelect = document.getElementById('modal-employee-select');
+                
+                // 【⭐️ 核心修正：儲存員工班表資料，並綁定事件 ⭐️】
+                employeeShiftData = {}; // 清空舊資料
                 employees.forEach(emp => {
                     const option = `<option value="${emp.userId}">${emp.userName}</option>`;
                     select.innerHTML += option;
                     modalSelect.innerHTML += option;
+                    // 將班表時間存入全域變數，以 userId 為鍵
+                    employeeShiftData[emp.userId] = { shiftStart: emp.shiftStart, shiftEnd: emp.shiftEnd };
                 });
+                // 【⭐️ 核心修正：移除對不存在函式的呼叫，避免程式中斷 ⭐️】
+                // 此處的 handleModalEmployeeChange 已被移除，保留會導致錯誤。
             })
             .catch(error => console.error('[DEBUG] 載入員工列表失敗:', error));
 
+        // 【⭐️ 核心修正：將所有事件綁定移至此處，確保 DOM 已載入 ⭐️】
         document.getElementById('query-btn').onclick = fetchReportData;
-        document.getElementById('add-checkin-btn').onclick = () => document.getElementById('checkin-modal').classList.add('is-open');
+        document.getElementById('add-checkin-btn').onclick = () => {
+            document.getElementById('checkin-modal').classList.add('is-open');
+            // 【⭐️ 核心新增：打開視窗時，設定預設日期與時間 ⭐️】
+            const today = new Date();
+            document.getElementById('modal-date').value = today.toLocaleDateString('sv');
+            const currentHour = today.getHours().toString().padStart(2, '0');
+            document.getElementById('modal-time').value = `${currentHour}:00`;
+        };
         document.getElementById('modal-cancel-btn').onclick = () => document.getElementById('checkin-modal').classList.remove('is-open');
         document.getElementById('modal-submit-btn').onclick = handleManualCheckinSubmit;
+        document.getElementById('btn-set-shift-start').addEventListener('click', () => setShiftTime('start'));
+        document.getElementById('btn-set-shift-end').addEventListener('click', () => setShiftTime('end'));
+
+        // 【⭐️ 核心新增：為日期與時間輸入框加上手動觸發功能 ⭐️】
+        document.getElementById('modal-date').addEventListener('click', (e) => e.target.showPicker());
+        document.getElementById('modal-time').addEventListener('click', (e) => e.target.showPicker());
     });
+
+    // 【⭐️ 核心重構：簡化設定時間的函式 ⭐️】
+    function setShiftTime(type) {
+        const userId = document.getElementById('modal-employee-select').value;
+        const timeInput = document.getElementById('modal-time');
+        const eventTypeSelect = document.getElementById('modal-event-type');
+
+        // 如果有員工且有班表資料，就帶入時間；否則就清空時間。
+        const shiftData = employeeShiftData[userId];
+        if (!shiftData) { timeInput.value = ''; return; }
+
+        if (type === 'start') {
+            timeInput.value = employeeShiftData[userId].shiftStart || '';
+            eventTypeSelect.value = '上班';
+        } else {
+            timeInput.value = employeeShiftData[userId].shiftEnd || '';
+            eventTypeSelect.value = '下班';
+        }
+    }
 
     function handleManualCheckinSubmit() {
         const btn = document.getElementById('modal-submit-btn');
