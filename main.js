@@ -519,6 +519,12 @@ document.addEventListener('click', (e) => {
         case 'handlePublish':
             LogActions.handlePublish(logId);
             break;
+        // [核心修正] 新增刪除日誌的處理邏輯
+        case 'deleteLog':
+            if (confirm(`您確定要永久刪除這篇日誌嗎？\n(Log ID: ${logId})`)) {
+                LogActions.handleDeleteLog(logId);
+            }
+            break;
         case 'handleSaveSchedule':
             ScheduleActions.handleSaveSchedule();
             break;
@@ -596,99 +602,12 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /**
- * [新增] 監聽來自後端 iframe 的 postMessage 事件
- * 這是為了解決 no-cors 限制下，前端無法得知後端處理結果的問題。
- * 所有後端 API 的回饋都會透過此管道送達。
- */
-window.addEventListener('message', (event) => {
-  // 簡單的來源驗證，確保訊息來自我們的 Apps Script 後端
-  // [優化] 在收到任何後端訊息時，顯示一個除錯通知，方便確認通訊是否成功
-    // 【⭐️ 除錯新增：在 Console 中印出收到的完整事件物件 ⭐️】
-  // 這可以讓我們看到訊息的來源(origin)、資料(data)等所有細節。
-  console.log('📬 成功收到來自 iframe 的 postMessage 事件:', event);
-  
-  // 【⭐️ 除錯新增：單獨印出最重要的資料部分 ⭐️】
-  // event.data 就是您後端 result 物件的內容。
-  console.log('📦 後端回傳的資料 (event.data):', event.data);
-  showGlobalNotification(`📬 收到後端回覆: ${JSON.stringify(event.data)}`, 8000, 'info');
-  if (!event.origin.includes('google.com')) {
-    return;
-  }
-
-  const result = event.data;
-  // [核心修正] 增加更嚴格的檢查，並將除錯通知的呼叫移至此處
-  if (!result || typeof result !== 'object') { // 暫時放寬 action 檢查，以便觀察所有訊息
-    logToPage(`📬 收到一個無效的後端回覆: ${JSON.stringify(result)}`);
-    return;
-  }
-
-  logToPage(`📬 收到後端回覆: Action=${result.action}, Success=${result.success}`);
-
-  // 根據後端回傳的 action，執行對應的 UI 更新
-  switch (result.action) {
-    case 'submit_report_chunk':
-      if (result.success) {
-        // 這個 case 代表施工回報或主控台發文的「非同步請求」已成功提交到後端佇列。
-        // 前端的 UI (如清空輸入框、跳出提示) 已在發送 fetch 後立即執行 (樂觀更新)。
-        // 此處我們可以在 console 留下記錄，或顯示一個更細微的成功提示。
-        // 【⭐️ 核心修改：改用全域通知函式 ⭐️】
-        const notificationMessage = '✅ 已成功加入上傳佇列！資料更新約需 10 分鐘後完成。';
-        showGlobalNotification(notificationMessage, 600000, 'info'); // 顯示 600,000 毫秒 = 10 分鐘
-        logToPage('✅ 後端已確認收到非同步提交請求。');
-        
-        // 【⭐️ 核心修改：移除在此處建立卡片的邏輯 ⭐️】
-        // 卡片建立的動作已移至 handlers.js，在點擊發佈時立即執行。
-        // 此處只負責顯示後端已收到請求的通知。
-      } else {
-        // 如果後端在接收階段就發生錯誤
-        logToPage(`❌ 非同步提交失敗: ${result.message}`, 'error');
-        alert(`提交失敗：${result.message}`);
-      }
-      break;
-
-    case 'publish':
-      if (result.success && result.logId) {
-        // 當「發布」動作成功後，將對應的草稿卡片從畫面上移除
-        const card = document.getElementById('log-' + result.logId);
-        if (card) { card.style.transition = 'opacity .5s'; card.style.opacity = '0'; setTimeout(() => card.remove(), 500); }
-      }
-      break;
-    
-    // 【⭐️ 核心修改：用通知列取代 alert ⭐️】
-    case 'createFromTemplate':
-      if (result.success) {
-        // 當從範本建立排程成功後，顯示成功訊息，並在短暫延遲後重新載入頁面
-        showGlobalNotification(result.message || '範本已成功匯入！頁面即將重新載入...', 5000, 'success');
-        setTimeout(() => window.location.reload(), 2000); // 延遲 2 秒後重載
-      } else {
-        showGlobalNotification(`匯入範本失敗：${result.message || '未知錯誤'}`, 8000, 'error');
-      }
-      break;
-
-    case 'updateSchedule':
-      if (result.success) {
-        // 當排程儲存成功後，顯示一個簡短的成功提示
-        showGlobalNotification(result.message || '排程已成功儲存！', 5000, 'success');
-      } else {
-        showGlobalNotification(`排程儲存失敗：${result.message || '未知錯誤'}`, 8000, 'error');
-      }
-      break;
-    // [核心修正] 新增 default 區塊，處理未知的 action
-    default:
-      const errorMessage = `收到未知的後端動作: "${result.action}"`;
-      logToPage(`❌ ${errorMessage}`);
-      showGlobalNotification(errorMessage, 10000, 'error');
-      break;
-  }
-}, false);
-
-/**
  * [重構] 在主標題下方顯示一個全域的、暫時的通知橫幅。
  * @param {string} message - 要顯示的訊息文字。
  * @param {number} duration - 訊息顯示的持續時間（毫秒）。
  * @param {'info'|'success'|'error'} type - 訊息類型，決定橫幅顏色。
  */
-function showGlobalNotification(message, duration, type = 'info') {
+export function showGlobalNotification(message, duration, type = 'info') {
   
   const targetElement = document.getElementById('project-title');
   if (!targetElement) return;

@@ -10,8 +10,8 @@
 import { logToPage } from './utils.js';
 import { state } from './state.js';
 import { createOrUpdateTradeDatalist } from './ui.js';
-import { loadJsonp } from './api.js'; // [重構] 導入 loadJsonp
-import { postToGas } from './api.js'; // 【⭐️ 核心修正：引入新的提交函式 ⭐️】
+import * as api from './api.js'; // [統一] 引入完整的 api 模組
+import { showGlobalNotification } from './main.js'; // [統一] 引入全域通知函式
 
 /**
  * [重構] 渲染整個排程頁面 (取代 ui.js 中的 displaySchedule)
@@ -245,11 +245,6 @@ export function enableSaveButton() {
 
 /** 處理儲存排程 */
 export function handleSaveSchedule() {
-    // [核心修正] 恢復為原始、穩定的 fetch POST 請求模式
-    const btn = document.getElementById('save-schedule-btn');
-    btn.disabled = true;
-    btn.textContent = '儲存中...'; // [優化] 點擊後立即更新按鈕文字
-    logToPage('💾 變更已送出，背景儲存中...');
 
     const projectId = state.projectId; // [核心修正] 統一從全域 state 讀取 projectId
     const cards = Array.from(document.querySelectorAll('.task-card')); // [核心修正] 先取得所有卡片元素
@@ -321,13 +316,27 @@ export function handleSaveSchedule() {
     // [核心修正] 確保 payload 中包含正確的 projectId
     const payload = { action: 'updateSchedule', projectId: projectId, scheduleData: scheduleData };
 
-    // 【⭐️ 核心修正：改用 iframe 提交模式 ⭐️】
-    postToGas(payload);
+    // [升級] 使用 api.postAsyncTask 並處理回傳的 Promise
+    const btn = document.getElementById('save-schedule-btn');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '儲存中...';
+    }
+    logToPage('💾 正在儲存排程變更...');
 
-    // 由於提交是異步的，我們直接在這裡處理 UI
-    btn.textContent = '儲存排程變更';
-    btn.disabled = false;
-    btn.classList.add('hidden');
+    api.postAsyncTask(payload)
+        .then(finalJobState => {
+            if (finalJobState.result && finalJobState.result.success) {
+                showGlobalNotification(finalJobState.result.message || '排程已成功儲存！', 5000, 'success');
+                if (btn) btn.classList.add('hidden'); // 儲存成功後隱藏按鈕
+            } else {
+                showGlobalNotification(`儲存失敗：${finalJobState.result.message || '未知錯誤'}`, 8000, 'error');
+            }
+        })
+        .catch(error => showGlobalNotification(`請求失敗：${error.message}`, 8000, 'error'))
+        .finally(() => {
+            if (btn) { btn.disabled = false; btn.textContent = '儲存排程變更'; }
+        });
 }
 
 export function showStartDatePicker(templateType) {    
@@ -357,7 +366,18 @@ export function handleImportTemplate(templateType, startDate) {
     logToPage(`正在為專案匯入「${templateType}」範本，開工日設為 ${startDate}...`);
     const projectId = state.projectId; // [優化] 從全域 state 讀取 projectId
     const payload = { action: 'createFromTemplate', projectId, templateType, startDate };
+    
+    showGlobalNotification('正在從範本建立排程...', 5000, 'info');
 
-    // 【⭐️ 核心修正：改用 iframe 提交模式 ⭐️】
-    postToGas(payload);
+    // [升級] 使用 api.postAsyncTask 並處理回傳的 Promise
+    api.postAsyncTask(payload)
+        .then(finalJobState => {
+            if (finalJobState.result && finalJobState.result.success) {
+                showGlobalNotification('排程已成功建立！頁面即將刷新...', 5000, 'success');
+                setTimeout(() => window.location.reload(), 2000); // 成功後刷新頁面以顯示新排程
+            } else {
+                showGlobalNotification(`建立失敗：${finalJobState.result.message || '未知錯誤'}`, 8000, 'error');
+            }
+        })
+        .catch(error => showGlobalNotification(`請求失敗：${error.message}`, 8000, 'error'));
 }

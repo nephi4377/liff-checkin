@@ -26,53 +26,170 @@ export function loadJsonp(url) {
 }
 
 /**
- * [核心] 透過隱藏的 iframe 和 form 提交 POST 請求至 Google Apps Script。
- * 這是解決跨來源 no-cors 限制下，仍需接收後端 postMessage 回應的標準作法。
+ * [新增] 處理簡單的非同步任務 (無檔案上傳)
+ * @param {object} payload - 包含 action 和其他資料的物件
+ * @returns {Promise<object>} 當任務完成或失敗時，解析為最終的結果物件。
+ */
+export async function postAsyncTask(payload) {
+    // 1. 立即提交任務
+    const initialResult = await postToGas(payload);
+    if (!initialResult.success || !initialResult.jobId) {
+        throw new Error('無法建立後端任務。');
+    }
+    const { jobId } = initialResult;
+    console.log(`[API] 成功建立後端任務，Job ID: ${jobId}`);
+
+    // 2. 開始輪詢任務狀態
+    console.log(`[API] 開始輪詢 Job ID: ${jobId} 的最終結果...`);
+    const finalResult = await pollJobStatus(jobId);
+
+    // 3. 回傳最終結果
+    return finalResult;
+}
+
+/**
+ * [核心] 透過 fetch API 提交 POST 請求至 Google Apps Script。
+ * 此函式會將 payload 包裝在 FormData 中，以解決跨來源請求問題。
+ * 它會觸發後端的非同步任務佇列，並立即回傳一個包含 jobId 的 Promise。
  * @param {object} payload - 要傳送給後端的資料包，必須包含 action。
- * @returns {void} 此函式不直接回傳 Promise，後端結果由全域的 'message' 事件監聽器處理。
+ * @returns {Promise<object>} 一個解析為後端初步回應 (包含 jobId) 的 Promise。
  */
 export function postToGas(payload) {
-  // 移除任何前一次操作可能殘留的 iframe 和 form
-  const oldIframe = document.getElementById('gas-comm-iframe');
-  if (oldIframe) oldIframe.remove();
-  const oldForm = document.getElementById('gas-comm-form');
-  if (oldForm) oldForm.remove();
+    // 【⭐️ 核心新增：增加除錯日誌 ⭐️】
+    // 在每次發送請求時，於主控台印出 payload 內容，方便開發階段除錯。
+    console.log('[API Request] 準備發送至後端:', payload);
+    const formData = new FormData();
+    formData.append('payload', JSON.stringify(payload));
 
-  // 建立一個隱藏的 iframe 作為表單提交的目標
-  const iframe = document.createElement('iframe');
-  iframe.id = 'gas-comm-iframe';
-  iframe.name = 'gas-comm-iframe'; // form 的 target 需要這個 name
-  iframe.style.display = 'none';
-  // [核心修正 v2.0] 設定 iframe 的沙箱 (sandbox) 屬性。
-  // - "allow-scripts": 允許 iframe 執行腳本 (我們的 postMessage 腳本)。
-  // - "allow-forms": 允許 iframe 作為表單提交的目標。
-  // - [移除] "allow-popups": 嘗試移除此權限，看是否能解決 'dropping postMessage' 問題。
-  //   如果移除後 'wardeninit' 的 CORS 錯誤依然存在，則可能需要重新評估。
-  // [重要] 移除了 "allow-same-origin"，因為它與 "allow-scripts" 一起使用會導致沙箱逃逸，
-  // 從而被父視窗的安全策略攔截 postMessage。postMessage 機制本身不需要同源權限。
-  iframe.sandbox = 'allow-scripts allow-forms';
-  document.body.appendChild(iframe);
+    const promise = fetch(API_BASE_URL, {
+        method: 'POST',
+        body: formData
+    }).then(response => response.json());
+    // [核心修正] 補上 return 語句，確保 Promise 被正確回傳
+    return promise;
+}
 
-  // 建立一個表單
-  const form = document.createElement('form');
-  form.id = 'gas-comm-form';
-  form.target = iframe.name; // 指向我們建立的 iframe
-  form.method = 'POST';
-  form.action = API_BASE_URL; // 後端 Web App 的 URL
+/**
+ * [新增] 圖片壓縮輔助函式 (從 handlers.js 移入)
+ * @param {string} base64Str - 包含 data URI 前綴的 Base64 字串
+ * @param {number} quality - 壓縮品質 (0 到 1)
+ * @returns {Promise<string>} - 回傳壓縮後的 Base64 字串 (包含 data URI 前綴)
+ */
+function compressImage_(base64Str, quality = 0.8) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.src = base64Str;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX_WIDTH = 1920; // 設定最大寬度
+      
+      // 如果圖片寬度大於最大寬度，則進行縮放
+      if (img.width > MAX_WIDTH) {
+        const scaleRatio = MAX_WIDTH / img.width;
+        canvas.width = MAX_WIDTH;
+        canvas.height = img.height * scaleRatio;
+      } else {
+        canvas.width = img.width;
+        canvas.height = img.height;
+      }
 
-  // 建立一個隱藏的 input 欄位來存放我們的 payload
-  const input = document.createElement('input');
-  input.type = 'hidden';
-  input.name = 'payload'; // 後端會從 e.parameter.payload 接收
-  input.value = JSON.stringify(payload);
-  form.appendChild(input);
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      // 將 canvas 內容轉換為 JPEG 格式的 Base64
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = error => reject(error);
+  });
+}
 
-  document.body.appendChild(form);
-  // [核心修正] 恢復為直接提交表單的模式。
-  // 這是最直接且可靠的方式。當表單提交時，瀏覽器會自動處理目標 iframe 的載入流程，
-  // 將後端的回應內容載入到 iframe 中，從而觸發 postMessage 腳本。
-  // 這避免了手動管理 onload 事件可能引發的競爭條件問題。
-  form.submit();
+/**
+ * [新增] 處理需要大型資料上傳的非同步任務
+ * @param {object} metaPayload - 包含任務元資料的物件 (不含大型資料)
+ * @param {Array} largeDataArray - 包含大型資料的完整陣列 (例如，完整的照片陣列)
+ * @returns {Promise<object>} 當任務完成或失敗時，解析為最終的結果物件。
+ */
+export async function postAsyncTaskWithUpload(metaPayload, largeDataArray) {
+    // [V17.0 核心功能] 在上傳前，先對所有圖片進行壓縮
+    console.log(`[API] 準備壓縮 ${largeDataArray.length} 張圖片...`);
+    const compressedDataArray = await Promise.all(largeDataArray.map(base64 => compressImage_(base64)));
+    console.log(`[API] 圖片壓縮完成。`);
+
+    // [V3.0 職責轉移] 將分塊邏輯封裝在此函式內部
+    const SUBMIT_CHUNK_SIZE = 10; // 每批次上傳10張照片
+    const totalChunks = Math.ceil(compressedDataArray.length / SUBMIT_CHUNK_SIZE) || 1;
+
+    const dataChunks = [];
+    for (let i = 0; i < totalChunks; i++) {
+        const chunkStart = i * SUBMIT_CHUNK_SIZE;
+        const chunkEnd = chunkStart + SUBMIT_CHUNK_SIZE;
+        // [V3.0 統一結構] 將分塊後的資料包裝在一個通用的 `data` 屬性中
+        dataChunks.push({ data: compressedDataArray.slice(chunkStart, chunkEnd) });
+    }
+
+    // 1. 宣告任務，取得 jobId
+    const createJobPayload = {
+        action: 'createUploadJob',
+        originalAction: metaPayload.action,
+        meta: { ...metaPayload, totalChunks: totalChunks }
+    };
+    const initialResult = await postToGas(createJobPayload);
+    if (!initialResult.success || !initialResult.jobId) {
+        throw new Error(initialResult.message || '後端未能成功建立上傳任務。');
+    }
+    const { jobId } = initialResult;
+    console.log(`[API] 上傳任務已建立，Job ID: ${jobId}`);
+
+    // 2. 在背景逐一上傳資料塊
+    for (let i = 0; i < dataChunks.length; i++) {
+        const chunkPayload = {
+            action: 'uploadJobDataChunk',
+            jobId: jobId,
+            chunkIndex: i + 1,
+            totalChunks: dataChunks.length,
+            chunkData: dataChunks[i]
+        };
+        await postToGas(chunkPayload); // 發後不理，不關心單一 chunk 的回傳
+        console.log(`[API] 已上傳資料塊 ${i + 1}/${dataChunks.length}`);
+    }
+
+    // 3. 所有資料上傳完畢後，開始輪詢最終結果
+    return pollJobStatus(jobId);
+}
+
+/**
+ * [新增] 輪詢任務狀態
+ * @param {string} jobId - 要查詢的任務 ID
+ * @returns {Promise<object>} 當任務完成或失敗時，解析為最終的結果物件。
+ */
+function pollJobStatus(jobId) {
+    const MAX_ATTEMPTS = 30; // 最多輪詢 30 次 (約 60 秒)
+    const INTERVAL_MS = 2000; // 每 2 秒輪詢一次
+    let attempts = 0;
+
+    return new Promise((resolve, reject) => {
+        const intervalId = setInterval(async () => {
+            attempts++;
+            if (attempts > MAX_ATTEMPTS) {
+                clearInterval(intervalId);
+                reject(new Error('任務處理超時，請稍後刷新頁面查看結果。'));
+                return;
+            }
+
+            try {
+                const url = `${API_BASE_URL}?page=getJobStatus&jobId=${jobId}`;
+                const statusResult = await loadJsonp(url);
+
+                if (statusResult.status === 'completed' || statusResult.status === 'failed') {
+                    clearInterval(intervalId);
+                    console.log(`[API] 任務 ${jobId} 已完成，狀態: ${statusResult.status}`);
+                    resolve(statusResult);
+                }
+            } catch (error) {
+                clearInterval(intervalId);
+                reject(new Error(`輪詢任務狀態時發生網路錯誤: ${error.message}`));
+            }
+        }, INTERVAL_MS);
+    });
 }
 
 /**
@@ -82,14 +199,13 @@ export function postToGas(payload) {
  * @param {Array<Node>} originalButtons - 原始按鈕，用於取消時還原
  */
 export function saveText(logId, newText, originalButtons) {
-    // 【⭐️ 核心修正：改用 iframe 提交模式，與其他 POST 請求保持一致 ⭐️】
     const payload = {
         action: 'updateLogText',
         id: logId,
         content: newText
     };
-    // 此函式不直接回傳 Promise，後端結果由全域的 'message' 事件監聽器處理
-    postToGas(payload);
+    // 呼叫 postToGas 會觸發非同步任務，並回傳一個包含 jobId 的 Promise
+    return postToGas(payload);
 }
 
 /**
@@ -97,17 +213,17 @@ export function saveText(logId, newText, originalButtons) {
  * @param {string} logId - 日誌 ID
  * @param {string} keepCsv - 保留的照片連結
  * @param {Array<string>} uploads - 新上傳的 Base64 照片陣列
+ * @param {string} deleteCsv - 要刪除的照片連結
  */
-export function savePhotos(logId, keepCsv, uploads) {
-    // 【⭐️ 核心修正：改用 iframe 提交模式，與其他 POST 請求保持一致 ⭐️】
+export function savePhotos(logId, keepCsv, uploads, deleteCsv) {
     const payload = {
         action: 'updateLogPhotosWithUploads',
         logId: logId,
         existingLinksCsv: keepCsv,
-        newPhotosBase64Array: uploads
+        newPhotosBase64Array: uploads,
+        deleteLinksCsv: deleteCsv
     };
-    // 此函式不直接回傳 Promise，後端結果由全域的 'message' 事件監聽器處理
-    postToGas(payload);
+    return postToGas(payload);
 }
 
 /**
@@ -121,6 +237,18 @@ export function publishLog(logId) {
         newStatus: '已發布'
     };
 
-    // 【⭐️ 核心修正：改用 iframe 提交模式 ⭐️】
-    postToGas(payload);
+    return postToGas(payload);
+}
+
+/**
+ * [新增] 刪除日誌
+ * @param {string} logId - 日誌 ID
+ */
+export function deleteLog(logId) {
+    const payload = {
+        action: 'deleteLog',
+        id: logId
+    };
+    // 使用 POST 請求來執行刪除操作
+    return postToGas(payload);
 }

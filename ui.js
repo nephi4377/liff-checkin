@@ -201,6 +201,15 @@ export function _buildLogCard(log, isDraftMode) {
         buttonContainer.appendChild(btnPublish);
     }
 
+    // [核心修正] 新增刪除按鈕
+    const btnDelete = document.createElement('button');
+    btnDelete.className = 'delete-log-btn'; // 使用 class 以便設定樣式
+    btnDelete.innerHTML = '&#128465;'; // 垃圾桶圖示
+    btnDelete.title = '刪除此日誌';
+    btnDelete.dataset.action = 'deleteLog';
+    btnDelete.dataset.logId = log.LogID;
+    card.appendChild(btnDelete);
+
     return card;
 }
 

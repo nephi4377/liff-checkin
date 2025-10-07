@@ -10,7 +10,8 @@
 import { state } from './state.js';
 import { logToPage } from './utils.js';
 import { _buildLogCard } from './ui.js'; // 【⭐️ 核心修改：引入建立卡片的函式 ⭐️】
-import { postToGas } from './api.js'; // 【⭐️ 核心修正：引入新的提交函式 ⭐️】
+import { showGlobalNotification } from './main.js'; // 【⭐️ 核心修正：引入全域通知函式 ⭐️】
+import * as api from './api.js'; // [統一] 引入完整的 api 模組
 
 /**
  * [新增] 圖片壓縮輔助函式
@@ -54,12 +55,7 @@ export function handleCreateNewPost() {
 
   const content = textarea.value.trim();
   const photosBase64Array = photoPreviewContainer
-    // [優化] 讀取完整的照片資訊，而不只是 base64
-    ? Array.from(photoPreviewContainer.querySelectorAll('.photo-preview-item')).map(item => ({
-        name: item.dataset.name || `console-upload-${Date.now()}.jpg`,
-        type: item.dataset.type || 'image/jpeg',
-        base64: item.dataset.base64
-      }))
+    ? Array.from(photoPreviewContainer.querySelectorAll('.photo-preview-item')).map(item => item.dataset.base64)
     : [];
 
   if (!content && photosBase64Array.length === 0) {
@@ -76,22 +72,15 @@ export function handleCreateNewPost() {
   const projectId = state.projectId; // [優化] 從全域 state 讀取 projectId
   const title = titleSelect ? titleSelect.value : '';
 
-  // 【⭐️ 核心重構：採用與施工回報完全一致的非同步佇列模式 ⭐️】
-  const batchId = `${state.currentUserId || 'consoleUser'}-${Date.now()}`;
-  const SUBMIT_CHUNK_SIZE = 10;
-  // 如果沒有照片，至少也要提交一筆文字資料
-  const totalChunks = Math.ceil(photosBase64Array.length / SUBMIT_CHUNK_SIZE) || 1;
-
-  const baseFormData = {
-    action: 'submit_report_chunk', // 【⭐️ 核心修改 ⭐️】統一使用 action 作為路由鍵
-    batchId,
-    totalChunks,
+  // [升級] 準備元資料 (不含照片)，使用新的 createLog action
+  const metaPayload = {
+    action: 'createLog',
     userId: state.currentUserId || 'ConsoleUser',
     userName: state.currentUserName,
     projectId: projectId,
-    workType: title, // 將標題對應到施工項目
-    workDescription: content, // 將內容對應到施工說明
-    problemDescription: '', // 主控台沒有這個欄位，留空
+    projectName: state.projectName,
+    title: title,
+    content: content,
   };
 
   // 【⭐️ 核心修改：在送出請求的當下，立即建立並顯示「處理中」卡片 ⭐️】
@@ -105,7 +94,7 @@ export function handleCreateNewPost() {
     Content: content,
     UserName: state.currentUserName || '管理員',
     Timestamp: new Date().toISOString(),
-    PhotoLinks: ''
+    PhotoLinks: photosBase64Array.join(',') // 讓樂觀更新的卡片也能顯示預覽
   };
 
   // 呼叫 ui.js 的函式來建立卡片 DOM 元素
@@ -119,44 +108,31 @@ export function handleCreateNewPost() {
     logsContainer.insertBefore(newCard, postCreator.nextSibling);
   }
 
-  (async () => {
-    try {
-      logToPage('⏳ 開始處理發文請求...');
-      for (let i = 0; i < totalChunks; i++) {
-        const chunkStart = i * SUBMIT_CHUNK_SIZE;
-        const chunkEnd = chunkStart + SUBMIT_CHUNK_SIZE;
-        const photoChunk = photosBase64Array.slice(chunkStart, chunkEnd);
-
-        // 【⭐️ 核心修改：在上傳前壓縮圖片 ⭐️】
-        const compressedPhotos = await Promise.all(photoChunk.map(async (photoInfo) => {
-          logToPage(`  - 正在壓縮圖片 ${photoInfo.name}...`);
-          const compressedData = await compressImage_(photoInfo.base64);
-          return { name: photoInfo.name, type: 'image/jpeg', data: compressedData };
-        }));
-
-        const chunkFormData = { ...baseFormData, chunkIndex: i + 1, photos: compressedPhotos };
-        
-        logToPage(`正在提交第 ${i + 1} / ${totalChunks} 批資料...`);
-
-        // 【⭐️ 核心修正：改用 iframe 提交模式 ⭐️】
-        // 注意：由於 iframe 提交本身是異步的，我們這裡不再需要 await
-        postToGas(chunkFormData);
-      }
-
-      // 【⭐️ 核心修改：樂觀更新與使用者提示 ⭐️】
-      logToPage('✅ 所有資料批次皆已提交！後端將在背景非同步處理。');
-      submitBtn.disabled = false;
-      submitBtn.textContent = '發佈';
-      textarea.value = '';
-      if (photoPreviewContainer) photoPreviewContainer.innerHTML = '';
-      if (titleSelect) titleSelect.selectedIndex = 0;
-
-    } catch (error) {
-      // 如果在壓縮或 fetch 過程中出錯
-      alert(`提交失敗: ${error.message}`);
-      logToPage(`❌ 提交過程中發生錯誤: ${error.message}`);
-      submitBtn.disabled = false;
-      submitBtn.textContent = '發佈';
-    }
-  })();
+  // [升級] 呼叫新的 API 函式，並處理回傳的 Promise
+  api.postAsyncTaskWithUpload(metaPayload, photosBase64Array)
+    .then(finalJobState => {
+        if (finalJobState.result && finalJobState.result.success) {
+            showGlobalNotification(finalJobState.result.message || '日誌已成功建立！', 5000, 'success');
+            newCard.style.opacity = '1'; // 成功後，移除半透明效果
+            if (finalJobState.result.logId) {
+                newCard.id = `log-${finalJobState.result.logId}`; // 用後端回傳的真實 ID 替換臨時 ID
+            }
+        } else {
+            showGlobalNotification(`建立日誌失敗: ${finalJobState.result?.message || '未知錯誤'}`, 8000, 'error');
+            newCard.style.border = '2px solid red';
+            newCard.querySelector('h3').textContent += ' (發佈失敗)';
+        }
+    })
+    .catch(error => {
+        showGlobalNotification(`請求失敗: ${error.message}`, 8000, 'error');
+        newCard.style.border = '2px solid red';
+        newCard.querySelector('h3').textContent += ' (發佈失敗)';
+    });
+  
+  // 樂觀更新：立即清空輸入框
+  submitBtn.disabled = false;
+  submitBtn.textContent = '發佈';
+  textarea.value = '';
+  if (photoPreviewContainer) photoPreviewContainer.innerHTML = '';
+  if (titleSelect) titleSelect.selectedIndex = 0;
 }

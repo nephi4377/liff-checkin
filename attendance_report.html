@@ -76,7 +76,7 @@
     </div>
 
 <script>
-    const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
+    const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
 
     function loadJsonp(url) {
         return new Promise((resolve, reject) => {
@@ -108,11 +108,25 @@
     }
 
     function loadGoogleMapsAPI(apiKey) {
-        const script = document.createElement('script');
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker`;
-        script.async = true;
-        script.defer = true;
-        document.head.appendChild(script);
+        // [優化] 使用 Google 推薦的 Inline Bootstrap Loader 方式載入 API，避免效能警告
+        if (window.google && window.google.maps) {
+            return Promise.resolve(); // 如果已載入，直接返回
+        }
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            const url = new URL('https://maps.googleapis.com/maps/api/js');
+            url.searchParams.set('key', apiKey);
+            url.searchParams.set('libraries', 'marker');
+            url.searchParams.set('v', 'weekly');
+            // 設置一個全域回呼函式，API 載入完成後會呼叫它
+            window.gm_authFailure = () => reject(new Error("Google Maps API 金鑰驗證失敗。"));
+            url.searchParams.set('callback', 'Function.prototype'); // 使用技巧避免產生新的全域變數
+            script.src = url.toString();
+            script.async = true;
+            script.onload = resolve;
+            script.onerror = () => reject(new Error("無法載入 Google Maps API 腳本。"));
+            document.head.appendChild(script);
+        });
     }
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -123,11 +137,7 @@
 
         loadJsonp(`${API_BASE_URL}?page=attendance_api&action=get_config`)
             .then(config => {
-                if (config && config.googleMapsApiKey) {
-                    loadGoogleMapsAPI(config.googleMapsApiKey);
-                } else {
-                    throw new Error('後端未回傳 API Key。');
-                }
+                return loadGoogleMapsAPI(config.googleMapsApiKey);
             })
             .catch(error => {
                 console.error('[DEBUG] 無法載入 Google Maps API Key:', error);
@@ -196,7 +206,7 @@
                 renderSummary(data.summary);
                 renderReportTable(data.records, new Set(data.holidays || [])); 
                 if (typeof google !== 'undefined' && userId && data.records[userId] && data.records[userId].mapPoints.length > 0) {
-                    initMap(data.records[userId].mapPoints);
+                    initMap(data.records[userId].mapPoints).catch(console.error);
                 }
             })
             .catch(error => {
@@ -285,21 +295,28 @@
         };
     }
 
-    function initMap(points) {
+    async function initMap(points) {
         const mapContainer = document.getElementById('map-container');
         if (!points || !Array.isArray(points) || points.length === 0 || 
             typeof points[0] !== 'object' || points[0] === null || 
             typeof points[0].lat !== 'number' || typeof points[0].lng !== 'number') {
             console.error('[DEBUG] 收到的地圖座標資料無效或格式不符:', points);
             mapContainer.style.display = 'none';
-            return;
+            return; // 結束函式
         }
+
+        // [優化] 使用新的 API 載入方式，需要非同步引入函式庫
+        const { Map } = await google.maps.importLibrary("maps");
+        const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
+        const { InfoWindow } = await google.maps.importLibrary("maps");
+
         mapContainer.style.display = 'block';
-        const map = new google.maps.Map(document.getElementById("map"), {
+        const map = new Map(document.getElementById("map"), {
             zoom: 15,
             center: { lat: points[0].lat, lng: points[0].lng },
+            mapId: 'ATTENDANCE_MAP' // 為地圖指定一個 ID
         });
-        const infoWindow = new google.maps.InfoWindow();
+        const infoWindow = new InfoWindow();
         points.forEach(point => {
             const position = { lat: point.lat, lng: point.lng };
             const marker = new google.maps.Marker({ 
@@ -308,7 +325,7 @@
                 title: `${point.eventType} - ${point.time}`,
                 icon: getMarkerIcon(point.eventType, point.status) 
             });
-            marker.addListener('click', () => {
+            marker.addListener('click', ({ domEvent, latLng }) => {
                 const statusText = (point.status === '準點') ? '' : `<span class="font-bold" style="color: ${getMarkerIcon(point.eventType, point.status).fillColor};">(${point.status})</span>`;
                 const contentString = `
                     <div class="p-1" style="max-width: 250px;">
@@ -317,7 +334,7 @@
                         <div class="text-xs text-gray-800 mt-1">${point.address || '無地址資訊'}</div>
                     </div>`;
                 infoWindow.setContent(contentString);
-                infoWindow.open(map, marker);
+                infoWindow.open(marker.map, marker);
             });
         });
     }
