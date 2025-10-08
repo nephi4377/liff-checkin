@@ -26,25 +26,84 @@ export function loadJsonp(url) {
 }
 
 /**
- * [新增] 處理簡單的非同步任務 (無檔案上傳)
+ * [架構重構 v5.0] 統一的非同步任務處理器。
+ * 此函式會自動判斷 payload 中是否包含大型資料 (newPhotosBase64Array)，
+ * 並智慧地選擇簡單提交或分塊上傳流程。
  * @param {object} payload - 包含 action 和其他資料的物件
  * @returns {Promise<object>} 當任務完成或失敗時，解析為最終的結果物件。
  */
-export async function postAsyncTask(payload) {
-    // 1. 立即提交任務
-    const initialResult = await postToGas(payload);
-    if (!initialResult.success || !initialResult.jobId) {
-        throw new Error('無法建立後端任務。');
-    }
-    const { jobId } = initialResult;
+export async function postTask(payload) {
+    // 檢查 payload 中是否包含需要上傳的檔案陣列
+    const uploadData = payload.newPhotosBase64Array;
+    const hasUpload = Array.isArray(uploadData) && uploadData.length > 0;
+
+    // 步驟 1：初始化任務，並取得 Job ID
+    const jobId = await _initiateTask(payload, hasUpload);
     console.log(`[API] 成功建立後端任務，Job ID: ${jobId}`);
 
-    // 2. 開始輪詢任務狀態
-    console.log(`[API] 開始輪詢 Job ID: ${jobId} 的最終結果...`);
-    const finalResult = await pollJobStatus(jobId);
+    // 步驟 2：如果有檔案，則執行分塊上傳
+    if (hasUpload) {
+        await _uploadChunks(jobId, uploadData);
+    }
 
-    // 3. 回傳最終結果
-    return finalResult;
+    // 步驟 3：統一輪詢任務的最終結果
+    console.log(`[API] 開始輪詢 Job ID: ${jobId} 的最終結果...`);
+    return await pollJobStatus(jobId);
+}
+
+/**
+ * [內部函式] 步驟 1：向後端初始化一個任務，並回傳 jobId。
+ * @param {object} payload - 完整的請求 payload。
+ * @param {boolean} hasUpload - 是否為上傳任務。
+ * @returns {Promise<string>} - 回傳從後端取得的 jobId。
+ */
+async function _initiateTask(payload, hasUpload) {
+    let initialPayload;
+
+    if (hasUpload) {
+        // [架構重構 v8.0] 徹底封裝複雜性。
+        // _initiateTask 的職責就是根據原始 payload，產生一個正確的「任務宣告」封包。
+        const metaPayload = { ...payload };
+        delete metaPayload.newPhotosBase64Array;
+
+        // 建立一個扁平化的「宣告任務」封包
+        initialPayload = {
+            ...metaPayload, // 將所有元資料（如 projectId, content）展開到第一層
+            action: 'createUploadJob', // 程序性指令：告訴後端「這是一個上傳任務的宣告」
+            originalAction: payload.action, // 業務邏輯指令：告訴後端，上傳完畢後，真正要執行的指令是什麼
+            totalChunks: Math.ceil((payload.newPhotosBase64Array.length || 1) / 10) || 1
+        };
+    } else {
+        // 對於簡單任務，直接使用原始 payload
+        initialPayload = payload;
+    }
+
+    const initialResult = await postToGas(initialPayload);
+    if (!initialResult.success || !initialResult.jobId) {
+        throw new Error(initialResult.message || '後端未能成功建立任務。');
+    }
+    return initialResult.jobId;
+}
+
+/**
+ * [內部函式] 步驟 2：處理檔案的壓縮與分塊上傳。
+ * @param {string} jobId - 任務 ID。
+ * @param {Array<string>} largeDataArray - 包含 Base64 圖片的陣列。
+ */
+async function _uploadChunks(jobId, largeDataArray) {
+    const compressedDataArray = await Promise.all(largeDataArray.map(base64 => compressImage_(base64)));
+    const SUBMIT_CHUNK_SIZE = 10;
+    const totalChunks = Math.ceil(compressedDataArray.length / SUBMIT_CHUNK_SIZE) || 1;
+
+    for (let i = 0; i < totalChunks; i++) {
+        const chunkStart = i * SUBMIT_CHUNK_SIZE;
+        const chunkEnd = chunkStart + SUBMIT_CHUNK_SIZE;
+        const chunkData = { data: compressedDataArray.slice(chunkStart, chunkEnd) };
+        
+        const chunkPayload = { action: 'uploadJobDataChunk', jobId, chunkIndex: i + 1, totalChunks, chunkData };
+        await postToGas(chunkPayload); // 發後不理，不關心單一 chunk 的回傳
+        console.log(`[API] 已上傳資料塊 ${i + 1}/${totalChunks} 至 Job ID: ${jobId}`);
+    }
 }
 
 /**
@@ -103,152 +162,45 @@ function compressImage_(base64Str, quality = 0.8) {
 }
 
 /**
- * [新增] 處理需要大型資料上傳的非同步任務
- * @param {object} metaPayload - 包含任務元資料的物件 (不含大型資料)
- * @param {Array} largeDataArray - 包含大型資料的完整陣列 (例如，完整的照片陣列)
- * @returns {Promise<object>} 當任務完成或失敗時，解析為最終的結果物件。
- */
-export async function postAsyncTaskWithUpload(metaPayload, largeDataArray) {
-    // [V17.0 核心功能] 在上傳前，先對所有圖片進行壓縮
-    console.log(`[API] 準備壓縮 ${largeDataArray.length} 張圖片...`);
-    const compressedDataArray = await Promise.all(largeDataArray.map(base64 => compressImage_(base64)));
-    console.log(`[API] 圖片壓縮完成。`);
-
-    // [V3.0 職責轉移] 將分塊邏輯封裝在此函式內部
-    const SUBMIT_CHUNK_SIZE = 10; // 每批次上傳10張照片
-    const totalChunks = Math.ceil(compressedDataArray.length / SUBMIT_CHUNK_SIZE) || 1;
-
-    const dataChunks = [];
-    for (let i = 0; i < totalChunks; i++) {
-        const chunkStart = i * SUBMIT_CHUNK_SIZE;
-        const chunkEnd = chunkStart + SUBMIT_CHUNK_SIZE;
-        // [V3.0 統一結構] 將分塊後的資料包裝在一個通用的 `data` 屬性中
-        dataChunks.push({ data: compressedDataArray.slice(chunkStart, chunkEnd) });
-    }
-
-    // 1. 宣告任務，取得 jobId
-    const createJobPayload = {
-        action: 'createUploadJob',
-        originalAction: metaPayload.action,
-        meta: { ...metaPayload, totalChunks: totalChunks }
-    };
-    const initialResult = await postToGas(createJobPayload);
-    if (!initialResult.success || !initialResult.jobId) {
-        throw new Error(initialResult.message || '後端未能成功建立上傳任務。');
-    }
-    const { jobId } = initialResult;
-    console.log(`[API] 上傳任務已建立，Job ID: ${jobId}`);
-
-    // 2. 在背景逐一上傳資料塊
-    for (let i = 0; i < dataChunks.length; i++) {
-        const chunkPayload = {
-            action: 'uploadJobDataChunk',
-            jobId: jobId,
-            chunkIndex: i + 1,
-            totalChunks: dataChunks.length,
-            chunkData: dataChunks[i]
-        };
-        await postToGas(chunkPayload); // 發後不理，不關心單一 chunk 的回傳
-        console.log(`[API] 已上傳資料塊 ${i + 1}/${dataChunks.length}`);
-    }
-
-    // 3. 所有資料上傳完畢後，開始輪詢最終結果
-    return pollJobStatus(jobId);
-}
-
-/**
  * [新增] 輪詢任務狀態
  * @param {string} jobId - 要查詢的任務 ID
  * @returns {Promise<object>} 當任務完成或失敗時，解析為最終的結果物件。
  */
 function pollJobStatus(jobId) {
-    const MAX_ATTEMPTS = 30; // 最多輪詢 30 次 (約 60 秒)
-    const INTERVAL_MS = 2000; // 每 2 秒輪詢一次
-    let attempts = 0;
+    // [架構重構 v6.0] 重構為基於 setTimeout 的遞迴模式，以增強網路容錯能力。
+    const POLLING_INTERVAL_MS = 2000; // 每 2 秒輪詢一次
+    const TOTAL_TIMEOUT_MS = 60000; // 總超時時間 60 秒
 
     return new Promise((resolve, reject) => {
-        const intervalId = setInterval(async () => {
-            attempts++;
-            if (attempts > MAX_ATTEMPTS) {
-                clearInterval(intervalId);
-                reject(new Error('任務處理超時，請稍後刷新頁面查看結果。'));
-                return;
+        const startTime = Date.now();
+
+        const poll = async () => {
+            // 檢查是否已超過總超時時間
+            if (Date.now() - startTime > TOTAL_TIMEOUT_MS) {
+                reject(new Error(`任務處理超時 (${TOTAL_TIMEOUT_MS / 1000}秒)，請稍後刷新頁面查看結果。`));
+                return; // 終止輪詢
             }
 
             try {
                 const url = `${API_BASE_URL}?page=getJobStatus&jobId=${jobId}`;
                 const statusResult = await loadJsonp(url);
 
+                // 檢查後端回傳的任務狀態
                 if (statusResult.status === 'completed' || statusResult.status === 'failed') {
-                    clearInterval(intervalId);
                     console.log(`[API] 任務 ${jobId} 已完成，狀態: ${statusResult.status}`);
-                    resolve(statusResult);
+                    resolve(statusResult); // 成功取得最終結果，結束輪詢
+                } else {
+                    // 任務仍在處理中，安排下一次輪詢
+                    setTimeout(poll, POLLING_INTERVAL_MS);
                 }
             } catch (error) {
-                clearInterval(intervalId);
-                reject(new Error(`輪詢任務狀態時發生網路錯誤: ${error.message}`));
+                // 捕獲單次的網路錯誤 (例如 loadJsonp 超時或失敗)
+                console.warn(`[API] 輪詢 Job ID ${jobId} 時發生網路錯誤: ${error.message}。將在 ${POLLING_INTERVAL_MS}ms 後重試...`);
+                // 不立即 reject，而是安排下一次輪詢，給予網路恢復的機會
+                setTimeout(poll, POLLING_INTERVAL_MS);
             }
-        }, INTERVAL_MS);
+        };
+
+        poll(); // 立即開始第一次輪詢
     });
-}
-
-/**
- * 儲存文字變更
- * @param {string} logId - 日誌 ID
- * @param {string} newText - 新的文字內容
- * @param {Array<Node>} originalButtons - 原始按鈕，用於取消時還原
- */
-export function saveText(logId, newText, originalButtons) {
-    const payload = {
-        action: 'updateLogText',
-        id: logId,
-        content: newText
-    };
-    // 呼叫 postToGas 會觸發非同步任務，並回傳一個包含 jobId 的 Promise
-    return postToGas(payload);
-}
-
-/**
- * 儲存照片變更
- * @param {string} logId - 日誌 ID
- * @param {string} keepCsv - 保留的照片連結
- * @param {Array<string>} uploads - 新上傳的 Base64 照片陣列
- * @param {string} deleteCsv - 要刪除的照片連結
- */
-export function savePhotos(logId, keepCsv, uploads, deleteCsv) {
-    const payload = {
-        action: 'updateLogPhotosWithUploads',
-        logId: logId,
-        existingLinksCsv: keepCsv,
-        newPhotosBase64Array: uploads,
-        deleteLinksCsv: deleteCsv
-    };
-    return postToGas(payload);
-}
-
-/**
- * 發布日誌
- * @param {string} logId - 日誌 ID
- */
-export function publishLog(logId) {
-    const payload = {
-        action: 'publish',
-        logId: logId,
-        newStatus: '已發布'
-    };
-
-    return postToGas(payload);
-}
-
-/**
- * [新增] 刪除日誌
- * @param {string} logId - 日誌 ID
- */
-export function deleteLog(logId) {
-    const payload = {
-        action: 'deleteLog',
-        id: logId
-    };
-    // 使用 POST 請求來執行刪除操作
-    return postToGas(payload);
 }

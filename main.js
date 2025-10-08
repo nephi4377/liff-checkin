@@ -485,10 +485,7 @@ window.addEventListener('load', () => {
   // [重構] 呼叫函式來初始化日誌動作模組
   LogActions.initializeLogActions();
 
-  // 2. 呼叫主應用程式初始化函式
-  initializeApp();
 });
-
 
 /**
  * [新增] 統一的事件代理監聽器
@@ -525,6 +522,16 @@ document.addEventListener('click', (e) => {
                 LogActions.handleDeleteLog(logId);
             }
             break;
+        // 【⭐️ 核心新增：處理照片管理視窗的按鈕事件 ⭐️】
+        case 'triggerPhotoUpload':
+            LogActions.triggerPhotoUpload();
+            break;
+        case 'savePhotos':
+            LogActions.handleSavePhotos();
+            break;
+        case 'closePhotoModal':
+            LogActions.closePhotoModal();
+            break;
         case 'handleSaveSchedule':
             ScheduleActions.handleSaveSchedule();
             break;
@@ -549,6 +556,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const logsContainer = document.getElementById('logs-container');
   const wallContainer = document.getElementById('wall-container'); // [新增] 取得專案牆容器
   const mainContent = document.getElementById('main-content');
+
+  // 【⭐️ 核心修正：將應用程式初始化移回此處，確保在 DOM 載入後立即執行 ⭐️】
+  initializeApp();
 
   // 漢堡選單開關
   if (mobileNavToggle && leftSidebar) {

@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <title>專案管理主控台</title>
   <link rel="stylesheet" href="style.css">
+  <!-- 【⭐️ 核心修正：解決 favicon.ico 404 錯誤 ⭐️】 -->
+  <link rel="icon" href="data:,">
   <!-- [新增] 引入 flatpickr 日期選擇器樣式 -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <!-- [必要] 引入 LINE LIFF SDK，這是 LIFF 應用的基礎 -->
@@ -13,7 +15,7 @@
     // 部分設定保留在 HTML 中，方便不重新部署時修改
     // [架構修正] 將 API_BASE_URL 移至此處，使其成為全域變數，解決模組循環依賴問題
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec'; // 請勿修改此處
-    const FRONTEND_VERSION = 'v25.10.07.1336'; // 此處將由 upload.bat 自動更新
+    const FRONTEND_VERSION = 'v25.10.08.1432'; // 此處將由 upload.bat 自動更新
   </script>
 </head>
 <body>
@@ -73,10 +75,10 @@
         <!-- [優化] 將按鈕群組放在 footer 中 -->
         <footer class="text-right space-x-2 mt-4">
           <input type="file" id="photo-file-input" multiple accept="image/*" style="display:none;">
-          <button id="add-photos-button" type="button" class="btn" style="background-color: #16a34a;">新增照片</button>
-          <button id="modal-cancel-btn" type="button" class="btn" style="background-color: #6b7280;">取消</button>
-          <!-- [修正] 統一按鈕樣式，增加 btn 與 btn-primary class -->
-          <button id="save-photos-button" type="button" class="btn btn-primary">儲存變更</button>
+          <!-- 【⭐️ 核心修正：移除行內樣式，改用 CSS class 統一管理顏色 ⭐️】 -->
+          <button id="add-photos-button" type="button" class="btn btn-green" data-action="triggerPhotoUpload">新增照片</button>
+          <button id="modal-cancel-btn" type="button" class="btn btn-secondary" data-action="closePhotoModal">取消</button>
+          <button id="save-photos-button" type="button" class="btn btn-primary" data-action="savePhotos">儲存變更</button>
         </footer>
       </form>
     </div>
@@ -96,15 +98,4 @@
   <script type="module" src="main.js"></script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
 

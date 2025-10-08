@@ -136,12 +136,13 @@ function buildPhotoGrid(htmlLinksCsv) {
 
     links.forEach(link => {
         const u = (link || '').trim(); if (!u) return;
+        // 【⭐️ 核心修正：修正樂觀更新的縮圖顯示邏輯 ⭐️】
+        // 1. 優先判斷是否為 Base64 字串，如果是，則直接渲染。
         if (u.startsWith('data:image/')) {
             container.appendChild(renderDirectImg(u));
-        } else if (u.charAt(0) === '/') {
-            const ph = document.createElement('div'); ph.className = 'photo-placeholder'; ph.textContent = 'Dropbox 內部路徑（僅佔位）'; container.appendChild(ph);
         } else {
             const id = driveFileId(u);
+            // 2. 如果不是 Base64，再判斷是 Google Drive 連結還是一般圖片連結。
             if (id) container.appendChild(renderSmartImg(id));
             else container.appendChild(renderDirectImg(u));
         }
@@ -184,9 +185,13 @@ export function _buildLogCard(log, isDraftMode) {
     card.appendChild(photoContainer);
     card.appendChild(buttonContainer);
 
-    if (log.PhotoLinks) { photoContainer.appendChild(buildPhotoGrid(log.PhotoLinks)); }
+    if (log.PhotoLinks) {
+        photoContainer.appendChild(buildPhotoGrid(log.PhotoLinks));
+    }
 
-    const btnManagePhotos = document.createElement('button'); btnManagePhotos.textContent = '管理相片'; btnManagePhotos.style.background = '#f59e0b';
+    // 【⭐️ 核心修正：移除行內樣式，改用 CSS class 統一管理顏色 ⭐️】
+    const btnManagePhotos = document.createElement('button'); btnManagePhotos.textContent = '管理相片';
+    btnManagePhotos.className = 'btn btn-green'; // 1. 移除 style.background, 2. 套用 .btn-green class
     btnManagePhotos.dataset.action = 'openPhotoModal'; btnManagePhotos.dataset.logId = log.LogID; btnManagePhotos.dataset.photoLinks = log.PhotoLinks; buttonContainer.appendChild(btnManagePhotos);
 
     const btnEditText = document.createElement('button'); btnEditText.textContent = '編輯文字';
@@ -201,14 +206,16 @@ export function _buildLogCard(log, isDraftMode) {
         buttonContainer.appendChild(btnPublish);
     }
 
-    // [核心修正] 新增刪除按鈕
+    // 【⭐️ 核心修正：將刪除按鈕移入按鈕群組，並套用正確樣式 ⭐️】
     const btnDelete = document.createElement('button');
-    btnDelete.className = 'delete-log-btn'; // 使用 class 以便設定樣式
-    btnDelete.innerHTML = '&#128465;'; // 垃圾桶圖示
+    // 1. 套用 .btn 和 .btn-danger class，使其與其他按鈕大小一致並顯示為紅色系。
+    btnDelete.className = 'btn btn-danger';
+    btnDelete.textContent = '刪除';
     btnDelete.title = '刪除此日誌';
     btnDelete.dataset.action = 'deleteLog';
     btnDelete.dataset.logId = log.LogID;
-    card.appendChild(btnDelete);
+    // 2. 將刪除按鈕也加入到 buttonContainer 中，確保與其他按鈕在同一行。
+    buttonContainer.appendChild(btnDelete);
 
     return card;
 }
@@ -226,7 +233,7 @@ export function renderPostCreator() {
       <textarea id="post-creator-textarea" class="form-textarea" placeholder="今天有什麼新進度嗎？"></textarea>
       <!-- [核心新增] 新增標題下拉選單 -->
       <div class="mt-1">
-        <label for="post-title-select" class="form-label">標題 (可選)</label>
+        <label for="post-title-select" class="form-label">日誌標題 (可選)</label>
         <select id="post-title-select" class="form-select"></select>
       </div>
       <!-- [核心修正] 新增照片預覽容器和隱藏的檔案輸入框 -->

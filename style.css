@@ -5,7 +5,12 @@
 */
 :root {
   --bg:#e5e7eb; --fg:#111827; --muted:#4b5563; --muted-2:#9ca3af; --card:#ffffff;
-  --primary:#3b82f6; --green:#16a34a; --red:#dc2626; --yellow:#f59e0b;
+  /* 【⭐️ 核心修正：更換為低飽和度的莫蘭迪色系 ⭐️】 */
+  --primary: #8fa8b7; /* 莫蘭迪藍 (主色) */
+  --primary-hover: #7c95a5; /* 懸停顏色 */
+  --red: #d3a398; /* 莫蘭迪紅 (用於刪除/危險操作) */
+  --red-hover: #c08e85; /* 懸停顏色 */
+  --green:#879f86; --green-hover:#738a72; --yellow:#f59e0b; --secondary: #a1a1aa; --secondary-hover: #71717a;
   --shadow:0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
   --radius:.5rem;
 }
@@ -43,6 +48,12 @@ hr { border: 0; border-top: 1px solid #e5e7eb; margin: 1rem 0; }
   align-items: baseline;
   gap: 0.75rem;
 }
+/* 【⭐️ 核心新增：日誌卡片底部按鈕佈局 ⭐️】 */
+.log-card-footer {
+  display: flex;
+  justify-content: flex-end; /* 靠右對齊 */
+  gap: 0.5rem; /* 按鈕間距 */
+}
 .log-card-header .muted { color: var(--muted); }
 .photo-thumb{width:100%;aspect-ratio:4/3;object-fit:cover;background:#e5e7eb;border-radius:.5rem;display:block;cursor:zoom-in}
 .photo-placeholder{width:100%;aspect-ratio:4/3;border-radius:.5rem;background:#f3f4f6;display:flex;align-items:center;justify-content:center;color:var(--muted-2);font-size:.9rem;text-align:center;padding:0 .5rem}
@@ -50,14 +61,31 @@ hr { border: 0; border-top: 1px solid #e5e7eb; margin: 1rem 0; }
 /* [重構] 通用按鈕樣式 */
 .btn { border:0; padding:.5rem 1rem; border-radius:.375rem; cursor:pointer; font-weight:600; transition:opacity .2s; }
 .btn:hover { opacity:.85; }
+.btn:active { transform: translateY(1px); } /* 增加點擊回饋 */
 .btn[disabled] { opacity:.6; cursor:not-allowed; }
 .btn-primary { background:var(--primary); color:#fff; }
+.btn-primary:hover { background: var(--primary-hover); opacity: 1; }
 .btn-danger { background:var(--red); color:#fff; }
+.btn-danger:hover { background: var(--red-hover); opacity: 1; }
+/* 【⭐️ 核心新增：為新增與次要按鈕定義新的 class ⭐️】 */
+.btn-green { background: var(--green); color: #fff; }
+.btn-green:hover { background: var(--green-hover); opacity: 1; }
+.btn-secondary { background: var(--secondary); color: #fff; }
+.btn-secondary:hover { background: var(--secondary-hover); opacity: 1; }
 
+/* 【⭐️ 核心修正 1/2：覆蓋舊的按鈕樣式，確保新顏色生效 ⭐️】 */
 button{background:var(--primary);color:#fff;border:0;padding:.5rem .75rem;border-radius:.375rem;cursor:pointer;font-weight:600;transition:opacity .2s}
-button:hover{opacity:.85}
+button:hover{background: var(--primary-hover); opacity: 1; transform: translateY(-1px);}
 button[disabled]{opacity:.6;cursor:not-allowed}
-.button-group{display:flex;gap:.5rem;justify-content:flex-end;flex-wrap:wrap}
+
+/* 【⭐️ 核心修正：移除 float 佈局，回歸單純的 Flexbox ⭐️】 */
+.button-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end; /* 讓所有按鈕靠右對齊 */
+  margin-top: 1rem;
+}
 
 /* [新增] 無障礙輔助：隱藏元素但保留給螢幕報讀軟體 */
 .sr-only {

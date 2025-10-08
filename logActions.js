@@ -42,31 +42,47 @@ function handleCancelEdit(logId, originalButtons) {
 
 /** 儲存文字變更 */
 function handleSaveText(logId, originalButtons) {
-    const contentDiv = document.getElementById('content-' + logId);
+    const contentDiv = document.getElementById(`content-${logId}`);
+    if (!contentDiv) return;
+
     const newText = contentDiv.innerText.trim();
-    const btnBox = contentDiv.closest('.card').querySelector('.button-group');
-    const firstBtn = btnBox.querySelector('button');
-    if (firstBtn) { firstBtn.textContent = '儲存中...'; firstBtn.disabled = true; }
-    
-    // [V2.1 升級] 改為呼叫 postAsyncTask，確保能取得最終結果並顯示通知
-    api.postAsyncTask({ action: 'updateLogText', id: logId, content: newText })
+    const btnBox = contentDiv.closest('.card')?.querySelector('.button-group');
+
+    // 【⭐️ 核心修正 1/3：執行樂觀更新，立即還原 UI ⭐️】
+    // 1. 立即將新內容更新到畫面上
+    contentDiv.innerText = newText;
+    // 2. 立刻將 UI 切換回正常瀏覽模式
+    contentDiv.contentEditable = false;
+    contentDiv.style.cssText = 'white-space: pre-wrap; margin-top: 0.75rem;';
+    if (btnBox) {
+        btnBox.innerHTML = '';
+        originalButtons.forEach(b => btnBox.appendChild(b));
+    }
+
+    // 【⭐️ 核心修正 2/3：立即更新本地快取 ⭐️】
+    const CACHE_KEY = `project_data_${state.projectId}_${state.currentUserId}`;
+    const cachedItem = localStorage.getItem(CACHE_KEY);
+    if (cachedItem) {
+        const cacheData = JSON.parse(cachedItem);
+        const logToUpdate = cacheData.data.dailyLogs.find(log => log.LogID === logId);
+        if (logToUpdate) {
+            logToUpdate.Content = newText;
+            localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+            logToPage(`[Cache] 已樂觀更新日誌 ${logId} 的文字內容。`);
+        }
+    }
+
+    // 【⭐️ 核心修正 3/3：在背景執行後端同步 ⭐️】
+    // [架構重構 v5.0] 統一呼叫 postTask
+    api.postTask({ action: 'updateLogText', id: logId, content: newText })
         .then(finalJobState => {
             if (finalJobState.result && finalJobState.result.success) {
                 showGlobalNotification(finalJobState.result.message || '文字已成功更新！', 5000, 'success');
             } else {
                 showGlobalNotification(`文字更新失敗: ${finalJobState.result?.message || '未知錯誤'}`, 8000, 'error');
-                // 失敗時還原內容
-                contentDiv.innerText = contentDiv.dataset.originalContent;
             }
         })
-        .catch(error => showGlobalNotification(`請求失敗: ${error.message}`, 8000, 'error'))
-        .finally(() => {
-            // 無論成功或失敗，都還原 UI
-            contentDiv.contentEditable = false;
-            contentDiv.style.cssText = 'white-space: pre-wrap; margin-top: 0.75rem;';
-            btnBox.innerHTML = '';
-            originalButtons.forEach(b => btnBox.appendChild(b));
-        });
+        .catch(error => showGlobalNotification(`請求失敗: ${error.message}`, 8000, 'error'));
 }
 
 /** 開啟照片管理視窗 */
@@ -92,13 +108,13 @@ export function openPhotoModal(logId, photoLinksCsv) {
 }
 
 /** 關閉照片管理視窗 */
-function closePhotoModal() {
+export function closePhotoModal() {
     document.getElementById('photo-modal').style.display = 'none';
     state.currentEditingLogId = null;
 }
 
 /** 處理儲存照片 */
-function handleSavePhotos() {
+export function handleSavePhotos() {
     const btn = document.getElementById('save-photos-button');
     btn.disabled = true;
     btn.textContent = '儲存中...';
@@ -107,35 +123,47 @@ function handleSavePhotos() {
     const keepLinks = Array.from(grid.querySelectorAll('.modal-photo-item:not(.deleted)'))
         .map(item => item.dataset.link);
 
-    // [V2.1 升級] 改為呼叫 postAsyncTask，確保能取得最終結果並顯示通知
-    // 注意：此處的 newPhotosBase64Array 和 deleteLinksCsv 暫時為空，因為 UI 尚未實作
+    // 【⭐️ 核心修正：收集新上傳的 Base64 照片資料 ⭐️】
+    const newUploads = Array.from(grid.querySelectorAll('.modal-photo-item.new-upload:not(.deleted)'))
+        .map(item => item.dataset.base64);
+
+    // 【⭐️ 核心修正 1/3：執行樂觀更新，立即更新 UI 並關閉視窗 ⭐️】
+    // 1. 組合出樂觀更新後，卡片上應該顯示的所有圖片連結 (舊的 + 新的 Base64 預覽)
+    const optimisticLinks = [...keepLinks, ...newUploads];
+
+    // 2. 立即重新渲染卡片上的照片牆
+    const cardPhotoContainer = document.querySelector(`#log-${state.currentEditingLogId} .photo-grid`);
+    if (cardPhotoContainer) {
+        // 使用 buildPhotoGrid 函式產生新的照片牆內容，並替換掉舊的
+        const newPhotoGrid = buildPhotoGrid(optimisticLinks.join(','));
+        cardPhotoContainer.innerHTML = newPhotoGrid.innerHTML;
+        // 觸發懶加載，確保新加入的圖片能被看見
+        if (window.lazyLoadImages) window.lazyLoadImages();
+    }
+
+    // 3. 立即關閉彈出視窗，讓使用者可以繼續操作
+    closePhotoModal();
+
+    // 【⭐️ 核心修正 2/3：準備 payload 並在背景執行後端同步 ⭐️】
     const payload = {
         action: 'updateLogPhotosWithUploads',
         logId: state.currentEditingLogId,
         existingLinksCsv: keepLinks.join(','),
-        newPhotosBase64Array: [],
+        newPhotosBase64Array: newUploads,
         deleteLinksCsv: ''
     };
 
-    api.postAsyncTask(payload)
+    // [架構重構 v5.0] 統一呼叫 postTask，它會自動處理 newPhotosBase64Array 的上傳
+    api.postTask(payload)
         .then(finalJobState => {
             if (finalJobState.result && finalJobState.result.success) {
                 showGlobalNotification(finalJobState.result.message || '照片已成功更新！', 5000, 'success');
-                // 成功後，更新卡片上的照片牆
-                const cardPhotoContainer = document.querySelector(`#log-${state.currentEditingLogId} .photo-grid`);
-                if (cardPhotoContainer) {
-                    cardPhotoContainer.innerHTML = buildPhotoGrid(finalJobState.result.finalLinks).innerHTML;
-                }
             } else {
                 showGlobalNotification(`照片更新失敗: ${finalJobState.result?.message || '未知錯誤'}`, 8000, 'error');
             }
         })
-        .catch(error => showGlobalNotification(`請求失敗: ${error.message}`, 8000, 'error'))
-        .finally(() => {
-            closePhotoModal();
-            btn.disabled = false;
-            btn.textContent = '儲存變更';
-        });
+        .catch(error => showGlobalNotification(`請求失敗: ${error.message}`, 8000, 'error'));
+    // 【⭐️ 核心修正 3/3：移除 finally 區塊，因為 UI 更新已在前面完成 ⭐️】
 }
 
 /** 發布日誌 */
@@ -144,7 +172,8 @@ export function handlePublish(logId) {
     if (btn) { btn.disabled = true; btn.textContent = '發布中...'; }
     
     // [V2.1 升級] 改為呼叫 postAsyncTask，確保能取得最終結果並顯示通知
-    api.postAsyncTask({ action: 'publish', logId: logId, newStatus: '已發布' })
+    // [架構重構 v5.0] 統一呼叫 postTask
+    api.postTask({ action: 'publish', logId: logId, newStatus: '已發布' })
         .then(finalJobState => {
             if (finalJobState.result && finalJobState.result.success) {
                 showGlobalNotification('草稿已成功發布！', 5000, 'success');
@@ -163,6 +192,11 @@ export function handlePublish(logId) {
  * @param {string} logId - 要刪除的日誌 ID
  */
 export function handleDeleteLog(logId) {
+    // [新增] 點擊刪除按鈕時，跳出確認對話框
+    if (!confirm(`您確定要永久刪除這篇日誌嗎？\n(Log ID: ${logId})`)) {
+        return; // 如果使用者取消，則不執行任何動作
+    }
+
     const card = document.getElementById('log-' + logId);
     if (card) {
         card.style.transition = 'opacity 0.5s, transform 0.5s';
@@ -188,7 +222,8 @@ export function handleDeleteLog(logId) {
     }
 
     // 2. 在背景執行真正的刪除操作
-    api.postAsyncTask({ action: 'deleteLog', id: logId })
+    // [架構重構 v5.0] 統一呼叫 postTask
+    api.postTask({ action: 'deleteLog', id: logId })
         .then(finalJobState => {
             if (finalJobState.result && finalJobState.result.success) {
                 // 3a. 後端成功，顯示成功訊息
@@ -205,12 +240,52 @@ export function handleDeleteLog(logId) {
         .catch(error => logToPage(`❌ 刪除 LogID ${logId} 時發生錯誤: ${error.message}`, 'error'));
 }
 /**
+ * [新增] 觸發隱藏的檔案上傳輸入框
+ */
+export function triggerPhotoUpload() {
+    const fileInput = document.getElementById('photo-file-input');
+    if (fileInput) {
+        fileInput.click();
+    }
+}
+/**
  * 初始化日誌動作相關的全域事件監聽器。
  */
 export function initializeLogActions() {
-    document.getElementById('modal-cancel-btn')?.addEventListener('click', closePhotoModal);
-    document.getElementById('save-photos-button')?.addEventListener('click', handleSavePhotos);
-    // 其他未來可能需要的全域事件可以加在此處
+    // 【⭐️ 核心重構：移除此處的事件綁定，統一由 main.js 的事件代理處理 ⭐️】
+    // document.getElementById('modal-cancel-btn')?.addEventListener('click', closePhotoModal);
+    // document.getElementById('save-photos-button')?.addEventListener('click', handleSavePhotos);
+
+    // 【⭐️ 核心修正：將檔案選擇的邏輯移至此處，並由 triggerPhotoUpload 觸發 ⭐️】
+    const fileInput = document.getElementById('photo-file-input');
+    if (fileInput) {
+        fileInput.addEventListener('change', (e) => {
+            const files = e.target.files;
+            const grid = document.getElementById('modal-photo-grid-container');
+            if (!files || !grid) return;
+
+            const placeholder = grid.querySelector('p.muted');
+            if (placeholder) placeholder.remove();
+
+            for (const file of files) {
+                if (!file.type.startsWith('image/')) continue;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const item = document.createElement('div');
+                    item.className = 'modal-photo-item new-upload';
+                    item.dataset.base64 = event.target.result;
+                    item.innerHTML = `
+                        <img src="${event.target.result}" loading="lazy">
+                        <button class="delete-photo-btn" title="移除此照片">&times;</button>
+                    `;
+                    item.querySelector('.delete-photo-btn').onclick = () => item.remove();
+                    grid.appendChild(item);
+                };
+                reader.readAsDataURL(file);
+            }
+            e.target.value = '';
+        });
+    }
 }
 
 /**

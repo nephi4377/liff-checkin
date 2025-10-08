@@ -83,11 +83,13 @@ export function handleCreateNewPost() {
     content: content,
   };
 
+  // [架構重構 v5.0] 將照片陣列直接放入 payload，交由 postTask 處理
+  metaPayload.newPhotosBase64Array = photosBase64Array;
+
   // 【⭐️ 核心修改：在送出請求的當下，立即建立並顯示「處理中」卡片 ⭐️】
   const displayTitle = title
     ? `${new Date().toLocaleDateString('sv')} ${title} 進度回報 (處理中...)`
     : `${new Date().toLocaleDateString('sv')} 主控台更新 (處理中...)`;
-
   const optimisticLog = {
     LogID: `temp-${Date.now()}`,
     Title: displayTitle,
@@ -108,8 +110,8 @@ export function handleCreateNewPost() {
     logsContainer.insertBefore(newCard, postCreator.nextSibling);
   }
 
-  // [升級] 呼叫新的 API 函式，並處理回傳的 Promise
-  api.postAsyncTaskWithUpload(metaPayload, photosBase64Array)
+  // [架構重構 v5.0] 統一呼叫 postTask，它會自動處理 newPhotosBase64Array 的上傳
+  api.postTask(metaPayload)
     .then(finalJobState => {
         if (finalJobState.result && finalJobState.result.success) {
             showGlobalNotification(finalJobState.result.message || '日誌已成功建立！', 5000, 'success');

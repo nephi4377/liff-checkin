@@ -228,8 +228,9 @@
 
           // 基本表單資料（案號使用清洗後的純數字）
           const baseFormData = {
-            source: 'liff_report_form_chunk',
-            batchId,
+            // [架構重構 v7.0] 統一封包：不再使用 'source'，改用 'action' 作為指令。
+            action: 'submitReport',
+            batchId, // batchId 依然保留，用於後端識別批次
             totalChunks,
             userId: userProfile.userId,
             userName: userProfile.displayName,
