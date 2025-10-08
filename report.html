@@ -223,8 +223,8 @@
 
           // 批次設定
           const batchId = `${userProfile.userId}-${Date.now()}`;
-          // [核心修正] 大幅縮小批次大小，以避免 payload 超過 Google Apps Script 的 100KB 快取限制。
-          const SUBMIT_CHUNK_SIZE = 2;
+          // [核心修正] 根據您的經驗，將批次大小調整回 8，以在穩定性與效率之間取得平衡。
+          const SUBMIT_CHUNK_SIZE = 8;
           const totalChunks = Math.ceil(allPhotosInfo.length / SUBMIT_CHUNK_SIZE);
 
           // 基本表單資料（案號使用清洗後的純數字）
