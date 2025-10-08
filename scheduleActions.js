@@ -324,7 +324,8 @@ export function handleSaveSchedule() {
     }
     logToPage('💾 正在儲存排程變更...');
 
-    api.postAsyncTask(payload)
+    // [架構重構 v5.0] 統一呼叫 postTask
+    api.postTask(payload)
         .then(finalJobState => {
             if (finalJobState.result && finalJobState.result.success) {
                 showGlobalNotification(finalJobState.result.message || '排程已成功儲存！', 5000, 'success');
@@ -339,23 +340,26 @@ export function handleSaveSchedule() {
         });
 }
 
-export function showStartDatePicker(templateType) {    
-    const pickerContainer = document.createElement('div');
-    pickerContainer.style.display = 'none';
-    document.body.appendChild(pickerContainer);
+export function showStartDatePicker(templateType, anchorElement) {
+    // [核心修正] 不再建立隱藏的 div，而是直接使用傳入的按鈕元素作為定位錨點。
+    // 如果沒有提供錨點，則預設使用 header 作為備用。
+    const anchor = anchorElement || document.querySelector('header');
 
-    const fp = flatpickr(pickerContainer, {
+    const fp = flatpickr(anchor, {
         defaultDate: 'today',
         dateFormat: 'Y-m-d',
+        // [核心修正] onClose 事件現在只負責觸發確認對話框
         onClose: function(selectedDates) {
             if (selectedDates.length > 0) {
                 const startDate = selectedDates[0].toISOString().split('T')[0];
-                handleImportTemplate(templateType, startDate);
+                // 彈出確認對話框，讓使用者二次確認
+                if (confirm(`您確定要為此專案套用「${templateType}」範本，並將開工日設為 ${startDate} 嗎？\n\n此操作將會新增多筆排程項目。`)) {
+                    handleImportTemplate(templateType, startDate);
+                } else {
+                    logToPage('使用者取消了範本匯入操作。');
+                }
             }
             fp.destroy();
-            if (pickerContainer.parentNode) {
-                pickerContainer.parentNode.removeChild(pickerContainer);
-            }
         }
     });
     fp.open();
@@ -363,14 +367,21 @@ export function showStartDatePicker(templateType) {
 
 /** 處理匯入範本 */
 export function handleImportTemplate(templateType, startDate) {
+    // [架構重構 v10.0] 雙重防護：在發送請求前的最後一刻，再次檢查排程是否存在。
+    // 這是防止因快取延遲而導致重複操作的最終防線。
+    if (state.currentScheduleData && state.currentScheduleData.length > 0) {
+        showGlobalNotification('操作已取消：此專案似乎已有排程資料。', 5000, 'error');
+        logToPage('❌ 偵測到重複的範本匯入操作，已自動中止。');
+        return;
+    }
     logToPage(`正在為專案匯入「${templateType}」範本，開工日設為 ${startDate}...`);
     const projectId = state.projectId; // [優化] 從全域 state 讀取 projectId
     const payload = { action: 'createFromTemplate', projectId, templateType, startDate };
     
     showGlobalNotification('正在從範本建立排程...', 5000, 'info');
 
-    // [升級] 使用 api.postAsyncTask 並處理回傳的 Promise
-    api.postAsyncTask(payload)
+    // [架構重構 v5.0] 統一呼叫 postTask
+    api.postTask(payload)
         .then(finalJobState => {
             if (finalJobState.result && finalJobState.result.success) {
                 showGlobalNotification('排程已成功建立！頁面即將刷新...', 5000, 'success');

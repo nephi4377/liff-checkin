@@ -192,11 +192,6 @@ export function handlePublish(logId) {
  * @param {string} logId - 要刪除的日誌 ID
  */
 export function handleDeleteLog(logId) {
-    // [新增] 點擊刪除按鈕時，跳出確認對話框
-    if (!confirm(`您確定要永久刪除這篇日誌嗎？\n(Log ID: ${logId})`)) {
-        return; // 如果使用者取消，則不執行任何動作
-    }
-
     const card = document.getElementById('log-' + logId);
     if (card) {
         card.style.transition = 'opacity 0.5s, transform 0.5s';

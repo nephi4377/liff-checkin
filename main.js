@@ -107,7 +107,7 @@ function handleDataResponse(data) {
   logToPage('✅ 後端回應成功');
   // 清除任何可能存在的舊錯誤訊息
   document.getElementById('status-message')?.remove();
-  if(data && data.error){ displayError({message:data.error}); return; }
+  if (data && data.error) { displayError({ message: data.error }); return; }
 
   // [核心修正] 將從後端接收到的資料，存入統一的 state 物件
   state.currentLogsData = data.dailyLogs || [];
@@ -126,36 +126,45 @@ function handleDataResponse(data) {
   }
 
   // 業務邏輯：如果這是一個沒有任何排程的既有專案，則顯示「套用範本」的按鈕
+  const actionsContainer = document.getElementById('actions-container');
   if (state.currentScheduleData.length === 0 && state.projectId !== '0') { // [核心修正] 改為從 state.projectId 讀取
-    const actionsContainer = document.getElementById('actions-container');
     if (actionsContainer) {
-        actionsContainer.style.display = 'flex';
-        document.getElementById('btn-import-new').addEventListener('click', () => ScheduleActions.showStartDatePicker('新屋案'));
-        document.getElementById('btn-import-old').addEventListener('click', () => ScheduleActions.showStartDatePicker('老屋案'));
+      actionsContainer.style.display = 'flex';
+      // [優化] 使用事件代理，避免重複綁定
+      if (!actionsContainer.dataset.listenerAttached) {
+        actionsContainer.addEventListener('click', (e) => {
+          if (e.target.id === 'btn-import-new') ScheduleActions.showStartDatePicker('新屋案', e.target);
+          if (e.target.id === 'btn-import-old') ScheduleActions.showStartDatePicker('老屋案', e.target);
+        });
+        actionsContainer.dataset.listenerAttached = 'true';
+      }
     }
+  } else if (actionsContainer) {
+    // 如果已有排程，則確保按鈕是隱藏的。
+    actionsContainer.style.display = 'none';
   }
-    // 業務邏輯：對排程資料進行排序，規則為：1. 依狀態 (已完成 > 施工中 > 未完成) 2. 依預計開始日期
+  // 業務邏輯：對排程資料進行排序，規則為：1. 依狀態 (已完成 > 施工中 > 未完成) 2. 依預計開始日期
   // 【⭐️ 核心修正：補上遺失的括號，並整理後續呼叫流程 ⭐️】
   if (Array.isArray(state.currentScheduleData)) {
     state.currentScheduleData.sort((a, b) => {
-        const statusOrder = { '已完成': 1, '施工中': 2, '未完成': 3 };
-        const statusA = statusOrder[a['狀態']] || 99;
-        const statusB = statusOrder[b['狀態']] || 99;
-        if (statusA !== statusB) {
-            return statusA - statusB;
-        }
-        const dateA = new Date(a['預計開始日']);
-        const dateB = new Date(b['預計開始日']);
-        if (isNaN(dateA.getTime())) return 1;
-        if (isNaN(dateB.getTime())) return -1;
-        return dateA - dateB;
+      const statusOrder = { '已完成': 1, '施工中': 2, '未完成': 3 };
+      const statusA = statusOrder[a['狀態']] || 99;
+      const statusB = statusOrder[b['狀態']] || 99;
+      if (statusA !== statusB) {
+        return statusA - statusB;
+      }
+      const dateA = new Date(a['預計開始日']);
+      const dateB = new Date(b['預計開始日']);
+      if (isNaN(dateA.getTime())) return 1;
+      if (isNaN(dateB.getTime())) return -1;
+      return dateA - dateB;
     });
   }
 
   // 渲染UI：使用後端提供的案場名稱，更新頁面的主標題
   const titleEl = document.getElementById('project-title');
-  if(data.overview && (data.overview.siteName || data.overview['案場名稱'])){
-      titleEl.textContent = '主控台: ' + (data.overview.siteName || data.overview['案場名稱']);
+  if (data.overview && (data.overview.siteName || data.overview['案場名稱'])) {
+    titleEl.textContent = '主控台: ' + (data.overview.siteName || data.overview['案場名稱']);
   }
 
   // [新增] 呼叫新函式來渲染右側的專案資訊面板
@@ -209,8 +218,8 @@ function lazyLoadImages() {
   } else {
     // Fallback for older browsers
     lazyImages.forEach((lazyImage) => {
-        lazyImage.src = lazyImage.dataset.src;
-        lazyImage.classList.remove("lazy");
+      lazyImage.src = lazyImage.dataset.src;
+      lazyImage.classList.remove("lazy");
     });
   }
 }
@@ -296,20 +305,20 @@ function initializeLightbox() {
 }
 
 function setupScrollListener() {
-    state.scrollObserver = new IntersectionObserver((entries) => {
-        const entry = entries[0];
-        if (entry.isIntersecting && !state.isLoadingNextPage) {
-            state.currentPage++;
-            logToPage(`滾動到底部，載入第 ${state.currentPage} 頁...`);
-            renderLogPage();
-            lazyLoadImages(); // [核心修正] 在載入下一頁後，再次觸發懶加載
-        }
-    }, { threshold: 0.1 });
-
-    const initialLoader = document.getElementById('log-loader');
-    if (initialLoader) {
-        state.scrollObserver.observe(initialLoader);
+  state.scrollObserver = new IntersectionObserver((entries) => {
+    const entry = entries[0];
+    if (entry.isIntersecting && !state.isLoadingNextPage) {
+      state.currentPage++;
+      logToPage(`滾動到底部，載入第 ${state.currentPage} 頁...`);
+      renderLogPage();
+      lazyLoadImages(); // [核心修正] 在載入下一頁後，再次觸發懶加載
     }
+  }, { threshold: 0.1 });
+
+  const initialLoader = document.getElementById('log-loader');
+  if (initialLoader) {
+    state.scrollObserver.observe(initialLoader);
+  }
 }
 
 /* ===== 入口 ===== */
@@ -374,32 +383,32 @@ async function initializeApp() {
   try {
     const cachedItem = localStorage.getItem(CACHE_KEY);
     if (cachedItem) { // 如果快取存在
-        const { timestamp, data } = JSON.parse(cachedItem);
-        // [核心修正] 使用 if-else 結構，確保有效和無效的邏輯互斥
-        if ((Date.now() - timestamp < CACHE_DURATION_MS) && (data.ownerId === userId)) {
-            // --- 情況一：快取有效 ---
-            logToPage('⚡️ 偵測到有效快取，立即渲染畫面...');
- 
-            state.projectId = projectId;
-            // 【⭐️ 核心修正：不要修改原始 data 物件，而是將處理結果存入 state ⭐️】
-            state.currentUserName = data.userName || `使用者 (${userId.slice(-6)})`; // 優先使用快取中的名稱
+      const { timestamp, data } = JSON.parse(cachedItem);
+      // [核心修正] 使用 if-else 結構，確保有效和無效的邏輯互斥
+      if ((Date.now() - timestamp < CACHE_DURATION_MS) && (data.ownerId === userId)) {
+        // --- 情況一：快取有效 ---
+        logToPage('⚡️ 偵測到有效快取，立即渲染畫面...');
 
-            // 【⭐️ 核心修正：建立一個 data 的深層複本來進行操作，保持原始 data 的純淨性 ⭐️】
-            const dataForRender = JSON.parse(JSON.stringify(data));
+        state.projectId = projectId;
+        // 【⭐️ 核心修正：不要修改原始 data 物件，而是將處理結果存入 state ⭐️】
+        state.currentUserName = data.userName || `使用者 (${userId.slice(-6)})`; // 優先使用快取中的名稱
 
-            // 使用複本來更新案號，這樣就不會污染原始的 data 物件
-            if (dataForRender.schedule && Array.isArray(dataForRender.schedule)) {
-                dataForRender.schedule.forEach(task => task['案號'] = projectId);
-                logToPage('🔄 已使用最新案號更新快取排程資料...');
-            }
-            handleDataResponse(dataForRender); // 使用處理過的複本來渲染畫面
-            hasRenderedFromCache = true;
-        } else {
-            // --- 情況二：快取無效 (過期或使用者不符) ---
-            const reason = data.ownerId !== userId ? 'UID 不符' : '已過期';
-            logToPage(`🗑️ 快取無效 (${reason})，將繼續向後端請求新資料。`);
-            localStorage.removeItem(CACHE_KEY);
+        // 【⭐️ 核心修正：建立一個 data 的深層複本來進行操作，保持原始 data 的純淨性 ⭐️】
+        const dataForRender = JSON.parse(JSON.stringify(data));
+
+        // 使用複本來更新案號，這樣就不會污染原始的 data 物件
+        if (dataForRender.schedule && Array.isArray(dataForRender.schedule)) {
+          dataForRender.schedule.forEach(task => task['案號'] = projectId);
+          logToPage('🔄 已使用最新案號更新快取排程資料...');
         }
+        handleDataResponse(dataForRender); // 使用處理過的複本來渲染畫面
+        hasRenderedFromCache = true;
+      } else {
+        // --- 情況二：快取無效 (過期或使用者不符) ---
+        const reason = data.ownerId !== userId ? 'UID 不符' : '已過期';
+        logToPage(`🗑️ 快取無效 (${reason})，將繼續向後端請求新資料。`);
+        localStorage.removeItem(CACHE_KEY);
+      }
     }
   } catch (e) {
     logToPage(`❌ 讀取快取失敗: ${e.message}`, 'error');
@@ -442,17 +451,17 @@ async function initializeApp() {
         // 為了避免因時間戳或 ownerId 不同而誤判，只比較核心資料
         const oldDataSignature = JSON.stringify({ overview: oldData.overview, schedule: oldData.schedule, dailyLogs: oldData.dailyLogs });
         const newDataSignature = JSON.stringify({ overview: freshData.overview, schedule: freshData.schedule, dailyLogs: freshData.dailyLogs });
-        
+
         // [核心修正] 只有在資料確定有變動時，才執行畫面更新與快取寫入
         if (oldDataSignature !== newDataSignature) {
           logToPage('🔄 偵測到後端資料已更新，正在無縫刷新畫面...');
-          
+
           // 【⭐️ 核心修正：保留樂觀更新的卡片 ⭐️】
           // 在重新渲染前，先找出所有「處理中」的卡片並暫存起來。
           const optimisticCards = Array.from(document.querySelectorAll('.card[id^="temp-"]'));
-          
+
           handleDataResponse(freshData); // 使用新資料重新渲染畫面
-          
+
           // 如果有暫存的卡片，將它們重新插入到列表頂部。
           const logsContainer = document.getElementById('logs-container');
           optimisticCards.reverse().forEach(card => logsContainer.insertBefore(card, logsContainer.children[1]));
@@ -492,59 +501,63 @@ window.addEventListener('load', () => {
  * 透過事件冒泡，在 document 層級處理所有帶有 data-action 的點擊事件。
  */
 document.addEventListener('click', (e) => {
-    const target = e.target.closest('[data-action]');
-    if (!target) return;
+  const target = e.target.closest('[data-action]');
+  if (!target) return;
 
-    const action = target.dataset.action;
-    const logId = target.dataset.logId;
+  const action = target.dataset.action;
+  const logId = target.dataset.logId;
 
-    switch (action) {
-        case 'deleteTask':
-            if (confirm(`確定要刪除任務「${target.dataset.taskName}」嗎？`)) {
-                const card = target.closest('.task-card');
-                card.style.display = 'none';
-                state.currentScheduleData[target.dataset.taskIndex] = null;
-                ScheduleActions.enableSaveButton();
-            }
-            break;
-        case 'openPhotoModal':
-            LogActions.openPhotoModal(logId, target.dataset.photoLinks);
-            break;
-        case 'handleEditText':
-            LogActions.handleEditText(logId);
-            break;
-        case 'handlePublish':
-            LogActions.handlePublish(logId);
-            break;
-        // [核心修正] 新增刪除日誌的處理邏輯
-        case 'deleteLog':
-            if (confirm(`您確定要永久刪除這篇日誌嗎？\n(Log ID: ${logId})`)) {
-                LogActions.handleDeleteLog(logId);
-            }
-            break;
-        // 【⭐️ 核心新增：處理照片管理視窗的按鈕事件 ⭐️】
-        case 'triggerPhotoUpload':
-            LogActions.triggerPhotoUpload();
-            break;
-        case 'savePhotos':
-            LogActions.handleSavePhotos();
-            break;
-        case 'closePhotoModal':
-            LogActions.closePhotoModal();
-            break;
-        case 'handleSaveSchedule':
-            ScheduleActions.handleSaveSchedule();
-            break;
-        case 'handleAddTask':
-            ScheduleActions.handleAddTask();
-            break;
-        case 'enableSaveButton':
-            ScheduleActions.enableSaveButton();
-            break;
-        case 'filterLogsByWorkType':
-            LogActions.filterLogsByWorkType(target.value);
-            break;
-    }
+  switch (action) {
+    case 'deleteTask':
+      if (confirm(`確定要刪除任務「${target.dataset.taskName}」嗎？`)) {
+        const card = target.closest('.task-card');
+        card.style.display = 'none';
+        state.currentScheduleData[target.dataset.taskIndex] = null;
+        ScheduleActions.enableSaveButton();
+      }
+      break;
+    case 'openPhotoModal':
+      LogActions.openPhotoModal(logId, target.dataset.photoLinks);
+      break;
+    case 'handleEditText':
+      LogActions.handleEditText(logId);
+      break;
+    case 'handlePublish':
+      LogActions.handlePublish(logId);
+      break;
+    // [核心修正] 新增刪除日誌的處理邏輯
+    case 'deleteLog':
+      // [UX Improvement] Fetch the timestamp from the card to show a more user-friendly confirmation.
+      const card = document.getElementById(`log-${logId}`);
+      const timestampText = card ? card.querySelector('.log-card-header small')?.textContent : `Log ID: ${logId}`;
+      
+      if (confirm(`您確定要永久刪除這篇於「${timestampText}」發佈的日誌嗎？`)) {
+        LogActions.handleDeleteLog(logId); // Call the handler only after confirmation.
+      }
+      break;
+    // 【⭐️ 核心新增：處理照片管理視窗的按鈕事件 ⭐️】
+    case 'triggerPhotoUpload':
+      LogActions.triggerPhotoUpload();
+      break;
+    case 'savePhotos':
+      LogActions.handleSavePhotos();
+      break;
+    case 'closePhotoModal':
+      LogActions.closePhotoModal();
+      break;
+    case 'handleSaveSchedule':
+      ScheduleActions.handleSaveSchedule();
+      break;
+    case 'handleAddTask':
+      ScheduleActions.handleAddTask();
+      break;
+    case 'enableSaveButton':
+      ScheduleActions.enableSaveButton();
+      break;
+    case 'filterLogsByWorkType':
+      LogActions.filterLogsByWorkType(target.value);
+      break;
+  }
 });
 
 /* ===== 新增：三欄式佈局互動 ===== */
@@ -591,8 +604,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const focusCard = document.getElementById(`task-card-${focusTaskIndex}`);
           if (focusCard) {
-              focusCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              logToPage(`✅ 已自動滾動至任務 #${focusTaskIndex + 1}`);
+            focusCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            logToPage(`✅ 已自動滾動至任務 #${focusTaskIndex + 1}`);
           }
         }, 50); // 使用短延遲確保區塊顯示後再滾動
       }
@@ -618,7 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
  * @param {'info'|'success'|'error'} type - 訊息類型，決定橫幅顏色。
  */
 export function showGlobalNotification(message, duration, type = 'info') {
-  
+
   const targetElement = document.getElementById('project-title');
   if (!targetElement) return;
 
@@ -647,9 +660,9 @@ export function showGlobalNotification(message, duration, type = 'info') {
 
   // 根據類型決定顏色 (邏輯不變)
   const colors = {
-    info:    { bg: '#dbeafe', text: '#1e40af' }, // 藍色
+    info: { bg: '#dbeafe', text: '#1e40af' }, // 藍色
     success: { bg: '#dcfce7', text: '#166534' }, // 綠色
-    error:   { bg: '#fee2e2', text: '#991b1b' }  // 紅色
+    error: { bg: '#fee2e2', text: '#991b1b' }  // 紅色
   };
   const selectedColor = colors[type] || colors.info;
 
