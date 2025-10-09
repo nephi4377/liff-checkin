@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添心設計｜互動式客戶接洽流程</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 React, ReactDOM, 和 Babel -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- 【⭐️ 核心修正：移除 window.onload，改用 Babel 標準執行流程 ⭐️】 -->
+    <!-- 1. 將 script 移至 body 結尾，確保所有函式庫已載入。 -->
+    <!-- 2. 使用 data-presets="react" 明確告知 Babel 如何轉換。 -->
+    <!-- 3. 移除手動呼叫的 renderApp() 和 Babel.transform()，讓 Babel 自動處理。 -->
+    <script type="text/babel" data-presets="react">
+        // 添心設計｜互動式客戶接洽流程 v1
+        // 說明：
+        // 1) 左側為主流程步驟（直線、可逐步展開）。
+        // 2) 右側為每個步驟的「話術範例 + 實際案例」，可開合檢視。
+        // 3) 第一階段「寒喧」內含多方案（框內多卡片），代表同階段不同話術。
+        // 4) 適合投影簡報 / 內訓 / 官網嵌入。Tailwind 風格、無外部 API。
+
+        const { useState } = React;
+        
+        // 【⭐️ 核心重構：內嵌 SVG 圖示，徹底移除外部依賴，解決所有載入問題 ⭐️】
+        // 建立一個包含所有圖示 React 元件的物件。
+        const Icons = {
+            ChevronDown: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m6 9 6 6 6-6"/></svg>
+            ),
+            ChevronRight: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m9 18 6-6-6-6"/></svg>
+            ),
+            MessagesSquare: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v10l-4-4h-6a2 2 0 0 1-2-2v-2"/></svg>
+            ),
+            FileText: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+            ),
+            ArrowDown: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+            ),
+            BadgeInfo: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+            ),
+            MoveRight: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M18 8L22 12L18 16"/><path d="M2 12H22"/></svg>
+            ),
+            ChevronDown: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m6 9 6 6 6-6"/></svg>
+            ),
+            Workflow: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg>
+            )
+        };
+
+        const STAGES = [
+          {
+            id: "s1",
+            title: "第一階段｜寒喧（同階段不同方案）",
+            note: "建立信任感、降低商業感，以地點分流為主，不急著詢問細節。",
+            group: true,
+            // [核心修改] 根據您的要求，豐富化第一階段的方案內容，使其更具體、更具引導性。
+            options: [
+              {
+                label: "方案一｜地點分流，建立專業",
+                script: "您好，我是添心設計的[你的名字]。為了能幫您安排最適合的設計師與工務團隊，想先請問這次的案場是在台南還是高雄呢？",
+                effect: "快速釐清服務範圍，同時展現公司團隊分工的專業性。",
+                nextAction: "根據客戶回覆的地點，立即轉介給該區的負責設計師，並告知客戶：『好的，我立刻請我們高雄的[設計師姓名]設計師與您聯繫，他對那邊的案場經驗比較豐富！』"
+              },
+              {
+                label: "方案二｜來源破冰，延續話題",
+                script: "您好，謝謝您聯繫添心設計！方便請問您是透過朋友介紹，還是看到我們哪個作品找來的呢？想了解一下您喜歡的風格！",
+                effect: "將制式問候轉為有溫度的對話，從客戶感興趣的話題切入。",
+                nextAction: "順著客戶提到的作品或風格，延伸討論：『那部影片的北歐風我們也很喜歡！您是特別喜歡其中的木質元素，還是明亮的採光呢？』藉此深入了解客戶偏好，再邀約諮詢。"
+              },
+              {
+                label: "方案三｜時程切入，展現專業",
+                script: "您好！想先請問您預計什麼時候會需要入住呢？我們可以根據您的時程，來反推設計與工程的規劃，確保一切都能在您的期望內完成。",
+                effect: "從客戶關心的「時間點」切入，展現您對專案時程的掌控力，並快速篩選出有明確需求的客戶。",
+                nextAction: "將客戶的時程視為首要目標，並以此為基礎邀約：『了解，若要在[時間]前入住，我們的設計和工程現在就需要開始規劃了。這週您方便約個時間，我們來排個詳細時程表嗎？』"
+              },
+              {
+                label: "方案四｜主動提供價值，建立專家形象",
+                script: "您好，謝謝您聯繫添心！您可以先簡單描述一下是新成屋還是舊屋翻新，以及最困擾您的問題是什麼嗎？",
+                effect: "展現樂於助人的專業態度，而非急於銷售，讓客戶卸下心防開啟有價值的諮詢對話。",
+                nextAction: "針對客戶提出的問題，給予一個簡單但專業的初步建議，並順勢引導至下一步：『採光問題可以透過調整格局或使用玻璃隔間來改善。想更深入了解的話，我建議我們約個現場丈量，這樣我的建議會更精準。』"
+              },
+              {
+                label: "方案五｜釐清現況，引導需求",
+                script: "您好！為了讓我們後續的討論更有效率，方便先提供您府上的格局圖、或是幾張現場照片嗎？我先幫您初步看看，這樣討論時會更有方向喔！",
+                effect: "將抽象的文字討論，轉化為有具體根據的圖像溝通，能快速聚焦問題，也展現我們的專業度。",
+                nextAction: "在收到客戶提供的圖面或照片後，立即給予初步的正向回饋，並以此為基礎邀約：『謝謝您提供照片！格局很方正耶！關於您提到的收納問題，我有幾個初步想法，我們約個時間聊聊細節好嗎？』"
+              },
+              {
+                label: "方案六｜願景探索，建立情感連結",
+                script: "您好！在討論設計細節之前，我想先聊聊您對這個『家』的夢想或畫面是什麼呢？是希望它成為一個能讓全家人放鬆聚會的客廳，還是一個能讓您專心工作的書房？",
+                effect: "引導客戶從感性層em>出發，分享對未來生活的期待，建立更深層的情感連結，讓設計師不只是「廠商」，更是「夢想實現者」。",
+                nextAction: "根據客戶描述的願景（例如『放鬆』、『專心』），給予肯定並連結到具體的設計手法：『「放鬆」的感覺很棒！我們可以透過溫暖的木質調和間接照明來實現這個氛圍。不如我們約個時間，我帶些材質樣板給您參考？』"
+              }
+            ],
+          },
+          { id: "s2", title: "第二階段｜約時間諮詢（門市/線上/到府）", script: "您這週有沒有哪天方便過來聊聊？平日晚間或假日下午都可以喔！", effect: "客戶白天上班無法配合 → 改約週六下午，順利到店。" },
+          { id: "s3", title: "第三階段｜索要相關資訊（平面圖/現況照/建商圖）", script: "若有建商平面圖或現況照，可先傳給我，我幫您初步看比例和動線。", effect: "透過平面圖提前發現樑位問題，避免丈量重工。" },
+          { id: "s4", title: "第四階段｜確定諮詢時間（日期/地點/聯絡方式）", script: "我幫您排下週三晚上七點，有任何變動提前告訴我即可。", effect: "臨時改期仍維持信任關係，客戶主動提前告知調整。" },
+          { id: "s5", title: "第五階段｜諮詢需求與想法（動線/機能/風格）", script: "您最希望這個空間帶給家人什麼感覺？", effect: "客戶希望明亮溫馨 → 導向北歐風提案。" },
+          { id: "s6", title: "第六階段｜討論預算（範圍/優先順序/階段性）", script: "想請問這次希望控制在多少範圍內？我們可以依預算分階段處理。", effect: "預算 40 萬內 → 先做主臥＋玄關，分兩階段執行。" },
+          { id: "s7", title: "第七階段｜說明公司流程（設計→施工→驗收/時程）", script: "我們流程會依次進行丈量、設計、提案、報價，報價透明、不二價。", effect: "展示付款與保固說明圖表，客戶信任度提升。" },
+          { id: "s8", title: "第八階段｜確認專案啟動（設計啟動與折抵說明）", script: "設計階段會製作 3D 圖，啟動金可於施工後折抵。", effect: "客戶先付單間設計費 3,000 元，後續全案啟動。" },
+          { id: "s9", title: "第九階段｜丈量（實測尺寸/拍照/現況紀錄）", script: "丈量時間約 1 小時，師傅會測每個面尺寸、拍照記錄。", effect: "丈量發現樑壓 → 即時修正櫃體高低差。" },
+          { id: "s10", title: "第十階段｜規劃設計（平面配置/系統櫃/水電配置）", script: "我們會出平面配置圖與系統櫃初稿，約 5–7 個工作天。", effect: "主臥因床頭壓樑，調整櫃體後動線順暢。" },
+          { id: "s11", title: "第十一階段｜3D 圖面繪製（約 2–3 週）", script: "3D 繪圖約 2–3 週，會用實際材質模擬成品。", effect: "客戶覺得木紋過深 → 調亮兩階層後更貼近實景。" },
+          { id: "s12", title: "第十二階段｜提案報價（材質/工法/工期/付款）", script: "報價含設計、工種、監工費及保固期，透明不二價。", effect: "客戶原比較他牌後回簽添心報價，因完整度與信任感高。" },
+        ];
+
+        function StageCard({ stage, active, onClick }) {
+            return (
+                <div className={`rounded-2xl border p-4 transition-all ${active ? "border-black shadow" : "border-zinc-300"}`}>
+                    <button onClick={onClick} className="w-full flex items-center justify-between">
+                        <div className="text-left">
+                            <div className="text-sm tracking-widest text-zinc-500">STEP</div>
+                            <h3 className="text-lg font-semibold">{stage.title}</h3>
+                            {stage.note && <p className="text-sm text-zinc-600 mt-1">{stage.note}</p>}
+                        </div>
+                        {active ? <Icons.ChevronDown className="w-6 h-6 flex-shrink-0" /> : <Icons.ChevronRight className="w-6 h-6 flex-shrink-0" />}
+                    </button>
+
+                    {active && (
+                        <div className="mt-4 space-y-4">
+                            {stage.group ? (
+                                <div className="grid md:grid-cols-2 gap-3">
+                                    {stage.options.map((opt, idx) => (
+                                        <div key={idx} className="rounded-xl border border-zinc-200 p-4 bg-white flex flex-col gap-3">
+                                            <div className="font-semibold text-zinc-800">{opt.label}</div>
+                                            
+                                            <div className="space-y-1">
+                                                <div className="text-sm font-medium text-zinc-500">對話腳本</div>
+                                                <p className="text-zinc-700 leading-relaxed">{opt.script}</p>
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <div className="text-sm font-medium text-zinc-500">預期效果</div>
+                                                <p className="text-zinc-700 leading-relaxed">{opt.effect}</p>
+                                            </div>
+                                            
+                                            <details className="group text-sm">
+                                                <summary className="flex items-center gap-1 cursor-pointer font-medium text-green-700 list-none">
+                                                    <Icons.ChevronRight className="w-4 h-4 group-open:rotate-90 transition-transform" />
+                                                    <span>顯示下一步行動</span>
+                                                </summary>
+                                                <p className="mt-2 pl-5 text-zinc-700 leading-relaxed">{opt.nextAction}</p>
+                                            </details>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="rounded-xl border border-zinc-200 p-4 bg-white space-y-3">
+                                    <div className="space-y-1">
+                                        <div className="text-sm font-medium text-zinc-500">對話腳本</div>
+                                        <p className="text-zinc-700 leading-relaxed">{stage.script}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="text-sm font-medium text-zinc-500">案例效果</div>
+                                        <p className="text-zinc-700 leading-relaxed">{stage.effect}</p>
+                                            </div>
+                                        </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function App() {
+            const [activeId, setActiveId] = useState("s1");
+
+            // 【⭐️ 核心新增：定義流程的三個主要階段 ⭐️】
+            const PROCESS_PHASES = [
+              { title: "線上初步接洽", stageCount: 4 },
+              { title: "諮詢階段", stageCount: 4 },
+              { title: "專案啟動階段", stageCount: 4 },
+            ];
+
+            let stageCounter = 0;
+
+            return (
+                <div className="min-h-screen w-full bg-zinc-50 py-8">
+                    <div className="max-w-6xl mx-auto px-4">
+                        <header className="flex items-center gap-3 mb-6">
+                            <Icons.Workflow className="w-6 h-6 text-zinc-700" />
+                            <h1 className="text-2xl font-semibold">添心設計｜客戶接洽流程（互動版）</h1>
+                        </header>
+
+                      {/* 【⭐️ 核心重構：改為以「階段」為單位進行渲染，確保版面正確 ⭐️】 */}
+                        <div className="flex flex-col gap-8">
+                            {PROCESS_PHASES.map((phase, phaseIndex) => {
+                                // 取得目前這個階段包含的步驟
+                                const phaseStages = STAGES.slice(stageCounter, stageCounter + phase.stageCount);
+                                const currentStageIndexStart = stageCounter;
+                                stageCounter += phase.stageCount; // 更新計數器，為下一個階段做準備
+
+                                return (
+                                    <div key={phaseIndex} className="flex gap-8">
+                                        {/* 左側：階段標題 (寬度固定，並使用 sticky 效果) */}
+                                        <div className="w-24 flex-shrink-0">
+                                            <div className="sticky top-8 text-center">
+                                                <div className="text-sm font-bold text-amber-700 bg-amber-100 rounded-full py-1 px-2">{phase.title}</div>
+                                            </div>
+                                        </div>
+
+                                        {/* 右側：主流程時間軸 */}
+                                        <div className="flex-grow">
+                                            <ol className="relative border-l border-zinc-300">
+                                                {phaseStages.map((s, i) => (
+                                                    <li key={s.id} className="ml-6 mb-6">
+                                                        <span className="absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full bg-black text-white text-xs">{currentStageIndexStart + i + 1}</span>
+                                                        <StageCard stage={s} active={activeId === s.id} onClick={() => setActiveId(activeId === s.id ? "" : s.id)} />
+                                                        {(currentStageIndexStart + i) < STAGES.length - 1 && (
+                                                            <div className="flex items-center gap-2 mt-2 text-zinc-400">
+                                                                <Icons.ArrowDown className="w-4 h-4" />
+                                                                <span className="text-xs">下一步</span>
+                                                            </div>
+                                                        )}
+                                                    </li>
+                                                ))}
+                                            </ol>
+                                        </div>
+                                    </div>
+                  
+                                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(<App />);
+    </script>
+</body>
+</html>
