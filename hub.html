@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添心設計 | 整合主控台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        .card { transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
+        .card:hover { transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+        .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <!-- 載入中畫面 -->
+    <div id="loading-screen" class="fixed inset-0 bg-white flex flex-col items-center justify-center z-50">
+        <div class="spinner w-12 h-12 border-4 border-gray-200 rounded-full"></div>
+        <p class="mt-4 text-gray-600">正在驗證您的身分...</p>
+    </div>
+
+    <!-- 主內容 (預設隱藏) -->
+    <div id="main-content" class="container mx-auto p-4 max-w-2xl hidden">
+        <header class="text-center my-6">
+            <h1 class="text-3xl font-bold text-gray-800">添心設計 整合主控台</h1>
+            <p id="welcome-message" class="text-gray-500 mt-2">歡迎，<span class="font-semibold">使用者</span>！</p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            <!-- 專案主控台 -->
+            <div class="col-span-1 md:col-span-2 bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                <h2 class="text-xl font-bold mb-4 text-blue-700">專案主控台</h2>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input type="text" id="project-id-input" inputmode="numeric" pattern="[0-9]*" class="flex-grow w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="請輸入案號 (例如: 715)">
+                    <button id="open-project-console-btn" class="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700">開啟</button>
+                </div>
+            </div>
+
+            <!-- 靜態連結 -->
+            <a href="https://nephi4377.github.io/liff-checkin/onboardingflow.html" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                <h2 class="text-xl font-bold mb-2 text-green-700">客戶接洽流程</h2>
+                <p class="text-gray-600">查看標準化的互動式客戶溝通劇本。</p>
+            </a>
+            
+            <a href="https://nephi4377.github.io/liff-checkin/FAQ.html" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                <h2 class="text-xl font-bold mb-2 text-green-700">新客戶常見問答 (FAQ)</h2>
+                <p class="text-gray-600">快速查詢與回覆客戶的常見問題。</p>
+            </a>
+
+            <a href="https://liff.line.me/2007974938-jVxn6y37" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                <h2 class="text-xl font-bold mb-2 text-purple-700">員工打卡</h2>
+                <p class="text-gray-600">開啟 LIFF 頁面進行每日出勤打卡。</p>
+            </a>
+
+            <a href="https://liff.line.me/2007974938-gOrjlzna" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                <h2 class="text-xl font-bold mb-2 text-purple-700">施工回報</h2>
+                <p class="text-gray-600">開啟 LIFF 頁面上傳每日施工進度與照片。</p>
+            </a>
+
+            <!-- 後端互動功能 -->
+            <div class="col-span-1 md:col-span-2 bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                <h2 class="text-xl font-bold mb-4 text-red-700">後端管理</h2>
+                <div class="flex items-center justify-between">
+                    <p class="text-gray-600">手動觸發後端處理已上傳的施工回報。</p>
+                    <button id="process-queue-btn" class="bg-red-600 text-white font-bold py-2 px-4 rounded-md hover:bg-red-700">立即處理回報</button>
+                </div>
+                <p id="process-status" class="text-sm text-gray-500 mt-3 min-h-[20px]"></p>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // ===============================================================
+        // ========================= 環境設定 ============================
+        const LIFF_ID = '2007974938-A4mGgEaZ'; // 這是這個 hub.html 自己的 LIFF ID
+        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
+        const PROJECT_CONSOLE_LIFF_ID = '2007974938-LpWvvkJq'; // 專案主控台的 LIFF ID
+        // ===============================================================
+
+        let userProfile = null;
+
+        async function main() {
+            try {
+                await liff.init({ liffId: LIFF_ID });
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                    return;
+                }
+                userProfile = await liff.getProfile();
+                
+                // 驗證成功，顯示主畫面
+                document.getElementById('loading-screen').style.display = 'none';
+                document.getElementById('main-content').classList.remove('hidden');
+                document.getElementById('welcome-message').querySelector('span').textContent = userProfile.displayName;
+
+                initializeEventListeners();
+
+            } catch (error) {
+                console.error('LIFF Initialization Error:', error);
+                document.getElementById('loading-screen').innerHTML = '<p class="text-red-500 font-semibold">驗證失敗，請在 LINE App 中開啟此頁面。</p>';
+            }
+        }
+
+        function initializeEventListeners() {
+            // 開啟專案主控台按鈕
+            document.getElementById('open-project-console-btn').addEventListener('click', () => {
+                const projectId = document.getElementById('project-id-input').value.trim();
+                if (!projectId || !/^\d+$/.test(projectId)) {
+                    alert('請輸入純數字的案號！');
+                    return;
+                }
+                if (!userProfile || !userProfile.userId) {
+                    alert('無法取得您的使用者資訊，請重新載入頁面。');
+                    return;
+                }
+                const consoleUrl = `https://liff.line.me/${PROJECT_CONSOLE_LIFF_ID}?id=${projectId}&uid=${userProfile.userId}`;
+                window.open(consoleUrl, '_blank');
+            });
+
+            // 立即處理回報按鈕
+            document.getElementById('process-queue-btn').addEventListener('click', async () => {
+                const btn = document.getElementById('process-queue-btn');
+                const statusEl = document.getElementById('process-status');
+
+                if (!confirm('確定要立即處理所有待辦的施工回報嗎？')) {
+                    return;
+                }
+
+                btn.disabled = true;
+                btn.textContent = '處理中...';
+                statusEl.textContent = '正在向後端發送指令...';
+                statusEl.className = 'text-sm text-blue-600 mt-3 min-h-[20px]';
+
+                try {
+                    const response = await fetch(GAS_WEB_APP_URL, {
+                        method: 'POST',
+                        cache: 'no-cache',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({
+                            action: 'process_queue',
+                            triggerUser: userProfile.displayName
+                        })
+                    });
+
+                    // 由於後端是 302 重導向，我們無法直接讀取 response.json()
+                    // 因此，只要 fetch 沒有拋出錯誤，我們就假設指令已成功發送
+                    statusEl.textContent = '指令已成功發送！後端正在背景處理中。';
+                    statusEl.className = 'text-sm text-green-600 mt-3 min-h-[20px]';
+
+                } catch (error) {
+                    // 處理 fetch 本身的錯誤 (例如網路問題)
+                    console.error('Fetch error:', error);
+                    statusEl.textContent = `指令發送失敗: ${error.message}`;
+                    statusEl.className = 'text-sm text-red-600 mt-3 min-h-[20px]';
+                } finally {
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.textContent = '立即處理回報';
+                    }, 3000);
+                }
+            });
+        }
+
+        window.onload = main;
+    </script>
+</body>
+</html>
