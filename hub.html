@@ -77,7 +77,7 @@
     <script>
         // ===============================================================
         // ========================= 環境設定 ============================
-        const LIFF_ID = '2007974938-A4mGgEaZ'; // 這是這個 hub.html 自己的 LIFF ID
+        const LIFF_ID = '2007974938-2nPKg3J0'; // 這是這個 hub.html 自己的 LIFF ID
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
         const PROJECT_CONSOLE_LIFF_ID = '2007974938-LpWvvkJq'; // 專案主控台的 LIFF ID
         // ===============================================================
@@ -85,6 +85,24 @@
         let userProfile = null;
 
         async function main() {
+            // 【⭐️ 核心新增：本地測試模式 ⭐️】
+            // 檢查是否為本地環境，且網址中是否提供了 uid 參數
+            const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+            const urlParams = new URLSearchParams(window.location.search);
+            const localTestUid = urlParams.get('uid');
+
+            if (isLocalTest && localTestUid) {
+                console.warn('⚡️ 本地測試模式啟用，跳過 LIFF 認證。');
+                // 模擬一個 userProfile 物件
+                userProfile = {
+                    userId: localTestUid,
+                    displayName: '本地測試員'
+                };
+                // 直接顯示主畫面並綁定事件
+                showMainContent();
+                return; // 中斷後續的 LIFF 流程
+            }
+
             try {
                 await liff.init({ liffId: LIFF_ID });
                 if (!liff.isLoggedIn()) {
@@ -94,16 +112,19 @@
                 userProfile = await liff.getProfile();
                 
                 // 驗證成功，顯示主畫面
-                document.getElementById('loading-screen').style.display = 'none';
-                document.getElementById('main-content').classList.remove('hidden');
-                document.getElementById('welcome-message').querySelector('span').textContent = userProfile.displayName;
-
-                initializeEventListeners();
+                showMainContent();
 
             } catch (error) {
                 console.error('LIFF Initialization Error:', error);
                 document.getElementById('loading-screen').innerHTML = '<p class="text-red-500 font-semibold">驗證失敗，請在 LINE App 中開啟此頁面。</p>';
             }
+        }
+        
+        function showMainContent() {
+            document.getElementById('loading-screen').style.display = 'none';
+            document.getElementById('main-content').classList.remove('hidden');
+            document.getElementById('welcome-message').querySelector('span').textContent = userProfile.displayName;
+            initializeEventListeners();
         }
 
         function initializeEventListeners() {

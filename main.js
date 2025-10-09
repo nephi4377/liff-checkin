@@ -358,11 +358,13 @@ async function initializeApp() {
   state.projectId = projectId;
   state.currentUserId = userId; // 【⭐️ 核心修正：將 userId 也存入全域 state ⭐️】
 
-  // 【⭐️ 核心修正：補上遺失的括號，並整理邏輯 ⭐️】
+  // 【⭐️ 核心修改：增強本地測試邏輯 ⭐️】
+  // 當在本地環境 (localhost 或 127.0.0.1) 測試時，
+  // 如果網址沒有提供 userId，則自動代入您的 UID 進行測試。
   if (isLocalTest) {
     if (!projectId) projectId = '999';
     if (!userId) userId = 'Ud58333430513b7527106fa71d2e30151';
-    logToPage(`⚡️ 本地測試模式啟用，使用預設 ID: ${projectId}`);
+    logToPage(`⚡️ 本地測試模式啟用，使用預設 ProjectID: ${projectId}, UserID: ${userId}`);
   }
 
   if (!projectId || !userId) {
