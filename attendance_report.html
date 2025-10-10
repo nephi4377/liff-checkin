@@ -314,6 +314,7 @@
             '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">狀態</th>' +
             '<th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">遲到(分)</th>' +
             '<th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">早退(分)</th>' +
+            '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">打卡地點</th>' +
             '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
         
         for (const userId in recordsByUser) {
@@ -334,6 +335,22 @@
                 const lateClass = day.late > 0 ? 'text-orange-600 font-bold' : '';
                 const earlyClass = day.early > 0 ? 'text-blue-600 font-bold' : '';
 
+                // 【⭐️ 核心修正：從 mapPoints 中查找對應的打卡地點 ⭐️】
+                let locationHtml = '';
+                // [v2 修正] 將 dateStr 的 '-' 替換為 '/'，以匹配 mapPoints.time 的格式 (e.g., '2025/10/01')
+                const dateStrForSearch = dateStr.replace(/-/g, '/');
+
+                // 尋找上班打卡點
+                const checkInPoint = userData.mapPoints.find(p => p.eventType === '上班' && p.time.startsWith(dateStrForSearch) && p.time.endsWith(day.checkIn));
+                if (checkInPoint && checkInPoint.address) {
+                    locationHtml += `<div class="text-xs">上班: ${checkInPoint.address}</div>`;
+                }
+                // 尋找下班打卡點
+                const checkOutPoint = userData.mapPoints.find(p => p.eventType === '下班' && p.time.startsWith(dateStrForSearch) && p.time.endsWith(day.checkOut));
+                if (checkOutPoint && checkOutPoint.address) {
+                    locationHtml += `<div class="text-xs">下班: ${checkOutPoint.address}</div>`;
+                }
+
                 html += `<tr>
                     <td class="px-6 py-4 whitespace-nowrap font-medium">${userData.userName}</td>
                     <td class="px-6 py-4 whitespace-nowrap ${dateClass}">${dateStr} (${weekdays[dayOfWeek]})</td>
@@ -342,6 +359,7 @@
                     <td class="px-6 py-4 whitespace-nowrap">${day.status}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-center ${lateClass}">${day.late}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-center ${earlyClass}">${day.early}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${locationHtml || '---'}</td>
                 </tr>`;
             }
         }

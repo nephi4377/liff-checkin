@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>員工排班系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- [新增] 引入 CoreLibrary，用於假日計算 -->
+    <script src="https://cdn.jsdelivr.net/gh/north-river/gs-core-library@v1.0.1/CoreLibrary.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+        /* [核心修正] 恢復使用 aspect-ratio，並透過 day-content 的 overflow-y: auto 來處理內容過多問題 */
+        /* [核心修正 v2] 放棄 flex，改用 grid 佈局來控制格子內部，徹底解決版面亂跳問題 */
+        .day-cell {
+            position: relative;
+            aspect-ratio: 1 / 1;
+            display: grid; /* 將格子本身也設為 grid 容器 */
+            grid-template-rows: auto 1fr; /* 第一行高度自動，第二行佔滿剩餘空間 */
+        }
+        /* [核心修正] 移除滑鼠懸浮的互動效果 */
+        /* .day-cell:hover .shift-selector { display: flex; } */
+        /* .shift-selector { display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px); } */
+        .shift-selector { display: none; } /* 直接隱藏 */
+        .shift-tag { font-size: 0.8rem; padding: 0.1rem 0.5rem; border-radius: 9999px; font-weight: 600; }
+        .shift-休假 { background-color: #fee2e2; color: #b91c1c; }
+        .shift-上班 { background-color: #ecfccb; color: #4d7c0f; } /* 新增上班樣式 */
+        .is-holiday .day-number { background-color: #fee2e2; color: #b91c1c; border-radius: 9999px; width: 1.75rem; height: 1.75rem; display: flex; align-items: center; justify-content: center; }
+        .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        /* [核心修正] 確保班表內容區塊在內容過多時，能自行滾動而不是撐開父層格子 */
+        .day-content {
+            min-height: 0; /* 允許內容區塊被壓縮，這是觸發 overflow 的關鍵 */
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+    <div class="container mx-auto p-4 md:p-8 max-w-5xl">
+        <header class="mb-6">
+            <h1 class="text-3xl font-bold text-gray-700">排班制員工排班系統</h1>
+            <p class="text-gray-500">點擊日期即可為員工設定休假。</p>
+        </header>
+
+        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <div class="flex items-center gap-4">
+                    <button id="prev-month-btn" class="p-2 rounded-full hover:bg-gray-200">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                    </button>
+                    <h2 id="current-month-display" class="text-xl font-semibold w-32 text-center"></h2>
+                    <button id="next-month-btn" class="p-2 rounded-full hover:bg-gray-200">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    </button>
+                    <!-- [新增] 顯示模式切換按鈕 -->
+                    <button id="toggle-view-btn" class="ml-4 bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-md text-sm">
+                        模式: 顯示排休
+                    </button>
+                </div>
+                <div class="flex flex-col sm:flex-row items-end gap-4">
+                    <!-- [排版優化] 排休天數統計，改為水平排列避免跳動 -->
+                    <div id="shift-stats" class="text-sm text-gray-600 hidden flex items-center gap-4">
+                        <div>可排休天數: <span id="total-off-days" class="font-bold">0</span></div>
+                        <div>已排休: <span id="scheduled-off-days" class="font-bold text-blue-600">0</span></div>
+                        <div class="font-bold text-green-600">剩餘: <span id="remaining-off-days">0</span></div>
+                    </div>
+                    <button id="save-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400" disabled>儲存變更</button>
+                    <div>
+                        <label for="employee-select" class="block text-sm font-medium text-gray-700">選擇排班員工</label>
+                        <select id="employee-select" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            <option value="">-- 檢視所有員工 --</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="calendar-container">
+                <div id="loading-spinner" class="text-center py-10">
+                    <div class="spinner w-10 h-10 border-4 border-gray-200 rounded-full mx-auto"></div>
+                    <p class="mt-2 text-gray-600">載入中...</p>
+                </div>
+                <div id="calendar-grid-wrapper" class="hidden">
+                    <div class="calendar-grid border-t border-l border-gray-200">
+                        <!-- Weekday headers -->
+                        <div class="text-center font-semibold py-2 border-r border-b border-gray-200 bg-gray-50">日</div>
+                        <div class="text-center font-semibold py-2 border-r border-b border-gray-200 bg-gray-50">一</div>
+                        <div class="text-center font-semibold py-2 border-r border-b border-gray-200 bg-gray-50">二</div>
+                        <div class="text-center font-semibold py-2 border-r border-b border-gray-200 bg-gray-50">三</div>
+                        <div class="text-center font-semibold py-2 border-r border-b border-gray-200 bg-gray-50">四</div>
+                        <div class="text-center font-semibold py-2 border-r border-b border-gray-200 bg-gray-50">五</div>
+                        <div class="text-center font-semibold py-2 border-r border-b border-gray-200 bg-gray-50">六</div>
+                    </div>
+                    <div id="calendar-body" class="calendar-grid border-l border-gray-200">
+                        <!-- Day cells will be injected here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec'; // 維持不變
+
+    // [新增] 勞基法檢查開關 (0: 關閉, 1: 開啟)
+    const ENFORCE_LABOR_LAW = 1;
+    const MAX_CONSECUTIVE_WORK_DAYS = 6;
+
+    // --- DOM Elements ---
+    const prevMonthBtn = document.getElementById('prev-month-btn');
+    const nextMonthBtn = document.getElementById('next-month-btn');
+    const currentMonthDisplay = document.getElementById('current-month-display');
+    const employeeSelect = document.getElementById('employee-select');
+    const calendarBody = document.getElementById('calendar-body');
+    const saveBtn = document.getElementById('save-btn');
+    const loadingSpinner = document.getElementById('loading-spinner');
+    const calendarWrapper = document.getElementById('calendar-grid-wrapper');
+    const toggleViewBtn = document.getElementById('toggle-view-btn');
+
+    // --- State ---
+    let currentDate = new Date();
+    let scheduleData = {}; // { "userId": { "YYYY-MM-DD": "班別" } }
+    let allEmployees = [];
+    let shiftBasedEmployees = [];
+    let standardEmployees = [];
+    let changes = {}; // { "userId": { "YYYY-MM-DD": "班別" } }
+    let holidays = new Set();
+    let currentUser = null; // [架構改造] 用來儲存從 URL 取得的使用者資訊
+    let currentViewMode = 'show_off'; // 'show_off' 或 'show_on'
+
+    // --- JSONP Helper ---
+    function loadJsonp(url) {
+        return new Promise((resolve, reject) => {
+            const cb = 'jsonp_' + Math.random().toString(36).slice(2);
+            const timer = setTimeout(() => { cleanup(); reject(new Error('請求後端資料超時 (15秒)。')); }, 15000);
+            function cleanup(){ clearTimeout(timer); delete window[cb]; if(script.parentNode) script.parentNode.removeChild(script); }
+            window[cb] = (data) => { cleanup(); resolve(data); };
+            const script = document.createElement('script');
+            script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
+            script.onerror = () => { cleanup(); reject(new Error('載入後端資料失敗。')); };
+            document.body.appendChild(script);
+        });
+    }
+
+    // --- Main Functions ---
+    async function initialize() {
+        // [架構改造] 移除 LIFF 初始化，改為從 URL 讀取使用者資訊
+        const urlParams = new URLSearchParams(window.location.search);
+        const uid = urlParams.get('uid');
+        const name = urlParams.get('name');
+
+        if (!uid || !name) {
+            document.body.innerHTML = `<div class="p-8 text-center text-red-600 font-bold">錯誤：缺少使用者認證資訊。<br>請從「整合主控台」進入此頁面。</div>`;
+            return;
+        }
+        currentUser = { userId: uid, userName: name };
+        console.log('認證成功:', currentUser);
+        
+        // [核心修正] 先畫出日曆骨架，再非同步載入資料
+        // 這樣使用者可以立刻看到日曆，而不是等待載入畫面
+        updateMonthDisplay();
+        renderCalendar(); // 立即產生空的日曆
+        bindEventListeners();
+        
+        await fetchEmployeesAndSchedule(); // 在背景載入員工與班表資料
+    }
+
+    async function fetchEmployees() {
+        try {
+            allEmployees = await loadJsonp(`${API_BASE_URL}?page=attendance_api&action=get_employees`);
+            
+            // [核心修改] 將員工分類，並增加相容性處理
+            shiftBasedEmployees = allEmployees.filter(emp => emp.shiftType === '排班制');
+            // [相容性修改] 如果後端資料尚未更新，找不到任何「排班制」員工，則預設將所有員工都視為排班制員工
+            if (shiftBasedEmployees.length === 0 && allEmployees.length > 0) {
+                console.warn("找不到任何'排班制'員工，已將所有員工視為可排班人員。請檢查後端員工資料表是否已新增 shiftType 欄位。");
+                shiftBasedEmployees = [...allEmployees];
+            }
+            standardEmployees = allEmployees.filter(emp => emp.shiftType !== '排班制');
+
+            // [核心修改] 下拉選單只顯示排班制員工
+            employeeSelect.innerHTML = '<option value="">-- 檢視所有員工 --</option>';
+            shiftBasedEmployees.forEach(emp => {
+                const option = document.createElement('option');
+                option.value = emp.userId;
+                option.textContent = emp.userName;
+                employeeSelect.appendChild(option);
+            });
+        } catch (error) {
+            console.error("載入員工列表失敗:", error);
+            alert("無法載入員工列表，請檢查後端連線。");
+        }
+    }
+
+    // [核心新增] 將員工與班表載入合併，簡化流程
+    async function fetchEmployeesAndSchedule() {
+        try {
+            await fetchEmployees();
+            await fetchScheduleData(false); // 傳入 false，因為日曆已存在，只需更新內容
+        } catch (error) {
+            console.error("載入初始資料失敗:", error);
+        }
+    }
+    async function fetchScheduleData(showLoading = true) {
+        loadingSpinner.style.display = 'block';
+        calendarWrapper.style.display = 'none';
+
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth() + 1;
+
+        try {
+            const data = await loadJsonp(`${API_BASE_URL}?page=attendance_api&action=get_latest_schedule&year=${year}&month=${month}`);
+            scheduleData = data.schedule || {};
+            holidays = new Set(data.holidays || []);
+            changes = {}; // Clear pending changes
+            saveBtn.disabled = true; // Reset save button state
+            updateCalendarContent(); // [核心修正] 改為只更新日曆內容，不重新產生骨架
+        } catch (error) {
+            console.error("載入排班資料失敗:", error);
+            alert("無法載入排班資料，請檢查後端 API。");
+            // [優化] 即使載入失敗，也顯示一個空的日曆
+            scheduleData = {};
+            holidays = new Set();
+            changes = {}; 
+            saveBtn.disabled = true;
+            updateCalendarContent(); // [核心修正] 即使失敗也嘗試更新畫面 (會顯示為空)
+        } finally {
+            // [優化] 使用 CoreLibrary 計算當月假日，作為後端未提供的備案
+            if (holidays.size === 0 && window.CoreLibrary) {
+                holidays = new Set(window.CoreLibrary.getHolidays(year, month));
+            }
+            loadingSpinner.style.display = 'none';
+            calendarWrapper.style.display = 'grid';
+        }
+    }
+
+    function renderCalendar() {
+        calendarBody.innerHTML = '';
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        // [核心修改] 根據選擇的員工，決定要顯示哪些人
+        const selectedUserId = employeeSelect.value;
+
+        // Add empty cells for the first week
+        for (let i = 0; i < firstDay; i++) {
+            calendarBody.innerHTML += `<div class="day-cell border-r border-b border-gray-200 bg-gray-50"></div>`;
+        }
+
+        // Add day cells
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+            const cell = document.createElement('div');
+            cell.className = 'day-cell border-r border-b border-gray-200 p-2 relative';
+            cell.dataset.date = dateStr;
+
+            const dayOfWeek = new Date(dateStr).getDay();
+            // [優化] 假日判斷優先使用後端資料，其次是 CoreLibrary
+            const isHoliday = holidays.has(dateStr);
+            if (dayOfWeek === 0 || dayOfWeek === 6 || isHoliday) {
+                cell.classList.add('is-holiday', 'bg-red-50');
+            }
+
+            cell.innerHTML = `
+                <div class="day-number font-semibold text-gray-700"></div>
+                <div class="day-content mt-1"></div>`;
+            calendarBody.appendChild(cell);
+        }
+        updateCalendarContent();
+    }
+
+    // [核心新增] 只更新日曆內容的函式
+    function updateCalendarContent() {
+        const selectedUserId = employeeSelect.value;
+        const dayCells = calendarBody.querySelectorAll('.day-cell[data-date]');
+
+        dayCells.forEach(cell => {
+            const dateStr = cell.dataset.date;
+            const dayContentEl = cell.querySelector('.day-content');
+            const dayNumberEl = cell.querySelector('.day-number');
+            if (!dayContentEl || !dayNumberEl) return;
+
+            const dayOfWeek = new Date(dateStr).getDay();
+            const isHoliday = holidays.has(dateStr);
+            
+            // [錯誤修正] 確保日期數字永遠存在
+            dayNumberEl.textContent = new Date(dateStr).getDate();
+            
+            if (selectedUserId) { // 選擇了特定排班員工
+                const emp = shiftBasedEmployees.find(e => e.userId === selectedUserId);
+                const shift = changes[selectedUserId]?.[dateStr] ?? scheduleData[selectedUserId]?.[dateStr];
+                if (shift === '休假') { 
+                    dayContentEl.innerHTML = `<div class="mt-1 text-xs"><span class="shift-tag shift-${shift}">${shift}</span></div>`;
+                } else {
+                    // [錯誤修正] 如果沒有班表，就清空內容
+                    dayContentEl.innerHTML = '';
+                }
+            } else { // 檢視所有員工
+                let shiftsHtml = '';
+                shiftBasedEmployees.forEach(emp => {
+                    const shift = changes[emp.userId]?.[dateStr] ?? scheduleData[emp.userId]?.[dateStr];
+                    const isWorking = !shift; // 沒有排休就是上班
+
+                    if ((currentViewMode === 'show_off' && shift === '休假') || (currentViewMode === 'show_on' && isWorking)) {
+                        const displayTag = isWorking ? '上班' : '休假';
+                        shiftsHtml += `<div class="flex items-center gap-1 text-xs">
+                                        <span class="flex-shrink-0">${emp.userName.substring(0, 3)}:</span>
+                                        <span class="shift-tag shift-${displayTag}">${displayTag}</span>
+                                   </div>`;
+                    }
+                });
+                // [錯誤修正] 將所有班表內容包裹在一個父層 div 中，確保 HTML 結構穩定
+                // [核心修正] 直接將 shiftsHtml 放入 dayContentEl，並加上樣式，讓 overflow-y: auto 生效
+                dayContentEl.innerHTML = shiftsHtml;
+            }
+        });
+        updateShiftStats();
+    }
+
+    function updateShift(userId, date, shift) {
+        // [新增] 勞基法檢查
+        if (ENFORCE_LABOR_LAW === 1 && shift !== '休假') {
+            const consecutiveDays = checkConsecutiveWorkDays(userId, date);
+            if (consecutiveDays >= MAX_CONSECUTIVE_WORK_DAYS) {
+                alert(`[勞基法警告]\n\n員工「${shiftBasedEmployees.find(e => e.userId === userId)?.userName}」在 ${date} 上班將導致連續工作 ${consecutiveDays + 1} 天，已超過法定上限。\n\n排班操作已取消。`);
+                return; // 中斷更新
+            }
+        }
+
+        if (!changes[userId]) {
+            changes[userId] = {};
+        }
+
+        // [v2.0 邏輯] 如果新班別是 '清除' (代表從休假變回上班)
+        // 則從 changes 中移除該日期的休假紀錄
+        if (shift === '清除') { 
+            delete changes[userId][date];
+            // 如果原本資料庫有休假紀錄，則標記為 null，後端會將其移除
+            if(scheduleData[userId]?.[date]){
+                changes[userId][date] = null; // 標記為刪除
+            }
+        } else {
+            changes[userId][date] = shift;
+        }
+        
+        updateCalendarContent();
+        saveBtn.disabled = false; // Enable save button after a change
+    }
+
+    // [新增] 檢查連續工作天數
+    function checkConsecutiveWorkDays(userId, targetDateStr) {
+        let consecutive = 0;
+        // 往前檢查
+        for (let i = 1; i <= MAX_CONSECUTIVE_WORK_DAYS; i++) {
+            const d = new Date(targetDateStr);
+            d.setDate(d.getDate() - i);
+            const dateStr = d.toLocaleDateString('sv');
+            const shift = changes[userId]?.[dateStr] ?? scheduleData[userId]?.[dateStr];
+            if (shift === '休假') break; // 遇到休假就中斷
+            consecutive++;
+        }
+        // 往後檢查
+        for (let i = 1; i <= MAX_CONSECUTIVE_WORK_DAYS; i++) {
+            const d = new Date(targetDateStr);
+            d.setDate(d.getDate() + i);
+            const dateStr = d.toLocaleDateString('sv');
+            const shift = changes[userId]?.[dateStr] ?? scheduleData[userId]?.[dateStr];
+            if (shift === '休假') break;
+            consecutive++;
+        }
+        return consecutive;
+    }
+
+    // [新增] 更新排休統計
+    function updateShiftStats() {
+        const statsEl = document.getElementById('shift-stats');
+        const selectedUserId = employeeSelect.value;
+
+        if (!selectedUserId) {
+            statsEl.classList.add('hidden');
+            return;
+        }
+        statsEl.classList.remove('hidden');
+
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        
+        // [優化] 改用 CoreLibrary 計算當月假日天數，更精確
+        let totalOffDays = 0;
+        const monthHolidays = window.CoreLibrary ? window.CoreLibrary.getHolidays(year, month + 1) : [];
+        const monthHolidaysSet = new Set(monthHolidays);
+        for (let d = 1; d <= daysInMonth; d++) {
+            if (monthHolidaysSet.has(`${year}-${(month + 1).toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`)) {
+                totalOffDays++;
+            }
+        }
+
+        let scheduledOffDays = 0;
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+            const shift = changes[selectedUserId]?.[dateStr] ?? scheduleData[selectedUserId]?.[dateStr];
+            if (shift === '休假') {
+                scheduledOffDays++;
+            }
+        }
+
+        document.getElementById('total-off-days').textContent = totalOffDays;
+        document.getElementById('scheduled-off-days').textContent = scheduledOffDays;
+        document.getElementById('remaining-off-days').textContent = totalOffDays - scheduledOffDays;
+    }
+
+    async function handleSaveChanges() {
+        const selectedUserId = employeeSelect.value;
+        if (!selectedUserId) {
+            alert("請先選擇一位員工。");
+            return;
+        }
+        if (!changes[selectedUserId] || Object.keys(changes[selectedUserId]).length === 0) {
+            alert("沒有任何變更需要儲存。");
+            return;
+        }
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = '儲存中...';
+
+        // 組合出該員工在該月份「最終」的休假日期列表
+        const finalOffDays = new Set();
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+            const finalShift = changes[selectedUserId]?.[dateStr] ?? scheduleData[selectedUserId]?.[dateStr];
+            if (finalShift === '休假') {
+                finalOffDays.add(dateStr);
+            }
+        }
+
+        try {
+            const payload = {
+                page: 'attendance_api',
+                action: 'save_schedule_version',
+                editorId: currentUser.userId,
+                editorName: currentUser.userName,
+                targetUserId: selectedUserId,
+                targetUserName: shiftBasedEmployees.find(e => e.userId === selectedUserId)?.userName,
+                yearMonth: `${year}-${(month + 1).toString().padStart(2, '0')}`,
+                offDaysCsv: Array.from(finalOffDays).join(',')
+            };
+            const params = new URLSearchParams(payload);
+            const response = await loadJsonp(`${API_BASE_URL}?${params.toString()}`);
+            
+            if (response.success) {
+                alert("排班資料已成功儲存！");
+                await fetchScheduleData(); // Refresh data from backend
+            } else {
+                throw new Error(response.message || "後端儲存失敗。");
+            }
+        } catch (error) {
+            console.error("儲存排班資料失敗:", error);
+            alert(`儲存失敗：${error.message}`);
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = '儲存變更';
+        }
+    }
+
+    function updateMonthDisplay() {
+        currentMonthDisplay.textContent = `${currentDate.getFullYear()}年 ${currentDate.getMonth() + 1}月`;
+    }
+
+    function bindEventListeners() {
+        prevMonthBtn.addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() - 1);
+            renderCalendar(); // [核心修正] 換月時，重新產生整個日曆骨架
+            fetchScheduleData(true); // 然後再非同步獲取資料
+        });
+
+        nextMonthBtn.addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            renderCalendar(); // [核心修正] 換月時，重新產生整個日曆骨架
+            fetchScheduleData(true);
+        });
+
+        employeeSelect.addEventListener('change', () => {
+            updateCalendarContent();
+        });
+
+        toggleViewBtn.addEventListener('click', () => {
+            currentViewMode = (currentViewMode === 'show_off') ? 'show_on' : 'show_off';
+            toggleViewBtn.textContent = (currentViewMode === 'show_off') ? '模式: 顯示排休' : '模式: 顯示上班';
+            updateCalendarContent();
+        });
+        // [核心修改] 將事件監聽器綁定到父元素，以處理動態生成的儲存格
+        // [核心修正] 簡化點擊邏輯
+        calendarBody.addEventListener('click', (e) => {
+            const cell = e.target.closest('.day-cell[data-date]');
+            if (!cell) return;
+
+            const selectedUserId = employeeSelect.value;
+            if (!selectedUserId) return; // 如果沒選特定員工，點擊無效
+
+            const date = cell.dataset.date;
+            const currentShift = changes[selectedUserId]?.[date] ?? scheduleData[selectedUserId]?.[date];
+
+            // 點擊儲存格優先設定為「休假」，再點一次就清除
+            const newShift = (currentShift !== '休假') ? '休假' : '清除';
+            updateShift(selectedUserId, date, newShift);
+        });
+
+        saveBtn.addEventListener('click', handleSaveChanges);
+    }
+
+    // --- Entry Point ---
+    document.addEventListener('DOMContentLoaded', initialize);
+
+</script>
+</body>
+</html>
