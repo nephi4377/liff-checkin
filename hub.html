@@ -51,6 +51,12 @@
                 <p class="text-gray-600">快速查詢與回覆客戶的常見問題。</p>
             </a>
 
+            <!-- [核心新增] 出勤管理主控台 (預設隱藏) -->
+            <a id="attendance-console-link" href="https://info.tanxin.space/attendance_report.html" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block hidden">
+                <h2 class="text-xl font-bold mb-2 text-green-700">出勤管理主控台</h2>
+                <p class="text-gray-600">查詢所有員工的出勤、遲到、早退與缺勤紀錄。</p>
+            </a>
+
             <a href="https://liff.line.me/2007974938-jVxn6y37" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
                 <h2 class="text-xl font-bold mb-2 text-purple-700">員工打卡</h2>
                 <p class="text-gray-600">開啟 LIFF 頁面進行每日出勤打卡。</p>
@@ -86,6 +92,7 @@
         const LIFF_ID = '2007974938-2nPKg3J0'; // 這是這個 hub.html 自己的 LIFF ID
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
         const PROJECT_CONSOLE_LIFF_ID = '2007974938-7yKM9EqL'; // 專案主控台的 LIFF ID
+        const ATTENDANCE_GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec'; // 出勤系統的後端 URL
         // ===============================================================
 
         let userProfile = null;
@@ -116,9 +123,30 @@
                     return;
                 }
                 userProfile = await liff.getProfile();
-                
+
                 // 驗證成功，顯示主畫面
                 showMainContent();
+
+                // [核心改造] 呼叫 get_employees API，並從中找出當前使用者的權限
+                try {
+                    const cb = 'jsonp_' + Math.random().toString(36).slice(2);
+                    const employeesUrl = `${ATTENDANCE_GAS_WEB_APP_URL}?page=attendance_api&action=get_employees&callback=${cb}`;
+                    
+                    window[cb] = (employees) => {
+                        delete window[cb];
+                        const currentUser = employees.find(emp => emp.userId === userProfile.userId);
+                        if (currentUser && currentUser.permission >= 4) {
+                            document.getElementById('attendance-console-link').classList.remove('hidden');
+                        }
+                    };
+
+                    const script = document.createElement('script');
+                    script.src = employeesUrl;
+                    script.onerror = () => delete window[cb];
+                    document.body.appendChild(script);
+                } catch (authError) {
+                    console.warn('無法取得使用者權限:', authError);
+                }
 
             } catch (error) {
                 console.error('LIFF Initialization Error:', error);

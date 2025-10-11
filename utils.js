@@ -50,9 +50,6 @@ export function isMobile() {
  */
 export function showGlobalNotification(message, duration, type = 'info') {
 
-  const targetElement = document.getElementById('project-title');
-  if (!targetElement) return;
-
   // [核心重構] 尋找或建立一個專門用來放置所有通知的容器
   let notificationContainer = document.getElementById('global-notification-container');
   if (!notificationContainer) {

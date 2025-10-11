@@ -185,6 +185,9 @@ function handleDataResponse(data) {
   // [核心修正] 在每次資料渲染完成後，都手動觸發一次圖片懶加載。
   // 這解決了從快取渲染時，圖片不會被載入的問題。
   lazyLoadImages();
+
+  // [還原] 根據使用者回饋，恢復頁面載入時顯示的 10 秒測試通知。
+  showGlobalNotification('這是一條測試通知', 10000, 'info');
 }
 
 // [核心修正] 將 lazyLoadImages 掛載到 window 物件上，使其成為一個全域可用的函式
@@ -336,6 +339,51 @@ async function initializeApp() {
   const pageLoadId = `load_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   window.currentPageLoadId = pageLoadId;
 
+  // [核心改造] 綁定主導覽按鈕的點擊事件，並增加滾動位置記憶與智慧滾動功能
+  const navButtons = document.querySelectorAll('.main-nav .nav-button');
+  const mainContent = document.getElementById('main-content');
+  const scrollPositions = { logs: 0, schedule: 0 }; // 儲存各個視圖的滾動位置
+
+  navButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const currentView = document.querySelector('.main-nav .nav-button.active')?.dataset.view;
+      const newView = button.dataset.view;
+
+      // 如果切換了視圖，儲存當前視圖的滾動位置
+      if (currentView && currentView !== newView) {
+        scrollPositions[currentView] = mainContent.scrollTop;
+      }
+
+      // 移除所有按鈕的 active class
+      navButtons.forEach(btn => btn.classList.remove('active'));
+      // 為被點擊的按鈕加上 active class
+      button.classList.add('active');
+
+      // 隱藏所有內容區塊
+      Array.from(mainContent.children).forEach(child => {
+        child.style.display = 'none';
+      });
+      // 顯示對應的內容區塊
+      const targetView = document.getElementById(`${newView}-container`);
+      if (targetView) {
+        targetView.style.display = 'block';
+        // 恢復新視圖的滾動位置
+        mainContent.scrollTop = scrollPositions[newView];
+
+        // [核心還原] 如果切換到排程視圖，自動滾動到第一個未完成的任務
+        if (newView === 'schedule') {
+          const taskCards = Array.from(document.querySelectorAll('#schedule-container .task-card'));
+          const firstUnfinishedIndex = taskCards.findIndex(card => card.querySelector('select[data-field="狀態"]')?.value !== '已完成');
+
+          if (firstUnfinishedIndex !== -1) {
+            // 滾動到第一個未完成任務的位置，並將其置於頂部
+            const targetCard = taskCards[firstUnfinishedIndex];
+            targetCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+      }
+    });
+  });
   // [v54.0 修正] 強化本地測試模式，使其能完全跳過 LIFF 認證
   // [核心修正] 將 API_BASE_URL 的讀取移至此處，確保在所有流程中都可用
   const API_BASE_URL = window.API_BASE_URL;
