@@ -17,6 +17,12 @@
             display: grid;
             grid-template-rows: auto 1fr; /* 日期數字佔用自動高度，內容區佔滿剩餘空間 */
         }
+        /* [核心新增] 在手機版上，拉高儲存格高度以容納更多資訊 */
+        @media (max-width: 768px) {
+            .day-cell {
+                aspect-ratio: 1 / 1.5;
+            }
+        }
         /* [核心修正] 移除滑鼠懸浮的互動效果 */
         /* .day-cell:hover .shift-selector { display: flex; } */
         /* .shift-selector { display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px); } */
@@ -465,6 +471,7 @@
                 <div class="day-content-wrapper mt-1 flex flex-col min-h-0">
                     <div class="self-status-container" style="min-height: 22px;"></div>
                     <div class="other-status-container mt-1 pt-1 border-t border-gray-200 flex-grow overflow-y-auto"></div>
+                    <div class="all-status-container day-content overflow-y-auto"></div>
                 </div>`;
             calendarBody.appendChild(cell);
         }
@@ -476,10 +483,12 @@
         const selectedUserId = employeeSelect.value;
         const dayCells = calendarBody.querySelectorAll('.day-cell[data-date]');
         dayCells.forEach(cell => {
-            // [核心修正] 重新宣告在 forEach 迴圈內必要的變數
             const dateStr = cell.dataset.date;
             const dayNumberEl = cell.querySelector('.day-number');
-            if (!dayNumberEl) return;
+            const selfStatusContainer = cell.querySelector('.self-status-container');
+            const otherStatusContainer = cell.querySelector('.other-status-container');
+            const allStatusContainer = cell.querySelector('.all-status-container');
+            if (!dayNumberEl || !selfStatusContainer || !otherStatusContainer || !allStatusContainer) return;
 
             const dayOfWeek = new Date(dateStr).getDay();
             const isHoliday = holidays.has(dateStr);
@@ -488,20 +497,10 @@
             dayNumberEl.textContent = new Date(dateStr).getDate();
             
             if (selectedUserId) { // 選擇了特定排班員工
-                // [核心修正] 只有在編輯模式下，才使用新的雙區塊結構
-                let selfStatusContainer = cell.querySelector('.self-status-container');
-                let otherStatusContainer = cell.querySelector('.other-status-container');
-
-                // 如果找不到新結構，就重新建立它
-                if (!selfStatusContainer || !otherStatusContainer) {
-                    cell.innerHTML = `<div class="day-number font-semibold text-gray-700">${new Date(dateStr).getDate()}</div>
-                                      <div class="day-content-wrapper mt-1 flex flex-col min-h-0">
-                                          <div class="self-status-container" style="min-height: 22px;"></div>
-                                          <div class="other-status-container mt-1 pt-1 border-t border-gray-200 flex-grow overflow-y-auto"></div>
-                                      </div>`;
-                    selfStatusContainer = cell.querySelector('.self-status-container');
-                    otherStatusContainer = cell.querySelector('.other-status-container');
-                }
+                // [核心重構] 顯示編輯模式的區塊，隱藏全員檢視區塊
+                selfStatusContainer.style.display = 'block';
+                otherStatusContainer.style.display = 'block';
+                allStatusContainer.style.display = 'none';
                 const isStandard = standardEmployees.some(e => e.userId === selectedUserId);
                 // [核心修正] 直接從 scheduleData 讀取班別，scheduleData 是唯一的真實來源
                 let shift = scheduleData[selectedUserId]?.[dateStr];
@@ -561,14 +560,10 @@
                     otherStatusContainer.classList.add('hidden');
                 }
             } else { // 檢視所有員工
-                // [核心修正] 在檢視模式下，還原為舊的、單純的 HTML 結構
-                cell.innerHTML = `<div class="day-number font-semibold text-gray-700">${new Date(dateStr).getDate()}</div>
-                                  <div class="day-content mt-1 overflow-y-auto"></div>`;
-                // 重新選取 day-content 元素
-                const dayContentEl = cell.querySelector('.day-content');
-                if (!dayContentEl) return;
-
-                // [核心修正] 根據勾選的組別來決定顯示哪些員工
+                // [核心重構] 顯示全員檢視區塊，隱藏編輯模式的區塊
+                selfStatusContainer.style.display = 'none';
+                otherStatusContainer.style.display = 'none';
+                allStatusContainer.style.display = 'block';
                 // NEW: Filter employees based on both groups AND shift types
                 const employeesToShow = [];
                 allEmployees.forEach(emp => {
@@ -598,7 +593,7 @@
                                            <span class="flex-shrink-0">${emp.userName.substring(0, 3)}</span></div>`;
                     }
                 });
-                dayContentEl.innerHTML = shiftsHtml;
+                allStatusContainer.innerHTML = shiftsHtml;
             }
         });
         updateShiftStats();
