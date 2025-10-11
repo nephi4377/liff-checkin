@@ -330,10 +330,6 @@ function setupScrollListener() {
 async function initializeApp() {
   // [核心修正] 將常數宣告移至函式內部，確保在 DOMContentLoaded 後才讀取 window 物件。
   // 這可以解決因模組載入時機導致 window.API_BASE_URL 為 undefined 的問題。
-  const API_BASE_URL = window.API_BASE_URL;
-  const FRONTEND_VERSION = window.FRONTEND_VERSION;
-  if (!API_BASE_URL) { displayError({ message: '無法讀取 API_BASE_URL 設定，請檢查 HTML 檔案。' }); return; }
-
   // [v57.0 偵錯強化] 在函式最開始就加入日誌，確認程式已開始執行
   console.log('[Init] 應用程式初始化開始...');
   // [核心修正] 為每一次頁面載入產生一個唯一的識別碼，用以解決競態條件
@@ -341,6 +337,10 @@ async function initializeApp() {
   window.currentPageLoadId = pageLoadId;
 
   // [v54.0 修正] 強化本地測試模式，使其能完全跳過 LIFF 認證
+  // [核心修正] 將 API_BASE_URL 的讀取移至此處，確保在所有流程中都可用
+  const API_BASE_URL = window.API_BASE_URL;
+  if (!API_BASE_URL) { displayError({ message: '無法讀取 API_BASE_URL 設定，請檢查 HTML 檔案。' }); return; }
+
   console.log('[Init] 檢查是否為本地測試環境...');
   const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
   if (isLocalTest) {

@@ -20,7 +20,7 @@ echo 新版本號為: %NEW_VERSION%
 echo.
 echo [前端部署] 正在自動更新 managementconsole.html 中的版本號...
 :: [核心修正] 使用 PowerShell 讀取、替換版本號，並強制以 UTF-8 編碼寫回檔案
-powershell -Command "(Get-Content -Path 'managementconsole.html' -Raw -Encoding UTF8) -replace \"const FRONTEND_VERSION = '.*';\", \"const FRONTEND_VERSION = '%NEW_VERSION%';\" | Set-Content -Path 'managementconsole.html' -Encoding UTF8"
+powershell -Command "(Get-Content -Path 'managementconsole.html' -Raw -Encoding UTF8) -replace \"var FRONTEND_VERSION = '.*';\", \"var FRONTEND_VERSION = '%NEW_VERSION%';\" | Set-Content -Path 'managementconsole.html' -Encoding UTF8"
 if %errorlevel% neq 0 (
     echo.
     echo 錯誤: 更新 HTML 檔案失敗。請檢查檔案是否存在或被鎖定。
