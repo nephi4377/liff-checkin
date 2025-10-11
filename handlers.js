@@ -10,7 +10,7 @@
 import { state } from './state.js';
 import { logToPage } from './utils.js';
 import { _buildLogCard } from './ui.js'; // 【⭐️ 核心修改：引入建立卡片的函式 ⭐️】
-import { showGlobalNotification } from './main.js'; // 【⭐️ 核心修正：引入全域通知函式 ⭐️】
+import { showGlobalNotification } from './utils.js'; // 【⭐️ 核心修正：引入全域通知函式 ⭐️】
 import * as api from './api.js'; // [統一] 引入完整的 api 模組
 
 /**

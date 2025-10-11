@@ -23,7 +23,7 @@ import { loadJsonp } from './api.js';
 * - **日誌分頁 (Pagination)**: 日誌列表採用前端分頁，滾動到底部時自動載入下一批，避免一次性渲染大量DOM。
 * =============================================================================
 */
-import { logToPage } from './utils.js';
+import { logToPage, showGlobalNotification } from './utils.js';
 import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, createOrUpdateTradeDatalist, renderPostCreator, _buildLogCard } from './ui.js';
 import * as Handlers from './handlers.js';
 import * as ScheduleActions from './scheduleActions.js';
@@ -562,138 +562,9 @@ document.addEventListener('click', (e) => {
   }
 });
 
-/* ===== 新增：三欄式佈局互動 ===== */
-document.addEventListener('DOMContentLoaded', () => {
-  const navButtons = document.querySelectorAll('.nav-button');
-  const mobileNavToggle = document.getElementById('mobile-nav-toggle');
-  const leftSidebar = document.querySelector('.left-sidebar');
-  const scheduleContainer = document.getElementById('schedule-container');
-  const logsContainer = document.getElementById('logs-container');
-  const wallContainer = document.getElementById('wall-container'); // [新增] 取得專案牆容器
-  const mainContent = document.getElementById('main-content');
-
-  // 【⭐️ 核心修正：將應用程式初始化移回此處，確保在 DOM 載入後立即執行 ⭐️】
-  initializeApp();
-
-  // 漢堡選單開關
-  if (mobileNavToggle && leftSidebar) {
-    mobileNavToggle.addEventListener('click', () => {
-      leftSidebar.classList.toggle('open');
-    });
-  }
-
-  navButtons.forEach(button => {
-    button.addEventListener('click', () => {
-      // 移除所有按鈕的 active class
-      navButtons.forEach(btn => btn.classList.remove('active'));
-      // 為當前點擊的按鈕加上 active class
-      button.classList.add('active');
-
-      const view = button.dataset.view;
-
-      // 根據 data-view 屬性顯示或隱藏對應的區塊
-      scheduleContainer.style.display = (view === 'schedule') ? 'block' : 'none';
-      logsContainer.style.display = (view === 'logs') ? 'block' : 'none';
-
-      // [新增] 根據當前視圖，顯示或隱藏手機版的懸浮新增按鈕
-      const fab = document.getElementById('fab-add-task-btn');
-      if (fab) fab.style.display = (view === 'schedule') ? 'flex' : 'none';
-      // [新增] 當切換到工程排程時，觸發滾動
-      if (view === 'schedule') {
-        setTimeout(() => {
-          // [修改] 尋找第一個「未完成」或「施工中」的任務索引
-          const focusTaskIndex = state.currentScheduleData.findIndex(task => task['狀態'] !== '已完成');
-
-          const focusCard = document.getElementById(`task-card-${focusTaskIndex}`);
-          if (focusCard) {
-            focusCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            logToPage(`✅ 已自動滾動至任務 #${focusTaskIndex + 1}`);
-          }
-        }, 50); // 使用短延遲確保區塊顯示後再滾動
-      }
-      // [核心修正] 當切換回日誌視圖時，將主內容區的捲動條歸零
-      // 解決從排程切換回來時，日誌頁面不在頂部的問題
-      const mainContent = document.getElementById('main-content');
-      if (view === 'logs' && mainContent) {
-        mainContent.scrollTop = 0;
-      }
-
-      // 在手機版上，點擊後自動關閉選單
-      if (leftSidebar && leftSidebar.classList.contains('open')) {
-        leftSidebar.classList.remove('open');
-      }
-    });
-  });
-});
-
 /**
  * [重構] 在主標題下方顯示一個全域的、暫時的通知橫幅。
  * @param {string} message - 要顯示的訊息文字。
  * @param {number} duration - 訊息顯示的持續時間（毫秒）。
  * @param {'info'|'success'|'error'} type - 訊息類型，決定橫幅顏色。
  */
-export function showGlobalNotification(message, duration, type = 'info') {
-
-  const targetElement = document.getElementById('project-title');
-  if (!targetElement) return;
-
-  // [核心重構] 尋找或建立一個專門用來放置所有通知的容器
-  let notificationContainer = document.getElementById('global-notification-container');
-  if (!notificationContainer) {
-    notificationContainer = document.createElement('div');
-    notificationContainer.id = 'global-notification-container';
-    // [核心修正] 將容器改為 fixed 定位，使其漂浮在頁面頂部中央，不影響其他內容佈局。
-    notificationContainer.style.cssText = `
-      position: fixed;
-      top: 1rem; /* 距離視窗頂部 1rem */
-      left: 50%;
-      transform: translateX(-50%); /* 水平置中 */
-      z-index: 9999; /* 確保在最上層 */
-      display: flex;
-      flex-direction: column;
-      align-items: center; /* 讓通知項目在容器內置中 */
-      gap: 0.5rem; /* 通知之間的間距 */
-    `;
-    // [核心修正] 將容器直接附加到 body，使其獨立於頁面其他元素的佈局。
-    document.body.appendChild(notificationContainer);
-  }
-
-  // [核心重構] 移除「刪除舊通知」的邏輯，以允許訊息堆疊
-
-  // 根據類型決定顏色 (邏輯不變)
-  const colors = {
-    info: { bg: '#dbeafe', text: '#1e40af' }, // 藍色
-    success: { bg: '#dcfce7', text: '#166534' }, // 綠色
-    error: { bg: '#fee2e2', text: '#991b1b' }  // 紅色
-  };
-  const selectedColor = colors[type] || colors.info;
-
-  // 建立新的通知橫幅元素
-  const notificationItem = document.createElement('div');
-  // [核心重構] 使用 class 而不是 id，允許多個通知存在
-  notificationItem.className = 'global-notification-item';
-  notificationItem.textContent = message;
-
-  // 設定樣式
-  notificationItem.style.cssText = `
-    background-color: ${selectedColor.bg};
-    color: ${selectedColor.text};
-    padding: 0.75rem 1.5rem; /* 稍微增加左右內距，讓外觀更舒適 */
-    border-radius: 0.5rem;
-    text-align: center;
-    font-weight: 600;
-    transition: opacity 0.5s ease-out, transform 0.5s ease-out;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1); /* 增加更明顯的陰影，突顯漂浮感 */
-    min-width: 300px; /* 設定最小寬度，避免訊息太短時過窄 */
-  `;
-
-  // [核心重構] 將新的通知項目附加到容器的末尾
-  notificationContainer.appendChild(notificationItem);
-
-  // 設定計時器，在指定時間後自動移除通知
-  setTimeout(() => {
-    notificationItem.style.opacity = '0';
-    notificationItem.style.transform = 'translateY(-20px)'; // 加上向上移出的動畫效果
-    setTimeout(() => notificationItem.remove(), 500); // 等待淡出動畫結束後再移除 DOM
-  }, duration);
-}

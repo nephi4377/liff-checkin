@@ -9,7 +9,7 @@
 
 import { state } from './state.js';
 import { logToPage, driveFileId } from './utils.js';
-import { showGlobalNotification } from './main.js'; // [核心修正] 引入全域通知函式
+import { showGlobalNotification } from './utils.js'; // [核心修正] 引入全域通知函式
 import { buildPhotoGrid } from './ui.js';
 import * as api from './api.js';
 
