@@ -156,7 +156,14 @@
                     alert('無法取得您的使用者資訊，請重新載入頁面。');
                     return;
                 }
-                const scheduleUrl = `https://info.tanxin.space/shift_schedule.html?uid=${userProfile.userId}&name=${encodeURIComponent(userProfile.displayName)}`;
+                // [核心改造] 根據當前環境，動態產生排班系統的 URL
+                const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+                const baseUrl = isLocal 
+                    ? 'http://127.0.0.1:5500/shift_schedule.html' 
+                    : 'https://info.tanxin.space/shift_schedule.html';
+
+                const scheduleUrl = `${baseUrl}?uid=${userProfile.userId}&name=${encodeURIComponent(userProfile.displayName)}`;
+                
                 window.open(scheduleUrl, '_blank');
             });
 
