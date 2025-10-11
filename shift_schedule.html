@@ -9,7 +9,7 @@
     <script src="https://cdn.jsdelivr.net/gh/north-river/gs-core-library@v1.0.1/CoreLibrary.min.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(68px, 1fr)); }
         /* [核心改造] 恢復為 grid 佈局，並微調內部結構以固定版面 */
         .day-cell {
             position: relative;
@@ -20,7 +20,7 @@
         /* [核心新增] 在手機版上，拉高儲存格高度以容納更多資訊 */
         @media (max-width: 768px) {
             .day-cell {
-                aspect-ratio: 1 / 2;
+                aspect-ratio: 1 / 1.6;
             }
         }
         /* [核心修正] 移除滑鼠懸浮的互動效果 */
@@ -39,6 +39,18 @@
         .day-content {
             min-height: 0; /* 允許內容區塊被壓縮，這是觸發 overflow 的關鍵 */
             overflow-y: auto;
+        }
+        /* [核心新增] 電腦版檢視全員模式下，放大字體 */
+        .day-content .text-xs {
+            font-size: 0.85rem; /* 預設為 14px (text-sm) */
+            line-height: 1.25rem;
+        }
+        /* [核心新增] 手機版檢視全員模式下，縮小字體 */
+        @media (max-width: 768px) {
+            .day-number .shift-tag, .day-content .text-xs {
+                font-size: 0.7rem;
+                letter-spacing: -0.1em; /* [新增] 讓字體更緊湊 */
+            }
         }
         /* [核心新增] 非阻塞式通知橫幅樣式 */
         .notification-banner {
@@ -86,11 +98,11 @@
                     <!-- [核心改造] 統計區塊，預設為 invisible 以避免跳動 -->
                     <div id="shift-stats" class="text-sm text-gray-600 invisible flex items-center gap-4" style="min-height: 48px;">
                         <div id="stats-on-duty" class="hidden items-center gap-4">
-                            <div>應上天數: <span id="total-work-days" class="font-bold">0</span></div>
-                            <div>已排上班: <span id="scheduled-on-days" class="font-bold text-green-600">0</span></div>
+                            <div>應上班: <span id="total-work-days" class="font-bold">0</span></div>
+                            <div>已排: <span id="scheduled-on-days" class="font-bold text-green-600">0</span></div>
                         </div>
                         <div id="stats-off-duty" class="items-center gap-4">
-                            <div>可排休天數: <span id="total-off-days" class="font-bold">0</span></div>
+                            <div>可排休: <span id="total-off-days" class="font-bold">0</span></div>
                             <div>已排休: <span id="scheduled-off-days" class="font-bold text-blue-600">0</span></div>
                             <div class="font-bold text-green-600">剩餘: <span id="remaining-off-days">0</span></div>
                         </div>
@@ -109,18 +121,8 @@
                     <div class="spinner w-10 h-10 border-4 border-gray-200 rounded-full mx-auto"></div>
                     <p class="mt-2 text-gray-600">載入中...</p>
                 </div>
-                <div id="calendar-grid-wrapper" class="hidden">
-                    <div class="calendar-grid border-t border-l border-gray-200">
-                        <!-- Weekday headers -->
-                        <div class="text-center font-semibold py-2 border-r border-b border-gray-200 bg-gray-50">日</div>
-                        <div class="text-center font-semibold py-2 border-r border-b border-gray-200 bg-gray-50">一</div>
-                        <div class="text-center font-semibold py-2 border-r border-b border-gray-200 bg-gray-50">二</div>
-                        <div class="text-center font-semibold py-2 border-r border-b border-gray-200 bg-gray-50">三</div>
-                        <div class="text-center font-semibold py-2 border-r border-b border-gray-200 bg-gray-50">四</div>
-                        <div class="text-center font-semibold py-2 border-r border-b border-gray-200 bg-gray-50">五</div>
-                        <div class="text-center font-semibold py-2 border-r border-b border-gray-200 bg-gray-50">六</div>
-                    </div>
-                    <div id="calendar-body" class="calendar-grid border-l border-gray-200">
+                <div id="calendar-grid-wrapper" class="hidden overflow-x-auto">
+                    <div id="calendar-body" class="calendar-grid border-t border-l border-gray-200">
                         <!-- Day cells will be injected here -->
                     </div>
                 </div>
@@ -357,14 +359,17 @@
                 console.warn('⚡️ 本地測試模式啟用，已強制賦予最高管理權限。');
             }
 
+            // [核心改造] 只有在頁面首次載入時，才根據權限設定預設的下拉選單選項。
+            // 避免在切換月份時重置使用者的選擇。
+            const isInitialLoad = !employeeSelect.dataset.initialized;
             const isManager = currentUser.permission >= 4;
             console.log(`權限等級: ${currentUser.permission} (${isManager ? '管理者' : '一般使用者'})`);
             employeeSelect.disabled = !isManager;
-            if (!isManager) {
-                employeeSelect.value = currentUser.userId;
-            } else {
-                employeeSelect.value = ''; // 管理者預設檢視全員
+            if (isInitialLoad) {
+                employeeSelect.value = isManager ? '' : currentUser.userId;
+                employeeSelect.dataset.initialized = 'true'; // 標記為已初始化
             }
+
         } catch (error) {
             console.error("載入員工列表失敗:", error);
             showGlobalNotification("無法載入員工列表，請檢查後端連線。", 8000, 'error');
@@ -373,6 +378,9 @@
 
     // [v12.0 新增] 將處理員工資料的邏輯獨立出來，方便快取和新資料共用
     function processEmployeesData() {
+            // [核心改造] 儲存當前選擇，避免重置
+            const currentSelectedUserId = employeeSelect.value;
+
             // [核心改造] 建立一個可供排班的員工列表，排除權限等級 5 的使用者
             const schedulableEmployees = allEmployees.filter(emp => emp.permission < 5);
 
@@ -447,6 +455,9 @@
             shifttypeFilterContainer.querySelectorAll('input[name="shifttype-filter"]').forEach(checkbox => {
                 checkbox.addEventListener('change', handleShiftTypeFilterChange);
             });
+
+            // [核心改造] 恢復之前的選擇
+            employeeSelect.value = currentSelectedUserId;
     }
 
     // [核心新增] 將員工與班表載入合併，簡化流程
@@ -507,6 +518,15 @@
 
     function renderCalendar() {
         calendarBody.innerHTML = '';
+        // [核心重構] 將表頭也由 JS 動態產生，確保與內容格在同一個 Grid 中
+        const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+        weekdays.forEach(day => {
+            const headerCell = document.createElement('div');
+            headerCell.className = 'text-center font-semibold py-2 border-r border-b border-gray-200 bg-gray-50';
+            headerCell.textContent = day;
+            calendarBody.appendChild(headerCell);
+        });
+
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
         const firstDay = new Date(year, month, 1).getDay();
@@ -515,7 +535,9 @@
 
         // Add empty cells for the first week
         for (let i = 0; i < firstDay; i++) {
-            calendarBody.innerHTML += `<div class="day-cell border-r border-b border-gray-200 bg-gray-50"></div>`;
+            const emptyCell = document.createElement('div');
+            emptyCell.className = 'day-cell border-r border-b border-gray-200 bg-gray-50';
+            calendarBody.appendChild(emptyCell);
         }
 
         const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -532,14 +554,10 @@
                 cell.classList.add('is-holiday');
             }
 
-        // [核心改造] 調整日曆格內部結構，以 flex 佈局解決跳動問題
+        // [核心重構] 回歸單純的 HTML 結構
             cell.innerHTML = `
-                <div class="day-number font-semibold text-gray-700"></div>
-                <div class="day-content-wrapper mt-1 flex flex-col min-h-0">
-                    <div class="self-status-container" style="min-height: 22px;"></div>
-                    <div class="other-status-container mt-1 pt-1 border-t border-gray-200 flex-grow overflow-y-auto"></div>
-                    <div class="all-status-container day-content overflow-y-auto"></div>
-                </div>`;
+                <div class="day-number font-semibold text-gray-700 flex items-center gap-2 pl-1"></div>
+                <div class="day-content overflow-y-auto p-1"></div>`;
             calendarBody.appendChild(cell);
         }
         updateCalendarContent();
@@ -552,10 +570,8 @@
         dayCells.forEach(cell => {
             const dateStr = cell.dataset.date;
             const dayNumberEl = cell.querySelector('.day-number');
-            const selfStatusContainer = cell.querySelector('.self-status-container');
-            const otherStatusContainer = cell.querySelector('.other-status-container');
-            const allStatusContainer = cell.querySelector('.all-status-container');
-            if (!dayNumberEl || !selfStatusContainer || !otherStatusContainer || !allStatusContainer) return;
+            const dayContentEl = cell.querySelector('.day-content');
+            if (!dayNumberEl || !dayContentEl) return;
 
             const dayOfWeek = new Date(dateStr).getDay();
             const isHoliday = holidays.has(dateStr);
@@ -564,24 +580,17 @@
             dayNumberEl.textContent = new Date(dateStr).getDate();
             
             if (selectedUserId) { // 選擇了特定排班員工
-                // [核心重構] 顯示編輯模式的區塊，隱藏全員檢視區塊
-                selfStatusContainer.style.display = 'block';
-                otherStatusContainer.style.display = 'block';
-                allStatusContainer.style.display = 'none';
                 const isStandard = standardEmployees.some(e => e.userId === selectedUserId);
-                // [核心修正] 直接從 scheduleData 讀取班別，scheduleData 是唯一的真實來源
                 let shift = scheduleData[selectedUserId]?.[dateStr];
+                if (isStandard && !shift && isHoliday) { shift = '休假'; }
 
-                // [v10.0 核心修正] 如果是標準班，且沒有任何排班紀錄，則預設假日為「休假」
-                if (isStandard && !shift && isHoliday) {
-                    shift = '休假';
-                }
-
-                let selfStatusHtml = '';
+                let selfStatusTag = null;
                 // [核心改造] 根據模式顯示自己的班表狀態
                 if (currentViewMode === 'show_off' && shift === '休假') {
                     const tagClass = `shift-${shift}`;
-                    selfStatusHtml = `<div class="text-xs"><span class="shift-tag ${tagClass} font-bold">${shift}</span></div>`;
+                    selfStatusTag = document.createElement('span');
+                    selfStatusTag.className = `shift-tag ${tagClass}`;
+                    selfStatusTag.textContent = '休';
                 } else if (currentViewMode === 'show_on') {
                     const isStandard = standardEmployees.some(e => e.userId === selectedUserId);
                     const isWorkday = !holidays.has(dateStr) && new Date(dateStr).getDay() % 6 !== 0;
@@ -589,10 +598,12 @@
                     
                     if (isWorking) {
                         const tagClass = `shift-上班`;
-                        selfStatusHtml = `<div class="text-xs"><span class="shift-tag ${tagClass} font-bold">上班</span></div>`;
+                        selfStatusTag = document.createElement('span');
+                        selfStatusTag.className = `shift-tag ${tagClass}`;
+                        selfStatusTag.textContent = '班';
                     }
                 }
-                selfStatusContainer.innerHTML = selfStatusHtml;
+                if (selfStatusTag) dayNumberEl.appendChild(selfStatusTag);
                 
                 // [核心改造] 根據當前模式 (顯示上班/休假) 和篩選器，顯示其他同事的狀態
                 const otherEmployeesToShow = allEmployees.filter(emp => {
@@ -611,28 +622,19 @@
                     const isWorking = otherIsStandard ? (isWorkday && !otherShift) : (otherShift !== '休假' && otherShift !== '特休');
                     const isOff = (otherShift === '休假') || (otherIsStandard && !isWorkday && !otherShift);
 
-                    if (currentViewMode === 'show_on' && isWorking) {
-                        return `<div class="text-xs text-gray-500 opacity-80 truncate" title="${emp.userName}">${emp.userName.substring(0, 3)} 上班</div>`;
-                    }
-                    if (currentViewMode === 'show_off' && isOff) {
-                        return `<div class="text-xs text-gray-500 opacity-80 truncate" title="${emp.userName}">${emp.userName.substring(0, 3)} 休假</div>`;
+                    if ((currentViewMode === 'show_on' && isWorking) || (currentViewMode === 'show_off' && isOff)) {
+                        return `<div class="text-xs text-gray-500 opacity-80 truncate" title="${emp.userName}">${emp.userName.substring(0, 3)}</div>`;
                     }
                     return null;
                 }).filter(Boolean).join('');
 
                 if (otherStatusesHtml) {
-                    otherStatusContainer.innerHTML = `<div class="space-y-0.5">${otherStatusesHtml}</div>`;
-                    otherStatusContainer.classList.remove('hidden');
+                    dayContentEl.innerHTML = `<div class="mt-1 pt-1 border-t border-gray-200 space-y-0.5">${otherStatusesHtml}</div>`;
                 } else {
-                    otherStatusContainer.innerHTML = '';
-                    otherStatusContainer.classList.add('hidden');
+                    dayContentEl.innerHTML = '';
                 }
             } else { // 檢視所有員工
-                // [核心重構] 顯示全員檢視區塊，隱藏編輯模式的區塊
-                selfStatusContainer.style.display = 'none';
-                otherStatusContainer.style.display = 'none';
-                allStatusContainer.style.display = 'block';
-                // NEW: Filter employees based on both groups AND shift types
+                dayContentEl.innerHTML = ''; // 清空內容
                 const employeesToShow = [];
                 allEmployees.forEach(emp => {
                     const inSelectedGroup = displayedGroups.has(emp.group || '未分類');
@@ -657,11 +659,11 @@
                     const isOff = (shift === '休假') || (isStandard && !isWorkday && !shift);
                     if ((currentViewMode === 'show_off' && isOff) || (currentViewMode === 'show_on' && isWorking)) {
                         // [核心新增] 套用員工專屬顏色作為背景
-                        shiftsHtml += `<div class="text-xs px-1.5 py-0.5 rounded" style="background-color: ${emp.color};">
-                                           <span class="flex-shrink-0">${emp.userName.substring(0, 3)}</span></div>`;
+                        // [核心改造] 增加 w-fit 讓色塊寬度貼合內容
+                        shiftsHtml += `<div class="w-fit text-xs px-1.5 py-0.5 rounded" style="background-color: ${emp.color};"><span class="flex-shrink-0">${emp.userName.substring(0, 3)}</span></div>`;
                     }
                 });
-                allStatusContainer.innerHTML = shiftsHtml;
+                dayContentEl.innerHTML = shiftsHtml;
             }
         });
         updateShiftStats();
@@ -928,7 +930,9 @@
             // [核心新增] 禁止編輯今天以前的日期
             const today = new Date();
             today.setHours(0, 0, 0, 0); // 設定為今天凌晨
-            if (new Date(date) < today) {
+            // [核心改造] 只有非管理者才需要被限制
+            const isManager = currentUser && currentUser.permission >= 4;
+            if (!isManager && new Date(date) < today) {
                 showGlobalNotification('無法修改過去的排班紀錄。如需調整，請聯繫管理員。', 8000, 'error');
                 return;
             }
