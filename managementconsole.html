@@ -9,13 +9,13 @@
   <link rel="icon" href="data:,">
   <!-- [新增] 引入 flatpickr 日期選擇器樣式 -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-  <!-- [必要] 引入 LINE LIFF SDK，這是 LIFF 應用的基礎 -->
-  <!--<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>-->
+  <!-- [v55.0 修正] 永遠載入 LIFF SDK，並由 main.js 判斷是否使用 -->
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <!-- [核心修正] 將 const 改為 var，確保變數能被正確掛載到 window 物件上，
+       以便後續的模組腳本 (main.js) 可以透過 window.API_BASE_URL 存取。 -->
   <script>
-    // 部分設定保留在 HTML 中，方便不重新部署時修改
-    // [架構修正] 將 API_BASE_URL 移至此處，使其成為全域變數，解決模組循環依賴問題
-    const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec'; // 請勿修改此處
-    const FRONTEND_VERSION = 'v25.10.11.1456'; // 此處將由 upload.bat 自動更新
+    var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
+    var FRONTEND_VERSION = 'v25.10.11.1456';
   </script>
 </head>
 <body>
@@ -98,16 +98,4 @@
   <script type="module" src="main.js"></script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
 

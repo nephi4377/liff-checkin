@@ -1,4 +1,3 @@
-import { loadJsonp } from './api.js';
 /*
 * =============================================================================
 * 檔案名稱: main.js
@@ -23,6 +22,7 @@ import { loadJsonp } from './api.js';
 * - **日誌分頁 (Pagination)**: 日誌列表採用前端分頁，滾動到底部時自動載入下一批，避免一次性渲染大量DOM。
 * =============================================================================
 */
+import { loadJsonp } from './api.js';
 import { logToPage, showGlobalNotification } from './utils.js';
 import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, createOrUpdateTradeDatalist, renderPostCreator, _buildLogCard } from './ui.js';
 import * as Handlers from './handlers.js';
@@ -328,19 +328,40 @@ function setupScrollListener() {
  * - 移除了在認證前顯示快取資料的邏輯，改為在認證成功後才顯示載入動畫並請求資料。
  */
 async function initializeApp() {
+  // [核心修正] 將常數宣告移至函式內部，確保在 DOMContentLoaded 後才讀取 window 物件。
+  // 這可以解決因模組載入時機導致 window.API_BASE_URL 為 undefined 的問題。
+  const API_BASE_URL = window.API_BASE_URL;
+  const FRONTEND_VERSION = window.FRONTEND_VERSION;
+  if (!API_BASE_URL) { displayError({ message: '無法讀取 API_BASE_URL 設定，請檢查 HTML 檔案。' }); return; }
+
+  // [v57.0 偵錯強化] 在函式最開始就加入日誌，確認程式已開始執行
+  console.log('[Init] 應用程式初始化開始...');
   // [核心修正] 為每一次頁面載入產生一個唯一的識別碼，用以解決競態條件
   const pageLoadId = `load_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   window.currentPageLoadId = pageLoadId;
 
-  logToPage('應用程式啟動 (快取優先模式)...');
-
-  // 【⭐️ 核心修改：加入啟動時的通知測試 ⭐️】
-  // 根據您的要求，在應用程式啟動時立即顯示一條測試通知，以確認其功能正常。
-  showGlobalNotification('這是一條測試通知，用於確認顯示功能是否正常。', 10000, 'info');
-
+  // [v54.0 修正] 強化本地測試模式，使其能完全跳過 LIFF 認證
+  console.log('[Init] 檢查是否為本地測試環境...');
   const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+  if (isLocalTest) {
+    logToPage('⚡️ 本地測試模式啟用，將跳過 LIFF 認證。');
+    const urlParams = new URLSearchParams(window.location.search);
+    const projectId = urlParams.get('id') || '999'; // 允許從 URL 傳入案號，否則預設為 999
+    const userId = urlParams.get('uid') || 'Ud58333430513b7527106fa71d2e30151'; // 預設為您的 UID
+    
+    // 將測試用的 ID 存入全域狀態
+    state.projectId = projectId;
+    state.currentUserId = userId;
+    state.currentUserName = '本地測試員';
 
-  // 步驟 1：從 URL 讀取 projectId 和 userId
+    // 直接開始載入資料，不執行後續的 LIFF 流程
+    console.log(`[Init] 本地模式：準備載入資料 (ProjectID: ${projectId}, UserID: ${userId})`);
+    await loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL);
+    return;
+  }
+
+  console.log('[Init] 判斷為正式環境，開始解析 URL 參數...');
+  // [v56.0 修正] 恢復 urlParams 的宣告，解決啟動時的致命錯誤
   const urlParams = new URLSearchParams(window.location.search);
   let projectId = urlParams.get('id');
   let userId = urlParams.get('uid');
@@ -348,32 +369,38 @@ async function initializeApp() {
   // 【⭐️ 核心修正：處理 LIFF 重新導向的 liff.state 參數 ⭐️】
   // LIFF 會將原始參數包在 liff.state 中，我們需要手動解析它。
   if (urlParams.has('liff.state')) {
+    console.log('[Init] 在 URL 中偵測到 liff.state，進行解析...');
     const liffState = decodeURIComponent(urlParams.get('liff.state')).replace(/^\?/, ''); // 【⭐️ 核心修正 ⭐️】先解碼 liff.state 的值，再移除開頭可能存在的 '?'
     const liffParams = new URLSearchParams(liffState);
     if (liffParams.has('id')) projectId = liffParams.get('id');
     if (liffParams.has('uid')) userId = liffParams.get('uid');
+    console.log(`[Init] 從 liff.state 解析結果 -> ProjectID: ${projectId}, UserID: ${userId}`);
   }
 
   // [核心修正] 將解析後的 projectId 存入全域 state
   state.projectId = projectId;
   state.currentUserId = userId; // 【⭐️ 核心修正：將 userId 也存入全域 state ⭐️】
 
-  // 【⭐️ 核心修改：增強本地測試邏輯 ⭐️】
-  // 當在本地環境 (localhost 或 127.0.0.1) 測試時，
-  // 如果網址沒有提供 userId，則自動代入您的 UID 進行測試。
-  if (isLocalTest) {
-    if (!projectId) projectId = '999';
-    if (!userId) userId = 'Ud58333430513b7527106fa71d2e30151';
-    logToPage(`⚡️ 本地測試模式啟用，使用預設 ProjectID: ${projectId}, UserID: ${userId}`);
-  }
-
+  console.log('[Init] 檢查解析後的參數是否齊全...');
   if (!projectId || !userId) {
     const errorMsg = '網址中缺少必要的專案 ID (id) 或使用者 ID (uid)。';
+    console.error(`[Init] 參數檢查失敗: ${errorMsg}`);
     displayError({ message: errorMsg });
     return;
   }
+
+  console.log('[Init] 參數檢查通過，準備載入資料...');
   logToPage(`目標專案 ID: ${projectId}`);
   logToPage(`操作者 UID: ${userId}`);
+
+  // [v54.0 新增] 將資料載入與渲染邏輯封裝成獨立函式
+  await loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL);
+}
+
+/**
+ * [v54.0 新增] 封裝資料載入與渲染的核心邏輯
+ */
+async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
 
   // 【⭐️ 核心修改：快取邏輯 ⭐️】
   // 【⭐️ 核心修正：恢復 UID 至快取 KEY 中 ⭐️】
@@ -480,23 +507,6 @@ async function initializeApp() {
 }
 
 /* ===== 程式進入點 ===== */
-window.addEventListener('load', () => {
-  // 1. 立即設定好 UI 的初始狀態
-  document.getElementById('schedule-container').style.display = 'none';
-  document.getElementById('logs-container').style.display = 'block';
-  const fab = document.getElementById('fab-add-task-btn');
-  if (fab) fab.style.display = 'none'; // 手機版懸浮按鈕預設隱藏
-
-  document.getElementById('version-display').textContent = '版本：' + (typeof FRONTEND_VERSION !== 'undefined' ? FRONTEND_VERSION : '未知');
-  logToPage('頁面載入完成，準備啟動應用程式...');
-
-  // [新增] 呼叫函式來初始化燈箱功能
-  initializeLightbox();
-
-  // [重構] 呼叫函式來初始化日誌動作模組
-  LogActions.initializeLogActions();
-
-});
 
 /**
  * [新增] 統一的事件代理監聽器
@@ -560,6 +570,13 @@ document.addEventListener('click', (e) => {
       LogActions.filterLogsByWorkType(target.value);
       break;
   }
+});
+
+// [核心修正] 應用程式進入點
+// 在所有函式與事件監聽器都定義完成後，
+// 呼叫 initializeApp() 來啟動整個應用程式的載入與渲染流程。
+document.addEventListener('DOMContentLoaded', () => {
+  initializeApp();
 });
 
 /**

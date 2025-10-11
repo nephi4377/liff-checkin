@@ -13,14 +13,17 @@
         .modal.is-open { display: flex; align-items: center; justify-content: center; }
         /* 【⭐️ 核心新增：優化日期/時間輸入框體驗 ⭐️】 */
         /* 讓整個輸入框都能點擊以打開選擇器 */
-        input[type="date"], input[type="time"] {
-            cursor: pointer;
+        /* [核心重構] 使用 :in-range 偽類來智慧地控制文字顏色，徹底解決預設值顯示問題 */
+        input[type="date"],
+        input[type="time"] {
+            cursor: pointer; /* 維持可點擊的指標 */
+            color: #1f2937;  /* 預設文字顏色 (深灰色) */
         }
-        /* 【⭐️ 核心修正：移除會導致預設值看不見的樣式 ⭐️】 */
-        /* 移除 opacity: 0，讓 JavaScript 設定的預設值可以正常顯示 */
-        input[type="date"]::-webkit-datetime-edit,
-        input[type="time"]::-webkit-datetime-edit {
-            /* opacity: 0; */
+
+        /* 當輸入框沒有有效值時，讓文字顏色變淡，模擬 placeholder 效果 */
+        input[type="date"]:out-of-range,
+        input[type="time"]:out-of-range {
+            color: #9ca3af; /* 淡灰色 */
         }
     </style>
 </head>
