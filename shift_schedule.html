@@ -147,6 +147,10 @@
 
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec'; // 維持不變
 
+    // --- 【⭐️ 核心新增：使用者設定區塊 ⭐️】 ---
+    const DEFAULT_VIEW_MODE = 'show_off'; // 可設為 'show_on' (顯示上班) 或 'show_off' (顯示排休)
+    // --- 【設定結束】 ---
+
     // [核心修正] 根據使用者要求，暫時關閉勞基法檢查
     const ENFORCE_LABOR_LAW = 0;
     const MAX_CONSECUTIVE_WORK_DAYS = 6;
@@ -185,8 +189,8 @@
     let displayedShiftTypes = new Set(); // NEW: 快取的顯示班別
     let holidays = new Set();
     let currentUser = null; // [架構改造] 用來儲存從 URL 取得的使用者資訊
-    let currentViewMode = 'show_on'; // 'show_off' 或 'show_on'
-    
+    let currentViewMode = DEFAULT_VIEW_MODE;
+        
     // --- JSONP Helper ---
     function loadJsonp(url) {
         return new Promise((resolve, reject) => {
@@ -221,6 +225,7 @@
         return cache.data;
     }
     // --- Main Functions ---
+    async function initialize() {
         // [架構改造] 移除 LIFF 初始化，改為從 URL 讀取使用者資訊
         const urlParams = new URLSearchParams(window.location.search);
         const uid = urlParams.get('uid');
