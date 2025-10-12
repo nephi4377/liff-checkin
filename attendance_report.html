@@ -95,7 +95,10 @@
       </div>
     </div>
 
-<script>
+<!-- 【⭐️ 核心改造：將內聯腳本改為模組，並從 utils.js 引入函式 ⭐️】 -->
+<script type="module">
+    import { showGlobalNotification } from './utils.js';
+
     // 【⭐️ 核心新增：全域變數，用於儲存員工班表資料 ⭐️】
     let employeeShiftData = {};
 
@@ -172,9 +175,12 @@
                 const select = document.getElementById('employee-select');
                 const modalSelect = document.getElementById('modal-employee-select');
                 
+                // [核心改造] 根據使用者要求，過濾掉權限等級為 5 的使用者
+                const filteredEmployees = employees.filter(emp => emp.permission < 5);
+
                 // 【⭐️ 核心修正：儲存員工班表資料，並綁定事件 ⭐️】
                 employeeShiftData = {}; // 清空舊資料
-                employees.forEach(emp => {
+                filteredEmployees.forEach(emp => {
                     const option = `<option value="${emp.userId}">${emp.userName}</option>`;
                     select.innerHTML += option;
                     modalSelect.innerHTML += option;
@@ -248,9 +254,9 @@
         const params = new URLSearchParams(payload);
         loadJsonp(`${API_BASE_URL}?${params.toString()}`)
             .then(response => {
-                alert(response.message || '補打卡請求已成功處理！報表將自動重新整理。');
+                showGlobalNotification(response.message || '補打卡成功！', 10000, 'success');
                 document.getElementById('checkin-modal').classList.remove('is-open');
-                fetchReportData(); // 成功後刷新報表
+                optimisticUpdate(payload); // 執行樂觀更新，取代重新整理
             })
             .catch(error => {
                 alert(`補打卡失敗：${error.message}`);
@@ -261,6 +267,59 @@
                 btn.textContent = '送出';
             });
 
+    }
+
+    /**
+     * 【⭐️ 核心新增：樂觀更新函式 ⭐️】
+     * 在不重新載入所有資料的情況下，將新的打卡紀錄插入到現有的表格中。
+     * @param {object} checkinData - 包含 userId, date, time, eventType 的物件
+     */
+    function optimisticUpdate(checkinData) {
+        const tableBody = document.querySelector('#report-table-container tbody');
+        if (!tableBody) return; // 如果表格不存在，則不執行任何操作
+
+        const { userId, date, time, eventType } = checkinData;
+        const employeeSelect = document.getElementById('employee-select');
+        const userName = employeeSelect.options[employeeSelect.selectedIndex].text;
+
+        // 建立新的一列 (tr)
+        const newRow = document.createElement('tr');
+
+        // 判斷日期是否為假日/週末
+        const dateObj = new Date(date);
+        dateObj.setMinutes(dateObj.getMinutes() + dateObj.getTimezoneOffset());
+        const dayOfWeek = dateObj.getDay();
+        const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const dateClass = isWeekend ? 'text-red-600 font-bold' : '';
+
+        // 組合 HTML
+        newRow.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap font-medium">${userName}</td>
+            <td class="px-6 py-4 whitespace-nowrap ${dateClass}">${date} (${weekdays[dayOfWeek]})</td>
+            <td class="px-6 py-4 whitespace-nowrap text-center">${eventType === '上班' ? time : '---'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-center">${eventType === '下班' ? time : '---'}</td>
+            <td class="px-6 py-4 whitespace-nowrap">手動補登</td>
+            <td class="px-6 py-4 whitespace-nowrap text-center">0</td>
+            <td class="px-6 py-4 whitespace-nowrap text-center">0</td>
+            <td class="px-6 py-4 whitespace-nowrap">手動補登</td>
+        `;
+
+        // 尋找插入點：找到所有列，然後根據日期排序找到合適的位置
+        const allRows = Array.from(tableBody.querySelectorAll('tr'));
+        let inserted = false;
+        for (let i = 0; i < allRows.length; i++) {
+            const rowDate = allRows[i].cells[1].textContent.split(' ')[0];
+            if (date > rowDate) {
+                tableBody.insertBefore(newRow, allRows[i]);
+                inserted = true;
+                break;
+            }
+        }
+        // 如果新日期比所有現有日期都早，或表格為空，則加到最後
+        if (!inserted) {
+            tableBody.appendChild(newRow);
+        }
     }
 
     function fetchReportData() {
@@ -277,10 +336,15 @@
         const params = new URLSearchParams({ page: 'attendance_api', action:'get_report', startDate, endDate, userId });
         loadJsonp(`${API_BASE_URL}?${params.toString()}`)
             .then(data => {
+                // [核心改造] 收到後端回傳的完整報表後，立即使用已過濾的員工列表 (employeeShiftData) 進行篩選。
+                // 這樣可以確保無論後端回傳什麼，最終顯示在畫面上的都只有權限 < 5 的員工紀錄。
+                const allowedUserIds = new Set(Object.keys(employeeShiftData));
+                const filteredRecords = Object.fromEntries(Object.entries(data.records).filter(([id]) => allowedUserIds.has(id)));
+
                 spinner.style.display = 'none';
                 renderSummary(data.summary);
-                renderReportTable(data.records, new Set(data.holidays || [])); 
-                if (typeof google !== 'undefined' && userId && data.records[userId] && data.records[userId].mapPoints.length > 0) {
+                renderReportTable(filteredRecords, new Set(data.holidays || [])); // 使用過濾後的資料進行渲染
+                if (typeof google !== 'undefined' && userId && filteredRecords[userId] && filteredRecords[userId].mapPoints.length > 0) {
                     initMap(data.records[userId].mapPoints).catch(console.error);
                 }
             })
@@ -302,10 +366,15 @@
     
     function renderReportTable(recordsByUser, holidays) {
         const container = document.getElementById('report-table-container');
+        // [核心改造] 移除此處的過濾邏輯，因為傳入的 recordsByUser 已經是過濾後的資料。
         if (!recordsByUser || Object.keys(recordsByUser).length === 0) {
             container.innerHTML = '<p class="text-center text-gray-500">此範圍內無出勤紀錄。</p>';
             return;
         }
+
+        // 【⭐️ 核心新增：取得今天的日期字串與當前時間，用於後續判斷 ⭐️】
+        const todayStr = new Date().toLocaleDateString('sv');
+        const now = new Date();
 
         const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
         let html = '<div class="bg-white p-6 rounded-lg shadow-md"><h2 class="text-xl font-semibold mb-4">出勤明細</h2><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">';
@@ -337,6 +406,27 @@
 
                 const lateClass = day.late > 0 ? 'text-orange-600 font-bold' : '';
                 const earlyClass = day.early > 0 ? 'text-blue-600 font-bold' : '';
+                // [核心改造] 新增異常狀態的 CSS class，使其顯示為紅色粗體
+                let displayStatus = day.status;
+                let displayCheckOut = day.checkOut || '---';
+
+                // 【⭐️ 核心新增：根據您的需求，加入三大判斷邏輯 ⭐️】
+                if (dateStr === todayStr) {
+                    // 1. 如果是今天，且狀態為「僅單次打卡」，則暫時顯示為「出勤」。
+                    if (displayStatus === '僅單次打卡') {
+                        displayStatus = '出勤';
+                    }
+                    // 2. 如果還沒到下班時間，則不顯示下班欄位。
+                    const shiftData = employeeShiftData[userId];
+                    if (shiftData && shiftData.shiftEnd) {
+                        const shiftEndHour = parseInt(shiftData.shiftEnd.split(':')[0], 10);
+                        if (now.getHours() < shiftEndHour) {
+                            displayCheckOut = '---';
+                        }
+                    }
+                }
+                // 3. 如果狀態為「缺勤」，則套用紅色粗體樣式。
+                const statusClass = displayStatus === '缺勤' ? 'text-red-600 font-bold' : (day.status === '異常' ? 'text-red-600 font-bold' : (day.status === '僅單次打卡' ? 'text-purple-600 font-bold' : ''));
 
                 // 【⭐️ 核心修正：從 mapPoints 中查找對應的打卡地點 ⭐️】
                 let locationHtml = '';
@@ -357,9 +447,9 @@
                 html += `<tr>
                     <td class="px-6 py-4 whitespace-nowrap font-medium">${userData.userName}</td>
                     <td class="px-6 py-4 whitespace-nowrap ${dateClass}">${dateStr} (${weekdays[dayOfWeek]})</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-center">${day.checkIn || '---'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-center">${day.checkOut || '---'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${day.status}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center">${day.checkIn || '---'}</td> <!-- 上班時間維持不變 -->
+                    <td class="px-6 py-4 whitespace-nowrap text-center">${displayCheckOut}</td> <!-- 使用處理過的下班時間 -->
+                    <td class="px-6 py-4 whitespace-nowrap ${statusClass}">${displayStatus}</td> <!-- 使用處理過的狀態 -->
                     <td class="px-6 py-4 whitespace-nowrap text-center ${lateClass}">${day.late}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-center ${earlyClass}">${day.early}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${locationHtml || '---'}</td>
