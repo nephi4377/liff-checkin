@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添心設計 | 假勤申請</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* 【⭐️ 核心改造：分頁標籤樣式 ⭐️】 */
+        .tab-button {
+            transition: all 0.2s ease-in-out;
+            border-bottom: 3px solid transparent;
+        }
+        .tab-button.active {
+            color: #2563eb; /* blue-600 */
+            border-bottom-color: #2563eb;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+
+        /* 自訂 Radio Card 樣式 */
+        .radio-card-label {
+            border: 2px solid #d1d5db; /* gray-300 */
+            transition: all 0.2s ease-in-out;
+        }
+        input[type="radio"]:checked + .radio-card-label {
+            border-color: #3b82f6; /* blue-500 */
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+
+        /* 【⭐️ 核心新增：優化日期/時間輸入框體驗 ⭐️】 */
+        input[type="date"],
+        input[type="time"] {
+            cursor: pointer;
+        }
+        /* 縮圖預覽樣式 */
+        #thumbnail-preview {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 0.5rem;
+            border: 1px solid #e5e7eb;
+            object-fit: cover;
+            margin-top: 0.5rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4 max-w-lg">
+        <div id="loading-screen" class="text-center py-20">
+            <div class="spinner w-10 h-10 border-4 border-gray-200 rounded-full mx-auto"></div>
+            <p class="mt-4 text-gray-600">正在驗證您的身分...</p>
+        </div>
+
+        <div id="main-content" class="bg-white rounded-lg shadow-md p-6 hidden">
+            <div class="text-center mb-6">
+                <h1 class="text-2xl font-bold text-gray-800">線上假勤申請</h1>
+                <p id="welcome-message" class="text-gray-500 mt-1"></p>
+            </div>
+
+            <form id="request-form" class="space-y-6">
+                <!-- 【⭐️ 核心改造：分頁標籤 ⭐️】 -->
+                <div class="border-b border-gray-200">
+                    <nav id="tab-nav" class="-mb-px flex gap-6" aria-label="Tabs">
+                        <button type="button" data-tab="leave" class="tab-button active shrink-0 border-b-2 px-1 pb-4 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">
+                            請假申請
+                        </button>
+                        <button type="button" data-tab="overtime" class="tab-button shrink-0 border-b-2 px-1 pb-4 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">
+                            加班申請
+                        </button>
+                        <button type="button" data-tab="supplement" class="tab-button shrink-0 border-b-2 px-1 pb-4 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">
+                            資料補件
+                        </button>
+                    </nav>
+                </div>
+
+                <!-- 【⭐️ 核心改造：分頁內容 ⭐️】 -->
+                <!-- 【⭐️ 核心修正：設定最小高度，解決切換時的跳動問題 ⭐️】 -->
+                <div style="min-height: 10.5rem;">
+                    <!-- 請假選項 -->
+                    <div id="tab-content-leave" class="tab-content active">
+                        <label class="block text-gray-700 font-semibold mb-3">假別 <span class="text-red-500">*</span></label>
+                        <div class="grid grid-cols-4 gap-2" id="leaveType-options"></div>
+                    </div>
+                    <!-- 加班選項 -->
+                    <div id="tab-content-overtime" class="tab-content">
+                        <label class="block text-gray-700 font-semibold mb-3">補償方式 <span class="text-red-500">*</span></label>
+                        <div class="grid grid-cols-2 gap-2" id="overtime-options"></div>
+                    </div>
+                    <!-- 【⭐️ 核心新增：資料補件分頁內容 ⭐️】 -->
+                    <div id="tab-content-supplement" class="tab-content">
+                        <label class="block text-gray-700 font-semibold mb-3">待補件項目</label>
+                        <div id="supplement-loading" class="text-center text-gray-500 py-4">載入中...</div>
+                        <div id="supplement-list" class="space-y-2"></div>
+                    </div>
+                </div>
+
+                <!-- 共用欄位 -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="startDate" class="block text-gray-700 font-semibold mb-2">開始日期 <span class="text-red-500">*</span></label>
+                        <input type="date" id="startDate" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                    </div>
+                    <div>
+                        <label for="startTime" class="block text-gray-700 font-semibold mb-2">開始時間 <span class="text-red-500">*</span></label>
+                        <select id="startTime" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white" required></select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="endDate" class="block text-gray-700 font-semibold mb-2">結束日期 <span class="text-red-500">*</span></label>
+                        <input type="date" id="endDate" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                    </div>
+                    <div>
+                        <label for="endTime" class="block text-gray-700 font-semibold mb-2">結束時間 <span class="text-red-500">*</span></label>
+                        <select id="endTime" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white" required></select>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="reason" class="block text-gray-700 font-semibold mb-2">事由說明</label>
+                    <textarea id="reason" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md"></textarea>
+                </div>
+                <div>
+                    <label id="proofFileLabel" for="proofFile" class="block text-gray-700 font-semibold mb-2">上傳證明文件 (選填)</label>
+                    <p class="text-sm text-gray-500 mb-2">僅接受 JPG, PNG 格式，建議大小不超過 5MB。</p>
+                    <input type="file" id="proofFile" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" accept="image/jpeg, image/png">
+                    <span id="file-name-display" class="text-sm text-gray-500 mt-1 inline-block"></span>
+                    <img id="thumbnail-preview" class="hidden" alt="圖片預覽">
+                </div>
+
+                <div id="status-message" class="text-center min-h-[24px]"></div>
+
+                <button type="submit" id="submit-button" class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-lg hover:bg-blue-700 disabled:bg-gray-400">
+                    <span id="button-text">送出申請</span>
+                    <div id="button-spinner" class="spinner w-6 h-6 border-4 border-white rounded-full mx-auto hidden"></div>
+                </button>
+
+                <!-- 【⭐️ 核心新增：申請規則說明區塊 ⭐️】 -->
+                <div class="mt-6 bg-gray-50 p-4 rounded-lg text-sm text-gray-600">
+                    <h3 class="font-semibold text-gray-800 mb-2">申請規則說明</h3>
+                    <ul class="list-disc list-inside space-y-1">
+                        <li><strong>事假：</strong>需於 2 小時前提出申請。緊急事務請直接聯繫主管。</li>
+                        <li><strong>特休：</strong>需於 3 個工作日前提出申請。</li>
+                        <li><strong>補休：</strong>需於 1 個工作日前提出申請。</li>
+                        <li><strong>加班補登：</strong>最早僅能補登 3 天前的紀錄。</li>
+                        <li><strong>病假：</strong>可先送出申請完成報備，後續請依公司規定補交證明。</li>
+                    </ul>
+                </div>
+            </form>
+        </div>
+    </div>
+
+<script>
+    const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
+    const APP_SETTINGS = {
+        // 預設上下班時間 (24小時制)
+        DEFAULT_SHIFT_TIMES: {
+            START: '08:30',
+            END: '17:30'
+        },
+        // 定義各假別的顏色 (使用 Tailwind CSS Class)
+        // 【⭐️ 核心改造：更換為低飽和度的莫蘭迪色系 ⭐️】
+        LEAVE_TYPE_COLORS: {
+            '事假': 'bg-stone-200', '病假': 'bg-rose-200', '特休': 'bg-teal-200',
+            '補休': 'bg-sky-200', '公假': 'bg-slate-200', '婚假': 'bg-pink-200',
+            '喪假': 'bg-indigo-200'
+        },
+        // 定義加班選項的顏色
+        OVERTIME_COLORS: {
+            '加班費': 'bg-amber-200', '補休': 'bg-sky-200'
+        }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const form = document.getElementById('request-form');
+        const statusMessage = document.getElementById('status-message');
+        let userProfile = null;
+        
+        // 【⭐️ 核心改造：加入本地測試模式，跳過認證檢查 ⭐️】
+        async function main() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+            const timestampForUpdate = urlParams.get('timestamp');
+
+            if (isLocalTest) {
+                console.warn('⚡️ 本地測試模式啟用，跳過認證檢查。');
+                userProfile = {
+                    userId: urlParams.get('uid') || 'U_local_test_user_001',
+                    displayName: '本地測試員'
+                };
+                // 【⭐️ 核心改造：在本地模式下也能測試補件模式 ⭐️】
+                if (timestampForUpdate) {
+                    setupUpdateMode(timestampForUpdate);
+                } else {
+                    showMainContent();
+                }
+            } else {
+                const uid = urlParams.get('uid');
+                const name = urlParams.get('name');
+                if (uid && name) {
+                    userProfile = { userId: uid, displayName: name };
+                    if (timestampForUpdate) {
+                        setupUpdateMode(timestampForUpdate);
+                    } else {
+                        showMainContent();
+                    }
+                } else {
+                    document.getElementById('loading-screen').innerHTML = '<p class="text-red-500 font-semibold">錯誤：缺少使用者認證資訊。<br>請從「整合主控台」進入此頁面。</p>';
+                }
+            }
+        }
+
+        function showMainContent() {
+            document.getElementById('loading-screen').style.display = 'none';
+            document.getElementById('main-content').classList.remove('hidden');
+            document.getElementById('welcome-message').textContent = `你好，${userProfile.displayName}`;
+            initializeForm();
+        }
+
+        /**
+         * 【⭐️ 核心新增：設定為「補件模式」的 UI (精簡版) ⭐️】
+         * 當使用者點擊一個待補件項目時觸發
+         */
+        function setupSimpleUpdateMode(timestamp, reason, startDate, startTime, endDate, endTime) {
+            // 【⭐️ 核心重構：專注於填值、鎖定時間，並啟用必要的編輯欄位 ⭐️】
+
+            // 填入並鎖定時間欄位
+            ['startDate', 'startTime', 'endDate', 'endTime'].forEach(id => {
+                const input = document.getElementById(id);
+                input.value = { startDate, startTime, endDate, endTime }[id];
+                input.disabled = true;
+            });
+
+            // 啟用事由與檔案上傳欄位供使用者編輯
+            document.getElementById('reason').disabled = false;
+            document.getElementById('proofFile').disabled = false;
+            document.getElementById('reason').value = reason || '';
+            document.getElementById('button-text').textContent = '提交補件';
+            form.dataset.mode = 'update';
+            form.dataset.timestamp = timestamp;
+        }
+
+        /**
+         * 【⭐️ 核心新增：設定為「補件模式」的 UI ⭐️】
+         */
+        function setupUpdateMode(timestamp) {
+            document.getElementById('loading-screen').style.display = 'none';
+            const mainContent = document.getElementById('main-content');
+            mainContent.classList.remove('hidden');
+
+            // 更新標題與歡迎訊息
+            mainContent.querySelector('h1').textContent = '病假證明補件';
+            const originalDate = new Date(parseInt(timestamp)).toLocaleString('zh-TW');
+            document.getElementById('welcome-message').innerHTML = `你好，${userProfile.displayName}<br>正在為 ${originalDate} 的申請補交文件。`;
+
+            // 隱藏所有不必要的表單欄位
+            const formSections = form.querySelectorAll('.space-y-6 > div');
+            formSections.forEach((el, index) => {
+                // 只顯示倒數第二個（檔案上傳）和最後一個（狀態訊息）
+                if (index < formSections.length - 3) {
+                    el.style.display = 'none';
+                }
+            });
+            form.dataset.mode = 'update'; // 標記為更新模式
+            form.dataset.timestamp = timestamp;
+            form.addEventListener('submit', handleFormSubmit);
+        }
+
+        function initializeForm() {
+            // 智慧預設：設定預設日期為今天
+            const today = new Date().toLocaleDateString('sv');
+            const startDateInput = document.getElementById('startDate');
+            const endDateInput = document.getElementById('endDate');
+            startDateInput.value = today;
+            endDateInput.value = today;
+
+            // 【⭐️ 核心改造：不再發送請求，改為直接從 URL 讀取班表時間 ⭐️】
+            const urlParams = new URLSearchParams(window.location.search);
+            const shiftStart = urlParams.get('shiftStart');
+            const shiftEnd = urlParams.get('shiftEnd');
+
+            if (shiftStart && shiftEnd) {
+                document.getElementById('startTime').value = shiftStart;
+                document.getElementById('endTime').value = shiftEnd;
+            } else {
+                // 若 URL 沒有提供，則使用通用的預設值
+                document.getElementById('startTime').value = APP_SETTINGS.DEFAULT_SHIFT_TIMES.START;
+                document.getElementById('endTime').value = APP_SETTINGS.DEFAULT_SHIFT_TIMES.END;
+            }
+
+            // 智慧預設：設定日期連動邏輯
+            startDateInput.addEventListener('change', () => {
+                if (endDateInput.value < startDateInput.value) {
+                    endDateInput.value = startDateInput.value;
+                }
+            });
+            endDateInput.addEventListener('change', () => {
+                if (endDateInput.value < startDateInput.value) {
+                    startDateInput.value = endDateInput.value;
+                }
+            });
+
+            setupTabControls();
+            createRadioOptions();
+            // 【⭐️ 核心修正：在綁定分頁事件後，手動觸發一次點擊事件來初始化時間選單 ⭐️】
+            document.querySelector('#tab-nav .tab-button.active').click();
+            form.addEventListener('submit', handleFormSubmit);
+
+            // 【⭐️ 核心新增：為補件模式設定初始狀態 ⭐️】
+            // 監聽分頁導覽的點擊事件，如果是點擊到補件分頁，就禁用按鈕
+            document.getElementById('tab-nav').addEventListener('click', (e) => {
+                if (e.target.closest('.tab-button') && e.target.closest('.tab-button').dataset.tab === 'supplement') {
+                    document.getElementById('submit-button').disabled = true;
+                }
+            });
+
+            // 【⭐️ 核心新增：為補件列表設定事件代理，點擊後啟用按鈕 ⭐️】
+            document.getElementById('supplement-list').addEventListener('click', (e) => {
+                if (e.target.closest('button')) {
+                    // 這裡的邏輯已在 fetchPendingRequests 中處理，
+                    // 我們只需要確保按鈕被啟用即可。
+                    // setupSimpleUpdateMode 會處理按鈕的啟用。
+                }
+            });
+
+
+
+
+            // 檔案上傳：監聽變化以實現縮圖預覽
+            document.getElementById('proofFile').addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                const displayElement = document.getElementById('file-name-display');
+                const thumbnail = document.getElementById('thumbnail-preview');
+                
+                if (file) {
+                    displayElement.textContent = `已選擇檔案：${file.name}`;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        thumbnail.src = e.target.result;
+                        thumbnail.classList.remove('hidden');
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    displayElement.textContent = '';
+                    thumbnail.src = '';
+                    thumbnail.classList.add('hidden');
+                }
+            });
+
+            // 【⭐️ 核心新增：初始化時，根據預設假別更新文件上傳欄位的狀態 ⭐️】
+            const defaultLeaveType = document.querySelector('input[name="leaveType"]:checked')?.value;
+            updateProofFileRequirement(defaultLeaveType);
+
+            // 【⭐️ 核心修正：只對日期輸入框優化點擊體驗 ⭐️】
+            ['startDate', 'endDate'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('click', () => el.showPicker && el.showPicker());
+                }
+            });
+        }
+
+        /**
+         * 【⭐️ 核心重構：根據班表時間，為下拉選單產生限定範圍的選項 ⭐️】
+         * @param {string | null} shiftStart - 上班時間 e.g., "09:00"。若為 null，則產生 24 小時選項。
+         * @param {string | null} shiftEnd - 下班時間 e.g., "18:00"。若為 null，則產生 24 小時選項。
+         */
+        function populateTimeSelects(shiftStart, shiftEnd) {
+            const startTimeSelect = document.getElementById('startTime');
+            const endTimeSelect = document.getElementById('endTime');
+            startTimeSelect.innerHTML = ''; // 清空舊選項
+            endTimeSelect.innerHTML = '';   // 清空舊選項
+            
+            const isFullDay = !shiftStart || !shiftEnd;
+            const startH = isFullDay ? 0 : parseInt(shiftStart.split(':')[0], 10);
+            const startM = isFullDay ? 0 : parseInt(shiftStart.split(':')[1], 10);
+            const endH = isFullDay ? 23 : parseInt(shiftEnd.split(':')[0], 10);
+            const endM = isFullDay ? 59 : parseInt(shiftEnd.split(':')[1], 10);
+
+            for (let h = startH; h <= endH; h++) {
+                for (let m = 0; m < 60; m += 15) {
+                    // 確保選項在上班時間範圍內
+                    if (!isFullDay && ((h === startH && m < startM) || (h === endH && m > endM))) {
+                        continue;
+                    }
+                    const hour = h.toString().padStart(2, '0');
+                    const minute = m.toString().padStart(2, '0');
+                    const timeValue = `${hour}:${minute}`;
+                    startTimeSelect.innerHTML += `<option value="${timeValue}">${timeValue}</option>`;
+                    endTimeSelect.innerHTML += `<option value="${timeValue}">${timeValue}</option>`;
+                }
+            }
+            // 重新設定預設值
+            startTimeSelect.value = shiftStart || '00:00';
+            endTimeSelect.value = shiftEnd || '23:45';
+        }
+
+        /**
+         * 【⭐️ 核心新增：智慧設定結束時間 ⭐️】
+         */
+        function smartSetEndTime(startTimeSelect) {
+            const endTimeSelect = document.getElementById('endTime');
+            const nextIndex = startTimeSelect.selectedIndex + 1;
+            // 如果不是最後一個選項，就自動選下一個；否則維持在最後一個
+            if (nextIndex < endTimeSelect.options.length) {
+                endTimeSelect.selectedIndex = nextIndex;
+            } else {
+                endTimeSelect.selectedIndex = endTimeSelect.options.length - 1;
+            }
+        }
+
+        // 【⭐️ 核心改造：建立卡片式單選按鈕 ⭐️】
+        function createRadioOptions() {
+            const createOption = (name, value, text, containerId, isChecked = false, colorClass = '') => {
+                const container = document.getElementById(containerId);
+                const id = `${name}-${value.replace(/\s+/g, '-')}`;
+                const checkedAttr = isChecked ? 'checked' : '';
+
+                container.innerHTML += `
+                    <div>
+                        <input type="radio" name="${name}" value="${value}" id="${id}" class="hidden" ${checkedAttr} data-color="${colorClass}">
+                        <label for="${id}" class="radio-card-label block rounded-lg cursor-pointer text-sm h-14 p-2 flex items-center justify-center ${colorClass}">
+                            <span class="font-semibold text-gray-800">${text}</span>
+                        </label>
+                    </div>
+                `;
+            };
+
+            const leaveTypes = [
+                { value: '事假', text: '事假' }, { value: '病假', text: '病假' }, { value: '特休', text: '特休' }, 
+                { value: '補休', text: '補休' }, { value: '公假', text: '公假' }, { value: '婚假', text: '婚假' }, 
+                { value: '喪假', text: '喪假' }
+            ];
+            leaveTypes.forEach((lt, index) => {
+                createOption('leaveType', lt.value, lt.text, 'leaveType-options', index === 0, APP_SETTINGS.LEAVE_TYPE_COLORS[lt.value]);
+            });
+
+            // 新增：監聽 radio 變化以動態更新背景色
+            document.querySelectorAll('input[name="leaveType"]').forEach(radio => {
+                radio.addEventListener('change', (event) => {
+                    const reasonTextarea = document.getElementById('reason');
+                    if (event.target.value === '病假') {
+                        reasonTextarea.placeholder = '可先送出申請完成報備，請於3日內向行政部門補交證明文件。';
+                    } else {
+                        reasonTextarea.placeholder = '';
+                    }
+                    // 【⭐️ 核心新增：當假別變更時，更新文件上傳欄位的狀態 ⭐️】
+                    updateProofFileRequirement(event.target.value);
+                });
+            });
+            createOption('overtimeCompensation', '加班費', '申請加班費', 'overtime-options', true, APP_SETTINGS.OVERTIME_COLORS['加班費']);
+            createOption('overtimeCompensation', '補休', '換補休', 'overtime-options', false, APP_SETTINGS.OVERTIME_COLORS['補休']);
+        }
+
+                /**
+         * 【⭐️ 核心新增：從後端取得待補件項目 ⭐️】
+         */
+        async function fetchPendingRequests() {
+            const listContainer = document.getElementById('supplement-list');
+            const loadingEl = document.getElementById('supplement-loading');
+            listContainer.innerHTML = '';
+            loadingEl.textContent = '載入中...';
+            loadingEl.style.display = 'block';
+
+            try {
+                // 【⭐️ 核心修正：改用標準的 fetch API (GET) 來查詢資料，並移除 loadJsonp ⭐️】
+                const url = new URL(API_BASE_URL);
+                url.searchParams.append('page', 'attendance_api');
+                url.searchParams.append('action', 'get_pending_proof_requests');
+                url.searchParams.append('userId', userProfile.userId);
+                const fetchResponse = await fetch(url, { method: 'GET' });
+                const response = await fetchResponse.json();
+
+                if (response && response.success && response.data.length > 0) {
+                    response.data.forEach(item => {
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'w-full text-left p-3 bg-gray-100 hover:bg-gray-200 rounded-md transition';
+                        const itemDate = new Date(item.timestamp).toLocaleString('zh-TW', { dateStyle: 'short', timeStyle: 'short' });
+                        btn.textContent = `[${item.leaveType}] ${itemDate}`;
+                        
+                        // 將所有需要的資料存入 data-* 屬性
+                        btn.dataset.timestamp = item.timestamp;
+                        btn.dataset.reason = item.reason;
+                        btn.dataset.startDate = item.startDate.split('T')[0];
+                        btn.dataset.startTime = item.startTime;
+                        btn.dataset.endDate = item.endDate.split('T')[0];
+                        btn.dataset.endTime = item.endTime;
+
+                        btn.addEventListener('click', (e) => {
+                            const data = e.currentTarget.dataset;
+                            setupSimpleUpdateMode(
+                                data.timestamp, data.reason, 
+                                data.startDate, data.startTime, 
+                                data.endDate, data.endTime
+                            );
+                        });
+                        listContainer.appendChild(btn);
+                    });
+                } else {
+                    listContainer.innerHTML = '<p class="text-center text-gray-500 py-4">目前無待補件項目。</p>';
+                }
+            } catch (error) {
+                console.error('無法載入待補件項目:', error);
+                listContainer.innerHTML = `<p class="text-center text-red-500 py-4">載入失敗: ${error.message}</p>`;
+            } finally {
+                loadingEl.style.display = 'none';
+            }
+        }
+
+        /**
+         * 【⭐️ 核心新增：輔助函式，將表單重置為「新增」模式 ⭐️】
+         */
+        function _resetFormToNewMode_() {
+            // 【⭐️ 核心修正：確保所有被隱藏的容器都恢復顯示 ⭐️】
+            document.getElementById('tab-nav').parentElement.style.display = 'block';
+            const tabContentContainer = document.querySelector('#tab-content-leave')?.parentElement;
+            if (tabContentContainer) {
+                tabContentContainer.style.display = 'block';
+            }
+
+            // 啟用所有可能被禁用的欄位
+            ['startDate', 'startTime', 'endDate', 'endTime', 'reason'].forEach(id => {
+                const input = document.getElementById(id);
+                if (input) input.disabled = false;
+            });
+
+            // 恢復按鈕文字與表單模式
+            document.getElementById('submit-button').disabled = false;
+            document.getElementById('button-text').textContent = '送出申請';
+            form.removeAttribute('data-mode');
+            form.removeAttribute('data-timestamp');
+            
+            // 清空事由欄位與檔案上傳狀態
+            document.getElementById('reason').value = '';
+            const proofFileInput = document.getElementById('proofFile');
+            proofFileInput.value = ''; // 清空已選檔案
+            document.getElementById('file-name-display').textContent = '';
+            const thumbnail = document.getElementById('thumbnail-preview');
+            thumbnail.src = '';
+            thumbnail.classList.add('hidden');
+        }
+        // 【⭐️ 核心改造：設定分頁切換邏輯 ⭐️】
+        function setupTabControls() {
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const tabContents = document.querySelectorAll('.tab-content');
+
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const tabName = button.dataset.tab;
+
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+
+                    tabContents.forEach(content => {
+                        content.classList.toggle('active', content.id === `tab-content-${tabName}`);
+                    });
+
+                    // 【⭐️ 核心重構：根據不同分頁，呼叫不同的狀態設定函式 ⭐️】
+                    if (tabName === 'supplement') {
+                        _setFormToSupplementMode_();
+                        fetchPendingRequests();
+                    } else {
+                        _resetFormToNewMode_();
+                    }
+
+                    // 【⭐️ 核心新增：根據分頁，動態重置時間選項 ⭐️】
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const userShiftStart = urlParams.get('shiftStart') || APP_SETTINGS.DEFAULT_SHIFT_TIMES.START;
+                    const userShiftEnd = urlParams.get('shiftEnd') || APP_SETTINGS.DEFAULT_SHIFT_TIMES.END;
+
+                    if (tabName === 'overtime') {
+                        // 加班模式：顯示 24 小時選項
+                        populateTimeSelects(null, null);
+                        document.getElementById('startTime').value = userShiftEnd; // 預設從下班時間開始
+                        smartSetEndTime(document.getElementById('startTime'));
+                    } else {
+                        // 請假模式：顯示班表內時間
+                        populateTimeSelects(userShiftStart, userShiftEnd);
+                    }
+
+                    const reasonTextarea = document.getElementById('reason');
+                    if (button.dataset.tab === 'leave') {
+                        // 當切換到請假頁時，檢查預設假別
+                        const defaultLeaveType = document.querySelector('input[name="leaveType"]:checked').value;
+                        if (defaultLeaveType === '病假') {
+                            reasonTextarea.placeholder = '可先送出申請完成報備，請於3日內向行政部門補交證明文件。';
+                        } else {
+                            reasonTextarea.placeholder = '';
+                        }
+                    } else {
+                        reasonTextarea.placeholder = '';
+                    }
+                });
+            });
+        }
+
+        /**
+         * 【⭐️ 核心新增：輔助函式，將表單設定為「資料補件」的初始模式 ⭐️】
+         */
+        function _setFormToSupplementMode_() {
+            // 【⭐️ 核心重構：進入補件分頁時，禁用所有共用欄位 ⭐️】
+            // 讓使用者明確知道，在選擇項目之前，這些欄位是不可操作的。
+            ['startDate', 'startTime', 'endDate', 'endTime', 'reason', 'proofFile'].forEach(id => {
+                const input = document.getElementById(id);
+                if (input) {
+                    input.disabled = true;
+                    if (input.tagName !== 'SELECT') input.value = ''; // 清空非下拉選單的欄位
+                }
+            });
+
+            // 禁用並重置按鈕
+            const submitButton = document.getElementById('submit-button');
+            submitButton.disabled = true;
+            document.getElementById('button-text').textContent = '請先選擇項目';
+            form.removeAttribute('data-mode');
+            form.removeAttribute('data-timestamp');
+        }
+
+        /**
+         * 【⭐️ 核心新增：根據假別，動態更新文件上傳欄位的必填狀態與提示 ⭐️】
+         */
+        function updateProofFileRequirement(leaveType) {
+            const proofFileLabel = document.getElementById('proofFileLabel');
+            const proofFileInput = document.getElementById('proofFile');
+            const isRequired = ['公假'].includes(leaveType);
+
+            proofFileInput.required = isRequired;
+            if (isRequired) {
+                proofFileLabel.innerHTML = '上傳證明文件 <span class="text-red-500">(必填)</span>';
+            } else {
+                proofFileLabel.textContent = '上傳證明文件 (選填)';
+            }
+        }
+
+        /**
+         * @description 驗證假勤申請的業務規則
+         * @param {FormData} formData - 表單資料
+         * @returns {{isValid: boolean, message: string}} 驗證結果
+         */
+        function validateRequest(formData) {
+            const recordType = formData.get('recordType');
+            const leaveType = formData.get('leaveType');
+            const startDateTime = new Date(`${formData.get('startDate')}T${formData.get('startTime')}`);
+            const now = new Date();
+
+            // 規則 1：事假必須在 2 小時前申請
+            if (leaveType === '事假') {
+                const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+                if (startDateTime < twoHoursLater) {
+                    return { isValid: false, message: '【規則錯誤】事假需於 2 小時前提出。若有緊急狀況，請直接聯繫主管，此申請單無法送出。' };
+                }
+            }
+
+            // 規則 2：特休/補休需提前申請
+            if (leaveType === '特休' || leaveType === '補休') {
+                const requiredDays = leaveType === '特休' ? 3 : 1;
+                const requiredTime = new Date(now.setDate(now.getDate() + requiredDays));
+                // 將時間設為一天的開始，以純日期比較
+                requiredTime.setHours(0, 0, 0, 0); 
+                
+                if (startDateTime < requiredTime) {
+                    return { isValid: false, message: `【規則錯誤】${leaveType}需於 ${requiredDays} 個工作日前提出申請。` };
+                }
+            }
+            
+            // 規則 3：加班補登不可超過 3 天
+            if (recordType === '加班') {
+                const threeDaysAgo = new Date();
+                threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+                threeDaysAgo.setHours(0, 0, 0, 0); // 設定為 3 天前的凌晨
+
+                if (startDateTime < threeDaysAgo) {
+                    return { isValid: false, message: '【規則錯誤】加班補登僅能申請 3 天內的紀錄。' };
+                }
+            }
+
+            // 所有規則通過
+            return { isValid: true, message: '' };
+        }
+
+        /**
+         * 【⭐️ 核心重構：統一的請求提交函式 ⭐️】
+         * @param {string | null} timestamp - 補件時傳入原始時間戳，新增時為 null
+         */
+        async function submitRequest(timestamp) {
+            const formData = new FormData();
+            let leaveTypeForSuccessMessage = ''; // 用於成功訊息中的補件連結判斷
+
+            if (!timestamp) { // 新增模式
+                // --- 組合新申請的 FormData ---
+                const activeTab = document.querySelector('.tab-button.active');
+                const recordType = activeTab.dataset.tab === 'leave' ? '請假' : '加班';
+                let leaveType = '';
+                if (recordType === '請假') {
+                    const leaveTypeRadio = document.querySelector('input[name="leaveType"]:checked');
+                    leaveType = leaveTypeRadio ? leaveTypeRadio.value : '';
+                } else { // 加班
+                    const overtimeRadio = document.querySelector('input[name="overtimeCompensation"]:checked');
+                    leaveType = overtimeRadio ? overtimeRadio.value : '';
+                }
+                leaveTypeForSuccessMessage = leaveType;
+
+                formData.append('page', 'attendance_api');
+                formData.append('action', 'submit_leave_request');
+                formData.append('userId', userProfile.userId);
+                formData.append('userName', userProfile.displayName);
+                formData.append('recordType', recordType);
+                formData.append('leaveType', leaveType);
+                formData.append('startDate', document.getElementById('startDate').value);
+                formData.append('startTime', document.getElementById('startTime').value);
+                formData.append('endDate', document.getElementById('endDate').value);
+                formData.append('endTime', document.getElementById('endTime').value);
+                formData.append('reason', document.getElementById('reason').value);
+
+                const proofFile = document.getElementById('proofFile').files[0];
+                if (proofFile) {
+                    formData.append('proofFile', proofFile, proofFile.name);
+                }
+
+                // --- 執行新申請的驗證 ---
+                const startDateTimeVal = new Date(`${formData.get('startDate')}T${formData.get('startTime')}`);
+                const endDateTimeVal = new Date(`${formData.get('endDate')}T${formData.get('endTime')}`);
+                if (endDateTimeVal <= startDateTimeVal) {
+                    updateStatus('結束時間必須晚于開始時間，請重新選擇。', 'error');
+                    setLoadingState(false);
+                    return;
+                }
+                const proofFileInput = document.getElementById('proofFile');
+                if (proofFileInput.required && proofFileInput.files.length === 0) {
+                    updateStatus('【規則錯誤】此假別需上傳證明文件。', 'error');
+                    setLoadingState(false);
+                    return;
+                }
+                const validationResult = validateRequest(formData);
+                if (!validationResult.isValid) {
+                    updateStatus(validationResult.message, 'error');
+                    setLoadingState(false);
+                    return;
+                }
+
+            } else { // 更新模式
+                // --- 組合補件的 FormData ---
+                formData.append('action', 'submit_leave_request'); // 【⭐️ 核心重構：統一使用 submit_leave_request 動作 ⭐️】
+                formData.append('userId', userProfile.userId);
+                formData.append('originalTimestamp', timestamp);
+                const proofFile = document.getElementById('proofFile').files[0];
+                if (!proofFile) {
+                    updateStatus('請選擇要上傳的證明文件。', 'error');
+                    setLoadingState(false);
+                    return;
+                }
+                formData.append('proofFile', proofFile, proofFile.name);
+            }
+
+            // --- 統一執行後端請求 ---
+            try {
+                updateStatus('資料上傳中...', 'info');
+                const response = await fetch(API_BASE_URL, { method: 'POST', body: formData });
+                if (!response.ok) throw new Error(`伺服器錯誤: ${response.statusText}`);
+                const result = await response.json();
+
+                if (result.success) {
+                    let successMessage = result.message;
+                    if (!timestamp && leaveTypeForSuccessMessage === '病假' && result.timestamp) {
+                        // 【⭐️ 核心改造：移除補件連結，改為引導使用者至「資料補件」分頁 ⭐️】
+                        successMessage += `<br><br><div class="mt-2 text-sm text-amber-800 bg-amber-50 p-2 rounded-md">提醒：若需補交證明，請稍後至「資料補件」分頁上傳。</div>`;
+                    }
+                    updateStatus(successMessage, 'success');
+                    // 【⭐️ 核心新增：成功後延遲 3 秒重置表單，提供更好的使用者體驗 ⭐️】
+                    setTimeout(() => {
+                        resetForm();
+                        setLoadingState(false);
+                    }, 3000);
+                } else {
+                    throw new Error(result.message || '後端處理失敗');
+                }
+            } catch (error) {
+                console.error('提交失敗', error);
+                updateStatus(`提交失敗：${error.message}`, 'error');
+                setLoadingState(false);
+            }
+        }
+
+        /**
+         * 【⭐️ 核心新增：重置表單至初始狀態 ⭐️】
+         */
+        function resetForm() {
+            form.reset(); // 重設所有 input, select, textarea
+            document.getElementById('file-name-display').textContent = '';
+            const thumbnail = document.getElementById('thumbnail-preview');
+            thumbnail.src = '';
+            thumbnail.classList.add('hidden');
+            updateStatus('', 'info'); // 清空狀態訊息
+            // 手動觸發一次點擊事件來還原分頁與時間選項
+            document.querySelector('#tab-nav .tab-button[data-tab="leave"]').click();
+            // 將日期設回今天
+            document.getElementById('startDate').value = new Date().toLocaleDateString('sv');
+            document.getElementById('endDate').value = new Date().toLocaleDateString('sv');
+        }
+
+        async function handleFormSubmit(event) {
+            event.preventDefault();
+            setLoadingState(true, '傳送中...');
+            
+            const originalTimestamp = form.dataset.timestamp || null;
+            await submitRequest(originalTimestamp);
+        }
+
+        function updateStatus(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.className = `text-center min-h-[24px] font-semibold ${
+                type === 'success' ? 'text-green-600' :
+                type === 'error' ? 'text-red-500' : 'text-gray-600'
+            }`;
+        }
+
+        function setLoadingState(isLoading, message = '') {
+            const buttonText = document.getElementById('button-text');
+            const submitButton = document.getElementById('submit-button');
+            const buttonSpinner = document.getElementById('button-spinner');
+            submitButton.disabled = isLoading;
+            if (isLoading) {
+                buttonText.classList.add('hidden');
+                buttonSpinner.classList.remove('hidden');
+                updateStatus(message, 'info');
+            } else {
+                buttonText.classList.remove('hidden');
+                buttonSpinner.classList.add('hidden');
+            }
+        }
+
+        main();
+    });
+</script>
+</body>
+</html>

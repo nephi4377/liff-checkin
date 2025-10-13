@@ -57,6 +57,12 @@
                 <p class="text-gray-600">查詢所有員工的出勤、遲到、早退與缺勤紀錄。</p>
             </a>
 
+            <!-- 【⭐️ 核心新增：假勤審核儀表板 (預設隱藏) ⭐️】 -->
+            <a id="approval-dashboard-link" href="#" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block hidden">
+                <h2 class="text-xl font-bold mb-2 text-red-700">假勤審核儀表板</h2>
+                <p class="text-gray-600">集中審核所有員工的請假與加班申請。</p>
+            </a>
+
             <a href="https://liff.line.me/2007974938-jVxn6y37" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
                 <h2 class="text-xl font-bold mb-2 text-purple-700">員工打卡</h2>
                 <p class="text-gray-600">開啟 LIFF 頁面進行每日出勤打卡。</p>
@@ -67,6 +73,12 @@
                 <p class="text-gray-600">開啟 LIFF 頁面上傳每日施工進度與照片。</p>
             </a>
             
+            <!-- 【⭐️ 核心改造：線上假勤申請，改為由 Hub 傳遞認證資訊 ⭐️】 -->
+            <a id="open-leave-request-link" href="#" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                <h2 class="text-xl font-bold mb-2 text-purple-700">線上假勤申請</h2>
+                <p class="text-gray-600">申請特休、病假、事假或回報加班。</p>
+            </a>
+
             <!-- [架構改造] 員工排班系統，改為由 Hub 傳遞認證資訊 -->
             <a id="open-shift-schedule-link" href="#" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
                 <h2 class="text-xl font-bold mb-2 text-purple-700">員工排班系統</h2>
@@ -96,6 +108,7 @@
         // ===============================================================
 
         let userProfile = null;
+        let allEmployees = []; // 【⭐️ 核心新增：將員工資料提升至全域，以便共用 ⭐️】
 
         async function main() {
             // 【⭐️ 核心新增：本地測試模式 ⭐️】
@@ -133,10 +146,12 @@
                     const employeesUrl = `${ATTENDANCE_GAS_WEB_APP_URL}?page=attendance_api&action=get_employees&callback=${cb}`;
                     
                     window[cb] = (employees) => {
+                        allEmployees = employees; // 將資料存入全域變數
                         delete window[cb];
-                        const currentUser = employees.find(emp => emp.userId === userProfile.userId);
+                        const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId);
                         if (currentUser && currentUser.permission >= 4) {
                             document.getElementById('attendance-console-link').classList.remove('hidden');
+                            document.getElementById('approval-dashboard-link').classList.remove('hidden');
                         }
                     };
 
@@ -193,6 +208,54 @@
                 const scheduleUrl = `${baseUrl}?uid=${userProfile.userId}&name=${encodeURIComponent(userProfile.displayName)}`;
                 
                 window.open(scheduleUrl, '_blank');
+            });
+
+            // 【⭐️ 核心新增：線上假勤申請連結 ⭐️】
+            document.getElementById('open-leave-request-link').addEventListener('click', (e) => {
+                e.preventDefault();
+                if (!userProfile || !userProfile.userId) {
+                    alert('無法取得您的使用者資訊，請重新載入頁面。');
+                    return;
+                }
+                // 根據當前環境，動態產生假勤申請系統的 URL
+                const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+                const baseUrl = isLocal 
+                    ? 'http://127.0.0.1:5500/leave_request.html' 
+                    : 'https://info.tanxin.space/leave_request.html';
+
+                // 【⭐️ 核心改造：從已取得的員工資料中找出班表時間，並加入 URL 參數 ⭐️】
+                const currentUserData = allEmployees.find(emp => emp.userId === userProfile.userId);
+                const params = new URLSearchParams({
+                    uid: userProfile.userId,
+                    name: userProfile.displayName
+                });
+                if (currentUserData && currentUserData.shiftStart && currentUserData.shiftEnd) {
+                    params.set('shiftStart', currentUserData.shiftStart);
+                    params.set('shiftEnd', currentUserData.shiftEnd);
+                }
+                const leaveRequestUrl = `${baseUrl}?${params.toString()}`;
+                
+                // 在新分頁中開啟
+                window.open(leaveRequestUrl, '_blank');
+            });
+
+            // 【⭐️ 核心新增：假勤審核儀表板連結 ⭐️】
+            document.getElementById('approval-dashboard-link').addEventListener('click', (e) => {
+                e.preventDefault();
+                if (!userProfile || !userProfile.userId) {
+                    alert('無法取得您的使用者資訊，請重新載入頁面。');
+                    return;
+                }
+                const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+                const baseUrl = isLocal 
+                    ? 'http://127.0.0.1:5500/approval_dashboard.html' 
+                    : 'https://info.tanxin.space/approval_dashboard.html';
+
+                const params = new URLSearchParams({
+                    uid: userProfile.userId,
+                    name: userProfile.displayName
+                });
+                window.open(`${baseUrl}?${params.toString()}`, '_blank');
             });
 
             // 立即處理回報按鈕
