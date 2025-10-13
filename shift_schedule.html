@@ -180,14 +180,14 @@
 
     // --- State ---
     let currentDate = new Date();
-    let scheduleData = {}; // { "userId": { "YYYY-MM-DD": "班別" } }
+    // [v14.0 核心改造] 建立一個全域的前端快取，用來儲存已載入的月份資料
+    let scheduleCache = {}; // { "YYYY-MM": { schedule: {...}, holidays: [...] } }
     let employeeGroups = {}; // { "groupName": [emp1, emp2] }
     let displayedGroups = new Set(); // 快取的顯示組別
     let shiftBasedEmployees = [];
     let standardEmployees = [];
     let allEmployees = []; // Moved here to be initialized after other states
     let displayedShiftTypes = new Set(); // NEW: 快取的顯示班別
-    let holidays = new Set();
     let currentUser = null; // [架構改造] 用來儲存從 URL 取得的使用者資訊
     let currentViewMode = DEFAULT_VIEW_MODE;
         
@@ -208,13 +208,13 @@
     // --- [v12.0 新增] 快取管理 ---
     function saveCache(key, data, days = 15) {
         const cache = {
-            data: data,
-            expires: Date.now() + days * 24 * 60 * 60 * 1000
+            data: data, // [v15.0 修正] 根據您的要求，快取時間改為 7 天
+            expires: Date.now() + 7 * 24 * 60 * 60 * 1000
         };
         localStorage.setItem(key, JSON.stringify(cache));
     }
 
-    function loadCache(key) {
+    function loadCache(key) { // [v15.0 修正] 根據您的要求，快取時間改為 7 天
         const cached = localStorage.getItem(key);
         if (!cached) return null;
         const cache = JSON.parse(cached);
@@ -246,16 +246,10 @@
         // [核心修正] 先更新月份顯示，再非同步載入資料
         updateMonthDisplay();
 
-        // [核心改造] 恢復模式按鈕的原始文字
-        toggleViewBtn.textContent = (currentViewMode === 'show_on') ? '模式: 顯示上班' : '模式: 顯示排休';
-
-        // [v12.0 核心改造] 嘗試從快取載入並立即顯示資料
+        // [v15.0 核心改造] 優先從快取載入並立即顯示資料
         const cacheLoaded = await loadAndDisplayCachedData();
 
-        // 綁定事件監聽
-        bindEventListeners();
-
-        // [v12.0 核心改造] 無論如何都在背景取得最新資料
+        // [v15.0 核心改造] 無論如何都在背景取得最新資料
         await fetchAndRefreshData(cacheLoaded);
     }
 
@@ -269,10 +263,11 @@
 
         if (cachedEmployees && cachedSchedule) {
             console.log("從快取載入資料...");
+            // [v14.0 修正] 將快取資料存入新的 scheduleCache 結構中
+            const cacheKey = getCacheKeyForDate(currentDate);
+            scheduleCache[cacheKey] = { schedule: cachedSchedule.schedule, holidays: new Set(cachedSchedule.holidays || []) };
             allEmployees = cachedEmployees;
-            scheduleData = cachedSchedule.schedule;
-            holidays = new Set(cachedSchedule.holidays);
-            
+
             // 使用快取資料來設定畫面
             processEmployeesData();
             renderCalendar();
@@ -285,10 +280,19 @@
 
     async function fetchEmployees() {
         try {
-            allEmployees = await loadJsonp(`${API_BASE_URL}?page=attendance_api&action=get_employees`);
-            saveCache('shiftSchedule_employees', allEmployees); // [v12.0] 儲存員工快取
+            // [v15.0 改造] 員工資料也採用快取優先策略
+            const cachedEmployees = loadCache('shiftSchedule_employees');
+            if (cachedEmployees) {
+                allEmployees = cachedEmployees;
+            } else {
+                allEmployees = await loadJsonp(`${API_BASE_URL}?page=attendance_api&action=get_employees`);
+                saveCache('shiftSchedule_employees', allEmployees, 1); // 員工資料快取 1 天
+            }
+
             processEmployeesData();
 
+            // [v15.0 改造] 權限設定邏輯移至此處，確保每次都有最新的員工資料
+            
             // [核心改造] 在取得員工資料後，才設定權限與介面
             // 尋找當前登入者的完整資料
             const loggedInEmployee = allEmployees.find(emp => emp.userId === currentUser.userId);
@@ -299,7 +303,7 @@
             const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
             if (isLocalTest) {
                 currentUser.permission = 5;
-                console.warn('⚡️ 本地測試模式啟用，已強制賦予最高管理權限。');
+                // [v15.0 改造] 移除重複的 console.warn，避免每次換頁都顯示
             }
 
             // [核心改造] 只有在頁面首次載入時，才根據權限設定預設的下拉選單選項。
@@ -312,7 +316,6 @@
                 employeeSelect.value = isManager ? '' : currentUser.userId;
                 employeeSelect.dataset.initialized = 'true'; // 標記為已初始化
             }
-
         } catch (error) {
             console.error("載入員工列表失敗:", error);
             showGlobalNotification("無法載入員工列表，請檢查後端連線。", 8000, 'error');
@@ -404,52 +407,75 @@
     }
 
     // [核心新增] 將員工與班表載入合併，簡化流程
-    async function fetchAndRefreshData(isCacheLoaded) {
-        // 如果沒有從快取載入，則顯示全頁的載入動畫
-        if (!isCacheLoaded) {
-            loadingSpinner.style.display = 'block';
-            calendarWrapper.style.display = 'none';
-        }
-
+    async function fetchAndRefreshData() {
         try {
-            await fetchEmployees(); // 載入員工列表
-            await fetchScheduleData();
+            // [v15.0 改造] 員工資料的載入與處理現在獨立於排班資料
+            await fetchEmployees();
+            await fetchScheduleData(true); // 傳入 true 表示這是背景更新
         } catch (error) {
             console.error("載入初始資料失敗:", error);
         }
     }
-    async function fetchScheduleData() {
-
+    async function fetchScheduleData(isBackgroundFetch = false) {
+        // [v17.0 改造] 為這次請求建立一個唯一的 "身分證" (年月字串)，並在整個函式作用域內可用
+        const requestCacheKey = getCacheKeyForDate(currentDate);
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth() + 1;
 
         try {
+            if (!isBackgroundFetch) {
+                loadingSpinner.style.display = 'block';
+                calendarWrapper.style.display = 'none';
+            }
+            console.log(`向後端請求 ${requestCacheKey} 的資料...`);
             const data = await loadJsonp(`${API_BASE_URL}?page=attendance_api&action=get_latest_schedule&year=${year}&month=${month}`);
             
-            // [核心修正] 確保假日資料被正確處理
-            // 優先使用後端資料，若無則使用 CoreLibrary 計算
-            if (data.holidays && data.holidays.length > 0) {
-                holidays = new Set(data.holidays);
-            } else if (window.CoreLibrary) {
-                holidays = new Set(window.CoreLibrary.getHolidays(year, month));
+            // [v15.0 改造] 根據您的要求，如果後端沒有回傳資料，則不進行任何更新
+            if (!data || !data.schedule) {
+                console.log(`後端未回傳 ${requestCacheKey} 的有效資料，不更新快取與畫面。`);
+                if (!scheduleCache[requestCacheKey]) { // 如果連前端快取都沒有，才顯示空日曆
+                    scheduleCache[requestCacheKey] = { schedule: {}, holidays: new Set() };
+                    renderCalendar();
+                }
+                return; // [v16.0 修正] 確保在沒有資料時也返回
             }
-            scheduleData = data.schedule || {};
 
-            // [v12.0] 儲存排班快取
-            const scheduleCacheKey = `shiftSchedule_schedule_${year}-${month}`;
-            saveCache(scheduleCacheKey, { schedule: scheduleData, holidays: Array.from(holidays) });
-            // changes = {}; // Removed: scheduleData is now the source of truth
-            saveBtn.disabled = true; // Reset save button state
-            renderCalendar(); // [核心修正] 取得資料後，才完整渲染日曆
+            const newScheduleData = data.schedule;
+            const newHolidays = new Set(data.holidays || []);
+
+            // [v15.0 改造] 智慧更新：只有在新舊資料不同時才更新畫面與快取
+            const oldData = scheduleCache[requestCacheKey];
+            const isDataSame = oldData && 
+                               JSON.stringify(oldData.schedule) === JSON.stringify(newScheduleData) && 
+                               oldData.holidays.size === newHolidays.size;
+
+            if (isDataSame) {
+                console.log(`背景資料與快取一致，無需更新畫面。`);
+            } else {
+                console.log(`背景資料與快取不一致，更新快取與畫面。`);
+                scheduleCache[requestCacheKey] = { schedule: newScheduleData, holidays: newHolidays };
+                const localStorageKey = `shiftSchedule_schedule_${year}-${month}`;
+                saveCache(localStorageKey, { schedule: newScheduleData, holidays: Array.from(newHolidays) });
+                
+                // [v17.0 核心改造] 只有當更新的資料是「當前顯示」的月份時，才重新渲染畫面
+                const currentDisplayKey = getCacheKeyForDate(currentDate);
+                if (requestCacheKey === currentDisplayKey) {
+                    if (isBackgroundFetch) {
+                        showGlobalNotification('班表已在背景更新完成！', 3000, 'info');
+                    }
+                    renderCalendar();
+                } else {
+                    console.log(`已在背景更新 ${requestCacheKey} 的快取，但目前顯示為 ${currentDisplayKey}，故不刷新畫面。`);
+                }
+            }
+
         } catch (error) {
             console.error("載入排班資料失敗:", error);
-            showGlobalNotification("無法載入排班資料，請檢查後端 API。", 8000, 'error');
-            // [優化] 即使載入失敗，也顯示一個空的日曆
-            scheduleData = {};
-            holidays = new Set(); // Keep holidays for display
-            // changes = {}; // Removed
-            saveBtn.disabled = true;
-            renderCalendar(); // [核心修正] 即使失敗也嘗試更新畫面 (會顯示為空)
+            // [v15.0 改造] 根據您的要求，載入失敗時不報錯，也不更新畫面
+            console.log(`後端資料請求失敗 (${error.message})，將繼續使用現有快取資料。`);
+            if (!scheduleCache[requestCacheKey]) { // 只有在連快取都沒有時才顯示錯誤
+                showGlobalNotification("無法載入排班資料，請檢查網路連線。", 8000, 'error');
+            }
         } finally {
             // 確保最終畫面是可見的
             if (loadingSpinner.style.display !== 'none') {
@@ -459,13 +485,19 @@
         }
     }
 
+    // [v15.0 新增] 輔助函式，產生標準格式的快取鍵
+    function getCacheKeyForDate(date) {
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1;
+        return `${year}-${month.toString().padStart(2, '0')}`;
+    }
+
     function renderCalendar() {
         calendarBody.innerHTML = '';
-        // [核心重構] 將表頭也由 JS 動態產生，確保與內容格在同一個 Grid 中
         const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
         weekdays.forEach(day => {
             const headerCell = document.createElement('div');
-            headerCell.className = 'text-center font-semibold py-2 border-r border-b border-gray-200 bg-gray-50';
+            headerCell.className = 'text-center font-semibold py-2 border-r border-b border-gray-200 bg-gray-50 sticky top-0 z-10'; // [v15.0 優化] 表頭吸頂
             headerCell.textContent = day;
             calendarBody.appendChild(headerCell);
         });
@@ -473,6 +505,14 @@
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
         const firstDay = new Date(year, month, 1).getDay();
+        // [v14.0 核心改造] 從快取中讀取當前月份的資料
+        const cacheKey = getCacheKeyForDate(currentDate);
+        const currentMonthData = scheduleCache[cacheKey];
+        if (!currentMonthData) {
+            console.error(`無法在快取中找到 ${cacheKey} 的資料來渲染日曆。`);
+            return;
+        }
+        const holidays = currentMonthData.holidays;
         // [核心修改] 根據選擇的員工，決定要顯示哪些人
         const selectedUserId = employeeSelect.value;
 
@@ -509,19 +549,25 @@
     // [核心新增] 只更新日曆內容的函式
     function updateCalendarContent() {
         const selectedUserId = employeeSelect.value;
+        const year = currentDate.getFullYear();
+        const cacheKey = getCacheKeyForDate(currentDate);
+        const currentMonthData = scheduleCache[cacheKey];
+
+        if (!currentMonthData) return; // 如果沒有資料，則不更新
+        const { schedule: scheduleData, holidays } = currentMonthData;
+
         const dayCells = calendarBody.querySelectorAll('.day-cell[data-date]');
         dayCells.forEach(cell => {
             const dateStr = cell.dataset.date;
             const dayNumberEl = cell.querySelector('.day-number');
             const dayContentEl = cell.querySelector('.day-content');
             if (!dayNumberEl || !dayContentEl) return;
-
+            
             const dayOfWeek = new Date(dateStr).getDay();
             const isHoliday = holidays.has(dateStr);
             
             // 確保日期數字永遠存在
             dayNumberEl.textContent = new Date(dateStr).getDate();
-            
             if (selectedUserId) { // 選擇了特定排班員工
                 const isStandard = standardEmployees.some(e => e.userId === selectedUserId);
                 let shift = scheduleData[selectedUserId]?.[dateStr];
@@ -613,6 +659,12 @@
     }
 
     function updateShift(userId, date, shift) {
+        // [v14.0 核心改造] 直接修改對應月份的快取資料
+        const year = new Date(date).getFullYear();
+        const cacheKey = getCacheKeyForDate(new Date(date));
+        const scheduleData = scheduleCache[cacheKey]?.schedule;
+        if (!scheduleData) return; // 如果沒有對應月份的資料，則不進行任何操作
+
         // [新增] 勞基法檢查
         if (ENFORCE_LABOR_LAW === 1 && shift !== '休假') {
             // [v4.0 修正] 應傳入 allEmployees 讓函式能找到員工姓名
@@ -644,6 +696,12 @@
 
     // [新增] 檢查連續工作天數
     function checkConsecutiveWorkDays(userId, targetDateStr, employeeList) {
+        // [v14.0 核心改造] 從快取中讀取對應月份的資料
+        const year = new Date(targetDateStr).getFullYear();
+        const cacheKey = getCacheKeyForDate(new Date(targetDateStr));
+        const scheduleData = scheduleCache[cacheKey]?.schedule;
+        if (!scheduleData) return 0;
+
         let consecutive = 0;
         // [核心修正] 往前檢查時，應從前一天 (i=1) 開始
         for (let i = 1; i <= MAX_CONSECUTIVE_WORK_DAYS; i++) {
@@ -692,6 +750,11 @@
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
         const daysInMonth = new Date(year, month + 1, 0).getDate();
+    // [v14.0 核心改造] 從快取讀取資料
+    const currentMonthData = scheduleCache[getCacheKeyForDate(currentDate)];
+    if (!currentMonthData) return;
+    const { schedule: scheduleData, holidays } = currentMonthData;
+
     
     const totalOffDays = Array.from(holidays).filter(h => h.startsWith(`${year}-${(month + 1).toString().padStart(2, '0')}`)).length;
     const totalWorkDays = daysInMonth - totalOffDays;
@@ -722,6 +785,13 @@
             showGlobalNotification("請先選擇一位員工。", 8000, 'info');
             return;
         }
+
+        // [v14.0 核心改造] 從快取讀取資料
+        const year = currentDate.getFullYear();
+        const cacheKey = getCacheKeyForDate(currentDate);
+        const scheduleData = scheduleCache[cacheKey]?.schedule;
+        if (!scheduleData) return;
+
         if (!scheduleData[selectedUserId] || Object.keys(scheduleData[selectedUserId]).length === 0) { // Check scheduleData directly
             showGlobalNotification("沒有任何變更需要儲存。", 8000, 'info');
             return;
@@ -732,9 +802,8 @@
 
         // 組合出該員工在該月份「最終」的休假日期列表
         const finalOffDays = new Set();
-        const year = currentDate.getFullYear();
-        const month = currentDate.getMonth();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const month = currentDate.getMonth(); // [v18.0 修正] 宣告 month 變數
+        const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
 
         for (let day = 1; day <= daysInMonth; day++) {
             const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
@@ -843,14 +912,16 @@
             loadingSpinner.style.display = 'block'; // [v11.0 優化] 立即顯示載入中
             calendarWrapper.style.display = 'none';
             currentDate.setMonth(currentDate.getMonth() - 1);
-            initialize(); // [v12.0] 換月份時，重新執行完整初始化流程 (快取優先)
+            // [v15.0 改造] 換頁時，重新執行完整初始化流程 (快取優先)
+            initialize();
         });
 
         nextMonthBtn.addEventListener('click', () => {
             loadingSpinner.style.display = 'block'; // [v11.0 優化] 立即顯示載入中
             calendarWrapper.style.display = 'none';
             currentDate.setMonth(currentDate.getMonth() + 1);
-            initialize(); // [v12.0] 換月份時，重新執行完整初始化流程 (快取優先)
+            // [v15.0 改造] 換頁時，重新執行完整初始化流程 (快取優先)
+            initialize();
         });
 
         employeeSelect.addEventListener('change', () => {
@@ -876,7 +947,7 @@
             // [核心改造] 只有非管理者才需要被限制
             const isManager = currentUser && currentUser.permission >= 4;
             if (!isManager && new Date(date) < today) {
-                showGlobalNotification('無法修改過去的排班紀錄。如需調整，請聯繫管理員。', 8000, 'error');
+                showGlobalNotification('無法修改過去的排班紀錄。如需調整，請聯繫管理員。', 8000, 'info');
                 return;
             }
 
@@ -885,8 +956,12 @@
                 showGlobalNotification('請先從下拉選單選擇一位員工以進行編輯。', 8000, 'error');
                 return; // 如果沒選特定員工，點擊無效
             }
-            // [核心修正] 套用與 updateCalendarContent 相同的嚴謹邏輯來判斷當前狀態。
-            // 必須優先讀取 changes 物件中的狀態，即使是 null。
+
+            // [v14.0 核心改造] 從對應月份的快取中讀取當前班別
+            const year = new Date(date).getFullYear();
+            const cacheKey = getCacheKeyForDate(new Date(date));
+            const scheduleData = scheduleCache[cacheKey]?.schedule;
+            if (!scheduleData) return;
             const currentShift = scheduleData[selectedUserId]?.[date];
 
             // [核心改造] 根據您的建議，回歸單純的 0/1 切換邏輯。
@@ -901,7 +976,13 @@
 
     // --- Entry Point ---
     document.addEventListener('DOMContentLoaded', () => {
+        // [v15.0 改造] 應用程式啟動時，先記錄本地測試模式的訊息，避免重複顯示
+        const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+        if (isLocalTest) {
+            console.warn('⚡️ 本地測試模式啟用，將強制賦予最高管理權限。');
+        }
         initialize();
+        bindEventListeners(); // [v13.0 修正] 將事件綁定移至此處，確保只執行一次
     });
 
 </script>
