@@ -80,6 +80,8 @@
 
             const response = await fetch(url);
             const result = await response.json();
+            // 【v39.0 核心新增】根據您的要求，將後端回傳的待審核項目顯示在 Console 中，方便偵錯。
+            console.log('後端回傳的待審核項目:', result);
 
             if (result.success && result.data.length > 0) {
                 const container = document.getElementById('requests-container');
@@ -123,6 +125,12 @@
                 <p><strong>時間：</strong> ${formatDateTime(req.startTime)} 至 ${formatDateTime(req.endTime)}</p>
                 <p><strong>事由：</strong> ${req.reason || '(未填寫)'}</p>
             </div>
+            <!-- 【v36.0 新增】駁回理由輸入區塊 (預設隱藏) -->
+            <div id="reject-reason-wrapper-${req.timestamp}" class="hidden mt-4 space-y-2">
+                <label for="reject-reason-${req.timestamp}" class="block text-sm font-medium text-gray-700">駁回理由 (可選填)</label>
+                <input type="text" id="reject-reason-${req.timestamp}" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="請輸入駁回的理由...">
+                <button data-decision="confirm-reject" data-record-id="${req.timestamp}" class="w-full px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-md hover:bg-red-700">確認駁回</button>
+            </div>
             <div class="mt-4 flex justify-end gap-3">
                 <button data-decision="rejected" data-record-id="${req.timestamp}" class="px-4 py-2 text-sm font-bold text-white bg-red-500 rounded-md hover:bg-red-600">駁回</button>
                 <button data-decision="approved" data-record-id="${req.timestamp}" class="px-4 py-2 text-sm font-bold text-white bg-green-500 rounded-md hover:bg-green-600">批准</button>
@@ -136,25 +144,56 @@
         const button = event.target.closest('button[data-decision]');
         if (!button) return;
 
+        const { decision, recordId } = button.dataset;
+
+        // 【v36.0 核心改造】處理駁回按鈕的 UI 互動
+        if (decision === 'rejected') {
+            const wrapper = document.getElementById(`reject-reason-wrapper-${recordId}`);
+            if (wrapper) {
+                wrapper.classList.toggle('hidden'); // 切換顯示/隱藏輸入框
+            }
+            return; // 中斷後續流程
+        }
+
         button.disabled = true;
         button.textContent = '處理中...';
 
-        const { decision, recordId } = button.dataset;
+        // 【v36.0 核心改造】處理批准與確認駁回的邏輯
+        let reason = '';
+        let finalDecision = decision;
+
+        if (decision === 'confirm-reject') {
+            finalDecision = 'rejected'; // 將動作轉換為後端可識別的 'rejected'
+            const reasonInput = document.getElementById(`reject-reason-${recordId}`);
+            reason = reasonInput ? reasonInput.value : '';
+        }
 
         try {
+            // 【v43.0 核心改造】為了解決 CORS 問題，且不修改後端，改用 no-cors 模式發送 GET 請求。
+            // 這是一種「發射後不理」的策略，前端無法讀取後端的回應內容，但請求會成功送達。
             const url = new URL(API_BASE_URL);
             url.searchParams.append('page', 'attendance_api');
             url.searchParams.append('action', 'handle_approval');
-            url.searchParams.append('decision', decision);
+            url.searchParams.append('decision', finalDecision);
             url.searchParams.append('recordId', recordId);
-            url.searchParams.append('approverName', userProfile.displayName); // 【v31.0 新增】傳入審核者姓名
+            url.searchParams.append('approverName', userProfile.displayName);
+            if (reason) url.searchParams.append('reason', reason);
 
-            const response = await fetch(url);
-            if (response.ok) {
+            const response = await fetch(url, { mode: 'no-cors' });
+            console.log('已使用 no-cors 模式發送審核請求。注意：前端無法讀取後端回應。');
+
+            // 在 no-cors 模式下，我們無法得知 response.ok 的真實狀態，
+            // 但只要 fetch 沒有拋出網路錯誤，我們就樂觀地假設後端已成功處理。
+            if (true) { // 樂觀更新 UI
                 const card = document.getElementById(`req-${recordId}`);
                 if (card) {
                     card.style.opacity = '0';
                     card.style.transform = 'translateX(50px)';
+                    // 更新 Hub 頁面的計數
+                    const currentCount = parseInt(document.getElementById('approval-badge')?.textContent || '1', 10);
+                    if (window.opener && window.opener.updateApprovalBadge) {
+                        window.opener.updateApprovalBadge(Math.max(0, currentCount - 1));
+                    }
                     setTimeout(() => card.remove(), 500);
                 }
             } else {

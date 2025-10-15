@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添心設計 | 整合主控台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        .card { transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
+        .card:hover { transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+        .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        /* 【v50.0 新增】任務交辦中心樣式 */
+        .recipient-tag { display: inline-flex; align-items: center; background-color: #e0e7ff; color: #4338ca; padding: 2px 8px; border-radius: 9999px; font-size: 0.875rem; margin: 2px; }
+        .recipient-tag button { margin-left: 6px; color: #6366f1; }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <!-- 載入中畫面 -->
+    <div id="loading-screen" class="fixed inset-0 bg-white flex flex-col items-center justify-center z-50">
+        <div class="spinner w-12 h-12 border-4 border-gray-200 rounded-full"></div>
+        <p class="mt-4 text-gray-600">正在驗證您的身分...</p>
+    </div>
+
+    <!-- 主內容 (預設隱藏) -->
+    <div id="main-content" class="container mx-auto p-4 max-w-4xl hidden">
+        <header class="text-center my-6">
+            <h1 class="text-3xl font-bold text-gray-800">添心設計 整合主控台</h1>
+            <p id="welcome-message" class="text-gray-500 mt-2">歡迎，<span class="font-semibold">使用者</span>！</p>
+        </header>
+
+        <!-- 【v50.0 核心改造】新增常駐的任務交辦中心 -->
+        <div id="task-sender-wrapper" class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-6 hidden">
+            <h2 class="text-xl font-bold text-gray-700 mb-4">任務交辦中心</h2>
+            <form id="notification-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">收件人</label>
+                    <div id="recipient-pills" class="mt-2 flex flex-wrap gap-1 border p-2 rounded-md min-h-[40px]"></div>
+                    <select id="notification-recipients" class="mt-2 block w-full rounded-md border-gray-300 shadow-sm">
+                        <!-- Employee options will be populated here -->
+                    </select>
+                    <div id="send-to-all-wrapper" class="mt-2 hidden">
+                        <label class="flex items-center"><input type="checkbox" id="send-to-all-checkbox" class="h-4 w-4 rounded border-gray-300"><span class="ml-2 text-sm text-red-600 font-semibold">發送給所有員工</span></label>
+                    </div>
+                </div>
+                <div>
+                    <label for="notification-title" class="block text-sm font-medium text-gray-700">標題</label>
+                    <input type="text" id="notification-title" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" required>
+                </div>
+                <div>
+                    <label for="notification-content" class="block text-sm font-medium text-gray-700">內容</label>
+                    <textarea id="notification-content" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></textarea>
+                </div>
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">要求動作</label>
+                        <div class="mt-2 flex gap-4"><label><input type="radio" name="actionType" value="None" checked> 無需回覆</label><label><input type="radio" name="actionType" value="ReplyText"> 要求文字回覆</label><label><input type="radio" name="actionType" value="ConfirmCompletion"> 要求完成回報</label></div>
+                    </div>
+                    <button type="submit" id="notification-submit-btn" class="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-4 rounded-md">發送任務</button>
+                </div>
+                <div id="notification-status" class="text-sm text-center min-h-[20px]"></div>
+            </form>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            <!-- 專案主控台 -->
+            <div class="col-span-1 md:col-span-2 bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                <h2 class="text-xl font-bold mb-4 text-blue-700">專案主控台</h2>
+                <!-- 【v50.0 核心改造】將輸入框與按鈕改為同一列 -->
+                <div class="flex flex-col sm:flex-row gap-2 items-center">
+                    <input type="text" id="project-id-input" inputmode="numeric" pattern="[0-9]*" class="flex-grow w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="請輸入案號 (例如: 715)">
+                    <button id="open-project-console-btn" class="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700">開啟</button>
+                </div>
+            </div>
+
+            <!-- 靜態連結 -->
+            <a href="https://info.tanxin.space/onboardingflow.html" target="_blank" class="card bg-white p-4 rounded-lg shadow-md border border-gray-200 block">
+                <h2 class="text-xl font-bold mb-2 text-green-700">客戶接洽流程</h2>
+                <p class="text-gray-600">查看標準化的互動式客戶溝通劇本。</p>
+            </a>
+            
+            <a href="https://info.tanxin.space/FAQ.html" target="_blank" class="card bg-white p-4 rounded-lg shadow-md border border-gray-200 block">
+                <h2 class="text-xl font-bold mb-2 text-green-700">新客戶常見問答 (FAQ)</h2>
+                <p class="text-gray-600">快速查詢與回覆客戶的常見問題。</p>
+            </a>
+
+            <!-- [核心新增] 出勤管理主控台 (預設隱藏) -->
+            <a id="attendance-console-link" href="https://info.tanxin.space/attendance_report.html" target="_blank" class="card bg-white p-4 rounded-lg shadow-md border border-gray-200 block hidden">
+                <h2 class="text-xl font-bold mb-2 text-green-700">出勤管理主控台</h2>
+                <p class="text-gray-600">查詢所有員工的出勤、遲到、早退與缺勤紀錄。</p>
+            </a>
+
+            <!-- 【⭐️ 核心新增：假勤審核儀表板 (預設隱藏) ⭐️】 -->
+            <a id="approval-dashboard-link" href="#" class="card bg-white p-4 rounded-lg shadow-md border border-gray-200 block hidden">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-bold mb-2 text-red-700">假勤審核儀表板</h2>
+                    <!-- 【v31.0 新增】待審核計數標籤 -->
+                    <span id="approval-badge" class="hidden h-6 w-6 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">0</span>
+                </div>
+                <p class="text-gray-600">集中審核所有員工的請假與加班申請。</p>
+            </a>
+
+            <a href="https://liff.line.me/2007974938-jVxn6y37" target="_blank" class="card bg-white p-4 rounded-lg shadow-md border border-gray-200 block">
+                <h2 class="text-xl font-bold mb-2 text-purple-700">員工打卡</h2>
+                <p class="text-gray-600">開啟 LIFF 頁面進行每日出勤打卡。</p>
+            </a>
+
+            <a href="https://liff.line.me/2007974938-gOrjlzna" target="_blank" class="card bg-white p-4 rounded-lg shadow-md border border-gray-200 block">
+                <h2 class="text-xl font-bold mb-2 text-purple-700">施工回報</h2>
+                <p class="text-gray-600">開啟 LIFF 頁面上傳每日施工進度與照片。</p>
+            </a>
+            
+            <!-- 【⭐️ 核心改造：線上假勤申請，改為由 Hub 傳遞認證資訊 ⭐️】 -->
+            <a id="open-leave-request-link" href="#" class="card bg-white p-4 rounded-lg shadow-md border border-gray-200 block">
+                <h2 class="text-xl font-bold mb-2 text-purple-700">線上假勤申請</h2>
+                <p class="text-gray-600">申請特休、病假、事假或回報加班。</p>
+            </a>
+
+            <!-- [架構改造] 員工排班系統，改為由 Hub 傳遞認證資訊 -->
+            <a id="open-shift-schedule-link" href="#" class="card bg-white p-4 rounded-lg shadow-md border border-gray-200 block">
+                <h2 class="text-xl font-bold mb-2 text-purple-700">員工排班系統</h2>
+                <p class="text-gray-600">設定排班制員工的休假日期。</p>
+            </a>
+
+            <!-- 後端互動功能 -->
+            <div class="col-span-1 md:col-span-2 bg-white p-4 rounded-lg shadow-md border border-gray-200">
+                <h2 class="text-xl font-bold mb-4 text-red-700">管理員工具</h2>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <p class="text-gray-600">手動觸發後端處理已上傳的施工回報。</p>
+                        <button id="process-queue-btn" class="bg-red-600 text-white font-bold py-1.5 px-3 text-sm rounded-md hover:bg-red-700">立即處理回報</button>
+                    </div>
+                </div>
+                <p id="process-status" class="text-sm text-gray-500 mt-3 min-h-[20px]"></p>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // ===============================================================
+        // ========================= 環境設定 ============================
+        const LIFF_ID = '2007974938-2nPKg3J0'; // 這是這個 hub.html 自己的 LIFF ID
+        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
+        const PROJECT_CONSOLE_LIFF_ID = '2007974938-7yKM9EqL'; // 專案主控台的 LIFF ID
+        const ATTENDANCE_GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec'; // 出勤系統的後端 URL
+        // ===============================================================
+
+        let userProfile = null;
+        let allEmployees = []; // 【⭐️ 核心新增：將員工資料提升至全域，以便共用 ⭐️】
+        let selectedRecipients = new Map(); // 【v50.0 新增】用於儲存已選擇的收件人
+
+        async function main() {
+            // 【⭐️ 核心新增：本地測試模式 ⭐️】
+            // 【v47.0 核心改造】強化本地測試模式：只要是在本地環境，就無條件繞過 LIFF 初始化。
+            const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+            const urlParams = new URLSearchParams(window.location.search);
+
+            if (isLocalTest) {
+                console.warn('⚡️ 本地測試模式啟用，跳過 LIFF 認證。');
+                // 模擬一個 userProfile 物件。允許從 URL 傳入 uid 以便測試不同使用者，若無則使用預設值。
+                userProfile = {
+                    userId: urlParams.get('uid') || 'U_local_test_user_001', // 預設測試者 ID
+                    displayName: '本地測試員'
+                };
+                // 直接顯示主畫面並綁定事件
+                // 在背景中非同步取得員工資料 (因為 LIFF 流程被跳過，這裡需要手動觸發)
+                // 【v51.0 核心修正】確保在顯示內容前，先完成資料的非同步載入
+                await fetchInitialData();
+                showMainContent();
+                return; // 中斷後續的 LIFF 流程
+            }
+
+            try {
+                await liff.init({ liffId: LIFF_ID });
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                    return;
+                }
+                userProfile = await liff.getProfile();
+
+                // 驗證成功，顯示主畫面
+                // 【v51.0 核心修正】確保在顯示內容前，先完成資料的非同步載入
+                await fetchInitialData();
+                showMainContent();
+
+            } catch (error) {
+                console.error('LIFF Initialization Error:', error);
+                document.getElementById('loading-screen').innerHTML = '<p class="text-red-500 font-semibold">驗證失敗，請在 LINE App 中開啟此頁面。</p>';
+            }
+        }
+        
+        function showMainContent() {
+            document.getElementById('loading-screen').style.display = 'none';
+            document.getElementById('main-content').classList.remove('hidden');
+            document.getElementById('welcome-message').querySelector('span').textContent = userProfile.displayName;
+            initializeEventListeners();
+        }
+
+        // 【v47.0 核心新增】將資料取得邏輯獨立成一個函式，方便共用
+        async function fetchInitialData() {
+            try {
+                // 使用 Promise.allSettled 來並行處理多個請求，即使其中一個失敗也不會中斷
+                const [employeesResult, pendingResult] = await Promise.allSettled([
+                    fetch(`${ATTENDANCE_GAS_WEB_APP_URL}?page=attendance_api&action=get_employees`).then(res => res.json()),
+                    fetch(`${ATTENDANCE_GAS_WEB_APP_URL}?page=attendance_api&action=get_pending_requests`).then(res => res.json())
+                ]);
+
+                if (employeesResult.status === 'fulfilled') {
+                    allEmployees = employeesResult.value;
+                    const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId);
+                    
+                    // 【v50.0 核心改造】在本地測試模式下，強制給予權限等級 5，以利完整測試。
+                    const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+                    const hasAdminRights = currentUser && (currentUser.permission >= 4);
+
+                    if (hasAdminRights || isLocalTest) {
+                        document.getElementById('attendance-console-link').classList.remove('hidden');
+                        document.getElementById('approval-dashboard-link').classList.remove('hidden');
+                        document.getElementById('task-sender-wrapper').classList.remove('hidden'); // 顯示任務交辦中心
+                        populateRecipientOptions(); // 填入收件人選項
+                        if (pendingResult.status === 'fulfilled' && pendingResult.value.success) {
+                            updateApprovalBadge(pendingResult.value.data.length);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.warn('載入初始資料時發生錯誤:', error);
+            }
+        }
+
+        // 【v50.0 核心新增】任務交辦中心相關函式
+        function populateRecipientOptions() {
+            const recipientsSelect = document.getElementById('notification-recipients');
+            recipientsSelect.innerHTML = '<option value="">-- 點此加入收件人 --</option>';
+            allEmployees.filter(emp => emp.permission < 5).forEach(emp => {
+                recipientsSelect.innerHTML += `<option value="${emp.userId}" data-name="${emp.userName}">${emp.userName}</option>`;
+            });
+
+            const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId);
+            const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+            if ((currentUser && currentUser.permission >= 4) || isLocalTest) {
+                document.getElementById('send-to-all-wrapper').classList.remove('hidden');
+            }
+        }
+
+        function renderRecipientPills() {
+            const container = document.getElementById('recipient-pills');
+            container.innerHTML = '';
+            selectedRecipients.forEach((name, id) => {
+                container.innerHTML += `
+                    <span class="recipient-tag">
+                        ${name}
+                        <button type="button" data-id="${id}" class="recipient-remove-btn">&times;</button>
+                    </span>
+                `;
+            });
+        }
+
+        function handleRecipientChange(event) {
+            const selectedOption = event.target.selectedOptions[0];
+            if (!selectedOption || !selectedOption.value) return;
+
+            const userId = selectedOption.value;
+            const userName = selectedOption.dataset.name;
+            selectedRecipients.set(userId, userName);
+            renderRecipientPills();
+            event.target.value = ''; // 重置下拉選單
+        }
+
+        function handlePillRemove(event) {
+            if (event.target.classList.contains('recipient-remove-btn')) {
+                const userId = event.target.dataset.id;
+                selectedRecipients.delete(userId);
+                renderRecipientPills();
+            }
+        }
+
+        async function handleSendNotification(event) {
+            event.preventDefault();
+            // 此處為示意，實際發送邏輯可在此處實作
+            const statusEl = document.getElementById('notification-status');
+            statusEl.textContent = '發送中...';
+            console.log('準備發送通知:', {
+                recipients: Array.from(selectedRecipients.keys()),
+                sendToAll: document.getElementById('send-to-all-checkbox').checked,
+                title: document.getElementById('notification-title').value,
+            });
+            setTimeout(() => {
+                statusEl.textContent = '任務已成功發送！';
+                setTimeout(() => { statusEl.textContent = ''; }, 2000);
+            }, 1000);
+        }
+
+        function initializeEventListeners() {
+            // 開啟專案主控台按鈕
+            document.getElementById('open-project-console-btn').addEventListener('click', (e) => { // 【v50.0 修正】將此事件監聽移至此處
+                e.preventDefault();
+                const projectId = document.getElementById('project-id-input').value.trim();
+                if (!projectId || !/^\d+$/.test(projectId)) {
+                    alert('請輸入純數字的案號！');
+                    return;
+                }
+                if (!userProfile || !userProfile.userId) {
+                    alert('無法取得您的使用者資訊，請重新載入頁面。');
+                    return;
+                }
+
+                // 【v46.0 核心改造】根據環境動態決定目標 URL
+                const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+                let targetUrl;
+                if (isLocal) {
+                    // 本地測試模式：直接開啟本地的 HTML 檔案，並帶上參數
+                    targetUrl = `http://127.0.0.1:5500/managementconsole.html?id=${projectId}&uid=${userProfile.userId}`;
+                } else {
+                    // 正式環境：使用 LIFF URL
+                    targetUrl = `https://liff.line.me/${PROJECT_CONSOLE_LIFF_ID}?id=${projectId}&uid=${userProfile.userId}`;
+                }
+                window.open(targetUrl, '_blank');
+            });
+
+            // [架構改造] 員工排班系統連結
+            document.getElementById('open-shift-schedule-link').addEventListener('click', (e) => {
+                e.preventDefault(); // 防止直接跳轉
+                if (!userProfile || !userProfile.userId) {
+                    alert('無法取得您的使用者資訊，請重新載入頁面。');
+                    return;
+                }
+                // [核心改造] 根據當前環境，動態產生排班系統的 URL
+                const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+                const baseUrl = isLocal 
+                    ? 'http://127.0.0.1:5500/shift_schedule.html' 
+                    : 'https://info.tanxin.space/shift_schedule.html';
+
+                const scheduleUrl = `${baseUrl}?uid=${userProfile.userId}&name=${encodeURIComponent(userProfile.displayName)}`;
+                
+                window.open(scheduleUrl, '_blank');
+            });
+
+            // 【⭐️ 核心新增：線上假勤申請連結 ⭐️】
+            document.getElementById('open-leave-request-link').addEventListener('click', (e) => {
+                e.preventDefault();
+                if (!userProfile || !userProfile.userId) {
+                    alert('無法取得您的使用者資訊，請重新載入頁面。');
+                    return;
+                }
+                // 根據當前環境，動態產生假勤申請系統的 URL
+                const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+                const baseUrl = isLocal 
+                    ? 'http://127.0.0.1:5500/leave_request.html' 
+                    : 'https://info.tanxin.space/leave_request.html';
+
+                // 【⭐️ 核心改造：從已取得的員工資料中找出班表時間，並加入 URL 參數 ⭐️】
+                const currentUserData = allEmployees.find(emp => emp.userId === userProfile.userId);
+                const params = new URLSearchParams({
+                    uid: userProfile.userId,
+                    name: userProfile.displayName
+                });
+                if (currentUserData && currentUserData.shiftStart && currentUserData.shiftEnd) {
+                    params.set('shiftStart', currentUserData.shiftStart);
+                    params.set('shiftEnd', currentUserData.shiftEnd);
+                }
+                const leaveRequestUrl = `${baseUrl}?${params.toString()}`;
+                
+                // 在新分頁中開啟
+                window.open(leaveRequestUrl, '_blank');
+            });
+
+            // 【⭐️ 核心新增：假勤審核儀表板連結 ⭐️】
+            document.getElementById('approval-dashboard-link').addEventListener('click', (e) => {
+                e.preventDefault();
+                if (!userProfile || !userProfile.userId) {
+                    alert('無法取得您的使用者資訊，請重新載入頁面。');
+                    return;
+                }
+                const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+                const baseUrl = isLocal 
+                    ? 'http://127.0.0.1:5500/approval_dashboard.html' 
+                    : 'https://info.tanxin.space/approval_dashboard.html';
+
+                const params = new URLSearchParams({
+                    uid: userProfile.userId,
+                    name: userProfile.displayName
+                });
+                window.open(`${baseUrl}?${params.toString()}`, '_blank');
+            });
+
+            // 立即處理回報按鈕
+            document.getElementById('process-queue-btn').addEventListener('click', async () => {
+                const btn = document.getElementById('process-queue-btn');
+                const statusEl = document.getElementById('process-status');
+
+                if (!confirm('確定要立即處理所有待辦的施工回報嗎？')) {
+                    return;
+                }
+
+                btn.disabled = true;
+                btn.textContent = '處理中...';
+                statusEl.textContent = '正在向後端發送指令...';
+                statusEl.className = 'text-sm text-blue-600 mt-3 min-h-[20px]';
+
+                try {
+                    const response = await fetch(GAS_WEB_APP_URL, {
+                        method: 'POST',
+                        cache: 'no-cache',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({
+                            action: 'process_queue',
+                            triggerUser: userProfile.displayName
+                        })
+                    });
+
+                    // 由於後端是 302 重導向，我們無法直接讀取 response.json()
+                    // 因此，只要 fetch 沒有拋出錯誤，我們就假設指令已成功發送
+                    statusEl.textContent = '指令已成功發送！後端正在背景處理中。';
+                    statusEl.className = 'text-sm text-green-600 mt-3 min-h-[20px]';
+
+                } catch (error) {
+                    // 處理 fetch 本身的錯誤 (例如網路問題)
+                    console.error('Fetch error:', error);
+                    statusEl.textContent = `指令發送失敗: ${error.message}`;
+                    statusEl.className = 'text-sm text-red-600 mt-3 min-h-[20px]';
+                } finally {
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.textContent = '立即處理回報';
+                    }, 3000);
+                }
+            });
+
+            // 【v50.0 新增】任務交辦中心事件
+            document.getElementById('notification-recipients').addEventListener('change', handleRecipientChange);
+            document.getElementById('recipient-pills').addEventListener('click', handlePillRemove);
+            document.getElementById('notification-form').addEventListener('submit', handleSendNotification);
+        }
+
+        // 【v31.0 新增】提供給子視窗呼叫的函式，用以更新待審核標籤
+        window.updateApprovalBadge = (count) => {
+            const badge = document.getElementById('approval-badge');
+            if (!badge) return;
+            if (count > 0) {
+                badge.textContent = count;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        };
+
+        window.onload = main;
+    </script>
+</body>
+</html>

@@ -137,67 +137,46 @@
         // ===============================================================
 
         /**
-         * 【新增的函式】
-         * 這是一個放在全域範圍的函式，專門用來接收後端 JSONP 的回應。
-         * @param {object} result - 由後端 Apps Script 傳回的 JSON 物件
-         */
-        function handleGasResponse(result) {
-            pageLog('步驟: 後端透過 JSONP 回應成功', 'success');
-            hideLoading();
-            handleCheckInResult(result);
-
-            // 清理動態產生的 script 標籤，避免頁面殘留
-            const scriptTag = document.getElementById('jsonp-script');
-            if (scriptTag) {
-                scriptTag.remove();
-            }
-        }
-
-        /**
          * 【修改過的函式】
          * 打卡按鈕的點擊事件處理器。
-         * 原本的 fetch 請求，已被替換為動態建立 <script> 標籤的 JSONP 請求方式。
+         * 【v52.0 核心改造】將舊的 JSONP 請求方式，升級為現代標準的 fetch API。
          */
         checkinButton.addEventListener('click', async () => {
             checkinButton.disabled = true;
             pageLog('事件: 打卡按鈕被點擊');
 
             try {
-                // --- 步驟 1 & 2: 取得 GPS 和 LINE Profile (這部分不變) ---
+                // --- 步驟 1: 取得 GPS ---
                 showLoading('正在取得您的 GPS 位置...');
                 const location = await getGeoLocationPromise();
                 const { latitude, longitude } = location.coords;
                 pageLog(`步驟: 取得 GPS 成功`, 'success');
 
+                // --- 步驟 2: 取得 LINE Profile ---
                 showLoading('正在驗證您的身分...');
                 const profile = await liff.getProfile();
                 pageLog(`步驟: liff.getProfile() 成功`, 'success');
 
-                // --- 步驟 3: 發送 JSONP 請求 ---
+                // --- 步驟 3: 使用 fetch API 發送請求 ---
                 showLoading('正在傳送打卡資訊...');
-                const callbackName = 'handleGasResponse'; // 對應到我們新增的全域函式
-                let url = `${GAS_WEB_APP_URL}?userId=${profile.userId}&userName=${encodeURIComponent(profile.displayName)}&lat=${latitude}&lon=${longitude}&callback=${callbackName}`;
-                pageLog(`目標 URL (JSONP): ${url}`);
+                const url = new URL(GAS_WEB_APP_URL);
+                url.searchParams.append('userId', profile.userId);
+                url.searchParams.append('userName', profile.displayName);
+                url.searchParams.append('lat', latitude);
+                url.searchParams.append('lon', longitude);
+                pageLog(`目標 URL (fetch): ${url.toString()}`);
 
-                // 動態建立一個 script 標籤
-                const script = document.createElement('script');
-                script.id = 'jsonp-script';
-                script.src = url;
-
-                // 處理載入失敗的情況 (網路錯誤等)
-                script.onerror = function() {
-                    pageLog('嚴重錯誤: JSONP 腳本載入失敗 (網路問題)', 'error');
-                    showError('無法連接到打卡主機。<br>請檢查您的網路連線。');
-                    checkinButton.textContent = '重新打卡';
-                    checkinButton.disabled = false;
-                    script.remove();
-                };
-                
-                // 將 script 標籤加入到頁面中，瀏覽器會自動發出請求
-                document.head.appendChild(script);
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`後端伺服器錯誤: ${response.status}`);
+                }
+                const result = await response.json();
+                pageLog('步驟: 後端透過 fetch 回應成功', 'success');
+                hideLoading();
+                handleCheckInResult(result);
 
             } catch (err) {
-                // 這個 catch 區塊主要處理 getGeoLocationPromise 或 liff.getProfile 的錯誤
+                // 這個 catch 區塊現在會處理 GPS、Profile 和 fetch 的所有錯誤
                 pageLog(`嚴重錯誤: 打卡流程中斷 - ${err.message}`, 'error');
                 console.error('Check-in Error:', err);
                 let errorMessage = '打卡失敗，發生未知錯誤。';
@@ -242,8 +221,3 @@
     </script>
 </body>
 </html>
-
-
-
-
-
