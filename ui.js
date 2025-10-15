@@ -71,14 +71,7 @@ function renderSmartImg(fileId) {
     const largeUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`;
     img.dataset.full = largeUrl;
     img.dataset.src = thumbnailUrl;
-    // [核心修正] 補上遺漏的點擊事件，使其能夠觸發圖片燈箱
-    img.addEventListener('click', (e) => {
-        const grid = e.target.closest('.photo-grid');
-        const allImages = Array.from(grid.querySelectorAll('img.photo-thumb'));
-        const urls = allImages.map(i => i.dataset.full);
-        const currentIndex = allImages.indexOf(e.target);
-        if (window.__openLightbox__) window.__openLightbox__(urls, currentIndex);
-    });
+    // [v27.0 修正] 移除此處的事件綁定，統一由 buildPhotoGrid 處理
     img.onerror = () => { const ph = document.createElement('div'); ph.className = 'photo-placeholder'; ph.textContent = '縮圖載入失敗'; wrap.replaceChildren(ph); };
     wrap.appendChild(img); return wrap;
 }
@@ -110,14 +103,6 @@ function renderDirectImg(src) {
         ph.onclick = () => window.open(src, '_blank', 'noopener,noreferrer');
         wrap.replaceChildren(ph); thumbLog('IMG ERROR ' + img.src);
     };
-    // [核心修正] 修正語法錯誤，將 __openLightbox__ 改為 window.__openLightbox__
-    img.addEventListener('click', (e) => {
-        const grid = e.target.closest('.photo-grid');
-        const allImages = Array.from(grid.querySelectorAll('img.photo-thumb'));
-        const urls = allImages.map(i => i.dataset.full);
-        const currentIndex = allImages.indexOf(e.target);
-        if (window.__openLightbox__) window.__openLightbox__(urls, currentIndex);
-    });
     wrap.appendChild(img); return wrap;
 }
 
@@ -147,6 +132,7 @@ function buildPhotoGrid(htmlLinksCsv) {
             else container.appendChild(renderDirectImg(u));
         }
     });
+
     return container;
 }
 
@@ -186,7 +172,18 @@ export function _buildLogCard(log, isDraftMode) {
     card.appendChild(buttonContainer);
 
     if (log.PhotoLinks) {
-        photoContainer.appendChild(buildPhotoGrid(log.PhotoLinks));
+        const photoGrid = buildPhotoGrid(log.PhotoLinks);
+        photoContainer.appendChild(photoGrid);
+
+        // [v28.0 修正] 為卡片內的每張照片綁定開啟燈箱的事件
+        const images = Array.from(photoGrid.querySelectorAll('img.photo-thumb'));
+        images.forEach((img, index) => {
+            img.addEventListener('click', () => {
+                const urls = images.map(i => i.dataset.full);
+                // 呼叫掛載在 window 上的全域函式來開啟燈箱
+                if (window.__openLightbox__) window.__openLightbox__(urls, index);
+            });
+        });
     }
 
     // 【⭐️ 核心修正：移除行內樣式，改用 CSS class 統一管理顏色 ⭐️】

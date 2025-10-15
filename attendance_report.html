@@ -104,33 +104,19 @@
 
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
 
-    function loadJsonp(url) {
-        return new Promise((resolve, reject) => {
-            const cb = 'jsonp_' + Math.random().toString(36).slice(2);
-            const timer = setTimeout(() => { 
-                cleanup(); 
-            reject(new Error('請求後端資料超時 (30秒)。')); 
-        }, 30000); // 【⭐️ 核心修正：將超時時間從 15 秒延長至 30 秒 ⭐️】
-            
-            function cleanup(){ 
-                clearTimeout(timer); 
-                delete window[cb]; 
-                if(script.parentNode) script.parentNode.removeChild(script); 
-            }
+    // 【v32.0 核心改造】將 loadJsonp 升級為現代的 fetch API
+    async function fetchApi(params) {
+        const url = new URL(API_BASE_URL);
+        for (const key in params) {
+            url.searchParams.append(key, params[key]);
+        }
 
-            window[cb] = (data) => { 
-                cleanup(); 
-                resolve(data); 
-            };
-
-            const script = document.createElement('script');
-            script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
-            script.onerror = () => { 
-                cleanup(); 
-                reject(new Error('載入後端資料失敗。')); 
-            };
-            document.body.appendChild(script);
-        });
+        const response = await fetch(url);
+        if (!response.ok) {
+            // 增加超時處理
+            throw new Error(`後端伺服器錯誤: ${response.status} ${response.statusText}`);
+        }
+        return response.json();
     }
 
     function loadGoogleMapsAPI(apiKey) {
@@ -161,7 +147,7 @@
         document.getElementById('start-date').value = firstDayOfMonth.toLocaleDateString('sv');
         document.getElementById('end-date').value = today.toLocaleDateString('sv');
 
-        loadJsonp(`${API_BASE_URL}?page=attendance_api&action=get_config`)
+        fetchApi({ page: 'attendance_api', action: 'get_config' })
             .then(config => {
                 return loadGoogleMapsAPI(config.googleMapsApiKey);
             })
@@ -170,7 +156,7 @@
                 alert('無法載入地圖設定，地圖功能將無法使用。');
             });
 
-        loadJsonp(`${API_BASE_URL}?page=attendance_api&action=get_employees`)
+        fetchApi({ page: 'attendance_api', action: 'get_employees' })
             .then(employees => {
                 const select = document.getElementById('employee-select');
                 const modalSelect = document.getElementById('modal-employee-select');
@@ -251,8 +237,7 @@
         btn.textContent = '送出中...';
 
         // 【⭐️ 核心修正 2/3：改用 loadJsonp 並指向正確的 API 路由 ⭐️】
-        const params = new URLSearchParams(payload);
-        loadJsonp(`${API_BASE_URL}?${params.toString()}`)
+        fetchApi(payload)
             .then(response => {
                 showGlobalNotification(response.message || '補打卡成功！', 10000, 'success');
                 document.getElementById('checkin-modal').classList.remove('is-open');
@@ -333,8 +318,8 @@
         document.getElementById('summary-section').style.display = 'none';
         document.getElementById('map-container').style.display = 'none';
 
-        const params = new URLSearchParams({ page: 'attendance_api', action:'get_report', startDate, endDate, userId });
-        loadJsonp(`${API_BASE_URL}?${params.toString()}`)
+        const params = { page: 'attendance_api', action:'get_report', startDate, endDate, userId };
+        fetchApi(params)
             .then(data => {
                 // [核心改造] 收到後端回傳的完整報表後，立即使用已過濾的員工列表 (employeeShiftData) 進行篩選。
                 // 這樣可以確保無論後端回傳什麼，最終顯示在畫面上的都只有權限 < 5 的員工紀錄。

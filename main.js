@@ -561,6 +561,29 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
  * 透過事件冒泡，在 document 層級處理所有帶有 data-action 的點擊事件。
  */
 document.addEventListener('click', (e) => {
+  // [v26.0 修正] 處理手機版漢堡選單的點擊事件
+  // 這個按鈕沒有 data-action，需要獨立處理
+  const mobileNavToggle = e.target.closest('#mobile-nav-toggle');
+  if (mobileNavToggle) {
+    // [v27.0 修正] 點擊漢堡選單時，應為 .left-sidebar 切換 .open class，而不是 .container
+    const leftSidebar = document.querySelector('.left-sidebar');
+    if (leftSidebar) {
+      leftSidebar.classList.toggle('open');
+    }
+    return; // 處理完畢，結束函式
+  }
+
+  // [v30.0 修正] 處理手機版側邊欄內所有按鈕的點擊事件
+  // 如果點擊的目標是在 .left-sidebar 裡面，就自動關閉選單
+  const clickedInsideSidebar = e.target.closest('.left-sidebar');
+  if (clickedInsideSidebar) {
+      const leftSidebar = document.querySelector('.left-sidebar');
+      // 確保只有在選單是開啟狀態時才關閉
+      if (leftSidebar && leftSidebar.classList.contains('open')) {
+          leftSidebar.classList.remove('open');
+      }
+  }
+
   const target = e.target.closest('[data-action]');
   if (!target) return;
 
@@ -577,6 +600,8 @@ document.addEventListener('click', (e) => {
       }
       break;
     case 'openPhotoModal':
+      // [v26.0 修正] 確保點擊「管理相片」按鈕時，是開啟照片管理視窗，而不是燈箱
+      // 從按鈕的 dataset 中取得 logId 和 photoLinks  
       LogActions.openPhotoModal(logId, target.dataset.photoLinks);
       break;
     case 'handleEditText':
@@ -624,6 +649,8 @@ document.addEventListener('click', (e) => {
 // 在所有函式與事件監聽器都定義完成後，
 // 呼叫 initializeApp() 來啟動整個應用程式的載入與渲染流程。
 document.addEventListener('DOMContentLoaded', () => {
+  // [v29.0 修正] 初始化圖片燈箱功能，確保點擊照片可以放大
+  initializeLightbox();
   initializeApp();
 });
 

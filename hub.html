@@ -59,7 +59,11 @@
 
             <!-- 【⭐️ 核心新增：假勤審核儀表板 (預設隱藏) ⭐️】 -->
             <a id="approval-dashboard-link" href="#" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block hidden">
-                <h2 class="text-xl font-bold mb-2 text-red-700">假勤審核儀表板</h2>
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-bold mb-2 text-red-700">假勤審核儀表板</h2>
+                    <!-- 【v31.0 新增】待審核計數標籤 -->
+                    <span id="approval-badge" class="hidden h-6 w-6 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">0</span>
+                </div>
                 <p class="text-gray-600">集中審核所有員工的請假與加班申請。</p>
             </a>
 
@@ -140,25 +144,25 @@
                 // 驗證成功，顯示主畫面
                 showMainContent();
 
-                // [核心改造] 呼叫 get_employees API，並從中找出當前使用者的權限
+                // 【v32.0 核心改造】在背景中非同步取得員工資料與待審核項目
                 try {
-                    const cb = 'jsonp_' + Math.random().toString(36).slice(2);
-                    const employeesUrl = `${ATTENDANCE_GAS_WEB_APP_URL}?page=attendance_api&action=get_employees&callback=${cb}`;
-                    
-                    window[cb] = (employees) => {
-                        allEmployees = employees; // 將資料存入全域變數
-                        delete window[cb];
+                    // 使用 Promise.allSettled 來並行處理多個請求，即使其中一個失敗也不會中斷
+                    const [employeesResult, pendingResult] = await Promise.allSettled([
+                        fetch(`${ATTENDANCE_GAS_WEB_APP_URL}?page=attendance_api&action=get_employees`).then(res => res.json()),
+                        fetch(`${ATTENDANCE_GAS_WEB_APP_URL}?page=attendance_api&action=get_pending_requests`).then(res => res.json())
+                    ]);
+
+                    if (employeesResult.status === 'fulfilled') {
+                        allEmployees = employeesResult.value;
                         const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId);
                         if (currentUser && currentUser.permission >= 4) {
                             document.getElementById('attendance-console-link').classList.remove('hidden');
                             document.getElementById('approval-dashboard-link').classList.remove('hidden');
+                            if (pendingResult.status === 'fulfilled' && pendingResult.value.success) {
+                                updateApprovalBadge(pendingResult.value.data.length);
+                            }
                         }
-                    };
-
-                    const script = document.createElement('script');
-                    script.src = employeesUrl;
-                    script.onerror = () => delete window[cb];
-                    document.body.appendChild(script);
+                    }
                 } catch (authError) {
                     console.warn('無法取得使用者權限:', authError);
                 }
@@ -301,6 +305,18 @@
                 }
             });
         }
+
+        // 【v31.0 新增】提供給子視窗呼叫的函式，用以更新待審核標籤
+        window.updateApprovalBadge = (count) => {
+            const badge = document.getElementById('approval-badge');
+            if (!badge) return;
+            if (count > 0) {
+                badge.textContent = count;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        };
 
         window.onload = main;
     </script>

@@ -31,7 +31,11 @@
         .shift-休假 { background-color: #fee2e2; color: #b91c1c; }
         .shift-上班 { background-color: #ecfccb; color: #4d7c0f; } /* 新增上班樣式 */
         .shift-加班 { background-color: #ffedd5; color: #9a3412; } /* 新增加班樣式 */
-        .shift-特休 { background-color: #dbeafe; color: #1e40af; } /* 新增特休樣式 */
+        /* 【v25.0 核心改造】新增多種假別樣式 */
+        .shift-特休 { background-color: #dbeafe; color: #1e40af; }
+        .shift-病假 { background-color: #fef9c3; color: #a16207; }
+        .shift-事假 { background-color: #e5e7eb; color: #374151; }
+        .shift-補休, .shift-公假, .shift-婚假, .shift-喪假 { background-color: #e0e7ff; color: #3730a3; }
         .is-holiday .day-number { color: #b91c1c; font-weight: 600; }
         .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -189,20 +193,22 @@
     let allEmployees = []; // Moved here to be initialized after other states
     let displayedShiftTypes = new Set(); // NEW: 快取的顯示班別
     let currentUser = null; // [架構改造] 用來儲存從 URL 取得的使用者資訊
+    let fetchDebounceTimer = null; // [核心新增] 用於延遲後端請求的計時器
     let currentViewMode = DEFAULT_VIEW_MODE;
         
-    // --- JSONP Helper ---
-    function loadJsonp(url) {
-        return new Promise((resolve, reject) => {
-            const cb = 'jsonp_' + Math.random().toString(36).slice(2);
-            const timer = setTimeout(() => { cleanup(); reject(new Error('請求後端資料超時 (15秒)。')); }, 15000);
-            function cleanup(){ clearTimeout(timer); delete window[cb]; if(script.parentNode) script.parentNode.removeChild(script); }
-            window[cb] = (data) => { cleanup(); resolve(data); };
-            const script = document.createElement('script');
-            script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
-            script.onerror = () => { cleanup(); reject(new Error('載入後端資料失敗。')); };
-            document.body.appendChild(script);
-        });
+    // 【v32.0 核心改造】將 loadJsonp 升級為現代的 fetch API
+    async function fetchApi(params) {
+        const url = new URL(API_BASE_URL);
+        // 將 params 物件的所有鍵值對附加到 URL 上
+        for (const key in params) {
+            url.searchParams.append(key, params[key]);
+        }
+
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`後端伺服器錯誤: ${response.status} ${response.statusText}`);
+        }
+        return response.json(); // 自動解析 JSON
     }
 
     // --- [v12.0 新增] 快取管理 ---
@@ -228,8 +234,20 @@
     async function initialize() {
         // [架構改造] 移除 LIFF 初始化，改為從 URL 讀取使用者資訊
         const urlParams = new URLSearchParams(window.location.search);
-        const uid = urlParams.get('uid');
-        const name = urlParams.get('name');
+        let uid = urlParams.get('uid');
+        let name = urlParams.get('name');
+
+        // 【⭐️ 核心修改：本地測試模式 ⭐️】
+        // 檢查當前網址是否為本地開發環境 (localhost 或 127.0.0.1)。
+        const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+        
+        // 如果是本地環境，且網址中缺少 uid 參數，則自動提供一組預設值以便測試。
+        if (isLocalTest && !uid) {
+            console.warn('⚡️ 本地測試模式啟用，使用預設使用者資訊。');
+            // 您可以將此處的 uid 改為任何您在「員工資料」表中設定的管理者 ID，以便測試權限功能。
+            uid = 'Ud58333430513b7527106fa71d2e30151'; 
+            name = '本地測試員';
+        }
 
         if (!uid || !name) {
             document.body.innerHTML = `<div class="p-8 text-center text-red-600 font-bold">錯誤：缺少使用者認證資訊。<br>請從「整合主控台」進入此頁面。</div>`;
@@ -246,11 +264,31 @@
         // [核心修正] 先更新月份顯示，再非同步載入資料
         updateMonthDisplay();
 
-        // [v15.0 核心改造] 優先從快取載入並立即顯示資料
+        // 1. 優先從 localStorage 載入快取並立即顯示，這是最快的路徑。
         const cacheLoaded = await loadAndDisplayCachedData();
 
-        // [v15.0 核心改造] 無論如何都在背景取得最新資料
-        await fetchAndRefreshData(cacheLoaded);
+        // 2. 如果快取未命中 (cacheLoaded 為 false)，則執行「先畫框、再填內容」的優化流程。
+        if (!cacheLoaded) {
+            // [v20.0 核心改造] 徹底實現「先畫框、後填內容」
+            // 步驟 1: 立即渲染日曆的「骨架」，不需等待任何資料。
+            renderCalendarFrame();
+
+            // 步驟 2: 建立一個空的資料結構，為後續的資料填充做準備。
+            const cacheKey = getCacheKeyForDate(currentDate);
+            if (!scheduleCache[cacheKey]) {
+                scheduleCache[cacheKey] = { schedule: {}, holidays: new Set() };
+            }
+
+            // 步驟 3: 在背景非同步載入員工資料。
+            // 這個函式完成後，會接著載入排班資料，並最終觸發 updateCalendarContent() 來「填充」內容。
+            processEmployeesData();
+        }
+
+        // 3. 無論如何，都在背景（延遲後）向後端請求最新資料。
+        clearTimeout(fetchDebounceTimer);
+        fetchDebounceTimer = setTimeout(() => {
+            fetchAndRefreshData();
+        }, 1500); // 延遲 1.5 秒
     }
 
     // [v12.0 新增] 從快取載入並顯示資料
@@ -268,8 +306,10 @@
             scheduleCache[cacheKey] = { schedule: cachedSchedule.schedule, holidays: new Set(cachedSchedule.holidays || []) };
             allEmployees = cachedEmployees;
 
-            // 使用快取資料來設定畫面
-            processEmployeesData();
+            // [核心修正] 恢復呼叫 processEmployeesData()，這是解決顏色與快取顯示問題的關鍵。
+            // 此函式會為員工物件賦予顏色，並準備好渲染所需的資料。
+            await processEmployeesData();
+
             renderCalendar();
             loadingSpinner.style.display = 'none';
             calendarWrapper.style.display = 'grid';
@@ -279,17 +319,15 @@
     }
 
     async function fetchEmployees() {
-        try {
+        try { // [v15.0 改造] 員工資料也採用快取優先策略
             // [v15.0 改造] 員工資料也採用快取優先策略
             const cachedEmployees = loadCache('shiftSchedule_employees');
             if (cachedEmployees) {
                 allEmployees = cachedEmployees;
             } else {
-                allEmployees = await loadJsonp(`${API_BASE_URL}?page=attendance_api&action=get_employees`);
+                allEmployees = await fetchApi({ page: 'attendance_api', action: 'get_employees' });
                 saveCache('shiftSchedule_employees', allEmployees, 1); // 員工資料快取 1 天
             }
-
-            processEmployeesData();
 
             // [v15.0 改造] 權限設定邏輯移至此處，確保每次都有最新的員工資料
             
@@ -323,8 +361,8 @@
     }
 
     // [v12.0 新增] 將處理員工資料的邏輯獨立出來，方便快取和新資料共用
-    function processEmployeesData() {
-            // [核心改造] 儲存當前選擇，避免重置
+    async function processEmployeesData() {
+            await fetchEmployees(); // [核心改造] 確保在處理前，員工資料已載入
             const currentSelectedUserId = employeeSelect.value;
 
             // [核心改造] 建立一個可供排班的員工列表，排除權限等級 5 的使用者
@@ -413,6 +451,8 @@
             await fetchEmployees();
             await fetchScheduleData(true); // 傳入 true 表示這是背景更新
         } catch (error) {
+            // [核心修正] 補上遺失的 catch 區塊，處理 fetchAndRefreshData 函式中可能發生的錯誤。
+            // 這個區塊是為了解決 "Missing catch or finally after try" 的語法錯誤。
             console.error("載入初始資料失敗:", error);
         }
     }
@@ -428,7 +468,12 @@
                 calendarWrapper.style.display = 'none';
             }
             console.log(`向後端請求 ${requestCacheKey} 的資料...`);
-            const data = await loadJsonp(`${API_BASE_URL}?page=attendance_api&action=get_latest_schedule&year=${year}&month=${month}`);
+            const data = await fetchApi({
+                page: 'attendance_api',
+                action: 'get_latest_schedule',
+                year: year,
+                month: month
+            });
             
             // [v15.0 改造] 根據您的要求，如果後端沒有回傳資料，則不進行任何更新
             if (!data || !data.schedule) {
@@ -440,8 +485,45 @@
                 return; // [v16.0 修正] 確保在沒有資料時也返回
             }
 
-            const newScheduleData = data.schedule;
+            // 【v24.0 核心修正】宣告並初始化 newScheduleData 和 newHolidays 變數。
+            // 這是解決 "newScheduleData is not defined" 錯誤的關鍵。
+            // 【v29.0 核心改造】重構資料解析邏輯，以處理後端傳來的 '日期:假別' 鍵名格式。
+            const rawScheduleData = data.schedule || {};
+            const newScheduleData = {};
+            for (const userId in rawScheduleData) {
+                newScheduleData[userId] = {};
+                for (const key in rawScheduleData[userId]) {
+                    const value = rawScheduleData[userId][key];
+                    const parts = key.split(':');
+                    const date = parts[0];
+                    // 優先使用鍵名中的假別，若無，則使用原始值
+                    const leaveType = parts[1] || value; 
+                    newScheduleData[userId][date] = leaveType;
+                }
+            }
+
             const newHolidays = new Set(data.holidays || []);
+
+            // 【v23.1 核心修正】將預設休假的邏輯移至「資料比對」之前。
+            // 確保無論後端資料是否與快取相同，標準制員工的預設休假都能被正確處理。
+            standardEmployees.forEach(emp => {
+                const userId = emp.userId;
+                // 檢查該員工在「後端傳來」的資料中，當前月份是否沒有任何紀錄。
+                const hasSavedDataForMonth = Object.keys(data.schedule[userId] || {}).some(date => date.startsWith(requestCacheKey));
+
+                // 如果沒有任何已儲存的資料，則執行預設排班邏輯
+                if (!hasSavedDataForMonth) {
+                    // 直接將國定假日寫入「即將存入快取」的 newScheduleData 中
+                    if (!newScheduleData[userId]) {
+                        newScheduleData[userId] = {};
+                    }
+                    newHolidays.forEach(holidayDate => {
+                        if (holidayDate.startsWith(requestCacheKey)) {
+                            newScheduleData[userId][holidayDate] = '休假';
+                        }
+                    });
+                }
+            });
 
             // [v15.0 改造] 智慧更新：只有在新舊資料不同時才更新畫面與快取
             const oldData = scheduleCache[requestCacheKey];
@@ -492,29 +574,31 @@
         return `${year}-${month.toString().padStart(2, '0')}`;
     }
 
-    function renderCalendar() {
+    /**
+     * [v20.0 新增] 僅渲染日曆的「框架」（星期、日期格子），不包含任何班表內容。
+     * 這個函式不依賴任何非同步資料，因此可以立即執行以避免畫面空白。
+     */
+    function renderCalendarFrame() {
         calendarBody.innerHTML = '';
         const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
         weekdays.forEach(day => {
             const headerCell = document.createElement('div');
-            headerCell.className = 'text-center font-semibold py-2 border-r border-b border-gray-200 bg-gray-50 sticky top-0 z-10'; // [v15.0 優化] 表頭吸頂
+            headerCell.className = 'text-center font-semibold py-2 border-r border-b border-gray-200 bg-gray-50 sticky top-0 z-10';
             headerCell.textContent = day;
             calendarBody.appendChild(headerCell);
         });
 
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
         const firstDay = new Date(year, month, 1).getDay();
-        // [v14.0 核心改造] 從快取中讀取當前月份的資料
+
+        // 1. 取得當前月份的快取鍵。
         const cacheKey = getCacheKeyForDate(currentDate);
-        const currentMonthData = scheduleCache[cacheKey];
-        if (!currentMonthData) {
-            console.error(`無法在快取中找到 ${cacheKey} 的資料來渲染日曆。`);
-            return;
-        }
-        const holidays = currentMonthData.holidays;
-        // [核心修改] 根據選擇的員工，決定要顯示哪些人
-        const selectedUserId = employeeSelect.value;
+        // 2. 從快取中讀取資料，如果找不到，則提供一個空的預設值。
+        const currentMonthData = scheduleCache[cacheKey] || { holidays: new Set() };
+        // 3. 從中解構出 holidays，確保 holidays 變數永遠有值 (至少是一個空的 Set)。
+        const { holidays } = currentMonthData;
 
         // Add empty cells for the first week
         for (let i = 0; i < firstDay; i++) {
@@ -523,26 +607,34 @@
             calendarBody.appendChild(emptyCell);
         }
 
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
         // Add day cells
         for (let day = 1; day <= daysInMonth; day++) {
-            const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-            const isHoliday = holidays.has(dateStr); // [核心修正] 在此處就判斷是否為假日
+            const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;            
             const cell = document.createElement('div');
             cell.className = 'day-cell border-r border-b border-gray-200 p-2 relative';
             cell.dataset.date = dateStr;
 
             const dayOfWeek = new Date(dateStr).getDay();
+            const isHoliday = holidays.has(dateStr);
             if (isHoliday || dayOfWeek === 0 || dayOfWeek === 6) {
                 cell.classList.add('is-holiday');
             }
 
         // [核心重構] 回歸單純的 HTML 結構
+            // [v21.0 修正] 立即填入日期數字，確保框架渲染時就有日期
             cell.innerHTML = `
-                <div class="day-number font-semibold text-gray-700 flex items-center gap-2 pl-1"></div>
-                <div class="day-content overflow-y-auto p-1"></div>`;
+                <div class="day-number font-semibold text-gray-700 flex items-center gap-2 pl-1">${day}</div>
+                <div class="day-content overflow-y-auto p-1"></div>
+            `;
             calendarBody.appendChild(cell);
         }
+        // 框架渲染完畢，顯示日曆並隱藏載入動畫
+        loadingSpinner.style.display = 'none';
+        calendarWrapper.style.display = 'grid';
+    }
+
+    function renderCalendar() {
+        renderCalendarFrame(); // 先確保框架存在
         updateCalendarContent();
     }
 
@@ -563,27 +655,32 @@
             const dayContentEl = cell.querySelector('.day-content');
             if (!dayNumberEl || !dayContentEl) return;
             
-            const dayOfWeek = new Date(dateStr).getDay();
-            const isHoliday = holidays.has(dateStr);
+            dayNumberEl.textContent = new Date(dateStr).getDate(); // [v21.0 修正] 確保日期數字永遠存在
             
             // 確保日期數字永遠存在
             dayNumberEl.textContent = new Date(dateStr).getDate();
             if (selectedUserId) { // 選擇了特定排班員工
                 const isStandard = standardEmployees.some(e => e.userId === selectedUserId);
-                let shift = scheduleData[selectedUserId]?.[dateStr];
-                if (isStandard && !shift && isHoliday) { shift = '休假'; }
+                // [v23.0 核心改造] 移除特殊判斷，直接讀取快取中的班表狀態
+                const shift = scheduleData[selectedUserId]?.[dateStr];
 
                 let selfStatusTag = null;
+                // [核心改造] 每次更新前，先清空舊的班別標籤，避免殘留
+                const existingTag = dayNumberEl.querySelector('.shift-tag');
+                if (existingTag) existingTag.remove();
+
                 // [核心改造] 根據模式顯示自己的班表狀態
-                if (currentViewMode === 'show_off' && shift === '休假') {
+                // 【v25.0 核心改造】如果 shift 有值 (不是 null 或 undefined)，就顯示它
+                if (currentViewMode === 'show_off' && shift) {
                     const tagClass = `shift-${shift}`;
                     selfStatusTag = document.createElement('span');
                     selfStatusTag.className = `shift-tag ${tagClass}`;
-                    selfStatusTag.textContent = '休';
+                    selfStatusTag.textContent = shift.charAt(0); // 顯示假別的第一個字
                 } else if (currentViewMode === 'show_on') {
-                    const isStandard = standardEmployees.some(e => e.userId === selectedUserId);
-                    const isWorkday = !holidays.has(dateStr) && new Date(dateStr).getDay() % 6 !== 0;
-                    const isWorking = isStandard ? (isWorkday && !shift) : (shift !== '休假' && shift !== '特休');
+                    // [v23.0 核心改造] 移除 isStandard 的特殊判斷，統一邏輯
+                    // 【v27.0 核心修正】重新定義「上班」的判斷邏輯：
+                    // 只要班表狀態(shift)沒有被設定 (null 或 undefined)，就視為上班。
+                    const isWorking = !shift; // 修正：只要 shift 沒值，就是上班
                     
                     if (isWorking) {
                         const tagClass = `shift-上班`;
@@ -605,11 +702,12 @@
 
                 const otherStatusesHtml = otherEmployeesToShow.map(emp => {
                     const otherShift = scheduleData[emp.userId]?.[dateStr];
-                    const otherIsStandard = standardEmployees.some(e => e.userId === emp.userId);
+                    // [v23.0 核心改造] 移除 isStandard 的特殊判斷，統一邏輯
                     const isWorkday = !holidays.has(dateStr) && new Date(dateStr).getDay() % 6 !== 0;
 
-                    const isWorking = otherIsStandard ? (isWorkday && !otherShift) : (otherShift !== '休假' && otherShift !== '特休');
-                    const isOff = (otherShift === '休假') || (otherIsStandard && !isWorkday && !otherShift);
+                    // 【v27.0 核心修正】統一判斷邏輯
+                    const isOff = !!otherShift; // 修正：只要 otherShift 有值，就視為休假
+                    const isWorking = !otherShift; // 修正：只要 otherShift 沒值，就是上班
 
                     if ((currentViewMode === 'show_on' && isWorking) || (currentViewMode === 'show_off' && isOff)) {
                         return `<div class="text-xs text-gray-500 opacity-80 truncate" title="${emp.userName}">${emp.userName.substring(0, 3)}</div>`;
@@ -624,31 +722,28 @@
                 }
             } else { // 檢視所有員工
                 dayContentEl.innerHTML = ''; // 清空內容
-                const employeesToShow = [];
-                allEmployees.forEach(emp => {
+                // [核心修正] 直接使用 .filter() 來篩選員工，確保員工物件的完整性 (包含顏色屬性)。
+                // 舊的寫法會建立一個新的、不含顏色資訊的物件，導致顏色遺失。
+                const employeesToShow = allEmployees.filter(emp => {
                     const inSelectedGroup = displayedGroups.has(emp.group || '未分類');
                     const inSelectedShiftType = displayedShiftTypes.has(emp.shiftType);
-                    // [核心改造] 在檢視全員模式下，同樣過濾掉不參與排班的最高管理者
-                    if (inSelectedGroup && inSelectedShiftType && emp.permission < 5) {
-                        employeesToShow.push(emp);
-                    }
+                    const isSchedulable = emp.permission < 5;
+                    return inSelectedGroup && inSelectedShiftType && isSchedulable;
                 });
 
                 let shiftsHtml = '';
                 employeesToShow.forEach(emp => {
                     const shift = scheduleData[emp.userId]?.[dateStr]; // Read directly from scheduleData
-                    const isStandard = standardEmployees.some(e => e.userId === emp.userId);
+                    // [v23.0 核心改造] 移除 isStandard 的特殊判斷，統一邏輯
                     const isWorkday = !holidays.has(dateStr) && new Date(dateStr).getDay() % 6 !== 0;
                     
-                    // [核心修正] 重新定義「上班」的判斷邏輯
-                    // 1. 標準班：在工作日且沒有休假紀錄，就算上班。
-                    // 2. 排班制：只要沒有被排定為「休假」或「特休」，就算上班。
-                    const isWorking = isStandard ? (isWorkday && !shift) : (shift !== '休假' && shift !== '特休');
-                    
-                    const isOff = (shift === '休假') || (isStandard && !isWorkday && !shift);
+                    // 【v27.0 核心修正】統一判斷邏輯
+                    const isOff = !!shift; // 修正：只要 shift 有值，就視為休假
+                    const isWorking = !shift; // 修正：只要 shift 沒值，就是上班
                     if ((currentViewMode === 'show_off' && isOff) || (currentViewMode === 'show_on' && isWorking)) {
                         // [核心新增] 套用員工專屬顏色作為背景
                         // [核心改造] 增加 w-fit 讓色塊寬度貼合內容
+                        // 【⭐️ 核心修正：根據您的要求，移除多餘的假別字樣，只顯示員工姓名 ⭐️】
                         shiftsHtml += `<div class="w-fit text-xs px-1.5 py-0.5 rounded" style="background-color: ${emp.color};"><span class="flex-shrink-0">${emp.userName.substring(0, 3)}</span></div>`;
                     }
                 });
@@ -679,12 +774,11 @@
             scheduleData[userId] = {};
         }
 
-        // [v2.0 邏輯] 如果新班別是 '清除' (代表從休假變回上班)
-        // [核心修正] 直接修改 scheduleData
+        // [核心改造] 根據您的建議，將資料更新邏輯改為更明確的賦值
+        // '清除' 代表從休假變回上班，我們將其狀態明確設為 null
+        // 這樣 scheduleData 就會記錄下 "使用者手動取消休假" 這個行為
         if (shift === '清除') {
-            // If we clear a shift, it means it's no longer a holiday.
-            // We delete the entry from scheduleData for that specific date.
-            delete scheduleData[userId][date];
+            scheduleData[userId][date] = null;
         } else {
             // Set the new shift type.
             scheduleData[userId][date] = shift;
@@ -764,12 +858,15 @@
         for (let day = 1; day <= daysInMonth; day++) {
             const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
             const shift = scheduleData[selectedUserId]?.[dateStr]; // Read directly from scheduleData
-        const isStandard = standardEmployees.some(e => e.userId === selectedUserId);
-        const isWorking = isStandard ? (!holidays.has(dateStr) && !shift) : (shift !== '休假' && shift !== '特休');
+        // 【v27.0 核心修正】統一判斷邏輯
+        const isWorking = !shift; // 修正：只要 shift 沒值，就是上班
+
         if (isWorking) scheduledOnDays++;
-        if (shift === '休假') { // 只計算明確排的休假
-                scheduledOffDays++;
-            }
+        // 【v30.0 核心修正】根據您的要求，只有班表狀態為「休假」時，才計入「已排休天數」。
+        // 其他假別 (如特休、病假) 將不再計入此統計。
+        if (shift === '休假') {
+            scheduledOffDays++;
+        }
         }
 
         document.getElementById('total-off-days').textContent = totalOffDays;
@@ -792,11 +889,6 @@
         const scheduleData = scheduleCache[cacheKey]?.schedule;
         if (!scheduleData) return;
 
-        if (!scheduleData[selectedUserId] || Object.keys(scheduleData[selectedUserId]).length === 0) { // Check scheduleData directly
-            showGlobalNotification("沒有任何變更需要儲存。", 8000, 'info');
-            return;
-        }
-
         saveBtn.disabled = true;
         saveBtn.textContent = '儲存中...';
 
@@ -804,12 +896,18 @@
         const finalOffDays = new Set();
         const month = currentDate.getMonth(); // [v18.0 修正] 宣告 month 變數
         const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+        const currentYearMonth = `${year}-${(month + 1).toString().padStart(2, '0')}`;
 
-        for (let day = 1; day <= daysInMonth; day++) {
-            const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-            const finalShift = scheduleData[selectedUserId]?.[dateStr]; // Read directly from scheduleData
-            if (finalShift === '休假') {
-                finalOffDays.add(dateStr);
+        // [核心修正] 根據您的要求，嚴格篩選出只屬於「當前月份」的休假日期。
+        // 遍歷該員工在 scheduleData 中的所有休假紀錄。
+        if (scheduleData[selectedUserId]) {
+            for (const dateStr in scheduleData[selectedUserId]) {
+                // 1. 檢查該筆紀錄是否屬於當前正在編輯的月份。
+                // 2. 檢查該筆紀錄的狀態是否為 '休假'。
+                // 只有同時滿足這兩個條件，才將其加入待儲存列表。
+                if (dateStr.startsWith(currentYearMonth) && scheduleData[selectedUserId][dateStr]) {
+                    finalOffDays.add(dateStr);
+                }
             }
         }
 
@@ -823,10 +921,10 @@
                 targetUserName: allEmployees.find(e => e.userId === selectedUserId)?.userName,
                 yearMonth: `${year}-${(month + 1).toString().padStart(2, '0')}`,
                 offDaysCsv: Array.from(finalOffDays).join(','),
+                editorPermission: currentUser.permission, // 【⭐️ 核心新增：將操作者權限傳給後端 ⭐️】
                 isStandard: standardEmployees.some(e => e.userId === selectedUserId) // [v3.0 新增] 告知後端是否為標準班
             };
-            const params = new URLSearchParams(payload);
-            const response = await loadJsonp(`${API_BASE_URL}?${params.toString()}`);
+            const response = await fetchApi(payload);
             
             if (response.success) {
                 showGlobalNotification("排班資料已成功儲存！", 8000, 'success');
@@ -963,6 +1061,12 @@
             const scheduleData = scheduleCache[cacheKey]?.schedule;
             if (!scheduleData) return;
             const currentShift = scheduleData[selectedUserId]?.[date];
+            
+            // 【v25.0 核心改造】如果當天已經是系統導入的假別 (特休、病假等)，則不允許手動修改
+            if (currentShift && currentShift !== '休假') {
+                showGlobalNotification(`此日期為「${currentShift}」，由假勤系統管理，無法在此處修改。`, 8000, 'info');
+                return;
+            }
 
             // [核心改造] 根據您的建議，回歸單純的 0/1 切換邏輯。
             // 無論在哪種顯示模式下，點擊行為都統一為在「上班(預設)」和「休假」之間切換。
