@@ -28,13 +28,43 @@
             <h1 class="text-3xl font-bold text-gray-800">添心設計 整合主控台</h1>
             <p id="welcome-message" class="text-gray-500 mt-2">歡迎，<span class="font-semibold">使用者</span>！</p>
         </header>
+        
+        <!-- 【v72.0 核心改造】主分頁導覽 -->
+        <div class="border-b border-gray-200 mb-6">
+            <nav id="main-tab-nav" class="-mb-px flex gap-6" aria-label="Tabs">
+                <button type="button" data-tab="dashboard" class="main-tab active py-3 px-1 text-base font-medium">主控台</button> 
+                <button type="button" data-tab="project-board" class="main-tab py-3 px-1 text-base font-medium">專案看板</button>
+            </nav>
+        </div>
+ 
+        <!-- 主控台分頁內容 -->
+        <div id="dashboard-content" class="tab-content active">
+            <!-- 【v72.0 新增】個人工作台 (智慧通知中心) -->
+            <div id="personal-workbench" class="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
+                <div class="lg:col-span-5 bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-700">智慧通知中心</h2>
+                        <button id="clear-all-notifications-btn" class="text-sm text-blue-600 hover:underline">全部清除</button>
+                    </div>
+                    <div id="notification-list" class="space-y-3 max-h-96 overflow-y-auto pr-2">
+                        <!-- 通知卡片範例 -->
+                        <div class="notification-card relative bg-yellow-50 border-l-4 border-yellow-500 p-3 rounded-md">
+                            <h4 class="font-semibold text-yellow-800">交辦事項：請採購A物料</h4>
+                            <p class="text-sm text-yellow-700">請於今日下班前回報進度。</p>
+                        </div>
+                        <div class="notification-card relative bg-green-50 border-l-4 border-green-500 p-3 rounded-md">
+                            <h4 class="font-semibold text-green-800">審核結果：您的特休申請已批准</h4>
+                            <p class="text-sm text-green-700">事由：家庭旅遊 (10/25 - 10/27)</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
             <!-- 專案主控台 -->
             <div class="col-span-1 md:col-span-2 bg-white p-6 rounded-lg shadow-md border border-gray-200">
                 <h2 class="text-xl font-bold mb-4 text-blue-700">專案主控台</h2>
-                <div class="flex flex-col sm:flex-row gap-2">
+                <div class="flex flex-col sm:flex-row gap-2 items-center">
                     <input type="text" id="project-id-input" inputmode="numeric" pattern="[0-9]*" class="flex-grow w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="請輸入案號 (例如: 715)">
                     <button id="open-project-console-btn" class="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700">開啟</button>
                 </div>
@@ -89,16 +119,32 @@
                 <p class="text-gray-600">設定排班制員工的休假日期。</p>
             </a>
 
-            <!-- 後端互動功能 -->
-            <div class="col-span-1 md:col-span-2 bg-white p-6 rounded-lg shadow-md border border-gray-200">
-                <h2 class="text-xl font-bold mb-4 text-red-700">後端管理</h2>
-                <div class="flex items-center justify-between">
-                    <p class="text-gray-600">手動觸發後端處理已上傳的施工回報。</p>
-                    <button id="process-queue-btn" class="bg-red-600 text-white font-bold py-2 px-4 rounded-md hover:bg-red-700">立即處理回報</button>
-                </div>
-                <p id="process-status" class="text-sm text-gray-500 mt-3 min-h-[20px]"></p>
             </div>
 
+            <!-- 【v72.0 新增】任務交辦中心 -->
+            <div id="task-sender-wrapper" class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mt-4 hidden">
+                <h2 class="text-xl font-bold text-gray-700 mb-4">任務交辦中心</h2>
+                <form id="notification-form" class="space-y-4">
+                    <div>
+                        <button type="button" id="recipient-toggle-btn" class="w-full text-left p-2 border rounded-md bg-gray-50 hover:bg-gray-100 flex justify-between items-center"><span id="recipient-summary" class="text-sm text-gray-600">選擇收件人</span><svg id="recipient-arrow" class="w-5 h-5 text-gray-500 transition-transform" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg></button>
+                        <div id="recipient-collapsible" class="collapsible-content mt-2"><div id="recipient-list" class="border rounded-md max-h-40 overflow-y-auto p-2 space-y-1"></div></div>
+                        <div id="send-to-all-wrapper" class="mt-2 hidden"><label class="flex items-center"><input type="checkbox" id="send-to-all-checkbox" class="h-4 w-4 rounded border-gray-300"><span class="ml-2 text-sm text-red-600 font-semibold">發送給所有員工</span></label></div>
+                    </div>
+                    <div><label for="notification-content" class="block text-sm font-medium text-gray-700">交辦內容<span class="text-red-500">*</span></label><textarea id="notification-content" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" required></textarea></div>
+                    <div><label for="related-project-id" class="block text-sm font-medium text-gray-700">相關案號 (選填)</label><input type="text" id="related-project-id" inputmode="numeric" pattern="[0-9]*" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" placeholder="例如: 715"></div>
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div><label class="block text-sm font-medium text-gray-700">要求動作</label><div id="action-type-group" class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2"><label><input type="radio" name="actionType" value="None" checked> 無</label><label><input type="radio" name="actionType" value="ReplyText"> 文字回覆</label><label class="flex items-center gap-2"><input type="radio" name="actionType" value="ConfirmCompletion"> 完成回報 (時限: <input type="date" id="completion-deadline-date" class="text-sm p-1 border rounded-md" disabled> <input type="time" id="completion-deadline-time" class="text-sm p-1 border rounded-md" disabled>)</label></div></div>
+                        <button type="submit" id="notification-submit-btn" class="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-4 rounded-md">發送任務</button>
+                    </div>
+                    <div id="notification-status" class="text-sm text-center min-h-[20px]"></div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 【v72.0 新增】專案看板分頁內容 -->
+        <div id="project-board-content" class="tab-content hidden">
+            <div id="project-board-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+            <p id="project-board-placeholder" class="text-center text-gray-500 py-12 hidden">正在載入專案資料...</p>
         </div>
     </div>
 
@@ -111,26 +157,69 @@
         const ATTENDANCE_GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec'; // 出勤系統的後端 URL
         // ===============================================================
 
+        // 【v72.0 新增】樣式與動畫相關
+        const STYLE_CLASSES = {
+            collapsibleContent: 'max-height: 0; overflow: hidden; transition: max-height 0.3s ease-in-out;',
+            mainTab: 'border-bottom: 3px solid transparent; transition: all 0.2s ease-in-out;',
+            mainTabActive: 'color: #1d4ed8; border-bottom-color: #1d4ed8;',
+        };
+        const dynamicStyleSheet = document.createElement("style");
+        dynamicStyleSheet.innerText = `
+            .collapsible-content { ${STYLE_CLASSES.collapsibleContent} }
+            .main-tab { ${STYLE_CLASSES.mainTab} }
+            .main-tab.active { ${STYLE_CLASSES.mainTabActive} }
+        `;
+        document.head.appendChild(dynamicStyleSheet);
+        // ===============================================================
+
         let userProfile = null;
-        let allEmployees = []; // 【⭐️ 核心新增：將員工資料提升至全域，以便共用 ⭐️】
+        let allEmployees = []; // 將員工資料提升至全域，以便共用
+
+        // 【v71.0 核心新增】快取管理函式
+        function saveCache(key, data, days = 1) {
+            const cache = {
+                data: data,
+                expires: Date.now() + days * 24 * 60 * 60 * 1000
+            };
+            try {
+                localStorage.setItem(key, JSON.stringify(cache));
+            } catch (e) {
+                console.error('儲存快取失敗:', e);
+            }
+        }
+
+        function loadCache(key) {
+            const cached = localStorage.getItem(key);
+            if (!cached) return null;
+            const cache = JSON.parse(cached);
+            if (cache.expires < Date.now()) {
+                localStorage.removeItem(key);
+                return null;
+            }
+            return cache.data;
+        }
 
         async function main() {
-            // 【⭐️ 核心新增：本地測試模式 ⭐️】
-            // 檢查是否為本地環境，且網址中是否提供了 uid 參數
+            // 本地測試模式
             const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
             const urlParams = new URLSearchParams(window.location.search);
-            const localTestUid = urlParams.get('uid');
 
-            if (isLocalTest && localTestUid) {
+            if (isLocalTest) {
                 console.warn('⚡️ 本地測試模式啟用，跳過 LIFF 認證。');
-                // 模擬一個 userProfile 物件
                 userProfile = {
-                    userId: localTestUid,
-                    displayName: '本地測試員'
+                    userId: urlParams.get('uid') || 'Ud58333430513b7527106fa71d2e30151',
+                    displayName: '俊豪 (本地測試)'
                 };
-                // 直接顯示主畫面並綁定事件
+                // 本地模式也採用快取優先策略
+                const cachedEmployees = loadCache('hub_employees');
+                if (cachedEmployees) {
+                    allEmployees = cachedEmployees;
+                    console.log('⚡️ 本地模式從快取載入員工資料。');
+                }
                 showMainContent();
-                return; // 中斷後續的 LIFF 流程
+                // 在背景獲取最新資料
+                fetchInitialData();
+                return;
             }
 
             try {
@@ -141,59 +230,278 @@
                 }
                 userProfile = await liff.getProfile();
 
-                // 驗證成功，顯示主畫面
+                // 【v71.0 核心改造】快取優先策略
+                // 1. 嘗試從快取載入員工資料並立即顯示畫面
+                const cachedEmployees = loadCache('hub_employees');
+                if (cachedEmployees) {
+                    allEmployees = cachedEmployees;
+                    console.log('✅ 從快取載入員工資料，執行樂觀更新。');
+                }
                 showMainContent();
 
-                // 【v32.0 核心改造】在背景中非同步取得員工資料與待審核項目
-                try {
-                    // 使用 Promise.allSettled 來並行處理多個請求，即使其中一個失敗也不會中斷
-                    const [employeesResult, pendingResult] = await Promise.allSettled([
-                        fetch(`${ATTENDANCE_GAS_WEB_APP_URL}?page=attendance_api&action=get_employees`).then(res => res.json()),
-                        fetch(`${ATTENDANCE_GAS_WEB_APP_URL}?page=attendance_api&action=get_pending_requests`).then(res => res.json())
-                    ]);
-
-                    if (employeesResult.status === 'fulfilled') {
-                        allEmployees = employeesResult.value;
-                        const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId);
-                        if (currentUser && currentUser.permission >= 4) {
-                            document.getElementById('attendance-console-link').classList.remove('hidden');
-                            document.getElementById('approval-dashboard-link').classList.remove('hidden');
-                            if (pendingResult.status === 'fulfilled' && pendingResult.value.success) {
-                                updateApprovalBadge(pendingResult.value.data.length);
-                            }
-                        }
-                    }
-                } catch (authError) {
-                    console.warn('無法取得使用者權限:', authError);
-                }
+                // 2. 在背景非同步獲取最新資料
+                fetchInitialData();
 
             } catch (error) {
                 console.error('LIFF Initialization Error:', error);
                 document.getElementById('loading-screen').innerHTML = '<p class="text-red-500 font-semibold">驗證失敗，請在 LINE App 中開啟此頁面。</p>';
             }
         }
-        
+
         function showMainContent() {
             document.getElementById('loading-screen').style.display = 'none';
             document.getElementById('main-content').classList.remove('hidden');
             document.getElementById('welcome-message').querySelector('span').textContent = userProfile.displayName;
+            // 使用現有 (可能來自快取) 的員工資料，先更新一次權限相關的UI
+            updatePermissionUI();
             initializeEventListeners();
+        }
+
+        // 根據權限更新 UI 的共用函式
+        function updatePermissionUI() {
+            if (!userProfile || allEmployees.length === 0) return;
+
+            const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId);
+            const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+            const hasAdminRights = currentUser && (currentUser.permission >= 4);
+
+            if (hasAdminRights || isLocalTest) {
+                document.getElementById('attendance-console-link').classList.remove('hidden');
+                document.getElementById('approval-dashboard-link').classList.remove('hidden');
+                // 【v72.0 新增】顯示任務交辦中心
+                document.getElementById('task-sender-wrapper').classList.remove('hidden');
+                populateRecipientOptions();
+            }
+        }
+
+        async function fetchInitialData() {
+            try {
+                // 將員工資料請求與其他請求分開，以便進行比對
+                const employeesPromise = fetch(`${ATTENDANCE_GAS_WEB_APP_URL}?page=attendance_api&action=get_employees`).then(res => res.json()).catch(e => { console.warn('獲取員工資料失敗', e); return null; });
+                const otherPromises = Promise.allSettled([
+                    fetch(`${ATTENDANCE_GAS_WEB_APP_URL}?page=attendance_api&action=get_pending_requests`).then(res => res.json()),
+                    fetchMultipleProjects(['715', '722', '999', '724', '726', '725'])
+                ]);
+
+                const [newEmployees, [pendingResult, projectsResult]] = await Promise.all([
+                    employeesPromise,
+                    otherPromises
+                ]);
+
+                // 智慧更新員工資料
+                if (newEmployees) {
+                    const oldDataString = JSON.stringify(allEmployees);
+                    const newDataString = JSON.stringify(newEmployees);
+
+                    if (oldDataString !== newDataString) {
+                        console.log('🔄 員工資料已在背景更新，重新整理權限與UI。');
+                        allEmployees = newEmployees;
+                        saveCache('hub_employees', allEmployees, 1); // 快取1天
+                        updatePermissionUI(); // 使用最新資料重新執行權限判斷
+                    }
+                }
+
+                // 處理待審核項目
+                if (pendingResult.status === 'fulfilled' && pendingResult.value.success) {
+                    updateApprovalBadge(pendingResult.value.data.length);
+                }
+
+                // 【v72.0 新增】處理專案資料
+                if (projectsResult.status === 'fulfilled' && projectsResult.value.success) {
+                    const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId);
+                    filterAndRenderProjects(projectsResult.value.data, currentUser);
+                } else {
+                    document.getElementById('project-board-placeholder').textContent = '載入專案資料失敗。';
+                }
+
+            } catch (error) {
+                console.warn('載入初始資料時發生錯誤:', error);
+            }
+        }
+        
+        // 【v72.0 新增】專案看板相關函式
+        async function fetchMultipleProjects(projectIds) {
+            const placeholder = document.getElementById('project-board-placeholder');
+            placeholder.classList.remove('hidden');
+            placeholder.textContent = '正在準備專案看板...';
+
+            const CACHE_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 快取 7 天
+
+            const projectPromises = projectIds.map(async (id) => {
+                const CACHE_KEY = `project_data_${id}_${userProfile.userId}`;
+                let projectData = null;
+
+                try {
+                    const cachedItem = localStorage.getItem(CACHE_KEY);
+                    if (cachedItem) {
+                        const { timestamp, data } = JSON.parse(cachedItem);
+                        if ((Date.now() - timestamp < CACHE_DURATION_MS) && data.overview) {
+                            console.log(`⚡️ 專案 #${id} 從快取載入。`);
+                            projectData = data;
+                        }
+                    }
+                } catch (e) { console.warn(`讀取專案 #${id} 的快取失敗:`, e); localStorage.removeItem(CACHE_KEY); }
+
+                try {
+                    placeholder.textContent = `正在同步專案 #${id}...`;
+                    const freshData = await loadJsonp(`${GAS_WEB_APP_URL}?page=project&id=${id}&userId=${userProfile.userId}`);
+                    if (freshData && freshData.overview) {
+                        localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData }));
+                        projectData = freshData;
+                        console.log(`✅ 專案 #${id} 已從後端同步。`);
+                    }
+                } catch (fetchError) { console.error(`後端同步專案 #${id} 失敗:`, fetchError); }
+
+                return projectData;
+            });
+
+            const results = await Promise.all(projectPromises);
+            const successfulProjects = results.filter(Boolean).map((p, index) => {
+                const overview = p.overview || {};
+                const projectId = projectIds[index];
+                // 【v72.1 核心修正】優化專案名稱的 fallback 邏輯
+                // 如果後端沒有提供 '案場名稱'，則 name 設為空字串，避免標題出現 "#715 專案 #715" 的情況。
+                // 最終標題會由 renderProjectCards 函式組合為 "#715" 或 "#715 王公館"。
+                return { ...overview, id: projectId, name: overview['案場名稱'] || '', dailyLogs: p.dailyLogs || [], tasks: p.schedule || [] };
+            });
+            return { success: true, data: successfulProjects };
+        }
+
+        async function loadJsonp(url) {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Network response was not ok: ${response.statusText}`);
+            const text = await response.text();
+            const firstParen = text.indexOf('(');
+            const lastParen = text.lastIndexOf(')');
+            if (firstParen === -1 || lastParen === -1 || lastParen < firstParen) {
+                try { return JSON.parse(text); } catch (e) { throw new Error('Invalid JSONP or JSON format'); }
+            }
+            return JSON.parse(text.substring(firstParen + 1, lastParen));
+        }
+
+        function filterAndRenderProjects(allProjects, currentUser) {
+            const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+            const permission = currentUser ? currentUser.permission : (isLocalTest ? 5 : 1);
+            const userName = currentUser ? currentUser.userName : '本地測試員';
+            let projectsToShow = [];
+            if (permission >= 4) { projectsToShow = allProjects; } 
+            else if (permission === 2) { projectsToShow = allProjects.filter(p => p.responsiblePerson === userName && p.status !== '已結案'); }
+            renderProjectCards(projectsToShow);
+        }
+
+        function renderProjectCards(projects) {
+            const grid = document.getElementById('project-board-grid');
+            const placeholder = document.getElementById('project-board-placeholder');
+            grid.innerHTML = '';
+            if (projects.length === 0) {
+                placeholder.textContent = '沒有符合條件的專案。';
+                placeholder.classList.remove('hidden');
+                return;
+            }
+            placeholder.classList.add('hidden');
+            projects.forEach(p => {
+                if (!p || !p.id || !p.name) { console.warn('偵測到不完整的專案資料，已跳過渲染:', p); return; }
+                const card = document.createElement('div');
+                card.className = 'bg-white p-4 rounded-lg shadow-md border border-gray-200 flex flex-col gap-4';
+                // 【v72.1 修正】確保 '預計開始日' 存在才進行排序，避免無效日期導致的錯誤
+                const allTasks = (p.tasks || []).sort((a, b) => 
+                    (a['預計開始日'] && b['預計開始日']) ? new Date(a['預計開始日']) - new Date(b['預計開始日']) : 0);
+                const completedTasks = allTasks.filter(task => task['狀態'] === '已完成');
+                const uncompletedTasks = allTasks.filter(task => task['狀態'] !== '已完成');
+                const scheduleHtml = [...completedTasks.slice(-1), ...uncompletedTasks.slice(0, 2)].map(task => {
+                    const isDone = task['狀態'] === '已完成';
+                    return `<li><span class="font-medium ${isDone ? 'text-gray-500' : 'text-red-600'}">${isDone ? '[已完成]' : '[未完成]'}</span> ${task['任務項目'] || '未命名任務'}</li>`;
+                }).join('') || '<li>無排程資料</li>';
+                const recentLogs = (p.dailyLogs || []).slice(0, 3);
+                const logsHtml = recentLogs.length > 0 ? recentLogs.map(log => {
+                    const titleMatch = (log.Title || '').match(/(\d{4}-\d{2}-\d{2})\s(.+?)\s/);
+                    const logDate = titleMatch ? titleMatch[1].substring(5) : '';
+                    const workType = titleMatch ? titleMatch[2] : '日誌';
+                    const logContent = (log.Content || '').trim();
+                    const contentHtml = logContent ? `<p class="text-xs text-gray-600 pl-4 mt-1 whitespace-pre-wrap">${logContent}</p>` : '';
+                    return `<li><span class="text-gray-500">${logDate}</span> <span class="font-medium text-blue-700">${workType}</span> by ${log.UserName}${contentHtml}</li>`;
+                }).join('') : '<li>無施工回報</li>';
+                card.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        {/* 【v72.1 修正】如果 p.name 為空，則只顯示案號，避免多餘的空格 */}
+                        <h3 class="font-bold text-lg text-gray-800">#${p.id}${p.name ? ' ' + p.name : ''}</h3>
+                        <div><button data-action="open-console" data-project-id="${p.id}" class="bg-blue-100 text-blue-700 text-xs font-bold py-1 px-3 rounded-full hover:bg-blue-200">開啟主控台</button></div>
+                    </div>
+                    <div><h4 class="font-semibold text-gray-600 text-sm mb-2">工程進度</h4><ul class="text-sm space-y-1 text-gray-700">${scheduleHtml}</ul></div>
+                    <div><h4 class="font-semibold text-gray-600 text-sm mb-2">近期回報</h4><ul class="text-sm space-y-1 text-gray-700">${logsHtml}</ul></div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // 【v72.0 新增】任務交辦相關函式
+        function populateRecipientOptions() {
+            const recipientList = document.getElementById('recipient-list');
+            if (!recipientList) return;
+            recipientList.innerHTML = '';
+            allEmployees.filter(emp => emp.permission < 5).forEach(emp => {
+                const id = `recipient-${emp.userId}`;
+                recipientList.insertAdjacentHTML('beforeend', `<label for="${id}" class="flex items-center p-1 rounded hover:bg-gray-100 cursor-pointer"><input type="checkbox" id="${id}" name="recipients" value="${emp.userId}" class="h-4 w-4 rounded border-gray-300"><span class="ml-2 text-sm text-gray-800" data-name="${emp.userName}">${emp.userName}</span></label>`);
+            });
+            document.getElementById('send-to-all-wrapper').classList.remove('hidden');
+        }
+
+        async function handleSendNotification(event) {
+            event.preventDefault();
+            const statusEl = document.getElementById('notification-status');
+            const submitBtn = document.getElementById('notification-submit-btn');
+            const sendToAll = document.getElementById('send-to-all-checkbox').checked;
+            const selectedRecipients = Array.from(document.querySelectorAll('#recipient-list input[type="checkbox"]:checked')).map(cb => cb.value);
+            if (!sendToAll && selectedRecipients.length === 0) { statusEl.textContent = '錯誤：請至少選擇一位收件人。'; return; }
+            submitBtn.disabled = true;
+            statusEl.textContent = '發送中...';
+            const deadlineDate = document.getElementById('completion-deadline-date').value;
+            const deadlineTime = document.getElementById('completion-deadline-time').value;
+            let deadline = (deadlineDate && deadlineTime) ? `${deadlineDate}T${deadlineTime}` : '';
+            const payload = { action: 'sendNotification', senderId: userProfile.userId, senderName: userProfile.displayName, recipients: sendToAll ? ['ALL'] : selectedRecipients, content: document.getElementById('notification-content').value, projectId: document.getElementById('related-project-id').value, actionType: document.querySelector('input[name="actionType"]:checked').value, deadline: deadline };
+            try {
+                const response = await fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify(payload), headers: { 'Content-Type': 'text/plain' } });
+                const result = await response.json();
+                if (!result.success) throw new Error(result.message || '後端處理失敗');
+                statusEl.textContent = '任務已成功發送！';
+                document.getElementById('notification-form').reset();
+                updateRecipientSummary();
+            } catch (error) { statusEl.textContent = `發送失敗: ${error.message}`; } finally {
+                submitBtn.disabled = false;
+                setTimeout(() => { statusEl.textContent = ''; }, 5000);
+            }
+        }
+
+        function updateRecipientSummary() {
+            const summaryEl = document.getElementById('recipient-summary');
+            if (document.getElementById('send-to-all-checkbox').checked) { summaryEl.textContent = '已選擇：所有員工'; return; }
+            const selectedCheckboxes = Array.from(document.querySelectorAll('#recipient-list input[type="checkbox"]:checked'));
+            if (selectedCheckboxes.length === 0) { summaryEl.textContent = '選擇收件人'; } 
+            else if (selectedCheckboxes.length <= 2) { summaryEl.textContent = '已選擇：' + selectedCheckboxes.map(cb => cb.nextElementSibling.textContent).join('、'); } 
+            else { summaryEl.textContent = `已選擇：${selectedCheckboxes.length} 位員工`; }
+        }
+
+        function setupMainTabs() {
+            const tabContainer = document.getElementById('main-tab-nav');
+            if (!tabContainer) return;
+            tabContainer.addEventListener('click', (e) => {
+                const button = e.target.closest('.main-tab');
+                if (!button) return;
+                const tabName = button.dataset.tab;
+                tabContainer.querySelectorAll('.main-tab').forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.toggle('hidden', content.id !== `${tabName}-content`);
+                });
+            });
         }
 
         function initializeEventListeners() {
             // 開啟專案主控台按鈕
-            document.getElementById('open-project-console-btn').addEventListener('click', () => {
+            document.getElementById('open-project-console-btn').addEventListener('click', (e) => {
+                e.preventDefault();
                 const projectId = document.getElementById('project-id-input').value.trim();
-                if (!projectId || !/^\d+$/.test(projectId)) {
-                    alert('請輸入純數字的案號！');
-                    return;
-                }
-                if (!userProfile || !userProfile.userId) {
-                    alert('無法取得您的使用者資訊，請重新載入頁面。');
-                    return;
-                }
-                const consoleUrl = `https://liff.line.me/${PROJECT_CONSOLE_LIFF_ID}?id=${projectId}&uid=${userProfile.userId}`;
-                window.open(consoleUrl, '_blank');
+                openProjectConsole(projectId);
             });
 
             // [架構改造] 員工排班系統連結
@@ -262,48 +570,45 @@
                 window.open(`${baseUrl}?${params.toString()}`, '_blank');
             });
 
-            // 立即處理回報按鈕
-            document.getElementById('process-queue-btn').addEventListener('click', async () => {
-                const btn = document.getElementById('process-queue-btn');
-                const statusEl = document.getElementById('process-status');
-
-                if (!confirm('確定要立即處理所有待辦的施工回報嗎？')) {
-                    return;
-                }
-
-                btn.disabled = true;
-                btn.textContent = '處理中...';
-                statusEl.textContent = '正在向後端發送指令...';
-                statusEl.className = 'text-sm text-blue-600 mt-3 min-h-[20px]';
-
-                try {
-                    const response = await fetch(GAS_WEB_APP_URL, {
-                        method: 'POST',
-                        cache: 'no-cache',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({
-                            action: 'process_queue',
-                            triggerUser: userProfile.displayName
-                        })
+            // 【v72.0 新增】任務交辦中心相關事件
+            const notificationForm = document.getElementById('notification-form');
+            if (notificationForm) {
+                notificationForm.addEventListener('submit', handleSendNotification);
+                document.getElementById('send-to-all-checkbox').addEventListener('change', (e) => {
+                    document.querySelectorAll('#recipient-list input[type="checkbox"]').forEach(checkbox => {
+                        checkbox.disabled = e.target.checked;
+                        if (e.target.checked) checkbox.checked = false;
                     });
+                    updateRecipientSummary();
+                });
+                document.getElementById('action-type-group').addEventListener('change', (e) => {
+                    const deadlineDate = document.getElementById('completion-deadline-date');
+                    const deadlineTime = document.getElementById('completion-deadline-time');
+                    const enabled = e.target.value === 'ConfirmCompletion';
+                    deadlineDate.disabled = !enabled;
+                    deadlineTime.disabled = !enabled;
+                    if (enabled) {
+                        const now = new Date();
+                        deadlineDate.value = now.toLocaleDateString('sv');
+                        now.setHours(now.getHours() + 1); now.setMinutes(0);
+                        deadlineTime.value = `${now.getHours().toString().padStart(2, '0')}:00`;
+                    } else { deadlineDate.value = ''; deadlineTime.value = ''; }
+                });
+                document.getElementById('recipient-list').addEventListener('change', updateRecipientSummary);
+                document.getElementById('recipient-toggle-btn').addEventListener('click', () => {
+                    const collapsible = document.getElementById('recipient-collapsible');
+                    const arrow = document.getElementById('recipient-arrow');
+                    if (collapsible.style.maxHeight) { collapsible.style.maxHeight = null; arrow.classList.remove('rotate-180'); } 
+                    else { collapsible.style.maxHeight = collapsible.scrollHeight + "px"; arrow.classList.add('rotate-180'); }
+                });
+            }
 
-                    // 由於後端是 302 重導向，我們無法直接讀取 response.json()
-                    // 因此，只要 fetch 沒有拋出錯誤，我們就假設指令已成功發送
-                    statusEl.textContent = '指令已成功發送！後端正在背景處理中。';
-                    statusEl.className = 'text-sm text-green-600 mt-3 min-h-[20px]';
-
-                } catch (error) {
-                    // 處理 fetch 本身的錯誤 (例如網路問題)
-                    console.error('Fetch error:', error);
-                    statusEl.textContent = `指令發送失敗: ${error.message}`;
-                    statusEl.className = 'text-sm text-red-600 mt-3 min-h-[20px]';
-                } finally {
-                    setTimeout(() => {
-                        btn.disabled = false;
-                        btn.textContent = '立即處理回報';
-                    }, 3000);
-                }
+            // 【v72.0 新增】專案看板相關事件
+            document.getElementById('project-board-grid').addEventListener('click', (e) => {
+                const button = e.target.closest('button[data-action="open-console"]');
+                if (button) { openProjectConsole(button.dataset.projectId); }
             });
+            setupMainTabs();
         }
 
         // 【v31.0 新增】提供給子視窗呼叫的函式，用以更新待審核標籤
@@ -317,6 +622,20 @@
                 badge.classList.add('hidden');
             }
         };
+
+        // 【v72.0 新增】開啟專案主控台的共用函式
+        function openProjectConsole(projectId) {
+            if (!projectId || !/^\d+$/.test(projectId)) { alert('請輸入純數字的案號！'); return; }
+            if (!userProfile || !userProfile.userId) { alert('無法取得您的使用者資訊，請重新載入頁面。'); return; }
+            const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+            let targetUrl;
+            if (isLocal) {
+                targetUrl = `http://127.0.0.1:5500/managementconsole.html?id=${projectId}&uid=${userProfile.userId}`;
+            } else {
+                targetUrl = `https://liff.line.me/${PROJECT_CONSOLE_LIFF_ID}?id=${projectId}&uid=${userProfile.userId}`;
+            }
+            window.open(targetUrl, '_blank');
+        }
 
         window.onload = main;
     </script>

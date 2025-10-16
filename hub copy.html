@@ -12,9 +12,26 @@
         .card:hover { transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
         .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        /* 【v50.0 新增】任務交辦中心樣式 */
-        .recipient-tag { display: inline-flex; align-items: center; background-color: #e0e7ff; color: #4338ca; padding: 2px 8px; border-radius: 9999px; font-size: 0.875rem; margin: 2px; }
-        .recipient-tag button { margin-left: 6px; color: #6366f1; }
+        /* 【v54.0 新增】個人工作台相關樣式 */
+        .notification-card { border-left-width: 4px; transition: opacity 0.3s ease-out, transform 0.3s ease-out; }
+        .progress-bar-bg { background-color: #e5e7eb; }
+        .progress-bar-fill { background-color: #3b82f6; transition: width 0.5s ease-in-out; }
+        .today-marker { position: absolute; top: -4px; bottom: -4px; width: 2px; background-color: #ef4444; }
+        /* 收合式區塊樣式 */
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-in-out;
+        }
+        /* 【v58.0 新增】主分頁樣式 */
+        .main-tab {
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s ease-in-out;
+        }
+        .main-tab.active {
+            color: #1d4ed8; /* blue-700 */
+            border-bottom-color: #1d4ed8;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -32,112 +49,119 @@
             <p id="welcome-message" class="text-gray-500 mt-2">歡迎，<span class="font-semibold">使用者</span>！</p>
         </header>
 
-        <!-- 【v50.0 核心改造】新增常駐的任務交辦中心 -->
-        <div id="task-sender-wrapper" class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-6 hidden">
-            <h2 class="text-xl font-bold text-gray-700 mb-4">任務交辦中心</h2>
-            <form id="notification-form" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">收件人</label>
-                    <div id="recipient-pills" class="mt-2 flex flex-wrap gap-1 border p-2 rounded-md min-h-[40px]"></div>
-                    <select id="notification-recipients" class="mt-2 block w-full rounded-md border-gray-300 shadow-sm">
-                        <!-- Employee options will be populated here -->
-                    </select>
-                    <div id="send-to-all-wrapper" class="mt-2 hidden">
-                        <label class="flex items-center"><input type="checkbox" id="send-to-all-checkbox" class="h-4 w-4 rounded border-gray-300"><span class="ml-2 text-sm text-red-600 font-semibold">發送給所有員工</span></label>
+        <!-- 【v58.0 核心改造】主分頁導覽 -->
+        <div class="border-b border-gray-200 mb-6">
+            <nav id="main-tab-nav" class="-mb-px flex gap-6" aria-label="Tabs">
+                <button type="button" data-tab="dashboard" class="main-tab active py-3 px-1 text-base font-medium">主控台</button> 
+                <button type="button" data-tab="project-board" class="main-tab py-3 px-1 text-base font-medium">專案看板</button>
+            </nav>
+        </div>
+ 
+        <!-- 主控台分頁內容 -->
+        <div id="dashboard-content" class="tab-content active">
+            <!-- 個人工作台 (智慧通知中心) -->
+            <div id="personal-workbench" class="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
+                <div class="lg:col-span-5 bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-700">智慧通知中心</h2>
+                        <button id="clear-all-notifications-btn" class="text-sm text-blue-600 hover:underline">全部清除</button>
+                    </div>
+                    <div id="notification-list" class="space-y-3 max-h-96 overflow-y-auto pr-2">
+                        <!-- 通知卡片範例 -->
+                        <div class="notification-card relative bg-yellow-50 border-yellow-500 p-3 rounded-md">
+                            <h4 class="font-semibold text-yellow-800">交辦事項：請採購A物料</h4>
+                            <p class="text-sm text-yellow-700">請於今日下班前回報進度。</p>
+                        </div>
+                        <div class="notification-card relative bg-green-50 border-green-500 p-3 rounded-md">
+                            <h4 class="font-semibold text-green-800">審核結果：您的特休申請已批准</h4>
+                            <p class="text-sm text-green-700">事由：家庭旅遊 (10/25 - 10/27)</p>
+                        </div>
                     </div>
                 </div>
-                <div>
-                    <label for="notification-title" class="block text-sm font-medium text-gray-700">標題</label>
-                    <input type="text" id="notification-title" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" required>
+            </div>
+
+            <!-- 【v58.0 核心修正】將原有的卡片式按鈕整合回主控台分頁 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                <!-- 專案主控台 -->
+                <div class="col-span-1 md:col-span-2 bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                    <h2 class="text-xl font-bold mb-4 text-blue-700">專案主控台</h2>
+                    <div class="flex flex-col sm:flex-row gap-2 items-center">
+                        <input type="text" id="project-id-input" inputmode="numeric" pattern="[0-9]*" class="flex-grow w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="請輸入案號 (例如: 715)">
+                        <button id="open-project-console-btn" class="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700">開啟</button>
+                    </div>
                 </div>
-                <div>
-                    <label for="notification-content" class="block text-sm font-medium text-gray-700">內容</label>
-                    <textarea id="notification-content" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></textarea>
-                </div>
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+
+                <!-- 靜態連結 -->
+                <a href="https://info.tanxin.space/onboardingflow.html" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                    <h2 class="text-xl font-bold mb-2 text-green-700">客戶接洽流程</h2>
+                    <p class="text-gray-600">查看標準化的互動式客戶溝通劇本。</p>
+                </a>
+                
+                <a href="https://info.tanxin.space/FAQ.html" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                    <h2 class="text-xl font-bold mb-2 text-green-700">新客戶常見問答 (FAQ)</h2>
+                    <p class="text-gray-600">快速查詢與回覆客戶的常見問題。</p>
+                </a>
+
+                <!-- 出勤管理主控台 (預設隱藏) -->
+                <a id="attendance-console-link" href="https://info.tanxin.space/attendance_report.html" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border-gray-200 block hidden">
+                    <h2 class="text-xl font-bold mb-2 text-green-700">出勤管理主控台</h2>
+                    <p class="text-gray-600">查詢所有員工的出勤、遲到、早退與缺勤紀錄。</p>
+                </a>
+
+                <!-- 假勤審核儀表板 (預設隱藏) -->
+                <a id="approval-dashboard-link" href="#" class="card bg-white p-6 rounded-lg shadow-md border-gray-200 block hidden">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-xl font-bold mb-2 text-red-700">假勤審核儀表板</h2>
+                        <span id="approval-badge" class="hidden h-6 w-6 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">0</span>
+                    </div>
+                    <p class="text-gray-600">集中審核所有員工的請假與加班申請。</p>
+                </a>
+
+                <a href="https://liff.line.me/2007974938-jVxn6y37" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                    <h2 class="text-xl font-bold mb-2 text-purple-700">員工打卡</h2>
+                    <p class="text-gray-600">開啟 LIFF 頁面進行每日出勤打卡。</p>
+                </a>
+
+                <a href="https://liff.line.me/2007974938-gOrjlzna" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                    <h2 class="text-xl font-bold mb-2 text-purple-700">施工回報</h2>
+                    <p class="text-gray-600">開啟 LIFF 頁面上傳每日施工進度與照片。</p>
+                </a>
+                
+                <a id="open-leave-request-link" href="#" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                    <h2 class="text-xl font-bold mb-2 text-purple-700">線上假勤申請</h2>
+                    <p class="text-gray-600">申請特休、病假、事假或回報加班。</p>
+                </a>
+
+                <a id="open-shift-schedule-link" href="#" class="card bg-white p-6 rounded-lg shadow-md border-gray-200 block">
+                    <h2 class="text-xl font-bold mb-2 text-purple-700">員工排班系統</h2>
+                    <p class="text-gray-600">設定排班制員工的休假日期。</p>
+                </a>
+            </div>
+
+            <div id="task-sender-wrapper" class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mt-4 hidden">
+                <h2 class="text-xl font-bold text-gray-700 mb-4">任務交辦中心</h2>
+                <form id="notification-form" class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">要求動作</label>
-                        <div class="mt-2 flex gap-4"><label><input type="radio" name="actionType" value="None" checked> 無需回覆</label><label><input type="radio" name="actionType" value="ReplyText"> 要求文字回覆</label><label><input type="radio" name="actionType" value="ConfirmCompletion"> 要求完成回報</label></div>
+                        <button type="button" id="recipient-toggle-btn" class="w-full text-left p-2 border rounded-md bg-gray-50 hover:bg-gray-100 flex justify-between items-center"><span id="recipient-summary" class="text-sm text-gray-600">選擇收件人</span><svg id="recipient-arrow" class="w-5 h-5 text-gray-500 transition-transform" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg></button>
+                        <div id="recipient-collapsible" class="collapsible-content mt-2"><div id="recipient-list" class="border rounded-md max-h-40 overflow-y-auto p-2 space-y-1"></div></div>
+                        <div id="send-to-all-wrapper" class="mt-2 hidden"><label class="flex items-center"><input type="checkbox" id="send-to-all-checkbox" class="h-4 w-4 rounded border-gray-300"><span class="ml-2 text-sm text-red-600 font-semibold">發送給所有員工</span></label></div>
                     </div>
-                    <button type="submit" id="notification-submit-btn" class="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-4 rounded-md">發送任務</button>
-                </div>
-                <div id="notification-status" class="text-sm text-center min-h-[20px]"></div>
-            </form>
+                    <div><label for="notification-content" class="block text-sm font-medium text-gray-700">交辦內容<span class="text-red-500">*</span></label><textarea id="notification-content" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" required></textarea></div>
+                    <div><label for="related-project-id" class="block text-sm font-medium text-gray-700">相關案號 (選填)</label><input type="text" id="related-project-id" inputmode="numeric" pattern="[0-9]*" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" placeholder="例如: 715"></div>
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div><label class="block text-sm font-medium text-gray-700">要求動作</label><div id="action-type-group" class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2"><label><input type="radio" name="actionType" value="None" checked> 無</label><label><input type="radio" name="actionType" value="ReplyText"> 文字回覆</label><label class="flex items-center gap-2"><input type="radio" name="actionType" value="ConfirmCompletion"> 完成回報 (時限: <input type="date" id="completion-deadline-date" class="text-sm p-1 border rounded-md" disabled> <input type="time" id="completion-deadline-time" class="text-sm p-1 border rounded-md" disabled>)</label></div></div>
+                        <button type="submit" id="notification-submit-btn" class="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-4 rounded-md">發送任務</button>
+                    </div>
+                    <div id="notification-status" class="text-sm text-center min-h-[20px]"></div>
+                </form>
+            </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            
-            <!-- 專案主控台 -->
-            <div class="col-span-1 md:col-span-2 bg-white p-6 rounded-lg shadow-md border border-gray-200">
-                <h2 class="text-xl font-bold mb-4 text-blue-700">專案主控台</h2>
-                <!-- 【v50.0 核心改造】將輸入框與按鈕改為同一列 -->
-                <div class="flex flex-col sm:flex-row gap-2 items-center">
-                    <input type="text" id="project-id-input" inputmode="numeric" pattern="[0-9]*" class="flex-grow w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="請輸入案號 (例如: 715)">
-                    <button id="open-project-console-btn" class="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700">開啟</button>
-                </div>
-            </div>
-
-            <!-- 靜態連結 -->
-            <a href="https://info.tanxin.space/onboardingflow.html" target="_blank" class="card bg-white p-4 rounded-lg shadow-md border border-gray-200 block">
-                <h2 class="text-xl font-bold mb-2 text-green-700">客戶接洽流程</h2>
-                <p class="text-gray-600">查看標準化的互動式客戶溝通劇本。</p>
-            </a>
-            
-            <a href="https://info.tanxin.space/FAQ.html" target="_blank" class="card bg-white p-4 rounded-lg shadow-md border border-gray-200 block">
-                <h2 class="text-xl font-bold mb-2 text-green-700">新客戶常見問答 (FAQ)</h2>
-                <p class="text-gray-600">快速查詢與回覆客戶的常見問題。</p>
-            </a>
-
-            <!-- [核心新增] 出勤管理主控台 (預設隱藏) -->
-            <a id="attendance-console-link" href="https://info.tanxin.space/attendance_report.html" target="_blank" class="card bg-white p-4 rounded-lg shadow-md border border-gray-200 block hidden">
-                <h2 class="text-xl font-bold mb-2 text-green-700">出勤管理主控台</h2>
-                <p class="text-gray-600">查詢所有員工的出勤、遲到、早退與缺勤紀錄。</p>
-            </a>
-
-            <!-- 【⭐️ 核心新增：假勤審核儀表板 (預設隱藏) ⭐️】 -->
-            <a id="approval-dashboard-link" href="#" class="card bg-white p-4 rounded-lg shadow-md border border-gray-200 block hidden">
-                <div class="flex justify-between items-center">
-                    <h2 class="text-xl font-bold mb-2 text-red-700">假勤審核儀表板</h2>
-                    <!-- 【v31.0 新增】待審核計數標籤 -->
-                    <span id="approval-badge" class="hidden h-6 w-6 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">0</span>
-                </div>
-                <p class="text-gray-600">集中審核所有員工的請假與加班申請。</p>
-            </a>
-
-            <a href="https://liff.line.me/2007974938-jVxn6y37" target="_blank" class="card bg-white p-4 rounded-lg shadow-md border border-gray-200 block">
-                <h2 class="text-xl font-bold mb-2 text-purple-700">員工打卡</h2>
-                <p class="text-gray-600">開啟 LIFF 頁面進行每日出勤打卡。</p>
-            </a>
-
-            <a href="https://liff.line.me/2007974938-gOrjlzna" target="_blank" class="card bg-white p-4 rounded-lg shadow-md border border-gray-200 block">
-                <h2 class="text-xl font-bold mb-2 text-purple-700">施工回報</h2>
-                <p class="text-gray-600">開啟 LIFF 頁面上傳每日施工進度與照片。</p>
-            </a>
-            
-            <!-- 【⭐️ 核心改造：線上假勤申請，改為由 Hub 傳遞認證資訊 ⭐️】 -->
-            <a id="open-leave-request-link" href="#" class="card bg-white p-4 rounded-lg shadow-md border border-gray-200 block">
-                <h2 class="text-xl font-bold mb-2 text-purple-700">線上假勤申請</h2>
-                <p class="text-gray-600">申請特休、病假、事假或回報加班。</p>
-            </a>
-
-            <!-- [架構改造] 員工排班系統，改為由 Hub 傳遞認證資訊 -->
-            <a id="open-shift-schedule-link" href="#" class="card bg-white p-4 rounded-lg shadow-md border border-gray-200 block">
-                <h2 class="text-xl font-bold mb-2 text-purple-700">員工排班系統</h2>
-                <p class="text-gray-600">設定排班制員工的休假日期。</p>
-            </a>
-
-            <!-- 後端互動功能 -->
-            <div class="col-span-1 md:col-span-2 bg-white p-4 rounded-lg shadow-md border border-gray-200">
-                <h2 class="text-xl font-bold mb-4 text-red-700">管理員工具</h2>
-                <div class="space-y-4">
-                    <div class="flex items-center justify-between">
-                        <p class="text-gray-600">手動觸發後端處理已上傳的施工回報。</p>
-                        <button id="process-queue-btn" class="bg-red-600 text-white font-bold py-1.5 px-3 text-sm rounded-md hover:bg-red-700">立即處理回報</button>
-                    </div>
-                </div>
-                <p id="process-status" class="text-sm text-gray-500 mt-3 min-h-[20px]"></p>
-            </div>
-
+        <!-- 【v58.0 核心修正】移除專案看板分頁內容 -->
+        <div id="project-board-content" class="tab-content hidden">
+            <!-- 【v59.0 核心改造】專案看板內容將由 JS 動態載入 -->
+            <div id="project-board-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+            <p id="project-board-placeholder" class="text-center text-gray-500 py-12 hidden">正在載入專案資料...</p>
         </div>
     </div>
 
@@ -151,28 +175,53 @@
         // ===============================================================
 
         let userProfile = null;
-        let allEmployees = []; // 【⭐️ 核心新增：將員工資料提升至全域，以便共用 ⭐️】
-        let selectedRecipients = new Map(); // 【v50.0 新增】用於儲存已選擇的收件人
+        let allEmployees = []; // 將員工資料提升至全域，以便共用
+
+        // 【v71.0 核心新增】快取管理函式
+        function saveCache(key, data, days = 7) {
+            const cache = {
+                data: data,
+                expires: Date.now() + days * 24 * 60 * 60 * 1000
+            };
+            try {
+                localStorage.setItem(key, JSON.stringify(cache));
+            } catch (e) {
+                console.error('儲存快取失敗:', e);
+            }
+        }
+
+        function loadCache(key) {
+            const cached = localStorage.getItem(key);
+            if (!cached) return null;
+            const cache = JSON.parse(cached);
+            if (cache.expires < Date.now()) {
+                localStorage.removeItem(key);
+                return null;
+            }
+            return cache.data;
+        }
 
         async function main() {
-            // 【⭐️ 核心新增：本地測試模式 ⭐️】
-            // 【v47.0 核心改造】強化本地測試模式：只要是在本地環境，就無條件繞過 LIFF 初始化。
+            // 本地測試模式
             const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
             const urlParams = new URLSearchParams(window.location.search);
 
             if (isLocalTest) {
                 console.warn('⚡️ 本地測試模式啟用，跳過 LIFF 認證。');
-                // 模擬一個 userProfile 物件。允許從 URL 傳入 uid 以便測試不同使用者，若無則使用預設值。
                 userProfile = {
-                    userId: urlParams.get('uid') || 'U_local_test_user_001', // 預設測試者 ID
-                    displayName: '本地測試員'
+                    userId: urlParams.get('uid') || 'Ud58333430513b7527106fa71d2e30151', // 【v64.0 修正】將本地測試預設 ID 改為總監 ID
+                    displayName: '俊豪 (本地測試)'
                 };
-                // 直接顯示主畫面並綁定事件
-                // 在背景中非同步取得員工資料 (因為 LIFF 流程被跳過，這裡需要手動觸發)
-                // 【v51.0 核心修正】確保在顯示內容前，先完成資料的非同步載入
-                await fetchInitialData();
+                // 【v71.0 改造】本地模式也採用快取優先策略
+                const cachedEmployees = loadCache('hub_employees');
+                if (cachedEmployees) {
+                    allEmployees = cachedEmployees;
+                    console.log('⚡️ 本地模式從快取載入員工資料。');
+                }
                 showMainContent();
-                return; // 中斷後續的 LIFF 流程
+                // 在背景獲取最新資料
+                fetchInitialData();
+                return;
             }
 
             try {
@@ -183,10 +232,17 @@
                 }
                 userProfile = await liff.getProfile();
 
-                // 驗證成功，顯示主畫面
-                // 【v51.0 核心修正】確保在顯示內容前，先完成資料的非同步載入
-                await fetchInitialData();
+                // 【v71.0 核心改造】快取優先策略
+                // 1. 嘗試從快取載入員工資料並立即顯示畫面
+                const cachedEmployees = loadCache('hub_employees');
+                if (cachedEmployees) {
+                    allEmployees = cachedEmployees;
+                    console.log('✅ 從快取載入員工資料，執行樂觀更新。');
+                }
                 showMainContent();
+
+                // 2. 在背景非同步獲取最新資料
+                fetchInitialData();
 
             } catch (error) {
                 console.error('LIFF Initialization Error:', error);
@@ -198,47 +254,281 @@
             document.getElementById('loading-screen').style.display = 'none';
             document.getElementById('main-content').classList.remove('hidden');
             document.getElementById('welcome-message').querySelector('span').textContent = userProfile.displayName;
+            // 【v71.0 新增】使用現有 (可能來自快取) 的員工資料，先更新一次權限相關的UI
+            updatePermissionUI();
             initializeEventListeners();
         }
 
-        // 【v47.0 核心新增】將資料取得邏輯獨立成一個函式，方便共用
+        // 【v71.0 核心新增】根據權限更新 UI 的共用函式
+        function updatePermissionUI() {
+            if (!userProfile || allEmployees.length === 0) return;
+
+            const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId);
+            const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+            const hasAdminRights = currentUser && (currentUser.permission >= 4);
+
+            if (hasAdminRights || isLocalTest) {
+                document.getElementById('attendance-console-link').classList.remove('hidden');
+                document.getElementById('approval-dashboard-link').classList.remove('hidden');
+                document.getElementById('task-sender-wrapper').classList.remove('hidden');
+                populateRecipientOptions();
+            }
+        }
+
         async function fetchInitialData() {
             try {
-                // 使用 Promise.allSettled 來並行處理多個請求，即使其中一個失敗也不會中斷
-                const [employeesResult, pendingResult] = await Promise.allSettled([
-                    fetch(`${ATTENDANCE_GAS_WEB_APP_URL}?page=attendance_api&action=get_employees`).then(res => res.json()),
-                    fetch(`${ATTENDANCE_GAS_WEB_APP_URL}?page=attendance_api&action=get_pending_requests`).then(res => res.json())
+                // 【v71.0 改造】將員工資料請求與其他請求分開，以便進行比對
+                const employeesPromise = fetch(`${ATTENDANCE_GAS_WEB_APP_URL}?page=attendance_api&action=get_employees`).then(res => res.json());
+                const otherPromises = Promise.allSettled([
+                    fetch(`${ATTENDANCE_GAS_WEB_APP_URL}?page=attendance_api&action=get_pending_requests`).then(res => res.json()),
+                    fetchMultipleProjects(['715', '722', '999', '724', '726', '725'])
                 ]);
 
-                if (employeesResult.status === 'fulfilled') {
-                    allEmployees = employeesResult.value;
-                    const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId);
-                    
-                    // 【v50.0 核心改造】在本地測試模式下，強制給予權限等級 5，以利完整測試。
-                    const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-                    const hasAdminRights = currentUser && (currentUser.permission >= 4);
+                const [newEmployees, [pendingResult, projectsResult]] = await Promise.all([
+                    employeesPromise,
+                    otherPromises
+                ]);
 
-                    if (hasAdminRights || isLocalTest) {
-                        document.getElementById('attendance-console-link').classList.remove('hidden');
-                        document.getElementById('approval-dashboard-link').classList.remove('hidden');
-                        document.getElementById('task-sender-wrapper').classList.remove('hidden'); // 顯示任務交辦中心
-                        populateRecipientOptions(); // 填入收件人選項
-                        if (pendingResult.status === 'fulfilled' && pendingResult.value.success) {
-                            updateApprovalBadge(pendingResult.value.data.length);
-                        }
-                    }
+                // 【v71.0 核心改造】智慧更新員工資料
+                const oldDataString = JSON.stringify(allEmployees);
+                const newDataString = JSON.stringify(newEmployees);
+
+                if (oldDataString !== newDataString) {
+                    console.log('🔄 員工資料已在背景更新，重新整理權限與UI。');
+                    allEmployees = newEmployees;
+                    saveCache('hub_employees', allEmployees);
+                    updatePermissionUI(); // 使用最新資料重新執行權限判斷
+                }
+
+                // 處理待審核項目
+                if (pendingResult.status === 'fulfilled' && pendingResult.value.success) {
+                    updateApprovalBadge(pendingResult.value.data.length);
+                }
+
+                // 【v59.0 新增】處理專案資料
+                if (projectsResult.status === 'fulfilled' && projectsResult.value.success) {
+                    const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId);
+                    filterAndRenderProjects(projectsResult.value.data, currentUser);
+                } else {
+                    document.getElementById('project-board-placeholder').textContent = '載入專案資料失敗。';
                 }
             } catch (error) {
                 console.warn('載入初始資料時發生錯誤:', error);
             }
         }
 
-        // 【v50.0 核心新增】任務交辦中心相關函式
+        // 【v60.0 核心新增】逐一獲取多個指定專案的資料
+        // 【v61.0 核心改造】引入與主控台相同的快取機制 (快取優先、背景更新)
+        async function fetchMultipleProjects(projectIds) {
+            const placeholder = document.getElementById('project-board-placeholder');
+            placeholder.classList.remove('hidden');
+            placeholder.textContent = '正在準備專案看板...';
+
+            const CACHE_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 快取 7 天
+
+            const projectPromises = projectIds.map(async (id) => {
+                const CACHE_KEY = `project_data_${id}_${userProfile.userId}`;
+                let projectData = null;
+
+                // 1. 嘗試從快取讀取
+                try {
+                    const cachedItem = localStorage.getItem(CACHE_KEY);
+                    if (cachedItem) {
+                        const { timestamp, data } = JSON.parse(cachedItem);
+                        if ((Date.now() - timestamp < CACHE_DURATION_MS) && data.overview) {
+                            console.log(`⚡️ 專案 #${id} 從快取載入。`);
+                            projectData = data;
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`讀取專案 #${id} 的快取失敗:`, e);
+                    localStorage.removeItem(CACHE_KEY);
+                }
+
+                // 2. (背景) 從後端獲取最新資料
+                try {
+                    placeholder.textContent = `正在同步專案 #${id}...`;
+                    // 【v62.0 核心修正】改用 loadJsonp 函式來處理後端回傳的 JSONP 格式
+                    const freshData = await loadJsonp(`${GAS_WEB_APP_URL}?page=project&id=${id}&userId=${userProfile.userId}`);
+
+                    if (freshData && freshData.overview) {
+                        localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData }));
+                        projectData = freshData; // 永遠使用最新資料
+                        console.log(`✅ 專案 #${id} 已從後端同步。`);
+                    }
+                } catch (fetchError) {
+                    console.error(`後端同步專案 #${id} 失敗:`, fetchError);
+                    // 如果後端請求失敗，但快取存在，依然可以使用快取資料
+                }
+
+                return projectData;
+            });
+
+            const results = await Promise.all(projectPromises);
+            
+            // 過濾掉失敗或無效的資料，並轉換為卡片渲染所需的格式
+            const successfulProjects = results.filter(Boolean).map((p, index) => {
+                // 【v67.0 核心修正】從後端回傳的資料中補上 id 和 name 欄位
+                const overview = p.overview || {};
+                const projectId = projectIds[index]; // 從原始請求的 ID 列表中取得 ID
+                
+                // 建立一個新的、符合前端需求的物件
+                return {
+                    ...overview,
+                    id: projectId,
+                    name: overview['案場名稱'] || `專案 #${projectId}`,
+                    dailyLogs: p.dailyLogs || [], // 【v68.0 新增】將施工日誌也加入資料結構
+                    tasks: p.schedule || []
+                };
+            });
+            
+            return { success: true, data: successfulProjects };
+        }
+
+        // 【v62.0 核心新增】專門用來處理 JSONP 回應的 fetch 函式
+        async function loadJsonp(url) {
+            // 【v65.0 偵錯強化】顯示送出的請求 URL
+            console.log('[JSONP] 正在請求 URL:', url);
+
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`Network response was not ok: ${response.statusText}`);
+            }
+            const text = await response.text();
+            // 【v65.0 偵錯強化】顯示從後端收到的原始文字回應
+            console.log('[JSONP] 收到原始回應:', text);
+
+            // 預期回應格式為 callback({...})
+            // 1. 找到第一個 '(' 和最後一個 ')'
+            const firstParen = text.indexOf('(');
+            const lastParen = text.lastIndexOf(')');
+
+            if (firstParen === -1 || lastParen === -1 || lastParen < firstParen) {
+                // 如果格式不符，嘗試直接解析為純 JSON
+                try { 
+                    const jsonData = JSON.parse(text);
+                    console.log('[JSONP] 解析為純 JSON:', jsonData);
+                    return jsonData;
+                } catch (e) { 
+                    throw new Error('Invalid JSONP or JSON format'); 
+                }
+            }
+
+            // 2. 提取括號內的 JSON 字串
+            const jsonString = text.substring(firstParen + 1, lastParen);
+            const parsedData = JSON.parse(jsonString);
+            // 【v65.0 偵錯強化】顯示從 JSONP 中成功解析出的資料物件
+            console.log('[JSONP] 從回應中解析出的資料:', parsedData);
+            return parsedData;
+        }
+
+        // 【v59.0 核心新增】根據權限過濾並渲染專案看板
+        function filterAndRenderProjects(allProjects, currentUser) {
+            const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+            const permission = currentUser ? currentUser.permission : (isLocalTest ? 5 : 1);
+            const userName = currentUser ? currentUser.userName : '本地測試員';
+
+            let projectsToShow = [];
+
+            if (permission >= 4) { // 管理者/總監看全部
+                projectsToShow = allProjects;
+            } else if (permission === 2) { // 權限2看自己負責的
+                projectsToShow = allProjects.filter(p => p.responsiblePerson === userName && p.status !== '已結案');
+            }
+
+            renderProjectCards(projectsToShow);
+        }
+
+        // 【v59.0 核心新增】渲染專案卡片到畫面上
+        function renderProjectCards(projects) {
+            const grid = document.getElementById('project-board-grid');
+            const placeholder = document.getElementById('project-board-placeholder');
+            grid.innerHTML = '';
+
+            if (projects.length === 0) {
+                placeholder.textContent = '沒有符合條件的專案。';
+                placeholder.classList.remove('hidden');
+                return;
+            }
+
+            placeholder.classList.add('hidden');
+            projects.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'bg-white p-4 rounded-lg shadow-md border border-gray-200 flex flex-col gap-4'; // 【v68.0 改造】使用 flex 佈局
+                
+                // 【v66.0 偵錯強化】如果專案資料不完整，則在 Console 中顯示警告
+                if (!p || !p.id || !p.name) {
+                    console.warn('偵測到不完整的專案資料，已跳過渲染:', p);
+                    return;
+                }
+
+                // 【v68.0 核心改造】工程排程顯示邏輯
+                const allTasks = (p.tasks || []).sort((a, b) => new Date(a['預計開始日']) - new Date(b['預計開始日']));
+                const completedTasks = allTasks.filter(task => task['狀態'] === '已完成');
+                const uncompletedTasks = allTasks.filter(task => task['狀態'] !== '已完成');
+                const lastCompleted = completedTasks.slice(-1);
+                const nextTwoUncompleted = uncompletedTasks.slice(0, 2);
+                const scheduleHtml = [...lastCompleted, ...nextTwoUncompleted].map(task => {
+                    const isDone = task['狀態'] === '已完成';
+                    const statusClass = isDone ? 'text-gray-500' : 'text-red-600';
+                    const statusText = isDone ? '[已完成]' : '[未完成]';
+                    return `<li><span class="font-medium ${statusClass}">${statusText}</span> ${task['任務項目'] || '未命名任務'}</li>`;
+                }).join('') || '<li>無排程資料</li>';
+
+                // 【v68.0 核心改造】近期回報顯示邏輯
+                const recentLogs = (p.dailyLogs || []).slice(0, 3);
+                const logsHtml = recentLogs.length > 0
+                    ? recentLogs.map(log => {
+                        // 【v69.0 核心改造】從日誌標題中精準提取「工種」與「日期」
+                        const titleMatch = (log.Title || '').match(/(\d{4}-\d{2}-\d{2})\s(.+?)\s/);
+                        const logDate = titleMatch ? titleMatch[1].substring(5) : ''; // 只取 MM-DD
+                        const workType = titleMatch ? titleMatch[2] : '日誌';
+                        // 【v70.0 新增】顯示施工內容或問題回報
+                        const logContent = (log.Content || '').trim();
+                        const contentHtml = logContent ? `<p class="text-xs text-gray-600 pl-4 mt-1 whitespace-pre-wrap">${logContent}</p>` : '';
+                        return `<li><span class="text-gray-500">${logDate}</span> <span class="font-medium text-blue-700">${workType}</span> by ${log.UserName}${contentHtml}</li>`;
+                    }).join('')
+                    : '<li>無施工回報</li>';
+                
+                // 【v68.0 核心改造】待辦事項 (保留結構，日後擴充)
+                const tasksHtml = '<li>無待辦事項</li>';
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold text-lg text-gray-800">#${p.id} ${p.name}</h3>
+                        <div>
+                            <button data-action="open-console" data-project-id="${p.id}" class="bg-blue-100 text-blue-700 text-xs font-bold py-1 px-3 rounded-full hover:bg-blue-200">開啟主控台</button>
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-gray-600 text-sm mb-2">工程進度</h4>
+                        <ul class="text-sm space-y-1 text-gray-700">${scheduleHtml}</ul>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-gray-600 text-sm mb-2">近期回報</h4>
+                        <ul class="text-sm space-y-1 text-gray-700">${logsHtml}</ul>
+                    </div>
+                    <div class="mt-4">
+                        <h4 class="font-semibold text-gray-600 text-sm mb-2">關鍵待辦事項</h4>
+                        <ul class="text-sm space-y-1 text-gray-500">${tasksHtml}</ul>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
         function populateRecipientOptions() {
-            const recipientsSelect = document.getElementById('notification-recipients');
-            recipientsSelect.innerHTML = '<option value="">-- 點此加入收件人 --</option>';
+            const recipientList = document.getElementById('recipient-list');
+            recipientList.innerHTML = '';
             allEmployees.filter(emp => emp.permission < 5).forEach(emp => {
-                recipientsSelect.innerHTML += `<option value="${emp.userId}" data-name="${emp.userName}">${emp.userName}</option>`;
+                const id = `recipient-${emp.userId}`;
+                const itemHTML = `
+                    <label for="${id}" class="flex items-center p-1 rounded hover:bg-gray-100 cursor-pointer">
+                        <input type="checkbox" id="${id}" name="recipients" value="${emp.userId}" class="h-4 w-4 rounded border-gray-300">
+                        <span class="ml-2 text-sm text-gray-800" data-name="${emp.userName}">${emp.userName}</span>
+                    </label>
+                `;
+                recipientList.insertAdjacentHTML('beforeend', itemHTML);
             });
 
             const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId);
@@ -246,131 +536,144 @@
             if ((currentUser && currentUser.permission >= 4) || isLocalTest) {
                 document.getElementById('send-to-all-wrapper').classList.remove('hidden');
             }
-        }
 
-        function renderRecipientPills() {
-            const container = document.getElementById('recipient-pills');
-            container.innerHTML = '';
-            selectedRecipients.forEach((name, id) => {
-                container.innerHTML += `
-                    <span class="recipient-tag">
-                        ${name}
-                        <button type="button" data-id="${id}" class="recipient-remove-btn">&times;</button>
-                    </span>
-                `;
+            document.getElementById('send-to-all-checkbox').addEventListener('change', (e) => {
+                const recipientCheckboxes = document.querySelectorAll('#recipient-list input[type="checkbox"]');
+                recipientCheckboxes.forEach(checkbox => {
+                    checkbox.disabled = e.target.checked;
+                    if (e.target.checked) checkbox.checked = false;
+                });
+                updateRecipientSummary();
+            });
+
+            document.getElementById('action-type-group').addEventListener('change', (e) => {
+                const deadlineDate = document.getElementById('completion-deadline-date');
+                const deadlineTime = document.getElementById('completion-deadline-time');
+                const enabled = e.target.value === 'ConfirmCompletion';
+                deadlineDate.disabled = !enabled;
+                deadlineTime.disabled = !enabled;
+                if (enabled) {
+                    const now = new Date();
+                    deadlineDate.value = now.toLocaleDateString('sv');
+                    now.setHours(now.getHours() + 1);
+                    now.setMinutes(0);
+                    const nextHour = now.getHours().toString().padStart(2, '0');
+                    deadlineTime.value = `${nextHour}:00`;
+                } else {
+                    deadlineDate.value = '';
+                    deadlineTime.value = '';
+                }
+            });
+
+            document.getElementById('recipient-list').addEventListener('change', updateRecipientSummary);
+            document.getElementById('recipient-toggle-btn').addEventListener('click', () => {
+                const collapsible = document.getElementById('recipient-collapsible');
+                const arrow = document.getElementById('recipient-arrow');
+                if (collapsible.style.maxHeight) {
+                    collapsible.style.maxHeight = null;
+                    arrow.classList.remove('rotate-180');
+                } else {
+                    collapsible.style.maxHeight = collapsible.scrollHeight + "px";
+                    arrow.classList.add('rotate-180');
+                }
             });
         }
 
-        function handleRecipientChange(event) {
-            const selectedOption = event.target.selectedOptions[0];
-            if (!selectedOption || !selectedOption.value) return;
+        // 【v63.0 核心改造】實作任務交辦中心的後端 API 串接
+        async function handleSendNotification(event) {
+            event.preventDefault();
+            const statusEl = document.getElementById('notification-status');
+            const submitBtn = document.getElementById('notification-submit-btn');
+            const sendToAll = document.getElementById('send-to-all-checkbox').checked;
+            const selectedRecipients = Array.from(document.querySelectorAll('#recipient-list input[type="checkbox"]:checked')).map(cb => cb.value);
 
-            const userId = selectedOption.value;
-            const userName = selectedOption.dataset.name;
-            selectedRecipients.set(userId, userName);
-            renderRecipientPills();
-            event.target.value = ''; // 重置下拉選單
-        }
+            if (!sendToAll && selectedRecipients.length === 0) {
+                statusEl.textContent = '錯誤：請至少選擇一位收件人。';
+                console.error('[任務交辦] 驗證失敗: 未選擇收件人。');
+                return;
+            }
 
-        function handlePillRemove(event) {
-            if (event.target.classList.contains('recipient-remove-btn')) {
-                const userId = event.target.dataset.id;
-                selectedRecipients.delete(userId);
-                renderRecipientPills();
+            submitBtn.disabled = true;
+            statusEl.textContent = '發送中...';
+
+            const deadlineDate = document.getElementById('completion-deadline-date').value;
+            const deadlineTime = document.getElementById('completion-deadline-time').value;
+            let deadline = '';
+            if (deadlineDate && deadlineTime) {
+                deadline = `${deadlineDate}T${deadlineTime}`;
+            }
+
+            const payload = {
+                action: 'sendNotification',
+                senderId: userProfile.userId,
+                senderName: userProfile.displayName,
+                recipients: sendToAll ? ['ALL'] : selectedRecipients,
+                content: document.getElementById('notification-content').value,
+                projectId: document.getElementById('related-project-id').value,
+                actionType: document.querySelector('input[name="actionType"]:checked').value,
+                deadline: deadline
+            };
+
+            console.log('[任務交辦] 準備發送的 Payload:', payload);
+
+            try {
+                const response = await fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify(payload), headers: { 'Content-Type': 'text/plain' } });
+                const result = await response.json();
+                console.log('[任務交辦] 後端回應:', result);
+                if (!result.success) throw new Error(result.message || '後端處理失敗');
+                statusEl.textContent = '任務已成功發送！';
+                document.getElementById('notification-form').reset();
+                updateRecipientSummary(); // 重置收件人摘要
+            } catch (error) {
+                console.error('[任務交辦] 發送失敗:', error);
+                statusEl.textContent = `發送失敗: ${error.message}`;
+            } finally {
+                submitBtn.disabled = false;
+                setTimeout(() => { statusEl.textContent = ''; }, 5000);
             }
         }
 
-        async function handleSendNotification(event) {
-            event.preventDefault();
-            // 此處為示意，實際發送邏輯可在此處實作
-            const statusEl = document.getElementById('notification-status');
-            statusEl.textContent = '發送中...';
-            console.log('準備發送通知:', {
-                recipients: Array.from(selectedRecipients.keys()),
-                sendToAll: document.getElementById('send-to-all-checkbox').checked,
-                title: document.getElementById('notification-title').value,
+        function updateRecipientSummary() {
+            const summaryEl = document.getElementById('recipient-summary');
+            const sendToAll = document.getElementById('send-to-all-checkbox').checked;
+            if (sendToAll) {
+                summaryEl.textContent = '已選擇：所有員工';
+                return;
+            }
+            const selectedCheckboxes = Array.from(document.querySelectorAll('#recipient-list input[type="checkbox"]:checked'));
+            if (selectedCheckboxes.length === 0) {
+                summaryEl.textContent = '選擇收件人';
+            } else if (selectedCheckboxes.length <= 2) {
+                summaryEl.textContent = '已選擇：' + selectedCheckboxes.map(cb => cb.nextElementSibling.textContent).join('、');
+            } else {
+                summaryEl.textContent = `已選擇：${selectedCheckboxes.length} 位員工`;
+            }
+        }
+
+        function setupMainTabs() {
+            const tabContainer = document.getElementById('main-tab-nav');
+            if (!tabContainer) return;
+            tabContainer.addEventListener('click', (e) => {
+                const button = e.target.closest('.main-tab');
+                if (!button) return;
+
+                const tabName = button.dataset.tab;
+                tabContainer.querySelectorAll('.main-tab').forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.toggle('hidden', content.id !== `${tabName}-content`);
+                });
             });
-            setTimeout(() => {
-                statusEl.textContent = '任務已成功發送！';
-                setTimeout(() => { statusEl.textContent = ''; }, 2000);
-            }, 1000);
         }
 
         function initializeEventListeners() {
-            // 開啟專案主控台按鈕
-            document.getElementById('open-project-console-btn').addEventListener('click', (e) => { // 【v50.0 修正】將此事件監聽移至此處
+            document.getElementById('open-project-console-btn').addEventListener('click', (e) => {
                 e.preventDefault();
                 const projectId = document.getElementById('project-id-input').value.trim();
-                if (!projectId || !/^\d+$/.test(projectId)) {
-                    alert('請輸入純數字的案號！');
-                    return;
-                }
-                if (!userProfile || !userProfile.userId) {
-                    alert('無法取得您的使用者資訊，請重新載入頁面。');
-                    return;
-                }
-
-                // 【v46.0 核心改造】根據環境動態決定目標 URL
-                const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-                let targetUrl;
-                if (isLocal) {
-                    // 本地測試模式：直接開啟本地的 HTML 檔案，並帶上參數
-                    targetUrl = `http://127.0.0.1:5500/managementconsole.html?id=${projectId}&uid=${userProfile.userId}`;
-                } else {
-                    // 正式環境：使用 LIFF URL
-                    targetUrl = `https://liff.line.me/${PROJECT_CONSOLE_LIFF_ID}?id=${projectId}&uid=${userProfile.userId}`;
-                }
-                window.open(targetUrl, '_blank');
+                openProjectConsole(projectId);
             });
 
-            // [架構改造] 員工排班系統連結
-            document.getElementById('open-shift-schedule-link').addEventListener('click', (e) => {
-                e.preventDefault(); // 防止直接跳轉
-                if (!userProfile || !userProfile.userId) {
-                    alert('無法取得您的使用者資訊，請重新載入頁面。');
-                    return;
-                }
-                // [核心改造] 根據當前環境，動態產生排班系統的 URL
-                const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-                const baseUrl = isLocal 
-                    ? 'http://127.0.0.1:5500/shift_schedule.html' 
-                    : 'https://info.tanxin.space/shift_schedule.html';
-
-                const scheduleUrl = `${baseUrl}?uid=${userProfile.userId}&name=${encodeURIComponent(userProfile.displayName)}`;
-                
-                window.open(scheduleUrl, '_blank');
-            });
-
-            // 【⭐️ 核心新增：線上假勤申請連結 ⭐️】
-            document.getElementById('open-leave-request-link').addEventListener('click', (e) => {
-                e.preventDefault();
-                if (!userProfile || !userProfile.userId) {
-                    alert('無法取得您的使用者資訊，請重新載入頁面。');
-                    return;
-                }
-                // 根據當前環境，動態產生假勤申請系統的 URL
-                const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-                const baseUrl = isLocal 
-                    ? 'http://127.0.0.1:5500/leave_request.html' 
-                    : 'https://info.tanxin.space/leave_request.html';
-
-                // 【⭐️ 核心改造：從已取得的員工資料中找出班表時間，並加入 URL 參數 ⭐️】
-                const currentUserData = allEmployees.find(emp => emp.userId === userProfile.userId);
-                const params = new URLSearchParams({
-                    uid: userProfile.userId,
-                    name: userProfile.displayName
-                });
-                if (currentUserData && currentUserData.shiftStart && currentUserData.shiftEnd) {
-                    params.set('shiftStart', currentUserData.shiftStart);
-                    params.set('shiftEnd', currentUserData.shiftEnd);
-                }
-                const leaveRequestUrl = `${baseUrl}?${params.toString()}`;
-                
-                // 在新分頁中開啟
-                window.open(leaveRequestUrl, '_blank');
-            });
-
-            // 【⭐️ 核心新增：假勤審核儀表板連結 ⭐️】
             document.getElementById('approval-dashboard-link').addEventListener('click', (e) => {
                 e.preventDefault();
                 if (!userProfile || !userProfile.userId) {
@@ -389,56 +692,64 @@
                 window.open(`${baseUrl}?${params.toString()}`, '_blank');
             });
 
-            // 立即處理回報按鈕
-            document.getElementById('process-queue-btn').addEventListener('click', async () => {
-                const btn = document.getElementById('process-queue-btn');
-                const statusEl = document.getElementById('process-status');
-
-                if (!confirm('確定要立即處理所有待辦的施工回報嗎？')) {
+            document.getElementById('open-leave-request-link').addEventListener('click', (e) => {
+                e.preventDefault();
+                if (!userProfile || !userProfile.userId) {
+                    alert('無法取得您的使用者資訊，請重新載入頁面。');
                     return;
                 }
+                const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+                const baseUrl = isLocal 
+                    ? 'http://127.0.0.1:5500/leave_request.html' 
+                    : 'https://info.tanxin.space/leave_request.html';
 
-                btn.disabled = true;
-                btn.textContent = '處理中...';
-                statusEl.textContent = '正在向後端發送指令...';
-                statusEl.className = 'text-sm text-blue-600 mt-3 min-h-[20px]';
+                const currentUserData = allEmployees.find(emp => emp.userId === userProfile.userId);
+                const params = new URLSearchParams({
+                    uid: userProfile.userId,
+                    name: userProfile.displayName
+                });
+                if (currentUserData && currentUserData.shiftStart && currentUserData.shiftEnd) {
+                    params.set('shiftStart', currentUserData.shiftStart);
+                    params.set('shiftEnd', currentUserData.shiftEnd);
+                }
+                window.open(`${baseUrl}?${params.toString()}`, '_blank');
+            });
 
-                try {
-                    const response = await fetch(GAS_WEB_APP_URL, {
-                        method: 'POST',
-                        cache: 'no-cache',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({
-                            action: 'process_queue',
-                            triggerUser: userProfile.displayName
-                        })
-                    });
+            document.getElementById('notification-form').addEventListener('submit', handleSendNotification);
 
-                    // 由於後端是 302 重導向，我們無法直接讀取 response.json()
-                    // 因此，只要 fetch 沒有拋出錯誤，我們就假設指令已成功發送
-                    statusEl.textContent = '指令已成功發送！後端正在背景處理中。';
-                    statusEl.className = 'text-sm text-green-600 mt-3 min-h-[20px]';
-
-                } catch (error) {
-                    // 處理 fetch 本身的錯誤 (例如網路問題)
-                    console.error('Fetch error:', error);
-                    statusEl.textContent = `指令發送失敗: ${error.message}`;
-                    statusEl.className = 'text-sm text-red-600 mt-3 min-h-[20px]';
-                } finally {
-                    setTimeout(() => {
-                        btn.disabled = false;
-                        btn.textContent = '立即處理回報';
-                    }, 3000);
+            // 【v70.0 新增】使用事件代理處理專案卡片上的按鈕點擊
+            document.getElementById('project-board-grid').addEventListener('click', (e) => {
+                const button = e.target.closest('button[data-action="open-console"]');
+                if (button) {
+                    const projectId = button.dataset.projectId;
+                    openProjectConsole(projectId);
                 }
             });
 
-            // 【v50.0 新增】任務交辦中心事件
-            document.getElementById('notification-recipients').addEventListener('change', handleRecipientChange);
-            document.getElementById('recipient-pills').addEventListener('click', handlePillRemove);
-            document.getElementById('notification-form').addEventListener('submit', handleSendNotification);
+            setupMainTabs();
         }
 
-        // 【v31.0 新增】提供給子視窗呼叫的函式，用以更新待審核標籤
+        // 【v70.0 新增】開啟專案主控台的共用函式
+        function openProjectConsole(projectId) {
+            if (!projectId || !/^\d+$/.test(projectId)) {
+                alert('請輸入純數字的案號！');
+                return;
+            }
+            if (!userProfile || !userProfile.userId) {
+                alert('無法取得您的使用者資訊，請重新載入頁面。');
+                return;
+            }
+
+            const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+            let targetUrl;
+            if (isLocal) {
+                targetUrl = `http://127.0.0.1:5500/managementconsole.html?id=${projectId}&uid=${userProfile.userId}`;
+            } else {
+                targetUrl = `https://liff.line.me/${PROJECT_CONSOLE_LIFF_ID}?id=${projectId}&uid=${userProfile.userId}`;
+            }
+            window.open(targetUrl, '_blank');
+        }
+
         window.updateApprovalBadge = (count) => {
             const badge = document.getElementById('approval-badge');
             if (!badge) return;
