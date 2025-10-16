@@ -350,10 +350,6 @@
             const isManager = currentUser.permission >= 4;
             console.log(`權限等級: ${currentUser.permission} (${isManager ? '管理者' : '一般使用者'})`);
             employeeSelect.disabled = !isManager;
-            if (isInitialLoad) {
-                employeeSelect.value = isManager ? '' : currentUser.userId;
-                employeeSelect.dataset.initialized = 'true'; // 標記為已初始化
-            }
         } catch (error) {
             console.error("載入員工列表失敗:", error);
             showGlobalNotification("無法載入員工列表，請檢查後端連線。", 8000, 'error');
@@ -363,7 +359,6 @@
     // [v12.0 新增] 將處理員工資料的邏輯獨立出來，方便快取和新資料共用
     async function processEmployeesData() {
             await fetchEmployees(); // [核心改造] 確保在處理前，員工資料已載入
-            const currentSelectedUserId = employeeSelect.value;
 
             // [核心改造] 建立一個可供排班的員工列表，排除權限等級 5 的使用者
             const schedulableEmployees = allEmployees.filter(emp => emp.permission < 5); // 根據使用者要求，過濾掉權限等級為 5 的使用者
@@ -415,7 +410,16 @@
                 checkbox.addEventListener('change', handleGroupFilterChange);
             });
 
-            // NEW: Get unique shift types
+            // [v33.0 核心修正] 在處理完所有員工資料後，才設定下拉選單的初始值。
+            // 這是解決非管理者無法看到自己班表的關鍵。
+            const isInitialLoad = !employeeSelect.dataset.initialized;
+            if (isInitialLoad) {
+                const isManager = currentUser.permission >= 4;
+                employeeSelect.value = isManager ? '' : currentUser.userId;
+                employeeSelect.dataset.initialized = 'true';
+            }
+            const currentSelectedUserId = employeeSelect.value;
+
             const uniqueShiftTypes = new Set(schedulableEmployees.map(emp => emp.shiftType).filter(Boolean));
             shifttypeFilterContainer.innerHTML = '<span class="text-sm font-medium text-gray-700 mr-2">顯示班別:</span>';
 
