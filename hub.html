@@ -168,7 +168,7 @@
         let allEmployees = []; // 將員工資料提升至全域，以便共用
 
         // 【v71.0 核心新增】快取管理函式
-        function saveCache(key, data, days = 1) {
+        function saveCache(key, data, days = 7) {
             const cache = {
                 data: data,
                 expires: Date.now() + days * 24 * 60 * 60 * 1000
@@ -273,14 +273,12 @@
                 // 【v87.0 核心改造】回歸職責分離的架構
                 // 1. 向 CheckinSystem 請求員工與待辦事項
                 // 2. 向 project-console 請求通知
-                // 3. 向 project-console 請求專案看板資料
-                const attendancePromise = fetchAttendanceData();
-                const notificationsPromise = fetchNotifications();
+                // 3. [v89.0 改造] 向 project-console 請求整合後的專案與通知資料
+                const attendancePromise = fetchAttendanceData(); // 員工與待辦事項仍獨立
                 const projectsPromise = fetchHubProjectsData();
 
-                const [attendanceResult, notificationsResult, projectsResult] = await Promise.all([
+                const [attendanceResult, projectsResult] = await Promise.all([
                     attendancePromise,
-                    notificationsPromise,
                     projectsPromise
                 ]);
 
@@ -292,21 +290,21 @@
                     if (oldDataString !== newDataString) {
                         console.log('🔄 員工資料已在背景更新，重新整理權限與UI。');
                         allEmployees = attendanceResult.employees;
-                        saveCache('hub_employees', allEmployees, 1); // 快取1天
+                        saveCache('hub_employees', allEmployees); // 快取1天
                         updatePermissionUI(); // 使用最新資料重新執行權限判斷
                     }
                 }
 
-                // 【v76.0 新增】處理智慧通知
-                renderNotifications(notificationsResult.success ? notificationsResult.data : []);
-
                 // 處理待審核項目
                 updateApprovalBadge(attendanceResult.success && attendanceResult.pendingRequests ? attendanceResult.pendingRequests.length : 0);
 
-                // 【v72.0 新增】處理專案資料
+                // 【v89.0 改造】處理整合後的專案與通知資料
                 if (projectsResult.success) {
+                    // 處理智慧通知
+                    renderNotifications(projectsResult.data.notifications || []);
+                    // 處理專案資料
                     const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId);
-                    filterAndRenderProjects(projectsResult.data, currentUser);
+                    filterAndRenderProjects(projectsResult.data.projects || [], currentUser);
                 } else {
                     document.getElementById('project-board-placeholder').textContent = '載入專案資料失敗。';
                 }
@@ -333,20 +331,6 @@
             }
         }
         
-        // 【v76.0 新增】獲取智慧通知中心的通知
-        async function fetchNotifications() {
-            if (!userProfile) return { success: false, data: [] };
-            const url = new URL(GAS_WEB_APP_URL); // 使用專案主控台的後端
-            url.searchParams.append('page', 'get_notifications');
-            url.searchParams.append('userId', userProfile.userId);
-            // 【v78.0 新增】增加 CONSOLE 日誌
-            console.log(`[CONSOLE] 請求通知: ${url.toString()}`);
-            // 【v82.0 核心修正】改用 loadJsonp 函式，以正確處理後端回傳的 JSONP 格式
-            const data = await loadJsonp(url.toString());
-            console.log(`[CONSOLE] 收到通知:`, data);
-            return data;
-        }
-
         // 【v76.0 新增】渲染智慧通知
         function renderNotifications(notifications) {
             const container = document.getElementById('notification-list');
@@ -381,22 +365,28 @@
             });
         }
 
-        // 【v81.0 核心改造】改為呼叫新的整合 API，一次性取得所有專案的詳細資料
+        // 【v89.0 核心改造】呼叫整合後的 API，一次性取得專案看板與通知資料
         async function fetchHubProjectsData() {
             if (!userProfile) return { success: false, data: [] };
             try {
-                // 【v87.0 核心修正】請求來源改為 project-console 後端
+                // [v90.0 效能優化] 從全域變數 allEmployees 中找到當前使用者的完整 Profile。
+                // allEmployees 可能來自快取或剛才的 API 請求。
+                const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId) || 
+                                  { userId: userProfile.userId, userName: userProfile.displayName, permission: 1, group: '未分類' };
+
                 const url = new URL(GAS_WEB_APP_URL);
-                url.searchParams.append('page', 'attendance_api');
-                url.searchParams.append('action', 'get_hub_projects_data');
+                // [v89.0 修正] 根據後端 checkin_.js 的路由邏輯，page 應為 'attendance_api'
+                url.searchParams.append('page', 'get_hub_projects_data');
                 url.searchParams.append('userId', userProfile.userId);
+                // [v90.0 效能優化] 將完整的 userProfile 物件作為 JSON 字串傳遞，避免後端重複查詢。
+                url.searchParams.append('userProfile', JSON.stringify(currentUser));
                 
-                // 【v78.0 新增】增加 CONSOLE 日誌
                 console.log(`[CONSOLE] 請求專案看板整合資料: ${url.toString()}`);
-                // 【v87.0 核心修正】專案主控台後端使用 JSONP，需用 loadJsonp 處理
-                const result = await loadJsonp(url.toString());
+                // [v89.0 修正] 後端已改為回傳標準 JSON，前端直接使用 fetch 和 .json() 即可
+                const response = await fetch(url);
+                const result = await response.json();
                 console.log(`[CONSOLE] 收到專案看板整合資料:`, result);
-                return result; // 直接回傳 { success: true, data: [...] }
+                return result; // 直接回傳 { success: true, data: { projects: [], notifications: [] } }
             } catch (error) {
                 console.error('獲取專案看板整合資料失敗:', error);
                 return { success: false, message: error.message, data: [] };
@@ -409,7 +399,7 @@
             const text = await response.text();
             const firstParen = text.indexOf('(');
             const lastParen = text.lastIndexOf(')');
-            if (firstParen === -1 || lastParen === -1 || lastParen < firstParen) {
+            if (firstParen === -1 || lastParen === -1 || lastParen <= firstParen) {
                 try { 
                     const jsonData = JSON.parse(text);
                     console.log('[CONSOLE] 解析為純 JSON:', jsonData);
@@ -427,11 +417,14 @@
             const permission = isLocalTest ? 5 : (currentUser ? currentUser.permission : 1);
             const userName = currentUser ? currentUser.userName : '本地測試員';
             let projectsToShow = [];
-            // 【v77.0 修正】將權限判斷從 === 2 改為 <= 2，確保權限為 1 的使用者也能看到自己負責的專案。
-            if (permission >= 4) { 
+            // [v89.2 核心修正] 根據使用者重申的權限規則進行調整，與後端邏輯保持一致。
+            if (permission >= 4) { // 權限 4, 5 (總監級) 可看全部
                 projectsToShow = allProjects; 
-            } else if (permission <= 2) { 
-                projectsToShow = allProjects.filter(p => (p.responsiblePerson || '').split(',').map(name => name.trim()).includes(userName));
+            } else if (permission === 3) { // 權限 3 (工務) 可看同分區的專案
+                const userGroup = currentUser ? currentUser.group : '';
+                projectsToShow = allProjects.filter(p => p['專案分區'] === userGroup);
+            } else { // 權限 2, 1 (設計師/助理) 只能看自己負責的專案
+                projectsToShow = allProjects.filter(p => (p['專案負責人'] || '').split(',').map(name => name.trim()).includes(userName));
             }
             renderProjectCards(projectsToShow);
         }
