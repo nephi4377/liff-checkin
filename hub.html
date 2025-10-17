@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,13 +8,45 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-        .card { transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
-        .card:hover { transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
-        .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        .card {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+
+        .spinner {
+            border-top-color: #3498db;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* 【⭐️ 核心新增：已逾時卡片的閃爍動畫 ⭐️】 */
+        .card-overdue {
+            animation: pulse-red 1.5s infinite;
+        }
+        @keyframes pulse-red {
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+            }
+        }
     </style>
 </head>
+
 <body class="bg-gray-100">
 
     <!-- 載入中畫面 -->
@@ -28,15 +61,17 @@
             <h1 class="text-3xl font-bold text-gray-800">添心設計 整合主控台</h1>
             <p id="welcome-message" class="text-gray-500 mt-2">歡迎，<span class="font-semibold">使用者</span>！</p>
         </header>
-        
+
         <!-- 【v72.0 核心改造】主分頁導覽 -->
         <div class="border-b border-gray-200 mb-6">
             <nav id="main-tab-nav" class="-mb-px flex gap-6" aria-label="Tabs">
-                <button type="button" data-tab="dashboard" class="main-tab active py-3 px-1 text-base font-medium">主控台</button> 
-                <button type="button" data-tab="project-board" class="main-tab py-3 px-1 text-base font-medium">專案看板</button>
+                <button type="button" data-tab="dashboard"
+                    class="main-tab active py-3 px-1 text-base font-medium">主控台</button>
+                <button type="button" data-tab="project-board"
+                    class="main-tab py-3 px-1 text-base font-medium">專案看板</button>
             </nav>
         </div>
- 
+
         <!-- 主控台分頁內容 -->
         <div id="dashboard-content" class="tab-content active">
             <!-- 【v72.0 新增】個人工作台 (智慧通知中心) -->
@@ -44,7 +79,8 @@
                 <div class="lg:col-span-5 bg-white p-6 rounded-lg shadow-md border border-gray-200">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl font-bold text-gray-700">智慧通知中心</h2>
-                        <button id="clear-all-notifications-btn" class="text-sm text-blue-600 hover:underline">全部清除</button>
+                        <button id="clear-all-notifications-btn"
+                            class="text-sm text-blue-600 hover:underline">全部清除</button>
                     </div>
                     <div id="notification-list" class="space-y-3 max-h-96 overflow-y-auto pr-2">
                         <p id="notification-placeholder" class="text-center text-gray-500 py-8">正在載入通知...</p>
@@ -53,63 +89,75 @@
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-            <!-- 專案主控台 -->
-            <div class="col-span-1 md:col-span-2 bg-white p-6 rounded-lg shadow-md border border-gray-200">
-                <h2 class="text-xl font-bold mb-4 text-blue-700">專案主控台</h2>
-                <div class="flex flex-col sm:flex-row gap-2 items-center">
-                    <input type="text" id="project-id-input" inputmode="numeric" pattern="[0-9]*" class="flex-grow w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="請輸入案號 (例如: 715)">
-                    <button id="open-project-console-btn" class="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700">開啟</button>
+                <!-- 專案主控台 -->
+                <div class="col-span-1 md:col-span-2 bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                    <h2 class="text-xl font-bold mb-4 text-blue-700">專案主控台</h2>
+                    <div class="flex flex-col sm:flex-row gap-2 items-center">
+                        <input type="text" id="project-id-input" inputmode="numeric" pattern="[0-9]*"
+                            class="flex-grow w-full px-3 py-2 border border-gray-300 rounded-md"
+                            placeholder="請輸入案號 (例如: 715)">
+                        <button id="open-project-console-btn"
+                            class="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700">開啟</button>
+                    </div>
                 </div>
-            </div>
 
-            <!-- 靜態連結 -->
-            <a href="https://info.tanxin.space/onboardingflow.html" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
-                <h2 class="text-xl font-bold mb-2 text-green-700">客戶接洽流程</h2>
-                <p class="text-gray-600">查看標準化的互動式客戶溝通劇本。</p>
-            </a>
-            
-            <a href="https://info.tanxin.space/FAQ.html" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
-                <h2 class="text-xl font-bold mb-2 text-green-700">新客戶常見問答 (FAQ)</h2>
-                <p class="text-gray-600">快速查詢與回覆客戶的常見問題。</p>
-            </a>
+                <!-- 靜態連結 -->
+                <a href="https://info.tanxin.space/onboardingflow.html" target="_blank"
+                    class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                    <h2 class="text-xl font-bold mb-2 text-green-700">客戶接洽流程</h2>
+                    <p class="text-gray-600">查看標準化的互動式客戶溝通劇本。</p>
+                </a>
 
-            <!-- [核心新增] 出勤管理主控台 (預設隱藏) -->
-            <a id="attendance-console-link" href="https://info.tanxin.space/attendance_report.html" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block hidden">
-                <h2 class="text-xl font-bold mb-2 text-green-700">出勤管理主控台</h2>
-                <p class="text-gray-600">查詢所有員工的出勤、遲到、早退與缺勤紀錄。</p>
-            </a>
+                <a href="https://info.tanxin.space/FAQ.html" target="_blank"
+                    class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                    <h2 class="text-xl font-bold mb-2 text-green-700">新客戶常見問答 (FAQ)</h2>
+                    <p class="text-gray-600">快速查詢與回覆客戶的常見問題。</p>
+                </a>
 
-            <!-- 【⭐️ 核心新增：假勤審核儀表板 (預設隱藏) ⭐️】 -->
-            <a id="approval-dashboard-link" href="#" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block hidden">
-                <div class="flex justify-between items-center">
-                    <h2 class="text-xl font-bold mb-2 text-red-700">假勤審核儀表板</h2>
-                    <!-- 【v31.0 新增】待審核計數標籤 -->
-                    <span id="approval-badge" class="hidden h-6 w-6 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">0</span>
-                </div>
-                <p class="text-gray-600">集中審核所有員工的請假與加班申請。</p>
-            </a>
+                <!-- [核心新增] 出勤管理主控台 (預設隱藏) -->
+                <a id="attendance-console-link" href="https://info.tanxin.space/attendance_report.html" target="_blank"
+                    class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block hidden">
+                    <h2 class="text-xl font-bold mb-2 text-green-700">出勤管理主控台</h2>
+                    <p class="text-gray-600">查詢所有員工的出勤、遲到、早退與缺勤紀錄。</p>
+                </a>
 
-            <a href="https://liff.line.me/2007974938-jVxn6y37" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
-                <h2 class="text-xl font-bold mb-2 text-purple-700">員工打卡</h2>
-                <p class="text-gray-600">開啟 LIFF 頁面進行每日出勤打卡。</p>
-            </a>
+                <!-- 【⭐️ 核心新增：假勤審核儀表板 (預設隱藏) ⭐️】 -->
+                <a id="approval-dashboard-link" href="#"
+                    class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block hidden">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-xl font-bold mb-2 text-red-700">假勤審核儀表板</h2>
+                        <!-- 【v31.0 新增】待審核計數標籤 -->
+                        <span id="approval-badge"
+                            class="hidden h-6 w-6 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">0</span>
+                    </div>
+                    <p class="text-gray-600">集中審核所有員工的請假與加班申請。</p>
+                </a>
 
-            <a href="https://liff.line.me/2007974938-gOrjlzna" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
-                <h2 class="text-xl font-bold mb-2 text-purple-700">施工回報</h2>
-                <p class="text-gray-600">開啟 LIFF 頁面上傳每日施工進度與照片。</p>
-            </a>
-            
-            <!-- 【⭐️ 核心改造：線上假勤申請，改為由 Hub 傳遞認證資訊 ⭐️】 -->
-            <a id="open-leave-request-link" href="#" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
-                <h2 class="text-xl font-bold mb-2 text-purple-700">線上假勤申請</h2>
-                <p class="text-gray-600">申請特休、病假、事假或回報加班。</p>
-            </a>
+                <a href="https://liff.line.me/2007974938-jVxn6y37" target="_blank"
+                    class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                    <h2 class="text-xl font-bold mb-2 text-purple-700">員工打卡</h2>
+                    <p class="text-gray-600">開啟 LIFF 頁面進行每日出勤打卡。</p>
+                </a>
 
-            <!-- [架構改造] 員工排班系統，改為由 Hub 傳遞認證資訊 -->
-            <a id="open-shift-schedule-link" href="#" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
-                <h2 class="text-xl font-bold mb-2 text-purple-700">員工排班系統</h2>
-                <p class="text-gray-600">設定排班制員工的休假日期。</p>
-            </a>
+                <a href="https://liff.line.me/2007974938-gOrjlzna" target="_blank"
+                    class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                    <h2 class="text-xl font-bold mb-2 text-purple-700">施工回報</h2>
+                    <p class="text-gray-600">開啟 LIFF 頁面上傳每日施工進度與照片。</p>
+                </a>
+
+                <!-- 【⭐️ 核心改造：線上假勤申請，改為由 Hub 傳遞認證資訊 ⭐️】 -->
+                <a id="open-leave-request-link" href="#"
+                    class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                    <h2 class="text-xl font-bold mb-2 text-purple-700">線上假勤申請</h2>
+                    <p class="text-gray-600">申請特休、病假、事假或回報加班。</p>
+                </a>
+
+                <!-- [架構改造] 員工排班系統，改為由 Hub 傳遞認證資訊 -->
+                <a id="open-shift-schedule-link" href="#"
+                    class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                    <h2 class="text-xl font-bold mb-2 text-purple-700">員工排班系統</h2>
+                    <p class="text-gray-600">設定排班制員工的休假日期。</p>
+                </a>
 
             </div>
 
@@ -118,15 +166,43 @@
                 <h2 class="text-xl font-bold text-gray-700 mb-4">任務交辦中心</h2>
                 <form id="notification-form" class="space-y-4">
                     <div>
-                        <button type="button" id="recipient-toggle-btn" class="w-full text-left p-2 border rounded-md bg-gray-50 hover:bg-gray-100 flex justify-between items-center"><span id="recipient-summary" class="text-sm text-gray-600">選擇收件人</span><svg id="recipient-arrow" class="w-5 h-5 text-gray-500 transition-transform" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg></button>
-                        <div id="recipient-collapsible" class="collapsible-content mt-2"><div id="recipient-list" class="border rounded-md max-h-40 overflow-y-auto p-2 space-y-1"></div></div>
-                        <div id="send-to-all-wrapper" class="mt-2 hidden"><label class="flex items-center"><input type="checkbox" id="send-to-all-checkbox" class="h-4 w-4 rounded border-gray-300"><span class="ml-2 text-sm text-red-600 font-semibold">發送給所有員工</span></label></div>
+                        <button type="button" id="recipient-toggle-btn"
+                            class="w-full text-left p-2 border rounded-md bg-gray-50 hover:bg-gray-100 flex justify-between items-center"><span
+                                id="recipient-summary" class="text-sm text-gray-600">選擇收件人</span><svg
+                                id="recipient-arrow" class="w-5 h-5 text-gray-500 transition-transform"
+                                xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd"
+                                    d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                                    clip-rule="evenodd" />
+                            </svg></button>
+                        <div id="recipient-collapsible" class="collapsible-content mt-2">
+                            <div id="recipient-list" class="border rounded-md max-h-40 overflow-y-auto p-2 space-y-1">
+                            </div>
+                        </div>
+                        <div id="send-to-all-wrapper" class="mt-2 hidden"><label class="flex items-center"><input
+                                    type="checkbox" id="send-to-all-checkbox"
+                                    class="h-4 w-4 rounded border-gray-300"><span
+                                    class="ml-2 text-sm text-red-600 font-semibold">發送給所有員工</span></label></div>
                     </div>
-                    <div><label for="notification-content" class="block text-sm font-medium text-gray-700">交辦內容<span class="text-red-500">*</span></label><textarea id="notification-content" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" required></textarea></div>
-                    <div><label for="related-project-id" class="block text-sm font-medium text-gray-700">相關案號 (選填)</label><input type="text" id="related-project-id" inputmode="numeric" pattern="[0-9]*" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" placeholder="例如: 715"></div>
+                    <div><label for="notification-content" class="block text-sm font-medium text-gray-700">交辦內容<span
+                                class="text-red-500">*</span></label><textarea id="notification-content" rows="3"
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" required></textarea></div>
+                    <div><label for="related-project-id" class="block text-sm font-medium text-gray-700">相關案號
+                            (選填)</label><input type="text" id="related-project-id" inputmode="numeric" pattern="[0-9]*"
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" placeholder="例如: 715"></div>
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                        <div><label class="block text-sm font-medium text-gray-700">要求動作</label><div id="action-type-group" class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2"><label><input type="radio" name="actionType" value="None" checked> 無</label><label><input type="radio" name="actionType" value="ReplyText"> 文字回覆</label><label class="flex items-center gap-2"><input type="radio" name="actionType" value="ConfirmCompletion"> 完成回報 (時限: <input type="date" id="completion-deadline-date" class="text-sm p-1 border rounded-md" disabled> <input type="time" id="completion-deadline-time" class="text-sm p-1 border rounded-md" disabled>)</label></div></div>
-                        <button type="submit" id="notification-submit-btn" class="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-4 rounded-md">發送任務</button>
+                        <div><label class="block text-sm font-medium text-gray-700">要求動作</label>
+                            <div id="action-type-group" class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                                <label><input type="radio" name="actionType" value="None" checked>
+                                    無</label><label><input type="radio" name="actionType" value="ReplyText">
+                                    文字回覆</label><label class="flex items-center gap-2"><input type="radio"
+                                        name="actionType" value="ConfirmCompletion"> 完成回報 (時限: <input type="date"
+                                        id="completion-deadline-date" class="text-sm p-1 border rounded-md" disabled>
+                                    <input type="time" id="completion-deadline-time"
+                                        class="text-sm p-1 border rounded-md" disabled>)</label></div>
+                        </div>
+                        <button type="submit" id="notification-submit-btn"
+                            class="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-4 rounded-md">發送任務</button>
                     </div>
                     <div id="notification-status" class="text-sm text-center min-h-[20px]"></div>
                 </form>
@@ -166,6 +242,7 @@
 
         let userProfile = null;
         let allEmployees = []; // 將員工資料提升至全域，以便共用
+        let allProjects = []; // 【v93.0 新增】將專案資料提升至全域，以便快取與樂觀更新
 
         // 【v71.0 核心新增】快取管理函式
         function saveCache(key, data, days = 7) {
@@ -208,6 +285,12 @@
                     allEmployees = cachedEmployees;
                     console.log('⚡️ 本地模式從快取載入員工資料。');
                 }
+                // 【v93.0 新增】本地模式也採用專案快取
+                const cachedProjects = loadCache('hub_projects');
+                if (cachedProjects) {
+                    allProjects = cachedProjects;
+                    console.log('⚡️ 本地模式從快取載入專案資料。');
+                }
                 showMainContent();
                 // 在背景獲取最新資料
                 fetchInitialData();
@@ -229,6 +312,12 @@
                     allEmployees = cachedEmployees;
                     console.log('✅ 從快取載入員工資料，執行樂觀更新。');
                 }
+                // 【v93.0 新增】從快取載入專案資料
+                const cachedProjects = loadCache('hub_projects');
+                if (cachedProjects) {
+                    allProjects = cachedProjects;
+                    console.log('✅ 從快取載入專案資料，執行樂觀更新。');
+                }
                 showMainContent();
 
                 // 2. 在背景非同步獲取最新資料
@@ -246,6 +335,11 @@
             document.getElementById('welcome-message').querySelector('span').textContent = userProfile.displayName;
             // 使用現有 (可能來自快取) 的員工資料，先更新一次權限相關的UI
             updatePermissionUI();
+            // 【v93.0 新增】使用現有 (可能來自快取) 的專案資料，先渲染一次專案看板
+            if (allProjects.length > 0) {
+                const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId);
+                filterAndRenderProjects(allProjects, currentUser);
+            }
             initializeEventListeners();
         }
 
@@ -300,11 +394,20 @@
 
                 // 【v89.0 改造】處理整合後的專案與通知資料
                 if (projectsResult.success) {
+                    const newProjects = projectsResult.data.projects || [];
+                    const oldProjectsString = JSON.stringify(allProjects);
+                    const newProjectsString = JSON.stringify(newProjects);
+
+                    if (oldProjectsString !== newProjectsString) {
+                        console.log('🔄 專案資料已在背景更新，重新渲染看板。');
+                        allProjects = newProjects;
+                        saveCache('hub_projects', allProjects);
+                        const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId);
+                        filterAndRenderProjects(allProjects, currentUser);
+                    }
+
                     // 處理智慧通知
                     renderNotifications(projectsResult.data.notifications || []);
-                    // 處理專案資料
-                    const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId);
-                    filterAndRenderProjects(projectsResult.data.projects || [], currentUser);
                 } else {
                     document.getElementById('project-board-placeholder').textContent = '載入專案資料失敗。';
                 }
@@ -313,7 +416,7 @@
                 console.warn('載入初始資料時發生錯誤:', error);
             }
         }
-        
+
         // 【v87.0 新增】向 CheckinSystem 請求資料
         async function fetchAttendanceData() {
             if (!userProfile) return { success: false, message: '無使用者 Profile' };
@@ -330,7 +433,7 @@
                 return { success: false, message: error.message };
             }
         }
-        
+
         // 【v76.0 新增】渲染智慧通知
         function renderNotifications(notifications) {
             const container = document.getElementById('notification-list');
@@ -343,6 +446,7 @@
                 return;
             }
 
+            // [v109.0 改造] 增加 Alert 類型以顯示逾時警告
             const typeStyles = {
                 // 【v76.1 核心修正】將 key 改為與後端回傳的 Type 值一致 (首字母大寫)
                 'Task': { bg: 'bg-yellow-50', border: 'border-yellow-500', text: 'text-yellow-800', subtext: 'text-yellow-700' },
@@ -352,17 +456,62 @@
             };
 
             notifications.forEach(item => {
-                // 【v76.1 核心修正】將讀取的屬性改為與後端一致的大小寫 (item.Type, item.Title, item.Content)
                 const styles = typeStyles[item.Type] || typeStyles.default;
                 const card = document.createElement('div');
-                // 【v77.0 修正】補上遺失的 border-l-4 class，讓左側邊框能正確顯示
-                card.className = `notification-card relative p-3 rounded-md ${styles.bg} border-l-4 ${styles.border}`;
+                card.dataset.notificationId = item.NotificationID;
+                card.dataset.actionType = item.ActionType || 'None';
+                card.className = `notification-card relative p-4 rounded-md flex flex-col gap-2 ${styles.bg} border-l-4 ${styles.border}`;
+
+                let actionHtml = '';
+                const now = new Date();
+                const deadline = item.ActionDeadline ? new Date(item.ActionDeadline) : null;
+                const isOverdue = deadline && now > deadline;
+                
+                // 【⭐️ 核心新增：格式化時間戳 ⭐️】
+                const timestamp = item.Timestamp ? new Date(item.Timestamp) : null;
+                const timeAgo = timestamp ? formatTimeAgo(timestamp) : '';
+
+                // [v109.0 核心改造] 根據 ActionType 產生不同的互動介面
+                if (item.ActionType === 'ReplyText') {
+                    // 【⭐️ 核心新增：如果文字回覆有時限且已逾時，也套用閃爍效果 ⭐️】
+                    if (isOverdue) {
+                        card.classList.add('card-overdue');
+                    }
+                    actionHtml = `
+                        <div class="mt-2 flex gap-2">
+                            <input type="text" class="flex-grow border-gray-300 rounded-md shadow-sm text-sm" placeholder="輸入回覆內容...">
+                            <button data-action="reply-text" class="bg-blue-500 text-white text-sm font-semibold px-3 py-1 rounded-md hover:bg-blue-600">回覆</button>
+                        </div>`;
+                } else if (item.ActionType === 'ConfirmCompletion') {
+                    const deadlineText = deadline ? `時限: ${deadline.toLocaleString('sv').slice(0, 16)}` : '';
+                    // 【⭐️ 核心新增：如果任務已逾時，為卡片加上閃爍效果 ⭐️】
+                    if (isOverdue) {
+                        card.classList.add('card-overdue');
+                    }
+                    actionHtml = `
+                        <div class="mt-2 flex justify-between items-center">
+                            <span class="text-xs ${isOverdue ? 'text-red-600 font-bold' : 'text-gray-500'}">${isOverdue ? '已逾時！' : deadlineText}</span>
+                            <button data-action="confirm-completion" class="bg-green-500 text-white text-sm font-semibold px-3 py-1 rounded-md hover:bg-green-600">標示為完成</button>
+                        </div>`;
+                }
+
                 card.innerHTML = `
-                    <h4 class="font-semibold ${styles.text}">${item.Title || '系統通知'}</h4>
-                    <p class="text-sm ${styles.subtext}">${item.Content || ''}</p>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h4 class="font-semibold ${styles.text}">${item.Title || '系統通知'}</h4>
+                                <span class="text-xs text-gray-400">${timeAgo}</span>
+                            </div>
+                            <p class="text-sm ${styles.subtext} mt-1">${item.Content || ''}</p>
+                        </div>
+                        <button data-action="delete-notification" title="清除此通知" class="text-gray-400 hover:text-red-500 p-1 rounded-full flex-shrink-0 -mt-1 -mr-1">&times;</button>
+                    </div>
+                    ${actionHtml}
                 `;
                 container.appendChild(card);
             });
+            // 【⭐️ 核心新增：時間戳格式化輔助函式 ⭐️】
+            function formatTimeAgo(date) { const seconds = Math.floor((new Date() - date) / 1000); let interval = seconds / 31536000; if (interval > 1) return Math.floor(interval) + " 年前"; interval = seconds / 2592000; if (interval > 1) return Math.floor(interval) + " 個月前"; interval = seconds / 86400; if (interval > 1) return Math.floor(interval) + " 天前"; interval = seconds / 3600; if (interval > 1) return Math.floor(interval) + " 小時前"; interval = seconds / 60; if (interval > 1) return Math.floor(interval) + " 分鐘前"; return "剛剛"; }
         }
 
         // 【v89.0 核心改造】呼叫整合後的 API，一次性取得專案看板與通知資料
@@ -371,8 +520,8 @@
             try {
                 // [v90.0 效能優化] 從全域變數 allEmployees 中找到當前使用者的完整 Profile。
                 // allEmployees 可能來自快取或剛才的 API 請求。
-                const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId) || 
-                                  { userId: userProfile.userId, userName: userProfile.displayName, permission: 1, group: '未分類' };
+                const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId) ||
+                    { userId: userProfile.userId, userName: userProfile.displayName, permission: 1, group: '未分類' };
 
                 const url = new URL(GAS_WEB_APP_URL);
                 // [v89.0 修正] 根據後端 checkin_.js 的路由邏輯，page 應為 'attendance_api'
@@ -380,7 +529,7 @@
                 url.searchParams.append('userId', userProfile.userId);
                 // [v90.0 效能優化] 將完整的 userProfile 物件作為 JSON 字串傳遞，避免後端重複查詢。
                 url.searchParams.append('userProfile', JSON.stringify(currentUser));
-                
+
                 console.log(`[CONSOLE] 請求專案看板整合資料: ${url.toString()}`);
                 // [v89.0 修正] 後端已改為回傳標準 JSON，前端直接使用 fetch 和 .json() 即可
                 const response = await fetch(url);
@@ -400,7 +549,7 @@
             const firstParen = text.indexOf('(');
             const lastParen = text.lastIndexOf(')');
             if (firstParen === -1 || lastParen === -1 || lastParen <= firstParen) {
-                try { 
+                try {
                     const jsonData = JSON.parse(text);
                     console.log('[CONSOLE] 解析為純 JSON:', jsonData);
                     return jsonData;
@@ -419,7 +568,7 @@
             let projectsToShow = [];
             // [v89.2 核心修正] 根據使用者重申的權限規則進行調整，與後端邏輯保持一致。
             if (permission >= 4) { // 權限 4, 5 (總監級) 可看全部
-                projectsToShow = allProjects; 
+                projectsToShow = allProjects;
             } else if (permission === 3) { // 權限 3 (工務) 可看同分區的專案
                 const userGroup = currentUser ? currentUser.group : '';
                 projectsToShow = allProjects.filter(p => p['專案分區'] === userGroup);
@@ -444,13 +593,15 @@
                 const card = document.createElement('div');
                 card.className = 'bg-white p-4 rounded-lg shadow-md border border-gray-200 flex flex-col gap-4';
                 // 【v72.1 修正】確保 '預計開始日' 存在才進行排序，避免無效日期導致的錯誤
-                const allTasks = (p.tasks || []).sort((a, b) => 
+                const allTasks = (p.tasks || []).sort((a, b) =>
                     (a['預計開始日'] && b['預計開始日']) ? new Date(a['預計開始日']) - new Date(b['預計開始日']) : 0);
                 const completedTasks = allTasks.filter(task => task['狀態'] === '已完成');
                 const uncompletedTasks = allTasks.filter(task => task['狀態'] !== '已完成');
+                // [v92.0 修正] 在工程進度中加入日期，並確保日期格式正確
                 const scheduleHtml = [...completedTasks.slice(-1), ...uncompletedTasks.slice(0, 2)].map(task => {
                     const isDone = task['狀態'] === '已完成';
-                    return `<li><span class="font-medium ${isDone ? 'text-gray-500' : 'text-red-600'}">${isDone ? '[已完成]' : '[未完成]'}</span> ${task['任務項目'] || '未命名任務'}</li>`;
+                    const startDate = task['預計開始日'] ? new Date(task['預計開始日']).toLocaleDateString('sv').substring(5) : '??-??';
+                    return `<li><span class="text-gray-500">${startDate}</span> <span class="font-medium ${isDone ? 'text-gray-500' : 'text-red-600'}">${isDone ? '[已完成]' : '[未完成]'}</span> ${task['任務項目'] || '未命名任務'}</li>`;
                 }).join('') || '<li>無排程資料</li>';
                 const recentLogs = (p.dailyLogs || []).slice(0, 3);
                 const logsHtml = recentLogs.length > 0 ? recentLogs.map(log => {
@@ -463,8 +614,9 @@
                 }).join('') : '<li>無施工回報</li>';
                 card.innerHTML = `
                     <div class="flex justify-between items-center">
-                        {/* 【v72.1 修正】如果 p.name 為空，則只顯示案號，避免多餘的空格 */}
-                        <h3 class="font-bold text-lg text-gray-800">#${p.id}${p.name ? ' ' + p.name : ''}</h3>
+                        <!-- [v92.0 修正] 如果 p.name 存在，則顯示 p.name；否則，顯示案號。 -->
+                        <!-- [v96.0 修正] 根據使用者要求，恢復案號與案名的組合顯示 -->
+                        <h3 class="font-bold text-lg text-gray-800">${p.name || ''}</h3>
                         <div><button data-action="open-console" data-project-id="${p.id}" class="bg-blue-100 text-blue-700 text-xs font-bold py-1 px-3 rounded-full hover:bg-blue-200">開啟主控台</button></div>
                     </div>
                     <div><h4 class="font-semibold text-gray-600 text-sm mb-2">工程進度</h4><ul class="text-sm space-y-1 text-gray-700">${scheduleHtml}</ul></div>
@@ -479,7 +631,8 @@
             const recipientList = document.getElementById('recipient-list');
             if (!recipientList) return;
             recipientList.innerHTML = '';
-            allEmployees.filter(emp => emp.permission < 5).forEach(emp => {
+            // [v97.0 修正] 根據使用者要求，收件人列表改為包含所有權限 >= 2 的員工
+            allEmployees.filter(emp => emp.permission >= 2).forEach(emp => {
                 const id = `recipient-${emp.userId}`;
                 recipientList.insertAdjacentHTML('beforeend', `<label for="${id}" class="flex items-center p-1 rounded hover:bg-gray-100 cursor-pointer"><input type="checkbox" id="${id}" name="recipients" value="${emp.userId}" class="h-4 w-4 rounded border-gray-300"><span class="ml-2 text-sm text-gray-800" data-name="${emp.userName}">${emp.userName}</span></label>`);
             });
@@ -498,8 +651,17 @@
             const deadlineDate = document.getElementById('completion-deadline-date').value;
             const deadlineTime = document.getElementById('completion-deadline-time').value;
             let deadline = (deadlineDate && deadlineTime) ? `${deadlineDate}T${deadlineTime}` : '';
+            // [v106.0 恢復] 根據使用者回饋，恢復此段關鍵邏輯。
+            // 如果是「完成回報」類型且使用者未手動設定時限，則系統自動設定為一天後。
+            if (document.querySelector('input[name="actionType"]:checked').value === 'ConfirmCompletion' && !deadline) {
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                deadline = tomorrow.toISOString();
+            }
             const payload = { action: 'sendNotification', senderId: userProfile.userId, senderName: userProfile.displayName, recipients: sendToAll ? ['ALL'] : selectedRecipients, content: document.getElementById('notification-content').value, projectId: document.getElementById('related-project-id').value, actionType: document.querySelector('input[name="actionType"]:checked').value, deadline: deadline };
             try {
+                // [v98.0 核心修正] 任務交辦的請求應發送至 project-console 的後端 (GAS_WEB_APP_URL)，
+                // 而非 CheckinSystem 的後端 (ATTENDANCE_GAS_WEB_APP_URL)。
                 const response = await fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify(payload), headers: { 'Content-Type': 'text/plain' } });
                 const result = await response.json();
                 if (!result.success) throw new Error(result.message || '後端處理失敗');
@@ -516,8 +678,8 @@
             const summaryEl = document.getElementById('recipient-summary');
             if (document.getElementById('send-to-all-checkbox').checked) { summaryEl.textContent = '已選擇：所有員工'; return; }
             const selectedCheckboxes = Array.from(document.querySelectorAll('#recipient-list input[type="checkbox"]:checked'));
-            if (selectedCheckboxes.length === 0) { summaryEl.textContent = '選擇收件人'; } 
-            else if (selectedCheckboxes.length <= 2) { summaryEl.textContent = '已選擇：' + selectedCheckboxes.map(cb => cb.nextElementSibling.textContent).join('、'); } 
+            if (selectedCheckboxes.length === 0) { summaryEl.textContent = '選擇收件人'; }
+            else if (selectedCheckboxes.length <= 2) { summaryEl.textContent = '已選擇：' + selectedCheckboxes.map(cb => cb.nextElementSibling.textContent).join('、'); }
             else { summaryEl.textContent = `已選擇：${selectedCheckboxes.length} 位員工`; }
         }
 
@@ -551,12 +713,8 @@
                     alert('無法取得您的使用者資訊，請重新載入頁面。');
                     return;
                 }
-                // [核心改造] 根據當前環境，動態產生排班系統的 URL
-                const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-                const baseUrl = isLocal 
-                    ? 'http://127.0.0.1:5500/shift_schedule.html' 
-                    : 'https://info.tanxin.space/shift_schedule.html';
-                
+                // [v94.0 修正] 無論在哪種環境下，都一律開啟正式版的排班系統，以確保功能完整。
+                const baseUrl = 'https://info.tanxin.space/shift_schedule.html';
                 // 【v84.0 核心修正】補上遺失的班表時間參數，確保非管理者也能看到自己的班表
                 const currentUserData = allEmployees.find(emp => emp.userId === userProfile.userId);
                 const params = new URLSearchParams({
@@ -577,12 +735,8 @@
                     alert('無法取得您的使用者資訊，請重新載入頁面。');
                     return;
                 }
-                // 根據當前環境，動態產生假勤申請系統的 URL
-                const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-                const baseUrl = isLocal 
-                    ? 'http://127.0.0.1:5500/leave_request.html' 
-                    : 'https://info.tanxin.space/leave_request.html';
-
+                // [v94.0 修正] 無論在哪種環境下，都一律開啟正式版的假勤申請系統。
+                const baseUrl = 'https://info.tanxin.space/leave_request.html';
                 // 【⭐️ 核心改造：從已取得的員工資料中找出班表時間，並加入 URL 參數 ⭐️】
                 const currentUserData = allEmployees.find(emp => emp.userId === userProfile.userId);
                 const params = new URLSearchParams({
@@ -594,7 +748,7 @@
                     params.set('shiftEnd', currentUserData.shiftEnd);
                 }
                 const leaveRequestUrl = `${baseUrl}?${params.toString()}`;
-                
+
                 // 在新分頁中開啟
                 window.open(leaveRequestUrl, '_blank');
             });
@@ -606,11 +760,8 @@
                     alert('無法取得您的使用者資訊，請重新載入頁面。');
                     return;
                 }
-                const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-                const baseUrl = isLocal 
-                    ? 'http://127.0.0.1:5500/approval_dashboard.html' 
-                    : 'https://info.tanxin.space/approval_dashboard.html';
-
+                // [v94.0 修正] 無論在哪種環境下，都一律開啟正式版的審核儀表板。
+                const baseUrl = 'https://info.tanxin.space/approval_dashboard.html';
                 const params = new URLSearchParams({
                     uid: userProfile.userId,
                     name: userProfile.displayName
@@ -646,7 +797,7 @@
                 document.getElementById('recipient-toggle-btn').addEventListener('click', () => {
                     const collapsible = document.getElementById('recipient-collapsible');
                     const arrow = document.getElementById('recipient-arrow');
-                    if (collapsible.style.maxHeight) { collapsible.style.maxHeight = null; arrow.classList.remove('rotate-180'); } 
+                    if (collapsible.style.maxHeight) { collapsible.style.maxHeight = null; arrow.classList.remove('rotate-180'); }
                     else { collapsible.style.maxHeight = collapsible.scrollHeight + "px"; arrow.classList.add('rotate-180'); }
                 });
             }
@@ -656,6 +807,74 @@
                 const button = e.target.closest('button[data-action="open-console"]');
                 if (button) { openProjectConsole(button.dataset.projectId); }
             });
+
+            // [v103.0 改造] 實作通知中心的清除與刪除功能 (包含後端 API 呼叫)
+            document.getElementById('clear-all-notifications-btn').addEventListener('click', () => {
+                const container = document.getElementById('notification-list');
+                const placeholder = document.getElementById('notification-placeholder');
+                // 只選取 ActionType 為 None 的通知
+                const noneCards = container.querySelectorAll('.notification-card[data-action-type="None"]');
+                if (noneCards.length === 0) return;
+
+                const idsToMarkRead = Array.from(noneCards).map(card => card.dataset.notificationId).filter(Boolean);
+                
+                // 樂觀更新：立即移除畫面上的 'None' 類型卡片
+                noneCards.forEach(card => card.remove());
+
+                if (container.children.length === 0) {
+                    // [v108.0 核心修正] 增強防禦性程式碼，處理 placeholder 可能不存在的情況。
+                    let currentPlaceholder = document.getElementById('notification-placeholder');
+                    if (!currentPlaceholder) {
+                        currentPlaceholder = document.createElement('p');
+                        currentPlaceholder.id = 'notification-placeholder';
+                        currentPlaceholder.className = 'text-center text-gray-500 py-8';
+                        container.appendChild(currentPlaceholder);
+                    }
+                    currentPlaceholder.textContent = '目前沒有任何通知。';
+                }
+
+                if (idsToMarkRead.length > 0) {
+                    processNotificationAction({ subAction: 'mark_read', notificationIds: idsToMarkRead.join(',') });
+                }
+            });
+
+            document.getElementById('notification-list').addEventListener('click', (e) => {
+                const button = e.target.closest('button[data-action]');
+                if (button) {
+                    const action = button.dataset.action;
+                    const card = button.closest('.notification-card');
+                    if (!card) return;
+
+                    const notificationId = card.dataset.notificationId;
+                    const actionType = card.dataset.actionType;
+
+                    if (action === 'delete-notification') {
+                        card.style.transition = 'opacity 0.3s ease-out, transform 0.3s ease-out';
+                        card.style.opacity = '0';
+                        card.style.transform = 'translateX(20px)';
+                        setTimeout(() => card.remove(), 300);
+
+                        const subActionToTake = (actionType === 'ReplyText' || actionType === 'ConfirmCompletion') ? 'archive' : 'mark_read';
+                        processNotificationAction({ subAction: subActionToTake, notificationId: notificationId, userName: userProfile.displayName });
+
+                    } else if (action === 'reply-text') {
+                        const input = card.querySelector('input[type="text"]');
+                        const replyContent = input.value.trim();
+                        if (!replyContent) { alert('請輸入回覆內容。'); return; }
+                        button.disabled = true;
+                        button.textContent = '傳送中...';
+                        processNotificationAction({ subAction: 'reply', notificationId: notificationId, content: replyContent, userName: userProfile.displayName })
+                            .then(() => card.remove());
+
+                    } else if (action === 'confirm-completion') {
+                        button.disabled = true;
+                        button.textContent = '處理中...';
+                        processNotificationAction({ subAction: 'complete', notificationId: notificationId, userName: userProfile.displayName })
+                            .then(() => card.remove());
+                    }
+                }
+            });
+            // 主選單標籤切換
             setupMainTabs();
         }
 
@@ -671,21 +890,50 @@
             }
         };
 
+        // [v109.0 恢復] 根據使用者回饋，恢復遺失的 processNotificationAction 函式定義。
+        // 這是所有通知互動功能 (已讀、封存、回覆、完成) 的統一 API 呼叫函式。
+        async function processNotificationAction(payload) {
+            console.log(`[API] 準備執行通知動作:`, payload);
+            // 將 action 固定為 'process_notification_action'，並將具體操作放入 subAction
+            const apiPayload = {
+                action: 'process_notification_action',
+                ...payload
+            };
+            try {
+                const response = await fetch(GAS_WEB_APP_URL, { 
+                    method: 'POST', 
+                    body: JSON.stringify(apiPayload), 
+                    headers: { 'Content-Type': 'text/plain' } 
+                });
+                const result = await response.json();
+                if (!result || !result.success) throw new Error(result.message);
+                console.log(`[API] 後端成功處理動作:`, result.message);
+                
+                // 對於回覆或完成的動作，顯示成功提示
+                if (payload.subAction === 'reply' || payload.subAction === 'complete') {
+                    if (typeof showGlobalNotification === 'function') {
+                        showGlobalNotification(result.message || '操作成功！', 3000, 'success');
+                    }
+                }
+            } catch (error) {
+                console.error('[API] 處理通知動作失敗:', error);
+                if (typeof showGlobalNotification === 'function') {
+                    showGlobalNotification(`操作失敗: ${error.message}`, 5000, 'error');
+                }
+            }
+        }
+
         // 【v72.0 新增】開啟專案主控台的共用函式
         function openProjectConsole(projectId) {
             if (!projectId || !/^\d+$/.test(projectId)) { alert('請輸入純數字的案號！'); return; }
             if (!userProfile || !userProfile.userId) { alert('無法取得您的使用者資訊，請重新載入頁面。'); return; }
-            const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-            let targetUrl;
-            if (isLocal) {
-                targetUrl = `http://127.0.0.1:5500/managementconsole.html?id=${projectId}&uid=${userProfile.userId}`;
-            } else {
-                targetUrl = `https://liff.line.me/${PROJECT_CONSOLE_LIFF_ID}?id=${projectId}&uid=${userProfile.userId}`;
-            }
+            // [v94.0 修正] 無論在哪種環境下，都一律開啟正式版的專案主控台 LIFF 連結。
+            const targetUrl = `https://liff.line.me/${PROJECT_CONSOLE_LIFF_ID}?id=${projectId}&uid=${userProfile.userId}`;
             window.open(targetUrl, '_blank');
         }
 
         window.onload = main;
     </script>
 </body>
+
 </html>
