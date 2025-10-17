@@ -461,8 +461,8 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
     const cachedItem = localStorage.getItem(CACHE_KEY);
     if (cachedItem) { // 如果快取存在
       const { timestamp, data } = JSON.parse(cachedItem);
-      // [核心修正] 使用 if-else 結構，確保有效和無效的邏輯互斥
-      if ((Date.now() - timestamp < CACHE_DURATION_MS) && (data.ownerId === userId)) {
+      // [核心修正] 修正快取擁有者的判斷邏輯，應從外層的 data 物件讀取 ownerId
+      if ((Date.now() - timestamp < CACHE_DURATION_MS) && (data && data.ownerId === userId)) {
         // --- 情況一：快取有效 ---
         logToPage('⚡️ 偵測到有效快取，立即渲染畫面...');
 
@@ -512,7 +512,7 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
     state.currentUserName = freshData.userName || `使用者 (${userId.slice(-6)})`;
     logToPage(`✅ 操作者已設定: ${state.currentUserName}`);
 
-    // 由前端為新資料蓋上所有權戳章
+    // [核心修正] 應在儲存快取前，就為新資料蓋上所有權戳章
     freshData.ownerId = userId;
 
     if (!hasRenderedFromCache) {

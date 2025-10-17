@@ -46,14 +46,19 @@ export function displaySkeletonLoader() {
 export function displayError(err) {
     const msg = (err && err.message) ? err.message : '發生未知錯誤。';
     console.error('PAGE ERROR: ' + msg); // Log to console instead
-    const statusContainer = document.getElementById('main-content');
-    if (statusContainer) {
-        statusContainer.innerHTML =
-            `<div id="status-message" style="border:1px solid red;background:#ffebee;color:#c62828;padding:1rem;white-space:pre-wrap;margin:1rem;">
+    const statusContainer = document.getElementById('main-content'); // This might be null
+    const errorHtml = `<div id="status-message" style="border:1px solid red;background:#ffebee;color:#c62828;padding:1rem;white-space:pre-wrap;margin:1rem;">
             <strong>載入失敗！</strong>\n\n
             <strong>錯誤訊息：</strong>\n${msg}\n\n
             <strong>建議：</strong>請檢查 Apps Script 後端日誌與路由設定（project）。
             </div>`;
+
+    // 【您的要求】修正錯誤顯示邏輯，增加防禦性程式碼
+    if (statusContainer) {
+        statusContainer.innerHTML = errorHtml;
+    } else {
+        // 如果主容器不存在，直接將錯誤訊息寫入 body，確保使用者能看到
+        document.body.innerHTML = errorHtml;
     }
 }
 

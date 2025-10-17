@@ -245,8 +245,10 @@
         if (isLocalTest && !uid) {
             console.warn('⚡️ 本地測試模式啟用，使用預設使用者資訊。');
             // 您可以將此處的 uid 改為任何您在「員工資料」表中設定的管理者 ID，以便測試權限功能。
-            uid = 'Ud58333430513b7527106fa71d2e30151'; 
-            name = '本地測試員';
+            uid = 'U7ce84c78bdee4060babe9cc3c03d291b'; 
+            name = '周汶則 (本地測試)';
+            //uid = 'Ud58333430513b7527106fa71d2e30151'; 
+            //name = '本地測試員';
         }
 
         if (!uid || !name) {
@@ -337,18 +339,10 @@
             if (loggedInEmployee) {
                 currentUser.permission = loggedInEmployee.permission || 1;
             }
-            // [核心改造] 增強本地測試模式：只要是在本地環境，就強制給予最高權限
-            const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-            if (isLocalTest) {
-                currentUser.permission = 5;
-                // [v15.0 改造] 移除重複的 console.warn，避免每次換頁都顯示
-            }
 
             // [核心改造] 只有在頁面首次載入時，才根據權限設定預設的下拉選單選項。
             // 避免在切換月份時重置使用者的選擇。
-            const isInitialLoad = !employeeSelect.dataset.initialized;
             const isManager = currentUser.permission >= 4;
-            console.log(`權限等級: ${currentUser.permission} (${isManager ? '管理者' : '一般使用者'})`);
             employeeSelect.disabled = !isManager;
         } catch (error) {
             console.error("載入員工列表失敗:", error);
@@ -412,13 +406,18 @@
 
             // [v33.0 核心修正] 在處理完所有員工資料後，才設定下拉選單的初始值。
             // 這是解決非管理者無法看到自己班表的關鍵。
+            // 【您的要求】修正權限等級重複顯示，並調整預設選項
             const isInitialLoad = !employeeSelect.dataset.initialized;
+            let currentSelectedUserId = employeeSelect.value; // 先保存目前的值
+
             if (isInitialLoad) {
                 const isManager = currentUser.permission >= 4;
-                employeeSelect.value = isManager ? '' : currentUser.userId;
+                console.log(`權限等級: ${currentUser.permission} (${isManager ? '管理者' : '一般使用者'})`);
+                // 根據您的要求，無論是否為管理者，首次載入時都預設為 "檢視所有員工"
+                employeeSelect.value = '';
+                currentSelectedUserId = ''; // 同步更新 currentSelectedUserId
                 employeeSelect.dataset.initialized = 'true';
             }
-            const currentSelectedUserId = employeeSelect.value;
 
             const uniqueShiftTypes = new Set(schedulableEmployees.map(emp => emp.shiftType).filter(Boolean));
             shifttypeFilterContainer.innerHTML = '<span class="text-sm font-medium text-gray-700 mr-2">顯示班別:</span>';
@@ -1004,27 +1003,36 @@
         }
         if (displayedGroups.size === 0) { displayedGroups.add('台南店'); } // 預設值
     }
+    /**
+     * [v34.0 核心重構] 專門處理月份切換的函式，避免重新載入員工資料。
+     */
+    function handleMonthChange(direction) {
+        loadingSpinner.style.display = 'block';
+        calendarWrapper.style.display = 'none';
+        currentDate.setMonth(currentDate.getMonth() + direction);
+        updateMonthDisplay();
+
+        const cacheKey = getCacheKeyForDate(currentDate);
+        // 如果新月份的資料已存在於快取中，直接渲染
+        if (scheduleCache[cacheKey]) {
+            console.log(`從快取渲染 ${cacheKey} 的班表...`);
+            renderCalendar();
+        } else {
+            // 如果不存在，才向後端請求該月份的資料
+            console.log(`快取中無 ${cacheKey} 的資料，向後端請求...`);
+            fetchScheduleData(); // 此函式完成後會自動渲染日曆
+        }
+    }
 
     function updateMonthDisplay() {
         currentMonthDisplay.textContent = `${currentDate.getFullYear()}年 ${currentDate.getMonth() + 1}月`;
     }
 
     function bindEventListeners() {
-        prevMonthBtn.addEventListener('click', () => {
-            loadingSpinner.style.display = 'block'; // [v11.0 優化] 立即顯示載入中
-            calendarWrapper.style.display = 'none';
-            currentDate.setMonth(currentDate.getMonth() - 1);
-            // [v15.0 改造] 換頁時，重新執行完整初始化流程 (快取優先)
-            initialize();
-        });
+            // 【您的要求】將月份切換的邏輯獨立出來，避免重複載入員工資料
+        prevMonthBtn.addEventListener('click', () => handleMonthChange(-1));
+        nextMonthBtn.addEventListener('click', () => handleMonthChange(1));
 
-        nextMonthBtn.addEventListener('click', () => {
-            loadingSpinner.style.display = 'block'; // [v11.0 優化] 立即顯示載入中
-            calendarWrapper.style.display = 'none';
-            currentDate.setMonth(currentDate.getMonth() + 1);
-            // [v15.0 改造] 換頁時，重新執行完整初始化流程 (快取優先)
-            initialize();
-        });
 
         employeeSelect.addEventListener('change', () => {
             updateCalendarContent();
