@@ -394,8 +394,8 @@ async function initializeApp() {
   if (isLocalTest) {
     logToPage('⚡️ 本地測試模式啟用，將跳過 LIFF 認證。');
     const urlParams = new URLSearchParams(window.location.search);
-    const projectId = urlParams.get('id') || '999'; // 允許從 URL 傳入案號，否則預設為 999
-    const userId = urlParams.get('uid') || 'Ud58333430513b7527106fa71d2e30151'; // 預設為您的 UID
+    const projectId = urlParams.get('id') || '736'; // 允許從 URL 傳入案號，否則預設為 736
+    const userId = urlParams.get('uid') || 'U1f74b9d87247a240dd3ab160cd90b124'; // 預設為吳奕弦的 UID
     
     // 將測試用的 ID 存入全域狀態
     state.projectId = projectId;
