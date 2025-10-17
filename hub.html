@@ -101,6 +101,13 @@
                     </div>
                 </div>
 
+                <!-- 【您的要求】新增案場資料 -->
+                <a id="add-site-link" href="#"
+                    class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                    <h2 class="text-xl font-bold mb-2 text-blue-700">新增案場資料</h2>
+                    <p class="text-gray-600">建立一個新的專案，並填寫基本資訊。</p>
+                </a>
+
                 <!-- 靜態連結 -->
                 <a href="https://info.tanxin.space/onboardingflow.html" target="_blank"
                     class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
@@ -767,6 +774,14 @@
                     name: userProfile.displayName
                 });
                 window.open(`${baseUrl}?${params.toString()}`, '_blank');
+            });
+
+            // 【您的要求】新增案場資料連結
+            document.getElementById('add-site-link').addEventListener('click', (e) => {
+                e.preventDefault();
+                // 直接使用已定義的全域變數 ATTENDANCE_GAS_WEB_APP_URL
+                const targetUrl = `${ATTENDANCE_GAS_WEB_APP_URL}?page=add_site`;
+                window.open(targetUrl, '_blank');
             });
 
             // 【v72.0 新增】任務交辦中心相關事件
