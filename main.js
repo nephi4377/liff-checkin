@@ -438,8 +438,8 @@ async function initializeApp() {
   }
 
   console.log('[Init] 參數檢查通過，準備載入資料...');
-  logToPage(`目標專案 ID: ${projectId}`);
-  logToPage(`操作者 UID: ${userId}`);
+  console.log(`目標專案 ID: ${projectId}`);
+  console.loge(`操作者 UID: ${userId}`);
 
   // [v54.0 新增] 將資料載入與渲染邏輯封裝成獨立函式
   await loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL);

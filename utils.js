@@ -16,13 +16,26 @@ export function thumbLog(msg) {
   // logToPage(`[THUMB] ${msg}`); // Removed to break circular dependency
 }
 
-/** 將訊息輸出到頁面下方的除錯區塊 */
-export function logToPage(message) {
-  const el = document.getElementById('debug-log');
-  if (!el) return;
+/**
+ * [核心重構] 將訊息輸出到瀏覽器主控台，而非頁面上的 DOM 元素。
+ * @param {string} message - 要記錄的訊息。
+ * @param {'log'|'warn'|'error'} type - 訊息的類型，決定使用 console 的哪個方法。
+ */
+export function logToPage(message, type = 'log') {
   const t = new Date().toLocaleTimeString('zh-TW');
-  el.textContent += `[${t}] ${message}\n`;
-  el.scrollTop = el.scrollHeight;
+  const formattedMessage = `[${t}] ${message}`;
+
+  switch (type) {
+    case 'error':
+      console.error(formattedMessage);
+      break;
+    case 'warn':
+      console.warn(formattedMessage);
+      break;
+    default:
+      console.log(formattedMessage);
+      break;
+  }
 }
 
 /** 從各種 Google Drive 連結中提取檔案 ID */
