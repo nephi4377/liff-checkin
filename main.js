@@ -525,7 +525,7 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
       // 情況一：沒有快取，這是第一次載入。直接渲染畫面並設定快取。
       logToPage('✅ 首次載入資料，正在渲染畫面並建立快取...');
       handleDataResponse(freshData);
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData, ownerId: userId }));
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData }));
     } else {
       // 情況二：畫面已由快取渲染，在背景比對新舊資料。
       const cachedItem = localStorage.getItem(CACHE_KEY);
@@ -549,7 +549,7 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
           const logsContainer = document.getElementById('logs-container');
           optimisticCards.reverse().forEach(card => logsContainer.insertBefore(card, logsContainer.children[1]));
           // [核心修正] 更新快取時，同時儲存 ownerId 到外層
-          localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData, ownerId: userId })); // 更新快取
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData })); // 更新快取
         }
       }
     }
