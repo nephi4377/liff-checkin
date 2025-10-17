@@ -460,9 +460,11 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
   try {
     const cachedItem = localStorage.getItem(CACHE_KEY);
     if (cachedItem) { // 如果快取存在
-      const { timestamp, data } = JSON.parse(cachedItem);
-      // [核心修正] 修正快取擁有者的判斷邏輯，應從外層的 data 物件讀取 ownerId
-      if ((Date.now() - timestamp < CACHE_DURATION_MS) && (data && data.ownerId === userId)) {
+      // [核心修正] 將 JSON.parse 包在 try-catch 中，增加程式碼健壯性
+      try {
+        const { timestamp, data } = JSON.parse(cachedItem);
+        // [核心修正] 修正快取擁有者的判斷邏輯，應從 data 物件本身讀取 ownerId
+        if ((Date.now() - timestamp < CACHE_DURATION_MS) && (data && data.ownerId === userId)) {
         // --- 情況一：快取有效 ---
         logToPage('⚡️ 偵測到有效快取，立即渲染畫面...');
 
@@ -481,10 +483,14 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
         handleDataResponse(dataForRender); // 使用處理過的複本來渲染畫面
         hasRenderedFromCache = true;
       } else {
-        // --- 情況二：快取無效 (過期或使用者不符) ---
-        const reason = data.ownerId !== userId ? 'UID 不符' : '已過期';
-        logToPage(`🗑️ 快取無效 (${reason})，將繼續向後端請求新資料。`);
-        localStorage.removeItem(CACHE_KEY);
+          // --- 情況二：快取無效 (過期或使用者不符) ---
+          const reason = (data && data.ownerId !== userId) ? 'UID 不符' : '已過期';
+          logToPage(`🗑️ 快取無效 (${reason})，將繼續向後端請求新資料。`);
+          localStorage.removeItem(CACHE_KEY);
+        }
+      } catch (parseError) {
+        logToPage(`❌ 解析快取失敗: ${parseError.message}`, 'error');
+        localStorage.removeItem(CACHE_KEY); // 解析失敗，直接刪除損壞的快取
       }
     }
   } catch (e) {
@@ -512,14 +518,14 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
     state.currentUserName = freshData.userName || `使用者 (${userId.slice(-6)})`;
     logToPage(`✅ 操作者已設定: ${state.currentUserName}`);
 
-    // [核心修正] 應在儲存快取前，就為新資料蓋上所有權戳章
+    // [核心修正] 在儲存快取前，就為新資料蓋上所有權戳章
     freshData.ownerId = userId;
 
     if (!hasRenderedFromCache) {
       // 情況一：沒有快取，這是第一次載入。直接渲染畫面並設定快取。
       logToPage('✅ 首次載入資料，正在渲染畫面並建立快取...');
       handleDataResponse(freshData);
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData }));
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData, ownerId: userId }));
     } else {
       // 情況二：畫面已由快取渲染，在背景比對新舊資料。
       const cachedItem = localStorage.getItem(CACHE_KEY);
@@ -542,8 +548,8 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
           // 如果有暫存的卡片，將它們重新插入到列表頂部。
           const logsContainer = document.getElementById('logs-container');
           optimisticCards.reverse().forEach(card => logsContainer.insertBefore(card, logsContainer.children[1]));
-
-          localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData })); // 更新快取
+          // [核心修正] 更新快取時，同時儲存 ownerId 到外層
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData, ownerId: userId })); // 更新快取
         }
       }
     }
