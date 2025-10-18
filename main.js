@@ -323,6 +323,31 @@ function setupScrollListener() {
     state.scrollObserver.observe(initialLoader);
   }
 }
+/**
+ * [v130.0 新增] 定期刷新資料的函式
+ */
+async function refreshData(projectId, userId, API_BASE_URL) {
+    try {
+        const fetchUrl = `${API_BASE_URL}?page=project&id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
+        logToPage('🔄 背景自動更新：正在從後端請求最新資料...');
+        const freshData = await loadJsonp(fetchUrl);
+
+        // 比對新舊資料是否有差異
+        const oldDataSignature = JSON.stringify({ overview: state.overview, schedule: state.currentScheduleData, dailyLogs: state.currentLogsData });
+        const newDataSignature = JSON.stringify({ overview: freshData.overview, schedule: freshData.schedule, dailyLogs: freshData.dailyLogs });
+
+        if (oldDataSignature !== newDataSignature) {
+            logToPage('🔄 背景自動更新：偵測到資料已更新，正在無縫刷新畫面...');
+            handleDataResponse(freshData);
+            showGlobalNotification('偵測到資料更新，畫面已自動刷新。', 3000, 'info');
+        } else {
+            logToPage('✅ 背景自動更新：資料無變動。');
+        }
+    } catch (err) {
+        logToPage(`❌ 背景自動更新失敗: ${err.message}`, 'error');
+        showGlobalNotification(`自動更新失敗: ${err.message}`, 5000, 'error');
+    }
+}
 
 /* ===== 入口 ===== */
 /**
@@ -443,6 +468,9 @@ async function initializeApp() {
 
   // [v54.0 新增] 將資料載入與渲染邏輯封裝成獨立函式
   await loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL);
+  // 【您的要求】設定每 10 分鐘自動更新一次資料
+  setInterval(() => refreshData(projectId, userId, API_BASE_URL), 10 * 60 * 1000);
+  logToPage('已設定每 10 分鐘自動更新專案資料。');
 }
 
 /**

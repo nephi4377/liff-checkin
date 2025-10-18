@@ -356,9 +356,8 @@
 
             const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId);
             const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-            // 【v78.0 修正】將本地測試模式的權限直接視為 5，確保所有管理者功能可見。
-            const permission = isLocalTest ? 5 : (currentUser ? currentUser.permission : 1);
-            const hasAdminRights = permission >= 4;
+             const permission = isLocalTest ? 5 : (currentUser ? currentUser.permission : 1);
+            const hasAdminRights = permission >= 2;
 
             if (hasAdminRights || isLocalTest) {
                 document.getElementById('attendance-console-link').classList.remove('hidden');
@@ -422,6 +421,10 @@
             } catch (error) {
                 console.warn('載入初始資料時發生錯誤:', error);
             }
+
+            // 【您的要求】設定每 10 分鐘自動更新一次資料
+            setInterval(fetchInitialData, 10 * 60 * 1000);
+            console.log('已設定每 10 分鐘自動更新主控台資料。');
         }
 
         // 【v87.0 新增】向 CheckinSystem 請求資料
@@ -870,7 +873,14 @@
                         card.style.transform = 'translateX(20px)';
                         setTimeout(() => card.remove(), 300);
 
-                        const subActionToTake = (actionType === 'ReplyText' || actionType === 'ConfirmCompletion') ? 'archive' : 'mark_read';
+                        // 【您的要求】恢復並明確化點擊 '×' 按鈕的行為：
+                        // - 任務型通知 (ReplyText, ConfirmCompletion):
+                        //   執行「封存 (archive)」。後端會將狀態設為 'Archived'，並通知原發送者。
+                        // - 資訊型通知 (None, Info, Alert):
+                        //   執行「已讀 (mark_read)」。後端僅將狀態設為 'Read'，不會有後續通知。
+                        //   這確保了前端的「移除」行為與後端的狀態變更精確對應。
+                        const isTaskType = (actionType === 'ReplyText' || actionType === 'ConfirmCompletion');
+                        const subActionToTake = isTaskType ? 'archive' : 'mark_read';
                         processNotificationAction({ subAction: subActionToTake, notificationId: notificationId, userName: userProfile.displayName });
 
                     } else if (action === 'reply-text') {

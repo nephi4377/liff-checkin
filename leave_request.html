@@ -327,6 +327,10 @@
             // 【⭐️ 核心新增：為補件列表設定事件代理，點擊後啟用按鈕 ⭐️】
             document.getElementById('supplement-list').addEventListener('click', (e) => {
                 if (e.target.closest('button')) {
+                    // 【您的要求】當使用者點擊一個補件項目時，暫停自動刷新，避免干擾操作
+                    if (window.autoRefreshInterval) {
+                        clearInterval(window.autoRefreshInterval);
+                    }
                     // 這裡的邏輯已在 fetchPendingRequests 中處理，
                     // 我們只需要確保按鈕被啟用即可。
                     // setupSimpleUpdateMode 會處理按鈕的啟用。
@@ -368,6 +372,10 @@
                     el.addEventListener('click', () => el.showPicker && el.showPicker());
                 }
             });
+
+            // 【您的要求】設定每 10 分鐘自動更新一次「待補件」列表
+            window.autoRefreshInterval = setInterval(fetchPendingRequests, 10 * 60 * 1000);
+            console.log('已設定每 10 分鐘自動更新待補件列表。');
         }
 
         /**
