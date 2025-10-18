@@ -155,17 +155,9 @@
     const DEFAULT_VIEW_MODE = 'show_off'; // 可設為 'show_on' (顯示上班) 或 'show_off' (顯示排休)
     // --- 【設定結束】 ---
 
-    // [核心修正] 根據使用者要求，暫時關閉勞基法檢查
+    // 【⭐️ 核心修正：根據您的要求，移除顏色設定與勞基法檢查 ⭐️】
     const ENFORCE_LABOR_LAW = 0;
     const MAX_CONSECUTIVE_WORK_DAYS = 6;
-    // [核心修正] 根據使用者要求，更換為飽和度更低的莫蘭迪色系
-    const COLOR_PALETTE = [
-        '#d1d5db', '#e5e7eb', '#d4d4d8', '#e4e4e7', // 灰
-        '#dbeafe', '#e0e7ff', '#e0f2fe', '#cffafe', // 藍
-        '#dcfce7', '#d1fae5', '#f0fdf4', '#ecfccb', // 綠
-        '#fef9c3', '#fffbeb', '#fff7ed', '#ffedd5', // 黃/橘
-        '#fee2e2', '#fce7f3', '#f3e8ff', '#ede9fe'  // 紅/紫
-    ];
 
 
     // --- DOM Elements ---
@@ -245,10 +237,10 @@
         if (isLocalTest && !uid) {
             console.warn('⚡️ 本地測試模式啟用，使用預設使用者資訊。');
             // 您可以將此處的 uid 改為任何您在「員工資料」表中設定的管理者 ID，以便測試權限功能。
-            uid = 'U7ce84c78bdee4060babe9cc3c03d291b'; 
-            name = '周汶則 (本地測試)';
-            //uid = 'Ud58333430513b7527106fa71d2e30151'; 
-            //name = '本地測試員';
+            //uid = 'U7ce84c78bdee4060babe9cc3c03d291b'; 
+            //name = '周汶則 (本地測試)';
+            uid = 'Ud58333430513b7527106fa71d2e30151'; 
+            name = '本地測試員';
         }
 
         if (!uid || !name) {
@@ -256,7 +248,7 @@
             return;
         }
         // [核心改造] currentUser 物件現在也包含權限
-        currentUser = { userId: uid, userName: name, permission: 1 }; // 預設權限為 1
+        currentUser = { userId: uid, userName: name, permission: 2 }; // 預設權限為 2
         console.log('認證成功:', currentUser);
 
         // [新增] 載入快取的組別
@@ -295,11 +287,16 @@
 
     // [v12.0 新增] 從快取載入並顯示資料
     async function loadAndDisplayCachedData() {
-        const cachedEmployees = loadCache('shiftSchedule_employees');
+        // 【v35.0 核心修正】loadCache 回傳的是完整的快取物件 { data, expires }。
+        // 我們需要從中取出 .data 屬性才是真正的員工陣列。
+        const employeeCache = loadCache('shiftSchedule_employees');
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth() + 1;
         const scheduleCacheKey = `shiftSchedule_schedule_${year}-${month}`;
         const cachedSchedule = loadCache(scheduleCacheKey);
+
+        // 只有在快取物件存在時，才從中取出資料。
+        const cachedEmployees = employeeCache ? employeeCache.data : null;
 
         if (cachedEmployees && cachedSchedule) {
             console.log("從快取載入資料...");
@@ -322,13 +319,24 @@
 
     async function fetchEmployees() {
         try { // [v15.0 改造] 員工資料也採用快取優先策略
-            // [v15.0 改造] 員工資料也採用快取優先策略
-            const cachedEmployees = loadCache('shiftSchedule_employees');
+            // 【v35.1 核心修正】loadCache 回傳的是完整的快取物件 { data, expires }。
+            // 我們需要從中取出 .data 屬性才是真正的員工陣列。
+            // 這個錯誤與 v35.0 在 loadAndDisplayCachedData 中的修正點相同。
+            const employeeCache = loadCache('shiftSchedule_employees');
+            const cachedEmployees = employeeCache ? employeeCache.data : null;
+
             if (cachedEmployees) {
                 allEmployees = cachedEmployees;
             } else {
-                allEmployees = await fetchApi({ page: 'attendance_api', action: 'get_employees' });
-                saveCache('shiftSchedule_employees', allEmployees, 1); // 員工資料快取 1 天
+                // 【⭐️ 核心修正：正確解析後端回傳的員工資料物件 ⭐️】
+                // 後端 API 回傳的格式是 { success: true, data: [...] }，我們需要從中取出 data 屬性。
+                const response = await fetchApi({ page: 'attendance_api', action: 'get_employees' });
+                if (response && response.success && Array.isArray(response.data)) {
+                    allEmployees = response.data;
+                    saveCache('shiftSchedule_employees', allEmployees, 1); // 員工資料快取 1 天
+                } else {
+                    throw new Error("從後端取得的員工資料格式不正確。");
+                }
             }
 
             // [v15.0 改造] 權限設定邏輯移至此處，確保每次都有最新的員工資料
@@ -340,10 +348,6 @@
                 currentUser.permission = loggedInEmployee.permission || 1;
             }
 
-            // [核心改造] 只有在頁面首次載入時，才根據權限設定預設的下拉選單選項。
-            // 避免在切換月份時重置使用者的選擇。
-            const isManager = currentUser.permission >= 4;
-            employeeSelect.disabled = !isManager;
         } catch (error) {
             console.error("載入員工列表失敗:", error);
             showGlobalNotification("無法載入員工列表，請檢查後端連線。", 8000, 'error');
@@ -354,8 +358,9 @@
     async function processEmployeesData() {
             await fetchEmployees(); // [核心改造] 確保在處理前，員工資料已載入
 
-            // [核心改造] 建立一個可供排班的員工列表，排除權限等級 5 的使用者
-            const schedulableEmployees = allEmployees.filter(emp => emp.permission < 5); // 根據使用者要求，過濾掉權限等級為 5 的使用者
+            // 【⭐️ 核心修正：根據您的要求，只顯示在職員工 (權限 >= 2) ⭐️】
+            // 同時過濾掉不參與排班的最高管理者 (權限 >= 5)，因此只保留權限 2, 3, 4 的員工。
+            const schedulableEmployees = allEmployees.filter(emp => emp.permission >= 2 && emp.permission < 5);
 
             // [核心修改] 將員工分類，並增加相容性處理
             shiftBasedEmployees = schedulableEmployees.filter(emp => emp.shiftType === '排班制');
@@ -367,24 +372,29 @@
             standardEmployees = schedulableEmployees.filter(emp => emp.shiftType === '標準制');
             
             // [核心新增] 為每位員工指派一個顏色
-            allEmployees.forEach((emp, index) => {
-                emp.color = COLOR_PALETTE[index % COLOR_PALETTE.length];
-            });
-
-            employeeSelect.innerHTML = '<option value="">-- 檢視所有員工 --</option>';
             groupFilterContainer.innerHTML = '<span class="text-sm font-medium text-gray-700 mr-2">顯示組別:</span>';
 
-            // [v4.0 重構] 改為根據「組別」進行分組
-            employeeGroups = schedulableEmployees.reduce((acc, emp) => {
-                const group = emp.group || '未分類';
-                if (!acc[group]) acc[group] = [];
-                acc[group].push(emp);
-                return acc;
-            }, {});
+            // 【v36.0 核心改造】根據使用者權限，動態產生下拉選單內容
+            // 【v38.0 核心改造】根據您的最新要求，調整權限邏輯
+            const isManager = currentUser.permission >= 4;
+            employeeSelect.innerHTML = '<option value="">-- 檢視所有員工 --</option>'; // 所有使用者都有此選項
 
-            for (const groupName in employeeGroups) {
-                const options = employeeGroups[groupName].map(emp => `<option value="${emp.userId}">${emp.userName}</option>`).join('');
-                employeeSelect.innerHTML += `<optgroup label="${groupName}">${options}</optgroup>`;
+            if (isManager) {
+                // 管理者：額外顯示所有可排班員工
+                employeeGroups = schedulableEmployees.reduce((acc, emp) => {
+                    const group = emp.group || '未分類';
+                    if (!acc[group]) acc[group] = [];
+                    acc[group].push(emp);
+                    return acc;
+                }, {});
+                for (const groupName in employeeGroups) {
+                    const options = employeeGroups[groupName].map(emp => `<option value="${emp.userId}">${emp.userName}</option>`).join('');
+                    employeeSelect.innerHTML += `<optgroup label="${groupName}">${options}</optgroup>`;
+                }
+            } else {
+                // 一般使用者：只額外顯示自己的名字
+                const self = allEmployees.find(emp => emp.userId === currentUser.userId);
+                if (self) employeeSelect.innerHTML += `<option value="${self.userId}">${self.userName}</option>`;
             }
 
             // [新增] 產生組別勾選框
@@ -411,9 +421,7 @@
             let currentSelectedUserId = employeeSelect.value; // 先保存目前的值
 
             if (isInitialLoad) {
-                const isManager = currentUser.permission >= 4;
-                console.log(`權限等級: ${currentUser.permission} (${isManager ? '管理者' : '一般使用者'})`);
-                // 根據您的要求，無論是否為管理者，首次載入時都預設為 "檢視所有員工"
+                // 【v38.0 核心改造】根據您的要求，無論權限為何，所有使用者預設都為「檢視所有員工」
                 employeeSelect.value = '';
                 currentSelectedUserId = ''; // 同步更新 currentSelectedUserId
                 employeeSelect.dataset.initialized = 'true';
@@ -445,6 +453,9 @@
 
             // [核心改造] 恢復之前的選擇
             employeeSelect.value = currentSelectedUserId;
+
+            // 【v36.0 核心改造】移除禁用邏輯，確保下拉選單永遠可用
+            employeeSelect.disabled = false;
     }
 
     // [核心新增] 將員工與班表載入合併，簡化流程
@@ -713,16 +724,15 @@
                     const isWorking = !otherShift; // 修正：只要 otherShift 沒值，就是上班
 
                     if ((currentViewMode === 'show_on' && isWorking) || (currentViewMode === 'show_off' && isOff)) {
-                        return `<div class="text-xs text-gray-500 opacity-80 truncate" title="${emp.userName}">${emp.userName.substring(0, 3)}</div>`;
+                        // 【⭐️ 核心修正：此處也改為紅/黑字顯示 ⭐️】
+                        const textColorClass = isOff ? 'text-red-600 font-bold' : 'text-gray-800';
+                        return `<div class="text-xs ${textColorClass} opacity-80 truncate" title="${emp.userName}">${emp.userName.substring(0, 3)}</div>`;
                     }
                     return null;
                 }).filter(Boolean).join('');
 
-                if (otherStatusesHtml) {
-                    dayContentEl.innerHTML = `<div class="mt-1 pt-1 border-t border-gray-200 space-y-0.5">${otherStatusesHtml}</div>`;
-                } else {
-                    dayContentEl.innerHTML = '';
-                }
+                // 【v39.0 核心修正】將處理好的「其他同事」狀態，渲染到對應的 day-content 區塊中。
+                dayContentEl.innerHTML = otherStatusesHtml;
             } else { // 檢視所有員工
                 dayContentEl.innerHTML = ''; // 清空內容
                 // [核心修正] 直接使用 .filter() 來篩選員工，確保員工物件的完整性 (包含顏色屬性)。
@@ -744,10 +754,12 @@
                     const isOff = !!shift; // 修正：只要 shift 有值，就視為休假
                     const isWorking = !shift; // 修正：只要 shift 沒值，就是上班
                     if ((currentViewMode === 'show_off' && isOff) || (currentViewMode === 'show_on' && isWorking)) {
-                        // [核心新增] 套用員工專屬顏色作為背景
-                        // [核心改造] 增加 w-fit 讓色塊寬度貼合內容
-                        // 【⭐️ 核心修正：根據您的要求，移除多餘的假別字樣，只顯示員工姓名 ⭐️】
-                        shiftsHtml += `<div class="w-fit text-xs px-1.5 py-0.5 rounded" style="background-color: ${emp.color};"><span class="flex-shrink-0">${emp.userName.substring(0, 3)}</span></div>`;
+                        // 【⭐️ 核心修正：根據上班/休假狀態決定文字顏色 ⭐️】
+                        if (isOff) {
+                            shiftsHtml += `<div class="text-xs text-red-600 font-bold">${emp.userName.substring(0, 3)}</div>`;
+                        } else { // isWorking
+                            shiftsHtml += `<div class="text-xs text-gray-800">${emp.userName.substring(0, 3)}</div>`;
+                        }
                     }
                 });
                 dayContentEl.innerHTML = shiftsHtml;

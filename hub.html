@@ -638,8 +638,9 @@
             const recipientList = document.getElementById('recipient-list');
             if (!recipientList) return;
             recipientList.innerHTML = '';
-            // [v97.0 修正] 根據使用者要求，收件人列表改為包含所有權限 >= 2 的員工
-            allEmployees.filter(emp => emp.permission >= 2).forEach(emp => {
+            // 【⭐️ 核心修正：根據您的要求，收件人列表只顯示在職員工 (權限 >= 2) ⭐️】
+            // 確保任務不會被指派給離職人員。
+            allEmployees.filter(emp => emp.permission >= 2).forEach(emp => { // 這裡的邏輯剛好符合您的新要求，無需變更
                 const id = `recipient-${emp.userId}`;
                 recipientList.insertAdjacentHTML('beforeend', `<label for="${id}" class="flex items-center p-1 rounded hover:bg-gray-100 cursor-pointer"><input type="checkbox" id="${id}" name="recipients" value="${emp.userId}" class="h-4 w-4 rounded border-gray-300"><span class="ml-2 text-sm text-gray-800" data-name="${emp.userName}">${emp.userName}</span></label>`);
             });

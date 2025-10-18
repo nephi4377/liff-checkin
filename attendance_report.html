@@ -157,12 +157,20 @@
             });
 
         fetchApi({ page: 'attendance_api', action: 'get_employees' })
-            .then(employees => {
+            .then(response => {
+                // 【v40.0 核心修正】後端 API 回傳的是 { success: true, data: [...] } 格式的物件。
+                // 我們需要從中取出 .data 屬性才是真正的員工陣列。
+                // 這個錯誤與之前在 shift_schedule.html 中遇到的問題完全相同。
+                if (!response || !response.success || !Array.isArray(response.data)) {
+                    throw new Error("從後端取得的員工資料格式不正確。");
+                }
+                const employees = response.data;
                 const select = document.getElementById('employee-select');
                 const modalSelect = document.getElementById('modal-employee-select');
                 
-                // [核心改造] 根據使用者要求，過濾掉權限等級為 5 的使用者
-                const filteredEmployees = employees.filter(emp => emp.permission < 5);
+                // 【⭐️ 核心修正：根據您的要求，只顯示在職員工 (權限 >= 2) ⭐️】
+                // 同時過濾掉不參與排班的最高管理者 (權限 >= 5)，因此只保留權限 2, 3, 4 的員工。
+                const filteredEmployees = employees.filter(emp => emp.permission >= 2 && emp.permission < 5);
 
                 // 【⭐️ 核心修正：儲存員工班表資料，並綁定事件 ⭐️】
                 employeeShiftData = {}; // 清空舊資料
@@ -411,7 +419,14 @@
                     }
                 }
                 // 3. 如果狀態為「缺勤」，則套用紅色粗體樣式。
-                const statusClass = displayStatus === '缺勤' ? 'text-red-600 font-bold' : (day.status === '異常' ? 'text-red-600 font-bold' : (day.status === '僅單次打卡' ? 'text-purple-600 font-bold' : ''));
+                // 【v42.0 核心改造】為不同的假別狀態新增對應的 CSS Class
+                let statusClass = '';
+                if (displayStatus === '缺勤' || day.status === '異常') statusClass = 'text-red-600 font-bold';
+                else if (day.status === '僅單次打卡') statusClass = 'text-purple-600 font-bold';
+                else if (displayStatus === '特休') statusClass = 'text-blue-600 font-bold';
+                else if (displayStatus === '病假') statusClass = 'text-yellow-600 font-bold';
+                else if (displayStatus === '事假') statusClass = 'text-gray-500';
+                else if (['補休', '公假', '婚假', '喪假'].includes(displayStatus)) statusClass = 'text-indigo-600 font-bold';
 
                 // 【⭐️ 核心修正：從 mapPoints 中查找對應的打卡地點 ⭐️】
                 let locationHtml = '';
