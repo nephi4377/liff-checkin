@@ -1,25 +1,38 @@
-/*
-* =============================================================================
-* 檔案名稱: utils.js
-* 專案名稱: 專案日誌管理主控台
-* 版本: v1.0
-* 說明: 存放可供各處重複使用的輔助工具函式。
-* =============================================================================
-*/
+/**
+ * =============================================================================
+ * 檔案名稱: utils.js
+ * 專案名稱: 前端共用工具函式庫
+ * 版本: v1.0
+ * 說明:
+ *   此檔案包含所有前端頁面可共用的輔助函式，例如：
+ *   - 檔案處理 (轉 Base64)
+ *   - UI 互動 (全域通知)
+ *
+ * 如何使用:
+ *   在 HTML 檔案中，使用 <script type="module"> 引入此檔案，
+ *   並透過 import { functionName } from './utils.js'; 來使用。
+ * =============================================================================
+ */
 
-const DEBUG_THUMBS = true;
-
-/** 縮圖專用 logger */
-export function thumbLog(msg) {
-  if (!DEBUG_THUMBS) return;
-  console.log('[THUMB]', msg);
-  // logToPage(`[THUMB] ${msg}`); // Removed to break circular dependency
+/**
+ * 將 File 物件非同步讀取為純 Base64 字串。
+ * @param {File} file - 要讀取的檔案。
+ * @returns {Promise<string>} - 一個解析為 Base64 資料字串的 Promise。
+ */
+export function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    // 成功讀取後，移除 data-url 的前綴 (e.g., "data:image/jpeg;base64,")，只回傳純資料
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = (error) => reject(error);
+    reader.readAsDataURL(file);
+  });
 }
 
 /**
- * [核心重構] 將訊息輸出到瀏覽器主控台，而非頁面上的 DOM 元素。
+ * 在 Console 中輸出帶有時間戳的日誌訊息。
  * @param {string} message - 要記錄的訊息。
- * @param {'log'|'warn'|'error'} type - 訊息的類型，決定使用 console 的哪個方法。
+ * @param {'log'|'warn'|'error'} [type='log'] - 日誌類型。
  */
 export function logToPage(message, type = 'log') {
   const t = new Date().toLocaleTimeString('zh-TW');
@@ -56,10 +69,10 @@ export function isMobile() {
 }
 
 /**
- * [重構] 在主標題下方顯示一個全域的、暫時的通知橫幅。
+ * 在畫面頂部顯示一個全域的、可自動消失的通知橫幅。
  * @param {string} message - 要顯示的訊息文字。
- * @param {number} duration - 訊息顯示的持續時間（毫秒）。
- * @param {'info'|'success'|'error'} type - 訊息類型，決定橫幅顏色。
+ * @param {number} [duration=3000] - 訊息顯示的持續時間（毫秒）。
+ * @param {'info'|'success'|'error'} [type='info'] - 訊息類型，決定橫幅顏色。
  */
 export function showGlobalNotification(message, duration, type = 'info') {
 

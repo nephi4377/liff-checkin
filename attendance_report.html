@@ -426,6 +426,7 @@
                 else if (displayStatus === '特休') statusClass = 'text-blue-600 font-bold';
                 else if (displayStatus === '病假') statusClass = 'text-yellow-600 font-bold';
                 else if (displayStatus === '事假') statusClass = 'text-gray-500';
+                else if (displayStatus === '加班') statusClass = 'text-orange-600 font-bold'; // 【您的要求】新增加班狀態的樣式
                 else if (['補休', '公假', '婚假', '喪假'].includes(displayStatus)) statusClass = 'text-indigo-600 font-bold';
 
                 // 【⭐️ 核心修正：從 mapPoints 中查找對應的打卡地點 ⭐️】

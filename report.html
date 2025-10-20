@@ -116,7 +116,10 @@
     </div>
   </div>
 
-  <script>
+  <!-- 【v150.0 核心修正】徹底修正巢狀 script 標籤與註解語法錯誤 -->
+  <script type="module">
+    import { readFileAsBase64 } from './utils.js';
+
     document.addEventListener('DOMContentLoaded', () => {
       const form = document.getElementById('report-form');
       const submitButton = document.getElementById('submit-button');
@@ -294,6 +297,7 @@
             if (shouldCompress) {
               processedFile = await imageCompression(photoInfo.file, options);
             }
+            // 【v144.0 核心修正】直接呼叫 import 的函式
             const base64 = await readFileAsBase64(processedFile);
             photoArray.push({
               name: photoInfo.file.name,
@@ -306,16 +310,6 @@
           }
         }
         return photoArray;
-      }
-
-      // === File → Base64 ===
-      function readFileAsBase64(file) {
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result.split(',')[1]);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
       }
 
       // === 載入狀態 ===
@@ -359,6 +353,6 @@
       // 啟動
       main();
     });
-  </script>
+</script>
 </body>
 </html>

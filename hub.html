@@ -434,6 +434,9 @@
                 const url = new URL(ATTENDANCE_GAS_WEB_APP_URL);
                 url.searchParams.append('page', 'attendance_api');
                 url.searchParams.append('action', 'get_hub_core_data');
+                // 【v155.0 核心修正】補上遺失的使用者資訊參數，以便後端日誌能正確記錄請求者。
+                url.searchParams.append('userId', userProfile.userId);
+                url.searchParams.append('userName', userProfile.displayName);
                 console.log(`[CONSOLE] 請求出勤核心整合資料: ${url.toString()}`);
                 const response = await fetch(url);
                 const result = await response.json();
