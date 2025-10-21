@@ -314,7 +314,13 @@ export function handleSaveSchedule() {
     });
 
     // [核心修正] 確保 payload 中包含正確的 projectId
-    const payload = { action: 'updateSchedule', projectId: projectId, scheduleData: scheduleData };
+    const payload = { 
+        action: 'updateSchedule', 
+        projectId: projectId, 
+        scheduleData: scheduleData,
+        userId: state.currentUserId,
+        userName: state.currentUserName
+    };
 
     // [升級] 使用 api.postAsyncTask 並處理回傳的 Promise
     const btn = document.getElementById('save-schedule-btn');
@@ -376,7 +382,14 @@ export function handleImportTemplate(templateType, startDate) {
     }
     logToPage(`正在為專案匯入「${templateType}」範本，開工日設為 ${startDate}...`);
     const projectId = state.projectId; // [優化] 從全域 state 讀取 projectId
-    const payload = { action: 'createFromTemplate', projectId, templateType, startDate };
+    const payload = { 
+        action: 'createFromTemplate', 
+        projectId, 
+        templateType, 
+        startDate,
+        userId: state.currentUserId,
+        userName: state.currentUserName
+    };
     
     showGlobalNotification('正在從範本建立排程...', 5000, 'info');
 

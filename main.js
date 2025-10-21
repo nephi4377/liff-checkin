@@ -358,8 +358,6 @@ async function refreshData(projectId, userId, API_BASE_URL) {
 async function initializeApp() {
   // [核心修正] 將常數宣告移至函式內部，確保在 DOMContentLoaded 後才讀取 window 物件。
   // 這可以解決因模組載入時機導致 window.API_BASE_URL 為 undefined 的問題。
-  // [v57.0 偵錯強化] 在函式最開始就加入日誌，確認程式已開始執行
-  console.log('[Init] 應用程式初始化開始...');
   // [核心修正] 為每一次頁面載入產生一個唯一的識別碼，用以解決競態條件
   const pageLoadId = `load_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   window.currentPageLoadId = pageLoadId;
@@ -414,7 +412,6 @@ async function initializeApp() {
   const API_BASE_URL = window.API_BASE_URL;
   if (!API_BASE_URL) { displayError({ message: '無法讀取 API_BASE_URL 設定，請檢查 HTML 檔案。' }); return; }
 
-  console.log('[Init] 檢查是否為本地測試環境...');
   const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
   if (isLocalTest) {
     logToPage('⚡️ 本地測試模式啟用，將跳過 LIFF 認證。');
@@ -428,12 +425,10 @@ async function initializeApp() {
     state.currentUserName = '本地測試員';
 
     // 直接開始載入資料，不執行後續的 LIFF 流程
-    console.log(`[Init] 本地模式：準備載入資料 (ProjectID: ${projectId}, UserID: ${userId})`);
     await loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL);
     return;
   }
 
-  console.log('[Init] 判斷為正式環境，開始解析 URL 參數...');
   // [v56.0 修正] 恢復 urlParams 的宣告，解決啟動時的致命錯誤
   const urlParams = new URLSearchParams(window.location.search);
   let projectId = urlParams.get('id');
@@ -442,7 +437,6 @@ async function initializeApp() {
   // 【⭐️ 核心修正：處理 LIFF 重新導向的 liff.state 參數 ⭐️】
   // LIFF 會將原始參數包在 liff.state 中，我們需要手動解析它。
   if (urlParams.has('liff.state')) {
-    console.log('[Init] 在 URL 中偵測到 liff.state，進行解析...');
     const liffState = decodeURIComponent(urlParams.get('liff.state')).replace(/^\?/, ''); // 【⭐️ 核心修正 ⭐️】先解碼 liff.state 的值，再移除開頭可能存在的 '?'
     const liffParams = new URLSearchParams(liffState);
     if (liffParams.has('id')) projectId = liffParams.get('id');
@@ -454,17 +448,12 @@ async function initializeApp() {
   state.projectId = projectId;
   state.currentUserId = userId; // 【⭐️ 核心修正：將 userId 也存入全域 state ⭐️】
 
-  console.log('[Init] 檢查解析後的參數是否齊全...');
   if (!projectId || !userId) {
     const errorMsg = '網址中缺少必要的專案 ID (id) 或使用者 ID (uid)。';
     console.error(`[Init] 參數檢查失敗: ${errorMsg}`);
     displayError({ message: errorMsg });
     return;
   }
-
-  console.log('[Init] 參數檢查通過，準備載入資料...');
-  console.log(`目標專案 ID: ${projectId}`);
-  console.log(`操作者 UID: ${userId}`);
 
   // [v54.0 新增] 將資料載入與渲染邏輯封裝成獨立函式
   await loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL);

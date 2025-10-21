@@ -74,7 +74,13 @@ function handleSaveText(logId, originalButtons) {
 
     // 【⭐️ 核心修正 3/3：在背景執行後端同步 ⭐️】
     // [架構重構 v5.0] 統一呼叫 postTask
-    api.postTask({ action: 'updateLogText', id: logId, content: newText })
+    api.postTask({ 
+        action: 'updateLogText', 
+        id: logId, 
+        content: newText,
+        userId: state.currentUserId,
+        userName: state.currentUserName
+    })
         .then(finalJobState => {
             if (finalJobState.result && finalJobState.result.success) {
                 showGlobalNotification(finalJobState.result.message || '文字已成功更新！', 5000, 'success');
@@ -149,8 +155,10 @@ export function handleSavePhotos() {
         action: 'updateLogPhotosWithUploads',
         logId: state.currentEditingLogId,
         existingLinksCsv: keepLinks.join(','),
-        newPhotosBase64Array: newUploads,
-        deleteLinksCsv: ''
+        newPhotosBase64Array: newUploads, // [v164.0 修正] 補上使用者資訊
+        deleteLinksCsv: '',
+        userId: state.currentUserId,
+        userName: state.currentUserName
     };
 
     // [架構重構 v5.0] 統一呼叫 postTask，它會自動處理 newPhotosBase64Array 的上傳
@@ -173,7 +181,13 @@ export function handlePublish(logId) {
     
     // [V2.1 升級] 改為呼叫 postAsyncTask，確保能取得最終結果並顯示通知
     // [架構重構 v5.0] 統一呼叫 postTask
-    api.postTask({ action: 'publish', logId: logId, newStatus: '已發布' })
+    api.postTask({ 
+        action: 'publish', 
+        logId: logId, 
+        newStatus: '已發布',
+        userId: state.currentUserId,
+        userName: state.currentUserName
+    })
         .then(finalJobState => {
             if (finalJobState.result && finalJobState.result.success) {
                 showGlobalNotification('草稿已成功發布！', 5000, 'success');
@@ -218,7 +232,12 @@ export function handleDeleteLog(logId) {
 
     // 2. 在背景執行真正的刪除操作
     // [架構重構 v5.0] 統一呼叫 postTask
-    api.postTask({ action: 'deleteLog', id: logId })
+    api.postTask({ 
+        action: 'deleteLog', 
+        id: logId,
+        userId: state.currentUserId,
+        userName: state.currentUserName
+    })
         .then(finalJobState => {
             if (finalJobState.result && finalJobState.result.success) {
                 // 3a. 後端成功，顯示成功訊息
