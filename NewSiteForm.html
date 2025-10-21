@@ -171,8 +171,11 @@
         const uid = urlParams.get('uid') || 'unknown_user';
         const name = urlParams.get('name') || 'Unknown User';
         
-        const sitesUrl = `${API_URL}?page=attendance_api&action=get_all_sites&userId=${uid}&userName=${encodeURIComponent(name)}`;
-        const employeesUrl = `${API_URL}?page=attendance_api&action=get_employees&userId=${uid}&userName=${encodeURIComponent(name)}`;
+        // 【v177.0 核心修正】如果 name 是預設的 'Unknown User'，則不要將其作為參數傳遞，讓後端日誌顯示為 N/A
+        const userQueryString = `userId=${uid}` + (name !== 'Unknown User' ? `&userName=${encodeURIComponent(name)}` : '');
+
+        const sitesUrl = `${API_URL}?page=attendance_api&action=get_all_sites&${userQueryString}`;
+        const employeesUrl = `${API_URL}?page=attendance_api&action=get_employees&${userQueryString}`;
         const sitesPromise = fetch(sitesUrl).then(res => res.json());
         const employeesPromise = fetch(employeesUrl).then(res => res.json());
 
