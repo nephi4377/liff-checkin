@@ -319,6 +319,8 @@ export function displayProjectInfo(overview, schedule) {
 
     const get = (key) => overview[key] || '未提供';
     panel.innerHTML = `
+      <!-- [v188.0 新增] 複製案場資訊按鈕 -->
+      <button id="copy-project-info-btn" class="btn btn-info w-full mb-4">複製案場資訊</button>
       <div class="project-info-section">
         <h4 class="info-header">專案基本資料</h4>
         <ul class="info-list">
@@ -351,6 +353,7 @@ export function displayProjectInfo(overview, schedule) {
         <ul class="info-list">
           <li><strong>管理中心電話:</strong> <a href="tel:${get('備註-管理中心電話')}">${get('備註-管理中心電話')}</a></li>
           <li><strong>施工時間:</strong> ${get('備註-施工時間')}</li>
+          <li style="white-space: pre-wrap;"><strong>衛浴使用說明:</strong><br>${get('衛浴使用說明')}</li>
           <li style="white-space: pre-wrap;"><strong>特別注意事項:</strong><br>${get('備註-特別注意事項')}</li>
         </ul>
       </div>

@@ -1,124 +1,180 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <base target="_top">
-    <!-- 【v116.0 修正】新增 viewport meta 標籤，解決手機版頁面縮小的問題 -->
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <!-- 【⭐️ 案場管理升級：新增樣式 ⭐️】 -->
-    <style>
-      .modal { display: none; position: fixed; z-index: 1050; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4); }
-      .modal-content { background-color: #fefefe; margin: 10% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 500px; border-radius: 0.3rem; }
-      .modal-header { padding-bottom: 10px; border-bottom: 1px solid #e9ecef; }
-      .modal-body { max-height: 400px; overflow-y: auto; }
-      .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; }
-      .close:hover, .close:focus { color: black; text-decoration: none; cursor: pointer; }
-      #responsiblePersonDisplay {
-        min-height: calc(1.5em + .75rem + 2px);
-        padding: .375rem .75rem;
-        background-color: #e9ecef;
-        cursor: pointer;
-        border: 1px solid #ced4da;
-        border-radius: .25rem;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container mt-4">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h4 id="form-title" class="mb-0">新增案場資料</h4>
-        <button type="button" class="btn btn-info" id="copyInfoBtn">複製進場資訊</button>
+
+<head>
+  <base target="_top">
+  <!-- 【v116.0 修正】新增 viewport meta 標籤，解決手機版頁面縮小的問題 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <!-- 【⭐️ 案場管理升級：新增樣式 ⭐️】 -->
+  <style>
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1050;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0, 0, 0, 0.4);
+    }
+
+    .modal-content {
+      background-color: #fefefe;
+      margin: 10% auto;
+      padding: 20px;
+      border: 1px solid #888;
+      width: 80%;
+      max-width: 500px;
+      border-radius: 0.3rem;
+    }
+
+    .modal-header {
+      padding-bottom: 10px;
+      border-bottom: 1px solid #e9ecef;
+    }
+
+    .modal-body {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .close {
+      color: #aaa;
+      float: right;
+      font-size: 28px;
+      font-weight: bold;
+    }
+
+    .close:hover,
+    .close:focus {
+      color: black;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    #responsiblePersonDisplay {
+      min-height: calc(1.5em + .75rem + 2px);
+      padding: .375rem .75rem;
+      background-color: #e9ecef;
+      cursor: pointer;
+      border: 1px solid #ced4da;
+      border-radius: .25rem;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h4 id="form-title" class="mb-0">新增案場資料</h4>
+      <button type="button" class="btn btn-info" id="copyInfoBtn">複製進場資訊</button>
+    </div>
+    <form id="siteForm">
+      <!-- 【⭐️ 案場管理升級：新增專案選擇器 ⭐️】 -->
+      <div class="form-group">
+        <label for="projectSelector">選擇現有案場 (可選)</label>
+        <select class="form-control" id="projectSelector">
+          <option value="">-- 建立新案場 --</option>
+          <!-- Options will be populated by JS -->
+        </select>
       </div>
-      <form id="siteForm">
-        <!-- 【⭐️ 案場管理升級：新增專案選擇器 ⭐️】 -->
-        <div class="form-group">
-          <label for="projectSelector">選擇現有案場 (可選)</label>
-          <select class="form-control" id="projectSelector">
-            <option value="">-- 建立新案場 --</option>
-            <!-- Options will be populated by JS -->
+      <hr>
+
+      <div class="form-group">
+        <label for="siteName">案場名稱 (必填)</label>
+        <input type="text" class="form-control" id="siteName" name="siteName" required
+          placeholder="#案號 案名 (例如: #725 王公館)">
+      </div>
+
+      <div class="form-group">
+        <label for="siteAddress">案場完整地址 (必填)</label>
+        <input type="text" class="form-control" id="siteAddress" name="siteAddress" required
+          placeholder="請輸入完整地址 (例如: 台南市南區中華東路一段88號)">
+      </div>
+
+      <div class="form-group">
+        <label for="projectCode">案號 (必填)</label>
+        <input type="text" class="form-control" id="projectCode" name="projectCode" required>
+      </div>
+
+      <!-- 【⭐️ 案場管理升級：改造「負責人」欄位為選擇器 ⭐️】 -->
+      <div class="form-group">
+        <label for="responsiblePersonDisplay">負責人員</label>
+        <div id="responsiblePersonDisplay" class="form-control text-muted">點擊以選擇所有負責人員,含設計師/助理</div>
+        <input type="hidden" id="responsiblePerson" name="responsiblePerson">
+      </div>
+      <hr>
+
+      <!-- 【⭐️ 案場管理升級：新增專案主控台所需欄位 ⭐️】 -->
+      <h5>專案主控台資訊</h5>
+      <div class="row">
+        <!-- [v204.0 新增] 專案分區選擇器 -->
+        <div class="col-md-12 form-group">
+          <label for="projectDivision">專案分區</label>
+          <select class="form-control" id="projectDivision" name="projectDivision">
+            <option value="台南店">台南店</option>
+            <option value="高雄店">高雄店</option>
           </select>
         </div>
-        <hr>
+        <div class="col-md-4 form-group">
+          <label for="designer">設計師</label>
+          <input type="text" class="form-control" id="designer" name="designer">
+        </div>
+        <div class="col-md-4 form-group">
+          <label for="assistant">助理</label>
+          <input type="text" class="form-control" id="assistant" name="assistant">
+        </div>
+        <div class="col-md-4 form-group">
+          <label for="siteManager">工務</label>
+          <input type="text" class="form-control" id="siteManager" name="siteManager">
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-6 form-group">
+          <label for="entryMethod">入門方式</label>
+          <input type="text" class="form-control" id="entryMethod" name="entryMethod">
+        </div>
+        <div class="col-md-6 form-group">
+          <label for="parkingMethod">停車方式</label>
+          <input type="text" class="form-control" id="parkingMethod" name="parkingMethod">
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-6 form-group">
+          <label for="constructionTime">施工進場時間</label>
+          <input type="text" class="form-control" id="constructionTime" name="constructionTime">
+        </div>
+        <div class="col-md-6 form-group">
+          <label for="depositInfo">保證金事宜</label>
+          <input type="text" class="form-control" id="depositInfo" name="depositInfo">
+        </div>
+      </div>
+      <h5>備註</h5>
+      <div class="form-group">
+        <label for="noteAdminPhone">管理中心電話</label>
+        <input type="text" class="form-control" id="noteAdminPhone" name="noteAdminPhone">
+      </div>
+      <div class="form-group">
+        <label for="noteConstructionTime">施工時間</label>
+        <textarea class="form-control" id="noteConstructionTime" name="noteConstructionTime" rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label for="notePrecautions">特別注意事項</label>
+        <textarea class="form-control" id="notePrecautions" name="notePrecautions" rows="3"></textarea>
+      </div>
+      <div class="form-group">
+        <label for="noteBathroomInstructions">衛浴使用說明</label>
+        <textarea class="form-control" id="noteBathroomInstructions" name="noteBathroomInstructions"
+          rows="3"></textarea>
+      </div>
 
-        <div class="form-group">
-          <label for="siteName">案場名稱 (必填)</label>
-          <input type="text" class="form-control" id="siteName" name="siteName" required placeholder="#案號 案名 (例如: #725 王公館)">
-        </div>
-        
-        <div class="form-group">
-          <label for="siteAddress">案場完整地址 (必填)</label>
-          <input type="text" class="form-control" id="siteAddress" name="siteAddress" required placeholder="請輸入完整地址 (例如: 台南市南區中華東路一段88號)">
-        </div>
-
-        <div class="form-group">
-          <label for="projectCode">案號 (選填)</label>
-          <input type="text" class="form-control" id="projectCode" name="projectCode">
-        </div>
-
-        <!-- 【⭐️ 案場管理升級：改造「負責人」欄位為選擇器 ⭐️】 -->
-        <div class="form-group">
-          <label for="responsiblePersonDisplay">負責人 (點擊選擇)</label>
-          <div id="responsiblePersonDisplay" class="form-control text-muted">點擊以選擇負責人</div>
-          <input type="hidden" id="responsiblePerson" name="responsiblePerson">
-        </div>
-        <hr>
-
-        <!-- 【⭐️ 案場管理升級：新增專案主控台所需欄位 ⭐️】 -->
-        <h5>專案主控台資訊</h5>
-        <div class="row">
-          <div class="col-md-4 form-group">
-            <label for="designer">設計師</label>
-            <input type="text" class="form-control" id="designer" name="designer">
-          </div>
-          <div class="col-md-4 form-group">
-            <label for="assistant">助理</label>
-            <input type="text" class="form-control" id="assistant" name="assistant">
-          </div>
-          <div class="col-md-4 form-group">
-            <label for="siteManager">工務</label>
-            <input type="text" class="form-control" id="siteManager" name="siteManager">
-          </div>
-        </div>
-        <div class="row">
-          <div class="col-md-6 form-group">
-            <label for="entryMethod">入門方式</label>
-            <input type="text" class="form-control" id="entryMethod" name="entryMethod">
-          </div>
-          <div class="col-md-6 form-group">
-            <label for="parkingMethod">停車方式</label>
-            <input type="text" class="form-control" id="parkingMethod" name="parkingMethod">
-          </div>
-        </div>
-        <div class="row">
-          <div class="col-md-6 form-group">
-            <label for="constructionTime">施工進場時間</label>
-            <input type="text" class="form-control" id="constructionTime" name="constructionTime">
-          </div>
-          <div class="col-md-6 form-group">
-            <label for="depositInfo">保證金事宜</label>
-            <input type="text" class="form-control" id="depositInfo" name="depositInfo">
-          </div>
-        </div>
-        <h5>備註</h5>
-        <div class="form-group">
-          <label for="noteAdminPhone">管理中心電話</label>
-          <input type="text" class="form-control" id="noteAdminPhone" name="noteAdminPhone">
-        </div>
-        <div class="form-group">
-          <label for="noteConstructionTime">施工時間</label>
-          <textarea class="form-control" id="noteConstructionTime" name="noteConstructionTime" rows="2"></textarea>
-        </div>
-        <div class="form-group">
-          <label for="notePrecautions">特別注意事項</label>
-          <textarea class="form-control" id="notePrecautions" name="notePrecautions" rows="3"></textarea>
-        </div>
-
-        <div class="form-group">
-          <button type="submit" class="btn btn-primary" id="submitBtn">提交</button>
-          <button type="button" class="btn btn-secondary ml-2" id="copyInfoBtn">複製進場資訊</button>
-        </div>
-        <div id="status" class="mt-3"></div>
-      </form>
+      <div class="form-group">
+        <button type="submit" class="btn btn-primary" id="submitBtn">提交</button>
+      </div>
+      <div id="status" class="mt-3"></div>
+    </form>
 
     <!-- 【⭐️ 案場管理升級：新增負責人選擇 Modal ⭐️】 -->
     <div id="employeeModal" class="modal">
@@ -162,7 +218,7 @@
       window.onload = () => {
         // 【v110.4 偵錯強化】記錄前端的「輸入」，顯示要發送給後端的請求。
         console.log('[NewSiteForm][Input] 準備向後端請求案場列表 (get_all_sites)...');
-        
+
         // 【v126.0 核心重構】改用 fetch API，並使用 Promise.all 並行請求，提升載入速度。
         // 【v172.0 核心修正】為所有請求附上使用者資訊，以便後端日誌追蹤。
         // 由於此頁面沒有 LIFF 認證，我們假設操作者是從其他地方跳轉過來的，
@@ -170,7 +226,7 @@
         const urlParams = new URLSearchParams(window.location.search);
         const uid = urlParams.get('uid') || 'unknown_user';
         const name = urlParams.get('name') || 'Unknown User';
-        
+
         // 【v177.0 核心修正】如果 name 是預設的 'Unknown User'，則不要將其作為參數傳遞，讓後端日誌顯示為 N/A
         const userQueryString = `userId=${uid}` + (name !== 'Unknown User' ? `&userName=${encodeURIComponent(name)}` : '');
 
@@ -202,6 +258,10 @@
           allSitesData = response.data; // 【v119.0 核心修改】將收到的完整資料存到全域變數
           // 【v111.0 修正】過濾邏輯已移至後端 _getAllSites_ 函式，前端直接使用回傳的資料。
           const activeSites = response.data;
+          // [v195.0 新增] 根據使用者建議，在填入前先對案場列表依案號排序
+          activeSites.sort((a, b) => {
+            return (parseInt(a['案號'], 10) || 0) - (parseInt(b['案號'], 10) || 0);
+          });
           // 【v110.3 偵錯】印出過濾後的案場數量
           console.log(`[NewSiteForm] 從後端取得 ${activeSites.length} 個有效案場的完整資料。`);
 
@@ -227,7 +287,8 @@
         const notes = [
           form.noteAdminPhone.value.trim(),
           form.noteConstructionTime.value.trim(),
-          form.notePrecautions.value.trim()
+          form.notePrecautions.value.trim(),
+          form.noteBathroomInstructions.value.trim() // 新增衛浴說明
         ].filter(Boolean).join('\n'); // 過濾掉空字串並用換行符連接
 
         const infoText = `進場資訊
@@ -237,7 +298,8 @@
 4.入門方式：${form.entryMethod.value.trim() || '未填寫'}
 5.設計師：${form.designer.value.trim() || '未填寫'}
 6.保證金事宜：${form.depositInfo.value.trim() || '未填寫'}
-7.案場注意事項：
+7.衛浴使用說明：${form.noteBathroomInstructions.value.trim() || '無'}
+8.案場注意事項：
 ${notes || '無'}`;
 
         // 使用 Clipboard API 複製文字
@@ -264,7 +326,7 @@ ${notes || '無'}`;
       });
 
       // 3. 監聽下拉選單的變更
-      projectSelector.addEventListener('change', function() {
+      projectSelector.addEventListener('change', function () {
         const selectedCode = this.value;
         if (selectedCode) {
           // 【v119.0 核心重構】不再發送 API 請求，直接從已載入的 allSitesData 中尋找資料
@@ -295,10 +357,12 @@ ${notes || '無'}`;
             'entryMethod': '入門方式',
             'parkingMethod': '停車方式',
             'constructionTime': '施工進場時間',
+            'projectDivision': '專案分區', // [v204.0 新增]
             'depositInfo': '保證金事宜',
             'noteAdminPhone': '備註-管理中心電話',
             'noteConstructionTime': '備註-施工時間',
-            'notePrecautions': '備註-特別注意事項'
+            'notePrecautions': '備註-特別注意事項',
+            'noteBathroomInstructions': '衛浴使用說明' // [v193.0 核心修正] 補上遺失的衛浴使用說明欄位對應
           };
 
           Array.from(form.elements).forEach(element => {
@@ -312,7 +376,7 @@ ${notes || '無'}`;
           });
 
           updateResponsiblePersonDisplay(); // 更新負責人顯示
-          
+
           currentMode = 'update';
           originalProjectCode = details['案號'];
           formTitle.innerText = `更新案場資料 (#${originalProjectCode})`;
@@ -335,54 +399,55 @@ ${notes || '無'}`;
 
       // 7. 處理後端的回應
       function handleFormResponse(response) {
-          statusDiv.className = (response.status === 'success') ? 'alert alert-success' : 'alert alert-danger';
-          statusDiv.innerText = response.message;
-          if (response.status === 'success') {
-              // [v75.1 修正] 成功後，延遲更長時間再重新載入，確保使用者能看到成功訊息。
-              setTimeout(() => location.reload(), 2500);
-          } else {
-              submitBtn.disabled = false;
-              submitBtn.innerText = (currentMode === 'update') ? '更新資料' : '提交';
-          }
+        statusDiv.className = (response.status === 'success') ? 'alert alert-success' : 'alert alert-danger';
+        statusDiv.innerText = response.message;
+        if (response.status === 'success') {
+          // [v75.1 修正] 成功後，延遲更長時間再重新載入，確保使用者能看到成功訊息。
+          setTimeout(() => location.reload(), 2500);
+        } else {
+          submitBtn.disabled = false;
+          submitBtn.innerText = (currentMode === 'update') ? '更新資料' : '提交';
+        }
       }
 
       // 6. 統一的表單提交邏輯
-      form.addEventListener("submit", function(e) {
-          e.preventDefault();
-          submitBtn.disabled = true;
-          submitBtn.innerText = "處理中...";
+      form.addEventListener("submit", function (e) {
+        console.log("Form submitted");
+        e.preventDefault();
+        submitBtn.disabled = true;
+        submitBtn.innerText = "處理中...";
 
-          const formData = {
-            mode: currentMode,
-            originalProjectCode: originalProjectCode,
-            // 【v127.0 修正】將 key 改為後端期待的中文欄位名稱
-            siteName: this.siteName.value,
-            address: this.siteAddress.value,
-            '案號': this.projectCode.value,
-            '專案負責人': this.responsiblePerson.value,
-            '設計師': this.designer.value,
-            '助理': this.assistant.value,
-            '工務': this.siteManager.value,
-            '入門方式': this.entryMethod.value,
-            '停車方式': this.parkingMethod.value,
-            '施工進場時間': this.constructionTime.value,
-            '保證金事宜': this.depositInfo.value,
-            '備註-管理中心電話': this.noteAdminPhone.value,
-            '備註-施工時間': this.noteConstructionTime.value,
-            '備註-特別注意事項': this.notePrecautions.value
-          };
+        const formData = {
+          mode: currentMode,
+          action: 'process_site_form', // [v192.0 核心修正] 補上後端 doPost 所需的 action 參數
+          originalProjectCode: originalProjectCode,
+          // 【v127.0 修正】將 key 改為後端期待的中文欄位名稱
+          siteName: this.siteName.value,
+          address: this.siteAddress.value,
+          '案號': this.projectCode.value,
+          '專案負責人': this.responsiblePerson.value,
+          '設計師': this.designer.value,
+          '助理': this.assistant.value,
+          '工務': this.siteManager.value,
+          '專案分區': this.projectDivision.value, // [v204.0 新增]
+          '入門方式': this.entryMethod.value,
+          '停車方式': this.parkingMethod.value,
+          '施工進場時間': this.constructionTime.value,
+          '保證金事宜': this.depositInfo.value,
+          '備註-管理中心電話': this.noteAdminPhone.value,
+          '衛浴使用說明': this.noteBathroomInstructions.value, // 新增衛浴說明
+            '備註-特別注意事項': this.notePrecautions.value,
+          '備註-施工時間': this.noteConstructionTime.value
+        };
 
-          // 【v126.0 核心重構】改用 fetch API 提交表單 (POST)
-          // 後端 doPost 路由會根據 action 參數來處理
-          const url = new URL(API_URL);
-          url.searchParams.append('action', 'process_site_form');
-
-          fetch(url, {
-            method: 'POST',
-            cache: 'no-cache',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 配合 Apps Script 的 e.postData.contents
-            body: JSON.stringify(formData)
-          })
+        // 【v126.0 核心重構】改用 fetch API 提交表單 (POST)
+        // 後端 doPost 路由會根據 action 參數來處理
+        fetch(API_URL, {
+          method: 'POST',
+          cache: 'no-cache',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 配合 Apps Script 的 e.postData.contents
+          body: JSON.stringify(formData)
+        })
           .then(res => res.json())
           .then(result => {
             handleFormResponse(result);
@@ -406,7 +471,7 @@ ${notes || '無'}`;
         allEmployees = employeeData;
         const employeeListDiv = document.getElementById('employeeList');
         employeeListDiv.innerHTML = '';
-        
+
         // 確保 employeeData 是陣列才執行 forEach
         if (Array.isArray(employeeData)) {
           // 【您的要求】只顯示權限等級 2 (含) 以上的員工
@@ -461,8 +526,9 @@ ${notes || '無'}`;
         responsiblePersonDisplay.textContent = selectedNames.length > 0 ? selectedNames.join(', ') : '點擊以選擇負責人';
         responsiblePersonDisplay.classList.toggle('text-muted', selectedNames.length === 0);
       }
-    </script> 
+    </script>
     <!-- 【v116.0 移除】根據您的要求，移除頁面下方的案場列表表格 -->
     <!-- <hr> <?!= sitesTable ?> -->
-  </body>
+</body>
+
 </html>

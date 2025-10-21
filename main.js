@@ -170,6 +170,68 @@ function handleDataResponse(data) {
   // [新增] 呼叫新函式來渲染右側的專案資訊面板
   displayProjectInfo(data.overview, state.currentScheduleData);
 
+  // [v189.0 核心修正] 將事件綁定移至 displayProjectInfo 之後，確保按鈕已存在於 DOM 中
+  const copyBtn = document.getElementById('copy-project-info-btn');
+  if (copyBtn && !copyBtn.dataset.listenerAttached) { // 避免重複綁定
+    copyBtn.addEventListener('click', () => {
+      if (!state.overview) {
+        showGlobalNotification('尚未載入專案資訊，無法複製。', 3000, 'error');
+        return;
+      }
+      const get = (key) => state.overview[key] || '';
+      const notes = [
+        get('備註-管理中心電話').trim(),
+        get('備註-施工時間').trim(),
+        get('備註-特別注意事項').trim()
+      ].filter(Boolean).join('\n');
+
+      const infoText = `進場資訊
+1.案名：${get('案場名稱').trim() || '未填寫'}
+2.地址：${get('案場地址').trim() || '未填寫'}
+3.停車方式：${get('停車方式').trim() || '未填寫'}
+4.入門方式：${get('入門方式').trim() || '未填寫'}
+5.設計師：${get('設計師').trim() || '未填寫'}
+6.保證金事宜：${get('保證金事宜').trim() || '未填寫'}
+7.衛浴使用說明：${get('衛浴使用說明').trim() || '無'}
+8.案場注意事項：
+${notes || '無'}`;
+
+      navigator.clipboard.writeText(infoText).then(() => {
+        showGlobalNotification('✅ 案場資訊已成功複製！', 3000, 'success');
+      }).catch(err => {
+        showGlobalNotification(`複製失敗: ${err.message}`, 5000, 'error');
+      });
+    });
+    copyBtn.dataset.listenerAttached = 'true';
+  }
+
+  // [v199.0 新增] 結案按鈕功能
+  const closeBtn = document.getElementById('close-project-btn');
+  if (closeBtn && !closeBtn.dataset.listenerAttached) { // 避免重複綁定
+    closeBtn.addEventListener('click', () => {
+      if (confirm(`您確定要將專案 #${state.projectId} 標示為「已結案」嗎？\n\n此操作將無法復原。`)) {
+        showGlobalNotification('正在處理結案...', 3000, 'info');
+        api.postTask({
+          action: 'updateProjectStatus',
+          projectId: state.projectId,
+          status: '已結案',
+          userId: state.currentUserId,
+          userName: state.currentUserName
+        }).then(finalJobState => {
+          if (finalJobState.result && finalJobState.result.success) {
+            showGlobalNotification('專案已成功標示為「已結案」。', 5000, 'success');
+            closeBtn.disabled = true; // 禁用按鈕，避免重複點擊
+            closeBtn.textContent = '專案已結案';
+          } else {
+            showGlobalNotification(`結案失敗: ${finalJobState.result?.message || '未知錯誤'}`, 5000, 'error');
+          }
+        }).catch(err => showGlobalNotification(`結案請求失敗: ${err.message}`, 5000, 'error'));
+      }
+    });
+    closeBtn.dataset.listenerAttached = 'true';
+  }
+  state.overview = data.overview; // [v187.0 新增] 將總覽資訊存入 state，供複製功能使用
+
   // [重構] 渲染UI：呼叫 scheduleActions.js 中的函式，將排序好的排程資料渲染成畫面
   ScheduleActions.renderSchedulePage(data.overview, state.currentScheduleData);
 
@@ -358,7 +420,6 @@ async function refreshData(projectId, userId, API_BASE_URL) {
 async function initializeApp() {
   // [核心修正] 將常數宣告移至函式內部，確保在 DOMContentLoaded 後才讀取 window 物件。
   // 這可以解決因模組載入時機導致 window.API_BASE_URL 為 undefined 的問題。
-  // [核心修正] 為每一次頁面載入產生一個唯一的識別碼，用以解決競態條件
   const pageLoadId = `load_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   window.currentPageLoadId = pageLoadId;
 
