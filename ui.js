@@ -8,7 +8,7 @@
 */
 
 import { state } from './state.js';
-import { thumbLog, driveFileId } from './utils.js';
+import { logToPage, driveFileId } from './utils.js';
 
 /**
  * 在等待 API 資料時，於主要內容區塊顯示骨架屏（載入中的動畫效果）。
@@ -101,12 +101,12 @@ function renderDirectImg(src) {
         img.dataset.full = src;
     }
 
-    img.onload = () => thumbLog('IMG OK ' + img.src);
+    img.onload = () => logToPage('IMG OK ' + img.src);
     img.onerror = () => {
         const ph = document.createElement('div'); ph.className = 'photo-placeholder';
         ph.textContent = '無法載入縮圖（點此開啟原圖）'; ph.style.cursor = 'pointer';
         ph.onclick = () => window.open(src, '_blank', 'noopener,noreferrer');
-        wrap.replaceChildren(ph); thumbLog('IMG ERROR ' + img.src);
+        wrap.replaceChildren(ph); logToPage('IMG ERROR ' + img.src, 'error');
     };
     wrap.appendChild(img); return wrap;
 }

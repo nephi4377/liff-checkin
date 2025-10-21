@@ -539,8 +539,8 @@
                     { userId: userProfile.userId, userName: userProfile.displayName, permission: 1, group: '未分類' };
 
                 const url = new URL(GAS_WEB_APP_URL);
-                // [v89.0 修正] 根據後端 checkin_.js 的路由邏輯，page 應為 'attendance_api'
-                url.searchParams.append('page', 'get_hub_projects_data');
+                // [v160.0 修正] 根據後端 project-console/WebApp.js 的路由邏輯，page 應為 'get_hub_projects_data'
+                url.searchParams.append('page', 'get_hub_projects_data'); // 修正此處的 page 參數
                 url.searchParams.append('userId', userProfile.userId);
                 // [v90.0 效能優化] 將完整的 userProfile 物件作為 JSON 字串傳遞，避免後端重複查詢。
                 url.searchParams.append('userProfile', JSON.stringify(currentUser));
