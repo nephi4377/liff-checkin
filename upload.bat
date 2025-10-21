@@ -52,9 +52,7 @@ goto end
 powershell -Command "Write-Output 'Git 可執行檔已設定為: %GIT_EXECUTABLE%'"
 powershell -Command "Write-Output '[前端部署] 正在產生新的版本號...'"
 for /f "delims=" %%i in ('powershell -Command "(Get-Date).ToString('yy.MM.dd.HHmm')"') do set "NEW_VERSION=v%%i"
-for /f "delims=" %%i in ('powershell -Command "(Get-Date).ToString('yyyy-MM-dd HH:mm')"') do set "CURRENT_DATETIME=%%i"
 powershell -Command "Write-Output '新版本號為: %NEW_VERSION%'"
-powershell -Command "Write-Output '更新時間為: %CURRENT_DATETIME%'"
 
 echo.
 powershell -Command "Write-Output '[前端部署] 正在自動更新 managementconsole.html 中的版本號...'"
@@ -67,8 +65,8 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-powershell -Command "Write-Output '[前端部署] 正在自動更新 checkin.html 中的版本號與更新時間...'"
-powershell -Command "(Get-Content -Path 'checkin.html' -Raw -Encoding UTF8) -replace \"const APP_VERSION = '.*';\", \"const APP_VERSION = '%NEW_VERSION%';\" -replace \"const LAST_UPDATED = '.*';\", \"const LAST_UPDATED = '%CURRENT_DATETIME%';\" | Set-Content -Path 'checkin.html' -Encoding UTF8"
+powershell -Command "Write-Output '[前端部署] 正在自動更新 checkin.html 中的版本號...'"
+powershell -Command "(Get-Content -Path 'checkin.html' -Raw -Encoding UTF8) -replace \"const APP_VERSION = '.*';\", \"const APP_VERSION = '%NEW_VERSION%';\" | Set-Content -Path 'checkin.html' -Encoding UTF8"
 if %errorlevel% neq 0 (
     echo.
     powershell -Command "Write-Output '錯誤: 更新 checkin.html 檔案失敗。請檢查檔案是否存在或被鎖定。'"
