@@ -164,8 +164,17 @@
         console.log('[NewSiteForm][Input] 準備向後端請求案場列表 (get_all_sites)...');
         
         // 【v126.0 核心重構】改用 fetch API，並使用 Promise.all 並行請求，提升載入速度。
-        const sitesPromise = fetch(`${API_URL}?page=attendance_api&action=get_all_sites`).then(res => res.json());
-        const employeesPromise = fetch(`${API_URL}?page=attendance_api&action=get_employees`).then(res => res.json());
+        // 【v172.0 核心修正】為所有請求附上使用者資訊，以便後端日誌追蹤。
+        // 由於此頁面沒有 LIFF 認證，我們假設操作者是從其他地方跳轉過來的，
+        // 因此在 URL 中應該會有 uid 和 name 參數。
+        const urlParams = new URLSearchParams(window.location.search);
+        const uid = urlParams.get('uid') || 'unknown_user';
+        const name = urlParams.get('name') || 'Unknown User';
+        
+        const sitesUrl = `${API_URL}?page=attendance_api&action=get_all_sites&userId=${uid}&userName=${encodeURIComponent(name)}`;
+        const employeesUrl = `${API_URL}?page=attendance_api&action=get_employees&userId=${uid}&userName=${encodeURIComponent(name)}`;
+        const sitesPromise = fetch(sitesUrl).then(res => res.json());
+        const employeesPromise = fetch(employeesUrl).then(res => res.json());
 
         Promise.all([sitesPromise, employeesPromise])
           .then(([sitesResponse, employeesResponse]) => {

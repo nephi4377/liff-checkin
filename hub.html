@@ -788,8 +788,30 @@
             // 【您的要求】新增案場資料連結
             document.getElementById('add-site-link').addEventListener('click', (e) => {
                 e.preventDefault();
-                // 【您的要求】修正連結錯誤，應直接導向 NewSiteForm.html
-                const targetUrl = `NewSiteForm.html`;
+                // 【v173.0 核心修正】在開啟「新增案場」頁面時，附上當前操作者的 UID 與名稱，
+                // 以便 NewSiteForm.html 能將使用者資訊傳遞給後端，解決日誌中 requestor 為 N/A 的問題。
+                if (!userProfile) { alert('無法取得您的使用者資訊，請稍後再試。'); return; }
+                const params = new URLSearchParams({
+                    uid: userProfile.userId,
+                    name: userProfile.displayName
+                });
+                const targetUrl = `NewSiteForm.html?${params.toString()}`;
+                window.open(targetUrl, '_blank');
+            });
+
+            // 【v175.0 核心修正】為「出勤管理主控台」連結動態加上使用者資訊
+            document.getElementById('attendance-console-link').addEventListener('click', (e) => {
+                e.preventDefault(); // 阻止 <a> 標籤的預設跳轉行為
+                if (!userProfile || !userProfile.userId) {
+                    alert('無法取得您的使用者資訊，請重新載入頁面。');
+                    return;
+                }
+                const baseUrl = 'https://info.tanxin.space/attendance_report.html';
+                const params = new URLSearchParams({
+                    uid: userProfile.userId,
+                    name: userProfile.displayName
+                });
+                const targetUrl = `${baseUrl}?${params.toString()}`;
                 window.open(targetUrl, '_blank');
             });
 

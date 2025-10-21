@@ -147,45 +147,6 @@
         document.getElementById('start-date').value = firstDayOfMonth.toLocaleDateString('sv');
         document.getElementById('end-date').value = today.toLocaleDateString('sv');
 
-        fetchApi({ page: 'attendance_api', action: 'get_config' })
-            .then(config => {
-                return loadGoogleMapsAPI(config.googleMapsApiKey);
-            })
-            .catch(error => {
-                console.error('[DEBUG] 無法載入 Google Maps API Key:', error);
-                alert('無法載入地圖設定，地圖功能將無法使用。');
-            });
-
-        fetchApi({ page: 'attendance_api', action: 'get_employees' })
-            .then(response => {
-                // 【v40.0 核心修正】後端 API 回傳的是 { success: true, data: [...] } 格式的物件。
-                // 我們需要從中取出 .data 屬性才是真正的員工陣列。
-                // 這個錯誤與之前在 shift_schedule.html 中遇到的問題完全相同。
-                if (!response || !response.success || !Array.isArray(response.data)) {
-                    throw new Error("從後端取得的員工資料格式不正確。");
-                }
-                const employees = response.data;
-                const select = document.getElementById('employee-select');
-                const modalSelect = document.getElementById('modal-employee-select');
-                
-                // 【⭐️ 核心修正：根據您的要求，只顯示在職員工 (權限 >= 2) ⭐️】
-                // 同時過濾掉不參與排班的最高管理者 (權限 >= 5)，因此只保留權限 2, 3, 4 的員工。
-                const filteredEmployees = employees.filter(emp => emp.permission >= 2 && emp.permission < 5);
-
-                // 【⭐️ 核心修正：儲存員工班表資料，並綁定事件 ⭐️】
-                employeeShiftData = {}; // 清空舊資料
-                filteredEmployees.forEach(emp => {
-                    const option = `<option value="${emp.userId}">${emp.userName}</option>`;
-                    select.innerHTML += option;
-                    modalSelect.innerHTML += option;
-                    // 將班表時間存入全域變數，以 userId 為鍵
-                    employeeShiftData[emp.userId] = { shiftStart: emp.shiftStart, shiftEnd: emp.shiftEnd };
-                });
-                // 【⭐️ 核心修正：移除對不存在函式的呼叫，避免程式中斷 ⭐️】
-                // 此處的 handleModalEmployeeChange 已被移除，保留會導致錯誤。
-            })
-            .catch(error => console.error('[DEBUG] 載入員工列表失敗:', error));
-
         // 【⭐️ 核心修正：將所有事件綁定移至此處，確保 DOM 已載入 ⭐️】
         document.getElementById('query-btn').onclick = fetchReportData;
         document.getElementById('add-checkin-btn').onclick = () => {
@@ -204,6 +165,46 @@
         // 【⭐️ 核心新增：為日期與時間輸入框加上手動觸發功能 ⭐️】
         document.getElementById('modal-date').addEventListener('click', (e) => e.target.showPicker());
         document.getElementById('modal-time').addEventListener('click', (e) => e.target.showPicker());
+
+        // 【v175.0 核心改造】將 API 請求移至此處，並統一附上使用者資訊
+        const urlParams = new URLSearchParams(window.location.search);
+        const uid = urlParams.get('uid') || 'unknown_user';
+        const name = urlParams.get('name') || 'Unknown User';
+
+        const userParams = { userId: uid, userName: name };
+
+        // 並行發送請求，提升載入速度
+        Promise.all([
+            fetchApi({ page: 'attendance_api', action: 'get_config', ...userParams }),
+            fetchApi({ page: 'attendance_api', action: 'get_employees', ...userParams })
+        ]).then(([configResponse, employeesResponse]) => {
+            // 處理地圖設定
+            if (configResponse && configResponse.googleMapsApiKey) {
+                loadGoogleMapsAPI(configResponse.googleMapsApiKey).catch(console.error);
+            } else {
+                console.error('[DEBUG] 無法取得 Google Maps API Key');
+            }
+
+            // 處理員工列表
+            if (employeesResponse && employeesResponse.success && Array.isArray(employeesResponse.data)) {
+                const employees = employeesResponse.data;
+                const select = document.getElementById('employee-select');
+                const modalSelect = document.getElementById('modal-employee-select');
+                const filteredEmployees = employees.filter(emp => emp.permission >= 2 && emp.permission < 5);
+
+                employeeShiftData = {};
+                filteredEmployees.forEach(emp => {
+                    const option = `<option value="${emp.userId}">${emp.userName}</option>`;
+                    select.innerHTML += option;
+                    modalSelect.innerHTML += option;
+                    employeeShiftData[emp.userId] = { shiftStart: emp.shiftStart, shiftEnd: emp.shiftEnd };
+                });
+            } else {
+                console.error('[DEBUG] 載入員工列表失敗:', employeesResponse);
+            }
+        }).catch(error => {
+            showGlobalNotification(`載入頁面初始資料失敗: ${error.message}`, 8000, 'error');
+        });
     });
 
     // 【⭐️ 核心重構：簡化設定時間的函式 ⭐️】
@@ -326,7 +327,12 @@
         document.getElementById('summary-section').style.display = 'none';
         document.getElementById('map-container').style.display = 'none';
 
-        const params = { page: 'attendance_api', action:'get_report', startDate, endDate, userId };
+        // 【v175.0 核心修正】在查詢報表時，也附上當前操作者的資訊
+        const urlParams = new URLSearchParams(window.location.search);
+        const operatorUid = urlParams.get('uid') || 'unknown_user';
+        const operatorName = urlParams.get('name') || 'Unknown User';
+
+        const params = { page: 'attendance_api', action:'get_report', startDate, endDate, userId, operatorId: operatorUid, operatorName: operatorName };
         fetchApi(params)
             .then(data => {
                 // [核心改造] 收到後端回傳的完整報表後，立即使用已過濾的員工列表 (employeeShiftData) 進行篩選。

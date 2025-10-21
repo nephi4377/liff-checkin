@@ -332,9 +332,13 @@
             if (cachedEmployees) {
                 allEmployees = cachedEmployees;
             } else {
-                // 【⭐️ 核心修正：正確解析後端回傳的員工資料物件 ⭐️】
-                // 後端 API 回傳的格式是 { success: true, data: [...] }，我們需要從中取出 data 屬性。
-                const response = await fetchApi({ page: 'attendance_api', action: 'get_employees' });
+                // 【v172.0 核心修正】在請求員工列表時，附上當前操作者的資訊，以便後端日誌追蹤。
+                const response = await fetchApi({ 
+                    page: 'attendance_api', 
+                    action: 'get_employees',
+                    userId: currentUser.userId,
+                    userName: currentUser.userName
+                });
                 if (response && response.success && Array.isArray(response.data)) {
                     allEmployees = response.data;
                     saveCache('shiftSchedule_employees', allEmployees, 1); // 員工資料快取 1 天
