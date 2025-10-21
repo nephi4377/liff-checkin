@@ -301,6 +301,8 @@
             url.searchParams.append('userName', record.userName);
             url.searchParams.append('lat', record.lat);
             url.searchParams.append('lon', record.lon);
+            // 【您的要求】新增 timestamp 參數，將離線打卡時的時間戳傳送到後端
+            if (record.timestamp) url.searchParams.append('timestamp', record.timestamp);
             // 【您的要求】新增 source 參數
             const urlParams = new URLSearchParams(window.location.search);
             const source = urlParams.get('source');
@@ -373,6 +375,7 @@
                 // --- 步驟 2: 建立打卡紀錄並存入離線佇列 ---
                 const checkinRecord = {
                     id: `checkin_${Date.now()}`, // 給每筆紀錄一個唯一 ID
+                    timestamp: Date.now(),       // 【您的要求】記錄按下按鈕當下的時間戳
                     userId: userProfile.userId,
                     userName: userProfile.displayName,
                     lat: latitude,
