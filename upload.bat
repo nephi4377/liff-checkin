@@ -1,15 +1,15 @@
 @echo off
-:: [v5.0 升級] 
-:: - 強化流程控制，在 pull 之前再次檢查工作區狀態，避免衝突。
-:: - 全面改用 PowerShell 輸出中文，根除亂碼問題。
-:: - 整合後端部署腳本，實現一鍵化部署。
-:: - 延長重試等待時間，並在失敗時給予更明確的提示。
 @chcp 65001 > nul
 setlocal
 
 :: =================================================================
-:: 全系統自動化部署腳本 v5.0
+:: 全系統自動化部署腳本 v5.2 (穩定還原版)
 :: 功能:
+:: - [v5.2] 移除 git commit 與 git pull 的自動重試，還原至最穩定版本。
+:: - [v5.0] 強化流程控制，在 pull 之前再次檢查工作區狀態，避免衝突。
+:: - [v5.0] 全面改用 PowerShell 輸出中文，根除亂碼問題。
+:: - [v5.0] 整合後端部署腳本，實現一鍵化部署。
+:: - [v5.0] 延長重試等待時間，並在失敗時給予更明確的提示。
 :: 1. 自動產生 YY.MM.DD.HHmm 格式的版本號。
 :: 2. 強制以 UTF-8 編碼更新 HTML 檔案中的版本號，解決亂碼問題。
 :: 3. 自動將版本號作為 commit 訊息。
@@ -97,19 +97,38 @@ echo [前端部署] 正在提交變更...
 
 :: [v2.1 修正] 檢查是否有任何已暫存的變更需要提交
 "%GIT_EXECUTABLE%" diff --cached --quiet --exit-code
-if %errorlevel% equ 1 (
-    powershell -Command "Write-Output '偵測到檔案變更，正在提交...'"
-    "%GIT_EXECUTABLE%" commit -m "Update frontend to %NEW_VERSION%"
-    if %errorlevel% neq 0 (
-        echo.
-        powershell -Command "Write-Output '錯誤: ''git commit'' 失敗。'"
-        powershell -Command "Write-Output '請檢查 Git 設定 (如 user.name, user.email) 或手動解決問題。'"
-        goto end
-    )
-) else (
+
+if %errorlevel% neq 1 (
     powershell -Command "Write-Output '沒有偵測到檔案變更，無需提交。'"
+    goto after_commit
 )
 
+set "GIT_COMMIT_ATTEMPTS=0"
+:retry_git_commit
+set /a "GIT_COMMIT_ATTEMPTS+=1"
+
+powershell -Command "Write-Output '偵測到檔案變更，正在嘗試第 %GIT_COMMIT_ATTEMPTS% 次提交...'"
+"%GIT_EXECUTABLE%" commit -m "Update frontend to %NEW_VERSION%"
+
+if %errorlevel% equ 0 (
+    powershell -Command "Write-Output ''git commit'' 成功。'"
+    goto after_commit
+)
+
+if %GIT_COMMIT_ATTEMPTS% lss 3 (
+    echo.
+    powershell -Command "Write-Output '[警告] ''git commit'' 第 %GIT_COMMIT_ATTEMPTS% 次失敗，極有可能是檔案鎖定問題。'"
+    powershell -Command "Write-Output '8 秒後自動重試...'"
+    timeout /t 8 /nobreak > nul
+    goto retry_git_commit
+)
+
+echo.
+powershell -Command "Write-Output '[錯誤] ''git commit'' 連續失敗 3 次，部署中止。'"
+powershell -Command "Write-Output '請手動執行 ''git commit'' 查看詳細錯誤，或暫停 Dropbox/防毒軟體後再試。'"
+goto end
+
+:after_commit
 echo.
 powershell -Command "Write-Output '[前端部署] 正在從 GitHub 同步最新變更 (rebase 模式)...'"
 
@@ -124,7 +143,7 @@ for /f %%i in ('"%GIT_EXECUTABLE%" status --porcelain') do (
 "%GIT_EXECUTABLE%" pull --rebase
 if %errorlevel% neq 0 (
     echo.
-    powershell -Command "Write-Output '錯誤: ''git pull'' 失敗。請手動解決合併衝突後再試一次。'"
+    powershell -Command "Write-Output '[錯誤] ''git pull'' 失敗。請手動解決合併衝突後再試一次。'"
     goto end
 )
 

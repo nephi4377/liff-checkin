@@ -36,15 +36,47 @@
         .log-success { color: #22c55e; }
         .log-error { color: #ef4444; }
         .log-info { color: #6b7280; }
+        /* 【您的要求】狀態燈號樣式 */
+        .status-indicator {
+            transition: all 0.3s ease;
+        }
+        .status-pending .status-icon { color: #9ca3af; /* gray-400 */ }
+        .status-pending .status-text { color: #6b7280; /* gray-500 */ }
+        .status-success .status-icon { color: #22c55e; /* green-500 */ }
+        .status-success .status-text { color: #166534; /* green-800 */ }
+        .status-error .status-icon { color: #ef4444; /* red-500 */ }
+        .status-error .status-text { color: #991b1b; /* red-800 */ }
+        .status-icon svg { width: 1.25rem; height: 1.25rem; }
+
     </style>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen">
     <div class="w-full max-w-md mx-auto bg-white rounded-xl shadow-lg p-8 text-center">
         
-        <div class="mb-6">
+        <!-- 【您的要求】新增一個用於「離線成功」的 SVG 圖示 -->
+        <div id="offline-success-icon" class="mb-6 hidden">
+            <svg class="mx-auto h-12 w-auto text-amber-500" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 16.2A4.5 4.5 0 0 0 17.5 8h-1.8A7 7 0 1 0 4 14.9"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg>
+        </div>
+        <div id="default-icon" class="mb-6">
             <svg class="mx-auto h-12 w-auto text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             <h1 class="text-2xl font-bold text-gray-800 mt-2">添心設計</h1>
             <p class="text-gray-500">員工專用打卡系統</p>
+        </div>
+
+        <!-- 【您的要求】狀態燈號 UI -->
+        <div class="grid grid-cols-3 gap-4 mb-6 text-center">
+            <div id="status-line" class="status-indicator status-pending">
+                <div class="status-icon mx-auto"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><path d="M12.01 6c-1.09 0-2.1.48-2.82 1.25l1.42 1.42C11.12 8.16 11.55 8 12.01 8c1.65 0 3 1.35 3 3s-1.35 3-3 3c-.46 0-.89-.16-1.28-.42L9.31 15.01C10.21 15.63 11.23 16 12.01 16c3.31 0 6-2.69 6-6s-2.69-6-6-6z"/></svg></div>
+                <div class="status-text text-xs font-semibold mt-1">LINE連線</div>
+            </div>
+            <div id="status-network" class="status-indicator status-pending">
+                <div class="status-icon mx-auto"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C19.73 5.73 8.27 5.73 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0z"/><path d="M5 13l2 2c2.76-2.76 7.24-2.76 10 0l2-2c-3.86-3.87-10.13-3.87-14 0z"/></svg></div>
+                <div class="status-text text-xs font-semibold mt-1">網路狀態</div>
+            </div>
+            <div id="status-gps" class="status-indicator status-pending">
+                <div class="status-icon mx-auto"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg></div>
+                <div class="status-text text-xs font-semibold mt-1">GPS狀態</div>
+            </div>
         </div>
 
         <div id="status-container" class="mb-8 p-4 rounded-lg bg-gray-50 min-h-[100px] flex items-center justify-center">
@@ -72,6 +104,8 @@
         const loadingTextElement = document.getElementById('loading-text');
         const checkinButton = document.getElementById('checkin-button');
         const debugLogElement = document.getElementById('debug-log');
+        const PROFILE_CACHE_KEY = 'checkin_user_profile_cache';
+        let userProfile = null; // 【您的要求】新增全域變數來儲存使用者 Profile
 
         function pageLog(message, type = 'info') {
             const logEntry = document.createElement('div');
@@ -81,34 +115,211 @@
             debugLogElement.parentElement.scrollTop = debugLogElement.parentElement.scrollHeight;
         }
 
-        async function main() {
+        // 【您的要求】快取管理工具
+        function saveCache(key, data, days = 7) {
+            const cache = {
+                data: data,
+                expires: Date.now() + days * 24 * 60 * 60 * 1000
+            };
             try {
-                pageLog('程式開始執行...');
-                showLoading('正在初始化 LIFF...');
-                await liff.init({ liffId: LIFF_ID });
+                localStorage.setItem(key, JSON.stringify(cache));
+                pageLog(`快取已儲存 (Key: ${key})`, 'success');
+            } catch (e) {
+                pageLog(`儲存快取失敗: ${e.message}`, 'error');
+            }
+        }
+
+        function loadCache(key) {
+            const cached = localStorage.getItem(key);
+            if (!cached) return null;
+            try {
+                const cache = JSON.parse(cached);
+                if (cache.expires < Date.now()) {
+                    localStorage.removeItem(key);
+                    return null;
+                }
+                return cache.data;
+            } catch (e) { return null; }
+        }
+
+        // ===============================================================
+        // ======================= 【離線功能核心】 ======================
+        // ===============================================================
+        const OFFLINE_QUEUE_KEY = 'checkin_offline_queue';
+
+        // 讀取離線佇列
+        function getOfflineQueue() {
+            try {
+                return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY)) || [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        // 儲存離線佇列
+        function saveOfflineQueue(queue) {
+            localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+        }
+
+        // 新增一筆紀錄到佇列
+        function addRecordToQueue(record) {
+            const queue = getOfflineQueue();
+            queue.push(record);
+            saveOfflineQueue(queue);
+        }
+
+        // [優化] 增加 Promise 超時功能
+        function withTimeout(promise, ms, timeoutError = new Error('操作逾時')) {
+            const timeout = new Promise((_, reject) => {
+                setTimeout(() => reject(timeoutError), ms);
+            });
+            return Promise.race([promise, timeout]);
+        }
+
+        /**
+         * 【您的要求】狀態燈號更新函式
+         * @param {'line' | 'network' | 'gps'} indicatorName - 燈號名稱
+         * @param {'pending' | 'success' | 'error'} status - 狀態
+         * @param {string} text - 顯示文字
+         */
+        function updateStatusIndicator(indicatorName, status, text) {
+            const indicator = document.getElementById(`status-${indicatorName}`);
+            if (!indicator) return;
+            indicator.className = `status-indicator status-${status}`;
+            indicator.querySelector('.status-text').textContent = text;
+        }
+
+        /**
+         * 【您的要求】核心改造：快取優先，背景驗證
+         */
+        async function main() {
+            pageLog('程式開始執行...');
+            
+            // 步驟 1: 處理網路狀態燈號
+            updateNetworkStatus();
+            window.addEventListener('online', updateNetworkStatus);
+            window.addEventListener('offline', updateNetworkStatus);
+
+            // 步驟 2: 嘗試從快取載入 Profile，實現快速啟動
+            const cachedProfile = loadCache(PROFILE_CACHE_KEY);
+            if (cachedProfile) {
+                userProfile = cachedProfile;
+                displayNameElement.textContent = userProfile.displayName;
+                checkinButton.disabled = false;
+                hideLoading();
+                pageLog('✅ 從快取載入 Profile，快速啟用介面。', 'success');
+                updateStatusIndicator('line', 'success', '已快取');
+            } else {
+                showLoading('正在初始化...');
+            }
+
+            // 步驟 3: 無論快取是否存在，都在背景執行 LIFF 初始化與驗證
+            try {
+                updateStatusIndicator('line', 'pending', '驗證中');
+                await withTimeout(liff.init({ liffId: LIFF_ID }), 10000, new Error('LIFF 初始化逾時'));
                 pageLog('步驟: liff.init() 成功', 'success');
 
                 if (!liff.isLoggedIn()) {
-                    pageLog('狀態: 未登入，準備跳轉登入頁面', 'error');
+                    pageLog('狀態: 未登入，準備跳轉登入頁面', 'info');
+                    updateStatusIndicator('line', 'error', '未登入');
                     liff.login();
                     return;
                 }
                 pageLog('狀態: 已登入');
 
-                const profile = await liff.getProfile();
-                pageLog('步驟: liff.getProfile() 成功', 'success');
-                displayNameElement.textContent = profile.displayName;
+                const freshProfile = await withTimeout(liff.getProfile(), 10000, new Error('身分驗證逾時'));
+                pageLog('步驟: liff.getProfile() 成功 (背景驗證)', 'success');
+                updateStatusIndicator('line', 'success', '已連線');
+
+                // 步驟 4: 更新 Profile 與快取
+                userProfile = freshProfile;
+                saveCache(PROFILE_CACHE_KEY, userProfile, 7); // 快取 7 天
+                displayNameElement.textContent = userProfile.displayName;
                 checkinButton.disabled = false;
                 hideLoading();
-                pageLog('初始化完成，等待使用者操作...');
+                pageLog('✅ 背景驗證與快取更新完成。');
 
             } catch (err) {
-                pageLog(`嚴重錯誤: LIFF 初始化失敗 - ${err.message}`, 'error');
-                console.error('LIFF Initialization Error:', err);
-                showError('LIFF 初始化失敗，請在手機 LINE App 中開啟此頁面。');
+                let errorMessage = '系統初始化失敗，請稍後再試。';
+                if (err.message.includes('逾時')) {
+                    errorMessage = '連線逾時，請確認您的網路是否穩定，然後重新載入頁面。';
+                }
+                pageLog(`背景驗證錯誤: ${err.message}`, 'error');
+                console.error('Initialization Error:', err);
+                updateStatusIndicator('line', 'error', '驗證失敗');
+                // 如果沒有快取，才顯示錯誤訊息給使用者
+                if (!cachedProfile) {
+                    showError(errorMessage);
+                }
+            }
+
+            // 步驟 5: 同步離線打卡紀錄
+            syncOfflineRecords();
+        }
+
+        /**
+         * 【離線功能】同步所有儲存在 localStorage 的離線打卡紀錄
+         */
+        async function syncOfflineRecords() {
+            const queue = getOfflineQueue();
+            if (queue.length === 0) {
+                pageLog('離線佇列為空，無需同步。');
+                return;
+            }
+
+            pageLog(`發現 ${queue.length} 筆離線紀錄，開始背景同步...`, 'info');
+            
+            let remainingQueue = [...queue];
+            for (const record of queue) {
+                try {
+                    // 為每筆紀錄的同步加上超時
+                    await withTimeout(sendCheckinData(record), 15000, new Error('同步逾時'));
+                    pageLog(`成功同步離線紀錄 (ID: ${record.id})`, 'success');
+                    // 從剩餘佇列中移除已成功的紀錄
+                    remainingQueue = remainingQueue.filter(r => r.id !== record.id);
+                } catch (error) {
+                    pageLog(`同步離線紀錄 (ID: ${record.id}) 失敗: ${error.message}`, 'error');
+                    // 同步失敗，保留在佇列中，下次再試
+                }
+            }
+
+            saveOfflineQueue(remainingQueue); // 更新 localStorage
+            if (remainingQueue.length === 0) {
+                pageLog('所有離線紀錄皆已同步完成！', 'success');
+            } else {
+                pageLog(`${remainingQueue.length} 筆離線紀錄同步失敗，將於下次開啟時重試。`, 'info');
             }
         }
+
+        /**
+         * 【離線功能】將單筆打卡資料傳送到後端的共用函式
+         * @param {object} record - 包含 userId, userName, lat, lon 的物件
+         */
+        async function sendCheckinData(record) {
+            const url = new URL(GAS_WEB_APP_URL);
+            url.searchParams.append('userId', record.userId);
+            url.searchParams.append('userName', record.userName);
+            url.searchParams.append('lat', record.lat);
+            url.searchParams.append('lon', record.lon);
+            // 【您的要求】新增 source 參數
+            const urlParams = new URLSearchParams(window.location.search);
+            const source = urlParams.get('source');
+            if (source) url.searchParams.append('source', source);
+            
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`後端伺服器錯誤: ${response.status}`);
+            return response.json();
+        }
         
+        // 【您的要求】網路狀態更新函式
+        function updateNetworkStatus() {
+            if (navigator.onLine) {
+                updateStatusIndicator('network', 'success', '連線正常');
+            } else {
+                updateStatusIndicator('network', 'error', '已離線');
+            }
+        }
+
         function getGeoLocationPromise() {
             return new Promise((resolve, reject) => {
                 if (!navigator.geolocation) {
@@ -137,54 +348,70 @@
         // ===============================================================
 
         /**
-         * 【修改過的函式】
-         * 打卡按鈕的點擊事件處理器。
-         * 【v52.0 核心改造】將舊的 JSONP 請求方式，升級為現代標準的 fetch API。
+         * 【核心改造】打卡按鈕的點擊事件處理器。
+         * - 將 liff.getProfile() 移至此處，實現「點擊後才驗證」，加快初始載入速度。
+         * - 為所有非同步操作加上超時與錯誤處理。
          */
+        // 【離線功能】改造打卡事件，加入離線儲存邏輯
         checkinButton.addEventListener('click', async () => {
             checkinButton.disabled = true;
             pageLog('事件: 打卡按鈕被點擊');
 
             try {
                 // --- 步驟 1: 取得 GPS ---
+                updateStatusIndicator('gps', 'pending', '定位中');
                 showLoading('正在取得您的 GPS 位置...');
                 const location = await getGeoLocationPromise();
                 const { latitude, longitude } = location.coords;
                 pageLog(`步驟: 取得 GPS 成功`, 'success');
+                updateStatusIndicator('gps', 'success', '定位成功');
 
-                // --- 步驟 2: 取得 LINE Profile ---
-                showLoading('正在驗證您的身分...');
-                const profile = await liff.getProfile();
-                pageLog(`步驟: liff.getProfile() 成功`, 'success');
-
-                // --- 步驟 3: 使用 fetch API 發送請求 ---
-                showLoading('正在傳送打卡資訊...');
-                const url = new URL(GAS_WEB_APP_URL);
-                url.searchParams.append('userId', profile.userId);
-                url.searchParams.append('userName', profile.displayName);
-                url.searchParams.append('lat', latitude);
-                url.searchParams.append('lon', longitude);
-                pageLog(`目標 URL (fetch): ${url.toString()}`);
-
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`後端伺服器錯誤: ${response.status}`);
+                if (!userProfile) {
+                    throw new Error('無法取得使用者資訊，請重新載入頁面。');
                 }
-                const result = await response.json();
-                pageLog('步驟: 後端透過 fetch 回應成功', 'success');
-                hideLoading();
-                handleCheckInResult(result);
+
+                // --- 步驟 2: 建立打卡紀錄並存入離線佇列 ---
+                const checkinRecord = {
+                    id: `checkin_${Date.now()}`, // 給每筆紀錄一個唯一 ID
+                    userId: userProfile.userId,
+                    userName: userProfile.displayName,
+                    lat: latitude,
+                    lon: longitude
+                };
+                addRecordToQueue(checkinRecord);
+                pageLog(`紀錄已存入離線佇列 (ID: ${checkinRecord.id})`, 'info');
+
+                // --- 步驟 3: 嘗試立即同步此筆紀錄 ---
+                showLoading('正在傳送打卡資訊...');
+                try {
+                    const result = await withTimeout(sendCheckinData(checkinRecord), 15000, new Error('後端伺服器無回應'));
+                    pageLog('步驟: 後端回應成功，此筆紀錄已即時同步。', 'success');
+                    // 同步成功，從佇列中移除
+                    const queue = getOfflineQueue().filter(r => r.id !== checkinRecord.id);
+                    saveOfflineQueue(queue);
+                    hideLoading();
+                    handleCheckInResult(result); // 顯示後端回傳的真實訊息
+                } catch (syncError) {
+                    // 即時同步失敗，但沒關係，紀錄已在佇列中
+                    pageLog(`即時同步失敗: ${syncError.message}。紀錄將於下次開啟時重試。`, 'info');
+                    hideLoading();
+                    // 顯示一個通用的、樂觀的成功訊息
+                    handleCheckInResult({ status: 'success', message: '打卡成功！\n(離線紀錄已暫存，將在網路恢復時自動上傳)' });
+                }
 
             } catch (err) {
-                // 這個 catch 區塊現在會處理 GPS、Profile 和 fetch 的所有錯誤
+                // 這個 catch 區塊只處理前置作業 (GPS, getProfile) 的錯誤
                 pageLog(`嚴重錯誤: 打卡流程中斷 - ${err.message}`, 'error');
                 console.error('Check-in Error:', err);
                 let errorMessage = '打卡失敗，發生未知錯誤。';
                 if (err.code === 'PERMISSION_DENIED') {
                     errorMessage = '您拒絕了位置資訊授權，無法進行打卡。';
-                } else if (err.code === 'TIMEOUT') {
+                } else if (err.message.includes('逾時')) {
+                    errorMessage = '連線逾時，請檢查您的網路與 GPS 設定後，再試一次。';
+                } else if (err.code === 'TIMEOUT') { // GPS 專用 timeout
                     errorMessage = '取得位置資訊逾時，請檢查您的網路與 GPS 設定。';
                 }
+                updateStatusIndicator('gps', 'error', '定位失敗');
                 showError(errorMessage);
                 checkinButton.disabled = false;
             }
@@ -195,16 +422,29 @@
         // ===============================================================
 
         function handleCheckInResult(result) {
+            const isOfflineSuccess = result.status === 'success' && result.message.includes('離線');
             const container = document.getElementById('status-container');
             container.classList.remove('bg-gray-50', 'bg-green-100', 'bg-red-100');
-            pageLog(`處理後端結果: ${result.status}`);
-            if (result.status === 'success') {
+            pageLog(`處理後端結果: ${result.status} (離線: ${isOfflineSuccess})`);
+
+            if (isOfflineSuccess) {
+                // 【您的要求】離線成功的專屬樣式
+                container.classList.add('bg-amber-50'); // 淡橘色背景
+                updateMessage(result.message, 'text-amber-700'); // 橘色文字
+                checkinButton.textContent = '打卡完成 (離線)';
+                checkinButton.classList.remove('bg-blue-600', 'btn-pulse');
+                checkinButton.classList.add('bg-amber-500'); // 橘色按鈕
+                document.getElementById('default-icon').style.display = 'none';
+                document.getElementById('offline-success-icon').style.display = 'block';
+            } else if (result.status === 'success') {
+                // 正常線上成功
                 container.classList.add('bg-green-100');
                 updateMessage(result.message, 'text-green-800');
                 checkinButton.textContent = '打卡完成';
                 checkinButton.classList.remove('bg-blue-600', 'btn-pulse');
                 checkinButton.classList.add('bg-green-600');
             } else {
+                // 失敗
                 container.classList.add('bg-red-100');
                 updateMessage(result.message || '後端回報了一個錯誤，但未提供詳細訊息。', 'text-red-800');
                 checkinButton.textContent = '重新打卡';

@@ -700,42 +700,48 @@
 
                 // 2. 根據當前模式，決定要顯示「上班」還是「休假」相關的標籤
                 if (currentViewMode === 'show_on') { // 顯示上班模式
-                    // [v23.0 核心改造] 移除 isStandard 的特殊判斷，統一邏輯
-                    // 【v27.0 核心修正】重新定義「上班」的判斷邏輯：
-                    // 【v168.0 核心修正】只要班表狀態不是「休假」相關的假別，就視為上班日。
-                    // 這樣 "加班[...]" 這種狀態也會被正確視為上班日。
-                    const isWorking = !shift || (shift && !shift.includes('休假') && !shift.includes('特休') && !shift.includes('病假') && !shift.includes('事假'));
-
-                    // 處理加班：即使是休假日，只要有加班紀錄，在「顯示上班」模式下也應該被看見
-                    // [v168.0 修正] 清空舊標籤，避免重複渲染
                     dayNumberEl.querySelectorAll('.shift-tag').forEach(t => t.remove());
-                    const overtimeShifts = shifts.filter(s => s.includes('加班'));
-                    overtimeShifts.forEach(s => {
-                        const baseType = s.match(/^[^\[\(]+/)[0]; // 提取 "加班"
+
+                    // [v207.0 核心改造] 根據使用者指示，重構上班/請假狀態的顯示邏輯
+                    // 1. 判斷是否為「全天休假」。只有單純的 "休假" 或不含時間區間的假別才算。
+                    const isFullDayOff = shifts.length === 1 && !shifts[0].includes('[') && ['休假', '特休', '病假', '事假', '公假', '婚假', '喪假'].includes(shifts[0]);
+
+                    // 2. 只要不是全天休假，就都算是上班日，要顯示「班」
+                    if (!isFullDayOff) {
+                        const tag = document.createElement('span');
+                        tag.className = 'shift-tag shift-上班';
+                        tag.textContent = '班';
+                        dayNumberEl.appendChild(tag);
+                    }
+
+                    // 3. 遍歷所有假別，只要不是單純的「休假」，就附加一個對應的標籤
+                    shifts.forEach(s => {
+                        if (s === '休假') return; // 純排休在「顯示上班」模式下不顯示
+                        const baseType = s.match(/^[^\[\(]+/)[0];
                         const tag = document.createElement('span');
                         tag.className = `shift-tag shift-${baseType}`;
                         tag.textContent = baseType.charAt(0);
                         tag.title = s; // 滑鼠懸浮提示
                         dayNumberEl.appendChild(tag);
                     });
-
-                    // 如果完全沒有任何假勤紀錄 (代表是純粹的上班日)，才顯示「班」
-                    if (isWorking) {
-                        const tagClass = `shift-上班`;
-                        selfStatusTag = document.createElement('span');
-                        selfStatusTag.className = `shift-tag ${tagClass}`;
-                        selfStatusTag.textContent = '班';
-                        dayNumberEl.appendChild(selfStatusTag);
-                    }
                 } else { // 顯示排休模式 (show_off)
                     // 遍歷所有假別，為每一個都產生對應的標籤
                     shifts.forEach(s => {
-                        // 從 "事假13:00~17:30" 中提取出 "事假"
+                        // [v206.0 核心改造] 智慧顯示假別標籤
                         const baseType = s.match(/^[^\[\(]+/)[0];
+                        const timeMatch = s.match(/\[(.*?)\]/);
+                        
                         const tag = document.createElement('span');
                         tag.className = `shift-tag shift-${baseType}`;
-                        tag.textContent = baseType.charAt(0);
                         tag.title = s; // 將完整資訊作為滑鼠懸浮提示
+
+                        if (timeMatch && timeMatch[1]) {
+                            // 如果是小時假，直接顯示時間區間
+                            tag.textContent = timeMatch[1];
+                        } else {
+                            // 如果是全天假，顯示假別的第一個字
+                            tag.textContent = baseType.charAt(0);
+                        }
                         dayNumberEl.appendChild(tag);
                     });
                 }
