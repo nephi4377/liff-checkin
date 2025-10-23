@@ -3,8 +3,9 @@
 setlocal
 
 :: =================================================================
-:: 全系統自動化部署腳本 v5.2 (穩定還原版)
+:: 全系統自動化部署腳本 v6.0 (Git 索引修復版)
 :: 功能:
+:: - [v6.0] 新增 Git 索引修復機制，在 add 之前自動移除並重置損壞的 index 檔案。
 :: - [v5.2] 移除 git commit 與 git pull 的自動重試，還原至最穩定版本。
 :: - [v5.0] 強化流程控制，在 pull 之前再次檢查工作區狀態，避免衝突。
 :: - [v5.0] 全面改用 PowerShell 輸出中文，根除亂碼問題。
@@ -72,6 +73,43 @@ if %errorlevel% neq 0 (
     powershell -Command "Write-Output '錯誤: 更新 checkin.html 檔案失敗。請檢查檔案是否存在或被鎖定。'"
     goto end
 )
+
+echo.
+powershell -NoProfile -Command "Write-Output '[前端部署] 正在修復 Git 索引 (v7.0 終極版)...'"
+
+:: --- [v7.0 新增] 終極修復：使用 git fsck 找出並刪除所有損壞的物件 ---
+powershell -NoProfile -Command "Write-Output '步驟 1/3: 正在使用 git fsck 檢查儲存庫完整性...'"
+for /f "tokens=2" %%a in ('"%GIT_EXECUTABLE%" fsck --unreachable ^| findstr "dangling blob"') do (
+    set "DANGLING_OBJECT=%%a"
+    powershell -NoProfile -Command "Write-Output '偵測到損壞/懸空的物件: !DANGLING_OBJECT!'"
+    
+    :: 將 SHA-1 (例如 12a1f9...) 轉換為路徑 (例如 .git/objects/12/a1f9...)
+    set "OBJ_DIR=!DANGLING_OBJECT:~0,2!"
+    set "OBJ_FILE=!DANGLING_OBJECT:~2!"
+    set "OBJ_PATH=.git\objects\!OBJ_DIR!\!OBJ_FILE!"
+    
+    if exist "!OBJ_PATH!" (
+        del "!OBJ_PATH!"
+        powershell -NoProfile -Command "Write-Output '  -> 已成功刪除損壞的物件檔案: !OBJ_PATH!'"
+    ) else (
+        powershell -NoProfile -Command "Write-Output '  -> 警告: 找不到物件檔案 !OBJ_PATH!，可能已被處理。'"
+    )
+)
+
+powershell -NoProfile -Command "Write-Output '步驟 2/3: 正在移除 Git 索引與有問題的檔案追蹤...'"
+if exist ".git\index" (
+    del .git\index
+    powershell -NoProfile -Command "Write-Output '  -> 已移除損壞的 .git/index 檔案。'"
+)
+"%GIT_EXECUTABLE%" rm --cached approval_dashboard.html >nul 2>&1
+
+powershell -NoProfile -Command "Write-Output '步驟 3/3: 正在重置工作區狀態...'"
+"%GIT_EXECUTABLE%" reset
+if %errorlevel% neq 0 (
+    powershell -NoProfile -Command "Write-Output '[錯誤] ''git reset'' 失敗，請手動檢查 Git 儲存庫狀態。'"
+    goto end
+)
+powershell -NoProfile -Command "Write-Output 'Git 儲存庫已成功修復並重置。'"
 
 echo.
 echo [前端部署] 正在將所有變更加入 Git...

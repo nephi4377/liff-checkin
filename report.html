@@ -23,6 +23,13 @@
     .file-input-label { display: inline-block; background-color: #3b82f6; color: white; border: 1px solid #3b82f6; padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; transition: background-color 0.2s; font-weight: 600; }
     .file-input-label:hover { background-color: #2563eb; }
     .file-input-label.selected { background-color: #6b7280; border-color: #6b7280; cursor: default; }
+    /* 【您的要求】輔助按鈕樣式 */
+    .helper-btn {
+      background-color: #f3f4f6; color: #4b5563; border: 1px solid #d1d5db;
+      padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;
+      transition: background-color 0.2s;
+    }
+    .helper-btn:hover { background-color: #e5e7eb; }
   </style>
 </head>
 
@@ -76,6 +83,10 @@
         <div class="mb-4">
           <label for="workDescription" class="block text-gray-700 font-semibold mb-2">當日施工內容說明</label>
           <textarea id="workDescription" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-md"></textarea>
+          <!-- 【您的要求】施工內容輔助按鈕容器 -->
+          <div id="workDescriptionHelpers" class="mt-2 flex flex-wrap gap-2">
+            <!-- 按鈕將由 JS 動態產生 -->
+          </div>
         </div>
 
         <div class="mb-4">
@@ -90,6 +101,10 @@
         <div class="mb-4">
           <label for="problemDescription" class="block text-gray-700 font-semibold mb-2">問題回報</label>
           <textarea id="problemDescription" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-md"></textarea>
+          <!-- 【您的要求】問題回報輔助按鈕容器 -->
+          <div id="problemDescriptionHelpers" class="mt-2 flex flex-wrap gap-2">
+            <!-- 按鈕將由 JS 動態產生 -->
+          </div>
         </div>
 
         <div class="mb-6">
@@ -130,15 +145,28 @@
 
       // === 初始化 ===
       async function main() {
+        const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+
+        if (isLocalTest) {
+            console.warn('⚡️ 本地測試模式啟用，跳過 LIFF 認證。');
+            userProfile = {
+                userId: 'U_local_test_user_report',
+                displayName: '本地測試員'
+            };
+            initializeEventListeners();
+            return; // 結束執行，不進入 LIFF 流程
+        }
+
+        // --- 正式環境 LIFF 流程 ---
         try {
-          await liff.init({ liffId: LIFF_ID });
-          if (!liff.isLoggedIn()) { liff.login(); return; }
-          userProfile = await liff.getProfile();
-          initializeEventListeners();
+            await liff.init({ liffId: LIFF_ID });
+            if (!liff.isLoggedIn()) { liff.login(); return; }
+            userProfile = await liff.getProfile();
+            initializeEventListeners();
         } catch (error) {
-          console.error('初始化失敗', error);
-          updateStatus('頁面初始化失敗，請在 LINE 中開啟或重新載入。', 'error');
-          submitButton.disabled = true;
+            console.error('初始化失敗', error);
+            updateStatus('頁面初始化失敗，請在 LINE 中開啟或重新載入。', 'error');
+            submitButton.disabled = true;
         }
       }
 
@@ -147,12 +175,84 @@
         setupFileInputUI('sitePhotos', 'sitePhotosLabel', 'sitePhotosCount');
         setupFileInputUI('problemPhotos', 'problemPhotosLabel', 'problemPhotosCount');
 
+        // 【您的要求】初始化輔助按鈕
+        initializeHelperButtons();
+
         // 案號輸入：即時只留數字；失焦再清一次
         const projectIdEl = document.getElementById('projectId');
+        // 【您的要求】記住並還原上次回報的案號
+        const lastProjectId = localStorage.getItem('lastReportedProjectId');
+        if (lastProjectId) {
+          projectIdEl.value = lastProjectId;
+        }
         projectIdEl.addEventListener('input', () => enforceDigits(projectIdEl));
         projectIdEl.addEventListener('blur',  () => enforceDigits(projectIdEl));
 
+        // 【優化建議】記住並還原上次選擇的施工項目
+        const workTypeSelect = document.getElementById('workType');
+        const lastWorkType = localStorage.getItem('lastSelectedWorkType');
+        if (lastWorkType) {
+          workTypeSelect.value = lastWorkType;
+          // 【您的要求】手動觸發一次 change 事件，以確保輔助按鈕能被正確渲染
+          // 這會模擬使用者手動選擇的行為，觸發 initializeHelperButtons 中綁定的監聽器
+          workTypeSelect.dispatchEvent(new Event('change'));
+        }
+        workTypeSelect.addEventListener('change', () => localStorage.setItem('lastSelectedWorkType', workTypeSelect.value));
+
         form.addEventListener('submit', handleFormSubmit);
+      }
+
+      // 【您的要求】輔助按鈕核心邏輯
+      function initializeHelperButtons() {
+        const workTypeSelect = document.getElementById('workType');
+        
+        const workTypePhrases = {
+          '保護工程-進退場項目': ['進場保護', '退場清潔', '電梯保護', '走道保護', '廢棄物清運'],
+          '木作工程': ['天花板施工', '櫃體組裝', '門片安裝', '角料下料', '隔間牆施工', '造型牆', '電視牆施工'],
+          '系統工程': ['櫃體安裝', '門片調整', '五金安裝', '收邊', '層板安裝', '檯面安裝'],
+          '水電工程': ['配管', '拉線', '燈具安裝', '開關面板', '插座面板', '弱電佈線', '給水測試', '排水測試'],
+          '油漆工程': ['批土', '研磨', '底漆', '面漆', '跳色', '噴漆', '木皮上漆'],
+          '泥作工程': ['砌磚', '打底', '粉光', '磁磚鋪貼', '防水施作', '地坪墊高', '門窗崁縫'],
+          '清潔工程': ['粗清', '細清', '垃圾清運', '裝潢後清潔'],
+          '玻璃工程': ['玻璃安裝', '鏡面安裝', '矽利康收邊', '淋浴拉門'],
+          '其他工程': []
+        };
+
+        const problemPhrases = ['【缺料】', '【尺寸不符】', '【圖面疑問】', '【品質問題】', '【需與設計師確認】', '【需與工務確認】', '【工序衝突】', '【現場保護不足】', '【工具損壞】'];
+
+        // 渲染問題回報的通用按鈕
+        renderHelperButtons('problemDescriptionHelpers', problemPhrases, 'problemDescription');
+
+        // 根據施工項目動態渲染按鈕
+        workTypeSelect.addEventListener('change', () => {
+          const selectedType = workTypeSelect.value;
+          renderHelperButtons('workDescriptionHelpers', workTypePhrases[selectedType] || [], 'workDescription');
+        });
+
+        // 初始觸發一次
+        renderHelperButtons('workDescriptionHelpers', [], 'workDescription');
+      }
+
+      function renderHelperButtons(containerId, phrases, targetTextareaId) {
+        const container = document.getElementById(containerId);
+        const textarea = document.getElementById(targetTextareaId);
+        container.innerHTML = '';
+        if (!phrases || phrases.length === 0) return;
+
+        phrases.forEach(phrase => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'helper-btn';
+          button.textContent = phrase;
+          button.addEventListener('click', () => {
+            // 【您的要求】智慧插入：如果文字框是空的，或結尾是空格/換行，則直接插入；否則先補一個空格再插入，確保文字接續。
+            const endsWithSpaceOrNewline = textarea.value === '' || /\s$/.test(textarea.value);
+            const separator = endsWithSpaceOrNewline ? '' : ' ';
+            textarea.value += separator + phrase;
+            textarea.focus(); // 將焦點移回文字框
+          });
+          container.appendChild(button);
+        });
       }
 
       // === 僅允許數字：即時過濾 ===
@@ -207,6 +307,9 @@
           setLoadingState(false);
           return; // 中止提交
         }
+
+        // 【您的要求】記住這次成功提交的案號
+        localStorage.setItem('lastReportedProjectId', cleanProjectId);
 
         try {
           const shouldCompress = document.getElementById('compressImages').checked;
