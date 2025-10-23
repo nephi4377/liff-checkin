@@ -24,8 +24,10 @@
        以便後續的模組腳本 (main.js) 可以透過 window.API_BASE_URL 存取。 -->
   <script>
     var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    var FRONTEND_VERSION = 'v25.10.23.0902';
+    var FRONTEND_VERSION = 'v25.10.23.1130';
   </script>
+  <!-- [架構修正] 將主腳本移至 head 並加上 defer，確保 DOM 載入後才執行 -->
+  <script type="module" src="main.js" defer></script>
 </head>
 <body>
   <div class="container">
@@ -103,38 +105,6 @@
   <!-- [優化] 引入函式庫 -->
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh-tw.js"></script>
-  <!-- [架構修正] 使用 type="module"，啟用 JavaScript 模組功能 -->
-  <script type="module" src="main.js"></script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

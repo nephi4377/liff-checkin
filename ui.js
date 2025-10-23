@@ -313,6 +313,7 @@ export function renderLogPage() {
  */
 /** 渲染右側專案資訊面板 */
 export function displayProjectInfo(overview, schedule) {
+    console.log('Rendering project info panel with overview:', overview, 'and schedule:', schedule);
     const panel = document.getElementById('project-info-panel');
     if (!panel) return;
     if (!overview) { panel.innerHTML = '<p class="muted">無專案資訊</p>'; return; }

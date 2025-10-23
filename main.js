@@ -167,8 +167,20 @@ function handleDataResponse(data) {
     titleEl.textContent = '主控台: ' + (data.overview.siteName || data.overview['案場名稱']);
   }
 
+  // [v204.0 核心修正] 進行前端資料預處理與順序調整
+  // 1. 確保 overview 物件存在，避免後續操作出錯。
+  const overviewData = data.overview || {};
+
+  // 2. 進行欄位名稱對應，解決後端欄位 'address' 與前端預期 '案場地址' 不符的問題。
+  if (overviewData.address && !overviewData['案場地址']) {
+    overviewData['案場地址'] = overviewData.address;
+  }
+
+  // 3. 優先將處理好的 overview 存入 state，確保後續所有 UI 渲染和事件綁定都能讀取到最新資料。
+  state.overview = overviewData;
+
   // [新增] 呼叫新函式來渲染右側的專案資訊面板
-  displayProjectInfo(data.overview, state.currentScheduleData);
+  displayProjectInfo(overviewData, state.currentScheduleData);
 
   // [v189.0 核心修正] 將事件綁定移至 displayProjectInfo 之後，確保按鈕已存在於 DOM 中
   const copyBtn = document.getElementById('copy-project-info-btn');
@@ -230,7 +242,6 @@ ${notes || '無'}`;
     });
     closeBtn.dataset.listenerAttached = 'true';
   }
-  state.overview = data.overview; // [v187.0 新增] 將總覽資訊存入 state，供複製功能使用
 
   // [重構] 渲染UI：呼叫 scheduleActions.js 中的函式，將排序好的排程資料渲染成畫面
   ScheduleActions.renderSchedulePage(data.overview, state.currentScheduleData);
@@ -477,8 +488,9 @@ async function initializeApp() {
   if (isLocalTest) {
     logToPage('⚡️ 本地測試模式啟用，將跳過 LIFF 認證。');
     const urlParams = new URLSearchParams(window.location.search);
-    const projectId = urlParams.get('id') || '736'; // 允許從 URL 傳入案號，否則預設為 736
-    const userId = urlParams.get('uid') || 'U1f74b9d87247a240dd3ab160cd90b124'; // 預設為吳奕弦的 UID
+    const projectId = urlParams.get('id') || '715'; // 允許從 URL 傳入案號，否則預設為 736 (測試案場)
+    // const userId = urlParams.get('uid') || 'U1f74b9d87247a240dd3ab160cd90b124'; // 預設為吳奕弦的 UID
+    const userId = urlParams.get('uid') || 'Uda473dd6debdba13d08525e962d26419'; // [偵錯切換] 預設為郭浩元的 UID
     
     // 將測試用的 ID 存入全域狀態
     state.projectId = projectId;
@@ -544,22 +556,20 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
         // [核心修正] 修正快取擁有者的判斷邏輯，應從 data 物件本身讀取 ownerId
         if ((Date.now() - timestamp < CACHE_DURATION_MS) && (data && data.ownerId === userId)) {
         // --- 情況一：快取有效 ---
-        logToPage('⚡️ 偵測到有效快取，立即渲染畫面...');
-
-        state.projectId = projectId;
-        // 【⭐️ 核心修正：不要修改原始 data 物件，而是將處理結果存入 state ⭐️】
-        state.currentUserName = data.userName || `使用者 (${userId.slice(-6)})`; // 優先使用快取中的名稱
-
-        // 【⭐️ 核心修正：建立一個 data 的深層複本來進行操作，保持原始 data 的純淨性 ⭐️】
-        const dataForRender = JSON.parse(JSON.stringify(data));
-
-        // 使用複本來更新案號，這樣就不會污染原始的 data 物件
-        if (dataForRender.schedule && Array.isArray(dataForRender.schedule)) {
-          dataForRender.schedule.forEach(task => task['案號'] = projectId);
-          logToPage('🔄 已使用最新案號更新快取排程資料...');
+        // [v202.0 核心修正] 增加對快取內容的健康檢查。
+        // 如果快取中儲存的是一筆錯誤的回應，則將其視為無效快取，並繼續向後端請求。
+        if (data.error) {
+          logToPage('🗑️ 快取中包含錯誤紀錄，將其視為無效並清除。');
+          localStorage.removeItem(CACHE_KEY);
+        } else {
+          logToPage('⚡️ 偵測到有效快取，立即渲染畫面...');
+          state.projectId = projectId;
+          state.currentUserName = data.userName || `使用者 (${userId.slice(-6)})`;
+          
+          // 直接使用從快取解析出的 data 物件進行渲染
+          handleDataResponse(data);
+          hasRenderedFromCache = true;
         }
-        handleDataResponse(dataForRender); // 使用處理過的複本來渲染畫面
-        hasRenderedFromCache = true;
       } else {
           // --- 情況二：快取無效 (過期或使用者不符) ---
           const reason = (data && data.ownerId !== userId) ? 'UID 不符' : '已過期';
@@ -592,11 +602,17 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
       return;
     }
 
+    // [v201.0 核心修正] 在處理任何資料前，先檢查後端是否回傳錯誤。
+    if (freshData && freshData.error) {
+        // 如果後端回傳錯誤，則不進行任何渲染或快取操作，直接顯示錯誤。
+        logToPage(`❌ 後端回傳錯誤: ${freshData.error}`, 'error');
+        displayError({ message: freshData.error });
+        return;
+    }
+
     // 【⭐️ 核心修正：使用後端傳來的使用者名稱 ⭐️】
     state.currentUserName = freshData.userName || `使用者 (${userId.slice(-6)})`;
     logToPage(`✅ 操作者已設定: ${state.currentUserName}`);
-
-    // [核心修正] 在儲存快取前，就為新資料蓋上所有權戳章
     freshData.ownerId = userId;
 
     if (!hasRenderedFromCache) {
@@ -737,10 +753,3 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeLightbox();
   initializeApp();
 });
-
-/**
- * [重構] 在主標題下方顯示一個全域的、暫時的通知橫幅。
- * @param {string} message - 要顯示的訊息文字。
- * @param {number} duration - 訊息顯示的持續時間（毫秒）。
- * @param {'info'|'success'|'error'} type - 訊息類型，決定橫幅顏色。
- */
