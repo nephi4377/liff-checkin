@@ -1,5 +1,5 @@
 /*
-* =============================================================================
+ * =============================================================================
 * 檔案名稱: main.js
 * 專案名稱: 專案日誌管理主控台
 * 版本: v13.0 (穩定版)
@@ -21,20 +21,21 @@
 * - **圖片懶加載 (Lazy Loading)**: 日誌中的圖片會等到滾動至可視範圍才載入。
 * - **日誌分頁 (Pagination)**: 日誌列表採用前端分頁，滾動到底部時自動載入下一批，避免一次性渲染大量DOM。
 * =============================================================================
-*/
+ */
+import * as api from './api.js'; // [v258.0 核心修正] 引入完整的 api 模組，解決 'api is not defined' 的錯誤
 import { loadJsonp } from './api.js';
 import { logToPage, showGlobalNotification } from './utils.js';
-import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, createOrUpdateTradeDatalist, renderPostCreator, _buildLogCard } from './ui.js';
+import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, createOrUpdateTradeDatalist, renderPostCreator, _buildLogCard, renderCommunicationHistory } from './ui.js';
 import * as Handlers from './handlers.js';
 import * as ScheduleActions from './scheduleActions.js';
-import * as LogActions from './logActions.js'; // [重構] 引入新的 logActions 模組
 import { state } from './state.js';
-
-/*
-* 版本: v13.0 (穩定版)
-* 修改時間: 2025-09-27 10:59 (Asia/Taipei)
-* 說明: 為 handleDataResponse 函式加上專業的 DocBlock 註解。
-*/
+import { initializeTaskSender, addRecipient } from './taskSender.js'; // [修正] 引入共用任務交辦模組 (包含 addRecipient)
+ 
+ /*
+  * 版本: v13.0 (穩定版)
+  * 修改時間: 2025-09-27 10:59 (Asia/Taipei)
+  * 說明: 為 handleDataResponse 函式加上專業的 DocBlock 註解。
+  */
 
 /**
  * @description 處理從後端 API (Google Apps Script) 成功獲取資料後的核心回呼函式 (Callback)。
@@ -107,12 +108,43 @@ function handleDataResponse(data) {
   logToPage('✅ 後端回應成功');
   // 清除任何可能存在的舊錯誤訊息
   document.getElementById('status-message')?.remove();
-  if (data && data.error) { displayError({ message: data.error }); return; }
+  if (data && data.error) {
+    displayError({ message: data.error });
+    return;
+  }
 
-  // [核心修正] 將從後端接收到的資料，存入統一的 state 物件
-  state.currentLogsData = data.dailyLogs || [];
+  // [v301.0 核心修正] 將 overview 的預處理邏輯移至此處，確保在存入 state 前完成。
+  // 這樣可以從根本上解決因 data.overview 為 null 或 undefined，導致預處理失效的問題。
+  if (data.overview && data.overview.address && !data.overview['案場地址']) {
+    data.overview['案場地址'] = data.overview.address;
+  }
+
+  // [v303.0 核心修正] 調整資料處理順序，確保 overview 和 schedule 的 dataReady 旗標能被一同觸發。
+  // 舊的寫法將 overview 的處理放在函式末尾，可能導致依賴 'projectOverview' 的元件無法即時渲染。
+  state.overview = data.overview || {};
   state.currentScheduleData = data.schedule || [];
+  state.currentLogsData = data.dailyLogs || [];
+  state.communicationHistory = data.communicationHistory || {};
+
   state.templateTasks = data.templates || [];
+
+  // 將所有相關的 dataReady 旗標一起設定，確保依賴它們的任務能被正確觸發
+  Object.assign(state.dataReady, {
+    projectOverview: true,
+    projectSchedule: true,
+    projectDailyLogs: true,
+    projectCommunicationHistory: true,
+  });
+
+  // [v307.0 核心修正] 修正 dependencyManager 的 notify 邏輯。
+  // 舊的寫法傳遞的是後端原始 key (e.g., 'overview')，但依賴註冊的是 state.dataReady 的 key (e.g., 'projectOverview')，導致無法匹配。
+  // 新的寫法明確地通知所有剛剛被設為 true 的 dataReady 旗標，確保依賴它們的元件能被正確觸發。
+  dependencyManager.notify([
+    'projectOverview',
+    'projectSchedule',
+    'projectDailyLogs',
+    'projectCommunicationHistory'
+  ]);
 
   // 處理標題下拉選單
   const titleSelect = document.getElementById('post-title-select');
@@ -127,7 +159,7 @@ function handleDataResponse(data) {
 
   // 業務邏輯：如果這是一個沒有任何排程的既有專案，則顯示「套用範本」的按鈕
   const actionsContainer = document.getElementById('actions-container');
-  if (state.currentScheduleData.length === 0 && state.projectId !== '0') { // [核心修正] 改為從 state.projectId 讀取
+  if (state.currentScheduleData.length === 0 && state.projectId !== '0') {
     if (actionsContainer) {
       actionsContainer.style.display = 'flex';
       // [優化] 使用事件代理，避免重複綁定
@@ -143,8 +175,8 @@ function handleDataResponse(data) {
     // 如果已有排程，則確保按鈕是隱藏的。
     actionsContainer.style.display = 'none';
   }
+
   // 業務邏輯：對排程資料進行排序，規則為：1. 依狀態 (已完成 > 施工中 > 未完成) 2. 依預計開始日期
-  // 【⭐️ 核心修正：補上遺失的括號，並整理後續呼叫流程 ⭐️】
   if (Array.isArray(state.currentScheduleData)) {
     state.currentScheduleData.sort((a, b) => {
       const statusOrder = { '已完成': 1, '施工中': 2, '未完成': 3 };
@@ -161,26 +193,10 @@ function handleDataResponse(data) {
     });
   }
 
-  // 渲染UI：使用後端提供的案場名稱，更新頁面的主標題
-  const titleEl = document.getElementById('project-title');
-  if (data.overview && (data.overview.siteName || data.overview['案場名稱'])) {
-    titleEl.textContent = '主控台: ' + (data.overview.siteName || data.overview['案場名稱']);
-  }
-
-  // [v204.0 核心修正] 進行前端資料預處理與順序調整
-  // 1. 確保 overview 物件存在，避免後續操作出錯。
-  const overviewData = data.overview || {};
-
-  // 2. 進行欄位名稱對應，解決後端欄位 'address' 與前端預期 '案場地址' 不符的問題。
-  if (overviewData.address && !overviewData['案場地址']) {
-    overviewData['案場地址'] = overviewData.address;
-  }
-
-  // 3. 優先將處理好的 overview 存入 state，確保後續所有 UI 渲染和事件綁定都能讀取到最新資料。
-  state.overview = overviewData;
-
-  // [新增] 呼叫新函式來渲染右側的專案資訊面板
-  displayProjectInfo(overviewData, state.currentScheduleData);
+  // [v292.0 核心重構] UI 渲染和事件綁定現在由 runWhenReady 觸發，不再直接在此處呼叫
+  // 這樣確保了所有操作都在其依賴的資料就緒後才執行。
+  // 例如，displayProjectInfo 會在 projectOverview 和 projectSchedule 就緒後執行。
+  // initializeTaskSender 會在 allEmployees 和 projectCommunicationHistory 就緒後執行。
 
   // [v189.0 核心修正] 將事件綁定移至 displayProjectInfo 之後，確保按鈕已存在於 DOM 中
   const copyBtn = document.getElementById('copy-project-info-btn');
@@ -243,24 +259,7 @@ ${notes || '無'}`;
     closeBtn.dataset.listenerAttached = 'true';
   }
 
-  // [重構] 渲染UI：呼叫 scheduleActions.js 中的函式，將排序好的排程資料渲染成畫面
-  ScheduleActions.renderSchedulePage(data.overview, state.currentScheduleData);
-
-  // [重構] 渲染UI：初始化日誌分頁，並渲染第一頁
-  state.currentPage = 1;
-  renderLogPage();
-
-  // [重構] 如果日誌超過一頁，則設定無限滾動監聽器
-  if (state.currentLogsData.length > state.LOGS_PER_PAGE) {
-    setupScrollListener();
-  }
-
-  // [核心修正] 在每次資料渲染完成後，都手動觸發一次圖片懶加載。
-  // 這解決了從快取渲染時，圖片不會被載入的問題。
-  lazyLoadImages();
-
-  // [還原] 根據使用者回饋，恢復頁面載入時顯示的 10 秒測試通知。
-  showGlobalNotification('這是一條測試通知', 10000, 'info');
+  logToPage(`✅ 已載入 ${Object.keys(state.communicationHistory).length} 組溝通串流。`);
 }
 
 // [核心修正] 將 lazyLoadImages 掛載到 window 物件上，使其成為一個全域可用的函式
@@ -400,27 +399,267 @@ function setupScrollListener() {
  * [v130.0 新增] 定期刷新資料的函式
  */
 async function refreshData(projectId, userId, API_BASE_URL) {
-    try {
-        const fetchUrl = `${API_BASE_URL}?page=project&id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
-        logToPage('🔄 背景自動更新：正在從後端請求最新資料...');
-        const freshData = await loadJsonp(fetchUrl);
+    // [v292.0 核心重構] 簡化 refreshData 函式，使其專注於比對資料簽名，並在需要時呼叫新的 refreshProjectData 函式。
+    const fetchUrl = `${API_BASE_URL}?page=project&id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
+    const response = await fetch(fetchUrl);
+    const freshData = await response.json();
 
-        // 比對新舊資料是否有差異
-        const oldDataSignature = JSON.stringify({ overview: state.overview, schedule: state.currentScheduleData, dailyLogs: state.currentLogsData });
-        const newDataSignature = JSON.stringify({ overview: freshData.overview, schedule: freshData.schedule, dailyLogs: freshData.dailyLogs });
+    const oldDataSignature = JSON.stringify({ overview: state.overview, schedule: state.currentScheduleData, dailyLogs: state.currentLogsData, communicationHistory: state.communicationHistory });
+    const newDataSignature = JSON.stringify({ overview: freshData.overview, schedule: freshData.schedule, dailyLogs: freshData.dailyLogs, communicationHistory: freshData.communicationHistory });
 
-        if (oldDataSignature !== newDataSignature) {
-            logToPage('🔄 背景自動更新：偵測到資料已更新，正在無縫刷新畫面...');
-            handleDataResponse(freshData);
-            showGlobalNotification('偵測到資料更新，畫面已自動刷新。', 3000, 'info');
-        } else {
-            logToPage('✅ 背景自動更新：資料無變動。');
-        }
-    } catch (err) {
-        logToPage(`❌ 背景自動更新失敗: ${err.message}`, 'error');
-        showGlobalNotification(`自動更新失敗: ${err.message}`, 5000, 'error');
+    if (oldDataSignature !== newDataSignature) {
+        await refreshProjectData(true); // 呼叫新的刷新函式，並顯示通知
+    } else {
+        logToPage('✅ 背景自動更新：資料無變動。');
     }
 }
+
+/**
+ * [v291.0 新增] 輕量級的資料刷新函式，專門用於更新溝通紀錄。
+ * 此函式只會獲取最新的溝通紀錄，並只重新渲染該區塊，避免整頁刷新。
+ * @param {string} projectId - 專案 ID。
+ * @param {string} userId - 使用者 ID。
+ * @param {string} API_BASE_URL - 後端 API 網址。
+ */
+async function refreshCommunicationHistory(projectId, userId, API_BASE_URL) {
+    try {
+        const fetchUrl = `${API_BASE_URL}?page=project&id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
+        logToPage('🔄 輕量更新：正在請求最新的溝通紀錄...');
+        const freshData = await loadJsonp(fetchUrl);
+
+        if (freshData && freshData.communicationHistory) {
+            state.communicationHistory = freshData.communicationHistory;
+            renderCommunicationHistory(state.communicationHistory, state.currentUserId);
+            logToPage('✅ 溝通紀錄已無縫更新。');
+        } else {
+            throw new Error('後端未回傳有效的溝通紀錄。');
+        }
+    } catch (err) {
+        logToPage(`❌ 輕量更新失敗: ${err.message}`, 'error');
+    }
+}
+
+/**
+ * [v292.0 新增] 輕量級的資料刷新與局部渲染函式。
+ * @param {boolean} [showNotification=false] - 是否在刷新後顯示通知。
+ */
+async function refreshProjectData(showNotification = false) {
+    try {
+        const fetchUrl = `${window.API_BASE_URL}?page=project&id=${encodeURIComponent(state.projectId)}&userId=${encodeURIComponent(state.currentUserId)}`;
+        logToPage('🔄 輕量更新：正在請求最新的專案資料...');
+        const response = await fetch(fetchUrl);
+        const freshData = await response.json();
+
+        if (freshData && freshData.error) throw new Error(freshData.error);
+        if (!freshData) throw new Error('後端未回傳有效資料。');
+
+        // 更新 state
+        state.overview = freshData.overview || {};
+        state.currentScheduleData = freshData.schedule || [];
+        state.currentLogsData = freshData.dailyLogs || [];
+        state.communicationHistory = freshData.communicationHistory || {};
+
+        // [v304.0 核心修正] 移除對已不存在的 runWhenReady 函式的呼叫。
+        // 在資料刷新後，直接呼叫渲染函式來更新畫面。
+        displayProjectInfo(state.overview, state.currentScheduleData);
+        ScheduleActions.renderSchedulePage(state.overview, state.currentScheduleData);
+
+        if (showNotification) {
+            showGlobalNotification('偵測到專案資料更新，畫面已自動刷新。', 3000, 'info');
+        }
+        logToPage('✅ 專案資料已無縫更新。');
+    } catch (err) {
+        logToPage(`❌ 輕量更新失敗: ${err.message}`, 'error');
+    }
+}
+
+/**
+ * [v292.0 新增] 獲取並快取所有員工資料。
+ * 成功獲取資料後，會將 state.dataReady.allEmployees 設為 true。
+ * @returns {Promise<void>}
+ */
+async function fetchEmployees() {
+    if (state.dataReady.allEmployees) return;
+
+    const employeeCacheKey = 'console_employees';
+    const cachedItem = localStorage.getItem(employeeCacheKey);
+    const ATTENDANCE_API_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
+
+    if (cachedItem) {
+        try {
+            const { timestamp, data } = JSON.parse(cachedItem);
+            if (Date.now() - timestamp < 24 * 60 * 60 * 1000) { // 快取 1 天
+                state.allEmployees = data;
+                state.dataReady.allEmployees = true;
+                logToPage('⚡️ 從快取載入員工資料。');
+                dependencyManager.notify('allEmployees'); // [v295.0] 發布 'allEmployees' 就緒通知
+                return;
+            }
+        } catch (e) {
+            localStorage.removeItem(employeeCacheKey);
+        }
+    }
+
+    logToPage('🔄 正在從 CheckinSystem 請求所有員工資料...');
+    try {
+        // [v293.0 核心修正] 根據您的指示，將 action 統一為後端已有的 'get_employees'
+        const response = await fetch(`${ATTENDANCE_API_URL}?page=attendance_api&action=get_employees`);
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+            state.allEmployees = result.data;
+            state.dataReady.allEmployees = true;
+            localStorage.setItem(employeeCacheKey, JSON.stringify({ timestamp: Date.now(), data: result.data }));
+            logToPage('✅ 成功獲取並快取員工資料。');            
+        } else {
+            throw new Error(result.message || '後端未回傳有效資料');
+        }
+    } catch (err) {
+        // [v293.0 核心改造] 根據您的指示，實作自動重試機制，而不是直接放棄
+        logToPage(`❌ 獲取員工資料失敗: ${err.message}。將在 5 秒後重試...`, 'error');
+        setTimeout(fetchEmployees, 15000); // [v294.0] 根據您的指示，將重試時間延長至 15 秒
+        return; // 提前返回，不執行後續的 runAllPendingActions
+    }
+
+    // [v295.0] 發布 'allEmployees' 就緒通知
+    dependencyManager.notify('allEmployees');
+}
+
+// [v295.0 核心重構] 引入事件驅動的依賴管理器，取代原有的 runWhenReady/runAllPendingActions
+const dependencyManager = {
+    subscribers: [],
+
+    /**
+     * 訂閱一個或多個資料依賴。當所有依賴都就緒時，執行回呼函式。
+     * @param {string[]} dependencies - 依賴的資料鍵名陣列 (來自 state.dataReady)。
+     * @param {Function} callback - 當依賴滿足時要執行的回呼函式。
+     * @param {string} name - (可選) 動作的名稱，用於日誌記錄。
+     */
+    subscribe(dependencies, callback, name = '未命名動作') {
+        const subscription = {
+            name,
+            dependencies,
+            callback,
+            isReady: () => dependencies.every(dep => state.dataReady[dep]),
+            executed: false
+        };
+
+        // 註冊時立即檢查一次，如果條件已滿足，直接執行
+        if (subscription.isReady()) {
+            logToPage(`[DepManager] ${name} 的依賴項已滿足，立即執行。`);
+            callback();
+            subscription.executed = true;
+        }
+
+        this.subscribers.push(subscription);
+    },
+
+    /**
+     * 發布一個或多個資料已就緒的通知。
+     * @param {string|string[]} event - 已就緒的資料鍵名。
+     */
+    notify(event) {
+        const events = Array.isArray(event) ? event : [event];
+        logToPage(`[DepManager] 收到就緒通知: ${events.join(', ')}`);
+
+        this.subscribers.forEach(sub => {
+            // 如果此訂閱尚未執行，且其依賴項包含剛剛觸發的事件之一
+            if (!sub.executed && sub.dependencies.some(dep => events.includes(dep))) {
+                // 重新檢查此訂閱的所有依賴是否都已滿足
+                if (sub.isReady()) {
+                    logToPage(`[DepManager] ${sub.name} 的依賴項現已全部滿足，開始執行...`);
+                    sub.callback();
+                    sub.executed = true; // 標記為已執行，避免重複觸發
+                }
+            }
+        });
+    }
+};
+
+/**
+ * [v292.0 新增] 封裝初始化任務交辦中心的邏輯。
+ */
+function initializeTaskSenderForConsole() {
+    const taskSenderContainer = document.getElementById('task-sender-container');
+    if (!taskSenderContainer || document.getElementById('task-sender-wrapper')) return;
+
+    const config = {
+        state: { ...state },
+        api: {
+            sendRequest: (payload) => {
+                return fetch(window.API_BASE_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                }).then(res => res.json());
+            }
+        },
+        callbacks: {
+            onSuccess: () => refreshCommunicationHistory(state.projectId, state.currentUserId, window.API_BASE_URL),
+            onOptimisticUpdate: window.addOptimisticCommunicationCard
+        }
+    };
+    initializeTaskSender(taskSenderContainer, config, { style: 'console', defaultAction: 'ReplyText' });
+}
+// [v292.0] 將 refreshProjectData 掛載到 window，以便其他模組呼叫
+
+/**
+ * [v296.0 新增] 全域函式，用於以真實卡片替換樂觀更新的臨時卡片。
+ * @param {string} tempId - 臨時卡片的 ID (e.g., 'temp-12345')。
+ * @param {object} finalLogData - 後端回傳的、包含真實 LogID 的完整日誌資料。
+ */
+function replaceOptimisticCard(tempId, finalLogData) {
+    const tempCard = document.getElementById(tempId);
+    if (!tempCard) return;
+
+    // 1. 根據最終資料，建立一張全新的、完整的卡片
+    const finalCard = _buildLogCard(finalLogData, false);
+
+    // 2. 在臨時卡片的位置，用新卡片替換掉它
+    tempCard.parentNode.replaceChild(finalCard, tempCard);
+
+    // 3. 觸發新卡片中可能存在的圖片懶加載
+    lazyLoadImages();
+}
+// 將函式掛載到 window，以便其他模組呼叫
+window.replaceOptimisticCard = replaceOptimisticCard;
+
+/**
+ * [v305.0 新增] 註冊所有元件的渲染依賴。
+ * 將此邏輯從 initializeApp 中抽離，使其成為一個獨立的設定步驟。
+ */
+function registerComponentDependencies() {
+  dependencyManager.subscribe(['projectOverview'], () => {
+    const titleEl = document.getElementById('project-title');
+    if (titleEl && (state.overview.siteName || state.overview['案場名稱'])) {
+      titleEl.textContent = '主控台: ' + (state.overview.siteName || state.overview['案場名稱']);
+    }
+  }, '更新頁面標題');
+
+  dependencyManager.subscribe(['projectOverview', 'projectSchedule'], () => {
+    displayProjectInfo(state.overview, state.currentScheduleData);
+    ScheduleActions.renderSchedulePage(state.overview, state.currentScheduleData);
+  }, '渲染專案資訊與排程');
+
+  dependencyManager.subscribe(['projectDailyLogs'], () => {
+    state.currentPage = 1;
+    renderLogPage();
+    if (state.currentLogsData.length > state.LOGS_PER_PAGE) {
+      setupScrollListener();
+    }
+    lazyLoadImages();
+  }, '渲染日誌');
+
+  dependencyManager.subscribe(['projectCommunicationHistory'], () => {
+    if (document.querySelector('.main-nav .nav-button.active')?.dataset.view === 'collaboration') {
+      renderCommunicationHistory(state.communicationHistory, state.currentUserId);
+    }
+  }, '渲染溝通紀錄');
+
+  dependencyManager.subscribe(['allEmployees', 'projectCommunicationHistory'], initializeTaskSenderForConsole, '初始化任務交辦中心');
+}
+
+window.refreshProjectData = refreshProjectData;
+
+
 
 /* ===== 入口 ===== */
 /**
@@ -429,112 +668,160 @@ async function refreshData(projectId, userId, API_BASE_URL) {
  * - 移除了在認證前顯示快取資料的邏輯，改為在認證成功後才顯示載入動畫並請求資料。
  */
 async function initializeApp() {
-  // [核心修正] 將常數宣告移至函式內部，確保在 DOMContentLoaded 後才讀取 window 物件。
-  // 這可以解決因模組載入時機導致 window.API_BASE_URL 為 undefined 的問題。
+  // [v306.0 核心重構] 根據您的建議，重構 initializeApp 函式，使其流程更清晰、更線性。
+  // 1. 宣告變數
+  let projectId;
+  let userId;
   const pageLoadId = `load_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  window.currentPageLoadId = pageLoadId;
+  const API_BASE_URL = window.API_BASE_URL;
 
-  // [核心改造] 綁定主導覽按鈕的點擊事件，並增加滾動位置記憶與智慧滾動功能
+  // 2. 初始設定 (不依賴環境)
+  window.currentPageLoadId = pageLoadId;
+  if (!API_BASE_URL) {
+    displayError({ message: '無法讀取 API_BASE_URL 設定，請檢查 HTML 檔案。' });
+    return;
+  }
+  setupNavigation();
+  fetchEmployees().catch(err => console.warn('初始化時預先獲取員工資料失敗，將在需要時重試。'));
+
+  // 3. 判斷環境並賦值
+  const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+  const urlParams = new URLSearchParams(window.location.search);
+
+  if (isLocalTest) {
+    logToPage('⚡️ 本地測試模式啟用...');
+    projectId = urlParams.get('id') || '729';
+    userId = urlParams.get('uid') || 'Ud58333430513b7527106fa71d2e30151';
+    state.currentUserName = '本地測試員';
+  } else {
+    projectId = urlParams.get('id');
+    userId = urlParams.get('uid');
+    // 處理 LIFF 重新導向的 liff.state 參數
+    if (urlParams.has('liff.state')) {
+      const liffState = decodeURIComponent(urlParams.get('liff.state')).replace(/^\?/, '');
+      const liffParams = new URLSearchParams(liffState);
+      if (liffParams.has('id')) projectId = liffParams.get('id');
+      if (liffParams.has('uid')) userId = liffParams.get('uid');
+    }
+  }
+
+  // 4. 驗證 ID
+  if (!projectId || !userId) {
+    const errorMsg = '網址中缺少必要的專案 ID (id) 或使用者 ID (uid)。請確認 LIFF 連結是否正確。';
+    console.error(`[Init] 參數檢查失敗: ${errorMsg}`);
+    displayError({ message: errorMsg });
+    return;
+  }
+
+  // 5. 將 ID 存入全域狀態
+  state.projectId = projectId;
+  state.currentUserId = userId;
+
+  // 6. 執行共用的後續邏輯
+  state.dataReady.userProfile = true;
+  dependencyManager.notify('userProfile');
+
+  registerComponentDependencies();
+
+  await loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL);
+
+  setInterval(() => refreshData(state.projectId, state.currentUserId, window.API_BASE_URL), 10 * 60 * 1000);
+  logToPage('已設定每 10 分鐘自動更新專案資料。');
+}
+
+/**
+ * [v306.0 新增] 封裝導覽列的事件綁定邏輯。
+ */
+function setupNavigation() {
   const navButtons = document.querySelectorAll('.main-nav .nav-button');
   const mainContent = document.getElementById('main-content');
-  const scrollPositions = { logs: 0, schedule: 0 }; // 儲存各個視圖的滾動位置
+  const scrollPositions = { logs: 0, schedule: 0, collaboration: 0 };
 
   navButtons.forEach(button => {
     button.addEventListener('click', () => {
       const currentView = document.querySelector('.main-nav .nav-button.active')?.dataset.view;
       const newView = button.dataset.view;
 
-      // 如果切換了視圖，儲存當前視圖的滾動位置
       if (currentView && currentView !== newView) {
         scrollPositions[currentView] = mainContent.scrollTop;
       }
 
-      // 移除所有按鈕的 active class
       navButtons.forEach(btn => btn.classList.remove('active'));
-      // 為被點擊的按鈕加上 active class
       button.classList.add('active');
 
-      // 隱藏所有內容區塊
       Array.from(mainContent.children).forEach(child => {
         child.style.display = 'none';
       });
-      // 顯示對應的內容區塊
+
       const targetView = document.getElementById(`${newView}-container`);
       if (targetView) {
         targetView.style.display = 'block';
-        // 恢復新視圖的滾動位置
         mainContent.scrollTop = scrollPositions[newView];
 
-        // [核心還原] 如果切換到排程視圖，自動滾動到第一個未完成的任務
         if (newView === 'schedule') {
           const taskCards = Array.from(document.querySelectorAll('#schedule-container .task-card'));
           const firstUnfinishedIndex = taskCards.findIndex(card => card.querySelector('select[data-field="狀態"]')?.value !== '已完成');
-
           if (firstUnfinishedIndex !== -1) {
-            // 滾動到第一個未完成任務的位置，並將其置於頂部
-            const targetCard = taskCards[firstUnfinishedIndex];
-            targetCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            taskCards[firstUnfinishedIndex].scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
+        } else if (newView === 'collaboration' && state.dataReady.projectCommunicationHistory) {
+          renderCommunicationHistory(state.communicationHistory, state.currentUserId);
+          initializeTaskSenderForConsole();
         }
       }
     });
   });
-  // [v54.0 修正] 強化本地測試模式，使其能完全跳過 LIFF 認證
-  // [核心修正] 將 API_BASE_URL 的讀取移至此處，確保在所有流程中都可用
-  const API_BASE_URL = window.API_BASE_URL;
-  if (!API_BASE_URL) { displayError({ message: '無法讀取 API_BASE_URL 設定，請檢查 HTML 檔案。' }); return; }
-
-  const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-  if (isLocalTest) {
-    logToPage('⚡️ 本地測試模式啟用，將跳過 LIFF 認證。');
-    const urlParams = new URLSearchParams(window.location.search);
-    const projectId = urlParams.get('id') || '715'; // 允許從 URL 傳入案號，否則預設為 736 (測試案場)
-    // const userId = urlParams.get('uid') || 'U1f74b9d87247a240dd3ab160cd90b124'; // 預設為吳奕弦的 UID
-    const userId = urlParams.get('uid') || 'Uda473dd6debdba13d08525e962d26419'; // [偵錯切換] 預設為郭浩元的 UID
-    
-    // 將測試用的 ID 存入全域狀態
-    state.projectId = projectId;
-    state.currentUserId = userId;
-    state.currentUserName = '本地測試員';
-
-    // 直接開始載入資料，不執行後續的 LIFF 流程
-    await loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL);
-    return;
-  }
-
-  // [v56.0 修正] 恢復 urlParams 的宣告，解決啟動時的致命錯誤
-  const urlParams = new URLSearchParams(window.location.search);
-  let projectId = urlParams.get('id');
-  let userId = urlParams.get('uid');
-
-  // 【⭐️ 核心修正：處理 LIFF 重新導向的 liff.state 參數 ⭐️】
-  // LIFF 會將原始參數包在 liff.state 中，我們需要手動解析它。
-  if (urlParams.has('liff.state')) {
-    const liffState = decodeURIComponent(urlParams.get('liff.state')).replace(/^\?/, ''); // 【⭐️ 核心修正 ⭐️】先解碼 liff.state 的值，再移除開頭可能存在的 '?'
-    const liffParams = new URLSearchParams(liffState);
-    if (liffParams.has('id')) projectId = liffParams.get('id');
-    if (liffParams.has('uid')) userId = liffParams.get('uid');
-    console.log(`[Init] 從 liff.state 解析結果 -> ProjectID: ${projectId}, UserID: ${userId}`);
-  }
-
-  // [核心修正] 將解析後的 projectId 存入全域 state
-  state.projectId = projectId;
-  state.currentUserId = userId; // 【⭐️ 核心修正：將 userId 也存入全域 state ⭐️】
-
-  if (!projectId || !userId) {
-    const errorMsg = '網址中缺少必要的專案 ID (id) 或使用者 ID (uid)。';
-    console.error(`[Init] 參數檢查失敗: ${errorMsg}`);
-    displayError({ message: errorMsg });
-    return;
-  }
-
-  // [v54.0 新增] 將資料載入與渲染邏輯封裝成獨立函式
-  await loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL);
-  // 【您的要求】設定每 10 分鐘自動更新一次資料
-  setInterval(() => refreshData(projectId, userId, API_BASE_URL), 10 * 60 * 1000);
-  logToPage('已設定每 10 分鐘自動更新專案資料。');
 }
 
+/**
+ * [v284.0 新增] 處理溝通紀錄卡片上的動作 (回覆, 完成, 封存)
+ */
+async function handleCommunicationAction(action, notificationId, content = '') {
+  // [v308.0 核心修正] 修正 'urlParams is not defined' 錯誤。改為從全域 state 物件讀取 ID。
+  const { projectId, currentUserId: userId } = state;
+
+  const payload = {
+    action: 'process_notification_action',
+    subAction: action,
+    notificationId: notificationId,
+    content: content,
+    userName: state.currentUserName,
+    userId: state.currentUserId
+  };
+
+  // [v309.0 核心修正] 針對「標示已讀」操作，採用樂觀更新，立即移除卡片以提升體驗。
+  if (action === 'mark_read') {
+    const card = document.getElementById(`thread-${notificationId}`);
+    if (card) {
+      card.style.transition = 'opacity 0.3s ease-out, transform 0.3s ease-out';
+      card.style.opacity = '0';
+      card.style.transform = 'translateX(20px)';
+      setTimeout(() => card.remove(), 300);
+    }
+  }
+
+  try {
+    // 【⭐️ v289.0 核心重構：與 hub.html 同步，改用直接 fetch 的方式處理 API 請求 ⭐️】
+    // 這樣可以繞開 api.js 中為非同步任務設計的輪詢機制，直接處理後端的回應。
+    const response = await fetch(window.API_BASE_URL, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+    });
+    const backendResult = await response.json();
+
+    if (!backendResult || !backendResult.success) throw new Error(backendResult.message || '後端處理失敗');
+    showGlobalNotification(backendResult.message || '操作成功！', 3000, 'success');
+
+    // [v309.0 核心修正] 只有在「回覆」或「完成」等需要更新畫面的操作後，才執行刷新。
+    // 「標示已讀」已透過樂觀更新處理，無需刷新。
+    if (action === 'reply' || action === 'complete') {
+      // 成功後刷新溝通紀錄
+      await refreshCommunicationHistory(state.projectId, state.currentUserId, window.API_BASE_URL);
+    }
+  } catch (error) {
+    showGlobalNotification(`操作失敗: ${error.message}`, 5000, 'error');
+  }
+}
 /**
  * [v54.0 新增] 封裝資料載入與渲染的核心邏輯
  */
@@ -591,16 +878,11 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
     displaySkeletonLoader(); // 顯示載入動畫
   }
 
+  // [v249.0 重構] 移除 includeEmployees 參數，因為員工資料已由前端獨立獲取
+  const fetchUrl = `${API_BASE_URL}?page=project&id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
   try {
-    const fetchUrl = `${API_BASE_URL}?page=project&id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
     logToPage('🔄 正在從後端請求專案資料...');
     const freshData = await loadJsonp(fetchUrl);
-
-    // [核心修正] 檢查此回呼是否屬於當前的頁面載入，若不屬於則直接中止
-    if (window.currentPageLoadId !== pageLoadId) {
-      logToPage(`🟡 偵測到過時的背景請求，已將其忽略。`);
-      return;
-    }
 
     // [v201.0 核心修正] 在處理任何資料前，先檢查後端是否回傳錯誤。
     if (freshData && freshData.error) {
@@ -613,6 +895,7 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
     // 【⭐️ 核心修正：使用後端傳來的使用者名稱 ⭐️】
     state.currentUserName = freshData.userName || `使用者 (${userId.slice(-6)})`;
     logToPage(`✅ 操作者已設定: ${state.currentUserName}`);
+
     freshData.ownerId = userId;
 
     if (!hasRenderedFromCache) {
@@ -626,9 +909,9 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
       if (cachedItem) {
         const { data: oldData } = JSON.parse(cachedItem);
         // 為了避免因時間戳或 ownerId 不同而誤判，只比較核心資料
-        const oldDataSignature = JSON.stringify({ overview: oldData.overview, schedule: oldData.schedule, dailyLogs: oldData.dailyLogs });
-        const newDataSignature = JSON.stringify({ overview: freshData.overview, schedule: freshData.schedule, dailyLogs: freshData.dailyLogs });
-
+        const oldDataSignature = JSON.stringify({ overview: oldData.overview, schedule: oldData.schedule, dailyLogs: oldData.dailyLogs, communicationHistory: oldData.communicationHistory });
+        const newDataSignature = JSON.stringify({ overview: freshData.overview, schedule: freshData.schedule, dailyLogs: freshData.dailyLogs, communicationHistory: freshData.communicationHistory });
+        
         // [核心修正] 只有在資料確定有變動時，才執行畫面更新與快取寫入
         if (oldDataSignature !== newDataSignature) {
           logToPage('🔄 偵測到後端資料已更新，正在無縫刷新畫面...');
@@ -640,10 +923,11 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
           handleDataResponse(freshData); // 使用新資料重新渲染畫面
 
           // 如果有暫存的卡片，將它們重新插入到列表頂部。
-          const logsContainer = document.getElementById('logs-container');
-          optimisticCards.reverse().forEach(card => logsContainer.insertBefore(card, logsContainer.children[1]));
+          // [v286.0 修正] 樂觀更新卡片應該插入到 communication-history-list
+          const communicationHistoryList = document.getElementById('communication-history-list');
+          optimisticCards.reverse().forEach(card => communicationHistoryList.prepend(card));
           // [核心修正] 更新快取時，同時儲存 ownerId 到外層
-          localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData })); // 更新快取
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData }));
         }
       }
     }
@@ -742,6 +1026,39 @@ document.addEventListener('click', (e) => {
     case 'filterLogsByWorkType':
       LogActions.filterLogsByWorkType(target.value);
       break;
+    // [v262.0 新增] 處理點擊成員姓名按鈕的事件，將其加入任務交辦中心的收件人
+    case 'add-recipient':
+      addRecipient(target.dataset.name);
+      break;
+    // [v286.0 核心修正] 處理溝通紀錄卡片上的動作 (回覆, 完成, 標示已讀)
+    // [v286.0 核心修正] 將 archive 改為 mark_read，並增加按鈕禁用與樂觀更新邏輯
+    case 'reply':
+    case 'complete':
+    case 'mark_read':
+      {
+        const actionWrapper = target.closest('.thread-actions');
+        if (!actionWrapper) return;
+
+        // 禁用所有按鈕防止重複點擊
+        actionWrapper.querySelectorAll('button').forEach(btn => btn.disabled = true);
+        target.textContent = '處理中...';
+
+        const notificationId = actionWrapper.dataset.notificationId;
+        let content = '';
+
+        if (action === 'reply') {
+          const input = actionWrapper.querySelector('input[type="text"]');
+          content = input.value.trim();
+          if (!content) {
+            showGlobalNotification('請輸入回覆內容。', 3000, 'error');
+            actionWrapper.querySelectorAll('button').forEach(btn => btn.disabled = false); // 恢復按鈕
+            target.textContent = '回覆';
+            return;
+          }
+        }
+        handleCommunicationAction(action, notificationId, content);
+      }
+      break;
   }
 });
 
@@ -749,7 +1066,7 @@ document.addEventListener('click', (e) => {
 // 在所有函式與事件監聽器都定義完成後，
 // 呼叫 initializeApp() 來啟動整個應用程式的載入與渲染流程。
 document.addEventListener('DOMContentLoaded', () => {
-  // [v29.0 修正] 初始化圖片燈箱功能，確保點擊照片可以放大
+  // [v29.0 修正] 初始化圖片燈箱功能，���保點擊照片可以放大
   initializeLightbox();
   initializeApp();
 });

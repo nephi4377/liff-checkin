@@ -114,21 +114,17 @@ export function handleCreateNewPost() {
   api.postTask(metaPayload)
     .then(finalJobState => {
         if (finalJobState.result && finalJobState.result.success) {
-            showGlobalNotification(finalJobState.result.message || '日誌已成功建立！', 5000, 'success');
-            newCard.style.opacity = '1'; // 成功後，移除半透明效果
-            if (finalJobState.result.logId) {
-                newCard.id = `log-${finalJobState.result.logId}`; // 用後端回傳的真實 ID 替換臨時 ID
-            }
+            // [v296.0 重構] 呼叫全域函式，用後端回傳的真實資料替換掉臨時卡片
+            window.replaceOptimisticCard(optimisticLog.LogID, finalJobState.result.newLogData);
+            showGlobalNotification(finalJobState.result.message || '日誌已成功建立！', 3000, 'success');
         } else {
             showGlobalNotification(`建立日誌失敗: ${finalJobState.result?.message || '未知錯誤'}`, 8000, 'error');
             newCard.style.border = '2px solid red';
-            newCard.querySelector('h3').textContent += ' (發佈失敗)';
         }
     })
     .catch(error => {
         showGlobalNotification(`請求失敗: ${error.message}`, 8000, 'error');
         newCard.style.border = '2px solid red';
-        newCard.querySelector('h3').textContent += ' (發佈失敗)';
     });
   
   // 樂觀更新：立即清空輸入框

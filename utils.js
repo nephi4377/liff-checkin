@@ -132,3 +132,37 @@ export function showGlobalNotification(message, duration, type = 'info') {
     setTimeout(() => notificationItem.remove(), 500); // 等待淡出動畫結束後再移除 DOM
   }, duration);
 }
+
+/**
+ * [新增] 快取管理函式：儲存資料到 localStorage。
+ * @param {string} key - 快取的鍵名。
+ * @param {object} data - 要儲存的資料。
+ * @param {number} [days=7] - 快取有效期（天）。
+ */
+export function saveCache(key, data, days = 7) {
+    const cache = {
+        data: data,
+        expires: Date.now() + days * 24 * 60 * 60 * 1000
+    };
+    try {
+        localStorage.setItem(key, JSON.stringify(cache));
+    } catch (e) {
+        console.error('儲存快取失敗:', e);
+    }
+}
+
+/**
+ * [新增] 快取管理函式：從 localStorage 載入資料。
+ * @param {string} key - 快取的鍵名。
+ * @returns {object|null} - 快取資料或 null。
+ */
+export function loadCache(key) {
+    const cached = localStorage.getItem(key);
+    if (!cached) return null;
+    const cache = JSON.parse(cached);
+    if (cache.expires < Date.now()) {
+        localStorage.removeItem(key);
+        return null;
+    }
+    return cache.data;
+}

@@ -79,6 +79,9 @@
                         <button type="button" data-tab="history" class="tab-button shrink-0 border-b-2 px-1 pb-4 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">
                             我的假單
                         </button>
+                        <button type="button" data-tab="management" id="management-tab-btn" class="tab-button shrink-0 border-b-2 px-1 pb-4 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700 hidden">
+                            假單管理
+                        </button>
                     </nav>
                 </div>
 
@@ -99,6 +102,11 @@
                     <div id="tab-content-history" class="tab-content">
                         <div id="history-loading" class="text-center text-gray-500 py-4">載入中...</div>
                         <div id="history-list" class="space-y-3"></div>
+                    </div>
+                    <!-- 【您的要求】新增假單管理分頁內容 -->
+                    <div id="tab-content-management" class="tab-content">
+                        <div id="management-loading" class="text-center text-gray-500 py-4">載入中...</div>
+                        <div id="management-list" class="space-y-3"></div>
                     </div>
                 </div>
 
@@ -202,6 +210,14 @@
                     displayName: '俊豪 (本地測試)'
                 };
                 // 【⭐️ 核心改造：在本地模式下也能測試補件模式 ⭐️】
+                // 【您的要求】本地測試模式下，給予管理者權限以顯示「假單管理」分頁
+                const permission = urlParams.get('permission') || '5';
+                userProfile.permission = parseInt(permission, 10);
+                if (userProfile.permission >= 4) {
+                    const managementTab = document.getElementById('management-tab-btn');
+                    if(managementTab) managementTab.classList.remove('hidden');
+                }
+
                 if (timestampForUpdate) {
                     setupUpdateMode(timestampForUpdate);
                 } else {
@@ -210,8 +226,15 @@
             } else {
                 const uid = urlParams.get('uid');
                 const name = urlParams.get('name');
+                const permission = urlParams.get('permission');
                 if (uid && name) {
-                    userProfile = { userId: uid, displayName: name };
+                    userProfile = { userId: uid, displayName: name, permission: parseInt(permission, 10) || 1 };
+                    // 【您的要求】根據權限顯示「假單管理」分頁
+                    if (userProfile.permission >= 4) {
+                        const managementTab = document.getElementById('management-tab-btn');
+                        if(managementTab) managementTab.classList.remove('hidden');
+                    }
+
                     if (timestampForUpdate) {
                         setupUpdateMode(timestampForUpdate);
                     } else {
@@ -323,6 +346,10 @@
             // 監聽分頁導覽的點擊事件，如果是點擊到補件分頁，就禁用按鈕
             document.getElementById('tab-nav').addEventListener('click', (e) => {
                 if (e.target.closest('.tab-button') && e.target.closest('.tab-button').dataset.tab === 'supplement') {
+                    // 【您的要求】修正：在補件模式下，隱藏主表單的共用欄位，避免畫面混亂
+                    form.querySelectorAll('div.grid[class*="grid-cols-"], textarea, input[type="file"], #submit-button, .bg-gray-50').forEach(el => {
+                        el.style.display = 'none';
+                    });
                     document.getElementById('submit-button').disabled = true;
                 }
             });
@@ -501,13 +528,6 @@
          * 【您的要求】輔助函式，將表單重置為「新增」模式
          */
         function _resetFormToNewMode_() {
-            // 確保所有共用欄位和提交按鈕都恢復顯示
-            // 【您的要求】核心修正：在重置表單時，確保分頁內容的顯示狀態也一併恢復正常。
-            // 這是解決從「我的假單」切換回來時，假別按鈕消失問題的關鍵。
-            document.querySelectorAll('.tab-content').forEach(el => {
-                el.classList.remove('active');
-            });
-            document.getElementById('tab-content-leave').classList.add('active');
 
             // 【您的要求】核心修正：將選擇器改為更精準的 'div.grid[class*="grid-cols-"]'。
             // 這個選擇器只會選中那些「同時」是 div、擁有 grid class、且擁有 grid-cols-* class 的元素，
@@ -544,12 +564,12 @@
             const tabButtons = document.querySelectorAll('.tab-button');
             const tabContents = document.querySelectorAll('.tab-content');
 
-            tabButtons.forEach(button => {
-                button.addEventListener('click', () => {
-                    const tabName = button.dataset.tab;
+            tabButtons.forEach(clickedButton => {
+                clickedButton.addEventListener('click', () => {
+                    const tabName = clickedButton.dataset.tab;
 
                     tabButtons.forEach(btn => btn.classList.remove('active'));
-                    button.classList.add('active');
+                    clickedButton.classList.add('active');
 
                     tabContents.forEach(content => {
                         content.classList.toggle('active', content.id === `tab-content-${tabName}`);
@@ -559,6 +579,10 @@
                     if (tabName === 'history') {
                         _setFormToHistoryMode_();
                         fetchMyLeaveRequests();
+                    } else if (tabName === 'management') {
+                        // 【您的要求】點擊假單管理分頁時，執行對應的載入邏輯
+                        _setFormToHistoryMode_();
+                        fetchManageableLeaveRequests();
                     } else {
                         _resetFormToNewMode_();
                     }
@@ -577,8 +601,9 @@
                         populateTimeSelects(userShiftStart, userShiftEnd);
                     }
 
-                    const reasonTextarea = document.getElementById('reason');
-                    if (button.dataset.tab === 'leave') {
+                    // 【您的要求】修正：當切換到請假頁時，才更新事由的 placeholder
+                    if (clickedButton.dataset.tab === 'leave') {
+                        const reasonTextarea = document.getElementById('reason');
                         // 當切換到請假頁時，檢查預設假別
                         const defaultLeaveType = document.querySelector('input[name="leaveType"]:checked').value;
                         if (defaultLeaveType === '病假') {
@@ -586,8 +611,6 @@
                         } else {
                             reasonTextarea.placeholder = '';
                         }
-                    } else {
-                        reasonTextarea.placeholder = '';
                     }
                 });
             });
@@ -616,6 +639,9 @@
             const listContainer = document.getElementById('history-list');
             const loadingEl = document.getElementById('history-loading');
             listContainer.innerHTML = '';
+            // 【您的要求】修正：在每次載入前，先清除舊的事件監聽器，避免重複綁定導致假單重複顯示
+            const newContainer = listContainer.cloneNode(false);
+            listContainer.parentNode.replaceChild(newContainer, listContainer);
             loadingEl.textContent = '載入中...';
             loadingEl.style.display = 'block';
 
@@ -623,7 +649,10 @@
                 const url = new URL(API_BASE_URL);
                 url.searchParams.append('page', 'attendance_api');
                 url.searchParams.append('action', 'get_my_leave_requests');
+                // 【您的要求】修正：傳入權限參數，讓後端能根據權限回傳對應的假單列表
+                const currentUser = (window.allEmployees || []).find(emp => emp.userId === userProfile.userId);
                 url.searchParams.append('userId', userProfile.userId);
+                url.searchParams.append('permission', currentUser ? currentUser.permission : 1);
                 const fetchResponse = await fetch(url);
                 const response = await fetchResponse.json();
 
@@ -633,8 +662,43 @@
                     throw new Error(response.message || '無法取得假單資料');
                 }
             } catch (error) {
-                console.error('無法載入我的假單:', error);
+                console.error('無法載入假單:', error);
                 listContainer.innerHTML = `<p class="text-center text-red-500 py-4">載入失敗: ${error.message}</p>`;
+            } finally {
+                loadingEl.style.display = 'none';
+            }
+        }
+
+        /**
+         * 【您的要求】從後端取得所有可管理的假單 (上個月至今)
+         */
+        async function fetchManageableLeaveRequests() {
+            const listContainer = document.getElementById('management-list');
+            const loadingEl = document.getElementById('management-loading');
+            listContainer.innerHTML = '';
+            const newContainer = listContainer.cloneNode(false);
+            listContainer.parentNode.replaceChild(newContainer, listContainer);
+            loadingEl.textContent = '載入中...';
+            loadingEl.style.display = 'block';
+
+            try {
+                const url = new URL(API_BASE_URL);
+                url.searchParams.append('page', 'attendance_api');
+                url.searchParams.append('action', 'get_my_leave_requests'); // 【您的要求】複用現有路由
+                url.searchParams.append('mode', 'management'); // 【您的要求】增加 mode 參數以區分模式
+                url.searchParams.append('userId', userProfile.userId); // 傳入管理者 ID 以供日誌記錄
+                // 【您的要求】核心修正：補上遺失的 permission 參數，後端才能正確識別管理者身分
+                url.searchParams.append('permission', userProfile.permission);
+                const fetchResponse = await fetch(url);
+                const response = await fetchResponse.json();
+
+                if (response && response.success && Array.isArray(response.data)) {
+                    renderMyLeaveRequests(response.data, 'management-list'); // 複用渲染函式
+                } else {
+                    throw new Error(response.message || '無法取得假單資料');
+                }
+            } catch (error) {
+                newContainer.innerHTML = `<p class="text-center text-red-500 py-4">載入失敗: ${error.message}</p>`;
             } finally {
                 loadingEl.style.display = 'none';
             }
@@ -675,6 +739,10 @@
          * @param {Event} event - 點擊事件物件
          */
         function handleSupplementProof(event) {
+            // 【您的要求】修正：點擊「上傳證明」時，隱藏主表單的共用欄位，避免畫面混亂
+            form.querySelectorAll('div.grid[class*="grid-cols-"], textarea, input[type="file"], #submit-button, .bg-gray-50').forEach(el => {
+                el.style.display = 'none';
+            });
             const button = event.currentTarget;
             const card = button.closest('.p-4');
             const { timestamp } = button.dataset;
@@ -707,8 +775,9 @@
         /**
          * 【您的要求】渲染「我的假單」列表
          */
-        function renderMyLeaveRequests(requests) {
-            const listContainer = document.getElementById('history-list');
+        function renderMyLeaveRequests(requests, containerId = 'history-list') {
+            const listContainer = document.getElementById(containerId);
+            if (!listContainer) return;
             if (requests.length === 0) {
                 listContainer.innerHTML = '<p class="text-center text-gray-500 py-4">您目前沒有任何假勤申請紀錄。</p>';
                 return;
@@ -726,9 +795,14 @@
                 const card = document.createElement('div');
                 // 【您的要求】為卡片加上 ID，方便後續操作
                 card.id = `req-${req.timestamp}`;
+                // 【您的要求】為卡片加上申請人 ID，方便取消他人假單
+                card.dataset.userid = req.userId;
                 card.className = 'p-4 border rounded-lg bg-white shadow-sm';
 
                 const formatDateTime = (isoStr) => new Date(isoStr).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+                // 【您的要求】修正：為管理者顯示申請人姓名
+                const displayName = req.userName ? `<span class="text-sm text-blue-600 font-normal">(${req.userName})</span>` : '';
+
                 const statusClass = statusStyles[req.status] || 'bg-gray-100 text-gray-800';
 
                 // 【您的要求】錯誤修正：將 data-* 屬性移至卡片外層，避免被 innerHTML 覆蓋
@@ -742,7 +816,7 @@
                 let cardHTML = `
                     <div class="flex justify-between items-start">
                         <div>
-                            <p class="font-bold text-lg text-gray-800">${req.leaveType}</p>
+                            <p class="font-bold text-lg text-gray-800">${req.leaveType} ${displayName}</p>
                             <p class="text-sm text-gray-500">${formatDateTime(req.startTime)} ~ ${formatDateTime(req.endTime)}</p>
                             ${req.reason ? `<p class="text-sm text-gray-600 mt-1">事由：${req.reason}</p>` : ''}
                         </div>
@@ -752,7 +826,15 @@
 
                 // 【您的要求】根據假單狀態，顯示不同的操作按鈕
                 let actionButtonsHTML = '';
-                if (req.status === '已批准' && req.recordType !== '加班') {
+                // [v282.0 核心改造] 增加判斷：過去的假單不能取消
+                const isPastLeave = new Date(req.startTime) < new Date(new Date().setHours(0, 0, 0, 0));
+                
+                // [v283.0 核心修正] 根據您的指示，待審核的假單，無論是否過期，都應允許使用者「撤回」。
+                if (req.status === '待審核') {
+                    // 待審核的假單，可以「撤回申請」
+                    actionButtonsHTML = `<button type="button" class="text-xs text-gray-600 hover:underline" data-action="withdraw-leave" data-timestamp="${req.timestamp}" data-leavetype="${req.leaveType}">撤回申請</button>`;
+                } else if (req.status === '已批准' && req.recordType !== '加班' && !isPastLeave) {
+                    // 已批准的假單，可以「申請銷假」
                     actionButtonsHTML = `
                         <button type="button" class="text-xs text-red-600 hover:underline" data-action="cancel-leave" data-timestamp="${req.timestamp}" data-leavetype="${req.leaveType}">
                             取消申請
@@ -767,6 +849,19 @@
                     `;
                 }
 
+                // 【您的要求】整合審核功能：如果狀態是待審核或已報備，顯示批准/駁回按鈕
+                if (req.status === '待審核' || req.status === '已報備') {
+                    actionButtonsHTML += `
+                        <div class="mt-4 flex justify-end gap-3">
+                            <button data-decision="rejected" data-record-id="${req.timestamp}" data-applicant-id="${req.userId}" class="px-4 py-2 text-sm font-bold text-white bg-red-500 rounded-md hover:bg-red-600">駁回</button>
+                            <button data-decision="approved" data-record-id="${req.timestamp}" data-applicant-id="${req.userId}" class="px-4 py-2 text-sm font-bold text-white bg-green-500 rounded-md hover:bg-green-600">批准</button>
+                        </div>
+                        <div id="reject-reason-wrapper-${req.timestamp}" class="hidden mt-4 space-y-2">
+                            <input type="text" id="reject-reason-${req.timestamp}" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="請輸入駁回的理由 (可選填)...">
+                            <button data-decision="confirm-reject" data-record-id="${req.timestamp}" data-applicant-id="${req.userId}" class="w-full px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-md hover:bg-red-700">確認駁回</button>
+                        </div>`;
+                }
+
                 if (actionButtonsHTML) {
                     cardHTML += `<div class="text-right mt-2">${actionButtonsHTML}</div>`;
                 }
@@ -775,14 +870,21 @@
                 listContainer.appendChild(card);
             });
 
+            // 【您的要求】修正：將事件綁定移至渲染完成後，並使用新的容器
+            const newContainer = document.getElementById(containerId);
+
             // 【您的要求】為所有動態產生的按鈕綁定事件監聽器
-            listContainer.querySelectorAll('button[data-action="supplement-proof"]').forEach(button => {
+            newContainer.querySelectorAll('button[data-action="supplement-proof"]').forEach(button => {
                 button.addEventListener('click', handleSupplementProof);
             });
             // 【您的要求】錯誤修正：改用事件監聽器取代 onclick 屬性，以解決 module scope 的問題。
             // 為所有新產生的「取消申請」按鈕綁定點擊事件。
-            listContainer.querySelectorAll('button[data-action="cancel-leave"]').forEach(button => {
+            newContainer.querySelectorAll('button[data-action="cancel-leave"], button[data-action="withdraw-leave"]').forEach(button => {
                 button.addEventListener('click', () => handleCancelLeave(button));
+            });
+            // 【您的要求】為審核按鈕綁定事件
+            newContainer.querySelectorAll('button[data-decision]').forEach(button => {
+                button.addEventListener('click', handleApproval);
             });
         }
 
@@ -791,23 +893,107 @@
          * 此函式負責處理使用者點擊「取消申請」按鈕的邏輯。
          */
         async function handleCancelLeave(button) {
-            const { timestamp, leavetype } = button.dataset;
-            if (!confirm(`您確定要取消這筆「${leavetype}」的申請嗎？此操作無法復原。`)) {
+            const { timestamp, leavetype, action } = button.dataset;
+            const isWithdraw = action === 'withdraw-leave'; // 判斷是「撤回」還是「銷假」
+            
+            const confirmMessage = isWithdraw
+                ? `您確定要撤回這筆「${leavetype}」的申請嗎？`
+                : `您確定要為這筆「${leavetype}」提交銷假申請嗎？\n\n提交後需由主管審核。`;
+
+            if (!confirm(confirmMessage)) {
                 return;
+            }
+
+            // 【您的要求】修正：在送出請求前，先禁用按鈕避免重複點擊
+            button.disabled = true;
+            button.textContent = '處理中...';
+
+            try {
+                // [v282.0 核心改造] 根據操作類型，呼叫不同的後端 action
+                const apiAction = isWithdraw ? 'cancel_leave' : 'request_leave_cancellation';
+
+                const url = new URL(API_BASE_URL);
+                url.searchParams.append('page', 'attendance_api');
+                url.searchParams.append('action', apiAction);
+                url.searchParams.append('timestamp', timestamp);
+                // 【您的要求】修正：取消他人假單時，需傳遞原始申請人的 ID
+                const card = button.closest('.p-4');
+                const targetUserId = card.dataset.userid || userProfile.userId;
+                url.searchParams.append('userId', targetUserId);
+
+                const response = await fetch(url).then(res => res.json());
+                if (!response.success) throw new Error(response.message);
+                alert(response.message || '操作成功！');
+                document.getElementById(`req-${timestamp}`)?.remove();
+            } catch (error) {
+                // 【您的要求】修正：操作失敗時，恢復按鈕狀態
+                button.disabled = false;
+                button.textContent = isWithdraw ? '撤回申請' : '取消申請';
+                alert(`取消失敗：${error.message}`);
+            }
+        }
+        // [v282.0 核心改造] 將事件綁定邏輯移至 renderMyLeaveRequests 函式中，以處理動態產生的按鈕
+        // listContainer.querySelectorAll('button[data-action="cancel-leave"]').forEach(button => {
+        //     button.addEventListener('click', () => handleCancelLeave(button));
+        // });
+
+        /**
+         * 【您的要求】從 approval_dashboard.html 移入的審核處理函式
+         */
+        async function handleApproval(event) {
+            const button = event.target.closest('button[data-decision]');
+            if (!button) return;
+
+            const { decision, recordId, applicantId } = button.dataset;
+
+            if (decision === 'rejected') {
+                const wrapper = document.getElementById(`reject-reason-wrapper-${recordId}`);
+                if (wrapper) wrapper.classList.toggle('hidden');
+                return;
+            }
+
+            button.disabled = true;
+            button.textContent = '處理中...';
+
+            let reason = '';
+            let finalDecision = decision;
+
+            if (decision === 'confirm-reject') {
+                finalDecision = 'rejected';
+                const reasonInput = document.getElementById(`reject-reason-${recordId}`);
+                reason = reasonInput ? reasonInput.value : '';
             }
 
             try {
                 const url = new URL(API_BASE_URL);
                 url.searchParams.append('page', 'attendance_api');
-                url.searchParams.append('action', 'cancel_leave');
-                url.searchParams.append('timestamp', timestamp);
-                url.searchParams.append('userId', userProfile.userId);
-                const response = await fetch(url).then(res => res.json());
-                if (!response.success) throw new Error(response.message);
-                alert('假單已成功取消！');
-                document.getElementById(`req-${timestamp}`)?.remove();
+                url.searchParams.append('action', 'handle_approval');
+                url.searchParams.append('decision', finalDecision);
+                url.searchParams.append('recordId', recordId);
+                url.searchParams.append('approverName', userProfile.displayName);
+                url.searchParams.append('applicantId', applicantId); // 傳遞申請人ID
+
+                if (reason) url.searchParams.append('reason', reason);
+
+                // 使用 no-cors 模式發送請求，避免 CORS 錯誤
+                await fetch(url, { mode: 'no-cors' });
+
+                // 樂觀更新 UI
+                const card = document.getElementById(`req-${recordId}`);
+                if (card) {
+                    card.style.opacity = '0';
+                    card.style.transform = 'translateX(50px)';
+                    setTimeout(() => {
+                        // 重新載入列表以取得最新狀態
+                        if (document.querySelector('.tab-button.active').dataset.tab === 'management') {
+                            fetchManageableLeaveRequests();
+                        }
+                    }, 500);
+                }
             } catch (error) {
-                alert(`取消失敗：${error.message}`);
+                alert(`操作失敗: ${error.message}`);
+                button.disabled = false;
+                button.textContent = button.dataset.decision === 'approved' ? '批准' : '駁回';
             }
         }
 

@@ -18,6 +18,29 @@ setlocal
 :: 5. 自動觸發後端部署。
 :: =================================================================
 
+echo [本地備份] 正在執行程式碼備份...
+
+:: --- [您的要求] 備份邏輯 ---
+:: 1. 設定來源與目標路徑
+set "SOURCE_DIR=D:\Dropbox\程式備份用\CODING"
+set "BACKUP_ROOT=D:\Dropbox\程式備份用\BAK"
+
+:: 2. 產生帶有日期時間的備份資料夾名稱 (格式: YYYYMMDD_HHMMSS)
+for /f "delims=" %%i in ('powershell -Command "(Get-Date).ToString('yyyyMMdd_HHmmss')"') do set "TIMESTAMP_FOLDER=%%i"
+set "BACKUP_PATH=%BACKUP_ROOT%\%TIMESTAMP_FOLDER%"
+
+:: 3. 建立備份資料夾
+mkdir "%BACKUP_PATH%"
+echo    - 備份資料夾已建立: %BACKUP_PATH%
+
+:: 4. 使用 robocopy 進行備份，並排除不必要的檔案/資料夾以減少容量
+::    /E :: 複製子目錄，包含空的子目錄。
+::    /XD .git :: 排除名為 .git 的資料夾 (最主要的容量來源)。
+::    /XF upload_new.bat :: 排除名為 upload_new.bat 的檔案。
+robocopy "%SOURCE_DIR%" "%BACKUP_PATH%" /E /XD .git /XF upload_new.bat > nul
+
+echo    - 程式碼已成功備份至指定位置。
+echo.
 echo [前端部署] 正在檢查 Git 環境...
 :: --- Git 可執行檔自動偵測與設定 v2.0 ---
 set "GIT_EXECUTABLE="

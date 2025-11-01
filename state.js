@@ -19,5 +19,16 @@ export const state = {
     currentPage: 1,
     LOGS_PER_PAGE: isMobile() ? 3 : 8,
     isLoadingNextPage: false,
-    scrollObserver: null
+    scrollObserver: null,
+    // [v292.0 新增] 精細化的資料就緒狀態旗標，用於實現更可靠的非同步依賴管理
+    dataReady: {
+        userProfile: false,
+        allEmployees: false,
+        projectOverview: false,
+        projectSchedule: false,
+        projectDailyLogs: false,
+        projectCommunicationHistory: false,
+    },
+    // [v292.0 新增] 追蹤當前正在進行的檔案上傳數量
+    activeUploads: 0,
 };

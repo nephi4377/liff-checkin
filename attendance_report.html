@@ -50,8 +50,17 @@
                     <select id="employee-select" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                         <option value="">所有員工</option>
                     </select>
+                    <!-- 【您的要求】新增「顯示所有歷史員工」的核取方塊 -->
+                    <div class="mt-2 flex items-center">
+                        <input id="show-all-employees-checkbox" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                        <label for="show-all-employees-checkbox" class="ml-2 block text-sm text-gray-900">顯示所有歷史員工</label>
+                    </div>
                 </div>
-                <button id="query-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700 transition duration-300">查詢</button>
+                <div class="flex items-center gap-2">
+                    <button id="query-btn" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700 transition duration-300">查詢</button>
+                    <!-- 【您的要求】新增匯出按鈕 -->
+                    <button id="export-csv-btn" title="將目前查詢結果匯出為 CSV 檔案" class="p-2 bg-green-600 text-white rounded-md hover:bg-green-700 hidden"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg></button>
+                </div>
             </div>
         </div>
 
@@ -99,6 +108,8 @@
 <script type="module">
     import { showGlobalNotification } from './utils.js';
 
+    // 【您的要求】新增全域變數，用於儲存當前報表資料以供匯出
+    let currentReportData = {};
     // 【⭐️ 核心新增：全域變數，用於儲存員工班表資料 ⭐️】
     let employeeShiftData = {};
 
@@ -117,6 +128,30 @@
             throw new Error(`後端伺服器錯誤: ${response.status} ${response.statusText}`);
         }
         return response.json();
+    }
+
+    /**
+     * 【您的要求】核心修正：從 hub.html 移入遺失的快取管理函式
+     * 將資料儲存到瀏覽器的 localStorage，並設定到期日。
+     * @param {string} key - 快取的鍵值。
+     * @param {any} data - 要快取的資料。
+     * @param {number} [days=1] - 快取有效天數，預設為 1 天。
+     */
+    function saveCache(key, data, days = 1) {
+        const cache = { data: data, expires: Date.now() + days * 24 * 60 * 60 * 1000 };
+        try {
+            localStorage.setItem(key, JSON.stringify(cache));
+        } catch (e) {
+            console.error('儲存快取失敗:', e);
+        }
+    }
+
+    function loadCache(key) {
+        const cached = localStorage.getItem(key);
+        if (!cached) return null;
+        const cache = JSON.parse(cached);
+        if (cache.expires < Date.now()) { localStorage.removeItem(key); return null; }
+        return cache.data;
     }
 
     function loadGoogleMapsAPI(apiKey) {
@@ -149,6 +184,8 @@
 
         // 【⭐️ 核心修正：將所有事件綁定移至此處，確保 DOM 已載入 ⭐️】
         document.getElementById('query-btn').onclick = fetchReportData;
+        // 【您的要求】為匯出按鈕綁定事件
+        document.getElementById('export-csv-btn').onclick = exportToCsv;
         document.getElementById('add-checkin-btn').onclick = () => {
             document.getElementById('checkin-modal').classList.add('is-open');
             // 【⭐️ 核心新增：打開視窗時，設定預設日期與時間 ⭐️】
@@ -167,44 +204,99 @@
         document.getElementById('modal-time').addEventListener('click', (e) => e.target.showPicker());
 
         // 【v175.0 核心改造】將 API 請求移至此處，並統一附上使用者資訊
+        // 【您的要求】為「顯示所有歷史員工」核取方塊綁定事件
+        document.getElementById('show-all-employees-checkbox').addEventListener('change', loadAndRenderEmployees);
+
         const urlParams = new URLSearchParams(window.location.search);
         const uid = urlParams.get('uid') || 'unknown_user';
         const name = urlParams.get('name') || 'Unknown User';
 
-        const userParams = { userId: uid, userName: name };
+        const userParams = { userId: uid, userName: name }; // 準備要傳給後端的通用參數
 
         // 並行發送請求，提升載入速度
-        Promise.all([
-            fetchApi({ page: 'attendance_api', action: 'get_config', ...userParams }),
-            fetchApi({ page: 'attendance_api', action: 'get_employees', ...userParams })
-        ]).then(([configResponse, employeesResponse]) => {
-            // 處理地圖設定
-            if (configResponse && configResponse.googleMapsApiKey) {
-                loadGoogleMapsAPI(configResponse.googleMapsApiKey).catch(console.error);
-            } else {
-                console.error('[DEBUG] 無法取得 Google Maps API Key');
+        fetchApi({ page: 'attendance_api', action: 'get_config', ...userParams })
+            .then(configResponse => {
+                // 步驟 3: 處理地圖設定
+                if (configResponse && configResponse.googleMapsApiKey) {
+                    loadGoogleMapsAPI(configResponse.googleMapsApiKey).catch(console.error);
+                } else {
+                    console.error('[DEBUG] 無法取得 Google Maps API Key');
+                }
+            });
+
+        // 獨立載入員工列表
+        loadAndRenderEmployees();
+
+        function loadAndRenderEmployees() {
+            const showAll = document.getElementById('show-all-employees-checkbox').checked;
+            const filter = showAll ? 'all' : 'active_with_recent_resigned';
+            const cacheKey = `employees_cache_${filter}`;
+
+            // 快取優先策略
+            const cachedData = loadCache(cacheKey);
+            if (cachedData) {
+                console.log(`⚡️ 從快取載入員工列表 (模式: ${filter})...`);
+                renderEmployeeSelect(cachedData);
             }
 
-            // 處理員工列表
-            if (employeesResponse && employeesResponse.success && Array.isArray(employeesResponse.data)) {
-                const employees = employeesResponse.data;
-                const select = document.getElementById('employee-select');
-                const modalSelect = document.getElementById('modal-employee-select');
-                const filteredEmployees = employees.filter(emp => emp.permission >= 2 && emp.permission < 5);
+            // 無論是否有快取，都在背景請求最新資料
+            console.log(`🔄 正在從後端請求員工列表 (模式: ${filter})...`);
+            fetchApi({ page: 'attendance_api', action: 'get_employees', filter: filter, ...userParams })
+                .then(response => {
+                    if (response && response.success) {
+                        const newData = response.data;
+                        // 只有在新舊資料不同時，才更新畫面與快取
+                        if (JSON.stringify(cachedData) !== JSON.stringify(newData)) {
+                            console.log(`🔄 偵測到員工資料已更新 (模式: ${filter})，正在刷新下拉選單...`);
+                            saveCache(cacheKey, newData, 1); // 快取 1 天
+                            renderEmployeeSelect(newData);
+                            if (cachedData) { // 只有在是背景更新時才跳通知
+                                showGlobalNotification('員工列表已自動更新。', 3000, 'info');
+                            }
+                        } else {
+                            console.log(`✅ 背景資料與快取一致 (模式: ${filter})，無需更新。`);
+                        }
+                    } else {
+                        throw new Error(response.message || '後端未回傳有效資料');
+                    }
+                })
+                .catch(error => {
+                    console.error(`載入員工列表 (模式: ${filter}) 失敗:`, error);
+                    if (!cachedData) { // 如果連快取都沒有，才顯示錯誤
+                        showGlobalNotification(`載入員工列表失敗: ${error.message}`, 8000, 'error');
+                    }
+                });
+        }
 
-                employeeShiftData = {};
-                filteredEmployees.forEach(emp => {
-                    const option = `<option value="${emp.userId}">${emp.userName}</option>`;
-                    select.innerHTML += option;
-                    modalSelect.innerHTML += option;
+        function renderEmployeeSelect(employees) {
+            const mainSelect = document.getElementById('employee-select');
+            const modalSelect = document.getElementById('modal-employee-select');
+            mainSelect.innerHTML = '<option value="">所有員工</option>';
+            modalSelect.innerHTML = '';
+            employeeShiftData = {};
+
+            const activeEmployees = employees.filter(emp => emp.status !== '離職');
+            const resignedEmployees = employees.filter(emp => emp.status === '離職');
+
+            const activeGroup = document.createElement('optgroup');
+            activeGroup.label = '在職員工';
+            activeEmployees.forEach(emp => {
+                activeGroup.innerHTML += `<option value="${emp.userId}">${emp.userName}</option>`;
+                modalSelect.innerHTML += `<option value="${emp.userId}">${emp.userName}</option>`;
+                employeeShiftData[emp.userId] = { shiftStart: emp.shiftStart, shiftEnd: emp.shiftEnd };
+            });
+            mainSelect.appendChild(activeGroup);
+
+            if (resignedEmployees.length > 0) {
+                const resignedGroup = document.createElement('optgroup');
+                resignedGroup.label = '離職員工';
+                resignedEmployees.forEach(emp => {
+                    resignedGroup.innerHTML += `<option value="${emp.userId}" class="text-gray-400">${emp.userName} (已離職)</option>`;
                     employeeShiftData[emp.userId] = { shiftStart: emp.shiftStart, shiftEnd: emp.shiftEnd };
                 });
-            } else {
-                console.error('[DEBUG] 載入員工列表失敗:', employeesResponse);
+                mainSelect.appendChild(resignedGroup);
             }
-        }).catch(error => {
-            showGlobalNotification(`載入頁面初始資料失敗: ${error.message}`, 8000, 'error');
-        });
+        }
     });
 
     // 【⭐️ 核心重構：簡化設定時間的函式 ⭐️】
@@ -325,6 +417,8 @@
         spinner.style.display = 'block';
         document.getElementById('report-table-container').innerHTML = '';
         document.getElementById('summary-section').style.display = 'none';
+        // 【您的要求】查詢時先隱藏匯出按鈕
+        document.getElementById('export-csv-btn').classList.add('hidden');
         document.getElementById('map-container').style.display = 'none';
 
         // 【v175.0 核心修正】在查詢報表時，也附上當前操作者的資訊
@@ -338,6 +432,9 @@
                 // [核心改造] 收到後端回傳的完整報表後，立即使用已過濾的員工列表 (employeeShiftData) 進行篩選。
                 // 這樣可以確保無論後端回傳什麼，最終顯示在畫面上的都只有權限 < 5 的員工紀錄。
                 const allowedUserIds = new Set(Object.keys(employeeShiftData));
+                // 【您的要求】將過濾後的資料存到全域變數
+                currentReportData = Object.fromEntries(Object.entries(data.records).filter(([id]) => allowedUserIds.has(id)));
+
                 const filteredRecords = Object.fromEntries(Object.entries(data.records).filter(([id]) => allowedUserIds.has(id)));
 
                 spinner.style.display = 'none';
@@ -346,12 +443,85 @@
                 if (typeof google !== 'undefined' && userId && filteredRecords[userId] && filteredRecords[userId].mapPoints.length > 0) {
                     initMap(data.records[userId].mapPoints).catch(console.error);
                 }
+                // 【您的要求】查詢成功且有資料時，顯示匯出按鈕
+                if (Object.keys(filteredRecords).length > 0) {
+                    document.getElementById('export-csv-btn').classList.remove('hidden');
+                }
             })
             .catch(error => {
                 spinner.style.display = 'none';
                 console.error("查詢報表資料失敗:", error);
                 document.getElementById('report-table-container').innerHTML = `<p class="text-center text-red-500">查詢資料失敗：${error.message}</p>`;
             });
+    }
+
+    /**
+     * 【您的要求】將當前報表資料匯出為 CSV 檔案
+     */
+    function exportToCsv() {
+        if (!currentReportData || Object.keys(currentReportData).length === 0) {
+            alert('沒有可匯出的資料。');
+            return;
+        }
+
+        let csvContent = "員工姓名,日期,星期,上班時間,下班時間,狀態,遲到(分),早退(分),打卡地點\n";
+        const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+
+        // 取得所有日期並排序，確保匯出順序正確
+        const allDates = new Set();
+        Object.values(currentReportData).forEach(userData => {
+            Object.keys(userData.dailyData).forEach(date => allDates.add(date));
+        });
+        const sortedDates = Array.from(allDates).sort();
+
+        // 遍歷每一位員工
+        for (const userId in currentReportData) {
+            const userData = currentReportData[userId];
+            // 遍歷每一天
+            for (const dateStr of sortedDates) {
+                const day = userData.dailyData[dateStr];
+                if (!day) continue; // 如果該員工當天沒資料，則跳過
+
+                const dateObj = new Date(dateStr);
+                dateObj.setMinutes(dateObj.getMinutes() + dateObj.getTimezoneOffset());
+                const dayOfWeek = weekdays[dateObj.getDay()];
+
+                // 處理地點，將多行地點合併為一行
+                const checkInPoint = userData.mapPoints.find(p => p.eventType === '上班' && p.time.includes(dateStr.replace(/-/g, '/')) && p.time.endsWith(day.checkIn));
+                const checkOutPoint = userData.mapPoints.find(p => p.eventType === '下班' && p.time.includes(dateStr.replace(/-/g, '/')) && p.time.endsWith(day.checkOut));
+                let locationInfo = [];
+                if (checkInPoint) locationInfo.push(`上班: ${checkInPoint.address || '無'}`);
+                if (checkOutPoint) locationInfo.push(`下班: ${checkOutPoint.address || '無'}`);
+                // 將地點中的逗號替換為全形逗號，避免 CSV 格式錯亂
+                const locationStr = locationInfo.join('; ').replace(/,/g, '，');
+
+                const row = [
+                    userData.userName,
+                    dateStr,
+                    dayOfWeek,
+                    day.checkIn || '',
+                    day.checkOut || '',
+                    `"${day.status.replace(/"/g, '""')}"`, // 處理狀態中可能包含的引號
+                    day.late || 0,
+                    day.early || 0,
+                    `"${locationStr}"` // 將地點資訊包在引號中
+                ].join(',');
+                csvContent += row + "\n";
+            }
+        }
+
+        // 建立並觸發下載
+        const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' }); // 加入 BOM 以支援 Excel
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        const startDate = document.getElementById('start-date').value;
+        const endDate = document.getElementById('end-date').value;
+        link.setAttribute("download", `出勤紀錄_${startDate}_to_${endDate}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     }
 
     function renderSummary(summary) {

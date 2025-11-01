@@ -334,8 +334,9 @@ export function handleSaveSchedule() {
     api.postTask(payload)
         .then(finalJobState => {
             if (finalJobState.result && finalJobState.result.success) {
-                showGlobalNotification(finalJobState.result.message || '排程已成功儲存！', 5000, 'success');
+                showGlobalNotification(finalJobState.result.message || '排程已成功儲存！正在刷新畫面...', 3000, 'success');
                 if (btn) btn.classList.add('hidden'); // 儲存成功後隱藏按鈕
+                if (window.refreshProjectData) window.refreshProjectData(); // [v292.0] 呼叫全域刷新函式
             } else {
                 showGlobalNotification(`儲存失敗：${finalJobState.result.message || '未知錯誤'}`, 8000, 'error');
             }
@@ -397,8 +398,9 @@ export function handleImportTemplate(templateType, startDate) {
     api.postTask(payload)
         .then(finalJobState => {
             if (finalJobState.result && finalJobState.result.success) {
-                showGlobalNotification('排程已成功建立！頁面即將刷新...', 5000, 'success');
-                setTimeout(() => window.location.reload(), 2000); // 成功後刷新頁面以顯示新排程
+                showGlobalNotification('排程已成功建立！正在刷新畫面...', 3000, 'success');
+                // [v292.0] 改為呼叫全域刷新函式，避免整頁重載
+                if (window.refreshProjectData) window.refreshProjectData();
             } else {
                 showGlobalNotification(`建立失敗：${finalJobState.result.message || '未知錯誤'}`, 8000, 'error');
             }

@@ -19,12 +19,12 @@ const API_BASE_URL = window.API_BASE_URL;
 export function loadJsonp(url) {
   return new Promise((resolve, reject) => {
     const cb = 'jsonp_' + Math.random().toString(36).slice(2);
-    const timer = setTimeout(() => { cleanup(); reject(new Error('請求後端資料超時 (15秒)。')); }, 15000);
+    const timer = setTimeout(() => { cleanup(); reject(new Error('請求後端資料超時 (30秒)。')); }, 30000); // 超時時間延長至 30 秒
     function cleanup() { clearTimeout(timer); delete window[cb]; if (script.parentNode) script.parentNode.removeChild(script); }
     window[cb] = (data) => { cleanup(); resolve(data); };
     const script = document.createElement('script');
-    script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
-    script.onerror = () => { cleanup(); reject(new Error('載入後端資料失敗。')); };
+    script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb; // 確保 URL 包含 callback 參數
+    script.onerror = () => { cleanup(); reject(new Error(`載入後端資料失敗。請求 URL: ${script.src}`)); }; // 顯示失敗的 URL
     document.body.appendChild(script);
   });
 }
@@ -207,4 +207,18 @@ function pollJobStatus(jobId) {
 
         poll(); // 立即開始第一次輪詢
     });
+}
+
+// [v244.0 新增] 獲取單個使用者 Profile 的 API 呼叫
+// [v250.0 修正] 將此函式移至 api.js 並匯出，解決 main.js 中的 ReferenceError
+export async function getUserProfile(userId) {
+  try {
+    const url = `${API_BASE_URL}?page=get_user_profile&userId=${encodeURIComponent(userId)}`;
+    const response = await fetch(url);
+    const result = await response.json();
+    return result.success ? result.data : null;
+  } catch (error) {
+    console.error(`[API] 獲取使用者 Profile 失敗 (${userId}):`, error);
+    return null;
+  }
 }

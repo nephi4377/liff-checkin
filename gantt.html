@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>專案甘特圖排程</title>
+  <!-- 引入 Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 引入共用樣式 -->
+  <link rel="stylesheet" href="style.css">
+  <!-- 引入 Frappe Gantt 的 CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.css">
+  <!-- 【⭐️ 核心修正：解決 favicon.ico 404 錯誤 ⭐️】 -->
+  <link rel="icon" href="data:,">
+
+  <!-- [核心修正] 將 const 改為 var，確保變數能被正確掛載到 window 物件上，
+       以便後續的模組腳本 (gantt_main.js) 可以透過 window.API_BASE_URL 存取。 -->
+  <script>
+    // 請將此處的 API_BASE_URL 替換為你的實際後端 Apps Script 網址
+    var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec'; // 確保此 URL 與 managementconsole.html 中的一致
+    var FRONTEND_VERSION = 'Gantt_v1.0'; // 為甘特圖頁面設定獨立版本號
+  </script>
+  <!-- 引入 Frappe Gantt 的 JS -->
+  <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+  <!-- 引入主腳本 -->
+  <script type="module" src="gantt_main.js"></script>
+</head>
+<body class="bg-gray-100 text-gray-800">
+  <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+    <header class="mb-6 flex justify-between items-center flex-wrap">
+      <div>
+        <h1 id="project-title" class="text-3xl font-bold text-gray-700">專案甘特圖排程</h1>
+        <p id="version-display" class="text-gray-500 text-sm"></p>
+      </div>
+      <div id="actions-container" class="flex gap-4 mt-4 md:mt-0">
+        <!-- 這些按鈕將由 JavaScript 動態控制顯示 -->
+        <button id="btn-import-new" class="btn btn-green hidden">套用新屋案範本</button>
+        <button id="btn-import-old" class="btn btn-primary hidden">套用舊屋案範本</button>
+      </div>
+    </header>
+
+    <main id="main-content" class="bg-white p-6 rounded-lg shadow-md">
+      <!-- 專案進度條將渲染在此 -->
+      <div id="project-progress-bar-container"></div>
+
+      <!-- 甘特圖將渲染在此 -->
+      <div id="gantt-chart-wrapper" class="mt-4">
+        <svg id="gantt-chart-container"></svg>
+      </div>
+
+      <!-- 控制按鈕 (儲存、新增任務) -->
+      <div id="gantt-controls" class="mt-4 pt-4 border-t flex justify-end items-center gap-4">
+        <button id="save-schedule-btn" class="btn btn-danger hidden">儲存排程變更</button>
+        <button id="add-task-btn" class="btn btn-primary">＋ 新增任務</button>
+      </div>
+
+      <!-- 載入中的骨架屏或錯誤訊息 -->
+      <div id="loading-or-error-message" class="text-center py-10">
+        <div class="spinner w-10 h-10 border-4 border-gray-200 rounded-full mx-auto"></div>
+        <p class="mt-2 text-gray-600">載入中...</p>
+      </div>
+    </main>
+  </div>
+
+  <!-- 全域通知容器 -->
+  <div id="global-notification-container"></div>
+
+  <!-- 引入 flatpickr 日期選擇器 (用於範本匯入) -->
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh-tw.js"></script>
+</body>
+</html>

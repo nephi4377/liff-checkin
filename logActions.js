@@ -166,6 +166,9 @@ export function handleSavePhotos() {
         .then(finalJobState => {
             if (finalJobState.result && finalJobState.result.success) {
                 showGlobalNotification(finalJobState.result.message || '照片已成功更新！', 5000, 'success');
+                // [v296.0 新增] 照片更新成功後，也呼叫替換卡片的函式，以確保照片連結是最終版本
+                const tempCardId = `log-${state.currentEditingLogId}`;
+                window.replaceOptimisticCard(tempCardId, finalJobState.result.newLogData);
             } else {
                 showGlobalNotification(`照片更新失敗: ${finalJobState.result?.message || '未知錯誤'}`, 8000, 'error');
             }
