@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>員工排班系統</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- [新增] 引入 CoreLibrary，用於假日計算 -->
-    <script src="https://cdn.jsdelivr.net/gh/north-river/gs-core-library@v1.0.1/CoreLibrary.min.js"></script>
+    <!-- [新增] 引入 CoreLibrary，用於假日計算 (修正版本號) -->
+    <script src="https://cdn.jsdelivr.net/gh/north-river/gs-core-library@v1.0.2/CoreLibrary.min.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
         .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(68px, 1fr)); }
@@ -319,33 +319,36 @@
         return false; // 回傳 false 表示沒有可用的快取
     }
 
-    async function fetchEmployees(useCacheOnly = false) { // 【您的要求】新增 useCacheOnly 參數
-        try { // [v15.0 改造] 員工資料也採用快取優先策略
-            // 【v35.1 核心修正】loadCache 回傳的是完整的快取物件 { data, expires }。
-            // 我們需要從中取出 .data 屬性才是真正的員工陣列。
-            // 這個錯誤與 v35.0 在 loadAndDisplayCachedData 中的修正點相同。
-            const employeeCacheObject = loadCache('shiftSchedule_employees');
-            // 【您的要求】修正：loadCache 已直接回傳 data，不需再取 .data 屬性
-            const cachedEmployees = employeeCacheObject;
+    // 【您的要求】核心重構：調整員工載入邏輯，改為「快取優先，背景驗證」
+    async function fetchEmployees() {
+        const cacheKey = 'shiftSchedule_employees';
+        const cachedEmployees = loadCache(cacheKey);
 
-            if (cachedEmployees) { // 如果快取存在，直接使用
-                allEmployees = cachedEmployees;
-            } else if (!useCacheOnly) { // 【您的要求】只有在不強制使用快取時，才發送網路請求
-                // 【v172.0 核心修正】在請求員工列表時，附上當前操作者的資訊，以便後端日誌追蹤。
-                const response = await fetchApi({ 
-                    page: 'attendance_api', 
-                    action: 'get_employees',
-                    userId: currentUser.userId,
-                    userName: currentUser.userName
-                });
-                if (response && response.success && Array.isArray(response.data)) {
-                    allEmployees = response.data;
-                    saveCache('shiftSchedule_employees', allEmployees, 1); // 員工資料快取 1 天
-                } else {
-                    throw new Error("從後端取得的員工資料格式不正確。");
+        // 步驟 1: 如果有快取，先用快取資料賦值
+        if (cachedEmployees) {
+            allEmployees = cachedEmployees;
+        }
+
+        // 步驟 2: 無論如何，都向後端請求最新資料
+        try {
+            const response = await fetchApi({
+                page: 'attendance_api',
+                action: 'get_employees',
+                userId: currentUser.userId,
+                userName: currentUser.userName
+            });
+
+            if (response && response.success && Array.isArray(response.data)) {
+                const newEmployees = response.data;
+                // 步驟 3: 只有在新舊資料不同時，才更新全域變數與快取
+                if (JSON.stringify(cachedEmployees) !== JSON.stringify(newEmployees)) {
+                    console.log('偵測到員工資料更新，已刷新。');
+                    allEmployees = newEmployees;
+                    saveCache(cacheKey, allEmployees, 1); // 員工資料快取 1 天
                 }
-            } 
-
+            } else {
+                throw new Error("從後端取得的員工資料格式不正確。");
+            }
             // [v15.0 改造] 權限設定邏輯移至此處，確保每次都有最新的員工資料
             
             // [核心改造] 在取得員工資料後，才設定權限與介面
@@ -362,8 +365,8 @@
     }
 
     // [v12.0 新增] 將處理員工資料的邏輯獨立出來，方便快取和新資料共用
-    async function processEmployeesData(useCacheOnly = false) { // 【您的要求】新增 useCacheOnly 參數
-            await fetchEmployees(useCacheOnly); // [核心改造] 確保在處理前，員工資料已載入
+    async function processEmployeesData() {
+            await fetchEmployees(); // [核心改造] 確保在處理前，員工資料已載入
 
             // 【⭐️ 核心修正：根據您的要求，只顯示在職員工 (權限 >= 2) ⭐️】
             // 同時過濾掉不參與排班的最高管理者 (權限 >= 5)，因此只保留權限 2, 3, 4 的員工。
@@ -472,8 +475,8 @@
     // [核心新增] 將員工與班表載入合併，簡化流程
     async function fetchAndRefreshData(isBackground = false) { // 【您的要求】新增 isBackground 參數
         try {
-            // [v15.0 改造] 員工資料的載入與處理現在獨立於排班資料
-            await fetchEmployees(isBackground); // 【您的要求】將 isBackground 傳遞給 fetchEmployees
+            // [v15.0 改造] 員工資料的載入與處理現在獨立於排班資料。
+            await fetchEmployees(); // 不再需要 isBackground 參數
             await fetchScheduleData(isBackground); // 傳入 isBackground
         } catch (error) {
             // [核心修正] 補上遺失的 catch 區塊，處理 fetchAndRefreshData 函式中可能發生的錯誤。
