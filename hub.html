@@ -290,11 +290,6 @@
                 // 2. 在背景非同步獲取最新資料
                 fetchInitialData();
 
-                // 【v159.0 核心修正】將 setInterval 移至此處，確保它只在頁面初始化時被設定一次。
-                // 舊寫法將其放在 fetchInitialData 內部，導致每次更新都建立一個新的計時器，造成請求被重複發送。
-                setInterval(fetchInitialData, 10 * 60 * 1000);
-                console.log('已設定每 10 分鐘自動更新主控台資料。');
-
             } catch (error) {
                 console.error('LIFF Initialization Error:', error);
                 document.getElementById('loading-screen').innerHTML = '<p class="text-red-500 font-semibold">驗證失敗，請在 LINE App 中開啟此頁面。</p>';
@@ -585,23 +580,27 @@
                 return;
             }
             placeholder.classList.add('hidden');
+
+            // 【您的要求】核心修改：在渲染前，根據最新日誌的時間進行排序
+            projects.sort((a, b) => {
+                // 【您的要求】改用 logSummary 進行排序
+                const lastLogTimeA = a.logSummary && a.logSummary.length > 0 ? new Date(a.logSummary[0].Timestamp).getTime() : 0; // 修正：移除重複宣告
+                const lastLogTimeB = b.logSummary && b.logSummary.length > 0 ? new Date(b.logSummary[0].Timestamp).getTime() : 0;
+                return lastLogTimeB - lastLogTimeA;
+            });
+
             projects.forEach(p => {
                 if (!p || !p.id || !p.name) { console.warn('偵測到不完整的專案資料，已跳過渲染:', p); return; }
                 const card = document.createElement('div');
                 card.className = 'bg-white p-4 rounded-lg shadow-md border border-gray-200 flex flex-col gap-4';
-                // 【v72.1 修正】確保 '預計開始日' 存在才進行排序，避免無效日期導致的錯誤
-                const allTasks = (p.tasks || []).sort((a, b) =>
-                    (a['預計開始日'] && b['預計開始日']) ? new Date(a['預計開始日']) - new Date(b['預計開始日']) : 0);
-                const completedTasks = allTasks.filter(task => task['狀態'] === '已完成');
-                const uncompletedTasks = allTasks.filter(task => task['狀態'] !== '已完成');
-                // [v92.0 修正] 在工程進度中加入日期，並確保日期格式正確
-                const scheduleHtml = [...completedTasks.slice(-1), ...uncompletedTasks.slice(0, 2)].map(task => {
+                // 【您的要求】直接使用後端傳來的 scheduleSummary
+                const scheduleHtml = (p.scheduleSummary || []).map(task => {
                     const isDone = task['狀態'] === '已完成';
                     const startDate = task['預計開始日'] ? new Date(task['預計開始日']).toLocaleDateString('sv').substring(5) : '??-??';
                     return `<li><span class="text-gray-500">${startDate}</span> <span class="font-medium ${isDone ? 'text-gray-500' : 'text-red-600'}">${isDone ? '[已完成]' : '[未完成]'}</span> ${task['任務項目'] || '未命名任務'}</li>`;
                 }).join('') || '<li>無排程資料</li>';
-                const recentLogs = (p.dailyLogs || []).slice(0, 3);
-                const logsHtml = recentLogs.length > 0 ? recentLogs.map(log => {
+                // 【您的要求】直接使用後端傳來的 logSummary
+                const logsHtml = (p.logSummary || []).length > 0 ? p.logSummary.map(log => {
                     const titleMatch = (log.Title || '').match(/(\d{4}-\d{2}-\d{2})\s(.+?)\s/);
                     const logDate = titleMatch ? titleMatch[1].substring(5) : '';
                     const workType = titleMatch ? titleMatch[2] : '日誌';
@@ -883,9 +882,12 @@
             window.open(targetUrl, '_blank');
         }
 
-        window.onload = main;
-        // 由於 main() 是 async，我們直接呼叫它
+        // 【⭐️ 核心修正：確保初始化流程只執行一次 ⭐️】
+        // 1. 移除 window.onload = main，只保留一次 main() 呼叫。
         main();
+        // 2. 將計時器移至此處，確保它在整個頁面生命週期中只被設定一次。
+        setInterval(fetchInitialData, 10 * 60 * 1000);
+        console.log('已設定每 10 分鐘自動更新主控台資料。');
     </script>
 </body>
 
