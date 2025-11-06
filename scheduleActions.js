@@ -1,3 +1,4 @@
+
 /*
 * =============================================================================
 * 檔案名稱: scheduleActions.js
@@ -330,8 +331,8 @@ export function handleSaveSchedule() {
     }
     logToPage('💾 正在儲存排程變更...');
 
-    // [架構重構 v5.0] 統一呼叫 postTask
-    api.postTask(payload)
+    // [v345.0 核心重構] 統一呼叫 projectApi.js 中的 request 函式
+    apiRequest({ action: 'updateSchedule', payload: payload })
         .then(finalJobState => {
             if (finalJobState.result && finalJobState.result.success) {
                 showGlobalNotification(finalJobState.result.message || '排程已成功儲存！正在刷新畫面...', 3000, 'success');
@@ -394,8 +395,8 @@ export function handleImportTemplate(templateType, startDate) {
     
     showGlobalNotification('正在從範本建立排程...', 5000, 'info');
 
-    // [架構重構 v5.0] 統一呼叫 postTask
-    api.postTask(payload)
+    // [v345.0 核心重構] 統一呼叫 projectApi.js 中的 request 函式
+    apiRequest({ action: 'createFromTemplate', payload: payload })
         .then(finalJobState => {
             if (finalJobState.result && finalJobState.result.success) {
                 showGlobalNotification('排程已成功建立！正在刷新畫面...', 3000, 'success');

@@ -62,6 +62,11 @@ import { initializeTaskSender, addRecipient } from './taskSender.js'; // [修正
  */
 function handleDataResponse(data) {
   const logsContainer = document.getElementById('logs-container');
+  // [核心修正] 在重新渲染前，先移除所有樂觀更新的臨時卡片，避免重複顯示。
+  const optimisticCards = logsContainer.querySelectorAll('.card[id^="log-temp-"]');
+  optimisticCards.forEach(card => card.remove());
+  logToPage(`[Render] 已移除 ${optimisticCards.length} 張樂觀更新卡片。`);
+
   // 檢查是否已存在發文區，避免重複加入
   if (logsContainer && !logsContainer.querySelector('.post-creator')) {
     // [整理] 呼叫 ui.js 中的函式來取得 HTML，讓此處程式碼更簡潔
@@ -77,6 +82,7 @@ function handleDataResponse(data) {
     }
     if (submitPostBtn) {
       submitPostBtn.addEventListener('click', Handlers.handleCreateNewPost);
+      submitPostBtn.addEventListener('click', LogActions.handleCreateNewPost); // [v346.0 合併] 改為呼叫 logActions 中的函式
     }
     if (photoInput) {
       photoInput.onchange = (e) => {
@@ -924,25 +930,32 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
       if (cachedItem) {
         const { data: oldData } = JSON.parse(cachedItem);
         // 為了避免因時間戳或 ownerId 不同而誤判，只比較核心資料
-        const oldDataSignature = JSON.stringify({ overview: oldData.overview, schedule: oldData.schedule, dailyLogs: oldData.dailyLogs, communicationHistory: oldData.communicationHistory });
+        const oldDataSignature = JSON.stringify({ 
+          overview: oldData.overview, 
+          schedule: oldData.schedule, 
+          dailyLogs: oldData.dailyLogs, 
+          communicationHistory: oldData.communicationHistory 
+        });
+        // [核心修正] 從 freshData 物件本身提取對應的屬性來產生簽名，而不是從它的下一層。
         const newDataSignature = JSON.stringify({ overview: freshData.overview, schedule: freshData.schedule, dailyLogs: freshData.dailyLogs, communicationHistory: freshData.communicationHistory });
         
         // [核心修正] 只有在資料確定有變動時，才執行畫面更新與快取寫入
         if (oldDataSignature !== newDataSignature) {
-          logToPage('🔄 偵測到後端資料已更新，正在無縫刷新畫面...');
-
-          // 【⭐️ 核心修正：保留樂觀更新的卡片 ⭐️】
-          // 在重新渲染前，先找出所有「處理中」的卡片並暫存起來。
-          const optimisticCards = Array.from(document.querySelectorAll('.card[id^="temp-"]'));
-
-          // [v338.0 核心修正] 使用新資料重新渲染畫面
-          handleDataResponse(freshData);
-
-          // 如果有暫存的卡片，將它們重新插入到列表頂部。
-          // [v286.0 修正] 樂觀更新卡片應該插入到 communication-history-list
-          const communicationHistoryList = document.getElementById('communication-history-list');
-          optimisticCards.reverse().forEach(card => communicationHistoryList.prepend(card));
-          // [核心修正] 更新快取時，同時儲存 ownerId 到外層
+          logToPage('🔄 偵測到後端資料已更新，正在執行畫面刷新...');
+          
+          // 步驟 1: 更新全域 state
+          state.currentLogsData = freshData.dailyLogs || [];
+          state.overview = freshData.overview || {};
+          state.currentScheduleData = freshData.schedule || [];
+          
+          // 步驟 2: 清空日誌容器 (保留發文框)
+          const logsContainer = document.getElementById('logs-container');
+          logsContainer.querySelectorAll('.card:not(.post-creator)').forEach(card => card.remove());
+          
+          // 步驟 3: 重設分頁並重新渲染
+          state.currentPage = 1;
+          renderLogPage();
+          
           localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData }));
         }
       }
@@ -990,6 +1003,10 @@ document.addEventListener('click', (e) => {
   const action = target.dataset.action;
   const logId = target.dataset.logId;
 
+  if (action === 'handleCreateNewPost') {
+    LogActions.handleCreateNewPost();
+    return;
+  }
   switch (action) {
     case 'deleteTask':
       if (confirm(`確定要刪除任務「${target.dataset.taskName}」嗎？`)) {

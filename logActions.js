@@ -10,7 +10,7 @@
 import { state } from './state.js';
 import { logToPage, driveFileId } from './utils.js';
 import { showGlobalNotification } from './utils.js'; // [核心修正] 引入全域通知函式
-import { buildPhotoGrid } from './ui.js';
+import { buildPhotoGrid, _buildLogCard } from './ui.js';
 import { request as apiRequest } from './projectApi.js'; // [v317.0 API化] 引入新的統一請求函式
 
 /** 處理文字編輯 */
@@ -99,8 +99,11 @@ export function openPhotoModal(logId, photoLinksCsv) {
         links.forEach(link => {
             const item = document.createElement('div'); item.className = 'modal-photo-item'; item.dataset.link = link;
             const img = document.createElement('img'); const id = driveFileId(link);
-            img.src = id ? (`https://drive.google.com/thumbnail?id=${id}&sz=w300`) : link; img.loading = 'lazy';
-            const del = document.createElement('button'); del.className = 'delete-photo-btn'; del.innerHTML = '&times;'; del.title = '標記刪除';
+            img.src = id ? (`https://drive.google.com/thumbnail?id=${id}&sz=w300`) : link; 
+            img.loading = 'lazy';
+            const del = document.createElement('button'); 
+            del.type = 'button'; // [問題1 修正] 避免觸發 form submit 導致頁面重整
+            del.className = 'delete-photo-btn'; del.innerHTML = '&times;'; del.title = '標記刪除';
             del.onclick = () => { item.style.opacity = '.3'; item.classList.add('deleted'); };
             item.appendChild(img); item.appendChild(del); grid.appendChild(item);
         });
@@ -108,69 +111,106 @@ export function openPhotoModal(logId, photoLinksCsv) {
         grid.innerHTML = '<p class="muted">目前沒有照片可供管理。</p>';
     }
     modal.style.display = 'flex';
+
+    // 【⭐️ 核心修正：將檔案輸入框的建立與事件綁定邏輯，全部移至此處 ⭐️】
+    // 確保每次 Modal 開啟時，都能為一個存在的 input 元素正確綁定事件。
+    const fileInputId = 'modal-photo-file-input';
+    let fileInput = document.getElementById(fileInputId);
+    if (!fileInput) {
+        fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.id = fileInputId;
+        fileInput.style.display = 'none';
+        fileInput.multiple = true;
+        fileInput.accept = 'image/*';
+        modal.appendChild(fileInput);
+
+        // 為這個新建立的 input 綁定 change 事件
+        fileInput.addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (!files) return;
+
+            // 呼叫一個新的輔助函式來處理預覽圖的產生
+            handlePhotoPreviews(files);
+
+            e.target.value = ''; // 清空 input，以便可以再次選擇同一個檔案
+        });
+    }
 }
 
 /** 關閉照片管理視窗 */
 export function closePhotoModal() {
     document.getElementById('photo-modal').style.display = 'none';
     state.currentEditingLogId = null;
+
+    // 【⭐️ 核心修正：關閉時移除動態建立的檔案輸入框，保持頁面乾淨 ⭐️】
+    const fileInput = document.getElementById('modal-photo-file-input');
+    if (fileInput) {
+        fileInput.remove();
+    }
 }
 
-/** 處理儲存照片 */
+/**
+ * [新增] 處理儲存照片的變更
+ */
 export function handleSavePhotos() {
     const btn = document.getElementById('save-photos-button');
+    if (!btn) return;
+
     btn.disabled = true;
     btn.textContent = '儲存中...';
 
     const grid = document.getElementById('modal-photo-grid-container');
-    const keepLinks = Array.from(grid.querySelectorAll('.modal-photo-item:not(.deleted)'))
-        .map(item => item.dataset.link);
-
-    // 【⭐️ 核心修正：收集新上傳的 Base64 照片資料 ⭐️】
-    const newUploads = Array.from(grid.querySelectorAll('.modal-photo-item.new-upload:not(.deleted)'))
-        .map(item => item.dataset.base64);
-
-    // 【⭐️ 核心修正 1/3：執行樂觀更新，立即更新 UI 並關閉視窗 ⭐️】
-    // 1. 組合出樂觀更新後，卡片上應該顯示的所有圖片連結 (舊的 + 新的 Base64 預覽)
-    const optimisticLinks = [...keepLinks, ...newUploads];
-
-    // 2. 立即重新渲染卡片上的照片牆
-    const cardPhotoContainer = document.querySelector(`#log-${state.currentEditingLogId} .photo-grid`);
-    if (cardPhotoContainer) {
-        // 使用 buildPhotoGrid 函式產生新的照片牆內容，並替換掉舊的
-        const newPhotoGrid = buildPhotoGrid(optimisticLinks.join(','));
-        cardPhotoContainer.innerHTML = newPhotoGrid.innerHTML;
-        // 觸發懶加載，確保新加入的圖片能被看見
-        if (window.lazyLoadImages) window.lazyLoadImages();
+    if (!grid) {
+        showGlobalNotification('錯誤：找不到照片容器。', 5000, 'error');
+        return;
     }
 
-    // 3. 立即關閉彈出視窗，讓使用者可以繼續操作
+    // 1. 收集要保留的舊照片連結
+    const keepLinks = Array.from(grid.querySelectorAll('.modal-photo-item:not(.new-upload):not(.deleted)'))
+        .map(item => item.dataset.link);
+
+    // 2. 收集新上傳的 Base64 照片資料
+    const newUploads = Array.from(grid.querySelectorAll('.modal-photo-item.new-upload:not(.deleted)'))
+        .map(item => item.dataset.fullUrl);
+
+    // 3. 取得當前正在編輯的日誌 ID
+    const logIdToUpdate = state.currentEditingLogId;
+    if (!logIdToUpdate) {
+        showGlobalNotification('錯誤：找不到當前編輯的日誌 ID，無法儲存。', 5000, 'error');
+        btn.disabled = false;
+        btn.textContent = '儲存變更';
+        return;
+    }
+
+    // 4. 關閉 Modal 並在背景執行後端同步
     closePhotoModal();
 
-    // 【⭐️ 核心修正 2/3：準備 payload 並在背景執行後端同步 ⭐️】
-    // [架構重構 v5.0] 統一呼叫 postTask，它會自動處理 newPhotosBase64Array 的上傳
-    apiRequest({ // [v317.0 API化] 改為使用統一請求函式
+    apiRequest({
+        // [核心修正] 回歸正確的 "更新" 模型，不再改變 LogID。
         action: 'updateLogPhotosWithUploads',
         payload: {
-            logId: state.currentEditingLogId,
-            existingLinksCsv: keepLinks.join(','),
+            logId: logIdToUpdate, // 明確指定要更新的 LogID
+            existingLinksCsv: keepLinks.join(','), // 要保留的舊連結
+            // [核心修正] 將新上傳的 Base64 照片陣列的 key 改回 newPhotosBase64Array，以匹配後端邏輯
             newPhotosBase64Array: newUploads,
-            deleteLinksCsv: '',
+            projectId: state.projectId, // [問題2 修正] 將 projectId 加入 payload
+            projectName: state.overview.siteName || state.overview['案場名稱'] || '', // [問題2 修正] 將 projectName 加入 payload
+            newPhotosBase64Array: newUploads,
+            deleteLinksCsv: '', // 根據您的舊邏輯，此處為空
             userId: state.currentUserId,
             userName: state.currentUserName
         }
     })
-        .then(result => {
-            if (result.success) {
-                showGlobalNotification(result.message || '照片已成功更新！', 5000, 'success');
-                const tempCardId = `log-${state.currentEditingLogId}`;
-                window.replaceOptimisticCard(tempCardId, result.data);
-            } else {
-                showGlobalNotification(`照片更新失敗: ${result.error || '未知錯誤'}`, 8000, 'error');
-            }
-        })
-        .catch(error => showGlobalNotification(`請求失敗: ${error.message}`, 8000, 'error'));
-    // 【⭐️ 核心修正 3/3：移除 finally 區塊，因為 UI 更新已在前面完成 ⭐️】
+    .then(result => {
+        if (result.success) {
+            showGlobalNotification(result.message || '照片已成功更新！', 3000, 'success');
+            window.replaceOptimisticCard(`log-${logIdToUpdate}`, result.data);
+        } else {
+            showGlobalNotification(`照片更新失敗: ${result.error || '未知錯誤'}`, 8000, 'error');
+        }
+    })
+    .catch(error => showGlobalNotification(`請求失敗: ${error.message}`, 8000, 'error'));
 }
 
 /** 發布日誌 */
@@ -251,48 +291,42 @@ export function handleDeleteLog(logId) {
  * [新增] 觸發隱藏的檔案上傳輸入框
  */
 export function triggerPhotoUpload() {
-    const fileInput = document.getElementById('photo-file-input');
+    const fileInput = document.getElementById('modal-photo-file-input'); // [核心修正] 使用 modal 專用的 ID
     if (fileInput) {
         fileInput.click();
     }
 }
+
 /**
- * 初始化日誌動作相關的全域事件監聽器。
+ * [新增] 輔助函式，專門處理在 Modal 中產生照片預覽縮圖。
+ * @param {FileList} files - 從 input[type=file] 選擇的檔案列表。
  */
-export function initializeLogActions() {
-    // 【⭐️ 核心重構：移除此處的事件綁定，統一由 main.js 的事件代理處理 ⭐️】
-    // document.getElementById('modal-cancel-btn')?.addEventListener('click', closePhotoModal);
-    // document.getElementById('save-photos-button')?.addEventListener('click', handleSavePhotos);
+function handlePhotoPreviews(files) {
+    const grid = document.getElementById('modal-photo-grid-container');
+    if (!grid) return;
 
-    // 【⭐️ 核心修正：將檔案選擇的邏輯移至此處，並由 triggerPhotoUpload 觸發 ⭐️】
-    const fileInput = document.getElementById('photo-file-input');
-    if (fileInput) {
-        fileInput.addEventListener('change', (e) => {
-            const files = e.target.files;
-            const grid = document.getElementById('modal-photo-grid-container');
-            if (!files || !grid) return;
+    // 如果有「目前沒有照片」的提示，就移除它
+    const placeholder = grid.querySelector('p.muted');
+    if (placeholder) placeholder.remove();
 
-            const placeholder = grid.querySelector('p.muted');
-            if (placeholder) placeholder.remove();
+    for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
 
-            for (const file of files) {
-                if (!file.type.startsWith('image/')) continue;
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const item = document.createElement('div');
-                    item.className = 'modal-photo-item new-upload';
-                    item.dataset.base64 = event.target.result;
-                    item.innerHTML = `
-                        <img src="${event.target.result}" loading="lazy">
-                        <button class="delete-photo-btn" title="移除此照片">&times;</button>
-                    `;
-                    item.querySelector('.delete-photo-btn').onclick = () => item.remove();
-                    grid.appendChild(item);
-                };
-                reader.readAsDataURL(file);
-            }
-            e.target.value = '';
-        });
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const fullDataUrl = event.target.result;
+            const item = document.createElement('div');
+            item.className = 'modal-photo-item new-upload';
+            // 將完整的 Data URL (包含 data:image/... 前綴) 存入 data-full-url，用於即時預覽和後續儲存。
+            item.dataset.fullUrl = fullDataUrl;
+            item.innerHTML = `
+                <img src="${fullDataUrl}" loading="lazy">
+                <button class="delete-photo-btn" title="移除此照片">&times;</button>
+            `;
+            item.querySelector('.delete-photo-btn').onclick = () => item.remove();
+            grid.appendChild(item);
+        };
+        reader.readAsDataURL(file);
     }
 }
 
@@ -332,4 +366,87 @@ export function filterLogsByWorkType(workType) {
     } else if (noResultMsg) {
         noResultMsg.style.display = 'none';
     }
+}
+
+/**
+ * [v346.0 合併] 處理建立新日誌 (從 handlers.js 移入)
+ */
+export function handleCreateNewPost() {
+  const textarea = document.getElementById('post-creator-textarea');
+  const submitBtn = document.getElementById('submit-post-btn');
+  const titleSelect = document.getElementById('post-title-select');
+  const photoPreviewContainer = document.getElementById('new-log-photo-preview');
+
+  const content = textarea.value.trim();
+  const photosBase64Array = photoPreviewContainer
+    ? Array.from(photoPreviewContainer.querySelectorAll('.photo-preview-item')).map(item => item.dataset.base64)
+    : [];
+
+  if (!content && photosBase64Array.length === 0) {
+    alert('請輸入一些內容或附加照片！');
+    textarea.focus();
+    return;
+  }
+
+  if (!submitBtn) { console.error('無法找到發佈按鈕 (submit-post-btn)'); return; }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = '發佈中...';
+
+  const projectId = state.projectId;
+  const title = titleSelect ? titleSelect.value : '';
+
+  const metaPayload = {
+    userId: state.currentUserId || 'ConsoleUser',
+    userName: state.currentUserName,
+    projectId: projectId,
+    projectName: state.overview.siteName || state.overview['案場名稱'] || '',
+    title: title,
+    content: content,
+    newPhotosBase64Array: photosBase64Array
+  };
+
+  const displayTitle = title
+    ? `${new Date().toLocaleDateString('sv')} ${title} 進度回報 (處理中...)`
+    : `${new Date().toLocaleDateString('sv')} 主控台更新 (處理中...)`;
+  const optimisticLog = {
+    LogID: `temp-${Date.now()}`,
+    Title: displayTitle,
+    Content: content,
+    UserName: state.currentUserName || '管理員',
+    Timestamp: new Date().toISOString(),
+    // [v350.0 核心修正] 直接傳遞 Base64 陣列，而不是用逗號連接的字串。
+    // 這可以避免 buildPhotoGrid 函式因 Base64 內容中的逗號而錯誤地分割單張圖片。
+    PhotoLinks: photosBase64Array
+  };
+
+  const newCard = _buildLogCard(optimisticLog, false);
+  newCard.style.opacity = '0.7';
+
+  const logsContainer = document.getElementById('logs-container');
+  const postCreator = logsContainer.querySelector('.post-creator');
+  if (logsContainer && postCreator) {
+    logsContainer.insertBefore(newCard, postCreator.nextSibling);
+  }
+
+  apiRequest({ action: 'createLog', payload: metaPayload })
+    .then(result => {
+      if (result.success) {
+        window.replaceOptimisticCard(optimisticLog.LogID, result.data);
+        showGlobalNotification(result.message || '日誌已成功建立！', 3000, 'success');
+      } else {
+        showGlobalNotification(`建立日誌失敗: ${result.error || '未知錯誤'}`, 8000, 'error');
+        newCard.style.border = '2px solid red';
+      }
+    })
+    .catch(error => {
+      showGlobalNotification(`請求失敗: ${error.message}`, 8000, 'error');
+      newCard.style.border = '2px solid red';
+    });
+
+  submitBtn.disabled = false;
+  submitBtn.textContent = '發佈';
+  textarea.value = '';
+  if (photoPreviewContainer) photoPreviewContainer.innerHTML = '';
+  if (titleSelect) titleSelect.selectedIndex = 0;
 }

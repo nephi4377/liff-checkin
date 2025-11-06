@@ -121,8 +121,9 @@ function buildPhotoGrid(htmlLinksCsv) {
     const container = document.createElement('div');
     container.className = 'photo-grid';
     if (!htmlLinksCsv) return container;
-
-    const links = Array.isArray(htmlLinksCsv) ? htmlLinksCsv : String(htmlLinksCsv).split(',');
+    // [v350.0 核心修正] 優先判斷傳入的是否為陣列 (來自樂觀更新)。
+    // 如果是字串 (來自後端)，才執行 split(',')。這使其能同時處理兩種資料來源。
+    const links = Array.isArray(htmlLinksCsv) ? htmlLinksCsv : String(htmlLinksCsv).split(',').filter(Boolean);
 
     links.forEach(link => {
         const u = (link || '').trim(); if (!u) return;
@@ -168,15 +169,15 @@ export function _buildLogCard(log, isDraftMode) {
     contentDiv.style.whiteSpace = 'pre-wrap'; contentDiv.textContent = displayContent;
     contentDiv.style.marginTop = '0.75rem';
 
-    const photoContainer = document.createElement('div');
     const buttonContainer = document.createElement('div'); buttonContainer.className = 'button-group'; buttonContainer.style.marginTop = '1rem';
 
     card.appendChild(headerDiv);
     card.appendChild(contentDiv);
-    card.appendChild(photoContainer);
     card.appendChild(buttonContainer);
 
     if (log.PhotoLinks) {
+        const photoContainer = document.createElement('div');
+        card.insertBefore(photoContainer, buttonContainer); // 將照片容器插入到按鈕區塊之前
         const photoGrid = buildPhotoGrid(log.PhotoLinks);
         photoContainer.appendChild(photoGrid);
 
