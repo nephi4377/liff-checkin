@@ -11,7 +11,7 @@ import { state } from './state.js';
 import { logToPage } from './utils.js';
 import { _buildLogCard } from './ui.js'; // 【⭐️ 核心修改：引入建立卡片的函式 ⭐️】
 import { showGlobalNotification } from './utils.js'; // 【⭐️ 核心修正：引入全域通知函式 ⭐️】
-import * as api from './api.js'; // [統一] 引入完整的 api 模組
+import { request as apiRequest } from './projectApi.js'; // [v317.0 API化] 引入新的統一請求函式
 
 /**
  * [新增] 圖片壓縮輔助函式
@@ -110,15 +110,20 @@ export function handleCreateNewPost() {
     logsContainer.insertBefore(newCard, postCreator.nextSibling);
   }
 
+  // [v315.0 核心新增] 根據您的要求，在上傳照片時顯示警語
+  if (photosBase64Array.length > 0) {
+    showGlobalNotification('照片上傳中，請勿關閉或刷新頁面...', 10000, 'info');
+  }
+
   // [架構重構 v5.0] 統一呼叫 postTask，它會自動處理 newPhotosBase64Array 的上傳
-  api.postTask(metaPayload)
-    .then(finalJobState => {
-        if (finalJobState.result && finalJobState.result.success) {
+  apiRequest({ action: 'createLog', payload: metaPayload }) // [v317.0 API化] 改為使用統一請求函式
+    .then(result => {
+        if (result.success) {
             // [v296.0 重構] 呼叫全域函式，用後端回傳的真實資料替換掉臨時卡片
-            window.replaceOptimisticCard(optimisticLog.LogID, finalJobState.result.newLogData);
-            showGlobalNotification(finalJobState.result.message || '日誌已成功建立！', 3000, 'success');
+            window.replaceOptimisticCard(optimisticLog.LogID, result.data);
+            showGlobalNotification(result.message || '日誌已成功建立！', 3000, 'success');
         } else {
-            showGlobalNotification(`建立日誌失敗: ${finalJobState.result?.message || '未知錯誤'}`, 8000, 'error');
+            showGlobalNotification(`建立日誌失敗: ${result.error || '未知錯誤'}`, 8000, 'error');
             newCard.style.border = '2px solid red';
         }
     })

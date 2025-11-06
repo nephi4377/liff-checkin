@@ -7,7 +7,7 @@
 *
 * 核心功能:
 * 1.  **資料處理與API串接**:
-* - 透過 JSONP 從 Google Apps Script 後端獲取專案總覽、排程、日誌與範本資料。
+* - 透過 projectApi 模組從 Google Apps Script 後端獲取專案總覽、排程、日誌與範本資料。
 * - 處理後端回傳的資料，並將其存入前端狀態變數。
 * - 負責將前端的修改（如文字編輯、照片管理、排程變更）傳送回後端儲存。
 *
@@ -22,11 +22,12 @@
 * - **日誌分頁 (Pagination)**: 日誌列表採用前端分頁，滾動到底部時自動載入下一批，避免一次性渲染大量DOM。
 * =============================================================================
  */
-import * as api from './api.js'; // [v258.0 核心修正] 引入完整的 api 模組，解決 'api is not defined' 的錯誤
-import { loadJsonp } from './api.js';
+import * as api from './api.js';
+import { request as apiRequest } from './projectApi.js'; // [v317.0 API化] 引入新的統一請求函式
 import { logToPage, showGlobalNotification } from './utils.js';
 import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, createOrUpdateTradeDatalist, renderPostCreator, _buildLogCard, renderCommunicationHistory } from './ui.js';
 import * as Handlers from './handlers.js';
+import * as LogActions from './logActions.js'; // [v337.0 修正] 補上遺失的 logActions 模組引入
 import * as ScheduleActions from './scheduleActions.js';
 import { state } from './state.js';
 import { initializeTaskSender, addRecipient } from './taskSender.js'; // [修正] 引入共用任務交辦模組 (包含 addRecipient)
@@ -239,14 +240,14 @@ ${notes || '無'}`;
     closeBtn.addEventListener('click', () => {
       if (confirm(`您確定要將專案 #${state.projectId} 標示為「已結案」嗎？\n\n此操作將無法復原。`)) {
         showGlobalNotification('正在處理結案...', 3000, 'info');
-        api.postTask({
+        apiRequest({ // [v317.0 API化] 改為使用統一請求函式
           action: 'updateProjectStatus',
           projectId: state.projectId,
           status: '已結案',
           userId: state.currentUserId,
           userName: state.currentUserName
-        }).then(finalJobState => {
-          if (finalJobState.result && finalJobState.result.success) {
+        }).then(result => {
+          if (result.success) {
             showGlobalNotification('專案已成功標示為「已結案」。', 5000, 'success');
             closeBtn.disabled = true; // 禁用按鈕，避免重複點擊
             closeBtn.textContent = '專案已結案';
@@ -445,13 +446,14 @@ async function refreshCommunicationHistory(projectId, userId, API_BASE_URL) {
  */
 async function refreshProjectData(showNotification = false) {
     try {
-        const fetchUrl = `${window.API_BASE_URL}?page=project&id=${encodeURIComponent(state.projectId)}&userId=${encodeURIComponent(state.currentUserId)}`;
         logToPage('🔄 輕量更新：正在請求最新的專案資料...');
-        const response = await fetch(fetchUrl);
-        const freshData = await response.json();
+        const result = await apiRequest({ // [v317.0 API化] 改為使用統一請求函式
+            action: 'project',
+            payload: { id: state.projectId, userId: state.currentUserId }
+        });
 
-        if (freshData && freshData.error) throw new Error(freshData.error);
-        if (!freshData) throw new Error('後端未回傳有效資料。');
+        if (!result.success) throw new Error(result.error);
+        const freshData = result.data;
 
         // 更新 state
         state.overview = freshData.overview || {};
@@ -607,7 +609,9 @@ function initializeTaskSenderForConsole() {
  * @param {object} finalLogData - 後端回傳的、包含真實 LogID 的完整日誌資料。
  */
 function replaceOptimisticCard(tempId, finalLogData) {
-    const tempCard = document.getElementById(tempId);
+    // [v323.0 核心修正] 修正樂觀更新卡片無法被替換的問題。
+    // _buildLogCard 在建立卡片時，會為 ID 加上 'log-' 前綴，因此在尋找時也必須加上。
+    const tempCard = document.getElementById('log-' + tempId);
     if (!tempCard) return;
 
     // 1. 根據最終資料，建立一張全新的、完整的卡片
@@ -690,7 +694,7 @@ async function initializeApp() {
 
   if (isLocalTest) {
     logToPage('⚡️ 本地測試模式啟用...');
-    projectId = urlParams.get('id') || '729';
+    projectId = urlParams.get('id') || '999';
     userId = urlParams.get('uid') || 'Ud58333430513b7527106fa71d2e30151';
     state.currentUserName = '本地測試員';
   } else {
@@ -879,13 +883,16 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
   }
 
   // [v249.0 重構] 移除 includeEmployees 參數，因為員工資料已由前端獨立獲取
-  const fetchUrl = `${API_BASE_URL}?page=project&id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
   try {
     logToPage('🔄 正在從後端請求專案資料...');
-    const freshData = await loadJsonp(fetchUrl);
+    const result = await apiRequest({ // [v317.0 API化] 改為使用統一請求函式
+        action: 'project',
+        payload: { id: projectId, userId: userId }
+    });
 
     // [v201.0 核心修正] 在處理任何資料前，先檢查後端是否回傳錯誤。
-    if (freshData && freshData.error) {
+    if (!result.success) {
+        const freshData = result.data || {}; // 即使失敗，也嘗試從 data 中取錯誤訊息
         // 如果後端回傳錯誤，則不進行任何渲染或快取操作，直接顯示錯誤。
         logToPage(`❌ 後端回傳錯誤: ${freshData.error}`, 'error');
         displayError({ message: freshData.error });
@@ -893,6 +900,14 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
     }
 
     // 【⭐️ 核心修正：使用後端傳來的使用者名稱 ⭐️】
+    const freshData = result.data;
+    // [v318.0 核心修正] 增加防禦性檢查，防止後端在某些情況下 (如找不到專案) 回傳 null 的 data，導致前端崩潰。
+    if (!freshData) {
+        const errorMsg = `後端未回傳有效的專案資料 (ID: ${projectId})，可能該專案不存在或已被刪除。`;
+        logToPage(`❌ ${errorMsg}`, 'error');
+        displayError({ message: errorMsg });
+        return;
+    }
     state.currentUserName = freshData.userName || `使用者 (${userId.slice(-6)})`;
     logToPage(`✅ 操作者已設定: ${state.currentUserName}`);
 
@@ -920,7 +935,8 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
           // 在重新渲染前，先找出所有「處理中」的卡片並暫存起來。
           const optimisticCards = Array.from(document.querySelectorAll('.card[id^="temp-"]'));
 
-          handleDataResponse(freshData); // 使用新資料重新渲染畫面
+          // [v338.0 核心修正] 使用新資料重新渲染畫面
+          handleDataResponse(freshData);
 
           // 如果有暫存的卡片，將它們重新插入到列表頂部。
           // [v286.0 修正] 樂觀更新卡片應該插入到 communication-history-list

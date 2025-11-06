@@ -2,8 +2,8 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>出勤管理主控台</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>出勤儀表板</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .summary-card { transition: all 0.3s ease; }
@@ -30,7 +30,7 @@
 <body class="bg-gray-100 text-gray-800">
     <div class="container mx-auto p-4 md:p-8">
         <header class="mb-6 flex justify-between items-center">
-            <h1 class="text-3xl font-bold text-gray-700">出勤管理主控台</h1>
+            <h1 class="text-3xl font-bold text-gray-700">出勤儀表板</h1>
             <button id="add-checkin-btn" class="bg-green-600 text-white font-bold py-2 px-4 rounded-md hover:bg-green-700">＋ 手動補打卡</button>
         </header>
 
@@ -208,7 +208,7 @@
         document.getElementById('show-all-employees-checkbox').addEventListener('change', loadAndRenderEmployees);
 
         const urlParams = new URLSearchParams(window.location.search);
-        const uid = urlParams.get('uid') || 'unknown_user';
+        const uid = urlParams.get('uid') || 'unknown_user'; // 【v175.0 核心修正】從 URL 取得操作者資訊
         const name = urlParams.get('name') || 'Unknown User';
 
         const userParams = { userId: uid, userName: name }; // 準備要傳給後端的通用參數
@@ -429,13 +429,20 @@
         const params = { page: 'attendance_api', action:'get_report', startDate, endDate, userId, operatorId: operatorUid, operatorName: operatorName };
         fetchApi(params)
             .then(data => {
+                // [v342.0 核心改造] 根據使用者建議，增加對後端回傳之 success 旗標的判斷。
+                // 如果後端明確回傳查詢失敗，則拋出錯誤，由下方的 catch 區塊統一顯示錯誤訊息。
+                if (data && data.success === false) {
+                    throw new Error(data.message || '後端回報了一個未知的錯誤。');
+                }
+
                 // [核心改造] 收到後端回傳的完整報表後，立即使用已過濾的員工列表 (employeeShiftData) 進行篩選。
                 // 這樣可以確保無論後端回傳什麼，最終顯示在畫面上的都只有權限 < 5 的員工紀錄。
                 const allowedUserIds = new Set(Object.keys(employeeShiftData));
+                const records = data.records || {}; // 增加保護，如果 data.records 為 null 或 undefined，則使用空物件
                 // 【您的要求】將過濾後的資料存到全域變數
-                currentReportData = Object.fromEntries(Object.entries(data.records).filter(([id]) => allowedUserIds.has(id)));
+                currentReportData = Object.fromEntries(Object.entries(records).filter(([id]) => allowedUserIds.has(id)));
 
-                const filteredRecords = Object.fromEntries(Object.entries(data.records).filter(([id]) => allowedUserIds.has(id)));
+                const filteredRecords = Object.fromEntries(Object.entries(records).filter(([id]) => allowedUserIds.has(id)));
 
                 spinner.style.display = 'none';
                 renderSummary(data.summary);

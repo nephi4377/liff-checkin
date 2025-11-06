@@ -180,11 +180,6 @@
 
         // 案號輸入：即時只留數字；失焦再清一次
         const projectIdEl = document.getElementById('projectId');
-        // 【您的要求】記住並還原上次回報的案號
-        const lastProjectId = localStorage.getItem('lastReportedProjectId');
-        if (lastProjectId) {
-          projectIdEl.value = lastProjectId;
-        }
         projectIdEl.addEventListener('input', () => enforceDigits(projectIdEl));
         projectIdEl.addEventListener('blur',  () => enforceDigits(projectIdEl));
 
@@ -307,9 +302,6 @@
           setLoadingState(false);
           return; // 中止提交
         }
-
-        // 【您的要求】記住這次成功提交的案號
-        localStorage.setItem('lastReportedProjectId', cleanProjectId);
 
         try {
           const shouldCompress = document.getElementById('compressImages').checked;

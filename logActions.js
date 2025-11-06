@@ -11,7 +11,7 @@ import { state } from './state.js';
 import { logToPage, driveFileId } from './utils.js';
 import { showGlobalNotification } from './utils.js'; // [核心修正] 引入全域通知函式
 import { buildPhotoGrid } from './ui.js';
-import * as api from './api.js';
+import { request as apiRequest } from './projectApi.js'; // [v317.0 API化] 引入新的統一請求函式
 
 /** 處理文字編輯 */
 export function handleEditText(logId) {
@@ -74,18 +74,15 @@ function handleSaveText(logId, originalButtons) {
 
     // 【⭐️ 核心修正 3/3：在背景執行後端同步 ⭐️】
     // [架構重構 v5.0] 統一呼叫 postTask
-    api.postTask({ 
-        action: 'updateLogText', 
-        id: logId, 
-        content: newText,
-        userId: state.currentUserId,
-        userName: state.currentUserName
+    apiRequest({ // [v317.0 API化] 改為使用統一請求函式
+        action: 'updateLogText',
+        payload: { id: logId, content: newText, userId: state.currentUserId, userName: state.currentUserName }
     })
-        .then(finalJobState => {
-            if (finalJobState.result && finalJobState.result.success) {
-                showGlobalNotification(finalJobState.result.message || '文字已成功更新！', 5000, 'success');
+        .then(result => {
+            if (result.success) {
+                showGlobalNotification(result.message || '文字已成功更新！', 5000, 'success');
             } else {
-                showGlobalNotification(`文字更新失敗: ${finalJobState.result?.message || '未知錯誤'}`, 8000, 'error');
+                showGlobalNotification(`文字更新失敗: ${result.error || '未知錯誤'}`, 8000, 'error');
             }
         })
         .catch(error => showGlobalNotification(`請求失敗: ${error.message}`, 8000, 'error'));
@@ -151,26 +148,25 @@ export function handleSavePhotos() {
     closePhotoModal();
 
     // 【⭐️ 核心修正 2/3：準備 payload 並在背景執行後端同步 ⭐️】
-    const payload = {
-        action: 'updateLogPhotosWithUploads',
-        logId: state.currentEditingLogId,
-        existingLinksCsv: keepLinks.join(','),
-        newPhotosBase64Array: newUploads, // [v164.0 修正] 補上使用者資訊
-        deleteLinksCsv: '',
-        userId: state.currentUserId,
-        userName: state.currentUserName
-    };
-
     // [架構重構 v5.0] 統一呼叫 postTask，它會自動處理 newPhotosBase64Array 的上傳
-    api.postTask(payload)
-        .then(finalJobState => {
-            if (finalJobState.result && finalJobState.result.success) {
-                showGlobalNotification(finalJobState.result.message || '照片已成功更新！', 5000, 'success');
-                // [v296.0 新增] 照片更新成功後，也呼叫替換卡片的函式，以確保照片連結是最終版本
+    apiRequest({ // [v317.0 API化] 改為使用統一請求函式
+        action: 'updateLogPhotosWithUploads',
+        payload: {
+            logId: state.currentEditingLogId,
+            existingLinksCsv: keepLinks.join(','),
+            newPhotosBase64Array: newUploads,
+            deleteLinksCsv: '',
+            userId: state.currentUserId,
+            userName: state.currentUserName
+        }
+    })
+        .then(result => {
+            if (result.success) {
+                showGlobalNotification(result.message || '照片已成功更新！', 5000, 'success');
                 const tempCardId = `log-${state.currentEditingLogId}`;
-                window.replaceOptimisticCard(tempCardId, finalJobState.result.newLogData);
+                window.replaceOptimisticCard(tempCardId, result.data);
             } else {
-                showGlobalNotification(`照片更新失敗: ${finalJobState.result?.message || '未知錯誤'}`, 8000, 'error');
+                showGlobalNotification(`照片更新失敗: ${result.error || '未知錯誤'}`, 8000, 'error');
             }
         })
         .catch(error => showGlobalNotification(`請求失敗: ${error.message}`, 8000, 'error'));
@@ -184,20 +180,17 @@ export function handlePublish(logId) {
     
     // [V2.1 升級] 改為呼叫 postAsyncTask，確保能取得最終結果並顯示通知
     // [架構重構 v5.0] 統一呼叫 postTask
-    api.postTask({ 
-        action: 'publish', 
-        logId: logId, 
-        newStatus: '已發布',
-        userId: state.currentUserId,
-        userName: state.currentUserName
+    apiRequest({ // [v317.0 API化] 改為使用統一請求函式
+        action: 'publish',
+        payload: { logId: logId, newStatus: '已發布', userId: state.currentUserId, userName: state.currentUserName }
     })
-        .then(finalJobState => {
-            if (finalJobState.result && finalJobState.result.success) {
+        .then(result => {
+            if (result.success) {
                 showGlobalNotification('草稿已成功發布！', 5000, 'success');
                 const card = document.getElementById('log-' + logId);
                 if (card) { card.style.transition = 'opacity .5s'; card.style.opacity = '0'; setTimeout(() => card.remove(), 500); }
             } else {
-                showGlobalNotification(`發布失敗: ${finalJobState.result?.message || '未知錯誤'}`, 8000, 'error');
+                showGlobalNotification(`發布失敗: ${result.error || '未知錯誤'}`, 8000, 'error');
                 if (btn) { btn.disabled = false; btn.textContent = '審核與發布'; }
             }
         })
@@ -235,21 +228,19 @@ export function handleDeleteLog(logId) {
 
     // 2. 在背景執行真正的刪除操作
     // [架構重構 v5.0] 統一呼叫 postTask
-    api.postTask({ 
-        action: 'deleteLog', 
-        id: logId,
-        userId: state.currentUserId,
-        userName: state.currentUserName
+    apiRequest({ // [v317.0 API化] 改為使用統一請求函式
+        action: 'deleteLog',
+        payload: { id: logId, userId: state.currentUserId, userName: state.currentUserName }
     })
-        .then(finalJobState => {
-            if (finalJobState.result && finalJobState.result.success) {
+        .then(result => {
+            if (result.success) {
                 // 3a. 後端成功，顯示成功訊息
-                showGlobalNotification(finalJobState.result.message || `日誌 ${logId} 已成功刪除。`, 5000, 'success');
+                showGlobalNotification(result.message || `日誌 ${logId} 已成功刪除。`, 5000, 'success');
                 logToPage(`✅ 後端成功刪除日誌 ${logId}。`);
             } else {
                 // 3b. 後端失敗，顯示錯誤訊息並提示使用者刷新
-                console.error(`❌ 後端刪除日誌 ${logId} 失敗:`, finalJobState.result?.message || '未知錯誤');
-                showGlobalNotification(`刪除失敗: ${finalJobState.result?.message || '未知錯誤'}，請刷新頁面。`, 8000, 'error');
+                console.error(`❌ 後端刪除日誌 ${logId} 失敗:`, result.error || '未知錯誤');
+                showGlobalNotification(`刪除失敗: ${result.error || '未知錯誤'}，請刷新頁面。`, 8000, 'error');
                 logToPage(`❌ 後端刪除日誌 ${logId} 失敗。`, 'error');
                 // (未來可在此處實作更複雜的回滾邏輯，例如將卡片加回畫面)
             }

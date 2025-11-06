@@ -103,8 +103,8 @@
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
                 <!-- 專案主控台 -->
-                <div class="col-span-1 md:col-span-2 bg-white p-6 rounded-lg shadow-md border border-gray-200">
-                    <h2 class="text-xl font-bold mb-4 text-blue-700">專案主控台</h2>
+                <div class="col-span-1 md:col-span-2 bg-white p-6 rounded-lg shadow-md border border-gray-200" title="開啟特定專案的管理頁面">
+                    <h2 class="text-xl font-bold mb-4 text-blue-700">開啟專案工作區</h2>
                     <div class="flex flex-col sm:flex-row gap-2 items-center">
                         <input type="text" id="project-id-input" inputmode="numeric" pattern="[0-9]*"
                             class="flex-grow w-full px-3 py-2 border border-gray-300 rounded-md"
@@ -137,7 +137,7 @@
                 <!-- [核心新增] 出勤管理主控台 (預設隱藏) -->
                 <a id="attendance-console-link" href="https://info.tanxin.space/attendance_report.html" target="_blank"
                     class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block hidden">
-                    <h2 class="text-xl font-bold mb-2 text-green-700">出勤管理主控台</h2>
+                    <h2 class="text-xl font-bold mb-2 text-green-700">出勤儀表板</h2>
                     <p class="text-gray-600">查詢所有員工的出勤、遲到、早退與缺勤紀錄。</p>
                 </a>
 
@@ -202,7 +202,7 @@
         // ===============================================================
         // ========================= 環境設定 ============================
         const LIFF_ID = '2007974938-2nPKg3J0'; // 這是這個 hub.html 自己的 LIFF ID
-        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
+        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec'; // 專案後端
         const PROJECT_CONSOLE_LIFF_ID = '2007974938-7yKM9EqL'; // 專案主控台的 LIFF ID
         const ATTENDANCE_GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec'; // 出勤系統的後端 URL
         // ===============================================================
@@ -613,7 +613,7 @@
                         <!-- [v92.0 修正] 如果 p.name 存在，則顯示 p.name；否則，顯示案號。 -->
                         <!-- [v96.0 修正] 根據使用者要求，恢復案號與案名的組合顯示 -->
                         <h3 class="font-bold text-lg text-gray-800">${p.name || ''}</h3>
-                        <div><button data-action="open-console" data-project-id="${p.id}" class="bg-blue-100 text-blue-700 text-xs font-bold py-1 px-3 rounded-full hover:bg-blue-200">開啟主控台</button></div>
+                        <div><button data-action="open-console" data-project-id="${p.id}" class="bg-blue-100 text-blue-700 text-xs font-bold py-1 px-3 rounded-full hover:bg-blue-200">開啟工作區</button></div>
                     </div>
                     <div><h4 class="font-semibold text-gray-600 text-sm mb-2">工程進度</h4><ul class="text-sm space-y-1 text-gray-700">${scheduleHtml}</ul></div>
                     <div><h4 class="font-semibold text-gray-600 text-sm mb-2">近期回報</h4><ul class="text-sm space-y-1 text-gray-700">${logsHtml}</ul></div>
@@ -877,7 +877,7 @@
         function openProjectConsole(projectId) {
             if (!projectId || !/^\d+$/.test(projectId)) { alert('請輸入純數字的案號！'); return; }
             if (!userProfile || !userProfile.userId) { alert('無法取得您的使用者資訊，請重新載入頁面。'); return; }
-            // [v94.0 修正] 無論在哪種環境下，都一律開啟正式版的專案主控台 LIFF 連結。
+            // [v94.0 修正] 無論在哪種環境下，都一律開啟正式版的專案工作區 LIFF 連結。
             const targetUrl = `https://liff.line.me/${PROJECT_CONSOLE_LIFF_ID}?id=${projectId}&uid=${userProfile.userId}`;
             window.open(targetUrl, '_blank');
         }

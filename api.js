@@ -75,8 +75,10 @@ async function _initiateTask(payload, hasUpload) {
             ...metaPayload, // 將所有元資料（如 projectId, content）展開到第一層
             action: 'createUploadJob', // 程序性指令：告訴後端「這是一個上傳任務的宣告」
             originalAction: payload.action, // 業務邏輯指令：告訴後端，上傳完畢後，真正要執行的指令是什麼
-            totalChunks: Math.ceil((payload.newPhotosBase64Array.length || 1) / 10) || 1
+            totalChunks: Math.ceil((payload.newPhotosBase64Array.length || 1) / 10) || 1,
+            totalPhotos: payload.newPhotosBase64Array.length // [v315.0 新增] 告訴後端總共有幾張照片
         };
+        console.log('[CONSOLE] 任務宣告 (initialPayload):', initialPayload); // [v330.0 偵錯]
     } else {
         // 對於簡單任務，直接使用原始 payload
         initialPayload = payload;
@@ -172,8 +174,8 @@ function compressImage_(base64Str, quality = 0.8) {
  */
 function pollJobStatus(jobId) {
     // [架構重構 v6.0] 重構為基於 setTimeout 的遞迴模式，以增強網路容錯能力。
-    const POLLING_INTERVAL_MS = 2000; // 每 2 秒輪詢一次
-    const TOTAL_TIMEOUT_MS = 60000; // 總超時時間 60 秒
+    const POLLING_INTERVAL_MS = 3000; // [v325.0] 延長輪詢間隔為 3 秒
+    const TOTAL_TIMEOUT_MS = 180000; // [v325.0] 根據您的要求，將總超時時間延長至 180 秒 (3分鐘)，以應對多張照片處理
 
     return new Promise((resolve, reject) => {
         const startTime = Date.now();
@@ -186,8 +188,11 @@ function pollJobStatus(jobId) {
             }
 
             try {
+                // [v318.0 API化] 輪詢狀態的 API 現在回傳標準 JSON，應改用 fetch 處理。
+                // 這解決了 "Unexpected token '('" 的錯誤。
                 const url = `${API_BASE_URL}?page=getJobStatus&jobId=${jobId}`;
-                const statusResult = await loadJsonp(url);
+                const response = await fetch(url);
+                const statusResult = await response.json();
 
                 // 檢查後端回傳的任務狀態
                 if (statusResult.status === 'completed' || statusResult.status === 'failed') {

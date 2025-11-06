@@ -2,8 +2,8 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>專案管理主控台</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>專案工作區</title>
   <!-- [v262.0 新增] 引入 Tailwind CSS，與 hub.html 保持樣式一致 -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="style.css">
@@ -42,7 +42,7 @@
        以便後續的模組腳本 (main.js) 可以透過 window.API_BASE_URL 存取。 -->
   <script>
     var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    var FRONTEND_VERSION = 'v25.11.01.1656';
+    var FRONTEND_VERSION = 'v1.0.0'; // 初始語意化版本號
   </script>
   <!-- [架構修正] 將主腳本移至 head 並加上 defer，確保 DOM 載入後才執行 -->
   <script type="module" src="main.js" defer></script>
@@ -56,7 +56,7 @@
     </button>
     <header>
       <div>
-        <h1 id="project-title">專案管理主控台</h1>
+        <h1 id="project-title">專案工作區</h1>
         <p id="version-display" class="muted"></p>
       </div>
       <!-- [優化] 將按鈕的行內 style 改為使用 CSS class，提升維護性 -->
@@ -134,7 +134,3 @@
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh-tw.js"></script>
 </body>
 </html>
-
-
-
-
