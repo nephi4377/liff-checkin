@@ -163,8 +163,3 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
     bindEventListeners();
 });
-/* ===== 程式進入點 ===== */
-document.addEventListener('DOMContentLoaded', () => {
-    initializeApp();
-    bindEventListeners();
-});

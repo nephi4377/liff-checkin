@@ -175,7 +175,7 @@ export function handleSavePhotos() {
         .map(item => item.dataset.fullUrl);
 
     // 3. 取得當前正在編輯的日誌 ID
-    const logIdToUpdate = state.currentEditingLogId;
+    const logIdToUpdate = state.currentEditingLogId; // [v359.0 核心修正] 修正屬性名稱，應為 state.currentEditingLogId
     if (!logIdToUpdate) {
         showGlobalNotification('錯誤：找不到當前編輯的日誌 ID，無法儲存。', 5000, 'error');
         btn.disabled = false;
@@ -185,6 +185,24 @@ export function handleSavePhotos() {
 
     // 4. 關閉 Modal 並在背景執行後端同步
     closePhotoModal();
+
+    // [v362.0 核心修正] 執行樂觀更新，立即在畫面上反映變更。
+    const cardToUpdate = document.getElementById(`log-${logIdToUpdate}`);
+    if (cardToUpdate) {
+        const photoContainer = cardToUpdate.querySelector('.photo-grid')?.parentNode;
+        if (photoContainer) {
+            // 組合要保留的舊照片和新上傳的 Base64 照片
+            const optimisticLinks = [...keepLinks, ...newUploads];
+            // 建立一個新的照片牆並替換掉舊的
+            const newPhotoGrid = buildPhotoGrid(optimisticLinks);
+            photoContainer.innerHTML = ''; // 清空舊照片
+            photoContainer.appendChild(newPhotoGrid);
+            // 為新照片綁定燈箱事件
+            const images = Array.from(newPhotoGrid.querySelectorAll('img.photo-thumb'));
+            images.forEach((img, index) => img.addEventListener('click', () => window.__openLightbox__(images.map(i => i.dataset.full), index)));
+        }
+        cardToUpdate.style.opacity = '0.7'; // 讓卡片半透明，表示正在處理中
+    }
 
     apiRequest({
         // [核心修正] 回歸正確的 "更新" 模型，不再改變 LogID。
@@ -205,7 +223,12 @@ export function handleSavePhotos() {
     .then(result => {
         if (result.success) {
             showGlobalNotification(result.message || '照片已成功更新！', 3000, 'success');
-            window.replaceOptimisticCard(`log-${logIdToUpdate}`, result.data);
+            // [v362.0] 使用後端回傳的最終資料，替換掉整張卡片，確保連結正確。
+            // 由於我們沒有建立臨時卡片，而是直接修改原卡片，這裡的 "replace" 實際上是 "update"。
+            const finalCard = _buildLogCard(result.data, false);
+            if (cardToUpdate) {
+                cardToUpdate.parentNode.replaceChild(finalCard, cardToUpdate);
+            }
         } else {
             showGlobalNotification(`照片更新失敗: ${result.error || '未知錯誤'}`, 8000, 'error');
         }

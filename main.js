@@ -25,7 +25,7 @@
 import * as api from './api.js';
 import { request as apiRequest } from './projectApi.js'; // [v317.0 API化] 引入新的統一請求函式
 import { logToPage, showGlobalNotification } from './utils.js';
-import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, createOrUpdateTradeDatalist, renderPostCreator, _buildLogCard, renderCommunicationHistory } from './ui.js';
+import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, createOrUpdateTradeDatalist, renderPostCreator, _buildLogCard, renderCommunicationHistory, lazyLoadImages } from './ui.js';
 import * as Handlers from './handlers.js';
 import * as LogActions from './logActions.js'; // [v337.0 修正] 補上遺失的 logActions 模組引入
 import * as ScheduleActions from './scheduleActions.js';
@@ -267,43 +267,6 @@ ${notes || '無'}`;
   }
 
   logToPage(`✅ 已載入 ${Object.keys(state.communicationHistory).length} 組溝通串流。`);
-}
-
-// [核心修正] 將 lazyLoadImages 掛載到 window 物件上，使其成為一個全域可用的函式
-// 這樣其他模組就可以透過 window.lazyLoadImages() 來呼叫它，從而打破模組間的循環依賴。
-window.lazyLoadImages = lazyLoadImages;
-export let lazyImageObserver;
-
-function lazyLoadImages() {
-  const lazyImages = document.querySelectorAll('img.lazy');
-
-  if ("IntersectionObserver" in window) {
-    // 如果已有觀察者，先中斷舊的
-    if (lazyImageObserver) {
-      lazyImageObserver.disconnect();
-    }
-
-    lazyImageObserver = new IntersectionObserver((entries, observer) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          const lazyImage = entry.target;
-          lazyImage.src = lazyImage.dataset.src;
-          lazyImage.classList.remove("lazy");
-          observer.unobserve(lazyImage);
-        }
-      });
-    });
-
-    lazyImages.forEach((lazyImage) => {
-      lazyImageObserver.observe(lazyImage);
-    });
-  } else {
-    // Fallback for older browsers
-    lazyImages.forEach((lazyImage) => {
-      lazyImage.src = lazyImage.dataset.src;
-      lazyImage.classList.remove("lazy");
-    });
-  }
 }
 
 /**
@@ -569,14 +532,16 @@ const dependencyManager = {
         const events = Array.isArray(event) ? event : [event];
         logToPage(`[DepManager] 收到就緒通知: ${events.join(', ')}`);
 
+        // [v362.0 核心修正] 修正背景刷新時 UI 不更新的問題。
+        // 每次收到通知時，都應該重新檢查所有訂閱，而不是只處理未執行過的。
         this.subscribers.forEach(sub => {
             // 如果此訂閱尚未執行，且其依賴項包含剛剛觸發的事件之一
-            if (!sub.executed && sub.dependencies.some(dep => events.includes(dep))) {
+            if (sub.dependencies.some(dep => events.includes(dep))) {
                 // 重新檢查此訂閱的所有依賴是否都已滿足
                 if (sub.isReady()) {
                     logToPage(`[DepManager] ${sub.name} 的依賴項現已全部滿足，開始執行...`);
                     sub.callback();
-                    sub.executed = true; // 標記為已執行，避免重複觸發
+                    // 移除 sub.executed = true，允許任務被重複觸發
                 }
             }
         });
@@ -614,7 +579,7 @@ function initializeTaskSenderForConsole() {
  * @param {string} tempId - 臨時卡片的 ID (e.g., 'temp-12345')。
  * @param {object} finalLogData - 後端回傳的、包含真實 LogID 的完整日誌資料。
  */
-function replaceOptimisticCard(tempId, finalLogData) {
+window.replaceOptimisticCard = function(tempId, finalLogData) {
     // [v323.0 核心修正] 修正樂觀更新卡片無法被替換的問題。
     // _buildLogCard 在建立卡片時，會為 ID 加上 'log-' 前綴，因此在尋找時也必須加上。
     const tempCard = document.getElementById('log-' + tempId);
@@ -628,9 +593,7 @@ function replaceOptimisticCard(tempId, finalLogData) {
 
     // 3. 觸發新卡片中可能存在的圖片懶加載
     lazyLoadImages();
-}
-// 將函式掛載到 window，以便其他模組呼叫
-window.replaceOptimisticCard = replaceOptimisticCard;
+};
 
 /**
  * [v305.0 新增] 註冊所有元件的渲染依賴。
@@ -942,21 +905,17 @@ async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
         // [核心修正] 只有在資料確定有變動時，才執行畫面更新與快取寫入
         if (oldDataSignature !== newDataSignature) {
           logToPage('🔄 偵測到後端資料已更新，正在執行畫面刷新...');
-          
-          // 步驟 1: 更新全域 state
-          state.currentLogsData = freshData.dailyLogs || [];
-          state.overview = freshData.overview || {};
-          state.currentScheduleData = freshData.schedule || [];
-          
-          // 步驟 2: 清空日誌容器 (保留發文框)
-          const logsContainer = document.getElementById('logs-container');
-          logsContainer.querySelectorAll('.card:not(.post-creator)').forEach(card => card.remove());
-          
-          // 步驟 3: 重設分頁並重新渲染
-          state.currentPage = 1;
-          renderLogPage();
-          
+
+          // [v358.0 核心修正] 偵測到資料更新時，不再手動更新部分畫面，
+          // 而是直接呼叫 handleDataResponse 函式，用最新的資料完整地、
+          // 從頭重新渲染整個頁面（包含排程、日誌、專案資訊等所有元件），
+          // 確保畫面的一致性。
+          handleDataResponse(freshData);
+
+          // 將新資料寫入快取
           localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData }));
+
+          showGlobalNotification('偵測到專案資料更新，畫面已自動刷新。', 3000, 'info');
         }
       }
     }

@@ -334,7 +334,8 @@
             const response = await fetchApi({
                 page: 'attendance_api',
                 action: 'get_employees',
-                userId: currentUser.userId,
+                source: '員工排班', // 【您的要求】新增來源參數
+                userId: currentUser.userId, // 維持傳遞使用者資訊
                 userName: currentUser.userName
             });
 
@@ -501,7 +502,10 @@
                 page: 'attendance_api',
                 action: 'get_latest_schedule',
                 year: year,
-                month: month
+                month: month,
+                // [v383.0 核心修正] 補上遺失的使用者資訊，以便後端日誌能正確記錄請求者。
+                userId: currentUser.userId,
+                userName: currentUser.userName
             });
             
             // [v15.0 改造] 根據您的要求，如果後端沒有回傳資料，則不進行任何更新

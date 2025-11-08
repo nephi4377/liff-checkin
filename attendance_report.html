@@ -241,7 +241,7 @@
 
             // 無論是否有快取，都在背景請求最新資料
             console.log(`🔄 正在從後端請求員工列表 (模式: ${filter})...`);
-            fetchApi({ page: 'attendance_api', action: 'get_employees', filter: filter, ...userParams })
+            fetchApi({ page: 'attendance_api', action: 'get_employees', filter: filter, source: '出勤儀表板', ...userParams })
                 .then(response => {
                     if (response && response.success) {
                         const newData = response.data;

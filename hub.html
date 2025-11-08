@@ -328,17 +328,17 @@
                 // 【⭐️ 核心修正：明確定義 API 函式，並傳入正確的後端網址 ⭐️】
                 // 建立一個專門用於發送任務的函式，它會使用 hub.html 內定義的 GAS_WEB_APP_URL。
                 const postTaskFunction = (payload) => {
-                    return fetch(GAS_WEB_APP_URL, {
+                    return fetch(GAS_WEB_APP_URL, { // 使用 hub.html 自己的後端 URL
                         method: 'POST',
                         body: JSON.stringify(payload),
                         headers: { 'Content-Type': 'text/plain' }
                     }).then(res => res.json());
                 };
 
-                const config = {
+                const config = { // 修正此處的 config 物件
                     state,
-                    api: { postTask: postTaskFunction }, // 將這個特定的函式作為 api.postTask 傳遞下去
-                    onSuccess: fetchInitialData
+                    api: { sendRequest: postTaskFunction }, // 修正：將 postTask 改為 sendRequest，以符合 taskSender.js 的期望
+                    onSuccess: fetchInitialData // 成功後的回呼函式
                 };
                 initializeTaskSender(taskSenderContainer, config, { style: 'hub' }); // 傳入新的 config
 

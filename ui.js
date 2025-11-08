@@ -156,7 +156,9 @@ export function _buildLogCard(log, isDraftMode) {
     const card = document.createElement('div'); card.className = 'card'; card.id = 'log-' + log.LogID;
 
     const timestamp = log.Timestamp ? new Date(log.Timestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) : '-';
-    const displayContent = (log.Content || '無內容').replace(/^\[更新 .*?\]\n/, '');
+    // [v363.0 核心修正] 增加 String() 轉換，確保即使 log.Content 是數字 0 或其他非字串類型，
+    // 也能安全地呼叫 .replace() 函式，避免因快取資料類型不一致導致的渲染錯誤。
+    const displayContent = String(log.Content || '無內容').replace(/^\[更新 .*?\]\n/, '');
 
     const headerDiv = document.createElement('div');
     headerDiv.className = 'log-card-header';
@@ -444,6 +446,44 @@ function addOptimisticCommunicationCard(notification) {
 }
 // 將函式掛載到 window，以便 taskSender.js 呼叫
 window.addOptimisticCommunicationCard = addOptimisticCommunicationCard;
+
+/**
+ * [v372.0 重構] 圖片懶加載 (Lazy Loading) 函式。
+ * 使用 IntersectionObserver API，當圖片進入可視範圍時才載入。
+ * @returns {void}
+ */
+let lazyImageObserver;
+export function lazyLoadImages() {
+  const lazyImages = document.querySelectorAll('img.lazy');
+
+  if ("IntersectionObserver" in window) {
+    // 如果已有觀察者，先中斷舊的，避免重複觀察
+    if (lazyImageObserver) {
+      lazyImageObserver.disconnect();
+    }
+
+    lazyImageObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const lazyImage = entry.target;
+          lazyImage.src = lazyImage.dataset.src;
+          lazyImage.classList.remove("lazy");
+          observer.unobserve(lazyImage);
+        }
+      });
+    });
+
+    lazyImages.forEach((lazyImage) => {
+      lazyImageObserver.observe(lazyImage);
+    });
+  } else {
+    // 對於不支援 IntersectionObserver 的舊版瀏覽器，直接載入所有圖片
+    lazyImages.forEach((lazyImage) => {
+      lazyImage.src = lazyImage.dataset.src;
+      lazyImage.classList.remove("lazy");
+    });
+  }
+}
 
 /**
  * [v213.0 新增] 渲染溝通紀錄頁面
