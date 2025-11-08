@@ -119,6 +119,8 @@
     async function fetchApi(params) {
         const url = new URL(API_BASE_URL);
         for (const key in params) {
+            // [v396.0 新增] 為所有 API 請求統一加上來源參數，以便後端日誌追蹤。
+            url.searchParams.append('source', '出勤儀表板');
             url.searchParams.append(key, params[key]);
         }
 
@@ -241,7 +243,7 @@
 
             // 無論是否有快取，都在背景請求最新資料
             console.log(`🔄 正在從後端請求員工列表 (模式: ${filter})...`);
-            fetchApi({ page: 'attendance_api', action: 'get_employees', filter: filter, source: '出勤儀表板', ...userParams })
+            fetchApi({ page: 'attendance_api', action: 'get_employees', filter: filter, ...userParams })
                 .then(response => {
                     if (response && response.success) {
                         const newData = response.data;

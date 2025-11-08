@@ -7,6 +7,8 @@
 * =============================================================================
 */
 
+import { state } from './state.js'; // [v389.0 修正] 引入共用 state 模組
+
 // [核心修正] 讓 api 模組直接從全域 window 物件讀取 API 網址。
 // 這確保了無論哪個模組呼叫 api.js 中的函式，都能使用到正確的後端網址。
 const API_BASE_URL = window.API_BASE_URL;
@@ -190,7 +192,10 @@ function pollJobStatus(jobId) {
             try {
                 // [v318.0 API化] 輪詢狀態的 API 現在回傳標準 JSON，應改用 fetch 處理。
                 // 這解決了 "Unexpected token '('" 的錯誤。
-                const url = `${API_BASE_URL}?page=getJobStatus&jobId=${jobId}`;
+                const url = new URL(API_BASE_URL);
+                url.searchParams.append('page', 'getJobStatus');
+                url.searchParams.append('jobId', jobId);
+                url.searchParams.append('userId', state.currentUserId); // [v389.0 修正] 改為從 state 模組讀取 userId
                 const response = await fetch(url);
                 const statusResult = await response.json();
 

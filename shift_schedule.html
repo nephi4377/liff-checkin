@@ -476,8 +476,12 @@
     // [核心新增] 將員工與班表載入合併，簡化流程
     async function fetchAndRefreshData(isBackground = false) { // 【您的要求】新增 isBackground 參數
         try {
-            // [v15.0 改造] 員工資料的載入與處理現在獨立於排班資料。
-            await fetchEmployees(); // 不再需要 isBackground 參數
+            // [v395.0 穩健性修正] 根據您的建議，增加防呆機制。
+            // 如果全域的 allEmployees 陣列因故為空 (例如初始化失敗)，則在刷新時再次嘗試獲取員工資料。
+            if (!allEmployees || allEmployees.length === 0) {
+                console.warn('偵測到員工資料為空，將重新獲取...');
+                await fetchEmployees();
+            }
             await fetchScheduleData(isBackground); // 傳入 isBackground
         } catch (error) {
             // [核心修正] 補上遺失的 catch 區塊，處理 fetchAndRefreshData 函式中可能發生的錯誤。
