@@ -8,7 +8,8 @@
 */
 
 import { state } from './state.js';
-import { logToPage, driveFileId } from './utils.js';
+// [v407.0 修正] 修正 Uncaught SyntaxError。將已移除的 driveFileId 改為使用新的 extractDriveFileId。
+import { logToPage, extractDriveFileId } from './utils.js';
 import { showGlobalNotification } from './utils.js'; // [核心修正] 引入全域通知函式
 import { buildPhotoGrid, _buildLogCard } from './ui.js';
 import { request as apiRequest } from './projectApi.js'; // [v317.0 API化] 引入新的統一請求函式
@@ -97,8 +98,9 @@ export function openPhotoModal(logId, photoLinksCsv) {
     const links = photoLinksCsv ? photoLinksCsv.split(',').map(v => v.trim()).filter(Boolean) : [];
     if (links.length) {
         links.forEach(link => {
-            const item = document.createElement('div'); item.className = 'modal-photo-item'; item.dataset.link = link;
-            const img = document.createElement('img'); const id = driveFileId(link);
+            const item = document.createElement('div'); item.className = 'modal-photo-item'; item.dataset.link = link;            
+            const img = document.createElement('img'); 
+            const id = extractDriveFileId(link); // [v407.0 修正] 改為呼叫新的函式
             img.src = id ? (`https://drive.google.com/thumbnail?id=${id}&sz=w300`) : link; 
             img.loading = 'lazy';
             const del = document.createElement('button'); 

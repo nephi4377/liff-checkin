@@ -8,7 +8,8 @@
 */
 
 import { state } from './state.js';
-import { logToPage, driveFileId } from './utils.js';
+// [v406.0 重構] 移除舊的 driveFileId，改為使用新的 extractDriveFileId 函式。
+import { logToPage, extractDriveFileId } from './utils.js';
 
 /**
  * 在等待 API 資料時，於主要內容區塊顯示骨架屏（載入中的動畫效果）。
@@ -132,7 +133,7 @@ function buildPhotoGrid(htmlLinksCsv) {
         if (u.startsWith('data:image/')) {
             container.appendChild(renderDirectImg(u));
         } else {
-            const id = driveFileId(u);
+            const id = extractDriveFileId(u); // [v406.0 重構] 改為呼叫新的函式
             // 2. 如果不是 Base64，再判斷是 Google Drive 連結還是一般圖片連結。
             if (id) container.appendChild(renderSmartImg(id));
             else container.appendChild(renderDirectImg(u));

@@ -51,21 +51,22 @@ export function logToPage(message, type = 'log') {
   }
 }
 
-/** 從各種 Google Drive 連結中提取檔案 ID */
-export function driveFileId(u) {
-  if (!u) return '';
-  u = String(u).trim();
-  let m;
-  // [核心修正] 修正不合法的正規表示式，使其能正確匹配 id=... 或 fileId=... 等參數
-  m = u.match(/[?&](?:id|ids|fileId)=([a-zA-Z0-9_-]+)/); if (m) return m[1];
-  m = u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/); if (m) return m[1];
-  m = u.match(/\/open\?id=([a-zA-Z0-9_-]+)/); if (m) return m[1];
-  return '';
-}
-
 /** 判斷是否為行動裝置 */
 export function isMobile() {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+/**
+ * [v406.0 重構] 從各種 Google Drive 連結中提取檔案 ID。
+ * 此函式取代了舊的 driveFileId，使用更穩健的正規表示式。
+ * @param {string} url - 完整的 Google Drive URL。
+ * @returns {string|null} 檔案 ID 或 null。
+ */
+export function extractDriveFileId(url) {
+    if (!url) return null;
+    const idRegex = /\/d\/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)/;
+    const match = url.match(idRegex);
+    return match ? (match[1] || match[2]) : null;
 }
 
 /**

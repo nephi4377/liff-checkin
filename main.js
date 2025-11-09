@@ -473,8 +473,14 @@ async function fetchEmployees() {
 
     logToPage('🔄 正在從 CheckinSystem 請求所有員工資料...');
     try {
-        // [v293.0 核心修正] 根據您的指示，將 action 統一為後端已有的 'get_employees'
-        const response = await fetch(`${ATTENDANCE_API_URL}?page=attendance_api&action=get_employees`);
+        // [v408.0 核心修正] 修正日誌中 requestor 為 N/A 的問題。
+        // 在請求員工列表時，附上當前操作者的 userId 和 userName，以便後端能正確記錄請求來源。
+        const url = new URL(ATTENDANCE_API_URL);
+        url.searchParams.set('page', 'attendance_api');
+        url.searchParams.set('action', 'get_employees');
+        url.searchParams.set('userId', state.currentUserId);
+        url.searchParams.set('userName', state.currentUserName);
+        const response = await fetch(url.toString());
         const result = await response.json();
         if (result.success && Array.isArray(result.data)) {
             state.allEmployees = result.data;
