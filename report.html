@@ -323,17 +323,20 @@
             ...problemFiles.map(file => ({ file, isProblem: true }))
           ];
 
-          if (allPhotosInfo.length === 0) {
-            updateStatus('請至少選擇一張照片。', 'error');
+          // [v460.0 核心改造] 允許無照片回報，但必須有文字內容。
+          const workDescription = document.getElementById('workDescription').value.trim();
+          const problemDescription = document.getElementById('problemDescription').value.trim();
+          if (allPhotosInfo.length === 0 && !workDescription && !problemDescription) {
+            updateStatus('請至少填寫施工內容或上傳照片。', 'error');
             setLoadingState(false);
             return;
           }
 
           // 批次設定
           const batchId = `${userProfile.userId}-${Date.now()}`;
-          // [核心修正] 根據您的經驗，將批次大小調整回 8，以在穩定性與效率之間取得平衡。
           const SUBMIT_CHUNK_SIZE = 8;
-          const totalChunks = Math.ceil(allPhotosInfo.length / SUBMIT_CHUNK_SIZE);
+          // [v460.0] 確保即使沒有照片，也至少會有 1 個批次來傳送文字資料。
+          const totalChunks = Math.ceil(allPhotosInfo.length / SUBMIT_CHUNK_SIZE) || 1;
 
           // 基本表單資料（案號使用清洗後的純數字）
           const baseFormData = {
