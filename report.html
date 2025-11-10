@@ -306,6 +306,14 @@
           return;
         }
 
+      // [v465.0 核心修正] 將 try...catch 移至迴圈內部，並在發生錯誤時 return，
+      // 這是解決「錯誤訊息閃一下就消失」問題的關鍵。
+      // 舊寫法中，內層 catch 拋出的錯誤雖然會被外層 catch 捕捉到，
+      // 但程式流程並未中止，會繼續執行到迴圈外的 handleSuccess()，
+      // 導致錯誤訊息被成功畫面覆蓋。
+      // 新寫法確保一旦有任何一個批次失敗，就會顯示錯誤、重設按鈕，並立即終止整個函式。
+      try {
+
         // 1) 先驗證案號（純數字；非案場請填 9999）
         const cleanProjectId = getValidProjectId();
         if (!cleanProjectId) {
@@ -313,176 +321,163 @@
           return; // 中止提交
         }
 
-        try {
-          const shouldCompress = document.getElementById('compressImages').checked;
+      const shouldCompress = document.getElementById('compressImages').checked;
 
-          const siteFiles = Array.from(document.getElementById('sitePhotos').files);
-          const problemFiles = Array.from(document.getElementById('problemPhotos').files);
-          const allPhotosInfo = [
-            ...siteFiles.map(file => ({ file, isProblem: false })),
-            ...problemFiles.map(file => ({ file, isProblem: true }))
-          ];
+      const siteFiles = Array.from(document.getElementById('sitePhotos').files);
+      const problemFiles = Array.from(document.getElementById('problemPhotos').files);
+      const allPhotosInfo = [
+        ...siteFiles.map(file => ({ file, isProblem: false })),
+        ...problemFiles.map(file => ({ file, isProblem: true }))
+      ];
 
-          // [v460.0 核心改造] 允許無照片回報，但必須有文字內容。
-          const workDescription = document.getElementById('workDescription').value.trim();
-          const problemDescription = document.getElementById('problemDescription').value.trim();
-          if (allPhotosInfo.length === 0 && !workDescription && !problemDescription) {
-            updateStatus('請至少填寫施工內容或上傳照片。', 'error');
-            setLoadingState(false);
-            return;
-          }
-
-          // 批次設定
-          const batchId = `${userProfile.userId}-${Date.now()}`;
-          const SUBMIT_CHUNK_SIZE = 8;
-          // [v460.0] 確保即使沒有照片，也至少會有 1 個批次來傳送文字資料。
-          const totalChunks = Math.ceil(allPhotosInfo.length / SUBMIT_CHUNK_SIZE) || 1;
-
-          // 基本表單資料（案號使用清洗後的純數字）
-          const baseFormData = {
-            // [架構重構 v7.0] 統一封包：不再使用 'source'，改用 'action' 作為指令。
-            action: 'submitReport',
-            batchId, // batchId 依然保留，用於後端識別批次
-            totalChunks,
-            userId: userProfile.userId,
-            userName: userProfile.displayName,
-            projectId: cleanProjectId,          // ✅ 只送乾淨數字（含 9999）
-            projectNameRaw: cleanProjectId,     // 如需保留原輸入可另設欄位
-            workType: document.getElementById('workType').value,
-            workDescription: document.getElementById('workDescription').value,
-            problemDescription: document.getElementById('problemDescription').value,
-          };
-
-          // 逐批處理與送出
-          for (let i = 0; i < totalChunks; i++) {
-            const chunkStart = i * SUBMIT_CHUNK_SIZE;
-            const chunkEnd = chunkStart + SUBMIT_CHUNK_SIZE;
-            const photoChunk = allPhotosInfo.slice(chunkStart, chunkEnd);
-
-            updateStatus(`正在處理第 ${i + 1} / ${totalChunks} 批照片...`, 'info');
-            const processedPhotos = await processPhotoChunk(photoChunk, shouldCompress);
-
-            const chunkFormData = { ...baseFormData, chunkIndex: i + 1, photos: processedPhotos };
-
-            updateStatus(`正在提交第 ${i + 1} / ${totalChunks} 批資料...`, 'info');
-            // [v462.0 CORS修正] 移除 mode: 'no-cors'，改為標準的 CORS 請求，並加入完整的錯誤處理。
-            // 這能確保我們能接收到後端真正的成功或失敗回應。
-            try {
-              const response = await fetch(GAS_WEB_APP_URL, {
-                method: 'POST',
-                // mode: 'no-cors', // 已移除
-                body: JSON.stringify(chunkFormData),
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' }
-              });
-
-              const result = await response.json();
-
-              if (!response.ok || !result.success) {
-                throw new Error(result.message || '後端回報了一個未知的錯誤。');
-              }
-            } catch (error) {
-              // 如果任何一個批次失敗，就立即中止並拋出錯誤
-              throw new Error(`第 ${i + 1} 批資料提交失敗：${error.message}`);
-            }
-          }
-
-          // [v455.0 核心修正] 將成功處理的呼叫移至迴圈外，確保所有批次都完成後才執行。
-          handleSuccess();
-
-        } catch (error) {
-          console.error('表單處理失敗', error);
-          updateStatus(`提交失敗：${error.message}`, 'error');
-          setLoadingState(false);
-        }
+      const workDescription = document.getElementById('workDescription').value.trim();
+      const problemDescription = document.getElementById('problemDescription').value.trim();
+      if (allPhotosInfo.length === 0 && !workDescription && !problemDescription) {
+        updateStatus('請至少填寫施工內容或上傳照片。', 'error');
+        setLoadingState(false);
+        return;
       }
 
-      // === 成功後處理 ===
-      function handleSuccess() {
-        // [v454.0 UX優化] 顯示成功畫面，取代單純的文字提示
-        document.getElementById('report-form').style.display = 'none';
-        document.getElementById('success-screen').style.display = 'block';
-        submitButton.textContent = '已完成';
-        submitButton.disabled = true;
-        setTimeout(() => { liff.closeWindow(); }, 30000); // [v455.0] 根據使用者要求，延長關閉時間至 30 秒
-      }
+      const batchId = `${userProfile.userId}-${Date.now()}`;
+      const SUBMIT_CHUNK_SIZE = 8;
+      const totalChunks = Math.ceil(allPhotosInfo.length / SUBMIT_CHUNK_SIZE) || 1;
 
-      // === 單批相片處理（壓縮→轉 Base64） ===
-      async function processPhotoChunk(photoInfoChunk, shouldCompress) {
-        const photoArray = [];
-        const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
-        for (const photoInfo of photoInfoChunk) {
-          let processedFile = photoInfo.file;
-          try {
-            if (shouldCompress) {
-              processedFile = await imageCompression(photoInfo.file, options);
-            }
-            // 【v144.0 核心修正】直接呼叫 import 的函式
-            const base64 = await readFileAsBase64(processedFile);
-            photoArray.push({
-              name: photoInfo.file.name,
-              type: processedFile.type,
-              data: base64,
-              isProblem: photoInfo.isProblem
-            });
-          } catch (error) { // [v456.0 核心修正] 增加明確的錯誤回報機制
-            console.error(`圖片 ${photoInfo.file.name} 處理失敗:`, error);
-            throw new Error(`處理圖片 "${photoInfo.file.name}" 時失敗，請檢查檔案是否損毀或過大。`);
-          }
-        }
-        return photoArray;
-      }
+      const baseFormData = {
+        action: 'submitReport',
+        batchId,
+        totalChunks,
+        userId: userProfile.userId,
+        userName: userProfile.displayName,
+        projectId: cleanProjectId,
+        projectNameRaw: cleanProjectId,
+        workType: document.getElementById('workType').value,
+        workDescription: document.getElementById('workDescription').value,
+        problemDescription: document.getElementById('problemDescription').value,
+      };
 
-      // === 載入狀態 ===
-      function setLoadingState(isLoading, message = '處理中...') {
-        submitButton.disabled = isLoading;
-        if (isLoading) {
-          buttonText.classList.add('hidden');
-          buttonSpinner.classList.remove('hidden');
-          updateStatus(message, 'info');
-        } else {
-          buttonText.classList.remove('hidden');
-          buttonSpinner.classList.add('hidden');
-          updateStatus('', 'info');
-        }
-      }
+      for (let i = 0; i < totalChunks; i++) {
+        const chunkStart = i * SUBMIT_CHUNK_SIZE;
+        const chunkEnd = chunkStart + SUBMIT_CHUNK_SIZE;
+        const photoChunk = allPhotosInfo.slice(chunkStart, chunkEnd);
 
-      // === 狀態顯示 ===
-      function updateStatus(message, type) {
-        // [v463.0 UX優化] 讓錯誤訊息更顯眼
-        // 1. 先重置所有樣式
-        statusMessage.className = 'text-center mb-4 min-h-[24px]';
-        statusMessage.textContent = message;
+        updateStatus(`正在處理第 ${i + 1} / ${totalChunks} 批照片...`, 'info');
+        const processedPhotos = await processPhotoChunk(photoChunk, shouldCompress);
 
-        // 2. 根據訊息類型套用不同樣式
-        if (type === 'success') {
-          statusMessage.classList.add('text-green-600', 'font-semibold');
-        } else if (type === 'error') {
-          // 錯誤時，套用醒目的紅色提示框樣式
-          statusMessage.classList.add('bg-red-100', 'border', 'border-red-400', 'text-red-700', 'px-4', 'py-3', 'rounded-lg', 'font-bold');
-        } else { // 'info' 類型
-          statusMessage.classList.add('text-gray-600');
-        }
-      }
+        const chunkFormData = { ...baseFormData, chunkIndex: i + 1, photos: processedPhotos };
 
-      // === 檔案選擇 UI ===
-      function setupFileInputUI(inputId, labelId, countId) {
-        const input = document.getElementById(inputId);
-        const label = document.getElementById(labelId);
-        const count = document.getElementById(countId);
-        input.addEventListener('change', () => {
-          if (input.files.length > 0) {
-            label.classList.add('selected');
-            count.textContent = `已選擇 ${input.files.length} 張照片`;
-          } else {
-            label.classList.remove('selected');
-            count.textContent = '未選取檔案';
-          }
+        updateStatus(`正在提交第 ${i + 1} / ${totalChunks} 批資料...`, 'info');
+        
+        const response = await fetch(GAS_WEB_APP_URL, {
+          method: 'POST',
+          body: JSON.stringify(chunkFormData),
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }
         });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          // 拋出一個包含具體錯誤訊息的例外
+          throw new Error(`第 ${i + 1} 批資料提交失敗：${result.message || '後端回報了一個未知的錯誤。'}`);
+        }
       }
 
-      // 啟動
-      main();
-    });
+      // 所有批次都成功後，才執行成功處理
+      handleSuccess();
+
+      } catch (error) {
+        console.error('表單處理失敗', error);
+        updateStatus(`提交失敗：${error.message}`, 'error');
+        setLoadingState(false);
+        // 此處的 return 是多餘的，因為 catch 區塊執行完後函式自然結束
+      }
+    }
+
+    // === 成功後處理 ===
+    function handleSuccess() {
+      // [v454.0 UX優化] 顯示成功畫面，取代單純的文字提示
+      document.getElementById('report-form').style.display = 'none';
+      document.getElementById('success-screen').style.display = 'block';
+      submitButton.textContent = '已完成';
+      submitButton.disabled = true;
+      setTimeout(() => {
+        if (liff && liff.isInClient()) {
+          liff.closeWindow();
+        }
+      }, 30000); // [v455.0] 根據使用者要求，延長關閉時間至 30 秒
+    }
+
+    // === 單批相片處理（壓縮→轉 Base64） ===
+    async function processPhotoChunk(photoInfoChunk, shouldCompress) {
+      const photoArray = [];
+      const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
+      for (const photoInfo of photoInfoChunk) {
+        let processedFile = photoInfo.file;
+        try {
+          if (shouldCompress) {
+            processedFile = await imageCompression(photoInfo.file, options);
+            }
+          // 【v144.0 核心修正】直接呼叫 import 的函式
+          const base64 = await readFileAsBase64(processedFile);
+          photoArray.push({
+            name: photoInfo.file.name,
+            type: processedFile.type,
+            data: base64,
+            isProblem: photoInfo.isProblem
+          });
+        } catch (error) { // [v456.0 核心修正] 增加明確的錯誤回報機制
+          console.error(`圖片 ${photoInfo.file.name} 處理失敗:`, error);
+          throw new Error(`處理圖片 "${photoInfo.file.name}" 時失敗，請檢查檔案是否損毀或過大。`);
+          }
+        }
+      return photoArray;
+    }
+
+    // === 載入狀態 ===
+    function setLoadingState(isLoading, message = '處理中...') {
+      submitButton.disabled = isLoading;
+      if (isLoading) {
+        buttonText.classList.add('hidden');
+        buttonSpinner.classList.remove('hidden');
+        updateStatus(message, 'info');
+      } else {
+        buttonText.classList.remove('hidden');
+        buttonSpinner.classList.add('hidden');
+        updateStatus('', 'info');
+      }
+    }
+
+    // === 狀態顯示 ===
+    function updateStatus(message, type) {
+      statusMessage.className = 'text-center mb-4 min-h-[24px]';
+      statusMessage.textContent = message;
+
+      if (type === 'success') {
+        statusMessage.classList.add('text-green-600', 'font-semibold');
+      } else if (type === 'error') {
+        statusMessage.classList.add('bg-red-100', 'border', 'border-red-400', 'text-red-700', 'px-4', 'py-3', 'rounded-lg', 'font-bold');
+      } else {
+        statusMessage.classList.add('text-gray-600');
+      }
+    }
+
+    // === 檔案選擇 UI ===
+    function setupFileInputUI(inputId, labelId, countId) {
+      const input = document.getElementById(inputId);
+      const label = document.getElementById(labelId);
+      const count = document.getElementById(countId);
+      input.addEventListener('change', () => {
+        if (input.files.length > 0) {
+          label.classList.add('selected');
+          count.textContent = `已選擇 ${input.files.length} 張照片`;
+        } else {
+          label.classList.remove('selected');
+          count.textContent = '未選取檔案';
+        }
+      });
+    }
+
+    main();
+  });
 </script>
 </body>
 </html>

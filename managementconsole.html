@@ -44,8 +44,9 @@
     var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
     var FRONTEND_VERSION = 'v1.0.0'; // 初始語意化版本號
   </script>
-  <!-- [v393.0 快取清除] 在腳本路徑後加上版本號查詢參數，強制瀏覽器在版本更新時下載新檔案，避免快取問題。 -->
-  <script type="module" src="main.js?v=393.0" defer></script>
+  <!-- [v393.0 快取清除] 在腳本路徑後加上版本號查詢參數，強制瀏覽器在版本更新時下載新檔案，避免快取問題。
+       [v464.0 修正] 根據使用者提供的日誌，此處的 defer 可能導致 main.js 在 DOM 尚未完全解析時執行，改為移除 defer。 -->
+  <script type="module" src="main.js?v=464.0"></script>
 </head>
 <body>
   <div class="container">
