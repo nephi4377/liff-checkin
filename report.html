@@ -306,90 +306,82 @@
           return;
         }
 
-      // [v465.0 核心修正] 將 try...catch 移至迴圈內部，並在發生錯誤時 return，
-      // 這是解決「錯誤訊息閃一下就消失」問題的關鍵。
-      // 舊寫法中，內層 catch 拋出的錯誤雖然會被外層 catch 捕捉到，
-      // 但程式流程並未中止，會繼續執行到迴圈外的 handleSuccess()，
-      // 導致錯誤訊息被成功畫面覆蓋。
-      // 新寫法確保一旦有任何一個批次失敗，就會顯示錯誤、重設按鈕，並立即終止整個函式。
-      try {
-
         // 1) 先驗證案號（純數字；非案場請填 9999）
         const cleanProjectId = getValidProjectId();
         if (!cleanProjectId) {
-          setLoadingState(false);
-          return; // 中止提交
+            setLoadingState(false);
+            return; // 中止提交
         }
 
-      const shouldCompress = document.getElementById('compressImages').checked;
+        const shouldCompress = document.getElementById('compressImages').checked;
 
-      const siteFiles = Array.from(document.getElementById('sitePhotos').files);
-      const problemFiles = Array.from(document.getElementById('problemPhotos').files);
-      const allPhotosInfo = [
-        ...siteFiles.map(file => ({ file, isProblem: false })),
-        ...problemFiles.map(file => ({ file, isProblem: true }))
-      ];
+        const siteFiles = Array.from(document.getElementById('sitePhotos').files);
+        const problemFiles = Array.from(document.getElementById('problemPhotos').files);
+        const allPhotosInfo = [
+            ...siteFiles.map(file => ({ file, isProblem: false })),
+            ...problemFiles.map(file => ({ file, isProblem: true }))
+        ];
 
-      const workDescription = document.getElementById('workDescription').value.trim();
-      const problemDescription = document.getElementById('problemDescription').value.trim();
-      if (allPhotosInfo.length === 0 && !workDescription && !problemDescription) {
-        updateStatus('請至少填寫施工內容或上傳照片。', 'error');
-        setLoadingState(false);
-        return;
-      }
-
-      const batchId = `${userProfile.userId}-${Date.now()}`;
-      const SUBMIT_CHUNK_SIZE = 8;
-      const totalChunks = Math.ceil(allPhotosInfo.length / SUBMIT_CHUNK_SIZE) || 1;
-
-      const baseFormData = {
-        action: 'submitReport',
-        batchId,
-        totalChunks,
-        userId: userProfile.userId,
-        userName: userProfile.displayName,
-        projectId: cleanProjectId,
-        projectNameRaw: cleanProjectId,
-        workType: document.getElementById('workType').value,
-        workDescription: document.getElementById('workDescription').value,
-        problemDescription: document.getElementById('problemDescription').value,
-      };
-
-      for (let i = 0; i < totalChunks; i++) {
-        const chunkStart = i * SUBMIT_CHUNK_SIZE;
-        const chunkEnd = chunkStart + SUBMIT_CHUNK_SIZE;
-        const photoChunk = allPhotosInfo.slice(chunkStart, chunkEnd);
-
-        updateStatus(`正在處理第 ${i + 1} / ${totalChunks} 批照片...`, 'info');
-        const processedPhotos = await processPhotoChunk(photoChunk, shouldCompress);
-
-        const chunkFormData = { ...baseFormData, chunkIndex: i + 1, photos: processedPhotos };
-
-        updateStatus(`正在提交第 ${i + 1} / ${totalChunks} 批資料...`, 'info');
-        
-        const response = await fetch(GAS_WEB_APP_URL, {
-          method: 'POST',
-          body: JSON.stringify(chunkFormData),
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' }
-        });
-
-        const result = await response.json();
-
-        if (!response.ok || !result.success) {
-          // 拋出一個包含具體錯誤訊息的例外
-          throw new Error(`第 ${i + 1} 批資料提交失敗：${result.message || '後端回報了一個未知的錯誤。'}`);
+        const workDescription = document.getElementById('workDescription').value.trim();
+        const problemDescription = document.getElementById('problemDescription').value.trim();
+        if (allPhotosInfo.length === 0 && !workDescription && !problemDescription) {
+            updateStatus('請至少填寫施工內容或上傳照片。', 'error');
+            setLoadingState(false);
+            return;
         }
-      }
 
-      // 所有批次都成功後，才執行成功處理
-      handleSuccess();
+        const batchId = `${userProfile.userId}-${Date.now()}`;
+        const SUBMIT_CHUNK_SIZE = 8;
+        const totalChunks = Math.ceil(allPhotosInfo.length / SUBMIT_CHUNK_SIZE) || 1;
 
-      } catch (error) {
-        console.error('表單處理失敗', error);
-        updateStatus(`提交失敗：${error.message}`, 'error');
-        setLoadingState(false);
-        // 此處的 return 是多餘的，因為 catch 區塊執行完後函式自然結束
-      }
+        const baseFormData = {
+            action: 'submitReport',
+            batchId,
+            totalChunks,
+            userId: userProfile.userId,
+            userName: userProfile.displayName,
+            projectId: cleanProjectId,
+            projectNameRaw: cleanProjectId,
+            workType: document.getElementById('workType').value,
+            workDescription: document.getElementById('workDescription').value,
+            problemDescription: document.getElementById('problemDescription').value,
+        };
+
+        for (let i = 0; i < totalChunks; i++) {
+            try {
+                const chunkStart = i * SUBMIT_CHUNK_SIZE;
+                const chunkEnd = chunkStart + SUBMIT_CHUNK_SIZE;
+                const photoChunk = allPhotosInfo.slice(chunkStart, chunkEnd);
+
+                updateStatus(`正在處理第 ${i + 1} / ${totalChunks} 批照片...`, 'info');
+                const processedPhotos = await processPhotoChunk(photoChunk, shouldCompress);
+
+                const chunkFormData = { ...baseFormData, chunkIndex: i + 1, photos: processedPhotos };
+
+                updateStatus(`正在提交第 ${i + 1} / ${totalChunks} 批資料...`, 'info');
+                
+                const response = await fetch(GAS_WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(chunkFormData),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                });
+
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    // 拋出一個包含具體錯誤訊息的例外
+                    throw new Error(`第 ${i + 1} 批資料提交失敗：${result.message || '後端回報了一個未知的錯誤。'}`);
+                }
+            } catch (error) {
+                console.error('表單處理失敗', error);
+                updateStatus(`提交失敗：${error.message}`, 'error');
+                setLoadingState(false);
+                return; // 【關鍵修正】一旦出錯，立即終止整個函式
+            }
+        }
+
+        // 所有批次都成功後，才執行成功處理
+        handleSuccess();
     }
 
     // === 成功後處理 ===
