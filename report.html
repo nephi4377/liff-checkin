@@ -2,8 +2,8 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>添心設計 | 施工回報 v7.8</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>添心設計 | 施工回報</title>
 
   <!-- UI / SDK -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -14,6 +14,17 @@
     // ⚠️請確認為最新設定
     const LIFF_ID = '2007974938-gOrjlzna';
     const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
+  </script>
+  
+  <!-- [v467.0 新增] 自動版本號產生器 -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const now = new Date();
+      const year = String(now.getFullYear()).slice(-2);
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      document.title += ` v${year}.${month}.${day}`;
+    });
   </script>
 
   <style>
@@ -347,11 +358,6 @@
             problemDescription: document.getElementById('problemDescription').value,
         };
 
-        // [v466.0 核心改造] 為了避免後端超時，將「設定檔案權限」的耗時操作移至前端。
-        // 在此處預先取得所有檔案的 ID，並在背景設定權限。
-        // 這樣後端接收到請求時，可以直接使用這些已授權的檔案，大幅縮短處理時間。
-        const allFileIds = await getAndShareAllFileIds(allPhotosInfo);
-
         for (let i = 0; i < totalChunks; i++) {
             try {
                 const chunkStart = i * SUBMIT_CHUNK_SIZE;
@@ -361,13 +367,7 @@
                 updateStatus(`正在處理第 ${i + 1} / ${totalChunks} 批照片...`, 'info');
                 const processedPhotos = await processPhotoChunk(photoChunk, shouldCompress);
 
-                // [v466.0] 將對應 chunk 的 fileIds 也一併傳送給後端
-                const chunkFileIds = allFileIds.slice(chunkStart, chunkEnd);
-                const chunkFormData = { 
-                    ...baseFormData, 
-                    chunkIndex: i + 1, 
-                    photos: processedPhotos,
-                    driveFileIds: chunkFileIds.join(',') };
+                const chunkFormData = { ...baseFormData, chunkIndex: i + 1, photos: processedPhotos };
 
                 updateStatus(`正在提交第 ${i + 1} / ${totalChunks} 批資料...`, 'info');
                 
@@ -395,40 +395,6 @@
         // 所有批次都成功後，才執行成功處理
         console.log('All chunks processed successfully. Calling handleSuccess().');
         handleSuccess();
-    }
-
-    // [v466.0 新增] 輔助函式：預先上傳所有檔案至暫存區，取得 File ID，並設定共用權限
-    async function getAndShareAllFileIds(allPhotosInfo) {
-        if (allPhotosInfo.length === 0) return [];
-        
-        updateStatus('正在準備檔案...', 'info');
-        const fileIds = [];
-        const tempFolderId = '1r54Q3G2I0S5p2G3eA4B5C6d7E8f9G0hI'; // 請替換為您的暫存資料夾 ID
-
-        for (const photoInfo of allPhotosInfo) {
-            try {
-                const formData = new FormData();
-                formData.append('file', photoInfo.file, photoInfo.file.name);
-
-                // 1. 上傳檔案至暫存資料夾
-                const uploadResponse = await fetch(`https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${liff.getAccessToken()}` },
-                    body: formData
-                });
-                const uploadResult = await uploadResponse.json();
-                if (!uploadResult.id) throw new Error('上傳至 Drive 失敗');
-
-                // 2. 設定檔案權限為公開
-                await fetch(`https://www.googleapis.com/drive/v3/files/${uploadResult.id}/permissions`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${liff.getAccessToken()}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ role: 'reader', type: 'anyone' })
-                });
-                fileIds.push(uploadResult.id);
-            } catch (error) { throw new Error(`準備檔案 ${photoInfo.file.name} 時失敗: ${error.message}`); }
-        }
-        return fileIds;
     }
 
     // === 成功後處理 ===
