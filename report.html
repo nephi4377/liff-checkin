@@ -48,7 +48,7 @@
             案號 <span class="text-red-500">*</span>
           </label>
           <input
-            type="text"
+            type="tel"
             id="projectId"
             class="w-full px-3 py-2 border border-gray-300 rounded-md"
             inputmode="numeric"
@@ -212,7 +212,7 @@
         const workTypeSelect = document.getElementById('workType');
         
         const workTypePhrases = {
-          '保護工程-進退場項目': ['進場保護', '退場清潔', '電梯保護', '走道保護', '廢棄物清運'],
+          '保護工程-進退場項目': ['進場保護', '退場清潔', '電梯保護', '走道保護', '廢棄物清運', '完工保護'],
           '木作工程': ['天花板施工', '櫃體組裝', '門片安裝', '角料下料', '隔間牆施工', '造型牆', '電視牆施工'],
           '系統工程': ['櫃體安裝', '門片調整', '五金安裝', '收邊', '層板安裝', '檯面安裝'],
           '水電工程': ['配管', '拉線', '燈具安裝', '開關面板', '插座面板', '弱電佈線', '給水測試', '排水測試'],
@@ -220,7 +220,7 @@
           '泥作工程': ['砌磚', '打底', '粉光', '磁磚鋪貼', '防水施作', '地坪墊高', '門窗崁縫'],
           '清潔工程': ['粗清', '細清', '垃圾清運', '裝潢後清潔'],
           '玻璃工程': ['玻璃安裝', '鏡面安裝', '矽利康收邊', '淋浴拉門'],
-          '其他工程': []
+          '其他工程': ['現場丈量', '設計圖製作', '施工圖製作', '與客戶討論', '廠商洽談', '材料確認']
         };
 
         const problemPhrases = ['【缺料】', '【尺寸不符】', '【圖面疑問】', '【品質問題】', '【需與設計師確認】', '【需與工務確認】', '【工序衝突】', '【現場保護不足】', '【工具損壞】'];
@@ -365,13 +365,25 @@
             const chunkFormData = { ...baseFormData, chunkIndex: i + 1, photos: processedPhotos };
 
             updateStatus(`正在提交第 ${i + 1} / ${totalChunks} 批資料...`, 'info');
-            // [v457.0 核心修正] 使用 'no-cors' 模式來解決 CORS 跨來源請求錯誤。
-            await fetch(GAS_WEB_APP_URL, {
-              method: 'POST',
-              mode: 'no-cors', // 關鍵設定
-              body: JSON.stringify(chunkFormData),
-              headers: { 'Content-Type': 'text/plain;charset=utf-8' }
-            });
+            // [v462.0 CORS修正] 移除 mode: 'no-cors'，改為標準的 CORS 請求，並加入完整的錯誤處理。
+            // 這能確保我們能接收到後端真正的成功或失敗回應。
+            try {
+              const response = await fetch(GAS_WEB_APP_URL, {
+                method: 'POST',
+                // mode: 'no-cors', // 已移除
+                body: JSON.stringify(chunkFormData),
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+              });
+
+              const result = await response.json();
+
+              if (!response.ok || !result.success) {
+                throw new Error(result.message || '後端回報了一個未知的錯誤。');
+              }
+            } catch (error) {
+              // 如果任何一個批次失敗，就立即中止並拋出錯誤
+              throw new Error(`第 ${i + 1} 批資料提交失敗：${error.message}`);
+            }
           }
 
           // [v455.0 核心修正] 將成功處理的呼叫移至迴圈外，確保所有批次都完成後才執行。
@@ -436,10 +448,20 @@
 
       // === 狀態顯示 ===
       function updateStatus(message, type) {
+        // [v463.0 UX優化] 讓錯誤訊息更顯眼
+        // 1. 先重置所有樣式
+        statusMessage.className = 'text-center mb-4 min-h-[24px]';
         statusMessage.textContent = message;
-        if (type === 'success')      statusMessage.className = 'text-green-600 font-semibold';
-        else if (type === 'error')   statusMessage.className = 'text-red-500 font-semibold';
-        else                         statusMessage.className = 'text-gray-600';
+
+        // 2. 根據訊息類型套用不同樣式
+        if (type === 'success') {
+          statusMessage.classList.add('text-green-600', 'font-semibold');
+        } else if (type === 'error') {
+          // 錯誤時，套用醒目的紅色提示框樣式
+          statusMessage.classList.add('bg-red-100', 'border', 'border-red-400', 'text-red-700', 'px-4', 'py-3', 'rounded-lg', 'font-bold');
+        } else { // 'info' 類型
+          statusMessage.classList.add('text-gray-600');
+        }
       }
 
       // === 檔案選擇 UI ===
