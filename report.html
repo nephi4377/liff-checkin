@@ -128,6 +128,15 @@
           <div id="button-spinner" class="spinner w-6 h-6 border-4 border-white rounded-full mx-auto hidden"></div>
         </button>
       </form>
+
+      <!-- [v454.0 UX優化] 新增成功提交畫面 -->
+      <div id="success-screen" class="text-center hidden">
+        <svg class="mx-auto h-16 w-16 text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <h2 class="mt-4 text-2xl font-bold text-gray-800">回報已成功提交！</h2>
+        <p class="mt-2 text-gray-600">後續處理完成後您會收到 LINE 通知。<br>此視窗將在 30 秒後自動關閉。</p>
+      </div>
     </div>
   </div>
 
@@ -353,21 +362,16 @@
             const chunkFormData = { ...baseFormData, chunkIndex: i + 1, photos: processedPhotos };
 
             updateStatus(`正在提交第 ${i + 1} / ${totalChunks} 批資料...`, 'info');
+            // [v457.0 核心修正] 使用 'no-cors' 模式來解決 CORS 跨來源請求錯誤。
             await fetch(GAS_WEB_APP_URL, {
               method: 'POST',
-              cache: 'no-cache',
-              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-              body: JSON.stringify(chunkFormData)
-            }).catch(error => {
-              // LIFF+GAS 在某些裝置會出現 fetch 類型錯誤但實際已送達
-              if (error instanceof TypeError && String(error.message || '').toLowerCase().includes('failed to fetch')) {
-                console.log(`批次 ${i + 1} 提交成功 (預期性錯誤)。`);
-                return;
-              }
-              throw error;
+              mode: 'no-cors', // 關鍵設定
+              body: JSON.stringify(chunkFormData),
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' }
             });
           }
 
+          // [v455.0 核心修正] 將成功處理的呼叫移至迴圈外，確保所有批次都完成後才執行。
           handleSuccess();
 
         } catch (error) {
@@ -379,8 +383,12 @@
 
       // === 成功後處理 ===
       function handleSuccess() {
-        updateStatus('所有批次皆已提交！後續處理完成後您會收到 LINE 通知。', 'success');
-        setTimeout(() => { liff.closeWindow(); }, 1500);
+        // [v454.0 UX優化] 顯示成功畫面，取代單純的文字提示
+        document.getElementById('report-form').style.display = 'none';
+        document.getElementById('success-screen').style.display = 'block';
+        submitButton.textContent = '已完成';
+        submitButton.disabled = true;
+        setTimeout(() => { liff.closeWindow(); }, 30000); // [v455.0] 根據使用者要求，延長關閉時間至 30 秒
       }
 
       // === 單批相片處理（壓縮→轉 Base64） ===
@@ -401,8 +409,9 @@
               data: base64,
               isProblem: photoInfo.isProblem
             });
-          } catch (error) {
+          } catch (error) { // [v456.0 核心修正] 增加明確的錯誤回報機制
             console.error(`圖片 ${photoInfo.file.name} 處理失敗:`, error);
+            throw new Error(`處理圖片 "${photoInfo.file.name}" 時失敗，請檢查檔案是否損毀或過大。`);
           }
         }
         return photoArray;
