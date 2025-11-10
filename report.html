@@ -145,28 +145,29 @@
 
       // === 初始化 ===
       async function main() {
-        const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+        // [v425.0 架構優化] 支援混合模式 (從主控台內嵌 或 直接LIFF開啟)
+        const urlParams = new URLSearchParams(window.location.search);
+        const uid = urlParams.get('uid');
+        const name = urlParams.get('name');
 
-        if (isLocalTest) {
-            console.warn('⚡️ 本地測試模式啟用，跳過 LIFF 認證。');
-            userProfile = {
-                userId: 'U_local_test_user_report',
-                displayName: '本地測試員'
-            };
+        if (uid && name) {
+            // 模式一：從主控台內嵌，已取得 uid 和 name
+            console.log('⚡️ 偵測到 uid，以內嵌模式啟動...');
+            userProfile = { userId: uid, displayName: name };
             initializeEventListeners();
-            return; // 結束執行，不進入 LIFF 流程
-        }
-
-        // --- 正式環境 LIFF 流程 ---
-        try {
-            await liff.init({ liffId: LIFF_ID });
-            if (!liff.isLoggedIn()) { liff.login(); return; }
-            userProfile = await liff.getProfile();
-            initializeEventListeners();
-        } catch (error) {
-            console.error('初始化失敗', error);
-            updateStatus('頁面初始化失敗，請在 LINE 中開啟或重新載入。', 'error');
-            submitButton.disabled = true;
+        } else {
+            // 模式二：直接開啟，需執行 LIFF 驗證
+            console.log('🔄 未偵測到 uid，以獨立 LIFF 模式啟動...');
+            try {
+                await liff.init({ liffId: LIFF_ID });
+                if (!liff.isLoggedIn()) { liff.login(); return; }
+                userProfile = await liff.getProfile();
+                initializeEventListeners();
+            } catch (error) {
+                console.error('LIFF 初始化失敗:', error);
+                updateStatus('頁面初始化失敗，請在 LINE 中開啟或重新載入。', 'error');
+                submitButton.disabled = true;
+            }
         }
       }
 

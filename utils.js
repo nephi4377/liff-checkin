@@ -135,7 +135,8 @@ export function showGlobalNotification(message, duration, type = 'info') {
 }
 
 /**
- * [新增] 快取管理函式：儲存資料到 localStorage。
+ * [v416.0 SPA化] 快取管理函式：儲存資料到 localStorage。
+ * (從 main.js 移入)
  * @param {string} key - 快取的鍵名。
  * @param {object} data - 要儲存的資料。
  * @param {number} [days=7] - 快取有效期（天）。
@@ -153,7 +154,8 @@ export function saveCache(key, data, days = 7) {
 }
 
 /**
- * [新增] 快取管理函式：從 localStorage 載入資料。
+ * [v416.0 SPA化] 快取管理函式：從 localStorage 載入資料。
+ * (從 main.js 移入)
  * @param {string} key - 快取的鍵名。
  * @returns {object|null} - 快取資料或 null。
  */

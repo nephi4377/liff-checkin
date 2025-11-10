@@ -647,10 +647,47 @@ window.refreshProjectData = refreshProjectData;
  * - 移除了在認證前顯示快取資料的邏輯，改為在認證成功後才顯示載入動畫並請求資料。
  */
 async function initializeApp() {
-  // [v306.0 核心重構] 根據您的建議，重構 initializeApp 函式，使其流程更清晰、更線性。
-  // 1. 宣告變數
-  let projectId;
-  let userId;
+      // [v425.0 架構優化] 支援混合模式 (從主控台內嵌 或 直接LIFF開啟)
+    const urlParams = new URLSearchParams(window.location.search);
+    let projectId = urlParams.get('id');
+    let userId = urlParams.get('uid');
+    let userName = urlParams.get('name');
+
+  // 3. 判斷環境並賦值
+  const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+
+  if (isLocalTest) {
+    logToPage('⚡️ 本地測試模式啟用...');
+    projectId = urlParams.get('id') || '999';
+    userId = urlParams.get('uid') || 'Ud58333430513b7527106fa71d2e30151';
+    state.currentUserName = '本地測試員';
+  } else {
+
+    if (userId && userName) {
+        // 模式一：從主控台內嵌，已取得 uid 和 name
+        logToPage('⚡️ 偵測到 uid，以內嵌模式啟動...');
+        state.currentUserName = userName;
+    } else {
+        // 模式二：直接開啟，需執行 LIFF 驗證
+        logToPage('🔄 未偵測到 uid，以獨立 LIFF 模式啟動...');
+        await liff.init({ liffId: '2007974938-7yKM9EqL' });
+        if (!liff.isLoggedIn()) {
+            liff.login();
+            return;
+        }
+        const profile = await liff.getProfile();
+        userId = profile.userId;
+        state.currentUserName = profile.displayName;
+        // [v425.1 修正] 補回對 liff.state 的處理，確保從 LINE 直接開啟時能正確讀取案號
+        if (urlParams.has('liff.state')) {
+            const liffState = decodeURIComponent(urlParams.get('liff.state')).replace(/^\?/, '');
+            const liffParams = new URLSearchParams(liffState);
+            if (liffParams.has('id')) projectId = liffParams.get('id');
+            // uid 已從 getProfile() 取得，此處無需再讀取
+        }
+    }
+  }
+
   const pageLoadId = `load_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const API_BASE_URL = window.API_BASE_URL;
 
@@ -662,35 +699,6 @@ async function initializeApp() {
   }
   setupNavigation();
   fetchEmployees().catch(err => console.warn('初始化時預先獲取員工資料失敗，將在需要時重試。'));
-
-  // 3. 判斷環境並賦值
-  const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-  const urlParams = new URLSearchParams(window.location.search);
-
-  if (isLocalTest) {
-    logToPage('⚡️ 本地測試模式啟用...');
-    projectId = urlParams.get('id') || '999';
-    userId = urlParams.get('uid') || 'Ud58333430513b7527106fa71d2e30151';
-    state.currentUserName = '本地測試員';
-  } else {
-    projectId = urlParams.get('id');
-    userId = urlParams.get('uid');
-    // 處理 LIFF 重新導向的 liff.state 參數
-    if (urlParams.has('liff.state')) {
-      const liffState = decodeURIComponent(urlParams.get('liff.state')).replace(/^\?/, '');
-      const liffParams = new URLSearchParams(liffState);
-      if (liffParams.has('id')) projectId = liffParams.get('id');
-      if (liffParams.has('uid')) userId = liffParams.get('uid');
-    }
-  }
-
-  // 4. 驗證 ID
-  if (!projectId || !userId) {
-    const errorMsg = '網址中缺少必要的專案 ID (id) 或使用者 ID (uid)。請確認 LIFF 連結是否正確。';
-    console.error(`[Init] 參數檢查失敗: ${errorMsg}`);
-    displayError({ message: errorMsg });
-    return;
-  }
 
   // 5. 將 ID 存入全域狀態
   state.projectId = projectId;
