@@ -110,9 +110,12 @@ export default {
                 <a :href="addSiteUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-blue-700">新增案場資料</h2><p class="text-gray-600">建立一個新的專案，並填寫基本資訊。</p></a>
                 <a href="#/onboarding-flow" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-green-700">客戶接洽流程</h2><p class="text-gray-600">查看標準化的互動式客戶溝通劇本。</p></a>
                 <a href="#/faq" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-green-700">新客戶常見問答 (FAQ)</h2><p class="text-gray-600">快速查詢與回覆客戶的常見問題。</p></a>
-                
-                <a v-if="hasAdminRights" :href="attendanceReportUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-green-700">出勤儀表板</h2><p class="text-gray-600">查詢所有員工的出勤、遲到、早退與缺勤紀錄。</p></a>
-                
+               <!-- [v453.0] 根據使用者要求，將「施工回報總覽」權限提升至 5，並調整顏色 -->
+                <a v-if="currentUser && currentUser.permission >= 5" href="#/daily-report" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-red-700">施工回報總覽 (檢視)</h2><p class="text-gray-600">在主控台內集中檢視團隊的所有回報。</p></a>
+                    
+                <!-- [v453.0] 根據使用者要求，將「出勤儀表板」顏色改為紅色 -->
+                <a v-if="hasAdminRights" :href="attendanceReportUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-red-700">出勤儀表板</h2><p class="text-gray-600">查詢所有員工的出勤、遲到、早退與缺勤紀錄。</p></a>
+               
                 <a v-if="hasAdminRights" :href="approvalDashboardUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
                     <div class="flex justify-between items-center">
                         <h2 class="text-xl font-bold mb-2 text-red-700">假勤審核儀表板</h2>
@@ -121,14 +124,6 @@ export default {
                     <p class="text-gray-600">集中審核所有員工的請假與加班申請。</p>
                 </a>
 
-                <!-- [v414.0 修正] 恢復「施工回報」(提交) 的 LIFF 連結，並新增「施工回報總覽」(檢視) 的 SPA 內部連結 -->
-                <a :href="reportUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
-                    <h2 class="text-xl font-bold mb-2 text-purple-700">施工回報</h2>
-                    <p class="text-gray-600">上傳每日施工進度與照片。</p>
-                </a>
-                <a href="#/daily-report" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-purple-700">施工回報總覽 (檢視)</h2><p class="text-gray-600">在主控台內集中檢視團隊的所有回報。</p></a>
-                
-                <a href="https://liff.line.me/2007974938-jVxn6y37?source=hub" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-purple-700">員工打卡</h2><p class="text-gray-600">開啟 LIFF 頁面進行每日出勤打卡。</p></a>
                 <a :href="leaveRequestUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-purple-700">線上假勤申請</h2><p class="text-gray-600">申請特休、病假、事假或回報加班。</p></a>
                 <a :href="shiftScheduleUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-purple-700">員工排班系統</h2><p class="text-gray-600">設定排班制員工的休假日期。</p></a>
             </div>

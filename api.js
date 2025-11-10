@@ -192,10 +192,12 @@ function pollJobStatus(jobId) {
             try {
                 // [v318.0 API化] 輪詢狀態的 API 現在回傳標準 JSON，應改用 fetch 處理。
                 // 這解決了 "Unexpected token '('" 的錯誤。
+                // [v450.0 核心修正] 輪詢狀態必須使用 GET 方法。
                 const url = new URL(API_BASE_URL);
                 url.searchParams.append('page', 'getJobStatus');
                 url.searchParams.append('jobId', jobId);
                 url.searchParams.append('userId', state.currentUserId); // [v389.0 修正] 改為從 state 模組讀取 userId
+                
                 const response = await fetch(url);
                 const statusResult = await response.json();
 
