@@ -14,10 +14,15 @@ echo.
 echo [Step 1/3] Performing local backup...
 :: [v1.4] Changed paths to English to permanently resolve encoding issues.
 :: Please ensure you have manually renamed the folder '程式備份用' to 'CodeBackups'.
-set "SOURCE_DIR=D:\Dropbox\CodeBackups\CODING"
-set "BACKUP_ROOT=D:\Dropbox\CodeBackups\BAK"
+
+:: Use relative paths based on the script's location.
+:: %~dp0 is the path of the current script (e.g., D:\Dropbox\CodeBackups\CODING\)
+set "SOURCE_DIR=%~dp0"
+set "BACKUP_ROOT=%~dp0..\BAK"
 
 for /f "delims=" %%i in ('powershell -Command "(Get-Date).ToString('yyyyMMdd_HHmmss')"') do set "TIMESTAMP=%%i"
+
+
 set "BACKUP_FOLDER_NAME=CODING_%TIMESTAMP%_%COMPUTERNAME%"
 set "BACKUP_PATH=%BACKUP_ROOT%\%BACKUP_FOLDER_NAME%"
 
@@ -32,7 +37,7 @@ if errorlevel 1 (
 
 :: [Step 2/3] Extracting frontend version and preparing commit message...
 :: Extract FRONTEND_VERSION from managementconsole.html
-for /f "delims=" %%i in ('powershell -Command "(Get-Content 'd:\Dropbox\CodeBackups\CODING\managementconsole.html' | Select-String -Pattern 'var FRONTEND_VERSION = ''(.*?)'';' | ForEach-Object { $_.Matches.Groups[1].Value })"') do set "FRONTEND_SEMVER=%%i"
+for /f "delims=" %%i in ('powershell -Command "(Get-Content '%SOURCE_DIR%\managementconsole.html' | Select-String -Pattern 'var FRONTEND_VERSION = ''(.*?)'';' | ForEach-Object { $_.Matches.Groups[1].Value })"') do set "FRONTEND_SEMVER=%%i"
 
 set "FULL_VERSION=%FRONTEND_SEMVER%-%TIMESTAMP%"
 echo    - Frontend Version: %FRONTEND_SEMVER% (Build: %TIMESTAMP%)
