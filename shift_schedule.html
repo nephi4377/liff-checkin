@@ -1022,8 +1022,8 @@
             return;
         }
 
-        // [v14.0 核心改造] 從快取讀取資料
         const year = currentDate.getFullYear();
+        const month = currentDate.getMonth() + 1;
         const cacheKey = getCacheKeyForDate(currentDate);
         const scheduleData = scheduleCache[cacheKey]?.schedule;
         if (!scheduleData) return;
@@ -1031,24 +1031,16 @@
         saveBtn.disabled = true;
         saveBtn.textContent = '儲存中...';
 
-        // 組合出該員工在該月份「最終」的休假日期列表
-        const finalOffDays = new Set();
-        const month = currentDate.getMonth(); // [v18.0 修正] 宣告 month 變數
-        const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-        const currentYearMonth = `${year}-${(month + 1).toString().padStart(2, '0')}`;
+        // 【v287.0 核心安全重構】
+        // 舊邏輯：只收集被標記為 '休假' 的日期，這會導致其他假別 (如事假、特休) 在儲存時遺失。
+        // 新邏輯：收集該員工在當前月份「所有」的班表資訊，並組合成 '日期:狀態' 的格式，
+        //         確保將一個完整的月份班表傳送給後端。
+        const userScheduleForMonth = scheduleData[selectedUserId] || {};
+        const finalOffDaysCsv = Object.entries(userScheduleForMonth)
+            .filter(([date, shift]) => shift) // 過濾掉狀態為 null 或空字串的日期
+            .map(([date, shift]) => `${date}:${shift}`)
+            .join(',');
 
-        // [核心修正] 根據您的要求，嚴格篩選出只屬於「當前月份」的休假日期。
-        // 遍歷該員工在 scheduleData 中的所有休假紀錄。
-        if (scheduleData[selectedUserId]) {
-            for (const dateStr in scheduleData[selectedUserId]) {
-                // 1. 檢查該筆紀錄是否屬於當前正在編輯的月份。
-                // 2. 檢查該筆紀錄的狀態是否為 '休假'。
-                // 只有同時滿足這兩個條件，才將其加入待儲存列表。
-                if (dateStr.startsWith(currentYearMonth) && scheduleData[selectedUserId][dateStr]) {
-                    finalOffDays.add(dateStr);
-                }
-            }
-        }
 
         try {
             const payload = {
@@ -1058,8 +1050,8 @@
                 editorName: currentUser.userName,
                 targetUserId: selectedUserId,
                 targetUserName: allEmployees.find(e => e.userId === selectedUserId)?.userName,
-                yearMonth: `${year}-${(month + 1).toString().padStart(2, '0')}`,
-                offDaysCsv: Array.from(finalOffDays).join(','),
+                yearMonth: `${year}-${month.toString().padStart(2, '0')}`,
+                offDaysCsv: finalOffDaysCsv, // 直接傳送包含所有狀態的字串
                 editorPermission: currentUser.permission, // 【⭐️ 核心新增：將操作者權限傳給後端 ⭐️】
                 isStandard: standardEmployees.some(e => e.userId === selectedUserId) // [v3.0 新增] 告知後端是否為標準班
             };
@@ -1216,10 +1208,21 @@
                 return;
             }
 
-            // [核心改造] 根據您的建議，回歸單純的 0/1 切換邏輯。
-            // 無論在哪種顯示模式下，點擊行為都統一為在「上班(預設)」和「休假」之間切換。
+            // 【v25.1 核心安全強化】將原本的二元切換邏輯改為更嚴謹的三元判斷，徹底杜絕狀態覆蓋漏洞。
+            // 舊邏輯: newShift = (currentShift === '休假') ? '清除' : '休假';
+            // 風險：當 currentShift 為 null 或 undefined 時，會錯誤地將 newShift 設為 '休假'，導致覆蓋系統假別。
             let newShift;
-            newShift = (currentShift === '休假') ? '清除' : '休假';
+            if (currentShift === '休假') {
+                // 情況一：如果當前是「休假」，則點擊後變為「清除」(恢復為預設上班日)。
+                newShift = '清除';
+            } else if (!currentShift) { // 這個條件會捕捉到 null, undefined, 或空字串 ''
+                // 情況二：如果當前為「空狀態」(即預設上班日)，則點擊後變為「休假」。
+                newShift = '休假';
+            } else {
+                // 情況三：如果當前是任何其他狀態 (如 '事假[...]')，則不進行任何操作。
+                // 這是最後一道防線，即使上方的保護機制被繞過，此處也能阻止狀態被錯誤修改。
+                return;
+            }
             updateShift(selectedUserId, date, newShift);
         });
 

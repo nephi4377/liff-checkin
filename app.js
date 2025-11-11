@@ -23,17 +23,21 @@ const App = {
         const pendingApprovals = ref(0);
         const currentView = ref({ name: 'dashboard' });
 
-        // [v429.0 效能優化] 快取優先策略
+        // --- [v429.0 效能優化] 快取優先策略 ---
         const EMPLOYEES_CACHE_KEY = 'spa_hub_employees';
         const PROJECTS_CACHE_KEY = 'spa_hub_projects';
 
-        // 1. 立即嘗試從快取載入資料
+        // 1. 應用程式啟動時，立即嘗試從快取載入資料
         const cachedEmployees = loadCache(EMPLOYEES_CACHE_KEY);
         const cachedProjects = loadCache(PROJECTS_CACHE_KEY);
 
-        if (cachedEmployees) allEmployees.value = cachedEmployees;
-        if (cachedProjects) allProjects.value = cachedProjects;
-        // ---
+        if (cachedEmployees) {
+            allEmployees.value = cachedEmployees;
+        }
+        if (cachedProjects) {
+            allProjects.value = cachedProjects;
+        }
+        // --- 快取策略結束 ---
 
         // --- 計算屬性 (Computed) ---
         const welcomeMessage = computed(() => userProfile.value ? `歡迎，${userProfile.value.displayName}！` : '歡迎！');
@@ -150,7 +154,7 @@ const App = {
         onMounted(async () => {
             const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
 
-            // [v429.0 效能優化] 如果已有快取，則立即顯示畫面，不再等待後端
+            // 2. [v429.0 效能優化] 如果已有快取，則立即結束載入動畫，讓使用者看到畫面
             if (cachedEmployees && cachedProjects) {
                 isLoading.value = false;
                 console.log('⚡️ 從快取載入資料，立即渲染畫面。');
@@ -170,27 +174,32 @@ const App = {
 
                 const [attendanceResult, projectsResult] = await Promise.all([fetchAttendanceData(), fetchHubProjectsData()]);
 
-                // [v429.0 效能優化] 智慧更新員工資料
+                // 3. [v429.0 效能優化] 智慧更新員工資料
                 if (attendanceResult.success && attendanceResult.employees) {
+                    // 只有在後端資料與當前畫面資料不同時，才更新畫面與快取
                     if (JSON.stringify(allEmployees.value) !== JSON.stringify(attendanceResult.employees)) {
                         console.log('🔄 員工資料已在背景更新。');
                         allEmployees.value = attendanceResult.employees;
                         saveCache(EMPLOYEES_CACHE_KEY, attendanceResult.employees);
                     }
+                    // 無論如何都更新待審核數量
                     pendingApprovals.value = attendanceResult.pendingRequests?.length || 0;
                 }
 
-                // [v429.0 效能優化] 智慧更新專案與通知資料
+                // 4. [v429.0 效能優化] 智慧更新專案與通知資料
                 if (projectsResult.success && projectsResult.data) {
                     const newProjects = projectsResult.data.projects || [];
+                    // 只有在後端資料與當前畫面資料不同時，才更新畫面與快取
                     if (JSON.stringify(allProjects.value) !== JSON.stringify(newProjects)) {
                         console.log('🔄 專案資料已在背景更新。');
                         allProjects.value = newProjects;
                         saveCache(PROJECTS_CACHE_KEY, newProjects);
-                        if (!isLoading.value) { // 如果不是首次載入，才跳通知
+                        // 如果不是首次載入 (即畫面已由快取渲染)，才跳出通知提醒使用者
+                        if (!isLoading.value) { 
                             showGlobalNotification('專案資料已自動更新。', 3000, 'info');
                         }
                     }
+                    // 通知永遠使用最新的
                     notifications.value = projectsResult.data.notifications || [];
                 }
 
@@ -198,6 +207,7 @@ const App = {
                 console.error('Initialization Error:', error);
                 showGlobalNotification(`資料載入失敗: ${error.message}`, 5000, 'error');
             } finally {
+                // 5. 無論成功或失敗，最終都確保載入動畫被隱藏
                 isLoading.value = false;
             }
         });

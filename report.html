@@ -383,6 +383,11 @@
                     // 拋出一個包含具體錯誤訊息的例外
                     throw new Error(`第 ${i + 1} 批資料提交失敗：${result.message || '後端回報了一個未知的錯誤。'}`);
                 }
+
+                // [v469.2 核心修正] 在每個批次成功提交後，加入一個短暫的延遲，以避免觸發後端的 429 速率限制錯誤。
+                if (i < totalChunks - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 500)); // 延遲 500 毫秒
+                }
             } catch (error) {
                 console.error('表單處理失敗', error);
                 console.log('Caught error in chunk loop, calling setLoadingState(false) and returning.');

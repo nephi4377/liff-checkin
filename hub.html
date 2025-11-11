@@ -314,6 +314,10 @@
         function updatePermissionUI() {
             if (!userProfile || allEmployees.length === 0) return;
 
+            // [v470.0 核心修正] 增加更嚴格的防呆保護。
+            // 必須確保 userProfile 和 allEmployees 都已載入，才能進行權限判斷。
+            if (!userProfile || !userProfile.userId || !allEmployees || allEmployees.length === 0) return;
+            
             const currentUser = allEmployees.find(emp => emp.userId === userProfile.userId);
             const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
             const permission = isLocalTest ? 5 : (currentUser ? currentUser.permission : 1);
@@ -559,13 +563,18 @@
             const userName = currentUser ? currentUser.userName : '本地測試員';
             let projectsToShow = [];
             // [v89.2 核心修正] 根據使用者重申的權限規則進行調整，與後端邏輯保持一致。
+            // 【優化建議】將「專案負責人」的姓名比對，改為更穩定的 UserID 比對，避免因姓名不一致或同名導致的問題。
             if (permission >= 4) { // 權限 4, 5 (總監級) 可看全部
                 projectsToShow = allProjects;
             } else if (permission === 3) { // 權限 3 (工務) 可看同分區的專案
                 const userGroup = currentUser ? currentUser.group : '';
                 projectsToShow = allProjects.filter(p => p['專案分區'] === userGroup);
-            } else { // 權限 2, 1 (設計師/助理) 只能看自己負責的專案
-                projectsToShow = allProjects.filter(p => (p['專案負責人'] || '').split(',').map(name => name.trim()).includes(userName));
+            } else { // 權限 2, 1 (設計師/助理) 只能看自己負責的專案 (改用 UserID 比對)
+                const currentUserId = currentUser ? currentUser.userId : '';
+                projectsToShow = allProjects.filter(p => {
+                    const responsibleIds = (p['負責人ID'] || '').split(',').map(id => id.trim());
+                    return responsibleIds.includes(currentUserId);
+                });
             }
             renderProjectCards(projectsToShow);
         }
