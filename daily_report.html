@@ -244,7 +244,7 @@
                         photosHtml = `<div class="grid grid-cols-4 sm:grid-cols-6 gap-1 mt-2">${photoUrls.map(url => `
                             <a href="${url.replace(/=s\d+$/, '')}" target="_blank" rel="noopener noreferrer" title="點擊以檢視原始大圖">
                                 <img src="https://drive.google.com/thumbnail?id=${window.extractDriveFileId(url)}&sz=w128" 
-                                     alt="現場照片" class="w-full h-16 object-cover rounded-md hover:opacity-80 transition-opacity">
+                                     alt="現場照片" class="w-full h-16 object-cover rounded-md hover:opacity-80 transition-opacity" loading="lazy">
                             </a>`).join('')}
                         </div>`;
                     }
@@ -318,6 +318,19 @@
             placeholder.innerHTML = '<p>此區間內沒有任何工作回報紀錄。</p>';
             placeholder.classList.remove('hidden');
             reportsContainer.appendChild(placeholder);
+        }
+
+        // 註冊 Service Worker 以快取圖片
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('ServiceWorker registration failed: ', error);
+                    });
+            });
         }
     });
 
