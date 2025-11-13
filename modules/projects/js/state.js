@@ -7,7 +7,7 @@
 * =============================================================================
 */
 
-import { isMobile } from './utils.js';
+import { isMobile } from '../../shared/js/utils.js';
 
 // 統一的狀態管理物件，所有模組共享此狀態
 export const state = {

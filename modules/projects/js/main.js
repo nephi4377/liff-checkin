@@ -22,17 +22,16 @@
 * - **日誌分頁 (Pagination)**: 日誌列表採用前端分頁，滾動到底部時自動載入下一批，避免一次性渲染大量DOM。
 * =============================================================================
  */
-import * as api from './api.js';
-import { request as apiRequest } from './modules/projects/js/projectApi.js'; // [v317.0 API化] 引入新的統一請求函式
-import { logToPage, showGlobalNotification } from './utils.js';
-import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, createOrUpdateTradeDatalist, renderPostCreator, _buildLogCard, renderCommunicationHistory, lazyLoadImages } from './modules/projects/js/ui.js';
-import * as Handlers from './handlers.js';
-import * as LogActions from './modules/projects/js/logActions.js'; // [v337.0 修正] 補上遺失的 logActions 模組引入
-import * as ScheduleActions from './modules/projects/js/scheduleActions.js';
-import { state } from './modules/projects/js/state.js';
-import { initializeTaskSender, addRecipient } from './taskSender.js'; // [修正] 引入共用任務交辦模組 (包含 addRecipient)
- 
- /*
+import * as api from './api.js'; // 位於同層資料夾
+import { request as apiRequest } from './projectApi.js'; // [v317.0 API化] 引入新的統一請求函式
+import { logToPage, showGlobalNotification } from '../../../shared/js/utils.js'; // 移至 shared/js
+import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, createOrUpdateTradeDatalist, renderPostCreator, _buildLogCard, renderCommunicationHistory, lazyLoadImages } from './ui.js'; // 位於同層資料夾
+import * as Handlers from './handlers.js'; // 假設 handlers.js 位於同層資料夾
+import * as LogActions from './logActions.js'; // [v337.0 修正] 補上遺失的 logActions 模組引入
+import * as ScheduleActions from './scheduleActions.js'; // 位於同層資料夾
+import { state } from './state.js'; // 位於同層資料夾
+import { initializeTaskSender, addRecipient } from '../../../shared/js/taskSender.js'; // [修正] 引入共用任務交辦模組 (包含 addRecipient)
+  /*
   * 版本: v13.0 (穩定版)
   * 修改時間: 2025-09-27 10:59 (Asia/Taipei)
   * 說明: 為 handleDataResponse 函式加上專業的 DocBlock 註解。

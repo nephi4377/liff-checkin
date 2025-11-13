@@ -7,10 +7,10 @@
  * =============================================================================
  */
 
-import * as api from './api.js';
-import { logToPage, showGlobalNotification, saveCache, loadCache } from './utils.js';
-import * as GanttScheduleLogic from './gantt_schedule_logic.js';
-import { state } from './state.js';
+import * as api from './api.js'; // 檔案位於同一層
+import { logToPage, showGlobalNotification, saveCache, loadCache } from '../../shared/js/utils.js';
+import * as GanttScheduleLogic from './gantt_schedule_logic.js'; // 檔案位於同一層
+import { state } from './state.js'; // 檔案位於同一層
 
 /**
  * 處理從後端 API 成功獲取資料後的核心回呼函式。

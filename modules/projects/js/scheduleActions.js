@@ -8,11 +8,11 @@
 * =============================================================================
 */
 
-import { logToPage } from './utils.js';
+import { logToPage } from '../../shared/js/utils.js';
 import { state } from './state.js';
 import { createOrUpdateTradeDatalist } from './ui.js';
 import * as api from './api.js'; // [統一] 引入完整的 api 模組
-import { showGlobalNotification } from './utils.js'; // [統一] 引入全域通知函式
+import { showGlobalNotification } from '../../shared/js/utils.js'; // [統一] 引入全域通知函式
 
 /**
  * [重構] 渲染整個排程頁面 (取代 ui.js 中的 displaySchedule)

@@ -37,7 +37,7 @@ if errorlevel 1 (
 
 :: [Step 2/3] Extracting frontend version and preparing commit message...
 :: Extract FRONTEND_VERSION from managementconsole.html
-for /f "delims=" %%i in ('powershell -Command "(Get-Content '%SOURCE_DIR%\managementconsole.html' | Select-String -Pattern 'var FRONTEND_VERSION = ''(.*?)'';' | ForEach-Object { $_.Matches.Groups[1].Value })"') do set "FRONTEND_SEMVER=%%i"
+for /f "delims=" %%i in ('powershell -Command "(Get-Content '%SOURCE_DIR%\modules\projects\managementconsole.html' | Select-String -Pattern 'var FRONTEND_VERSION = ''(.*?)'';' | ForEach-Object { $_.Matches.Groups[1].Value })"') do set "FRONTEND_SEMVER=%%i"
 
 set "FULL_VERSION=%FRONTEND_SEMVER%-%TIMESTAMP%"
 echo    - Frontend Version: %FRONTEND_SEMVER% (Build: %TIMESTAMP%)

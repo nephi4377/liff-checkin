@@ -7,10 +7,10 @@
  * =============================================================================
  */
 
-import { logToPage } from './utils.js';
+import { logToPage } from '../../shared/js/utils.js';
 import { state } from './state.js';
 import * as api from './api.js';
-import { showGlobalNotification } from './utils.js';
+import { showGlobalNotification } from '../../shared/js/utils.js';
 
 /**
  * 渲染整個甘特圖排程頁面。

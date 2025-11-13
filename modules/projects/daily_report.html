@@ -146,7 +146,7 @@
         // [v399.0 新增] 應用程式主入口
         function main() {
             // [v405.0 重構] 引入共用模組
-            import('./utils.js').then(({ extractDriveFileId }) => {
+            import('../../shared/js/utils.js').then(({ extractDriveFileId }) => {
                 window.extractDriveFileId = extractDriveFileId; // 將函式掛載到 window，以便後續使用
                 fetchAndRenderReports(startDatePicker.value, endDatePicker.value);
             }).catch(err => console.error('無法載入 utils.js:', err));
@@ -323,7 +323,7 @@
         // 註冊 Service Worker 以快取圖片
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
+                navigator.serviceWorker.register('../../sw.js')
                     .then(registration => {
                         console.log('ServiceWorker registration successful with scope: ', registration.scope);
                     })

@@ -7,7 +7,7 @@
 * =============================================================================
 */
 
-import { state } from './modules/projects/js/state.js'; // [v389.0 修正] 引入共用 state 模組
+import { state } from './state.js';
 
 // [核心修正] 讓 api 模組直接從全域 window 物件讀取 API 網址。
 // 這確保了無論哪個模組呼叫 api.js 中的函式，都能使用到正確的後端網址。

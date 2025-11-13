@@ -7,11 +7,11 @@
 * =============================================================================
 */
 
-import { state } from './state.js';
+import { state } from './state.js'; // 同一層
 // [v407.0 修正] 修正 Uncaught SyntaxError。將已移除的 driveFileId 改為使用新的 extractDriveFileId。
-import { logToPage, extractDriveFileId } from './utils.js';
-import { showGlobalNotification } from './utils.js'; // [核心修正] 引入全域通知函式
-import { buildPhotoGrid, _buildLogCard } from './ui.js';
+import { logToPage, extractDriveFileId } from '../../shared/js/utils.js';
+import { showGlobalNotification } from '../../shared/js/utils.js'; // [核心修正] 引入全域通知函式
+import { buildPhotoGrid, _buildLogCard } from './ui.js'; // 同一層
 import { request as apiRequest } from './projectApi.js'; // [v317.0 API化] 引入新的統一請求函式
 
 /** 處理文字編輯 */

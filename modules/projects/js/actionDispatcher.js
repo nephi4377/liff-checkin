@@ -11,8 +11,9 @@
 
 import * as LogActions from './logActions.js';
 import * as ScheduleActions from './scheduleActions.js';
-import { addRecipient } from './taskSender.js';
-import { showGlobalNotification } from './utils.js';
+import { addRecipient } from '../../../shared/js/taskSender.js';
+import { showGlobalNotification } from '../../../shared/js/utils.js';
+import { state } from './state.js';
 
 // 動作地圖：將 data-action 的值映射到實際的處理函式
 const ACTION_HANDLERS = {

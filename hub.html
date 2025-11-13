@@ -60,7 +60,7 @@
 </head>
 
 <body class="bg-gray-100">
-    <script type="module" src="./utils.js"></script>
+    <!-- [v416.0 SPA化] 移除此處的 utils.js 引入，因為它會在下方的模組腳本中被引入 -->
 
     <!-- 載入中畫面 -->
     <div id="loading-screen" class="fixed inset-0 bg-white flex flex-col items-center justify-center z-50">
@@ -196,8 +196,9 @@
     </div>
 
     <script type="module">
-        import { initializeTaskSender, addRecipient } from './taskSender.js';
-        import * as api from './api.js'; // 假設 api.js 存在且導出 postTask
+        // [檔案重組] 更新共用模組的路徑
+        import { initializeTaskSender, addRecipient } from './shared/js/taskSender.js';
+        import { showGlobalNotification } from './shared/js/utils.js';
 
         // ===============================================================
         // ========================= 環境設定 ============================
@@ -729,7 +730,7 @@
                     uid: userProfile.userId,
                     name: userProfile.displayName
                 });
-                const targetUrl = `NewSiteForm.html?${params.toString()}`;
+                const targetUrl = `modules/projects/NewSiteForm.html?${params.toString()}`;
                 window.open(targetUrl, '_blank');
             });
 
@@ -871,7 +872,7 @@
                 // 對於回覆或完成的動作，顯示成功提示
                 if (payload.subAction === 'reply' || payload.subAction === 'complete') {
                     if (typeof showGlobalNotification === 'function') {
-                        showGlobalNotification(result.message || '操作成功！', 3000, 'success');
+                        showGlobalNotification(result.message || '操作成功！', 3000, 'success'); // 此函式來自 utils.js
                     }
                 }
             } catch (error) {
