@@ -11,8 +11,8 @@
 import { logToPage } from '../../shared/js/utils.js';
 import { state } from './state.js';
 import { createOrUpdateTradeDatalist } from './ui.js';
-import * as api from './api.js'; // [統一] 引入完整的 api 模組
-import { showGlobalNotification } from '../../shared/js/utils.js'; // [統一] 引入全域通知函式
+import { request as apiRequest } from './projectApi.js'; // [v508.0 修正] 引入重構後的 projectApi 模組
+import { showGlobalNotification } from '../../shared/js/utils.js';
 
 /**
  * [重構] 渲染整個排程頁面 (取代 ui.js 中的 displaySchedule)
@@ -324,7 +324,7 @@ export function handleSaveSchedule() {
     };
 
     // [升級] 使用 api.postAsyncTask 並處理回傳的 Promise
-    const btn = document.getElementById('save-schedule-btn');
+    const btn = document.getElementById('save-schedule-btn'); // [v508.0 修正] 移除重複宣告
     if (btn) {
         btn.disabled = true;
         btn.textContent = '儲存中...';
@@ -333,13 +333,13 @@ export function handleSaveSchedule() {
 
     // [v345.0 核心重構] 統一呼叫 projectApi.js 中的 request 函式
     apiRequest({ action: 'updateSchedule', payload: payload })
-        .then(finalJobState => {
-            if (finalJobState.result && finalJobState.result.success) {
-                showGlobalNotification(finalJobState.result.message || '排程已成功儲存！正在刷新畫面...', 3000, 'success');
+        .then(result => {
+            if (result.success) {
+                showGlobalNotification(result.message || '排程已成功儲存！正在刷新畫面...', 3000, 'success');
                 if (btn) btn.classList.add('hidden'); // 儲存成功後隱藏按鈕
                 if (window.refreshProjectData) window.refreshProjectData(); // [v292.0] 呼叫全域刷新函式
             } else {
-                showGlobalNotification(`儲存失敗：${finalJobState.result.message || '未知錯誤'}`, 8000, 'error');
+                showGlobalNotification(`儲存失敗：${result.message || '未知錯誤'}`, 8000, 'error');
             }
         })
         .catch(error => showGlobalNotification(`請求失敗：${error.message}`, 8000, 'error'))
@@ -397,13 +397,13 @@ export function handleImportTemplate(templateType, startDate) {
 
     // [v345.0 核心重構] 統一呼叫 projectApi.js 中的 request 函式
     apiRequest({ action: 'createFromTemplate', payload: payload })
-        .then(finalJobState => {
-            if (finalJobState.result && finalJobState.result.success) {
-                showGlobalNotification('排程已成功建立！正在刷新畫面...', 3000, 'success');
+        .then(result => {
+            if (result.success) {
+                showGlobalNotification(result.message || '排程已成功建立！正在刷新畫面...', 3000, 'success');
                 // [v292.0] 改為呼叫全域刷新函式，避免整頁重載
                 if (window.refreshProjectData) window.refreshProjectData();
             } else {
-                showGlobalNotification(`建立失敗：${finalJobState.result.message || '未知錯誤'}`, 8000, 'error');
+                showGlobalNotification(`建立失敗：${result.message || '未知錯誤'}`, 8000, 'error');
             }
         })
         .catch(error => showGlobalNotification(`請求失敗：${error.message}`, 8000, 'error'));

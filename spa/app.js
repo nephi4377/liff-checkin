@@ -1,8 +1,8 @@
 import Dashboard from './Dashboard.js';
 import ProjectBoard from './ProjectBoard.js';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
-import { saveCache, loadCache, showGlobalNotification } from './utils.js'; // [v416.0 SPA化] 引入快取與通知函式
-import { initializeTaskSender } from './taskSender.js';
+import { saveCache, loadCache, showGlobalNotification } from '../shared/js/utils.js'; // [v509.0 修正] 更新共用模組路徑
+import { initializeTaskSender } from '../shared/js/taskSender.js'; // [v509.0 修正] 更新共用模組路徑
 
 const { createApp, ref, onMounted, computed, watch, nextTick } = Vue;
 
@@ -50,17 +50,17 @@ const App = {
             '#/dashboard': { name: 'dashboard' },
             '#/project-board': { name: 'project-board' },
             // [v413.0 SPA化] 擴充路由表，將更多獨立頁面以 iframe 方式整合進來
-            '#/new-site': { name: 'iframe', src: 'NewSiteForm.html', title: '新增案場資料' },
-            '#/faq': { name: 'iframe', src: 'FAQ.html', title: '客戶常見問答' },
-            '#/daily-report': { name: 'iframe', src: 'daily_report.html', title: '施工回報總覽' },
-            '#/onboarding-flow': { name: 'iframe', src: 'onboardingflow.html', title: '客戶接洽流程' },
-            '#/attendance-report': { name: 'iframe', src: 'attendance_report.html', title: '出勤儀表板' },
-            '#/approval-dashboard': { name: 'iframe', src: 'approval_dashboard.html', title: '假勤審核儀表板' },
-            '#/leave-request': { name: 'iframe', src: 'leave_request.html', title: '線上假勤申請' },
-            '#/shift-schedule': { name: 'iframe', src: 'shift_schedule.html', title: '員工排班系統' },
+            '#/new-site': { name: 'iframe', src: '../modules/projects/NewSiteForm.html', title: '新增案場資料' }, // [v511.0 修正]
+            '#/faq': { name: 'iframe', src: '../FAQ.html', title: '客戶常見問答' }, // [v510.0 修正] 更新相對路徑
+            '#/daily-report': { name: 'iframe', src: '../modules/projects/daily_report.html', title: '施工回報總覽' }, // [v510.0 修正] 更新相對路徑
+            '#/onboarding-flow': { name: 'iframe', src: '../onboardingflow.html', title: '客戶接洽流程' }, // [v511.0 修正]
+            '#/attendance-report': { name: 'iframe', src: '../attendance_report.html', title: '出勤儀表板' }, // [v511.0 修正]
+            '#/approval-dashboard': { name: 'iframe', src: '../approval_dashboard.html', title: '假勤審核儀表板' }, // [v511.0 修正]
+            '#/leave-request': { name: 'iframe', src: '../leave_request.html', title: '線上假勤申請' }, // [v511.0 修正]
+            '#/shift-schedule': { name: 'iframe', src: '../shift_schedule.html', title: '員工排班系統' }, // [v511.0 修正]
             // [v424.0 架構優化] 將專案工作區與施工回報改為內嵌 iframe
-            '#/project-console': { name: 'iframe', src: 'managementconsole.html', title: '專案工作區' },
-            '#/report': { name: 'iframe', src: 'report.html', title: '施工回報' },
+            '#/project-console': { name: 'iframe', src: '../managementconsole.html', title: '專案工作區' }, // [v511.0 修正]
+            '#/report': { name: 'iframe', src: '../report.html', title: '施工回報' }, // [v511.0 修正]
         };
 
         const handleRouteChange = () => {

@@ -22,11 +22,11 @@
 * - **日誌分頁 (Pagination)**: 日誌列表採用前端分頁，滾動到底部時自動載入下一批，避免一次性渲染大量DOM。
 * =============================================================================
  */
-import * as api from './api.js';
+// [v506.0 修正] 移除未使用的 api 模組引入，避免混淆。所有 API 請求應透過 projectApi.js。
 import { request as apiRequest } from './modules/projects/js/projectApi.js'; // [v317.0 API化] 引入新的統一請求函式
 import { logToPage, showGlobalNotification } from './shared/js/utils.js'; // [v505.0 修正] 更新共用模組路徑
-import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, createOrUpdateTradeDatalist, renderPostCreator, _buildLogCard, renderCommunicationHistory, lazyLoadImages } from './modules/projects/js/ui.js';
-import * as Handlers from './handlers.js';
+import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, renderPostCreator, _buildLogCard, renderCommunicationHistory, lazyLoadImages } from './modules/projects/js/ui.js'; // [v507.0 修正] 移除未使用的 createOrUpdateTradeDatalist
+// [v507.0 修正] 移除未使用的 Handlers 模組引入
 import * as LogActions from './modules/projects/js/logActions.js'; // [v337.0 修正] 補上遺失的 logActions 模組引入
 import * as ScheduleActions from './modules/projects/js/scheduleActions.js';
 import { state } from './modules/projects/js/state.js';
@@ -81,7 +81,6 @@ function handleDataResponse(data) {
       addPhotoBtn.addEventListener('click', () => photoInput?.click());
     }
     if (submitPostBtn) {
-      submitPostBtn.addEventListener('click', Handlers.handleCreateNewPost);
       submitPostBtn.addEventListener('click', LogActions.handleCreateNewPost); // [v346.0 合併] 改為呼叫 logActions 中的函式
     }
     if (photoInput) {
