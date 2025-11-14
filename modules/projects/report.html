@@ -153,7 +153,7 @@
 
   <!-- 【v150.0 核心修正】徹底修正巢狀 script 標籤與註解語法錯誤 -->
   <script type="module">
-    import { readFileAsBase64 } from './utils.js';
+    import { readFileAsBase64 } from '../../shared/js/utils.js'; // [v519.0 修正] 更新共用模組 utils.js 的路徑
 
     document.addEventListener('DOMContentLoaded', () => {
       const form = document.getElementById('report-form');

@@ -7,7 +7,8 @@
 * =============================================================================
 */
 
-import { loadJsonp, postTask } from './api.js';
+// [v520.0 修正] 修正導入路徑，直接從根目錄的 api.js 引入，避免循環依賴。
+import { postTask } from '../../../api.js';
 
 // 定義哪些 action 是讀取型 (用 GET)，哪些是寫入型 (用 POST + 任務佇列)
 // 注意：這裡的 action 名稱必須與後端 WebApp.js 中的 GET_ROUTES 和 processJob 的 switch case 完全對應。
