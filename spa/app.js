@@ -50,18 +50,20 @@ const App = {
             '#/dashboard': { name: 'dashboard' },
             '#/project-board': { name: 'project-board' },
             // [v413.0 SPA化] 擴充路由表，將更多獨立頁面以 iframe 方式整合進來
-            '#/new-site': { name: 'iframe', src: '../modules/projects/NewSiteForm.html', title: '新增案場資料' }, // [v511.0 修正]
-            '#/faq': { name: 'iframe', src: '../FAQ.html', title: '客戶常見問答' }, // [v510.0 修正] 更新相對路徑
-            '#/daily-report': { name: 'iframe', src: '../modules/projects/daily_report.html', title: '施工回報總覽' }, // [v510.0 修正] 更新相對路徑
-            '#/onboarding-flow': { name: 'iframe', src: '../onboardingflow.html', title: '客戶接洽流程' }, // [v511.0 修正]
-            '#/attendance-report': { name: 'iframe', src: '../attendance_report.html', title: '出勤儀表板' }, // [v511.0 修正]
-            '#/approval-dashboard': { name: 'iframe', src: '../approval_dashboard.html', title: '假勤審核儀表板' }, // [v511.0 修正]
-            '#/leave-request': { name: 'iframe', src: '../leave_request.html', title: '線上假勤申請' }, // [v511.0 修正]
-            '#/shift-schedule': { name: 'iframe', src: '../shift_schedule.html', title: '員工排班系統' }, // [v511.0 修正]
+            '#/new-site': { name: 'iframe', src: '/modules/projects/NewSiteForm.html', title: '新增案場資料' }, // [v515.0 修正] 改為絕對路徑
+            '#/faq': { name: 'iframe', src: '/modules/info/FAQ.html', title: '客戶常見問答' }, // [v518.0 修正]
+            '#/daily-report': { name: 'iframe', src: '/modules/projects/daily_report.html', title: '施工回報總覽' }, // [v515.0 修正] 改為絕對路徑
+            '#/onboarding-flow': { name: 'iframe', src: '/modules/info/onboardingflow.html', title: '客戶接洽流程' }, // [v518.0 修正]
+            '#/attendance-report': { name: 'iframe', src: '/modules/attendance/attendance_report.html', title: '出勤儀表板' }, // [v515.0 修正] 改為絕對路徑
+            '#/approval-dashboard': { name: 'iframe', src: '/modules/attendance/approval_dashboard.html', title: '假勤審核儀表板' }, // [v515.0 修正] 改為絕對路徑
+            '#/leave-request': { name: 'iframe', src: '/modules/attendance/leave_request.html', title: '線上假勤申請' }, // [v515.0 修正] 改為絕對路徑
+            '#/shift-schedule': { name: 'iframe', src: '/modules/attendance/shift_schedule.html', title: '員工排班系統' }, // [v515.0 修正] 改為絕對路徑
             // [v424.0 架構優化] 將專案工作區與施工回報改為內嵌 iframe
-            '#/project-console': { name: 'iframe', src: '../managementconsole.html', title: '專案工作區' }, // [v511.0 修正]
-            '#/report': { name: 'iframe', src: '../report.html', title: '施工回報' }, // [v511.0 修正]
+            '#/project-console': { name: 'iframe', src: '/managementconsole.html', title: '專案工作區' }, // [v515.0 修正] 改為絕對路徑
+            '#/report': { name: 'iframe', src: '/report.html', title: '施工回報' }, // [v515.0 修正] 改為絕對路徑
         };
+        // [v513.0 新增] 補上員工資料編輯頁面的路由
+        routes['#/employee-editor'] = { name: 'iframe', src: '/modules/attendance/employee_editor.html', title: '員工資料編輯' }; // [v515.0 修正] 改為絕對路徑
 
         const handleRouteChange = () => {
             const hash = window.location.hash || '#';

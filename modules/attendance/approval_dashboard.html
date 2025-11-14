@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>添心設計 | 假勤審核儀表板</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 【v31.0 新增】引入 utils.js 以使用 showGlobalNotification -->
-    <script type="module" src="./utils.js"></script>
+    <!-- [v516.0 修正] 更新共用模組 utils.js 的路徑 -->
+    <script type="module" src="../../shared/js/utils.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
         .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
@@ -36,7 +36,7 @@
 
 <!-- 【v31.0 核心改造】將腳本改為 module，並引入 showGlobalNotification -->
 <script type="module">
-    import { showGlobalNotification } from './utils.js';
+    import { showGlobalNotification } from '../../shared/js/utils.js';
 
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
     let userProfile = null;

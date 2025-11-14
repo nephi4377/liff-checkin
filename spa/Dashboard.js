@@ -28,6 +28,7 @@ export default {
         const leaveRequestUrl = computed(() => `#/leave-request`);
         const shiftScheduleUrl = computed(() => `#/shift-schedule`);
         const attendanceReportUrl = computed(() => `#/attendance-report`);
+        const employeeEditorUrl = computed(() => `#/employee-editor`); // [v513.0 新增]
         const reportUrl = computed(() => `#/report`);
 
         const formatTimeAgo = (date) => {
@@ -60,6 +61,7 @@ export default {
             leaveRequestUrl,
             shiftScheduleUrl,
             attendanceReportUrl,
+            employeeEditorUrl,
             formatTimeAgo,
             handleReply,
             emit,
@@ -123,6 +125,8 @@ export default {
                     </div>
                     <p class="text-gray-600">集中審核所有員工的請假與加班申請。</p>
                 </a>
+                <!-- [v513.0 新增] 員工資料編輯連結 -->
+                <a v-if="hasAdminRights" :href="employeeEditorUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-purple-700">員工資料編輯</h2><p class="text-gray-600">管理員工的基本資料、權限與班表設定。</p></a>
 
                 <a :href="leaveRequestUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-purple-700">線上假勤申請</h2><p class="text-gray-600">申請特休、病假、事假或回報加班。</p></a>
                 <a :href="shiftScheduleUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-purple-700">員工排班系統</h2><p class="text-gray-600">設定排班制員工的休假日期。</p></a>

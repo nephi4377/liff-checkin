@@ -170,7 +170,7 @@
 <!-- 【v144.0 核心修正】將 script 標籤類型改為 "module"，以支援 import 語法 -->
 <script type="module">
     // 【v143.0 核心改造】引入共用工具函式庫
-    import { readFileAsBase64 } from './utils.js';
+    import { readFileAsBase64 } from '../../shared/js/utils.js'; // [v516.0 修正] 更新共用模組 utils.js 的路徑
 
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
     const APP_SETTINGS = {
