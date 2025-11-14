@@ -8,11 +8,9 @@
 * =============================================================================
 */
 
-import { logToPage } from '../../shared/js/utils.js';
+import { logToPage, showGlobalNotification } from '/shared/js/utils.js';
 import { state } from './state.js';
-import { createOrUpdateTradeDatalist } from './ui.js';
 import { request as apiRequest } from './projectApi.js'; // [v508.0 修正] 引入重構後的 projectApi 模組
-import { showGlobalNotification } from '../../shared/js/utils.js';
 
 /**
  * [重構] 渲染整個排程頁面 (取代 ui.js 中的 displaySchedule)
@@ -305,23 +303,14 @@ export function handleSaveSchedule() {
         }
     });
 
-    // [核心修正] 在送出前，對所有任務進行最後的排序與案號填充
+    // 在送出前，對所有任務進行最後的排序
     scheduleData.sort((a, b) => {
         const dateA = new Date(a['預計開始日']);
         const dateB = new Date(b['預計開始日']);
         if (isNaN(dateA.getTime())) return 1;
         if (isNaN(dateB.getTime())) return -1;
         return dateA - dateB;
-    });
-
-    // [核心修正] 確保 payload 中包含正確的 projectId
-    const payload = { 
-        action: 'updateSchedule', 
-        projectId: projectId, 
-        scheduleData: scheduleData,
-        userId: state.currentUserId,
-        userName: state.currentUserName
-    };
+    }); // [v550.0 修正] 移除此處多餘的分號，解決 SyntaxError
 
     // [升級] 使用 api.postAsyncTask 並處理回傳的 Promise
     const btn = document.getElementById('save-schedule-btn'); // [v508.0 修正] 移除重複宣告
@@ -331,8 +320,11 @@ export function handleSaveSchedule() {
     }
     logToPage('💾 正在儲存排程變更...');
 
-    // [v345.0 核心重構][v540.0 修正] 統一呼叫 projectApi.js 中的 request 函式，並正確處理其回傳值
-    apiRequest({ action: 'updateSchedule', payload: { scheduleData: scheduleData } }) // payload 只需傳遞 scheduleData
+    // [v549.0 修正] 簡化 payload，只傳遞後端需要的核心資料
+    apiRequest({ 
+        action: 'updateSchedule', 
+        payload: { projectId: state.projectId, scheduleData: scheduleData } 
+    })
         .then(result => {
             if (result.success) {
                 showGlobalNotification(result.message || '排程已成功儲存！正在刷新畫面...', 3000, 'success');

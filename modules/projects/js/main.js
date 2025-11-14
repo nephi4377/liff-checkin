@@ -24,13 +24,13 @@
  */
 
 // [v521.0 修正] 移除多餘的 api.js 和 handlers.js 引入，並修正所有模組的相對路徑。
-import { request as apiRequest } from './projectApi.js'; // [v317.0 API化] 引入新的統一請求函式
-import { logToPage, showGlobalNotification } from '../../shared/js/utils.js';
+import { request as apiRequest } from './projectApi.js';
+import { logToPage, showGlobalNotification } from '/shared/js/utils.js'; // [v544.0 修正] 改為絕對路徑
 import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, renderPostCreator, _buildLogCard, renderCommunicationHistory, lazyLoadImages } from './ui.js';
-import * as LogActions from './logActions.js'; // [v337.0 修正] 補上遺失的 logActions 模組引入
-import * as ScheduleActions from './scheduleActions.js'; // 位於同層資料夾
-import { state } from './state.js'; // 位於同層資料夾
-import { initializeTaskSender, addRecipient } from '../../shared/js/taskSender.js';
+import * as LogActions from './logActions.js';
+import * as ScheduleActions from './scheduleActions.js';
+import { state } from './state.js';
+import { initializeTaskSender, addRecipient } from '/shared/js/taskSender.js'; // [v544.0 修正] 改為絕對路徑
 
 /**
  * @description 處理從後端 API (Google Apps Script) 成功獲取資料後的核心回呼函式 (Callback)。
@@ -75,8 +75,7 @@ function handleDataResponse(data) {
       addPhotoBtn.addEventListener('click', () => photoInput?.click());
     }
     if (submitPostBtn) {
-      submitPostBtn.addEventListener('click', Handlers.handleCreateNewPost);
-      submitPostBtn.addEventListener('click', LogActions.handleCreateNewPost); // [v346.0 合併] 改為呼叫 logActions 中的函式
+      submitPostBtn.addEventListener('click', LogActions.handleCreateNewPost); // [v545.0 修正] 移除對已不存在的 Handlers 模組的呼叫
     }
     if (photoInput) {
       photoInput.onchange = (e) => {

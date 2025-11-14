@@ -8,9 +8,8 @@
 */
 
 import { state } from './state.js'; // 同一層
-// [v407.0 修正] 修正 Uncaught SyntaxError。將已移除的 driveFileId 改為使用新的 extractDriveFileId。
-import { logToPage, extractDriveFileId } from '../../shared/js/utils.js';
-import { showGlobalNotification } from '../../shared/js/utils.js'; // [核心修正] 引入全域通知函式
+// [v547.0 修正] 將相對路徑改為絕對路徑，並合併重複的 import
+import { logToPage, extractDriveFileId, showGlobalNotification } from '/shared/js/utils.js';
 import { buildPhotoGrid, _buildLogCard } from './ui.js'; // 同一層
 import { request as apiRequest } from './projectApi.js'; // [v317.0 API化] 引入新的統一請求函式
 

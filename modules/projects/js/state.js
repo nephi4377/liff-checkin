@@ -7,7 +7,7 @@
 * =============================================================================
 */
 
-import { isMobile } from '../../shared/js/utils.js';
+import { isMobile } from '/shared/js/utils.js'; // [v548.0 修正] 改為絕對路徑以解決本地測試 404 問題
 
 // 統一的狀態管理物件，所有模組共享此狀態
 export const state = {

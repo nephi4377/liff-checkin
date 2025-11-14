@@ -278,7 +278,8 @@ const App = {
                 <div v-else-if="currentView.name === 'project-board'" class="container mx-auto max-w-2xl px-4 sm:px-6 lg:px-8 py-6">
                      <ProjectBoard :projects="allProjects" :userProfile="userProfile" :currentUser="currentUser" />
                 </div>
-                <div v-else-if="currentView.name === 'iframe'" class="h-full">
+                <!-- [v544.0 核心修正] 增加 v-if="userProfile" 判斷，確保在 userProfile 載入完成後才渲染 iframe -->
+                <div v-else-if="currentView.name === 'iframe' && userProfile" class="h-full">
                     <!-- [v424.0 架構優化] 根據路由動態組合 iframe 的 src -->
                     <IframeView :src="currentView.src + 
                         (currentView.src.includes('?') ? '&' : '?') + 

@@ -9,7 +9,7 @@
 
 import { state } from './state.js'; // 同一層
 // [v406.0 重構] 移除舊的 driveFileId，改為使用新的 extractDriveFileId 函式。
-import { logToPage, extractDriveFileId } from '../../shared/js/utils.js';
+import { logToPage, extractDriveFileId } from '/shared/js/utils.js'; // [v546.0 修正] 改為絕對路徑以解決本地測試 404 問題
 
 /**
  * 在等待 API 資料時，於主要內容區塊顯示骨架屏（載入中的動畫效果）。
