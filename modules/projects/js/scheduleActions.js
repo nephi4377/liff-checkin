@@ -331,20 +331,20 @@ export function handleSaveSchedule() {
     }
     logToPage('💾 正在儲存排程變更...');
 
-    // [v345.0 核心重構] 統一呼叫 projectApi.js 中的 request 函式
-    apiRequest({ action: 'updateSchedule', payload: payload })
+    // [v345.0 核心重構][v540.0 修正] 統一呼叫 projectApi.js 中的 request 函式，並正確處理其回傳值
+    apiRequest({ action: 'updateSchedule', payload: { scheduleData: scheduleData } }) // payload 只需傳遞 scheduleData
         .then(result => {
             if (result.success) {
                 showGlobalNotification(result.message || '排程已成功儲存！正在刷新畫面...', 3000, 'success');
                 if (btn) btn.classList.add('hidden'); // 儲存成功後隱藏按鈕
-                if (window.refreshProjectData) window.refreshProjectData(); // [v292.0] 呼叫全域刷新函式
+                if (window.refreshProjectData) window.refreshProjectData(false); // [v292.0][v540.0 修正] 呼叫全域刷新函式，不顯示通知
             } else {
                 showGlobalNotification(`儲存失敗：${result.message || '未知錯誤'}`, 8000, 'error');
             }
         })
         .catch(error => showGlobalNotification(`請求失敗：${error.message}`, 8000, 'error'))
         .finally(() => {
-            if (btn) { btn.disabled = false; btn.textContent = '儲存排程變更'; }
+            if (btn) { btn.disabled = false; btn.textContent = '儲存排程變更'; } // 無論成功失敗都恢復按鈕
         });
 }
 
@@ -394,13 +394,13 @@ export function handleImportTemplate(templateType, startDate) {
     };
     
     showGlobalNotification('正在從範本建立排程...', 5000, 'info');
-
-    // [v345.0 核心重構] 統一呼叫 projectApi.js 中的 request 函式
-    apiRequest({ action: 'createFromTemplate', payload: payload })
+    
+    // [v345.0 核心重構][v540.0 修正] 統一呼叫 projectApi.js 中的 request 函式
+    apiRequest({ action: 'createFromTemplate', payload: { templateType, startDate } }) // payload 只需傳遞核心資料
         .then(result => {
             if (result.success) {
                 showGlobalNotification(result.message || '排程已成功建立！正在刷新畫面...', 3000, 'success');
-                // [v292.0] 改為呼叫全域刷新函式，避免整頁重載
+                // [v292.0][v540.0 修正] 改為呼叫全域刷新函式，避免整頁重載
                 if (window.refreshProjectData) window.refreshProjectData();
             } else {
                 showGlobalNotification(`建立失敗：${result.message || '未知錯誤'}`, 8000, 'error');

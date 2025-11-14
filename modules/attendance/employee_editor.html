@@ -31,6 +31,11 @@
                     <select id="employee-select" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white">
                         <!-- [v524.0 修正] 移除新增員工選項，此頁面專注於編輯 -->
                     </select>
+                    <!-- [v529.0 新增] 顯示離職員工的勾選項目 -->
+                    <div class="flex items-center mt-2">
+                        <input type="checkbox" id="show-resigned-checkbox" class="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                        <label for="show-resigned-checkbox" class="ml-2 block text-xs text-gray-700">顯示離職員工</label>
+                    </div>
                 </div>
 
                 <hr>
@@ -56,13 +61,13 @@
                             <option value="2">2 - 設計師/助理/工務</option>
                             <option value="3">3 - 保留</option>
                             <option value="4">4 - 主管/會計</option>
-                            <option value="5">5 - 總監</option>
+                            <!-- [v531.0 修正] 根據使用者要求，移除設定總監權限的選項 -->
                         </select>
                     </div>
                     <div>
-                        <label for="身份" class="block text-gray-700 font-semibold mb-2">狀態 <span class="text-red-500">*</span></label>
+                        <label for="身份" class="block text-gray-700 font-semibold mb-2">身份 <span class="text-red-500">*</span></label>
                         <select id="身份" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white" required>
-                            <option value="員工">員工</option>
+                            <option value="員工">員工</option> <!-- [v531.0 修正] 統一欄位名稱 -->
                              <option value="廠商">廠商</option>
                             <option value="離職">離職</option>
                         </select>
@@ -177,6 +182,7 @@
         const resignationDateInput = document.getElementById('離職日');
         const shiftGroupWrapper = document.getElementById('shift-group-wrapper');
         const emailInput = document.getElementById('email');
+        const showResignedCheckbox = document.getElementById('show-resigned-checkbox');
         const birthDateInput = document.getElementById('出生日期');
         const nationalIdInput = document.getElementById('身分證字號');
         const emergencyContactInput = document.getElementById('緊急聯絡人');
@@ -237,6 +243,8 @@
             // [v522.0 新增] 權限與狀態雙向連動
             permissionSelect.addEventListener('change', handlePermissionChange);
             statusSelect.addEventListener('change', handleStatusChange);
+            // [v529.0 新增] 監聽「顯示離職員工」勾選狀態的變化
+            showResignedCheckbox.addEventListener('change', populateEmployeeDropdown);
         }
 
         async function fetchEmployeesAndPopulateDropdown() {
@@ -280,11 +288,18 @@
         }
 
         function populateEmployeeDropdown() {
-            // [v522.0 優化] 按組別分組
-            // [v525.0 修正] 不列出權限為 5 的人員
-            const employeesToDisplay = allEmployees.filter(emp => emp.permission < 5);
+            const showResigned = showResignedCheckbox.checked;
+            const currentSelectedValue = employeeSelect.value; // 保存當前選中的值
 
-            const employeesByGroup = employeesToDisplay.reduce((acc, emp) => {
+            // 1. 過濾掉權限為 5 的總監
+            const filteredEmployees = allEmployees.filter(emp => emp.permission < 5);
+
+            // 2. 分離在職/廠商與離職員工
+            const activeEmployees = filteredEmployees.filter(emp => emp.status !== '離職');
+            const resignedEmployees = showResigned ? filteredEmployees.filter(emp => emp.status === '離職') : [];
+
+            // 3. 將在職員工按組別分組
+            const employeesByGroup = activeEmployees.reduce((acc, emp) => {
                 let group;
                 if (emp.status === '廠商') {
                     group = '廠商';
@@ -296,23 +311,51 @@
                 return acc;
             }, {});
 
-            // [v524.0 修正] 移除新增員工選項
+            // 4. 根據您指定的順序對組別進行排序
+            const groupOrder = ['台南店', '台南施工', '高雄店', '高雄施工', '廠商'];
+            const sortedGroups = Object.keys(employeesByGroup).sort((a, b) => {
+                const indexA = groupOrder.indexOf(a);
+                const indexB = groupOrder.indexOf(b);
+                if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                if (indexA !== -1) return -1;
+                if (indexB !== -1) return 1;
+                return a.localeCompare(b, 'zh-Hant'); // 其他組別按筆劃排序
+            });
+
+            // 5. 渲染下拉選單
             employeeSelect.innerHTML = '';
-            
-            for (const group in employeesByGroup) {
+            sortedGroups.forEach(group => {
                 const optgroup = document.createElement('optgroup');
                 optgroup.label = group;
                 employeesByGroup[group].forEach(emp => {
                     const option = document.createElement('option');
                     option.value = emp.userId;
-                    option.textContent = `${emp.userName} (${emp.userId.slice(-6)}) ${emp.status === '離職' ? '(離職)' : ''}`; // [v523.0 修正] 使用正規化後的 'status' 屬性
+                    option.textContent = `${emp.userName} (${emp.userId.slice(-6)})`;
+                    optgroup.appendChild(option);
+                });
+                employeeSelect.appendChild(optgroup);
+            });
+
+            // 6. 如果勾選了顯示，則在最下方加入離職員工群組
+            if (showResigned && resignedEmployees.length > 0) {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = '離職員工';
+                resignedEmployees.forEach(emp => {
+                    const option = document.createElement('option');
+                    option.value = emp.userId;
+                    option.textContent = `${emp.userName} (${emp.userId.slice(-6)})`;
                     optgroup.appendChild(option);
                 });
                 employeeSelect.appendChild(optgroup);
             }
 
-            const firstActiveEmployee = employeesToDisplay.find(emp => emp.status === '員工' || emp.status === '廠商');
-            if (firstActiveEmployee) {
+            // [v530.0 修正] 根據使用者要求，優化預設選中邏輯
+            // 7. 優先尋找「台南店」的第一位員工作為預設，若無則選擇任何一位有效的員工
+            const firstTainanStoreEmployee = activeEmployees.find(emp => emp.group === '台南店');
+            const firstActiveEmployee = firstTainanStoreEmployee || activeEmployees[0];
+            if (currentSelectedValue && employeeSelect.querySelector(`option[value="${currentSelectedValue}"]`)) {
+                employeeSelect.value = currentSelectedValue;
+            } else if (firstActiveEmployee) {
                 employeeSelect.value = firstActiveEmployee.userId;
                 handleEmployeeSelection();
             } else {
@@ -358,7 +401,7 @@
             emergencyContactPhoneInput.value = '';
             userIdInput.readOnly = true;
             toggleShiftGroupFields(true); // [v522.0 新增] 確保新增時顯示
-            submitButton.textContent = '新增員工';
+            submitButton.textContent = '儲存員工資料'; // [v524.0] 恢復為儲存
         }
 
         function fillForm(employee) {

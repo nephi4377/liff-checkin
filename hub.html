@@ -912,9 +912,10 @@
         function openProjectConsole(projectId) {
             if (!projectId || !/^\d+$/.test(projectId)) { alert('請輸入純數字的案號！'); return; }
             if (!userProfile || !userProfile.userId) { alert('無法取得您的使用者資訊，請重新載入頁面。'); return; }
-            // [v94.0 修正] 無論在哪種環境下，都一律開啟正式版的專案工作區 LIFF 連結。
-            const targetUrl = `https://liff.line.me/${PROJECT_CONSOLE_LIFF_ID}?id=${projectId}&uid=${userProfile.userId}`;
-            window.open(targetUrl, '_blank');
+            // [v543.0 SPA化] 不再開啟新視窗，而是改變 hash 來觸發 SPA 路由
+            // 這會讓 app.js 中的 handleRouteChange 函式被觸發，並在 iframe 中載入對應頁面
+            const targetHash = `#/project-console?id=${projectId}`;
+            window.location.hash = targetHash;
         }
 
         // 【⭐️ 核心修正：確保初始化流程只執行一次 ⭐️】

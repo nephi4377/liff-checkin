@@ -59,8 +59,8 @@ const App = {
             '#/leave-request': { name: 'iframe', src: '/modules/attendance/leave_request.html', title: '線上假勤申請' }, // [v515.0 修正] 改為絕對路徑
             '#/shift-schedule': { name: 'iframe', src: '/modules/attendance/shift_schedule.html', title: '員工排班系統' }, // [v515.0 修正] 改為絕對路徑
             // [v424.0 架構優化] 將專案工作區與施工回報改為內嵌 iframe
-            '#/project-console': { name: 'iframe', src: '/managementconsole.html', title: '專案工作區' }, // [v515.0 修正] 改為絕對路徑
-            '#/report': { name: 'iframe', src: '/report.html', title: '施工回報' }, // [v515.0 修正] 改為絕對路徑
+            '#/project-console': { name: 'iframe', src: '/modules/projects/managementconsole.html', title: '專案工作區' }, // [v543.0 修正] 改為正確的模組路徑
+            '#/report': { name: 'iframe', src: '/modules/projects/report.html', title: '施工回報' }, // [v543.0 修正] 改為正確的模組路徑
         };
         // [v513.0 新增] 補上員工資料編輯頁面的路由
         routes['#/employee-editor'] = { name: 'iframe', src: '/modules/attendance/employee_editor.html', title: '員工資料編輯' }; // [v515.0 修正] 改為絕對路徑
