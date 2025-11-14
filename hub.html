@@ -179,6 +179,13 @@
                     <p class="text-gray-600">設定排班制員工的休假日期。</p>
                 </a>
 
+                <!-- 【⭐️ 核心新增：員工資料編輯連結 ⭐️】 -->
+                <a id="open-employee-editor-link" href="#"
+                    class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block hidden">
+                    <h2 class="text-xl font-bold mb-2 text-purple-700">員工資料編輯</h2>
+                    <p class="text-gray-600">管理員工的基本資料、權限與班表設定。</p>
+                </a>
+
             </div>
 
             <!-- 【v72.0 新增】任務交辦中心 -->
@@ -351,7 +358,10 @@
                 const attendanceLink = document.getElementById('attendance-console-link');
                 if (attendanceLink) attendanceLink.classList.remove('hidden');
                 const approvalLink = document.getElementById('approval-dashboard-link');
-                if (approvalLink) approvalLink.classList.remove('hidden');
+                if (approvalLink) approvalLink.classList.remove('hidden');                
+                // 【⭐️ 核心新增：顯示員工資料編輯連結 ⭐️】
+                const employeeEditorLink = document.getElementById('open-employee-editor-link');
+                if (employeeEditorLink) employeeEditorLink.classList.remove('hidden');
             }
         }
 
@@ -713,6 +723,21 @@
                 }
                 // [v94.0 修正] 無論在哪種環境下，都一律開啟正式版的審核儀表板。
                 const baseUrl = 'https://info.tanxin.space/approval_dashboard.html';
+                const params = new URLSearchParams({
+                    uid: userProfile.userId,
+                    name: userProfile.displayName
+                });
+                window.open(`${baseUrl}?${params.toString()}`, '_blank');
+            });
+
+            // 【⭐️ 核心新增：員工資料編輯連結 ⭐️】
+            document.getElementById('open-employee-editor-link').addEventListener('click', (e) => {
+                e.preventDefault();
+                if (!userProfile || !userProfile.userId) {
+                    alert('無法取得您的使用者資訊，請重新載入頁面。');
+                    return;
+                }
+                const baseUrl = 'modules/attendance/employee_editor.html'; // 相對路徑
                 const params = new URLSearchParams({
                     uid: userProfile.userId,
                     name: userProfile.displayName

@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添心設計 | 員工資料編輯</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4 max-w-lg">
+        <div id="loading-screen" class="text-center py-20">
+            <div class="spinner w-10 h-10 border-4 border-gray-200 rounded-full mx-auto"></div>
+            <p class="mt-4 text-gray-600">正在驗證您的身分...</p>
+        </div>
+
+        <div id="main-content" class="bg-white rounded-lg shadow-md p-6 hidden">
+            <div class="text-center mb-6">
+                <h1 class="text-2xl font-bold text-gray-800">員工資料編輯</h1>
+                <p id="welcome-message" class="text-gray-500 mt-1"></p>
+            </div>
+
+            <form id="employee-form" class="space-y-4">
+                <div class="mb-4">
+                    <label for="employee-select" class="block text-gray-700 font-semibold mb-2">選擇員工</label>
+                    <select id="employee-select" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white">
+                        <option value="new">-- 新增員工 --</option>
+                    </select>
+                </div>
+
+                <hr>
+
+                <div>
+                    <label for="userId" class="block text-gray-700 font-semibold mb-2">LINE User ID</label>
+                    <input type="text" id="userId" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100" readonly>
+                    <p class="text-sm text-gray-500 mt-1">新增員工時，此欄位會自動產生。</p>
+                </div>
+
+                <div>
+                    <label for="userName" class="block text-gray-700 font-semibold mb-2">員工姓名 <span class="text-red-500">*</span></label>
+                    <input type="text" id="userName" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="權限" class="block text-gray-700 font-semibold mb-2">權限等級 <span class="text-red-500">*</span></label>
+                        <select id="權限" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white" required>
+                            <option value="1">1 - 助理</option>
+                            <option value="2">2 - 設計師</option>
+                            <option value="3">3 - 工務</option>
+                            <option value="4">4 - 主管</option>
+                            <option value="5">5 - 管理者</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="身份" class="block text-gray-700 font-semibold mb-2">狀態 <span class="text-red-500">*</span></label>
+                        <select id="身份" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white" required>
+                            <option value="在職">在職</option>
+                            <option value="離職">離職</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="組別" class="block text-gray-700 font-semibold mb-2">組別</label>
+                        <input type="text" id="組別" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    </div>
+                    <div>
+                        <label for="班別" class="block text-gray-700 font-semibold mb-2">班別</label>
+                        <select id="班別" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white">
+                            <option value="標準制">標準制</option>
+                            <option value="排班制">排班制</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="shiftStartTime" class="block text-gray-700 font-semibold mb-2">上班時間</label>
+                        <input type="time" id="shiftStartTime" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    </div>
+                    <div>
+                        <label for="shiftEndTime" class="block text-gray-700 font-semibold mb-2">下班時間</label>
+                        <input type="time" id="shiftEndTime" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="到職日" class="block text-gray-700 font-semibold mb-2">到職日</label>
+                        <input type="date" id="到職日" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    </div>
+                    <div>
+                        <label for="離職日" class="block text-gray-700 font-semibold mb-2">離職日</label>
+                        <input type="date" id="離職日" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="聯絡電話" class="block text-gray-700 font-semibold mb-2">聯絡電話</label>
+                    <input type="tel" id="聯絡電話" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                </div>
+
+                <div>
+                    <label for="聯絡地址" class="block text-gray-700 font-semibold mb-2">聯絡地址</label>
+                    <input type="text" id="聯絡地址" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                </div>
+
+                <div id="status-message" class="text-center min-h-[24px]"></div>
+
+                <button type="submit" id="submit-button" class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-lg hover:bg-blue-700 disabled:bg-gray-400">
+                    <span id="button-text">儲存員工資料</span>
+                    <div id="button-spinner" class="spinner w-6 h-6 border-4 border-white rounded-full mx-auto hidden"></div>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script type="module">
+        const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec'; // CheckinSystem 的 Apps Script URL
+        let currentUserProfile = null;
+        let allEmployees = [];
+
+        const employeeSelect = document.getElementById('employee-select');
+        const userIdInput = document.getElementById('userId');
+        const userNameInput = document.getElementById('userName');
+        const permissionSelect = document.getElementById('權限');
+        const groupInput = document.getElementById('組別');
+        const shiftTypeSelect = document.getElementById('班別');
+        const shiftStartInput = document.getElementById('shiftStartTime');
+        const shiftEndInput = document.getElementById('shiftEndTime');
+        const statusSelect = document.getElementById('身份');
+        const hireDateInput = document.getElementById('到職日');
+        const resignationDateInput = document.getElementById('離職日');
+        const phoneInput = document.getElementById('聯絡電話');
+        const addressInput = document.getElementById('聯絡地址');
+        const submitButton = document.getElementById('submit-button');
+        const buttonText = document.getElementById('button-text');
+        const buttonSpinner = document.getElementById('button-spinner');
+        const statusMessageDiv = document.getElementById('status-message');
+
+        async function main() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+
+            if (isLocalTest) {
+                console.warn('⚡️ 本地測試模式啟用，跳過 LIFF 認證。');
+                currentUserProfile = {
+                    userId: urlParams.get('uid') || 'U_test_admin',
+                    displayName: '測試管理員',
+                    permission: 5
+                };
+                showMainContent();
+            } else {
+                try {
+                    await liff.init({ liffId: '2007974938-2nPKg3J0' });
+                    if (!liff.isLoggedIn()) {
+                        liff.login();
+                        return;
+                    }
+                    currentUserProfile = await liff.getProfile();
+                    const userDetails = await fetchApi({
+                        page: 'attendance_api',
+                        action: 'get_employee_details',
+                        targetUserId: currentUserProfile.userId,
+                        userId: currentUserProfile.userId,
+                        userName: currentUserProfile.displayName
+                    });
+                    if (userDetails.success && userDetails.data) {
+                        currentUserProfile.permission = userDetails.data.權限;
+                    } else {
+                        currentUserProfile.permission = 1;
+                    }
+
+                    if (currentUserProfile.permission < 4) {
+                        document.getElementById('loading-screen').innerHTML = '<p class="text-red-500 font-semibold">您沒有權限存取此頁面。</p>';
+                        return;
+                    }
+                    showMainContent();
+                } catch (error) {
+                    console.error('LIFF 初始化失敗:', error);
+                    document.getElementById('loading-screen').innerHTML = '<p class="text-red-500 font-semibold">驗證失敗，請在 LINE App 中開啟此頁面。</p>';
+                }
+            }
+        }
+
+        function showMainContent() {
+            document.getElementById('loading-screen').style.display = 'none';
+            document.getElementById('main-content').classList.remove('hidden');
+            document.getElementById('welcome-message').textContent = `歡迎，${currentUserProfile.displayName}！`;
+            fetchEmployeesAndPopulateDropdown();
+            employeeSelect.addEventListener('change', handleEmployeeSelection);
+            document.getElementById('employee-form').addEventListener('submit', handleSubmit);
+        }
+
+        async function fetchEmployeesAndPopulateDropdown() {
+            try {
+                const response = await fetchApi({
+                    page: 'attendance_api',
+                    action: 'get_employees',
+                    filter: 'all',
+                    userId: currentUserProfile.userId,
+                    userName: currentUserProfile.displayName
+                });
+                if (response.success && Array.isArray(response.data)) {
+                    allEmployees = response.data.sort((a, b) => a.userName.localeCompare(b.userName, 'zh-Hant'));
+                    populateEmployeeDropdown();
+                } else {
+                    updateStatus(response.message || '無法載入員工列表。', 'error');
+                }
+            } catch (error) {
+                updateStatus(`載入員工列表失敗: ${error.message}`, 'error');
+            }
+        }
+
+        function populateEmployeeDropdown() {
+            employeeSelect.innerHTML = '<option value="new">-- 新增員工 --</option>';
+            allEmployees.forEach(emp => {
+                const option = document.createElement('option');
+                option.value = emp.userId;
+                option.textContent = `${emp.userName} (${emp.userId.slice(-6)}) ${emp.身份 === '離職' ? '(離職)' : ''}`;
+                employeeSelect.appendChild(option);
+            });
+            const firstActiveEmployee = allEmployees.find(emp => emp.身份 === '在職');
+            if (firstActiveEmployee) {
+                employeeSelect.value = firstActiveEmployee.userId;
+                handleEmployeeSelection();
+            } else {
+                clearForm();
+            }
+        }
+
+        function handleEmployeeSelection() {
+            const selectedUserId = employeeSelect.value;
+            if (selectedUserId === 'new') {
+                clearForm();
+            } else {
+                const employee = allEmployees.find(emp => emp.userId === selectedUserId);
+                if (employee) {
+                    fillForm(employee);
+                }
+            }
+        }
+
+        function clearForm() {
+            userIdInput.value = '';
+            userNameInput.value = '';
+            permissionSelect.value = '1';
+            groupInput.value = '';
+            shiftTypeSelect.value = '標準制';
+            shiftStartInput.value = '';
+            shiftEndInput.value = '';
+            statusSelect.value = '在職';
+            hireDateInput.value = '';
+            resignationDateInput.value = '';
+            phoneInput.value = '';
+            addressInput.value = '';
+            userIdInput.readOnly = true;
+            submitButton.textContent = '新增員工';
+        }
+
+        function fillForm(employee) {
+            userIdInput.value = employee.userId || '';
+            userNameInput.value = employee.userName || '';
+            permissionSelect.value = employee.權限 || '1';
+            groupInput.value = employee.組別 || '';
+            shiftTypeSelect.value = employee.班別 || '標準制';
+            shiftStartInput.value = employee.shiftStartTime || '';
+            shiftEndInput.value = employee.shiftEndTime || '';
+            statusSelect.value = employee.身份 || '在職';
+            hireDateInput.value = employee.到職日 || '';
+            resignationDateInput.value = employee.離職日 || '';
+            phoneInput.value = employee.聯絡電話 || '';
+            addressInput.value = employee.聯絡地址 || '';
+            userIdInput.readOnly = true;
+            submitButton.textContent = '儲存變更';
+        }
+
+        async function handleSubmit(event) {
+            event.preventDefault();
+            setLoadingState(true, '儲存中...');
+
+            const payload = {
+                action: 'upsert_employee',
+                userId: userIdInput.value === '' ? null : userIdInput.value,
+                userName: userNameInput.value,
+                權限: parseInt(permissionSelect.value, 10),
+                組別: groupInput.value,
+                班別: shiftTypeSelect.value,
+                shiftStartTime: shiftStartInput.value,
+                shiftEndTime: shiftEndInput.value,
+                身份: statusSelect.value,
+                到職日: hireDateInput.value,
+                離職日: resignationDateInput.value,
+                聯絡電話: phoneInput.value,
+                聯絡地址: addressInput.value,
+                operatorUserId: currentUserProfile.userId,
+                operatorUserName: currentUserProfile.displayName
+            };
+
+            if (!payload.userName) {
+                updateStatus('員工姓名為必填。', 'error');
+                setLoadingState(false);
+                return;
+            }
+
+            try {
+                const response = await fetchApi(payload);
+                if (response.success) {
+                    updateStatus(response.message, 'success');
+                    await fetchEmployeesAndPopulateDropdown();
+                    if (payload.userId) {
+                        employeeSelect.value = payload.userId;
+                    } else {
+                        employeeSelect.value = response.newUserId;
+                    }
+                    handleEmployeeSelection();
+                } else {
+                    updateStatus(response.message || '儲存失敗。', 'error');
+                }
+            } catch (error) {
+                updateStatus(`儲存失敗: ${error.message}`, 'error');
+            } finally {
+                setLoadingState(false);
+            }
+        }
+
+        async function fetchApi(params) {
+            const url = new URL(API_BASE_URL);
+            const isPost = params.action === 'upsert_employee';
+            
+            if (isPost) {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(params)
+                });
+                if (!response.ok) throw new Error(`伺服器錯誤: ${response.status} ${response.statusText}`);
+                return response.json();
+            } else {
+                for (const key in params) {
+                    url.searchParams.append(key, params[key]);
+                }
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`伺服器錯誤: ${response.status} ${response.statusText}`);
+                return response.json();
+            }
+        }
+
+        function setLoadingState(isLoading, message = '') {
+            submitButton.disabled = isLoading;
+            if (isLoading) {
+                buttonText.classList.add('hidden');
+                buttonSpinner.classList.remove('hidden');
+                updateStatus(message, 'info');
+            } else {
+                buttonText.classList.remove('hidden');
+                buttonSpinner.classList.add('hidden');
+            }
+        }
+
+        function updateStatus(message, type) {
+            statusMessageDiv.className = 'text-center min-h-[24px] font-semibold';
+            statusMessageDiv.textContent = message;
+            if (type === 'success') {
+                statusMessageDiv.classList.add('text-green-600');
+            } else if (type === 'error') {
+                statusMessageDiv.classList.add('text-red-600');
+            } else {
+                statusMessageDiv.classList.add('text-gray-600');
+            }
+        }
+
+        main();
+    </script>
+</body>
+</html>

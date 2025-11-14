@@ -24,13 +24,13 @@
  */
 import * as api from './api.js';
 import { request as apiRequest } from './modules/projects/js/projectApi.js'; // [v317.0 API化] 引入新的統一請求函式
-import { logToPage, showGlobalNotification } from './utils.js';
+import { logToPage, showGlobalNotification } from './shared/js/utils.js'; // [v505.0 修正] 更新共用模組路徑
 import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, createOrUpdateTradeDatalist, renderPostCreator, _buildLogCard, renderCommunicationHistory, lazyLoadImages } from './modules/projects/js/ui.js';
 import * as Handlers from './handlers.js';
 import * as LogActions from './modules/projects/js/logActions.js'; // [v337.0 修正] 補上遺失的 logActions 模組引入
 import * as ScheduleActions from './modules/projects/js/scheduleActions.js';
 import { state } from './modules/projects/js/state.js';
-import { initializeTaskSender, addRecipient } from './taskSender.js'; // [修正] 引入共用任務交辦模組 (包含 addRecipient)
+import { initializeTaskSender, addRecipient } from './shared/js/taskSender.js'; // [v505.0 修正] 更新共用任務交辦模組路徑
  
  /*
   * 版本: v13.0 (穩定版)
