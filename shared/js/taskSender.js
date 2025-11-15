@@ -8,12 +8,15 @@
 * =============================================================================
 */
 
+// [v554.0 重構] 直接引入 projectApi，移除 config.api 中間層。
+import { request as apiRequest } from '/modules/projects/js/projectApi.js';
+
 /**
  * 初始化任務交辦元件 (Task Sender Component)
  * @param {HTMLElement} container - 要將任務交辦中心插入的容器元素
  * @param {object} config - 核心設定物件
  * @param {object} config.state - 動態資料 { allEmployees, currentUserId, currentUserName, projectId? }
- * @param {object} config.api - 後端通訊介面 { sendRequest }
+ * @param {object} [config.api] - (已棄用) 後端通訊介面
  * @param {object} [config.callbacks] - 回呼函式 { onSuccess?, onOptimisticUpdate? }
  * @param {object} [options={}] - 外觀與行為選項 { style?, defaultAction?, collapsible?, groupBy? }
  */
@@ -322,7 +325,7 @@ function _buildPayload(state, styleType) {
     }
 
     return {
-        action: 'sendNotification',
+        // [v558.0] 'action' 已移至 handleSend 中處理，此處不再需要
         senderId: state.currentUserId,
         senderName: state.currentUserName,
         recipients: sendToAll ? ['ALL'] : selectedRecipients,
@@ -385,46 +388,66 @@ function _resetUI(styleType, recipientSelector) {
  */
 async function handleSend(event, config, styleType, recipientSelector) {
     event.preventDefault();
-    const { state, api, callbacks } = config;
+    const { state, callbacks } = config;
+    // 取得狀態與 UI 元素
     const statusEl = document.getElementById('task-sender-status');
     const submitBtn = document.getElementById('task-sender-submit-btn');
-
     const payload = _buildPayload(state, styleType);
-
+    console.log('[TaskSender] 建立的 payload:', payload);
     // 驗證輸入
     if (payload.recipients.length === 0 && !payload.recipients.includes('ALL')) {
         statusEl.textContent = '錯誤：請至少選擇一位收件人。';
         return;
     }
+    console.log('[TaskSender] 收件人驗證通過');
     if (!payload.content) {
         statusEl.textContent = '錯誤：請輸入內容。';
         document.getElementById('task-sender-content').focus();
         return;
     }
-
+    console.log('[TaskSender] 內容驗證通過');
+    // 更新 UI 狀態
     submitBtn.disabled = true;
     submitBtn.textContent = '發送中...';
+    console.log('[TaskSender] 開始發送任務/訊息');
 
     // 觸發樂觀更新回呼
     if (callbacks && typeof callbacks.onOptimisticUpdate === 'function') {
         const optimisticNotification = _createOptimisticNotification(payload, state);
         callbacks.onOptimisticUpdate(optimisticNotification);
+        console.log('[TaskSender] 執行樂觀更新回呼');
     }
-
+    console.log('[TaskSender] 發送 payload 給後端:', payload);
+    // 發送請求到後端
     try {
-        const result = await api.sendRequest(payload);
-        if (!result.success) throw new Error(result.message || '後端處理失敗');
+        console.log('[TaskSender] 發送 payload:', payload);
+        // [v554.0 重構] 直接呼叫 apiRequest，不再透過 config.api.sendRequest
+        const result = await apiRequest({ action: 'sendNotification', payload: payload });
+        console.log('[TaskSender] 後端回應:', result);
+        // [v551.0] 因為後端現在只回傳 "OK" 文字，我們只需檢查回應是否為 "OK"。
+        // 如果不是 "OK"，則將整個回應文字視為錯誤訊息。
+        if (!result.success) {
+          throw new Error(result.message || '後端處理失敗');
+        }
+        console.log('[TaskSender] 任務/訊息已成功發送！');
         statusEl.textContent = '任務/訊息已成功發送！';
+        console.log('[TaskSender] 重置 UI 狀態');
         _resetUI(styleType, recipientSelector);
+        console.log('[TaskSender] 執行成功回呼');
         if (callbacks && typeof callbacks.onSuccess === 'function') {
             callbacks.onSuccess(result);
+            console.log('[TaskSender] 成功回呼執行完畢');
         }
     } catch (error) {
         statusEl.textContent = `發送失敗: ${error.message}`;
+        console.error('[TaskSender] 發送任務/訊息時發生錯誤:', error);
+        if (callbacks && typeof callbacks.onError === 'function') {
+            callbacks.onError(error);
+        }
     } finally {
         submitBtn.disabled = false;
         submitBtn.textContent = '發送任務';
-        setTimeout(() => { statusEl.textContent = ''; }, 5000);
+        setTimeout(() => { statusEl.textContent = ''; }, 60000);
     }
 }
 
@@ -554,7 +577,7 @@ class RecipientSelector {
         if (!this.collapsibleEl || !this.arrowEl) return;
         const isCurrentlyCollapsed = !this.collapsibleEl.style.maxHeight || this.collapsibleEl.style.maxHeight === '0px';
         this.collapsibleEl.style.maxHeight = isCurrentlyCollapsed ? `${this.collapsibleEl.scrollHeight}px` : '0px';
-        this.arrowEl.classList.toggle('rotate-180', isCollapsed);
+        this.arrowEl.classList.toggle('rotate-180', isCurrentlyCollapsed);
     }
 
     updateSummary() {

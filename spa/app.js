@@ -1,7 +1,8 @@
 import Dashboard from './Dashboard.js';
 import ProjectBoard from './ProjectBoard.js';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
-import { saveCache, loadCache, showGlobalNotification } from '../shared/js/utils.js'; // [v509.0 修正] 更新共用模組路徑
+import { saveCache, loadCache, showGlobalNotification, sendApiRequestAsGet } from '../shared/js/utils.js'; // [v552.0 重構] 引入共用 API 函式
+import { postTask } from '../api.js'; // [v553.1 修正] 補上遺失的 postTask 模組引入
 import { initializeTaskSender } from '../shared/js/taskSender.js'; // [v509.0 修正] 更新共用模組路徑
 
 const { createApp, ref, onMounted, computed, watch, nextTick } = Vue;
@@ -12,6 +13,9 @@ const App = {
         // --- 環境設定 ---
         const LIFF_ID = '2007974938-2nPKg3J0';
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
+        // [v556.0 核心修正] 將 URL 掛載到 window 物件，以便 projectApi.js 模組可以存取。
+        window.__GAS_WEB_APP_URL__ = GAS_WEB_APP_URL;
+
         const ATTENDANCE_GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
 
         // --- 狀態管理 (State) ---
@@ -97,17 +101,19 @@ const App = {
             url.searchParams.append('page', 'get_hub_projects_data');
             url.searchParams.append('userId', userProfile.value.userId);
             url.searchParams.append('userProfile', JSON.stringify(user));
-            const response = await fetch(url);
+            const response = await fetch(url); // 移除手動設定的 header
             return response.json();
         };
 
         const processNotificationAction = async (payload) => {
             try {
                 const apiPayload = { action: 'process_notification_action', ...payload };
+                // [v549.0 CORS 修正] 將請求方式改為 FormData，以繞過 CORS 預檢請求。
+                const formData = new FormData();
+                formData.append('payload', JSON.stringify(apiPayload));
                 const response = await fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
-                    body: JSON.stringify(apiPayload),
-                    headers: { 'Content-Type': 'text/plain' }
+                    body: formData,
                 });
                 const result = await response.json();
                 if (!result.success) throw new Error(result.message);
@@ -223,7 +229,10 @@ const App = {
                     const taskSenderContainer = document.getElementById('task-sender-container');
                     if (taskSenderContainer) {
                         const state = { allEmployees: allEmployees.value, currentUserId: userProfile.value.userId, currentUserName: userProfile.value.displayName };
-                        const postTaskFunction = (payload) => fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify(payload), headers: { 'Content-Type': 'text/plain' } }).then(res => res.json());
+                        // [v553.0 架構統一] 為了與 main.js 的行為一致，此處模擬 projectApi.js 的 postTask 流程。
+                        // 注意：此處直接呼叫 api.js 的 postTask，而不是 projectApi.js 的 request。
+                        // 這需要後端 WebApp.js 將 'sendNotification' 加入 isApiAction 列表。
+                        const postTaskFunction = (payload) => postTask({ ...payload, action: 'sendNotification' });
                         const config = { state, api: { sendRequest: postTaskFunction }, callbacks: { onSuccess: fetchHubProjectsData } };
                         // 【您的要求】傳入分組與收合設定
                         initializeTaskSender(taskSenderContainer, config, { style: 'hub', collapsible: true, groupBy: 'group' });

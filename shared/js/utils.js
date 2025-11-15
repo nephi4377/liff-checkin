@@ -169,3 +169,16 @@ export function loadCache(key) {
     }
     return cache.data;
 }
+
+/**
+ * [v552.0 新增] 以 GET 請求方式發送 API Payload，用於繞過 CORS 問題。
+ * @param {string} baseUrl - 後端 API 的基礎 URL。
+ * @param {object} payload - 要發送的資料物件。
+ * @returns {Promise<string>} - 一個解析為後端回應文字 (如 "OK") 的 Promise。
+ */
+export function sendApiRequestAsGet(baseUrl, payload) {
+    const url = new URL(baseUrl);
+    url.searchParams.set('payload', JSON.stringify(payload));
+    return fetch(url, { method: 'GET' })
+        .then(res => res.text());
+}

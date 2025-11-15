@@ -8,8 +8,30 @@
 */
 
 // [v520.0 修正] 修正導入路徑，直接從根目錄的 api.js 引入，避免循環依賴。
-import { postTask } from '../../../api.js';
+// [v555.0 重構] 移除對外部 api.js 的依賴，將 postTask 邏輯內化，解決 API_BASE_URL 為 undefined 的問題。
+// import { postTask } from '../../../api.js';
 
+/**
+ * [v555.0 內化] 透過 fetch API 提交 POST 請求至 Google Apps Script。
+ * 此函式會將 payload 包裝在 FormData 中，以解決跨來源請求問題。
+ * @param {object} payload - 要傳送給後端的資料包，必須包含 action。
+ * @returns {Promise<object>} 一個解析為後端初步回應 (包含 jobId) 的 Promise。
+ */
+function postToGas(payload) {
+    console.log('[projectApi] 準備發送至後端:', payload);
+    const formData = new FormData();
+    formData.append('payload', JSON.stringify(payload));
+ 
+    // [v556.0 核心修正] 解決在 SPA 主頁面 (index.html) 中 API_BASE_URL 為 undefined 的問題。
+    // 優先從 window 物件讀取 (用於 managementconsole.html)，如果找不到，
+    // 則嘗試從 window.__GAS_WEB_APP_URL__ 讀取 (由 spa/app.js 提供)。
+    const API_BASE_URL = window.API_BASE_URL || window.__GAS_WEB_APP_URL__;
+    if (!API_BASE_URL) {
+        throw new Error("API_BASE_URL is not defined. It must be set on the window object.");
+    }
+ 
+    return fetch(API_BASE_URL, { method: 'POST', body: formData }).then(response => response.json());
+}
 // 定義哪些 action 是讀取型 (用 GET)，哪些是寫入型 (用 POST + 任務佇列)
 // 注意：這裡的 action 名稱必須與後端 WebApp.js 中的 GET_ROUTES 和 processJob 的 switch case 完全對應。
 const READ_ACTIONS = new Set([
@@ -24,7 +46,8 @@ const WRITE_ACTIONS = new Set([
     'deleteLog',
     'updateProjectStatus',
     'createFromTemplate',
-    'updateSchedule'
+    'updateSchedule',
+    'sendNotification' // [v553.0] 將發送通知也納入非同步任務佇列
 ]);
 
 /**
@@ -57,8 +80,20 @@ export async function request({ action, payload = {} }) {
 
         } else if (WRITE_ACTIONS.has(action)) {
             // --- 處理寫入型請求 (POST + 非同步任務) ---
-            const taskPayload = { ...payload, action }; // 將 action 合併到 payload
-            const finalJobState = await postTask(taskPayload);
+            // [v555.0 重構] 將 postTask 的邏輯內聯至此處，移除對外部 api.js 的依賴。
+            const taskPayload = { ...payload, action };
+
+            // 步驟 1：初始化任務，並取得 Job ID
+            const initialResult = await postToGas(taskPayload);
+            if (!initialResult.success || !initialResult.jobId) {
+                throw new Error(initialResult.message || '後端未能成功建立任務。');
+            }
+            const jobId = initialResult.jobId;
+            console.log(`[projectApi] 成功建立後端任務，Job ID: ${jobId}`);
+
+            // 步驟 2：輪詢任務的最終結果 (此處簡化，因為 sendNotification 沒有分塊上傳)
+            console.log(`[projectApi] 開始輪詢 Job ID: ${jobId} 的最終結果...`);
+            const finalJobState = await pollJobStatus(jobId);
 
             if (finalJobState.status === 'completed' && finalJobState.result.success) {
                 result = finalJobState.result; // result 的格式應為 { success: true, data: ..., message: ... }
@@ -92,4 +127,52 @@ export async function request({ action, payload = {} }) {
             error: error.message
         };
     }
+}
+
+/**
+ * [v555.0 內化] 輪詢任務狀態
+ * @param {string} jobId - 要查詢的任務 ID
+ * @returns {Promise<object>} 當任務完成或失敗時，解析為最終的結果物件。
+ */
+function pollJobStatus(jobId) {
+    const POLLING_INTERVAL_MS = 3000;
+    const TOTAL_TIMEOUT_MS = 180000;
+    // [v559.0 核心修正] 採用與 postToGas 相同的 URL 獲取邏輯，以解決輪詢時的 Invalid URL 問題。
+    const API_BASE_URL = window.API_BASE_URL || window.__GAS_WEB_APP_URL__;
+
+    if (!API_BASE_URL) {
+        return Promise.reject(new Error("輪詢失敗：找不到 API_BASE_URL。"));
+    }
+
+    return new Promise((resolve, reject) => {
+        const startTime = Date.now();
+
+        const poll = async () => {
+            if (Date.now() - startTime > TOTAL_TIMEOUT_MS) {
+                reject(new Error(`任務處理超時 (${TOTAL_TIMEOUT_MS / 1000}秒)。`));
+                return;
+            }
+
+            try {
+                const url = new URL(API_BASE_URL);
+                url.searchParams.append('page', 'getJobStatus');
+                url.searchParams.append('jobId', jobId);
+                
+                const response = await fetch(url);
+                const statusResult = await response.json();
+
+                if (statusResult.status === 'completed' || statusResult.status === 'failed') {
+                    console.log(`[projectApi] 任務 ${jobId} 已完成，狀態: ${statusResult.status}`);
+                    resolve(statusResult);
+                } else {
+                    setTimeout(poll, POLLING_INTERVAL_MS);
+                }
+            } catch (error) {
+                console.warn(`[projectApi] 輪詢 Job ID ${jobId} 時發生網路錯誤: ${error.message}。將在 ${POLLING_INTERVAL_MS}ms 後重試...`);
+                setTimeout(poll, POLLING_INTERVAL_MS);
+            }
+        };
+
+        poll();
+    });
 }

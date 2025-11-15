@@ -553,22 +553,8 @@ const dependencyManager = {
 function initializeTaskSenderForConsole() {
     const taskSenderContainer = document.getElementById('task-sender-container');
     if (!taskSenderContainer || document.getElementById('task-sender-wrapper')) return;
-
-    const config = {
-        state: { ...state },
-        api: {
-            sendRequest: (payload) => {
-                return fetch(window.API_BASE_URL, {
-                    method: 'POST',
-                    body: JSON.stringify(payload)
-                }).then(res => res.json());
-            }
-        },
-        callbacks: {
-            onSuccess: () => refreshCommunicationHistory(state.projectId, state.currentUserId, window.API_BASE_URL),
-            onOptimisticUpdate: window.addOptimisticCommunicationCard
-        }
-    };
+    // [v558.0 架構統一] 簡化 config 物件，因為 taskSender.js 現在會直接呼叫 apiRequest。
+    const config = { state: { ...state }, callbacks: { onSuccess: () => refreshCommunicationHistory(state.projectId, state.currentUserId, window.API_BASE_URL), onOptimisticUpdate: window.addOptimisticCommunicationCard } };
     initializeTaskSender(taskSenderContainer, config, { style: 'console', defaultAction: 'ReplyText' });
 }
 // [v292.0] 將 refreshProjectData 掛載到 window，以便其他模組呼叫
