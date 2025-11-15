@@ -50,20 +50,20 @@ const App = {
             '#/dashboard': { name: 'dashboard' },
             '#/project-board': { name: 'project-board' },
             // [v413.0 SPA化] 擴充路由表，將更多獨立頁面以 iframe 方式整合進來
-            '#/new-site': { name: 'iframe', src: '/modules/projects/NewSiteForm.html', title: '新增案場資料' }, // [v515.0 修正] 改為絕對路徑
-            '#/faq': { name: 'iframe', src: '/modules/info/FAQ.html', title: '客戶常見問答' }, // [v518.0 修正]
-            '#/daily-report': { name: 'iframe', src: '/modules/projects/daily_report.html', title: '施工回報總覽' }, // [v515.0 修正] 改為絕對路徑
-            '#/onboarding-flow': { name: 'iframe', src: '/modules/info/onboardingflow.html', title: '客戶接洽流程' }, // [v518.0 修正]
-            '#/attendance-report': { name: 'iframe', src: '/modules/attendance/attendance_report.html', title: '出勤儀表板' }, // [v515.0 修正] 改為絕對路徑
-            '#/approval-dashboard': { name: 'iframe', src: '/modules/attendance/approval_dashboard.html', title: '假勤審核儀表板' }, // [v515.0 修正] 改為絕對路徑
-            '#/leave-request': { name: 'iframe', src: '/modules/attendance/leave_request.html', title: '線上假勤申請' }, // [v515.0 修正] 改為絕對路徑
-            '#/shift-schedule': { name: 'iframe', src: '/modules/attendance/shift_schedule.html', title: '員工排班系統' }, // [v515.0 修正] 改為絕對路徑
+            '#/new-site': { name: 'iframe', src: 'modules/projects/NewSiteForm.html', title: '新增案場資料' }, // [v515.0 修正] 改為絕對路徑
+            '#/faq': { name: 'iframe', src: 'modules/info/FAQ.html', title: '客戶常見問答' }, // [v518.0 修正]
+            '#/daily-report': { name: 'iframe', src: 'modules/projects/daily_report.html', title: '施工回報總覽' }, // [v515.0 修正] 改為絕對路徑
+            '#/onboarding-flow': { name: 'iframe', src: 'modules/info/onboardingflow.html', title: '客戶接洽流程' }, // [v518.0 修正]
+            '#/attendance-report': { name: 'iframe', src: 'modules/attendance/attendance_report.html', title: '出勤儀表板' }, // [v515.0 修正] 改為絕對路徑
+            '#/approval-dashboard': { name: 'iframe', src: 'modules/attendance/approval_dashboard.html', title: '假勤審核儀表板' }, // [v515.0 修正] 改為絕對路徑
+            '#/leave-request': { name: 'iframe', src: 'modules/attendance/leave_request.html', title: '線上假勤申請' }, // [v515.0 修正] 改為絕對路徑
+            '#/shift-schedule': { name: 'iframe', src: 'modules/attendance/shift_schedule.html', title: '員工排班系統' }, // [v515.0 修正] 改為絕對路徑
             // [v424.0 架構優化] 將專案工作區與施工回報改為內嵌 iframe
-            '#/project-console': { name: 'iframe', src: '/modules/projects/managementconsole.html', title: '專案工作區' }, // [v543.0 修正] 改為正確的模組路徑
-            '#/report': { name: 'iframe', src: '/modules/projects/report.html', title: '施工回報' }, // [v543.0 修正] 改為正確的模組路徑
+            '#/project-console': { name: 'iframe', src: 'modules/projects/managementconsole.html', title: '專案工作區' }, // [v543.0 修正] 改為正確的模組路徑
+            '#/report': { name: 'iframe', src: 'modules/projects/report.html', title: '施工回報' }, // [v543.0 修正] 改為正確的模組路徑
         };
         // [v513.0 新增] 補上員工資料編輯頁面的路由
-        routes['#/employee-editor'] = { name: 'iframe', src: '/modules/attendance/employee_editor.html', title: '員工資料編輯' }; // [v515.0 修正] 改為絕對路徑
+        routes['#/employee-editor'] = { name: 'iframe', src: 'modules/attendance/employee_editor.html', title: '員工資料編輯' }; // [v515.0 修正] 改為絕對路徑
 
         const handleRouteChange = () => {
             const hash = window.location.hash || '#';
@@ -214,20 +214,23 @@ const App = {
             }
         });
 
-        // 監聽權限變化，並在 DOM 更新後初始化任務交辦中心
-        watch(hasAdminRights, (newValue) => {
-            if (newValue) {
+        // 【您的要求】核心修正：監聽權限與當前視圖，確保任務交辦中心能被正確初始化
+        watch([hasAdminRights, currentView], ([isAdmin, view]) => {
+            // 只有當使用者有權限，且當前視圖是主控台時，才執行
+            if (isAdmin && view.name === 'dashboard') {
+                // 使用 nextTick 確保 DOM 元素已準備就緒
                 nextTick(() => {
                     const taskSenderContainer = document.getElementById('task-sender-container');
                     if (taskSenderContainer) {
                         const state = { allEmployees: allEmployees.value, currentUserId: userProfile.value.userId, currentUserName: userProfile.value.displayName };
                         const postTaskFunction = (payload) => fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify(payload), headers: { 'Content-Type': 'text/plain' } }).then(res => res.json());
-                        const config = { state, api: { sendRequest: postTaskFunction }, onSuccess: fetchHubProjectsData };
-                        initializeTaskSender(taskSenderContainer, config, { style: 'hub' });
+                        const config = { state, api: { sendRequest: postTaskFunction }, callbacks: { onSuccess: fetchHubProjectsData } };
+                        // 【您的要求】傳入分組與收合設定
+                        initializeTaskSender(taskSenderContainer, config, { style: 'hub', collapsible: true, groupBy: 'group' });
                     }
                 });
             }
-        });
+        }, { immediate: true }); // immediate: true 確保在初次載入時也會執行一次檢查
 
         // [v411.0 SPA化] 監聽 URL hash 的變化
         window.addEventListener('hashchange', handleRouteChange);

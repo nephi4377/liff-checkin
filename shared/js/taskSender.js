@@ -14,14 +14,14 @@
  * @param {object} config - 核心設定物件
  * @param {object} config.state - 動態資料 { allEmployees, currentUserId, currentUserName, projectId? }
  * @param {object} config.api - 後端通訊介面 { sendRequest }
- * @param {object} config.callbacks - 回呼函式 { onSuccess?, onOptimisticUpdate? }
- * @param {object} [options={}] - 外觀與行為選項 { style?, defaultAction? }
+ * @param {object} [config.callbacks] - 回呼函式 { onSuccess?, onOptimisticUpdate? }
+ * @param {object} [options={}] - 外觀與行為選項 { style?, defaultAction?, collapsible?, groupBy? }
  */
 export function initializeTaskSender(container, config, options = {}) {
     if (!container) return;
 
     // [v290.0 核心重構] 建立 RecipientSelector 子元件實例
-    const recipientSelector = new RecipientSelector();
+    const recipientSelector = new RecipientSelector(options);
 
     const styleType = options.style || 'hub'; // 預設為 'hub' 樣式 (完整版)
 
@@ -94,7 +94,8 @@ export function initializeTaskSender(container, config, options = {}) {
                     </button>
                     <!-- 可收合的收件人列表容器 -->
                     <div id="task-sender-recipient-collapsible" class="collapsible-content mt-2">
-                        <div id="task-sender-recipient-list" class="border rounded-md max-h-48 overflow-y-auto p-2 grid grid-cols-2 md:grid-cols-3 gap-x-2 gap-y-1"></div>
+                        <!-- 【您的要求】移除 grid 相關 class，改為垂直列表 -->
+                        <div id="task-sender-recipient-list" class="border rounded-md max-h-48 overflow-y-auto p-2 space-y-1"></div>
                     </div>
                     <!-- Hub 樣式才有「全體發送」選項 -->
                     <div id="task-sender-send-to-all-wrapper" class="mt-2">
@@ -146,7 +147,7 @@ export function initializeTaskSender(container, config, options = {}) {
     const form = document.getElementById('task-sender-form');
     form.addEventListener('submit', (e) => handleSend(e, config, styleType, recipientSelector));
 
-    const recipientToggleBtn = document.getElementById('task-sender-recipient-toggle-btn');
+    const recipientToggleBtn = document.getElementById('task-sender-recipient-toggle-btn'); // [v548.0 修正] 確保變數已宣告
     recipientToggleBtn.addEventListener('click', () => recipientSelector.toggleList());
 
     const recipientList = document.getElementById('task-sender-recipient-list');
@@ -300,7 +301,8 @@ function _buildPayload(state, styleType) {
     const content = document.getElementById('task-sender-content').value.trim();
     const sendToAllCheckbox = document.getElementById('task-sender-send-to-all-checkbox');
     const sendToAll = sendToAllCheckbox ? sendToAllCheckbox.checked : false;
-    const selectedRecipients = Array.from(document.querySelectorAll('#task-sender-recipient-list input[type="checkbox"]:checked')).map(cb => cb.value);
+    // 【您的要求】核心修正：改為從 .selected 標籤讀取收件人 ID，解決無法發送的問題
+    const selectedRecipients = Array.from(document.querySelectorAll('#task-sender-recipient-list .recipient-tag.selected')).map(tag => tag.dataset.userId);
 
     let actionType = 'None';
     if (styleType === 'console') {
@@ -431,12 +433,29 @@ async function handleSend(event, config, styleType, recipientSelector) {
 // =============================================================================
 
 class RecipientSelector {
-    constructor() {
+    // 【您的要求】定義一個包含約 10 種顏色的色階，用於標籤
+    #tagColors = [
+        { bg: 'bg-sky-100', text: 'text-sky-800', ring: 'ring-sky-400' },
+        { bg: 'bg-amber-100', text: 'text-amber-800', ring: 'ring-amber-400' },
+        { bg: 'bg-emerald-100', text: 'text-emerald-800', ring: 'ring-emerald-400' },
+        { bg: 'bg-indigo-100', text: 'text-indigo-800', ring: 'ring-indigo-400' },
+        { bg: 'bg-rose-100', text: 'text-rose-800', ring: 'ring-rose-400' },
+        { bg: 'bg-teal-100', text: 'text-teal-800', ring: 'ring-teal-400' },
+        { bg: 'bg-fuchsia-100', text: 'text-fuchsia-800', ring: 'ring-fuchsia-400' },
+        { bg: 'bg-lime-100', text: 'text-lime-800', ring: 'ring-lime-400' },
+        { bg: 'bg-cyan-100', text: 'text-cyan-800', ring: 'ring-cyan-400' },
+        { bg: 'bg-violet-100', text: 'text-violet-800', ring: 'ring-violet-400' },
+    ];
+    #employeeColorMap = new Map(); // 用於儲存每個員工對應的顏色
+
+    constructor(options = {}) {
         this.listEl = null;
         this.summaryEl = null;
         this.collapsibleEl = null;
         this.arrowEl = null;
         this.sendToAllCheckbox = null;
+        // 【您的要求】將選項儲存為實例屬性
+        this.options = options;
     }
 
     init(state, styleType) {
@@ -451,30 +470,90 @@ class RecipientSelector {
             return;
         }
         this.listEl.innerHTML = '';
-
+        
+        // 【您的要求】根據 styleType 篩選要顯示的員工
         const employeesToShow = (styleType === 'console')
             ? state.allEmployees.filter(emp => emp.permission >= 2 && (emp.group === '台南店' || emp.group === '高雄店'))
             : state.allEmployees.filter(emp => emp.permission >= 2);
 
-        employeesToShow
-            .sort((a, b) => {
-                const groupCompare = (a.group || 'Z').localeCompare(b.group || 'Z', 'zh-Hant');
-                return groupCompare !== 0 ? groupCompare : a.userName.localeCompare(b.userName, 'zh-Hant');
-            })
-            .forEach(emp => {
-                const id = `task-sender-recipient-${emp.userId}`;
-                this.listEl.insertAdjacentHTML('beforeend', `<label for="${id}" class="flex items-center p-1.5 rounded hover:bg-gray-100 cursor-pointer">
-                        <input type="checkbox" id="${id}" name="taskSenderRecipients" value="${emp.userId}" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-                        <span class="ml-2 text-xs text-gray-800" data-name="${emp.userName}">${emp.userName}</span>
-                    </label>
-                `);
+        // 【您的要求】為每位員工預先分配顏色
+        employeesToShow.forEach((emp, index) => {
+            this.#employeeColorMap.set(emp.userId, this.#tagColors[index % this.#tagColors.length]);
+        });
+
+        // 【您的要求】呼叫新的渲染方法
+        this._renderList(employeesToShow);
+
+        // 【您的要求】如果啟用收合功能，則預設為收合
+        if (this.options.collapsible && this.collapsibleEl) {
+            this.collapsibleEl.style.maxHeight = '0px';
+        }
+    }
+
+    /**
+     * [內部] 渲染收件人列表，支援分組
+     * @param {Array<object>} employees - 要渲染的員工列表
+     */
+    _renderList(employees) {
+        const groupBy = this.options.groupBy;
+
+        if (groupBy) {
+            const groupedEmployees = employees.reduce((acc, emp) => {
+                const groupKey = emp[groupBy] || '未分類';
+                if (!acc[groupKey]) acc[groupKey] = [];
+                acc[groupKey].push(emp);
+                return acc;
+            }, {});
+
+            Object.keys(groupedEmployees).sort((a, b) => a.localeCompare(b, 'zh-Hant')).forEach(groupName => {
+                const groupHeader = document.createElement('h4');
+                groupHeader.className = 'text-xs font-semibold text-gray-500 px-1.5 pt-2 pb-1 border-b';
+                groupHeader.textContent = groupName;
+                this.listEl.appendChild(groupHeader);
+                
+                // 【您的要求】改為在群組內建立一個 flex 容器來放置標籤
+                const tagContainer = document.createElement('div');
+                tagContainer.className = 'flex flex-wrap gap-2 p-1.5';
+                groupedEmployees[groupName].forEach(emp => this._createRecipientTag(emp, tagContainer));
+                this.listEl.appendChild(tagContainer);
             });
+        } else {
+            // 無分組時，也使用 flex 容器
+            const tagContainer = document.createElement('div');
+            tagContainer.className = 'flex flex-wrap gap-2 p-1.5';
+            employees.forEach(emp => this._createRecipientTag(emp, tagContainer));
+            this.listEl.appendChild(tagContainer);
+        }
+    }
+
+    /**
+     * [內部] 建立單個員工的標籤按鈕並附加到列表
+     * @param {object} employee - 員工物件
+     * @param {HTMLElement} container - 要附加到的容器元素
+     */
+    _createRecipientTag(employee, container) {
+        const colors = this.#employeeColorMap.get(employee.userId) || this.#tagColors[0];
+        const button = document.createElement('button');
+        button.type = 'button';
+        // 【您的要求】套用標籤樣式，並加入 transition 效果
+        button.className = `recipient-tag px-3 py-1.5 rounded-full text-sm font-semibold transition-all duration-200 ${colors.bg} ${colors.text}`;
+        button.textContent = employee.userName;
+        button.dataset.userId = employee.userId;
+        button.dataset.userName = employee.userName;
+
+        button.addEventListener('click', () => {
+            button.classList.toggle('selected');
+            button.classList.toggle('ring-2'); // 切換 ring 樣式
+            button.classList.toggle(colors.ring); // 切換對應顏色的 ring
+            this.updateSummary();
+        });
+        container.appendChild(button);
     }
 
     toggleList() {
         if (!this.collapsibleEl || !this.arrowEl) return;
-        const isCollapsed = !this.collapsibleEl.style.maxHeight || this.collapsibleEl.style.maxHeight === '0px';
-        this.collapsibleEl.style.maxHeight = isCollapsed ? this.collapsibleEl.scrollHeight + "px" : null;
+        const isCurrentlyCollapsed = !this.collapsibleEl.style.maxHeight || this.collapsibleEl.style.maxHeight === '0px';
+        this.collapsibleEl.style.maxHeight = isCurrentlyCollapsed ? `${this.collapsibleEl.scrollHeight}px` : '0px';
         this.arrowEl.classList.toggle('rotate-180', isCollapsed);
     }
 
@@ -484,31 +563,31 @@ class RecipientSelector {
             this.summaryEl.textContent = '已選擇：所有員工';
             return;
         }
-        const selectedCheckboxes = Array.from(this.listEl.querySelectorAll('input[type="checkbox"]:checked'));
-        if (selectedCheckboxes.length === 0) {
+        const selectedTags = Array.from(this.listEl.querySelectorAll('.recipient-tag.selected'));
+        if (selectedTags.length === 0) {
             this.summaryEl.textContent = '選擇收件人';
-        } else if (selectedCheckboxes.length <= 2) {
-            this.summaryEl.textContent = '已選擇：' + selectedCheckboxes.map(cb => cb.nextElementSibling.dataset.name).join('、');
+        } else if (selectedTags.length <= 2) {
+            this.summaryEl.textContent = '已選擇：' + selectedTags.map(tag => tag.dataset.userName).join('、');
         } else {
-            this.summaryEl.textContent = `已選擇：${selectedCheckboxes.length} 位員工`;
+            this.summaryEl.textContent = `已選擇：${selectedTags.length} 位員工`;
         }
     }
 
-    toggleSendToAll(isChecked) {
-        this.listEl.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-            checkbox.disabled = isChecked;
-            if (isChecked) checkbox.checked = false;
+    toggleSendToAll(isChecked) { // 【您的要求】調整為操作標籤按鈕
+        this.listEl.querySelectorAll('.recipient-tag').forEach(tag => {
+            tag.disabled = isChecked;
+            if (isChecked) {
+                tag.classList.remove('selected', 'ring-2', ...Object.values(this.#tagColors).map(c => c.ring));
+            }
         });
         this.updateSummary();
     }
 
     addByName(userName) {
         if (!userName || !this.listEl) return;
-        const checkbox = this.listEl.querySelector(`span[data-name="${userName}"]`)?.previousElementSibling;
-        if (checkbox && !checkbox.checked) {
-            checkbox.checked = true;
-            const event = new Event('change', { bubbles: true });
-            this.listEl.dispatchEvent(event);
+        const tag = this.listEl.querySelector(`.recipient-tag[data-user-name="${userName}"]`);
+        if (tag && !tag.classList.contains('selected')) {
+            tag.click(); // 直接觸發點擊事件來選中
         }
         if (!this.collapsibleEl.style.maxHeight || this.collapsibleEl.style.maxHeight === '0px') {
             this.toggleList();

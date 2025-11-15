@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添心設計 | 好友推薦感謝回饋</title>
+    <!-- 載入 Tailwind CSS 框架 --><script src="https://cdn.tailwindcss.com"></script>
+    <!-- 載入 Google Fonts Noto Sans TC --><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #fcf8e8; /* 外層背景：米色 */
+            color: #3d4a41; 
+            font-weight: 500;
+        }
+        .text-dark-brand {
+            color: #2a3c35; /* 深品牌色 */
+        }
+        .text-accent-reward {
+            color: #a82e2e; /* 保持強調色 */
+        }
+        .card-shadow {
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.04); 
+        }
+        .line-id-button {
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .line-id-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.15);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 sm:p-6">
+
+    <!-- 主要內容區塊：內層卡片為白色，與米色背景形成層次 --><div class="max-w-2xl w-full p-6 sm:p-10 md:p-16 text-center bg-white rounded-3xl card-shadow border border-gray-100">
+        
+        <!-- 【您的要求】將「添心設計」移至最上方，並調整標題區塊 -->
+        <header class="mb-8 md:mb-10">
+            <p class="text-2xl md:text-4xl font-bold mb-6 text-dark-brand">
+                <span class="border-b-4 border-dark-brand pb-2 px-2">添心設計</span>
+            </p>
+            <h1 class="text-3xl md:text-4xl font-extrabold leading-tight mb-3 text-dark-brand">
+                喜歡自己的家嗎？
+            </h1>
+            <h2 class="text-xl md:text-3xl font-semibold text-dark-brand">
+                邀請朋友一起添點心吧！
+            </h2>
+        </header>
+
+        <!-- 【您的要求】將內文字體縮小一號 -->
+        <section class="space-y-4 md:space-y-6 mb-8 md:mb-10 text-base md:text-lg text-gray-700">
+            <p class="font-medium leading-relaxed">
+                感謝您一路以來對【添心設計】的支持與信任。
+            </p>
+            <p class="leading-relaxed">
+                如果您身邊有親友剛交屋、正準備打造夢想家園，
+                誠摯邀請您推薦他們選擇添心設計，讓美好空間從此展開～
+            </p>
+        </section>
+
+        <!-- 獎勵核心區塊：維持綠色漸變框，並放大禮券金額字體以強調 (text-4xl md:text-6xl) -->
+        <div class="bg-gradient-to-r from-emerald-50 to-teal-100 p-6 md:p-10 rounded-2xl shadow-inner mb-10 md:mb-12 border border-emerald-300">
+            <p class="text-lg md:text-xl font-bold mb-4 text-dark-brand">
+                成功推薦好友完成裝修設計合約簽訂後，
+            </p>
+            <p class="text-3xl md:text-4xl font-black text-accent-reward tracking-wider leading-none mb-4">
+                全聯禮券 <span class="text-red-600">3,000</span> 元
+            </p>
+            <p class="text-lg md:text-xl font-bold text-dark-brand">
+                立即獻上，作為對您的感謝回饋！
+            </p>
+        </div>
+
+        <!-- 行動呼籲 (CTA) / 聯絡資訊區 -->
+        <footer class="space-y-6">
+            <p class="text-base md:text-lg font-semibold text-dark-brand">
+                立即掃描下方 QR Code 或加入 LINE 官方帳號諮詢
+            </p>
+            
+            <!-- QR Code 圖片：使用您上傳的穩定檔案 ID -->
+            <img 
+                src="https://i.meee.com.tw/vXTlICx.png" 
+                alt="添心設計 LINE 官方帳號 QR Code" 
+                class="mx-auto rounded-xl shadow-lg w-56 h-56 border-4 border-gray-100 p-1"
+                onerror="this.onerror=null; this.src='https://placehold.co/224x224/fcf8e8/2a3c35?text=請替換QR+Code';"
+            >
+
+            <!-- LINE ID 按鈕化設計：連結改為 line.me/R/ti/p/ 格式，以更積極地導向 App -->
+            <a href="https://line.me/R/ti/p/@uis9604v" target="_blank" rel="noopener noreferrer" 
+               class="line-id-button inline-block mt-6 px-6 py-3 md:px-8 md:py-4 bg-white text-dark-brand border-2 border-dark-brand text-xl md:text-2xl font-black rounded-full transition duration-300 ease-in-out hover:bg-gray-100">
+                @uis9604v
+            </a>
+
+            <!-- 【您的要求】新增社群分享按鈕 -->
+            <div class="pt-8">
+                <p class="text-sm text-gray-500 mb-4">或將我們分享給好友：</p>
+                <div class="flex justify-center items-center gap-4">
+                    <!-- 分享到 LINE -->
+                    <a href="https://social-plugins.line.me/lineit/share?url=https%3A%2F%2Ftanxin.space&text=%E6%88%91%E5%AE%B6%E7%9A%84%E8%A3%9D%E6%BD%A2%E6%98%AF%E7%B5%A6%E3%80%90%E6%B7%BB%E5%BF%83%E8%A8%AD%E8%A8%88%E3%80%91%E5%81%9A%E7%9A%84%EF%BC%8C%E6%88%90%E6%9E%9C%E6%88%91%E5%BE%88%E6%BB%BF%E6%84%8F%EF%BC%81%E4%BB%96%E5%80%91%E7%8F%BE%E5%9C%A8%E6%9C%89%E5%A5%BD%E5%8F%8B%E6%8E%A8%E8%96%A6%E6%B4%BB%E5%8B%95%EF%BC%8C%E5%A6%82%E6%9E%9C%E4%BD%A0%E5%89%9B%E5%A5%BD%E6%9C%89%E6%96%B0%E5%AE%B6%E8%A6%81%E8%A3%9D%E6%BD%A2%E6%88%96%E8%88%8A%E5%B1%8B%E6%83%B3%E7%BF%BB%E6%96%B0%EF%BC%8C%E7%9C%9F%E5%BF%83%E6%8E%A8%E8%96%A6%E4%BD%A0%E5%8F%83%E8%80%83%E7%9C%8B%E7%9C%8B%EF%BC%81%F0%9F%91%89" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500 text-white font-bold hover:bg-green-600 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M21.9,10.9a8.9,8.9,0,0,0-6.3-6.3,8.8,8.8,0,0,0-11.2,11.2,8.9,8.9,0,0,0,6.3,6.3,8.8,8.8,0,0,0,11.2-11.2ZM15.8,15a.5.5,0,0,1-.5.5h-1a.5.5,0,0,1-.5-.5v-2.1a.5.5,0,0,1,.5-.5h1a.5.5,0,0,1,.5.5Zm-4.4,0a.5.5,0,0,1-.5.5h-1a.5.5,0,0,1-.5-.5V10.4a.5.5,0,0,1,.5-.5h1a.5.5,0,0,1,.5.5Zm-2.2-4.6H8.2a.5.5,0,0,1-.5-.5V8.7a.5.5,0,0,1,.5-.5h1a.5.5,0,0,1,.5.5v1.2a.5.5,0,0,1-.5.5Zm6.6,0h-1a.5.5,0,0,1-.5-.5V8.7a.5.5,0,0,1,.5-.5h1a.5.5,0,0,1,.5.5v1.2a.5.5,0,0,1-.5.5Z"/></svg>
+                        <span>LINE</span>
+                    </a>
+                    <!-- 分享到 Facebook -->
+                    <a href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Ftanxin.space&quote=%E6%88%91%E5%AE%B6%E7%9A%84%E8%A3%9D%E6%BD%A2%E6%98%AF%E7%B5%A6%E3%80%90%E6%B7%BB%E5%BF%83%E8%A8%AD%E8%A8%88%E3%80%91%E5%81%9A%E7%9A%84%EF%BC%8C%E6%88%90%E6%9E%9C%E6%88%91%E5%BE%88%E6%BB%BF%E6%84%8F%EF%BC%81%E4%BB%96%E5%80%91%E7%8F%BE%E5%9C%A8%E6%9C%89%E5%A5%BD%E5%8F%8B%E6%8E%A8%E8%96%A6%E6%B4%BB%E5%8B%95%EF%BC%8C%E5%A6%82%E6%9E%9C%E4%BD%A0%E5%89%9B%E5%A5%BD%E6%9C%89%E6%96%B0%E5%AE%B6%E8%A6%81%E8%A3%9D%E6%BD%A2%E6%88%96%E8%88%8A%E5%B1%8B%E6%83%B3%E7%BF%BB%E6%96%B0%EF%BC%8C%E7%9C%9F%E5%BF%83%E6%8E%A8%E8%96%A6%E4%BD%A0%E5%8F%83%E8%80%83%E7%9C%8B%E7%9C%8B%EF%BC%81" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-600 text-white font-bold hover:bg-blue-700 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M22,12c0-5.52-4.48-10-10-10S2,6.48,2,12c0,4.84,3.44,8.87,8,9.8V15H8v-3h2V9.5C10,7.57,11.57,6,13.5,6H16v3h-2c-0.55,0-1,0.45-1,1v2h3v3h-3v6.95C18.05,21.45,22,17.19,22,12z"/></svg>
+                        <span>Facebook</span>
+                    </a>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+
+</body>
+</html>
