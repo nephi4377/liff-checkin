@@ -200,36 +200,44 @@ function pollJobStatus(jobId) {
     if (!API_BASE_URL) {
         return Promise.reject(new Error("輪詢失敗：找不到 API_BASE_URL。"));
     }
-
+   // 回傳一個 Promise，讓上層程式碼可以 await 它的最終結果
     return new Promise((resolve, reject) => {
         const startTime = Date.now();
 
+        // 定義一個會自我重複呼叫的內部函式
         const poll = async () => {
+            // 檢查是否超過總等待時間
             if (Date.now() - startTime > TOTAL_TIMEOUT_MS) {
                 reject(new Error(`任務處理超時 (${TOTAL_TIMEOUT_MS / 1000}秒)。`));
                 return;
             }
 
             try {
+                // 1. 組合查詢用的 URL
                 const url = new URL(API_BASE_URL);
                 url.searchParams.append('page', 'getJobStatus');
                 url.searchParams.append('jobId', jobId);
                 
+                // 2. 發送 GET 請求到後端
                 const response = await fetch(url);
                 const statusResult = await response.json();
 
+                // 4. 判斷任務狀態
                 if (statusResult.status === 'completed' || statusResult.status === 'failed') {
+                    // 如果任務已結束 (成功或失敗)，就結束輪詢                    
                     console.log(`[projectApi] 任務 ${jobId} 已完成，狀態: ${statusResult.status}`);
                     resolve(statusResult);
                 } else {
+                    // 如果任務還在進行中，就安排下一次查詢
                     setTimeout(poll, POLLING_INTERVAL_MS);
                 }
             } catch (error) {
+                // 如果單次查詢失敗 (例如網路不穩)，會在 console 顯示警告，並繼續嘗試下一次輪詢
                 console.warn(`[projectApi] 輪詢 Job ID ${jobId} 時發生網路錯誤: ${error.message}。將在 ${POLLING_INTERVAL_MS}ms 後重試...`);
                 setTimeout(poll, POLLING_INTERVAL_MS);
             }
         };
 
-        poll();
+        poll(); // 啟動第一次輪詢
     });
 }
