@@ -26,6 +26,11 @@ const App = {
         const notifications = ref([]);
         const pendingApprovals = ref(0);
         const currentView = ref({ name: 'dashboard' });
+        const lightbox = ref({
+            visible: false,
+            images: [],
+            currentIndex: 0
+        });
 
         // --- [v429.0 效能優化] 快取優先策略 ---
         const EMPLOYEES_CACHE_KEY = 'spa_hub_employees';
@@ -83,6 +88,53 @@ const App = {
         };
 
         // --- 方法 (Methods) ---
+        const openLightbox = (images, startIndex = 0) => {
+            console.log('[Lightbox] openLightbox called with:', { images, startIndex });
+            if (!images || images.length === 0) return;
+
+            // [v559.6 終極修正] 使用 nextTick 強制 Vue 在下一個 DOM 更新循環中更新畫面。
+            // 這是為了解決在複雜的跨 iframe 通訊中，響應式更新偶爾會失效的邊界情況。
+            // 1. 先更新資料
+            lightbox.value.images = images;
+            lightbox.value.currentIndex = startIndex;
+            
+            // 2. 在下一個 "tick" 中更新可見性，強制觸發渲染
+            nextTick(() => {
+                lightbox.value.visible = true;
+                document.body.style.overflow = 'hidden'; // 在燈箱可見時才鎖定滾動
+            });
+        };
+
+        const closeLightbox = () => {
+            if (!lightbox.value.visible) return; // 防止重複觸發
+            
+            // 恢復背景滾動
+            document.body.style.overflow = '';
+            
+            // [v559.6] 為了與 openLightbox 的邏輯對稱，此處也直接修改屬性
+            lightbox.value.visible = false;
+            
+            // 延遲清空資料，讓淡出動畫能順利完成
+            setTimeout(() => {
+                lightbox.value.images = [];
+            }, 300);
+        };
+
+        const showNextImage = () => {
+            if (lightbox.value.images.length === 0) return;
+            lightbox.value.currentIndex = (lightbox.value.currentIndex + 1) % lightbox.value.images.length;
+        };
+
+        const showPrevImage = () => {
+            if (lightbox.value.images.length === 0) return;
+            lightbox.value.currentIndex = (lightbox.value.currentIndex - 1 + lightbox.value.images.length) % lightbox.value.images.length;
+        };
+
+        const handleKeydown = (e) => {
+            if (!lightbox.value.visible) return;
+            if (e.key === 'ArrowRight') showNextImage();
+            if (e.key === 'ArrowLeft') showPrevImage();
+        };
         const fetchAttendanceData = async () => {
             if (!userProfile.value) return { success: false };
             const url = new URL(ATTENDANCE_GAS_WEB_APP_URL);
@@ -158,8 +210,8 @@ const App = {
             }
         };
 
-        // --- 生命週期鉤子 (Lifecycle Hooks) ---
-        onMounted(async () => {
+        // [v559.8 核心重構] 將所有非同步初始化邏輯移出 onMounted，確保 setup 同步返回。
+        const initializeApplication = async () => {
             const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
 
             // 2. [v429.0 效能優化] 如果已有快取，則立即結束載入動畫，讓使用者看到畫面
@@ -182,43 +234,49 @@ const App = {
 
                 const [attendanceResult, projectsResult] = await Promise.all([fetchAttendanceData(), fetchHubProjectsData()]);
 
-                // 3. [v429.0 效能優化] 智慧更新員工資料
                 if (attendanceResult.success && attendanceResult.employees) {
-                    // 只有在後端資料與當前畫面資料不同時，才更新畫面與快取
                     if (JSON.stringify(allEmployees.value) !== JSON.stringify(attendanceResult.employees)) {
-                        console.log('🔄 員工資料已在背景更新。');
                         allEmployees.value = attendanceResult.employees;
                         saveCache(EMPLOYEES_CACHE_KEY, attendanceResult.employees);
                     }
-                    // 無論如何都更新待審核數量
                     pendingApprovals.value = attendanceResult.pendingRequests?.length || 0;
                 }
 
-                // 4. [v429.0 效能優化] 智慧更新專案與通知資料
                 if (projectsResult.success && projectsResult.data) {
                     const newProjects = projectsResult.data.projects || [];
-                    // 只有在後端資料與當前畫面資料不同時，才更新畫面與快取
                     if (JSON.stringify(allProjects.value) !== JSON.stringify(newProjects)) {
-                        console.log('🔄 專案資料已在背景更新。');
                         allProjects.value = newProjects;
                         saveCache(PROJECTS_CACHE_KEY, newProjects);
-                        // 如果不是首次載入 (即畫面已由快取渲染)，才跳出通知提醒使用者
-                        if (!isLoading.value) { 
-                            showGlobalNotification('專案資料已自動更新。', 3000, 'info');
-                        }
                     }
-                    // 通知永遠使用最新的
                     notifications.value = projectsResult.data.notifications || [];
                 }
-
             } catch (error) {
                 console.error('Initialization Error:', error);
-                showGlobalNotification(`資料載入失敗: ${error.message}`, 5000, 'error');
             } finally {
-                // 5. 無論成功或失敗，最終都確保載入動畫被隱藏
                 isLoading.value = false;
             }
+        };
+
+        // --- 生命週期鉤子 (Lifecycle Hooks) ---
+        onMounted(async () => {
+            // [v559.2 核心修正] 立即註冊 iframe 訊息監聽器，確保不會錯過任何來自 iframe 的 postMessage。
+            // [v559.8] onMounted 只負責觸發非同步初始化，本身保持同步。
+            initializeApplication();
         });
+
+        // [v559.3 核心修正] 將 handleIframeMessage 移入 setup 作用域，確保能存取 openLightbox。
+        const handleIframeMessage = (event) => {
+            // 為了安全，可以檢查 event.origin
+            // if (event.origin !== 'https://your-expected-origin.com') return;
+            
+            const { type, payload } = event.data;
+            if (type === 'openLightbox' && payload) {
+                console.log('[Lightbox] Received message from iframe:', payload);
+                openLightbox(payload.images, payload.index);
+            }
+        };
+        // 將監聽器放在 setup 函式的頂層，確保它只被註冊一次。
+        window.addEventListener('message', handleIframeMessage);
 
         // 【您的要求】核心修正：監聽權限與當前視圖，確保任務交辦中心能被正確初始化
         watch([hasAdminRights, currentView], ([isAdmin, view]) => {
@@ -258,12 +316,31 @@ const App = {
             clearAllNotifications,
             currentUser,
             currentView, // [v411.0 SPA化] 將路由狀態傳給模板
+            // 燈箱功能
+            lightbox,
+            openLightbox,
+            closeLightbox,
+            showPrevImage, // [v559.10 修正] 導出方法給模板使用
+            showNextImage, // [v559.10 修正] 導出方法給模板使用
+            handleKeydown, // 解決 Vue warn: Property "handleKeydown" is not defined on instance
         };
     }, // [v418.1 修正] 補上遺失的逗號，解決 setup() 與 template 之間的語法錯誤
     template: `
         <div v-if="isLoading" class="fixed inset-0 bg-white flex flex-col items-center justify-center z-50"><div class="spinner w-12 h-12 border-4 border-gray-200 rounded-full"></div><p class="mt-4 text-gray-600">正在驗證您的身分並載入資料...</p></div>
         
-        <div v-else id="app-wrapper" class="flex flex-col h-screen">
+        <div v-else id="app-wrapper" class="flex flex-col h-screen" @keydown.esc="closeLightbox" @keydown.left="handleKeydown" @keydown.right="handleKeydown" tabindex="-1">
+            <!-- [v559.10 修正] 將燈箱移至 v-else 內部，並與 header/main 成為兄弟節點 -->
+            <transition name="fade">
+                <div v-if="lightbox.visible" @click="closeLightbox" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-[999]">
+                    <!-- 上一張按鈕 -->
+                    <button v-if="lightbox.images.length > 1" @click.stop="showPrevImage" class="absolute left-4 top-1/2 -translate-y-1/2 text-white text-4xl opacity-50 hover:opacity-100 transition-opacity z-[1001]">&#10094;</button>
+                    <!-- 圖片本體 -->
+                    <img :src="lightbox.images[lightbox.currentIndex]" @click.stop class="max-w-[80vw] max-h-[90vh] object-contain cursor-default rounded-lg shadow-xl">
+                    <!-- 下一張按鈕 -->
+                    <button v-if="lightbox.images.length > 1" @click.stop="showNextImage" class="absolute right-4 top-1/2 -translate-y-1/2 text-white text-4xl opacity-50 hover:opacity-100 transition-opacity z-[1001]">&#10095;</button>
+                </div>
+            </transition>
+
             <!-- [v419.0 UX優化] 將 header 統一為全寬佈局，解決切換頁面時的跳動問題 -->
             <!-- [v420.0 RWD優化] 增加手機版 header 的響應式設計 -->
             <header class="flex-shrink-0 border-b border-gray-200 py-2">

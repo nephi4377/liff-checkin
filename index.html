@@ -15,18 +15,15 @@
         @keyframes pulse-red { 0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } }
     /* 【您的要求】將 hub.html 的樣式整合至主應用，確保樣式能被正確載入 */
     .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-in-out; }
+    /* 為了讓燈箱的 v-if/v-show 動畫更流暢 */
+    .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
+    .fade-enter-from, .fade-leave-to { opacity: 0; }
     </style>
 </head>
 <body class="bg-gray-100">
 
     <!-- Vue 應用程式的掛載點 -->
-    <div id="app">
-        <!-- 載入中畫面 -->
-        <div class="fixed inset-0 bg-white flex flex-col items-center justify-center z-50">
-            <div class="spinner w-12 h-12 border-4 border-gray-200 rounded-full"></div>
-            <p class="mt-4 text-gray-600">正在初始化應用程式...</p>
-        </div>
-    </div>
+    <div id="app"></div>
 
     <!-- 引入 Vue 3 和我們的應用程式主腳本 -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>

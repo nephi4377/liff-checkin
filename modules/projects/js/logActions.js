@@ -395,82 +395,113 @@ export function filterLogsByWorkType(workType) {
 /**
  * [v346.0 合併] 處理建立新日誌 (從 handlers.js 移入)
  */
-export function handleCreateNewPost() {
+export async function handleCreateNewPost() {
   const textarea = document.getElementById('post-creator-textarea');
   const submitBtn = document.getElementById('submit-post-btn');
   const titleSelect = document.getElementById('post-title-select');
   const photoPreviewContainer = document.getElementById('new-log-photo-preview');
 
   const content = textarea.value.trim();
+  // [核心修正] 此處不再讀取 Base64，而是讀取 File 物件，以便後續分塊處理。
+  // 我們假設在建立預覽時，已將 File 物件存放在某處，或可以從預覽元素重新取得。
+  // 為了簡化，我們直接從預覽的 dataset 讀取 Base64，但在新流程中這僅用於樂觀更新。
   const photosBase64Array = photoPreviewContainer
     ? Array.from(photoPreviewContainer.querySelectorAll('.photo-preview-item')).map(item => item.dataset.base64)
     : [];
 
   if (!content && photosBase64Array.length === 0) {
-    alert('請輸入一些內容或附加照片！');
+    showGlobalNotification('請輸入一些內容或附加照片！', 3000, 'error');
     textarea.focus();
     return;
   }
 
   if (!submitBtn) { console.error('無法找到發佈按鈕 (submit-post-btn)'); return; }
 
-  submitBtn.disabled = true;
-  submitBtn.textContent = '發佈中...';
+  try {
+    submitBtn.disabled = true;
+    submitBtn.textContent = '處理中...';
 
-  const projectId = state.projectId;
-  const title = titleSelect ? titleSelect.value : '';
+    // --- 步驟 1: 建立上傳任務 (只發送文字資料和照片數量) ---
+    const title = titleSelect ? titleSelect.value : '';
+    const initialPayload = {
+      action: 'createLog',
+      userId: state.currentUserId || 'ConsoleUser',
+      userName: state.currentUserName,
+      projectId: state.projectId,
+      projectName: state.overview.siteName || state.overview['案場名稱'] || '',
+      title: title,
+      content: content,
+      totalPhotos: photosBase64Array.length, // [重要] 告知後端總共有幾張照片
+      // 注意：這裡完全沒有傳遞 newPhotosBase64Array
+    };
 
-  const metaPayload = {
-    userId: state.currentUserId || 'ConsoleUser',
-    userName: state.currentUserName,
-    projectId: projectId,
-    projectName: state.overview.siteName || state.overview['案場名稱'] || '',
-    title: title,
-    content: content,
-    newPhotosBase64Array: photosBase64Array
-  };
+    // 樂觀更新 UI
+    const optimisticLog = {
+      LogID: `temp-${Date.now()}`,
+      Title: `${new Date().toLocaleDateString('sv')} ${title || '主控台更新'} (處理中...)`,
+      Content: content,
+      UserName: state.currentUserName || '管理員',
+      Timestamp: new Date().toISOString(),
+      PhotoLinks: photosBase64Array,
+    };
+    const newCard = _buildLogCard(optimisticLog, false);
+    newCard.style.opacity = '0.7';
+    const logsContainer = document.getElementById('logs-container');
+    const postCreator = logsContainer.querySelector('.post-creator');
+    if (logsContainer && postCreator) {
+      logsContainer.insertBefore(newCard, postCreator.nextSibling);
+    }
 
-  const displayTitle = title
-    ? `${new Date().toLocaleDateString('sv')} ${title} 進度回報 (處理中...)`
-    : `${new Date().toLocaleDateString('sv')} 主控台更新 (處理中...)`;
-  const optimisticLog = {
-    LogID: `temp-${Date.now()}`,
-    Title: displayTitle,
-    Content: content,
-    UserName: state.currentUserName || '管理員',
-    Timestamp: new Date().toISOString(),
-    // [v350.0 核心修正] 直接傳遞 Base64 陣列，而不是用逗號連接的字串。
-    // 這可以避免 buildPhotoGrid 函式因 Base64 內容中的逗號而錯誤地分割單張圖片。
-    PhotoLinks: photosBase64Array
-  };
+    // 發送初始化請求
+    const jobResponse = await apiRequest({ action: 'createLog', payload: initialPayload });
+    if (!jobResponse.success || !jobResponse.data.jobId) {
+      throw new Error(jobResponse.message || "後端建立任務失敗，未收到有效的 Job ID。");
+    }
+    const { jobId } = jobResponse.data;
 
-  const newCard = _buildLogCard(optimisticLog, false);
-  newCard.style.opacity = '0.7';
+    // --- 步驟 2: 將照片分塊並逐一上傳 ---
+    if (photosBase64Array.length > 0) {
+      const CHUNK_SIZE = 5; // 每次上傳 5 張
+      const totalChunks = Math.ceil(photosBase64Array.length / CHUNK_SIZE);
 
-  const logsContainer = document.getElementById('logs-container');
-  const postCreator = logsContainer.querySelector('.post-creator');
-  if (logsContainer && postCreator) {
-    logsContainer.insertBefore(newCard, postCreator.nextSibling);
-  }
+      for (let i = 0; i < totalChunks; i++) {
+        const chunkStart = i * CHUNK_SIZE;
+        const chunkEnd = chunkStart + CHUNK_SIZE;
+        const photoChunk = photosBase64Array.slice(chunkStart, chunkEnd);
 
-  apiRequest({ action: 'createLog', payload: metaPayload })
-    .then(result => {
-      if (result.success) {
-        window.replaceOptimisticCard(optimisticLog.LogID, result.data);
-        showGlobalNotification(result.message || '日誌已成功建立！', 3000, 'success');
-      } else {
-        showGlobalNotification(`建立日誌失敗: ${result.error || '未知錯誤'}`, 8000, 'error');
-        newCard.style.border = '2px solid red';
+        const chunkPayload = {
+          action: 'uploadJobDataChunk',
+          jobId: jobId,
+          chunkIndex: i + 1,
+          totalChunks: totalChunks,
+          chunkData: { data: photoChunk }
+        };
+        // 發送分塊，這裡我們不等待每個分塊的回應，讓 projectApi 內部處理
+        apiRequest({ action: 'uploadJobDataChunk', payload: chunkPayload });
       }
-    })
-    .catch(error => {
-      showGlobalNotification(`請求失敗: ${error.message}`, 8000, 'error');
-      newCard.style.border = '2px solid red';
-    });
+    }
 
-  submitBtn.disabled = false;
-  submitBtn.textContent = '發佈';
-  textarea.value = '';
-  if (photoPreviewContainer) photoPreviewContainer.innerHTML = '';
-  if (titleSelect) titleSelect.selectedIndex = 0;
+    // --- 步驟 3: 等待後端最終處理結果 ---
+    // projectApi 內部會自動輪詢，我們只需要等待最終的 Promise 結果
+    const finalResult = await jobResponse.pollPromise; // 假設 apiRequest 回傳一個可輪詢的 promise
+
+    if (finalResult.success) {
+      window.replaceOptimisticCard(optimisticLog.LogID, finalResult.data);
+      showGlobalNotification(finalResult.message || '日誌已成功建立！', 3000, 'success');
+    } else {
+      throw new Error(finalResult.message || '後端處理日誌時發生錯誤。');
+    }
+
+  } catch (error) {
+    showGlobalNotification(`建立日誌失敗: ${error.message}`, 8000, 'error');
+    const tempCard = document.querySelector('.card[id^="log-temp-"]');
+    if (tempCard) tempCard.style.border = '2px solid red';
+  } finally {
+    // --- 步驟 4: 清理 UI ---
+    submitBtn.disabled = false;
+    submitBtn.textContent = '發佈';
+    textarea.value = '';
+    if (photoPreviewContainer) photoPreviewContainer.innerHTML = '';
+    if (titleSelect) titleSelect.selectedIndex = 0;
+  }
 }

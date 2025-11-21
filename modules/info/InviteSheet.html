@@ -96,7 +96,6 @@
         // [vNext] 簡化分享流程，直接分享此頁面的網址
         document.getElementById('line-share-btn').addEventListener('click', function(e) {
             e.preventDefault();
-            // [vNext] 建立分享給朋友的專屬頁面 URL
             const currentUrl = new URL(window.location.href);
             const landingPageUrl = `${currentUrl.origin}${currentUrl.pathname.substring(0, currentUrl.pathname.lastIndexOf('/'))}/LandingPage.html`;
 

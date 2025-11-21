@@ -30,8 +30,13 @@
         </div>
         
         <!-- [v445.0 新增] 組別篩選器 -->
-        <div class="bg-white p-3 rounded-lg shadow-md mb-4">
-            <div id="group-filter-container" class="flex flex-wrap gap-x-4 gap-y-2 items-center">
+        <!-- [v564.0 修改] 將組別篩選與尺寸調整拉桿整合在同一行 -->
+        <div class="bg-white p-3 rounded-lg shadow-md mb-4 flex flex-wrap justify-between items-center gap-4">
+            <div id="group-filter-container" class="flex flex-wrap gap-x-4 gap-y-2 items-center flex-grow">
+                <!-- 組別篩選器內容由 JS 動態產生 -->
+            </div>
+            <div id="thumbnail-slider-container" class="flex items-center justify-end gap-2 flex-shrink-0">
+                <!-- 尺寸調整拉桿內容由 JS 動態產生 -->
             </div>
         </div>
 
@@ -53,6 +58,9 @@
         const reportsContainer = document.getElementById('reports-container');
         const placeholder = document.getElementById('placeholder');
         const groupFilterContainer = document.getElementById('group-filter-container');
+        // [v563.0 新增] 縮圖尺寸調整相關元素
+        const sizeSlider = document.getElementById('thumbnail-size-slider');
+        const sizeDisplay = document.getElementById('thumbnail-size-display');
         let userProfile = null; // [v399.0 新增] 用於儲存使用者資訊
         // [v447.0 效能優化] 新增全域變數，用於快取已獲取的資料
         let allFetchedEmployees = [];
@@ -154,6 +162,26 @@
             if (initializeUser()) {
                 queryBtn.addEventListener('click', () => fetchAndRenderReports(startDatePicker.value, endDatePicker.value));
                 fetchAndRenderReports(startDatePicker.value, endDatePicker.value);
+
+                // [v563.0 新增] 綁定拉桿事件
+                // [v564.0 修改] 將拉桿 UI 的生成也移到 JS 中，並修正其功能
+                const sliderContainer = document.getElementById('thumbnail-slider-container');
+                sliderContainer.innerHTML = `
+                    <label for="thumbnail-size-slider" class="text-sm font-medium text-gray-700 whitespace-nowrap">縮圖尺寸:</label>
+                    <input type="range" id="thumbnail-size-slider" min="50" max="300" value="100" class="w-32 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                    <span id="thumbnail-size-display" class="text-sm font-semibold text-gray-800 w-12 text-center">100%</span>
+                `;
+                const sizeSlider = document.getElementById('thumbnail-size-slider');
+                const sizeDisplay = document.getElementById('thumbnail-size-display');
+
+                sizeSlider.addEventListener('input', (event) => {
+                    const percentage = event.target.value;
+                    sizeDisplay.textContent = `${percentage}%`;
+                    // [v564.0 修正] 改為設定圖片的寬度，並讓高度自動調整，以維持比例
+                    // [v565.0 核心修正] 改為直接設定網格欄位的寬度，並將預設尺寸加大為 6rem (96px)
+                    const newWidth = `calc(6rem * ${percentage / 100})`;
+                    document.documentElement.style.setProperty('--thumbnail-width', newWidth);
+                });
             }
         }
 
@@ -229,8 +257,18 @@
                 return acc;
             }, {});
 
+            // [v564.0 新增] 根據組別排序員工
+            filteredEmployees.sort((a, b) => (a.group || '未分類').localeCompare(b.group || '未分類', 'zh-Hant'));
+
+            let lastGroup = null; // 用於追蹤上一個組別名稱
             filteredEmployees.forEach(employee => {
                 const reports = reportsByUserId[employee.userId] || [];
+
+                // [v566.0 新增] 如果員工在此區間內沒有任何回報，則跳過，不顯示其卡片。
+                if (reports.length === 0) {
+                    return; // 進行下一次迴圈
+                }
+
                 const card = document.createElement('div');
                 card.className = 'bg-white p-6 rounded-lg shadow-md border-l-4 border-blue-500';
 
@@ -241,11 +279,18 @@
                     let photosHtml = '';
                     if (report.PhotoLinks) {
                         const photoUrls = report.PhotoLinks.split(',');
-                        photosHtml = `<div class="grid grid-cols-4 sm:grid-cols-6 gap-1 mt-2">${photoUrls.map(url => `
-                            <a href="${url.replace(/=s\d+$/, '')}" target="_blank" rel="noopener noreferrer" title="點擊以檢視原始大圖">
-                                <img src="https://drive.google.com/thumbnail?id=${window.extractDriveFileId(url)}&sz=w128" 
-                                     alt="現場照片" class="w-full h-16 object-cover rounded-md hover:opacity-80 transition-opacity" loading="lazy">
-                            </a>`).join('')}
+                        // [v559.0 燈箱] 加上 onclick 事件以觸發燈箱，並移除原本的 a 標籤
+                        const imageElements = photoUrls.map((url, index) => `
+                            <img src="https://drive.google.com/thumbnail?id=${window.extractDriveFileId(url)}&sz=w128" 
+                                 alt="現場照片" 
+                                 class="object-cover rounded-md hover:opacity-80 transition-opacity cursor-pointer" 
+                                 style="width: var(--thumbnail-width, 100%); height: auto;"
+                                 style="width: 100%; height: 100%;"
+                                 loading="lazy"
+                                 onclick="openParentLightbox('${report.LogID}', ${index})">`).join('');
+                        // [v565.0 核心修正] 移除固定的 grid-cols-*，改用 style 動態控制欄位寬度
+                        photosHtml = `<div class="grid gap-2 mt-2" style="grid-template-columns: repeat(auto-fill, minmax(var(--thumbnail-width, 6rem), 1fr));" id="image-group-${report.LogID}" data-photos='${JSON.stringify(photoUrls)}'>
+                            ${imageElements}
                         </div>`;
                     }
                     
@@ -285,10 +330,20 @@
                         </span>
                     </div>
                     <div class="mt-2">
-                        ${reportsHtml || '<p class="text-gray-500 text-center py-4">此區間內無回報紀錄。</p>'}
+                        ${reportsHtml}
                     </div>
                 `;
                 reportsContainer.appendChild(card);
+
+                // [v564.0 新增] 如果當前員工的組別與上一個不同，插入一個組別標題
+                const currentGroup = employee.group || '未分類';
+                if (currentGroup !== lastGroup) {
+                    const groupHeader = document.createElement('h2');
+                    groupHeader.className = 'text-lg font-bold text-gray-600 mt-8 mb-2 pb-1 border-b-2 border-gray-300';
+                    groupHeader.textContent = currentGroup;
+                    reportsContainer.insertBefore(groupHeader, card);
+                    lastGroup = currentGroup;
+                }
             });
 
             // 如果篩選後所有員工都沒有回報，也顯示提示
@@ -333,6 +388,30 @@
             });
         }
     });
+
+    /**
+     * [v559.1 修正] 將函式移至全域，解決 ReferenceError
+     * 呼叫父視窗的燈箱功能
+     * @param {string} logId - 包含圖片組的回報 LogID
+     * @param {number} startIndex - 被點擊的圖片在陣列中的索引
+     */
+    function openParentLightbox(logId, startIndex) {
+        const imageGroup = document.getElementById(`image-group-${logId}`);
+        if (!imageGroup) return;
+        const originalUrls = JSON.parse(imageGroup.dataset.photos);
+
+        // [v561.0 核心修正] 參考專案工作區的方式，將 URL 轉換為可靠的大圖預覽格式，以解決 403 Forbidden 錯誤。
+        // [v562.0 修正] 加上 sz=w1920 參數以請求高解析度大圖，解決燈箱圖片過小的問題。
+        const largeImageUrls = originalUrls.map(url =>
+            `https://drive.google.com/thumbnail?id=${window.extractDriveFileId(url)}&sz=w1920`
+        );
+        
+        // 使用 postMessage 將指令和資料傳送給父視窗 (SPA 主應用)
+        window.parent.postMessage({
+            type: 'openLightbox',
+            payload: { images: largeImageUrls, index: startIndex } 
+        }, '*'); // 在生產環境中，最好指定確切的 origin
+    }
 
 </script>
 </body>
