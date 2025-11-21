@@ -80,18 +80,46 @@ export async function request({ action, payload = {} }) {
 
         } else if (WRITE_ACTIONS.has(action)) {
             // --- 處理寫入型請求 (POST + 非同步任務) ---
-            // [v555.0 重構] 將 postTask 的邏輯內聯至此處，移除對外部 api.js 的依賴。
-            const taskPayload = { ...payload, action };
+            // [v561.0 核心修正] 重新引入智慧判斷邏輯，解決 '引數過大' 的問題。
+            // 必須在前端就判斷是否包含大型檔案，並選擇不同的後端 API 入口點。
+            const hasUpload = Array.isArray(payload.newPhotosBase64Array) && payload.newPhotosBase64Array.length > 0;
+            let jobId;
 
-            // 步驟 1：初始化任務，並取得 Job ID
-            const initialResult = await postToGas(taskPayload);
-            if (!initialResult.success || !initialResult.jobId) {
-                throw new Error(initialResult.message || '後端未能成功建立任務。');
+            if (hasUpload) {
+                // 情況一：有檔案上傳。
+                // 1. 先發送一個不含照片的「任務宣告」請求。
+                const metaPayload = { ...payload };
+                delete metaPayload.newPhotosBase64Array;
+
+                const initialPayload = {
+                    ...metaPayload,
+                    action: 'createUploadJob', // 強制 action 為 createUploadJob
+                    originalAction: action,    // 將原始 action (如 createLog) 附帶過去
+                    totalPhotos: payload.newPhotosBase64Array.length
+                };
+
+                const initialResult = await postToGas(initialPayload);
+                if (!initialResult.success || !initialResult.jobId) {
+                    throw new Error(initialResult.message || '後端未能成功建立上傳任務。');
+                }
+                jobId = initialResult.jobId;
+                console.log(`[projectApi] 成功建立上傳任務，Job ID: ${jobId}`);
+
+                // 2. 在背景執行分塊上傳 (發後不理)
+                _uploadChunks(jobId, payload.newPhotosBase64Array);
+
+            } else {
+                // 情況二：沒有檔案上傳的簡單任務。
+                const taskPayload = { ...payload, action };
+                const initialResult = await postToGas(taskPayload);
+                if (!initialResult.success || !initialResult.jobId) {
+                    throw new Error(initialResult.message || '後端未能成功建立任務。');
+                }
+                jobId = initialResult.jobId;
+                console.log(`[projectApi] 成功建立後端任務，Job ID: ${jobId}`);
             }
-            const jobId = initialResult.jobId;
-            console.log(`[projectApi] 成功建立後端任務，Job ID: ${jobId}`);
 
-            // 步驟 2：輪詢任務的最終結果 (此處簡化，因為 sendNotification 沒有分塊上傳)
+            // 步驟 3：統一輪詢任務的最終結果
             console.log(`[projectApi] 開始輪詢 Job ID: ${jobId} 的最終結果...`);
             const finalJobState = await pollJobStatus(jobId);
 
@@ -126,6 +154,35 @@ export async function request({ action, payload = {} }) {
             message: error.message,
             error: error.message
         };
+    }
+}
+
+/**
+ * [v561.0 新增] 內部函式，處理檔案的壓縮與分塊上傳。
+ * @param {string} jobId - 任務 ID。
+ * @param {Array<string>} largeDataArray - 包含 Base64 圖片的陣列。
+ */
+async function _uploadChunks(jobId, largeDataArray) {
+    // 簡易壓縮，這裡不實作完整壓縮以簡化邏輯
+    const compressedDataArray = largeDataArray; // 在實際應用中應加入壓縮邏輯
+    const SUBMIT_CHUNK_SIZE = 10; // 每 10 張照片一個 chunk
+    const totalChunks = Math.ceil(compressedDataArray.length / SUBMIT_CHUNK_SIZE) || 1;
+
+    console.log(`[projectApi] Job ID ${jobId}: 開始上傳 ${largeDataArray.length} 張照片，共 ${totalChunks} 個分塊。`);
+
+    for (let i = 0; i < totalChunks; i++) {
+        const chunkStart = i * SUBMIT_CHUNK_SIZE;
+        const chunkEnd = chunkStart + SUBMIT_CHUNK_SIZE;
+        const chunkData = { data: compressedDataArray.slice(chunkStart, chunkEnd) };
+        
+        const chunkPayload = { 
+            action: 'uploadJobDataChunk', 
+            jobId, 
+            chunkIndex: i + 1, 
+            totalChunks, 
+            chunkData 
+        };
+        postToGas(chunkPayload); // 發後不理，不關心單一 chunk 的回傳
     }
 }
 
