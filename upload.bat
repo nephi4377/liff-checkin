@@ -7,16 +7,13 @@
 :: 2. Push all changes to the 'main' branch on GitHub.
 :: =================================================================
 
-:: [v1.3] Switched all output to English to eliminate all encoding issues.
 setlocal
+:: [v1.5 核心修正] 參考 deploy.bat 的作法，在腳本開頭切換至 UTF-8 編碼，
+:: 這可以從根本上解決所有因編碼不符造成的亂碼與指令執行失敗問題。
+chcp 65001 > nul
 
 echo.
 echo [Step 1/3] Performing local backup...
-:: [v1.4] Changed paths to English to permanently resolve encoding issues.
-:: Please ensure you have manually renamed the folder '程式備份用' to 'CodeBackups'.
-
-:: Use relative paths based on the script's location.
-:: %~dp0 is the path of the current script (e.g., D:\Dropbox\CodeBackups\CODING\)
 set "SOURCE_DIR=%~dp0"
 set "BACKUP_ROOT=%~dp0..\BAK"
 
