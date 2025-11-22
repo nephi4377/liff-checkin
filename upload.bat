@@ -27,9 +27,12 @@ mkdir "%BACKUP_PATH%"
 if errorlevel 1 (
     echo    - ERROR: Failed to create backup directory. Check path and permissions.
 ) else (
-    :: [核心修正] /XF 參數不應包含完整路徑，否則會將整個來源目錄排除。
-    :: 只需提供檔名即可。
-    robocopy "%SOURCE_DIR%" "%BACKUP_PATH%" /E /XD .git /XF "upload.bat" > nul
+    :: [v1.6 核心修正] 根據您的建議，參考 deploy.bat 的作法，改用更穩定的 xcopy 指令。
+    :: 建立一個 exclude.txt 檔案，列出所有要排除的檔案和資料夾。
+    echo .git\ > exclude.txt
+    echo upload.bat >> exclude.txt
+    :: /E 複製所有子目錄(包含空的) /I 如果目的地不存在就建立 /Y 不提示直接覆寫 /EXCLUDE 指定排除列表
+    xcopy "%SOURCE_DIR%" "%BACKUP_PATH%\" /E /I /Y /EXCLUDE:exclude.txt > nul
     echo    - Backup folder: %BACKUP_PATH%
     echo    - Backup complete.
 )
