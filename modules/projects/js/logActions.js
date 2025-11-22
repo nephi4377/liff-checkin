@@ -175,6 +175,11 @@ export function handleSavePhotos() {
     const newUploads = Array.from(grid.querySelectorAll('.modal-photo-item.new-upload:not(.deleted)'))
         .map(item => item.dataset.fullUrl);
 
+    // [v588.0 新增] 3. 收集要刪除的舊照片的 File ID
+    const deleteIds = Array.from(grid.querySelectorAll('.modal-photo-item.deleted:not(.new-upload)'))
+        .map(item => extractDriveFileId(item.dataset.link))
+        .filter(Boolean); // 過濾掉無法解析 ID 的連結
+
     // 3. 取得當前正在編輯的日誌 ID
     const logIdToUpdate = state.currentEditingLogId; // [v359.0 核心修正] 修正屬性名稱，應為 state.currentEditingLogId
     if (!logIdToUpdate) {
@@ -213,6 +218,7 @@ export function handleSavePhotos() {
             existingLinksCsv: keepLinks.join(','), // 要保留的舊連結
             // [核心修正] 將新上傳的 Base64 照片陣列的 key 改回 newPhotosBase64Array，以匹配後端邏輯
             newPhotosBase64Array: newUploads,
+            fileIdsToDelete: deleteIds, // [v588.0 新增] 將待刪除的 ID 列表加入 payload
             projectId: state.projectId, // [問題2 修正] 將 projectId 加入 payload
             projectName: state.overview.siteName || state.overview['案場名稱'] || '', // [問題2 修正] 將 projectName 加入 payload
             newPhotosBase64Array: newUploads,

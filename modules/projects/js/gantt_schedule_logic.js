@@ -8,8 +8,8 @@
  */
 
 import { logToPage } from '../../shared/js/utils.js';
-import { state } from './state.js'; // [v540.0 修正] 引入 state
-import * as api from './api.js';
+import { state } from './state.js';
+import { request as apiRequest } from './projectApi.js'; // [v563.0 修正] 統一使用新的 projectApi 模組
 import { showGlobalNotification } from '../../shared/js/utils.js';
 
 /**
@@ -382,26 +382,20 @@ export function handleImportTemplate(templateType, startDate) {
   
   showGlobalNotification('正在從範本建立排程...', 5000, 'info');
 
-  // [v540.0 修正] 統一呼叫 projectApi.js 中的 request 函式
-  // 注意：gantt_main.js 沒有引入 projectApi.js，所以我們需要透過 main.js 的 apiRequest
-  // 這裡假設 gantt.html 會引入 main.js 或 projectApi.js
-  // 為了安全起見，我們直接使用 api.postTask，但正確處理其回傳值
-  const payload = {
+  // [v563.0 修正] 統一使用 projectApi.js 的 request 函式
+  apiRequest({
     action: 'createFromTemplate',
-    projectId: state.projectId,
-    templateType,
-    startDate,
-    userId: state.currentUserId,
-    userName: state.currentUserName
-  };
-
-  api.postTask(payload)
-    .then(finalJobState => {
-      if (finalJobState.status === 'completed' && finalJobState.result.success) {
+    payload: {
+      templateType,
+      startDate,
+    }
+  })
+    .then(result => {
+      if (result.success) {
         showGlobalNotification('排程已成功建立！正在刷新畫面...', 3000, 'success');
         window.location.reload(); // 重新載入頁面以顯示新排程
       } else {
-        showGlobalNotification(`建立失敗：${finalJobState.result?.message || '未知錯誤'}`, 8000, 'error');
+        showGlobalNotification(`建立失敗：${result.error || '未知錯誤'}`, 8000, 'error');
       }
     })
     .catch(error => showGlobalNotification(`請求失敗：${error.message}`, 8000, 'error'));

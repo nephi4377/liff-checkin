@@ -454,31 +454,59 @@ window.addOptimisticCommunicationCard = addOptimisticCommunicationCard;
  * @returns {void}
  */
 let lazyImageObserver;
+const imageQueue = new Set(); // 圖片請求佇列
+let isProcessingQueue = false; // 佇列是否正在處理中
+
 export function lazyLoadImages() {
   const lazyImages = document.querySelectorAll('img.lazy');
 
+  /**
+   * [內部函式] 處理圖片請求佇列。
+   * 每次從佇列中取出一張圖片進行載入，並透過 setTimeout 安排下一次的處理，
+   * 以此達到請求分流、避免觸發速率限制的目的。
+   */
+  async function processQueue() {
+      if (imageQueue.size === 0) {
+          isProcessingQueue = false; // 佇列已空，標示為未處理
+          return;
+      }
+      isProcessingQueue = true;
+      const lazyImage = imageQueue.values().next().value; // 取出佇列中的第一張圖片
+      imageQueue.delete(lazyImage); // 從佇列中移除
+      
+      // [v580.0 核心修正] 將 setTimeout 改為 Promise，確保一張圖片載入完成後才處理下一張
+      await new Promise((resolve) => {
+          lazyImage.onload = resolve;
+          lazyImage.onerror = resolve; // 無論成功或失敗都繼續處理下一張
+          lazyImage.src = lazyImage.dataset.src;
+      });
+      
+      lazyImage.classList.remove("lazy"); // 載入後移除 lazy class
+      
+      // 處理完一張後，延遲一小段時間再處理下一張
+      // 即使圖片是從 Service Worker 快取中快速載入，這個延遲也能確保請求不會過於密集
+      setTimeout(processQueue, 100);
+  }
+
   if ("IntersectionObserver" in window) {
-    // 如果已有觀察者，先中斷舊的，避免重複觀察
     if (lazyImageObserver) {
       lazyImageObserver.disconnect();
-    }
+      }
 
     lazyImageObserver = new IntersectionObserver((entries, observer) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          const lazyImage = entry.target;
-          lazyImage.src = lazyImage.dataset.src;
-          lazyImage.classList.remove("lazy");
-          observer.unobserve(lazyImage);
-        }
-      });
+        entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+                imageQueue.add(entry.target); // 將圖片加入佇列
+                if (!isProcessingQueue) processQueue(); // 如果佇列不在處理中，則開始處理
+                observer.unobserve(entry.target); // 立即停止觀察，避免重複加入佇列
+            }
+        });
     });
 
     lazyImages.forEach((lazyImage) => {
       lazyImageObserver.observe(lazyImage);
     });
   } else {
-    // 對於不支援 IntersectionObserver 的舊版瀏覽器，直接載入所有圖片
     lazyImages.forEach((lazyImage) => {
       lazyImage.src = lazyImage.dataset.src;
       lazyImage.classList.remove("lazy");

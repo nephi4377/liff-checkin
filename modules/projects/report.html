@@ -414,6 +414,9 @@
                 formData.append('payload', JSON.stringify(chunkFormData));
                 // 1. 將非檔案的文字資料逐一附加
                 Object.keys(baseFormData).forEach(key => formData.append(key, baseFormData[key]));
+                Object.keys(chunkFormData).forEach(key => {
+                    if (key !== 'photos') formData.append(key, typeof chunkFormData[key] === 'object' ? JSON.stringify(chunkFormData[key]) : chunkFormData[key]);
+                });
                 formData.append('chunkIndex', i + 1);
                 // 2. 只將圖片陣列（Base64 字串）單獨 stringify 後附加
                 formData.append('photos', JSON.stringify(processedPhotos));

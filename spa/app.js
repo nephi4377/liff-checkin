@@ -1,8 +1,8 @@
 import Dashboard from './Dashboard.js';
 import ProjectBoard from './ProjectBoard.js';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
-import { saveCache, loadCache, showGlobalNotification, sendApiRequestAsGet } from '../shared/js/utils.js'; // [v552.0 重構] 引入共用 API 函式
-import { postTask } from '../api.js'; // [v553.1 修正] 補上遺失的 postTask 模組引入
+import { saveCache, loadCache } from '../shared/js/utils.js';
+import { request as apiRequest } from '../modules/projects/js/projectApi.js'; // [重構] 改為引入統一的 projectApi 模組
 import { initializeTaskSender } from '../shared/js/taskSender.js'; // [v509.0 修正] 更新共用模組路徑
 
 const { createApp, ref, onMounted, computed, watch, nextTick } = Vue;
@@ -288,10 +288,10 @@ const App = {
                     if (taskSenderContainer) {
                         const state = { allEmployees: allEmployees.value, currentUserId: userProfile.value.userId, currentUserName: userProfile.value.displayName };
                         // [v553.0 架構統一] 為了與 main.js 的行為一致，此處模擬 projectApi.js 的 postTask 流程。
-                        // 注意：此處直接呼叫 api.js 的 postTask，而不是 projectApi.js 的 request。
-                        // 這需要後端 WebApp.js 將 'sendNotification' 加入 isApiAction 列表。
-                        const postTaskFunction = (payload) => postTask({ ...payload, action: 'sendNotification' });
-                        const config = { state, api: { sendRequest: postTaskFunction }, callbacks: { onSuccess: fetchHubProjectsData } };
+                        // [重構] 將請求函式直接指向 apiRequest，並固定 action 為 'sendNotification'。
+                        // taskSender 模組會自動將它的 payload 傳遞給這個函式。
+                        const sendRequestFunction = (payload) => apiRequest({ action: 'sendNotification', payload });
+                        const config = { state, api: { sendRequest: sendRequestFunction }, callbacks: { onSuccess: fetchHubProjectsData } };
                         // 【您的要求】傳入分組與收合設定
                         initializeTaskSender(taskSenderContainer, config, { style: 'hub', collapsible: true, groupBy: 'group' });
                     }

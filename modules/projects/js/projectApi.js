@@ -165,7 +165,7 @@ export async function request({ action, payload = {} }) {
 async function _uploadChunks(jobId, largeDataArray) {
     // 簡易壓縮，這裡不實作完整壓縮以簡化邏輯
     const compressedDataArray = largeDataArray; // 在實際應用中應加入壓縮邏輯
-    const SUBMIT_CHUNK_SIZE = 10; // 每 10 張照片一個 chunk
+    const SUBMIT_CHUNK_SIZE = 6; // 每 10 張照片一個 chunk
     const totalChunks = Math.ceil(compressedDataArray.length / SUBMIT_CHUNK_SIZE) || 1;
 
     console.log(`[projectApi] Job ID ${jobId}: 開始上傳 ${largeDataArray.length} 張照片，共 ${totalChunks} 個分塊。`);

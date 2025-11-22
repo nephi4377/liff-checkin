@@ -30,7 +30,9 @@ mkdir "%BACKUP_PATH%"
 if errorlevel 1 (
     echo    - ERROR: Failed to create backup directory. Check path and permissions.
 ) else (
-    robocopy "%SOURCE_DIR%" "%BACKUP_PATH%" /E /XD .git /XF "%SOURCE_DIR%\upload.bat" > nul
+    :: [核心修正] /XF 參數不應包含完整路徑，否則會將整個來源目錄排除。
+    :: 只需提供檔名即可。
+    robocopy "%SOURCE_DIR%" "%BACKUP_PATH%" /E /XD .git /XF "upload.bat" > nul
     echo    - Backup folder: %BACKUP_PATH%
     echo    - Backup complete.
 )

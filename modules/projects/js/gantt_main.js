@@ -7,9 +7,9 @@
  * =============================================================================
  */
 
-import * as api from './api.js'; // 檔案位於同一層
+import { request as apiRequest } from './projectApi.js'; // [重構] 改為使用統一的 projectApi 模組
 import { logToPage, showGlobalNotification, saveCache, loadCache } from '../../shared/js/utils.js';
-import * as GanttScheduleLogic from './gantt_schedule_logic.js'; // 檔案位於同一層
+import * as GanttScheduleLogic from './gantt_schedule_logic.js';
 import { state } from './state.js'; // 檔案位於同一層
 
 /**
@@ -122,12 +122,18 @@ async function initializeApp() {
     setTimeout(async () => {
         try {
             logToPage('🔄 正在從後端請求最新專案資料...');
-            const fetchUrl = `${window.API_BASE_URL}?page=project&id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
-            const freshData = await api.loadJsonp(fetchUrl);
+            // [重構] 改為使用統一的 apiRequest 函式，不再使用舊的 api.loadJsonp
+            const result = await apiRequest({
+                action: 'project',
+                payload: { id: projectId, userId: userId }
+            });
+
+            if (!result.success) throw new Error(result.error);
+            const freshData = result.data;
             
             // 【優化】只有在新舊資料不同時才更新畫面和快取
             const oldDataSignature = JSON.stringify(loadCache(state.cacheKey) || {});
-            const newDataSignature = JSON.stringify(freshData);
+            const newDataSignature = JSON.stringify(freshData); // freshData 現在是 result.data
 
             if (oldDataSignature !== newDataSignature) {
                 logToPage('🔄 偵測到後端資料已更新，正在無縫刷新畫面...');

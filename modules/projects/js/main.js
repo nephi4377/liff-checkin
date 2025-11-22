@@ -386,11 +386,15 @@ async function refreshData(projectId, userId, API_BASE_URL) {
  */
 async function refreshCommunicationHistory(projectId, userId, API_BASE_URL) {
     try {
-        const fetchUrl = `${API_BASE_URL}?page=project&id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
         logToPage('🔄 輕量更新：正在請求最新的溝通紀錄...');
-        const freshData = await loadJsonp(fetchUrl);
+        // [重構] 改為使用統一的 apiRequest 函式，以保持一致性
+        const result = await apiRequest({
+            action: 'project',
+            payload: { id: projectId, userId: userId }
+        });
 
-        if (freshData && freshData.communicationHistory) {
+        if (result.success) {
+            const freshData = result.data;
             state.communicationHistory = freshData.communicationHistory;
             renderCommunicationHistory(state.communicationHistory, state.currentUserId);
             logToPage('✅ 溝通紀錄已無縫更新。');

@@ -33,11 +33,21 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) => {
         return cache.match(request).then((cachedResponse) => {
-          // 如果快取中有，直接回傳；否則從網路請求，並存入快取
-          return cachedResponse || fetch(request).then((networkResponse) => {
-            cache.put(request, networkResponse.clone());
-            return networkResponse;
-          });
+          // [v584.0 核心優化] 增加對快取內容的有效性檢查
+          // 如果快取存在且是成功的 (status 2xx)，才回傳快取。
+          if (cachedResponse && cachedResponse.ok) {
+            return cachedResponse;
+          }
+
+          // 如果沒有快取，或者快取的回應是失敗的 (如 429)，則重新從網路請求。
+          return fetch(request).then((networkResponse) => {
+              // [v582.0 核心修正] 只快取成功的請求 (狀態碼 200-299)
+              if (networkResponse && networkResponse.ok) {
+                // 複製一份回應存入快取，因為回應只能被讀取一次
+                cache.put(request, networkResponse.clone());
+              }
+              return networkResponse; // 無論成功失敗，都將原始回應傳回給頁面
+          });          
         });
       })
     );
