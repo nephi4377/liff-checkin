@@ -18,16 +18,20 @@ export default {
         const projectsToShow = computed(() => {
             if (!props.projects || !props.currentUser) return [];
             const permission = props.currentUser.permission || 1;
-            const userName = props.currentUser.userName;
+            // [v595.0 核心修正] 根據您的回報，權限判斷應使用 userId，而非 userName。
+            const userId = props.currentUser.userId;
             const userGroup = props.currentUser.group;
 
             let filtered = [];
             if (permission >= 4) {
                 filtered = props.projects;
             } else if (permission === 3) {
+                // 工務權限：比對專案分區與使用者組別
                 filtered = props.projects.filter(p => p['專案分區'] === userGroup);
             } else {
-                filtered = props.projects.filter(p => (p['專案負責人'] || '').split(',').map(name => name.trim()).includes(userName));
+                // 設計師/助理權限：比對專案負責人欄位是否包含使用者的 User ID
+                // 專案負責人欄位可能包含多個以逗號分隔的 ID
+                filtered = props.projects.filter(p => (p['專案負責人'] || '').split(',').map(id => id.trim()).includes(userId));
             }
             return filtered.sort((a, b) => (new Date(b.logSummary?.[0]?.Timestamp) || 0) - (new Date(a.logSummary?.[0]?.Timestamp) || 0));
         });

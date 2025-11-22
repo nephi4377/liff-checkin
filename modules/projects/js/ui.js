@@ -455,37 +455,43 @@ window.addOptimisticCommunicationCard = addOptimisticCommunicationCard;
  */
 let lazyImageObserver;
 const imageQueue = new Set(); // 圖片請求佇列
-let isProcessingQueue = false; // 佇列是否正在處理中
+let activeRequests = 0; // [v596.0] 追蹤當前正在處理的請求數量
+const MAX_CONCURRENT_REQUESTS = 3; // [v596.0] 設定最大並行請求數為 3
 
 export function lazyLoadImages() {
   const lazyImages = document.querySelectorAll('img.lazy');
 
   /**
    * [內部函式] 處理圖片請求佇列。
-   * 每次從佇列中取出一張圖片進行載入，並透過 setTimeout 安排下一次的處理，
-   * 以此達到請求分流、避免觸發速率限制的目的。
+   * [v596.0 重構] 此函式現在作為一個「總調度員」。
+   * 它會以極短的間隔不斷檢查，只要佇列中有圖片且當前請求數未達上限，就立即派出新的「工人」去載入。
    */
   async function processQueue() {
-      if (imageQueue.size === 0) {
-          isProcessingQueue = false; // 佇列已空，標示為未處理
+      // 如果佇列已空，或請求數已達上限，則暫停，等待下一次被喚醒
+      if (imageQueue.size === 0 || activeRequests >= MAX_CONCURRENT_REQUESTS) {
           return;
       }
-      isProcessingQueue = true;
+
+      activeRequests++; // 派出一個工人，計數+1
       const lazyImage = imageQueue.values().next().value; // 取出佇列中的第一張圖片
       imageQueue.delete(lazyImage); // 從佇列中移除
       
-      // [v580.0 核心修正] 將 setTimeout 改為 Promise，確保一張圖片載入完成後才處理下一張
-      await new Promise((resolve) => {
-          lazyImage.onload = resolve;
-          lazyImage.onerror = resolve; // 無論成功或失敗都繼續處理下一張
+      // 真正載入圖片的「工人」
+      const loadImage = new Promise((resolve) => {
+          lazyImage.onload = () => resolve();
+          lazyImage.onerror = () => resolve(); // 無論成功或失敗都算完成
           lazyImage.src = lazyImage.dataset.src;
       });
+
+      // 當這個工人完成工作後
+      loadImage.then(() => {
+          lazyImage.classList.remove("lazy");
+          activeRequests--; // 工人回來了，計數-1
+          processQueue(); // 立刻檢查是否能派出下一個工人
+      });
       
-      lazyImage.classList.remove("lazy"); // 載入後移除 lazy class
-      
-      // 處理完一張後，延遲一小段時間再處理下一張
-      // 即使圖片是從 Service Worker 快取中快速載入，這個延遲也能確保請求不會過於密集
-      setTimeout(processQueue, 100);
+      // 立刻檢查是否能派出更多工人（如果還沒達到上限）
+      setTimeout(processQueue, 150); // [v596.0] 間隔 50ms 派出下一個，實現並行處理
   }
 
   if ("IntersectionObserver" in window) {
@@ -497,7 +503,7 @@ export function lazyLoadImages() {
         entries.forEach((entry) => {
             if (entry.isIntersecting) {
                 imageQueue.add(entry.target); // 將圖片加入佇列
-                if (!isProcessingQueue) processQueue(); // 如果佇列不在處理中，則開始處理
+                processQueue(); // 每次有新圖片進入視野，都嘗試啟動調度員
                 observer.unobserve(entry.target); // 立即停止觀察，避免重複加入佇列
             }
         });

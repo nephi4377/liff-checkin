@@ -61,7 +61,7 @@ const App = {
             // [v413.0 SPA化] 擴充路由表，將更多獨立頁面以 iframe 方式整合進來
             '#/new-site': { name: 'iframe', src: 'modules/projects/NewSiteForm.html', title: '新增案場資料' }, // [v515.0 修正] 改為絕對路徑
             '#/faq': { name: 'iframe', src: 'modules/info/FAQ.html', title: '客戶常見問答' }, // [v518.0 修正]
-            '#/daily-report': { name: 'iframe', src: 'modules/projects/daily_report.html', title: '施工回報總覽' }, // [v515.0 修正] 改為絕對路徑
+            '#/daily-report': { name: 'iframe', src: 'modules/projects/daily_report.html', title: '團隊工作總覽' }, // [v515.0 修正] 改為絕對路徑
             '#/onboarding-flow': { name: 'iframe', src: 'modules/info/onboardingflow.html', title: '客戶接洽流程' }, // [v518.0 修正]
             '#/attendance-report': { name: 'iframe', src: 'modules/attendance/attendance_report.html', title: '出勤儀表板' }, // [v515.0 修正] 改為絕對路徑
             '#/approval-dashboard': { name: 'iframe', src: 'modules/attendance/approval_dashboard.html', title: '假勤審核儀表板' }, // [v515.0 修正] 改為絕對路徑

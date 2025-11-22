@@ -402,7 +402,10 @@
          */
         // 【離線功能】改造打卡事件，加入離線儲存邏輯
         checkinButton.addEventListener('click', async () => {
+            // [v25.11.02.1000 核心修正] 根據您的指示，優化防重複點擊機制。
+            // 1. 在所有非同步操作開始前，立即禁用按鈕並更新文字。
             checkinButton.disabled = true;
+            checkinButton.textContent = '定位中...';
             pageLog('事件: 打卡按鈕被點擊');
 
             try {
@@ -433,6 +436,8 @@
 
                 // --- 步驟 3: 嘗試立即同步此筆紀錄 ---
                 showLoading('正在傳送打卡資訊...');
+                // 2. 進入網路請求階段，再次更新按鈕文字。
+                checkinButton.textContent = '傳送中...';
                 try {
                     console.log(`[Check-in] ⚡️ 嘗試立即同步剛建立的紀錄 (ID: ${checkinRecord.id})`);
                     const result = await withTimeout(sendCheckinData(checkinRecord), 30000, new Error('後端伺服器無回應'));
@@ -469,6 +474,7 @@
                 updateStatusIndicator('gps', 'error', '定位失敗');
                 showError(errorMessage);
                 // 【您的要求】在顯示錯誤後，確保打卡按鈕恢復可用狀態
+                // 3. 在所有錯誤路徑中，恢復按鈕為可點擊狀態，並提示使用者重新操作。
                 checkinButton.disabled = false; 
                 checkinButton.textContent = '重新打卡';
             }
@@ -525,17 +531,3 @@
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-

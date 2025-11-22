@@ -199,36 +199,25 @@
             const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
 
             if (isLocalTest) {
-                console.warn('⚡️ 本地測試模式啟用，跳過 LIFF 認證。');
+                console.warn('⚡️ 本地測試模式啟用。');
                 currentUserProfile = {
                     userId: urlParams.get('uid') || 'U_test_admin',
                     displayName: '測試管理員',
                     permission: 5
                 };
-                // [v527.0 優化] 在本地測試模式下，也模擬從後端獲取員工資料
                 await showMainContent();
             } else {
-                try {
-                    await liff.init({ liffId: '2007974938-2nPKg3J0' });
-                    if (!liff.isLoggedIn()) {
-                        liff.login();
-                        return;
-                    }
-                    currentUserProfile = await liff.getProfile();
-                    // [v527.0 優化] 移除多餘的 get_employee_details 呼叫。
-                    // 權限將在 fetchEmployeesAndPopulateDropdown 中取得。
-                    await showMainContent();
+                // [v597.0 核心修正] 移除 LIFF 認證流程，改為完全依賴從主控台傳入的 uid 和 name 參數。
+                // 這解決了在 iframe 中重複初始化 LIFF 導致頁面卡住的問題。
+                const uid = urlParams.get('uid');
+                const name = urlParams.get('name');
 
-                    // [v527.0 優化] 將權限檢查移至取得員工資料後
-                    const currentUserData = allEmployees.find(emp => emp.userId === currentUserProfile.userId);
-                    if (!currentUserData || currentUserData.permission < 4) {
-                        document.getElementById('loading-screen').innerHTML = '<p class="text-red-500 font-semibold">您沒有權限存取此頁面。</p>';
-                        return;
-                    }
-                    showMainContent();
-                } catch (error) {
-                    console.error('LIFF 初始化失敗:', error);
-                    document.getElementById('loading-screen').innerHTML = '<p class="text-red-500 font-semibold">驗證失敗，請在 LINE App 中開啟此頁面。</p>';
+                if (uid && name) {
+                    currentUserProfile = { userId: uid, displayName: name };
+                    await showMainContent();
+                } else {
+                    // 如果缺少 uid 或 name，表示不是從主控台正常進入，顯示錯誤。
+                    document.getElementById('loading-screen').innerHTML = '<p class="text-red-500 font-semibold">錯誤：缺少使用者認證資訊。<br>請從「整合主控台」進入此頁面。</p>';
                 }
             }
         }
