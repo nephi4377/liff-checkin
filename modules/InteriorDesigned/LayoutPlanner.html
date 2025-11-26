@@ -629,6 +629,20 @@
         © 添心設計 Interior Design
     </div>
 
+    <!-- 【您的要求】核心修正：覆寫手機版偵測邏輯 -->
+    <!-- 
+        問題：當此頁面在主控台的 iframe 中載入時，其 window.innerWidth 會是 iframe 的寬度，
+              可能小於 768px，導致被誤判為手機。
+        解決方案：在 LayoutPlanner.js 載入後，重新執行一次更精準的裝置偵測。
+                  新的偵測邏輯優先檢查 User Agent 是否包含 'Mobi' 關鍵字，
+                  這能更準確地判斷是否為真實的行動裝置，從而避免因 iframe 寬度造成的誤判。
+    -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const isMobile = /Mobi/i.test(navigator.userAgent);
+            document.getElementById('mobile-warning').style.display = isMobile ? 'flex' : 'none';
+        });
+    </script>
 </body>
 
 </html>

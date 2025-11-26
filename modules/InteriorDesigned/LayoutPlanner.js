@@ -1919,8 +1919,11 @@ function showDesignFilesDownloadComplete(dateString) {
 
 // 應用程式進入點
 window.onload = () => {
-    // [您的要求] 新增：偵測是否為手機裝置
-    const isMobile = window.innerWidth < 768; // 以 768px 為分界點
+    // 【核心修正】修正手機裝置偵測邏輯。
+    // 舊邏輯 (window.innerWidth < 768) 在 iframe 中會因寬度不足而被誤判。
+    // 新邏輯優先檢查 User Agent 是否包含 'Mobi' 關鍵字，這能更準確地判斷是否為真實的行動裝置，
+    // 從而避免因 iframe 寬度造成的誤判。
+    const isMobile = /Mobi/i.test(navigator.userAgent);
     if (isMobile) {
         // 如果是手機，則顯示提示訊息並停止後續所有程式碼的執行
         document.getElementById('mobile-warning').style.display = 'flex';

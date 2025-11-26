@@ -66,6 +66,9 @@ const App = {
             // [v424.0 架構優化] 將專案工作區與施工回報改為內嵌 iframe
             '#/project-console': { name: 'iframe', src: 'modules/projects/managementconsole.html', title: '專案工作區' }, // [v543.0 修正] 改為正確的模組路徑
             '#/report': { name: 'iframe', src: 'modules/projects/report.html', title: '施工回報' }, // [v543.0 修正] 改為正確的模組路徑
+            // 【您的要求】新增互動式室內設計規劃工具與平面圖校正工具的路由
+            '#/layout-planner': { name: 'iframe', src: 'modules/InteriorDesigned/LayoutPlanner.html', title: '互動式室內設計規劃工具' },
+            '#/floorplan-straightener': { name: 'iframe', src: 'modules/InteriorDesigned/floorplan-straightener.html', title: '平面圖校正工具' },
         };
         // [v513.0 新增] 補上員工資料編輯頁面的路由
         routes['#/employee-editor'] = { name: 'iframe', src: 'modules/attendance/employee_editor.html', title: '員工資料編輯' }; // [v515.0 修正] 改為絕對路徑
@@ -353,14 +356,16 @@ const App = {
             </header>
 
             <!-- [v419.0 UX優化] 主要內容區的寬度限制與 header 分離 -->
-            <main class="flex-grow overflow-y-auto">
+            <!-- 【您的要求】核心修正：當視圖為 iframe 時，移除 main 元素的寬度限制，讓 iframe 可以全寬顯示 -->
+            <main :class="['flex-grow overflow-y-auto', { 'container mx-auto max-w-2xl px-4 sm:px-6 lg:px-8': currentView.name !== 'iframe' }]">
                 <!-- [v428.0 UX優化] 將 Dashboard 和 ProjectBoard 都放入限寬容器中，提升閱讀體驗 -->
-                <div v-if="currentView.name === 'dashboard'" class="container mx-auto max-w-2xl px-4 sm:px-6 lg:px-8 py-6">
+                <!-- 【您的要求】核心修正：移除內層的寬度限制，統一由 main 元素控制 -->
+                <div v-if="currentView.name === 'dashboard'" class="py-6">
                     <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :hasAdminRights="hasAdminRights" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" />
                     <!-- 任務交辦中心容器 -->
                     <div v-if="hasAdminRights" id="task-sender-container" class="mt-4"></div>
                 </div>
-                <div v-else-if="currentView.name === 'project-board'" class="container mx-auto max-w-2xl px-4 sm:px-6 lg:px-8 py-6">
+                <div v-else-if="currentView.name === 'project-board'" class="py-6">
                      <ProjectBoard :projects="allProjects" :userProfile="userProfile" :currentUser="currentUser" />
                 </div>
                 <!-- [v544.0 核心修正] 增加 v-if="userProfile" 判斷，確保在 userProfile 載入完成後才渲染 iframe -->
