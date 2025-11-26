@@ -1,7 +1,6 @@
 import Dashboard from './Dashboard.js';
 import ProjectBoard from './ProjectBoard.js';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
-import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
 import { saveCache, loadCache } from '../shared/js/utils.js';
 import { request as apiRequest } from '../modules/projects/js/projectApi.js'; // [重構] 改為引入統一的 projectApi 模組
 import { initializeTaskSender } from '../shared/js/taskSender.js'; // [v509.0 修正] 更新共用模組路徑
@@ -12,7 +11,12 @@ const App = {
     components: { Dashboard, ProjectBoard, IframeView }, // [v411.0 SPA化] 註冊 Iframe 元件
     setup() {
         // --- 環境設定 ---
-        // [v602.0 重構] 所有 URL 和 LIFF ID 改為從 config.js 讀取
+        const LIFF_ID = '2007974938-2nPKg3J0';
+        const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
+        // [v556.0 核心修正] 將 URL 掛載到 window 物件，以便 projectApi.js 模組可以存取。
+        window.__GAS_WEB_APP_URL__ = GAS_WEB_APP_URL;
+
+        const ATTENDANCE_GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
 
         // --- 狀態管理 (State) ---
         const isLoading = ref(true);
@@ -133,7 +137,7 @@ const App = {
         };
         const fetchAttendanceData = async () => {
             if (!userProfile.value) return { success: false };
-            const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
+            const url = new URL(ATTENDANCE_GAS_WEB_APP_URL);
             url.searchParams.append('page', 'attendance_api');
             url.searchParams.append('action', 'get_hub_core_data');
             url.searchParams.append('userId', userProfile.value.userId);
@@ -145,7 +149,7 @@ const App = {
         const fetchHubProjectsData = async () => {
             if (!userProfile.value) return { success: false };
             const user = currentUser.value || { userId: userProfile.value.userId, userName: userProfile.value.displayName, permission: 1, group: '未分類' };
-            const url = new URL(CONFIG.GAS_WEB_APP_URL);
+            const url = new URL(GAS_WEB_APP_URL);
             url.searchParams.append('page', 'get_hub_projects_data');
             url.searchParams.append('userId', userProfile.value.userId);
             url.searchParams.append('userProfile', JSON.stringify(user));
@@ -158,8 +162,8 @@ const App = {
                 const apiPayload = { action: 'process_notification_action', ...payload };
                 // [v549.0 CORS 修正] 將請求方式改為 FormData，以繞過 CORS 預檢請求。
                 const formData = new FormData();
-                formData.append('payload', JSON.stringify(apiPayload)); // [v602.0 重構] 改為使用 CONFIG
-                const response = await fetch(CONFIG.GAS_WEB_APP_URL, {
+                formData.append('payload', JSON.stringify(apiPayload));
+                const response = await fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
                     body: formData,
                 });
@@ -220,7 +224,7 @@ const App = {
                 if (isLocalTest) {
                     userProfile.value = { userId: 'Ud58333430513b7527106fa71d2e30151', displayName: '俊豪 (本地測試)' };
                 } else {
-                    await liff.init({ liffId: CONFIG.LIFF_ID });
+                    await liff.init({ liffId: LIFF_ID });
                     if (!liff.isLoggedIn()) {
                         liff.login();
                         return;

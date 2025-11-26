@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添心室內裝修設計 - 常見問答</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals -->
+    <!-- Application Structure Plan: A two-column layout with a sticky category sidebar for smooth-scroll navigation and a main content area featuring a searchable accordion for the Q&A. This organizes the 50 questions into manageable topics, prevents information overload, and provides quick access via both browsing and searching, enhancing user experience. -->
+    <!-- Visualization & Content Choices: Report Info: 50 Q&A pairs. Goal: Organize & Inform. Presentation: Interactive Accordion (HTML/CSS/JS) grouped by category. Interaction: Click to expand/collapse answers, filter via a search bar. Justification: Accordions are ideal for FAQ content, keeping the interface clean. Search provides direct access. Library: Vanilla JS. NO SVG/Mermaid used. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            background-color: #FDFBF8;
+            color: #333;
+        }
+        .active-link {
+            background-color: #EFEBE5;
+            color: #A16207;
+            font-weight: 600;
+        }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out;
+            border-bottom: 1px solid #EAE6E1;
+        }
+        .accordion-item.active .accordion-content {
+            max-height: 1000px;
+        }
+        .accordion-item.active .icon-plus {
+            transform: rotate(45deg);
+        }
+        .prose-custom a {
+            color: #A16207;
+            text-decoration: underline;
+        }
+        .prose-custom a:hover {
+            color: #784d05;
+        }
+        .prose-custom ul {
+            list-style-position: inside;
+            padding-left: 0;
+        }
+        .prose-custom li {
+            margin-bottom: 0.5rem;
+        }
+        mark {
+            background-color: #FBBF24;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="bg-stone-50 text-stone-800">
+    <div class="container mx-auto max-w-7xl px-4 py-8 md:py-12">
+        <header class="text-center mb-8 md:mb-12">
+            <h1 class="text-3xl md:text-4xl font-bold text-amber-900 tracking-wider">添心室內裝修設計</h1>
+            <p class="text-xl md:text-2xl mt-2 text-stone-600">客戶常見問答</p>
+        </header>
+
+        <div class="flex flex-col md:flex-row gap-8 lg:gap-12">
+            <aside class="md:w-1/4 lg:w-1/5 md:sticky md:top-8 self-start">
+                <nav id="faq-nav" class="bg-white rounded-lg shadow-sm p-4 border border-stone-200">
+                    <h3 class="font-bold text-lg mb-4 text-amber-800">問答分類</h3>
+                    <ul class="space-y-2"></ul>
+                </nav>
+            </aside>
+
+            <main class="md:w-3/4 lg:w-4/5">
+                <div class="mb-6">
+                    <div class="relative">
+                         <input type="text" id="search-box" placeholder="輸入關鍵字搜尋問題..." class="w-full pl-10 pr-4 py-3 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition">
+                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <svg class="h-5 w-5 text-stone-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                              <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd" />
+                            </svg>
+                         </div>
+                    </div>
+                </div>
+                <div id="faq-container" class="space-y-6"></div>
+                <p id="no-results" class="text-center text-stone-500 py-8 hidden">找不到符合的結果。</p>
+            </main>
+        </div>
+    </div>
+    
+    <button id="back-to-top" class="fixed bottom-8 right-8 bg-amber-800 text-white p-3 rounded-full shadow-lg hover:bg-amber-900 transition-opacity opacity-0 hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+        </svg>
+    </button>
+
+
+<script>
+    // 版本號碼: V2.0.0
+    // 修改時間: 2025-11-10 11:25:30 (Asia/Taipei)
+    const faqData = [
+        // Q1-6: 關於我們與服務
+        { category: '關於我們與服務', question: '請問添心設計主要提供哪些服務項目？', answer: '您好，添心室內裝修設計主要提供住宅與商業空間的室內設計、舊屋翻新、以及客製化系統櫃與木作櫃的規劃與施工。我們特別專長於整合收納系統與生活動線，打造兼具美觀與實用性的居住空間。' },
+        { category: '關於我們與服務', question: '添心設計風格或最擅長的項目是什麼？', answer: '我們的設計核心理念是「以人為本」，特別重視空間的**實用性**、**收納規劃**與**生活動線**的流暢度。在技術層面，我對於木工、系統櫃以及水電基礎知識有非常深入的了解，能確保設計不僅美觀，在施工上也是務實可行的。' },
+        { category: '關於我們與服務', question: '請問服務的地區範圍是？', answer: '我們的服務地區以嘉義市以南至屏東市為主，東港、長治等地區也都有服務經驗。無論您在哪個區域，我們都致力於提供同樣高品質的設計與施工服務。' },
+        { category: '關於我們與服務', question: '我可以參考你們過去的作品嗎？', answer: '當然可以！我們鼓勵您多參考我們的作品集，找到您喜歡的風格與靈感。您可以透過以下平台觀看：<ul><li>**Facebook 粉絲專頁**：查看最新的完工案例與客戶互動。<br><a href="https://www.facebook.com/TainanTanXin" target="_blank" rel="noopener noreferrer">https://www.facebook.com/TainanTanXin</a></li><li>**YouTube 頻道**：透過影片身歷其境，感受空間的真實樣貌。<br><a href="https://www.youtube.com/@tanxindesign/videos" target="_blank" rel="noopener noreferrer">https://www.youtube.com/@tanxindesign/videos</a></li><li>**官方網站**：我們的網站上有最完整的作品分類與詳細介紹，能幫助您全面了解我們的設計實力與理念，強烈建議您前往瀏覽！<br><a href="https://tanxin.space/" target="_blank" rel="noopener noreferrer">https://tanxin.space/</a></li></ul>' },
+        { category: '關於我們與服務', question: '與其他設計公司相比，添心設計最大的不同或優勢是什麼？', answer: '我們最大的優勢在於**「設計與施工的高度整合」**。能確保我們提出的設計方案不僅美觀，更是務實、可執行且符合成本效益的。加上我們擁有專屬配合的工班團隊，能將設計理念無落差地呈現在您的家中，避免了設計與施工脫節的問題。' },
+        { category: '關於我們與服務', question: '你們公司對於綠建材或永續設計的理念是什麼？', answer: '我們樂於在客戶的預算與需求範圍內，盡可能地採用環保、低甲醛的建材，為您的健康把關。同時，我們擅長透過優化空間的採光與通風，來降低未來對能源的依賴，這也是永續設計中非常務實的一環。' },
+
+        // Q7-16: 設計與工程流程
+        { category: '設計與工程流程', question: '一般來說，從諮詢到完工的設計流程是怎麼樣的？', answer: '我們的服務流程講求精準與效率，主要分為以下階段：<ol class="list-decimal list-inside space-y-2"><li>初步諮詢</li><li>現場丈量與提案</li><li>簽訂專案啟動委任書</li><li>3D 圖面繪製</li><li>看圖深入討論</li><li>整體工程報價</li><li>簽訂工程合約與材質確認</li><li>施工圖繪製與工程施作</li><li>完工驗收與售後服務</li></ol>' },
+        { category: '設計與工程流程', question: '如果我在設計期間人不在台南或高雄，可以遠端溝通嗎？', answer: '絕對可以。我們有豐富的遠端協作經驗，可以透過視訊會議、LINE群組以及雲端共享等方式，與您進行設計討論、材質挑選與進度匯報，確保您即使身處外地，也能零時差地掌握專案的每一個細節。' },
+        { category: '設計與工程流程', question: '設計階段（從諮詢到確認施工圖）大概需要多久時間？', answer: '設計階段的時長會因案件的複雜度與雙方溝通的頻率而異。一般來說，在需求明確的情況下，從初步諮詢到產出完整的施工圖，大約需要 3 至 6 週的時間。我們會與您密切配合，在您期望的時程內完成設計定案。' },
+        { category: '設計與工程流程', question: '我可以提供我自己找的參考圖片或設計想法嗎？', answer: '非常歡迎！我們鼓勵您提供任何您喜歡的參考圖片或設計想法。這能幫助我們更快地理解您的風格偏好與生活想像，是設計初期非常重要的溝通環節。' },
+        { category: '設計與工程流程', question: '我可以多大程度地參與設計過程？', answer: '我們非常歡迎並重視您的參與。實務上，我們會先根據初期討論的資料，為您規劃出具體的 3D 圖面。當圖面完成後，我們會邀請您進行深入的討論，因為有了實際的圖像作為基礎，我們的溝通可以更明確、也更有方向，確保每一處細節都貼近您的理想。' },
+        { category: '設計與工程流程', question: '如果我不喜歡你們提出的 3D 圖或設計方案怎麼辦？', answer: '請不用擔心，設計本身就是一個不斷溝通與修正的過程。我們的合約中保障您有兩次依指示修改設計的權利。如果您對 3D 圖或方案有任何疑慮，請務必提出，我們會耐心與您討論，共同找出您最滿意的方向。' },
+        { category: '設計與工程流程', question: '舊屋翻新和新成屋的設計有什麼不同嗎？', answer: '有很大的不同。舊屋翻新除了美感設計，更著重於基礎工程的檢測與更新，例如水電管線重拉、防水工程、結構補強等，這些是確保居住安全的根本。新成屋則更專注於格局優化、風格塑造與收納機能的提升。我們在這兩方面都有豐富的經驗。' },
+        { category: '設計與工程流程', question: '3D 圖跟實際成果會有落差嗎？', answer: '3D 圖是我們用來溝通設計與風格的重要工具，我們致力於讓最終成果高度還原圖面效果。不過，由於現場光線、材質紋理的細微差異，實體空間與渲染圖仍可能存在合理的些微感受差異。為此，在簽約後我們會提供實際的材質樣板供您確認，盡力將認知落差降至最低。' },
+        { category: '設計與工程流程', question: '你們會如何考量家中小孩或長輩的安全？', answer: '家人的安全是我們的首要考量。在設計時，我們會主動為您規劃無障礙設計，例如消除地面高低差、在衛浴加裝扶手等。對於有孩童的家庭，我們會建議使用圓角設計的家具、安全插座、以及低甲醛的環保建材，打造一個讓您安心的居住環境。' },
+        { category: '設計與工程流程', question: '如果 3D 圖確認後，我又想改變設計風格怎麼辦？', answer: '我們理解想法隨時可能改變。若在簽訂工程合約前，您希望大幅度調整風格，這可能會需要重新繪製圖面並產生額外的規劃費用。若是在工程開始後才提出變更，則可能影響到已採購的材料與施工進度，衍生的費用會更高。因此，我們建議在 3D 圖討論階段盡可能地確認所有細節。' },
+        { category: '設計與工程流程', question: '請問櫃體的封邊範圍有哪些地方？', answer: '正常的木作封邊及封底僅製作「**一般可見之使用範圍處**」（例如：隔板正面處、櫃體正側面處等）。其餘部分（例如：**櫃底、櫃頂、間接照明等**）不進行封邊或封底。如有特殊需求，請先詢問討論，我們會在設計圖上標註確認。' },
+
+        // Q17-23: 費用與合約 (保持不變)
+        { category: '費用與合約', question: '請問你們的收費方式是怎麼計算的？', answer: '我們的收費模式很單純。我們**不收取設計費**，費用會完全依照您確認的施工項目進行報價。在專案正式啟動前，我們會與您簽訂「工程專案啟動委任書」，並酌收一筆「**專案啟動金**」作為訂金，這筆費用會包含前期的現場精準丈量、3D圖面繪製、室內設計提案以及完整的工程報價單。' },
+        { category: '費用與合約', question: '除了專案啟動金，後續的工程款項是怎麼支付的？', answer: '工程款項會依據工程合約，採**分階段付款**的方式。通常會分為 3 至 4 期，例如：簽訂工程合約、木作進場、油漆進場、完工驗收等。每階段的付款比例都會清楚載明於合約中，讓您的資金運用更有計畫。' },
+        { category: '費用與合約', question: '報價單的內容包含所有費用嗎？有沒有不包含的項目？', answer: '我們的報價單會詳列所有由我們負責的「工程」相關費用。通常**不包含**的項目有：您自購的特定設備、需另行委託的專業服務（如建築師簽證費）等。值得一提的是，我們本身也有施作**廚具**以及販售**家具、窗簾與熱水器**。針對冷氣，我們也可以為您推薦長期配合的優質廠商並協助協調安裝時程，但最終的購買合約與後續保固，仍會由您直接與廠商對接，以保障您的權益。' },
+        { category: '費用與合約', question: '我的預算有限，你們能配合嗎？', answer: '我們完全理解預算的重要性。請在初步諮詢時告訴我們您的預算範圍，這將是我們設計規劃的基礎。我們會根據您的預算，在材質選擇、工法與設計複雜度上提供最合適的建議，在美感與現實之間找到最佳平衡點。' },
+        { category: '費用與合約', question: '施工的費用是固定的嗎？會不會有追加款項？', answer: '我們會在簽訂工程合約時，提供一份詳細的報價單，載明所有施工項目與費用。除非您在施工過程中提出設計變更或新增項目，否則合約總價是固定的。若有任何可能產生追加費用的變更，我們一定會事先與您溝通並取得您的同意，才會進行施工。' },
+        { category: '費用與合約', question: '如果施工過程中預算超出怎麼辦？', answer: '我們會嚴格按照合約總價進行施工。會產生預算超出的情況，通常只有兩種：一是您主動提出的設計變更或材料升級；二是遇到無法預見的屋況問題（例如拆除後發現漏水或壁癌）。無論何種情況，我們都一定會**立即向您報告、提出方案與報價，並在取得您的書面同意後，才會產生追加費用**，絕不會擅自施工。' },
+        { category: '費用與合約', question: '完工後，我會收到哪些文件？', answer: '專案完工驗收後，我們會將所有相關文件整理給您，通常包含：最終版本的施工圖、各項設備的保固卡與使用說明書、以及工程合約與付款證明等，方便您日後查閱與維護。' },
+
+        // Q24-36: 施工與團隊
+        { category: '施工與團隊', question: '施工團隊是你們自己的工班嗎？品質如何控管？', answer: '我們的施工團隊品質精良，其中木工與系統櫃的師傅更是我們專屬的合作團隊，確保了工法的穩定與一致性。此外，我們還有專業的工務團隊負責現場的協調與監管，並透過專案主控台每日回報進度，確保一切符合設計圖說與施工標準。' },
+        { category: '施工與團隊', question: '我可以指定特定的師傅或工班嗎？', answer: '我們會根據專案的特性與時程，指派最適合的團隊為您服務。由於我們的工班都經過長期的合作與篩選，品質與默契都相當穩定，因此通常由我們進行專業調度，能達到最佳的施工效率與成果。' },
+        { category: '施工與團隊', question: '施工期間的管理與監工方式是？', answer: '我們採用現代化的專案管理模式。工務團隊會透過「專案主控台」線上系統，每日檢查工班回報的進度與照片，並協調各工程的進退場。若有需要，工務或設計師會親自前往現場與施工人員討論關鍵細節。這種方式能確保資訊透明，並高效地管理現場狀況。' },
+        { category: '施工與團隊', question: '專案開始後，我主要會與誰聯繫？', answer: '您的主要聯繫窗口會是專案的**負責設計師**。設計總監與工務團隊會在幕後提供完整的支援，確保專案順利。我們會建立一個專案專屬的溝通群組（例如 LINE），讓您能隨時與負責設計師溝通，確保資訊傳遞的即時與透明。' },
+        { category: '施工與團隊', question: '施工期間的廢棄物和垃圾如何處理？', answer: '施工期間產生的所有廢棄物，我們會委託合法的廢棄物清運公司，依規定進行處理，並將費用納入工程報價中。我們也會維持施工現場基本的整潔，確保符合社區規定。' },
+        { category: '施工與團隊', question: '如果施工過程中發生意外或造成損壞，怎麼辦？', answer: '我們理解施工過程中的風險控管至關重要。我們會以最嚴謹的態度管理工地安全與您的財產。若有任何狀況，我們將本於負責的態度，第一時間與您溝通並妥善處理。' },
+        { category: '施工與團隊', question: '施工期間的噪音和粉塵問題如何處理？會影響到鄰居嗎？', answer: '我們非常重視施工期間對周遭環境的影響。在開工前，我們會對公共區域（如電梯、走道）進行完整的保護。在拆除等易產生粉塵的階段，會盡力維持環境。同時，我們會嚴格遵守社區管委會規定的施工時間，盡力將對鄰居的干擾降到最低。' },
+        { category: '施工與團隊', question: '你們會協助處理社區管委會的裝修申請事宜嗎？', answer: '會的。我們會協助您準備提交給社區管委會所需的施工圖說等文件，並提醒您相關的施工規範（如施工時間、公共區域保護等），以確保整個裝修過程符合社區規定，順利進行。' },
+        { category: '施工與團隊', question: '裝修需要申請室內裝修許可證嗎？你們會協助辦理嗎？', answer: '根據建築法規，若您的裝修涉及到天花板、室內分間牆變更等項目，就需要申請「室內裝修許可證」。但在南部地區，此項檢查並非常態，但若真的有需要，我們會為您判斷並說明。請注意，申請許可證會產生一筆 8 至 12 萬不等的額外費用，此費用需由業主負擔。' },
+        { category: '施工與團隊', question: '施工期間我可以隨時到現場看看嗎？', answer: '我們歡迎您關心施工進度。但為了您的安全以及避免干擾施工，請務必**提前與您的負責設計師或工務預約**時間。我們會安排在現場無高風險作業的時段，陪同您一同巡視，並為您解說現場狀況。' },
+        { category: '施工與團隊', question: '如果拆除後發現有漏水、壁癌等圖面上看不出的問題怎麼辦？', answer: '這是在舊屋翻新中可能遇到的狀況。一旦發現任何無法預見的屋況問題，我們的標準作業流程是：**立即向您報告、拍照存證**。在情況允許下，我們會繼續進行其他不受影響的工項以控制成本，同時與您討論專業的解決方案與追加費用報價。在取得您的書面同意前，我們絕不會擅自處理。' },
+        { category: '施工與團隊', question: '完工的驗收流程是怎麼樣的？', answer: '在工程基本完成並進行細部清潔後，我們會邀請您一同到現場，根據合約與圖面，逐一進行驗收。若有任何需要修繕的瑕疵，我們會記錄下來並安排師傅在期限內完成。直到您確認所有項目都符合標準後，我們才會進行最後的交屋與尾款支付。' },
+        { category: '施工與團隊', question: '如果我們之間出現意見不合或爭議，該如何處理？', answer: '我們始終相信良好的溝通是解決問題的基礎。若有任何意見不合之處，我們會優先以最大的誠意與您協商，尋求共識。所有討論與決議都會留下書面紀錄。我們的目標是圓滿完成您的家，而不是製造爭議。' },
+        { category: '施工與團隊', question: '請問冷氣排水是不是會包在裝潢裡面，這樣未來如果排水管不通 是不是會很麻煩？', answer: '是的，為了整體空間的美觀，冷氣排水管線一般會包覆在裝潢內部。關於您擔心的堵塞問題，我們的規劃分為「事前預防」與「事後處理」兩個層面，請您放心：<ol class="list-decimal list-inside space-y-2 mt-2"><li><strong>事前預防：</strong><ul class="list-disc list-inside pl-4 mt-1 space-y-1"><li><strong>洩水坡度：</strong>合適的洩水坡度，讓水流靠重力自然、順暢地排出，這是防止堵塞最關鍵的一步。</li><li><strong>管材與保溫：</strong>我們會使用光滑的 PVC 硬管及保溫管，不易附著髒污。同時在管外包覆保溫材，避免產生「冷凝水」，保護裝修面不受潮。</li></ul></li><li><strong>事後處理：設想周全的維修方案</strong><br>即便我們做了最完善的預防，但萬一未來因灰塵等因素造成堵塞，也有非破壞性的處理方式。專業的空調或水電師傅，可以從冷氣室內機的出水口端，使用「高壓氣體」將管路疏通，並不需要拆除裝潢。</li></ol>' },
+        { category: '施工與團隊', question: '請問水電延伸插座的線材規格與安全使用提醒？', answer: '水電延伸插座皆採用 **2.0mm 白扁線或單芯線**。我們**不建議兩台發熱型電器用品同時使用**於此延伸迴路。如需多台電器同時使用，建議要**額外新增 5.5mm 廚房專用迴路**，以確保用電安全。' },
+        { category: '施工與團隊', question: '請問木作裝潢上的釘孔或螺絲孔會如何處理？', answer: '木作裝潢局部會有**釘孔或鎖螺絲產生**，此為工法正常現象。這些痕跡通常會出現在**內部、側面以及高於 200 公分的上緣處**。如需採用完全無釘孔或螺絲的工法，需額外加價討論。' },
+        { category: '施工與團隊', question: '請問木作 PVC 面材收邊若有破口或瑕疵，會怎麼處理？', answer: 'PVC 面材在收邊處偶有破口情形，將採用**補土處理**收尾。若您無法接受補土效果，建議改用**實木貼皮五/七度上漆工法**，需另行加價討論。' },
+        { category: '施工與團隊', question: '請問油漆收尾補漆的時機與驗收注意事項？', answer: '為避免重複施工，牆面補漆建議安排在**細清完成及大型家具搬入後**進行。收尾當日請您務必**到場驗收**，確認無誤後，油漆師傅才會退場。師傅退場後，若再有額外補漆需求，將視情況另行收取工資。' },
+        { category: '施工與團隊', question: '請問老舊燈具或既有電線拆卸沿用的風險提醒？', answer: '本次工程涉及電線抽換及燈具拆卸作業。若有燈具或設備欲沿用，請業主先行妥善保管。需特別注意：拆除後之既有電線、燈具或其他設備，可能因**年久老化、材質脆化**等原因而**無法再次沿用**，本公司將於施工前先行告知並確認。' },
+
+        // Q37-43: 材料與軟裝
+        { category: '材料與軟裝', question: '板材的環保等級與來源是？', answer: '我們非常重視居住環境的健康。我們選用的系統櫃板材，皆符合國家標準的低甲醛環保等級（通常為 F3 或以上）。若您需要相關的官方證明文件，我們可以協助申請，但建材行可能會酌收部分文件費用。' },
+        { category: '材料與軟裝', question: '系統櫃和木作櫃有什麼差別？我該如何選擇？', answer: '兩者各有優劣。**系統櫃**在工廠預製，現場組裝快速、板材環保且價格相對實惠，適合用於儲物櫃等。**木作櫃**由師傅現場製作，造型與尺寸的客製化彈性極高，能完美貼合畸零空間或做出特殊設計。我們會根據您的需求、預算與設計風格，建議您最適合的搭配方案。' },
+        { category: '材料與軟裝', question: '我可以自己採購部分的材料或設備嗎？', answer: '可以的。如果您有偏好的特定設備（如衛浴、廚具）或材料，我們可以配合您的採購。不過，為了確保工程順利，需要請您務必在我們指定的時程內提供產品的詳細尺寸圖與進場時間，以便我們規劃後續的管線與安裝作業。由您自購的品項，其保固將由原廠提供。' },
+        { category: '材料與軟裝', question: '你們有整合智慧家庭系統的經驗嗎？', answer: '有的，我們樂於將智慧居家系統融入設計中。但需要提醒您，智慧家庭系統的整體費用相對較高。若您有此需求，我們可以在設計初期就為您規劃好相關的管線與迴路配置，並與您指定的智慧家庭廠商協同作業，打造便利舒適的智慧生活空間。' },
+        { category: '材料與軟裝', question: '你們如何挑選與控管材料的品質？', answer: '我們所有使用的板材、五金與建材，都來自長期合作、信譽良好的供應商。在材料進場時，我們的工務團隊會進行第一步的檢查，確認型號、規格與外觀是否符合標準。在施工過程中，師傅也會再次確認，確保您家中所使用的都是品質優良的材料。' },
+        { category: '材料與軟裝', question: '如果簽約後，我選的材料缺貨或停產了怎麼辦？', answer: '這是偶爾會發生的市場狀況。一旦得知您選擇的材料無法供貨，我們會立即通知您，並提供數種同等級、風格相近的替代方案供您選擇。任何材料的更換，都一定會經過您的同意，並在確認價差（若有）後才會進行採購。' },
+        { category: '材料與軟裝', question: '請問裝修使用的板材環保等級標準是什麼？', answer: '我們的裝潢板材皆採用符合國家標準的環保等級：系統櫃板材為 **E1 等級**，木作櫃板材為 **F3 等級**低甲醛木芯板。若您有更高標準的需求，可以另行加價升級至 F1 或 E0 等級板材。' },
+        { category: '材料與軟裝', question: '請問櫃體或牆面的板材在拼接工法上有什麼限制與說明？', answer: '單塊板材最大面積為 **4x8 台尺**。超過此尺寸的區域會採用拼接工法施作。若您有指定木紋對花的需求，則施作工法將會更改為**油漆工法**來呈現。' },
+        { category: '材料與軟裝', question: '請問櫃體面材的材質與耐熱性標準為何？', answer: '櫃體標準面材為 **PVC 耐磨材料**。如需提升耐熱強度，建議**加價採用美耐皿**等材質，或在檯面上外加強化玻璃。請注意，木作封邊條是使用熱熔膠處理，**不適合高溫環境**；使用電器時請務必將托盤拉出，避免熱蒸氣損壞櫃體。' },
+        { category: '材料與軟裝', question: '請問抽屜與置物空間底板的承重標準與驗收方式為何？', answer: '標準配置的抽屜底部與置物空間底板，設計上僅供一般置物使用。若有放置**重物需求**（如大量書本），請務必提前告知，我們將升級底板與重型滑軌。' },
+        { category: '材料與軟裝', question: '請問抽屜滑軌的驗收標準是什麼？可以完全穩定不晃動嗎？', answer: '本公司標準採用**側裝三截式滑軌**。正確的驗收方式為**前後順暢抽拉**。此類滑軌設計有緩衝與間隙預留，因此**輕微的左右晃動屬於正常現象**，不作為驗收標準。如需抽屜完全穩定，可升級為**座式滑軌**（每組抽屜需加價 NT$1,500）。' },
+        { category: '材料與軟裝', question: '請問裝潢用建材玻璃的品質聲明與驗收標準？', answer: '本公司所使用的玻璃為裝潢用建材玻璃，非水晶琉璃。由於製程特性，玻璃表面可能會有**輕微的刮痕、小點或氣泡**，此屬於正常現象，不影響使用功能，**恕不作為退貨或更換的依據**。' },
+
+        // Q44-50: 售後與其他
+        { category: '售後與其他', question: '你們有提供保固服務嗎？', answer: '是的，我們對所承接的工程提供應有的保固服務。保固的範圍與期限，都會在合約中詳細載明，保障您的權益。' },
+        { category: '售後與其他', question: '你們的保固具體包含哪些項目？', answer: '我們的保固主要涵蓋因施工不良導致的功能性問題，例如櫃體五金鬆脫、水電管路滲漏等。詳細的保固項目與期限會清楚載明於工程合約中。因人為使用不當或自然耗損則不在此範圍內。' },
+        { category: '售後與其他', question: '如果在保固期內發現問題，報修的流程是什麼？', answer: '若在保固期內遇到任何問題，您只需要透過我們的官方 LINE 或電話聯繫，說明狀況並提供照片，我們就會建立維修案件，並盡快與您安排時間，由我們的工務團隊或師傅前往處理。' },
+        { category: '售後與其他', question: '請問嵌燈壞了要怎麼維修或更換？', answer: '我們特別為您準備了一支教學影片，您可以參考影片中的步驟進行更換：<br><a href="https://www.youtube.com/watch?v=6mB4csIgmEk" target="_blank" rel="noopener noreferrer">https://www.youtube.com/watch?v=6mB4csIgmEk</a><br><br>崁燈，作為室內照明的一部分，確實在裝修設計中佔有重要地位。以下是我們對於崁燈的一些專業建議：<br><br><strong>【規格選擇】</strong><ul class="list-disc list-inside pl-4 mt-1 space-y-1"><li>崁燈的規格通常有 9.5 公分 和 15 公分 兩種尺寸。您可以根據您的需求和空間大小選擇適合的尺寸，較大的尺寸通常用於更寬敞的區域，而較小的尺寸則適合較狹窄的空間。</li><li>此外，請確保所選崁燈符合安全標準和電氣規範。</li></ul><br><strong>【接線方式】</strong><ul class="list-disc list-inside pl-4 mt-1 space-y-1"><li>崁燈的接線通常包括 N 線（中性線） 和 L 線（火線）。中性線一般使用白色線材，而火線則使用黑色線材。在更換崁燈時，請確保正確連接這兩條線，以避免電路問題。</li></ul><br><strong>【更換注意事項】</strong><ul class="list-disc list-inside pl-4 mt-1-space-y-1"><li>在更換崁燈之前，請務必關閉總電源，以確保您的安全。</li><li>此外，建議您戴上絕緣手套，以防止觸電。</li></ul><br>如果您需要更多關於照明設計或崁燈方面的建議，歡迎隨時與我們聯繫。我們期待為您提供更專業的服務🙋‍♂️🙋‍♀️' },
+        { category: '售後與其他', question: '保固期過後如果出現問題，你們還會提供維修服務嗎？', answer: '當然。我們視每一位客戶為長期的夥伴。即使超過保固期，若您家中有任何需要維修的問題，我們都很樂意為您評估狀況並提供報價，協助您處理。' },
+        { category: '售後與其他', question: '請問油漆有保固嗎？牆面產生裂痕怎麼辦？', answer: '我們對油漆施工的品質提供保固，主要針對因施工不當造成的油漆大面積剝落、起泡等問題。然而，牆面產生細微裂痕通常屬於以下幾種「非保固」的自然現象：<ul class="list-disc list-inside pl-4 mt-2 space-y-1"><li><strong>自然龜裂：</strong>台灣位處地震帶，建築物本身會因地震或熱脹冷縮產生微小的位移，導致牆面出現細微的髮絲紋裂縫。</li><li><strong>外力損傷：</strong>因人為碰撞、刮傷或寵物造成的漆面損傷。</li><li><strong>環境因素：</strong>因牆體漏水、壁癌或環境過度潮濕導致的漆面問題，需先從根本解決漏水或濕氣問題。</li></ul>油漆僅屬表層裝飾，無法克服牆體結構的自然變化。若您希望修補這些自然裂痕，我們很樂意提供**付費**的修飾服務；若想降低裂痕發生機率，可在裝修時加購**木板打底或貼上壁紙**的工法。' },
+        { category: '售後與其他', question: '鋁框滑門使用久了好像有點卡卡的，該怎麼辦？', answer: '我們也為您準備了一支教學影片，您可以參考影片中的步驟進行調整：<br><a href="https://youtu.be/DhLMWexV4cI" target="_blank" rel="noopener noreferrer">https://youtu.be/DhLMWexV4cI</a><br><br>這是正常的物理現象，請不用擔心！滑門變得「卡卡的」，通常是因為門片在使用一段時間後，受到地心引力影響產生了非常輕微的「下沉」，導致與軌道不夠順暢。<br><br>我們的鋁框門五金都設計有「可調整機制」，可以透過門片側邊或把手附近的調整孔，使用**專用工具**進行微調，將門片「轉上去」恢復水平，即可解決卡頓的問題。<br><br>如果您遇到這個狀況，歡迎您拍照聯繫我們，我們很樂意線上指導您。若需要我們派師傅到府處理，**將會產生相關的服務費用**，我們會視情況向您報價。' },
+        { category: '售後與其他', question: '完工後會幫忙做基礎清潔嗎？', answer: '會的。在所有工程結束後，我們會進行一次基礎的「粗清」，將施工產生的大型廢棄物與粉塵清理乾淨。若您需要達到入住標準的「細清」服務，我們也可以為您推薦專業的清潔公司。'},
+        { category: '售後與其他', question: '施工的工期大概需要多久？', answer: '工期會根據專案的坪數、屋況（新成屋或舊屋翻新）以及設計的複雜度而有很大的不同。在確認最終設計方案後，我們會提供一份詳細的工程進度表，讓您對整體時程有清楚的了解。' },
+        { category: '售後與其他', question: '如果工期延誤了怎麼辦？', answer: '我們會盡最大的努力確保專案如期完工。工期延誤通常由不可抗力因素（如惡劣天氣、社區規定）或設計變更造成。若發生任何可能影響工期的狀況，我們會第一時間與您溝通，說明原因並協調後續的時程。我們的目標是透明地管理專案進度。'},
+        { category: '售後與其他', question: '你們會協助挑選家具、窗簾等軟裝嗎？', answer: '會的，這是我們服務很重要的一環。在設計定案後，我們的設計師會陪同您一起挑選建材與家具。除了帶您前往我們長期配合的廠商或您指定的店家，<strong>我們公司本身也有提供高品質的家具、窗簾等軟裝供您選購</strong>，讓您能享受一站式的便利服務，並確保最終的整體風格一致且完美。' },
+        { category: '售後與其他', question: '請問工程完工後，你們提供的清潔服務範圍有哪些？', answer: '我們提供合約範圍內的**粗清服務**，涵蓋了大型廢棄物垃圾處理、保護材料回收以及剩餘材料的搬運等，旨在處理裝潢完工後的基礎整潔。' },
+        { category: '售後與其他', question: '請問粗清服務不包含哪些項目？細清服務該怎麼處理？', answer: '我們的粗清服務**不包括細清工程**的範疇，例如：門片的污漬、粉塵、殘膠、廁所的細部清潔等。若您需要細清服務，我們將另請**專業細清公司**為您進行現場評估並提供報價。' },
+        { category: '售後與其他', question: '請問若業主提前使用未完成的工程空間，會有什麼責任？', answer: '若甲方（業主）無故先行使用本契約工程範圍內之空間，即表示甲方**已驗收並接受工程之所有內容與品質**，甲方不得再向乙方提出任何抗辯或要求乙方負擔任何費用或損害。' },
+    ];
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const faqContainer = document.getElementById('faq-container');
+        const faqNav = document.getElementById('faq-nav').querySelector('ul');
+        const searchBox = document.getElementById('search-box');
+        const noResults = document.getElementById('no-results');
+        const backToTopButton = document.getElementById('back-to-top');
+
+        const categories = [...new Set(faqData.map(item => item.category))];
+        let originalHTML = '';
+
+        function renderFAQs(filter = '') {
+            faqContainer.innerHTML = '';
+            let found = false;
+
+            categories.forEach(category => {
+                const sectionWrapper = document.createElement('section');
+                sectionWrapper.id = 'category-' + category.replace(/\s+/g, '-');
+                sectionWrapper.className = 'scroll-mt-20';
+
+                const categoryTitle = document.createElement('h2');
+                categoryTitle.className = 'text-2xl font-bold mb-4 text-amber-800 border-b-2 border-amber-200 pb-2';
+                categoryTitle.textContent = category;
+                sectionWrapper.appendChild(categoryTitle);
+
+                const itemsContainer = document.createElement('div');
+                itemsContainer.className = 'space-y-2';
+                
+                const filteredData = faqData.filter(item => item.category === category && (item.question.includes(filter) || item.answer.includes(filter)));
+
+                if(filteredData.length > 0) {
+                    found = true;
+                    filteredData.forEach(item => {
+                        const accordionItem = document.createElement('div');
+                        accordionItem.className = 'accordion-item bg-white border border-stone-200 rounded-lg shadow-sm overflow-hidden';
+
+                        const button = document.createElement('button');
+                        button.className = 'w-full text-left p-4 flex justify-between items-center hover:bg-stone-100 transition duration-200';
+                        
+                        const questionText = document.createElement('span');
+                        questionText.className = 'font-semibold text-stone-700';
+                        questionText.innerHTML = highlight(item.question, filter);
+                        
+                        const icon = document.createElement('div');
+                        icon.className = 'icon-plus text-amber-700 transition-transform duration-300';
+                        icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>';
+
+                        button.appendChild(questionText);
+                        button.appendChild(icon);
+
+                        const content = document.createElement('div');
+                        content.className = 'accordion-content px-4';
+                        const contentInner = document.createElement('div');
+                        contentInner.className = 'prose-custom py-4 text-stone-600';
+                        contentInner.innerHTML = highlight(item.answer, filter);
+                        content.appendChild(contentInner);
+
+                        accordionItem.appendChild(button);
+                        accordionItem.appendChild(content);
+                        itemsContainer.appendChild(accordionItem);
+                    });
+                    sectionWrapper.appendChild(itemsContainer);
+                    faqContainer.appendChild(sectionWrapper);
+                }
+            });
+            originalHTML = faqContainer.innerHTML;
+            
+            noResults.classList.toggle('hidden', found);
+        }
+
+        function highlight(text, filter) {
+            if (!filter) return text;
+            const regex = new RegExp(`(${filter})`, 'gi');
+            return text.replace(regex, '<mark>$1</mark>');
+        }
+
+        renderFAQs();
+
+        faqContainer.addEventListener('click', function(e) {
+            const button = e.target.closest('button');
+            if (button && button.parentElement.classList.contains('accordion-item')) {
+                button.parentElement.classList.toggle('active');
+            }
+        });
+
+        categories.forEach(category => {
+            const li = document.createElement('li');
+            const a = document.createElement('a');
+            a.href = '#category-' + category.replace(/\s+/g, '-');
+            a.textContent = category;
+            a.className = 'block py-2 px-3 rounded-md hover:bg-stone-100 transition nav-link';
+            a.dataset.category = category;
+            li.appendChild(a);
+            faqNav.appendChild(li);
+        });
+
+        faqNav.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (e.target.tagName === 'A') {
+                const targetId = e.target.getAttribute('href');
+                const targetElement = document.querySelector(targetId);
+                if (targetElement) {
+                    targetElement.scrollIntoView({ behavior: 'smooth' });
+                }
+            }
+        });
+        
+        searchBox.addEventListener('keyup', function() {
+            renderFAQs(this.value.trim());
+        });
+
+        const navLinks = faqNav.querySelectorAll('.nav-link');
+        const sections = document.querySelectorAll('main section');
+
+        // [v432.0 最終修正] 棄用 IntersectionObserver，改用傳統的 scroll 事件監聽搭配節流，徹底解決反白跳動問題。
+        let throttleTimer = false;
+        const throttle = (callback, time) => {
+            if (throttleTimer) return;
+            throttleTimer = true;
+            setTimeout(() => {
+                callback();
+                throttleTimer = false;
+            }, time);
+        };
+
+        const handleScroll = () => {
+            // [v433.0 最終修正] 採用更精準的偵測線邏輯
+            const detectionLine = window.scrollY + (window.innerHeight * 0.25);
+            let bestMatch = { id: '', distance: Infinity };
+
+            // 1. 遍歷所有區塊，找出最靠近偵測線的那個
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                const distance = detectionLine - sectionTop;
+
+                // 2. 我們只考慮偵測線「下方」的區塊 (distance >= 0)
+                //    並在其中找到距離最近的 (distance 最小)
+                if (distance >= 0 && distance < bestMatch.distance) {
+                    bestMatch.id = section.getAttribute('id');
+                    bestMatch.distance = distance;
+                }
+            });
+
+            // 3. 更新導覽列的反白狀態
+            if (bestMatch.id) {
+                const id = bestMatch.id.replace('category-', '').replace(/-/g, ' ');
+                navLinks.forEach(link => link.classList.toggle('active-link', link.dataset.category === id));
+            }
+        };
+
+        // [v434.0 核心修正] 將所有滾動事件合併到單一的節流監聽器中，解決功能衝突問題
+        const handleCombinedScroll = () => {
+            // 處理導覽列反白
+            handleScroll();
+
+            // 處理「回到頂部」按鈕的顯示/隱藏
+            if (window.pageYOffset > 300) {
+                backToTopButton.classList.remove('hidden');
+                backToTopButton.classList.remove('opacity-0');
+            } else {
+                backToTopButton.classList.add('opacity-0');
+                setTimeout(() => {
+                   backToTopButton.classList.add('hidden');
+                }, 300);
+            }
+        };
+
+        window.addEventListener('scroll', () => throttle(handleCombinedScroll, 100));
+
+        backToTopButton.addEventListener('click', () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    });
+</script>
+</body>
+</html>

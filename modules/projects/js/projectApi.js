@@ -5,7 +5,8 @@
 * 版本: v1.0
 * 說明: 統一的 API 客戶端模組。所有前端元件都應透過此模組與後端溝通。
 * =============================================================================
-*/
+*/ // [v602.0 重構] 引入統一設定檔
+import { CONFIG } from '/shared/js/config.js';
 
 // [v520.0 修正] 修正導入路徑，直接從根目錄的 api.js 引入，避免循環依賴。
 // [v555.0 重構] 移除對外部 api.js 的依賴，將 postTask 邏輯內化，解決 API_BASE_URL 為 undefined 的問題。
@@ -18,17 +19,11 @@
  * @returns {Promise<object>} 一個解析為後端初步回應 (包含 jobId) 的 Promise。
  */
 function postToGas(payload) {
-    console.log('[projectApi] 準備發送至後端:', payload);
     const formData = new FormData();
     formData.append('payload', JSON.stringify(payload));
  
-    // [v556.0 核心修正] 解決在 SPA 主頁面 (index.html) 中 API_BASE_URL 為 undefined 的問題。
-    // 優先從 window 物件讀取 (用於 managementconsole.html)，如果找不到，
-    // 則嘗試從 window.__GAS_WEB_APP_URL__ 讀取 (由 spa/app.js 提供)。
-    const API_BASE_URL = window.API_BASE_URL || window.__GAS_WEB_APP_URL__;
-    if (!API_BASE_URL) {
-        throw new Error("API_BASE_URL is not defined. It must be set on the window object.");
-    }
+    // [v602.0 重構] 直接從 config.js 讀取 URL，不再依賴 window 物件
+    const API_BASE_URL = CONFIG.GAS_WEB_APP_URL;
  
     return fetch(API_BASE_URL, { method: 'POST', body: formData }).then(response => response.json());
 }
@@ -47,7 +42,8 @@ const WRITE_ACTIONS = new Set([
     'updateProjectStatus',
     'createFromTemplate',
     'updateSchedule',
-    'sendNotification' // [v553.0] 將發送通知也納入非同步任務佇列
+    'sendNotification', // [v553.0] 將發送通知也納入非同步任務佇列
+    'process_notification_action' // [v601.1] 新增：處理溝通紀錄的互動 (回覆/完成/封存)
 ]);
 
 /**
@@ -63,7 +59,7 @@ export async function request({ action, payload = {} }) {
 
         if (READ_ACTIONS.has(action)) {
             // --- 處理讀取型請求 (GET) ---
-            const url = new URL(window.API_BASE_URL);
+            const url = new URL(CONFIG.GAS_WEB_APP_URL);
             // 根據後端 doGet 路由表，讀取型 action 放在 'page' 參數中
             url.searchParams.append('page', action);
             // [v318.0 核心修正] 將 payload 中的所有參數正確附加到 URL 上。
@@ -81,21 +77,24 @@ export async function request({ action, payload = {} }) {
         } else if (WRITE_ACTIONS.has(action)) {
             // --- 處理寫入型請求 (POST + 非同步任務) ---
             // [v561.0 核心修正] 重新引入智慧判斷邏輯，解決 '引數過大' 的問題。
-            // 必須在前端就判斷是否包含大型檔案，並選擇不同的後端 API 入口點。
-            const hasUpload = Array.isArray(payload.newPhotosBase64Array) && payload.newPhotosBase64Array.length > 0;
+            // [v606.0 核心修正] 必須在前端就判斷是否包含大型檔案，並選擇不同的後端 API 入口點。
+            // 同時檢查新的 'photos' 屬性 (來自建立日誌) 和舊的 'newPhotosBase64Array' 屬性 (來自編輯照片)，以確保相容性。
+            const photosToUpload = payload.photos || payload.newPhotosBase64Array;
+            const hasUpload = Array.isArray(photosToUpload) && photosToUpload.length > 0;
             let jobId;
 
             if (hasUpload) {
                 // 情況一：有檔案上傳。
                 // 1. 先發送一個不含照片的「任務宣告」請求。
                 const metaPayload = { ...payload };
-                delete metaPayload.newPhotosBase64Array;
+                delete metaPayload.photos; // [v606.0] 移除 photos 屬性
+                delete metaPayload.newPhotosBase64Array; // [v606.0] 移除舊的屬性
 
                 const initialPayload = {
                     ...metaPayload,
                     action: 'createUploadJob', // 強制 action 為 createUploadJob
                     originalAction: action,    // 將原始 action (如 createLog) 附帶過去
-                    totalPhotos: payload.newPhotosBase64Array.length
+                    totalPhotos: photosToUpload.length // [v606.0] 使用新的變數
                 };
 
                 const initialResult = await postToGas(initialPayload);
@@ -106,7 +105,7 @@ export async function request({ action, payload = {} }) {
                 console.log(`[projectApi] 成功建立上傳任務，Job ID: ${jobId}`);
 
                 // 2. 在背景執行分塊上傳 (發後不理)
-                _uploadChunks(jobId, payload.newPhotosBase64Array);
+                _uploadChunks(jobId, photosToUpload); // [v606.0] 使用新的變數
 
             } else {
                 // 情況二：沒有檔案上傳的簡單任務。
@@ -194,8 +193,8 @@ async function _uploadChunks(jobId, largeDataArray) {
 function pollJobStatus(jobId) {
     const POLLING_INTERVAL_MS = 3000;
     const TOTAL_TIMEOUT_MS = 180000;
-    // [v559.0 核心修正] 採用與 postToGas 相同的 URL 獲取邏輯，以解決輪詢時的 Invalid URL 問題。
-    const API_BASE_URL = window.API_BASE_URL || window.__GAS_WEB_APP_URL__;
+    // [v602.0 重構] 直接從 config.js 讀取 URL
+    const API_BASE_URL = CONFIG.GAS_WEB_APP_URL;
 
     if (!API_BASE_URL) {
         return Promise.reject(new Error("輪詢失敗：找不到 API_BASE_URL。"));

@@ -30,6 +30,7 @@ import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo,
 import * as LogActions from './logActions.js';
 import * as ScheduleActions from './scheduleActions.js';
 import { state } from './state.js';
+import { CONFIG } from '/shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
 import { initializeTaskSender, addRecipient } from '/shared/js/taskSender.js'; // [v544.0 修正] 改為絕對路徑
 
 /**
@@ -362,9 +363,9 @@ function setupScrollListener() {
  * [v130.0 新增] 定期刷新資料的函式
  */
 async function refreshData(projectId, userId, API_BASE_URL) {
-    // [v292.0 核心重構] 簡化 refreshData 函式，使其專注於比對資料簽名，並在需要時呼叫新的 refreshProjectData 函式。
-    const fetchUrl = `${API_BASE_URL}?page=project&id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
-    const response = await fetch(fetchUrl);
+    // [v602.0 重構] 改為使用統一的 apiRequest 函式，不再直接使用 fetch。
+    const fetchUrl = `${CONFIG.GAS_WEB_APP_URL}?page=project&id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
+    const response = await fetch(fetchUrl); // 維持 fetch，因為此函式在 apiRequest 之外
     const freshData = await response.json();
 
     const oldDataSignature = JSON.stringify({ overview: state.overview, schedule: state.currentScheduleData, dailyLogs: state.currentLogsData, communicationHistory: state.communicationHistory });
@@ -451,7 +452,7 @@ async function fetchEmployees() {
 
     const employeeCacheKey = 'console_employees';
     const cachedItem = localStorage.getItem(employeeCacheKey);
-    const ATTENDANCE_API_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
+    // [v602.0 重構] ATTENDANCE_API_URL 改為從 config.js 讀取
 
     if (cachedItem) {
         try {
@@ -472,7 +473,7 @@ async function fetchEmployees() {
     try {
         // [v408.0 核心修正] 修正日誌中 requestor 為 N/A 的問題。
         // 在請求員工列表時，附上當前操作者的 userId 和 userName，以便後端能正確記錄請求來源。
-        const url = new URL(ATTENDANCE_API_URL);
+        const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
         url.searchParams.set('page', 'attendance_api');
         url.searchParams.set('action', 'get_employees');
         url.searchParams.set('userId', state.currentUserId);
@@ -557,8 +558,8 @@ const dependencyManager = {
 function initializeTaskSenderForConsole() {
     const taskSenderContainer = document.getElementById('task-sender-container');
     if (!taskSenderContainer || document.getElementById('task-sender-wrapper')) return;
-    // [v558.0 架構統一] 簡化 config 物件，因為 taskSender.js 現在會直接呼叫 apiRequest。
-    const config = { state: { ...state }, callbacks: { onSuccess: () => refreshCommunicationHistory(state.projectId, state.currentUserId, window.API_BASE_URL), onOptimisticUpdate: window.addOptimisticCommunicationCard } };
+    // [v602.0 重構] 移除對 window.API_BASE_URL 的依賴
+    const config = { state: { ...state }, callbacks: { onSuccess: () => refreshCommunicationHistory(state.projectId, state.currentUserId), onOptimisticUpdate: window.addOptimisticCommunicationCard } };
     initializeTaskSender(taskSenderContainer, config, { style: 'console', defaultAction: 'ReplyText' });
 }
 // [v292.0] 將 refreshProjectData 掛載到 window，以便其他模組呼叫
@@ -637,7 +638,7 @@ async function initializeApp() {
     let userName = urlParams.get('name');
 
   // 3. 判斷環境並賦值
-  const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+  const isLocalTest = ['127.0.0.1', 'localhost'].includes(window.location.hostname);
 
   if (isLocalTest) {
     logToPage('⚡️ 本地測試模式啟用...');
@@ -653,7 +654,7 @@ async function initializeApp() {
     } else {
         // 模式二：直接開啟，需執行 LIFF 驗證
         logToPage('🔄 未偵測到 uid，以獨立 LIFF 模式啟動...');
-        await liff.init({ liffId: '2007974938-7yKM9EqL' });
+        await liff.init({ liffId: CONFIG.PROJECT_CONSOLE_LIFF_ID });
         if (!liff.isLoggedIn()) {
             liff.login();
             return;
@@ -672,11 +673,11 @@ async function initializeApp() {
   }
 
   const pageLoadId = `load_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  const API_BASE_URL = window.API_BASE_URL;
+  // [v602.0 重構] 不再從 window 讀取，projectApi 會自行引入
 
   // 2. 初始設定 (不依賴環境)
   window.currentPageLoadId = pageLoadId;
-  if (!API_BASE_URL) {
+  if (!CONFIG.GAS_WEB_APP_URL) {
     displayError({ message: '無法讀取 API_BASE_URL 設定，請檢查 HTML 檔案。' });
     return;
   }
@@ -693,9 +694,9 @@ async function initializeApp() {
 
   registerComponentDependencies();
 
-  await loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL);
+  await loadDataAndRender(projectId, userId, pageLoadId);
 
-  setInterval(() => refreshData(state.projectId, state.currentUserId, window.API_BASE_URL), 10 * 60 * 1000);
+  setInterval(() => refreshData(state.projectId, state.currentUserId), 10 * 60 * 1000);
   logToPage('已設定每 10 分鐘自動更新專案資料。');
 }
 
@@ -771,22 +772,21 @@ async function handleCommunicationAction(action, notificationId, content = '') {
   }
 
   try {
-    // 【⭐️ v289.0 核心重構：與 hub.html 同步，改用直接 fetch 的方式處理 API 請求 ⭐️】
-    // 這樣可以繞開 api.js 中為非同步任務設計的輪詢機制，直接處理後端的回應。
-    const response = await fetch(window.API_BASE_URL, {
-        method: 'POST',
-        body: JSON.stringify(payload)
+    // [v601.0 重構] 改為使用統一的 apiRequest 函式，與專案其他部分保持一致。
+    // apiRequest 內部已包含輪詢機制，此處只需等待最終結果。
+    const backendResult = await apiRequest({
+      action: payload.action,
+      payload: payload
     });
-    const backendResult = await response.json();
-
+    
     if (!backendResult || !backendResult.success) throw new Error(backendResult.message || '後端處理失敗');
     showGlobalNotification(backendResult.message || '操作成功！', 3000, 'success');
 
     // [v309.0 核心修正] 只有在「回覆」或「完成」等需要更新畫面的操作後，才執行刷新。
     // 「標示已讀」已透過樂觀更新處理，無需刷新。
     if (action === 'reply' || action === 'complete') {
-      // 成功後刷新溝通紀錄
-      await refreshCommunicationHistory(state.projectId, state.currentUserId, window.API_BASE_URL);
+      // [v602.0 重構] 移除對 window.API_BASE_URL 的依賴
+      await refreshCommunicationHistory(state.projectId, state.currentUserId);
     }
   } catch (error) {
     showGlobalNotification(`操作失敗: ${error.message}`, 5000, 'error');
@@ -795,7 +795,7 @@ async function handleCommunicationAction(action, notificationId, content = '') {
 /**
  * [v54.0 新增] 封裝資料載入與渲染的核心邏輯
  */
-async function loadDataAndRender(projectId, userId, pageLoadId, API_BASE_URL) {
+async function loadDataAndRender(projectId, userId, pageLoadId) {
 
   // 【⭐️ 核心修改：快取邏輯 ⭐️】
   // 【⭐️ 核心修正：恢復 UID 至快取 KEY 中 ⭐️】

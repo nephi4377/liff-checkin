@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工作回報總覽</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .report-card-content ul { list-style-position: inside; }
+        .report-card-content li { margin-bottom: 0.25rem; }
+        /* [v580.0 優化] 針對延遲載入的圖片增加樣式，避免版面跳動 */
+        img[loading="lazy"] {
+            background-color: #f0f0f0; /* 淺灰色背景作為圖片載入前的佔位符 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+        <header class="text-center mb-6">
+            <h1 class="text-2xl font-bold text-gray-800">團隊工作進度</h1>
+        </header>
+
+        <!-- [v442.0 UX優化] 根據使用者要求，恢復使用原生日期選擇器，並採用更緊湊的單行佈局 -->
+        <div class="bg-white p-2 rounded-lg shadow-md sticky top-0 z-10 mb-4">
+            <div class="flex items-center justify-center space-x-1">
+                <input type="date" id="start-date-picker" class="border-gray-300 rounded-md shadow-sm text-xs p-1 w-32" aria-label="開始日期">
+                <span class="text-gray-400 text-xs">至</span>
+                <input type="date" id="end-date-picker" class="border-gray-300 rounded-md shadow-sm text-xs p-1 w-32" aria-label="結束日期">
+                <button id="query-btn" class="bg-blue-600 text-white font-bold py-1 px-2.5 rounded-md hover:bg-blue-700 text-xs">查詢</button>
+            </div>
+        </div>
+        
+        <!-- [v445.0 新增] 組別篩選器 -->
+        <!-- [v564.0 修改] 將組別篩選與尺寸調整拉桿整合在同一行 -->
+        <div class="bg-white p-3 rounded-lg shadow-md mb-4 flex flex-wrap justify-between items-center gap-4">
+            <div id="group-filter-container" class="flex flex-wrap gap-x-4 gap-y-2 items-center flex-grow">
+                <!-- 組別篩選器內容由 JS 動態產生 -->
+            </div>
+            <div id="thumbnail-slider-container" class="flex items-center justify-end gap-2 flex-shrink-0">
+                <!-- 尺寸調整拉桿內容由 JS 動態產生 -->
+            </div>
+        </div>
+
+        <div id="reports-container" class="space-y-6">
+            <div id="placeholder" class="text-center text-gray-500 py-16">
+                <div class="spinner w-10 h-10 border-4 border-gray-200 rounded-full mx-auto"></div>
+                <p class="mt-4">正在載入回報資料...</p>
+            </div>
+        </div>
+    </div>
+
+<!-- [v579.0 重構] 改為載入模組化的 JS 檔案 -->
+<script type="module" src="./js/daily_report_main.js"></script>
+</body>
+</html>

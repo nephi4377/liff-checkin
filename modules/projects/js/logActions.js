@@ -172,8 +172,19 @@ export function handleSavePhotos() {
         .map(item => item.dataset.link);
 
     // 2. 收集新上傳的 Base64 照片資料
-    const newUploads = Array.from(grid.querySelectorAll('.modal-photo-item.new-upload:not(.deleted)'))
-        .map(item => item.dataset.fullUrl);
+    // [v603.0 核心修正] 將 Base64 字串轉換為後端 _manageProjectFiles_ 函式預期的物件格式。
+    // 後端預期格式為 { data: string, type: string, name: string }
+    const newUploads = Array.from(grid.querySelectorAll('.modal-photo-item.new-upload:not(.deleted)')).map(item => {
+        const fullDataUrl = item.dataset.fullUrl;
+        if (!fullDataUrl) return null;
+        const match = fullDataUrl.match(/^data:(image\/.+);base64,(.+)$/);
+        if (!match) return null;
+        return {
+            data: match[2], // 純 Base64 資料
+            type: match[1], // MIME 類型, e.g., 'image/jpeg'
+            name: `upload_${Date.now()}.jpg` // 提供一個預設檔名
+        };
+    }).filter(Boolean); // 過濾掉解析失敗的 null
 
     // [v588.0 新增] 3. 收集要刪除的舊照片的 File ID
     const deleteIds = Array.from(grid.querySelectorAll('.modal-photo-item.deleted:not(.new-upload)'))
@@ -197,7 +208,7 @@ export function handleSavePhotos() {
     if (cardToUpdate) {
         const photoContainer = cardToUpdate.querySelector('.photo-grid')?.parentNode;
         if (photoContainer) {
-            // 組合要保留的舊照片和新上傳的 Base64 照片
+            // [v603.0] 樂觀更新時，一樣使用完整的 Data URL 來顯示預覽
             const optimisticLinks = [...keepLinks, ...newUploads];
             // 建立一個新的照片牆並替換掉舊的
             const newPhotoGrid = buildPhotoGrid(optimisticLinks);
@@ -216,13 +227,10 @@ export function handleSavePhotos() {
         payload: {
             logId: logIdToUpdate, // 明確指定要更新的 LogID
             existingLinksCsv: keepLinks.join(','), // 要保留的舊連結
-            // [核心修正] 將新上傳的 Base64 照片陣列的 key 改回 newPhotosBase64Array，以匹配後端邏輯
-            newPhotosBase64Array: newUploads,
+            photos: newUploads, // [v603.0] 使用新的 key 'photos' 並傳遞物件陣列
             fileIdsToDelete: deleteIds, // [v588.0 新增] 將待刪除的 ID 列表加入 payload
-            projectId: state.projectId, // [問題2 修正] 將 projectId 加入 payload
-            projectName: state.overview.siteName || state.overview['案場名稱'] || '', // [問題2 修正] 將 projectName 加入 payload
-            newPhotosBase64Array: newUploads,
-            deleteLinksCsv: '', // 根據您的舊邏輯，此處為空
+            projectId: state.projectId,
+            projectName: state.overview.siteName || state.overview['案場名稱'] || '',
             userId: state.currentUserId,
             userName: state.currentUserName
         }
@@ -406,13 +414,22 @@ export function handleCreateNewPost() {
   const submitBtn = document.getElementById('submit-post-btn');
   const titleSelect = document.getElementById('post-title-select');
   const photoPreviewContainer = document.getElementById('new-log-photo-preview');
-
   const content = textarea.value.trim();
-  const photosBase64Array = photoPreviewContainer
-    ? Array.from(photoPreviewContainer.querySelectorAll('.photo-preview-item')).map(item => item.dataset.base64)
-    : [];
+  
+  // [v605.0 核心修正] 將 Base64 字串轉換為後端 _manageProjectFiles_ 函式預期的物件格式。
+  const photos = photoPreviewContainer ? Array.from(photoPreviewContainer.querySelectorAll('.photo-preview-item')).map(item => {
+    const fullDataUrl = item.dataset.base64; // 預覽項目的 dataset.base64 儲存的是完整的 Data URL
+    if (!fullDataUrl) return null;
+    const match = fullDataUrl.match(/^data:(image\/.+);base64,(.+)$/);
+    if (!match) return null;
+    return {
+        data: match[2], // 純 Base64 資料
+        type: match[1], // MIME 類型
+        name: item.dataset.name || `upload_${Date.now()}.jpg` // 從 dataset 讀取原始檔名
+    };
+  }).filter(Boolean) : [];
 
-  if (!content && photosBase64Array.length === 0) {
+  if (!content && photos.length === 0) {
     alert('請輸入一些內容或附加照片！');
     textarea.focus();
     return;
@@ -426,14 +443,14 @@ export function handleCreateNewPost() {
   const projectId = state.projectId;
   const title = titleSelect ? titleSelect.value : '';
 
-  const metaPayload = {
+  const requestPayload = {
     userId: state.currentUserId || 'ConsoleUser',
     userName: state.currentUserName,
     projectId: projectId,
     projectName: state.overview.siteName || state.overview['案場名稱'] || '',
     title: title,
     content: content,
-    newPhotosBase64Array: photosBase64Array
+    photos: photos
   };
 
   const displayTitle = title
@@ -447,7 +464,7 @@ export function handleCreateNewPost() {
     Timestamp: new Date().toISOString(),
     // [v350.0 核心修正] 直接傳遞 Base64 陣列，而不是用逗號連接的字串。
     // 這可以避免 buildPhotoGrid 函式因 Base64 內容中的逗號而錯誤地分割單張圖片。
-    PhotoLinks: photosBase64Array
+    PhotoLinks: photos.map(p => `data:${p.type};base64,${p.data}`) // 樂觀更新時，需要完整的 Data URL
   };
 
   const newCard = _buildLogCard(optimisticLog, false);
@@ -459,7 +476,7 @@ export function handleCreateNewPost() {
     logsContainer.insertBefore(newCard, postCreator.nextSibling);
   }
 
-  apiRequest({ action: 'createLog', payload: metaPayload })
+  apiRequest({ action: 'createLog', payload: requestPayload })
     .then(result => {
       if (result.success) {
         window.replaceOptimisticCard(optimisticLog.LogID, result.data);

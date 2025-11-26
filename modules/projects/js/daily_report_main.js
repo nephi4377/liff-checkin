@@ -5,20 +5,17 @@
 * 版本: v1.0 (模組化重構版)
 * 說明: 負責處理每日回報總覽頁面的所有邏輯，包含資料獲取、渲染與互動。
 * =============================================================================
-*/
+*/ // [v602.0 重構] 引入統一設定檔
+import { CONFIG } from '/shared/js/config.js';
 
 // [v579.0 重構] 引入共用模組
 import { extractDriveFileId } from '/shared/js/utils.js';
 // [v581.0 修正] 根據使用者要求，改為使用自訂的 lazyLoadImages 函式來處理圖片延遲載入
 import { lazyLoadImages } from './ui.js';
 
-// [v583.0 核心修正] 將函式掛載到 window 的操作提升至模組頂層。
-// 這確保了在任何業務邏輯執行前，window.extractDriveFileId 都已存在，解決了圖片 URL 為 null 的問題。
 window.extractDriveFileId = extractDriveFileId;
 
 document.addEventListener('DOMContentLoaded', () => {
-    const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    const ATTENDANCE_API_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
     const startDatePicker = document.getElementById('start-date-picker');
     const endDatePicker = document.getElementById('end-date-picker');
     const queryBtn = document.getElementById('query-btn');
@@ -72,12 +69,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchEmployees() {
         try {
-            const url = new URL(ATTENDANCE_API_URL);
+            const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
             url.searchParams.append('page', 'attendance_api');
             url.searchParams.append('action', 'get_employees');
             const response = await fetch(url);
             const result = await response.json();
-            if (!result.success) throw new Error(result.message);
+            if (!result.success) throw new Error(result.message || '後端未回傳員工資料');
             return result.data.filter(emp => emp.permission === 2 || emp.permission === 3);
         } catch (error) {
             console.error('獲取員工列表失敗:', error);
@@ -140,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const url = new URL(API_BASE_URL);
+            const url = new URL(CONFIG.GAS_WEB_APP_URL);
             url.searchParams.append('page', 'get_daily_reports');
             url.searchParams.append('startDate', startDateStr);
             url.searchParams.append('endDate', endDateStr);

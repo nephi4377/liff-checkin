@@ -1,0 +1,13 @@
+名稱	寬度	深度	單價	計價方式	可調整	深度選項	預設透明度	圖片網址
+系統櫃(40cm深)	120	40	2200	width	width-depth-select	40,60	80	
+系統櫃(60cm深)	120	60	2500	width	width-depth-select	40,60	80	
+層板	180	30	800	width	width		70	
+門片	90	2	1200	width	width		90	
+三人沙發	210	90	35000	fixed	none		80	
+L型沙發	280	170	55000	fixed	none		80	
+雙人床	182	212	32000	fixed	none		80	
+衣櫃(40cm深)	150	40	2000	width	width-depth-select	40,60	80	
+衣櫃(60cm深)	150	60	2300	width	width-depth-select	40,60	80	
+電視櫃	240	45	18000	fixed	none		80	
+比例尺(300cm)	300	10	0	fixed	none		100	
+門片(90cm)	90	90	5000	fixed	none		90	

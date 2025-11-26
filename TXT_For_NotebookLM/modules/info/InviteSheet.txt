@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">    <title>添心設計 | 好友推薦感謝回饋</title>
+    <!-- 載入 Tailwind CSS 框架 --><script src="https://cdn.tailwindcss.com"></script>
+    <!-- 載入 Google Fonts Noto Sans TC --><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #fcf8e8; /* 外層背景：米色 */
+            color: #3d4a41; 
+            font-weight: 500;
+        }
+        .text-dark-brand {
+            color: #2a3c35; /* 深品牌色 */
+        }
+        .text-accent-reward {
+            color: #a82e2e; /* 保持強調色 */
+        }
+        .card-shadow {
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.04); 
+        }
+        .line-id-button {
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .line-id-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.15);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 sm:p-6">
+
+    <!-- 主要內容區塊：內層卡片為白色，與米色背景形成層次 --><div class="max-w-2xl w-full p-6 sm:p-10 md:p-16 text-center bg-white rounded-3xl card-shadow border border-gray-100">
+        
+        <!-- 【您的要求】將「添心設計」移至最上方，並調整標題區塊 -->
+        <header class="mb-8 md:mb-10">
+            <p class="text-2xl md:text-4xl font-bold mb-6 text-dark-brand">
+                <span class="border-b-4 border-dark-brand pb-2 px-2">添心設計</span>
+            </p>
+            <h1 class="text-3xl md:text-4xl font-extrabold leading-tight mb-3 text-dark-brand">
+                喜歡自己的家嗎？
+            </h1>
+            <h2 class="text-xl md:text-3xl font-semibold text-dark-brand">
+                邀請朋友一起添點心吧！
+            </h2>
+        </header>
+
+        <!-- 【您的要求】將內文字體縮小一號 -->
+        <section class="space-y-4 md:space-y-6 mb-8 md:mb-10 text-base md:text-lg text-gray-700">
+            <p class="font-medium leading-relaxed">
+                感謝您一路以來對【添心設計】的支持與信任。
+            </p>
+            <p class="leading-relaxed">
+                如果您身邊有親友剛交屋、正準備打造夢想家園，
+                誠摯邀請您推薦他們選擇添心設計，讓美好空間從此展開～
+            </p>
+        </section>
+
+        <!-- 獎勵核心區塊：維持綠色漸變框，並放大禮券金額字體以強調 (text-4xl md:text-6xl) -->
+        <div class="bg-gradient-to-r from-emerald-50 to-teal-100 p-6 md:p-10 rounded-2xl shadow-inner mb-10 md:mb-12 border border-emerald-300">
+            <p class="text-lg md:text-xl font-bold mb-4 text-dark-brand">
+                成功推薦好友完成裝修設計合約簽訂後，
+            </p>
+            <p class="text-3xl md:text-4xl font-black text-accent-reward tracking-wider leading-none mb-4">
+                全聯禮券 <span class="text-red-600">3,000</span> 元
+            </p>
+            <p class="text-lg md:text-xl font-bold text-dark-brand">
+                立即獻上，作為對您的感謝回饋！
+            </p>
+        </div>
+
+        <!-- 行動呼籲 (CTA) / 聯絡資訊區 -->
+        <footer class="space-y-6">
+            <p class="text-base md:text-lg font-semibold text-dark-brand">
+                讓您的親友也感受我們的用心
+            </p>
+            
+            <!-- [vNext] 簡化分享流程，直接分享此頁面 -->
+            <div class="pt-4">
+                <p class="text-sm text-gray-500 mb-4">或將我們分享給好友：</p>
+                <div class="flex justify-center items-center gap-4">
+                    <a id="line-share-btn" href="#" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500 text-white font-bold hover:bg-green-600 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M21.9,10.9a8.9,8.9,0,0,0-6.3-6.3,8.8,8.8,0,0,0-11.2,11.2,8.9,8.9,0,0,0,6.3,6.3,8.8,8.8,0,0,0,11.2-11.2ZM15.8,15a.5.5,0,0,1-.5.5h-1a.5.5,0,0,1-.5-.5v-2.1a.5.5,0,0,1,.5-.5h1a.5.5,0,0,1,.5.5Zm-4.4,0a.5.5,0,0,1-.5.5h-1a.5.5,0,0,1-.5-.5V10.4a.5.5,0,0,1,.5-.5h1a.5.5,0,0,1,.5.5Zm-2.2-4.6H8.2a.5.5,0,0,1-.5-.5V8.7a.5.5,0,0,1,.5-.5h1a.5.5,0,0,1,.5.5v1.2a.5.5,0,0,1-.5.5Zm6.6,0h-1a.5.5,0,0,1-.5-.5V8.7a.5.5,0,0,1,.5-.5h1a.5.5,0,0,1,.5.5v1.2a.5.5,0,0,1-.5.5Z"/></svg>
+                        <span>LINE</span>
+                    </a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- 【您的要求】新增 JavaScript 邏輯，實現智慧分享 -->
+    <script>
+        // [vNext] 簡化分享流程，直接分享此頁面的網址
+        document.getElementById('line-share-btn').addEventListener('click', function(e) {
+            e.preventDefault();
+            const currentUrl = new URL(window.location.href);
+            const landingPageUrl = `${currentUrl.origin}${currentUrl.pathname.substring(0, currentUrl.pathname.lastIndexOf('/'))}/LandingPage.html`;
+
+            const shareText = '我家的裝潢是給【添心設計】做的，成果我很滿意！他們現在有好友推薦活動，如果你剛好有新家要裝潢或舊屋想翻新，真心推薦你參考看看！';
+            const lineUrl = `https://line.me/R/msg/text/?${encodeURIComponent(shareText + ' 👉 ' + landingPageUrl)}`;
+            window.open(lineUrl, '_blank');
+        });
+    </script>
+
+</body>
+</html>
