@@ -11,6 +11,7 @@ export const CONFIG = {
     // LIFF ID 設定
     LIFF_ID: '2007974938-jVxn6y37', // 員工打卡用
     PROJECT_CONSOLE_LIFF_ID: '2007974938-7yKM9EqL', // 專案主控台用
+    HUB_LIFF_ID: '2007974938-2nPKg3J0', // 整合主控台 (SPA) 用
     REPORT_FORM_LIFF_ID: '2007974938-gOrjlzna', // 施工回報用
 
     // Google Apps Script Web App URL 設定

@@ -223,7 +223,7 @@ const App = {
                 if (isLocalTest) {
                     userProfile.value = { userId: 'Ud58333430513b7527106fa71d2e30151', displayName: '俊豪 (本地測試)' };
                 } else {
-                    await liff.init({ liffId: CONFIG.LIFF_ID });
+                    await liff.init({ liffId: CONFIG.HUB_LIFF_ID }); // 使用專屬於主控台的 LIFF ID
                     if (!liff.isLoggedIn()) {
                         liff.login();
                         return;
