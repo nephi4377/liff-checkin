@@ -390,14 +390,17 @@
             const isManager = currentUser.permission >= 4;
             employeeSelect.innerHTML = '<option value="">-- 檢視所有員工 --</option>'; // 所有使用者都有此選項
 
+            // [v617.0 核心修正] 根據您的指示，將組別資料的產生邏輯移至權限判斷之外。
+            // 確保所有能進入此頁面的使用者 (權限 >= 2) 都能看到組別篩選器。
+            employeeGroups = schedulableEmployees.reduce((acc, emp) => {
+                const group = emp.group || '未分類';
+                if (!acc[group]) acc[group] = [];
+                acc[group].push(emp);
+                return acc;
+            }, {});
+
             if (isManager) {
                 // 管理者：額外顯示所有可排班員工
-                employeeGroups = schedulableEmployees.reduce((acc, emp) => {
-                    const group = emp.group || '未分類';
-                    if (!acc[group]) acc[group] = [];
-                    acc[group].push(emp);
-                    return acc;
-                }, {});
                 for (const groupName in employeeGroups) {
                     const options = employeeGroups[groupName].map(emp => `<option value="${emp.userId}">${emp.userName}</option>`).join('');
                     employeeSelect.innerHTML += `<optgroup label="${groupName}">${options}</optgroup>`;
