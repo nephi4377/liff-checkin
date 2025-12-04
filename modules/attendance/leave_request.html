@@ -311,17 +311,17 @@
             endDateInput.value = today;
 
             // 【⭐️ 核心改造：不再發送請求，改為直接從 URL 讀取班表時間 ⭐️】
+            // [v619.0 核心修正] 根據您的要求，動態產生個人化的時間選項。
             const urlParams = new URLSearchParams(window.location.search);
             const shiftStart = urlParams.get('shiftStart');
             const shiftEnd = urlParams.get('shiftEnd');
 
             if (shiftStart && shiftEnd) {
-                document.getElementById('startTime').value = shiftStart;
-                document.getElementById('endTime').value = shiftEnd;
+                // 如果 URL 提供了班表時間，則根據該時間產生選項
+                populateTimeSelects(shiftStart, shiftEnd);
             } else {
-                // 若 URL 沒有提供，則使用通用的預設值
-                document.getElementById('startTime').value = APP_SETTINGS.DEFAULT_SHIFT_TIMES.START;
-                document.getElementById('endTime').value = APP_SETTINGS.DEFAULT_SHIFT_TIMES.END;
+                // 若無，則使用 07:00-18:00 的通用範圍
+                populateTimeSelects('07:00', '18:00');
             }
 
             // 智慧預設：設定日期連動邏輯
