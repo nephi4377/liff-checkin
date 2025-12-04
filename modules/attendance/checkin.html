@@ -332,11 +332,9 @@
 
             console.log(`[sendCheckinData] 🚀 準備發送請求至: ${url.toString()}`);
             
-            try {
-                const response = await fetch(url);
-                if (!response.ok) throw new Error(`後端伺服器錯誤: ${response.status}`);
-                return response.json();
-            }
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`後端伺服器錯誤: ${response.status}`);
+            return response.json();
         }
         
         // 【您的要求】網路狀態更新函式
