@@ -218,7 +218,10 @@ function pollJobStatus(jobId) {
                 url.searchParams.append('jobId', jobId);
                 
                 // 2. 發送 GET 請求到後端
-                const response = await fetch(url);
+                // [v630.0 穩健性修正] 根據您的建議，明確指定 method 為 'GET'，使程式碼意圖更清晰，避免潛在問題。
+                const response = await fetch(url, {
+                    method: 'GET'
+                });
                 const statusResult = await response.json();
 
                 // 4. 判斷任務狀態

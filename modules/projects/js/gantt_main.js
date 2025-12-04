@@ -6,8 +6,7 @@
  * 說明: 這是專案甘特圖獨立頁面的主要進入點，負責初始化、資料載入與事件處理。
  * =============================================================================
  */
-
-import { request as apiRequest } from './projectApi.js'; // [重構] 改為使用統一的 projectApi 模組
+import { request as apiRequest } from './projectApi.js';
 import { logToPage, showGlobalNotification, saveCache, loadCache } from '../../shared/js/utils.js';
 import * as GanttScheduleLogic from './gantt_schedule_logic.js';
 import { state } from './state.js'; // 檔案位於同一層
