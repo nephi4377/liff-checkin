@@ -31,6 +31,7 @@
     --danger-color: #ff5252;  /* 紅色，代表刪除 */
     --input-bg: #333;
     --border-color: #555;
+    --info-color: #2196F3; /* 藍色，用於一般資訊 */
     --card-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
   }
 
@@ -40,7 +41,7 @@
     color: var(--text-color);
     display: flex;
     justify-content: center;
-    padding: 20px;
+    padding-top: 80px; /* 增加頂部空間給通知 */
     min-height: 100vh;
     box-sizing: border-box;
     margin: 0;
@@ -132,12 +133,19 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap; /* 允許換行 */
+    gap: 10px; /* 按鈕間距 */
     padding-bottom: 10px;
     border-bottom: 1px solid var(--border-color);
   }
 
+  .members-header .title {
+    flex-grow: 1; /* 讓標題佔據多餘空間 */
+  }
+
   .btn-small {
     padding: 6px 12px;
+    margin-left: 5px;
     font-size: 0.85rem;
     background-color: #444;
     color: white;
@@ -196,9 +204,8 @@
 
   /* 底部按鈕區 */
   .actions {
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: 15px;
+    display: flex; /* 改為 flex 佈局 */
+    justify-content: center; /* 置中計算按鈕 */
     margin-top: 10px;
   }
 
@@ -243,6 +250,26 @@
     font-size: 0.9rem;
   }
 
+  /* 新增：通知元件樣式 */
+  .notification {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 20px;
+    border-radius: 6px;
+    color: white;
+    font-weight: 600;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.3s, transform 0.3s;
+    pointer-events: none;
+  }
+  .notification.show { opacity: 1; transform: translate(-50%, 10px); }
+  .notification.success { background-color: var(--accent-color); }
+  .notification.error { background-color: var(--danger-color); }
+  .notification.info { background-color: var(--info-color); }
+
   /* 響應式調整 */
   @media (max-width: 400px) {
     .member-row {
@@ -255,6 +282,9 @@
 </style>
 </head>
 <body>
+
+<!-- 新增：通知顯示區塊 -->
+<div id="notification" class="notification"></div>
 
 <div class="container">
   <h2>🏰 Rally Dispatcher</h2>
@@ -275,8 +305,12 @@
   <!-- 2. 成員列表 -->
   <div class="control-group">
     <div class="members-header">
-      <label>Squad Members</label>
-      <button class="btn-small" onclick="addMemberRow()">+ Add Member</button>
+      <label class="title">Squad Members</label>
+      <div>
+        <button class="btn-small" onclick="loadSquad()">Load Squad</button>
+        <button class="btn-small" onclick="saveSquad()">Save Squad</button>
+        <button class="btn-small" onclick="addMemberRow()">+ Add Member</button>
+      </div>
     </div>
     <div id="members-list">
       <!-- JavaScript 會動態產生輸入列 -->
@@ -285,8 +319,7 @@
 
   <!-- 3. 操作按鈕 -->
   <div class="actions">
-    <button class="main-btn btn-primary" onclick="calculateAndCopy()">Calculate & Copy</button>
-    <button class="main-btn btn-secondary" onclick="resetForm()">Reset</button>
+    <button class="main-btn btn-primary" onclick="calculateAndCopy()" style="width: 100%;">Calculate & Copy</button>
   </div>
 
   <!-- 4. 結果顯示 -->
@@ -301,6 +334,23 @@
    * 常數設定：集結時間為 5 分鐘 (300秒)
    */
   const ASSEMBLY_TIME_SECONDS = 5 * 60; 
+  const SQUAD_STORAGE_KEY = 'rallyDispatcher_squad';
+
+  /**
+   * 新增：顯示通知的函式
+   */
+  let notificationTimer;
+  function showNotification(message, type = 'info', duration = 3000) {
+    const notification = document.getElementById('notification');
+    notification.textContent = message;
+    notification.className = `notification ${type}`; // 清除舊的 type
+    
+    clearTimeout(notificationTimer);
+    notification.classList.add('show');
+    notificationTimer = setTimeout(() => {
+      notification.classList.remove('show');
+    }, duration);
+  }
 
   /**
    * 工具函式：將總秒數格式化為 HH:MM:SS 字串 (修改後)
@@ -347,21 +397,31 @@
   }
 
   /**
-   * UI 操作：重置表單
+   * 新增：快取管理函式 - 儲存資料並設定到期日
+   * @param {string} key - 快取的鍵值
+   * @param {any} data - 要快取的資料
+   * @param {number} [days=30] - 快取有效天數，預設為 30 天
    */
-  function resetForm() {
-    if(!confirm("Clear all inputs?")) return;
+  function saveCache(key, data, days = 30) {
+    const cache = {
+      data: data,
+      expires: Date.now() + days * 24 * 60 * 60 * 1000
+    };
+    localStorage.setItem(key, JSON.stringify(cache));
+  }
 
-    // 清空抵達時間
-    document.getElementById('targetHH').value = '';
-    document.getElementById('targetMM').value = '';
-    document.getElementById('targetSS').value = '';
-
-    document.getElementById('members-list').innerHTML = '';
-    // 恢復 5 個空白行供重新輸入 (Reset 通常為清空，若需恢復預設值可重新整理網頁)
-    for(let i=0; i<5; i++) addMemberRow(); 
-    document.getElementById('output-container').style.display = 'none';
-    document.getElementById('output-text').value = '';
+  /**
+   * 新增：快取管理函式 - 讀取資料並檢查到期日
+   */
+  function loadCache(key) {
+    const cached = localStorage.getItem(key);
+    if (!cached) return null;
+    const cache = JSON.parse(cached);
+    if (cache.expires < Date.now()) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return cache.data;
   }
 
   /**
@@ -375,7 +435,7 @@
 
     // 檢查是否有輸入 (至少需要時和分)
     if (hhVal === '' || mmVal === '') {
-      alert("Please enter Target Arrival Time (HH and MM).");
+      showNotification("Please enter Target Arrival Time (HH and MM).", 'error');
       return;
     }
 
@@ -420,7 +480,7 @@
     });
 
     if (!hasValidMember) {
-      alert("Please enter at least one member's ID.");
+      showNotification("Please enter at least one member's ID.", 'error');
       return;
     }
 
@@ -447,15 +507,72 @@
     try {
       const successful = document.execCommand('copy');
       if (successful) {
-        alert("Copied to clipboard!");
+        showNotification("Copied to clipboard!", 'success');
       } else {
-        alert("Auto-copy failed. Please copy manually.");
+        showNotification("Auto-copy failed. Please copy manually.", 'error');
       }
     } catch (err) {
       console.error('Fallback copy failed', err);
-      alert("Copy failed. Please copy manually.");
+      showNotification("Copy failed. Please copy manually.", 'error');
     }
   }
+
+  /**
+   * 新增：儲存常用成員列表到 localStorage
+   */
+  function saveSquad() {
+    const rows = document.querySelectorAll('.member-row');
+    const squadData = [];
+
+    rows.forEach(row => {
+      const id = row.querySelector('.mem-id').value.trim();
+      const min = row.querySelector('.mem-min').value;
+      const sec = row.querySelector('.mem-sec').value;
+
+      // 只儲存有 ID 的成員
+      if (id) {
+        squadData.push({
+          id: id,
+          min: min,
+          sec: sec
+        });
+      }
+    });
+
+    if (squadData.length === 0) {
+      showNotification("No members to save.", 'error');
+      return;
+    }
+
+    saveCache(SQUAD_STORAGE_KEY, squadData, 30); // 使用新的快取函式，設定 30 天
+    showNotification("Squad saved successfully!", 'success');
+  }
+
+  /**
+   * 新增：從 localStorage 讀取並載入成員列表
+   */
+  function loadSquad() {
+    const savedData = loadCache(SQUAD_STORAGE_KEY); // 使用新的快取函式
+    if (!savedData) {
+      showNotification("No saved squad found.", 'info');
+      return;
+    }
+
+    if (!confirm("This will overwrite the current list. Continue?")) {
+      return;
+    }
+
+    const squadData = savedData; // loadCache 已處理 JSON.parse
+    const listContainer = document.getElementById('members-list');
+    listContainer.innerHTML = ''; // 清空現有名單
+
+    squadData.forEach(member => {
+      addMemberRow(member.id, member.min, member.sec);
+    });
+
+    showNotification("Squad loaded successfully!", 'success');
+  }
+
 
   // 初始化：頁面載入時設定預設值
   window.onload = function() {
