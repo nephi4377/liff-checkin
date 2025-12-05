@@ -237,6 +237,8 @@ const App = {
                     if (JSON.stringify(allEmployees.value) !== JSON.stringify(attendanceResult.employees)) {
                         allEmployees.value = attendanceResult.employees;
                         saveCache(EMPLOYEES_CACHE_KEY, attendanceResult.employees);
+                        // 【您的要求】核心新增：將員工列表暴露到全域，供 iframe 子頁面使用
+                        window.spaAllEmployees = attendanceResult.employees;
                     }
                     pendingApprovals.value = attendanceResult.pendingRequests?.length || 0;
                 }
@@ -278,9 +280,9 @@ const App = {
         window.addEventListener('message', handleIframeMessage);
 
         // 【您的要求】核心修正：監聽權限與當前視圖，確保任務交辦中心能被正確初始化
-        watch([hasAdminRights, currentView], ([isAdmin, view]) => {
+        watch([hasAdminRights, currentView, allEmployees], ([isAdmin, view, employees]) => {
             // 只有當使用者有權限，且當前視圖是主控台時，才執行
-            if (isAdmin && view.name === 'dashboard') {
+            if (isAdmin && view.name === 'dashboard' && employees.length > 0) {
                 // 使用 nextTick 確保 DOM 元素已準備就緒
                 nextTick(() => {
                     const taskSenderContainer = document.getElementById('task-sender-container');
@@ -375,6 +377,9 @@ const App = {
                         (currentView.src.includes('?') ? '&' : '?') + 
                         'uid=' + userProfile.userId + 
                         '&name=' + userProfile.displayName +
+                        '&permission=' + (currentUser?.permission || 1) +
+                        '&shiftStart=' + (currentUser?.shiftStart || '08:30') +
+                        '&shiftEnd=' + (currentUser?.shiftEnd || '17:30') +
                         (currentView.params || '')" />
                 </div>
             </main>

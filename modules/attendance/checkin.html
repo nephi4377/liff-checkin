@@ -321,13 +321,12 @@
             const urlParams = new URLSearchParams(window.location.search);
             const source = urlParams.get('source');
             // [v625.0 穩健性修正] 增加對 context 是否為 null 的判斷。
-            // 當 LIFF 在外部瀏覽器開啟時，liff.getContext() 會回傳 null。
-            const context = liff.getContext();
+            // 【您的要求】核心修正：改用正確的 liff.isInClient() 函式來判斷來源。
             // 判斷邏輯：
             // 1. 優先使用 URL 中的 source 參數。
-            // 2. 如果沒有 source，且 context 存在，且 isInClient 為 false (代表從圖文選單等外部管道開啟)，則設為 'richmenu'。
-            // 3. 其他所有情況 (包含 context 為 null)，都設為 'unknown'。
-            const finalSource = source || (context && context.isInClient === false ? 'richmenu' : 'unknown');
+            // 2. 如果沒有 source，且 LIFF 是在 LINE App 中開啟的，則來源視為 'richmenu'。
+            // 3. 其他所有情況 (例如在外部瀏覽器開啟)，都設為 'unknown'。
+            const finalSource = source || (liff.isInClient() ? 'richmenu' : 'unknown');
             if (finalSource) url.searchParams.append('source', finalSource);
 
             console.log(`[sendCheckinData] 🚀 準備發送請求至: ${url.toString()}`);

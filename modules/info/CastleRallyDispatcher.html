@@ -1,0 +1,477 @@
+<!-- 
+  Version: 1.0.7
+  Last Modified: 2025-12-05 (Asia/Taipei)
+  Author: Gemini (Technical Partner)
+  Description: 
+    多人集結時間計算器 (Rally Dispatcher) - V1.0.7
+    
+    修改重點：
+    1. 修正輸出格式邏輯：
+       - 將剪貼簿輸出的時間格式由 "HH MM SS" 改為標準的 "HH:MM:SS" (加上冒號)。
+       - 包含「抵達時間」與「出發時間」的輸出字串皆同步調整。
+    2. 維持 V1.0.6 的介面優化與客製化預設值。
+    
+    核心邏輯：
+    1. 時間格式為 UTC 24小時制。
+    2. 維持純數學運算，不依賴系統時區。
+    3. 修正剪貼簿複製功能，兼容 iframe 環境。
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Castle Rally Dispatcher</title>
+<style>
+  :root {
+    --bg-color: #121212;
+    --container-bg: #1e1e1e;
+    --text-color: #e0e0e0;
+    --accent-color: #4CAF50; /* 綠色，代表行動 */
+    --danger-color: #ff5252;  /* 紅色，代表刪除 */
+    --input-bg: #333;
+    --border-color: #555;
+    --card-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  }
+
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+    min-height: 100vh;
+    box-sizing: border-box;
+    margin: 0;
+  }
+
+  .container {
+    background-color: var(--container-bg);
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
+    width: 100%;
+    max-width: 550px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  h2 {
+    text-align: center;
+    color: var(--accent-color);
+    margin: 0 0 10px 0;
+    font-size: 1.5rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  label {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #ccc;
+  }
+
+  /* 輸入框通用樣式 */
+  input[type="text"],
+  input[type="number"] {
+    background-color: var(--input-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 12px;
+    border-radius: 6px;
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 1rem;
+    transition: border-color 0.2s;
+    text-align: center; /* 讓數字置中更好看 */
+  }
+
+  input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+  }
+
+  /* 針對抵達時間的 Flex 佈局 (加入冒號) */
+  .time-inputs {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .time-inputs input {
+    flex: 1; /* 每個輸入框平均分配寬度 */
+    font-family: 'Consolas', monospace; /* 使用等寬字體讓數字對齊 */
+    font-size: 1.2rem;
+    letter-spacing: 1px;
+    padding: 10px;
+  }
+
+  .time-separator {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #888;
+    margin-top: -4px; /* 微調垂直對齊 */
+  }
+
+  .helper-text {
+    font-size: 0.8rem;
+    color: #888;
+    font-style: italic;
+  }
+
+  /* 成員列表區塊 */
+  .members-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .btn-small {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    background-color: #444;
+    color: white;
+    border: 1px solid #666;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .btn-small:hover { background-color: #555; }
+
+  #members-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 5px;
+  }
+
+  /* 單個成員列的 Grid 佈局 */
+  .member-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr auto; /* ID, Min, Sec, Delete */
+    gap: 8px;
+    align-items: center;
+    background-color: #2a2a2a;
+    padding: 8px;
+    border-radius: 6px;
+  }
+
+  .member-row input {
+    padding: 8px;
+    text-align: center;
+  }
+  
+  /* 讓 ID 欄位靠左對齊，比較像文字輸入 */
+  .member-row input.mem-id {
+    text-align: left;
+    padding-left: 10px;
+  }
+
+  .btn-icon {
+    background: none;
+    border: none;
+    color: var(--danger-color);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+  }
+  .btn-icon:hover {
+    background-color: rgba(255, 82, 82, 0.1);
+  }
+
+  /* 底部按鈕區 */
+  .actions {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 15px;
+    margin-top: 10px;
+  }
+
+  button.main-btn {
+    padding: 14px;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.2s;
+  }
+
+  .btn-primary { background-color: var(--accent-color); color: #000; }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-secondary { background-color: #444; color: white; }
+  .btn-secondary:hover { background-color: #555; }
+  
+  button:active { transform: scale(0.98); }
+
+  /* 輸出結果區 */
+  #output-container {
+    display: none; /* 預設隱藏 */
+    animation: fadeIn 0.3s ease-in;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  textarea {
+    width: 100%;
+    height: 120px;
+    background-color: #111;
+    border: 1px solid var(--accent-color);
+    color: var(--accent-color);
+    padding: 10px;
+    border-radius: 6px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    resize: vertical;
+    font-size: 0.9rem;
+  }
+
+  /* 響應式調整 */
+  @media (max-width: 400px) {
+    .member-row {
+      grid-template-columns: 1fr 1fr 1fr auto;
+    }
+    .member-row input::placeholder {
+      font-size: 0.8rem;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h2>🏰 Rally Dispatcher</h2>
+
+  <!-- 1. 設定目標時間 (加入冒號分隔符) -->
+  <div class="control-group">
+    <label>Target Arrival Time (UTC 24H)</label>
+    <div class="time-inputs">
+      <input type="number" id="targetHH" placeholder="HH" min="0" max="23">
+      <span class="time-separator">:</span>
+      <input type="number" id="targetMM" placeholder="MM" min="0" max="59">
+      <span class="time-separator">:</span>
+      <input type="number" id="targetSS" placeholder="SS" min="0" max="59">
+    </div>
+    <div class="helper-text">Logic: Arrival Time - Walk Time - 5 mins (Assembly)</div>
+  </div>
+
+  <!-- 2. 成員列表 -->
+  <div class="control-group">
+    <div class="members-header">
+      <label>Squad Members</label>
+      <button class="btn-small" onclick="addMemberRow()">+ Add Member</button>
+    </div>
+    <div id="members-list">
+      <!-- JavaScript 會動態產生輸入列 -->
+    </div>
+  </div>
+
+  <!-- 3. 操作按鈕 -->
+  <div class="actions">
+    <button class="main-btn btn-primary" onclick="calculateAndCopy()">Calculate & Copy</button>
+    <button class="main-btn btn-secondary" onclick="resetForm()">Reset</button>
+  </div>
+
+  <!-- 4. 結果顯示 -->
+  <div id="output-container">
+    <label style="margin-bottom:5px; display:block;">Result (Auto-copied):</label>
+    <textarea id="output-text" readonly></textarea>
+  </div>
+</div>
+
+<script>
+  /**
+   * 常數設定：集結時間為 5 分鐘 (300秒)
+   */
+  const ASSEMBLY_TIME_SECONDS = 5 * 60; 
+
+  /**
+   * 工具函式：將總秒數格式化為 HH:MM:SS 字串 (修改後)
+   * 包含處理跨日邏輯 (負數秒數轉為前一天)
+   * 確保永遠輸出 24 小時制，且使用冒號分隔，例如 13:00:00
+   */
+  function formatSecondsToTimeStr(totalSeconds) {
+    let secs = totalSeconds;
+    
+    // 處理跨日：如果秒數小於 0，加上一天的秒數 (86400) 直到變為正數
+    while (secs < 0) secs += 86400; 
+    // 確保秒數在一天內
+    secs %= 86400; 
+
+    const hh = String(Math.floor(secs / 3600)).padStart(2, '0');
+    const mm = String(Math.floor((secs % 3600) / 60)).padStart(2, '0');
+    const ss = String(secs % 60).padStart(2, '0');
+    // 修改處：將空格改為冒號
+    return `${hh}:${mm}:${ss}`;
+  }
+
+  /**
+   * UI 操作：新增一行成員輸入框
+   * Modified: 增加參數以支援初始值設定
+   */
+  function addMemberRow(initialId = '', initialMin = '', initialSec = '') {
+    const list = document.getElementById('members-list');
+    const row = document.createElement('div');
+    row.className = 'member-row';
+    row.innerHTML = `
+      <input type="text" placeholder="ID / Name" class="mem-id">
+      <input type="number" placeholder="Min" min="0" class="mem-min">
+      <input type="number" placeholder="Sec" min="0" max="59" class="mem-sec">
+      <button class="btn-icon" onclick="this.parentElement.remove()" title="Remove">✕</button>
+    `;
+    
+    // 如果有提供初始值，則填入
+    if (initialId) row.querySelector('.mem-id').value = initialId;
+    // 數字 0 也是有效值，所以用 undefined 檢查或轉字串判斷
+    if (initialMin !== '') row.querySelector('.mem-min').value = initialMin;
+    if (initialSec !== '') row.querySelector('.mem-sec').value = initialSec;
+
+    list.appendChild(row);
+  }
+
+  /**
+   * UI 操作：重置表單
+   */
+  function resetForm() {
+    if(!confirm("Clear all inputs?")) return;
+
+    // 清空抵達時間
+    document.getElementById('targetHH').value = '';
+    document.getElementById('targetMM').value = '';
+    document.getElementById('targetSS').value = '';
+
+    document.getElementById('members-list').innerHTML = '';
+    // 恢復 5 個空白行供重新輸入 (Reset 通常為清空，若需恢復預設值可重新整理網頁)
+    for(let i=0; i<5; i++) addMemberRow(); 
+    document.getElementById('output-container').style.display = 'none';
+    document.getElementById('output-text').value = '';
+  }
+
+  /**
+   * 核心功能：計算時間並複製
+   */
+  function calculateAndCopy() {
+    // 取得抵達時間的三個欄位值
+    const hhVal = document.getElementById('targetHH').value;
+    const mmVal = document.getElementById('targetMM').value;
+    const ssVal = document.getElementById('targetSS').value;
+
+    // 檢查是否有輸入 (至少需要時和分)
+    if (hhVal === '' || mmVal === '') {
+      alert("Please enter Target Arrival Time (HH and MM).");
+      return;
+    }
+
+    const hh = parseInt(hhVal) || 0;
+    const mm = parseInt(mmVal) || 0;
+    const ss = parseInt(ssVal) || 0;
+
+    // 計算目標總秒數
+    const arrivalSeconds = (hh * 3600) + (mm * 60) + ss;
+    
+    // 格式化目標時間用於顯示 (補零)
+    // 修改處：將空格改為冒號
+    const arrivalTimeFormatted = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+
+    // 建立輸出字串的標頭
+    let output = `Arrive time: ${arrivalTimeFormatted}\nStart time list`;
+    let memberCount = 0;
+    let hasValidMember = false;
+
+    // 取得所有成員列
+    const rows = document.querySelectorAll('.member-row');
+    
+    rows.forEach(row => {
+      const id = row.querySelector('.mem-id').value.trim();
+      
+      // 只有當 ID 欄位有值時才進行計算
+      if (id) {
+        memberCount++;
+        hasValidMember = true;
+        
+        const min = parseInt(row.querySelector('.mem-min').value) || 0;
+        const sec = parseInt(row.querySelector('.mem-sec').value) || 0;
+        const walkSeconds = (min * 60) + sec;
+
+        // 計算公式：目標 - 集結(300s) - 行走
+        const departureSeconds = arrivalSeconds - ASSEMBLY_TIME_SECONDS - walkSeconds;
+        const departureTimeFormatted = formatSecondsToTimeStr(departureSeconds);
+
+        // 串接結果字串
+        output += `\n#${memberCount} ${id} ${departureTimeFormatted}`;
+      }
+    });
+
+    if (!hasValidMember) {
+      alert("Please enter at least one member's ID.");
+      return;
+    }
+
+    // 顯示結果區域
+    const container = document.getElementById('output-container');
+    const outputTextarea = document.getElementById('output-text');
+    
+    container.style.display = 'block';
+    outputTextarea.value = output;
+    
+    // 執行複製
+    copyToClipboard(output, outputTextarea);
+  }
+
+  /**
+   * 複製邏輯：使用 document.execCommand ('copy') 確保相容性
+   */
+  function copyToClipboard(text, textareaElement) {
+    // 1. 選取文字
+    textareaElement.select();
+    textareaElement.setSelectionRange(0, 99999); // 手機版相容
+
+    // 2. 嘗試使用 execCommand 複製
+    try {
+      const successful = document.execCommand('copy');
+      if (successful) {
+        alert("Copied to clipboard!");
+      } else {
+        alert("Auto-copy failed. Please copy manually.");
+      }
+    } catch (err) {
+      console.error('Fallback copy failed', err);
+      alert("Copy failed. Please copy manually.");
+    }
+  }
+
+  // 初始化：頁面載入時設定預設值
+  window.onload = function() {
+      // 1. 設定預設抵達時間 14:30:00
+      document.getElementById('targetHH').value = 14;
+      document.getElementById('targetMM').value = 30;
+      document.getElementById('targetSS').value = '00';
+
+      // 2. 設定預設成員與行走時間
+      const defaultMembers = ["VKING", "CROWN", "ALYCIA", "BANGOKO", "ARDAM"];
+      defaultMembers.forEach(name => {
+          // name, min=0, sec=45
+          addMemberRow(name, 0, 45);
+      });
+  };
+</script>
+
+</body>
+</html>
