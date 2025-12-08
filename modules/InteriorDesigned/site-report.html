@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>施工日誌生成器 | TianXin Site Report</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#0891b2', // Cyan 600
+                        secondary: '#164e63', // Cyan 900
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        .canvas-preview {
+            max-width: 100%;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        const { Camera, Image: ImageIcon, Download, Share2, Calendar, CloudSun, MapPin, Hammer, CheckSquare, Trash2, Plus, FileStack } = lucide;
+
+        // --- 預設資料 ---
+        const DEFAULT_TAGS = ['拆除工程', '水電配管', '泥作打底', '防水施作', '木工進場', '油漆粉刷', '系統櫃安裝', '清潔', '驗收', '材料進場', '施工保護'];
+        const WEATHER_OPTIONS = ['☀️ 晴朗', '⛅ 多雲', '☁️ 陰天', '🌧️ 雨天', '⛈️ 雷雨'];
+        const PHOTOS_PER_PAGE = 4;
+
+        function App() {
+            // --- 狀態管理 ---
+            const [projectName, setProjectName] = useState(() => localStorage.getItem('site_report_project') || '');
+            const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+            const [weather, setWeather] = useState('☀️ 晴朗');
+            const [stage, setStage] = useState('施工中');
+            const [photos, setPhotos] = useState([]); // Array of dataURLs
+            const [tags, setTags] = useState([]);
+            const [notes, setNotes] = useState('');
+            const [isGenerating, setIsGenerating] = useState(false);
+            const [previewUrls, setPreviewUrls] = useState([]); // Array of generated page images
+
+            // 儲存常用設定
+            useEffect(() => {
+                localStorage.setItem('site_report_project', projectName);
+            }, [projectName]);
+
+            // --- 照片處理 ---
+            const handlePhotoUpload = (e) => {
+                const files = Array.from(e.target.files);
+                if (files.length === 0) return;
+
+                files.forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        setPhotos(prev => [...prev, ev.target.result]);
+                    };
+                    reader.readAsDataURL(file);
+                });
+            };
+
+            const removePhoto = (index) => {
+                setPhotos(prev => prev.filter((_, i) => i !== index));
+            };
+
+            // --- 標籤處理 ---
+            const toggleTag = (tag) => {
+                setTags(prev =>
+                    prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+                );
+            };
+
+            // --- 核心：生成多頁圖片 ---
+            const generateReport = async () => {
+                setIsGenerating(true);
+                setPreviewUrls([]); // Clear previous
+
+                // 批次處理：將照片分頁
+                const pages = [];
+                const photoChunks = [];
+
+                if (photos.length === 0) {
+                    photoChunks.push([]); // 空頁
+                } else {
+                    for (let i = 0; i < photos.length; i += PHOTOS_PER_PAGE) {
+                        photoChunks.push(photos.slice(i, i + PHOTOS_PER_PAGE));
+                    }
+                }
+
+                // 依序生成每一頁
+                setTimeout(async () => {
+                    try {
+                        const totalPages = photoChunks.length;
+                        const newUrls = [];
+
+                        for (let i = 0; i < totalPages; i++) {
+                            const dataUrl = await renderPageCanvas(photoChunks[i], i + 1, totalPages);
+                            newUrls.push(dataUrl);
+                        }
+
+                        setPreviewUrls(newUrls);
+                    } catch (e) {
+                        console.error("Generate error:", e);
+                        alert("生成失敗，請稍後再試");
+                    } finally {
+                        setIsGenerating(false);
+                    }
+                }, 100);
+            };
+
+            const renderPageCanvas = (pagePhotos, pageNum, totalPages) => {
+                return new Promise((resolve) => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const W = 1200;
+                    const H = 1600;
+                    canvas.width = W;
+                    canvas.height = H;
+
+                    // 1. 背景
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, W, H);
+
+                    // 2. Header
+                    ctx.fillStyle = '#0891b2';
+                    ctx.fillRect(0, 0, W, 120);
+
+                    // Logo 文字
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 48px "Noto Sans TC"';
+                    ctx.textAlign = 'left';
+                    ctx.fillText('添心室內裝修設計', 40, 75);
+
+                    // 標題
+                    ctx.font = '32px "Noto Sans TC"';
+                    ctx.textAlign = 'right';
+                    ctx.fillText('施工日報表 Site Report', W - 40, 75);
+
+                    // 3. 專案資訊欄
+                    ctx.fillStyle = '#f0f9ff';
+                    ctx.fillRect(40, 140, W - 80, 100);
+
+                    ctx.fillStyle = '#164e63';
+                    ctx.font = 'bold 36px "Noto Sans TC"';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(projectName || '未命名專案', 60, 200);
+
+                    ctx.font = '28px "Noto Sans TC"';
+                    ctx.fillStyle = '#555';
+                    const infoText = `${date}  |  ${weather}  |  ${stage}`;
+                    ctx.textAlign = 'right';
+                    ctx.fillText(infoText, W - 60, 200);
+
+                    // 4. 照片拼貼
+                    const photoAreaY = 260;
+                    const photoAreaH = 900;
+                    const gap = 20;
+
+                    const drawStart = () => {
+                        // 5. 底部資訊 (僅在第一頁顯示完整工項，或每頁都顯示？這裡選擇每頁都顯示但標註頁碼)
+                        drawFooter(ctx, W, H, pageNum, totalPages);
+                        resolve(canvas.toDataURL('image/jpeg', 0.85));
+                    };
+
+                    if (pagePhotos.length > 0) {
+                        const loadImg = (src) => new Promise(res => {
+                            const img = new Image();
+                            img.onload = () => res(img);
+                            img.src = src;
+                        });
+
+                        Promise.all(pagePhotos.map(loadImg)).then(imgs => {
+                            // 根據數量排版 (最多4張)
+                            if (imgs.length === 1) {
+                                drawPhoto(ctx, imgs[0], 40, photoAreaY, W - 80, photoAreaH);
+                            } else if (imgs.length === 2) {
+                                const w = (W - 80 - gap) / 2;
+                                drawPhoto(ctx, imgs[0], 40, photoAreaY, w, photoAreaH);
+                                drawPhoto(ctx, imgs[1], 40 + w + gap, photoAreaY, w, photoAreaH);
+                            } else if (imgs.length === 3) {
+                                const w1 = (W - 80 - gap) * 0.6;
+                                const w2 = (W - 80 - gap) * 0.4;
+                                const h2 = (photoAreaH - gap) / 2;
+                                drawPhoto(ctx, imgs[0], 40, photoAreaY, w1, photoAreaH);
+                                drawPhoto(ctx, imgs[1], 40 + w1 + gap, photoAreaY, w2, h2);
+                                drawPhoto(ctx, imgs[2], 40 + w1 + gap, photoAreaY + h2 + gap, w2, h2);
+                            } else {
+                                // 4張田字型
+                                const w = (W - 80 - gap) / 2;
+                                const h = (photoAreaH - gap) / 2;
+                                drawPhoto(ctx, imgs[0], 40, photoAreaY, w, h);
+                                drawPhoto(ctx, imgs[1], 40 + w + gap, photoAreaY, w, h);
+                                drawPhoto(ctx, imgs[2], 40, photoAreaY + h + gap, w, h);
+                                drawPhoto(ctx, imgs[3], 40 + w + gap, photoAreaY + h + gap, w, h);
+                            }
+                            drawStart();
+                        });
+                    } else {
+                        // 無照片
+                        ctx.fillStyle = '#eee';
+                        ctx.fillRect(40, photoAreaY, W - 80, photoAreaH);
+                        ctx.fillStyle = '#aaa';
+                        ctx.font = '30px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('此頁無照片', W / 2, photoAreaY + photoAreaH / 2);
+                        drawStart();
+                    }
+                });
+            };
+
+            const drawPhoto = (ctx, img, x, y, w, h) => {
+                ctx.save();
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, 10);
+                ctx.clip();
+
+                const ratio = Math.max(w / img.width, h / img.height);
+                const drawW = img.width * ratio;
+                const drawH = img.height * ratio;
+                const drawX = x + (w - drawW) / 2;
+                const drawY = y + (h - drawH) / 2;
+
+                ctx.drawImage(img, drawX, drawY, drawW, drawH);
+                ctx.restore();
+
+                ctx.strokeStyle = '#e5e7eb';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(x, y, w, h);
+            };
+
+            const drawFooter = (ctx, W, H, pageNum, totalPages) => {
+                const footerY = 1200;
+
+                // --- 今日工項 ---
+                ctx.textAlign = 'left';
+                ctx.fillStyle = '#0891b2';
+                ctx.font = 'bold 32px "Noto Sans TC"';
+                ctx.fillText('✅ 今日工項', 40, footerY + 40);
+
+                ctx.font = '28px "Noto Sans TC"';
+                ctx.fillStyle = '#333';
+                const tagText = tags.length > 0 ? tags.join('、') : '今日無特殊工項紀錄';
+                wrapText(ctx, tagText, 40, footerY + 90, W - 80, 40);
+
+                // --- 備註 ---
+                ctx.fillStyle = '#0891b2';
+                ctx.font = 'bold 32px "Noto Sans TC"';
+                ctx.fillText('📝 施工備註', 40, footerY + 160);
+
+                ctx.font = '28px "Noto Sans TC"';
+                ctx.fillStyle = '#555';
+                const noteText = notes || '無補充事項。';
+                wrapText(ctx, noteText, 40, footerY + 210, W - 80, 40);
+
+                // --- 頁碼與版權 ---
+                ctx.fillStyle = 'rgba(8, 145, 178, 0.1)';
+                ctx.fillRect(0, H - 60, W, 60);
+
+                ctx.fillStyle = '#0891b2';
+                ctx.font = '20px "Noto Sans TC"';
+                ctx.textAlign = 'center';
+                ctx.fillText(`Powered by 添心智能日報產生器 | Page ${pageNum} of ${totalPages}`, W / 2, H - 22);
+            };
+
+            const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
+                const words = text.split('');
+                let line = '';
+                let currentY = y;
+                for (let n = 0; n < words.length; n++) {
+                    const testLine = line + words[n];
+                    const metrics = ctx.measureText(testLine);
+                    const testWidth = metrics.width;
+                    if (testWidth > maxWidth && n > 0) {
+                        ctx.fillText(line, x, currentY);
+                        line = words[n];
+                        currentY += lineHeight;
+                    } else {
+                        line = testLine;
+                    }
+                }
+                ctx.fillText(line, x, currentY);
+            };
+
+            const downloadAll = () => {
+                previewUrls.forEach((url, idx) => {
+                    const link = document.createElement('a');
+                    link.download = `${date}_施工日報_${projectName}_P${idx + 1}.jpg`;
+                    link.href = url;
+                    link.click();
+                });
+            };
+
+            // 初始化 Lucide icon
+            useEffect(() => { lucide.createIcons(); }, []);
+            useEffect(() => { lucide.createIcons(); });
+
+            return (
+                <div className="max-w-md mx-auto min-h-screen bg-white shadow-2xl overflow-hidden">
+                    {/* Header */}
+                    <div className="bg-primary px-6 py-5 text-white flex justify-between items-center sticky top-0 z-50 shadow-md">
+                        <h1 className="text-xl font-bold flex items-center gap-2">
+                            <i data-lucide="file-stack" className="w-5 h-5"></i>
+                            施工日報生成器 V2
+                        </h1>
+                    </div>
+
+                    <div className="p-5 space-y-6 pb-32">
+                        {/* 1. 基本資訊 */}
+                        <section className="space-y-3">
+                            <label className="block text-sm font-medium text-gray-700">專案名稱</label>
+                            <input
+                                type="text"
+                                value={projectName}
+                                onChange={(e) => setProjectName(e.target.value)}
+                                placeholder="例如：台南陳公館"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
+                            />
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">日期</label>
+                                    <input
+                                        type="date"
+                                        value={date}
+                                        onChange={(e) => setDate(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">天氣</label>
+                                    <select
+                                        value={weather}
+                                        onChange={(e) => setWeather(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                    >
+                                        {WEATHER_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* 2. 照片上傳 */}
+                        <section>
+                            <label className="block text-sm font-medium text-gray-700 mb-2 flex justify-between">
+                                <span>施工照片 ({photos.length})</span>
+                                <span className="text-xs text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">
+                                    {Math.ceil(photos.length / PHOTOS_PER_PAGE) || 1} 頁
+                                </span>
+                            </label>
+
+                            <div className="grid grid-cols-3 gap-2">
+                                {photos.map((src, idx) => (
+                                    <div key={idx} className="relative aspect-square rounded-lg overflow-hidden group shadow-sm bg-gray-100 border border-gray-200">
+                                        <img src={src} className="w-full h-full object-cover" />
+                                        <button
+                                            onClick={() => removePhoto(idx)}
+                                            className="absolute top-1 right-1 bg-red-500 text-white p-0.5 rounded-full opacity-90 shadow-lg"
+                                        >
+                                            <i data-lucide="trash-2" className="w-3 h-3"></i>
+                                        </button>
+                                        <div className="absolute bottom-0 left-0 bg-black/50 text-white text-[10px] px-1.5 py-0.5 rounded-tr-lg">
+                                            P{Math.floor(idx / 4) + 1}
+                                        </div>
+                                    </div>
+                                ))}
+
+                                <label className="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-400 cursor-pointer hover:border-primary hover:text-primary transition-colors bg-gray-50 hover:bg-white">
+                                    <i data-lucide="plus" className="w-6 h-6 mb-1"></i>
+                                    <span className="text-[10px]">新增</span>
+                                    <input type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />
+                                </label>
+                            </div>
+                        </section>
+
+                        {/* 3. 今日工項 */}
+                        <section>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">今日工項</label>
+                            <div className="flex flex-wrap gap-2">
+                                {DEFAULT_TAGS.map(tag => (
+                                    <button
+                                        key={tag}
+                                        onClick={() => toggleTag(tag)}
+                                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${tags.includes(tag)
+                                                ? 'bg-secondary text-white shadow-md'
+                                                : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        {tag}
+                                    </button>
+                                ))}
+                            </div>
+                        </section>
+
+                        {/* 4. 備註 */}
+                        <section>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">施工備註</label>
+                            <textarea
+                                rows="3"
+                                value={notes}
+                                onChange={(e) => setNotes(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary outline-none"
+                            ></textarea>
+                        </section>
+
+                        {/* 5. 預覽與下載 */}
+                        <div className="border-t border-gray-200 pt-6">
+                            <button
+                                onClick={generateReport}
+                                disabled={isGenerating}
+                                className="w-full bg-secondary text-white py-3 rounded-xl font-bold text-lg shadow-lg hover:bg-opacity-90 active:scale-95 transition-all flex justify-center items-center gap-2"
+                            >
+                                {isGenerating ? '正在拼貼中...' : `✨ 生成 ${Math.ceil(photos.length / 4) || 1} 張日報`}
+                            </button>
+
+                            {previewUrls.length > 0 && (
+                                <div className="mt-8 space-y-8 animate-fade-in">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="font-bold text-gray-800">預覽結果 ({previewUrls.length}頁)</h3>
+                                        <button onClick={downloadAll} className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 shadow-sm hover:bg-green-700">
+                                            <i data-lucide="download" className="w-4 h-4"></i> 下載全部
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-6">
+                                        {previewUrls.map((url, idx) => (
+                                            <div key={idx} className="bg-gray-100 p-2 rounded-xl border border-gray-200 shadow-inner">
+                                                <div className="mb-2 flex justify-between px-1">
+                                                    <span className="text-xs font-bold text-gray-500">Page {idx + 1}</span>
+                                                </div>
+                                                <img src={url} className="w-full rounded-lg shadow-md border border-white" />
+                                                <a
+                                                    href={url}
+                                                    download={`${date}_施工日報_${projectName}_P${idx + 1}.jpg`}
+                                                    className="mt-2 block w-full bg-white border border-gray-300 text-gray-700 text-center py-2 rounded-lg text-sm hover:bg-gray-50 font-medium"
+                                                >
+                                                    下載此頁 (Page {idx + 1})
+                                                </a>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>

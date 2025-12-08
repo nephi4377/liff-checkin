@@ -11,34 +11,35 @@ let selectedCabId = null;
 // [錯誤修正] 宣告遺漏的拖曳與縮放狀態變數
 let isDraggingCab = false;
 let currentDragCab = null;
+
 let dragOffset = { x: 0, y: 0 };
 let startPos = { x: 0, y: 0 };
+// [v8.12 修復] 明確宣告 canvas 變數，避免依賴隱式全域變數導致的潛在錯誤
+const canvas = document.getElementById('design-canvas');
+// [v8.9 修復] 補回遺失的變數宣告
 let isResizing = false;
 let resizeTarget = null;
+let resizeDirection = null; // [v9.0 新增] 記錄拉伸方向
 let resizeStart = { x: 0, y: 0, w: 0, h: 0 };
 let isDraggingBg = false;
 let bgDragStart = { x: 0, y: 0 };
 let bgStartPos = { x: 0, y: 0 };
-
-// [新增] 區域繪製相關狀態
+let clipboardCab = null;
 let isDrawing = false;
-let currentDrawingType = null;
+let currentDrawingType = null; // [v8.23 修復] 補回遺失的 global 變數
+let drawingType = null;
 let currentDrawingPoints = [];
-let drawnAreas = []; // 用來儲存所有已繪製的區域
-let selectedAreaId = null; // [新增] 用來追蹤被選取的區域ID
-
-// [您的要求] 新增：用於調整區域頂點的狀態
+let drawnAreas = [];
+let selectedAreaId = null;
 let isDraggingVertex = false;
 let draggedAreaId = null;
-let draggedVertexIndex = -1;
-
-// [您的要求] 新增復原/重做功能所需的狀態堆疊
+let draggedVertexIndex = null;
+// [v8.8 新增] 全局畫布縮放比列
+let viewScale = 1.0;
+// [v8.8 補回] 歷史紀錄堆疊
 let history = [];
 let historyIndex = -1;
-const MAX_HISTORY_STATES = 50; // 最多儲存 50 步操作
-
-const CANVAS_SIZE = 2000;
-
+const MAX_HISTORY_STATES = 50;
 const svgStyle = 'width="100%" height="100%" preserveAspectRatio="none"';
 const svgs = {
     sofa3: `<svg ${svgStyle} viewBox="0 0 210 90"><rect width="210" height="90" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/><rect x="10" y="10" width="190" height="20" fill="#d1d5db"/><rect x="10" y="35" width="60" height="45" rx="5" fill="#fff"/><rect x="75" y="35" width="60" height="45" rx="5" fill="#fff"/><rect x="140" y="35" width="60" height="45" rx="5" fill="#fff"/></svg>`,
@@ -147,9 +148,6 @@ async function loadFromSheets() {
                     cabinetCategories[group] = [];
                 }
 
-                // [CONSOLE] 記錄從 Google Sheet 讀取到的原始圖片 URL
-                console.log(`[Input] 元件: "${name}", 從Sheet讀取的原始img值:`, img);
-
                 cabinetCategories[group].push({
                     id: `sheets-${Date.now()}-${i}`,
                     name: String(name),
@@ -170,6 +168,7 @@ async function loadFromSheets() {
 
         renderComponentList();
         showGlobalNotification(`✅ 成功載入 ${Object.values(cabinetCategories).flat().length} 個元件`, 3000, 'success');
+        console.log(`[Input] 成功載入 ${Object.values(cabinetCategories).flat().length} 個元件`);
     } catch (error) {
         console.error('載入錯誤:', error);
         showGlobalNotification(`❌ 載入失敗: ${error.message}`, 8000, 'error');
@@ -195,6 +194,27 @@ function getSvgAspectRatio(svgString) {
     return null; // 如果找不到或尺寸無效，返回 null
 }
 
+
+
+/**
+ * [v8.0 新增] SVG 內容處理核心
+ * 強制 SVG 填滿容器，解決「邊緣留白」問題
+ */
+function processSvgStr(svgStr) {
+    if (!svgStr) return '';
+    let result = svgStr;
+
+    // 1. 移除既有的 width/height/preserveAspectRatio 設定 (避免衝突)
+    result = result.replace(/\s(width|height|preserveAspectRatio)=["'][^"']*["']/gi, '');
+
+    // 2. 強制設定 width="100%" height="100%" preserveAspectRatio="none"
+    // 這會讓 SVG 無視原本比例，強制拉伸填滿容器 (解決留白問題)
+    // 插入到 <svg 標籤後的第一個空格處
+    result = result.replace('<svg', '<svg width="100%" height="100%" preserveAspectRatio="none" style="overflow:visible;"');
+
+    return result;
+}
+
 function renderComponentList() {
     const container = document.getElementById('cabinet-components');
     container.innerHTML = '';
@@ -204,6 +224,7 @@ function renderComponentList() {
         title.className = 'col-span-2 font-bold text-gray-500 mt-2 text-xs';
         title.innerText = cat;
         container.appendChild(title);
+
         items.forEach(item => {
             const el = document.createElement('div');
             el.className = 'border rounded p-1 bg-white hover:shadow cursor-grab flex flex-col items-center text-center';
@@ -216,23 +237,16 @@ function renderComponentList() {
             const isSvgCode = rawImgSrc && typeof rawImgSrc === 'string' && rawImgSrc.trim().startsWith('<svg');
             let imageHtml = '';
 
-            // 容器使用 w-full h-12 確保佈局一致，內部圖示使用 max-w/h-full 確保等比縮放
+            // [v8.6 修正] 依使用者要求，完全移除 safeScaleSvg，直接使用 rawImgSrc
+            // 這會讓元件列表的顯示與 Sheet 中的原始 SVG 完全一致 (包含原有的寬高設定)
             if (isSvgCode) {
- 
-                // 替換掉會導致拉伸的屬性
-                let safeSvg = rawImgSrc.replace(/preserveAspectRatio\s*=\s*["']none["']/gi, 'preserveAspectRatio="xMidYMid meet"');
-                if (!safeSvg.includes('width=')) {
-                    safeSvg = safeSvg.replace('<svg', '<svg width="100%" height="100%"');
-                }                // [您的要求] 容器嚴格限制高度為 h-12，內部 SVG 使用 max-h-full 適應容器
                 imageHtml = `
                      <div class="w-12 h-12 flex items-center justify-center mb-1 p-1">
-                        ${safeSvg}
+                        ${rawImgSrc}
                     </div>`;
             } else {
-                // === 方案 B: 針對普通圖片連結 (http...) 或無圖片 (Fallback) ===
                 imageHtml = rawImgSrc
                     ? `<div class="w-full h-12 flex items-center justify-center mb-1"><img src="${rawImgSrc}" class="max-w-full max-h-full object-contain" onerror="this.onerror=null; this.src='${defaultSvgDataUri}';"></div>`
-                // 對於一般圖片，也使用同樣的容器邏輯
                     : `<div class="w-full h-12 flex items-center justify-center border-b"><div class="w-10 h-10 bg-gray-100 border rounded"></div></div>`;
             }
 
@@ -243,7 +257,7 @@ function renderComponentList() {
     }
 }
 
-const canvas = document.getElementById('design-canvas');
+
 
 function addCabinet(data, x, y) {
     const cab = {
@@ -277,6 +291,7 @@ function renderAllCabinets() {
 
     // 確保 placeholder 的可見性正確
     document.getElementById('canvas-placeholder').style.display = placedCabinets.length > 0 ? 'none' : 'block';
+    console.log(`已渲染 ${placedCabinets.length} 個元件`);
 }
 
 // [新增] 渲染所有已繪製的區域
@@ -309,9 +324,19 @@ function renderAllDrawnAreas() {
             renderVertexHandles(selectedArea);
         }
     }
+    console.log(`已渲染 ${drawnAreas.length} 個區域`);
 }
 
 // [您的要求] 新增輔助函式，用於渲染單一區域，避免程式碼重複
+
+
+/* renderSingleArea(layer, area, isSelected)
+    layer: SVG 元素
+    area: 區域物件
+    isSelected: 是否為選取狀態
+    return: SVG 元素
+    功能說明：渲染單一區域，包括多邊形和頂點
+*/
 function renderSingleArea(layer, area, isSelected) {
     const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     group.dataset.id = area.id;
@@ -400,7 +425,7 @@ function renderVertexHandles(area) {
         handle.setAttribute('stroke', '#3b82f6'); // [您的要求] 修正拼寫錯誤
         handle.setAttribute('stroke-width', '2');
         handle.style.cursor = 'move';
-        
+
         // 為每個控點綁定 mousedown 事件
         handle.addEventListener('mousedown', (e) => {
             e.stopPropagation();
@@ -423,26 +448,51 @@ function clearVertexHandles() {
     }
 }
 
+/**
+ * 渲染單個元件到畫布上
+ * @param {Object} cab - 元件資料物件
+ */
 function renderCabinet(cab) {
     const el = document.createElement('div');
     el.className = 'placed-cabinet';
     el.id = cab.id;
     updateCabStyle(el, cab);
 
-    // [您的要求] 根據 adjustable 屬性決定是否產生拉伸控點
-    const resizeHandleHtml = (cab.data.adjustable !== 'none' && cab.data.adjustable !== false)
-        ? `<div class="resize-handle"></div>`
-        : '';
+    // [v9.0 重構] 根據 adjustable 屬性生成對應方向的拉伸控點
+    // 支援: width (左右), depth (上下), both (四邊), none (無)
+    const adjustable = cab.data.adjustable;
+    let handlesHtml = '';
+
+    if (adjustable !== 'none' && adjustable !== false) {
+        // 左右拉伸點 (Width)
+        if (adjustable === 'width' || adjustable === 'both' || adjustable === 'width-depth-select') {
+            handlesHtml += `<div class="resize-handle resize-handle-w" data-dir="w"></div>`;
+            handlesHtml += `<div class="resize-handle resize-handle-e" data-dir="e"></div>`;
+        }
+        // 上下拉伸點 (Depth)
+        if (adjustable === 'depth' || adjustable === 'both' || adjustable === 'width-depth-select') {
+            handlesHtml += `<div class="resize-handle resize-handle-n" data-dir="n"></div>`;
+            handlesHtml += `<div class="resize-handle resize-handle-s" data-dir="s"></div>`;
+        }
+    }
 
     el.innerHTML = `
-        ${resizeHandleHtml}
-        <div class="size-label">${cab.currentW}x${cab.currentH} cm (${cmToFeet(cab.currentW)}x${cmToFeet(cab.currentH)}尺)</div>
+        ${handlesHtml}
+        <div class="size-label">${Math.round(cab.currentW)}x${Math.round(cab.currentH)} cm (${cmToFeet(cab.currentW)}x${cmToFeet(cab.currentH)}尺)</div>
     `;
+
+    // 綁定元件拖曳事件
     el.onmousedown = (e) => startCabDrag(e, cab);
-    const resizeHandle = el.querySelector('.resize-handle');
-    if (resizeHandle) {
-        resizeHandle.addEventListener('mousedown', (e) => startResize(cab.id, e));
-    }
+
+    // 綁定拉伸控點事件
+    const handles = el.querySelectorAll('.resize-handle');
+    handles.forEach(handle => {
+        handle.addEventListener('mousedown', (e) => {
+            const direction = handle.dataset.dir;
+            console.log(`[Resize] Start resizing cab ${cab.id}, direction: ${direction}`); // [Debug]
+            startResize(cab.id, e, direction);
+        });
+    });
 
     canvas.appendChild(el);
     if (cab.id === selectedCabId) {
@@ -455,24 +505,23 @@ function updateCabStyle(el, cab) {
     el.style.top = cab.y + 'px';
     el.style.width = cab.currentW + 'px';
     el.style.height = cab.currentH + 'px';
-    // 檢查是否有圖片，沒有則使用預設背景色
+
+    // [v8.6 修復] 還原完整的 updateCabStyle 邏輯
     const defaultSvgDataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgs.default(cab.data.name))}`;
     let finalImageSrc = '';
 
     if (cab.data.img && cab.data.img.trim().startsWith('<svg')) {
-        // [您的要求] 如果是 SVG 程式碼，直接轉換為 Data URI
+        // [v8.6] 直接使用原始 SVG
         finalImageSrc = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(cab.data.img)}`;
         el.style.backgroundImage = `url("${finalImageSrc}")`;
     } else if (cab.data.img) {
-        // [您的要求] 如果是 URL，使用 Image 物件來處理載入與錯誤
         const img = new Image();
         img.src = cab.data.img;
         img.onload = () => { el.style.backgroundImage = `url('${cab.data.img}')`; };
         img.onerror = () => { el.style.backgroundImage = `url("${defaultSvgDataUri}")`; };
     } else {
-        // 沒有圖片時，使用預設背景色
         el.style.backgroundImage = 'none';
-        el.style.backgroundColor = '#f3f4f6'; // 淺灰色背景
+        el.style.backgroundColor = '#f3f4f6';
     }
     el.style.transform = `rotate(${cab.rotation}deg)`;
     el.style.opacity = (cab.opacity / 100);
@@ -513,11 +562,11 @@ function selectCabinet(id) {
         document.getElementById('selected-size-inputs').style.display = 'grid';
 
         const price = calculatePrice(cab);
-        let priceText = `單價: $${cab.data.unitPrice.toLocaleString()}`;
+        let priceText = `單價: $${cab.data.unitPrice.toLocaleString()} `;
         if (cab.data.pricingType === 'width') {
-            priceText += `/尺 | 總價: $${price.toLocaleString()}`;
+            priceText += `/ 尺 | 總價: $${price.toLocaleString()} `;
         } else if (cab.data.pricingType === 'fixed') {
-            priceText = `總價: $${price.toLocaleString()}`;
+            priceText = `總價: $${price.toLocaleString()} `;
         }
         document.getElementById('selected-price').innerText = priceText;
 
@@ -558,7 +607,7 @@ function updateNote() {
             saveState(); // [您的要求] 儲存狀態
         }
     } else if (selectedAreaId) {
-        const area = drawnAreas.find(a => a.id === selectedAreaId); // 修正: 這裡的 cab 變數是錯的
+        const area = drawnAreas.find(a => a.id === selectedAreaId);
         if (area) {
             area.note = document.getElementById('note-input').value;
             renderAllDrawnAreas(); // [v4.0 新增] 更新備註後，立即重繪以顯示標籤
@@ -579,18 +628,55 @@ function handleKeyDown(e) {
         finishDrawing();
         return;
     }
-    
+
     // [您的要求] 複製功能 (Ctrl+D)
     if (e.ctrlKey && e.key.toLowerCase() === 'd') {
         e.preventDefault();
         duplicateSelectedCab();
         return;
     }
-    
+
     // [新增] 如果選取了區域，按下 'D' 鍵刪除
     if (selectedAreaId && (e.key.toLowerCase() === 'd' || e.key === 'Delete')) { // [您的要求] 增加 Delete 鍵支援
         e.preventDefault();
         deleteArea(selectedAreaId);
+        return;
+    }
+
+    // [您的要求] 複製功能 (Ctrl+C)
+    if (e.ctrlKey && e.key.toLowerCase() === 'c') {
+        if (selectedCabId) {
+            e.preventDefault();
+            const cab = placedCabinets.find(c => c.id === selectedCabId);
+            if (cab) {
+                clipboardCab = JSON.parse(JSON.stringify(cab));
+                showGlobalNotification('已複製元件', 1000, 'info');
+            }
+        }
+        return;
+    }
+
+    // [您的要求] 貼上功能 (Ctrl+V)
+    if (e.ctrlKey && e.key.toLowerCase() === 'v') {
+        if (clipboardCab) {
+            e.preventDefault();
+            // 貼上時給予一點位移
+            const newCab = JSON.parse(JSON.stringify(clipboardCab));
+            newCab.id = `cab-${Date.now()}`;
+            newCab.x += 20;
+            newCab.y += 20;
+
+            if (checkCollision(newCab)) {
+                newCab.x += 20;
+                newCab.y += 20;
+            }
+
+            placedCabinets.push(newCab);
+            renderAllCabinets();
+            selectCabinet(newCab.id);
+            saveState();
+            showGlobalNotification('已貼上元件', 1000, 'success');
+        }
         return;
     }
 
@@ -650,7 +736,7 @@ function duplicateSelectedCab() {
     const newCab = JSON.parse(JSON.stringify(sourceCab));
 
     // 給予新 ID 和新位置
-    newCab.id = `cab-${Date.now()}`;
+    newCab.id = `cab - ${Date.now()} `;
     newCab.x += 20; // 向右偏移 20px
     newCab.y += 20; // 向下偏移 20px
 
@@ -691,18 +777,144 @@ function rotatePoint(x, y, cx, cy, angleDeg) {
     };
 }
 
+// [v6.1 新增] 取得投影軸的輔助函式 (抽出共用)
+function getAxes(vertices) {
+    const axes = [];
+    for (let i = 0; i < vertices.length; i++) {
+        const p1 = vertices[i];
+        const p2 = vertices[i + 1 === vertices.length ? 0 : i + 1];
+        const edge = { x: p1.x - p2.x, y: p1.y - p2.y };
+        // 正規化向量
+        const length = Math.sqrt(edge.x * edge.x + edge.y * edge.y);
+        const normal = { x: -edge.y / length, y: edge.x / length };
+        axes.push(normal);
+    }
+    return axes;
+}
+
+// [v6.1 新增] 計算兩物件間的 MTV (Minimum Translation Vector)
+// 如果沒有碰撞，回傳 null
+// 如果有碰撞，回傳 {x, y} 表示 cab1 需要移動多少距離才能離開 cab2
+function getMTV(cab1, cab2) {
+    const v1 = getVertices(cab1);
+    const v2 = getVertices(cab2);
+    const axes = [...getAxes(v1), ...getAxes(v2)];
+
+    let minOverlap = Infinity;
+    let smallestAxis = null;
+
+    for (const axis of axes) {
+        const p1 = project(v1, axis);
+        const p2 = project(v2, axis);
+
+        if (!overlap(p1, p2)) {
+            return null; // 有分離軸，表示未碰撞
+        } else {
+            // 計算重疊量
+            const o = Math.min(p1.max, p2.max) - Math.max(p1.min, p2.min);
+            if (o < minOverlap) {
+                minOverlap = o;
+                smallestAxis = axis;
+            }
+        }
+    }
+
+    if (!smallestAxis) return null;
+
+    // 確保推離方向是正確的 (從 cab2 推向 cab1)
+    // 簡單判斷：計算兩中心點向量，看是否需反轉軸向
+    const c1 = getCenter(cab1);
+    const c2 = getCenter(cab2);
+    const dir = { x: c1.x - c2.x, y: c1.y - c2.y };
+
+    if (dotProduct(dir, smallestAxis) < 0) {
+        smallestAxis = { x: -smallestAxis.x, y: -smallestAxis.y };
+    }
+
+    return {
+        x: smallestAxis.x * minOverlap,
+        y: smallestAxis.y * minOverlap
+    };
+}
+
+// [v6.1 新增] 輔助函式：取得中心點
+function getCenter(cab) {
+    return {
+        x: cab.x + cab.currentW / 2,
+        y: cab.y + cab.currentH / 2
+    };
+}
+
+// [v6.1 新增] 輔助函式：內積
+function dotProduct(v1, v2) {
+    return v1.x * v2.x + v1.y * v2.y;
+}
+
+/**
+ * 處理全域滑鼠移動事件 (拖曳元件、調整大小)
+ * @param {MouseEvent} e - 滑鼠事件物件
+ */
 function handleGlobalMove(e) {
+    // --------------------------
+    // 1. 處理元件拖曳 (Move)
+    // --------------------------
     if (isDraggingCab && currentDragCab) {
-        const nx = e.clientX - dragOffset.x, ny = e.clientY - dragOffset.y;
-        currentDragCab.x = nx; currentDragCab.y = ny;
+        // [v8.14 修復] 拖曳時必須考慮畫布的縮放與位移，與 startCabDrag 保持一致
+        const rect = canvas.getBoundingClientRect();
+        const safeScale = viewScale || 1.0;
+        const nx = (e.clientX - rect.left) / safeScale - dragOffset.x;
+        const ny = (e.clientY - rect.top) / safeScale - dragOffset.y;
+
+        // 先嘗試移動到新位置
+        currentDragCab.x = nx;
+        currentDragCab.y = ny;
+
+        // [v6.1 核心升級] 碰撞反應機制
+        // 不只是偵測 true/false，而是計算出 "修正向量" (MTV) 並應用它
+        let totalCorrection = { x: 0, y: 0 };
+        let hasCollision = false;
+
+        // 檢查與所有其他元件的碰撞
+        for (const other of placedCabinets) {
+            if (other.id === currentDragCab.id) continue;
+            if (currentDragCab.data.allowOverlap || other.data.allowOverlap) continue;
+
+            const mtv = getMTV(currentDragCab, other);
+            if (mtv) {
+                hasCollision = true;
+                // 累積修正量 (簡單處理：直接取最大的修正，避免抖動)
+                if (Math.abs(mtv.x) > Math.abs(totalCorrection.x) || Math.abs(mtv.y) > Math.abs(totalCorrection.y)) {
+                    totalCorrection = mtv;
+                }
+            }
+        }
+
+        // 應用修正：將物件「推」出碰撞區域，形成吸附/阻擋效果
+        if (hasCollision) {
+            currentDragCab.x += totalCorrection.x;
+            currentDragCab.y += totalCorrection.y;
+        }
+
         const el = document.getElementById(currentDragCab.id);
         updateCabStyle(el, currentDragCab);
-        if (checkCollision(currentDragCab, currentDragCab.id)) el.classList.add('collision-warning');
-        else el.classList.remove('collision-warning');
+
+        // 如果修正後仍有碰撞 (例如被夾在兩個物件中間)，才顯示紅框警告
+        if (checkCollision(currentDragCab, currentDragCab.id)) {
+            el.classList.add('collision-warning');
+        } else {
+            el.classList.remove('collision-warning');
+        }
     }
+
+    // --------------------------
+    // 2. 處理元件縮放 (Resize)
+    // --------------------------
     if (isResizing && resizeTarget) {
-        const dx = e.clientX - resizeStart.x;
-        const dy = e.clientY - resizeStart.y;
+        const rect = canvas.getBoundingClientRect();
+        const safeScale = viewScale || 1.0;
+        // [v9.0 修正] 計算縮放時的位移量 (考慮 viewScale)
+        const dx = (e.clientX - resizeStart.checkX) / safeScale;
+        const dy = (e.clientY - resizeStart.checkY) / safeScale;
 
         // 1. 計算新的寬高 (在 Local 座標系)
         const rotation = resizeTarget.rotation % 360;
@@ -710,79 +922,115 @@ function handleGlobalMove(e) {
         const cos = Math.cos(rad);
         const sin = Math.sin(rad);
 
-        const localDW = dx * cos + dy * sin;
-        const localDH = -dx * sin + dy * cos;
+        // 將滑鼠位移投影到局部座標軸
+        const localDx = dx * cos + dy * sin;
+        const localDy = -dx * sin + dy * cos;
 
-        // [您的要求] 還原遺失的元件拉伸邏輯
+        let newW = resizeStart.w;
+        let newH = resizeStart.h;
+        // 計算中心點位移量 (Local)
+        let localShiftX = 0;
+        let localShiftY = 0;
+
+        // [v9.0 新增] 根據拉伸方向計算新的尺寸與中心點位移
+        if (resizeDirection) {
+            switch (resizeDirection) {
+                case 'w': // 西 (左) - 寬度增加，中心向左移
+                    newW = Math.max(20, resizeStart.w - localDx);
+                    localShiftX = -(newW - resizeStart.w) / 2;
+                    // 修正: 如果只是單純位移，中心點移動量應為 delta/2。
+                    // 例子: 往左拉 10px (localDx = -10)。newW = oldW + 10。
+                    // 左邊界往左移 10，右邊界不變。中心點往左移 5。
+                    // localShiftX = -5. (newW - oldW) = 10. => -10 / 2 = -5. 正確。
+                    break;
+                case 'e': // 東 (右) - 寬度增加，中心向右移
+                    newW = Math.max(20, resizeStart.w + localDx);
+                    localShiftX = (newW - resizeStart.w) / 2;
+                    break;
+                case 'n': // 北 (上) - 高度增加，中心向上移
+                    newH = Math.max(20, resizeStart.h - localDy);
+                    localShiftY = -(newH - resizeStart.h) / 2;
+                    break;
+                case 's': // 南 (下) - 高度增加，中心向下移
+                    newH = Math.max(20, resizeStart.h + localDy);
+                    localShiftY = (newH - resizeStart.h) / 2;
+                    break;
+            }
+        }
+        // fallback: 舊邏輯 (如果沒有 resizeDirection，例如右下角拉伸)
+        else {
+            // 舊邏輯暫不支援，目前透過 renderCabinet 強制產生有方向的控點
+        }
+
+        // [限制] 根據 adjustable 屬性最後把關
         const adjustable = resizeTarget.data.adjustable;
-        let newW = resizeTarget.currentW;
-        let newH = resizeTarget.currentH;
+        if (adjustable === 'width' && (resizeDirection === 'n' || resizeDirection === 's')) newH = resizeStart.h;
+        if (adjustable === 'depth' && (resizeDirection === 'w' || resizeDirection === 'e')) newW = resizeStart.w;
 
-        if (adjustable === 'width' || adjustable === 'both' || adjustable === 'width-depth-select') {
-            newW = Math.round(Math.max(20, resizeStart.w + localDW));
-        }
-        if (adjustable === 'depth' || adjustable === 'both') {
-            newH = Math.round(Math.max(20, resizeStart.h + localDH));
-        }
+        // 3. 計算新的全域中心點
+        // 將局部中心位移轉回全域
+        const globalShiftX = localShiftX * cos - localShiftY * sin;
+        const globalShiftY = localShiftX * sin + localShiftY * cos;
 
-        // 2. [核心修正] 計算位置補償
-        const oldCx = resizeTarget.x + resizeTarget.currentW / 2;
-        const oldCy = resizeTarget.y + resizeTarget.currentH / 2;
-        const oldLocal00_x = -resizeTarget.currentW / 2;
-        const oldLocal00_y = -resizeTarget.currentH / 2;
-        const fixedPointGlobal = rotatePoint(oldCx + oldLocal00_x, oldCy + oldLocal00_y, oldCx, oldCy, rotation);
+        // 原始中心點 (Start時)
+        const oldCx = resizeStart.x + resizeStart.w / 2;
+        const oldCy = resizeStart.y + resizeStart.h / 2;
 
-        const newLocal00_x = -newW / 2;
-        const newLocal00_y = -newH / 2;
+        const newCx = oldCx + globalShiftX;
+        const newCy = oldCy + globalShiftY;
 
-        const vRotatedX = newLocal00_x * cos - newLocal00_y * sin;
-        const vRotatedY = newLocal00_x * sin + newLocal00_y * cos;
-
-        const newCx = fixedPointGlobal.x - vRotatedX;
-        const newCy = fixedPointGlobal.y - vRotatedY;
-
-        const newX = newCx - newW / 2;
-        const newY = newCy - newH / 2;
-
-        resizeTarget.currentW = newW;
-        resizeTarget.currentH = newH;
-        resizeTarget.x = newX;
-        resizeTarget.y = newY;
+        // 4. 更新元件狀態 (Top-Left 座標 = Center - Size/2)
+        resizeTarget.currentW = Math.round(newW);
+        resizeTarget.currentH = Math.round(newH);
+        resizeTarget.x = newCx - resizeTarget.currentW / 2;
+        resizeTarget.y = newCy - resizeTarget.currentH / 2;
 
         const el = document.getElementById(resizeTarget.id);
         updateCabStyle(el, resizeTarget);
         el.querySelector('.size-label').innerText = `${Math.round(resizeTarget.currentW)}x${Math.round(resizeTarget.currentH)} cm (${cmToFeet(resizeTarget.currentW)}x${cmToFeet(resizeTarget.currentH)}尺)`;
-        selectCabinet(resizeTarget.id);
 
-    // [您的要求] 新增：處理區域頂點拖曳
+        // --------------------------
+        // 3. 處理區域頂點拖曳 (Vertex Move)
+        // --------------------------
     } else if (isDraggingVertex && draggedAreaId !== null && draggedVertexIndex !== -1) {
         const area = drawnAreas.find(a => a.id === draggedAreaId);
         if (area) {
             const rect = canvas.getBoundingClientRect();
-            const newX = e.clientX - rect.left;
-            const newY = e.clientY - rect.top;
-            
+            // [v8.8 修正] 區域頂點拖曳也需要考慮 viewScale
+            const newX = (e.clientX - rect.left) / viewScale;
+            const newY = (e.clientY - rect.top) / viewScale;
+
             // 更新頂點座標
             area.points[draggedVertexIndex] = { x: newX, y: newY };
             // 即時重繪
             renderAllDrawnAreas();
         }
     }
+
     if (isDraggingBg && isBgEditMode) {
-        bgPosition.x = bgStartPos.x + (e.clientX - bgDragStart.x);
-        bgPosition.y = bgStartPos.y + (e.clientY - bgDragStart.y);
+        // [v8.8 修正] 底圖拖曳位移量也需要除以 viewScale
+        const deltaX = (e.clientX - bgDragStart.x) / viewScale;
+        const deltaY = (e.clientY - bgDragStart.y) / viewScale;
+        bgPosition.x = bgStartPos.x + deltaX;
+        bgPosition.y = bgStartPos.y + deltaY;
         updateBgTransform();
     }
 }
 
 function endDrag() {
     if (isDraggingCab && currentDragCab) {
+        // [v6.1 修改] 由於在移動過程中已即時修正位置 (吸附效果)，
+        // 這裡只需要檢查最終是否仍處於無解的碰撞狀態 (極少見)。
+        // 如果是，才執行復原。一般情況下，放開滑鼠時已經是貼齊側邊的合法位置。
         if (checkCollision(currentDragCab, currentDragCab.id)) {
-            currentDragCab.x = startPos.x; currentDragCab.y = startPos.y;
+            currentDragCab.x = startPos.x;
+            currentDragCab.y = startPos.y;
             updateCabStyle(document.getElementById(currentDragCab.id), currentDragCab);
             document.getElementById(currentDragCab.id).classList.remove('collision-warning');
+            showGlobalNotification('無法放置該位置 (空間不足)', 2000, 'warning');
         } else {
-            saveState(); // [您的要求] 只有在移動成功後才儲存狀態
+            // 位置有效，確認變更
+            saveState();
         }
     }
     // [您的要求] 修正：在結束拖曳時，將背景圖的滑鼠指標恢復為 grab
@@ -803,7 +1051,7 @@ function endDrag() {
         draggedAreaId = null;
         draggedVertexIndex = -1;
     }
-    isDraggingCab = false; isResizing = false; isDraggingBg = false; 
+    isDraggingCab = false; isResizing = false; isDraggingBg = false;
 }
 
 // [錯誤修正] 新增遺漏的 checkCollision 函式及相關輔助函式
@@ -820,7 +1068,7 @@ function checkCollision(cab, excludeId = null) {
 
         const cab2Vertices = getVertices(otherCab);
         const axes = getAxes(cab1Vertices).concat(getAxes(cab2Vertices));
-        
+
         // [優化] 增加一個旗標來追蹤是否碰撞
         let collided = true;
 
@@ -866,6 +1114,8 @@ function getVertices(cab) {
 }
 
 // 輔助函式：取得多邊形的法向量（用於分離軸定理）
+// [v6.1] 此函式已被移至上方共用區域，保留此空殼或移除以維持結構
+/*
 function getAxes(vertices) {
     const axes = [];
     for (let i = 0; i < vertices.length; i++) {
@@ -877,6 +1127,7 @@ function getAxes(vertices) {
     }
     return axes;
 }
+*/
 
 // 輔助函式：將多邊形投影到一個軸上
 function project(vertices, axis) {
@@ -891,14 +1142,16 @@ function project(vertices, axis) {
 
 // 輔助函式：檢查兩個投影是否重疊
 function overlap(p1, p2) {
-    return p1.max >= p2.min && p2.max >= p1.min;
+    // [v8.3 核心修正] 使用 > 而非 >=，允許邊緣剛好接觸 (Touching is not overlapping)
+    // 加入極小的 epsilon (0.01) 避免浮點數運算導致的誤判
+    return p1.max > p2.min + 0.01 && p2.max > p1.min + 0.01;
 }
 
 // [v5.0 新增] 計算地板面積含損耗 (乘以1.2，無條件進位到0.5坪)
 function calculateFloorAreaWithLoss(originalPing) {
     // [您的要求] 修正：先加計 20% 損耗，再向上取到 0.5 坪
-    const areaWithLoss = originalPing * 1.2; 
-    return Math.ceil(areaWithLoss * 2) / 2; 
+    const areaWithLoss = originalPing * 1.2;
+    return Math.ceil(areaWithLoss * 2) / 2;
 }
 
 // [v3.0 核心新增] 計算多邊形的質心 (用於放置標籤)
@@ -945,7 +1198,7 @@ function selectArea(id) {
         document.getElementById('selected-size-inputs').style.display = 'none';
         const areaTypeText = area.type === 'floor' ? '地板區域' : '天花板區域';
         const areaInPingText = area.type === 'floor'
-            ? `${calculateFloorAreaWithLoss(area.areaInPing)} 坪 (含損耗)`
+            ? `${calculateFloorAreaWithLoss(area.areaInPing)} 坪(含損耗)`
             : `${area.areaInPing} 坪`; // [您的要求] 天花板坪數顯示為整數
 
         document.getElementById('selected-name').innerText = areaTypeText;
@@ -988,7 +1241,7 @@ function handleBgUpload(event) {
     const file = event.target.files[0];
     if (file) {
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = function (e) {
             const bgImg = document.getElementById('bg-img');
             bgImg.src = e.target.result;
             bgImg.style.display = 'block';
@@ -999,10 +1252,7 @@ function handleBgUpload(event) {
     }
 }
 
-function updateBgTransform() {
-    const bgLayer = document.getElementById('bg-layer');
-    bgLayer.style.transform = `translate(-50%, -50%) translate(${bgPosition.x}px, ${bgPosition.y}px) scale(${bgScale})`;
-}
+
 
 // [錯誤修正] 新增遺漏的 saveCanvasAsImage 函式
 function saveCanvasAsImage() {
@@ -1030,17 +1280,17 @@ function saveCanvasAsImage() {
         // 3. 建立下載連結
         const link = document.createElement('a');
         const date = new Date();
-        const dateString = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
-        link.download = `layout-${dateString}.png`;
+        const dateString = `${date.getFullYear()} -${(date.getMonth() + 1).toString().padStart(2, '0')} -${date.getDate().toString().padStart(2, '0')} `;
+        link.download = `layout - ${dateString}.png`;
         link.href = canvas.toDataURL('image/png');
-        
+
         // 4. 觸發下載並清理
         link.click();
         showGlobalNotification('圖片已開始下載！', 3000, 'success');
 
     }).catch(err => {
         console.error('另存圖片失敗:', err);
-        showGlobalNotification(`圖片產生失敗: ${err.message}`, 8000, 'error');
+        showGlobalNotification(`圖片產生失敗: ${err.message} `, 8000, 'error');
     }).finally(() => {
         // [您的要求] 無論成功或失敗，都隱藏浮水印
         watermark.style.display = 'none';
@@ -1076,7 +1326,7 @@ function saveLayout() {
         // 3. 建立並觸發下載連結
         const link = document.createElement('a');
         const dateString = new Date().toISOString().slice(0, 10);
-        link.download = `layout-data-${dateString}.json`;
+        link.download = `layout - data - ${dateString}.json`;
         link.href = url;
         link.click();
 
@@ -1084,7 +1334,7 @@ function saveLayout() {
         showGlobalNotification('佈局已儲存為 JSON 檔案！', 3000, 'success');
     } catch (error) {
         console.error('儲存佈局失敗:', error);
-        showGlobalNotification(`儲存失敗: ${error.message}`, 8000, 'error');
+        showGlobalNotification(`儲存失敗: ${error.message} `, 8000, 'error');
     }
 }
 
@@ -1096,7 +1346,7 @@ function loadLayout(event) {
     }
 
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = function (e) {
         try {
             const layoutData = JSON.parse(e.target.result);
 
@@ -1127,14 +1377,14 @@ function loadLayout(event) {
             updateBgTransform();
             saveState(); // [您的要求] 載入新佈局後，將其作為一個歷史狀態
             updateQuotation();
-            
+
             deselectAll();
             deselectAllAreas();
 
             showGlobalNotification('佈局已成功載入！', 3000, 'success');
         } catch (error) {
             console.error('載入佈局失敗:', error);
-            showGlobalNotification(`載入失敗: ${error.message}`, 8000, 'error');
+            showGlobalNotification(`載入失敗: ${error.message} `, 8000, 'error');
         } finally {
             event.target.value = ''; // 清空 input，以便可以再次載入同一個檔案
         }
@@ -1216,14 +1466,14 @@ function showBudgetModal() {
 
     componentItems.forEach(item => {
         const row = `
-            <tr>
+        < tr >
                 <td class="px-2 py-2 border-b text-center">${itemIndex++}</td>
                 <td class="px-2 py-2 border-b">${item.name}</td>
                 <td class="px-2 py-2 border-b">${item.unit}</td>
                 <td class="px-2 py-2 border-b text-center">${item.quantity}</td>
                 <td class="px-2 py-2 border-b text-right">$${item.totalPrice.toLocaleString()}</td>
                 <td class="px-2 py-2 border-b text-xs text-gray-600">${item.note}</td>
-            </tr>
+            </tr >
         `;
         tableBody.innerHTML += row;
     });
@@ -1232,20 +1482,20 @@ function showBudgetModal() {
         // [您的要求] 移除「施工項目」的分類標題
         constructionItems.forEach(item => {
             const row = `
-                <tr>
+        < tr >
                     <td class="px-2 py-2 border-b text-center">${itemIndex++}</td>
                     <td class="px-2 py-2 border-b">${item.name}</td>
                     <td class="px-2 py-2 border-b">${item.unit}</td>
                     <td class="px-2 py-2 border-b text-center">${item.quantity}</td>
                     <td class="px-2 py-2 border-b text-right">$${item.totalPrice.toLocaleString()}</td>
                     <td class="px-2 py-2 border-b text-xs text-gray-600">${item.note}</td>
-                </tr>
-            `;
+                </tr >
+        `;
             tableBody.innerHTML += row;
         });
     }
 
-    document.getElementById('modal-total-price').innerText = `$${quotation.grandTotal.toLocaleString()}`;
+    document.getElementById('modal-total-price').innerText = `$${quotation.grandTotal.toLocaleString()} `;
     document.getElementById('budget-modal').style.display = 'flex';
 }
 
@@ -1413,8 +1663,10 @@ function startDrawing(type) {
 
 function handleDrawingClick(e) {
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    // [v8.16 修復] 繪圖點擊座標也必須考慮 viewScale，否則縮放後畫出來的點會偏離
+    const safeScale = viewScale || 1.0;
+    const x = (e.clientX - rect.left) / safeScale;
+    const y = (e.clientY - rect.top) / safeScale;
     currentDrawingPoints.push({ x, y });
     // [您的要求] 新增：更新繪圖預覽
     updateDrawingPreview();
@@ -1453,26 +1705,34 @@ function updateDrawingPreview() {
 }
 
 function finishDrawing() {
+    console.log('finishDrawing called. Points:', currentDrawingPoints.length); // [Debug]
     if (currentDrawingPoints.length < 3) {
         showGlobalNotification('至少需要 3 個頂點才能形成一個區域。', 3000, 'error');
         cancelDrawing();
         return;
     }
     // [您的要求] 修正面積計算與坪數進位
-    const calculatedArea = getPolygonCentroid(currentDrawingPoints).area;
-    const areaInPing = Math.ceil(Math.abs(calculatedArea) / 32400); // 無條件進位到整數坪
+    try {
+        const centroidData = getPolygonCentroid(currentDrawingPoints);
+        const calculatedArea = centroidData.area;
+        const areaInPing = Math.ceil(Math.abs(calculatedArea) / 32400); // 無條件進位到整數坪
 
-    drawnAreas.push({
-        id: `area-${Date.now()}`,
-        type: currentDrawingType,
-        points: [...currentDrawingPoints],
-        areaInPing: areaInPing,
-        note: ''
-    });
-    renderAllDrawnAreas();
-    updateQuotation();
-    saveState(); // [您的要求] 儲存狀態
-    cancelDrawing();
+        drawnAreas.push({
+            id: `area-${Date.now()}`,
+            type: currentDrawingType,
+            points: [...currentDrawingPoints],
+            areaInPing: areaInPing,
+            note: ''
+        });
+        renderAllDrawnAreas();
+        updateQuotation();
+        saveState(); // [您的要求] 儲存狀態
+        cancelDrawing();
+    } catch (e) {
+        console.error('finishDrawing error:', e);
+        showGlobalNotification('繪圖錯誤: ' + e.message, 3000, 'error');
+        cancelDrawing();
+    }
 }
 
 function cancelDrawing() {
@@ -1490,25 +1750,53 @@ function cancelDrawing() {
 
 // [錯誤修正] 新增遺漏的 startCabDrag, startResize, toggleBgMode, updateBgScale 函式
 function startCabDrag(e, cab) {
-    if (e.button !== 0 || isBgEditMode) return;
+    // [v8.17 修復] 繪圖模式下禁止選取或拖曳元件，避免誤觸
+    if (e.button !== 0 || isBgEditMode || isDrawing) return;
     e.stopPropagation();
     isDraggingCab = true;
     currentDragCab = cab;
     selectCabinet(cab.id);
     const rect = canvas.getBoundingClientRect();
     // 注意：拖曳開始時不儲存狀態，在 endDrag 時才儲存
-    dragOffset = { x: e.clientX - cab.x, y: e.clientY - cab.y };
+    // [v8.8 修正] 紀錄拖曳起始點時，需將滑鼠目前位置轉換為「畫布內座標」
+    // 公式: (clientX - rect.left) / viewScale
+    // [v8.12 修正] 加入安全檢查，防止 viewScale 為 0 或 undefined 導致座標 NaN 造成元件消失
+    const safeScale = viewScale || 1.0;
+    const canvasX = (e.clientX - rect.left) / safeScale;
+    const canvasY = (e.clientY - rect.top) / safeScale;
+
+    if (isNaN(canvasX) || isNaN(canvasY)) {
+        console.error('拖曳座標計算錯誤 (NaN)', { clientX: e.clientX, rect, safeScale });
+        return; // 防止錯誤數據污染元件位置
+    }
+
+    dragOffset = { x: canvasX - cab.x, y: canvasY - cab.y };
     startPos = { x: cab.x, y: cab.y };
 }
 
-function startResize(id, e) {
+/**
+ * 啟動元件縮放模式
+ * @param {string} id - 元件ID
+ * @param {MouseEvent} e - 滑鼠事件
+ * @param {string} direction - 拉伸方向 ('n', 's', 'w', 'e')
+ */
+function startResize(id, e, direction = null) {
     if (e.button !== 0) return;
     e.stopPropagation();
     isResizing = true;
+    resizeDirection = direction; // [v9.0] 記錄拉伸方向
+
     resizeTarget = placedCabinets.find(c => c.id === id);
     if (resizeTarget) {
-        resizeStart = { x: e.clientX, y: e.clientY, w: resizeTarget.currentW, h: resizeTarget.currentH };
-        // 注意：縮放開始時不儲存狀態，在 endDrag 時才儲存
+        // [v9.0] 記錄起始滑鼠位置與原始幾何狀態
+        resizeStart = {
+            checkX: e.clientX, // 用 checkX 區別於 x/y (為了不混淆)
+            checkY: e.clientY,
+            x: resizeTarget.x,
+            y: resizeTarget.y,
+            w: resizeTarget.currentW,
+            h: resizeTarget.currentH
+        };
     }
 }
 
@@ -1531,6 +1819,66 @@ function updateBgScale(value) {
     document.getElementById('bg-scale').value = bgScale;
     document.getElementById('bg-scale-num').value = bgScale;
     updateBgTransform();
+}
+
+
+
+// [v8.8 新增] 更新畫布縮放 (Zoom In/Out) - 不影響資料結構，只改變顯示比例
+function updateViewZoom(newScale) {
+    if (newScale < 0.1 || newScale > 5.0) return; // 限制縮放範圍
+    viewScale = newScale;
+
+    // 顯示當前比例 (四捨五入到整數百分比)
+    const percentage = Math.round(viewScale * 100);
+    const displayEl = document.getElementById('zoom-level-display');
+    if (displayEl) displayEl.innerText = `${percentage}%`;
+
+    // 應用縮放到 canvas
+    // 注意：依照使用者需求 [連同底圖及元件、比例不變]，我們直接對 canvas 應用 transform: scale
+    // 為了保持畫布左上角固定，使用 transform-origin: top left
+    canvas.style.transformOrigin = 'top left';
+    canvas.style.transform = `scale(${viewScale})`;
+
+    // [v8.12 修復] 解決 Zoom In 時無法捲動看到完整內容的問題
+    // 當使用 CSS transform 放大時，元素佔據的 layout 空間不會改變，導致捲軸不會出現。
+    // 我們透過動態設定 margin 來強制撐大 (或縮小) 父容器的 layout 空間。
+    const originalSize = 2000; // 畫布原始大小
+
+    // 計算視覺尺寸與原始尺寸的差值
+    // scale > 1: 正值，增加右/下 margin，撐大捲動範圍
+    // scale < 1: 負值，減少 layout 寬高，讓 margin: auto 能正確置中縮小後的畫布
+    const extraSpace = originalSize * (viewScale - 1);
+
+    canvas.style.marginRight = `${extraSpace}px`;
+    canvas.style.marginBottom = `${extraSpace}px`;
+}
+
+// [v8.8 新增] 初始化縮放控制
+function initZoomControls() {
+    document.getElementById('zoom-in-btn').addEventListener('click', () => updateViewZoom(viewScale + 0.1));
+    document.getElementById('zoom-out-btn').addEventListener('click', () => updateViewZoom(viewScale - 0.1));
+    document.getElementById('zoom-reset-btn').addEventListener('click', () => updateViewZoom(1.0));
+
+    // 滑鼠滾輪縮放 (需按住 Ctrl)
+    document.getElementById('canvas-wrapper').addEventListener('wheel', (e) => {
+        if (e.ctrlKey) {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            updateViewZoom(viewScale + delta);
+        }
+    });
+}
+
+// [v8.7 修復] 補回遺失的 updateBgTransform 函式，恢復底圖調整功能
+function updateBgTransform() {
+    const bgImg = document.getElementById('bg-img');
+    if (bgImg) {
+        // 設定 transform-origin 為左上角，讓位移和縮放更直觀
+        bgImg.style.transformOrigin = '0 0';
+        bgImg.style.transform = `translate(${bgPosition.x}px, ${bgPosition.y}px) scale(${bgScale})`;
+        // 確保在調整模式下顯示
+        bgImg.style.display = 'block';
+    }
 }
 
 // [您的要求] 新增：處理手動輸入尺寸變更的函式
@@ -1646,6 +1994,9 @@ function bindEventListeners() {
     document.addEventListener('keydown', handleKeyDown);
     document.body.addEventListener('click', handleGlobalClick);
 
+    // [v8.8 新增] 初始化縮放控制
+    initZoomControls();
+
     // 畫布事件
     canvas.addEventListener('dragover', (e) => e.preventDefault());
     canvas.addEventListener('drop', (e) => {
@@ -1653,7 +2004,31 @@ function bindEventListeners() {
         if (isBgEditMode) return showGlobalNotification("請先關閉底圖模式", 3000, 'error');
         const data = JSON.parse(e.dataTransfer.getData('application/json'));
         const rect = canvas.getBoundingClientRect();
-        addCabinet(data, e.clientX - rect.left - data.width / 2, e.clientY - rect.top - data.depth / 2);
+        // [v8.8 修正] 座標計算需除以 viewScale，以抵銷 CSS Transform 的影響
+        addCabinet(data, (e.clientX - rect.left) / viewScale - data.width / 2, (e.clientY - rect.top) / viewScale - data.depth / 2);
+    });
+
+    // [v8.5 優化] 底圖拖曳邏輯重構：移至畫布層級監聽，解決點不到圖的問題
+    // 原本綁定在 bg-layer，但 bg-layer 可能因圖片位移而跑掉或太小
+    canvas.addEventListener('mousedown', (e) => {
+        if (isBgEditMode) {
+            // 在底圖模式下，點擊畫布任何地方都可以拖曳底圖 (更直覺)
+            e.preventDefault();
+            e.stopPropagation();
+            isDraggingBg = true;
+            bgDragStart = { x: e.clientX, y: e.clientY };
+            bgStartPos = { x: bgPosition.x, y: bgPosition.y };
+            document.getElementById('bg-layer').style.cursor = 'grabbing';
+            document.getElementById('bg-layer').style.cursor = 'grabbing';
+        }
+    });
+
+    // [v8.16 修復] 綁定繪圖點擊事件，讓使用者可以放置頂點
+    // 原本的程式碼中似乎遺漏了這個綁定，導致點擊畫布無反應
+    canvas.addEventListener('click', (e) => {
+        if (isDrawing) {
+            handleDrawingClick(e);
+        }
     });
 
     // 工具箱 - 設定頁
@@ -1730,18 +2105,7 @@ function bindEventListeners() {
     const copyLineBtn = document.getElementById('copy-line-btn');
     if (copyLineBtn) copyLineBtn.addEventListener('click', copyLineId);
 
-    // [您的要求] 新增底圖拖曳事件
-    const bgLayer = document.getElementById('bg-layer');
-    bgLayer.addEventListener('mousedown', (e) => {
-        if (isBgEditMode) {
-            e.preventDefault();
-            e.stopPropagation();
-            isDraggingBg = true;
-            bgDragStart = { x: e.clientX, y: e.clientY };
-            bgStartPos = { x: bgPosition.x, y: bgPosition.y };
-            bgLayer.style.cursor = 'grabbing'; // 拖曳時變更指標
-        }
-    });
+
 
     // 預算與估價
     document.getElementById('show-budget-modal-btn').addEventListener('click', showBudgetModal);
@@ -1751,8 +2115,102 @@ function bindEventListeners() {
     });
 
     // 視窗拖曳
-    initDraggable('toolbox-window');
     initDraggable('info-window');
+}
+
+
+
+// ========== [新增] 自動儲存與防崩潰機制 ==========
+
+const AUTO_SAVE_KEY = 'layoutPlanner_autosave_v1';
+const AUTO_SAVE_INTERVAL = 60000; // 60秒自動儲存一次
+
+function initAutoSave() {
+    // 1. 啟動定時器
+    setInterval(autoSave, AUTO_SAVE_INTERVAL);
+
+    // 2. 檢查是否有意外中斷的備份
+    checkAndRestoreBackup();
+}
+
+function autoSave(silent = false) {
+    try {
+        // 收集當前狀態
+        const layoutData = {
+            version: '2.0',
+            timestamp: new Date().getTime(), // 使用 timestamp 方便比較
+            prettyTime: new Date().toLocaleString(), // 易讀的時間格式
+            placedCabinets: placedCabinets,
+            drawnAreas: drawnAreas,
+            background: {
+                position: bgPosition,
+                scale: bgScale,
+                src: document.getElementById('bg-img').src
+            },
+            constructionArea: document.getElementById('construction-area').value
+        };
+
+        localStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(layoutData));
+
+        if (!silent) {
+            // 使用非侵入式的方式提示 (只顯示 1 秒)
+            showGlobalNotification('☁️ 進度已自動備份', 1000, 'info');
+        }
+    } catch (e) {
+        console.error('自動備份失敗 (可能是 LocalStorage 已滿):', e);
+    }
+}
+
+function checkAndRestoreBackup() {
+    try {
+        const json = localStorage.getItem(AUTO_SAVE_KEY);
+        if (!json) return;
+
+        const data = JSON.parse(json);
+        // 檢查備份時間，如果距離現在超過 24 小時則忽略 (避免載入太舊的資料)
+        const now = new Date().getTime();
+        if (now - data.timestamp > 24 * 60 * 60 * 1000) {
+            return;
+        }
+
+        // 詢問使用者是否還原
+        if (confirm(`檢測到您有未儲存的進度 (${data.prettyTime})，是否還原？\n\n按「確定」還原，按「取消」將忽略此備份。`)) {
+            loadLayoutFromData(data);
+        } else {
+            // 如果使用者選擇不還原，是否要清除備份？
+            // 這裡選擇暫時保留，或可選擇 localStorage.removeItem(AUTO_SAVE_KEY);
+        }
+    } catch (e) {
+        console.error('檢查備份失敗:', e);
+    }
+}
+
+// 抽取原本 loadLayout 的核心邏輯，以便重用
+function loadLayoutFromData(layoutData) {
+    placedCabinets = layoutData.placedCabinets || [];
+    drawnAreas = layoutData.drawnAreas || [];
+
+    if (layoutData.background) {
+        bgPosition = layoutData.background.position || { x: 0, y: 0 };
+        bgScale = layoutData.background.scale || 1.0;
+        const bgImg = document.getElementById('bg-img');
+        if (layoutData.background.src && layoutData.background.src.startsWith('data:image')) {
+            bgImg.src = layoutData.background.src;
+            bgImg.style.display = 'block';
+            document.getElementById('bg-controls').classList.remove('opacity-50', 'pointer-events-none');
+        }
+    }
+    document.getElementById('construction-area').value = layoutData.constructionArea || '0';
+
+    renderAllCabinets();
+    renderAllDrawnAreas();
+    updateBgTransform();
+    saveState();
+    updateQuotation();
+    deselectAll();
+    deselectAllAreas();
+
+    showGlobalNotification('✅ 已成功還原備份進度', 3000, 'success');
 }
 
 // ========== [新增] 檔案傳輸功能 ==========
@@ -1764,91 +2222,91 @@ async function downloadDesignFilesAsZip() {
     try {
         const zip = new JSZip();
         const dateString = new Date().toISOString().slice(0, 10);
-        
-            // 1. 生成並加入設計圖片 (PNG)
-            const previouslySelectedCabId = selectedCabId;
-            const previouslySelectedAreaId = selectedAreaId;
-            deselectAll();
-            deselectAllAreas();
-            const watermark = document.getElementById('canvas-watermark');
-            watermark.style.display = 'flex';
-        
-            const canvasElement = document.getElementById('design-canvas');
-            const canvas = await html2canvas(canvasElement, {
-                logging: false,
-                backgroundColor: '#ffffff',
-                useCORS: true,
-                scale: 1
-            });
-        
-            const imageData = canvas.toDataURL('image/png').split(',')[1];
-            zip.file(`設計圖面_${dateString}.png`, imageData, { base64: true });
-        
-            watermark.style.display = 'none';
-            if (previouslySelectedCabId) selectCabinet(previouslySelectedCabId);
-            if (previouslySelectedAreaId) selectArea(previouslySelectedAreaId);
-        
-            // 2. 加入佈局 JSON 檔案
-            const layoutData = {
-                createdAt: new Date().toISOString(),
-                constructionArea: parseFloat(document.getElementById('construction-area').value) || 0,
-                cabinets: placedCabinets.map(cab => ({
-                    id: cab.id,
-                    name: cab.name,
-                    category: cab.category,
-                    position: { x: cab.x, y: cab.y },
-                    size: { width: cab.width, height: cab.height }
-                })),
-                areas: drawnAreas.map(area => ({
-                    id: area.id,
-                    type: area.type,
-                    points: area.points
-                }))
-            };
-            zip.file(`佈局資料_${dateString}.json`, JSON.stringify(layoutData, null, 2));
-        
-            // 3. 加入預算 CSV 檔案
-            const quotation = calculateFullQuotation();
-            const headers = ['項次', '項目', '單位', '數量', '總價', '備註'];
-            let csvContent = headers.join(',') + '\n';
-            let itemIndex = 1;
-        
-            quotation.lineItems.forEach(item => {
-                const row = [
-                    itemIndex++,
-                    `"${item.name.replace(/"/g, '""')}"`,
-                    item.unit,
-                    item.quantity,
-                    item.totalPrice,
-                    `"${(item.note || '').replace(/"/g, '""')}"`
-                ];
-                csvContent += row.join(',') + '\n';
-            });
-            csvContent += `\n,,,總計,${quotation.grandTotal},`;
-        
-            const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
-            zip.file(`預算明細_${dateString}.csv`, new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' }));
-        
-            // 4. 生成 ZIP 並下載
-            const zipBlob = await zip.generateAsync({ type: 'blob' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(zipBlob);
-            link.download = `設計檔案_${dateString}.zip`;
-            link.click();
-        
-            // 5. 提示使用者發送郵件
-            showDesignFilesDownloadComplete(dateString);
-        
-        } catch (err) {
-            console.error('檔案下載失敗:', err);
-            showGlobalNotification(`檔案準備失敗: ${err.message}`, 8000, 'error');
-        }
+
+        // 1. 生成並加入設計圖片 (PNG)
+        const previouslySelectedCabId = selectedCabId;
+        const previouslySelectedAreaId = selectedAreaId;
+        deselectAll();
+        deselectAllAreas();
+        const watermark = document.getElementById('canvas-watermark');
+        watermark.style.display = 'flex';
+
+        const canvasElement = document.getElementById('design-canvas');
+        const canvas = await html2canvas(canvasElement, {
+            logging: false,
+            backgroundColor: '#ffffff',
+            useCORS: true,
+            scale: 1
+        });
+
+        const imageData = canvas.toDataURL('image/png').split(',')[1];
+        zip.file(`設計圖面_${dateString}.png`, imageData, { base64: true });
+
+        watermark.style.display = 'none';
+        if (previouslySelectedCabId) selectCabinet(previouslySelectedCabId);
+        if (previouslySelectedAreaId) selectArea(previouslySelectedAreaId);
+
+        // 2. 加入佈局 JSON 檔案
+        const layoutData = {
+            createdAt: new Date().toISOString(),
+            constructionArea: parseFloat(document.getElementById('construction-area').value) || 0,
+            cabinets: placedCabinets.map(cab => ({
+                id: cab.id,
+                name: cab.name,
+                category: cab.category,
+                position: { x: cab.x, y: cab.y },
+                size: { width: cab.width, height: cab.height }
+            })),
+            areas: drawnAreas.map(area => ({
+                id: area.id,
+                type: area.type,
+                points: area.points
+            }))
+        };
+        zip.file(`佈局資料_${dateString}.json`, JSON.stringify(layoutData, null, 2));
+
+        // 3. 加入預算 CSV 檔案
+        const quotation = calculateFullQuotation();
+        const headers = ['項次', '項目', '單位', '數量', '總價', '備註'];
+        let csvContent = headers.join(',') + '\n';
+        let itemIndex = 1;
+
+        quotation.lineItems.forEach(item => {
+            const row = [
+                itemIndex++,
+                `"${item.name.replace(/"/g, '""')}"`,
+                item.unit,
+                item.quantity,
+                item.totalPrice,
+                `"${(item.note || '').replace(/"/g, '""')}"`
+            ];
+            csvContent += row.join(',') + '\n';
+        });
+        csvContent += `\n,,,總計,${quotation.grandTotal},`;
+
+        const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+        zip.file(`預算明細_${dateString}.csv`, new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' }));
+
+        // 4. 生成 ZIP 並下載
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(zipBlob);
+        link.download = `設計檔案_${dateString}.zip`;
+        link.click();
+
+        // 5. 提示使用者發送郵件
+        showDesignFilesDownloadComplete(dateString);
+
+    } catch (err) {
+        console.error('檔案下載失敗:', err);
+        showGlobalNotification(`檔案準備失敗: ${err.message}`, 8000, 'error');
     }
+}
 
 // [新增] 顯示檔案下載完成提示及發送郵件指導
 function showDesignFilesDownloadComplete(dateString) {
     showGlobalNotification('✅ 檔案已下載！', 3000, 'success');
-    
+
     // 建立郵件提示 Modal
     const modal = document.createElement('div');
     modal.style.cssText = `
@@ -1863,7 +2321,7 @@ function showDesignFilesDownloadComplete(dateString) {
         justify-content: center;
         z-index: 5000;
     `;
-    
+
     const content = document.createElement('div');
     content.style.cssText = `
         background: white;
@@ -1872,7 +2330,7 @@ function showDesignFilesDownloadComplete(dateString) {
         max-width: 500px;
         box-shadow: 0 8px 32px rgba(0,0,0,0.15);
     `;
-    
+
     content.innerHTML = `
         <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 16px;">📧 下一步：發送給設計師</h2>
         <p style="color: #4b5563; margin-bottom: 12px; line-height: 1.6;">
@@ -1899,10 +2357,10 @@ function showDesignFilesDownloadComplete(dateString) {
             </button>
         </div>
     `;
-    
+
     modal.appendChild(content);
     document.body.appendChild(modal);
-    
+
     // 事件處理
     document.getElementById('email-copy-btn').addEventListener('click', () => {
         navigator.clipboard.writeText('tanxintainan002@gmail.com').then(() => {
@@ -1911,7 +2369,7 @@ function showDesignFilesDownloadComplete(dateString) {
             showGlobalNotification('❌ 複製失敗，請手動複製：tanxintainan002@gmail.com', 3000, 'warning');
         });
     });
-    
+
     document.getElementById('email-close-btn').addEventListener('click', () => {
         modal.remove();
     });
@@ -1934,14 +2392,17 @@ window.onload = () => {
 
     // 只有在電腦版才會執行以下程式碼
     bindEventListeners();
-    
+
     // [修改] 初始化視窗狀態：預設打開工具箱和預算視窗，隱藏對應的最小化按鈕
     document.getElementById('toolbox-window').style.display = 'flex';
     document.getElementById('info-window').style.display = 'flex';
     document.getElementById('toggle-toolbox-btn').classList.add('hidden');
     document.getElementById('toggle-info-btn').classList.add('hidden');
-    
+
     loadFromSheets();
     switchTab('settings'); // 預設顯示設定頁籤
     saveState(); // [您的要求] 儲存初始狀態
+
+    // [v7.0 新增] 啟動自動儲存機制
+    initAutoSave();
 };

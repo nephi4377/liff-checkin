@@ -1,429 +1,113 @@
-# LayoutPlanner 改進計劃
+# IMPROVEMENT_PLAN
 
-## 📋 現況分析
+## v8.0 - v8.20 更新重點紀錄 (2025-12-07)
 
-### 程式架構
-- **主檔案**：LayoutPlanner.html + LayoutPlanner.js (1739 行)
-- **工具函式**：utils.js (81 行) - 通知系統
-- **狀態管理**：全局變數 + Google Sheets 動態載入
-- **框架**：Tailwind CSS + 原生 JavaScript
-- **功能特性**：
-  - ✅ 室內設計互動規劃工具
-  - ✅ 元件拖放和調整
-  - ✅ 區域繪製（天花板/地板）
-  - ✅ 動態計價系統
-  - ✅ PDF 匯出
-  - ✅ 佈局儲存/載入
-  - ✅ 復原/重做
-  - ✅ 手機版提示
+### 1. 全局畫布縮放功能 (Global Canvas Zoom)
+- **功能描述**：實作畫布的 Zoom In / Zoom Out 功能，允許使用者放大檢視細節或縮小查看全貌。
+- **關鍵修正**：
+    - 採用 CSS `transform: scale()` 對 `canvas` 進行無損縮放，確保底圖與所有元件同步縮放。
+    - **捲動條修復**：動態計算 `margin`，解決縮放後 Scrollbar 不出現或無法捲動到邊緣的問題。
+    - **座標系統重構**：所有滑鼠事件 (拖曳、點擊、繪圖) 的座標計算皆引入 `viewScale` 修正，防止放大時游標與物件位置不同步。
 
-### LINE 聯繫功能現況
-- **實現位置**：3 處 (浮動按鈕 + 預算 Modal + 手機版)
-- **實現方式**：LINE 官方連結 `https://line.me/R/ti/p/@uis9604v`
-- **額外功能**：LINE ID 複製功能
+### 2. 繪圖工具修復與優化 (Drawing Tool)
+- **鍵盤控制修復**：
+    - 將 `keydown` 監聽器移至事件綁定函式的最上層，確保 **Enter (完成)** 和 **Esc (取消)** 鍵在任何情況下都能優先被偵測到。
+    - 新增支援數字鍵盤 Enter (`NumpadEnter`)。
+- **互動邏輯鎖定**：
+    - 在 `startCabDrag` 中加入 `isDrawing` 檢測，**強制**在繪圖模式下禁止選取或拖曳任何櫃體元件，避免誤觸。
+- **點擊座標修正**：
+    - 修正 `handleDrawingClick`，加入 `viewScale` 除法運算，解決縮放狀態下節點位置偏移的問題。
 
----
+### 3. 底圖與元件拖曳優化 (Drag & Drop)
+- **底圖拖曳**：改為在 `canvas` 層級監聽 `mousedown`，解決底圖縮小後難以點擊選取的問題。
+- **元件拖曳保護**：在 `startCabDrag` 加入 `isNaN` 檢查，防止因縮放比例未初始化導致元件座標變為 `NaN` 而消失。
+- **元件磁吸貼合 (Magnetic Snap)**：
+    - **功能描述**：拖曳元件靠近其他元件時，透過計算分離軸 (MTV, Minimum Translation Vector)，自動將元件「推」至邊緣貼合，防止重疊並輔助對齊。
+    - **實作原理**：在 `handleGlobalMove` 中即時計算碰撞修正向量，若發生重疊則強制位移至無重疊的最近位置，形成吸附效果。
 
-## 🔴 當前問題
+### 4. 程式碼結構與穩定性修正
+- **語法錯誤修復**：修復因多次編輯導致的函式合併 (`toggleWindow` / `initDraggable`) 與括號遺失 (`bindEventListeners`) 問題。
+- **變數宣告清理**：移除重複宣告的 `canvas`, `isDragging` 等變數，消除 TypeScript 警告。
 
-### 已發現的問題
-1. **QR Code 出現**（用戶反饋）
-   - LINE 連結可能在某些情況下產生 QR Code
-   - 掃描報錯可能是連結格式問題
 
-2. **可能的根本原因**
-   - [ ] 瀏覽器/設備環境問題
-   - [ ] LINE 連結格式還需最佳化
-   - [ ] 使用者代理偵測不完整
-   - [ ] 備用方案不夠完善
+### 5. 元件拉伸改進與文件化 (v9.0)
+- **多方向拉伸重構**：
+    - **方向性控點**：捨棄舊版單一右下角控點，改為根據 `adjustable` (width/depth/both) 自動生成對應的邊緣控點 (上/下/左/右)。
+    - **雙向拉伸邏輯**：
+        - 實作「中心位移補償」演算法：當向左或向上拉伸時，自動調整元件 `x`, `y` 座標，使對側邊緣保持固定，符合直覺操作。
+        - 支援 `viewScale` 修正：拉伸量自動除以 `safeScale`，確保在縮放狀態下鼠標與控點同步。
+    - **視覺優化**：更新 CSS，將控點改為白色圓點藍框樣式，並根據拉伸方向顯示正確的游標 (w-resize, n-resize 等)。
 
----
+- **程式碼文件化 (Documentation)**：
+    - 為核心函式 (`renderCabinet`, `startResize`, `handleGlobalMove` 等) 添加 JSDoc 格式註解，明確定義輸入參數與功能。
+    - 加入關鍵動作的 `console.log`，輔助追蹤 Resize 與 Drag 事件。
 
-## 🟡 潛在風險
+### 6. 自動儲存與防崩潰機制 (v9.1)
+- **LocalStorage 快取**：建立 `saveToLocalCache()`，將目前完整狀態 (元件、繪圖、底圖) 存入瀏覽器快取。
+- **定時觸發**：每 60 秒自動執行一次儲存，降低意外關閉導致的損失。
+- **意外還原**：在頁面載入時檢查快取，若發現未儲存的進度 (且在 24 小時內)，主動彈出確認視窗詢問使用者是否還原。
 
-### 代碼質量問題
-1. **全局變數過多**
-   - 超過 30 個全局變數，難以追蹤狀態
-   - 容易產生命名衝突和副作用
-   - 建議：轉換為模組化架構 (Class/Object)
+- **意外還原**：在頁面載入時檢查快取，若發現未儲存的進度 (且在 24 小時內)，主動彈出確認視窗詢問使用者是否還原。
 
-2. **事件監聽器管理**
-   - 多個地方使用 `addEventListener`
-   - 沒有集中的事件管理器
-   - 建議：建立事件委派系統
+### 7. 未來升級藍圖 (Future Roadmap: v10.0+)
+以下為建議的十大改進方向，皆以提升「專業度」與「操作效率」為核心：
 
-3. **錯誤處理不足**
-   - Google Sheets 載入失敗沒有重試機制
-   - 拖放操作異常無適當補救
-   - 建議：新增錯誤邊界和重試機制
-
-4. **性能瓶頸**
-   - 大型 SVG 繪圖（2000x2000px）
-   - 頻繁的 DOM 操作
-   - 無虛擬化或懶加載
-   - 建議：實現 Canvas 或 WebGL 渲染
-
-### 功能缺陷
-1. **缺少數據驗證**
-   - 使用者輸入沒有驗證
-   - Google Sheets 資料格式假設
-   - 建議：新增 Zod/Yup 模式驗證
-
-2. **移動設備支援不完善**
-   - 僅提示不支援，沒有簡化版本
-   - 觸摸事件未最佳化
-   - 建議：實現響應式設計或手機版本
-
-3. **缺少分析和日誌**
-   - 無法追蹤使用者行為
-   - 無法診斷故障
-   - 建議：整合 Google Analytics + 錯誤日誌
-
----
-
-## 🟢 改進計劃 (優先級排序)
-
-### **優先級 1：關鍵 (立即修復)**
-
-#### 1.1 修復 LINE 聯繫功能
-**問題**：QR Code 和連結報錯
-**解決方案**：
-```javascript
-// 方案 1：改用更穩定的連結格式
-const LINE_URLS = {
-    official: 'https://line.me/R/ti/p/@uis9604v',  // 官方帳號
-    direct: 'line://ti/p/@uis9604v',               // 深層連結
-    backup: 'https://lin.ee/XX'                    // 短連結（待設定）
-};
-
-// 方案 2：實現 Fallback 機制
-function openLineOfficialAccount() {
-    const userAgent = navigator.userAgent;
-    const isNative = /Line/i.test(userAgent);
-    
-    if (isNative) {
-        window.location.href = LINE_URLS.direct;
-    } else {
-        window.open(LINE_URLS.official, '_blank');
-    }
-    
-    // 顯示替代聯繫方式
-    showContactAlternatives();
-}
-```
-
-**預期結果**：
-- ✅ 直接開啟 LINE App（已安裝時）
-- ✅ 開啟網頁版（未安裝時）
-- ✅ 提供手動搜尋選項
-- ✅ 無 QR Code 出現
-
-**工作量**：2-4 小時
-**優先級**：🔴 **立即**
+1.  **多重選取與群組功能 (Multi-select & Grouping)**
+    - 允許框選多個元件，或按住 Shift 連選。
+    - 建立「群組 (Group)」，移動桌子時椅子一併移動 (如：餐桌組)。
+2.  **進階圖層管理 (Advanced Layer System)**
+    - 實作類似 CAD/PS 的圖層面板。
+    - 可鎖定 (Lock)、隱藏 (Hide) 特定類別 (例如：一鍵隱藏所有水電符號，只看木工)。
+3.  **智慧尺寸標註 (Smart Dimensioning)**
+    - 選取元件時，自動顯示與最近牆面或鄰近元件的距離。
+    - 提供「測距儀」工具，點擊兩點即顯示精確距離。
+4.  **材質與紋理貼圖 (Material & Texture Mapping)**
+    - 地板與天花板不再只有顏色，可上傳或選擇材質圖片 (如：木紋、大理石、磁磚) 並設定拼接比例。
+5.  **DXF/AutoCAD 匯出 (CAD Interoperability)**
+    - 將目前的佈局轉換為標準 .dxf 格式，讓設計師能匯入 AutoCAD 進行精修與出圖。
+6.  **2.5D 空間預覽 (2.5D Visualization)**
+    - 根據元件的「高度」屬性，將平面圖長出簡易的 3D 模型 (Extrusion)，提供空間感的初步檢視。
+7.  **施工圖例自動生成 (Construction Symbols)**
+    - 內建水電符號庫 (插座、開關、冷氣排水)。
+    - 拖曳至牆面自動吸附並轉向。
+8.  **雲端專案庫與分享 (Cloud Library & Sharing)**
+    - 對接 Firebase/Supabase 資料庫。
+    - 產生「唯讀分享連結」，直接傳給業主用手機查看佈局與報價，無需截圖。
+9.  **自訂元件繪製器 (Custom Component Builder)**
+    - 簡單的向量繪圖工具，讓使用者在工具內直接繪製不規則形狀的家具 (如：L型櫃、異形吧台) 並存入庫。
+10. **專業報價單匯出 (Professional PDF Quote)**
+    - 將報價資訊排版為正式 PDF。
+    - 支援自訂頁首/Logo/條款，直接作為合約附件使用。
 
 ---
 
-#### 1.2 新增複合式聯繫選項
-**問題**：單一連結可能失效
-**解決方案**：
-```html
-<!-- 新增聯繫對話框 -->
-<div id="contact-modal" class="modal">
-    <div class="modal-content">
-        <h3>選擇聯繫方式</h3>
-        <button class="contact-option">
-            💬 LINE 官方帳號
-            <span>@uis9604v</span>
-        </button>
-        <button class="contact-option">
-            📱 複製 LINE ID
-        </button>
-        <button class="contact-option">
-            📧 電子郵件
-        </button>
-        <button class="contact-option">
-            ☎️ 電話號碼
-        </button>
-    </div>
-</div>
-```
+## 新增與修改的關鍵函式列表 (Key Functions)
 
-**工作量**：4-6 小時
-**優先級**：🟡 **高**
+### 縮放控制相關
+| 函式名稱 | 作用描述 |
+| :--- | :--- |
+| **`initZoomControls()`** | 初始化縮放按鈕事件，包含放大、縮小、重置及顯示比例。 |
+| **`updateViewZoom(newScale)`** | 核心縮放邏輯。設定 Canvas 的 `transform` 並動態調整 `margin` 以確保捲動範圍正確。 |
 
----
+### 繪圖功能相關
+| 函式名稱 | 作用描述 |
+| :--- | :--- |
+| **`startDrawing(type)`** | 啟動繪圖模式。鎖定元件互動 (`pointerEvents = 'none'`) 並初始化繪圖狀態。 |
+| **`handleDrawingClick(e)`** | 處理繪圖點擊。**[修正]** 引入 `viewScale` 計算精確的畫布座標。 |
+| **`updateDrawingPreview()`** | 即時繪製預覽線段與閉合區域，提供更好的視覺回饋。 |
+| **`finishDrawing()`** | 完成繪圖。計算面積、轉換坪數並儲存區域資料。 |
+| **`cancelDrawing()`** | 取消繪圖。清除暫存點與預覽圖層，恢復游標狀態。 |
 
-### **優先級 2：重要 (本週內)**
-
-#### 2.1 代碼重構：模組化架構
-**問題**：全局變數太多，難以維護
-**解決方案**：
-```javascript
-// 轉換為 Class 架構
-class DesignState {
-    constructor() {
-        this.placedCabinets = [];
-        this.selectedCabId = null;
-        this.bgEditMode = false;
-        this.history = [];
-    }
-    
-    addCabinet(cabinet) { /* ... */ }
-    removeCabinet(id) { /* ... */ }
-    undo() { /* ... */ }
-}
-
-class DesignCanvas {
-    constructor(element) {
-        this.element = element;
-        this.state = new DesignState();
-        this.setupEventListeners();
-    }
-}
-
-// 使用
-const designTool = new DesignCanvas(document.getElementById('design-canvas'));
-```
-
-**工作量**：20-30 小時
-**優先級**：🟡 **中期**
-
----
-
-#### 2.2 事件系統現代化
-**問題**：事件監聽器分散、難以管理
-**解決方案**：
-```javascript
-class EventManager {
-    constructor() {
-        this.listeners = new Map();
-    }
-    
-    on(event, handler) {
-        if (!this.listeners.has(event)) {
-            this.listeners.set(event, []);
-        }
-        this.listeners.get(event).push(handler);
-    }
-    
-    emit(event, data) {
-        this.listeners.get(event)?.forEach(h => h(data));
-    }
-    
-    off(event, handler) { /* ... */ }
-}
-
-// 使用
-eventBus.on('cabinetAdded', (cabinet) => {
-    updateQuotation();
-});
-```
-
-**工作量**：8-12 小時
-**優先級**：🟡 **中期**
-
----
-
-#### 2.3 錯誤處理和日誌系統
-**問題**：無法追蹤問題發生原因
-**解決方案**：
-```javascript
-class Logger {
-    log(level, message, data) {
-        const timestamp = new Date().toISOString();
-        console.log(`[${timestamp}] ${level}: ${message}`, data);
-        
-        // 可選：發送到遠端日誌服務
-        if (level === 'error') {
-            this.sendToServer(level, message, data);
-        }
-    }
-}
-
-// 使用
-try {
-    await loadFromSheets();
-} catch (error) {
-    logger.error('Failed to load from Sheets', { error, sheetId });
-    showGlobalNotification('資料載入失敗，請重試', 3000, 'error');
-}
-```
-
-**工作量**：6-10 小時
-**優先級**：🟡 **中期**
-
----
-
-### **優先級 3：增強 (月度計劃)**
-
-#### 3.1 手機版支援
-**目標**：提供實際可用的手機版本
-**方案**：
-- 簡化工具介面
-- 觸摸最佳化
-- 單點搜尋設計
-- 卡片式佈局
-
-**工作量**：30-50 小時
-**優先級**：🟢 **未來**
-
----
-
-#### 3.2 性能最佳化
-**目標**：提升大型佈局的性能
-**方案**：
-- [ ] 改用 Canvas 或 Three.js 渲染
-- [ ] 實現虛擬化滾動
-- [ ] 懶加載元件圖片
-- [ ] 壓縮和快取策略
-
-**工作量**：40-60 小時
-**優先級**：🟢 **未來**
-
----
-
-#### 3.3 協作功能
-**目標**：支援多人共享和編輯
-**方案**：
-- 實時同步 (WebSocket/Firestore)
-- 版本控制和歷史記錄
-- 使用者權限管理
-- 評論和標記功能
-
-**工作量**：50-100 小時
-**優先級**：🟢 **未來**
-
----
-
-#### 3.4 分析和追蹤
-**目標**：了解使用者行為
-**方案**：
-- Google Analytics 整合
-- 元件使用率統計
-- 平均佈局時間
-- 轉換漏斗追蹤
-
-**工作量**：4-8 小時
-**優先級**：🟢 **未來**
-
----
-
-## 📊 改進優先矩陣
-
-```
-┌─────────────────────────────────────────┐
-│ 優先級 │ 工作量    │ 影響度 │ 難度  │ 計劃
-├─────────────────────────────────────────┤
-│ 1.1   │ 2-4h    │ 高   │ 低   │ 立即
-│ 1.2   │ 4-6h    │ 中   │ 中   │ 本週
-│ 2.1   │ 20-30h  │ 高   │ 高   │ 下月
-│ 2.2   │ 8-12h   │ 中   │ 中   │ 下月
-│ 2.3   │ 6-10h   │ 中   │ 低   │ 下月
-│ 3.1   │ 30-50h  │ 中   │ 高   │ 3 月
-│ 3.2   │ 40-60h  │ 高   │ 高   │ 3 月
-│ 3.3   │ 50-100h │ 中   │ 極高  │ 4 月+
-│ 3.4   │ 4-8h    │ 低   │ 低   │ 下月
-└─────────────────────────────────────────┘
-```
-
----
-
-## 🎯 建議的短期行動計劃 (2 週)
-
-### 第 1 週
-- [ ] **1.1** 修復 LINE 聯繫功能
-  - 測試多種瀏覽器和設備
-  - 實現 Fallback 機制
-  - 驗證無 QR Code 出現
-
-- [ ] **1.2** 新增聯繫對話框
-  - 設計 UI 模型
-  - 實現多個聯繫選項
-  - 測試所有選項
-
-### 第 2 週
-- [ ] **2.3** 基礎日誌系統
-  - 實現 Logger 類
-  - 在關鍵位置新增日誌
-  - 監控 Google Sheets 載入
-
-- [ ] **文檔更新**
-  - 更新使用說明
-  - 記錄 LINE 聯繫最佳實踐
-  - 建立故障排除指南
-
----
-
-## 📋 檢查清單
-
-### 代碼品質
-- [ ] 執行 ESLint 檢查
-- [ ] 添加 JSDoc 註解
-- [ ] 實現單元測試
-- [ ] 性能監控
-
-### 功能驗證
-- [ ] 跨瀏覽器測試 (Chrome, Safari, Firefox, Edge)
-- [ ] 跨設備測試 (Windows, Mac, iOS, Android)
-- [ ] 網路速度測試 (3G/4G)
-- [ ] 離線功能測試
-
-### 安全性
-- [ ] 驗證 Google Sheets 存取權限
-- [ ] 檢查敏感資料洩露
-- [ ] 實現 CSP 政策
-- [ ] CORS 設定審核
-
----
-
-## 📞 所需資訊
-
-請提供以下資訊以加速改進：
-
-1. **LINE 帳號資訊**
-   - [ ] 是否有官方網頁版連結？(line://xxx 或 https://...)
-   - [ ] 是否有短連結 (lin.ee/xxx)？
-
-2. **替代聯繫方式**
-   - [ ] 電話號碼
-   - [ ] 電子郵件
-   - [ ] WeChat / WhatsApp / 其他
-
-3. **使用環境**
-   - [ ] 主要目標客戶設備類型？(手機/電腦)
-   - [ ] 網路環境限制？(公司 WiFi/行動數據)
-   - [ ] 訪問統計數據？(日均使用者數)
-
-4. **業務需求**
-   - [ ] 是否需要轉換追蹤？(點擊到 LINE 的轉換率)
-   - [ ] 是否需要協作功能？
-   - [ ] 未來是否考慮行動應用化？
-
----
-
-## 📝 文件回顧
-
-已生成的文檔：
-- `IMPLEMENTATION_SUMMARY.md` - LINE 功能實現詳述
-- `plan-addLineContactCTA.prompt.md` - 初始計劃
-- `IMPROVEMENT_PLAN.md` - 本文件
-
----
-
-## 下一步行動
-
-**立即建議**：
-1. 確認 LINE 官方帳號的最佳連結格式
-2. 測試當前實現在真實設備上的表現
-3. 蒐集使用者反饋（QR Code 問題的細節）
-4. 決定是否進行代碼重構
-
-**聯繫我以**：
-- 修復緊急問題
-- 實現短期改進
-- 規劃長期架構升級
-
----
-
-*計劃生成於 2025-11-26*
-*預計下次審查：2025-12-03*
+### 互動與事件處理
+| 函式名稱 | 作用描述 |
+| :--- | :--- |
+| **`bindEventListeners()`** | **[重構]** 集中管理所有事件監聽。將 `keydown` 移至最上方以確保優先權。 |
+| **`startCabDrag(e, cab)`** | **[修正]** 加入 `isDrawing` 阻擋邏輯；加入 `viewScale` 座標轉換；加入 `NaN` 防護。 |
+| **`handleGlobalMove(e)`** | **[重構]** 整合元件拖曳 (Move) 與多方向縮放 (Resize) 邏輯。實作 MTV 碰撞修正與中心位移補償。 |
+| **`startResize(id, e, dir)`** | **[重構]** 新增 `direction` 參數，支援紀錄拉伸方向 ('n', 's', 'w', 'e')。 |
+| **`renderCabinet(cab)`** | **[重構]** 根據 `adjustable` 動態生成多個方向的拉伸控點，並綁定對應事件。 |
+| **`toggleWindow(windowId)`** | **[修復]** 修復顯示/隱藏視窗的邏輯，與 `initDraggable` 分離。 |
+| **`initDraggable(windowId)`** | **[修復]** 獨立的視窗拖曳初始化函式。 |
+| **`getMTV(cab1, cab2)`** | **[新增]** 計算最小推移向量 (Minimum Translation Vector)，核心磁吸防撞邏輯。 |
+| **`getAxes(vertices)`** | **[新增]** 取得多邊形的投影軸向量 (用於分離軸定理 SAT)。 |
+| **`checkCollision(cab, ...)`** | **[優化]** 基於 SAT (Separating Axis Theorem) 的精確碰撞偵測。 |

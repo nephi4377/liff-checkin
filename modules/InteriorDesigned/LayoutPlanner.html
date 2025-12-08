@@ -43,6 +43,7 @@
             border-bottom: 2px solid transparent;
             color: #6b7280;
         }
+
         .tab-btn.active {
             border-bottom-color: #3b82f6;
             color: #2563eb;
@@ -110,6 +111,7 @@
             border: none;
             transition: all 0.3s ease;
         }
+
         .contact-btn:hover {
             box-shadow: 0 6px 16px rgba(6, 199, 85, 0.4);
             transform: translateY(-2px);
@@ -124,11 +126,13 @@
             text-align: center;
             margin-top: 12px;
         }
+
         .contact-card-title {
             font-weight: bold;
             color: #06C755;
             margin-bottom: 8px;
         }
+
         .contact-line-id {
             background: white;
             border: 1px solid #d1d5db;
@@ -140,6 +144,7 @@
             cursor: pointer;
             transition: all 0.3s ease;
         }
+
         .contact-line-id:hover {
             background: #f0fdf4;
             border-color: #06C755;
@@ -152,8 +157,9 @@
             overflow: auto;
             position: relative;
             display: flex;
-            justify-content: center;
-            align-items: center;
+            /* [v9.2] 移除強制置中，改用 margin: auto 配合動態 margin 實現正確縮放 */
+            /* justify-content: center; */
+            /* align-items: center; */
             padding: 40px;
         }
 
@@ -166,6 +172,10 @@
             height: 2000px;
             overflow: hidden;
             flex-shrink: 0;
+            transform-origin: top left;
+            /* 確保原點在左上角 */
+            margin: auto;
+            /* 在 flex 容器中自動置中 */
         }
 
         #grid-layer {
@@ -194,10 +204,12 @@
         .placed-cabinet {
             position: absolute;
             background-color: #fff;
-            background-size: contain;
+            background-size: 100% 100%;
+            /* [v8.0 修正] 改為 100% 100% 以填滿容器 */
             background-repeat: no-repeat;
             background-position: center;
-            border: 1px solid rgba(0, 0, 0, 0.2);
+            border: 1px solid #000;
+            /* [v8.4 修正] 加深邊框顏色為純黑，符合使用者需求 */
             cursor: grab;
             box-sizing: border-box;
             z-index: 20;
@@ -215,14 +227,14 @@
 
         .resize-handle {
             position: absolute;
-            bottom: 0;
-            right: 0;
-            width: 15px;
-            height: 15px;
-            background: linear-gradient(135deg, transparent 50%, #3b82f6 50%);
-            cursor: nwse-resize;
+            width: 12px;
+            height: 12px;
+            background: #ffffff;
+            border: 2px solid #3b82f6;
+            border-radius: 50%;
             z-index: 40;
             display: none;
+            box-shadow: 0 0 3px rgba(0, 0, 0, 0.2);
         }
 
         .placed-cabinet:hover .resize-handle,
@@ -230,9 +242,38 @@
             display: block;
         }
 
+        .resize-handle-w {
+            top: 50%;
+            left: -6px;
+            transform: translateY(-50%);
+            cursor: w-resize;
+        }
+
+        .resize-handle-e {
+            top: 50%;
+            right: -6px;
+            transform: translateY(-50%);
+            cursor: e-resize;
+        }
+
+        .resize-handle-n {
+            top: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            cursor: n-resize;
+        }
+
+        .resize-handle-s {
+            bottom: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            cursor: s-resize;
+        }
+
         .size-label {
             position: absolute;
-            bottom: -30px; /* [您的要求] 增加與元件的距離 */
+            bottom: -30px;
+            /* [您的要求] 增加與元件的距離 */
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.7);
@@ -254,7 +295,8 @@
         /* [修改] 調整提示文字的位置與樣式 */
         #canvas-placeholder {
             position: fixed;
-            bottom: 70px; /* 移至右下角，在按鈕上方 */
+            bottom: 70px;
+            /* 移至右下角，在按鈕上方 */
             right: 20px;
             text-align: right;
             pointer-events: none;
@@ -292,30 +334,38 @@
         /* [新增] 繪圖模式下的遮罩 */
         #drawing-overlay {
             position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.3);
-            z-index: 98; /* 比繪圖中的畫布低，比其他元件高 */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 98;
+            /* 比繪圖中的畫布低，比其他元件高 */
             display: none;
         }
 
         /* [新增] 已選取繪圖區域的樣式 */
         #drawn-areas-layer polygon.selected {
-            stroke: #3b82f6; /* 藍色 */
+            stroke: #3b82f6;
+            /* 藍色 */
             stroke-width: 3px;
         }
 
         /* [您的要求] 新增：PDF 匯出 (列印) 專用樣式 */
         @media print {
+
             /* 隱藏所有不需要列印的元素 */
-            body > *:not(#budget-modal) {
+            body>*:not(#budget-modal) {
                 display: none !important;
             }
+
             /* 讓 Modal 填滿整個頁面 */
             #budget-modal {
                 display: block !important;
                 position: static !important;
                 background: none !important;
             }
+
             .modal-content {
                 box-shadow: none !important;
                 border: none !important;
@@ -323,16 +373,22 @@
                 width: 100% !important;
                 max-width: 100% !important;
             }
+
             /* [您的要求] 優化列印樣式，避免標題和表尾被分頁切斷 */
-            .modal-content h2, .modal-content tfoot {
+            .modal-content h2,
+            .modal-content tfoot {
                 page-break-after: avoid;
                 page-break-inside: avoid;
             }
+
             /* [您的要求] 列印時顯示浮水印，並隱藏版權宣告 */
             .print-watermark {
                 display: flex !important;
             }
-            #copyright-notice { display: none !important; }
+
+            #copyright-notice {
+                display: none !important;
+            }
         }
     </style>
 </head>
@@ -341,8 +397,10 @@
     <!-- [您的要求] 新增：手機版提示訊息 -->
     <div id="mobile-warning" class="hidden fixed inset-0 bg-white z-[9999] flex items-center justify-center p-8">
         <div class="text-center">
-            <svg class="mx-auto h-16 w-16 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
+            <svg class="mx-auto h-16 w-16 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none"
+                viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
             </svg>
             <h2 class="mt-4 text-xl font-bold text-gray-800">請使用電腦瀏覽</h2>
             <p class="mt-2 text-gray-600">此設計工具功能較為複雜，不適用於手機操作。<br><br>若有室內設計需求，歡迎與我們聯繫進行專業諮詢。</p>
@@ -384,21 +442,30 @@
                             <input type="checkbox" id="bg-edit-mode"> 底圖調整模式
                         </label>
                         <div class="flex items-center gap-2">
-                            <input type="range" id="bg-scale" min="0.2" max="3.0" step="0.01" value="1.0" class="flex-1 h-2">
-                            <input type="number" id="bg-scale-num" min="0.2" max="3.0" step="0.01" value="1.0" class="w-16 text-xs border rounded text-center">
+                            <input type="range" id="bg-scale" min="0.2" max="3.0" step="0.01" value="1.0"
+                                class="flex-1 h-2">
+                            <input type="number" id="bg-scale-num" min="0.2" max="3.0" step="0.01" value="1.0"
+                                class="w-16 text-xs border rounded text-center">
+                            <div class="grid grid-cols-2 gap-2">
+                                <button id="save-layout-btn" class="hidden"></button>
+                                <!-- Placeholder to maintain grid but hide duplicate -->
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 佈局存檔功能區塊 -->
+                <!-- 佈局存檔功能區塊 (補回) -->
                 <div class="bg-yellow-50 p-3 rounded border border-yellow-100">
                     <h2 class="font-bold text-yellow-800 text-sm mb-2">2. 佈局存檔</h2>
                     <div class="grid grid-cols-1 gap-2 text-xs">
-                        <!-- [修改] 復原/重做按鈕已移至最小化列 -->
-                        <button id="save-canvas-as-image-btn" class="w-full py-1.5 bg-yellow-600 text-white rounded hover:bg-yellow-700">另存圖片 (PNG)</button>
+                        <button id="save-canvas-as-image-btn"
+                            class="w-full py-1.5 bg-yellow-600 text-white rounded hover:bg-yellow-700">另存圖片
+                            (PNG)</button>
                         <div class="grid grid-cols-2 gap-2">
-                            <button id="save-layout-btn" class="w-full py-1.5 bg-yellow-200 text-yellow-800 rounded hover:bg-yellow-300">儲存佈局</button>
-                            <label id="layout-upload-label" class="w-full py-1.5 bg-yellow-200 text-yellow-800 rounded hover:bg-yellow-300 text-center cursor-pointer">載入佈局</label>
+                            <button id="save-layout-btn"
+                                class="w-full py-1.5 bg-yellow-200 text-yellow-800 rounded hover:bg-yellow-300">儲存佈局</button>
+                            <label id="layout-upload-label"
+                                class="w-full py-1.5 bg-yellow-200 text-yellow-800 rounded hover:bg-yellow-300 text-center cursor-pointer">載入佈局</label>
                             <input type="file" id="layout-upload" accept=".json" class="hidden">
                         </div>
                     </div>
@@ -408,8 +475,10 @@
                 <div class="bg-purple-50 p-3 rounded border border-purple-100">
                     <h2 class="font-bold text-purple-800 text-sm mb-2">3. 區域繪製</h2>
                     <div class="grid grid-cols-2 gap-2 mb-2">
-                        <button id="draw-ceiling-btn" class="w-full py-1.5 bg-purple-600 text-white rounded hover:bg-purple-700 text-xs">繪製天花板</button>
-                        <button id="draw-floor-btn" class="w-full py-1.5 bg-amber-500 text-white rounded hover:bg-amber-600 text-xs">繪製地板</button>
+                        <button id="draw-ceiling-btn"
+                            class="w-full py-1.5 bg-purple-600 text-white rounded hover:bg-purple-700 text-xs">繪製天花板</button>
+                        <button id="draw-floor-btn"
+                            class="w-full py-1.5 bg-amber-500 text-white rounded hover:bg-amber-600 text-xs">繪製地板</button>
                     </div>
                     <div class="space-y-1 mt-3">
                         <label class="flex items-center gap-2 text-xs font-bold text-gray-700">
@@ -435,7 +504,8 @@
     <!-- 畫布 -->
     <main id="canvas-wrapper">
         <!-- [新增] 工作區說明與快捷鍵提示 -->
-        <div id="canvas-header" style="position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(to right, #f3f4f6, #ffffff); border-bottom: 1px solid #e5e7eb; padding: 12px 20px; z-index: 50; font-size: 12px; color: #4b5563;">
+        <div id="canvas-header"
+            style="position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(to right, #f3f4f6, #ffffff); border-bottom: 1px solid #e5e7eb; padding: 12px 20px; z-index: 50; font-size: 12px; color: #4b5563;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div><strong>📐 工作區：2000cm × 2000cm</strong></div>
                 <div style="display: flex; gap: 20px;">
@@ -447,21 +517,25 @@
             <div id="bg-layer"><img id="bg-img" draggable="false" style="display:none;"></div>
             <!-- [新增] 用於永久顯示已繪製區域的 SVG 圖層 -->
             <!-- [您的要求] 新增繪圖預覽圖層 -->
-            <svg id="drawing-preview-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 99; pointer-events: none; display: none;">
-                <polygon id="drawing-preview-polygon" fill="rgba(59, 130, 246, 0.3)" stroke="rgba(59, 130, 246, 0.8)" stroke-width="2" stroke-dasharray="5,5" />
+            <svg id="drawing-preview-layer"
+                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 99; pointer-events: none; display: none;">
+                <polygon id="drawing-preview-polygon" fill="rgba(59, 130, 246, 0.3)" stroke="rgba(59, 130, 246, 0.8)"
+                    stroke-width="2" stroke-dasharray="5,5" />
                 <polyline id="drawing-preview-polyline" fill="none" stroke="#3b82f6" stroke-width="2" />
                 <!-- [您的要求] 新增：繪圖時顯示的頂點標記 -->
                 <g id="drawing-preview-vertices"></g>
             </svg>
             <!-- [您的要求] 核心修正：將繪圖圖層的 pointer-events 徹底設為 none，避免攔截事件 -->
-            <svg id="drawn-areas-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none;"></svg>
+            <svg id="drawn-areas-layer"
+                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none;"></svg>
             <div id="grid-layer"></div>
             <div id="canvas-placeholder">
                 <p class="text-lg font-bold">2000cm x 2000cm 工作區</p>
                 <p class="text-sm mt-2">快捷鍵: R=旋轉 | D=刪除 | 方向鍵=移動</p>
             </div>
             <!-- [您的要求] 新增：畫布浮水印 (預設隱藏) -->
-            <div id="canvas-watermark" class="absolute inset-0 flex items-center justify-center pointer-events-none" style="display: none; z-index: 999;">
+            <div id="canvas-watermark" class="absolute inset-0 flex items-center justify-center pointer-events-none"
+                style="display: none; z-index: 999;">
                 <span class="text-9xl font-black text-gray-500 opacity-10 -rotate-45">添心設計</span>
             </div>
         </div>
@@ -480,9 +554,12 @@
                     <p id="selected-name" class="font-bold text-sm"></p>
                     <!-- [您的要求] 新增操作按鈕 -->
                     <div id="selected-cab-actions" class="flex gap-2">
-                        <button id="selected-rotate-btn" title="旋轉 (R)" class="p-1.5 bg-blue-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-blue-600">↻</button>
-                        <button id="selected-duplicate-btn" title="複製 (Ctrl+D)" class="p-1.5 bg-green-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-green-600">❏</button>
-                        <button id="selected-delete-btn" title="刪除 (D)" class="p-1.5 bg-red-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-red-600">✕</button>
+                        <button id="selected-rotate-btn" title="旋轉 (R)"
+                            class="p-1.5 bg-blue-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-blue-600">↻</button>
+                        <button id="selected-duplicate-btn" title="複製 (Ctrl+D)"
+                            class="p-1.5 bg-green-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-green-600">❏</button>
+                        <button id="selected-delete-btn" title="刪除 (D)"
+                            class="p-1.5 bg-red-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-red-600">✕</button>
                     </div>
                 </div>
 
@@ -508,7 +585,8 @@
                 <!-- 備註 -->
                 <div class="mt-2">
                     <label class="text-xs font-bold text-gray-700">備註:</label>
-                    <textarea id="note-input" class="w-full text-xs border rounded p-1 mt-1" rows="2" placeholder="輸入備註..."></textarea>
+                    <textarea id="note-input" class="w-full text-xs border rounded p-1 mt-1" rows="2"
+                        placeholder="輸入備註..."></textarea>
                 </div>
             </div>
 
@@ -516,7 +594,8 @@
             <div class="bg-white p-3 rounded border mb-3">
                 <p class="text-xs text-gray-500 text-center">總金額</p>
                 <p id="total-price-display" class="text-2xl font-bold text-blue-600 text-center">$0</p>
-                <button id="show-budget-modal-btn" class="w-full mt-2 py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">查看明細</button>
+                <button id="show-budget-modal-btn"
+                    class="w-full mt-2 py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">查看明細</button>
             </div>
 
             <!-- 施工項目 -->
@@ -524,7 +603,8 @@
                 <!-- 施工面積 -->
                 <div class="mb-3">
                     <label class="text-xs font-bold">施工面積 (坪):</label>
-                    <input type="number" id="construction-area" min="0" step="0.1" value="0" class="w-full text-xs border rounded p-1 mt-1">
+                    <input type="number" id="construction-area" min="0" step="0.1" value="0"
+                        class="w-full text-xs border rounded p-1 mt-1">
                     <p class="text-[10px] text-gray-500 mt-1">用於計算保護工程費用</p>
                 </div>
 
@@ -549,6 +629,28 @@
 
     <!-- 最小化列 -->
     <div id="minimized-bar">
+        <!-- [v8.11 修復] 將縮放控制整合進最小化列，避免被遮擋 -->
+        <div class="flex bg-white rounded-lg shadow border overflow-hidden mr-2">
+            <button id="zoom-out-btn" class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 border-r"
+                title="縮小 (Ctrl+滾輪)">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
+                </svg>
+            </button>
+            <span id="zoom-level-display"
+                class="w-12 flex items-center justify-center text-xs font-mono bg-gray-50 border-r">100%</span>
+            <button id="zoom-in-btn" class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 border-r"
+                title="放大 (Ctrl+滾輪)">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+            </button>
+            <button id="zoom-reset-btn" class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 text-xs"
+                title="重置比例">R</button>
+        </div>
+
         <button id="toggle-toolbox-btn" class="toggle-btn">🛠️ 工具箱</button>
         <button id="toggle-info-btn" class="toggle-btn">💰 預算</button>
         <!-- [新增] LINE 聯繫按鈕 -->
@@ -599,26 +701,31 @@
                 此報價單僅為根據當前設計所做的初步估算，僅供參考。實際費用可能因現場狀況、材料選擇、施工工法及各家施工廠商報價而有所差異，最終價格以簽訂之正式工程合約為準。
             </div>
             <div class="mt-6 flex justify-end gap-2">
-                <button id="export-csv-btn" class="bg-green-700 text-white px-3 py-1 rounded text-sm hover:bg-green-800">匯出 CSV</button>
-                <button id="save-pdf-btn" class="bg-red-700 text-white px-3 py-1 rounded text-sm hover:bg-red-800">另存 PDF</button>
+                <button id="export-csv-btn"
+                    class="bg-green-700 text-white px-3 py-1 rounded text-sm hover:bg-green-800">匯出 CSV</button>
+                <button id="save-pdf-btn" class="bg-red-700 text-white px-3 py-1 rounded text-sm hover:bg-red-800">另存
+                    PDF</button>
             </div>
             <!-- [新增] 諮詢詳細報價區塊 -->
             <div class="mt-6 border-t pt-4">
                 <div class="bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg p-4">
                     <h3 class="font-bold text-green-800 mb-2">📞 需要詳細報價？</h3>
                     <p class="text-sm text-gray-700 mb-3">以上報價為根據目前設計的初步估算。若需更精準的報價、材料選項或專業建議，歡迎與我們聯繫進行面對面諮詢。</p>
-                    <button id="modal-contact-line-btn" class="w-full contact-btn text-sm py-2">🟢 加入 LINE 諮詢詳細方案</button>
+                    <button id="modal-contact-line-btn" class="w-full contact-btn text-sm py-2">🟢 加入 LINE
+                        諮詢詳細方案</button>
                 </div>
             </div>
-               <!-- [新增] 發送設計檔案區塊 -->
-               <div class="mt-4 border-t pt-4">
-                   <div class="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4">
-                       <h3 class="font-bold text-blue-800 mb-2">📥 發送設計檔案給設計師</h3>
-                       <p class="text-sm text-gray-700 mb-3">下載您的設計圖面、佈局檔案和預算明細，然後透過 Email 發送給我們，以便獲得更詳細的設計建議和施工報價。</p>
-                       <button id="modal-download-design-files-btn" class="w-full bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">📥 下載所有檔案</button>
-                       <p class="text-xs text-gray-500 mt-2">📧 寄送至: <strong>tanxintainan002@gmail.com</strong></p>
-                   </div>
-               </div>
+            <!-- [新增] 發送設計檔案區塊 -->
+            <div class="mt-4 border-t pt-4">
+                <div class="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4">
+                    <h3 class="font-bold text-blue-800 mb-2">📥 發送設計檔案給設計師</h3>
+                    <p class="text-sm text-gray-700 mb-3">下載您的設計圖面、佈局檔案和預算明細，然後透過 Email 發送給我們，以便獲得更詳細的設計建議和施工報價。</p>
+                    <button id="modal-download-design-files-btn"
+                        class="w-full bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">📥
+                        下載所有檔案</button>
+                    <p class="text-xs text-gray-500 mt-2">📧 寄送至: <strong>tanxintainan002@gmail.com</strong></p>
+                </div>
+            </div>
         </div>
     </div>
 
