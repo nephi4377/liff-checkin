@@ -206,8 +206,8 @@
 
         /* Print CSS: 列印時強制展開所有內容 */
         @media print {
-            body { background: white; }
-            .container { padding: 0; box-shadow: none; max-width: 100%; }
+            body { background: white; margin: 0; }
+            .container { padding: 0; box-shadow: none; max-width: 100%; min-height: 0; }
             .accordion-content { display: block !important; border: none; padding: 5px 0; }
             .accordion-header { background: none; padding: 10px 0; border-bottom: 2px solid #000; font-size: 18px; }
             .accordion-header:after { display: none; }
@@ -216,6 +216,8 @@
             .canvas-wrapper { border: 2px solid #000; }
             header { margin-bottom: 20px; }
         }
+
+        /* 螢幕顯示時隱藏 */
     </style>
 </head>
 <body>
@@ -390,6 +392,8 @@
             <div class="canvas-wrapper">
                 <div class="placeholder">請在此簽名</div>
                 <canvas id="signaturePad"></canvas>
+                <!-- [新增] 用於列印顯示的簽名圖片 (預設隱藏) -->
+                <img id="finalSignatureImg" style="display:none; width:100%; height:100%; object-fit:contain;" alt="簽名預覽">
             </div>
         </div>
 
@@ -401,7 +405,7 @@
 
     <div class="btn-group">
         <button class="btn-clear" onclick="clearSignature()">清除重寫</button>
-        <button class="btn-save" onclick="saveAsPDF()">完成並存檔 (PDF)</button>
+        <button class="btn-save" id="saveBtn" onclick="saveAsPDF()">完成並存檔 (PDF)</button>
     </div>
 
     <div class="footer">
@@ -509,9 +513,22 @@
             alert('請務必填寫廠商/工班名稱');
             return;
         }
-        alert('請在接下來的列印視窗中，將「目的地」選擇為「另存為 PDF」即可下載檔案。');
-        // 觸發列印，CSS 會處理自動展開
-        window.print();
+
+        // [修改] 將 Canvas 轉為圖片顯示在原本的位置，確保列印時可見
+        const finalImg = document.getElementById('finalSignatureImg');
+        
+        finalImg.src = canvas.toDataURL();
+        finalImg.onload = function() {
+            // 切換顯示：隱藏 Canvas，顯示圖片
+            canvas.style.display = 'none';
+            placeholder.style.display = 'none';
+            finalImg.style.display = 'block';
+
+            setTimeout(() => {
+                alert('請在接下來的列印視窗中，將「目的地」選擇為「另存為 PDF」即可下載檔案。');
+                window.print();
+            }, 100);
+        };
     }
 </script>
 
