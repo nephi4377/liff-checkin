@@ -395,7 +395,7 @@
 
 <body class="bg-gray-100 font-sans text-gray-800">
     <!-- [您的要求] 新增：手機版提示訊息 -->
-    <div id="mobile-warning" class="hidden fixed inset-0 bg-white z-[9999] flex items-center justify-center p-8">
+    <div id="mobile-warning" class="hidden fixed inset-0 bg-white z-[9999] items-center justify-center p-8">
         <div class="text-center">
             <svg class="mx-auto h-16 w-16 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none"
                 viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -447,7 +447,7 @@
                             <input type="number" id="bg-scale-num" min="0.2" max="3.0" step="0.01" value="1.0"
                                 class="w-16 text-xs border rounded text-center">
                             <div class="grid grid-cols-2 gap-2">
-                                <button id="save-layout-btn" class="hidden"></button>
+                                <div class="hidden"></div>
                                 <!-- Placeholder to maintain grid but hide duplicate -->
                             </div>
                         </div>
@@ -463,9 +463,10 @@
                             (PNG)</button>
                         <div class="grid grid-cols-2 gap-2">
                             <button id="save-layout-btn"
-                                class="w-full py-1.5 bg-yellow-200 text-yellow-800 rounded hover:bg-yellow-300">儲存佈局</button>
-                            <label id="layout-upload-label"
-                                class="w-full py-1.5 bg-yellow-200 text-yellow-800 rounded hover:bg-yellow-300 text-center cursor-pointer">載入佈局</label>
+                                class="w-full py-1.5 bg-yellow-200 text-yellow-800 rounded hover:bg-yellow-300">儲存佈局 (.json)</button>
+                            <!-- [修正] 移除 for 屬性以避免與 JS 事件衝突導致開啟兩次，並標註檔案格式 -->
+                            <label id="layout-upload-label" title="請選擇 .json 格式的佈局檔案 (若為 ZIP 請先解壓縮)"
+                                class="w-full py-1.5 bg-yellow-200 text-yellow-800 rounded hover:bg-yellow-300 text-center cursor-pointer">載入佈局 (.json)</label>
                             <input type="file" id="layout-upload" accept=".json" class="hidden">
                         </div>
                     </div>
@@ -529,10 +530,6 @@
             <svg id="drawn-areas-layer"
                 style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none;"></svg>
             <div id="grid-layer"></div>
-            <div id="canvas-placeholder">
-                <p class="text-lg font-bold">2000cm x 2000cm 工作區</p>
-                <p class="text-sm mt-2">快捷鍵: R=旋轉 | D=刪除 | 方向鍵=移動</p>
-            </div>
             <!-- [您的要求] 新增：畫布浮水印 (預設隱藏) -->
             <div id="canvas-watermark" class="absolute inset-0 flex items-center justify-center pointer-events-none"
                 style="display: none; z-index: 999;">
@@ -659,7 +656,15 @@
         <button id="undo-btn" class="toggle-btn" title="復原 (Ctrl+Z)" disabled>↶</button>
         <button id="redo-btn" class="toggle-btn" title="重做 (Ctrl+Y)" disabled>↷</button>
         <!-- [新增] 下載設計檔案按鈕 -->
-        <button id="download-design-files-btn" class="toggle-btn" title="下載設計圖面、佈局檔案和預算">📥 下載檔案</button>
+        <button id="download-design-files-btn" class="toggle-btn" title="下載設計圖面、佈局檔案和預算 (ZIP)">📥 下載檔案 (ZIP)</button>
+        <!-- [新增] 說明按鈕 (修改文字) -->
+        <button id="help-btn" class="toggle-btn font-bold text-blue-600" title="操作說明">使用說明</button>
+    </div>
+
+    <!-- [修正] 將提示文字移出畫布，避免隨畫布縮放 -->
+    <div id="canvas-placeholder">
+        <p class="text-lg font-bold">2000cm x 2000cm 工作區</p>
+        <p class="text-sm mt-2">快捷鍵: R=旋轉 | D=刪除 | 方向鍵=移動</p>
     </div>
 
     <!-- 預算 Modal -->
@@ -725,6 +730,125 @@
                         下載所有檔案</button>
                     <p class="text-xs text-gray-500 mt-2">📧 寄送至: <strong>tanxintainan002@gmail.com</strong></p>
                 </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- [新增] 說明 Modal -->
+    <div id="help-modal" class="modal">
+        <div class="modal-content relative">
+            <span id="help-modal-close-btn" class="absolute top-2 right-4 text-2xl cursor-pointer">&times;</span>
+            <h2 class="text-xl font-bold mb-4">📖 操作使用手冊</h2>
+
+            <div class="overflow-auto max-h-[60vh] text-sm space-y-6 text-gray-700">
+
+                <!-- 0. 基礎操作 -->
+                <section>
+                    <h3 class="font-bold text-lg text-blue-800 mb-2">步驟 0：基礎操作與熱鍵</h3>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li><strong>滑鼠左鍵</strong>：拖曳物件、調整尺寸</li>
+                        <li><strong>Ctrl + 滾輪</strong>：縮放畫布</li>
+                        <li><strong>Ctrl + Z / Y</strong>：復原 / 重做</li>
+                        <li><strong>Ctrl + D</strong>：複製選取的家具</li>
+                        <li><strong>R 鍵</strong>：旋轉家具</li>
+                        <li><strong>Delete 鍵</strong>：刪除</li>
+                    </ul>
+                </section>
+
+                <hr class="border-gray-200">
+
+                <!-- 1. 校正 -->
+                <section>
+                    <h3 class="font-bold text-lg text-blue-800 mb-2">步驟 1：匯入與校正</h3>
+                    <p class="mb-2">匯入底圖後，請務必進行比例校正，以確保估價準確。</p>
+                    <ol class="list-decimal pl-5 space-y-1">
+                        <li>點擊「設定」頁籤 -> 「上傳底圖」。</li>
+                        <ul class="list-disc pl-5 text-gray-500 text-xs">
+                            <li><em>若底圖歪斜，請先使用「照片轉正工具」校正。</em></li>
+                            <li><em>本工具僅支援有正確比例之圖面 (如 CAD 檔或建商提供的平面圖)。</em></li>
+                        </ul>
+                        <li>勾選 **「底圖調整模式」**。</li>
+                        <li>從元件庫拖入 **「比例尺 90CM」**。</li>
+                        <li>將比例尺移至一般的房門旁 (房門標準寬度約 90cm)。</li>
+                        <li>拖曳 **「底圖縮放」** 滑桿，直到 **房門寬度 = 比例尺長度**。</li>
+                        <li><strong>取消勾選</strong>「底圖調整模式」以鎖定底圖。</li>
+                    </ol>
+                </section>
+
+                <hr class="border-gray-200">
+
+                <!-- 2. 配置 -->
+                <section>
+                    <h3 class="font-bold text-lg text-blue-800 mb-2">步驟 2：配置家具與櫃體</h3>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>從左側「元件庫」拖曳家具至畫布。</li>
+                        <li>點擊家具可調整尺寸 (白色圓點) 或旋轉。</li>
+                        <li><strong>紅色外框</strong> 代表位置重疊。</li>
+                        <li><em>注意：一般家具預設單價為 $0 (僅參考)，櫃體類則依尺寸計價。</em></li>
+                    </ul>
+                </section>
+
+                <hr class="border-gray-200">
+
+                <!-- 3. 繪圖 -->
+                <section>
+                    <h3 class="font-bold text-lg text-blue-800 mb-2">步驟 3：繪製裝修區域</h3>
+                    <p class="mb-2">用於計算天花板與地板坪數。</p>
+                    <ol class="list-decimal pl-5 space-y-1">
+                        <li>點擊「繪製天花板」或「繪製地板」。</li>
+                        <li>沿著角落點擊描點。</li>
+                        <li>按 <strong>Enter</strong> 完成 (自動封口)。</li>
+                        <li>點擊已繪製的區域可拖曳頂點微調。</li>
+                    </ol>
+                </section>
+
+                <hr class="border-gray-200">
+
+                <!-- 3.5 施工面積 -->
+                <section>
+                    <h3 class="font-bold text-lg text-blue-800 mb-2">步驟 3.5：輸入施工面積</h3>
+                    <p class="mb-2">此步驟影響保護工程費用的計算。</p>
+                    <ol class="list-decimal pl-5 space-y-1">
+                        <li>在右側「預算 & 估價」面板中。</li>
+                        <li>找到 **「施工面積 (坪)」** 欄位。</li>
+                        <li>手動輸入室內總坪數，系統即會自動計算保護工程費用。</li>
+                    </ol>
+                </section>
+
+                <hr class="border-gray-200">
+
+                <!-- 4. 輸出 -->
+                <section>
+                    <h3 class="font-bold text-lg text-blue-800 mb-2">步驟 4：輸出與分享</h3>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li><strong>另存圖片</strong>：下載乾淨的設計圖 JPG。</li>
+                        <li><strong>檢視預算</strong>：查看詳細報價並儲存為 PDF。</li>
+                        <li><strong>下載檔案</strong>：一鍵打包所有設計資料 (ZIP) 以便歸檔或寄送。</li>
+                    </ul>
+                </section>
+
+                <hr class="border-gray-200">
+
+                <!-- FAQ -->
+                <section class="bg-gray-50 p-4 rounded-lg">
+                    <h3 class="font-bold text-lg text-gray-800 mb-2">❓ 常見問題 (FAQ)</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <p class="font-bold text-gray-900">Q: 圖片上傳後很模糊？</p>
+                            <p>A: 請確認原圖解析度。若用 Line 傳輸，請務必下載「原始畫質」。</p>
+                        </div>
+                        <div>
+                            <p class="font-bold text-gray-900">Q: 為什麼有些家具不能調整大小？</p>
+                            <p>A: 如馬桶、門片等特定物件為符合人體工學，設定為固定尺寸。</p>
+                        </div>
+                        <div>
+                            <p class="font-bold text-gray-900">Q: 東西不見了怎麼辦？</p>
+                            <p>A: 系統有自動備份，請嘗試重新整理網頁，並在彈出視窗點擊「確定」還原。</p>
+                        </div>
+                    </div>
+                </section>
+
             </div>
         </div>
     </div>
