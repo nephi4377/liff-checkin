@@ -1043,7 +1043,7 @@ function endDrag() {
         if (area) {
             // 重新計算面積並更新
             const calculatedArea = getPolygonCentroid(area.points).area;
-            area.areaInPing = Math.ceil(Math.abs(calculatedArea) / 32400);
+            area.areaInPing = Math.ceil(Math.abs(calculatedArea) / 30000);
             updateQuotation();
             saveState(); // 儲存變更
         }
@@ -1421,7 +1421,7 @@ function calculateFullQuotation() {
     // 天花板 & 油漆
     const ceilingArea = drawnAreas.filter(a => a.type === 'ceiling').reduce((sum, a) => sum + a.areaInPing, 0);
     if (ceilingArea > 0) {
-        subtotals.ceilingCost = ceilingArea * 2150; // 假設天花板單價不含油漆
+        subtotals.ceilingCost = ceilingArea * 3400; // 假設天花板單價不含油漆
         grandTotal += subtotals.ceilingCost;
         lineItems.push({ isConstruction: true, name: '平釘天花板', unit: '坪', quantity: ceilingArea, totalPrice: subtotals.ceilingCost, note: '油漆工程另計' });
     } else {
@@ -1432,7 +1432,7 @@ function calculateFullQuotation() {
     const floorArea = drawnAreas.filter(a => a.type === 'floor').reduce((sum, a) => sum + a.areaInPing, 0);
     if (floorArea > 0) {
         const floorAreaWithLoss = calculateFloorAreaWithLoss(floorArea);
-        subtotals.floorCost = floorAreaWithLoss * 4200;
+        subtotals.floorCost = floorAreaWithLoss * 3950;
         grandTotal += subtotals.floorCost;
         lineItems.push({ isConstruction: true, name: '超耐磨地板 (含損耗)', unit: '坪', quantity: floorAreaWithLoss.toFixed(2), totalPrice: subtotals.floorCost, note: '' });
     } else {
@@ -1715,7 +1715,7 @@ function finishDrawing() {
     try {
         const centroidData = getPolygonCentroid(currentDrawingPoints);
         const calculatedArea = centroidData.area;
-        const areaInPing = Math.ceil(Math.abs(calculatedArea) / 32400); // 無條件進位到整數坪
+        const areaInPing = Math.ceil(Math.abs(calculatedArea) / 30000); // 無條件進位到整數坪
 
         drawnAreas.push({
             id: `area-${Date.now()}`,
@@ -1983,8 +1983,16 @@ function redo() {
 }
 
 function updateUndoRedoButtons() {
-    document.getElementById('undo-btn').disabled = historyIndex <= 0;
     document.getElementById('redo-btn').disabled = historyIndex >= history.length - 1;
+}
+
+// [新增] 說明 Modal 控制
+function openHelpModal() {
+    document.getElementById('help-modal').style.display = 'flex';
+}
+
+function closeHelpModal() {
+    document.getElementById('help-modal').style.display = 'none';
 }
 
 function bindEventListeners() {
@@ -2104,6 +2112,21 @@ function bindEventListeners() {
     if (openLineBtn) openLineBtn.addEventListener('click', openLineOfficialAccount);
     const copyLineBtn = document.getElementById('copy-line-btn');
     if (copyLineBtn) copyLineBtn.addEventListener('click', copyLineId);
+
+    // [新增] 說明 Modal 事件
+    const helpBtn = document.getElementById('help-btn');
+    if (helpBtn) helpBtn.addEventListener('click', openHelpModal);
+
+    const helpCloseBtn = document.getElementById('help-modal-close-btn');
+    if (helpCloseBtn) helpCloseBtn.addEventListener('click', closeHelpModal);
+
+    // 點擊背景關閉說明 Modal
+    const helpModal = document.getElementById('help-modal');
+    if (helpModal) {
+        helpModal.addEventListener('click', (e) => {
+            if (e.target === helpModal) closeHelpModal();
+        });
+    }
 
 
 
@@ -2247,21 +2270,18 @@ async function downloadDesignFilesAsZip() {
         if (previouslySelectedAreaId) selectArea(previouslySelectedAreaId);
 
         // 2. 加入佈局 JSON 檔案
+        // [修正] 使用與 saveLayout 相同的資料結構，確保載入時格式正確
         const layoutData = {
-            createdAt: new Date().toISOString(),
-            constructionArea: parseFloat(document.getElementById('construction-area').value) || 0,
-            cabinets: placedCabinets.map(cab => ({
-                id: cab.id,
-                name: cab.name,
-                category: cab.category,
-                position: { x: cab.x, y: cab.y },
-                size: { width: cab.width, height: cab.height }
-            })),
-            areas: drawnAreas.map(area => ({
-                id: area.id,
-                type: area.type,
-                points: area.points
-            }))
+            version: '2.0',
+            timestamp: new Date().toISOString(),
+            placedCabinets: placedCabinets,
+            drawnAreas: drawnAreas,
+            background: {
+                position: bgPosition,
+                scale: bgScale,
+                src: document.getElementById('bg-img').src
+            },
+            constructionArea: document.getElementById('construction-area').value
         };
         zip.file(`佈局資料_${dateString}.json`, JSON.stringify(layoutData, null, 2));
 
