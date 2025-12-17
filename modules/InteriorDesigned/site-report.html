@@ -337,8 +337,7 @@
             };
 
             // 初始化 Lucide icon
-            useEffect(() => { lucide.createIcons(); }, []);
-            useEffect(() => { lucide.createIcons(); });
+            useEffect(() => { lucide.createIcons(); }, [photos, tags, previewUrls, isGenerating]);
 
             return (
                 <div className="max-w-md mx-auto min-h-screen bg-white shadow-2xl overflow-hidden">

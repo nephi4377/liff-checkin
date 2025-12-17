@@ -1,0 +1,2429 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<!-- v2.0 - 2025-12-16 23:39 (Asia/Taipei) -->
+<!-- 修改內容: 圖片選擇器重構 - 後端搜尋 20 張, 前端網格顯示 5 張/頁, 分頁控制 -->
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添心裝修工料檢核小幫手 v1.8</title>
+
+    <!-- 核心庫: Vue 3 & Tailwind -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 圖標庫: Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        .card-shadow {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        /* 隱藏捲軸但保留功能 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* 在 Vue 完成掛載前隱藏整個 app */
+        [v-cloak] {
+            display: none !important;
+        }
+
+        /* Toast 通知動畫 */
+        .toast-enter-active,
+        .toast-leave-active {
+            transition: all 0.3s ease;
+        }
+
+        .toast-enter-from,
+        .toast-leave-to {
+            opacity: 0;
+            transform: translateX(100%);
+        }
+
+        /* Skeleton Loading 動畫 */
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s infinite;
+        }
+
+        @keyframes skeleton-loading {
+            0% {
+                background-position: 200% 0;
+            }
+
+            100% {
+                background-position: -200% 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app" v-cloak class="min-h-screen flex flex-col">
+        <!-- 頂部導航 -->
+        <header class="bg-indigo-600 text-white p-4 shadow-lg sticky top-0 z-50">
+            <div class="max-w-7xl mx-auto flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                    <i class="ph ph-toolbox text-2xl"></i>
+                    <h1 class="text-xl font-bold tracking-wide">裝修工料檢核小幫手</h1>
+                    <span class="text-xs bg-indigo-500 px-2 py-0.5 rounded text-indigo-100">v1.8</span>
+                </div>
+                <!-- loading state -->
+                <div v-if="loading" class="flex items-center gap-2 text-sm animate-pulse">
+                    <i class="ph ph-spinner animate-spin"></i>
+                    <span>資料讀取中...</span>
+                </div>
+                <button @click="setupDatabase" title="重置資料庫 (Admin)"
+                    class="ml-4 text-xs bg-red-800 text-red-200 px-2 py-1 rounded hover:bg-red-700 transition-colors">
+                    <i class="ph ph-database"></i> 重置 DB
+                </button>
+            </div>
+        </header>
+
+        <!-- 主內容區 -->
+        <main class="flex-1 max-w-7xl w-full mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- 左側：控制與輸入區 (佔 4 欄) -->
+            <section class="lg:col-span-4 space-y-6">
+                <!-- 1. 案場設定 -->
+                <div class="bg-white rounded-xl card-shadow p-5 border border-gray-100">
+                    <h2 class="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <i class="ph ph-house-line text-indigo-600"></i> 案場設定
+                    </h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">案場名稱</label>
+                            <input v-model="project.name" type="text" placeholder="例如：台南東區-陳公館"
+                                class="w-full rounded-lg border-gray-300 border p-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-colors">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">施工階段 (篩選工具)</label>
+                                <select v-model="project.phase"
+                                    class="w-full rounded-lg border-gray-300 border p-2 bg-white">
+                                    <option value="ALL">全部階段</option>
+                                    <option v-for="p in phases" :key="p" :value="p">{{ p }}</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">工具分配</label>
+                                <select v-model="project.allocMode"
+                                    class="w-full rounded-lg border-gray-300 border p-2 bg-white">
+                                    <option value="share">共用 (合併)</option>
+                                    <option value="individual">分開由師傅帶</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. 加入工項 -->
+                <div class="bg-white rounded-xl card-shadow p-5 border border-indigo-100 ring-1 ring-indigo-50">
+                    <h2 class="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <i class="ph ph-plus-circle text-indigo-600"></i> 新增工項
+                    </h2>
+
+                    <div class="space-y-4">
+                        <!-- 分類篩選 -->
+                        <div class="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+                            <button v-for="cat in categories" :key="cat" @click="filterCategory = cat"
+                                :class="{'bg-indigo-600 text-white': filterCategory === cat, 'bg-gray-100 text-gray-600 hover:bg-gray-200': filterCategory !== cat}"
+                                class="px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors">
+                                {{ cat }}
+                            </button>
+                        </div>
+
+                        <!-- 工項選擇 (搜尋 + 清單) -->
+                        <div class="relative">
+                            <select v-model="selectedTask"
+                                class="w-full rounded-lg border-gray-300 border p-2 bg-white h-12">
+                                <option :value="null" disabled>請選擇工項...</option>
+                                <option v-for="task in filteredTasks" :key="task.task_id" :value="task">
+                                    [{{ task.category }}] {{ task.task_name }} ({{ task.unit }})
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- 數量輸入 -->
+                        <div class="flex gap-2 items-end" v-if="selectedTask">
+                            <div class="flex-1">
+                                <label class="block text-xs text-gray-500 mb-1">施工數量 ({{ selectedTask.unit }})</label>
+                                <input v-model.number="inputQty" type="number" min="0" step="0.1"
+                                    class="w-full text-2xl font-bold text-indigo-600 border-b-2 border-indigo-200 focus:border-indigo-600 focus:outline-none p-1 bg-transparent placeholder-indigo-200">
+                            </div>
+                            <button @click="addTask"
+                                class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-bold shadow-md active:transform active:scale-95 transition-all flex items-center gap-2">
+                                <i class="ph ph-check-bold"></i> 加入
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. 已選工項清單 (購物車) -->
+                <div class="bg-white rounded-xl card-shadow overflow-hidden">
+                    <div class="bg-gray-50 px-5 py-3 border-b border-gray-100 flex justify-between items-center">
+                        <h3 class="font-bold text-gray-700 text-sm">已規劃清單</h3>
+                        <span class="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">{{ cart.length }}
+                            項</span>
+                    </div>
+                    <div class="max-h-[300px] overflow-y-auto p-2">
+                        <div v-if="cart.length === 0" class="text-center py-8 text-gray-400 text-sm">
+                            尚未加入任何工項
+                        </div>
+                        <ul class="space-y-2">
+                            <li v-for="(item, idx) in cart" :key="idx"
+                                class="flex justify-between items-center p-3 hover:bg-gray-50 rounded-lg group border border-transparent hover:border-gray-200 transition-all">
+                                <div>
+                                    <div class="font-bold text-gray-800">{{ item.task.task_name }}</div>
+                                    <div class="text-xs text-gray-500">{{ item.task.category }} | <span
+                                            class="text-indigo-600 font-bold">{{ item.qty }}</span> {{ item.task.unit }}
+                                    </div>
+                                </div>
+                                <button @click="removeTask(idx)"
+                                    class="text-gray-400 hover:text-red-500 p-2 transition-colors">
+                                    <i class="ph ph-trash text-lg"></i>
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 右側：計算結果區 (佔 8 欄) -->
+            <section class="lg:col-span-8 space-y-6">
+
+                <!-- Tab 切換 -->
+                <div class="flex border-b border-gray-200">
+                    <button @click="viewMode = 'materials'"
+                        :class="{'border-indigo-600 text-indigo-600': viewMode === 'materials', 'border-transparent text-gray-500 hover:text-gray-700': viewMode !== 'materials'}"
+                        class="px-6 py-3 border-b-2 font-medium transition-colors flex items-center gap-2">
+                        <i class="ph ph-package"></i> 材料總表
+                    </button>
+                    <button @click="viewMode = 'tools'"
+                        :class="{'border-indigo-600 text-indigo-600': viewMode === 'tools', 'border-transparent text-gray-500 hover:text-gray-700': viewMode !== 'tools'}"
+                        class="px-6 py-3 border-b-2 font-medium transition-colors flex items-center gap-2">
+                        <i class="ph ph-wrench"></i> 工具清單
+                    </button>
+                    <button @click="viewMode = 'sop'"
+                        :class="{'border-indigo-600 text-indigo-600': viewMode === 'sop', 'border-transparent text-gray-500 hover:text-gray-700': viewMode !== 'sop'}"
+                        class="px-6 py-3 border-b-2 font-medium transition-colors flex items-center gap-2">
+                        <i class="ph ph-clipboard-text"></i> 施工重點
+                    </button>
+                    <button @click="viewMode = 'recipes'"
+                        :class="{'border-indigo-600 text-indigo-600': viewMode === 'recipes', 'border-transparent text-gray-500 hover:text-gray-700': viewMode !== 'recipes'}"
+                        class="px-6 py-3 border-b-2 font-medium transition-colors flex items-center gap-2">
+                        <i class="ph ph-note-pencil"></i> 配方管理
+                    </button>
+                    <button @click="viewMode = 'dataManager'"
+                        :class="{'border-indigo-600 text-indigo-600': viewMode === 'dataManager', 'border-transparent text-gray-500 hover:text-gray-700': viewMode !== 'dataManager'}"
+                        class="px-6 py-3 border-b-2 font-medium transition-colors flex items-center gap-2">
+                        <i class="ph ph-database"></i> 資料管理
+                    </button>
+                </div>
+
+                <!-- 內容顯示區 -->
+                <div class="bg-white rounded-xl card-shadow min-h-[500px] p-6">
+
+                    <!-- A. 材料表 -->
+                    <div v-show="viewMode === 'materials'">
+                        <div class="flex justify-between mb-4">
+                            <h3 class="font-bold text-lg">需採購材料彙整</h3>
+                            <button @click="copyToClipboard('materials')"
+                                class="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
+                                <i class="ph ph-copy"></i> 複製文字
+                            </button>
+                        </div>
+
+                        <!-- 空狀態提示 -->
+                        <div v-if="Object.keys(calculatedMaterials).length === 0"
+                            class="text-center py-16 text-gray-400">
+                            <i class="ph ph-package text-6xl mb-4 opacity-30"></i>
+                            <p class="text-lg font-medium">尚無材料需求</p>
+                            <p class="text-sm mt-2">請先在左側加入工項，系統將自動計算所需材料</p>
+                        </div>
+
+                        <!-- 依供應商分類 -->
+                        <div v-else>
+                            <div v-for="(group, vendor) in calculatedMaterials" :key="vendor" class="mb-6">
+                                <h4
+                                    class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 border-l-4 border-indigo-400 pl-2 bg-gray-50 py-1">
+                                    {{ vendor || '未指定供應商' }}</h4>
+                                <table class="w-full text-sm">
+                                    <thead class="bg-gray-50 text-gray-700">
+                                        <tr>
+                                            <th class="text-left p-2 rounded-l">材料名稱</th>
+                                            <th class="text-left p-2">規格</th>
+                                            <th class="text-right p-2">預估數量</th>
+                                            <th class="text-left p-2 rounded-r">單位</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100">
+                                        <tr v-for="mat in group" :key="mat.id" class="hover:bg-gray-50 group">
+                                            <td class="p-2">
+                                                <div class="font-medium text-indigo-600 hover:text-indigo-800 cursor-pointer hover:underline"
+                                                    @click="openImageModal(mat)">
+                                                    <i class="ph ph-image text-xs mr-1 opacity-50"></i>{{ mat.name }}
+                                                </div>
+                                                <!-- 新增：材料說明 -->
+                                                <div v-if="mat.description"
+                                                    class="text-xs text-gray-400 truncate max-w-[200px]"
+                                                    :title="mat.description">
+                                                    {{ mat.description }}
+                                                </div>
+                                            </td>
+                                            <td class="p-2 text-gray-500">{{ mat.spec }}</td>
+                                            <td class="p-2 text-right font-bold text-indigo-600">{{ mat.total_qty }}
+                                            </td>
+                                            <td class="p-2 text-gray-500">
+                                                {{ mat.unit }}
+                                                <span v-if="mat.pack_desc" :title="mat.pack_desc"
+                                                    class="text-xs bg-yellow-100 text-yellow-800 px-1 rounded ml-1 cursor-help">
+                                                    包裝
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- B. 工具表 -->
+                    <div v-show="viewMode === 'tools'">
+                        <div class="flex justify-between mb-4 items-center">
+                            <h3 class="font-bold text-lg">工具檢核表</h3>
+                            <div class="flex gap-2 text-sm">
+                                <span class="bg-green-100 text-green-800 px-2 py-0.5 rounded">Air = 氣動</span>
+                                <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Batt = 電池</span>
+                            </div>
+                        </div>
+
+                        <!-- 空狀態提示 -->
+                        <div v-if="calculatedTools.power.length === 0 && calculatedTools.manual.length === 0"
+                            class="text-center py-16 text-gray-400">
+                            <i class="ph ph-wrench text-6xl mb-4 opacity-30"></i>
+                            <p class="text-lg font-medium">尚無工具需求</p>
+                            <p class="text-sm mt-2">請先在左側加入工項，系統將自動列出所需工具</p>
+                        </div>
+
+                        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- 左欄：機具/電動工具 -->
+                            <div>
+                                <h4 class="font-bold text-gray-700 mb-2 flex items-center gap-1">
+                                    <i class="ph ph-lightning text-yellow-500"></i> 機具/電動工具
+                                </h4>
+                                <ul class="space-y-2">
+                                    <li v-for="tool in calculatedTools.power" :key="tool.id"
+                                        class="bg-gray-50 rounded hover:bg-gray-100 border border-transparent hover:border-gray-200 transition-all">
+                                        <div class="flex items-start gap-2 p-2">
+                                            <input type="checkbox" class="mt-1">
+                                            <div class="flex-1">
+                                                <div class="flex justify-between">
+                                                    <span class="font-bold">{{ tool.name }}</span>
+                                                    <span v-if="tool.qty > 1"
+                                                        class="bg-gray-600 text-white text-xs px-1.5 rounded-full h-fit">x{{
+                                                        tool.qty }}</span>
+                                                </div>
+                                                <div class="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
+                                                    <span v-if="tool.power_spec"
+                                                        class="px-1.5 py-0.5 rounded text-[10px] font-bold"
+                                                        :class="getPowerClass(tool.power_spec)">{{ tool.power_spec
+                                                        }}</span>
+                                                    <span v-if="tool.storage" class="text-gray-400">({{ tool.storage
+                                                        }})</span>
+                                                </div>
+
+                                                <!-- 新增：展開細節 (保養/撇步) -->
+                                                <details class="mt-1 group/details">
+                                                    <summary
+                                                        class="text-[10px] text-indigo-500 cursor-pointer hover:text-indigo-700 list-none flex items-center gap-1">
+                                                        <i
+                                                            class="ph ph-caret-right group-open/details:rotate-90 transition-transform"></i>
+                                                        查看保養與撇步
+                                                    </summary>
+                                                    <div
+                                                        class="text-xs text-gray-600 mt-1 pl-2 border-l-2 border-indigo-100 space-y-1">
+                                                        <div v-if="tool.maintenance">🔧 <span
+                                                                class="font-medium">保養：</span>{{ tool.maintenance }}
+                                                        </div>
+                                                        <div v-if="tool.usage_tips">💡 <span
+                                                                class="font-medium">撇步：</span>{{ tool.usage_tips }}
+                                                        </div>
+                                                    </div>
+                                                </details>
+                                            </div>
+                                        </div>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <!-- 右欄：手工具/耗材 -->
+                            <div>
+                                <h4 class="font-bold text-gray-700 mb-2 flex items-center gap-1">
+                                    <i class="ph ph-hand text-gray-500"></i> 手工具 & 配件
+                                </h4>
+                                <ul class="space-y-2">
+                                    <li v-for="tool in calculatedTools.manual" :key="tool.id"
+                                        class="bg-gray-50 rounded hover:bg-gray-100 border border-transparent hover:border-gray-200 transition-all">
+                                        <div class="flex items-start gap-2 p-2">
+                                            <input type="checkbox" class="mt-1">
+                                            <div class="flex-1">
+                                                <div class="flex justify-between">
+                                                    <span class="font-medium">{{ tool.name }}</span>
+                                                    <span v-if="tool.qty > 1"
+                                                        class="bg-gray-600 text-white text-xs px-1.5 rounded-full h-fit">x{{
+                                                        tool.qty }}</span>
+                                                </div>
+                                                <div class="text-xs text-gray-400 mt-0.5">
+                                                    <span>{{ tool.storage || '未指定位置' }}</span>
+                                                </div>
+                                                <!-- 新增：展開細節 (雖是手工具，但也可能有保養) -->
+                                                <details v-if="tool.maintenance || tool.usage_tips"
+                                                    class="mt-1 group/details">
+                                                    <summary
+                                                        class="text-[10px] text-gray-400 cursor-pointer hover:text-gray-600 list-none flex items-center gap-1">
+                                                        <i
+                                                            class="ph ph-caret-right group-open/details:rotate-90 transition-transform"></i>
+                                                        資訊
+                                                    </summary>
+                                                    <div
+                                                        class="text-xs text-gray-600 mt-1 pl-2 border-l-2 border-gray-200 space-y-1">
+                                                        <div v-if="tool.maintenance">🔧 {{ tool.maintenance }}</div>
+                                                        <div v-if="tool.usage_tips">💡 {{ tool.usage_tips }}</div>
+                                                    </div>
+                                                </details>
+                                            </div>
+                                        </div>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- C. 施工重點 -->
+                    <div v-show="viewMode === 'sop'">
+                        <div v-if="cart.length === 0" class="text-center py-12 text-gray-400">
+                            <i class="ph ph-clipboard-text text-6xl mb-4 opacity-30"></i>
+                            <p>請先加入工項，即可查看對應的施工SOP與驗收重點</p>
+                        </div>
+                        <div v-for="(item, idx) in cart" :key="idx"
+                            class="mb-6 bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                            <!-- Header -->
+                            <div
+                                class="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                                <h3 class="font-bold text-lg text-gray-800 flex items-center gap-2">
+                                    <span class="bg-indigo-600 text-white text-xs px-2 py-0.5 rounded">{{
+                                        item.task.category }}</span>
+                                    {{ item.task.task_name }}
+                                </h3>
+                                <div class="text-sm text-gray-500">數量: {{ item.qty }} {{ item.task.unit }}</div>
+                            </div>
+
+                            <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <!-- 左：施工要點 -->
+                                <div>
+                                    <h4 class="font-bold text-indigo-700 text-sm mb-2 flex items-center gap-2">
+                                        <i class="ph ph-hammer"></i> 施工要點 (SOP)
+                                    </h4>
+                                    <div
+                                        class="text-sm text-gray-600 whitespace-pre-wrap leading-relaxed pl-3 border-l-2 border-indigo-200 bg-indigo-50/30 p-2 rounded-r">
+                                        {{ item.task.sop_construction || '尚無資料' }}
+                                    </div>
+                                </div>
+
+                                <!-- 右：驗收重點 -->
+                                <div>
+                                    <h4 class="font-bold text-green-700 text-sm mb-2 flex items-center gap-2">
+                                        <i class="ph ph-magnifying-glass"></i> 驗收重點
+                                    </h4>
+                                    <div
+                                        class="text-sm text-gray-600 whitespace-pre-wrap leading-relaxed pl-3 border-l-2 border-green-200 bg-green-50/30 p-2 rounded-r">
+                                        {{ item.task.inspection_key || '尚無資料' }}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 底部：查驗標準 (若有) -->
+                            <div v-if="item.task.inspection_sample && item.task.inspection_sample !== '無'"
+                                class="px-5 pb-4">
+                                <h4 class="font-bold text-gray-500 text-xs mb-1 uppercase tracking-wide">
+                                    <i class="ph ph-info"></i> 補充標準/樣本
+                                </h4>
+                                <div
+                                    class="text-xs text-gray-500 whitespace-pre-wrap bg-gray-50 p-2 rounded border border-gray-100">
+                                    {{ item.task.inspection_sample }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- D. 配方管理 -->
+                    <div v-show="viewMode === 'recipes'">
+                        <div class="mb-4 flex justify-between items-center">
+                            <h3 class="font-bold text-lg">工項配方管理</h3>
+                            <select v-model="recipeManager.selectedTaskId" class="border rounded-lg px-3 py-2 w-64">
+                                <option value="">-- 選擇工項 --</option>
+                                <option v-for="task in db.tasks" :key="task.task_id" :value="task.task_id">
+                                    {{ task.task_name }} ({{ task.unit }})
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- 選擇工項後顯示配方 -->
+                        <div v-if="recipeManager.selectedTaskId" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                            <!-- 材料配方 -->
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <div class="flex justify-between items-center mb-3">
+                                    <h4 class="font-bold text-indigo-700 flex items-center gap-2">
+                                        <i class="ph ph-package"></i> 材料配方
+                                    </h4>
+                                    <div class="flex gap-2">
+                                        <span class="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded">
+                                            {{ getTaskMaterials(recipeManager.selectedTaskId).length }} 項
+                                        </span>
+                                        <button @click="openAddMaterialModal()"
+                                            class="text-xs bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700">
+                                            <i class="ph ph-plus"></i> 新增
+                                        </button>
+                                    </div>
+                                </div>
+                                <table class="w-full text-sm">
+                                    <thead class="bg-white text-gray-600">
+                                        <tr>
+                                            <th class="text-left p-2">材料</th>
+                                            <th class="text-right p-2 w-20">數量</th>
+                                            <th class="text-right p-2 w-20">損耗</th>
+                                            <th class="text-center p-2 w-12">耗材</th>
+                                            <th class="text-center p-2 w-12">刪除</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-200">
+                                        <tr v-for="(mat, idx) in getTaskMaterials(recipeManager.selectedTaskId)"
+                                            :key="mat.mat_id + '-' + idx" class="hover:bg-white group">
+                                            <td class="p-2">
+                                                <div class="font-medium text-indigo-600 cursor-pointer hover:underline"
+                                                    @click="showMaterialDetail(mat.mat_id)">
+                                                    {{ getMatName(mat.mat_id) }}
+                                                </div>
+                                                <div class="text-xs text-gray-400">{{ mat.spec }}</div>
+                                            </td>
+                                            <td class="p-2 text-right">
+                                                <input type="number" step="0.1" min="0" :value="mat.qty_per_unit"
+                                                    @change="updateMatRecipe(mat, 'qty_per_unit', parseFloat($event.target.value))"
+                                                    class="w-16 text-right border rounded px-1 py-0.5 text-sm">
+                                            </td>
+                                            <td class="p-2 text-right">
+                                                <input type="number" step="0.01" min="1" :value="mat.loss_rate"
+                                                    @change="updateMatRecipe(mat, 'loss_rate', parseFloat($event.target.value))"
+                                                    class="w-16 text-right border rounded px-1 py-0.5 text-sm">
+                                            </td>
+                                            <td class="p-2 text-center">
+                                                <input type="checkbox" :checked="mat.is_consumable === 'TRUE'"
+                                                    @change="updateMatRecipe(mat, 'is_consumable', $event.target.checked ? 'TRUE' : 'FALSE')"
+                                                    class="w-4 h-4 cursor-pointer">
+                                            </td>
+                                            <td class="p-2 text-center">
+                                                <button @click="deleteMatRecipe(mat)"
+                                                    class="text-red-500 hover:text-red-700 opacity-50 hover:opacity-100">
+                                                    <i class="ph ph-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr v-if="getTaskMaterials(recipeManager.selectedTaskId).length === 0">
+                                            <td colspan="5" class="p-4 text-center text-gray-400">
+                                                尚無材料配方，請點擊「新增」按鈕
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- 工具配方 -->
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <div class="flex justify-between items-center mb-3">
+                                    <h4 class="font-bold text-green-700 flex items-center gap-2">
+                                        <i class="ph ph-wrench"></i> 工具配方
+                                    </h4>
+                                    <div class="flex gap-2">
+                                        <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                                            {{ getTaskTools(recipeManager.selectedTaskId).length }} 項
+                                        </span>
+                                        <button @click="openAddToolModal()"
+                                            class="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700">
+                                            <i class="ph ph-plus"></i> 新增
+                                        </button>
+                                    </div>
+                                </div>
+                                <table class="w-full text-sm">
+                                    <thead class="bg-white text-gray-600">
+                                        <tr>
+                                            <th class="text-left p-2">工具</th>
+                                            <th class="text-center p-2 w-20">類型</th>
+                                            <th class="text-right p-2 w-14">數量</th>
+                                            <th class="text-center p-2 w-24">分配</th>
+                                            <th class="text-center p-2 w-12">刪除</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-200">
+                                        <tr v-for="(tool, idx) in getTaskTools(recipeManager.selectedTaskId)"
+                                            :key="tool.tool_id + '-' + idx" class="hover:bg-white group">
+                                            <td class="p-2 font-medium">{{ getToolName(tool.tool_id) }}</td>
+                                            <td class="p-2 text-center">
+                                                <select :value="tool.type"
+                                                    @change="updateToolRecipe(tool, 'type', $event.target.value)"
+                                                    class="text-xs border rounded px-1 py-0.5"
+                                                    :class="tool.type === '必備' ? 'bg-red-50 text-red-800' : 'bg-gray-50'">
+                                                    <option value="必備">必備</option>
+                                                    <option value="選用">選用</option>
+                                                </select>
+                                            </td>
+                                            <td class="p-2 text-right">
+                                                <input type="number" step="1" min="1" :value="tool.qty_avg"
+                                                    @change="updateToolRecipe(tool, 'qty_avg', parseInt($event.target.value))"
+                                                    class="w-12 text-right border rounded px-1 py-0.5 text-sm">
+                                            </td>
+                                            <td class="p-2 text-center">
+                                                <select :value="tool.calc_method"
+                                                    @change="updateToolRecipe(tool, 'calc_method', $event.target.value)"
+                                                    class="text-xs border rounded px-1 py-0.5">
+                                                    <option value="PerWorker">每人一套</option>
+                                                    <option value="Fixed">工地固定</option>
+                                                    <option value="Dynamic">依量計算</option>
+                                                </select>
+                                            </td>
+                                            <td class="p-2 text-center">
+                                                <button @click="deleteToolRecipe(tool)"
+                                                    class="text-red-500 hover:text-red-700 opacity-50 hover:opacity-100">
+                                                    <i class="ph ph-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr v-if="getTaskTools(recipeManager.selectedTaskId).length === 0">
+                                            <td colspan="5" class="p-4 text-center text-gray-400">
+                                                尚無工具配方，請點擊「新增」按鈕
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- 未選擇工項時的提示 -->
+                        <div v-else class="h-64 flex flex-col items-center justify-center text-gray-400">
+                            <i class="ph ph-note-pencil text-6xl mb-4"></i>
+                            <p>請從上方選擇一個工項來檢視配方</p>
+                        </div>
+
+                        <!-- 配方統計 -->
+                        <div class="mt-6 p-4 bg-indigo-50 rounded-lg">
+                            <div class="flex justify-around text-center">
+                                <div>
+                                    <div class="text-2xl font-bold text-indigo-700">{{ db.tasks.length }}</div>
+                                    <div class="text-xs text-gray-500">工項總數</div>
+                                </div>
+                                <div>
+                                    <div class="text-2xl font-bold text-indigo-700">{{ db.mapExMaterials.length }}</div>
+                                    <div class="text-xs text-gray-500">材料配方</div>
+                                </div>
+                                <div>
+                                    <div class="text-2xl font-bold text-indigo-700">{{ db.mapExTools.length }}</div>
+                                    <div class="text-xs text-gray-500">工具配方</div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 儲存按鈕 -->
+                        <div class="mt-4 text-center">
+                            <button @click="saveAllRecipes()" :disabled="loading || !recipeManager.hasChanges"
+                                :class="loading ? 'bg-gray-400 cursor-wait' : (recipeManager.hasChanges ? 'bg-green-500 hover:bg-green-600 animate-pulse' : 'bg-gray-400 cursor-not-allowed')"
+                                class="text-white px-6 py-2 rounded-lg font-bold transition-colors disabled:opacity-60">
+                                <i v-if="loading" class="ph ph-spinner animate-spin mr-2"></i>
+                                <i v-else class="ph ph-floppy-disk mr-2"></i>
+                                {{ loading ? '儲存中...' : (recipeManager.hasChanges ? '儲存變更' : '無變更') }}
+                            </button>
+                            <p v-if="recipeManager.hasChanges" class="text-xs text-orange-500 mt-2">
+                                ⚠️ 有未儲存的變更
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- E. 資料管理 -->
+                    <div v-show="viewMode === 'dataManager'">
+                        <!-- 子分頁切換 -->
+                        <div class="flex gap-2 mb-4 border-b pb-3">
+                            <button v-for="tab in ['tasks', 'tools', 'materials']" :key="tab"
+                                @click="dataManager.activeTab = tab"
+                                :class="dataManager.activeTab === tab ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                                class="px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                {{ tab === 'tasks' ? '工項管理' : tab === 'tools' ? '工具管理' : '材料管理' }}
+                            </button>
+                        </div>
+
+                        <!-- 工項管理 -->
+                        <div v-if="dataManager.activeTab === 'tasks'" class="space-y-4">
+                            <div class="flex justify-between items-center">
+                                <h3 class="font-bold text-lg">工項清單 ({{ db.tasks.length }} 筆)</h3>
+                                <button @click="openTaskModal('create')"
+                                    class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 flex items-center gap-1">
+                                    <i class="ph ph-plus"></i> 新增工項
+                                </button>
+                            </div>
+
+                            <!-- 搜尋與篩選 -->
+                            <div class="flex gap-2">
+                                <input v-model="dataManager.searchTask" type="text" placeholder="搜尋工項名稱..."
+                                    class="flex-1 border rounded-lg px-3 py-2">
+                                <select v-model="dataManager.filterCategory" class="border rounded-lg px-3 py-2">
+                                    <option value="">全部分類</option>
+                                    <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
+                                </select>
+                            </div>
+
+                            <!-- 工項表格 -->
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-gray-100">
+                                        <tr>
+                                            <th class="text-left p-3">工項名稱</th>
+                                            <th class="text-left p-3">分類</th>
+                                            <th class="text-left p-3">階段</th>
+                                            <th class="text-left p-3">單位</th>
+                                            <th class="text-center p-3 w-24">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y">
+                                        <tr v-for="task in filteredDbTasks" :key="task.task_id"
+                                            class="hover:bg-gray-50">
+                                            <td class="p-3 font-medium">{{ task.task_name }}</td>
+                                            <td class="p-3">{{ task.category }}</td>
+                                            <td class="p-3">{{ task.phase }}</td>
+                                            <td class="p-3">{{ task.unit }}</td>
+                                            <td class="p-3 text-center">
+                                                <button @click="openTaskModal('edit', task)"
+                                                    class="text-indigo-600 hover:text-indigo-800 p-1">
+                                                    <i class="ph ph-pencil"></i>
+                                                </button>
+                                                <button @click="deleteTask(task)"
+                                                    class="text-red-500 hover:text-red-700 p-1 ml-1">
+                                                    <i class="ph ph-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr v-if="filteredDbTasks.length === 0">
+                                            <td colspan="5" class="p-8 text-center text-gray-400">
+                                                無符合條件的工項
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- 工具管理 -->
+                        <div v-if="dataManager.activeTab === 'tools'" class="space-y-4">
+                            <div class="flex justify-between items-center">
+                                <h3 class="font-bold text-lg">工具清單 ({{ db.tools.length }} 筆)</h3>
+                                <button @click="openToolModal('create')"
+                                    class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-1">
+                                    <i class="ph ph-plus"></i> 新增工具
+                                </button>
+                            </div>
+
+                            <div class="flex gap-2">
+                                <input v-model="dataManager.searchTool" type="text" placeholder="搜尋工具名稱..."
+                                    class="flex-1 border rounded-lg px-3 py-2">
+                            </div>
+
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-gray-100">
+                                        <tr>
+                                            <th class="text-left p-3">工具名稱</th>
+                                            <th class="text-left p-3">分類</th>
+                                            <th class="text-left p-3">動力規格</th>
+                                            <th class="text-left p-3">收納位置</th>
+                                            <th class="text-center p-3 w-24">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y">
+                                        <tr v-for="tool in filteredDbTools" :key="tool.tool_id"
+                                            class="hover:bg-gray-50">
+                                            <td class="p-3 font-medium">{{ tool.name }}</td>
+                                            <td class="p-3">{{ tool.category }}</td>
+                                            <td class="p-3">
+                                                <span v-if="tool.power_spec" class="px-2 py-0.5 rounded text-xs"
+                                                    :class="getPowerClass(tool.power_spec)">{{ tool.power_spec }}</span>
+                                            </td>
+                                            <td class="p-3 text-gray-500">{{ tool.storage_box }}</td>
+                                            <td class="p-3 text-center">
+                                                <button @click="openToolModal('edit', tool)"
+                                                    class="text-green-600 hover:text-green-800 p-1">
+                                                    <i class="ph ph-pencil"></i>
+                                                </button>
+                                                <button @click="deleteTool(tool)"
+                                                    class="text-red-500 hover:text-red-700 p-1 ml-1">
+                                                    <i class="ph ph-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr v-if="filteredDbTools.length === 0">
+                                            <td colspan="5" class="p-8 text-center text-gray-400">
+                                                無符合條件的工具
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- 材料管理 -->
+                        <div v-if="dataManager.activeTab === 'materials'" class="space-y-4">
+                            <div class="flex justify-between items-center">
+                                <h3 class="font-bold text-lg">材料清單 ({{ db.materials.length }} 筆)</h3>
+                                <button @click="openMaterialModal('create')"
+                                    class="bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 flex items-center gap-1">
+                                    <i class="ph ph-plus"></i> 新增材料
+                                </button>
+                            </div>
+
+                            <div class="flex gap-2">
+                                <input v-model="dataManager.searchMaterial" type="text" placeholder="搜尋材料名稱..."
+                                    class="flex-1 border rounded-lg px-3 py-2">
+                            </div>
+
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-gray-100">
+                                        <tr>
+                                            <th class="text-left p-3">材料名稱</th>
+                                            <th class="text-left p-3">規格</th>
+                                            <th class="text-left p-3">單位</th>
+                                            <th class="text-left p-3">供應商</th>
+                                            <th class="text-center p-3 w-24">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y">
+                                        <tr v-for="mat in filteredDbMaterials" :key="mat.mat_id"
+                                            class="hover:bg-gray-50">
+                                            <td class="p-3 font-medium">{{ mat.name }}</td>
+                                            <td class="p-3">{{ mat.spec || mat.spec_order }}</td>
+                                            <td class="p-3">{{ mat.unit }}</td>
+                                            <td class="p-3 text-gray-500">{{ mat.vendor_ref }}</td>
+                                            <td class="p-3 text-center">
+                                                <button @click="openMaterialModal('edit', mat)"
+                                                    class="text-amber-600 hover:text-amber-800 p-1">
+                                                    <i class="ph ph-pencil"></i>
+                                                </button>
+                                                <button @click="deleteMaterial(mat)"
+                                                    class="text-red-500 hover:text-red-700 p-1 ml-1">
+                                                    <i class="ph ph-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr v-if="filteredDbMaterials.length === 0">
+                                            <td colspan="5" class="p-8 text-center text-gray-400">
+                                                無符合條件的材料
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- 新增材料配方 Modal -->
+            <div v-if="recipeManager.addMatModal.show"
+                class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+                @click.self="recipeManager.addMatModal.show = false">
+                <div class="bg-white rounded-xl shadow-2xl max-w-md w-full">
+                    <div class="bg-indigo-600 text-white p-4 rounded-t-xl">
+                        <h3 class="font-bold text-lg">新增材料配方</h3>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">選擇材料</label>
+                            <select v-model="recipeManager.addMatModal.selectedMatId"
+                                class="w-full border rounded-lg px-3 py-2">
+                                <option value="">-- 請選擇 --</option>
+                                <option v-for="mat in db.materials" :key="mat.mat_id" :value="mat.mat_id">
+                                    {{ mat.name }} ({{ mat.spec }})
+                                </option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">用途說明</label>
+                            <input type="text" v-model="recipeManager.addMatModal.spec" placeholder="例如：天花骨架"
+                                class="w-full border rounded-lg px-3 py-2">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">每單位數量</label>
+                                <input type="number" step="0.1" min="0" v-model.number="recipeManager.addMatModal.qty"
+                                    class="w-full border rounded-lg px-3 py-2">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">損耗率</label>
+                                <input type="number" step="0.01" min="1" v-model.number="recipeManager.addMatModal.loss"
+                                    class="w-full border rounded-lg px-3 py-2">
+                            </div>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" v-model="recipeManager.addMatModal.isConsumable" class="w-4 h-4 mr-2"
+                                id="isConsumable">
+                            <label for="isConsumable" class="text-sm text-gray-700">這是耗材（每次使用皆消耗）</label>
+                        </div>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded-b-xl flex justify-end gap-3">
+                        <button @click="recipeManager.addMatModal.show = false"
+                            class="px-4 py-2 text-gray-600 hover:text-gray-800">取消</button>
+                        <button @click="addMaterialRecipe()"
+                            class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">新增</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 新增工具配方 Modal -->
+            <div v-if="recipeManager.addToolModal.show"
+                class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+                @click.self="recipeManager.addToolModal.show = false">
+                <div class="bg-white rounded-xl shadow-2xl max-w-md w-full">
+                    <div class="bg-green-600 text-white p-4 rounded-t-xl">
+                        <h3 class="font-bold text-lg">新增工具配方</h3>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">選擇工具</label>
+                            <select v-model="recipeManager.addToolModal.selectedToolId"
+                                class="w-full border rounded-lg px-3 py-2">
+                                <option value="">-- 請選擇 --</option>
+                                <option v-for="tool in db.tools" :key="tool.tool_id" :value="tool.tool_id">
+                                    {{ tool.name }}
+                                </option>
+                            </select>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">類型</label>
+                                <select v-model="recipeManager.addToolModal.type"
+                                    class="w-full border rounded-lg px-3 py-2">
+                                    <option value="必備">必備</option>
+                                    <option value="選用">選用</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">數量</label>
+                                <input type="number" step="1" min="1" v-model.number="recipeManager.addToolModal.qty"
+                                    class="w-full border rounded-lg px-3 py-2">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">分配方式</label>
+                            <select v-model="recipeManager.addToolModal.calcMethod"
+                                class="w-full border rounded-lg px-3 py-2">
+                                <option value="PerWorker">每人一套 (每位師傅各帶一套)</option>
+                                <option value="Fixed">工地固定 (整個工地共用)</option>
+                                <option value="Dynamic">依量計算 (根據工程量動態計算)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded-b-xl flex justify-end gap-3">
+                        <button @click="recipeManager.addToolModal.show = false"
+                            class="px-4 py-2 text-gray-600 hover:text-gray-800">取消</button>
+                        <button @click="addToolRecipe()"
+                            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">新增</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 材料詳情 Modal -->
+            <div v-if="recipeManager.matDetailModal.show"
+                class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+                @click.self="recipeManager.matDetailModal.show = false">
+                <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full">
+                    <div class="bg-indigo-600 text-white p-4 rounded-t-xl flex justify-between items-center">
+                        <h3 class="font-bold text-lg">{{ recipeManager.matDetailModal.material?.name }}</h3>
+                        <button @click="recipeManager.matDetailModal.show = false"
+                            class="text-white/70 hover:text-white">
+                            <i class="ph ph-x text-xl"></i>
+                        </button>
+                    </div>
+                    <div class="p-6" v-if="recipeManager.matDetailModal.material">
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div><span class="text-gray-500">材料代號：</span>{{ recipeManager.matDetailModal.material.mat_id
+                                }}
+                            </div>
+                            <div><span class="text-gray-500">類別：</span>{{ recipeManager.matDetailModal.material.category
+                                }}
+                            </div>
+                            <div><span class="text-gray-500">規格：</span>{{ recipeManager.matDetailModal.material.spec }}
+                            </div>
+                            <div><span class="text-gray-500">單位：</span>{{ recipeManager.matDetailModal.material.unit }}
+                            </div>
+                            <div><span class="text-gray-500">單價：</span>${{ recipeManager.matDetailModal.material.price
+                                }}</div>
+                            <div><span class="text-gray-500">供應商：</span>{{
+                                recipeManager.matDetailModal.material.supplier }}
+                            </div>
+                            <div class="col-span-2"><span class="text-gray-500">材質：</span>{{
+                                recipeManager.matDetailModal.material.material_type }}</div>
+                            <div class="col-span-2"><span class="text-gray-500">備註：</span>{{
+                                recipeManager.matDetailModal.material.notes || '-' }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 圖片搜尋 Modal (v2.0: 網格顯示) -->
+            <div v-if="imageModal.show" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+                @click.self="imageModal.show = false">
+                <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden animate-[fadeIn_0.2s]">
+                    <!-- Modal Header -->
+                    <div class="bg-indigo-600 text-white p-4">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h3 class="font-bold text-lg">{{ imageModal.material?.name }}</h3>
+                                <p class="text-indigo-200 text-sm">{{ imageModal.material?.spec || '選擇材料圖片' }}</p>
+                            </div>
+                            <button @click="imageModal.show = false" class="text-white/70 hover:text-white">
+                                <i class="ph ph-x text-2xl"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="p-6 space-y-4">
+                        <!-- 已儲存的圖片區 -->
+                        <div v-if="imageModal.material?.image_url"
+                            class="bg-green-50 border border-green-200 rounded-lg p-4">
+                            <div class="flex items-center gap-4">
+                                <img :src="imageModal.material.image_url"
+                                    class="w-20 h-20 object-cover rounded-lg border-2 border-green-400"
+                                    @error="imageModal.material.image_url = null">
+                                <div class="flex-1">
+                                    <p class="text-green-700 font-medium"><i class="ph ph-check-circle mr-1"></i>已儲存圖片
+                                    </p>
+                                    <p class="text-green-600 text-xs truncate">{{ imageModal.material.image_url }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 搜尋按鈕 -->
+                        <button @click="searchImages" :disabled="imageModal.loading"
+                            class="w-full py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">
+                            <i v-if="imageModal.loading" class="ph ph-spinner animate-spin mr-2"></i>
+                            <i v-else class="ph ph-magnifying-glass mr-2"></i>
+                            {{ imageModal.loading ? '搜尋中...' : '搜尋網路圖片 (20張)' }}
+                        </button>
+
+                        <!-- 圖片網格區 -->
+                        <div v-if="imageModal.imagePool.length > 0" class="space-y-4">
+                            <!-- 網格顯示 5 張 -->
+                            <div class="grid grid-cols-5 gap-2">
+                                <div v-for="(img, idx) in currentPageImages" :key="idx"
+                                    @click="selectImage(getPoolIndex(idx))" :class="[
+                                        'relative aspect-square rounded-lg overflow-hidden cursor-pointer border-3 transition-all',
+                                        imageModal.selectedIndex === getPoolIndex(idx) 
+                                            ? 'border-green-500 ring-2 ring-green-300 scale-105' 
+                                            : 'border-transparent hover:border-indigo-300'
+                                    ]">
+                                    <img :src="img" class="w-full h-full object-cover"
+                                        @error="$event.target.src='data:image/svg+xml,...'">
+                                    <!-- 選中標記 -->
+                                    <div v-if="imageModal.selectedIndex === getPoolIndex(idx)"
+                                        class="absolute inset-0 bg-green-500/20 flex items-center justify-center">
+                                        <i class="ph ph-check-circle text-green-500 text-3xl drop-shadow-lg"></i>
+                                    </div>
+                                    <!-- 序號 -->
+                                    <div
+                                        class="absolute bottom-1 right-1 bg-black/50 text-white text-xs px-1.5 py-0.5 rounded">
+                                        {{ getPoolIndex(idx) + 1 }}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 分頁控制 -->
+                            <div class="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                                <button @click="changePage(-1)" :disabled="imageModal.currentPage === 0"
+                                    class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors disabled:opacity-30">
+                                    <i class="ph ph-caret-left"></i> 上一頁
+                                </button>
+                                <span class="text-sm text-gray-600">
+                                    第 {{ imageModal.currentPage + 1 }} / {{ totalPages }} 頁
+                                    <span class="text-gray-400 ml-2">(共 {{ imageModal.imagePool.length }} 張)</span>
+                                </span>
+                                <button @click="changePage(1)" :disabled="imageModal.currentPage >= totalPages - 1"
+                                    class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors disabled:opacity-30">
+                                    下一頁 <i class="ph ph-caret-right"></i>
+                                </button>
+                            </div>
+
+                            <!-- 儲存按鈕 -->
+                            <button @click="saveSelectedImage"
+                                :disabled="imageModal.selectedIndex === null || imageModal.loading"
+                                class="w-full py-3 bg-green-500 hover:bg-green-600 text-white font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                <i class="ph ph-check-circle mr-2"></i>
+                                {{ imageModal.selectedIndex !== null ? '儲存選中的圖片 (#' + (imageModal.selectedIndex + 1) +
+                                ')' : '請先點選圖片' }}
+                            </button>
+                        </div>
+
+                        <!-- 無圖片提示 -->
+                        <div v-else-if="!imageModal.loading && imageModal.imagePool.length === 0 && !imageModal.material?.image_url"
+                            class="h-40 flex flex-col items-center justify-center text-gray-400">
+                            <i class="ph ph-image text-5xl mb-2"></i>
+                            <p>點擊上方按鈕搜尋圖片</p>
+                        </div>
+                    </div>
+
+                    <!-- Modal Footer -->
+                    <div class="border-t p-3 bg-gray-50 text-center text-xs text-gray-400">
+                        <i class="ph ph-info mr-1"></i>
+                        圖片來源：Google 圖片搜尋 | 每日免費 100 次
+                    </div>
+                </div>
+            </div>
+
+            <!-- 工項編輯 Modal -->
+            <div v-if="dataManager.taskModal.show"
+                class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+                @mousedown.self="dataManager.taskModal.show = false">
+                <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                    <div class="bg-indigo-600 text-white p-4 rounded-t-xl flex justify-between items-center">
+                        <h3 class="font-bold text-lg">
+                            {{ dataManager.taskModal.mode === 'create' ? '新增工項' : '編輯工項' }}
+                        </h3>
+                        <button @click="dataManager.taskModal.show = false" class="text-white/80 hover:text-white">
+                            <i class="ph ph-x text-xl"></i>
+                        </button>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">工項代號 *</label>
+                                <input v-model="dataManager.taskModal.data.task_id" type="text"
+                                    :disabled="dataManager.taskModal.mode === 'edit'"
+                                    class="w-full border rounded-lg px-3 py-2 disabled:bg-gray-100"
+                                    placeholder="例如：t_ceiling_lv1">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">工項名稱 *</label>
+                                <input v-model="dataManager.taskModal.data.task_name" type="text"
+                                    class="w-full border rounded-lg px-3 py-2" placeholder="例如：平釘天花">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">分類</label>
+                                <select v-model="dataManager.taskModal.data.category"
+                                    class="w-full border rounded-lg px-3 py-2">
+                                    <option v-for="cat in taskCategoryOptions" :key="cat" :value="cat">{{ cat }}
+                                    </option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">階段</label>
+                                <select v-model="dataManager.taskModal.data.phase"
+                                    class="w-full border rounded-lg px-3 py-2">
+                                    <option v-for="p in phases" :key="p" :value="p">{{ p }}</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">計算單位</label>
+                                <input v-model="dataManager.taskModal.data.unit" type="text"
+                                    class="w-full border rounded-lg px-3 py-2" placeholder="坪 / 尺 / 式">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">施工要點 (SOP)</label>
+                            <textarea v-model="dataManager.taskModal.data.sop_construction" rows="3"
+                                class="w-full border rounded-lg px-3 py-2" placeholder="輸入施工步驟與注意事項..."></textarea>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">驗收重點</label>
+                            <textarea v-model="dataManager.taskModal.data.inspection_key" rows="2"
+                                class="w-full border rounded-lg px-3 py-2" placeholder="輸入驗收檢核項目..."></textarea>
+                        </div>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded-b-xl flex justify-end gap-3">
+                        <button @click="dataManager.taskModal.show = false"
+                            class="px-4 py-2 text-gray-600 hover:text-gray-800">取消</button>
+                        <button @click="saveTask()" :disabled="loading"
+                            class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                            <i v-if="loading" class="ph ph-spinner animate-spin mr-1"></i>
+                            {{ dataManager.taskModal.mode === 'create' ? '新增' : '儲存' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 工具編輯 Modal -->
+            <div v-if="dataManager.toolModal.show"
+                class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+                @mousedown.self="dataManager.toolModal.show = false">
+                <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                    <div class="bg-green-600 text-white p-4 rounded-t-xl flex justify-between items-center">
+                        <h3 class="font-bold text-lg">
+                            {{ dataManager.toolModal.mode === 'create' ? '新增工具' : '編輯工具' }}
+                        </h3>
+                        <button @click="dataManager.toolModal.show = false" class="text-white/80 hover:text-white">
+                            <i class="ph ph-x text-xl"></i>
+                        </button>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">工具代號 *</label>
+                                <input v-model="dataManager.toolModal.data.tool_id" type="text"
+                                    :disabled="dataManager.toolModal.mode === 'edit'"
+                                    class="w-full border rounded-lg px-3 py-2 disabled:bg-gray-100"
+                                    placeholder="例如：t_compressor">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">工具名稱 *</label>
+                                <input v-model="dataManager.toolModal.data.name" type="text"
+                                    class="w-full border rounded-lg px-3 py-2" placeholder="例如：空壓機">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">分類</label>
+                                <select v-model="dataManager.toolModal.data.category"
+                                    class="w-full border rounded-lg px-3 py-2">
+                                    <option v-for="cat in toolCategoryOptions" :key="cat" :value="cat">{{ cat }}
+                                    </option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">動力規格</label>
+                                <select v-model="dataManager.toolModal.data.power_spec"
+                                    class="w-full border rounded-lg px-3 py-2">
+                                    <option value="">無</option>
+                                    <option value="110V">110V</option>
+                                    <option value="220V">220V</option>
+                                    <option value="18V">18V 電池</option>
+                                    <option value="Air">氣動</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">收納位置</label>
+                                <input v-model="dataManager.toolModal.data.storage_box" type="text"
+                                    class="w-full border rounded-lg px-3 py-2" placeholder="例如：工具箱 A">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">保養說明</label>
+                            <textarea v-model="dataManager.toolModal.data.maintenance" rows="2"
+                                class="w-full border rounded-lg px-3 py-2" placeholder="例如：每日洩水、定期上油..."></textarea>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">使用要訣</label>
+                            <textarea v-model="dataManager.toolModal.data.usage_tips" rows="2"
+                                class="w-full border rounded-lg px-3 py-2" placeholder="例如：壓力設定 8kg..."></textarea>
+                        </div>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded-b-xl flex justify-end gap-3">
+                        <button @click="dataManager.toolModal.show = false"
+                            class="px-4 py-2 text-gray-600 hover:text-gray-800">取消</button>
+                        <button @click="saveTool()" :disabled="loading"
+                            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+                            <i v-if="loading" class="ph ph-spinner animate-spin mr-1"></i>
+                            {{ dataManager.toolModal.mode === 'create' ? '新增' : '儲存' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 材料編輯 Modal -->
+            <div v-if="dataManager.materialModal.show"
+                class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+                @mousedown.self="dataManager.materialModal.show = false">
+                <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                    <div class="bg-amber-600 text-white p-4 rounded-t-xl flex justify-between items-center">
+                        <h3 class="font-bold text-lg">
+                            {{ dataManager.materialModal.mode === 'create' ? '新增材料' : '編輯材料' }}
+                        </h3>
+                        <button @click="dataManager.materialModal.show = false" class="text-white/80 hover:text-white">
+                            <i class="ph ph-x text-xl"></i>
+                        </button>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">材料代號 *</label>
+                                <input v-model="dataManager.materialModal.data.mat_id" type="text"
+                                    :disabled="dataManager.materialModal.mode === 'edit'"
+                                    class="w-full border rounded-lg px-3 py-2 disabled:bg-gray-100"
+                                    placeholder="例如：m_silicate_6mm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">材料名稱 *</label>
+                                <input v-model="dataManager.materialModal.data.name" type="text"
+                                    class="w-full border rounded-lg px-3 py-2" placeholder="例如：矽酸鈣板">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">規格</label>
+                                <input v-model="dataManager.materialModal.data.spec_order" type="text"
+                                    class="w-full border rounded-lg px-3 py-2" placeholder="例如：3x6尺 6mm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">品牌</label>
+                                <input v-model="dataManager.materialModal.data.brand" type="text"
+                                    class="w-full border rounded-lg px-3 py-2" placeholder="例如：日本麗仕">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">單位</label>
+                                <input v-model="dataManager.materialModal.data.unit" type="text"
+                                    class="w-full border rounded-lg px-3 py-2" placeholder="例如：張、支、箱">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">分類</label>
+                                <select v-model="dataManager.materialModal.data.category"
+                                    class="w-full border rounded-lg px-3 py-2">
+                                    <option v-for="cat in materialCategoryOptions" :key="cat" :value="cat">{{ cat }}
+                                    </option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">供應商</label>
+                                <input v-model="dataManager.materialModal.data.vendor_ref" type="text"
+                                    class="w-full border rounded-lg px-3 py-2" placeholder="例如：建材行A">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">預估單價</label>
+                                <input v-model.number="dataManager.materialModal.data.price_estimate" type="number"
+                                    class="w-full border rounded-lg px-3 py-2" placeholder="0">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">包裝規格</label>
+                            <input v-model="dataManager.materialModal.data.pack_desc" type="text"
+                                class="w-full border rounded-lg px-3 py-2" placeholder="例如：一箱 8 片">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">備註說明</label>
+                            <textarea v-model="dataManager.materialModal.data.note" rows="2"
+                                class="w-full border rounded-lg px-3 py-2" placeholder="其他備註..."></textarea>
+                        </div>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded-b-xl flex justify-end gap-3">
+                        <button @click="dataManager.materialModal.show = false"
+                            class="px-4 py-2 text-gray-600 hover:text-gray-800">取消</button>
+                        <button @click="saveMaterial()" :disabled="loading"
+                            class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50">
+                            <i v-if="loading" class="ph ph-spinner animate-spin mr-1"></i>
+                            {{ dataManager.materialModal.mode === 'create' ? '新增' : '儲存' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Toast 通知容器 -->
+            <div class="fixed bottom-4 right-4 z-[100] flex flex-col gap-2">
+                <transition-group name="toast">
+                    <div v-for="toast in toasts" :key="toast.id" :class="[
+                            'px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 min-w-[280px] max-w-sm',
+                            toast.type === 'success' ? 'bg-green-500 text-white' : '',
+                            toast.type === 'error' ? 'bg-red-500 text-white' : '',
+                            toast.type === 'warning' ? 'bg-yellow-500 text-white' : '',
+                            toast.type === 'info' ? 'bg-indigo-500 text-white' : ''
+                        ]">
+                        <i :class="[
+                            'ph text-lg',
+                            toast.type === 'success' ? 'ph-check-circle' : '',
+                            toast.type === 'error' ? 'ph-x-circle' : '',
+                            toast.type === 'warning' ? 'ph-warning' : '',
+                            toast.type === 'info' ? 'ph-info' : ''
+                        ]"></i>
+                        <span class="flex-1 text-sm">{{ toast.message }}</span>
+                        <button @click="removeToast(toast.id)" class="text-white/70 hover:text-white">
+                            <i class="ph ph-x"></i>
+                        </button>
+                    </div>
+                </transition-group>
+            </div>
+        </main>
+    </div><!-- end #app -->
+
+    <script>
+        const { createApp, ref, computed, onMounted, reactive, watch } = Vue;
+
+        // ═══════════════════════════════════════════════════════════
+        // 📌 應用程式配置 (集中管理，便於維護與環境切換)
+        // ═══════════════════════════════════════════════════════════
+        const APP_CONFIG = {
+            VERSION: '2.0',
+            // Google Sheets 資料來源
+            SHEET_ID: '1EXy83IaR378dX68ppltYL0KdD76zZFf40we2AYXwUh8',
+            // Google Apps Script 後端 API (圖片搜尋已移至後端處理)
+            GAS_API_URL: 'https://script.google.com/macros/s/AKfycbyjDiSXzTDfakkzehN5eYPxJ-JDROgc7EBoTGSOmhBoustu6_n-7FVEn7Xfj9Sanr2h/exec'
+        };
+        // ═══════════════════════════════════════════════════════════
+
+        createApp({
+            setup() {
+                // 狀態
+                const loading = ref(true);
+                const viewMode = ref('materials'); // materials, tools, sop
+                const project = reactive({
+                    name: '',
+                    phase: 'ALL',
+                    allocMode: 'share' // share, individual
+                });
+
+                // 資料庫 (Raw Data)
+                const db = reactive({
+                    materials: [],      // DB_Materials
+                    tools: [],          // DB_Tools
+                    tasks: [],          // DB_Tasks
+                    mapExMaterials: [], // Map_Task_Materials
+                    mapExTools: []      // Map_Task_Tools
+                });
+
+                // UI 狀態
+                const filterCategory = ref('全部');
+                const selectedTask = ref(null);
+                const inputQty = ref(1);
+                const cart = ref([]);
+
+                // === Toast 通知系統 ===
+                const toasts = ref([]);
+                let toastId = 0;
+
+                const showToast = (message, type = 'info', duration = 3000) => {
+                    const id = ++toastId;
+                    toasts.value.push({ id, message, type });
+                    if (duration > 0) {
+                        setTimeout(() => removeToast(id), duration);
+                    }
+                };
+
+                const removeToast = (id) => {
+                    const idx = toasts.value.findIndex(t => t.id === id);
+                    if (idx > -1) toasts.value.splice(idx, 1);
+                };
+
+                // === 資料管理狀態 ===
+                const phases = ['01_保護', '02_拆除', '03_木作', '04_水電', '05_泥作', '06_油漆', '07_系統櫃', '08_清潔'];
+
+                const dataManager = reactive({
+                    activeTab: 'tasks',
+                    searchTask: '',
+                    searchTool: '',
+                    searchMaterial: '',
+                    filterCategory: '',
+                    taskModal: { show: false, mode: 'create', data: {} },
+                    toolModal: { show: false, mode: 'create', data: {} },
+                    materialModal: { show: false, mode: 'create', data: {} }
+                });
+
+                // 篩選後的清單
+                const filteredDbTasks = computed(() => {
+                    let list = db.tasks;
+                    if (dataManager.searchTask) {
+                        const keyword = dataManager.searchTask.toLowerCase();
+                        list = list.filter(t => t.task_name?.toLowerCase().includes(keyword));
+                    }
+                    if (dataManager.filterCategory) {
+                        list = list.filter(t => t.category === dataManager.filterCategory);
+                    }
+                    return list;
+                });
+
+                const filteredDbTools = computed(() => {
+                    let list = db.tools;
+                    if (dataManager.searchTool) {
+                        const keyword = dataManager.searchTool.toLowerCase();
+                        list = list.filter(t => t.name?.toLowerCase().includes(keyword));
+                    }
+                    return list;
+                });
+
+                const filteredDbMaterials = computed(() => {
+                    let list = db.materials;
+                    if (dataManager.searchMaterial) {
+                        const keyword = dataManager.searchMaterial.toLowerCase();
+                        list = list.filter(m => m.name?.toLowerCase().includes(keyword));
+                    }
+                    return list;
+                });
+
+                // 動力規格顏色
+                const getPowerClass = (power) => {
+                    if (!power) return 'bg-gray-100 text-gray-600';
+                    if (power.includes('110V') || power.includes('220V')) return 'bg-blue-100 text-blue-700';
+                    if (power.includes('18V')) return 'bg-purple-100 text-purple-700';
+                    if (power === 'Air') return 'bg-green-100 text-green-700';
+                    return 'bg-gray-100 text-gray-600';
+                };
+
+                // === 通用函式：從資料中擷取唯一選項 ===
+                // 用於動態生成下拉選單，避免硬編碼選項與資料不符造成空白
+                const getUniqueOptions = (dataArray, fieldName, defaultOptions = []) => {
+                    // 從現有資料中擷取該欄位的所有唯一值
+                    const valuesFromData = new Set(
+                        dataArray
+                            .map(item => item[fieldName])
+                            .filter(val => val !== undefined && val !== null && val !== '')
+                    );
+                    // 合併預設選項（確保新建時有基本選項）
+                    defaultOptions.forEach(opt => valuesFromData.add(opt));
+                    // 排序後回傳陣列
+                    return [...valuesFromData].sort();
+                };
+
+                // 動態選單: 工項分類
+                const taskCategoryOptions = computed(() =>
+                    getUniqueOptions(db.tasks, 'category', ['木作', '油漆', '水電', '泥作', '系統櫃', '拆除', '保護', '其他'])
+                );
+
+                // 動態選單: 工具分類
+                const toolCategoryOptions = computed(() =>
+                    getUniqueOptions(db.tools, 'category', ['電動工具', '氣動工具', '手工具', '量測工具', '五金配件', '其他'])
+                );
+
+                // 動態選單: 材料分類
+                const materialCategoryOptions = computed(() =>
+                    getUniqueOptions(db.materials, 'category', ['板材', '角材', '五金', '油漆', '填縫料', '其他'])
+                );
+
+                // === GAS API 整合 === (使用 APP_CONFIG)
+                const GAS_API_URL = APP_CONFIG.GAS_API_URL;
+
+                const callBackend = async (action, payload = {}) => {
+                    console.log(`[API] Call ${action}`, payload);
+                    const postData = JSON.stringify({ action, ...payload });
+                    try {
+                        const res = await fetch(GAS_API_URL, {
+                            method: 'POST',
+                            redirect: 'follow', // GAS Web App 導向
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 避開 CORS preflight
+                            body: postData
+                        });
+                        const data = await res.json();
+                        console.log(`[API] Result:`, data);
+                        if (data.status === 'error') throw new Error(data.message);
+                        return data;
+                    } catch (e) {
+                        console.error(`[API] Error:`, e);
+                        if (e.name === 'SyntaxError') {
+                            // CORS blocked response text usually causes SyntaxError on json()
+                            // but headers might have succeeded.
+                            console.warn('Response blocked by CORS, but request likely sent.');
+                            return { status: 'unknown' };
+                        }
+                        throw e;
+                    }
+                };
+
+                const setupDatabase = async () => {
+                    if (!confirm("確定要重置資料庫嗎？\n\n警告：這將會清除所有現有資料並還原為預設值！")) return;
+                    loading.value = true;
+                    try {
+                        await callBackend('setup_db');
+                        alert("初始化成功！請重新整理頁面。");
+                        location.reload();
+                    } catch (e) {
+                        alert("初始化失敗: " + e.message);
+                        loading.value = false;
+                    }
+                };
+
+                // === 配方管理功能 ===
+                const recipeManager = reactive({
+                    selectedTaskId: '',
+                    // 新增材料 Modal
+                    addMatModal: {
+                        show: false,
+                        selectedMatId: '',
+                        spec: '',
+                        qty: 1,
+                        loss: 1.1,
+                        isConsumable: false
+                    },
+                    // 新增工具 Modal
+                    addToolModal: {
+                        show: false,
+                        selectedToolId: '',
+                        type: '必備',
+                        qty: 1,
+                        calcMethod: 'PerWorker'
+                    },
+                    // 材料詳情 Modal
+                    matDetailModal: {
+                        show: false,
+                        material: null
+                    },
+                    // 修改標記
+                    hasChanges: false
+                });
+
+                // 取得指定工項的材料配方
+                const getTaskMaterials = (taskId) => {
+                    if (!taskId) return [];
+                    return db.mapExMaterials.filter(m => m.task_id === taskId);
+                };
+
+                // 取得指定工項的工具配方
+                const getTaskTools = (taskId) => {
+                    if (!taskId) return [];
+                    return db.mapExTools.filter(t => t.task_id === taskId);
+                };
+
+                // 根據 mat_id 取得材料名稱
+                const getMatName = (matId) => {
+                    const mat = db.materials.find(m => m.mat_id === matId);
+                    return mat ? mat.name : matId;
+                };
+
+                // 根據 tool_id 取得工具名稱
+                const getToolName = (toolId) => {
+                    const tool = db.tools.find(t => t.tool_id === toolId);
+                    return tool ? tool.name : toolId;
+                };
+
+                // === CRUD: 材料配方 ===
+                // 更新材料配方
+                const updateMatRecipe = (mat, field, value) => {
+                    mat[field] = value;
+                    recipeManager.hasChanges = true;
+                    console.log(`更新材料配方: ${mat.mat_id}.${field} = ${value}`);
+                };
+
+                // 刪除材料配方
+                const deleteMatRecipe = (mat) => {
+                    if (!confirm(`確定要刪除「${getMatName(mat.mat_id)}」嗎?`)) return;
+                    const idx = db.mapExMaterials.findIndex(m =>
+                        m.task_id === mat.task_id && m.mat_id === mat.mat_id);
+                    if (idx > -1) {
+                        db.mapExMaterials.splice(idx, 1);
+                        recipeManager.hasChanges = true;
+                    }
+                };
+
+                // 開啟新增材料 Modal
+                const openAddMaterialModal = () => {
+                    recipeManager.addMatModal.show = true;
+                    recipeManager.addMatModal.selectedMatId = '';
+                    recipeManager.addMatModal.spec = '';
+                    recipeManager.addMatModal.qty = 1;
+                    recipeManager.addMatModal.loss = 1.1;
+                    recipeManager.addMatModal.isConsumable = false;
+                };
+
+                // 新增材料配方
+                const addMaterialRecipe = () => {
+                    const m = recipeManager.addMatModal;
+                    if (!m.selectedMatId) {
+                        alert('請選擇材料');
+                        return;
+                    }
+                    db.mapExMaterials.push({
+                        task_id: recipeManager.selectedTaskId,
+                        mat_id: m.selectedMatId,
+                        spec: m.spec || getMatName(m.selectedMatId),
+                        qty_per_unit: m.qty,
+                        loss_rate: m.loss,
+                        is_consumable: m.isConsumable ? 'TRUE' : 'FALSE',
+                        linked_tool_id: ''
+                    });
+                    recipeManager.addMatModal.show = false;
+                    recipeManager.hasChanges = true;
+                };
+
+                // 顯示材料詳情
+                const showMaterialDetail = (matId) => {
+                    const mat = db.materials.find(m => m.mat_id === matId);
+                    if (mat) {
+                        recipeManager.matDetailModal.material = mat;
+                        recipeManager.matDetailModal.show = true;
+                    }
+                };
+
+                // === CRUD: 工具配方 ===
+                // 更新工具配方
+                const updateToolRecipe = (tool, field, value) => {
+                    tool[field] = value;
+                    recipeManager.hasChanges = true;
+                    console.log(`更新工具配方: ${tool.tool_id}.${field} = ${value}`);
+                };
+
+                // 刪除工具配方
+                const deleteToolRecipe = (tool) => {
+                    if (!confirm(`確定要刪除「${getToolName(tool.tool_id)}」嗎?`)) return;
+                    const idx = db.mapExTools.findIndex(t =>
+                        t.task_id === tool.task_id && t.tool_id === tool.tool_id);
+                    if (idx > -1) {
+                        db.mapExTools.splice(idx, 1);
+                        recipeManager.hasChanges = true;
+                    }
+                };
+
+                // 開啟新增工具 Modal
+                const openAddToolModal = () => {
+                    recipeManager.addToolModal.show = true;
+                    recipeManager.addToolModal.selectedToolId = '';
+                    recipeManager.addToolModal.type = '必備';
+                    recipeManager.addToolModal.qty = 1;
+                    recipeManager.addToolModal.calcMethod = 'PerWorker';
+                };
+
+                // 新增工具配方
+                const addToolRecipe = () => {
+                    const t = recipeManager.addToolModal;
+                    if (!t.selectedToolId) {
+                        alert('請選擇工具');
+                        return;
+                    }
+                    db.mapExTools.push({
+                        task_id: recipeManager.selectedTaskId,
+                        tool_id: t.selectedToolId,
+                        type: t.type,
+                        qty_avg: t.qty,
+                        calc_method: t.calcMethod
+                    });
+                    recipeManager.addToolModal.show = false;
+                    recipeManager.hasChanges = true;
+                };
+
+                // 儲存所有配方到 Sheet (v2.3 - 移除 confirm, 點擊立即禁用)
+                const saveAllRecipes = async () => {
+                    const taskId = recipeManager.selectedTaskId;
+                    if (!taskId) {
+                        showToast('請先選擇一個工項', 'warning');
+                        return;
+                    }
+
+                    // 立即禁用按鈕，防止重複點擊
+                    loading.value = true;
+                    try {
+                        // 1. 準備資料 - 複製 Pure Object
+                        const currentMaterials = getTaskMaterials(taskId).map(m => ({
+                            task_id: m.task_id,
+                            mat_id: m.mat_id,
+                            spec: m.spec,
+                            qty_per_unit: m.qty_per_unit,
+                            loss_rate: m.loss_rate,
+                            is_consumable: m.is_consumable,
+                            linked_tool_id: m.linked_tool_id || ''
+                        }));
+
+                        const currentTools = getTaskTools(taskId).map(t => ({
+                            task_id: t.task_id,
+                            tool_id: t.tool_id,
+                            type: t.type,
+                            qty_avg: t.qty_avg,
+                            calc_method: t.calc_method
+                        }));
+
+                        console.log('[Save] Materials:', currentMaterials);
+                        console.log('[Save] Tools:', currentTools);
+
+                        // Helper: 批次新增 with fallback
+                        const batchCreateWithFallback = async (sheetName, dataList) => {
+                            if (dataList.length === 0) return;
+
+                            try {
+                                // 優先嘗試 batch_create
+                                await callBackend('batch_create', { sheetName, data: dataList });
+                                console.log(`[Save] batch_create ${sheetName} 成功`);
+                            } catch (batchErr) {
+                                // 如果 batch_create 失敗，改用循環 create
+                                console.warn(`[Save] batch_create ${sheetName} 失敗，改用循環 create:`, batchErr.message);
+                                for (const item of dataList) {
+                                    await callBackend('create', { sheetName, data: item });
+                                }
+                                console.log(`[Save] 循環 create ${sheetName} 完成`);
+                            }
+                        };
+
+                        // 2. 執行 Material 更新 (Delete All -> Batch Create or Loop Create)
+                        await callBackend('delete', {
+                            sheetName: 'Map_Task_Materials',
+                            keyField: 'task_id',
+                            keyValue: taskId
+                        });
+                        await batchCreateWithFallback('Map_Task_Materials', currentMaterials);
+
+                        // 3. 執行 Tool 更新
+                        await callBackend('delete', {
+                            sheetName: 'Map_Task_Tools',
+                            keyField: 'task_id',
+                            keyValue: taskId
+                        });
+                        await batchCreateWithFallback('Map_Task_Tools', currentTools);
+
+                        showToast('配方儲存成功！', 'success');
+                        recipeManager.hasChanges = false;
+
+                    } catch (e) {
+                        console.error('[Save] 最終錯誤:', e);
+                        showToast('儲存失敗: ' + e.message, 'error');
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+
+                // === 圖片搜尋功能 === (已移至後端處理，前端不再暴露 API 金鑰)
+
+                // 圖片 Modal 狀態 (v2.0: 分頁顯示)
+                const PAGE_SIZE = 5; // 每頁顯示 5 張
+                const imageModal = reactive({
+                    show: false,
+                    loading: false,
+                    material: null,        // 當前選擇的材料物件
+                    imagePool: [],         // 搜尋到的所有圖片 URL (最多 20 張)
+                    currentPage: 0,        // 當前頁碼 (0-based)
+                    selectedIndex: null    // 當前選中的圖片索引 (在 imagePool 中的位置)
+                });
+
+                // 計算屬性：當前頁的圖片陣列
+                const currentPageImages = computed(() => {
+                    const start = imageModal.currentPage * PAGE_SIZE;
+                    return imageModal.imagePool.slice(start, start + PAGE_SIZE);
+                });
+
+                // 計算屬性：總頁數
+                const totalPages = computed(() => {
+                    return Math.ceil(imageModal.imagePool.length / PAGE_SIZE);
+                });
+
+                // 計算屬性：已有儲存圖片
+                const hasSavedImage = computed(() => {
+                    return imageModal.material?.image_url ? true : false;
+                });
+
+                // 開啟圖片 Modal
+                const openImageModal = (mat) => {
+                    console.log('[ImageModal] Opening for:', mat?.name);
+                    imageModal.material = mat;
+                    imageModal.show = true;
+                    imageModal.loading = false;
+                    imageModal.imagePool = [];
+                    imageModal.currentPage = 0;
+                    imageModal.selectedIndex = null;
+
+                    // 如果已有儲存的圖片，直接顯示
+                    if (mat.image_url) {
+                        console.log('[ImageModal] Has saved image:', mat.image_url);
+                        // 不需要立即搜尋，用戶可手動點擊重新搜尋
+                    }
+                };
+
+                // 搜尋圖片 (通過後端 GAS API，不暴露金鑰)
+                const searchImages = async () => {
+                    if (!imageModal.material) return;
+
+                    imageModal.loading = true;
+                    imageModal.imagePool = [];
+                    imageModal.currentPage = 0;
+                    imageModal.selectedIndex = null;
+
+                    const query = `${imageModal.material.name} ${imageModal.material.spec || ''}`.trim();
+                    console.log(`[ImageSearch] Searching: ${query}`);
+
+                    try {
+                        const result = await callBackend('search_images', { query });
+
+                        if (result.status === 'error') {
+                            console.error('[ImageSearch] Backend Error:', result.message);
+                            showToast(`搜尋失敗: ${result.message}`, 'error');
+                        } else if (result.images && result.images.length > 0) {
+                            imageModal.imagePool = result.images;
+                            console.log(`[ImageSearch] Found ${result.images.length} images`);
+                            showToast(`找到 ${result.images.length} 張圖片`, 'success');
+                        } else {
+                            showToast('找不到相關圖片', 'warning');
+                        }
+                    } catch (err) {
+                        console.error('[ImageSearch] Exception:', err);
+                        showToast('圖片搜尋失敗，請稍後再試', 'error');
+                    }
+
+                    imageModal.loading = false;
+                };
+
+                // 翻頁
+                const changePage = (delta) => {
+                    const newPage = imageModal.currentPage + delta;
+                    if (newPage >= 0 && newPage < totalPages.value) {
+                        imageModal.currentPage = newPage;
+                    }
+                };
+
+                // 選擇圖片
+                const selectImage = (poolIndex) => {
+                    imageModal.selectedIndex = poolIndex;
+                };
+
+                // 取得圖片在 imagePool 中的實際索引
+                const getPoolIndex = (pageIndex) => {
+                    return imageModal.currentPage * PAGE_SIZE + pageIndex;
+                };
+
+                // 儲存選定的圖片
+                const saveSelectedImage = async () => {
+                    if (!imageModal.material || imageModal.selectedIndex === null) {
+                        showToast('請先選擇一張圖片', 'warning');
+                        return;
+                    }
+
+                    const matId = imageModal.material.mat_id;
+                    const newUrl = imageModal.imagePool[imageModal.selectedIndex];
+
+                    // 1. 更新本地資料
+                    const matInDb = db.materials.find(m => m.mat_id === matId);
+                    if (matInDb) {
+                        matInDb.image_url = newUrl;
+                    }
+
+                    // 2. 呼叫後端
+                    imageModal.loading = true;
+                    try {
+                        await callBackend('update', {
+                            sheetName: 'DB_Materials',
+                            keyField: 'mat_id',
+                            keyValue: matId,
+                            data: {
+                                image_url: newUrl
+                            }
+                        });
+                        showToast('圖片已儲存！', 'success');
+                        imageModal.show = false;
+                    } catch (e) {
+                        showToast('儲存失敗: ' + e.message, 'error');
+                    } finally {
+                        imageModal.loading = false;
+                    }
+                };
+
+                // 工項分類 (從資料庫自動產生)
+                const categories = computed(() => {
+                    if (!db.tasks || db.tasks.length === 0) return ['全部'];
+                    const cats = new Set(db.tasks.map(t => t.category).filter(c => c));
+                    return ['全部', ...Array.from(cats)];
+                });
+
+                // 工項篩選
+                const filteredTasks = computed(() => {
+                    if (filterCategory.value === '全部') return db.tasks;
+                    return db.tasks.filter(t => t.category === filterCategory.value);
+                });
+
+                // 加入購物車
+                const addTask = () => {
+                    if (!selectedTask.value || inputQty.value <= 0) return;
+                    cart.value.push({
+                        task: selectedTask.value,
+                        qty: inputQty.value
+                    });
+                    // Reset
+                    selectedTask.value = null;
+                    inputQty.value = 1;
+                };
+
+                const removeTask = (index) => {
+                    cart.value.splice(index, 1);
+                };
+
+                // 核心：讀取 Google Sheets (使用 APP_CONFIG)
+                const SHEET_ID = APP_CONFIG.SHEET_ID;
+
+                // JSONP 封裝: 利用 <script> 標籤載入資料，避開瀏覽器跨域限制
+                const fetchSheet = (sheetName, query = 'SELECT *') => {
+                    return new Promise((resolve, reject) => {
+                        console.log(`[GViz] Requesting sheet: ${sheetName}...`); // Log Request
+
+                        // 產生隨機 Callback 名稱
+                        const callbackName = 'gviz_callback_' + Math.floor(Math.random() * 100000);
+
+                        // 設定超時機制 (15秒)，避免請求卡死
+                        const timeoutId = setTimeout(() => {
+                            delete window[callbackName];
+                            if (document.body.contains(script)) {
+                                document.body.removeChild(script);
+                            }
+                            reject(new Error(`Request timeout for ${sheetName}`));
+                        }, 15000);
+
+                        // 定義全域 Callback
+                        window[callbackName] = (data) => {
+                            clearTimeout(timeoutId); // 清除超時計時器
+                            delete window[callbackName]; // 清除
+                            if (document.body.contains(script)) document.body.removeChild(script); // 移除標籤
+
+                            if (data.status === 'error') {
+                                console.error(`[GViz] Error for ${sheetName}:`, data.errors);
+                                reject(data.errors);
+                            } else {
+                                const parsed = parseGVizData(data);
+                                console.log(`[GViz] Success ${sheetName}: ${parsed.length} rows loaded.`);
+                                resolve(parsed);
+                            }
+                        };
+
+                        // 建立 Script 標籤
+                        const script = document.createElement('script');
+                        // [Fix] 加入 &headers=1 強制指定第一列為標題，避免 GViz 誤判導致 label 為空
+                        const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=responseHandler:${callbackName}&sheet=${sheetName}&tq=${encodeURIComponent(query)}&headers=1`;
+
+                        script.src = url;
+                        script.onerror = (err) => {
+                            console.error(`[GViz] Network Error loading ${sheetName}. URL: ${url}`, err);
+                            clearTimeout(timeoutId);
+                            delete window[callbackName];
+                            document.body.removeChild(script);
+                            reject(new Error(`Network error loading ${sheetName}`));
+                        };
+
+                        document.body.appendChild(script);
+                    });
+                };
+
+                // 解析 GViz Data Table 格式為 Array of Objects
+                const parseGVizData = (data) => {
+                    const cols = data.table.cols.map(c => c.label);
+                    return data.table.rows.map(row => {
+                        let obj = {};
+                        row.c.forEach((cell, i) => {
+                            // 若欄位為空，給予預設值
+                            if (cols[i]) obj[cols[i]] = (cell && cell.v !== null) ? cell.v : '';
+                        });
+                        return obj;
+                    });
+                };
+
+                // 初始化
+                onMounted(async () => {
+                    console.log("=== Start App Initialization ===");
+                    try {
+                        // 依序或平行讀取資料，這裡用平行讀取加快速度
+                        const [m, t, tk, mm, mt] = await Promise.all([
+                            fetchSheet('DB_Materials'),
+                            fetchSheet('DB_Tools'),
+                            fetchSheet('DB_Tasks'),
+                            fetchSheet('Map_Task_Materials'),
+                            fetchSheet('Map_Task_Tools')
+                        ]);
+
+                        db.materials = m;
+                        db.tools = t;
+                        db.tasks = tk;
+                        db.mapExMaterials = mm;
+                        db.mapExTools = mt;
+
+                        console.log("=== All DB Loaded Successfully ===");
+
+                        // [DEBUG] 詳細輸出資料結構與欄位名稱
+                        console.log("[DEBUG] Map_Task_Tools Keys:", mt[0] ? JSON.stringify(Object.keys(mt[0])) : 'Empty Array');
+                        console.log("[DEBUG] DB_Tools Keys:", t[0] ? JSON.stringify(Object.keys(t[0])) : 'Empty Array');
+                        console.log("[DEBUG] Sample Tool from DB_Tools:", t[0] ? JSON.stringify(t[0]) : 'None');
+
+                    } catch (e) {
+                        console.error("=== Database Load Failed ===", e);
+                        alert("資料庫讀取失敗！請按 F12 打開 Console 查看詳細錯誤訊息。\n可能原因：Google Sheet 未發布或 Sheet 名稱錯誤。");
+                    } finally {
+                        loading.value = false;
+                    }
+                });
+
+                // --- 核心運算邏輯 ---
+
+                // 1. 計算材料需求
+                const calculatedMaterials = computed(() => {
+                    const rawRequirements = {}; // mat_id -> { qty, ...info }
+
+                    // 遍歷所有已選工項
+                    cart.value.forEach(item => {
+                        const taskId = item.task.task_id;
+                        const taskQty = item.qty;
+
+                        // 找出該工項的所有配方
+                        const recipes = db.mapExMaterials.filter(r => r.task_id === taskId);
+
+                        recipes.forEach(recipe => {
+                            const matId = recipe.mat_id;
+                            const qtyPerUnit = parseFloat(recipe.qty_per_unit || 0);
+                            const lossRate = parseFloat(recipe.loss_rate || 1.0);
+
+                            // 計算需求量 = 工項數量 * 單位用量 * 損耗
+                            const requiredQty = taskQty * qtyPerUnit * lossRate;
+
+                            if (!rawRequirements[matId]) {
+                                // 首次加入，從 DB_Materials 抓詳細資料
+                                const matInfo = db.materials.find(m => m.mat_id === matId) ||
+                                    { name: matId, spec_order: 'Unknown', unit: '', vendor_ref: 'Unknown', description: '' };
+                                rawRequirements[matId] = {
+                                    id: matId,
+                                    name: matInfo.name,
+                                    spec: matInfo.spec_order,
+                                    unit: matInfo.unit,
+                                    vendor: matInfo.vendor_ref,
+                                    pack_desc: matInfo.pack_desc,
+                                    description: matInfo.description,
+                                    total_qty: 0
+                                };
+                            }
+                            rawRequirements[matId].total_qty += requiredQty;
+                        });
+                    });
+
+                    // 整理並分組 (依供應商)
+                    const grouped = {};
+                    Object.values(rawRequirements).forEach(item => {
+                        // 數量取小數點後1位
+                        item.total_qty = Math.ceil(item.total_qty * 10) / 10;
+
+                        const vendor = item.vendor || '其他';
+                        if (!grouped[vendor]) grouped[vendor] = [];
+                        grouped[vendor].push(item);
+                    });
+
+                    return grouped;
+                });
+
+                // 2. 計算工具需求
+                const calculatedTools = computed(() => {
+                    const toolSet = new Set(); // 存放需要的 tool_id
+                    console.log('[DEBUG] calculatedTools: cart =', cart.value.length, 'items');
+
+                    // 遍歷工項找出所需工具
+                    cart.value.forEach(item => {
+                        const taskId = item.task.task_id;
+                        console.log('[DEBUG] Processing taskId:', taskId);
+
+                        // 直接由 Map_Task_Tools 定義的工具
+                        const directTools = db.mapExTools.filter(t => t.task_id === taskId);
+                        console.log('[DEBUG] Found directTools:', directTools.length, 'for', taskId);
+                        directTools.forEach(dt => toolSet.add(dt.tool_id));
+
+                        // 由 Map_Task_Materials 間接定義的工具 (linked_tool_id)
+                        const materialRecipes = db.mapExMaterials.filter(r => r.task_id === taskId);
+                        materialRecipes.forEach(mr => {
+                            if (mr.linked_tool_id) toolSet.add(mr.linked_tool_id);
+                        });
+                    });
+
+                    // 轉換為詳細物件並分類
+                    const result = {
+                        power: [],
+                        manual: []
+                    };
+
+                    toolSet.forEach(tid => {
+                        const info = db.tools.find(t => t.tool_id === tid);
+                        if (!info) return;
+
+                        const toolObj = {
+                            id: tid,
+                            name: info.name,
+                            power_spec: info.power_spec,
+                            storage: info.storage_box,
+                            qty: 1, // 暫時簡化為 1 (進階需實作 alloc_rule)
+                            maintenance: info.maintenance, // 新增保養
+                            usage_tips: info.usage_tips    // 新增撇步
+                        };
+
+                        // 簡單分類邏輯
+                        if (['110V', '220V', '18V', '12V', 'Air', 'Battery'].some(k => info.power_spec?.includes(k))) {
+                            result.power.push(toolObj);
+                        } else {
+                            result.manual.push(toolObj);
+                        }
+                    });
+
+                    return result;
+                });
+
+                // 複製文字功能
+                const copyToClipboard = (type) => {
+                    let text = "";
+                    if (type === 'materials') {
+                        text += "【裝修材料採購清單】\n\n";
+                        for (const [vendor, items] of Object.entries(calculatedMaterials.value)) {
+                            text += `== ${vendor} ==\n`;
+                            items.forEach(m => {
+                                text += `- ${m.name} (${m.spec}): ${m.total_qty} ${m.unit}\n`;
+                            });
+                            text += "\n";
+                        }
+                    }
+                    navigator.clipboard.writeText(text).then(() => showToast("已複製到剪貼簿", "success"));
+                };
+
+                // === 工項 CRUD ===
+                const openTaskModal = (mode, task = null) => {
+                    dataManager.taskModal.mode = mode;
+                    dataManager.taskModal.data = mode === 'create' ? {
+                        task_id: '',
+                        task_name: '',
+                        category: '木作',
+                        phase: '03_木作',
+                        unit: '坪',
+                        labor_cost: 0,
+                        sop_construction: '',
+                        inspection_key: '',
+                        inspection_sample: ''
+                    } : { ...task };
+                    dataManager.taskModal.show = true;
+                };
+
+                const saveTask = async () => {
+                    const data = dataManager.taskModal.data;
+                    if (!data.task_id || !data.task_name) {
+                        showToast('請填寫工項代號與名稱', 'warning');
+                        return;
+                    }
+
+                    loading.value = true;
+                    try {
+                        if (dataManager.taskModal.mode === 'create') {
+                            if (db.tasks.some(t => t.task_id === data.task_id)) {
+                                showToast('工項代號已存在', 'error');
+                                loading.value = false;
+                                return;
+                            }
+                            await callBackend('create', { sheetName: 'DB_Tasks', data: data });
+                            db.tasks.push({ ...data });
+                            showToast('工項新增成功！', 'success');
+                        } else {
+                            await callBackend('update', {
+                                sheetName: 'DB_Tasks',
+                                keyField: 'task_id',
+                                keyValue: data.task_id,
+                                data: data
+                            });
+                            const idx = db.tasks.findIndex(t => t.task_id === data.task_id);
+                            if (idx > -1) db.tasks[idx] = { ...data };
+                            showToast('工項更新成功！', 'success');
+                        }
+                        dataManager.taskModal.show = false;
+                    } catch (e) {
+                        showToast('工項儲存失敗: ' + e.message, 'error');
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const deleteTask = async (task) => {
+                    if (!confirm(`確定要刪除「${task.task_name}」嗎？\n\n注意：相關的配方也將一併刪除！`)) return;
+
+                    loading.value = true;
+                    try {
+                        await callBackend('delete', { sheetName: 'DB_Tasks', keyField: 'task_id', keyValue: task.task_id });
+                        await callBackend('delete', { sheetName: 'Map_Task_Materials', keyField: 'task_id', keyValue: task.task_id });
+                        await callBackend('delete', { sheetName: 'Map_Task_Tools', keyField: 'task_id', keyValue: task.task_id });
+
+                        db.tasks = db.tasks.filter(t => t.task_id !== task.task_id);
+                        db.mapExMaterials = db.mapExMaterials.filter(m => m.task_id !== task.task_id);
+                        db.mapExTools = db.mapExTools.filter(t => t.task_id !== task.task_id);
+
+                        showToast('工項已刪除', 'success');
+                    } catch (e) {
+                        showToast('刪除失敗: ' + e.message, 'error');
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                // === 工具 CRUD ===
+                const openToolModal = (mode, tool = null) => {
+                    dataManager.toolModal.mode = mode;
+                    dataManager.toolModal.data = mode === 'create' ? {
+                        tool_id: '',
+                        name: '',
+                        category: '電動工具',
+                        power_spec: '',
+                        alloc_rule: 'Site',
+                        storage_box: '',
+                        maintenance: '',
+                        usage_tips: ''
+                    } : { ...tool };
+                    dataManager.toolModal.show = true;
+                };
+
+                const saveTool = async () => {
+                    const data = dataManager.toolModal.data;
+                    if (!data.tool_id || !data.name) {
+                        showToast('請填寫工具代號與名稱', 'warning');
+                        return;
+                    }
+
+                    loading.value = true;
+                    try {
+                        if (dataManager.toolModal.mode === 'create') {
+                            if (db.tools.some(t => t.tool_id === data.tool_id)) {
+                                showToast('工具代號已存在', 'error');
+                                loading.value = false;
+                                return;
+                            }
+                            await callBackend('create', { sheetName: 'DB_Tools', data: data });
+                            db.tools.push({ ...data });
+                            showToast('工具新增成功！', 'success');
+                        } else {
+                            await callBackend('update', {
+                                sheetName: 'DB_Tools',
+                                keyField: 'tool_id',
+                                keyValue: data.tool_id,
+                                data: data
+                            });
+                            const idx = db.tools.findIndex(t => t.tool_id === data.tool_id);
+                            if (idx > -1) db.tools[idx] = { ...data };
+                            showToast('工具更新成功！', 'success');
+                        }
+                        dataManager.toolModal.show = false;
+                    } catch (e) {
+                        showToast('工具儲存失敗: ' + e.message, 'error');
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const deleteTool = async (tool) => {
+                    if (!confirm(`確定要刪除「${tool.name}」嗎？`)) return;
+
+                    loading.value = true;
+                    try {
+                        await callBackend('delete', { sheetName: 'DB_Tools', keyField: 'tool_id', keyValue: tool.tool_id });
+                        db.tools = db.tools.filter(t => t.tool_id !== tool.tool_id);
+                        showToast('工具已刪除', 'success');
+                    } catch (e) {
+                        showToast('刪除失敗: ' + e.message, 'error');
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                // === 材料 CRUD ===
+                const openMaterialModal = (mode, material = null) => {
+                    dataManager.materialModal.mode = mode;
+                    dataManager.materialModal.data = mode === 'create' ? {
+                        mat_id: '',
+                        name: '',
+                        category: '板材',
+                        spec_order: '',
+                        brand: '',
+                        unit: '張',
+                        vendor_ref: '',
+                        price_estimate: 0,
+                        pack_desc: '',
+                        note: ''
+                    } : { ...material };
+                    dataManager.materialModal.show = true;
+                };
+
+                const saveMaterial = async () => {
+                    const data = dataManager.materialModal.data;
+                    if (!data.mat_id || !data.name) {
+                        showToast('請填寫材料代號與名稱', 'warning');
+                        return;
+                    }
+
+                    loading.value = true;
+                    try {
+                        if (dataManager.materialModal.mode === 'create') {
+                            if (db.materials.some(m => m.mat_id === data.mat_id)) {
+                                showToast('材料代號已存在', 'error');
+                                loading.value = false;
+                                return;
+                            }
+                            await callBackend('create', { sheetName: 'DB_Materials', data: data });
+                            db.materials.push({ ...data });
+                            showToast('材料新增成功！', 'success');
+                        } else {
+                            await callBackend('update', {
+                                sheetName: 'DB_Materials',
+                                keyField: 'mat_id',
+                                keyValue: data.mat_id,
+                                data: data
+                            });
+                            const idx = db.materials.findIndex(m => m.mat_id === data.mat_id);
+                            if (idx > -1) db.materials[idx] = { ...data };
+                            showToast('材料更新成功！', 'success');
+                        }
+                        dataManager.materialModal.show = false;
+                    } catch (e) {
+                        showToast('材料儲存失敗: ' + e.message, 'error');
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const deleteMaterial = async (material) => {
+                    if (!confirm(`確定要刪除「${material.name}」嗎？`)) return;
+
+                    loading.value = true;
+                    try {
+                        await callBackend('delete', { sheetName: 'DB_Materials', keyField: 'mat_id', keyValue: material.mat_id });
+                        db.materials = db.materials.filter(m => m.mat_id !== material.mat_id);
+                        showToast('材料已刪除', 'success');
+                    } catch (e) {
+                        showToast('刪除失敗: ' + e.message, 'error');
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                return {
+                    loading, project, viewMode, cart,
+                    categories, filterCategory, filteredTasks, selectedTask, inputQty,
+                    addTask, removeTask,
+                    calculatedMaterials, calculatedTools,
+                    phases, getPowerClass, copyToClipboard,
+                    // Toast 通知
+                    toasts, showToast, removeToast,
+                    // 資料管理
+                    dataManager, filteredDbTasks, filteredDbTools, filteredDbMaterials,
+                    taskCategoryOptions, toolCategoryOptions, materialCategoryOptions, // 動態選單
+                    openTaskModal, saveTask, deleteTask,
+                    openToolModal, saveTool, deleteTool,
+                    openMaterialModal, saveMaterial, deleteMaterial,
+                    // 圖片搜尋功能 (v2.0: 分頁顯示)
+                    imageModal, openImageModal, searchImages, saveSelectedImage,
+                    currentPageImages, totalPages, changePage, selectImage, getPoolIndex,
+                    // 配方管理功能
+                    db, recipeManager, getTaskMaterials, getTaskTools, getMatName, getToolName,
+                    // 配方 CRUD
+                    updateMatRecipe, deleteMatRecipe, openAddMaterialModal, addMaterialRecipe,
+                    updateToolRecipe, deleteToolRecipe, openAddToolModal, addToolRecipe,
+                    showMaterialDetail, saveAllRecipes,
+                    setupDatabase // Admin
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>

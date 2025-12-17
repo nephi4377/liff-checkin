@@ -302,6 +302,7 @@ function renderAllDrawnAreas() {
     // [v5.0 新增] 取得顯示選項的狀態
     const showCeilings = document.getElementById('show-ceilings-toggle').checked;
     const showFloors = document.getElementById('show-floors-toggle').checked;
+    const showWalls = document.getElementById('show-walls-toggle') ? document.getElementById('show-walls-toggle').checked : true;
 
     // [您的要求] 清除舊的頂點調整控點
     clearVertexHandles();
@@ -309,16 +310,20 @@ function renderAllDrawnAreas() {
     const unselectedAreas = drawnAreas.filter(area => area.id !== selectedAreaId);
     const selectedArea = drawnAreas.find(area => area.id === selectedAreaId);
 
+    // [您的要求] 定義圖層順序：地板(底) -> 牆壁 -> 天花板(頂)
+    const typeOrder = { 'floor': 1, 'wall': 2, 'ceiling': 3 };
+    unselectedAreas.sort((a, b) => (typeOrder[a.type] || 0) - (typeOrder[b.type] || 0));
+
     // 先渲染所有未選取的區域
     unselectedAreas.forEach(area => {
-        if ((area.type === 'ceiling' && showCeilings) || (area.type === 'floor' && showFloors)) {
+        if ((area.type === 'ceiling' && showCeilings) || (area.type === 'floor' && showFloors) || (area.type === 'wall' && showWalls)) {
             renderSingleArea(layer, area, false);
         }
     });
 
     // 最後再渲染選取的區域，確保它在最上層
     if (selectedArea) {
-        if ((selectedArea.type === 'ceiling' && showCeilings) || (selectedArea.type === 'floor' && showFloors)) {
+        if ((selectedArea.type === 'ceiling' && showCeilings) || (selectedArea.type === 'floor' && showFloors) || (selectedArea.type === 'wall' && showWalls)) {
             renderSingleArea(layer, selectedArea, true);
             // [您的要求] 為選取的區域產生可拖曳的頂點
             renderVertexHandles(selectedArea);
@@ -346,7 +351,8 @@ function renderSingleArea(layer, area, isSelected) {
 
     const colors = {
         ceiling: { fill: 'rgba(139, 92, 246, 0.4)', stroke: 'rgba(139, 92, 246, 0.8)' },
-        floor: { fill: 'rgba(251, 191, 36, 0.4)', stroke: 'rgba(217, 119, 6, 0.8)' }
+        floor: { fill: 'rgba(251, 191, 36, 0.4)', stroke: 'rgba(217, 119, 6, 0.8)' },
+        wall: { fill: 'rgba(75, 85, 99, 0.9)', stroke: 'rgba(31, 41, 55, 1)' } // [新增] 牆壁樣式 (深灰色)
     };
     const areaColor = colors[area.type] || colors.ceiling;
 
@@ -377,7 +383,7 @@ function renderSingleArea(layer, area, isSelected) {
     textElement.style.pointerEvents = 'none';
     textElement.style.textShadow = '0 0 3px rgba(0,0,0,0.5)';
 
-    const areaTypeText = area.type === 'floor' ? '地板' : '天花板';
+    const areaTypeText = area.type === 'floor' ? '地板' : (area.type === 'wall' ? '牆壁' : '天花板');
     const areaInPingText = area.type === 'floor'
         ? `${calculateFloorAreaWithLoss(area.areaInPing)} 坪 (含損耗)`
         : `${area.areaInPing} 坪`; // [您的要求] 天花板坪數顯示為整數
@@ -455,6 +461,19 @@ function clearVertexHandles() {
 function renderCabinet(cab) {
     const el = document.createElement('div');
     el.className = 'placed-cabinet';
+    if (cab.data.isWall) {
+        // [v9.1] 牆壁顯示與鎖定控制
+        const showWalls = document.getElementById('show-walls-toggle') ? document.getElementById('show-walls-toggle').checked : true;
+        const lockWalls = document.getElementById('lock-walls-toggle') ? document.getElementById('lock-walls-toggle').checked : false;
+
+        if (!showWalls) {
+            el.style.display = 'none';
+        }
+        if (lockWalls) {
+            el.style.pointerEvents = 'none';
+        }
+        el.classList.add('is-wall');
+    }
     el.id = cab.id;
     updateCabStyle(el, cab);
 
@@ -506,22 +525,27 @@ function updateCabStyle(el, cab) {
     el.style.width = cab.currentW + 'px';
     el.style.height = cab.currentH + 'px';
 
-    // [v8.6 修復] 還原完整的 updateCabStyle 邏輯
-    const defaultSvgDataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgs.default(cab.data.name))}`;
-    let finalImageSrc = '';
-
-    if (cab.data.img && cab.data.img.trim().startsWith('<svg')) {
-        // [v8.6] 直接使用原始 SVG
-        finalImageSrc = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(cab.data.img)}`;
-        el.style.backgroundImage = `url("${finalImageSrc}")`;
-    } else if (cab.data.img) {
-        const img = new Image();
-        img.src = cab.data.img;
-        img.onload = () => { el.style.backgroundImage = `url('${cab.data.img}')`; };
-        img.onerror = () => { el.style.backgroundImage = `url("${defaultSvgDataUri}")`; };
-    } else {
+    if (cab.data.isWall) {
+        el.style.backgroundColor = '#374151'; // dark gray
         el.style.backgroundImage = 'none';
-        el.style.backgroundColor = '#f3f4f6';
+    } else {
+        // [v8.6 修復] 還原完整的 updateCabStyle 邏輯
+        const defaultSvgDataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgs.default(cab.data.name))}`;
+        let finalImageSrc = '';
+
+        if (cab.data.img && cab.data.img.trim().startsWith('<svg')) {
+            // [v8.6] 直接使用原始 SVG
+            finalImageSrc = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(cab.data.img)}`;
+            el.style.backgroundImage = `url("${finalImageSrc}")`;
+        } else if (cab.data.img) {
+            const img = new Image();
+            img.src = cab.data.img;
+            img.onload = () => { el.style.backgroundImage = `url('${cab.data.img}')`; };
+            img.onerror = () => { el.style.backgroundImage = `url("${defaultSvgDataUri}")`; };
+        } else {
+            el.style.backgroundImage = 'none';
+            el.style.backgroundColor = '#f3f4f6';
+        }
     }
     el.style.transform = `rotate(${cab.rotation}deg)`;
     el.style.opacity = (cab.opacity / 100);
@@ -531,7 +555,7 @@ function updateCabStyle(el, cab) {
 function handleGlobalClick(e) {
     // [新增] 如果正在繪圖模式，則處理點擊事件
     if (isDrawing && e.target.closest('#design-canvas')) {
-        handleDrawingClick(e);
+        // handleDrawingClick(e); // [修正] 避免與 canvas click 事件重複觸發導致產生雙重點
         return; // 阻止取消選取等其他點擊事件
     }
     // [新增] 如果點擊的不是繪製區域，則取消選取
@@ -561,12 +585,15 @@ function selectCabinet(id) {
         document.getElementById('selected-height').value = cab.currentH;
         document.getElementById('selected-size-inputs').style.display = 'grid';
 
-        const price = calculatePrice(cab);
-        let priceText = `單價: $${cab.data.unitPrice.toLocaleString()} `;
-        if (cab.data.pricingType === 'width') {
-            priceText += `/ 尺 | 總價: $${price.toLocaleString()} `;
-        } else if (cab.data.pricingType === 'fixed') {
-            priceText = `總價: $${price.toLocaleString()} `;
+        let priceText = '此項目不計價';
+        if (cab.data.pricingType !== 'none' && typeof cab.data.unitPrice === 'number') {
+            const price = calculatePrice(cab);
+            priceText = `單價: $${cab.data.unitPrice.toLocaleString()} `;
+            if (cab.data.pricingType === 'width') {
+                priceText += `/ 尺 | 總價: $${price.toLocaleString()}`;
+            } else if (cab.data.pricingType === 'fixed') {
+                priceText = `總價: $${price.toLocaleString()}`;
+            }
         }
         document.getElementById('selected-price').innerText = priceText;
 
@@ -737,6 +764,7 @@ function duplicateSelectedCab() {
 
     // 給予新 ID 和新位置
     newCab.id = `cab - ${Date.now()} `;
+    newCab.id = `cab-${Date.now()}`;
     newCab.x += 20; // 向右偏移 20px
     newCab.y += 20; // 向下偏移 20px
 
@@ -855,15 +883,48 @@ function dotProduct(v1, v2) {
  * @param {MouseEvent} e - 滑鼠事件物件
  */
 function handleGlobalMove(e) {
+    // [v8.14 修復] 拖曳時必須考慮畫布的縮放與位移，與 startCabDrag 保持一致
+    const rect = canvas.getBoundingClientRect();
+    const safeScale = viewScale || 1.0;
+    let mouseX = (e.clientX - rect.left) / safeScale;
+    let mouseY = (e.clientY - rect.top) / safeScale;
+
+    // [v9.1 新增] 繪圖時的即時預覽 (正交鎖定 + 自動吸附起點)
+    if (isDrawing) {
+        let snapToStart = false;
+        // 1. 自動吸附起點 (Auto-close loop)
+        if (currentDrawingPoints.length > 2) {
+            const startPoint = currentDrawingPoints[0];
+            const dist = Math.sqrt(Math.pow(mouseX - startPoint.x, 2) + Math.pow(mouseY - startPoint.y, 2));
+            if (dist < 20) { // 20px 吸附半徑
+                mouseX = startPoint.x;
+                mouseY = startPoint.y;
+                snapToStart = true;
+            }
+        }
+
+        // 2. 正交鎖定 (Orthogonal Lock) - 適用於所有繪圖模式 (牆壁/天花/地板)
+        // 如果沒有吸附到起點，且沒有按住 Alt 鍵，則執行正交鎖定
+        if (!snapToStart && !e.altKey && currentDrawingPoints.length > 0) {
+            const lastPoint = currentDrawingPoints[currentDrawingPoints.length - 1];
+            const dx = Math.abs(mouseX - lastPoint.x);
+            const dy = Math.abs(mouseY - lastPoint.y);
+            if (dx > dy) {
+                mouseY = lastPoint.y; // Snap Y (Horizontal)
+            } else {
+                mouseX = lastPoint.x; // Snap X (Vertical)
+            }
+        }
+        updateDrawingPreview({ x: mouseX, y: mouseY });
+        return; // 繪圖模式下不執行後續的拖曳邏輯
+    }
+
     // --------------------------
     // 1. 處理元件拖曳 (Move)
     // --------------------------
     if (isDraggingCab && currentDragCab) {
-        // [v8.14 修復] 拖曳時必須考慮畫布的縮放與位移，與 startCabDrag 保持一致
-        const rect = canvas.getBoundingClientRect();
-        const safeScale = viewScale || 1.0;
-        const nx = (e.clientX - rect.left) / safeScale - dragOffset.x;
-        const ny = (e.clientY - rect.top) / safeScale - dragOffset.y;
+        const nx = mouseX - dragOffset.x;
+        const ny = mouseY - dragOffset.y;
 
         // 先嘗試移動到新位置
         currentDragCab.x = nx;
@@ -910,25 +971,28 @@ function handleGlobalMove(e) {
     // 2. 處理元件縮放 (Resize)
     // --------------------------
     if (isResizing && resizeTarget) {
-        const rect = canvas.getBoundingClientRect();
-        const safeScale = viewScale || 1.0;
-        // [v9.0 修正] 計算縮放時的位移量 (考慮 viewScale)
-        const dx = (e.clientX - resizeStart.checkX) / safeScale;
-        const dy = (e.clientY - resizeStart.checkY) / safeScale;
+        // [v9.0] 使用原始記錄的滑鼠位置計算 delta
+        const dx = e.clientX - resizeStart.checkX;
+        const dy = e.clientY - resizeStart.checkY;
 
-        // 1. 計算新的寬高 (在 Local 座標系)
-        const rotation = resizeTarget.rotation % 360;
-        const rad = toRad(rotation);
+        // 轉換為畫布縮放後的 delta
+        const safeScale = viewScale || 1.0;
+        const localDx = dx / safeScale;
+        const localDy = dy / safeScale;
+
+        // 旋轉處理：將滑鼠位移投影到元件的局部座標系
+        const rad = toRad(resizeTarget.rotation);
         const cos = Math.cos(rad);
         const sin = Math.sin(rad);
 
-        // 將滑鼠位移投影到局部座標軸
-        const localDx = dx * cos + dy * sin;
-        const localDy = -dx * sin + dy * cos;
+        // 重新定義 localDx/Dy 為投影後的量
+        const projDx = localDx * cos + localDy * sin;
+        const projDy = -localDx * sin + localDy * cos;
 
+        // 根據方向更新尺寸
+        // 這裡使用 resizeStart 紀錄的原始尺寸
         let newW = resizeStart.w;
         let newH = resizeStart.h;
-        // 計算中心點位移量 (Local)
         let localShiftX = 0;
         let localShiftY = 0;
 
@@ -936,30 +1000,22 @@ function handleGlobalMove(e) {
         if (resizeDirection) {
             switch (resizeDirection) {
                 case 'w': // 西 (左) - 寬度增加，中心向左移
-                    newW = Math.max(20, resizeStart.w - localDx);
+                    newW = Math.max(20, resizeStart.w - projDx);
                     localShiftX = -(newW - resizeStart.w) / 2;
-                    // 修正: 如果只是單純位移，中心點移動量應為 delta/2。
-                    // 例子: 往左拉 10px (localDx = -10)。newW = oldW + 10。
-                    // 左邊界往左移 10，右邊界不變。中心點往左移 5。
-                    // localShiftX = -5. (newW - oldW) = 10. => -10 / 2 = -5. 正確。
                     break;
                 case 'e': // 東 (右) - 寬度增加，中心向右移
-                    newW = Math.max(20, resizeStart.w + localDx);
+                    newW = Math.max(20, resizeStart.w + projDx);
                     localShiftX = (newW - resizeStart.w) / 2;
                     break;
                 case 'n': // 北 (上) - 高度增加，中心向上移
-                    newH = Math.max(20, resizeStart.h - localDy);
+                    newH = Math.max(20, resizeStart.h - projDy);
                     localShiftY = -(newH - resizeStart.h) / 2;
                     break;
                 case 's': // 南 (下) - 高度增加，中心向下移
-                    newH = Math.max(20, resizeStart.h + localDy);
+                    newH = Math.max(20, resizeStart.h + projDy);
                     localShiftY = (newH - resizeStart.h) / 2;
                     break;
             }
-        }
-        // fallback: 舊邏輯 (如果沒有 resizeDirection，例如右下角拉伸)
-        else {
-            // 舊邏輯暫不支援，目前透過 renderCabinet 強制產生有方向的控點
         }
 
         // [限制] 根據 adjustable 屬性最後把關
@@ -988,29 +1044,30 @@ function handleGlobalMove(e) {
         const el = document.getElementById(resizeTarget.id);
         updateCabStyle(el, resizeTarget);
         el.querySelector('.size-label').innerText = `${Math.round(resizeTarget.currentW)}x${Math.round(resizeTarget.currentH)} cm (${cmToFeet(resizeTarget.currentW)}x${cmToFeet(resizeTarget.currentH)}尺)`;
+    }
 
-        // --------------------------
-        // 3. 處理區域頂點拖曳 (Vertex Move)
-        // --------------------------
-    } else if (isDraggingVertex && draggedAreaId !== null && draggedVertexIndex !== -1) {
+    // --------------------------
+    // 3. 處理區域頂點拖曳 (Vertex Move)
+    // --------------------------
+    if (isDraggingVertex && draggedAreaId !== null && draggedVertexIndex !== null) {
         const area = drawnAreas.find(a => a.id === draggedAreaId);
         if (area) {
             const rect = canvas.getBoundingClientRect();
-            // [v8.8 修正] 區域頂點拖曳也需要考慮 viewScale
-            const newX = (e.clientX - rect.left) / viewScale;
-            const newY = (e.clientY - rect.top) / viewScale;
-
-            // 更新頂點座標
+            const safeScale = viewScale || 1.0;
+            const newX = (e.clientX - rect.left) / safeScale;
+            const newY = (e.clientY - rect.top) / safeScale;
             area.points[draggedVertexIndex] = { x: newX, y: newY };
-            // 即時重繪
             renderAllDrawnAreas();
         }
     }
 
+    // --------------------------
+    // 4. 處理底圖拖曳
+    // --------------------------
     if (isDraggingBg && isBgEditMode) {
-        // [v8.8 修正] 底圖拖曳位移量也需要除以 viewScale
-        const deltaX = (e.clientX - bgDragStart.x) / viewScale;
-        const deltaY = (e.clientY - bgDragStart.y) / viewScale;
+        const safeScale = viewScale || 1.0;
+        const deltaX = (e.clientX - bgDragStart.x) / safeScale;
+        const deltaY = (e.clientY - bgDragStart.y) / safeScale;
         bgPosition.x = bgStartPos.x + deltaX;
         bgPosition.y = bgStartPos.y + deltaY;
         updateBgTransform();
@@ -1018,40 +1075,30 @@ function handleGlobalMove(e) {
 }
 
 function endDrag() {
-    if (isDraggingCab && currentDragCab) {
-        // [v6.1 修改] 由於在移動過程中已即時修正位置 (吸附效果)，
-        // 這裡只需要檢查最終是否仍處於無解的碰撞狀態 (極少見)。
-        // 如果是，才執行復原。一般情況下，放開滑鼠時已經是貼齊側邊的合法位置。
-        if (checkCollision(currentDragCab, currentDragCab.id)) {
-            currentDragCab.x = startPos.x;
-            currentDragCab.y = startPos.y;
-            updateCabStyle(document.getElementById(currentDragCab.id), currentDragCab);
-            document.getElementById(currentDragCab.id).classList.remove('collision-warning');
-            showGlobalNotification('無法放置該位置 (空間不足)', 2000, 'warning');
-        } else {
-            // 位置有效，確認變更
-            saveState();
-        }
-    }
-    // [您的要求] 修正：在結束拖曳時，將背景圖的滑鼠指標恢復為 grab
-    if (isDraggingBg) {
-        document.getElementById('bg-layer').style.cursor = 'grab';
-    }
-    // [您的要求] 新增：結束區域頂點拖曳
+    if (isDraggingCab) saveState();
+    if (isResizing) saveState();
     if (isDraggingVertex) {
         const area = drawnAreas.find(a => a.id === draggedAreaId);
         if (area) {
-            // 重新計算面積並更新
             const calculatedArea = getPolygonCentroid(area.points).area;
             area.areaInPing = Math.ceil(Math.abs(calculatedArea) / 30000);
             updateQuotation();
-            saveState(); // 儲存變更
+            saveState();
         }
-        isDraggingVertex = false;
-        draggedAreaId = null;
-        draggedVertexIndex = -1;
     }
-    isDraggingCab = false; isResizing = false; isDraggingBg = false;
+
+    isDraggingCab = false;
+    currentDragCab = null;
+    isResizing = false;
+    resizeTarget = null;
+    resizeDirection = null;
+    isDraggingBg = false;
+    isDraggingVertex = false;
+    draggedAreaId = null;
+    draggedVertexIndex = null;
+
+    const bgLayer = document.getElementById('bg-layer');
+    if (bgLayer) bgLayer.style.cursor = isBgEditMode ? 'grab' : 'default';
 }
 
 // [錯誤修正] 新增遺漏的 checkCollision 函式及相關輔助函式
@@ -1229,11 +1276,19 @@ function deleteArea(id) {
 }
 
 function toggleDrawnAreasLock(isLocked) {
+    // Lock SVG areas
     const layer = document.getElementById('drawn-areas-layer');
-    layer.querySelectorAll('polygon').forEach(p => {
-        p.style.pointerEvents = isLocked ? 'none' : 'auto';
+    layer.querySelectorAll('g').forEach(g => {
+        g.style.pointerEvents = isLocked ? 'none' : 'auto';
     });
-    if (isLocked) deselectAllAreas();
+
+    if (isLocked) {
+        deselectAllAreas();
+        const selectedCab = placedCabinets.find(c => c.id === selectedCabId);
+        if (selectedCab && selectedCab.data.isWall) {
+            deselectAll();
+        }
+    }
 }
 
 // [錯誤修正] 新增遺漏的 handleBgUpload 函式
@@ -1245,14 +1300,16 @@ function handleBgUpload(event) {
             const bgImg = document.getElementById('bg-img');
             bgImg.src = e.target.result;
             bgImg.style.display = 'block';
-            // 啟用控制項
             document.getElementById('bg-controls').classList.remove('opacity-50', 'pointer-events-none');
-        }
+            // Reset position and scale when new image loaded
+            bgPosition = { x: 0, y: 0 };
+            bgScale = 1.0;
+            updateBgScale(1.0);
+            updateBgTransform();
+        };
         reader.readAsDataURL(file);
     }
 }
-
-
 
 // [錯誤修正] 新增遺漏的 saveCanvasAsImage 函式
 function saveCanvasAsImage() {
@@ -1279,108 +1336,50 @@ function saveCanvasAsImage() {
     }).then(canvas => {
         // 3. 建立下載連結
         const link = document.createElement('a');
-        const date = new Date();
-        const dateString = `${date.getFullYear()} -${(date.getMonth() + 1).toString().padStart(2, '0')} -${date.getDate().toString().padStart(2, '0')} `;
-        link.download = `layout - ${dateString}.png`;
-        link.href = canvas.toDataURL('image/png');
-
-        // 4. 觸發下載並清理
+        link.download = `design-layout-${Date.now()}.png`;
+        link.href = canvas.toDataURL();
         link.click();
-        showGlobalNotification('圖片已開始下載！', 3000, 'success');
 
-    }).catch(err => {
-        console.error('另存圖片失敗:', err);
-        showGlobalNotification(`圖片產生失敗: ${err.message} `, 8000, 'error');
-    }).finally(() => {
-        // [您的要求] 無論成功或失敗，都隱藏浮水印
+        // 4. 恢復狀態
         watermark.style.display = 'none';
-        // 5. 無論成功或失敗，都恢復之前的選取狀態
         if (previouslySelectedCabId) selectCabinet(previouslySelectedCabId);
         if (previouslySelectedAreaId) selectArea(previouslySelectedAreaId);
+        showGlobalNotification('圖片下載完成', 3000, 'success');
     });
 }
 
-// [錯誤修正] 新增遺漏的 saveLayout 函式
 function saveLayout() {
-    try {
-        // 1. 收集所有需要儲存的資料
-        const layoutData = {
-            version: '2.0', // 版本號，方便未來升級
-            timestamp: new Date().toISOString(),
-            placedCabinets: placedCabinets,
-            drawnAreas: drawnAreas,
-            background: {
-                position: bgPosition,
-                scale: bgScale,
-                // [您的要求] 新增：儲存底圖的 src
-                src: document.getElementById('bg-img').src
-            },
-            constructionArea: document.getElementById('construction-area').value
-        };
+    const layoutData = {
+        version: '2.0',
+        timestamp: new Date().toISOString(),
+        placedCabinets: placedCabinets,
+        drawnAreas: drawnAreas,
+        background: {
+            position: bgPosition,
+            scale: bgScale,
+            src: document.getElementById('bg-img').src
+        },
+        constructionArea: document.getElementById('construction-area').value
+    };
 
-        // 2. 轉換為 JSON 字串並建立 Blob
-        const jsonString = JSON.stringify(layoutData, null, 2); // 使用 null, 2 進行格式化，方便閱讀
-        const blob = new Blob([jsonString], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-
-        // 3. 建立並觸發下載連結
-        const link = document.createElement('a');
-        const dateString = new Date().toISOString().slice(0, 10);
-        link.download = `layout - data - ${dateString}.json`;
-        link.href = url;
-        link.click();
-
-        URL.revokeObjectURL(url); // 釋放資源
-        showGlobalNotification('佈局已儲存為 JSON 檔案！', 3000, 'success');
-    } catch (error) {
-        console.error('儲存佈局失敗:', error);
-        showGlobalNotification(`儲存失敗: ${error.message} `, 8000, 'error');
-    }
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(layoutData, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", `layout-${Date.now()}.json`);
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
 }
 
-// [錯誤修正] 新增遺漏的 loadLayout 函式
 function loadLayout(event) {
     const file = event.target.files[0];
-    if (!file) {
-        return;
-    }
+    if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = function (e) {
+    reader.onload = function(e) {
         try {
             const layoutData = JSON.parse(e.target.result);
-
-            // 1. 基本驗證
-            if (!layoutData.placedCabinets || !layoutData.drawnAreas || !layoutData.background) {
-                throw new Error('無效的佈局檔案格式。');
-            }
-
-            // 2. 套用載入的資料
-            placedCabinets = layoutData.placedCabinets || [];
-            drawnAreas = layoutData.drawnAreas || [];
-            // [您的要求] 新增：載入底圖的 src、位置和縮放
-            if (layoutData.background) {
-                bgPosition = layoutData.background.position || { x: 0, y: 0 };
-                bgScale = layoutData.background.scale || 1.0;
-                const bgImg = document.getElementById('bg-img');
-                if (layoutData.background.src && layoutData.background.src.startsWith('data:image')) {
-                    bgImg.src = layoutData.background.src;
-                    bgImg.style.display = 'block';
-                    document.getElementById('bg-controls').classList.remove('opacity-50', 'pointer-events-none');
-                }
-            }
-            document.getElementById('construction-area').value = layoutData.constructionArea || '0';
-
-            // 3. 重新渲染所有內容
-            renderAllCabinets();
-            renderAllDrawnAreas();
-            updateBgTransform();
-            saveState(); // [您的要求] 載入新佈局後，將其作為一個歷史狀態
-            updateQuotation();
-
-            deselectAll();
-            deselectAllAreas();
-
+            loadLayoutFromData(layoutData);
             showGlobalNotification('佈局已成功載入！', 3000, 'success');
         } catch (error) {
             console.error('載入佈局失敗:', error);
@@ -1657,6 +1656,8 @@ function startDrawing(type) {
         document.getElementById('show-floors-toggle').checked = false;
     } else if (type === 'floor') {
         document.getElementById('show-ceilings-toggle').checked = false;
+    } else if (type === 'wall') {
+        // 繪製牆壁時，通常不需要隱藏其他層，或者可以選擇隱藏天花板以便看清牆壁位置
     }
     renderAllDrawnAreas();
 }
@@ -1665,19 +1666,49 @@ function handleDrawingClick(e) {
     const rect = canvas.getBoundingClientRect();
     // [v8.16 修復] 繪圖點擊座標也必須考慮 viewScale，否則縮放後畫出來的點會偏離
     const safeScale = viewScale || 1.0;
-    const x = (e.clientX - rect.left) / safeScale;
-    const y = (e.clientY - rect.top) / safeScale;
+    let x = (e.clientX - rect.left) / safeScale;
+    let y = (e.clientY - rect.top) / safeScale;
+
+    // [v9.1] 點擊時也應用相同的吸附與正交邏輯
+    if (isDrawing) {
+        // 1. 吸附起點
+        if (currentDrawingPoints.length > 2) {
+            const startPoint = currentDrawingPoints[0];
+            const dist = Math.sqrt(Math.pow(x - startPoint.x, 2) + Math.pow(y - startPoint.y, 2));
+            if (dist < 20) {
+                finishDrawing(); // 點擊起點直接完成
+                return;
+            }
+        }
+        // 2. 正交鎖定
+        if (!e.altKey && currentDrawingPoints.length > 0) {
+            const lastPoint = currentDrawingPoints[currentDrawingPoints.length - 1];
+            const dx = Math.abs(x - lastPoint.x);
+            const dy = Math.abs(y - lastPoint.y);
+            if (dx > dy) {
+                y = lastPoint.y;
+            } else {
+                x = lastPoint.x;
+            }
+        }
+    }
+
     currentDrawingPoints.push({ x, y });
     // [您的要求] 新增：更新繪圖預覽
     updateDrawingPreview();
 }
 
 // [您的要求] 新增：更新繪圖預覽的函式
-function updateDrawingPreview() {
+function updateDrawingPreview(tempNextPoint = null) {
     const polyline = document.getElementById('drawing-preview-polyline');
     const polygon = document.getElementById('drawing-preview-polygon');
-    const pointsStr = currentDrawingPoints.map(p => `${p.x},${p.y}`).join(' ');
     const verticesGroup = document.getElementById('drawing-preview-vertices');
+
+    let previewPoints = [...currentDrawingPoints];
+    if (tempNextPoint) {
+        previewPoints.push(tempNextPoint);
+    }
+    const pointsStr = previewPoints.map(p => `${p.x},${p.y}`).join(' ');
 
     if (polyline) {
         polyline.setAttribute('points', pointsStr);
@@ -1694,44 +1725,135 @@ function updateDrawingPreview() {
             verticesGroup.appendChild(circle);
         });
     }
-    // 當有超過兩個點時，才顯示預覽的閉合區域
-    if (polygon && currentDrawingPoints.length > 2) {
-        polygon.setAttribute('points', pointsStr);
-        polygon.style.display = 'block';
-    } else if (polygon) {
+    // [您的要求] 繪製牆壁時不顯示預覽填充
+    if (currentDrawingType === 'wall') {
         polygon.style.display = 'none';
+    } else {
+        // 當有超過兩個點時，才顯示預覽的閉合區域
+        if (polygon && previewPoints.length > 2) {
+            polygon.setAttribute('points', pointsStr);
+            polygon.style.display = 'block';
+        } else if (polygon) {
+            polygon.style.display = 'none';
+        }
     }
     document.getElementById('drawing-preview-layer').style.display = 'block';
 }
 
 function finishDrawing() {
     console.log('finishDrawing called. Points:', currentDrawingPoints.length); // [Debug]
-    if (currentDrawingPoints.length < 3) {
-        showGlobalNotification('至少需要 3 個頂點才能形成一個區域。', 3000, 'error');
-        cancelDrawing();
-        return;
-    }
-    // [您的要求] 修正面積計算與坪數進位
-    try {
-        const centroidData = getPolygonCentroid(currentDrawingPoints);
-        const calculatedArea = centroidData.area;
-        const areaInPing = Math.ceil(Math.abs(calculatedArea) / 30000); // 無條件進位到整數坪
 
-        drawnAreas.push({
-            id: `area-${Date.now()}`,
-            type: currentDrawingType,
-            points: [...currentDrawingPoints],
-            areaInPing: areaInPing,
-            note: ''
-        });
-        renderAllDrawnAreas();
+    // [您的要求] 牆壁繪製邏輯
+    if (currentDrawingType === 'wall') {
+        if (currentDrawingPoints.length < 2) {
+            showGlobalNotification('至少需要 2 個頂點才能形成牆壁。', 3000, 'error');
+            cancelDrawing();
+            return;
+        }
+
+        const wallThickness = parseInt(document.getElementById('wall-thickness-input').value) || 15;
+        const wallData = {
+            name: '牆壁',
+            width: 0, depth: 0, pricingType: 'none', adjustable: 'none',
+            allowOverlap: true, isWall: true, defaultOpacity: 100, note: '手繪牆壁'
+        };
+
+        // [v9.1] 計算多邊形質心，用於判斷「向外」的方向
+        // 如果點數不足以構成多邊形(例如直線)，則預設向右/下偏移
+        let centroid = { x: 0, y: 0 };
+        if (currentDrawingPoints.length > 2) {
+            centroid = getPolygonCentroid(currentDrawingPoints);
+        }
+
+        for (let i = 0; i < currentDrawingPoints.length - 1; i++) {
+            const p1 = currentDrawingPoints[i];
+            const p2 = currentDrawingPoints[i + 1];
+
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angleRad = Math.atan2(dy, dx);
+            const angleDeg = angleRad * 180 / Math.PI;
+
+            // 計算原始中心點
+            const midX = (p1.x + p2.x) / 2;
+            const midY = (p1.y + p2.y) / 2;
+
+            // [v9.1] 計算向外偏移向量
+            // 法向量 (-dy, dx)
+            let nx = -dy;
+            let ny = dx;
+            // 正規化
+            const nLen = Math.sqrt(nx * nx + ny * ny);
+            nx /= nLen;
+            ny /= nLen;
+
+            // 判斷法向量是否指向質心 (向內)，如果是則反轉 (向外)
+            // 向量 C->M (質心到中點)
+            const cx = midX - centroid.x;
+            const cy = midY - centroid.y;
+            // 內積 > 0 表示同向(向外)，< 0 表示反向(向內)
+            // 若 currentDrawingPoints.length <= 2，centroid 為 0,0，此判斷可能不準，但對於直線牆壁通常可接受
+            if (currentDrawingPoints.length > 2) {
+                if (cx * nx + cy * ny < 0) {
+                    nx = -nx;
+                    ny = -ny;
+                }
+            }
+
+            // 偏移中心點：向外移動 厚度/2
+            const offsetX = nx * (wallThickness / 2);
+            const offsetY = ny * (wallThickness / 2);
+
+            // [v9.1] 延伸長度以覆蓋轉角 (簡單處理：兩端各延伸 厚度/2)
+            // 這樣 90 度轉角會形成重疊，避免缺角
+            const extendedLength = length + wallThickness;
+
+            const wallSegment = {
+                id: `wall-segment-${Date.now()}-${i}`,
+                data: { ...wallData, unitPrice: 0 }, // [Fix] Add unitPrice to avoid error
+                x: (midX + offsetX) - (extendedLength / 2),
+                y: (midY + offsetY) - (wallThickness / 2),
+                rotation: angleDeg,
+                currentW: extendedLength,
+                currentH: wallThickness,
+                opacity: 100,
+                note: '手繪牆壁'
+            };
+            placedCabinets.push(wallSegment);
+        }
+
+        renderAllCabinets();
+        saveState();
         updateQuotation();
-        saveState(); // [您的要求] 儲存狀態
         cancelDrawing();
-    } catch (e) {
-        console.error('finishDrawing error:', e);
-        showGlobalNotification('繪圖錯誤: ' + e.message, 3000, 'error');
-        cancelDrawing();
+    } else { // 原有的天花板/地板邏輯
+        if (currentDrawingPoints.length < 3) {
+            showGlobalNotification('至少需要 3 個頂點才能形成一個區域。', 3000, 'error');
+            cancelDrawing();
+            return;
+        }
+        try {
+            const centroidData = getPolygonCentroid(currentDrawingPoints);
+            const calculatedArea = centroidData.area;
+            const areaInPing = Math.ceil(Math.abs(calculatedArea) / 30000);
+
+            drawnAreas.push({
+                id: `area-${Date.now()}`,
+                type: currentDrawingType,
+                points: [...currentDrawingPoints],
+                areaInPing: areaInPing,
+                note: ''
+            });
+            renderAllDrawnAreas();
+            updateQuotation();
+            saveState();
+            cancelDrawing();
+        } catch (e) {
+            console.error('finishDrawing error:', e);
+            showGlobalNotification('繪圖錯誤: ' + e.message, 3000, 'error');
+            cancelDrawing();
+        }
     }
 }
 
@@ -1746,11 +1868,13 @@ function cancelDrawing() {
     document.getElementById('drawing-preview-polygon').setAttribute('points', '');
     document.getElementById('drawing-preview-vertices').innerHTML = '';
     canvas.style.zIndex = 'auto';
-}
 
+    // 恢復元件的透明度與點擊事件
+    renderAllCabinets();
+    showGlobalNotification('繪圖已取消', 2000, 'info');
+}
 // [錯誤修正] 新增遺漏的 startCabDrag, startResize, toggleBgMode, updateBgScale 函式
 function startCabDrag(e, cab) {
-    // [v8.17 修復] 繪圖模式下禁止選取或拖曳元件，避免誤觸
     if (e.button !== 0 || isBgEditMode || isDrawing) return;
     e.stopPropagation();
     isDraggingCab = true;
@@ -1774,12 +1898,6 @@ function startCabDrag(e, cab) {
     startPos = { x: cab.x, y: cab.y };
 }
 
-/**
- * 啟動元件縮放模式
- * @param {string} id - 元件ID
- * @param {MouseEvent} e - 滑鼠事件
- * @param {string} direction - 拉伸方向 ('n', 's', 'w', 'e')
- */
 function startResize(id, e, direction = null) {
     if (e.button !== 0) return;
     e.stopPropagation();
@@ -1800,22 +1918,25 @@ function startResize(id, e, direction = null) {
     }
 }
 
-function toggleBgMode(checked) {
-    isBgEditMode = checked;
+function toggleBgMode(enabled) {
+    isBgEditMode = enabled;
     const bgLayer = document.getElementById('bg-layer');
+    const bgControls = document.getElementById('bg-controls');
+    
     if (isBgEditMode) {
-        bgLayer.style.zIndex = '60';
         bgLayer.style.cursor = 'grab';
-        showGlobalNotification('底圖調整模式已啟用。', 3000, 'info');
+        bgLayer.style.pointerEvents = 'auto';
+        bgControls.classList.remove('opacity-50', 'pointer-events-none');
+        showGlobalNotification('底圖調整模式：可拖曳底圖或使用滑桿縮放', 3000, 'info');
     } else {
-        bgLayer.style.zIndex = '1'; // [您的要求] 修正：取消模式時，將 z-index 降回，才不會擋住繪圖區域
         bgLayer.style.cursor = 'default';
+        bgLayer.style.pointerEvents = 'none';
+        bgControls.classList.add('opacity-50', 'pointer-events-none');
     }
 }
 
-function updateBgScale(value) {
-    if (isNaN(value) || value < 0.2 || value > 3.0) return;
-    bgScale = value;
+function updateBgScale(scale) {
+    bgScale = scale;
     document.getElementById('bg-scale').value = bgScale;
     document.getElementById('bg-scale-num').value = bgScale;
     updateBgTransform();
@@ -1859,14 +1980,13 @@ function initZoomControls() {
     document.getElementById('zoom-out-btn').addEventListener('click', () => updateViewZoom(viewScale - 0.1));
     document.getElementById('zoom-reset-btn').addEventListener('click', () => updateViewZoom(1.0));
 
-    // 滑鼠滾輪縮放 (需按住 Ctrl)
-    document.getElementById('canvas-wrapper').addEventListener('wheel', (e) => {
+    document.addEventListener('wheel', (e) => {
         if (e.ctrlKey) {
             e.preventDefault();
             const delta = e.deltaY > 0 ? -0.1 : 0.1;
             updateViewZoom(viewScale + delta);
         }
-    });
+    }, { passive: false });
 }
 
 // [v8.7 修復] 補回遺失的 updateBgTransform 函式，恢復底圖調整功能
@@ -2050,8 +2170,11 @@ function bindEventListeners() {
     document.getElementById('layout-upload').addEventListener('change', loadLayout);
     document.getElementById('draw-ceiling-btn').addEventListener('click', () => startDrawing('ceiling'));
     document.getElementById('draw-floor-btn').addEventListener('click', () => startDrawing('floor'));
+    document.getElementById('draw-wall-btn').addEventListener('click', () => startDrawing('wall'));
     document.getElementById('show-ceilings-toggle').addEventListener('change', renderAllDrawnAreas);
     document.getElementById('show-floors-toggle').addEventListener('change', renderAllDrawnAreas);
+    if (document.getElementById('show-walls-toggle')) document.getElementById('show-walls-toggle').addEventListener('change', renderAllDrawnAreas);
+    if (document.getElementById('lock-walls-toggle')) document.getElementById('lock-walls-toggle').addEventListener('change', renderAllCabinets);
     document.getElementById('lock-drawn-areas').addEventListener('change', (e) => toggleDrawnAreasLock(e.target.checked));
     // [您的要求] 綁定復原/重做按鈕事件
     document.getElementById('undo-btn').addEventListener('click', undo);
@@ -2200,8 +2323,7 @@ function checkAndRestoreBackup() {
         if (confirm(`檢測到您有未儲存的進度 (${data.prettyTime})，是否還原？\n\n按「確定」還原，按「取消」將忽略此備份。`)) {
             loadLayoutFromData(data);
         } else {
-            // 如果使用者選擇不還原，是否要清除備份？
-            // 這裡選擇暫時保留，或可選擇 localStorage.removeItem(AUTO_SAVE_KEY);
+            // 如果使用者選擇不還原，是否要清除備份？m
         }
     } catch (e) {
         console.error('檢查備份失敗:', e);

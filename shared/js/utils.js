@@ -182,3 +182,40 @@ export function sendApiRequestAsGet(baseUrl, payload) {
     return fetch(url, { method: 'GET' })
         .then(res => res.text());
 }
+/**
+ * 壓縮圖片共用函式
+ * 依賴 browser-image-compression 函式庫 (需在 HTML 中引入 CDN)
+ * 
+ * @param {File} file - 原始檔案物件
+ * @param {number} maxSizeMB - 最大檔案大小 (MB)，預設 1MB
+ * @param {number} maxWidthOrHeight - 最大寬或高 (px)，預設 1920px
+ * @returns {Promise<File>} - 壓縮後的檔案物件，若壓縮失敗則回傳原檔
+ */
+export async function compressImage(file, maxSizeMB = 1, maxWidthOrHeight = 1920) {
+    // 1. 基本檢查：若不是圖片或檔案不存在，直接回傳原檔
+    if (!file || !file.type.startsWith('image/')) {
+        return file;
+    }
+
+    // 2. 檢查全域變數 imageCompression 是否存在
+    if (typeof imageCompression === 'undefined') {
+        console.warn('browser-image-compression library not loaded. Skipping compression.');
+        return file;
+    }
+
+    const options = {
+        maxSizeMB: maxSizeMB,
+        maxWidthOrHeight: maxWidthOrHeight,
+        useWebWorker: true
+    };
+
+    try {
+        // 3. 執行壓縮
+        const compressedFile = await imageCompression(file, options);
+        return compressedFile;
+    } catch (error) {
+        // 4. 錯誤處理：壓縮失敗時回傳原檔，不中斷流程
+        console.error('圖片壓縮失敗，將使用原圖上傳:', error);
+        return file;
+    }
+}

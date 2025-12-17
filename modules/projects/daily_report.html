@@ -53,6 +53,124 @@
     </div>
 
 <!-- [v579.0 重構] 改為載入模組化的 JS 檔案 -->
-<script type="module" src="./js/daily_report_main.js"></script>
+<!-- [v625.0 核心改造] 根據您的要求，將排休資料的讀取邏輯直接整合進來 -->
+<script type="module">
+    // 引入主應用程式邏輯
+    import { main as initializeDailyReport } from './js/daily_report_main.js';
+
+    // [v625.0 新增] 假勤系統的 API URL
+    const ATTENDANCE_API_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
+
+    /**
+     * [v625.0 新增] 讀取排班/假勤資料的核心函式
+     * 採用「主控台快取 -> 本地儲存 -> 後端請求」的降級策略
+     * @param {number} year - 年份 (e.g., 2024)
+     * @param {number} month - 月份 (1-12)
+     * @returns {Promise<object>} - 包含 { schedule, holidays } 的物件
+     */
+    async function getScheduleDataForMonth(year, month) {
+        const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+        const localStorageKey = `shiftSchedule_schedule_${year}-${month}`;
+
+        // 1. 嘗試從 SPA 主控台 (父視窗) 的全域快取讀取
+        if (window.parent && window.parent.scheduleCache && window.parent.scheduleCache[monthStr]) {
+            console.log(`[排班] 從 SPA 主控台快取讀取 ${monthStr} 的資料。`);
+            return window.parent.scheduleCache[monthStr];
+        }
+
+        // 2. 嘗試從 localStorage 讀取
+        const cached = localStorage.getItem(localStorageKey);
+        if (cached) {
+            try {
+                const cacheData = JSON.parse(cached);
+                // 檢查快取是否過期 (排班快取通常設定 7 天)
+                if (cacheData.expires && cacheData.expires > Date.now()) {
+                    console.log(`[排班] 從 localStorage 快取讀取 ${monthStr} 的資料。`);
+                    // 將 localStorage 的資料格式轉換為記憶體中快取的格式
+                    return {
+                        schedule: cacheData.data.schedule,
+                        holidays: new Set(cacheData.data.holidays || [])
+                    };
+                }
+            } catch (e) {
+                console.error(`解析 localStorage 中的排班快取 (${localStorageKey}) 失敗:`, e);
+            }
+        }
+
+        // 3. 向後端請求資料
+        console.log(`[排班] 快取未命中，向後端請求 ${monthStr} 的資料...`);
+        try {
+            const url = new URL(ATTENDANCE_API_URL);
+            url.searchParams.append('page', 'attendance_api');
+            url.searchParams.append('action', 'get_latest_schedule');
+            url.searchParams.append('year', year);
+            url.searchParams.append('month', month);
+
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`伺服器錯誤: ${response.status}`);
+            const result = await response.json();
+
+            if (result && result.schedule) {
+                const scheduleData = {
+                    schedule: result.schedule,
+                    holidays: new Set(result.holidays || [])
+                };
+
+                // 將從後端取得的資料存入 localStorage 快取 (設定 7 天過期)
+                const cacheToStore = {
+                    data: {
+                        schedule: scheduleData.schedule,
+                        holidays: Array.from(scheduleData.holidays)
+                    },
+                    expires: Date.now() + 7 * 24 * 60 * 60 * 1000
+                };
+                localStorage.setItem(localStorageKey, JSON.stringify(cacheToStore));
+                console.log(`[排班] 已從後端取得 ${monthStr} 資料並存入快取。`);
+
+                return scheduleData;
+            } else {
+                // 如果後端沒有回傳有效資料，也回傳一個空物件結構，避免後續程式出錯
+                return { schedule: {}, holidays: new Set() };
+            }
+        } catch (error) {
+            console.error(`[排班] 獲取 ${monthStr} 的排班資料失敗:`, error);
+            // 即使失敗也回傳空物件，讓主流程繼續
+            return { schedule: {}, holidays: new Set() };
+        }
+    }
+
+    /**
+     * [v625.0 新增] 判斷指定員工在特定日期是否有假勤紀錄
+     * @param {string} userId - 員工的 LINE User ID
+     * @param {string} dateStr - 日期字串 (e.g., "2024-05-30")
+     * @param {object} scheduleData - 從 getScheduleDataForMonth 取得的排班資料
+     * @returns {string|null} - 回傳假別名稱 (如 "休假", "特休") 或 null
+     */
+    function getLeaveStatus(userId, dateStr, scheduleData) {
+        if (!scheduleData || !scheduleData.schedule || !scheduleData.schedule[userId]) {
+            return null;
+        }
+        const userSchedule = scheduleData.schedule[userId];
+        const shiftStatus = userSchedule[dateStr]; // e.g., "休假", "特休[08:30-17:30]"
+
+        if (shiftStatus) {
+            // 只要狀態包含 "休" (休假, 特休, 補休...)，就認為是休假
+            if (shiftStatus.includes('休')) {
+                // 提取假別基本類型，去除時間等附加資訊
+                return shiftStatus.match(/^[^\[\(]+/)[0];
+            }
+        }
+        return null;
+    }
+
+    // 將需要用到的函式掛載到 window 物件上，以便 daily_report_main.js 可以呼叫
+    window.dailyReportApp = {
+        getScheduleDataForMonth,
+        getLeaveStatus
+    };
+
+    // 執行主應用程式
+    initializeDailyReport();
+</script>
 </body>
 </html>

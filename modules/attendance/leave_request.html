@@ -6,6 +6,8 @@
     <title>添心設計 | 假勤申請</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <!-- [新增] 引入圖片壓縮函式庫，解決手機照片過大導致上傳失敗的問題 -->
+    <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.1/dist/browser-image-compression.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
         .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
@@ -170,7 +172,7 @@
 <!-- 【v144.0 核心修正】將 script 標籤類型改為 "module"，以支援 import 語法 -->
 <script type="module">
     // 【v143.0 核心改造】引入共用工具函式庫
-    import { readFileAsBase64 } from '../../shared/js/utils.js'; // [v516.0 修正] 更新共用模組 utils.js 的路徑
+    import { readFileAsBase64, compressImage } from '../../shared/js/utils.js'; // [v516.0 修正] 更新共用模組 utils.js 的路徑
 
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
     const APP_SETTINGS = {
@@ -542,7 +544,8 @@
             submitButton.textContent = '上傳中...';
 
             try {
-                await submitRequest(timestamp); // 呼叫既有的 submitRequest 函式，傳入 timestamp 進入補件模式
+                // [修正] 傳入正確的參數順序 (mode, recordId)，確保補件功能正常運作
+                await submitRequest('supplement', timestamp); 
             } catch (error) {
                 // submitRequest 內部已有錯誤處理，此處僅恢復按鈕狀態
                 submitButton.disabled = false;
@@ -1286,8 +1289,11 @@ thumbnail.src = '';
 
                      const proofFile = document.getElementById('proofFile').files[0];
                      if (proofFile) {
-                         const base64Data = await readFileAsBase64(proofFile);
-                         payload.proofFile = { name: proofFile.name, type: proofFile.type, data: base64Data };
+                         // [優化] 使用共用壓縮函式，自動處理錯誤回退
+                         const compressedFile = await compressImage(proofFile);
+                         const base64Data = await readFileAsBase64(compressedFile);
+                         // [修正] 使用壓縮後的檔案類型 (type) 與名稱，確保後端儲存正確的副檔名 (如 .jpg)
+                         payload.proofFile = { name: compressedFile.name || proofFile.name, type: compressedFile.type, data: base64Data };
                      }
                      
                      // --- Validation for new requests ---
@@ -1332,8 +1338,11 @@ thumbnail.src = '';
                     };
 
                     if (proofFile) {
-                        const base64Data = await readFileAsBase64(proofFile);
-                        payload.proofFile = { name: proofFile.name, type: proofFile.type, data: base64Data };
+                        // [優化] 使用共用壓縮函式
+                        const compressedFile = await compressImage(proofFile);
+                        const base64Data = await readFileAsBase64(compressedFile);
+                        // [修正] 使用壓縮後的檔案資訊
+                        payload.proofFile = { name: compressedFile.name || proofFile.name, type: compressedFile.type, data: base64Data };
                     }
                     successCallback = () => {
                         const card = document.getElementById(`req-${recordId}`);

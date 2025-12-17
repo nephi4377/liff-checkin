@@ -456,7 +456,7 @@ window.addOptimisticCommunicationCard = addOptimisticCommunicationCard;
 let lazyImageObserver;
 const imageQueue = new Set(); // 圖片請求佇列
 let activeRequests = 0; // [v596.0] 追蹤當前正在處理的請求數量
-const MAX_CONCURRENT_REQUESTS = 3; // [v596.0] 設定最大並行請求數為 3
+const MAX_CONCURRENT_REQUESTS = 5; // [v624.0 優化] 根據您的要求，將並行請求數提高到 5，加快圖片載入
 
 export function lazyLoadImages() {
   const lazyImages = document.querySelectorAll('img.lazy');
@@ -491,7 +491,7 @@ export function lazyLoadImages() {
       });
       
       // 立刻檢查是否能派出更多工人（如果還沒達到上限）
-      setTimeout(processQueue, 150); // [v596.0] 間隔 50ms 派出下一個，實現並行處理
+      setTimeout(processQueue, 50); // [v624.0 優化] 根據您的要求，將批次間隔縮短為 50ms，讓載入更連貫
   }
 
   if ("IntersectionObserver" in window) {

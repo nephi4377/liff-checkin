@@ -15,16 +15,10 @@ import { lazyLoadImages } from './ui.js';
 
 window.extractDriveFileId = extractDriveFileId;
 
-document.addEventListener('DOMContentLoaded', () => {
-    const startDatePicker = document.getElementById('start-date-picker');
-    const endDatePicker = document.getElementById('end-date-picker');
-    const queryBtn = document.getElementById('query-btn');
-    const reportsContainer = document.getElementById('reports-container');
-    const placeholder = document.getElementById('placeholder');
-    const groupFilterContainer = document.getElementById('group-filter-container');
-    let userProfile = null;
-    let allFetchedEmployees = [];
-    let allFetchedReports = [];
+let startDatePicker, endDatePicker, queryBtn, reportsContainer, placeholder, groupFilterContainer;
+let userProfile = null;
+let allFetchedEmployees = [];
+let allFetchedReports = [];
 
     function getTwoWorkingDaysAgo(date) {
         let resultDate = new Date(date);
@@ -40,10 +34,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return resultDate;
     }
-
-    const today = new Date();
-    startDatePicker.value = getTwoWorkingDaysAgo(today).toLocaleDateString('sv');
-    endDatePicker.value = today.toLocaleDateString('sv');
 
     function initializeUser() {
         const urlParams = new URLSearchParams(window.location.search);
@@ -104,7 +94,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function main() {
+    export function main() {
+        startDatePicker = document.getElementById('start-date-picker');
+        endDatePicker = document.getElementById('end-date-picker');
+        queryBtn = document.getElementById('query-btn');
+        reportsContainer = document.getElementById('reports-container');
+        placeholder = document.getElementById('placeholder');
+        groupFilterContainer = document.getElementById('group-filter-container');
+
+        const today = new Date();
+        startDatePicker.value = getTwoWorkingDaysAgo(today).toLocaleDateString('sv');
+        endDatePicker.value = today.toLocaleDateString('sv');
+
         if (initializeUser()) {
             queryBtn.addEventListener('click', () => fetchAndRenderReports(startDatePicker.value, endDatePicker.value));
             fetchAndRenderReports(startDatePicker.value, endDatePicker.value);
@@ -125,9 +126,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.documentElement.style.setProperty('--thumbnail-width', newWidth);
             });
         }
-    }
 
-    main();
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('../../sw.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('ServiceWorker registration failed: ', error);
+                    });
+            });
+        }
+    }
 
     async function fetchAndRenderReports(startDateStr, endDateStr) {
         showLoading();
@@ -297,19 +308,6 @@ document.addEventListener('DOMContentLoaded', () => {
         placeholder.classList.remove('hidden');
         reportsContainer.appendChild(placeholder);
     }
-
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('../../sw.js')
-                .then(registration => {
-                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                })
-                .catch(error => {
-                    console.log('ServiceWorker registration failed: ', error);
-                });
-        });
-    }
-});
 
 /**
  * [v579.0 重構] 將函式移至全域，解決 ReferenceError

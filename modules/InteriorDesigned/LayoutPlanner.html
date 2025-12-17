@@ -12,6 +12,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <!-- [您的要求] 新增 jsPDF 函式庫，用於生成 PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- [新增] OpenCV.js 用於影像處理 (牆壁偵測) -->
+    <script async src="https://docs.opencv.org/4.8.0/opencv.js" type="text/javascript"></script>
     <!-- [核心修正] 重新引入已分離的 JavaScript 主檔案，並設定為 module -->
     <script type="module" src="./LayoutPlanner.js"></script>
     <!-- [新增] JSZip 函式庫，用於打包多個檔案成 ZIP -->
@@ -475,11 +477,18 @@
                 <!-- 區域繪製功能 -->
                 <div class="bg-purple-50 p-3 rounded border border-purple-100">
                     <h2 class="font-bold text-purple-800 text-sm mb-2">3. 區域繪製</h2>
-                    <div class="grid grid-cols-2 gap-2 mb-2">
+                    <div class="grid grid-cols-3 gap-2 mb-2">
                         <button id="draw-ceiling-btn"
                             class="w-full py-1.5 bg-purple-600 text-white rounded hover:bg-purple-700 text-xs">繪製天花板</button>
                         <button id="draw-floor-btn"
                             class="w-full py-1.5 bg-amber-500 text-white rounded hover:bg-amber-600 text-xs">繪製地板</button>
+                        <button id="draw-wall-btn"
+                            class="w-full py-1.5 bg-gray-600 text-white rounded hover:bg-gray-700 text-xs">繪製牆壁</button>
+                    </div>
+                    <div class="mt-2">
+                        <label class="text-xs font-bold text-gray-700">牆壁厚度 (cm):</label>
+                        <input type="number" id="wall-thickness-input" value="15" min="5" max="50"
+                            class="w-full text-xs border rounded p-1 mt-1">
                     </div>
                     <div class="space-y-1 mt-3">
                         <label class="flex items-center gap-2 text-xs font-bold text-gray-700">
@@ -487,6 +496,12 @@
                         </label>
                         <label class="flex items-center gap-2 text-xs font-bold text-gray-700">
                             <input type="checkbox" id="show-floors-toggle" checked> 顯示地板區域
+                        </label>
+                        <label class="flex items-center gap-2 text-xs font-bold text-gray-700">
+                            <input type="checkbox" id="show-walls-toggle" checked> 顯示牆壁結構
+                        </label>
+                        <label class="flex items-center gap-2 text-xs font-bold text-gray-700">
+                            <input type="checkbox" id="lock-walls-toggle"> 鎖定牆壁 (不可選取)
                         </label>
                         <label class="flex items-center gap-2 text-xs font-bold text-purple-800 mt-1">
                             <input type="checkbox" id="lock-drawn-areas"> 鎖定繪圖 (不可選取)
