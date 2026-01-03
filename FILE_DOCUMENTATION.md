@@ -1,6 +1,6 @@
 # 📋 CODING 專案完整檔案清冊
 
-**最後更新**: 2026年1月3日  
+**最後更新**: 2026年1月3日 (新增假單管理功能文檔)  
 **專案名稱**: 添心設計 LIFF 打卡系統前端頁面  
 **主要框架**: Vue 3 SPA + 多模組 iframe 架構
 
@@ -241,17 +241,117 @@ browser-image-compression 庫進行品質檢查
 - 📝 允許追加事由說明
 - 🖼️ 只接受 JPG/PNG，支援圖片壓縮
 
-##### 6️⃣ **假單管理 (管理者模式)**
+##### 6️⃣ **假單管理 (管理者模式) - 新增功能**
 
 **可見條件**: 權限 ≥ 4 (主管/HR)
 
-**額外功能**:
-- 👤 查看申請人姓名（員工視圖無此顯示）
-- ✏️ **編輯他人假單**: 修改日期、時間、事由
-- 🚫 **取消申請**: 只能取消已批准的申請
-- ✅ **批准/駁回**: 針對待審核假單進行審核
-- 🔍 **批量列表**: 顯示上月至今所有待管理假單
-- 📋 **定期刷新**: 自動於 10 分鐘更新一次列表（若停留在分頁）
+**管理介面結構**:
+```
+┌──────────────────────────────────────────┐
+│  假單管理分頁 (新增)                      │
+├──────────────────────────────────────────┤
+│ 待審核假單列表 (自動每 10 分鐘刷新)      │
+│                                          │
+│ 假單卡片:                               │
+│ ├─ 申請人: [姓名] (員工視圖無此顯示)   │
+│ ├─ 假別: [事假] 狀態: [待審核]          │
+│ ├─ 時間: 2026/01/05 09:00~12:00        │
+│ ├─ 事由: 家中急事                      │
+│ └─ [批准] [駁回] [編輯]                │
+│                                          │
+│ 批准/駁回面板:                          │
+│ └─ 駁回理由輸入框 (駁回時展開)          │
+│    [確認駁回] [取消]                   │
+│                                          │
+│ 編輯面板:                               │
+│ └─ 可編輯欄位: 日期、時間、事由         │
+│    [提交編輯] [取消]                   │
+└──────────────────────────────────────────┘
+```
+
+**核心功能**:
+1. ✅ **批准申請流程**
+   - 點擊「批准」→ 後端寫入排班記錄表
+   - 自動產生該月份的新排班版本（狀態: 已確認）
+   - 更新原假單狀態為「已批准」
+   - 發送系統通知給申請人
+
+2. 🚫 **駁回申請流程**
+   - 點擊「駁回」→ 展開理由輸入框
+   - 輸入駁回理由 (可選) → 確認駁回
+   - 後端建立駁回紀錄留供追溯
+   - 發送包含拒絕原因的系統通知
+
+3. ✏️ **編輯假單流程**
+   - 點擊「編輯」→ 表單切換至「請假申請」或「加班申請」分頁
+   - 根據該員工的班表重新產生時間選單
+   - 修改日期、時間、事由 → 點擊「提交編輯」
+   - 更新假單資料，記錄編輯者姓名與時間戳至「審核備註」
+
+4. 🚫 **取消申請功能**
+   - 只能取消「已批准」的申請
+   - 待審核或其他狀態的申請由駁回功能處理
+   - 取消後產生新的排班記錄移除該假勤項目
+
+5. 📋 **定期刷新機制**
+   - 使用者停留在「假單管理」分頁時，每 10 分鐘自動更新一次列表
+   - 新的待審核假單會自動出現在列表上方
+   - 若假單已被其他管理者處理則自動移除
+
+**管理者操作按鈕對照表**:
+
+| 按鈕 | 狀態條件 | 動作 | 後端處理 |
+|------|---------|------|--------|
+| **批准** | 待審核 | 點擊後立即批准 | 建立排班記錄，狀態→已批准 |
+| **駁回** | 待審核 | 展開理由輸入框 | 建立駁回記錄，狀態→已駁回 |
+| **確認駁回** | 駁回理由已填 | 確認駁回動作 | 提交理由，發送通知 |
+| **編輯** | 任何狀態 | 進入編輯模式 | 修改假單資料 |
+| **取消申請** | 已批准 | 取消該假勤 | 移除排班記錄中的假勤項目 |
+
+**新增 API 端點**:
+
+| 動作 | 路由 | 方法 | 參數 | 後端函式 | 回傳 |
+|------|------|------|------|---------|------|
+| **取得可管理假單** | `/attendance_api` | GET | userId, permission, mode=management | `_getMyLeaveRequests_()` | { success, data: [...] } |
+| **批准/駁回假單** | `/attendance_api` | GET | action=handle_approval, decision, recordId, applicantId, approverName, reason | `_handleApprovalRequest_()` | HTML 結果頁面 + 系統通知 |
+| **編輯假單** | POST | action=update_leave_request | recordId, applicantId, recordType, leaveType, startDate, startTime, endDate, endTime, reason | `_handleLeaveRequest_()` | { success, message } |
+
+**後端核心邏輯** (CheckinLogic.js):
+
+```javascript
+/**
+ * 取得我的假勤申請紀錄 (員工視圖 / 管理者視圖)
+ * @param {string} userId - 申請人 ID (員工視圖) 或管理者 ID (管理者視圖)
+ * @param {number} permission - 使用者權限等級
+ * @param {string} mode - 'default' = 自己的假單 | 'management' = 所有待審核假單
+ * @returns {object} { success, data: [...] }
+ */
+function _getMyLeaveRequests_(userId, permission, mode) { ... }
+
+/**
+ * 處理 Email/網頁審核: 批准或駁回假單
+ * @param {object} params - { decision: 'approved'|'rejected', recordId, approverName, reason, applicantId }
+ * @returns {HtmlService} 審核結果頁面
+ * 
+ * 核心業務邏輯:
+ * - 若批准「請假」: 產生該月份新排班記錄，合併假勤項目
+ * - 若批准「加班」: 記錄加班時間與補償方式
+ * - 若批准「銷假」: 移除指定假勤項目，恢復上班日
+ * - 若駁回: 建立駁回紀錄，發送通知
+ */
+function _handleApprovalRequest_(params) { ... }
+
+/**
+ * 更新假勤申請紀錄 (管理者編輯)
+ * @param {object} payload - { recordId, applicantId, recordType, leaveType, startDate, startTime, endDate, endTime, reason }
+ * @returns {object} { success, message }
+ * 
+ * 特性:
+ * - 記錄編輯者姓名與時間至「審核備註」
+ * - 保留原始建立時間戳
+ */
+function _handleLeaveRequest_(payload) { ... }
+```
 
 ##### 7️⃣ **事件監聽與交互**
 
@@ -640,7 +740,7 @@ const APP_SETTINGS = {
 | 檔名 | 行數 | 功能用途 | 版本 |
 |------|------|---------|------|
 | **WebApp.js** | 464 | 📡 Web App 總入口，處理所有 GET/POST 請求，路由分發、日誌記錄 | v1.0 |
-| **CheckinLogic.js** | 2098 | 🎯 打卡核心業務邏輯，位置驗證、事件記錄、AI 問候、隊列管理 | v1.0 |
+| **CheckinLogic.js** | 2149 | 🎯 打卡核心業務邏輯，位置驗證、事件記錄、假勤管理、批准流程 | v1.0 (假勤管理功能新增) |
 | **EmployeeLogic.js** | 469 | 👤 員工資料管理，使用者身份驗證、快取、個人資料查詢 | v1.0 |
 | **ScheduledTasks.js** | 791 | ⏰ 排程任務與手動工具，定時檢查、日報產生、紀錄封存 | v1.0 |
 | **SiteLogic.js** | ? | 📍 案場管理邏輯，位置座標反地理編碼、近距離計算 | v1.0 |
@@ -683,6 +783,8 @@ CheckinSystem Web App
 
 ### 9.3 主要 API 端點
 
+#### 基本功能
+
 | 動作 | 方法 | 功能 | 受影響的資料表 |
 |------|------|------|---------|
 | **checkin** | GET | 員工打卡，記錄 GPS、驗證位置、隊列任務 | 打卡前置記錄、打卡記錄 |
@@ -690,13 +792,176 @@ CheckinSystem Web App
 | **get_hub_core_data** | GET | 整合主控台核心資料 | 多個工作表 |
 | **get_employees** | GET | 取得員工列表 | 員工資料 |
 | **get_report** | GET | 出勤報表 | 員工出勤 |
-| **get_my_leave_requests** | GET | 個人假單 | 假勤申請 |
-| **get_pending_requests** | GET | 待審核假單 (主管用) | 假勤申請 |
 | **get_latest_schedule** | GET | 最新班表 | 排班表 |
-| **submit_leave_request** | POST | 提交假勤申請 | 假勤申請 |
 | **process_site_form** | POST | 新增/修改案場 | 案場資料 |
 | **save_schedule_version** | POST | 儲存排班版本 | 排班表 |
 | **upsert_employee** | POST | 新增/更新員工資料 | 員工資料 |
+
+#### 假勤管理 API (新增功能)
+
+| 動作 | 方法 | 功能 | 後端函式 | 受影響的資料表 |
+|------|------|------|---------|---------|
+| **get_my_leave_requests** | GET | 取得假單列表 (員工視圖 / 管理者視圖)<br/>參數: userId, permission, mode | `_getMyLeaveRequests_()` | 排班歷史紀錄 |
+| **get_pending_requests** | GET | 待審核假單 (主管專用) | `_getPendingRequests_()` | 排班歷史紀錄 |
+| **submit_leave_request** | POST | 提交/補件假勤申請 (員工) | `_handleLeaveRequest_()` | 排班歷史紀錄 |
+| **update_leave_request** | POST | 編輯假單 (管理者)<br/>參數: recordId, applicantId, recordType, leaveType, dates, reason | `_handleLeaveRequest_()` | 排班歷史紀錄 |
+| **cancel_leave** | GET | 取消假單 (員工自行取消)<br/>參數: timestamp, userId | `_cancelLeaveRequest_()` | 排班歷史紀錄 |
+| **request_leave_cancellation** | POST | 申請銷假 (員工撤銷已批准的假)<br/>參數: timestamp, userId | `_requestLeaveCancellation_()` | 排班歷史紀錄 |
+| **handle_approval** | GET | 審核假單 (管理者批准/駁回)<br/>參數: decision, recordId, approverName, reason, applicantId | `_handleApprovalRequest_()` | 排班歷史紀錄 |
+
+### 9.4 假勤管理核心業務邏輯詳解
+
+#### 📋 後端函式映射表
+
+| 函式名稱 | 行數 | 參數 | 回傳值 | 主要職責 |
+|---------|------|------|--------|---------|
+| **`_getMyLeaveRequests_(userId, permission, mode)`** | ~80 | userId, permission, mode='default'\|'management' | { success, data: [...] } | 根據使用者權限返回假單列表 |
+| **`_getPendingRequests_()`** | ~50 | 無 | { success, data: [...] } | 取得所有待審核假單 |
+| **`_handleLeaveRequest_(payload)`** | ~200+ | action, userId, recordType, leaveType, dates, files | { success, message, recordId } | 統一處理新增/補件/編輯假單 |
+| **`_cancelLeaveRequest_(params)`** | ~30 | timestamp, userId | { success, message } | 員工自行取消假單 |
+| **`_requestLeaveCancellation_(params)`** | ~40 | timestamp, userId | { success, message } | 員工申請銷假(取消已批准假單) |
+| **`_handleApprovalRequest_(params)`** | ~150+ | decision, recordId, approverName, reason, applicantId | HtmlService | 管理者批准/駁回假單 |
+| **`_mergeLeaveEntries(existing, newLeave)`** | ~50 | 現有假勤字串, 新假勤字串 | 合併後的字串 | 合併時間區間假勤 (避免重疊) |
+| **`_removeLeaveEntry_(existing, toRemove)`** | ~20 | 現有假勤字串, 要移除的字串 | 移除後的字串 | 從假勤字串中移除指定項目 |
+
+#### 🎯 批准假單的業務流程
+
+```
+使用者點擊「批准」按鈕 (前端)
+    ↓
+呼叫 /attendance_api?action=handle_approval&decision=approved&recordId=...
+    ↓
+後端 _handleApprovalRequest_() 開始執行
+    ├─ 查找目標假單紀錄
+    ├─ 驗證狀態 (必須為「待審核」或「已報備」)
+    │
+    ├─【若假別為「請假」】
+    │   ├─ 讀取請假的開始/結束日期
+    │   ├─ 計算該假期跨越的所有月份
+    │   ├─ 依月份分別處理:
+    │   │   ├─ 讀取該月最新班表 (`_getLatestScheduleForMonth_`)
+    │   │   ├─ 合併新的假勤項目 (`_mergeLeaveEntries_`)
+    │   │   └─ 寫入新的「已確認」排班紀錄
+    │   │
+    │   └─【跨月假單範例】
+    │       開始: 2026/01/29 (1月)
+    │       結束: 2026/02/03 (2月)
+    │       └─ 自動產生:
+    │           - 2026年1月的新班表 (含 1/29~1/31 假勤)
+    │           - 2026年2月的新班表 (含 2/01~2/03 假勤)
+    │
+    ├─【若假別為「加班」】
+    │   ├─ 讀取加班日期與時間區間
+    │   ├─ 取得該月班表
+    │   ├─ 合併加班項目
+    │   └─ 寫入新的「已確認」排班紀錄
+    │
+    ├─【若假別為「銷假」】
+    │   ├─ 讀取原假勤項目的日期與假別
+    │   ├─ 取得該月班表
+    │   ├─ 移除該假勤項目 (`_removeLeaveEntry_`)
+    │   └─ 寫入新的「已確認」排班紀錄 (該日恢復上班日)
+    │
+    ├─ 更新原假單狀態:
+    │   ├─ 批准: 狀態 → 「已批准」
+    │   └─ 駁回: 狀態 → 「已駁回」
+    │
+    ├─ 發送系統通知給申請人
+    │   ├─ 批准: 「您的假勤申請已被批准」
+    │   ├─ 駁回: 「您的假勤申請已被駁回，理由: [原因]」
+    │   └─ 銷假批准: 「該日已恢復為上班日」
+    │
+    └─ 回傳審核結果頁面 (HTML)
+        └─ 顯示「操作成功」或錯誤訊息
+```
+
+#### 🚫 駁回假單的業務流程
+
+```
+使用者點擊「駁回」→ 展開理由輸入框 → 輸入駁回理由 → 確認駁回
+    ↓
+呼叫 /attendance_api?action=handle_approval&decision=rejected&recordId=...&reason=...
+    ↓
+後端 _handleApprovalRequest_() 開始執行
+    ├─ 查找目標假單紀錄
+    ├─ 驗證狀態 (必須為「待審核」或「已報備」)
+    ├─ 更新狀態: 「已駁回」
+    ├─ 建立駁回紀錄 (新增一列至排班歷史紀錄表):
+    │   ├─ recordType: '駁回紀錄'
+    │   ├─ reason: '[理由]'
+    │   ├─ approverName: '[駁回者名稱]'
+    │   └─ timestamp: 駁回時間
+    │
+    ├─ 發送系統通知給申請人:
+    │   └─ 「您的「[假別]」申請已被駁回。理由: [輸入的理由]」
+    │
+    └─ 回傳審核結果頁面
+```
+
+#### ✏️ 編輯假單的業務流程 (管理者)
+
+```
+管理者於「假單管理」分頁點擊「編輯」按鈕
+    ↓
+前端切換至「請假申請」/「加班申請」分頁,並填入原假單資料
+    ↓
+管理者修改日期、時間、事由等欄位
+    ↓
+點擊「提交編輯」→ POST action=update_leave_request
+    ↓
+後端 _handleLeaveRequest_() 處理 'update_leave_request' 動作
+    ├─ 查找原假單紀錄 (透過 recordId + applicantId 比對)
+    ├─ 更新以下欄位:
+    │   ├─ offDaysCsv (假別)
+    │   ├─ recordType (申請類型)
+    │   ├─ startTime (開始時間)
+    │   ├─ endTime (結束時間)
+    │   └─ reason (事由)
+    │
+    ├─ 記錄編輯審計: 在「審核備註」欄位追加:
+    │   └─ "[2026/01/03 14:30] 由 [編輯者名稱] 編輯"
+    │
+    └─ 回傳 { success: true, message: "假單已成功更新" }
+```
+
+### 9.4 資料表結構 (排班歷史紀錄)
+
+**工作表名稱**: `排班歷史紀錄`
+
+| 欄位 | 資料類型 | 用途 | 樣本值 |
+|------|---------|------|--------|
+| `timestamp` | DateTime | 記錄建立時間 (唯一 ID) | 2026-01-03 10:30:45 |
+| `editorId` | String | 操作者/申請人 ID | user123 |
+| `editorName` | String | 操作者/申請人姓名 | 王小明 |
+| `targetUserId` | String | 目標員工 ID (編輯他人時) | emp456 |
+| `targetUserName` | String | 目標員工姓名 | 李大衛 |
+| `yearMonth` | String | 年月 (用於快速篩選) | 2026-01 |
+| `offDaysCsv` | String | 假勤內容 CSV 格式 | `2026-01-05:病假[09:00~17:30](發燒);2026-01-06:病假` |
+| `status` | String | 假單狀態 | `待審核` \| `已批准` \| `已駁回` \| `已報備` \| `已確認` |
+| `recordType` | String | 紀錄類型 | `請假` \| `加班` \| `銷假` \| `駁回紀錄` |
+| `startTime` | DateTime | 請假/加班開始時間 | 2026-01-05 09:00:00 |
+| `endTime` | DateTime | 請假/加班結束時間 | 2026-01-05 17:30:00 |
+| `reason` | String | 事由說明 | 「家中急事」 或 「客戶會議延時」 |
+| `fileUrl` | String | 上傳證明檔案 URL (Dropbox) | https://dl.dropboxusercontent.com/... |
+| `approverNotes` | String | 審核備註/編輯紀錄 | `[2026/01/03 14:30] 由王主任編輯` |
+
+#### 狀態流轉圖
+
+```
+[待審核] ──批准──> [已批准] ──銷假────> [已取消]
+   ↓                 ↓
+  駁回             已批准
+   ↓                 ↓
+[已駁回]        [已確認]
+   ↓
+編輯重新提交
+   ↓
+[待審核]
+
+[病假申請]
+   ↓
+[已報備] ──補件────> [待審核] ──批准──> [已批准]
+```
 
 ### 9.4 外部依賴
 
