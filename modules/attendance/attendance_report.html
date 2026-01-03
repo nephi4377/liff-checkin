@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>出勤儀表板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .summary-card { transition: all 0.3s ease; }
+        .summary-card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+        #map { height: 400px; width: 100%; border-radius: 0.5rem; margin-top: 1rem; }
+        .modal { display: none; }
+        .modal.is-open { display: flex; align-items: center; justify-content: center; }
+        /* 【⭐️ 核心新增：優化日期/時間輸入框體驗 ⭐️】 */
+        /* 讓整個輸入框都能點擊以打開選擇器 */
+        /* [核心重構] 使用 :in-range 偽類來智慧地控制文字顏色，徹底解決預設值顯示問題 */
+        input[type="date"],
+        input[type="time"] {
+            cursor: pointer; /* 維持可點擊的指標 */
+            color: #1f2937;  /* 預設文字顏色 (深灰色) */
+        }
+
+        /* 當輸入框沒有有效值時，讓文字顏色變淡，模擬 placeholder 效果 */
+        input[type="date"]:out-of-range,
+        input[type="time"]:out-of-range {
+            color: #9ca3af; /* 淡灰色 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="mb-6 flex justify-between items-center">
+            <h1 class="text-3xl font-bold text-gray-700">出勤儀表板</h1>
+            <button id="add-checkin-btn" class="bg-green-600 text-white font-bold py-2 px-4 rounded-md hover:bg-green-700">＋ 手動補打卡</button>
+        </header>
+
+        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+            <h2 class="text-xl font-semibold mb-4">查詢條件</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <div>
+                    <label for="start-date" class="block text-sm font-medium text-gray-700">開始日期</label>
+                    <input type="date" id="start-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="end-date" class="block text-sm font-medium text-gray-700">結束日期</label>
+                    <input type="date" id="end-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="employee-select" class="block text-sm font-medium text-gray-700">選擇員工</label>
+                    <select id="employee-select" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">所有員工</option>
+                    </select>
+                    <!-- 【您的要求】新增「顯示所有歷史員工」的核取方塊 -->
+                    <div class="mt-2 flex items-center">
+                        <input id="show-all-employees-checkbox" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                        <label for="show-all-employees-checkbox" class="ml-2 block text-sm text-gray-900">顯示所有歷史員工</label>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="query-btn" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700 transition duration-300">查詢</button>
+                    <!-- 【您的要求】新增匯出按鈕 -->
+                    <button id="export-csv-btn" title="將目前查詢結果匯出為 CSV 檔案" class="p-2 bg-green-600 text-white rounded-md hover:bg-green-700 hidden"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg></button>
+                </div>
+            </div>
+        </div>
+
+        <div id="summary-section" class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">應到天數</div><div id="total-workdays" class="mt-1 text-3xl font-semibold text-gray-700">0</div></div>
+            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">實到天數</div><div id="total-attended" class="mt-1 text-3xl font-semibold text-green-600">0</div></div>
+            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總遲到(分)</div><div id="total-late" class="mt-1 text-3xl font-semibold text-orange-500">0</div></div>
+            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總早退(分)</div><div id="total-early" class="mt-1 text-3xl font-semibold text-blue-500">0</div></div>
+            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總缺勤(天)</div><div id="total-absent" class="mt-1 text-3xl font-semibold text-red-600">0</div></div>
+        </div>
+
+        <div id="results-container" class="bg-white p-6 rounded-lg shadow-md">
+             <div id="loading-spinner" class="text-center py-10" style="display: none;">載入中...</div>
+             <div id="report-table-container"></div>
+             <div id="map-container" style="display: none;">
+                 <h3 class="text-lg font-semibold mt-4">打卡地圖</h3>
+                 <div id="map"></div>
+             </div>
+        </div>
+    </div>
+    
+    <div id="checkin-modal" class="modal fixed inset-0 bg-gray-600 bg-opacity-50 h-full w-full">
+      <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <h3 class="text-lg font-semibold">手動補打卡</h3>
+        <div class="mt-4 space-y-4">
+          <div><label for="modal-employee-select" class="block text-sm font-medium text-gray-700">員工</label><select id="modal-employee-select" class="mt-1 block w-full rounded-md border-gray-300"></select></div>
+          <div><label for="modal-date" class="block text-sm font-medium text-gray-700">日期</label><input type="date" id="modal-date" class="mt-1 block w-full rounded-md border-gray-300"></div>
+          <div><label for="modal-time" class="block text-sm font-medium text-gray-700">時間 (HH:mm)</label><input type="time" id="modal-time" class="mt-1 block w-full rounded-md border-gray-300"></div>
+          <!-- 【⭐️ 核心新增：快速帶入時間按鈕 ⭐️】 -->
+          <div id="shift-time-buttons" class="flex items-center gap-2 mt-1">
+              <button id="btn-set-shift-start" class="text-xs bg-sky-100 text-sky-700 px-4 py-1 rounded-md hover:bg-sky-200">上班</button>
+              <button id="btn-set-shift-end" class="text-xs bg-amber-100 text-amber-700 px-4 py-1 rounded-md hover:bg-amber-200">下班</button>
+          </div>
+          <!-- 【新增結束】 -->
+          <div><label for="modal-event-type" class="block text-sm font-medium text-gray-700">事件</label><select id="modal-event-type" class="mt-1 block w-full rounded-md border-gray-300"><option value="上班">上班</option><option value="下班">下班</option></select></div>
+        </div>
+        <div class="mt-6 flex justify-end space-x-2">
+          <button id="modal-cancel-btn" class="px-4 py-2 bg-gray-200 rounded-md">取消</button>
+          <button id="modal-submit-btn" class="px-4 py-2 bg-blue-600 text-white rounded-md">送出</button>
+        </div>
+      </div>
+    </div>
+
+<!-- 【⭐️ 核心改造：將內聯腳本改為模組，並從 utils.js 引入函式 ⭐️】 -->
+<script type="module">
+    import { showGlobalNotification } from '../../shared/js/utils.js';
+
+    // 【您的要求】新增全域變數，用於儲存當前報表資料以供匯出
+    let currentReportData = {};
+    // 【⭐️ 核心新增：全域變數，用於儲存員工班表資料 ⭐️】
+    let employeeShiftData = {};
+
+    const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
+
+    // 【v32.0 核心改造】將 loadJsonp 升級為現代的 fetch API
+    async function fetchApi(params) {
+        const url = new URL(API_BASE_URL);
+        for (const key in params) {
+            // [v396.0 新增] 為所有 API 請求統一加上來源參數，以便後端日誌追蹤。
+            url.searchParams.append('source', '出勤儀表板');
+            url.searchParams.append(key, params[key]);
+        }
+
+        const response = await fetch(url);
+        if (!response.ok) {
+            // 增加超時處理
+            throw new Error(`後端伺服器錯誤: ${response.status} ${response.statusText}`);
+        }
+        return response.json();
+    }
+
+    /**
+     * 【您的要求】核心修正：從 hub.html 移入遺失的快取管理函式
+     * 將資料儲存到瀏覽器的 localStorage，並設定到期日。
+     * @param {string} key - 快取的鍵值。
+     * @param {any} data - 要快取的資料。
+     * @param {number} [days=1] - 快取有效天數，預設為 1 天。
+     */
+    function saveCache(key, data, days = 1) {
+        const cache = { data: data, expires: Date.now() + days * 24 * 60 * 60 * 1000 };
+        try {
+            localStorage.setItem(key, JSON.stringify(cache));
+        } catch (e) {
+            console.error('儲存快取失敗:', e);
+        }
+    }
+
+    function loadCache(key) {
+        const cached = localStorage.getItem(key);
+        if (!cached) return null;
+        const cache = JSON.parse(cached);
+        if (cache.expires < Date.now()) { localStorage.removeItem(key); return null; }
+        return cache.data;
+    }
+
+    function loadGoogleMapsAPI(apiKey) {
+        // [優化] 使用 Google 推薦的 Inline Bootstrap Loader 方式載入 API，避免效能警告
+        if (window.google && window.google.maps) {
+            return Promise.resolve(); // 如果已載入，直接返回
+        }
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            const url = new URL('https://maps.googleapis.com/maps/api/js');
+            url.searchParams.set('key', apiKey);
+            url.searchParams.set('libraries', 'marker');
+            url.searchParams.set('v', 'weekly');
+            // 設置一個全域回呼函式，API 載入完成後會呼叫它
+            window.gm_authFailure = () => reject(new Error("Google Maps API 金鑰驗證失敗。"));
+            url.searchParams.set('callback', 'Function.prototype'); // 使用技巧避免產生新的全域變數
+            script.src = url.toString();
+            script.async = true;
+            script.onload = resolve;
+            script.onerror = () => reject(new Error("無法載入 Google Maps API 腳本。"));
+            document.head.appendChild(script);
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const today = new Date();
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        document.getElementById('start-date').value = firstDayOfMonth.toLocaleDateString('sv');
+        document.getElementById('end-date').value = today.toLocaleDateString('sv');
+
+        // 【⭐️ 核心修正：將所有事件綁定移至此處，確保 DOM 已載入 ⭐️】
+        document.getElementById('query-btn').onclick = fetchReportData;
+        // 【您的要求】為匯出按鈕綁定事件
+        document.getElementById('export-csv-btn').onclick = exportToCsv;
+        document.getElementById('add-checkin-btn').onclick = () => {
+            document.getElementById('checkin-modal').classList.add('is-open');
+            // 【⭐️ 核心新增：打開視窗時，設定預設日期與時間 ⭐️】
+            const today = new Date();
+            document.getElementById('modal-date').value = today.toLocaleDateString('sv');
+            const currentHour = today.getHours().toString().padStart(2, '0');
+            document.getElementById('modal-time').value = `${currentHour}:00`;
+        };
+        document.getElementById('modal-cancel-btn').onclick = () => document.getElementById('checkin-modal').classList.remove('is-open');
+        document.getElementById('modal-submit-btn').onclick = handleManualCheckinSubmit;
+        document.getElementById('btn-set-shift-start').addEventListener('click', () => setShiftTime('start'));
+        document.getElementById('btn-set-shift-end').addEventListener('click', () => setShiftTime('end'));
+
+        // 【⭐️ 核心新增：為日期與時間輸入框加上手動觸發功能 ⭐️】
+        document.getElementById('modal-date').addEventListener('click', (e) => e.target.showPicker());
+        document.getElementById('modal-time').addEventListener('click', (e) => e.target.showPicker());
+
+        // 【v175.0 核心改造】將 API 請求移至此處，並統一附上使用者資訊
+        // 【您的要求】為「顯示所有歷史員工」核取方塊綁定事件
+        document.getElementById('show-all-employees-checkbox').addEventListener('change', loadAndRenderEmployees);
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const uid = urlParams.get('uid') || 'unknown_user'; // 【v175.0 核心修正】從 URL 取得操作者資訊
+        const name = urlParams.get('name') || 'Unknown User';
+
+        const userParams = { userId: uid, userName: name }; // 準備要傳給後端的通用參數
+
+        // 並行發送請求，提升載入速度
+        fetchApi({ page: 'attendance_api', action: 'get_config', ...userParams })
+            .then(configResponse => {
+                // 步驟 3: 處理地圖設定
+                if (configResponse && configResponse.googleMapsApiKey) {
+                    loadGoogleMapsAPI(configResponse.googleMapsApiKey).catch(console.error);
+                } else {
+                    console.error('[DEBUG] 無法取得 Google Maps API Key');
+                }
+            });
+
+        // 獨立載入員工列表
+        loadAndRenderEmployees();
+
+        function loadAndRenderEmployees() {
+            const showAll = document.getElementById('show-all-employees-checkbox').checked;
+            const filter = showAll ? 'all' : 'active_with_recent_resigned';
+            const cacheKey = `employees_cache_${filter}`;
+
+            // 快取優先策略
+            const cachedData = loadCache(cacheKey);
+            if (cachedData) {
+                console.log(`⚡️ 從快取載入員工列表 (模式: ${filter})...`);
+                renderEmployeeSelect(cachedData);
+            }
+
+            // 無論是否有快取，都在背景請求最新資料
+            console.log(`🔄 正在從後端請求員工列表 (模式: ${filter})...`);
+            fetchApi({ page: 'attendance_api', action: 'get_employees', filter: filter, ...userParams })
+                .then(response => {
+                    if (response && response.success) {
+                        const newData = response.data;
+                        // 只有在新舊資料不同時，才更新畫面與快取
+                        if (JSON.stringify(cachedData) !== JSON.stringify(newData)) {
+                            console.log(`🔄 偵測到員工資料已更新 (模式: ${filter})，正在刷新下拉選單...`);
+                            saveCache(cacheKey, newData, 1); // 快取 1 天
+                            renderEmployeeSelect(newData);
+                            if (cachedData) { // 只有在是背景更新時才跳通知
+                                showGlobalNotification('員工列表已自動更新。', 3000, 'info');
+                            }
+                        } else {
+                            console.log(`✅ 背景資料與快取一致 (模式: ${filter})，無需更新。`);
+                        }
+                    } else {
+                        throw new Error(response.message || '後端未回傳有效資料');
+                    }
+                })
+                .catch(error => {
+                    console.error(`載入員工列表 (模式: ${filter}) 失敗:`, error);
+                    if (!cachedData) { // 如果連快取都沒有，才顯示錯誤
+                        showGlobalNotification(`載入員工列表失敗: ${error.message}`, 8000, 'error');
+                    }
+                });
+        }
+
+        function renderEmployeeSelect(employees) {
+            const mainSelect = document.getElementById('employee-select');
+            const modalSelect = document.getElementById('modal-employee-select');
+            mainSelect.innerHTML = '<option value="">所有員工</option>';
+            modalSelect.innerHTML = '';
+            employeeShiftData = {};
+
+            const activeEmployees = employees.filter(emp => emp.status !== '離職');
+            const resignedEmployees = employees.filter(emp => emp.status === '離職');
+
+            const activeGroup = document.createElement('optgroup');
+            activeGroup.label = '在職員工';
+            activeEmployees.forEach(emp => {
+                activeGroup.innerHTML += `<option value="${emp.userId}">${emp.userName}</option>`;
+                modalSelect.innerHTML += `<option value="${emp.userId}">${emp.userName}</option>`;
+                employeeShiftData[emp.userId] = { shiftStart: emp.shiftStart, shiftEnd: emp.shiftEnd };
+            });
+            mainSelect.appendChild(activeGroup);
+
+            if (resignedEmployees.length > 0) {
+                const resignedGroup = document.createElement('optgroup');
+                resignedGroup.label = '離職員工';
+                resignedEmployees.forEach(emp => {
+                    resignedGroup.innerHTML += `<option value="${emp.userId}" class="text-gray-400">${emp.userName} (已離職)</option>`;
+                    employeeShiftData[emp.userId] = { shiftStart: emp.shiftStart, shiftEnd: emp.shiftEnd };
+                });
+                mainSelect.appendChild(resignedGroup);
+            }
+        }
+    });
+
+    // 【⭐️ 核心重構：簡化設定時間的函式 ⭐️】
+    function setShiftTime(type) {
+        const userId = document.getElementById('modal-employee-select').value;
+        const timeInput = document.getElementById('modal-time');
+        const eventTypeSelect = document.getElementById('modal-event-type');
+
+        // 如果有員工且有班表資料，就帶入時間；否則就清空時間。
+        const shiftData = employeeShiftData[userId];
+        if (!shiftData) { timeInput.value = ''; return; }
+
+        if (type === 'start') {
+            timeInput.value = employeeShiftData[userId].shiftStart || '';
+            eventTypeSelect.value = '上班';
+        } else {
+            timeInput.value = employeeShiftData[userId].shiftEnd || '';
+            eventTypeSelect.value = '下班';
+        }
+    }
+
+    function handleManualCheckinSubmit() {
+        const btn = document.getElementById('modal-submit-btn');
+        const payload = {
+            page: 'attendance_api', // 【⭐️ 核心修正 1/3：指定正確的 page ⭐️】
+            action: 'add_manual_checkin',
+            userId: document.getElementById('modal-employee-select').value,
+            date: document.getElementById('modal-date').value,
+            time: document.getElementById('modal-time').value,
+            eventType: document.getElementById('modal-event-type').value,
+        };
+
+        if(!payload.date || !payload.time) {
+            alert('請填寫完整的日期與時間。');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = '送出中...';
+
+        // 【⭐️ 核心修正 2/3：改用 loadJsonp 並指向正確的 API 路由 ⭐️】
+        fetchApi(payload)
+            .then(response => {
+                showGlobalNotification(response.message || '補打卡成功！', 10000, 'success');
+                document.getElementById('checkin-modal').classList.remove('is-open');
+                optimisticUpdate(payload); // 執行樂觀更新，取代重新整理
+            })
+            .catch(error => {
+                alert(`補打卡失敗：${error.message}`);
+            })
+            .finally(() => {
+                // 【⭐️ 核心修正 3/3：恢復按鈕狀態 ⭐️】
+                btn.disabled = false;
+                btn.textContent = '送出';
+            });
+
+    }
+
+    /**
+     * 【⭐️ 核心新增：樂觀更新函式 ⭐️】
+     * 在不重新載入所有資料的情況下，將新的打卡紀錄插入到現有的表格中。
+     * @param {object} checkinData - 包含 userId, date, time, eventType 的物件
+     */
+    function optimisticUpdate(checkinData) {
+        const tableBody = document.querySelector('#report-table-container tbody');
+        if (!tableBody) return; // 如果表格不存在，則不執行任何操作
+
+        const { userId, date, time, eventType } = checkinData;
+        const employeeSelect = document.getElementById('employee-select');
+        const userName = employeeSelect.options[employeeSelect.selectedIndex].text;
+
+        // 建立新的一列 (tr)
+        const newRow = document.createElement('tr');
+
+        // 判斷日期是否為假日/週末
+        const dateObj = new Date(date);
+        dateObj.setMinutes(dateObj.getMinutes() + dateObj.getTimezoneOffset());
+        const dayOfWeek = dateObj.getDay();
+        const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const dateClass = isWeekend ? 'text-red-600 font-bold' : '';
+
+        // 組合 HTML
+        newRow.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap font-medium">${userName}</td>
+            <td class="px-6 py-4 whitespace-nowrap ${dateClass}">${date} (${weekdays[dayOfWeek]})</td>
+            <td class="px-6 py-4 whitespace-nowrap text-center">${eventType === '上班' ? time : '---'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-center">${eventType === '下班' ? time : '---'}</td>
+            <td class="px-6 py-4 whitespace-nowrap">手動補登</td>
+            <td class="px-6 py-4 whitespace-nowrap text-center">0</td>
+            <td class="px-6 py-4 whitespace-nowrap text-center">0</td>
+            <td class="px-6 py-4 whitespace-nowrap">手動補登</td>
+        `;
+
+        // 尋找插入點：找到所有列，然後根據日期排序找到合適的位置
+        const allRows = Array.from(tableBody.querySelectorAll('tr'));
+        let inserted = false;
+        for (let i = 0; i < allRows.length; i++) {
+            const rowDate = allRows[i].cells[1].textContent.split(' ')[0];
+            if (date > rowDate) {
+                tableBody.insertBefore(newRow, allRows[i]);
+                inserted = true;
+                break;
+            }
+        }
+        // 如果新日期比所有現有日期都早，或表格為空，則加到最後
+        if (!inserted) {
+            tableBody.appendChild(newRow);
+        }
+    }
+
+    function fetchReportData() {
+        const startDate = document.getElementById('start-date').value;
+        const endDate = document.getElementById('end-date').value;
+        const userId = document.getElementById('employee-select').value;
+        const spinner = document.getElementById('loading-spinner');
+        
+        spinner.style.display = 'block';
+        document.getElementById('report-table-container').innerHTML = '';
+        document.getElementById('summary-section').style.display = 'none';
+        // 【您的要求】查詢時先隱藏匯出按鈕
+        document.getElementById('export-csv-btn').classList.add('hidden');
+        document.getElementById('map-container').style.display = 'none';
+
+        // 【v175.0 核心修正】在查詢報表時，也附上當前操作者的資訊
+        const urlParams = new URLSearchParams(window.location.search);
+        const operatorUid = urlParams.get('uid') || 'unknown_user';
+        const operatorName = urlParams.get('name') || 'Unknown User';
+
+        const params = { page: 'attendance_api', action:'get_report', startDate, endDate, userId, operatorId: operatorUid, operatorName: operatorName };
+        fetchApi(params)
+            .then(data => {
+                // [v342.0 核心改造] 根據使用者建議，增加對後端回傳之 success 旗標的判斷。
+                // 如果後端明確回傳查詢失敗，則拋出錯誤，由下方的 catch 區塊統一顯示錯誤訊息。
+                if (data && data.success === false) {
+                    throw new Error(data.message || '後端回報了一個未知的錯誤。');
+                }
+
+                // [核心改造] 收到後端回傳的完整報表後，立即使用已過濾的員工列表 (employeeShiftData) 進行篩選。
+                // 這樣可以確保無論後端回傳什麼，最終顯示在畫面上的都只有權限 < 5 的員工紀錄。
+                const allowedUserIds = new Set(Object.keys(employeeShiftData));
+                const records = data.records || {}; // 增加保護，如果 data.records 為 null 或 undefined，則使用空物件
+                // 【您的要求】將過濾後的資料存到全域變數
+                currentReportData = Object.fromEntries(Object.entries(records).filter(([id]) => allowedUserIds.has(id)));
+
+                const filteredRecords = Object.fromEntries(Object.entries(records).filter(([id]) => allowedUserIds.has(id)));
+
+                spinner.style.display = 'none';
+                renderSummary(data.summary);
+                renderReportTable(filteredRecords, new Set(data.holidays || [])); // 使用過濾後的資料進行渲染
+                if (typeof google !== 'undefined' && userId && filteredRecords[userId] && filteredRecords[userId].mapPoints.length > 0) {
+                    initMap(data.records[userId].mapPoints).catch(console.error);
+                }
+                // 【您的要求】查詢成功且有資料時，顯示匯出按鈕
+                if (Object.keys(filteredRecords).length > 0) {
+                    document.getElementById('export-csv-btn').classList.remove('hidden');
+                }
+            })
+            .catch(error => {
+                spinner.style.display = 'none';
+                console.error("查詢報表資料失敗:", error);
+                document.getElementById('report-table-container').innerHTML = `<p class="text-center text-red-500">查詢資料失敗：${error.message}</p>`;
+            });
+    }
+
+    /**
+     * 【您的要求】將當前報表資料匯出為 CSV 檔案
+     */
+    function exportToCsv() {
+        if (!currentReportData || Object.keys(currentReportData).length === 0) {
+            alert('沒有可匯出的資料。');
+            return;
+        }
+
+        let csvContent = "員工姓名,日期,星期,上班時間,下班時間,狀態,遲到(分),早退(分),打卡地點\n";
+        const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+
+        // 取得所有日期並排序，確保匯出順序正確
+        const allDates = new Set();
+        Object.values(currentReportData).forEach(userData => {
+            Object.keys(userData.dailyData).forEach(date => allDates.add(date));
+        });
+        const sortedDates = Array.from(allDates).sort();
+
+        // 遍歷每一位員工
+        for (const userId in currentReportData) {
+            const userData = currentReportData[userId];
+            // 遍歷每一天
+            for (const dateStr of sortedDates) {
+                const day = userData.dailyData[dateStr];
+                if (!day) continue; // 如果該員工當天沒資料，則跳過
+
+                const dateObj = new Date(dateStr);
+                dateObj.setMinutes(dateObj.getMinutes() + dateObj.getTimezoneOffset());
+                const dayOfWeek = weekdays[dateObj.getDay()];
+
+                // 處理地點，將多行地點合併為一行
+                const checkInPoint = userData.mapPoints.find(p => p.eventType === '上班' && p.time.includes(dateStr.replace(/-/g, '/')) && p.time.endsWith(day.checkIn));
+                const checkOutPoint = userData.mapPoints.find(p => p.eventType === '下班' && p.time.includes(dateStr.replace(/-/g, '/')) && p.time.endsWith(day.checkOut));
+                let locationInfo = [];
+                if (checkInPoint) locationInfo.push(`上班: ${checkInPoint.address || '無'}`);
+                if (checkOutPoint) locationInfo.push(`下班: ${checkOutPoint.address || '無'}`);
+                // 將地點中的逗號替換為全形逗號，避免 CSV 格式錯亂
+                const locationStr = locationInfo.join('; ').replace(/,/g, '，');
+
+                const row = [
+                    userData.userName,
+                    dateStr,
+                    dayOfWeek,
+                    day.checkIn || '',
+                    day.checkOut || '',
+                    `"${day.status.replace(/"/g, '""')}"`, // 處理狀態中可能包含的引號
+                    day.late || 0,
+                    day.early || 0,
+                    `"${locationStr}"` // 將地點資訊包在引號中
+                ].join(',');
+                csvContent += row + "\n";
+            }
+        }
+
+        // 建立並觸發下載
+        const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' }); // 加入 BOM 以支援 Excel
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        const startDate = document.getElementById('start-date').value;
+        const endDate = document.getElementById('end-date').value;
+        link.setAttribute("download", `出勤紀錄_${startDate}_to_${endDate}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    function renderSummary(summary) {
+        document.getElementById('summary-section').style.display = 'grid';
+        document.getElementById('total-workdays').textContent = summary.totalWorkDays || 0;
+        document.getElementById('total-attended').textContent = summary.totalAttendedDays || 0;
+        document.getElementById('total-late').textContent = summary.totalLateMinutes || 0;
+        document.getElementById('total-early').textContent = summary.totalEarlyMinutes || 0;
+        document.getElementById('total-absent').textContent = summary.totalAbsentDays || 0;
+    }
+    
+    function renderReportTable(recordsByUser, holidays) {
+        const container = document.getElementById('report-table-container');
+        // [核心改造] 移除此處的過濾邏輯，因為傳入的 recordsByUser 已經是過濾後的資料。
+        if (!recordsByUser || Object.keys(recordsByUser).length === 0) {
+            container.innerHTML = '<p class="text-center text-gray-500">此範圍內無出勤紀錄。</p>';
+            return;
+        }
+
+        // 【⭐️ 核心新增：取得今天的日期字串與當前時間，用於後續判斷 ⭐️】
+        const todayStr = new Date().toLocaleDateString('sv');
+        const now = new Date();
+
+        const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+        let html = '<div class="bg-white p-6 rounded-lg shadow-md"><h2 class="text-xl font-semibold mb-4">出勤明細</h2><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">';
+        html += '<thead class="bg-gray-50"><tr>' +
+            '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">員工姓名</th>' +
+            '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">日期</th>' +
+            '<th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">上班</th>' +
+            '<th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">下班</th>' +
+            '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">狀態</th>' +
+            '<th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">遲到(分)</th>' +
+            '<th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">早退(分)</th>' +
+            '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">打卡地點</th>' +
+            '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+        
+        for (const userId in recordsByUser) {
+            const userData = recordsByUser[userId];
+            const dailyData = userData.dailyData || {};
+            // [修改] 取得所有日期的鍵並排序，確保顯示順序正確
+            const sortedDates = Object.keys(dailyData).sort();
+
+            for (const dateStr of sortedDates) {
+                const day = dailyData[dateStr];
+                const dateObj = new Date(dateStr);
+                dateObj.setMinutes(dateObj.getMinutes() + dateObj.getTimezoneOffset());
+                const dayOfWeek = dateObj.getDay();
+
+                const isHoliday = holidays.has(dateStr) || dayOfWeek === 0 || dayOfWeek === 6;
+                const dateClass = isHoliday ? 'text-red-600 font-bold' : '';
+
+                const lateClass = day.late > 0 ? 'text-orange-600 font-bold' : '';
+                const earlyClass = day.early > 0 ? 'text-blue-600 font-bold' : '';
+                // [核心改造] 新增異常狀態的 CSS class，使其顯示為紅色粗體
+                let displayStatus = day.status;
+                let displayCheckOut = day.checkOut || '---';
+
+                // 【⭐️ 核心新增：根據您的需求，加入三大判斷邏輯 ⭐️】
+                if (dateStr === todayStr) {
+                    // 1. 如果是今天，且狀態為「僅單次打卡」，則暫時顯示為「出勤」。
+                    if (displayStatus === '僅單次打卡') {
+                        displayStatus = '出勤';
+                    }
+                    // 2. 如果還沒到下班時間，則不顯示下班欄位。
+                    const shiftData = employeeShiftData[userId];
+                    if (shiftData && shiftData.shiftEnd) {
+                        const shiftEndHour = parseInt(shiftData.shiftEnd.split(':')[0], 10);
+                        if (now.getHours() < shiftEndHour) {
+                            displayCheckOut = '---';
+                        }
+                    }
+                }
+                // 3. 如果狀態為「缺勤」，則套用紅色粗體樣式。
+                // 【v42.0 核心改造】為不同的假別狀態新增對應的 CSS Class
+                let statusClass = '';
+                if (displayStatus === '缺勤' || day.status === '異常') statusClass = 'text-red-600 font-bold';
+                else if (day.status === '僅單次打卡') statusClass = 'text-purple-600 font-bold';
+                // [改善] 改用 .includes() 判斷，讓 "休假;加班[...]" 這類複合狀態也能正確顯示樣式
+                else if (displayStatus.includes('加班')) statusClass = 'text-orange-600 font-bold';
+                else if (displayStatus === '特休') statusClass = 'text-blue-600 font-bold';
+                else if (displayStatus === '病假') statusClass = 'text-yellow-600 font-bold';
+                else if (displayStatus === '事假') statusClass = 'text-gray-500';
+                else if (['補休', '公假', '婚假', '喪假'].includes(displayStatus)) statusClass = 'text-indigo-600 font-bold';
+
+                // 【⭐️ 核心修正：從 mapPoints 中查找對應的打卡地點 ⭐️】
+                let locationHtml = '';
+                // [v2 修正] 將 dateStr 的 '-' 替換為 '/'，以匹配 mapPoints.time 的格式 (e.g., '2025/10/01')
+                const dateStrForSearch = dateStr.replace(/-/g, '/');
+
+                // 尋找上班打卡點
+                const checkInPoint = userData.mapPoints.find(p => p.eventType === '上班' && p.time.startsWith(dateStrForSearch) && p.time.endsWith(day.checkIn));
+                if (checkInPoint && checkInPoint.address) {
+                    locationHtml += `<div class="text-xs">上班: ${checkInPoint.address}</div>`;
+                }
+                // 尋找下班打卡點
+                const checkOutPoint = userData.mapPoints.find(p => p.eventType === '下班' && p.time.startsWith(dateStrForSearch) && p.time.endsWith(day.checkOut));
+                if (checkOutPoint && checkOutPoint.address) {
+                    locationHtml += `<div class="text-xs">下班: ${checkOutPoint.address}</div>`;
+                }
+
+                html += `<tr>
+                    <td class="px-6 py-4 whitespace-nowrap font-medium">${userData.userName}</td>
+                    <td class="px-6 py-4 whitespace-nowrap ${dateClass}">${dateStr} (${weekdays[dayOfWeek]})</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center">${day.checkIn || '---'}</td> <!-- 上班時間維持不變 -->
+                    <td class="px-6 py-4 whitespace-nowrap text-center">${displayCheckOut}</td> <!-- 使用處理過的下班時間 -->
+                    <td class="px-6 py-4 whitespace-nowrap ${statusClass}">${displayStatus}</td> <!-- 使用處理過的狀態 -->
+                    <td class="px-6 py-4 whitespace-nowrap text-center ${lateClass}">${day.late}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center ${earlyClass}">${day.early}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${locationHtml || '---'}</td>
+                </tr>`;
+            }
+        }
+        html += '</tbody></table></div></div>';
+        container.innerHTML = html;
+    }
+
+    function getMarkerIcon(eventType, status) {
+        let color = '#707070'; 
+        if (eventType === '上班') {
+            color = (status === '遲到') ? '#F97316' : '#22C55E';
+        } else if (eventType === '下班') {
+            color = (status === '早退') ? '#EF4444' : '#3B82F6';
+        }
+        return {
+            path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
+            fillColor: color,
+            fillOpacity: 0.9,
+            strokeWeight: 0,
+            rotation: 0,
+            scale: 1.5,
+            anchor: new google.maps.Point(12, 22),
+        };
+    }
+
+    async function initMap(points) {
+        const mapContainer = document.getElementById('map-container');
+        if (!points || !Array.isArray(points) || points.length === 0 || 
+            typeof points[0] !== 'object' || points[0] === null || 
+            typeof points[0].lat !== 'number' || typeof points[0].lng !== 'number') {
+            console.error('[DEBUG] 收到的地圖座標資料無效或格式不符:', points);
+            mapContainer.style.display = 'none';
+            return; // 結束函式
+        }
+
+        // [優化] 使用新的 API 載入方式，需要非同步引入函式庫
+        const { Map } = await google.maps.importLibrary("maps");
+        const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
+        const { InfoWindow } = await google.maps.importLibrary("maps");
+
+        mapContainer.style.display = 'block';
+        const map = new Map(document.getElementById("map"), {
+            zoom: 15,
+            center: { lat: points[0].lat, lng: points[0].lng },
+            mapId: 'ATTENDANCE_MAP' // 為地圖指定一個 ID
+        });
+        const infoWindow = new InfoWindow();
+        points.forEach(point => {
+            const position = { lat: point.lat, lng: point.lng };
+            const marker = new google.maps.Marker({ 
+                position: position, 
+                map: map,
+                title: `${point.eventType} - ${point.time}`,
+                icon: getMarkerIcon(point.eventType, point.status) 
+            });
+            marker.addListener('click', ({ domEvent, latLng }) => {
+                const statusText = (point.status === '準點') ? '' : `<span class="font-bold" style="color: ${getMarkerIcon(point.eventType, point.status).fillColor};">(${point.status})</span>`;
+                const contentString = `
+                    <div class="p-1" style="max-width: 250px;">
+                        <div class="font-bold">${point.eventType} ${statusText}</div>
+                        <div class="text-sm text-gray-600">${point.time || '無時間資訊'}</div>
+                        <div class="text-xs text-gray-800 mt-1">${point.address || '無地址資訊'}</div>
+                    </div>`;
+                infoWindow.setContent(contentString);
+                infoWindow.open(marker.map, marker);
+            });
+        });
+    }
+</script>
+</body>
+</html>

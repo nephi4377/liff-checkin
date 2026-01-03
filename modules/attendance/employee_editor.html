@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添心設計 | 員工資料編輯</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4 max-w-lg">
+        <div id="loading-screen" class="text-center py-20">
+            <div class="spinner w-10 h-10 border-4 border-gray-200 rounded-full mx-auto"></div>
+            <p class="mt-4 text-gray-600">正在驗證您的身分...</p>
+        </div>
+
+        <div id="main-content" class="bg-white rounded-lg shadow-md p-6 hidden">
+            <div class="text-center mb-6">
+                <h1 class="text-2xl font-bold text-gray-800">員工資料編輯</h1>
+                <p id="welcome-message" class="text-gray-500 mt-1"></p>
+            </div>
+
+            <form id="employee-form" class="space-y-4">
+                <div class="mb-4">
+                    <label for="employee-select" class="block text-gray-700 font-semibold mb-2">選擇員工</label>
+                    <select id="employee-select" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white">
+                        <!-- [v524.0 修正] 移除新增員工選項，此頁面專注於編輯 -->
+                    </select>
+                    <!-- [v529.0 新增] 顯示離職員工的勾選項目 -->
+                    <div class="flex items-center mt-2">
+                        <input type="checkbox" id="show-resigned-checkbox" class="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                        <label for="show-resigned-checkbox" class="ml-2 block text-xs text-gray-700">顯示離職員工</label>
+                    </div>
+                </div>
+
+                <hr>
+
+                <div>
+                    <label for="userId" class="block text-gray-700 font-semibold mb-2">LINE User ID</label>
+                    <input type="text" id="userId" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100" readonly>
+                    <p class="text-sm text-gray-500 mt-1">新增員工時，此欄位會自動產生。</p>
+                </div>
+
+                <div>
+                    <label for="userName" class="block text-gray-700 font-semibold mb-2">員工姓名 <span class="text-red-500">*</span></label>
+                    <input type="text" id="userName" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <!-- [v522.0 修正] 更新權限等級定義 -->
+                        <label for="權限" class="block text-gray-700 font-semibold mb-2">權限等級 <span class="text-red-500">*</span></label>
+                        <select id="權限" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white" required>
+                            <option value="0">0 - 離職</option>
+                            <option value="1">1 - 廠商</option>
+                            <option value="2">2 - 設計師/助理/工務</option>
+                            <option value="3">3 - 保留</option>
+                            <option value="4">4 - 主管/會計</option>
+                            <!-- [v531.0 修正] 根據使用者要求，移除設定總監權限的選項 -->
+                        </select>
+                    </div>
+                    <div>
+                        <label for="身份" class="block text-gray-700 font-semibold mb-2">身份 <span class="text-red-500">*</span></label>
+                        <select id="身份" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white" required>
+                            <option value="員工">員工</option> <!-- [v531.0 修正] 統一欄位名稱 -->
+                             <option value="廠商">廠商</option>
+                            <option value="離職">離職</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- [v522.0 新增] 增加 ID 以便控制顯示/隱藏 -->
+                <div id="shift-group-wrapper" class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="組別" class="block text-gray-700 font-semibold mb-2">組別</label>
+                        <!-- [v522.0 優化] 改為使用 datalist 提供輸入建議 -->
+                        <input type="text" id="組別" class="w-full px-3 py-2 border border-gray-300 rounded-md" list="group-datalist">
+                        <datalist id="group-datalist"></datalist>
+                    </div>
+                    <div>
+                        <label for="班別" class="block text-gray-700 font-semibold mb-2">班別</label>
+                        <select id="班別" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white">
+                            <option value="標準制">標準制</option>
+                            <option value="排班制">排班制</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="shiftStartTime" class="block text-gray-700 font-semibold mb-2">上班時間</label>
+                        <input type="time" id="shiftStartTime" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    </div>
+                    <div>
+                        <label for="shiftEndTime" class="block text-gray-700 font-semibold mb-2">下班時間</label>
+                        <input type="time" id="shiftEndTime" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="到職日" class="block text-gray-700 font-semibold mb-2">到職日</label>
+                        <input type="date" id="到職日" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    </div>
+                    <div>
+                        <label for="離職日" class="block text-gray-700 font-semibold mb-2">離職日</label>
+                        <input type="date" id="離職日" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="聯絡電話" class="block text-gray-700 font-semibold mb-2">聯絡電話</label>
+                    <input type="tel" id="聯絡電話" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                </div>
+
+                <div>
+                    <label for="聯絡地址" class="block text-gray-700 font-semibold mb-2">聯絡地址</label>
+                    <input type="text" id="聯絡地址" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                </div>
+
+                <!-- [v525.0 新增] Email / 生日 / 身分證字號 -->
+                <div>
+                    <label for="email" class="block text-gray-700 font-semibold mb-2">Email</label>
+                    <input type="email" id="email" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="出生日期" class="block text-gray-700 font-semibold mb-2">出生日期</label>
+                        <input type="date" id="出生日期" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    </div>
+                    <div>
+                        <label for="身分證字號" class="block text-gray-700 font-semibold mb-2">身分證字號</label>
+                        <input type="text" id="身分證字號" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    </div>
+                </div>
+                <!-- 新增結束 -->
+
+                <!-- [v524.0 新增] 建議新增的緊急聯絡人欄位 -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="緊急聯絡人" class="block text-gray-700 font-semibold mb-2">緊急聯絡人</label>
+                        <input type="text" id="緊急聯絡人" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    </div>
+                    <div>
+                        <label for="緊急聯絡人電話" class="block text-gray-700 font-semibold mb-2">緊急聯絡人電話</label>
+                        <input type="tel" id="緊急聯絡人電話" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    </div>
+                </div>
+                <!-- 新增結束 -->
+
+                <div id="status-message" class="text-center min-h-[24px]"></div>
+
+                <button type="submit" id="submit-button" class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-lg hover:bg-blue-700 disabled:bg-gray-400">
+                    <span id="button-text">儲存員工資料</span>
+                    <div id="button-spinner" class="spinner w-6 h-6 border-4 border-white rounded-full mx-auto hidden"></div>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script type="module">
+        const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec'; // CheckinSystem 的 Apps Script URL
+        let currentUserProfile = null;
+        let allEmployees = [];
+
+        const employeeSelect = document.getElementById('employee-select');
+        const userIdInput = document.getElementById('userId');
+        const userNameInput = document.getElementById('userName');
+        const permissionSelect = document.getElementById('權限');
+        const groupInput = document.getElementById('組別');
+        const shiftTypeSelect = document.getElementById('班別');
+        const shiftStartInput = document.getElementById('shiftStartTime');
+        const shiftEndInput = document.getElementById('shiftEndTime');
+        const statusSelect = document.getElementById('身份');
+        const hireDateInput = document.getElementById('到職日');
+        const resignationDateInput = document.getElementById('離職日');
+        const shiftGroupWrapper = document.getElementById('shift-group-wrapper');
+        const emailInput = document.getElementById('email');
+        const showResignedCheckbox = document.getElementById('show-resigned-checkbox');
+        const birthDateInput = document.getElementById('出生日期');
+        const nationalIdInput = document.getElementById('身分證字號');
+        const emergencyContactInput = document.getElementById('緊急聯絡人');
+        const emergencyContactPhoneInput = document.getElementById('緊急聯絡人電話');
+        const phoneInput = document.getElementById('聯絡電話');
+        const addressInput = document.getElementById('聯絡地址');
+        const submitButton = document.getElementById('submit-button');
+        const buttonText = document.getElementById('button-text');
+        const buttonSpinner = document.getElementById('button-spinner');
+        const statusMessageDiv = document.getElementById('status-message');
+
+        async function main() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+
+            if (isLocalTest) {
+                console.warn('⚡️ 本地測試模式啟用。');
+                currentUserProfile = {
+                    userId: urlParams.get('uid') || 'U_test_admin',
+                    displayName: '測試管理員',
+                    permission: 5
+                };
+                await showMainContent();
+            } else {
+                // [v597.0 核心修正] 移除 LIFF 認證流程，改為完全依賴從主控台傳入的 uid 和 name 參數。
+                // 這解決了在 iframe 中重複初始化 LIFF 導致頁面卡住的問題。
+                const uid = urlParams.get('uid');
+                const name = urlParams.get('name');
+
+                if (uid && name) {
+                    currentUserProfile = { userId: uid, displayName: name };
+                    await showMainContent();
+                } else {
+                    // 如果缺少 uid 或 name，表示不是從主控台正常進入，顯示錯誤。
+                    document.getElementById('loading-screen').innerHTML = '<p class="text-red-500 font-semibold">錯誤：缺少使用者認證資訊。<br>請從「整合主控台」進入此頁面。</p>';
+                }
+            }
+        }
+
+        async function showMainContent() {
+            document.getElementById('loading-screen').style.display = 'none';
+            document.getElementById('main-content').classList.remove('hidden');
+            document.getElementById('welcome-message').textContent = `歡迎，${currentUserProfile.displayName}！`;
+            await fetchEmployeesAndPopulateDropdown(); // 等待員工資料載入完成
+            employeeSelect.addEventListener('change', handleEmployeeSelection);
+            document.getElementById('employee-form').addEventListener('submit', handleSubmit);
+            // [v522.0 新增] 權限與狀態雙向連動
+            permissionSelect.addEventListener('change', handlePermissionChange);
+            statusSelect.addEventListener('change', handleStatusChange);
+            // [v529.0 新增] 監聽「顯示離職員工」勾選狀態的變化
+            showResignedCheckbox.addEventListener('change', populateEmployeeDropdown);
+        }
+
+        async function fetchEmployeesAndPopulateDropdown() {
+            try {
+                // [v527.0 優化] 優先從 localStorage 讀取主控台的快取
+                const cachedEmployees = JSON.parse(localStorage.getItem('spa_hub_employees'));
+                if (cachedEmployees && Array.isArray(cachedEmployees)) {
+                    console.log('⚡️ 從主控台快取載入員工資料。');
+                    allEmployees = cachedEmployees.sort((a, b) => a.userName.localeCompare(b.userName, 'zh-Hant'));
+                    populateEmployeeDropdown();
+                    populateGroupDatalist();
+                    // 背景靜默更新
+                    fetchApi({
+                        page: 'attendance_api', action: 'get_employees', filter: 'all',
+                        userId: currentUserProfile.userId, userName: currentUserProfile.displayName
+                    }).then(response => {
+                        if (response.success && JSON.stringify(allEmployees) !== JSON.stringify(response.data)) {
+                            localStorage.setItem('spa_hub_employees', JSON.stringify(response.data));
+                        }
+                    });
+                    return; // 快取命中，直接返回
+                }
+
+                const response = await fetchApi({
+                    page: 'attendance_api',
+                    action: 'get_employees',
+                    filter: 'all',
+                    userId: currentUserProfile.userId,
+                    userName: currentUserProfile.displayName
+                });
+                if (response.success && Array.isArray(response.data)) {
+                    allEmployees = response.data.sort((a, b) => a.userName.localeCompare(b.userName, 'zh-Hant'));
+                    populateEmployeeDropdown();
+                    populateGroupDatalist(); // [v522.0 新增] 填充組別建議
+                } else {
+                    updateStatus(response.message || '無法載入員工列表。', 'error');
+                }
+            } catch (error) {
+                updateStatus(`載入員工列表失敗: ${error.message}`, 'error');
+            }
+        }
+
+        function populateEmployeeDropdown() {
+            const showResigned = showResignedCheckbox.checked;
+            const currentSelectedValue = employeeSelect.value; // 保存當前選中的值
+
+            // 1. 過濾掉權限為 5 的總監
+            const filteredEmployees = allEmployees.filter(emp => emp.permission < 5);
+
+            // 2. 分離在職/廠商與離職員工
+            const activeEmployees = filteredEmployees.filter(emp => emp.status !== '離職');
+            const resignedEmployees = showResigned ? filteredEmployees.filter(emp => emp.status === '離職') : [];
+
+            // 3. 將在職員工按組別分組
+            const employeesByGroup = activeEmployees.reduce((acc, emp) => {
+                let group;
+                if (emp.status === '廠商') {
+                    group = '廠商';
+                } else {
+                    group = emp.group || '未分類';
+                }
+                if (!acc[group]) acc[group] = [];
+                acc[group].push(emp);
+                return acc;
+            }, {});
+
+            // 4. 根據您指定的順序對組別進行排序
+            const groupOrder = ['台南店', '台南施工', '高雄店', '高雄施工', '廠商'];
+            const sortedGroups = Object.keys(employeesByGroup).sort((a, b) => {
+                const indexA = groupOrder.indexOf(a);
+                const indexB = groupOrder.indexOf(b);
+                if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                if (indexA !== -1) return -1;
+                if (indexB !== -1) return 1;
+                return a.localeCompare(b, 'zh-Hant'); // 其他組別按筆劃排序
+            });
+
+            // 5. 渲染下拉選單
+            employeeSelect.innerHTML = '';
+            sortedGroups.forEach(group => {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = group;
+                employeesByGroup[group].forEach(emp => {
+                    const option = document.createElement('option');
+                    option.value = emp.userId;
+                    option.textContent = `${emp.userName} (${emp.userId.slice(-6)})`;
+                    optgroup.appendChild(option);
+                });
+                employeeSelect.appendChild(optgroup);
+            });
+
+            // 6. 如果勾選了顯示，則在最下方加入離職員工群組
+            if (showResigned && resignedEmployees.length > 0) {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = '離職員工';
+                resignedEmployees.forEach(emp => {
+                    const option = document.createElement('option');
+                    option.value = emp.userId;
+                    option.textContent = `${emp.userName} (${emp.userId.slice(-6)})`;
+                    optgroup.appendChild(option);
+                });
+                employeeSelect.appendChild(optgroup);
+            }
+
+            // [v530.0 修正] 根據使用者要求，優化預設選中邏輯
+            // 7. 優先尋找「台南店」的第一位員工作為預設，若無則選擇任何一位有效的員工
+            const firstTainanStoreEmployee = activeEmployees.find(emp => emp.group === '台南店');
+            const firstActiveEmployee = firstTainanStoreEmployee || activeEmployees[0];
+            if (currentSelectedValue && employeeSelect.querySelector(`option[value="${currentSelectedValue}"]`)) {
+                employeeSelect.value = currentSelectedValue;
+            } else if (firstActiveEmployee) {
+                employeeSelect.value = firstActiveEmployee.userId;
+                handleEmployeeSelection();
+            } else {
+                clearForm();
+            }
+        }
+
+        function handleEmployeeSelection() {
+            const selectedUserId = employeeSelect.value;
+            const employee = allEmployees.find(emp => emp.userId === selectedUserId);
+            if (employee) {
+                fillForm(employee);
+            }
+        }
+
+        // [v522.0 新增] 填充組別 datalist
+        function populateGroupDatalist() {
+            const groupDatalist = document.getElementById('group-datalist');
+            const uniqueGroups = [...new Set(allEmployees.map(emp => emp.group).filter(Boolean))]; // [v523.0 修正] 使用正規化後的 'group' 屬性
+            groupDatalist.innerHTML = '';
+            uniqueGroups.forEach(group => {
+                groupDatalist.innerHTML += `<option value="${group}">`;
+            });
+        }
+
+        function clearForm() {
+            userIdInput.value = '';
+            userNameInput.value = '';
+            permissionSelect.value = '1';
+            groupInput.value = '';
+            shiftTypeSelect.value = '標準制';
+            shiftStartInput.value = '';
+            shiftEndInput.value = '';
+            statusSelect.value = '員工'; // [v523.0 修正] 新增時預設為員工
+            hireDateInput.value = '';
+            resignationDateInput.value = '';
+            phoneInput.value = '';
+            addressInput.value = '';
+            emailInput.value = '';
+            birthDateInput.value = '';
+            nationalIdInput.value = '';
+            emergencyContactInput.value = '';
+            emergencyContactPhoneInput.value = '';
+            userIdInput.readOnly = true;
+            toggleShiftGroupFields(true); // [v522.0 新增] 確保新增時顯示
+            submitButton.textContent = '儲存員工資料'; // [v524.0] 恢復為儲存
+        }
+
+        function fillForm(employee) {
+            userIdInput.value = employee.userId || '';
+            userNameInput.value = employee.userName || '';
+            permissionSelect.value = employee.permission || '1'; // [v523.0 修正] 使用正規化後的 'permission'
+            groupInput.value = employee.group || ''; // [v523.0 修正] 使用正規化後的 'group'
+            shiftTypeSelect.value = employee.shiftType || '標準制'; // [v523.0 修正] 使用正規化後的 'shiftType'
+            shiftStartInput.value = employee.shiftStart || ''; // [v523.0 修正] 使用正規化後的 'shiftStart'
+            shiftEndInput.value = employee.shiftEnd || ''; // [v523.0 修正] 使用正規化後的 'shiftEnd'
+            statusSelect.value = employee.status || '員工'; // [v523.0 修正] 使用正規化後的 'status'
+            hireDateInput.value = employee.hireDate || ''; // [v523.0 修正] 使用正規化後的 'hireDate'
+            resignationDateInput.value = employee.resignationDate || ''; // [v523.0 修正] 使用正規化後的 'resignationDate'
+            phoneInput.value = employee.聯絡電話 || '';
+            addressInput.value = employee.聯絡地址 || '';
+            emailInput.value = employee.email || '';
+            birthDateInput.value = employee.出生日期 || '';
+            nationalIdInput.value = employee.身分證字號 || '';
+            emergencyContactInput.value = employee.緊急聯絡人 || '';
+            emergencyContactPhoneInput.value = employee.緊急聯絡人電話 || '';
+            userIdInput.readOnly = true;
+            toggleShiftGroupFields(employee.permission != 1); // [v523.0 修正] 使用正規化後的 'permission'
+            submitButton.textContent = '儲存變更';
+        }
+
+        // [v522.0 新增] 權限與狀態連動
+        function handlePermissionChange() {
+            const permission = parseInt(permissionSelect.value, 10);
+            if (permission === 0) {
+                statusSelect.value = '離職';
+            } else if (permission === 1) {
+                statusSelect.value = '廠商';
+            } else {
+                statusSelect.value = '員工'; // [v523.0 修正]
+            }
+            toggleShiftGroupFields(permission != 1);
+        }
+
+        function handleStatusChange() {
+            if (statusSelect.value === '離職') {
+                // [v528.0 優化] 當狀態改為離職時，如果離職日為空，則自動填入今天
+                if (!resignationDateInput.value) {
+                    resignationDateInput.value = new Date().toLocaleDateString('sv');
+                }
+                permissionSelect.value = '0';
+            } else if (statusSelect.value === '廠商') {
+                permissionSelect.value = '1';
+            }
+            toggleShiftGroupFields(statusSelect.value !== '廠商');
+        }
+
+        // [v522.0 新增] 根據權限顯示/隱藏班別與組別
+        function toggleShiftGroupFields(show) {
+            shiftGroupWrapper.style.display = show ? 'grid' : 'none';
+        }
+
+        async function handleSubmit(event) {
+            event.preventDefault();
+            setLoadingState(true, '儲存中...');
+
+            const payload = {
+                action: 'upsert_employee',
+                userId: userIdInput.value, // [v524.0 修正] 編輯模式下必有 userId
+                userName: userNameInput.value,
+                權限: parseInt(permissionSelect.value, 10),
+                組別: groupInput.value,
+                班別: shiftTypeSelect.value,
+                shiftStartTime: shiftStartInput.value,
+                shiftEndTime: shiftEndInput.value,
+                身份: statusSelect.value,
+                到職日: hireDateInput.value,
+                離職日: resignationDateInput.value,
+                聯絡電話: phoneInput.value,
+                聯絡地址: addressInput.value,
+                email: emailInput.value,
+                出生日期: birthDateInput.value,
+                身分證字號: nationalIdInput.value,
+                緊急聯絡人: emergencyContactInput.value,
+                緊急聯絡人電話: emergencyContactPhoneInput.value,
+                operatorUserId: currentUserProfile.userId,
+                operatorUserName: currentUserProfile.displayName
+            };
+
+            if (!payload.userName) {
+                updateStatus('員工姓名為必填。', 'error');
+                setLoadingState(false);
+                return;
+            }
+
+            try {
+                const response = await fetchApi(payload);
+                if (response.success) {
+                    updateStatus(response.message, 'success');
+                    await fetchEmployeesAndPopulateDropdown();
+                    employeeSelect.value = payload.userId; // 重新選中剛編輯的員工
+                    handleEmployeeSelection();
+                } else {
+                    updateStatus(response.message || '儲存失敗。', 'error');
+                }
+            } catch (error) {
+                updateStatus(`儲存失敗: ${error.message}`, 'error');
+            } finally {
+                setLoadingState(false);
+            }
+        }
+
+        async function fetchApi(params) {
+            const url = new URL(API_BASE_URL);
+            const isPost = params.action === 'upsert_employee';
+            
+            if (isPost) {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(params)
+                });
+                if (!response.ok) throw new Error(`伺服器錯誤: ${response.status} ${response.statusText}`);
+                return response.json();
+            } else {
+                for (const key in params) {
+                    url.searchParams.append(key, params[key]);
+                }
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`伺服器錯誤: ${response.status} ${response.statusText}`);
+                return response.json();
+            }
+        }
+
+        function setLoadingState(isLoading, message = '') {
+            submitButton.disabled = isLoading;
+            if (isLoading) {
+                buttonText.classList.add('hidden');
+                buttonSpinner.classList.remove('hidden');
+                updateStatus(message, 'info');
+            } else {
+                buttonText.classList.remove('hidden');
+                buttonSpinner.classList.add('hidden');
+            }
+        }
+
+        function updateStatus(message, type) {
+            statusMessageDiv.className = 'text-center min-h-[24px] font-semibold';
+            statusMessageDiv.textContent = message;
+            if (type === 'success') {
+                statusMessageDiv.classList.add('text-green-600');
+            } else if (type === 'error') {
+                statusMessageDiv.classList.add('text-red-600');
+            } else {
+                statusMessageDiv.classList.add('text-gray-600');
+            }
+        }
+
+        main();
+    </script>
+</body>
+</html>

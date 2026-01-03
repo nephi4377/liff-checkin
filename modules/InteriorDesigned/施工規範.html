@@ -1,0 +1,654 @@
+<!-- 
+版本號碼：Ver 5.2 (Hybrid Personalized - User Approved)
+修改時間：2025-12-15 (Asia/Taipei)
+修改說明：
+1. 本文架構：恢復 v4.0 基礎。
+2. 修改項目：第二章「每日清」與「滅火器」條款更新。
+3. 新增章節：新增「第五章 核對與變更規範」。
+4. 拒絕項目：維持原版保險與禁菸勸導條款。
+-->
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>添心室內裝修設計-施工規範(工程合約附件)</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #c0392b;
+            /* 強烈的警告紅 */
+            --bg-color: #f8f9fa;
+            --header-bg: #e9ecef;
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: "Microsoft JhengHei", "Heiti TC", sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #eee;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        /* 標題區 */
+        header {
+            text-align: center;
+            border-bottom: 3px solid var(--primary-color);
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 24px;
+            color: var(--primary-color);
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+            font-weight: bold;
+        }
+
+        /* 折疊選單樣式 */
+        .accordion-item {
+            border: 1px solid #ddd;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .accordion-header {
+            background-color: var(--header-bg);
+            padding: 15px;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--primary-color);
+        }
+
+        .accordion-header:after {
+            content: '+';
+            font-size: 20px;
+            color: #777;
+        }
+
+        .accordion-item.active .accordion-header:after {
+            content: '-';
+        }
+
+        .accordion-content {
+            display: none;
+            /* 預設隱藏 */
+            padding: 15px;
+            background-color: #fff;
+            border-top: 1px solid #ddd;
+        }
+
+        .accordion-item.active .accordion-content {
+            display: block;
+            /* 展開 */
+        }
+
+        /* 條文樣式 */
+        .rule-item {
+            margin-bottom: 15px;
+            border-bottom: 1px dashed #eee;
+            padding-bottom: 10px;
+        }
+
+        .rule-item:last-child {
+            border-bottom: none;
+        }
+
+        .rule-title {
+            font-weight: bold;
+            color: #000;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        /* 風險強調色 */
+        .highlight {
+            color: var(--accent-color);
+            font-weight: bold;
+            background-color: #fff0f0;
+            /* 淡淡的紅色背景強調 */
+            padding: 0 4px;
+        }
+
+        /* 簽名區 */
+        .signature-section {
+            margin-top: 40px;
+            border: 2px solid #333;
+            padding: 20px;
+            border-radius: 8px;
+            page-break-inside: avoid;
+            background-color: #fffcf5;
+            /* 簽名區底色 */
+        }
+
+        .checkbox-group {
+            margin: 15px 0;
+            padding: 10px;
+            border: 1px solid #dae0e5;
+            background: white;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            margin-right: 10px;
+            margin-top: 5px;
+            transform: scale(1.2);
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        .canvas-wrapper {
+            border: 2px dashed #999;
+            height: 200px;
+            position: relative;
+            background: #fff;
+            margin-bottom: 10px;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .placeholder {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #bbb;
+            pointer-events: none;
+        }
+
+        /* 按鈕區 */
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            padding-bottom: 30px;
+        }
+
+        button {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .btn-clear {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-save {
+            background: #27ae60;
+            color: white;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #888;
+            margin-top: 20px;
+        }
+
+        /* Print CSS: 列印時強制展開所有內容 */
+        @media print {
+            body {
+                background: white;
+                margin: 0;
+            }
+
+            .container {
+                padding: 0;
+                box-shadow: none;
+                max-width: 100%;
+                min-height: 0;
+            }
+
+            .accordion-content {
+                display: block !important;
+                border: none;
+                padding: 5px 0;
+            }
+
+            .accordion-header {
+                background: none;
+                padding: 10px 0;
+                border-bottom: 2px solid #000;
+                font-size: 18px;
+            }
+
+            .accordion-header:after {
+                display: none;
+            }
+
+            .accordion-item {
+                border: none;
+                margin-bottom: 20px;
+            }
+
+            .btn-group {
+                display: none;
+            }
+
+            .canvas-wrapper {
+                border: 2px solid #000;
+            }
+
+            header {
+                margin-bottom: 20px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <header>
+            <h1>添心室內裝修設計有限公司</h1>
+            <div class="subtitle">承攬廠商施工規範暨安全承諾書</div>
+        </header>
+
+        <!-- 第一章：維持原版 4.0 (User 1X 2X) -->
+        <div class="accordion-item active">
+            <div class="accordion-header" onclick="toggleAccordion(this)" role="button" tabindex="0"
+                onkeypress="handleKeyPress(event, this)">一、 共同維護與行為準則</div>
+            <div class="accordion-content">
+                <div class="rule-item">
+                    <span class="rule-title">1. 友善空間維護 (飲食)</span>
+                    全室（含廁所、梯廳）原則上禁止吸菸與嚼食檳榔和酒精飲品。若有殘留異味或垃圾，<span class="highlight">需由該工班負責細清與除臭，直至業主驗收通過</span>。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">2. 指定區域使用</span>
+                    請吸菸請移至戶外或社區指定區域（如陽台、頂樓等），禁止於室內施工區域吸菸，並注意菸蒂回收。如管委會另有規定，請遵從管委會規定。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">3. 垃圾與異味管理</span>
+                    指定區域休息後，菸蒂、便當盒、飲料罐請隨手帶離。<span class="highlight">勿將私人垃圾遺留在現場過夜</span>。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">4. 施工時間尊重</span>
+                    嚴格遵守社區核定時段（通常 08:00-17:00，如管委會另有規定，請遵從管委會規定）。<span
+                        class="highlight">提早敲打或延後收工將可能導致之鄰居投訴，責任由工班自行承擔</span>。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">5. 案場人員控管</span>
+                    為確保工安與單純，<span class="highlight">嚴禁攜帶未參與施作之親友、兒童或寵物進入案場，以避免意外發生</span>。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">6. 鄰里關係處理</span>
+                    若遇鄰居關切，請不要發生爭論並聯繫設計師處理。<span class="highlight">嚴禁擅自對鄰居做出任何承諾</span>。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">7. 個人安全裝備 (PPE)</span>
+                    進場施工建議可穿包鞋。高處作業<span class="highlight">建議佩戴安全帽並使用安全帶</span>。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">8. 鑰匙與門禁</span>
+                    鑰匙請妥善保管，<span class="highlight">嚴禁私自複製或轉交他人</span>。若遺失導致需換鎖，費用由當事人負擔。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">9. 個人物品管理</span>
+                    個人工具與貴重物品請自行保管，公司不負保管責任。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">10. 衛浴設施愛惜</span>
+                    使用衛浴請使用規定之廁所，切勿使用不被允許之設施。<span class="highlight">嚴禁將水泥、油漆、剩料沖入馬桶或排水管</span>，違者需負擔通管及修復全額費用。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">11. 隱私尊重</span>
+                    嚴禁拍攝業主私人物品。施工紀錄照片請僅限於工程範圍。
+                </div>
+            </div>
+        </div>
+
+        <!-- 第二章：部分修正 (User 3 OK, 4 OK) -->
+        <div class="accordion-item">
+            <div class="accordion-header" onclick="toggleAccordion(this)" role="button" tabindex="0"
+                onkeypress="handleKeyPress(event, this)">二、 安全、效率與環境維護</div>
+            <div class="accordion-content">
+                <!-- 修改項目 3: 垃圾管理 (惡意遺留才扣款) -->
+                <div class="rule-item">
+                    <span class="rule-title">1. 每日環境整理 (隨手清)</span>
+                    實施「每日清」政策。當日產生之廢料與飲料垃圾，<span class="highlight">務必於當日打包並放置指定區</span>。若發現惡意遺留垃圾過夜且屢勸不聽，<span
+                        class="highlight">將代為清運並直接從工程款扣除相關清潔運費</span>。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">2. 物料與動線</span>
+                    材料請整齊堆放，<span class="highlight">嚴禁阻擋逃生通道與施工動線</span>。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">3. 廢棄物分類</span>
+                    請依規定分類（木作、事業癈棄物、生活垃圾）。<span class="highlight">若因未分類導致清運公司拒收或加價，由混置者利用自己的時間負責分類垃圾</span>。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">4. 用電安全管理</span>
+                    延長線請使用具過載保護功能者。電線小心收納避免絆倒。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">5. 明火作業管控</span>
+                    室內嚴禁焚燒垃圾。進行焊接、切割等明火作業時，<span class="highlight">請務必先向設計師/工務申請或索取滅火器</span>，並放置於方圓 2 公尺內，確保安全。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">6. 危險品存放</span>
+                    油漆、溶劑等易燃物請密封並存放於通風處。<span class="highlight">切勿倒入室內排水口，如發生堵塞，需自行疏通並負擔可能之費用</span>。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">7. 排水管線保護</span>
+                    所有開放排水口（浴室、陽台）<span class="highlight">如需施工時，務必使用保護蓋或膠帶封口</span>，防止砂石掉入。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">8. 收工安全確認</span>
+                    每日離場前，<span class="highlight">務必拔除空壓機/充電器等非必要電源，並關閉電源總開關與門窗</span>。
+                </div>
+            </div>
+        </div>
+
+        <!-- 第三章：維持原版 -->
+        <div class="accordion-item">
+            <div class="accordion-header" onclick="toggleAccordion(this)" role="button" tabindex="0"
+                onkeypress="handleKeyPress(event, this)">三、 珍視成品與保護工作</div>
+            <div class="accordion-content">
+                <div class="rule-item">
+                    <span class="rule-title">1. 保護工程完整性</span>
+                    若因施工需暫時掀開保護板，<span class="highlight">完工後請立即復原貼回，確保工程完整性</span>。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">2. 嚴禁刮傷成品</span>
+                    保護層掀開期間，請特別謹慎，嚴禁刮傷已完成之地板或飾面。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">3. 公共區域責任</span>
+                    進出梯廳與走道公司會鋪設保護，施工期間煩請確保保護周全。<span class="highlight">若因施工不當造成公設損壞，由造成者負責賠償管委會</span>。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">4. 櫃體防護</span>
+                    已安裝之系統櫃或木作，如有需要放置東西於上，請使用板材或保護膜包覆，防止刮傷。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">5. 出入口防撞</span>
+                    進出門檻及門框<span class="highlight">務必使用 L 型或 U 型護條包覆</span>，避免搬運撞擊。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">6. 窗戶與玻璃清潔</span>
+                    玻璃及窗框<span class="highlight">嚴禁沾染水泥漿、油漆或強酸鹼溶劑</span>。若不慎沾染請立即溫和清除，造成腐蝕需照價賠償。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">7. 管線異動記錄</span>
+                    若需移動管線，<span class="highlight">務必拍照記錄原始位置與迴路</span>，並確保復原正確。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">8. 成品表面禁置物品</span>
+                    <span class="highlight">絕對禁止</span>將工具、飲料、油漆桶直接放置於已完成的櫃體、檯面或地板上。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">9. 保護層巡檢</span>
+                    收工前請檢查保護層是否移位，並立即修補。
+                </div>
+            </div>
+        </div>
+
+        <!-- 第四章：維持原版 -->
+        <div class="accordion-item">
+            <div class="accordion-header" onclick="toggleAccordion(this)" role="button" tabindex="0"
+                onkeypress="handleKeyPress(event, this)">四、 透明回報與順暢溝通</div>
+            <div class="accordion-content">
+                <div class="rule-item">
+                    <span class="rule-title">1. 異常狀況即時回報</span>
+                    若遇圖說不符、漏水、鄰損等突發狀況，<span class="highlight">請立即停工並回報</span>，切勿憑經驗硬做。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">2. 每日進度回饋</span>
+                    收工後請拍攝現場照片並回報群組，確保雙方資訊同步。
+                </div>
+            </div>
+        </div>
+
+        <!-- 第五章 (新增)：User Need -->
+        <div class="accordion-item">
+            <div class="accordion-header" onclick="toggleAccordion(this)" role="button" tabindex="0"
+                onkeypress="handleKeyPress(event, this)">五、 核對、變更與扣款規範</div>
+            <div class="accordion-content">
+                <div class="rule-item">
+                    <span class="rule-title">1. 尺寸放樣核對</span>
+                    進場第一件事為<span class="highlight">現場放樣與尺寸檢核</span>。若發現現場尺寸與圖面差異過大，未回報而逕行施作導致後續收尾困難或需拆除，<span
+                        class="highlight">拆改費用與材料損失由乙方自行吸收</span>。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">2. 變更追加程序 (Change Orders)</span>
+                    所有工程追加減、變更設計，<span class="highlight">必須經由本公司(甲方)書面或官方群組確認</span>始得施作。
+                    <br>
+                    <b style="color:red;">嚴禁私下接受業主口頭指示追加</b>。若違反此條，該追加項目本公司<span
+                        class="highlight">概不予計價</span>，且若影響原工程進度，視同違約。
+                </div>
+                <div class="rule-item">
+                    <span class="rule-title">3. 完工與撤場標準</span>
+                    完工撤場定義：
+                    (1) 剩餘廢料清運完畢 (2) 現場掃地除塵至「粗清」標準 (3) 工具撤離。
+                    <span class="highlight">未達撤場標準者，不得申請該期估驗計價</span>。
+                </div>
+            </div>
+        </div>
+
+        <!-- 簽署區：改為第六項 -->
+        <div class="signature-section">
+            <h3>六、 廠商電子簽署確認</h3>
+            <p>本人/本公司已詳閱上述共五章節之完整規範，承諾於施工期間配合添心室內裝修設計有限公司之管理。</p>
+            <p class="highlight">若因本工班人員疏失導致人員受傷、鄰損、成品損壞或違反上述規範，願負完全之修繕賠償及法律責任。</p>
+
+            <!-- [新增] 保險確認勾選 (雖然拒絕了第一章強制條約，但簽署處仍建議保留此提醒，若您堅持完全不提保險，可忽略此處，但我根據專業建議保留此最輕微的勾選) -->
+            <div class="checkbox-group">
+                <input type="checkbox" id="insuranceCheck">
+                <label for="insuranceCheck">
+                    <span class="highlight">【重要確認】</span>
+                    本人確認已詳閱並充分理解上述所有施工規範內容。
+                </label>
+            </div>
+
+            <div class="input-group">
+                <label>承攬廠商/工班名稱：</label>
+                <input type="text" id="vendorName" placeholder="請輸入公司或工頭名稱">
+            </div>
+
+            <div class="input-group">
+                <label>現場負責人簽名：</label>
+                <div class="canvas-wrapper">
+                    <div class="placeholder">請在此簽名</div>
+                    <canvas id="signaturePad"></canvas>
+                    <!-- 用於列印顯示的簽名圖片 -->
+                    <img id="finalSignatureImg" style="display:none; width:100%; height:100%; object-fit:contain;"
+                        alt="簽名預覽">
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label>簽署日期：</label>
+                <input type="text" id="dateDisplay" readonly>
+            </div>
+        </div>
+
+        <div class="btn-group">
+            <button class="btn-clear" onclick="clearSignature()">清除重寫</button>
+            <button class="btn-save" id="saveBtn" onclick="saveAsPDF()">完成並存檔 (PDF)</button>
+        </div>
+
+        <div class="footer">
+            添心室內裝修設計有限公司 | Tianxin Interior Design
+        </div>
+    </div>
+
+    <script>
+        // 1. 日期初始化
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        document.getElementById('dateDisplay').value = `${yyyy} 年 ${mm} 月 ${dd} 日`;
+
+        // 2. 折疊選單邏輯
+        function toggleAccordion(header) {
+            const item = header.parentElement;
+            item.classList.toggle('active');
+        }
+
+        // 2.1 鍵盤支援 (Accessibility)
+        function handleKeyPress(e, header) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleAccordion(header);
+            }
+        }
+
+        // 3. 簽名板邏輯
+        const canvas = document.getElementById('signaturePad');
+        const ctx = canvas.getContext('2d');
+        const wrapper = document.querySelector('.canvas-wrapper');
+        const placeholder = document.querySelector('.placeholder');
+        let isDrawing = false;
+
+        function resizeCanvas() {
+            const rect = wrapper.getBoundingClientRect();
+
+            // [優化] 防止手機網址列伸縮導致 resize 事件觸發而清空簽名
+            if (canvas.width === rect.width) return;
+
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = '#000';
+        }
+
+        window.addEventListener('load', resizeCanvas);
+        window.addEventListener('resize', resizeCanvas);
+
+        function startDrawing(e) {
+            isDrawing = true;
+            placeholder.style.display = 'none';
+            draw(e);
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+            ctx.beginPath();
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+
+            // 防止手機捲動
+            e.preventDefault();
+
+            let clientX, clientY;
+            if (e.touches) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+
+            const rect = canvas.getBoundingClientRect();
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mousemove', draw);
+
+        canvas.addEventListener('touchstart', startDrawing, { passive: false });
+        canvas.addEventListener('touchend', stopDrawing);
+        canvas.addEventListener('touchmove', draw, { passive: false });
+
+        function clearSignature() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            placeholder.style.display = 'block';
+        }
+
+        function saveAsPDF() {
+            // [新增] 檢查保險勾選
+            const insuranceChecked = document.getElementById('insuranceCheck').checked;
+            if (!insuranceChecked) {
+                alert('請務必勾選「確認閱讀」聲明，確認已詳閱內容。');
+                document.getElementById('insuranceCheck').scrollIntoView({ behavior: "smooth", block: "center" });
+                return;
+            }
+
+            const name = document.getElementById('vendorName').value;
+            if (!name) {
+                alert('請務必填寫廠商/工班名稱');
+                return;
+            }
+
+            const finalImg = document.getElementById('finalSignatureImg');
+
+            finalImg.src = canvas.toDataURL();
+            finalImg.onload = function () {
+                canvas.style.display = 'none';
+                placeholder.style.display = 'none';
+                finalImg.style.display = 'block';
+
+                setTimeout(() => {
+                    alert('請在接下來的列印視窗中，將「目的地」選擇為「另存為 PDF」即可下載檔案。');
+                    window.print();
+                }, 100);
+            };
+        }
+    </script>
+
+</body>
+
+</html>

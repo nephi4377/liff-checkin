@@ -1,0 +1,137 @@
+﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>專案工作區</title>
+  <!-- [v262.0 新增] 引入 Tailwind CSS，與 hub.html 保持樣式一致 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../assets/css/style.css">
+  <!-- 【⭐️ 核心修正：解決 favicon.ico 404 錯誤 ⭐️】 -->
+  <link rel="icon" href="data:,">
+  <!-- [v190.0 新增] 漢堡選單響應式樣式 -->
+  <!-- [v262.0 修正] 修正漢堡選單在非手機模式下未隱藏的問題 -->
+  <style>
+    /* 手機版漢堡選單按鈕，預設顯示 */
+    .mobile-nav-toggle {
+      display: block;
+    }
+    /* 在寬度大於 768px 的螢幕上隱藏漢堡選單按鈕 */
+    @media (min-width: 768px) { .mobile-nav-toggle { display: none; } }
+
+    /* [v262.0 新增] 溝通紀錄卡片的閃爍動畫 (與 hub.html 同步) */
+    .card-overdue {
+        animation: pulse-red 1.5s infinite;
+    }
+    @keyframes pulse-red {
+        0%,
+        100% {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+        }
+
+        70% {
+            box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+        }
+    }
+  </style>
+  <!-- [新增] 引入 flatpickr 日期選擇器樣式 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <!-- [v55.0 修正] 永遠載入 LIFF SDK，並由 main.js 判斷是否使用 -->
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <!-- [核心修正] 將 const 改為 var，確保變數能被正確掛載到 window 物件上，
+       以便後續的模組腳本 (main.js) 可以透過 window.API_BASE_URL 存取。 -->
+  <script>
+    var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
+    var FRONTEND_VERSION = 'v1.0.0'; // 初始語意化版本號
+  </script>
+  <!-- [v471.0 快取清除] 更新版本號以強制瀏覽器下載最新的 JavaScript 檔案。
+       這可以解決因瀏覽器快取舊版 api.js，導致輪詢任務狀態時發送錯誤 POST 請求的問題。 -->
+  <script type="module" src="./js/main.js?v=471.0"></script>
+</head>
+<body>
+  <div class="container">
+    <!-- 導覽：手機版漢堡選單按鈕 -->
+    <button id="mobile-nav-toggle" class="mobile-nav-toggle">
+      <span class="sr-only">開啟選單</span>
+      <div class="hamburger-icon"></div>
+    </button>
+    <header>
+      <div>
+        <h1 id="project-title">專案工作區</h1>
+        <p id="version-display" class="muted"></p>
+      </div>
+      <!-- [優化] 將按鈕的行內 style 改為使用 CSS class，提升維護性 -->
+      <div id="actions-container" style="margin-left: auto; display: none;">
+        <button id="btn-import-new" class="btn btn-green">套用新屋案範本</button>
+        <button id="btn-import-old" class="btn btn-primary">套用舊屋案範本</button>
+      </div>
+    </header>
+
+    <!-- 主要三欄式布局 -->
+    <div class="app-layout">
+      <!-- 左欄：導覽區 -->
+      <aside class="left-sidebar">
+        <nav class="main-nav">
+          <button class="nav-button active" data-view="logs">
+            <span>施工日誌</span>
+          </button>
+          <button class="nav-button" data-view="schedule">
+            <span>工程排程</span>
+          </button>
+          <!-- [v213.0 新增][v244.0 重命名] 專案協作中心分頁按鈕 -->
+          <button class="nav-button" data-view="collaboration">
+            <span>專案協作中心</span>
+          </button>
+        </nav>
+      </aside>
+
+      <!-- 中間：主要內容區 -->
+      <main id="main-content">
+        <div id="logs-container"></div> <!-- 預設顯示日誌 -->
+        <div id="schedule-container" style="display:none;"></div>
+        <!-- [v213.0 新增][v261.0 重構] 專案協作中心內容容器 -->
+        <div id="collaboration-container" style="display: none;">
+          <div id="task-sender-container"></div> <!-- 任務交辦中心的容器 -->
+          <div id="communication-history-list"></div>
+        </div>
+      </main>
+
+      <!-- 右欄：專案資訊面板 -->
+      <aside class="right-sidebar card">
+        <div id="project-info-panel">
+          <!-- 專案資料將由 JavaScript 動態填入 -->
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div id="photo-modal" class="modal">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="photo-modal-title">
+      <!-- [優化] 使用 form 標籤包裝，語意更清晰 -->
+      <form>
+        <h2 id="photo-modal-title" class="text-xl font-semibold mb-4">管理照片</h2>
+        <div id="modal-photo-grid-container" class="modal-photo-grid mb-4"></div>
+        <!-- [優化] 將按鈕群組放在 footer 中 -->
+        <footer class="text-right space-x-2 mt-4">
+          <input type="file" id="photo-file-input" multiple accept="image/*" style="display:none;">
+          <!-- 【⭐️ 核心修正：移除行內樣式，改用 CSS class 統一管理顏色 ⭐️】 -->
+          <button id="add-photos-button" type="button" class="btn btn-green" data-action="triggerPhotoUpload">新增照片</button>
+          <button id="modal-cancel-btn" type="button" class="btn btn-secondary" data-action="closePhotoModal">取消</button>
+          <button id="save-photos-button" type="button" class="btn btn-primary" data-action="savePhotos">儲存變更</button>
+        </footer>
+      </form>
+    </div>
+  </div>
+
+  <div id="lightbox" aria-hidden="true">
+    <div class="lb-wrap">
+      <img class="lb-img" alt="preview">
+      <button class="lb-close" aria-label="關閉">✕</button>
+    </div>
+  </div>
+
+  <!-- [優化] 引入函式庫 -->
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh-tw.js"></script>
+</body>
+</html>
