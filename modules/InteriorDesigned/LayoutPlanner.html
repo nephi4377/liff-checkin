@@ -210,8 +210,7 @@
             /* [v8.0 修正] 改為 100% 100% 以填滿容器 */
             background-repeat: no-repeat;
             background-position: center;
-            border: 1px solid #000;
-            /* [v8.4 修正] 加深邊框顏色為純黑，符合使用者需求 */
+            border: none; /* [修正] 移除邊框，避免 border-box 模式下產生 1px 的透明間隙 (白線) */
             cursor: grab;
             box-sizing: border-box;
             z-index: 20;
@@ -223,7 +222,8 @@
         }
 
         .placed-cabinet:hover {
-            border: 1px solid #2563eb;
+            /* [修正] 改用 box-shadow (內陰影或外陰影皆可) 避免影響內容尺寸與佔位 */
+            box-shadow: 0 0 0 1px #2563eb;
             z-index: 25;
         }
 
@@ -566,8 +566,14 @@
                     <p id="selected-name" class="font-bold text-sm"></p>
                     <!-- [您的要求] 新增操作按鈕 -->
                     <div id="selected-cab-actions" class="flex gap-2">
+                        <button id="selected-layer-up-btn" title="上移一層"
+                            class="p-1.5 bg-gray-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-gray-600">↑</button>
+                        <button id="selected-layer-down-btn" title="下移一層"
+                            class="p-1.5 bg-gray-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-gray-600">↓</button>
                         <button id="selected-rotate-btn" title="旋轉 (R)"
                             class="p-1.5 bg-blue-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-blue-600">↻</button>
+                        <button id="selected-mirror-btn" title="鏡像 (M)"
+                            class="p-1.5 bg-purple-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-purple-600">⇄</button>
                         <button id="selected-duplicate-btn" title="複製 (Ctrl+D)"
                             class="p-1.5 bg-green-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-green-600">❏</button>
                         <button id="selected-delete-btn" title="刪除 (D)"
@@ -592,6 +598,16 @@
                         <input type="number" id="selected-height" class="w-full text-xs border rounded p-1 mt-1">
                     </div>
                 </div>
+                
+                <!-- [修改] 才數計價改為直接輸入才數 -->
+                <div id="selected-cai-wrapper" class="mb-2" style="display:none;">
+                    <label for="selected-cai-qty" class="text-xs text-gray-600">才數 <span class="text-red-500 font-bold">*直接輸入</span></label>
+                    <input type="number" id="selected-cai-qty" class="w-full text-xs border rounded p-1 mt-1">
+                </div>
+                
+                <!-- [新增] 副屬性設定區 (由 Sheet 定義) -->
+                <div id="selected-addons" class="mb-2 border-t border-gray-100 pt-2 mt-2" style="display:none;"></div>
+
                 <p id="selected-price" class="text-xs text-gray-600 mb-2"></p>
 
                 <!-- 備註 -->
@@ -610,32 +626,6 @@
                     class="w-full mt-2 py-1 bg-gray-100 text-xs rounded hover:bg-gray-200">查看明細</button>
             </div>
 
-            <!-- 施工項目 -->
-            <div class="bg-white p-3 rounded border">
-                <!-- 施工面積 -->
-                <div class="mb-3">
-                    <label class="text-xs font-bold">施工面積 (坪):</label>
-                    <input type="number" id="construction-area" min="0" step="0.1" value="0"
-                        class="w-full text-xs border rounded p-1 mt-1">
-                    <p class="text-[10px] text-gray-500 mt-1">用於計算保護工程費用</p>
-                </div>
-
-                <!-- 費用明細 -->
-                <div class="text-xs bg-gray-50 p-2 rounded mt-2">
-                    <div class="flex justify-between mb-1">
-                        <span>平釘天花板:</span>
-                        <span id="ceiling-cost">$0</span>
-                    </div>
-                    <div class="flex justify-between mb-1">
-                        <span>超耐磨地板:</span>
-                        <span id="floor-cost">$0</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span>保護工程:</span>
-                        <span id="protection-cost">$0</span>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -699,7 +689,7 @@
                         <tr>
                             <th class="px-2 py-2 w-12">項次</th>
                             <th class="px-2 py-2">項目</th>
-                            <th class="px-2 py-2 w-16">單位</th>
+                            <th class="px-2 py-2 w-16 text-center">單位</th>
                             <th class="px-2 py-2 w-16">數量</th>
                             <th class="px-2 py-2 w-24 text-right">總價</th>
                             <th class="px-2 py-2">備註</th>
@@ -767,7 +757,10 @@
                         <li><strong>Ctrl + Z / Y</strong>：復原 / 重做</li>
                         <li><strong>Ctrl + D</strong>：複製選取的家具</li>
                         <li><strong>R 鍵</strong>：旋轉家具</li>
+                        <li><strong>M 鍵</strong>：鏡像翻轉</li>
+                        <li><strong>[ and ] 鍵</strong>：調整圖層 (下移/上移)</li>
                         <li><strong>Delete 鍵</strong>：刪除</li>
+                        <li><strong>方向鍵</strong>：微調位置</li>
                     </ul>
                 </section>
 

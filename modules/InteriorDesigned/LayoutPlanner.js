@@ -66,24 +66,45 @@ function cmToFeet(cm) {
 function calculatePrice(cabinet) {
     const { unitPrice, pricingType } = cabinet.data;
     const { currentW, currentH } = cabinet;
-
-    if (pricingType === 'fixed') {
-        return unitPrice;
-    }
+    let price = 0;
 
     const widthFeet = cmToFeet(currentW);
     const depthFeet = cmToFeet(currentH);
 
-    switch (pricingType) {
-        case 'width':
-            return unitPrice * widthFeet;
-        case 'depth':
-            return unitPrice * depthFeet;
-        case 'area':
-            return unitPrice * widthFeet * depthFeet;
-        default:
-            return 0;
+    // 1. 基礎價格計算
+    if (pricingType === 'fixed' || pricingType === 'number') {
+        price = unitPrice;
+    } else {
+        switch (pricingType) {
+            case 'width': price = unitPrice * widthFeet; break;
+            case 'depth': price = unitPrice * depthFeet; break;
+            case 'area': price = unitPrice * widthFeet * depthFeet; break;
+            case 'cai': price = unitPrice * (cabinet.caiQty || 0); break; // [修正] 變數名稱錯誤修正 (cab -> cabinet)
+            case 'cm': price = unitPrice * currentW; break; // [新增] 公分計價 (通常指寬度)
+            default: price = 0;
+        }
     }
+
+    // 2. 副屬性 (Addons) 加價計算
+    if (cabinet.data.addonsConfig && cabinet.addons) {
+        cabinet.data.addonsConfig.forEach((addon, idx) => {
+            const qty = cabinet.addons[idx] || 0;
+            if (qty > 0) {
+                price += qty * addon.price;
+            }
+        });
+    }
+
+    // 3. 自訂副屬性 (Custom Addons) 加價計算
+    if (cabinet.customAddons && cabinet.customAddons.length > 0) {
+        cabinet.customAddons.forEach(addon => {
+            if (addon.qty > 0) {
+                price += addon.qty * (addon.price || 0);
+            }
+        });
+    }
+
+    return price;
 }
 
 // [新增] LINE 聯繫相關常數
@@ -107,6 +128,73 @@ function copyLineId() {
     }).catch(() => {
         showGlobalNotification(`請手動複製 LINE ID: ${LINE_ID}`, 3000, 'warning');
     });
+}
+
+/**
+ * [自動修正] SVG 幾何校正函式
+ * 偵測並修正填滿 ViewBox 的矩形，將其向內縮半個邊框寬度，避免邊框被切掉。
+ */
+function autoFixSvgGeometry(svgStr) {
+    if (!svgStr || !svgStr.trim().startsWith('<svg')) return svgStr;
+
+    try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svgStr, "image/svg+xml");
+        const svg = doc.querySelector('svg');
+        if (!svg) return svgStr;
+
+        // [修正 1] 強制設定 preserveAspectRatio="none" 以填滿容器，避免因比例不符產生的白邊
+        if (svg.getAttribute('preserveAspectRatio') !== 'none') {
+            svg.setAttribute('preserveAspectRatio', 'none');
+        }
+        // [修正 2] 確保 width/height 為 100%
+        if (svg.getAttribute('width') !== '100%') svg.setAttribute('width', '100%');
+        if (svg.getAttribute('height') !== '100%') svg.setAttribute('height', '100%');
+
+        // 1. 取得 ViewBox 資訊
+        const viewBox = svg.getAttribute('viewBox');
+        if (!viewBox) return new XMLSerializer().serializeToString(doc); // 回傳已修正屬性的 SVG
+
+        const [vbX, vbY, vbW, vbH] = viewBox.split(/\s+|,/).map(parseFloat);
+        if (isNaN(vbW) || isNaN(vbH)) return new XMLSerializer().serializeToString(doc);
+
+        // 2. 尋找並修正矩形
+        const rects = svg.querySelectorAll('rect');
+
+        rects.forEach(rect => {
+            // [重要修正] 若有 vector-effect="non-scaling-stroke"，則不進行內縮修正
+            // 因為 non-scaling-stroke 的線條寬度不隨縮放改變，若依據 SVG 座標內縮，
+            // 在放大元件時會產生明顯的白邊間隙 (Gap)。
+            const vectorEffect = rect.getAttribute('vector-effect');
+            const style = rect.getAttribute('style') || '';
+            if (vectorEffect === 'non-scaling-stroke' || style.includes('non-scaling-stroke')) return;
+
+            const x = parseFloat(rect.getAttribute('x')) || 0;
+            const y = parseFloat(rect.getAttribute('y')) || 0;
+            const w = parseFloat(rect.getAttribute('width')); // 假設是數字 (Sheet中的SVG通常是)
+            const h = parseFloat(rect.getAttribute('height'));
+            const stroke = rect.getAttribute('stroke');
+            const strokeWidth = parseFloat(rect.getAttribute('stroke-width')) || 0;
+
+            // 條件：有邊框、邊框寬度 > 0、且矩形尺寸等於 ViewBox 尺寸 (允許 0.1 的誤差)
+            if (stroke && stroke !== 'none' && strokeWidth > 0 &&
+                Math.abs(x - vbX) < 0.1 && Math.abs(y - vbY) < 0.1 &&
+                Math.abs(w - vbW) < 0.1 && Math.abs(h - vbH) < 0.1) {
+
+                const inset = strokeWidth / 2;
+                // 向內縮：起點 + 0.5寬度，總長 - 1.0寬度
+                rect.setAttribute('x', x + inset);
+                rect.setAttribute('y', y + inset);
+                rect.setAttribute('width', w - strokeWidth);
+                rect.setAttribute('height', h - strokeWidth);
+            }
+        });
+
+        return new XMLSerializer().serializeToString(doc);
+    } catch (e) {
+        console.warn('Auto-fix SVG failed:', e);
+    }
+    return svgStr;
 }
 
 // Google Sheets 載入
@@ -134,13 +222,27 @@ async function loadFromSheets() {
             const adjustable = row.c[5]?.v || 'both';
             const depthOptions = row.c[6]?.v || '';
             const defaultOpacity = row.c[7]?.v || 80;
-            const img = row.c[8]?.v || '';
+            // [自動修正] 讀取 SVG 時自動執行幾何校正
+            let img = row.c[8]?.v || '';
+            if (img && typeof img === 'string' && img.trim().startsWith('<svg')) {
+                img = autoFixSvgGeometry(img);
+            }
+
             // 讀取 J 欄 (索引為 9) 的組別，若為空則預設為 '未分類'
             const group = row.c[9]?.v || '未分類';
             // [您的要求] 讀取 K 欄 (索引為 10) 作為預設備註
             const note = row.c[10]?.v || '';
             // [您的要求] 讀取 M 欄 (索引為 12) 作為 '允許重疊' 屬性
             const allowOverlap = row.c[12]?.v === true;
+
+            // [新增] 讀取副屬性 (13-21)
+            const addonsConfig = [];
+            // Group 1 (13, 14, 15)
+            if (row.c[13]?.v) addonsConfig.push({ name: row.c[13].v, unit: row.c[14]?.v || '式', price: parseFloat(row.c[15]?.v) || 0 });
+            // Group 2 (16, 17, 18)
+            if (row.c[16]?.v) addonsConfig.push({ name: row.c[16].v, unit: row.c[17]?.v || '式', price: parseFloat(row.c[18]?.v) || 0 });
+            // Group 3 (19, 20, 21)
+            if (row.c[19]?.v) addonsConfig.push({ name: row.c[19].v, unit: row.c[20]?.v || '式', price: parseFloat(row.c[21]?.v) || 0 });
 
             if (name && width && depth) {
                 // 如果該組別還不存在，就建立一個空陣列
@@ -160,6 +262,8 @@ async function loadFromSheets() {
                     defaultOpacity: parseInt(defaultOpacity) || 80,
                     note: note, // [您的要求] 將 K 欄的備註存入元件資料
                     allowOverlap: allowOverlap, // [您的要求] 將屬性存入元件資料
+                    addonsConfig: addonsConfig, // [新增] 儲存副屬性設定
+                    group: group, // [新增] 儲存群組資訊，用於報價單分類
                     // [最終修正] 當 Sheet 的 img 為空時，就讓它保持為空。後續渲染邏輯會自動處理 onerror 事件。
                     img: img
                 });
@@ -269,7 +373,11 @@ function addCabinet(data, x, y) {
         currentW: data.width,
         currentH: data.depth,
         opacity: data.defaultOpacity || 80,
-        note: data.note || '' // [您的要求] 新增元件時，帶入從 Sheet 讀取的預設備註
+        note: data.note || '', // [您的要求] 新增元件時，帶入從 Sheet 讀取的預設備註
+        caiQty: 0, // [新增] 才數計價的數量
+        mirrored: false, // [新增] 鏡像狀態
+        addons: data.addonsConfig ? new Array(data.addonsConfig.length).fill(0) : [], // [新增] 初始化副屬性數量
+        customAddons: [] // [新增] 初始化自訂副屬性
     };
     if (checkCollision(cab)) return showGlobalNotification("位置重疊，請更換位置", 3000, 'error');
     placedCabinets.push(cab);
@@ -577,12 +685,16 @@ function updateCabStyle(el, cab) {
             el.style.backgroundColor = '#f3f4f6';
         }
     }
-    el.style.transform = `rotate(${cab.rotation}deg)`;
+    el.style.transform = `rotate(${cab.rotation}deg) scaleX(${cab.mirrored ? -1 : 1})`; // [新增] 支援鏡像
     el.style.opacity = (cab.opacity / 100);
 }
 
 
 function handleGlobalClick(e) {
+    // [v9.2 修正] 防止因 DOM 元素被移除導致的誤判 (例如點擊 "新增自訂項目" 按鈕後該按鈕被重繪移除)
+    // 如果點擊的目標已經不在文件中，視為有效操作，不觸發取消選取
+    if (!document.body.contains(e.target)) return;
+
     // [新增] 如果正在繪圖模式，則處理點擊事件
     if (isDrawing && e.target.closest('#design-canvas')) {
         // handleDrawingClick(e); // [修正] 避免與 canvas click 事件重複觸發導致產生雙重點
@@ -599,9 +711,106 @@ function handleGlobalClick(e) {
     }
 }
 
+// [v9.5 新增] 統一渲染副屬性面板的函式 (供 selectCabinet 與 selectArea 共用)
+function renderAddonsPanel(targetId) {
+    const container = document.getElementById('selected-addons');
+    if (!container) return;
+    container.innerHTML = '';
+
+    let target = placedCabinets.find(c => c.id === targetId);
+    let isArea = false;
+    if (!target) {
+        target = drawnAreas.find(a => a.id === targetId);
+        isArea = true;
+    }
+    if (!target) return;
+
+    // 1. Sheet 定義的副屬性 (預設副屬性)
+    let sheetAddons = [];
+    let sheetAddonQtys = target.addons || [];
+    let updateFuncName = '';
+
+    if (isArea) {
+        if (target.linkedComponent && target.linkedComponent.addonsConfig) {
+            sheetAddons = target.linkedComponent.addonsConfig;
+        }
+        updateFuncName = 'window.updateAreaAddon';
+    } else {
+        if (target.data && target.data.addonsConfig) {
+            sheetAddons = target.data.addonsConfig;
+        }
+        updateFuncName = 'window.updateCabinetAddon';
+    }
+
+    if (sheetAddons.length > 0) {
+        sheetAddons.forEach((addon, idx) => {
+            const row = document.createElement('div');
+            row.className = 'flex justify-between items-center mb-2';
+            row.innerHTML = `
+                <span class="text-xs text-gray-600">${addon.name} ($${addon.price}/${addon.unit})</span>
+                <input type="number" min="0" value="${sheetAddonQtys[idx] || 0}" class="w-12 text-xs border rounded text-center" onchange="${updateFuncName}('${target.id}', ${idx}, this.value)">
+            `;
+            container.appendChild(row);
+        });
+    }
+
+    // 2. 自訂副屬性
+    if (target.customAddons && target.customAddons.length > 0) {
+        // 分隔線
+        if (sheetAddons.length > 0) {
+            const sep = document.createElement('div');
+            sep.className = 'border-t border-gray-100 my-2';
+            container.appendChild(sep);
+        }
+
+        // Header - [v9.7] 統一使用標準元件的簡潔版面 (移除分類欄位)
+        const header = document.createElement('div');
+        header.className = 'flex gap-1 mb-1 text-[10px] text-gray-500 font-bold';
+        header.innerHTML = `
+            <div class="flex-1 pl-1">項目</div>
+            <div class="w-12 text-center">單位</div>
+            <div class="w-16 text-right">單價</div>
+            <div class="w-12 text-center">數量</div>
+            <div class="w-5"></div>
+        `;
+        container.appendChild(header);
+
+        // Datalists (共用 ID)
+        const datalistUnit = document.createElement('datalist');
+        datalistUnit.id = 'unit-options-shared';
+        datalistUnit.innerHTML = `<option value="式"><option value="坪"><option value="尺"><option value="才"><option value="公分"><option value="口"><option value="個"><option value="組">`;
+        container.appendChild(datalistUnit);
+
+        target.customAddons.forEach((addon, idx) => {
+            const row = document.createElement('div');
+            row.className = 'flex gap-1 mb-1 items-center';
+            row.innerHTML = `
+                <input type="text" value="${addon.name}" class="flex-1 text-xs border rounded p-1 min-w-0" placeholder="名稱" onchange="window.updateCustomAddon('${target.id}', ${idx}, 'name', this.value)">
+                <input type="text" value="${addon.unit}" list="unit-options-shared" class="w-12 text-xs border rounded p-1 text-center px-0" placeholder="式" onchange="window.updateCustomAddon('${target.id}', ${idx}, 'unit', this.value)">
+                <input type="number" value="${addon.price}" step="100" class="w-16 text-xs border rounded p-1 text-right px-0" placeholder="0" onchange="window.updateCustomAddon('${target.id}', ${idx}, 'price', this.value)">
+                <input type="number" value="${addon.qty}" class="w-12 text-xs border rounded p-1 text-center px-0" placeholder="1" onchange="window.updateCustomAddon('${target.id}', ${idx}, 'qty', this.value)">
+                <button class="w-5 text-red-500 hover:text-red-700 flex justify-center items-center" onclick="window.removeCustomAddon('${target.id}', ${idx})">×</button>
+            `;
+            container.appendChild(row);
+        });
+    }
+
+    // 3. Add Button
+    const addBtn = document.createElement('button');
+    addBtn.className = 'w-full mt-2 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100 border border-dashed border-blue-300 transition-colors flex justify-center items-center';
+    addBtn.innerHTML = '<span class="text-lg leading-none mr-1">+</span> 新增自訂項目';
+    addBtn.onclick = () => window.addCustomAddon(target.id);
+    container.appendChild(addBtn);
+
+    container.style.display = 'block';
+}
+
 function selectCabinet(id) {
-    deselectAll();
-    deselectAllAreas(); // [v6.0 核心修正] 確保在選取元件時，取消對區域的選取
+    // [修正] 只有當選取的 ID 改變時，才執行 deselectAll (避免新增副屬性時畫面閃爍)
+    if (selectedCabId !== id) {
+        deselectAll();
+        deselectAllAreas();
+    }
     selectedCabId = id;
     const el = document.getElementById(id);
     if (el) el.classList.add('selected');
@@ -622,7 +831,11 @@ function selectCabinet(id) {
             priceText = `單價: $${cab.data.unitPrice.toLocaleString()} `;
             if (cab.data.pricingType === 'width') {
                 priceText += `/ 尺 | 總價: $${price.toLocaleString()}`;
-            } else if (cab.data.pricingType === 'fixed') {
+            } else if (cab.data.pricingType === 'cai' || cab.data.pricingType === 'area') {
+                priceText += `/ 才 | 總價: $${price.toLocaleString()}`;
+            } else if (cab.data.pricingType === 'cm') {
+                priceText += `/ cm | 總價: $${price.toLocaleString()}`;
+            } else if (cab.data.pricingType === 'fixed' || cab.data.pricingType === 'number') {
                 priceText = `總價: $${price.toLocaleString()}`;
             }
         }
@@ -634,6 +847,25 @@ function selectCabinet(id) {
         document.getElementById('note-input').parentElement.style.display = 'block'; // [v6.0 UX優化] 確保備註欄可見
         document.getElementById('note-input').value = cab.note || '';
         document.getElementById('selected-cab-actions').style.display = 'flex'; // [您的要求] 顯示元件操作按鈕
+
+        // [修改] 顯示/隱藏才數輸入框
+        const caiWrapper = document.getElementById('selected-cai-wrapper');
+        if (cab.data.pricingType === 'cai') {
+            caiWrapper.style.display = 'block';
+            // 使用已儲存的才數
+            document.getElementById('selected-cai-qty').value = cab.caiQty || 0;
+        } else {
+            caiWrapper.style.display = 'none';
+        }
+
+        // [新增] 渲染副屬性輸入框
+        const addonContainer = document.getElementById('selected-addons');
+        if (addonContainer) {
+            addonContainer.innerHTML = '';
+            // [v9.7] 使用統一函式渲染副屬性面板，確保與天花板/地板一致
+            renderAddonsPanel(cab.id);
+            addonContainer.style.display = 'block';
+        }
     }
 }
 
@@ -642,6 +874,11 @@ function deselectAll() {
     document.querySelectorAll('.placed-cabinet.selected').forEach(e => e.classList.remove('selected'));
     document.getElementById('selected-info').style.display = 'none';
     document.getElementById('selected-size-inputs').style.display = 'none';
+    // [修改] 隱藏才數輸入框
+    document.getElementById('selected-cai-wrapper').style.display = 'none';
+    // 清空副屬性區
+    const addonContainer = document.getElementById('selected-addons');
+    if (addonContainer) addonContainer.style.display = 'none';
     document.getElementById('selected-cab-actions').style.display = 'none'; // [您的要求] 隱藏元件操作按鈕
 }
 
@@ -675,6 +912,9 @@ function updateNote() {
 }
 
 function handleKeyDown(e) {
+    // [安全修正] 確保 e.key 存在，避免在某些特殊輸入狀態下 (如 IME) 導致 undefined 錯誤
+    if (!e.key) return;
+
     // [新增] 如果按下 Escape 鍵，則取消目前的繪圖
     if (e.key === 'Escape' && isDrawing) {
         cancelDrawing();
@@ -691,6 +931,13 @@ function handleKeyDown(e) {
     if (e.ctrlKey && e.key.toLowerCase() === 'd') {
         e.preventDefault();
         duplicateSelectedCab();
+        return;
+    }
+    
+    // [新增] 鏡像功能 (M)
+    if (e.key.toLowerCase() === 'm' && !e.ctrlKey) {
+        e.preventDefault();
+        mirrorSelectedCab();
         return;
     }
 
@@ -742,6 +989,19 @@ function handleKeyDown(e) {
     if (isDrawing || !selectedCabId || isBgEditMode || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     const cab = placedCabinets.find(c => c.id === selectedCabId);
     if (!cab) return;
+
+    // [您的要求] 圖層調整熱鍵 ([ 下移, ] 上移)
+    if (e.key === ']') {
+        e.preventDefault();
+        moveSelectedCabLayer('up');
+        return;
+    }
+    if (e.key === '[') {
+        e.preventDefault();
+        moveSelectedCabLayer('down');
+        return;
+    }
+
     if (e.key.toLowerCase() === 'r') {
         e.preventDefault();
         cab.rotation = (cab.rotation + 90) % 360;
@@ -784,6 +1044,16 @@ function rotateSelectedCab() {
     saveState(); // [您的要求] 儲存狀態
 }
 
+// [新增] 鏡像選取的元件
+function mirrorSelectedCab() {
+    const id = selectedCabId;
+    const cab = placedCabinets.find(c => c.id === id);
+    if (!cab) return;
+    cab.mirrored = !cab.mirrored;
+    renderAllCabinets();
+    saveState();
+}
+
 // [您的要求] 新增：複製選取的元件
 function duplicateSelectedCab() {
     if (!selectedCabId) return;
@@ -805,6 +1075,33 @@ function duplicateSelectedCab() {
 
     // 自動選取新複製的元件
     selectCabinet(newCab.id);
+}
+
+// [新增] 調整元件圖層順序
+function moveSelectedCabLayer(direction) {
+    if (!selectedCabId) return;
+    const index = placedCabinets.findIndex(c => c.id === selectedCabId);
+    if (index === -1) return;
+
+    if (direction === 'up') {
+        // 往後移動 (DOM 順序越後面越上層)
+        if (index < placedCabinets.length - 1) {
+            const temp = placedCabinets[index];
+            placedCabinets[index] = placedCabinets[index + 1];
+            placedCabinets[index + 1] = temp;
+            renderAllCabinets();
+            saveState();
+        }
+    } else if (direction === 'down') {
+        // 往前移動
+        if (index > 0) {
+            const temp = placedCabinets[index];
+            placedCabinets[index] = placedCabinets[index - 1];
+            placedCabinets[index - 1] = temp;
+            renderAllCabinets();
+            saveState();
+        }
+    }
 }
 
 function deleteCabById(id) {
@@ -1293,6 +1590,21 @@ function selectArea(id) {
         document.getElementById('selected-cab-actions').style.display = 'none'; // [您的要求] 隱藏元件操作按鈕
         document.getElementById('note-input').value = area.note || '';
 
+        // [v9.3 新增] 渲染區域的自訂副屬性 (如維修孔、迴風口)
+        const addonContainer = document.getElementById('selected-addons');
+        if (addonContainer) {
+            addonContainer.innerHTML = '';
+        // [v9.5] 使用統一函式渲染副屬性面板
+        renderAddonsPanel(area.id);
+
+        // [v9.6 修正] 移除重複的副屬性渲染程式碼
+        // 舊有的手動渲染邏輯已由 renderAddonsPanel 取代
+        // 這樣可以解決「天花板和地板的新增加工項目,輸入格不正確」的問題
+        // 並確保所有元件使用統一的 UI 邏輯
+
+            addonContainer.style.display = 'block';
+        }
+
         showGlobalNotification('已選取繪圖區域，可編輯備註或按 "D" 鍵刪除。', 3000, 'info');
     }
 }
@@ -1396,8 +1708,7 @@ function saveLayout() {
             position: bgPosition,
             scale: bgScale,
             src: document.getElementById('bg-img').src
-        },
-        constructionArea: document.getElementById('construction-area').value
+        }
     };
 
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(layoutData, null, 2));
@@ -1437,56 +1748,237 @@ function loadLayout(event) {
 function calculateFullQuotation() {
     const lineItems = [];
     let grandTotal = 0;
+    const subtotals = { ceilingCost: 0, floorCost: 0 }; // 保留相容性，雖然現在統一處理
 
-    // 1. 計算元件費用
+    // 1. 準備統一的計價項目列表 (包含元件與繪製區域)
+    const allItems = [];
+
+    // A. 加入一般元件 (Cabinets)
     placedCabinets.forEach(cab => {
-        const price = calculatePrice(cab);
-        grandTotal += price;
-        lineItems.push({
-            isConstruction: false,
-            name: cab.data.name,
-            unit: cab.data.pricingType === 'fixed' ? '式' : '尺',
-            quantity: cab.data.pricingType === 'fixed' ? 1 : cmToFeet(cab.currentW),
-            totalPrice: price,
-            note: cab.note || ''
+        const { unitPrice, pricingType, name } = cab.data;
+        const { currentW, currentH } = cab;
+        let qty = 0;
+        let unit = '尺';
+
+        // 計算數量與單位
+        if (pricingType === 'number') { qty = 1; unit = '個'; }
+        else if (pricingType === 'fixed') { qty = 1; unit = '式'; }
+        else if (pricingType === 'cai') { qty = cab.caiQty || 0; unit = '才'; }
+        else if (pricingType === 'area') { qty = Math.round((cmToFeet(currentW) * cmToFeet(currentH)) * 100) / 100; unit = '才'; }
+        else if (pricingType === 'depth') { qty = cmToFeet(currentH); unit = '尺'; }
+        else if (pricingType === 'cm') { qty = currentW; unit = 'cm'; }
+        else if (pricingType === 'none') { qty = 0; unit = ''; }
+        else { qty = cmToFeet(currentW); unit = '尺'; } // default width
+
+        allItems.push({
+            source: 'cabinet',
+            id: cab.id,
+            name: name,
+            group: cab.data.group || '未分類',
+            unit: unit,
+            unitPrice: unitPrice,
+            quantity: qty,
+            pricingType: pricingType,
+            addonsConfig: cab.data.addonsConfig,
+            addons: cab.addons,
+            customAddons: cab.customAddons,
+            note: cab.note
         });
     });
 
-    // 2. 計算施工項目費用
-    const subtotals = {};
+    // B. 加入繪製區域 (Areas: 天花板/地板)
+    drawnAreas.forEach(area => {
+        if (area.type === 'wall') return; // 牆壁目前不計價
 
-    // 天花板 & 油漆
-    const ceilingArea = drawnAreas.filter(a => a.type === 'ceiling').reduce((sum, a) => sum + a.areaInPing, 0);
-    if (ceilingArea > 0) {
-        subtotals.ceilingCost = ceilingArea * 3400; // 假設天花板單價不含油漆
-        grandTotal += subtotals.ceilingCost;
-        lineItems.push({ isConstruction: true, name: '平釘天花板', unit: '坪', quantity: ceilingArea, totalPrice: subtotals.ceilingCost, note: '油漆工程另計' });
-    } else {
-        subtotals.ceilingCost = 0;
-    }
+        const comp = area.linkedComponent || {};
+        let name = comp.name || (area.type === 'floor' ? '超耐磨木地板' : '平釘天花板');
+        let groupName = comp.group || (area.type === 'floor' ? '地板工程' : '木作');
+        let qty = area.areaInPing;
+        
+        // 地板特殊處理：加計損耗
+        if (area.type === 'floor') {
+            qty = calculateFloorAreaWithLoss(qty);
+            name = `${name} (含損耗)`;
+        }
 
-    // 地板
-    const floorArea = drawnAreas.filter(a => a.type === 'floor').reduce((sum, a) => sum + a.areaInPing, 0);
-    if (floorArea > 0) {
-        const floorAreaWithLoss = calculateFloorAreaWithLoss(floorArea);
-        subtotals.floorCost = floorAreaWithLoss * 3950;
-        grandTotal += subtotals.floorCost;
-        lineItems.push({ isConstruction: true, name: '超耐磨地板 (含損耗)', unit: '坪', quantity: floorAreaWithLoss.toFixed(2), totalPrice: subtotals.floorCost, note: '' });
-    } else {
-        subtotals.floorCost = 0;
-    }
+        allItems.push({
+            source: 'area',
+            id: area.id,
+            name: name,
+            group: groupName,
+            unit: '坪',
+            unitPrice: comp.unitPrice || (area.type === 'floor' ? 3950 : 3400), // 預設單價 fallback
+            quantity: qty,
+            pricingType: 'area',
+            addonsConfig: comp.addonsConfig,
+            addons: area.addons,
+            customAddons: area.customAddons,
+            note: area.note
+        });
+    });
 
-    // 保護工程
-    const protectionArea = parseFloat(document.getElementById('construction-area').value) || 0;
-    if (protectionArea > 0) {
-        subtotals.protectionCost = protectionArea * 800;
-        grandTotal += subtotals.protectionCost;
-        lineItems.push({ isConstruction: true, name: '現場保護工程', unit: '坪', quantity: protectionArea, totalPrice: subtotals.protectionCost, note: '' });
-    } else {
-        subtotals.protectionCost = 0;
-    }
+    // 2. 統一處理計價與分組
+    const groups = {};
+    const groupOrder = [];
 
-    return { lineItems, subtotals, grandTotal };
+    allItems.forEach(item => {
+        // 計算本體價格
+        const basePrice = item.quantity * item.unitPrice;
+        
+        // 收集所有副屬性 (Sheet定義 + 自訂)
+        const itemAddons = [];
+        let addonsTotal = 0;
+
+        // Sheet 定義的副屬性
+        if (item.addonsConfig && item.addons) {
+            item.addonsConfig.forEach((addon, idx) => {
+                const qty = item.addons[idx] || 0;
+                if (qty > 0) {
+                    const total = qty * addon.price;
+                    addonsTotal += total;
+                    itemAddons.push({ name: addon.name, unit: addon.unit, price: addon.price, qty: qty, total: total });
+                }
+            });
+        }
+
+        // 自訂副屬性
+        if (item.customAddons) {
+            item.customAddons.forEach(addon => {
+                if (addon.qty > 0) {
+                    const price = parseFloat(addon.price) || 0;
+                    const total = addon.qty * price;
+                    addonsTotal += total;
+                    itemAddons.push({ name: addon.name, unit: addon.unit, price: price, qty: parseFloat(addon.qty), total: total });
+                }
+            });
+        }
+
+        // 若總價為 0 則不列入報價單
+        if (basePrice + addonsTotal === 0) return;
+
+        grandTotal += (basePrice + addonsTotal);
+
+        // 更新舊版相容的 subtotals (僅供參考)
+        if (item.group === '天花板工程') subtotals.ceilingCost += (basePrice + addonsTotal);
+        if (item.group === '地板工程') subtotals.floorCost += (basePrice + addonsTotal);
+
+        // 產生分組 Key
+        // 規則：名稱、單價、備註、副屬性內容完全相同者合併
+        // [修正] 為了符合「併入一般元件流程」的要求，我們放寬分組限制，
+        // 只要屬性相同就合併，不再區分是 Cabinet 還是 Area
+        const addonsKey = JSON.stringify(itemAddons.map(a => `${a.name}-${a.qty}`));
+        const key = `${item.name}_${item.unitPrice}_${item.note || ''}_${addonsKey}`;
+
+        if (!groups[key]) {
+            groups[key] = {
+                isConstruction: item.source === 'area', // 標記來源
+                name: item.name,
+                group: item.group,
+                unit: item.unit,
+                quantity: 0,
+                totalPrice: 0,
+                note: item.note || '',
+                addons: {} 
+            };
+            groupOrder.push(key);
+        }
+
+        const group = groups[key];
+        group.quantity += item.quantity;
+        group.totalPrice += basePrice;
+
+        // 合併副屬性到群組中
+        itemAddons.forEach(addon => {
+            const addonKey = `${addon.name}_${addon.unit}_${addon.price}`;
+            if (!group.addons[addonKey]) {
+                group.addons[addonKey] = {
+                    name: `└ ${addon.name}`,
+                    unit: addon.unit,
+                    quantity: 0,
+                    totalPrice: 0
+                };
+            }
+            group.addons[addonKey].quantity += addon.qty;
+            group.addons[addonKey].totalPrice += addon.total;
+        });
+    });
+
+    // 3. 將群組轉換回 lineItems 陣列
+    groupOrder.forEach(key => {
+        const group = groups[key];
+        lineItems.push({
+            isConstruction: group.isConstruction,
+            name: group.name,
+            unit: group.unit,
+            group: group.group, // [新增] 傳遞群組
+            quantity: group.quantity,
+            totalPrice: group.totalPrice,
+            note: group.note
+        });
+
+        // 加入該項目的副屬性
+        if (group.addons) {
+            Object.values(group.addons).forEach(addon => {
+                lineItems.push({
+                    isConstruction: false,
+                    name: addon.name,
+                    unit: addon.unit,
+                    group: group.group, // [新增] 副屬性跟隨主項目的群組
+                    quantity: addon.quantity,
+                    totalPrice: addon.totalPrice,
+                    note: ''
+                });
+            });
+        }
+    });
+
+    // [新增] 報價單分組排序邏輯
+    const groupedLineItems = [];
+    const itemGroups = {};
+    
+    lineItems.forEach(item => {
+        const g = item.group || '其他';
+        if (!itemGroups[g]) itemGroups[g] = [];
+        itemGroups[g].push(item);
+    });
+
+    // 定義群組顯示順序
+    // [修正] 擴充排序清單，整合 Google Sheet 的分類名稱 (簡稱) 與系統自動產生的分類 (全稱)
+    const preferredOrder = [
+        '保護工程', 
+        '拆除工程', 
+        '水電', '水電工程', 
+        '泥作工程', 
+        '木作', '木作工程', 
+        '天花板工程', 
+        '油漆工程', 
+        '櫃體', '系統櫃', 
+        '地板工程', 
+        '門片', '門窗工程',
+        '玻璃工程', 
+        '衛浴', '衛浴設備',
+        '家具家電', '家具', '家電',
+        '雜項工程', 
+        '清潔工程'
+    ];
+    
+    const sortedGroupNames = Object.keys(itemGroups).sort((a, b) => {
+        const idxA = preferredOrder.indexOf(a);
+        const idxB = preferredOrder.indexOf(b);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return a.localeCompare(b);
+    });
+
+    sortedGroupNames.forEach(gName => {
+        // 加入標題列 (Header)
+        groupedLineItems.push({ isHeader: true, name: gName });
+        // 加入該群組的項目
+        itemGroups[gName].forEach(item => groupedLineItems.push(item));
+    });
+
+    return { lineItems: groupedLineItems, subtotals, grandTotal };
 }
 
 
@@ -1498,39 +1990,28 @@ function showBudgetModal() {
     tableBody.innerHTML = '';
     let itemIndex = 1;
 
-    const componentItems = quotation.lineItems.filter(item => !item.isConstruction);
-    const constructionItems = quotation.lineItems.filter(item => item.isConstruction);
-
-    componentItems.forEach(item => {
-        const row = `
-        < tr >
-                <td class="px-2 py-2 border-b text-center">${itemIndex++}</td>
-                <td class="px-2 py-2 border-b">${item.name}</td>
-                <td class="px-2 py-2 border-b">${item.unit}</td>
-                <td class="px-2 py-2 border-b text-center">${item.quantity}</td>
-                <td class="px-2 py-2 border-b text-right">$${item.totalPrice.toLocaleString()}</td>
-                <td class="px-2 py-2 border-b text-xs text-gray-600">${item.note}</td>
-            </tr >
-        `;
-        tableBody.innerHTML += row;
-    });
-
-    if (constructionItems.length > 0) {
-        // [您的要求] 移除「施工項目」的分類標題
-        constructionItems.forEach(item => {
+    quotation.lineItems.forEach(item => {
+        if (item.isHeader) {
+            // [新增] 渲染標題列
             const row = `
-        < tr >
+                <tr class="bg-gray-100 font-bold">
+                    <td class="px-2 py-2 border-b text-center"></td>
+                    <td class="px-2 py-2 border-b text-gray-700" colspan="5">${item.name}</td>
+                </tr>`;
+            tableBody.innerHTML += row;
+        } else {
+            const row = `
+                <tr>
                     <td class="px-2 py-2 border-b text-center">${itemIndex++}</td>
                     <td class="px-2 py-2 border-b">${item.name}</td>
                     <td class="px-2 py-2 border-b">${item.unit}</td>
-                    <td class="px-2 py-2 border-b text-center">${item.quantity}</td>
-                    <td class="px-2 py-2 border-b text-right">$${item.totalPrice.toLocaleString()}</td>
+                    <td class="px-2 py-2 border-b text-center">${item.quantity > 0 ? item.quantity : ''}</td>
+                    <td class="px-2 py-2 border-b text-right">${item.totalPrice > 0 ? '$' + item.totalPrice.toLocaleString() : ''}</td>
                     <td class="px-2 py-2 border-b text-xs text-gray-600">${item.note}</td>
-                </tr >
-        `;
+                </tr>`;
             tableBody.innerHTML += row;
-        });
-    }
+        }
+    });
 
     document.getElementById('modal-total-price').innerText = `$${quotation.grandTotal.toLocaleString()} `;
     document.getElementById('budget-modal').style.display = 'flex';
@@ -1550,15 +2031,20 @@ function exportBudgetAsCSV() {
     let itemIndex = 1;
 
     quotation.lineItems.forEach(item => {
-        const row = [
-            itemIndex++,
-            `"${item.name.replace(/"/g, '""')}"`, // 處理項目名稱中的引號
-            item.unit,
-            item.quantity,
-            item.totalPrice,
-            `"${(item.note || '').replace(/"/g, '""')}"` // 處理備註中的引號
-        ];
-        csvContent += row.join(',') + '\n';
+        if (item.isHeader) {
+            // [新增] CSV 標題列
+            csvContent += `,"${item.name}",,,,\n`;
+        } else {
+            const row = [
+                itemIndex++,
+                `"${item.name.replace(/"/g, '""')}"`, // 處理項目名稱中的引號
+                item.unit,
+                item.quantity > 0 ? item.quantity : '', // [修正] 0不顯示
+                item.totalPrice > 0 ? item.totalPrice : '', // [修正] 0元不顯示
+                `"${(item.note || '').replace(/"/g, '""')}"` // 處理備註中的引號
+            ];
+            csvContent += row.join(',') + '\n';
+        }
     });
 
     // 加上總計
@@ -1585,10 +2071,6 @@ function updateQuotation() {
     const quotation = calculateFullQuotation();
     const { subtotals, grandTotal } = quotation;
 
-    document.getElementById('ceiling-cost').innerText = `$${Math.round(subtotals.ceilingCost || 0).toLocaleString()}`;
-    // [您的要求] 移除油漆計價
-    document.getElementById('floor-cost').innerText = `$${Math.round(subtotals.floorCost || 0).toLocaleString()}`;
-    document.getElementById('protection-cost').innerText = `$${Math.round(subtotals.protectionCost || 0).toLocaleString()}`;
     document.getElementById('total-price-display').innerText = `$${Math.round(grandTotal).toLocaleString()}`;
 }
 
@@ -1840,17 +2322,55 @@ function finishDrawing() {
             const calculatedArea = centroidData.area;
             const areaInPing = Math.ceil(Math.abs(calculatedArea) / 30000);
 
+            // [v9.4 修正] 嘗試連結元件資料 (支援天花板與地板)
+            let linkedComponent = null;
+            let targetName = '';
+
+            // [v9.7] 定義預設的元件資料 (Fallback)，確保即使 Sheet 未載入也能正常運作
+            const ceilingDef = {
+                name: '平釘天花板', group: '木作', unitPrice: 3400, addonsConfig: [
+                    { name: '迴風口', unit: '處', price: 2000 },
+                    { name: '維修孔(60X60內)', unit: '處', price: 1200 },
+                    { name: '特殊加工(留縫)', unit: '公分', price: 20 }
+                ]
+            };
+            const floorDef = {
+                name: '超耐磨木地板', group: '地板工程', unitPrice: 3950, addonsConfig: [
+                    { name: '升級12mm', unit: '坪', price: 1000 },
+                    { name: '不足5坪加基本工資', unit: '式', price: 2500 },
+                    { name: '傢俱位移', unit: '式', price: 2000 }
+                ]
+            };
+
+            if (currentDrawingType === 'ceiling') {
+                targetName = '平釘天花板';
+                linkedComponent = ceilingDef;
+            } else if (currentDrawingType === 'floor') {
+                targetName = '超耐磨木地板'; // [v9.7 修正] 名稱對應 Sheet 資料
+                linkedComponent = floorDef;
+            }
+
+            if (targetName) {
+                for (const group in cabinetCategories) {
+                    const found = cabinetCategories[group].find(c => c.name === targetName);
+                    if (found) { linkedComponent = found; break; } // 若 Sheet 中有定義，則覆蓋預設值
+                }
+            }
+
             drawnAreas.push({
                 id: `area-${Date.now()}`,
                 type: currentDrawingType,
                 points: [...currentDrawingPoints],
                 areaInPing: areaInPing,
-                note: ''
+                note: '',
+                customAddons: [], // [v9.3] 初始化自訂副屬性
+                linkedComponent: linkedComponent || {}, // [v9.3] 連結元件資料
+                addons: (linkedComponent && linkedComponent.addonsConfig) ? new Array(linkedComponent.addonsConfig.length).fill(0) : [] // [v9.4] 初始化預設副屬性數量
             });
             renderAllDrawnAreas();
             updateQuotation();
             saveState();
-            cancelDrawing();
+            cancelDrawing(true); // [v9.6] 確保傳入 true 以靜默取消，解決「地板連起來後會顯示繪圖已取消」的問題
         } catch (e) {
             console.error('finishDrawing error:', e);
             showGlobalNotification('繪圖錯誤: ' + e.message, 3000, 'error');
@@ -1859,7 +2379,7 @@ function finishDrawing() {
     }
 }
 
-function cancelDrawing() {
+function cancelDrawing(silent = false) {
     isDrawing = false;
     currentDrawingPoints = [];
     document.getElementById('drawing-overlay').style.display = 'none';
@@ -1873,7 +2393,7 @@ function cancelDrawing() {
 
     // 恢復元件的透明度與點擊事件
     renderAllCabinets();
-    showGlobalNotification('繪圖已取消', 2000, 'info');
+    if (!silent) showGlobalNotification('繪圖已取消', 2000, 'info');
 }
 // [錯誤修正] 新增遺漏的 startCabDrag, startResize, toggleBgMode, updateBgScale 函式
 function startCabDrag(e, cab) {
@@ -2038,6 +2558,25 @@ function handleDimensionChange() {
     selectCabinet(cab.id); // 重新選取以更新資訊面板上的所有資訊 (如價格)
 }
 
+// [修改] 處理才數變更
+function handleCaiQtyChange() {
+    if (!selectedCabId) return;
+    const cab = placedCabinets.find(c => c.id === selectedCabId);
+    if (!cab || cab.data.pricingType !== 'cai') return;
+
+    const newQty = parseFloat(document.getElementById('selected-cai-qty').value);
+    if (isNaN(newQty) || newQty < 0) {
+        showGlobalNotification('請輸入有效的才數。', 3000, 'error');
+        document.getElementById('selected-cai-qty').value = cab.caiQty || 0; // Restore old value
+        return;
+    }
+
+    cab.caiQty = newQty;
+    saveState();
+    updateQuotation();
+    selectCabinet(cab.id); // Re-select to update price display
+}
+
 // [您的要求] 新增復原/重做相關函式
 /**
  * 儲存當前的畫布狀態到歷史紀錄中
@@ -2053,7 +2592,11 @@ function saveState() {
     const currentState = {
         placedCabinets: JSON.parse(JSON.stringify(placedCabinets)),
         drawnAreas: JSON.parse(JSON.stringify(drawnAreas)),
-        constructionArea: document.getElementById('construction-area').value
+        background: {
+            position: bgPosition,
+            scale: bgScale,
+            src: document.getElementById('bg-img').src
+        }
     };
 
     // 避免儲存與上一步完全相同的狀態
@@ -2079,7 +2622,6 @@ function saveState() {
 function loadState(state) {
     placedCabinets = JSON.parse(JSON.stringify(state.placedCabinets));
     drawnAreas = JSON.parse(JSON.stringify(state.drawnAreas));
-    document.getElementById('construction-area').value = state.constructionArea;
 
     renderAllCabinets();
     renderAllDrawnAreas();
@@ -2105,6 +2647,7 @@ function redo() {
 }
 
 function updateUndoRedoButtons() {
+    document.getElementById('undo-btn').disabled = historyIndex <= 0;
     document.getElementById('redo-btn').disabled = historyIndex >= history.length - 1;
 }
 
@@ -2200,12 +2743,20 @@ function bindEventListeners() {
     // [您的要求] 為新的尺寸輸入框綁定 change 事件 (在失焦或按 Enter 時觸發)
     document.getElementById('selected-width').addEventListener('change', handleDimensionChange);
     document.getElementById('selected-height').addEventListener('change', handleDimensionChange);
+    // [修改] 為才數輸入框綁定事件
+    document.getElementById('selected-cai-qty').addEventListener('change', handleCaiQtyChange);
 
     // [您的要求] 為資訊視窗中的新按鈕綁定事件
     document.getElementById('selected-rotate-btn').addEventListener('click', () => rotateSelectedCab());
+    // [新增] 綁定鏡像按鈕事件
+    document.getElementById('selected-mirror-btn').addEventListener('click', () => mirrorSelectedCab());
     // [您的要求] 綁定新的複製按鈕事件
     document.getElementById('selected-duplicate-btn').addEventListener('click', () => duplicateSelectedCab());
     document.getElementById('selected-delete-btn').addEventListener('click', () => deleteCabById(selectedCabId));
+
+    // [新增] 綁定圖層移動按鈕事件
+    document.getElementById('selected-layer-up-btn').addEventListener('click', () => moveSelectedCabLayer('up'));
+    document.getElementById('selected-layer-down-btn').addEventListener('click', () => moveSelectedCabLayer('down'));
 
 
     // 預算明細 Modal
@@ -2265,10 +2816,6 @@ function bindEventListeners() {
 
     // 預算與估價
     document.getElementById('show-budget-modal-btn').addEventListener('click', showBudgetModal);
-    document.getElementById('construction-area').addEventListener('change', () => {
-        updateQuotation();
-        saveState(); // [您的要求] 修改施工面積後儲存狀態
-    });
 
     // 視窗拖曳
     initDraggable('info-window');
@@ -2402,8 +2949,7 @@ function autoSave(silent = false) {
                 position: bgPosition,
                 scale: bgScale,
                 src: document.getElementById('bg-img').src
-            },
-            constructionArea: document.getElementById('construction-area').value
+            }
         };
 
         localStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(layoutData));
@@ -2455,7 +3001,6 @@ function loadLayoutFromData(layoutData) {
             document.getElementById('bg-controls').classList.remove('opacity-50', 'pointer-events-none');
         }
     }
-    document.getElementById('construction-area').value = layoutData.constructionArea || '0';
 
     renderAllCabinets();
     renderAllDrawnAreas();
@@ -2524,15 +3069,19 @@ async function downloadDesignFilesAsZip() {
         let itemIndex = 1;
 
         quotation.lineItems.forEach(item => {
-            const row = [
-                itemIndex++,
-                `"${item.name.replace(/"/g, '""')}"`,
-                item.unit,
-                item.quantity,
-                item.totalPrice,
-                `"${(item.note || '').replace(/"/g, '""')}"`
-            ];
-            csvContent += row.join(',') + '\n';
+            if (item.isHeader) {
+                csvContent += `,"${item.name}",,,,\n`;
+            } else {
+                const row = [
+                    itemIndex++,
+                    `"${item.name.replace(/"/g, '""')}"`,
+                    item.unit,
+                    item.quantity,
+                    item.totalPrice,
+                    `"${(item.note || '').replace(/"/g, '""')}"`
+                ];
+                csvContent += row.join(',') + '\n';
+            }
         });
         csvContent += `\n,,,總計,${quotation.grandTotal},`;
 
@@ -2657,4 +3206,84 @@ window.onload = () => {
 
     // [v7.0 新增] 啟動自動儲存機制
     initAutoSave();
+};
+
+// [新增] 全域函式：更新元件副屬性 (供 HTML onchange 呼叫)
+window.updateCabinetAddon = function(id, index, value) {
+    const cab = placedCabinets.find(c => c.id === id);
+    if (!cab || !cab.addons) return;
+    
+    cab.addons[index] = parseInt(value) || 0;
+    
+    saveState();
+    updateQuotation();
+    selectCabinet(id); // 重新整理面板以更新價格
+};
+
+// [v9.4 新增] 全域函式：更新區域預設副屬性
+window.updateAreaAddon = function(id, index, value) {
+    const area = drawnAreas.find(a => a.id === id);
+    if (!area || !area.addons) return;
+    
+    area.addons[index] = parseInt(value) || 0;
+    
+    saveState();
+    updateQuotation();
+    selectArea(id); // 重新整理面板
+};
+
+// [新增] 全域函式：新增自訂副屬性
+window.addCustomAddon = function(id) {
+    // [v9.3 修正] 同時支援 Cabinet 和 DrawnArea
+    let target = placedCabinets.find(c => c.id === id);
+    let isArea = false;
+    if (!target) {
+        target = drawnAreas.find(a => a.id === id);
+        isArea = true;
+    }
+    if (!target) return;
+    
+    if (!target.customAddons) target.customAddons = [];
+    target.customAddons.push({ name: '', unit: '', price: 0, qty: 1, category: '' });
+    saveState();
+    if (isArea) selectArea(id); else selectCabinet(id); // 重新渲染面板
+};
+
+// [新增] 全域函式：更新自訂副屬性
+window.updateCustomAddon = function(id, index, field, value) {
+    // [v9.3 修正] 同時支援 Cabinet 和 DrawnArea
+    let target = placedCabinets.find(c => c.id === id);
+    let isArea = false;
+    if (!target) {
+        target = drawnAreas.find(a => a.id === id);
+        isArea = true;
+    }
+    if (!target || !target.customAddons[index]) return;
+    
+    if (field === 'price' || field === 'qty') {
+        target.customAddons[index][field] = parseFloat(value) || 0;
+    } else {
+        target.customAddons[index][field] = value;
+    }
+    saveState();
+    updateQuotation();
+    
+    if (isArea) selectArea(id); else selectCabinet(id);
+};
+
+// [新增] 全域函式：移除自訂副屬性
+window.removeCustomAddon = function(id, index) {
+    // [v9.3 修正] 同時支援 Cabinet 和 DrawnArea
+    let target = placedCabinets.find(c => c.id === id);
+    let isArea = false;
+    if (!target) {
+        target = drawnAreas.find(a => a.id === id);
+        isArea = true;
+    }
+    if (!target || !target.customAddons) return;
+    
+    target.customAddons.splice(index, 1);
+    saveState();
+    updateQuotation();
+    if (isArea) selectArea(id); else selectCabinet(id);
 };
