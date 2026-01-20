@@ -456,21 +456,17 @@
                     </div>
                 </div>
 
-                <!-- 佈局存檔功能區塊 (補回) -->
-                <div class="bg-yellow-50 p-3 rounded border border-yellow-100">
-                    <h2 class="font-bold text-yellow-800 text-sm mb-2">2. 佈局存檔</h2>
-                    <div class="grid grid-cols-1 gap-2 text-xs">
-                        <button id="save-canvas-as-image-btn"
-                            class="w-full py-1.5 bg-yellow-600 text-white rounded hover:bg-yellow-700">另存圖片
-                            (PNG)</button>
-                        <div class="grid grid-cols-2 gap-2">
-                            <button id="save-layout-btn"
-                                class="w-full py-1.5 bg-yellow-200 text-yellow-800 rounded hover:bg-yellow-300">儲存佈局 (.json)</button>
-                            <!-- [修正] 移除 for 屬性以避免與 JS 事件衝突導致開啟兩次，並標註檔案格式 -->
-                            <label id="layout-upload-label" title="請選擇 .json 格式的佈局檔案 (若為 ZIP 請先解壓縮)"
-                                class="w-full py-1.5 bg-yellow-200 text-yellow-800 rounded hover:bg-yellow-300 text-center cursor-pointer">載入佈局 (.json)</label>
-                            <input type="file" id="layout-upload" accept=".json" class="hidden">
-                        </div>
+                <!-- [新增] 工程標註與圖層管理 -->
+                <div class="bg-orange-50 p-3 rounded border border-orange-100">
+                    <h2 class="font-bold text-orange-800 text-sm mb-2">2. 工程標註</h2>
+                    <button id="add-annotation-btn" class="w-full py-1.5 bg-orange-500 text-white rounded hover:bg-orange-600 text-xs mb-2">新增工程項目 (如:拆除)</button>
+                    <div class="space-y-1">
+                        <label class="flex items-center gap-2 text-xs font-bold text-gray-700">
+                            <input type="checkbox" id="show-cabinets-toggle" checked> 顯示家具/櫃體
+                        </label>
+                        <label class="flex items-center gap-2 text-xs font-bold text-gray-700">
+                            <input type="checkbox" id="show-annotations-toggle" checked> 顯示工程標註
+                        </label>
                     </div>
                 </div>
 
@@ -506,6 +502,24 @@
                         <label class="flex items-center gap-2 text-xs font-bold text-purple-800 mt-1">
                             <input type="checkbox" id="lock-drawn-areas"> 鎖定繪圖 (不可選取)
                         </label>
+                    </div>
+                </div>
+
+                <!-- 佈局存檔功能區塊 (補回) -->
+                <div class="bg-yellow-50 p-3 rounded border border-yellow-100">
+                    <h2 class="font-bold text-yellow-800 text-sm mb-2">4. 佈局存檔</h2>
+                    <div class="grid grid-cols-1 gap-2 text-xs">
+                        <button id="save-canvas-as-image-btn"
+                            class="w-full py-1.5 bg-yellow-600 text-white rounded hover:bg-yellow-700">另存圖片
+                            (PNG)</button>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button id="save-layout-btn"
+                                class="w-full py-1.5 bg-yellow-200 text-yellow-800 rounded hover:bg-yellow-300">儲存佈局 (.json)</button>
+                            <!-- [修正] 移除 for 屬性以避免與 JS 事件衝突導致開啟兩次，並標註檔案格式 -->
+                            <label id="layout-upload-label" title="請選擇 .json 格式的佈局檔案 (若為 ZIP 請先解壓縮)"
+                                class="w-full py-1.5 bg-yellow-200 text-yellow-800 rounded hover:bg-yellow-300 text-center cursor-pointer">載入佈局 (.json)</label>
+                            <input type="file" id="layout-upload" accept=".json" class="hidden">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -544,6 +558,8 @@
             <!-- [您的要求] 核心修正：將繪圖圖層的 pointer-events 徹底設為 none，避免攔截事件 -->
             <svg id="drawn-areas-layer"
                 style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none;"></svg>
+            <!-- [新增] 工程標註圖層 (獨立圖層) -->
+            <div id="annotation-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 30; pointer-events: none;"></div>
             <div id="grid-layer"></div>
             <!-- [您的要求] 新增：畫布浮水印 (預設隱藏) -->
             <div id="canvas-watermark" class="absolute inset-0 flex items-center justify-center pointer-events-none"
@@ -579,6 +595,23 @@
                         <button id="selected-delete-btn" title="刪除 (D)"
                             class="p-1.5 bg-red-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-red-600">✕</button>
                     </div>
+                </div>
+
+                <!-- [新增] 分類群組選擇 -->
+                <div class="mb-2">
+                    <label class="text-xs text-gray-600">分類群組</label>
+                    <input type="text" id="selected-group-input" list="group-options" class="w-full text-xs border rounded p-1 mt-1 font-bold text-gray-700" placeholder="選擇或輸入分類">
+                    <datalist id="group-options">
+                        <option value="拆除工程">
+                        <option value="水電工程">
+                        <option value="木作工程">
+                        <option value="油漆工程">
+                        <option value="泥作工程">
+                        <option value="地板工程">
+                        <option value="玻璃工程">
+                        <option value="門窗工程">
+                        <option value="其他工程">
+                    </datalist>
                 </div>
 
                 <!-- 透明度控制 -->

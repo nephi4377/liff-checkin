@@ -6,6 +6,7 @@ let placedCabinets = [];
 let isBgEditMode = false;
 let bgScale = 1.0;
 let bgPosition = { x: 0, y: 0 };
+let placedAnnotations = []; // [新增] 工程標註資料陣列
 let selectedCabId = null;
 
 // [錯誤修正] 宣告遺漏的拖曳與縮放狀態變數
@@ -34,6 +35,11 @@ let selectedAreaId = null;
 let isDraggingVertex = false;
 let draggedAreaId = null;
 let draggedVertexIndex = null;
+// [新增] 標註拖曳相關變數
+let isDraggingAnnotation = false;
+let currentDragAnnotationId = null;
+let annotationDragType = null; // 'box' or 'target'
+let annotationDragOffset = { x: 0, y: 0 }; // [修正] 補上遺漏的變數宣告
 // [v8.8 新增] 全局畫布縮放比列
 let viewScale = 1.0;
 // [v8.8 補回] 歷史紀錄堆疊
@@ -383,6 +389,7 @@ function addCabinet(data, x, y) {
     placedCabinets.push(cab);
     renderAllCabinets();
     selectCabinet(cab.id); // 選取新元件
+    deselectAllAnnotations(); // [新增] 取消選取標註
     updateQuotation();
     saveState(); // [修正] 新增元件後保存狀態
 }
@@ -391,6 +398,10 @@ function renderAllCabinets() {
     // 移除畫布上除了底圖和格線外的所有元件
     const existingCabinets = canvas.querySelectorAll('.placed-cabinet');
     existingCabinets.forEach(el => el.remove());
+
+    // [新增] 檢查是否顯示家具圖層
+    const showCabinets = document.getElementById('show-cabinets-toggle') ? document.getElementById('show-cabinets-toggle').checked : true;
+    if (!showCabinets) return;
 
     // 根據 placedCabinets 陣列重新渲染所有元件
     placedCabinets.forEach(cab => {
@@ -592,6 +603,117 @@ function clearVertexHandles() {
     }
 }
 
+// [新增] 新增工程標註
+function addAnnotation() {
+    // 取得畫布中心點
+    const rect = canvas.getBoundingClientRect();
+    const centerX = (rect.width / 2 - 50) / viewScale; // 稍微偏移
+    const centerY = (rect.height / 2 - 20) / viewScale;
+
+    const anno = {
+        id: `anno-${Date.now()}`,
+        x: centerX,
+        y: centerY,
+        targetX: centerX + 100, // 指示點預設在右方 100px
+        targetY: centerY + 50,
+        data: { 
+            name: '隱藏門', 
+            unitPrice: 0, 
+            pricingType: 'fixed',
+            group: '木作工程' // 預設群組
+        },
+        addons: [],
+        customAddons: [{ name: '', unit: '式', price: 0, qty: 1 }], // [修正] 預設加入主計價項目 (名稱留空，因會使用標註名稱)
+        note: ''
+    };
+
+    placedAnnotations.push(anno);
+    renderAllAnnotations();
+    selectAnnotation(anno.id);
+    saveState();
+    updateQuotation();
+    showGlobalNotification('已新增工程標註', 2000, 'success');
+}
+
+// [新增] 渲染所有工程標註
+function renderAllAnnotations() {
+    const layer = document.getElementById('annotation-layer');
+    layer.innerHTML = '';
+
+    // 檢查是否顯示標註圖層
+    const showAnnotations = document.getElementById('show-annotations-toggle') ? document.getElementById('show-annotations-toggle').checked : true;
+    if (!showAnnotations) return;
+
+    // 1. 建立 SVG 容器用於繪製連接線 (在底層)
+    const svgns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgns, "svg");
+    svg.style.position = "absolute";
+    svg.style.top = "0";
+    svg.style.left = "0";
+    svg.style.width = "100%";
+    svg.style.height = "100%";
+    svg.style.pointerEvents = "none"; // 讓 SVG 不擋住下方的點擊
+    layer.appendChild(svg);
+
+    placedAnnotations.forEach(anno => {
+        // A. 繪製連接線與指示點 (SVG)
+        // 連接線
+        const line = document.createElementNS(svgns, "line");
+        // 計算方塊中心點 (假設方塊寬約 120px, 高約 40px，這裡做簡單估算，實際拖曳時會更新)
+        // 為了美觀，線條從方塊中心連到目標點
+        const boxCenterX = anno.x + 60; 
+        const boxCenterY = anno.y + 20;
+        
+        line.setAttribute("x1", boxCenterX);
+        line.setAttribute("y1", boxCenterY);
+        line.setAttribute("x2", anno.targetX);
+        line.setAttribute("y2", anno.targetY);
+        line.setAttribute("stroke", "#f97316"); // Orange-500
+        line.setAttribute("stroke-width", "2");
+        line.setAttribute("stroke-dasharray", "5,5");
+        svg.appendChild(line);
+
+        // 指示點 (Target Dot)
+        const targetDot = document.createElementNS(svgns, "circle");
+        targetDot.setAttribute("cx", anno.targetX);
+        targetDot.setAttribute("cy", anno.targetY);
+        targetDot.setAttribute("r", "6");
+        targetDot.setAttribute("fill", "#f97316");
+        targetDot.setAttribute("stroke", "white");
+        targetDot.setAttribute("stroke-width", "2");
+        targetDot.style.cursor = "crosshair";
+        targetDot.style.pointerEvents = "auto"; // 允許拖曳
+        
+        // 綁定指示點拖曳事件
+        targetDot.addEventListener('mousedown', (e) => startAnnotationDrag(e, anno, 'target'));
+        svg.appendChild(targetDot);
+
+        // B. 繪製說明方塊 (HTML Div)
+        const box = document.createElement('div');
+        box.className = 'absolute bg-white border-2 border-orange-500 rounded shadow-md p-2 text-xs cursor-move flex flex-col items-center justify-center';
+        box.style.left = `${anno.x}px`;
+        box.style.top = `${anno.y}px`;
+        box.style.width = '120px';
+        box.style.minHeight = '40px';
+        box.style.zIndex = '35'; // 比 SVG 高
+        box.style.pointerEvents = 'auto';
+
+        if (selectedCabId === anno.id) { // 借用 selectedCabId 變數來存標註 ID (或新增 selectedAnnotationId)
+            box.classList.add('ring-2', 'ring-blue-500');
+        }
+
+        box.innerHTML = `
+            <div class="font-bold text-orange-700">${anno.data.name}</div>
+            ${anno.data.unitPrice > 0 ? `<div class="text-gray-500">$${anno.data.unitPrice}</div>` : ''}
+        `;
+
+        // 綁定方塊拖曳事件
+        box.addEventListener('mousedown', (e) => startAnnotationDrag(e, anno, 'box'));
+        
+        layer.appendChild(box);
+    });
+}
+
 /**
  * 渲染單個元件到畫布上
  * @param {Object} cab - 元件資料物件
@@ -706,8 +828,10 @@ function handleGlobalClick(e) {
         deselectAllAreas();
     }
 
-    if (!e.target.closest('.placed-cabinet') && !e.target.closest('.floating-window') && !e.target.closest('.modal')) {
+    // [修正] 增加對 annotation-layer 的檢查
+    if (!e.target.closest('.placed-cabinet') && !e.target.closest('#annotation-layer') && !e.target.closest('.floating-window') && !e.target.closest('.modal')) {
         deselectAll();
+        deselectAllAnnotations(); // [新增]
     }
 }
 
@@ -722,6 +846,10 @@ function renderAddonsPanel(targetId) {
     if (!target) {
         target = drawnAreas.find(a => a.id === targetId);
         isArea = true;
+    }
+    // [新增] 支援標註
+    if (!target) {
+        target = placedAnnotations.find(a => a.id === targetId);
     }
     if (!target) return;
 
@@ -784,12 +912,26 @@ function renderAddonsPanel(targetId) {
         target.customAddons.forEach((addon, idx) => {
             const row = document.createElement('div');
             row.className = 'flex gap-1 mb-1 items-center';
+            
+            // [修正] 針對標註的第一個項目(基本費用)，隱藏名稱輸入與刪除按鈕
+            const isAnno = target.id.startsWith('anno-');
+            let nameInputHtml = '';
+            let deleteBtnHtml = '';
+
+            if (isAnno && idx === 0) {
+                nameInputHtml = `<div class="flex-1 text-xs border-0 p-1 text-gray-500 font-bold">主項目計價</div>`;
+                deleteBtnHtml = `<div class="w-5"></div>`; // 佔位但不顯示刪除鈕
+            } else {
+                nameInputHtml = `<input type="text" value="${addon.name}" class="flex-1 text-xs border rounded p-1 min-w-0" placeholder="名稱" onchange="window.updateCustomAddon('${target.id}', ${idx}, 'name', this.value)">`;
+                deleteBtnHtml = `<button class="w-5 text-red-500 hover:text-red-700 flex justify-center items-center" onclick="window.removeCustomAddon('${target.id}', ${idx})">×</button>`;
+            }
+
             row.innerHTML = `
-                <input type="text" value="${addon.name}" class="flex-1 text-xs border rounded p-1 min-w-0" placeholder="名稱" onchange="window.updateCustomAddon('${target.id}', ${idx}, 'name', this.value)">
+                ${nameInputHtml}
                 <input type="text" value="${addon.unit}" list="unit-options-shared" class="w-12 text-xs border rounded p-1 text-center px-0" placeholder="式" onchange="window.updateCustomAddon('${target.id}', ${idx}, 'unit', this.value)">
                 <input type="number" value="${addon.price}" step="100" class="w-16 text-xs border rounded p-1 text-right px-0" placeholder="0" onchange="window.updateCustomAddon('${target.id}', ${idx}, 'price', this.value)">
                 <input type="number" value="${addon.qty}" class="w-12 text-xs border rounded p-1 text-center px-0" placeholder="1" onchange="window.updateCustomAddon('${target.id}', ${idx}, 'qty', this.value)">
-                <button class="w-5 text-red-500 hover:text-red-700 flex justify-center items-center" onclick="window.removeCustomAddon('${target.id}', ${idx})">×</button>
+                ${deleteBtnHtml}
             `;
             container.appendChild(row);
         });
@@ -810,6 +952,7 @@ function selectCabinet(id) {
     if (selectedCabId !== id) {
         deselectAll();
         deselectAllAreas();
+        deselectAllAnnotations(); // [新增]
     }
     selectedCabId = id;
     const el = document.getElementById(id);
@@ -818,6 +961,15 @@ function selectCabinet(id) {
     const cab = placedCabinets.find(c => c.id === id);
     if (cab) {
         document.getElementById('selected-info').style.display = 'block';
+        
+        // [修正] 恢復顯示名稱文字，隱藏輸入框 (避免從標註切換過來時殘留)
+        document.getElementById('selected-name').style.display = 'block';
+        const nameInput = document.getElementById('selected-name-input');
+        if (nameInput) nameInput.style.display = 'none';
+
+        // [新增] 載入分類群組
+        document.getElementById('selected-group-input').value = cab.data.group || '未分類';
+
         document.getElementById('selected-name').innerText = cab.data.name;
 
         // [您的要求] 將尺寸填入新的輸入框
@@ -869,6 +1021,79 @@ function selectCabinet(id) {
     }
 }
 
+// [新增] 選取工程標註
+function selectAnnotation(id) {
+    if (selectedCabId !== id) {
+        deselectAll();
+        deselectAllAreas();
+    }
+    // 這裡我們借用 selectedCabId 來儲存選取的標註 ID，因為 UI 共用
+    selectedCabId = id; 
+    renderAllAnnotations(); // 重繪以顯示選取狀態
+
+    const anno = placedAnnotations.find(a => a.id === id);
+    if (anno) {
+        document.getElementById('selected-info').style.display = 'block';
+        
+        // [修正] 標註支援修改名稱：隱藏文字，顯示輸入框
+        document.getElementById('selected-name').style.display = 'none';
+        let nameInput = document.getElementById('selected-name-input');
+        if (!nameInput) {
+            nameInput = document.createElement('input');
+            nameInput.id = 'selected-name-input';
+            nameInput.className = 'w-full text-sm border rounded p-1 font-bold mb-1';
+            const pName = document.getElementById('selected-name');
+            pName.parentNode.insertBefore(nameInput, pName);
+            nameInput.addEventListener('input', (e) => {
+                const currentAnno = placedAnnotations.find(a => a.id === selectedCabId);
+                if (currentAnno) {
+                    currentAnno.data.name = e.target.value;
+                    renderAllAnnotations();
+                    updateQuotation(); // 名稱改變可能影響分組
+                    saveState();
+                }
+            });
+        }
+        nameInput.style.display = 'block';
+        nameInput.value = anno.data.name;
+
+        // [新增] 載入分類群組
+        document.getElementById('selected-group-input').value = anno.data.group || '其他工程';
+
+        // 標註通常不需要尺寸輸入，隱藏之
+        document.getElementById('selected-size-inputs').style.display = 'none';
+        document.getElementById('selected-cai-wrapper').style.display = 'none';
+
+        // 顯示價格
+        let priceText = '此項目不計價';
+        const totalPrice = calculatePrice(anno);
+        if (totalPrice > 0) {
+            priceText = `總價: $${totalPrice.toLocaleString()}`;
+        }
+        document.getElementById('selected-price').innerText = priceText;
+
+        // 隱藏透明度，顯示備註
+        document.getElementById('opacity-slider').parentElement.style.display = 'none';
+        document.getElementById('note-input').parentElement.style.display = 'block';
+        document.getElementById('note-input').value = anno.note || '';
+        
+        // 顯示刪除按鈕，隱藏其他變形按鈕
+        document.getElementById('selected-cab-actions').style.display = 'flex';
+        // 隱藏旋轉、鏡像等不適用於標註的按鈕
+        ['selected-rotate-btn', 'selected-mirror-btn', 'selected-layer-up-btn', 'selected-layer-down-btn'].forEach(btnId => {
+            document.getElementById(btnId).style.display = 'none';
+        });
+
+        // 渲染副屬性
+        const addonContainer = document.getElementById('selected-addons');
+        if (addonContainer) {
+            addonContainer.innerHTML = '';
+            renderAddonsPanel(anno.id);
+            addonContainer.style.display = 'block';
+        }
+    }
+}
+
 function deselectAll() {
     selectedCabId = null;
     document.querySelectorAll('.placed-cabinet.selected').forEach(e => e.classList.remove('selected'));
@@ -880,6 +1105,24 @@ function deselectAll() {
     const addonContainer = document.getElementById('selected-addons');
     if (addonContainer) addonContainer.style.display = 'none';
     document.getElementById('selected-cab-actions').style.display = 'none'; // [您的要求] 隱藏元件操作按鈕
+    
+    // [修正] 恢復名稱顯示狀態
+    document.getElementById('selected-name').style.display = 'block';
+    const nameInput = document.getElementById('selected-name-input');
+    if (nameInput) nameInput.style.display = 'none';
+
+    // 恢復所有按鈕顯示 (因為 selectAnnotation 可能隱藏了部分)
+    ['selected-rotate-btn', 'selected-mirror-btn', 'selected-layer-up-btn', 'selected-layer-down-btn'].forEach(btnId => {
+        const btn = document.getElementById(btnId);
+        if(btn) btn.style.display = 'flex';
+    });
+}
+
+// [新增] 取消選取所有標註
+function deselectAllAnnotations() {
+    // 由於我們共用 selectedCabId，deselectAll 已經處理了 ID 清空
+    // 這裡主要負責重繪以移除視覺選取效果
+    renderAllAnnotations();
 }
 
 function updateOpacity(value) {
@@ -894,21 +1137,56 @@ function updateOpacity(value) {
 }
 
 function updateNote() {
-    // [v5.0 核心修正] 修正備註儲存邏輯
+    // [修正] 修正備註儲存邏輯，確保標註也能正確儲存
+    const noteValue = document.getElementById('note-input').value;
     if (selectedCabId) {
         const cab = placedCabinets.find(c => c.id === selectedCabId);
         if (cab) {
-            cab.note = document.getElementById('note-input').value;
+            cab.note = noteValue;
             saveState(); // [您的要求] 儲存狀態
+            return;
         }
-    } else if (selectedAreaId) {
+        // [修正] 若找不到 cabinet，嘗試找 annotation
+        const anno = placedAnnotations.find(a => a.id === selectedCabId);
+        if (anno) {
+            anno.note = noteValue;
+            saveState();
+            return;
+        }
+    } 
+    
+    if (selectedAreaId) {
         const area = drawnAreas.find(a => a.id === selectedAreaId);
         if (area) {
-            area.note = document.getElementById('note-input').value;
+            area.note = noteValue;
             renderAllDrawnAreas(); // [v4.0 新增] 更新備註後，立即重繪以顯示標籤
             saveState(); // [您的要求] 儲存狀態
         }
     }
+}
+
+// [新增] 更新分類群組
+function updateSelectedGroup() {
+    const val = document.getElementById('selected-group-input').value;
+    if (selectedCabId) {
+        const cab = placedCabinets.find(c => c.id === selectedCabId);
+        if (cab) {
+            cab.data.group = val;
+        } else {
+            const anno = placedAnnotations.find(a => a.id === selectedCabId);
+            if (anno) {
+                anno.data.group = val;
+            }
+        }
+    } else if (selectedAreaId) {
+        const area = drawnAreas.find(a => a.id === selectedAreaId);
+        if (area) {
+            if (!area.linkedComponent) area.linkedComponent = {};
+            area.linkedComponent.group = val;
+        }
+    }
+    saveState();
+    updateQuotation();
 }
 
 function handleKeyDown(e) {
@@ -958,6 +1236,14 @@ function handleKeyDown(e) {
                 showGlobalNotification('已複製元件', 1000, 'info');
             }
         }
+        return;
+    }
+
+    // [新增] 刪除標註
+    const selectedAnno = placedAnnotations.find(a => a.id === selectedCabId);
+    if (selectedAnno && (e.key.toLowerCase() === 'd' || e.key === 'Delete')) {
+        e.preventDefault();
+        deleteAnnotation(selectedCabId);
         return;
     }
 
@@ -1064,7 +1350,6 @@ function duplicateSelectedCab() {
     const newCab = JSON.parse(JSON.stringify(sourceCab));
 
     // 給予新 ID 和新位置
-    newCab.id = `cab - ${Date.now()} `;
     newCab.id = `cab-${Date.now()}`;
     newCab.x += 20; // 向右偏移 20px
     newCab.y += 20; // 向下偏移 20px
@@ -1113,6 +1398,15 @@ function deleteCabById(id) {
     renderAllCabinets();
     updateQuotation();
     saveState(); // [您的要求] 儲存狀態
+}
+
+// [新增] 刪除標註
+function deleteAnnotation(id) {
+    placedAnnotations = placedAnnotations.filter(a => a.id !== id);
+    deselectAll();
+    renderAllAnnotations();
+    updateQuotation();
+    saveState();
 }
 
 // [v6.0 核心修正] 輔助函式：將角度轉換為弧度
@@ -1245,6 +1539,25 @@ function handleGlobalMove(e) {
         }
         updateDrawingPreview({ x: mouseX, y: mouseY });
         return; // 繪圖模式下不執行後續的拖曳邏輯
+    }
+
+    // --------------------------
+    // 0. 處理標註拖曳 (Annotation)
+    // --------------------------
+    if (isDraggingAnnotation && currentDragAnnotationId) {
+        const anno = placedAnnotations.find(a => a.id === currentDragAnnotationId);
+        if (anno) {
+            if (annotationDragType === 'box') {
+                anno.x = mouseX - annotationDragOffset.x;
+                anno.y = mouseY - annotationDragOffset.y;
+            } else if (annotationDragType === 'target') {
+                // 指示點直接跟隨滑鼠
+                anno.targetX = mouseX;
+                anno.targetY = mouseY;
+            }
+            renderAllAnnotations();
+        }
+        return; // 標註拖曳時不處理其他
     }
 
     // --------------------------
@@ -1431,6 +1744,12 @@ function endDrag() {
     isDraggingVertex = false;
     draggedAreaId = null;
     draggedVertexIndex = null;
+    // [新增] 重置標註拖曳狀態
+    if (isDraggingAnnotation) {
+        saveState();
+    }
+    isDraggingAnnotation = false;
+    currentDragAnnotationId = null;
 
     const bgLayer = document.getElementById('bg-layer');
     if (bgLayer) bgLayer.style.cursor = isBgEditMode ? 'grab' : 'default';
@@ -1559,6 +1878,7 @@ function getPolygonCentroid(points) {
 function selectArea(id) {
     deselectAll(); // 取消選取其他元件
     deselectAllAreas(); // 取消選取其他區域
+    deselectAllAnnotations(); // [新增]
     selectedCabId = null; // [v6.0 核心修正] 確保在選取區域時，取消對元件的選取
 
     clearVertexHandles(); // [您的要求] 清除舊的頂點控點
@@ -1576,6 +1896,16 @@ function selectArea(id) {
         }
 
         document.getElementById('selected-info').style.display = 'block';
+        
+        // [修正] 恢復顯示名稱文字
+        document.getElementById('selected-name').style.display = 'block';
+        const nameInput = document.getElementById('selected-name-input');
+        if (nameInput) nameInput.style.display = 'none';
+
+        // [新增] 載入分類群組
+        const comp = area.linkedComponent || {};
+        document.getElementById('selected-group-input').value = comp.group || (area.type === 'floor' ? '地板工程' : '木作');
+
         // [您的要求] 隱藏尺寸輸入框
         document.getElementById('selected-size-inputs').style.display = 'none';
         const areaTypeText = area.type === 'floor' ? '地板區域' : '天花板區域';
@@ -1817,13 +2147,34 @@ function calculateFullQuotation() {
         });
     });
 
+    // C. 加入工程標註 (Annotations)
+    placedAnnotations.forEach(anno => {
+        allItems.push({
+            source: 'annotation',
+            id: anno.id,
+            name: anno.data.name,
+            group: anno.data.group || '其他工程',
+            unit: '式', // 標註預設為式
+            unitPrice: anno.data.unitPrice,
+            quantity: 1,
+            pricingType: 'fixed',
+            addonsConfig: [],
+            addons: [],
+            customAddons: anno.customAddons,
+            note: anno.note
+        });
+    });
+
     // 2. 統一處理計價與分組
     const groups = {};
     const groupOrder = [];
 
     allItems.forEach(item => {
-        // 計算本體價格
-        const basePrice = item.quantity * item.unitPrice;
+        // [修正] 支援工程標註的主項目覆蓋邏輯
+        let currentUnit = item.unit;
+        let currentQty = item.quantity;
+        let currentUnitPrice = item.unitPrice;
+        let basePrice = currentQty * currentUnitPrice;
         
         // 收集所有副屬性 (Sheet定義 + 自訂)
         const itemAddons = [];
@@ -1843,12 +2194,21 @@ function calculateFullQuotation() {
 
         // 自訂副屬性
         if (item.customAddons) {
-            item.customAddons.forEach(addon => {
-                if (addon.qty > 0) {
-                    const price = parseFloat(addon.price) || 0;
-                    const total = addon.qty * price;
-                    addonsTotal += total;
-                    itemAddons.push({ name: addon.name, unit: addon.unit, price: price, qty: parseFloat(addon.qty), total: total });
+            item.customAddons.forEach((addon, idx) => {
+                // [核心修正] 若為工程標註且是第一項，則覆蓋主項目的計價資訊，且不列入副屬性清單
+                if (item.source === 'annotation' && idx === 0) {
+                    currentUnitPrice = parseFloat(addon.price) || 0;
+                    currentQty = parseFloat(addon.qty) || 0;
+                    currentUnit = addon.unit || '式';
+                    basePrice = currentUnitPrice * currentQty;
+                } else {
+                    // 其他項目照常處理
+                    if (addon.qty > 0) {
+                        const price = parseFloat(addon.price) || 0;
+                        const total = addon.qty * price;
+                        addonsTotal += total;
+                        itemAddons.push({ name: addon.name, unit: addon.unit, price: price, qty: parseFloat(addon.qty), total: total });
+                    }
                 }
             });
         }
@@ -1867,14 +2227,14 @@ function calculateFullQuotation() {
         // [修正] 為了符合「併入一般元件流程」的要求，我們放寬分組限制，
         // 只要屬性相同就合併，不再區分是 Cabinet 還是 Area
         const addonsKey = JSON.stringify(itemAddons.map(a => `${a.name}-${a.qty}`));
-        const key = `${item.name}_${item.unitPrice}_${item.note || ''}_${addonsKey}`;
+        const key = `${item.name}_${currentUnitPrice}_${item.note || ''}_${addonsKey}`;
 
         if (!groups[key]) {
             groups[key] = {
                 isConstruction: item.source === 'area', // 標記來源
                 name: item.name,
                 group: item.group,
-                unit: item.unit,
+                unit: currentUnit,
                 quantity: 0,
                 totalPrice: 0,
                 note: item.note || '',
@@ -1884,7 +2244,7 @@ function calculateFullQuotation() {
         }
 
         const group = groups[key];
-        group.quantity += item.quantity;
+        group.quantity += currentQty;
         group.totalPrice += basePrice;
 
         // 合併副屬性到群組中
@@ -1947,6 +2307,7 @@ function calculateFullQuotation() {
     const preferredOrder = [
         '保護工程', 
         '拆除工程', 
+        '其他工程', // [新增]
         '水電', '水電工程', 
         '泥作工程', 
         '木作', '木作工程', 
@@ -2440,6 +2801,28 @@ function startResize(id, e, direction = null) {
     }
 }
 
+// [新增] 開始拖曳標註
+function startAnnotationDrag(e, anno, type) {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    isDraggingAnnotation = true;
+    currentDragAnnotationId = anno.id;
+    annotationDragType = type;
+    selectAnnotation(anno.id);
+    
+    const rect = canvas.getBoundingClientRect();
+    const safeScale = viewScale || 1.0;
+    const mouseX = (e.clientX - rect.left) / safeScale;
+    const mouseY = (e.clientY - rect.top) / safeScale;
+
+    // 計算偏移量，防止跳動
+    if (type === 'box') {
+        annotationDragOffset = { x: mouseX - anno.x, y: mouseY - anno.y };
+    } else {
+        annotationDragOffset = { x: 0, y: 0 };
+    }
+}
+
 function toggleBgMode(enabled) {
     isBgEditMode = enabled;
     const bgLayer = document.getElementById('bg-layer');
@@ -2592,6 +2975,7 @@ function saveState() {
     const currentState = {
         placedCabinets: JSON.parse(JSON.stringify(placedCabinets)),
         drawnAreas: JSON.parse(JSON.stringify(drawnAreas)),
+        placedAnnotations: JSON.parse(JSON.stringify(placedAnnotations)), // [新增]
         background: {
             position: bgPosition,
             scale: bgScale,
@@ -2622,9 +3006,11 @@ function saveState() {
 function loadState(state) {
     placedCabinets = JSON.parse(JSON.stringify(state.placedCabinets));
     drawnAreas = JSON.parse(JSON.stringify(state.drawnAreas));
+    placedAnnotations = state.placedAnnotations ? JSON.parse(JSON.stringify(state.placedAnnotations)) : []; // [新增]
 
     renderAllCabinets();
     renderAllDrawnAreas();
+    renderAllAnnotations(); // [新增]
     updateQuotation();
     deselectAll();
     deselectAllAreas();
@@ -2692,7 +3078,6 @@ function bindEventListeners() {
             bgDragStart = { x: e.clientX, y: e.clientY };
             bgStartPos = { x: bgPosition.x, y: bgPosition.y };
             document.getElementById('bg-layer').style.cursor = 'grabbing';
-            document.getElementById('bg-layer').style.cursor = 'grabbing';
         }
     });
 
@@ -2719,6 +3104,12 @@ function bindEventListeners() {
     document.getElementById('show-ceilings-toggle').addEventListener('change', renderAllDrawnAreas);
     document.getElementById('show-floors-toggle').addEventListener('change', renderAllDrawnAreas);
     if (document.getElementById('show-walls-toggle')) document.getElementById('show-walls-toggle').addEventListener('change', renderAllDrawnAreas);
+    
+    // [新增] 標註與家具圖層切換
+    document.getElementById('show-cabinets-toggle').addEventListener('change', renderAllCabinets);
+    document.getElementById('show-annotations-toggle').addEventListener('change', renderAllAnnotations);
+    document.getElementById('add-annotation-btn').addEventListener('click', addAnnotation);
+
     // [修正] 鎖定牆壁時，同時更新元件與繪圖區域
     if (document.getElementById('lock-walls-toggle')) document.getElementById('lock-walls-toggle').addEventListener('change', () => {
         renderAllCabinets();
@@ -2741,6 +3132,7 @@ function bindEventListeners() {
     document.getElementById('opacity-slider').addEventListener('input', (e) => updateOpacity(e.target.value));
     document.getElementById('note-input').addEventListener('input', updateNote);
     // [您的要求] 為新的尺寸輸入框綁定 change 事件 (在失焦或按 Enter 時觸發)
+    document.getElementById('selected-group-input').addEventListener('change', updateSelectedGroup); // [新增]
     document.getElementById('selected-width').addEventListener('change', handleDimensionChange);
     document.getElementById('selected-height').addEventListener('change', handleDimensionChange);
     // [修改] 為才數輸入框綁定事件
@@ -2945,6 +3337,7 @@ function autoSave(silent = false) {
             prettyTime: new Date().toLocaleString(), // 易讀的時間格式
             placedCabinets: placedCabinets,
             drawnAreas: drawnAreas,
+            placedAnnotations: placedAnnotations, // [新增]
             background: {
                 position: bgPosition,
                 scale: bgScale,
@@ -2990,6 +3383,7 @@ function checkAndRestoreBackup() {
 function loadLayoutFromData(layoutData) {
     placedCabinets = layoutData.placedCabinets || [];
     drawnAreas = layoutData.drawnAreas || [];
+    placedAnnotations = layoutData.placedAnnotations || []; // [新增]
 
     if (layoutData.background) {
         bgPosition = layoutData.background.position || { x: 0, y: 0 };
@@ -3004,6 +3398,7 @@ function loadLayoutFromData(layoutData) {
 
     renderAllCabinets();
     renderAllDrawnAreas();
+    renderAllAnnotations(); // [新增]
     updateBgTransform();
     saveState();
     updateQuotation();
@@ -3053,6 +3448,7 @@ async function downloadDesignFilesAsZip() {
             timestamp: new Date().toISOString(),
             placedCabinets: placedCabinets,
             drawnAreas: drawnAreas,
+            placedAnnotations: placedAnnotations, // [新增]
             background: {
                 position: bgPosition,
                 scale: bgScale,
@@ -3237,16 +3633,30 @@ window.addCustomAddon = function(id) {
     // [v9.3 修正] 同時支援 Cabinet 和 DrawnArea
     let target = placedCabinets.find(c => c.id === id);
     let isArea = false;
+    let isAnnotation = false;
     if (!target) {
         target = drawnAreas.find(a => a.id === id);
-        isArea = true;
+        if (target) isArea = true;
+    }
+    // [修正] 支援標註
+    if (!target) {
+        target = placedAnnotations.find(a => a.id === id);
+        if (target) isAnnotation = true;
     }
     if (!target) return;
     
     if (!target.customAddons) target.customAddons = [];
-    target.customAddons.push({ name: '', unit: '', price: 0, qty: 1, category: '' });
+    
+    // [修正] 若為標註且是第一筆，預設名稱為「基本費用」
+    const isAnno = target.id.startsWith('anno-');
+    const defaultName = (isAnno && target.customAddons.length === 0) ? '基本費用' : '';
+    
+    target.customAddons.push({ name: defaultName, unit: '', price: 0, qty: 1, category: '' });
     saveState();
-    if (isArea) selectArea(id); else selectCabinet(id); // 重新渲染面板
+    
+    if (isArea) selectArea(id);
+    else if (isAnnotation) selectAnnotation(id);
+    else selectCabinet(id);
 };
 
 // [新增] 全域函式：更新自訂副屬性
@@ -3254,9 +3664,15 @@ window.updateCustomAddon = function(id, index, field, value) {
     // [v9.3 修正] 同時支援 Cabinet 和 DrawnArea
     let target = placedCabinets.find(c => c.id === id);
     let isArea = false;
+    let isAnnotation = false;
     if (!target) {
         target = drawnAreas.find(a => a.id === id);
-        isArea = true;
+        if (target) isArea = true;
+    }
+    // [修正] 支援標註
+    if (!target) {
+        target = placedAnnotations.find(a => a.id === id);
+        if (target) isAnnotation = true;
     }
     if (!target || !target.customAddons[index]) return;
     
@@ -3268,7 +3684,9 @@ window.updateCustomAddon = function(id, index, field, value) {
     saveState();
     updateQuotation();
     
-    if (isArea) selectArea(id); else selectCabinet(id);
+    if (isArea) selectArea(id);
+    else if (isAnnotation) selectAnnotation(id);
+    else selectCabinet(id);
 };
 
 // [新增] 全域函式：移除自訂副屬性
@@ -3276,14 +3694,22 @@ window.removeCustomAddon = function(id, index) {
     // [v9.3 修正] 同時支援 Cabinet 和 DrawnArea
     let target = placedCabinets.find(c => c.id === id);
     let isArea = false;
+    let isAnnotation = false;
     if (!target) {
         target = drawnAreas.find(a => a.id === id);
-        isArea = true;
+        if (target) isArea = true;
+    }
+    // [修正] 支援標註
+    if (!target) {
+        target = placedAnnotations.find(a => a.id === id);
+        if (target) isAnnotation = true;
     }
     if (!target || !target.customAddons) return;
     
     target.customAddons.splice(index, 1);
     saveState();
     updateQuotation();
-    if (isArea) selectArea(id); else selectCabinet(id);
+    if (isArea) selectArea(id);
+    else if (isAnnotation) selectAnnotation(id);
+    else selectCabinet(id);
 };
