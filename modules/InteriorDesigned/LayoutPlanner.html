@@ -10,8 +10,6 @@
     <!-- [錯誤修正] 增加此行可避免瀏覽器嘗試載入 favicon.ico 而產生 404 錯誤 -->
     <link rel="icon" href="data:,">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <!-- [您的要求] 新增 jsPDF 函式庫，用於生成 PDF -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <!-- [新增] OpenCV.js 用於影像處理 (牆壁偵測) -->
     <script async src="https://docs.opencv.org/4.8.0/opencv.js" type="text/javascript"></script>
     <!-- [核心修正] 重新引入已分離的 JavaScript 主檔案，並設定為 module -->
@@ -746,8 +744,6 @@
             <div class="mt-6 flex justify-end gap-2">
                 <button id="export-csv-btn"
                     class="bg-green-700 text-white px-3 py-1 rounded text-sm hover:bg-green-800">匯出 CSV</button>
-                <button id="save-pdf-btn" class="bg-red-700 text-white px-3 py-1 rounded text-sm hover:bg-red-800">另存
-                    PDF</button>
             </div>
             <!-- [新增] 諮詢詳細報價區塊 -->
             <div class="mt-6 border-t pt-4">

@@ -208,11 +208,20 @@ async function loadFromSheets() {
     // 將您的 Sheet ID 直接寫在程式碼中
     const sheetId = '1y8iD3Pe8AvYxDYFGYVOZ0afsdW10j1GSnDXqUCyEh-Q';
 
+    // [修正] 每次載入前清空分類，避免重複或資料殘留
+    cabinetCategories = {};
+
     try {
         const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=0`;
         const response = await fetch(url);
         const text = await response.text();
-        const jsonString = text.substring(47).slice(0, -2);
+        
+        // [修正] 使用更穩健的方式擷取 JSON 字串，不依賴固定長度 (解決資料截斷或解析錯誤問題)
+        const start = text.indexOf('{');
+        const end = text.lastIndexOf('}');
+        if (start === -1 || end === -1) throw new Error('無法解析 Google Sheets 回傳的資料格式');
+        const jsonString = text.substring(start, end + 1);
+        
         const data = JSON.parse(jsonString);
         const rows = data.table.rows;
 
@@ -2034,6 +2043,7 @@ function saveLayout() {
         timestamp: new Date().toISOString(),
         placedCabinets: placedCabinets,
         drawnAreas: drawnAreas,
+        placedAnnotations: placedAnnotations, // [修正] 加入標註資料
         background: {
             position: bgPosition,
             scale: bgScale,
@@ -3153,8 +3163,6 @@ function bindEventListeners() {
 
     // 預算明細 Modal
     document.getElementById('budget-modal-close-btn').addEventListener('click', closeBudgetModal);
-    // [您的要求] 簡化 PDF 儲存邏輯，改為呼叫瀏覽器內建的列印功能
-    document.getElementById('save-pdf-btn').addEventListener('click', () => window.print());
     document.getElementById('export-csv-btn').addEventListener('click', exportBudgetAsCSV);
 
     // 最小化列
@@ -3443,6 +3451,7 @@ async function downloadDesignFilesAsZip() {
 
         // 2. 加入佈局 JSON 檔案
         // [修正] 使用與 saveLayout 相同的資料結構，確保載入時格式正確
+        const constructionAreaEl = document.getElementById('construction-area');
         const layoutData = {
             version: '2.0',
             timestamp: new Date().toISOString(),
@@ -3454,7 +3463,7 @@ async function downloadDesignFilesAsZip() {
                 scale: bgScale,
                 src: document.getElementById('bg-img').src
             },
-            constructionArea: document.getElementById('construction-area').value
+            constructionArea: constructionAreaEl ? constructionAreaEl.value : ''
         };
         zip.file(`佈局資料_${dateString}.json`, JSON.stringify(layoutData, null, 2));
 

@@ -123,6 +123,40 @@
             </div>
         </header>
 
+        <!-- 除錯面板 -->
+        <div v-if="debugMode" class="bg-gray-900 text-green-400 text-xs font-mono">
+            <div class="flex items-center justify-between px-4 py-2 border-b border-gray-700">
+                <span class="font-bold">🔧 API 除錯面板</span>
+                <div class="flex gap-2">
+                    <span v-if="debugData.loading" class="text-yellow-400">⏳ 載入中...</span>
+                    <span v-else class="text-green-400">✅ 載入完成</span>
+                    <button @click="loadApiData"
+                        class="px-2 py-0.5 bg-blue-600 text-white rounded hover:bg-blue-700">重新載入</button>
+                    <button @click="debugMode = false"
+                        class="px-2 py-0.5 bg-gray-600 text-white rounded hover:bg-gray-700">關閉</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4 p-4 max-h-64 overflow-auto">
+                <!-- 員工資料 -->
+                <div>
+                    <div class="text-yellow-400 font-bold mb-1">👥 員工資料 ({{ employees.length }} 人)</div>
+                    <pre
+                        class="bg-gray-800 p-2 rounded overflow-auto max-h-48">{{ JSON.stringify(debugData.employeesRaw, null, 2) }}</pre>
+                </div>
+                <!-- 案場資料 -->
+                <div>
+                    <div class="text-yellow-400 font-bold mb-1">🏠 案場資料 ({{ projects.length }} 個)</div>
+                    <pre
+                        class="bg-gray-800 p-2 rounded overflow-auto max-h-48">{{ JSON.stringify(debugData.projectsRaw, null, 2) }}</pre>
+                </div>
+            </div>
+            <!-- 錯誤訊息 -->
+            <div v-if="debugData.errors.length" class="px-4 pb-2">
+                <div class="text-red-400 font-bold">❌ 錯誤訊息</div>
+                <div v-for="err in debugData.errors" :key="err" class="text-red-300">{{ err }}</div>
+            </div>
+        </div>
+
         <!-- Main Content -->
         <div class="flex flex-1 overflow-hidden">
             <!-- Sidebar -->
@@ -151,10 +185,15 @@
                     </div>
                     <div>
                         <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">任務類型</label>
-                        <div class="flex flex-wrap gap-1">
-                            <button v-for="t in taskTypes" :key="t" @click="toggleTypeFilter(t)"
-                                :class="filterTypes.includes(t) ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'"
-                                class="px-2 py-1 rounded text-xs transition-colors">{{ t }}</button>
+                        <div class="space-y-2">
+                            <template v-for="(types, group) in taskTypeGroups" :key="group">
+                                <div class="text-xs text-gray-400 font-medium">{{ group }}</div>
+                                <div class="flex flex-wrap gap-1">
+                                    <button v-for="t in types" :key="t" @click="toggleTypeFilter(t)"
+                                        :class="filterTypes.includes(t) ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'"
+                                        class="px-2 py-1 rounded text-xs transition-colors">{{ t }}</button>
+                                </div>
+                            </template>
                         </div>
                     </div>
                 </div>
@@ -386,7 +425,9 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">任務類型</label>
                             <select v-model="taskForm.type" class="w-full border rounded-lg p-2">
-                                <option v-for="t in taskTypes" :key="t" :value="t">{{ t }}</option>
+                                <optgroup v-for="(types, group) in taskTypeGroups" :key="group" :label="group">
+                                    <option v-for="t in types" :key="t" :value="t">{{ t }}</option>
+                                </optgroup>
                             </select>
                         </div>
                     </div>
@@ -396,15 +437,14 @@
                         <label class="flex items-center gap-2 cursor-pointer">
                             <input type="radio" v-model="taskForm.taskMode" value="instant"
                                 class="w-4 h-4 text-blue-600">
-                            <span class="font-medium text-blue-700"><i class="ph ph-clock mr-1"></i>即時任務</span>
-                            <span class="text-xs text-gray-500">(佔用時間槽，同時只能1個)</span>
+                            <span class="font-medium text-blue-700"><i class="ph ph-clock mr-1"></i>交辦任務</span>
+                            <span class="text-xs text-gray-500">(排入日曆，有具體時間)</span>
                         </label>
                         <label class="flex items-center gap-2 cursor-pointer">
                             <input type="radio" v-model="taskForm.taskMode" value="longterm"
                                 class="w-4 h-4 text-purple-600">
-                            <span class="font-medium text-purple-700"><i
-                                    class="ph ph-calendar-dots mr-1"></i>長期任務</span>
-                            <span class="text-xs text-gray-500">(背景進行，不佔時間槽)</span>
+                            <span class="font-medium text-purple-700"><i class="ph ph-briefcase mr-1"></i>負責案件</span>
+                            <span class="text-xs text-gray-500">(追蹤負責的專案)</span>
                         </label>
                     </div>
                     <div>
@@ -412,61 +452,29 @@
                         <input v-model="taskForm.title" type="text" class="w-full border rounded-lg p-2"
                             placeholder="例如：客廳天花板施工">
                     </div>
+                    <!-- 任務資訊 -->
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">開始時間</label>
-                            <div class="flex gap-1">
-                                <input v-model="taskForm.startDate" type="date"
-                                    class="flex-1 border rounded-lg p-2 text-sm">
-                                <select v-model="taskForm.startSlot" class="w-24 border rounded-lg p-2 text-sm">
-                                    <option v-for="slot in timeSlots" :key="slot" :value="slot">{{ slot }}</option>
-                                </select>
-                            </div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">開始日期</label>
+                            <input v-model="taskForm.startDate" type="date" class="w-full border rounded-lg p-2">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">結束時間</label>
-                            <div class="flex gap-1">
-                                <input v-model="taskForm.endDate" type="date"
-                                    class="flex-1 border rounded-lg p-2 text-sm">
-                                <select v-model="taskForm.endSlot" class="w-24 border rounded-lg p-2 text-sm">
-                                    <option v-for="slot in timeSlots" :key="slot" :value="slot">{{ slot }}</option>
-                                </select>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">工作天數</label>
+                            <div class="flex gap-2 items-center">
+                                <input v-model.number="taskForm.workDays" type="number" step="0.5" min="0.5"
+                                    class="flex-1 border rounded-lg p-2" placeholder="1">
+                                <span class="text-gray-500 text-sm">天</span>
+                            </div>
+                            <div class="text-xs text-gray-400 mt-1">
+                                例如：半天=0.5，一週=5
                             </div>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">負責人</label>
-                            <select v-model="taskForm.assignedTo" class="w-full border rounded-lg p-2">
-                                <option v-for="emp in employees" :key="emp.id" :value="emp.id">{{ emp.name }}</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">優先等級</label>
-                            <select v-model="taskForm.priority" class="w-full border rounded-lg p-2">
-                                <option v-for="i in 5" :key="i" :value="i">{{ i }} {{ i===1?'(緊急)':i===5?'(一般)':'' }}
-                                </option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">前置任務</label>
-                            <select v-model="taskForm.predecessorId" class="w-full border rounded-lg p-2">
-                                <option value="">無</option>
-                                <option v-for="t in tasks.filter(x => x.id !== editingTask?.id)" :key="t.id"
-                                    :value="t.id">{{ t.title }}</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">週期性</label>
-                            <select v-model="taskForm.recurrence" class="w-full border rounded-lg p-2">
-                                <option value="none">無</option>
-                                <option value="daily">每日</option>
-                                <option value="weekly">每週</option>
-                                <option value="monthly">每月</option>
-                            </select>
-                        </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">負責人</label>
+                        <select v-model="taskForm.assignedTo" class="w-full border rounded-lg p-2">
+                            <option v-for="emp in employees" :key="emp.id" :value="emp.id">{{ emp.name }}</option>
+                        </select>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">備註</label>
@@ -533,11 +541,125 @@
     </div>
 
     <script>
+        // v1.1 - 2026-01-04 15:20 (Asia/Taipei)
+        // 修改內容: 新增後端 API 連接測試功能
+
         const { createApp, ref, computed, onMounted } = Vue;
 
         createApp({
             setup() {
-                // === 假資料 ===
+                // === API 設定 ===
+                const API_CONFIG = {
+                    // 專案管理後端 (案場資料)
+                    PROJECT_API: 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec',
+                    // 出勤系統後端 (員工資料)
+                    ATTENDANCE_API: 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec',
+                };
+
+                // === 除錯狀態 ===
+                const debugMode = ref(true); // 開啟除錯面板
+                const debugData = ref({
+                    loading: false,
+                    employeesRaw: null,
+                    projectsRaw: null,
+                    errors: []
+                });
+
+                // === API 呼叫函式 ===
+                async function fetchEmployees() {
+                    try {
+                        console.log('[WMS] 開始取得員工資料...');
+                        const url = new URL(API_CONFIG.ATTENDANCE_API);
+                        url.searchParams.append('page', 'attendance_api');
+                        url.searchParams.append('action', 'get_hub_core_data');
+                        // 使用測試用的 userId
+                        url.searchParams.append('userId', 'Ud58333430513b7527106fa71d2e30151');
+                        url.searchParams.append('userName', '測試用戶');
+
+                        const response = await fetch(url);
+                        const result = await response.json();
+                        console.log('[WMS] 員工資料回傳:', result);
+                        debugData.value.employeesRaw = result;
+
+                        if (result.success && result.employees) {
+                            // 只取權限 >= 2 的在職員工
+                            const activeEmployees = result.employees.filter(e =>
+                                e.permission >= 2 && e.身份 !== '離職' && e.身份 !== '廠商'
+                            );
+                            console.log(`[WMS] 篩選後員工: ${activeEmployees.length} 人`);
+
+                            // 轉換格式
+                            employees.value = activeEmployees.map(e => ({
+                                id: e.userId,
+                                name: e.userName,
+                                group: e.組別 || '未分類',
+                                role: e.身份 || '員工'
+                            }));
+
+                            // 設定預設當前使用者
+                            if (employees.value.length > 0) {
+                                currentUserId.value = employees.value[0].id;
+                            }
+                        }
+                        return result;
+                    } catch (error) {
+                        console.error('[WMS] 取得員工資料失敗:', error);
+                        debugData.value.errors.push(`員工API錯誤: ${error.message}`);
+                        return null;
+                    }
+                }
+
+                async function fetchProjects() {
+                    try {
+                        console.log('[WMS] 開始取得案場資料...');
+                        const url = new URL(API_CONFIG.PROJECT_API);
+                        url.searchParams.append('page', 'get_hub_projects_data');
+                        url.searchParams.append('userId', 'Ud58333430513b7527106fa71d2e30151');
+                        url.searchParams.append('userProfile', JSON.stringify({
+                            userId: 'Ud58333430513b7527106fa71d2e30151',
+                            userName: '測試用戶',
+                            permission: 5,
+                            group: '台南店'
+                        }));
+
+                        const response = await fetch(url);
+                        const result = await response.json();
+                        console.log('[WMS] 案場資料回傳:', result);
+                        debugData.value.projectsRaw = result;
+
+                        if (result.success && result.data && result.data.projects) {
+                            console.log(`[WMS] 案場數量: ${result.data.projects.length}`);
+
+                            // 轉換格式
+                            projects.value = result.data.projects.map(p => ({
+                                id: p.projectId || p.id,
+                                name: p.projectName || p.name,
+                                location: p.location || ''
+                            }));
+                        }
+                        return result;
+                    } catch (error) {
+                        console.error('[WMS] 取得案場資料失敗:', error);
+                        debugData.value.errors.push(`案場API錯誤: ${error.message}`);
+                        return null;
+                    }
+                }
+
+                async function loadApiData() {
+                    debugData.value.loading = true;
+                    debugData.value.errors = [];
+
+                    try {
+                        await Promise.all([fetchEmployees(), fetchProjects()]);
+                        console.log('[WMS] API 資料載入完成');
+                    } catch (error) {
+                        console.error('[WMS] API 載入失敗:', error);
+                    } finally {
+                        debugData.value.loading = false;
+                    }
+                }
+
+                // === 資料 (初始值為假資料，API 成功後會覆蓋) ===
                 const employees = ref([
                     { id: 'emp1', name: '王大明', group: '木作組', role: '組長' },
                     { id: 'emp2', name: '李小華', group: '木作組', role: '師傅' },
@@ -556,7 +678,14 @@
                     { id: 'proj7', name: '台南中西-吳公館', location: '台南市中西區' },
                 ]);
 
-                const taskTypes = ['場勘', '放樣', '拆除', '水電', '木作', '油漆', '系統櫃', '驗收'];
+                // === 任務類別 (分組結構) ===
+                const taskTypeGroups = {
+                    '設計': ['平面規劃', '3D繪圖', '報價製作', '客戶溝通', '材料確認'],
+                    '工務': ['場勘', '放樣', '拆除', '水電', '木作', '油漆', '系統櫃', '驗收'],
+                    '通用': ['會議', '採購', '其他']
+                };
+                // 所有類別的平面列表 (向後相容)
+                const taskTypes = Object.values(taskTypeGroups).flat();
 
                 // 時間槽 (15分鐘為單位)
                 const timeSlots = [];
@@ -572,19 +701,14 @@
                 const todayStr = formatDate(today);
 
                 const tasks = ref([
-                    { id: 't1', projectId: 'proj1', projectName: '台南東區-陳公館', type: '場勘', title: '初次場勘', assignedTo: 'emp1', startTime: `${todayStr}T09:00`, endTime: `${todayStr}T11:00`, priority: 1, status: 'pending', parallelIndex: 1, predecessorId: '', recurrence: 'none', taskMode: 'instant', notes: '' },
-                    { id: 't2', projectId: 'proj1', projectName: '台南東區-陳公館', type: '木作', title: '天花板骨架', assignedTo: 'emp1', startTime: `${todayStr}T13:00`, endTime: `${todayStr}T17:00`, priority: 2, status: 'in_progress', parallelIndex: 1, predecessorId: 't1', recurrence: 'none', taskMode: 'instant', notes: '' },
-                    { id: 't3', projectId: 'proj2', projectName: '高雄左營-林宅', type: '水電', title: '配管拉線', assignedTo: 'emp3', startTime: `${todayStr}T09:00`, endTime: `${todayStr}T12:00`, priority: 2, status: 'pending', parallelIndex: 1, predecessorId: '', recurrence: 'none', taskMode: 'instant', notes: '' },
-                    { id: 't4', projectId: 'proj2', projectName: '高雄左營-林宅', type: '拆除', title: '舊裝潢拆除', assignedTo: 'emp2', startTime: `${todayStr}T09:00`, endTime: `${todayStr}T18:00`, priority: 1, status: 'in_progress', parallelIndex: 1, predecessorId: '', recurrence: 'none', taskMode: 'instant', notes: '' },
-                    { id: 't5', projectId: 'proj3', projectName: '台南安平-王公館', type: '油漆', title: '批土打底', assignedTo: 'emp5', startTime: `${todayStr}T10:00`, endTime: `${todayStr}T16:00`, priority: 3, status: 'pending', parallelIndex: 1, predecessorId: '', recurrence: 'none', taskMode: 'instant', notes: '' },
-                    // 長期任務範例（模擬多案負責）
-                    { id: 't6', projectId: 'proj1', projectName: '台南東區-陳公館', type: '木作', title: '施工圖繪製', assignedTo: 'emp1', startTime: `${todayStr}T00:00`, endTime: `${formatDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))}T00:00`, priority: 2, status: 'in_progress', parallelIndex: 1, predecessorId: '', recurrence: 'none', taskMode: 'longterm', notes: '預計7工作天' },
-                    { id: 't7', projectId: 'proj2', projectName: '高雄左營-林宅', type: '系統櫃', title: '報價確認', assignedTo: 'emp1', startTime: `${todayStr}T00:00`, endTime: `${formatDate(new Date(Date.now() + 5 * 24 * 60 * 60 * 1000))}T00:00`, priority: 2, status: 'pending', parallelIndex: 1, predecessorId: '', recurrence: 'none', taskMode: 'longterm', notes: '' },
-                    { id: 't8', projectId: 'proj3', projectName: '台南安平-王公館', type: '水電', title: '管線確認', assignedTo: 'emp1', startTime: `${todayStr}T00:00`, endTime: `${formatDate(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000))}T00:00`, priority: 3, status: 'in_progress', parallelIndex: 1, predecessorId: '', recurrence: 'none', taskMode: 'longterm', notes: '' },
-                    { id: 't9', projectId: 'proj4', projectName: '高雄鼓山-許宅', type: '場勘', title: '現場丈量', assignedTo: 'emp1', startTime: `${todayStr}T00:00`, endTime: `${formatDate(new Date(Date.now() + 2 * 24 * 60 * 60 * 1000))}T00:00`, priority: 1, status: 'pending', parallelIndex: 1, predecessorId: '', recurrence: 'none', taskMode: 'longterm', notes: '' },
-                    { id: 't10', projectId: 'proj5', projectName: '台南北區-張公館', type: '木作', title: '施工圖繪製', assignedTo: 'emp1', startTime: `${todayStr}T00:00`, endTime: `${formatDate(new Date(Date.now() + 10 * 24 * 60 * 60 * 1000))}T00:00`, priority: 2, status: 'in_progress', parallelIndex: 1, predecessorId: '', recurrence: 'none', taskMode: 'longterm', notes: '' },
-                    { id: 't11', projectId: 'proj6', projectName: '高雄三民-李宅', type: '油漆', title: '材料採購', assignedTo: 'emp1', startTime: `${todayStr}T00:00`, endTime: `${formatDate(new Date(Date.now() + 4 * 24 * 60 * 60 * 1000))}T00:00`, priority: 3, status: 'pending', parallelIndex: 1, predecessorId: '', recurrence: 'none', taskMode: 'longterm', notes: '' },
-                    { id: 't12', projectId: 'proj7', projectName: '台南中西-吳公館', type: '驗收', title: '交屋準備', assignedTo: 'emp1', startTime: `${todayStr}T00:00`, endTime: `${formatDate(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000))}T00:00`, priority: 1, status: 'in_progress', parallelIndex: 1, predecessorId: '', recurrence: 'none', taskMode: 'longterm', notes: '' },
+                    // 交辦任務：有具體時間的工作
+                    { id: 't1', projectId: 'proj1', projectName: '台南東區-陳公館', type: '場勘', title: '初次場勘', assignedTo: 'emp1', startDate: todayStr, workDays: 0.25, status: 'pending', notes: '' },
+                    { id: 't2', projectId: 'proj1', projectName: '台南東區-陳公館', type: '木作', title: '天花板骨架', assignedTo: 'emp1', startDate: todayStr, workDays: 10, status: 'in_progress', notes: '預計10工作天' },
+                    { id: 't3', projectId: 'proj2', projectName: '高雄左營-林宅', type: '水電', title: '配管拉線', assignedTo: 'emp3', startDate: todayStr, workDays: 3, status: 'pending', notes: '' },
+                    { id: 't4', projectId: 'proj2', projectName: '高雄左營-林宅', type: '拆除', title: '舊裝潢拆除', assignedTo: 'emp2', startDate: todayStr, workDays: 2, status: 'in_progress', notes: '' },
+                    { id: 't5', projectId: 'proj3', projectName: '台南安平-王公館', type: '油漆', title: '批土打底', assignedTo: 'emp5', startDate: todayStr, workDays: 5, status: 'pending', notes: '' },
+                    // 插單任務範例：1/8 去協助別的案子
+                    { id: 't6', projectId: 'proj4', projectName: '高雄鼓山-許宅', type: '場勘', title: '緊急協助', assignedTo: 'emp1', startDate: formatDate(new Date(Date.now() + 4 * 24 * 60 * 60 * 1000)), workDays: 0.5, status: 'pending', notes: '插單任務' },
                 ]);
 
                 // === 狀態 ===
@@ -603,10 +727,16 @@
 
                 const taskForm = ref({
                     projectId: 'proj1', type: '木作', title: '',
-                    startDate: todayStr, startSlot: '09:00',
-                    endDate: todayStr, endSlot: '10:00',
-                    assignedTo: 'emp1', priority: 3, predecessorId: '', recurrence: 'none',
-                    taskMode: 'instant', notes: ''
+                    startDate: todayStr,
+                    workDays: 1, // 工作天數
+                    assignedTo: 'emp1',
+                    notes: ''
+                });
+
+                // === 生命週期：載入 API 資料 ===
+                onMounted(() => {
+                    console.log('[WMS] 頁面載入，開始呼叫 API...');
+                    loadApiData();
                 });
 
                 // === 計算屬性 ===
@@ -648,8 +778,29 @@
                     });
                 });
 
+                // === 輔助函式：判斷任務是否在某天進行中 ===
+                function isTaskOnDate(task, dateStr) {
+                    const taskStart = new Date(task.startDate);
+                    const checkDate = new Date(dateStr);
+                    // 計算任務結束日期（工作天數不含週末，簡化為直接加天數）
+                    const taskEnd = new Date(taskStart);
+                    taskEnd.setDate(taskEnd.getDate() + Math.ceil(task.workDays) - 1);
+                    // 檢查日期是否在任務範圍內
+                    return checkDate >= taskStart && checkDate <= taskEnd;
+                }
+
+                // === 計算任務結束日期 ===
+                function getTaskEndDate(task) {
+                    const start = new Date(task.startDate);
+                    const end = new Date(start);
+                    end.setDate(end.getDate() + Math.ceil(task.workDays) - 1);
+                    return formatDate(end);
+                }
+
                 const todaySummary = computed(() => {
-                    const todayTasks = tasks.value.filter(t => t.startTime.startsWith(todayStr) && t.assignedTo === currentUserId.value);
+                    const todayTasks = tasks.value.filter(t =>
+                        isTaskOnDate(t, todayStr) && t.assignedTo === currentUserId.value
+                    );
                     return {
                         pending: todayTasks.filter(t => t.status === 'pending').length,
                         inProgress: todayTasks.filter(t => t.status === 'in_progress').length,
@@ -659,12 +810,15 @@
 
                 const conflicts = computed(() => {
                     const result = [];
-                    // 只檢測即時任務的衝突
-                    const userTasks = tasks.value.filter(t => t.assignedTo === currentUserId.value && t.taskMode === 'instant');
+                    // 檢測同一開始日期的任務（衝突）
+                    const userTasks = tasks.value.filter(t => t.assignedTo === currentUserId.value);
                     for (let i = 0; i < userTasks.length; i++) {
                         for (let j = i + 1; j < userTasks.length; j++) {
-                            if (isOverlapping(userTasks[i], userTasks[j])) {
-                                result.push({ id: `${userTasks[i].id}-${userTasks[j].id}`, message: `${userTasks[i].title} 與 ${userTasks[j].title} 時間重疊` });
+                            if (userTasks[i].startDate === userTasks[j].startDate) {
+                                result.push({
+                                    id: `${userTasks[i].id}-${userTasks[j].id}`,
+                                    message: `${userTasks[i].title} 與 ${userTasks[j].title} 同一天開始`
+                                });
                             }
                         }
                     }
@@ -673,10 +827,11 @@
 
                 const delayedTasks = computed(() => {
                     const now = new Date();
+                    const todayDate = formatDate(now);
                     return tasks.value.filter(t => {
                         if (t.status === 'completed') return false;
-                        const end = new Date(t.endTime);
-                        return end < now;
+                        const endDate = getTaskEndDate(t);
+                        return endDate < todayDate;
                     });
                 });
 
@@ -706,70 +861,39 @@
                 }
 
                 function getTasksAt(date, hour) {
+                    // 新版本：檢查任務是否在該日進行中
                     return filteredTasks.value.filter(t => {
                         if (t.assignedTo !== currentUserId.value) return false;
-                        // 長期任務在頂部橫跨條顯示，不在時間格顯示
-                        if (t.taskMode === 'longterm') return false;
-
-                        // 即時任務：按原邏輯顯示
-                        const startDate = t.startTime.split('T')[0];
-                        const startHour = parseInt(t.startTime.split('T')[1].split(':')[0]);
-                        return startDate === date && startHour === hour;
+                        return isTaskOnDate(t, date);
                     });
                 }
 
-                // 取得某日的所有即時任務 (Apple 日曆風格用)
+                // 取得某日的所有任務
                 function getDayTasks(date) {
                     return filteredTasks.value.filter(t => {
                         if (t.assignedTo !== currentUserId.value) return false;
-                        if (t.taskMode === 'longterm') return false;
-                        const startDate = t.startTime.split('T')[0];
-                        return startDate === date;
+                        return isTaskOnDate(t, date);
                     });
                 }
 
-                // 計算任務在日曆中的位置和高度
-                function getTaskPosition(task) {
-                    // 直接從字串解析時間，避免 Date 的時區轉換問題
-                    const parseTimeStr = (str) => {
-                        const timePart = str.split('T')[1] || '00:00';
-                        const [h, m] = timePart.split(':').map(Number);
-                        return h + (m || 0) / 60;
-                    };
-
-                    const startHour = parseTimeStr(task.startTime);
-                    const endHour = parseTimeStr(task.endTime);
-
-                    // 每小時 48px
-                    const hourHeight = 48;
-
-                    // top: 從 08:00 開始算
-                    const top = (startHour - 8) * hourHeight;
-                    // height: 根據時長
-                    const height = Math.max(24, (endHour - startHour) * hourHeight);
-
+                // 計算任務在日曆中的位置和高度（簡化版：每天一個卡片）
+                function getTaskPosition(task, date) {
+                    // 新版本：每個任務在每天都顯示為固定高度的卡片
+                    const taskIndex = getDayTasks(date).indexOf(task);
+                    const cardHeight = 60; // 每個任務卡片高度
+                    const top = taskIndex * (cardHeight + 4);
                     return {
                         top: top + 'px',
-                        height: height + 'px',
-                        minHeight: '24px'
+                        height: cardHeight + 'px',
+                        minHeight: cardHeight + 'px'
                     };
                 }
 
                 function getEmployeeTasks(empId) {
                     return tasks.value.filter(t => {
                         if (t.assignedTo !== empId) return false;
-                        // 即時任務：今日的任務
-                        if (t.taskMode === 'instant') {
-                            return t.startTime.startsWith(todayStr);
-                        }
-                        // 長期任務：進行中的都顯示
-                        if (t.taskMode === 'longterm') {
-                            const now = new Date();
-                            const start = new Date(t.startTime);
-                            const end = new Date(t.endTime);
-                            return now >= start && now <= end;
-                        }
-                        return t.startTime.startsWith(todayStr);
+                        // 檢查任務是否在今天進行中
+                        return isTaskOnDate(t, todayStr);
                     });
                 }
 
@@ -778,11 +902,17 @@
                 }
 
                 function getParallelCount(empId) {
-                    return tasks.value.filter(t => t.assignedTo === empId && t.startTime.startsWith(todayStr) && t.status !== 'completed').length;
+                    return tasks.value.filter(t =>
+                        t.assignedTo === empId &&
+                        isTaskOnDate(t, todayStr) &&
+                        t.status !== 'completed'
+                    ).length;
                 }
 
                 function getTaskCount(empId, date) {
-                    return tasks.value.filter(t => t.assignedTo === empId && t.startTime.startsWith(date)).length;
+                    return tasks.value.filter(t =>
+                        t.assignedTo === empId && isTaskOnDate(t, date)
+                    ).length;
                 }
 
                 function getHeatmapClass(empId, date) {
@@ -794,23 +924,34 @@
                 }
 
                 function getGanttStyle(task) {
-                    const start = new Date(task.startTime);
-                    const end = new Date(task.endTime);
+                    const start = new Date(task.startDate);
+                    const end = new Date(task.startDate);
+                    end.setDate(end.getDate() + Math.ceil(task.workDays) - 1);
+
                     const weekStart = new Date(currentWeekStart.value);
                     const weekEnd = new Date(weekStart);
                     weekEnd.setDate(weekStart.getDate() + 7);
                     const totalMs = weekEnd - weekStart;
                     const left = Math.max(0, (start - weekStart) / totalMs * 100);
-                    const width = Math.min(100 - left, (end - start) / totalMs * 100);
+                    const width = Math.min(100 - left, (end - start + 24 * 60 * 60 * 1000) / totalMs * 100);
                     return { left: `${left}%`, width: `${Math.max(5, width)}%` };
                 }
 
                 function getGanttBg(type) {
-                    const colors = { '場勘': 'bg-amber-500', '放樣': 'bg-blue-500', '拆除': 'bg-red-500', '水電': 'bg-emerald-500', '木作': 'bg-pink-500', '油漆': 'bg-indigo-500', '系統櫃': 'bg-purple-500', '驗收': 'bg-teal-500' };
+                    const colors = {
+                        '場勘': 'bg-amber-500', '放樣': 'bg-blue-500', '拆除': 'bg-red-500',
+                        '水電': 'bg-emerald-500', '木作': 'bg-pink-500', '油漆': 'bg-indigo-500',
+                        '系統櫃': 'bg-purple-500', '驗收': 'bg-teal-500',
+                        // 設計部門
+                        '平面規劃': 'bg-violet-500', '3D繪圖': 'bg-fuchsia-500',
+                        '報價製作': 'bg-lime-500', '客戶溝通': 'bg-sky-500', '材料確認': 'bg-orange-500',
+                        // 通用
+                        '會議': 'bg-gray-500', '採購': 'bg-yellow-500', '其他': 'bg-slate-500'
+                    };
                     return colors[type] || 'bg-gray-500';
                 }
 
-                // 取得當前用戶的長期任務（在本週範圍內）
+                // 取得當前用戶的多天任務（工作天數 > 1 且在本週範圍內）
                 function getLongtermTasks() {
                     const weekStart = new Date(currentWeekStart.value);
                     const weekEnd = new Date(weekStart);
@@ -818,22 +959,26 @@
 
                     return filteredTasks.value.filter(t => {
                         if (t.assignedTo !== currentUserId.value) return false;
-                        if (t.taskMode !== 'longterm') return false;
-                        const taskStart = new Date(t.startTime);
-                        const taskEnd = new Date(t.endTime);
+                        // 只顯示工作天數 > 1 的任務作為「負責案件」
+                        if (t.workDays <= 1) return false;
+
+                        const taskStart = new Date(t.startDate);
+                        const taskEnd = new Date(t.startDate);
+                        taskEnd.setDate(taskEnd.getDate() + Math.ceil(t.workDays) - 1);
                         // 任務與本週有交集
-                        return taskStart < weekEnd && taskEnd > weekStart;
+                        return taskStart < weekEnd && taskEnd >= weekStart;
                     });
                 }
 
-                // 計算長期任務橫跨條的樣式
+                // 計算多天任務橫跨條的樣式
                 function getLongtermStyle(task) {
                     const weekStart = new Date(currentWeekStart.value);
                     const weekEnd = new Date(weekStart);
                     weekEnd.setDate(weekStart.getDate() + 7);
 
-                    const taskStart = new Date(task.startTime);
-                    const taskEnd = new Date(task.endTime);
+                    const taskStart = new Date(task.startDate);
+                    const taskEnd = new Date(task.startDate);
+                    taskEnd.setDate(taskEnd.getDate() + Math.ceil(task.workDays) - 1);
 
                     // 計算在本週內的起點和終點
                     const visibleStart = taskStart < weekStart ? weekStart : taskStart;
@@ -841,7 +986,7 @@
 
                     const dayWidth = 100 / 7; // 每天佔 1/7
                     const startDay = (visibleStart - weekStart) / (24 * 60 * 60 * 1000);
-                    const endDay = (visibleEnd - weekStart) / (24 * 60 * 60 * 1000);
+                    const endDay = (visibleEnd - weekStart) / (24 * 60 * 60 * 1000) + 1;
 
                     const left = Math.max(0, startDay * dayWidth);
                     const width = Math.max(dayWidth * 0.5, (endDay - startDay) * dayWidth);
@@ -878,41 +1023,48 @@
                     return shortName;
                 }
 
-                function formatTime(datetime) {
-                    if (!datetime) return '';
-                    return datetime.split('T')[1]?.substring(0, 5) || '';
+                function formatTime(task) {
+                    // 新版本：顯示工作天數
+                    if (!task || !task.workDays) return '';
+                    return `${task.workDays}天`;
                 }
 
+                // 檢查兩個任務是否有日期重疊（用於插單邏輯）
                 function isOverlapping(t1, t2) {
-                    const s1 = new Date(t1.startTime), e1 = new Date(t1.endTime);
-                    const s2 = new Date(t2.startTime), e2 = new Date(t2.endTime);
-                    return s1 < e2 && s2 < e1;
+                    const s1 = new Date(t1.startDate);
+                    const e1 = new Date(t1.startDate);
+                    e1.setDate(e1.getDate() + Math.ceil(t1.workDays) - 1);
+
+                    const s2 = new Date(t2.startDate);
+                    const e2 = new Date(t2.startDate);
+                    e2.setDate(e2.getDate() + Math.ceil(t2.workDays) - 1);
+
+                    return s1 <= e2 && s2 <= e1;
                 }
 
                 function openTaskModal(date = null, hour = null, task = null) {
                     if (task) {
                         editingTask.value = task;
-                        // 從 startTime/endTime 解析出日期和時段
-                        const [sd, st] = task.startTime.split('T');
-                        const [ed, et] = task.endTime.split('T');
                         taskForm.value = {
-                            ...task,
-                            startDate: sd,
-                            startSlot: st?.substring(0, 5) || '09:00',
-                            endDate: ed,
-                            endSlot: et?.substring(0, 5) || '10:00'
+                            projectId: task.projectId,
+                            type: task.type,
+                            title: task.title,
+                            startDate: task.startDate,
+                            workDays: task.workDays,
+                            assignedTo: task.assignedTo,
+                            notes: task.notes || ''
                         };
                     } else {
                         editingTask.value = null;
                         const startDateVal = date || todayStr;
-                        const startSlotVal = hour ? `${String(hour).padStart(2, '0')}:00` : '09:00';
-                        const endHour = (hour || 9) + 1;
                         taskForm.value = {
-                            projectId: 'proj1', type: '木作', title: '',
-                            startDate: startDateVal, startSlot: startSlotVal,
-                            endDate: startDateVal, endSlot: `${String(endHour).padStart(2, '0')}:00`,
-                            assignedTo: currentUserId.value, priority: 3,
-                            predecessorId: '', recurrence: 'none', taskMode: 'instant', notes: ''
+                            projectId: projects.value[0]?.id || 'proj1',
+                            type: '木作',
+                            title: '',
+                            startDate: startDateVal,
+                            workDays: 1,
+                            assignedTo: currentUserId.value,
+                            notes: ''
                         };
                     }
                     showModal.value = true;
@@ -920,44 +1072,41 @@
 
                 function saveTask() {
                     if (!taskForm.value.title) { showToast('請輸入任務名稱', 'error'); return; }
-                    const project = projects.value.find(p => p.id === taskForm.value.projectId);
-
-                    // 組合 startTime 和 endTime
-                    const startTime = `${taskForm.value.startDate}T${taskForm.value.startSlot}`;
-                    const endTime = `${taskForm.value.endDate}T${taskForm.value.endSlot}`;
-
-                    // 檢查前置任務限制
-                    if (taskForm.value.predecessorId) {
-                        const pred = tasks.value.find(t => t.id === taskForm.value.predecessorId);
-                        if (pred && new Date(startTime) < new Date(pred.endTime)) {
-                            showToast('開始時間必須在前置任務結束之後', 'error');
-                            return;
-                        }
+                    if (!taskForm.value.workDays || taskForm.value.workDays < 0.5) {
+                        showToast('工作天數至少為 0.5 天', 'error');
+                        return;
                     }
 
+                    const project = projects.value.find(p => p.id === taskForm.value.projectId);
+
                     if (editingTask.value) {
+                        // 更新現有任務
                         Object.assign(editingTask.value, {
-                            ...taskForm.value,
-                            startTime, endTime,
-                            projectName: project?.name || ''
+                            projectId: taskForm.value.projectId,
+                            projectName: project?.name || '',
+                            type: taskForm.value.type,
+                            title: taskForm.value.title,
+                            startDate: taskForm.value.startDate,
+                            workDays: taskForm.value.workDays,
+                            assignedTo: taskForm.value.assignedTo,
+                            notes: taskForm.value.notes
                         });
                         showToast('任務已更新', 'success');
                     } else {
+                        // 建立新任務
                         const newTask = {
                             id: 't' + Date.now(),
-                            ...taskForm.value,
-                            startTime, endTime,
+                            projectId: taskForm.value.projectId,
                             projectName: project?.name || '',
+                            type: taskForm.value.type,
+                            title: taskForm.value.title,
+                            assignedTo: taskForm.value.assignedTo,
+                            startDate: taskForm.value.startDate,
+                            workDays: taskForm.value.workDays,
                             status: 'pending',
-                            parallelIndex: 1
+                            notes: taskForm.value.notes
                         };
                         tasks.value.push(newTask);
-
-                        // 週期性任務生成
-                        if (taskForm.value.recurrence !== 'none') {
-                            generateRecurringTasks(newTask);
-                        }
-
                         showToast('任務已建立', 'success');
                     }
 
@@ -1139,8 +1288,9 @@
                     const [sh, sm] = startTimePart.split(':').map(Number);
                     const startMinutes = sh * 60 + (sm || 0);
 
-                    // 確保結束時間至少比開始時間晚 15 分鐘，最多 18:00
-                    const clampedMinutes = Math.max(startMinutes + 15, Math.min(18 * 60, newEndMinutes));
+                    // 確保結束時間：至少比開始時間晚 15 分鐘、不早於 08:15、最晚 18:00
+                    const minEndMinutes = Math.max(8 * 60 + 15, startMinutes + 15); // 至少 08:15 或開始+15分鐘
+                    const clampedMinutes = Math.max(minEndMinutes, Math.min(18 * 60, newEndMinutes));
                     const finalHour = Math.floor(clampedMinutes / 60);
                     const finalMins = clampedMinutes % 60;
 
@@ -1206,14 +1356,16 @@
                 }
 
                 return {
-                    employees, projects, taskTypes, timeSlots, tasks, currentView, currentUserId, currentUserRole, currentWeekStart,
+                    employees, projects, taskTypes, taskTypeGroups, timeSlots, tasks, currentView, currentUserId, currentUserRole, currentWeekStart,
                     filterProject, filterTypes, showModal, showShiftModal, editingTask, taskForm, toast, showAllLongterm,
                     shiftSuggestions, weekDays, weekLabel, workHours, employeeGroups, filteredTasks, todaySummary, conflicts, delayedTasks,
                     isToday, changeWeek, goToToday, toggleTypeFilter, getTasksAt, getDayTasks, getTaskPosition, getEmployeeTasks,
                     getProjectTasks, getParallelCount, getTaskCount, getHeatmapClass, getGanttStyle,
                     getGanttBg, getLongtermTasks, getLongtermStyle, getProjectPillClass, getProjectShortName,
                     formatTime, openTaskModal, saveTask, deleteTask, onDragStart, onDrop, startResize,
-                    applyShift, applyAllShifts, toggleStatus, exportHistory
+                    applyShift, applyAllShifts, toggleStatus, exportHistory,
+                    // 除錯功能
+                    debugMode, debugData, loadApiData
                 };
             }
         }).mount('#app');

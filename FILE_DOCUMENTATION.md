@@ -519,18 +519,18 @@ const APP_SETTINGS = {
 
 **模組說明**: 室內設計工具、施工規範、工程管理等設計相關功能
 
-| 檔名 | 版本 | 技術棧 | 主要功能 |
-|------|------|--------|---------|
-| **LayoutPlanner.html** | v3.0 | HTML5 Canvas + SVG + Vanilla JS | 互動式室內設計規劃工具 |
-| **LayoutPlanner.js** | v3.0 | Vanilla JavaScript (2660行) | 核心設計邏輯 |
-| **floorplan-straightener.html** | - | HTML + Canvas API | 平面圖校正工具 |
-| **WMS.html** | v1.0 | **Vue 3** + Tailwind CSS | 員工工作排程系統 |
-| **site-report.html** | v1.0 | **React 18** + Canvas | 施工日誌生成器 |
-| **renovation_checker.html** | v2.0 | **Vue 3** + Tailwind CSS | 工料檢核小幫手 |
-| **施工規範.html** | - | HTML + CSS | 施工規範文件 |
-| **backend_script.js** | v2.1 | Google Apps Script | GAS 通用 API 後端 |
-| **utils.js** | - | JavaScript | 工具函式 |
-| **images/** | - | 圖片庫 | 40+ 傢俱/家電/建材圖片 |
+| 檔名 | 版本 | 技術棧 | 主要功能 | 線上連結 |
+|------|------|--------|---------|---------|
+| **LayoutPlanner.html** | v3.0 | HTML5 Canvas + SVG + Vanilla JS | 互動式室內設計規劃工具 | [🔗 開啟](https://info.tanxin.space/modules/InteriorDesigned/LayoutPlanner.html) |
+| **LayoutPlanner.js** | v3.0 | Vanilla JavaScript (2660行) | 核心設計邏輯 | - |
+| **floorplan-straightener.html** | - | HTML + Canvas API | 平面圖校正工具 | [🔗 開啟](https://info.tanxin.space/modules/InteriorDesigned/floorplan-straightener.html) |
+| **WMS.html** | v1.0 | **Vue 3** + Tailwind CSS | 員工工作排程系統 | [🔗 開啟](https://info.tanxin.space/modules/InteriorDesigned/WMS.html) |
+| **site-report.html** | v1.0 | **React 18** + Canvas | 施工日誌生成器 | [🔗 開啟](https://info.tanxin.space/modules/InteriorDesigned/site-report.html) |
+| **renovation_checker.html** | v2.0 | **Vue 3** + Tailwind CSS | 工料檢核小幫手 | [🔗 開啟](https://info.tanxin.space/modules/InteriorDesigned/renovation_checker.html) |
+| **施工規範.html** | - | HTML + CSS | 施工規範文件 | [🔗 開啟](https://info.tanxin.space/modules/InteriorDesigned/施工規範.html) |
+| **backend_script.js** | v2.1 | Google Apps Script | GAS 通用 API 後端 | - |
+| **utils.js** | - | JavaScript | 工具函式 | - |
+| **images/** | - | 圖片庫 | 40+ 傢俱/家電/建材圖片 | - |
 
 <details>
 <summary><b>📝 詳細功能說明</b> (點擊展開)</summary>
