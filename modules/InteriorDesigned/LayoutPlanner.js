@@ -2038,6 +2038,7 @@ function saveCanvasAsImage() {
 }
 
 function saveLayout() {
+    const constructionAreaEl = document.getElementById('construction-area');
     const layoutData = {
         version: '2.0',
         timestamp: new Date().toISOString(),
@@ -2048,7 +2049,8 @@ function saveLayout() {
             position: bgPosition,
             scale: bgScale,
             src: document.getElementById('bg-img').src
-        }
+        },
+        constructionArea: constructionAreaEl ? constructionAreaEl.value : ''
     };
 
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(layoutData, null, 2));
@@ -3164,6 +3166,8 @@ function bindEventListeners() {
     // 預算明細 Modal
     document.getElementById('budget-modal-close-btn').addEventListener('click', closeBudgetModal);
     document.getElementById('export-csv-btn').addEventListener('click', exportBudgetAsCSV);
+    const printBtn = document.getElementById('print-budget-btn');
+    if (printBtn) printBtn.addEventListener('click', () => window.print());
 
     // 最小化列
     document.getElementById('toggle-toolbox-btn').addEventListener('click', () => toggleWindow('toolbox-window'));
@@ -3402,6 +3406,11 @@ function loadLayoutFromData(layoutData) {
             bgImg.style.display = 'block';
             document.getElementById('bg-controls').classList.remove('opacity-50', 'pointer-events-none');
         }
+    }
+
+    if (layoutData.constructionArea !== undefined) {
+        const constructionAreaEl = document.getElementById('construction-area');
+        if (constructionAreaEl) constructionAreaEl.value = layoutData.constructionArea;
     }
 
     renderAllCabinets();

@@ -354,6 +354,13 @@
         /* [您的要求] 新增：PDF 匯出 (列印) 專用樣式 */
         @media print {
 
+            /* [修正] 確保 body 可以捲動，避免內容被裁切 */
+            body {
+                height: auto !important;
+                overflow: visible !important;
+                user-select: auto !important;
+            }
+
             /* 隱藏所有不需要列印的元素 */
             body>*:not(#budget-modal) {
                 display: none !important;
@@ -373,6 +380,18 @@
                 width: 100% !important;
                 max-width: 100% !important;
             }
+            
+            /* [修正] 強制展開表格捲動區域，確保列印所有內容 */
+            #budget-table-container {
+                max-height: none !important;
+                overflow: visible !important;
+            }
+
+            /* [優化] 隱藏列印時不需要的按鈕與關閉圖示 */
+            #budget-modal-close-btn,
+            #budget-action-buttons {
+                display: none !important;
+            }
 
             /* [您的要求] 優化列印樣式，避免標題和表尾被分頁切斷 */
             .modal-content h2,
@@ -384,6 +403,12 @@
             /* [您的要求] 列印時顯示浮水印，並隱藏版權宣告 */
             .print-watermark {
                 display: flex !important;
+                position: fixed !important;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 9999 !important;
             }
 
             #copyright-notice {
@@ -713,7 +738,8 @@
                 <span class="text-8xl font-black text-gray-500 opacity-10 -rotate-45">添心設計</span>
             </div>
 
-            <div class="overflow-auto max-h-[60vh]">
+            <!-- [修正] 加入 ID 以便 CSS @media print 控制展開 -->
+            <div id="budget-table-container" class="overflow-auto max-h-[60vh]">
                 <table class="w-full text-sm text-left">
                     <thead class="bg-gray-50 uppercase text-xs">
                         <!-- [您的要求] 調整報價單欄位 -->
@@ -741,7 +767,9 @@
                 <strong>免責聲明：</strong>
                 此報價單僅為根據當前設計所做的初步估算，僅供參考。實際費用可能因現場狀況、材料選擇、施工工法及各家施工廠商報價而有所差異，最終價格以簽訂之正式工程合約為準。
             </div>
-            <div class="mt-6 flex justify-end gap-2">
+            <!-- [修正] 加入 ID 以便列印時隱藏 -->
+            <div id="budget-action-buttons" class="mt-6 flex justify-end gap-2">
+                <button id="print-budget-btn" class="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700">列印 / 儲存 PDF</button>
                 <button id="export-csv-btn"
                     class="bg-green-700 text-white px-3 py-1 rounded text-sm hover:bg-green-800">匯出 CSV</button>
             </div>
