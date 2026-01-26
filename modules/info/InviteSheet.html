@@ -2,7 +2,14 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">    <title>添心設計 | 好友推薦感謝回饋</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添心設計 | 好友推薦感謝回饋</title>
+    <!-- Open Graph 標籤：告訴 LINE 爬蟲爬正式環境的 InviteSheet.html，而不是本地 -->
+    <meta property="og:url" content="https://info.tanxin.space/modules/info/InviteSheet.html">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="添心設計 | 好友推薦活動">
+    <meta property="og:description" content="成功推薦好友完成裝修設計合約簽訂後，獲得全聯禮券 3,000 元">
+    <link rel="canonical" href="https://info.tanxin.space/modules/info/InviteSheet.html">
     <!-- 載入 Tailwind CSS 框架 --><script src="https://cdn.tailwindcss.com"></script>
     <!-- 載入 Google Fonts Noto Sans TC --><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
     <style>
@@ -100,11 +107,9 @@
         // [vNext] 簡化分享流程，直接分享此頁面的網址
         document.getElementById('line-share-btn').addEventListener('click', function(e) {
             e.preventDefault();
-            // [修正] 改為固定網址，避免測試時抓到內部路徑或主控台連結
-            const landingPageUrl = 'https://info.tanxin.space/modules/info/LandingPage.html';
-
-            const shareText = '我家的裝潢是給【添心設計】做的，成果我很滿意！他們現在有好友推薦活動，如果你剛好有新家要裝潢或舊屋想翻新，真心推薦你參考看看！';
-            const lineUrl = `https://line.me/R/msg/text/?${encodeURIComponent(shareText + ' 👉 ' + landingPageUrl)}`;
+            // 【改進】直接在訊息文字中包含正式 URL，這樣 LINE 就只會顯示這個
+            const shareText = '我家的裝潢是給【添心設計】做的，成果我很滿意！他們現在有好友推薦活動，如果你剛好有新家要裝潢或舊屋想翻新，真心推薦你參考看看！\n\n👉 https://info.tanxin.space/modules/info/LandingPage.html';
+            const lineUrl = `https://line.me/R/msg/text/?${encodeURIComponent(shareText)}`;
             window.open(lineUrl, '_blank');
         });
 
