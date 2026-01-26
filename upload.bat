@@ -27,11 +27,11 @@ mkdir "%BACKUP_PATH%"
 if errorlevel 1 (
     echo    - ERROR: Failed to create backup directory. Check path and permissions.
 ) else (
-    REM [v1.6 核心修正] 根據您的建議，參考 deploy.bat 的作法，改用更穩定的 xcopy 指令。
-    REM 建立一個 exclude.txt 檔案，列出所有要排除的檔案和資料夾。
+    REM [v1.6 Fix] Use xcopy for better stability.
+    REM Create exclude.txt listing files to exclude.
     echo .git\ > exclude.txt
     echo upload.bat >> exclude.txt
-    REM /E 複製所有子目錄(包含空的) /I 如果目的地不存在就建立 /Y 不提示直接覆寫 /EXCLUDE 指定排除列表
+    REM /E Copy dirs and subdirs /I Create dest if missing /Y Overwrite /EXCLUDE List of exclusions
     xcopy "%SOURCE_DIR%" "%BACKUP_PATH%\" /E /I /Y /EXCLUDE:exclude.txt > nul
     echo    - Backup folder: %BACKUP_PATH%
     echo    - Backup complete.
