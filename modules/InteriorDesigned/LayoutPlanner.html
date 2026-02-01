@@ -479,10 +479,12 @@
                 <div class="bg-blue-50 p-3 rounded border border-blue-100">
                     <h2 class="font-bold text-blue-800 text-sm mb-2">1. 平面圖設定</h2>
                     <input type="file" id="bg-upload" accept="image/*" class="text-xs w-full mb-2" />
-                    <div id="bg-controls" class="opacity-50 pointer-events-none">
-                        <label class="flex items-center gap-2 mb-2 text-xs font-bold text-red-600">
-                            <input type="checkbox" id="bg-edit-mode"> 底圖調整模式
-                        </label>
+                    <!-- [v9.13 修正] 將勾選框移出受控區域，避免取消勾選後無法再次點擊 -->
+                    <label class="flex items-center gap-2 mb-2 text-xs font-bold text-red-600">
+                        <input type="checkbox" id="bg-edit-mode"> 底圖調整模式
+                    </label>
+                    
+                    <div id="bg-controls" class="opacity-50 pointer-events-none transition-opacity duration-200">
                         <div class="flex items-center gap-2">
                             <input type="range" id="bg-scale" min="0.2" max="3.0" step="0.01" value="1.0"
                                 class="flex-1 h-2">
