@@ -193,7 +193,7 @@
         #bg-layer {
             position: absolute;
             top: 50%;
-            left: 50%;
+            left: 40%;
             transform: translate(-50%, -50%);
             transform-origin: center;
             z-index: 1;
@@ -208,7 +208,7 @@
             /* [v8.0 修正] 改為 100% 100% 以填滿容器 */
             background-repeat: no-repeat;
             background-position: center;
-            border: none; /* [修正] 移除邊框，避免 border-box 模式下產生 1px 的透明間隙 (白線) */
+            border: none; /* [修正] 移除邊框，避免接合處產生縫隙 */
             cursor: grab;
             box-sizing: border-box;
             z-index: 20;
@@ -227,47 +227,64 @@
 
         .resize-handle {
             position: absolute;
-            width: 12px;
-            height: 12px;
-            background: #ffffff;
-            border: 2px solid #3b82f6;
-            border-radius: 50%;
             z-index: 40;
             display: none;
-            box-shadow: 0 0 3px rgba(0, 0, 0, 0.2);
+            /* [v9.11 樣式重構] 改為透明感應區，透過偽元素繪製線條與小圓點 */
+            background: transparent;
+            border: none;
+            box-shadow: none;
         }
 
         .placed-cabinet:hover .resize-handle,
         .placed-cabinet.selected .resize-handle {
-            display: block;
+            display: flex; /* 使用 flex 讓圓點置中 */
+            align-items: center;
+            justify-content: center;
         }
 
-        .resize-handle-w {
-            top: 50%;
-            left: -6px;
-            transform: translateY(-50%);
+        /* 左右拉伸 (垂直線) */
+        .resize-handle-w, .resize-handle-e {
+            top: 0;
+            bottom: 0;
+            width: 12px; /* 加大感應區寬度 */
+            transform: none;
             cursor: w-resize;
         }
+        .resize-handle-w { left: -6px; }
+        .resize-handle-e { right: -6px; }
 
-        .resize-handle-e {
-            top: 50%;
-            right: -6px;
-            transform: translateY(-50%);
-            cursor: e-resize;
-        }
-
-        .resize-handle-n {
-            top: -6px;
-            left: 50%;
-            transform: translateX(-50%);
+        /* 上下拉伸 (水平線) */
+        .resize-handle-n, .resize-handle-s {
+            left: 0;
+            right: 0;
+            height: 12px; /* 加大感應區高度 */
+            transform: none;
             cursor: n-resize;
         }
+        .resize-handle-n { top: -6px; }
+        .resize-handle-s { bottom: -6px; }
 
-        .resize-handle-s {
-            bottom: -6px;
-            left: 50%;
-            transform: translateX(-50%);
-            cursor: s-resize;
+        /* [v9.11 新增] 邊線亮起效果 (Line) */
+        .resize-handle-w::before, .resize-handle-e::before {
+            content: ''; position: absolute; top: 0; bottom: 0; width: 2px; background: #3b82f6; opacity: 0.5;
+        }
+        .resize-handle-n::before, .resize-handle-s::before {
+            content: ''; position: absolute; left: 0; right: 0; height: 2px; background: #3b82f6; opacity: 0.5;
+        }
+        .resize-handle:hover::before {
+            opacity: 1;
+            box-shadow: 0 0 4px #3b82f6; /* 發光效果 */
+        }
+
+        /* [v9.11 新增] 中間的小圓點 (Dot) */
+        .resize-handle::after {
+            content: '';
+            width: 4px; height: 4px; /* [v9.12] 極小圓點 (2px content + 1px border = 4px total) */
+            background: #fff;
+            border: 1px solid #3b82f6;
+            border-radius: 50%;
+            z-index: 2;
+            box-shadow: none;
         }
 
         .size-label {

@@ -143,9 +143,13 @@ function copyLineId() {
 function autoFixSvgGeometry(svgStr) {
     if (!svgStr || !svgStr.trim().startsWith('<svg')) return svgStr;
 
+    // [v9.11 修正] 增強 SVG 清理邏輯，處理 Markdown 連結與雙重引號錯誤
+    let cleanSvgStr = svgStr.replace(/xmlns="\[(.*?)\]\(.*?\)"/g, 'xmlns="$1"')
+                            .replace(/xmlns=""(.*?)""/g, 'xmlns="$1"');
+
     try {
         const parser = new DOMParser();
-        const doc = parser.parseFromString(svgStr, "image/svg+xml");
+        const doc = parser.parseFromString(cleanSvgStr, "image/svg+xml");
         const svg = doc.querySelector('svg');
         if (!svg) return svgStr;
 
@@ -751,6 +755,13 @@ function renderCabinet(cab) {
     const adjustable = cab.data.adjustable;
     let handlesHtml = '';
 
+    // [v9.10 修正] 支援 Inline SVG 渲染，解決 Data URI 編碼問題與 vector-effect 失效問題
+    let svgContent = '';
+    if (!cab.data.isWall && cab.data.img && cab.data.img.trim().startsWith('<svg')) {
+        // [v9.11 修正] 改為 overflow:visible 以避免邊界線條(stroke)被裁切
+        svgContent = `<div class="cab-svg-content" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:0;overflow:visible;">${cab.data.img}</div>`;
+    }
+
     if (adjustable !== 'none' && adjustable !== false) {
         // 左右拉伸點 (Width)
         if (adjustable === 'width' || adjustable === 'both' || adjustable === 'width-depth-select') {
@@ -765,6 +776,7 @@ function renderCabinet(cab) {
     }
 
     el.innerHTML = `
+        ${svgContent}
         ${handlesHtml}
         <div class="size-label">${Math.round(cab.currentW)}x${Math.round(cab.currentH)} cm (${cmToFeet(cab.currentW)}x${cmToFeet(cab.currentH)}尺)</div>
     `;
@@ -798,15 +810,11 @@ function updateCabStyle(el, cab) {
         el.style.backgroundColor = '#374151'; // dark gray
         el.style.backgroundImage = 'none';
     } else {
-        // [v8.6 修復] 還原完整的 updateCabStyle 邏輯
-        const defaultSvgDataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgs.default(cab.data.name))}`;
-        let finalImageSrc = '';
-
         if (cab.data.img && cab.data.img.trim().startsWith('<svg')) {
-            // [v8.6] 直接使用原始 SVG
-            finalImageSrc = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(cab.data.img)}`;
-            el.style.backgroundImage = `url("${finalImageSrc}")`;
+            // [v9.10 修正] 若為 SVG 則不設定背景圖 (已改為 Inline 渲染)
+            el.style.backgroundImage = 'none';
         } else if (cab.data.img) {
+            const defaultSvgDataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgs.default(cab.data.name))}`;
             const img = new Image();
             img.src = cab.data.img;
             img.onload = () => { el.style.backgroundImage = `url('${cab.data.img}')`; };
@@ -1573,8 +1581,39 @@ function handleGlobalMove(e) {
     // 1. 處理元件拖曳 (Move)
     // --------------------------
     if (isDraggingCab && currentDragCab) {
-        const nx = mouseX - dragOffset.x;
-        const ny = mouseY - dragOffset.y;
+        let nx = mouseX - dragOffset.x;
+        let ny = mouseY - dragOffset.y;
+
+        // [v9.9 新增] 吸附對齊功能 (Snap to Grid/Object)
+        // 按住 Shift 鍵可暫時停用吸附
+        if (!e.shiftKey) {
+            const SNAP_THRESHOLD = 10; // 吸附閾值 (px)
+            const GRID_SIZE = 10;      // 網格大小 (px)
+
+            // 1. 網格吸附
+            nx = Math.round(nx / GRID_SIZE) * GRID_SIZE;
+            ny = Math.round(ny / GRID_SIZE) * GRID_SIZE;
+
+            // 2. 物件邊緣吸附
+            const myW = currentDragCab.currentW;
+            const myH = currentDragCab.currentH;
+            
+            for (const other of placedCabinets) {
+                if (other.id === currentDragCab.id) continue;
+                
+                // X軸吸附 (左對左、左對右、右對左、右對右)
+                if (Math.abs(nx - other.x) < SNAP_THRESHOLD) nx = other.x;
+                else if (Math.abs(nx - (other.x + other.currentW)) < SNAP_THRESHOLD) nx = other.x + other.currentW;
+                else if (Math.abs((nx + myW) - other.x) < SNAP_THRESHOLD) nx = other.x - myW;
+                else if (Math.abs((nx + myW) - (other.x + other.currentW)) < SNAP_THRESHOLD) nx = other.x + other.currentW - myW;
+
+                // Y軸吸附 (上對上、上對下、下對上、下對下)
+                if (Math.abs(ny - other.y) < SNAP_THRESHOLD) ny = other.y;
+                else if (Math.abs(ny - (other.y + other.currentH)) < SNAP_THRESHOLD) ny = other.y + other.currentH;
+                else if (Math.abs((ny + myH) - other.y) < SNAP_THRESHOLD) ny = other.y - myH;
+                else if (Math.abs((ny + myH) - (other.y + other.currentH)) < SNAP_THRESHOLD) ny = other.y + other.currentH - myH;
+            }
+        }
 
         // 先嘗試移動到新位置
         currentDragCab.x = nx;
@@ -2898,6 +2937,14 @@ function initZoomControls() {
     document.getElementById('zoom-reset-btn').addEventListener('click', () => updateViewZoom(1.0));
 
     document.addEventListener('wheel', (e) => {
+        // [v9.8 新增] 底圖調整模式下，滾輪直接縮放底圖
+        if (isBgEditMode) {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.05 : 0.05;
+            updateBgScale(Math.max(0.1, bgScale + delta));
+            return;
+        }
+
         if (e.ctrlKey) {
             e.preventDefault();
             const delta = e.deltaY > 0 ? -0.1 : 0.1;
@@ -2950,7 +2997,10 @@ function handleDimensionChange() {
     }
     saveState();
     renderAllCabinets(); // 重繪以更新畫面
-    selectCabinet(cab.id); // 重新選取以更新資訊面板上的所有資訊 (如價格)
+    
+    // [v9.8 修正] 僅更新價格顯示，不重新選取 (避免輸入框失去焦點)
+    updateQuotation();
+    updateSelectedPriceDisplay(cab.id);
 }
 
 // [修改] 處理才數變更
@@ -2969,7 +3019,8 @@ function handleCaiQtyChange() {
     cab.caiQty = newQty;
     saveState();
     updateQuotation();
-    selectCabinet(cab.id); // Re-select to update price display
+    // [v9.8 修正] 僅更新價格顯示
+    updateSelectedPriceDisplay(cab.id);
 }
 
 // [您的要求] 新增復原/重做相關函式
@@ -3622,6 +3673,32 @@ window.onload = () => {
     initAutoSave();
 };
 
+// [v9.8 新增] 僅更新資訊面板的價格顯示 (不重繪 DOM，防止焦點跳離)
+function updateSelectedPriceDisplay(id) {
+    let target = placedCabinets.find(c => c.id === id);
+    if (!target) target = placedAnnotations.find(a => a.id === id);
+    if (!target) return; // 區域通常沒有單價顯示，或邏輯不同
+
+    const priceEl = document.getElementById('selected-price');
+    if (!priceEl) return;
+
+    let priceText = '此項目不計價';
+    const price = calculatePrice(target);
+
+    if (target.data.pricingType !== 'none') {
+        if (target.data.pricingType === 'width') {
+            priceText = `單價: $${target.data.unitPrice.toLocaleString()} / 尺 | 總價: $${price.toLocaleString()}`;
+        } else if (target.data.pricingType === 'cai' || target.data.pricingType === 'area') {
+            priceText = `單價: $${target.data.unitPrice.toLocaleString()} / 才 | 總價: $${price.toLocaleString()}`;
+        } else if (target.data.pricingType === 'cm') {
+            priceText = `單價: $${target.data.unitPrice.toLocaleString()} / cm | 總價: $${price.toLocaleString()}`;
+        } else {
+            priceText = `總價: $${price.toLocaleString()}`;
+        }
+    }
+    priceEl.innerText = priceText;
+}
+
 // [新增] 全域函式：更新元件副屬性 (供 HTML onchange 呼叫)
 window.updateCabinetAddon = function(id, index, value) {
     const cab = placedCabinets.find(c => c.id === id);
@@ -3631,7 +3708,8 @@ window.updateCabinetAddon = function(id, index, value) {
     
     saveState();
     updateQuotation();
-    selectCabinet(id); // 重新整理面板以更新價格
+    // [v9.8 修正] 僅更新價格，不重繪面板
+    updateSelectedPriceDisplay(id);
 };
 
 // [v9.4 新增] 全域函式：更新區域預設副屬性
@@ -3643,7 +3721,7 @@ window.updateAreaAddon = function(id, index, value) {
     
     saveState();
     updateQuotation();
-    selectArea(id); // 重新整理面板
+    // 區域沒有顯示單價在面板上，所以不需要 updateSelectedPriceDisplay
 };
 
 // [新增] 全域函式：新增自訂副屬性
@@ -3702,9 +3780,8 @@ window.updateCustomAddon = function(id, index, field, value) {
     saveState();
     updateQuotation();
     
-    if (isArea) selectArea(id);
-    else if (isAnnotation) selectAnnotation(id);
-    else selectCabinet(id);
+    // [v9.8 修正] 僅更新價格，不重繪面板 (防止輸入時焦點跳離)
+    if (!isArea) updateSelectedPriceDisplay(id);
 };
 
 // [新增] 全域函式：移除自訂副屬性
