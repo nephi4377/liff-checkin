@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工作回報總覽</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .report-card-content ul { list-style-position: inside; }
+        .report-card-content li { margin-bottom: 0.25rem; }
+        /* [v580.0 優化] 針對延遲載入的圖片增加樣式，避免版面跳動 */
+        img[loading="lazy"] {
+            background-color: #f0f0f0; /* 淺灰色背景作為圖片載入前的佔位符 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+        <header class="text-center mb-6">
+            <h1 class="text-2xl font-bold text-gray-800">團隊工作進度</h1>
+        </header>
+
+        <!-- [v442.0 UX優化] 根據使用者要求，恢復使用原生日期選擇器，並採用更緊湊的單行佈局 -->
+        <div class="bg-white p-2 rounded-lg shadow-md sticky top-0 z-10 mb-4">
+            <div class="flex items-center justify-center space-x-1">
+                <input type="date" id="start-date-picker" class="border-gray-300 rounded-md shadow-sm text-xs p-1 w-32" aria-label="開始日期">
+                <span class="text-gray-400 text-xs">至</span>
+                <input type="date" id="end-date-picker" class="border-gray-300 rounded-md shadow-sm text-xs p-1 w-32" aria-label="結束日期">
+                <button id="query-btn" class="bg-blue-600 text-white font-bold py-1 px-2.5 rounded-md hover:bg-blue-700 text-xs">查詢</button>
+            </div>
+        </div>
+        
+        <!-- [v445.0 新增] 組別篩選器 -->
+        <!-- [v564.0 修改] 將組別篩選與尺寸調整拉桿整合在同一行 -->
+        <div class="bg-white p-3 rounded-lg shadow-md mb-4 flex flex-wrap justify-between items-center gap-4">
+            <div id="group-filter-container" class="flex flex-wrap gap-x-4 gap-y-2 items-center flex-grow">
+                <!-- 組別篩選器內容由 JS 動態產生 -->
+            </div>
+            <div id="thumbnail-slider-container" class="flex items-center justify-end gap-2 flex-shrink-0">
+                <!-- 尺寸調整拉桿內容由 JS 動態產生 -->
+            </div>
+        </div>
+
+        <div id="reports-container" class="space-y-6">
+            <div id="placeholder" class="text-center text-gray-500 py-16">
+                <div class="spinner w-10 h-10 border-4 border-gray-200 rounded-full mx-auto"></div>
+                <p class="mt-4">正在載入回報資料...</p>
+            </div>
+        </div>
+    </div>
+
+<!-- [v579.0 重構] 改為載入模組化的 JS 檔案 -->
+<!-- [v625.0 核心改造] 根據您的要求，將排休資料的讀取邏輯直接整合進來 -->
+<script type="module">
+    // 引入主應用程式邏輯
+    import { main as initializeDailyReport } from './js/daily_report_main.js';
+
+    // [v625.0 新增] 假勤系統的 API URL
+    const ATTENDANCE_API_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
+
+    /**
+     * [v625.0 新增] 讀取排班/假勤資料的核心函式
+     * 採用「主控台快取 -> 本地儲存 -> 後端請求」的降級策略
+     * @param {number} year - 年份 (e.g., 2024)
+     * @param {number} month - 月份 (1-12)
+     * @returns {Promise<object>} - 包含 { schedule, holidays } 的物件
+     */
+    async function getScheduleDataForMonth(year, month) {
+        const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+        const localStorageKey = `shiftSchedule_schedule_${year}-${month}`;
+
+        // 1. 嘗試從 SPA 主控台 (父視窗) 的全域快取讀取
+        if (window.parent && window.parent.scheduleCache && window.parent.scheduleCache[monthStr]) {
+            console.log(`[排班] 從 SPA 主控台快取讀取 ${monthStr} 的資料。`);
+            return window.parent.scheduleCache[monthStr];
+        }
+
+        // 2. 嘗試從 localStorage 讀取
+        const cached = localStorage.getItem(localStorageKey);
+        if (cached) {
+            try {
+                const cacheData = JSON.parse(cached);
+                // 檢查快取是否過期 (排班快取通常設定 7 天)
+                if (cacheData.expires && cacheData.expires > Date.now()) {
+                    console.log(`[排班] 從 localStorage 快取讀取 ${monthStr} 的資料。`);
+                    // 將 localStorage 的資料格式轉換為記憶體中快取的格式
+                    return {
+                        schedule: cacheData.data.schedule,
+                        holidays: new Set(cacheData.data.holidays || [])
+                    };
+                }
+            } catch (e) {
+                console.error(`解析 localStorage 中的排班快取 (${localStorageKey}) 失敗:`, e);
+            }
+        }
+
+        // 3. 向後端請求資料
+        console.log(`[排班] 快取未命中，向後端請求 ${monthStr} 的資料...`);
+        try {
+            const url = new URL(ATTENDANCE_API_URL);
+            url.searchParams.append('page', 'attendance_api');
+            url.searchParams.append('action', 'get_latest_schedule');
+            url.searchParams.append('year', year);
+            url.searchParams.append('month', month);
+
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`伺服器錯誤: ${response.status}`);
+            const result = await response.json();
+
+            if (result && result.schedule) {
+                const scheduleData = {
+                    schedule: result.schedule,
+                    holidays: new Set(result.holidays || [])
+                };
+
+                // 將從後端取得的資料存入 localStorage 快取 (設定 7 天過期)
+                const cacheToStore = {
+                    data: {
+                        schedule: scheduleData.schedule,
+                        holidays: Array.from(scheduleData.holidays)
+                    },
+                    expires: Date.now() + 7 * 24 * 60 * 60 * 1000
+                };
+                localStorage.setItem(localStorageKey, JSON.stringify(cacheToStore));
+                console.log(`[排班] 已從後端取得 ${monthStr} 資料並存入快取。`);
+
+                return scheduleData;
+            } else {
+                // 如果後端沒有回傳有效資料，也回傳一個空物件結構，避免後續程式出錯
+                return { schedule: {}, holidays: new Set() };
+            }
+        } catch (error) {
+            console.error(`[排班] 獲取 ${monthStr} 的排班資料失敗:`, error);
+            // 即使失敗也回傳空物件，讓主流程繼續
+            return { schedule: {}, holidays: new Set() };
+        }
+    }
+
+    /**
+     * [v625.0 新增] 判斷指定員工在特定日期是否有假勤紀錄
+     * @param {string} userId - 員工的 LINE User ID
+     * @param {string} dateStr - 日期字串 (e.g., "2024-05-30")
+     * @param {object} scheduleData - 從 getScheduleDataForMonth 取得的排班資料
+     * @returns {string|null} - 回傳假別名稱 (如 "休假", "特休") 或 null
+     */
+    function getLeaveStatus(userId, dateStr, scheduleData) {
+        if (!scheduleData || !scheduleData.schedule || !scheduleData.schedule[userId]) {
+            return null;
+        }
+        const userSchedule = scheduleData.schedule[userId];
+        const shiftStatus = userSchedule[dateStr]; // e.g., "休假", "特休[08:30-17:30]"
+
+        if (shiftStatus) {
+            // 只要狀態包含 "休" (休假, 特休, 補休...)，就認為是休假
+            if (shiftStatus.includes('休')) {
+                // 提取假別基本類型，去除時間等附加資訊
+                return shiftStatus.match(/^[^\[\(]+/)[0];
+            }
+        }
+        return null;
+    }
+
+    // 將需要用到的函式掛載到 window 物件上，以便 daily_report_main.js 可以呼叫
+    window.dailyReportApp = {
+        getScheduleDataForMonth,
+        getLeaveStatus
+    };
+
+    // 執行主應用程式
+    initializeDailyReport();
+</script>
+</body>
+</html>

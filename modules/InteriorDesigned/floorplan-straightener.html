@@ -1,0 +1,891 @@
+﻿<!-- 
+  [版本號碼: v1.0.24]
+  [修改時間: 2025-11-26 13:10:00 Asia/Taipei]
+  [開發者: 添心室內裝修設計有限公司 - 技術顧問]
+  [描述: 基於 React 與 OpenCV.js 的平面圖透視校正工具。
+         優化裁切功能 (無變形裁切)：
+         1. 修改「應用裁切」邏輯：改為 Bounding Box 裁切 (無透視變形)。
+         2. 新增 generateBoundingBoxCrop 函式：計算選取範圍的最大矩形並裁切。
+         3. 保持 Light Mode、浮動放大鏡與縮小後的字體。]
+-->
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>照片轉正工具 | TianXin Plan Scanner</title>
+
+    <!-- Tailwind CSS (樣式庫) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React & ReactDOM (前端框架) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <!-- Babel (JSX 編譯器) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- 預先定義 OpenCV 回呼函數，確保在腳本載入前已存在 -->
+    <script>
+        window.cvLoaded = false;
+        window.onOpenCvReady = function () {
+            window.cvLoaded = true;
+            // 觸發自定義事件通知 React
+            window.dispatchEvent(new Event('opencv-ready'));
+            console.log("OpenCV.js is ready.");
+        };
+    </script>
+
+    <!-- OpenCV.js (電腦視覺核心庫 - 非同步載入) -->
+    <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady();"
+        type="text/javascript"></script>
+
+    <style>
+        /* 針對移動裝置優化觸控體驗 */
+        canvas {
+            touch-action: none;
+            /* 防止拖曳時觸發捲動 */
+        }
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #fafaf9;
+            /* Stone 50 - 溫暖的淺灰白 */
+            color: #292524;
+            /* Stone 800 - 深暖灰文字 */
+        }
+
+        .loader {
+            border: 4px solid #e7e5e4;
+            /* Stone 200 */
+            border-top: 4px solid #d97706;
+            /* Amber 600 */
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .cursor-wait {
+            cursor: wait;
+        }
+
+        .cursor-grabbing {
+            cursor: grabbing;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        // --- 內建圖標組件 ---
+        const Icon = ({ children, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {children}
+            </svg>
+        );
+
+        const Layers = ({ className }) => (
+            <Icon className={className}>
+                <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                <polyline points="2 17 12 22 22 17" />
+                <polyline points="2 12 12 17 22 12" />
+            </Icon>
+        );
+
+        const Upload = ({ className }) => (
+            <Icon className={className}>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+            </Icon>
+        );
+
+        const Move = ({ className }) => (
+            <Icon className={className}>
+                <polyline points="5 9 2 12 5 15" />
+                <polyline points="9 5 12 2 15 5" />
+                <polyline points="15 19 12 22 9 19" />
+                <polyline points="19 15 22 12 19 9" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <line x1="12" y1="2" x2="12" y2="22" />
+            </Icon>
+        );
+
+        const Check = ({ className }) => (
+            <Icon className={className}>
+                <polyline points="20 6 9 17 4 12" />
+            </Icon>
+        );
+
+        const Download = ({ className }) => (
+            <Icon className={className}>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+            </Icon>
+        );
+
+        const RefreshCw = ({ className }) => (
+            <Icon className={className}>
+                <path d="M23 4v6h-6" />
+                <path d="M1 20v-6h6" />
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </Icon>
+        );
+
+        const Scissors = ({ className }) => (
+            <Icon className={className}>
+                <circle cx="6" cy="6" r="3" />
+                <circle cx="6" cy="18" r="3" />
+                <line x1="20" y1="4" x2="8.12" y2="15.88" />
+                <line x1="14.47" y1="14.48" x2="20" y2="20" />
+                <line x1="8.12" y1="8.12" x2="12" y2="12" />
+            </Icon>
+        );
+
+        // --- 點位排序 ---
+        const sortPoints = (pts) => {
+            const sortedBySum = [...pts].sort((a, b) => (a.x + a.y) - (b.x + b.y));
+            const p0 = sortedBySum[0]; // 左上 (TL)
+            const p2 = sortedBySum[3]; // 右下 (BR)
+            const middle = [sortedBySum[1], sortedBySum[2]].sort((a, b) => (a.x - a.y) - (b.x - b.y));
+            const p1 = middle[0]; // 右上 (TR)
+            const p3 = middle[1]; // 左下 (BL)
+            return [p0, p1, p2, p3];
+        };
+
+        // --- 自動偵測邊角 ---
+        const findAllCornerCandidates = (img) => {
+            const candidates = [];
+            if (!window.cv || !window.cvLoaded) return candidates;
+
+            try {
+                const src = cv.imread(img);
+                let scaledSrc = new cv.Mat();
+                const MAX_PROCESSING_WIDTH = 1200;
+
+                if (src.cols > MAX_PROCESSING_WIDTH) {
+                    const scaleFactor = MAX_PROCESSING_WIDTH / src.cols;
+                    const dsize = new cv.Size(MAX_PROCESSING_WIDTH, src.rows * scaleFactor);
+                    cv.resize(src, scaledSrc, dsize, 0, 0, cv.INTER_AREA);
+                } else {
+                    src.copyTo(scaledSrc);
+                }
+
+                let gray = new cv.Mat();
+                let blur = new cv.Mat();
+                let threshold = new cv.Mat();
+                let contours = new cv.MatVector();
+                let hierarchy = new cv.Mat();
+
+                cv.cvtColor(scaledSrc, gray, cv.COLOR_RGBA2GRAY, 0);
+                cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
+                cv.adaptiveThreshold(blur, threshold, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 11, 2);
+                cv.findContours(threshold, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+                for (let i = 0; i < contours.size(); ++i) {
+                    let contour = contours.get(i);
+                    let area = cv.contourArea(contour);
+
+                    const minAreaThreshold = scaledSrc.cols * scaledSrc.rows * 0.15;
+                    if (area > minAreaThreshold) {
+                        let perimeter = cv.arcLength(contour, true);
+                        let approx = new cv.Mat();
+                        cv.approxPolyDP(contour, approx, 0.02 * perimeter, true);
+
+                        if (approx.rows === 4) {
+                            const tempPoints = [];
+                            for (let j = 0; j < 4; j++) {
+                                tempPoints.push({
+                                    x: approx.data32S[j * 2] / scaledSrc.cols,
+                                    y: approx.data32S[j * 2 + 1] / scaledSrc.rows
+                                });
+                            }
+                            candidates.push(sortPoints(tempPoints));
+                        }
+                        approx.delete();
+                    }
+                }
+
+                src.delete(); scaledSrc.delete(); gray.delete(); blur.delete(); threshold.delete(); contours.delete(); hierarchy.delete();
+
+            } catch (err) {
+                console.error("Error detecting corners:", err);
+            }
+
+            return candidates;
+        };
+
+        // 放大鏡元件 (支援樣式傳入)
+        const Magnifier = ({ image, point, zoomLevel = 2, style }) => {
+            const magnifierCanvasRef = useRef(null);
+            const MAGNIFIER_SIZE = 140;
+
+            useEffect(() => {
+                if (!magnifierCanvasRef.current || !image || !point) return;
+
+                const canvas = magnifierCanvasRef.current;
+                const ctx = canvas.getContext('2d');
+                canvas.width = MAGNIFIER_SIZE;
+                canvas.height = MAGNIFIER_SIZE;
+
+                const sourceSize = MAGNIFIER_SIZE / zoomLevel;
+                const sourceX = (point.x * image.width) - (sourceSize / 2);
+                const sourceY = (point.y * image.height) - (sourceSize / 2);
+
+                ctx.clearRect(0, 0, MAGNIFIER_SIZE, MAGNIFIER_SIZE);
+                ctx.drawImage(
+                    image,
+                    sourceX, sourceY, sourceSize, sourceSize,
+                    0, 0, MAGNIFIER_SIZE, MAGNIFIER_SIZE
+                );
+
+                ctx.strokeStyle = 'rgba(251, 191, 36, 0.8)'; // Amber 400
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(MAGNIFIER_SIZE / 2, 0);
+                ctx.lineTo(MAGNIFIER_SIZE / 2, MAGNIFIER_SIZE);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(0, MAGNIFIER_SIZE / 2);
+                ctx.lineTo(MAGNIFIER_SIZE, MAGNIFIER_SIZE / 2);
+                ctx.stroke();
+
+            }, [image, point, zoomLevel]);
+
+            return (
+                <canvas
+                    ref={magnifierCanvasRef}
+                    className="rounded-full border-4 border-white shadow-2xl bg-white"
+                    style={{ width: MAGNIFIER_SIZE, height: MAGNIFIER_SIZE, ...style }}
+                />
+            );
+        };
+
+        // 主應用程式元件
+        function App() {
+            const [isOpenCvReady, setIsOpenCvReady] = useState(window.cvLoaded);
+            const [imageSrc, setImageSrc] = useState(null);
+            const [processedImage, setProcessedImage] = useState(null);
+            const [points, setPoints] = useState([]);
+            const [activePointIndex, setActivePointIndex] = useState(null);
+            const [dragOffset, setDragOffset] = useState({ dx: 0, dy: 0 });
+            const [isProcessing, setIsProcessing] = useState(false);
+            const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+            const [cornerCandidates, setCornerCandidates] = useState([]);
+            const [candidateIndex, setCandidateIndex] = useState(-1);
+            const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
+
+            const canvasRef = useRef(null);
+            const imageRef = useRef(null);
+            const containerRef = useRef(null);
+
+            useEffect(() => {
+                if (window.cvLoaded) {
+                    setIsOpenCvReady(true);
+                }
+                const handleCvReady = () => setIsOpenCvReady(true);
+                window.addEventListener('opencv-ready', handleCvReady);
+                return () => window.removeEventListener('opencv-ready', handleCvReady);
+            }, []);
+
+            const handleImageUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        setImageSrc(event.target.result);
+                        setProcessedImage(null);
+                        const initialPoints = [{ x: 0.1, y: 0.1 }, { x: 0.9, y: 0.1 }, { x: 0.9, y: 0.9 }, { x: 0.1, y: 0.9 }];
+                        setPoints(initialPoints);
+
+                        const candidates = findAllCornerCandidates(img);
+                        setCornerCandidates(candidates);
+                        setCandidateIndex(-1);
+                    };
+                    img.src = event.target.result;
+                    imageRef.current = img;
+                };
+                reader.readAsDataURL(file);
+            };
+
+            const drawGrid = (ctx, points, segments = 4) => {
+                ctx.save();
+                ctx.strokeStyle = 'rgba(251, 191, 36, 0.8)'; // Amber 400
+                ctx.lineWidth = 2;
+                ctx.setLineDash([10, 8]);
+                for (let i = 1; i < segments; i++) {
+                    const t = i / segments;
+                    const pLeft = { x: points[0].x + (points[3].x - points[0].x) * t, y: points[0].y + (points[3].y - points[0].y) * t };
+                    const pRight = { x: points[1].x + (points[2].x - points[1].x) * t, y: points[1].y + (points[2].y - points[1].y) * t };
+                    ctx.beginPath(); ctx.moveTo(pLeft.x, pLeft.y); ctx.lineTo(pRight.x, pRight.y); ctx.stroke();
+                }
+                for (let i = 1; i < segments; i++) {
+                    const t = i / segments;
+                    const pTop = { x: points[0].x + (points[1].x - points[0].x) * t, y: points[0].y + (points[1].y - points[0].y) * t };
+                    const pBottom = { x: points[3].x + (points[2].x - points[3].x) * t, y: points[3].y + (points[2].y - points[3].y) * t };
+                    ctx.beginPath(); ctx.moveTo(pTop.x, pTop.y); ctx.lineTo(pBottom.x, pBottom.y); ctx.stroke();
+                }
+                ctx.restore();
+            };
+
+            const drawCanvas = useCallback(() => {
+                const canvas = canvasRef.current;
+                const img = imageRef.current;
+                if (!canvas || !img || !imageSrc) return;
+                const ctx = canvas.getContext('2d');
+                const container = containerRef.current;
+                const containerWidth = container.clientWidth || 800;
+                const ratio = img.height / img.width;
+                const targetWidth = containerWidth * 0.95;
+                const displayWidth = Math.min(img.width, targetWidth);
+                const displayHeight = displayWidth * ratio;
+                if (displayWidth === 0 || displayHeight === 0) return;
+
+                if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+                    canvas.width = displayWidth;
+                    canvas.height = displayHeight;
+                    setCanvasSize({ width: displayWidth, height: displayHeight });
+                }
+
+                ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                ctx.fillRect(0, 0, displayWidth, displayHeight);
+                const currentPoints = points.map(p => ({ x: p.x * displayWidth, y: p.y * displayHeight }));
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(currentPoints[0].x, currentPoints[0].y);
+                ctx.lineTo(currentPoints[1].x, currentPoints[1].y);
+                ctx.lineTo(currentPoints[2].x, currentPoints[2].y);
+                ctx.lineTo(currentPoints[3].x, currentPoints[3].y);
+                ctx.closePath();
+                ctx.clip();
+                ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
+                drawGrid(ctx, currentPoints, 8);
+                ctx.restore();
+                ctx.beginPath();
+                ctx.strokeStyle = '#d97706'; // Amber 600
+                ctx.lineWidth = 3;
+                ctx.setLineDash([]);
+                ctx.moveTo(currentPoints[0].x, currentPoints[0].y);
+                currentPoints.forEach((p, i) => { if (i > 0) ctx.lineTo(p.x, p.y); });
+                ctx.lineTo(currentPoints[0].x, currentPoints[0].y);
+                ctx.stroke();
+                currentPoints.forEach((p, i) => {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 9, 0, 2 * Math.PI);
+                    ctx.fillStyle = activePointIndex === i ? '#fbbf24' : '#f59e0b'; // Amber 400 / 500
+                    ctx.fill();
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 2.5;
+                    ctx.stroke();
+                    ctx.fillStyle = '#fff';
+                    ctx.font = 'bold 11px Arial';
+                    ctx.fillText(i + 1, p.x - 3.5, p.y + 4);
+                });
+            }, [imageSrc, points, activePointIndex]);
+
+            useEffect(() => {
+                drawCanvas();
+                window.addEventListener('resize', drawCanvas);
+                return () => window.removeEventListener('resize', drawCanvas);
+            }, [drawCanvas]);
+
+            const getPointerPos = (e) => {
+                const canvas = canvasRef.current;
+                if (!canvas) return null;
+                const rect = canvas.getBoundingClientRect();
+                const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
+                return { x: clientX - rect.left, y: clientY - rect.top };
+            };
+
+            const handlePointerTracker = (e) => {
+                const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
+                setCursorPos({ x: clientX, y: clientY });
+            };
+
+            const handlePointerUp = useCallback(() => {
+                setActivePointIndex(null);
+                setDragOffset({ dx: 0, dy: 0 });
+            }, []);
+
+            const handlePointerMove = useCallback((e) => {
+                if (activePointIndex === null) return;
+                if (!canvasRef.current || canvasSize.width === 0 || canvasSize.height === 0) return;
+                e.preventDefault();
+                const pos = getPointerPos(e);
+                const width = canvasSize.width;
+                const height = canvasSize.height;
+                const intendedPointX = pos.x - dragOffset.dx;
+                const intendedPointY = pos.y - dragOffset.dy;
+                const newX = Math.max(0, Math.min(intendedPointX / width, 1));
+                const newY = Math.max(0, Math.min(intendedPointY / height, 1));
+                if (isNaN(newX) || isNaN(newY)) return;
+                setPoints(prevPoints => {
+                    const newPoints = [...prevPoints];
+                    newPoints[activePointIndex] = { x: newX, y: newY };
+                    return newPoints;
+                });
+            }, [activePointIndex, canvasSize.width, canvasSize.height, dragOffset]);
+
+            const handlePointerDown = (e) => {
+                if (!canvasRef.current) return;
+                const pos = getPointerPos(e);
+                const width = canvasSize.width;
+                const height = canvasSize.height;
+                const threshold = 30;
+                const index = points.findIndex(p => {
+                    const px = p.x * width;
+                    const py = p.y * height;
+                    const dist = Math.sqrt(Math.pow(px - pos.x, 2) + Math.pow(py - pos.y, 2));
+                    return dist < threshold;
+                });
+                if (index !== -1) {
+                    setActivePointIndex(index);
+                    const currentPointDisplay = { x: points[index].x * width, y: points[index].y * height };
+                    setDragOffset({ dx: pos.x - currentPointDisplay.x, dy: pos.y - currentPointDisplay.y });
+
+                    const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
+                    setCursorPos({ x: clientX, y: clientY });
+                }
+            };
+
+            useEffect(() => {
+                window.addEventListener('mousemove', handlePointerMove);
+                window.addEventListener('mousemove', handlePointerTracker);
+                window.addEventListener('mouseup', handlePointerUp, { passive: true });
+                window.addEventListener('touchmove', handlePointerMove, { passive: false });
+                window.addEventListener('touchmove', handlePointerTracker);
+                window.addEventListener('touchend', handlePointerUp, { passive: true });
+                return () => {
+                    window.removeEventListener('mousemove', handlePointerMove);
+                    window.removeEventListener('mouseup', handlePointerUp, { passive: true });
+                    window.removeEventListener('touchmove', handlePointerMove);
+                    window.removeEventListener('touchend', handlePointerUp, { passive: true });
+                };
+            }, [handlePointerMove, handlePointerUp]);
+
+            const handleAutoDetect = () => {
+                if (cornerCandidates.length === 0) {
+                    setPoints([{ x: 0.1, y: 0.1 }, { x: 0.9, y: 0.1 }, { x: 0.9, y: 0.9 }, { x: 0.1, y: 0.9 }]);
+                    setCandidateIndex(-1);
+                    return;
+                }
+                const nextIndex = (candidateIndex + 1) % cornerCandidates.length;
+                setPoints(cornerCandidates[nextIndex]);
+                setCandidateIndex(nextIndex);
+            };
+
+            const handleResetPoints = () => {
+                const defaultPoints = [{ x: 0.1, y: 0.1 }, { x: 0.9, y: 0.1 }, { x: 0.9, y: 0.9 }, { x: 0.1, y: 0.9 }];
+                setPoints(defaultPoints);
+                setCandidateIndex(-1);
+            };
+
+            // --- 核心演算法：OpenCV 透視變換 (共用邏輯) ---
+            const generateWarpedImage = () => {
+                return new Promise((resolve, reject) => {
+                    if (!isOpenCvReady || !imageRef.current) {
+                        reject("OpenCV not ready or no image");
+                        return;
+                    }
+
+                    let src = null;
+                    let dst = null;
+                    let M = null;
+                    let srcTri = null;
+                    let dstTri = null;
+
+                    try {
+                        const imgElement = imageRef.current;
+                        src = cv.imread(imgElement);
+
+                        const srcCoords = points.map(p => ({
+                            x: p.x * imgElement.width,
+                            y: p.y * imgElement.height
+                        }));
+
+                        srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+                            srcCoords[0].x, srcCoords[0].y, // TL
+                            srcCoords[1].x, srcCoords[1].y, // TR
+                            srcCoords[2].x, srcCoords[2].y, // BR
+                            srcCoords[3].x, srcCoords[3].y  // BL
+                        ]);
+
+                        const widthTop = Math.hypot(srcCoords[1].x - srcCoords[0].x, srcCoords[1].y - srcCoords[0].y);
+                        const widthBottom = Math.hypot(srcCoords[2].x - srcCoords[3].x, srcCoords[2].y - srcCoords[3].y);
+                        const heightLeft = Math.hypot(srcCoords[3].x - srcCoords[0].x, srcCoords[3].y - srcCoords[0].y);
+                        const heightRight = Math.hypot(srcCoords[2].x - srcCoords[1].x, srcCoords[2].y - srcCoords[1].y);
+
+                        const W_out = Math.max(widthTop, widthBottom);
+                        const H_out = Math.max(heightLeft, heightRight);
+
+                        dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+                            0, 0,
+                            W_out, 0,
+                            W_out, H_out,
+                            0, H_out
+                        ]);
+
+                        M = cv.getPerspectiveTransform(srcTri, dstTri);
+
+                        dst = new cv.Mat();
+                        let dsize = new cv.Size(W_out, H_out);
+                        cv.warpPerspective(src, dst, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar(255, 255, 255, 255));
+
+                        const outputCanvas = document.createElement('canvas');
+                        cv.imshow(outputCanvas, dst);
+                        resolve(outputCanvas.toDataURL('image/png'));
+
+                    } catch (err) {
+                        console.error("OpenCV Processing Error:", err);
+                        reject(err);
+                    } finally {
+                        if (src) src.delete();
+                        if (dst) dst.delete();
+                        if (srcTri) srcTri.delete();
+                        if (dstTri) dstTri.delete();
+                        if (M) M.delete();
+                    }
+                });
+            };
+
+            // [核心新增] 無變形裁切 (Bounding Box Crop)
+            const generateBoundingBoxCrop = () => {
+                return new Promise((resolve, reject) => {
+                    if (!imageRef.current) {
+                        reject("No image loaded");
+                        return;
+                    }
+
+                    try {
+                        const img = imageRef.current;
+                        const width = img.width;
+                        const height = img.height;
+
+                        // 1. 計算 Bounding Box
+                        const xs = points.map(p => p.x * width);
+                        const ys = points.map(p => p.y * height);
+                        const minX = Math.max(0, Math.min(...xs));
+                        const maxX = Math.min(width, Math.max(...xs));
+                        const minY = Math.max(0, Math.min(...ys));
+                        const maxY = Math.min(height, Math.max(...ys));
+
+                        const cropWidth = maxX - minX;
+                        const cropHeight = maxY - minY;
+
+                        if (cropWidth <= 0 || cropHeight <= 0) {
+                            reject("Invalid crop dimensions");
+                            return;
+                        }
+
+                        // 2. 建立新 Canvas 並裁切
+                        const canvas = document.createElement('canvas');
+                        canvas.width = cropWidth;
+                        canvas.height = cropHeight;
+                        const ctx = canvas.getContext('2d');
+
+                        // 3. 繪製裁切區域
+                        ctx.drawImage(
+                            img,
+                            minX, minY, cropWidth, cropHeight, // Source rect
+                            0, 0, cropWidth, cropHeight        // Dest rect
+                        );
+
+                        resolve(canvas.toDataURL('image/png'));
+
+                    } catch (err) {
+                        console.error("Bounding Box Crop Error:", err);
+                        reject(err);
+                    }
+                });
+            };
+
+            const processImage = async () => {
+                setIsProcessing(true);
+                setTimeout(async () => {
+                    try {
+                        const dataUrl = await generateWarpedImage();
+                        setProcessedImage(dataUrl);
+                    } catch (err) {
+                        console.error("處理失敗", err);
+                    } finally {
+                        setIsProcessing(false);
+                    }
+                }, 100);
+            };
+
+            // [核心修改] 裁切並繼續編輯 (改為無變形裁切)
+            const handleCropAndContinue = async () => {
+                setIsProcessing(true);
+                setTimeout(async () => {
+                    try {
+                        // 改用 generateBoundingBoxCrop
+                        const dataUrl = await generateBoundingBoxCrop();
+
+                        // 建立新的 Image 物件以更新 imageRef
+                        const newImg = new Image();
+                        newImg.onload = () => {
+                            imageRef.current = newImg;
+                            setImageSrc(dataUrl);
+                            setProcessedImage(null);
+                            // 重置點位到角落，稍微內縮一點以免貼邊
+                            setPoints([{ x: 0.05, y: 0.05 }, { x: 0.95, y: 0.05 }, { x: 0.95, y: 0.95 }, { x: 0.05, y: 0.95 }]);
+                            setCornerCandidates([]); // 清空舊的候選框
+                            setCandidateIndex(-1);
+                            setIsProcessing(false);
+                        };
+                        newImg.src = dataUrl;
+
+                    } catch (err) {
+                        console.error("裁切失敗", err);
+                        setIsProcessing(false);
+                    }
+                }, 100);
+            };
+
+            const reset = () => {
+                setImageSrc(null);
+                setProcessedImage(null);
+            };
+
+            const downloadImage = () => {
+                if (!processedImage) return;
+                const link = document.createElement('a');
+                link.download = `添心設計_圖面校正_${new Date().getTime()}.png`;
+                link.href = processedImage;
+                link.click();
+            };
+
+            // --- 介面渲染 ---
+            return (
+                <div className="min-h-screen bg-stone-50 text-stone-800 flex flex-col items-center py-8 px-4 font-sans">
+                    <header className="mb-6 text-center max-w-2xl w-full">
+                        <h1 className="text-2xl font-bold text-stone-800 mb-2 flex items-center justify-center gap-2 tracking-wide">
+                            <Layers className="w-7 h-7 text-amber-500" />
+                            添心智能圖面校正儀 - 照片轉正工具
+                        </h1>
+                    </header>
+
+                    <main className="w-full max-w-[95%] bg-white rounded-3xl shadow-xl overflow-hidden border border-stone-200">
+                        {!imageSrc ? (
+                            <div className="p-16 flex flex-col items-center justify-center text-center border-2 border-dashed border-stone-300 m-6 rounded-2xl hover:border-amber-400 hover:bg-stone-50 transition-all cursor-pointer relative group">
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleImageUpload}
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                    disabled={!isOpenCvReady}
+                                />
+                                <div className="p-5 bg-stone-100 rounded-full mb-4 group-hover:scale-110 transition-transform shadow-sm">
+                                    <Upload className="w-10 h-10 text-amber-500" />
+                                </div>
+                                <h3 className="text-xl font-semibold text-stone-700 mb-2">上傳平面圖照片</h3>
+                                <p className="text-stone-500 max-w-md">
+                                    支援 JPG, PNG 格式。
+                                    {!isOpenCvReady && <span className="block mt-2 text-amber-500 text-sm font-medium">請稍候，引擎載入中...</span>}
+                                </p>
+                            </div>
+                        ) : !processedImage ? (
+                            <div className="flex flex-col lg:flex-row h-full">
+                                <div className="flex-1 p-6 bg-stone-100 relative flex items-center justify-center overflow-hidden min-h-[500px]" ref={containerRef}>
+                                    <canvas
+                                        ref={canvasRef}
+                                        onMouseDown={handlePointerDown}
+                                        onTouchStart={handlePointerDown}
+                                        className={`cursor - crosshair shadow - xl max - w - full rounded - xl border border - stone - 200 bg - white ${activePointIndex !== null ? 'cursor-grabbing' : ''} `}
+                                        style={{ touchAction: 'none' }}
+                                    />
+                                    <div className="absolute top-6 left-6 bg-white/90 backdrop-blur-md px-4 py-2 rounded-full border border-stone-200 pointer-events-none shadow-md">
+                                        <p className="text-sm text-stone-600 flex items-center font-medium">
+                                            <Move className="w-4 h-4 mr-2 text-amber-500" />
+                                            請拖曳 4 個黃點至平面圖角落
+                                        </p>
+                                    </div>
+
+                                    {activePointIndex !== null && (
+                                        <div
+                                            style={{
+                                                position: 'fixed',
+                                                left: cursorPos.x,
+                                                top: cursorPos.y,
+                                                transform: 'translate(-50%, -130%)',
+                                                pointerEvents: 'none',
+                                                zIndex: 9999
+                                            }}
+                                        >
+                                            <Magnifier
+                                                image={imageRef.current}
+                                                point={points[activePointIndex]}
+                                                zoomLevel={2}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="w-full lg:w-72 bg-white border-l border-stone-200 p-6 flex flex-col gap-5 shadow-lg z-10">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <h3 className="text-lg font-bold text-stone-800">操作面板</h3>
+                                        <div className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border font-medium ${isOpenCvReady ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-amber-50 border-amber-200 text-amber-600'}`} title={isOpenCvReady ? "引擎已就緒" : "載入中..."}>
+                                            <div className={`w-1.5 h-1.5 rounded-full ${isOpenCvReady ? 'bg-emerald-500' : 'bg-amber-500 animate-spin'}`}></div>
+                                            {isOpenCvReady ? "CV 就緒" : "載入中"}
+                                        </div>
+                                    </div>
+
+                                    {/* [修改] 縮小操作步驟字體 (text-xs) */}
+                                    <div className="h-[180px] flex flex-col justify-center">
+                                        <div className="text-xs text-stone-500 bg-stone-50 p-4 rounded-2xl h-full overflow-y-auto border border-stone-100 leading-relaxed">
+                                            <p className="mb-2 font-bold text-stone-700">操作步驟：</p>
+                                            <ol className="list-decimal list-inside space-y-1.5 marker:text-amber-500">
+                                                <li>點擊「自動偵測」尋找圖框。</li>
+                                                <li>可<span className="text-amber-600 font-medium">多次點擊</span>切換候選框。</li>
+                                                <li>拖曳黃點微調角落位置。</li>
+                                                <li>點擊「應用裁切」重設底圖。</li>
+                                                <li>點擊「執行轉正」完成校正。</li>
+                                            </ol>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button
+                                            onClick={handleAutoDetect}
+                                            className="w-full py-2.5 px-3 rounded-xl text-sm font-medium text-stone-700 bg-white hover:bg-stone-50 border border-stone-300 hover:border-amber-400 transition-all shadow-sm"
+                                        >
+                                            自動偵測
+                                        </button>
+                                        <button
+                                            onClick={handleResetPoints}
+                                            className="w-full py-2.5 px-3 rounded-xl text-sm font-medium text-stone-500 hover:text-stone-800 hover:bg-stone-100 transition-colors"
+                                        >
+                                            還原選框
+                                        </button>
+                                    </div>
+
+                                    {/* [核心新增] 應用裁切按鈕 */}
+                                    <button
+                                        onClick={handleCropAndContinue}
+                                        disabled={isProcessing}
+                                        className="w-full py-2.5 px-4 rounded-xl font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 border border-stone-200 transition-all flex items-center justify-center"
+                                    >
+                                        <Scissors className="w-4 h-4 mr-2" />
+                                        應用裁切 (無變形)
+                                    </button>
+
+                                    <button
+                                        onClick={processImage}
+                                        disabled={isProcessing}
+                                        className={`w-full py-4 px-6 rounded-2xl font-bold text-white shadow-lg flex items-center justify-center transition-all transform hover:scale-[1.02] active:scale-[0.98]
+                                            ${isProcessing
+                                                ? 'bg-stone-400 cursor-wait opacity-70'
+                                                : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 shadow-orange-200'
+                                            } `}
+                                    >
+                                        {isProcessing ? (
+                                            <>
+                                                <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
+                                                處理中...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Check className="w-5 h-5 mr-2" />
+                                                執行轉正
+                                            </>
+                                        )}
+                                    </button>
+
+                                    <a
+                                        href="https://line.me/R/ti/p/@uis9604v"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="w-full py-3 px-4 rounded-xl font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border border-emerald-200 hover:border-emerald-300 transition-all flex items-center justify-center"
+                                    >
+                                        聯繫添心設計
+                                    </a>
+
+                                    <button
+                                        onClick={reset}
+                                        className="w-full py-2.5 px-4 rounded-xl font-medium text-stone-400 hover:text-stone-600 hover:bg-stone-50 border border-transparent hover:border-stone-200 transition-all"
+                                    >
+                                        重新上傳
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col h-full">
+                                <div className="flex-1 bg-stone-100 p-8 overflow-auto flex items-center justify-center">
+                                    <div className="relative group">
+                                        <img
+                                            src={processedImage}
+                                            alt="Processed Plan"
+                                            className="max-w-full shadow-2xl border border-white rounded-lg"
+                                        />
+                                        <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-all pointer-events-none rounded-lg"></div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-6 border-t border-stone-200 flex flex-wrap items-center justify-between gap-4">
+                                    <div className="flex items-center gap-2">
+                                        <Check className="w-5 h-5 text-emerald-500" />
+                                        <span className="text-stone-700 font-medium tracking-wide">處理完成！已完成透視校正</span>
+                                    </div>
+
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={() => setProcessedImage(null)}
+                                            className="px-5 py-2.5 rounded-xl font-medium text-stone-500 hover:bg-stone-50 hover:text-stone-800 transition-all border border-transparent hover:border-stone-200"
+                                        >
+                                            <div className="flex items-center">
+                                                <RefreshCw className="w-4 h-4 mr-2" />
+                                                重新調整
+                                            </div>
+                                        </button>
+                                        <button
+                                            onClick={downloadImage}
+                                            className="px-6 py-2.5 rounded-xl font-bold text-white bg-emerald-500 hover:bg-emerald-400 shadow-lg hover:shadow-emerald-200 transition-all"
+                                        >
+                                            <div className="flex items-center">
+                                                <Download className="w-4 h-4 mr-2" />
+                                                下載圖檔
+                                            </div>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    <footer className="mt-8 text-stone-400 text-xs tracking-wider">
+                        &copy; 2025 添心室內裝修設計有限公司 | 技術支援
+                    </footer>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>

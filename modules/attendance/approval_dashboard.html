@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添心設計 | 假勤審核儀表板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- [v516.0 修正] 更新共用模組 utils.js 的路徑 -->
+    <script type="module" src="../../shared/js/utils.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .request-card { transition: opacity 0.5s ease-out, transform 0.5s ease-out; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4 max-w-4xl">
+        <div id="loading-screen" class="text-center py-20">
+            <div class="spinner w-10 h-10 border-4 border-gray-200 rounded-full mx-auto"></div>
+            <p class="mt-4 text-gray-600">正在載入待審核項目...</p>
+        </div>
+
+        <div id="main-content" class="hidden">
+            <header class="text-center my-6">
+                <h1 class="text-3xl font-bold text-gray-800">假勤審核儀表板</h1>
+                <p id="welcome-message" class="text-gray-500 mt-2"></p>
+            </header>
+
+            <div id="requests-container" class="space-y-4">
+                <!-- Request cards will be inserted here -->
+            </div>
+            <p id="no-requests-message" class="text-center text-gray-500 py-12 hidden">太棒了！目前沒有任何待審核的項目。</p>
+        </div>
+    </div>
+
+<!-- 【v31.0 核心改造】將腳本改為 module，並引入 showGlobalNotification -->
+<script type="module">
+    import { showGlobalNotification } from '../../shared/js/utils.js';
+
+    const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
+    let userProfile = null;
+
+    async function main() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+
+        if (isLocalTest) {
+            userProfile = {
+                userId: urlParams.get('uid') || 'U_manager_test_user',
+                displayName: '測試管理者'
+            };
+            showMainContent();
+        } else {
+            // 正式環境的 LIFF 認證邏輯 (此處省略，假設已從 hub.html 傳入 uid)
+            const uid = urlParams.get('uid');
+            const name = urlParams.get('name');
+            if (uid && name) {
+                userProfile = { userId: uid, displayName: name };
+                showMainContent();
+            } else {
+                document.getElementById('loading-screen').innerHTML = '<p class="text-red-500 font-semibold">錯誤：缺少使用者認證資訊。</p>';
+            }
+        }
+    }
+
+    function showMainContent() {
+        document.getElementById('loading-screen').style.display = 'none';
+        document.getElementById('main-content').classList.remove('hidden');
+        document.getElementById('welcome-message').textContent = `你好，${userProfile.displayName}，以下是待您處理的項目：`;
+        fetchPendingRequests();
+    }
+
+    async function fetchPendingRequests() {
+        try {
+            const url = new URL(API_BASE_URL);
+            url.searchParams.append('page', 'attendance_api');
+            url.searchParams.append('action', 'get_pending_requests'); // 呼叫新的 API
+            url.searchParams.append('userId', userProfile.userId); // 傳入管理者 ID 以供未來權限檢查
+
+            const response = await fetch(url);
+            const result = await response.json();
+            // 【v39.0 核心新增】根據您的要求，將後端回傳的待審核項目顯示在 Console 中，方便偵錯。
+            console.log('後端回傳的待審核項目:', result);
+
+            if (result.success && result.data.length > 0) {
+                const container = document.getElementById('requests-container');
+                container.innerHTML = '';
+                // 【v31.0 新增】更新 Hub 頁面的標籤
+                const pendingCount = result.data.length;
+                if (window.opener && window.opener.updateApprovalBadge) {
+                    window.opener.updateApprovalBadge(pendingCount);
+                }
+
+                result.data.forEach(req => {
+                    container.appendChild(createRequestCard(req));
+                });
+            } else {
+                document.getElementById('no-requests-message').classList.remove('hidden');
+            }
+        } catch (error) {
+            document.getElementById('loading-screen').innerHTML = `<p class="text-red-500 font-semibold">載入失敗: ${error.message}</p>`;
+        }
+    }
+
+    function createRequestCard(req) {
+        const card = document.createElement('div');
+        card.id = `req-${req.timestamp}`;
+        card.className = 'request-card bg-white p-5 rounded-lg shadow-md border-l-4';
+        
+        const statusColors = { '待審核': 'border-amber-400', '已報備': 'border-blue-400' };
+        card.classList.add(statusColors[req.status] || 'border-gray-400');
+
+        const formatDateTime = (dtStr) => new Date(dtStr).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+        card.innerHTML = `
+            <div class="flex justify-between items-start">
+                <div>
+                    <h3 class="text-lg font-bold text-gray-800">${req.userName} - <span class="text-indigo-600">${req.leaveType}</span></h3>
+                    <p class="text-sm text-gray-500">${req.recordType}</p>
+                </div>
+                <span class="text-xs font-semibold px-2 py-1 rounded-full ${req.status === '待審核' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}">${req.status}</span>
+            </div>
+            <div class="mt-4 space-y-2 text-sm text-gray-700">
+                <p><strong>時間：</strong> ${formatDateTime(req.startTime)} 至 ${formatDateTime(req.endTime)}</p>
+                <p><strong>事由：</strong> ${req.reason || '(未填寫)'}</p>
+            </div>
+            <!-- 【v36.0 新增】駁回理由輸入區塊 (預設隱藏) -->
+            <div id="reject-reason-wrapper-${req.timestamp}" class="hidden mt-4 space-y-2">
+                <label for="reject-reason-${req.timestamp}" class="block text-sm font-medium text-gray-700">駁回理由 (可選填)</label>
+                <input type="text" id="reject-reason-${req.timestamp}" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="請輸入駁回的理由...">
+                <button data-decision="confirm-reject" data-record-id="${req.timestamp}" class="w-full px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-md hover:bg-red-700">確認駁回</button>
+            </div>
+            <div class="mt-4 flex justify-end gap-3">
+                <button data-decision="rejected" data-record-id="${req.timestamp}" class="px-4 py-2 text-sm font-bold text-white bg-red-500 rounded-md hover:bg-red-600">駁回</button>
+                <button data-decision="approved" data-record-id="${req.timestamp}" class="px-4 py-2 text-sm font-bold text-white bg-green-500 rounded-md hover:bg-green-600">批准</button>
+            </div>
+        `;
+
+        return card;
+    }
+
+    async function handleApproval(event) {
+        const button = event.target.closest('button[data-decision]');
+        if (!button) return;
+
+        const { decision, recordId } = button.dataset;
+
+        // 【v36.0 核心改造】處理駁回按鈕的 UI 互動
+        if (decision === 'rejected') {
+            const wrapper = document.getElementById(`reject-reason-wrapper-${recordId}`);
+            if (wrapper) {
+                wrapper.classList.toggle('hidden'); // 切換顯示/隱藏輸入框
+            }
+            return; // 中斷後續流程
+        }
+
+        button.disabled = true;
+        button.textContent = '處理中...';
+
+        // 【v36.0 核心改造】處理批准與確認駁回的邏輯
+        let reason = '';
+        let finalDecision = decision;
+
+        if (decision === 'confirm-reject') {
+            finalDecision = 'rejected'; // 將動作轉換為後端可識別的 'rejected'
+            const reasonInput = document.getElementById(`reject-reason-${recordId}`);
+            reason = reasonInput ? reasonInput.value : '';
+        }
+
+        try {
+            // 【v43.0 核心改造】為了解決 CORS 問題，且不修改後端，改用 no-cors 模式發送 GET 請求。
+            // 這是一種「發射後不理」的策略，前端無法讀取後端的回應內容，但請求會成功送達。
+            const url = new URL(API_BASE_URL);
+            url.searchParams.append('page', 'attendance_api');
+            url.searchParams.append('action', 'handle_approval');
+            url.searchParams.append('decision', finalDecision);
+            url.searchParams.append('recordId', recordId);
+            url.searchParams.append('approverName', userProfile.displayName);
+            if (reason) url.searchParams.append('reason', reason);
+
+            const response = await fetch(url, { mode: 'no-cors' });
+            console.log('已使用 no-cors 模式發送審核請求。注意：前端無法讀取後端回應。');
+
+            // 在 no-cors 模式下，我們無法得知 response.ok 的真實狀態，
+            // 但只要 fetch 沒有拋出網路錯誤，我們就樂觀地假設後端已成功處理。
+            if (true) { // 樂觀更新 UI
+                const card = document.getElementById(`req-${recordId}`);
+                if (card) {
+                    card.style.opacity = '0';
+                    card.style.transform = 'translateX(50px)';
+                    // 更新 Hub 頁面的計數
+                    const currentCount = parseInt(document.getElementById('approval-badge')?.textContent || '1', 10);
+                    if (window.opener && window.opener.updateApprovalBadge) {
+                        window.opener.updateApprovalBadge(Math.max(0, currentCount - 1));
+                    }
+                    setTimeout(() => card.remove(), 500);
+                }
+            } else {
+                throw new Error(`伺服器回應錯誤: ${response.status}`);
+            }
+        } catch (error) {
+            alert(`操作失敗: ${error.message}`);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        main();
+        document.getElementById('requests-container').addEventListener('click', handleApproval);
+    });
+</script>    
+</body>
+</html>

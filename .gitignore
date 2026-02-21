@@ -1,0 +1,11 @@
+# Exclude large binaries and deprecated files to stay within GitHub limits
+_DEPRECATED_/
+_待開發備份_/
+*.exe
+*.zip
+*.blockmap
+node_modules/
+dist/
+release/
+.cache/
+*.log

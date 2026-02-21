@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>添心設計 | 回報系統</title>
+
+  <!-- UI / SDK -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.1/dist/browser-image-compression.js"></script>
+
+  <script>
+    // ⚠️請確認為最新設定
+    const LIFF_ID = '2007974938-gOrjlzna';
+    const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
+  </script>
+  
+  <!-- [v467.0 新增] 自動版本號產生器 -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const now = new Date();
+      const year = String(now.getFullYear()).slice(-2);
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      document.title += ` v${year}.${month}.${day}`;
+    });
+  </script>
+
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .file-input-label { display: inline-block; background-color: #3b82f6; color: white; border: 1px solid #3b82f6; padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; transition: background-color 0.2s; font-weight: 600; }
+    .file-input-label:hover { background-color: #2563eb; }
+    .file-input-label.selected { background-color: #6b7280; border-color: #6b7280; cursor: default; }
+    /* 【您的要求】輔助按鈕樣式 */
+    .helper-btn {
+      background-color: #f3f4f6; color: #4b5563; border: 1px solid #d1d5db;
+      padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;
+      transition: background-color 0.2s;
+    }
+    .helper-btn:hover { background-color: #e5e7eb; }
+  </style>
+</head>
+
+<body class="bg-gray-100">
+  <div class="container mx-auto p-4 max-w-lg">
+    <div class="bg-white rounded-lg shadow-md p-6">
+      <div class="text-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">添心設計｜回報系統</h1>
+      </div>
+
+      <!-- 表單 -->
+      <form id="report-form" novalidate>
+        <!-- 案號：限制純數字 + 範例 + 非案場=9999 -->
+        <div class="mb-4">
+          <label for="projectId" class="block text-gray-700 font-semibold mb-2">
+            案號 <span class="text-red-500">*</span>
+          </label>
+          <input
+            type="tel"
+            id="projectId"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md"
+            inputmode="numeric"
+            pattern="[0-9]+"
+            placeholder="例如：715；非案場請填 9999"
+            required
+          >
+          <p class="text-sm text-gray-500 mt-1">
+            僅允許數字（例：<span class="font-semibold">715</span>）。若為非案場，請填 <span class="font-semibold">9999</span>。
+          </p>
+          <p id="projectIdError" class="text-sm text-red-600 mt-1 hidden"></p>
+        </div>
+
+        <div class="mb-4">
+          <label for="workType" class="block text-gray-700 font-semibold mb-2">
+            今日施工項目 <span class="text-red-500">*</span>
+          </label>
+          <select id="workType" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white" required>
+            <option value="" disabled selected>請選擇施工項目</option>
+            <option value="保護工程-進退場項目">1. 保護工程-進退場項目</option>
+            <option value="木作工程">2. 木作工程</option>
+            <option value="系統工程">3. 系統工程</option>
+            <option value="水電工程">4. 水電工程</option>
+            <option value="油漆工程">5. 油漆工程</option>
+            <option value="泥作工程">6. 泥作工程</option>
+            <option value="清潔工程">7. 清潔工程</option>
+            <option value="玻璃工程">8. 玻璃工程</option>
+            <option value="其他工程">9. 其他工程</option>
+          </select>
+        </div>
+
+        <div class="mb-4">
+          <label for="workDescription" class="block text-gray-700 font-semibold mb-2">當日施工內容說明</label>
+          <textarea id="workDescription" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-md"></textarea>
+          <!-- 【您的要求】施工內容輔助按鈕容器 -->
+          <div id="workDescriptionHelpers" class="mt-2 flex flex-wrap gap-2">
+            <!-- 按鈕將由 JS 動態產生 -->
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-gray-700 font-semibold mb-2">現場照片 (可多選)</label>
+          <div class="flex items-center">
+            <label for="sitePhotos" id="sitePhotosLabel" class="file-input-label">選擇檔案</label>
+            <span id="sitePhotosCount" class="ml-3 text-gray-600">未選取檔案</span>
+            <input type="file" id="sitePhotos" multiple accept="image/*" class="hidden" />
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label for="problemDescription" class="block text-gray-700 font-semibold mb-2">問題回報</label>
+          <textarea id="problemDescription" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-md"></textarea>
+          <!-- 【您的要求】問題回報輔助按鈕容器 -->
+          <div id="problemDescriptionHelpers" class="mt-2 flex flex-wrap gap-2">
+            <!-- 按鈕將由 JS 動態產生 -->
+          </div>
+        </div>
+
+        <div class="mb-6">
+          <label class="block text-gray-700 font-semibold mb-2">問題照片 (可多選)</label>
+          <div class="flex items-center">
+            <label for="problemPhotos" id="problemPhotosLabel" class="file-input-label">選擇檔案</label>
+            <span id="problemPhotosCount" class="ml-3 text-gray-600">未選取檔案</span>
+            <input type="file" id="problemPhotos" multiple accept="image/*" class="hidden" />
+          </div>
+        </div>
+
+        <div class="flex items-center mb-4">
+          <input id="compressImages" type="checkbox" checked class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>
+          <label for="compressImages" class="ml-2 block text-sm text-gray-900">壓縮相片以加快上傳</label>
+        </div>
+
+        <!-- [v567.0 新增] 上傳進度條 -->
+        <div id="progress-container" class="w-full bg-gray-200 rounded-full h-6 mb-4 hidden">
+            <div id="progress-bar" class="bg-blue-600 h-6 rounded-full text-center text-white text-sm leading-6 transition-all duration-500" style="width: 0%;">
+                0%
+            </div>
+        </div>
+
+        <div id="status-message" class="text-center mb-4 min-h-[24px]"></div>
+
+        <button type="submit" id="submit-button" class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-lg hover:bg-blue-700 disabled:bg-gray-400">
+          <span id="button-text">提交回報</span>
+          <div id="button-spinner" class="spinner w-6 h-6 border-4 border-white rounded-full mx-auto hidden"></div>
+        </button>
+      </form>
+
+      <!-- [v454.0 UX優化] 新增成功提交畫面 -->
+      <div id="success-screen" class="text-center hidden">
+        <svg class="mx-auto h-16 w-16 text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <h2 class="mt-4 text-2xl font-bold text-gray-800">回報已成功提交！</h2>
+        <p class="mt-2 text-gray-600">後續處理完成後您會收到 LINE 通知。<br>此視窗將在 30 秒後自動關閉。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 【v150.0 核心修正】徹底修正巢狀 script 標籤與註解語法錯誤 -->
+  <script type="module">
+    import { readFileAsBase64 } from '../../shared/js/utils.js'; // [v519.0 修正] 更新共用模組 utils.js 的路徑
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.getElementById('report-form');
+      const submitButton = document.getElementById('submit-button');
+      const buttonText = document.getElementById('button-text');
+      const buttonSpinner = document.getElementById('button-spinner');
+      const statusMessage = document.getElementById('status-message');
+      // [v567.0 新增] 進度條元素
+      const progressContainer = document.getElementById('progress-container');
+      const progressBar = document.getElementById('progress-bar');
+      // [v575.0 新增] 擬真進度條相關變數
+      let progressInterval = null;
+      let currentFakeProgress = 0;
+      let userProfile = null;
+
+      // === 初始化 ===
+      async function main() {
+        // [v425.0 架構優化] 支援混合模式 (從主控台內嵌 或 直接LIFF開啟)
+        const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+        const urlParams = new URLSearchParams(window.location.search);
+        let uid = urlParams.get('uid');
+        let name = urlParams.get('name');
+
+        // [v570.0 新增] 本地測試模式
+        if (isLocalTest && !uid) {
+            console.warn('⚡️ 本地測試模式啟用，使用預設使用者資訊。');
+            userProfile = { userId: 'Ud58333430513b7527106fa71d2e30151', displayName: '本地測試員' };
+            initializeEventListeners();
+        } else if (uid && name) {
+            // 模式一：從主控台內嵌，已取得 uid 和 name
+            console.log('⚡️ 偵測到 uid，以內嵌模式啟動...');
+            userProfile = { userId: uid, displayName: name };
+            initializeEventListeners();
+        } else {
+            // 模式二：直接開啟，需執行 LIFF 驗證
+            console.log('🔄 未偵測到 uid，以獨立 LIFF 模式啟動...');
+            try {
+                await liff.init({ liffId: LIFF_ID });
+                if (!liff.isLoggedIn()) { liff.login(); return; }
+                userProfile = await liff.getProfile();
+                initializeEventListeners();
+            } catch (error) {
+                console.error('LIFF 初始化失敗:', error);
+                updateStatus('頁面初始化失敗，請在 LINE 中開啟或重新載入。', 'error');
+                submitButton.disabled = true;
+            }
+        }
+      }
+
+      // === 綁定 UI 事件 ===
+      function initializeEventListeners() {
+        setupFileInputUI('sitePhotos', 'sitePhotosLabel', 'sitePhotosCount');
+        setupFileInputUI('problemPhotos', 'problemPhotosLabel', 'problemPhotosCount');
+
+        // 【您的要求】初始化輔助按鈕
+        initializeHelperButtons();
+
+        // 案號輸入：即時只留數字；失焦再清一次
+        const projectIdEl = document.getElementById('projectId');
+        projectIdEl.addEventListener('input', () => enforceDigits(projectIdEl));
+        projectIdEl.addEventListener('blur',  () => enforceDigits(projectIdEl));
+
+        // 【優化建議】記住並還原上次選擇的施工項目
+        const workTypeSelect = document.getElementById('workType');
+        const lastWorkType = localStorage.getItem('lastSelectedWorkType');
+        if (lastWorkType) {
+          workTypeSelect.value = lastWorkType;
+          // 【您的要求】手動觸發一次 change 事件，以確保輔助按鈕能被正確渲染
+          // 這會模擬使用者手動選擇的行為，觸發 initializeHelperButtons 中綁定的監聽器
+          workTypeSelect.dispatchEvent(new Event('change'));
+        }
+        workTypeSelect.addEventListener('change', () => localStorage.setItem('lastSelectedWorkType', workTypeSelect.value));
+
+        form.addEventListener('submit', handleFormSubmit);
+      }
+
+      // 【您的要求】輔助按鈕核心邏輯
+      function initializeHelperButtons() {
+        const workTypeSelect = document.getElementById('workType');
+        
+        const workTypePhrases = {
+          '保護工程-進退場項目': ['進場保護', '退場清潔', '電梯保護', '走道保護', '廢棄物清運', '完工保護'],
+          '木作工程': ['天花板施工', '櫃體組裝', '門片安裝', '角料下料', '隔間牆施工', '造型牆', '電視牆施工'],
+          '系統工程': ['櫃體安裝', '門片調整', '五金安裝', '收邊', '層板安裝', '檯面安裝'],
+          '水電工程': ['配管', '拉線', '燈具安裝', '開關面板', '插座面板', '弱電佈線', '給水測試', '排水測試'],
+          '油漆工程': ['批土', '研磨', '底漆', '面漆', '跳色', '噴漆', '木皮上漆'],
+          '泥作工程': ['砌磚', '打底', '粉光', '磁磚鋪貼', '防水施作', '地坪墊高', '門窗崁縫'],
+          '清潔工程': ['粗清', '細清', '垃圾清運', '裝潢後清潔'],
+          '玻璃工程': ['玻璃安裝', '鏡面安裝', '矽利康收邊', '淋浴拉門'],
+          '其他工程': ['現場丈量', '設計圖製作', '施工圖製作', '與客戶討論', '廠商洽談', '材料確認']
+        };
+
+        const problemPhrases = ['【缺料】', '【尺寸不符】', '【圖面疑問】', '【品質問題】', '【需與設計師確認】', '【需與工務確認】', '【工序衝突】', '【現場保護不足】', '【工具損壞】'];
+
+        // 渲染問題回報的通用按鈕
+        renderHelperButtons('problemDescriptionHelpers', problemPhrases, 'problemDescription');
+
+        // 根據施工項目動態渲染按鈕
+        workTypeSelect.addEventListener('change', () => {
+          const selectedType = workTypeSelect.value;
+          renderHelperButtons('workDescriptionHelpers', workTypePhrases[selectedType] || [], 'workDescription');
+        });
+
+        // 初始觸發一次
+        renderHelperButtons('workDescriptionHelpers', [], 'workDescription');
+      }
+
+      function renderHelperButtons(containerId, phrases, targetTextareaId) {
+        const container = document.getElementById(containerId);
+        const textarea = document.getElementById(targetTextareaId);
+        container.innerHTML = '';
+        if (!phrases || phrases.length === 0) return;
+
+        phrases.forEach(phrase => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'helper-btn';
+          button.textContent = phrase;
+          button.addEventListener('click', () => {
+            // 【您的要求】智慧插入：如果文字框是空的，或結尾是空格/換行，則直接插入；否則先補一個空格再插入，確保文字接續。
+            const endsWithSpaceOrNewline = textarea.value === '' || /\s$/.test(textarea.value);
+            const separator = endsWithSpaceOrNewline ? '' : ' ';
+            textarea.value += separator + phrase;
+            textarea.focus(); // 將焦點移回文字框
+          });
+          container.appendChild(button);
+        });
+      }
+
+      // === 僅允許數字：即時過濾 ===
+      function enforceDigits(el) {
+        const digits = (el.value || '').replace(/\D+/g, '');
+        if (el.value !== digits) el.value = digits;
+      }
+
+      // === 錯誤訊息顯示/隱藏 ===
+      function showProjectIdError(msg) {
+        const err = document.getElementById('projectIdError');
+        const input = document.getElementById('projectId');
+        err.textContent = msg || '案號僅能輸入數字；非案場請填 9999。';
+        err.classList.remove('hidden');
+        input.classList.add('border-red-500');
+      }
+      function hideProjectIdError() {
+        const err = document.getElementById('projectIdError');
+        const input = document.getElementById('projectId');
+        err.textContent = '';
+        err.classList.add('hidden');
+        input.classList.remove('border-red-500');
+      }
+
+      // === 取得並驗證案號（通過回傳純數字字串；失敗回傳 null） ===
+      function getValidProjectId() {
+        const input = document.getElementById('projectId');
+        enforceDigits(input);
+        const v = (input.value || '').trim();
+        if (!v || !/^\d+$/.test(v)) {
+          showProjectIdError('請輸入純數字案號；非案場請填 9999。');
+          return null;
+        }
+        hideProjectIdError();
+        return v;
+      }
+
+      // === 送出處理 ===
+      async function handleFormSubmit(event) {
+        event.preventDefault();
+        setLoadingState(true);
+        // [v567.0 新增] 重設並顯示進度條
+        updateStatus('', 'info'); // 清空舊的狀態訊息
+        progressContainer.classList.remove('hidden');
+        // [v575.0 新增] 重設擬真進度條
+        currentFakeProgress = 0;
+        if (progressInterval) clearInterval(progressInterval);
+        progressBar.style.width = '0%';
+        progressBar.textContent = '0%';
+
+        if (!userProfile) {
+          updateStatus('無法取得使用者資訊，請重新載入頁面。', 'error');
+          setLoadingState(false);
+          // [v567.0 新增] 發生錯誤時隱藏進度條
+          progressContainer.classList.add('hidden');
+          return;
+        }
+
+        // 1) 先驗證案號（純數字；非案場請填 9999）
+        const cleanProjectId = getValidProjectId();
+        if (!cleanProjectId) {
+            setLoadingState(false);
+            return; // 中止提交
+        }
+
+        const shouldCompress = document.getElementById('compressImages').checked;
+
+        const siteFiles = Array.from(document.getElementById('sitePhotos').files);
+        const problemFiles = Array.from(document.getElementById('problemPhotos').files);
+        const allPhotosInfo = [
+            ...siteFiles.map(file => ({ file, isProblem: false })),
+            ...problemFiles.map(file => ({ file, isProblem: true }))
+        ];
+
+        const workDescription = document.getElementById('workDescription').value.trim();
+        const problemDescription = document.getElementById('problemDescription').value.trim();
+        if (allPhotosInfo.length === 0 && !workDescription && !problemDescription) {
+            updateStatus('請至少填寫施工內容或上傳照片。', 'error');
+            setLoadingState(false);
+            // [v567.0 新增] 發生錯誤時隱藏進度條
+            progressContainer.classList.add('hidden');
+            return;
+        }
+
+        const batchId = `${userProfile.userId}-${Date.now()}`;
+        const SUBMIT_CHUNK_SIZE = 8;
+        const totalChunks = Math.ceil(allPhotosInfo.length / SUBMIT_CHUNK_SIZE) || 1;
+
+        const baseFormData = {
+            action: 'submitReport',
+            batchId,
+            totalChunks,
+            userId: userProfile.userId,
+            userName: userProfile.displayName,
+            projectId: cleanProjectId,
+            projectNameRaw: cleanProjectId,
+            workType: document.getElementById('workType').value,
+            workDescription: document.getElementById('workDescription').value,
+            problemDescription: document.getElementById('problemDescription').value,
+        };
+
+        for (let i = 0; i < totalChunks; i++) {
+            try {
+                const chunkStart = i * SUBMIT_CHUNK_SIZE;
+                const chunkEnd = chunkStart + SUBMIT_CHUNK_SIZE;
+                const photoChunk = allPhotosInfo.slice(chunkStart, chunkEnd);
+
+                updateStatus(`正在處理第 ${i + 1} / ${totalChunks} 批照片...`, 'info');
+                const processedPhotos = await processPhotoChunk(photoChunk, shouldCompress);
+
+                // [v575.0 新增] 為當前批次啟動擬真進度動畫
+                const chunkTargetProgress = Math.round(((i + 1) / totalChunks) * 100);
+                startFakeProgress(chunkTargetProgress);
+                const chunkFormData = { ...baseFormData, chunkIndex: i + 1, photos: processedPhotos };
+
+                updateStatus(`正在提交第 ${i + 1} / ${totalChunks} 批資料...`, 'info');
+                
+                // [v573.0 核心修正] 回歸到最可靠的 fetch + FormData 模式，以徹底解決 CORS 問題。
+                // 放棄即時進度，改回分批次更新進度。
+                // 【效能優化】改進 FormData 傳送方式，避免 "引數過大" 錯誤。
+                // 不再將所有東西 stringify 成單一 payload，而是將文字和圖片資料分開欄位。
+                // 這需要後端 GAS 的 doPost 函式做相應調整來解析。
+                const formData = new FormData();
+                formData.append('payload', JSON.stringify(chunkFormData));
+                // 1. 將非檔案的文字資料逐一附加
+                Object.keys(baseFormData).forEach(key => formData.append(key, baseFormData[key]));
+                Object.keys(chunkFormData).forEach(key => {
+                    if (key !== 'photos') formData.append(key, typeof chunkFormData[key] === 'object' ? JSON.stringify(chunkFormData[key]) : chunkFormData[key]);
+                });
+                formData.append('chunkIndex', i + 1);
+                // 2. 只將圖片陣列（Base64 字串）單獨 stringify 後附加
+                formData.append('photos', JSON.stringify(processedPhotos));
+
+                const response = await fetch(GAS_WEB_APP_URL, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    throw new Error(`第 ${i + 1} 批資料提交失敗：${result.message || '後端回報了一個未知的錯誤。'}`);
+                }
+
+                // [v575.0 修改] 批次成功後，停止動畫並將進度條精確設定到里程碑位置
+                if (progressInterval) clearInterval(progressInterval);
+                updateProgressBar(Math.min(99, chunkTargetProgress));
+
+                // [v469.2 核心修正] 在每個批次成功提交後，加入一個短暫的延遲，以避免觸發後端的 429 速率限制錯誤。
+                if (i < totalChunks - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 500)); // 延遲 500 毫秒
+                }
+            } catch (error) {
+                console.error('表單處理失敗', error);
+                console.log('Caught error in chunk loop, calling setLoadingState(false) and returning.');
+                updateStatus(`提交失敗：${error.message}`, 'error');
+                // [v575.0 新增] 出錯時停止動畫
+                if (progressInterval) clearInterval(progressInterval);
+                setLoadingState(false);
+                // [v567.0 新增] 發生錯誤時隱藏進度條
+                progressContainer.classList.add('hidden');
+                return; // 【關鍵修正】一旦出錯，立即終止整個函式
+            }
+        }
+
+        // 所有批次都成功後，才執行成功處理
+        console.log('All chunks processed successfully. Calling handleSuccess().');
+        // [v568.0 新增] 在跳轉到成功畫面之前，將進度條推到 100%
+        updateProgressBar(100);
+        handleSuccess();
+    }
+
+    // === 成功後處理 ===
+    function handleSuccess() {
+      // [v454.0 UX優化] 顯示成功畫面，取代單純的文字提示
+      console.log('handleSuccess() called. Hiding form and showing success screen.');
+      document.getElementById('report-form').style.display = 'none';
+      document.getElementById('success-screen').style.display = 'block';
+      // submitButton.textContent = '已完成'; // [v568.0] 移除此行，因為按鈕已被隱藏
+      // [v567.0 新增] 成功後隱藏進度條
+      progressContainer.classList.add('hidden');
+      submitButton.disabled = true;
+      setTimeout(() => {
+        if (liff && liff.isInClient()) {
+          liff.closeWindow();
+        }
+      }, 30000); // [v455.0] 根據使用者要求，延長關閉時間至 30 秒
+    }
+
+    // === 單批相片處理（壓縮→轉 Base64） ===
+    async function processPhotoChunk(photoInfoChunk, shouldCompress) {
+      const photoArray = [];
+      const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
+      for (const photoInfo of photoInfoChunk) {
+        let processedFile = photoInfo.file;
+        try {
+          if (shouldCompress) {
+            processedFile = await imageCompression(photoInfo.file, options);
+            }
+          // 【v144.0 核心修正】直接呼叫 import 的函式
+          const base64 = await readFileAsBase64(processedFile);
+          photoArray.push({
+            name: photoInfo.file.name,
+            type: processedFile.type,
+            data: base64,
+            isProblem: photoInfo.isProblem
+          });
+        } catch (error) { // [v456.0 核心修正] 增加明確的錯誤回報機制
+          console.error(`圖片 ${photoInfo.file.name} 處理失敗:`, error);
+          throw new Error(`處理圖片 "${photoInfo.file.name}" 時失敗，請檢查檔案是否損毀或過大。`);
+          }
+        }
+      return photoArray;
+    }
+
+    // === 載入狀態 ===
+    function setLoadingState(isLoading, message = '處理中...') {
+      submitButton.disabled = isLoading;
+      if (isLoading) {
+        buttonText.classList.add('hidden');
+        buttonSpinner.classList.remove('hidden');
+        updateStatus(message, 'info');
+      } else {
+        buttonText.classList.remove('hidden');
+        buttonSpinner.classList.add('hidden');
+        // 移除此行，避免在錯誤發生後清除錯誤訊息。
+        // 狀態訊息的清除或更新應由呼叫者明確處理。
+      }
+    }
+
+    // [v575.0 新增] 啟動擬真進度條動畫的函式
+    function startFakeProgress(targetPercentage) {
+        if (progressInterval) clearInterval(progressInterval);
+
+        progressInterval = setInterval(() => {
+            // 讓進度緩慢增加，但永遠不會超過目標的前 1%
+            if (currentFakeProgress < targetPercentage - 1) {
+                currentFakeProgress++;
+                updateProgressBar(currentFakeProgress);
+            } else {
+                clearInterval(progressInterval);
+            }
+        }, 250); // 每 250 毫秒更新一次，這個速度看起來比較舒服
+    }
+
+    // [v568.0 新增] 獨立的進度條更新函式
+    function updateProgressBar(percentage) {
+        progressBar.style.width = `${percentage}%`;
+        progressBar.textContent = `${percentage}%`;
+    }
+
+    // === 狀態顯示 ===
+    function updateStatus(message, type) {
+      statusMessage.className = 'text-center mb-4 min-h-[24px]';
+      statusMessage.textContent = message;
+
+      if (type === 'success') {
+        statusMessage.classList.add('text-green-600', 'font-semibold');
+      } else if (type === 'error') {
+        statusMessage.classList.add('bg-red-100', 'border', 'border-red-400', 'text-red-700', 'px-4', 'py-3', 'rounded-lg', 'font-bold');
+      } else {
+        statusMessage.classList.add('text-gray-600');
+      }
+    }
+
+    // === 檔案選擇 UI ===
+    function setupFileInputUI(inputId, labelId, countId) {
+      const input = document.getElementById(inputId);
+      const label = document.getElementById(labelId);
+      const count = document.getElementById(countId);
+      input.addEventListener('change', () => {
+        if (input.files.length > 0) {
+          label.classList.add('selected');
+          count.textContent = `已選擇 ${input.files.length} 張照片`;
+        } else {
+          label.classList.remove('selected');
+          count.textContent = '未選取檔案';
+        }
+      });
+    }
+
+    main();
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top">
+  <!-- 【v116.0 修正】新增 viewport meta 標籤，解決手機版頁面縮小的問題 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <!-- 【⭐️ 案場管理升級：新增樣式 ⭐️】 -->
+  <style>
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1050;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0, 0, 0, 0.4);
+    }
+
+    .modal-content {
+      background-color: #fefefe;
+      margin: 10% auto;
+      padding: 20px;
+      border: 1px solid #888;
+      width: 80%;
+      max-width: 500px;
+      border-radius: 0.3rem;
+    }
+
+    .modal-header {
+      padding-bottom: 10px;
+      border-bottom: 1px solid #e9ecef;
+    }
+
+    .modal-body {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .close {
+      color: #aaa;
+      float: right;
+      font-size: 28px;
+      font-weight: bold;
+    }
+
+    .close:hover,
+    .close:focus {
+      color: black;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    #responsiblePersonDisplay {
+      min-height: calc(1.5em + .75rem + 2px);
+      padding: .375rem .75rem;
+      background-color: #e9ecef;
+      cursor: pointer;
+      border: 1px solid #ced4da;
+      border-radius: .25rem;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h4 id="form-title" class="mb-0">新增案場資料</h4>
+      <button type="button" class="btn btn-info" id="copyInfoBtn">複製進場資訊</button>
+    </div>
+    <form id="siteForm">
+      <!-- 【⭐️ 案場管理升級：新增專案選擇器 ⭐️】 -->
+      <div class="form-group">
+        <label for="projectSelector">選擇現有案場 (可選)</label>
+        <select class="form-control" id="projectSelector">
+          <option value="">-- 建立新案場 --</option>
+          <!-- Options will be populated by JS -->
+        </select>
+      </div>
+      <hr>
+
+      <div class="form-group">
+        <label for="siteName">案場名稱 (必填)</label>
+        <input type="text" class="form-control" id="siteName" name="siteName" required
+          placeholder="#案號 案名 (例如: #725 王公館)">
+      </div>
+
+      <div class="form-group">
+        <label for="siteAddress">案場完整地址 (必填)</label>
+        <input type="text" class="form-control" id="siteAddress" name="siteAddress" required
+          placeholder="請輸入完整地址 (例如: 台南市南區中華東路一段88號)">
+      </div>
+
+      <div class="form-group">
+        <label for="projectCode">案號 (必填)</label>
+        <input type="text" class="form-control" id="projectCode" name="projectCode" required>
+      </div>
+
+      <!-- 【⭐️ 案場管理升級：改造「負責人」欄位為選擇器 ⭐️】 -->
+      <div class="form-group">
+        <label for="responsiblePersonDisplay">負責人員</label>
+        <div id="responsiblePersonDisplay" class="form-control text-muted">點擊以選擇所有負責人員,含設計師/助理</div>
+        <input type="hidden" id="responsiblePerson" name="responsiblePerson">
+      </div>
+      <hr>
+
+      <!-- 【⭐️ 案場管理升級：新增專案主控台所需欄位 ⭐️】 -->
+      <h5>專案主控台資訊</h5>
+      <div class="row">
+        <!-- [v204.0 新增] 專案分區選擇器 -->
+        <div class="col-md-12 form-group">
+          <label for="projectDivision">專案分區</label>
+          <select class="form-control" id="projectDivision" name="projectDivision">
+            <option value="台南店">台南店</option>
+            <option value="高雄店">高雄店</option>
+          </select>
+        </div>
+        <div class="col-md-4 form-group">
+          <label for="designer">設計師</label>
+          <input type="text" class="form-control" id="designer" name="designer">
+        </div>
+        <div class="col-md-4 form-group">
+          <label for="assistant">助理</label>
+          <input type="text" class="form-control" id="assistant" name="assistant">
+        </div>
+        <div class="col-md-4 form-group">
+          <label for="siteManager">工務</label>
+          <input type="text" class="form-control" id="siteManager" name="siteManager">
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-6 form-group">
+          <label for="entryMethod">入門方式</label>
+          <input type="text" class="form-control" id="entryMethod" name="entryMethod">
+        </div>
+        <div class="col-md-6 form-group">
+          <label for="parkingMethod">停車方式</label>
+          <input type="text" class="form-control" id="parkingMethod" name="parkingMethod">
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-6 form-group">
+          <label for="constructionTime">施工進場時間</label>
+          <input type="text" class="form-control" id="constructionTime" name="constructionTime">
+        </div>
+        <div class="col-md-6 form-group">
+          <label for="depositInfo">保證金事宜</label>
+          <input type="text" class="form-control" id="depositInfo" name="depositInfo">
+        </div>
+      </div>
+      <h5>備註</h5>
+      <div class="form-group">
+        <label for="noteAdminPhone">管理中心電話</label>
+        <input type="text" class="form-control" id="noteAdminPhone" name="noteAdminPhone">
+      </div>
+      <div class="form-group">
+        <label for="noteConstructionTime">施工時間</label>
+        <textarea class="form-control" id="noteConstructionTime" name="noteConstructionTime" rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label for="notePrecautions">特別注意事項</label>
+        <textarea class="form-control" id="notePrecautions" name="notePrecautions" rows="3"></textarea>
+      </div>
+      <div class="form-group">
+        <label for="noteBathroomInstructions">衛浴使用說明</label>
+        <textarea class="form-control" id="noteBathroomInstructions" name="noteBathroomInstructions"
+          rows="3"></textarea>
+      </div>
+
+      <div class="form-group">
+        <button type="submit" class="btn btn-primary" id="submitBtn">提交</button>
+      </div>
+      <div id="status" class="mt-3"></div>
+    </form>
+
+    <!-- 【⭐️ 案場管理升級：新增負責人選擇 Modal ⭐️】 -->
+    <div id="employeeModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">選擇負責人</h5>
+          <span class="close" id="closeModal">&times;</span>
+        </div>
+        <div class="modal-body" id="employeeList">
+          <!-- Employee checkboxes will be populated here -->
+        </div>
+        <div class="modal-footer mt-3">
+          <button type="button" class="btn btn-primary" id="confirmSelection">確認</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const form = document.getElementById("siteForm");
+      const submitBtn = document.getElementById("submitBtn");
+      const statusDiv = document.getElementById("status");
+      const projectSelector = document.getElementById("projectSelector");
+      const formTitle = document.getElementById("form-title");
+
+      // 【⭐️ 案場管理升級：新增 Modal 相關元素 ⭐️】
+      const employeeModal = document.getElementById('employeeModal');
+      const closeModalBtn = document.getElementById('closeModal');
+      const confirmSelectionBtn = document.getElementById('confirmSelection');
+      const responsiblePersonDisplay = document.getElementById('responsiblePersonDisplay');
+      const responsiblePersonInput = document.getElementById('responsiblePerson');
+      let allEmployees = [];
+      let allSitesData = []; // 【v119.0 新增】用於儲存所有案場的完整資料
+
+      let currentMode = 'create'; // 'create' or 'update'
+      let originalProjectCode = '';
+
+      // 【v126.0 新增】後端 API 的 URL
+      const API_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
+
+      // 1. 頁面載入時，取得所有案場列表
+      window.onload = () => {
+        // 【v110.4 偵錯強化】記錄前端的「輸入」，顯示要發送給後端的請求。
+        console.log('[NewSiteForm][Input] 準備向後端請求案場列表 (get_all_sites)...');
+
+        // 【v126.0 核心重構】改用 fetch API，並使用 Promise.all 並行請求，提升載入速度。
+        // 【v172.0 核心修正】為所有請求附上使用者資訊，以便後端日誌追蹤。
+        // 由於此頁面沒有 LIFF 認證，我們假設操作者是從其他地方跳轉過來的，
+        // 因此在 URL 中應該會有 uid 和 name 參數。
+        const urlParams = new URLSearchParams(window.location.search);
+        const uid = urlParams.get('uid') || 'unknown_user';
+        const name = urlParams.get('name') || 'Unknown User';
+
+        // 【v177.0 核心修正】如果 name 是預設的 'Unknown User'，則不要將其作為參數傳遞，讓後端日誌顯示為 N/A
+        const userQueryString = `userId=${uid}` + (name !== 'Unknown User' ? `&userName=${encodeURIComponent(name)}` : '');
+
+        const sitesUrl = `${API_URL}?page=attendance_api&action=get_all_sites&${userQueryString}`;
+        const employeesUrl = `${API_URL}?page=attendance_api&action=get_employees&${userQueryString}`;
+        const sitesPromise = fetch(sitesUrl).then(res => res.json());
+        const employeesPromise = fetch(employeesUrl).then(res => res.json());
+
+        Promise.all([sitesPromise, employeesPromise])
+          .then(([sitesResponse, employeesResponse]) => {
+            populateProjectSelector(sitesResponse);
+            populateEmployeeModal(employeesResponse);
+          })
+          .catch(error => {
+            console.error('[NewSiteForm] 載入初始資料失敗:', error);
+            statusDiv.className = 'alert alert-danger';
+            statusDiv.innerText = `載入頁面資料失敗: ${error.message}`;
+          });
+      };
+
+      // 2. 將案場列表填入下拉選單
+      function populateProjectSelector(response) {
+        // 【v123.0 還原】前端直接接收後端傳來的 JavaScript 物件。
+        // 【您的要求】將收到的原始回應印到 Console
+        console.log('[DEBUG] populateProjectSelector 收到來自後端的原始回應:', response);
+
+        // 【v110.2 修正】確保能正確解析 {success, data} 格式的物件
+        if (response && response.success && response.data) {
+          allSitesData = response.data; // 【v119.0 核心修改】將收到的完整資料存到全域變數
+          // 【v111.0 修正】過濾邏輯已移至後端 _getAllSites_ 函式，前端直接使用回傳的資料。
+          const activeSites = response.data;
+          // [v195.0 新增] 根據使用者建議，在填入前先對案場列表依案號排序
+          activeSites.sort((a, b) => {
+            return (parseInt(a['案號'], 10) || 0) - (parseInt(b['案號'], 10) || 0);
+          });
+          // 【v110.3 偵錯】印出過濾後的案場數量
+          console.log(`[NewSiteForm] 從後端取得 ${activeSites.length} 個有效案場的完整資料。`);
+
+          activeSites.forEach(site => {
+            // 【v119.0 修正】從完整資料物件中讀取案號與案場名稱
+            const option = new Option(`${site['案號']} - ${site.siteName}`, site['案號']);
+            projectSelector.add(option);
+          });
+
+          // 【v110.3 偵錯】檢查最終下拉選單中的選項數量
+          console.log(`[NewSiteForm] 下拉選單已成功填入 ${projectSelector.options.length - 1} 個案場。`);
+        } else {
+          // 【v110.3 偵錯】如果回應格式不符，也印出錯誤訊息
+          console.error('[NewSiteForm] 錯誤：從後端收到的案場列表格式不正確或為空。', response);
+        }
+      }
+
+      // 【您的要求】複製進場資訊的邏輯
+      // 【v127.0 修正】將按鈕宣告移至此處，確保 DOM 已載入
+      const copyInfoBtn = document.getElementById('copyInfoBtn');
+
+      copyInfoBtn.addEventListener('click', () => {
+        const notes = [
+          form.noteAdminPhone.value.trim(),
+          form.noteConstructionTime.value.trim(),
+          form.notePrecautions.value.trim(),
+          form.noteBathroomInstructions.value.trim() // 新增衛浴說明
+        ].filter(Boolean).join('\n'); // 過濾掉空字串並用換行符連接
+
+        const infoText = `進場資訊
+1.案名：${form.siteName.value.trim() || '未填寫'}
+2.地址：${form.siteAddress.value.trim() || '未填寫'}
+3.停車方式：${form.parkingMethod.value.trim() || '未填寫'}
+4.入門方式：${form.entryMethod.value.trim() || '未填寫'}
+5.設計師：${form.designer.value.trim() || '未填寫'}
+6.保證金事宜：${form.depositInfo.value.trim() || '未填寫'}
+7.衛浴使用說明：${form.noteBathroomInstructions.value.trim() || '無'}
+8.案場注意事項：
+${notes || '無'}`;
+
+        // 使用 Clipboard API 複製文字
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(infoText).then(() => {
+            // 顯示成功訊息
+            statusDiv.className = 'alert alert-info';
+            statusDiv.innerText = '✅ 進場資訊已成功複製到剪貼簿！';
+            setTimeout(() => {
+              if (!statusDiv.className.includes('danger') && !statusDiv.className.includes('success')) {
+                statusDiv.innerText = '';
+                statusDiv.className = 'mt-3';
+              }
+            }, 3000);
+          }).catch(err => {
+            console.error('複製失敗:', err);
+            statusDiv.className = 'alert alert-warning';
+            statusDiv.innerText = '複製失敗，您的瀏覽器可能不支援此功能。';
+          });
+        } else {
+          statusDiv.className = 'alert alert-warning';
+          statusDiv.innerText = '您的瀏覽器不支援自動複製功能。';
+        }
+      });
+
+      // 3. 監聽下拉選單的變更
+      projectSelector.addEventListener('change', function () {
+        const selectedCode = this.value;
+        if (selectedCode) {
+          // 【v119.0 核心重構】不再發送 API 請求，直接從已載入的 allSitesData 中尋找資料
+          const siteDetails = allSitesData.find(site => String(site['案號']) === String(selectedCode));
+          // 【v119.0 修正】將找到的資料包裝成與舊 API 相同的格式，以利 fillFormForUpdate 函式處理
+          if (siteDetails) fillFormForUpdate({ success: true, data: siteDetails });
+        } else {
+          // 切換回新增模式
+          resetFormToCreateMode();
+        }
+      });
+
+      // 4. 取得案場詳情後，填入表單
+      function fillFormForUpdate(response) {
+        if (response && response.success && response.data) {
+          console.log('[NewSiteForm] 收到案場詳細資料:', response.data);
+          const details = response.data;
+
+          // 【v127.0 核心修正】建立欄位對應表，解決中英文欄位名稱不一致的問題
+          const fieldMapping = {
+            'siteName': 'siteName', // 案場名稱
+            'siteAddress': 'address', // 案場地址
+            'projectCode': '案號',
+            'responsiblePerson': '專案負責人',
+            'designer': '設計師',
+            'assistant': '助理',
+            'siteManager': '工務',
+            'entryMethod': '入門方式',
+            'parkingMethod': '停車方式',
+            'constructionTime': '施工進場時間',
+            'projectDivision': '專案分區', // [v204.0 新增]
+            'depositInfo': '保證金事宜',
+            'noteAdminPhone': '備註-管理中心電話',
+            'noteConstructionTime': '備註-施工時間',
+            'notePrecautions': '備註-特別注意事項',
+            'noteBathroomInstructions': '衛浴使用說明' // [v193.0 核心修正] 補上遺失的衛浴使用說明欄位對應
+          };
+
+          Array.from(form.elements).forEach(element => {
+            const formElementName = element.name;
+            if (formElementName) {
+              const backendFieldName = fieldMapping[formElementName];
+              if (backendFieldName) {
+                element.value = details[backendFieldName] || '';
+              }
+            }
+          });
+
+          updateResponsiblePersonDisplay(); // 更新負責人顯示
+
+          currentMode = 'update';
+          originalProjectCode = details['案號'];
+          formTitle.innerText = `更新案場資料 (#${originalProjectCode})`;
+          submitBtn.innerText = '更新資料';
+          submitBtn.classList.replace('btn-primary', 'btn-success');
+        }
+      }
+
+      // 5. 重置表單為新增模式
+      function resetFormToCreateMode() {
+        form.reset();
+        currentMode = 'create';
+        originalProjectCode = '';
+        formTitle.innerText = '新增案場資料';
+        submitBtn.innerText = '提交';
+        submitBtn.classList.replace('btn-success', 'btn-primary');
+        statusDiv.innerText = '';
+        statusDiv.className = 'mt-3';
+      }
+
+      // 7. 處理後端的回應
+      function handleFormResponse(response) {
+        statusDiv.className = (response.status === 'success') ? 'alert alert-success' : 'alert alert-danger';
+        statusDiv.innerText = response.message;
+        if (response.status === 'success') {
+          // [v75.1 修正] 成功後，延遲更長時間再重新載入，確保使用者能看到成功訊息。
+          setTimeout(() => location.reload(), 2500);
+        } else {
+          submitBtn.disabled = false;
+          submitBtn.innerText = (currentMode === 'update') ? '更新資料' : '提交';
+        }
+      }
+
+      // 6. 統一的表單提交邏輯
+      form.addEventListener("submit", function (e) {
+        console.log("Form submitted");
+        e.preventDefault();
+        submitBtn.disabled = true;
+        submitBtn.innerText = "處理中...";
+
+        const formData = {
+          mode: currentMode,
+          action: 'process_site_form', // [v192.0 核心修正] 補上後端 doPost 所需的 action 參數
+          originalProjectCode: originalProjectCode,
+          // 【v127.0 修正】將 key 改為後端期待的中文欄位名稱
+          siteName: this.siteName.value,
+          address: this.siteAddress.value,
+          '案號': this.projectCode.value,
+          '專案負責人': this.responsiblePerson.value,
+          '設計師': this.designer.value,
+          '助理': this.assistant.value,
+          '工務': this.siteManager.value,
+          '專案分區': this.projectDivision.value, // [v204.0 新增]
+          '入門方式': this.entryMethod.value,
+          '停車方式': this.parkingMethod.value,
+          '施工進場時間': this.constructionTime.value,
+          '保證金事宜': this.depositInfo.value,
+          '備註-管理中心電話': this.noteAdminPhone.value,
+          '衛浴使用說明': this.noteBathroomInstructions.value, // 新增衛浴說明
+            '備註-特別注意事項': this.notePrecautions.value,
+          '備註-施工時間': this.noteConstructionTime.value
+        };
+
+        // 【v126.0 核心重構】改用 fetch API 提交表單 (POST)
+        // 後端 doPost 路由會根據 action 參數來處理
+        fetch(API_URL, {
+          method: 'POST',
+          cache: 'no-cache',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 配合 Apps Script 的 e.postData.contents
+          body: JSON.stringify(formData)
+        })
+          .then(res => res.json())
+          .then(result => {
+            handleFormResponse(result);
+          })
+          .catch(err => {
+            console.error('表單提交失敗:', err);
+            handleFormResponse({ status: 'error', message: `提交失敗: ${err.message}` });
+          });
+      });
+
+      // --- 【⭐️ 案場管理升級：負責人選擇器相關邏輯 ⭐️】 ---
+
+      // 將員工列表填入 Modal
+      function populateEmployeeModal(employees) {
+        // 【您的要求】將收到的原始回應印到 Console
+        console.log('[DEBUG] populateEmployeeModal 收到來自後端的原始回應:', employees);
+
+        // 【v110.0 修正】根據後端回傳的標準格式 {success, data} 來解析資料。
+        // 同時增加防呆機制，如果回傳的不是預期格式，則給予空陣列避免錯誤。
+        const employeeData = (employees && employees.success) ? employees.data : [];
+        allEmployees = employeeData;
+        const employeeListDiv = document.getElementById('employeeList');
+        employeeListDiv.innerHTML = '';
+
+        // 確保 employeeData 是陣列才執行 forEach
+        if (Array.isArray(employeeData)) {
+          // 【您的要求】只顯示權限等級 2 (含) 以上的員工
+          const filteredEmployees = employeeData.filter(emp => emp.permission >= 2);
+
+          filteredEmployees.forEach(emp => {
+            const div = document.createElement('div');
+            div.className = 'form-check';
+            div.innerHTML = `
+              <input class="form-check-input" type="checkbox" value="${emp.userId}" id="emp-${emp.userId}">
+              <label class="form-check-label" for="emp-${emp.userId}">
+                ${emp.userName}
+              </label>
+            `;
+            employeeListDiv.appendChild(div);
+          });
+        }
+      }
+
+      // 開啟 Modal
+      responsiblePersonDisplay.addEventListener('click', () => {
+        // 根據隱藏 input 的值，預先勾選已選的員工
+        const selectedUids = new Set((responsiblePersonInput.value || '').split(','));
+        document.querySelectorAll('#employeeList input[type="checkbox"]').forEach(cb => {
+          cb.checked = selectedUids.has(cb.value);
+        });
+        employeeModal.style.display = 'block';
+      });
+
+      // 關閉 Modal
+      closeModalBtn.onclick = () => { employeeModal.style.display = 'none'; };
+      window.onclick = (event) => {
+        if (event.target == employeeModal) {
+          employeeModal.style.display = 'none';
+        }
+      };
+
+      // 確認選擇
+      confirmSelectionBtn.addEventListener('click', () => {
+        const selectedUids = Array.from(document.querySelectorAll('#employeeList input:checked')).map(cb => cb.value);
+        responsiblePersonInput.value = selectedUids.join(',');
+        updateResponsiblePersonDisplay();
+        employeeModal.style.display = 'none';
+      });
+
+      // 更新負責人顯示區塊
+      function updateResponsiblePersonDisplay() {
+        const selectedUids = new Set((responsiblePersonInput.value || '').split(','));
+        const selectedNames = allEmployees
+          .filter(emp => selectedUids.has(emp.userId))
+          .map(emp => emp.userName);
+        responsiblePersonDisplay.textContent = selectedNames.length > 0 ? selectedNames.join(', ') : '點擊以選擇負責人';
+        responsiblePersonDisplay.classList.toggle('text-muted', selectedNames.length === 0);
+      }
+    </script>
+    <!-- 【v116.0 移除】根據您的要求，移除頁面下方的案場列表表格 -->
+    <!-- <hr> <?!= sitesTable ?> -->
+</body>
+
+</html>
