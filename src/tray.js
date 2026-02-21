@@ -791,6 +791,7 @@ class TrayManager {
 <body>
   <div class="container">
     <h1>📊 今日生產力報告</h1>
+    <div style="text-align: center; color: #888; font-size: 14px; margin-top: -10px; margin-bottom: 20px;">v${this.app.getVersion()}</div>
     
     <div style="text-align: center; margin-bottom: 20px;">
       <span class="status-badge ${status.isPaused ? 'paused' : 'running'}">

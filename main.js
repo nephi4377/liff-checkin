@@ -152,8 +152,19 @@ function setupAutoUpdater() {
         });
     });
 
+    let isManualCheck = false;
+
     autoUpdater.on('update-not-available', () => {
         log.info('[Updater] 當前為最新版本');
+        if (isManualCheck) {
+            dialog.showMessageBox({
+                type: 'info',
+                title: '檢查更新',
+                message: '目前已是最新版本！',
+                buttons: ['確定']
+            });
+            isManualCheck = false;
+        }
     });
 
     autoUpdater.on('update-downloaded', (info) => {
@@ -174,16 +185,25 @@ function setupAutoUpdater() {
     // 支援手動檢查更新
     app.on('check-for-updates-manual', () => {
         if (app.isPackaged) {
+            isManualCheck = true;
             autoUpdater.checkForUpdates();
         } else {
             dialog.showMessageBox({
                 type: 'info',
                 title: '開發模式通知',
-                message: '目前處於開發環境 (npm start)，不支援自動更新測。請打包成安裝檔後再測試此功能。',
+                message: '目前處於開發環境 (npm start)，不支援自動更新測試。請打包成安裝檔後再測試此功能。',
                 buttons: ['確定']
             });
         }
     });
+
+    // [v1.3.2] 每 15 分鐘 (0.25 小時) 背景自動檢查一次
+    setInterval(() => {
+        if (app.isPackaged) {
+            log.info('[Updater] 執行定時計劃更新檢查...');
+            autoUpdater.checkForUpdates();
+        }
+    }, 15 * 60 * 1000);
 }
 
 // 初始化更新器
