@@ -106,7 +106,7 @@ class TrayManager {
     const productivityRate = stats.productivityRate || 0;
 
     const template = [
-      { label: `添心生產力助手 (${statusLabel})`, enabled: false },
+      { label: `添心生產力助手 v${this.app.getVersion()} (${statusLabel})`, enabled: false },
       { label: `今日工作: ${this.formatMinutes(stats.work)} (${productivityRate}%)`, enabled: false },
       {
         label: '📊 詳細統計 (歷史)',
@@ -298,7 +298,7 @@ class TrayManager {
     template.push({
       label: '🔄 檢查更新',
       click: () => {
-        ipcMain.emit('check-for-updates');
+        this.app.emit('check-for-updates-manual');
       }
     });
 
@@ -307,8 +307,7 @@ class TrayManager {
     template.push({
       label: '❌ 結束程式',
       click: () => {
-        this.cleanup();
-        this.app.quit();
+        this.destroy();
       }
     });
 
@@ -318,7 +317,7 @@ class TrayManager {
     this.tray.setContextMenu(contextMenu);
 
     // 更新 tooltip
-    const tooltipParts = ['添心生產力助手'];
+    const tooltipParts = [`添心生產力助手 v${this.app.getVersion()}`];
     if (boundEmployee) {
       tooltipParts.push(boundEmployee.userName);
     }
@@ -915,16 +914,24 @@ class TrayManager {
     });
   }
 
-  // 清理資源
-  cleanup() {
+  // 銷毀托盤與清理資源
+  destroy() {
+    console.log('[Tray] 正在關閉程式並清理資源...');
     if (this.updateInterval) {
       clearInterval(this.updateInterval);
       this.updateInterval = null;
     }
     if (this.statsWindow) {
-      this.statsWindow.close();
+      this.statsWindow.destroy(); // 直接強行銷毀
       this.statsWindow = null;
     }
+    if (this.tray) {
+      this.tray.destroy();
+      this.tray = null;
+    }
+
+    // 強行結束進程，確保不會殘留背景
+    process.exit(0);
   }
 }
 

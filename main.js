@@ -172,11 +172,16 @@ function setupAutoUpdater() {
     });
 
     // 支援手動檢查更新
-    ipcMain.on('check-for-updates', () => {
+    app.on('check-for-updates-manual', () => {
         if (app.isPackaged) {
             autoUpdater.checkForUpdates();
         } else {
-            dialog.showMessageBox({ message: '開發環境下不支援自動更新' });
+            dialog.showMessageBox({
+                type: 'info',
+                title: '開發模式通知',
+                message: '目前處於開發環境 (npm start)，不支援自動更新測。請打包成安裝檔後再測試此功能。',
+                buttons: ['確定']
+            });
         }
     });
 }
