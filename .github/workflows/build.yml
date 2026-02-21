@@ -1,0 +1,33 @@
+name: Build/Release Electron App
+
+on:
+  push:
+    tags:
+      - 'v*' # 當推送 v1.0.0 等版本標籤時觸發
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install Dependencies
+        run: |
+          cd client
+          npm install
+
+      - name: Build and Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd client
+          npm run build -- --publish always
