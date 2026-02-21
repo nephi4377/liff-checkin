@@ -19,12 +19,19 @@ import { CONFIG } from '/shared/js/config.js';
  * @returns {Promise<object>} 一個解析為後端初步回應 (包含 jobId) 的 Promise。
  */
 function postToGas(payload) {
+    // [v2026.02 緊急安全性攔截] 防止誤將任務狀態當成 action 發送 POST
+    const invalidPollingActions = ['requested', 'in_progress', 'completed', 'failed', 'unknown_payload'];
+    if (payload && invalidPollingActions.includes(payload.action)) {
+        console.error(`[projectApi] 偵測到不正確的 POST 動作攔截: ${payload.action}。這通常是輪詢邏輯誤觸。`);
+        return Promise.reject(new Error(`不正確的 API 動作: ${payload.action}`));
+    }
+
     const formData = new FormData();
     formData.append('payload', JSON.stringify(payload));
- 
+
     // [v602.0 重構] 直接從 config.js 讀取 URL，不再依賴 window 物件
     const API_BASE_URL = CONFIG.GAS_WEB_APP_URL;
- 
+
     return fetch(API_BASE_URL, { method: 'POST', body: formData }).then(response => response.json());
 }
 // 定義哪些 action 是讀取型 (用 GET)，哪些是寫入型 (用 POST + 任務佇列)
@@ -173,13 +180,13 @@ async function _uploadChunks(jobId, largeDataArray) {
         const chunkStart = i * SUBMIT_CHUNK_SIZE;
         const chunkEnd = chunkStart + SUBMIT_CHUNK_SIZE;
         const chunkData = { data: compressedDataArray.slice(chunkStart, chunkEnd) };
-        
-        const chunkPayload = { 
-            action: 'uploadJobDataChunk', 
-            jobId, 
-            chunkIndex: i + 1, 
-            totalChunks, 
-            chunkData 
+
+        const chunkPayload = {
+            action: 'uploadJobDataChunk',
+            jobId,
+            chunkIndex: i + 1,
+            totalChunks,
+            chunkData
         };
         postToGas(chunkPayload); // 發後不理，不關心單一 chunk 的回傳
     }
@@ -199,7 +206,7 @@ function pollJobStatus(jobId) {
     if (!API_BASE_URL) {
         return Promise.reject(new Error("輪詢失敗：找不到 API_BASE_URL。"));
     }
-   // 回傳一個 Promise，讓上層程式碼可以 await 它的最終結果
+    // 回傳一個 Promise，讓上層程式碼可以 await 它的最終結果
     return new Promise((resolve, reject) => {
         const startTime = Date.now();
 
@@ -216,11 +223,11 @@ function pollJobStatus(jobId) {
                 const url = new URL(API_BASE_URL);
                 url.searchParams.append('page', 'getJobStatus');
                 url.searchParams.append('jobId', jobId);
-                
-                // 2. 發送 GET 請求到後端
-                // [v630.0 穩健性修正] 根據您的建議，明確指定 method 為 'GET'，使程式碼意圖更清晰，避免潛在問題。
-                const response = await fetch(url, {
-                    method: 'GET'
+
+                // 2. 確保使用 GET 請求進行輪詢 (核心修正：防止誤用 POST)
+                const response = await fetch(url.toString(), {
+                    method: 'GET',
+                    cache: 'no-store'
                 });
                 const statusResult = await response.json();
 
