@@ -47,7 +47,7 @@ const App = {
         // --- 計算屬性 (Computed) ---
         const welcomeMessage = computed(() => userProfile.value ? `歡迎，${userProfile.value.displayName}！` : '歡迎！');
         const currentUser = computed(() => allEmployees.value.find(emp => emp.userId === userProfile.value?.userId));
-        const hasAdminRights = computed(() => (currentUser.value?.permission || 1) >= 2);
+        const hasAdminRights = computed(() => (currentUser.value?.permission || 1) >= 4);
 
         // [v411.0 SPA化] 簡易路由系統
         const routes = {
@@ -78,8 +78,8 @@ const App = {
             // [v425.0 架構優化] 處理帶有查詢參數的 hash 路由
             const [path, queryString] = hash.split('?');
             const route = routes[path] || routes['#'];
-            
-            currentView.value = { 
+
+            currentView.value = {
                 ...route,
                 params: queryString ? `&${queryString}` : '' // 將 hash 中的參數轉給 iframe
             };
@@ -96,7 +96,7 @@ const App = {
             // 1. 先更新資料
             lightbox.value.images = images;
             lightbox.value.currentIndex = startIndex;
-            
+
             // 2. 在下一個 "tick" 中更新可見性，強制觸發渲染
             nextTick(() => {
                 lightbox.value.visible = true;
@@ -106,13 +106,13 @@ const App = {
 
         const closeLightbox = () => {
             if (!lightbox.value.visible) return; // 防止重複觸發
-            
+
             // 恢復背景滾動
             document.body.style.overflow = '';
-            
+
             // [v559.6] 為了與 openLightbox 的邏輯對稱，此處也直接修改屬性
             lightbox.value.visible = false;
-            
+
             // 延遲清空資料，讓淡出動畫能順利完成
             setTimeout(() => {
                 lightbox.value.images = [];
@@ -201,7 +201,7 @@ const App = {
             const idsToMarkRead = notifications.value
                 .filter(n => n.ActionType === 'None')
                 .map(n => n.NotificationID);
-            
+
             if (idsToMarkRead.length > 0) {
                 // 樂觀更新
                 notifications.value = notifications.value.filter(n => n.ActionType !== 'None');
@@ -269,7 +269,7 @@ const App = {
         const handleIframeMessage = (event) => {
             // 為了安全，可以檢查 event.origin
             // if (event.origin !== 'https://your-expected-origin.com') return;
-            
+
             const { type, payload } = event.data;
             if (type === 'openLightbox' && payload) {
                 console.log('[Lightbox] Received message from iframe:', payload);
