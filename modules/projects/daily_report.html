@@ -216,10 +216,11 @@
             const shiftStatus = userSchedule[dateStr]; // e.g., "休假", "特休[08:30-17:30]"
 
             if (shiftStatus) {
-                // 只要狀態包含 "休" (休假, 特休, 補休...)，就認為是休假
-                if (shiftStatus.includes('休')) {
-                    // 提取假別基本類型，去除時間等附加資訊
-                    return shiftStatus.match(/^[^\[\(]+/)[0];
+                // 只要狀態包含 "休" (休假, 特休...) 或 "假" (事假, 病假...)，就認為是請假
+                if (shiftStatus.includes('休') || shiftStatus.includes('假')) {
+                    // 提取假別基本類型，去除時間等附加資訊 (e.g. "特休[08:30]" -> "特休")
+                    const match = shiftStatus.match(/^[^\[\(]+/);
+                    return match ? match[0] : shiftStatus;
                 }
             }
             return null;
