@@ -356,26 +356,22 @@ function renderReportsByEmployee(employees, allReports, scheduleData) {
                         `;
                 }).join('');
             } else {
-                // 無報告的情況，判斷假勤
+                // 無報告的情況，判斷假勤 (設計為超緊湊模式)
                 if (dateStr > todayStr) return ''; // 未來不顯示
 
                 const leaveStatus = window.dailyReportApp.getLeaveStatus(employee.userId, dateStr, scheduleData);
                 if (leaveStatus) {
                     return `
-                            <div class="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between text-sm">
-                                <div class="flex items-center gap-2 opacity-70">
-                                    <span class="font-bold text-gray-400">${dateLabel}</span>
-                                    <span class="py-0.5 px-2 rounded-full border border-gray-200 bg-gray-50 text-gray-500">[${leaveStatus}] (未進場)</span>
-                                </div>
+                            <div class="mt-1 pt-1 border-t border-gray-50 flex items-center gap-3 text-[11px]">
+                                <span class="font-bold text-gray-400 w-16">${dateLabel}</span>
+                                <span class="text-gray-400 italic">[${leaveStatus}] (未進場)</span>
                             </div>
                         `;
                 } else {
                     return `
-                            <div class="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between text-sm">
-                                <div class="flex items-center gap-2">
-                                    <span class="font-bold text-red-500">${dateLabel}</span>
-                                    <span class="py-0.5 px-2 rounded-full border border-red-200 bg-red-50 text-red-600 font-bold animate-pulse">⚠️ 缺交報告 (應出勤)</span>
-                                </div>
+                            <div class="mt-1 pt-1 border-t border-red-50 flex items-center gap-3 text-[11px]">
+                                <span class="font-bold text-red-400 w-16">${dateLabel}</span>
+                                <span class="text-red-500 font-bold">⚠️ 缺交報告 (應出勤)</span>
                             </div>
                         `;
                 }
@@ -431,27 +427,29 @@ function updateKPIDashboard(employees, reportsByUserId, scheduleData) {
     if (!kpiDashboard) return;
 
     const dateStr = startDatePicker.value;
-    let attendanceCount = 0;
-    let leaveCount = 0;
-    let missingCount = 0;
+    let attendanceNames = [];
+    let leaveNames = [];
+    let missingNames = [];
 
     employees.forEach(emp => {
         const leaveStatus = window.dailyReportApp.getLeaveStatus(emp.userId, dateStr, scheduleData);
         const hasReport = !!(reportsByUserId[emp.userId] && reportsByUserId[emp.userId].length > 0);
 
         if (leaveStatus) {
-            leaveCount++;
+            leaveNames.push(emp.userName);
         } else {
-            attendanceCount++;
-            if (!hasReport) {
-                missingCount++;
+            if (hasReport) {
+                attendanceNames.push(emp.userName);
+            } else {
+                missingNames.push(emp.userName);
             }
         }
     });
 
-    kpiAttendance.textContent = attendanceCount;
-    kpiLeave.textContent = leaveCount;
-    kpiMissing.textContent = missingCount;
+    kpiAttendance.innerHTML = `<div>${attendanceNames.length}</div><div class="text-[10px] font-normal mt-1 opacity-80 leading-tight">${attendanceNames.join(', ')}</div>`;
+    kpiLeave.innerHTML = `<div>${leaveNames.length}</div><div class="text-[10px] font-normal mt-1 opacity-80 leading-tight">${leaveNames.join(', ')}</div>`;
+    kpiMissing.innerHTML = `<div>${missingNames.length}</div><div class="text-[10px] font-normal mt-1 opacity-80 leading-tight font-bold text-red-600">${missingNames.join(', ')}</div>`;
+
     kpiDashboard.classList.remove('hidden');
 }
 
