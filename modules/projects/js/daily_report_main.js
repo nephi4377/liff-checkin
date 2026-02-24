@@ -231,6 +231,24 @@ async function fetchAndRenderReports(startDateStr, endDateStr) {
     }
 }
 
+/**
+ * 取得指定範圍內的所有日期（由新到舊）
+ */
+function getDateRange(startDateStr, endDateStr) {
+    const start = new Date(startDateStr);
+    const end = new Date(endDateStr);
+    const dates = [];
+    let curr = new Date(end);
+    curr.setHours(0, 0, 0, 0);
+    start.setHours(0, 0, 0, 0);
+
+    while (curr >= start) {
+        dates.push(curr.getFullYear() + '-' + String(curr.getMonth() + 1).padStart(2, '0') + '-' + String(curr.getDate()).padStart(2, '0'));
+        curr.setDate(curr.getDate() - 1);
+    }
+    return dates;
+}
+
 function renderMainReports() {
     if (currentViewMode === 'employee') {
         renderReportsByEmployee(allFetchedEmployees, allFetchedReports, window.currentScheduleData);
@@ -270,66 +288,104 @@ function renderReportsByEmployee(employees, allReports, scheduleData) {
 
     filteredEmployees.sort((a, b) => (a.group || '未分類').localeCompare(b.group || '未分類', 'zh-Hant'));
 
+    const localToday = new Date();
+    const todayStr = localToday.getFullYear() + '-' + String(localToday.getMonth() + 1).padStart(2, '0') + '-' + String(localToday.getDate()).padStart(2, '0');
+    const dateRange = getDateRange(startDatePicker.value, endDatePicker.value);
+
     let lastGroup = null;
     filteredEmployees.forEach(employee => {
-        const reports = reportsByUserId[employee.userId] || [];
-
-        if (reports.length === 0) {
-            return;
-        }
+        const employeeReports = reportsByUserId[employee.userId] || [];
+        const reportsByDate = employeeReports.reduce((acc, report) => {
+            const d = String(report.Timestamp).split('T')[0];
+            if (!acc[d]) acc[d] = [];
+            acc[d].push(report);
+            return acc;
+        }, {});
 
         const card = document.createElement('div');
         card.className = 'bg-white p-6 rounded-lg shadow-md border-l-4 border-blue-500';
 
-        let reportsHtml = reports.map(report => {
-            const reportTime = new Date(report.Timestamp).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
-            let contentHtml = '';
-            let photosHtml = '';
-            if (report.PhotoLinks) {
-                const photoUrls = report.PhotoLinks.split(',');
-                // [v581.0 修正] 改為使用自訂的 lazy-loading，設定 data-src 並加上 class="lazy"
-                const imageElements = photoUrls.map((url, index) => `
-                        <img data-src="https://drive.google.com/thumbnail?id=${window.extractDriveFileId(url)}&sz=w128"
-                             alt="現場照片"
-                             class="object-cover rounded-md hover:opacity-80 transition-opacity cursor-pointer lazy"
-                             style="width: var(--thumbnail-width, 100%); height: auto;"
-                             onclick="openParentLightbox('${report.LogID}', ${index})">`).join('');
-                photosHtml = `<div class="grid gap-2 mt-2" style="grid-template-columns: repeat(auto-fill, minmax(var(--thumbnail-width, 6rem), 1fr));" id="image-group-${report.LogID}" data-photos='${JSON.stringify(photoUrls)}'>
-                        ${imageElements}
-                    </div>`;
-            }
+        // 生成時間軸 HTML
+        let timelineHtml = dateRange.map(dateStr => {
+            const dateReports = reportsByDate[dateStr] || [];
+            const dateLabel = dateStr.replace(/-/g, '/');
 
-            if (report.Content !== null && typeof report.Content !== 'undefined') {
-                const contentParts = String(report.Content).split('【問題回報】');
-                const workDesc = contentParts[0].replace('【施工內容】', '').trim();
-                const problemDesc = contentParts[1] ? contentParts[1].trim() : '';
-                if (workDesc) {
-                    contentHtml += `<p class="text-gray-800 whitespace-pre-wrap pl-2">${workDesc}</p>`;
-                }
-                if (problemDesc) {
-                    contentHtml += `<div class="mt-2"><h5 class="font-semibold text-red-600">問題回報：</h5><p class="text-red-800 whitespace-pre-wrap pl-2">${problemDesc}</p></div>`;
-                }
-            }
+            if (dateReports.length > 0) {
+                // 有報告的情況
+                return dateReports.map(report => {
+                    const reportTime = new Date(report.Timestamp).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+                    let contentHtml = '';
+                    let photosHtml = '';
+                    if (report.PhotoLinks) {
+                        const photoUrls = report.PhotoLinks.split(',');
+                        const imageElements = photoUrls.map((url, index) => `
+                                <img data-src="https://drive.google.com/thumbnail?id=${window.extractDriveFileId(url)}&sz=w128"
+                                     alt="現場照片"
+                                     class="object-cover rounded-md hover:opacity-80 transition-opacity cursor-pointer lazy"
+                                     style="width: var(--thumbnail-width, 100%); height: auto;"
+                                     onclick="openParentLightbox('${report.LogID}', ${index})">`).join('');
+                        photosHtml = `<div class="grid gap-2 mt-2" style="grid-template-columns: repeat(auto-fill, minmax(var(--thumbnail-width, 6rem), 1fr));" id="image-group-${report.LogID}" data-photos='${JSON.stringify(photoUrls)}'>
+                                ${imageElements}
+                            </div>`;
+                    }
 
-            return `
-                    <div class="mt-4 pt-4 border-t border-gray-200">
-                        <div class="flex justify-between items-center text-sm flex-wrap gap-2">
-                            <div class="flex items-center gap-2">
-                                <h3 class="font-bold text-gray-800">${(report.Title || '無標題').replace(/^(\d{4})-(\d{2})-(\d{2})/, '$1/$2/$3')}</h3>
-                                <span class="text-xs font-medium bg-gray-100 text-gray-800 py-0.5 px-2 rounded-full">#${String(report.ProjectName || 'N/A').replace(/^#/, '')}</span>
+                    if (report.Content !== null && typeof report.Content !== 'undefined') {
+                        const contentParts = String(report.Content).split('【問題回報】');
+                        const workDesc = contentParts[0].replace('【施工內容】', '').trim();
+                        const problemDesc = contentParts[1] ? contentParts[1].trim() : '';
+                        if (workDesc) {
+                            contentHtml += `<p class="text-gray-800 whitespace-pre-wrap pl-2">${workDesc}</p>`;
+                        }
+                        if (problemDesc) {
+                            contentHtml += `<div class="mt-2"><h5 class="font-semibold text-red-600">問題回報：</h5><p class="text-red-800 whitespace-pre-wrap pl-2">${problemDesc}</p></div>`;
+                        }
+                    }
+
+                    return `
+                            <div class="mt-4 pt-4 border-t border-gray-200">
+                                <div class="flex justify-between items-center text-sm flex-wrap gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="font-bold text-gray-800">${dateLabel}</h3>
+                                        <span class="text-xs font-medium bg-gray-100 text-gray-800 py-0.5 px-2 rounded-full">#${String(report.ProjectName || 'N/A').replace(/^#/, '')}</span>
+                                    </div>
+                                    <span class="text-gray-500">${reportTime}</span>
+                                </div>
+                                <div class="text-sm mt-2">${contentHtml || '<p class="text-gray-500">無文字內容回報。</p>'}</div>
+                                ${photosHtml}
                             </div>
-                            <span class="text-gray-500">${reportTime}</span>
-                        </div>
-                        <div class="text-sm mt-2">${contentHtml || '<p class="text-gray-500">無文字內容回報。</p>'}</div>
-                        ${photosHtml}
-                    </div>
-                `;
+                        `;
+                }).join('');
+            } else {
+                // 無報告的情況，判斷假勤
+                if (dateStr > todayStr) return ''; // 未來不顯示
+
+                const leaveStatus = window.dailyReportApp.getLeaveStatus(employee.userId, dateStr, scheduleData);
+                if (leaveStatus) {
+                    return `
+                            <div class="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between text-sm">
+                                <div class="flex items-center gap-2 opacity-70">
+                                    <span class="font-bold text-gray-400">${dateLabel}</span>
+                                    <span class="py-0.5 px-2 rounded-full border border-gray-200 bg-gray-50 text-gray-500">[${leaveStatus}] (未進場)</span>
+                                </div>
+                            </div>
+                        `;
+                } else {
+                    return `
+                            <div class="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between text-sm">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-bold text-red-500">${dateLabel}</span>
+                                    <span class="py-0.5 px-2 rounded-full border border-red-200 bg-red-50 text-red-600 font-bold animate-pulse">⚠️ 缺交報告 (應出勤)</span>
+                                </div>
+                            </div>
+                        `;
+                }
+            }
         }).join('');
 
-        // [第一階段] 獲取該員工在開始日期的請假狀態
-        const leaveStatus = window.dailyReportApp.getLeaveStatus(employee.userId, startDatePicker.value, scheduleData);
-        const leaveBadge = leaveStatus ? `<span class="ml-2 text-xs font-medium bg-red-100 text-red-700 py-0.5 px-2 rounded-full border border-red-200">${leaveStatus}</span>` : '';
-        const opacityClass = leaveStatus ? 'opacity-60' : '';
+        // 獲取當前日期的請假狀態（用於 Header 顯示）
+        const currentLeaveStatus = window.dailyReportApp.getLeaveStatus(employee.userId, startDatePicker.value, scheduleData);
+        const leaveBadge = currentLeaveStatus ? `<span class="ml-2 text-xs font-medium bg-red-100 text-red-700 py-0.5 px-2 rounded-full border border-red-200">${currentLeaveStatus}</span>` : '';
+        const opacityClass = currentLeaveStatus ? 'opacity-60' : '';
 
         card.innerHTML = `
                 <div class="flex justify-between items-center">
@@ -338,11 +394,11 @@ function renderReportsByEmployee(employees, allReports, scheduleData) {
                         ${leaveBadge}
                     </div>
                     <span class="text-sm font-medium bg-blue-100 text-blue-800 py-1 px-3 rounded-full">
-                        ${reports.length} 則回報
+                        ${employeeReports.length} 則回報
                     </span>
                 </div>
                 <div class="mt-2 ${opacityClass}">
-                    ${reportsHtml}
+                    ${timelineHtml || '<p class="text-gray-500 text-sm mt-4">此區間無任何記錄。</p>'}
                 </div>
             `;
         reportsContainer.appendChild(card);
