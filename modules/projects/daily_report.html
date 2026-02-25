@@ -202,25 +202,50 @@
         }
 
         /**
-         * [v625.0 新增] 判斷指定員工在特定日期是否有假勤紀錄
+         * [v1.0.7 更新] 判斷指定員工在特定日期是否有假勤紀錄
          * @param {string} userId - 員工的 LINE User ID
          * @param {string} dateStr - 日期字串 (e.g., "2024-05-30")
          * @param {object} scheduleData - 從 getScheduleDataForMonth 取得的排班資料
-         * @returns {string|null} - 回傳假別名稱 (如 "休假", "特休") 或 null
+         * @returns {object|null} - 回傳假勤資訊物件或 null
          */
         function getLeaveStatus(userId, dateStr, scheduleData) {
             if (!scheduleData || !scheduleData.schedule || !scheduleData.schedule[userId]) {
                 return null;
             }
             const userSchedule = scheduleData.schedule[userId];
-            const shiftStatus = userSchedule[dateStr]; // e.g., "休假", "特休[08:30-17:30]"
+            const shiftStatus = userSchedule[dateStr]; // e.g., "休假", "特休[08:30~17:30]"
 
             if (shiftStatus) {
-                // 只要狀態包含 "休" (休假, 特休...) 或 "假" (事假, 病假...)，就認為是請假
-                if (shiftStatus.includes('休') || shiftStatus.includes('假')) {
-                    // 提取假別基本類型，去除時間等附加資訊 (e.g. "特休[08:30]" -> "特休")
-                    const match = shiftStatus.match(/^[^\[\(]+/);
-                    return match ? match[0] : shiftStatus;
+                const isLeave = shiftStatus.includes('休') || shiftStatus.includes('假');
+                if (isLeave) {
+                    // 提取假別基本類型
+                    const typeMatch = shiftStatus.match(/^[^\[\(]+/);
+                    const leaveType = typeMatch ? typeMatch[0] : shiftStatus;
+
+                    // 檢查是否有時間區間 [08:30~17:30]
+                    const timeMatch = shiftStatus.match(/\[(\d{2}:\d{2})~(\d{2}:\d{2})\]/);
+                    let isFullDay = true;
+                    let startTime = null;
+                    let endTime = null;
+
+                    if (timeMatch) {
+                        startTime = timeMatch[1];
+                        endTime = timeMatch[2];
+                        // 簡單邏輯：如果跨度大於 7 小時，暫定為全天假 (實際上應比對員工班表，此處先採寬鬆判定)
+                        const [sH, sM] = startTime.split(':').map(Number);
+                        const [eH, eM] = endTime.split(':').map(Number);
+                        const durationHrs = (eH + eM / 60) - (sH + sM / 60);
+                        if (durationHrs < 6) isFullDay = false;
+                    } else if (shiftStatus === '休假' || shiftStatus === '特休') {
+                        isFullDay = true;
+                    }
+
+                    return {
+                        original: shiftStatus,
+                        type: leaveType,
+                        isFullDay: isFullDay,
+                        timeRange: timeMatch ? `${startTime}~${endTime}` : null
+                    };
                 }
             }
             return null;

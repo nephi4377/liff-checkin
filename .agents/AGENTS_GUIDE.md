@@ -13,6 +13,7 @@
 
 ## 📚 3. 專案知識 (Knowledge) - 專案背景
 - **`Project-Architecture`**：記載跨儲存庫（CODING/backend/小助手）的檔案關聯與通訊邏輯。
+- **`Attendance-System`**：記錄假勤 API 連結、參數規範以及「特休/事假/病假」的核心判定演算邏輯。
 
 ---
 

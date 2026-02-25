@@ -188,6 +188,22 @@ export function main() {
     }
 }
 
+async function fetchAttendanceData(startDateStr, endDateStr) {
+    try {
+        const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
+        url.searchParams.append('page', 'attendance_api');
+        url.searchParams.append('action', 'get_report');
+        url.searchParams.append('startDate', startDateStr);
+        url.searchParams.append('endDate', endDateStr);
+        const response = await fetch(url);
+        const result = await response.json();
+        return result.records || {};
+    } catch (error) {
+        console.error('獲取打卡紀錄失敗:', error);
+        return {};
+    }
+}
+
 async function fetchAndRenderReports(startDateStr, endDateStr) {
     showLoading();
     if (!userProfile) {
@@ -207,10 +223,12 @@ async function fetchAndRenderReports(startDateStr, endDateStr) {
         const queryYear = startDate.getFullYear();
         const queryMonth = startDate.getMonth() + 1;
 
-        const [employees, reportsResult, scheduleData] = await Promise.all([
+        // [v1.0.7] 同時獲取打卡紀錄
+        const [employees, reportsResult, scheduleData, attendanceData] = await Promise.all([
             fetchEmployees(),
             fetch(url).then(res => res.json()),
-            window.dailyReportApp.getScheduleDataForMonth(queryYear, queryMonth)
+            window.dailyReportApp.getScheduleDataForMonth(queryYear, queryMonth),
+            fetchAttendanceData(startDateStr, endDateStr)
         ]);
 
         if (!reportsResult.success) {
@@ -219,8 +237,8 @@ async function fetchAndRenderReports(startDateStr, endDateStr) {
 
         allFetchedEmployees = employees;
         allFetchedReports = reportsResult.data;
-        // 儲存排班資料供後續渲染使用
         window.currentScheduleData = scheduleData;
+        window.currentAttendanceData = attendanceData; // 儲存打卡紀錄
 
         renderGroupFilters(employees);
         renderMainReports();
@@ -359,19 +377,27 @@ function renderReportsByEmployee(employees, allReports, scheduleData) {
                 // 無報告的情況，判斷假勤 (設計為超緊湊模式)
                 if (dateStr > todayStr) return ''; // 未來不顯示
 
-                const leaveStatus = window.dailyReportApp.getLeaveStatus(employee.userId, dateStr, scheduleData);
-                if (leaveStatus) {
+                const leaveInfo = window.dailyReportApp.getLeaveStatus(employee.userId, dateStr, scheduleData);
+                // [v1.0.7] 引入打卡判定
+                const userAttendance = window.currentAttendanceData[employee.userId]?.dailyData?.[dateStr];
+                const hasClockedIn = !!(userAttendance && userAttendance.checkIn && userAttendance.checkIn !== '---');
+
+                if (leaveInfo && leaveInfo.isFullDay && !hasClockedIn) {
                     return `
                             <div class="mt-1 pt-1 border-t border-gray-50 flex items-center gap-3 text-[11px]">
                                 <span class="font-bold text-gray-400 w-16">${dateLabel}</span>
-                                <span class="text-gray-400 italic">[${leaveStatus}] (未進場)</span>
+                                <span class="text-gray-400 italic">[${leaveInfo.type}] (未進場)</span>
                             </div>
                         `;
                 } else {
+                    // 如果有上班打卡但沒交報告，或者是時段假期間應出勤卻沒交報告
+                    const statusText = hasClockedIn ? `⚠️ 缺交報告 (已進場 ${userAttendance.checkIn})` : `⚠️ 缺交報告 (應出勤)`;
+                    const leaveSuffix = (leaveInfo && !leaveInfo.isFullDay) ? ` <span class="text-[10px] opacity-70">[${leaveInfo.original}]</span>` : '';
+
                     return `
                             <div class="mt-1 pt-1 border-t border-red-50 flex items-center gap-3 text-[11px]">
                                 <span class="font-bold text-red-400 w-16">${dateLabel}</span>
-                                <span class="text-red-500 font-bold">⚠️ 缺交報告 (應出勤)</span>
+                                <span class="text-red-500 font-bold">${statusText}${leaveSuffix}</span>
                             </div>
                         `;
                 }
@@ -379,9 +405,9 @@ function renderReportsByEmployee(employees, allReports, scheduleData) {
         }).join('');
 
         // 獲取當前日期的請假狀態（用於 Header 顯示）
-        const currentLeaveStatus = window.dailyReportApp.getLeaveStatus(employee.userId, startDatePicker.value, scheduleData);
-        const leaveBadge = currentLeaveStatus ? `<span class="ml-2 text-xs font-medium bg-red-100 text-red-700 py-0.5 px-2 rounded-full border border-red-200">${currentLeaveStatus}</span>` : '';
-        const opacityClass = currentLeaveStatus ? 'opacity-60' : '';
+        const currentLeave = window.dailyReportApp.getLeaveStatus(employee.userId, startDatePicker.value, scheduleData);
+        const leaveBadge = currentLeave ? `<span class="ml-2 text-xs font-medium bg-red-100 text-red-700 py-0.5 px-2 rounded-full border border-red-200">${currentLeave.original}</span>` : '';
+        const opacityClass = (currentLeave && currentLeave.isFullDay) ? 'opacity-60' : '';
 
         card.innerHTML = `
                 <div class="flex justify-between items-center">
@@ -426,29 +452,61 @@ function renderReportsByEmployee(employees, allReports, scheduleData) {
 function updateKPIDashboard(employees, reportsByUserId, scheduleData) {
     if (!kpiDashboard) return;
 
-    const dateStr = startDatePicker.value;
+    const displayDateStr = startDatePicker.value; // 當前選擇日期
+    const now = new Date();
+    const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+
+    // [v1.0.7] 邏輯重構：
+    // 1. 出勤 = 該日有「上班打卡」紀錄。
+    // 2. 請假 = 該日有全天假且無打卡。
+    // 3. 缺交 = 該日應出勤(或已打卡)且回報數為 0。
+    // 【重點】若查詢今日，缺交欄位會加註「昨日統計」
+
+    let isQueryingToday = (displayDateStr === todayStr);
+    let targetMissingDate = displayDateStr;
+    let missingLabelSuffix = "";
+
+    if (isQueryingToday) {
+        // 如果查今日，缺交人數跳過目前還沒報的，顯示「昨日」的最終缺交，對管理者更有意義
+        const yesterday = new Date(now);
+        yesterday.setDate(now.getDate() - 1);
+        targetMissingDate = yesterday.getFullYear() + '-' + String(yesterday.getMonth() + 1).padStart(2, '0') + '-' + String(yesterday.getDate()).padStart(2, '0');
+        missingLabelSuffix = " (昨日)";
+    }
+
     let attendanceNames = [];
     let leaveNames = [];
     let missingNames = [];
 
     employees.forEach(emp => {
-        const leaveStatus = window.dailyReportApp.getLeaveStatus(emp.userId, dateStr, scheduleData);
-        const hasReport = !!(reportsByUserId[emp.userId] && reportsByUserId[emp.userId].length > 0);
+        const leaveInfo = window.dailyReportApp.getLeaveStatus(emp.userId, displayDateStr, scheduleData);
+        const userAttendance = window.currentAttendanceData[emp.userId]?.dailyData?.[displayDateStr];
+        const hasClockedIn = !!(userAttendance && userAttendance.checkIn && userAttendance.checkIn !== '---');
 
-        if (leaveStatus) {
+        // 判定今日出勤/請假
+        if (hasClockedIn) {
+            attendanceNames.push(emp.userName);
+        } else if (leaveInfo && leaveInfo.isFullDay) {
             leaveNames.push(emp.userName);
-        } else {
-            if (hasReport) {
-                attendanceNames.push(emp.userName);
-            } else {
-                missingNames.push(emp.userName);
-            }
+        }
+
+        // 判定催繳對象 (依據 targetMissingDate)
+        const missingLeaveInfo = window.dailyReportApp.getLeaveStatus(emp.userId, targetMissingDate, scheduleData);
+        const missingAttendance = window.currentAttendanceData[emp.userId]?.dailyData?.[targetMissingDate];
+        const missingHasClockedIn = !!(missingAttendance && missingAttendance.checkIn && missingAttendance.checkIn !== '---');
+
+        // 應出勤條件：有打卡 OR (沒請全天假)
+        const shouldHaveWorked = missingHasClockedIn || !(missingLeaveInfo && missingLeaveInfo.isFullDay);
+        const reportCount = (reportsByUserId[emp.userId] || []).filter(r => r.Timestamp.startsWith(targetMissingDate)).length;
+
+        if (shouldHaveWorked && reportCount === 0) {
+            missingNames.push(emp.userName);
         }
     });
 
-    kpiAttendance.innerHTML = `<div>${attendanceNames.length}</div><div class="text-[10px] font-normal mt-1 opacity-80 leading-tight">${attendanceNames.join(', ')}</div>`;
-    kpiLeave.innerHTML = `<div>${leaveNames.length}</div><div class="text-[10px] font-normal mt-1 opacity-80 leading-tight">${leaveNames.join(', ')}</div>`;
-    kpiMissing.innerHTML = `<div>${missingNames.length}</div><div class="text-[10px] font-normal mt-1 opacity-80 leading-tight font-bold text-red-600">${missingNames.join(', ')}</div>`;
+    kpiAttendance.innerHTML = `<div class="text-[11px] opacity-70 mb-1">今日出勤</div><div>${attendanceNames.length}</div><div class="text-[10px] font-normal mt-1 opacity-80 leading-tight">${attendanceNames.join(', ')}</div>`;
+    kpiLeave.innerHTML = `<div class="text-[11px] opacity-70 mb-1">今日請假</div><div>${leaveNames.length}</div><div class="text-[10px] font-normal mt-1 opacity-80 leading-tight">${leaveNames.join(', ')}</div>`;
+    kpiMissing.innerHTML = `<div class="text-[11px] opacity-70 mb-1">缺交報告${missingLabelSuffix}</div><div>${missingNames.length}</div><div class="text-[10px] font-normal mt-1 opacity-80 leading-tight font-bold text-red-600">${missingNames.join(', ')}</div>`;
 
     kpiDashboard.classList.remove('hidden');
 }
@@ -502,8 +560,8 @@ function renderReportsByProject(employees, allReports, scheduleData) {
             const userName = emp ? emp.userName : (report.userName || '未知人員');
 
             // 獲取請假狀態
-            const leaveStatus = window.dailyReportApp.getLeaveStatus(report.UserID, startDatePicker.value, scheduleData);
-            const leaveBadge = leaveStatus ? `<span class="ml-1 text-[10px] bg-red-100 text-red-600 px-1 rounded-sm">${leaveStatus}</span>` : '';
+            const leaveInfo = window.dailyReportApp.getLeaveStatus(report.UserID, startDatePicker.value, scheduleData);
+            const leaveBadge = leaveInfo ? `<span class="ml-1 text-[10px] bg-red-100 text-red-600 px-1 rounded-sm">${leaveInfo.original}</span>` : '';
 
             let contentHtml = '';
             let photosHtml = '';
