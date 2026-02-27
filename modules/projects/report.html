@@ -426,6 +426,12 @@
           workType: document.getElementById('workType').value,
           workDescription: document.getElementById('workDescription').value,
           problemDescription: document.getElementById('problemDescription').value,
+          clientTrace: {
+            url: window.location.href,
+            ver: '2026.02.27.2300-report',
+            uid: userProfile.userId,
+            ts: Date.now()
+          }
         };
 
         for (let i = 0; i < totalChunks; i++) {

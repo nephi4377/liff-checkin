@@ -39,22 +39,20 @@ function postToGas(payload) {
 }
 // 定義哪些 action 是讀取型 (用 GET)，哪些是寫入型 (用 POST + 任務佇列)
 // 注意：這裡的 action 名稱必須與後端 WebApp.js 中的 GET_ROUTES 和 processJob 的 switch case 完全對應。
-const READ_ACTIONS = new Set([
-    'project', // 獲取專案所有資料
-    'getSingleLog'
-]);
+const READ_ACTIONS = new Set(['project', 'getSingleLog', 'getJobStatus']);
+const WRITE_ACTIONS = new Set(['createLog', 'updateLogText', 'updateLogPhotosWithUploads', 'deleteLog', 'updateProjectStatus', 'createFromTemplate', 'updateSchedule', 'sendNotification', 'createUploadJob', 'uploadJobDataChunk', 'process_notification_action']);
 
-const WRITE_ACTIONS = new Set([
-    'createLog',
-    'updateLogText',
-    'updateLogPhotosWithUploads',
-    'deleteLog',
-    'updateProjectStatus',
-    'createFromTemplate',
-    'updateSchedule',
-    'sendNotification', // [v553.0] 將發送通知也納入非同步任務佇列
-    'process_notification_action' // [v601.1] 新增：處理溝通紀錄的互動 (回覆/完成/封存)
-]);
+/**
+ * 獲取客戶端追蹤資訊
+ */
+function getClientTrace() {
+    return {
+        url: window.location.href,
+        ver: '2026.02.27.2300',
+        uid: state.currentUserId || 'unknown',
+        ts: Date.now()
+    };
+}
 
 /**
  * 統一的 API 請求函式，作為所有後端請求的唯一入口。
@@ -64,6 +62,9 @@ const WRITE_ACTIONS = new Set([
  * @returns {Promise<{success: boolean, data: any, message: string, error: string | null}>}
  */
 export async function request({ action, payload = {} }) {
+    // [v2026.02.27 深度防禦] 注入追蹤資訊
+    payload.clientTrace = getClientTrace();
+
     // [v2026.02.27 深度防禦] 嚴禁將「任務狀態」作為 API 動作。這通常發生在連鎖調用誤傳了回傳物件。
     const STATUS_WORDS = ['requested', 'in_progress', 'completed', 'failed', 'unknown_payload', 'pending'];
     if (STATUS_WORDS.includes(action) || !action) {
