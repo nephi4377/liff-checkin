@@ -15,7 +15,7 @@
     <script>
         const LIFF_ID = '2007974938-jVxn6y37';
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
-        const APP_VERSION = 'v26.02.27.1645';
+        const APP_VERSION = 'v26.02.27.1936';
     </script>
     <!-- =============================================================== -->
 
@@ -233,7 +233,7 @@
         const CHECKIN_HISTORY_KEY = 'checkin_history_records';
         let userProfile = null; // 【您的要求】新增全域變數來儲存使用者 Profile
         // 【您的要求】移除 isBusy 旗標，改用請求計數器
-        let activeRequests = 0;
+
 
         function pageLog(message, type = 'info') {
             // 【您的要求】將日誌重導向到瀏覽器主控台
@@ -296,9 +296,26 @@
 
             if (history.length > 0) {
                 listEl.innerHTML = '';
+
+                // 【新增】檢查今日是否已打過卡，若有則在主畫面顯示上班時間與預計下班時間
+                const latest = history[0];
+                const isToday = latest && new Date(latest.timestamp).toDateString() === new Date().toDateString();
+                if (isToday && !latest.message.includes('失敗')) {
+                    const checkinDate = new Date(latest.timestamp);
+                    const checkinTimeStr = `${checkinDate.getHours().toString().padStart(2, '0')}:${checkinDate.getMinutes().toString().padStart(2, '0')}`;
+                    const flexMatch = latest.message && latest.message.match(/預計下班：(\d{2}:\d{2})/);
+                    if (flexMatch) {
+                        messageElement.innerHTML = `您今天已完成上班打卡 <span class="text-blue-600 font-bold">${checkinTimeStr}</span>！<br>預計下班時間：<span class="text-blue-600 font-bold">${flexMatch[1]}</span>`;
+                    }
+                }
+
                 history.forEach(record => {
                     const date = new Date(record.timestamp);
                     const dateStr = `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+
+                    // 【新增】解析訊息中的「預計下班時間」
+                    const flexMatch = record.message && record.message.match(/預計下班：(\d{2}:\d{2})/);
+                    const estOffTime = flexMatch ? flexMatch[1] : '';
 
                     // 【新增】判斷狀態並顯示對應圖示 (紅色叉叉=失敗, 綠色打勾=線上, 橘色時鐘=離線)
                     const isOffline = record.isOffline === true || (record.message && record.message.includes('離線'));
@@ -327,14 +344,18 @@
                     li.className = liClasses;
 
                     // 移除 "打卡成功：" 前綴以節省空間
-                    let displayMsg = (record.message || '').replace(/^打卡成功[：:!]\s*/, '').replace(/\(離線.*\)/, '(離線)');
+                    let displayMsg = (record.message || '').replace(/^打卡成功[：:!]\s*/, '').split('\n')[0].replace(/\(離線.*\)/, '(離線)');
+
+                    // 【優化】如果有預計下班時間，則格式化顯示
+                    const estOffSpan = estOffTime ? `<span class="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded text-[10px] ml-1 font-bold">下班 ${estOffTime}</span>` : '';
 
                     li.innerHTML = `
-                        <div class="flex items-center">
+                        <div class="flex items-center min-w-0">
                             ${iconSvg}
-                            <span>${dateStr}</span>
+                            <span class="flex-shrink-0">${dateStr}</span>
+                            ${estOffSpan}
                         </div>
-                        <span class="text-gray-500 text-xs truncate ml-2 max-w-[140px]" title="${record.message}">${displayMsg}</span>
+                        <span class="text-gray-500 text-xs truncate ml-2 max-w-[120px]" title="${record.message}">${displayMsg}</span>
                     `;
 
                     // 綁定點擊事件顯示詳細資訊
@@ -713,6 +734,7 @@
         // ===============================================================
 
         function handleCheckInResult(result) {
+            hideLoading(); // 【最重要修正】收到結果後立即停止載入動畫並顯示訊息區塊
             const isOfflineSuccess = result.status === 'success' && result.message.includes('離線');
             const container = document.getElementById('status-container');
             container.classList.remove('bg-gray-50', 'bg-green-100', 'bg-red-100');
@@ -741,27 +763,34 @@
             if (isOfflineSuccess) {
                 // 【您的要求】離線成功的專屬樣式
                 container.classList.add('bg-amber-50'); // 淡橘色背景
-                updateMessage(result.message, 'text-amber-700'); // 橘色文字
+                updateMessage(result.message + '<br><span class="text-xs text-gray-400 mt-2 block">視窗將於 45 秒後自動關閉</span>', 'text-amber-700'); // 橘色文字
                 checkinButton.textContent = '打卡完成 (離線)';
                 checkinButton.disabled = true; // 【您的要求】禁用按鈕
                 checkinButton.classList.remove('bg-blue-600', 'btn-pulse');
                 checkinButton.classList.add('bg-amber-500'); // 橘色按鈕
                 document.getElementById('default-icon').style.display = 'none';
                 document.getElementById('offline-success-icon').style.display = 'block';
+
+                // 成功則不解鎖 isProcessing，並設定自動關閉
+                setTimeout(() => { if (liff.closeWindow) liff.closeWindow(); }, 45000);
             } else if (result.status === 'success') {
                 // 正常線上成功
                 container.classList.add('bg-green-100');
-                updateMessage(result.message, 'text-green-800');
+                updateMessage(result.message + '<br><span class="text-xs text-gray-400 mt-2 block">視窗將於 45 秒後自動關閉</span>', 'text-green-800');
                 checkinButton.textContent = '打卡完成';
                 checkinButton.disabled = true; // 【您的要求】禁用按鈕
                 checkinButton.classList.remove('bg-blue-600', 'btn-pulse');
                 checkinButton.classList.add('bg-green-600');
+
+                // 成功則不解鎖 isProcessing，並設定自動關閉
+                setTimeout(() => { if (liff.closeWindow) liff.closeWindow(); }, 45000);
             } else {
                 // 失敗
                 container.classList.add('bg-red-100');
                 updateMessage(result.message || '後端回報了一個錯誤，但未提供詳細訊息。', 'text-red-800');
                 checkinButton.textContent = '重新打卡';
                 checkinButton.disabled = false;
+                isProcessing = false; // 【修正】僅在失敗時釋放鎖定，允許重新嘗試
             }
         }
 
