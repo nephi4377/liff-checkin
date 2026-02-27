@@ -15,7 +15,7 @@
     <script>
         const LIFF_ID = '2007974938-jVxn6y37';
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
-        const APP_VERSION = 'v26.02.27.1936';
+        const APP_VERSION = 'v26.02.27.2015';
     </script>
     <!-- =============================================================== -->
 
@@ -297,13 +297,15 @@
             if (history.length > 0) {
                 listEl.innerHTML = '';
 
-                // 【新增】檢查今日是否已打過卡，若有則在主畫面顯示上班時間與預計下班時間
-                const latest = history[0];
-                const isToday = latest && new Date(latest.timestamp).toDateString() === new Date().toDateString();
-                if (isToday && !latest.message.includes('失敗')) {
-                    const checkinDate = new Date(latest.timestamp);
+                // 【修正】檢查今日是否已打過卡，並取得「今天第一筆」成功紀錄作為上班時間
+                const todayStr = new Date().toDateString();
+                const todayRecords = history.filter(r => new Date(r.timestamp).toDateString() === todayStr && !r.message.includes('失敗'));
+
+                if (todayRecords.length > 0) {
+                    const firstToday = todayRecords[todayRecords.length - 1]; // 歷史紀錄是最新在前，所以取最後一筆是當天最早的
+                    const checkinDate = new Date(firstToday.timestamp);
                     const checkinTimeStr = `${checkinDate.getHours().toString().padStart(2, '0')}:${checkinDate.getMinutes().toString().padStart(2, '0')}`;
-                    const flexMatch = latest.message && latest.message.match(/預計下班：(\d{2}:\d{2})/);
+                    const flexMatch = firstToday.message && firstToday.message.match(/預計下班：(\d{2}:\d{2})/);
                     if (flexMatch) {
                         messageElement.innerHTML = `您今天已完成上班打卡 <span class="text-blue-600 font-bold">${checkinTimeStr}</span>！<br>預計下班時間：<span class="text-blue-600 font-bold">${flexMatch[1]}</span>`;
                     }
