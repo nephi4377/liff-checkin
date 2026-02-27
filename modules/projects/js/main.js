@@ -252,7 +252,7 @@ ${notes || '無'}`;
             closeBtn.disabled = true; // 禁用按鈕，避免重複點擊
             closeBtn.textContent = '專案已結案';
           } else {
-            showGlobalNotification(`結案失敗: ${finalJobState.result?.message || '未知錯誤'}`, 5000, 'error');
+            showGlobalNotification(`結案失敗: ${result.message || '未知錯誤'}`, 5000, 'error');
           }
         }).catch(err => showGlobalNotification(`結案請求失敗: ${err.message}`, 5000, 'error'));
       }
@@ -363,19 +363,19 @@ function setupScrollListener() {
  * [v130.0 新增] 定期刷新資料的函式
  */
 async function refreshData(projectId, userId, API_BASE_URL) {
-    // [v602.0 重構] 改為使用統一的 apiRequest 函式，不再直接使用 fetch。
-    const fetchUrl = `${CONFIG.GAS_WEB_APP_URL}?page=project&id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
-    const response = await fetch(fetchUrl); // 維持 fetch，因為此函式在 apiRequest 之外
-    const freshData = await response.json();
+  // [v602.0 重構] 改為使用統一的 apiRequest 函式，不再直接使用 fetch。
+  const fetchUrl = `${CONFIG.GAS_WEB_APP_URL}?page=project&id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
+  const response = await fetch(fetchUrl); // 維持 fetch，因為此函式在 apiRequest 之外
+  const freshData = await response.json();
 
-    const oldDataSignature = JSON.stringify({ overview: state.overview, schedule: state.currentScheduleData, dailyLogs: state.currentLogsData, communicationHistory: state.communicationHistory });
-    const newDataSignature = JSON.stringify({ overview: freshData.overview, schedule: freshData.schedule, dailyLogs: freshData.dailyLogs, communicationHistory: freshData.communicationHistory });
+  const oldDataSignature = JSON.stringify({ overview: state.overview, schedule: state.currentScheduleData, dailyLogs: state.currentLogsData, communicationHistory: state.communicationHistory });
+  const newDataSignature = JSON.stringify({ overview: freshData.overview, schedule: freshData.schedule, dailyLogs: freshData.dailyLogs, communicationHistory: freshData.communicationHistory });
 
-    if (oldDataSignature !== newDataSignature) {
-        await refreshProjectData(true); // 呼叫新的刷新函式，並顯示通知
-    } else {
-        logToPage('✅ 背景自動更新：資料無變動。');
-    }
+  if (oldDataSignature !== newDataSignature) {
+    await refreshProjectData(true); // 呼叫新的刷新函式，並顯示通知
+  } else {
+    logToPage('✅ 背景自動更新：資料無變動。');
+  }
 }
 
 /**
@@ -386,25 +386,25 @@ async function refreshData(projectId, userId, API_BASE_URL) {
  * @param {string} API_BASE_URL - 後端 API 網址。
  */
 async function refreshCommunicationHistory(projectId, userId, API_BASE_URL) {
-    try {
-        logToPage('🔄 輕量更新：正在請求最新的溝通紀錄...');
-        // [重構] 改為使用統一的 apiRequest 函式，以保持一致性
-        const result = await apiRequest({
-            action: 'project',
-            payload: { id: projectId, userId: userId }
-        });
+  try {
+    logToPage('🔄 輕量更新：正在請求最新的溝通紀錄...');
+    // [重構] 改為使用統一的 apiRequest 函式，以保持一致性
+    const result = await apiRequest({
+      action: 'project',
+      payload: { id: projectId, userId: userId }
+    });
 
-        if (result.success) {
-            const freshData = result.data;
-            state.communicationHistory = freshData.communicationHistory;
-            renderCommunicationHistory(state.communicationHistory, state.currentUserId);
-            logToPage('✅ 溝通紀錄已無縫更新。');
-        } else {
-            throw new Error('後端未回傳有效的溝通紀錄。');
-        }
-    } catch (err) {
-        logToPage(`❌ 輕量更新失敗: ${err.message}`, 'error');
+    if (result.success) {
+      const freshData = result.data;
+      state.communicationHistory = freshData.communicationHistory;
+      renderCommunicationHistory(state.communicationHistory, state.currentUserId);
+      logToPage('✅ 溝通紀錄已無縫更新。');
+    } else {
+      throw new Error('後端未回傳有效的溝通紀錄。');
     }
+  } catch (err) {
+    logToPage(`❌ 輕量更新失敗: ${err.message}`, 'error');
+  }
 }
 
 /**
@@ -412,34 +412,34 @@ async function refreshCommunicationHistory(projectId, userId, API_BASE_URL) {
  * @param {boolean} [showNotification=false] - 是否在刷新後顯示通知。
  */
 async function refreshProjectData(showNotification = false) {
-    try {
-        logToPage('🔄 輕量更新：正在請求最新的專案資料...');
-        const result = await apiRequest({ // [v317.0 API化] 改為使用統一請求函式
-            action: 'project',
-            payload: { id: state.projectId, userId: state.currentUserId }
-        });
+  try {
+    logToPage('🔄 輕量更新：正在請求最新的專案資料...');
+    const result = await apiRequest({ // [v317.0 API化] 改為使用統一請求函式
+      action: 'project',
+      payload: { id: state.projectId, userId: state.currentUserId }
+    });
 
-        if (!result.success) throw new Error(result.error);
-        const freshData = result.data;
+    if (!result.success) throw new Error(result.error);
+    const freshData = result.data;
 
-        // 更新 state
-        state.overview = freshData.overview || {};
-        state.currentScheduleData = freshData.schedule || [];
-        state.currentLogsData = freshData.dailyLogs || [];
-        state.communicationHistory = freshData.communicationHistory || {};
+    // 更新 state
+    state.overview = freshData.overview || {};
+    state.currentScheduleData = freshData.schedule || [];
+    state.currentLogsData = freshData.dailyLogs || [];
+    state.communicationHistory = freshData.communicationHistory || {};
 
-        // [v304.0 核心修正] 移除對已不存在的 runWhenReady 函式的呼叫。
-        // 在資料刷新後，直接呼叫渲染函式來更新畫面。
-        displayProjectInfo(state.overview, state.currentScheduleData);
-        ScheduleActions.renderSchedulePage(state.overview, state.currentScheduleData);
+    // [v304.0 核心修正] 移除對已不存在的 runWhenReady 函式的呼叫。
+    // 在資料刷新後，直接呼叫渲染函式來更新畫面。
+    displayProjectInfo(state.overview, state.currentScheduleData);
+    ScheduleActions.renderSchedulePage(state.overview, state.currentScheduleData);
 
-        if (showNotification) {
-            showGlobalNotification('偵測到專案資料更新，畫面已自動刷新。', 3000, 'info');
-        }
-        logToPage('✅ 專案資料已無縫更新。');
-    } catch (err) {
-        logToPage(`❌ 輕量更新失敗: ${err.message}`, 'error');
+    if (showNotification) {
+      showGlobalNotification('偵測到專案資料更新，畫面已自動刷新。', 3000, 'info');
     }
+    logToPage('✅ 專案資料已無縫更新。');
+  } catch (err) {
+    logToPage(`❌ 輕量更新失敗: ${err.message}`, 'error');
+  }
 }
 
 /**
@@ -448,119 +448,119 @@ async function refreshProjectData(showNotification = false) {
  * @returns {Promise<void>}
  */
 async function fetchEmployees() {
-    if (state.dataReady.allEmployees) return;
+  if (state.dataReady.allEmployees) return;
 
-    const employeeCacheKey = 'console_employees';
-    const cachedItem = localStorage.getItem(employeeCacheKey);
-    // [v602.0 重構] ATTENDANCE_API_URL 改為從 config.js 讀取
+  const employeeCacheKey = 'console_employees';
+  const cachedItem = localStorage.getItem(employeeCacheKey);
+  // [v602.0 重構] ATTENDANCE_API_URL 改為從 config.js 讀取
 
-    if (cachedItem) {
-        try {
-            const { timestamp, data } = JSON.parse(cachedItem);
-            if (Date.now() - timestamp < 24 * 60 * 60 * 1000) { // 快取 1 天
-                state.allEmployees = data;
-                state.dataReady.allEmployees = true;
-                logToPage('⚡️ 從快取載入員工資料。');
-                dependencyManager.notify('allEmployees'); // [v295.0] 發布 'allEmployees' 就緒通知
-                return;
-            }
-        } catch (e) {
-            localStorage.removeItem(employeeCacheKey);
-        }
-    }
-
-    logToPage('🔄 正在從 CheckinSystem 請求所有員工資料...');
+  if (cachedItem) {
     try {
-        // [v408.0 核心修正] 修正日誌中 requestor 為 N/A 的問題。
-        // 在請求員工列表時，附上當前操作者的 userId 和 userName，以便後端能正確記錄請求來源。
-        const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
-        url.searchParams.set('page', 'attendance_api');
-        url.searchParams.set('action', 'get_employees');
-        url.searchParams.set('userId', state.currentUserId);
-        url.searchParams.set('userName', state.currentUserName);
-        const response = await fetch(url.toString());
-        const result = await response.json();
-        if (result.success && Array.isArray(result.data)) {
-            state.allEmployees = result.data;
-            state.dataReady.allEmployees = true;
-            localStorage.setItem(employeeCacheKey, JSON.stringify({ timestamp: Date.now(), data: result.data }));
-            logToPage('✅ 成功獲取並快取員工資料。');            
-        } else {
-            throw new Error(result.message || '後端未回傳有效資料');
-        }
-    } catch (err) {
-        // [v293.0 核心改造] 根據您的指示，實作自動重試機制，而不是直接放棄
-        logToPage(`❌ 獲取員工資料失敗: ${err.message}。將在 5 秒後重試...`, 'error');
-        setTimeout(fetchEmployees, 15000); // [v294.0] 根據您的指示，將重試時間延長至 15 秒
-        return; // 提前返回，不執行後續的 runAllPendingActions
+      const { timestamp, data } = JSON.parse(cachedItem);
+      if (Date.now() - timestamp < 24 * 60 * 60 * 1000) { // 快取 1 天
+        state.allEmployees = data;
+        state.dataReady.allEmployees = true;
+        logToPage('⚡️ 從快取載入員工資料。');
+        dependencyManager.notify('allEmployees'); // [v295.0] 發布 'allEmployees' 就緒通知
+        return;
+      }
+    } catch (e) {
+      localStorage.removeItem(employeeCacheKey);
     }
+  }
 
-    // [v295.0] 發布 'allEmployees' 就緒通知
-    dependencyManager.notify('allEmployees');
+  logToPage('🔄 正在從 CheckinSystem 請求所有員工資料...');
+  try {
+    // [v408.0 核心修正] 修正日誌中 requestor 為 N/A 的問題。
+    // 在請求員工列表時，附上當前操作者的 userId 和 userName，以便後端能正確記錄請求來源。
+    const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
+    url.searchParams.set('page', 'attendance_api');
+    url.searchParams.set('action', 'get_employees');
+    url.searchParams.set('userId', state.currentUserId);
+    url.searchParams.set('userName', state.currentUserName);
+    const response = await fetch(url.toString());
+    const result = await response.json();
+    if (result.success && Array.isArray(result.data)) {
+      state.allEmployees = result.data;
+      state.dataReady.allEmployees = true;
+      localStorage.setItem(employeeCacheKey, JSON.stringify({ timestamp: Date.now(), data: result.data }));
+      logToPage('✅ 成功獲取並快取員工資料。');
+    } else {
+      throw new Error(result.message || '後端未回傳有效資料');
+    }
+  } catch (err) {
+    // [v293.0 核心改造] 根據您的指示，實作自動重試機制，而不是直接放棄
+    logToPage(`❌ 獲取員工資料失敗: ${err.message}。將在 5 秒後重試...`, 'error');
+    setTimeout(fetchEmployees, 15000); // [v294.0] 根據您的指示，將重試時間延長至 15 秒
+    return; // 提前返回，不執行後續的 runAllPendingActions
+  }
+
+  // [v295.0] 發布 'allEmployees' 就緒通知
+  dependencyManager.notify('allEmployees');
 }
 
 // [v295.0 核心重構] 引入事件驅動的依賴管理器，取代原有的 runWhenReady/runAllPendingActions
 const dependencyManager = {
-    subscribers: [],
+  subscribers: [],
 
-    /**
-     * 訂閱一個或多個資料依賴。當所有依賴都就緒時，執行回呼函式。
-     * @param {string[]} dependencies - 依賴的資料鍵名陣列 (來自 state.dataReady)。
-     * @param {Function} callback - 當依賴滿足時要執行的回呼函式。
-     * @param {string} name - (可選) 動作的名稱，用於日誌記錄。
-     */
-    subscribe(dependencies, callback, name = '未命名動作') {
-        const subscription = {
-            name,
-            dependencies,
-            callback,
-            isReady: () => dependencies.every(dep => state.dataReady[dep]),
-            executed: false
-        };
+  /**
+   * 訂閱一個或多個資料依賴。當所有依賴都就緒時，執行回呼函式。
+   * @param {string[]} dependencies - 依賴的資料鍵名陣列 (來自 state.dataReady)。
+   * @param {Function} callback - 當依賴滿足時要執行的回呼函式。
+   * @param {string} name - (可選) 動作的名稱，用於日誌記錄。
+   */
+  subscribe(dependencies, callback, name = '未命名動作') {
+    const subscription = {
+      name,
+      dependencies,
+      callback,
+      isReady: () => dependencies.every(dep => state.dataReady[dep]),
+      executed: false
+    };
 
-        // 註冊時立即檢查一次，如果條件已滿足，直接執行
-        if (subscription.isReady()) {
-            logToPage(`[DepManager] ${name} 的依賴項已滿足，立即執行。`);
-            callback();
-            subscription.executed = true;
-        }
-
-        this.subscribers.push(subscription);
-    },
-
-    /**
-     * 發布一個或多個資料已就緒的通知。
-     * @param {string|string[]} event - 已就緒的資料鍵名。
-     */
-    notify(event) {
-        const events = Array.isArray(event) ? event : [event];
-        logToPage(`[DepManager] 收到就緒通知: ${events.join(', ')}`);
-
-        // [v362.0 核心修正] 修正背景刷新時 UI 不更新的問題。
-        // 每次收到通知時，都應該重新檢查所有訂閱，而不是只處理未執行過的。
-        this.subscribers.forEach(sub => {
-            // 如果此訂閱尚未執行，且其依賴項包含剛剛觸發的事件之一
-            if (sub.dependencies.some(dep => events.includes(dep))) {
-                // 重新檢查此訂閱的所有依賴是否都已滿足
-                if (sub.isReady()) {
-                    logToPage(`[DepManager] ${sub.name} 的依賴項現已全部滿足，開始執行...`);
-                    sub.callback();
-                    // 移除 sub.executed = true，允許任務被重複觸發
-                }
-            }
-        });
+    // 註冊時立即檢查一次，如果條件已滿足，直接執行
+    if (subscription.isReady()) {
+      logToPage(`[DepManager] ${name} 的依賴項已滿足，立即執行。`);
+      callback();
+      subscription.executed = true;
     }
+
+    this.subscribers.push(subscription);
+  },
+
+  /**
+   * 發布一個或多個資料已就緒的通知。
+   * @param {string|string[]} event - 已就緒的資料鍵名。
+   */
+  notify(event) {
+    const events = Array.isArray(event) ? event : [event];
+    logToPage(`[DepManager] 收到就緒通知: ${events.join(', ')}`);
+
+    // [v362.0 核心修正] 修正背景刷新時 UI 不更新的問題。
+    // 每次收到通知時，都應該重新檢查所有訂閱，而不是只處理未執行過的。
+    this.subscribers.forEach(sub => {
+      // 如果此訂閱尚未執行，且其依賴項包含剛剛觸發的事件之一
+      if (sub.dependencies.some(dep => events.includes(dep))) {
+        // 重新檢查此訂閱的所有依賴是否都已滿足
+        if (sub.isReady()) {
+          logToPage(`[DepManager] ${sub.name} 的依賴項現已全部滿足，開始執行...`);
+          sub.callback();
+          // 移除 sub.executed = true，允許任務被重複觸發
+        }
+      }
+    });
+  }
 };
 
 /**
  * [v292.0 新增] 封裝初始化任務交辦中心的邏輯。
  */
 function initializeTaskSenderForConsole() {
-    const taskSenderContainer = document.getElementById('task-sender-container');
-    if (!taskSenderContainer || document.getElementById('task-sender-wrapper')) return;
-    // [v602.0 重構] 移除對 window.API_BASE_URL 的依賴
-    const config = { state: { ...state }, callbacks: { onSuccess: () => refreshCommunicationHistory(state.projectId, state.currentUserId), onOptimisticUpdate: window.addOptimisticCommunicationCard } };
-    initializeTaskSender(taskSenderContainer, config, { style: 'console', defaultAction: 'ReplyText' });
+  const taskSenderContainer = document.getElementById('task-sender-container');
+  if (!taskSenderContainer || document.getElementById('task-sender-wrapper')) return;
+  // [v602.0 重構] 移除對 window.API_BASE_URL 的依賴
+  const config = { state: { ...state }, callbacks: { onSuccess: () => refreshCommunicationHistory(state.projectId, state.currentUserId), onOptimisticUpdate: window.addOptimisticCommunicationCard } };
+  initializeTaskSender(taskSenderContainer, config, { style: 'console', defaultAction: 'ReplyText' });
 }
 // [v292.0] 將 refreshProjectData 掛載到 window，以便其他模組呼叫
 
@@ -569,20 +569,20 @@ function initializeTaskSenderForConsole() {
  * @param {string} tempId - 臨時卡片的 ID (e.g., 'temp-12345')。
  * @param {object} finalLogData - 後端回傳的、包含真實 LogID 的完整日誌資料。
  */
-window.replaceOptimisticCard = function(tempId, finalLogData) {
-    // [v323.0 核心修正] 修正樂觀更新卡片無法被替換的問題。
-    // _buildLogCard 在建立卡片時，會為 ID 加上 'log-' 前綴，因此在尋找時也必須加上。
-    const tempCard = document.getElementById('log-' + tempId);
-    if (!tempCard) return;
+window.replaceOptimisticCard = function (tempId, finalLogData) {
+  // [v323.0 核心修正] 修正樂觀更新卡片無法被替換的問題。
+  // _buildLogCard 在建立卡片時，會為 ID 加上 'log-' 前綴，因此在尋找時也必須加上。
+  const tempCard = document.getElementById('log-' + tempId);
+  if (!tempCard) return;
 
-    // 1. 根據最終資料，建立一張全新的、完整的卡片
-    const finalCard = _buildLogCard(finalLogData, false);
+  // 1. 根據最終資料，建立一張全新的、完整的卡片
+  const finalCard = _buildLogCard(finalLogData, false);
 
-    // 2. 在臨時卡片的位置，用新卡片替換掉它
-    tempCard.parentNode.replaceChild(finalCard, tempCard);
+  // 2. 在臨時卡片的位置，用新卡片替換掉它
+  tempCard.parentNode.replaceChild(finalCard, tempCard);
 
-    // 3. 觸發新卡片中可能存在的圖片懶加載
-    lazyLoadImages();
+  // 3. 觸發新卡片中可能存在的圖片懶加載
+  lazyLoadImages();
 };
 
 /**
@@ -631,11 +631,11 @@ window.refreshProjectData = refreshProjectData;
  * - 移除了在認證前顯示快取資料的邏輯，改為在認證成功後才顯示載入動畫並請求資料。
  */
 async function initializeApp() {
-      // [v425.0 架構優化] 支援混合模式 (從主控台內嵌 或 直接LIFF開啟)
-    const urlParams = new URLSearchParams(window.location.search);
-    let projectId = urlParams.get('id');
-    let userId = urlParams.get('uid');
-    let userName = urlParams.get('name');
+  // [v425.0 架構優化] 支援混合模式 (從主控台內嵌 或 直接LIFF開啟)
+  const urlParams = new URLSearchParams(window.location.search);
+  let projectId = urlParams.get('id');
+  let userId = urlParams.get('uid');
+  let userName = urlParams.get('name');
 
   // 3. 判斷環境並賦值
   const isLocalTest = ['127.0.0.1', 'localhost'].includes(window.location.hostname);
@@ -648,27 +648,27 @@ async function initializeApp() {
   } else {
 
     if (userId && userName) {
-        // 模式一：從主控台內嵌，已取得 uid 和 name
-        logToPage('⚡️ 偵測到 uid，以內嵌模式啟動...');
-        state.currentUserName = userName;
+      // 模式一：從主控台內嵌，已取得 uid 和 name
+      logToPage('⚡️ 偵測到 uid，以內嵌模式啟動...');
+      state.currentUserName = userName;
     } else {
-        // 模式二：直接開啟，需執行 LIFF 驗證
-        logToPage('🔄 未偵測到 uid，以獨立 LIFF 模式啟動...');
-        await liff.init({ liffId: CONFIG.PROJECT_CONSOLE_LIFF_ID });
-        if (!liff.isLoggedIn()) {
-            liff.login();
-            return;
-        }
-        const profile = await liff.getProfile();
-        userId = profile.userId;
-        state.currentUserName = profile.displayName;
-        // [v425.1 修正] 補回對 liff.state 的處理，確保從 LINE 直接開啟時能正確讀取案號
-        if (urlParams.has('liff.state')) {
-            const liffState = decodeURIComponent(urlParams.get('liff.state')).replace(/^\?/, '');
-            const liffParams = new URLSearchParams(liffState);
-            if (liffParams.has('id')) projectId = liffParams.get('id');
-            // uid 已從 getProfile() 取得，此處無需再讀取
-        }
+      // 模式二：直接開啟，需執行 LIFF 驗證
+      logToPage('🔄 未偵測到 uid，以獨立 LIFF 模式啟動...');
+      await liff.init({ liffId: CONFIG.PROJECT_CONSOLE_LIFF_ID });
+      if (!liff.isLoggedIn()) {
+        liff.login();
+        return;
+      }
+      const profile = await liff.getProfile();
+      userId = profile.userId;
+      state.currentUserName = profile.displayName;
+      // [v425.1 修正] 補回對 liff.state 的處理，確保從 LINE 直接開啟時能正確讀取案號
+      if (urlParams.has('liff.state')) {
+        const liffState = decodeURIComponent(urlParams.get('liff.state')).replace(/^\?/, '');
+        const liffParams = new URLSearchParams(liffState);
+        if (liffParams.has('id')) projectId = liffParams.get('id');
+        // uid 已從 getProfile() 取得，此處無需再讀取
+      }
     }
   }
 
@@ -778,7 +778,7 @@ async function handleCommunicationAction(action, notificationId, content = '') {
       action: payload.action,
       payload: payload
     });
-    
+
     if (!backendResult || !backendResult.success) throw new Error(backendResult.message || '後端處理失敗');
     showGlobalNotification(backendResult.message || '操作成功！', 3000, 'success');
 
@@ -812,22 +812,22 @@ async function loadDataAndRender(projectId, userId, pageLoadId) {
         const { timestamp, data } = JSON.parse(cachedItem);
         // [核心修正] 修正快取擁有者的判斷邏輯，應從 data 物件本身讀取 ownerId
         if ((Date.now() - timestamp < CACHE_DURATION_MS) && (data && data.ownerId === userId)) {
-        // --- 情況一：快取有效 ---
-        // [v202.0 核心修正] 增加對快取內容的健康檢查。
-        // 如果快取中儲存的是一筆錯誤的回應，則將其視為無效快取，並繼續向後端請求。
-        if (data.error) {
-          logToPage('🗑️ 快取中包含錯誤紀錄，將其視為無效並清除。');
-          localStorage.removeItem(CACHE_KEY);
+          // --- 情況一：快取有效 ---
+          // [v202.0 核心修正] 增加對快取內容的健康檢查。
+          // 如果快取中儲存的是一筆錯誤的回應，則將其視為無效快取，並繼續向後端請求。
+          if (data.error) {
+            logToPage('🗑️ 快取中包含錯誤紀錄，將其視為無效並清除。');
+            localStorage.removeItem(CACHE_KEY);
+          } else {
+            logToPage('⚡️ 偵測到有效快取，立即渲染畫面...');
+            state.projectId = projectId;
+            state.currentUserName = data.userName || `使用者 (${userId.slice(-6)})`;
+
+            // 直接使用從快取解析出的 data 物件進行渲染
+            handleDataResponse(data);
+            hasRenderedFromCache = true;
+          }
         } else {
-          logToPage('⚡️ 偵測到有效快取，立即渲染畫面...');
-          state.projectId = projectId;
-          state.currentUserName = data.userName || `使用者 (${userId.slice(-6)})`;
-          
-          // 直接使用從快取解析出的 data 物件進行渲染
-          handleDataResponse(data);
-          hasRenderedFromCache = true;
-        }
-      } else {
           // --- 情況二：快取無效 (過期或使用者不符) ---
           const reason = (data && data.ownerId !== userId) ? 'UID 不符' : '已過期';
           logToPage(`🗑️ 快取無效 (${reason})，將繼續向後端請求新資料。`);
@@ -852,27 +852,27 @@ async function loadDataAndRender(projectId, userId, pageLoadId) {
   try {
     logToPage('🔄 正在從後端請求專案資料...');
     const result = await apiRequest({ // [v317.0 API化] 改為使用統一請求函式
-        action: 'project',
-        payload: { id: projectId, userId: userId }
+      action: 'project',
+      payload: { id: projectId, userId: userId }
     });
 
     // [v201.0 核心修正] 在處理任何資料前，先檢查後端是否回傳錯誤。
     if (!result.success) {
-        const freshData = result.data || {}; // 即使失敗，也嘗試從 data 中取錯誤訊息
-        // 如果後端回傳錯誤，則不進行任何渲染或快取操作，直接顯示錯誤。
-        logToPage(`❌ 後端回傳錯誤: ${freshData.error}`, 'error');
-        displayError({ message: freshData.error });
-        return;
+      const freshData = result.data || {}; // 即使失敗，也嘗試從 data 中取錯誤訊息
+      // 如果後端回傳錯誤，則不進行任何渲染或快取操作，直接顯示錯誤。
+      logToPage(`❌ 後端回傳錯誤: ${freshData.error}`, 'error');
+      displayError({ message: freshData.error });
+      return;
     }
 
     // 【⭐️ 核心修正：使用後端傳來的使用者名稱 ⭐️】
     const freshData = result.data;
     // [v318.0 核心修正] 增加防禦性檢查，防止後端在某些情況下 (如找不到專案) 回傳 null 的 data，導致前端崩潰。
     if (!freshData) {
-        const errorMsg = `後端未回傳有效的專案資料 (ID: ${projectId})，可能該專案不存在或已被刪除。`;
-        logToPage(`❌ ${errorMsg}`, 'error');
-        displayError({ message: errorMsg });
-        return;
+      const errorMsg = `後端未回傳有效的專案資料 (ID: ${projectId})，可能該專案不存在或已被刪除。`;
+      logToPage(`❌ ${errorMsg}`, 'error');
+      displayError({ message: errorMsg });
+      return;
     }
     state.currentUserName = freshData.userName || `使用者 (${userId.slice(-6)})`;
     logToPage(`✅ 操作者已設定: ${state.currentUserName}`);
@@ -890,15 +890,15 @@ async function loadDataAndRender(projectId, userId, pageLoadId) {
       if (cachedItem) {
         const { data: oldData } = JSON.parse(cachedItem);
         // 為了避免因時間戳或 ownerId 不同而誤判，只比較核心資料
-        const oldDataSignature = JSON.stringify({ 
-          overview: oldData.overview, 
-          schedule: oldData.schedule, 
-          dailyLogs: oldData.dailyLogs, 
-          communicationHistory: oldData.communicationHistory 
+        const oldDataSignature = JSON.stringify({
+          overview: oldData.overview,
+          schedule: oldData.schedule,
+          dailyLogs: oldData.dailyLogs,
+          communicationHistory: oldData.communicationHistory
         });
         // [核心修正] 從 freshData 物件本身提取對應的屬性來產生簽名，而不是從它的下一層。
         const newDataSignature = JSON.stringify({ overview: freshData.overview, schedule: freshData.schedule, dailyLogs: freshData.dailyLogs, communicationHistory: freshData.communicationHistory });
-        
+
         // [核心修正] 只有在資料確定有變動時，才執行畫面更新與快取寫入
         if (oldDataSignature !== newDataSignature) {
           logToPage('🔄 偵測到後端資料已更新，正在執行畫面刷新...');
@@ -946,11 +946,11 @@ document.addEventListener('click', (e) => {
   // 如果點擊的目標是在 .left-sidebar 裡面，就自動關閉選單
   const clickedInsideSidebar = e.target.closest('.left-sidebar');
   if (clickedInsideSidebar) {
-      const leftSidebar = document.querySelector('.left-sidebar');
-      // 確保只有在選單是開啟狀態時才關閉
-      if (leftSidebar && leftSidebar.classList.contains('open')) {
-          leftSidebar.classList.remove('open');
-      }
+    const leftSidebar = document.querySelector('.left-sidebar');
+    // 確保只有在選單是開啟狀態時才關閉
+    if (leftSidebar && leftSidebar.classList.contains('open')) {
+      leftSidebar.classList.remove('open');
+    }
   }
 
   const target = e.target.closest('[data-action]');
@@ -988,7 +988,7 @@ document.addEventListener('click', (e) => {
       // [UX Improvement] Fetch the timestamp from the card to show a more user-friendly confirmation.
       const card = document.getElementById(`log-${logId}`);
       const timestampText = card ? card.querySelector('.log-card-header small')?.textContent : `Log ID: ${logId}`;
-      
+
       if (confirm(`您確定要永久刪除這篇於「${timestampText}」發佈的日誌嗎？`)) {
         LogActions.handleDeleteLog(logId); // Call the handler only after confirmation.
       }

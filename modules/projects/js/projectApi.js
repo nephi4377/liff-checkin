@@ -17,13 +17,16 @@ import { CONFIG } from '/shared/js/config.js';
  * 此函式會將 payload 包裝在 FormData 中，以解決跨來源請求問題。
  * @param {object} payload - 要傳送給後端的資料包，必須包含 action。
  * @returns {Promise<object>} 一個解析為後端初步回應 (包含 jobId) 的 Promise。
+ * 防止任何無效的 Action 被發往後端。
  */
 function postToGas(payload) {
-    // [v2026.02 緊急安全性攔截] 防止誤將任務狀態當成 action 發送 POST
+    // [v2026.02.27 終極攔截] 防止任何無效 Action (空值或任務狀態) 被發往後端。
     const invalidPollingActions = ['requested', 'in_progress', 'completed', 'failed', 'unknown_payload'];
-    if (payload && invalidPollingActions.includes(payload.action)) {
-        console.error(`[projectApi] 偵測到不正確的 POST 動作攔截: ${payload.action}。這通常是輪詢邏輯誤觸。`);
-        return Promise.reject(new Error(`不正確的 API 動作: ${payload.action}`));
+    const currentAction = payload ? payload.action : null;
+
+    if (!currentAction || invalidPollingActions.includes(currentAction)) {
+        console.error(`[projectApi] 偵測到不正確的 POST 動作攔截: "${currentAction}"。這通常是調用處誤傳了物件。`, payload);
+        return Promise.reject(new Error(`拒絕發送無效 API 動作: ${currentAction}`));
     }
 
     const formData = new FormData();
