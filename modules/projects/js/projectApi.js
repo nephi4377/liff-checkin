@@ -64,6 +64,13 @@ const WRITE_ACTIONS = new Set([
  * @returns {Promise<{success: boolean, data: any, message: string, error: string | null}>}
  */
 export async function request({ action, payload = {} }) {
+    // [v2026.02.27 深度防禦] 嚴禁將「任務狀態」作為 API 動作。這通常發生在連鎖調用誤傳了回傳物件。
+    const STATUS_WORDS = ['requested', 'in_progress', 'completed', 'failed', 'unknown_payload', 'pending'];
+    if (STATUS_WORDS.includes(action) || !action) {
+        console.error(`[projectApi] 攔截到非法請求動作: "${action}"。請檢查調用來源。`, { action, payload });
+        return { success: false, message: `非法 API 動作攔截: ${action}`, error: 'Invalid Action' };
+    }
+
     try {
         let result;
 

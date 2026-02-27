@@ -1,5 +1,6 @@
-﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
+﻿﻿<!DOCTYPE html>
 <html lang="zh-Hant">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -16,22 +17,29 @@
     .mobile-nav-toggle {
       display: block;
     }
+
     /* 在寬度大於 768px 的螢幕上隱藏漢堡選單按鈕 */
-    @media (min-width: 768px) { .mobile-nav-toggle { display: none; } }
+    @media (min-width: 768px) {
+      .mobile-nav-toggle {
+        display: none;
+      }
+    }
 
     /* [v262.0 新增] 溝通紀錄卡片的閃爍動畫 (與 hub.html 同步) */
     .card-overdue {
-        animation: pulse-red 1.5s infinite;
+      animation: pulse-red 1.5s infinite;
     }
-    @keyframes pulse-red {
-        0%,
-        100% {
-            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
-        }
 
-        70% {
-            box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
-        }
+    @keyframes pulse-red {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+      }
+
+      70% {
+        box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+      }
     }
   </style>
   <!-- [新增] 引入 flatpickr 日期選擇器樣式 -->
@@ -46,8 +54,9 @@
   </script>
   <!-- [v471.0 快取清除] 更新版本號以強制瀏覽器下載最新的 JavaScript 檔案。
        這可以解決因瀏覽器快取舊版 api.js，導致輪詢任務狀態時發送錯誤 POST 請求的問題。 -->
-  <script type="module" src="./js/main.js?v=471.0"></script>
+  <script type="module" src="./js/main.js?v=26.02.27.2200"></script>
 </head>
+
 <body>
   <div class="container">
     <!-- 導覽：手機版漢堡選單按鈕 -->
@@ -115,8 +124,10 @@
         <footer class="text-right space-x-2 mt-4">
           <input type="file" id="photo-file-input" multiple accept="image/*" style="display:none;">
           <!-- 【⭐️ 核心修正：移除行內樣式，改用 CSS class 統一管理顏色 ⭐️】 -->
-          <button id="add-photos-button" type="button" class="btn btn-green" data-action="triggerPhotoUpload">新增照片</button>
-          <button id="modal-cancel-btn" type="button" class="btn btn-secondary" data-action="closePhotoModal">取消</button>
+          <button id="add-photos-button" type="button" class="btn btn-green"
+            data-action="triggerPhotoUpload">新增照片</button>
+          <button id="modal-cancel-btn" type="button" class="btn btn-secondary"
+            data-action="closePhotoModal">取消</button>
           <button id="save-photos-button" type="button" class="btn btn-primary" data-action="savePhotos">儲存變更</button>
         </footer>
       </form>
@@ -134,4 +145,5 @@
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh-tw.js"></script>
 </body>
+
 </html>
