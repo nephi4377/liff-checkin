@@ -1,5 +1,6 @@
 ﻿<!DOCTYPE html>
 <html lang="zh-Hant">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,56 +15,132 @@
     <script>
         const LIFF_ID = '2007974938-jVxn6y37';
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
-        const APP_VERSION = 'v25.11.01.1656';
+        const APP_VERSION = 'v26.02.27.1645';
     </script>
     <!-- =============================================================== -->
-    
+
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
         /* 【您的要求】新增背景漸層，提升質感 */
         .gradient-bg {
             background-image: linear-gradient(to top, #f3e7e9 0%, #e3eeff 99%, #e3eeff 100%);
         }
-        .btn-pulse { animation: pulse 2s infinite; }
-        @keyframes pulse {
-            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
-            70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
-            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+
+        .btn-pulse {
+            animation: pulse 2s infinite;
         }
-        .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+            }
+
+            70% {
+                transform: scale(1.05);
+                box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+            }
+
+            100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+            }
+        }
+
+        .spinner {
+            border-top-color: #3498db;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
         #debug-log-container {
             font-family: 'Courier New', Courier, monospace;
             font-size: 12px;
             line-height: 1.6;
             max-height: 200px;
         }
-        .log-success { color: #22c55e; }
-        .log-error { color: #ef4444; }
-        .log-info { color: #6b7280; }
+
+        .log-success {
+            color: #22c55e;
+        }
+
+        .log-error {
+            color: #ef4444;
+        }
+
+        .log-info {
+            color: #6b7280;
+        }
+
         /* 【您的要求】狀態燈號樣式 */
         .status-indicator {
             transition: all 0.3s ease;
         }
-        .status-pending .status-icon { color: #9ca3af; /* gray-400 */ }
-        .status-pending .status-text { color: #6b7280; /* gray-500 */ }
-        .status-success .status-icon { color: #22c55e; /* green-500 */ }
-        .status-success .status-text { color: #166534; /* green-800 */ }
-        .status-error .status-icon { color: #ef4444; /* red-500 */ }
-        .status-error .status-text { color: #991b1b; /* red-800 */ }
-        .status-icon svg { width: 1.25rem; height: 1.25rem; }
 
+        .status-pending .status-icon {
+            color: #9ca3af;
+            /* gray-400 */
+        }
+
+        .status-pending .status-text {
+            color: #6b7280;
+            /* gray-500 */
+        }
+
+        .status-success .status-icon {
+            color: #22c55e;
+            /* green-500 */
+        }
+
+        .status-success .status-text {
+            color: #166534;
+            /* green-800 */
+        }
+
+        .status-error .status-icon {
+            color: #ef4444;
+            /* red-500 */
+        }
+
+        .status-error .status-text {
+            color: #991b1b;
+            /* red-800 */
+        }
+
+        .status-icon svg {
+            width: 1.25rem;
+            height: 1.25rem;
+        }
     </style>
 </head>
+
 <body class="gradient-bg flex flex-col items-center justify-center min-h-screen p-4">
     <div class="w-full max-w-md mx-auto bg-white rounded-2xl shadow-xl p-8 text-center">
-        
+
         <!-- 【您的要求】新增一個用於「離線成功」的 SVG 圖示 -->
         <div id="offline-success-icon" class="mb-6 hidden">
-            <svg class="mx-auto h-12 w-auto text-amber-500" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 16.2A4.5 4.5 0 0 0 17.5 8h-1.8A7 7 0 1 0 4 14.9"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg>
+            <svg class="mx-auto h-12 w-auto text-amber-500" xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <path d="M20 16.2A4.5 4.5 0 0 0 17.5 8h-1.8A7 7 0 1 0 4 14.9" />
+                <path d="M12 12v9" />
+                <path d="m16 16-4-4-4 4" />
+            </svg>
         </div>
         <div id="default-icon" class="mb-6">
-            <svg class="mx-auto h-12 w-auto text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <svg class="mx-auto h-12 w-auto text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none"
+                viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             <h1 class="text-2xl font-bold text-gray-800 mt-2">添心設計</h1>
             <p class="text-gray-500">線上打卡系統</p>
         </div>
@@ -71,47 +148,73 @@
         <!-- 【您的要求】狀態燈號 UI -->
         <div class="grid grid-cols-3 gap-4 mb-6 text-center">
             <div id="status-line" class="status-indicator status-pending">
-                <div class="status-icon mx-auto"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><path d="M12.01 6c-1.09 0-2.1.48-2.82 1.25l1.42 1.42C11.12 8.16 11.55 8 12.01 8c1.65 0 3 1.35 3 3s-1.35 3-3 3c-.46 0-.89-.16-1.28-.42L9.31 15.01C10.21 15.63 11.23 16 12.01 16c3.31 0 6-2.69 6-6s-2.69-6-6-6z"/></svg></div>
+                <div class="status-icon mx-auto"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                        fill="currentColor">
+                        <path
+                            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" />
+                        <path
+                            d="M12.01 6c-1.09 0-2.1.48-2.82 1.25l1.42 1.42C11.12 8.16 11.55 8 12.01 8c1.65 0 3 1.35 3 3s-1.35 3-3 3c-.46 0-.89-.16-1.28-.42L9.31 15.01C10.21 15.63 11.23 16 12.01 16c3.31 0 6-2.69 6-6s-2.69-6-6-6z" />
+                    </svg></div>
                 <div class="status-text text-xs font-semibold mt-1">身分驗證</div>
             </div>
             <div id="status-network" class="status-indicator status-pending">
                 <!-- 【您的要求】修正網路圖示被裁切的問題 -->
-                <div class="status-icon mx-auto"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7.31 4.5 3.19 6.34 0 9.25l2.25 2.25C4.32 9.61 7.95 8 12 8s7.68 1.61 9.75 3.5l2.25-2.25C20.81 6.34 16.69 4.5 12 4.5zM12 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-4-4.5C9.66 13.5 10.76 13 12 13s2.34.5 3.5 1.5l-3.5 3.5-3.5-3.5z"/></svg></div>
+                <div class="status-icon mx-auto"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                        fill="currentColor">
+                        <path
+                            d="M12 4.5C7.31 4.5 3.19 6.34 0 9.25l2.25 2.25C4.32 9.61 7.95 8 12 8s7.68 1.61 9.75 3.5l2.25-2.25C20.81 6.34 16.69 4.5 12 4.5zM12 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-4-4.5C9.66 13.5 10.76 13 12 13s2.34.5 3.5 1.5l-3.5 3.5-3.5-3.5z" />
+                    </svg></div>
                 <div class="status-text text-xs font-semibold mt-1">網路狀態</div>
             </div>
             <div id="status-gps" class="status-indicator status-pending">
-                <div class="status-icon mx-auto"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg></div>
+                <div class="status-icon mx-auto"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                        fill="currentColor">
+                        <path
+                            d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                    </svg></div>
                 <div class="status-text text-xs font-semibold mt-1">GPS狀態</div>
             </div>
         </div>
 
-        <div id="status-container" class="mb-8 p-4 rounded-lg bg-gray-50 min-h-[100px] flex flex-col items-center justify-center">
-            <div id="message" class="text-gray-700">歡迎，<span id="displayName" class="font-semibold">員工</span>！<br>請點擊下方按鈕進行打卡。</div>
+        <div id="status-container"
+            class="mb-8 p-4 rounded-lg bg-gray-50 min-h-[100px] flex flex-col items-center justify-center">
+            <div id="message" class="text-gray-700">歡迎，<span id="displayName"
+                    class="font-semibold">員工</span>！<br>請點擊下方按鈕進行打卡。</div>
             <div id="loading" class="hidden">
                 <div class="spinner w-8 h-8 border-4 border-gray-200 rounded-full"></div>
                 <p id="loading-text" class="mt-2 text-gray-600">正在初始化...</p>
             </div>
             <div id="checkin-history-container" class="mt-4 pt-3 border-t border-gray-200 w-full hidden">
                 <p class="text-xs text-gray-500 mb-2 font-semibold">最近 15 筆打卡紀錄</p>
-                <ul id="checkin-history-list" class="text-sm text-gray-600 font-mono space-y-2 max-h-48 overflow-y-auto text-left px-2"></ul>
+                <ul id="checkin-history-list"
+                    class="text-sm text-gray-600 font-mono space-y-2 max-h-48 overflow-y-auto text-left px-2"></ul>
             </div>
         </div>
 
-        <button id="checkin-button" class="w-full bg-blue-600 text-white font-bold py-4 px-6 rounded-lg text-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none btn-pulse" disabled>打卡</button>
+        <button id="checkin-button"
+            class="w-full bg-blue-600 text-white font-bold py-4 px-6 rounded-lg text-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none btn-pulse"
+            disabled>打卡</button>
     </div>
 
     <!-- 詳細資訊彈窗 -->
-    <div id="detail-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50 px-4">
+    <div id="detail-modal"
+        class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50 px-4">
         <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 transform transition-all scale-100">
             <div class="flex justify-between items-start mb-4">
                 <h3 id="modal-title" class="text-xl font-bold text-gray-900">詳細資訊</h3>
                 <button onclick="closeDetailModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
                 </button>
             </div>
             <p id="modal-time" class="text-sm text-gray-500 mb-3 font-mono"></p>
-            <div id="modal-content" class="text-gray-700 text-base whitespace-pre-wrap break-words bg-gray-50 p-3 rounded-lg border border-gray-100 max-h-60 overflow-y-auto"></div>
-            <button onclick="closeDetailModal()" class="mt-6 w-full bg-gray-100 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-200 transition-colors">關閉</button>
+            <div id="modal-content"
+                class="text-gray-700 text-base whitespace-pre-wrap break-words bg-gray-50 p-3 rounded-lg border border-gray-100 max-h-60 overflow-y-auto">
+            </div>
+            <button onclick="closeDetailModal()"
+                class="mt-6 w-full bg-gray-100 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-200 transition-colors">關閉</button>
         </div>
     </div>
 
@@ -190,17 +293,17 @@
 
             const container = document.getElementById('checkin-history-container');
             const listEl = document.getElementById('checkin-history-list');
-            
+
             if (history.length > 0) {
                 listEl.innerHTML = '';
                 history.forEach(record => {
                     const date = new Date(record.timestamp);
-                    const dateStr = `${(date.getMonth()+1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-                    
+                    const dateStr = `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+
                     // 【新增】判斷狀態並顯示對應圖示 (紅色叉叉=失敗, 綠色打勾=線上, 橘色時鐘=離線)
                     const isOffline = record.isOffline === true || (record.message && record.message.includes('離線'));
                     const isFail = record.message && (record.message.includes('失敗') || record.message.includes('錯誤') || record.message.includes('Error'));
-                    
+
                     let statusColor, iconSvg;
                     if (isFail) {
                         statusColor = 'text-red-500';
@@ -222,10 +325,10 @@
                         liClasses += ' hover:bg-gray-50';
                     }
                     li.className = liClasses;
-                    
+
                     // 移除 "打卡成功：" 前綴以節省空間
                     let displayMsg = (record.message || '').replace(/^打卡成功[：:!]\s*/, '').replace(/\(離線.*\)/, '(離線)');
-                    
+
                     li.innerHTML = `
                         <div class="flex items-center">
                             ${iconSvg}
@@ -233,10 +336,10 @@
                         </div>
                         <span class="text-gray-500 text-xs truncate ml-2 max-w-[140px]" title="${record.message}">${displayMsg}</span>
                     `;
-                    
+
                     // 綁定點擊事件顯示詳細資訊
                     li.addEventListener('click', () => showDetailModal(record, isFail, isOffline));
-                    
+
                     listEl.appendChild(li);
                 });
                 container.classList.remove('hidden');
@@ -250,7 +353,7 @@
             const title = document.getElementById('modal-title');
             const content = document.getElementById('modal-content');
             const time = document.getElementById('modal-time');
-            
+
             const date = new Date(record.timestamp);
             time.textContent = date.toLocaleString('zh-TW', { hour12: false });
             content.textContent = record.message;
@@ -265,7 +368,7 @@
                 title.textContent = '打卡成功';
                 title.className = 'text-xl font-bold text-green-600';
             }
-            
+
             modal.classList.remove('hidden');
         }
 
@@ -328,7 +431,7 @@
             document.getElementById('app-version').textContent = APP_VERSION;
 
             pageLog('程式開始執行...');
-            
+
             // 步驟 1: 處理網路狀態燈號
             updateNetworkStatus();
             window.addEventListener('online', updateNetworkStatus);
@@ -355,16 +458,14 @@
             if (isLocalTest) {
                 console.warn('⚡️ 本地測試模式啟用，跳過 LIFF 驗證。');
                 userProfile = {
-                    userId: 'U_local_test_user',
-                    displayName: '本地測試員'
+                    userId: 'Ud58333430513b7527106fa71d2e30151',
+                    displayName: '黃俊豪 (本地模擬)'
                 };
                 saveCache(PROFILE_CACHE_KEY, userProfile, 7);
                 displayNameElement.textContent = userProfile.displayName;
                 checkinButton.disabled = false;
                 hideLoading();
-                pageLog('✅ 本地測試模式：已模擬使用者登入。', 'success');
                 updateStatusIndicator('line', 'success', '本地測試');
-                syncOfflineRecords();
                 return;
             }
 
@@ -423,7 +524,7 @@
             }
 
             pageLog(`發現 ${queue.length} 筆離線紀錄，開始背景同步...`, 'info');
-            
+
             let remainingQueue = [...queue];
             for (const record of queue) {
                 try {
@@ -473,12 +574,12 @@
             if (finalSource) url.searchParams.append('source', finalSource);
 
             console.log(`[sendCheckinData] 🚀 準備發送請求至: ${url.toString()}`);
-            
+
             const response = await fetch(url);
             if (!response.ok) throw new Error(`後端伺服器錯誤: ${response.status}`);
             return response.json();
         }
-        
+
         // 【您的要求】網路狀態更新函式
         function updateNetworkStatus() {
             if (navigator.onLine) {
@@ -498,7 +599,7 @@
                     (position) => { resolve(position); },
                     (error) => {
                         let code = '';
-                        switch(error.code) {
+                        switch (error.code) {
                             case error.PERMISSION_DENIED: code = 'PERMISSION_DENIED'; break;
                             case error.POSITION_UNAVAILABLE: code = 'POSITION_UNAVAILABLE'; break;
                             case error.TIMEOUT: code = 'TIMEOUT'; break;
@@ -537,24 +638,24 @@
         // ======================= 【核心修改處】 ========================
         // ===============================================================
 
-        /**
-         * 【核心改造】打卡按鈕的點擊事件處理器。
-         * - 將 liff.getProfile() 移至此處，實現「點擊後才驗證」，加快初始載入速度。
-         * - 為所有非同步操作加上超時與錯誤處理。
-         */
-        // 【離線功能】改造打卡事件，加入離線儲存邏輯
+        // [v25.11.02.1100 核心優化] 嚴格防重複點擊機制
+        let isProcessing = false;
+
         checkinButton.addEventListener('click', async () => {
-            // [v25.11.02.1000 核心修正] 根據您的指示，優化防重複點擊機制。
-            // 1. 在所有非同步操作開始前，立即禁用按鈕並更新文字。
+            if (isProcessing) return;
+            isProcessing = true;
+
+            // 1. 立即禁用按鈕並更新 UI
             checkinButton.disabled = true;
             checkinButton.textContent = '定位中...';
-            pageLog('事件: 打卡按鈕被點擊');
+            checkinButton.classList.remove('btn-pulse'); // 移除跳動動畫
+            pageLog('事件: 打卡按鈕被點擊 (進入鎖定狀態)');
 
             try {
                 // --- 步驟 1: 取得 GPS ---
                 updateStatusIndicator('gps', 'pending', '定位中');
                 showLoading('正在取得您的 GPS 位置...');
-                const location = await getGeoLocationWithRetry(); // 改為呼叫帶有重試機制的函式
+                const location = await getGeoLocationWithRetry();
                 const { latitude, longitude } = location.coords;
                 pageLog(`步驟: 取得 GPS 成功`, 'success');
                 updateStatusIndicator('gps', 'success', '定位成功');
@@ -565,60 +666,45 @@
 
                 // --- 步驟 2: 建立打卡紀錄並存入離線佇列 ---
                 const checkinRecord = {
-                    id: `checkin_${Date.now()}`, // 給每筆紀錄一個唯一 ID
-                    timestamp: Date.now(),       // 【您的要求】記錄按下按鈕當下的時間戳
+                    id: `checkin_${Date.now()}`,
+                    timestamp: Date.now(),
                     userId: userProfile.userId,
                     userName: userProfile.displayName,
                     lat: latitude,
                     lon: longitude
                 };
-                console.log('[Check-in] 📝 建立新的離線打卡紀錄:', checkinRecord);
                 addRecordToQueue(checkinRecord);
-                pageLog(`紀錄已存入離線佇列 (ID: ${checkinRecord.id})`, 'info');
 
-                // --- 步驟 3: 嘗試立即同步此筆紀錄 ---
+                // --- 步驟 3: 嘗試立即同步 ---
                 showLoading('正在傳送打卡資訊...');
-                // 2. 進入網路請求階段，再次更新按鈕文字。
                 checkinButton.textContent = '傳送中...';
+
                 try {
-                    console.log(`[Check-in] ⚡️ 嘗試立即同步剛建立的紀錄 (ID: ${checkinRecord.id})`);
                     const result = await withTimeout(sendCheckinData(checkinRecord), 30000, new Error('後端伺服器無回應'));
-                    pageLog('步驟: 後端回應成功，此筆紀錄已即時同步。', 'success');
-                    // 同步成功，從佇列中移除
-                    const queue = getOfflineQueue().filter(r => r.id !== checkinRecord.id);
-                    saveOfflineQueue(queue);
-                    hideLoading();
-                    handleCheckInResult(result); // 顯示後端回傳的真實訊息
-                    console.log(`[Check-in] ✅ 立即同步成功，已從佇列移除 (ID: ${checkinRecord.id})`);
+                    handleCheckInResult(result);
                 } catch (syncError) {
-                    // 即時同步失敗，但沒關係，紀錄已在佇列中
-                    pageLog(`即時同步失敗: ${syncError.message}。紀錄將於下次開啟時重試。`, 'info');
+                    pageLog(`即時同步失敗: ${syncError.message}`, 'info');
                     hideLoading();
-                    // 顯示一個通用的、樂觀的成功訊息
                     handleCheckInResult({ status: 'success', message: '打卡成功！\n(離線紀錄已暫存，將在網路恢復時自動上傳)' });
                 }
 
             } catch (err) {
-                // 這個 catch 區塊只處理前置作業 (GPS, getProfile) 的錯誤
-                pageLog(`嚴重錯誤: 打卡流程中斷 - ${err.message}`, 'error');
-                console.error('Check-in Error:', err);
+                pageLog(`嚴重錯誤: ${err.message}`, 'error');
                 let errorMessage = '打卡失敗，發生未知錯誤。';
                 if (err.code === 'PERMISSION_DENIED') {
-                    // 【您的要求】針對拒絕授權，提供更明確的提示與指引
-                    errorMessage = '<strong>您已拒絕位置資訊授權</strong><br>請點擊網址列旁的鎖頭圖示，並允許此頁面存取您的位置資訊，然後再試一次。';
+                    errorMessage = '<strong>您已拒絕位置資訊授權</strong><br>請允許此頁面存取您的位置資訊。';
                     updateStatusIndicator('gps', 'error', '已拒絕授權');
-                    showError(errorMessage, true); // 傳入 true 表示不要隱藏載入動畫
                 } else if (err.message.includes('逾時')) {
-                    errorMessage = '連線逾時，請檢查您的網路與 GPS 設定後，再試一次。';
-                } else if (err.code === 'TIMEOUT') { // GPS 專用 timeout
-                    errorMessage = '取得位置資訊逾時，請檢查您的網路與 GPS 設定。';
+                    errorMessage = '連線逾時，請檢查您的網路與 GPS 設定。';
                 }
                 updateStatusIndicator('gps', 'error', '定位失敗');
                 showError(errorMessage);
-                // 【您的要求】在顯示錯誤後，確保打卡按鈕恢復可用狀態
-                // 3. 在所有錯誤路徑中，恢復按鈕為可點擊狀態，並提示使用者重新操作。
-                checkinButton.disabled = false; 
+
+                // 發生錯誤時恢復按鈕
+                isProcessing = false;
+                checkinButton.disabled = false;
                 checkinButton.textContent = '重新打卡';
+                checkinButton.classList.add('btn-pulse');
             }
         });
 
@@ -639,15 +725,15 @@
                 try {
                     history = historyJson ? JSON.parse(historyJson) : [];
                 } catch (e) { history = []; }
-                
+
                 // 新增紀錄到開頭，並限制 15 筆
-                history.unshift({ 
-                    timestamp: Date.now(), 
+                history.unshift({
+                    timestamp: Date.now(),
                     message: result.message,
                     isOffline: isOfflineSuccess // 【新增】儲存離線狀態標記
                 });
                 if (history.length > 15) history = history.slice(0, 15);
-                
+
                 localStorage.setItem(CHECKIN_HISTORY_KEY, JSON.stringify(history));
                 renderCheckinHistory();
             }
@@ -682,14 +768,15 @@
         function showLoading(text) { messageElement.style.display = 'none'; loadingElement.style.display = 'block'; loadingTextElement.textContent = text; }
         function hideLoading() { loadingElement.style.display = 'none'; messageElement.style.display = 'block'; }
         function updateMessage(html, colorClass = 'text-gray-700') { messageElement.innerHTML = html; messageElement.className = ''; messageElement.classList.add(colorClass); }
-        function showError(html, keepLoading = false) { 
-            if (!keepLoading) hideLoading(); 
-            const container = document.getElementById('status-container'); 
-            container.classList.add('bg-red-100'); 
-            updateMessage(html, 'text-red-800'); 
+        function showError(html, keepLoading = false) {
+            if (!keepLoading) hideLoading();
+            const container = document.getElementById('status-container');
+            container.classList.add('bg-red-100');
+            updateMessage(html, 'text-red-800');
         }
 
         main();
     </script>
 </body>
+
 </html>

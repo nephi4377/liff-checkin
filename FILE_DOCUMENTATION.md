@@ -48,7 +48,7 @@
 | **exclude.txt** | - | 備份排除清單 | 無依賴 | **保留** |
 | **CNAME** | - | 域名設定 | 無依賴 | **保留** |
 | **create_txt_backup.bat** | - | 批次備份工具 | 無依賴 | **已移至 _DEPRECATED_** |
-| **upload.bat** | - | 批次上傳工具 | 無依賴 | **已移至 _DEPRECATED_** |
+| **upload.bat** | v1.5 | 批次備份與上傳工具 | 無依賴 | **恢復使用** |
 
 ---
 
