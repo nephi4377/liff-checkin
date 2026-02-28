@@ -415,31 +415,56 @@
             }
         };
 
-        /** @core AppCore - 打卡業務驅動引擎 (承重牆)
-         * 統籌整個打卡週期的進程控制與狀態切換。
+        /** @core AppCore - 業務啟動與狀態機 (承重牆)
+         * 驅動打卡完整 Lifecycle：身分驗證 -> 定位 -> 發送 -> 鎖定 -> 關閉。
          */
         const AppCore = {
             user: null, isLocked: false,
-            /** 系統生命週期：初始化 */
             init: async () => {
+                // 1. 優先顯示基本資訊與網路狀態
                 document.getElementById('app-version').textContent = CONSTANTS.VERSION;
                 const updateNet = () => AppUI.updateIndicator('network', navigator.onLine ? 'success' : 'error', navigator.onLine ? '連線正常' : '已離線');
                 updateNet(); window.ononline = window.onoffline = updateNet;
                 AppUI.renderHistory();
 
+                // 2. 優先嘗試載入身分快取，確保「離線/弱網」下按鈕仍可運作
                 const cached = AppStorage.load(CONSTANTS.CACHE_KEYS.PROFILE);
-                if (cached) { AppCore.user = cached; AppUI.updateUserDisplay(cached.displayName); AppUI.updateIndicator('line', 'success', '快取登入'); document.getElementById('checkin-button').disabled = false; }
-
-                try {
-                    AppUI.updateIndicator('line', 'pending', '驗證身分');
-                    await liff.init({ liffId: CONSTANTS.LIFF_ID });
-                    if (!liff.isLoggedIn()) { liff.login(); return; }
-                    const p = await liff.getProfile();
-                    AppCore.user = p; AppStorage.save(CONSTANTS.CACHE_KEYS.PROFILE, p);
-                    AppUI.updateUserDisplay(p.displayName); AppUI.updateIndicator('line', 'success', '認證成功');
+                if (cached) {
+                    AppCore.user = cached;
+                    AppUI.updateUserDisplay(cached.displayName);
+                    AppUI.updateIndicator('line', 'success', '身分快取');
                     document.getElementById('checkin-button').disabled = false;
+                }
+
+                // 3. 執行 LIFF 初始化 (加入超時保護防止卡死)
+                try {
+                    AppUI.updateIndicator('line', 'pending', '身分驗證');
+
+                    // Promise 競態：若 LIFF 10秒沒反應則拋出超時
+                    await Promise.race([
+                        liff.init({ liffId: CONSTANTS.LIFF_ID }),
+                        new Promise((_, rej) => setTimeout(() => rej(new Error('驗證超時')), 10000))
+                    ]);
+
+                    if (!liff.isLoggedIn()) { liff.login(); return; }
+
+                    const p = await liff.getProfile();
+                    AppCore.user = p;
+                    AppStorage.save(CONSTANTS.CACHE_KEYS.PROFILE, p);
+                    AppUI.updateUserDisplay(p.displayName);
+                    AppUI.updateIndicator('line', 'success', '認證成功');
+                    document.getElementById('checkin-button').disabled = false;
+
                     AppAPI.syncAll();
-                } catch (e) { if (!cached) AppUI.updateIndicator('line', 'error', '身分失效'); }
+                } catch (e) {
+                    console.error('LIFF Init Error:', e);
+                    if (!cached) {
+                        AppUI.updateIndicator('line', 'error', '身分失效');
+                        AppUI.updateMessage(`驗證失敗: ${e.message}<br>請嘗試重新開啟頁面。`, 'text-red-700 font-bold');
+                    } else {
+                        AppUI.updateIndicator('line', 'success', '離線認證');
+                    }
+                }
             },
             /** 生命週期：執行打卡動作 */
             execute: async () => {
