@@ -50,11 +50,11 @@
        以便後續的模組腳本 (main.js) 可以透過 window.API_BASE_URL 存取。 -->
   <script>
     var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    var FRONTEND_VERSION = 'v1.0.0'; // 初始語意化版本號
+    var FRONTEND_VERSION = 'v26.02.28.1415'; // 導入防禦性輪詢機制
   </script>
-  <!-- [v471.0 快取清除] 更新版本號以強制瀏覽器下載最新的 JavaScript 檔案。
+  <!-- [v2026.02.28 核心修正] 更新版本號以強制瀏覽器下載最新的 JavaScript 檔案。
        這可以解決因瀏覽器快取舊版 api.js，導致輪詢任務狀態時發送錯誤 POST 請求的問題。 -->
-  <script type="module" src="./js/main.js?v=26.02.27.2300"></script>
+  <script type="module" src="./js/main.js?v=26.02.28.1415"></script>
 </head>
 
 <body>

@@ -21,7 +21,7 @@ import { CONFIG } from '/shared/js/config.js';
  */
 function postToGas(payload) {
     // [v2026.02.27 終極攔截] 防止任何無效 Action (空值或任務狀態) 被發往後端。
-    const invalidPollingActions = ['requested', 'in_progress', 'completed', 'failed', 'unknown_payload'];
+    const invalidPollingActions = ['requested', 'in_progress', 'completed', 'failed', 'unknown_payload', 'pending'];
     const currentAction = payload ? payload.action : null;
 
     if (!currentAction || invalidPollingActions.includes(currentAction)) {
