@@ -53,6 +53,15 @@ function postToGas(payload) {
  * @returns {Promise<{success: boolean, data: any, message: string, error: string | null}>}
  */
 export async function request({ action, payload = {} }) {
+    // 【核心修正】嚴格過濾非法 Action 字串。
+    // 防止前端邏輯誤將非同步任務的狀態 (如 'in_progress', 'completed') 當成 Action 再次提交。
+    const ILLEGAL_ACTIONS = ['in_progress', 'completed', 'pending', 'expired', 'error', 'failed', 'success'];
+    if (!action || ILLEGAL_ACTIONS.includes(String(action).toLowerCase())) {
+        const errorMsg = `[apiService] ❌ 偵測到非法請求動作: "${action}"。這通常是輪詢邏輯錯誤導致的狀態誤傳。請求已攔截。`;
+        console.error(errorMsg);
+        return { success: false, data: null, message: errorMsg, error: errorMsg };
+    }
+
     try {
         let result;
 
