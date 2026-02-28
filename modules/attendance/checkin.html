@@ -18,7 +18,7 @@
         const CONSTANTS = {
             LIFF_ID: '2007974938-jVxn6y37',
             GAS_URL: 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec',
-            VERSION: 'v26.02.28.1226',
+            VERSION: 'v26.02.28.1318',
             CACHE_KEYS: {
                 PROFILE: 'checkin_user_profile_cache', // 使用者個人資料快取
                 HISTORY: 'checkin_history_records',     // 歷史打卡紀錄快取
@@ -207,7 +207,7 @@
     </div>
 
     <footer class="mt-10 text-center text-[9px] text-gray-400 font-bold uppercase tracking-widest">
-        <p>REFACTORED v1.1 | STABLE PRODUCTION ENVIRONMENT</p>
+        <p><span id="app-version"></span>REFACTORED v1.1</span> | STABLE PRODUCTION ENVIRONMENT</p>
     </footer>
 
     <!-- =============================================================== -->
@@ -215,6 +215,18 @@
     <!-- 將資料、介面與通訊邏輯徹底拆分，符合開發規範。                       -->
     <!-- =============================================================== -->
     <script>
+        /** 
+         * [DevOps] 全域錯誤監聽器
+         * 確保在手機端發生任何 JS 崩潰時，能即時回顯於介面，免除盲猜。
+         */
+        window.onerror = function (msg, url, line) {
+            const errDisplay = `[Runtime Error] ${msg} (Line: ${line})`;
+            console.error(errDisplay);
+            if (document.getElementById('message')) {
+                document.getElementById('message').innerHTML = `<span class="text-red-600 font-black">${errDisplay}</span>`;
+            }
+        };
+
         /** 
          * @stable AppStorage - 資料持久化模組 (承重牆)
          * 維護 localStorage 快取系統與離線快取規則。

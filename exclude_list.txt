@@ -1,0 +1,8 @@
+.git\
+BAK\
+_待開發備份_\
+upload.bat
+exclude_list.txt
+*.tmp
+.vscode\
+node_modules\
