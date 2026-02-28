@@ -674,6 +674,8 @@
             checkinButton.classList.remove('btn-pulse'); // 移除跳動動畫
             pageLog('事件: 打卡按鈕被點擊 (進入鎖定狀態)');
 
+            let currentRecordId = null;
+
             try {
                 // --- 步驟 1: 取得 GPS ---
                 updateStatusIndicator('gps', 'pending', '定位中');
@@ -688,8 +690,9 @@
                 }
 
                 // --- 步驟 2: 建立打卡紀錄並存入離線佇列 ---
+                currentRecordId = `checkin_${Date.now()}`;
                 const checkinRecord = {
-                    id: `checkin_${Date.now()}`,
+                    id: currentRecordId,
                     timestamp: Date.now(),
                     userId: userProfile.userId,
                     userName: userProfile.displayName,
@@ -704,9 +707,18 @@
 
                 try {
                     const result = await withTimeout(sendCheckinData(checkinRecord), 30000, new Error('後端伺服器無回應'));
+
+                    // 【關鍵修正 1】如果立即同步成功，立即從佇列中移除該筆紀錄，防止下次載入頁面時重複發送
+                    if (result.status === 'success') {
+                        const queue = getOfflineQueue();
+                        const updatedQueue = queue.filter(r => r.id !== currentRecordId);
+                        saveOfflineQueue(updatedQueue);
+                        pageLog(`[Sync] 立即同步成功，已清理 Queue ID: ${currentRecordId}`, 'success');
+                    }
+
                     handleCheckInResult(result);
                 } catch (syncError) {
-                    pageLog(`即時同步失敗: ${syncError.message}`, 'info');
+                    pageLog(`即時同步失敗 (將由背景同步處理): ${syncError.message}`, 'info');
                     hideLoading();
                     handleCheckInResult({ status: 'success', message: '打卡成功！\n(離線紀錄已暫存，將在網路恢復時自動上傳)' });
                 }
