@@ -4,18 +4,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>添心設計 | 員工打卡 (重構測試版)</title>
+    <title>添心設計 | 員工打卡</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 
-    <!-- =============================================================== -->
-    <!-- [v2026.1] 集中化配置 (Centralized Configuration)             -->
-    <!-- =============================================================== -->
     <script>
+        /** 
+         * @stable CONSTANTS - 核心承重牆配置
+         * 包含 LIFF ID 與後端端點，嚴禁隨意更改結構。
+         */
         const CONSTANTS = {
             LIFF_ID: '2007974938-jVxn6y37',
             GAS_URL: 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec',
-            VERSION: 'v26.02.28.CORE-REF',
+            VERSION: 'REFACTORED CORE v1.1',
             CACHE_KEYS: {
                 PROFILE: 'checkin_user_profile_cache',
                 HISTORY: 'checkin_history_records',
@@ -28,19 +29,13 @@
                 AUTO_CLOSE: 45000
             },
             MAX_RETRY: 3,
-            HISTORY_LIMIT: 15,
-            // 【測試專用】模擬身分庫
-            MOCK_USERS: {
-                "BOSS": { userId: 'Ud58333430513b7527106fa71d2e30151', displayName: '黃俊豪 (BOSS)' },
-                "MANAGER": { userId: 'Ucd6cb7c6f541e9d6c92b83be1dba5d74', displayName: '添心設計 店長' },
-                "STORE": { userId: 'Ua6306c79f1250e55be6a1546882bb6ac', displayName: '添心設計-台南店' }
-            }
+            HISTORY_LIMIT: 15
         };
     </script>
 
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         }
 
         .gradient-bg {
@@ -102,13 +97,17 @@
         .status-error .status-text {
             color: #991b1b;
         }
+
+        .status-icon svg {
+            width: 1.25rem;
+            height: 1.25rem;
+        }
     </style>
 </head>
 
 <body class="gradient-bg flex flex-col items-center justify-center min-h-screen p-4">
-    <div class="w-full max-w-md mx-auto bg-white rounded-2xl shadow-xl p-8 text-center">
+    <div class="w-full max-w-md mx-auto bg-white rounded-2xl shadow-xl p-8 text-center border-t-8 border-blue-500">
 
-        <!-- 圖示區塊 -->
         <div id="ui-icons" class="mb-6">
             <div id="icon-offline" class="hidden">
                 <svg class="mx-auto h-12 w-auto text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -124,108 +123,87 @@
                     <path stroke-linecap="round" stroke-linejoin="round"
                         d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <h1 class="text-2xl font-bold text-gray-800 mt-2">添心設計</h1>
-                <p class="text-[10px] text-blue-500 font-mono">REFACTORED CORE v1.1</p>
+                <h1 class="text-2xl font-bold text-gray-800 mt-2 tracking-tight">添心設計</h1>
+                <p class="text-gray-400 text-xs font-bold uppercase tracking-widest">Clock-in System</p>
             </div>
         </div>
 
-        <!-- 狀態燈號 -->
-        <div class="grid grid-cols-3 gap-4 mb-6 text-center">
+        <div class="grid grid-cols-3 gap-2 mb-8 text-center bg-gray-50 p-3 rounded-xl">
             <div id="status-line" class="status-indicator status-pending">
-                <div class="status-icon mx-auto"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <div class="status-icon mx-auto"><svg fill="currentColor" viewBox="0 0 24 24">
                         <path
                             d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" />
                         <path
                             d="M12.01 6c-1.09 0-2.1.48-2.82 1.25l1.42 1.42C11.12 8.16 11.55 8 12.01 8c1.65 0 3 1.35 3 3s-1.35 3-3 3c-.46 0-.89-.16-1.28-.42L9.31 15.01C10.21 15.63 11.23 16 12.01 16c3.31 0 6-2.69 6-6s-2.69-6-6-6z" />
                     </svg></div>
-                <div class="status-text text-xs font-semibold mt-1">身分驗證</div>
+                <div class="text-[10px] font-bold mt-1 text-gray-400">身分驗證</div>
             </div>
             <div id="status-network" class="status-indicator status-pending">
-                <div class="status-icon mx-auto"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <div class="status-icon mx-auto"><svg fill="currentColor" viewBox="0 0 24 24">
                         <path
                             d="M12 4.5C7.31 4.5 3.19 6.34 0 9.25l2.25 2.25C4.32 9.61 7.95 8 12 8s7.68 1.61 9.75 3.5l2.25-2.25C20.81 6.34 16.69 4.5 12 4.5zM12 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-4-4.5C9.66 13.5 10.76 13 12 13s2.34.5 3.5 1.5l-3.5 3.5-3.5-3.5z" />
                     </svg></div>
-                <div class="status-text text-xs font-semibold mt-1">網路狀態</div>
+                <div class="text-[10px] font-bold mt-1 text-gray-400">網路狀態</div>
             </div>
             <div id="status-gps" class="status-indicator status-pending">
-                <div class="status-icon mx-auto"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <div class="status-icon mx-auto"><svg fill="currentColor" viewBox="0 0 24 24">
                         <path
                             d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
                     </svg></div>
-                <div class="status-text text-xs font-semibold mt-1">GPS狀態</div>
+                <div class="text-[10px] font-bold mt-1 text-gray-400">GPS狀態</div>
             </div>
         </div>
 
-        <!-- 訊息與載入區塊 -->
-        <div id="status-panel"
-            class="mb-8 p-4 rounded-lg bg-gray-50 min-h-[100px] flex flex-col items-center justify-center transition-colors duration-500">
-            <div id="message" class="text-gray-700">歡迎，<span id="displayName"
-                    class="font-semibold text-blue-600">讀取中...</span>！<br>準備啟動打卡程序。</div>
-            <div id="loading" class="hidden flex flex-col items-center mt-2">
+        <div id="status-container"
+            class="mb-8 p-4 rounded-lg bg-gray-50 min-h-[100px] flex flex-col items-center justify-center transition-all duration-500 border border-gray-100">
+            <div id="message" class="text-gray-700 text-sm">歡迎，<span id="displayName"
+                    class="font-bold text-blue-600">...</span>！<br>請點擊下方按鈕進行打卡。</div>
+            <div id="loading" class="hidden flex flex-col items-center">
                 <div class="spinner w-8 h-8 border-4 border-gray-200 rounded-full mb-2"></div>
-                <p id="loading-text" class="text-xs text-blue-500 font-bold"></p>
+                <p id="loading-text" class="mt-2 text-gray-600 text-[10px] font-bold">正在讀取...</p>
             </div>
-
-            <!-- 歷史紀錄列表 -->
-            <div id="history-container" class="mt-4 pt-3 border-t border-gray-200 w-full hidden">
-                <p class="text-[10px] text-gray-400 mb-2 font-bold uppercase tracking-wider text-left">Recent Records
-                </p>
-                <ul id="history-list"
-                    class="text-sm text-gray-600 font-mono space-y-2 max-h-48 overflow-y-auto text-left px-2"></ul>
+            <div id="checkin-history-container" class="mt-4 pt-3 border-t border-gray-200 w-full hidden">
+                <p class="text-[9px] text-gray-400 mb-2 font-black uppercase tracking-widest text-left px-2">RECORDS</p>
+                <ul id="checkin-history-list"
+                    class="text-xs text-gray-600 font-mono space-y-2 max-h-48 overflow-y-auto text-left px-2"></ul>
             </div>
         </div>
 
-        <button id="btn-checkin"
-            class="w-full bg-blue-600 text-white font-bold py-4 px-6 rounded-lg text-lg hover:bg-blue-700 transition-all transform hover:scale-105 btn-pulse disabled:bg-gray-400 disabled:shadow-none"
-            disabled>
-            打卡
-        </button>
-
-        <!-- 測試用：身分切換 -->
-        <div id="test-selector" class="mt-6 flex flex-wrap justify-center gap-2 hidden">
-            <button onclick="AppCore.switchUser('BOSS')" class="text-[9px] px-2 py-1 bg-gray-100 rounded">黃俊豪</button>
-            <button onclick="AppCore.switchUser('MANAGER')" class="text-[9px] px-2 py-1 bg-gray-100 rounded">店長</button>
-            <button onclick="AppCore.switchUser('STORE')" class="text-[9px] px-2 py-1 bg-gray-100 rounded">台南店</button>
-        </div>
+        <button id="checkin-button"
+            class="w-full bg-blue-600 text-white font-black py-5 px-6 rounded-xl text-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all transform hover:scale-105 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none btn-pulse"
+            disabled> 打卡 </button>
     </div>
 
-    <!-- 詳細資訊彈窗 -->
     <div id="detail-modal"
-        class="fixed inset-0 bg-gray-900 bg-opacity-60 hidden flex items-center justify-center z-50 px-4 backdrop-blur-sm">
-        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 transform transition-all">
+        class="fixed inset-0 bg-gray-900 bg-opacity-70 hidden flex items-center justify-center z-50 px-4 backdrop-blur-md">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-8 transform transition-all">
             <div class="flex justify-between items-start mb-4">
-                <h3 id="modal-title" class="text-xl font-bold">打卡詳細</h3>
-                <button onclick="AppUI.closeModal()" class="text-gray-400 hover:text-gray-600"><svg class="w-6 h-6"
-                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <h3 id="modal-title" class="text-2xl font-black">打卡詳細</h3>
+                <button onclick="AppUI.closeModal()" class="text-gray-300 hover:text-gray-900 transition-colors"><svg
+                        class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
                         </path>
                     </svg></button>
             </div>
-            <p id="modal-time" class="text-xs text-gray-400 mb-3 font-mono border-b pb-2"></p>
+            <p id="modal-time" class="text-xs text-gray-400 mb-4 font-mono border-b pb-2"></p>
             <div id="modal-content"
-                class="text-gray-700 text-sm whitespace-pre-wrap bg-gray-50 p-4 rounded-xl border border-gray-100 max-h-60 overflow-y-auto font-medium">
+                class="text-gray-800 text-sm whitespace-pre-wrap leading-relaxed bg-gray-50 p-5 rounded-2xl border border-gray-100 max-h-80 overflow-y-auto font-medium">
             </div>
             <button onclick="AppUI.closeModal()"
-                class="mt-6 w-full bg-gray-100 text-gray-700 font-bold py-3 rounded-xl hover:bg-gray-200">關閉</button>
+                class="mt-8 w-full bg-gray-900 text-white font-bold py-4 rounded-2xl hover:bg-black transition-colors">確認關閉</button>
         </div>
     </div>
 
-    <footer class="mt-8 text-center text-[10px] text-gray-300">
-        <p>VERSION: <span id="ui-version"></span> | SYSTEM STABLE</p>
+    <footer class="mt-10 text-center text-[9px] text-gray-400 font-bold uppercase tracking-widest">
+        <p>REFACTORED v1.1 | STABLE PRODUCTION ENVIRONMENT</p>
     </footer>
 
-    <!-- =============================================================== -->
-    <!-- [v2026.1] 核心開發規範區塊 - 職責分離與承重牆保護                -->
-    <!-- =============================================================== -->
     <script>
-        /**
-         * @stable AppStorage - 資料持久化模組
-         * 負責所有 localStorage、快取與隊列管理。
-         */
+        /** @stable AppStorage - 承重牆：資料持久化與隊列管理伺服 */
         const AppStorage = {
             save: (key, data, days = 7) => {
                 const bundle = { data, expires: Date.now() + days * 86400000 };
-                try { localStorage.setItem(key, JSON.stringify(bundle)); } catch (e) { console.error('Cache Save Error', e); }
+                try { localStorage.setItem(key, JSON.stringify(bundle)); } catch (e) { }
             },
             load: (key) => {
                 const raw = localStorage.getItem(key);
@@ -240,281 +218,187 @@
             addHistory: (record) => {
                 let h = AppStorage.getHistory();
                 h.unshift({ ...record, timestamp: Date.now() });
-                AppStorage.save(CONSTANTS.CACHE_KEYS.HISTORY, h.slice(0, CONSTANTS.HISTORY_LIMIT));
+                if (h.length > CONSTANTS.HISTORY_LIMIT) h = h.slice(0, CONSTANTS.HISTORY_LIMIT);
+                AppStorage.save(CONSTANTS.CACHE_KEYS.HISTORY, h);
             },
-            getQueue: () => JSON.parse(localStorage.getItem(CONSTANTS.CACHE_KEYS.QUEUE)) || [],
+            getQueue: () => JSON.parse(localStorage.getItem(CONSTANTS.CACHE_KEYS.QUEUE) || '[]'),
             saveQueue: (q) => localStorage.setItem(CONSTANTS.CACHE_KEYS.QUEUE, JSON.stringify(q)),
-            addToQueue: (record) => {
-                const q = AppStorage.getQueue();
-                q.push(record);
-                AppStorage.saveQueue(q);
-            }
+            addToQueue: (r) => { const q = AppStorage.getQueue(); q.push(r); AppStorage.saveQueue(q); }
         };
 
-        /**
-         * @core AppGeo - 地理位置模組
-         */
+        /** @core AppGeo - 承重牆：地理位置定位核心 */
         const AppGeo = {
-            getCurrent: () => {
-                return new Promise((res, rej) => {
-                    if (!navigator.geolocation) return rej(new Error('不支援 GPS'));
-                    navigator.geolocation.getCurrentPosition(res, rej, {
-                        enableHighAccuracy: true, timeout: CONSTANTS.TIMEOUTS.GEO, maximumAge: 0
-                    });
-                });
-            },
-            withRetry: async (retries = CONSTANTS.MAX_RETRY) => {
-                for (let i = 1; i <= retries; i++) {
-                    try {
-                        console.log(`[GEO] Attempt ${i}...`);
-                        return await AppGeo.getCurrent();
-                    } catch (e) {
-                        if (i === retries) throw e;
-                        await new Promise(r => setTimeout(r, 1000));
-                    }
+            getCoords: () => new Promise((res, rej) => {
+                if (!navigator.geolocation) return rej({ code: 'NOT_SUPPORTED' });
+                navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: CONSTANTS.TIMEOUTS.GEO, maximumAge: 0 });
+            }),
+            withRetry: async (max = CONSTANTS.MAX_RETRY) => {
+                for (let i = 1; i <= max; i++) {
+                    try { return await AppGeo.getCoords(); } catch (e) { if (e.code === 1 || i === max) throw e; await new Promise(r => setTimeout(r, 1000)); }
                 }
             }
         };
 
-        /**
-         * @core AppAPI - 通訊與背景服務模組
-         */
+        /** @core AppAPI - 承重牆：後端同步核心 */
         const AppAPI = {
             request: async (params) => {
                 const url = new URL(CONSTANTS.GAS_URL);
                 Object.entries(params).forEach(([k, v]) => url.searchParams.append(k, v));
-
-                const res = await Promise.race([
-                    fetch(url),
-                    new Promise((_, rej) => setTimeout(() => rej(new Error('API 響應超時')), CONSTANTS.TIMEOUTS.SYNC))
-                ]);
-
+                const source = new URLSearchParams(window.location.search).get('source') || (liff.isInClient() ? 'richmenu' : 'unknown');
+                url.searchParams.append('source', source);
+                const res = await Promise.race([fetch(url), new Promise((_, rej) => setTimeout(() => rej(new Error('超時')), CONSTANTS.TIMEOUTS.SYNC))]);
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 return res.json();
             },
             syncAll: async () => {
-                const q = AppStorage.getQueue();
-                if (!q.length) return;
-                console.log(`[API] 同步離線隊列: ${q.length} 筆`);
+                const q = AppStorage.getQueue(); if (!q.length) return;
                 let remaining = [];
-                for (const item of q) {
-                    try { await AppAPI.request(item); } catch (e) { remaining.push(item); }
-                }
+                for (const item of q) { try { await AppAPI.request(item); } catch (e) { remaining.push(item); } }
                 AppStorage.saveQueue(remaining);
             }
         };
 
-        /**
-         * AppUI - 介面與渲染模組
-         */
         const AppUI = {
             updateIndicator: (name, status, text) => {
                 const el = document.getElementById(`status-${name}`);
                 if (!el) return;
                 el.className = `status-indicator status-${status}`;
-                el.querySelector('.status-text').textContent = text;
+                el.querySelector('div:last-child').textContent = text;
             },
             setLoading: (show, text = '') => {
-                document.getElementById('loading').classList.toggle('hidden', !show);
-                document.getElementById('loading-text').textContent = text;
-                document.getElementById('btn-checkin').disabled = show;
+                const loading = document.getElementById('loading');
+                const btn = document.getElementById('checkin-button');
+                const message = document.getElementById('message');
+                if (loading) loading.classList.toggle('hidden', !show);
+                if (document.getElementById('loading-text')) document.getElementById('loading-text').textContent = text;
+                if (message) message.classList.toggle('hidden', show);
+                if (btn) btn.disabled = show;
             },
-            setMessage: (html, colorClass = 'text-gray-700') => {
+            updateMessage: (html, colorClass = 'text-gray-700') => {
                 const msg = document.getElementById('message');
-                msg.innerHTML = html;
-                msg.className = colorClass;
+                msg.innerHTML = html; msg.className = `text-center text-sm ${colorClass}`;
             },
+            updateUserDisplay: (name) => { const el = document.getElementById('displayName'); if (el) el.textContent = name; },
             showModal: (record) => {
-                const isFail = record.message.includes('失敗');
-                const isOffline = record.isOffline;
-                const modal = document.getElementById('detail-modal');
-                const title = document.getElementById('modal-title');
-
-                title.textContent = isFail ? '打卡失敗' : (isOffline ? '離線簽到' : '打卡成功');
-                title.className = `text-xl font-bold ${isFail ? 'text-red-600' : (isOffline ? 'text-amber-600' : 'text-green-600')}`;
-
-                document.getElementById('modal-time').textContent = new Date(record.timestamp).toLocaleString();
+                const isFail = record.message.includes('失敗') || record.message.includes('錯誤');
+                const mod = document.getElementById('detail-modal');
+                document.getElementById('modal-title').textContent = isFail ? '打卡失敗' : '打卡詳細';
+                document.getElementById('modal-title').className = `text-2xl font-black ${isFail ? 'text-red-600' : 'text-gray-900'}`;
+                document.getElementById('modal-time').textContent = new Date(record.timestamp).toLocaleString('zh-TW', { hour12: false });
                 document.getElementById('modal-content').textContent = record.message;
-                modal.classList.remove('hidden');
+                mod.classList.remove('hidden');
             },
             closeModal: () => document.getElementById('detail-modal').classList.add('hidden'),
             renderHistory: () => {
                 const h = AppStorage.getHistory();
-                const container = document.getElementById('history-container');
-                const list = document.getElementById('history-list');
-
+                const container = document.getElementById('checkin-history-container');
+                const list = document.getElementById('checkin-history-list');
                 if (!h.length) { container.classList.add('hidden'); return; }
-                container.classList.remove('hidden');
+                container.classList.remove('hidden'); list.innerHTML = '';
 
-                list.innerHTML = '';
                 h.forEach(record => {
-                    const isOffline = record.isOffline;
-                    const isFail = record.message.includes('失敗');
-                    const timeStr = new Date(record.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    const dateStr = `${new Date(record.timestamp).getMonth() + 1}/${new Date(record.timestamp).getDate()}`;
+                    const isOffline = record.isOffline === true || (record.message && record.message.includes('離線'));
+                    const isFail = record.message && (record.message.includes('失敗') || record.message.includes('錯誤'));
+                    const d = new Date(record.timestamp);
+                    const timeStr = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                    const dateStr = `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}`;
+                    const off = record.message && record.message.match(/預計下班：(\d{2}:\d{2})/);
+                    const offTag = off ? `<span class="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded text-[10px] ml-1 font-bold">下班 ${off[1]}</span>` : '';
 
                     const li = document.createElement('li');
-                    li.className = `flex justify-between items-center p-2 rounded-lg cursor-pointer transition-colors ${isFail ? 'bg-red-50' : 'hover:bg-gray-50'}`;
-
-                    let icon = `<svg class="w-3 h-3 ${isFail ? 'text-red-500' : (isOffline ? 'text-amber-500' : 'text-green-500')} mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${isFail ? 'M6 18L18 6M6 6l12 12' : 'M5 13l4 4L19 7'}"/></svg>`;
-
-                    // 下班時間解析
-                    const offMatch = record.message.match(/下班：(\d{2}:\d{2})/);
-                    const offTag = offMatch ? `<span class="bg-blue-50 text-blue-600 px-1 py-0.5 rounded-[4px] text-[9px] font-bold ml-2">下班 ${offMatch[1]}</span>` : '';
-
-                    li.innerHTML = `
-                        <div class="flex items-center truncate">
-                            ${icon} <span class="text-[11px] font-bold">${dateStr} ${timeStr}</span> ${offTag}
-                        </div>
-                        <span class="text-[10px] text-gray-400 truncate ml-2">${record.message.split('\n')[0].substring(0, 10)}...</span>
-                    `;
+                    li.className = `flex justify-between items-center border-b border-gray-100 p-2 last:border-0 cursor-pointer transition-colors rounded-md ${isFail ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'}`;
+                    li.innerHTML = `<div class="flex items-center min-w-0"><svg class="w-3 h-3 ${isFail ? 'text-red-500' : (isOffline ? 'text-amber-500' : 'text-green-500')} mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${isFail ? 'M6 18L18 6M6 6l12 12' : 'M5 13l4 4L19 7'}"/></svg><span class="text-[10px] font-bold text-gray-400">${dateStr} ${timeStr}</span> ${offTag}</div><span class="text-[9px] text-gray-400 truncate ml-2 max-w-[120px]">${(record.message || '').split('\n')[0].substring(0, 14)}</span>`;
                     li.onclick = () => AppUI.showModal(record);
                     list.appendChild(li);
                 });
 
-                // 如果今天有上班，顯示醒目通知
                 const todayStr = new Date().toDateString();
-                const firstOne = h.find(r => new Date(r.timestamp).toDateString() === todayStr && !r.message.includes('失敗'));
-                if (firstOne) {
-                    const time = new Date(firstOne.timestamp).toTimeString().substring(0, 5);
-                    const offMatch = firstOne.message.match(/下班：(\d{2}:\d{2})/);
-                    AppUI.setMessage(`✅ 今日已於 <span class="text-blue-600 font-bold">${time}</span> 打卡<br>${offMatch ? `預計下班：<span class="text-blue-600 font-bold">${offMatch[1]}</span>` : ''}`, 'text-green-800');
+                const todayRes = h.filter(r => new Date(r.timestamp).toDateString() === todayStr && !r.message.includes('失敗'));
+                if (todayRes.length > 0) {
+                    const first = todayRes[todayRes.length - 1];
+                    const d = new Date(first.timestamp);
+                    const t = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                    const off = first.message.match(/預計下班：(\d{2}:\d{2})/);
+                    AppUI.updateMessage(`您今日已於 <span class="text-blue-600 font-black">${t}</span> 完成打卡！${off ? `<br>預計下班：<span class="text-blue-600 font-bold">${off[1]}</span>` : ''}`, 'text-green-800');
                 }
             }
         };
 
-        /**
-         * @stable AppCore - 業務邏輯與狀態機
-         */
+        /** @core AppCore - 業務驅動引擎 */
         const AppCore = {
-            user: null,
-            isProcessing: false,
-
+            user: null, isLocked: false,
             init: async () => {
-                document.getElementById('ui-version').textContent = CONSTANTS.VERSION;
-
-                // 1. 初始化 UI
-                AppUI.updateIndicator('network', navigator.onLine ? 'success' : 'error', navigator.onLine ? '連線中' : '無網路');
-                window.ononline = window.onoffline = () => AppUI.updateIndicator('network', navigator.onLine ? 'success' : 'error', navigator.onLine ? '連線中' : '無網路');
+                const updateNet = () => AppUI.updateIndicator('network', navigator.onLine ? 'success' : 'error', navigator.onLine ? '連線正常' : '已離線');
+                updateNet(); window.ononline = window.onoffline = updateNet;
                 AppUI.renderHistory();
 
-                // 2. 快取優先加載
                 const cached = AppStorage.load(CONSTANTS.CACHE_KEYS.PROFILE);
-                if (cached) {
-                    AppCore.user = cached;
-                    document.getElementById('displayName').textContent = cached.displayName;
-                    AppUI.updateIndicator('line', 'success', '快取登入');
-                    document.getElementById('btn-checkin').disabled = false;
-                }
+                if (cached) { AppCore.user = cached; AppUI.updateUserDisplay(cached.displayName); AppUI.updateIndicator('line', 'success', '身分快取'); document.getElementById('checkin-button').disabled = false; }
 
-                // 3. 測試環境判斷
-                const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.search.includes('debug=true');
-                if (isLocal) {
-                    document.getElementById('test-selector').classList.remove('hidden');
-                    if (!cached) AppCore.switchUser('BOSS');
-                    AppAPI.syncAll();
-                    return;
-                }
-
-                // 4. 生產環境 LIFF 初始化
                 try {
+                    AppUI.updateIndicator('line', 'pending', '驗證身分');
                     await liff.init({ liffId: CONSTANTS.LIFF_ID });
                     if (!liff.isLoggedIn()) { liff.login(); return; }
                     const p = await liff.getProfile();
-                    AppCore.user = p;
-                    AppStorage.save(CONSTANTS.CACHE_KEYS.PROFILE, p);
-                    document.getElementById('displayName').textContent = p.displayName;
-                    AppUI.updateIndicator('line', 'success', '已連線');
-                    document.getElementById('btn-checkin').disabled = false;
+                    AppCore.user = p; AppStorage.save(CONSTANTS.CACHE_KEYS.PROFILE, p);
+                    AppUI.updateUserDisplay(p.displayName); AppUI.updateIndicator('line', 'success', '認證成功');
+                    document.getElementById('checkin-button').disabled = false;
                     AppAPI.syncAll();
-                } catch (e) {
-                    AppUI.updateIndicator('line', 'error', '授權失效');
-                }
+                } catch (e) { if (!cached) AppUI.updateIndicator('line', 'error', '身分失效'); }
             },
-
-            switchUser: (key) => {
-                const u = CONSTANTS.MOCK_USERS[key];
-                AppCore.user = u;
-                AppStorage.save(CONSTANTS.CACHE_KEYS.PROFILE, u);
-                document.getElementById('displayName').textContent = u.displayName;
-                AppUI.updateIndicator('line', 'success', '測試切換');
-                AppUI.renderHistory();
-                console.log(`[CORE] Switched to ${u.displayName}`);
-            },
-
-            doCheckin: async () => {
-                if (AppCore.isProcessing) return;
-                AppCore.isProcessing = true;
-                AppUI.setLoading(true, '定位中...');
+            execute: async () => {
+                if (AppCore.isLocked) return; AppCore.isLocked = true;
+                const btn = document.getElementById('checkin-button');
+                btn.disabled = true; btn.textContent = '定位中...'; btn.classList.remove('btn-pulse');
                 AppUI.updateIndicator('gps', 'pending', '定位中');
-
-                const startTime = Date.now();
-                const recordId = `REQ_${startTime}`;
+                AppUI.setLoading(true, '確認經緯座標...');
 
                 try {
-                    // 1. GPS
                     const pos = await AppGeo.withRetry();
-                    const { latitude, longitude } = pos.coords;
                     AppUI.updateIndicator('gps', 'success', '定位成功');
+                    const payload = { userId: AppCore.user.userId, userName: AppCore.user.displayName, lat: pos.coords.latitude, lon: pos.coords.longitude, timestamp: Date.now() };
+                    AppStorage.addToQueue(payload);
+                    AppUI.setLoading(true, '正在傳送...');
+                    btn.textContent = '傳送中...';
 
-                    // 2. 封裝封包
-                    const payload = {
-                        userId: AppCore.user.userId,
-                        userName: AppCore.user.displayName,
-                        lat: latitude, lon: longitude,
-                        timestamp: startTime,
-                        source: location.search.includes('debug') ? 'test_refactor' : 'richmenu'
-                    };
-
-                    // 3. 寫入離線隊列 (高穩定預防機制)
-                    AppStorage.addToQueue({ ...payload, id: recordId });
-                    AppUI.setLoading(true, '傳送資訊...');
-
-                    // 4. 發射 API
                     try {
-                        const res = await AppAPI.request(payload);
-                        // 清理隊列
-                        const q = AppStorage.getQueue().filter(r => r.id !== recordId);
+                        const result = await AppAPI.request(payload);
+                        const q = AppStorage.getQueue().filter(r => r.timestamp !== payload.timestamp);
                         AppStorage.saveQueue(q);
-
-                        AppCore.handleSuccess(res.message, false);
-                    } catch (apiErr) {
-                        console.warn('Immediate sync failed, relied on queue', apiErr);
-                        AppCore.handleSuccess('打卡成功！(離線紀錄已暫存，將自動上傳)', true);
-                    }
-
-                } catch (e) {
-                    AppUI.updateIndicator('gps', 'error', '失敗');
-                    AppUI.setMessage(`<span class="text-red-500 font-bold">打卡失敗</span><br>${e.message}`, 'text-red-800');
-                    AppCore.isProcessing = false;
-                    AppUI.setLoading(false);
+                        AppCore.finalize(result);
+                    } catch (e) { AppCore.finalize({ status: 'success', message: '打卡成功！\n(紀錄已暫存，將自動補傳)' }); }
+                } catch (err) {
+                    AppUI.updateIndicator('gps', 'error', '定位失敗');
+                    AppUI.updateMessage(err.code === 1 ? '<strong>位置授權被拒絕</strong>' : `打卡失敗: ${err.message}`, 'text-red-800');
+                    btn.disabled = false; btn.textContent = '重新打卡'; btn.classList.add('btn-pulse');
+                    AppCore.isLocked = false; AppUI.setLoading(false);
                 }
             },
-
-            handleSuccess: (msg, isOffline) => {
+            finalize: (res) => {
                 AppUI.setLoading(false);
-                AppStorage.addHistory({ message: msg, isOffline });
-                AppUI.renderHistory();
-
-                const panel = document.getElementById('status-panel');
-                panel.className = `mb-8 p-4 rounded-lg min-h-[100px] flex flex-col items-center justify-center border ${isOffline ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`;
-
-                const btn = document.getElementById('btn-checkin');
-                btn.textContent = isOffline ? '打卡完成 (離線)' : '打卡成功';
-                btn.className = `w-full text-white font-bold py-4 px-6 rounded-lg text-lg ${isOffline ? 'bg-amber-500' : 'bg-green-600'}`;
-                btn.disabled = true;
-
-                if (isOffline) {
-                    document.getElementById('icon-default').classList.add('hidden');
-                    document.getElementById('icon-offline').classList.remove('hidden');
+                const isOff = res.status === 'success' && res.message.includes('離線');
+                if (res.status === 'success') {
+                    AppStorage.addHistory({ message: res.message, isOffline: isOff });
+                    AppUI.renderHistory();
+                    const btn = document.getElementById('checkin-button');
+                    btn.textContent = '打卡完成';
+                    btn.className = "w-full bg-gray-200 text-gray-400 font-bold py-5 px-6 rounded-xl text-xl cursor-not-allowed transform-none shadow-none";
+                    btn.disabled = true;
+                    if (isOff) {
+                        document.getElementById('icon-default').classList.add('hidden');
+                        document.getElementById('icon-offline').classList.remove('hidden');
+                    }
+                    AppUI.updateMessage(res.message + '<br><span class="text-[9px] text-gray-400 mt-2 block italic">視窗將於 45 秒後自動關閉</span>', isOff ? 'text-amber-700' : 'text-green-800');
+                    setTimeout(() => { if (liff.closeWindow) liff.closeWindow(); }, CONSTANTS.TIMEOUTS.AUTO_CLOSE);
+                } else {
+                    AppUI.updateMessage(res.message || '後端回報錯誤', 'text-red-800');
+                    const btn = document.getElementById('checkin-button');
+                    btn.disabled = false; btn.textContent = '重新嘗試'; btn.classList.add('btn-pulse');
+                    AppCore.isLocked = false;
                 }
-
-                setTimeout(() => { if (liff.closeWindow) liff.closeWindow(); }, CONSTANTS.TIMEOUTS.AUTO_CLOSE);
             }
         };
-
-        // 綁定按紐
-        document.getElementById('btn-checkin').onclick = AppCore.doCheckin;
+        document.getElementById('checkin-button').onclick = AppCore.execute;
         window.onload = AppCore.init;
     </script>
 </body>
