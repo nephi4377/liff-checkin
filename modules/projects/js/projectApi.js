@@ -7,6 +7,7 @@
 * =============================================================================
 */ // [v602.0 重構] 引入統一設定檔
 import { CONFIG } from '/shared/js/config.js';
+import { state } from './state.js';
 
 // [v520.0 修正] 修正導入路徑，直接從根目錄的 api.js 引入，避免循環依賴。
 // [v555.0 重構] 移除對外部 api.js 的依賴，將 postTask 邏輯內化，解決 API_BASE_URL 為 undefined 的問題。

@@ -256,7 +256,15 @@
             },
             getQueue: () => JSON.parse(localStorage.getItem(CONSTANTS.CACHE_KEYS.QUEUE) || '[]'),
             saveQueue: (q) => localStorage.setItem(CONSTANTS.CACHE_KEYS.QUEUE, JSON.stringify(q)),
-            addToQueue: (r) => { const q = AppStorage.getQueue(); q.push(r); AppStorage.saveQueue(q); }
+            addToQueue: (r) => { const q = AppStorage.getQueue(); q.push(r); AppStorage.saveQueue(q); },
+            updateQueueItem: (timestamp, updates) => {
+                const q = AppStorage.getQueue();
+                const idx = q.findIndex(item => item.timestamp === timestamp);
+                if (idx !== -1) {
+                    q[idx] = { ...q[idx], ...updates };
+                    AppStorage.saveQueue(q);
+                }
+            }
         };
 
         /** 
@@ -347,12 +355,39 @@
                     }
                 }
             },
+            /** 
+             * @core dispatch - 統一調度發送出口 (Single Sink)
+             * 全系統唯一的 API 發送點，負責排隊、鎖定與併發防護。
+             */
+            isDispatching: false,
+            dispatch: async (payload) => {
+                if (AppAPI.isDispatching) return { status: 'busy' }; // 簡單鎖定防護
+                AppAPI.isDispatching = true;
+                try {
+                    const result = await AppAPI.request(payload);
+                    AppAPI.isDispatching = false;
+                    return result;
+                } catch (e) {
+                    AppAPI.isDispatching = false;
+                    throw e; // 傳遞錯誤由呼叫端決定是否進隊列
+                }
+            },
             /** 同步離線隊列中的所有紀錄 */
             syncAll: async () => {
+                if (AppAPI.isDispatching) return;
                 const q = AppStorage.getQueue(); if (!q.length) return;
-                let remaining = [];
-                for (const item of q) { try { await AppAPI.request(item); } catch (e) { remaining.push(item); } }
-                AppStorage.saveQueue(remaining); // 同步失敗的則保留至下次嘗試。
+
+                // 依序透過 dispatch 發送
+                let remaining = q;
+                for (const item of q) {
+                    try {
+                        const res = await AppAPI.dispatch(item);
+                        if (res.status === 'success') {
+                            remaining = remaining.filter(r => r.timestamp !== item.timestamp);
+                        }
+                    } catch (e) { break; } // 網絡不通則停止同步
+                }
+                AppStorage.saveQueue(remaining);
             }
         };
 
@@ -490,17 +525,28 @@
                 try {
                     const pos = await AppGeo.withRetry();
                     AppUI.updateIndicator('gps', 'success', '定位成功');
-                    const payload = { userId: AppCore.user.userId, userName: AppCore.user.displayName, lat: pos.coords.latitude, lon: pos.coords.longitude, timestamp: Date.now() };
-                    AppStorage.addToQueue(payload);
+
+                    const payload = {
+                        reqId: `c-${Math.random().toString(36).substr(2, 9)}-${Date.now()}`,
+                        userId: AppCore.user.userId,
+                        userName: AppCore.user.displayName,
+                        lat: pos.coords.latitude,
+                        lon: pos.coords.longitude,
+                        timestamp: Date.now()
+                    };
+
                     AppUI.setLoading(true, '正在傳送數據...');
                     btn.textContent = '傳送中...';
 
                     try {
-                        const result = await AppAPI.request(payload);
-                        const q = AppStorage.getQueue().filter(r => r.timestamp !== payload.timestamp);
-                        AppStorage.saveQueue(q);
+                        // 統一出口發送
+                        const result = await AppAPI.dispatch(payload);
                         AppCore.finalize(result);
-                    } catch (e) { AppCore.finalize({ status: 'success', message: '打卡成功！\n(紀錄已暫存，雲端將自動補傳)' }); }
+                    } catch (e) {
+                        // 發送失敗，存入隊列交由自動同步
+                        AppStorage.addToQueue(payload);
+                        AppCore.finalize({ status: 'success', message: '打卡成功！\n(紀錄已暫存，雲端將自動補傳)' });
+                    }
                 } catch (err) {
                     AppUI.updateIndicator('gps', 'error', '定位失敗');
                     AppUI.updateMessage(err.code === 1 ? '<strong>您已拒絕位置授權</strong><br>請開啟位置權限後重試。' : `打卡失敗: ${err.message}`, 'text-red-800');
@@ -509,11 +555,14 @@
                 }
             },
             /** 生命週期：處理結果與結算 */
-            finalize: (res) => {
+            finalize: (res, isSilentInit = false) => {
                 AppUI.setLoading(false);
                 const isOff = res.status === 'success' && res.message.includes('離線');
                 if (res.status === 'success') {
-                    AppStorage.addHistory({ message: res.message, isOffline: isOff });
+                    if (!isSilentInit) {
+                        AppCore.isLocked = true; // 鎖定本次會話
+                        AppStorage.addHistory({ message: res.message, isOffline: isOff });
+                    }
                     AppUI.renderHistory();
                     const btn = document.getElementById('checkin-button');
                     // 成功後按鈕樣式：強制灰色鎖定，防止單次開啟後重複打卡。
@@ -524,8 +573,10 @@
                         document.getElementById('icon-default').classList.add('hidden');
                         document.getElementById('icon-offline').classList.remove('hidden');
                     }
-                    AppUI.updateMessage(res.message + '<br><span class="text-[9px] text-gray-400 mt-2 block italic font-bold">視窗將於 45 秒後自動關閉</span>', isOff ? 'text-amber-700' : 'text-green-800');
-                    setTimeout(() => { if (liff.closeWindow) liff.closeWindow(); }, CONSTANTS.TIMEOUTS.AUTO_CLOSE);
+                    AppUI.updateMessage(res.message + (isSilentInit ? '' : '<br><span class="text-[9px] text-gray-400 mt-2 block italic font-bold">視窗將於 45 秒後自動關閉</span>'), isOff ? 'text-amber-700' : 'text-green-800');
+                    if (!isSilentInit) {
+                        setTimeout(() => { if (liff.closeWindow) liff.closeWindow(); }, CONSTANTS.TIMEOUTS.AUTO_CLOSE);
+                    }
                 } else {
                     AppUI.updateMessage(res.message || '後端回報錯誤，請洽管理員', 'text-red-800');
                     const btn = document.getElementById('checkin-button');
