@@ -18,7 +18,7 @@
         const CONSTANTS = {
             LIFF_ID: '2007974938-jVxn6y37',
             GAS_URL: 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec',
-            VERSION: 'v26.02.28.1324',
+            VERSION: 'v26.03.01.1220',
             CACHE_KEYS: {
                 PROFILE: 'checkin_user_profile_cache', // 使用者個人資料快取
                 HISTORY: 'checkin_history_records',     // 歷史打卡紀錄快取
@@ -359,17 +359,19 @@
              * @core dispatch - 統一調度發送出口 (Single Sink)
              * 全系統唯一的 API 發送點，負責排隊、鎖定與併發防護。
              */
-            isDispatching: false,
             dispatch: async (payload) => {
-                if (AppAPI.isDispatching) return { status: 'busy' }; // 簡單鎖定防護
+                if (AppAPI.isDispatching) {
+                    console.warn('[Single Sink] 請求處理中，略過重複調用');
+                    return { status: 'busy' };
+                }
                 AppAPI.isDispatching = true;
                 try {
                     const result = await AppAPI.request(payload);
-                    AppAPI.isDispatching = false;
                     return result;
                 } catch (e) {
+                    throw e;
+                } finally {
                     AppAPI.isDispatching = false;
-                    throw e; // 傳遞錯誤由呼叫端決定是否進隊列
                 }
             },
             /** 同步離線隊列中的所有紀錄 */
@@ -527,7 +529,6 @@
                     AppUI.updateIndicator('gps', 'success', '定位成功');
 
                     const payload = {
-                        reqId: `c-${Math.random().toString(36).substr(2, 9)}-${Date.now()}`,
                         userId: AppCore.user.userId,
                         userName: AppCore.user.displayName,
                         lat: pos.coords.latitude,
