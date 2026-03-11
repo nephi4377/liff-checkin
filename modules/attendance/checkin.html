@@ -470,6 +470,10 @@
          */
         const AppCore = {
             user: null, isLocked: false,
+            // 本頁面是否已發起過一次打卡（重開頁面後重置）
+            pageSendOnce: false,
+            // 本頁面實例 ID（用於日誌與去重追蹤）
+            pageInstance: null,
             init: async () => {
                 // 1. 優先顯示基本資訊與網路狀態
                 document.getElementById('app-version').textContent = CONSTANTS.VERSION;
@@ -483,7 +487,8 @@
                     AppCore.user = cached;
                     AppUI.updateUserDisplay(cached.displayName);
                     AppUI.updateIndicator('line', 'success', '身分快取');
-                    document.getElementById('checkin-button').disabled = false;
+                    // 延遲 2 秒後才允許打卡，確保系統初始化穩定
+                    setTimeout(() => { document.getElementById('checkin-button').disabled = false; }, 2000);
                 }
 
                 // 3. 執行 LIFF 初始化 (加入超時保護防止卡死)
@@ -503,7 +508,11 @@
                     AppStorage.save(CONSTANTS.CACHE_KEYS.PROFILE, p);
                     AppUI.updateUserDisplay(p.displayName);
                     AppUI.updateIndicator('line', 'success', '認證成功');
-                    document.getElementById('checkin-button').disabled = false;
+                    // 延遲 2 秒後才允許打卡，確保所有初始化完成且系統穩定
+                    setTimeout(() => { document.getElementById('checkin-button').disabled = false; }, 2000);
+
+                    // 產生本頁唯一 instance id，用於日誌追蹤與去重（每次開頁不同）
+                    AppCore.pageInstance = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
 
                     AppAPI.syncAll();
                 } catch (e) {
@@ -518,6 +527,11 @@
             },
             /** 生命週期：執行打卡動作 */
             execute: async () => {
+                // 本頁面只允許一次打卡動作（「一頁一次」物理限制）
+                if (AppCore.pageSendOnce) {
+                    AppUI.updateMessage('本頁已完成打卡操作，如需重新打卡請關閉此視窗後重新開啟。', 'text-amber-600');
+                    return;
+                }
                 if (AppCore.isLocked) return; AppCore.isLocked = true;
                 const btn = document.getElementById('checkin-button');
                 btn.disabled = true; btn.textContent = '定位中...'; btn.classList.remove('btn-pulse');
@@ -528,19 +542,25 @@
                     const pos = await AppGeo.withRetry();
                     AppUI.updateIndicator('gps', 'success', '定位成功');
 
+                    // 定位成功後，標記本頁已發起一次打卡動作
+                    // 此後即使失敗也不允許同頁重新嘗試，需要重新開啟頁面
+                    AppCore.pageSendOnce = true;
+
                     const payload = {
                         userId: AppCore.user.userId,
                         userName: AppCore.user.displayName,
                         lat: pos.coords.latitude,
                         lon: pos.coords.longitude,
-                        timestamp: Date.now()
+                        // 加入 client 時間戳與本頁 instance id 供後端日誌/去重使用
+                        clientTimestamp: Date.now(),
+                        pageInstance: AppCore.pageInstance
                     };
 
                     AppUI.setLoading(true, '正在傳送數據...');
                     btn.textContent = '傳送中...';
 
                     try {
-                        // 統一出口發送
+                        // 統一出口發送（payload 已包含 pageInstance 與 clientTimestamp）
                         const result = await AppAPI.dispatch(payload);
                         AppCore.finalize(result);
                     } catch (e) {
@@ -551,6 +571,7 @@
                 } catch (err) {
                     AppUI.updateIndicator('gps', 'error', '定位失敗');
                     AppUI.updateMessage(err.code === 1 ? '<strong>您已拒絕位置授權</strong><br>請開啟位置權限後重試。' : `打卡失敗: ${err.message}`, 'text-red-800');
+                    // 定位失敗時：本頁仍未標記 pageSendOnce，允許使用者重新點擊
                     btn.disabled = false; btn.textContent = '重新打卡'; btn.classList.add('btn-pulse');
                     AppCore.isLocked = false; AppUI.setLoading(false);
                 }
@@ -558,18 +579,20 @@
             /** 生命週期：處理結果與結算 */
             finalize: (res, isSilentInit = false) => {
                 AppUI.setLoading(false);
+                const btn = document.getElementById('checkin-button');
                 const isOff = res.status === 'success' && res.message.includes('離線');
                 if (res.status === 'success') {
                     if (!isSilentInit) {
                         AppCore.isLocked = true; // 鎖定本次會話
-                        AppStorage.addHistory({ message: res.message, isOffline: isOff });
+                        AppStorage.addHistory({ message: res.message, isOffline: isOff, pageInstance: AppCore.pageInstance });
                     }
                     AppUI.renderHistory();
-                    const btn = document.getElementById('checkin-button');
                     // 成功後按鈕樣式：強制灰色鎖定，防止單次開啟後重複打卡。
-                    btn.textContent = '打卡完成';
-                    btn.className = "w-full bg-gray-200 text-gray-400 font-bold py-5 px-6 rounded-xl text-xl cursor-not-allowed transform-none shadow-none";
-                    btn.disabled = true;
+                    if (btn) {
+                        btn.textContent = '打卡完成';
+                        btn.className = "w-full bg-gray-200 text-gray-400 font-bold py-5 px-6 rounded-xl text-xl cursor-not-allowed transform-none shadow-none";
+                        btn.disabled = true;
+                    }
                     if (isOff) {
                         document.getElementById('icon-default').classList.add('hidden');
                         document.getElementById('icon-offline').classList.remove('hidden');
@@ -578,10 +601,22 @@
                     if (!isSilentInit) {
                         setTimeout(() => { if (liff.closeWindow) liff.closeWindow(); }, CONSTANTS.TIMEOUTS.AUTO_CLOSE);
                     }
+                } else if (res.status === 'busy') {
+                    // 系統忙碌（dispatch 已在處理中）
+                    AppUI.updateMessage('系統忙碌，請關閉此視窗後重試（錯誤碼：E002）。', 'text-red-800');
+                    if (btn) { btn.disabled = true; btn.classList.remove('btn-pulse'); }
+                    AppCore.isLocked = false;
+                } else if (res.status === 'error') {
+                    // 明確的錯誤回傳，顯示錯誤代碼（若無則以 E001 為預設）
+                    const code = res.errorCode || 'E001';
+                    const msg = res.message || '系統異常，請聯絡管理員。';
+                    AppUI.updateMessage(`打卡失敗（${code}）：${msg}<br>請關閉此視窗後重新開啟或聯絡管理員。`, 'text-red-800');
+                    if (btn) { btn.disabled = true; btn.classList.remove('btn-pulse'); }
+                    AppCore.isLocked = false;
                 } else {
-                    AppUI.updateMessage(res.message || '後端回報錯誤，請洽管理員', 'text-red-800');
-                    const btn = document.getElementById('checkin-button');
-                    btn.disabled = false; btn.textContent = '重新點擊'; btn.classList.add('btn-pulse');
+                    // 其他未預期狀態，使用通用錯誤提示
+                    AppUI.updateMessage('打卡失敗。請關閉此視窗後重新開啟頁面重新打卡。', 'text-red-800');
+                    if (btn) { btn.disabled = true; btn.classList.remove('btn-pulse'); }
                     AppCore.isLocked = false;
                 }
             }
