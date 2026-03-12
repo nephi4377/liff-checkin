@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>添心設計 | 回報系統</title>
+  <title>添心設計 | 回報系統 (V2)</title>
 
   <!-- UI / SDK -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -200,7 +200,7 @@
 
         <!-- [v2026.03.11 新增] 上傳統計資訊與計時器 -->
         <div id="stats-container" class="text-center text-sm font-mono text-gray-500 mb-4 hidden">
-          耗時: <span id="time-elapsed">0.0</span>s | 速率: <span id="upload-speed">0.00</span> MB/s
+          耗時: <span id="time-elapsed">0.0</span>s | 速率: <span id="upload-speed">0.00</span> KB/s
         </div>
 
         <div id="status-message" class="text-center mb-4 min-h-[24px]"></div>
@@ -228,8 +228,13 @@
           <path stroke-linecap="round" stroke-linejoin="round"
             d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <h2 class="mt-4 text-2xl font-bold text-gray-800">回報已成功提交！</h2>
-        <p class="mt-2 text-gray-600">後續處理完成後您會收到 LINE 通知。<br>此視窗將在 30 秒後自動關閉。</p>
+        <h2 class="mt-4 text-2xl font-bold text-gray-800">回報已成功提交！(V2)</h2>
+        <div id="final-stats" class="mt-4 p-4 bg-blue-50 rounded-lg text-sm text-blue-800 space-y-1">
+          <p>總體積: <span id="final-total-mb">0.00</span> MB</p>
+          <p>總耗時: <span id="final-time">0.0</span> 秒</p>
+          <p>平均速率: <span id="final-speed">0.00</span> KB/s</p>
+        </div>
+        <p class="mt-4 text-gray-600">後續處理完成後您會收到 LINE 通知。<br>此視窗將在 30 秒後自動關閉。</p>
       </div>
     </div>
   </div>
@@ -446,9 +451,13 @@
         errorListContainer.classList.add('hidden');
       }
 
+      // === 全域狀態與計量變數 ===
+      let uploadedChunksBytes = 0; // [v2026.03.12 修正] 提升至全域以支援非同步 processPhotoChunk 存取
+
       // === 送出處理 ===
       async function handleFormSubmit(event) {
         event.preventDefault();
+        console.log(`[Lifecycle] === 開始提交表單 ===`);
         setLoadingState(true);
         
         // [v2026.03.11 新增] 初始化計時器與統計 UI
@@ -493,6 +502,7 @@
           ...siteFiles.map(file => ({ file, isProblem: false })),
           ...problemFiles.map(file => ({ file, isProblem: true }))
         ];
+        console.log(`[Lifecycle] 偵測到 ${allPhotosInfo.length} 張照片待處理`, allPhotosInfo.map(i => i.file.name));
 
         const workDescription = document.getElementById('workDescription').value.trim();
         const problemDescription = document.getElementById('problemDescription').value.trim();
@@ -505,124 +515,115 @@
         }
 
         const batchId = `${userProfile.userId}-${Date.now()}`;
-        const SUBMIT_CHUNK_SIZE = 4; // 【升級方案】由 8 降至 4，確保在弱網下單次請求不逾時
-        const totalChunks = Math.ceil(allPhotosInfo.length / SUBMIT_CHUNK_SIZE) || 1;
-
-        // [v2026.03.11 新增] 計算總體積與開始計時
-        const totalBytes = allPhotosInfo.reduce((sum, item) => sum + item.file.size, 0);
-        const totalMB = totalBytes / (1024 * 1024);
-        let uploadedChunksBytes = 0;
+        
+        // [v2026.03.12 補回] 重構時誤刪的計量變數 (重置全域值)
+        uploadedChunksBytes = 0;
         const uploadStartTime = performance.now();
 
-        // [v2026.03.11 新增] 即時更新儀表板的函式
+        // [v2026.03.12 補回] 即時更新儀表板的函式
         const updateStatsDashboard = () => {
           const elapsedSec = (performance.now() - uploadStartTime) / 1000;
           timeElapsedEl.textContent = elapsedSec.toFixed(1);
           if (elapsedSec > 0.5) {
-            const speed = (uploadedChunksBytes / (1024 * 1024)) / elapsedSec;
-            uploadSpeedEl.textContent = speed.toFixed(2);
+            const speed = (uploadedChunksBytes / 1024) / elapsedSec;
+            uploadSpeedEl.textContent = speed.toFixed(1);
           }
         };
         const statsTimer = setInterval(updateStatsDashboard, 500);
 
-        const baseFormData = {
-          action: 'submitFastReport', // [v2026.03.12 新增] 改用高速專用路由
-          batchId,
-          totalChunks,
-          userId: userProfile.userId,
-          userName: userProfile.displayName,
-          projectId: cleanProjectId,
-          projectNameRaw: cleanProjectId,
-          workType: document.getElementById('workType').value,
-          workDescription: document.getElementById('workDescription').value,
-          problemDescription: document.getElementById('problemDescription').value,
-          clientTrace: {
-            url: window.location.href,
-            ver: '2026.02.27.2300-report',
-            uid: userProfile.userId,
-            ts: Date.now()
-          }
-        };
+        // [v2026.03.12 重構] 高效架構：全量並行處理 Firebase
+        updateStatus(`正在處理所有 ${allPhotosInfo.length} 張照片...`, 'info');
+        
+        try {
+          // 啟動擬真進度
+          startFakeProgress(90);
 
-        for (let i = 0; i < totalChunks; i++) {
-          try {
-            const chunkStart = i * SUBMIT_CHUNK_SIZE;
-            const chunkEnd = chunkStart + SUBMIT_CHUNK_SIZE;
-            const photoChunk = allPhotosInfo.slice(chunkStart, chunkEnd);
+          // 1) 全量處理相片 (Firebase 並行上傳)
+          console.log(`[Lifecycle] 階段 1: 啟動全量並行處理 (Fire-and-Forget)...`);
+          const processedPhotos = await processPhotoChunk(allPhotosInfo, shouldCompress, storage, cleanProjectId, batchId);
+          console.log(`[Lifecycle] 階段 1 完成，成功處理 ${processedPhotos.length} 張照片。`);
 
-            updateStatus(`正在處理第 ${i + 1} / ${totalChunks} 批照片...`, 'info');
-            // [vTEST-FB] 傳遞 storage 物件以便並行上傳
-            const processedPhotos = await processPhotoChunk(photoChunk, shouldCompress, storage, cleanProjectId, batchId);
-
-            // [v575.0 新增] 為當前批次啟動擬真進度動畫
-            const chunkTargetProgress = Math.round(((i + 1) / totalChunks) * 100);
-            startFakeProgress(chunkTargetProgress);
-            const chunkFormData = { ...baseFormData, chunkIndex: i + 1, photos: processedPhotos };
-
-            updateStatus(`正在提交第 ${i + 1} / ${totalChunks} 批資料...`, 'info');
-
-            // [v573.0 核心修正] 回歸到最可靠的 fetch + FormData 模式，以徹底解決 CORS 問題。
-            // 放棄即時進度，改回分批次更新進度。
-            // 【效能優化】改進 FormData 傳送方式，避免 "引數過大" 錯誤。
-            // 不再將所有東西 stringify 成單一 payload，而是將文字和圖片資料分開欄位。
-            // 這需要後端 GAS 的 doPost 函式做相應調整來解析。
-            const formData = new FormData();
-            formData.append('payload', JSON.stringify(chunkFormData));
-            // 1. 將非檔案的文字資料逐一附加
-            Object.keys(baseFormData).forEach(key => {
-              formData.append(key, typeof baseFormData[key] === 'object' ? JSON.stringify(baseFormData[key]) : baseFormData[key]);
-            });
-            Object.keys(chunkFormData).forEach(key => {
-              if (key !== 'photos') formData.append(key, typeof chunkFormData[key] === 'object' ? JSON.stringify(chunkFormData[key]) : chunkFormData[key]);
-            });
-            formData.append('chunkIndex', i + 1);
-            // 2. 只將圖片陣列（Base64 字串）單獨 stringify 後附加
-            formData.append('photos', JSON.stringify(processedPhotos));
-
-            const response = await fetch(GAS_WEB_APP_URL, {
-              method: 'POST',
-              body: formData,
-            });
-
-            const result = await response.json();
-            if (!response.ok || !result.success) {
-              const gasError = result.message || '後端未知錯誤';
-              appendErrorToList(`批次 ${i + 1}`, `GAS 拒絕請求: ${gasError}`);
-              throw new Error(`第 ${i + 1} 批資料提交失敗：${gasError}`);
+          // 2) 打包單一 Package
+          console.log(`[Lifecycle] 階段 2: 封裝數據 Package...`);
+          const finalFormData = {
+            action: 'submitFastReport',
+            batchId,
+            totalChunks: 1, // 現在改為單一請求
+            userId: userProfile.userId,
+            userName: userProfile.displayName,
+            projectId: cleanProjectId,
+            projectNameRaw: cleanProjectId,
+            workType: document.getElementById('workType').value,
+            workDescription: document.getElementById('workDescription').value,
+            problemDescription: document.getElementById('problemDescription').value,
+            photos: processedPhotos.map(p => ({ name: p.name, hasUrl: !!p.firebaseURL, hasBase64: !!p.data })), // 日誌中只檢查有無資料
+            clientTrace: {
+              url: window.location.href,
+              ver: '2026.03.12.1525-V2',
+              uid: userProfile.userId,
+              ts: Date.now()
             }
+          };
+          console.log(`[Lifecycle] Package 準備就緒，包含照片資訊:`, finalFormData.photos);
 
-            // 更新已處理的位元組以供計速
-            uploadedChunksBytes += photoChunk.reduce((s, p) => s + p.file.size, 0);
+          updateStatus(`正在一次性提交資料至後端...`, 'info');
 
-            // [v575.0 修改] 批次成功後，停止動畫並將進度條精確設定到里程碑位置
-            if (progressInterval) clearInterval(progressInterval);
-            updateProgressBar(Math.min(99, chunkTargetProgress));
-
-            // [v469.2 核心修正] 在每個批次成功提交後，加入一個短暫的延遲，以避免觸發後端的 429 速率限制錯誤。
-            if (i < totalChunks - 1) {
-              await new Promise(resolve => setTimeout(resolve, 500)); // 延遲 500 毫秒
+          // 3) 單次 POST 到 GAS
+          console.log(`[Lifecycle] 階段 3: 向 GAS 發送 POST 請求...`);
+          const formData = new FormData();
+          formData.append('payload', JSON.stringify({...finalFormData, photos: processedPhotos})); // 真正的傳送需包含完整照片
+          
+          // 拆解欄位以相容舊版手動多欄位模式 (後端 GAS 維持接收 chunkIndex 為 1)
+          Object.keys(finalFormData).forEach(key => {
+            if (key !== 'photos') {
+              formData.append(key, typeof finalFormData[key] === 'object' ? JSON.stringify(finalFormData[key]) : finalFormData[key]);
             }
-          } catch (error) {
-            console.error('表單處理失敗', error);
-            console.log('Caught error in chunk loop, calling setLoadingState(false) and returning.');
-            updateStatus(`提交發生錯誤，部分或全部失敗。`, 'error');
-            appendErrorToList('整體提交流程', error.message);
-            // [v575.0 新增] 出錯時停止動畫
-            if (progressInterval) clearInterval(progressInterval);
-            clearInterval(statsTimer); // 停止計時
-            setLoadingState(false);
-            // [v567.0 新增] 發生錯誤時隱藏進度條
-            progressContainer.classList.add('hidden');
-            return; // 【關鍵修正】一旦出錯，立即終止整個函式
+          });
+          formData.append('chunkIndex', 1);
+          formData.append('photos', JSON.stringify(processedPhotos));
+
+          const response = await fetch(GAS_WEB_APP_URL, {
+            method: 'POST',
+            body: formData,
+          });
+
+          const result = await response.json();
+          console.log(`[Lifecycle] GAS 回傳結果:`, result);
+          if (!response.ok || !result.success) {
+            const gasError = result.message || '後端未知錯誤';
+            appendErrorToList(`提交階段`, `GAS 拒絕請求: ${gasError}`);
+            throw new Error(`全量數據提交失敗：${gasError}`);
           }
+
+        } catch (error) {
+          console.error('表單處理失敗', error);
+          updateStatus(`提交發生錯誤，部分或全部失敗。`, 'error');
+          appendErrorToList('整體提交流程', error.message);
+          if (progressInterval) clearInterval(progressInterval);
+          clearInterval(statsTimer);
+          setLoadingState(false);
+          progressContainer.classList.add('hidden');
+          return;
         }
 
-        // 所有批次都成功後，才執行成功處理
+        // 所有動作成功
         clearInterval(statsTimer);
-        updateStatsDashboard(); // 做最後一次精準結算
-        console.log('All chunks processed successfully. Calling handleSuccess().');
-        // [v568.0 新增] 在跳轉到成功畫面之前，將進度條推到 100%
+        updateStatsDashboard();
         updateProgressBar(100);
+        
+        const finalTime = (performance.now() - uploadStartTime) / 1000;
+        const totalKb = uploadedChunksBytes / 1024;
+        const avgSpeed = totalKb / finalTime;
+        
+        console.log(`[Lifecycle] === 所有動作成功完成 ===`);
+        console.log(`[Lifecycle] 總上傳體積: ${(totalKb/1024).toFixed(2)} MB`);
+        console.log(`[Lifecycle] 總耗時: ${finalTime.toFixed(1)} s`);
+        console.log(`[Lifecycle] 平均速率: ${avgSpeed.toFixed(1)} KB/s`);
+
+        document.getElementById('final-total-mb').textContent = (totalKb / 1024).toFixed(2);
+        document.getElementById('final-time').textContent = finalTime.toFixed(1);
+        document.getElementById('final-speed').textContent = avgSpeed.toFixed(1);
+        
         handleSuccess();
       }
 
@@ -665,7 +666,9 @@
 
               const uploadResult = await uploadBytes(storageRef, processedFile);
               firebaseURL = await getDownloadURL(uploadResult.ref);
-              console.log(`[Firebase] 上傳成功: ${firebaseURL}`);
+              // [v2026.03.12 修正] 只要 Firebase 上傳成功，立即累加體積，讓計速器動起來
+              uploadedChunksBytes += processedFile.size;
+              console.log(`[Firebase] 上傳成功: ${photoInfo.file.name} (${processedFile.size} bytes) -> ${firebaseURL}`);
             } catch (fbError) {
               const debugMsg = fbError.code || fbError.message || '未知錯誤';
               console.error(`[Firebase] 上傳失敗 (${photoInfo.file.name})`, fbError);
@@ -675,6 +678,8 @@
               // 【核心關鍵】只有這裡才會呼叫 readFileAsBase64，節省 90% 以上本地資源
               console.log(`[降級轉換] 開始將 ${photoInfo.file.name} 轉為 Base64...`);
               base64 = await readFileAsBase64(processedFile);
+              // [v2026.03.12 修正] 降級方案完成也計入傳輸體積
+              uploadedChunksBytes += base64.length;
             }
 
             return {

@@ -1,6 +1,30 @@
 # 部署記錄 - 添心設計 (Coding)
 
-## 📅 修改日期: 2026-03-04 19:25
+## 📅 修改日期: 2026-03-12 11:45
+
+### 🚀 執行目標: 實施極速非同步傳輸架構 (Fire-and-Forget)
+- **修改摘要**: 
+  - **架構重構**: 徹底解耦前端傳輸與後端處理過程。
+  - **report_test.html**: 
+    - 啟動全量並行 Firebase 上傳模式，不再分批等待。
+    - 實作「一次性打包提交」，將所有 URL 封裝在單一 API 請求中，極大化減少 HTTP 握手次數。
+    - 加入結算儀表板，即時顯示速率 (MB/s) 與總體積。
+  - **FirebaseHandler.gs**: 
+    - 重構 `handleFastReport_`：接收大封包後，後端自動拆解為 4 張一组的 Chunks 入庫。
+    - 實施「秒回機制」：入庫後立即通知前端成功，背景於 15 秒後延遲啟發 Trigger 進行搬運。
+- **修改檔案**: `modules/projects/report_test.html`, `backend/project-console/FirebaseHandler.js`
+- **結果**: 2026-03-12 11:45 | 極速非同步架構實施 | 高效搬運 | 成功
+
+## 📅 修改日期: 2026-03-12 00:45
+
+### 🚀 執行目標: 啟用極速回報路由與移除 CPU 效能瓶頸
+- **修改摘要**: 
+  - **report_test.html**: 
+    - 移除不必要的 `isTest: true` 混淆標籤，將發送封包改用專屬的 `action: 'submitFastReport'` 極速路由與後端對接。
+    - **CPU 效能瓶頸移除**: 修正「Firebase 成功上傳後竟然還會繼續轉換 Base64」的嚴重 Bug。改為只要成功上傳，立即中斷 Base64 轉換，直接放行，成功解救凍結長達一分鐘的 JavaScript 分配記憶體。
+    - 導入 `Promise.all` 與 `map`，讓同一批次的圖檔不再是被迫循序漸進，而是全數並行 (Concurrency) 進行壓縮與上傳。
+- **修改檔案**: `modules/projects/report_test.html`
+- **結果**: 2026-03-12 00:45 | 前端並行壓縮與路由脫鉤修正 | 成功
 
 ### 🚀 執行目標: 施工回報系統內測修復與 FormData 支援
 ### 2026-03-11 21:35 - [內測修正] 解決 FormData 序列化與頻寬優化
