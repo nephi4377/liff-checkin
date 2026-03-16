@@ -424,6 +424,7 @@ ${notes || '無'}`;
           action: 'process_site_form', 
           originalProjectCode: originalProjectCode,
           siteName: this.siteName.value,
+          siteAddress: this.siteAddress.value, // 對齊後端必填驗證
           address: this.siteAddress.value,
           '案號': this.projectCode.value,
           '專案負責人': this.responsiblePerson.value,
