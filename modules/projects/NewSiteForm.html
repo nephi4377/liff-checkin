@@ -266,8 +266,10 @@
           console.log(`[NewSiteForm] 從後端取得 ${activeSites.length} 個有效案場的完整資料。`);
 
           activeSites.forEach(site => {
-            // 【v119.0 修正】從完整資料物件中讀取案號與案場名稱
-            const option = new Option(`${site['案號']} - ${site.siteName}`, site['案號']);
+            // 【v127.1 修正】對齊後端資料屬性：案場名稱正確 Key 為 siteName (或 site_name)
+            // 根據截圖與診斷，site.siteName 可能是 undefined，改為讀取 siteName 並增加後備機制
+            const sName = site.siteName || site.site_name || site['案場名稱'] || '未命名案場';
+            const option = new Option(`${site['案號']} - ${sName}`, site['案號']);
             projectSelector.add(option);
           });
 
@@ -345,10 +347,10 @@ ${notes || '無'}`;
           console.log('[NewSiteForm] 收到案場詳細資料:', response.data);
           const details = response.data;
 
-          // 【v127.0 核心修正】建立欄位對應表，解決中英文欄位名稱不一致的問題
+          // 【v127.1 核心修正】對齊後端屬性名稱，解決自動填充失效問題
           const fieldMapping = {
             'siteName': 'siteName', // 案場名稱
-            'siteAddress': 'address', // 案場地址
+            'siteAddress': 'address', // 【修正】根據試算表標題，應為 address
             'projectCode': '案號',
             'responsiblePerson': '專案負責人',
             'designer': '設計師',
@@ -357,12 +359,12 @@ ${notes || '無'}`;
             'entryMethod': '入門方式',
             'parkingMethod': '停車方式',
             'constructionTime': '施工進場時間',
-            'projectDivision': '專案分區', // [v204.0 新增]
+            'projectDivision': '專案分區', 
             'depositInfo': '保證金事宜',
             'noteAdminPhone': '備註-管理中心電話',
             'noteConstructionTime': '備註-施工時間',
             'notePrecautions': '備註-特別注意事項',
-            'noteBathroomInstructions': '衛浴使用說明' // [v193.0 核心修正] 補上遺失的衛浴使用說明欄位對應
+            'noteBathroomInstructions': '衛浴使用說明' 
           };
 
           Array.from(form.elements).forEach(element => {

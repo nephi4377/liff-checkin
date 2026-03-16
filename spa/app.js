@@ -253,6 +253,19 @@ const App = {
                 }
             } catch (error) {
                 console.error('Initialization Error:', error);
+                // [v605.0 專家級防禦] 解決 invalid authorization code 導致的初始化死循環
+                // 當 code 已被使用或過期時，liff.init 會噴出此錯誤。
+                // 解決方案：偵測 URL 是否包含 code 且發生錯誤，若是則清空 URL 重新嘗試。
+                if (error.message && error.message.includes('invalid authorization code')) {
+                    const url = new URL(window.location.href);
+                    if (url.searchParams.has('code')) {
+                        console.warn('⚠️ 偵測到無效的授權代碼，正在清理 URL 並重試...');
+                        url.searchParams.delete('code');
+                        url.searchParams.delete('state'); // 同步清理 state
+                        window.location.replace(url.toString());
+                        return;
+                    }
+                }
             } finally {
                 isLoading.value = false;
             }

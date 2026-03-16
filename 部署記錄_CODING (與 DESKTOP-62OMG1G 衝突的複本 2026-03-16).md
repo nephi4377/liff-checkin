@@ -1,34 +1,4 @@
 # 部署記錄 - 添心設計 (Coding)
-2: 
-3: ## 📅 修改日期: 2026-03-15 23:25
-
-### 🚀 執行目標: 全景圖「深度細節」像素級還原
-- **修改摘要**: 
-  - **細節補完**: 依據截圖 `media__1773569903719.png` 補全所有遺漏標籤：`Message Tunnel`、`Offline Cache & Utils`、`自動背景生成` 等。
-  - **樣式模擬**: 透過 Mermaid CSS 模擬原始圖表的色塊區分（藍、綠、紫、橘、灰）。
-  - **引線邏輯**: 精確還原「postMessage 指令」與「URL 參數傳遞」的通訊關係。
-- **修改檔案**: `SPEC/07_SYSTEM_FLOW_MAP.md`
-- **結果**: 2026-03-15 23:25 | 全景圖深度細節還原完成 | 成功
-
-## 📅 修改日期: 2026-03-15 11:30
-4: 
-5: ### 🚀 執行目標: 完成全量深度檢索與全系統技術規格書製作
-6: - **修改摘要**: 
-7:   - **跨模組解構**: 完成從 `index.html` 出發的遞迴掃描，涵蓋 HR、專案管理、設計引擎（LayoutPlanner）三大核心。
-8:   - **設計引擎解構**: 產出 `SPEC/06_DESIGN_ENGINE_SPEC.md`，詳述 SAT 碰撞引擎與動態計價規則。
-9:   - **規格同步**: 完善 `SPEC/01_SYSTEM_OVERVIEW.md`，連結所有模組規格書，確保白皮書完整性。
-10: - **修改檔案**: `SPEC/06_DESIGN_ENGINE_SPEC.md`, `SPEC/01_SYSTEM_OVERVIEW.md`, `部署記錄_CODING.md`
-11: - **結果**: 2026-03-15 11:30 | 產出全系統技術白皮書 | 完成交付 | 成功
-
-## 📅 修改日期: 2026-03-15 17:55
-
-### 🚀 執行目標: 全專案技術規格書補完與更新
-- **修改摘要**: 
-  - **規格化**: 建立 `SPEC/01_SYSTEM_OVERVIEW.md`，定義 Vue 3 SPA + Iframe 聯邦架構。
-  - **技術同步**: 更新 `SPEC/REPORT_SYSTEM_SPEC.md` 至 v2.0，正式納入 Firebase 極速回報非同步架構規格。
-  - **核心解構**: 建立 `SPEC/04_INTERIOR_DESIGN_TOOL_SPEC.md`，詳述 `LayoutPlanner` 之畫布座標系統與狀態管理邏輯。
-- **修改檔案**: `SPEC/01_SYSTEM_OVERVIEW.md`, `SPEC/REPORT_SYSTEM_SPEC.md`, `SPEC/04_INTERIOR_DESIGN_TOOL_SPEC.md`
-- **結果**: 2026-03-15 17:55 | 全系統規格文件同步更新 | 完成
 
 ## 📅 修改日期: 2026-03-15 13:30
 
@@ -42,7 +12,8 @@
     - **自動填充修正**: 修正 `fieldMapping` 對應關係（如 `siteAddress`），確保選取現有案場後能正確帶入歷史資料。
 - **修改檔案**: `index.html`, `spa/app.js`, `modules/projects/NewSiteForm.html`
 - **結果**: 2026-03-15 14:10 | LINE Login 修復與案場管理功能修正 | 成功
-- 
+
+
 ## 📅 修改日期: 2026-03-12 11:45
 
 ### 🚀 執行目標: 實施極速非同步傳輸架構 (Fire-and-Forget)
@@ -107,71 +78,6 @@
   - **版本同步**: 更新核心版本號並同步至 UI 顯示。
 - **修改檔案**: `CODING/modules/attendance/checkin.html`
 - **結果**: 2026-03-01 12:20 | 優化單一出口並更新版本號 | AppAPI.dispatch | 成功
-
-### 2026-03-15 23:05 - 啟動全量深度檢索 Phase 1
-- **修改摘要**: 
-  - **單一出口強化**: 重構 `AppAPI.dispatch` 邏輯，確保其為全系統唯一通訊出口。
-  - **狀態管理**: 引入 `finally` 區塊確保 `isDispatching` 鎖定狀態在請求結束後均能正確釋放。
-  - **版本同步**: 更新核心版本號並同步至 UI 顯示。
-- **修改檔案**: `CODING/modules/attendance/checkin.html`
-- **結果**: 2026-03-15 23:05 | 啟動全量深度檢索 Phase 1 | index.html, sw.js, app.js, checkin.html | 完成基礎設施與打卡核心解構。標註：Single Sink 發送引擎、三階段 API 重試機制、Service Worker 圖片快取優化。
-
-### 2026-03-15 23:15 - 全量深度檢索 Phase 2
-- **修改摘要**: 
-  - **狀態機解構**: 完成 `leave_request.html` 的 1438 行代碼檢索。
-  - **關鍵發現**: 標註「管理者編輯模式」下的班表動態映射邏輯、審核樂觀更新機制。
-  - **API 契約更新**: 記錄了 GAS 七大 Action (submit, update, approval, supplement etc.) 之完整參數結構。
-- **修改檔案**: `CODING/modules/attendance/leave_request.html`
-- **結果**: 2026-03-15 23:15 | 技術解構完成 | 假勤模組 | 深度完善狀態機與 API 溝通契約文檔。
-
-### 2026-03-15 23:25 - 全量深度檢索 Phase 3
-- **修改摘要**: 
-  - **資料層解構**: 完成 `attendance_report.html` 掃描。
-  - **關鍵發現**: 標註「樂觀更新」插播算法、Excel BOM 相容 CSV 產生器、今日邊界動態 UI 邏輯。
-  - **效能模型**: 確認「快取優先 + 背景靜默刷新」的員工名單載入策略。
-- **修改檔案**: `CODING/modules/attendance/attendance_report.html`
-- **結果**: 2026-03-15 23:25 | 技術解構完成 | 出勤儀表板 | 標註報表聚合邏輯與前端匯出機制。
-
-### 2026-03-15 23:35 - 全量深度檢索 Phase 4
-- **修改摘要**: 
-  - **通訊層全解**: 解構 `projectApi.js` 的輪詢任務佇列與分片上傳機制。
-  - **上傳優化標註**: 標註 `reportV2.html` 的 Firebase/GAS 雙軌制，確認其「高併發處理 (Promise.all)」與「降級轉換」之強韌性設計。
-  - **依賴管理器**: 深度解構 `DependencyManager` 的訂閱通知流，確立其為專案主控台的「神經中樞」。
-- **修改檔案**: `CODING/modules/projects/js/main.js`, `CODING/modules/projects/reportV2.html`
-- **結果**: 2026-03-15 23:35 | 技術解構完成 | 專案中心核心 | 產出「通訊+狀態+上傳」完整技術矩陣。
-
-### 2026-03-15 23:45 - 全量深度檢索 Phase 5
-- **修改摘要**: 
-  - **設計引擎解構**: 掃描 `LayoutPlanner.js`。標註「住宅設計基準線」算法（1 尺 = 30cm, 0.5 尺進位）。
-  - **SVG 補償機制**: 分析 `autoFixSvgGeometry` 處理邊緣裁切的幾何校正邏輯。
-  - **報表匯出矩陣**: 解構基於 `html2canvas` 與 `JSZip` 的多維度（圖片+佈局+報價）打包下載流程。
-- **修改檔案**: `CODING/modules/InteriorDesigned/LayoutPlanner.js`, `CODING/modules/InteriorDesigned/LayoutPlanner.html`
-- **結果**: 2026-03-15 23:45 | 技術解構完成 | 設計規劃模組 | 深度完善 2D 佈局與預算聯動之技術 SPEC。
-
-### 2026-03-15 23:55 - 全量深度檢索 Phase 6
-- **修改摘要**: 
-  - **幾何算法深探**: 解構 `calculateWallPath` 牆體路徑計算，標註其基於頂點法向量外擴的閉合路徑算法。
-  - **資料持久化擴充**: 分析 `saveLayout` 與 `downloadDesignFiles`，確立「JSON 佈局 + PNG 渲染圖 + CSV 報價單」的 ZIP 封裝協定。
-  - **UX 強化標註**: 標註快捷鍵系統 (R/D/M/Ctrl+D) 與歷史紀錄 (Undo/Redo) 的狀態機維護邏輯。
-- **修改檔案**: `CODING/modules/InteriorDesigned/LayoutPlanner.js`
-- **結果**: 2026-03-15 23:55 | 技術解構完成 | 設計引擎算法核心 | 產出完整幾何運算與檔案持久化白皮書。
-
-### 2026-03-16 00:05 - 全量深度檢索 Phase 7 (SPA 核心與共享層)
-- **修改摘要**: 
-  - **SPA 路由解構**: 分析 `app.js` 路由表，標註 15+ 個具體功能模組的 Iframe 嵌套與動態參數 (uid/name/permission) 傳遞邏輯。
-  - **API 服務中繼**: 解構 `apiService.js` 的讀寫分離策略，標註其內置的 Job 輪詢機制與非法 Action 攔截器。
-  - **工具層規範**: 標註 `utils.js` 中的高可用通知系統、過期快取管理與圖片壓縮標準。
-- **修改檔案**: `CODING/spa/app.js`, `CODING/shared/js/apiService.js`, `CODING/shared/js/utils.js`
-- **結果**: 2026-03-16 00:05 | 技術解構完成 | SPA 框架與共享基礎設施 | 完善跨模組通訊與 API 同步技術規範。
-
-### 2026-03-16 00:20 - 全量深度檢索 Phase 8 (專案管理核心模組)
-- **修改摘要**: 
-  - **回報同步解構**: 分析 `reportV2.html` 雙軌同步機制，標註 Firebase 匿名登入與 Base64 Failback 策略。
-  - **排程調度解構**: 解構 `scheduleActions.js`，分析甘特圖動態權重分布與範本衝突防護邏輯。
-  - **日誌與 KPI 解構**: 分析 `daily_report_main.js` 跨專案數據彙整算法與智慧催繳機制。
-  - **主控台核心解構**: 分析 `main.js` 的 `DependencyManager` 實現與多層級快取簽名檢查系統。
-- **修改檔案**: `CODING/modules/projects/reportV2.html`, `CODING/modules/projects/js/scheduleActions.js`, `CODING/modules/projects/js/main.js`, `CODING/modules/projects/js/daily_report_main.js`
-- **結果**: 2026-03-16 00:20 | 技術解構完成 | 專案管理核心邏輯 | 完善數據一致性與高可用同步技術白皮書。
 
 ### 2026-02-28 09:45 - 修復 LIFF 離線隊列重複發送與同步延遲問題 (v2026.02.28)
 - **修改摘要**:
