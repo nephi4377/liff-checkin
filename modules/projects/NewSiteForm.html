@@ -266,7 +266,7 @@
           console.log(`[NewSiteForm] 從後端取得 ${activeSites.length} 個有效案場的完整資料。`);
 
           activeSites.forEach(site => {
-            // 【v127.4 決戰版】對齊後端正名後的「案號」欄位，徹底解決 N/A 問題
+            // 【v127.5 全量修正】統一使用後端原始欄位名
             const sName = site.siteName || site['案場名稱'] || '未命名案場';
             const sCode = site['案號'] || 'N/A';
             const option = new Option(`${sCode} - ${sName}`, sCode);
@@ -421,25 +421,24 @@ ${notes || '無'}`;
 
         const formData = {
           mode: currentMode,
-          action: 'process_site_form', // [v192.0 核心修正] 補上後端 doPost 所需的 action 參數
+          action: 'process_site_form', 
           originalProjectCode: originalProjectCode,
-          // 【v127.0 修正】將 key 改為後端期待的中文欄位名稱
           siteName: this.siteName.value,
           address: this.siteAddress.value,
-          '案號': this.projectCode.value, // 對齊後端 id
+          '案號': this.projectCode.value,
           '專案負責人': this.responsiblePerson.value,
           '設計師': this.designer.value,
           '助理': this.assistant.value,
           '工務': this.siteManager.value,
-          '專案分區': this.projectDivision.value, // [v204.0 新增]
+          '專案分區': this.projectDivision.value, 
           '入門方式': this.entryMethod.value,
           '停車方式': this.parkingMethod.value,
           '施工進場時間': this.constructionTime.value,
           '保證金事宜': this.depositInfo.value,
           '備註-管理中心電話': this.noteAdminPhone.value,
-          '衛浴使用說明': this.noteBathroomInstructions.value, // 新增衛浴說明
-            '備註-特別注意事項': this.notePrecautions.value,
-          '備註-施工時間': this.noteConstructionTime.value
+          '備註-施工時間': this.noteConstructionTime.value,
+          '備註-特別注意事項': this.notePrecautions.value,
+          '衛浴使用說明': this.noteBathroomInstructions.value
         };
 
         // 【v126.0 核心重構】改用 fetch API 提交表單 (POST)
