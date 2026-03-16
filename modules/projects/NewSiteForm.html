@@ -266,9 +266,9 @@
           console.log(`[NewSiteForm] 從後端取得 ${activeSites.length} 個有效案場的完整資料。`);
 
           activeSites.forEach(site => {
-            // 【v127.2 修正】根據截圖診斷，後端回傳屬性為 siteName
+            // 【v127.4 決戰版】對齊後端正名後的「案號」欄位，徹底解決 N/A 問題
             const sName = site.siteName || site['案場名稱'] || '未命名案場';
-            const sCode = site['案號'] || site.projectCode || 'N/A';
+            const sCode = site['案號'] || 'N/A';
             const option = new Option(`${sCode} - ${sName}`, sCode);
             projectSelector.add(option);
           });
@@ -350,7 +350,7 @@ ${notes || '無'}`;
           // 【v127.1 核心修正】對齊後端屬性名稱，解決自動填充失效問題
           const fieldMapping = {
             'siteName': 'siteName', 
-            'siteAddress': 'address', // 截圖顯示後端欄位為 address
+            'siteAddress': 'address', 
             'projectCode': '案號',
             'responsiblePerson': '專案負責人',
             'designer': '設計師',
@@ -426,7 +426,7 @@ ${notes || '無'}`;
           // 【v127.0 修正】將 key 改為後端期待的中文欄位名稱
           siteName: this.siteName.value,
           address: this.siteAddress.value,
-          '案號': this.projectCode.value,
+          '案號': this.projectCode.value, // 對齊後端 id
           '專案負責人': this.responsiblePerson.value,
           '設計師': this.designer.value,
           '助理': this.assistant.value,
