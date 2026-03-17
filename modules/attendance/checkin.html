@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-Hant">
 
 <head>
@@ -18,7 +18,7 @@
         const CONSTANTS = {
             LIFF_ID: '2007974938-jVxn6y37',
             GAS_URL: 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec',
-            VERSION: 'v26.03.01.1220',
+            VERSION: 'v26.03.17.1242',
             CACHE_KEYS: {
                 PROFILE: 'checkin_user_profile_cache', // 使用者個人資料快取
                 HISTORY: 'checkin_history_records',     // 歷史打卡紀錄快取
@@ -273,16 +273,61 @@
          * 具備：高度精確模式 (enableHighAccuracy)、逾時控制與自動重試流程。
          */
         const AppGeo = {
+            cachedLocation: null,
+            isLocating: false,
             getCoords: () => new Promise((res, rej) => {
                 if (!navigator.geolocation) return rej({ code: 'NOT_SUPPORTED', message: '瀏覽器不支援定位' });
                 navigator.geolocation.getCurrentPosition(res, (e) => rej({ code: e.code, message: e.message }), {
                     enableHighAccuracy: true, timeout: CONSTANTS.TIMEOUTS.GEO, maximumAge: 0
                 });
             }),
+            /** [v2026.3] 預熱定位：一啟動頁面即異步獲獲座標，減少點擊後的等待感 */
+            prewarm: async () => {
+                if (AppGeo.isLocating || AppGeo.cachedLocation) return;
+                AppGeo.isLocating = true;
+                AppUI.updateIndicator('gps', 'pending', '定位預熱');
+                try {
+                    const pos = await AppGeo.getCoords();
+                    AppGeo.cachedLocation = {
+                        coords: { latitude: pos.coords.latitude, longitude: pos.coords.longitude },
+                        timestamp: Date.now()
+                    };
+                    AppUI.updateIndicator('gps', 'success', '定位就緒');
+                    // 座標就緒後，若身分已驗證，提前啟用按鈕
+                    if (AppCore.user) document.getElementById('checkin-button').disabled = false;
+                    console.log('[GPS Prewarm] 座標預熱完畢', AppGeo.cachedLocation.coords);
+                } catch (e) {
+                    // [v2026.3.2] 主動偵測權限拒絕
+                    if (e.code === 1) {
+                        AppUI.updateIndicator('gps', 'error', '授權失敗');
+                        AppUI.updateMessage('您已拒絕位置授權，系統無法定位。請至「設定」中開啟權限後再重新進入本頁。', 'text-red-600 font-bold');
+                        document.getElementById('checkin-button').disabled = true;
+                        console.warn('[GPS Prewarm] 使用者拒絕授權');
+                    } else {
+                        console.warn('[GPS Prewarm] 預熱超時或未知錯誤，改為點擊時再嘗試', e);
+                        AppUI.updateIndicator('gps', 'pending', '等待重試');
+                    }
+                } finally {
+                    AppGeo.isLocating = false;
+                }
+            },
+            /** [v2026.3] 取得有效快取座標 (TTL: 120s) */
+            getValidCache: () => {
+                if (!AppGeo.cachedLocation) return null;
+                const ageSec = (Date.now() - AppGeo.cachedLocation.timestamp) / 1000;
+                return ageSec < 120 ? AppGeo.cachedLocation : null;
+            },
             withRetry: async (max = CONSTANTS.MAX_RETRY) => {
+                // 優先使用快取，實現瞬間打卡
+                const cache = AppGeo.getValidCache();
+                if (cache) {
+                    console.log('[GPS] 使用快取座標');
+                    return cache;
+                }
+
                 for (let i = 1; i <= max; i++) {
                     try { return await AppGeo.getCoords(); } catch (e) {
-                        if (e.code === 1 || i === max) throw e; // 1 = 拒絕授權，這不需要重試。
+                        if (e.code === 1 || i === max) throw e;
                         await new Promise(r => setTimeout(r, 1000));
                     }
                 }
@@ -487,8 +532,8 @@
                     AppCore.user = cached;
                     AppUI.updateUserDisplay(cached.displayName);
                     AppUI.updateIndicator('line', 'success', '身分快取');
-                    // 延遲 2 秒後才允許打卡，確保系統初始化穩定
-                    setTimeout(() => { document.getElementById('checkin-button').disabled = false; }, 2000);
+                    // 同步發起定位預熱
+                    AppGeo.prewarm();
                 }
 
                 // 3. 執行 LIFF 初始化 (加入超時保護防止卡死)
@@ -508,8 +553,8 @@
                     AppStorage.save(CONSTANTS.CACHE_KEYS.PROFILE, p);
                     AppUI.updateUserDisplay(p.displayName);
                     AppUI.updateIndicator('line', 'success', '認證成功');
-                    // 延遲 2 秒後才允許打卡，確保所有初始化完成且系統穩定
-                    setTimeout(() => { document.getElementById('checkin-button').disabled = false; }, 2000);
+                    // 身分成功後，若座標尚未預熱好，則啟動預熱
+                    AppGeo.prewarm();
 
                     // 產生本頁唯一 instance id，用於日誌追蹤與去重（每次開頁不同）
                     AppCore.pageInstance = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);

@@ -27,11 +27,71 @@
 import { request as apiRequest } from './projectApi.js';
 import { logToPage, showGlobalNotification } from '/shared/js/utils.js'; // [v544.0 修正] 改為絕對路徑
 import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, renderPostCreator, _buildLogCard, renderCommunicationHistory, lazyLoadImages } from './ui.js';
+/** 取得日誌資料 (切換至 SocialFeed 模式) */
+async function fetchLogs() {
+    try {
+        const response = await apiRequest('get_social_logs', { projectName: state.currentProjectId });
+        if (response && response.success) {
+            state.currentLogsData = response.data;
+            renderSocialLogPage(); // 切換至社群渲染引擎
+        }
+    } catch (e) {
+        console.error('取得社群日誌失敗:', e);
+    }
+}
+
+/** 渲染社群化日誌頁面 */
+function renderSocialLogPage() {
+    const container = document.getElementById('logs-container');
+    const logs = state.currentLogsData;
+    
+    // 渲染日誌卡片
+    logs.forEach(log => {
+        const card = buildSocialLogCard(log);
+        container.appendChild(card);
+        
+        // 綁定留言按鈕事件
+        const btn = card.querySelector('.send-comment-btn');
+        btn.onclick = () => handleSendComment(log.LogID);
+        
+        // 分別載入留言 (非同步，不阻塞主 UI)
+        fetchAndRenderComments(log.LogID);
+    });
+    
+    lazyLoadImages();
+}
+
+/** 非同步載入留言 */
+async function fetchAndRenderComments(logId) {
+    try {
+        const response = await apiRequest('get_comments', { logId: logId });
+        if (response && response.success) {
+            const list = document.getElementById(`comments-${logId}`);
+            if (list) {
+                list.innerHTML = ''; // 清空
+                response.data.forEach(comment => {
+                    list.appendChild(renderSingleComment(comment));
+                });
+            }
+        }
+    } catch (e) {
+        console.warn(`載入留言 [${logId}] 失敗`);
+    }
+}
+// 匯出基礎渲染器供 SocialFeed 私有調用
+export { _buildLogCard }; 
 import * as LogActions from './logActions.js';
 import * as ScheduleActions from './scheduleActions.js';
 import { state } from './state.js';
-import { CONFIG } from '/shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
-import { initializeTaskSender, addRecipient } from '/shared/js/taskSender.js'; // [v544.0 修正] 改為絕對路徑
+import { CONFIG } from '/shared/js/config.js'; 
+import { initializeTaskSender, addRecipient } from '/shared/js/taskSender.js';
+
+// 【V3 SocialFeed 核心掛載】隨時可移除此區塊以撤退至 V1
+import { buildSocialLogCard, injectSocialStyles } from '../social_feed/social_ui.js';
+import { injectCommentStyles, handleSendComment, renderSingleComment } from '../social_feed/social_actions.js';
+
+injectSocialStyles();
+injectCommentStyles();
 
 /**
  * @description 處理從後端 API (Google Apps Script) 成功獲取資料後的核心回呼函式 (Callback)。

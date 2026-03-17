@@ -117,24 +117,19 @@ function renderDirectImg(src) {
  * @param {string} htmlLinksCsv - 以逗號分隔的圖片 URL 字串。
  * @returns {HTMLDivElement} 包含所有圖片的 photo-grid 容器。
  */
-/** 建立照片牆 */
+/** 建立照片牆 (V1 原始版) */
 function buildPhotoGrid(htmlLinksCsv) {
     const container = document.createElement('div');
     container.className = 'photo-grid';
     if (!htmlLinksCsv) return container;
-    // [v350.0 核心修正] 優先判斷傳入的是否為陣列 (來自樂觀更新)。
-    // 如果是字串 (來自後端)，才執行 split(',')。這使其能同時處理兩種資料來源。
     const links = Array.isArray(htmlLinksCsv) ? htmlLinksCsv : String(htmlLinksCsv).split(',').filter(Boolean);
 
     links.forEach(link => {
         const u = (link || '').trim(); if (!u) return;
-        // 【⭐️ 核心修正：修正樂觀更新的縮圖顯示邏輯 ⭐️】
-        // 1. 優先判斷是否為 Base64 字串，如果是，則直接渲染。
         if (u.startsWith('data:image/')) {
             container.appendChild(renderDirectImg(u));
         } else {
-            const id = extractDriveFileId(u); // [v406.0 重構] 改為呼叫新的函式
-            // 2. 如果不是 Base64，再判斷是 Google Drive 連結還是一般圖片連結。
+            const id = extractDriveFileId(u);
             if (id) container.appendChild(renderSmartImg(id));
             else container.appendChild(renderDirectImg(u));
         }
@@ -143,8 +138,48 @@ function buildPhotoGrid(htmlLinksCsv) {
     return container;
 }
 
+/** 
+ * [v3.0 NEW] 建立照片牆 (V2 FB 模式) 
+ * 僅顯示前 5 張圖片，第五張疊加 +N 遮罩
+ */
+function buildPhotoGridV2(htmlLinksCsv) {
+    const container = document.createElement('div');
+    container.className = 'photo-grid v2-grid';
+    if (!htmlLinksCsv) return container;
+    
+    const links = Array.isArray(htmlLinksCsv) ? htmlLinksCsv : String(htmlLinksCsv).split(',').filter(Boolean);
+    const totalCount = links.length;
+    const MAX_VISIBLE = 5;
+    const visibleLinks = links.slice(0, MAX_VISIBLE);
+
+    visibleLinks.forEach((link, index) => {
+        const u = (link || '').trim(); if (!u) return;
+        let item;
+        if (u.startsWith('data:image/')) {
+            item = renderDirectImg(u);
+        } else {
+            const id = extractDriveFileId(u);
+            if (id) item = renderSmartImg(id);
+            else item = renderDirectImg(u);
+        }
+
+        // 處理第 5 張圖片的遮罩
+        if (index === MAX_VISIBLE - 1 && totalCount > MAX_VISIBLE) {
+            item.classList.add('has-more');
+            const overlay = document.createElement('div');
+            overlay.className = 'photo-more-overlay';
+            overlay.innerHTML = `<span>+${totalCount - MAX_VISIBLE + 1}</span>`;
+            item.appendChild(overlay);
+        }
+        
+        container.appendChild(item);
+    });
+
+    return container;
+}
+
 // [核心修正] 將 buildPhotoGrid 導出，以便 handlers.js 可以呼叫
-export { buildPhotoGrid };
+export { buildPhotoGrid, buildPhotoGridV2 };
 
 /**
  * 根據單筆日誌資料，建立一個完整的日誌卡片 HTML 元素。
@@ -181,7 +216,7 @@ export function _buildLogCard(log, isDraftMode) {
     if (log.PhotoLinks) {
         const photoContainer = document.createElement('div');
         card.insertBefore(photoContainer, buttonContainer); // 將照片容器插入到按鈕區塊之前
-        const photoGrid = buildPhotoGrid(log.PhotoLinks);
+        const photoGrid = buildPhotoGridV2(log.PhotoLinks); // [v3.0] 套用 V2 FB 模式
         photoContainer.appendChild(photoGrid);
 
         // [v28.0 修正] 為卡片內的每張照片綁定開啟燈箱的事件
@@ -678,6 +713,28 @@ export function renderCommunicationHistory(groupedNotifications, currentUserId) 
 /**
  * [v284.0 新增] 為溝通紀錄卡片加上專屬的互動樣式
  */
+/**
+ * [v3.0 新增] 圖片網格 V2 (FB 模式) 專用樣式
+ */
+function addGridV2Styles() {
+    const styleId = 'grid-v2-styles';
+    if (document.getElementById(styleId)) return;
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+        .photo-grid.v2-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+        .photo-item { position: relative; aspect-ratio: 1/1; overflow: hidden; border-radius: 4px; cursor: pointer; }
+        .photo-item img { width: 100%; height: 100%; object-fit: cover; }
+        .photo-item.has-more .photo-more-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
+            color: white; font-size: 1.5rem; font-weight: bold; pointer-events: none;
+        }
+    `;
+    document.head.appendChild(style);
+}
+addGridV2Styles();
+addCommunicationCardStyles();
 function addCommunicationCardStyles() {
     const styleId = 'communication-card-styles';
     if (document.getElementById(styleId)) return;

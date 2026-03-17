@@ -1,7 +1,10 @@
-# 室內設計規劃工具 - 幾何引擎規格書 (LayoutPlanner) (v2.0)
+# 互動式室內設計規劃工具 (LayoutPlanner) 技術規格書
 
-## 1. 核心定位
-`LayoutPlanner.js` 是一個超過 3800 行的複雜幾何處理模組，負責處理基於 Canvas 的 2D 空間配置與動態決策。
+> v2.1 | 隸屬於 [CODING 全量系統全景圖 (v3.0)](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/07_SYSTEM_FLOW_MAP.md) 之設計引擎模組。
+
+## 1. 模組定位
+本工具為 **CODING** 專案的核心設計引擎，負責處理 2D 空間佈局、尺寸計算與即時預算生成。
+是一個超過 3800 行的複雜幾何處理模組，負責處理基於 Canvas 的 2D 空間配置與動態決策。
 
 ## 2. 幾何座標與狀態管理
 
