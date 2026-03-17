@@ -18,7 +18,7 @@
         const CONSTANTS = {
             LIFF_ID: '2007974938-jVxn6y37',
             GAS_URL: 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec',
-            VERSION: 'v26.03.17.1242',
+            VERSION: 'v26.03.17.1335',
             CACHE_KEYS: {
                 PROFILE: 'checkin_user_profile_cache', // 使用者個人資料快取
                 HISTORY: 'checkin_history_records',     // 歷史打卡紀錄快取
@@ -311,6 +311,11 @@
                     AppGeo.isLocating = false;
                 }
             },
+            // [v2026.3.5] 立即啟動極速預熱，不再等待任何事件
+            turboInit: () => {
+                console.log('[GPS Turbo] 啟動極速預熱...');
+                AppGeo.prewarm();
+            },
             /** [v2026.3] 取得有效快取座標 (TTL: 120s) */
             getValidCache: () => {
                 if (!AppGeo.cachedLocation) return null;
@@ -536,11 +541,13 @@
                     AppGeo.prewarm();
                 }
 
-                // 3. 執行 LIFF 初始化 (加入超時保護防止卡死)
                 try {
                     AppUI.updateIndicator('line', 'pending', '身分驗證');
 
-                    // Promise 競態：若 LIFF 10秒沒反應則拋出超時
+                    // 確保 AppGeo 已經在執行，不重讀快取的話也直接調用 prewarm
+                    if (!AppGeo.cachedLocation) AppGeo.prewarm();
+
+                    // 平行化：LIFF 初始化與 120s 座標有效期偵測
                     await Promise.race([
                         liff.init({ liffId: CONSTANTS.LIFF_ID }),
                         new Promise((_, rej) => setTimeout(() => rej(new Error('驗證超時')), 10000))
@@ -553,10 +560,8 @@
                     AppStorage.save(CONSTANTS.CACHE_KEYS.PROFILE, p);
                     AppUI.updateUserDisplay(p.displayName);
                     AppUI.updateIndicator('line', 'success', '認證成功');
-                    // 身分成功後，若座標尚未預熱好，則啟動預熱
-                    AppGeo.prewarm();
 
-                    // 產生本頁唯一 instance id，用於日誌追蹤與去重（每次開頁不同）
+                    // 產生本頁唯一 instance id
                     AppCore.pageInstance = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
 
                     AppAPI.syncAll();
@@ -667,6 +672,7 @@
             }
         };
         document.getElementById('checkin-button').onclick = AppCore.execute;
+        AppGeo.turboInit(); // [v2026.3.5] 極速啟動
         window.onload = AppCore.init;
     </script>
 </body>
