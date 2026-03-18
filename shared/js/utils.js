@@ -19,7 +19,7 @@
  * @param {File} file - 要讀取的檔案。
  * @returns {Promise<string>} - 一個解析為 Base64 資料字串的 Promise。
  */
-export function readFileAsBase64(file) {
+function readFileAsBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     // 成功讀取後，移除 data-url 的前綴 (e.g., "data:image/jpeg;base64,")，只回傳純資料
@@ -34,7 +34,7 @@ export function readFileAsBase64(file) {
  * @param {string} message - 要記錄的訊息。
  * @param {'log'|'warn'|'error'} [type='log'] - 日誌類型。
  */
-export function logToPage(message, type = 'log') {
+function logToPage(message, type = 'log') {
   const t = new Date().toLocaleTimeString('zh-TW');
   const formattedMessage = `[${t}] ${message}`;
 
@@ -52,8 +52,8 @@ export function logToPage(message, type = 'log') {
 }
 
 /** 判斷是否為行動裝置 */
-export function isMobile() {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+function isMobile() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
 /**
@@ -62,11 +62,11 @@ export function isMobile() {
  * @param {string} url - 完整的 Google Drive URL。
  * @returns {string|null} 檔案 ID 或 null。
  */
-export function extractDriveFileId(url) {
-    if (!url) return null;
-    const idRegex = /\/d\/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)/;
-    const match = url.match(idRegex);
-    return match ? (match[1] || match[2]) : null;
+function extractDriveFileId(url) {
+  if (!url) return null;
+  const idRegex = /\/d\/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)/;
+  const match = url.match(idRegex);
+  return match ? (match[1] || match[2]) : null;
 }
 
 /**
@@ -75,7 +75,7 @@ export function extractDriveFileId(url) {
  * @param {number} [duration=3000] - 訊息顯示的持續時間（毫秒）。
  * @param {'info'|'success'|'error'} [type='info'] - 訊息類型，決定橫幅顏色。
  */
-export function showGlobalNotification(message, duration, type = 'info') {
+function showGlobalNotification(message, duration, type = 'info') {
 
   // [核心重構] 尋找或建立一個專門用來放置所有通知的容器
   let notificationContainer = document.getElementById('global-notification-container');
@@ -142,15 +142,15 @@ export function showGlobalNotification(message, duration, type = 'info') {
  * @param {number} [days=7] - 快取有效期（天）。
  */
 export function saveCache(key, data, days = 7) {
-    const cache = {
-        data: data,
-        expires: Date.now() + days * 24 * 60 * 60 * 1000
-    };
-    try {
-        localStorage.setItem(key, JSON.stringify(cache));
-    } catch (e) {
-        console.error('儲存快取失敗:', e);
-    }
+  const cache = {
+    data: data,
+    expires: Date.now() + days * 24 * 60 * 60 * 1000
+  };
+  try {
+    localStorage.setItem(key, JSON.stringify(cache));
+  } catch (e) {
+    console.error('儲存快取失敗:', e);
+  }
 }
 
 /**
@@ -160,14 +160,14 @@ export function saveCache(key, data, days = 7) {
  * @returns {object|null} - 快取資料或 null。
  */
 export function loadCache(key) {
-    const cached = localStorage.getItem(key);
-    if (!cached) return null;
-    const cache = JSON.parse(cached);
-    if (cache.expires < Date.now()) {
-        localStorage.removeItem(key);
-        return null;
-    }
-    return cache.data;
+  const cached = localStorage.getItem(key);
+  if (!cached) return null;
+  const cache = JSON.parse(cached);
+  if (cache.expires < Date.now()) {
+    localStorage.removeItem(key);
+    return null;
+  }
+  return cache.data;
 }
 
 /**
@@ -177,10 +177,10 @@ export function loadCache(key) {
  * @returns {Promise<string>} - 一個解析為後端回應文字 (如 "OK") 的 Promise。
  */
 export function sendApiRequestAsGet(baseUrl, payload) {
-    const url = new URL(baseUrl);
-    url.searchParams.set('payload', JSON.stringify(payload));
-    return fetch(url, { method: 'GET' })
-        .then(res => res.text());
+  const url = new URL(baseUrl);
+  url.searchParams.set('payload', JSON.stringify(payload));
+  return fetch(url, { method: 'GET' })
+    .then(res => res.text());
 }
 /**
  * 壓縮圖片共用函式
@@ -192,30 +192,30 @@ export function sendApiRequestAsGet(baseUrl, payload) {
  * @returns {Promise<File>} - 壓縮後的檔案物件，若壓縮失敗則回傳原檔
  */
 export async function compressImage(file, maxSizeMB = 1, maxWidthOrHeight = 1920) {
-    // 1. 基本檢查：若不是圖片或檔案不存在，直接回傳原檔
-    if (!file || !file.type.startsWith('image/')) {
-        return file;
-    }
+  // 1. 基本檢查：若不是圖片或檔案不存在，直接回傳原檔
+  if (!file || !file.type.startsWith('image/')) {
+    return file;
+  }
 
-    // 2. 檢查全域變數 imageCompression 是否存在
-    if (typeof imageCompression === 'undefined') {
-        console.warn('browser-image-compression library not loaded. Skipping compression.');
-        return file;
-    }
+  // 2. 檢查全域變數 imageCompression 是否存在
+  if (typeof imageCompression === 'undefined') {
+    console.warn('browser-image-compression library not loaded. Skipping compression.');
+    return file;
+  }
 
-    const options = {
-        maxSizeMB: maxSizeMB,
-        maxWidthOrHeight: maxWidthOrHeight,
-        useWebWorker: true
-    };
+  const options = {
+    maxSizeMB: maxSizeMB,
+    maxWidthOrHeight: maxWidthOrHeight,
+    useWebWorker: true
+  };
 
-    try {
-        // 3. 執行壓縮
-        const compressedFile = await imageCompression(file, options);
-        return compressedFile;
-    } catch (error) {
-        // 4. 錯誤處理：壓縮失敗時回傳原檔，不中斷流程
-        console.error('圖片壓縮失敗，將使用原圖上傳:', error);
-        return file;
-    }
+  try {
+    // 3. 執行壓縮
+    const compressedFile = await imageCompression(file, options);
+    return compressedFile;
+  } catch (error) {
+    // 4. 錯誤處理：壓縮失敗時回傳原檔，不中斷流程
+    console.error('圖片壓縮失敗，將使用原圖上傳:', error);
+    return file;
+  }
 }

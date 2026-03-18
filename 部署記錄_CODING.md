@@ -1,3 +1,18 @@
+## 部署記錄_CODING
+
+### 2026-03-18 12:50
+**修改摘要/過程**: 
+- **Live Server 測試優化**: 增加環境偵測邏輯，確保使用者在 `d:\Dropbox\CodeBackups\CODING` 根目錄啟動時能獲得清晰提示。
+- **路徑偵錯**: 強化 `DOMContentLoaded` 的核心物件檢查。
+
+**技術明細**:
+- 修改檔案: `CODING/modules/projects/v2/managementconsole_v2.html`
+- 變更細節: 加入 `isLiveServer` 檢查，對資源載入錯誤提供修復導引。
+
+**驗證結果**: 
+- 成功，支援 `127.0.0.1:5500` 直接存取。
+
+---
 # 部署記錄 - 添心設計 (Coding)
 
 ##  修改日期: 2026-03-17 13:15

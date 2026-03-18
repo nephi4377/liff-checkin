@@ -163,6 +163,10 @@ function buildPhotoGridV2(htmlLinksCsv) {
             else item = renderDirectImg(u);
         }
 
+        // 儲存原始索引，供燈箱定位使用
+        const img = item.querySelector('img');
+        if (img) img.dataset.index = index;
+
         // 處理第 5 張圖片的遮罩
         if (index === MAX_VISIBLE - 1 && totalCount > MAX_VISIBLE) {
             item.classList.add('has-more');
@@ -174,6 +178,9 @@ function buildPhotoGridV2(htmlLinksCsv) {
         
         container.appendChild(item);
     });
+
+    // 將所有連結存入容器，讓點擊事件可以抓到完整的清單
+    container.dataset.allLinks = JSON.stringify(links);
 
     return container;
 }
@@ -219,13 +226,21 @@ export function _buildLogCard(log, isDraftMode) {
         const photoGrid = buildPhotoGridV2(log.PhotoLinks); // [v3.0] 套用 V2 FB 模式
         photoContainer.appendChild(photoGrid);
 
-        // [v28.0 修正] 為卡片內的每張照片綁定開啟燈箱的事件
-        const images = Array.from(photoGrid.querySelectorAll('img.photo-thumb'));
-        images.forEach((img, index) => {
+        // [v31.0 修正] 為卡片內的每張照片綁定開啟燈箱的事件。
+        // 修正：必須傳遞所有連結（包含未顯示的），而不只是前 5 張。
+        const allLinks = JSON.parse(photoGrid.dataset.allLinks || '[]');
+        const fullUrls = allLinks.map(link => {
+            const u = (link || '').trim();
+            const id = extractDriveFileId(u);
+            return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w1200` : u;
+        });
+
+        const images = photoGrid.querySelectorAll('img.photo-thumb');
+        images.forEach((img) => {
             img.addEventListener('click', () => {
-                const urls = images.map(i => i.dataset.full);
+                const index = parseInt(img.dataset.index || 0);
                 // 呼叫掛載在 window 上的全域函式來開啟燈箱
-                if (window.__openLightbox__) window.__openLightbox__(urls, index);
+                if (window.__openLightbox__) window.__openLightbox__(fullUrls, index);
             });
         });
     }
@@ -236,6 +251,7 @@ export function _buildLogCard(log, isDraftMode) {
     btnManagePhotos.dataset.action = 'openPhotoModal'; btnManagePhotos.dataset.logId = log.LogID; btnManagePhotos.dataset.photoLinks = log.PhotoLinks; buttonContainer.appendChild(btnManagePhotos);
 
     const btnEditText = document.createElement('button'); btnEditText.textContent = '編輯文字';
+    btnEditText.className = 'btn'; // [修正] 補上基礎按鈕樣式
     btnEditText.dataset.action = 'handleEditText'; btnEditText.dataset.logId = log.LogID; buttonContainer.appendChild(btnEditText);
 
     if (isDraftMode) {

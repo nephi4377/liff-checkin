@@ -335,14 +335,26 @@ function renderReportsByEmployee(employees, allReports, scheduleData) {
                     let contentHtml = '';
                     let photosHtml = '';
                     if (report.PhotoLinks) {
-                        const photoUrls = report.PhotoLinks.split(',');
-                        const imageElements = photoUrls.map((url, index) => `
-                                <img data-src="https://drive.google.com/thumbnail?id=${window.extractDriveFileId(url)}&sz=w128"
-                                     alt="現場照片"
-                                     class="object-cover rounded-md hover:opacity-80 transition-opacity cursor-pointer lazy"
-                                     style="width: var(--thumbnail-width, 100%); height: auto;"
-                                     onclick="openParentLightbox('${report.LogID}', ${index})">`).join('');
-                        photosHtml = `<div class="grid gap-2 mt-2" style="grid-template-columns: repeat(auto-fill, minmax(var(--thumbnail-width, 6rem), 1fr));" id="image-group-${report.LogID}" data-photos='${JSON.stringify(photoUrls)}'>
+                        const photoUrls = report.PhotoLinks.split(',').filter(Boolean);
+                        const totalCount = photoUrls.length;
+                        const MAX_VISIBLE = 5;
+                        const visiblePhotos = photoUrls.slice(0, MAX_VISIBLE);
+
+                        const imageElements = visiblePhotos.map((url, index) => {
+                            const isLast = (index === MAX_VISIBLE - 1 && totalCount > MAX_VISIBLE);
+                            const overlayHtml = isLast ? `<div class="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-bold text-lg pointer-events-none"><span>+${totalCount - MAX_VISIBLE + 1}</span></div>` : '';
+                            
+                            return `
+                                <div class="relative aspect-square overflow-hidden rounded-md cursor-pointer group">
+                                    <img data-src="https://drive.google.com/thumbnail?id=${window.extractDriveFileId(url)}&sz=w300"
+                                         alt="現場照片"
+                                         class="w-full h-full object-cover group-hover:opacity-80 transition-opacity lazy"
+                                         onclick="openParentLightbox('${report.LogID}', ${index})">
+                                    ${overlayHtml}
+                                </div>`;
+                        }).join('');
+
+                        photosHtml = `<div class="grid grid-cols-3 gap-1 mt-2" id="image-group-${report.LogID}" data-photos='${JSON.stringify(photoUrls)}'>
                                 ${imageElements}
                             </div>`;
                     }
@@ -566,14 +578,26 @@ function renderReportsByProject(employees, allReports, scheduleData) {
             let contentHtml = '';
             let photosHtml = '';
             if (report.PhotoLinks) {
-                const photoUrls = report.PhotoLinks.split(',');
-                const imageElements = photoUrls.map((url, index) => `
-                        <img data-src="https://drive.google.com/thumbnail?id=${window.extractDriveFileId(url)}&sz=w128" 
-                             alt="現場照片" 
-                             class="object-cover rounded-md hover:opacity-80 transition-opacity cursor-pointer lazy" 
-                             style="width: var(--thumbnail-width, 100%); height: auto;"
-                             onclick="openParentLightbox('${report.LogID}', ${index})">`).join('');
-                photosHtml = `<div class="grid gap-2 mt-2" style="grid-template-columns: repeat(auto-fill, minmax(var(--thumbnail-width, 6rem), 1fr));" id="image-group-${report.LogID}" data-photos='${JSON.stringify(photoUrls)}'>
+                const photoUrls = report.PhotoLinks.split(',').filter(Boolean);
+                const totalCount = photoUrls.length;
+                const MAX_VISIBLE = 5;
+                const visiblePhotos = photoUrls.slice(0, MAX_VISIBLE);
+
+                const imageElements = visiblePhotos.map((url, index) => {
+                    const isLast = (index === MAX_VISIBLE - 1 && totalCount > MAX_VISIBLE);
+                    const overlayHtml = isLast ? `<div class="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-bold text-xs pointer-events-none"><span>+${totalCount - MAX_VISIBLE + 1}</span></div>` : '';
+                    
+                    return `
+                        <div class="relative aspect-square overflow-hidden rounded-md cursor-pointer group">
+                            <img data-src="https://drive.google.com/thumbnail?id=${window.extractDriveFileId(url)}&sz=w300" 
+                                 alt="現場照片" 
+                                 class="w-full h-full object-cover group-hover:opacity-80 transition-opacity lazy" 
+                                 onclick="openParentLightbox('${report.LogID}', ${index})">
+                            ${overlayHtml}
+                        </div>`;
+                }).join('');
+
+                photosHtml = `<div class="grid grid-cols-3 gap-1 mt-2" id="image-group-${report.LogID}" data-photos='${JSON.stringify(photoUrls)}'>
                         ${imageElements}
                     </div>`;
             }
