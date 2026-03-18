@@ -52,7 +52,7 @@ function logToPage(message, type = 'log') {
 }
 
 /** 判斷是否為行動裝置 */
-function isMobile() {
+export function isMobile() {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
