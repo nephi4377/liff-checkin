@@ -7,7 +7,8 @@
 * =============================================================================
 */
 
-import { isMobile } from '/shared/js/utils.js'; // [v548.0 修正] 改為絕對路徑以解決本地測試 404 問題
+// [v549.0 修正] 改為內置檢查以解決 utils.js 導出導致的 SyntaxError
+const isMobile = () => /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
 // 統一的狀態管理物件，所有模組共享此狀態
 export const state = {
