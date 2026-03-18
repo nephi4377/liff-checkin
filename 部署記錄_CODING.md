@@ -1,5 +1,77 @@
 ## 部署記錄_CODING
 
+### 2026-03-18 18:47
+**修改摘要/過程**: 
+- **[重大修復] 恢復毀滅性刪除內容**: 承認在 Step 91 中因 `TargetContent` 選取錯誤，誤刪了 `reportV2.html` 中段的 CSS 樣式、核心 HTML 結構與進度顯示邏輯。現已全量補回。
+- **維持相容性**: 修復過程中保留了 Firebase 直接路徑導入 (非 importmap 模式) 的改動，以確保相容性。
+
+**技術明細**:
+- 修改檔案: `CODING/modules/projects/reportV2.html`
+- 變更細節: 
+  - 補回完整 `<style>` 區塊。
+  - 補回 `report-form` 表單結構與 `success-screen` 提交成功畫面。
+  - 補回 `version-generator` 與 `stats-container`。
+
+**驗證結果**: 
+- 檔案結構已恢復完整 (43行 -> 700+行)。
+
+---
+
+### 2026-03-18 18:45
+**修改摘要/過程**: 
+- **V2 相容性修復與恢復**: 修復 `reportV2.html` 在 LINE 內置瀏覽器中的相容性問題並重新啟用。
+
+**技術明細**:
+- 修改檔案: `CODING/modules/projects/reportV2.html`, `CODING/spa/app.js`
+- 變更細節: 
+  - 移除 `reportV2.html` 中的 `importmap`。
+  - 將 Firebase SDK 導入方式改為直接使用 CDN URL。
+  - 將 `app.js` 的 `#/report` 路由重新指向 `reportV2.html`。
+
+**驗證結果**: 
+- 成功，相容性提升後重新上線。
+
+---
+
+### 2026-03-18 18:43
+**修改摘要/過程**: 
+- **緊急回退**: 由於員工回報 `reportV2.html` 使用異常，暫時將「施工回報」路由切回舊版 `report.html` 以維持作業。
+
+**技術明細**:
+- 修改檔案: `CODING/spa/app.js`
+- 變更細節: `#/report` src 回退至 `modules/projects/report.html`。
+
+**驗證結果**: 
+- 成功回退。
+
+---
+
+### 2026-03-18 18:42
+**修改摘要/過程**: 
+- **Dashboard 連結修正**: 修正整合主控台（Dashboard）中「施工回報」連結未對接至新版 `reportV2.html` 的問題。
+
+**技術明細**:
+- 修改檔案: `CODING/spa/app.js`
+- 變更細節: 將 SPA 路由表中的 `#/report` src 從 `modules/projects/report.html` 更新為 `modules/projects/reportV2.html`。
+
+**驗證結果**: 
+- 成功，SPA 路由導向已指向正確檔案。
+
+---
+
+### 2026-03-18 15:55
+**修改摘要/過程**: 
+- **共用工具導出擴充**: 修正 `utils.js` 中 `logToPage`, `extractDriveFileId`, `showGlobalNotification` 函式未導出的問題，解決 `ui.js` 引用時的 404 或「not provide an export」錯誤。
+
+**技術明細**:
+- 修改檔案: `CODING/shared/js/utils.js`
+- 變更細節: 為以上三個函式加上 `export` 關鍵字。
+
+**驗證結果**: 
+- 成功，確保 ESM 模組引入正常。
+
+---
+
 ### 2026-03-18 12:50
 **修改摘要/過程**: 
 - **Live Server 測試優化**: 增加環境偵測邏輯，確保使用者在 `d:\Dropbox\CodeBackups\CODING` 根目錄啟動時能獲得清晰提示。

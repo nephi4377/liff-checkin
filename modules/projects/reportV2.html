@@ -28,17 +28,14 @@
     };
   </script>
 
-  <!-- Firebase 9+ SDK (Modular) -->
-  <script type="importmap">
-    {
-      "imports": {
-        "firebase/app": "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js",
-        "firebase/storage": "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js",
-        "firebase/auth": "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js"
-      }
-    }
+  <!-- [v605.4] 核心修復：還原誤刪樣式與結構，並將 Firebase 導入改為直接 path 導入以提升 LINE 瀏覽器相容性 -->
+  <script type="module">
+    import { readFileAsBase64 } from '../../shared/js/utils.js?v=20260318'; 
+    // [vTEST-FB] 引入 Firebase 模組 (改用直接 URL 導入)
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+    import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
   </script>
-
 
   <!-- [v467.0 新增] 自動版本號產生器 -->
   <script>
@@ -239,13 +236,12 @@
     </div>
   </div>
 
-  <!-- 【v150.0 核心修正】徹底修正巢狀 script 標籤與註解語法錯誤 -->
   <script type="module">
-    import { readFileAsBase64 } from '../../shared/js/utils.js'; // [v519.0 修正] 更新共用模組 utils.js 的路徑
-    // [vTEST-FB] 引入 Firebase 模組
-    import { initializeApp } from "firebase/app";
-    import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-    import { getAuth, signInAnonymously } from "firebase/auth"; // [v2026.03.11 新增] Auth 模組
+    import { readFileAsBase64 } from '../../shared/js/utils.js?v=20260318'; // [v605.3] 加入版本號防止快取
+    // [vTEST-FB] 引入 Firebase 模組 (改用直接 URL 導入)
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+    import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 
     document.addEventListener('DOMContentLoaded', async () => {
       // [vTEST-FB] 初始化 Firebase

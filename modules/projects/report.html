@@ -199,7 +199,7 @@
 
   <!-- 【v150.0 核心修正】徹底修正巢狀 script 標籤與註解語法錯誤 -->
   <script type="module">
-    import { readFileAsBase64 } from '../../shared/js/utils.js'; // [v519.0 修正] 更新共用模組 utils.js 的路徑
+    import { readFileAsBase64 } from '../../shared/js/utils.js?v=20260318'; // [v519.0 修正] 更新共用模組 utils.js 的路徑 (加上 v 版本號強制更新)
 
     document.addEventListener('DOMContentLoaded', () => {
       const form = document.getElementById('report-form');

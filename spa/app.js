@@ -65,7 +65,7 @@ const App = {
             '#/shift-schedule': { name: 'iframe', src: 'modules/attendance/shift_schedule.html', title: '員工排班系統' }, // [v515.0 修正] 改為絕對路徑
             // [v424.0 架構優化] 將專案工作區與施工回報改為內嵌 iframe
             '#/project-console': { name: 'iframe', src: 'modules/projects/managementconsole.html', title: '專案工作區' }, // [v543.0 修正] 改為正確的模組路徑
-            '#/report': { name: 'iframe', src: 'modules/projects/report.html', title: '施工回報' }, // [v543.0 修正] 改為正確的模組路徑
+            '#/report': { name: 'iframe', src: 'modules/projects/reportV2.html', title: '施工回報' }, // [v605.3] 修正相容性後重新啟用 V2 版本
             // 【您的要求】新增互動式室內設計規劃工具與平面圖校正工具的路由
             '#/layout-planner': { name: 'iframe', src: 'modules/InteriorDesigned/LayoutPlanner.html', title: '互動式室內設計規劃工具' },
             '#/floorplan-straightener': { name: 'iframe', src: 'modules/InteriorDesigned/floorplan-straightener.html', title: '平面圖校正工具' },
