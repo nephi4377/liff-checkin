@@ -34,7 +34,7 @@ function readFileAsBase64(file) {
  * @param {string} message - 要記錄的訊息。
  * @param {'log'|'warn'|'error'} [type='log'] - 日誌類型。
  */
-function logToPage(message, type = 'log') {
+export function logToPage(message, type = 'log') {
   const t = new Date().toLocaleTimeString('zh-TW');
   const formattedMessage = `[${t}] ${message}`;
 
@@ -62,7 +62,7 @@ export function isMobile() {
  * @param {string} url - 完整的 Google Drive URL。
  * @returns {string|null} 檔案 ID 或 null。
  */
-function extractDriveFileId(url) {
+export function extractDriveFileId(url) {
   if (!url) return null;
   const idRegex = /\/d\/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)/;
   const match = url.match(idRegex);
@@ -75,7 +75,7 @@ function extractDriveFileId(url) {
  * @param {number} [duration=3000] - 訊息顯示的持續時間（毫秒）。
  * @param {'info'|'success'|'error'} [type='info'] - 訊息類型，決定橫幅顏色。
  */
-function showGlobalNotification(message, duration, type = 'info') {
+export function showGlobalNotification(message, duration, type = 'info') {
 
   // [核心重構] 尋找或建立一個專門用來放置所有通知的容器
   let notificationContainer = document.getElementById('global-notification-container');
