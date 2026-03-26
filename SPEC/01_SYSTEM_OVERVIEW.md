@@ -28,6 +28,8 @@
 - [06_DESIGN_ENGINE_SPEC.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/06_DESIGN_ENGINE_SPEC.md)：2D 空間設計引擎與自動計價系統 (CAT.A)。
 - [07_SYSTEM_FLOW_MAP.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/07_SYSTEM_FLOW_MAP.md)：全系統功能連結全景流程圖。
 - [REPORT_SYSTEM_SPEC.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/REPORT_SYSTEM_SPEC.md)：施工回報 V3 流程（Fire-and-Forget）。
+- [10_FB_MESSENGER_SPEC.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/10_FB_MESSENGER_SPEC.md)：Facebook Messenger 通訊連結規格與跨平台綁定預留。
+- [11_1_AI_LOG_AND_PARAMETER_FULL_INTEGRATED_SPEC.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/11_1_AI_LOG_AND_PARAMETER_FULL_INTEGRATED_SPEC.md)：AI 施工日誌與全域參數通訊整合白皮書 (詳盡版)。
 
 ## 3. 防禦性程式設計與維護
 - **@stable 承重牆**: `shared/js/config.js` 為全系統配置中樞，任何 API 修改必須在此處執行。
