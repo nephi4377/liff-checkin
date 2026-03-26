@@ -33,6 +33,9 @@ export default {
         // 【您的要求】新增兩個設計工具的 SPA 路由
         const layoutPlannerUrl = computed(() => `#/layout-planner`);
         const floorplanStraightenerUrl = computed(() => `#/floorplan-straightener`);
+        // 【您的要求】新增報價單工具的 SPA 路由連結
+        const budgetWebUrl = computed(() => `#/budget-web`);
+        const budgetAuditUrl = computed(() => `#/budget-audit`);
 
         const formatTimeAgo = (date) => {
             const seconds = Math.floor((new Date() - new Date(date)) / 1000);
@@ -68,6 +71,8 @@ export default {
             reportUrl, // 將施工回報的 URL 也傳給模板
             layoutPlannerUrl,
             floorplanStraightenerUrl,
+            budgetWebUrl,
+            budgetAuditUrl,
             formatTimeAgo,
             handleReply,
             emit,
@@ -115,40 +120,52 @@ export default {
                     </form>
                 </div>
 
-                <a :href="addSiteUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-blue-700">新增案場資料</h2><p class="text-gray-600">建立一個新的專案，並填寫基本資訊。</p></a>
-                <a href="#/onboarding-flow" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-green-700">客戶接洽流程</h2><p class="text-gray-600">查看標準化的互動式客戶溝通劇本。</p></a>
-                <a href="#/faq" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-green-700">新客戶常見問答 (FAQ)</h2><p class="text-gray-600">快速查詢與回覆客戶的常見問題。</p></a>
-               <!-- [v453.0] 根據使用者要求，將「施工回報總覽」權限提升至 5，並調整顏色 -->
-                <!-- 【您的要求】新增設計工具卡片 -->
-                <a :href="layoutPlannerUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-cyan-700">互動式室內設計規劃工具</h2><p class="text-gray-600">提供給客戶使用的線上平面佈局工具。</p></a>
-                <a :href="floorplanStraightenerUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-cyan-700">平面圖校正工具</h2><p class="text-gray-600">上傳並校正客戶提供的歪斜平面圖。</p></a>
-
-                <a v-if="currentUser && currentUser.permission >= 5" href="#/daily-report" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-red-700">團隊工作總覽 (檢視)</h2><p class="text-gray-600">在主控台內集中檢視團隊的所有回報。</p></a>
-
-                <!-- [v453.0] 根據使用者要求，將「出勤儀表板」顏色改為紅色 -->
-                <a v-if="hasAdminRights" :href="attendanceReportUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-red-700">出勤儀表板</h2><p class="text-gray-600">查詢所有員工的出勤、遲到、早退與缺勤紀錄。</p></a>
-
-                <!-- 【您的要求】新增「員工打卡」按鈕 -->
-                <a href="https://liff.line.me/2007974938-jVxn6y37?source=hub" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
-                    <h2 class="text-xl font-bold mb-2 text-purple-700">員工打卡</h2>
-                    <p class="text-gray-600">開啟 LIFF 頁面進行每日出勤打卡。</p>
+                <!-- 核心功能 (置前) -->
+                <a :href="budgetAuditUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                    <h2 class="text-xl font-bold mb-2 text-indigo-700">報價單審核器</h2>
+                    <p class="text-gray-600">進行案場工項確認與進度回報。</p>
+                </a>
+                <a :href="reportUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                    <h2 class="text-xl font-bold mb-2 text-purple-700">施工回報</h2>
+                    <p class="text-gray-600">在此上傳每日施工進度與照片。</p>
+                </a>
+                
+                <a :href="budgetWebUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                    <h2 class="text-xl font-bold mb-2 text-indigo-700">報價單解析器 (BudgetWeb)</h2>
+                    <p class="text-gray-600">上傳 Excel 並自動解析工項分區。</p>
+                </a>
+                <a :href="addSiteUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                    <h2 class="text-xl font-bold mb-2 text-blue-700">新增案場資料</h2>
+                    <p class="text-gray-600">建立新專案並填寫基本資訊。</p>
                 </a>
 
+                <!-- 假勤與管理功能 -->
+                <a :href="leaveRequestUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-purple-700">線上假勤申請</h2><p class="text-gray-600">申請特休、病假、事假或回報加班。</p></a>
+                <a :href="shiftScheduleUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-purple-700">員工排班系統</h2><p class="text-gray-600">設定排班制員工的休假日期。</p></a>
+                
                 <a v-if="hasAdminRights" :href="approvalDashboardUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
                     <div class="flex justify-between items-center">
                         <h2 class="text-xl font-bold mb-2 text-red-700">假勤審核儀表板</h2>
                         <span v-if="pendingApprovals > 0" class="h-6 w-6 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center animate-pulse">{{ pendingApprovals }}</span>
                     </div>
-                    <p class="text-gray-600">集中審核所有員工的請假與加班申請。</p>
+                    <p class="text-gray-600">集中審核請假與加班申請。</p>
                 </a>
+                <a v-if="hasAdminRights" :href="attendanceReportUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-red-700">出勤儀表板</h2><p class="text-gray-600">查詢遲到、早退與缺勤紀錄。</p></a>
+                <a v-if="hasAdminRights" :href="employeeEditorUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-purple-700">員工資料編輯</h2><p class="text-gray-600">管理基本資料、權限與班表。</p></a>
 
-                <a v-if="hasAdminRights" :href="employeeEditorUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-purple-700">員工資料編輯</h2><p class="text-gray-600">管理員工的基本資料、權限與班表設定。</p></a>
+                <!-- 設計工具 -->
+                <a :href="layoutPlannerUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-cyan-700">互動式設計規劃工具</h2><p class="text-gray-600">提供給客戶使用的線上佈局工具。</p></a>
+                <a :href="floorplanStraightenerUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-cyan-700">平面圖校正工具</h2><p class="text-gray-600">校正客戶提供的歪斜平面圖。</p></a>
 
-                <!-- 【您的要求】新增「施工回報」按鈕，並使用 SPA 路由 -->
-                <a :href="reportUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-purple-700">施工回報</h2><p class="text-gray-600">在主控台內上傳每日施工進度與照片。</p></a>
-
-                <a :href="leaveRequestUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-purple-700">線上假勤申請</h2><p class="text-gray-600">申請特休、病假、事假或回報加班。</p></a>
-                <a :href="shiftScheduleUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-purple-700">員工排班系統</h2><p class="text-gray-600">設定排班制員工的休假日期。</p></a>
+                <!-- 資訊/查詢類 (置後) -->
+                <a href="#/onboarding-flow" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-green-700">客戶接洽流程</h2><p class="text-gray-600">查看標準化溝通劇本。</p></a>
+                <a href="#/faq" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-green-700">客戶常見問答 (FAQ)</h2><p class="text-gray-600">快速查詢與回覆常見問題。</p></a>
+                <a v-if="currentUser && currentUser.permission >= 5" href="#/daily-report" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block"><h2 class="text-xl font-bold mb-2 text-red-700">團隊工作總覽</h2><p class="text-gray-600">集中檢視團隊的所有回報。</p></a>
+                
+                <a href="https://liff.line.me/2007974938-jVxn6y37?source=hub" target="_blank" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
+                    <h2 class="text-xl font-bold mb-2 text-purple-700">員工報到/打卡</h2>
+                    <p class="text-gray-600">開啟外部頁面進行報到註冊。</p>
+                </a>
             </div>
         </div>
     `

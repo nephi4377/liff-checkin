@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添心設計 | 報價單 AI 預處理器 (Standalone)</title>
+    <!-- Firebase SDK (v9 Compatibility) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <!-- SheetJS (XLSX) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --primary: #1e3a8a;
+            --secondary: #10b981;
+            --bg: #f3f4f6;
+            --text: #1f2937;
+        }
+
+        body {
+            font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 800px;
+            background: white;
+            margin-top: 40px;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        header {
+            border-bottom: 2px solid var(--bg);
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        h1 { color: var(--primary); margin: 0; font-size: 24px; }
+        p { color: #666; margin-top: 8px; }
+
+        .upload-box {
+            border: 2px dashed #cbd5e1;
+            padding: 40px;
+            border-radius: 8px;
+            text-align: center;
+            background-color: #fafafa;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .upload-box:hover { border-color: var(--secondary); background-color: #f0fdf4; }
+        .upload-box.disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(1); }
+
+        input[type="file"] { display: none; }
+
+        .btn {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+            display: none;
+            width: 100%;
+        }
+
+        .btn-download { background-color: var(--secondary); display: block; }
+
+        #status { margin-top: 20px; font-weight: bold; color: var(--primary); text-align: center; }
+
+        .preview-box {
+            margin-top: 30px;
+            display: none;
+            width: 100%;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            table-layout: fixed;
+        }
+
+        th, td { 
+            border: 1px solid #e2e8f0; 
+            padding: 8px; 
+            text-align: left; 
+            vertical-align: top;
+            word-wrap: break-word;
+        }
+        
+        th { background-color: #f8fafc; }
+        
+        .col-raw { width: 40%; background: #f9fafb; color: #666; font-family: monospace; }
+        .col-parsed { width: 50%; }
+        .col-action { width: 10%; text-align: center; }
+
+        .row-skipped { background-color: #fdfdfd; opacity: 0.8; }
+        .row-parsed { background-color: #fff; border-left: 4px solid var(--secondary); }
+        .row-header { background-color: #e0f2fe; font-weight: bold; }
+
+        .tag {
+            background: #dcfce7;
+            color: #166534;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        .alert {
+            background-color: #fff4e5;
+            color: #663c00;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+        .sheet-selector {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            display: none;
+            text-align: left;
+        }
+
+        .sheet-item {
+            margin: 8px 0;
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+        }
+
+        .sheet-item input { margin-right: 10px; transform: scale(1.2); }
+
+        .add-item-box {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fff;
+            border: 1px solid var(--secondary);
+            border-radius: 8px;
+            display: none;
+        }
+
+        .add-item-box input {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        /* 增強：加減項對比與人工調整樣式 */
+        .item-row-deduction { border-left: 4px solid #ef4444 !important; background-color: #fef2f2; }
+        .match-highlight { outline: 2px solid #3b82f6; outline-offset: -2px; }
+        .edit-select {
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid #d1d5db;
+            background-color: #f9fafb;
+            color: #374151;
+            width: 130px;
+            transition: border-color 0.2s;
+        }
+        .edit-select:focus { border-color: #9ca3af; outline: none; }
+        
+        .edit-input { 
+            border: 1px solid #d1d5db; 
+            border-radius: 6px; 
+            padding: 4px 8px; 
+            font-size: 11px;
+            background-color: #f9fafb;
+            color: #374151;
+            transition: border-color 0.2s;
+        }
+        .edit-input:focus { border-color: #9ca3af; outline: none; }
+        .pair-tag {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: bold;
+            color: white;
+            margin-left: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>🤖 報價單預處理器</h1>
+        <p>對齊 11_1 SPEC | 全量分頁掃描 | 自動排除</p>
+    </header>
+
+    <div id="projectNoInitialBox" class="sheet-selector" style="display:block; margin-bottom:20px; padding:20px;">
+        <h3 style="margin-top:0; font-size:16px;">Step 0: 填寫案號 (必要)</h3>
+        <input type="text" id="projectNoInput" placeholder="案號 (例: 742)" style="padding:8px; margin-right:10px; width:200px;">
+        <span id="projectVerifyStatus" style="font-size: 12px; font-weight: bold;"></span><br>
+        <span style="font-size: 12px; color: #666;">* 輸入案號將自動檢查雲端是否有既有資料。</span>
+    </div>
+
+    <div class="upload-box disabled" id="dropZone" onclick="handleUploadClick()">
+        <img src="https://img.icons8.com/clouds/100/attach.png" alt="upload icon"><br>
+        <span id="uploadHint">請先填寫案號以解鎖上傳功能</span>
+        <input type="file" id="fileInput" accept=".xlsx">
+    </div>
+
+    <div id="status">等待檔案...</div>
+
+    <div id="projectInfoBox" class="sheet-selector" style="display:none; margin-top:10px; padding:15px; background-color:#fffbeb; border-color:#f59e0b;">
+        <button id="syncCloudBtn" class="btn" style="display:block; width:100%; padding:12px; background-color:#f59e0b; font-weight:bold;">☁️ 同步至雲端並開啟審核</button>
+    </div>
+
+    <div id="sheetSelector" class="sheet-selector">
+        <h3 style="margin-top:0; font-size:16px;">Step 2: 請勾選要解析的施工分頁</h3>
+        <div id="sheetList"></div>
+        <button id="processBtn" class="btn" style="display:block; margin-top:15px; background-color:var(--primary)">🚀 開始精煉解析</button>
+    </div>
+
+    <button id="downloadBtn" class="btn btn-download">📥 確認無誤，下載 Context JSON</button>
+
+    <div id="addItemBox" class="add-item-box">
+        <h4 style="margin:0 0 10px 0; color:var(--secondary)">➕ 手動增加工項</h4>
+        <input type="text" id="addZone" placeholder="區域 (如: 客廳)" style="width:100px">
+        <input type="text" id="addName" placeholder="工項名稱" style="width:150px">
+        <input type="text" id="addSpec" placeholder="規格/備註" style="width:150px">
+        <input type="text" id="addQty" placeholder="數量" style="width:60px">
+        <input type="text" id="addUnit" placeholder="單位" style="width:60px">
+        <button onclick="addNewItem()" style="background:var(--secondary); color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer">加入列表</button>
+    </div>
+
+    <div id="previewArea" class="preview-box">
+        <h3>🔍 全量行對照稽核 (全資料不漏抓)</h3>
+        <p style="font-size:12px; color:#666">左側為 Excel 原文，右側為結構化結果。若右側空白，可點擊「➕」將該行強制解析為工項。</p>
+        <table id="previewTable">
+            <thead>
+                <tr>
+                    <th class="col-raw">Excel 原始內容</th>
+                    <th class="col-parsed">AI 結構化解析結果 (脫敏後)</th>
+                    <th class="col-action">操作</th>
+                </tr>
+            </thead>
+            <tbody id="previewBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const projectNoInput = document.getElementById('projectNoInput');
+    const projectVerifyStatus = document.getElementById('projectVerifyStatus');
+
+    // 自動比對案號是否存在
+    projectNoInput.addEventListener('input', debounce(async (e) => {
+        const no = e.target.value.trim();
+        if (!no) {
+            projectVerifyStatus.innerText = "";
+            return;
+        }
+
+        projectVerifyStatus.innerText = "⏳ 檢查中...";
+        projectVerifyStatus.style.color = "#666";
+
+        try {
+            const snap = await db.ref(`quotations/${no}`).once('value');
+            if (snap.exists()) {
+                const data = snap.val();
+                const itemCount = (data.context && data.context.items) ? data.context.items.length : 0;
+                projectVerifyStatus.innerText = `✅ 雲端已有資料 (${itemCount} 項)，同步時將自動比對差異。`;
+                projectVerifyStatus.style.color = "var(--secondary)";
+            } else {
+                projectVerifyStatus.innerText = "🆕 此案號在雲端尚無資料 (新專案)。";
+                projectVerifyStatus.style.color = "#3b82f6";
+            }
+            // 解鎖上傳
+            document.getElementById('dropZone').classList.remove('disabled');
+            document.getElementById('uploadHint').innerText = "將報價單 Excel 拖曳至此或點擊選取檔案 (.xlsx)";
+        } catch (err) {
+            console.error('[Verify] 案號檢查失敗:', err);
+        }
+    }, 500));
+
+    window.handleUploadClick = () => {
+        const no = document.getElementById('projectNoInput').value.trim();
+        if (!no) {
+            alert("請先在 Step 0 填寫『案號』，才能解鎖上傳功能。");
+            document.getElementById('projectNoInput').focus();
+            return;
+        }
+        document.getElementById('fileInput').click();
+    };
+
+    function debounce(func, delay) {
+        let timeout;
+        return (...args) => {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), delay);
+        };
+    }
+
+    let currentWorkbook = null;
+    let processedData = null;
+
+    // 定義全局變數，但需在 DOMContentLoaded 後初始化或確保 ID 存在
+    const fileInput = document.getElementById('fileInput');
+    const status = document.getElementById('status');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const previewArea = document.getElementById('previewArea');
+    const previewBody = document.getElementById('previewBody');
+    const sheetSelector = document.getElementById('sheetSelector');
+    const sheetList = document.getElementById('sheetList');
+    const processBtn = document.getElementById('processBtn');
+
+    // Firebase 配置 (與 reportV2 同步)
+    const FB_CONFIG = {
+        databaseURL: "https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app"
+    };
+
+    // 初始化 Firebase
+    if (!firebase.apps.length) {
+        firebase.initializeApp(FB_CONFIG);
+    }
+    const db = firebase.database();
+
+    // 脫敏與分類規則
+    const SENSITIVE_KEYWORDS = ['價格', '金額', '單價', '總價', '複價', '備註市價', '成本', '小計', '合計', '稅'];
+    const METADATA_KEYWORDS = ['住址', '電話', '簽名', '定金', '支付', '發票', '尾款', '示意3d', '規劃費', '稅', '估價單', '有效為一個月'];
+    
+    const CATEGORY_RULES = {
+        '施工保護': ['保護', '地坪保護', '防塵'],
+        '拆除工程': ['拆除', '清運', '廢棄物'],
+        '泥作工程': ['磁磚', '大理石', '砌牆', '防水', '泥作', '石紋', '填縫'],
+        '水電工程': ['插座', '配線', '開關', '燈具', '迴路', '弱電', '專用迴路', '網路', '移位', '感應燈'],
+        '木作工程': ['天花板', '隔間', '門', '層板', '木', '包管', '冷氣管', '平釘', '間照', '封板', '美耐板', '木芯板', '矽酸鈣'],
+        '系統櫃體': ['櫃', '櫥', '衣', '鞋', '高櫃', '矮櫃', '抽屜'],
+        '油漆工程': ['批土', '噴漆', '乳膠漆', '水泥漆', '油漆', '得利', '虹牌', '跳色'],
+        '廚具設備': ['廚具', '水槽', '烘碗機', '瓦斯爐', '人造石', '龍頭'],
+        '地板工程': ['超耐磨', '地板', '卡扣', '拋光', '拼花'],
+        '清潔工程': ['粗清', '細清']
+    };
+
+    function getCategory(name, spec) {
+        const text = (name + spec).toLowerCase();
+        for (const [cat, keywords] of Object.entries(CATEGORY_RULES)) {
+            if (keywords.some(kw => text.includes(kw))) return cat;
+        }
+        return "其他";
+    }
+
+    // 模糊比對演算法：尋找加減項對應
+    function findPairs(items) {
+        const parsedItems = items.filter(it => it.type === 'item');
+        const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
+        let colorIdx = 0;
+
+        parsedItems.forEach(it => {
+            const name = it.data.name;
+            const qty = parseFloat(it.data.qty) || 0;
+            // 判定為「減項」：關鍵字或負數
+            const isDeduction = /取消|扣除|減項/.test(name) || qty < 0;
+            it.data.is_deduction = isDeduction;
+
+            if (isDeduction) {
+                // 嘗試尋找對應的加項 (名稱相似且非減項)
+                const cleanName = name.replace(/取消|扣除|減項|[\(\)\-\s]/g, '').trim();
+                const match = parsedItems.find(other => {
+                    if (other === it || other.data.is_deduction) return false;
+                    const otherName = other.data.name.replace(/[\(\)\-\s]/g, '').trim();
+                    const isMatch = otherName.includes(cleanName) || cleanName.includes(otherName);
+                    if (isMatch) console.log(`[FuzzyMatch] 找到對應: "${name}" <-> "${other.data.name}"`);
+                    return isMatch;
+                });
+
+                if (match) {
+                    const color = colors[colorIdx % colors.length];
+                    it.data.pair_id = match.data.id;
+                    it.data.pair_color = color;
+                    match.data.pair_id = it.data.id;
+                    match.data.pair_color = color;
+                    colorIdx++;
+                }
+            }
+        });
+    }
+
+    // Step 1: 檔案讀取
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        status.innerText = "⏳ 正在讀取 Excel 結構...";
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            try {
+                const data = new Uint8Array(evt.target.result);
+                currentWorkbook = XLSX.read(data, {type: 'array'});
+                
+                sheetList.innerHTML = currentWorkbook.SheetNames.map(name => `
+                    <label class="sheet-item">
+                        <input type="checkbox" value="${name}" ${['參照', '傢俱', '窗簾', '壁紙', '工作表1', '條款'].some(ex => name.includes(ex)) ? '' : 'checked'}>
+                        ${name}
+                    </label>
+                `).join('');
+                
+                status.innerText = "✅ 讀取成功！請填寫資料與選擇施工分頁。";
+                document.getElementById('projectInfoBox').style.display = 'block';
+                sheetSelector.style.display = 'block';
+                downloadBtn.style.display = 'none';
+                previewArea.style.display = 'none';
+            } catch (err) {
+                status.innerText = "❌ 讀取失敗: " + err.message;
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    });
+
+    // Step 2: 執行解析
+    processBtn.addEventListener('click', () => {
+        if (!currentWorkbook) return;
+        const selectedSheets = Array.from(sheetList.querySelectorAll('input:checked')).map(cb => cb.value);
+        if (selectedSheets.length === 0) { alert("請至少選擇一個分頁！"); return; }
+
+        status.innerText = "⏳ 正在建立全案例稽核對照表...";
+        let allItems = [];
+        let itemCount = 0;
+
+        try {
+            selectedSheets.forEach(sheetName => {
+                const ws = currentWorkbook.Sheets[sheetName];
+                const json = XLSX.utils.sheet_to_json(ws, {header: 1, defval: ""}); 
+                if (json.length < 3) return; 
+
+                let currentZone = "未分類";
+                let startRow = 0;
+                let colMapping = { id: -1, name: -1, qty: -1, unit: -1, spec: -1, total_price: -1 }; 
+
+                // 找標題
+                for (let i = 0; i < Math.min(json.length, 35); i++) {
+                    const row = json[i].map(c => String(c).trim());
+                    const nameIdx = row.findIndex(c => (c === '品項' || c === '項目' || c === '內容'));
+                    if (nameIdx !== -1) {
+                        colMapping.name = nameIdx;
+                        colMapping.id = row.findIndex(c => c.includes('項次') || c === 'NO' || c === 'No.');
+                        colMapping.qty = row.findIndex(c => c.includes('數量'));
+                        colMapping.unit = row.findIndex(c => c.includes('單位'));
+                        colMapping.spec = row.findIndex(c => c.includes('備註') || c.includes('規格'));
+                        colMapping.total_price = row.findIndex(c => c.includes('總價') || c.includes('複價') || c.includes('小計'));
+
+                        // 自動補位邏輯 (若找不到則嘗試根據品項相對位置)
+                        if (colMapping.id === -1) colMapping.id = Math.max(0, colMapping.name - 1);
+                        if (colMapping.qty === -1) colMapping.qty = colMapping.name + 2;
+                        if (colMapping.unit === -1) colMapping.unit = colMapping.name + 1;
+                        if (colMapping.total_price === -1) colMapping.total_price = colMapping.name + 4;
+                        
+                        startRow = i + 1;
+                        break;
+                    }
+                }
+
+                for (let i = 0; i < json.length; i++) {
+                    const row = json[i];
+                    if (!row || row.length === 0) continue;
+                    let name = String(row[colMapping.name] || "").trim();
+                    
+                    // 深度除噪：rawLine 僅保留前幾項，切除價格與預算 (後三位通常是 價格/成本/小計)
+                    let cleanRow = row.filter(c => c !== "");
+                    if (cleanRow.length > 5) cleanRow = cleanRow.slice(0, cleanRow.length - 2); 
+                    let rawLine = cleanRow.join(" | ");
+
+                    // Zone 識別
+                    const hasZoneKeyword = /樓|廳|房|區|工程|追加|增減|變更|玄關|廚房|衛浴|陽台/.test(name);
+                    const isUnitEmpty = !row[colMapping.unit] || String(row[colMapping.unit]).trim() === "";
+                    if (name !== "" && ( (name.length <= 8 && hasZoneKeyword) || (isUnitEmpty && hasZoneKeyword) )) {
+                        const isDuplicate = (name === currentZone);
+                        currentZone = name;
+                        allItems.push({ type: 'header', zone: currentZone, raw: rawLine, is_cancelled: isDuplicate });
+                        continue;
+                    }
+
+                    // [v1.5] 嚴格判斷是否為預設工項: 項次/品項/單位/數量/總價 這5項才是一個項目
+                    const indexVal = String(row[colMapping.id] || "").trim();
+                    const nameVal = name; // 已在上方定義
+                    const unitVal = String(row[colMapping.unit] || "").trim();
+                    const qtyVal = String(row[colMapping.qty] || "").trim();
+                    const totalPriceVal = String(row[colMapping.total_price] || "").trim();
+
+                    // 5 項滿足才視為有效工項
+                    let isItem = (indexVal !== "" && nameVal !== "" && unitVal !== "" && qtyVal !== "" && totalPriceVal !== "" && i >= startRow);
+                    
+                    // 額外排除關鍵字
+                    if (METADATA_KEYWORDS.some(kw => nameVal.includes(kw))) isItem = false;
+                    if (SENSITIVE_KEYWORDS.some(kw => nameVal.includes(kw))) isItem = false;
+
+                    if (isItem) {
+                        itemCount++;
+                        allItems.push({
+                            type: 'item',
+                            raw: rawLine,
+                            data: {
+                                id: `ITEM_${String(itemCount).padStart(3, '0')}`,
+                                zone: currentZone,
+                                name: name,
+                                spec: String(row[colMapping.spec] || "").trim(),
+                                qty: String(row[colMapping.qty] || "").trim() || "1",
+                                unit: String(row[colMapping.unit] || "").trim() || "式",
+                                category_tag: getCategory(name, ""),
+                                sheet_source: sheetName,
+                                raw_line: rawLine
+                            }
+                        });
+                    } else {
+                        allItems.push({ type: 'raw', raw: rawLine, row_data: row, sheet_source: sheetName, zone: currentZone });
+                    }
+                }
+            });
+
+            processedData = { 
+                total_summary: {
+                    total_items: itemCount,
+                    source_sheets: selectedSheets,
+                    export_time: new Date().toLocaleString()
+                },
+                items: allItems 
+            };
+            
+            // 執行對比分析
+            findPairs(processedData.items);
+            
+            renderPreview();
+            status.innerHTML = `✅ 稽核表已生成！共偵漏抓取 ${itemCount} 項工項。`;
+            previewArea.style.display = 'block';
+            downloadBtn.style.display = 'block';
+            document.getElementById('addItemBox').style.display = 'block';
+
+        } catch (err) {
+            status.innerText = "❌ 解析錯誤: " + err.message;
+            console.error(err);
+        }
+    });
+
+    function renderPreview() {
+        if (!processedData) return;
+        
+        // 確保獲取最新的 DOM 參考
+        const previewBody = document.getElementById('previewBody');
+        if (!previewBody) {
+            console.error('[Render] 找不到 previewBody 元素');
+            return;
+        }
+
+        // 1. 取得所有「作廢除外」的分區
+        const allZones = [...new Set(processedData.items.map(it => {
+            if (it.type === 'header') return it.is_cancelled ? null : it.zone;
+            if (it.type === 'item') return it.data?.zone;
+            return null;
+        }))].filter(Boolean).sort();
+        console.log('[Debug] 取得全量分區清單:', allZones);
+        const allCats = Object.keys(CATEGORY_RULES).concat(["其他"]);
+
+        // 2. 生成預覽 HTML
+        previewBody.innerHTML = processedData.items.map((row, idx) => {
+            if (row.type === 'header') {
+                const isCancelled = row.is_cancelled;
+                const opacity = isCancelled ? '0.4' : '1';
+                const actionBtn = isCancelled 
+                    ? `<button onclick="toggleSection(${idx}, false)" title="還原分區" style="color:var(--secondary); border:0; background:none; cursor:pointer; font-size:16px;">🔄</button>`
+                    : `<button onclick="toggleSection(${idx}, true)" title="取消此分區 (將併入上一區)" style="color:#9ca3af; border:0; background:none; cursor:pointer; font-size:16px;">🚫</button>`;
+
+                return `
+                    <tr class="row-header" style="opacity:${opacity}">
+                        <td colspan="2">📍 分區: ${row.zone} ${isCancelled ? '<small>(已取消，向下併入)</small>' : ''}</td>
+                        <td class="col-action">${actionBtn}</td>
+                    </tr>
+                `;
+            }
+            if (row.type === 'item') {
+                const d = row.data;
+                const rowClass = d.is_deduction ? 'row-parsed item-row-deduction' : 'row-parsed';
+                const pairStyle = d.pair_color ? `border: 2px solid ${d.pair_color};` : '';
+                const pairTag = d.pair_color ? `<span class="pair-tag" style="background:${d.pair_color}">🔗 對應</span>` : '';
+
+                const rawParts = row.raw.split('|').map(s => s.trim()).filter(s => s && s !== d.sheet_source);
+                const rawSummary = rawParts.slice(0, 5).join(' | ');
+
+                const uniqueListId = `zoneList_${Date.now()}`;
+                return `
+                    <tr class="${rowClass}" style="${pairStyle}">
+                        <td class="col-raw" style="color:#666; font-size:12px; vertical-align:middle;">
+                            ${rawSummary}
+                        </td>
+                        <td class="col-parsed">
+                            <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center;">
+                                <select class="edit-select" onchange="updateItemField(${idx}, 'category_tag', this.value)">
+                                    ${allCats.map(c => `<option value="${c}" ${d.category_tag === c ? 'selected' : ''}>${c}</option>`).join('')}
+                                </select>
+                                <input type="text" class="edit-input" style="flex:1" value="${d.zone || ''}" 
+                                    onchange="updateItemField(${idx}, 'zone', this.value)" 
+                                    onfocus="this.dataset.old = this.value; this.value = '';"
+                                    onblur="if(this.value.trim() === '') { this.value = this.dataset.old || ''; updateItemField(${idx}, 'zone', this.value); }"
+                                    list="zoneList" placeholder="搜尋或輸入分區...">
+                            </div>
+                            <div style="padding: 2px 5px;">
+                                <span style="font-size:14px; font-weight:500; color:#111;">${d.name}</span> 
+                                <span style="color:#666; font-size:13px; margin: 0 8px;">|</span>
+                                <b style="font-size:14px; color:#111;">${d.qty} ${d.unit}</b>
+                                ${pairTag}
+                            </div>
+                        </td>
+                        <td class="col-action">
+                            <button onclick="removeItem(${idx})" style="color:#9ca3af; border:0; background:none; cursor:pointer; font-size:14px;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#9ca3af'">🗑️</button>
+                        </td>
+                    </tr>
+                `;
+            }
+            return `
+                <tr class="row-skipped">
+                    <td class="col-raw">${row.raw || '(空行)'}</td>
+                    <td class="col-parsed" style="color:#ccc">--- 自動排除 ---</td>
+                    <td class="col-action">
+                        <button onclick="forceParse(${idx})" title="強制解析" style="color:var(--secondary); border:0; background:none; cursor:pointer; font-size:16px;">➕</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        // 3. 強制刷新 datalist
+        // 先移除所有舊的 zoneList 避免 ID 衝突或瀏覽器快取
+        document.querySelectorAll('datalist[id="zoneList"]').forEach(el => el.remove());
+        
+        const zoneList = document.createElement('datalist');
+        zoneList.id = 'zoneList';
+        zoneList.innerHTML = allZones.map(z => `<option value="${z}">`).join('');
+        document.body.appendChild(zoneList);
+
+        console.log(`[Datalist Sync] 強制重新建立選單，共 ${allZones.length} 個分區。`, allZones);
+    }
+
+
+    window.updateItemField = (idx, field, value) => {
+        if (processedData.items[idx] && processedData.items[idx].data) {
+            processedData.items[idx].data[field] = value;
+            // 如果改了數量，重新判定減項與對比
+            if (field === 'qty' || field === 'name' || field === 'zone') {
+                findPairs(processedData.items);
+                renderPreview();
+            }
+        }
+    };
+
+    window.toggleSection = (idx, cancel) => {
+        const header = processedData.items[idx];
+        if (header.type !== 'header') return;
+        
+        header.is_cancelled = cancel;
+        
+        // 重新掃描分區歸屬
+        let currentZone = "未分類";
+        processedData.items.forEach(it => {
+            if (it.type === 'header') {
+                if (!it.is_cancelled) currentZone = it.zone;
+            } else if (it.type === 'item') {
+                it.data.zone = currentZone;
+            } else if (it.type === 'raw') {
+                it.zone = currentZone;
+            }
+        });
+        
+        renderPreview();
+    };
+
+    window.removeItem = (index) => {
+        const row = processedData.items[index];
+        if (row.type === 'item') {
+            // 轉換為 'raw' 但保留它的 data，這樣點擊 ➕ 就能瞬間還原
+            processedData.items[index].type = 'raw';
+        }
+        renderPreview();
+    };
+
+    window.forceParse = (index) => {
+        const row = processedData.items[index];
+        
+        // 如果已經有 data (之前解析過或被 removeItem 過)，直接還原 type
+        if (row.data) {
+            row.type = 'item';
+            renderPreview();
+            return;
+        }
+
+        // 全新解析：從 row_data 提取 (假設對齊當前 colMapping)
+        const d = row.row_data || [];
+        const nameIdx = d.findIndex(c => String(c).trim() !== "");
+        if (nameIdx === -1) return;
+
+        // 嘗試抓取附近的數量與單位 (啟發式：往後找)
+        const name = String(d[nameIdx]).trim();
+        const qty = d[nameIdx + 2] || "1";
+        const unit = d[nameIdx + 1] || "式";
+
+        processedData.items[index] = {
+            type: 'item',
+            raw: row.raw,
+            data: {
+                id: `MANUAL_${index}`,
+                zone: row.zone || "未分類",
+                name: name,
+                spec: "", 
+                qty: String(qty).trim(), 
+                unit: String(unit).trim(),
+                category_tag: getCategory(name, ""),
+                sheet_source: row.sheet_source || "稽核手動",
+                raw_line: row.raw
+            }
+        };
+        renderPreview();
+    };
+
+    window.addNewItem = () => {
+        const name = document.getElementById('addName').value.trim();
+        if (!name) return;
+        const newItem = {
+            type: 'item',
+            raw: "手動新增",
+            data: {
+                id: `APPEND_${Date.now().toString().slice(-4)}`,
+                zone: document.getElementById('addZone').value || "追加項",
+                name: name,
+                spec: document.getElementById('addSpec').value,
+                qty: document.getElementById('addQty').value || "1",
+                unit: document.getElementById('addUnit').value || "式",
+                category_tag: getCategory(name, ""),
+                sheet_source: "手動",
+                raw_line: "Manual"
+            }
+        };
+        processedData.items.unshift(newItem);
+        renderPreview();
+    };
+
+    downloadBtn.addEventListener('click', () => {
+        const projectNo = document.getElementById('projectNoInput').value.trim();
+        if (!projectNo) {
+            alert("請先填寫『案號』，否則導出的 JSON 無法在審核系統中使用。");
+            document.getElementById('projectNoInput').focus();
+            return;
+        }
+
+        const exportItems = processedData.items.filter(r => r.type === 'item').map(r => {
+            const d = r.data;
+            return {
+                id: d.id,
+                zone: d.zone,
+                category_tag: d.category_tag,
+                name: d.name,
+                spec: d.spec,
+                qty: d.qty,
+                unit: d.unit,
+                raw_line: d.raw_line,
+                sheet_source: d.sheet_source,
+                status: 'PENDING',
+                completion_percent: 0,
+                verification: {
+                    is_ok: false
+                }
+            };
+        });
+        
+        const finalExport = {
+            案號: document.getElementById('projectNoInput').value || "UNKNOWN_NO",
+            total_summary: {
+                ...processedData.total_summary,
+                siteName: (processedData.total_summary && processedData.total_summary.siteName) ? processedData.total_summary.siteName : "未命名案場",
+                overall_completion: 0
+            },
+            items: exportItems
+        };
+        const blob = new Blob([JSON.stringify(finalExport, null, 2)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `budget_context_${new Date().getTime()}.json`;
+        a.click();
+    });
+
+    document.getElementById('syncCloudBtn').addEventListener('click', async () => {
+        const projectNo = document.getElementById('projectNoInput').value.trim();
+        if (!projectNo) { alert("請填寫案號才能同步！"); return; }
+        
+        const syncBtn = document.getElementById('syncCloudBtn');
+        syncBtn.innerText = "⏳ 同步中...";
+        syncBtn.disabled = true;
+
+        try {
+            // [Smart Sync v1.4] 先嘗試抓取雲端既有資料
+            let existingData = null;
+            try {
+                const snapshot = await db.ref(`quotations/${projectNo}`).once('value');
+                existingData = snapshot.val();
+            } catch (fbErr) { console.warn('無既有雲端資料或讀取失敗', fbErr); }
+
+            const exportItems = processedData.items.filter(r => r.type === 'item').map(r => {
+                const d = r.data;
+                const newItem = {
+                    id: d.id,
+                    zone: d.zone,
+                    category_tag: d.category_tag,
+                    name: d.name,
+                    spec: d.spec,
+                    qty: d.qty,
+                    unit: d.unit,
+                    raw_line: d.raw_line,
+                    sheet_source: d.sheet_source,
+                    status: 'PENDING',
+                    completion_percent: 0,
+                    verification: { is_ok: false }
+                };
+
+                // 若有舊資料，進行狀態對比保留
+                if (existingData && existingData.context && existingData.context.items) {
+                    const oldMatch = existingData.context.items.find(old => 
+                        old.id === newItem.id || (old.name === newItem.name && old.spec === newItem.spec)
+                    );
+                    if (oldMatch) {
+                        newItem.completion_percent = oldMatch.completion_percent || 0;
+                        newItem.verification = oldMatch.verification || { is_ok: false };
+                        newItem.status = newItem.completion_percent === 100 ? 'DONE' : (newItem.completion_percent > 0 ? 'PROCESS' : 'PENDING');
+                    }
+                }
+                return newItem;
+            });
+            
+            const finalExport = {
+                案號: projectNo,
+                total_summary: {
+                    ...processedData.total_summary,
+                    siteName: (existingData && existingData.context && existingData.context.total_summary) ? existingData.context.total_summary.siteName : "載入中...",
+                    overall_completion: 0 // 將在下方重新計算
+                },
+                items: exportItems
+            };
+
+            // 重新計算整體進度
+            const totalP = exportItems.reduce((acc, cur) => acc + (cur.completion_percent || 0), 0);
+            finalExport.total_summary.overall_completion = Math.round(totalP / exportItems.length) || 0;
+
+            console.log('[Sync] 準備上傳雲端，總工項數:', exportItems.length, '進度:', finalExport.total_summary.overall_completion);
+
+            await db.ref(`quotations/${projectNo}`).set({
+                context: finalExport,
+                last_updated: new Date().toLocaleString(),
+                sync_by: "AI_PREPROCESSOR (SmartSync)"
+            });
+
+            if (confirm("☁️ 同步成功！是否立即開啟『預算審核工具』進行核對？")) {
+                const auditorUrl = `BudgetAuditor_Standalone.html?projectNo=${projectNo}`;
+                window.open(auditorUrl, '_blank');
+            }
+        } catch (err) {
+            alert("同步失敗: " + err.message);
+        } finally {
+            syncBtn.innerText = "☁️ 同步至雲端並開啟審核";
+            syncBtn.disabled = false;
+        }
+    });
+</script>
+
+</body>
+</html>

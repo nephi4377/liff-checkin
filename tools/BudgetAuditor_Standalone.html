@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添心設計 | 獨立報價單審核器 v1.0</title>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.321.0/dist/umd/lucide.min.js"></script>
+    <!-- LINE LIFF SDK -->
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-main: #f8fafc;
+            --bg-card: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --pending: #f59e0b;
+        }
+
+        * { box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }
+        body { background: var(--bg-main); color: var(--text-main); margin: 0; padding: 20px; line-height: 1.5; }
+
+        .container { max-width: 1200px; margin: 0 auto; }
+        
+        /* Dropzone */
+        #drop-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            background: var(--bg-card);
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 20px;
+        }
+        #drop-zone.active { border-color: var(--primary); background: #eff6ff; }
+        #drop-zone i { width: 48px; height: 48px; color: var(--primary); margin-bottom: 12px; }
+
+        /* Header Info */
+        .project-header {
+            background: var(--bg-card);
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 24px;
+            display: none;
+        }
+        .project-header h1 { margin: 0 0 8px 0; font-size: 1.5rem; }
+        .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 16px; }
+        .meta-item { font-size: 0.875rem; color: var(--text-muted); }
+        .meta-item strong { color: var(--text-main); display: block; }
+
+        /* Controls */
+        .controls { margin-bottom: 20px; display: flex; gap: 12px; }
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.875rem;
+        }
+        .btn:hover { background: #f1f5f9; }
+        .btn-primary { background: var(--primary); color: white; border: none; }
+        .btn-primary:hover { background: var(--primary-hover); }
+
+        /* Group / Zone */
+        .zone-block { margin-bottom: 32px; }
+        .zone-title {
+            font-size: 1.125rem;
+            font-weight: 700;
+            padding: 8px 12px;
+            background: #f1f5f9;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+        }
+        .zone-title:hover { background: #e2e8f0; }
+        .zone-content.collapsed { display: none; }
+        .item-row {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            display: flex;
+            gap: 16px;
+            align-items: stretch;
+            transition: transform 0.2s;
+        }
+        .item-row:hover { border-color: var(--primary); transform: translateY(-2px); }
+        
+        .item-content { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+        
+        .item-info-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 0.9rem; }
+        .status-tag { font-weight: bold; color: var(--pending); }
+        .item-spec { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px; }
+
+        .progress-box { margin-top: 4px; position: relative; max-width: 400px; }
+        .progress-input {
+            width: 100%; height: 16px; cursor: pointer;
+            accent-color: var(--primary);
+            margin: 0;
+            display: block;
+        }
+        .progress-value-overlay {
+            position: absolute;
+            right: 0;
+            top: -18px;
+            font-size: 11px;
+            font-weight: 900;
+            color: var(--primary);
+        }
+
+        .verify-aside { 
+            width: 80px; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            border-left: 1px solid var(--border);
+            padding-left: 16px;
+        }
+        .verify-large-btn {
+            width: 100%;
+            height: 100%;
+            border: 1px solid var(--border);
+            background: #f8fafc;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            cursor: pointer;
+            padding: 8px 4px;
+            transition: all 0.2s;
+        }
+        .verify-large-btn i { width: 24px; height: 24px; }
+        .verify-large-btn span { font-size: 0.75rem; font-weight: 600; line-height: 1.2; text-align: center; }
+        .verify-large-btn.active {
+            background: var(--success);
+            color: white;
+            border-color: var(--success);
+        }
+        .verify-info { font-size: 9px; color: var(--text-muted); text-align: center; margin-top: 4px; }
+
+        /* Status Badge */
+        .badge {
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 99px;
+            text-align: center;
+            font-weight: 600;
+        }
+        .badge-pending { background: #fef3c7; color: #92400e; }
+        .badge-process { background: #dcfce7; color: #166534; }
+        .badge-done { background: #dbeafe; color: #1e40af; }
+
+        /* Hidden Items */
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- 1. Drop Zone / Initial Input -->
+    <div id="drop-zone">
+        <i data-lucide="upload-cloud"></i>
+        <h3>請輸入案號或拖入 JSON</h3>
+        <div id="manual-init" style="margin-top: 20px; display: flex; justify-content: center; gap: 10px;">
+            <input type="text" id="manualProjectNo" placeholder="案號 (例: 742)" style="padding: 10px; border: 1px solid var(--border); border-radius: 6px; width: 200px;">
+            <button class="btn btn-primary" onclick="startManualAudit()">開始審核</button>
+        </div>
+        <p style="margin-top: 15px; font-size: 0.825rem; color: var(--text-muted);">我們會自動載入該案場的最新雲端進度</p>
+    </div>
+
+    <!-- 2. Project Header -->
+    <header class="project-header" id="project-header">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+                <h1 id="h-project-name">載入中...</h1>
+                <span id="h-project-no" style="font-family: monospace; color: var(--text-muted);">#---</span>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-primary" onclick="syncToFirebase()">
+                    <i data-lucide="upload-cloud"></i> 同步至雲端
+                </button>
+                <button class="btn" onclick="exportData()">
+                    <i data-lucide="download-cloud"></i> 導出 JSON
+                </button>
+            </div>
+        </div>
+        <div class="meta-grid">
+            <div class="meta-item"><strong>總工項數</strong><span id="h-total">0</span></div>
+            <div class="meta-item"><strong>整體進度</strong><span id="h-overall">0%</span></div>
+            <div class="meta-item"><strong>匯出時間</strong><span id="h-ver">--</span></div>
+            <div class="meta-item"><strong>最後同步</strong><span id="h-sync">無紀錄</span></div>
+        </div>
+    </header>
+
+    <!-- 3. Cloud Settings Modal -->
+    <div id="cloud-modal" class="hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;">
+        <div style="background: white; padding: 24px; border-radius: 12px; width: 400px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);">
+            <h3 style="margin-top: 0;">Firebase 雲端配置</h3>
+            <div style="margin-bottom: 12px;">
+                <label style="font-size: 12px; display: block; margin-bottom: 4px;">Database URL</label>
+                <input id="fb-db-url" type="text" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;" placeholder="https://your-db.firebaseio.com">
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="font-size: 12px; display: block; margin-bottom: 4px;">GAS WebApp URL</label>
+                <input id="gas-url" type="text" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;" placeholder="https://script.google.com/macros/s/.../exec">
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;">
+                <button class="btn" onclick="closeCloudSettings()">取消</button>
+                <button class="btn btn-primary" onclick="saveCloudSettings()">儲存設定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Audit List Container -->
+    <main id="audit-list"></main>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+
+<script>
+    let appData = null;
+    let currentUser = { userId: 'unknown', displayName: '訪客' };
+    const FB_CONFIG_DEFAULT = {
+        databaseURL: "https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app",
+        gasURL: "https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec"
+    };
+    let fbConfig = JSON.parse(localStorage.getItem('fb_audit_config')) || FB_CONFIG_DEFAULT;
+
+    // 初始化 Firebase
+    if (!firebase.apps.length) {
+        firebase.initializeApp({ databaseURL: fbConfig.databaseURL });
+    }
+    const db = firebase.database();
+
+    // LIFF 初始化與身份識別
+    async function initLiff() {
+        const params = new URLSearchParams(window.location.search);
+        const urlUid = params.get('uid');
+        const urlName = params.get('userName');
+
+        // 1. 優先從 URL 取得 (由主控台跳轉過來時)
+        if (urlUid && urlName) {
+            currentUser = { userId: urlUid, displayName: urlName };
+            console.log('從 URL 取得身份:', currentUser.displayName);
+            return;
+        }
+
+        // 2. 嘗試 LIFF 登入
+        try {
+            await liff.init({ liffId: "2007974938-gOrjlzna" });
+            if (liff.isLoggedIn()) {
+                const profile = await liff.getProfile();
+                currentUser = {
+                    userId: profile.userId,
+                    displayName: profile.displayName
+                };
+                console.log('LIFF 已登入:', currentUser.displayName);
+                return;
+            }
+        } catch (err) {
+            console.warn('LIFF 初始化失敗或不支援 (Local Mode)', err);
+        }
+
+        // 3. 保底備案 (本地測試繞過)
+        setTestIdentity();
+    }
+
+    const dropZone = document.getElementById('drop-zone');
+    const auditList = document.getElementById('audit-list');
+    const cloudModal = document.getElementById('cloud-modal');
+
+    // Initialize Lucide safely
+    try {
+        lucide.createIcons();
+    } catch(err) {
+        console.warn('Lucide initialization minor error', err);
+    }
+
+    // --- Cloud Management ---
+    function openCloudSettings() {
+        document.getElementById('fb-db-url').value = fbConfig.databaseURL || '';
+        document.getElementById('gas-url').value = fbConfig.gasURL || '';
+        cloudModal.classList.remove('hidden');
+    }
+    function closeCloudSettings() { cloudModal.classList.add('hidden'); }
+    function saveCloudSettings() {
+        fbConfig.databaseURL = document.getElementById('fb-db-url').value;
+        fbConfig.gasURL = document.getElementById('gas-url').value;
+        localStorage.setItem('fb_audit_config', JSON.stringify(fbConfig));
+        closeCloudSettings();
+        alert('設定已儲存');
+    }
+
+    async function syncToFirebase() {
+        if (!appData) return;
+        if (!fbConfig.databaseURL) {
+            alert('請先點擊「雲端設定」配置 Firebase URL');
+            return openCloudSettings();
+        }
+
+        try {
+            // Initialize if not already
+            if (!firebase.apps.length) {
+                firebase.initializeApp({ databaseURL: fbConfig.databaseURL });
+            }
+
+            const db = firebase.database();
+            const projectNo = appData.案號 || 'UNKNOWN';
+            
+            // Re-calculate overall
+            refreshOverall();
+            
+            const nowDisplay = new Date().toLocaleString();
+            const syncData = JSON.parse(JSON.stringify({
+                context: appData,
+                audit_last_updated: nowDisplay,
+                sync_by: (currentUser && currentUser.displayName) ? currentUser.displayName : '本地測試員'
+            }));
+
+            await db.ref(`quotations/${projectNo}`).set(syncData);
+            const hSync = document.getElementById('h-sync');
+            if (hSync) hSync.innerText = nowDisplay;
+            
+            // [SPEC 12] Parallel sync to GAS Console
+            if (fbConfig.gasURL) {
+                await syncToConsole();
+            } else {
+                alert('☁️ Firebase 同步成功！\n(提示: 未設定 GAS URL，摘要未同步至主控台)');
+            }
+            
+        } catch (err) {
+            console.error(err);
+            alert('同步失敗: ' + err.message);
+        }
+    }
+
+    async function syncToConsole() {
+        if (!fbConfig.gasURL) return;
+        
+        try {
+            const sum = appData.total_summary || {};
+            const verifiedCount = appData.items.filter(it => it.verification && it.verification.is_ok).length;
+            
+            const payload = {
+                action: 'updateAuditSummary',
+                案號: appData.案號,
+                siteName: sum.siteName, 
+                audit_items_total: appData.items.length,
+                audit_items_verified: verifiedCount,
+                audit_percent: sum.overall_completion,
+                userId: currentUser.userId,
+                userName: currentUser.displayName
+            };
+
+            console.log('[LOG] 準備同步至 GAS 主控台:', payload);
+            
+            try {
+                const response = await fetch(fbConfig.gasURL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                console.log('[LOG] GAS 同步回報:', result);
+                if (result.success) {
+                    console.log('☁️ 雲端同步成功！1. Firebase 2. Google Sheets');
+                } else {
+                    console.error('Firebase 同步成功，但 GAS 更新失敗: ' + result.message);
+                }
+            } catch (fetchErr) {
+                console.warn('[LOG] CORS 或安全限制，改用隱形模式發送...', fetchErr);
+                // 隱形發送不依賴回應
+                await fetch(fbConfig.gasURL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify(payload)
+                });
+                console.log('☁️ 同步請求已發送！(提示: 本地開發環境限制讀取回報，請確認 Sheets 狀態)');
+            }
+        } catch (err) {
+            console.error('[LOG] GAS 同步過程產生崩潰錯誤:', err);
+            console.error('Firebase 同步成功，但 GAS 摘要同步失敗。');
+        }
+    }
+
+    function refreshOverall() {
+        if (!appData || !appData.items) return;
+        const count = appData.items.length;
+        if (count === 0) return;
+        const totalP = appData.items.reduce((acc, cur) => acc + (cur.completion_percent || 0), 0);
+        if (!appData.total_summary) appData.total_summary = {};
+        appData.total_summary.overall_completion = Math.round(totalP / count);
+        document.getElementById('h-overall').innerText = `${appData.total_summary.overall_completion}%`;
+    }
+
+    // --- Drag & Drop ---
+    // [v1.5] 移除檔案選取邏輯，僅保留手動案號輸入
+    dropZone.onclick = null; 
+    dropZone.classList.remove('active');
+    dropZone.style.cursor = 'default';
+
+    dropZone.ondragover = e => { e.preventDefault(); };
+    dropZone.ondrop = e => { e.preventDefault(); };
+
+    // [v1.5] 更新測試身份
+    function setTestIdentity() {
+        currentUser = {
+            userId: 'U12345',
+            displayName: '測試新員工',
+            shiftStartTime: '8:30',
+            shiftEndTime: '17:30',
+            身份: '員工',
+            班別: '標準制',
+            組別: '台南店',
+            權限: 2,
+            到職日: '2026-03-01',
+            彈性時間: 0,
+            pcName: 'TEST-PC-AUTO'
+        };
+        console.log('[LOG] 已載入測試員工身份:', currentUser);
+    }
+
+
+    async function loadFromFirebase(projectNo) {
+        // Ensure Firebase is initialized
+        if (!fbConfig.databaseURL) {
+            alert("請先設定 Firebase Database URL");
+            return;
+        }
+        
+        console.log(`⏳ 正在從雲端載入案號: ${projectNo}...`);
+        try {
+            if (!firebase.apps.length) {
+                firebase.initializeApp({ databaseURL: fbConfig.databaseURL });
+            }
+            const db = firebase.database();
+            const snapshot = await db.ref(`quotations/${projectNo}`).once('value');
+            const data = snapshot.val();
+            
+            if (data && data.context) {
+                console.log('✅ 成功從雲端抓取 Context:', data.context);
+                loadData(data.context);
+                document.getElementById('h-sync').innerText = data.last_updated || '剛剛';
+                
+                // [v1.4] 向 GAS 請求真實專案資訊 (名稱)
+                const projectNo = data.context.案號;
+                if (projectNo && projectNo !== 'UNKNOWN_NO') {
+                    fetchProjectMetadata(projectNo);
+                }
+            } else {
+                alert(`找不到案號 ${projectNo} 的雲端數據`);
+            }
+        } catch (err) {
+            console.error(err);
+            alert("雲端載入失敗: " + err.message);
+        }
+    }
+
+    async function fetchProjectMetadata(projectNo) {
+        if (!fbConfig.gasURL) return;
+        try {
+            // [MVP] 使用既有的 get_hub_projects_data 獲取所有案場，再本地篩選
+            const response = await fetch(`${fbConfig.gasURL}?page=get_hub_projects_data`, {
+                method: 'GET',
+            });
+            const result = await response.json();
+            
+            if (result.success && result.data) {
+                const targetNo = String(projectNo || '').trim();
+                const project = result.data.find(s => String(s['案號'] || '').trim() === targetNo);
+                if (project) {
+                    // 更新 UI 案場名稱
+                    document.getElementById('h-project-name').innerText = project.siteName || '未命名案場';
+                    
+                    // 同步回 appData
+                    if (appData && appData.total_summary) {
+                        appData.total_summary.siteName = project.siteName;
+                    }
+                }
+            }
+        } catch (err) { console.warn('無法獲取案場詳細資訊', err); }
+    }
+
+    // --- Data Management ---
+    function loadData(data) {
+        try {
+            console.log('開始執行 loadData，準備相容性處理...');
+            // 向下相容處理舊版未攜帶這些資訊的 JSON
+            if (!data.案號) data.案號 = 'UNKNOWN_NO';
+            if (!data.total_summary) data.total_summary = {};
+            if (data.items) {
+                data.items.forEach((item, idx) => {
+                    if (!item) return;
+                    if (item.completion_percent === undefined) item.completion_percent = 0;
+                    if (item.verification === undefined) item.verification = { is_ok: false };
+                });
+                data.items = data.items.filter(it => it !== null);
+            }
+
+            appData = data;
+            dropZone.classList.add('hidden');
+            document.getElementById('project-header').style.display = 'block';
+            
+            // Header
+            const sum = data.total_summary || {};
+            // 優先顯示 Firebase 內的案名與進度
+            const nameDisplay = (sum.siteName && sum.siteName !== "載入中...") ? sum.siteName : `案號 #${data.案號 || 'N/A'}`;
+            
+            document.getElementById('h-project-name').innerText = nameDisplay;
+            document.getElementById('h-project-no').innerText = `#${data.案號 || 'N/A'}`;
+            document.getElementById('h-total').innerText = (data.items || []).length;
+            document.getElementById('h-overall').innerText = `${sum.audit_percent || sum.overall_completion || 0}%`;
+            
+            const hVer = document.getElementById('h-ver');
+            if (hVer) hVer.innerText = sum.export_time || '--';
+
+            console.log('表頭更新完畢，準備呼叫 renderList...');
+            renderList();
+        } catch (err) {
+            console.error('❌ 執行 loadData 時產生崩潰錯誤:', err);
+            alert('讀取資料過程發生錯誤！請開啟 Console 檢查。');
+        }
+    }
+
+    function renderList() {
+        try {
+            console.log('進入 renderList()，總項目數:', (appData.items || []).length);
+            const items = appData.items || [];
+            if (items.length === 0) {
+                auditList.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-muted)">無工項資料</div>';
+                return;
+            }
+            
+            // Group by zone
+            const zones = {};
+            items.forEach((it, idx) => {
+                if (!it) return;
+                const z = it.zone || '未分類區域';
+                if(!zones[z]) zones[z] = [];
+                zones[z].push(it);
+            });
+
+            let finalHtml = '';
+            
+            Object.keys(zones).forEach((zName, zIdx) => {
+                finalHtml += `<section class="zone-block">`;
+                finalHtml += `
+                    <div class="zone-title" onclick="toggleZone('${zIdx}')">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <i data-lucide="map-pin" style="width:18px"></i> ${zName}
+                        </div>
+                        <i data-lucide="chevron-down" class="zone-chevron" id="chevron-${zIdx}"></i>
+                    </div>
+                    <div class="zone-content" id="zone-content-${zIdx}">
+                `;
+                
+                zones[zName].forEach(item => {
+                    const isVerified = item.verification && item.verification.is_ok;
+                    const statusText = item.completion_percent === 100 ? '完成' : (item.completion_percent > 0 ? '施工中' : '等候中');
+                    
+                    finalHtml += `
+                    <div class="item-row" id="row-${item.id}">
+                        <div class="item-content">
+                            <div class="item-info-line">
+                                <span class="status-tag" style="color: ${item.completion_percent === 100 ? 'var(--success)' : (item.completion_percent > 0 ? 'var(--primary)' : 'var(--pending)')}">
+                                    (${statusText})
+                                </span>
+                                <span class="item-name">${item.name || '未知工項'}</span>
+                                <span class="tag">${item.category_tag || '未分類'}</span>
+                                <span class="tag">${item.qty || '-'} ${item.unit || ''}</span>
+                            </div>
+                            <div class="item-spec">備註: ${item.spec || '無'}</div>
+                            <div class="progress-box" style="max-width: 200px;">
+                                <span class="progress-value-overlay">${item.completion_percent || 0}%</span>
+                                <input type="range" class="progress-input" min="0" max="100" value="${item.completion_percent || 0}" 
+                                    oninput="updateProgress('${item.id}', this.value)">
+                            </div>
+                        </div>
+                        <div class="verify-aside">
+                            <button class="verify-large-btn ${isVerified ? 'active' : ''}" onclick="toggleVerify('${item.id}')">
+                                <i data-lucide="${isVerified ? 'check-circle' : 'circle'}"></i> 
+                                <span>${isVerified ? '審核<br>完成' : '標註<br>完成'}</span>
+                            </button>
+                            <div class="verify-info">
+                                ${isVerified ? `${item.verification.verified_by || ''}` : ''}
+                            </div>
+                        </div>
+                    </div>`;
+                });
+                
+                finalHtml += `</section>`;
+            });
+
+            auditList.innerHTML = finalHtml;
+            
+            console.log('DOM 組裝完畢，準備執行 createIcons()');
+            try {
+                lucide.createIcons();
+            } catch (err) {
+                console.warn('渲染 DOM 後呼叫 lucide 失敗:', err);
+            }
+            console.log('renderList() 執行成功。');
+        } catch (err) {
+            console.error('❌ 執行 renderList 時產生崩潰錯誤:', err);
+            auditList.innerHTML = `<div style="color:red; padding: 20px;">渲染清單時發生不可預期的錯誤，請查看 Console！ (${err.message})</div>`;
+        }
+    }
+
+    function toggleZone(idx) {
+        const content = document.getElementById(`zone-content-${idx}`);
+        const chevron = document.getElementById(`chevron-${idx}`);
+        if (content) {
+            content.classList.toggle('collapsed');
+            if (chevron) {
+                const isCollapsed = content.classList.contains('collapsed');
+                chevron.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+            }
+        }
+    }
+
+    // --- Actions ---
+    function startManualAudit() {
+        const no = document.getElementById('manualProjectNo').value.trim();
+        if (!no) { alert('請輸入案號！'); return; }
+        
+        // 模擬載入狀態
+        dropZone.innerHTML = '<i data-lucide="loader" class="spinner"></i><h3>正在從雲端同步案號 #' + no + ' ...</h3>';
+        lucide.createIcons();
+        
+        // 修改 URL (不刷新頁面) 並啟動
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.set('projectNo', no);
+        window.history.pushState({}, '', newUrl);
+        
+        loadDataFromFirebase(no);
+    }
+
+    async function loadDataFromFirebase(projectNo) {
+        if (!fbConfig.databaseURL) return;
+        const dbRef = db.ref(`quotations/${projectNo}`);
+        const snapshot = await dbRef.once('value');
+        const data = snapshot.val();
+        
+        if (data && data.context) {
+            appData = data.context;
+            // 標記為雲端同步版本
+            appData.from_cloud = true;
+            appData.last_sync = data.last_sync;
+            
+            document.getElementById('h-sync').innerText = data.last_sync || '剛更新';
+            
+            // 隱藏 DropZone 並顯示 Header
+            dropZone.classList.add('hidden');
+            document.getElementById('project-header').classList.remove('hidden');
+            
+            loadData(appData);
+            fetchProjectMetadata(projectNo); // 額外抓案名
+        } else {
+            alert('查無此案號的雲端報價單資料！請先使用 BudgetWeb 進行同步。');
+            location.reload(); // 重置
+        }
+    }
+
+    function updateProgress(id, val) {
+        const item = appData.items.find(it => it.id === id);
+        if(!item) return;
+        const oldVal = item.completion_percent || 0;
+        item.completion_percent = parseInt(val);
+        
+        // 紀錄日誌
+        if (!item.audit_logs) item.audit_logs = [];
+        item.audit_logs.push({
+            ts: Date.now(),
+            at: new Date().toLocaleString(),
+            user: currentUser.displayName,
+            action: `進度變更: ${oldVal}% -> ${val}%`
+        });
+
+        // Update UI locally (fast feedback)
+        const row = document.getElementById(`row-${id}`);
+        if(row) {
+            const valLabel = row.querySelector('.progress-value-overlay');
+            if(valLabel) valLabel.innerText = `${val}%`;
+
+            const statusTag = row.querySelector('.status-tag');
+            if(statusTag) {
+                const statusText = val == 100 ? '完成' : (val > 0 ? '施工中' : '等候中');
+                statusTag.innerText = `(${statusText})`;
+                statusTag.style.color = val == 100 ? 'var(--success)' : (val > 0 ? 'var(--primary)' : 'var(--pending)');
+            }
+        }
+    }
+
+    function toggleVerify(id) {
+        const item = appData.items.find(it => it.id === id);
+        if(!item) return;
+
+        if (!item.verification) item.verification = { is_ok: false };
+
+        if (item.verification.is_ok) {
+            // Cancel
+            item.verification = { is_ok: false };
+            if (!item.audit_logs) item.audit_logs = [];
+            item.audit_logs.push({
+                ts: Date.now(),
+                at: new Date().toLocaleString(),
+                user: currentUser.displayName,
+                action: `取消標註完成`
+            });
+        } else {
+            // Set
+            item.verification = {
+                is_ok: true,
+                verified_by: currentUser.displayName,
+                verified_at: new Date().toLocaleString(),
+                verified_uid: currentUser.userId
+            };
+            // 標註完成即直接 100%
+            item.completion_percent = 100;
+
+            if (!item.audit_logs) item.audit_logs = [];
+            item.audit_logs.push({
+                ts: Date.now(),
+                at: new Date().toLocaleString(),
+                user: currentUser.displayName,
+                action: `標註完成`
+            });
+        }
+        
+        // Refresh this item via re-rendering the list
+        renderList();
+    }
+
+    function exportData() {
+        if (!appData) return;
+        
+        // Recalculate overall
+        const count = appData.items.length;
+        const totalP = appData.items.reduce((acc, cur) => acc + (cur.completion_percent || 0), 0);
+        appData.total_summary.overall_completion = Math.round(totalP / count);
+
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData, null, 2));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", `${appData.案號}_updated.json`);
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    }
+    // --- Initialization ---
+    async function init() {
+        await initLiff();
+        const params = new URLSearchParams(window.location.search);
+        const projectNo = params.get('projectNo');
+        if (projectNo) {
+            // 自動模式：隱藏選擇器，直接同步
+            dropZone.innerHTML = '<i data-lucide="loader" class="spinner"></i><h3>自動同步中...</h3>';
+            lucide.createIcons();
+            loadDataFromFirebase(projectNo);
+        } else {
+            // 手動模式：顯示輸入框
+            dropZone.classList.remove('hidden');
+        }
+    }
+    
+    init();
+    refreshOverall();
+</script>
+
+</body>
+</html>
