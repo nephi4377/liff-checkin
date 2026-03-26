@@ -146,7 +146,28 @@
             transition: all 0.2s;
         }
         .verify-large-btn i { width: 24px; height: 24px; }
-        .verify-large-btn span { font-size: 0.75rem; font-weight: 600; line-height: 1.2; text-align: center; }
+        .verify-aside .verify-large-btn span { font-size: 14px; font-weight: bold; line-height: 1.2; }
+
+        /* [v2.0] 分類切換下拉選單樣式 */
+        .category-editor {
+            font-size: 11px;
+            padding: 2px 4px;
+            border-radius: 4px;
+            border: 1px solid #d1d5db;
+            background: white;
+            cursor: pointer;
+        }
+
+        /* 已完成專區樣式 */
+        .zone-completed {
+            border-top: 3px solid var(--success);
+            margin-top: 40px;
+            opacity: 0.9;
+        }
+        .zone-completed .zone-title {
+            background: #f0fdf4;
+            color: #166534;
+        }
         .verify-large-btn.active {
             background: var(--success);
             color: white;
@@ -165,6 +186,26 @@
         .badge-pending { background: #fef3c7; color: #92400e; }
         .badge-process { background: #dcfce7; color: #166534; }
         .badge-done { background: #dbeafe; color: #1e40af; }
+
+        /* 浮動工具列 [v2.2] 精簡左置版 */
+        .floating-toolbar {
+            position: fixed;
+            bottom: 30px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 5px 12px;
+            border-radius: 50px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            display: none;
+            gap: 0;
+            z-index: 1000;
+            border: 1px solid var(--border);
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        .floating-toolbar .btn { padding: 4px 10px; font-size: 0.75rem; box-shadow: none; border: none; background: transparent; color: var(--primary); font-weight: 700; }
+        .floating-toolbar .btn-primary { background: var(--primary); color: white; border-radius: 50px; }
+        .floating-toolbar i { width: 14px; height: 14px; margin-right: 4px; }
 
         /* Hidden Items */
         .hidden { display: none !important; }
@@ -229,6 +270,13 @@
 
     <!-- 4. Audit List Container -->
     <main id="audit-list"></main>
+
+    <!-- 5. Floating Toolbar [v2.2] -->
+    <div id="floating-toolbar" class="floating-toolbar">
+        <button class="btn btn-primary" onclick="syncToFirebase()">
+            <i data-lucide="upload-cloud"></i> 同步至雲端
+        </button>
+    </div>
 </div>
 
 <!-- Firebase SDK -->
@@ -336,6 +384,13 @@
             }));
 
             await db.ref(`quotations/${projectNo}`).set(syncData);
+            
+            // [v2.1] 同步成功後，將「已完成項」正式標註為 UI_DONE，使其在下次 render 時下移
+            appData.items.forEach(it => {
+                if (it.completion_percent === 100) it.is_ui_done = true;
+            });
+            renderList(); // 同步後執行一次完整重排
+            
             const hSync = document.getElementById('h-sync');
             if (hSync) hSync.innerText = nowDisplay;
             
@@ -402,13 +457,57 @@
 
     function refreshOverall() {
         if (!appData || !appData.items) return;
-        const count = appData.items.length;
-        if (count === 0) return;
-        const totalP = appData.items.reduce((acc, cur) => acc + (cur.completion_percent || 0), 0);
-        if (!appData.total_summary) appData.total_summary = {};
-        appData.total_summary.overall_completion = Math.round(totalP / count);
-        document.getElementById('h-overall').innerText = `${appData.total_summary.overall_completion}%`;
+        const total = appData.items.length;
+        const done = appData.items.filter(it => it.completion_percent === 100).length;
+        const overall = Math.round((appData.items.reduce((acc, cur) => acc + (cur.completion_percent || 0), 0)) / total) || 0;
+        
+        if (appData.total_summary) {
+            appData.total_summary.overall_completion = overall;
+        }
+        document.getElementById('h-total').innerText = total;
+        document.getElementById('h-overall').innerText = `${overall}%`;
+        saveToCache();
     }
+
+    // [v2.0] 本地 24 小時快取
+    function saveToCache() {
+        if (!appData) return;
+        const cacheObj = {
+            data: appData,
+            timestamp: Date.now()
+        };
+        localStorage.setItem(`audit_cache_${appData.案號}`, JSON.stringify(cacheObj));
+        console.log('[Cache] 已更新本地快取');
+    }
+
+    function loadFromCache(projectNo) {
+        const raw = localStorage.getItem(`audit_cache_${projectNo}`);
+        if (!raw) return null;
+        try {
+            const cacheObj = JSON.parse(raw);
+            const hours = (Date.now() - cacheObj.timestamp) / (1000 * 60 * 60);
+            if (hours < 24) {
+                console.log(`[Cache] 找到 24 小時內快取 (${Math.round(hours)}h ago)，準備載入...`);
+                return cacheObj.data;
+            }
+            console.log('[Cache] 快取已過期 (超過 24 小時)');
+            return null;
+        } catch (e) { return null; }
+    }
+
+    // [v2.0] 更新工項分類
+    window.updateCategory = async (itemId, newCategory) => {
+        const item = appData.items.find(it => it.id === itemId);
+        if (!item) return;
+
+        console.log(`[Category] 更新工項 ${itemId} 分類為: ${newCategory}`);
+        item.category_tag = newCategory;
+        
+        // 不需要全量渲染，只需要本地更新數據並觸發 Firebase 同步
+        // 為了讓 UI 反饋，這裡還是調用 render 比較保險，但未來可改為局部更新
+        renderList();
+        syncToFirebase();
+    };
 
     // --- Drag & Drop ---
     // [v1.5] 移除檔案選取邏輯，僅保留手動案號輸入
@@ -510,6 +609,8 @@
                     if (!item) return;
                     if (item.completion_percent === undefined) item.completion_percent = 0;
                     if (item.verification === undefined) item.verification = { is_ok: false };
+                    // [v2.1] 初始解析時，同步視覺狀態
+                    item.is_ui_done = (item.completion_percent === 100);
                 });
                 data.items = data.items.filter(it => it !== null);
             }
@@ -517,6 +618,7 @@
             appData = data;
             dropZone.classList.add('hidden');
             document.getElementById('project-header').style.display = 'block';
+            document.getElementById('floating-toolbar').style.display = 'flex';
             
             // Header
             const sum = data.total_summary || {};
@@ -548,9 +650,13 @@
                 return;
             }
             
-            // Group by zone
+            // [v2.1] 分離「已完成」項目 (優化：根據 is_ui_done 而非即時 % 進行分組)
+            const activeItems = items.filter(it => !it.is_ui_done);
+            const doneItems = items.filter(it => it.is_ui_done);
+
+            // Group active items by zone
             const zones = {};
-            items.forEach((it, idx) => {
+            activeItems.forEach((it, idx) => {
                 if (!it) return;
                 const z = it.zone || '未分類區域';
                 if(!zones[z]) zones[z] = [];
@@ -559,6 +665,7 @@
 
             let finalHtml = '';
             
+            // 渲染 active zones
             Object.keys(zones).forEach((zName, zIdx) => {
                 finalHtml += `<section class="zone-block">`;
                 finalHtml += `
@@ -572,109 +679,94 @@
                 `;
                 
                 zones[zName].forEach(item => {
-                    const isVerified = item.verification && item.verification.is_ok;
-                    const statusText = item.completion_percent === 100 ? '完成' : (item.completion_percent > 0 ? '施工中' : '等候中');
-                    
-                    finalHtml += `
-                    <div class="item-row" id="row-${item.id}">
-                        <div class="item-content">
-                            <div class="item-info-line">
-                                <span class="status-tag" style="color: ${item.completion_percent === 100 ? 'var(--success)' : (item.completion_percent > 0 ? 'var(--primary)' : 'var(--pending)')}">
-                                    (${statusText})
-                                </span>
-                                <span class="item-name">${item.name || '未知工項'}</span>
-                                <span class="tag">${item.category_tag || '未分類'}</span>
-                                <span class="tag">${item.qty || '-'} ${item.unit || ''}</span>
-                            </div>
-                            <div class="item-spec">備註: ${item.spec || '無'}</div>
-                            <div class="progress-box" style="max-width: 200px;">
-                                <span class="progress-value-overlay">${item.completion_percent || 0}%</span>
-                                <input type="range" class="progress-input" min="0" max="100" value="${item.completion_percent || 0}" 
-                                    oninput="updateProgress('${item.id}', this.value)">
-                            </div>
-                        </div>
-                        <div class="verify-aside">
-                            <button class="verify-large-btn ${isVerified ? 'active' : ''}" onclick="toggleVerify('${item.id}')">
-                                <i data-lucide="${isVerified ? 'check-circle' : 'circle'}"></i> 
-                                <span>${isVerified ? '審核<br>完成' : '標註<br>完成'}</span>
-                            </button>
-                            <div class="verify-info">
-                                ${isVerified ? `${item.verification.verified_by || ''}` : ''}
-                            </div>
-                        </div>
-                    </div>`;
+                    finalHtml += renderItemHtml(item);
                 });
                 
-                finalHtml += `</section>`;
+                finalHtml += `</div></section>`;
             });
 
-            auditList.innerHTML = finalHtml;
-            
-            console.log('DOM 組裝完畢，準備執行 createIcons()');
-            try {
-                lucide.createIcons();
-            } catch (err) {
-                console.warn('渲染 DOM 後呼叫 lucide 失敗:', err);
+            // [v2.0] 渲染已完成彙整區
+            if (doneItems.length > 0) {
+                const doneIdx = "DONE_GROUP";
+                finalHtml += `<section class="zone-block zone-completed">`;
+                finalHtml += `
+                    <div class="zone-title" onclick="toggleZone('${doneIdx}')">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <i data-lucide="check-circle" style="width:18px; color:var(--success)"></i> ✅ 已完成項目 (${doneItems.length} 項)
+                        </div>
+                        <i data-lucide="chevron-down" class="zone-chevron" id="chevron-${doneIdx}"></i>
+                    </div>
+                    <div class="zone-content" id="zone-content-${doneIdx}" style="display:none;">
+                `;
+                doneItems.forEach(item => {
+                    finalHtml += renderItemHtml(item);
+                });
+                finalHtml += `</div></section>`;
             }
-            console.log('renderList() 執行成功。');
+
+            auditList.innerHTML = finalHtml;
+            lucide.createIcons();
+
         } catch (err) {
             console.error('❌ 執行 renderList 時產生崩潰錯誤:', err);
             auditList.innerHTML = `<div style="color:red; padding: 20px;">渲染清單時發生不可預期的錯誤，請查看 Console！ (${err.message})</div>`;
         }
     }
 
-    function toggleZone(idx) {
-        const content = document.getElementById(`zone-content-${idx}`);
-        const chevron = document.getElementById(`chevron-${idx}`);
+    // [v2.0] 抽離單個工項渲染邏輯
+    function renderItemHtml(item) {
+        const isVerified = item.verification && item.verification.is_ok;
+        const statusText = item.completion_percent === 100 ? '完成' : (item.completion_percent > 0 ? '施工中' : '等候中');
+        const catList = [
+            "施工保護", "拆除工程", "泥作工程", "水電工程", "木作工程", 
+            "系統櫃體", "油漆工程", "廚具設備", "地板工程", "清潔工程", "其他"
+        ];
+        
+        return `
+        <div class="item-row" id="row-${item.id}">
+            <div class="item-content">
+                <div class="item-info-line">
+                    <span class="status-tag" style="color: ${item.completion_percent === 100 ? 'var(--success)' : (item.completion_percent > 0 ? 'var(--primary)' : 'var(--pending)')}">
+                        (${statusText})
+                    </span>
+                    <span class="item-name">${item.name || '未知工項'}</span>
+                    
+                    <select class="category-editor" onchange="updateCategory('${item.id}', this.value)">
+                        ${catList.map(c => `<option value="${c}" ${item.category_tag === c ? 'selected' : ''}>${c}</option>`).join('')}
+                    </select>
+
+                    <span class="tag">${item.qty || '-'} ${item.unit || ''}</span>
+                </div>
+                <div class="item-spec">備註: ${item.spec || '無'}</div>
+                <div class="progress-box" style="max-width: 200px;">
+                    <span class="progress-value-overlay">${item.completion_percent || 0}%</span>
+                    <input type="range" class="progress-input" min="0" max="100" value="${item.completion_percent || 0}" 
+                        oninput="updateProgress('${item.id}', this.value)">
+                </div>
+            </div>
+            <div class="verify-aside">
+                <button class="verify-large-btn ${isVerified ? 'active' : ''}" onclick="toggleVerify('${item.id}')">
+                    <i data-lucide="${isVerified ? 'check-circle' : 'circle'}"></i> 
+                    <span>${isVerified ? '審核<br>完成' : '標註<br>完成'}</span>
+                </button>
+                <div class="verify-info">
+                    ${isVerified ? `${item.verification.verified_by || ''}` : ''}
+                </div>
+            </div>
+        </div>`;
+    }
+
+    function toggleZone(contentId) {
+        const content = document.getElementById(`zone-content-${contentId}`);
+        const chevron = document.getElementById(`chevron-${contentId}`);
         if (content) {
-            content.classList.toggle('collapsed');
+            const isHidden = content.style.display === 'none';
+            content.style.display = isHidden ? 'block' : 'none';
             if (chevron) {
-                const isCollapsed = content.classList.contains('collapsed');
-                chevron.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+                chevron.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(-90deg)';
             }
-        }
-    }
-
-    // --- Actions ---
-    function startManualAudit() {
-        const no = document.getElementById('manualProjectNo').value.trim();
-        if (!no) { alert('請輸入案號！'); return; }
-        
-        // 模擬載入狀態
-        dropZone.innerHTML = '<i data-lucide="loader" class="spinner"></i><h3>正在從雲端同步案號 #' + no + ' ...</h3>';
-        lucide.createIcons();
-        
-        // 修改 URL (不刷新頁面) 並啟動
-        const newUrl = new URL(window.location.href);
-        newUrl.searchParams.set('projectNo', no);
-        window.history.pushState({}, '', newUrl);
-        
-        loadDataFromFirebase(no);
-    }
-
-    async function loadDataFromFirebase(projectNo) {
-        if (!fbConfig.databaseURL) return;
-        const dbRef = db.ref(`quotations/${projectNo}`);
-        const snapshot = await dbRef.once('value');
-        const data = snapshot.val();
-        
-        if (data && data.context) {
-            appData = data.context;
-            // 標記為雲端同步版本
-            appData.from_cloud = true;
-            appData.last_sync = data.last_sync;
-            
-            document.getElementById('h-sync').innerText = data.last_sync || '剛更新';
-            
-            // 隱藏 DropZone 並顯示 Header
-            dropZone.classList.add('hidden');
-            document.getElementById('project-header').classList.remove('hidden');
-            
-            loadData(appData);
-            fetchProjectMetadata(projectNo); // 額外抓案名
-        } else {
-            alert('查無此案號的雲端報價單資料！請先使用 BudgetWeb 進行同步。');
-            location.reload(); // 重置
+            // 確保展開後 Lucide 圖標正確 (針對動態內容)
+            lucide.createIcons();
         }
     }
 
@@ -684,7 +776,6 @@
         const oldVal = item.completion_percent || 0;
         item.completion_percent = parseInt(val);
         
-        // 紀錄日誌
         if (!item.audit_logs) item.audit_logs = [];
         item.audit_logs.push({
             ts: Date.now(),
@@ -693,12 +784,10 @@
             action: `進度變更: ${oldVal}% -> ${val}%`
         });
 
-        // Update UI locally (fast feedback)
         const row = document.getElementById(`row-${id}`);
         if(row) {
             const valLabel = row.querySelector('.progress-value-overlay');
             if(valLabel) valLabel.innerText = `${val}%`;
-
             const statusTag = row.querySelector('.status-tag');
             if(statusTag) {
                 const statusText = val == 100 ? '完成' : (val > 0 ? '施工中' : '等候中');
@@ -706,6 +795,12 @@
                 statusTag.style.color = val == 100 ? 'var(--success)' : (val > 0 ? 'var(--primary)' : 'var(--pending)');
             }
         }
+        
+        if (val == 100) {
+            // [v2.1] 標註為 100% 時，不觸發全量 renderList，僅更新本地數據
+            // 等到同步或重整時才會歸類至下方
+        }
+        refreshOverall();
     }
 
     function toggleVerify(id) {
@@ -715,74 +810,97 @@
         if (!item.verification) item.verification = { is_ok: false };
 
         if (item.verification.is_ok) {
-            // Cancel
             item.verification = { is_ok: false };
-            if (!item.audit_logs) item.audit_logs = [];
-            item.audit_logs.push({
-                ts: Date.now(),
-                at: new Date().toLocaleString(),
-                user: currentUser.displayName,
-                action: `取消標註完成`
-            });
         } else {
-            // Set
             item.verification = {
                 is_ok: true,
                 verified_by: currentUser.displayName,
                 verified_at: new Date().toLocaleString(),
                 verified_uid: currentUser.userId
             };
-            // 標註完成即直接 100%
             item.completion_percent = 100;
-
-            if (!item.audit_logs) item.audit_logs = [];
-            item.audit_logs.push({
-                ts: Date.now(),
-                at: new Date().toLocaleString(),
-                user: currentUser.displayName,
-                action: `標註完成`
-            });
         }
-        
-        // Refresh this item via re-rendering the list
-        renderList();
+        // [v2.1] toggleVerify 不再觸發全量 renderList，除非您希望立即移動
+        // 為了維持 UX 穩定性，這裡只調用 refreshOverall 確保頂部數字更新
+        // 並局部更新當前 row 的 UI
+        const row = document.getElementById(`row-${id}`);
+        if (row) {
+            const isDone = item.completion_percent === 100;
+            const btn = row.querySelector('.verify-large-btn');
+            const icon = row.querySelector('.verify-large-btn i');
+            const statusTag = row.querySelector('.status-tag');
+            
+            if (btn) btn.classList.toggle('active', item.verification.is_ok);
+            if (icon) icon.setAttribute('data-lucide', item.verification.is_ok ? 'check-circle' : 'circle');
+            if (statusTag) {
+                statusTag.innerText = `(${isDone ? '完成' : '施工中'})`;
+                statusTag.style.color = isDone ? 'var(--success)' : 'var(--primary)';
+            }
+            lucide.createIcons();
+        }
+        refreshOverall();
     }
 
     function exportData() {
         if (!appData) return;
-        
-        // Recalculate overall
-        const count = appData.items.length;
-        const totalP = appData.items.reduce((acc, cur) => acc + (cur.completion_percent || 0), 0);
-        appData.total_summary.overall_completion = Math.round(totalP / count);
-
+        refreshOverall();
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData, null, 2));
         const downloadAnchorNode = document.createElement('a');
         downloadAnchorNode.setAttribute("href", dataStr);
-        downloadAnchorNode.setAttribute("download", `${appData.案號}_updated.json`);
+        downloadAnchorNode.setAttribute("download", `${appData.案號 || 'project'}_audit_${Date.now()}.json`);
         document.body.appendChild(downloadAnchorNode);
         downloadAnchorNode.click();
         downloadAnchorNode.remove();
     }
-    // --- Initialization ---
+
     async function init() {
+        console.log('[Init] 啟動驗收器...');
         await initLiff();
         const params = new URLSearchParams(window.location.search);
         const projectNo = params.get('projectNo');
         if (projectNo) {
-            // 自動模式：隱藏選擇器，直接同步
-            dropZone.innerHTML = '<i data-lucide="loader" class="spinner"></i><h3>自動同步中...</h3>';
+            dropZone.innerHTML = '<i data-lucide="loader" class="spinner"></i><h3>雲端同步中...</h3>';
             lucide.createIcons();
-            loadDataFromFirebase(projectNo);
+            loadFromFirebase(projectNo);
         } else {
-            // 手動模式：顯示輸入框
             dropZone.classList.remove('hidden');
         }
     }
-    
-    init();
-    refreshOverall();
-</script>
 
+    window.startManualAudit = () => {
+        const no = document.getElementById('manualProjectNo').value.trim();
+        if (!no) return alert('請輸入案號');
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.set('projectNo', no);
+        window.history.pushState({}, '', newUrl);
+        init();
+    };
+    
+    // [v2.2] 捲動監聽
+    window.addEventListener('scroll', () => {
+        const toolbar = document.getElementById('floating-toolbar');
+        if (!toolbar || toolbar.style.display === 'none' && !appData) return;
+        
+        // 如果捲動高度小於 100 (接近頂部)，則隱藏浮動列
+        if (window.scrollY < 120) {
+            toolbar.style.opacity = '0';
+            toolbar.style.pointerEvents = 'none';
+        } else {
+            toolbar.style.opacity = '1';
+            toolbar.style.pointerEvents = 'auto';
+            if (toolbar.style.display !== 'flex') toolbar.style.display = 'flex';
+        }
+    });
+
+    // [v2.2] 啟動器
+    async function start() {
+        console.log('[Init] 啟動驗收器...');
+        await initLiff();
+        init();
+        console.log('[Init] 啟動流程完畢。');
+    }
+
+    start();
+</script>
 </body>
 </html>

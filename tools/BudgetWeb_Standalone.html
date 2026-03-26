@@ -187,18 +187,62 @@
             transition: border-color 0.2s;
         }
         .edit-input:focus { border-color: #9ca3af; outline: none; }
-        .pair-tag {
-            display: inline-block;
-            padding: 1px 6px;
-            border-radius: 10px;
-            font-size: 10px;
-            font-weight: bold;
-            color: white;
-            margin-left: 5px;
+        /* 浮動控制列 */
+        .floating-toolbar {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 400px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(8px);
+            padding: 12px 20px;
+            border-radius: 50px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+
+        .floating-toolbar .btn {
+            margin: 0;
+            width: auto;
+            flex: 1;
+            border-radius: 25px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        /* 快取恢復提示 */
+        #cacheNotify {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #fffbeb;
+            border: 1px solid #f59e0b;
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            z-index: 1001;
+            display: none;
+            align-items: center;
+            gap: 15px;
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
+
+<div id="cacheNotify">
+    <span>🕵️ 偵測到上次未完成的解析紀錄，是否恢復？</span>
+    <div style="display:flex; gap:8px;">
+        <button onclick="restoreCache()" style="background:#f59e0b; color:white; border:none; padding:5px 12px; border-radius:4px; cursor:pointer;">恢復</button>
+        <button onclick="clearCacheNotify()" style="background:#ccc; border:none; padding:5px 12px; border-radius:4px; cursor:pointer;">忽略</button>
+    </div>
+</div>
 
 <div class="container">
     <header>
@@ -231,7 +275,11 @@
         <button id="processBtn" class="btn" style="display:block; margin-top:15px; background-color:var(--primary)">🚀 開始精煉解析</button>
     </div>
 
-    <button id="downloadBtn" class="btn btn-download">📥 確認無誤，下載 Context JSON</button>
+    <button id="downloadBtn" class="btn btn-download">📥 下載 Context JSON (開發者用)</button>
+
+    <div id="floatingToolbar" class="floating-toolbar">
+        <button id="floatSyncBtn" class="btn" style="background-color:#f59e0b; font-weight:bold; display:block;">☁️ 同步至雲端並開啟驗收表</button>
+    </div>
 
     <div id="addItemBox" class="add-item-box">
         <h4 style="margin:0 0 10px 0; color:var(--secondary)">➕ 手動增加工項</h4>
@@ -340,16 +388,16 @@
     const METADATA_KEYWORDS = ['住址', '電話', '簽名', '定金', '支付', '發票', '尾款', '示意3d', '規劃費', '稅', '估價單', '有效為一個月'];
     
     const CATEGORY_RULES = {
-        '施工保護': ['保護', '地坪保護', '防塵'],
-        '拆除工程': ['拆除', '清運', '廢棄物'],
-        '泥作工程': ['磁磚', '大理石', '砌牆', '防水', '泥作', '石紋', '填縫'],
-        '水電工程': ['插座', '配線', '開關', '燈具', '迴路', '弱電', '專用迴路', '網路', '移位', '感應燈'],
-        '木作工程': ['天花板', '隔間', '門', '層板', '木', '包管', '冷氣管', '平釘', '間照', '封板', '美耐板', '木芯板', '矽酸鈣'],
+        '施工保護': ['保護', '地坪保護', '防塵', '包覆'],
+        '拆除工程': ['拆除', '清運', '廢棄物', '打除', '搬運'],
+        '泥作工程': ['磁磚', '大理石', '砌牆', '防水', '泥作', '石紋', '填縫', '打底', '貼磚', '磨石子', '洗石子', '抿石子', '水泥砂漿'],
+        '油漆工程': ['批土', '噴漆', '乳膠漆', '水泥漆', '油漆', '得利', '虹牌', '跳色', '刷漆', '水性漆', '色漆', '藝術漆', 'ab膠', '木作修補', '填縫'],
+        '水電工程': ['插座', '配線', '開關', '燈具', '迴路', '弱電', '專用迴路', '網路', '移位', '感應燈', 'tv', '開關位移', '強電', '管路', '接線', '明管'],
+        '木作工程': ['天花板', '隔間', '門', '層板', '木', '包管', '冷氣管', '平釘', '間照', '封板', '美耐板', '木芯板', '矽酸鈣', '隔間牆', '電視牆', '半腰牆', '壁板', '背板'],
         '系統櫃體': ['櫃', '櫥', '衣', '鞋', '高櫃', '矮櫃', '抽屜'],
-        '油漆工程': ['批土', '噴漆', '乳膠漆', '水泥漆', '油漆', '得利', '虹牌', '跳色'],
         '廚具設備': ['廚具', '水槽', '烘碗機', '瓦斯爐', '人造石', '龍頭'],
-        '地板工程': ['超耐磨', '地板', '卡扣', '拋光', '拼花'],
-        '清潔工程': ['粗清', '細清']
+        '地板工程': ['超耐磨', '地板', '卡扣', '拼花', 'spc', '塑膠地磚'],
+        '清潔工程': ['粗清', '細清', '廢棄物', '吸塵']
     };
 
     function getCategory(name, spec) {
@@ -434,6 +482,7 @@
         if (selectedSheets.length === 0) { alert("請至少選擇一個分頁！"); return; }
 
         status.innerText = "⏳ 正在建立全案例稽核對照表...";
+        processedData = { total_summary: {}, items: [] }; 
         let allItems = [];
         let itemCount = 0;
 
@@ -518,53 +567,28 @@
                     
                     // 額外排除關鍵字 (如：估價單標題、條款等)
                     if (METADATA_KEYWORDS.some(kw => nameVal.includes(kw))) isItem = false;
-                    if (SENSITIVE_KEYWORDS.some(kw => nameVal.includes(kw))) isItem = false;
-
+                    
                     if (isItem) {
-                        itemCount++;
-                        allItems.push({
-                            type: 'item',
-                            raw: rawLine,
-                            data: {
-                                id: `ITEM_${String(itemCount).padStart(3, '0')}`,
-                                zone: currentZone,
-                                name: name,
-                                spec: String(row[colMapping.spec] || "").trim(),
-                                qty: String(row[colMapping.qty] || "").trim() || "1",
-                                unit: String(row[colMapping.unit] || "").trim() || "式",
-                                category_tag: getCategory(name, ""),
-                                sheet_source: sheetName,
-                                raw_line: rawLine
-                            }
-                        });
-                    } else {
-                        // [v1.8] 不滿足五欄條件的行，統一判定為 raw (自動排除)
-                        // 這樣在 UI 上會顯示「自動排除」，且右側會有「＋」按鈕供人工點擊加入
-                        allItems.push({ type: 'raw', raw: rawLine, row_data: row, sheet_source: sheetName, zone: currentZone });
+                        allItems.push({ type: 'item', zone: currentZone, raw: rawLine, data: {
+                            id: `ITEM_${i}`, zone: currentZone, name: nameVal, spec: String(row[colMapping.spec] || "").trim(),
+                            qty: qtyVal, unit: unitVal, price: totalPriceVal, 
+                            category_tag: getCategory(nameVal, String(row[colMapping.spec] || "").trim()),
+                            sheet_source: sheetName, raw_line: rawLine
+                        }});
                     }
                 }
             });
 
-            processedData = { 
-                total_summary: {
-                    total_items: itemCount,
-                    source_sheets: selectedSheets,
-                    export_time: new Date().toLocaleString()
-                },
-                items: allItems 
-            };
-            
-            // 執行對比分析
+            processedData.items = allItems;
             findPairs(processedData.items);
-            
             renderPreview();
-            status.innerHTML = `✅ 稽核表已生成！共偵漏抓取 ${itemCount} 項工項。`;
-            previewArea.style.display = 'block';
+            
+            status.innerText = `✅ 解析完成！共偵測到 ${processedData.items.filter(it => it.type==='item').length} 個有效工項。`;
             downloadBtn.style.display = 'block';
-            document.getElementById('addItemBox').style.display = 'block';
-
+            previewArea.style.display = 'block';
+            
         } catch (err) {
-            status.innerText = "❌ 解析錯誤: " + err.message;
+            status.innerText = "❌ 解析失敗: " + err.message;
             console.error(err);
         }
     });
@@ -572,23 +596,19 @@
     function renderPreview() {
         if (!processedData) return;
         
-        // 確保獲取最新的 DOM 參考
         const previewBody = document.getElementById('previewBody');
-        if (!previewBody) {
-            console.error('[Render] 找不到 previewBody 元素');
-            return;
-        }
+        if (!previewBody) return;
 
-        // 1. 取得所有「作廢除外」的分區
+        // 1. 取得分區清單
         const allZones = [...new Set(processedData.items.map(it => {
             if (it.type === 'header') return it.is_cancelled ? null : it.zone;
             if (it.type === 'item') return it.data?.zone;
             return null;
         }))].filter(Boolean).sort();
-        console.log('[Debug] 取得全量分區清單:', allZones);
+
         const allCats = Object.keys(CATEGORY_RULES).concat(["其他"]);
 
-        // 2. 生成預覽 HTML
+        // 2. 生成預覽 HTML (移除自動合併邏輯)
         previewBody.innerHTML = processedData.items.map((row, idx) => {
             if (row.type === 'header') {
                 const isCancelled = row.is_cancelled;
@@ -613,7 +633,6 @@
                 const rawParts = row.raw.split('|').map(s => s.trim()).filter(s => s && s !== d.sheet_source);
                 const rawSummary = rawParts.slice(0, 5).join(' | ');
 
-                const uniqueListId = `zoneList_${Date.now()}`;
                 return `
                     <tr class="${rowClass}" style="${pairStyle}">
                         <td class="col-raw" style="color:#666; font-size:12px; vertical-align:middle;">
@@ -655,36 +674,27 @@
         }).join('');
 
         // 3. 強制刷新 datalist
-        // 先移除所有舊的 zoneList 避免 ID 衝突或瀏覽器快取
         document.querySelectorAll('datalist[id="zoneList"]').forEach(el => el.remove());
-        
         const zoneList = document.createElement('datalist');
         zoneList.id = 'zoneList';
         zoneList.innerHTML = allZones.map(z => `<option value="${z}">`).join('');
         document.body.appendChild(zoneList);
-
-        console.log(`[Datalist Sync] 強制重新建立選單，共 ${allZones.length} 個分區。`, allZones);
     }
-
 
     window.updateItemField = (idx, field, value) => {
         if (processedData.items[idx] && processedData.items[idx].data) {
             processedData.items[idx].data[field] = value;
-            // 如果改了數量，重新判定減項與對比
             if (field === 'qty' || field === 'name' || field === 'zone') {
                 findPairs(processedData.items);
-                renderPreview();
             }
         }
+        renderPreview();
     };
 
     window.toggleSection = (idx, cancel) => {
         const header = processedData.items[idx];
         if (header.type !== 'header') return;
-        
         header.is_cancelled = cancel;
-        
-        // 重新掃描分區歸屬
         let currentZone = "未分類";
         processedData.items.forEach(it => {
             if (it.type === 'header') {
@@ -695,14 +705,11 @@
                 it.zone = currentZone;
             }
         });
-        
         renderPreview();
     };
 
     window.removeItem = (index) => {
-        const row = processedData.items[index];
-        if (row.type === 'item') {
-            // 轉換為 'raw' 但保留它的 data，這樣點擊 ➕ 就能瞬間還原
+        if (processedData.items[index].type === 'item') {
             processedData.items[index].type = 'raw';
         }
         renderPreview();
@@ -710,24 +717,15 @@
 
     window.forceParse = (index) => {
         const row = processedData.items[index];
-        
-        // 如果已經有 data (之前解析過或被 removeItem 過)，直接還原 type
         if (row.data) {
             row.type = 'item';
             renderPreview();
             return;
         }
-
-        // 全新解析：從 row_data 提取 (假設對齊當前 colMapping)
         const d = row.row_data || [];
         const nameIdx = d.findIndex(c => String(c).trim() !== "");
         if (nameIdx === -1) return;
-
-        // 嘗試抓取附近的數量與單位 (啟發式：往後找)
         const name = String(d[nameIdx]).trim();
-        const qty = d[nameIdx + 2] || "1";
-        const unit = d[nameIdx + 1] || "式";
-
         processedData.items[index] = {
             type: 'item',
             raw: row.raw,
@@ -736,8 +734,8 @@
                 zone: row.zone || "未分類",
                 name: name,
                 spec: "", 
-                qty: String(qty).trim(), 
-                unit: String(unit).trim(),
+                qty: String(d[nameIdx + 2] || "1").trim(), 
+                unit: String(d[nameIdx + 1] || "式").trim(),
                 category_tag: getCategory(name, ""),
                 sheet_source: row.sheet_source || "稽核手動",
                 raw_line: row.raw
@@ -749,7 +747,7 @@
     window.addNewItem = () => {
         const name = document.getElementById('addName').value.trim();
         if (!name) return;
-        const newItem = {
+        processedData.items.unshift({
             type: 'item',
             raw: "手動新增",
             data: {
@@ -763,94 +761,57 @@
                 sheet_source: "手動",
                 raw_line: "Manual"
             }
-        };
-        processedData.items.unshift(newItem);
+        });
         renderPreview();
     };
 
     downloadBtn.addEventListener('click', () => {
         const projectNo = document.getElementById('projectNoInput').value.trim();
-        if (!projectNo) {
-            alert("請先填寫『案號』，否則導出的 JSON 無法在審核系統中使用。");
-            document.getElementById('projectNoInput').focus();
-            return;
-        }
-
+        if (!projectNo) { alert("請填寫案號！"); return; }
         const exportItems = processedData.items.filter(r => r.type === 'item').map(r => {
             const d = r.data;
             return {
-                id: d.id,
-                zone: d.zone,
-                category_tag: d.category_tag,
-                name: d.name,
-                spec: d.spec,
-                qty: d.qty,
-                unit: d.unit,
-                raw_line: d.raw_line,
-                sheet_source: d.sheet_source,
-                status: 'PENDING',
-                completion_percent: 0,
-                verification: {
-                    is_ok: false
-                }
+                id: d.id, zone: d.zone, category_tag: d.category_tag, name: d.name,
+                spec: d.spec, qty: d.qty, unit: d.unit, raw_line: d.raw_line,
+                sheet_source: d.sheet_source, status: 'PENDING', completion_percent: 0,
+                verification: { is_ok: false }
             };
         });
-        
         const finalExport = {
-            案號: document.getElementById('projectNoInput').value || "UNKNOWN_NO",
-            total_summary: {
-                ...processedData.total_summary,
-                siteName: (processedData.total_summary && processedData.total_summary.siteName) ? processedData.total_summary.siteName : "未命名案場",
-                overall_completion: 0
-            },
+            案號: projectNo,
+            total_summary: { ...processedData.total_summary, siteName: "未命名案場", overall_completion: 0 },
             items: exportItems
         };
         const blob = new Blob([JSON.stringify(finalExport, null, 2)], {type: 'application/json'});
-        const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
-        a.download = `budget_context_${new Date().getTime()}.json`;
+        a.href = URL.createObjectURL(blob);
+        a.download = `budget_context_${Date.now()}.json`;
         a.click();
     });
 
     document.getElementById('syncCloudBtn').addEventListener('click', async () => {
         const projectNo = document.getElementById('projectNoInput').value.trim();
-        if (!projectNo) { alert("請填寫案號才能同步！"); return; }
-        
+        if (!projectNo) { alert("請填寫案號！"); return; }
         const syncBtn = document.getElementById('syncCloudBtn');
         syncBtn.innerText = "⏳ 同步中...";
         syncBtn.disabled = true;
-
         try {
-            // [Smart Sync v1.4] 先嘗試抓取雲端既有資料
             let existingData = null;
             try {
                 const snapshot = await db.ref(`quotations/${projectNo}`).once('value');
                 existingData = snapshot.val();
-            } catch (fbErr) { console.warn('無既有雲端資料或讀取失敗', fbErr); }
+            } catch (e) {}
 
             const exportItems = processedData.items.filter(r => r.type === 'item').map(r => {
                 const d = r.data;
                 const newItem = {
-                    id: d.id,
-                    zone: d.zone,
-                    category_tag: d.category_tag,
-                    name: d.name,
-                    spec: d.spec,
-                    qty: d.qty,
-                    unit: d.unit,
-                    raw_line: d.raw_line,
-                    sheet_source: d.sheet_source,
-                    status: 'PENDING',
-                    completion_percent: 0,
+                    id: d.id, zone: d.zone, category_tag: d.category_tag, name: d.name,
+                    spec: d.spec, qty: d.qty, unit: d.unit, raw_line: d.raw_line,
+                    sheet_source: d.sheet_source, status: 'PENDING', completion_percent: 0,
                     verification: { is_ok: false }
                 };
-
-                // 若有舊資料，進行狀態對比保留
                 if (existingData && existingData.context && existingData.context.items) {
-                    const oldMatch = existingData.context.items.find(old => 
-                        old.id === newItem.id || (old.name === newItem.name && old.spec === newItem.spec)
-                    );
+                    const oldMatch = existingData.context.items.find(old => old.id === newItem.id || (old.name === newItem.name && old.spec === newItem.spec));
                     if (oldMatch) {
                         newItem.completion_percent = oldMatch.completion_percent || 0;
                         newItem.verification = oldMatch.verification || { is_ok: false };
@@ -859,41 +820,35 @@
                 }
                 return newItem;
             });
-            
+
             const finalExport = {
                 案號: projectNo,
-                total_summary: {
-                    ...processedData.total_summary,
+                total_summary: { 
+                    ...processedData.total_summary, 
                     siteName: (existingData && existingData.context && existingData.context.total_summary) ? existingData.context.total_summary.siteName : "載入中...",
-                    overall_completion: 0 // 將在下方重新計算
+                    overall_completion: Math.round(exportItems.reduce((acc, cur) => acc + (cur.completion_percent || 0), 0) / exportItems.length) || 0
                 },
                 items: exportItems
             };
 
-            // 重新計算整體進度
-            const totalP = exportItems.reduce((acc, cur) => acc + (cur.completion_percent || 0), 0);
-            finalExport.total_summary.overall_completion = Math.round(totalP / exportItems.length) || 0;
-
-            console.log('[Sync] 準備上傳雲端，總工項數:', exportItems.length, '進度:', finalExport.total_summary.overall_completion);
-
             await db.ref(`quotations/${projectNo}`).set({
                 context: finalExport,
                 last_updated: new Date().toLocaleString(),
-                sync_by: "AI_PREPROCESSOR (SmartSync)"
+                sync_by: "AI_PREPROCESSOR"
             });
 
-            if (confirm("☁️ 同步成功！是否立即開啟『預算審核工具』進行核對？")) {
-                const auditorUrl = `BudgetAuditor_Standalone.html?projectNo=${projectNo}`;
-                window.open(auditorUrl, '_blank');
+            if (confirm("☁️ 同步成功！是否啟動驗收表？")) {
+                window.open(`BudgetAuditor_Standalone.html?projectNo=${projectNo}`, '_blank');
             }
         } catch (err) {
             alert("同步失敗: " + err.message);
         } finally {
-            syncBtn.innerText = "☁️ 同步至雲端並開啟審核";
+            syncBtn.innerText = "☁️ 同步至雲端並開啟驗收表";
             syncBtn.disabled = false;
         }
     });
-</script>
 
+    document.getElementById('floatSyncBtn').addEventListener('click', () => document.getElementById('syncCloudBtn').click());
+</script>
 </body>
 </html>
