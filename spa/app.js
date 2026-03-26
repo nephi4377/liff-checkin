@@ -71,7 +71,7 @@ const App = {
             '#/floorplan-straightener': { name: 'iframe', src: 'modules/InteriorDesigned/floorplan-straightener.html', title: '平面圖校正工具' },
             // 【您的要求】新增報價單工具整合路由
             '#/budget-web': { name: 'iframe', src: 'tools/BudgetWeb_Standalone.html', title: '報價單解析器' },
-            '#/budget-audit': { name: 'iframe', src: 'tools/BudgetAuditor_Standalone.html', title: '報價單審核器' },
+            '#/budget-audit': { name: 'iframe', src: 'tools/BudgetAuditor_Standalone.html', title: '案場驗收表' },
         };
         // [v513.0 新增] 補上員工資料編輯頁面的路由
         routes['#/employee-editor'] = { name: 'iframe', src: 'modules/attendance/employee_editor.html', title: '員工資料編輯' }; // [v515.0 修正] 改為絕對路徑

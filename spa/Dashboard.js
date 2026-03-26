@@ -122,7 +122,7 @@ export default {
 
                 <!-- 核心功能 (置前) -->
                 <a :href="budgetAuditUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
-                    <h2 class="text-xl font-bold mb-2 text-indigo-700">報價單審核器</h2>
+                    <h2 class="text-xl font-bold mb-2 text-indigo-700">案場驗收表</h2>
                     <p class="text-gray-600">進行案場工項確認與進度回報。</p>
                 </a>
                 <a :href="reportUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
@@ -131,7 +131,7 @@ export default {
                 </a>
                 
                 <a :href="budgetWebUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
-                    <h2 class="text-xl font-bold mb-2 text-indigo-700">報價單解析器 (BudgetWeb)</h2>
+                    <h2 class="text-xl font-bold mb-2 text-indigo-700">報價單解析器</h2>
                     <p class="text-gray-600">上傳 Excel 並自動解析工項分區。</p>
                 </a>
                 <a :href="addSiteUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
