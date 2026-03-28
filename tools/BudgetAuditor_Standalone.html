@@ -106,6 +106,94 @@
         .status-tag { font-weight: bold; color: var(--pending); }
         .item-spec { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px; }
 
+        /* [v2.4] 施工記錄樣式 */
+        .audit-remark-row {
+            font-size: 0.85rem;
+            color: #1d4ed8;
+            background: #eff6ff;
+            padding: 6px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid #dbeafe;
+            margin-top: 4px;
+            transition: all 0.2s;
+        }
+        .audit-remark-row:hover { background: #dbeafe; border-color: #bfdbfe; }
+        .audit-remark-row i { width: 14px; height: 14px; flex-shrink: 0; }
+        .audit-remark-empty { color: #94a3b8; font-style: italic; }
+        .audit-remark-text { flex: 1; word-break: break-all; }
+
+        /* [v2.5] Inline Editor 實作 */
+        .audit-remark-input {
+            width: 100%;
+            border: 2px solid var(--primary);
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 0.85rem;
+            outline: none;
+            background: white;
+            color: var(--text-main);
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+        }
+
+        /* [v3.0] Dashboard 樣式 */
+        #dashboard-view { display: none; padding: 20px 0; }
+        .dashboard-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); 
+            gap: 20px; 
+            margin-top: 20px;
+        }
+        .project-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        .project-card:hover { transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); border-color: var(--primary); }
+        .project-card h3 { margin: 0 0 10px 0; font-size: 1.1rem; color: var(--text-main); }
+        .card-meta { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px; }
+        .card-progress-container { margin-top: 15px; }
+        .card-progress-bar { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
+        .card-progress-fill { height: 100%; background: var(--primary); transition: width 0.5s; }
+        .card-stats { display: flex; justify-content: space-between; font-size: 0.8rem; margin-top: 6px; }
+        .sync-status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+        .dot-online { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+        .dot-syncing { background: #3b82f6; animation: blink 1s infinite; }
+
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+        .tab-nav { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .tab-item { 
+            padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; color: var(--text-muted); transition: 0.2s;
+        }
+        .tab-item.active { background: var(--primary); color: white; }
+
+        /* [v2.4] 取消狀態樣式 */
+        .item-row.is-cancelled { opacity: 0.6; background: #f8fafc; border-left: 4px solid #94a3b8; }
+        .item-row.is-cancelled .item-name { text-decoration: line-through; color: #64748b; }
+        .cancel-badge {
+            background: #64748b;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+
+        .btn-cancel { color: #dc2626; border-color: #fecaca; }
+        .btn-cancel:hover { background: #fef2f2; }
+        .btn-cancel.active { background: #dc2626; color: white; border-color: #dc2626; }
+
         .progress-box { margin-top: 4px; position: relative; max-width: 400px; }
         .progress-input {
             width: 100%; height: 16px; cursor: pointer;
@@ -214,8 +302,26 @@
 <body>
 
 <div class="container">
-    <!-- 1. Drop Zone / Initial Input -->
-    <div id="drop-zone">
+    <div class="tab-nav">
+        <div id="tab-dashboard" class="tab-item active" onclick="switchView('dashboard')">案場概覽</div>
+        <div id="tab-auditor" class="tab-item" onclick="switchView('auditor')">案場詳情</div>
+    </div>
+
+    <!-- 0. Dashboard View [v3.0] -->
+    <div id="dashboard-view">
+        <div class="header-card">
+            <h1>全域案場概覽 <small style="font-size: 0.5em; opacity: 0.7;">v3.0 Dashboard</small></h1>
+            <p>自動掃描所有未結案項目 | 每 5 分鐘同步一輪</p>
+            <div id="dashboard-stats" style="margin-top: 10px; font-size: 0.9rem;">載入中...</div>
+        </div>
+        <div id="dashboard-list" class="dashboard-grid">
+            <!-- 案場卡片將在此渲染 -->
+        </div>
+    </div>
+
+    <div id="auditor-view" style="display: none;">
+        <!-- 1. Drop Zone / Initial Input -->
+        <div id="drop-zone">
         <i data-lucide="upload-cloud"></i>
         <h3>請輸入案號或拖入 JSON</h3>
         <div id="manual-init" style="margin-top: 20px; display: flex; justify-content: center; gap: 10px;">
@@ -249,7 +355,16 @@
         </div>
     </header>
 
-    <!-- 3. Cloud Settings Modal -->
+    <!-- 4. Audit List Container -->
+    <main id="audit-list"></main>
+
+    <!-- 5. Floating Toolbar [v2.2] -->
+    <div id="floating-toolbar" class="floating-toolbar" style="display: none;">
+        <button class="btn btn-primary" onclick="syncToFirebase()">
+            <i data-lucide="upload-cloud"></i> 同步至雲端
+        </button>
+    </div>
+    </div> <!-- #auditor-view end -->
     <div id="cloud-modal" class="hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;">
         <div style="background: white; padding: 24px; border-radius: 12px; width: 400px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);">
             <h3 style="margin-top: 0;">Firebase 雲端配置</h3>
@@ -267,16 +382,6 @@
             </div>
         </div>
     </div>
-
-    <!-- 4. Audit List Container -->
-    <main id="audit-list"></main>
-
-    <!-- 5. Floating Toolbar [v2.2] -->
-    <div id="floating-toolbar" class="floating-toolbar">
-        <button class="btn btn-primary" onclick="syncToFirebase()">
-            <i data-lucide="upload-cloud"></i> 同步至雲端
-        </button>
-    </div>
 </div>
 
 <!-- Firebase SDK -->
@@ -286,6 +391,28 @@
 <script>
     let appData = null;
     let currentUser = { userId: 'unknown', displayName: '訪客' };
+    let globalProjects = {}; // [v3.0] 儲存所有案場的摘要快取
+
+    // [v3.0] 切換視圖
+    window.switchView = (view) => {
+        const dv = document.getElementById('dashboard-view');
+        const av = document.getElementById('auditor-view');
+        const tabD = document.getElementById('tab-dashboard');
+        const tabA = document.getElementById('tab-auditor');
+
+        if (view === 'dashboard') {
+            dv.style.display = 'block';
+            av.style.display = 'none';
+            tabD.classList.add('active');
+            tabA.classList.remove('active');
+            refreshDashboard(); // 切換回來時順便同步
+        } else {
+            dv.style.display = 'none';
+            av.style.display = 'block';
+            tabD.classList.remove('active');
+            tabA.classList.add('active');
+        }
+    };
     const FB_CONFIG_DEFAULT = {
         databaseURL: "https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app",
         gasURL: "https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec"
@@ -469,7 +596,7 @@
         saveToCache();
     }
 
-    // [v2.0] 本地 24 小時快取
+    // [v3.0] 快取 7 天
     function saveToCache() {
         if (!appData) return;
         const cacheObj = {
@@ -485,12 +612,11 @@
         if (!raw) return null;
         try {
             const cacheObj = JSON.parse(raw);
-            const hours = (Date.now() - cacheObj.timestamp) / (1000 * 60 * 60);
-            if (hours < 24) {
-                console.log(`[Cache] 找到 24 小時內快取 (${Math.round(hours)}h ago)，準備載入...`);
+            const days = (Date.now() - cacheObj.timestamp) / (1000 * 60 * 60 * 24);
+            if (days < 7) {
+                console.log(`[Cache] 找到 7 天內快取 (${Math.round(days * 24)}h ago)，載入中...`);
                 return cacheObj.data;
             }
-            console.log('[Cache] 快取已過期 (超過 24 小時)');
             return null;
         } catch (e) { return null; }
     }
@@ -506,6 +632,189 @@
         // 不需要全量渲染，只需要本地更新數據並觸發 Firebase 同步
         // 為了讓 UI 反饋，這裡還是調用 render 比較保險，但未來可改為局部更新
         renderList();
+        syncToFirebase();
+    };
+
+    // [v2.5] 啟動 Inline 編輯 (取代原本的 prompt)
+    window.startEditRemark = (itemId) => {
+        const row = document.getElementById(`row-${itemId}`);
+        if (!row) return;
+        
+        const remarkBox = row.querySelector('.audit-remark-row');
+        if (!remarkBox) return;
+
+        const item = appData.items.find(it => it.id === itemId);
+        if (!item) return;
+
+        const currentVal = item.audit_remark || '';
+        
+        // 切換為 Input 模式
+        remarkBox.onclick = null; // 暫時移除 click 事件避免衝突
+        remarkBox.innerHTML = `
+            <i data-lucide="edit-3" style="color:var(--primary)"></i>
+            <input type="text" class="audit-remark-input" value="${currentVal}" 
+                   placeholder="輸入現場紀錄 (叫料、工況、異常)..."
+                   onblur="finishEditRemark('${itemId}', this.value)"
+                   onkeydown="if(event.key === 'Enter') finishEditRemark('${itemId}', this.value)">
+        `;
+        
+        const input = remarkBox.querySelector('input');
+        input.focus();
+        input.select();
+        lucide.createIcons();
+    };
+
+    window.finishEditRemark = (itemId, newVal) => {
+        const item = appData.items.find(it => it.id === itemId);
+        if (!item) return;
+        
+        const oldVal = item.audit_remark || '';
+        newVal = newVal.trim();
+
+        // 重新封裝外層 click (延遲避免 blur 立即觸發)
+        setTimeout(() => {
+            const row = document.getElementById(`row-${itemId}`);
+            if (row) {
+                const box = row.querySelector('.audit-remark-row');
+                if (box) box.onclick = () => startEditRemark(itemId);
+            }
+        }, 100);
+
+        if (newVal === oldVal) {
+            renderItemRemark(itemId); // 無變動，恢復原狀
+            return;
+        }
+
+        // 執行更新與日誌
+        item.audit_remark = newVal;
+        if (!item.spec_logs) item.spec_logs = [];
+        item.spec_logs.push({
+            ts: Date.now(),
+            at: new Date().toLocaleString(),
+            user: currentUser.displayName,
+            msg: newVal ? `紀錄變更: ${newVal}` : '清空紀錄'
+        });
+
+        renderItemRemark(itemId);
+        saveToCache();
+        syncToFirebase();
+    };
+
+    // 局部渲染紀錄區域
+    function renderItemRemark(itemId) {
+        const item = appData.items.find(it => it.id === itemId);
+        const row = document.getElementById(`row-${itemId}`);
+        if (!row || !item) return;
+
+        const remarkBox = row.querySelector('.audit-remark-row');
+        if (!remarkBox) return;
+
+        // [v2.5] 邏輯精簡：有內容時隱藏「現場紀錄」文字
+        remarkBox.innerHTML = item.audit_remark 
+            ? `<i data-lucide="edit-3"></i> <div class="audit-remark-text">${item.audit_remark}</div>`
+            : `<i data-lucide="plus-circle"></i> <span class="audit-remark-empty">點擊加入現場紀錄...</span>`;
+        lucide.createIcons();
+    }
+
+    // [v3.0] Dashboard 核心邏輯 - 輪詢掃描
+    window.refreshDashboard = async () => {
+        const dbList = document.getElementById('dashboard-list');
+        const dbStats = document.getElementById('dashboard-stats');
+        
+        // 1. 抓取 Firebase 全域 index (假設案場位於 /quotations/)
+        try {
+            const snap = await db.ref('quotations').once('value');
+            const projects = snap.val() || {};
+            const pIds = Object.keys(projects);
+            
+            dbStats.innerHTML = `<span class="sync-status-dot dot-syncing"></span> 正在同步所有案場 (${pIds.length})...`;
+            
+            // 2. 一筆一筆更新 (非同步輪詢)
+            // [Fix v26.03.27] Firebase 儲存結構為 { context: appData, ... }，需從 data.context 讀取
+            for (const id of pIds) {
+                const raw = projects[id];
+                if (!raw) continue;
+
+                // 相容新版 (context 包裝) 與舊版 (直接存放) 資料結構
+                const data = raw.context || raw;
+                const sum = data.total_summary;
+                if (!sum) continue;
+                
+                // 排除已結案的案場
+                if (data.is_closed || raw.is_closed) continue;
+
+                globalProjects[id] = {
+                    name: sum.siteName || '未命名案場',
+                    percent: sum.overall_completion || 0,
+                    total: (data.items || []).length,
+                    verified: (data.items || []).filter(it => it && (it.verification && it.verification.is_ok || it.is_cancelled)).length,
+                    lastUpdate: sum.last_updated || raw.audit_last_updated || '無日期'
+                };
+                
+                // 每更新一筆即重新渲染列表，讓使用者看到進度
+                renderDashboardList();
+            }
+            
+            dbStats.innerHTML = `<span class="sync-status-dot dot-online"></span> 最後同步: ${new Date().toLocaleTimeString()} | 共 ${Object.keys(globalProjects).length} 個使用中案場`;
+            
+        } catch (e) {
+            console.error('[Dashboard] 同步失敗', e);
+            dbStats.innerHTML = `<span style="color:red">⚠️ 同步失敗，請檢查網路</span>`;
+        }
+    };
+
+    function renderDashboardList() {
+        const container = document.getElementById('dashboard-list');
+        const ids = Object.keys(globalProjects).sort((a,b) => b.localeCompare(a)); // 按案號倒序
+        
+        container.innerHTML = ids.map(id => {
+            const p = globalProjects[id];
+            return `
+                <div class="project-card" onclick="jumpToProject('${id}')">
+                    <h3>[${id}] ${p.name}</h3>
+                    <div class="card-meta">最後更新: ${p.lastUpdate}</div>
+                    <div class="card-progress-container">
+                        <div class="card-progress-bar">
+                            <div class="card-progress-fill" style="width: ${p.percent}%"></div>
+                        </div>
+                    </div>
+                    <div class="card-stats">
+                        <span>進度: ${p.percent}%</span>
+                        <span>完工: ${p.verified} / ${p.total}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // jumpToProject 定義在下方 L1242 (完整版，含 loadFromFirebase)
+
+    // [v2.4] 切換取消狀態 (獨立日誌: status_logs)
+    window.toggleCancel = (itemId) => {
+        const item = appData.items.find(it => it.id === itemId);
+        if (!item) return;
+
+        const willCancel = !item.is_cancelled;
+        item.is_cancelled = willCancel;
+        
+        if (willCancel) {
+            item.completion_percent = 100;
+            // 項目取消時標註為已處理完成，自動移至下方
+            item.is_ui_done = true; 
+        }
+
+        // 寫入專屬狀態日誌
+        if (!item.status_logs) item.status_logs = [];
+        item.status_logs.push({
+            ts: Date.now(),
+            at: new Date().toLocaleString(),
+            user: currentUser.displayName,
+            action: willCancel ? '標註為 [項目取消]' : '恢復項目 [取消 -> 正常]'
+        });
+
+        // 為了 UI 表現一致性，取消狀態建議觸發全量 renderList
+        renderList();
+        saveToCache();
         syncToFirebase();
     };
 
@@ -574,23 +883,33 @@
 
     async function fetchProjectMetadata(projectNo) {
         if (!fbConfig.gasURL) return;
+        const uid = currentUser && currentUser.userId ? String(currentUser.userId).trim() : '';
+        if (!uid || uid === 'unknown') {
+            console.warn('[fetchProjectMetadata] 缺少有效 userId，無法向 GAS 取得案場列表（請從主控台 iframe 開啟、URL 帶 uid，或完成 LIFF 登入）。');
+            return;
+        }
         try {
-            // [MVP] 使用既有的 get_hub_projects_data 獲取所有案場，再本地篩選
-            const response = await fetch(`${fbConfig.gasURL}?page=get_hub_projects_data`, {
-                method: 'GET',
-            });
+            // [MVP] 使用既有的 get_hub_projects_data（需帶 userId 與 Hub 端權限一致），再本地依案號篩選
+            const url = new URL(fbConfig.gasURL);
+            url.searchParams.set('page', 'get_hub_projects_data');
+            url.searchParams.set('userId', uid);
+            if (currentUser.displayName) url.searchParams.set('userName', currentUser.displayName);
+            const response = await fetch(url.toString(), { method: 'GET' });
             const result = await response.json();
-            
+
             if (result.success && result.data) {
                 const targetNo = String(projectNo || '').trim();
-                const project = result.data.find(s => String(s['案號'] || '').trim() === targetNo);
+                const raw = result.data;
+                const list = Array.isArray(raw) ? raw : (raw.projects || []);
+                const project = list.find(s => {
+                    const no = String(s['案號'] || s.id || '').trim();
+                    return no === targetNo;
+                });
                 if (project) {
-                    // 更新 UI 案場名稱
-                    document.getElementById('h-project-name').innerText = project.siteName || '未命名案場';
-                    
-                    // 同步回 appData
+                    const displayName = project.siteName || project.name || project['案場名稱'] || '未命名案場';
+                    document.getElementById('h-project-name').innerText = displayName;
                     if (appData && appData.total_summary) {
-                        appData.total_summary.siteName = project.siteName;
+                        appData.total_summary.siteName = displayName;
                     }
                 }
             }
@@ -616,9 +935,11 @@
             }
 
             appData = data;
-            dropZone.classList.add('hidden');
-            document.getElementById('project-header').style.display = 'block';
-            document.getElementById('floating-toolbar').style.display = 'flex';
+            if (dropZone) dropZone.classList.add('hidden');
+            const header = document.getElementById('project-header');
+            if (header) header.style.display = 'block';
+            const toolbar = document.getElementById('floating-toolbar');
+            if (toolbar) toolbar.style.display = 'flex';
             
             // Header
             const sum = data.total_summary || {};
@@ -716,20 +1037,21 @@
     // [v2.0] 抽離單個工項渲染邏輯
     function renderItemHtml(item) {
         const isVerified = item.verification && item.verification.is_ok;
-        const statusText = item.completion_percent === 100 ? '完成' : (item.completion_percent > 0 ? '施工中' : '等候中');
+        const isCancelled = item.is_cancelled || false;
+        const statusText = isCancelled ? '已取消' : (item.completion_percent === 100 ? '完成' : (item.completion_percent > 0 ? '施工中' : '等候中'));
         const catList = [
             "施工保護", "拆除工程", "泥作工程", "水電工程", "木作工程", 
             "系統櫃體", "油漆工程", "廚具設備", "地板工程", "清潔工程", "其他"
         ];
         
         return `
-        <div class="item-row" id="row-${item.id}">
+        <div class="item-row ${isCancelled ? 'is-cancelled' : ''}" id="row-${item.id}">
             <div class="item-content">
                 <div class="item-info-line">
-                    <span class="status-tag" style="color: ${item.completion_percent === 100 ? 'var(--success)' : (item.completion_percent > 0 ? 'var(--primary)' : 'var(--pending)')}">
+                    <span class="status-tag" style="color: ${isCancelled ? '#64748b' : (item.completion_percent === 100 ? 'var(--success)' : (item.completion_percent > 0 ? 'var(--primary)' : 'var(--pending)'))}">
                         (${statusText})
                     </span>
-                    <span class="item-name">${item.name || '未知工項'}</span>
+                    <span class="item-name">${item.name || '未知工項'} ${isCancelled ? '<span class="cancel-badge">已取消</span>' : ''}</span>
                     
                     <select class="category-editor" onchange="updateCategory('${item.id}', this.value)">
                         ${catList.map(c => `<option value="${c}" ${item.category_tag === c ? 'selected' : ''}>${c}</option>`).join('')}
@@ -738,16 +1060,27 @@
                     <span class="tag">${item.qty || '-'} ${item.unit || ''}</span>
                 </div>
                 <div class="item-spec">備註: ${item.spec || '無'}</div>
+                
+                <!-- [v2.5] 現場紀錄區 - Inline Editor -->
+                <div class="audit-remark-row" onclick="startEditRemark('${item.id}')">
+                    ${item.audit_remark 
+                        ? `<i data-lucide="edit-3"></i> <div class="audit-remark-text">${item.audit_remark}</div>` 
+                        : `<i data-lucide="plus-circle"></i> <span class="audit-remark-empty">點擊加入現場紀錄...</span>`}
+                </div>
+
                 <div class="progress-box" style="max-width: 200px;">
                     <span class="progress-value-overlay">${item.completion_percent || 0}%</span>
                     <input type="range" class="progress-input" min="0" max="100" value="${item.completion_percent || 0}" 
-                        oninput="updateProgress('${item.id}', this.value)">
+                        oninput="updateProgress('${item.id}', this.value)" ${isCancelled ? 'disabled' : ''}>
                 </div>
             </div>
-            <div class="verify-aside">
-                <button class="verify-large-btn ${isVerified ? 'active' : ''}" onclick="toggleVerify('${item.id}')">
+            <div class="verify-aside" style="width: 100px;">
+                <button class="verify-large-btn ${isVerified ? 'active' : ''}" onclick="toggleVerify('${item.id}')" ${isCancelled ? 'disabled style="opacity:0.3; cursor:not-allowed;"' : ''}>
                     <i data-lucide="${isVerified ? 'check-circle' : 'circle'}"></i> 
                     <span>${isVerified ? '審核<br>完成' : '標註<br>完成'}</span>
+                </button>
+                <button class="btn btn-cancel ${isCancelled ? 'active' : ''}" onclick="toggleCancel('${item.id}')" style="margin-top:8px; font-size:11px; padding:4px;">
+                    <i data-lucide="slash"></i> ${isCancelled ? '取消項' : '項目取消'}
                 </button>
                 <div class="verify-info">
                     ${isVerified ? `${item.verification.verified_by || ''}` : ''}
@@ -776,8 +1109,9 @@
         const oldVal = item.completion_percent || 0;
         item.completion_percent = parseInt(val);
         
-        if (!item.audit_logs) item.audit_logs = [];
-        item.audit_logs.push({
+        // [v2.4] 更新進度也寫入狀態日誌
+        if (!item.status_logs) item.status_logs = [];
+        item.status_logs.push({
             ts: Date.now(),
             at: new Date().toLocaleString(),
             user: currentUser.displayName,
@@ -819,6 +1153,15 @@
                 verified_uid: currentUser.userId
             };
             item.completion_percent = 100;
+
+            // [v2.4] 審核完成寫入狀態日誌
+            if (!item.status_logs) item.status_logs = [];
+            item.status_logs.push({
+                ts: Date.now(),
+                at: new Date().toLocaleString(),
+                user: currentUser.displayName,
+                action: '標註 [審核完成]'
+            });
         }
         // [v2.1] toggleVerify 不再觸發全量 renderList，除非您希望立即移動
         // 為了維持 UX 穩定性，這裡只調用 refreshOverall 確保頂部數字更新
@@ -853,27 +1196,41 @@
         downloadAnchorNode.remove();
     }
 
+    // [v3.0] 頁面初始化入口
     async function init() {
-        console.log('[Init] 啟動驗收器...');
+        console.log('[Init] 啟動 v3.0 驗收器 Dashboard...');
         await initLiff();
+        
+        // 預設載入 Dashboard
+        switchView('dashboard');
+        refreshDashboard();
+
+        // 啟動 5 分鐘自動同步計時器
+        setInterval(() => {
+            console.log('[AutoSync] 5 分鐘輪詢開始...');
+            refreshDashboard();
+        }, 5 * 60 * 1000);
+
+        // 處理 URL 帶案號的情況 (自動跳轉至詳情)
         const params = new URLSearchParams(window.location.search);
-        const projectNo = params.get('projectNo');
-        if (projectNo) {
-            dropZone.innerHTML = '<i data-lucide="loader" class="spinner"></i><h3>雲端同步中...</h3>';
-            lucide.createIcons();
-            loadFromFirebase(projectNo);
-        } else {
-            dropZone.classList.remove('hidden');
+        const pNo = params.get('projectNo');
+        if (pNo) {
+            jumpToProject(pNo);
         }
     }
+
+    // [v3.0] 跳轉至特定案場
+    window.jumpToProject = (id) => {
+        const input = document.getElementById('project-no-input');
+        if (input) input.value = id;
+        switchView('auditor');
+        loadFromFirebase(id);
+    };
 
     window.startManualAudit = () => {
         const no = document.getElementById('manualProjectNo').value.trim();
         if (!no) return alert('請輸入案號');
-        const newUrl = new URL(window.location.href);
-        newUrl.searchParams.set('projectNo', no);
-        window.history.pushState({}, '', newUrl);
-        init();
+        jumpToProject(no);
     };
     
     // [v2.2] 捲動監聽
@@ -892,15 +1249,8 @@
         }
     });
 
-    // [v2.2] 啟動器
-    async function start() {
-        console.log('[Init] 啟動驗收器...');
-        await initLiff();
-        init();
-        console.log('[Init] 啟動流程完畢。');
-    }
-
-    start();
+    // 啟動觸發器
+    init();
 </script>
 </body>
 </html>

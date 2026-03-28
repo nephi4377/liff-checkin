@@ -178,6 +178,29 @@
                     class="text-xs text-gray-600 font-mono space-y-2 max-h-48 overflow-y-auto text-left px-2 scrollbar-thin scrollbar-thumb-gray-200">
                 </ul>
             </div>
+
+            <!-- [v2026.3.28] 定位權限引導區塊：僅在授權失敗時顯示 -->
+            <div id="guide-container" class="mt-4 w-full hidden">
+                <div class="flex flex-col gap-2">
+                    <button onclick="AppUI.showGuideModal()"
+                        class="w-full bg-amber-50 text-amber-700 text-[11px] font-bold py-2 px-4 rounded-lg border border-amber-200 hover:bg-amber-100 transition-colors flex items-center justify-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        找不到如何開啟定位？查看教學
+                    </button>
+                    <button onclick="location.reload()"
+                        class="w-full bg-blue-50 text-blue-700 text-[11px] font-bold py-2 px-4 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors flex items-center justify-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                            </path>
+                        </svg>
+                        我已開啟權限，點此重新整理
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- 主要動作按鈕：內建 Pulse 動畫與 Disable 灰階邏輯 -->
@@ -186,24 +209,48 @@
             disabled> 立即打卡 </button>
     </div>
 
-    <!-- 詳細資訊彈窗：用於檢視打卡結果的完整文字回饋 -->
-    <div id="detail-modal"
-        class="fixed inset-0 bg-gray-900 bg-opacity-70 hidden flex items-center justify-center z-50 px-4 backdrop-blur-md">
-        <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-8 transition-all">
-            <div class="flex justify-between items-start mb-4">
-                <h3 id="modal-title" class="text-2xl font-black text-gray-800">打卡詳細</h3>
-                <button onclick="AppUI.closeModal()" class="text-gray-300 hover:text-gray-900 transition-colors"><svg
-                        class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <!-- 權限引導彈窗 [v2026.3.28] -->
+    <div id="guide-modal"
+        class="fixed inset-0 bg-gray-900 bg-opacity-70 hidden flex items-center justify-center z-[60] px-4 backdrop-blur-md">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 transition-all">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-black text-gray-800">如何開啟定位權限？</h3>
+                <button onclick="AppUI.closeGuideModal()" class="text-gray-400"><svg class="w-6 h-6" fill="none"
+                        stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
                         </path>
                     </svg></button>
             </div>
-            <p id="modal-time" class="text-xs text-gray-400 mb-4 font-mono border-b border-gray-50 pb-2"></p>
-            <div id="modal-content"
-                class="text-gray-800 text-sm whitespace-pre-wrap leading-relaxed bg-gray-50 p-5 rounded-2xl border border-gray-100 max-h-80 overflow-y-auto font-medium">
+            <div class="space-y-6 text-sm">
+                <div class="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                    <p class="font-bold text-blue-800 mb-2 flex items-center"><span
+                            class="bg-blue-600 text-white w-5 h-5 rounded-full inline-flex items-center justify-center mr-2 text-[10px]">1</span>
+                        檢查 LINE 內部設定</p>
+                    <p class="text-[11px] text-blue-600/80 leading-relaxed font-medium">
+                        點擊右上角 <span class="font-black">「三個點 ⋯」</span> 或 <span class="font-black">「✕」</span>
+                        關閉此頁，重新從選單點擊打卡。若跳出詢問，請務必點選「允許」。
+                    </p>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                    <p class="font-bold text-gray-800 mb-2 flex items-center"><span
+                            class="bg-gray-800 text-white w-5 h-5 rounded-full inline-flex items-center justify-center mr-2 text-[10px]">2</span>
+                        iPhone 使用者 (iOS)</p>
+                    <p class="text-[11px] text-gray-500 leading-relaxed font-medium">
+                        進入手機的「設定」 > 「隱私權與安全性」 > 「定位服務」 > 確保已開啟，並在下方列表中找到 「LINE」 設為 <span
+                            class="text-blue-600 font-bold underline">使用 App 期間</span>。
+                    </p>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                    <p class="font-bold text-gray-800 mb-2 flex items-center"><span
+                            class="bg-gray-800 text-white w-5 h-5 rounded-full inline-flex items-center justify-center mr-2 text-[10px]">3</span>
+                        Android 使用者</p>
+                    <p class="text-[11px] text-gray-500 leading-relaxed font-medium">
+                        長按 LINE 圖示 > 「應用程式資訊」 > 「權限」 > 「位置」 > 設為 <span class="text-blue-600 font-bold underline">僅在使用該應用程式時允許</span>。
+                    </p>
+                </div>
             </div>
-            <button onclick="AppUI.closeModal()"
-                class="mt-8 w-full bg-gray-900 text-white font-bold py-4 rounded-2xl hover:bg-black transition-colors">確認關閉</button>
+            <button onclick="AppUI.closeGuideModal()"
+                class="mt-8 w-full bg-blue-600 text-white font-bold py-4 rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">我了解了</button>
         </div>
     </div>
 
@@ -300,8 +347,9 @@
                     // [v2026.3.2] 主動偵測權限拒絕
                     if (e.code === 1) {
                         AppUI.updateIndicator('gps', 'error', '授權失敗');
-                        AppUI.updateMessage('您已拒絕位置授權，系統無法定位。請至「設定」中開啟權限後再重新進入本頁。', 'text-red-600 font-bold');
+                        AppUI.updateMessage('<strong>您已拒絕位置授權</strong><br>系統無法取得座標。請依下方教學開啟權限。', 'text-red-700 font-bold');
                         document.getElementById('checkin-button').disabled = true;
+                        AppUI.showPermissionGuide(true);
                         console.warn('[GPS Prewarm] 使用者拒絕授權');
                     } else {
                         console.warn('[GPS Prewarm] 預熱超時或未知錯誤，改為點擊時再嘗試', e);
@@ -478,6 +526,13 @@
                 mod.classList.remove('hidden');
             },
             closeModal: () => document.getElementById('detail-modal').classList.add('hidden'),
+            /** [v2026.3.28] 顯示定位引導按鈕 */
+            showPermissionGuide: (show) => {
+                const guide = document.getElementById('guide-container');
+                if (guide) guide.classList.toggle('hidden', !show);
+            },
+            showGuideModal: () => document.getElementById('guide-modal').classList.remove('hidden'),
+            closeGuideModal: () => document.getElementById('guide-modal').classList.add('hidden'),
             renderHistory: () => {
                 const h = AppStorage.getHistory();
                 const container = document.getElementById('checkin-history-container');
@@ -620,7 +675,12 @@
                     }
                 } catch (err) {
                     AppUI.updateIndicator('gps', 'error', '定位失敗');
-                    AppUI.updateMessage(err.code === 1 ? '<strong>您已拒絕位置授權</strong><br>請開啟位置權限後重試。' : `打卡失敗: ${err.message}`, 'text-red-800');
+                    if (err.code === 1) {
+                        AppUI.updateMessage('<strong>您已拒絕位置授權</strong><br>請依下方引導開啟權限後再試。', 'text-red-800');
+                        AppUI.showPermissionGuide(true);
+                    } else {
+                        AppUI.updateMessage(`打卡失敗: ${err.message}`, 'text-red-800');
+                    }
                     // 定位失敗時：本頁仍未標記 pageSendOnce，允許使用者重新點擊
                     btn.disabled = false; btn.textContent = '重新打卡'; btn.classList.add('btn-pulse');
                     AppCore.isLocked = false; AppUI.setLoading(false);
