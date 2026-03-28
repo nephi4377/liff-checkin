@@ -1,0 +1,31 @@
+﻿# Cursor 索引排除（與 .gitignore 對齊並補充）
+# 依賴、建置、備份、大型二進位
+node_modules/
+dist/
+release/
+.cache/
+_DEPRECATED_/
+_待開發備份_/
+*.exe
+*.zip
+*.blockmap
+*.log
+
+# Git 物件（減少索引負擔）
+.git/
+
+# 環境與機密
+.env
+.env.*
+!.env.example
+
+# 作業系統與雜項
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# 測試覆蓋率／暫存
+coverage/
+tmp/
+temp/

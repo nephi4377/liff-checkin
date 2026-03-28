@@ -161,7 +161,7 @@ const App = {
 
         const processNotificationAction = async (payload) => {
             try {
-                const apiPayload = { action: 'process_notification_action', ...payload };
+                const apiPayload = { ...payload, action: 'process_notification_action' };
                 // [v549.0 CORS 修正] 將請求方式改為 FormData，以繞過 CORS 預檢請求。
                 const formData = new FormData();
                 formData.append('payload', JSON.stringify(apiPayload)); // [v602.0 重構] 改為使用 CONFIG

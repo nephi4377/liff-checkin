@@ -240,12 +240,14 @@ ${notes || '無'}`;
     closeBtn.addEventListener('click', () => {
       if (confirm(`您確定要將專案 #${state.projectId} 標示為「已結案」嗎？\n\n此操作將無法復原。`)) {
         showGlobalNotification('正在處理結案...', 3000, 'info');
-        apiRequest({ // [v317.0 API化] 改為使用統一請求函式
+        apiRequest({
           action: 'updateProjectStatus',
-          projectId: state.projectId,
-          status: '已結案',
-          userId: state.currentUserId,
-          userName: state.currentUserName
+          payload: {
+            projectId: state.projectId,
+            status: '已結案',
+            userId: state.currentUserId,
+            userName: state.currentUserName
+          }
         }).then(result => {
           if (result.success) {
             showGlobalNotification('專案已成功標示為「已結案」。', 5000, 'success');
