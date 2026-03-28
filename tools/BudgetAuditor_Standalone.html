@@ -393,6 +393,65 @@
     let currentUser = { userId: 'unknown', displayName: '訪客' };
     let globalProjects = {}; // [v3.0] 儲存所有案場的摘要快取
 
+    /** Hub / GAS 專案物件上與後端一致的案名（例：#770 茄萣 吳豐杰）— 優先 name／案場名稱再 siteName */
+    function pickHubProjectDisplayName(p) {
+        if (!p) return '';
+        const name = p.name != null ? String(p.name).trim() : '';
+        const cn = p['案場名稱'] != null ? String(p['案場名稱']).trim() : '';
+        const sn = p.siteName != null ? String(p.siteName).trim() : '';
+        return name || cn || sn;
+    }
+
+    /** Firebase 內存的 siteName：排除 placeholder，不捏造「案號 #xxx」（卡片已有 [案號]） */
+    function firebaseSiteNameToDisplay(siteName) {
+        const raw = (siteName != null && siteName !== '') ? String(siteName).trim() : '';
+        if (!raw || raw === '載入中...') return '';
+        return raw;
+    }
+
+    let _hubNameMapCache = { map: null, ts: 0 };
+    const HUB_NAME_MAP_TTL_MS = 60000;
+
+    /** 向 GAS 取一次 Hub 專案列表，建立案號→案名（與主控台後端欄位一致） */
+    async function getHubProjectNameMap() {
+        const now = Date.now();
+        if (_hubNameMapCache.map && (now - _hubNameMapCache.ts) < HUB_NAME_MAP_TTL_MS) {
+            return _hubNameMapCache.map;
+        }
+        const out = {};
+        if (!fbConfig.gasURL) {
+            _hubNameMapCache = { map: out, ts: now };
+            return out;
+        }
+        const uid = currentUser && currentUser.userId ? String(currentUser.userId).trim() : '';
+        if (!uid || uid === 'unknown') {
+            _hubNameMapCache = { map: out, ts: now };
+            return out;
+        }
+        try {
+            const url = new URL(fbConfig.gasURL);
+            url.searchParams.set('page', 'get_hub_projects_data');
+            url.searchParams.set('userId', uid);
+            if (currentUser.displayName) url.searchParams.set('userName', currentUser.displayName);
+            const response = await fetch(url.toString(), { method: 'GET' });
+            const result = await response.json();
+            if (result.success && result.data) {
+                const raw = result.data;
+                const list = Array.isArray(raw) ? raw : (raw.projects || []);
+                list.forEach((p) => {
+                    const no = String(p['案號'] != null ? p['案號'] : p.id || '').trim();
+                    if (!no) return;
+                    const label = pickHubProjectDisplayName(p);
+                    if (label) out[no] = label;
+                });
+            }
+        } catch (e) {
+            console.warn('[Hub] 無法取得案名對照', e);
+        }
+        _hubNameMapCache = { map: out, ts: now };
+        return out;
+    }
+
     // [v3.0] 切換視圖
     window.switchView = (view) => {
         const dv = document.getElementById('dashboard-view');
@@ -429,7 +488,8 @@
     async function initLiff() {
         const params = new URLSearchParams(window.location.search);
         const urlUid = params.get('uid');
-        const urlName = params.get('userName');
+        // 與 spa/app.js iframe 一致：主控台傳的是 name=，部分頁面用 userName=
+        const urlName = params.get('userName') || params.get('name');
 
         // 1. 優先從 URL 取得 (由主控台跳轉過來時)
         if (urlUid && urlName) {
@@ -728,6 +788,8 @@
             const pIds = Object.keys(projects);
             
             dbStats.innerHTML = `<span class="sync-status-dot dot-syncing"></span> 正在同步所有案場 (${pIds.length})...`;
+
+            const hubMap = await getHubProjectNameMap();
             
             // 2. 一筆一筆更新 (非同步輪詢)
             // [Fix v26.03.27] Firebase 儲存結構為 { context: appData, ... }，需從 data.context 讀取
@@ -743,8 +805,12 @@
                 // 排除已結案的案場
                 if (data.is_closed || raw.is_closed) continue;
 
+                const idKey = String(id).trim();
+                const hubLabel = hubMap[idKey] || hubMap[id] || '';
+                const cardName = hubLabel || firebaseSiteNameToDisplay(sum.siteName) || '';
+
                 globalProjects[id] = {
-                    name: sum.siteName || '未命名案場',
+                    name: cardName,
                     percent: sum.overall_completion || 0,
                     total: (data.items || []).length,
                     verified: (data.items || []).filter(it => it && (it.verification && it.verification.is_ok || it.is_cancelled)).length,
@@ -769,9 +835,10 @@
         
         container.innerHTML = ids.map(id => {
             const p = globalProjects[id];
+            const title = p.name ? `[${id}] ${p.name}` : `[${id}]`;
             return `
                 <div class="project-card" onclick="jumpToProject('${id}')">
-                    <h3>[${id}] ${p.name}</h3>
+                    <h3>${title}</h3>
                     <div class="card-meta">最後更新: ${p.lastUpdate}</div>
                     <div class="card-progress-container">
                         <div class="card-progress-bar">
@@ -827,7 +894,7 @@
     dropZone.ondragover = e => { e.preventDefault(); };
     dropZone.ondrop = e => { e.preventDefault(); };
 
-    // [v1.5] 更新測試身份
+    // [v1.5] 本地／LIFF 失敗時的後備測試身份
     function setTestIdentity() {
         currentUser = {
             userId: 'U12345',
@@ -864,13 +931,14 @@
             
             if (data && data.context) {
                 console.log('✅ 成功從雲端抓取 Context:', data.context);
-                loadData(data.context);
+                const hubMap = await getHubProjectNameMap();
+                loadData(data.context, hubMap);
                 document.getElementById('h-sync').innerText = data.last_updated || '剛剛';
                 
-                // [v1.4] 向 GAS 請求真實專案資訊 (名稱)
-                const projectNo = data.context.案號;
-                if (projectNo && projectNo !== 'UNKNOWN_NO') {
-                    fetchProjectMetadata(projectNo);
+                // [v1.4] 向 GAS 請求真實專案資訊 (名稱) — 補強 Firebase 未寫入案名時
+                const ctxNo = data.context.案號;
+                if (ctxNo && ctxNo !== 'UNKNOWN_NO') {
+                    fetchProjectMetadata(ctxNo);
                 }
             } else {
                 alert(`找不到案號 ${projectNo} 的雲端數據`);
@@ -906,10 +974,24 @@
                     return no === targetNo;
                 });
                 if (project) {
-                    const displayName = project.siteName || project.name || project['案場名稱'] || '未命名案場';
+                    const displayName = pickHubProjectDisplayName(project) || '未命名案場';
                     document.getElementById('h-project-name').innerText = displayName;
                     if (appData && appData.total_summary) {
                         appData.total_summary.siteName = displayName;
+                    }
+                    try {
+                        const refPath = `quotations/${targetNo}`;
+                        const snap = await db.ref(refPath).once('value');
+                        const v = snap.val();
+                        if (v && v.context && typeof v.context === 'object') {
+                            await db.ref(`${refPath}/context/total_summary/siteName`).set(displayName);
+                        } else if (v && v.total_summary) {
+                            await db.ref(`${refPath}/total_summary/siteName`).set(displayName);
+                        }
+                        _hubNameMapCache.ts = 0;
+                        await refreshDashboard();
+                    } catch (fbErr) {
+                        console.warn('[fetchProjectMetadata] 寫回 Firebase 案名失敗', fbErr);
                     }
                 }
             }
@@ -917,7 +999,7 @@
     }
 
     // --- Data Management ---
-    function loadData(data) {
+    function loadData(data, hubNameMap) {
         try {
             console.log('開始執行 loadData，準備相容性處理...');
             // 向下相容處理舊版未攜帶這些資訊的 JSON
@@ -941,10 +1023,11 @@
             const toolbar = document.getElementById('floating-toolbar');
             if (toolbar) toolbar.style.display = 'flex';
             
-            // Header
+            // Header：優先 GAS Hub 案名（與主控台一致），再 Firebase siteName
             const sum = data.total_summary || {};
-            // 優先顯示 Firebase 內的案名與進度
-            const nameDisplay = (sum.siteName && sum.siteName !== "載入中...") ? sum.siteName : `案號 #${data.案號 || 'N/A'}`;
+            const noKey = String(data.案號 != null ? data.案號 : '').trim();
+            const map = hubNameMap && typeof hubNameMap === 'object' ? hubNameMap : {};
+            const nameDisplay = (noKey && map[noKey]) || firebaseSiteNameToDisplay(sum.siteName) || '未命名案場';
             
             document.getElementById('h-project-name').innerText = nameDisplay;
             document.getElementById('h-project-no').innerText = `#${data.案號 || 'N/A'}`;
