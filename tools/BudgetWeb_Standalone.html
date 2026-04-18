@@ -6,6 +6,7 @@
     <title>添心設計 | 報價單 AI 預處理器 (Standalone)</title>
     <!-- Firebase SDK (v9 Compatibility) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <!-- SheetJS (XLSX) -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -254,7 +255,9 @@
         <h3 style="margin-top:0; font-size:16px;">Step 0: 填寫案號 (必要)</h3>
         <input type="text" id="projectNoInput" placeholder="案號 (例: 742)" style="padding:8px; margin-right:10px; width:200px;">
         <span id="projectVerifyStatus" style="font-size: 12px; font-weight: bold;"></span><br>
-        <span style="font-size: 12px; color: #666;">* 輸入案號將自動檢查雲端是否有既有資料。</span>
+        <span style="font-size: 12px; color: #666;">* 輸入案號將自動檢查雲端是否有既有資料。</span><br>
+        <button type="button" onclick="clearParserPrefsForProject()" style="margin-top:10px; font-size:12px; padding:6px 12px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; cursor:pointer; color:#334155;">清除本機解析記憶</button>
+        <p style="font-size:11px; color:#888; margin:6px 0 0 0; max-width:520px;">刪除此案號在瀏覽器內儲存的「分區列取消／隱藏工項」自動套用設定（localStorage），不影響 Firebase／雲端驗收資料。</p>
     </div>
 
     <div class="upload-box disabled" id="dropZone" onclick="handleUploadClick()">
@@ -362,6 +365,127 @@
     let currentWorkbook = null;
     let processedData = null;
 
+    /** 依案號記憶「分區取消／移除工項」，下次同案號解析時自動套用 */
+    const PARSER_PREFS_KEY_PREFIX = 'budget_parser_prefs_v1_';
+
+    function getParserPrefsProjectKey() {
+        const el = document.getElementById('projectNoInput');
+        return el ? String(el.value || '').trim() : '';
+    }
+
+    function itemFingerprint(d) {
+        if (!d) return '';
+        const rl = String(d.raw_line || '').trim();
+        if (rl) return rl;
+        return [d.name, d.spec, d.sheet_source, d.qty, d.unit].map(x => String(x || '').trim()).join('|');
+    }
+
+    /** 分區列原文正規化（略縮空白），搭配分頁名稱可區分同名分區 */
+    function normalizeHeaderRaw(s) {
+        return String(s || '').trim().replace(/\s+/g, ' ');
+    }
+
+    function headerCancelKey(it) {
+        return normalizeHeaderRaw(it.raw || '') + '::' + String(it.sheet_source || '');
+    }
+
+    function propagateZonesFromHeaders() {
+        if (!processedData || !processedData.items) return;
+        let currentZone = '未分類';
+        processedData.items.forEach(it => {
+            if (it.type === 'header') {
+                if (!it.is_cancelled) currentZone = it.zone;
+            } else if (it.type === 'item') {
+                it.data.zone = currentZone;
+            } else if (it.type === 'raw') {
+                it.zone = currentZone;
+            }
+        });
+    }
+
+    function saveParserPrefs() {
+        if (!processedData || !processedData.items) return;
+        const projectNo = getParserPrefsProjectKey();
+        if (!projectNo) return;
+        const cancelledHeaderKeys = [];
+        const hkSeen = new Set();
+        processedData.items.forEach(it => {
+            if (it.type === 'header' && it.is_cancelled) {
+                const k = headerCancelKey(it);
+                if (k !== '::' && !hkSeen.has(k)) {
+                    hkSeen.add(k);
+                    cancelledHeaderKeys.push(k);
+                }
+            }
+        });
+        const removedFingerprints = new Set();
+        processedData.items.forEach(it => {
+            if (it.type === 'raw' && it.data) {
+                const fp = itemFingerprint(it.data);
+                if (fp) removedFingerprints.add(fp);
+            }
+        });
+        try {
+            localStorage.setItem(PARSER_PREFS_KEY_PREFIX + projectNo, JSON.stringify({
+                cancelledHeaderKeys,
+                removedFingerprints: Array.from(removedFingerprints),
+                updatedAt: Date.now()
+            }));
+        } catch (e) {
+            console.warn('[ParserPrefs] 儲存失敗', e);
+        }
+    }
+
+    /** @returns {{ cancelledHeaders: number, removedItems: number } | null} */
+    function applyParserPrefs() {
+        const projectNo = getParserPrefsProjectKey();
+        if (!projectNo || !processedData || !processedData.items) return null;
+        let prefs;
+        try {
+            const raw = localStorage.getItem(PARSER_PREFS_KEY_PREFIX + projectNo);
+            if (!raw) return null;
+            prefs = JSON.parse(raw);
+        } catch (e) {
+            return null;
+        }
+        const cancelledHeaderKeys = prefs.cancelledHeaderKeys || [];
+        const legacyCancelledZones = prefs.cancelledZones || [];
+        const removedFingerprints = prefs.removedFingerprints || [];
+        const hkSet = new Set(cancelledHeaderKeys);
+        const legacyZoneSet = new Set(legacyCancelledZones);
+        const useLegacyZoneOnly = hkSet.size === 0 && legacyZoneSet.size > 0;
+        const remSet = new Set(removedFingerprints);
+        processedData.items.forEach(it => {
+            if (it.type !== 'header') return;
+            if (hkSet.has(headerCancelKey(it))) it.is_cancelled = true;
+            else if (useLegacyZoneOnly && legacyZoneSet.has(it.zone)) it.is_cancelled = true;
+        });
+        propagateZonesFromHeaders();
+        processedData.items.forEach(it => {
+            if (it.type === 'item' && it.data) {
+                const fp = itemFingerprint(it.data);
+                if (fp && remSet.has(fp)) it.type = 'raw';
+            }
+        });
+        const nHdr = hkSet.size || (useLegacyZoneOnly ? legacyZoneSet.size : 0);
+        return { cancelledHeaders: nHdr, removedItems: removedFingerprints.length };
+    }
+
+    window.clearParserPrefsForProject = function () {
+        const projectNo = getParserPrefsProjectKey();
+        if (!projectNo) {
+            alert('請先填寫案號。');
+            return;
+        }
+        if (!confirm('確定清除本機解析記憶？\n\n下次同案號重新解析時，不會自動套用先前取消的分區列與隱藏工項。\n不影響已同步至 Firebase 的驗收資料。')) return;
+        try {
+            localStorage.removeItem(PARSER_PREFS_KEY_PREFIX + projectNo);
+            alert('已清除本機解析記憶。');
+        } catch (e) {
+            alert('清除失敗：' + e.message);
+        }
+    };
+
     // 定義全局變數，但需在 DOMContentLoaded 後初始化或確保 ID 存在
     const fileInput = document.getElementById('fileInput');
     const status = document.getElementById('status');
@@ -380,6 +504,8 @@
     // 初始化 Firebase
     if (!firebase.apps.length) {
         firebase.initializeApp(FB_CONFIG);
+        // [安全性預置] 預先啟動匿名登入，以配合未來規則轉型
+        firebase.auth().signInAnonymously().catch(e => console.warn('[Auth] 匿名登入預載中 (不影響目前存取):', e.message));
     }
     const db = firebase.database();
 
@@ -544,7 +670,7 @@
                     if (name !== "" && ( (name.length <= 8 && hasZoneKeyword) || (isUnitEmpty && hasZoneKeyword) ) && !hasNumber) {
                         const isDuplicate = (name === currentZone);
                         currentZone = name;
-                        allItems.push({ type: 'header', zone: currentZone, raw: rawLine, is_cancelled: isDuplicate });
+                        allItems.push({ type: 'header', zone: currentZone, raw: rawLine, sheet_source: sheetName, is_cancelled: isDuplicate });
                         continue;
                     }
 
@@ -581,9 +707,15 @@
 
             processedData.items = allItems;
             findPairs(processedData.items);
+            const prefsMeta = applyParserPrefs();
+            findPairs(processedData.items);
             renderPreview();
             
-            status.innerText = `✅ 解析完成！共偵測到 ${processedData.items.filter(it => it.type==='item').length} 個有效工項。`;
+            let statusMsg = `✅ 解析完成！共偵測到 ${processedData.items.filter(it => it.type==='item').length} 個有效工項。`;
+            if (prefsMeta && (prefsMeta.cancelledHeaders > 0 || prefsMeta.removedItems > 0)) {
+                statusMsg += ` 已套用本案記憶：分區列取消 ${prefsMeta.cancelledHeaders} 筆、隱藏工項 ${prefsMeta.removedItems} 筆。`;
+            }
+            status.innerText = statusMsg;
             downloadBtn.style.display = 'block';
             previewArea.style.display = 'block';
             
@@ -695,17 +827,9 @@
         const header = processedData.items[idx];
         if (header.type !== 'header') return;
         header.is_cancelled = cancel;
-        let currentZone = "未分類";
-        processedData.items.forEach(it => {
-            if (it.type === 'header') {
-                if (!it.is_cancelled) currentZone = it.zone;
-            } else if (it.type === 'item') {
-                it.data.zone = currentZone;
-            } else if (it.type === 'raw') {
-                it.zone = currentZone;
-            }
-        });
+        propagateZonesFromHeaders();
         renderPreview();
+        saveParserPrefs();
     };
 
     window.removeItem = (index) => {
@@ -713,6 +837,7 @@
             processedData.items[index].type = 'raw';
         }
         renderPreview();
+        saveParserPrefs();
     };
 
     window.forceParse = (index) => {
@@ -720,6 +845,7 @@
         if (row.data) {
             row.type = 'item';
             renderPreview();
+            saveParserPrefs();
             return;
         }
         const d = row.row_data || [];
@@ -742,6 +868,7 @@
             }
         };
         renderPreview();
+        saveParserPrefs();
     };
 
     window.addNewItem = () => {

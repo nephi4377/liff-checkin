@@ -1,0 +1,1574 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>添心設計 | 回報系統 (V3)</title>
+
+  <!--
+    ========== V3 可調設定（改這裡即可；勿在下方 module 重複貼密鑰）==========
+    變更後：存檔 → 強制重新整理（Ctrl+Shift+R）
+  -->
+  <script>
+    window.__REPORT_V3_CONFIG__ = {
+      LIFF_ID: '2007974938-gOrjlzna',
+      GAS_WEB_APP_URL: 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec',
+      FIREBASE_CONFIG: {
+        apiKey: "AIzaSyApr3pKxW9Ukot6_QRJ2WunlQD8R4DImoQ",
+        authDomain: "brave-calling-391208.firebaseapp.com",
+        databaseURL: "https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "brave-calling-391208",
+        storageBucket: "brave-calling-391208.firebasestorage.app",
+        messagingSenderId: "274903284381",
+        appId: "1:274903284381:web:be4c60d23357af39a2f274"
+      },
+      // 設為 false：localhost 也走 LIFF；本機無 LIFF 測試改 true
+      ENABLE_LOCAL_TEST_BYPASS: false,
+      PHOTO_UPLOAD_CONCURRENCY: 5,  // 相片上傳並行數 
+      GAS_POST_MAX_RETRIES: 3,  // GAS 送出重試次數
+      FIREBASE_UPLOAD_MAX_RETRIES: 3,  // Firebase 上傳重試次數
+      PHOTO_UNIT_MAX_RETRIES: 3,  // 單張相片重試次數
+      PHOTO_UNIT_RETRY_BASE_MS: 400,  // 單張相片重試間隔
+      GAS_FETCH_TIMEOUT_MS: 120000,  // GAS 連線逾時  
+      CLIENT_VER: '2026.04.12-V3.14',  // 版本號
+      FAILURE_REPORT_PREFIX: 'failure-report',  // 失敗報告前綴
+      MAX_FAILURE_REPORT_JSON_BYTES: 480000,  // 失敗報告 JSON 大小上限
+      IDB_KEY_TRACE: 'sessionTraceDraft',  // IDB 記錄鍵
+      SCHEMA_PENDING: 2,  // IDB 暫存結構版本
+      AUTO_APPLY_PENDING_ON_LOAD: false,  // 有暫存時載入頁面就自動帶入
+      IDB_NAME: 'TanxinReportV3',  // IDB 名稱
+      IDB_VER: 1,  // IDB 版本
+      IDB_STORE: 'pending',  // IDB 儲存空間
+      IDB_KEY: 'lastFailedSubmit',  // IDB 鍵
+      MAX_LOG_LINES: 220  // 最大記錄行數
+    };
+  </script>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.1/dist/browser-image-compression.js"></script>
+
+  <script>
+    // 頁面載入時，顯示頁面版本號
+    document.addEventListener('DOMContentLoaded', () => {
+      const now = new Date();
+      const year = String(now.getFullYear()).slice(-2);
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      document.title += ` v${year}.${month}.${day}`;
+    });
+  </script>
+
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    .spinner {
+      border-top-color: #3498db;
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .file-input-label {
+      display: inline-block;
+      background-color: #3b82f6;
+      color: white;
+      border: 1px solid #3b82f6;
+      padding: 0.5rem 1rem;
+      border-radius: 0.375rem;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      font-weight: 600;
+    }
+
+    .file-input-label:hover { background-color: #2563eb; }
+
+    .file-input-label.selected {
+      background-color: #6b7280;
+      border-color: #6b7280;
+      cursor: default;
+    }
+
+    .helper-btn {
+      background-color: #f3f4f6;
+      color: #4b5563;
+      border: 1px solid #d1d5db;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.875rem;
+      transition: background-color 0.2s;
+    }
+
+    .helper-btn:hover { background-color: #e5e7eb; }
+  </style>
+</head>
+
+<body class="bg-gray-100">
+  <div class="container mx-auto p-4 max-w-lg">
+    <div class="bg-white rounded-lg shadow-md p-6">
+      <div class="text-center mb-4">
+        <h1 class="text-2xl font-bold text-gray-800">添心設計｜回報系統</h1>
+        <p id="v3-local-banner" class="hidden mt-2 text-sm text-amber-800 bg-amber-100 border border-amber-200 rounded px-2 py-1">
+          本地測試模式（略過 LINE）— 正式上線請將頁首 <code class="bg-amber-50 px-1 rounded">__REPORT_V3_CONFIG__</code> 的 <code class="bg-amber-50 px-1 rounded">ENABLE_LOCAL_TEST_BYPASS</code> 改為 <code class="bg-amber-50 px-1 rounded">false</code>
+        </p>
+        <div id="dev-sim-panel" class="hidden mt-2 p-3 bg-violet-50 border border-violet-200 rounded-lg text-sm">
+          <label for="dev-sim-mode" class="font-semibold text-violet-900">測試用 · 失敗模擬</label>
+          <p class="text-xs text-violet-700 mt-0.5 mb-1">僅 localhost、127.0.0.1 或網址加 <code class="bg-violet-100 px-1 rounded">?devSim=1</code> 時顯示。正式環境不會出現。</p>
+          <select id="dev-sim-mode" class="w-full border border-violet-300 rounded px-2 py-1.5 bg-white text-violet-900">
+            <option value="none">不模擬（正常）</option>
+            <option value="gas_business">GAS 回 success:false（業務拒絕）</option>
+            <option value="gas_bad_json">GAS 回非 JSON（類似錯誤頁）</option>
+            <option value="gas_network">GAS 連線 throw Failed to fetch（第 1 次）</option>
+            <option value="gas_abort">GAS 逾時 AbortError（第 1 次）</option>
+            <option value="after_photos">照片處理完、送 GAS 前拋錯</option>
+            <option value="photo_first">第一張：走滿單張重試後仍失敗（實機路徑）</option>
+            <option value="photo_first_retry_ok">第一張前兩次暫時失敗、第三次成功</option>
+            <option value="idb_skip">模擬本機暫存寫入失敗（不寫 IndexedDB）</option>
+          </select>
+          <p id="dev-sim-hint" class="mt-2 text-xs text-violet-800 leading-relaxed"></p>
+        </div>
+      </div>
+
+      <form id="report-form" novalidate>
+        <div id="pending-retry-banner" class="hidden mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900">
+          <p class="font-semibold mb-1">偵測到本機有未送出的暫存</p>
+          <p id="pending-retry-summary" class="text-blue-800 mb-2"></p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" id="btn-pending-apply"
+              class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium">一鍵帶入上次內容</button>
+            <button type="button" id="btn-pending-clear"
+              class="px-3 py-1.5 bg-white border border-blue-300 text-blue-800 rounded text-sm">刪除暫存</button>
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label for="projectId" class="block text-gray-700 font-semibold mb-2">
+            案號 <span class="text-red-500">*</span>
+          </label>
+          <input type="tel" id="projectId" class="w-full px-3 py-2 border border-gray-300 rounded-md"
+            inputmode="numeric" pattern="[0-9]+" placeholder="例如：715；非案場請填 9999" required>
+          <p class="text-sm text-gray-500 mt-1">
+            僅允許數字（例：<span class="font-semibold">715</span>）。若為非案場，請填 <span class="font-semibold">9999</span>。
+          </p>
+          <p id="projectIdError" class="text-sm text-red-600 mt-1 hidden"></p>
+        </div>
+
+        <div class="mb-4">
+          <label for="workType" class="block text-gray-700 font-semibold mb-2">
+            今日施工項目 <span class="text-red-500">*</span>
+          </label>
+          <select id="workType" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white" required>
+            <option value="" disabled selected>請選擇施工項目</option>
+            <option value="保護工程-進退場項目">1. 保護工程-進退場項目</option>
+            <option value="木作工程">2. 木作工程</option>
+            <option value="系統工程">3. 系統工程</option>
+            <option value="水電工程">4. 水電工程</option>
+            <option value="油漆工程">5. 油漆工程</option>
+            <option value="泥作工程">6. 泥作工程</option>
+            <option value="清潔工程">7. 清潔工程</option>
+            <option value="玻璃工程">8. 玻璃工程</option>
+            <option value="其他工程">9. 其他工程</option>
+          </select>
+        </div>
+
+        <div class="mb-4">
+          <label for="workDescription" class="block text-gray-700 font-semibold mb-2">當日施工內容說明</label>
+          <textarea id="workDescription" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-md"></textarea>
+          <div id="workDescriptionHelpers" class="mt-2 flex flex-wrap gap-2"></div>
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-gray-700 font-semibold mb-2">現場照片 (可多選)</label>
+          <div class="flex items-center">
+            <label for="sitePhotos" id="sitePhotosLabel" class="file-input-label">選擇檔案</label>
+            <span id="sitePhotosCount" class="ml-3 text-gray-600">未選取檔案</span>
+            <input type="file" id="sitePhotos" multiple accept="image/*" class="hidden" />
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label for="problemDescription" class="block text-gray-700 font-semibold mb-2">問題回報</label>
+          <textarea id="problemDescription" rows="4"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md"></textarea>
+          <div id="problemDescriptionHelpers" class="mt-2 flex flex-wrap gap-2"></div>
+        </div>
+
+        <div class="mb-6">
+          <label class="block text-gray-700 font-semibold mb-2">問題照片 (可多選)</label>
+          <div class="flex items-center">
+            <label for="problemPhotos" id="problemPhotosLabel" class="file-input-label">選擇檔案</label>
+            <span id="problemPhotosCount" class="ml-3 text-gray-600">未選取檔案</span>
+            <input type="file" id="problemPhotos" multiple accept="image/*" class="hidden" />
+          </div>
+        </div>
+
+        <div class="flex items-center mb-4">
+          <input id="compressImages" type="checkbox" checked
+            class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+          <label for="compressImages" class="ml-2 block text-sm text-gray-900">壓縮相片以加快上傳</label>
+        </div>
+
+        <div id="progress-container" class="w-full bg-gray-200 rounded-full h-6 mb-2 hidden">
+          <div id="progress-bar"
+            class="bg-blue-600 h-6 rounded-full text-center text-white text-sm leading-6 transition-all duration-500"
+            style="width: 0%;">0%</div>
+        </div>
+
+        <div id="stats-container" class="text-center text-sm font-mono text-gray-500 mb-4 hidden space-y-1">
+          <div>相片階段：約 <span id="time-photo-phase">0.0</span> 秒／約 <span id="speed-photo-phase">0.0</span> KB/s</div>
+          <div>後端回應：約 <span id="time-backend">0.0</span> 秒</div>
+        </div>
+
+        <div id="status-message" class="text-center mb-4 min-h-[24px]"></div>
+
+        <button type="submit" id="submit-button"
+          class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-lg hover:bg-blue-700 disabled:bg-gray-400">
+          <span id="button-text">提交回報</span>
+          <div id="button-spinner" class="spinner w-6 h-6 border-4 border-white rounded-full mx-auto hidden"></div>
+        </button>
+
+        <div id="error-list-container" class="mt-4 p-4 bg-red-50 border border-red-200 rounded-md hidden">
+          <h3 class="text-red-800 font-bold mb-2 flex items-center">
+            <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            發生以下錯誤：
+          </h3>
+          <ul id="error-list" class="list-disc pl-5 text-sm text-red-600 space-y-1"></ul>
+        </div>
+
+        <div id="failure-recovery-panel" class="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-md hidden">
+          <p class="text-sm text-gray-800">送出仍失敗時，表單與照片會<strong>默默存在您這台裝置</strong>（僅此瀏覽器）。下次開啟頁面會提示，請按「一鍵帶入上次內容」再送；成功後才刪暫存。</p>
+          <button type="button" id="btn-copy-debug-log"
+            class="mt-2 px-3 py-1.5 bg-gray-600 text-white rounded text-xs">複製除錯（開發者用）</button>
+        </div>
+      </form>
+
+      <div id="success-screen" class="text-center hidden">
+        <svg class="mx-auto h-16 w-16 text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+          stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <h2 class="mt-4 text-2xl font-bold text-gray-800">回報已成功提交！(V3)</h2>
+        <div id="final-stats" class="mt-4 p-4 bg-blue-50 rounded-lg text-sm text-blue-800 space-y-1">
+          <p>總體積: <span id="final-total-mb">0.00</span> MB</p>
+          <p>相片階段：約 <span id="final-time-photo">0.0</span> 秒／約 <span id="final-speed-photo">0.0</span> KB/s</p>
+          <p>後端回應：約 <span id="final-time-backend">0.0</span> 秒</p>
+        </div>
+        <p class="mt-4 text-gray-600">後續處理完成後您會收到 LINE 通知。<br>此視窗將在 30 秒後自動關閉。</p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { readFileAsBase64 } from '../../shared/js/utils.js?v=20260318';
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+    import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+
+    const {
+      LIFF_ID,
+      GAS_WEB_APP_URL,
+      FIREBASE_CONFIG,
+      ENABLE_LOCAL_TEST_BYPASS,
+      PHOTO_UPLOAD_CONCURRENCY,
+      GAS_POST_MAX_RETRIES,
+      FIREBASE_UPLOAD_MAX_RETRIES,
+      PHOTO_UNIT_MAX_RETRIES,
+      PHOTO_UNIT_RETRY_BASE_MS,
+      GAS_FETCH_TIMEOUT_MS,
+      CLIENT_VER,
+      FAILURE_REPORT_PREFIX,
+      MAX_FAILURE_REPORT_JSON_BYTES,
+      IDB_KEY_TRACE,
+      SCHEMA_PENDING,
+      AUTO_APPLY_PENDING_ON_LOAD,
+      IDB_NAME,
+      IDB_VER,
+      IDB_STORE,
+      IDB_KEY,
+      MAX_LOG_LINES,
+    } = window.__REPORT_V3_CONFIG__;
+
+    let v3FirebaseStorage = null;
+    let v3FirebaseAuth = null;
+    let v3ActiveSubmitBatchId = null;
+    let v3TraceDebounceTimer = null;
+    // 開發者測試用：模擬失敗情境
+    function isDevSimAllowed() {
+      try {
+        if (new URLSearchParams(window.location.search).get('devSim') === '1') return true;
+        const h = window.location.hostname;
+        return h === '127.0.0.1' || h === 'localhost';
+      } catch (_) {
+        return false;
+      }
+    }
+    // 開發者測試用：模擬失敗情境
+    function getDevSimMode() {
+      try {
+        const el = document.getElementById('dev-sim-mode');
+        return (el && el.value) || 'none';
+      } catch (_) {
+        return 'none';
+      }
+    }
+    // 開發者測試用：模擬失敗情境
+    const REPORT_LOG_LINES = [];
+    function reportTrace(msg) {
+      const line = `[${new Date().toISOString()}] ${msg}`;
+      REPORT_LOG_LINES.push(line);
+      if (REPORT_LOG_LINES.length > MAX_LOG_LINES) {
+        REPORT_LOG_LINES.splice(0, REPORT_LOG_LINES.length - MAX_LOG_LINES);
+      }
+      console.log('[V3-LOG]', line);
+      scheduleV3TraceIdbFlush();
+    }
+    // 開發者測試用：模擬失敗情境
+    function scheduleV3TraceIdbFlush() {
+      if (!v3ActiveSubmitBatchId) return;
+      if (v3TraceDebounceTimer) clearTimeout(v3TraceDebounceTimer);
+      v3TraceDebounceTimer = setTimeout(() => {
+        v3TraceDebounceTimer = null;
+        void idbPutTraceDraft(getFullReportLog(), v3ActiveSubmitBatchId).catch((e) => {
+          console.warn('[V3] IDB 記錄檔草稿寫入失敗', e);
+        });
+      }, 650);
+    }
+    // 開發者測試用：模擬失敗情境
+    function clearV3SubmitSession() {
+      v3ActiveSubmitBatchId = null;
+      if (v3TraceDebounceTimer) {
+        clearTimeout(v3TraceDebounceTimer);
+        v3TraceDebounceTimer = null;
+      }
+    }
+    // 開發者測試用：模擬失敗情境
+    function getFullReportLog() {
+      return REPORT_LOG_LINES.join('\n');
+    }
+    // 開發者測試用：模擬失敗情境
+    function snapshotClientEnv() {
+      return {
+        ver: CLIENT_VER,
+        href: typeof location !== 'undefined' ? location.href : '',
+        online: typeof navigator !== 'undefined' ? navigator.onLine : null,
+        language: typeof navigator !== 'undefined' ? navigator.language : '',
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+        screen: typeof screen !== 'undefined' ? `${screen.width}x${screen.height}` : '',
+        viewport: typeof document !== 'undefined' && document.documentElement
+          ? `${document.documentElement.clientWidth}x${document.documentElement.clientHeight}`
+          : '',
+      };
+    }
+
+    function reportTraceEnv() {
+      const e = snapshotClientEnv();
+      reportTrace(`[ENV] online=${e.online} screen=${e.screen} viewport=${e.viewport}`);
+      reportTrace(`[ENV] ua=${e.userAgent}`);
+      reportTrace(`[ENV] href=${e.href}`);
+    }
+
+    function getDeveloperDiagnosticReport() {
+      return [
+        '=== V3 診斷用（複製給開發者）===',
+        JSON.stringify(snapshotClientEnv(), null, 2),
+        '',
+        '--- 時間線（程式內建）---',
+        getFullReportLog(),
+      ].join('\n');
+    }
+
+    function openReportIdb() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(IDB_NAME, IDB_VER);
+        req.onupgradeneeded = () => {
+          if (!req.result.objectStoreNames.contains(IDB_STORE)) {
+            req.result.createObjectStore(IDB_STORE);
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function idbSavePending(payload) {
+      const db = await openReportIdb();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).put(payload, IDB_KEY);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    async function idbLoadPending() {
+      const db = await openReportIdb();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        const req = tx.objectStore(IDB_STORE).get(IDB_KEY);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function idbClearPending() {
+      const db = await openReportIdb();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        const st = tx.objectStore(IDB_STORE);
+        st.delete(IDB_KEY);
+        st.delete(IDB_KEY_TRACE);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    async function idbPutTraceDraft(traceFull, batchId) {
+      const db = await openReportIdb();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).put({ traceFull, batchId, updatedAt: Date.now() }, IDB_KEY_TRACE);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    async function idbDeleteTraceDraft() {
+      const db = await openReportIdb();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).delete(IDB_KEY_TRACE);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    function migrateFailureChainFromSnapshot(snap) {
+      if (!snap) return [];
+      if ((snap.schema || 0) >= 2 && Array.isArray(snap.failureChain)) {
+        return snap.failureChain.map((x) => ({ ...x }));
+      }
+      if (snap.failure) {
+        return [{
+          savedAt: snap.savedAt,
+          batchId: snap.batchIdAttempt,
+          error: { name: snap.failure.name || 'Error', message: snap.failure.message || '' },
+          reportTraceFull: snap.failure.trace || '',
+          env: snap.failure.env || null,
+        }];
+      }
+      return [];
+    }
+
+    async function buildPhotoEntriesFromAllPhotosInfo(allPhotosInfo) {
+      const photoEntries = [];
+      for (let i = 0; i < (allPhotosInfo || []).length; i++) {
+        const item = allPhotosInfo[i];
+        try {
+          const buf = await item.file.arrayBuffer();
+          photoEntries.push({
+            name: item.file.name || `photo_${i}.jpg`,
+            type: item.file.type || 'image/jpeg',
+            isProblem: !!item.isProblem,
+            buffer: buf,
+          });
+        } catch (e) {
+          reportTrace(`[IDB] 無法讀取照片略過: ${item.file.name} ${e.message}`);
+        }
+      }
+      return photoEntries;
+    }
+
+    async function writeSessionPayloadToIdbBegin({
+      cleanProjectId,
+      batchId,
+      userProfile,
+      allPhotosInfo,
+      shouldCompress,
+      workType,
+      workDescription,
+      problemDescription,
+      idbPriorSnapshot,
+    }) {
+      const failureChain = migrateFailureChainFromSnapshot(idbPriorSnapshot);
+      const photoEntries = await buildPhotoEntriesFromAllPhotosInfo(allPhotosInfo);
+      const payload = {
+        schema: SCHEMA_PENDING,
+        savedAt: Date.now(),
+        batchIdAttempt: batchId,
+        userId: userProfile.userId,
+        displayName: userProfile.displayName,
+        form: {
+          projectId: cleanProjectId,
+          workType,
+          workDescription,
+          problemDescription,
+          compressImages: !!shouldCompress,
+        },
+        photos: photoEntries,
+        failureChain,
+        reportTraceFull: getFullReportLog(),
+      };
+      await idbSavePending(payload);
+      await idbPutTraceDraft(getFullReportLog(), batchId);
+      reportTrace('[IDB] 已建立本輪工作集與記錄檔（全文於 sessionTraceDraft + 主暫存）');
+    }
+
+    async function uploadFailureReportToFirebase(projectId, failureRecord) {
+      if (!v3FirebaseStorage || !v3FirebaseAuth || !v3FirebaseAuth.currentUser) {
+        reportTrace('[Firebase] 失敗記錄略過雲端（Storage／Auth 未就緒）');
+        return;
+      }
+      const ts = failureRecord.savedAt;
+      const seg = String(projectId || '0').replace(/[^\d]/g, '') || '0';
+      const path = `${FAILURE_REPORT_PREFIX}/${seg}/failure-${ts}.json`;
+      let body = {
+        kind: 'TanxinReportV3_failure',
+        schema: SCHEMA_PENDING,
+        savedAt: ts,
+        batchId: failureRecord.batchId,
+        projectId: String(projectId),
+        error: failureRecord.error,
+        env: failureRecord.env,
+        reportTraceFull: failureRecord.reportTraceFull || '',
+      };
+      let json = JSON.stringify(body);
+      if (json.length > MAX_FAILURE_REPORT_JSON_BYTES) {
+        const trim = json.length - MAX_FAILURE_REPORT_JSON_BYTES + 4000;
+        body.reportTraceFull = (body.reportTraceFull || '').slice(trim > 0 ? trim : 0);
+        json = JSON.stringify(body);
+      }
+      const storageRef = ref(v3FirebaseStorage, path);
+      try {
+        await uploadBytes(storageRef, new Blob([json], { type: 'application/json;charset=utf-8' }));
+        reportTrace(`[Firebase] 已上傳失敗記錄 ${path}`);
+      } catch (e) {
+        reportTrace(`[Firebase] 失敗記錄上傳失敗: ${e.code || e.message || e}`);
+      }
+    }
+
+    /** 供 GAS 的 clientTrace：上次失敗摘要（控制字數，不含 Base64） */
+    function compactFailureForPayload(stored) {
+      if (!stored) return null;
+      if ((stored.schema || 0) >= 2 && Array.isArray(stored.failureChain) && stored.failureChain.length) {
+        const last = stored.failureChain[stored.failureChain.length - 1];
+        const trace = last.reportTraceFull || '';
+        return {
+          schema: stored.schema,
+          savedAt: last.savedAt,
+          failedBatchId: last.batchId || stored.batchIdAttempt || '',
+          failureCount: stored.failureChain.length,
+          error: {
+            name: last.error?.name || 'Error',
+            message: (last.error?.message || '').slice(0, 2000),
+          },
+          env: last.env || null,
+          traceTail: trace.length > 12000 ? trace.slice(-12000) : trace,
+        };
+      }
+      if (stored.failure) {
+        const trace = stored.failure.trace || '';
+        return {
+          schema: stored.schema || 1,
+          savedAt: stored.savedAt,
+          failedBatchId: stored.batchIdAttempt || '',
+          error: {
+            name: stored.failure.name || 'Error',
+            message: (stored.failure.message || '').slice(0, 2000),
+          },
+          env: stored.failure.env || null,
+          traceTail: trace.length > 12000 ? trace.slice(-12000) : trace,
+        };
+      }
+      return null;
+    }
+
+    async function persistFailedSubmitToLocal({
+      cleanProjectId,
+      batchId,
+      userProfile,
+      allPhotosInfo,
+      shouldCompress,
+      workType,
+      workDescription,
+      problemDescription,
+      error,
+    }) {
+      if (isDevSimAllowed() && getDevSimMode() === 'idb_skip') {
+        reportTrace('[模擬] 略過 IndexedDB，等同暫存失敗');
+        if (typeof window.logGlobalError === 'function') {
+          window.logGlobalError('本機暫存', '（測試）模擬無法寫入，未保留重送資料');
+        }
+        return;
+      }
+
+      let existing = null;
+      try {
+        existing = await idbLoadPending();
+      } catch (_) { /* 略 */ }
+
+      const failureChain = migrateFailureChainFromSnapshot(existing);
+      const failureRecord = {
+        savedAt: Date.now(),
+        batchId,
+        error: {
+          name: error && error.name ? error.name : 'Error',
+          message: error && error.message ? error.message : String(error),
+        },
+        reportTraceFull: getFullReportLog(),
+        env: snapshotClientEnv(),
+      };
+      failureChain.push(failureRecord);
+
+      const photoEntries = await buildPhotoEntriesFromAllPhotosInfo(allPhotosInfo);
+      const payload = {
+        schema: SCHEMA_PENDING,
+        savedAt: Date.now(),
+        batchIdAttempt: batchId,
+        userId: userProfile.userId,
+        displayName: userProfile.displayName,
+        form: {
+          projectId: cleanProjectId,
+          workType,
+          workDescription,
+          problemDescription,
+          compressImages: !!shouldCompress,
+        },
+        photos: photoEntries,
+        failureChain,
+        reportTraceFull: getFullReportLog(),
+        failure: {
+          name: failureRecord.error.name,
+          message: failureRecord.error.message,
+          trace: failureRecord.reportTraceFull,
+          env: failureRecord.env,
+        },
+      };
+      try {
+        payload.reportTraceFull = getFullReportLog();
+        await idbSavePending(payload);
+        await idbDeleteTraceDraft();
+        reportTrace('[IDB] 已暫存失敗回報（本機，含失敗鏈）');
+        failureRecord.reportTraceFull = getFullReportLog();
+      } catch (e) {
+        reportTrace(`[IDB] 暫存失敗: ${e.message || e}`);
+        failureRecord.reportTraceFull = getFullReportLog();
+      }
+      await uploadFailureReportToFirebase(cleanProjectId, failureRecord);
+    }
+
+    function sleep(ms) {
+      return new Promise((r) => setTimeout(r, ms));
+    }
+
+    function isTransientHttpStatus(status) {
+      return status === 502 || status === 503 || status === 504 || status === 408 || status === 429;
+    }
+
+    function isLikelyNetworkError(err) {
+      const msg = err && err.message ? String(err.message) : String(err);
+      return /Failed to fetch|NetworkError|Load failed|aborted|AbortError/i.test(msg);
+    }
+
+    /** 整張相片管線失敗時，是否值得在同一輪送出內再試（與「本輪放棄、稍後整批重傳」區隔） */
+    function isTransientPhotoPipelineError(err) {
+      if (!err) return false;
+      if (err._simPhotoTransient === true) return true;
+      const code = err.code;
+      if (typeof code === 'string') {
+        if (['unavailable', 'deadline-exceeded', 'aborted', 'resource-exhausted'].includes(code)) return true;
+        if (['permission-denied', 'unauthenticated'].includes(code)) return false;
+      }
+      if (isLikelyNetworkError(err)) return true;
+      const msg = String(err.message || err);
+      if (/quota|QUOTA|權限|permission|denied|unauth/i.test(msg)) return false;
+      if (/storage\/|FirebaseError|Failed to fetch|NetworkError|Load failed/i.test(msg)) return true;
+      return false;
+    }
+
+    /** 僅開發模擬：第一張在「單張重試」層的行為（不影響正式併發） */
+    function throwIfDevSimPhotoFirstAttempt(mode, idx, unitAttempt) {
+      if (!isDevSimAllowed()) return;
+      if (idx !== 0) return;
+      if (mode === 'photo_first_retry_ok') {
+        if (unitAttempt < PHOTO_UNIT_MAX_RETRIES) {
+          const e = new Error('[模擬] 相片暫時失敗');
+          e._simPhotoTransient = true;
+          throw e;
+        }
+      } else if (mode === 'photo_first') {
+        if (unitAttempt < PHOTO_UNIT_MAX_RETRIES) {
+          const e = new Error('[模擬] 相片暫時失敗（實機：同輪內會再試）');
+          e._simPhotoTransient = true;
+          throw e;
+        }
+        throw new Error('[模擬] 相片處理失敗（重試後仍失敗）');
+      }
+    }
+
+    async function mapWithConcurrency(items, concurrency, mapper) {
+      if (!items.length) return [];
+      const results = new Array(items.length);
+      let nextIndex = 0;
+      /** 任一項目失敗後不再派發新索引，避免首張錯誤後仍跑完剩餘項目 */
+      let failure = null;
+
+      async function worker() {
+        while (failure === null) {
+          const i = nextIndex++;
+          if (i >= items.length) break;
+          try {
+            results[i] = await mapper(items[i], i);
+          } catch (e) {
+            failure = e;
+            throw e;
+          }
+        }
+      }
+
+      const n = Math.min(concurrency, items.length);
+      try {
+        await Promise.all(Array.from({ length: n }, () => worker()));
+      } catch (e) {
+        throw failure || e;
+      }
+      return results;
+    }
+
+    async function compressWithFallback(file, shouldCompress) {
+      if (!shouldCompress) return file;
+      const base = { maxSizeMB: 0.4, maxWidthOrHeight: 1280 };
+      try {
+        return await imageCompression(file, { ...base, useWebWorker: true });
+      } catch (e) {
+        console.warn('[V3] 壓縮(WebWorker)失敗，改主執行緒重試', e);
+        return await imageCompression(file, { ...base, useWebWorker: false });
+      }
+    }
+
+    async function uploadFirebaseWithRetry(storageRef, processedFile) {
+      let lastErr;
+      for (let attempt = 1; attempt <= FIREBASE_UPLOAD_MAX_RETRIES; attempt++) {
+        try {
+          const uploadResult = await uploadBytes(storageRef, processedFile);
+          const firebaseURL = await getDownloadURL(uploadResult.ref);
+          return { uploadResult, firebaseURL };
+        } catch (e) {
+          lastErr = e;
+          console.warn(`[V3] Firebase 上傳第 ${attempt} 次失敗，將重試`, e);
+          if (attempt < FIREBASE_UPLOAD_MAX_RETRIES) await sleep(350 * attempt);
+        }
+      }
+      throw lastErr;
+    }
+
+    function buildGasFormData(finalFormData, processedPhotos) {
+      const formData = new FormData();
+      formData.append('payload', JSON.stringify({ ...finalFormData, photos: processedPhotos }));
+      Object.keys(finalFormData).forEach((key) => {
+        if (key !== 'photos') {
+          formData.append(key, typeof finalFormData[key] === 'object' ? JSON.stringify(finalFormData[key]) : finalFormData[key]);
+        }
+      });
+      formData.append('chunkIndex', 1);
+      formData.append('photos', JSON.stringify(processedPhotos));
+      return formData;
+    }
+
+    async function postToGasWithRetry(finalFormData, processedPhotos) {
+      let lastError = null;
+      for (let attempt = 1; attempt <= GAS_POST_MAX_RETRIES; attempt++) {
+        reportTrace(`GAS 送出 第 ${attempt}/${GAS_POST_MAX_RETRIES} 次`);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), GAS_FETCH_TIMEOUT_MS);
+        try {
+          const formData = buildGasFormData(finalFormData, processedPhotos);
+
+          if (isDevSimAllowed() && getDevSimMode() === 'gas_network' && attempt === 1) {
+            clearTimeout(timer);
+            reportTrace('[模擬] 拋出 Failed to fetch');
+            throw new TypeError('Failed to fetch (simulated)');
+          }
+          if (isDevSimAllowed() && getDevSimMode() === 'gas_abort' && attempt === 1) {
+            clearTimeout(timer);
+            reportTrace('[模擬] 拋出 AbortError（類逾時）');
+            const ab = new Error('The user aborted a request.');
+            ab.name = 'AbortError';
+            throw ab;
+          }
+
+          const response = await fetch(GAS_WEB_APP_URL, {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal,
+          });
+          clearTimeout(timer);
+
+          let textBody = await response.text();
+          if (isDevSimAllowed()) {
+            const sm = getDevSimMode();
+            if (sm === 'gas_business') {
+              textBody = JSON.stringify({ success: false, message: '[模擬] GAS 業務拒絕 (success:false)' });
+              reportTrace('[模擬] 覆寫回應為 success:false');
+            } else if (sm === 'gas_bad_json') {
+              textBody = '<!DOCTYPE html><html><body>502 Bad Gateway (simulated)</body></html>';
+              reportTrace('[模擬] 覆寫回應為非 JSON');
+            }
+          }
+
+          let result = {};
+          try {
+            result = textBody ? JSON.parse(textBody) : {};
+          } catch (parseErr) {
+            const snippet = (textBody || '').slice(0, 120).replace(/\s+/g, ' ');
+            reportTrace(`[GAS] 非 JSON HTTP=${response.status} 片段=${snippet}`);
+            if (attempt < GAS_POST_MAX_RETRIES && (isTransientHttpStatus(response.status) || response.status === 0)) {
+              window.logGlobalError('GAS', `第 ${attempt} 次：回應不是 JSON (HTTP ${response.status})，將重試`);
+              await sleep(700 * attempt);
+              continue;
+            }
+            throw new Error(`伺服器回傳內容無法解析 (HTTP ${response.status}) ${snippet}`);
+          }
+
+          if (response.ok && result.success) {
+            reportTrace(`GAS 回應成功（第 ${attempt} 次嘗試）`);
+            console.log('[V3] GAS 成功', result, attempt > 1 ? `(第 ${attempt} 次嘗試)` : '');
+            return { response, result };
+          }
+
+          if (response.ok && result.success === false) {
+            reportTrace(`[GAS] success=false（業務拒絕）msg=${result.message || ''}`);
+            throw new Error(result.message || '後端回報失敗');
+          }
+
+          if (attempt < GAS_POST_MAX_RETRIES && isTransientHttpStatus(response.status)) {
+            window.logGlobalError('GAS', `HTTP ${response.status}，第 ${attempt} 次失敗，將重試`);
+            await sleep(700 * attempt);
+            continue;
+          }
+
+          reportTrace(`[GAS] 將結束 HTTP=${response.status} bodyMsg=${result.message || ''}`);
+          throw new Error(result.message || `HTTP ${response.status}`);
+        } catch (err) {
+          clearTimeout(timer);
+          lastError = err;
+          if (err && err.name === 'AbortError') {
+            if (attempt < GAS_POST_MAX_RETRIES) {
+              window.logGlobalError('GAS', `等待逾時，第 ${attempt} 次，將重試`);
+              await sleep(800 * attempt);
+              continue;
+            }
+            throw new Error('連線等待逾時，請檢查網路後再試');
+          }
+          if (attempt < GAS_POST_MAX_RETRIES && isLikelyNetworkError(err)) {
+            window.logGlobalError('GAS', `網路異常 (${attempt}/${GAS_POST_MAX_RETRIES})，將重試`);
+            await sleep(800 * attempt);
+            continue;
+          }
+          throw err;
+        }
+      }
+      throw lastError || new Error('GAS 提交失敗');
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const app = initializeApp(FIREBASE_CONFIG);
+      const storage = getStorage(app);
+      const auth = getAuth(app);
+      v3FirebaseStorage = storage;
+      v3FirebaseAuth = auth;
+
+      window.logGlobalError = function (source, msg) {
+        const errorListContainer = document.getElementById('error-list-container');
+        const errorList = document.getElementById('error-list');
+        if (errorListContainer && errorList) {
+          errorListContainer.classList.remove('hidden');
+          const listItem = document.createElement('li');
+          listItem.innerHTML = `<strong>[${source}]</strong> ${msg}`;
+          errorList.appendChild(listItem);
+        } else {
+          console.error(`無法渲染 UI 錯誤: [${source}] ${msg}`);
+        }
+      };
+
+      try {
+        await signInAnonymously(auth);
+        reportTrace('Firebase 匿名登入成功');
+        console.log('[V3] Firebase 匿名登入成功');
+      } catch (authError) {
+        console.error('[V3] Firebase 匿名登入失敗', authError);
+        window.logGlobalError('Firebase Auth', `匿名登入失敗 (${authError.code})，請確認 Firebase 已啟用匿名登入。`);
+      }
+
+      const form = document.getElementById('report-form');
+      const submitButton = document.getElementById('submit-button');
+      const buttonText = document.getElementById('button-text');
+      const buttonSpinner = document.getElementById('button-spinner');
+      const statusMessage = document.getElementById('status-message');
+      const progressContainer = document.getElementById('progress-container');
+      const progressBar = document.getElementById('progress-bar');
+      let progressInterval = null;
+      let currentFakeProgress = 0;
+      let userProfile = null;
+      /** 從 IndexedDB 還原的照片（無法寫回 input，改由程式直接送） */
+      let restoredPhotoInfos = null;
+
+      async function ensureAuthBeforeSubmit() {
+        if (auth.currentUser) return;
+        try {
+          await signInAnonymously(auth);
+        } catch (e) {
+          throw new Error('無法完成上傳前驗證，請關閉頁面後再開一次');
+        }
+        if (!auth.currentUser) {
+          throw new Error('上傳權限尚未就緒，請稍候再按提交');
+        }
+      }
+
+      async function main() {
+        const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+        const urlParams = new URLSearchParams(window.location.search);
+        const uid = urlParams.get('uid');
+        const name = urlParams.get('name');
+
+        if (ENABLE_LOCAL_TEST_BYPASS && isLocalTest && !uid) {
+          console.warn('[V3] 本地測試模式（ENABLE_LOCAL_TEST_BYPASS=true）');
+          document.getElementById('v3-local-banner').classList.remove('hidden');
+          userProfile = { userId: 'Ud58333430513b7527106fa71d2e30151', displayName: '本地測試員' };
+          initializeEventListeners();
+        } else if (uid && name) {
+          let displayName = name;
+          try { displayName = decodeURIComponent(name); } catch (_) { /* 保持原字串 */ }
+          userProfile = { userId: uid, displayName };
+          initializeEventListeners();
+        } else {
+          try {
+            await liff.init({ liffId: LIFF_ID });
+            if (!liff.isLoggedIn()) { liff.login(); return; }
+            userProfile = await liff.getProfile();
+            initializeEventListeners();
+          } catch (error) {
+            console.error('LIFF 初始化失敗:', error);
+            updateStatus('頁面初始化失敗，請在 LINE 中開啟或重新載入。', 'error');
+            submitButton.disabled = true;
+          }
+        }
+      }
+
+      function initializeEventListeners() {
+        setupFileInputUI('sitePhotos', 'sitePhotosLabel', 'sitePhotosCount');
+        setupFileInputUI('problemPhotos', 'problemPhotosLabel', 'problemPhotosCount');
+        initializeHelperButtons();
+
+        const projectIdEl = document.getElementById('projectId');
+        projectIdEl.addEventListener('input', () => enforceDigits(projectIdEl));
+        projectIdEl.addEventListener('blur', () => enforceDigits(projectIdEl));
+
+        const workTypeSelect = document.getElementById('workType');
+        const lastWorkType = localStorage.getItem('lastSelectedWorkType');
+        if (lastWorkType) {
+          workTypeSelect.value = lastWorkType;
+          workTypeSelect.dispatchEvent(new Event('change'));
+        }
+        workTypeSelect.addEventListener('change', () => localStorage.setItem('lastSelectedWorkType', workTypeSelect.value));
+
+        form.addEventListener('submit', handleFormSubmit);
+
+        document.getElementById('btn-copy-debug-log').addEventListener('click', async () => {
+          const text = getDeveloperDiagnosticReport();
+          try {
+            await navigator.clipboard.writeText(text);
+            appendErrorToList('除錯', '已複製（含環境＋時間線），可貼給開發者');
+          } catch (_) {
+            window.prompt('請長按下方文字、全選並複製：', text);
+          }
+        });
+
+        document.getElementById('sitePhotos').addEventListener('change', () => { restoredPhotoInfos = null; });
+        document.getElementById('problemPhotos').addEventListener('change', () => { restoredPhotoInfos = null; });
+
+        document.getElementById('btn-pending-apply').addEventListener('click', async () => {
+          const rec = await idbLoadPending();
+          if (rec) applyPendingRecord(rec);
+        });
+        document.getElementById('btn-pending-clear').addEventListener('click', async () => {
+          try {
+            await idbClearPending();
+          } catch (_) {}
+          restoredPhotoInfos = null;
+          document.getElementById('pending-retry-banner').classList.add('hidden');
+          updateStatus('已刪除本機暫存。', 'info');
+        });
+
+        const DEV_SIM_HINTS = {
+          none: '正常送出；失敗時會嘗試寫入本機暫存。',
+          gas_business: '預期：紅字錯誤（後端拒絕）；若有暫存會寫入 IndexedDB，可重開頁面一鍵帶入。',
+          gas_bad_json: '預期：解析失敗或重試；最終錯誤＋本機暫存（若可寫入）。',
+          gas_network: '預期：類網路斷線，GAS 會重試數次；仍失敗則暫存。',
+          gas_abort: '預期：類連線逾時；仍失敗則暫存。',
+          after_photos: '預期：照片已跑完，在送 GAS 前失敗；暫存應含照片。',
+          photo_first: '預期：第一張前兩次為暫時失敗（會重試）、第三次仍失敗，與實機「走滿 PHOTO_UNIT_MAX_RETRIES」一致；整批失敗並暫存。',
+          photo_first_retry_ok: '預期：第一張前兩次為暫時失敗、第三次成功，可驗證單張重試。',
+          idb_skip: '預期：送出失敗且刻意不寫暫存，無法一鍵帶入（用於測暫存失敗）。',
+        };
+
+        function updateDevSimHint() {
+          const el = document.getElementById('dev-sim-hint');
+          const sel = document.getElementById('dev-sim-mode');
+          if (!el || !sel) return;
+          const k = sel.value || 'none';
+          el.textContent = DEV_SIM_HINTS[k] || '';
+        }
+
+        if (isDevSimAllowed()) {
+          const panel = document.getElementById('dev-sim-panel');
+          if (panel) panel.classList.remove('hidden');
+          const sel = document.getElementById('dev-sim-mode');
+          if (sel) {
+            sel.addEventListener('change', updateDevSimHint);
+            updateDevSimHint();
+          }
+        }
+
+        void initPendingFromIdb();
+      }
+
+      function applyPendingRecord(rec) {
+        if (!rec || !rec.form) return;
+        document.getElementById('projectId').value = rec.form.projectId || '';
+        document.getElementById('workType').value = rec.form.workType || '';
+        document.getElementById('workDescription').value = rec.form.workDescription || '';
+        document.getElementById('problemDescription').value = rec.form.problemDescription || '';
+        document.getElementById('compressImages').checked = rec.form.compressImages !== false;
+        restoredPhotoInfos = (rec.photos || []).map((p) => ({
+          file: new File([p.buffer], p.name, { type: p.type || 'image/jpeg' }),
+          isProblem: !!p.isProblem,
+        }));
+        const siteN = restoredPhotoInfos.filter((x) => !x.isProblem).length;
+        const probN = restoredPhotoInfos.filter((x) => x.isProblem).length;
+        document.getElementById('sitePhotosCount').textContent = siteN ? `暫存 ${siteN} 張` : '未選取檔案';
+        document.getElementById('problemPhotosCount').textContent = probN ? `暫存 ${probN} 張` : '未選取檔案';
+        document.getElementById('sitePhotosLabel').classList.toggle('selected', siteN > 0);
+        document.getElementById('problemPhotosLabel').classList.toggle('selected', probN > 0);
+        document.getElementById('workType').dispatchEvent(new Event('change'));
+      }
+
+      async function initPendingFromIdb() {
+        let rec = null;
+        try {
+          rec = await idbLoadPending();
+        } catch (e) {
+          console.warn(e);
+          return;
+        }
+        const banner = document.getElementById('pending-retry-banner');
+        const sum = document.getElementById('pending-retry-summary');
+        const btnApply = document.getElementById('btn-pending-apply');
+        if (!rec) {
+          banner.classList.add('hidden');
+          return;
+        }
+        if (!userProfile || rec.userId !== userProfile.userId) {
+          sum.textContent = '本機有暫存，但與目前 LINE 帳號不一致；若要重送請刪除暫存後重新填寫。';
+          banner.classList.remove('hidden');
+          if (btnApply) btnApply.classList.add('hidden');
+          return;
+        }
+        if (btnApply) btnApply.classList.remove('hidden');
+        const failN = ((rec.schema || 0) >= 2 && Array.isArray(rec.failureChain)) ? rec.failureChain.length : (rec.failure ? 1 : 0);
+        sum.textContent = `案號 ${rec.form?.projectId || '—'} · 共 ${(rec.photos || []).length} 張圖 · 累積失敗 ${failN} 筆 · 暫存於 ${new Date(rec.savedAt).toLocaleString('zh-TW')}。請按「一鍵帶入上次內容」後再提交。`;
+        banner.classList.remove('hidden');
+        if (AUTO_APPLY_PENDING_ON_LOAD) {
+          applyPendingRecord(rec);
+        }
+      }
+
+      function initializeHelperButtons() {
+        const workTypeSelect = document.getElementById('workType');
+        const workTypePhrases = {
+          '保護工程-進退場項目': ['進場保護', '退場清潔', '電梯保護', '走道保護', '廢棄物清運', '完工保護'],
+          '木作工程': ['天花板施工', '櫃體組裝', '門片安裝', '角料下料', '隔間牆施工', '造型牆', '電視牆施工'],
+          '系統工程': ['櫃體安裝', '門片調整', '五金安裝', '收邊', '層板安裝', '檯面安裝'],
+          '水電工程': ['配管', '拉線', '燈具安裝', '開關面板', '插座面板', '弱電佈線', '給水測試', '排水測試'],
+          '油漆工程': ['批土', '研磨', '底漆', '面漆', '跳色', '噴漆', '木皮上漆'],
+          '泥作工程': ['砌磚', '打底', '粉光', '磁磚鋪貼', '防水施作', '地坪墊高', '門窗崁縫'],
+          '清潔工程': ['粗清', '細清', '垃圾清運', '裝潢後清潔'],
+          '玻璃工程': ['玻璃安裝', '鏡面安裝', '矽利康收邊', '淋浴拉門'],
+          '其他工程': ['現場丈量', '設計圖製作', '施工圖製作', '與客戶討論', '廠商洽談', '材料確認']
+        };
+        const problemPhrases = ['【缺料】', '【尺寸不符】', '【圖面疑問】', '【品質問題】', '【需與設計師確認】', '【需與工務確認】', '【工序衝突】', '【現場保護不足】', '【工具損壞】'];
+
+        renderHelperButtons('problemDescriptionHelpers', problemPhrases, 'problemDescription');
+        workTypeSelect.addEventListener('change', () => {
+          const selectedType = workTypeSelect.value;
+          renderHelperButtons('workDescriptionHelpers', workTypePhrases[selectedType] || [], 'workDescription');
+        });
+        renderHelperButtons('workDescriptionHelpers', [], 'workDescription');
+      }
+
+      /** 渲染輔助按鈕 
+       * @param {string} containerId - 容器 ID
+       * @param {Array} phrases - 按鈕文字列表
+       * @param {string} targetTextareaId - 目標文本框 ID
+       * @returns {void} - 無返回值
+      */
+      function renderHelperButtons(containerId, phrases, targetTextareaId) {
+        const container = document.getElementById(containerId);
+        const textarea = document.getElementById(targetTextareaId);
+        container.innerHTML = '';
+        if (!phrases || phrases.length === 0) return;
+        phrases.forEach((phrase) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'helper-btn';
+          button.textContent = phrase;
+          button.addEventListener('click', () => {
+            const endsWithSpaceOrNewline = textarea.value === '' || /\s$/.test(textarea.value);
+            const separator = endsWithSpaceOrNewline ? '' : ' ';
+            textarea.value += separator + phrase;
+            textarea.focus();
+          });
+          container.appendChild(button);
+        });
+      }
+
+      function enforceDigits(el) {
+        const digits = (el.value || '').replace(/\D+/g, '');
+        if (el.value !== digits) el.value = digits;
+      }
+
+      function showProjectIdError(msg) {
+        const err = document.getElementById('projectIdError');
+        const input = document.getElementById('projectId');
+        err.textContent = msg || '案號僅能輸入數字；非案場請填 9999。';
+        err.classList.remove('hidden');
+        input.classList.add('border-red-500');
+      }
+
+      function hideProjectIdError() {
+        const err = document.getElementById('projectIdError');
+        const input = document.getElementById('projectId');
+        err.textContent = '';
+        err.classList.add('hidden');
+        input.classList.remove('border-red-500');
+      }
+
+      function getValidProjectId() {
+        const input = document.getElementById('projectId');
+        enforceDigits(input);
+        const v = (input.value || '').trim();
+        if (!v || !/^\d+$/.test(v)) {
+          showProjectIdError('請輸入純數字案號；非案場請填 9999。');
+          return null;
+        }
+        hideProjectIdError();
+        return v;
+      }
+
+      function appendErrorToList(source, message) {
+        window.logGlobalError(source, message);
+      }
+
+      function clearErrorList() {
+        const errorListContainer = document.getElementById('error-list-container');
+        const errorList = document.getElementById('error-list');
+        errorList.innerHTML = '';
+        errorListContainer.classList.add('hidden');
+        const fr = document.getElementById('failure-recovery-panel');
+        if (fr) fr.classList.add('hidden');
+      }
+
+      let uploadedChunksBytes = 0;
+      /** 處理表單提交 
+       * @param {Event} event - 表單提交事件
+       * @returns {Promise<void>} - 無返回值
+      */
+      async function handleFormSubmit(event) {
+        event.preventDefault();
+        setLoadingState(true);
+        clearErrorList();
+        REPORT_LOG_LINES.length = 0;
+        reportTrace('新一次提交開始');
+        reportTraceEnv();
+
+        let idbSnapshotForPayload = null;
+        try {
+          idbSnapshotForPayload = await idbLoadPending();
+        } catch (e) {
+          reportTrace('[IDB] 讀取暫存失敗: ' + (e.message || e));
+        }
+
+        const statsContainer = document.getElementById('stats-container');
+        const timePhotoPhaseEl = document.getElementById('time-photo-phase');
+        const speedPhotoPhaseEl = document.getElementById('speed-photo-phase');
+        const timeBackendEl = document.getElementById('time-backend');
+        statsContainer.classList.remove('hidden');
+        timePhotoPhaseEl.textContent = '0.0';
+        speedPhotoPhaseEl.textContent = '0.0';
+        timeBackendEl.textContent = '0.0';
+
+        updateStatus('', 'info');
+        progressContainer.classList.remove('hidden');
+        currentFakeProgress = 0;
+        if (progressInterval) clearInterval(progressInterval);
+        progressBar.style.width = '0%';
+        progressBar.textContent = '0%';
+
+        if (!userProfile) {
+          updateStatus('無法取得使用者資訊，請重新載入頁面。', 'error');
+          setLoadingState(false);
+          progressContainer.classList.add('hidden');
+          return;
+        }
+
+        const cleanProjectId = getValidProjectId();
+        if (!cleanProjectId) {
+          setLoadingState(false);
+          progressContainer.classList.add('hidden');
+          return;
+        }
+
+        try {
+          await ensureAuthBeforeSubmit();
+        } catch (ae) {
+          updateStatus(ae.message, 'error');
+          appendErrorToList('驗證', ae.message);
+          setLoadingState(false);
+          progressContainer.classList.add('hidden');
+          return;
+        }
+
+        const shouldCompress = document.getElementById('compressImages').checked;
+
+        let allPhotosInfo;
+        if (restoredPhotoInfos && restoredPhotoInfos.length) {
+          allPhotosInfo = restoredPhotoInfos;
+          reportTrace(`使用本機暫存照片 ${allPhotosInfo.length} 張`);
+        } else {
+          const siteFiles = Array.from(document.getElementById('sitePhotos').files);
+          const problemFiles = Array.from(document.getElementById('problemPhotos').files);
+          allPhotosInfo = [
+            ...siteFiles.map((file) => ({ file, isProblem: false })),
+            ...problemFiles.map((file) => ({ file, isProblem: true })),
+          ];
+        }
+
+        const workDescription = document.getElementById('workDescription').value.trim();
+        const problemDescription = document.getElementById('problemDescription').value.trim();
+        if (allPhotosInfo.length === 0 && !workDescription && !problemDescription) {
+          updateStatus('請至少填寫施工內容或上傳照片。', 'error');
+          setLoadingState(false);
+          progressContainer.classList.add('hidden');
+          return;
+        }
+
+        const batchId = `${userProfile.userId}-${Date.now()}`;
+        reportTrace(`提交開始 batchId=${batchId}，照片 ${allPhotosInfo.length} 張`);
+        v3ActiveSubmitBatchId = batchId;
+        try {
+          await writeSessionPayloadToIdbBegin({
+            cleanProjectId,
+            batchId,
+            userProfile,
+            allPhotosInfo,
+            shouldCompress,
+            workType: document.getElementById('workType').value,
+            workDescription,
+            problemDescription,
+            idbPriorSnapshot: idbSnapshotForPayload,
+          });
+        } catch (draftErr) {
+          reportTrace(`[IDB] 本輪工作集草稿寫入失敗: ${draftErr.message || draftErr}`);
+          clearV3SubmitSession();
+        }
+        uploadedChunksBytes = 0;
+        const uploadStartTime = performance.now();
+        let processedPhotos = null;
+        let statsPhase = 'photos';
+        let gasStartMs = null;
+        let photoPhaseEndMs = null;
+
+        const updateStatsDashboard = () => {
+          if (statsPhase === 'photos') {
+            const elapsedSec = (performance.now() - uploadStartTime) / 1000;
+            timePhotoPhaseEl.textContent = elapsedSec.toFixed(1);
+            if (elapsedSec > 0) {
+              const speed = (uploadedChunksBytes / 1024) / Math.max(elapsedSec, 1e-6);
+              speedPhotoPhaseEl.textContent = speed.toFixed(1);
+            }
+            timeBackendEl.textContent = '0.0';
+          } else {
+            const elapsedBackend = gasStartMs != null ? (performance.now() - gasStartMs) / 1000 : 0;
+            timeBackendEl.textContent = elapsedBackend.toFixed(1);
+          }
+        };
+        const statsTimer = setInterval(updateStatsDashboard, 500);
+
+        updateStatus(`正在處理 ${allPhotosInfo.length} 張照片（同時最多 ${PHOTO_UPLOAD_CONCURRENCY} 張）…`, 'info');
+
+        try {
+          startFakeProgress(90);
+
+          console.log(`[V3] 階段1：有限併發 ${PHOTO_UPLOAD_CONCURRENCY}，共 ${allPhotosInfo.length} 張`);
+          processedPhotos = await processPhotosStable(
+            allPhotosInfo,
+            shouldCompress,
+            storage,
+            cleanProjectId,
+            batchId
+          );
+          reportTrace(`相片處理完成，共 ${processedPhotos.length} 張，準備送 GAS`);
+
+          photoPhaseEndMs = performance.now();
+          const photoSecSnap = (photoPhaseEndMs - uploadStartTime) / 1000;
+          timePhotoPhaseEl.textContent = photoSecSnap.toFixed(1);
+          const photoSpdSnap = photoSecSnap > 0 ? (uploadedChunksBytes / 1024) / photoSecSnap : 0;
+          speedPhotoPhaseEl.textContent = photoSpdSnap.toFixed(1);
+          statsPhase = 'gas';
+
+          if (isDevSimAllowed() && getDevSimMode() === 'after_photos') {
+            throw new Error('[模擬] 照片流程完成，送 GAS 前失敗');
+          }
+
+          const prevFail = idbSnapshotForPayload ? compactFailureForPayload(idbSnapshotForPayload) : null;
+          const sim = isDevSimAllowed() ? getDevSimMode() : 'none';
+          const finalFormData = {
+            action: 'submitFastReport',
+            batchId,
+            totalChunks: 1,
+            userId: userProfile.userId,
+            userName: userProfile.displayName,
+            projectId: cleanProjectId,
+            projectNameRaw: cleanProjectId,
+            workType: document.getElementById('workType').value,
+            workDescription: document.getElementById('workDescription').value,
+            problemDescription: document.getElementById('problemDescription').value,
+            photos: processedPhotos.map((p) => ({ name: p.name, hasUrl: !!p.firebaseURL, hasBase64: !!p.data })),
+            clientTrace: {
+              url: window.location.href,
+              ver: CLIENT_VER,
+              uid: userProfile.userId,
+              ts: Date.now(),
+              ...(prevFail ? { previousFailedAttempt: prevFail } : {}),
+              ...(sim && sim !== 'none' ? { devSimulate: sim } : {}),
+            },
+          };
+
+          updateStatus('正在提交到後端（可自動重試）…', 'info');
+          gasStartMs = performance.now();
+          await postToGasWithRetry(finalFormData, processedPhotos);
+          try {
+            clearV3SubmitSession();
+            await idbClearPending();
+            restoredPhotoInfos = null;
+            reportTrace('[IDB] 送出成功，已清除本機暫存與記錄檔');
+            document.getElementById('pending-retry-banner').classList.add('hidden');
+          } catch (e) {
+            reportTrace('[IDB] 成功後清除暫存失敗: ' + (e.message || e));
+          }
+          if (progressInterval) clearInterval(progressInterval);
+        } catch (error) {
+          console.error('[V3] 表單處理失敗', error);
+          reportTrace(`失敗: ${error.message || error}`);
+          updateStatus('送出失敗。內容已儲存在此裝置，請稍後再按「提交回報」重試。', 'error');
+          appendErrorToList('整體流程', error.message || String(error));
+          if (progressInterval) clearInterval(progressInterval);
+          try {
+            updateStatsDashboard();
+          } catch (_) { /* 統計 DOM 可略 */ }
+          clearInterval(statsTimer);
+          setLoadingState(false);
+          progressContainer.classList.add('hidden');
+
+          const fr = document.getElementById('failure-recovery-panel');
+          if (fr) fr.classList.remove('hidden');
+
+          await persistFailedSubmitToLocal({
+            cleanProjectId,
+            batchId,
+            userProfile,
+            allPhotosInfo,
+            shouldCompress,
+            workType: document.getElementById('workType').value,
+            workDescription: document.getElementById('workDescription').value,
+            problemDescription: document.getElementById('problemDescription').value,
+            error,
+          });
+          clearV3SubmitSession();
+          void initPendingFromIdb();
+          return;
+        }
+
+        clearInterval(statsTimer);
+        updateStatsDashboard();
+        updateProgressBar(100);
+
+        const totalKb = uploadedChunksBytes / 1024;
+        const photoSecFinal = photoPhaseEndMs != null ? (photoPhaseEndMs - uploadStartTime) / 1000 : 0;
+        const photoSpeedFinal = photoSecFinal > 0 ? totalKb / photoSecFinal : 0;
+        const backendSecFinal = gasStartMs != null ? (performance.now() - gasStartMs) / 1000 : 0;
+
+        document.getElementById('final-total-mb').textContent = (totalKb / 1024).toFixed(2);
+        document.getElementById('final-time-photo').textContent = photoSecFinal.toFixed(1);
+        document.getElementById('final-speed-photo').textContent = photoSpeedFinal.toFixed(1);
+        document.getElementById('final-time-backend').textContent = backendSecFinal.toFixed(1);
+
+        handleSuccess();
+      }
+
+      /** 處理表單提交成功 
+       * @returns {void} - 無返回值
+      */
+      function handleSuccess() {
+        document.getElementById('report-form').style.display = 'none';
+        document.getElementById('success-screen').style.display = 'block';
+        progressContainer.classList.add('hidden');
+        submitButton.disabled = true;
+        setLoadingState(false);
+        setTimeout(() => {
+          try {
+            if (typeof liff !== 'undefined' && liff.isInClient && liff.isInClient()) {
+              liff.closeWindow();
+            }
+          } catch (e) { console.warn(e); }
+        }, 30000);
+      }
+
+      /** 穩定處理相片 
+       * @param {Array} photoInfoList - 相片資訊列表
+       * @param {boolean} shouldCompress - 是否壓縮相片
+       * @param {Storage} storageInst - 儲存實例
+       * @param {string} projectId - 案號
+       * @param {string} batchId - 批次 ID
+       * @returns {Promise<Array>} - 處理完成的相片資訊列表
+      */
+      async function processPhotosStable(photoInfoList, shouldCompress, storageInst, projectId, batchId) {
+        const devSimMode = isDevSimAllowed() ? getDevSimMode() : 'none';
+
+        async function processSinglePhotoOnce(photoInfo, idx) {
+          let processedFile = photoInfo.file;
+          let firebaseURL = '';
+          let base64 = null;
+
+          processedFile = await compressWithFallback(photoInfo.file, shouldCompress);
+
+          const safeName = photoInfo.file.name.replace(/[^a-zA-Z0-9.\-_]/g, '') || 'photo.jpg';
+          const fileName = `${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 8)}_${safeName}`;
+          const storagePath = `reports/${projectId}/${batchId}/${fileName}`;
+          const storageRef = ref(storageInst, storagePath);
+
+          try {
+            const { firebaseURL: url } = await uploadFirebaseWithRetry(storageRef, processedFile);
+            firebaseURL = url;
+            uploadedChunksBytes += processedFile.size;
+            console.log(`[V3] Firebase OK: ${photoInfo.file.name}`);
+          } catch (fbError) {
+            const debugMsg = fbError.code || fbError.message || '未知錯誤';
+            reportTrace(`[主流程 Firebase] ${photoInfo.file.name} 失敗 code=${fbError.code || '無'} msg=${debugMsg}`);
+            console.error(`[V3] Firebase 仍失敗: ${photoInfo.file.name}`, fbError);
+            appendErrorToList(`${photoInfo.file.name} (Firebase)`, debugMsg);
+            base64 = await readFileAsBase64(processedFile);
+            uploadedChunksBytes += base64.length;
+          }
+
+          return {
+            name: photoInfo.file.name,
+            type: processedFile.type,
+            data: base64,
+            isProblem: photoInfo.isProblem,
+            firebaseURL,
+          };
+        }
+
+        return mapWithConcurrency(photoInfoList, PHOTO_UPLOAD_CONCURRENCY, async (photoInfo, idx) => {
+          for (let unitAttempt = 1; unitAttempt <= PHOTO_UNIT_MAX_RETRIES; unitAttempt++) {
+            try {
+              reportTrace(`[相片] ${photoInfo.file.name} 單張第 ${unitAttempt}/${PHOTO_UNIT_MAX_RETRIES} 次 [序號 idx=${idx}]`);
+              throwIfDevSimPhotoFirstAttempt(devSimMode, idx, unitAttempt);
+              return await processSinglePhotoOnce(photoInfo, idx);
+            } catch (e) {
+              console.error(`圖片 ${photoInfo.file.name} 處理失敗:`, e);
+              if (isTransientPhotoPipelineError(e) && unitAttempt < PHOTO_UNIT_MAX_RETRIES) {
+                reportTrace(`[相片] ${photoInfo.file.name} 可恢復（暫時性），將重試`);
+                await sleep(PHOTO_UNIT_RETRY_BASE_MS * unitAttempt);
+                continue;
+              }
+              if (!isTransientPhotoPipelineError(e)) {
+                reportTrace(`[相片] ${photoInfo.file.name} 同一輪內不重試（非暫時性或無法自動恢復）`);
+              } else {
+                reportTrace(`[相片] ${photoInfo.file.name} 已達單張重試上限 (${PHOTO_UNIT_MAX_RETRIES})，仍失敗`);
+              }
+              appendErrorToList(`${photoInfo.file.name}`, e.message || '處理失敗');
+              throw new Error(`處理圖片 "${photoInfo.file.name}" 時失敗。`);
+            }
+          }
+        });
+      }
+
+      function setLoadingState(isLoading, message = '處理中...') {
+        submitButton.disabled = isLoading;
+        if (isLoading) {
+          buttonText.classList.add('hidden');
+          buttonSpinner.classList.remove('hidden');
+          updateStatus(message, 'info');
+        } else {
+          buttonText.classList.remove('hidden');
+          buttonSpinner.classList.add('hidden');
+        }
+      }
+
+      function startFakeProgress(targetPercentage) {
+        if (progressInterval) clearInterval(progressInterval);
+        progressInterval = setInterval(() => {
+          if (currentFakeProgress < targetPercentage - 1) {
+            currentFakeProgress++;
+            updateProgressBar(currentFakeProgress);
+          } else {
+            clearInterval(progressInterval);
+          }
+        }, 250);
+      }
+      // 更新進度條
+      function updateProgressBar(percentage) {
+        progressBar.style.width = `${percentage}%`;
+        progressBar.textContent = `${percentage}%`;
+      }
+      // 更新狀態訊息
+      function updateStatus(message, type) {
+        statusMessage.className = 'text-center mb-4 min-h-[24px]';
+        statusMessage.textContent = message;
+        if (type === 'success') {
+          statusMessage.classList.add('text-green-600', 'font-semibold');
+        } else if (type === 'error') {
+          statusMessage.classList.add('bg-red-100', 'border', 'border-red-400', 'text-red-700', 'px-4', 'py-3', 'rounded-lg', 'font-bold');
+        } else {
+          statusMessage.classList.add('text-gray-600');
+        }
+      }
+      // 設置檔案輸入 UI，選擇檔案後更新顯示數量
+      function setupFileInputUI(inputId, labelId, countId) {
+        const input = document.getElementById(inputId); // 檔案輸入框
+        const label = document.getElementById(labelId); // 檔案輸入框標籤
+        const count = document.getElementById(countId); // 檔案數量顯示
+        input.addEventListener('change', () => {
+          if (input.files.length > 0) {
+            label.classList.add('selected');
+            count.textContent = `已選擇 ${input.files.length} 張照片`;
+          } else {
+            label.classList.remove('selected');
+            count.textContent = '未選取檔案';
+          }
+        });
+      }
+
+      main();
+    });
+  </script>
+</body>
+
+</html>

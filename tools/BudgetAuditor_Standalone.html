@@ -386,6 +386,7 @@
 
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
 
 <script>
@@ -481,6 +482,8 @@
     // 初始化 Firebase
     if (!firebase.apps.length) {
         firebase.initializeApp({ databaseURL: fbConfig.databaseURL });
+        // [安全性預置] 預先啟用匿名登入，以配合未來規則轉型
+        firebase.auth().signInAnonymously().catch(e => console.warn('[Auth] 匿名登入預載中 (不影響目前存取):', e.message));
     }
     const db = firebase.database();
 
@@ -1067,6 +1070,22 @@
                 zones[z].push(it);
             });
 
+            /** 有現場施工記錄 (audit_remark) 的工項置於該分區最上方 */
+            function sortItemsWithRemarkFirst(arr) {
+                return arr.slice().sort((a, b) => {
+                    const ra = !!(a && a.audit_remark && String(a.audit_remark).trim());
+                    const rb = !!(b && b.audit_remark && String(b.audit_remark).trim());
+                    if (ra !== rb) return ra ? -1 : 1;
+                    return 0;
+                });
+            }
+
+            Object.keys(zones).forEach(zName => {
+                zones[zName] = sortItemsWithRemarkFirst(zones[zName]);
+            });
+
+            const doneItemsSorted = sortItemsWithRemarkFirst(doneItems);
+
             let finalHtml = '';
             
             // 渲染 active zones
@@ -1089,20 +1108,20 @@
                 finalHtml += `</div></section>`;
             });
 
-            // [v2.0] 渲染已完成彙整區
-            if (doneItems.length > 0) {
+            // [v2.0] 渲染已完成彙整區（同樣將有施工記錄者置頂）
+            if (doneItemsSorted.length > 0) {
                 const doneIdx = "DONE_GROUP";
                 finalHtml += `<section class="zone-block zone-completed">`;
                 finalHtml += `
                     <div class="zone-title" onclick="toggleZone('${doneIdx}')">
                         <div style="display:flex; align-items:center; gap:8px;">
-                            <i data-lucide="check-circle" style="width:18px; color:var(--success)"></i> ✅ 已完成項目 (${doneItems.length} 項)
+                            <i data-lucide="check-circle" style="width:18px; color:var(--success)"></i> ✅ 已完成項目 (${doneItemsSorted.length} 項)
                         </div>
                         <i data-lucide="chevron-down" class="zone-chevron" id="chevron-${doneIdx}"></i>
                     </div>
                     <div class="zone-content" id="zone-content-${doneIdx}" style="display:none;">
                 `;
-                doneItems.forEach(item => {
+                doneItemsSorted.forEach(item => {
                     finalHtml += renderItemHtml(item);
                 });
                 finalHtml += `</div></section>`;

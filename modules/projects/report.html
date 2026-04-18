@@ -1,4 +1,12 @@
 <!DOCTYPE html>
+<!--
+  查證紀錄（2026-04-12）
+  - SPA：`spa/app.js` 之 `#/report` 掛載 `modules/projects/reportV2.html`，未引用本檔。
+  - 於 CODING 內 grep `modules/projects/report.html`：無程式或路由引用本檔。
+  - `reportV3.html` 為後續迭代；查證時未掛入 `spa/app.js`。
+  - 本檔為舊版單頁（LIFF + GAS 等）；若 LINE Rich Menu／書籤／文件仍直連本 URL，刪除或搬移會影響對外連結。
+  - 後端註解「施工回報 (report.html)」僅描述 API 用途，非強制前端檔名。
+-->
 <html lang="zh-Hant">
 
 <head>

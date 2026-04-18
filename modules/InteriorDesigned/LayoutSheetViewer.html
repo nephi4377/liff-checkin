@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sheet 元件檢視（I 欄可即時預覽編輯）</title>
+  <link rel="icon" href="data:,">
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 12px; background: #f4f4f5; color: #18181b; }
+    h1 { font-size: 1.1rem; margin: 0 0 8px; }
+    .hint { font-size: 12px; color: #71717a; margin-bottom: 12px; }
+    .hint code { background: #e4e4e7; padding: 1px 6px; border-radius: 4px; }
+    #status { margin-bottom: 10px; font-size: 14px; }
+    #status.err { color: #b91c1c; }
+    table { width: 100%; border-collapse: collapse; background: #fff; font-size: 13px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-radius: 8px; overflow: hidden; }
+    th, td { border: 1px solid #e4e4e7; padding: 8px 10px; text-align: left; vertical-align: top; word-break: break-word; }
+    th { background: #fafafa; font-weight: 600; white-space: nowrap; }
+    .col-preview { width: 140px; background: #fafafa; }
+    .preview-box { width: 120px; height: 120px; display: flex; align-items: center; justify-content: center; border: 1px dashed #d4d4d8; border-radius: 6px; overflow: hidden; margin: 0 auto; }
+    .preview-box svg { max-width: 100%; max-height: 100%; }
+    .preview-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .empty-preview { color: #a1a1aa; font-size: 12px; }
+    .cell-long { max-width: 280px; max-height: 120px; overflow: auto; font-size: 11px; white-space: pre-wrap; }
+    textarea.svg-source {
+      width: 100%;
+      min-height: 88px;
+      font-family: ui-monospace, monospace;
+      font-size: 11px;
+      line-height: 1.35;
+      padding: 6px 8px;
+      border: 1px solid #d4d4d8;
+      border-radius: 6px;
+      resize: vertical;
+    }
+    textarea.svg-source:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+    .preview-err { color: #b91c1c; font-size: 11px; padding: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Sheet 元件檢視</h1>
+  <p class="hint">與 <code>LayoutPlanner</code> 相同來源：公開 gviz JSON、<code>gid=0</code>。<strong>I 欄</strong>可在此直接改 SVG／圖片網址，左側「預覽」會即時更新。<strong>不會寫回</strong> Google Sheet；要永久保存請複製回試算表。請以本機伺服器開啟（勿用 <code>file://</code>）。</p>
+  <div id="status">載入中…</div>
+  <div id="wrap"></div>
+
+  <script>
+    const SHEET_ID = '1y8iD3Pe8AvYxDYFGYVOZ0afsdW10j1GSnDXqUCyEh-Q';
+    const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=0`;
+    const PREVIEW_COL = 8; // I 欄
+
+    function cellVal(c) {
+      if (!c) return '';
+      if (c.v !== undefined && c.v !== null) {
+        if (typeof c.v === 'object') return (c.f != null && c.f !== '') ? String(c.f) : JSON.stringify(c.v);
+        return String(c.v);
+      }
+      return c.f != null ? String(c.f) : '';
+    }
+
+    /** 將內容畫進預覽節點（SVG 信任來源與 LayoutPlanner 相同） */
+    function renderPreviewInto(container, raw) {
+      container.innerHTML = '';
+      const s = (raw == null ? '' : String(raw)).trim();
+      if (!s) {
+        container.innerHTML = '<span class="empty-preview">—</span>';
+        return;
+      }
+      if (s.startsWith('<svg')) {
+        try {
+          container.innerHTML = '<div class="preview-box">' + s + '</div>';
+        } catch (err) {
+          container.innerHTML = '<div class="preview-err">無法顯示</div>';
+        }
+        return;
+      }
+      if (/^https?:\/\//i.test(s)) {
+        const box = document.createElement('div');
+        box.className = 'preview-box';
+        const img = document.createElement('img');
+        img.alt = '';
+        img.src = s;
+        img.onerror = function () {
+          box.innerHTML = '';
+          const err = document.createElement('div');
+          err.className = 'preview-err';
+          err.textContent = '無法載入';
+          box.appendChild(err);
+        };
+        box.appendChild(img);
+        container.appendChild(box);
+        return;
+      }
+      const div = document.createElement('div');
+      div.className = 'cell-long';
+      div.textContent = s.length > 500 ? s.slice(0, 500) + '…' : s;
+      container.appendChild(div);
+    }
+
+    function maxCols(rows) {
+      let m = 0;
+      rows.forEach(function (row) {
+        if (row.c && row.c.length > m) m = row.c.length;
+      });
+      return m;
+    }
+
+    function textCell(v) {
+      const td = document.createElement('td');
+      const s = v == null ? '' : String(v);
+      if (s.length > 80 || s.indexOf('\n') >= 0) {
+        const div = document.createElement('div');
+        div.className = 'cell-long';
+        div.textContent = s;
+        td.appendChild(div);
+      } else {
+        td.textContent = s;
+      }
+      return td;
+    }
+
+    async function load() {
+      const status = document.getElementById('status');
+      const wrap = document.getElementById('wrap');
+      try {
+        const res = await fetch(GVIZ_URL);
+        const text = await res.text();
+        const start = text.indexOf('{');
+        const end = text.lastIndexOf('}');
+        if (start === -1 || end === -1) throw new Error('無法解析回傳格式');
+        const data = JSON.parse(text.substring(start, end + 1));
+        const rows = data.table.rows;
+        if (!rows || rows.length === 0) {
+          status.textContent = '沒有資料列';
+          return;
+        }
+
+        const cols = maxCols(rows);
+        const head = rows[0] && rows[0].c ? rows[0] : null;
+        const headerCells = [];
+        for (let j = 0; j < cols; j++) {
+          const h = head && head.c[j] ? cellVal(head.c[j]) : '';
+          headerCells.push(h || ('欄 ' + (j + 1)));
+        }
+
+        const table = document.createElement('table');
+        const thead = document.createElement('thead');
+        const trh = document.createElement('tr');
+        const th0 = document.createElement('th');
+        th0.className = 'col-preview';
+        th0.innerHTML = '預覽<br><small style="font-weight:400">(跟隨 I 欄)</small>';
+        trh.appendChild(th0);
+        headerCells.forEach(function (h) {
+          const th = document.createElement('th');
+          th.textContent = h;
+          trh.appendChild(th);
+        });
+        thead.appendChild(trh);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row.c) continue;
+
+          const tr = document.createElement('tr');
+
+          const tdPrev = document.createElement('td');
+          tdPrev.className = 'col-preview';
+          const live = document.createElement('div');
+          live.className = 'preview-live';
+          tdPrev.appendChild(live);
+
+          const svgVal = row.c[PREVIEW_COL] ? cellVal(row.c[PREVIEW_COL]) : '';
+          renderPreviewInto(live, svgVal);
+
+          tr.appendChild(tdPrev);
+
+          for (let j = 0; j < cols; j++) {
+            const v = row.c[j] ? cellVal(row.c[j]) : '';
+            if (j === PREVIEW_COL) {
+              const td = document.createElement('td');
+              const ta = document.createElement('textarea');
+              ta.className = 'svg-source';
+              ta.value = v;
+              ta.setAttribute('spellcheck', 'false');
+              const lines = v.split('\n').length;
+              ta.rows = Math.min(16, Math.max(5, lines));
+              td.appendChild(ta);
+              tr.appendChild(td);
+              ta.addEventListener('input', function () {
+                renderPreviewInto(live, ta.value);
+              });
+            } else {
+              tr.appendChild(textCell(v));
+            }
+          }
+
+          tbody.appendChild(tr);
+        }
+        table.appendChild(tbody);
+
+        wrap.innerHTML = '';
+        wrap.appendChild(table);
+        status.textContent = '已載入 ' + (rows.length - 1) + ' 筆資料列（不含表頭）。編輯 I 欄僅影響此頁預覽。';
+        status.className = '';
+      } catch (e) {
+        status.textContent = '載入失敗：' + (e && e.message ? e.message : String(e));
+        status.className = 'err';
+        wrap.innerHTML = '';
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>添心排程 | 矩陣式排班系統 v3.2</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --tanxin-bg: #F1F5F9;
+            --tanxin-gold: #C5A47E;
+            --tanxin-gold-light: #F5EDE2;
+            --tanxin-border: #CBD5E1;
+            --date-w: 160px;
+            --emp-w: 120px;
+            --cell-h: 60px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html { height: 100%; background: var(--tanxin-bg); color: #334155; font-family: 'Inter', 'Noto Sans TC', sans-serif; overflow: hidden; }
+
+        .app { display: flex; flex-direction: column; height: 100vh; }
+        header { 
+            height: 60px; background: #FFF; border-bottom: 2px solid var(--tanxin-border);
+            display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 200;
+        }
+        .logo { font-weight: 800; font-size: 1.1rem; }
+        .logo strong { color: var(--tanxin-gold); }
+        .toolbar { display: flex; gap: 8px; }
+        .btn { border: 1px solid var(--tanxin-border); background: #FFF; padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 600; }
+        .btn-primary { background: var(--tanxin-gold); color: #FFF; border: none; }
+
+        .matrix-wrapper { flex: 1; overflow: auto; background: #FFF; position: relative; }
+        table { border-collapse: separate; border-spacing: 0; table-layout: fixed; min-width: 100%; }
+
+        thead th { 
+            position: sticky; top: 0; background: #E2E8F0; z-index: 20; 
+            border-bottom: 2px solid var(--tanxin-border); border-right: 1px solid var(--tanxin-border);
+            width: var(--emp-w); height: 60px; font-size: 0.8rem; text-align: center;
+        }
+        .date-sticky { 
+            position: sticky; left: 0; width: var(--date-w); min-width: var(--date-w);
+            background: #F8FAFC; z-index: 30; border-right: 2px solid var(--tanxin-border);
+            padding: 8px; font-weight: 700; font-size: 0.8rem;
+        }
+        thead th.date-sticky { z-index: 40; background: #E2E8F0; }
+
+        td { border-right: 1px solid var(--tanxin-border); border-bottom: 1px solid var(--tanxin-border); padding: 4px; text-align: center; vertical-align: middle; height: var(--cell-h); }
+        .is-weekend { background: #FFF1F2 !important; }
+        .is-weekend .date-sticky { background: #FFF1F2 !important; }
+        .is-today { background: #FEF3C7 !important; }
+        .is-today .date-sticky { background: #FEF3C7 !important; }
+
+        .plan-val { font-weight: 700; font-size: 0.85rem; }
+        .acc-val { font-size: 0.7rem; color: #64748B; font-style: italic; margin-top: 2px; }
+        .case-tag { display: inline-block; padding: 1px 4px; border-radius: 3px; font-size: 10px; color:#FFF; margin-left:2px; }
+
+        .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 500; align-items: center; justify-content: center; }
+        .modal-bg.open { display: flex; }
+        .modal { background: #FFF; border-radius: 12px; width: 90%; max-width: 520px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-height: 85vh; display: flex; flex-direction: column; }
+        .modal-body { flex: 1; overflow-y: auto; margin: 15px 0; }
+        .form-input { width: 100%; border: 1px solid var(--tanxin-border); border-radius: 8px; padding: 10px; margin-top: 5px; }
+
+        .emp-pill { border: 1px solid var(--tanxin-border); padding: 8px; border-radius: 8px; cursor: pointer; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+        .emp-pill.selected { border-color: var(--tanxin-gold); background: var(--tanxin-gold-light); }
+
+        .loading-tip { text-align: center; padding: 15px; color: var(--tanxin-gold); font-weight: 700; font-size: 0.8rem; }
+        #debug-console { position: fixed; bottom: 10px; right: 10px; width: 280px; max-height: 120px; background: rgba(0,0,0,0.85); color: #55FF55; font-size: 9px; padding: 8px; border-radius: 8px; z-index: 1000; pointer-events: none; overflow-y: auto; }
+    </style>
+</head>
+<body>
+
+<div class="app">
+    <header>
+        <div class="logo">添心 <strong>排程矩陣 v3.2</strong></div>
+        <div class="toolbar">
+            <button class="btn" onclick="App.openEmpSettings()">👥 人員管理</button>
+            <button class="btn" onclick="App.scrollToToday()">📅 今天</button>
+            <button class="btn btn-primary" onclick="App.openBatchModal()">✨ 批次預排</button>
+        </div>
+    </header>
+
+    <div class="matrix-wrapper" id="viewport">
+        <div id="top-trigger" class="loading-tip">▲ 向上捲動載入上個月</div>
+        <table id="matrix-table">
+            <thead id="thead"></thead>
+            <tbody id="tbody"></tbody>
+        </table>
+        <div id="bottom-trigger" class="loading-tip">▼ 向下捲動載入下個月</div>
+    </div>
+</div>
+
+<!-- 人員管理 Modal -->
+<div class="modal-bg" id="empSettingsModal">
+    <div class="modal">
+        <div style="font-weight:800; font-size:1.1rem;">👥 人員顯示設定</div>
+        <div class="modal-body" id="empSettingsList"></div>
+        <div style="text-align:right;"><button class="btn btn-primary" onclick="App.saveEmpSettings()">儲存</button></div>
+    </div>
+</div>
+
+<!-- 批次預排 Modal -->
+<div class="modal-bg" id="batchModal">
+    <div class="modal">
+        <div style="font-weight:800; font-size:1.1rem;">✨ 批次預排計畫</div>
+        <div class="modal-body">
+            <div>開始日期 <input type="date" id="b-start" class="form-input"></div>
+            <div style="margin-top:10px;">結束日期 <input type="date" id="b-end" class="form-input"></div>
+            <div style="margin-top:10px;">人員 (可複選)</div>
+            <div id="batchEmpPicker" style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-top:5px;"></div>
+            <div style="margin-top:10px;">案場 <input type="text" id="b-site" list="site-dl" class="form-input" placeholder="搜尋案場..."></div>
+            <datalist id="site-dl"></datalist>
+        </div>
+        <div style="text-align:right; display:flex; gap:10px; justify-content:flex-end;">
+            <button class="btn" onclick="App.closeBatchModal()">取消</button>
+            <button class="btn btn-primary" onclick="App.submitBatch()">確認提交</button>
+        </div>
+    </div>
+</div>
+
+<div id="debug-console"></div>
+
+<script>
+    const API = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
+    
+    let G_Dates = [], G_Employees = [], G_Grid = {};
+    let allActiveEmps = []; // 完整員工清單 (用於批次選擇)
+    let isFetching = false;
+    let headY, headM, tailY, tailM;
+    let selectedBatchEmps = new Set();
+
+    function log(msg) {
+        const c = document.getElementById('debug-console');
+        if(c) { c.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`; c.scrollTop = c.scrollHeight; }
+    }
+
+    function getCaseColor(no) {
+        if (!no) return null;
+        let h = 0; for(let i=0; i<no.length; i++) h = no.charCodeAt(i) + ((h << 5) - h);
+        return `hsl(${Math.abs(h % 360)}, 55%, 45%)`;
+    }
+
+    const App = {
+        async init() {
+            log('正在初始載入...');
+            const now = new Date();
+            const y = now.getFullYear(), m = now.getMonth() + 1;
+            headY = tailY = y; headM = tailM = m;
+
+            await this.loadChunk(y, m, 'append');
+            this.loadAllEmployees();
+            this.loadSites();
+            this.initObservers();
+            setTimeout(() => this.scrollToToday(), 600);
+        },
+
+        async loadChunk(y, m, mode = 'append') {
+            if(isFetching) return;
+            isFetching = true;
+            log(`請求 ${y}/${m}...`);
+            try {
+                const res = await fetch(`${API}?page=attendance_api&action=get_plan_schedule_chunk&year=${y}&month=${m}`);
+                const data = await res.json();
+                if(data.success) {
+                    // 這裡也加入過濾，確保矩陣中不出現廠商
+                    data.employees = (data.employees || []).filter(e => {
+                        const g = e.group || '';
+                        return !g.includes('廠商') && (g.includes('施工') || g.includes('店'));
+                    });
+                    this.mergeData(data, mode);
+                    this.render();
+                    if(mode==='append'){ tailY=y; tailM=m; } else { headY=y; headM=m; }
+                }
+            } catch(e) { log(e.message); }
+            finally { isFetching = false; }
+        },
+
+        async loadAllEmployees() {
+            try {
+                const res = await fetch(`${API}?page=attendance_api&action=get_employees&filter=active`);
+                const json = await res.json();
+                // 嚴格過濾：必須包含施工/店，且絕不能包含廠商
+                allActiveEmps = json.data.filter(e => {
+                    const g = e.group || '';
+                    return !g.includes('廠商') && (g.includes('施工') || g.includes('店'));
+                });
+                log(`[員工] 已載入 ${allActiveEmps.length} 位非廠商員工`);
+            } catch(e) { log('員工清單載入失敗', 'error'); }
+        },
+
+        async loadSites() {
+            try {
+                const res = await fetch(`${API}?page=attendance_api&action=get_all_sites`);
+                const json = await res.json();
+                document.getElementById('site-dl').innerHTML = json.data.map(s => `<option value="${s['案號']} ${s.siteName}">`).join('');
+            } catch(e) {}
+        },
+
+        mergeData(data, mode) {
+            // 這裡進行全域合併，並再次確保沒有廠商
+            data.employees.forEach(emp => {
+                const g = emp.group || '';
+                const isContractor = g.includes('廠商');
+                if(!isContractor && !G_Employees.find(x => x.userName === emp.userName)) {
+                    G_Employees.push(emp);
+                }
+            });
+            if(mode === 'append') G_Dates = G_Dates.concat(data.dates);
+            else G_Dates = data.dates.concat(G_Dates);
+            Object.assign(G_Grid, data.grid);
+            log(`已併入 ${data.dates.length} 天資料`);
+        },
+
+        render() {
+            if(!G_Dates.length || !G_Employees.length) return;
+            const head = document.getElementById('thead');
+            const body = document.getElementById('tbody');
+            const now = new Date();
+            const todayPattern = `${now.getMonth()+1}月${now.getDate()}日`;
+
+            const settings = JSON.parse(localStorage.getItem('sp_emp_settings') || '[]');
+            const displayEmps = G_Employees.filter(e => {
+                const s = settings.find(x => x.userName === e.userName);
+                return s ? s.visible : true;
+            });
+
+            if(displayEmps.length === 0) {
+                log('警告：過濾後無可顯示人員', 'error');
+                return;
+            }
+
+            let hHtml = `<tr><th class="date-sticky">日期 \ 人員</th>`;
+            displayEmps.forEach(emp => {
+                const name = emp.displayName || emp.userName || '未知';
+                hHtml += `<th>${name}<br><small>${emp.group||''}</small></th>`;
+            });
+            head.innerHTML = hHtml + `</tr>`;
+
+            let bHtml = '';
+            G_Dates.forEach(dateStr => {
+                const isWeekend = dateStr.includes('週六') || dateStr.includes('週日');
+                const isToday = dateStr.includes(todayPattern);
+                let row = `<tr class="${isWeekend?'is-weekend':''} ${isToday?'is-today':''}"><td class="date-sticky">${dateStr}</td>`;
+                const daily = G_Grid[dateStr] || [];
+                displayEmps.forEach(emp => {
+                    const info = daily.find(x => x.userName === emp.userName);
+                    if(info) {
+                        const tag = info.planCaseNo ? `<span class="case-tag" style="background:${getCaseColor(info.planCaseNo)}">${info.planCaseNo}</span>` : '';
+                        row += `<td><div class="plan-val">${info.planRaw||''} ${tag}</div>${info.accountingRaw?`<div class="acc-val">實: ${info.accountingRaw}</div>`:''}</td>`;
+                    } else row += `<td></td>`;
+                });
+                bHtml += row + `</tr>`;
+            });
+            body.innerHTML = bHtml;
+        },
+
+        scrollToToday() {
+            const el = document.querySelector('.is-today');
+            if(el) el.scrollIntoView({ behavior:'smooth', block:'center' });
+        },
+
+        initObservers() {
+            const vp = document.getElementById('viewport');
+            const obs = new IntersectionObserver(async entries => {
+                for(let e of entries) {
+                    if(!e.isIntersecting || isFetching) continue;
+                    if(e.target.id === 'bottom-trigger') {
+                        let nM = tailM+1, nY = tailY; if(nM>12){nM=1; nY++;}
+                        await this.loadChunk(nY, nM, 'append');
+                    } else if(e.target.id === 'top-trigger') {
+                        let pM = headM-1, pY = headY; if(pM<1){pM=12; pY--;}
+                        await this.loadChunk(pY, pM, 'prepend');
+                    }
+                }
+            }, { root: vp, threshold: 0.1 });
+            obs.observe(document.getElementById('top-trigger'));
+            obs.observe(document.getElementById('bottom-trigger'));
+        },
+
+        // --- Modals ---
+        openEmpSettings() {
+            const list = document.getElementById('empSettingsList');
+            if(!G_Employees.length) { log('尚無人員資料', 'error'); return; }
+            const saved = JSON.parse(localStorage.getItem('sp_emp_settings') || '[]');
+            list.innerHTML = G_Employees.map((e, i) => {
+                const s = saved.find(x => x.userName === e.userName) || { visible:true };
+                const name = e.displayName || e.userName || '未知';
+                return `<div class="emp-pill ${s.visible?'selected':''}" onclick="App.toggleSetting('${e.userName}', this)">${name}</div>`;
+            }).join('');
+            document.getElementById('empSettingsModal').classList.add('open');
+        },
+        toggleSetting(u, el) { el.classList.toggle('selected'); },
+        saveEmpSettings() {
+            const pills = document.querySelectorAll('#empSettingsList .emp-pill');
+            const news = G_Employees.map((emp, i) => {
+                // 從畫面上的 pill 狀態判斷是否選中
+                const pill = pills[i];
+                return { userName: emp.userName, visible: pill ? pill.classList.contains('selected') : true };
+            });
+            localStorage.setItem('sp_emp_settings', JSON.stringify(news));
+            this.render(); document.getElementById('empSettingsModal').classList.remove('open');
+        },
+        openBatchModal() {
+            const picker = document.getElementById('batchEmpPicker');
+            if(!allActiveEmps.length) { log('尚未載入員工清單', 'error'); return; }
+            picker.innerHTML = allActiveEmps.map(e => {
+                const name = e.displayName || e.userName || '未知';
+                return `<div class="emp-pill ${selectedBatchEmps.has(e.userName)?'selected':''}" onclick="App.toggleBatchEmp('${e.userName}', this)">${name}</div>`;
+            }).join('');
+            document.getElementById('batchModal').classList.add('open');
+        },
+        closeBatchModal() { document.getElementById('batchModal').classList.remove('open'); },
+        toggleBatchEmp(u, el) { if(selectedBatchEmps.has(u)){selectedBatchEmps.delete(u); el.classList.remove('selected');}else{selectedBatchEmps.add(u); el.classList.add('selected');} },
+        async submitBatch() {
+            const payload = { action:'manage_plan_schedule', year:new Date().getFullYear(), payload:{
+                batchMode:true, start:document.getElementById('b-start').value, end:document.getElementById('b-end').value,
+                site:document.getElementById('b-site').value, employees:[...selectedBatchEmps]
+            }};
+            const res = await fetch(API, { method:'POST', body:JSON.stringify(payload) });
+            const json = await res.json();
+            if(json.success) { alert('✅ 成功'); location.reload(); }
+        }
+    };
+    window.onload = () => App.init();
+</script>
+</body>
+</html>
