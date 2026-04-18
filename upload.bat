@@ -2,16 +2,13 @@
 setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul 2>&1
 
-:: =================================================================
-::   添心設計：部署腳本 v1.6
-:: =================================================================
-::   1. 備份至 ..\BAK（robocopy，排除與 exclude_list.txt 對齊）
-::   2. git add / commit（僅在有暫存變更時 commit）
-::   3. git push origin main
-:: =================================================================
-::   環境變數：
-::     NONINTERACTIVE=1  → 結束前不 pause（排程／CI／自動化）
-:: =================================================================
+REM =================================================================
+REM   Tanxin deploy script v1.6
+REM   Step1: robocopy backup to ..\BAK
+REM   Step2: git add, commit only if staged changes exist
+REM   Step3: git push origin main
+REM   Env: set NONINTERACTIVE=1 to skip final pause
+REM =================================================================
 
 set "SOURCE_DIR=%~dp0"
 cd /d "%SOURCE_DIR%" || (echo [錯誤] 無法切換到腳本目錄 & exit /b 1)
