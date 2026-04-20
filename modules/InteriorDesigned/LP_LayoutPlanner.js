@@ -1,6 +1,14 @@
 // v3.0 - 2025-11-24 16:30 (Asia/Taipei)
 // 修改內容: 新增動態計價系統、透明度控制、備註功能、施工面積輸入
-import { showGlobalNotification } from './utils.js';
+import { showGlobalNotification } from './LP_utils.js';
+import { sanitizeSvgString } from './LP_sanitizeSvg.js';
+import { cmToFeet, project, overlap, getAxes } from './lib/LP_geometry.js';
+
+/** 開啟時於 console 輸出除錯訊息（元件載入、渲染、縮放、繪圖等） */
+const DEBUG = false;
+function dbgLog(...args) {
+    if (DEBUG) console.log(...args);
+}
 
 let placedCabinets = [];
 let isBgEditMode = false;
@@ -62,14 +70,7 @@ const getSvg = (k) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg
 // 移除內建元件，改為由 Google Sheet 動態載入
 let cabinetCategories = {};
 
-// [您的要求] 尺寸轉換函式 (1尺=30cm)，無條件進位到 0.5 尺
-function cmToFeet(cm) {
-    const rawFeet = cm / 30;
-    // 將尺數乘以 2，無條件進位到整數，再除以 2，即可得到最接近的 0.5 單位
-    return Math.ceil(rawFeet * 2) / 2;
-}
-
-// 價格計算函式
+// 價格計算函式（cmToFeet 見 lib/LP_geometry.js）
 function calculatePrice(cabinet) {
     const { unitPrice, pricingType } = cabinet.data;
     const { currentW, currentH } = cabinet;
@@ -245,7 +246,7 @@ async function loadFromSheets() {
             // [自動修正] 讀取 SVG 時自動執行幾何校正
             let img = row.c[8]?.v || '';
             if (img && typeof img === 'string' && img.trim().startsWith('<svg')) {
-                img = autoFixSvgGeometry(img);
+                img = normalizeSheetSvg(img);
             }
 
             // 讀取 J 欄 (索引為 9) 的組別，若為空則預設為 '未分類'
@@ -292,7 +293,7 @@ async function loadFromSheets() {
 
         renderComponentList();
         showGlobalNotification(`✅ 成功載入 ${Object.values(cabinetCategories).flat().length} 個元件`, 3000, 'success');
-        console.log(`[Input] 成功載入 ${Object.values(cabinetCategories).flat().length} 個元件`);
+        dbgLog(`[Input] 成功載入 ${Object.values(cabinetCategories).flat().length} 個元件`);
     } catch (error) {
         console.error('載入錯誤:', error);
         showGlobalNotification(`❌ 載入失敗: ${error.message}`, 8000, 'error');
@@ -326,7 +327,7 @@ function getSvgAspectRatio(svgString) {
  */
 function processSvgStr(svgStr) {
     if (!svgStr) return '';
-    let result = svgStr;
+    let result = sanitizeSvgString(svgStr);
 
     // 1. 移除既有的 width/height/preserveAspectRatio 設定 (避免衝突)
     result = result.replace(/\s(width|height|preserveAspectRatio)=["'][^"']*["']/gi, '');
@@ -337,6 +338,12 @@ function processSvgStr(svgStr) {
     result = result.replace('<svg', '<svg width="100%" height="100%" preserveAspectRatio="none" style="overflow:visible;"');
 
     return result;
+}
+
+/** Sheet／佈局載入之 SVG：先消毒再幾何修正，供列表與畫布共用 */
+function normalizeSheetSvg(raw) {
+    if (!raw || typeof raw !== 'string' || !raw.trim().startsWith('<svg')) return raw;
+    return autoFixSvgGeometry(sanitizeSvgString(raw));
 }
 
 function renderComponentList() {
@@ -424,7 +431,7 @@ function renderAllCabinets() {
 
     // 確保 placeholder 的可見性正確
     document.getElementById('canvas-placeholder').style.display = placedCabinets.length > 0 ? 'none' : 'block';
-    console.log(`已渲染 ${placedCabinets.length} 個元件`);
+    dbgLog(`已渲染 ${placedCabinets.length} 個元件`);
 }
 
 // [新增] 渲染所有已繪製的區域
@@ -462,7 +469,7 @@ function renderAllDrawnAreas() {
             renderVertexHandles(selectedArea);
         }
     }
-    console.log(`已渲染 ${drawnAreas.length} 個區域`);
+    dbgLog(`已渲染 ${drawnAreas.length} 個區域`);
 }
 
 // [您的要求] 新增輔助函式，用於渲染單一區域，避免程式碼重複
@@ -790,7 +797,7 @@ function renderCabinet(cab) {
     handles.forEach(handle => {
         handle.addEventListener('mousedown', (e) => {
             const direction = handle.dataset.dir;
-            console.log(`[Resize] Start resizing cab ${cab.id}, direction: ${direction}`); // [Debug]
+            dbgLog(`[Resize] Start resizing cab ${cab.id}, direction: ${direction}`);
             startResize(cab.id, e, direction);
         });
     });
@@ -829,6 +836,27 @@ function updateCabStyle(el, cab) {
     el.style.opacity = (cab.opacity / 100);
 }
 
+/**
+ * 僅更新單一元件 DOM（寬高／標籤／碰撞外框），避免 renderAllCabinets 整批重繪造成右側尺寸輸入框失焦或選取「跳掉」。
+ */
+function applyCabinetVisualUpdate(cab) {
+    const el = document.getElementById(cab.id);
+    if (!el) {
+        renderAllCabinets();
+        return;
+    }
+    updateCabStyle(el, cab);
+    const label = el.querySelector('.size-label');
+    if (label) {
+        label.textContent = `${Math.round(cab.currentW)}x${Math.round(cab.currentH)} cm (${cmToFeet(cab.currentW)}x${cmToFeet(cab.currentH)}尺)`;
+    }
+    if (checkCollision(cab, cab.id)) {
+        el.classList.add('collision-warning');
+    } else {
+        el.classList.remove('collision-warning');
+    }
+}
+
 
 function handleGlobalClick(e) {
     // [v9.2 修正] 防止因 DOM 元素被移除導致的誤判 (例如點擊 "新增自訂項目" 按鈕後該按鈕被重繪移除)
@@ -847,7 +875,7 @@ function handleGlobalClick(e) {
     }
 
     // [修正] 增加對 annotation-layer 的檢查
-    if (!e.target.closest('.placed-cabinet') && !e.target.closest('#annotation-layer') && !e.target.closest('.floating-window') && !e.target.closest('.modal')) {
+    if (!e.target.closest('.placed-cabinet') && !e.target.closest('#annotation-layer') && !e.target.closest('.floating-window') && !e.target.closest('.modal') && !e.target.closest('#minimized-bar') && !e.target.closest('#canvas-header')) {
         deselectAll();
         deselectAllAnnotations(); // [新增]
     }
@@ -1211,7 +1239,7 @@ function handleKeyDown(e) {
     // [安全修正] 確保 e.key 存在，避免在某些特殊輸入狀態下 (如 IME) 導致 undefined 錯誤
     if (!e.key) return;
 
-    // [新增] 如果按下 Escape 鍵，則取消目前的繪圖
+    // [新增] 如果按下 Escape 鍵，則取消目前的繪圖（優先於表單欄位略過）
     if (e.key === 'Escape' && isDrawing) {
         cancelDrawing();
         return;
@@ -1220,6 +1248,23 @@ function handleKeyDown(e) {
     if (e.key === 'Enter' && isDrawing) {
         e.preventDefault();
         finishDrawing();
+        return;
+    }
+
+    const formEl = e.target;
+    if (formEl && (formEl.tagName === 'INPUT' || formEl.tagName === 'TEXTAREA' || formEl.tagName === 'SELECT' || formEl.isContentEditable)) {
+        return;
+    }
+
+    // 復原／重做（與底部按鈕一致；表單欄位內不觸發，交給瀏覽器預設行為）
+    if (e.ctrlKey && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+        return;
+    }
+    if (e.ctrlKey && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
+        e.preventDefault();
+        redo();
         return;
     }
 
@@ -1290,7 +1335,7 @@ function handleKeyDown(e) {
     }
 
 
-    if (isDrawing || !selectedCabId || isBgEditMode || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (isDrawing || !selectedCabId || isBgEditMode) return;
     const cab = placedCabinets.find(c => c.id === selectedCabId);
     if (!cab) return;
 
@@ -1443,21 +1488,6 @@ function rotatePoint(x, y, cx, cy, angleDeg) {
         x: cx + dx * cos - dy * sin,
         y: cy + dx * sin + dy * cos
     };
-}
-
-// [v6.1 新增] 取得投影軸的輔助函式 (抽出共用)
-function getAxes(vertices) {
-    const axes = [];
-    for (let i = 0; i < vertices.length; i++) {
-        const p1 = vertices[i];
-        const p2 = vertices[i + 1 === vertices.length ? 0 : i + 1];
-        const edge = { x: p1.x - p2.x, y: p1.y - p2.y };
-        // 正規化向量
-        const length = Math.sqrt(edge.x * edge.x + edge.y * edge.y);
-        const normal = { x: -edge.y / length, y: edge.x / length };
-        axes.push(normal);
-    }
-    return axes;
 }
 
 // [v6.1 新增] 計算兩物件間的 MTV (Minimum Translation Vector)
@@ -1724,9 +1754,22 @@ function handleGlobalMove(e) {
         resizeTarget.x = newCx - resizeTarget.currentW / 2;
         resizeTarget.y = newCy - resizeTarget.currentH / 2;
 
+        // 與手動輸入寬深一致：若新尺寸會與他物重疊則維持縮放前狀態
+        if (checkCollision(resizeTarget, resizeTarget.id)) {
+            resizeTarget.x = resizeStart.x;
+            resizeTarget.y = resizeStart.y;
+            resizeTarget.currentW = resizeStart.w;
+            resizeTarget.currentH = resizeStart.h;
+        }
+
         const el = document.getElementById(resizeTarget.id);
         updateCabStyle(el, resizeTarget);
         el.querySelector('.size-label').innerText = `${Math.round(resizeTarget.currentW)}x${Math.round(resizeTarget.currentH)} cm (${cmToFeet(resizeTarget.currentW)}x${cmToFeet(resizeTarget.currentH)}尺)`;
+        if (checkCollision(resizeTarget, resizeTarget.id)) {
+            el.classList.add('collision-warning');
+        } else {
+            el.classList.remove('collision-warning');
+        }
     }
 
     // --------------------------
@@ -1835,7 +1878,7 @@ function checkCollision(cab, excludeId = null) {
     return false;
 }
 
-// 輔助函式：取得矩形的四個頂點座標
+// 輔助函式：取得矩形的四個頂點座標（含鏡像：與 DOM `scaleX(-1)` 後之 OBB 一致）
 function getVertices(cab) {
     const w = cab.currentW;
     const h = cab.currentH;
@@ -1846,7 +1889,12 @@ function getVertices(cab) {
     const cx = x + w / 2;
     const cy = y + h / 2;
 
-    const points = [
+    const points = cab.mirrored ? [
+        { x: x + w, y: y },
+        { x: x, y: y },
+        { x: x, y: y + h },
+        { x: x + w, y: y + h }
+    ] : [
         { x: x, y: y },
         { x: x + w, y: y },
         { x: x + w, y: y + h },
@@ -1856,39 +1904,7 @@ function getVertices(cab) {
     return points.map(p => rotatePoint(p.x, p.y, cx, cy, angle));
 }
 
-// 輔助函式：取得多邊形的法向量（用於分離軸定理）
-// [v6.1] 此函式已被移至上方共用區域，保留此空殼或移除以維持結構
-/*
-function getAxes(vertices) {
-    const axes = [];
-    for (let i = 0; i < vertices.length; i++) {
-        const p1 = vertices[i];
-        const p2 = vertices[i + 1 === vertices.length ? 0 : i + 1];
-        const edge = { x: p1.x - p2.x, y: p1.y - p2.y };
-        const normal = { x: -edge.y, y: edge.x }; // 取得垂直向量
-        axes.push(normal);
-    }
-    return axes;
-}
-*/
-
-// 輔助函式：將多邊形投影到一個軸上
-function project(vertices, axis) {
-    let min = Infinity, max = -Infinity;
-    for (const vertex of vertices) {
-        const dotProduct = vertex.x * axis.x + vertex.y * axis.y;
-        min = Math.min(min, dotProduct);
-        max = Math.max(max, dotProduct);
-    }
-    return { min, max };
-}
-
-// 輔助函式：檢查兩個投影是否重疊
-function overlap(p1, p2) {
-    // [v8.3 核心修正] 使用 > 而非 >=，允許邊緣剛好接觸 (Touching is not overlapping)
-    // 加入極小的 epsilon (0.01) 避免浮點數運算導致的誤判
-    return p1.max > p2.min + 0.01 && p2.max > p1.min + 0.01;
-}
+// project／overlap／getAxes 見 lib/LP_geometry.js
 
 // [v5.0 新增] 計算地板面積含損耗 (乘以1.2，無條件進位到0.5坪)
 function calculateFloorAreaWithLoss(originalPing) {
@@ -2667,7 +2683,7 @@ function updateDrawingPreview(tempNextPoint = null) {
 }
 
 function finishDrawing() {
-    console.log('finishDrawing called. Points:', currentDrawingPoints.length); // [Debug]
+    dbgLog('finishDrawing called. Points:', currentDrawingPoints.length);
 
     // [核心重構] 根據您的需求，修改牆壁繪製邏輯
     if (currentDrawingType === 'wall') { // 牆壁繪製模式
@@ -2989,11 +3005,12 @@ function handleDimensionChange() {
     if (checkCollision(cab, cab.id)) {
         showGlobalNotification('尺寸修改後與其他物件重疊，操作已取消。', 4000, 'warning');
         cab.currentW = oldW; cab.currentH = oldH; // 還原尺寸
+        widthInput.value = cab.currentW;
+        heightInput.value = cab.currentH;
     }
     saveState();
-    renderAllCabinets(); // 重繪以更新畫面
-    
-    // [v9.8 修正] 僅更新價格顯示，不重新選取 (避免輸入框失去焦點)
+    applyCabinetVisualUpdate(cab);
+
     updateQuotation();
     updateSelectedPriceDisplay(cab.id);
 }
@@ -3030,6 +3047,7 @@ function saveState() {
     }
 
     // 深度複製當前狀態
+    const constructionAreaEl = document.getElementById('construction-area');
     const currentState = {
         placedCabinets: JSON.parse(JSON.stringify(placedCabinets)),
         drawnAreas: JSON.parse(JSON.stringify(drawnAreas)),
@@ -3038,7 +3056,8 @@ function saveState() {
             position: bgPosition,
             scale: bgScale,
             src: document.getElementById('bg-img').src
-        }
+        },
+        constructionArea: constructionAreaEl ? constructionAreaEl.value : ''
     };
 
     // 避免儲存與上一步完全相同的狀態
@@ -3065,6 +3084,11 @@ function loadState(state) {
     placedCabinets = JSON.parse(JSON.stringify(state.placedCabinets));
     drawnAreas = JSON.parse(JSON.stringify(state.drawnAreas));
     placedAnnotations = state.placedAnnotations ? JSON.parse(JSON.stringify(state.placedAnnotations)) : []; // [新增]
+
+    const constructionAreaEl = document.getElementById('construction-area');
+    if (constructionAreaEl) {
+        constructionAreaEl.value = state.constructionArea !== undefined ? state.constructionArea : '';
+    }
 
     renderAllCabinets();
     renderAllDrawnAreas();
@@ -3156,6 +3180,8 @@ function bindEventListeners() {
     document.getElementById('save-layout-btn').addEventListener('click', saveLayout);
     document.getElementById('layout-upload-label').addEventListener('click', () => document.getElementById('layout-upload').click());
     document.getElementById('layout-upload').addEventListener('change', loadLayout);
+    const constructionAreaInput = document.getElementById('construction-area');
+    if (constructionAreaInput) constructionAreaInput.addEventListener('change', () => saveState());
     document.getElementById('draw-ceiling-btn').addEventListener('click', () => startDrawing('ceiling'));
     document.getElementById('draw-floor-btn').addEventListener('click', () => startDrawing('floor'));
     document.getElementById('draw-wall-btn').addEventListener('click', () => startDrawing('wall'));
@@ -3389,6 +3415,7 @@ function initAutoSave() {
 function autoSave(silent = false) {
     try {
         // 收集當前狀態
+        const constructionAreaEl = document.getElementById('construction-area');
         const layoutData = {
             version: '2.0',
             timestamp: new Date().getTime(), // 使用 timestamp 方便比較
@@ -3400,7 +3427,8 @@ function autoSave(silent = false) {
                 position: bgPosition,
                 scale: bgScale,
                 src: document.getElementById('bg-img').src
-            }
+            },
+            constructionArea: constructionAreaEl ? constructionAreaEl.value : ''
         };
 
         localStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(layoutData));
@@ -3439,7 +3467,13 @@ function checkAndRestoreBackup() {
 
 // 抽取原本 loadLayout 的核心邏輯，以便重用
 function loadLayoutFromData(layoutData) {
-    placedCabinets = layoutData.placedCabinets || [];
+    const rawCabs = layoutData.placedCabinets || [];
+    placedCabinets = rawCabs.map((cab) => {
+        if (cab.data && cab.data.img && typeof cab.data.img === 'string' && cab.data.img.trim().startsWith('<svg')) {
+            return { ...cab, data: { ...cab.data, img: normalizeSheetSvg(cab.data.img) } };
+        }
+        return cab;
+    });
     drawnAreas = layoutData.drawnAreas || [];
     placedAnnotations = layoutData.placedAnnotations || []; // [新增]
 
@@ -3454,9 +3488,9 @@ function loadLayoutFromData(layoutData) {
         }
     }
 
-    if (layoutData.constructionArea !== undefined) {
-        const constructionAreaEl = document.getElementById('construction-area');
-        if (constructionAreaEl) constructionAreaEl.value = layoutData.constructionArea;
+    const constructionAreaElLoad = document.getElementById('construction-area');
+    if (constructionAreaElLoad) {
+        constructionAreaElLoad.value = layoutData.constructionArea !== undefined ? layoutData.constructionArea : '';
     }
 
     renderAllCabinets();

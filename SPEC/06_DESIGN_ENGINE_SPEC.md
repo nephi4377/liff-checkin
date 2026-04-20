@@ -1,6 +1,6 @@
 # 06_DESIGN_ENGINE_SPEC.md：2D 空間設計與自動報價系統規格
 
-本文件解構 `modules/InteriorDesigned/LayoutPlanner.js` 的核心架構，該模組提供完整的 2D CAD 編輯能力與即時工程計價邏輯。
+本文件解構 `modules/InteriorDesigned/LP_LayoutPlanner.js` 的核心架構，該模組提供完整的 2D CAD 編輯能力與即時工程計價邏輯。
 
 ## 1. 核心幾何運算引擎 (Core Geometry Engine)
 

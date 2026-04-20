@@ -1,9 +1,9 @@
 # 互動式室內設計規劃工具（LayoutPlanner）規格書
 
-**文件版本**：1.0  
-**對應程式**：`modules/InteriorDesigned/LayoutPlanner.html` + `LayoutPlanner.js` + `utils.js`  
-**關聯工具**：`LayoutSheetViewer.html`（僅檢視／編輯試算表預覽，不寫回 Sheet）  
-**撰寫日期**：2026-04-18  
+**文件版本**：1.7  
+**對應程式**：`modules/InteriorDesigned/LP_LayoutPlanner.html` + `LP_LayoutPlanner.js` + `LP_utils.js`  
+**關聯工具**：`LP_LayoutSheetViewer.html`（僅檢視／編輯試算表預覽，不寫回 Sheet）  
+**撰寫日期**：2026-04-18（v1.7 修訂）  
 
 ---
 
@@ -18,7 +18,7 @@
 | **功能需求** | 依模組條列可驗收行為（含快捷鍵、錯誤提示） |
 | **資料字典** | Google Sheet 欄位、佈局 JSON 結構、版本欄位 |
 | **計價規則** | 尺／才／坪換算、預設單價、損耗、合併列規則、總價為 0 是否列出 |
-| **外部依賴** | CDN（Tailwind、html2canvas、JSZip、OpenCV）、公開 Sheet gviz API |
+| **外部依賴** | CDN（Tailwind、html2canvas、JSZip）、公開 Sheet gviz API |
 | **非功能需求** | 瀏覽器限制、本機伺服器需求（ES module）、效能與儲存上限 |
 | **安全與隱私** | 底圖與資料皆在使用者端；localStorage 內容；第三方 URL 圖片 |
 | **已知限制與風險** | 見本文第八節 |
@@ -42,7 +42,7 @@
 ### 3.1 執行環境
 
 - **建議**：以本機或網站 **HTTP(S) 伺服器**開啟；**不建議**以 `file://` 直接開啟（ES `import`、部分 API 行為可能異常）。
-- **模組**：`LayoutPlanner.html` 以 `<script type="module" src="./LayoutPlanner.js">` 載入，依賴同目錄之 `utils.js`（`showGlobalNotification`）。
+- **模組**：`LP_LayoutPlanner.html` 以 `<script type="module" src="./LP_LayoutPlanner.js">` 載入，依賴同目錄之 `LP_utils.js`（`showGlobalNotification`）。
 - **行動裝置**：以 **User-Agent 含 `Mobi`** 判斷為行動裝置時，顯示全畫面提示並**中止主程式初始化**（避免小螢幕操作）；另備註：曾修正 iframe 內寬度誤判，改以 UA 為主。
 
 ### 3.2 前端技術棧（CDN）
@@ -50,13 +50,13 @@
 - **Tailwind CSS**（`cdn.tailwindcss.com`）
 - **html2canvas**：畫布匯出 PNG、ZIP 內截圖
 - **JSZip**：打包 PNG + JSON + CSV
-- **OpenCV.js**（`docs.opencv.org/4.8.0/opencv.js`）：HTML 註解標示用於「牆壁偵測」等影像處理；**於 `LayoutPlanner.js` 中未檢索到 `cv`／OpenCV API 呼叫**（屬**未使用或預留**之依賴，見第八節）。
+- **已移除**：先前曾載入 **OpenCV.js** 但未於本工具呼叫；已自 `LP_LayoutPlanner.html` 移除以減少體積。若未來要做底圖牆線辨識，宜另開頁或按需載入並寫入規格。
 
 ### 3.3 遠端資料來源
 
 - **Google Sheets**：透過 **gviz** 公開 JSON（`tqx=out:json&gid=0`）讀取元件清單。
-- **試算表 ID**（寫死於 `LayoutPlanner.js`）：`1y8iD3Pe8AvYxDYFGYVOZ0afsdW10j1GSnDXqUCyEh-Q`  
-- **LayoutSheetViewer** 使用相同 ID 與 `gid=0`，僅供預覽／編輯 I 欄文字，**不寫回** Sheet。
+- **試算表 ID**（寫死於 `LP_LayoutPlanner.js`）：`1y8iD3Pe8AvYxDYFGYVOZ0afsdW10j1GSnDXqUCyEh-Q`  
+- **LP_LayoutSheetViewer** 使用相同 ID 與 `gid=0`，僅供預覽／編輯 I 欄文字，**不寫回** Sheet。
 
 ---
 
@@ -80,8 +80,9 @@
 - **載入**：自 Sheet 解析後依 **群組（J 欄）** 分類，渲染於「元件」頁籤。
 - **拖放**：由元件庫拖入畫布，建立 `placedCabinets` 項目（位置、旋轉、實際寬深、透明度、備註、才數、鏡像、副屬性數量等）。
 - **互動**：點選、拖曳、**四向縮放**（resize handles）、**旋轉（R）**、**鏡像（M）**、**圖層上下**（`[` `]`）、**方向鍵微移**、**刪除（D／Delete）**、**複製（Ctrl+D）**。
-- **碰撞**：以 SAT（分離軸）類演算法做 OBB 重疊偵測；**允許重疊**可由 Sheet **M 欄**控制；碰撞時視覺標示 `collision-warning`。
-- **圖像來源**：I 欄可為 **內嵌 SVG** 或 **http(s) 圖片 URL**；內嵌 SVG 經 `autoFixSvgGeometry`／`processSvgStr` 等處理以減少邊界與拉伸問題。
+- **碰撞**：以 SAT（分離軸）類演算法對**旋轉矩形**（OBB）做重疊偵測；**允許重疊**可由 Sheet **M 欄**控制；碰撞時視覺標示 `collision-warning`。拖曳時以 **MTV** 嘗試推開；**邊緣貼齊**（僅接觸）刻意不視為碰撞（見第七節「碰撞幾何」）。
+- **手動改寬深**：變更尺寸後以 **`applyCabinetVisualUpdate`** 僅更新單一元件 DOM，避免整批 `renderAllCabinets` 造成右側輸入框失焦（實作細節見程式註解）。
+- **圖像來源**：I 欄可為 **內嵌 SVG** 或 **http(s) 圖片 URL**；內嵌 SVG 經 **`sanitizeSvgString`**、`autoFixSvgGeometry`（合併為 **`normalizeSheetSvg`** 於載入）、`processSvgStr` 等處理，以減少惡意標籤、邊界與拉伸問題。
 
 ### 4.4 區域繪製（天花板／地板／牆壁）
 
@@ -136,7 +137,7 @@
 - `drawnAreas`：陣列（含 `type`: `ceiling` | `floor` | `wall`、`points`、`areaInPing`、`linkedComponent`、`addons`…）
 - `placedAnnotations`：陣列
 - `background`：`position`、`scale`、`src`（常為 `data:image/...`）
-- `constructionArea`：字串（見第八節 **DOM 缺失**）
+- `constructionArea`：字串（設定頁 **`#construction-area`**，備註／匯出用，**不連動計價**）
 - `timestamp`／`prettyTime`：自動備份用
 
 ### 5.2 Google Sheet 欄位對應（`gid=0`，列從第二列起為資料）
@@ -168,50 +169,64 @@
 
 ---
 
-## 七、錯誤點、不一致與改進措施
+## 七、碰撞偵測（實作摘要）
 
-### 7.1 文件／UI 與程式不一致
-
-| 項目 | 說明 | 建議 |
-|------|------|------|
-| **施工面積（坪）** | 使用手冊與註解提到「施工面積」影響保護工程；`saveLayout`／ZIP 亦讀取 `#construction-area` | 現行 **HTML 無 `id="construction-area"` 元素**，欄位永遠為空字串，相關說明與資料**無法透過 UI 輸入**。應補上輸入框並接入 `calculateFullQuotation`（若商業規則仍需要），或移除／修正文件與死碼。 |
-| **另存圖片格式** | 說明寫「JPG」 | 實際為 **PNG**（`toDataURL`／檔名 `design-layout-*.png`）。應統一文案。 |
-| **OpenCV.js** | HTML 載入 | **LayoutPlanner 主流程未使用**，徒增下載與初始化成本；若無短期路線圖應移除或改按需載入。 |
-| **finishDrawing debug** | `console.log` | 量產可改為開發旗標或移除，避免主控台噪音。 |
-
-### 7.2 架構與維護性
-
-| 項目 | 說明 | 建議 |
-|------|------|------|
-| **單檔過大** | `LayoutPlanner.js` 極長，職責混合 | 依「資料載入／幾何與碰撞／繪圖／計價／匯出」拆模組，並補單元測試於純函式（如 `calculateFullQuotation`、`cmToFeet`）。 |
-| **狀態變數** | 工程標註與元件**共用 `selectedCabId`** | 可運作但易誤讀；建議改名為 `selectedEntityId` 或分開 ID 並集中選取邏輯。 |
-| **魔術數字** | 如 `30000`（面積→坪） | 抽成具名常數並註明換算假設（1px=1cm 等）。 |
-| **Sheet ID 寫死** | 不利多環境 | 改為設定檔、查詢參數或建置時注入。 |
-
-### 7.3 相容與安全
-
-| 項目 | 說明 | 建議 |
-|------|------|------|
-| **內嵌 SVG／第三方圖** | 來自 Sheet 的 SVG 字串與 URL | 需認知 **XSS 風險**若 Sheet 可被他人竄改；正式環境應簡化、消毒或僅允許圖片 URL 白名單。 |
-| **localStorage 配額** | 底圖 `data:` 可能很大 | 已有 try／catch；可提示使用者改用小圖或改存檔案連結策略。 |
+- **形狀**：每個元件為矩形，經旋轉後以四頂點做 **SAT（分離軸定理）** 與其他元件比對；`overlap` 使用 **嚴格大於 + epsilon**，使**邊對邊貼齊**不計為碰撞。
+- **拖曳**：除布林偵測外，以 **MTV** 對被拖物件做最小平移修正，減少穿模；若仍卡住則顯示 `collision-warning`。
+- **鏡像（`mirrored`）**：視覺上以 CSS `scaleX(-1)` 呈現；**`getVertices` 已依 `mirrored` 交換局部四角再旋轉**，與 SAT 一致（若日後改 `transform` 順序或 `transform-origin`，需再對照）。
+- **拉曳控點縮放**：`handleGlobalMove` 縮放分支在套用新寬高後若 **`checkCollision` 為真**，則**還原為本次縮放起始狀態**（與右側輸入寬深阻擋重疊對齊）；仍可能出現短暫 `collision-warning` 標示。
 
 ---
 
-## 八、未來發展方向（建議路線圖）
+## 八、已處理與待處理項目（對照表）
 
-1. **補齊「施工面積／保護工程」閉環**：UI 欄位、計價公式、與 Sheet 列定義一致；並更新本 SPEC 與使用手冊。
-2. **釐清 OpenCV**：若要自動牆線辨識，需定義輸入（底圖／筆畫）與輸出（vector path）並實作；否則移除依賴。
-3. **協作與帳號**：專案儲存於雲端、版本歷史、權限管理（超出目前純前端本機模型）。
-4. **效能**：大量 DOM 元件時考慮 Canvas／WebGL 或虛擬化；html2canvas 可針對匯出解析度做選項。
-5. **無障礙與國際化**：鍵盤可操作完整流程、ARIA、文案抽離。
-6. **測試**：關鍵計價與合併列、JSON 往返、Sheet 解析錯誤之降級策略。
+### 8.1 已反映於程式／手冊者（v1.1 前後）
+
+| 項目 | 說明 |
+|------|------|
+| **使用手冊** | 步驟 3.5 與「繪製區域坪數」一致；並註明設定頁「施工面積」為選填備註／匯出、不連動計價；步驟 4 為 **PNG**；步驟 2 補充右側寬深輸入。 |
+| **OpenCV** | 已自 `LP_LayoutPlanner.html` 移除未使用之腳本。 |
+| **手機偵測** | 保留極簡 `DOMContentLoaded` 先顯示遮罩；主邏輯仍在 `LP_LayoutPlanner.js` `onload`。 |
+| **改寬深失焦** | 以 `applyCabinetVisualUpdate` 取代整批重繪；熱鍵在表單欄位內略過；全域點擊排除 `#minimized-bar`、`#canvas-header`。 |
+
+### 8.2 近期實作與持續項目（原「待處理」）
+
+| 項目 | 說明 | 建議方向 |
+|------|------|----------|
+| **`constructionArea`** | 已補 **設定頁** `#construction-area`；佈局 JSON／ZIP／自動備份／復原歷史皆會帶此欄。 | **不實作**與保護工程之自動連動計價（依產品決策）。 |
+| **鏡像與碰撞** | `getVertices` 已依 `mirrored` 調整局部四角順序再旋轉，與 SAT 一致。 | 若未來改 `transform` 順序或 `transform-origin`，需再對照幾何。 |
+| **縮放控點與碰撞** | 拉邊調整時若 `checkCollision` 為真則 **還原為縮放前尺寸**（與右側輸入寬深邏輯對齊）。 | — |
+| **除錯輸出** | 已以 **`DEBUG`**（預設 `false`）+ `dbgLog` 包裝原 `console.log`。 | 開發時將 `DEBUG` 改為 `true` 即可。 |
+| **鍵盤復原** | 已綁定 **Ctrl+Z**→`undo`、**Ctrl+Y**／**Ctrl+Shift+Z**→`redo`（表單欄位內不攔截，維持瀏覽器預設）。 | — |
 
 ---
 
-## 九、建議驗收測試清單（摘錄）
+## 九、後續改進（僅下列四項）
 
+本專案之**排程範圍**僅限以下四類；其餘（例如：Sheet ID／query、gviz 快取、匯出 hash／基準日、CSP、無障礙、雲端協作、施工面積自動連動計價、牆線碰撞／吸附、模組化分檔等）**不納入排程**。
+
+1. **SVG 消毒**（**已導入**）：`LP_sanitizeSvg.js` 之 `sanitizeSvgString`；Sheet 載入與 `processSvgStr`、佈局 JSON 載入時經 **`normalizeSheetSvg`**（消毒 + `autoFixSvgGeometry`）寫回元件之 `img`。
+2. **大量元件效能**（**已部分導入**）：`.placed-cabinet` 使用 **`contain: layout`** 縮小版面連動重算範圍；若仍不足再評估 Canvas／可見區重繪／虛擬化。
+3. **單元測試**（**已導入**）：`lib/LP_geometry.js` 匯出 `cmToFeet`、`getAxes`、`project`、`overlap`（主程式改為 import）；**Vitest** 見 `lib/LP_*.test.js`，指令 `npm run test:unit`。
+4. **更廣的 Playwright**（**已部分導入**）：除原 3 項外，新增 **`e2e/LP_layout-planner.more.spec.cjs`**（開啟／關閉預算 Modal）；**仍待**：拖元件、下載 ZIP 等（見第十節未涵蓋）。
+
+---
+
+## 十、建議驗收測試清單（摘錄）
+
+- **自動化（可選）**
+  - **單元測試**：`npm run test:unit`（Vitest，`lib/LP_geometry.test.js`、`lib/LP_sanitizeSvg.test.js`；設定檔 `LP_vitest.config.cjs`）。
+  - **E2E**：`npm run test:e2e`（Playwright；`LP_playwright.config.cjs` 啟動靜態伺服器）。
+  - **一鍵**：`npm test`＝`test:unit` + `test:e2e`。
+  - **Playwright 涵蓋（共 4 項）**：
+    1. **載入**：桌面 User-Agent（非 `Mobi`）下開啟 `LP_LayoutPlanner.html`，`#mobile-warning` 為隱藏、`#toolbox-window` 與 **`#construction-area` 可見**，載入後約 2 秒內無未捕捉之 **`pageerror`**。
+    2. **復原**：在 `#construction-area` 輸入文字並觸發 `change` 後，`#undo-btn` 應可復原；焦點離開欄位後按 **Ctrl+Z**，欄位清空且復原鈕回到 **disabled**（與 `saveState`／`loadState` 含施工面積一致）。
+    3. **重做**：同上情境後按 **Ctrl+Y**，欄位應回到先前輸入內容。
+    4. **預算 Modal**：點「檢視預算」開啟 `#budget-modal`，關閉鈕可關閉。
+  - **未涵蓋**（仍依下列手動／後續擴充）：Google Sheet 載入、元件拖曳、旋轉／鏡像／碰撞、繪製區域、ZIP／JSON 匯出、行動裝置遮罩等。
 - Sheet 載入失敗時通知與頁面不崩潰。
-- 拖入元件、旋轉、縮放、碰撞標示、允許重疊屬性。
+- 拖入元件、旋轉、縮放、碰撞標示、允許重疊屬性；**鏡像開啟時**碰撞與視覺是否合理。
+- 右側**寬深數字**連續修改：選取不應異常消失、焦點合理。
 - 天花／地板／牆壁繪製與 Enter／Esc；地板損耗與坪數顯示。
 - 預算 Modal 分組、CSV／列印、ZIP 三檔內容正確。
 - JSON 儲存再載入：底圖、物件、區域、標註一致。
@@ -220,8 +235,15 @@
 
 ---
 
-## 十、文件修訂紀錄
+## 十一、文件修訂紀錄
 
 | 版本 | 日期 | 說明 |
 |------|------|------|
 | 1.0 | 2026-04-18 | 初版：依原始碼盤點功能、資料欄位、風險與路線圖 |
+| 1.1 | 2026-04-18 | 同步 OpenCV 移除、手冊與 UX 修正；新增碰撞摘要、待處理表、後續改進滾動清單；章節重編（驗收為第十一節） |
+| 1.2 | 2026-04-18 | 施工面積欄位、鏡像頂點、縮放碰撞還原、DEBUG、Ctrl+Z／Y 快捷鍵、自動備份含 `constructionArea`；更新 §8.2 |
+| 1.3 | 2026-04-18 | §11 補充 `npm run test:e2e` 之目錄、檔案與三項涵蓋／未涵蓋說明 |
+| 1.4 | 2026-04-18 | §7 碰撞摘要與實作對齊（鏡像頂點、縮放碰撞還原）；§9 測試項註記已部分導入 Playwright |
+| 1.5 | 2026-04-18 | §9 僅保留 SVG 消毒／大量元件效能／單元測試／擴充 Playwright；刪除原 §10 與其餘路線圖；§5.1／§8.2 施工面積敘述更新；章節重編（驗收為第十節） |
+| 1.6 | 2026-04-18 | §9 四項落地：`sanitizeSvg.js`、`normalizeSheetSvg`、`lib/geometry.js`、Vitest、`.placed-cabinet` contain、E2E 預算 Modal；§10 補單元測與 `npm test` |
+| 1.7 | 2026-04-18 | LP 專用檔名加 `LP_` 前綴（`LP_LayoutPlanner.html/js`、`LP_utils.js`、`LP_sanitizeSvg.js`、`lib/LP_geometry.js`、測試與設定檔、`LP_LayoutSheetViewer.html`）；`spa/app.js` 路由同步 |

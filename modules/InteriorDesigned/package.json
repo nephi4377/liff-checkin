@@ -1,0 +1,14 @@
+{
+  "name": "interior-designed-layout-planner",
+  "private": true,
+  "scripts": {
+    "test:unit": "vitest run --config LP_vitest.config.cjs",
+    "test:e2e": "playwright test --config LP_playwright.config.cjs",
+    "test": "npm run test:unit && npm run test:e2e",
+    "serve": "npx --yes serve@14 -l 8765 ."
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "vitest": "^3.0.5"
+  }
+}

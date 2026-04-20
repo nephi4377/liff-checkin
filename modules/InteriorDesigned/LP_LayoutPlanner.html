@@ -10,10 +10,8 @@
     <!-- [錯誤修正] 增加此行可避免瀏覽器嘗試載入 favicon.ico 而產生 404 錯誤 -->
     <link rel="icon" href="data:,">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <!-- [新增] OpenCV.js 用於影像處理 (牆壁偵測) -->
-    <script async src="https://docs.opencv.org/4.8.0/opencv.js" type="text/javascript"></script>
     <!-- [核心修正] 重新引入已分離的 JavaScript 主檔案，並設定為 module -->
-    <script type="module" src="./LayoutPlanner.js"></script>
+    <script type="module" src="./LP_LayoutPlanner.js"></script>
     <!-- [新增] JSZip 函式庫，用於打包多個檔案成 ZIP -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
@@ -212,6 +210,8 @@
             cursor: grab;
             box-sizing: border-box;
             z-index: 20;
+            /* 大量元件時縮小版面重算範圍（拉伸控點仍在本節點內） */
+            contain: layout;
         }
 
         .placed-cabinet.selected {
@@ -509,6 +509,11 @@
                         <label class="flex items-center gap-2 text-xs font-bold text-gray-700">
                             <input type="checkbox" id="show-annotations-toggle" checked> 顯示工程標註
                         </label>
+                    </div>
+                    <div class="mt-2">
+                        <label class="text-xs font-bold text-gray-700">施工面積（選填）</label>
+                        <input type="text" id="construction-area" class="w-full text-xs border rounded p-1 mt-1"
+                            placeholder="例：全室保護、約 12 坪（僅備註／匯出用，未自動連動計價）">
                     </div>
                 </div>
 
@@ -867,7 +872,7 @@
                     <h3 class="font-bold text-lg text-blue-800 mb-2">步驟 2：配置家具與櫃體</h3>
                     <ul class="list-disc pl-5 space-y-1">
                         <li>從左側「元件庫」拖曳家具至畫布。</li>
-                        <li>點擊家具可調整尺寸 (白色圓點) 或旋轉。</li>
+                        <li>點擊家具可調整尺寸（拉曳白點）或旋轉；亦可在右側「預算 &amp; 估價」面板輸入<strong>寬度／深度 (cm)</strong>，輸入後請按 Enter 或點他處以套用。</li>
                         <li><strong>紅色外框</strong> 代表位置重疊。</li>
                         <li><em>注意：一般家具預設單價為 $0 (僅參考)，櫃體類則依尺寸計價。</em></li>
                     </ul>
@@ -889,14 +894,14 @@
 
                 <hr class="border-gray-200">
 
-                <!-- 3.5 施工面積 -->
+                <!-- 3.5 坪數與估價（與實際功能一致） -->
                 <section>
-                    <h3 class="font-bold text-lg text-blue-800 mb-2">步驟 3.5：輸入施工面積</h3>
-                    <p class="mb-2">此步驟影響保護工程費用的計算。</p>
+                    <h3 class="font-bold text-lg text-blue-800 mb-2">步驟 3.5：天花板／地板坪數與估價</h3>
+                    <p class="mb-2">室內「總坪數」請以實際丈量為準；本工具以<strong>您繪製的天花板／地板區域</strong>計算該區施工坪數並列入預算明細。</p>
                     <ol class="list-decimal pl-5 space-y-1">
-                        <li>在右側「預算 & 估價」面板中。</li>
-                        <li>找到 **「施工面積 (坪)」** 欄位。</li>
-                        <li>手動輸入室內總坪數，系統即會自動計算保護工程費用。</li>
+                        <li>使用步驟 3 繪製天花板、地板封閉區域後，系統會依區域面積換算坪數（地板另含損耗係數）。</li>
+                        <li>若 Sheet 中有對應材質項目（例如平釘天花板、超耐磨木地板），單價與副屬性以試算表為準。</li>
+                        <li>「保護工程」等項目請在元件庫／工程標註中選用對應項目。設定頁另有<strong>「施工面積（選填）」</strong>文字欄，供備註與匯入 JSON／ZIP，<strong>不會自動連動</strong>保護工程計價。</li>
                     </ol>
                 </section>
 
@@ -906,7 +911,7 @@
                 <section>
                     <h3 class="font-bold text-lg text-blue-800 mb-2">步驟 4：輸出與分享</h3>
                     <ul class="list-disc pl-5 space-y-1">
-                        <li><strong>另存圖片</strong>：下載乾淨的設計圖 JPG。</li>
+                        <li><strong>另存圖片</strong>：下載乾淨的設計圖 <strong>PNG</strong> 檔。</li>
                         <li><strong>檢視預算</strong>：查看詳細報價並儲存為 PDF。</li>
                         <li><strong>下載檔案</strong>：一鍵打包所有設計資料 (ZIP) 以便歸檔或寄送。</li>
                     </ul>
@@ -944,18 +949,13 @@
         © 添心設計 Interior Design
     </div>
 
-    <!-- 【您的要求】核心修正：覆寫手機版偵測邏輯 -->
-    <!-- 
-        問題：當此頁面在主控台的 iframe 中載入時，其 window.innerWidth 會是 iframe 的寬度，
-              可能小於 768px，導致被誤判為手機。
-        解決方案：在 LayoutPlanner.js 載入後，重新執行一次更精準的裝置偵測。
-                  新的偵測邏輯優先檢查 User Agent 是否包含 'Mobi' 關鍵字，
-                  這能更準確地判斷是否為真實的行動裝置，從而避免因 iframe 寬度造成的誤判。
-    -->
+    <!-- 僅先顯示手機全畫面提示（避免模組載入前短暫露出桌面 UI）；其餘封鎖與初始化在 LP_LayoutPlanner.js window.onload -->
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const isMobile = /Mobi/i.test(navigator.userAgent);
-            document.getElementById('mobile-warning').style.display = isMobile ? 'flex' : 'none';
+        document.addEventListener('DOMContentLoaded', function () {
+            if (/Mobi/i.test(navigator.userAgent)) {
+                var w = document.getElementById('mobile-warning');
+                if (w) w.style.display = 'flex';
+            }
         });
     </script>
 </body>

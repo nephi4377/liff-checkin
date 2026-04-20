@@ -116,7 +116,7 @@
 ### 5.3 InteriorDesigned 室內設計
 | 檔名 | 功能用途 | 狀態 |
 |------|---------|---------|
-| **LayoutPlanner.html** | 互動式室內設計規劃工具 | **保留 (使用中)** |
+| **LP_LayoutPlanner.html** | 互動式室內設計規劃工具（LayoutPlanner） | **保留 (使用中)** |
 | **floorplan-straightener.html** | 平面圖校正工具 | **保留 (使用中)** |
 | **施工規範.html** | 工程標準文件 | **保留 (常用)** |
 | **WMS.html** | 工作排程系統 (舊版) | **已移至 _待開發備份_** |
