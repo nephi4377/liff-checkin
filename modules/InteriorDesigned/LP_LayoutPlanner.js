@@ -1,8 +1,13 @@
 // v3.0 - 2025-11-24 16:30 (Asia/Taipei)
 // 修改內容: 新增動態計價系統、透明度控制、備註功能、施工面積輸入
-import { showGlobalNotification } from './LP_utils.js';
-import { sanitizeSvgString } from './LP_sanitizeSvg.js';
-import { cmToFeet, project, overlap, getAxes } from './lib/LP_geometry.js';
+import {
+    showGlobalNotification,
+    sanitizeSvgString,
+    cmToFeet,
+    project,
+    overlap,
+    getAxes,
+} from './LP_core.js';
 
 /** 開啟時於 console 輸出除錯訊息（元件載入、渲染、縮放、繪圖等） */
 const DEBUG = false;
@@ -70,7 +75,7 @@ const getSvg = (k) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg
 // 移除內建元件，改為由 Google Sheet 動態載入
 let cabinetCategories = {};
 
-// 價格計算函式（cmToFeet 見 lib/LP_geometry.js）
+// 價格計算函式（cmToFeet 見 LP_core.js）
 function calculatePrice(cabinet) {
     const { unitPrice, pricingType } = cabinet.data;
     const { currentW, currentH } = cabinet;
@@ -1904,7 +1909,7 @@ function getVertices(cab) {
     return points.map(p => rotatePoint(p.x, p.y, cx, cy, angle));
 }
 
-// project／overlap／getAxes 見 lib/LP_geometry.js
+// project／overlap／getAxes 見 LP_core.js
 
 // [v5.0 新增] 計算地板面積含損耗 (乘以1.2，無條件進位到0.5坪)
 function calculateFloorAreaWithLoss(originalPing) {

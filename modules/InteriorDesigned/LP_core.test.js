@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cmToFeet, overlap, project, getAxes } from './LP_geometry.js';
+import { cmToFeet, overlap, project, getAxes, sanitizeSvgString } from './LP_core.js';
 
 describe('cmToFeet', () => {
     it('1 尺 = 30cm，進位 0.5 尺', () => {
@@ -25,5 +25,17 @@ describe('SAT 輔助', () => {
         const axis = axes[0];
         const p = project(v, axis);
         expect(p.max).toBeGreaterThan(p.min);
+    });
+});
+
+describe('sanitizeSvgString', () => {
+    it('移除 script 區塊', () => {
+        const s = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><rect width="1"/></svg>';
+        const out = sanitizeSvgString(s);
+        expect(out.toLowerCase()).not.toContain('<script');
+    });
+    it('移除 onerror 等事件屬性', () => {
+        const s = '<svg onload="evil()"><rect /></svg>';
+        expect(sanitizeSvgString(s).toLowerCase()).not.toContain('onload');
     });
 });

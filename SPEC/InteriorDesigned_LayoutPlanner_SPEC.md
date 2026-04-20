@@ -1,7 +1,7 @@
 # 互動式室內設計規劃工具（LayoutPlanner）規格書
 
-**文件版本**：1.7  
-**對應程式**：`modules/InteriorDesigned/LP_LayoutPlanner.html` + `LP_LayoutPlanner.js` + `LP_utils.js`  
+**文件版本**：1.8  
+**對應程式**：`modules/InteriorDesigned/LP_LayoutPlanner.html` + `LP_LayoutPlanner.js` + `LP_core.js`  
 **關聯工具**：`LP_LayoutSheetViewer.html`（僅檢視／編輯試算表預覽，不寫回 Sheet）  
 **撰寫日期**：2026-04-18（v1.7 修訂）  
 
@@ -42,7 +42,7 @@
 ### 3.1 執行環境
 
 - **建議**：以本機或網站 **HTTP(S) 伺服器**開啟；**不建議**以 `file://` 直接開啟（ES `import`、部分 API 行為可能異常）。
-- **模組**：`LP_LayoutPlanner.html` 以 `<script type="module" src="./LP_LayoutPlanner.js">` 載入，依賴同目錄之 `LP_utils.js`（`showGlobalNotification`）。
+- **模組**：`LP_LayoutPlanner.html` 以 `<script type="module" src="./LP_LayoutPlanner.js">` 載入，依賴同目錄之 `LP_core.js`（通知、SVG 消毒、幾何／碰撞輔助函式等）。
 - **行動裝置**：以 **User-Agent 含 `Mobi`** 判斷為行動裝置時，顯示全畫面提示並**中止主程式初始化**（避免小螢幕操作）；另備註：曾修正 iframe 內寬度誤判，改以 UA 為主。
 
 ### 3.2 前端技術棧（CDN）
@@ -205,17 +205,17 @@
 
 本專案之**排程範圍**僅限以下四類；其餘（例如：Sheet ID／query、gviz 快取、匯出 hash／基準日、CSP、無障礙、雲端協作、施工面積自動連動計價、牆線碰撞／吸附、模組化分檔等）**不納入排程**。
 
-1. **SVG 消毒**（**已導入**）：`LP_sanitizeSvg.js` 之 `sanitizeSvgString`；Sheet 載入與 `processSvgStr`、佈局 JSON 載入時經 **`normalizeSheetSvg`**（消毒 + `autoFixSvgGeometry`）寫回元件之 `img`。
+1. **SVG 消毒**（**已導入**）：`LP_core.js` 之 `sanitizeSvgString`；Sheet 載入與 `processSvgStr`、佈局 JSON 載入時經 **`normalizeSheetSvg`**（消毒 + `autoFixSvgGeometry`）寫回元件之 `img`。
 2. **大量元件效能**（**已部分導入**）：`.placed-cabinet` 使用 **`contain: layout`** 縮小版面連動重算範圍；若仍不足再評估 Canvas／可見區重繪／虛擬化。
-3. **單元測試**（**已導入**）：`lib/LP_geometry.js` 匯出 `cmToFeet`、`getAxes`、`project`、`overlap`（主程式改為 import）；**Vitest** 見 `lib/LP_*.test.js`，指令 `npm run test:unit`。
-4. **更廣的 Playwright**（**已部分導入**）：除原 3 項外，新增 **`e2e/LP_layout-planner.more.spec.cjs`**（開啟／關閉預算 Modal）；**仍待**：拖元件、下載 ZIP 等（見第十節未涵蓋）。
+3. **單元測試**（**已導入**）：`LP_core.js` 匯出 `cmToFeet`、`getAxes`、`project`、`overlap`（主程式改為 import）；**Vitest** 見同目錄 `LP_core.test.js`，指令 `npm run test:unit`。
+4. **更廣的 Playwright**（**已部分導入**）：**`e2e/LP_layout-planner.spec.cjs`** 合併載入／復原／重做／預算 Modal 共 4 項；**仍待**：拖元件、下載 ZIP 等（見第十節未涵蓋）。
 
 ---
 
 ## 十、建議驗收測試清單（摘錄）
 
 - **自動化（可選）**
-  - **單元測試**：`npm run test:unit`（Vitest，`lib/LP_geometry.test.js`、`lib/LP_sanitizeSvg.test.js`；設定檔 `LP_vitest.config.cjs`）。
+  - **單元測試**：`npm run test:unit`（Vitest，`LP_core.test.js`；設定檔 `LP_vitest.config.cjs`）。
   - **E2E**：`npm run test:e2e`（Playwright；`LP_playwright.config.cjs` 啟動靜態伺服器）。
   - **一鍵**：`npm test`＝`test:unit` + `test:e2e`。
   - **Playwright 涵蓋（共 4 項）**：
@@ -247,3 +247,4 @@
 | 1.5 | 2026-04-18 | §9 僅保留 SVG 消毒／大量元件效能／單元測試／擴充 Playwright；刪除原 §10 與其餘路線圖；§5.1／§8.2 施工面積敘述更新；章節重編（驗收為第十節） |
 | 1.6 | 2026-04-18 | §9 四項落地：`sanitizeSvg.js`、`normalizeSheetSvg`、`lib/geometry.js`、Vitest、`.placed-cabinet` contain、E2E 預算 Modal；§10 補單元測與 `npm test` |
 | 1.7 | 2026-04-18 | LP 專用檔名加 `LP_` 前綴（`LP_LayoutPlanner.html/js`、`LP_utils.js`、`LP_sanitizeSvg.js`、`lib/LP_geometry.js`、測試與設定檔、`LP_LayoutSheetViewer.html`）；`spa/app.js` 路由同步 |
+| 1.8 | 2026-04-20 | 收斂模組：`LP_core.js` 合併原 `LP_utils.js`、`LP_sanitizeSvg.js`、`lib/LP_geometry.js`；單元測試合併為 `LP_core.test.js`；Playwright 合併為 `e2e/LP_layout-planner.spec.cjs`；刪除 `lib/` 內舊檔。 |
