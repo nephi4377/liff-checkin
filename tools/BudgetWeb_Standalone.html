@@ -496,16 +496,42 @@
     const sheetList = document.getElementById('sheetList');
     const processBtn = document.getElementById('processBtn');
 
-    // Firebase 配置 (與 reportV2 同步)
-    const FB_CONFIG = {
-        databaseURL: "https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app"
+    // Firebase 配置：與 BudgetAuditor_Standalone 共用 localStorage「fb_audit_config」（apiKey 等選填）
+    const FB_CONFIG_DEFAULT = {
+        databaseURL: "https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app",
+        apiKey: "",
+        authDomain: "",
+        projectId: ""
     };
+    let fbConfig = { ...FB_CONFIG_DEFAULT, ...(JSON.parse(localStorage.getItem('fb_audit_config')) || {}) };
 
-    // 初始化 Firebase
+    function firebaseAuthConfigured() {
+        const k = (fbConfig.apiKey != null ? String(fbConfig.apiKey) : '').trim();
+        const d = (fbConfig.authDomain != null ? String(fbConfig.authDomain) : '').trim();
+        const p = (fbConfig.projectId != null ? String(fbConfig.projectId) : '').trim();
+        return !!(k && d && p);
+    }
+
+    function buildFirebaseInitOptions() {
+        const o = { databaseURL: fbConfig.databaseURL || FB_CONFIG_DEFAULT.databaseURL };
+        if (firebaseAuthConfigured()) {
+            o.apiKey = String(fbConfig.apiKey).trim();
+            o.authDomain = String(fbConfig.authDomain).trim();
+            o.projectId = String(fbConfig.projectId).trim();
+        }
+        return o;
+    }
+
+    function tryAnonymousSignIn() {
+        if (!firebaseAuthConfigured() || !firebase.apps.length) return;
+        firebase.auth().signInAnonymously().catch(function (e) {
+            console.warn('[Auth] 匿名登入失敗:', e.message);
+        });
+    }
+
     if (!firebase.apps.length) {
-        firebase.initializeApp(FB_CONFIG);
-        // [安全性預置] 預先啟動匿名登入，以配合未來規則轉型
-        firebase.auth().signInAnonymously().catch(e => console.warn('[Auth] 匿名登入預載中 (不影響目前存取):', e.message));
+        firebase.initializeApp(buildFirebaseInitOptions());
+        tryAnonymousSignIn();
     }
     const db = firebase.database();
 
