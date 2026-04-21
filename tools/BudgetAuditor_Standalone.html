@@ -376,6 +376,19 @@
                 <label style="font-size: 12px; display: block; margin-bottom: 4px;">GAS WebApp URL</label>
                 <input id="gas-url" type="text" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;" placeholder="https://script.google.com/macros/s/.../exec">
             </div>
+            <p style="font-size: 11px; color: var(--muted, #666); margin: 8px 0;">若 RTDB 規則改為需登入（<code>auth != null</code>），請填 Firebase 主控台「專案設定 → 一般 → 您的應用程式」的 Web 設定，並在 Authentication 啟用「匿名」。三欄皆填才會嘗試匿名登入。</p>
+            <div style="margin-bottom: 12px;">
+                <label style="font-size: 12px; display: block; margin-bottom: 4px;">apiKey（選填）</label>
+                <input id="fb-api-key" type="text" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;" placeholder="AIza...">
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="font-size: 12px; display: block; margin-bottom: 4px;">authDomain（選填）</label>
+                <input id="fb-auth-domain" type="text" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;" placeholder="your-project.firebaseapp.com">
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="font-size: 12px; display: block; margin-bottom: 4px;">projectId（選填）</label>
+                <input id="fb-project-id" type="text" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;" placeholder="brave-calling-391208">
+            </div>
             <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;">
                 <button class="btn" onclick="closeCloudSettings()">取消</button>
                 <button class="btn btn-primary" onclick="saveCloudSettings()">儲存設定</button>
@@ -384,7 +397,7 @@
     </div>
 </div>
 
-<!-- Firebase SDK -->
+<!-- Firebase SDK：Auth 僅在雲端設定填齊 apiKey／authDomain／projectId 時才做匿名登入 -->
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
@@ -475,15 +488,42 @@
     };
     const FB_CONFIG_DEFAULT = {
         databaseURL: "https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app",
-        gasURL: "https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec"
+        gasURL: "https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec",
+        apiKey: "",
+        authDomain: "",
+        projectId: ""
     };
-    let fbConfig = JSON.parse(localStorage.getItem('fb_audit_config')) || FB_CONFIG_DEFAULT;
+    let fbConfig = { ...FB_CONFIG_DEFAULT, ...(JSON.parse(localStorage.getItem('fb_audit_config')) || {}) };
 
-    // 初始化 Firebase
+    /** 與主控台 Web 設定一致；三欄齊全才會初始化 Auth 並匿名登入（規則需 auth 時使用） */
+    function firebaseAuthConfigured() {
+        const k = (fbConfig.apiKey != null ? String(fbConfig.apiKey) : '').trim();
+        const d = (fbConfig.authDomain != null ? String(fbConfig.authDomain) : '').trim();
+        const p = (fbConfig.projectId != null ? String(fbConfig.projectId) : '').trim();
+        return !!(k && d && p);
+    }
+
+    function buildFirebaseInitOptions() {
+        const o = { databaseURL: fbConfig.databaseURL || FB_CONFIG_DEFAULT.databaseURL };
+        if (firebaseAuthConfigured()) {
+            o.apiKey = String(fbConfig.apiKey).trim();
+            o.authDomain = String(fbConfig.authDomain).trim();
+            o.projectId = String(fbConfig.projectId).trim();
+        }
+        return o;
+    }
+
+    function tryAnonymousSignIn() {
+        if (!firebaseAuthConfigured() || !firebase.apps.length) return;
+        firebase.auth().signInAnonymously().catch(function (e) {
+            console.warn('[Auth] 匿名登入失敗:', e.message);
+        });
+    }
+
+    // 初始化 Firebase；業務身份仍以 URL/LIFF 的 currentUser 為主（與 Firebase Auth uid 無強制對應）
     if (!firebase.apps.length) {
-        firebase.initializeApp({ databaseURL: fbConfig.databaseURL });
-        // [安全性預置] 預先啟用匿名登入，以配合未來規則轉型
-        firebase.auth().signInAnonymously().catch(e => console.warn('[Auth] 匿名登入預載中 (不影響目前存取):', e.message));
+        firebase.initializeApp(buildFirebaseInitOptions());
+        tryAnonymousSignIn();
     }
     const db = firebase.database();
 
@@ -536,15 +576,21 @@
     function openCloudSettings() {
         document.getElementById('fb-db-url').value = fbConfig.databaseURL || '';
         document.getElementById('gas-url').value = fbConfig.gasURL || '';
+        document.getElementById('fb-api-key').value = fbConfig.apiKey || '';
+        document.getElementById('fb-auth-domain').value = fbConfig.authDomain || '';
+        document.getElementById('fb-project-id').value = fbConfig.projectId || '';
         cloudModal.classList.remove('hidden');
     }
     function closeCloudSettings() { cloudModal.classList.add('hidden'); }
     function saveCloudSettings() {
         fbConfig.databaseURL = document.getElementById('fb-db-url').value;
         fbConfig.gasURL = document.getElementById('gas-url').value;
+        fbConfig.apiKey = document.getElementById('fb-api-key').value;
+        fbConfig.authDomain = document.getElementById('fb-auth-domain').value;
+        fbConfig.projectId = document.getElementById('fb-project-id').value;
         localStorage.setItem('fb_audit_config', JSON.stringify(fbConfig));
         closeCloudSettings();
-        alert('設定已儲存');
+        alert('設定已儲存。若首次填寫或變更 apiKey／authDomain／projectId，請重新整理頁面以套用 Firebase 初始化。');
     }
 
     async function syncToFirebase() {
@@ -557,7 +603,8 @@
         try {
             // Initialize if not already
             if (!firebase.apps.length) {
-                firebase.initializeApp({ databaseURL: fbConfig.databaseURL });
+                firebase.initializeApp(buildFirebaseInitOptions());
+                tryAnonymousSignIn();
             }
 
             const db = firebase.database();
@@ -926,7 +973,8 @@
         console.log(`⏳ 正在從雲端載入案號: ${projectNo}...`);
         try {
             if (!firebase.apps.length) {
-                firebase.initializeApp({ databaseURL: fbConfig.databaseURL });
+                firebase.initializeApp(buildFirebaseInitOptions());
+                tryAnonymousSignIn();
             }
             const db = firebase.database();
             const snapshot = await db.ref(`quotations/${projectNo}`).once('value');
