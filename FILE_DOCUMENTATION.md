@@ -118,7 +118,7 @@
 |------|---------|---------|
 | **LP_LayoutPlanner.html** | 互動式室內設計規劃工具（LayoutPlanner） | **保留 (使用中)** |
 | **LP_core.js** | LayoutPlanner 共用（通知、SVG 消毒、幾何／碰撞輔助）；由 `LP_LayoutPlanner.js` import | **保留 (使用中)** |
-| **floorplan-straightener.html** | 平面圖校正工具 | **保留 (使用中)** |
+| **floorplan-straightener.html** | 平面圖校正工具（白話規格：`SPEC/InteriorDesigned_FloorplanStraightener_SPEC.md`） | **保留 (使用中)** |
 | **施工規範.html** | 工程標準文件 | **保留 (常用)** |
 | **WMS.html** | 工作排程系統 (舊版) | **已移至 _待開發備份_** |
 | **site-report.html** | 施工日誌生成器 | **已移至 _待開發備份_** |

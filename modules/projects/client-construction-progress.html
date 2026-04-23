@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" class="client-progress-standalone">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>施工進度（客戶唯讀）</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../assets/css/style.css?v=2026-04-23h">
+  <link rel="icon" href="data:,">
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <!-- 正式環境：在 LINE Developers 建立「客戶用」LIFF 後填入（與員工主控台分開）。 -->
+  <script>
+    var CLIENT_PROGRESS_LIFF_ID = '';
+  </script>
+  <!--
+    style.css 對 html/body 設 height:100% + overflow:hidden 給主控台三欄捲動用；本頁改為整頁垂直捲動。
+    本機：根目錄須為 CODING（Live Server）；勿 file://。
+    開發預設 userId／案號 寫在 client-progress-main.js 的 __DEV_CLIENT_DEFAULTS（上線前關閉）。
+  -->
+  <style>
+    html.client-progress-standalone,
+    html.client-progress-standalone body {
+      height: auto !important;
+      min-height: 100%;
+      overflow-x: hidden !important;
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .client-progress-page {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      padding-bottom: 3rem;
+    }
+
+    .client-progress-page #log-list .card:last-child {
+      margin-bottom: 0;
+    }
+
+    .client-audit-summary .audit-pct {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .client-audit-summary-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.5rem 0.5rem;
+      margin-top: 0.5rem;
+      text-align: center;
+    }
+
+    .client-audit-metric {
+      min-width: 0;
+    }
+
+    .client-audit-metric-label {
+      display: block;
+      font-size: 0.75rem;
+      line-height: 1.25;
+      color: var(--muted, #6b7280);
+      font-weight: 500;
+      margin: 0 0 0.25rem 0;
+    }
+
+    .client-audit-metric-value {
+      font-feature-settings: 'tnum' 1;
+    }
+
+    .client-audit-overall-bar {
+      height: 10px;
+      border-radius: 9999px;
+      background: #e5e7eb;
+      overflow: hidden;
+      margin-top: 0.75rem;
+    }
+
+    .client-audit-overall-bar-fill {
+      height: 100%;
+      border-radius: 9999px;
+      background: linear-gradient(90deg, var(--primary), var(--primary-hover, #7c95a5));
+      transition: width 0.35s ease;
+    }
+
+    .client-audit-overall-scale {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: var(--muted-2, #9ca3af);
+      margin-top: 0.25rem;
+    }
+
+    details.client-audit-zone {
+      border: 1px solid #e5e7eb;
+      border-radius: var(--radius);
+      margin-bottom: 0.5rem;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    details.client-audit-zone:last-child {
+      margin-bottom: 0;
+    }
+
+    .client-audit-zone-summary {
+      list-style: none;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 12rem 0.9rem;
+      align-items: center;
+      column-gap: 0.5rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      padding: 0.6rem 0.85rem;
+      background: #f1f5f9;
+      cursor: pointer;
+    }
+
+    .client-audit-zone-title {
+      min-width: 0;
+      line-height: 1.4;
+      word-wrap: break-word;
+      text-align: left;
+      font-weight: 700;
+    }
+
+    .client-audit-zone-summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .client-audit-zone-summary::after {
+      content: '▾';
+      font-size: 0.75rem;
+      color: var(--muted);
+      transition: transform 0.2s;
+      justify-self: end;
+      align-self: center;
+    }
+
+    details.client-audit-zone:not([open]) .client-audit-zone-summary::after {
+      transform: rotate(-90deg);
+    }
+
+    .client-audit-zone-badge {
+      display: block;
+      justify-self: end;
+      min-width: 0;
+      width: 100%;
+      font-size: 0.8rem;
+      line-height: 1.3;
+      font-weight: 600;
+      color: var(--muted);
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .client-audit-zone-body {
+      padding: 0 0.75rem;
+    }
+
+    .client-audit-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .client-audit-zone-body .client-audit-item:last-child {
+      border-bottom: none;
+    }
+
+    .client-audit-item .done-mark {
+      flex-shrink: 0;
+      width: 1.5rem;
+      text-align: center;
+      font-weight: 700;
+    }
+
+    .client-audit-item.done .done-mark {
+      color: var(--green);
+    }
+
+    .client-audit-item.not-started .done-mark {
+      color: var(--muted-2, #9ca3af);
+      font-weight: 400;
+    }
+
+    .client-audit-item.in-progress {
+      border-left: 3px solid var(--primary);
+      padding-left: calc(0.75rem - 3px);
+      margin-left: 0;
+    }
+
+    .client-audit-mini-bar {
+      height: 6px;
+      border-radius: 9999px;
+      background: #e5e7eb;
+      overflow: hidden;
+      margin-top: 0.4rem;
+      max-width: 100%;
+    }
+
+    .client-audit-mini-bar-fill {
+      display: block;
+      height: 100%;
+      border-radius: 9999px;
+      background: var(--primary);
+    }
+
+    .client-audit-item .item-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .client-audit-item .item-name {
+      font-weight: 600;
+    }
+
+    .client-audit-item .item-meta {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 0.2rem;
+    }
+
+    /* 施工項目列僅展示，避免誤以為可點擊編輯 */
+    #client-audit-panel .client-audit-item {
+      cursor: default;
+      user-select: none;
+    }
+
+    /* 施工項目在標題下、紀錄前：摺疊一列即可見，底線與下方紀錄區隔 */
+    #client-audit-panel {
+      margin-top: 0;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1.25rem;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    details.client-audit-collapse-root {
+      border: 1px solid #e5e7eb;
+      border-radius: var(--radius);
+      background: #fafbfc;
+      overflow: hidden;
+    }
+
+    .client-audit-collapse-summary {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.7rem 0.9rem;
+      cursor: pointer;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--fg);
+      background: #f1f5f9;
+    }
+
+    .client-audit-collapse-summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .client-audit-collapse-summary::after {
+      content: '▾';
+      flex-shrink: 0;
+      font-size: 0.7rem;
+      color: var(--muted);
+      transition: transform 0.2s;
+    }
+
+    details.client-audit-collapse-root:not([open]) .client-audit-collapse-summary::after {
+      transform: rotate(-90deg);
+    }
+
+    .client-audit-collapse-title {
+      flex-shrink: 0;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.875rem;
+      letter-spacing: 0.02em;
+    }
+
+    .client-audit-collapse-counts {
+      flex: 1;
+      text-align: right;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--fg);
+    }
+
+    .client-audit-collapse-counts .cnt-pending {
+      color: #b45309;
+    }
+
+    .client-audit-collapse-counts .cnt-done {
+      color: var(--green, #15803d);
+    }
+
+    .client-audit-collapse-counts .cnt-sep {
+      color: var(--muted-2, #9ca3af);
+      font-weight: 400;
+      padding: 0 0.2rem;
+    }
+
+    .client-audit-collapse-body {
+      padding: 0.85rem 0.9rem 1rem;
+      background: #fff;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .client-audit-inner-quiet {
+      padding: 0.75rem 0.85rem;
+      background: #fafafa;
+      border: 1px solid #eee;
+      border-radius: calc(var(--radius) - 2px);
+    }
+
+    .client-audit-summary.client-audit-summary--compact .audit-pct,
+    .client-audit-summary--compact .client-audit-metric .audit-pct {
+      font-size: 1.35rem;
+    }
+  </style>
+</head>
+
+<body class="client-progress-body">
+  <div class="client-progress-page">
+    <header class="mb-6">
+      <h1 id="page-title" class="text-2xl font-bold m-0">施工進度</h1>
+      <p id="subhead" class="muted mt-2 mb-0">載入中…</p>
+      <p id="sync-hint" class="hidden mt-2 mb-0 text-sm" style="color: #b45309;">正在背景更新資料…</p>
+    </header>
+
+    <div id="error-banner" class="hidden mb-4 p-3 rounded text-sm border border-red-200 bg-red-50 text-red-900 whitespace-pre-wrap"></div>
+
+    <!-- 與內部專案表同一 Firebase：quotations/{案號}，僅顯示項目完成度（無報價細節）；置於紀錄上方避免捲到底才看到 -->
+    <section id="client-audit-panel" aria-label="施工項目（與公司同步、僅供查看）"></section>
+
+    <h2 class="text-lg font-semibold m-0 mb-3" style="color: var(--fg);">現場施工紀錄</h2>
+    <div id="log-list"></div>
+    <p id="empty-hint" class="hidden text-center muted py-12 text-sm">尚無已發布之施工紀錄。</p>
+  </div>
+
+  <!-- 與 managementconsole.html 相同結構，供 style.css #lightbox.open 與左右切換 -->
+  <div id="lightbox" aria-hidden="true">
+    <div class="lb-wrap">
+      <img class="lb-img" alt="預覽">
+      <button type="button" class="lb-close" aria-label="關閉">✕</button>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+  <script type="module" src="./js/client-progress-main.js?v=2026-04-23c"></script>
+</body>
+
+</html>

@@ -706,15 +706,22 @@
         saveToCache();
     }
 
-    // [v3.0] 快取 7 天
+    // 驗收表本地快取：約 5～7 天有效（與使用者預期一致，避免每次 iframe 都白等雲端）
+    const AUDIT_LOCAL_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
     function saveToCache() {
         if (!appData) return;
         const cacheObj = {
             data: appData,
             timestamp: Date.now()
         };
-        localStorage.setItem(`audit_cache_${appData.案號}`, JSON.stringify(cacheObj));
-        console.log('[Cache] 已更新本地快取');
+        const key = `audit_cache_${appData.案號}`;
+        try {
+            localStorage.setItem(key, JSON.stringify(cacheObj));
+            console.log('[Cache] 已更新本地快取', key);
+        } catch (e) {
+            console.warn('[Cache] localStorage 寫入失敗（可能已滿）', e);
+        }
     }
 
     function loadFromCache(projectNo) {
@@ -722,9 +729,10 @@
         if (!raw) return null;
         try {
             const cacheObj = JSON.parse(raw);
-            const days = (Date.now() - cacheObj.timestamp) / (1000 * 60 * 60 * 24);
-            if (days < 7) {
-                console.log(`[Cache] 找到 7 天內快取 (${Math.round(days * 24)}h ago)，載入中...`);
+            const ageMs = Date.now() - cacheObj.timestamp;
+            if (ageMs >= 0 && ageMs <= AUDIT_LOCAL_CACHE_TTL_MS) {
+                const days = ageMs / (1000 * 60 * 60 * 24);
+                console.log(`[Cache] 找到 ${Math.round(AUDIT_LOCAL_CACHE_TTL_MS / 86400000)} 天內快取（約 ${(days).toFixed(2)} 天前），可立即顯示`);
                 return cacheObj.data;
             }
             return null;
@@ -969,8 +977,25 @@
             alert("請先設定 Firebase Database URL");
             return;
         }
-        
-        console.log(`⏳ 正在從雲端載入案號: ${projectNo}...`);
+
+        console.log(`⏳ 載入案號: ${projectNo}（有快取則先顯示，再同步雲端）…`);
+        const cached = loadFromCache(projectNo);
+        let showedCache = false;
+        if (cached) {
+            try {
+                const hubMap = await getHubProjectNameMap();
+                loadData(cached, hubMap);
+                showedCache = true;
+                const hSync = document.getElementById('h-sync');
+                if (hSync) {
+                    const t = cached.total_summary && (cached.total_summary.export_time || cached.total_summary.last_updated);
+                    hSync.innerText = t ? `快取・${t}` : '快取（待同步雲端）';
+                }
+            } catch (e) {
+                console.warn('[Cache] 無法套用本地快取', e);
+            }
+        }
+
         try {
             if (!firebase.apps.length) {
                 firebase.initializeApp(buildFirebaseInitOptions());
@@ -979,24 +1004,31 @@
             const db = firebase.database();
             const snapshot = await db.ref(`quotations/${projectNo}`).once('value');
             const data = snapshot.val();
-            
+
             if (data && data.context) {
                 console.log('✅ 成功從雲端抓取 Context:', data.context);
                 const hubMap = await getHubProjectNameMap();
                 loadData(data.context, hubMap);
                 document.getElementById('h-sync').innerText = data.last_updated || '剛剛';
-                
+                saveToCache();
+
                 // [v1.4] 向 GAS 請求真實專案資訊 (名稱) — 補強 Firebase 未寫入案名時
                 const ctxNo = data.context.案號;
                 if (ctxNo && ctxNo !== 'UNKNOWN_NO') {
                     fetchProjectMetadata(ctxNo);
                 }
-            } else {
+            } else if (!showedCache) {
                 alert(`找不到案號 ${projectNo} 的雲端數據`);
+            } else {
+                console.warn('[Firebase] 無遠端資料，沿用本地快取');
             }
         } catch (err) {
             console.error(err);
-            alert("雲端載入失敗: " + err.message);
+            if (!showedCache) {
+                alert("雲端載入失敗: " + err.message);
+            } else {
+                console.warn('雲端載入失敗，沿用本地快取:', err.message);
+            }
         }
     }
 

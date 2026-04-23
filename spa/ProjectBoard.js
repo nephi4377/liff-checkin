@@ -43,7 +43,12 @@ export default {
             <div v-if="!projectsToShow || projectsToShow.length === 0" class="text-center text-gray-500 py-12"><p>正在載入專案資料或沒有符合您權限的專案。</p></div>
             <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div v-for="p in projectsToShow" :key="p.id" class="bg-white p-4 rounded-lg shadow-md border border-gray-200 flex flex-col gap-4">
-                    <div class="flex justify-between items-center"><h3 class="font-bold text-lg text-gray-800">{{ p.name }}</h3><div><button @click="openProjectConsole(p.id)" class="bg-blue-100 text-blue-700 text-xs font-bold py-1 px-3 rounded-full hover:bg-blue-200">開啟工作區</button></div></div>
+                    <div class="flex flex-wrap justify-between items-center gap-2">
+                        <h3 class="font-bold text-lg text-gray-800 min-w-0 flex-1">{{ p.name }}</h3>
+                        <button type="button" @click="openProjectConsole(p.id)"
+                            class="shrink-0 inline-flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2.5 px-4 rounded-lg shadow-md active:opacity-90 transition"
+                            aria-label="開啟此專案的主控台工作區">開啟工作區</button>
+                    </div>
                     <div><h4 class="font-semibold text-gray-600 text-sm mb-2">工程進度</h4><ul class="text-sm space-y-1 text-gray-700"><li v-for="task in p.scheduleSummary" :key="task['任務項目']"><span class="text-gray-500">{{ new Date(task['預計開始日']).toLocaleDateString('sv').substring(5) }}</span> <span :class="['font-medium', task['狀態'] === '已完成' ? 'text-gray-500' : 'text-red-600']">{{ task['狀態'] === '已完成' ? '[已完成]' : '[未完成]' }}</span> {{ task['任務項目'] }}</li></ul></div>
                     <div><h4 class="font-semibold text-gray-600 text-sm mb-2">近期回報</h4><ul class="text-sm space-y-1 text-gray-700"><li v-for="log in p.logSummary" :key="log.LogID"><span class="text-gray-500">{{ new Date(log.Timestamp).toLocaleDateString('sv').substring(5) }}</span> <span class="font-medium text-blue-700">{{ (log.Title || '').match(/(\\d{4}-\\d{2}-\\d{2})\\s(.+?)\\s/)?.[2] || '日誌' }}</span> by {{ log.UserName }}</li></ul></div>
                 </div>

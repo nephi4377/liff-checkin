@@ -1,12 +1,10 @@
 ﻿<!-- 
-  [版本號碼: v1.0.24]
-  [修改時間: 2025-11-26 13:10:00 Asia/Taipei]
+  [版本號碼: v1.0.31]
+  [修改時間: 2026-04-23 Asia/Taipei]
   [開發者: 添心室內裝修設計有限公司 - 技術顧問]
   [描述: 基於 React 與 OpenCV.js 的平面圖透視校正工具。
-         優化裁切功能 (無變形裁切)：
-         1. 修改「應用裁切」邏輯：改為 Bounding Box 裁切 (無透視變形)。
-         2. 新增 generateBoundingBoxCrop 函式：計算選取範圍的最大矩形並裁切。
-         3. 保持 Light Mode、浮動放大鏡與縮小後的字體。]
+         v1.0.31：候選收斂至多 6 組；偵測虛線預設關閉、可勾選顯示並選極淡／稍清楚。
+         v1.0.30：多策略偵測、整張外框備援。]
 -->
 <!DOCTYPE html>
 <html lang="zh-TW">
@@ -159,6 +157,9 @@
             </Icon>
         );
 
+        /** 編輯區四點預設（亦作 drawCanvas 防呆） */
+        const DEFAULT_EDIT_POINTS = [{ x: 0.1, y: 0.1 }, { x: 0.9, y: 0.1 }, { x: 0.9, y: 0.9 }, { x: 0.1, y: 0.9 }];
+
         // --- 點位排序 ---
         const sortPoints = (pts) => {
             const sortedBySum = [...pts].sort((a, b) => (a.x + a.y) - (b.x + b.y));
@@ -170,14 +171,160 @@
             return [p0, p1, p2, p3];
         };
 
-        // --- 自動偵測邊角 ---
+        /** 偵測全失敗時的備援：近乎貼齊圖邊（拼貼／透視合成圖常用） */
+        const FULL_IMAGE_FRAME_QUAD = sortPoints([
+            { x: 0.012, y: 0.012 }, { x: 0.988, y: 0.012 },
+            { x: 0.988, y: 0.988 }, { x: 0.012, y: 0.988 }
+        ]);
+
+        /** 從 approxPolyDP 的 Mat 讀出四點（整數／浮點皆嘗試） */
+        const readQuadFromApprox = (approx, cols, rows) => {
+            if (!approx || approx.rows !== 4) return null;
+            const tempPoints = [];
+            for (let j = 0; j < 4; j++) {
+                let x = NaN;
+                let y = NaN;
+                if (approx.data32S && approx.data32S.length >= (j + 1) * 2) {
+                    x = approx.data32S[j * 2];
+                    y = approx.data32S[j * 2 + 1];
+                }
+                if ((x !== x || y !== y) && approx.data32F && approx.data32F.length >= (j + 1) * 2) {
+                    x = approx.data32F[j * 2];
+                    y = approx.data32F[j * 2 + 1];
+                }
+                if (x !== x || y !== y) return null;
+                tempPoints.push({ x: x / cols, y: y / rows });
+            }
+            return sortPoints(tempPoints);
+        };
+
+        /** 輪廓的最小外接矩形四角（多數圖 approx 不是剛好 4 點時的補救） */
+        const quadFromMinAreaRectContour = (contour, cols, rows) => {
+            try {
+                const rect = cv.minAreaRect(contour);
+                if (typeof cv.rotatedRectPoints === 'function') {
+                    const m = cv.rotatedRectPoints(rect);
+                    if (Array.isArray(m) && m.length === 4) {
+                        const tempPoints = m.map(v => ({ x: v.x / cols, y: v.y / rows }));
+                        return sortPoints(tempPoints);
+                    }
+                    if (m && m.data32F && m.rows >= 4) {
+                        try {
+                            const tempPoints = [];
+                            for (let j = 0; j < 4; j++) {
+                                const x = m.data32F[j * 2] / cols;
+                                const y = m.data32F[j * 2 + 1] / rows;
+                                tempPoints.push({ x, y });
+                            }
+                            return sortPoints(tempPoints);
+                        } finally {
+                            if (typeof m.delete === 'function') m.delete();
+                        }
+                    }
+                    if (m && typeof m.delete === 'function') m.delete();
+                }
+                if (typeof cv.RotatedRect !== 'undefined' && typeof cv.RotatedRect.points === 'function') {
+                    const vertices = cv.RotatedRect.points(rect);
+                    if (vertices && vertices.length === 4) {
+                        const tempPoints = vertices.map(v => ({ x: v.x / cols, y: v.y / rows }));
+                        return sortPoints(tempPoints);
+                    }
+                }
+            } catch (e) {
+                console.warn('minAreaRect quad', e);
+            }
+            return null;
+        };
+
+        const quadsNearlySame = (a, b, tol = 0.035) => {
+            if (!a || !b || a.length !== 4 || b.length !== 4) return false;
+            return a.every((p, i) => Math.abs(p.x - b[i].x) < tol && Math.abs(p.y - b[i].y) < tol);
+        };
+
+        const pushUniqueQuad = (list, quad) => {
+            if (!quad) return;
+            if (list.some((c) => quadsNearlySame(c, quad, 0.045))) return;
+            list.push(quad);
+        };
+
+        /** 漸進加大簡化比例，嘗試得到剛好四角（適合複雜邊緣） */
+        const tryIterativeApproxQuad = (contour, cols, rows) => {
+            const perim = cv.arcLength(contour, true);
+            if (perim < 8) return null;
+            for (const scale of [0.015, 0.025, 0.04, 0.06, 0.09, 0.12, 0.18]) {
+                const approx = new cv.Mat();
+                try {
+                    cv.approxPolyDP(contour, approx, scale * perim, true);
+                    if (approx.rows === 4) {
+                        return readQuadFromApprox(approx, cols, rows);
+                    }
+                } finally {
+                    approx.delete();
+                }
+            }
+            return null;
+        };
+
+        /** 凸包再簡化，常能從拼貼／透視圖得到外框四角 */
+        const tryHullQuad = (contour, cols, rows) => {
+            const hull = new cv.Mat();
+            try {
+                cv.convexHull(contour, hull, false, true);
+                if (!hull || hull.rows < 3) return null;
+                const perim = Math.max(cv.arcLength(hull, true), 4);
+                for (const scale of [0.022, 0.04, 0.065, 0.09, 0.13]) {
+                    const approx = new cv.Mat();
+                    try {
+                        cv.approxPolyDP(hull, approx, scale * perim, true);
+                        if (approx.rows === 4) {
+                            return readQuadFromApprox(approx, cols, rows);
+                        }
+                    } finally {
+                        approx.delete();
+                    }
+                }
+            } catch (e) {
+                console.warn('tryHullQuad', e);
+            } finally {
+                hull.delete();
+            }
+            return null;
+        };
+
+        /** 正規化座標下四邊形面積（越大通常越像「框住主體」） */
+        const quadPolygonAreaNorm = (q) => {
+            if (!q || q.length !== 4) return 0;
+            let s = 0;
+            for (let i = 0; i < 4; i++) {
+                const j = (i + 1) % 4;
+                s += q[i].x * q[j].y - q[j].x * q[i].y;
+            }
+            return Math.abs(s) * 0.5;
+        };
+
+        /** 收斂候選：依面積排序、合併近似重複、最多 maxKeep 組 */
+        const trimAndRankCandidates = (list, maxKeep = 6) => {
+            if (!list || list.length === 0) return [];
+            const sorted = [...list].sort((a, b) => quadPolygonAreaNorm(b) - quadPolygonAreaNorm(a));
+            const out = [];
+            const mergeTol = 0.058;
+            for (const q of sorted) {
+                if (!q || q.length !== 4) continue;
+                if (out.some((o) => quadsNearlySame(o, q, mergeTol))) continue;
+                out.push(q.map((p) => ({ ...p })));
+                if (out.length >= maxKeep) break;
+            }
+            return out;
+        };
+
+        // --- 自動偵測邊角（多種二值化 + 最大輪廓加強；仍無則整張外框備援）---
         const findAllCornerCandidates = (img) => {
             const candidates = [];
             if (!window.cv || !window.cvLoaded) return candidates;
 
             try {
                 const src = cv.imread(img);
-                let scaledSrc = new cv.Mat();
+                const scaledSrc = new cv.Mat();
                 const MAX_PROCESSING_WIDTH = 1200;
 
                 if (src.cols > MAX_PROCESSING_WIDTH) {
@@ -188,48 +335,103 @@
                     src.copyTo(scaledSrc);
                 }
 
-                let gray = new cv.Mat();
-                let blur = new cv.Mat();
-                let threshold = new cv.Mat();
-                let contours = new cv.MatVector();
-                let hierarchy = new cv.Mat();
-
-                cv.cvtColor(scaledSrc, gray, cv.COLOR_RGBA2GRAY, 0);
-                cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
-                cv.adaptiveThreshold(blur, threshold, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 11, 2);
-                cv.findContours(threshold, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-                for (let i = 0; i < contours.size(); ++i) {
-                    let contour = contours.get(i);
-                    let area = cv.contourArea(contour);
-
-                    const minAreaThreshold = scaledSrc.cols * scaledSrc.rows * 0.15;
-                    if (area > minAreaThreshold) {
-                        let perimeter = cv.arcLength(contour, true);
-                        let approx = new cv.Mat();
-                        cv.approxPolyDP(contour, approx, 0.02 * perimeter, true);
-
-                        if (approx.rows === 4) {
-                            const tempPoints = [];
-                            for (let j = 0; j < 4; j++) {
-                                tempPoints.push({
-                                    x: approx.data32S[j * 2] / scaledSrc.cols,
-                                    y: approx.data32S[j * 2 + 1] / scaledSrc.rows
-                                });
-                            }
-                            candidates.push(sortPoints(tempPoints));
-                        }
-                        approx.delete();
-                    }
+                const gray = new cv.Mat();
+                const ch = scaledSrc.channels();
+                if (ch === 4) {
+                    cv.cvtColor(scaledSrc, gray, cv.COLOR_RGBA2GRAY, 0);
+                } else if (ch === 3) {
+                    cv.cvtColor(scaledSrc, gray, cv.COLOR_RGB2GRAY, 0);
+                } else if (ch === 1) {
+                    scaledSrc.copyTo(gray);
+                } else {
+                    cv.cvtColor(scaledSrc, gray, cv.COLOR_RGBA2GRAY, 0);
                 }
 
-                src.delete(); scaledSrc.delete(); gray.delete(); blur.delete(); threshold.delete(); contours.delete(); hierarchy.delete();
+                const blur = new cv.Mat();
+                cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
 
+                const cols = scaledSrc.cols;
+                const rows = scaledSrc.rows;
+                const totalArea = cols * rows;
+
+                const processContoursFromBinary = (binary) => {
+                    const minAreaLoose = totalArea * 0.025;
+                    const minAreaLarge = totalArea * 0.10;
+                    const contours = new cv.MatVector();
+                    const hierarchy = new cv.Mat();
+                    cv.findContours(binary, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+                    let maxIdx = -1;
+                    let maxArea = 0;
+                    for (let i = 0; i < contours.size(); ++i) {
+                        const contour = contours.get(i);
+                        const area = cv.contourArea(contour);
+                        if (area > maxArea) {
+                            maxArea = area;
+                            maxIdx = i;
+                        }
+                        if (area <= minAreaLoose) continue;
+                        const perimeter = cv.arcLength(contour, true);
+                        const approx = new cv.Mat();
+                        cv.approxPolyDP(contour, approx, 0.02 * perimeter, true);
+                        if (area > minAreaLarge && approx.rows === 4) {
+                            pushUniqueQuad(candidates, readQuadFromApprox(approx, cols, rows));
+                        }
+                        pushUniqueQuad(candidates, quadFromMinAreaRectContour(contour, cols, rows));
+                        approx.delete();
+                    }
+                    if (maxIdx >= 0 && maxArea > totalArea * 0.015) {
+                        const big = contours.get(maxIdx);
+                        pushUniqueQuad(candidates, tryIterativeApproxQuad(big, cols, rows));
+                        pushUniqueQuad(candidates, tryHullQuad(big, cols, rows));
+                        pushUniqueQuad(candidates, quadFromMinAreaRectContour(big, cols, rows));
+                    }
+                    contours.delete();
+                    hierarchy.delete();
+                };
+
+                const binInv = new cv.Mat();
+                cv.adaptiveThreshold(blur, binInv, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 11, 2);
+                processContoursFromBinary(binInv);
+                binInv.delete();
+
+                const bin = new cv.Mat();
+                cv.adaptiveThreshold(blur, bin, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
+                processContoursFromBinary(bin);
+                bin.delete();
+
+                const otsuInv = new cv.Mat();
+                cv.threshold(blur, otsuInv, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU);
+                processContoursFromBinary(otsuInv);
+                otsuInv.delete();
+
+                const otsuBin = new cv.Mat();
+                cv.threshold(blur, otsuBin, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
+                processContoursFromBinary(otsuBin);
+                otsuBin.delete();
+
+                const edges = new cv.Mat();
+                const dilated = new cv.Mat();
+                cv.Canny(blur, edges, 20, 70);
+                const k3 = cv.Mat.ones(3, 3, cv.CV_8U);
+                cv.dilate(edges, dilated, k3);
+                k3.delete();
+                processContoursFromBinary(dilated);
+                dilated.delete();
+                edges.delete();
+
+                if (candidates.length === 0) {
+                    pushUniqueQuad(candidates, FULL_IMAGE_FRAME_QUAD.map(p => ({ ...p })));
+                }
+
+                src.delete();
+                scaledSrc.delete();
+                gray.delete();
+                blur.delete();
             } catch (err) {
                 console.error("Error detecting corners:", err);
             }
 
-            return candidates;
+            return trimAndRankCandidates(candidates, 6);
         };
 
         // 放大鏡元件 (支援樣式傳入)
@@ -291,6 +493,14 @@
             const [cornerCandidates, setCornerCandidates] = useState([]);
             const [candidateIndex, setCandidateIndex] = useState(-1);
             const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
+            /** 操作失敗時給使用者看的白話說明（非工程 log） */
+            const [actionError, setActionError] = useState(null);
+            /** 自動偵測結果說明（有／無候選框） */
+            const [detectionHint, setDetectionHint] = useState(null);
+            /** 是否畫出自動偵測候選虛線（預設關，避免干擾拖黃點） */
+            const [showCandidateOverlay, setShowCandidateOverlay] = useState(false);
+            /** 候選線濃度：ghost=極淡，muted=稍清楚 */
+            const [overlayPreset, setOverlayPreset] = useState('ghost');
 
             const canvasRef = useRef(null);
             const imageRef = useRef(null);
@@ -305,21 +515,43 @@
                 return () => window.removeEventListener('opencv-ready', handleCvReady);
             }, []);
 
+            const friendlyErrorMessage = (err) => {
+                const raw = typeof err === 'string' ? err : (err && err.message) ? String(err.message) : String(err || '');
+                if (/OpenCV not ready/i.test(raw) || /not ready or no image/i.test(raw)) {
+                    return '影像引擎還沒準備好，請重新整理頁面後再試一次。';
+                }
+                if (/No image loaded/i.test(raw)) {
+                    return '目前沒有圖片，請先上傳一張照片。';
+                }
+                if (/Invalid crop dimensions/i.test(raw)) {
+                    return '四個點太靠近或重疊，請把角拉開一點再按「應用裁切」。';
+                }
+                return '這一步沒有完成。可以試試較小的圖、或重新整理頁面後再操作一次。';
+            };
+
             const handleImageUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
+                setActionError(null);
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     const img = new Image();
                     img.onload = () => {
+                        setShowCandidateOverlay(false);
+                        setOverlayPreset('ghost');
                         setImageSrc(event.target.result);
                         setProcessedImage(null);
-                        const initialPoints = [{ x: 0.1, y: 0.1 }, { x: 0.9, y: 0.1 }, { x: 0.9, y: 0.9 }, { x: 0.1, y: 0.9 }];
-                        setPoints(initialPoints);
+                        setPoints(DEFAULT_EDIT_POINTS.map(p => ({ ...p })));
 
                         const candidates = findAllCornerCandidates(img);
                         setCornerCandidates(candidates);
                         setCandidateIndex(-1);
+                        const onlyFullFallback = candidates.length === 1 && quadsNearlySame(candidates[0], FULL_IMAGE_FRAME_QUAD, 0.09);
+                        if (onlyFullFallback) {
+                            setDetectionHint('這類圖較難自動猜角，已收斂候選並含「整張外框」。請拖黃點微調；要對照其他自動框可勾選「顯示偵測候選」。');
+                        } else {
+                            setDetectionHint(`已收斂為 ${candidates.length} 組較可能的外框（按「自動偵測」可輪流套用）。若要對照淡虛線，請勾選「顯示偵測候選」。`);
+                        }
                     };
                     img.src = event.target.result;
                     imageRef.current = img;
@@ -353,7 +585,11 @@
                 if (!canvas || !img || !imageSrc) return;
                 const ctx = canvas.getContext('2d');
                 const container = containerRef.current;
-                const containerWidth = container.clientWidth || 800;
+                let containerWidth = container && container.clientWidth ? container.clientWidth : 0;
+                // 從「結果頁」回到編輯時，首幀外層 flex 常為 0 寬 → 若不備援會整片空白
+                if (!containerWidth || containerWidth < 8) {
+                    containerWidth = Math.max(320, Math.floor((window.innerWidth || 900) * 0.88));
+                }
                 const ratio = img.height / img.width;
                 const targetWidth = containerWidth * 0.95;
                 const displayWidth = Math.min(img.width, targetWidth);
@@ -366,10 +602,13 @@
                     setCanvasSize({ width: displayWidth, height: displayHeight });
                 }
 
+                const pts = (points && points.length === 4) ? points : DEFAULT_EDIT_POINTS;
+
                 ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
                 ctx.fillRect(0, 0, displayWidth, displayHeight);
-                const currentPoints = points.map(p => ({ x: p.x * displayWidth, y: p.y * displayHeight }));
+
+                const currentPoints = pts.map(p => ({ x: p.x * displayWidth, y: p.y * displayHeight }));
 
                 ctx.save();
                 ctx.beginPath();
@@ -402,7 +641,51 @@
                     ctx.font = 'bold 11px Arial';
                     ctx.fillText(i + 1, p.x - 3.5, p.y + 4);
                 });
-            }, [imageSrc, points, activePointIndex]);
+
+                // 候選虛線：僅在勾選時繪製，預設極淡以免蓋過黃點操作
+                if (showCandidateOverlay && cornerCandidates && cornerCandidates.length > 0) {
+                    const quadNearlySame = (a, b) => {
+                        if (!a || !b || a.length !== 4 || b.length !== 4) return false;
+                        const tol = 0.018;
+                        return a.every((p, i) => Math.abs(p.x - b[i].x) < tol && Math.abs(p.y - b[i].y) < tol);
+                    };
+                    const pal = overlayPreset === 'muted'
+                        ? {
+                            fillOther: 'rgba(100, 116, 139, 0.07)',
+                            fillMatch: 'rgba(251, 191, 36, 0.1)',
+                            strokeOther: 'rgba(100, 116, 139, 0.38)',
+                            strokeMatch: 'rgba(180, 83, 9, 0.42)',
+                            lineW: 1.35,
+                            dash: [8, 6]
+                        }
+                        : {
+                            fillOther: 'rgba(120, 113, 108, 0.035)',
+                            fillMatch: 'rgba(251, 191, 36, 0.055)',
+                            strokeOther: 'rgba(120, 113, 108, 0.2)',
+                            strokeMatch: 'rgba(180, 83, 9, 0.26)',
+                            lineW: 1.05,
+                            dash: [6, 7]
+                        };
+                    ctx.save();
+                    ctx.lineJoin = 'round';
+                    cornerCandidates.forEach((cand) => {
+                        if (!cand || cand.length !== 4) return;
+                        const m = cand.map(p => ({ x: p.x * displayWidth, y: p.y * displayHeight }));
+                        const matchesCurrent = quadNearlySame(cand, pts);
+                        ctx.beginPath();
+                        ctx.moveTo(m[0].x, m[0].y);
+                        for (let i = 1; i < 4; i++) ctx.lineTo(m[i].x, m[i].y);
+                        ctx.closePath();
+                        ctx.fillStyle = matchesCurrent ? pal.fillMatch : pal.fillOther;
+                        ctx.fill();
+                        ctx.setLineDash(pal.dash);
+                        ctx.lineWidth = pal.lineW;
+                        ctx.strokeStyle = matchesCurrent ? pal.strokeMatch : pal.strokeOther;
+                        ctx.stroke();
+                    });
+                    ctx.restore();
+                }
+            }, [imageSrc, points, activePointIndex, cornerCandidates, showCandidateOverlay, overlayPreset]);
 
             useEffect(() => {
                 drawCanvas();
@@ -410,20 +693,45 @@
                 return () => window.removeEventListener('resize', drawCanvas);
             }, [drawCanvas]);
 
+            // 編輯區版面延遲算出寬度時補繪（含「重新調整」回到本頁）
+            useEffect(() => {
+                if (!imageSrc || processedImage) return;
+                const el = containerRef.current;
+                if (!el || typeof ResizeObserver === 'undefined') return;
+                const ro = new ResizeObserver(() => drawCanvas());
+                ro.observe(el);
+                return () => ro.disconnect();
+            }, [imageSrc, processedImage, drawCanvas]);
+
+            const handleBackToAdjust = useCallback(() => {
+                setProcessedImage(null);
+                setActionError(null);
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => drawCanvas());
+                });
+            }, [drawCanvas]);
+
+            /** 回傳座標與 canvas 內部像素（canvas.width / height）一致，避免 CSS 縮放後對不準 */
             const getPointerPos = (e) => {
                 const canvas = canvasRef.current;
                 if (!canvas) return null;
                 const rect = canvas.getBoundingClientRect();
+                if (rect.width <= 0 || rect.height <= 0) return null;
                 const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
                 const clientY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
-                return { x: clientX - rect.left, y: clientY - rect.top };
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                return {
+                    x: (clientX - rect.left) * scaleX,
+                    y: (clientY - rect.top) * scaleY
+                };
             };
 
-            const handlePointerTracker = (e) => {
+            const handlePointerTracker = useCallback((e) => {
                 const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
                 const clientY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
                 setCursorPos({ x: clientX, y: clientY });
-            };
+            }, []);
 
             const handlePointerUp = useCallback(() => {
                 setActivePointIndex(null);
@@ -435,6 +743,7 @@
                 if (!canvasRef.current || canvasSize.width === 0 || canvasSize.height === 0) return;
                 e.preventDefault();
                 const pos = getPointerPos(e);
+                if (!pos) return;
                 const width = canvasSize.width;
                 const height = canvasSize.height;
                 const intendedPointX = pos.x - dragOffset.dx;
@@ -452,6 +761,8 @@
             const handlePointerDown = (e) => {
                 if (!canvasRef.current) return;
                 const pos = getPointerPos(e);
+                if (!pos) return;
+                setActionError(null);
                 const width = canvasSize.width;
                 const height = canvasSize.height;
                 const threshold = 30;
@@ -481,26 +792,36 @@
                 window.addEventListener('touchend', handlePointerUp, { passive: true });
                 return () => {
                     window.removeEventListener('mousemove', handlePointerMove);
+                    window.removeEventListener('mousemove', handlePointerTracker);
                     window.removeEventListener('mouseup', handlePointerUp, { passive: true });
                     window.removeEventListener('touchmove', handlePointerMove);
+                    window.removeEventListener('touchmove', handlePointerTracker);
                     window.removeEventListener('touchend', handlePointerUp, { passive: true });
                 };
-            }, [handlePointerMove, handlePointerUp]);
+            }, [handlePointerMove, handlePointerTracker, handlePointerUp]);
 
             const handleAutoDetect = () => {
-                if (cornerCandidates.length === 0) {
-                    setPoints([{ x: 0.1, y: 0.1 }, { x: 0.9, y: 0.1 }, { x: 0.9, y: 0.9 }, { x: 0.1, y: 0.9 }]);
+                setActionError(null);
+                let list = cornerCandidates;
+                if (list.length === 0 && imageRef.current && window.cv && window.cvLoaded) {
+                    list = findAllCornerCandidates(imageRef.current);
+                    setCornerCandidates(list);
+                }
+                if (list.length === 0) {
+                    setDetectionHint('仍沒有候選框。請手動拖黃點，或換一張邊線更清楚的平面圖。');
+                    setPoints(DEFAULT_EDIT_POINTS.map(p => ({ ...p })));
                     setCandidateIndex(-1);
                     return;
                 }
-                const nextIndex = (candidateIndex + 1) % cornerCandidates.length;
-                setPoints(cornerCandidates[nextIndex]);
+                setDetectionHint(`共 ${list.length} 組候選，再按「自動偵測」可換下一組。若要對照淡虛線，請勾選下方「顯示偵測候選」。`);
+                const nextIndex = (candidateIndex + 1) % list.length;
+                setPoints(list[nextIndex].map(p => ({ ...p })));
                 setCandidateIndex(nextIndex);
             };
 
             const handleResetPoints = () => {
-                const defaultPoints = [{ x: 0.1, y: 0.1 }, { x: 0.9, y: 0.1 }, { x: 0.9, y: 0.9 }, { x: 0.1, y: 0.9 }];
-                setPoints(defaultPoints);
+                setActionError(null);
+                setPoints(DEFAULT_EDIT_POINTS.map(p => ({ ...p })));
                 setCandidateIndex(-1);
             };
 
@@ -624,13 +945,16 @@
             };
 
             const processImage = async () => {
+                setActionError(null);
                 setIsProcessing(true);
                 setTimeout(async () => {
                     try {
                         const dataUrl = await generateWarpedImage();
                         setProcessedImage(dataUrl);
+                        setActionError(null);
                     } catch (err) {
                         console.error("處理失敗", err);
+                        setActionError(friendlyErrorMessage(err));
                     } finally {
                         setIsProcessing(false);
                     }
@@ -639,6 +963,7 @@
 
             // [核心修改] 裁切並繼續編輯 (改為無變形裁切)
             const handleCropAndContinue = async () => {
+                setActionError(null);
                 setIsProcessing(true);
                 setTimeout(async () => {
                     try {
@@ -653,14 +978,28 @@
                             setProcessedImage(null);
                             // 重置點位到角落，稍微內縮一點以免貼邊
                             setPoints([{ x: 0.05, y: 0.05 }, { x: 0.95, y: 0.05 }, { x: 0.95, y: 0.95 }, { x: 0.05, y: 0.95 }]);
-                            setCornerCandidates([]); // 清空舊的候選框
                             setCandidateIndex(-1);
+                            setActionError(null);
+                            const newCands = findAllCornerCandidates(newImg);
+                            setCornerCandidates(newCands);
+                            const onlyFullCrop = newCands.length === 1 && quadsNearlySame(newCands[0], FULL_IMAGE_FRAME_QUAD, 0.09);
+                            if (onlyFullCrop) {
+                                setDetectionHint('裁切後仍偏像合成／情境照，已收斂候選（多為整張外框）；請拖黃點微調。需對照虛線可勾選「顯示偵測候選」。');
+                            } else {
+                                setDetectionHint(`裁切後收斂為 ${newCands.length} 組候選；按「自動偵測」可換組。對照淡虛線請勾選「顯示偵測候選」。`);
+                            }
+                            setIsProcessing(false);
+                        };
+                        newImg.onerror = () => {
+                            console.error("裁切後圖片載入失敗");
+                            setActionError('裁切後的圖片無法顯示，請換一張圖或縮小解析度後再試。');
                             setIsProcessing(false);
                         };
                         newImg.src = dataUrl;
 
                     } catch (err) {
                         console.error("裁切失敗", err);
+                        setActionError(friendlyErrorMessage(err));
                         setIsProcessing(false);
                     }
                 }, 100);
@@ -669,6 +1008,10 @@
             const reset = () => {
                 setImageSrc(null);
                 setProcessedImage(null);
+                setActionError(null);
+                setDetectionHint(null);
+                setShowCandidateOverlay(false);
+                setOverlayPreset('ghost');
             };
 
             const downloadImage = () => {
@@ -715,7 +1058,7 @@
                                         ref={canvasRef}
                                         onMouseDown={handlePointerDown}
                                         onTouchStart={handlePointerDown}
-                                        className={`cursor - crosshair shadow - xl max - w - full rounded - xl border border - stone - 200 bg - white ${activePointIndex !== null ? 'cursor-grabbing' : ''} `}
+                                        className={`max-w-full rounded-xl border border-stone-200 bg-white shadow-xl ${activePointIndex !== null ? 'cursor-grabbing' : 'cursor-crosshair'}`}
                                         style={{ touchAction: 'none' }}
                                     />
                                     <div className="absolute top-6 left-6 bg-white/90 backdrop-blur-md px-4 py-2 rounded-full border border-stone-200 pointer-events-none shadow-md">
@@ -746,6 +1089,47 @@
                                 </div>
 
                                 <div className="w-full lg:w-72 bg-white border-l border-stone-200 p-6 flex flex-col gap-5 shadow-lg z-10">
+                                    {actionError && (
+                                        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800 flex flex-col gap-2" role="alert">
+                                            <p className="leading-relaxed">{actionError}</p>
+                                            <button
+                                                type="button"
+                                                onClick={() => setActionError(null)}
+                                                className="self-end text-xs font-medium text-red-700 hover:text-red-900 underline"
+                                            >
+                                                知道了
+                                            </button>
+                                        </div>
+                                    )}
+                                    {detectionHint && !actionError && (
+                                        <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs text-sky-950 leading-relaxed" role="status">
+                                            {detectionHint}
+                                        </div>
+                                    )}
+                                    <div className="flex flex-col gap-2 rounded-xl border border-stone-100 bg-stone-50/70 px-3 py-2.5">
+                                        <label className="flex items-start gap-2.5 text-xs text-stone-700 cursor-pointer select-none leading-snug">
+                                            <input
+                                                type="checkbox"
+                                                checked={showCandidateOverlay}
+                                                onChange={(e) => setShowCandidateOverlay(e.target.checked)}
+                                                className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-stone-300 text-amber-600 focus:ring-amber-400"
+                                            />
+                                            <span>顯示偵測候選（淡虛線；預設關閉，避免干擾拖黃點）</span>
+                                        </label>
+                                        {showCandidateOverlay && (
+                                            <label className="flex items-center gap-2 text-[11px] text-stone-600">
+                                                <span className="shrink-0">線條濃度</span>
+                                                <select
+                                                    value={overlayPreset}
+                                                    onChange={(e) => setOverlayPreset(e.target.value)}
+                                                    className="min-w-0 flex-1 rounded-lg border border-stone-200 bg-white px-2 py-1 text-xs text-stone-800"
+                                                >
+                                                    <option value="ghost">極淡（建議）</option>
+                                                    <option value="muted">稍清楚</option>
+                                                </select>
+                                            </label>
+                                        )}
+                                    </div>
                                     <div className="flex items-center justify-between mb-1">
                                         <h3 className="text-lg font-bold text-stone-800">操作面板</h3>
                                         <div className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border font-medium ${isOpenCvReady ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-amber-50 border-amber-200 text-amber-600'}`} title={isOpenCvReady ? "引擎已就緒" : "載入中..."}>
@@ -759,8 +1143,8 @@
                                         <div className="text-xs text-stone-500 bg-stone-50 p-4 rounded-2xl h-full overflow-y-auto border border-stone-100 leading-relaxed">
                                             <p className="mb-2 font-bold text-stone-700">操作步驟：</p>
                                             <ol className="list-decimal list-inside space-y-1.5 marker:text-amber-500">
-                                                <li>點擊「自動偵測」尋找圖框。</li>
-                                                <li>可<span className="text-amber-600 font-medium">多次點擊</span>切換候選框。</li>
+                                                <li>按「自動偵測」在收斂後的少數候選中切換；需對照時再勾選「顯示偵測候選」（極淡虛線，不干擾黃點）。</li>
+                                                <li>可<span className="text-amber-600 font-medium">多次點擊</span>切換候選（橘線＋黃點為目前使用）。</li>
                                                 <li>拖曳黃點微調角落位置。</li>
                                                 <li>點擊「應用裁切」重設底圖。</li>
                                                 <li>點擊「執行轉正」完成校正。</li>
@@ -782,6 +1166,15 @@
                                             還原選框
                                         </button>
                                     </div>
+
+                                    <details className="text-xs text-stone-500 bg-stone-50/80 rounded-xl border border-stone-100 px-3 py-2">
+                                        <summary className="cursor-pointer font-medium text-stone-600 select-none">自動偵測怎麼找？（白話）</summary>
+                                            <p className="mt-2 leading-relaxed pl-0.5">
+                                                會用<strong>好幾種</strong>方式找輪廓後，再<strong>合併近似重複</strong>、依面積<strong>最多保留約 6 組</strong>，避免選項爆炸。
+                                                <strong>拼貼、透視合成</strong>仍可能不準；程式會<strong>預設不畫</strong>候選虛線，以免干擾你拖黃點——需要對照時再勾選「顯示偵測候選」，並可選「極淡／稍清楚」。
+                                                橘色<strong>實線</strong>與黃點才是正在編輯的邊界；「自動偵測」在收斂後的候選之間輪流切換。
+                                            </p>
+                                    </details>
 
                                     {/* [核心新增] 應用裁切按鈕 */}
                                     <button
@@ -853,7 +1246,7 @@
 
                                     <div className="flex gap-3">
                                         <button
-                                            onClick={() => setProcessedImage(null)}
+                                            onClick={handleBackToAdjust}
                                             className="px-5 py-2.5 rounded-xl font-medium text-stone-500 hover:bg-stone-50 hover:text-stone-800 transition-all border border-transparent hover:border-stone-200"
                                         >
                                             <div className="flex items-center">

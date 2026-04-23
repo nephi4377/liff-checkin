@@ -13,15 +13,17 @@
   <!-- [v190.0 新增] 漢堡選單響應式樣式 -->
   <!-- [v262.0 修正] 修正漢堡選單在非手機模式下未隱藏的問題 -->
   <style>
-    /* 手機版漢堡選單按鈕，預設顯示 */
+    /* 手機版漢堡：須與 style.css 一致用 flex 置中，勿用 block（會蓋掉 flex 導致圖示靠左） */
     .mobile-nav-toggle {
-      display: block;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
-    /* 在寬度大於 768px 的螢幕上隱藏漢堡選單按鈕 */
-    @media (min-width: 768px) {
+    /* 與 style.css 三欄斷點一致：≤1024 顯示漢堡；寬螢幕隱藏 */
+    @media (min-width: 1025px) {
       .mobile-nav-toggle {
-        display: none;
+        display: none !important;
       }
     }
 
@@ -54,26 +56,23 @@
   </script>
   <!-- [v2026.02.28 核心修正] 更新版本號以強制瀏覽器下載最新的 JavaScript 檔案。
        這可以解決因瀏覽器快取舊版 api.js，導致輪詢任務狀態時發送錯誤 POST 請求的問題。 -->
-  <script type="module" src="./js/main.js?v=26.02.28.1415"></script>
+  <script type="module" src="./js/main.js?v=26.04.23.4"></script>
 </head>
 
 <body>
   <div class="container">
-    <!-- 導覽：手機版漢堡選單按鈕 -->
-    <button id="mobile-nav-toggle" class="mobile-nav-toggle">
-      <span class="sr-only">開啟選單</span>
-      <div class="hamburger-icon"></div>
-    </button>
-    <header>
-      <div>
+    <header class="console-top-header">
+      <!-- 手機／平板：漢堡為 fixed 不佔排版列；標題列預留左側空間 -->
+      <button type="button" id="mobile-nav-toggle" class="mobile-nav-toggle">
+        <span class="sr-only">開啟選單</span>
+        <div class="hamburger-icon"></div>
+      </button>
+      <div class="console-top-header__titles">
         <h1 id="project-title">專案工作區</h1>
         <p id="version-display" class="muted"></p>
       </div>
-      <!-- [優化] 將按鈕的行內 style 改為使用 CSS class，提升維護性 -->
-      <div id="actions-container" style="margin-left: auto; display: none;">
-        <button id="btn-import-new" class="btn btn-green">套用新屋案範本</button>
-        <button id="btn-import-old" class="btn btn-primary">套用舊屋案範本</button>
-      </div>
+      <button type="button" id="btn-copy-site-header" class="btn btn-info console-header-copy-btn"
+        aria-label="複製案場資訊全文到剪貼簿">複製案場資訊</button>
     </header>
 
     <!-- 主要三欄式布局 -->
@@ -84,8 +83,15 @@
           <button class="nav-button active" data-view="logs">
             <span>施工日誌</span>
           </button>
+          <button class="nav-button" data-view="auditor">
+            <span>驗收表</span>
+          </button>
           <button class="nav-button" data-view="schedule">
             <span>工程排程</span>
+          </button>
+          <!-- 手機／平板：專案基本資料獨立分頁（寬螢幕仍顯示於右欄，此按鈕以 CSS 隱藏） -->
+          <button class="nav-button nav-button--mobile-only-project" data-view="project-basic" type="button">
+            <span>專案基本資料</span>
           </button>
           <!-- [v213.0 新增][v244.0 重命名] 專案協作中心分頁按鈕 -->
           <button class="nav-button" data-view="collaboration">
@@ -94,23 +100,29 @@
         </nav>
       </aside>
 
-      <!-- 中間：主要內容區 -->
-      <main id="main-content">
-        <div id="logs-container"></div> <!-- 預設顯示日誌 -->
-        <div id="schedule-container" style="display:none;"></div>
-        <!-- [v213.0 新增][v261.0 重構] 專案協作中心內容容器 -->
-        <div id="collaboration-container" style="display: none;">
-          <div id="task-sender-container"></div> <!-- 任務交辦中心的容器 -->
-          <div id="communication-history-list"></div>
-        </div>
-      </main>
+      <!-- 中欄＋右欄：寬螢幕並排；窄螢幕預設只顯示中欄，「專案基本資料」分頁時再顯示右欄 -->
+      <div class="app-main-row">
+        <main id="main-content">
+          <div id="logs-container"></div> <!-- 預設顯示日誌 -->
+          <div id="auditor-container" class="auditor-view-wrap" style="display: none;" aria-label="驗收表內嵌區">
+            <p class="muted m-0 mb-2" style="font-size:0.85rem">與獨立驗收表相同，可勾選完成並同步雲端；Firebase／GAS 請在下方驗收表內設定。</p>
+            <iframe id="auditor-iframe" class="auditor-embed-iframe" title="專案驗收表" src="about:blank" loading="lazy"></iframe>
+          </div>
+          <div id="schedule-container" style="display:none;"></div>
+          <!-- [v213.0 新增][v261.0 重構] 專案協作中心內容容器 -->
+          <div id="collaboration-container" style="display: none;">
+            <div id="task-sender-container"></div> <!-- 任務交辦中心的容器 -->
+            <div id="communication-history-list"></div>
+          </div>
+        </main>
 
-      <!-- 右欄：專案資訊面板 -->
-      <aside class="right-sidebar card">
-        <div id="project-info-panel">
-          <!-- 專案資料將由 JavaScript 動態填入 -->
-        </div>
-      </aside>
+        <!-- 右欄：專案資訊面板（手機預設隱藏，僅「專案基本資料」分頁顯示） -->
+        <aside class="right-sidebar card">
+          <div id="project-info-panel">
+            <!-- 專案資料將由 JavaScript 動態填入 -->
+          </div>
+        </aside>
+      </div>
     </div>
   </div>
 
@@ -144,6 +156,52 @@
   <!-- [優化] 引入函式庫 -->
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh-tw.js"></script>
+  <!-- [v2026] 置於 body 末端：壓過 Tailwind CDN Preflight 的 button 透明底；避免仍套用 style.css 全域 button{color:#fff} 變成白字貼白底 -->
+  <style>
+    #main-content .button-group > button.btn-primary {
+      background-color: var(--primary, #7999ab) !important;
+      color: #fff !important;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    #main-content .button-group > button.btn-primary:hover {
+      background-color: var(--primary-hover, #6d8a9c) !important;
+      opacity: 1;
+    }
+    #main-content .button-group > button.btn-green {
+      background-color: var(--green, #738a72) !important;
+      color: #fff !important;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    #main-content .button-group > button.btn-green:hover {
+      background-color: var(--green-hover, #627860) !important;
+      opacity: 1;
+    }
+    #main-content .button-group > button.btn-danger {
+      background-color: var(--red, #c4938a) !important;
+      color: #fff !important;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    #main-content .button-group > button.btn-danger:hover {
+      background-color: var(--red-hover, #b07e75) !important;
+      opacity: 1;
+    }
+
+    #auditor-container.auditor-view-wrap {
+      width: 100%;
+    }
+
+    #auditor-container .auditor-embed-iframe {
+      display: block;
+      width: 100%;
+      min-height: min(75vh, 860px);
+      border: 0;
+      border-radius: var(--radius, 0.5rem);
+      background: #f1f5f9;
+    }
+  </style>
 </body>
 
 </html>

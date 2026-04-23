@@ -1,0 +1,27 @@
+---
+description: 平面圖照片轉正工具 — 白話產品說明與修改時注意事項（InteriorDesigned）
+globs: modules/InteriorDesigned/floorplan-straightener.html
+alwaysApply: false
+---
+
+# 平面圖校正（floorplan-straightener）
+
+## 給助理／非工程讀的摘要
+
+- 這頁是：**把拍的平面圖拉正**，必要時**先裁邊再拉正**。
+- **「應用裁切」**：只做**不歪的長方形裁切**（四點外接框）；**不會**做透視拉正。
+- **「執行轉正」**：才用電腦視覺做**透視校正**，產出可下載的圖。
+- 使用前要**網路**載入引擎；圖在**使用者瀏覽器**處理，不是另一套 LayoutPlanner。
+
+## 完整白話規格
+
+更長、給一般人看的說明在：
+
+`SPEC/InteriorDesigned_FloorplanStraightener_SPEC.md`
+
+## 改程式時請遵守
+
+- 用詞與對使用者說明：遵守專案 **總規則**（`.cursor/rules/00-general-plain-language.mdc`）；專有名詞對照 **`SPEC/GLOSSARY_ZH.md`**。
+- 按鈕文案與步驟說明維持**好懂、少術語**；與 SPEC 行為一致。
+- 勿把本工具與 `LP_LayoutPlanner` 的需求混用；路由在 `spa/app.js` 的 `#/floorplan-straightener`。
+- 若改變「裁切／轉正」任一步的意義，**同步更新**上述 SPEC 與本規則檔。

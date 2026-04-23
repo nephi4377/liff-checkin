@@ -33,6 +33,17 @@ import { state } from './state.js';
 import { CONFIG } from '/shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
 import { initializeTaskSender, addRecipient } from '/shared/js/taskSender.js'; // [v544.0 修正] 改為絕對路徑
 
+/** 排程範本：僅「工程排程」頁的空狀態按鈕，只註冊一次 */
+function ensureScheduleTemplateImportDelegation() {
+  if (ensureScheduleTemplateImportDelegation.done) return;
+  ensureScheduleTemplateImportDelegation.done = true;
+  document.addEventListener('click', (e) => {
+    const id = e.target && e.target.id;
+    if (id === 'btn-import-new') ScheduleActions.showStartDatePicker('新屋案', e.target);
+    if (id === 'btn-import-old') ScheduleActions.showStartDatePicker('老屋案', e.target);
+  });
+}
+
 /**
  * @description 處理從後端 API (Google Apps Script) 成功獲取資料後的核心回呼函式 (Callback)。
  * 此函式是整個應用程式的入口點，負責解析後端資料，並依序觸發所有 UI 的渲染與更新。
@@ -47,7 +58,7 @@ import { initializeTaskSender, addRecipient } from '/shared/js/taskSender.js'; /
  *
  * @functionality
  * 1.  將後端資料存入前端的全域變數 (currentLogsData, currentScheduleData, templateTasks)。
- * 2.  檢查專案排程是否為空，若是，則顯示「套用範本」按鈕。
+ * 2.  專案排程為空時，「套用範本」按鈕由 `renderSchedulePage` 在工程排程分頁顯示。
  * 3.  對排程資料進行排序 (依狀態 > 依日期)。
  * 4.  呼叫 `displaySchedule()` 渲染排程區塊。
  * 5.  將任務範本資料填充至「新增任務」下拉選單。
@@ -55,6 +66,29 @@ import { initializeTaskSender, addRecipient } from '/shared/js/taskSender.js'; /
  * 7.  若日誌總數多於一頁，則呼叫 `setupScrollListener()` 啟動無限滾動功能。
  * 8.  更新頁面主標題。
  */
+/**
+ * 內嵌驗收表：與 `tools/BudgetAuditor_Standalone.html` 的 `?projectNo=` 一致，避免同案重複 reload。
+ * @param {string} projectId
+ */
+function updateAuditorIframeSrc(projectId) {
+  const iframe = document.getElementById('auditor-iframe');
+  if (!iframe || projectId == null || String(projectId).trim() === '') return;
+  const no = String(projectId).trim();
+  let url;
+  try {
+    url = new URL('../../tools/BudgetAuditor_Standalone.html', window.location.href);
+  } catch {
+    return;
+  }
+  url.searchParams.set('projectNo', no);
+  const next = url.toString();
+  try {
+    const cur = iframe.src && iframe.src !== 'about:blank' ? new URL(iframe.src) : null;
+    if (cur && cur.searchParams.get('projectNo') === no) return;
+  } catch { /* 忽略，直接設 src */ }
+  iframe.src = next;
+}
+
 function handleDataResponse(data) {
   const logsContainer = document.getElementById('logs-container');
   // [核心修正] 在重新渲染前，先移除所有樂觀更新的臨時卡片，避免重複顯示。
@@ -158,24 +192,7 @@ function handleDataResponse(data) {
     });
   }
 
-  // 業務邏輯：如果這是一個沒有任何排程的既有專案，則顯示「套用範本」的按鈕
-  const actionsContainer = document.getElementById('actions-container');
-  if (state.currentScheduleData.length === 0 && state.projectId !== '0') {
-    if (actionsContainer) {
-      actionsContainer.style.display = 'flex';
-      // [優化] 使用事件代理，避免重複綁定
-      if (!actionsContainer.dataset.listenerAttached) {
-        actionsContainer.addEventListener('click', (e) => {
-          if (e.target.id === 'btn-import-new') ScheduleActions.showStartDatePicker('新屋案', e.target);
-          if (e.target.id === 'btn-import-old') ScheduleActions.showStartDatePicker('老屋案', e.target);
-        });
-        actionsContainer.dataset.listenerAttached = 'true';
-      }
-    }
-  } else if (actionsContainer) {
-    // 如果已有排程，則確保按鈕是隱藏的。
-    actionsContainer.style.display = 'none';
-  }
+  ensureScheduleTemplateImportDelegation();
 
   // 業務邏輯：對排程資料進行排序，規則為：1. 依狀態 (已完成 > 施工中 > 未完成) 2. 依預計開始日期
   if (Array.isArray(state.currentScheduleData)) {
@@ -199,9 +216,10 @@ function handleDataResponse(data) {
   // 例如，displayProjectInfo 會在 projectOverview 和 projectSchedule 就緒後執行。
   // initializeTaskSender 會在 allEmployees 和 projectCommunicationHistory 就緒後執行。
 
-  // [v189.0 核心修正] 將事件綁定移至 displayProjectInfo 之後，確保按鈕已存在於 DOM 中
-  const copyBtn = document.getElementById('copy-project-info-btn');
-  if (copyBtn && !copyBtn.dataset.listenerAttached) { // 避免重複綁定
+  // [v189.0 核心修正] 複製：右欄按鈕（寬螢幕）與頂列按鈕（窄螢幕）擇一顯示，皆綁相同邏輯
+  ['copy-project-info-btn', 'btn-copy-site-header'].forEach((copyId) => {
+    const copyBtn = document.getElementById(copyId);
+    if (!copyBtn || copyBtn.dataset.listenerAttached) return;
     copyBtn.addEventListener('click', () => {
       if (!state.overview) {
         showGlobalNotification('尚未載入專案資訊，無法複製。', 3000, 'error');
@@ -232,7 +250,7 @@ ${notes || '無'}`;
       });
     });
     copyBtn.dataset.listenerAttached = 'true';
-  }
+  });
 
   // [v199.0 新增] 結案按鈕功能
   const closeBtn = document.getElementById('close-project-btn');
@@ -263,6 +281,8 @@ ${notes || '無'}`;
   }
 
   logToPage(`✅ 已載入 ${Object.keys(state.communicationHistory).length} 組溝通串流。`);
+
+  updateAuditorIframeSrc(state.projectId);
 }
 
 /**
@@ -644,7 +664,7 @@ async function initializeApp() {
 
   if (isLocalTest) {
     logToPage('⚡️ 本地測試模式啟用...');
-    projectId = urlParams.get('id') || '999';
+    projectId = urlParams.get('id') || '752';
     userId = urlParams.get('uid') || 'Ud58333430513b7527106fa71d2e30151';
     state.currentUserName = '本地測試員';
   } else {
@@ -708,7 +728,9 @@ async function initializeApp() {
 function setupNavigation() {
   const navButtons = document.querySelectorAll('.main-nav .nav-button');
   const mainContent = document.getElementById('main-content');
-  const scrollPositions = { logs: 0, schedule: 0, collaboration: 0 };
+  const appMainRow = document.querySelector('.app-main-row');
+  const projectAside = document.querySelector('.app-main-row .right-sidebar');
+  const scrollPositions = { logs: 0, auditor: 0, schedule: 0, collaboration: 0, 'project-basic': 0 };
 
   navButtons.forEach(button => {
     button.addEventListener('click', () => {
@@ -716,20 +738,37 @@ function setupNavigation() {
       const newView = button.dataset.view;
 
       if (currentView && currentView !== newView) {
-        scrollPositions[currentView] = mainContent.scrollTop;
+        if (currentView === 'project-basic' && projectAside) {
+          scrollPositions['project-basic'] = projectAside.scrollTop;
+        } else if (currentView !== 'project-basic') {
+          scrollPositions[currentView] = mainContent.scrollTop;
+        }
       }
 
       navButtons.forEach(btn => btn.classList.remove('active'));
       button.classList.add('active');
 
-      Array.from(mainContent.children).forEach(child => {
+      if (newView === 'project-basic') {
+        appMainRow?.classList.add('app-main-row--mobile-project-basic');
+        Array.from(mainContent.children).forEach((child) => {
+          child.style.display = 'none';
+        });
+        if (projectAside) {
+          projectAside.scrollTop = scrollPositions['project-basic'] || 0;
+        }
+        return;
+      }
+
+      appMainRow?.classList.remove('app-main-row--mobile-project-basic');
+
+      Array.from(mainContent.children).forEach((child) => {
         child.style.display = 'none';
       });
 
       const targetView = document.getElementById(`${newView}-container`);
       if (targetView) {
         targetView.style.display = 'block';
-        mainContent.scrollTop = scrollPositions[newView];
+        mainContent.scrollTop = scrollPositions[newView] ?? 0;
 
         if (newView === 'schedule') {
           const taskCards = Array.from(document.querySelectorAll('#schedule-container .task-card'));

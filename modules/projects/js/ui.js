@@ -250,8 +250,11 @@ export function _buildLogCard(log, isDraftMode) {
     btnManagePhotos.className = 'btn btn-green'; // 1. 移除 style.background, 2. 套用 .btn-green class
     btnManagePhotos.dataset.action = 'openPhotoModal'; btnManagePhotos.dataset.logId = log.LogID; btnManagePhotos.dataset.photoLinks = log.PhotoLinks; buttonContainer.appendChild(btnManagePhotos);
 
-    const btnEditText = document.createElement('button'); btnEditText.textContent = '編輯文字';
-    btnEditText.className = 'btn'; // [修正] 補上基礎按鈕樣式
+    const btnEditText = document.createElement('button');
+    btnEditText.type = 'button';
+    btnEditText.textContent = '✏️ 編輯文字';
+    btnEditText.className = 'btn btn-primary btn-log-edit';
+    btnEditText.setAttribute('aria-label', '編輯此則日誌的文字內容');
     btnEditText.dataset.action = 'handleEditText'; btnEditText.dataset.logId = log.LogID; buttonContainer.appendChild(btnEditText);
 
     if (isDraftMode) {
@@ -381,46 +384,6 @@ export function displayProjectInfo(overview, schedule) {
     const closeProjectButtonHtml = overview['專案狀態'] !== '已結案'
       ? `<button id="close-project-btn" class="btn btn-danger w-full mt-4">將此專案結案</button>`
       : `<div class="text-center p-2 bg-gray-200 text-gray-600 rounded-md mt-4">此專案已結案</div>`;
-    panel.innerHTML = `
-      <!-- [v188.0 新增] 複製案場資訊按鈕 -->
-      <button id="copy-project-info-btn" class="btn btn-info w-full mb-4">複製案場資訊</button>
-      <div class="project-info-section">
-        <h4 class="info-header">專案基本資料</h4>
-        <ul class="info-list">
-          <li><strong>案場名稱:</strong> ${get('案場名稱')}</li>
-          <li><strong>案場地址:</strong> <a href="https://www.google.com/maps?q=${encodeURIComponent(get('案場地址'))}" target="_blank" rel="noopener noreferrer">${get('案場地址')}</a></li>
-        </ul>
-      </div>
-      <hr class="info-divider">
-      <div class="project-info-section">
-        <h4 class="info-header">團隊成員</h4>
-        <ul class="info-list">
-          <li><strong>設計師:</strong> ${get('設計師')}</li>
-          <li><strong>助理:</strong> ${get('助理')}</li>
-          <li><strong>工務:</strong> ${get('工務')}</li>
-        </ul>
-      </div>
-      <hr class="info-divider">
-      <div class="project-info-section">
-        <h4 class="info-header">現場資訊</h4>
-        <ul class="info-list">
-          <li><strong>入門方式:</strong> ${get('入門方式')}</li>
-          <li><strong>停車方式:</strong> ${get('停車方式')}</li>
-          <li><strong>施工進場時間:</strong> ${get('施工進場時間')}</li>
-          <li><strong>保證金事宜:</strong> ${get('保證金事宜')}</li>
-        </ul>
-      </div>
-      <hr class="info-divider">
-      <div class="project-info-section">
-        <h4 class="info-header">備註</h4>
-        <ul class="info-list">
-          <li><strong>管理中心電話:</strong> <a href="tel:${get('備註-管理中心電話')}">${get('備註-管理中心電話')}</a></li>
-          <li><strong>施工時間:</strong> ${get('備註-施工時間')}</li>
-          <li style="white-space: pre-wrap;"><strong>衛浴使用說明:</strong><br>${get('衛浴使用說明')}</li>
-          <li style="white-space: pre-wrap;"><strong>特別注意事項:</strong><br>${get('備註-特別注意事項')}</li>
-        </ul>
-      </div>
-      ${closeProjectButtonHtml}`; // [v220.0 核心修正] 將結案按鈕的 HTML 包含進 innerHTML 的模板字串中
 
     const tradeContacts = new Map();
     if (schedule && schedule.length > 0) {
@@ -433,15 +396,66 @@ export function displayProjectInfo(overview, schedule) {
             }
         });
     }
-
+    let tradeSectionHtml = '';
     if (tradeContacts.size > 0) {
-        let tradeHtml = '<hr class="info-divider"><div class="project-info-section"><h4 class="info-header">工班資訊</h4><ul class="info-list">';
+        tradeSectionHtml = '<hr class="info-divider"><div class="project-info-section"><h4 class="info-header">工班資訊</h4><ul class="info-list">';
         tradeContacts.forEach((persons, trade) => {
-            tradeHtml += `<li><strong>${trade}:</strong> ${Array.from(persons).join(', ')}</li>`;
+            tradeSectionHtml += `<li><strong>${trade}:</strong> ${Array.from(persons).join(', ')}</li>`;
         });
-        tradeHtml += '</ul></div>';
-        panel.innerHTML += tradeHtml;
+        tradeSectionHtml += '</ul></div>';
     }
+
+    const esc = (v) => String(v ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    const addrRaw = get('案場地址');
+    const addrMaps = `https://www.google.com/maps?q=${encodeURIComponent(addrRaw === '未提供' ? '' : addrRaw)}`;
+    const addrNav = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addrRaw === '未提供' ? '' : addrRaw)}`;
+
+    // 經典直列：專案基本資料 → 案名／地址 → 團隊／現場／備註／工班／結案（手機於右欄內捲動閱讀；範本改至「工程排程」）
+    panel.innerHTML = `
+      <h3 class="project-info-panel-title">專案基本資料</h3>
+      <div class="project-info-compact">
+        <p class="project-info-line"><strong>案場名稱</strong>　${esc(get('案場名稱'))}</p>
+        <p class="project-info-line project-info-line--address">
+          <strong>案場地址</strong>　<a href="${addrMaps}" target="_blank" rel="noopener noreferrer">${esc(addrRaw)}</a>
+          <a class="project-info-nav-inline" href="${addrNav}" target="_blank" rel="noopener noreferrer">開啟導航</a>
+        </p>
+        <button type="button" id="copy-project-info-btn" class="btn btn-info btn-copy-site-info w-full"
+          aria-label="複製案場資訊全文到剪貼簿，可貼到 LINE 或其他 App">📋 複製案場資訊</button>
+      </div>
+      <div class="project-info-section">
+        <h4 class="info-header">團隊成員</h4>
+        <ul class="info-list">
+          <li><strong>設計師:</strong> ${esc(get('設計師'))}</li>
+          <li><strong>助理:</strong> ${esc(get('助理'))}</li>
+          <li><strong>工務:</strong> ${esc(get('工務'))}</li>
+        </ul>
+      </div>
+      <hr class="info-divider">
+      <div class="project-info-section">
+        <h4 class="info-header">現場資訊</h4>
+        <ul class="info-list">
+          <li><strong>入門方式:</strong> ${esc(get('入門方式'))}</li>
+          <li><strong>停車方式:</strong> ${esc(get('停車方式'))}</li>
+          <li><strong>施工進場時間:</strong> ${esc(get('施工進場時間'))}</li>
+          <li><strong>保證金事宜:</strong> ${esc(get('保證金事宜'))}</li>
+        </ul>
+      </div>
+      <hr class="info-divider">
+      <div class="project-info-section">
+        <h4 class="info-header">備註</h4>
+        <ul class="info-list">
+          <li><strong>管理中心電話:</strong> <a href="tel:${get('備註-管理中心電話')}">${esc(get('備註-管理中心電話'))}</a></li>
+          <li><strong>施工時間:</strong> ${esc(get('備註-施工時間'))}</li>
+          <li style="white-space: pre-wrap;"><strong>衛浴使用說明:</strong><br>${esc(get('衛浴使用說明'))}</li>
+          <li style="white-space: pre-wrap;"><strong>特別注意事項:</strong><br>${esc(get('備註-特別注意事項'))}</li>
+        </ul>
+      </div>
+      ${closeProjectButtonHtml}
+      ${tradeSectionHtml}`;
 }
 
 /**

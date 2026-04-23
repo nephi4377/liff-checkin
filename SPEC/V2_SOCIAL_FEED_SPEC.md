@@ -1,5 +1,7 @@
 # 專案主控台 V2 (SocialFeed) 技術規格書-預訂計劃
 
+> **狀態：草案已中止。** 客戶端範圍請以 [13_PROJECT_CLIENT_PORTAL_THREADED_SPEC.md](./13_PROJECT_CLIENT_PORTAL_THREADED_SPEC.md) **v2.0** 為準：**唯讀施工進度**＋**內部綁定**；串流留言等為非本期。
+
 本規格書定義了「專案主控台 V2」的開發範疇，重點在於實現類似 FB 社群介面的日誌呈現與互動功能。
 
 ## 1. 介面與顯示層 (Social UI)

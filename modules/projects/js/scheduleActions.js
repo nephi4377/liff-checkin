@@ -21,7 +21,28 @@ export function renderSchedulePage(overview, schedule) {
     const container = document.getElementById('schedule-container');
     if (!container) return;
     container.innerHTML = '';
-    if (!overview || !schedule || !overview['專案起始日']) {
+
+    if (!overview || !Array.isArray(schedule)) {
+        container.style.display = 'none';
+        return;
+    }
+
+    // 尚無任務：於「工程排程」提供範本入口（不再放在頂列／案場卡）
+    if (schedule.length === 0 && state.projectId && state.projectId !== '0') {
+        container.innerHTML = `
+          <div class="card schedule-empty-state mb-4" style="padding:1rem 1.1rem">
+            <p class="muted" style="margin:0 0 0.85rem;font-size:0.9rem;line-height:1.45">
+              目前尚無排程任務。可先套用範本建立預設工項，再回此頁調整日期與內容。
+            </p>
+            <div style="display:flex;flex-direction:column;gap:0.5rem">
+              <button type="button" id="btn-import-new" class="btn btn-green" style="width:100%">套用新屋案範本</button>
+              <button type="button" id="btn-import-old" class="btn btn-primary" style="width:100%">套用舊屋案範本</button>
+            </div>
+          </div>`;
+        return;
+    }
+
+    if (!overview['專案起始日']) {
         container.style.display = 'none';
         return;
     }
