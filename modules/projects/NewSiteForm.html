@@ -68,7 +68,7 @@
 <body>
   <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
-      <h4 id="form-title" class="mb-0">新增案場資料</h4>
+      <h4 id="form-title" class="mb-0">新增／修改案場資料</h4>
       <button type="button" class="btn btn-info" id="copyInfoBtn">複製進場資訊</button>
     </div>
     <form id="siteForm">
@@ -392,7 +392,7 @@ ${notes || '無'}`;
         form.reset();
         currentMode = 'create';
         originalProjectCode = '';
-        formTitle.innerText = '新增案場資料';
+        formTitle.innerText = '新增／修改案場資料';
         submitBtn.innerText = '提交';
         submitBtn.classList.replace('btn-success', 'btn-primary');
         statusDiv.innerText = '';

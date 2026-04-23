@@ -135,8 +135,8 @@ export default {
                     <p class="text-gray-600">上傳 Excel 並自動解析工項分區。</p>
                 </a>
                 <a :href="addSiteUrl" class="card bg-white p-6 rounded-lg shadow-md border border-gray-200 block">
-                    <h2 class="text-xl font-bold mb-2 text-blue-700">新增案場資料</h2>
-                    <p class="text-gray-600">建立新專案並填寫基本資訊。</p>
+                    <h2 class="text-xl font-bold mb-2 text-blue-700">新增／修改案場資料</h2>
+                    <p class="text-gray-600">可建立新案場，或從下拉選單選既有案場後更新基本資訊。</p>
                 </a>
 
                 <!-- 假勤與管理功能 -->
