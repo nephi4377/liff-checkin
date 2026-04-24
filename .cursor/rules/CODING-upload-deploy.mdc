@@ -1,0 +1,28 @@
+---
+description: CODING 倉庫同步 GitHub 一律執行 upload.bat，勿改用手動零散的 git 指令取代正式流程
+alwaysApply: true
+---
+
+# CODING 上傳／部署（唯一流程）
+
+## 必須遵守
+
+- **本倉庫（CODING）要備份、提交、推送到 GitHub `main` 時**，一律透過倉庫根目錄的批次檔執行，不要只告訴使用者自行 `git push` 而略過專案慣例。
+- **批次檔絕對路徑**：`C:\Users\a9999\Dropbox\CodeBackups\CODING\upload.bat`  
+  （與 repo 根目錄的相對路徑：`upload.bat`）
+
+## `upload.bat` 會做什麼（摘要）
+
+1. **備份**：用 robocopy 將專案複製到 `..\BAK\` 下帶時間戳的資料夾（排除 `.git` 等）。
+2. **Git**：`checkout main` → `git add .` → 若有暫存變更則 **commit**（訊息會帶從 `managementconsole.html` 讀出的版本字串）。
+3. **推送**：`git push origin main`。
+
+## 助理實作時
+
+- 使用者要求「上傳／部署／PUSH／同步 GitHub」且目標為本 CODING 倉庫時：**在終端機執行上述 `upload.bat`**（可設 `NONINTERACTIVE=1` 略過結尾 pause），不要擅自改用未經約定的其他 deploy 指令。
+- 若工作區未掛在此路徑，仍應以使用者實際的 **CODING 倉庫根目錄** 下的 `upload.bat` 為準；路徑僅在使用者本機為上述時才與絕對路徑一致。
+
+## 例外
+
+- 使用者**明確**只要 `git status`／看 log／單一檔案 diff、且**不要** push 時，不必執行 `upload.bat`。
+- 使用者明確說改用其他流程（例如只 `git push`、或別的 CI）時，從其指示。

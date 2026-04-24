@@ -21,6 +21,12 @@ const App = {
         const allProjects = ref([]);
         const notifications = ref([]);
         const pendingApprovals = ref(0);
+        // 當月班表（供「今日出勤」卡片使用）。結構同 09_SHIFT_SCHEDULE_DATA_SPEC 的 get_latest_schedule 回傳。
+        const monthSchedule = ref({ schedule: {}, holidays: [] });
+        // 班表是否正在向後端更新中（用於「快取優先 + 更新中 + 最新資訊」的狀態顯示）
+        const scheduleLoading = ref(false);
+        // 待審核假勤原始清單（包含 startTime/endTime），用於今日出勤的「待審核」標記
+        const pendingRequestsRaw = ref([]);
         const currentView = ref({ name: 'dashboard' });
         const lightbox = ref({
             visible: false,
@@ -31,16 +37,25 @@ const App = {
         // --- [v429.0 效能優化] 快取優先策略 ---
         const EMPLOYEES_CACHE_KEY = 'spa_hub_employees';
         const PROJECTS_CACHE_KEY = 'spa_hub_projects';
+        // 班表依「年-月」分鍵快取，TTL 1 天（仍會背景重抓最新）
+        const scheduleCacheKey = () => {
+            const d = new Date();
+            return `spa_hub_schedule_${d.getFullYear()}_${String(d.getMonth() + 1).padStart(2, '0')}`;
+        };
 
         // 1. 應用程式啟動時，立即嘗試從快取載入資料
         const cachedEmployees = loadCache(EMPLOYEES_CACHE_KEY);
         const cachedProjects = loadCache(PROJECTS_CACHE_KEY);
+        const cachedSchedule = loadCache(scheduleCacheKey());
 
         if (cachedEmployees) {
             allEmployees.value = cachedEmployees;
         }
         if (cachedProjects) {
             allProjects.value = cachedProjects;
+        }
+        if (cachedSchedule && cachedSchedule.schedule) {
+            monthSchedule.value = cachedSchedule;
         }
         // --- 快取策略結束 ---
 
@@ -148,6 +163,26 @@ const App = {
             return response.json();
         };
 
+        // 抓當月排班資料（供「今日出勤」卡片使用；失敗不阻擋主流程）
+        const fetchLatestScheduleForThisMonth = async () => {
+            if (!userProfile.value) return { success: false };
+            const now = new Date();
+            const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
+            url.searchParams.append('page', 'attendance_api');
+            url.searchParams.append('action', 'get_latest_schedule');
+            url.searchParams.append('year', String(now.getFullYear()));
+            url.searchParams.append('month', String(now.getMonth() + 1));
+            url.searchParams.append('userId', userProfile.value.userId);
+            url.searchParams.append('userName', userProfile.value.displayName);
+            try {
+                const response = await fetch(url);
+                return await response.json();
+            } catch (e) {
+                console.warn('[Hub] 取得本月班表失敗（今日出勤將退回基本顯示）:', e);
+                return { success: false };
+            }
+        };
+
         const fetchHubProjectsData = async () => {
             if (!userProfile.value) return { success: false };
             const user = currentUser.value || { userId: userProfile.value.userId, userName: userProfile.value.displayName, permission: 1, group: '未分類' };
@@ -244,7 +279,28 @@ const App = {
                         window.spaAllEmployees = attendanceResult.employees;
                     }
                     pendingApprovals.value = attendanceResult.pendingRequests?.length || 0;
+                    // 將待審核假單原始資料留給「今日出勤」卡片使用（含 startTime/endTime）
+                    pendingRequestsRaw.value = attendanceResult.pendingRequests || [];
                 }
+
+                // 背景抓當月班表（SWR 策略：先顯示快取，背景更新後無縫替換，TTL 1 天）。
+                // 有無快取都會打 API；失敗時卡片維持快取內容。
+                scheduleLoading.value = true;
+                fetchLatestScheduleForThisMonth().then(scheduleResult => {
+                    if (scheduleResult && scheduleResult.schedule) {
+                        const latest = {
+                            schedule: scheduleResult.schedule || {},
+                            holidays: scheduleResult.holidays || []
+                        };
+                        // 有變動才更新，避免觸發不必要的 re-render
+                        if (JSON.stringify(monthSchedule.value) !== JSON.stringify(latest)) {
+                            monthSchedule.value = latest;
+                        }
+                        saveCache(scheduleCacheKey(), latest, 1); // 快取 1 天
+                    }
+                }).finally(() => {
+                    scheduleLoading.value = false;
+                });
 
                 if (projectsResult.success && projectsResult.data) {
                     const newProjects = projectsResult.data.projects || [];
@@ -328,6 +384,9 @@ const App = {
             allProjects,
             notifications,
             pendingApprovals,
+            pendingRequestsRaw,
+            monthSchedule,
+            scheduleLoading,
             hasAdminRights,
             handleNotificationAction,
             clearAllNotifications,
@@ -360,14 +419,15 @@ const App = {
 
             <!-- [v419.0 UX優化] 將 header 統一為全寬佈局，解決切換頁面時的跳動問題 -->
             <!-- [v420.0 RWD優化] 增加手機版 header 的響應式設計 -->
-            <header class="flex-shrink-0 border-b border-gray-200 py-2">
-                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center container mx-auto px-4 sm:px-6 lg:px-8 gap-2">
+            <header class="flex-shrink-0 border-b border-gray-200 py-0.5">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center container mx-auto px-4 sm:px-6 lg:px-8 gap-1">
                      <!-- [v421.0 UX優化] 移除標題與歡迎詞，讓版面更簡潔 -->
                      <div class="flex items-center">
                          <!-- [v423.0 UX優化] 移除 v-if，讓導覽列在 iframe 頁面也顯示 -->
+                         <!-- [v612.0 UX優化] 縮小上下 padding，字級維持 text-base，讓主內容有更多版面 -->
                          <nav class="-mb-px flex gap-6" aria-label="Tabs">
-                             <a href="#/dashboard" :class="['py-3 px-1 text-base font-bold', currentView.name === 'dashboard' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:border-gray-300']">主控台</a>
-                             <a href="#/project-board" :class="['py-3 px-1 text-base font-bold', currentView.name === 'project-board' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:border-gray-300']">專案看板</a>
+                             <a href="#/dashboard" :class="['py-1.5 px-1 text-base font-bold', currentView.name === 'dashboard' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:border-gray-300']">主控台</a>
+                             <a href="#/project-board" :class="['py-1.5 px-1 text-base font-bold', currentView.name === 'project-board' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:border-gray-300']">專案看板</a>
                          </nav>
                      </div>
                 </div>
@@ -379,7 +439,7 @@ const App = {
                 <!-- [v428.0 UX優化] 將 Dashboard 和 ProjectBoard 都放入限寬容器中，提升閱讀體驗 -->
                 <!-- 【您的要求】核心修正：移除內層的寬度限制，統一由 main 元素控制 -->
                 <div v-if="currentView.name === 'dashboard'" class="py-6">
-                    <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :hasAdminRights="hasAdminRights" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" />
+                    <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :pendingRequestsRaw="pendingRequestsRaw" :hasAdminRights="hasAdminRights" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" />
                     <!-- 任務交辦中心容器 -->
                     <div v-if="hasAdminRights" id="task-sender-container" class="mt-4"></div>
                 </div>
