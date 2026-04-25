@@ -17,8 +17,288 @@
     <style>
         body {
             overflow: hidden;
-            height: 100vh;
             user-select: none;
+        }
+
+        :root {
+            --lp-rail-w: 264px;
+        }
+
+        /* 主工作區：左欄 | 畫布 | 右欄 */
+        #app-shell {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: row;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        #left-rail,
+        #right-rail {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            z-index: 95;
+        }
+
+        /* —— 兩者固定：左工具箱、右預算 —— */
+        body.lp-ui-dock-both #left-rail {
+            width: var(--lp-rail-w);
+            border-right: 1px solid #cbd5e1;
+            background: linear-gradient(180deg, #eef2f7 0%, #e2e8f0 100%);
+            padding: 8px 8px 12px;
+            gap: 8px;
+            overflow-y: auto;
+        }
+
+        body.lp-ui-dock-both #right-rail {
+            width: var(--lp-rail-w);
+            border-left: 1px solid #cbd5e1;
+            background: linear-gradient(180deg, #eef2f7 0%, #e2e8f0 100%);
+            padding: 8px 8px 12px;
+            gap: 8px;
+            overflow-y: auto;
+        }
+
+        body.lp-ui-dock-both #left-rail #toolbox-window,
+        body.lp-ui-dock-both #right-rail #info-window {
+            position: relative !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            width: 100% !important;
+            flex: 1 1 0;
+            min-height: 0;
+            max-width: 100%;
+        }
+
+        body.lp-ui-dock-both #left-rail .window-header,
+        body.lp-ui-dock-both #right-rail .window-header {
+            cursor: default;
+            padding: 8px 12px;
+        }
+
+        body.lp-ui-dock-both #left-rail .window-content,
+        body.lp-ui-dock-both #right-rail .window-content {
+            padding: 10px 12px;
+            max-height: none;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+        }
+
+        /* —— 工具箱固定左欄、預算浮動 —— */
+        body.lp-ui-dock-tb-float-bi #left-rail {
+            width: var(--lp-rail-w);
+            border-right: 1px solid #cbd5e1;
+            background: linear-gradient(180deg, #eef2f7 0%, #e2e8f0 100%);
+            padding: 8px;
+            overflow-y: auto;
+        }
+
+        body.lp-ui-dock-tb-float-bi #left-rail #toolbox-window {
+            position: relative !important;
+            width: 100% !important;
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+
+        body.lp-ui-dock-tb-float-bi #left-rail .window-header {
+            cursor: default;
+            padding: 8px 12px;
+        }
+
+        body.lp-ui-dock-tb-float-bi #right-rail {
+            width: 0;
+            padding: 0;
+            border: none;
+            overflow: visible;
+            pointer-events: none;
+        }
+
+        body.lp-ui-dock-tb-float-bi #info-window {
+            pointer-events: auto;
+            position: fixed !important;
+            top: 56px !important;
+            right: 12px !important;
+            left: auto !important;
+            width: min(300px, calc(100vw - var(--lp-rail-w) - 28px)) !important;
+            max-height: calc(100vh - 120px);
+            z-index: 100;
+        }
+
+        body.lp-ui-dock-tb-float-bi #info-window .window-header {
+            cursor: grab;
+            padding: 8px 12px;
+        }
+
+        /* —— 工具箱浮動、預算固定右欄 —— */
+        body.lp-ui-float-tb-dock-bi #left-rail {
+            width: 0;
+            padding: 0;
+            border: none;
+            overflow: visible;
+            pointer-events: none;
+        }
+
+        body.lp-ui-float-tb-dock-bi #toolbox-window {
+            pointer-events: auto;
+            position: fixed !important;
+            top: 56px !important;
+            left: 12px !important;
+            width: min(292px, calc(100vw - 32px)) !important;
+            max-height: calc(100vh - 120px);
+            z-index: 100;
+        }
+
+        body.lp-ui-float-tb-dock-bi #toolbox-window .window-header {
+            cursor: grab;
+            padding: 8px 12px;
+        }
+
+        body.lp-ui-float-tb-dock-bi #right-rail {
+            width: var(--lp-rail-w);
+            border-left: 1px solid #cbd5e1;
+            background: linear-gradient(180deg, #eef2f7 0%, #e2e8f0 100%);
+            padding: 8px;
+            overflow-y: auto;
+        }
+
+        body.lp-ui-float-tb-dock-bi #info-window {
+            position: relative !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            width: 100% !important;
+            flex: 1 1 0;
+            min-height: 0;
+        }
+
+        body.lp-ui-float-tb-dock-bi #right-rail .window-header {
+            cursor: default;
+            padding: 8px 12px;
+        }
+
+        body.lp-ui-float-tb-dock-bi #right-rail .window-content {
+            padding: 10px 12px;
+            max-height: none;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+        }
+
+        /* —— 兩者皆浮動 —— */
+        body.lp-ui-float-both #left-rail,
+        body.lp-ui-float-both #right-rail {
+            width: 0;
+            padding: 0;
+            border: none;
+            overflow: visible;
+            pointer-events: none;
+        }
+
+        body.lp-ui-float-both #toolbox-window,
+        body.lp-ui-float-both #info-window {
+            pointer-events: auto;
+        }
+
+        body.lp-ui-float-both #toolbox-window {
+            position: fixed !important;
+            top: 56px !important;
+            left: 12px !important;
+            width: min(292px, calc(50vw - 24px)) !important;
+            max-height: calc(100vh - 120px);
+            z-index: 100;
+        }
+
+        body.lp-ui-float-both #info-window {
+            position: fixed !important;
+            top: 56px !important;
+            right: 12px !important;
+            left: auto !important;
+            width: min(300px, calc(50vw - 24px)) !important;
+            max-height: calc(100vh - 120px);
+            z-index: 100;
+        }
+
+        body.lp-ui-float-both #toolbox-window .window-header,
+        body.lp-ui-float-both #info-window .window-header {
+            cursor: grab;
+        }
+
+        /* 頂列說明：依左右欄讓位 */
+        body.lp-ui-dock-both #canvas-header {
+            left: var(--lp-rail-w) !important;
+            right: var(--lp-rail-w) !important;
+        }
+
+        body.lp-ui-dock-tb-float-bi #canvas-header {
+            left: var(--lp-rail-w) !important;
+            right: 0 !important;
+        }
+
+        body.lp-ui-float-tb-dock-bi #canvas-header {
+            left: 0 !important;
+            right: var(--lp-rail-w) !important;
+        }
+
+        body.lp-ui-float-both #canvas-header {
+            left: 0 !important;
+            right: 0 !important;
+        }
+
+        /* 底列快捷：縮小、並留在中間可視區 */
+        body.lp-ui-dock-both #minimized-bar {
+            left: calc(var(--lp-rail-w) + 8px);
+            right: calc(var(--lp-rail-w) + 8px);
+            bottom: 10px;
+        }
+
+        body.lp-ui-dock-tb-float-bi #minimized-bar {
+            left: calc(var(--lp-rail-w) + 8px);
+            right: 12px;
+            bottom: 10px;
+        }
+
+        body.lp-ui-float-tb-dock-bi #minimized-bar {
+            left: 12px;
+            right: calc(var(--lp-rail-w) + 8px);
+            bottom: 10px;
+        }
+
+        body.lp-ui-float-both #minimized-bar {
+            left: 12px;
+            right: 12px;
+            bottom: 10px;
+        }
+
+        #minimized-bar {
+            position: fixed;
+            z-index: 90;
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            align-items: center;
+        }
+
+        #minimized-bar .lp-zoom-cluster {
+            transform: scale(0.88);
+            transform-origin: right center;
+        }
+
+        #minimized-bar .toggle-btn,
+        #minimized-bar .contact-btn {
+            padding: 5px 10px;
+            font-size: 11px;
+            border-radius: 22px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        #minimized-bar .contact-btn {
+            padding: 5px 12px;
         }
 
         .floating-window {
@@ -49,7 +329,7 @@
         }
 
         .window-header {
-            padding: 10px 15px;
+            padding: 8px 12px;
             background: linear-gradient(to right, #f8fafc, #f1f5f9);
             border-bottom: 1px solid #e2e8f0;
             cursor: grab;
@@ -59,31 +339,19 @@
         }
 
         .window-content {
-            padding: 15px;
+            padding: 12px;
             overflow-y: auto;
             max-height: 70vh;
         }
 
+        /* 浮動位置由 body.lp-ui-* 規則覆寫 */
         #toolbox-window {
-            top: 20px;
-            left: 20px;
-            width: 340px;
+            width: 292px;
         }
 
         #info-window {
-            top: 20px;
-            right: 20px;
-            width: 320px;
+            width: 300px;
             max-height: 80vh;
-        }
-
-        #minimized-bar {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            display: flex;
-            gap: 10px;
-            z-index: 90;
         }
 
         .toggle-btn {
@@ -149,8 +417,11 @@
         }
 
         #canvas-wrapper {
-            width: 100vw;
-            height: 100vh;
+            flex: 1;
+            min-width: 0;
+            width: 100%;
+            height: 100%;
+            min-height: 0;
             background-color: #f3f4f6;
             overflow: auto;
             position: relative;
@@ -435,7 +706,7 @@
     </style>
 </head>
 
-<body class="bg-gray-100 font-sans text-gray-800">
+<body class="bg-gray-100 font-sans text-gray-800 flex flex-col h-screen overflow-hidden lp-ui-dock-both">
     <!-- [您的要求] 新增：手機版提示訊息 -->
     <div id="mobile-warning" class="hidden fixed inset-0 bg-white z-[9999] items-center justify-center p-8">
         <div class="text-center">
@@ -461,7 +732,8 @@
         </div>
     </div>
 
-    <!-- 工具箱 -->
+    <div id="app-shell">
+    <aside id="left-rail" aria-label="設計工具箱">
     <div id="toolbox-window" class="floating-window">
         <div class="window-header">
             <span class="font-bold">🛠️ 設計工具箱</span>
@@ -569,6 +841,30 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- 介面與工作區（排第五） -->
+                <div class="bg-slate-50 p-3 rounded border border-slate-200">
+                    <h2 class="font-bold text-slate-800 text-sm mb-2">5. 介面與工作區</h2>
+                    <label for="ui-layout-mode-select" class="text-xs font-bold text-gray-700">工具箱／預算視窗</label>
+                    <select id="ui-layout-mode-select" class="w-full text-xs border rounded p-1.5 mt-1 mb-1 bg-white">
+                        <option value="dock-both">兩者固定：左工具箱、右預算（預設）</option>
+                        <option value="dock-tb-float-bi">工具箱固定左欄、預算浮動</option>
+                        <option value="float-tb-dock-bi">工具箱浮動、預算固定右欄</option>
+                        <option value="float-both">兩者皆浮動（標題列可拖曳）</option>
+                    </select>
+                    <p class="text-[10px] text-gray-500">「浮動」的視窗可按住標題列拖曳；固定者留在左欄（工具）或右欄（預算）。</p>
+                    <div class="mt-2">
+                        <label for="workspace-size-select" class="text-xs font-bold text-gray-700">畫布邊長（與圖上 cm 比例一致）</label>
+                        <select id="workspace-size-select" class="w-full text-xs border rounded p-1.5 mt-1 bg-white">
+                            <option value="2000">2000（預設）</option>
+                            <option value="2400">2400</option>
+                            <option value="2600">2600</option>
+                            <option value="3000">3000</option>
+                            <option value="3500">3500</option>
+                        </select>
+                        <p class="text-[10px] text-gray-500 mt-1">變更後僅影響可編輯範圍；已擺好的物件不會自動搬移。</p>
+                    </div>
+                </div>
             </div>
 
             <!-- [新增] 元件頁籤內容 -->
@@ -577,14 +873,15 @@
             </div>
         </div>
     </div>
+    </aside>
 
-    <!-- 畫布 -->
+    <!-- 畫布（主工作區）：置於左欄工具箱與右欄預算之間 -->
     <main id="canvas-wrapper">
         <!-- [新增] 工作區說明與快捷鍵提示 -->
         <div id="canvas-header"
             style="position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(to right, #f3f4f6, #ffffff); border-bottom: 1px solid #e5e7eb; padding: 12px 20px; z-index: 50; font-size: 12px; color: #4b5563;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div><strong>📐 工作區：2000cm × 2000cm</strong></div>
+                <div><strong id="canvas-size-label">📐 工作區：2000cm × 2000cm</strong></div>
                 <div style="display: flex; gap: 20px;">
                     <span><strong>快捷鍵：</strong> R=旋轉 | D=刪除 | Ctrl+Z=復原 | Ctrl+Y=重做 | ↑↓←→=移動</span>
                 </div>
@@ -616,7 +913,7 @@
         </div>
     </main>
 
-    <!-- 資訊視窗 -->
+    <aside id="right-rail" aria-label="預算與估價">
     <div id="info-window" class="floating-window">
         <div class="window-header">
             <span class="font-bold">💰 預算 & 估價</span>
@@ -708,28 +1005,30 @@
 
         </div>
     </div>
+    </aside>
+    </div>
 
     <!-- 最小化列 -->
     <div id="minimized-bar">
         <!-- [v8.11 修復] 將縮放控制整合進最小化列，避免被遮擋 -->
-        <div class="flex bg-white rounded-lg shadow border overflow-hidden mr-2">
-            <button id="zoom-out-btn" class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 border-r"
+        <div class="lp-zoom-cluster flex bg-white rounded-md shadow border overflow-hidden mr-1 shrink-0">
+            <button id="zoom-out-btn" class="w-6 h-6 flex items-center justify-center hover:bg-gray-100 border-r text-gray-600"
                 title="縮小 (Ctrl+滾輪)">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24"
                     stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
                 </svg>
             </button>
             <span id="zoom-level-display"
-                class="w-12 flex items-center justify-center text-xs font-mono bg-gray-50 border-r">100%</span>
-            <button id="zoom-in-btn" class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 border-r"
+                class="w-9 flex items-center justify-center text-[10px] font-mono bg-gray-50 border-r leading-none">100%</span>
+            <button id="zoom-in-btn" class="w-6 h-6 flex items-center justify-center hover:bg-gray-100 border-r text-gray-600"
                 title="放大 (Ctrl+滾輪)">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24"
                     stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                 </svg>
             </button>
-            <button id="zoom-reset-btn" class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 text-xs"
+            <button id="zoom-reset-btn" class="w-6 h-6 flex items-center justify-center hover:bg-gray-100 text-[10px] font-semibold text-gray-600"
                 title="重置比例">R</button>
         </div>
 
@@ -748,7 +1047,7 @@
 
     <!-- [修正] 將提示文字移出畫布，避免隨畫布縮放 -->
     <div id="canvas-placeholder">
-        <p class="text-lg font-bold">2000cm x 2000cm 工作區</p>
+        <p id="canvas-placeholder-size" class="text-lg font-bold">2000cm x 2000cm 工作區</p>
         <p class="text-sm mt-2">快捷鍵: R=旋轉 | D=刪除 | 方向鍵=移動</p>
     </div>
 
@@ -770,6 +1069,7 @@
                         <tr>
                             <th class="px-2 py-2 w-12">項次</th>
                             <th class="px-2 py-2">項目</th>
+                            <th class="px-2 py-2 w-24">規格</th>
                             <th class="px-2 py-2 w-16 text-center">單位</th>
                             <th class="px-2 py-2 w-16">數量</th>
                             <th class="px-2 py-2 w-24 text-right">總價</th>
@@ -779,7 +1079,7 @@
                     <tbody id="budget-table-body"></tbody>
                     <tfoot>
                         <tr class="font-bold bg-gray-50">
-                            <td colspan="4" class="px-2 py-2 text-right">總計</td>
+                            <td colspan="5" class="px-2 py-2 text-right">總計</td>
                             <td class="px-2 py-2 text-right text-blue-600" id="modal-total-price">$0</td>
                             <td></td>
                         </tr>

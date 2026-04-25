@@ -1,5 +1,10 @@
 # 12. 報價單審核系統與主控台整合架構規格書 (Dual-Track Storage SPEC)
 
+> **實作檔案（權威）**  
+> - 驗收審核（主線）：`tools/BudgetAuditor_Standalone_V2.html`（Hub 路由 `#/budget-audit` 亦指向此檔）  
+> - 報價解析／預處理：`tools/BudgetWeb_Standalone.html`  
+> - 舊版單檔名 `BudgetAuditor_Standalone.html` 若仍存在於倉庫，**行為以本 SPEC ＋ 現行程式為準**；新功能以 V2 為準。
+
 ## 1. 系統定位與目標
 本規格書定義了前端 **`BudgetAuditor` (報價單進度審核器)** 與後端 **`project-console` (專案主控台, Google Apps Script 生態)** 之間的資料串接與持久化儲存架構。
 
@@ -11,7 +16,7 @@
 當查帳員或工班在 `BudgetAuditor` 點擊「同步至雲端」時，系統將平行發起以下寫入任務：
 
 ### 2.1 軌道一：完整資料庫 (Firebase RTDB) - [細節防護層]
-*   **儲存對象**：保留巢狀結構 (`total_summary` 與 `items`) 的脫敏 JSON 資料。
+*   **儲存對象**：保留巢狀結構 (`total_summary` 與 `items`) 的 **完整工項清單 JSON**；可含**可選**欄位 `price`（單筆小計／總價欄之字串，由 `BudgetWeb` 從 Excel 帶出）。**對外系統**（如客戶端）讀取同一筆 Firebase 時仍須依產品規則**脫敏、不顯示金額**；內部驗收表則依 **權限等級** 控制畫面與匯出（見 **§6.5**）。
 *   **傳輸方式**：透過 Firebase SDK `set()` 至對應案號路徑。
 *   **儲存路徑設計**：`{FirebaseURL}/quotations/{projectNo}`
 *   **底層資料結構 (JSON Example)**：
@@ -32,6 +37,7 @@
           "spec": "PP板+全室木板",
           "qty": "19",
           "unit": "坪",
+          "price": "198000",
           "completion_percent": 100,
           "is_ui_done": true,
           "raw_line": "2 | 室內保護工程-地坪 | 坪 | 19 | 10450 | ...",
@@ -41,15 +47,16 @@
             "verified_at": "2026/3/26 下午4:10:31",
             "verified_uid": "U12345"
           },
-          "audit_logs": [
-            { "ts": 1774512487892, "at": "...", "user": "...", "action": "標註完成" }
+          "status_logs": [
+            { "ts": 1774512487892, "at": "...", "user": "...", "action": "進度: 0% → 50%" }
           ]
         }
       ]
     }
     ```
 *   **欄位說明**：
-    - `audit_logs`: 紀錄該工項的每一筆異動（進度調整、標註完成/取消），具備秒級追蹤能力。
+    - `price`（可選）: 該行「總價／小計」欄之字串；可為空。舊資料或手動工項可無此鍵，**驗收表與匯出皆須向下相容**（無則不顯示單筆金額）。
+    - `status_logs`（V2 慣用）: 紀錄該工項之**進度變更、審核完成、項目取消/恢復、單項分區移動**等；每筆含 `ts` / `at` / `user` / `action` 字串。舊資料若僅含 `audit_logs` 鍵，讀取端可視為等價用途之歷史欄位（**新寫入以 `status_logs` 為準**）。
     - `raw_line`: 保留解析時的原始 Excel 文字行，用於除錯與對照價格。
     - `verification`: 正式的完工簽核快取，包含人員名稱與 UID。
 *   **優勢**：Auditor 開啟時以毫秒級速度透過 `projectNo` 載入，完全跳過後端解析。
@@ -78,25 +85,27 @@
     }
     ```
 ### 2.3 工具聯動路徑 (Connection Routing)
-*   **路徑 A (預處理與儲存)**：`BudgetWeb` (Excel 解析) -> **Firebase** (`quotations/{projectId}`)。
-*   **路徑 B (載入與審核)**：`BudgetAuditor` (載入 Firebase) -> **GAS Backend** -> **案場資料** (戰情摘要更新)。
+*   **路徑 A (預處理與儲存)**：`BudgetWeb_Standalone` (Excel 解析) -> **Firebase** (`quotations/{projectId}`)。下載的 Context JSON 與上傳至 Firebase 之工項皆含可選欄位 **`price`**；若再次同步雲端且同案號已有舊筆，解析結果 **無** `price` 時**沿用雲端舊值**（避免覆寫進度時一併洗掉金額）。
+*   **路徑 A 末段（開驗收表）**：同步至 Firebase 成功且使用者同意開啟驗收表時，預設以 **`BudgetAuditor_Standalone_V2.html?projectNo=...`** 開新分頁（非舊版檔名）。
+*   **路徑 B (載入與審核)**：`BudgetAuditor_Standalone_V2` (載入 Firebase) -> **GAS Backend** -> **案場資料** (戰情摘要更新)。
 *   **資料一致性**：兩者共享相同的 JSON 結構，主要透過 `projectId` 作為金鑰聯結。
 *   **回報系統連動**：`reportV2.html` 使用相同的 Firebase 配置進行照片與日誌管理，確保數據生態系的一致。
+*   **Firebase／GAS 位址取得**：V2 驗收表**不**內建「雲端設定」表單；`databaseURL`／`gasURL`／（選用）Auth 參數以程式內 **預設** 併合 **`localStorage` 鍵 `fb_audit_config`**，與 `BudgetWeb_Standalone` 相同。
 
 ### 2.4 資料流轉流程 (Data Flow Diagram)
 
 ```mermaid
 sequenceDiagram
     participant U as 查帳員
-    participant BW as BudgetWeb (解析/脫敏)
+    participant BW as BudgetWeb (解析+price)
     participant FB as Firebase RTDB
-    participant BA as BudgetAuditor (審核)
+    participant BA as BudgetAuditor V2 (審核)
     participant GAS as project-console (GAS)
     participant SS as Google Sheets (案場資料)
 
     U->>BW: 上傳 Excel + 輸入案號
-    BW->>FB: 儲存全量脫敏 JSON (quotations/{案號})
-    BW->>BA: 跳轉 (?projectNo=案號)
+    BW->>FB: 儲存全量工項 JSON (可含 price) (quotations/{案號})
+    BW->>BA: 開新分頁 V2 (?projectNo=案號)（可選）
     BA->>FB: 載入最新進度 (quotations/{案號})
     BA->>U: 顯示審核清單 (含 24h 快取)
     U->>BA: 修改進度/分類 (穩定排序)
@@ -156,6 +165,8 @@ sequenceDiagram
 - [x] **UX 穩定排序 (v2.1)**: 勾選完成時不立即跳動，同步雲端後才下移歸類。
 - [x] **行動端浮動工具列**: 吸底精簡設計，捲動至頂端自動隱藏。
 - [x] **全分類選單補全**: 支援手動將工項調整至十大分類中的任一項。
+- [x] **單項移入群組（非整區更名）**: 僅變更該筆工項之 `zone`；支援視窗（既有群組下拉 + 自訂名稱，名稱優先）、進行中工項以拖曳手把放到群組標題列（見 **§6.7**）。
+- [x] **工項列版面（資訊列／進度列）**: 狀態＋名稱＋數量單位置左；分類與移入群組靠右；施工進度與滑桿、百分比同一列（見 **§6.8**）。
 
 ### 5.2 待處理項目 (主控台整合)
 - [ ] **Phase 1: 建立後端端點**
@@ -163,7 +174,7 @@ sequenceDiagram
   - [ ] 於 `ProjectLogic.js` 撰寫 `updateAuditSummary_` 商業邏輯。
 - [ ] **Phase 2: 全局規則雲端化**
   - [ ] 將 `CATEGORY_RULES` 從 HTML 抽離，改從 Firebase `config` 讀取。
-## 6. 驗收表核心功能詳註 (BudgetAuditor UX v2.2)
+## 6. 驗收表核心功能詳註 (BudgetAuditor UX v2.2+)
 
 ### 6.1 視覺穩定排序 (Stable Grouping)
 *   **標註即時反饋**: 當工項切換為 100% (完成) 時，工項圖案變更為核取狀態但**留在原位**，防止行動端操作時列表突然跳動造成誤導。
@@ -179,16 +190,46 @@ sequenceDiagram
 *   **動態隱藏**: 當滑動距離 < 120px (位於頁面最上方) 時自動淡出關閉，避免與標題欄按鈕衝突；滑離頂端後才顯示。
 
 ### 6.4 工項屬性動態管理 (Property Editor)
-*   **即時分類**: 支援在驗收清單中直接修改工項分類，修改後立即同步至 Firebase，實現跨系統（如報表端）的即時分類更新。
+*   **即時分類**: 支援在驗收清單中直接修改工項 **`category_tag`**（工程分類），修改後立即同步至 Firebase，實現跨系統（如報表端）的即時分類更新。
+*   **分區 `zone`（空間／群組標籤）**：與分類不同；單筆工項如何改群組（不影響同區其他列）見 **§6.7**，整區更名與整區合併見標題列動作與 **§6.6**。
+
+### 6.5 權限與金額顯示（V2.1+）
+*   **權限來源**：內部驗收表以 URL 參數 `permission`（Hub iframe 帶入）或 LIFF 開啟時之預設等級，判斷**畫面**與**匯出**是否含價；**不**在本文重述完整資安模型，見實作註解。
+*   **單筆小計／總報價**：權限等級 **達 4 以上**可顯示工項 `price` 與表頭合計；**未達 4 級**不顯示單筆金額與總報價卡。
+*   **匯出 JSON**：**權限 5** 顯示「匯出」鈕；匯出時若權限**未達 4 級**，匯出前會**刪除**各工項之 `price` 鍵。無 `price` 之舊資料**相容**（不影響進度、審核、分區）。
+
+### 6.6 分區合併（合併至其他群組）
+*   **用途**：將某一分區下**所有工項**之 `zone` 改為**目標分區**名稱，使清單歸併到同一摺疊群組下。
+*   **實作要點**：可合併的目標清單須在執行時從**目前 `items`** 重算；**不可**在 HTML `onclick` 內塞入 `JSON.stringify` 產生之陣列（內容雙引號會**截斷屬性字串**，導致按鈕無效）。
+
+### 6.7 分區更名 vs. 單項移入群組（釐清）
+*   **群組更名（區塊標題鉛筆）**：變更的是「**該群組名稱下全部工項**」的 `zone`（批次改名）；用於整區一起改稱呼。
+*   **單項移入群組**：只改**被選定的那一筆**工項的 `zone`；同群組內其他工項不受影響。
+*   **視窗操作（資料夾＋圖示鈕）**：
+    - **既有群組**：下拉選單由**全案** `items` 去重後之 `zone` 清單組成（含「未分類區域」等），開啟時預設不預選，避免誤按確認。
+    - **或新群組名稱**：文字欄若**有填寫**，則以文字為準（可新建群組名，或與既有同名則併入該群組）；未填寫則以上方下拉所選為目標。
+    - 與目前群組相同時不寫入，並以 Toast 提示。
+*   **拖曳操作（僅「進行中」工項）**：
+    - 工項列左側 **⋮⋮ 手把**（`grip-vertical`）可拖曳；**已完成**摺疊區內之工項**不**顯示手把、亦不提供群組標題為放置目標（避免與完成狀態邏輯混淆）。
+    - 放置目標為各進行中群組之**標題列**（`data-budget-drop-zone` 存 `encodeURIComponent(zoneName)`）；放開後呼叫與視窗相同之單項指派邏輯。
+*   **持久化**：成功後 `renderList`、`saveToCache`、`syncToFirebase`；並於該工項 `status_logs` 追加一筆（註明來自視窗或拖曳）。
+
+### 6.8 工項列版面（資訊列／進度列）
+*   **第一列（`.item-info-line`）**：
+    - **左側**：狀態 chip → 工項名稱 → **數量＋單位**（緊接名稱，視覺整齊）→（權限許可時）單筆 `price` 標籤。
+    - **右側**：工程分類下拉、移入群組鈕；以 `margin-left: auto` 靠右；窄螢幕允許換行。
+*   **施工進度列**：「施工進度」標籤、**範圍滑桿**與裝飾用 **`progress-track` 填色**、**百分比**同一橫列（`.progress-row-inline`）；滑桿區域 `flex: 1` 可伸縮。
 
 ---
 
 ## 7. 技術細節與安全機制 (Technical Implementation)
 
-### 7.1 強度資料脫敏 (Data Sanitization)
-`BudgetWeb` 在解析 Excel 時，會針對以下關鍵字進行**嚴格過濾**，確保 `Firebase` 中的 JSON 不含敏感價格資訊：
-*   **過濾字樣**: 價格、單價、總價、複價、成本、單價小計、合計、稅。
-*   **處理行為**: 匹配成功之列將被略過，確保資料庫僅存放工項名稱、規格、數量及單位。
+### 7.1 價格欄位與脫敏分責 (Price Field vs. Client-Facing)
+*   **預處理器 `BudgetWeb`**：將 Excel 中對應到「總價／複價／小計」欄之值寫入每筆工項的 **`price`** 字串，一併進下載與 `quotations/{案號}`；解析時仍可能依既有規則**略過**非工項列（如純表頭、條款、說明列）。
+*   **內部驗收 V2**：可讀寫帶有 `price` 之 `context`；**顯示**依 **§6.5**。
+*   **對外／客戶面**：讀同一路徑 Firebase 的頁面（如客戶端）仍須遵守產品 SPEC，**不**在 UI 顯示 `price`、`raw_line`、可辨識之報價細節，見 [13_PROJECT_CLIENT_PORTAL_THREADED_SPEC](./13_PROJECT_CLIENT_PORTAL_THREADED_SPEC.md)。
+
+> **歷史註記**：本檔舊版曾寫「Firebase JSON 必不含價格」之敘述；**現況**以內部需求為先，**以工項帶出 `price` 為主**，權限與對外頁面則分責處理。
 
 ### 7.2 LIFF 身份識別流 (Identity Flow)
 兩端工具均整合了 LIFF SDK，依序進行身份辨識：
@@ -213,6 +254,17 @@ sequenceDiagram
 ---
 
 ## 8. 版本更新記錄 (Version Roadmap)
+
+### v2.7 (2026-04-25) — 單項分區、拖曳、工項列版面
+- **單項移入群組**：與「群組更名」整批改 `zone` 區隔；支援視窗（既有群組下拉＋自訂名稱，**名稱優先**）、進行中工項拖曳至群組標題列（見 **§6.7**）。
+- **工項列 UI**：數量單位緊接項目名稱；分類與移入群組靠右；施工進度與滑桿、百分比同一列（見 **§6.8**）。
+- **日誌**：單項分區異動寫入 `status_logs`（與進度／審核／取消共用陣列）。
+
+### v2.6 (2026-04-25) — 驗收 V2、工項 `price`、彈窗修正
+- **主線實作檔**：`BudgetAuditor_Standalone_V2.html`；`BudgetWeb` 同步雲端成功後之「開啟驗收表」預設為此檔。
+- **BudgetWeb → Firebase／下載 JSON**：工項帶可選欄位 **`price`**；再次同步時若新解析無單筆金額則**保留**雲端舊 `price`。
+- **V2 介面**：已移除**雲端設定**表單；`fb_audit_config` 與內建預設併用（見 **§2.3**）。
+- **分組合併鈕**：目標分區清單改由程式內重算，避免內聯 JSON 導致按鈕失效（見 **§6.6**）。
 
 ### v2.5 (2026-03-27) - UI/UX 深度優化
 - **現場紀錄 (Inline Editor)**: 移除 `prompt` 跳窗，實現點擊即編輯的流暢體驗。

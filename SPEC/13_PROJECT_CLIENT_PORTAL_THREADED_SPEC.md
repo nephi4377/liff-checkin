@@ -66,7 +66,7 @@
 - **禁止**在客戶進度頁展示 **案場聯絡與識別面板** 同等內容：**案名、地址、電話、地圖、團隊／工班聯絡、保證金、內部備註** 等（與內部主控台右欄「案場資訊」一覽）。  
 - **允許（對客統稱「施工項目」；資料仍為審核器／戰情之工項完成度）**：  
   - 自 **`page=project` 之 `overview`** 僅取用 **`audit_items_total`、`audit_items_verified`、`audit_percent`（及同等戰情欄位）** 作摘要（來源為 [12](./12_BUDGET_AUDITOR_AND_CONSOLE_INTEGRATION_SPEC.md) 同步寫入之 Sheets 欄位）。  
-  - 自 **Firebase `quotations/{案號}`**（與 **`BudgetAuditor_Standalone`** 相同路徑）讀取 **`context.items`**，**僅渲染**：`name`、`zone`、`completion_percent`／`is_ui_done`、**已取消**狀態；**嚴禁**顯示 `raw_line`、單價、數量、金額等報價細節。  
+  - 自 **Firebase `quotations/{案號}`**（與 **`BudgetAuditor_Standalone_V2`** 相同路徑；舊檔名 `BudgetAuditor_Standalone.html` 所寫之結構同）讀取 **`context.items`**，**僅渲染**：`name`、`zone`、`completion_percent`／`is_ui_done`、**已取消**狀態；**嚴禁**顯示 `raw_line`、單價、數量、**`price`** 與可辨識之報價／金額等細節。  
 - **版面與互動（雛形頁已實作，正式對客可沿用原則）**  
   - **區塊順序**（由上而下）：頁首標題「施工進度」與案號副標 →（錯誤／載入提示）→ **施工項目**（外層 **`<details>` 預設摺疊**；摺疊時**單列**摘要：左為「施工項目」、右為 **「未完成 n · 已完成 m」**，避免日誌很長時需捲到頁尾才看到）→ **「現場施工紀錄」** 標題與已發布日誌列表。  
   - **展開施工項目後**：可顯示與內部同步之說明、戰情摘要（若有）、整體比例條；**依 `zone` 分區**，每區一個 **`<details>` 預設摺疊**，摘要列為 **區域名稱 +「未完成 x · 已完成 y」**；分區排序：**仍有未完成項的分區優先**，其餘依區域名稱排序。  
@@ -156,15 +156,15 @@
 
 ---
 
-## 5. 與報價單審核器（`BudgetAuditor_Standalone.html`）工項 — 能否讀入與比對？
+## 5. 與報價單審核器（`BudgetAuditor_Standalone_V2.html`）工項 — 能否讀入與比對？
 
 > **實作現況（雛形）**：`client-construction-progress` 在 **現場施工紀錄** 之上顯示 **施工項目**（外層預設摺疊；展開後為戰情摘要 + 依區域之工項完成狀態，分區預設摺疊），資料來源為 **Firebase `quotations/{案號}`**（與審核器同步之 `context`）及 **`page=project` 之 `overview.audit_*`**。詳見 **§2.3**。
 
 ### 5.1 釐清：`Standalone` 頁面本身不是「工項 API」
 
-- **`BudgetAuditor_Standalone.html`** 是一個**獨立網頁工具**：拖入 JSON、輸入案號連 Firebase、或走 GAS Hub 取案名等。  
+- **`BudgetAuditor_Standalone_V2.html`** 是一個**獨立網頁工具**（內部主線）：拖入 JSON、輸入案號連 Firebase、或走 GAS Hub 取案名等。  
 - **真正的工項清單**是其記憶體裡的 **`appData.items`**（以及 `total_summary`、`案號` 等），結構定義見 [12_BUDGET_AUDITOR_AND_CONSOLE_INTEGRATION_SPEC.md](./12_BUDGET_AUDITOR_AND_CONSOLE_INTEGRATION_SPEC.md)（例如 Firebase 路徑 **`quotations/{案號}`**、欄位 `name`、`zone`、`completion_percent`、`audit_remark` 等）。  
-- 因此其他頁面（含 **客戶施工進度頁**）若要「像審核器一樣的工項」，應讀取 **同一套資料結構**（JSON／Firebase／或未來由 GAS 轉發的 DTO），而不是去「執行」或內嵌整份 `BudgetAuditor_Standalone.html`（該頁含編輯、同步、金額脈絡，**不適合**直接當客戶唯讀元件）。
+- 因此其他頁面（含 **客戶施工進度頁**）若要「像審核器一樣的工項」，應讀取 **同一套資料結構**（JSON／Firebase／或未來由 GAS 轉發的 DTO），而不是去「執行」或內嵌整份 V2 驗收頁（該頁含編輯、同步、金額顯示脈絡，**不適合**直接當客戶唯讀元件）。
 
 ### 5.2 與「施工日誌」做比對時缺什麼？
 
@@ -182,7 +182,7 @@
 | **B. 僅內部比對** | 內部開發者／查帳員在 **BudgetAuditor** 內比對；客戶頁不顯示工項細目。 |
 | **C. 前端另拉 Firebase** | 與 Standalone 相同 SDK 讀 `quotations/{案號}` — **客戶頁一般不建議**（金鑰、規則、暴露面）。若要做，須 **匿名／自訂 Token 規則** 與極度縮欄。 |
 
-**結論**：**可以**把「審核器那份工項邏輯」接到同一案場做比對，但應讀 **資料（items 結構）** 並由 **§5.2** 定對照規則；**不要**把 `BudgetAuditor_Standalone.html` 當成資料來源本體硬嵌進客戶頁。
+**結論**：**可以**把「審核器那份工項邏輯」接到同一案場做比對，但應讀 **資料（items 結構）** 並由 **§5.2** 定對照規則；**不要**把 `BudgetAuditor_Standalone_V2.html` 當成資料來源本體硬嵌進客戶頁。
 
 ---
 
@@ -195,4 +195,4 @@
 
 ---
 
-*文件版本：**v2.5** | **2026-04-23**：對客用語改「施工項目」、§2.3 補版面順序（施工項目在日誌上／預設摺疊／分區摘要未完成·已完成）、§2.2 主從關係、§3.2–3.3 與 §5 對齊實作；本地測試不顯示 LIFF 略過黃橫幅。v2.4.1：客戶不得寫入／改驗收；v2.4：Firebase 工項；v2.2：產品拍板。維護：與 `project-console`、LINE OA、GitHub 發佈、`tools/BudgetAuditor`、Firebase `quotations` 同步。*
+*文件版本：**v2.6** | **2026-04-25**：§2.3、§5 內部驗收表主檔**改列** `BudgetAuditor_Standalone_V2.html`、Firebase 工項可存 **`price` 欄**但**客戶端嚴禁顯示**之敘述對齊。v2.5（2026-04-23）：對客用語與施工項目版面。維護：與 [12_BUDGET_AUDITOR_AND_CONSOLE_INTEGRATION_SPEC](./12_BUDGET_AUDITOR_AND_CONSOLE_INTEGRATION_SPEC.md)、`tools/BudgetAuditor_Standalone_V2.html`、Firebase `quotations` 同步。*

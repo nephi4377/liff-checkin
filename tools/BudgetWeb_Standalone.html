@@ -811,6 +811,7 @@
                                 <span style="font-size:14px; font-weight:500; color:#111;">${d.name}</span> 
                                 <span style="color:#666; font-size:13px; margin: 0 8px;">|</span>
                                 <b style="font-size:14px; color:#111;">${d.qty} ${d.unit}</b>
+                                ${d.price ? ` <b style="font-size:14px; color:var(--secondary);">$ ${String(d.price)}</b>` : ''}
                                 ${pairTag}
                             </div>
                         </td>
@@ -888,6 +889,7 @@
                 spec: "", 
                 qty: String(d[nameIdx + 2] || "1").trim(), 
                 unit: String(d[nameIdx + 1] || "式").trim(),
+                price: '',
                 category_tag: getCategory(name, ""),
                 sheet_source: row.sheet_source || "稽核手動",
                 raw_line: row.raw
@@ -910,6 +912,7 @@
                 spec: document.getElementById('addSpec').value,
                 qty: document.getElementById('addQty').value || "1",
                 unit: document.getElementById('addUnit').value || "式",
+                price: '',
                 category_tag: getCategory(name, ""),
                 sheet_source: "手動",
                 raw_line: "Manual"
@@ -925,7 +928,8 @@
             const d = r.data;
             return {
                 id: d.id, zone: d.zone, category_tag: d.category_tag, name: d.name,
-                spec: d.spec, qty: d.qty, unit: d.unit, raw_line: d.raw_line,
+                spec: d.spec, qty: d.qty, unit: d.unit, price: d.price != null && d.price !== '' ? d.price : '',
+                raw_line: d.raw_line,
                 sheet_source: d.sheet_source, status: 'PENDING', completion_percent: 0,
                 verification: { is_ok: false }
             };
@@ -959,7 +963,8 @@
                 const d = r.data;
                 const newItem = {
                     id: d.id, zone: d.zone, category_tag: d.category_tag, name: d.name,
-                    spec: d.spec, qty: d.qty, unit: d.unit, raw_line: d.raw_line,
+                    spec: d.spec, qty: d.qty, unit: d.unit, price: d.price != null && d.price !== '' ? d.price : '',
+                    raw_line: d.raw_line,
                     sheet_source: d.sheet_source, status: 'PENDING', completion_percent: 0,
                     verification: { is_ok: false }
                 };
@@ -969,6 +974,7 @@
                         newItem.completion_percent = oldMatch.completion_percent || 0;
                         newItem.verification = oldMatch.verification || { is_ok: false };
                         newItem.status = newItem.completion_percent === 100 ? 'DONE' : (newItem.completion_percent > 0 ? 'PROCESS' : 'PENDING');
+                        if (!newItem.price && oldMatch.price) newItem.price = oldMatch.price;
                     }
                 }
                 return newItem;
@@ -991,7 +997,7 @@
             });
 
             if (confirm("☁️ 同步成功！是否啟動驗收表？")) {
-                window.open(`BudgetAuditor_Standalone.html?projectNo=${projectNo}`, '_blank');
+                window.open(`BudgetAuditor_Standalone_V2.html?projectNo=${projectNo}`, '_blank');
             }
         } catch (err) {
             alert("同步失敗: " + err.message);

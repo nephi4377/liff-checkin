@@ -803,12 +803,30 @@
 
         .item-content { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 
-        /* Info Line */
+        /* Info Line：左側 狀態＋名稱＋數量；右側 分類＋移入群組 */
         .item-info-line {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
+            justify-content: space-between;
+            gap: 10px 12px;
+        }
+
+        .item-info-left {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
             gap: 8px;
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+
+        .item-info-right {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+            margin-left: auto;
         }
 
         .item-name {
@@ -863,6 +881,59 @@
             outline: none;
         }
 
+        /* 單項移入新群組（與區塊「群組更名」不同：只改這一筆的 zone） */
+        .item-split-zone-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: var(--bg-main);
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: var(--transition);
+            flex-shrink: 0;
+        }
+        .item-split-zone-btn:hover {
+            color: var(--primary);
+            border-color: hsl(221, 83%, 80%);
+            background: var(--primary-light);
+        }
+        .item-split-zone-btn i { width: 14px; height: 14px; pointer-events: none; }
+
+        /* 拖曳工項到群組標題（僅進行中工項顯示手把） */
+        .item-drag-handle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            align-self: stretch;
+            width: 22px;
+            flex-shrink: 0;
+            margin: -6px 0 -6px -6px;
+            padding: 0 2px;
+            border-radius: var(--radius-sm);
+            color: var(--text-muted);
+            cursor: grab;
+            transition: var(--transition);
+        }
+        .item-drag-handle:hover {
+            color: var(--primary);
+            background: var(--primary-light);
+        }
+        .item-drag-handle:active { cursor: grabbing; }
+        .item-drag-handle i { width: 14px; height: 14px; pointer-events: none; }
+
+        .zone-title.zone-drop-target { position: relative; }
+        .zone-title.zone-drop-target.is-drag-over {
+            outline: 2px dashed var(--primary);
+            outline-offset: 2px;
+            background: var(--primary-light) !important;
+        }
+        #audit-list.is-dragging-item .zone-drop-target { transition: background 0.15s ease, outline 0.15s ease; }
+
         /* Qty Tag */
         .qty-tag {
             font-size: 0.75rem;
@@ -915,17 +986,18 @@
             width: 100%;
         }
 
-        /* Progress Box */
+        /* Progress：標籤、滑桿、百分比同一列 */
         .progress-box {
-            max-width: 320px;
+            max-width: 100%;
+            width: 100%;
             position: relative;
         }
 
-        .progress-label-row {
+        .progress-row-inline {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            margin-bottom: 6px;
+            gap: 10px;
+            width: 100%;
         }
 
         .progress-label {
@@ -934,12 +1006,26 @@
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+
+        .progress-inline-slider {
+            flex: 1;
+            min-width: 100px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            justify-content: center;
         }
 
         .progress-pct {
             font-size: 0.78rem;
             font-weight: 800;
             color: var(--primary);
+            flex-shrink: 0;
+            min-width: 2.5em;
+            text-align: right;
         }
 
         /* Custom range slider */
@@ -975,7 +1061,11 @@
             background: var(--border);
             border-radius: var(--radius-full);
             overflow: hidden;
-            margin-top: 6px;
+            margin-top: 4px;
+        }
+
+        .progress-inline-slider .progress-track {
+            margin-top: 2px;
         }
 
         .progress-fill {
@@ -1418,9 +1508,6 @@
                         <button id="btn-export" class="btn hidden" onclick="exportData()">
                             <i data-lucide="download"></i> 匯出 JSON
                         </button>
-                        <button class="btn btn-icon" onclick="openCloudSettings()" title="雲端設定">
-                            <i data-lucide="settings"></i>
-                        </button>
                     </div>
                 </div>
                 <div class="meta-grid">
@@ -1481,42 +1568,6 @@
 
 </div><!-- /container -->
 
-<!-- Cloud Settings Modal -->
-<div id="cloud-modal" class="modal-overlay hidden">
-    <div class="modal-box">
-        <h3><i data-lucide="cloud" style="display:inline-block;width:18px;height:18px;vertical-align:-3px;margin-right:7px;color:var(--primary)"></i>Firebase 雲端設定</h3>
-        <div class="form-group">
-            <label class="form-label">Database URL</label>
-            <input id="fb-db-url" type="text" class="form-input" placeholder="https://your-db.firebaseio.com">
-        </div>
-        <div class="form-group">
-            <label class="form-label">GAS WebApp URL</label>
-            <input id="gas-url" type="text" class="form-input" placeholder="https://script.google.com/macros/s/.../exec">
-        </div>
-        <div class="form-hint">
-            若 RTDB 規則改為需登入 (<code>auth != null</code>)，請額外填寫以下三欄以啟用匿名登入。
-        </div>
-        <div class="form-group" style="margin-top:12px;">
-            <label class="form-label">apiKey（選填）</label>
-            <input id="fb-api-key" type="text" class="form-input" placeholder="AIza...">
-        </div>
-        <div class="form-group">
-            <label class="form-label">authDomain（選填）</label>
-            <input id="fb-auth-domain" type="text" class="form-input" placeholder="your-project.firebaseapp.com">
-        </div>
-        <div class="form-group">
-            <label class="form-label">projectId（選填）</label>
-            <input id="fb-project-id" type="text" class="form-input" placeholder="your-project-id">
-        </div>
-        <div class="modal-footer">
-            <button class="btn" onclick="closeCloudSettings()">取消</button>
-            <button class="btn btn-primary" onclick="saveCloudSettings()">
-                <i data-lucide="save"></i> 儲存設定
-            </button>
-        </div>
-    </div>
-</div>
-
 <!-- Zone Merge Modal -->
 <div id="merge-modal" class="modal-overlay hidden">
     <div class="modal-box" style="max-width:400px;">
@@ -1537,6 +1588,36 @@
             <button class="btn" onclick="closeMergeModal()">取消</button>
             <button class="btn btn-primary" onclick="confirmMerge()" style="background:var(--warning);border-color:var(--warning);box-shadow:0 4px 12px rgba(245,158,11,0.3);">
                 <i data-lucide="git-merge"></i> 確認合併
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 單項移入群組 Modal（整區「群組更名」會改同區全部；此處只動選定的那一筆） -->
+<div id="split-zone-modal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:420px;">
+        <h3 style="display:flex;align-items:center;gap:8px;">
+            <i data-lucide="folder-plus" style="width:18px;height:18px;color:var(--primary)"></i>
+            工項移入群組
+        </h3>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin:0 0 12px;">
+            僅移動 <strong id="split-item-label"></strong>；同區其他工項不變。也可按住工項左側 <strong>⋮⋮</strong> 拖到群組標題列。
+        </p>
+        <div class="form-group">
+            <label class="form-label">既有群組</label>
+            <select id="split-zone-select" class="form-input" style="cursor:pointer;">
+                <option value="">— 請選擇 —</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom:8px;">
+            <label class="form-label">或新群組名稱</label>
+            <input type="text" id="split-zone-input" class="form-input" placeholder="例如：主臥、2F 浴廁（有填寫則優先於下拉）" autocomplete="off">
+        </div>
+        <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 16px;">若填寫名稱，一律以名稱為準（可新增群組，或併入同名既有群組）。</p>
+        <div class="modal-footer">
+            <button type="button" class="btn" onclick="closeSplitZoneModal()">取消</button>
+            <button type="button" class="btn btn-primary" onclick="confirmSplitItemToZone()">
+                <i data-lucide="folder-plus"></i> 確認
             </button>
         </div>
     </div>
@@ -1619,32 +1700,7 @@
     }
     const db = firebase.database();
 
-    /* ============================================================
-       CLOUD SETTINGS
-       ============================================================ */
-    const cloudModal = document.getElementById('cloud-modal');
-
-    function openCloudSettings() {
-        document.getElementById('fb-db-url').value    = fbConfig.databaseURL || '';
-        document.getElementById('gas-url').value      = fbConfig.gasURL      || '';
-        document.getElementById('fb-api-key').value   = fbConfig.apiKey      || '';
-        document.getElementById('fb-auth-domain').value = fbConfig.authDomain || '';
-        document.getElementById('fb-project-id').value  = fbConfig.projectId  || '';
-        cloudModal.classList.remove('hidden');
-    }
-
-    function closeCloudSettings() { cloudModal.classList.add('hidden'); }
-
-    function saveCloudSettings() {
-        fbConfig.databaseURL = document.getElementById('fb-db-url').value;
-        fbConfig.gasURL      = document.getElementById('gas-url').value;
-        fbConfig.apiKey      = document.getElementById('fb-api-key').value;
-        fbConfig.authDomain  = document.getElementById('fb-auth-domain').value;
-        fbConfig.projectId   = document.getElementById('fb-project-id').value;
-        localStorage.setItem('fb_audit_config', JSON.stringify(fbConfig));
-        closeCloudSettings();
-        showToast('設定已儲存', 'success');
-    }
+    /* 雲端位址以程式內 FB_CONFIG_DEFAULT 為預設，並可經由 localStorage「fb_audit_config」覆寫（同 BudgetWeb_Standalone）。 */
 
     /* ============================================================
        PERMISSION HELPERS  [v2.1]
@@ -1881,7 +1937,7 @@
     }
 
     async function loadFromFirebase(projectNo) {
-        if (!fbConfig.databaseURL) { showToast('請先設定 Firebase URL', 'warning'); openCloudSettings(); return; }
+        if (!fbConfig.databaseURL) { showToast('未設定 Database URL，無法連線雲端。', 'warning'); return; }
 
         showToast(`載入案號 ${projectNo}...`, 'info', 2000);
         const cached = loadFromCache(projectNo);
@@ -1957,7 +2013,7 @@
 
     async function syncToFirebase() {
         if (!appData) return;
-        if (!fbConfig.databaseURL) { showToast('請先設定 Firebase URL', 'warning'); openCloudSettings(); return; }
+        if (!fbConfig.databaseURL) { showToast('未設定 Database URL，無法連線雲端。', 'warning'); return; }
         try {
             if (!firebase.apps.length) { firebase.initializeApp(buildFirebaseInitOptions()); tryAnonymousSignIn(); }
             const db2       = firebase.database();
@@ -2171,7 +2227,7 @@
                 const zoneKey = encodeURIComponent(zName);
                 html += `
                     <section class="zone-block" id="zone-section-${zIdx}">
-                        <div class="zone-title" id="zone-header-${zIdx}">
+                        <div class="zone-title zone-drop-target" id="zone-header-${zIdx}" data-budget-drop-zone="${encodeURIComponent(zName)}">
                             <div class="zone-title-left" onclick="toggleZone('${zIdx}')" style="cursor:pointer;flex:1;min-width:0;">
                                 <i data-lucide="map-pin"></i>
                                 <span class="zone-name-label" id="zone-label-${zIdx}">${zName}</span>
@@ -2183,7 +2239,7 @@
                                     <i data-lucide="pencil"></i>
                                 </button>
                                 <button class="zone-action-btn merge" title="合併至其他群組"
-                                    onclick="openMergeModal('${zoneKey}', ${JSON.stringify(allZoneNames.filter(z=>z!==zName))})">
+                                    onclick="openMergeModal('${zoneKey}')">
                                     <i data-lucide="git-merge"></i>
                                 </button>
                             </div>
@@ -2191,7 +2247,7 @@
                                 onclick="toggleZone('${zIdx}')" style="cursor:pointer;"></i>
                         </div>
                         <div class="zone-content" id="zone-content-${zIdx}">
-                            ${zItems.map(renderItemHtml).join('')}
+                            ${zItems.map(it => renderItemHtml(it, { zoneDrag: true })).join('')}
                         </div>
                     </section>`;
             });
@@ -2233,7 +2289,8 @@
         return 'linear-gradient(90deg, #e2e8f0, #cbd5e1)';
     }
 
-    function renderItemHtml(item) {
+    function renderItemHtml(item, opts = {}) {
+        const zoneDrag = !!opts.zoneDrag;
         const isVerified  = item.verification?.is_ok;
         const isCancelled = item.is_cancelled || false;
         const pct         = item.completion_percent || 0;
@@ -2243,19 +2300,35 @@
         const statusText = { cancelled:'已取消',  done:'完成',         process:'施工中',  pending:'等候中' }[statusKey];
         const statusRow  = `status-${statusKey}`;
 
+        const dragHandle = zoneDrag
+            ? `<div class="item-drag-handle" draggable="true" data-item-id-zone="${encodeURIComponent(item.id)}"
+                    title="按住拖到上方群組標題列以移動此工項">
+                    <i data-lucide="grip-vertical"></i>
+               </div>`
+            : '';
+
         return `
         <div class="item-row ${isCancelled ? 'is-cancelled' : ''} ${statusRow}" id="row-${item.id}">
+            ${dragHandle}
             <div class="item-content">
                 <div class="item-info-line">
-                    <span class="status-chip ${statusKey}">
-                        <i data-lucide="${statusIcon}"></i>${statusText}
-                    </span>
-                    <span class="item-name">${item.name || '未知工項'}${isCancelled ? ' <span class="cancel-badge">已取消</span>' : ''}</span>
-                    <select class="category-editor" onchange="updateCategory('${item.id}', this.value)">
-                        ${catList.map(c => `<option value="${c}" ${item.category_tag === c ? 'selected' : ''}>${c}</option>`).join('')}
-                    </select>
-                    <span class="qty-tag">${item.qty || '-'} ${item.unit || ''}</span>
-                    ${hasPermission(4) && item.price ? `<span class="price-tag"><i data-lucide="dollar-sign"></i>${item.price}</span>` : ''}
+                    <div class="item-info-left">
+                        <span class="status-chip ${statusKey}">
+                            <i data-lucide="${statusIcon}"></i>${statusText}
+                        </span>
+                        <span class="item-name">${item.name || '未知工項'}${isCancelled ? ' <span class="cancel-badge">已取消</span>' : ''}</span>
+                        <span class="qty-tag">${item.qty || '-'} ${item.unit || ''}</span>
+                        ${hasPermission(4) && item.price ? `<span class="price-tag"><i data-lucide="dollar-sign"></i>${item.price}</span>` : ''}
+                    </div>
+                    <div class="item-info-right">
+                        <select class="category-editor" onchange="updateCategory('${item.id}', this.value)">
+                            ${catList.map(c => `<option value="${c}" ${item.category_tag === c ? 'selected' : ''}>${c}</option>`).join('')}
+                        </select>
+                        <button type="button" class="item-split-zone-btn" title="移入群組：選既有、輸入新名稱，或左側拖曳到群組標題"
+                            onclick="openSplitItemToZoneModal('${encodeURIComponent(item.id)}')">
+                            <i data-lucide="folder-plus"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="item-spec">備註：${item.spec || '無'}</div>
@@ -2267,14 +2340,16 @@
                 </div>
 
                 <div class="progress-box">
-                    <div class="progress-label-row">
+                    <div class="progress-row-inline">
                         <span class="progress-label">施工進度</span>
+                        <div class="progress-inline-slider">
+                            <input type="range" class="progress-input" min="0" max="100" value="${pct}"
+                                oninput="updateProgress('${item.id}', this.value)" ${isCancelled ? 'disabled' : ''}>
+                            <div class="progress-track">
+                                <div class="progress-fill" id="fill-${item.id}" style="width:${pct}%; background:${getProgressColor(pct)};"></div>
+                            </div>
+                        </div>
                         <span class="progress-pct" id="pct-${item.id}">${pct}%</span>
-                    </div>
-                    <input type="range" class="progress-input" min="0" max="100" value="${pct}"
-                        oninput="updateProgress('${item.id}', this.value)" ${isCancelled ? 'disabled' : ''}>
-                    <div class="progress-track">
-                        <div class="progress-fill" id="fill-${item.id}" style="width:${pct}%; background:${getProgressColor(pct)};"></div>
                     </div>
                 </div>
             </div>
@@ -2367,13 +2442,28 @@
        ============================================================ */
     let _mergeSrcZone = '';
 
-    window.openMergeModal = (encodedSrc, otherZones) => {
+    /**
+     * 合併群組：只從參數取得來源名（已 encodeURIComponent），
+     * 可合併目標由 appData 重算。避免內聯 JSON 的雙引號截斷 HTML 的 onclick 而導致按鈕無效。
+     */
+    window.openMergeModal = (encodedSrc) => {
         _mergeSrcZone = decodeURIComponent(encodedSrc);
+        const allNames = [...new Set((appData?.items || []).map(it => it.zone || '未分類區域'))];
+        const otherZones = allNames.filter(z => z !== _mergeSrcZone);
+        if (otherZones.length === 0) {
+            showToast('沒有其他群組可合併', 'info');
+            return;
+        }
         document.getElementById('merge-src-label').textContent = _mergeSrcZone;
 
         const select = document.getElementById('merge-target-select');
-        const options = Array.isArray(otherZones) ? otherZones : JSON.parse(decodeURIComponent(String(otherZones)));
-        select.innerHTML = options.map(z => `<option value="${z}">${z}</option>`).join('');
+        select.innerHTML = '';
+        otherZones.forEach(z => {
+            const opt = document.createElement('option');
+            opt.value = z;
+            opt.textContent = z;
+            select.appendChild(opt);
+        });
 
         const modal = document.getElementById('merge-modal');
         modal.classList.remove('hidden');
@@ -2404,6 +2494,160 @@
         saveToCache();
         syncToFirebase();
     };
+
+    /* ============================================================
+       單項移入群組（只改該筆 item.zone；下拉、自訂名稱、拖曳標題列）
+       ============================================================ */
+    let _splitItemId = '';
+
+    function getSortedZoneNamesFromApp() {
+        const names = [...new Set((appData?.items || []).map(it => it.zone || '未分類區域'))];
+        const def = '未分類區域';
+        return names.sort((a, b) => {
+            if (a === def) return -1;
+            if (b === def) return 1;
+            return a.localeCompare(b, 'zh-Hant');
+        });
+    }
+
+    function fillSplitZoneSelect() {
+        const sel = document.getElementById('split-zone-select');
+        if (!sel) return;
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">— 請選擇 —</option>';
+        getSortedZoneNamesFromApp().forEach(z => {
+            const opt = document.createElement('option');
+            opt.value = z;
+            opt.textContent = z;
+            sel.appendChild(opt);
+        });
+        if (cur && [...sel.options].some(o => o.value === cur)) sel.value = cur;
+    }
+
+    /**
+     * 將單一工項移入指定群組名（與整區更名不同）。
+     * @param {'modal'|'drag'} source
+     */
+    function assignItemToZone(itemId, newName, source = 'modal') {
+        const name = (newName || '').trim();
+        if (!name) {
+            showToast('請選擇群組或輸入名稱', 'warning');
+            return false;
+        }
+        const item = (appData?.items || []).find(it => it.id === itemId);
+        if (!item) return false;
+        const curZone = item.zone || '未分類區域';
+        if (name === curZone) {
+            showToast('與目前群組相同，無需變更', 'info');
+            return false;
+        }
+        item.zone = name;
+        if (!item.status_logs) item.status_logs = [];
+        const via = source === 'drag' ? '拖曳至群組標題' : '移入群組視窗';
+        item.status_logs.push({
+            ts: Date.now(),
+            at: new Date().toLocaleString(),
+            user: currentUser.displayName,
+            action: `「${via}」→「${name}」（原「${curZone}」）`
+        });
+        showToast(`已將「${item.name || '工項'}」移入「${name}」`, 'success');
+        renderList();
+        saveToCache();
+        syncToFirebase();
+        return true;
+    }
+
+    window.openSplitItemToZoneModal = (encodedId) => {
+        _splitItemId = decodeURIComponent(encodedId);
+        const item = (appData?.items || []).find(it => it.id === _splitItemId);
+        if (!item) return;
+        document.getElementById('split-item-label').textContent = item.name || '（無名稱）';
+        fillSplitZoneSelect();
+        const sel = document.getElementById('split-zone-select');
+        sel.value = '';
+
+        const input = document.getElementById('split-zone-input');
+        input.value = '';
+        const modal = document.getElementById('split-zone-modal');
+        modal.classList.remove('hidden');
+        lucide.createIcons({ nodes: [modal] });
+        setTimeout(() => { input.focus(); }, 50);
+        input.onkeydown = (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); confirmSplitItemToZone(); }
+        };
+    };
+
+    window.closeSplitZoneModal = () => {
+        document.getElementById('split-zone-modal').classList.add('hidden');
+        const input = document.getElementById('split-zone-input');
+        if (input) input.onkeydown = null;
+        _splitItemId = '';
+    };
+
+    window.confirmSplitItemToZone = () => {
+        if (!_splitItemId) return;
+        const inputVal = document.getElementById('split-zone-input').value.trim();
+        const selVal = document.getElementById('split-zone-select').value.trim();
+        const target = inputVal || selVal;
+        if (!target) {
+            showToast('請選擇既有群組或輸入新名稱', 'warning');
+            return;
+        }
+        if (assignItemToZone(_splitItemId, target, 'modal')) closeSplitZoneModal();
+    };
+
+    function clearZoneDropHighlights() {
+        document.querySelectorAll('.zone-drop-target.is-drag-over').forEach(el => el.classList.remove('is-drag-over'));
+    }
+
+    function wireBudgetZoneDnD() {
+        const list = document.getElementById('audit-list');
+        if (!list || list.dataset.zoneDndWired === '1') return;
+        list.dataset.zoneDndWired = '1';
+
+        list.addEventListener('dragstart', (e) => {
+            const h = e.target.closest('.item-drag-handle');
+            if (!h || !h.hasAttribute('data-item-id-zone')) return;
+            e.dataTransfer.setData('text/plain', h.getAttribute('data-item-id-zone'));
+            e.dataTransfer.effectAllowed = 'move';
+            list.classList.add('is-dragging-item');
+        });
+
+        list.addEventListener('dragend', (e) => {
+            if (e.target.closest && e.target.closest('.item-drag-handle')) {
+                list.classList.remove('is-dragging-item');
+                clearZoneDropHighlights();
+            }
+        });
+
+        list.addEventListener('dragover', (e) => {
+            const z = e.target.closest('.zone-drop-target');
+            if (!z || !z.getAttribute('data-budget-drop-zone')) return;
+            if (!list.classList.contains('is-dragging-item')) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            list.querySelectorAll('.zone-drop-target.is-drag-over').forEach(el => {
+                if (el !== z) el.classList.remove('is-drag-over');
+            });
+            z.classList.add('is-drag-over');
+        });
+
+        list.addEventListener('drop', (e) => {
+            const z = e.target.closest('.zone-drop-target');
+            if (!z) return;
+            const enc = z.getAttribute('data-budget-drop-zone');
+            if (!enc) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const itemEnc = e.dataTransfer.getData('text/plain');
+            if (!itemEnc) return;
+            const zoneName = decodeURIComponent(enc);
+            const itemId = decodeURIComponent(itemEnc);
+            clearZoneDropHighlights();
+            list.classList.remove('is-dragging-item');
+            assignItemToZone(itemId, zoneName, 'drag');
+        });
+    }
 
     window.updateCategory = async (itemId, newCategory) => {
         const item = appData.items.find(it => it.id === itemId);
@@ -2591,6 +2835,7 @@
     async function init() {
         console.log('[Init] BudgetAuditor V2 Premium 啟動...');
         try { lucide.createIcons(); } catch {}
+        wireBudgetZoneDnD();
         await initLiff();
         switchView('dashboard');
         refreshDashboard();

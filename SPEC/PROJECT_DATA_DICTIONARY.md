@@ -80,6 +80,7 @@
 
 | JSON Key | 資料格式 | 說明 |
 | :--- | :--- | :--- |
+| **price**（可選，工項） | `String` | 單一工項之**總價／小計**（Excel 欄位對應，字串、可含逗號等）；內部驗收可顯示、客戶端不顯示。見 `12_BUDGET_*_SPEC` |
 | **audit_logs** | `Array` | 個別工項的操作歷程 |
 | └ `ts` | `Number` | Timestamp |
 | └ `user` | `String` | 操作者姓名 |
