@@ -1,0 +1,2301 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添心設計 | 驗收審核器 v2.0</title>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.321.0/dist/umd/lucide.min.js"></script>
+    <!-- LINE LIFF SDK -->
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        /* =====================================================
+           V2 PREMIUM DESIGN SYSTEM
+           ===================================================== */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+        :root {
+            /* Brand Colors */
+            --primary:       hsl(221, 83%, 53%);
+            --primary-light: hsl(221, 83%, 96%);
+            --primary-hover: hsl(221, 83%, 44%);
+            --primary-glow:  hsl(221, 83%, 53%, 0.25);
+
+            /* Status Colors */
+            --success:       hsl(160, 84%, 39%);
+            --success-light: hsl(160, 84%, 95%);
+            --warning:       hsl(38, 92%, 50%);
+            --warning-light: hsl(38, 92%, 95%);
+            --danger:        hsl(0, 84%, 60%);
+            --danger-light:  hsl(0, 84%, 97%);
+            --pending:       hsl(38, 92%, 50%);
+
+            /* Neutral */
+            --bg-main:      #f0f4f8;
+            --bg-card:      #ffffff;
+            --bg-glass:     rgba(255,255,255,0.85);
+            --text-main:    #0f172a;
+            --text-sub:     #334155;
+            --text-muted:   #64748b;
+            --border:       #e2e8f0;
+            --border-light: #f1f5f9;
+
+            /* Shadows */
+            --shadow-sm:  0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-md:  0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+            --shadow-lg:  0 10px 24px rgba(0,0,0,0.10), 0 4px 8px rgba(0,0,0,0.05);
+            --shadow-xl:  0 20px 40px rgba(0,0,0,0.12), 0 8px 16px rgba(0,0,0,0.06);
+            --shadow-blue: 0 4px 14px rgba(37, 99, 235, 0.25);
+
+            /* Radius */
+            --radius-sm:  6px;
+            --radius-md:  10px;
+            --radius-lg:  16px;
+            --radius-xl:  20px;
+            --radius-full: 9999px;
+
+            /* Transitions */
+            --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            background: var(--bg-main);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* Gradient page background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 280px;
+            background: linear-gradient(135deg, hsl(221, 83%, 20%) 0%, hsl(240, 60%, 28%) 100%);
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 0 20px 60px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* =====================================================
+           TOP BAR
+           ===================================================== */
+        .top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 28px 0 0;
+            margin-bottom: 24px;
+        }
+
+        .brand-area {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-icon {
+            width: 44px;
+            height: 44px;
+            background: rgba(255,255,255,0.15);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255,255,255,0.2);
+            backdrop-filter: blur(8px);
+        }
+
+        .brand-icon i { width: 22px; height: 22px; color: white; }
+
+        .brand-text h1 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: white;
+            margin: 0;
+            letter-spacing: -0.3px;
+        }
+
+        .brand-text p {
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.65);
+            margin: 0;
+        }
+
+        .version-badge {
+            background: rgba(255,255,255,0.18);
+            color: rgba(255,255,255,0.9);
+            padding: 4px 12px;
+            border-radius: var(--radius-full);
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            border: 1px solid rgba(255,255,255,0.25);
+            backdrop-filter: blur(8px);
+        }
+
+        /* =====================================================
+           TABS
+           ===================================================== */
+        .tab-nav {
+            display: flex;
+            gap: 4px;
+            background: rgba(255,255,255,0.12);
+            padding: 5px;
+            border-radius: var(--radius-lg);
+            margin-bottom: 24px;
+            backdrop-filter: blur(10px);
+            width: fit-content;
+            border: 1px solid rgba(255,255,255,0.18);
+        }
+
+        .tab-item {
+            padding: 9px 22px;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: rgba(255,255,255,0.72);
+            transition: var(--transition);
+            user-select: none;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+        .tab-item i { width: 15px; height: 15px; }
+
+        .tab-item:hover { color: white; background: rgba(255,255,255,0.12); }
+
+        .tab-item.active {
+            background: white;
+            color: var(--primary);
+            box-shadow: var(--shadow-md);
+        }
+
+        /* =====================================================
+           PANEL CARD WRAPPER
+           ===================================================== */
+        .panel-card {
+            background: var(--bg-card);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border-light);
+            overflow: hidden;
+        }
+
+        /* =====================================================
+           DASHBOARD VIEW
+           ===================================================== */
+        #dashboard-view { display: none; }
+
+        .dashboard-header {
+            padding: 28px 32px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .dashboard-header-left h2 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin: 0 0 4px 0;
+            color: var(--text-main);
+        }
+
+        .dashboard-header-left p {
+            margin: 0;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+        }
+
+        .dashboard-body { padding: 24px 28px; }
+
+        /* Global Stats */
+        .global-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .stat-card {
+            background: var(--bg-main);
+            border-radius: var(--radius-lg);
+            padding: 18px 20px;
+            border: 1px solid var(--border);
+            transition: var(--transition);
+        }
+
+        .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+
+        .stat-label {
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 6px;
+        }
+
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: var(--text-main);
+            line-height: 1;
+        }
+
+        .stat-value.blue { color: var(--primary); }
+        .stat-value.green { color: var(--success); }
+        .stat-value.orange { color: var(--warning); }
+
+        /* Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+            gap: 18px;
+        }
+
+        .project-card {
+            background: white;
+            border-radius: var(--radius-lg);
+            padding: 22px;
+            border: 1.5px solid var(--border);
+            box-shadow: var(--shadow-sm);
+            transition: var(--transition);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .project-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary), hsl(260, 80%, 60%));
+            opacity: 0;
+            transition: var(--transition);
+        }
+
+        .project-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-xl);
+            border-color: var(--primary);
+        }
+
+        .project-card:hover::before { opacity: 1; }
+
+        .project-card-id {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--primary);
+            background: var(--primary-light);
+            padding: 3px 8px;
+            border-radius: var(--radius-full);
+            display: inline-block;
+            margin-bottom: 10px;
+            letter-spacing: 0.5px;
+        }
+
+        .project-card h3 {
+            margin: 0 0 8px 0;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-main);
+            line-height: 1.4;
+        }
+
+        .card-meta {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .card-meta i { width: 12px; height: 12px; }
+
+        .card-progress-container { margin-top: 6px; }
+
+        .card-progress-bar {
+            height: 6px;
+            background: var(--border);
+            border-radius: var(--radius-full);
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .card-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), hsl(160, 84%, 45%));
+            border-radius: var(--radius-full);
+            transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .card-stats {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+
+        .card-stats .pct { color: var(--primary); }
+        .card-stats .cnt { color: var(--text-muted); }
+
+        /* Sync Status */
+        .sync-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+        }
+
+        .sync-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .dot-online  { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.2); }
+        .dot-syncing { background: var(--primary); animation: pulse-dot 1.2s ease-in-out infinite; }
+        .dot-offline { background: #ef4444; }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.85); }
+        }
+
+        /* =====================================================
+           DROP ZONE / INPUT
+           ===================================================== */
+        #drop-zone {
+            text-align: center;
+            padding: 52px 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .drop-icon-wrap {
+            width: 68px;
+            height: 68px;
+            background: var(--primary-light);
+            border-radius: var(--radius-xl);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 18px;
+        }
+
+        .drop-icon-wrap i { width: 32px; height: 32px; color: var(--primary); }
+
+        #drop-zone h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            color: var(--text-main);
+        }
+
+        #drop-zone p {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            margin: 0 0 24px 0;
+        }
+
+        .manual-init {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .input-group {
+            display: flex;
+            align-items: center;
+            background: var(--bg-main);
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            transition: var(--transition);
+        }
+
+        .input-group:focus-within {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+        }
+
+        .input-group input {
+            border: none;
+            background: transparent;
+            padding: 10px 14px;
+            font-size: 0.9rem;
+            width: 200px;
+            outline: none;
+            color: var(--text-main);
+        }
+
+        .input-group input::placeholder { color: var(--text-muted); }
+
+        /* =====================================================
+           BUTTONS
+           ===================================================== */
+        .btn {
+            padding: 9px 18px;
+            border-radius: var(--radius-md);
+            border: 1.5px solid var(--border);
+            background: white;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-sub);
+            transition: var(--transition);
+            white-space: nowrap;
+            text-decoration: none;
+        }
+
+        .btn i { width: 15px; height: 15px; flex-shrink: 0; }
+
+        .btn:hover {
+            background: var(--bg-main);
+            border-color: #cbd5e1;
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn:active { transform: translateY(0); }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            box-shadow: var(--shadow-blue);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            border-color: var(--primary-hover);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35);
+        }
+
+        .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+        .btn-icon { padding: 8px; aspect-ratio: 1; }
+
+        .btn-cancel { color: var(--danger); border-color: #fecaca; }
+        .btn-cancel:hover { background: var(--danger-light); border-color: #f87171; }
+        .btn-cancel.active { background: var(--danger); color: white; border-color: var(--danger); }
+
+        /* =====================================================
+           PROJECT HEADER
+           ===================================================== */
+        .project-header {
+            padding: 28px 32px;
+            border-bottom: 1px solid var(--border);
+            display: none;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .header-title-group { flex: 1; min-width: 0; }
+
+        .project-no-badge {
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--primary);
+            background: var(--primary-light);
+            padding: 3px 10px;
+            border-radius: var(--radius-full);
+            display: inline-block;
+            margin-bottom: 8px;
+            font-family: 'SFMono-Regular', Consolas, monospace;
+        }
+
+        .header-title-group h1 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin: 0;
+            color: var(--text-main);
+            line-height: 1.3;
+        }
+
+        .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+        }
+
+        .meta-card {
+            background: var(--bg-main);
+            border-radius: var(--radius-md);
+            padding: 14px 16px;
+            border: 1px solid var(--border);
+        }
+
+        .meta-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            margin-bottom: 5px;
+        }
+
+        .meta-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .meta-value.highlight { color: var(--primary); }
+
+        /* =====================================================
+           SEARCH & FILTER BAR  [NEW v2.0]
+           ===================================================== */
+        .controls-bar {
+            padding: 16px 32px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 200px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg-main);
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 8px 14px;
+            transition: var(--transition);
+        }
+
+        .search-box:focus-within {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+            background: white;
+        }
+
+        .search-box i { width: 16px; height: 16px; color: var(--text-muted); flex-shrink: 0; }
+
+        .search-box input {
+            border: none;
+            background: transparent;
+            outline: none;
+            font-size: 0.875rem;
+            color: var(--text-main);
+            width: 100%;
+        }
+
+        .search-box input::placeholder { color: var(--text-muted); }
+
+        .filter-pills {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .filter-pill {
+            padding: 6px 14px;
+            border-radius: var(--radius-full);
+            font-size: 0.78rem;
+            font-weight: 600;
+            border: 1.5px solid var(--border);
+            background: white;
+            cursor: pointer;
+            transition: var(--transition);
+            color: var(--text-muted);
+        }
+
+        .filter-pill:hover { border-color: var(--primary); color: var(--primary); }
+
+        .filter-pill.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+            box-shadow: var(--shadow-blue);
+        }
+
+        /* =====================================================
+           AUDIT LIST BODY
+           ===================================================== */
+        #audit-list { padding: 24px 28px; }
+
+        /* Zone Block */
+        .zone-block { margin-bottom: 28px; }
+
+        .zone-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 18px;
+            background: var(--bg-main);
+            border-radius: var(--radius-md);
+            margin-bottom: 12px;
+            cursor: pointer;
+            user-select: none;
+            transition: var(--transition);
+            border: 1px solid var(--border);
+        }
+
+        .zone-title:hover { background: #e8eef5; border-color: #cbd5e1; }
+
+        .zone-title-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .zone-title-left i { width: 16px; height: 16px; color: var(--primary); }
+
+        .zone-count-badge {
+            font-size: 0.7rem;
+            font-weight: 700;
+            background: var(--primary-light);
+            color: var(--primary);
+            padding: 2px 8px;
+            border-radius: var(--radius-full);
+        }
+
+        .zone-chevron {
+            width: 16px;
+            height: 16px;
+            color: var(--text-muted);
+            transition: transform 0.25s ease;
+        }
+
+        .zone-content.collapsed { display: none; }
+
+        /* =====================================================
+           ITEM ROW
+           ===================================================== */
+        .item-row {
+            background: var(--bg-card);
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 18px 20px;
+            margin-bottom: 12px;
+            display: flex;
+            gap: 16px;
+            align-items: stretch;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Left accent bar */
+        .item-row::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 4px;
+            background: var(--border);
+            transition: var(--transition);
+            border-radius: 4px 0 0 4px;
+        }
+
+        .item-row.status-pending::before  { background: var(--warning); }
+        .item-row.status-process::before  { background: var(--primary); }
+        .item-row.status-done::before     { background: var(--success); }
+        .item-row.is-cancelled::before    { background: #94a3b8; }
+
+        .item-row:hover {
+            border-color: #bfdbfe;
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+        }
+
+        .item-row.is-cancelled {
+            opacity: 0.55;
+            background: #f8fafc;
+            border-color: #e2e8f0;
+        }
+
+        .item-row.is-cancelled .item-name { text-decoration: line-through; color: var(--text-muted); }
+
+        .item-content { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+        /* Info Line */
+        .item-info-line {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .item-name {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        /* Status Chip */
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            border-radius: var(--radius-full);
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+        }
+
+        .status-chip.pending  { background: var(--warning-light); color: hsl(38, 92%, 30%); }
+        .status-chip.process  { background: var(--primary-light); color: var(--primary-hover); }
+        .status-chip.done     { background: var(--success-light); color: hsl(160, 84%, 25%); }
+        .status-chip.cancelled{ background: #f1f5f9; color: #64748b; }
+        .status-chip i { width: 10px; height: 10px; }
+
+        /* Cancel Badge */
+        .cancel-badge {
+            background: #94a3b8;
+            color: white;
+            padding: 2px 7px;
+            border-radius: var(--radius-full);
+            font-size: 0.68rem;
+            font-weight: 700;
+        }
+
+        /* Category Selector */
+        .category-editor {
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: var(--radius-sm);
+            border: 1.5px solid var(--border);
+            background: var(--bg-main);
+            cursor: pointer;
+            color: var(--text-sub);
+            transition: var(--transition);
+        }
+
+        .category-editor:hover, .category-editor:focus {
+            border-color: var(--primary);
+            outline: none;
+        }
+
+        /* Qty Tag */
+        .qty-tag {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            background: var(--bg-main);
+            padding: 3px 8px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+        }
+
+        /* Spec */
+        .item-spec {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        /* Remark Row */
+        .audit-remark-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: var(--radius-md);
+            background: var(--primary-light);
+            border: 1.5px solid hsl(221, 83%, 88%);
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 0.82rem;
+        }
+
+        .audit-remark-row:hover {
+            background: hsl(221, 83%, 90%);
+            border-color: hsl(221, 83%, 75%);
+        }
+
+        .audit-remark-row i { width: 14px; height: 14px; color: var(--primary); flex-shrink: 0; }
+
+        .audit-remark-empty { color: var(--text-muted); font-style: italic; }
+        .audit-remark-text  { color: var(--text-main); font-weight: 500; word-break: break-all; flex: 1; }
+
+        .audit-remark-input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            outline: none;
+            font-size: 0.82rem;
+            color: var(--text-main);
+            width: 100%;
+        }
+
+        /* Progress Box */
+        .progress-box {
+            max-width: 320px;
+            position: relative;
+        }
+
+        .progress-label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .progress-label {
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .progress-pct {
+            font-size: 0.78rem;
+            font-weight: 800;
+            color: var(--primary);
+        }
+
+        /* Custom range slider */
+        .progress-input {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: var(--radius-full);
+            background: var(--border);
+            outline: none;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .progress-input::-webkit-slider-track { height: 6px; border-radius: 99px; }
+        .progress-input::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 1px 4px rgba(37,99,235,0.4);
+            transition: var(--transition);
+        }
+
+        .progress-input::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+        /* Progress bar track fill via JS */
+        .progress-track {
+            height: 6px;
+            background: var(--border);
+            border-radius: var(--radius-full);
+            overflow: hidden;
+            margin-top: 6px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: var(--radius-full);
+            transition: width 0.3s ease, background 0.3s ease;
+        }
+
+        /* =====================================================
+           VERIFY ASIDE
+           ===================================================== */
+        .verify-aside {
+            width: 96px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border-left: 1.5px solid var(--border);
+            padding-left: 18px;
+            flex-shrink: 0;
+        }
+
+        .verify-large-btn {
+            width: 100%;
+            border: 1.5px solid var(--border);
+            background: var(--bg-main);
+            border-radius: var(--radius-md);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            cursor: pointer;
+            padding: 10px 6px;
+            transition: var(--transition);
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-sub);
+            line-height: 1.2;
+            text-align: center;
+        }
+
+        .verify-large-btn i { width: 22px; height: 22px; }
+
+        .verify-large-btn:hover:not(:disabled) {
+            border-color: var(--success);
+            color: var(--success);
+            background: var(--success-light);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+        }
+
+        .verify-large-btn.active {
+            background: var(--success);
+            color: white;
+            border-color: var(--success);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+        }
+
+        .verify-large-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .verify-info {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-align: center;
+            line-height: 1.3;
+        }
+
+        /* =====================================================
+           DONE ZONE
+           ===================================================== */
+        .zone-completed {
+            border-top: 3px solid var(--success);
+            padding-top: 24px;
+            margin-top: 32px;
+        }
+
+        .zone-completed .zone-title {
+            background: var(--success-light);
+            border-color: hsl(160, 84%, 80%);
+        }
+
+        .zone-completed .zone-title:hover { background: hsl(160, 84%, 90%); }
+        .zone-completed .zone-title-left { color: hsl(160, 84%, 25%); }
+        .zone-completed .zone-title-left i { color: var(--success); }
+
+        /* =====================================================
+           FLOATING TOOLBAR
+           ===================================================== */
+        .floating-toolbar {
+            position: fixed;
+            bottom: 28px;
+            right: 28px;
+            background: var(--bg-glass);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            padding: 8px;
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-xl);
+            display: none;
+            gap: 6px;
+            z-index: 1000;
+            border: 1px solid rgba(255,255,255,0.8);
+            align-items: center;
+            transition: opacity 0.3s, transform 0.3s;
+        }
+
+        .floating-toolbar .btn {
+            font-size: 0.8rem;
+            padding: 8px 14px;
+        }
+
+        /* =====================================================
+           TOAST  [NEW v2.0]
+           ===================================================== */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+
+        .toast {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 18px;
+            border-radius: var(--radius-lg);
+            background: white;
+            box-shadow: var(--shadow-xl);
+            border: 1px solid var(--border);
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-main);
+            min-width: 260px;
+            max-width: 360px;
+            pointer-events: auto;
+            transform: translateX(0);
+            animation: slideInRight 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .toast.toast-success { border-left: 4px solid var(--success); }
+        .toast.toast-error   { border-left: 4px solid var(--danger); }
+        .toast.toast-info    { border-left: 4px solid var(--primary); }
+        .toast.toast-warning { border-left: 4px solid var(--warning); }
+
+        .toast i { width: 18px; height: 18px; flex-shrink: 0; }
+        .toast.toast-success i { color: var(--success); }
+        .toast.toast-error   i { color: var(--danger); }
+        .toast.toast-info    i { color: var(--primary); }
+        .toast.toast-warning i { color: var(--warning); }
+
+        .toast.fade-out {
+            animation: slideOutRight 0.3s ease forwards;
+        }
+
+        @keyframes slideInRight {
+            from { transform: translateX(110%); opacity: 0; }
+            to   { transform: translateX(0);    opacity: 1; }
+        }
+
+        @keyframes slideOutRight {
+            to { transform: translateX(110%); opacity: 0; }
+        }
+
+        /* =====================================================
+           MODAL
+           ===================================================== */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            padding: 20px;
+        }
+
+        .modal-box {
+            background: white;
+            padding: 32px;
+            border-radius: var(--radius-xl);
+            width: 100%;
+            max-width: 440px;
+            box-shadow: var(--shadow-xl);
+            animation: scaleIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes scaleIn {
+            from { transform: scale(0.92); opacity: 0; }
+            to   { transform: scale(1);    opacity: 1; }
+        }
+
+        .modal-box h3 {
+            margin: 0 0 20px 0;
+            font-size: 1.15rem;
+            font-weight: 700;
+        }
+
+        .form-group { margin-bottom: 14px; }
+
+        .form-label {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            display: block;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 9px 12px;
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-md);
+            font-size: 0.875rem;
+            color: var(--text-main);
+            transition: var(--transition);
+            outline: none;
+            background: var(--bg-main);
+        }
+
+        .form-input:focus {
+            border-color: var(--primary);
+            background: white;
+            box-shadow: 0 0 0 3px var(--primary-glow);
+        }
+
+        .form-hint {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            margin-top: 10px;
+            padding: 10px 12px;
+            background: var(--bg-main);
+            border-radius: var(--radius-sm);
+            line-height: 1.5;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 24px;
+        }
+
+        /* =====================================================
+           MISC
+           ===================================================== */
+        .hidden { display: none !important; }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state i { width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.4; }
+        .empty-state p { font-size: 0.9rem; margin: 0; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* [v2.0] Search highlight */
+        .search-highlight { background: #fef3c7; border-radius: 2px; }
+
+        /* Skeleton loader */
+        .skeleton {
+            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+            background-size: 200% 100%;
+            animation: skeleton-shimmer 1.5s infinite;
+            border-radius: var(--radius-md);
+        }
+
+        @keyframes skeleton-shimmer {
+            0%   { background-position: -200% 0; }
+            100% { background-position:  200% 0; }
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            .container { padding: 0 12px 40px; }
+            .top-bar { padding-top: 18px; }
+            .project-header, .controls-bar, #audit-list { padding: 16px; }
+            .dashboard-body, .dashboard-header { padding: 16px; }
+            .item-row { flex-direction: column; }
+            .verify-aside { width: 100%; flex-direction: row; border-left: none; border-top: 1.5px solid var(--border); padding: 12px 0 0; }
+            .verify-large-btn { flex: 1; }
+            .floating-toolbar { bottom: 16px; right: 16px; left: 16px; justify-content: center; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Toast Container -->
+<div id="toast-container"></div>
+
+<div class="container">
+
+    <!-- TOP BAR -->
+    <div class="top-bar">
+        <div class="brand-area">
+            <div class="brand-icon"><i data-lucide="clipboard-check"></i></div>
+            <div class="brand-text">
+                <h1>添心設計</h1>
+                <p>工程驗收審核系統</p>
+            </div>
+        </div>
+        <span class="version-badge">v2.0 PREMIUM</span>
+    </div>
+
+    <!-- TAB NAV -->
+    <div class="tab-nav">
+        <div id="tab-dashboard" class="tab-item active" onclick="switchView('dashboard')">
+            <i data-lucide="layout-dashboard"></i> 案場概覽
+        </div>
+        <div id="tab-auditor" class="tab-item" onclick="switchView('auditor')">
+            <i data-lucide="search"></i> 案場詳情
+        </div>
+    </div>
+
+    <!-- ========== DASHBOARD VIEW ========== -->
+    <div id="dashboard-view">
+        <div class="panel-card">
+            <div class="dashboard-header">
+                <div class="dashboard-header-left">
+                    <h2>全域案場概覽</h2>
+                    <p>自動掃描所有未結案項目 · 每 5 分鐘同步一輪</p>
+                </div>
+                <button class="btn btn-sm" onclick="refreshDashboard()">
+                    <i data-lucide="refresh-cw"></i> 立即同步
+                </button>
+            </div>
+
+            <div class="dashboard-body">
+                <!-- Global Stats -->
+                <div class="global-stats" id="global-stats">
+                    <div class="stat-card">
+                        <div class="stat-label">案場總數</div>
+                        <div class="stat-value blue" id="stat-total">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">平均進度</div>
+                        <div class="stat-value green" id="stat-avg-pct">--%</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">未完工</div>
+                        <div class="stat-value orange" id="stat-pending">--</div>
+                    </div>
+                </div>
+
+                <!-- Sync Status -->
+                <div class="sync-row" id="dashboard-stats" style="margin-bottom: 16px;">
+                    <span class="sync-dot dot-syncing"></span>
+                    <span>正在初始化...</span>
+                </div>
+
+                <!-- Project Cards -->
+                <div id="dashboard-list" class="dashboard-grid">
+                    <!-- skeleton placeholders -->
+                    <div class="project-card"><div class="skeleton" style="height:120px;"></div></div>
+                    <div class="project-card"><div class="skeleton" style="height:120px;"></div></div>
+                    <div class="project-card"><div class="skeleton" style="height:120px;"></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== AUDITOR VIEW ========== -->
+    <div id="auditor-view" style="display: none;">
+        <div class="panel-card">
+
+            <!-- Drop Zone -->
+            <div id="drop-zone">
+                <div class="drop-icon-wrap"><i data-lucide="clipboard-list"></i></div>
+                <h3>輸入案號，載入驗收表</h3>
+                <p>系統將自動從雲端讀取最新進度</p>
+                <div class="manual-init">
+                    <div class="input-group">
+                        <input type="text" id="manualProjectNo" placeholder="案號 (例: 742)" onkeydown="if(event.key==='Enter')startManualAudit()">
+                    </div>
+                    <button class="btn btn-primary" onclick="startManualAudit()">
+                        <i data-lucide="search"></i> 開始審核
+                    </button>
+                </div>
+            </div>
+
+            <!-- Project Header -->
+            <header class="project-header" id="project-header">
+                <div class="header-top">
+                    <div class="header-title-group">
+                        <div class="project-no-badge" id="h-project-no">#---</div>
+                        <h1 id="h-project-name">載入中...</h1>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="syncToFirebase()">
+                            <i data-lucide="upload-cloud"></i> 同步雲端
+                        </button>
+                        <button class="btn" onclick="exportData()">
+                            <i data-lucide="download"></i> 匯出 JSON
+                        </button>
+                        <button class="btn btn-icon" onclick="openCloudSettings()" title="雲端設定">
+                            <i data-lucide="settings"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="meta-grid">
+                    <div class="meta-card">
+                        <div class="meta-label">工項總數</div>
+                        <div class="meta-value" id="h-total">0</div>
+                    </div>
+                    <div class="meta-card">
+                        <div class="meta-label">整體進度</div>
+                        <div class="meta-value highlight" id="h-overall">0%</div>
+                    </div>
+                    <div class="meta-card">
+                        <div class="meta-label">匯出時間</div>
+                        <div class="meta-value" id="h-ver" style="font-size:0.85rem;">--</div>
+                    </div>
+                    <div class="meta-card">
+                        <div class="meta-label">最後同步</div>
+                        <div class="meta-value" id="h-sync" style="font-size:0.85rem;">無紀錄</div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Controls Bar -->
+            <div class="controls-bar" id="controls-bar" style="display:none;">
+                <div class="search-box">
+                    <i data-lucide="search"></i>
+                    <input type="text" id="search-input" placeholder="搜尋工項名稱、備註、分類..." oninput="filterItems()">
+                </div>
+                <div class="filter-pills">
+                    <span class="filter-pill active" data-filter="all"    onclick="setFilter('all',this)">全部</span>
+                    <span class="filter-pill" data-filter="pending"       onclick="setFilter('pending',this)">未開工</span>
+                    <span class="filter-pill" data-filter="process"       onclick="setFilter('process',this)">施工中</span>
+                    <span class="filter-pill" data-filter="done"          onclick="setFilter('done',this)">完工</span>
+                    <span class="filter-pill" data-filter="unverified"    onclick="setFilter('unverified',this)">待審核</span>
+                </div>
+            </div>
+
+            <!-- Audit List -->
+            <main id="audit-list"></main>
+
+        </div><!-- /panel-card -->
+    </div><!-- /auditor-view -->
+
+    <!-- Floating Toolbar -->
+    <div id="floating-toolbar" class="floating-toolbar">
+        <button class="btn btn-sm" onclick="scrollToTop()" title="回到頂部">
+            <i data-lucide="arrow-up"></i>
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="syncToFirebase()">
+            <i data-lucide="upload-cloud"></i> 同步
+        </button>
+    </div>
+
+</div><!-- /container -->
+
+<!-- Cloud Settings Modal -->
+<div id="cloud-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+        <h3><i data-lucide="cloud" style="display:inline-block;width:18px;height:18px;vertical-align:-3px;margin-right:7px;color:var(--primary)"></i>Firebase 雲端設定</h3>
+        <div class="form-group">
+            <label class="form-label">Database URL</label>
+            <input id="fb-db-url" type="text" class="form-input" placeholder="https://your-db.firebaseio.com">
+        </div>
+        <div class="form-group">
+            <label class="form-label">GAS WebApp URL</label>
+            <input id="gas-url" type="text" class="form-input" placeholder="https://script.google.com/macros/s/.../exec">
+        </div>
+        <div class="form-hint">
+            若 RTDB 規則改為需登入 (<code>auth != null</code>)，請額外填寫以下三欄以啟用匿名登入。
+        </div>
+        <div class="form-group" style="margin-top:12px;">
+            <label class="form-label">apiKey（選填）</label>
+            <input id="fb-api-key" type="text" class="form-input" placeholder="AIza...">
+        </div>
+        <div class="form-group">
+            <label class="form-label">authDomain（選填）</label>
+            <input id="fb-auth-domain" type="text" class="form-input" placeholder="your-project.firebaseapp.com">
+        </div>
+        <div class="form-group">
+            <label class="form-label">projectId（選填）</label>
+            <input id="fb-project-id" type="text" class="form-input" placeholder="your-project-id">
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="closeCloudSettings()">取消</button>
+            <button class="btn btn-primary" onclick="saveCloudSettings()">
+                <i data-lucide="save"></i> 儲存設定
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+
+<script>
+    /* ============================================================
+       V2 STATE
+       ============================================================ */
+    let appData = null;
+    let currentUser = { userId: 'unknown', displayName: '訪客' };
+    let globalProjects = {};
+    let activeFilter = 'all';
+    let searchQuery  = '';
+
+    /* ============================================================
+       TOAST SYSTEM  [NEW v2.0]
+       ============================================================ */
+    function showToast(msg, type = 'info', duration = 3000) {
+        const container = document.getElementById('toast-container');
+        const iconMap = {
+            success: 'check-circle',
+            error:   'x-circle',
+            info:    'info',
+            warning: 'alert-triangle'
+        };
+        const el = document.createElement('div');
+        el.className = `toast toast-${type}`;
+        el.innerHTML = `<i data-lucide="${iconMap[type] || 'info'}"></i><span>${msg}</span>`;
+        container.appendChild(el);
+        lucide.createIcons({ nodes: [el] });
+
+        setTimeout(() => {
+            el.classList.add('fade-out');
+            el.addEventListener('animationend', () => el.remove(), { once: true });
+        }, duration);
+    }
+
+    /* ============================================================
+       FIREBASE CONFIG
+       ============================================================ */
+    const FB_CONFIG_DEFAULT = {
+        databaseURL: "https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app",
+        gasURL: "https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec",
+        apiKey: "", authDomain: "", projectId: ""
+    };
+    let fbConfig = { ...FB_CONFIG_DEFAULT, ...(JSON.parse(localStorage.getItem('fb_audit_config')) || {}) };
+
+    function firebaseAuthConfigured() {
+        return !!(
+            (fbConfig.apiKey    || '').trim() &&
+            (fbConfig.authDomain || '').trim() &&
+            (fbConfig.projectId  || '').trim()
+        );
+    }
+
+    function buildFirebaseInitOptions() {
+        const o = { databaseURL: fbConfig.databaseURL || FB_CONFIG_DEFAULT.databaseURL };
+        if (firebaseAuthConfigured()) {
+            o.apiKey     = fbConfig.apiKey.trim();
+            o.authDomain = fbConfig.authDomain.trim();
+            o.projectId  = fbConfig.projectId.trim();
+        }
+        return o;
+    }
+
+    function tryAnonymousSignIn() {
+        if (!firebaseAuthConfigured() || !firebase.apps.length) return;
+        firebase.auth().signInAnonymously().catch(e => console.warn('[Auth] 匿名登入失敗:', e.message));
+    }
+
+    if (!firebase.apps.length) {
+        firebase.initializeApp(buildFirebaseInitOptions());
+        tryAnonymousSignIn();
+    }
+    const db = firebase.database();
+
+    /* ============================================================
+       CLOUD SETTINGS
+       ============================================================ */
+    const cloudModal = document.getElementById('cloud-modal');
+
+    function openCloudSettings() {
+        document.getElementById('fb-db-url').value    = fbConfig.databaseURL || '';
+        document.getElementById('gas-url').value      = fbConfig.gasURL      || '';
+        document.getElementById('fb-api-key').value   = fbConfig.apiKey      || '';
+        document.getElementById('fb-auth-domain').value = fbConfig.authDomain || '';
+        document.getElementById('fb-project-id').value  = fbConfig.projectId  || '';
+        cloudModal.classList.remove('hidden');
+    }
+
+    function closeCloudSettings() { cloudModal.classList.add('hidden'); }
+
+    function saveCloudSettings() {
+        fbConfig.databaseURL = document.getElementById('fb-db-url').value;
+        fbConfig.gasURL      = document.getElementById('gas-url').value;
+        fbConfig.apiKey      = document.getElementById('fb-api-key').value;
+        fbConfig.authDomain  = document.getElementById('fb-auth-domain').value;
+        fbConfig.projectId   = document.getElementById('fb-project-id').value;
+        localStorage.setItem('fb_audit_config', JSON.stringify(fbConfig));
+        closeCloudSettings();
+        showToast('設定已儲存', 'success');
+    }
+
+    /* ============================================================
+       LIFF / Identity
+       ============================================================ */
+    async function initLiff() {
+        const params = new URLSearchParams(window.location.search);
+        const urlUid  = params.get('uid');
+        const urlName = params.get('userName') || params.get('name');
+
+        if (urlUid && urlName) {
+            currentUser = { userId: urlUid, displayName: urlName };
+            return;
+        }
+
+        try {
+            await liff.init({ liffId: "2007974938-gOrjlzna" });
+            if (liff.isLoggedIn()) {
+                const profile = await liff.getProfile();
+                currentUser = { userId: profile.userId, displayName: profile.displayName };
+                return;
+            }
+        } catch (err) {
+            console.warn('LIFF 初始化失敗 (Local Mode)', err);
+        }
+        setTestIdentity();
+    }
+
+    function setTestIdentity() {
+        currentUser = {
+            userId: 'U12345', displayName: '測試員工',
+            身份: '員工', 組別: '台南店', 權限: 2
+        };
+    }
+
+    /* ============================================================
+       HUB NAME HELPERS
+       ============================================================ */
+    function pickHubProjectDisplayName(p) {
+        if (!p) return '';
+        return (
+            (p.name != null ? String(p.name).trim() : '') ||
+            (p['案場名稱'] != null ? String(p['案場名稱']).trim() : '') ||
+            (p.siteName != null ? String(p.siteName).trim() : '')
+        );
+    }
+
+    function firebaseSiteNameToDisplay(siteName) {
+        const raw = siteName ? String(siteName).trim() : '';
+        return (!raw || raw === '載入中...') ? '' : raw;
+    }
+
+    let _hubNameMapCache = { map: null, ts: 0 };
+    const HUB_NAME_MAP_TTL_MS = 60000;
+
+    async function getHubProjectNameMap() {
+        const now = Date.now();
+        if (_hubNameMapCache.map && (now - _hubNameMapCache.ts) < HUB_NAME_MAP_TTL_MS) return _hubNameMapCache.map;
+        const out = {};
+        if (!fbConfig.gasURL) { _hubNameMapCache = { map: out, ts: now }; return out; }
+        const uid = currentUser && currentUser.userId ? String(currentUser.userId).trim() : '';
+        if (!uid || uid === 'unknown') { _hubNameMapCache = { map: out, ts: now }; return out; }
+        try {
+            const url = new URL(fbConfig.gasURL);
+            url.searchParams.set('page', 'get_hub_projects_data');
+            url.searchParams.set('userId', uid);
+            if (currentUser.displayName) url.searchParams.set('userName', currentUser.displayName);
+            const res    = await fetch(url.toString(), { method: 'GET' });
+            const result = await res.json();
+            if (result.success && result.data) {
+                const list = Array.isArray(result.data) ? result.data : (result.data.projects || []);
+                list.forEach(p => {
+                    const no = String(p['案號'] != null ? p['案號'] : p.id || '').trim();
+                    if (!no) return;
+                    const label = pickHubProjectDisplayName(p);
+                    if (label) out[no] = label;
+                });
+            }
+        } catch (e) { console.warn('[Hub] 無法取得案名對照', e); }
+        _hubNameMapCache = { map: out, ts: now };
+        return out;
+    }
+
+    /* ============================================================
+       VIEW SWITCHING
+       ============================================================ */
+    window.switchView = (view) => {
+        const dv   = document.getElementById('dashboard-view');
+        const av   = document.getElementById('auditor-view');
+        const tabD = document.getElementById('tab-dashboard');
+        const tabA = document.getElementById('tab-auditor');
+        if (view === 'dashboard') {
+            dv.style.display = 'block';
+            av.style.display = 'none';
+            tabD.classList.add('active');
+            tabA.classList.remove('active');
+            refreshDashboard();
+        } else {
+            dv.style.display = 'none';
+            av.style.display = 'block';
+            tabD.classList.remove('active');
+            tabA.classList.add('active');
+        }
+    };
+
+    /* ============================================================
+       DASHBOARD
+       ============================================================ */
+    window.refreshDashboard = async () => {
+        const dbStats = document.getElementById('dashboard-stats');
+        dbStats.innerHTML = `<span class="sync-dot dot-syncing"></span> 同步中...`;
+        try {
+            const snap     = await db.ref('quotations').once('value');
+            const projects = snap.val() || {};
+            const pIds     = Object.keys(projects);
+            const hubMap   = await getHubProjectNameMap();
+
+            for (const id of pIds) {
+                const raw = projects[id];
+                if (!raw) continue;
+                const data = raw.context || raw;
+                const sum  = data.total_summary;
+                if (!sum) continue;
+                if (data.is_closed || raw.is_closed) continue;
+
+                const idKey   = String(id).trim();
+                const cardName = hubMap[idKey] || firebaseSiteNameToDisplay(sum.siteName) || '';
+
+                globalProjects[id] = {
+                    name:       cardName,
+                    percent:    sum.overall_completion || 0,
+                    total:      (data.items || []).length,
+                    verified:   (data.items || []).filter(it => it && (it.verification?.is_ok || it.is_cancelled)).length,
+                    lastUpdate: sum.last_updated || raw.audit_last_updated || '無日期'
+                };
+                renderDashboardList();
+            }
+
+            // Update global stats
+            const ids   = Object.keys(globalProjects);
+            const total = ids.length;
+            const avgPct = total
+                ? Math.round(ids.reduce((s, id) => s + (globalProjects[id].percent || 0), 0) / total)
+                : 0;
+            const pending = ids.filter(id => (globalProjects[id].percent || 0) < 100).length;
+
+            document.getElementById('stat-total').textContent   = total;
+            document.getElementById('stat-avg-pct').textContent = avgPct + '%';
+            document.getElementById('stat-pending').textContent = pending;
+
+            dbStats.innerHTML = `<span class="sync-dot dot-online"></span> 最後同步: ${new Date().toLocaleTimeString()} · 共 ${total} 個使用中案場`;
+        } catch (e) {
+            console.error('[Dashboard] 同步失敗', e);
+            dbStats.innerHTML = `<span class="sync-dot dot-offline"></span> 同步失敗，請檢查網路`;
+            showToast('Dashboard 同步失敗', 'error');
+        }
+    };
+
+    function renderDashboardList() {
+        const container = document.getElementById('dashboard-list');
+        const ids = Object.keys(globalProjects).sort((a, b) => b.localeCompare(a));
+        container.innerHTML = ids.map(id => {
+            const p     = globalProjects[id];
+            const name  = p.name ? p.name : '未命名案場';
+            const pct   = p.percent || 0;
+            const done  = pct >= 100;
+            return `
+                <div class="project-card" onclick="jumpToProject('${id}')">
+                    <div class="project-card-id"># ${id}</div>
+                    <h3>${name}</h3>
+                    <div class="card-meta"><i data-lucide="clock"></i> ${p.lastUpdate}</div>
+                    <div class="card-progress-container">
+                        <div class="card-progress-bar">
+                            <div class="card-progress-fill" style="width:${pct}%"></div>
+                        </div>
+                        <div class="card-stats">
+                            <span class="pct">${pct}%</span>
+                            <span class="cnt">完工 ${p.verified} / ${p.total}</span>
+                        </div>
+                    </div>
+                </div>`;
+        }).join('');
+        lucide.createIcons();
+    }
+
+    /* ============================================================
+       FIREBASE LOAD / SYNC
+       ============================================================ */
+    const AUDIT_LOCAL_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+    function saveToCache() {
+        if (!appData) return;
+        try {
+            localStorage.setItem(`audit_cache_${appData.案號}`, JSON.stringify({ data: appData, timestamp: Date.now() }));
+        } catch (e) { console.warn('[Cache] 寫入失敗', e); }
+    }
+
+    function loadFromCache(projectNo) {
+        try {
+            const raw = localStorage.getItem(`audit_cache_${projectNo}`);
+            if (!raw) return null;
+            const obj = JSON.parse(raw);
+            const age = Date.now() - obj.timestamp;
+            return (age >= 0 && age <= AUDIT_LOCAL_CACHE_TTL_MS) ? obj.data : null;
+        } catch { return null; }
+    }
+
+    async function loadFromFirebase(projectNo) {
+        if (!fbConfig.databaseURL) { showToast('請先設定 Firebase URL', 'warning'); openCloudSettings(); return; }
+
+        showToast(`載入案號 ${projectNo}...`, 'info', 2000);
+        const cached = loadFromCache(projectNo);
+        let showedCache = false;
+
+        if (cached) {
+            try {
+                const hubMap = await getHubProjectNameMap();
+                loadData(cached, hubMap);
+                showedCache = true;
+                const hSync = document.getElementById('h-sync');
+                if (hSync) {
+                    const t = cached.total_summary?.export_time || cached.total_summary?.last_updated;
+                    hSync.innerText = t ? `快取 · ${t}` : '快取（待同步）';
+                }
+            } catch (e) { console.warn('[Cache] 套用快取失敗', e); }
+        }
+
+        try {
+            if (!firebase.apps.length) { firebase.initializeApp(buildFirebaseInitOptions()); tryAnonymousSignIn(); }
+            const snap = await firebase.database().ref(`quotations/${projectNo}`).once('value');
+            const data = snap.val();
+
+            if (data?.context) {
+                const hubMap = await getHubProjectNameMap();
+                loadData(data.context, hubMap);
+                document.getElementById('h-sync').innerText = data.last_updated || '剛剛';
+                saveToCache();
+                showToast('已同步最新資料', 'success');
+                const ctxNo = data.context.案號;
+                if (ctxNo && ctxNo !== 'UNKNOWN_NO') fetchProjectMetadata(ctxNo);
+            } else if (!showedCache) {
+                showToast(`找不到案號 ${projectNo} 的雲端資料`, 'error');
+            } else {
+                console.warn('[Firebase] 無遠端資料，沿用本地快取');
+            }
+        } catch (err) {
+            console.error(err);
+            if (!showedCache) showToast('雲端載入失敗: ' + err.message, 'error');
+        }
+    }
+
+    async function fetchProjectMetadata(projectNo) {
+        if (!fbConfig.gasURL) return;
+        const uid = currentUser?.userId ? String(currentUser.userId).trim() : '';
+        if (!uid || uid === 'unknown') return;
+        try {
+            const url = new URL(fbConfig.gasURL);
+            url.searchParams.set('page', 'get_hub_projects_data');
+            url.searchParams.set('userId', uid);
+            if (currentUser.displayName) url.searchParams.set('userName', currentUser.displayName);
+            const res    = await fetch(url.toString(), { method: 'GET' });
+            const result = await res.json();
+            if (result.success && result.data) {
+                const list    = Array.isArray(result.data) ? result.data : (result.data.projects || []);
+                const project = list.find(s => String(s['案號'] || s.id || '').trim() === String(projectNo).trim());
+                if (project) {
+                    const displayName = pickHubProjectDisplayName(project) || '未命名案場';
+                    document.getElementById('h-project-name').innerText = displayName;
+                    if (appData?.total_summary) appData.total_summary.siteName = displayName;
+                    try {
+                        const refPath = `quotations/${projectNo}`;
+                        const sv = (await firebase.database().ref(refPath).once('value')).val();
+                        if (sv?.context) await firebase.database().ref(`${refPath}/context/total_summary/siteName`).set(displayName);
+                        else if (sv?.total_summary) await firebase.database().ref(`${refPath}/total_summary/siteName`).set(displayName);
+                        _hubNameMapCache.ts = 0;
+                        await refreshDashboard();
+                    } catch (fbErr) { console.warn('[fetchProjectMetadata] Firebase 寫回失敗', fbErr); }
+                }
+            }
+        } catch (err) { console.warn('無法取得案場詳細資訊', err); }
+    }
+
+    async function syncToFirebase() {
+        if (!appData) return;
+        if (!fbConfig.databaseURL) { showToast('請先設定 Firebase URL', 'warning'); openCloudSettings(); return; }
+        try {
+            if (!firebase.apps.length) { firebase.initializeApp(buildFirebaseInitOptions()); tryAnonymousSignIn(); }
+            const db2       = firebase.database();
+            const projectNo = appData.案號 || 'UNKNOWN';
+            refreshOverall();
+            const nowDisplay = new Date().toLocaleString();
+            await db2.ref(`quotations/${projectNo}`).set({
+                context: JSON.parse(JSON.stringify(appData)),
+                audit_last_updated: nowDisplay,
+                sync_by: currentUser?.displayName || '本地測試員'
+            });
+            appData.items.forEach(it => { if (it.completion_percent === 100) it.is_ui_done = true; });
+            renderList();
+            document.getElementById('h-sync').innerText = nowDisplay;
+            showToast('☁️ Firebase 同步成功！', 'success');
+            if (fbConfig.gasURL) await syncToConsole();
+        } catch (err) {
+            console.error(err);
+            showToast('同步失敗: ' + err.message, 'error');
+        }
+    }
+
+    async function syncToConsole() {
+        if (!fbConfig.gasURL) return;
+        try {
+            const verifiedCount = appData.items.filter(it => it.verification?.is_ok).length;
+            const payload = {
+                action: 'updateAuditSummary',
+                案號:   appData.案號,
+                siteName: appData.total_summary?.siteName,
+                audit_items_total:    appData.items.length,
+                audit_items_verified: verifiedCount,
+                audit_percent:        appData.total_summary?.overall_completion,
+                userId:   currentUser.userId,
+                userName: currentUser.displayName
+            };
+            try {
+                const res    = await fetch(fbConfig.gasURL, { method: 'POST', body: JSON.stringify(payload) });
+                const result = await res.json();
+                if (result.success) showToast('Google Sheets 同步完成', 'success');
+            } catch {
+                await fetch(fbConfig.gasURL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+                showToast('摘要已送出（CORS 模式）', 'info');
+            }
+        } catch (err) { console.error('[syncToConsole]', err); }
+    }
+
+    function refreshOverall() {
+        if (!appData?.items) return;
+        const total   = appData.items.length;
+        const overall = Math.round(appData.items.reduce((acc, cur) => acc + (cur.completion_percent || 0), 0) / total) || 0;
+        if (appData.total_summary) appData.total_summary.overall_completion = overall;
+        document.getElementById('h-total').innerText   = total;
+        document.getElementById('h-overall').innerText = `${overall}%`;
+        saveToCache();
+    }
+
+    /* ============================================================
+       DATA / RENDER
+       ============================================================ */
+    function loadData(data, hubNameMap) {
+        try {
+            if (!data.案號)         data.案號         = 'UNKNOWN_NO';
+            if (!data.total_summary) data.total_summary = {};
+            if (data.items) {
+                data.items.forEach(item => {
+                    if (!item) return;
+                    if (item.completion_percent === undefined) item.completion_percent = 0;
+                    if (item.verification === undefined)       item.verification = { is_ok: false };
+                    item.is_ui_done = (item.completion_percent === 100);
+                });
+                data.items = data.items.filter(Boolean);
+            }
+            appData = data;
+
+            document.getElementById('drop-zone').classList.add('hidden');
+            document.getElementById('project-header').style.display = 'block';
+            document.getElementById('controls-bar').style.display   = 'flex';
+            document.getElementById('floating-toolbar').style.display = 'flex';
+
+            const sum     = data.total_summary || {};
+            const noKey   = String(data.案號 || '').trim();
+            const map     = (hubNameMap && typeof hubNameMap === 'object') ? hubNameMap : {};
+            const nameDisplay = map[noKey] || firebaseSiteNameToDisplay(sum.siteName) || '未命名案場';
+
+            document.getElementById('h-project-name').innerText = nameDisplay;
+            document.getElementById('h-project-no').innerText   = `# ${data.案號 || 'N/A'}`;
+            document.getElementById('h-total').innerText         = (data.items || []).length;
+            document.getElementById('h-overall').innerText       = `${sum.audit_percent || sum.overall_completion || 0}%`;
+            const hVer = document.getElementById('h-ver');
+            if (hVer) hVer.innerText = sum.export_time || '--';
+
+            renderList();
+        } catch (err) {
+            console.error('loadData 崩潰', err);
+            showToast('讀取資料時發生錯誤', 'error');
+        }
+    }
+
+    /* ------------ SEARCH / FILTER ------------ */
+    window.filterItems = () => {
+        searchQuery = (document.getElementById('search-input')?.value || '').toLowerCase().trim();
+        renderList();
+    };
+
+    window.setFilter = (filter, el) => {
+        activeFilter = filter;
+        document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+        if (el) el.classList.add('active');
+        renderList();
+    };
+
+    function itemMatchesFilter(item) {
+        const pct     = item.completion_percent || 0;
+        const isVerif = item.verification?.is_ok;
+        if (activeFilter === 'pending'    && pct !== 0)     return false;
+        if (activeFilter === 'process'    && (pct === 0 || pct === 100)) return false;
+        if (activeFilter === 'done'       && pct !== 100)   return false;
+        if (activeFilter === 'unverified' && (isVerif || item.is_cancelled)) return false;
+        if (searchQuery) {
+            const haystack = [item.name, item.spec, item.audit_remark, item.category_tag, item.zone]
+                .filter(Boolean).join(' ').toLowerCase();
+            if (!haystack.includes(searchQuery)) return false;
+        }
+        return true;
+    }
+
+    /* ------------ RENDER LIST ------------ */
+    function renderList() {
+        const auditList = document.getElementById('audit-list');
+        try {
+            const items = (appData?.items || []).filter(Boolean);
+            if (!items.length) {
+                auditList.innerHTML = `<div class="empty-state"><i data-lucide="inbox"></i><p>無工項資料</p></div>`;
+                lucide.createIcons();
+                return;
+            }
+
+            const active = items.filter(it => !it.is_ui_done);
+            const done   = items.filter(it => it.is_ui_done);
+
+            const filterActive = active.filter(itemMatchesFilter);
+            const filterDone   = done.filter(itemMatchesFilter);
+
+            if (!filterActive.length && !filterDone.length) {
+                auditList.innerHTML = `<div class="empty-state"><i data-lucide="search-x"></i><p>找不到符合條件的工項</p></div>`;
+                lucide.createIcons();
+                return;
+            }
+
+            const zones = {};
+            filterActive.forEach(it => {
+                const z = it.zone || '未分類區域';
+                if (!zones[z]) zones[z] = [];
+                zones[z].push(it);
+            });
+
+            function sortWithRemarkFirst(arr) {
+                return arr.slice().sort((a, b) => {
+                    const ra = !!(a?.audit_remark?.trim());
+                    const rb = !!(b?.audit_remark?.trim());
+                    return ra === rb ? 0 : ra ? -1 : 1;
+                });
+            }
+
+            Object.keys(zones).forEach(z => { zones[z] = sortWithRemarkFirst(zones[z]); });
+
+            let html = '';
+            Object.entries(zones).forEach(([zName, zItems], zIdx) => {
+                html += `
+                    <section class="zone-block">
+                        <div class="zone-title" onclick="toggleZone('${zIdx}')">
+                            <div class="zone-title-left">
+                                <i data-lucide="map-pin"></i> ${zName}
+                                <span class="zone-count-badge">${zItems.length}</span>
+                            </div>
+                            <i data-lucide="chevron-down" class="zone-chevron" id="chevron-${zIdx}"></i>
+                        </div>
+                        <div class="zone-content" id="zone-content-${zIdx}">
+                            ${zItems.map(renderItemHtml).join('')}
+                        </div>
+                    </section>`;
+            });
+
+            if (filterDone.length) {
+                const dIdx = 'DONE_GROUP';
+                const sortedDone = sortWithRemarkFirst(filterDone);
+                html += `
+                    <section class="zone-block zone-completed">
+                        <div class="zone-title" onclick="toggleZone('${dIdx}')">
+                            <div class="zone-title-left">
+                                <i data-lucide="check-circle"></i>
+                                已完成項目
+                                <span class="zone-count-badge">${sortedDone.length}</span>
+                            </div>
+                            <i data-lucide="chevron-down" class="zone-chevron" id="chevron-${dIdx}"></i>
+                        </div>
+                        <div class="zone-content" id="zone-content-${dIdx}" style="display:none;">
+                            ${sortedDone.map(renderItemHtml).join('')}
+                        </div>
+                    </section>`;
+            }
+
+            auditList.innerHTML = html;
+            lucide.createIcons();
+        } catch (err) {
+            console.error('renderList 崩潰', err);
+            auditList.innerHTML = `<div style="color:var(--danger);padding:20px;">渲染清單時發生錯誤：${err.message}</div>`;
+        }
+    }
+
+    /* ------------ RENDER ITEM ------------ */
+    const catList = ["施工保護","拆除工程","泥作工程","水電工程","木作工程","系統櫃體","油漆工程","廚具設備","地板工程","清潔工程","其他"];
+
+    function getProgressColor(pct) {
+        if (pct >= 100) return 'linear-gradient(90deg, hsl(160,84%,39%), hsl(160,84%,50%))';
+        if (pct >= 60)  return 'linear-gradient(90deg, var(--primary), hsl(221,83%,65%))';
+        if (pct >= 20)  return 'linear-gradient(90deg, var(--warning), hsl(38,92%,60%))';
+        return 'linear-gradient(90deg, #e2e8f0, #cbd5e1)';
+    }
+
+    function renderItemHtml(item) {
+        const isVerified  = item.verification?.is_ok;
+        const isCancelled = item.is_cancelled || false;
+        const pct         = item.completion_percent || 0;
+
+        const statusKey  = isCancelled ? 'cancelled' : (pct === 100 ? 'done' : (pct > 0 ? 'process' : 'pending'));
+        const statusIcon = { cancelled:'slash', done:'check-circle', process:'loader', pending:'clock' }[statusKey];
+        const statusText = { cancelled:'已取消',  done:'完成',         process:'施工中',  pending:'等候中' }[statusKey];
+        const statusRow  = `status-${statusKey}`;
+
+        return `
+        <div class="item-row ${isCancelled ? 'is-cancelled' : ''} ${statusRow}" id="row-${item.id}">
+            <div class="item-content">
+                <div class="item-info-line">
+                    <span class="status-chip ${statusKey}">
+                        <i data-lucide="${statusIcon}"></i>${statusText}
+                    </span>
+                    <span class="item-name">${item.name || '未知工項'}${isCancelled ? ' <span class="cancel-badge">已取消</span>' : ''}</span>
+                    <select class="category-editor" onchange="updateCategory('${item.id}', this.value)">
+                        ${catList.map(c => `<option value="${c}" ${item.category_tag === c ? 'selected' : ''}>${c}</option>`).join('')}
+                    </select>
+                    <span class="qty-tag">${item.qty || '-'} ${item.unit || ''}</span>
+                </div>
+
+                <div class="item-spec">備註：${item.spec || '無'}</div>
+
+                <div class="audit-remark-row" onclick="startEditRemark('${item.id}')">
+                    ${item.audit_remark
+                        ? `<i data-lucide="file-text"></i><div class="audit-remark-text">${item.audit_remark}</div>`
+                        : `<i data-lucide="plus-circle"></i><span class="audit-remark-empty">點擊加入現場紀錄 (叫料/工況/異常)...</span>`}
+                </div>
+
+                <div class="progress-box">
+                    <div class="progress-label-row">
+                        <span class="progress-label">施工進度</span>
+                        <span class="progress-pct" id="pct-${item.id}">${pct}%</span>
+                    </div>
+                    <input type="range" class="progress-input" min="0" max="100" value="${pct}"
+                        oninput="updateProgress('${item.id}', this.value)" ${isCancelled ? 'disabled' : ''}>
+                    <div class="progress-track">
+                        <div class="progress-fill" id="fill-${item.id}" style="width:${pct}%; background:${getProgressColor(pct)};"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="verify-aside">
+                <button class="verify-large-btn ${isVerified ? 'active' : ''}" onclick="toggleVerify('${item.id}')"
+                    ${isCancelled ? 'disabled' : ''}>
+                    <i data-lucide="${isVerified ? 'check-circle' : 'circle'}"></i>
+                    <span>${isVerified ? '審核<br>完成' : '標註<br>完成'}</span>
+                </button>
+                <button class="btn btn-cancel btn-sm ${isCancelled ? 'active' : ''}" onclick="toggleCancel('${item.id}')" style="width:100%;">
+                    <i data-lucide="slash"></i>${isCancelled ? '恢復' : '取消'}
+                </button>
+                <div class="verify-info">${isVerified ? (item.verification.verified_by || '') : ''}</div>
+            </div>
+        </div>`;
+    }
+
+    /* ============================================================
+       INTERACTIONS
+       ============================================================ */
+    window.toggleZone = (contentId) => {
+        const content = document.getElementById(`zone-content-${contentId}`);
+        const chevron = document.getElementById(`chevron-${contentId}`);
+        if (!content) return;
+        const isHidden = content.style.display === 'none';
+        content.style.display = isHidden ? 'block' : 'none';
+        if (chevron) chevron.style.transform = isHidden ? '' : 'rotate(-90deg)';
+        lucide.createIcons();
+    };
+
+    window.updateCategory = async (itemId, newCategory) => {
+        const item = appData.items.find(it => it.id === itemId);
+        if (!item) return;
+        item.category_tag = newCategory;
+        renderList();
+        syncToFirebase();
+    };
+
+    window.updateProgress = (id, val) => {
+        const item = appData.items.find(it => it.id === id);
+        if (!item) return;
+        const old = item.completion_percent || 0;
+        item.completion_percent = parseInt(val);
+
+        if (!item.status_logs) item.status_logs = [];
+        item.status_logs.push({ ts: Date.now(), at: new Date().toLocaleString(), user: currentUser.displayName, action: `進度: ${old}% → ${val}%` });
+
+        // Update UI inline
+        const pctEl  = document.getElementById(`pct-${id}`);
+        const fillEl = document.getElementById(`fill-${id}`);
+        if (pctEl)  pctEl.textContent  = `${val}%`;
+        if (fillEl) { fillEl.style.width = `${val}%`; fillEl.style.background = getProgressColor(parseInt(val)); }
+
+        const row = document.getElementById(`row-${id}`);
+        if (row) {
+            ['status-pending','status-process','status-done'].forEach(c => row.classList.remove(c));
+            const newStatus = val == 100 ? 'status-done' : (val > 0 ? 'status-process' : 'status-pending');
+            row.classList.add(newStatus);
+            const chip = row.querySelector('.status-chip');
+            if (chip) {
+                chip.className = `status-chip ${val == 100 ? 'done' : (val > 0 ? 'process' : 'pending')}`;
+                const text = val == 100 ? '完成' : (val > 0 ? '施工中' : '等候中');
+                chip.innerHTML = `<i data-lucide="${val == 100 ? 'check-circle' : (val > 0 ? 'loader' : 'clock')}"></i>${text}`;
+                lucide.createIcons({ nodes: [chip] });
+            }
+        }
+        refreshOverall();
+    };
+
+    window.toggleVerify = (id) => {
+        const item = appData.items.find(it => it.id === id);
+        if (!item) return;
+        if (!item.verification) item.verification = { is_ok: false };
+        if (item.verification.is_ok) {
+            item.verification = { is_ok: false };
+        } else {
+            item.verification = { is_ok: true, verified_by: currentUser.displayName, verified_at: new Date().toLocaleString(), verified_uid: currentUser.userId };
+            item.completion_percent = 100;
+            if (!item.status_logs) item.status_logs = [];
+            item.status_logs.push({ ts: Date.now(), at: new Date().toLocaleString(), user: currentUser.displayName, action: '標註 [審核完成]' });
+            showToast(`「${item.name}」已標註審核完成`, 'success', 2000);
+        }
+        const row = document.getElementById(`row-${id}`);
+        if (row) {
+            const btn  = row.querySelector('.verify-large-btn');
+            const icon = row.querySelector('.verify-large-btn i');
+            if (btn)  btn.classList.toggle('active', item.verification.is_ok);
+            if (icon) { icon.setAttribute('data-lucide', item.verification.is_ok ? 'check-circle' : 'circle'); lucide.createIcons({ nodes: [icon] }); }
+        }
+        refreshOverall();
+        saveToCache();
+        syncToFirebase();
+    };
+
+    window.toggleCancel = (itemId) => {
+        const item = appData.items.find(it => it.id === itemId);
+        if (!item) return;
+        const willCancel = !item.is_cancelled;
+        item.is_cancelled = willCancel;
+        if (willCancel) { item.completion_percent = 100; item.is_ui_done = true; }
+        if (!item.status_logs) item.status_logs = [];
+        item.status_logs.push({ ts: Date.now(), at: new Date().toLocaleString(), user: currentUser.displayName, action: willCancel ? '標註 [項目取消]' : '恢復 [取消→正常]' });
+        showToast(willCancel ? `「${item.name}」已取消` : `「${item.name}」已恢復`, willCancel ? 'warning' : 'info', 2000);
+        renderList(); saveToCache(); syncToFirebase();
+    };
+
+    /* ------------ Remark Inline Edit ------------ */
+    window.startEditRemark = (itemId) => {
+        const row = document.getElementById(`row-${itemId}`);
+        if (!row) return;
+        const box  = row.querySelector('.audit-remark-row');
+        const item = appData.items.find(it => it.id === itemId);
+        if (!box || !item) return;
+        const cur = item.audit_remark || '';
+        box.onclick = null;
+        box.innerHTML = `
+            <i data-lucide="edit-3" style="color:var(--primary)"></i>
+            <input type="text" class="audit-remark-input" value="${cur}"
+                   placeholder="輸入現場紀錄 (叫料、工況、異常)..."
+                   onblur="finishEditRemark('${itemId}', this.value)"
+                   onkeydown="if(event.key==='Enter')finishEditRemark('${itemId}',this.value)">`;
+        lucide.createIcons({ nodes: [box] });
+        const input = box.querySelector('input');
+        input.focus(); input.select();
+    };
+
+    window.finishEditRemark = (itemId, newVal) => {
+        const item = appData.items.find(it => it.id === itemId);
+        if (!item) return;
+        newVal = newVal.trim();
+        setTimeout(() => {
+            const row = document.getElementById(`row-${itemId}`);
+            if (row) { const box = row.querySelector('.audit-remark-row'); if (box) box.onclick = () => startEditRemark(itemId); }
+        }, 100);
+        if (newVal === (item.audit_remark || '')) { renderItemRemark(itemId); return; }
+        item.audit_remark = newVal;
+        if (!item.spec_logs) item.spec_logs = [];
+        item.spec_logs.push({ ts: Date.now(), at: new Date().toLocaleString(), user: currentUser.displayName, msg: newVal || '清空紀錄' });
+        renderItemRemark(itemId);
+        saveToCache(); syncToFirebase();
+    };
+
+    function renderItemRemark(itemId) {
+        const item = appData.items.find(it => it.id === itemId);
+        const row  = document.getElementById(`row-${itemId}`);
+        if (!row || !item) return;
+        const box = row.querySelector('.audit-remark-row');
+        if (!box) return;
+        box.innerHTML = item.audit_remark
+            ? `<i data-lucide="file-text"></i><div class="audit-remark-text">${item.audit_remark}</div>`
+            : `<i data-lucide="plus-circle"></i><span class="audit-remark-empty">點擊加入現場紀錄...</span>`;
+        lucide.createIcons({ nodes: [box] });
+    }
+
+    /* ------------ Export ------------ */
+    function exportData() {
+        if (!appData) return;
+        refreshOverall();
+        const blob = new Blob([JSON.stringify(appData, null, 2)], { type: 'application/json' });
+        const url  = URL.createObjectURL(blob);
+        const a    = Object.assign(document.createElement('a'), { href: url, download: `${appData.案號 || 'project'}_audit_${Date.now()}.json` });
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+        showToast('JSON 已匯出', 'success');
+    }
+
+    /* ------------ Scroll & Toolbar ------------ */
+    window.scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    window.addEventListener('scroll', () => {
+        const toolbar = document.getElementById('floating-toolbar');
+        if (!toolbar || !appData) return;
+        if (window.scrollY < 120) {
+            toolbar.style.opacity = '0';
+            toolbar.style.pointerEvents = 'none';
+        } else {
+            toolbar.style.opacity = '1';
+            toolbar.style.pointerEvents = 'auto';
+            if (toolbar.style.display !== 'flex') toolbar.style.display = 'flex';
+        }
+    });
+
+    /* ------------ Navigation ------------ */
+    window.jumpToProject = (id) => {
+        switchView('auditor');
+        loadFromFirebase(id);
+    };
+
+    window.startManualAudit = () => {
+        const no = document.getElementById('manualProjectNo').value.trim();
+        if (!no) { showToast('請輸入案號', 'warning'); return; }
+        jumpToProject(no);
+    };
+
+    /* ------------ Drop zone wiring ------------ */
+    const dropZone = document.getElementById('drop-zone');
+    dropZone.onclick  = null;
+    dropZone.ondragover = e => e.preventDefault();
+    dropZone.ondrop     = e => e.preventDefault();
+
+    /* ============================================================
+       INIT
+       ============================================================ */
+    async function init() {
+        console.log('[Init] BudgetAuditor V2 Premium 啟動...');
+        try { lucide.createIcons(); } catch {}
+        await initLiff();
+        switchView('dashboard');
+        refreshDashboard();
+        setInterval(() => refreshDashboard(), 5 * 60 * 1000);
+        const params = new URLSearchParams(window.location.search);
+        const pNo = params.get('projectNo');
+        if (pNo) jumpToProject(pNo);
+    }
+
+    init();
+</script>
+</body>
+</html>
