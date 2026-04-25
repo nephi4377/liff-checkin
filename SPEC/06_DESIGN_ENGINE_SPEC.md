@@ -35,7 +35,7 @@
 
 ### 3.2 報價單生成流程
 1. **收集數據**: 遍歷 `placedCabinets`, `drawnAreas`, `placedAnnotations`。
-2. **分組對齊**: 根據 `name`, `unitPrice`, `note`, `addons` 進行智慧歸類合併。
+2. **分組對齊**: 依群組、名稱、單價、單位、計價型別、備註、副屬性指紋等相同者歸類，再以**畫布上外接框邊到邊距離**（閾值內視為相鄰）決定是否併成同一報價列；**不以**櫃寬高或區塊坪數當併列條件。細節見 [InteriorDesigned_LayoutPlanner_SPEC.md](./InteriorDesigned_LayoutPlanner_SPEC.md) **§4.6**。
 3. **分組排序**: 依據預設的工程順序（保護 → 拆除 → ... → 清潔）自動重排。
 
 ## 4. 持續性與容錯機制

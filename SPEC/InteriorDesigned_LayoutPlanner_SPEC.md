@@ -101,7 +101,13 @@
 ### 4.6 預算與報價
 
 - **總價顯示**：右側面板即時顯示（`updateQuotation` → `calculateFullQuotation` 之 `grandTotal`）。
-- **明細 Modal**：依**工程分組**插入標題列，再列項目；合併規則為同名／同單價／同備註／同副屬性組合之 key。
+- **明細 Modal**：依**工程分組**插入標題列，再列項目。
+- **合併列規則**（實作：`LP_LayoutPlanner.js` 內 `calculateFullQuotation`、`quotationAssignSpatialClusterKeys`）：
+  - **帳面條件相同**才會進入同一批比對：群組、名稱、單價、單位、計價型別（`pricingType`）、備註、副屬性數量指紋等。**不以**櫃體寬高、也不以區塊坪數小數**決定**要不要分兩列（避免「同寬但畫面上隔很遠」誤併、「寬不同但貼在一起」無法併）。
+  - 在上述相同條件的一批項目裡，用各項在畫布上的**外接矩形**算**邊到邊距離**（分離時為正距離，相接或重疊為 0）；距離 ≤ **55**（與畫布座標同尺度，與圖上 cm 設計一致）視為**相鄰**，以 union-find 連成 **spatialCluster**（程式內如 `loc0`、`loc1`…）。
+  - **僅同一 spatialCluster** 才會合併成報價表**同一列**（主項數量與主價加總、副屬性併入同列下之加總）。**不相鄰**者，即使寬高或坪數相同也**分列**；**相鄰**者，即使寬高或坪數不同也**合併一列**。
+  - 該批比對內僅**一筆**可計價項目時，不帶位置群後綴（維持單列）。
+  - **規格**欄（Modal／CSV）：仍以實際寬高或坪數顯示；若一列由多種規格併成，以「、」串接多段顯示字串。
 - **分組排序**：使用內建 `preferredOrder`（含「保護工程」「拆除工程」…等）；**實際是否出現「保護工程」**取決於 Sheet 或標註資料是否含有該群組之可計價項目。
 - **匯出**：**列印／PDF**（透過 `@media print` 針對 `#budget-modal`）、**CSV**、ZIP 內含 CSV。
 - **免責聲明**：Modal 內建文字聲明僅供參考。
@@ -165,7 +171,7 @@
 - **尺**：`cmToFeet`：1 尺 = 30 cm，並以 **0.5 尺**為最小進位單位（`Math.ceil(rawFeet * 2) / 2`）。
 - **才（面積）**：`pricingType === 'area'` 時以寬深換算尺數相乘（見 `calculatePrice`）。
 - **單一元件價格**：`calculatePrice` 合併主計價與 Sheet 副屬性、自訂副屬性。
-- **全案報價**：`calculateFullQuotation` 合併元件、繪製區域、標註，再合併同質行；**總價為 0 之項目不列入**。
+- **全案報價**：`calculateFullQuotation` 彙總元件、繪製區域、標註後，依 **§4.6**（條件相同且平面相鄰）合併同列；**總價為 0 之項目不列入**。
 
 ---
 
@@ -248,3 +254,4 @@
 | 1.6 | 2026-04-18 | §9 四項落地：`sanitizeSvg.js`、`normalizeSheetSvg`、`lib/geometry.js`、Vitest、`.placed-cabinet` contain、E2E 預算 Modal；§10 補單元測與 `npm test` |
 | 1.7 | 2026-04-18 | LP 專用檔名加 `LP_` 前綴（`LP_LayoutPlanner.html/js`、`LP_utils.js`、`LP_sanitizeSvg.js`、`lib/LP_geometry.js`、測試與設定檔、`LP_LayoutSheetViewer.html`）；`spa/app.js` 路由同步 |
 | 1.8 | 2026-04-20 | 收斂模組：`LP_core.js` 合併原 `LP_utils.js`、`LP_sanitizeSvg.js`、`lib/LP_geometry.js`；單元測試合併為 `LP_core.test.js`；Playwright 合併為 `e2e/LP_layout-planner.spec.cjs`；刪除 `lib/` 內舊檔。 |
+| 1.9 | 2026-04-25 | §4.6／§6：報價合併改為「帳面條件相同 + 畫布上外框相鄰（邊距閾值 55）」；寬高／坪數不決定是否併列；規格欄支援多種尺寸以「、」串接。 |
