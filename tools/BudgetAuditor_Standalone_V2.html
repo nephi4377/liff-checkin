@@ -1431,7 +1431,7 @@
                         <button class="btn btn-primary" onclick="syncToFirebase()">
                             <i data-lucide="upload-cloud"></i> 同步雲端
                         </button>
-                        <button class="btn" onclick="exportData()">
+                        <button id="btn-export" class="btn hidden" onclick="exportData()">
                             <i data-lucide="download"></i> 匯出 JSON
                         </button>
                         <button class="btn btn-icon" onclick="openCloudSettings()" title="雲端設定">
@@ -2031,16 +2031,23 @@
         saveToCache();
     }
 
-    /* [v2.1] 權限提示橫幅 */
+    /* [v2.1] 權限提示橫幅 + 按鈕可見性 */
     function refreshPermissionBanner() {
-        const banner = document.getElementById('permission-banner');
-        const text   = document.getElementById('permission-banner-text');
+        const banner    = document.getElementById('permission-banner');
+        const text      = document.getElementById('permission-banner-text');
+        const exportBtn = document.getElementById('btn-export');
+
+        // 匯出按鈕：權限 5+ 才顯示
+        if (exportBtn) {
+            exportBtn.classList.toggle('hidden', !hasPermission(5));
+        }
+
         if (!banner || !text) return;
 
         const p = parseInt(currentUser?.權限 ?? 0, 10);
         const msgs = [];
         if (p < 4) msgs.push('報價金額已隱藏（需權限等級 4+）');
-        if (p < 5) msgs.push('匯出 JSON 功能已鎖定（需權限等級 5+）');
+        if (p < 5) msgs.push('匯出 JSON 功能已隱藏（需權限等級 5+）');
 
         if (msgs.length > 0) {
             text.textContent = `目前等級 ${p}：` + msgs.join('；');
@@ -2560,13 +2567,6 @@
     /* ------------ Export  [v2.1 權限 5] ------------ */
     function exportData() {
         if (!appData) return;
-
-        // 權限 5 才能匯出
-        if (!hasPermission(5)) {
-            showToast('匯出 JSON 需要權限等級 5 以上', 'error', 4000);
-            return;
-        }
-
         refreshOverall();
 
         // 深拷貝後依權限決定是否保留 price 欄（權限 4+ 保留，否則刪除）
