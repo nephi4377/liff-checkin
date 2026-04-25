@@ -1243,6 +1243,53 @@
         .empty-state i { width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.4; }
         .empty-state p { font-size: 0.9rem; margin: 0; }
 
+        /* =====================================================
+           PRICE / PERMISSION STYLES  [v2.1]
+           ===================================================== */
+
+        /* 金額標籤 */
+        .price-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: hsl(160, 84%, 94%);
+            color: hsl(160, 84%, 25%);
+            border: 1px solid hsl(160, 84%, 78%);
+            padding: 3px 10px;
+            border-radius: var(--radius-full);
+            font-size: 0.75rem;
+            font-weight: 700;
+            font-family: 'SFMono-Regular', Consolas, monospace;
+        }
+
+        .price-tag i { width: 11px; height: 11px; }
+
+        /* Header 總報價卡 */
+        .meta-card.price-card {
+            background: hsl(160, 84%, 95%);
+            border-color: hsl(160, 84%, 75%);
+        }
+
+        .meta-card.price-card .meta-label { color: hsl(160, 84%, 30%); }
+        .meta-card.price-card .meta-value { color: hsl(160, 84%, 22%); font-family: 'SFMono-Regular', Consolas, monospace; }
+
+        /* 權限提示橫幅 */
+        .permission-banner {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: hsl(38, 92%, 95%);
+            border: 1px solid hsl(38, 92%, 80%);
+            border-radius: var(--radius-md);
+            font-size: 0.8rem;
+            color: hsl(38, 60%, 30%);
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .permission-banner i { width: 15px; height: 15px; color: var(--warning); flex-shrink: 0; }
+
         /* Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -1409,6 +1456,11 @@
                         <div class="meta-label">最後同步</div>
                         <div class="meta-value" id="h-sync" style="font-size:0.85rem;">無紀錄</div>
                     </div>
+                    <!-- 總報價：僅權限 4+ 可見 -->
+                    <div class="meta-card price-card hidden" id="h-price-card">
+                        <div class="meta-label">總報價金額</div>
+                        <div class="meta-value" id="h-total-price" style="font-size:0.9rem;">--</div>
+                    </div>
                 </div>
             </header>
 
@@ -1425,6 +1477,12 @@
                     <span class="filter-pill" data-filter="done"          onclick="setFilter('done',this)">完工</span>
                     <span class="filter-pill" data-filter="unverified"    onclick="setFilter('unverified',this)">待審核</span>
                 </div>
+            </div>
+
+            <!-- 權限提示橫幅：低於 4 不顯示報價；低於 5 不能匯出 -->
+            <div id="permission-banner" class="permission-banner hidden" style="margin: 0 28px 0;">
+                <i data-lucide="lock"></i>
+                <span id="permission-banner-text"></span>
             </div>
 
             <!-- Audit List -->
@@ -1611,15 +1669,33 @@
     }
 
     /* ============================================================
+       PERMISSION HELPERS  [v2.1]
+       ============================================================ */
+    /**
+     * 判斷目前使用者是否達到指定權限等級
+     * @param {number} level - 最低要求等級（含）
+     */
+    function hasPermission(level) {
+        const p = parseInt(currentUser?.權限 ?? 0, 10);
+        return p >= level;
+    }
+
+    /* ============================================================
        LIFF / Identity
        ============================================================ */
     async function initLiff() {
-        const params = new URLSearchParams(window.location.search);
+        const params  = new URLSearchParams(window.location.search);
         const urlUid  = params.get('uid');
         const urlName = params.get('userName') || params.get('name');
+        // 主控台跳轉時可附帶 role=N（數字），若有則覆寫 currentUser.權限
+        const urlRole = params.get('role');
 
         if (urlUid && urlName) {
-            currentUser = { userId: urlUid, displayName: urlName };
+            currentUser = {
+                userId: urlUid,
+                displayName: urlName,
+                權限: urlRole != null ? parseInt(urlRole, 10) : 2
+            };
             return;
         }
 
@@ -1627,7 +1703,12 @@
             await liff.init({ liffId: "2007974938-gOrjlzna" });
             if (liff.isLoggedIn()) {
                 const profile = await liff.getProfile();
-                currentUser = { userId: profile.userId, displayName: profile.displayName };
+                currentUser = {
+                    userId:      profile.userId,
+                    displayName: profile.displayName,
+                    // LIFF 無法直接取得權限欄，預設 2；若有 URL role 則覆寫
+                    權限: urlRole != null ? parseInt(urlRole, 10) : 2
+                };
                 return;
             }
         } catch (err) {
@@ -1950,6 +2031,53 @@
         saveToCache();
     }
 
+    /* [v2.1] 權限提示橫幅 */
+    function refreshPermissionBanner() {
+        const banner = document.getElementById('permission-banner');
+        const text   = document.getElementById('permission-banner-text');
+        if (!banner || !text) return;
+
+        const p = parseInt(currentUser?.權限 ?? 0, 10);
+        const msgs = [];
+        if (p < 4) msgs.push('報價金額已隱藏（需權限等級 4+）');
+        if (p < 5) msgs.push('匯出 JSON 功能已鎖定（需權限等級 5+）');
+
+        if (msgs.length > 0) {
+            text.textContent = `目前等級 ${p}：` + msgs.join('；');
+            banner.classList.remove('hidden');
+            lucide.createIcons({ nodes: [banner] });
+        } else {
+            banner.classList.add('hidden');
+        }
+    }
+
+    /* [v2.1] 總報價顯示（僅權限 4+）*/
+    function refreshPriceDisplay() {
+        const card = document.getElementById('h-price-card');
+        const el   = document.getElementById('h-total-price');
+        if (!card || !el) return;
+
+        if (!hasPermission(4)) {
+            card.classList.add('hidden');
+            return;
+        }
+
+        // 計算：price 欄位為字串（可能含逗號、「元」、「贈送」等）
+        let totalPrice = 0;
+        let hasAny = false;
+        (appData?.items || []).forEach(it => {
+            if (!it.price) return;
+            const cleaned = String(it.price).replace(/[^\d.]/g, '');
+            const val = parseFloat(cleaned);
+            if (!isNaN(val) && val > 0) { totalPrice += val; hasAny = true; }
+        });
+
+        el.textContent = hasAny
+            ? `NT$ ${totalPrice.toLocaleString('zh-TW')}`
+            : '（資料中無價格欄位）';
+        card.classList.remove('hidden');
+    }
+
     /* ============================================================
        DATA / RENDER
        ============================================================ */
@@ -1984,6 +2112,10 @@
             document.getElementById('h-overall').innerText       = `${sum.audit_percent || sum.overall_completion || 0}%`;
             const hVer = document.getElementById('h-ver');
             if (hVer) hVer.innerText = sum.export_time || '--';
+
+            // [v2.1] 總報價：僅權限 4+ 可見
+            refreshPriceDisplay();
+            refreshPermissionBanner();
 
             renderList();
         } catch (err) {
@@ -2151,6 +2283,7 @@
                         ${catList.map(c => `<option value="${c}" ${item.category_tag === c ? 'selected' : ''}>${c}</option>`).join('')}
                     </select>
                     <span class="qty-tag">${item.qty || '-'} ${item.unit || ''}</span>
+                    ${hasPermission(4) && item.price ? `<span class="price-tag"><i data-lucide="dollar-sign"></i>${item.price}</span>` : ''}
                 </div>
 
                 <div class="item-spec">備註：${item.spec || '無'}</div>
@@ -2424,13 +2557,30 @@
         lucide.createIcons({ nodes: [box] });
     }
 
-    /* ------------ Export ------------ */
+    /* ------------ Export  [v2.1 權限 5] ------------ */
     function exportData() {
         if (!appData) return;
+
+        // 權限 5 才能匯出
+        if (!hasPermission(5)) {
+            showToast('匯出 JSON 需要權限等級 5 以上', 'error', 4000);
+            return;
+        }
+
         refreshOverall();
-        const blob = new Blob([JSON.stringify(appData, null, 2)], { type: 'application/json' });
+
+        // 深拷貝後依權限決定是否保留 price 欄（權限 4+ 保留，否則刪除）
+        const exportObj = JSON.parse(JSON.stringify(appData));
+        if (!hasPermission(4)) {
+            (exportObj.items || []).forEach(it => { delete it.price; });
+        }
+
+        const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
         const url  = URL.createObjectURL(blob);
-        const a    = Object.assign(document.createElement('a'), { href: url, download: `${appData.案號 || 'project'}_audit_${Date.now()}.json` });
+        const a    = Object.assign(document.createElement('a'), {
+            href: url,
+            download: `${appData.案號 || 'project'}_audit_${Date.now()}.json`
+        });
         document.body.appendChild(a); a.click(); a.remove();
         URL.revokeObjectURL(url);
         showToast('JSON 已匯出', 'success');
