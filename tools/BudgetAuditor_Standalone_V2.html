@@ -1273,22 +1273,6 @@
         .meta-card.price-card .meta-label { color: hsl(160, 84%, 30%); }
         .meta-card.price-card .meta-value { color: hsl(160, 84%, 22%); font-family: 'SFMono-Regular', Consolas, monospace; }
 
-        /* 權限提示橫幅 */
-        .permission-banner {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 16px;
-            background: hsl(38, 92%, 95%);
-            border: 1px solid hsl(38, 92%, 80%);
-            border-radius: var(--radius-md);
-            font-size: 0.8rem;
-            color: hsl(38, 60%, 30%);
-            font-weight: 600;
-            margin-bottom: 12px;
-        }
-
-        .permission-banner i { width: 15px; height: 15px; color: var(--warning); flex-shrink: 0; }
 
         /* Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -1477,12 +1461,6 @@
                     <span class="filter-pill" data-filter="done"          onclick="setFilter('done',this)">完工</span>
                     <span class="filter-pill" data-filter="unverified"    onclick="setFilter('unverified',this)">待審核</span>
                 </div>
-            </div>
-
-            <!-- 權限提示橫幅：低於 4 不顯示報價；低於 5 不能匯出 -->
-            <div id="permission-banner" class="permission-banner hidden" style="margin: 0 28px 0;">
-                <i data-lucide="lock"></i>
-                <span id="permission-banner-text"></span>
             </div>
 
             <!-- Audit List -->
@@ -2031,30 +2009,11 @@
         saveToCache();
     }
 
-    /* [v2.1] 權限提示橫幅 + 按鈕可見性 */
+    /* [v2.1] 按鈕可見性（依權限） */
     function refreshPermissionBanner() {
-        const banner    = document.getElementById('permission-banner');
-        const text      = document.getElementById('permission-banner-text');
         const exportBtn = document.getElementById('btn-export');
-
-        // 匯出按鈕：權限 5+ 才顯示
         if (exportBtn) {
             exportBtn.classList.toggle('hidden', !hasPermission(5));
-        }
-
-        if (!banner || !text) return;
-
-        const p = parseInt(currentUser?.權限 ?? 0, 10);
-        const msgs = [];
-        if (p < 4) msgs.push('報價金額已隱藏（需權限等級 4+）');
-        if (p < 5) msgs.push('匯出 JSON 功能已隱藏（需權限等級 5+）');
-
-        if (msgs.length > 0) {
-            text.textContent = `目前等級 ${p}：` + msgs.join('；');
-            banner.classList.remove('hidden');
-            lucide.createIcons({ nodes: [banner] });
-        } else {
-            banner.classList.add('hidden');
         }
     }
 
