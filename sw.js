@@ -1,3 +1,9 @@
+/**
+ * 必須**獨立成檔** — 需由 `navigator.serviceWorker.register('/sw.js' 或相對路徑)` 指到單一 URL。
+ * 不可內嵌於 index / app bundle：瀏覽器只接受以獨立腳本註冊的 SW，且**放在網站根**時預設
+ * 作用域為整站（/）；若改放到子目錄，預設只能管該子路徑，GHP 也不易加 Service-Worker-Allowed。
+ * 參考：modules/projects/js/daily_report_main.js
+ */
 const CACHE_NAME = 'daily-report-image-cache-v1';
 const IMAGE_HOST = 'drive.google.com';
 

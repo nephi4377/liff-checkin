@@ -22,12 +22,14 @@
 - **狀態中心**: 雖然未採用 Vuex，但透過 SPA 層級的 `ref` 與 `computed` 實現輕量級響應式狀態流轉。
 
 ## 01_SYSTEM_OVERVIEW 相關模組規格書
+- [FILE_DOCUMENTATION.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/FILE_DOCUMENTATION.md)：CODING 專案**檔案清冊**與路由導讀（與本深編互補）。
+- [PROJECT_DATA_DICTIONARY.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/PROJECT_DATA_DICTIONARY.md)：專案**資料欄位**唯一定義表（前後端 key 以本檔為準）。
 - [02_LEAVE_SYSTEM_SPEC.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/02_LEAVE_SYSTEM_SPEC.md)：假勤與加班申請系統。
 - [03_CHECKIN_SYSTEM_SPEC.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/03_CHECKIN_SYSTEM_SPEC.md)：精確地理圍欄打卡系統。
 - [05_PROJECT_WORKSPACE_SPEC.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/05_PROJECT_WORKSPACE_SPEC.md)：專案主控台與異步資料管理架構。
 - [06_DESIGN_ENGINE_SPEC.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/06_DESIGN_ENGINE_SPEC.md)：2D 空間設計引擎與自動計價系統 (CAT.A)。
 - [07_SYSTEM_FLOW_MAP.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/07_SYSTEM_FLOW_MAP.md)：全系統功能連結全景流程圖。
-- [REPORT_SYSTEM_SPEC.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/REPORT_SYSTEM_SPEC.md)：施工回報 V3 流程（Fire-and-Forget）。
+- [施工回報_系統完整_SPEC.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/施工回報_系統完整_SPEC.md)：施工回報 V3 ＋ GAS 現況（極速路徑、佇列、與上傳優化/遷移敘事之合併版）。歷史拆檔已於 2026-04-25 移入 `CODING/_DEPRECATED_/2026-04-25_施工回報合併前_SPEC/`。
 - [10_FB_MESSENGER_SPEC.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/10_FB_MESSENGER_SPEC.md)：Facebook Messenger 通訊連結規格與跨平台綁定預留。
 - [11_1_AI_LOG_AND_PARAMETER_FULL_INTEGRATED_SPEC.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/11_1_AI_LOG_AND_PARAMETER_FULL_INTEGRATED_SPEC.md)：AI 施工日誌與全域參數通訊整合白皮書 (詳盡版)。
 
@@ -37,4 +39,4 @@
 
 ---
 > [!IMPORTANT]
-> 新增模組路由時，必須同步更新 `app.js` 內的 `routes` 與 `FILE_DOCUMENTATION.md`。
+> 新增模組路由時，必須同步更新 `app.js` 內的 `routes` 與 `SPEC/FILE_DOCUMENTATION.md`（專案完整檔案清冊）。

@@ -1,6 +1,7 @@
 # 專案全域資料字典 (Project Data Dictionary)
 
-本文件為「參數一致性」的唯一事實來源。所有前端、後端、API 傳輸與資料庫儲存必須**嚴格遵守**下表定義的變數名稱，嚴禁建立自定義映射表 (Mapping Table)。
+> **本檔位置（正式）**：`CODING/SPEC/PROJECT_DATA_DICTIONARY.md`（**2026-04-25** 自倉庫根目錄合併至此，與各模組 SPEC 同層。）  
+> 本文件為「參數一致性」的唯一事實來源。所有前端、後端、API 傳輸與資料庫儲存必須**嚴格遵守**下表定義的變數名稱，嚴禁建立自定義映射表 (Mapping Table)。
 
 ## 1. 案場資料 (案場資料 Sheet) - 完整原始欄位
 
@@ -75,7 +76,7 @@
 | **PhotoLinks** | `PhotoLinks` | `String` | 圖片連結 (以半形逗點分隔之 CSV) |
 | **Status** | `Status` | `String` | 狀態 (如: 已發布) |
 
-## 3. 稽核歷程 (Firebase JSON 內部結構)
+## 5. 稽核歷程 (Firebase JSON 內部結構)
 
 | JSON Key | 資料格式 | 說明 |
 | :--- | :--- | :--- |
