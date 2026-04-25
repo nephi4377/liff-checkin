@@ -8,6 +8,7 @@
 
 ## 🧠 2. 專業技能 (Skills) - 自動套用規範
 每當我執行相關任務時，我會自動載入這些「專業技能模組」：
+- **`Cloud-Codebase-Runbook`**（`.agents/skills/Cloud-Codebase-Runbook/SKILL.md`）：Cloud／遠端代理用 — 如何在本倉庫啟動靜態網頁、本機身份與快取、各區塊測試指令與更新技能的方式。
 - **`Premium-UI-Design`**：定義專案的視覺風格（HSL 色彩、Tailwind 規範、微動畫、高質感設計）。
 - **`GAS-Backend-Expert`**：定義 Google Apps Script 的開發、錯誤處理與安全性標準。
 
