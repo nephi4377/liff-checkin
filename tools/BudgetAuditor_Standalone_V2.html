@@ -1654,7 +1654,8 @@
      * @param {number} level - 最低要求等級（含）
      */
     function hasPermission(level) {
-        const p = parseInt(currentUser?.權限 ?? 0, 10);
+        // 相容 Hub 傳入的 permission（英文）與員工資料表欄位 權限（中文）
+        const p = parseInt(currentUser?.permission ?? currentUser?.權限 ?? 0, 10);
         return p >= level;
     }
 
@@ -1662,17 +1663,20 @@
        LIFF / Identity
        ============================================================ */
     async function initLiff() {
-        const params  = new URLSearchParams(window.location.search);
-        const urlUid  = params.get('uid');
-        const urlName = params.get('userName') || params.get('name');
-        // 主控台跳轉時可附帶 role=N（數字），若有則覆寫 currentUser.權限
-        const urlRole = params.get('role');
+        const params      = new URLSearchParams(window.location.search);
+        const urlUid      = params.get('uid');
+        const urlName     = params.get('userName') || params.get('name');
+        // Hub (spa/app.js) 以 iframe src 附帶 &permission=N，與員工資料表欄位對應
+        const urlPerm     = params.get('permission');
+        const parsedPerm  = urlPerm != null ? parseInt(urlPerm, 10) : null;
 
         if (urlUid && urlName) {
             currentUser = {
-                userId: urlUid,
+                userId:      urlUid,
                 displayName: urlName,
-                權限: urlRole != null ? parseInt(urlRole, 10) : 2
+                // 保留兩個欄位名，方便其他地方沿用
+                permission:  parsedPerm ?? 2,
+                權限:        parsedPerm ?? 2
             };
             return;
         }
@@ -1684,8 +1688,9 @@
                 currentUser = {
                     userId:      profile.userId,
                     displayName: profile.displayName,
-                    // LIFF 無法直接取得權限欄，預設 2；若有 URL role 則覆寫
-                    權限: urlRole != null ? parseInt(urlRole, 10) : 2
+                    // 直接 LIFF 開啟無法取得員工權限，等 Hub 以 iframe 帶入才有正確值
+                    permission:  parsedPerm ?? 2,
+                    權限:        parsedPerm ?? 2
                 };
                 return;
             }
@@ -1698,7 +1703,8 @@
     function setTestIdentity() {
         currentUser = {
             userId: 'U12345', displayName: '測試員工',
-            身份: '員工', 組別: '台南店', 權限: 2
+            身份: '員工', 組別: '台南店',
+            permission: 2, 權限: 2
         };
     }
 
