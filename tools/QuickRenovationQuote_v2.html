@@ -326,6 +326,23 @@
   var PRICE_TAB_WOOD = '木作工程';
   var PRICE_TAB_PAINT = '油漆工程';
   var PRICE_TAB_MEP = '水電工程';
+  var PRICE_TAB_WALLPAPER = '壁紙工程';
+  var PRICE_TAB_PROTECT = '保護工程';
+
+  /**
+   * PRICE_SHEET_GAP_NOTES — 表內「找不到同名」或僅能近似代入者（其餘列已盡量對到 A 欄全名）：
+   * - 木作+系統收邊：表無整單「收邊％」列；程式小計仍＝木作×％。參考單價欄暫對「壁紙工程｜300CM內鋁製收邊條」。
+   * - 細清＋竣工後修補：表無同一併列；程式金額仍＝管理員定額。參考單價欄暫對「油漆工程｜細清後局部髒污修補」。
+   * - 餐櫃(深60)：無「餐櫃」→「木作工程｜開門中高櫃-D60H180內」（可改半腰櫃列）。
+   * - 沙發背牆：無同名列→「木作工程｜半腰背牆-木紋板-單面」。
+   * - 衣櫃置頂：無「置頂」→「木作工程｜木作-封板/美背H61-120cm(油漆面)」。
+   * - 化粧桌／書桌：表無「式」專列→「木作工程｜書桌&電視吊櫃-D60XH40內」（延尺）。
+   * - 電器櫃：無延尺專列→「木作工程｜電器拉盤」（組）。
+   * - 高身櫃：與衣櫃同規格列→「開門高衣櫃-D60H240內」。
+   * - 有線電視／路：無「路」→「水電工程｜一孔電視」（組）；可改「電視(端末)」。
+   * - 其餘水電：無總括「雜項」→暫對「保護工程｜粗步清潔及工具損耗」（式）；請依案改水電單列。
+   * - 出線／插座參考：表為「座／處」計價，與工具「式」語意不同時請手調或改列。
+   */
 
   var DEFAULTS = {
     adminPin: '0426',
@@ -353,7 +370,7 @@
       { id: 'ceiling', zoneScope: 'all', sortKey: 1, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 200, menuMatrix: '變量・坪(客+臥合，進位) | 不設%', label: '木作平釘天花', unit: '坪', price: 3400, defaultOn: true, cabWood: true, hint: '變量｜客+臥坪合、進位', priceSheetTab: PRICE_TAB_WOOD, priceSheetItem: '木作平釘天花板', clientNote: '' },
       { id: 'shoe_lk', zoneScope: 'lk', sortKey: 12, group: '客', groupTitle: '客餐廳', quoteSection: '客餐廳', displayRank: 10, menuMatrix: '定量or變量・可設固定尺(定量) 或 邊尺×%(變量) ・ 長/短邊 ・ 空間=客餐廳', label: '鞋櫃', unit: '尺', price: 2500, defaultOn: true, cabWood: true, hint: '木作', priceSheetTab: PRICE_TAB_WOOD, priceSheetItem: '開門高櫃-D40H240內', clientNote: '標準計價表：D40×H240 櫃體（與表列「開門高櫃-D40H240內」對價）。' },
       { id: 'storage_40', zoneScope: 'lk', sortKey: 14, group: '客', groupTitle: '客餐廳', quoteSection: '客餐廳', displayRank: 12, menuMatrix: '同鞋櫃欄位模型・深 40cm', label: '收納櫃(深 40cm)', unit: '尺', price: 2800, defaultOn: true, cabWood: true, hint: '系統/木作櫃', priceSheetTab: PRICE_TAB_WOOD, priceSheetItem: '開門高櫃-D40H240內', clientNote: '與鞋櫃同：D40×H240 櫃體，對價「開門高櫃-D40H240內」。' },
-      { id: 'sideboard_60', zoneScope: 'lk', sortKey: 16, group: '客', groupTitle: '客餐廳', quoteSection: '客餐廳', displayRank: 14, menuMatrix: '同鞋櫃欄位模型・深 60cm', label: '餐櫃(深 60cm)', unit: '尺', price: 3200, defaultOn: false, cabWood: true, hint: '', priceSheetTab: PRICE_TAB_WOOD, priceSheetItem: '開門半腰深櫃-D60H120內', clientNote: '表內無「餐櫃」專列：暫對「開門半腰深櫃-D60H120內」（深60）；可改對更貼近之列。' },
+      { id: 'sideboard_60', zoneScope: 'lk', sortKey: 16, group: '客', groupTitle: '客餐廳', quoteSection: '客餐廳', displayRank: 14, menuMatrix: '同鞋櫃欄位模型・深 60cm', label: '餐櫃(深 60cm)', unit: '尺', price: 3200, defaultOn: false, cabWood: true, hint: '', priceSheetTab: PRICE_TAB_WOOD, priceSheetItem: '開門中高櫃-D60H180內', clientNote: '表內無「餐櫃」：暫對 D60 中高櫃列；若實務為半腰可改「開門半腰深櫃-D60H120內」。' },
       { id: 'tv_wall', zoneScope: 'lk', sortKey: 18, group: '客', groupTitle: '客餐廳', quoteSection: '客餐廳', displayRank: 16, menuMatrix: '變量・邊台尺×% ・ 長/短邊 ・ 客', label: '電視牆', unit: '尺', price: 5000, defaultOn: true, cabWood: true, hint: '', priceSheetTab: PRICE_TAB_WOOD, priceSheetItem: '電視牆壁板', clientNote: '' },
       { id: 'sofa_wall', zoneScope: 'lk', sortKey: 20, group: '客', groupTitle: '客餐廳', quoteSection: '客餐廳', displayRank: 18, menuMatrix: '變量・邊台尺×% ・ 長/短邊 ・ 客', label: '沙發背牆', unit: '尺', price: 4000, defaultOn: true, cabWood: true, hint: '', priceSheetTab: PRICE_TAB_WOOD, priceSheetItem: '半腰背牆-木紋板-單面', clientNote: '表內無「沙發背牆」：暫對半腰背牆單面；可改。' },
       { id: 'ac_lk', zoneScope: 'lk', sortKey: 22, group: '客', groupTitle: '客餐廳', quoteSection: '客餐廳', displayRank: 20, menuMatrix: '變量・一邊邊滿台尺(短邊預設) ・ 客', label: '冷氣包管', unit: '尺', price: 800, defaultOn: true, cabWood: true, hint: '木作封板', priceSheetTab: PRICE_TAB_WOOD, priceSheetItem: '矽酸鈣板冷氣包管', clientNote: '' },
@@ -377,17 +394,17 @@
       { id: 'feature_sec', perSecondary: true, sortKey: 55, group: '次臥', label: '造型背牆或半腰背牆', quoteSection: '次臥', displayRank: 48, menuMatrix: '變量・邊台尺×% ・ 次臥各間', unit: '尺', price: 4000, defaultOn: true, cabWood: true, hint: '', priceSheetTab: PRICE_TAB_WOOD, priceSheetItem: '半腰背牆-木紋板-單面', clientNote: '' },
       { id: 'cove_sec', perSecondary: true, sortKey: 56, group: '次臥', label: '間接照明(間照)', quoteSection: '次臥', displayRank: 50, menuMatrix: '變量・邊台尺×% ・ 次臥', unit: '尺', price: 1800, defaultOn: true, cabWood: true, hint: '', priceSheetTab: PRICE_TAB_WOOD, priceSheetItem: '間接照明', clientNote: '' },
       { id: 'desk_sec', perSecondary: true, sortKey: 57, group: '次臥', label: '化粧桌／書桌', quoteSection: '次臥', displayRank: 52, menuMatrix: '定量(式) ・ 次臥各間', unit: '式', price: 10000, defaultOn: false, cabWood: true, hint: '', priceSheetTab: PRICE_TAB_WOOD, priceSheetItem: '書桌&電視吊櫃-D60XH40內', clientNote: '同主臥書桌列。' },
-      { id: 'wardrobe2', zoneScope: 'all', sortKey: 2, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 215, menuMatrix: '次臥平均尺×%（舊合併列、少用）', label: '衣櫃(次臥短邊平均-舊)', unit: '尺', price: 3200, perSecondary: false, defaultOn: false, cabWood: false, hint: '併舊方案用' },
+      { id: 'wardrobe2', zoneScope: 'all', sortKey: 2, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 215, menuMatrix: '次臥平均尺×%（舊合併列、少用）', label: '衣櫃(次臥短邊平均-舊)', unit: '尺', price: 3200, perSecondary: false, defaultOn: false, cabWood: false, hint: '併舊方案用', priceSheetTab: PRICE_TAB_WOOD, priceSheetItem: '開門高衣櫃-D60H240內', clientNote: '舊合併列：單價對照同主／次臥衣櫃 D60×H240。' },
       { id: 'paint_ceil', zoneScope: 'all', sortKey: 200, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 220, menuMatrix: '變量・坪(面漆參考) | 不設邊', label: '面漆(天地壁-概估用坪)', unit: '坪', price: 600, defaultOn: true, cabWood: false, hint: '概估＝客+臥實鋪坪', priceSheetTab: PRICE_TAB_PAINT, priceSheetItem: '矽酸鈣/石膏天花板-乳膠漆', clientNote: '概估面漆：暫對天花乳膠漆列；可改牆面或水泥漆列。' },
       { id: 'paint_ac', zoneScope: 'all', sortKey: 201, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 230, menuMatrix: '變量・全區包管短邊合計台尺', label: '矽鈣／包管油漆(參考台尺合)', unit: '尺', price: 200, defaultOn: true, cabWood: false, hint: '各空間包管一邊短尺加總', priceSheetTab: PRICE_TAB_PAINT, priceSheetItem: '油漆-冷氣包管', clientNote: '' },
       { id: 'mep_switches', zoneScope: 'all', sortKey: 300, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 300, menuMatrix: '變量・點數(底+臥，管理員) | 全區', label: '出線/開關插座(參考-點)', unit: '式', price: 350, defaultOn: true, cabWood: false, hint: '底數+每區一參與', priceSheetTab: PRICE_TAB_MEP, priceSheetItem: '插座拉線新增/移位-一般作法', clientNote: '參考用「座」價；本工具數量語意為式／點時請手調或改對列。' },
       { id: 'mep_dedicated', zoneScope: 'all', sortKey: 301, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 302, menuMatrix: '定量(迴)', label: '專用迴路/220V(參考)', unit: '迴', price: 5000, defaultOn: true, cabWood: false, hint: '', priceSheetTab: PRICE_TAB_MEP, priceSheetItem: '新增5.5 專用迴路', clientNote: '表列單位為「處」；讀入後單位會以表為準。' },
       { id: 'mep_net', zoneScope: 'all', sortKey: 302, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 304, menuMatrix: '定量(點)', label: '網路/弱電延伸(參考)', unit: '點', price: 1500, defaultOn: true, cabWood: false, hint: '', priceSheetTab: PRICE_TAB_MEP, priceSheetItem: '網路線拉線/延長 +資訊座(延長工法)', clientNote: '' },
-      { id: 'mep_tv', zoneScope: 'all', sortKey: 303, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 306, menuMatrix: '定量(路)', label: '有線電視/同軸(參考)', unit: '路', price: 1500, defaultOn: true, cabWood: false, hint: '', priceSheetTab: PRICE_TAB_MEP, priceSheetItem: '電視(端末)', clientNote: '表內為「組」；與「路」語意不同時請改表內品項。' },
-      { id: 'mep_misc', zoneScope: 'all', sortKey: 304, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 308, menuMatrix: '定量(式)', label: '其餘水電(參考)', unit: '式', price: 3000, defaultOn: false, cabWood: false, hint: '', priceSheetTab: PRICE_TAB_MEP, priceSheetItem: '電視線座更換工資', clientNote: '表內無總括「雜項」：暫對單列工資；請依實務改。' },
+      { id: 'mep_tv', zoneScope: 'all', sortKey: 303, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 306, menuMatrix: '定量(路)', label: '有線電視/同軸(參考)', unit: '路', price: 1500, defaultOn: true, cabWood: false, hint: '', priceSheetTab: PRICE_TAB_MEP, priceSheetItem: '一孔電視', clientNote: '表無「路／同軸」專列：暫對「一孔電視」（組）；可改「電視(端末)」。' },
+      { id: 'mep_misc', zoneScope: 'all', sortKey: 304, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 308, menuMatrix: '定量(式)', label: '其餘水電(參考)', unit: '式', price: 3000, defaultOn: false, cabWood: false, hint: '', priceSheetTab: PRICE_TAB_PROTECT, priceSheetItem: '粗步清潔及工具損耗', clientNote: '表內無「水電雜項」總列：暫對保護工程之現場雜項式子目；請依案改水電單列。' },
       { id: 'mep_recess', zoneScope: 'all', sortKey: 305, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 310, menuMatrix: '變量・(客+臥坪)×1.5 盞(概估) | 全區', label: '嵌燈/筒燈(參考-盞)', unit: '盞', price: 500, defaultOn: true, cabWood: false, hint: '概估(客+臥坪）×1.5 盞', priceSheetTab: PRICE_TAB_MEP, priceSheetItem: '9mm嵌燈', clientNote: '' },
-      { id: 'trim_molding', zoneScope: 'all', sortKey: 400, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 400, menuMatrix: '佔位(式) ・ 金額=木作小計×% 見管理員', label: '木作+系統收邊(參考)', unit: '式', price: 0, lineKind: 'trim', defaultOn: true, cabWood: false, hint: '小計=下方木作+系統合計×設定%', quoteNote: 'trim' },
-      { id: 'touchup_clean', zoneScope: 'all', sortKey: 401, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 410, menuMatrix: '佔位(定額) ・ 金額見管理員', label: '細清＋竣工後修補(參考)', unit: '式', price: 0, lineKind: 'touchup', defaultOn: true, cabWood: false, hint: '參考固定額，見管理員' },
+      { id: 'trim_molding', zoneScope: 'all', sortKey: 400, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 400, menuMatrix: '佔位(式) ・ 金額=木作小計×% 見管理員', label: '木作+系統收邊(參考)', unit: '式', price: 0, lineKind: 'trim', defaultOn: true, cabWood: false, hint: '小計=下方木作+系統合計×設定%', quoteNote: 'trim', priceSheetTab: PRICE_TAB_WALLPAPER, priceSheetItem: '300CM內鋁製收邊條', clientNote: '表無「收邊％」整單列：報價小計仍依管理員％×木作小計；此欄僅供讀入單價參考（與實際收邊計價方式可能不同）。' },
+      { id: 'touchup_clean', zoneScope: 'all', sortKey: 401, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 410, menuMatrix: '佔位(定額) ・ 金額見管理員', label: '細清＋竣工後修補(參考)', unit: '式', price: 0, lineKind: 'touchup', defaultOn: true, cabWood: false, hint: '參考固定額，見管理員', priceSheetTab: PRICE_TAB_PAINT, priceSheetItem: '細清後局部髒污修補', clientNote: '表無與「定額細清＋竣工修補」完全對應之单列：報價金額仍依管理員定額；此欄對「細清後局部髒污修補」供參考單價。可改「木作後局部髒污損傷修補」。' },
     ],
     templates: [
       { id: '3b2h', name: '三房二廳（3 臥 + 客廚 + 2 衛）', bedrooms: 3, baths: 2 },
