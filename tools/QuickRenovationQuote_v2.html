@@ -28,7 +28,7 @@
     <section id="adminSection" class="hidden no-print bg-white rounded-xl shadow p-4 md:p-6 space-y-4">
       <h2 class="text-lg font-semibold text-amber-900">管理員設定</h2>
       <p class="text-xs text-stone-500"
-        >參數存 <code class="bg-stone-100 px-1 rounded">localStorage</code>。<strong>從雲端試算表用「分頁＋品項」帶出單位單價</strong>：在「試算表 ID」那一欄的<strong>正下面</strong>、橘底標題「<span class="text-amber-900">各品項：單價、試算表對照、客戶可見備註</span>」的區塊內，逐筆填<strong>表頁名、表內品項</strong>後按讀入單價。菜單數量規則在本頁<strong>再下面</strong>的「方案菜單」表單編。正式上雲可改 GAS／後端。開發階段暫不鎖密碼。</p>
+        >參數<strong>本機</strong>仍寫 <code class="bg-stone-100 px-1 rounded">localStorage</code>（鍵 <code class="bg-stone-100 px-1 rounded">qr_estimator_settings_v2</code>），並可<strong>同步到 Firebase</strong>（與報價審核器同一組連線設定 <code class="bg-stone-100 px-1 rounded">fb_audit_config</code>）。<strong>從雲端試算表用「分頁＋品項」帶出單位單價</strong>：在「試算表 ID」那一欄的<strong>正下面</strong>、橘底標題「<span class="text-amber-900">各品項：單價、試算表對照、客戶可見備註</span>」的區塊內，逐筆填<strong>表頁名、表內品項</strong>後按讀入單價。菜單數量規則在本頁<strong>再下面</strong>的「方案菜單」表單編。開發階段暫不鎖密碼。</p>
       <div id="adminForm" class="space-y-6">
         <div class="flex flex-wrap gap-2">
           <button type="button" id="adminSaveBtn" class="px-4 py-2 bg-stone-800 text-white rounded-lg text-sm">儲存設定</button>
@@ -36,6 +36,15 @@
           <label class="px-4 py-2 border rounded-lg text-sm cursor-pointer">匯入 JSON<input id="adminImportFile" type="file" accept="application/json" class="hidden" /></label>
           <button type="button" id="adminResetBtn" class="px-4 py-2 text-red-700 border border-red-200 rounded-lg text-sm">還原全預設</button>
           <button type="button" id="adminResetSchemesBtn" class="px-4 py-2 border border-amber-300 rounded-lg text-sm text-amber-900">只還原方案菜單 JSON</button>
+        </div>
+        <div class="rounded-lg border border-stone-200 bg-stone-50/80 p-3 text-xs space-y-2">
+          <div class="font-medium text-stone-800">Firebase 同步（選用）</div>
+          <p class="text-stone-600">雲端路徑：<code class="bg-white px-1 rounded">quickRenovationQuote/settingsV2</code>（Realtime Database）。請在 Firebase 主控台為此路徑設定<strong>讀寫規則</strong>（例如僅內部可寫）；未設定連線時只使用本機。</p>
+          <p id="qrFbSyncStatus" class="text-stone-700" role="status">尚未檢查雲端。</p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" id="qrFbPullBtn" class="px-3 py-1.5 border rounded-lg text-sm hover:bg-white">從雲端拉下</button>
+            <button type="button" id="qrFbPushBtn" class="px-3 py-1.5 border rounded-lg text-sm hover:bg-white">上傳到雲端</button>
+          </div>
         </div>
         <label class="block text-sm">變更 PIN（≥4 字，留空不變）</label>
         <input id="adminNewPin" type="password" class="border rounded-lg px-3 py-2 w-full max-w-xs" />
@@ -74,7 +83,7 @@
         <p class="text-xs text-stone-500"
           >與「單價從表抓」<strong>分開</strong>：本區只編<strong>每品項的數量規則</strong>，存在 <code>schemeMenus</code>；品項的<strong>單價、表頁、表內品項、客戶備註</strong>在 <code>itemDefs</code>。兩層是為了同一價可配多套方案。上方各品項列有「帶我過去」可跳到此處編該品項規則。</p>
         <p class="text-xs text-amber-900/90 bg-amber-50/80 border border-amber-100 rounded px-2 py-1.5"
-          ><strong>存哪裡？</strong> 瀏覽器 <code>localStorage</code> 鍵名 <code>qr_estimator_settings_v2</code>（整包 JSON）。可按頁頂「匯出 JSON」備份；清除網站資料或換電腦會沒有，請定期匯出。</p>
+          ><strong>存哪裡？</strong> 本機 <code>localStorage</code> 鍵名 <code>qr_estimator_settings_v2</code>；若已連 Firebase 另存於 <code>quickRenovationQuote/settingsV2</code>。開頁時若雲端有資料會<strong>以雲端為準</strong>並覆寫本機。可按頁頂「匯出 JSON」備份。</p>
         <p class="text-xs text-stone-500"
           >每一組方案＝一組「數量怎麼算」的<strong>規則</strong>。你可以用**下面表單**逐筆改，或改用<strong>速寫區</strong>用橫欄（像表格）整批寫/貼；按「轉成規則」或「儲存設定」後一併寫入。地坪 <code>floor_p</code> 一條 <code>floor_115</code> 就會**套到**客、主、各次臥。</p>
         <div class="flex flex-wrap gap-3 items-end text-sm">
@@ -249,11 +258,22 @@
     </section>
   </div>
 
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
   <script>
 (function () {
   'use strict';
 
   var STORAGE_KEY = 'qr_estimator_settings_v2';
+  var FB_CONFIG_STORAGE_KEY = 'fb_audit_config';
+  var FB_RTDB_SETTINGS_PATH = 'quickRenovationQuote/settingsV2';
+  var FB_CONFIG_DEFAULT = {
+    databaseURL: 'https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app',
+    apiKey: '',
+    authDomain: '',
+    projectId: '',
+  };
   var PING_TO_M2 = 3.305785124;
   var SCHEMA_V = 4;
 
@@ -391,8 +411,185 @@
     ],
   };
 
-  var state = { settings: null, lastAlloc: null, selectedSchemeId: 'simple', _preservedMenuScheme: null };
+  var state = {
+    settings: null,
+    lastAlloc: null,
+    selectedSchemeId: 'simple',
+    _preservedMenuScheme: null,
+    fbReady: false,
+    fbAuthUid: null,
+    fbLoadNote: '',
+  };
   var priceSyncPromise = null;
+
+  function qrFbReadMergedConfig() {
+    try {
+      return Object.assign({}, FB_CONFIG_DEFAULT, JSON.parse(localStorage.getItem(FB_CONFIG_STORAGE_KEY)) || {});
+    } catch (e) {
+      return Object.assign({}, FB_CONFIG_DEFAULT);
+    }
+  }
+
+  function qrFbAuthConfigured(cfg) {
+    var c = cfg || qrFbReadMergedConfig();
+    return !!(String(c.apiKey || '').trim() && String(c.authDomain || '').trim() && String(c.projectId || '').trim());
+  }
+
+  function qrFbInitOptions(cfg) {
+    var c = cfg || qrFbReadMergedConfig();
+    var o = { databaseURL: c.databaseURL || FB_CONFIG_DEFAULT.databaseURL };
+    if (qrFbAuthConfigured(c)) {
+      o.apiKey = String(c.apiKey).trim();
+      o.authDomain = String(c.authDomain).trim();
+      o.projectId = String(c.projectId).trim();
+    }
+    return o;
+  }
+
+  function qrFbEnsureApp() {
+    if (typeof firebase === 'undefined') return null;
+    try {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(qrFbInitOptions());
+      }
+    } catch (e) {
+      console.warn('[QuickQuote Firebase]', e);
+      return null;
+    }
+    try {
+      if (qrFbAuthConfigured() && firebase.auth) {
+        firebase.auth().onAuthStateChanged(function (u) {
+          state.fbAuthUid = u && u.uid ? u.uid : null;
+        });
+        firebase.auth().signInAnonymously().catch(function (e2) {
+          console.warn('[QuickQuote Firebase] 匿名登入失敗', e2 && e2.message);
+        });
+      }
+    } catch (e3) {
+      console.warn('[QuickQuote Firebase]', e3);
+    }
+    state.fbReady = true;
+    return firebase.database();
+  }
+
+  function qrFbSettingsRef(db) {
+    return db.ref(FB_RTDB_SETTINGS_PATH);
+  }
+
+  function qrFbSetSyncNote(text) {
+    state.fbLoadNote = text || '';
+    var el = document.getElementById('qrFbSyncStatus');
+    if (el) el.textContent = text || '（無訊息）';
+  }
+
+  function qrApplyLoadedSettingsObject(parsed) {
+    state.settings = deepMerge(JSON.parse(JSON.stringify(DEFAULTS)), parsed);
+    if (state.settings.mepPerZone == null && state.settings.mepPerRoom != null) {
+      state.settings.mepPerZone = state.settings.mepPerRoom;
+    }
+  }
+
+  function normalizeSettingsAfterLoad() {
+    if (state.settings.mepPerZone == null && state.settings.mepPerRoom != null) {
+      state.settings.mepPerZone = state.settings.mepPerRoom;
+    }
+    if (state.settings.bed4VsBed2 == null) state.settings.bed4VsBed2 = DEFAULTS.bed4VsBed2;
+    if (!Array.isArray(state.settings.schemeMenus) || !state.settings.schemeMenus.length) {
+      state.settings.schemeMenus = defaultSchemeMenus();
+    }
+    var defs = state.settings.itemDefs;
+    var hasSchema4 =
+      Array.isArray(defs) &&
+      defs.some(function (x) { return x && x.id === 'floor_p' && x.perFloor; }) &&
+      defs.some(function (x) { return x && x.id === 'trim_molding' && x.lineKind === 'trim'; });
+    if (!state.settings.schemaVersion || state.settings.schemaVersion < SCHEMA_V || !hasSchema4) {
+      state.settings.itemDefs = JSON.parse(JSON.stringify(DEFAULTS.itemDefs));
+      state.settings.schemeMenus = defaultSchemeMenus();
+      state.settings.schemaVersion = SCHEMA_V;
+      if (state.settings.mepPerZone == null && state.settings.mepPerRoom != null) {
+        state.settings.mepPerZone = state.settings.mepPerRoom;
+      }
+      if (!state.settings.priceSheetGvizId && state.settings.gvizId) {
+        state.settings.priceSheetGvizId = state.settings.gvizId;
+      }
+      saveSettingsLocalOnly();
+    }
+    if (!Array.isArray(state.settings.itemDefs) || !state.settings.itemDefs.length) {
+      state.settings.itemDefs = JSON.parse(JSON.stringify(DEFAULTS.itemDefs));
+    }
+    alignItemDefLayoutFromDefaults();
+  }
+
+  function saveSettingsLocalOnly() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.settings));
+  }
+
+  function qrFbPushCurrentSettings(opts) {
+    opts = opts || {};
+    var silent = !!opts.silent;
+    var db = qrFbEnsureApp();
+    if (!db) {
+      if (!silent) alert('無法連線 Firebase（程式未載入或初始化失敗）。');
+      return Promise.resolve(false);
+    }
+    return qrFbSettingsRef(db)
+      .set(state.settings)
+      .then(function () {
+        qrFbSetSyncNote('已上傳至雲端（' + FB_RTDB_SETTINGS_PATH + '）。');
+        if (!silent) alert('已上傳到 Firebase。');
+        return true;
+      })
+      .catch(function (e) {
+        var msg = (e && e.message) || String(e);
+        qrFbSetSyncNote('上傳失敗：' + msg);
+        if (!silent) alert('上傳失敗：' + msg);
+        console.warn('[QuickQuote Firebase] push', e);
+        return false;
+      });
+  }
+
+  function qrFbPullOnce(opts) {
+    opts = opts || {};
+    var silent = !!opts.silent;
+    var preferRemote = !!opts.preferRemote;
+    var db = qrFbEnsureApp();
+    if (!db) {
+      if (!silent) qrFbSetSyncNote('未載入 Firebase SDK 或無法初始化。');
+      return Promise.resolve(false);
+    }
+    return qrFbSettingsRef(db)
+      .once('value')
+      .then(function (snap) {
+        var val = snap.val();
+        if (val == null || typeof val !== 'object') {
+          qrFbSetSyncNote('雲端尚無資料（路徑 ' + FB_RTDB_SETTINGS_PATH + '）。沿用本機。');
+          return false;
+        }
+        try {
+          qrApplyLoadedSettingsObject(val);
+          normalizeSettingsAfterLoad();
+          saveSettingsLocalOnly();
+          qrFbSetSyncNote(
+            preferRemote
+              ? '已從雲端載入並覆寫本機（' + FB_RTDB_SETTINGS_PATH + '）。'
+              : '已從雲端拉下並寫入本機。'
+          );
+          if (!silent && !preferRemote) alert('已從雲端拉下並寫入本機。');
+          return true;
+        } catch (e) {
+          qrFbSetSyncNote('雲端資料格式異常：' + (e && e.message));
+          if (!silent) alert('雲端資料無法解析。');
+          return false;
+        }
+      })
+      .catch(function (e) {
+        var msg = (e && e.message) || String(e);
+        qrFbSetSyncNote('讀取雲端失敗：' + msg + '（沿用本機）');
+        if (!silent) alert('讀取雲端失敗：' + msg);
+        console.warn('[QuickQuote Firebase] pull', e);
+        return false;
+      });
+  }
 
   function syncSchemesJsonTextarea() {
     var t = document.getElementById('adminSchemesJson');
@@ -598,39 +795,13 @@
     } catch (e) {
       state.settings = JSON.parse(JSON.stringify(DEFAULTS));
     }
-    if (state.settings.mepPerZone == null && state.settings.mepPerRoom != null) {
-      state.settings.mepPerZone = state.settings.mepPerRoom;
-    }
-    if (state.settings.bed4VsBed2 == null) state.settings.bed4VsBed2 = DEFAULTS.bed4VsBed2;
-    if (!Array.isArray(state.settings.schemeMenus) || !state.settings.schemeMenus.length) {
-      state.settings.schemeMenus = defaultSchemeMenus();
-    }
-    var defs = state.settings.itemDefs;
-    var hasSchema4 =
-      Array.isArray(defs) &&
-      defs.some(function (x) { return x && x.id === 'floor_p' && x.perFloor; }) &&
-      defs.some(function (x) { return x && x.id === 'trim_molding' && x.lineKind === 'trim'; });
-    if (!state.settings.schemaVersion || state.settings.schemaVersion < SCHEMA_V || !hasSchema4) {
-      state.settings.itemDefs = JSON.parse(JSON.stringify(DEFAULTS.itemDefs));
-      state.settings.schemeMenus = defaultSchemeMenus();
-      state.settings.schemaVersion = SCHEMA_V;
-      if (state.settings.mepPerZone == null && state.settings.mepPerRoom != null) {
-        state.settings.mepPerZone = state.settings.mepPerRoom;
-      }
-      if (!state.settings.priceSheetGvizId && state.settings.gvizId) {
-        state.settings.priceSheetGvizId = state.settings.gvizId;
-      }
-      saveSettings();
-    }
-    if (!Array.isArray(state.settings.itemDefs) || !state.settings.itemDefs.length) {
-      state.settings.itemDefs = JSON.parse(JSON.stringify(DEFAULTS.itemDefs));
-    }
-    alignItemDefLayoutFromDefaults();
+    normalizeSettingsAfterLoad();
     return state.settings;
   }
 
   function saveSettings() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.settings));
+    saveSettingsLocalOnly();
+    return qrFbPushCurrentSettings({ silent: true });
   }
 
   function randBetween(a, b) {
@@ -2060,8 +2231,13 @@
     }
     syncSchemesJsonTextarea();
     readAdminForm();
-    saveSettings();
-    alert('已儲存');
+    saveSettings().then(function (cloudOk) {
+      alert(
+        cloudOk
+          ? '已儲存（本機與 Firebase）。'
+          : '已寫入本機；Firebase 同步失敗或未連線（見下方 Firebase 區狀態）。'
+      );
+    });
   });
   document.getElementById('adminResetBtn').addEventListener('click', function () {
     if (!confirm('還原全部預設？')) return;
@@ -2227,12 +2403,43 @@
     true
   );
 
-  loadSettings();
-  if (state.settings.priceSheetAutoOnOpen !== false && (state.settings.priceSheetGvizId || '').trim()) {
-    priceSyncPromise = syncPricesFromGviz({ silent: true });
+  function qrAfterSettingsReady() {
+    if (state.settings.priceSheetAutoOnOpen !== false && (state.settings.priceSheetGvizId || '').trim()) {
+      priceSyncPromise = syncPricesFromGviz({ silent: true });
+    }
+    fillTemplateSelect();
+    showClient();
   }
-  fillTemplateSelect();
-  showClient();
+
+  loadSettings();
+  qrFbPullOnce({ silent: true, preferRemote: true })
+    .then(function () {
+      qrAfterSettingsReady();
+    })
+    .catch(function () {
+      qrAfterSettingsReady();
+    });
+
+  var pullBtn = document.getElementById('qrFbPullBtn');
+  if (pullBtn) {
+    pullBtn.addEventListener('click', function () {
+      qrFbPullOnce({ silent: false, preferRemote: true }).then(function (ok) {
+        if (ok) {
+          fillTemplateSelect();
+          fillSchemeRadios();
+          var adm = document.getElementById('adminSection');
+          if (adm && !adm.classList.contains('hidden')) fillAdminForm();
+        }
+      });
+    });
+  }
+  var pushBtn = document.getElementById('qrFbPushBtn');
+  if (pushBtn) {
+    pushBtn.addEventListener('click', function () {
+      readAdminForm();
+      qrFbPushCurrentSettings({ silent: false });
+    });
+  }
 })();
   </script>
 </body>
