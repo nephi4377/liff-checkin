@@ -2272,10 +2272,18 @@ function quotationSizeDisplay(item) {
     return '';
 }
 
+/** 報價單「備註」欄：合併尺寸與備註，對齊 BudgetWeb 單一「備註／規格」欄（spec） */
+function quotationMergedSpecNote(item) {
+    const s = String(item.sizeLabel || '').trim();
+    const n = String(item.note || '').trim();
+    if (s && n) return `${s} ${n}`;
+    return s || n;
+}
+
 /**
  * 報價「合併分群」用尺寸段（不含實際寬高／坪數）：櫃體與區域是否併列改由相鄰 spatialCluster 決定，
  * 故此處不帶寬高或坪數，避免「同寬但遠」誤併或「不同寬但相鄰」無法併」。
- * 規格欄顯示仍用 {@link quotationSizeDisplay}。
+ * 尺寸字串仍由 {@link quotationSizeDisplay} 產出，經群組彙整後併入 {@link quotationMergedSpecNote} 之備註欄。
  */
 function quotationSizeMergeKey(item) {
     if (item.source === 'cabinet') return 'c';
@@ -2709,7 +2717,7 @@ function showBudgetModal() {
             const row = `
                 <tr class="bg-gray-100 font-bold">
                     <td class="px-2 py-2 border-b text-center"></td>
-                    <td class="px-2 py-2 border-b text-gray-700" colspan="6">${item.name}</td>
+                    <td class="px-2 py-2 border-b text-gray-700" colspan="5">${item.name}</td>
                 </tr>`;
             tableBody.innerHTML += row;
         } else {
@@ -2717,11 +2725,10 @@ function showBudgetModal() {
                 <tr>
                     <td class="px-2 py-2 border-b text-center">${itemIndex++}</td>
                     <td class="px-2 py-2 border-b">${item.name}</td>
-                    <td class="px-2 py-2 border-b text-xs text-gray-600">${item.sizeLabel || ''}</td>
                     <td class="px-2 py-2 border-b">${item.unit}</td>
                     <td class="px-2 py-2 border-b text-center">${item.quantity > 0 ? item.quantity : ''}</td>
                     <td class="px-2 py-2 border-b text-right">${item.totalPrice > 0 ? '$' + item.totalPrice.toLocaleString() : ''}</td>
-                    <td class="px-2 py-2 border-b text-xs text-gray-600">${item.note}</td>
+                    <td class="px-2 py-2 border-b text-xs text-gray-600">${quotationMergedSpecNote(item)}</td>
                 </tr>`;
             tableBody.innerHTML += row;
         }
@@ -2740,30 +2747,29 @@ function closeBudgetModal() {
  */
 function exportBudgetAsCSV() {
     const quotation = calculateFullQuotation();
-    const headers = ['項次', '項目', '規格', '單位', '數量', '總價', '備註'];
+    const headers = ['項次', '項目', '單位', '數量', '總價', '備註'];
     let csvContent = headers.join(',') + '\n';
     let itemIndex = 1;
 
     quotation.lineItems.forEach(item => {
         if (item.isHeader) {
             // [新增] CSV 標題列
-            csvContent += `,"${item.name}",,,,,\n`;
+            csvContent += `,"${item.name}",,,,\n`;
         } else {
             const row = [
                 itemIndex++,
                 `"${item.name.replace(/"/g, '""')}"`, // 處理項目名稱中的引號
-                `"${(item.sizeLabel || '').replace(/"/g, '""')}"`,
                 item.unit,
                 item.quantity > 0 ? item.quantity : '', // [修正] 0不顯示
                 item.totalPrice > 0 ? item.totalPrice : '', // [修正] 0元不顯示
-                `"${(item.note || '').replace(/"/g, '""')}"` // 處理備註中的引號
+                `"${quotationMergedSpecNote(item).replace(/"/g, '""')}"` // 備註（含尺寸），對齊 BudgetWeb spec 欄
             ];
             csvContent += row.join(',') + '\n';
         }
     });
 
     // 加上總計
-    csvContent += `\n"","","","","總計","","${quotation.grandTotal}",""\n`;
+    csvContent += `\n"","","","總計","${quotation.grandTotal}",""\n`;
 
     // 建立並下載 Blob
     const bom = new Uint8Array([0xEF, 0xBB, 0xBF]); // UTF-8 BOM，確保 Excel 正確讀取中文
@@ -3886,27 +3892,26 @@ async function downloadDesignFilesAsZip() {
 
         // 3. 加入預算 CSV 檔案
         const quotation = calculateFullQuotation();
-        const headers = ['項次', '項目', '規格', '單位', '數量', '總價', '備註'];
+        const headers = ['項次', '項目', '單位', '數量', '總價', '備註'];
         let csvContent = headers.join(',') + '\n';
         let itemIndex = 1;
 
         quotation.lineItems.forEach(item => {
             if (item.isHeader) {
-                csvContent += `,"${item.name}",,,,,\n`;
+                csvContent += `,"${item.name}",,,,\n`;
             } else {
                 const row = [
                     itemIndex++,
                     `"${item.name.replace(/"/g, '""')}"`,
-                    `"${(item.sizeLabel || '').replace(/"/g, '""')}"`,
                     item.unit,
                     item.quantity,
                     item.totalPrice,
-                    `"${(item.note || '').replace(/"/g, '""')}"`
+                    `"${quotationMergedSpecNote(item).replace(/"/g, '""')}"`
                 ];
                 csvContent += row.join(',') + '\n';
             }
         });
-        csvContent += `\n"","","","","總計","","${quotation.grandTotal}",""\n`;
+        csvContent += `\n"","","","總計","${quotation.grandTotal}",""\n`;
 
         const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
         zip.file(`預算明細_${dateString}.csv`, new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' }));

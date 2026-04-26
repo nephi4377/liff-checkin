@@ -27,6 +27,7 @@
 - [02_LEAVE_SYSTEM_SPEC.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/02_LEAVE_SYSTEM_SPEC.md)：假勤與加班申請系統。
 - [03_CHECKIN_SYSTEM_SPEC.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/03_CHECKIN_SYSTEM_SPEC.md)：精確地理圍欄打卡系統。
 - [05_PROJECT_WORKSPACE_SPEC.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/05_PROJECT_WORKSPACE_SPEC.md)：專案主控台與異步資料管理架構。
+- [14_INTERIOR_RENOVATION_QUOTATION_SYSTEM_SPEC.md](./14_INTERIOR_RENOVATION_QUOTATION_SYSTEM_SPEC.md)：室內裝修**清單式**快速報價（與 LayoutPlanner 圖面幾何計價分流）。
 - [06_DESIGN_ENGINE_SPEC.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/06_DESIGN_ENGINE_SPEC.md)：2D 空間設計引擎與自動計價系統 (CAT.A)。
 - [07_SYSTEM_FLOW_MAP.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/07_SYSTEM_FLOW_MAP.md)：全系統功能連結全景流程圖。
 - [施工回報_系統完整_SPEC.md](file:///c:/Users/a9999/Dropbox/CodeBackups/CODING/SPEC/施工回報_系統完整_SPEC.md)：施工回報 V3 ＋ GAS 現況（極速路徑、佇列、與上傳優化/遷移敘事之合併版）。歷史拆檔已於 2026-04-25 移入 `CODING/_DEPRECATED_/2026-04-25_施工回報合併前_SPEC/`。

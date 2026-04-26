@@ -2,7 +2,7 @@
 # CODING 專案完整檔案清冊
 
 > **本檔位置（正式）**：`CODING/SPEC/FILE_DOCUMENTATION.md` — 與各模組 **SPEC** 同層，用來盤點實體路徑與路由，**不**重複寫入各模組的細部行為（細節見對應 `SPEC/*_SPEC.md`）。  
-> **最後更新**：2026-04-25（遷入 `SPEC/`、補專案管理與施工回報、補本資料夾索引）  
+> **最後更新**：2026-04-26（新增室內裝修快速報價 SPEC 與計劃書索引）  
 > **專案名稱**：添心設計 LIFF 多模組前端（打卡／專案／內裝等）  
 > **主要架構**：Vue 3 SPA + 多模組 `iframe`（路由見 `spa/app.js`）
 
@@ -135,7 +135,8 @@
 | **01_SYSTEM_OVERVIEW.md** | 系統深編、模組與**其他 SPEC 的連結索引** |
 | **施工回報_系統完整_SPEC.md** | 施工回報前後端現況（V3、GAS、佇列） |
 | **GLOSSARY_ZH.md** | 專有名詞白話對照 |
-| 其餘 | `02_`…`11_` 等模組規格、LayoutPlanner/平面圖專用 SPEC 等 — **依模組**查閱 |
+| **14_INTERIOR_RENOVATION_QUOTATION_SYSTEM_SPEC.md** | 室內裝修**清單式**快速報價（草案）；產品計劃見 `tools/室內裝修快速報價系統_計劃書.md` |
+| 其餘 | `02_`…`13_` 等模組規格、LayoutPlanner/平面圖專用 SPEC 等 — **依模組**查閱 |
 
 `backend/project-console` 的後端規格如另有 `SPEC/`，不屬本 CODING 倉內前綴，以該專案路徑為準（主規格有交叉引用已寫在《施工回報_系統完整_SPEC》）。
 

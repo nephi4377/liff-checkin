@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- 本檔為「試算表逐項勾選」試作；產品主線改見 QuickRenovationQuote_v2.html（房型坪數推估）。 -->
+  <title>添心｜快速報價單（初版）</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white !important; }
+      .print-sheet { box-shadow: none !important; max-width: 100% !important; }
+    }
+  </style>
+</head>
+<body class="bg-stone-100 text-stone-900 min-h-screen">
+  <div class="max-w-5xl mx-auto px-3 py-6 pb-24">
+    <header class="no-print mb-6">
+      <h1 class="text-2xl font-bold text-amber-900">快速報價單</h1>
+      <p class="text-sm text-stone-600 mt-1">約 5 分鐘：設定空間 → 勾選工項與數量 → 總覽與列印。價目來源：公司標準計價表（Google 試算表公開讀取）。</p>
+      <p class="text-xs text-stone-500 mt-2">請用本機伺服器或已部署網域開啟（勿用 <code class="bg-stone-200 px-1 rounded">file://</code>），否則無法抓取試算表。</p>
+    </header>
+
+    <!-- 步驟條 -->
+    <nav class="no-print flex gap-2 mb-6 text-sm">
+      <button type="button" id="tab1" class="tab-btn flex-1 py-2 rounded-lg bg-amber-800 text-white font-medium">1 空間與案名</button>
+      <button type="button" id="tab2" class="tab-btn flex-1 py-2 rounded-lg bg-stone-300 text-stone-700 font-medium">2 選工項</button>
+      <button type="button" id="tab3" class="tab-btn flex-1 py-2 rounded-lg bg-stone-300 text-stone-700 font-medium">3 總覽／列印</button>
+    </nav>
+
+    <!-- Step 1 -->
+    <section id="panel1" class="panel bg-white rounded-xl shadow p-4 md:p-6">
+      <h2 class="text-lg font-semibold text-amber-900 mb-4">步驟一：案名與空間坪數</h2>
+      <div class="grid md:grid-cols-2 gap-4">
+        <label class="block">
+          <span class="text-sm text-stone-600">報價／案名</span>
+          <input id="quoteTitle" type="text" class="mt-1 w-full border rounded-lg px-3 py-2" placeholder="例：林宅｜新竹" />
+        </label>
+        <label class="block">
+          <span class="text-sm text-stone-600">客戶稱呼（選填）</span>
+          <input id="clientName" type="text" class="mt-1 w-full border rounded-lg px-3 py-2" placeholder="例：林先生" />
+        </label>
+      </div>
+      <div id="spacesList" class="mt-6 space-y-3"></div>
+      <button type="button" id="addSpaceBtn" class="no-print mt-3 text-sm text-amber-800 underline">＋ 新增空間</button>
+      <p class="no-print mt-6 text-xs text-stone-500">坪數用於「每坪」類工項：加入明細時可選「帶入本空間坪數」為數量。</p>
+      <div class="no-print mt-6 flex justify-end">
+        <button type="button" class="next1 px-6 py-2 bg-amber-800 text-white rounded-lg font-medium">下一步：選工項</button>
+      </div>
+    </section>
+
+    <!-- Step 2 -->
+    <section id="panel2" class="panel hidden bg-white rounded-xl shadow p-4 md:p-6">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+        <h2 class="text-lg font-semibold text-amber-900">步驟二：從計價表加入明細</h2>
+        <div class="flex flex-wrap gap-2 items-center">
+          <input id="catalogSearch" type="search" class="border rounded-lg px-3 py-2 text-sm w-full md:w-56" placeholder="搜尋品項…" />
+          <span id="catalogStatus" class="text-xs text-stone-500">載入中…</span>
+        </div>
+      </div>
+      <div class="grid lg:grid-cols-5 gap-4">
+        <div class="lg:col-span-2 border rounded-lg max-h-[60vh] overflow-y-auto text-sm no-print">
+          <div id="categoryAcc" class="divide-y"></div>
+        </div>
+        <div class="lg:col-span-3 border rounded-lg p-3 max-h-[60vh] overflow-y-auto" id="itemPicker">
+          <p class="text-stone-500 text-sm">請左側先展開分類，點品項後可加入報價。</p>
+        </div>
+      </div>
+      <h3 class="text-md font-semibold mt-6 mb-2">已選明細（可改數量、刪除）</h3>
+      <div class="overflow-x-auto border rounded-lg">
+        <table class="w-full text-sm">
+          <thead class="bg-stone-100">
+            <tr>
+              <th class="text-left p-2">空間</th>
+              <th class="text-left p-2">品項</th>
+              <th class="text-left p-2">單位</th>
+              <th class="text-right p-2">單價</th>
+              <th class="text-right p-2">數量</th>
+              <th class="text-right p-2">小計</th>
+              <th class="p-2 no-print"></th>
+            </tr>
+          </thead>
+          <tbody id="linesBody"></tbody>
+        </table>
+      </div>
+      <div class="no-print mt-6 flex justify-between">
+        <button type="button" class="prev2 px-4 py-2 border rounded-lg">上一步</button>
+        <button type="button" class="next2 px-6 py-2 bg-amber-800 text-white rounded-lg font-medium">下一步：總覽</button>
+      </div>
+    </section>
+
+    <!-- Step 3 -->
+    <section id="panel3" class="panel hidden bg-white rounded-xl shadow p-4 md:p-6 print-sheet">
+      <h2 class="text-lg font-semibold text-amber-900 mb-4">步驟三：費用與報價單</h2>
+      <div class="grid md:grid-cols-2 gap-4 no-print">
+        <label class="block">
+          <span class="text-sm">設計費（元，固定）</span>
+          <input id="designFeeFixed" type="number" min="0" step="1" value="0" class="mt-1 w-full border rounded-lg px-3 py-2" />
+        </label>
+        <label class="block">
+          <span class="text-sm">工程服務費（元，固定）</span>
+          <input id="serviceFeeFixed" type="number" min="0" step="1" value="0" class="mt-1 w-full border rounded-lg px-3 py-2" />
+        </label>
+        <label class="block">
+          <span class="text-sm">稅率（例如 0.05 = 5%）</span>
+          <input id="taxRate" type="number" min="0" max="1" step="0.01" value="0.05" class="mt-1 w-full border rounded-lg px-3 py-2" />
+        </label>
+        <label class="block">
+          <span class="text-sm">報價日期</span>
+          <input id="quoteDate" type="date" class="mt-1 w-full border rounded-lg px-3 py-2" />
+        </label>
+      </div>
+      <div id="summaryBox" class="mt-6 p-4 bg-stone-50 rounded-lg text-sm space-y-2"></div>
+      <div class="no-print mt-6 flex flex-wrap gap-2">
+        <button type="button" id="btnPrint" class="px-6 py-2 bg-stone-800 text-white rounded-lg">列印／存 PDF</button>
+        <button type="button" class="prev3 px-4 py-2 border rounded-lg">上一步</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- 加入明細：選空間 -->
+  <div id="modalBackdrop" class="hidden fixed inset-0 bg-black/40 z-40 no-print" aria-hidden="true"></div>
+  <div id="addModal" class="hidden fixed z-50 inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-md bg-white rounded-xl shadow-xl p-6 no-print">
+    <h3 class="font-semibold text-lg mb-3">加入明細</h3>
+    <p id="modalItemName" class="text-sm text-stone-600 mb-4"></p>
+    <label class="block mb-3">
+      <span class="text-sm">空間</span>
+      <select id="modalSpaceId" class="mt-1 w-full border rounded-lg px-3 py-2"></select>
+    </label>
+    <label class="block mb-3">
+      <span class="text-sm">數量</span>
+      <div class="flex gap-2 mt-1">
+        <input id="modalQty" type="number" min="0" step="0.01" value="1" class="flex-1 border rounded-lg px-3 py-2" />
+        <button type="button" id="modalUsePing" class="text-xs px-2 border rounded-lg whitespace-nowrap">帶入空間坪數</button>
+      </div>
+    </label>
+    <label class="block mb-4">
+      <span class="text-sm">單價覆寫（選填）</span>
+      <input id="modalPriceOverride" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2" placeholder="空白＝用計價表單價" />
+    </label>
+    <div class="flex justify-end gap-2">
+      <button type="button" id="modalCancel" class="px-4 py-2 border rounded-lg">取消</button>
+      <button type="button" id="modalConfirm" class="px-4 py-2 bg-amber-800 text-white rounded-lg">加入</button>
+    </div>
+  </div>
+
+  <script>
+(function () {
+  'use strict';
+
+  /** 標準計價表（與 LayoutPlanner 相同：須「知道連結的人可檢視」或公開） */
+  const PRICING_SHEET_ID = '1-9Ztmawv5tnAsQBmoHXzW_THYLyUOahGFsITvtmHaUk';
+  const PRICING_SHEET_GID = 0;
+
+  let categories = [];
+  let selectedCatIndex = 0;
+  let quoteLines = [];
+  let pendingItem = null;
+  let lineIdSeq = 1;
+
+  function money(n) {
+    const x = Math.round(Number(n) || 0);
+    return x.toLocaleString('zh-TW');
+  }
+
+  function isPercentRow(unit, price) {
+    const u = String(unit || '').trim();
+    return u === '式' && typeof price === 'number' && price > 0 && price < 1;
+  }
+
+  function parseGvizText(text) {
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start === -1 || end === -1) throw new Error('試算表回傳格式無法解析');
+    return JSON.parse(text.substring(start, end + 1));
+  }
+
+  function buildCategoriesFromSheet(data) {
+    const rows = data.table.rows;
+    const cats = [];
+    let current = { name: '主表（開頭）', items: [] };
+    cats.push(current);
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row.c) continue;
+      const a = row.c[0]?.v;
+      const b = row.c[1]?.v;
+      const c = row.c[2]?.v;
+      const d = row.c[3]?.v;
+      const e = row.c[4]?.v;
+      const name = a != null ? String(a).trim() : '';
+      if (!name) continue;
+
+      const bStr = b != null ? String(b).trim() : '';
+      const hasPrice = typeof c === 'number' && !Number.isNaN(c);
+      const hasUnit = bStr.length > 0;
+
+      if (!hasUnit && !hasPrice) {
+        current = { name, items: [] };
+        cats.push(current);
+        continue;
+      }
+      if (!hasUnit || !hasPrice) continue;
+
+      current.items.push({
+        id: 'row-' + i,
+        sheetRowIndex: i,
+        name,
+        unit: bStr,
+        unitPrice: c,
+        note: d != null ? String(d) : '',
+        extraNote: e != null ? String(e) : '',
+        categoryName: current.name,
+      });
+    }
+    return cats.filter(function (c) { return c.items.length > 0; });
+  }
+
+  async function loadCatalog() {
+    const el = document.getElementById('catalogStatus');
+    el.textContent = '載入計價表…';
+    const url = 'https://docs.google.com/spreadsheets/d/' + PRICING_SHEET_ID + '/gviz/tq?tqx=out:json&gid=' + PRICING_SHEET_GID;
+    const res = await fetch(url);
+    const text = await res.text();
+    const data = parseGvizText(text);
+    categories = buildCategoriesFromSheet(data);
+    el.textContent = '已載入 ' + categories.reduce(function (n, c) { return n + c.items.length; }, 0) + ' 筆工項';
+    renderCategoryAcc();
+    renderItemPicker();
+  }
+
+  let spaces = [];
+
+  function defaultSpaces() {
+    return [
+      { id: 's1', name: '客廳', ping: 0 },
+      { id: 's2', name: '主臥', ping: 0 },
+    ];
+  }
+
+  function renderSpaces() {
+    const root = document.getElementById('spacesList');
+    root.innerHTML = '';
+    spaces.forEach(function (s, idx) {
+      const row = document.createElement('div');
+      row.className = 'flex flex-wrap gap-2 items-end border-b border-stone-100 pb-3';
+      row.innerHTML =
+        '<label class="flex-1 min-w-[120px]">' +
+        '<span class="text-xs text-stone-500">空間名稱</span>' +
+        '<input type="text" data-k="name" data-id="' + s.id + '" class="mt-1 w-full border rounded px-2 py-1.5 text-sm" value="' + escapeAttr(s.name) + '" />' +
+        '</label>' +
+        '<label class="w-28">' +
+        '<span class="text-xs text-stone-500">坪數</span>' +
+        '<input type="number" min="0" step="0.01" data-k="ping" data-id="' + s.id + '" class="mt-1 w-full border rounded px-2 py-1.5 text-sm" value="' + (s.ping || '') + '" />' +
+        '</label>' +
+        (spaces.length > 1
+          ? '<button type="button" data-del="' + s.id + '" class="text-xs text-red-600 px-2 py-1 mb-0.5 no-print">刪除</button>'
+          : '');
+      root.appendChild(row);
+    });
+    root.querySelectorAll('input[data-k]').forEach(function (inp) {
+      inp.addEventListener('change', function () {
+        const id = inp.getAttribute('data-id');
+        const sp = spaces.find(function (x) { return x.id === id; });
+        if (!sp) return;
+        if (inp.getAttribute('data-k') === 'name') sp.name = inp.value.trim() || '空間';
+        else sp.ping = parseFloat(inp.value) || 0;
+      });
+    });
+    root.querySelectorAll('button[data-del]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const id = btn.getAttribute('data-del');
+        spaces = spaces.filter(function (x) { return x.id !== id; });
+        quoteLines = quoteLines.filter(function (l) { return l.spaceId !== id; });
+        renderSpaces();
+        renderLines();
+      });
+    });
+  }
+
+  function escapeAttr(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  }
+
+  document.getElementById('addSpaceBtn').addEventListener('click', function () {
+    spaces.push({ id: 's' + Date.now(), name: '空間', ping: 0 });
+    renderSpaces();
+  });
+
+  function setStep(n) {
+    document.querySelectorAll('.panel').forEach(function (p) { p.classList.add('hidden'); });
+    document.getElementById('panel' + n).classList.remove('hidden');
+    document.querySelectorAll('.tab-btn').forEach(function (b, i) {
+      if (i + 1 === n) {
+        b.className = 'tab-btn flex-1 py-2 rounded-lg bg-amber-800 text-white font-medium';
+      } else {
+        b.className = 'tab-btn flex-1 py-2 rounded-lg bg-stone-300 text-stone-700 font-medium';
+      }
+    });
+    if (n === 3) renderSummary();
+  }
+
+  document.getElementById('tab1').addEventListener('click', function () { setStep(1); });
+  document.getElementById('tab2').addEventListener('click', function () { setStep(2); });
+  document.getElementById('tab3').addEventListener('click', function () { setStep(3); });
+  document.querySelector('.next1').addEventListener('click', function () { setStep(2); });
+  document.querySelector('.prev2').addEventListener('click', function () { setStep(1); });
+  document.querySelector('.next2').addEventListener('click', function () { setStep(3); });
+  document.querySelector('.prev3').addEventListener('click', function () { setStep(2); });
+
+  function renderCategoryAcc() {
+    const acc = document.getElementById('categoryAcc');
+    acc.innerHTML = '';
+    const q = (document.getElementById('catalogSearch').value || '').trim().toLowerCase();
+    categories.forEach(function (cat, ci) {
+      const filtered = !q
+        ? cat.items
+        : cat.items.filter(function (it) {
+            return (it.name + it.note + it.unit).toLowerCase().indexOf(q) !== -1;
+          });
+      if (!filtered.length && q) return;
+
+      const wrap = document.createElement('div');
+      const head = document.createElement('button');
+      head.type = 'button';
+      head.className = 'w-full text-left px-3 py-2 font-medium flex justify-between items-center hover:bg-stone-50';
+      head.innerHTML =
+        '<span>' + escapeHtml(cat.name) + '</span>' +
+        '<span class="text-stone-400 text-xs">' + (q ? filtered.length : cat.items.length) + '</span>';
+      const body = document.createElement('div');
+      body.className = 'px-2 pb-2 space-y-0.5 ' + (ci === selectedCatIndex ? '' : 'hidden');
+      head.addEventListener('click', function () {
+        selectedCatIndex = ci;
+        document.querySelectorAll('#categoryAcc > div > div:last-child').forEach(function (el) { el.classList.add('hidden'); });
+        body.classList.remove('hidden');
+        renderItemPicker(filtered.length ? filtered : cat.items);
+      });
+      filtered.forEach(function (it) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'w-full text-left px-2 py-1.5 rounded text-xs hover:bg-amber-50 border border-transparent hover:border-amber-200';
+        b.textContent = it.name;
+        b.addEventListener('click', function (e) {
+          e.stopPropagation();
+          selectedCatIndex = ci;
+          openAddModal(it);
+        });
+        body.appendChild(b);
+      });
+      wrap.appendChild(head);
+      wrap.appendChild(body);
+      acc.appendChild(wrap);
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function renderItemPicker(list) {
+    const box = document.getElementById('itemPicker');
+    const items = list || (categories[selectedCatIndex] && categories[selectedCatIndex].items) || [];
+    if (!items.length) {
+      box.innerHTML = '<p class="text-stone-500 text-sm">此分類無項目或無符合搜尋結果。</p>';
+      return;
+    }
+    box.innerHTML = items
+      .map(function (it) {
+        const flag = isPercentRow(it.unit, it.unitPrice) ? '<span class="text-amber-700 text-xs">（％類）</span>' : '';
+        return (
+          '<div class="border-b border-stone-100 py-2 flex justify-between gap-2 items-start">' +
+          '<div><div class="font-medium text-sm">' +
+          escapeHtml(it.name) +
+          ' ' +
+          flag +
+          '</div>' +
+          '<div class="text-xs text-stone-500 mt-1">' +
+          escapeHtml(it.unit) +
+          ' · $' +
+          money(it.unitPrice) +
+          (it.note ? ' · ' + escapeHtml(it.note) : '') +
+          '</div></div>' +
+          '<button type="button" class="shrink-0 px-3 py-1 text-sm bg-amber-100 text-amber-900 rounded-lg add-item" data-sheet-row="' +
+          it.sheetRowIndex +
+          '">加入</button></div>'
+        );
+      })
+      .join('');
+    box.querySelectorAll('.add-item').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const ri = parseInt(btn.getAttribute('data-sheet-row'), 10);
+        let found = null;
+        categories.forEach(function (c) {
+          c.items.forEach(function (it) {
+            if (it.sheetRowIndex === ri) found = it;
+          });
+        });
+        if (found) openAddModal(found);
+      });
+    });
+  }
+
+  function openAddModal(item) {
+    pendingItem = item;
+    document.getElementById('modalItemName').textContent = item.name + '（' + item.unit + ' · $' + money(item.unitPrice) + '）';
+    const sel = document.getElementById('modalSpaceId');
+    sel.innerHTML = '';
+    spaces.forEach(function (s) {
+      const o = document.createElement('option');
+      o.value = s.id;
+      o.textContent = s.name + '（' + (s.ping || 0) + ' 坪）';
+      sel.appendChild(o);
+    });
+    document.getElementById('modalQty').value = '1';
+    document.getElementById('modalPriceOverride').value = '';
+    document.getElementById('modalBackdrop').classList.remove('hidden');
+    document.getElementById('addModal').classList.remove('hidden');
+  }
+
+  function closeModal() {
+    pendingItem = null;
+    document.getElementById('modalBackdrop').classList.add('hidden');
+    document.getElementById('addModal').classList.add('hidden');
+  }
+
+  document.getElementById('modalCancel').addEventListener('click', closeModal);
+  document.getElementById('modalBackdrop').addEventListener('click', closeModal);
+  document.getElementById('modalUsePing').addEventListener('click', function () {
+    const sid = document.getElementById('modalSpaceId').value;
+    const sp = spaces.find(function (x) { return x.id === sid; });
+    if (sp) document.getElementById('modalQty').value = String(sp.ping || 0);
+  });
+
+  document.getElementById('modalConfirm').addEventListener('click', function () {
+    if (!pendingItem) return;
+    const sid = document.getElementById('modalSpaceId').value;
+    const sp = spaces.find(function (x) { return x.id === sid; });
+    const qty = parseFloat(document.getElementById('modalQty').value);
+    const ov = document.getElementById('modalPriceOverride').value.trim();
+    const unitPrice = ov === '' ? pendingItem.unitPrice : parseFloat(ov);
+    if (Number.isNaN(qty) || qty < 0 || Number.isNaN(unitPrice)) {
+      alert('請確認數量與單價');
+      return;
+    }
+    quoteLines.push({
+      id: 'L' + lineIdSeq++,
+      spaceId: sid,
+      spaceName: sp ? sp.name : '',
+      catalogRow: pendingItem.sheetRowIndex,
+      name: pendingItem.name,
+      unit: pendingItem.unit,
+      unitPrice: unitPrice,
+      qty: qty,
+      note: pendingItem.note,
+      isPercent: isPercentRow(pendingItem.unit, unitPrice),
+    });
+    renderLines();
+    closeModal();
+  });
+
+  function lineSubtotal(line) {
+    if (line.isPercent) return 0;
+    return Math.round(line.qty * line.unitPrice);
+  }
+
+  function computeTotals() {
+    const normalSum = quoteLines.filter(function (l) { return !l.isPercent; }).reduce(function (s, l) { return s + lineSubtotal(l); }, 0);
+    let percentSum = 0;
+    quoteLines.filter(function (l) { return l.isPercent; }).forEach(function (l) {
+      percentSum += Math.round(normalSum * l.unitPrice * l.qty);
+    });
+    const constructionSubtotal = normalSum + percentSum;
+    const design = parseFloat(document.getElementById('designFeeFixed').value) || 0;
+    const service = parseFloat(document.getElementById('serviceFeeFixed').value) || 0;
+    const taxRate = parseFloat(document.getElementById('taxRate').value) || 0;
+    const taxBase = constructionSubtotal + design + service;
+    const tax = Math.round(taxBase * taxRate);
+    const grand = constructionSubtotal + design + service + tax;
+    return {
+      normalSum: normalSum,
+      percentSum: percentSum,
+      constructionSubtotal: constructionSubtotal,
+      design: design,
+      service: service,
+      tax: tax,
+      grand: grand,
+    };
+  }
+
+  function renderLines() {
+    const tb = document.getElementById('linesBody');
+    tb.innerHTML = '';
+    quoteLines.forEach(function (line, idx) {
+      const tr = document.createElement('tr');
+      const sub = line.isPercent ? '（見總覽）' : money(lineSubtotal(line));
+      tr.innerHTML =
+        '<td class="p-2">' +
+        escapeHtml(line.spaceName) +
+        '</td>' +
+        '<td class="p-2">' +
+        escapeHtml(line.name) +
+        (line.isPercent ? '<span class="text-amber-800 text-xs"> ％</span>' : '') +
+        '</td>' +
+        '<td class="p-2">' +
+        escapeHtml(line.unit) +
+        '</td>' +
+        '<td class="p-2 text-right">' +
+        money(line.unitPrice) +
+        '</td>' +
+        '<td class="p-2 text-right">' +
+        '<input type="number" min="0" step="0.01" data-line-qty="' +
+        line.id +
+        '" class="w-20 border rounded px-1 py-0.5 text-right no-print" value="' +
+        line.qty +
+        '" />' +
+        '<span class="hidden print:inline">' +
+        line.qty +
+        '</span>' +
+        '</td>' +
+        '<td class="p-2 text-right">' +
+        sub +
+        '</td>' +
+        '<td class="p-2 no-print"><button type="button" data-rm="' +
+        line.id +
+        '" class="text-red-600 text-xs">刪</button></td>';
+      tb.appendChild(tr);
+    });
+    tb.querySelectorAll('input[data-line-qty]').forEach(function (inp) {
+      inp.addEventListener('change', function () {
+        const id = inp.getAttribute('data-line-qty');
+        const line = quoteLines.find(function (l) { return l.id === id; });
+        if (line) line.qty = parseFloat(inp.value) || 0;
+        renderLines();
+      });
+    });
+    tb.querySelectorAll('button[data-rm]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const id = btn.getAttribute('data-rm');
+        quoteLines = quoteLines.filter(function (l) { return l.id !== id; });
+        renderLines();
+      });
+    });
+  }
+
+  function renderSummary() {
+    const t = computeTotals();
+    const normalBase = quoteLines.filter(function (l) { return !l.isPercent; }).reduce(function (s, l) { return s + lineSubtotal(l); }, 0);
+    const title = document.getElementById('quoteTitle').value.trim() || '（未命名報價）';
+    const client = document.getElementById('clientName').value.trim();
+    const dateStr = document.getElementById('quoteDate').value || new Date().toISOString().slice(0, 10);
+
+    const linesHtml = quoteLines
+      .map(function (l) {
+        const st = l.isPercent
+          ? money(Math.round(normalBase * l.unitPrice * l.qty))
+          : money(lineSubtotal(l));
+        return (
+          '<tr><td class="p-1 border">' +
+          escapeHtml(l.spaceName) +
+          '</td><td class="p-1 border">' +
+          escapeHtml(l.name) +
+          '</td><td class="p-1 border text-center">' +
+          escapeHtml(l.unit) +
+          '</td><td class="p-1 border text-right">' +
+          money(l.unitPrice) +
+          '</td><td class="p-1 border text-right">' +
+          l.qty +
+          '</td><td class="p-1 border text-right">' +
+          st +
+          '</td></tr>'
+        );
+      })
+      .join('');
+
+    document.getElementById('summaryBox').innerHTML =
+      '<div class="text-center border-b pb-3 mb-3">' +
+      '<div class="text-xl font-bold">' +
+      escapeHtml(title) +
+      '</div>' +
+      (client ? '<div class="text-stone-600 mt-1">客戶：' + escapeHtml(client) + '</div>' : '') +
+      '<div class="text-sm text-stone-500 mt-1">日期：' +
+      dateStr +
+      '</div></div>' +
+      '<table class="w-full text-sm mb-4"><thead><tr class="bg-stone-200">' +
+      '<th class="p-1 text-left">空間</th><th class="p-1 text-left">品項</th><th class="p-1">單位</th><th class="p-1 text-right">單價</th><th class="p-1 text-right">數量</th><th class="p-1 text-right">小計</th></tr></thead><tbody>' +
+      (linesHtml || '<tr><td colspan="6" class="p-2 text-stone-500">尚無明細</td></tr>') +
+      '</tbody></table>' +
+      '<div class="space-y-1 text-right max-w-sm ml-auto">' +
+      '<div>工程明細（一般項）小計：<strong>$' +
+      money(t.normalSum) +
+      '</strong></div>' +
+      (t.percentSum
+        ? '<div>百分比／加價類小計：<strong>$' + money(t.percentSum) + '</strong>（以一般項小計為底）</div>'
+        : '') +
+      '<div>工程合計：<strong>$' + money(t.constructionSubtotal) + '</strong></div>' +
+      '<div>設計費：$' +
+      money(t.design) +
+      '</div>' +
+      '<div>工程服務費：$' +
+      money(t.service) +
+      '</div>' +
+      '<div>稅額：$' +
+      money(t.tax) +
+      '</div>' +
+      '<div class="text-lg pt-2 border-t">總計：<strong>$' +
+      money(t.grand) +
+      '</strong></div></div>' +
+      '<p class="text-xs text-stone-500 mt-4">本頁為內部快速估價初版；％類工項以小計方式呈現，實際合約條件以現場與公司報價為準。</p>';
+  }
+
+  document.getElementById('designFeeFixed').addEventListener('input', renderSummary);
+  document.getElementById('serviceFeeFixed').addEventListener('input', renderSummary);
+  document.getElementById('taxRate').addEventListener('input', renderSummary);
+
+  document.getElementById('catalogSearch').addEventListener('input', function () {
+    selectedCatIndex = 0;
+    renderCategoryAcc();
+  });
+
+  document.getElementById('btnPrint').addEventListener('click', function () {
+    renderSummary();
+    window.print();
+  });
+
+  spaces = defaultSpaces();
+  renderSpaces();
+  document.getElementById('quoteDate').valueAsDate = new Date();
+
+  loadCatalog().catch(function (e) {
+    document.getElementById('catalogStatus').textContent = '載入失敗：' + (e && e.message ? e.message : e);
+  });
+})();
+  </script>
+</body>
+</html>

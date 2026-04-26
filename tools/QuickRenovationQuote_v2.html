@@ -1,0 +1,2239 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>添心｜快速報價（坪數推估 v2）</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white !important; }
+    }
+  </style>
+</head>
+<body class="bg-stone-100 text-stone-900 min-h-screen pb-24">
+  <div class="max-w-4xl mx-auto px-3 py-5">
+    <header class="no-print mb-4">
+      <h1 class="text-2xl font-bold text-amber-900">快速報價（參考用）</h1>
+      <p class="text-sm text-stone-600 mt-1">依房型與總坪數推估各空間坪數與長寬；<strong>方案菜單</strong>決定各常見項目的<strong>數量規則</strong>（非整單乘倍率）。實務仍需與設計師確認。</p>
+      <p id="c_priceSyncBar" class="hidden no-print text-xs mt-2 py-1.5 px-2 rounded border border-amber-200 bg-amber-50/80 text-amber-950" role="status" aria-live="polite"></p>
+    </header>
+
+    <nav class="no-print flex gap-2 mb-4 text-sm">
+      <button type="button" id="navClient" class="flex-1 py-2 rounded-lg bg-amber-800 text-white font-medium">客戶報價</button>
+      <button type="button" id="navAdmin" class="flex-1 py-2 rounded-lg bg-stone-300 text-stone-800 font-medium">管理員設定</button>
+    </nav>
+
+    <section id="adminSection" class="hidden no-print bg-white rounded-xl shadow p-4 md:p-6 space-y-4">
+      <h2 class="text-lg font-semibold text-amber-900">管理員設定</h2>
+      <p class="text-xs text-stone-500"
+        >參數存 <code class="bg-stone-100 px-1 rounded">localStorage</code>。<strong>從雲端試算表用「分頁＋品項」帶出單位單價</strong>：在「試算表 ID」那一欄的<strong>正下面</strong>、橘底標題「<span class="text-amber-900">各品項：單價、試算表對照、客戶可見備註</span>」的區塊內，逐筆填<strong>表頁名、表內品項</strong>後按讀入單價。菜單數量規則在本頁<strong>再下面</strong>的「方案菜單」表單編。正式上雲可改 GAS／後端。開發階段暫不鎖密碼。</p>
+      <div id="adminForm" class="space-y-6">
+        <div class="flex flex-wrap gap-2">
+          <button type="button" id="adminSaveBtn" class="px-4 py-2 bg-stone-800 text-white rounded-lg text-sm">儲存設定</button>
+          <button type="button" id="adminExportBtn" class="px-4 py-2 border rounded-lg text-sm">匯出 JSON</button>
+          <label class="px-4 py-2 border rounded-lg text-sm cursor-pointer">匯入 JSON<input id="adminImportFile" type="file" accept="application/json" class="hidden" /></label>
+          <button type="button" id="adminResetBtn" class="px-4 py-2 text-red-700 border border-red-200 rounded-lg text-sm">還原全預設</button>
+          <button type="button" id="adminResetSchemesBtn" class="px-4 py-2 border border-amber-300 rounded-lg text-sm text-amber-900">只還原方案菜單 JSON</button>
+        </div>
+        <label class="block text-sm">變更 PIN（≥4 字，留空不變）</label>
+        <input id="adminNewPin" type="password" class="border rounded-lg px-3 py-2 w-full max-w-xs" />
+        <h3 class="font-medium text-stone-800 border-t pt-4">單價匯入（Google 試算表）</h3>
+        <p class="text-xs text-stone-500"
+          >表須「發佈到網路」或讓擁有連結可檢視。<strong>兩種讀法</strong>可並用：① 下方可選的<strong>分頁／gid 那一頁</strong>中，<strong>A＝內用 id、B＝單價</strong>（小表對照用）。② 各品項在「單價表」中若填了<strong>表頁名＋表內品項</strong>，讀入時會從該分頁依<strong>A＝品項、B＝單位、C＝價格</strong>（如添心計價表列結構）尋找列，先<strong>全字相等</strong>，沒有再<strong>雙向包含</strong>，並更新單位與單價。內建數字僅作還原預設用。</p>
+        <label class="inline-flex items-center gap-2 text-sm cursor-pointer"
+          title="關掉後，僅在您按「讀入單價」時才向 Google 更新，不會在每次重新整理網頁時連線"
+          ><input type="checkbox" id="s_priceSheetAuto" class="rounded" /> 每次開啟／重新整理本頁時<strong>自動</strong>從試算表更新單價（需已填表 ID 且可公開讀取）</label
+        >
+        <div class="flex flex-wrap gap-2 items-end text-sm">
+          <label class="block flex-1 min-w-[200px]">試算表 ID（從網址 <code>.../d/這一段</code> 複製）<input id="s_sheetId" type="text" class="mt-1 w-full border rounded px-2 py-1" placeholder="44 字元 ID" /></label>
+          <label class="block w-32">分頁名稱留空=Sheet1<input id="s_sheetGid" type="text" class="mt-1 w-full border rounded px-2 py-1" placeholder="選填" /></label>
+          <button type="button" id="s_loadSheetBtn" class="px-3 py-2 bg-amber-800 text-white rounded-lg">讀入單價</button>
+        </div>
+        <p class="text-xs text-amber-900/90 font-medium mt-2">若要從「添心標準計價表」那樣的<strong>分頁＋A 欄品項</strong>抓取<strong>單位與單價</strong>：在<strong>下面這一塊</strong>找到對應的內用品項，填<strong>表頁名</strong>、<strong>表內品項</strong>（與雲端試算表文字一致），按上方<strong>讀入單價</strong>（或勾「開頁自動」）即可。未填的品項只會用「小表 id」那條路徑，或沿用本機手改價格。</p>
+        <h3 class="text-base font-semibold text-amber-950 border border-amber-200 rounded-lg px-3 py-2 bg-amber-50/60 mt-3" id="adminItemPricePanel">各品項：單價、試算表對照、客戶可見備註</h3>
+        <p class="text-xs text-stone-500 -mt-1 mb-1">位置在<strong>試算表 ID 正下方</strong>（地坪、方案菜單<strong>還在下面</strong>）。每筆內用品項可填「表頁、表內品項、客戶可見備註」＋手改單價；列表可捲動瀏覽。</p>
+        <div class="grid sm:grid-cols-1 gap-3 text-sm max-h-[70vh] overflow-y-auto border border-stone-200 rounded-lg p-2 bg-stone-50/50" id="adminItemPrices"></div>
+        <h3 class="font-medium text-stone-800 border-t pt-4">地坪、收邊、細清、水電參考</h3>
+        <div class="grid sm:grid-cols-2 gap-3 text-sm">
+          <label>地板損耗（倍率）<input id="s_floorWaste" type="number" step="0.01" class="mt-1 w-full border rounded px-2 py-1" /></label>
+          <label>每空間「坪」進位
+            <select id="s_floorRound" class="mt-1 w-full border rounded px-2 py-1">
+              <option value="int">向上至整坪</option>
+              <option value="half">向上至 0.5 坪</option>
+            </select>
+          </label>
+          <label>收邊費＝木作+系統小計 ×（小數，例 0.05）<input id="s_trimRate" type="number" step="0.01" class="mt-1 w-full border rounded px-2 py-1" /></label>
+          <label>細清＋峻工後修補（參考固定額，元）<input id="s_touchup" type="number" step="100" class="mt-1 w-full border rounded px-2 py-1" /></label>
+          <label>水電出線：底數＋ 每臥+客廳（點參考）<input id="s_mepBase" type="number" class="mt-1 w-full border rounded px-2 py-1" placeholder="30" /><span class="text-xs text-stone-500">底數</span>
+            <input id="s_mepPerRoom" type="number" class="mt-1 w-full border rounded px-2 py-1" placeholder="6" /><span class="text-xs text-stone-500">每臥+客廳</span>
+          </label>
+        </div>
+        <h3 class="font-medium text-stone-800 border-t pt-4" id="schemeMenuSection">方案菜單（數量怎麼算＝計算條件）</h3>
+        <p class="text-xs text-stone-500"
+          >與「單價從表抓」<strong>分開</strong>：本區只編<strong>每品項的數量規則</strong>，存在 <code>schemeMenus</code>；品項的<strong>單價、表頁、表內品項、客戶備註</strong>在 <code>itemDefs</code>。兩層是為了同一價可配多套方案。上方各品項列有「帶我過去」可跳到此處編該品項規則。</p>
+        <p class="text-xs text-amber-900/90 bg-amber-50/80 border border-amber-100 rounded px-2 py-1.5"
+          ><strong>存哪裡？</strong> 瀏覽器 <code>localStorage</code> 鍵名 <code>qr_estimator_settings_v2</code>（整包 JSON）。可按頁頂「匯出 JSON」備份；清除網站資料或換電腦會沒有，請定期匯出。</p>
+        <p class="text-xs text-stone-500"
+          >每一組方案＝一組「數量怎麼算」的<strong>規則</strong>。你可以用**下面表單**逐筆改，或改用<strong>速寫區</strong>用橫欄（像表格）整批寫/貼；按「轉成規則」或「儲存設定」後一併寫入。地坪 <code>floor_p</code> 一條 <code>floor_115</code> 就會**套到**客、主、各次臥。</p>
+        <div class="flex flex-wrap gap-3 items-end text-sm">
+          <label class="block"
+            >要編輯的方案
+            <select id="s_menuScheme" class="mt-1 block border rounded px-2 py-1 min-w-[10rem]"></select>
+          </label>
+          <label class="block"
+            >客戶看到的名字
+            <input type="text" id="s_schemeNameEdit" class="mt-1 block border rounded px-2 py-1 w-48" maxlength="64" />
+          </label>
+          <p class="text-xs text-stone-500 self-end mb-0.5">
+            內用代碼
+            <code id="s_schemeIdView" class="bg-stone-100 rounded px-1.5">—</code>
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-2 text-sm mt-2">
+          <button type="button" id="menuAddScheme" class="px-3 py-1.5 border rounded-lg hover:bg-stone-50">＋ 新增空方案</button>
+          <button type="button" id="menuDupScheme" class="px-3 py-1.5 border rounded-lg hover:bg-stone-50">複製此方案</button>
+          <button type="button" id="menuDelScheme" class="px-3 py-1.5 border border-red-200 text-red-800 rounded-lg">刪除此方案</button>
+        </div>
+        <p id="s_schemeNameHint" class="text-xs text-amber-800/90 mt-1">改「客戶看到的名字」後按<strong>儲存設定</strong>或等套用規則時一併寫入。</p>
+        <div class="overflow-x-auto text-xs border rounded-lg mt-3 max-h-56 overflow-y-auto">
+          <table class="w-full text-left">
+            <thead class="bg-stone-100 sticky top-0">
+              <tr>
+                <th class="p-2 w-[28%]">品項</th>
+                <th class="p-2">此方案內的規則</th>
+                <th class="p-2 w-24">帶到下方</th>
+              </tr>
+            </thead>
+            <tbody id="s_rulesTableBody"></tbody>
+          </table>
+        </div>
+        <h4 class="text-sm font-medium text-stone-800 mt-4">新增或修改一筆規則</h4>
+        <div class="flex flex-wrap gap-2 text-sm">
+          <select id="s_formItem" class="border rounded px-2 py-1 min-w-[220px]"></select>
+          <select id="s_formRule" class="border rounded px-2 py-1 min-w-[18rem]">
+            <option value="fixed_shaku">定量：填「數量」一欄（尺／坪／盞等視品項）</option>
+            <option value="ceil_ping_lk_beds">變量：客＋臥實鋪坪合，再向上取整（天花類）</option>
+            <option value="sum_ping_paints">變量：面漆參考坪＝上列坪合</option>
+            <option value="sum_ac_shaku_paint">變量：各空間包管一邊短邊台尺加總</option>
+            <option value="floor_115">變量：地坪＝分空間實鋪×損耗再取整（一條通用品項 floor_p）</option>
+            <option value="recess_15x">變量：嵌燈概估＝(客+臥坪)×1.5 向上</option>
+            <option value="mep_sockets_bed">變量：出線點＝管理員的底數＋每區參與</option>
+            <option value="short_shaku_zone">變量：指到哪一間就量那一間的一邊台尺（要選空間）</option>
+            <option value="short_shaku_scaled">變量：一邊台尺× 比例%（要選空間＋%）</option>
+            <option value="shaku_edge_scaled">變量：依長邊或短邊台尺×%（要選空間＋邊＋%）</option>
+            <option value="short_shaku_full">變量：一邊滿尺、不額外乘%（要選空間＋邊）</option>
+            <option value="avg_secondary_short_shaku_scaled">變量：次臥各間短邊台尺平均×%</option>
+            <option value="trim_placeholder">佔位：收邊（數量1，金額另用木作%算）</option>
+            <option value="touchup_from_settings">佔位：細清修補（數量1，金額用管理員定額）</option>
+            <option value="remove">刪除：拿掉此品項在本方案的規則</option>
+          </select>
+        </div>
+        <p id="s_formRuleHelp" class="text-xs text-stone-500 mt-1.5 min-h-[2.5em]">選規則型別後會說要填哪幾欄。次臥逐間品項不須在規則裡寫「哪一間」。</p>
+        <div class="grid sm:grid-cols-2 md:grid-cols-4 gap-2 text-sm max-w-3xl">
+          <label>數量定值（單位依品項）<input id="s_formValue" class="mt-1 w-full border rounded px-2 py-1" inputmode="decimal" placeholder="例：3" /></label>
+          <label>比例（0.3＝30%）<input id="s_formScale" class="mt-1 w-full border rounded px-2 py-1" inputmode="decimal" placeholder="0.3" /></label>
+          <label>空間代碼
+            <select id="s_formZone" class="mt-1 w-full border rounded px-2 py-1">
+              <option value="">（不指定／由程式帶入）</option>
+              <option value="lk">客＋廚 (lk)</option>
+              <option value="master">主臥 (master)</option>
+            </select>
+            <input type="text" class="mt-1 w-full border rounded px-2 py-1 text-xs" id="s_formZoneExtra" placeholder="次臥代碼如 bed2（進階）" title="多數次臥品不用填，規則會自己套到每一間" />
+          </label>
+          <label>牆邊
+            <select id="s_formEdge" class="mt-1 w-full border rounded px-2 py-1">
+              <option value="short">短邊</option>
+              <option value="long">長邊</option>
+            </select>
+          </label>
+        </div>
+        <div class="flex flex-wrap gap-2 mt-3">
+          <button type="button" id="s_applyRuleBtn" class="px-4 py-2 bg-amber-800 text-white rounded-lg">套用此規則到目前方案</button>
+        </div>
+        <h4 class="text-sm font-medium text-stone-800 mt-6">菜單速寫（寫在表格、貼在這裡，轉成規則 JSON）</h4>
+        <p class="text-xs text-stone-500">每行一筆，用直線 <code class="bg-stone-100 px-0.5">|</code> 分欄（像 Excel 貼成文字）。<strong>欄位</strong>：<span class="font-mono">品項id | 規則代碼 | 定值 | 比例(0.3=30%) | 空間 | 邊</span>。用不到的欄留空。規則代碼與上列下拉相同（<code>fixed_shaku</code>、<code>shaku_edge_scaled</code>…）。以 <code>#</code> 開頭＝註解。</p>
+        <div class="text-xs text-stone-600 font-mono bg-stone-50 p-2 rounded border border-stone-200 my-1 space-y-0.5">
+          <div>ceiling|ceil_ping_lk_beds</div>
+          <div>shoe_lk|fixed_shaku|3</div>
+          <div>tv_wall|shaku_edge_scaled| |0.3|lk|long</div>
+          <div>floor_p|floor_115</div>
+          <div>wardrobe_sec|short_shaku_scaled| |0.5| |short</div>
+        </div>
+        <div class="flex flex-wrap items-center gap-3 text-sm mt-2">
+          <span class="text-stone-600">速寫套用到此方案時：</span>
+          <label class="inline-flex items-center gap-1.5"
+            ><input type="radio" name="s_draftMode" value="merge" checked class="rounded" /> 只更新<strong>有列出</strong>的品項（其餘規則不動）</label
+          >
+          <label class="inline-flex items-center gap-1.5"
+            ><input type="radio" name="s_draftMode" value="replace" class="rounded" /> 整份改為以下內容（<strong>沒寫的品項會拿掉規則</strong>）</label
+          >
+        </div>
+        <textarea
+          id="s_menuDraft"
+          class="w-full mt-1 text-xs font-mono border rounded-lg p-2 min-h-[8rem] leading-relaxed"
+          rows="8"
+          spellcheck="false"
+          placeholder="# 在試算表排好 6 欄後，複製貼上（或手打）。再按「轉成規則」。
+# ceiling|ceil_ping_lk_beds
+# shoe_lk|fixed_shaku|3| | | |"
+        ></textarea>
+        <p id="s_draftError" class="text-xs text-red-700 min-h-4 mt-1 hidden" aria-live="polite"></p>
+        <div class="flex flex-wrap gap-2 mt-2">
+          <button type="button" id="s_parseDraftBtn" class="px-4 py-2 bg-amber-800 text-white rounded-lg">轉成規則並寫入此方案</button>
+          <button type="button" id="s_exportDraftBtn" class="px-4 py-2 border rounded-lg">從此方案產生速寫文字</button>
+        </div>
+        <details class="border-t border-stone-200 pt-4 mt-6" id="schemesJsonDetails">
+          <summary class="cursor-pointer text-sm font-medium text-stone-700">進階：方案 JSON（與表單雙向同步，不懂可跳過）</summary>
+          <p class="text-xs text-stone-500 mt-2">表單改動會寫到這裡。若手改 JSON，請儲存前自己檢查括號。備份可改用頁面頂的「匯出 JSON」。</p>
+          <textarea id="adminSchemesJson" class="w-full h-56 text-xs font-mono border rounded-lg p-2 mt-2" spellcheck="false"></textarea>
+        </details>
+        <h3 class="font-medium text-stone-800 border-t pt-4">坪數推估</h3>
+        <div class="grid sm:grid-cols-2 gap-3 text-sm">
+          <label>陽台坪數<input id="s_balcony" type="number" step="0.1" class="mt-1 w-full border rounded px-2 py-1" /></label>
+          <label>浴廁坪數（逗號，依模板衛浴數）<input id="s_baths" type="text" class="mt-1 w-full border rounded px-2 py-1" /></label>
+          <label>客廚占餘額比例 下限<input id="s_lkMin" type="number" step="0.01" class="mt-1 w-full border rounded px-2 py-1" /></label>
+          <label>客廚占餘額比例 上限<input id="s_lkMax" type="number" step="0.01" class="mt-1 w-full border rounded px-2 py-1" /></label>
+          <label>主臥／次卧一倍率<input id="s_master" type="number" step="0.01" class="mt-1 w-full border rounded px-2 py-1" /></label>
+          <label>次卧二／次卧一倍率<input id="s_bed3" type="number" step="0.01" class="mt-1 w-full border rounded px-2 py-1" /></label>
+          <label>四房｜次卧三／次卧一倍率<input id="s_bed4" type="number" step="0.01" class="mt-1 w-full border rounded px-2 py-1" /></label>
+          <label>長邊比（長邊:短邊）<input id="s_long" type="number" step="0.1" class="mt-1 w-full border rounded px-2 py-1" /></label>
+          <label>短邊比<input id="s_short" type="number" step="0.1" class="mt-1 w-full border rounded px-2 py-1" /></label>
+        </div>
+      </div>
+    </section>
+
+    <section id="clientSection" class="bg-white rounded-xl shadow p-4 md:p-6 space-y-6">
+      <div id="cStep1" class="space-y-4">
+        <h2 class="text-lg font-semibold text-amber-900">① 房型與總坪數（不含公設）</h2>
+        <label class="block text-sm">房型模板</label>
+        <select id="c_template" class="border rounded-lg px-3 py-2 w-full max-w-md"></select>
+        <p class="text-xs text-stone-500">「兩房一廳一衛」與「兩房一廳」相同：2 臥、1 客廚、浴廁列表取<strong>第一筆</strong>坪數（預設 1 坪）。三房為 1+1.5 兩筆。</p>
+        <label class="block text-sm">總坪數（不含公設）</label>
+        <input id="c_totalPing" type="number" min="1" step="0.1" value="20" class="border rounded-lg px-3 py-2 w-full max-w-xs" />
+        <label class="block text-sm">案名／稱呼（選填）</label>
+        <input id="c_title" type="text" class="border rounded-lg px-3 py-2 w-full max-w-md" placeholder="例：張先生｜新竹案" />
+        <button type="button" id="c_calcBtn" class="no-print px-5 py-2 bg-amber-800 text-white rounded-lg font-medium">計算空間分配</button>
+      </div>
+
+      <div id="cStep2" class="hidden space-y-4 border-t pt-4">
+        <h2 class="text-lg font-semibold text-amber-900">② 推估結果（坪數 + 長寬比）</h2>
+        <p class="text-xs text-stone-500">客廚占餘額比例在設定區間內隨機；臥室依倍率拆分。</p>
+        <div id="c_allocTable" class="overflow-x-auto text-sm"></div>
+        <p class="text-xs text-stone-600">尺數可捉<strong>該空間短邊或長邊</strong>（依菜單規則的 <code>edge</code>）換算台尺，÷30.3cm；<strong>定量</strong>品由菜單寫死尺、坪、組數。下列<strong>先選</strong>報價方案，再帶出各空間拆項（可之後在明細內手改或返回重選）。</p>
+        <div class="no-print rounded-lg border border-amber-200 bg-amber-50/40 p-4 space-y-2">
+          <div class="text-sm font-medium text-amber-950">Step 2｜先選 <strong>報價方案</strong>（管理員可編的菜單）</div>
+          <p class="text-xs text-stone-600">選一組方案＝一組「數量規則（定量／變量＋%＋長邊或短邊）」的組合，下一步才產生勾選明細，避免直接進清單不知基準。</p>
+          <div id="c_schemeRadios" class="flex flex-wrap gap-3 text-sm"></div>
+        </div>
+        <button type="button" id="c_toItemsBtn" class="no-print px-5 py-2 bg-amber-800 text-white rounded-lg font-medium">下一步：依方案帶出項目明細</button>
+      </div>
+
+      <div id="cStep3" class="hidden space-y-4 border-t pt-4">
+        <h2 class="text-lg font-semibold text-amber-900">③ 項目明細（依空間＋全室，可手改數量）</h2>
+        <p class="text-xs text-stone-500">目前採用方案「<strong id="c_schemeNameStep3" class="text-amber-900">尚未產生</strong>」。切回上一步可<strong>變更方案</strong>並重帶入數量。進入報價前可<strong>手改數量</strong>，現場慣用<strong>整數</strong>或<strong>0.5</strong>一檔（坪、尺、盞等），系統不建議 0.01 微調。小計＝單價×數量，不整單乘一個倍率。</p>
+        <div id="c_itemRows" class="space-y-2 text-sm"></div>
+        <div class="no-print flex flex-wrap gap-2 pt-2">
+          <button type="button" id="c_backToSchemeBtn" class="px-4 py-2 border border-amber-300 text-amber-900 rounded-lg">上一步：重選方案</button>
+          <button type="button" id="c_quoteBtn" class="px-5 py-2 bg-stone-800 text-white rounded-lg">產生報價摘要</button>
+        </div>
+      </div>
+
+      <div id="cStep4" class="hidden border-t pt-4 text-sm space-y-3">
+        <h2 class="text-lg font-semibold text-amber-900">④ 報價摘要（參考用）</h2>
+        <div id="c_quoteOut" class="bg-stone-50 rounded-lg p-4 space-y-2"></div>
+        <button type="button" id="c_printBtn" class="no-print px-5 py-2 border rounded-lg">列印／存 PDF</button>
+        <p class="text-xs text-stone-600 border-t pt-2">本報價僅依推估尺寸與菜單規則試算，<strong>不構成承諾</strong>；需求決定價錢，請與專業設計師討論後定案。</p>
+      </div>
+    </section>
+  </div>
+
+  <script>
+(function () {
+  'use strict';
+
+  var STORAGE_KEY = 'qr_estimator_settings_v2';
+  var PING_TO_M2 = 3.305785124;
+  var SCHEMA_V = 4;
+
+  function cloneR(r) {
+    return JSON.parse(JSON.stringify(r));
+  }
+  function defaultSchemeRulesBase() {
+    return {
+      ceiling: { type: 'ceil_ping_lk_beds' },
+      floor_p: { type: 'floor_115' },
+      shoe_lk: { type: 'fixed_shaku', value: 3 },
+      storage_40: { type: 'fixed_shaku', value: 4 },
+      sideboard_60: { type: 'fixed_shaku', value: 0 },
+      tv_wall: { type: 'shaku_edge_scaled', zone: 'lk', edge: 'long', scale: 0.3 },
+      sofa_wall: { type: 'shaku_edge_scaled', zone: 'lk', edge: 'short', scale: 0.35 },
+      ac_lk: { type: 'short_shaku_zone', zone: 'lk', edge: 'short' },
+      curtain_lk: { type: 'fixed_shaku', value: 4 },
+      service_hatch: { type: 'fixed_shaku', value: 0 },
+      appliance_lk: { type: 'fixed_shaku', value: 0 },
+      tall_cab: { type: 'fixed_shaku', value: 0 },
+      cove_lk: { type: 'shaku_edge_scaled', zone: 'lk', edge: 'long', scale: 0.2 },
+      ac_m: { type: 'short_shaku_zone', zone: 'master', edge: 'short' },
+      curtain_m: { type: 'fixed_shaku', value: 3 },
+      wardrobe_m: { type: 'short_shaku_scaled', zone: 'master', edge: 'short', scale: 0.6 },
+      top_m: { type: 'shaku_edge_scaled', zone: 'master', edge: 'long', scale: 0.15 },
+      feature_m: { type: 'shaku_edge_scaled', zone: 'master', edge: 'long', scale: 0.25 },
+      cove_m: { type: 'shaku_edge_scaled', zone: 'master', edge: 'long', scale: 0.15 },
+      desk_m: { type: 'fixed_shaku', value: 0 },
+      ac_sec: { type: 'short_shaku_zone', edge: 'short' },
+      curtain_sec: { type: 'fixed_shaku', value: 2 },
+      wardrobe_sec: { type: 'short_shaku_scaled', edge: 'short', scale: 0.5 },
+      top_sec: { type: 'shaku_edge_scaled', edge: 'long', scale: 0.12 },
+      feature_sec: { type: 'shaku_edge_scaled', edge: 'long', scale: 0.2 },
+      cove_sec: { type: 'shaku_edge_scaled', edge: 'long', scale: 0.1 },
+      desk_sec: { type: 'fixed_shaku', value: 0 },
+      paint_ceil: { type: 'sum_ping_paints' },
+      paint_ac: { type: 'sum_ac_shaku_paint' },
+      mep_switches: { type: 'mep_sockets_bed' },
+      mep_dedicated: { type: 'fixed_shaku', value: 1 },
+      mep_net: { type: 'fixed_shaku', value: 1 },
+      mep_tv: { type: 'fixed_shaku', value: 1 },
+      mep_misc: { type: 'fixed_shaku', value: 0 },
+      mep_recess: { type: 'recess_15x' },
+      trim_molding: { type: 'trim_placeholder' },
+      touchup_clean: { type: 'touchup_from_settings' },
+      wardrobe2: { type: 'avg_secondary_short_shaku_scaled', scale: 0.5 },
+    };
+  }
+  function defaultSchemeMenus() {
+    var a = defaultSchemeRulesBase();
+    var b = cloneR(a);
+    b.wardrobe_m = { type: 'short_shaku_full', zone: 'master', edge: 'short' };
+    b.wardrobe_sec = { type: 'short_shaku_full', edge: 'short' };
+    b.shoe_lk.value = 4;
+    b.storage_40.value = 8;
+    b.mep_switches = { type: 'mep_sockets_bed' };
+    b.mep_dedicated = { type: 'fixed_shaku', value: 2 };
+    var c = cloneR(b);
+    c.wardrobe_m = { type: 'short_shaku_scaled', zone: 'master', scale: 1.05, edge: 'short' };
+    c.wardrobe_sec = { type: 'short_shaku_scaled', scale: 1, edge: 'short' };
+    c.tv_wall.scale = 0.5;
+    return [
+      { id: 'simple', name: '精簡方案', rules: a },
+      { id: 'storage', name: '收納導向', rules: b },
+      { id: 'design', name: '造型導向', rules: c },
+    ];
+  }
+
+  var DEFAULTS = {
+    adminPin: '0426',
+    schemaVersion: SCHEMA_V,
+    priceSheetGvizId: '',
+    priceSheetGid: '',
+    priceSheetAutoOnOpen: true,
+    floorWaste: 1.15,
+    floorRound: 'int',
+    trimMoldingRate: 0.05,
+    touchupLump: 20000,
+    mepSocketBase: 30,
+    mepPerZone: 6,
+    balconyPing: 2,
+    bathroomPings: [1, 1.5],
+    lkShareMin: 0.5,
+    lkShareMax: 0.6,
+    masterVsBed2: 1.3,
+    bed3VsBed2: 0.85,
+    bed4VsBed2: 0.92,
+    rectLong: 6,
+    rectShort: 4,
+    schemeMenus: defaultSchemeMenus(),
+    itemDefs: [
+      { id: 'ceiling', zoneScope: 'all', sortKey: 1, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 200, menuMatrix: '變量・坪(客+臥合，進位) | 不設%', label: '木作平釘天花', unit: '坪', price: 3400, defaultOn: true, cabWood: true, hint: '變量｜客+臥坪合、進位' },
+      { id: 'shoe_lk', zoneScope: 'lk', sortKey: 12, group: '客', groupTitle: '客餐廳', quoteSection: '客餐廳', displayRank: 10, menuMatrix: '定量or變量・可設固定尺(定量) 或 邊尺×%(變量) ・ 長/短邊 ・ 空間=客餐廳', label: '鞋櫃', unit: '尺', price: 2500, defaultOn: true, cabWood: true, hint: '木作' },
+      { id: 'storage_40', zoneScope: 'lk', sortKey: 14, group: '客', groupTitle: '客餐廳', quoteSection: '客餐廳', displayRank: 12, menuMatrix: '同鞋櫃欄位模型・深 40cm', label: '收納櫃(深 40cm)', unit: '尺', price: 2800, defaultOn: true, cabWood: true, hint: '系統/木作櫃' },
+      { id: 'sideboard_60', zoneScope: 'lk', sortKey: 16, group: '客', groupTitle: '客餐廳', quoteSection: '客餐廳', displayRank: 14, menuMatrix: '同鞋櫃欄位模型・深 60cm', label: '餐櫃(深 60cm)', unit: '尺', price: 3200, defaultOn: false, cabWood: true, hint: '' },
+      { id: 'tv_wall', zoneScope: 'lk', sortKey: 18, group: '客', groupTitle: '客餐廳', quoteSection: '客餐廳', displayRank: 16, menuMatrix: '變量・邊台尺×% ・ 長/短邊 ・ 客', label: '電視牆', unit: '尺', price: 5000, defaultOn: true, cabWood: true, hint: '' },
+      { id: 'sofa_wall', zoneScope: 'lk', sortKey: 20, group: '客', groupTitle: '客餐廳', quoteSection: '客餐廳', displayRank: 18, menuMatrix: '變量・邊台尺×% ・ 長/短邊 ・ 客', label: '沙發背牆', unit: '尺', price: 4000, defaultOn: true, cabWood: true, hint: '' },
+      { id: 'ac_lk', zoneScope: 'lk', sortKey: 22, group: '客', groupTitle: '客餐廳', quoteSection: '客餐廳', displayRank: 20, menuMatrix: '變量・一邊邊滿台尺(短邊預設) ・ 客', label: '冷氣包管', unit: '尺', price: 800, defaultOn: true, cabWood: true, hint: '木作封板' },
+      { id: 'curtain_lk', zoneScope: 'lk', sortKey: 24, group: '客', groupTitle: '客餐廳', quoteSection: '客餐廳', displayRank: 22, menuMatrix: '定量(尺) or 變量', label: '窗簾盒', unit: '尺', price: 1000, defaultOn: true, cabWood: true, hint: '' },
+      { id: 'service_hatch', zoneScope: 'lk', sortKey: 25, group: '客', groupTitle: '客餐廳', quoteSection: '客餐廳', displayRank: 24, menuMatrix: '定量(式)', label: '維修孔', unit: '式', price: 1200, defaultOn: false, cabWood: true, hint: '' },
+      { id: 'appliance_lk', zoneScope: 'lk', sortKey: 26, group: '客', groupTitle: '客餐廳', quoteSection: '客餐廳', displayRank: 26, menuMatrix: '定量 or 變量・邊尺×% ・ 客', label: '電器櫃', unit: '尺', price: 3000, defaultOn: true, cabWood: true, hint: '' },
+      { id: 'tall_cab', zoneScope: 'lk', sortKey: 27, group: '客', groupTitle: '客餐廳', quoteSection: '客餐廳', displayRank: 28, menuMatrix: '定量(尺) or 變量 ・ 客', label: '高身櫃', unit: '尺', price: 3000, defaultOn: false, cabWood: true, hint: '' },
+      { id: 'cove_lk', zoneScope: 'lk', sortKey: 28, group: '客', groupTitle: '客餐廳', quoteSection: '客餐廳', displayRank: 30, menuMatrix: '變量・邊台尺×% ・ 長/短邊 ・ 客', label: '間接照明(間照)', unit: '尺', price: 1800, defaultOn: true, cabWood: true, hint: '' },
+      { id: 'floor_p', perFloor: true, sortKey: 10, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 210, menuMatrix: '變量・各空間實鋪×損耗%再取整 | 一條規則全區套用', label: '地坪(分空間鋪設×損耗＋取整)', unit: '坪', price: 4500, defaultOn: true, cabWood: false, hint: '實作坪=該空間內實鋪×損耗' },
+      { id: 'ac_m', zoneScope: 'master', sortKey: 32, group: '主臥', groupTitle: '主臥', quoteSection: '主臥', displayRank: 40, menuMatrix: '變量・一邊台尺 ・ 主臥', label: '冷氣包管', unit: '尺', price: 800, defaultOn: true, cabWood: true, hint: '' },
+      { id: 'curtain_m', zoneScope: 'master', sortKey: 33, group: '主臥', groupTitle: '主臥', quoteSection: '主臥', displayRank: 42, menuMatrix: '定量(尺) or 變量 ・ 主臥', label: '窗簾盒', unit: '尺', price: 1000, defaultOn: true, cabWood: true, hint: '' },
+      { id: 'wardrobe_m', zoneScope: 'master', sortKey: 34, group: '主臥', groupTitle: '主臥', quoteSection: '主臥', displayRank: 44, menuMatrix: '變量・邊滿或邊尺×% ・ 主臥短邊預設', label: '衣櫃', unit: '尺', price: 3500, defaultOn: true, cabWood: true, hint: '' },
+      { id: 'top_m', zoneScope: 'master', sortKey: 35, group: '主臥', groupTitle: '主臥', quoteSection: '主臥', displayRank: 46, menuMatrix: '變量・邊台尺×% ・ 主', label: '衣櫃置頂', unit: '尺', price: 2000, defaultOn: true, cabWood: true, hint: '' },
+      { id: 'feature_m', zoneScope: 'master', sortKey: 36, group: '主臥', groupTitle: '主臥', quoteSection: '主臥', displayRank: 48, menuMatrix: '變量・邊台尺×% ・ 長/短 ・ 主臥', label: '造型背牆或半腰背牆', unit: '尺', price: 4200, defaultOn: true, cabWood: true, hint: '' },
+      { id: 'cove_m', zoneScope: 'master', sortKey: 37, group: '主臥', groupTitle: '主臥', quoteSection: '主臥', displayRank: 50, menuMatrix: '變量・邊台尺×% ・ 主', label: '間接照明(間照)', unit: '尺', price: 1800, defaultOn: true, cabWood: true, hint: '' },
+      { id: 'desk_m', zoneScope: 'master', sortKey: 38, group: '主臥', groupTitle: '主臥', quoteSection: '主臥', displayRank: 52, menuMatrix: '定量(式) ・ 主臥', label: '化粧桌／書桌', unit: '式', price: 12000, defaultOn: false, cabWood: true, hint: '' },
+      { id: 'ac_sec', perSecondary: true, sortKey: 51, group: '次臥', label: '冷氣包管', quoteSection: '次臥', displayRank: 40, menuMatrix: '變量・一邊台尺 ・ 次臥各間(規則不帶臥名)', unit: '尺', price: 800, defaultOn: true, cabWood: true, hint: '逐間' },
+      { id: 'curtain_sec', perSecondary: true, sortKey: 52, group: '次臥', label: '窗簾盒', quoteSection: '次臥', displayRank: 42, menuMatrix: '定量 or 變量 ・ 次臥各間', unit: '尺', price: 1000, defaultOn: true, cabWood: true, hint: '' },
+      { id: 'wardrobe_sec', perSecondary: true, sortKey: 53, group: '次臥', label: '衣櫃', quoteSection: '次臥', displayRank: 44, menuMatrix: '變量・邊滿/邊尺×% ・ 次臥各間', unit: '尺', price: 3200, defaultOn: true, cabWood: true, hint: '' },
+      { id: 'top_sec', perSecondary: true, sortKey: 54, group: '次臥', label: '衣櫃置頂', quoteSection: '次臥', displayRank: 46, menuMatrix: '變量・邊台尺×% ・ 次臥', unit: '尺', price: 2000, defaultOn: true, cabWood: true, hint: '' },
+      { id: 'feature_sec', perSecondary: true, sortKey: 55, group: '次臥', label: '造型背牆或半腰背牆', quoteSection: '次臥', displayRank: 48, menuMatrix: '變量・邊台尺×% ・ 次臥各間', unit: '尺', price: 4000, defaultOn: true, cabWood: true, hint: '' },
+      { id: 'cove_sec', perSecondary: true, sortKey: 56, group: '次臥', label: '間接照明(間照)', quoteSection: '次臥', displayRank: 50, menuMatrix: '變量・邊台尺×% ・ 次臥', unit: '尺', price: 1800, defaultOn: true, cabWood: true, hint: '' },
+      { id: 'desk_sec', perSecondary: true, sortKey: 57, group: '次臥', label: '化粧桌／書桌', quoteSection: '次臥', displayRank: 52, menuMatrix: '定量(式) ・ 次臥各間', unit: '式', price: 10000, defaultOn: false, cabWood: true, hint: '' },
+      { id: 'wardrobe2', zoneScope: 'all', sortKey: 2, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 215, menuMatrix: '次臥平均尺×%（舊合併列、少用）', label: '衣櫃(次臥短邊平均-舊)', unit: '尺', price: 3200, perSecondary: false, defaultOn: false, cabWood: false, hint: '併舊方案用' },
+      { id: 'paint_ceil', zoneScope: 'all', sortKey: 200, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 220, menuMatrix: '變量・坪(面漆參考) | 不設邊', label: '面漆(天地壁-概估用坪)', unit: '坪', price: 600, defaultOn: true, cabWood: false, hint: '概估＝客+臥實鋪坪' },
+      { id: 'paint_ac', zoneScope: 'all', sortKey: 201, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 230, menuMatrix: '變量・全區包管短邊合計台尺', label: '矽鈣／包管油漆(參考台尺合)', unit: '尺', price: 200, defaultOn: true, cabWood: false, hint: '各空間包管一邊短尺加總' },
+      { id: 'mep_switches', zoneScope: 'all', sortKey: 300, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 300, menuMatrix: '變量・點數(底+臥，管理員) | 全區', label: '出線/開關插座(參考-點)', unit: '式', price: 350, defaultOn: true, cabWood: false, hint: '底數+每區一參與' },
+      { id: 'mep_dedicated', zoneScope: 'all', sortKey: 301, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 302, menuMatrix: '定量(迴)', label: '專用迴路/220V(參考)', unit: '迴', price: 5000, defaultOn: true, cabWood: false, hint: '' },
+      { id: 'mep_net', zoneScope: 'all', sortKey: 302, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 304, menuMatrix: '定量(點)', label: '網路/弱電延伸(參考)', unit: '點', price: 1500, defaultOn: true, cabWood: false, hint: '' },
+      { id: 'mep_tv', zoneScope: 'all', sortKey: 303, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 306, menuMatrix: '定量(路)', label: '有線電視/同軸(參考)', unit: '路', price: 1500, defaultOn: true, cabWood: false, hint: '' },
+      { id: 'mep_misc', zoneScope: 'all', sortKey: 304, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 308, menuMatrix: '定量(式)', label: '其餘水電(參考)', unit: '式', price: 3000, defaultOn: false, cabWood: false, hint: '' },
+      { id: 'mep_recess', zoneScope: 'all', sortKey: 305, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 310, menuMatrix: '變量・(客+臥坪)×1.5 盞(概估) | 全區', label: '嵌燈/筒燈(參考-盞)', unit: '盞', price: 500, defaultOn: true, cabWood: false, hint: '概估(客+臥坪）×1.5 盞' },
+      { id: 'trim_molding', zoneScope: 'all', sortKey: 400, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 400, menuMatrix: '佔位(式) ・ 金額=木作小計×% 見管理員', label: '木作+系統收邊(參考)', unit: '式', price: 0, lineKind: 'trim', defaultOn: true, cabWood: false, hint: '小計=下方木作+系統合計×設定%', quoteNote: 'trim' },
+      { id: 'touchup_clean', zoneScope: 'all', sortKey: 401, group: '全室', groupTitle: '全室', quoteSection: '全室', displayRank: 410, menuMatrix: '佔位(定額) ・ 金額見管理員', label: '細清＋竣工後修補(參考)', unit: '式', price: 0, lineKind: 'touchup', defaultOn: true, cabWood: false, hint: '參考固定額，見管理員' },
+    ],
+    templates: [
+      { id: '3b2h', name: '三房二廳（3 臥 + 客廚 + 2 衛）', bedrooms: 3, baths: 2 },
+      { id: '2b1h', name: '二房一廳一衛（2 臥 + 客廚 + 1 衛）', bedrooms: 2, baths: 1 },
+      { id: '4b2h', name: '四房二廳（4 臥 + 客廚 + 2 衛）', bedrooms: 4, baths: 2 },
+    ],
+  };
+
+  var state = { settings: null, lastAlloc: null, selectedSchemeId: 'simple', _preservedMenuScheme: null };
+  var priceSyncPromise = null;
+
+  function syncSchemesJsonTextarea() {
+    var t = document.getElementById('adminSchemesJson');
+    if (t) t.value = JSON.stringify(state.settings.schemeMenus || [], null, 2);
+  }
+
+  function getMenuScheme() {
+    var el = document.getElementById('s_menuScheme');
+    if (!el) return null;
+    var id = el.value;
+    if (!id) return null;
+    return (state.settings.schemeMenus || []).filter(function (x) { return x && x.id === id; })[0] || null;
+  }
+
+  function ruleToSummary(r) {
+    if (!r || !r.type) return '— 未設規則（不計算）';
+    var t = r.type;
+    var eLong = r.edge === 'long';
+    if (t === 'fixed_shaku') return '定量：' + (r.value != null ? r.value : '0');
+    if (t === 'floor_115') return '分空間地坪：每區實鋪×損耗＋取整';
+    if (t === 'ceil_ping_lk_beds') return '變量：客＋臥坪合、向上取整（天花用）';
+    if (t === 'sum_ping_paints') return '變量：面漆參考坪＝上列和';
+    if (t === 'sum_ac_shaku_paint') return '變量：各空間包管短邊一邊加總（台尺）';
+    if (t === 'recess_15x') return '變量：嵌燈盞數參考';
+    if (t === 'mep_sockets_bed') return '變量：出線點（底＋臥參與，見管理員）';
+    if (t === 'short_shaku_zone') {
+      return '變量：' + (r.zone ? r.zone + ' ' : '逐空間帶入 ') + (eLong ? '長邊' : '短邊') + '一邊滿尺';
+    }
+    if (t === 'shaku_edge_scaled') {
+      return '變量：' + (r.zone || '?') + ' 的' + (eLong ? '長' : '短') + '邊×' + (r.scale != null ? Math.round(r.scale * 100) : '') + '%';
+    }
+    if (t === 'short_shaku_scaled') {
+      return '變量：' + (r.zone || '?') + ' ' + (eLong ? '長' : '短') + '邊×' + (r.scale != null ? Math.round(r.scale * 100) : '') + '%';
+    }
+    if (t === 'short_shaku_full') {
+      return '變量：' + (r.zone || '?') + ' ' + (eLong ? '長' : '短') + '邊滿尺';
+    }
+    if (t === 'avg_secondary_short_shaku_scaled') {
+      return '變量：次臥短邊平均×' + (r.scale != null ? Math.round(r.scale * 100) : '') + '%';
+    }
+    if (t === 'trim_placeholder' || t === 'touchup_from_settings') {
+      return t === 'trim_placeholder' ? '佔位：收邊（%另行）' : '佔位：細清定額（管理員）';
+    }
+    return t;
+  }
+
+  function setRuleFormHelp() {
+    var h = document.getElementById('s_formRuleHelp');
+    if (!h) return;
+    var t = (document.getElementById('s_formRule') && document.getElementById('s_formRule').value) || '';
+    var m = {
+      remove: '將從本方案刪除這一筆。若品項內建預設有勾，數量可能仍帶 0，請在客戶端不勾或改手動。',
+      floor_115: '地坪不用選空間：一條規則就會分別套在客、主、各次臥。',
+      sum_ping_paints: '面漆、包管漆等不需填 zone。',
+      mep_sockets_bed: '出線的底數在「水電參考」欄，不在此。',
+    };
+    h.textContent = m[t] != null ? m[t] : '依需要填定值、比例、空間、牆邊。次臥可逐間的品通常不必填「哪一臥」— 程式會每間帶一個。';
+  }
+
+  function loadRuleFieldsFromRule(r) {
+    var ruleSel = document.getElementById('s_formRule');
+    if (ruleSel) ruleSel.value = r.type || 'fixed_shaku';
+    if (document.getElementById('s_formValue')) {
+      document.getElementById('s_formValue').value = r.value != null && !isNaN(r.value) ? r.value : '';
+    }
+    if (document.getElementById('s_formScale')) {
+      document.getElementById('s_formScale').value = r.scale != null && !isNaN(r.scale) ? r.scale : '';
+    }
+    var z = r.zone;
+    if (z === 'lk' || z === 'master') {
+      if (document.getElementById('s_formZone')) document.getElementById('s_formZone').value = z;
+      if (document.getElementById('s_formZoneExtra')) document.getElementById('s_formZoneExtra').value = '';
+    } else if (z) {
+      if (document.getElementById('s_formZone')) document.getElementById('s_formZone').value = '';
+      if (document.getElementById('s_formZoneExtra')) document.getElementById('s_formZoneExtra').value = z;
+    } else {
+      if (document.getElementById('s_formZone')) document.getElementById('s_formZone').value = '';
+      if (document.getElementById('s_formZoneExtra')) document.getElementById('s_formZoneExtra').value = '';
+    }
+    if (document.getElementById('s_formEdge')) {
+      document.getElementById('s_formEdge').value = r.edge === 'long' ? 'long' : 'short';
+    }
+    setRuleFormHelp();
+  }
+
+  function loadFormFromCurrentItem() {
+    var itId = document.getElementById('s_formItem') && document.getElementById('s_formItem').value;
+    if (!itId) return;
+    var sc = getMenuScheme();
+    if (!sc) return;
+    var r = (sc.rules && sc.rules[itId]) || null;
+    if (!r) {
+      if (document.getElementById('s_formRule')) document.getElementById('s_formRule').value = 'fixed_shaku';
+      if (document.getElementById('s_formValue')) document.getElementById('s_formValue').value = '';
+      if (document.getElementById('s_formScale')) document.getElementById('s_formScale').value = '';
+      if (document.getElementById('s_formZone')) document.getElementById('s_formZone').value = '';
+      if (document.getElementById('s_formZoneExtra')) document.getElementById('s_formZoneExtra').value = '';
+      if (document.getElementById('s_formEdge')) document.getElementById('s_formEdge').value = 'short';
+      setRuleFormHelp();
+      return;
+    }
+    loadRuleFieldsFromRule(r);
+  }
+
+  function itemDefListSortKeyForAdmin(def) {
+    if (def.zoneScope === 'lk' && !def.perFloor) return 1e5 + (def.displayRank != null ? def.displayRank : def.sortKey || 0);
+    if (def.zoneScope === 'master' && !def.perFloor) return 2e5 + (def.displayRank != null ? def.displayRank : def.sortKey || 0);
+    if (def.perSecondary) return 3e5 + (def.displayRank != null ? def.displayRank : def.sortKey || 0);
+    if (def.id === 'ceiling') return 5e5 + 200;
+    if (def.perFloor) return 5e5 + 210;
+    if (def.zoneScope === 'all') return 5e5 + (def.displayRank != null ? def.displayRank : def.sortKey || 0);
+    return 9e5;
+  }
+
+  function renderRulesTable() {
+    var bod = document.getElementById('s_rulesTableBody');
+    if (!bod) return;
+    var sc = getMenuScheme();
+    bod.innerHTML = '';
+    if (!sc) return;
+    var defs = (state.settings.itemDefs || []).slice().sort(function (a, b) {
+      return itemDefListSortKeyForAdmin(a) - itemDefListSortKeyForAdmin(b);
+    });
+    var rules = sc.rules || {};
+    defs.forEach(function (def) {
+      var r = rules[def.id];
+      var tr = document.createElement('tr');
+      tr.className = 'border-b border-stone-100';
+      tr.innerHTML =
+        '<td class="p-2 align-top"><span class="font-mono text-[11px] text-stone-400">' +
+        esc(def.id) +
+        '</span><br><span class="text-stone-800">' +
+        esc(def.label) +
+        (def.menuMatrix
+          ? '</span><p class="text-stone-500 text-[10px] leading-snug mt-0.5">' + esc(def.menuMatrix) + '</p>'
+          : '</span>') +
+        '</td><td class="p-2 align-top text-stone-700">' +
+        esc(ruleToSummary(r)) +
+        '</td><td class="p-2 align-top"><button type="button" class="px-2 py-0.5 text-xs border rounded s-load-item" data-item-id="' +
+        esc(def.id) +
+        '">帶到下方</button></td>';
+      bod.appendChild(tr);
+    });
+    bod.querySelectorAll('.s-load-item').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var iid = btn.getAttribute('data-item-id');
+        if (document.getElementById('s_formItem')) document.getElementById('s_formItem').value = iid;
+        loadFormFromCurrentItem();
+        btn.blur();
+      });
+    });
+  }
+
+  function deepMerge(a, b) {
+    if (!b || typeof b !== 'object') return a;
+    Object.keys(b).forEach(function (k) {
+      if (Array.isArray(b[k])) a[k] = b[k].slice();
+      else if (b[k] && typeof b[k] === 'object' && !Array.isArray(b[k])) {
+        a[k] = a[k] || {};
+        deepMerge(a[k], b[k]);
+      } else a[k] = b[k];
+    });
+    return a;
+  }
+
+  function alignItemDefLayoutFromDefaults() {
+    var by = {};
+    DEFAULTS.itemDefs.forEach(function (d) {
+      if (d && d.id) by[d.id] = d;
+    });
+    (state.settings.itemDefs || []).forEach(function (d) {
+      var b0 = d && d.id && by[d.id];
+      if (!b0) return;
+      var keys = [
+        'quoteSection',
+        'displayRank',
+        'menuMatrix',
+        'groupTitle',
+        'group',
+        'perSecondary',
+        'perFloor',
+        'zoneScope',
+        'lineKind',
+        'quoteNote',
+        'label',
+        'unit',
+        'sortKey',
+        'priceSheetTab',
+        'priceSheetItem',
+        'clientNote',
+      ];
+      keys.forEach(function (k) {
+        if (b0[k] !== undefined && d[k] === undefined) d[k] = b0[k];
+      });
+    });
+  }
+
+  function loadSettings() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) state.settings = deepMerge(JSON.parse(JSON.stringify(DEFAULTS)), JSON.parse(raw));
+      else state.settings = JSON.parse(JSON.stringify(DEFAULTS));
+    } catch (e) {
+      state.settings = JSON.parse(JSON.stringify(DEFAULTS));
+    }
+    if (state.settings.mepPerZone == null && state.settings.mepPerRoom != null) {
+      state.settings.mepPerZone = state.settings.mepPerRoom;
+    }
+    if (state.settings.bed4VsBed2 == null) state.settings.bed4VsBed2 = DEFAULTS.bed4VsBed2;
+    if (!Array.isArray(state.settings.schemeMenus) || !state.settings.schemeMenus.length) {
+      state.settings.schemeMenus = defaultSchemeMenus();
+    }
+    var defs = state.settings.itemDefs;
+    var hasSchema4 =
+      Array.isArray(defs) &&
+      defs.some(function (x) { return x && x.id === 'floor_p' && x.perFloor; }) &&
+      defs.some(function (x) { return x && x.id === 'trim_molding' && x.lineKind === 'trim'; });
+    if (!state.settings.schemaVersion || state.settings.schemaVersion < SCHEMA_V || !hasSchema4) {
+      state.settings.itemDefs = JSON.parse(JSON.stringify(DEFAULTS.itemDefs));
+      state.settings.schemeMenus = defaultSchemeMenus();
+      state.settings.schemaVersion = SCHEMA_V;
+      if (state.settings.mepPerZone == null && state.settings.mepPerRoom != null) {
+        state.settings.mepPerZone = state.settings.mepPerRoom;
+      }
+      if (!state.settings.priceSheetGvizId && state.settings.gvizId) {
+        state.settings.priceSheetGvizId = state.settings.gvizId;
+      }
+      saveSettings();
+    }
+    if (!Array.isArray(state.settings.itemDefs) || !state.settings.itemDefs.length) {
+      state.settings.itemDefs = JSON.parse(JSON.stringify(DEFAULTS.itemDefs));
+    }
+    alignItemDefLayoutFromDefaults();
+    return state.settings;
+  }
+
+  function saveSettings() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.settings));
+  }
+
+  function randBetween(a, b) {
+    return a + Math.random() * (b - a);
+  }
+
+  function rectDimsCm(ping, s) {
+    var m2 = ping * PING_TO_M2;
+    var ratio = s.rectLong / s.rectShort;
+    var W = Math.sqrt(m2 / ratio);
+    var L = m2 / W;
+    return { L: Math.round(L * 100), W: Math.round(W * 100), Lm: L, Wm: W };
+  }
+
+  function shakuFromCm(cm) {
+    return Math.max(1, Math.round(cm / 30.3));
+  }
+
+  /** 小數一位（衣櫃 8.5×0.6 類） */
+  function round1(x) {
+    return Math.round(x * 10) / 10;
+  }
+
+  function getZone(alloc, key) {
+    var z = alloc.zones.filter(function (x) { return x.key === key; })[0];
+    return z || null;
+  }
+
+  function edgeShakuZone(alloc, zoneKey, edge) {
+    var z = getZone(alloc, zoneKey);
+    if (!z || !z.dims) return 0;
+    var e = edge === 'long' ? 'long' : 'short';
+    var cm = e === 'long' ? Math.max(z.dims.L, z.dims.W) : Math.min(z.dims.L, z.dims.W);
+    return shakuFromCm(cm);
+  }
+
+  function shortShakuZone(alloc, zoneKey) {
+    return edgeShakuZone(alloc, zoneKey, 'short');
+  }
+
+  function mergeRuleForZoneInject(rule, ctx) {
+    if (!ctx || !ctx.zoneKey) return rule;
+    if (!rule || !rule.type) return rule;
+    if (ctx.zoneKey && (rule.zone == null || rule.zone === '')) {
+      var t = rule.type;
+      if (
+        t === 'short_shaku_zone' ||
+        t === 'short_shaku_scaled' ||
+        t === 'shaku_edge_scaled' ||
+        t === 'short_shaku_full' ||
+        t === 'floor_115'
+      ) {
+        return Object.assign({}, rule, { zone: ctx.zoneKey });
+      }
+    }
+    return rule;
+  }
+
+  function sumAcShakuAllAlloc(alloc) {
+    var t = 0;
+    t += shortShakuZone(alloc, 'lk');
+    t += shortShakuZone(alloc, 'master');
+    getSecondaryBeds(alloc).forEach(function (b) {
+      t += shortShakuZone(alloc, b.key);
+    });
+    return t;
+  }
+
+  function roundAfterWastePing(raw, mode) {
+    if (raw <= 0) return 0;
+    if (mode === 'half') return Math.max(0.5, Math.ceil(raw * 2) / 2);
+    return Math.max(1, Math.ceil(raw));
+  }
+
+  function floorQtyForZone(alloc, zoneKey, s) {
+    var z = getZone(alloc, zoneKey);
+    if (!z) return 0;
+    var waste = typeof s.floorWaste === 'number' ? s.floorWaste : 1.15;
+    var mode = s.floorRound === 'half' ? 'half' : 'int';
+    return roundAfterWastePing(z.ping * waste, mode);
+  }
+
+  function mepSocketCountFromAlloc(alloc, s) {
+    if (!alloc || !alloc.template) return 0;
+    var base = typeof s.mepSocketBase === 'number' ? s.mepSocketBase : 30;
+    var pz = typeof s.mepPerZone === 'number' ? s.mepPerZone : 6;
+    return Math.max(0, Math.round(base + pz * (1 + alloc.template.bedrooms)));
+  }
+
+  function avgSecondaryShortShaku(alloc) {
+    var beds = alloc.zones.filter(function (z) { return z.kind === 'bed' && z.key !== 'master'; });
+    if (!beds.length) return 0;
+    var t = 0;
+    beds.forEach(function (b) {
+      t += shakuFromCm(Math.min(b.dims.L, b.dims.W));
+    });
+    return round1(t / beds.length);
+  }
+
+  function sumPingLkBeds(alloc) {
+    var s = 0;
+    alloc.zones.forEach(function (z) {
+      if (z.key === 'lk' || z.kind === 'bed') s += z.ping;
+    });
+    return s;
+  }
+
+  function computeQtyFromRule(rule, itemId, alloc, ctx) {
+    if (!rule || !rule.type) return 0;
+    var r0 = rule;
+    if (ctx) r0 = mergeRuleForZoneInject(rule, ctx);
+    var r = r0;
+    switch (r.type) {
+      case 'ceil_ping_lk_beds':
+        return Math.ceil(sumPingLkBeds(alloc));
+      case 'floor_ping_lk_beds':
+        return Math.ceil(sumPingLkBeds(alloc));
+      case 'short_shaku_zone': {
+        var zKey = r.zone != null && r.zone !== '' ? r.zone : 'lk';
+        return edgeShakuZone(alloc, zKey, r.edge || 'short');
+      }
+      case 'shaku_edge_scaled': {
+        var ze = r.zone != null && r.zone !== '' ? r.zone : 'lk';
+        var base = edgeShakuZone(alloc, ze, r.edge || 'long');
+        var sc0 = typeof r.scale === 'number' ? r.scale : 0.3;
+        return Math.max(0.1, round1(base * sc0));
+      }
+      case 'short_shaku_scaled': {
+        var z2 = r.zone != null && r.zone !== '' ? r.zone : 'master';
+        var sh = edgeShakuZone(alloc, z2, r.edge || 'short');
+        var scc = typeof r.scale === 'number' ? r.scale : 0.6;
+        return Math.max(0.1, round1(sh * scc));
+      }
+      case 'short_shaku_full': {
+        var z3 = r.zone != null && r.zone !== '' ? r.zone : 'master';
+        return edgeShakuZone(alloc, z3, r.edge || 'short');
+      }
+      case 'avg_secondary_short_shaku_scaled': {
+        var avg2 = avgSecondaryShortShaku(alloc);
+        var sc2 = typeof r.scale === 'number' ? r.scale : 0.6;
+        if (!alloc.zones.some(function (z) { return z.kind === 'bed' && z.key !== 'master'; })) return 0;
+        return Math.max(0.1, round1(avg2 * sc2));
+      }
+      case 'fixed_shaku':
+        return typeof r.value === 'number' ? r.value : 0;
+      case 'floor_115': {
+        var zf = r.zone;
+        if (!zf) return 0;
+        return floorQtyForZone(alloc, zf, state.settings);
+      }
+      case 'sum_ping_paints':
+        return Math.ceil(sumPingLkBeds(alloc));
+      case 'sum_ac_shaku_paint':
+        return sumAcShakuAllAlloc(alloc);
+      case 'recess_15x':
+        return Math.max(0, Math.ceil(sumPingLkBeds(alloc) * 1.5));
+      case 'mep_sockets_bed':
+        return mepSocketCountFromAlloc(alloc, state.settings);
+      case 'trim_placeholder':
+        return 1;
+      case 'touchup_from_settings':
+        return 1;
+      default:
+        return 0;
+    }
+  }
+
+  function getSchemeById(sid) {
+    var s = state.settings;
+    var m = (s.schemeMenus || []).filter(function (x) { return x.id === sid; })[0];
+    return m || (s.schemeMenus && s.schemeMenus[0]) || { id: 'simple', name: '精簡', rules: {} };
+  }
+
+  function getSecondaryBeds(alloc) {
+    return alloc.zones.filter(function (z) {
+      return z.kind === 'bed' && z.key !== 'master';
+    });
+  }
+
+  function getDisplayItemRows(alloc) {
+    var rows = [];
+    var defs = (state.settings.itemDefs || []).slice();
+    var pushF = function (def, ex) {
+      var rid = (ex && ex.rowId) || def.id;
+      rows.push({
+        def: def,
+        rowId: rid,
+        instanceZoneKey: ex && ex.zk != null ? ex.zk : null,
+        roomLabel: ex && ex.label ? ex.label : null,
+        groupTitle: (ex && ex.gTitle) || def.groupTitle || def.group,
+        sort: ex && ex.sort != null ? ex.sort : 5e4 + (def.displayRank != null ? def.displayRank : def.sortKey || 0),
+      });
+    };
+    var S = 5e4;
+    var sortLk = function (d) { return 1e4 + (d.displayRank != null ? d.displayRank : d.sortKey || 0); };
+    var sortM = function (d) { return 2e4 + (d.displayRank != null ? d.displayRank : d.sortKey || 0); };
+    var sortZ = function (d, bedIdx) { return 3e4 + bedIdx * 1e3 + (d.displayRank != null ? d.displayRank : d.sortKey || 0); };
+    var sortQ = function (d) { return S + (d.displayRank != null ? d.displayRank : d.sortKey || 0); };
+    defs
+      .filter(function (d) { return d.zoneScope === 'lk' && !d.perFloor; })
+      .sort(function (a, b) {
+        return (a.displayRank || a.sortKey || 0) - (b.displayRank || b.sortKey || 0);
+      })
+      .forEach(function (def) {
+        pushF(def, { gTitle: '客餐廳', sort: sortLk(def) });
+      });
+    defs
+      .filter(function (d) { return d.zoneScope === 'master' && !d.perFloor; })
+      .sort(function (a, b) {
+        return (a.displayRank || a.sortKey || 0) - (b.displayRank || b.sortKey || 0);
+      })
+      .forEach(function (def) {
+        pushF(def, { gTitle: '主臥', sort: sortM(def) });
+      });
+    getSecondaryBeds(alloc).forEach(function (b, bedIdx) {
+      defs
+        .filter(function (d) { return d.perSecondary; })
+        .sort(function (a, b2) {
+          return (a.displayRank || a.sortKey || 0) - (b2.displayRank || b2.sortKey || 0);
+        })
+        .forEach(function (def) {
+          pushF(def, {
+            rowId: def.id + '__' + b.key,
+            zk: b.key,
+            label: b.name,
+            gTitle: '次臥 · ' + b.name,
+            sort: sortZ(def, bedIdx),
+          });
+        });
+    });
+    var defCeil = defs.filter(function (d) { return d.id === 'ceiling'; })[0];
+    if (defCeil) {
+      pushF(defCeil, { gTitle: '全室', sort: sortQ(defCeil) });
+    }
+    var defFloor = defs.filter(function (d) { return d.perFloor; })[0];
+    if (defFloor) {
+      var o = 0;
+      ['lk', 'master'].forEach(function (zk) {
+        if (!getZone(alloc, zk)) return;
+        o++;
+        pushF(defFloor, { rowId: 'floor_p__' + zk, zk: zk, gTitle: '全室', sort: sortQ(defFloor) + o * 0.1 });
+      });
+      getSecondaryBeds(alloc).forEach(function (b) {
+        o++;
+        pushF(defFloor, { rowId: 'floor_p__' + b.key, zk: b.key, gTitle: '全室', sort: sortQ(defFloor) + o * 0.1 });
+      });
+    }
+    defs
+      .filter(function (d) {
+        if (d.perSecondary || d.perFloor) return false;
+        if (d.id === 'ceiling') return false;
+        return d.zoneScope === 'all';
+      })
+      .sort(function (a, b) {
+        return (a.displayRank != null ? a.displayRank : a.sortKey || 0) - (b.displayRank != null ? b.displayRank : b.sortKey || 0);
+      })
+      .forEach(function (def) {
+        pushF(def, { gTitle: '全室', sort: sortQ(def) });
+      });
+    rows.sort(function (a, b) {
+      if (a.sort === b.sort) {
+        if (a.rowId < b.rowId) return -1;
+        if (a.rowId > b.rowId) return 1;
+        return 0;
+      }
+      return a.sort - b.sort;
+    });
+    return rows;
+  }
+
+  function getQtyForDisplayRow(row, alloc, scheme) {
+    var def = row.def;
+    if (!def) return 0;
+    if (def.id === 'touchup_clean') {
+      return 1;
+    }
+    if (def.id === 'trim_molding') {
+      return 1;
+    }
+    if (row.instanceZoneKey) {
+      var r0 = scheme.rules && scheme.rules[def.id];
+      if (!r0) return 0;
+      return computeQtyFromRule(r0, def.id, alloc, { zoneKey: row.instanceZoneKey });
+    }
+    var r2 = scheme.rules && (scheme.rules[def.id] || (def.legacyId ? scheme.rules[def.legacyId] : null));
+    if (!r2) return 0;
+    return computeQtyFromRule(r2, def.id, alloc, null);
+  }
+
+  function qtyForItemWithScheme(itemId, alloc, scheme) {
+    var r = scheme.rules && scheme.rules[itemId];
+    if (r) return computeQtyFromRule(r, itemId, alloc, null);
+    return 0;
+  }
+
+  function computeAllocation(totalPing, templateId, s) {
+    var tpl = s.templates.filter(function (t) { return t.id === templateId; })[0] || s.templates[0];
+    var balcony = s.balconyPing;
+    var baths = (s.bathroomPings && s.bathroomPings.length >= tpl.baths)
+      ? s.bathroomPings.slice(0, tpl.baths)
+      : s.bathroomPings.slice();
+    while (baths.length < tpl.baths) baths.push(1);
+    var bathSum = baths.reduce(function (x, y) { return x + y; }, 0);
+    var R = totalPing - balcony - bathSum;
+    if (R <= 0) R = 0.1;
+    var lkPct = randBetween(s.lkShareMin, s.lkShareMax);
+    var lk = R * lkPct;
+    var R_br = R - lk;
+    var zones = [];
+    zones.push({ key: 'balcony', name: '陽台', ping: balcony, kind: 'fixed' });
+    baths.forEach(function (bp, i) {
+      zones.push({ key: 'bath' + (i + 1), name: '浴廁' + (i + 1), ping: bp, kind: 'fixed' });
+    });
+    zones.push({ key: 'lk', name: '客廳+廚房', ping: round2(lk), kind: 'lk' });
+    var beds = [];
+    if (tpl.bedrooms === 2) {
+      var b2 = R_br / (s.masterVsBed2 + 1);
+      beds = [
+        { key: 'master', name: '主臥', ping: round2(s.masterVsBed2 * b2) },
+        { key: 'bed2', name: '次卧', ping: round2(b2) },
+      ];
+    } else if (tpl.bedrooms === 3) {
+      var den = s.masterVsBed2 + 1 + s.bed3VsBed2;
+      var b2a = R_br / den;
+      beds = [
+        { key: 'master', name: '主臥', ping: round2(s.masterVsBed2 * b2a) },
+        { key: 'bed2', name: '次卧一', ping: round2(b2a) },
+        { key: 'bed3', name: '次卧二', ping: round2(s.bed3VsBed2 * b2a) },
+      ];
+    } else if (tpl.bedrooms === 4) {
+      var r4 = s.bed4VsBed2 != null ? s.bed4VsBed2 : 0.92;
+      var d4 = s.masterVsBed2 + 1 + s.bed3VsBed2 + r4;
+      var b2b = R_br / d4;
+      beds = [
+        { key: 'master', name: '主臥', ping: round2(s.masterVsBed2 * b2b) },
+        { key: 'bed2', name: '次卧一', ping: round2(b2b) },
+        { key: 'bed3', name: '次卧二', ping: round2(s.bed3VsBed2 * b2b) },
+        { key: 'bed4', name: '次卧三', ping: round2(r4 * b2b) },
+      ];
+    }
+    beds.forEach(function (b) {
+      zones.push({ key: b.key, name: b.name, ping: b.ping, kind: 'bed' });
+    });
+    var sumCheck = zones.reduce(function (a, z) { return a + z.ping; }, 0);
+    var drift = round2(totalPing - sumCheck);
+    if (Math.abs(drift) >= 0.01) {
+      var lkZ = zones.filter(function (z) { return z.key === 'lk'; })[0];
+      if (lkZ) lkZ.ping = round2(lkZ.ping + drift);
+    }
+    zones.forEach(function (z) {
+      z.dims = rectDimsCm(z.ping, s);
+    });
+    return { template: tpl, totalPing: totalPing, R: R, lkPct: lkPct, zones: zones, bathPingsUsed: baths };
+  }
+
+  function round2(x) {
+    return Math.round(x * 100) / 100;
+  }
+
+  function money(n) {
+    return Math.round(Number(n) || 0).toLocaleString('zh-TW');
+  }
+
+  function parseGvizResponseText(text) {
+    var a = text.indexOf('{');
+    var b = text.lastIndexOf('}');
+    if (a < 0 || b < a) {
+      throw new Error('回應格式無法辨識（表須已「發佈到網路」或讓有連結者可檢視，並確認 ID）');
+    }
+    return JSON.parse(text.substring(a, b + 1));
+  }
+
+  function gvizGetCellString(ch) {
+    if (!ch) return '';
+    if (ch.f != null && String(ch.f) !== '') return String(ch.f);
+    if (ch.v == null) return '';
+    return typeof ch.v === 'number' && !isNaN(ch.v) ? String(ch.v) : String(ch.v);
+  }
+
+  function gvizRowsToNameUnitPriceMatrix(j) {
+    var out = [];
+    var rows = (j && j.table && j.table.rows) || [];
+    for (var i = 0; i < rows.length; i++) {
+      var c = rows[i].c || [];
+      if (!c.length) continue;
+      out.push([gvizGetCellString(c[0]), gvizGetCellString(c[1]), gvizGetCellString(c[2])]);
+    }
+    return out;
+  }
+
+  function normNameKey(s) {
+    return String(s == null ? '' : s)
+      .replace(/\r?\n/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function findRowUnitPriceByName(matrix, nameKey) {
+    var n = normNameKey(nameKey);
+    if (!n) return null;
+    var r, a0, u, pnum;
+    for (r = 0; r < matrix.length; r++) {
+      a0 = normNameKey(matrix[r][0]);
+      if (!a0) continue;
+      pnum = parseFloat(String(matrix[r][2] || '').replace(/,/g, ''));
+      if (isNaN(pnum) || pnum <= 0) continue;
+      if (a0 === n) {
+        u = normNameKey(matrix[r][1]) || '式';
+        return { unit: u, price: pnum };
+      }
+    }
+    for (r = 0; r < matrix.length; r++) {
+      a0 = normNameKey(matrix[r][0]);
+      if (!a0) continue;
+      pnum = parseFloat(String(matrix[r][2] || '').replace(/,/g, ''));
+      if (isNaN(pnum) || pnum <= 0) continue;
+      if (a0.indexOf(n) >= 0 || n.indexOf(a0) >= 0) {
+        u = normNameKey(matrix[r][1]) || '式';
+        return { unit: u, price: pnum };
+      }
+    }
+    return null;
+  }
+
+  function fetchGvizUrl(url) {
+    return fetch(url)
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
+      .then(parseGvizResponseText);
+  }
+
+  function showPriceSyncBar(msg, isError) {
+    var bar = document.getElementById('c_priceSyncBar');
+    if (!bar) return;
+    bar.textContent = msg;
+    bar.className = isError
+      ? 'no-print text-xs mt-2 py-1.5 px-2 rounded border border-red-200 bg-red-50/90 text-red-900'
+      : 'no-print text-xs mt-2 py-1.5 px-2 rounded border border-amber-200 bg-amber-50/80 text-amber-950';
+    bar.classList.remove('hidden');
+    if (!isError) {
+      setTimeout(function () {
+        if (bar.textContent === msg) {
+          bar.classList.add('hidden');
+          bar.textContent = '';
+        }
+      }, 8000);
+    }
+  }
+
+  function buildLegacyGvizUrl(sheetId, rawG) {
+    var u =
+      'https://docs.google.com/spreadsheets/d/' +
+      encodeURIComponent(sheetId) +
+      '/gviz/tq?tqx=out:json&headers=1&range=A1%3AB2000';
+    if (rawG) {
+      if (/^\d+$/.test(rawG)) u += '&gid=' + encodeURIComponent(rawG);
+      else u += '&sheet=' + encodeURIComponent(rawG);
+    }
+    return u;
+  }
+
+  function buildTabGvizUrl(sheetId, tabName) {
+    return (
+      'https://docs.google.com/spreadsheets/d/' +
+      encodeURIComponent(sheetId) +
+      '/gviz/tq?tqx=out:json&headers=1&range=A1%3AD2000&sheet=' +
+      encodeURIComponent(tabName)
+    );
+  }
+
+  function parseLegacyIdPriceMapFromJ(j) {
+    var map = {};
+    var tab = j && j.table;
+    if (!tab || !tab.rows || !tab.rows.length) return map;
+    tab.rows.forEach(function (row) {
+      var c = row.c;
+      if (!c || c.length < 2) return;
+      var c0 = c[0];
+      if (!c0) return;
+      var idCell = c0.v != null && c0.v !== '' ? c0.v : c0.f;
+      if (idCell == null) return;
+      var id2 = String(idCell).trim();
+      if (!id2) return;
+      var c1a = c[1];
+      if (c1a == null) return;
+      var pCell = c1a.v != null && c1a.v !== '' ? c1a.v : c1a.f;
+      var pr = parseFloat(pCell);
+      if (isNaN(pr)) return;
+      map[id2] = pr;
+    });
+    return map;
+  }
+
+  function uniquePriceSheetTabNames() {
+    var seen = Object.create(null);
+    (state.settings.itemDefs || []).forEach(function (it) {
+      if (it && it.priceSheetTab && (it.priceSheetItem || '').trim()) {
+        seen[it.priceSheetTab.replace(/\s+/g, ' ').trim()] = true;
+      }
+    });
+    return Object.keys(seen);
+  }
+
+  function syncPricesFromGviz(options) {
+    options = options || {};
+    var silent = !!options.silent;
+    var id = (state.settings.priceSheetGvizId || '').trim();
+    if (!id) {
+      if (!silent) alert('請先填寫試算表 ID（網址內 /d/ 之後 44 字元那段）');
+      return Promise.resolve(0);
+    }
+    if (silent) {
+      showPriceSyncBar('正在從試算表讀取最新單價…', false);
+    }
+    var rawG = (state.settings.priceSheetGid || '').trim();
+    return fetchGvizUrl(buildLegacyGvizUrl(id, rawG))
+      .then(function (j) {
+        var map = parseLegacyIdPriceMapFromJ(j);
+        var nLegacy = 0;
+        state.settings.itemDefs.forEach(function (it) {
+          if (it && it.priceSheetTab && (it.priceSheetItem || '').trim()) return;
+          if (Object.prototype.hasOwnProperty.call(map, it.id)) {
+            it.price = map[it.id];
+            nLegacy++;
+          }
+        });
+        return nLegacy;
+      })
+      .then(function (nLegacy) {
+        var tabNames = uniquePriceSheetTabNames();
+        if (!tabNames.length) {
+          return { nLegacy: nLegacy, nByTab: 0 };
+        }
+        var byTab = {};
+        return tabNames
+          .reduce(function (p, tabName) {
+            return p.then(function () {
+              return fetchGvizUrl(buildTabGvizUrl(id, tabName))
+                .then(function (j) {
+                  byTab[tabName] = gvizRowsToNameUnitPriceMatrix(j);
+                })
+                .catch(function () {
+                  byTab[tabName] = null;
+                });
+            });
+          }, Promise.resolve())
+          .then(function () {
+            var nBy = 0;
+            state.settings.itemDefs.forEach(function (it) {
+              if (!it || !it.priceSheetTab || !(it.priceSheetItem || '').trim()) return;
+              var tn = it.priceSheetTab.replace(/\s+/g, ' ').trim();
+              var matrix = byTab[tn];
+              if (!matrix) return;
+              var found = findRowUnitPriceByName(matrix, it.priceSheetItem);
+              if (!found) return;
+              it.unit = found.unit;
+              it.price = found.price;
+              nBy++;
+            });
+            return { nLegacy: nLegacy, nByTab: nBy };
+          });
+      })
+      .then(function (summary) {
+        var nL = summary && typeof summary.nLegacy === 'number' ? summary.nLegacy : 0;
+        var nB = summary && typeof summary.nByTab === 'number' ? summary.nByTab : 0;
+        saveSettings();
+        fillAdminForm();
+        if (silent) {
+          showPriceSyncBar('單價已與試算表同步（id 對照 ' + nL + ' 筆；分頁品項 ' + nB + ' 筆，以表為準）。', false);
+        } else {
+          alert('已從試算表帶入：內用 id 對 B 欄＝' + nL + ' 筆；分頁品名對單位／單價＝' + nB + ' 筆。');
+        }
+        return nL + nB;
+      })
+      .catch(function (e) {
+        var errText = e && e.message ? e.message : String(e);
+        if (silent) {
+          showPriceSyncBar('試算表讀取失敗，本場先沿用本機上次的單價。（' + errText + '）', true);
+        } else {
+          alert('讀取失敗：' + errText + '。可改用匯出 JSON 手動帶入或檢查表可公開讀。');
+        }
+        return 0;
+      });
+  }
+
+  function loadPricesFromGviz() {
+    readAdminForm();
+    syncPricesFromGviz({ silent: false });
+  }
+
+  function buildMenuRuleObject(ruleType, v, sca, zRaw, edgStr) {
+    var z = (zRaw && String(zRaw).trim()) || undefined;
+    var edg = edgStr === 'long' ? 'long' : 'short';
+    var r;
+    switch (ruleType) {
+      case 'fixed_shaku':
+        r = { type: 'fixed_shaku', value: isNaN(v) ? 0 : v };
+        break;
+      case 'floor_115':
+        r = { type: 'floor_115' };
+        break;
+      case 'ceil_ping_lk_beds':
+      case 'sum_ping_paints':
+      case 'sum_ac_shaku_paint':
+      case 'recess_15x':
+      case 'mep_sockets_bed':
+      case 'trim_placeholder':
+      case 'touchup_from_settings':
+        r = { type: ruleType };
+        break;
+      case 'shaku_edge_scaled': {
+        r = { type: 'shaku_edge_scaled', edge: edg === 'long' ? 'long' : 'short' };
+        if (z) r.zone = z;
+        if (!isNaN(sca)) r.scale = sca;
+        break;
+      }
+      case 'short_shaku_scaled':
+      case 'short_shaku_full':
+      case 'short_shaku_zone': {
+        r = { type: ruleType, edge: edg === 'long' ? 'long' : 'short' };
+        if (z) r.zone = z;
+        if (ruleType === 'short_shaku_scaled' && !isNaN(sca)) r.scale = sca;
+        break;
+      }
+      case 'avg_secondary_short_shaku_scaled': {
+        r = { type: 'avg_secondary_short_shaku_scaled' };
+        if (!isNaN(sca)) r.scale = sca;
+        break;
+      }
+      default:
+        return null;
+    }
+    return r;
+  }
+
+  function setDraftError(msg) {
+    var d = document.getElementById('s_draftError');
+    if (!d) return;
+    if (msg) {
+      d.textContent = msg;
+      d.classList.remove('hidden');
+    } else {
+      d.textContent = '';
+      d.classList.add('hidden');
+    }
+  }
+
+  function parseAndApplyMenuDraft() {
+    if (document.getElementById('s_schemeNameEdit') && getMenuScheme()) {
+      var nm0 = (document.getElementById('s_schemeNameEdit').value || '').trim();
+      if (nm0) getMenuScheme().name = nm0;
+    }
+    syncSchemesJsonTextarea();
+    readAdminForm();
+    setDraftError('');
+    var sc = getMenuScheme();
+    if (!sc) {
+      setDraftError('請先選一組要編輯的方案。');
+      return;
+    }
+    var box = document.getElementById('s_menuDraft');
+    if (!box) return;
+    var mode = (document.querySelector('input[name="s_draftMode"]:checked') || {}).value || 'merge';
+    var base = mode === 'replace' ? {} : Object.assign({}, sc.rules || {});
+    var err = [];
+    var nOk = 0;
+    (box.value || '').split('\n').forEach(function (line, idx) {
+      var s = String(line).trim();
+      if (!s || s.charAt(0) === '#') return;
+      var parts = s.split('|').map(function (x) { return String(x).trim(); });
+      if (parts.length < 2) {
+        err.push('第 ' + (idx + 1) + ' 行欄位不足，至少要「品項id|規則代碼」。');
+        return;
+      }
+      var itemId = parts[0];
+      var rt = parts[1];
+      if (!itemId) {
+        err.push('第 ' + (idx + 1) + ' 行缺品項 id。');
+        return;
+      }
+      if (rt === 'remove' || rt === 'delete' || rt === '刪') {
+        delete base[itemId];
+        nOk++;
+        return;
+      }
+      var pV = parts[2] === '' || parts[2] == null ? NaN : parseFloat(parts[2]);
+      var pS = parts[3] === '' || parts[3] == null ? NaN : parseFloat(parts[3]);
+      var pZ = parts[4] != null && parts[4] !== '' ? String(parts[4]).trim() : undefined;
+      var pE = parts[5] != null && String(parts[5]).trim() !== '' ? String(parts[5]).trim() : 'short';
+      var rule = buildMenuRuleObject(rt, pV, pS, pZ, pE);
+      if (!rule) {
+        err.push('第 ' + (idx + 1) + ' 行：無法辨識規則代碼「' + rt + '」');
+        return;
+      }
+      base[itemId] = rule;
+      nOk++;
+    });
+    if (mode === 'replace' && nOk === 0) {
+      setDraftError((err.length ? '' : '整包取代需至少一筆有效內容（# 註解不算）。') + (err.length ? ' 尚有錯誤未處理。' : ''));
+      return;
+    }
+    if (nOk === 0) {
+      setDraftError('沒有成功讀到任何一筆（可檢查｜ 與規則代碼是否正確）。' + (err.length ? ' ' + err[0] : ''));
+      return;
+    }
+    if (err.length) {
+      setDraftError('部分行未套用：' + err.slice(0, 4).join('；') + (err.length > 4 ? '…' : ''));
+    } else {
+      setDraftError('');
+    }
+    sc.rules = base;
+    syncSchemesJsonTextarea();
+    saveSettings();
+    state._preservedMenuScheme = sc.id;
+    fillFormMenuSelects();
+    renderRulesTable();
+    loadFormFromCurrentItem();
+    fillSchemeRadios();
+    alert('已從速寫更新規則（' + nOk + ' 筆）。' + (err.length ? ' 部分行有誤，請看紅字。' : ' 已一併寫入 JSON 與本機。'));
+  }
+
+  function exportMenuDraftFromScheme() {
+    if (getMenuScheme() && document.getElementById('s_schemeNameEdit')) {
+      var nm0 = (document.getElementById('s_schemeNameEdit').value || '').trim();
+      if (nm0) getMenuScheme().name = nm0;
+    }
+    syncSchemesJsonTextarea();
+    readAdminForm();
+    setDraftError('');
+    var sc = getMenuScheme();
+    if (!sc) return;
+    var rules = sc.rules || {};
+    var defOrder = {};
+    (state.settings.itemDefs || []).forEach(function (d, i) { defOrder[d.id] = i; });
+    var keys = Object.keys(rules).sort(function (a, b) {
+      return (defOrder[a] != null && defOrder[b] != null ? defOrder[a] - defOrder[b] : 0) || a.localeCompare(b);
+    });
+    var lines = [
+      '# 欄位：品項id | 規則代碼 | 定值 | 比例(小數) | 空間 | 邊(長/短) — 每行 6 欄，5 條 |',
+      '# 產生自：' + (sc.name || sc.id),
+    ];
+    keys.forEach(function (k) {
+      var r = rules[k];
+      if (!r || !r.type) return;
+      var v0 = typeof r.value === 'number' && !isNaN(r.value) ? String(r.value) : '';
+      var s0 = typeof r.scale === 'number' && !isNaN(r.scale) ? String(r.scale) : '';
+      var z0 = r.zone != null && r.zone !== '' ? String(r.zone) : '';
+      var e0 = '';
+      if (r.type === 'shaku_edge_scaled' || r.type === 'short_shaku_scaled' || r.type === 'short_shaku_full' || r.type === 'short_shaku_zone') {
+        e0 = r.edge === 'long' ? 'long' : 'short';
+      }
+      lines.push([k, r.type, v0, s0, z0, e0].join('|'));
+    });
+    var t = document.getElementById('s_menuDraft');
+    if (t) t.value = lines.join('\n');
+    setDraftError('');
+  }
+
+  function applyFormRuleToScheme() {
+    if (document.getElementById('s_schemeNameEdit') && getMenuScheme()) {
+      var nm0 = (document.getElementById('s_schemeNameEdit').value || '').trim();
+      if (nm0) getMenuScheme().name = nm0;
+    }
+    syncSchemesJsonTextarea();
+    readAdminForm();
+    var elI = document.getElementById('s_formItem');
+    var elR = document.getElementById('s_formRule');
+    if (!elI || !elR) return;
+    var itemId = elI.value;
+    var ruleType = elR.value;
+    if (!itemId || !ruleType) {
+      alert('請選品項與規則型別');
+      return;
+    }
+    var sc = getMenuScheme();
+    if (!sc) {
+      alert('請先選要編輯的方案');
+      return;
+    }
+    sc.rules = sc.rules || {};
+    if (ruleType === 'remove') {
+      delete sc.rules[itemId];
+    } else {
+      var z0 = (document.getElementById('s_formZone') && document.getElementById('s_formZone').value) || '';
+      var zEx = (document.getElementById('s_formZoneExtra') && document.getElementById('s_formZoneExtra').value.trim()) || '';
+      var z = (zEx || z0).trim() || undefined;
+      var v2 = parseFloat(document.getElementById('s_formValue') && document.getElementById('s_formValue').value);
+      var sca2 = parseFloat(document.getElementById('s_formScale') && document.getElementById('s_formScale').value);
+      var edg2 = (document.getElementById('s_formEdge') && document.getElementById('s_formEdge').value) || 'short';
+      var r = buildMenuRuleObject(ruleType, v2, sca2, z, edg2);
+      if (!r) {
+        alert('不支援的規則型別');
+        return;
+      }
+      sc.rules[itemId] = r;
+    }
+    syncSchemesJsonTextarea();
+    saveSettings();
+    state._preservedMenuScheme = sc.id;
+    fillFormMenuSelects();
+    renderRulesTable();
+    loadFormFromCurrentItem();
+    fillSchemeRadios();
+    alert('已寫入方案「' + (sc.name || sc.id) + '」並已儲存。');
+  }
+
+  function menuAddScheme() {
+    if (getMenuScheme() && document.getElementById('s_schemeNameEdit')) {
+      var nm0 = (document.getElementById('s_schemeNameEdit').value || '').trim();
+      if (nm0) getMenuScheme().name = nm0;
+    }
+    syncSchemesJsonTextarea();
+    readAdminForm();
+    var nid = 's_' + Date.now();
+    var menus = state.settings.schemeMenus = state.settings.schemeMenus || [];
+    menus.push({ id: nid, name: '新方案', rules: {} });
+    syncSchemesJsonTextarea();
+    saveSettings();
+    state._preservedMenuScheme = nid;
+    fillAdminForm();
+    fillSchemeRadios();
+  }
+
+  function menuDuplicateScheme() {
+    if (getMenuScheme() && document.getElementById('s_schemeNameEdit')) {
+      var nm0 = (document.getElementById('s_schemeNameEdit').value || '').trim();
+      if (nm0) getMenuScheme().name = nm0;
+    }
+    syncSchemesJsonTextarea();
+    readAdminForm();
+    var cur = getMenuScheme();
+    if (!cur) return;
+    var nid = 's_' + Date.now();
+    var c2 = JSON.parse(JSON.stringify(cur));
+    c2.id = nid;
+    c2.name = (cur.name || '方案') + '（複本）';
+    c2.rules = c2.rules || {};
+    (state.settings.schemeMenus = state.settings.schemeMenus || []).push(c2);
+    syncSchemesJsonTextarea();
+    saveSettings();
+    state._preservedMenuScheme = nid;
+    fillAdminForm();
+    fillSchemeRadios();
+  }
+
+  function menuDeleteScheme() {
+    var menus = state.settings.schemeMenus || [];
+    if (menus.length < 2) {
+      alert('至少保留一組方案，無法刪除。');
+      return;
+    }
+    if (!confirm('確定刪除這一組方案？此動作可再用「匯出／還原」救回。')) return;
+    if (getMenuScheme() && document.getElementById('s_schemeNameEdit')) {
+      var nm0 = (document.getElementById('s_schemeNameEdit').value || '').trim();
+      if (nm0) getMenuScheme().name = nm0;
+    }
+    syncSchemesJsonTextarea();
+    readAdminForm();
+    var id = (document.getElementById('s_menuScheme') && document.getElementById('s_menuScheme').value) || '';
+    state.settings.schemeMenus = menus.filter(function (m) { return m.id !== id; });
+    state._preservedMenuScheme = (state.settings.schemeMenus[0] && state.settings.schemeMenus[0].id) || 'simple';
+    if (state.selectedSchemeId === id) state.selectedSchemeId = state._preservedMenuScheme;
+    syncSchemesJsonTextarea();
+    saveSettings();
+    fillAdminForm();
+    fillSchemeRadios();
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function fillTemplateSelect() {
+    var sel = document.getElementById('c_template');
+    sel.innerHTML = '';
+    state.settings.templates.forEach(function (t) {
+      var o = document.createElement('option');
+      o.value = t.id;
+      o.textContent = t.name;
+      sel.appendChild(o);
+    });
+  }
+
+  function fillSchemeRadios() {
+    var box = document.getElementById('c_schemeRadios');
+    if (!box) return;
+    var menus = state.settings.schemeMenus || [];
+    if (!state.selectedSchemeId && menus[0]) state.selectedSchemeId = menus[0].id;
+    if (menus.length && !menus.some(function (m) { return m.id === state.selectedSchemeId; })) {
+      state.selectedSchemeId = menus[0].id;
+    }
+    box.innerHTML = '';
+    menus.forEach(function (sc) {
+      var lab = document.createElement('label');
+      lab.className = 'inline-flex items-center gap-1';
+      var chk = sc.id === state.selectedSchemeId ? ' checked' : '';
+      lab.innerHTML =
+        '<input type="radio" name="scheme" value="' +
+        esc(sc.id) +
+        '"' +
+        chk +
+        ' /> ' +
+        esc(sc.name);
+      box.appendChild(lab);
+    });
+    box.querySelectorAll('input[name=scheme]').forEach(function (inp) {
+      inp.addEventListener('change', function () {
+        state.selectedSchemeId = this.value;
+        var step3 = document.getElementById('cStep3');
+        if (state.lastAlloc && step3 && !step3.classList.contains('hidden')) {
+          applySchemeQtyToInputs();
+        }
+      });
+    });
+  }
+
+  function fillFormMenuSelects() {
+    var fs = document.getElementById('s_menuScheme');
+    var fi = document.getElementById('s_formItem');
+    var want = state._preservedMenuScheme;
+    state._preservedMenuScheme = null;
+    if (fs) {
+      fs.innerHTML = '';
+      (state.settings.schemeMenus || []).forEach(function (m) {
+        var o = document.createElement('option');
+        o.value = m.id;
+        o.textContent = m.name + '（' + m.id + '）';
+        fs.appendChild(o);
+      });
+      if (want && (state.settings.schemeMenus || []).some(function (x) { return x.id === want; })) {
+        fs.value = want;
+      } else if (state.selectedSchemeId && (state.settings.schemeMenus || []).some(function (x) { return x.id === state.selectedSchemeId; })) {
+        fs.value = state.selectedSchemeId;
+      } else if (state.settings.schemeMenus[0]) {
+        fs.value = state.settings.schemeMenus[0].id;
+      }
+    }
+    if (fi) {
+      fi.innerHTML = '';
+      (state.settings.itemDefs || [])
+        .slice()
+        .sort(function (a, b) {
+          return itemDefListSortKeyForAdmin(a) - itemDefListSortKeyForAdmin(b);
+        })
+        .forEach(function (it) {
+        var o2 = document.createElement('option');
+        o2.value = it.id;
+        o2.textContent = it.id + ' — ' + it.label;
+        fi.appendChild(o2);
+      });
+    }
+  }
+
+  function refreshMenuSchemeUI() {
+    var sc = getMenuScheme();
+    if (document.getElementById('s_schemeNameEdit') && sc) {
+      document.getElementById('s_schemeNameEdit').value = sc.name || '';
+    }
+    if (document.getElementById('s_schemeIdView') && sc) {
+      document.getElementById('s_schemeIdView').textContent = sc.id;
+    } else if (document.getElementById('s_schemeIdView')) {
+      document.getElementById('s_schemeIdView').textContent = '—';
+    }
+    renderRulesTable();
+    loadFormFromCurrentItem();
+    setRuleFormHelp();
+  }
+
+  function fillAdminForm() {
+    var s = state.settings;
+    if (document.getElementById('s_sheetId')) {
+      document.getElementById('s_sheetId').value = s.priceSheetGvizId != null ? s.priceSheetGvizId : '';
+    }
+    if (document.getElementById('s_sheetGid')) {
+      document.getElementById('s_sheetGid').value = s.priceSheetGid != null ? s.priceSheetGid : '';
+    }
+    if (document.getElementById('s_floorWaste')) {
+      document.getElementById('s_floorWaste').value = s.floorWaste != null ? s.floorWaste : DEFAULTS.floorWaste;
+    }
+    if (document.getElementById('s_floorRound')) {
+      document.getElementById('s_floorRound').value = s.floorRound || 'int';
+    }
+    if (document.getElementById('s_trimRate')) {
+      document.getElementById('s_trimRate').value = s.trimMoldingRate != null ? s.trimMoldingRate : DEFAULTS.trimMoldingRate;
+    }
+    if (document.getElementById('s_touchup')) {
+      document.getElementById('s_touchup').value = s.touchupLump != null ? s.touchupLump : DEFAULTS.touchupLump;
+    }
+    if (document.getElementById('s_mepBase')) {
+      document.getElementById('s_mepBase').value = s.mepSocketBase != null ? s.mepSocketBase : DEFAULTS.mepSocketBase;
+    }
+    if (document.getElementById('s_mepPerRoom')) {
+      var mpz = s.mepPerZone != null ? s.mepPerZone : s.mepPerRoom != null ? s.mepPerRoom : DEFAULTS.mepPerZone;
+      document.getElementById('s_mepPerRoom').value = mpz;
+    }
+    if (document.getElementById('s_priceSheetAuto')) {
+      document.getElementById('s_priceSheetAuto').checked = s.priceSheetAutoOnOpen !== false;
+    }
+    fillFormMenuSelects();
+    refreshMenuSchemeUI();
+    document.getElementById('s_balcony').value = s.balconyPing;
+    document.getElementById('s_baths').value = (s.bathroomPings || []).join(',');
+    document.getElementById('s_lkMin').value = s.lkShareMin;
+    document.getElementById('s_lkMax').value = s.lkShareMax;
+    document.getElementById('s_master').value = s.masterVsBed2;
+    document.getElementById('s_bed3').value = s.bed3VsBed2;
+    document.getElementById('s_bed4').value = s.bed4VsBed2 != null ? s.bed4VsBed2 : 0.92;
+    document.getElementById('s_long').value = s.rectLong;
+    document.getElementById('s_short').value = s.rectShort;
+    document.getElementById('adminSchemesJson').value = JSON.stringify(s.schemeMenus || [], null, 2);
+    var box = document.getElementById('adminItemPrices');
+    box.innerHTML = '';
+    s.itemDefs
+      .slice()
+      .sort(function (a, b) {
+        return itemDefListSortKeyForAdmin(a) - itemDefListSortKeyForAdmin(b);
+      })
+      .forEach(function (it) {
+      var w = document.createElement('div');
+      w.className = 'border-b border-stone-100 pb-3 mb-3 last:border-0 last:mb-0';
+      var tab0 = (it.priceSheetTab != null ? it.priceSheetTab : '') || '';
+      var pin0 = (it.priceSheetItem != null ? it.priceSheetItem : '') || '';
+      var cn0 = (it.clientNote != null ? it.clientNote : '') || '';
+      w.innerHTML =
+        '<span class="text-stone-800 font-medium">' +
+        esc(it.label) +
+        '</span><span class="font-mono text-[10px] text-stone-400"> ' +
+        esc(it.id) +
+        '</span><div class="grid sm:grid-cols-2 gap-2 mt-1 text-xs">' +
+        '<label>表頁名（分頁標籤，與雲端一致）<input type="text" class="item-ps-tab mt-0.5 w-full border rounded px-1 py-1" data-itemid="' +
+        esc(it.id) +
+        '" value="' +
+        esc(tab0) +
+        '" placeholder="例：木作工程" /></label>' +
+        '<label>表內品項（A 欄，對到即帶 B 單位 C 單價）<input type="text" class="item-ps-name mt-0.5 w-full border rounded px-1 py-1" data-itemid="' +
+        esc(it.id) +
+        '" value="' +
+        esc(pin0) +
+        '" placeholder="與試算表字串一致" /></label></div>' +
+        '<label class="block text-xs text-stone-600 mt-1">客戶可見備註（列印在報價小表）' +
+        '<input type="text" class="item-client-note mt-0.5 w-full border rounded px-2 py-1 text-stone-800" data-itemid="' +
+        esc(it.id) +
+        '" value="' +
+        esc(cn0) +
+        '" placeholder="可留空" /></label>' +
+        '<div class="flex flex-wrap items-baseline gap-2 mt-1"><span class="text-xs text-stone-500">單價（讀入後帶出；可手改，元／' +
+        esc(it.unit) +
+        '）</span>' +
+        '<input type="number" min="0" step="1" data-itemid="' +
+        esc(it.id) +
+        '" class="item-price-inp w-32 border rounded px-2 py-1" value="' +
+        it.price +
+        '" /></div>' +
+        '<p class="mt-1.5 mb-0"><button type="button" class="text-xs text-amber-900 underline decoration-amber-300 hover:decoration-amber-800 jump-to-rule-for-item" data-itemid="' +
+        esc(it.id) +
+        '">此品項「數量怎麼算」在下方方案菜單裡 → 帶我過去</button></p>';
+      box.appendChild(w);
+    });
+    if (box && !box._qrJumpToRuleBound) {
+      box._qrJumpToRuleBound = true;
+      box.addEventListener('click', function (ev) {
+        var btn = ev.target && ev.target.closest && ev.target.closest('.jump-to-rule-for-item');
+        if (!btn) return;
+        ev.preventDefault();
+        var iid = (btn.getAttribute('data-itemid') || '').trim();
+        if (!iid) return;
+        if (document.getElementById('s_formItem')) {
+          document.getElementById('s_formItem').value = iid;
+          loadFormFromCurrentItem();
+        }
+        var el = document.getElementById('schemeMenuSection');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+  }
+
+  function readAdminForm() {
+    var s = state.settings;
+    if (document.getElementById('s_sheetId')) s.priceSheetGvizId = document.getElementById('s_sheetId').value.trim();
+    if (document.getElementById('s_sheetGid')) s.priceSheetGid = document.getElementById('s_sheetGid').value.trim();
+    if (document.getElementById('s_floorWaste')) s.floorWaste = parseFloat(document.getElementById('s_floorWaste').value) || DEFAULTS.floorWaste;
+    if (document.getElementById('s_floorRound')) s.floorRound = document.getElementById('s_floorRound').value || 'int';
+    if (document.getElementById('s_trimRate')) s.trimMoldingRate = parseFloat(document.getElementById('s_trimRate').value);
+    if (s.trimMoldingRate == null || isNaN(s.trimMoldingRate)) s.trimMoldingRate = DEFAULTS.trimMoldingRate;
+    if (document.getElementById('s_touchup')) s.touchupLump = parseFloat(document.getElementById('s_touchup').value);
+    if (s.touchupLump == null || isNaN(s.touchupLump)) s.touchupLump = DEFAULTS.touchupLump;
+    if (document.getElementById('s_mepBase')) s.mepSocketBase = parseFloat(document.getElementById('s_mepBase').value);
+    if (s.mepSocketBase == null || isNaN(s.mepSocketBase)) s.mepSocketBase = DEFAULTS.mepSocketBase;
+    if (document.getElementById('s_mepPerRoom')) {
+      s.mepPerZone = parseFloat(document.getElementById('s_mepPerRoom').value);
+      if (s.mepPerZone == null || isNaN(s.mepPerZone)) s.mepPerZone = DEFAULTS.mepPerZone;
+    }
+    if (document.getElementById('s_priceSheetAuto')) {
+      s.priceSheetAutoOnOpen = !!document.getElementById('s_priceSheetAuto').checked;
+    }
+    s.balconyPing = parseFloat(document.getElementById('s_balcony').value) || 0;
+    s.bathroomPings = document
+      .getElementById('s_baths')
+      .value.split(/[,，]/)
+      .map(function (x) { return parseFloat(x.trim()); })
+      .filter(function (x) { return !isNaN(x); });
+    s.lkShareMin = parseFloat(document.getElementById('s_lkMin').value) || 0.5;
+    s.lkShareMax = parseFloat(document.getElementById('s_lkMax').value) || 0.6;
+    s.masterVsBed2 = parseFloat(document.getElementById('s_master').value) || 1.3;
+    s.bed3VsBed2 = parseFloat(document.getElementById('s_bed3').value) || 0.85;
+    s.bed4VsBed2 = parseFloat(document.getElementById('s_bed4').value);
+    if (isNaN(s.bed4VsBed2)) s.bed4VsBed2 = 0.92;
+    s.rectLong = parseFloat(document.getElementById('s_long').value) || 6;
+    s.rectShort = parseFloat(document.getElementById('s_short').value) || 4;
+    try {
+      var parsed = JSON.parse(document.getElementById('adminSchemesJson').value);
+      if (Array.isArray(parsed)) s.schemeMenus = parsed;
+    } catch (e) {
+      alert('方案 JSON 格式錯誤，未更新方案');
+    }
+    document.querySelectorAll('.item-price-inp').forEach(function (inp) {
+      var iid = (inp.getAttribute('data-itemid') || '').trim();
+      if (!iid) return;
+      s.itemDefs.forEach(function (d) {
+        if (d && d.id === iid) d.price = parseFloat(inp.value) || 0;
+      });
+    });
+    document.querySelectorAll('.item-ps-tab').forEach(function (inp) {
+      var iid = (inp.getAttribute('data-itemid') || '').trim();
+      if (!iid) return;
+      s.itemDefs.forEach(function (d) {
+        if (d && d.id === iid) d.priceSheetTab = (inp.value || '').trim();
+      });
+    });
+    document.querySelectorAll('.item-ps-name').forEach(function (inp) {
+      var iid = (inp.getAttribute('data-itemid') || '').trim();
+      if (!iid) return;
+      s.itemDefs.forEach(function (d) {
+        if (d && d.id === iid) d.priceSheetItem = (inp.value || '').trim();
+      });
+    });
+    document.querySelectorAll('.item-client-note').forEach(function (inp) {
+      var iid = (inp.getAttribute('data-itemid') || '').trim();
+      if (!iid) return;
+      s.itemDefs.forEach(function (d) {
+        if (d && d.id === iid) d.clientNote = (inp.value || '').trim();
+      });
+    });
+    var np = document.getElementById('adminNewPin').value.trim();
+    if (np.length >= 4) s.adminPin = np;
+    s.schemaVersion = SCHEMA_V;
+  }
+
+  function renderAllocTable(alloc) {
+    var html =
+      '<table class="w-full border text-left"><thead><tr class="bg-stone-100">' +
+      '<th class="p-2 border">空間</th><th class="p-2 border">坪數</th><th class="p-2 border">長×寬（cm）</th><th class="p-2 border">長邊尺／短邊尺（約）</th></tr></thead><tbody>';
+    alloc.zones.forEach(function (z) {
+      var longS = shakuFromCm(Math.max(z.dims.L, z.dims.W));
+      var shortS = shakuFromCm(Math.min(z.dims.L, z.dims.W));
+      html +=
+        '<tr><td class="p-2 border">' +
+        esc(z.name) +
+        '</td><td class="p-2 border">' +
+        z.ping +
+        '</td><td class="p-2 border">' +
+        z.dims.L +
+        ' × ' +
+        z.dims.W +
+        '</td><td class="p-2 border">' +
+        longS +
+        ' ／ ' +
+        shortS +
+        '</td></tr>';
+    });
+    html += '</tbody></table>';
+    html +=
+      '<p class="mt-2 text-xs text-stone-600">扣陽台與浴廁後餘額 <strong>' +
+      round2(alloc.R) +
+      '</strong> 坪；本次客廚占餘額 <strong>' +
+      round2(alloc.lkPct * 100) +
+      '%</strong>。</p>';
+    document.getElementById('c_allocTable').innerHTML = html;
+  }
+
+  function getSelectedSchemeId() {
+    var el = document.querySelector('input[name=scheme]:checked');
+    if (el) {
+      state.selectedSchemeId = el.value;
+      return el.value;
+    }
+    if (state.selectedSchemeId) return state.selectedSchemeId;
+    return (state.settings.schemeMenus[0] && state.settings.schemeMenus[0].id) || 'simple';
+  }
+
+  function applySchemeQtyToInputs() {
+    if (!state.lastAlloc) return;
+    var scheme = getSchemeById(getSelectedSchemeId());
+    var drows = getDisplayItemRows(state.lastAlloc);
+    drows.forEach(function (drow) {
+      var q = getQtyForDisplayRow(drow, state.lastAlloc, scheme);
+      var inp = document.querySelector('.it-qty[data-id="' + drow.rowId + '"]');
+      if (inp) inp.value = q;
+    });
+  }
+
+  function buildItemRows(alloc) {
+    var scheme = getSchemeById(getSelectedSchemeId());
+    if (document.getElementById('c_schemeNameStep3')) {
+      document.getElementById('c_schemeNameStep3').textContent = scheme.name;
+    }
+    var drows = getDisplayItemRows(alloc);
+    var box = document.getElementById('c_itemRows');
+    box.innerHTML = '';
+    var lastG = null;
+    drows.forEach(function (drow) {
+      var it = drow.def;
+      var g = drow.groupTitle || it.group || '未分組';
+      if (g !== lastG) {
+        var gh = document.createElement('h4');
+        gh.className = 'text-sm font-semibold text-amber-950 border-b border-amber-100 pb-1 mt-3 first:mt-0';
+        gh.textContent = g;
+        box.appendChild(gh);
+        lastG = g;
+      }
+      var qty = getQtyForDisplayRow(drow, alloc, scheme);
+      var showLabel = drow.roomLabel ? drow.def.label + '（' + drow.roomLabel + '）' : drow.def.label;
+      var noteC = (it.clientNote && String(it.clientNote).trim()) || '';
+      if (!noteC) noteC = (it.hint && String(it.hint).trim()) || '';
+      var row = document.createElement('div');
+      row.className = 'flex flex-wrap items-center gap-2 border rounded-lg p-2';
+      var rid = drow.rowId;
+      row.innerHTML =
+        '<label class="inline-flex items-center gap-2 min-w-[200px]">' +
+        '<input type="checkbox" class="it-check" data-id="' +
+        esc(rid) +
+        '" />' +
+        '<span>' +
+        esc(showLabel) +
+        '</span></label>' +
+        '<span class="text-stone-500 text-xs max-w-[280px] leading-snug">' +
+        noteC +
+        '</span>' +
+        '<span class="ml-auto">數量</span>' +
+        '<input type="number" min="0" step="0.5" inputmode="decimal" title="以 0.5 或整數為單位" class="it-qty border rounded px-2 py-1 w-24" data-id="' +
+        esc(rid) +
+        '" value="' +
+        qty +
+        '" />' +
+        '<span>' +
+        esc(it.unit) +
+        '</span>' +
+        '<span class="text-stone-600">@' +
+        money(it.price) +
+        '</span>';
+      box.appendChild(row);
+    });
+    drows.forEach(function (drow) {
+      if (drow.def.defaultOn) {
+        var c = document.querySelector('.it-check[data-id="' + escDataIdForSelector(drow.rowId) + '"]');
+        if (c) c.checked = true;
+      }
+    });
+  }
+
+  function escDataIdForSelector(s) {
+    return String(s);
+  }
+
+  function collectQuoteLines() {
+    var out = [];
+    if (!state.lastAlloc) return out;
+    var s = state.settings;
+    var drows = getDisplayItemRows(state.lastAlloc);
+    var wood = 0;
+    drows.forEach(function (drow) {
+      var id = drow.rowId;
+      var it = drow.def;
+      var ch = document.querySelector('.it-check[data-id="' + id + '"]');
+      if (!it.lineKind && ch && ch.checked) {
+        var qInp = document.querySelector('.it-qty[data-id="' + id + '"]');
+        var q = parseFloat(qInp && qInp.value ? qInp.value : '0') || 0;
+        if (it.cabWood) {
+          wood += Math.round(q * (it.price || 0));
+        }
+      }
+    });
+    drows.forEach(function (drow) {
+      var id = drow.rowId;
+      var it = drow.def;
+      var ch = document.querySelector('.it-check[data-id="' + id + '"]');
+      if (!ch || !ch.checked) return;
+      if (it.lineKind === 'trim' || it.lineKind === 'touchup') {
+        if (it.lineKind === 'trim') {
+          var r = typeof s.trimMoldingRate === 'number' ? s.trimMoldingRate : 0.05;
+          var st = Math.round(wood * r);
+          out.push({
+            section: drow.groupTitle || it.group,
+            label: it.label + '（木作+系統參考小計 ' + money(wood) + ' 元×' + Math.round(r * 100) + '%）',
+            clientNote: (it.clientNote && String(it.clientNote).trim()) || '',
+            unit: it.unit,
+            qty: 1,
+            unitPrice: st,
+            sub: st,
+          });
+        } else {
+          var lump2 = typeof s.touchupLump === 'number' ? s.touchupLump : 20000;
+          out.push({
+            section: drow.groupTitle || it.group,
+            label: it.label,
+            clientNote: (it.clientNote && String(it.clientNote).trim()) || '',
+            unit: it.unit,
+            qty: 1,
+            unitPrice: lump2,
+            sub: Math.round(lump2),
+          });
+        }
+        return;
+      }
+      var qInp2 = document.querySelector('.it-qty[data-id="' + id + '"]');
+      var q2 = parseFloat(qInp2 && qInp2.value ? qInp2.value : '0') || 0;
+      var lab2 = drow.roomLabel ? it.label + '（' + drow.roomLabel + '）' : it.label;
+      if (drow.groupTitle) lab2 = lab2;
+      out.push({
+        section: drow.groupTitle || it.group,
+        label: lab2,
+        clientNote: (it.clientNote && String(it.clientNote).trim()) || '',
+        unit: it.unit,
+        qty: q2,
+        unitPrice: it.price,
+        sub: Math.round(q2 * (it.price || 0)),
+      });
+    });
+    return out;
+  }
+
+  function renderQuote() {
+    var lines = collectQuoteLines();
+    var total = lines.reduce(function (a, l) { return a + l.sub; }, 0);
+    var title = document.getElementById('c_title').value.trim() || '（未命名）';
+    var sc = getSchemeById(getSelectedSchemeId());
+    var allocHtml = document.getElementById('c_allocTable').innerHTML;
+    var bySec = [];
+    var lastSec = null;
+    var cur = [];
+    lines.forEach(function (l) {
+      var sn = l.section != null && l.section !== '' ? l.section : '未分組';
+      if (lastSec !== null && sn !== lastSec) {
+        bySec.push({ title: lastSec, lines: cur });
+        cur = [];
+      }
+      lastSec = sn;
+      cur.push(l);
+    });
+    if (lastSec !== null) bySec.push({ title: lastSec, lines: cur });
+    var lineRows = bySec
+      .map(function (blk) {
+        var subTable = blk.lines
+          .map(function (l) {
+            return (
+              '<tr><td class="p-1 border">' +
+              esc(l.label) +
+              (l.clientNote
+                ? '<p class="text-stone-500 m-0 mt-0.5 text-[11px] leading-snug">' + esc(l.clientNote) + '</p>'
+                : '') +
+              '</td><td class="p-1 border text-right">' +
+              l.qty +
+              '</td><td class="p-1 border">' +
+              esc(l.unit) +
+              '</td><td class="p-1 border text-right">' +
+              money(l.unitPrice) +
+              '</td><td class="p-1 border text-right">' +
+              money(l.sub) +
+              '</td></tr>'
+            );
+          })
+          .join('');
+        return (
+          '<div class="text-xs font-semibold text-amber-900 border-b border-amber-200 pb-0.5 mt-2 first:mt-0">' +
+          esc(blk.title) +
+          '</div><table class="w-full text-xs table-fixed break-words"><thead class="bg-stone-200"><tr><th class="p-1 text-left w-[36%]">項目／備註</th><th class="p-1 text-right w-14">數量</th><th class="p-1 w-12">單位</th><th class="p-1 text-right w-20">單價</th><th class="p-1 text-right w-20">小計</th></tr></thead><tbody>' +
+          subTable +
+          '</tbody></table>'
+        );
+      })
+      .join('');
+    if (!lineRows) lineRows = '<p class="text-stone-500 p-2">未勾選項目</p>';
+    document.getElementById('c_quoteOut').innerHTML =
+      '<div class="font-semibold">' +
+      esc(title) +
+      '</div>' +
+      '<div class="text-stone-600 text-xs">方案菜單：<strong>' +
+      esc(sc.name) +
+      '</strong>（數量依菜單規則帶入，可手改）</div>' +
+      '<div class="text-xs text-stone-500 mt-2">— 坪數推估 —</div><div class="text-xs">' +
+      allocHtml +
+      '</div>' +
+      '<div class="text-xs text-stone-500 mt-2">— 拆項（依分區小表）—</div>' +
+      (lineRows || '<p class="p-2 text-stone-500">未勾選項目</p>') +
+      '<div class="text-right text-lg font-bold mt-2">參考合計：' +
+      money(total) +
+      ' 元</div>';
+    document.getElementById('cStep4').classList.remove('hidden');
+  }
+
+  function showClient() {
+    document.getElementById('clientSection').classList.remove('hidden');
+    document.getElementById('adminSection').classList.add('hidden');
+    document.getElementById('navClient').className = 'flex-1 py-2 rounded-lg bg-amber-800 text-white font-medium';
+    document.getElementById('navAdmin').className = 'flex-1 py-2 rounded-lg bg-stone-300 text-stone-800 font-medium';
+  }
+
+  function showAdmin() {
+    document.getElementById('clientSection').classList.add('hidden');
+    document.getElementById('adminSection').classList.remove('hidden');
+    document.getElementById('navAdmin').className = 'flex-1 py-2 rounded-lg bg-amber-800 text-white font-medium';
+    document.getElementById('navClient').className = 'flex-1 py-2 rounded-lg bg-stone-300 text-stone-800 font-medium';
+    fillAdminForm();
+  }
+
+  document.getElementById('navClient').addEventListener('click', showClient);
+  document.getElementById('navAdmin').addEventListener('click', showAdmin);
+  document.getElementById('adminSaveBtn').addEventListener('click', function () {
+    if (getMenuScheme() && document.getElementById('s_schemeNameEdit')) {
+      var nm0 = (document.getElementById('s_schemeNameEdit').value || '').trim();
+      if (nm0) getMenuScheme().name = nm0;
+    }
+    syncSchemesJsonTextarea();
+    readAdminForm();
+    saveSettings();
+    alert('已儲存');
+  });
+  document.getElementById('adminResetBtn').addEventListener('click', function () {
+    if (!confirm('還原全部預設？')) return;
+    state.settings = JSON.parse(JSON.stringify(DEFAULTS));
+    saveSettings();
+    fillAdminForm();
+  });
+  document.getElementById('adminResetSchemesBtn').addEventListener('click', function () {
+    if (!confirm('將方案菜單還原成內建三組（精簡／收納／造型）？自訂方案會被刪除。')) return;
+    state.settings.schemeMenus = defaultSchemeMenus();
+    state.selectedSchemeId = 'simple';
+    state._preservedMenuScheme = 'simple';
+    syncSchemesJsonTextarea();
+    saveSettings();
+    fillAdminForm();
+    fillSchemeRadios();
+    alert('已還原內建三組方案。');
+  });
+  document.getElementById('adminExportBtn').addEventListener('click', function () {
+    readAdminForm();
+    var blob = new Blob([JSON.stringify(state.settings, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'quick-quote-settings-v2.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  document.getElementById('adminImportFile').addEventListener('change', function (ev) {
+    var f = ev.target.files[0];
+    if (!f) return;
+    var r = new FileReader();
+    r.onload = function () {
+      try {
+        state.settings = deepMerge(JSON.parse(JSON.stringify(DEFAULTS)), JSON.parse(r.result));
+        if (state.settings.mepPerZone == null && state.settings.mepPerRoom != null) {
+          state.settings.mepPerZone = state.settings.mepPerRoom;
+        }
+        saveSettings();
+        fillAdminForm();
+        alert('匯入完成');
+      } catch (e) {
+        alert('JSON 無效');
+      }
+    };
+    r.readAsText(f);
+    ev.target.value = '';
+  });
+
+  function runClientStep1Alloc() {
+    loadSettings();
+    var T = parseFloat(document.getElementById('c_totalPing').value);
+    if (isNaN(T) || T <= 0) {
+      alert('請輸入有效總坪數');
+      return;
+    }
+    var alloc = computeAllocation(T, document.getElementById('c_template').value, state.settings);
+    state.lastAlloc = alloc;
+    renderAllocTable(alloc);
+    getSelectedSchemeId();
+    fillSchemeRadios();
+    document.getElementById('cStep2').classList.remove('hidden');
+    document.getElementById('cStep3').classList.add('hidden');
+    document.getElementById('cStep4').classList.add('hidden');
+  }
+  document.getElementById('c_calcBtn').addEventListener('click', function () {
+    var go = function () { runClientStep1Alloc(); };
+    if (priceSyncPromise && typeof priceSyncPromise.finally === 'function') {
+      priceSyncPromise.finally(go);
+    } else {
+      go();
+    }
+  });
+  document.getElementById('c_toItemsBtn').addEventListener('click', function () {
+    if (!state.lastAlloc) return;
+    getSelectedSchemeId();
+    buildItemRows(state.lastAlloc);
+    document.getElementById('cStep3').classList.remove('hidden');
+    if (document.getElementById('c_schemeNameStep3')) {
+      var sc2 = getSchemeById(getSelectedSchemeId());
+      document.getElementById('c_schemeNameStep3').textContent = sc2.name;
+    }
+    setTimeout(function () {
+      var el = document.getElementById('cStep3');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  });
+  document.getElementById('c_backToSchemeBtn').addEventListener('click', function () {
+    document.getElementById('cStep3').classList.add('hidden');
+    var box = document.getElementById('c_schemeRadios');
+    if (box) {
+      setTimeout(function () {
+        box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 0);
+    }
+  });
+  document.getElementById('c_quoteBtn').addEventListener('click', renderQuote);
+  document.getElementById('c_printBtn').addEventListener('click', function () {
+    window.print();
+  });
+  if (document.getElementById('s_loadSheetBtn')) {
+    document.getElementById('s_loadSheetBtn').addEventListener('click', function () {
+      loadPricesFromGviz();
+    });
+  }
+  if (document.getElementById('s_applyRuleBtn')) {
+    document.getElementById('s_applyRuleBtn').addEventListener('click', function () {
+      applyFormRuleToScheme();
+    });
+  }
+  if (document.getElementById('s_menuScheme')) {
+    document.getElementById('s_menuScheme').addEventListener('change', function () {
+      refreshMenuSchemeUI();
+    });
+  }
+  if (document.getElementById('s_formItem')) {
+    document.getElementById('s_formItem').addEventListener('change', function () {
+      loadFormFromCurrentItem();
+    });
+  }
+  if (document.getElementById('s_formRule')) {
+    document.getElementById('s_formRule').addEventListener('change', function () {
+      setRuleFormHelp();
+    });
+  }
+  if (document.getElementById('s_schemeNameEdit')) {
+    document.getElementById('s_schemeNameEdit').addEventListener('blur', function () {
+      var sc = getMenuScheme();
+      if (!sc) return;
+      var nm = (this.value || '').trim();
+      if (nm) sc.name = nm;
+      syncSchemesJsonTextarea();
+      saveSettings();
+    });
+  }
+  if (document.getElementById('menuAddScheme')) {
+    document.getElementById('menuAddScheme').addEventListener('click', menuAddScheme);
+  }
+  if (document.getElementById('menuDupScheme')) {
+    document.getElementById('menuDupScheme').addEventListener('click', menuDuplicateScheme);
+  }
+  if (document.getElementById('menuDelScheme')) {
+    document.getElementById('menuDelScheme').addEventListener('click', menuDeleteScheme);
+  }
+  if (document.getElementById('s_parseDraftBtn')) {
+    document.getElementById('s_parseDraftBtn').addEventListener('click', function () {
+      parseAndApplyMenuDraft();
+    });
+  }
+  if (document.getElementById('s_exportDraftBtn')) {
+    document.getElementById('s_exportDraftBtn').addEventListener('click', function () {
+      exportMenuDraftFromScheme();
+    });
+  }
+
+  document.getElementById('clientSection').addEventListener(
+    'blur',
+    function (e) {
+      if (!e.target || !e.target.classList || !e.target.classList.contains('it-qty')) return;
+      var v = parseFloat(e.target.value);
+      if (isNaN(v) || v < 0) return;
+      e.target.value = String(Math.max(0, Math.round(v * 2) / 2));
+    },
+    true
+  );
+
+  loadSettings();
+  if (state.settings.priceSheetAutoOnOpen !== false && (state.settings.priceSheetGvizId || '').trim()) {
+    priceSyncPromise = syncPricesFromGviz({ silent: true });
+  }
+  fillTemplateSelect();
+  showClient();
+})();
+  </script>
+</body>
+</html>
