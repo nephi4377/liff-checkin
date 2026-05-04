@@ -275,6 +275,25 @@ export default {
             return !!s && Object.keys(s).length > 0;
         });
 
+        /** 與 modules/info/LandingPage.html canonical 一致；通用給客戶的公開介紹頁（非禮券邀請頁） */
+        const LANDING_PAGE_PUBLIC_URL = 'https://info.tanxin.space/modules/info/LandingPage.html';
+        const landingPageUrlCopied = ref(false);
+        let landingCopyTimer = null;
+        const copyLandingPageUrl = () => {
+            const url = LANDING_PAGE_PUBLIC_URL;
+            if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+                window.prompt('請長按或全選複製以下網址：', url);
+                return;
+            }
+            navigator.clipboard.writeText(url).then(() => {
+                landingPageUrlCopied.value = true;
+                if (landingCopyTimer) clearTimeout(landingCopyTimer);
+                landingCopyTimer = setTimeout(() => { landingPageUrlCopied.value = false; }, 2500);
+            }).catch(() => {
+                window.prompt('複製失敗，請手動複製：', url);
+            });
+        };
+
         return {
             projectIdInput,
             openProjectConsole,
@@ -302,6 +321,8 @@ export default {
             scheduledByGroup,
             standardAnomalies,
             hasAnyScheduleData,
+            copyLandingPageUrl,
+            landingPageUrlCopied,
         };
     },
     template: `
@@ -315,6 +336,18 @@ export default {
                         placeholder="輸入案號（例：715）">
                     <button type="submit" class="flex-shrink-0 bg-blue-600 text-white text-sm font-bold py-1.5 px-4 rounded-md hover:bg-blue-700">開啟</button>
                 </form>
+            </div>
+
+            <!-- 公開落地頁 LandingPage（全員可給客戶）；禮券 InviteSheet 另覓入口、不在此 -->
+            <div class="bg-emerald-50/90 px-4 py-2.5 rounded-lg border border-emerald-200 mb-4 flex flex-wrap items-center justify-between gap-2">
+                <p class="text-sm text-gray-800 m-0 max-w-full">
+                    <span class="font-semibold text-emerald-900">公開落地頁</span>
+                    <span class="text-gray-600">（官網介紹／案例，貼給客戶）</span>
+                </p>
+                <button type="button" @click="copyLandingPageUrl"
+                    class="flex-shrink-0 text-sm font-semibold bg-emerald-600 text-white py-1.5 px-3 rounded-md hover:bg-emerald-700">
+                    {{ landingPageUrlCopied ? '已複製' : '複製網址' }}
+                </button>
             </div>
 
             <!-- 今日出勤 -->

@@ -4,9 +4,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>施工進度（客戶唯讀）</title>
+  <title>施工進度</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="../../assets/css/style.css?v=2026-04-23h">
+  <link rel="stylesheet" href="../../assets/css/style.css?v=2026-05-04a">
   <link rel="icon" href="data:,">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <!-- 正式環境：在 LINE Developers 建立「客戶用」LIFF 後填入（與員工主控台分開）。 -->
@@ -28,15 +28,202 @@
       -webkit-overflow-scrolling: touch;
     }
 
+    body.client-progress-body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+        'Noto Sans TC', 'PingFang TC', Arial, sans-serif;
+      background:
+        radial-gradient(ellipse 120% 80% at 100% -20%, rgba(143, 168, 183, 0.18), transparent 50%),
+        radial-gradient(ellipse 90% 60% at -10% 40%, rgba(135, 159, 134, 0.1), transparent 45%),
+        linear-gradient(165deg, #e8ecf1 0%, #e3e9ef 40%, #dde4ec 100%);
+      -webkit-font-smoothing: antialiased;
+    }
+
     .client-progress-page {
-      max-width: 900px;
+      max-width: 920px;
       margin: 0 auto;
-      padding: 1.5rem;
-      padding-bottom: 3rem;
+      padding: 0.65rem 1rem 4rem;
+    }
+
+    @media (min-width: 640px) {
+      .client-progress-page {
+        padding-left: 1.75rem;
+        padding-right: 1.75rem;
+      }
+    }
+
+    /* 頂部標題區：緊湊一排 */
+    .client-progress-hero {
+      margin-bottom: 1rem;
+    }
+
+    .client-progress-hero__inner {
+      position: relative;
+      padding: 0.7rem 0.95rem 0.75rem;
+      border-radius: 0.75rem;
+      background: linear-gradient(
+        145deg,
+        rgba(255, 255, 255, 0.97) 0%,
+        rgba(248, 250, 252, 0.94) 55%,
+        rgba(243, 246, 249, 0.92) 100%
+      );
+      border: 1px solid rgba(255, 255, 255, 0.95);
+      box-shadow:
+        0 1px 2px rgb(15 23 42 / 0.04),
+        0 12px 42px -14px rgb(15 23 42 / 0.14),
+        inset 0 1px 0 rgba(255, 255, 255, 0.85);
+      overflow: hidden;
+    }
+
+    .client-progress-hero__inner::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(
+        90deg,
+        var(--primary-hover, #7c95a5),
+        var(--primary, #8fa8b7) 38%,
+        rgba(135, 159, 134, 0.55) 100%
+      );
+      border-radius: 0.75rem 0.75rem 0 0;
+    }
+
+    .client-progress-subhead {
+      font-size: 0.875rem !important;
+      line-height: 1.45;
+      margin-top: 0.25rem !important;
+    }
+
+    .client-progress-sync-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      margin-top: 0.45rem !important;
+      padding: 0.38rem 0.85rem !important;
+      border-radius: 9999px;
+      font-size: 0.8125rem !important;
+      font-weight: 600;
+      color: #92400e;
+      background: rgba(251, 146, 60, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.25);
+      line-height: 1.3;
+    }
+
+    .client-progress-sync-pill::before {
+      content: '';
+      width: 0.45rem;
+      height: 0.45rem;
+      flex-shrink: 0;
+      border-radius: 50%;
+      background: #ea580c;
+      animation: client-progress-dot-pulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes client-progress-dot-pulse {
+      0%, 100% { opacity: 0.35; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1); }
+    }
+
+    .client-progress-logs-shell .client-progress-section-desc {
+      font-size: 0.875rem;
+      line-height: 1.45;
+    }
+
+    .client-progress-empty {
+      border-radius: 1rem !important;
+      border: 1px dashed rgb(148 163 184 / 0.55);
+      background: rgba(255, 255, 255, 0.55);
+      backdrop-filter: blur(4px);
     }
 
     .client-progress-page #log-list .card:last-child {
       margin-bottom: 0;
+    }
+
+    .client-progress-hero h1#page-title {
+      font-size: clamp(1.2rem, 3.5vw, 1.4rem);
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+      color: var(--fg);
+    }
+
+    /* 施工項目外層：與內部摺疊區分層次 */
+    #client-audit-panel.client-progress-audit-shell {
+      margin-top: 0;
+      margin-bottom: 1.75rem;
+      padding: 1rem 1rem 1.15rem;
+      border-bottom: none;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 250, 252, 0.96) 100%);
+      border-radius: 1rem;
+      border: 1px solid rgb(226 232 240 / 0.95);
+      box-shadow:
+        0 1px 3px rgb(15 23 42 / 0.045),
+        0 14px 40px -18px rgb(15 23 42 / 0.12);
+    }
+
+    #client-audit-panel.client-progress-audit-shell > details.client-audit-collapse-root {
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+      border-radius: 0;
+    }
+
+    #client-audit-panel.client-progress-audit-shell .client-audit-collapse-summary {
+      border-radius: 0.75rem;
+      border: 1px solid rgb(226 232 240 / 0.9);
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+
+    #client-audit-panel.client-progress-audit-shell .client-audit-collapse-summary:hover {
+      background: linear-gradient(180deg, #f8fafc, #eef2f6);
+      border-color: rgb(203 213 225 / 0.95);
+    }
+
+    #client-audit-panel.client-progress-audit-shell .client-audit-collapse-body {
+      padding-top: 1rem;
+    }
+
+    /* 現場紀錄區：獨立一張大卡 */
+    .client-progress-logs-shell {
+      padding: 1.25rem 1.1rem 1.25rem;
+      border-radius: 1rem;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgb(255 255 255 / 0.9);
+      box-shadow:
+        0 1px 3px rgb(15 23 42 / 0.04),
+        0 10px 36px -20px rgb(15 23 42 / 0.1);
+    }
+
+    @media (min-width: 640px) {
+      .client-progress-logs-shell {
+        padding: 1.5rem 1.35rem;
+      }
+    }
+
+    .client-progress-section-head h2 {
+      font-size: 1.15rem !important;
+      letter-spacing: -0.02em;
+    }
+
+    /* 區塊內的施工分區細節 */
+    details.client-audit-zone {
+      border-color: rgb(226 232 240 / 0.95);
+      box-shadow: 0 1px 3px rgb(15 23 42 / 0.035);
+      transition: box-shadow 0.2s ease;
+    }
+
+    details.client-audit-zone[open] {
+      box-shadow: 0 8px 28px -12px rgb(15 23 42 / 0.12);
+    }
+
+    .client-audit-zone-summary {
+      transition: background 0.2s ease;
+    }
+
+    details.client-audit-zone .client-audit-zone-summary:hover {
+      background: linear-gradient(180deg, #f3f6f9, #eef2f6);
     }
 
     .client-audit-summary .audit-pct {
@@ -231,14 +418,6 @@
       user-select: none;
     }
 
-    /* 施工項目在標題下、紀錄前：摺疊一列即可見，底線與下方紀錄區隔 */
-    #client-audit-panel {
-      margin-top: 0;
-      margin-bottom: 1.5rem;
-      padding-bottom: 1.25rem;
-      border-bottom: 1px solid #e5e7eb;
-    }
-
     details.client-audit-collapse-root {
       border: 1px solid #e5e7eb;
       border-radius: var(--radius);
@@ -328,20 +507,39 @@
 
 <body class="client-progress-body">
   <div class="client-progress-page">
-    <header class="mb-6">
-      <h1 id="page-title" class="text-2xl font-bold m-0">施工進度</h1>
-      <p id="subhead" class="muted mt-2 mb-0">載入中…</p>
-      <p id="sync-hint" class="hidden mt-2 mb-0 text-sm" style="color: #b45309;">正在背景更新資料…</p>
+    <header class="client-progress-hero">
+      <div class="client-progress-hero__inner">
+        <h1 id="page-title" class="font-bold m-0">施工進度</h1>
+        <p id="subhead" class="client-progress-subhead muted mb-0">載入中…</p>
+        <p id="sync-hint" class="hidden client-progress-sync-pill mb-0">正在背景更新資料…</p>
+      </div>
     </header>
 
-    <div id="error-banner" class="hidden mb-4 p-3 rounded text-sm border border-red-200 bg-red-50 text-red-900 whitespace-pre-wrap"></div>
+    <div
+      id="error-banner"
+      role="alert"
+      class="hidden mb-5 px-4 py-3.5 rounded-2xl text-sm border border-red-200/90 bg-gradient-to-br from-red-50 via-red-50/90 to-amber-50/40 text-red-900 whitespace-pre-wrap shadow-sm"
+    ></div>
 
     <!-- 與內部專案表同一 Firebase：quotations/{案號}，僅顯示項目完成度（無報價細節）；置於紀錄上方避免捲到底才看到 -->
-    <section id="client-audit-panel" aria-label="施工項目（與公司同步、僅供查看）"></section>
+    <section
+      id="client-audit-panel"
+      class="client-progress-audit-shell"
+      aria-label="施工項目（與公司資料同步）"
+    ></section>
 
-    <h2 class="text-lg font-semibold m-0 mb-3" style="color: var(--fg);">現場施工紀錄</h2>
-    <div id="log-list"></div>
-    <p id="empty-hint" class="hidden text-center muted py-12 text-sm">尚無已發布之施工紀錄。</p>
+    <section class="client-progress-logs-shell" aria-labelledby="logs-heading">
+      <div class="client-progress-section-head mb-4">
+        <h2 id="logs-heading" class="font-semibold m-0" style="color: var(--fg);">現場施工紀錄</h2>
+        <p class="client-progress-section-desc muted mt-1.5 mb-0">
+          已發布之工地日誌與照片（無法在此編輯）
+        </p>
+      </div>
+      <div id="log-list"></div>
+      <p id="empty-hint" class="hidden text-center muted py-14 text-sm client-progress-empty max-w-md mx-auto">
+        尚無已發布之施工紀錄。
+      </p>
+    </section>
   </div>
 
   <!-- 與 managementconsole.html 相同結構，供 style.css #lightbox.open 與左右切換 -->
@@ -355,7 +553,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
-  <script type="module" src="./js/client-progress-main.js?v=2026-04-23c"></script>
+  <script type="module" src="./js/client-progress-main.js?v=2026-05-04b"></script>
 </body>
 
 </html>

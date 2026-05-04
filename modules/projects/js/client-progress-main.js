@@ -249,7 +249,7 @@ function buildAuditPanelHtml(overview, ctx) {
   else if (countsFromSheet) summaryCountsHtml = formatPendingDoneCountsHtml(countsFromSheet);
 
   const customerNote =
-    '<p class="muted text-sm m-0 mb-3" style="border-left:3px solid #e5e7eb;padding-left:0.65rem">此區為<strong>項目清單</strong>，與公司內部表單同步、<strong>僅供查看</strong>，無法在此更新。您關心的<strong>現場狀況</strong>請以<strong>下方</strong>「現場施工紀錄」為主。</p>';
+    '<p class="muted text-sm m-0 mb-3" style="border-left:3px solid #e5e7eb;padding-left:0.65rem">此區為<strong>項目清單</strong>，與公司內部表單<strong>同步顯示</strong>（無法在此更新）。您關心的<strong>現場狀況</strong>請以<strong>下方</strong>「現場施工紀錄」為主。</p>';
 
   if (!hasSheetSignal) {
     return `<details class="client-audit-collapse-root">
@@ -596,7 +596,7 @@ async function fetchProject(userId) {
 
 async function main() {
   setupLightbox();
-  subhead.textContent = `案號 ${projectId}（唯讀）`;
+  subhead.textContent = `案號 ${projectId}`;
 
   let userId;
   try {
@@ -620,7 +620,7 @@ async function main() {
     const data = gasEntry.payload;
     const logs0 = filterPublishedLogs(data.dailyLogs || []);
     renderLogs(logs0);
-    subhead.textContent = `案號 ${projectId} · 已發布紀錄 ${logs0.length} 則（唯讀）`;
+    subhead.textContent = `案號 ${projectId} · 已發布紀錄 ${logs0.length} 則`;
     if (fbEntry && fbEntry.payload && Object.prototype.hasOwnProperty.call(fbEntry.payload, 'ctx')) {
       paintAuditPanel(data.overview || {}, fbEntry.payload.ctx);
     } else if (auditPanel) {
@@ -654,7 +654,7 @@ async function main() {
 
     const logs = filterPublishedLogs(data.dailyLogs || []);
     renderLogs(logs);
-    subhead.textContent = `案號 ${projectId} · 已發布紀錄 ${logs.length} 則（唯讀）`;
+    subhead.textContent = `案號 ${projectId} · 已發布紀錄 ${logs.length} 則`;
   } catch (e) {
     setSyncHint(false);
     if (usedCache && gasEntry && gasEntry.payload) {
