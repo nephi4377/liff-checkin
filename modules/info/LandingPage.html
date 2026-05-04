@@ -6,12 +6,12 @@
     <!-- Google Search Console：若用「網址前置字元 + HTML 標記」驗證此頁，請部署後再按 GSC「驗證」。DNS 驗證需在你網域的 DNS 後台另加 TXT。 -->
     <meta name="google-site-verification" content="SGHWvVU4e8bk7AqsIJ4jI_xed-hJh_b4yVt0ZSxrpOs">
     <title>添心設計｜台南・高雄室內設計、老屋翻新與木作規劃</title>
-    <meta name="description" content="添心設計：台南與高雄室內設計、老屋翻新、系統櫃與木作。免費諮詢官方 LINE、精選完工影片。服務台南・高雄及週邊。">
+    <meta name="description" content="添心設計：台南店（南區中華西路）、高雄店（三民區大順三路）提供室內設計、老屋翻新、系統櫃與木作。免費諮詢官方 LINE、精選完工影片。服務大台南、大高雄及週邊。">
     <meta name="keywords" content="室內設計, 舊屋翻新, 系統櫃, 木作, 台南室內設計, 高雄室內設計, 添心設計">
     <meta name="theme-color" content="#2a3c35">
     <meta property="og:site_name" content="添心設計">
     <meta property="og:title" content="添心設計｜台南・高雄室內設計、老屋翻新與木作規劃">
-    <meta property="og:description" content="台南與高雄室內設計、老屋翻新、系統櫃與木作。精選完工影片、官方 LINE 免費諮詢。">
+    <meta property="og:description" content="台南南區、高雄三民兩處門市。室內設計、老屋翻新、系統櫃與木作。精選完工影片、官方 LINE 免費諮詢。">
     <meta property="og:image" content="https://i.ytimg.com/vi/meMnlMf7Mc0/hqdefault.jpg">
     <meta property="og:image:alt" content="添心設計 完工實景影片縮圖">
     <meta property="og:image:width" content="480">
@@ -24,7 +24,7 @@
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="添心設計｜台南・高雄室內設計、老屋翻新與木作規劃">
-    <meta name="twitter:description" content="台南與高雄室內設計、老屋翻新、系統櫃與木作。精選完工影片、官方 LINE 免費諮詢。">
+    <meta name="twitter:description" content="台南南區、高雄三民兩處門市。室內設計、老屋翻新、系統櫃與木作。官方 LINE 免費諮詢。">
     <meta name="twitter:image" content="https://i.ytimg.com/vi/meMnlMf7Mc0/hqdefault.jpg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -96,38 +96,77 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": ["LocalBusiness", "HomeAndConstructionBusiness"],
-      "@id": "https://info.tanxin.space/modules/info/LandingPage.html#business",
-      "name": "添心設計",
-      "alternateName": "添心設計 X 添興家具",
-      "description": "台南與高雄室內設計、老屋翻新、系統櫃與木作規劃；官方 LINE 與電話提供諮詢。",
-      "url": "https://info.tanxin.space/modules/info/LandingPage.html",
-      "telephone": "+886-6-264-9819",
-      "priceRange": "$$",
-      "image": "https://i.ytimg.com/vi/meMnlMf7Mc0/hqdefault.jpg",
-      "sameAs": [
-        "https://www.facebook.com/TainanTanXin",
-        "https://www.youtube.com/@tanxindesign",
-        "https://tanxin.space/"
-      ],
-      "areaServed": [
-        { "@type": "City", "name": "台南市", "containedInPlace": { "@type": "Country", "name": "台灣" } },
-        { "@type": "City", "name": "高雄市", "containedInPlace": { "@type": "Country", "name": "台灣" } }
-      ],
-      "openingHoursSpecification": {
-        "@type": "OpeningHoursSpecification",
-        "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-        "opens": "08:30",
-        "closes": "17:30"
-      },
-      "address": {
-        "@type": "PostalAddress",
-        "streetAddress": "中華西路一段219號",
-        "addressLocality": "南區",
-        "addressRegion": "台南市",
-        "postalCode": "702",
-        "addressCountry": "TW"
-      }
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://info.tanxin.space/modules/info/LandingPage.html#organization",
+          "name": "添心設計",
+          "alternateName": ["添心設計 X 添興傢俱", "添心室內裝修設計有限公司"],
+          "url": "https://tanxin.space/",
+          "description": "台南、高雄兩地門市，提供室內設計、老屋翻新、系統櫃與木作規劃；官方 LINE 與電話諮詢。",
+          "sameAs": [
+            "https://www.facebook.com/TainanTanXin",
+            "https://www.youtube.com/@tanxindesign",
+            "https://tanxin.space/"
+          ]
+        },
+        {
+          "@type": ["LocalBusiness", "HomeAndConstructionBusiness"],
+          "@id": "https://info.tanxin.space/modules/info/LandingPage.html#tainan-store",
+          "name": "添心設計 台南門市",
+          "parentOrganization": { "@id": "https://info.tanxin.space/modules/info/LandingPage.html#organization" },
+          "description": "台南室內設計、老屋翻新、系統櫃與木作；展示與諮詢。",
+          "url": "https://info.tanxin.space/modules/info/LandingPage.html",
+          "telephone": "+886-6-264-9819",
+          "priceRange": "$$",
+          "image": "https://i.ytimg.com/vi/meMnlMf7Mc0/hqdefault.jpg",
+          "areaServed": [
+            { "@type": "City", "name": "台南市", "containedInPlace": { "@type": "Country", "name": "台灣" } }
+          ],
+          "openingHoursSpecification": {
+            "@type": "OpeningHoursSpecification",
+            "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+            "opens": "08:30",
+            "closes": "17:30"
+          },
+          "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "中華西路一段219號",
+            "addressLocality": "南區",
+            "addressRegion": "台南市",
+            "postalCode": "702",
+            "addressCountry": "TW"
+          }
+        },
+        {
+          "@type": ["LocalBusiness", "HomeAndConstructionBusiness"],
+          "@id": "https://info.tanxin.space/modules/info/LandingPage.html#kaohsiung-store",
+          "name": "添心設計 高雄門市",
+          "parentOrganization": { "@id": "https://info.tanxin.space/modules/info/LandingPage.html#organization" },
+          "description": "高雄室內設計、老屋翻新與木作規劃；與台南團隊同一服務流程，可就近預約諮詢。",
+          "url": "https://info.tanxin.space/modules/info/LandingPage.html",
+          "telephone": "+886-6-264-9819",
+          "priceRange": "$$",
+          "image": "https://i.ytimg.com/vi/meMnlMf7Mc0/hqdefault.jpg",
+          "areaServed": [
+            { "@type": "City", "name": "高雄市", "containedInPlace": { "@type": "Country", "name": "台灣" } }
+          ],
+          "openingHoursSpecification": {
+            "@type": "OpeningHoursSpecification",
+            "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+            "opens": "08:30",
+            "closes": "17:30"
+          },
+          "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "大順三路359巷10號",
+            "addressLocality": "三民區",
+            "addressRegion": "高雄市",
+            "postalCode": "807",
+            "addressCountry": "TW"
+          }
+        }
+      ]
     }
     </script>
 </head>
@@ -150,17 +189,20 @@
                         添心設計
                     </span>
                 </p>
-                <h1 class="text-balance text-3xl font-black leading-snug tracking-tight text-dark-brand sm:text-4xl md:text-5xl md:leading-tight">
-                    <span class="bg-gradient-to-r from-[#1f2e29] via-[#2a3c35] to-[#3d5349] bg-clip-text text-transparent">一個懂你、貼近生活的家</span>
+                <h1 class="text-balance text-2xl font-black leading-snug tracking-tight text-dark-brand sm:text-3xl md:text-4xl md:leading-tight">
+                    添心設計｜台南・高雄室內設計、老屋翻新與木作規劃
                 </h1>
+                <p class="mx-auto mt-4 max-w-xl text-balance text-xl font-bold leading-snug tracking-tight text-dark-brand sm:mx-0 sm:text-2xl md:text-3xl">
+                    <span class="bg-gradient-to-r from-[#1f2e29] via-[#2a3c35] to-[#3d5349] bg-clip-text text-transparent">一個懂你、貼近生活的家</span>
+                </p>
                 <div class="mx-auto mt-5 h-px w-20 max-w-full bg-gradient-to-r from-transparent via-[#2a3c35]/35 to-transparent md:mx-0"></div>
-                <p class="mt-5 text-xl font-semibold text-stone-600 md:text-2xl">
-                    從這裡開始認識我們
+                <p class="mt-5 text-lg font-semibold text-stone-600 md:text-xl">
+                    從這裡開始認識我們——兩地門市就近諮詢，亦可先加 LINE 聊聊需求。
                 </p>
             </header>
 
-            <section class="mb-8 text-left rounded-2xl border border-stone-200/70 bg-gradient-to-br from-stone-50/95 to-emerald-50/30 px-4 py-5 shadow-inner sm:px-6" aria-label="服務與聯絡摘要">
-                <h2 class="sr-only">服務地區與聯絡方式</h2>
+            <section class="mb-8 text-left rounded-2xl border border-stone-200/70 bg-gradient-to-br from-stone-50/95 to-emerald-50/30 px-4 py-5 shadow-inner sm:px-6" aria-labelledby="contact-heading">
+                <h2 id="contact-heading" class="mb-4 text-lg font-bold text-dark-brand sm:text-xl">門市地址與聯絡方式</h2>
                 <p class="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-dark-brand">
                     <span class="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true"></span>
                     聯絡與服務
@@ -183,6 +225,11 @@
                         <span class="text-stone-800">702 台南市南區中華西路一段219號</span>
                         <a href="https://www.google.com/maps/search/?api=1&query=%E5%8F%B0%E5%8D%97%E5%B8%82%E5%8D%97%E5%8D%80%E4%B8%AD%E8%8F%AF%E8%A5%BF%E8%B7%AF%E4%B8%80%E6%AE%B5219%E8%99%9F" target="_blank" rel="noopener noreferrer" class="shrink-0 text-sm font-semibold text-emerald-800 underline decoration-emerald-300 underline-offset-2 hover:text-dark-brand">Google 地圖</a>
                     </li>
+                    <li class="flex flex-col gap-1.5 rounded-lg bg-white/60 px-3 py-2 sm:col-span-2 sm:flex-row sm:items-baseline sm:gap-3 sm:bg-transparent sm:px-0 sm:py-0">
+                        <span class="shrink-0 font-bold text-dark-brand">高雄門市</span>
+                        <span class="text-stone-800">807 高雄市三民區大順三路359巷10號</span>
+                        <a href="https://www.google.com/maps/search/?api=1&query=%E9%AB%98%E9%9B%84%E5%B8%82%E4%B8%89%E6%B0%91%E5%8D%80%E5%A4%A7%E9%A0%86%E4%B8%89%E8%B7%AF359%E5%B7%B710%E8%99%9F" target="_blank" rel="noopener noreferrer" class="shrink-0 text-sm font-semibold text-emerald-800 underline decoration-emerald-300 underline-offset-2 hover:text-dark-brand">Google 地圖</a>
+                    </li>
                     <li class="sm:col-span-2">
                         <span class="mr-2 font-bold text-dark-brand">更多參考</span>
                         <span class="flex flex-wrap gap-x-1 gap-y-1 text-base sm:text-[17px]">
@@ -196,7 +243,16 @@
                 </ul>
             </section>
 
-            <section class="mb-9 space-y-5 text-lg leading-relaxed text-gray-700 md:mb-10 md:text-xl md:leading-relaxed">
+            <section class="mb-9 space-y-5 text-lg leading-relaxed text-gray-700 md:mb-10 md:text-xl md:leading-relaxed" aria-labelledby="service-intro-heading">
+                <h2 id="service-intro-heading" class="text-2xl font-bold tracking-tight text-dark-brand sm:text-[1.65rem]">
+                    在台南與高雄，我們協助您完成的室內設計與裝潢
+                </h2>
+                <p>
+                    <strong class="font-semibold text-stone-800">添心設計</strong>（添心設計 X 添興傢俱）於<strong class="font-semibold text-stone-800">台南南區</strong>與<strong class="font-semibold text-stone-800">高雄三民區</strong>設有門市；服務範圍涵蓋大台南、大高雄及鄰近行政區。不論是<strong class="font-semibold text-stone-800">預售客變</strong>、<strong class="font-semibold text-stone-800">新成屋</strong>、<strong class="font-semibold text-stone-800">中古屋整新</strong>或<strong class="font-semibold text-stone-800">老屋翻新</strong>，都能與您討論格局、動線、<strong class="font-semibold text-stone-800">系統櫃</strong>與<strong class="font-semibold text-stone-800">木作</strong>、收納與建材搭配，讓空間好看也好住。
+                </p>
+                <p>
+                    若您在找「<strong class="font-semibold text-stone-800">台南室內設計</strong>」「<strong class="font-semibold text-stone-800">高雄室內設計</strong>」或周遭城鎮的裝修規劃，歡迎先撥打上方電話，或加入官方 LINE，由專人了解需求後再安排參觀與談圖；人不在南高時，亦可先約線上討論。
+                </p>
                 <p class="border-l-[3px] border-emerald-600/40 pl-4 text-stone-700">
                     我們相信，好的設計源自於對生活的深刻理解。
                 </p>
@@ -207,29 +263,29 @@
 
             <!-- 設計補強：差異化重點（可隨實際服務微調文案） -->
             <section class="mb-9 md:mb-10" aria-labelledby="why-heading">
-                <h3 id="why-heading" class="mb-5 text-center text-xl font-bold tracking-tight text-dark-brand sm:text-2xl">
+                <h2 id="why-heading" class="mb-5 text-center text-xl font-bold tracking-tight text-dark-brand sm:text-2xl">
                     與我們合作，你可以期待什麼
-                </h3>
+                </h2>
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-4">
                     <div class="rounded-2xl border border-stone-200/80 bg-gradient-to-b from-white to-stone-50/90 p-5 text-left shadow-sm ring-1 ring-stone-100">
                         <div class="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-800/10 text-emerald-900">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                         </div>
-                        <h4 class="text-lg font-bold text-dark-brand">在地・好溝通</h4>
+                        <h3 class="text-lg font-bold text-dark-brand">在地・好溝通</h3>
                         <p class="mt-2 text-base leading-relaxed text-stone-600">台南起家、服務高雄與週邊，現場與需求討論節奏貼近在地生活型態。</p>
                     </div>
                     <div class="rounded-2xl border border-stone-200/80 bg-gradient-to-b from-white to-stone-50/90 p-5 text-left shadow-sm ring-1 ring-stone-100">
                         <div class="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-800/10 text-emerald-900">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/></svg>
                         </div>
-                        <h4 class="text-lg font-bold text-dark-brand">整合・重動線</h4>
+                        <h3 class="text-lg font-bold text-dark-brand">整合・重動線</h3>
                         <p class="mt-2 text-base leading-relaxed text-stone-600">格局、木作、系統櫃與收納一併考量，讓好看與好用留在每一天的動線裡。</p>
                     </div>
                     <div class="rounded-2xl border border-stone-200/80 bg-gradient-to-b from-white to-stone-50/90 p-5 text-left shadow-sm ring-1 ring-stone-100">
                         <div class="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-800/10 text-emerald-900">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
                         </div>
-                        <h4 class="text-lg font-bold text-dark-brand">先聊・再規劃</h4>
+                        <h3 class="text-lg font-bold text-dark-brand">先聊・再規劃</h3>
                         <p class="mt-2 text-base leading-relaxed text-stone-600">官方 LINE 與電話皆可先談需求；人不在南高，也可先說明遠端溝通方式再安排。</p>
                     </div>
                 </div>
@@ -237,7 +293,7 @@
 
             <section class="mb-9 md:mb-10" aria-labelledby="works-heading">
                 <div class="mb-6 text-center">
-                    <h3 id="works-heading" class="text-2xl font-bold tracking-tight text-dark-brand sm:text-3xl">精選作品</h3>
+                    <h2 id="works-heading" class="text-2xl font-bold tracking-tight text-dark-brand sm:text-3xl">精選作品｜台南・高雄完工實景</h2>
                     <p class="mt-2 text-base text-stone-500 sm:text-lg">六件完工實景，點縮圖前往 YouTube 觀看完整影片</p>
                 </div>
                 <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 sm:gap-4 lg:gap-5">
@@ -252,7 +308,7 @@
                             </div>
                         </div>
                         <div class="px-4 pb-4 pt-3">
-                            <h4 class="text-lg font-bold text-stone-800">舊屋改造｜格局大風吹</h4>
+                            <h3 class="text-lg font-bold text-stone-800">舊屋改造｜格局大風吹</h3>
                             <p class="mt-1.5 text-base text-stone-600">打掉重練，創造全新明亮空間。</p>
                         </div>
                     </a>
@@ -267,7 +323,7 @@
                             </div>
                         </div>
                         <div class="px-4 pb-4 pt-3">
-                            <h4 class="text-lg font-bold text-stone-800">新成屋設計｜莫蘭迪輕奢風</h4>
+                            <h3 class="text-lg font-bold text-stone-800">新成屋設計｜莫蘭迪輕奢風</h3>
                             <p class="mt-1.5 text-base text-stone-600">打造溫柔且具質感的居家氛圍。</p>
                         </div>
                     </a>
@@ -282,7 +338,7 @@
                             </div>
                         </div>
                         <div class="px-4 pb-4 pt-3">
-                            <h4 class="text-lg font-bold text-stone-800">老屋改造｜高雄北歐風</h4>
+                            <h3 class="text-lg font-bold text-stone-800">老屋改造｜高雄北歐風</h3>
                             <p class="mt-1.5 text-base text-stone-600">蛻變為精緻北歐風格，溫潤開闊。</p>
                         </div>
                     </a>
@@ -297,7 +353,7 @@
                             </div>
                         </div>
                         <div class="px-4 pb-4 pt-3">
-                            <h4 class="text-lg font-bold text-stone-800">電梯大樓｜二手整新</h4>
+                            <h3 class="text-lg font-bold text-stone-800">電梯大樓｜二手整新</h3>
                             <p class="mt-1.5 text-base text-stone-600">動線重整，兼顧居家與工作型態。</p>
                         </div>
                     </a>
@@ -312,7 +368,7 @@
                             </div>
                         </div>
                         <div class="px-4 pb-4 pt-3">
-                            <h4 class="text-lg font-bold text-stone-800">透天雙車｜北歐度假感</h4>
+                            <h3 class="text-lg font-bold text-stone-800">透天雙車｜北歐度假感</h3>
                             <p class="mt-1.5 text-base text-stone-600">12 坪客餐廳尺度放大，通透舒適。</p>
                         </div>
                     </a>
@@ -327,7 +383,7 @@
                             </div>
                         </div>
                         <div class="px-4 pb-4 pt-3">
-                            <h4 class="text-lg font-bold text-stone-800">三房二廳｜收納宅</h4>
+                            <h3 class="text-lg font-bold text-stone-800">三房二廳｜收納宅</h3>
                             <p class="mt-1.5 text-base text-stone-600">系統收納與動線，北歐風開箱。</p>
                         </div>
                     </a>
