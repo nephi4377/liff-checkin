@@ -37,7 +37,7 @@ const App = {
         // --- [v429.0 效能優化] 快取優先策略 ---
         const EMPLOYEES_CACHE_KEY = 'spa_hub_employees';
         const PROJECTS_CACHE_KEY = 'spa_hub_projects';
-        // 班表依「年-月」分鍵快取，TTL 1 天（仍會背景重抓最新）
+        // 班表依「年-月」分鍵快取，TTL 7 天（仍會背景重抓最新；久未開啟時本機資料較舊，屬可接受取捨）
         const scheduleCacheKey = () => {
             const d = new Date();
             return `spa_hub_schedule_${d.getFullYear()}_${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -283,7 +283,7 @@ const App = {
                     pendingRequestsRaw.value = attendanceResult.pendingRequests || [];
                 }
 
-                // 背景抓當月班表（SWR 策略：先顯示快取，背景更新後無縫替換，TTL 1 天）。
+                // 背景抓當月班表（SWR 策略：先顯示快取，背景更新後無縫替換，TTL 7 天）。
                 // 有無快取都會打 API；失敗時卡片維持快取內容。
                 scheduleLoading.value = true;
                 fetchLatestScheduleForThisMonth().then(scheduleResult => {
@@ -296,7 +296,7 @@ const App = {
                         if (JSON.stringify(monthSchedule.value) !== JSON.stringify(latest)) {
                             monthSchedule.value = latest;
                         }
-                        saveCache(scheduleCacheKey(), latest, 1); // 快取 1 天
+                        saveCache(scheduleCacheKey(), latest, 7); // 快取 7 天
                     }
                 }).finally(() => {
                     scheduleLoading.value = false;

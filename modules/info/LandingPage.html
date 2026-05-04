@@ -3,143 +3,391 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>添心設計 | 為您打造理想的家</title>
-    <!-- [vNext] SEO 優化標籤 -->
-    <meta name="description" content="添心設計專注於打造兼具美學與實用性的居住空間。我們提供專業的室內設計、舊屋翻新、系統櫃與木作規劃服務，為您量身訂做貼近生活的理想家園。">
+    <!-- Google Search Console：若用「網址前置字元 + HTML 標記」驗證此頁，請部署後再按 GSC「驗證」。DNS 驗證需在你網域的 DNS 後台另加 TXT。 -->
+    <meta name="google-site-verification" content="SGHWvVU4e8bk7AqsIJ4jI_xed-hJh_b4yVt0ZSxrpOs">
+    <title>添心設計｜台南・高雄室內設計、老屋翻新與木作規劃</title>
+    <meta name="description" content="添心設計：台南與高雄室內設計、老屋翻新、系統櫃與木作。免費諮詢官方 LINE、精選完工影片。服務台南・高雄及週邊。">
     <meta name="keywords" content="室內設計, 舊屋翻新, 系統櫃, 木作, 台南室內設計, 高雄室內設計, 添心設計">
-    <!-- Open Graph 標籤：確保 LINE 只抓正式網址 -->
-    <meta property="og:title" content="添心設計 | 為您打造理想的家">
-    <meta property="og:description" content="我們相信，好的設計源自於對生活的深刻理解。點擊了解更多我們的作品與理念。">
+    <meta name="theme-color" content="#2a3c35">
+    <meta property="og:site_name" content="添心設計">
+    <meta property="og:title" content="添心設計｜台南・高雄室內設計、老屋翻新與木作規劃">
+    <meta property="og:description" content="台南與高雄室內設計、老屋翻新、系統櫃與木作。精選完工影片、官方 LINE 免費諮詢。">
     <meta property="og:image" content="https://i.ytimg.com/vi/meMnlMf7Mc0/hqdefault.jpg">
+    <meta property="og:image:alt" content="添心設計 完工實景影片縮圖">
+    <meta property="og:image:width" content="480">
+    <meta property="og:image:height" content="360">
     <meta property="og:url" content="https://info.tanxin.space/modules/info/LandingPage.html">
     <meta property="og:type" content="website">
+    <meta property="og:locale" content="zh_TW">
     <link rel="canonical" href="https://info.tanxin.space/modules/info/LandingPage.html">
-    <!-- 禁止搜尋引擎索引本地版本 -->
-    <meta name="robots" content="noindex, nofollow">
-    <!-- 載入 Tailwind CSS 框架 -->
+    <!-- 推廣落地頁：允許完整收錄；max-image-preview 利於搜尋結果顯示較大預覽（Google 支援） -->
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="添心設計｜台南・高雄室內設計、老屋翻新與木作規劃">
+    <meta name="twitter:description" content="台南與高雄室內設計、老屋翻新、系統櫃與木作。精選完工影片、官方 LINE 免費諮詢。">
+    <meta name="twitter:image" content="https://i.ytimg.com/vi/meMnlMf7Mc0/hqdefault.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="dns-prefetch" href="https://i.ytimg.com">
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 載入 Google Fonts Noto Sans TC -->
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Noto Sans TC', sans-serif;
-            background-color: #fcf8e8; /* 外層背景：米色 */
-            color: #3d4a41; 
+            color: #3d4a41;
             font-weight: 500;
+            font-size: 17px;
+            line-height: 1.65;
         }
-        .text-dark-brand {
-            color: #2a3c35; /* 深品牌色 */
+        @media (min-width: 640px) {
+            body { font-size: 18px; }
         }
-        .card-shadow {
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.04); 
+        .text-dark-brand { color: #2a3c35; }
+        .mesh-page-bg {
+            background-color: #f7f3ea;
+            background-image:
+                radial-gradient(ellipse 80% 55% at 15% 10%, rgba(180, 205, 188, 0.35), transparent 52%),
+                radial-gradient(ellipse 70% 50% at 88% 25%, rgba(232, 218, 195, 0.55), transparent 48%),
+                radial-gradient(ellipse 60% 40% at 50% 95%, rgba(167, 189, 175, 0.2), transparent 45%),
+                linear-gradient(180deg, #faf7f0 0%, #f4efe6 48%, #eef2ed 100%);
         }
-        .line-id-button {
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        .hero-card {
+            box-shadow:
+                0 2px 3px rgba(42, 60, 53, 0.04),
+                0 12px 40px rgba(42, 60, 53, 0.09),
+                0 1px 0 rgba(255, 255, 255, 0.8) inset;
+            border: 1px solid rgba(255, 255, 255, 0.9);
         }
-        .line-id-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 15px rgba(0,0,0,0.15);
+        .grain-overlay {
+            opacity: 0.22;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+        }
+        .line-cta {
+            background: linear-gradient(145deg, #07d65e 0%, #05b34a 45%, #049a42 100%);
+            box-shadow: 0 4px 14px rgba(5, 150, 70, 0.35), 0 1px 0 rgba(255, 255, 255, 0.25) inset;
+        }
+        .line-cta:hover {
+            filter: brightness(1.06);
+            box-shadow: 0 6px 22px rgba(5, 150, 70, 0.42), 0 1px 0 rgba(255, 255, 255, 0.25) inset;
+        }
+        .line-cta:active {
+            transform: scale(0.99);
+        }
+        .work-card {
+            transition: transform 0.35s cubic-bezier(0.34, 1.2, 0.64, 1), box-shadow 0.35s ease;
+        }
+        .work-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 16px 40px rgba(42, 60, 53, 0.12);
+        }
+        .work-card:focus-visible {
+            outline: 2px solid #2a3c35;
+            outline-offset: 3px;
+        }
+        .safe-pb {
+            padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .work-card, .work-card:hover { transition: none; transform: none; }
+            .line-cta:active { transform: none; }
         }
     </style>
+    <!-- 結構化資料：協助 Google 理解品牌、服務區域與聯絡方式（推廣頁 SEO） -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": ["LocalBusiness", "HomeAndConstructionBusiness"],
+      "@id": "https://info.tanxin.space/modules/info/LandingPage.html#business",
+      "name": "添心設計",
+      "alternateName": "添心設計 X 添興家具",
+      "description": "台南與高雄室內設計、老屋翻新、系統櫃與木作規劃；官方 LINE 與電話提供諮詢。",
+      "url": "https://info.tanxin.space/modules/info/LandingPage.html",
+      "telephone": "+886-6-264-9819",
+      "priceRange": "$$",
+      "image": "https://i.ytimg.com/vi/meMnlMf7Mc0/hqdefault.jpg",
+      "sameAs": [
+        "https://www.facebook.com/TainanTanXin",
+        "https://www.youtube.com/@tanxindesign",
+        "https://tanxin.space/"
+      ],
+      "areaServed": [
+        { "@type": "City", "name": "台南市", "containedInPlace": { "@type": "Country", "name": "台灣" } },
+        { "@type": "City", "name": "高雄市", "containedInPlace": { "@type": "Country", "name": "台灣" } }
+      ],
+      "openingHoursSpecification": {
+        "@type": "OpeningHoursSpecification",
+        "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+        "opens": "08:30",
+        "closes": "17:30"
+      },
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "中華西路一段219號",
+        "addressLocality": "南區",
+        "addressRegion": "台南市",
+        "postalCode": "702",
+        "addressCountry": "TW"
+      }
+    }
+    </script>
 </head>
-<body class="min-h-screen flex items-center justify-center p-4 sm:p-6">
+<body class="mesh-page-bg min-h-screen flex flex-col items-center p-4 sm:p-8 pb-28 md:pb-8 relative overflow-x-hidden">
 
-    <!-- 主要內容區塊 -->
-    <div class="max-w-2xl w-full p-6 sm:p-10 md:p-16 text-center bg-white rounded-3xl card-shadow border border-gray-100">
-        
-        <header class="mb-8 md:mb-10">
-            <p class="text-2xl md:text-4xl font-bold mb-6 text-dark-brand">
-                <span class="border-b-4 border-dark-brand pb-2 px-2">添心設計</span>
-            </p>
-            <h1 class="text-3xl md:text-4xl font-extrabold leading-tight mb-3 text-dark-brand">
-                一個懂你、貼近生活的家
-            </h1>
-            <h2 class="text-xl md:text-3xl font-semibold text-dark-brand">
-                從這裡開始
-            </h2>
-        </header>
+    <div class="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden="true">
+        <div class="absolute -top-24 -right-20 h-72 w-72 rounded-full bg-emerald-300/25 blur-3xl"></div>
+        <div class="absolute top-1/3 -left-32 h-80 w-80 rounded-full bg-amber-200/20 blur-3xl"></div>
+        <div class="absolute bottom-0 right-1/4 h-64 w-64 rounded-full bg-teal-200/15 blur-3xl"></div>
+    </div>
+    <div class="grain-overlay pointer-events-none fixed inset-0 z-0 mix-blend-multiply" aria-hidden="true"></div>
 
-        <section class="space-y-4 md:space-y-6 mb-8 md:mb-10 text-base md:text-lg text-gray-700">
-            <p class="leading-relaxed">
-                我們相信，好的設計源自於對生活的深刻理解。
-            </p>
-            <p class="leading-relaxed">
-                添心設計專注於打造兼具美學與實用性的居住空間，讓您的家不只是房子，更是承載每日幸福的容器。
-            </p>
-        </section>
+    <div class="relative z-10 w-full max-w-3xl">
+        <div class="rounded-[2rem] bg-white/85 backdrop-blur-md hero-card px-5 py-8 sm:px-9 sm:py-11 md:px-12 md:py-14 text-center sm:text-left">
 
-        <!-- [vNext] 新增作品預覽區塊 -->
-        <section class="mb-8 md:mb-12">
-            <h3 class="text-2xl font-bold text-dark-brand mb-6 text-center">精選作品</h3>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                <!-- 作品 1 -->
-                <a href="https://www.youtube.com/watch?v=Wx3G9JXXKK4" target="_blank" rel="noopener noreferrer" class="block bg-white rounded-lg overflow-hidden border border-gray-200 group shadow-sm hover:shadow-lg transition-shadow duration-300">
-                    <div class="relative">
-                        <img src="https://i.ytimg.com/vi/Wx3G9JXXKK4/hqdefault.jpg" alt="舊屋改造作品" class="w-full h-40 object-cover group-hover:scale-105 transition-transform duration-300">
-                        <div class="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <svg class="w-12 h-12 text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+            <header class="mb-8 md:mb-10 text-center">
+                <p class="mb-3 text-xs font-semibold uppercase tracking-[0.28em] text-stone-500 sm:text-sm">Interior · 台南 · 高雄</p>
+                <p class="mb-6 inline-block">
+                    <span class="inline-block rounded-full border border-stone-200/80 bg-white/80 px-5 py-2.5 text-2xl font-bold tracking-wide text-dark-brand shadow-sm md:px-6 md:text-4xl">
+                        添心設計
+                    </span>
+                </p>
+                <h1 class="text-balance text-3xl font-black leading-snug tracking-tight text-dark-brand sm:text-4xl md:text-5xl md:leading-tight">
+                    <span class="bg-gradient-to-r from-[#1f2e29] via-[#2a3c35] to-[#3d5349] bg-clip-text text-transparent">一個懂你、貼近生活的家</span>
+                </h1>
+                <div class="mx-auto mt-5 h-px w-20 max-w-full bg-gradient-to-r from-transparent via-[#2a3c35]/35 to-transparent md:mx-0"></div>
+                <p class="mt-5 text-xl font-semibold text-stone-600 md:text-2xl">
+                    從這裡開始認識我們
+                </p>
+            </header>
+
+            <section class="mb-8 text-left rounded-2xl border border-stone-200/70 bg-gradient-to-br from-stone-50/95 to-emerald-50/30 px-4 py-5 shadow-inner sm:px-6" aria-label="服務與聯絡摘要">
+                <h2 class="sr-only">服務地區與聯絡方式</h2>
+                <p class="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-dark-brand">
+                    <span class="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true"></span>
+                    聯絡與服務
+                </p>
+                <ul class="grid grid-cols-1 gap-3.5 text-base leading-snug text-gray-800 sm:grid-cols-2 sm:text-[17px]">
+                    <li class="flex gap-2 rounded-lg bg-white/60 px-3 py-2 sm:block sm:bg-transparent sm:px-0 sm:py-0">
+                        <span class="shrink-0 font-bold text-dark-brand">服務地區</span>
+                        <span>台南、高雄及週邊<span class="text-stone-500">（遠端可另洽）</span></span>
+                    </li>
+                    <li class="flex gap-2 rounded-lg bg-white/60 px-3 py-2 sm:block sm:bg-transparent sm:px-0 sm:py-0">
+                        <span class="shrink-0 font-bold text-dark-brand">聯絡電話</span>
+                        <a href="tel:+88662649819" class="font-semibold text-emerald-900 underline decoration-emerald-300 underline-offset-2 transition hover:text-dark-brand">06-264-9819</a>
+                    </li>
+                    <li class="flex gap-2 rounded-lg bg-white/60 px-3 py-2 sm:block sm:bg-transparent sm:px-0 sm:py-0">
+                        <span class="shrink-0 font-bold text-dark-brand">營業時間</span>
+                        <span>每日 08:30–17:30</span>
+                    </li>
+                    <li class="flex flex-col gap-1.5 rounded-lg bg-white/60 px-3 py-2 sm:col-span-2 sm:flex-row sm:items-baseline sm:gap-3 sm:bg-transparent sm:px-0 sm:py-0">
+                        <span class="shrink-0 font-bold text-dark-brand">台南門市</span>
+                        <span class="text-stone-800">702 台南市南區中華西路一段219號</span>
+                        <a href="https://www.google.com/maps/search/?api=1&query=%E5%8F%B0%E5%8D%97%E5%B8%82%E5%8D%97%E5%8D%80%E4%B8%AD%E8%8F%AF%E8%A5%BF%E8%B7%AF%E4%B8%80%E6%AE%B5219%E8%99%9F" target="_blank" rel="noopener noreferrer" class="shrink-0 text-sm font-semibold text-emerald-800 underline decoration-emerald-300 underline-offset-2 hover:text-dark-brand">Google 地圖</a>
+                    </li>
+                    <li class="sm:col-span-2">
+                        <span class="mr-2 font-bold text-dark-brand">更多參考</span>
+                        <span class="flex flex-wrap gap-x-1 gap-y-1 text-base sm:text-[17px]">
+                            <a href="https://www.facebook.com/TainanTanXin" target="_blank" rel="noopener noreferrer" class="rounded-md px-1.5 py-0.5 font-medium text-emerald-900 underline decoration-emerald-200 decoration-2 underline-offset-2 hover:bg-white/70">Facebook</a>
+                            <span class="text-stone-300">·</span>
+                            <a href="https://www.youtube.com/@tanxindesign/videos" target="_blank" rel="noopener noreferrer" class="rounded-md px-1.5 py-0.5 font-medium text-emerald-900 underline decoration-emerald-200 decoration-2 underline-offset-2 hover:bg-white/70">YouTube</a>
+                            <span class="text-stone-300">·</span>
+                            <a href="https://tanxin.space/" target="_blank" rel="noopener noreferrer" class="rounded-md px-1.5 py-0.5 font-medium text-emerald-900 underline decoration-emerald-200 decoration-2 underline-offset-2 hover:bg-white/70">官網</a>
+                        </span>
+                    </li>
+                </ul>
+            </section>
+
+            <section class="mb-9 space-y-5 text-lg leading-relaxed text-gray-700 md:mb-10 md:text-xl md:leading-relaxed">
+                <p class="border-l-[3px] border-emerald-600/40 pl-4 text-stone-700">
+                    我們相信，好的設計源自於對生活的深刻理解。
+                </p>
+                <p>
+                    添心設計專注於打造兼具<strong class="font-semibold text-stone-800">美學與實用性</strong>的居住空間，讓您的家不只是房子，更是承載每日幸福的容器。
+                </p>
+            </section>
+
+            <!-- 設計補強：差異化重點（可隨實際服務微調文案） -->
+            <section class="mb-9 md:mb-10" aria-labelledby="why-heading">
+                <h3 id="why-heading" class="mb-5 text-center text-xl font-bold tracking-tight text-dark-brand sm:text-2xl">
+                    與我們合作，你可以期待什麼
+                </h3>
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-4">
+                    <div class="rounded-2xl border border-stone-200/80 bg-gradient-to-b from-white to-stone-50/90 p-5 text-left shadow-sm ring-1 ring-stone-100">
+                        <div class="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-800/10 text-emerald-900">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                         </div>
+                        <h4 class="text-lg font-bold text-dark-brand">在地・好溝通</h4>
+                        <p class="mt-2 text-base leading-relaxed text-stone-600">台南起家、服務高雄與週邊，現場與需求討論節奏貼近在地生活型態。</p>
                     </div>
-                    <div class="p-4">
-                        <h4 class="font-bold text-lg text-gray-800">舊屋改造｜格局大風吹</h4>
-                        <p class="text-sm text-gray-600 mt-1">打掉重練，創造全新明亮空間。</p>
-                    </div>
-                </a>
-                <!-- 作品 2 -->
-                <a href="https://www.youtube.com/watch?v=meMnlMf7Mc0" target="_blank" rel="noopener noreferrer" class="block bg-white rounded-lg overflow-hidden border border-gray-200 group shadow-sm hover:shadow-lg transition-shadow duration-300">
-                    <div class="relative">
-                        <img src="https://i.ytimg.com/vi/meMnlMf7Mc0/hqdefault.jpg" alt="新成屋設計作品" class="w-full h-40 object-cover group-hover:scale-105 transition-transform duration-300">
-                        <div class="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <svg class="w-12 h-12 text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+                    <div class="rounded-2xl border border-stone-200/80 bg-gradient-to-b from-white to-stone-50/90 p-5 text-left shadow-sm ring-1 ring-stone-100">
+                        <div class="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-800/10 text-emerald-900">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/></svg>
                         </div>
+                        <h4 class="text-lg font-bold text-dark-brand">整合・重動線</h4>
+                        <p class="mt-2 text-base leading-relaxed text-stone-600">格局、木作、系統櫃與收納一併考量，讓好看與好用留在每一天的動線裡。</p>
                     </div>
-                    <div class="p-4">
-                        <h4 class="font-bold text-lg text-gray-800">新成屋設計｜莫蘭迪輕奢風</h4>
-                        <p class="text-sm text-gray-600 mt-1">打造溫柔且具質感的居家氛圍。</p>
-                    </div>
-                </a>
-                <!-- 作品 3 -->
-                <a href="https://www.youtube.com/watch?v=Wx3G9JXXKK4" target="_blank" rel="noopener noreferrer" class="block bg-white rounded-lg overflow-hidden border border-gray-200 group shadow-sm hover:shadow-lg transition-shadow duration-300">
-                    <div class="relative">
-                        <img src="https://i.ytimg.com/vi/Wx3G9JXXKK4/hqdefault.jpg" alt="舊屋改造作品" class="w-full h-40 object-cover group-hover:scale-105 transition-transform duration-300">
-                        <div class="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <svg class="w-12 h-12 text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+                    <div class="rounded-2xl border border-stone-200/80 bg-gradient-to-b from-white to-stone-50/90 p-5 text-left shadow-sm ring-1 ring-stone-100">
+                        <div class="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-800/10 text-emerald-900">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
                         </div>
+                        <h4 class="text-lg font-bold text-dark-brand">先聊・再規劃</h4>
+                        <p class="mt-2 text-base leading-relaxed text-stone-600">官方 LINE 與電話皆可先談需求；人不在南高，也可先說明遠端溝通方式再安排。</p>
                     </div>
-                    <div class="p-4">
-                        <h4 class="font-bold text-lg text-gray-800">舊屋改造｜格局大風吹</h4>
-                        <p class="text-sm text-gray-600 mt-1">打掉重練，創造全新明亮空間。</p>
-                    </div>
-                </a>
+                </div>
+            </section>
+
+            <section class="mb-9 md:mb-10" aria-labelledby="works-heading">
+                <div class="mb-6 text-center">
+                    <h3 id="works-heading" class="text-2xl font-bold tracking-tight text-dark-brand sm:text-3xl">精選作品</h3>
+                    <p class="mt-2 text-base text-stone-500 sm:text-lg">六件完工實景，點縮圖前往 YouTube 觀看完整影片</p>
+                </div>
+                <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 sm:gap-4 lg:gap-5">
+                    <a href="https://www.youtube.com/watch?v=Wx3G9JXXKK4" target="_blank" rel="noopener noreferrer" class="work-card group block overflow-hidden rounded-2xl border border-stone-200/90 bg-white text-left shadow-sm ring-1 ring-stone-100">
+                        <div class="relative aspect-[16/10] overflow-hidden bg-stone-200">
+                            <img src="https://i.ytimg.com/vi/Wx3G9JXXKK4/hqdefault.jpg" alt="舊屋改造作品：格局大風吹" width="480" height="360" loading="eager" fetchpriority="high" decoding="async" class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.06]">
+                            <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-black/5 to-transparent opacity-90"></div>
+                            <div class="absolute inset-0 flex items-center justify-center opacity-0 transition duration-300 group-hover:opacity-100">
+                                <span class="flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-[#2a3c35] shadow-lg">
+                                    <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="px-4 pb-4 pt-3">
+                            <h4 class="text-lg font-bold text-stone-800">舊屋改造｜格局大風吹</h4>
+                            <p class="mt-1.5 text-base text-stone-600">打掉重練，創造全新明亮空間。</p>
+                        </div>
+                    </a>
+                    <a href="https://www.youtube.com/watch?v=meMnlMf7Mc0" target="_blank" rel="noopener noreferrer" class="work-card group block overflow-hidden rounded-2xl border border-stone-200/90 bg-white text-left shadow-sm ring-1 ring-stone-100">
+                        <div class="relative aspect-[16/10] overflow-hidden bg-stone-200">
+                            <img src="https://i.ytimg.com/vi/meMnlMf7Mc0/hqdefault.jpg" alt="新成屋設計作品：莫蘭迪輕奢風" width="480" height="360" loading="lazy" decoding="async" class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.06]">
+                            <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-black/5 to-transparent opacity-90"></div>
+                            <div class="absolute inset-0 flex items-center justify-center opacity-0 transition duration-300 group-hover:opacity-100">
+                                <span class="flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-[#2a3c35] shadow-lg">
+                                    <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="px-4 pb-4 pt-3">
+                            <h4 class="text-lg font-bold text-stone-800">新成屋設計｜莫蘭迪輕奢風</h4>
+                            <p class="mt-1.5 text-base text-stone-600">打造溫柔且具質感的居家氛圍。</p>
+                        </div>
+                    </a>
+                    <a href="https://www.youtube.com/watch?v=u5n0RPFEv3g" target="_blank" rel="noopener noreferrer" class="work-card group block overflow-hidden rounded-2xl border border-stone-200/90 bg-white text-left shadow-sm ring-1 ring-stone-100">
+                        <div class="relative aspect-[16/10] overflow-hidden bg-stone-200">
+                            <img src="https://i.ytimg.com/vi/u5n0RPFEv3g/hqdefault.jpg" alt="高雄老屋改造：北歐風格" width="480" height="360" loading="lazy" decoding="async" class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.06]">
+                            <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-black/5 to-transparent opacity-90"></div>
+                            <div class="absolute inset-0 flex items-center justify-center opacity-0 transition duration-300 group-hover:opacity-100">
+                                <span class="flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-[#2a3c35] shadow-lg">
+                                    <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="px-4 pb-4 pt-3">
+                            <h4 class="text-lg font-bold text-stone-800">老屋改造｜高雄北歐風</h4>
+                            <p class="mt-1.5 text-base text-stone-600">蛻變為精緻北歐風格，溫潤開闊。</p>
+                        </div>
+                    </a>
+                    <a href="https://www.youtube.com/watch?v=Kp0WTd2Pl9I" target="_blank" rel="noopener noreferrer" class="work-card group block overflow-hidden rounded-2xl border border-stone-200/90 bg-white text-left shadow-sm ring-1 ring-stone-100">
+                        <div class="relative aspect-[16/10] overflow-hidden bg-stone-200">
+                            <img src="https://i.ytimg.com/vi/Kp0WTd2Pl9I/hqdefault.jpg" alt="電梯大樓二手整新：動線與居家辦公" width="480" height="360" loading="lazy" decoding="async" class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.06]">
+                            <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-black/5 to-transparent opacity-90"></div>
+                            <div class="absolute inset-0 flex items-center justify-center opacity-0 transition duration-300 group-hover:opacity-100">
+                                <span class="flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-[#2a3c35] shadow-lg">
+                                    <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="px-4 pb-4 pt-3">
+                            <h4 class="text-lg font-bold text-stone-800">電梯大樓｜二手整新</h4>
+                            <p class="mt-1.5 text-base text-stone-600">動線重整，兼顧居家與工作型態。</p>
+                        </div>
+                    </a>
+                    <a href="https://www.youtube.com/watch?v=mY-MG1h5ngA" target="_blank" rel="noopener noreferrer" class="work-card group block overflow-hidden rounded-2xl border border-stone-200/90 bg-white text-left shadow-sm ring-1 ring-stone-100">
+                        <div class="relative aspect-[16/10] overflow-hidden bg-stone-200">
+                            <img src="https://i.ytimg.com/vi/mY-MG1h5ngA/hqdefault.jpg" alt="透天雙車：現代北歐風別墅與客餐廳" width="480" height="360" loading="lazy" decoding="async" class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.06]">
+                            <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-black/5 to-transparent opacity-90"></div>
+                            <div class="absolute inset-0 flex items-center justify-center opacity-0 transition duration-300 group-hover:opacity-100">
+                                <span class="flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-[#2a3c35] shadow-lg">
+                                    <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="px-4 pb-4 pt-3">
+                            <h4 class="text-lg font-bold text-stone-800">透天雙車｜北歐度假感</h4>
+                            <p class="mt-1.5 text-base text-stone-600">12 坪客餐廳尺度放大，通透舒適。</p>
+                        </div>
+                    </a>
+                    <a href="https://www.youtube.com/watch?v=lOGknirqeGU" target="_blank" rel="noopener noreferrer" class="work-card group block overflow-hidden rounded-2xl border border-stone-200/90 bg-white text-left shadow-sm ring-1 ring-stone-100">
+                        <div class="relative aspect-[16/10] overflow-hidden bg-stone-200">
+                            <img src="https://i.ytimg.com/vi/lOGknirqeGU/hqdefault.jpg" alt="三房二廳：北歐風收納設計開箱" width="480" height="360" loading="lazy" decoding="async" class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.06]">
+                            <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-black/5 to-transparent opacity-90"></div>
+                            <div class="absolute inset-0 flex items-center justify-center opacity-0 transition duration-300 group-hover:opacity-100">
+                                <span class="flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-[#2a3c35] shadow-lg">
+                                    <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="px-4 pb-4 pt-3">
+                            <h4 class="text-lg font-bold text-stone-800">三房二廳｜收納宅</h4>
+                            <p class="mt-1.5 text-base text-stone-600">系統收納與動線，北歐風開箱。</p>
+                        </div>
+                    </a>
+                </div>
+            </section>
+
+            <footer class="space-y-6 text-center">
+                <p class="text-lg font-semibold leading-snug text-dark-brand md:text-xl">
+                    準備好開始了嗎？<br class="sm:hidden">
+                    <span class="font-medium text-stone-600">先加官方 LINE，與我們聊聊您的需求</span>
+                </p>
+
+                <div>
+                    <a href="https://line.me/R/ti/p/@uis9604v" target="_blank" rel="noopener noreferrer"
+                       class="line-cta inline-flex w-full min-w-[240px] items-center justify-center rounded-full px-8 py-[1.1rem] text-xl font-bold text-white transition sm:inline-flex sm:w-auto md:px-12 md:text-2xl md:py-5">
+                        加入官方 LINE｜免費諮詢
+                    </a>
+                </div>
+
+                <p class="text-base text-stone-500">或掃描 QR Code 加入</p>
+                <div class="relative mx-auto inline-block">
+                    <div class="absolute -inset-1 rounded-2xl bg-gradient-to-br from-stone-200/80 to-emerald-100/50 blur-sm"></div>
+                    <img
+                        src="https://i.meee.com.tw/vXTlICx.png"
+                        alt="添心設計 LINE 官方帳號 QR Code"
+                        width="224"
+                        height="224"
+                        loading="lazy"
+                        decoding="async"
+                        class="relative mx-auto w-52 rounded-2xl border border-white/90 bg-white p-2 shadow-lg sm:w-56"
+                        onerror="this.onerror=null; this.src='https://placehold.co/224x224/fcf8e8/2a3c35?text=請替換QR+Code';"
+                    >
+                </div>
+
+                <p class="text-sm text-stone-500">
+                    官方帳號
+                    <a href="https://line.me/R/ti/p/@uis9604v" class="font-semibold text-dark-brand underline decoration-stone-300 underline-offset-2 hover:decoration-emerald-500" target="_blank" rel="noopener noreferrer">@uis9604v</a>
+                </p>
+
+                <p class="border-t border-stone-200/80 pt-8">
+                    <a href="https://tanxin.space/" target="_blank" rel="noopener noreferrer"
+                       class="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-b from-amber-800 to-amber-950 py-4 text-xl font-bold text-amber-50 shadow-lg shadow-amber-900/20 transition hover:from-amber-700 hover:to-amber-900 sm:w-auto sm:px-10 md:text-2xl md:py-[1.15rem]">
+                        前往官網欣賞更多作品
+                    </a>
+                </p>
+            </footer>
+        </div>
+    </div>
+
+    <div class="fixed bottom-0 left-0 right-0 z-50 border-t border-stone-200/80 bg-white/90 backdrop-blur-lg md:hidden safe-pb shadow-[0_-8px_32px_rgba(42,60,53,0.08)]">
+        <div class="mx-auto flex max-w-lg items-center gap-3 px-3 py-3">
+            <div class="min-w-0 flex-1 text-left">
+                <p class="truncate text-sm font-bold text-dark-brand">添心設計｜免費諮詢</p>
+                <p class="truncate text-xs text-stone-500 sm:text-[13px]">加入官方 LINE 與設計師聊聊</p>
             </div>
-        </section>
-
-        <!-- 行動呼籲 (CTA) / 聯絡資訊區 -->
-        <footer class="space-y-6">
-            <p class="text-base md:text-lg font-semibold text-dark-brand">
-                準備好開始了嗎？<br>立即與我們的設計師聊聊您的想法！
-            </p>
-            
-            <img 
-                src="https://i.meee.com.tw/vXTlICx.png" 
-                alt="添心設計 LINE 官方帳號 QR Code" 
-                class="mx-auto rounded-xl shadow-lg w-56 h-56 border-4 border-gray-100 p-1"
-                onerror="this.onerror=null; this.src='https://placehold.co/224x224/fcf8e8/2a3c35?text=請替換QR+Code';"
-            >
-
-            <a href="https://line.me/R/ti/p/@uis9604v" target="_blank" rel="noopener noreferrer" 
-               class="line-id-button inline-block mt-6 px-6 py-3 md:px-8 md:py-4 bg-white text-dark-brand border-2 border-dark-brand text-xl md:text-2xl font-black rounded-full transition duration-300 ease-in-out hover:bg-gray-100">
-                @uis9604v
+            <a href="https://line.me/R/ti/p/@uis9604v" target="_blank" rel="noopener noreferrer"
+               class="line-cta shrink-0 rounded-full px-5 py-3 text-base font-bold text-white shadow-md transition active:scale-[0.98]">
+                加入 LINE
             </a>
-
-            <!-- [vNext] 將官網按鈕移至最下方 -->
-            <p class="pt-8">
-                <a href="https://tanxin.space/" target="_blank" rel="noopener noreferrer" class="inline-block bg-amber-800 text-white font-bold py-3 px-8 rounded-lg text-lg hover:bg-amber-900 transition-colors">
-                    前往官網欣賞更多作品
-                </a>
-            </p>
-        </footer>
+        </div>
     </div>
 
 </body>
