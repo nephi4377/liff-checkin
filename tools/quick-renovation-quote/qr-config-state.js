@@ -1,5 +1,8 @@
 'use strict';
   var STORAGE_KEY = 'qr_estimator_settings_v2';
+  /** 管理員「本機備份快照」清單（與主設定分開存） */
+  var SNAPSHOTS_STORAGE_KEY = 'qr_estimator_snapshots_v1';
+  var SNAPSHOTS_MAX = 25;
   var TABS_CACHE_KEY = 'qr_price_tabs_v1'; /* 工作頁快取（獨立 key，還原全預設不影響） */
   var FB_CONFIG_STORAGE_KEY = 'fb_audit_config';
   var FB_RTDB_SETTINGS_PATH = 'quickRenovationQuote/settingsV2';

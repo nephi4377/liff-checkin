@@ -116,6 +116,84 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.settings));
   }
 
+  function qrReadSnapshotsRaw() {
+    try {
+      var a = JSON.parse(localStorage.getItem(SNAPSHOTS_STORAGE_KEY) || '[]');
+      return Array.isArray(a) ? a : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function qrWriteSnapshots(arr) {
+    try {
+      localStorage.setItem(SNAPSHOTS_STORAGE_KEY, JSON.stringify(arr));
+    } catch (e) {
+      alert('快照寫入失敗（本機儲存空間可能不足）：' + (e && e.message ? e.message : String(e)));
+    }
+  }
+
+  /** 將目前 state.settings 存成一筆本機快照（已先 readAdminForm 更佳，由按鈕呼叫處處理） */
+  function qrSaveCurrentSettingsSnapshot(displayName) {
+    var label = String(displayName || '').trim();
+    if (!label) {
+      alert('請填快照名稱。');
+      return false;
+    }
+    if (label.length > 80) label = label.slice(0, 80);
+    state.settings.schemaVersion = SCHEMA_V;
+    var entry = {
+      id: 'snap_' + Date.now(),
+      label: label,
+      savedAt: new Date().toISOString(),
+      settings: JSON.parse(JSON.stringify(state.settings)),
+    };
+    var arr = qrReadSnapshotsRaw();
+    arr.unshift(entry);
+    while (arr.length > SNAPSHOTS_MAX) arr.pop();
+    qrWriteSnapshots(arr);
+    return true;
+  }
+
+  function qrDeleteSnapshot(snapId) {
+    if (!snapId) return;
+    qrWriteSnapshots(qrReadSnapshotsRaw().filter(function (x) { return x && x.id !== snapId; }));
+  }
+
+  /** 以快照覆寫目前設定（本機主鍵），成功回傳 true */
+  function qrApplySnapshot(snapId) {
+    var hit = qrReadSnapshotsRaw().filter(function (x) { return x && x.id === snapId; })[0];
+    if (!hit || !hit.settings || typeof hit.settings !== 'object') return false;
+    qrApplyLoadedSettingsObject(hit.settings);
+    normalizeSettingsAfterLoad();
+    saveSettingsLocalOnly();
+    return true;
+  }
+
+  /** 寫入試算表對照結果（品項或子品項物件） */
+  function touchPriceSyncMeta(obj, code, detail) {
+    if (!obj || typeof obj !== 'object') return;
+    obj.priceSheetMatchCode = code;
+    obj.priceSheetMatchDetail = detail != null ? String(detail).slice(0, 240) : '';
+    obj.priceSheetMatchAt = new Date().toISOString();
+  }
+
+  /** 主品項＋子品項有填「工作頁＋表內品項」者，合併成要抓的分頁清單 */
+  function uniquePriceSheetTabNamesFromMappings() {
+    var seen = Object.create(null);
+    (state.settings.itemDefs || []).forEach(function (it) {
+      if (!it) return;
+      var t0 = String(it.priceSheetTab || '').replace(/\s+/g, ' ').trim();
+      if (t0 && String(it.priceSheetItem || '').trim()) seen[t0] = true;
+      (it.subItems || []).forEach(function (sub) {
+        if (!sub) return;
+        var tn = String(sub.priceSheetTab || it.priceSheetTab || '').replace(/\s+/g, ' ').trim();
+        if (tn && String(sub.priceSheetItem || '').trim()) seen[tn] = true;
+      });
+    });
+    return Object.keys(seen);
+  }
+
   function qrFbPushCurrentSettings(opts) {
     opts = opts || {};
     var silent = !!opts.silent;
@@ -1138,16 +1216,6 @@
     return map;
   }
 
-  function uniquePriceSheetTabNames() {
-    var seen = Object.create(null);
-    (state.settings.itemDefs || []).forEach(function (it) {
-      if (it && it.priceSheetTab && (it.priceSheetItem || '').trim()) {
-        seen[it.priceSheetTab.replace(/\s+/g, ' ').trim()] = true;
-      }
-    });
-    return Object.keys(seen);
-  }
-
   /** 是否有品項未填「工作表＋表內品項」而仍可能依內用 id／簡表對價（舊路徑）。預設菜單每筆皆已對表，故多為 false。 */
   function anyItemNeedsLegacyIdMap() {
     var defs = state.settings.itemDefs || [];
@@ -1168,114 +1236,167 @@
       if (!silent) alert('請先填寫試算表 ID（網址內 /d/ 之後 44 字元那段）');
       return Promise.resolve(0);
     }
-    if (silent) {
-      showPriceSyncBar('正在從試算表讀取最新單價…', false);
-    }
+    if (silent) showPriceSyncBar('正在從試算表讀取最新單價…', false);
     var runLegacy = anyItemNeedsLegacyIdMap();
     var legacyPromise = runLegacy
-      ? fetchGvizUrl(buildLegacyGvizUrl(id, (state.settings.priceSheetGid || '').trim())).then(function (j) {
-          var map = parseLegacyIdPriceMapFromJ(j);
-          var nLegacy = 0;
-          state.settings.itemDefs.forEach(function (it) {
-            if (it && it.priceSheetTab && (it.priceSheetItem || '').trim()) return;
-            if (Object.prototype.hasOwnProperty.call(map, it.id)) {
-              it.price = map[it.id];
-              nLegacy++;
-            }
-          });
-          return nLegacy;
-        })
-      : Promise.resolve(0);
+      ? fetchGvizUrl(buildLegacyGvizUrl(id, (state.settings.priceSheetGid || '').trim()))
+          .then(function (j) {
+            return parseLegacyIdPriceMapFromJ(j);
+          })
+          .catch(function () {
+            return {};
+          })
+      : Promise.resolve({});
 
-    return legacyPromise.then(function (nLegacy) {
-        var tabNames = uniquePriceSheetTabNames();
-        if (!tabNames.length) {
-          return { nLegacy: nLegacy, nByTab: 0 };
-        }
+    return legacyPromise
+      .then(function (legacyMap) {
+        legacyMap = legacyMap || {};
+        var tabNames = uniquePriceSheetTabNamesFromMappings();
         var byTab = {};
-        return tabNames
-          .reduce(function (p, tabName) {
-            return p.then(function () {
-              return fetchGvizUrl(buildTabGvizUrl(id, tabName))
-                .then(function (j) {
-                  var matrix = gvizRowsToNameUnitPriceMatrix(j);
-                  byTab[tabName] = matrix;
-                  /* 快取 A 欄品項名稱 */
-                  var names = matrix.map(function (r) { return r[0]; }).filter(function (n) { return n && n.trim(); });
-                  state.settings.knownPriceItems = state.settings.knownPriceItems || {};
-                  state.settings.knownPriceItems[tabName] = names;
-                })
-                .catch(function () {
-                  byTab[tabName] = null;
-                });
-            });
-          }, Promise.resolve())
-          .then(function () {
-            /* 將成功取得資料的工作頁名稱加入 knownPriceTabs */
-            var known = state.settings.knownPriceTabs || [];
-            Object.keys(byTab).forEach(function (tn) {
-              if (byTab[tn] !== null && known.indexOf(tn) < 0) known.push(tn);
-            });
-            state.settings.knownPriceTabs = known;
-            refreshTabDatalist();
-            var nBy = 0;
-            state.settings.itemDefs.forEach(function (it) {
-              if (!it || !it.priceSheetTab || !(it.priceSheetItem || '').trim()) return;
-              var tn = it.priceSheetTab.replace(/\s+/g, ' ').trim();
-              var matrix = byTab[tn];
-              if (!matrix) return;
-              var found = findRowUnitPriceByName(matrix, it.priceSheetItem);
-              if (!found) return;
-              it.unit = found.unit;
-              it.price = found.price;
-              nBy++;
-            });
-            /* 同步 subItems 單價（工作頁空白時繼承父品項的工作頁） */
-            state.settings.itemDefs.forEach(function (it) {
-              if (!it || !Array.isArray(it.subItems)) return;
-              it.subItems.forEach(function (sub) {
-                var tn = ((sub.priceSheetTab || it.priceSheetTab || '').replace(/\s+/g, ' ')).trim();
-                if (!tn || !(sub.priceSheetItem || '').trim()) return;
-                var matrix = byTab[tn];
-                if (!matrix) return;
-                var found = findRowUnitPriceByName(matrix, sub.priceSheetItem);
-                if (!found) return;
-                sub.unit = found.unit;
-                sub.price = found.price;
-                nBy++;
+        if (!tabNames.length) {
+          return { legacyMap: legacyMap, byTab: byTab };
+        }
+        return tabNames.reduce(function (p, tabName) {
+          return p.then(function () {
+            return fetchGvizUrl(buildTabGvizUrl(id, tabName))
+              .then(function (j) {
+                var matrix = gvizRowsToNameUnitPriceMatrix(j);
+                byTab[tabName] = { ok: true, matrix: matrix };
+                var names = matrix.map(function (r) { return r[0]; }).filter(function (n) { return n && n.trim(); });
+                state.settings.knownPriceItems = state.settings.knownPriceItems || {};
+                state.settings.knownPriceItems[tabName] = names;
+              })
+              .catch(function (err) {
+                byTab[tabName] = { ok: false, matrix: null, err: err && err.message };
               });
-            });
-            return { nLegacy: nLegacy, nByTab: nBy };
           });
+        }, Promise.resolve()).then(function () {
+          return { legacyMap: legacyMap, byTab: byTab };
+        });
       })
-      .then(function (summary) {
-        var nL = summary && typeof summary.nLegacy === 'number' ? summary.nLegacy : 0;
-        var nB = summary && typeof summary.nByTab === 'number' ? summary.nByTab : 0;
+      .then(function (ctx) {
+        var legacyMap = ctx.legacyMap || {};
+        var byTab = ctx.byTab || {};
+        var nBy = 0;
+        var nLegacy = 0;
+
+        var known = state.settings.knownPriceTabs || [];
+        Object.keys(byTab).forEach(function (tn) {
+          if (byTab[tn] && byTab[tn].ok && known.indexOf(tn) < 0) known.push(tn);
+        });
+        state.settings.knownPriceTabs = known;
+        refreshTabDatalist();
+
+        (state.settings.itemDefs || []).forEach(function (it) {
+          if (!it) return;
+          var hasPair = !!String(it.priceSheetTab || '').trim() && !!String(it.priceSheetItem || '').trim();
+          if (hasPair) {
+            var tn = String(it.priceSheetTab).replace(/\s+/g, ' ').trim();
+            var pack = byTab[tn];
+            if (!pack) {
+              touchPriceSyncMeta(it, 'tab_fetch_fail', '無法載入「' + tn + '」');
+              return;
+            }
+            if (!pack.ok) {
+              touchPriceSyncMeta(it, 'tab_fetch_fail', pack.err || tn);
+              return;
+            }
+            var found = findRowUnitPriceByName(pack.matrix, it.priceSheetItem);
+            if (!found) {
+              touchPriceSyncMeta(it, 'tab_no_row', '「' + tn + '」查無「' + String(it.priceSheetItem).trim() + '」');
+              return;
+            }
+            it.unit = found.unit;
+            it.price = found.price;
+            touchPriceSyncMeta(it, 'tab_ok', tn);
+            nBy++;
+          } else if (runLegacy) {
+            if (Object.prototype.hasOwnProperty.call(legacyMap, it.id)) {
+              it.price = legacyMap[it.id];
+              touchPriceSyncMeta(it, 'legacy_ok', '簡表 id：' + it.id);
+              nLegacy++;
+            } else {
+              touchPriceSyncMeta(it, 'legacy_no_row', '簡表無 id「' + it.id + '」');
+            }
+          } else {
+            touchPriceSyncMeta(it, 'no_table_pair', '請填工作頁與表內品項');
+          }
+
+          (it.subItems || []).forEach(function (sub) {
+            if (!sub) return;
+            var tn = String(sub.priceSheetTab || it.priceSheetTab || '').replace(/\s+/g, ' ').trim();
+            var hasSub = !!tn && !!String(sub.priceSheetItem || '').trim();
+            if (!hasSub) {
+              touchPriceSyncMeta(sub, 'no_table_pair', '子品項未填對照');
+              return;
+            }
+            var pack = byTab[tn];
+            if (!pack) {
+              touchPriceSyncMeta(sub, 'tab_fetch_fail', '無法載入「' + tn + '」');
+              return;
+            }
+            if (!pack.ok) {
+              touchPriceSyncMeta(sub, 'tab_fetch_fail', pack.err || tn);
+              return;
+            }
+            var found2 = findRowUnitPriceByName(pack.matrix, sub.priceSheetItem);
+            if (!found2) {
+              touchPriceSyncMeta(sub, 'tab_no_row', '「' + tn + '」查無「' + String(sub.priceSheetItem).trim() + '」');
+              return;
+            }
+            sub.unit = found2.unit;
+            sub.price = found2.price;
+            touchPriceSyncMeta(sub, 'tab_ok', tn);
+            nBy++;
+          });
+        });
+
+        var statsOk = 0;
+        var statsBad = 0;
+        (state.settings.itemDefs || []).forEach(function (it) {
+          if (!it) return;
+          var oc = it.priceSheetMatchCode;
+          if (oc === 'tab_ok' || oc === 'legacy_ok') statsOk++;
+          else if (oc) statsBad++;
+          (it.subItems || []).forEach(function (sub) {
+            if (!sub) return;
+            var sc = sub.priceSheetMatchCode;
+            if (sc === 'tab_ok') statsOk++;
+            else if (sc) statsBad++;
+          });
+        });
+
         saveSettings();
         fillAdminForm();
+        var statsMsg =
+          statsOk || statsBad
+            ? '（對到約 ' + statsOk + ' 筆／其餘狀態 ' + statsBad + ' 筆，見右欄標籤）'
+            : '';
         if (silent) {
           showPriceSyncBar(
-            nL > 0
-              ? '單價已與試算表同步（表頁＋品項 ' + nB + ' 筆；未填表之品項另以 id 簡表 ' + nL + ' 筆）。'
-              : '單價已與試算表同步（各品項依表頁＋品項對照，共 ' + nB + ' 筆，以表為準）。',
+            (nLegacy > 0
+              ? '單價已同步：表頁對照更新 ' +
+                nBy +
+                ' 筆，簡表 id ' +
+                nLegacy +
+                ' 筆。'
+              : '單價已同步：表頁對照共 ' + nBy + ' 筆（以表為準）。') +
+              statsMsg,
             false
           );
         } else {
           alert(
-            nL > 0
-              ? '已從試算表帶入：表頁＋品項對照 ' + nB + ' 筆；另有未填表頁／品項者以 id 簡表 ' + nL + ' 筆。'
-              : '已從試算表帶入：各品項依「表頁名＋表內品項」更新 ' + nB + ' 筆。'
+            (nLegacy > 0
+              ? '已自試算表帶入：表頁對照 ' + nBy + ' 筆；簡表 id ' + nLegacy + ' 筆。'
+              : '已自試算表帶入：表頁對照 ' + nBy + ' 筆。') + statsMsg
           );
         }
-        return nL + nB;
+        return nLegacy + nBy;
       })
       .catch(function (e) {
         var errText = e && e.message ? e.message : String(e);
-        if (silent) {
-          showPriceSyncBar('試算表讀取失敗，本場先沿用本機上次的單價。（' + errText + '）', true);
-        } else {
-          alert('讀取失敗：' + errText + '。可改用匯出 JSON 手動帶入或檢查表可公開讀。');
-        }
+        if (silent) showPriceSyncBar('試算表讀取失敗，沿用本機單價。（' + errText + '）', true);
+        else alert('讀取失敗：' + errText + '。可檢查表是否已發佈到網路。');
         return 0;
       });
   }
@@ -1296,7 +1417,7 @@
       '拆除工程', '泥作工程', '玻璃工程', '鐵件工程', '系統家具', '空調工程',
       '弱電工程', '木地板', '磁磚工程', '衛浴工程', '廚具工程', '窗簾工程',
       '燈具工程', '清潔工程'];
-    var extra = (state.settings.knownPriceTabs || []).concat(uniquePriceSheetTabNames());
+    var extra = (state.settings.knownPriceTabs || []).concat(uniquePriceSheetTabNamesFromMappings());
     extra.forEach(function (t) { if (t && seed.indexOf(t) < 0) seed.push(t); });
     /* 平行 gviz 請求：回傳有 table 的即存在 */
     return Promise.all(seed.map(function (tabName) {
@@ -1374,21 +1495,36 @@
     fillAdminForm();
   };
 
-  /** 新增一筆空白品項到 itemDefs */
-  function addNewItemDef() {
+  /**
+   * @param {Record<string, *>} [presets] 可選：priceSheetTab、menuBand、quoteSection、groupTitle、label、zoneScope 等
+   */
+  function addNewItemDef(presets) {
+    presets = presets || {};
     readAdminForm();
     var newId = 'custom_' + Date.now();
+    var pt = (presets.priceSheetTab != null ? String(presets.priceSheetTab) : '').trim();
+    var qs = (presets.quoteSection != null && String(presets.quoteSection).trim()) || (pt || '其他');
+    var gt = (presets.groupTitle != null && String(presets.groupTitle).trim()) || (pt || '其他');
     state.settings.itemDefs.push({
-      id: newId, label: '新品項', unit: '式', price: 0,
-      priceSheetTab: '', priceSheetItem: '', clientNote: '',
-      menuBand: 'other', sortKey: 9000, displayRank: 9000,
-      groupTitle: '其他', quoteSection: '其他',
-      zoneScope: 'all', defaultOn: false, cabWood: false,
+      id: newId,
+      label: (presets.label != null && String(presets.label).trim()) || '新品項',
+      unit: (presets.unit != null ? String(presets.unit) : '') || '式',
+      price: 0,
+      priceSheetTab: pt,
+      priceSheetItem: '',
+      clientNote: '',
+      menuBand: presets.menuBand || 'other',
+      sortKey: 9000,
+      displayRank: 9000,
+      groupTitle: gt,
+      quoteSection: qs,
+      zoneScope: presets.zoneScope || 'all',
+      defaultOn: !!presets.defaultOn,
+      cabWood: !!presets.cabWood,
     });
     saveSettings();
     fillAdminForm();
-    /* 捲動到新卡片 */
-    var box = document.getElementById('adminItemPrices');
+    var box = document.getElementById('adminPriceGroups');
     if (box && box.lastElementChild) {
       box.lastElementChild.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
@@ -1621,7 +1757,11 @@
     renderRulesTable();
     loadFormFromCurrentItem();
     fillSchemeRadios();
-    alert('已寫入方案「' + (sc.name || sc.id) + '」並已儲存。');
+    if (typeof window.qrAdminHintSave === 'function') {
+      window.qrAdminHintSave('已套用到方案「' + (sc.name || sc.id) + '」，記得按右上「儲存設定」。');
+    } else {
+      alert('已寫入方案「' + (sc.name || sc.id) + '」，記得按「儲存設定」。');
+    }
   }
 
   function menuAddScheme() {

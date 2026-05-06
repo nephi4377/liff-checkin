@@ -65,28 +65,22 @@
     var drows = getDisplayItemRows(alloc);
     var box = document.getElementById('c_itemRows');
     box.innerHTML = '';
-    var lastBand = null;
-    var lastSub = null;
+    var lastSectionLabel = null;
     drows.forEach(function (drow) {
       var it = drow.def;
       var band = drow.menuBand || it.menuBand || 'other';
-      if (band !== lastBand) {
+      var sl =
+        ((drow.subGroupTitle && String(drow.subGroupTitle).trim()) || '') ||
+        (drow.quoteSection && String(drow.quoteSection).trim()) ||
+        (it.groupTitle && String(it.groupTitle).trim()) ||
+        (MENU_BAND_LABEL_ZH[band] || MENU_BAND_LABEL_ZH.other);
+      if (sl !== lastSectionLabel) {
         var h3 = document.createElement('h3');
         h3.className =
           'text-sm font-bold text-stone-800 border-b border-stone-200 pb-1.5 mt-4 first:mt-0 tracking-tight';
-        h3.textContent = MENU_BAND_LABEL_ZH[band] || MENU_BAND_LABEL_ZH.other;
+        h3.textContent = sl;
         box.appendChild(h3);
-        lastBand = band;
-        lastSub = null;
-      }
-      if (drow.subGroupTitle && drow.subGroupTitle !== lastSub) {
-        var sh = document.createElement('h4');
-        sh.className = 'text-xs font-semibold text-amber-900/90 mt-2 mb-1';
-        sh.textContent = drow.subGroupTitle;
-        box.appendChild(sh);
-        lastSub = drow.subGroupTitle;
-      } else if (!drow.subGroupTitle) {
-        lastSub = null;
+        lastSectionLabel = sl;
       }
       var qty = getQtyForDisplayRow(drow, alloc, scheme);
       var showLabel = drow.roomLabel ? drow.def.label + '（' + drow.roomLabel + '）' : drow.def.label;
@@ -306,93 +300,173 @@
   }
 
   function showClient() {
-    document.getElementById('clientSection').classList.remove('hidden');
-    document.getElementById('adminSection').classList.add('hidden');
-    document.getElementById('navClient').className = 'flex-1 py-2 rounded-lg bg-amber-800 text-white font-medium';
-    document.getElementById('navAdmin').className = 'flex-1 py-2 rounded-lg bg-stone-300 text-stone-800 font-medium';
+    var c = document.getElementById('clientSection');
+    var a = document.getElementById('adminSection');
+    if (c) c.classList.remove('hidden');
+    if (a) a.classList.add('hidden');
+    var navC = document.getElementById('navClient');
+    var navA = document.getElementById('navAdmin');
+    if (navC) navC.className = 'flex-1 py-2 rounded-lg bg-amber-800 text-white font-medium';
+    if (navA) navA.className = 'flex-1 py-2 rounded-lg bg-stone-300 text-stone-800 font-medium';
   }
 
   function showAdmin() {
-    document.getElementById('clientSection').classList.add('hidden');
-    document.getElementById('adminSection').classList.remove('hidden');
-    document.getElementById('navAdmin').className = 'flex-1 py-2 rounded-lg bg-amber-800 text-white font-medium';
-    document.getElementById('navClient').className = 'flex-1 py-2 rounded-lg bg-stone-300 text-stone-800 font-medium';
+    var c = document.getElementById('clientSection');
+    var a = document.getElementById('adminSection');
+    if (c) c.classList.add('hidden');
+    if (a) a.classList.remove('hidden');
+    var navC = document.getElementById('navClient');
+    var navA = document.getElementById('navAdmin');
+    if (navA) navA.className = 'flex-1 py-2 rounded-lg bg-amber-800 text-white font-medium';
+    if (navC) navC.className = 'flex-1 py-2 rounded-lg bg-stone-300 text-stone-800 font-medium';
     fillAdminForm();
   }
 
-  document.getElementById('navClient').addEventListener('click', showClient);
-  document.getElementById('navAdmin').addEventListener('click', showAdmin);
-  document.getElementById('adminSaveBtn').addEventListener('click', function () {
-    if (getMenuScheme() && document.getElementById('s_schemeNameEdit')) {
-      var nm0 = (document.getElementById('s_schemeNameEdit').value || '').trim();
-      if (nm0) getMenuScheme().name = nm0;
-    }
-    syncSchemesJsonTextarea();
-    readAdminForm();
-    saveSettings().then(function (cloudOk) {
-      alert(
-        cloudOk
-          ? '已儲存（本機與 Firebase）。'
-          : '已寫入本機；Firebase 同步失敗或未連線（見下方 Firebase 區狀態）。'
-      );
-    });
-  });
-  document.getElementById('adminResetBtn').addEventListener('click', function () {
-    if (!confirm('還原全部預設？')) return;
-    state.settings = JSON.parse(JSON.stringify(DEFAULTS));
-    /* 保留獨立快取的工作頁清單 */
-    try {
-      var cachedTabs = JSON.parse(localStorage.getItem(TABS_CACHE_KEY));
-      if (Array.isArray(cachedTabs) && cachedTabs.length > 0) {
-        state.settings.knownPriceTabs = cachedTabs;
-      }
-    } catch (e) { /* ignore */ }
-    saveSettings();
-    fillAdminForm();
-  });
-  if (document.getElementById('adminAddItemBtn')) {
-    document.getElementById('adminAddItemBtn').addEventListener('click', addNewItemDef);
+  if (document.getElementById('navClient') && document.getElementById('navAdmin')) {
+    document.getElementById('navClient').addEventListener('click', showClient);
+    document.getElementById('navAdmin').addEventListener('click', showAdmin);
   }
-  document.getElementById('adminResetSchemesBtn').addEventListener('click', function () {
-    if (!confirm('將方案菜單還原成內建三組（精簡／收納／造型）？自訂方案會被刪除。')) return;
-    state.settings.schemeMenus = defaultSchemeMenus();
-    state.selectedSchemeId = 'simple';
-    state._preservedMenuScheme = 'simple';
-    syncSchemesJsonTextarea();
-    saveSettings();
+
+  function qrFlashAdminAction(msg, level) {
+    var bar = document.getElementById('qrAdminActionBar');
+    if (!bar || !msg) return;
+    if (bar._qrT) clearTimeout(bar._qrT);
+    bar.textContent = msg;
+    bar.classList.remove('hidden', 'border-emerald-200', 'bg-emerald-50', 'text-emerald-900', 'border-amber-200', 'bg-amber-50', 'text-amber-900');
+    if (level === 'warn') bar.className = 'max-w-[1600px] mx-auto mt-2 px-4 text-xs py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-900';
+    else bar.className = 'max-w-[1600px] mx-auto mt-2 px-4 text-xs py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-900';
+    bar._qrT = setTimeout(function () {
+      bar.classList.add('hidden');
+    }, 3200);
+  }
+
+  window.qrAdminHintSave = function (msg) {
+    qrFlashAdminAction(msg || '已套用規則，記得按右上「儲存設定」。', 'warn');
+  };
+
+  if (document.getElementById('adminSaveBtn')) {
+    var saveFn = function () {
+      if (getMenuScheme() && document.getElementById('s_schemeNameEdit')) {
+        var nm0 = (document.getElementById('s_schemeNameEdit').value || '').trim();
+        if (nm0) getMenuScheme().name = nm0;
+      }
+      syncSchemesJsonTextarea();
+      readAdminForm();
+      saveSettings().then(function (cloudOk) {
+        qrFlashAdminAction(cloudOk ? '設定已儲存（本機＋Firebase）。' : '設定已寫入本機；Firebase 暫時未同步。', cloudOk ? 'ok' : 'warn');
+        alert(
+          cloudOk
+            ? '已儲存（本機與 Firebase）。'
+            : '已寫入本機；Firebase 同步失敗或未連線（見下方 Firebase 區狀態）。'
+        );
+      });
+    };
+    document.getElementById('adminSaveBtn').addEventListener('click', saveFn);
+    var topSaveBtn = document.getElementById('adminSaveBtnTop');
+    if (topSaveBtn) topSaveBtn.addEventListener('click', saveFn);
+    document.getElementById('adminResetBtn').addEventListener('click', function () {
+      if (!confirm('還原全部預設？')) return;
+      state.settings = JSON.parse(JSON.stringify(DEFAULTS));
+      try {
+        var cachedTabs = JSON.parse(localStorage.getItem(TABS_CACHE_KEY));
+        if (Array.isArray(cachedTabs) && cachedTabs.length > 0) {
+          state.settings.knownPriceTabs = cachedTabs;
+        }
+      } catch (e) { /* ignore */ }
+      saveSettings();
+      fillAdminForm();
+    });
+    var alignQuoteBtn = document.getElementById('adminAlignQuoteFromTabsBtn');
+    if (alignQuoteBtn) {
+      alignQuoteBtn.addEventListener('click', function () { alignQuoteMetaFromTabs(); });
+    }
+    document.getElementById('adminResetSchemesBtn').addEventListener('click', function () {
+      if (!confirm('將方案菜單還原成內建三組（精簡／收納／造型）？自訂方案會被刪除。')) return;
+      state.settings.schemeMenus = defaultSchemeMenus();
+      state.selectedSchemeId = 'simple';
+      state._preservedMenuScheme = 'simple';
+      syncSchemesJsonTextarea();
+      saveSettings();
+      fillAdminForm();
+      fillSchemeRadios();
+      alert('已還原內建三組方案。');
+    });
+    document.getElementById('adminExportBtn').addEventListener('click', function () {
+      readAdminForm();
+      var blob = new Blob([JSON.stringify(state.settings, null, 2)], { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'quick-quote-settings-v2.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+    document.getElementById('adminImportFile').addEventListener('change', function (ev) {
+      var f = ev.target.files[0];
+      if (!f) return;
+      var r = new FileReader();
+      r.onload = function () {
+        try {
+          state.settings = deepMerge(JSON.parse(JSON.stringify(DEFAULTS)), JSON.parse(r.result));
+          if (state.settings.mepPerZone == null && state.settings.mepPerRoom != null) {
+            state.settings.mepPerZone = state.settings.mepPerRoom;
+          }
+          saveSettings();
+          fillAdminForm();
+          alert('匯入完成');
+        } catch (e) {
+          alert('JSON 無效');
+        }
+      };
+      r.readAsText(f);
+      ev.target.value = '';
+    });
+    var sid = document.getElementById('s_sheetId');
+    if (sid) sid.addEventListener('blur', function () { qrScheduleSheetPriceSync(); });
+    var pauto = document.getElementById('s_priceSheetAuto');
+    if (pauto) {
+      pauto.addEventListener('change', function () {
+        readAdminForm();
+        qrScheduleSheetPriceSync();
+      });
+    }
+    var ssb = document.getElementById('adminSnapshotSaveBtn');
+    if (ssb && !ssb._qrSnapSaveBound) {
+      ssb._qrSnapSaveBound = true;
+      ssb.addEventListener('click', function () {
+        readAdminForm();
+        var inp = document.getElementById('adminSnapshotName');
+        var nm = inp ? inp.value : '';
+        if (typeof qrSaveCurrentSettingsSnapshot !== 'function') return;
+        if (qrSaveCurrentSettingsSnapshot(nm)) {
+          if (inp) inp.value = '';
+          if (typeof renderAdminSnapshotsPanel === 'function') renderAdminSnapshotsPanel();
+          alert('已存入本機快照（上限 ' + SNAPSHOTS_MAX + ' 筆，超過會刪最舊）。');
+        }
+      });
+    }
+  }
+
+  window.qrConfirmLoadSnapshot = function (snapId) {
+    if (
+      !snapId ||
+      !confirm('載入快照會覆寫目前本機主設定檔。（若要同步 Firebase 請之後再按儲存／上傳。）確定？')
+    )
+      return;
+    if (typeof qrApplySnapshot !== 'function' || !qrApplySnapshot(snapId)) {
+      alert('無法載入（找不到快照或資料毀損）。');
+      return;
+    }
+    if (state.settings.schemeMenus && state.settings.schemeMenus[0]) state._preservedMenuScheme = state.settings.schemeMenus[0].id;
     fillAdminForm();
     fillSchemeRadios();
-    alert('已還原內建三組方案。');
-  });
-  document.getElementById('adminExportBtn').addEventListener('click', function () {
-    readAdminForm();
-    var blob = new Blob([JSON.stringify(state.settings, null, 2)], { type: 'application/json' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'quick-quote-settings-v2.json';
-    a.click();
-    URL.revokeObjectURL(a.href);
-  });
-  document.getElementById('adminImportFile').addEventListener('change', function (ev) {
-    var f = ev.target.files[0];
-    if (!f) return;
-    var r = new FileReader();
-    r.onload = function () {
-      try {
-        state.settings = deepMerge(JSON.parse(JSON.stringify(DEFAULTS)), JSON.parse(r.result));
-        if (state.settings.mepPerZone == null && state.settings.mepPerRoom != null) {
-          state.settings.mepPerZone = state.settings.mepPerRoom;
-        }
-        saveSettings();
-        fillAdminForm();
-        alert('匯入完成');
-      } catch (e) {
-        alert('JSON 無效');
-      }
-    };
-    r.readAsText(f);
-    ev.target.value = '';
-  });
+    alert('已載入快照。');
+  };
+
+  window.qrConfirmDeleteSnapshot = function (snapId) {
+    if (!snapId || !confirm('刪除此快照？')) return;
+    if (typeof qrDeleteSnapshot === 'function') qrDeleteSnapshot(snapId);
+    if (typeof renderAdminSnapshotsPanel === 'function') renderAdminSnapshotsPanel();
+  };
 
   function qrUpdateBuildingHint() {
     var h = document.getElementById('c_buildingHint');
@@ -429,41 +503,54 @@
     document.getElementById('cStep3').classList.add('hidden');
     document.getElementById('cStep4').classList.add('hidden');
   }
-  document.getElementById('c_calcBtn').addEventListener('click', function () {
-    var go = function () { runClientStep1Alloc(); };
-    if (priceSyncPromise && typeof priceSyncPromise.finally === 'function') {
-      priceSyncPromise.finally(go);
-    } else {
-      go();
-    }
-  });
-  document.getElementById('c_toItemsBtn').addEventListener('click', function () {
-    if (!state.lastAlloc) return;
-    getSelectedSchemeId();
-    buildItemRows(state.lastAlloc);
-    document.getElementById('cStep3').classList.remove('hidden');
-    if (document.getElementById('c_schemeNameStep3')) {
-      var sc2 = getSchemeById(getSelectedSchemeId());
-      document.getElementById('c_schemeNameStep3').textContent = sc2.name;
-    }
-    setTimeout(function () {
-      var el = document.getElementById('cStep3');
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 0);
-  });
-  document.getElementById('c_backToSchemeBtn').addEventListener('click', function () {
-    document.getElementById('cStep3').classList.add('hidden');
-    var box = document.getElementById('c_schemeRadios');
-    if (box) {
+  var cCalcBtn = document.getElementById('c_calcBtn');
+  if (cCalcBtn) {
+    cCalcBtn.addEventListener('click', function () {
+      var go = function () { runClientStep1Alloc(); };
+      if (priceSyncPromise && typeof priceSyncPromise.finally === 'function') {
+        priceSyncPromise.finally(go);
+      } else {
+        go();
+      }
+    });
+  }
+  var cToItemsBtn = document.getElementById('c_toItemsBtn');
+  if (cToItemsBtn) {
+    cToItemsBtn.addEventListener('click', function () {
+      if (!state.lastAlloc) return;
+      getSelectedSchemeId();
+      buildItemRows(state.lastAlloc);
+      document.getElementById('cStep3').classList.remove('hidden');
+      if (document.getElementById('c_schemeNameStep3')) {
+        var sc2 = getSchemeById(getSelectedSchemeId());
+        document.getElementById('c_schemeNameStep3').textContent = sc2.name;
+      }
       setTimeout(function () {
-        box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        var el = document.getElementById('cStep3');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 0);
-    }
-  });
-  document.getElementById('c_quoteBtn').addEventListener('click', renderQuote);
-  document.getElementById('c_printBtn').addEventListener('click', function () {
-    window.print();
-  });
+    });
+  }
+  var cBackToSchemeBtn = document.getElementById('c_backToSchemeBtn');
+  if (cBackToSchemeBtn) {
+    cBackToSchemeBtn.addEventListener('click', function () {
+      document.getElementById('cStep3').classList.add('hidden');
+      var box = document.getElementById('c_schemeRadios');
+      if (box) {
+        setTimeout(function () {
+          box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 0);
+      }
+    });
+  }
+  var cQuoteBtn = document.getElementById('c_quoteBtn');
+  if (cQuoteBtn) cQuoteBtn.addEventListener('click', renderQuote);
+  var cPrintBtn = document.getElementById('c_printBtn');
+  if (cPrintBtn) {
+    cPrintBtn.addEventListener('click', function () {
+      window.print();
+    });
+  }
   if (document.getElementById('s_loadSheetBtn')) {
     document.getElementById('s_loadSheetBtn').addEventListener('click', function () {
       loadPricesFromGviz();
@@ -540,16 +627,19 @@
     });
   }
 
-  document.getElementById('clientSection').addEventListener(
-    'blur',
-    function (e) {
-      if (!e.target || !e.target.classList || !e.target.classList.contains('it-qty')) return;
-      var v = parseFloat(e.target.value);
-      if (isNaN(v) || v < 0) return;
-      e.target.value = String(Math.max(0, Math.round(v * 2) / 2));
-    },
-    true
-  );
+  var clientSectionEl = document.getElementById('clientSection');
+  if (clientSectionEl) {
+    clientSectionEl.addEventListener(
+      'blur',
+      function (e) {
+        if (!e.target || !e.target.classList || !e.target.classList.contains('it-qty')) return;
+        var v = parseFloat(e.target.value);
+        if (isNaN(v) || v < 0) return;
+        e.target.value = String(Math.max(0, Math.round(v * 2) / 2));
+      },
+      true
+    );
+  }
 
   function qrAfterSettingsReady() {
     if (state.settings.priceSheetAutoOnOpen !== false && (state.settings.priceSheetGvizId || '').trim()) {
@@ -563,16 +653,91 @@
         r.addEventListener('change', qrUpdateBuildingHint);
       });
     }
-    showClient();
   }
+
+  /** 管理員獨立頁：左側分段導覽，只顯示一個主面板；上次分區記在 sessionStorage。 */
+  function qrAdminShellInitNavigation() {
+    if (!document.body || document.body.dataset.qrStandaloneAdmin !== '1') return;
+    var nav = document.getElementById('qrAdminNav');
+    if (!nav || nav.dataset.qrNavInit === '1') return;
+    nav.dataset.qrNavInit = '1';
+
+    function panelId(seg) {
+      return seg === 'schemes' ? 'adminPanelSchemes' : seg === 'system' ? 'adminPanelSystem' : 'adminPanelPrices';
+    }
+
+    function show(seg) {
+      if (seg !== 'prices' && seg !== 'schemes' && seg !== 'system') seg = 'prices';
+      ['prices', 'schemes', 'system'].forEach(function (s) {
+        var el = document.getElementById(panelId(s));
+        if (el) el.classList.toggle('hidden', s !== seg);
+      });
+      nav.querySelectorAll('[data-admin-section]').forEach(function (btn) {
+        var s = btn.getAttribute('data-admin-section') || '';
+        var on = s === seg;
+        btn.setAttribute('aria-selected', on ? 'true' : 'false');
+        btn.tabIndex = on ? 0 : -1;
+        btn.classList.toggle('bg-amber-900', on);
+        btn.classList.toggle('text-white', on);
+        btn.classList.toggle('border-amber-800', on);
+        btn.classList.toggle('shadow-md', on);
+        btn.classList.toggle('bg-stone-100', !on);
+        btn.classList.toggle('text-stone-800', !on);
+        btn.classList.toggle('border-transparent', !on);
+        btn.classList.toggle('hover:bg-amber-50', !on);
+        btn.classList.toggle('hover:border-amber-200/80', !on);
+        var sub = btn.querySelectorAll('span');
+        if (sub.length > 1) {
+          sub[1].classList.toggle('text-stone-500', !on);
+          sub[1].classList.toggle('text-amber-100/90', on);
+        }
+      });
+      try {
+        sessionStorage.setItem('qr_admin_section_v2', seg);
+      } catch (_e) { /* ignore */
+      }
+      var main = nav.nextElementSibling;
+      if (main && typeof main.scrollTop === 'number') main.scrollTop = 0;
+    }
+
+    var pref = 'prices';
+    try {
+      var t = sessionStorage.getItem('qr_admin_section_v2');
+      if (t === 'schemes' || t === 'system' || t === 'prices') pref = t;
+    } catch (_e2) { /* ignore */
+    }
+
+    nav.querySelectorAll('[data-admin-section]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        show(btn.getAttribute('data-admin-section') || 'prices');
+      });
+    });
+
+    show(pref);
+  }
+
+  function qrAdminPageReady() {
+    var st = document.getElementById('qrFbSyncStatus');
+    if (st && state.fbLoadNote) st.textContent = state.fbLoadNote;
+    fillAdminForm();
+    refreshMenuSchemeUI();
+    if (state.settings.priceSheetAutoOnOpen !== false && (state.settings.priceSheetGvizId || '').trim()) {
+      priceSyncPromise = syncPricesFromGviz({ silent: true });
+    }
+  }
+
+  var isAdminStandalonePage = !!(document.body && document.body.dataset.qrStandaloneAdmin === '1');
+  if (isAdminStandalonePage) qrAdminShellInitNavigation();
 
   loadSettings();
   qrFbPullOnce({ silent: true, preferRemote: true })
     .then(function () {
-      qrAfterSettingsReady();
+      if (isAdminStandalonePage) qrAdminPageReady();
+      else qrAfterSettingsReady();
     })
     .catch(function () {
-      qrAfterSettingsReady();
+      if (isAdminStandalonePage) qrAdminPageReady();
+      else qrAfterSettingsReady();
     });
 
   var pullBtn = document.getElementById('qrFbPullBtn');
@@ -582,8 +747,7 @@
         if (ok) {
           fillTemplateSelect();
           fillSchemeRadios();
-          var adm = document.getElementById('adminSection');
-          if (adm && !adm.classList.contains('hidden')) fillAdminForm();
+          if (document.getElementById('adminSaveBtn')) fillAdminForm();
         }
       });
     });

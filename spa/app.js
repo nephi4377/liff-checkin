@@ -1,4 +1,4 @@
-import Dashboard from './Dashboard.js?v=26.05.04.3';
+import Dashboard from './Dashboard.js?v=26.05.04.4';
 import ProjectBoard from './ProjectBoard.js';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
@@ -33,6 +33,25 @@ const App = {
             images: [],
             currentIndex: 0
         });
+
+        /** 主控台底部公開落地頁（LandingPage.html）；禮券 InviteSheet 另覓入口 */
+        const landingPagePublicUrl = 'https://info.tanxin.space/modules/info/LandingPage.html';
+        const landingPageUrlCopied = ref(false);
+        let landingCopyTimer = null;
+        const copyLandingPageUrl = () => {
+            const url = landingPagePublicUrl;
+            if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+                window.prompt('請長按或全選複製以下網址：', url);
+                return;
+            }
+            navigator.clipboard.writeText(url).then(() => {
+                landingPageUrlCopied.value = true;
+                if (landingCopyTimer) clearTimeout(landingCopyTimer);
+                landingCopyTimer = setTimeout(() => { landingPageUrlCopied.value = false; }, 2500);
+            }).catch(() => {
+                window.prompt('複製失敗，請手動複製：', url);
+            });
+        };
 
         // --- [v429.0 效能優化] 快取優先策略 ---
         const EMPLOYEES_CACHE_KEY = 'spa_hub_employees';
@@ -399,6 +418,9 @@ const App = {
             showPrevImage, // [v559.10 修正] 導出方法給模板使用
             showNextImage, // [v559.10 修正] 導出方法給模板使用
             handleKeydown, // 解決 Vue warn: Property "handleKeydown" is not defined on instance
+            landingPagePublicUrl,
+            landingPageUrlCopied,
+            copyLandingPageUrl,
         };
     }, // [v418.1 修正] 補上遺失的逗號，解決 setup() 與 template 之間的語法錯誤
     template: `
@@ -442,6 +464,21 @@ const App = {
                     <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :pendingRequestsRaw="pendingRequestsRaw" :hasAdminRights="hasAdminRights" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" />
                     <!-- 任務交辦中心容器 -->
                     <div v-if="hasAdminRights" id="task-sender-container" class="mt-4"></div>
+                    <!-- 公開落地頁：緊接在任務交辦中心之後（無管理權者無交辦區，此景為主控台捲動到底） -->
+                    <div class="mt-4 bg-emerald-50/90 px-4 py-3 rounded-lg border border-emerald-200 flex flex-wrap items-center justify-between gap-3">
+                        <p class="text-sm text-gray-800 m-0 max-w-full">
+                            <span class="font-semibold text-emerald-900">公開落地頁</span>
+                            <span class="text-gray-600">（官網介紹／案例，貼給客戶）</span>
+                        </p>
+                        <div class="flex flex-wrap items-center gap-2 flex-shrink-0">
+                            <a :href="landingPagePublicUrl" target="_blank" rel="noopener noreferrer"
+                                class="inline-flex items-center text-sm font-semibold bg-white text-emerald-800 border border-emerald-300 py-1.5 px-3 rounded-md hover:bg-emerald-50">開啟網站</a>
+                            <button type="button" @click="copyLandingPageUrl"
+                                class="inline-flex items-center text-sm font-semibold bg-emerald-600 text-white py-1.5 px-3 rounded-md hover:bg-emerald-700">
+                                {{ landingPageUrlCopied ? '已複製' : '複製網址' }}
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 <div v-else-if="currentView.name === 'project-board'" class="py-6">
                      <ProjectBoard :projects="allProjects" :userProfile="userProfile" :currentUser="currentUser" />

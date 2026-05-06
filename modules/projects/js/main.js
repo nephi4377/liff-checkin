@@ -67,7 +67,7 @@ function ensureScheduleTemplateImportDelegation() {
  * 8.  更新頁面主標題。
  */
 /**
- * 內嵌驗收表：與 `tools/BudgetAuditor_Standalone.html` 的 `?projectNo=` 一致，避免同案重複 reload。
+ * 內嵌驗收表：與 `tools/BudgetAuditor_Standalone_V2.html` 的 `?projectNo=` 一致，避免同案重複 reload。
  * @param {string} projectId
  */
 function updateAuditorIframeSrc(projectId) {
@@ -76,7 +76,7 @@ function updateAuditorIframeSrc(projectId) {
   const no = String(projectId).trim();
   let url;
   try {
-    url = new URL('../../tools/BudgetAuditor_Standalone.html', window.location.href);
+    url = new URL('../../tools/BudgetAuditor_Standalone_V2.html', window.location.href);
   } catch {
     return;
   }

@@ -2,6 +2,104 @@
 
   /* ── 共用輔助：下拉選項 HTML ── */
 
+  /** 最近一次試算表對照狀態（滑鼠移上可看細節） */
+  function priceMatchBadgeHtml(ent) {
+    var c = ent && ent.priceSheetMatchCode;
+    var det = ent && ent.priceSheetMatchDetail ? String(ent.priceSheetMatchDetail) : '';
+    if (!c) {
+      return (
+        '<span class="qr-match-badge shrink-0 text-[10px] px-1.5 py-0.5 rounded border border-stone-200 bg-stone-50 text-stone-500" title="尚未對表或未跑過對表">─</span>'
+      );
+    }
+    var row = {
+      tab_ok: { cls: 'border-emerald-300 bg-emerald-50 text-emerald-900', lab: '對到' },
+      tab_no_row: { cls: 'border-amber-300 bg-amber-50 text-amber-950', lab: '表無列' },
+      tab_fetch_fail: { cls: 'border-red-300 bg-red-50 text-red-900', lab: '分頁敗' },
+      no_table_pair: { cls: 'border-stone-300 bg-stone-100 text-stone-700', lab: '未填對照' },
+      legacy_ok: { cls: 'border-teal-300 bg-teal-50 text-teal-900', lab: '簡表對到' },
+      legacy_no_row: { cls: 'border-amber-300 bg-amber-50 text-amber-950', lab: '簡表無' },
+      sync_error: { cls: 'border-red-400 bg-red-50 text-red-950', lab: '中斷' },
+    };
+    var m = row[c] || { cls: 'border-stone-200 bg-stone-50 text-stone-600', lab: String(c).slice(0, 8) };
+    var title = det ? det : m.lab;
+    return (
+      '<span class="qr-match-badge shrink-0 text-[10px] px-1.5 py-0.5 rounded border ' +
+      m.cls +
+      '" title="' +
+      escAttr(title) +
+      '">' +
+      esc(m.lab) +
+      '</span>'
+    );
+  }
+
+  /** 格式化 ISO 時間供快照列表（本機語系） */
+  function qrFormatSnapDate(iso) {
+    if (!iso) return '';
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return String(iso);
+      return d.toLocaleString('zh-TW', { hour12: false });
+    } catch (e) {
+      return String(iso);
+    }
+  }
+
+  function renderAdminSnapshotsPanel() {
+    var ul = document.getElementById('adminSnapshotsList');
+    if (!ul || typeof qrReadSnapshotsRaw !== 'function') return;
+    var arr = qrReadSnapshotsRaw();
+    ul.innerHTML = '';
+    if (!arr.length) {
+      ul.innerHTML =
+        '<li class="text-xs text-stone-500 py-2 list-none">尚無快照。輸入名稱後按「存成快照」。</li>';
+      qrBindSnapshotsListOnce(ul);
+      return;
+    }
+    arr.forEach(function (s) {
+      if (!s || !s.id) return;
+      var li = document.createElement('li');
+      li.className =
+        'list-none flex flex-wrap items-center gap-2 justify-between py-2 border-b border-stone-100';
+      li.innerHTML =
+        '<div class="min-w-0 flex-1">' +
+        '<span class="text-sm text-stone-800 font-medium">' +
+        esc(s.label || '（無名）') +
+        '</span>' +
+        '<span class="block text-[10px] text-stone-400 mt-0.5">' +
+        esc(qrFormatSnapDate(s.savedAt)) +
+        '</span></div>' +
+        '<div class="flex flex-wrap gap-1.5 shrink-0">' +
+        '<button type="button" class="text-xs px-2 py-1 rounded border bg-white hover:bg-stone-50 qr-snap-load" data-snap-id="' +
+        escAttr(s.id) +
+        '">載入</button>' +
+        '<button type="button" class="text-xs px-2 py-1 rounded border border-red-200 bg-red-50/60 text-red-800 hover:bg-red-50 qr-snap-del" data-snap-id="' +
+        escAttr(s.id) +
+        '">刪除</button></div>';
+      ul.appendChild(li);
+    });
+    qrBindSnapshotsListOnce(ul);
+  }
+
+  function qrBindSnapshotsListOnce(ul) {
+    if (!ul || ul._qrSnapBound) return;
+    ul._qrSnapBound = true;
+    ul.addEventListener('click', function (ev) {
+      var t = ev.target;
+      var loadBtn = t.closest ? t.closest('.qr-snap-load') : null;
+      var delBtn = t.closest ? t.closest('.qr-snap-del') : null;
+      if (loadBtn) {
+        var sid = loadBtn.getAttribute('data-snap-id');
+        if (sid && typeof window.qrConfirmLoadSnapshot === 'function') window.qrConfirmLoadSnapshot(sid);
+        return;
+      }
+      if (delBtn) {
+        var sid2 = delBtn.getAttribute('data-snap-id');
+        if (sid2 && typeof window.qrConfirmDeleteSnapshot === 'function') window.qrConfirmDeleteSnapshot(sid2);
+      }
+    });
+  }
+
   /** 依 state.settings.knownPriceTabs 產生 <option> 串，currentTab 自動 selected */
   function buildTabSelectOptionsHtml(currentTab) {
     var tabs = (state.settings && state.settings.knownPriceTabs && state.settings.knownPriceTabs.length)
@@ -33,6 +131,7 @@
       '<label class="flex items-center gap-1 shrink-0"><input type="checkbox" class="sub-defaulton"' + (sub.defaultOn ? ' checked' : '') + ' /><span>預設勾</span></label>' +
       '<label class="flex items-center gap-1 shrink-0">預設量<input type="number" class="sub-defaultqty w-10 border border-stone-200 rounded px-1 py-0.5 ml-1" min="0" step="1" value="' + escAttr(String(sub.defaultQty != null ? sub.defaultQty : 1)) + '" /></label>' +
       '<button type="button" class="shrink-0 text-red-500 hover:text-red-700 border border-red-200 rounded px-1.5 py-0.5 bg-white" onclick="window._qrRemoveSubItem(\'' + parentId.replace(/'/g, "\\'") + '\',\'' + sub.id.replace(/'/g, "\\'") + '\')">移除</button>' +
+      priceMatchBadgeHtml(sub) +
       '</div>' +
       /* 第二行：工作頁 + A欄品項 */
       '<div class="flex gap-1.5">' +
@@ -166,6 +265,7 @@
   }
 
   function fillAdminForm() {
+    if (!document.getElementById('adminSaveBtn')) return;
     var s = state.settings;
     if (document.getElementById('s_sheetId')) {
       document.getElementById('s_sheetId').value = s.priceSheetGvizId != null ? s.priceSheetGvizId : '';
@@ -193,7 +293,6 @@
       document.getElementById('s_priceSheetAuto').checked = s.priceSheetAutoOnOpen !== false;
     }
     fillFormMenuSelects();
-    refreshMenuSchemeUI();
     document.getElementById('s_balcony').value = s.balconyPing;
     document.getElementById('s_baths').value = (s.bathroomPings || []).join(',');
     document.getElementById('s_lkMin').value = s.lkShareMin;
@@ -204,71 +303,231 @@
     document.getElementById('s_long').value = s.rectLong;
     document.getElementById('s_short').value = s.rectShort;
     document.getElementById('adminSchemesJson').value = JSON.stringify(s.schemeMenus || [], null, 2);
-    var box = document.getElementById('adminItemPrices');
-    box.innerHTML = '';
-    /* 初始化 ② 規則編輯器的菜單大區下拉 */
     var bandFormSel = document.getElementById('s_formMenuBand');
     if (bandFormSel) bandFormSel.innerHTML = menuBandOptionsHtml('other');
-    /* 刷新工作頁 datalist（從 knownPriceTabs） */
-    refreshTabDatalist();
-    s.itemDefs
+    var box = document.getElementById('adminPriceGroups');
+    /* 各大項／試算表分頁分組；同分頁的品項聚在一起 */
+    var itemsSorted = s.itemDefs
       .slice()
-      .sort(function (a, b) { return adminItemDefSortKey(a) - adminItemDefSortKey(b); })
-      .forEach(function (it) {
+      .sort(function (a, b) { return adminItemDefSortKey(a) - adminItemDefSortKey(b); });
+
+    var tabBuckets = {};
+    itemsSorted.forEach(function (it) {
+      var g = (it.priceSheetTab && String(it.priceSheetTab).trim()) || '__none';
+      if (!tabBuckets[g]) tabBuckets[g] = [];
+      tabBuckets[g].push(it);
+    });
+
+    var tabRank = {};
+    ((s.knownPriceTabs && s.knownPriceTabs.length)
+      ? s.knownPriceTabs
+      : ['木作工程', '油漆工程', '水電工程', '壁紙工程', '保護工程']
+    ).forEach(function (t, i) { tabRank[String(t)] = i; });
+
+    var tabKeys = Object.keys(tabBuckets).sort(function (a, b) {
+      var ra = tabRank[a] != null ? tabRank[a] : 888;
+      var rb = tabRank[b] != null ? tabRank[b] : 888;
+      if (ra !== rb) return ra - rb;
+      var na = a === '__none' ? 1 : 0;
+      var nb = b === '__none' ? 1 : 0;
+      if (na !== nb) return na - nb;
+      return String(a).localeCompare(String(b), 'zh-Hant');
+    });
+
+    if (box) {
+    box.innerHTML = '';
+
+    tabKeys.forEach(function (tabKey) {
+      var list = tabBuckets[tabKey];
+      var secEl = document.createElement('section');
+      secEl.className = 'rounded-xl border border-stone-200 bg-stone-50/50 overflow-hidden';
+      var displayTab = tabKey === '__none' ? '（未指定試算表分頁／其他）' : tabKey;
+      secEl.dataset.engineTabKey = tabKey;
+      secEl.innerHTML =
+        '<div class="sticky top-0 z-[1] flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-stone-200/90 bg-amber-100/40">' +
+        '<span class="text-sm font-semibold text-amber-950">' +
+        esc(displayTab) +
+        '<span class="text-[11px] font-normal text-stone-500 ml-1">（' +
+        String(list.length) +
+        ' 筆）</span></span>' +
+        '<button type="button" class="text-xs shrink-0 px-2 py-1 rounded-lg border border-amber-300 bg-white hover:bg-white text-amber-900 qr-add-item-in-tab" data-tabpreset="' +
+        escAttr(tabKey === '__none' ? '' : tabKey) +
+        '">＋ 此工程新增品項</button>' +
+        '</div>' +
+        '<div class="p-2 space-y-2 qr-tab-item-list"></div>';
+      box.appendChild(secEl);
+      var inner = secEl.querySelector('.qr-tab-item-list');
+      list.forEach(function (it) {
         var w = document.createElement('div');
-        w.className = 'item-price-card rounded-xl border border-stone-200/90 bg-white px-3 py-2.5 mb-2 last:mb-0 shadow-sm';
+        w.className = 'item-price-card rounded-lg border border-stone-200/90 bg-white px-3 py-2 shadow-sm';
         w.setAttribute('data-card-itemid', it.id);
         var tab0 = (it.priceSheetTab != null ? it.priceSheetTab : '') || '';
         var pin0 = (it.priceSheetItem != null ? it.priceSheetItem : '') || '';
         var cn0  = (it.clientNote != null ? it.clientNote : '') || '';
         var lab0 = (it.label != null ? it.label : '') || '';
         w.innerHTML =
-          /* 第一行：顯示名稱 + id */
-          '<div class="flex items-center gap-2 mb-2">' +
-          '<input type="text" class="item-label-inp flex-1 min-w-0 border border-stone-200 rounded-lg px-2 py-1.5 text-sm text-stone-900" data-itemid="' +
+          '<div class="flex items-start gap-2 mb-2 flex-wrap">' +
+          '<input type="text" class="item-label-inp flex-1 min-w-[8rem] border border-stone-200 rounded-lg px-2 py-1.5 text-sm text-stone-900" data-itemid="' +
           escAttr(it.id) + '" value="' + escAttr(lab0) + '" />' +
-          '<code class="shrink-0 text-[10px] text-amber-900/70 bg-amber-50 border border-amber-100 rounded-md px-1.5 py-0.5 select-all" title="內用 id">' +
-          esc(it.id) + '</code></div>' +
-          /* 第二行：工作頁 | 品項（A欄） | 單價 — 三欄 */
-          '<div class="grid grid-cols-1 sm:grid-cols-3 gap-x-2 gap-y-1.5 text-xs">' +
+          '<code class="shrink-0 text-[10px] text-amber-900/70 bg-amber-50 border border-amber-100 rounded-md px-1.5 py-0.5 select-all max-w-[8rem] break-all">' +
+          esc(it.id) + '</code>' +
+          '<button type="button" class="shrink-0 text-xs px-2 py-1 rounded-lg border border-red-200 bg-red-50/80 text-red-800 hover:bg-red-50 qr-delete-item-def" data-itemid="' +
+          escAttr(it.id) + '" title="刪除此品項">刪除</button>' +
+          priceMatchBadgeHtml(it) +
+          '</div>' +
+          '<div class="grid grid-cols-1 gap-x-2 gap-y-1.5 text-xs">' +
           '<label class="block text-stone-500">工作頁' +
           '<select class="item-ps-tab mt-0.5 w-full border border-stone-200 rounded-lg px-2 py-1.5 bg-white text-stone-900" data-itemid="' +
           escAttr(it.id) + '">' + buildTabSelectOptionsHtml(tab0) + '</select></label>' +
-          '<label class="block text-stone-500">品項（試算表 A 欄）' +
+          '<label class="block text-stone-500">表內品項（對到即自動帶<strong>單位／單價</strong>）' +
           '<input type="text" list="qr-item-datalist" class="item-ps-name mt-0.5 w-full border border-stone-200 rounded-lg px-2 py-1.5 text-stone-900" data-itemid="' +
-          escAttr(it.id) + '" value="' + escAttr(pin0) + '" placeholder="與試算表文字一致" /></label>' +
-          '<label class="block text-stone-500">單價（元／' + esc(it.unit) + '）' +
+          escAttr(it.id) + '" value="' + escAttr(pin0) + '" placeholder="與試算表 A 欄相同" autocomplete="off" /></label>' +
+          '</div>' +
+          '<div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2 text-xs">' +
+          '<label class="block text-stone-500">單位' +
+          '<input type="text" class="item-unit-inp mt-0.5 w-full border border-stone-200 rounded-lg px-2 py-1.5 bg-white" data-itemid="' +
+          escAttr(it.id) + '" value="' + escAttr(String(it.unit != null ? it.unit : '')) + '" /></label>' +
+          '<label class="block text-stone-500">單價（元）' +
           '<input type="number" min="0" step="1" data-itemid="' + escAttr(it.id) +
           '" class="item-price-inp mt-0.5 w-full border border-stone-200 rounded-lg px-2 py-1.5 text-stone-900" value="' +
           escAttr(String(it.price != null ? it.price : 0)) + '" /></label>' +
           '</div>' +
-          /* 第三行：備註（淺色、選填感） */
           '<input type="text" class="item-client-note mt-1.5 w-full border border-stone-200/70 rounded-lg px-2 py-1 text-xs text-stone-500 placeholder:text-stone-300" data-itemid="' +
           escAttr(it.id) + '" value="' + escAttr(cn0) + '" placeholder="客戶可見備註（可留空）" />' +
-          /* 子品項折疊區塊 */
           subItemsSectionHtml(it.id, it.subItems);
-        box.appendChild(w);
+        inner.appendChild(w);
       });
+    });
 
-    /* 事件代理：工作頁改選 → 更新品項下拉清單；品項 focus → 同步清單 */
-    if (!box._qrItemDatalistBound) {
-      box._qrItemDatalistBound = true;
-      box.addEventListener('change', function (ev) {
-        if (ev.target && ev.target.classList.contains('item-ps-tab')) {
-          refreshItemDatalist(ev.target.value);
-        }
+    qrBindGroupedPricePanels(box);
+
+    box.querySelectorAll('.qr-add-item-in-tab').forEach(function (btn) {
+      var preset = btn.getAttribute('data-tabpreset');
+      preset = preset != null ? String(preset).trim() : '';
+      btn.addEventListener('click', function () {
+        addNewItemDef({
+          priceSheetTab: preset,
+          menuBand: preset ? priceTabToSuggestedMenuBand(preset) : 'other',
+          quoteSection: preset || '',
+          groupTitle: preset || '',
+        });
       });
-      box.addEventListener('focusin', function (ev) {
-        if (ev.target && ev.target.classList.contains('item-ps-name')) {
-          var iid = ev.target.getAttribute('data-itemid');
-          var tabSel = iid ? box.querySelector('select.item-ps-tab[data-itemid="' + iid + '"]') : null;
-          refreshItemDatalist(tabSel ? tabSel.value : '');
-        }
+    });
+    box.querySelectorAll('.qr-delete-item-def').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var aid = btn.getAttribute('data-itemid');
+        if (aid) removeItemDef(aid);
       });
+    });
     }
+
+    document.querySelectorAll('#adminGlobalAddItemBtn').forEach(function (btn) {
+      if (btn._qrGlobalAddBound) return;
+      btn._qrGlobalAddBound = true;
+      btn.addEventListener('click', function () { addNewItemDef({}); });
+    });
+
+    refreshTabDatalist();
+    refreshMenuSchemeUI();
+    renderAdminSnapshotsPanel();
+  }
+
+  function priceTabToSuggestedMenuBand(tabName) {
+    var t = String(tabName || '');
+    if (t.indexOf('木作') >= 0) return 'wood_full';
+    if (t.indexOf('油漆') >= 0) return 'paint';
+    if (t.indexOf('水電') >= 0) return 'mep';
+    if (t.indexOf('壁紙') >= 0) return 'finish';
+    if (t.indexOf('保護') >= 0) return 'protect';
+    return 'other';
+  }
+
+  /** 依試算表分頁自動補上「段落名／抬頭」（僅填空欄，減少重複輸入） */
+  function alignQuoteMetaFromTabs() {
+    if (!document.getElementById('adminSaveBtn')) return;
+    readAdminForm();
+    (state.settings.itemDefs || []).forEach(function (d) {
+      if (!d) return;
+      var t = (d.priceSheetTab || '').trim();
+      if (!t) return;
+      var qs = String(d.quoteSection || '').trim();
+      var gt = String(d.groupTitle || '').trim();
+      if (!qs) {
+        d.quoteSection = t;
+        d.menuBand = priceTabToSuggestedMenuBand(t);
+      }
+      if (!gt) d.groupTitle = t;
+    });
+    saveSettings();
+    fillFormMenuSelects();
+    refreshMenuSchemeUI();
+    fillAdminForm();
+    alert('已將「段落名／群組抬頭」為空的品項補為工作頁名稱。（僅填空，不中斷你手動改過的值）');
+  }
+
+  /** 防抖：工作頁／表內品項改過後自動向試算表對一次單價（需在「試算表 ID」已填時） */
+  function qrScheduleSheetPriceSync() {
+    if (!(state.settings.priceSheetAutoOnOpen !== false)) return;
+    if (!document.getElementById('adminSaveBtn')) return;
+    if (!(state.settings.priceSheetGvizId || '').trim()) return;
+    if (qrScheduleSheetPriceSync._t) clearTimeout(qrScheduleSheetPriceSync._t);
+    qrScheduleSheetPriceSync._t = setTimeout(function () {
+      qrScheduleSheetPriceSync._t = null;
+      readAdminForm();
+      syncPricesFromGviz({ silent: true });
+    }, 850);
+  }
+
+  /** 區塊內委派：對價監聽與 tab datalist — 只做一次綁定在 #adminPriceGroups */
+
+  /** @param box {HTMLElement} */
+  function qrBindGroupedPricePanels(box) {
+    if (!box || box._qrGroupedBound) return;
+    box._qrGroupedBound = true;
+    box.addEventListener('change', function (ev) {
+      if (!ev.target) return;
+      if (ev.target.classList.contains('item-ps-tab')) {
+        refreshItemDatalist(ev.target.value);
+      }
+      if (ev.target.classList.contains('item-ps-tab') || ev.target.classList.contains('item-ps-name')) {
+        qrScheduleSheetPriceSync();
+      }
+    });
+    box.addEventListener('focusin', function (ev) {
+      if (!ev.target || !ev.target.classList) return;
+      if (ev.target.classList.contains('item-ps-name')) {
+        var iid = ev.target.getAttribute('data-itemid');
+        var tabSel = iid ? box.querySelector('select.item-ps-tab[data-itemid="' + iid + '"]') : null;
+        refreshItemDatalist(tabSel ? tabSel.value : '');
+      }
+    });
+    box.addEventListener('blur', function (ev) {
+      if (!ev.target || !ev.target.classList) return;
+      if (ev.target.classList.contains('item-ps-name')) qrScheduleSheetPriceSync();
+    }, true);
+  }
+
+  /** 刪一品項並自各方案的 rules 拔除 */
+  function removeItemDef(itemId) {
+    if (!itemId || !confirm('確定刪除此品項？各方案若有規則一併移除。'))
+      return;
+    readAdminForm();
+    state.settings.itemDefs = (state.settings.itemDefs || []).filter(function (d) { return d && d.id !== itemId; });
+    (state.settings.schemeMenus || []).forEach(function (sc) {
+      if (sc && sc.rules && Object.prototype.hasOwnProperty.call(sc.rules, itemId)) delete sc.rules[itemId];
+    });
+    saveSettings();
+    state._preservedMenuScheme = (document.getElementById('s_menuScheme') && document.getElementById('s_menuScheme').value) || state._preservedMenuScheme;
+    fillFormMenuSelects();
+    renderRulesTable();
+    loadFormFromCurrentItem();
+    fillSchemeRadios();
+    syncSchemesJsonTextarea();
+    fillAdminForm();
   }
 
   function readAdminForm() {
+    if (!document.getElementById('adminSaveBtn')) return;
     var s = state.settings;
     if (document.getElementById('s_sheetId')) s.priceSheetGvizId = document.getElementById('s_sheetId').value.trim();
     if (document.getElementById('s_floorWaste')) s.floorWaste = parseFloat(document.getElementById('s_floorWaste').value) || DEFAULTS.floorWaste;
@@ -306,6 +565,13 @@
     } catch (e) {
       alert('方案 JSON 格式錯誤，未更新方案');
     }
+    document.querySelectorAll('.item-unit-inp').forEach(function (inp) {
+      var iid = (inp.getAttribute('data-itemid') || '').trim();
+      if (!iid) return;
+      s.itemDefs.forEach(function (d) {
+        if (d && d.id === iid) d.unit = (inp.value || '').trim() || '式';
+      });
+    });
     document.querySelectorAll('.item-price-inp').forEach(function (inp) {
       var iid = (inp.getAttribute('data-itemid') || '').trim();
       if (!iid) return;
@@ -382,7 +648,5 @@
         });
       });
     });
-    var np = document.getElementById('adminNewPin').value.trim();
-    if (np.length >= 4) s.adminPin = np;
     s.schemaVersion = SCHEMA_V;
   }

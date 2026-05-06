@@ -11,19 +11,11 @@
         #map { height: 400px; width: 100%; border-radius: 0.5rem; margin-top: 1rem; }
         .modal { display: none; }
         .modal.is-open { display: flex; align-items: center; justify-content: center; }
-        /* 【⭐️ 核心新增：優化日期/時間輸入框體驗 ⭐️】 */
-        /* 讓整個輸入框都能點擊以打開選擇器 */
-        /* [核心重構] 使用 :in-range 偽類來智慧地控制文字顏色，徹底解決預設值顯示問題 */
+        /* 日期/時間輸入：較易點擊、可读性較佳（無 min/max 時 :out-of-range 無意義故不使用） */
         input[type="date"],
         input[type="time"] {
-            cursor: pointer; /* 維持可點擊的指標 */
-            color: #1f2937;  /* 預設文字顏色 (深灰色) */
-        }
-
-        /* 當輸入框沒有有效值時，讓文字顏色變淡，模擬 placeholder 效果 */
-        input[type="date"]:out-of-range,
-        input[type="time"]:out-of-range {
-            color: #9ca3af; /* 淡灰色 */
+            cursor: pointer;
+            color: #1f2937;
         }
     </style>
 </head>
@@ -115,12 +107,35 @@
 
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
 
+    function escapeHtml(s) {
+        if (s == null || s === undefined) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function escapeAttr(s) {
+        return String(s ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;');
+    }
+
+    /** CSV 欄位跳脫（含逗號、引號、換行） */
+    function csvEscapeField(value) {
+        const str = value == null ? '' : String(value);
+        if (/[",\r\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
+        return str;
+    }
+
     // 【v32.0 核心改造】將 loadJsonp 升級為現代的 fetch API
     async function fetchApi(params) {
         const url = new URL(API_BASE_URL);
+        // [v396.0] 來源參數只附加一次（勿在 params 迴圈內重複 append）
+        url.searchParams.append('source', '出勤儀表板');
         for (const key in params) {
-            // [v396.0 新增] 為所有 API 請求統一加上來源參數，以便後端日誌追蹤。
-            url.searchParams.append('source', '出勤儀表板');
             url.searchParams.append(key, params[key]);
         }
 
@@ -151,7 +166,18 @@
     function loadCache(key) {
         const cached = localStorage.getItem(key);
         if (!cached) return null;
-        const cache = JSON.parse(cached);
+        let cache;
+        try {
+            cache = JSON.parse(cached);
+        } catch (e) {
+            console.error('讀取快取失敗（JSON 無效）:', e);
+            localStorage.removeItem(key);
+            return null;
+        }
+        if (!cache || typeof cache.expires !== 'number') {
+            localStorage.removeItem(key);
+            return null;
+        }
         if (cache.expires < Date.now()) { localStorage.removeItem(key); return null; }
         return cache.data;
     }
@@ -167,13 +193,26 @@
             url.searchParams.set('key', apiKey);
             url.searchParams.set('libraries', 'marker');
             url.searchParams.set('v', 'weekly');
-            // 設置一個全域回呼函式，API 載入完成後會呼叫它
-            window.gm_authFailure = () => reject(new Error("Google Maps API 金鑰驗證失敗。"));
-            url.searchParams.set('callback', 'Function.prototype'); // 使用技巧避免產生新的全域變數
+            const prevAuthFailure = window.gm_authFailure;
+            window.gm_authFailure = () => {
+                window.gm_authFailure = prevAuthFailure;
+                if (typeof prevAuthFailure === 'function') prevAuthFailure();
+                reject(new Error("Google Maps API 金鑰驗證失敗。"));
+            };
+            const cbName = '__attendanceGmapsCb_' + Math.random().toString(36).slice(2);
+            window[cbName] = () => {
+                delete window[cbName];
+                window.gm_authFailure = prevAuthFailure;
+                resolve();
+            };
+            url.searchParams.set('callback', cbName);
             script.src = url.toString();
             script.async = true;
-            script.onload = resolve;
-            script.onerror = () => reject(new Error("無法載入 Google Maps API 腳本。"));
+            script.onerror = () => {
+                delete window[cbName];
+                window.gm_authFailure = prevAuthFailure;
+                reject(new Error("無法載入 Google Maps API 腳本。"));
+            };
             document.head.appendChild(script);
         });
     }
@@ -202,8 +241,12 @@
         document.getElementById('btn-set-shift-end').addEventListener('click', () => setShiftTime('end'));
 
         // 【⭐️ 核心新增：為日期與時間輸入框加上手動觸發功能 ⭐️】
-        document.getElementById('modal-date').addEventListener('click', (e) => e.target.showPicker());
-        document.getElementById('modal-time').addEventListener('click', (e) => e.target.showPicker());
+        const tryShowPicker = (e) => {
+            const el = e.target;
+            if (el && typeof el.showPicker === 'function') el.showPicker();
+        };
+        document.getElementById('modal-date').addEventListener('click', tryShowPicker);
+        document.getElementById('modal-time').addEventListener('click', tryShowPicker);
 
         // 【v175.0 核心改造】將 API 請求移至此處，並統一附上使用者資訊
         // 【您的要求】為「顯示所有歷史員工」核取方塊綁定事件
@@ -283,8 +326,8 @@
             const activeGroup = document.createElement('optgroup');
             activeGroup.label = '在職員工';
             activeEmployees.forEach(emp => {
-                activeGroup.innerHTML += `<option value="${emp.userId}">${emp.userName}</option>`;
-                modalSelect.innerHTML += `<option value="${emp.userId}">${emp.userName}</option>`;
+                activeGroup.innerHTML += `<option value="${escapeAttr(emp.userId)}">${escapeHtml(emp.userName)}</option>`;
+                modalSelect.innerHTML += `<option value="${escapeAttr(emp.userId)}">${escapeHtml(emp.userName)}</option>`;
                 employeeShiftData[emp.userId] = { shiftStart: emp.shiftStart, shiftEnd: emp.shiftEnd };
             });
             mainSelect.appendChild(activeGroup);
@@ -293,7 +336,7 @@
                 const resignedGroup = document.createElement('optgroup');
                 resignedGroup.label = '離職員工';
                 resignedEmployees.forEach(emp => {
-                    resignedGroup.innerHTML += `<option value="${emp.userId}" class="text-gray-400">${emp.userName} (已離職)</option>`;
+                    resignedGroup.innerHTML += `<option value="${escapeAttr(emp.userId)}" class="text-gray-400">${escapeHtml(emp.userName)} (已離職)</option>`;
                     employeeShiftData[emp.userId] = { shiftStart: emp.shiftStart, shiftEnd: emp.shiftEnd };
                 });
                 mainSelect.appendChild(resignedGroup);
@@ -331,6 +374,10 @@
             eventType: document.getElementById('modal-event-type').value,
         };
 
+        if (!payload.userId) {
+            alert('請選擇員工。');
+            return;
+        }
         if(!payload.date || !payload.time) {
             alert('請填寫完整的日期與時間。');
             return;
@@ -342,6 +389,9 @@
         // 【⭐️ 核心修正 2/3：改用 loadJsonp 並指向正確的 API 路由 ⭐️】
         fetchApi(payload)
             .then(response => {
+                if (response && response.success === false) {
+                    throw new Error(response.message || '補打卡失敗');
+                }
                 showGlobalNotification(response.message || '補打卡成功！', 10000, 'success');
                 document.getElementById('checkin-modal').classList.remove('is-open');
                 optimisticUpdate(payload); // 執行樂觀更新，取代重新整理
@@ -367,8 +417,9 @@
         if (!tableBody) return; // 如果表格不存在，則不執行任何操作
 
         const { userId, date, time, eventType } = checkinData;
-        const employeeSelect = document.getElementById('employee-select');
-        const userName = employeeSelect.options[employeeSelect.selectedIndex].text;
+        const modalSelect = document.getElementById('modal-employee-select');
+        const opt = modalSelect?.options[modalSelect.selectedIndex];
+        const userName = (opt && opt.value === userId ? opt.text : '') || userId;
 
         // 建立新的一列 (tr)
         const newRow = document.createElement('tr');
@@ -381,32 +432,41 @@
         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
         const dateClass = isWeekend ? 'text-red-600 font-bold' : '';
 
-        // 組合 HTML
+        // 組合 HTML（動態文字跳脫，避免 XSS）
+        const safeName = escapeHtml(userName);
+        const safeDateCell = escapeHtml(`${date} (${weekdays[dayOfWeek]})`);
+        const inStr = escapeHtml(eventType === '上班' ? time : '---');
+        const outStr = escapeHtml(eventType === '下班' ? time : '---');
         newRow.innerHTML = `
-            <td class="px-6 py-4 whitespace-nowrap font-medium">${userName}</td>
-            <td class="px-6 py-4 whitespace-nowrap ${dateClass}">${date} (${weekdays[dayOfWeek]})</td>
-            <td class="px-6 py-4 whitespace-nowrap text-center">${eventType === '上班' ? time : '---'}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-center">${eventType === '下班' ? time : '---'}</td>
+            <td class="px-6 py-4 whitespace-nowrap font-medium">${safeName}</td>
+            <td class="px-6 py-4 whitespace-nowrap ${dateClass}">${safeDateCell}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-center">${inStr}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-center">${outStr}</td>
             <td class="px-6 py-4 whitespace-nowrap">手動補登</td>
             <td class="px-6 py-4 whitespace-nowrap text-center">0</td>
             <td class="px-6 py-4 whitespace-nowrap text-center">0</td>
             <td class="px-6 py-4 whitespace-nowrap">手動補登</td>
         `;
 
-        // 尋找插入點：找到所有列，然後根據日期排序找到合適的位置
+        // 與 renderReportTable 一致：依「同一員工」分組，日期由早到晚
         const allRows = Array.from(tableBody.querySelectorAll('tr'));
+        const sameUserRows = allRows.filter((r) => r.cells[0] && r.cells[0].textContent.trim() === String(userName).trim());
+        if (sameUserRows.length === 0) {
+            tableBody.appendChild(newRow);
+            return;
+        }
         let inserted = false;
-        for (let i = 0; i < allRows.length; i++) {
-            const rowDate = allRows[i].cells[1].textContent.split(' ')[0];
-            if (date > rowDate) {
-                tableBody.insertBefore(newRow, allRows[i]);
+        for (const row of sameUserRows) {
+            const rowDate = row.cells[1].textContent.split(' ')[0];
+            if (date < rowDate) {
+                tableBody.insertBefore(newRow, row);
                 inserted = true;
                 break;
             }
         }
-        // 如果新日期比所有現有日期都早，或表格為空，則加到最後
         if (!inserted) {
-            tableBody.appendChild(newRow);
+            const lastSame = sameUserRows[sameUserRows.length - 1];
+            lastSame.after(newRow);
         }
     }
 
@@ -449,8 +509,10 @@
                 spinner.style.display = 'none';
                 renderSummary(data.summary);
                 renderReportTable(filteredRecords, new Set(data.holidays || [])); // 使用過濾後的資料進行渲染
-                if (typeof google !== 'undefined' && userId && filteredRecords[userId] && filteredRecords[userId].mapPoints.length > 0) {
-                    initMap(data.records[userId].mapPoints).catch(console.error);
+                const mapRec = filteredRecords[userId];
+                const mapPts = mapRec?.mapPoints;
+                if (typeof google !== 'undefined' && userId && Array.isArray(mapPts) && mapPts.length > 0) {
+                    initMap(mapPts).catch(console.error);
                 }
                 // 【您的要求】查詢成功且有資料時，顯示匯出按鈕
                 if (Object.keys(filteredRecords).length > 0) {
@@ -460,7 +522,8 @@
             .catch(error => {
                 spinner.style.display = 'none';
                 console.error("查詢報表資料失敗:", error);
-                document.getElementById('report-table-container').innerHTML = `<p class="text-center text-red-500">查詢資料失敗：${error.message}</p>`;
+                document.getElementById('report-table-container').innerHTML =
+                    `<p class="text-center text-red-500">查詢資料失敗：${escapeHtml(error.message)}</p>`;
             });
     }
 
@@ -479,7 +542,7 @@
         // 取得所有日期並排序，確保匯出順序正確
         const allDates = new Set();
         Object.values(currentReportData).forEach(userData => {
-            Object.keys(userData.dailyData).forEach(date => allDates.add(date));
+            Object.keys(userData.dailyData || {}).forEach(date => allDates.add(date));
         });
         const sortedDates = Array.from(allDates).sort();
 
@@ -488,7 +551,7 @@
             const userData = currentReportData[userId];
             // 遍歷每一天
             for (const dateStr of sortedDates) {
-                const day = userData.dailyData[dateStr];
+                const day = (userData.dailyData || {})[dateStr];
                 if (!day) continue; // 如果該員工當天沒資料，則跳過
 
                 const dateObj = new Date(dateStr);
@@ -496,8 +559,10 @@
                 const dayOfWeek = weekdays[dateObj.getDay()];
 
                 // 處理地點，將多行地點合併為一行
-                const checkInPoint = userData.mapPoints.find(p => p.eventType === '上班' && p.time.includes(dateStr.replace(/-/g, '/')) && p.time.endsWith(day.checkIn));
-                const checkOutPoint = userData.mapPoints.find(p => p.eventType === '下班' && p.time.includes(dateStr.replace(/-/g, '/')) && p.time.endsWith(day.checkOut));
+                const pts = Array.isArray(userData.mapPoints) ? userData.mapPoints : [];
+                const dateSlash = dateStr.replace(/-/g, '/');
+                const checkInPoint = pts.find(p => p.eventType === '上班' && p.time && p.time.includes(dateSlash) && day.checkIn && p.time.endsWith(day.checkIn));
+                const checkOutPoint = pts.find(p => p.eventType === '下班' && p.time && p.time.includes(dateSlash) && day.checkOut && p.time.endsWith(day.checkOut));
                 let locationInfo = [];
                 if (checkInPoint) locationInfo.push(`上班: ${checkInPoint.address || '無'}`);
                 if (checkOutPoint) locationInfo.push(`下班: ${checkOutPoint.address || '無'}`);
@@ -505,15 +570,15 @@
                 const locationStr = locationInfo.join('; ').replace(/,/g, '，');
 
                 const row = [
-                    userData.userName,
-                    dateStr,
-                    dayOfWeek,
-                    day.checkIn || '',
-                    day.checkOut || '',
-                    `"${day.status.replace(/"/g, '""')}"`, // 處理狀態中可能包含的引號
+                    csvEscapeField(userData.userName),
+                    csvEscapeField(dateStr),
+                    csvEscapeField(dayOfWeek),
+                    csvEscapeField(day.checkIn || ''),
+                    csvEscapeField(day.checkOut || ''),
+                    csvEscapeField(day.status || ''),
                     day.late || 0,
                     day.early || 0,
-                    `"${locationStr}"` // 將地點資訊包在引號中
+                    csvEscapeField(locationStr)
                 ].join(',');
                 csvContent += row + "\n";
             }
@@ -531,15 +596,17 @@
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     }
 
     function renderSummary(summary) {
         document.getElementById('summary-section').style.display = 'grid';
-        document.getElementById('total-workdays').textContent = summary.totalWorkDays || 0;
-        document.getElementById('total-attended').textContent = summary.totalAttendedDays || 0;
-        document.getElementById('total-late').textContent = summary.totalLateMinutes || 0;
-        document.getElementById('total-early').textContent = summary.totalEarlyMinutes || 0;
-        document.getElementById('total-absent').textContent = summary.totalAbsentDays || 0;
+        const s = summary || {};
+        document.getElementById('total-workdays').textContent = s.totalWorkDays || 0;
+        document.getElementById('total-attended').textContent = s.totalAttendedDays || 0;
+        document.getElementById('total-late').textContent = s.totalLateMinutes || 0;
+        document.getElementById('total-early').textContent = s.totalEarlyMinutes || 0;
+        document.getElementById('total-absent').textContent = s.totalAbsentDays || 0;
     }
     
     function renderReportTable(recordsByUser, holidays) {
@@ -582,8 +649,10 @@
                 const isHoliday = holidays.has(dateStr) || dayOfWeek === 0 || dayOfWeek === 6;
                 const dateClass = isHoliday ? 'text-red-600 font-bold' : '';
 
-                const lateClass = day.late > 0 ? 'text-orange-600 font-bold' : '';
-                const earlyClass = day.early > 0 ? 'text-blue-600 font-bold' : '';
+                const lateVal = day.late ?? 0;
+                const earlyVal = day.early ?? 0;
+                const lateClass = lateVal > 0 ? 'text-orange-600 font-bold' : '';
+                const earlyClass = earlyVal > 0 ? 'text-blue-600 font-bold' : '';
                 // [核心改造] 新增異常狀態的 CSS class，使其顯示為紅色粗體
                 let displayStatus = day.status;
                 let displayCheckOut = day.checkOut || '---';
@@ -606,39 +675,43 @@
                 // 3. 如果狀態為「缺勤」，則套用紅色粗體樣式。
                 // 【v42.0 核心改造】為不同的假別狀態新增對應的 CSS Class
                 let statusClass = '';
-                if (displayStatus === '缺勤' || day.status === '異常') statusClass = 'text-red-600 font-bold';
-                else if (day.status === '僅單次打卡') statusClass = 'text-purple-600 font-bold';
+                const rawStatus = day.status;
+                const dispStr = String(displayStatus ?? '');
+                if (dispStr === '缺勤' || rawStatus === '異常') statusClass = 'text-red-600 font-bold';
+                else if (rawStatus === '僅單次打卡') statusClass = 'text-purple-600 font-bold';
                 // [改善] 改用 .includes() 判斷，讓 "休假;加班[...]" 這類複合狀態也能正確顯示樣式
-                else if (displayStatus.includes('加班')) statusClass = 'text-orange-600 font-bold';
-                else if (displayStatus === '特休') statusClass = 'text-blue-600 font-bold';
-                else if (displayStatus === '病假') statusClass = 'text-yellow-600 font-bold';
-                else if (displayStatus === '事假') statusClass = 'text-gray-500';
-                else if (['補休', '公假', '婚假', '喪假'].includes(displayStatus)) statusClass = 'text-indigo-600 font-bold';
+                else if (dispStr.includes('加班')) statusClass = 'text-orange-600 font-bold';
+                else if (dispStr === '特休') statusClass = 'text-blue-600 font-bold';
+                else if (dispStr === '病假') statusClass = 'text-yellow-600 font-bold';
+                else if (dispStr === '事假') statusClass = 'text-gray-500';
+                else if (['補休', '公假', '婚假', '喪假'].includes(dispStr)) statusClass = 'text-indigo-600 font-bold';
 
                 // 【⭐️ 核心修正：從 mapPoints 中查找對應的打卡地點 ⭐️】
                 let locationHtml = '';
                 // [v2 修正] 將 dateStr 的 '-' 替換為 '/'，以匹配 mapPoints.time 的格式 (e.g., '2025/10/01')
                 const dateStrForSearch = dateStr.replace(/-/g, '/');
+                const pts = Array.isArray(userData.mapPoints) ? userData.mapPoints : [];
 
                 // 尋找上班打卡點
-                const checkInPoint = userData.mapPoints.find(p => p.eventType === '上班' && p.time.startsWith(dateStrForSearch) && p.time.endsWith(day.checkIn));
+                const checkInPoint = pts.find(p => p.eventType === '上班' && p.time && p.time.startsWith(dateStrForSearch) && day.checkIn && p.time.endsWith(day.checkIn));
                 if (checkInPoint && checkInPoint.address) {
-                    locationHtml += `<div class="text-xs">上班: ${checkInPoint.address}</div>`;
+                    locationHtml += `<div class="text-xs">上班: ${escapeHtml(checkInPoint.address)}</div>`;
                 }
                 // 尋找下班打卡點
-                const checkOutPoint = userData.mapPoints.find(p => p.eventType === '下班' && p.time.startsWith(dateStrForSearch) && p.time.endsWith(day.checkOut));
+                const checkOutPoint = pts.find(p => p.eventType === '下班' && p.time && p.time.startsWith(dateStrForSearch) && day.checkOut && p.time.endsWith(day.checkOut));
                 if (checkOutPoint && checkOutPoint.address) {
-                    locationHtml += `<div class="text-xs">下班: ${checkOutPoint.address}</div>`;
+                    locationHtml += `<div class="text-xs">下班: ${escapeHtml(checkOutPoint.address)}</div>`;
                 }
 
+                const dateCellText = `${dateStr} (${weekdays[dayOfWeek]})`;
                 html += `<tr>
-                    <td class="px-6 py-4 whitespace-nowrap font-medium">${userData.userName}</td>
-                    <td class="px-6 py-4 whitespace-nowrap ${dateClass}">${dateStr} (${weekdays[dayOfWeek]})</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-center">${day.checkIn || '---'}</td> <!-- 上班時間維持不變 -->
-                    <td class="px-6 py-4 whitespace-nowrap text-center">${displayCheckOut}</td> <!-- 使用處理過的下班時間 -->
-                    <td class="px-6 py-4 whitespace-nowrap ${statusClass}">${displayStatus}</td> <!-- 使用處理過的狀態 -->
-                    <td class="px-6 py-4 whitespace-nowrap text-center ${lateClass}">${day.late}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-center ${earlyClass}">${day.early}</td>
+                    <td class="px-6 py-4 whitespace-nowrap font-medium">${escapeHtml(userData.userName)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap ${dateClass}">${escapeHtml(dateCellText)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center">${escapeHtml(day.checkIn || '---')}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center">${escapeHtml(displayCheckOut)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap ${statusClass}">${escapeHtml(dispStr)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center ${lateClass}">${escapeHtml(lateVal)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center ${earlyClass}">${escapeHtml(earlyVal)}</td>
                     <td class="px-6 py-4 whitespace-nowrap">${locationHtml || '---'}</td>
                 </tr>`;
             }
@@ -677,7 +750,6 @@
 
         // [優化] 使用新的 API 載入方式，需要非同步引入函式庫
         const { Map } = await google.maps.importLibrary("maps");
-        const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
         const { InfoWindow } = await google.maps.importLibrary("maps");
 
         mapContainer.style.display = 'block';
@@ -689,19 +761,22 @@
         const infoWindow = new InfoWindow();
         points.forEach(point => {
             const position = { lat: point.lat, lng: point.lng };
+            const titleRaw = `${point.eventType ?? ''} - ${point.time ?? ''}`;
+            const titleSafe = titleRaw.replace(/[\r\n<>&]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240);
             const marker = new google.maps.Marker({ 
                 position: position, 
                 map: map,
-                title: `${point.eventType} - ${point.time}`,
+                title: titleSafe,
                 icon: getMarkerIcon(point.eventType, point.status) 
             });
             marker.addListener('click', ({ domEvent, latLng }) => {
-                const statusText = (point.status === '準點') ? '' : `<span class="font-bold" style="color: ${getMarkerIcon(point.eventType, point.status).fillColor};">(${point.status})</span>`;
+                const fill = getMarkerIcon(point.eventType, point.status).fillColor;
+                const statusText = (point.status === '準點') ? '' : `<span class="font-bold" style="color: ${fill};">(${escapeHtml(point.status)})</span>`;
                 const contentString = `
                     <div class="p-1" style="max-width: 250px;">
-                        <div class="font-bold">${point.eventType} ${statusText}</div>
-                        <div class="text-sm text-gray-600">${point.time || '無時間資訊'}</div>
-                        <div class="text-xs text-gray-800 mt-1">${point.address || '無地址資訊'}</div>
+                        <div class="font-bold">${escapeHtml(point.eventType)} ${statusText}</div>
+                        <div class="text-sm text-gray-600">${escapeHtml(point.time || '無時間資訊')}</div>
+                        <div class="text-xs text-gray-800 mt-1">${escapeHtml(point.address || '無地址資訊')}</div>
                     </div>`;
                 infoWindow.setContent(contentString);
                 infoWindow.open(marker.map, marker);

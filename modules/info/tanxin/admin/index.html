@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#2a3c35">
+    <title>添心官網移植｜維運後台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans TC', system-ui, sans-serif; }
+        .kbd { font-family: ui-monospace, monospace; }
+    </style>
+</head>
+<body class="min-h-screen bg-stone-100 text-stone-800">
+    <header class="border-b border-stone-200 bg-[#2a3c35] text-stone-50 shadow">
+        <div class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-6 sm:px-6">
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200/90">Tanxin mirror</p>
+                <h1 class="text-2xl font-bold tracking-tight">添心官網移植｜維運後台</h1>
+                <p class="mt-1 max-w-xl text-sm text-emerald-100/90">本頁不對外公開連結；僅供本機預覽、與官網對照、更新鏡像之用。</p>
+            </div>
+            <a href="../index.html" class="rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/20">← 回到鏡像首頁</a>
+        </div>
+    </header>
+
+    <main class="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+        <section class="mb-10 rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
+            <h2 class="text-lg font-bold text-[#2a3c35]">本機預覽基底網址</h2>
+            <p class="mt-2 text-sm text-stone-600">請先在本機用靜態伺服器掛在 <span class="kbd rounded bg-stone-100 px-2 py-0.5 text-stone-900">modules/info</span>（例如埠號 8088）。若你的埠不同，可自行改下表連結。</p>
+            <div class="mt-4 flex flex-wrap gap-2">
+                <input id="baseUrl" type="text" value="http://127.0.0.1:8088/tanxin" readonly class="min-w-[16rem] flex-1 rounded-lg border border-stone-300 px-3 py-2 text-sm" aria-label="本機基底網址">
+                <button type="button" id="btnCopyBase" class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800">複製基底</button>
+            </div>
+        </section>
+
+        <section class="mb-10 rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
+            <h2 class="text-lg font-bold text-[#2a3c35]">更新鏡像（重新抓官網 HTML）</h2>
+            <p class="mt-2 text-sm text-stone-600">在 CODING 倉庫根目錄執行以下指令（會覆寫各頁 <span class="kbd">index.html</span>）：</p>
+            <pre id="cmdMirror" class="kbd mt-3 overflow-x-auto rounded-lg bg-stone-900 p-4 text-sm text-emerald-100">powershell -NoProfile -ExecutionPolicy Bypass -File modules/info/tanxin/_mirror-pages.ps1</pre>
+            <div class="mt-3 flex flex-wrap gap-2">
+                <button type="button" id="btnCopyCmd" class="rounded-lg bg-stone-800 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-900">複製指令</button>
+                <span id="toast" class="hidden self-center text-sm font-medium text-emerald-700" role="status"></span>
+            </div>
+        </section>
+
+        <section class="mb-10 rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
+            <h2 class="text-lg font-bold text-[#2a3c35]">頁面清單（本機／官網對照）</h2>
+            <p class="mt-2 text-sm text-stone-600">由 <span class="kbd">_wp-pages.json</span> 自動載入；若載入失敗會顯示預設清單。</p>
+            <div class="mt-4 overflow-x-auto">
+                <table class="w-full min-w-[28rem] border-collapse text-left text-sm">
+                    <thead>
+                        <tr class="border-b border-stone-200 text-stone-500">
+                            <th class="py-2 pr-4 font-semibold">頁面</th>
+                            <th class="py-2 pr-4 font-semibold">路徑</th>
+                            <th class="py-2 font-semibold">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pageRows"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="rounded-2xl border border-amber-200 bg-amber-50/80 p-6">
+            <h2 class="text-lg font-bold text-amber-950">素材與資料夾</h2>
+            <ul class="mt-3 list-inside list-disc space-y-1 text-sm text-amber-950/90">
+                <li>官網抓圖與對照：<span class="kbd">modules/info/official-site-assets/tanxin-space/</span></li>
+                <li>WordPress 媒體去重：<span class="kbd">wp-media-dedup/</span>、對照表 <span class="kbd">wp-media-dedup-map.tsv</span></li>
+                <li>鏡像腳本與頁面清單：<span class="kbd">_mirror-pages.ps1</span>、<span class="kbd">_wp-pages.json</span></li>
+            </ul>
+        </section>
+    </main>
+
+    <footer class="border-t border-stone-200 py-8 text-center text-xs text-stone-500">
+        勿從公開首頁連到此後台；上線部署時建議限制目錄或改路徑。
+    </footer>
+
+    <script>
+    (function () {
+        var OFFICIAL = 'https://tanxin.space';
+        var FALLBACK = [
+            { path: '', title: '首頁' },
+            { path: 'about-us', title: '關於添心' },
+            { path: 'blog', title: '設計文章' },
+            { path: 'service', title: '服務流程' },
+            { path: 'free-consultation', title: '聯繫預約' },
+            { path: 'master-of-space-utilization', title: '空間利用大師' },
+            { path: 'faq', title: '常見問題' },
+            { path: 'news', title: '消息' },
+            { path: 'sofa-mattress', title: '沙發床墊' },
+            { path: 'privacy-policy-2', title: '隱私政策' }
+        ];
+
+        function base() {
+            var el = document.getElementById('baseUrl');
+            return (el && el.value) ? el.value.replace(/\/$/, '') : 'http://127.0.0.1:8088/tanxin';
+        }
+
+        function rowHtml(title, pathSeg, localUrl, officialUrl) {
+            var tr = document.createElement('tr');
+            tr.className = 'border-b border-stone-100';
+            var pathCell = pathSeg === '' ? '<span class="text-stone-400">/</span>' : '/' + pathSeg + '/';
+            tr.innerHTML =
+                '<td class="py-3 pr-4 font-medium">' + title + '</td>' +
+                '<td class="py-3 pr-4 text-stone-600">' + pathCell + '</td>' +
+                '<td class="py-3">' +
+                '<a class="mr-3 font-semibold text-emerald-800 underline decoration-emerald-300 hover:text-emerald-950" href="' + localUrl + '" target="_blank" rel="noopener">本機</a>' +
+                '<a class="font-semibold text-stone-600 underline decoration-stone-300 hover:text-stone-900" href="' + officialUrl + '" target="_blank" rel="noopener">官網</a>' +
+                '</td>';
+            return tr;
+        }
+
+        function render(list) {
+            var tbody = document.getElementById('pageRows');
+            tbody.innerHTML = '';
+            list.forEach(function (p) {
+                var pathSeg = p.path || '';
+                var title = p.title || pathSeg || '首頁';
+                var localPath = pathSeg === '' ? base() + '/' : base() + '/' + pathSeg + '/';
+                var officialPath = pathSeg === '' ? OFFICIAL + '/' : OFFICIAL + '/' + pathSeg + '/';
+                tbody.appendChild(rowHtml(title, pathSeg, localPath, officialPath));
+            });
+        }
+
+        function fromWpPages(data) {
+            if (!Array.isArray(data)) return null;
+            return data.map(function (pg) {
+                var u = document.createElement('a');
+                u.href = pg.link;
+                var seg = u.pathname.replace(/^\/+|\/+$/g, '');
+                var title = (pg.title && (pg.title.rendered || pg.title)) || seg;
+                if (typeof title === 'string') {
+                    title = title.replace(/<[^>]+>/g, '').trim();
+                }
+                return { path: seg, title: title || seg };
+            });
+        }
+
+        fetch('../_wp-pages.json', { cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+            .then(function (data) {
+                var mapped = fromWpPages(data);
+                if (mapped && mapped.length) render(mapped);
+                else render(FALLBACK);
+            })
+            .catch(function () { render(FALLBACK); });
+
+        function copyText(text, msg) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function () {
+                    var t = document.getElementById('toast');
+                    if (t) { t.textContent = msg || '已複製'; t.classList.remove('hidden'); setTimeout(function () { t.classList.add('hidden'); }, 2000); }
+                });
+            }
+        }
+
+        document.getElementById('btnCopyBase').addEventListener('click', function () {
+            copyText(base(), '已複製基底網址');
+        });
+        document.getElementById('btnCopyCmd').addEventListener('click', function () {
+            var el = document.getElementById('cmdMirror');
+            copyText(el ? el.textContent : '', '已複製指令');
+        });
+    })();
+    </script>
+</body>
+</html>

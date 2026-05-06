@@ -500,6 +500,23 @@
             box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35);
         }
 
+        .btn-close-project {
+            color: var(--danger);
+            border-color: #fca5a5;
+            background: #fff5f5;
+        }
+        .btn-close-project:hover:not(:disabled) {
+            background: #fee2e2;
+            border-color: #f87171;
+            box-shadow: 0 6px 18px rgba(239, 68, 68, 0.2);
+        }
+        .btn-close-project:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
         .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
         .btn-icon { padding: 8px; aspect-ratio: 1; }
 
@@ -1505,6 +1522,9 @@
                         <button class="btn btn-primary" onclick="syncToFirebase()">
                             <i data-lucide="upload-cloud"></i> 同步雲端
                         </button>
+                        <button id="btn-close-project" class="btn btn-close-project" onclick="closeProject()" disabled title="全部工項 100% 才可結案">
+                            <i data-lucide="lock"></i> 全部 100% 才可結案
+                        </button>
                         <button id="btn-export" class="btn hidden" onclick="exportData()">
                             <i data-lucide="download"></i> 匯出 JSON
                         </button>
@@ -1635,6 +1655,9 @@
     let appData = null;
     let currentUser = { userId: 'unknown', displayName: '訪客' };
     let globalProjects = {};
+    /** 個案 JSON 與「概覽快照」共用：超過天數不再使用快取 */
+    const AUDIT_LOCAL_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+    const AUDIT_LOCAL_CACHE_STALE_HINT_MS = Math.floor(AUDIT_LOCAL_CACHE_MAX_AGE_MS / 2);
     let activeFilter = 'all';
     let searchQuery  = '';
 
@@ -1835,17 +1858,89 @@
     };
 
     /* ============================================================
-       DASHBOARD
+       DASHBOARD（概覽快照：先畫本地、再拉 Firebase）
        ============================================================ */
-    window.refreshDashboard = async () => {
+    const DASHBOARD_SNAPSHOT_KEY = 'audit_dashboard_snapshot';
+    let _dashboardRefreshSeq = 0;
+
+    function loadDashboardSnapshot() {
+        try {
+            const raw = localStorage.getItem(DASHBOARD_SNAPSHOT_KEY);
+            if (!raw) return null;
+            const o = JSON.parse(raw);
+            if (!o || typeof o.globalProjects !== 'object' || !o.globalProjects) return null;
+            const savedAt = typeof o.timestamp === 'number' ? o.timestamp : 0;
+            const age = Date.now() - savedAt;
+            if (age < -120000 || age > AUDIT_LOCAL_CACHE_MAX_AGE_MS) {
+                localStorage.removeItem(DASHBOARD_SNAPSHOT_KEY);
+                return null;
+            }
+            return o;
+        } catch {
+            return null;
+        }
+    }
+
+    function saveDashboardSnapshot(syncTimeDisplay) {
+        try {
+            localStorage.setItem(DASHBOARD_SNAPSHOT_KEY, JSON.stringify({
+                timestamp: Date.now(),
+                syncTimeDisplay: syncTimeDisplay || new Date().toLocaleTimeString(),
+                globalProjects: JSON.parse(JSON.stringify(globalProjects)),
+            }));
+        } catch (e) { console.warn('[Dashboard] 快照寫入失敗', e); }
+    }
+
+    function updateDashboardStatElements() {
+        const ids   = Object.keys(globalProjects);
+        const total = ids.length;
+        const avgPct = total
+            ? Math.round(ids.reduce((s, id) => s + (globalProjects[id].percent || 0), 0) / total)
+            : 0;
+        const pending = ids.filter(id => (globalProjects[id].percent || 0) < 100).length;
+        document.getElementById('stat-total').textContent   = total;
+        document.getElementById('stat-avg-pct').textContent = avgPct + '%';
+        document.getElementById('stat-pending').textContent = pending;
+        return { total, avgPct, pending };
+    }
+
+    function applyDashboardFromSnapshot(o, awaitingCloud) {
         const dbStats = document.getElementById('dashboard-stats');
-        dbStats.innerHTML = `<span class="sync-dot dot-syncing"></span> 同步中...`;
+        try {
+            globalProjects = JSON.parse(JSON.stringify(o.globalProjects));
+        } catch {
+            globalProjects = {};
+        }
+        const { total } = updateDashboardStatElements();
+        renderDashboardList();
+        const stale = (Date.now() - (o.timestamp || 0)) > AUDIT_LOCAL_CACHE_STALE_HINT_MS;
+        const staleTag = stale ? '（較舊）' : '';
+        const pendingSuffix = awaitingCloud ? ' · 雲端更新中…' : '';
+        const t = o.syncTimeDisplay || '—';
+        dbStats.innerHTML = `<span class="sync-dot dot-syncing"></span> 快取${staleTag} · 上次畫面: ${t} · 共 ${total} 個使用中案場${pendingSuffix}`;
+    }
+
+    window.refreshDashboard = async () => {
+        const mySeq = ++_dashboardRefreshSeq;
+        const still = () => mySeq === _dashboardRefreshSeq;
+        const dbStats = document.getElementById('dashboard-stats');
+
+        const cachedDash = loadDashboardSnapshot();
+        if (cachedDash) {
+            applyDashboardFromSnapshot(cachedDash, true);
+        } else {
+            dbStats.innerHTML = `<span class="sync-dot dot-syncing"></span> 同步中...`;
+        }
+
         try {
             const snap     = await db.ref('quotations').once('value');
+            if (!still()) return;
             const projects = snap.val() || {};
             const pIds     = Object.keys(projects);
             const hubMap   = await getHubProjectNameMap();
+            if (!still()) return;
 
+            globalProjects = {};
             for (const id of pIds) {
                 const raw = projects[id];
                 if (!raw) continue;
@@ -1864,26 +1959,27 @@
                     verified:   (data.items || []).filter(it => it && (it.verification?.is_ok || it.is_cancelled)).length,
                     lastUpdate: sum.last_updated || raw.audit_last_updated || '無日期'
                 };
-                renderDashboardList();
             }
 
-            // Update global stats
+            updateDashboardStatElements();
+            renderDashboardList();
+
             const ids   = Object.keys(globalProjects);
             const total = ids.length;
-            const avgPct = total
-                ? Math.round(ids.reduce((s, id) => s + (globalProjects[id].percent || 0), 0) / total)
-                : 0;
-            const pending = ids.filter(id => (globalProjects[id].percent || 0) < 100).length;
-
-            document.getElementById('stat-total').textContent   = total;
-            document.getElementById('stat-avg-pct').textContent = avgPct + '%';
-            document.getElementById('stat-pending').textContent = pending;
-
-            dbStats.innerHTML = `<span class="sync-dot dot-online"></span> 最後同步: ${new Date().toLocaleTimeString()} · 共 ${total} 個使用中案場`;
+            const syncTimeDisplay = new Date().toLocaleTimeString();
+            dbStats.innerHTML = `<span class="sync-dot dot-online"></span> 最後同步: ${syncTimeDisplay} · 共 ${total} 個使用中案場`;
+            saveDashboardSnapshot(syncTimeDisplay);
         } catch (e) {
             console.error('[Dashboard] 同步失敗', e);
-            dbStats.innerHTML = `<span class="sync-dot dot-offline"></span> 同步失敗，請檢查網路`;
-            showToast('Dashboard 同步失敗', 'error');
+            if (!still()) return;
+            if (cachedDash) {
+                applyDashboardFromSnapshot(cachedDash, false);
+                dbStats.innerHTML = `<span class="sync-dot dot-offline"></span> 雲端失敗 · 已顯示本地快取（${cachedDash.syncTimeDisplay || '—'}）`;
+                showToast('概覽：雲端失敗，已顯示上次快取', 'warning');
+            } else {
+                dbStats.innerHTML = `<span class="sync-dot dot-offline"></span> 同步失敗，請檢查網路`;
+                showToast('Dashboard 同步失敗', 'error');
+            }
         }
     };
 
@@ -1916,28 +2012,67 @@
 
     /* ============================================================
        FIREBASE LOAD / SYNC
+       個案：未過期則先樂觀顯示快取，再在背景補 hub 名稱與拉雲端即時資料（MAX_AGE 見上方 STATE）。
        ============================================================ */
-    const AUDIT_LOCAL_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-    function saveToCache() {
+    let _firebaseLoadSeq = 0;
+
+    function saveToCache(extra) {
         if (!appData) return;
         try {
-            localStorage.setItem(`audit_cache_${appData.案號}`, JSON.stringify({ data: appData, timestamp: Date.now() }));
+            let prevCloudAt = null;
+            try {
+                const rawPrev = localStorage.getItem(`audit_cache_${appData.案號}`);
+                if (rawPrev) prevCloudAt = JSON.parse(rawPrev).cloudUpdatedAt ?? null;
+            } catch {}
+            const cloudUpdatedAt = (extra && extra.cloudUpdatedAt != null) ? extra.cloudUpdatedAt : prevCloudAt;
+            localStorage.setItem(`audit_cache_${appData.案號}`, JSON.stringify({
+                data: appData,
+                timestamp: Date.now(),
+                cloudUpdatedAt,
+            }));
         } catch (e) { console.warn('[Cache] 寫入失敗', e); }
     }
 
+    /** @returns {{ data: object, savedAt: number, stale: boolean, cloudUpdatedAt?: string|null }|null} */
     function loadFromCache(projectNo) {
         try {
             const raw = localStorage.getItem(`audit_cache_${projectNo}`);
             if (!raw) return null;
             const obj = JSON.parse(raw);
-            const age = Date.now() - obj.timestamp;
-            return (age >= 0 && age <= AUDIT_LOCAL_CACHE_TTL_MS) ? obj.data : null;
+            if (!obj || !obj.data) return null;
+            const savedAt = typeof obj.timestamp === 'number' ? obj.timestamp : 0;
+            const age = Date.now() - savedAt;
+            if (age < -120000) return null;
+            if (age > AUDIT_LOCAL_CACHE_MAX_AGE_MS) {
+                localStorage.removeItem(`audit_cache_${projectNo}`);
+                return null;
+            }
+            const stale = age > AUDIT_LOCAL_CACHE_STALE_HINT_MS;
+            return {
+                data: obj.data,
+                savedAt,
+                stale,
+                cloudUpdatedAt: obj.cloudUpdatedAt != null ? obj.cloudUpdatedAt : null,
+            };
         } catch { return null; }
+    }
+
+    function setSyncLabelFromCache(cached) {
+        const hSync = document.getElementById('h-sync');
+        if (!hSync || !cached) return;
+        const t = cached.cloudUpdatedAt
+            || cached.data.total_summary?.export_time
+            || cached.data.total_summary?.last_updated;
+        const staleTag = cached.stale ? '（較舊）' : '';
+        hSync.innerText = t ? `快取${staleTag} · ${t}` : `快取${staleTag}（待同步）`;
     }
 
     async function loadFromFirebase(projectNo) {
         if (!fbConfig.databaseURL) { showToast('未設定 Database URL，無法連線雲端。', 'warning'); return; }
+
+        const mySeq = ++_firebaseLoadSeq;
+        const stillThisLoad = () => mySeq === _firebaseLoadSeq;
 
         showToast(`載入案號 ${projectNo}...`, 'info', 2000);
         const cached = loadFromCache(projectNo);
@@ -1945,27 +2080,35 @@
 
         if (cached) {
             try {
-                const hubMap = await getHubProjectNameMap();
-                loadData(cached, hubMap);
+                loadData(cached.data, {});
                 showedCache = true;
-                const hSync = document.getElementById('h-sync');
-                if (hSync) {
-                    const t = cached.total_summary?.export_time || cached.total_summary?.last_updated;
-                    hSync.innerText = t ? `快取 · ${t}` : '快取（待同步）';
-                }
+                setSyncLabelFromCache(cached);
+                getHubProjectNameMap().then((hubMap) => {
+                    if (!stillThisLoad() || !appData || String(appData.案號 || '').trim() !== String(projectNo).trim()) return;
+                    try { loadData(appData, hubMap); } catch (e) { console.warn('[Cache] hub 名稱補齊失敗', e); }
+                }).catch((e) => console.warn('[Cache] hub 名稱對照失敗', e));
             } catch (e) { console.warn('[Cache] 套用快取失敗', e); }
         }
 
         try {
             if (!firebase.apps.length) { firebase.initializeApp(buildFirebaseInitOptions()); tryAnonymousSignIn(); }
             const snap = await firebase.database().ref(`quotations/${projectNo}`).once('value');
+            if (!stillThisLoad()) return;
             const data = snap.val();
 
             if (data?.context) {
                 const hubMap = await getHubProjectNameMap();
-                loadData(data.context, hubMap);
-                document.getElementById('h-sync').innerText = data.last_updated || '剛剛';
-                saveToCache();
+                if (!stillThisLoad()) return;
+                const contextData = JSON.parse(JSON.stringify(data.context));
+                if (data.is_closed || contextData.is_closed) {
+                    contextData.is_closed = true;
+                    contextData.closed_at = data.closed_at || contextData.closed_at || null;
+                    contextData.closed_by = data.closed_by || contextData.closed_by || null;
+                }
+                loadData(contextData, hubMap);
+                const hSync = document.getElementById('h-sync');
+                if (hSync) hSync.innerText = data.last_updated || '剛剛';
+                saveToCache({ cloudUpdatedAt: data.last_updated || null });
                 showToast('已同步最新資料', 'success');
                 const ctxNo = data.context.案號;
                 if (ctxNo && ctxNo !== 'UNKNOWN_NO') fetchProjectMetadata(ctxNo);
@@ -1973,10 +2116,12 @@
                 showToast(`找不到案號 ${projectNo} 的雲端資料`, 'error');
             } else {
                 console.warn('[Firebase] 無遠端資料，沿用本地快取');
+                if (stillThisLoad()) showToast('雲端尚無此案，已顯示本地快取', 'warning', 3500);
             }
         } catch (err) {
             console.error(err);
             if (!showedCache) showToast('雲端載入失敗: ' + err.message, 'error');
+            else if (stillThisLoad()) showToast('雲端暫時無法更新，已保留本地快取', 'warning', 3500);
         }
     }
 
@@ -2023,11 +2168,16 @@
             await db2.ref(`quotations/${projectNo}`).set({
                 context: JSON.parse(JSON.stringify(appData)),
                 audit_last_updated: nowDisplay,
-                sync_by: currentUser?.displayName || '本地測試員'
+                sync_by: currentUser?.displayName || '本地測試員',
+                is_closed: !!appData.is_closed,
+                closed_at: appData.closed_at || null,
+                closed_by: appData.closed_by || null
             });
             appData.items.forEach(it => { if (it.completion_percent === 100) it.is_ui_done = true; });
             renderList();
             document.getElementById('h-sync').innerText = nowDisplay;
+            refreshCloseProjectButton();
+            saveToCache({ cloudUpdatedAt: nowDisplay });
             showToast('☁️ Firebase 同步成功！', 'success');
             if (fbConfig.gasURL) await syncToConsole();
         } catch (err) {
@@ -2068,7 +2218,75 @@
         if (appData.total_summary) appData.total_summary.overall_completion = overall;
         document.getElementById('h-total').innerText   = total;
         document.getElementById('h-overall').innerText = `${overall}%`;
+        refreshCloseProjectButton();
         saveToCache();
+    }
+
+    function canCloseProject() {
+        if (!appData?.items || !appData.items.length) return false;
+        const allDone = appData.items.every(it => Number(it?.completion_percent || 0) === 100);
+        return allDone && !appData.is_closed;
+    }
+
+    function refreshCloseProjectButton() {
+        const btn = document.getElementById('btn-close-project');
+        if (!btn) return;
+        if (!appData) {
+            btn.disabled = true;
+            btn.innerHTML = `<i data-lucide="lock"></i> 全部 100% 才可結案`;
+            btn.title = '尚未載入案場';
+            lucide.createIcons();
+            return;
+        }
+        if (appData.is_closed) {
+            btn.disabled = true;
+            btn.innerHTML = `<i data-lucide="check-check"></i> 已結案`;
+            btn.title = '此案已結案';
+            lucide.createIcons();
+            return;
+        }
+        const enabled = canCloseProject();
+        btn.disabled = !enabled;
+        btn.innerHTML = enabled
+            ? `<i data-lucide="folder-check"></i> 結案`
+            : `<i data-lucide="lock"></i> 全部 100% 才可結案`;
+        btn.title = enabled ? '將此案標示為已結案' : '全部工項需達 100%';
+        lucide.createIcons();
+    }
+
+    async function closeProject() {
+        if (!appData) return;
+        refreshOverall();
+        if (appData.is_closed) {
+            showToast('此案已結案', 'info');
+            return;
+        }
+        if (!canCloseProject()) {
+            showToast('尚未全部 100%，無法結案', 'warning');
+            return;
+        }
+        const no = appData.案號 || 'UNKNOWN';
+        if (!confirm(`確定要將案號 #${no} 標示為已結案嗎？`)) return;
+
+        const btn = document.getElementById('btn-close-project');
+        if (btn) btn.disabled = true;
+
+        try {
+            const nowDisplay = new Date().toLocaleString();
+            appData.is_closed = true;
+            appData.closed_at = nowDisplay;
+            appData.closed_by = currentUser?.displayName || '本地測試員';
+            await syncToFirebase();
+            refreshCloseProjectButton();
+            await refreshDashboard();
+            showToast('已結案，概覽將不再顯示此案', 'success');
+        } catch (err) {
+            appData.is_closed = false;
+            delete appData.closed_at;
+            delete appData.closed_by;
+            refreshCloseProjectButton();
+            showToast('結案失敗: ' + (err?.message || '未知錯誤'), 'error');
+        }
     }
 
     /* [v2.1] 按鈕可見性（依權限） */
@@ -2144,6 +2362,7 @@
             // [v2.1] 總報價：僅權限 4+ 可見
             refreshPriceDisplay();
             refreshPermissionBanner();
+            refreshCloseProjectButton();
 
             renderList();
         } catch (err) {
