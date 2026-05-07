@@ -1,4 +1,4 @@
-const { ref, computed, watch } = Vue;
+const { ref, computed } = Vue;
 
 export default {
     name: 'Dashboard',
@@ -89,37 +89,59 @@ export default {
         });
 
         // ======================================================================
-        // [新增] 今日出勤 — 日期與資料推導
+        // 人員出席 — 今天／明天與資料推導（假勤僅顯示假別＋時段，不顯示事由）
         // ======================================================================
         const pad2 = (n) => String(n).padStart(2, '0');
+        const formatDateStr = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+        const formatDayLabel = (d) => {
+            const wd = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'][d.getDay()];
+            return `${d.getMonth() + 1}/${d.getDate()}（${wd}）`;
+        };
         const today = new Date();
-        const todayStr = `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`;
-        const weekdayLabel = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'][today.getDay()];
-        const todayLabel = `${today.getMonth() + 1}/${today.getDate()}（${weekdayLabel}）`;
+        const todayStr = formatDateStr(today);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStr = formatDateStr(tomorrow);
 
-        // 從 schedule[uid] 中找出屬於今日的 entries，並回傳 [{raw, label, timeRange}]
+        /** 與線上假勤申請一致（長詞先比對，避免「休」誤套「休假」） */
+        const KNOWN_LEAVE_TYPES_SORTED = ['婚假', '喪假', '病假', '事假', '特休', '補休', '公假', '休假', '加班', '休'];
+
+        const leaveTypeOnlyFromText = (text) => {
+            const s = String(text || '').trim();
+            if (!s) return '';
+            for (const t of KNOWN_LEAVE_TYPES_SORTED) {
+                if (s === t || s.startsWith(`${t} `) || s.startsWith(`${t}　`)) return t;
+            }
+            const first = s.split(/\s+/)[0];
+            return first || s;
+        };
+
+        // 從 schedule[uid] 中找出指定日期的 entries，並回傳 [{ label, timeRange }]
         // key 格式參考 SPEC/09_SHIFT_SCHEDULE_DATA_SPEC.md：
         //   - "YYYY-MM-DD": "休假"
-        //   - "YYYY-MM-DD:特休": "特休[08:00-12:00]"
-        //   - "YYYY-MM-DD": "加班"
+        //   - "YYYY-MM-DD:特休": "特休[08:00-12:00]" 或含事由 "特休 事由[08:00-12:00]"
         const parseScheduleEntry = (rawValue) => {
-            // rawValue 可能是 "休假" / "加班" / "特休[08:00-12:00]" / "特休"
             if (!rawValue) return { label: '', timeRange: '' };
             const str = String(rawValue).trim();
             const m = str.match(/^(.+?)\[(.+?)\]$/);
-            if (m) return { label: m[1].trim(), timeRange: m[2].trim() };
-            return { label: str, timeRange: '' };
+            if (m) {
+                return {
+                    label: leaveTypeOnlyFromText(m[1].trim()),
+                    timeRange: m[2].trim()
+                };
+            }
+            const simple = leaveTypeOnlyFromText(str);
+            return { label: simple, timeRange: '' };
         };
 
-        const getTodayEntriesForUser = (uid) => {
+        const getEntriesForUserOnDate = (uid, dateStr) => {
             const sch = props.monthSchedule?.schedule?.[uid];
             if (!sch) return [];
             const entries = [];
             Object.keys(sch).forEach(k => {
                 if (k === '_userName') return;
-                // k 可能為 "2026-04-24" 或 "2026-04-24:特休"
                 const [datePart] = k.split(':');
-                if (datePart === todayStr) {
+                if (datePart === dateStr) {
                     entries.push(parseScheduleEntry(sch[k]));
                 }
             });
@@ -145,13 +167,14 @@ export default {
                 return { kind: 'off', label: '休假', colorClass: 'bg-red-100 text-red-700 border-red-200' };
             }
             if (otEntry) {
-                return { kind: 'overtime', label: '加班', colorClass: 'bg-blue-100 text-blue-800 border-blue-200' };
+                const otText = otEntry.timeRange ? `加班 ${otEntry.timeRange}` : '加班';
+                return { kind: 'overtime', label: otText, colorClass: 'bg-blue-100 text-blue-800 border-blue-200' };
             }
             return { kind: 'work', label: '上班', colorClass: 'bg-green-100 text-green-800 border-green-200' };
         };
 
-        // 判斷待審核假勤是否影響今日（跨日假單：startTime ≤ 今日 ≤ endTime）
-        const isPendingRequestForToday = (req) => {
+        // 待審核假勤是否涵蓋指定日（跨日假單：startTime ≤ dateStr ≤ endTime）
+        const isPendingRequestForDate = (req, dateStr) => {
             if (!req) return false;
             const toDateOnly = (iso) => {
                 if (!iso) return null;
@@ -162,20 +185,23 @@ export default {
             const s = toDateOnly(req.startTime);
             const e = toDateOnly(req.endTime);
             if (!s && !e) return false;
-            const sOk = !s || s <= todayStr;
-            const eOk = !e || e >= todayStr;
+            const sOk = !s || s <= dateStr;
+            const eOk = !e || e >= dateStr;
             return sOk && eOk;
         };
 
-        // 建立「姓名 → 是否有今日待審核申請」的索引
-        const pendingByUserName = computed(() => {
-            const map = {};
-            (props.pendingRequestsRaw || []).forEach(req => {
-                if (isPendingRequestForToday(req) && req.userName) {
-                    map[req.userName] = req.recordType || '待審核';
-                }
+        const pendingMapsByDate = computed(() => {
+            const maps = {};
+            [todayStr, tomorrowStr].forEach(ds => {
+                const map = {};
+                (props.pendingRequestsRaw || []).forEach(req => {
+                    if (isPendingRequestForDate(req, ds) && req.userName) {
+                        map[req.userName] = req.recordType || '待審核';
+                    }
+                });
+                maps[ds] = map;
             });
-            return map;
+            return maps;
         });
 
         // 判斷是否為「真員工」且屬於排班對象：permission 2~4
@@ -186,23 +212,21 @@ export default {
             return p >= 2 && p <= 4;
         };
 
-        // 排班制員工列表（依組別分組）
-        const scheduledByGroup = computed(() => {
+        const buildScheduledByGroupForDate = (dateStr, pendingMap) => {
             const list = (props.allEmployees || []).filter(e => e.shiftType === '排班制' && isSchedulableEmployee(e));
             const groups = {};
             list.forEach(emp => {
                 const g = emp.group || '未分類';
                 if (!groups[g]) groups[g] = [];
-                const entries = getTodayEntriesForUser(emp.userId);
+                const entries = getEntriesForUserOnDate(emp.userId, dateStr);
                 const status = deriveStatus(entries);
                 groups[g].push({
                     userId: emp.userId,
                     userName: emp.userName,
                     status,
-                    pendingType: pendingByUserName.value[emp.userName] || ''
+                    pendingType: pendingMap[emp.userName] || ''
                 });
             });
-            // 組內排序：異常（非上班）優先，姓名次之
             const orderKind = { leave: 0, off: 1, overtime: 2, work: 3 };
             Object.keys(groups).forEach(g => {
                 groups[g].sort((a, b) => {
@@ -212,32 +236,28 @@ export default {
                     return String(a.userName).localeCompare(String(b.userName), 'zh-Hant');
                 });
             });
-            // 依組別名排序輸出
             return Object.keys(groups).sort().map(g => ({ group: g, members: groups[g] }));
-        });
+        };
 
-        // 標準制「今日異動」：只列出今日 entries 中含「請假類」或「加班」的人
-        // （純「休假」且落在 holidays 內視為例行休，不列出）
-        const standardAnomalies = computed(() => {
+        const buildStandardAnomaliesForDate = (dateStr, pendingMap) => {
             const list = (props.allEmployees || []).filter(e => e.shiftType === '標準制' && isSchedulableEmployee(e));
             const holidays = new Set(props.monthSchedule?.holidays || []);
             const rows = [];
             list.forEach(emp => {
-                const entries = getTodayEntriesForUser(emp.userId);
-                if (entries.length === 0) return; // 無紀錄 → 常態在班，不列
+                const entries = getEntriesForUserOnDate(emp.userId, dateStr);
+                if (entries.length === 0) return;
                 entries.forEach(en => {
                     const label = en.label;
                     if (!label) return;
                     if (label === '休假' || label === '休') {
-                        // 落在例行休（週日或國定）則忽略；否則視為額外休（補休等）
-                        if (holidays.has(todayStr)) return;
+                        if (holidays.has(dateStr)) return;
                         rows.push({
                             userName: emp.userName,
                             group: emp.group || '未分類',
                             label: '休假',
                             timeRange: '',
                             colorClass: 'bg-red-100 text-red-700 border-red-200',
-                            pendingType: pendingByUserName.value[emp.userName] || ''
+                            pendingType: pendingMap[emp.userName] || ''
                         });
                     } else if (label === '加班') {
                         rows.push({
@@ -246,7 +266,7 @@ export default {
                             label: '加班',
                             timeRange: en.timeRange || '',
                             colorClass: 'bg-blue-100 text-blue-800 border-blue-200',
-                            pendingType: pendingByUserName.value[emp.userName] || ''
+                            pendingType: pendingMap[emp.userName] || ''
                         });
                     } else {
                         rows.push({
@@ -255,18 +275,32 @@ export default {
                             label,
                             timeRange: en.timeRange || '',
                             colorClass: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-                            pendingType: pendingByUserName.value[emp.userName] || ''
+                            pendingType: pendingMap[emp.userName] || ''
                         });
                     }
                 });
             });
-            // 依組別、姓名排序
             rows.sort((a, b) => {
-                const g = String(a.group).localeCompare(String(b.group), 'zh-Hant');
-                if (g !== 0) return g;
+                const gcmp = String(a.group).localeCompare(String(b.group), 'zh-Hant');
+                if (gcmp !== 0) return gcmp;
                 return String(a.userName).localeCompare(String(b.userName), 'zh-Hant');
             });
             return rows;
+        };
+
+        const attendanceDays = computed(() => {
+            const maps = pendingMapsByDate.value;
+            return [
+                { key: 'today', title: '今天', dateStr: todayStr, dayLabel: formatDayLabel(today) },
+                { key: 'tomorrow', title: '明天', dateStr: tomorrowStr, dayLabel: formatDayLabel(tomorrow) }
+            ].map(d => {
+                const pmap = maps[d.dateStr] || {};
+                return {
+                    ...d,
+                    scheduledByGroup: buildScheduledByGroupForDate(d.dateStr, pmap),
+                    standardAnomalies: buildStandardAnomaliesForDate(d.dateStr, pmap)
+                };
+            });
         });
 
         // 是否完全沒有可顯示的排班資料（例如載入中或 API 失敗）
@@ -297,10 +331,7 @@ export default {
             toggleNotifications,
             notificationTodoCount,
             hasOverdueNotification,
-            // 今日出勤
-            todayLabel,
-            scheduledByGroup,
-            standardAnomalies,
+            attendanceDays,
             hasAnyScheduleData,
         };
     },
@@ -317,43 +348,43 @@ export default {
                 </form>
             </div>
 
-            <!-- 今日出勤 -->
+            <!-- 人員出席：今天／明天；假勤 chip 僅假別與時段 -->
             <div class="bg-white p-3 sm:p-4 rounded-lg shadow-md border border-gray-200 mb-4">
-                <div class="flex justify-between items-center mb-2">
-                    <h2 class="text-sm font-bold text-gray-700">今日出勤 · {{ todayLabel }}</h2>
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-sm font-bold text-gray-700">人員出席狀況（今天／明天）</h2>
                     <span v-if="!hasAnyScheduleData" class="text-[10px] text-gray-400">載入班表中…</span>
                     <span v-else-if="scheduleLoading" class="text-[10px] text-blue-500 animate-pulse" title="正在取得最新排班">更新中…</span>
                 </div>
 
-                <!-- 排班制：依組別分組 -->
-                <div v-if="scheduledByGroup.length > 0" class="space-y-2">
-                    <div v-for="g in scheduledByGroup" :key="g.group">
-                        <div class="text-[10px] text-gray-500 font-semibold mb-1">{{ g.group }}</div>
-                        <div class="flex flex-wrap gap-1.5">
-                            <span v-for="m in g.members" :key="m.userId"
-                                :class="['inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs', m.status.colorClass]">
-                                <span class="font-medium">{{ m.userName }}</span>
-                                <span class="text-[10px] opacity-80">{{ m.status.label }}</span>
-                                <span v-if="m.pendingType" class="text-[9px] bg-white/70 text-yellow-700 border border-yellow-300 rounded px-1" title="此人今日有待審核申請">待審</span>
-                            </span>
+                <div v-for="day in attendanceDays" :key="day.key" class="mb-4 last:mb-0 pb-3 last:pb-0 border-b border-gray-100 last:border-0">
+                    <div class="text-xs font-bold text-gray-600 mb-2">{{ day.title }} · {{ day.dayLabel }}</div>
+                    <div v-if="day.scheduledByGroup.length > 0" class="space-y-2">
+                        <div v-for="g in day.scheduledByGroup" :key="day.key + '-' + g.group">
+                            <div class="text-[10px] text-gray-500 font-semibold mb-1">{{ g.group }}</div>
+                            <div class="flex flex-wrap gap-1.5">
+                                <span v-for="m in g.members" :key="day.key + '-' + m.userId"
+                                    :class="['inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs', m.status.colorClass]">
+                                    <span class="font-medium">{{ m.userName }}</span>
+                                    <span class="text-[10px] opacity-80">{{ m.status.label }}</span>
+                                    <span v-if="m.pendingType" class="text-[9px] bg-white/70 text-yellow-700 border border-yellow-300 rounded px-1" title="此日有待審核假勤">待審</span>
+                                </span>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div v-else class="text-xs text-gray-500 py-2">目前沒有排班制員工資料。</div>
-
-                <!-- 標準制：只列今日異動（請假/加班等） -->
-                <div v-if="standardAnomalies.length > 0" class="mt-3 pt-2 border-t border-gray-100">
-                    <div class="text-[10px] text-gray-500 font-semibold mb-1">標準制員工今日異動</div>
-                    <ul class="space-y-0.5">
-                        <li v-for="(row, idx) in standardAnomalies" :key="idx" class="flex items-center gap-1.5 text-xs">
-                            <span class="text-gray-700 font-medium">{{ row.userName }}</span>
-                            <span class="text-[10px] text-gray-400">（{{ row.group }}）</span>
-                            <span :class="['inline-flex items-center px-1.5 py-0.5 rounded-full border text-[10px]', row.colorClass]">
-                                {{ row.label }}<template v-if="row.timeRange"> {{ row.timeRange }}</template>
-                            </span>
-                            <span v-if="row.pendingType" class="text-[9px] bg-yellow-50 text-yellow-700 border border-yellow-300 rounded px-1">待審</span>
-                        </li>
-                    </ul>
+                    <div v-else class="text-xs text-gray-500 py-1">目前沒有排班制員工資料。</div>
+                    <div v-if="day.standardAnomalies.length > 0" class="mt-2 pt-2 border-t border-dashed border-gray-100">
+                        <div class="text-[10px] text-gray-500 font-semibold mb-1">標準制員工 · 異動</div>
+                        <ul class="space-y-0.5">
+                            <li v-for="(row, idx) in day.standardAnomalies" :key="day.key + '-std-' + idx" class="flex items-center gap-1.5 text-xs flex-wrap">
+                                <span class="text-gray-700 font-medium">{{ row.userName }}</span>
+                                <span class="text-[10px] text-gray-400">（{{ row.group }}）</span>
+                                <span :class="['inline-flex items-center px-1.5 py-0.5 rounded-full border text-[10px]', row.colorClass]">
+                                    {{ row.label }}<template v-if="row.timeRange"> {{ row.timeRange }}</template>
+                                </span>
+                                <span v-if="row.pendingType" class="text-[9px] bg-yellow-50 text-yellow-700 border border-yellow-300 rounded px-1">待審</span>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </div>
 

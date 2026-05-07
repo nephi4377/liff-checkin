@@ -1,4 +1,4 @@
-import Dashboard from './Dashboard.js?v=26.05.04.4';
+import Dashboard from './Dashboard.js?v=26.05.07.1';
 import ProjectBoard from './ProjectBoard.js';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
@@ -182,22 +182,69 @@ const App = {
             return response.json();
         };
 
-        // 抓當月排班資料（供「今日出勤」卡片使用；失敗不阻擋主流程）
+        /** 合併兩次 get_latest_schedule 回傳（供主控台「今天／明天」橫跨兩個曆月時） */
+        const mergeSchedulePayloads = (a, b) => {
+            const holidays = [...new Set([...(a.holidays || []), ...(b.holidays || [])])];
+            const schedule = { ...(a.schedule || {}) };
+            const bSch = b.schedule || {};
+            for (const uid of Object.keys(bSch)) {
+                if (!schedule[uid]) {
+                    schedule[uid] = { ...bSch[uid] };
+                } else {
+                    schedule[uid] = { ...schedule[uid], ...bSch[uid] };
+                }
+            }
+            return { schedule, holidays };
+        };
+
+        // 抓當月排班資料（供主控台人員出席使用）；若「明天」在下一個月，多抓一次並合併。
         const fetchLatestScheduleForThisMonth = async () => {
             if (!userProfile.value) return { success: false };
             const now = new Date();
-            const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
-            url.searchParams.append('page', 'attendance_api');
-            url.searchParams.append('action', 'get_latest_schedule');
-            url.searchParams.append('year', String(now.getFullYear()));
-            url.searchParams.append('month', String(now.getMonth() + 1));
-            url.searchParams.append('userId', userProfile.value.userId);
-            url.searchParams.append('userName', userProfile.value.displayName);
-            try {
+            const y = now.getFullYear();
+            const m = now.getMonth() + 1;
+            const tomorrow = new Date(now);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const ty = tomorrow.getFullYear();
+            const tm = tomorrow.getMonth() + 1;
+
+            const fetchOne = async (year, month) => {
+                const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
+                url.searchParams.append('page', 'attendance_api');
+                url.searchParams.append('action', 'get_latest_schedule');
+                url.searchParams.append('year', String(year));
+                url.searchParams.append('month', String(month));
+                url.searchParams.append('userId', userProfile.value.userId);
+                url.searchParams.append('userName', userProfile.value.displayName);
                 const response = await fetch(url);
-                return await response.json();
+                return response.json();
+            };
+
+            try {
+                const first = await fetchOne(y, m);
+                if (!first || !first.schedule) {
+                    return first || { success: false };
+                }
+                let merged = {
+                    success: first.success,
+                    schedule: first.schedule || {},
+                    holidays: first.holidays || []
+                };
+                if (ty !== y || tm !== m) {
+                    const second = await fetchOne(ty, tm);
+                    if (second && second.schedule) {
+                        merged = {
+                            success: merged.success && second.success !== false,
+                            ...mergeSchedulePayloads(
+                                { schedule: merged.schedule, holidays: merged.holidays },
+                                { schedule: second.schedule, holidays: second.holidays || [] }
+                            )
+                        };
+                    }
+                }
+                return merged;
             } catch (e) {
-                console.warn('[Hub] 取得本月班表失敗（今日出勤將退回基本顯示）:', e);
+                console.warn('[Hub] 取得班表失敗（出席區塊將退回基本顯示）:', e);
                 return { success: false };
             }
         };
