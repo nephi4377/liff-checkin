@@ -106,8 +106,19 @@ export default {
         /** 與線上假勤申請一致（長詞先比對，避免「休」誤套「休假」） */
         const KNOWN_LEAVE_TYPES_SORTED = ['婚假', '喪假', '病假', '事假', '特休', '補休', '公假', '休假', '加班', '休'];
 
+        /** 去掉括號內附註（事由），含半形 () 與全形 （） */
+        const stripParentheticalReason = (text) => {
+            let out = String(text || '').trim();
+            let prev;
+            do {
+                prev = out;
+                out = out.replace(/\([^)]*\)/g, '').replace(/（[^）]*）/g, '').trim();
+            } while (out !== prev);
+            return out;
+        };
+
         const leaveTypeOnlyFromText = (text) => {
-            const s = String(text || '').trim();
+            const s = stripParentheticalReason(text);
             if (!s) return '';
             for (const t of KNOWN_LEAVE_TYPES_SORTED) {
                 if (s === t || s.startsWith(`${t} `) || s.startsWith(`${t}　`)) return t;
