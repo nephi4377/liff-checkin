@@ -89,6 +89,30 @@ function updateAuditorIframeSrc(projectId) {
   iframe.src = next;
 }
 
+/**
+ * 統一正規化專案總覽欄位，避免不同來源欄位名造成 UI 偶發顯示「未知/未提供」。
+ * @param {object} overview
+ * @returns {object}
+ */
+function normalizeOverview(overview) {
+  if (!overview || typeof overview !== 'object') return {};
+
+  const normalized = { ...overview };
+  const addressCandidates = [
+    normalized['案場地址'],
+    normalized.address,
+    normalized['地址'],
+    normalized.siteAddress
+  ];
+  const finalAddress = addressCandidates.find(value => String(value || '').trim());
+
+  if (finalAddress) {
+    normalized['案場地址'] = String(finalAddress).trim();
+  }
+
+  return normalized;
+}
+
 function handleDataResponse(data) {
   const logsContainer = document.getElementById('logs-container');
   // [核心修正] 在重新渲染前，先移除所有樂觀更新的臨時卡片，避免重複顯示。
@@ -150,9 +174,7 @@ function handleDataResponse(data) {
 
   // [v301.0 核心修正] 將 overview 的預處理邏輯移至此處，確保在存入 state 前完成。
   // 這樣可以從根本上解決因 data.overview 為 null 或 undefined，導致預處理失效的問題。
-  if (data.overview && data.overview.address && !data.overview['案場地址']) {
-    data.overview['案場地址'] = data.overview.address;
-  }
+  data.overview = normalizeOverview(data.overview);
 
   // [v303.0 核心修正] 調整資料處理順序，確保 overview 和 schedule 的 dataReady 旗標能被一同觸發。
   // 舊的寫法將 overview 的處理放在函式末尾，可能導致依賴 'projectOverview' 的元件無法即時渲染。
@@ -271,6 +293,16 @@ ${notes || '無'}`;
             showGlobalNotification('專案已成功標示為「已結案」。', 5000, 'success');
             closeBtn.disabled = true; // 禁用按鈕，避免重複點擊
             closeBtn.textContent = '專案已結案';
+            try {
+              const iframe = document.getElementById('auditor-iframe');
+              if (iframe && iframe.contentWindow) {
+                iframe.contentWindow.postMessage({
+                  type: 'TANXIN_APPLY_PROJECT_CLOSURE',
+                  projectNo: state.projectId,
+                  closedBy: state.currentUserName || '主控台'
+                }, '*');
+              }
+            } catch (_) { /* 內嵌驗收表未載入時略過 */ }
           } else {
             showGlobalNotification(`結案失敗: ${result.message || '未知錯誤'}`, 5000, 'error');
           }
@@ -445,7 +477,7 @@ async function refreshProjectData(showNotification = false) {
     const freshData = result.data;
 
     // 更新 state
-    state.overview = freshData.overview || {};
+    state.overview = normalizeOverview(freshData.overview);
     state.currentScheduleData = freshData.schedule || [];
     state.currentLogsData = freshData.dailyLogs || [];
     state.communicationHistory = freshData.communicationHistory || {};

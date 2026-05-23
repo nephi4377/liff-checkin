@@ -1,6 +1,12 @@
-# Skill: Cloud Agent Runbook
-> 本技能模組為 Cloud Agent 提供「如何在此程式庫跑起來、測試」的最短路徑指南。
-> **適用情境**：接到任何需要執行程式碼、驗證功能、或修改並測試的任務時，**先讀本文件**。
+---
+name: cloud-agent-runbook
+description: >-
+  在 CODING 倉庫執行、測試、啟動靜態站、跑 Vitest/Playwright 時優先讀。含環境、網域、功能旗標與常見問題。
+---
+
+# Cloud Agent Runbook
+
+> **適用情境**：需要在本倉庫跑程式、驗證功能、或修改後測試時，**先讀本文件**。
 
 ---
 

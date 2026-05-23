@@ -136,7 +136,8 @@
   var DEFAULTS = {
     adminPin: '0426',
     schemaVersion: SCHEMA_V,
-    priceSheetGvizId: '',
+    /* 與 v1 相同之「添心設計標準計價表」；管理頁可改 */
+    priceSheetGvizId: '1-9Ztmawv5tnAsQBmoHXzW_THYLyUOahGFsITvtmHaUk',
     priceSheetGid: '',
     priceSheetAutoOnOpen: true,
     knownPriceTabs: ['木作工程', '油漆工程', '水電工程', '壁紙工程', '保護工程'],

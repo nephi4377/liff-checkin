@@ -1,0 +1,26 @@
+---
+description: 改後端 API、試算表欄位、GAS 行為時 — 後端在 backend 倉庫，欄位以資料字典為準
+globs: shared/js/**,modules/**/js/**,**/config*.js
+alwaysApply: false
+---
+
+# GAS 後端與 SPEC 指引（CODING 前端視角）
+
+## 後端程式在哪？
+
+- **Google 試算表後端（GAS）不在本 CODING 倉庫**，在 **`../backend/`**（`CheckinSystem`、`project-console`、`core_library` 等）。
+- 改 `doGet` / `action` / Sheet 邏輯時：載入 skill **`GAS-Backend-Expert`**，並到 backend 倉庫修改。
+
+## 欄位與 API 契約
+
+- 前後端欄位名以 **`SPEC/PROJECT_DATA_DICTIONARY.md`** 為準，**不要自創對照表**。
+- 模組行為以對應 **SPEC/*.md** 為準（例如施工回報、假勤、主控台）。
+
+## 機密
+
+- **勿**把 GAS 網址、金鑰、LIFF ID 複製進 SPEC 或規則檔；留在各頁 `config` / `__REPORT_V3_CONFIG__` 等既有位置。
+
+## 部署
+
+- CODING 靜態站上線：依 **`CODING-upload-deploy.mdc`** 執行 `upload.bat`。
+- GAS 部署：在 backend 倉庫依該專案慣例（`clasp` 等），**使用者明確說「部署／發布」才做**。

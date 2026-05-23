@@ -110,6 +110,9 @@
     if (!state.settings.knownPriceItems || typeof state.settings.knownPriceItems !== 'object' || Array.isArray(state.settings.knownPriceItems)) {
       state.settings.knownPriceItems = {};
     }
+    if (!String(state.settings.priceSheetGvizId || '').trim() && DEFAULTS.priceSheetGvizId) {
+      state.settings.priceSheetGvizId = DEFAULTS.priceSheetGvizId;
+    }
   }
 
   function saveSettingsLocalOnly() {
@@ -592,6 +595,51 @@
     var band = menuBandOrderKey(def.menuBand);
     return band * 100000 + (def.displayRank != null ? def.displayRank : def.sortKey || 0);
   }
+
+  /** 本機已有主檔時，開頁不強制用雲端覆寫（避免把調好的本機設定蓋掉） */
+  function qrShouldPreferRemoteOnLoad() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return true;
+      var parsed = JSON.parse(raw);
+      return !parsed || !Array.isArray(parsed.itemDefs) || !parsed.itemDefs.length;
+    } catch (e) {
+      return true;
+    }
+  }
+
+  /** 管理頁：試算表 ID → 取工作頁 → 對表 → 儲存（一鍵） */
+  function qrAdminQuickSetup(sheetIdOptional) {
+    if (typeof readAdminForm === 'function') readAdminForm();
+    var id = String(sheetIdOptional || state.settings.priceSheetGvizId || '').trim();
+    if (!id) return Promise.reject(new Error('請先填寫試算表 ID'));
+    state.settings.priceSheetGvizId = id;
+    if (document.getElementById('s_sheetId')) document.getElementById('s_sheetId').value = id;
+    saveSettingsLocalOnly();
+    var btn = document.getElementById('qrQuickSetupBtn');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '處理中…';
+    }
+    return fetchAndCacheSheetTabs(id)
+      .then(function () {
+        return syncPricesFromGviz({ silent: false });
+      })
+      .then(function (n) {
+        if (typeof readAdminForm === 'function') readAdminForm();
+        return saveSettings().then(function () {
+          return n;
+        });
+      })
+      .finally(function () {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = '一鍵完成初次設定';
+        }
+      });
+  }
+
+  window.qrAdminQuickSetup = qrAdminQuickSetup;
 
   function loadSettings() {
     try {

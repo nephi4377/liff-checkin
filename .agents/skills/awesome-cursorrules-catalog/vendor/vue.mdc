@@ -1,0 +1,86 @@
+---
+description: "現代網頁應用的 Vue.js 最佳實務與常見模式"
+globs: **/*.vue, **/*.ts, components/**/*
+alwaysApply: false
+---
+# Vue.js 最佳實務
+
+## 元件結構
+- 優先使用 Composition API，少用 Options API
+- 元件保持小而專注
+- 妥善整合 TypeScript
+- 做好 props 驗證
+- 明確宣告 emit
+- 模板內邏輯盡量精簡
+
+## Composition API
+- 正確使用 ref 與 reactive
+- 正確使用生命週期鉤子
+- 可重用邏輯抽成 composables
+- setup 函式保持乾淨
+- 正確使用 computed
+- 正確使用 watcher
+
+## 狀態管理
+- 狀態管理使用 Pinia
+- store 保持模組化
+- 正確組合 state
+- 正確實作 actions
+- 正確使用 getters
+- 妥善處理非同步狀態
+
+## 效能
+- 適當使用元件懶載入
+- 適當快取
+- 正確使用 computed
+- 避免不必要的 watcher
+- 正確選擇 v-show 與 v-if
+- 正確管理 :key
+
+## 路由
+- 正確使用 Vue Router
+- 實作導航守衛
+- 正確使用 route meta
+- 妥善處理路由參數
+- 路由懶載入
+- 正確的導航方式
+
+## 表單
+- 正確使用 v-model
+- 實作驗證
+- 妥善處理送出
+- 顯示載入狀態
+- 錯誤處理
+- 正確重置表單
+
+## TypeScript 整合
+- 正確定義元件型別
+- 正確定義 prop 型別
+- 正確宣告 emit
+- 善用型別推斷
+- composable 有型別
+- store 有型別
+
+## 測試
+- 撰寫單元測試
+- 撰寫元件測試
+- 正確使用 Vue Test Utils
+- 測試 composables
+- 適當 mock
+- 測試非同步流程
+
+## 通用原則
+- 遵循 Vue 風格指南
+- 命名一致
+- 元件目錄清楚
+- 錯誤處理完善
+- 事件處理正確
+- 複雜邏輯加說明
+
+## 建置與工具
+- 開發使用 Vite
+- 建置設定正確
+- 環境變數使用得當
+- 適當程式碼分割
+- 靜態資源處理正確
+- 適當優化設定

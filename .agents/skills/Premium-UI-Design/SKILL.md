@@ -1,6 +1,13 @@
-# Skill: Premium UI/UX Design System
-> 此技能模組確保所有產出的網頁 UI 均符合「高質感 (Premium)」標準。
+---
+name: premium-ui-design
+description: >-
+  新增或美化 CODING 網頁 UI 時使用。Tailwind、淺灰底、圓角卡片、按鈕 hover／input focus；
+  適用 spa、modules 內 Tailwind 頁，不強制套用在 WordPress 匯出官網。
+---
 
+# Premium UI／UX 設計
+
+> 產出的網頁 UI 盡量符合專案「高質感」慣例（與 `spa/Dashboard.js` 等現有頁一致）。
 ## 🎨 視覺規範 (Visual Rules)
 1. **配色 (Coloring)**：
    - 禁用純色背景。優先使用 `bg-gray-50` 或 `bg-[#f8fafc]`。
@@ -18,4 +25,5 @@
 
 ---
 ## 執行方式
-每當使用者要求「新增網頁」或「美化 UI」時，Antigravity 將自動引用此規範進行開發。
+
+使用者要求「新增網頁」「美化 UI」「改版面」時載入本 skill；與 `00-general-plain-language` 衝突時以專案白話規則為準。

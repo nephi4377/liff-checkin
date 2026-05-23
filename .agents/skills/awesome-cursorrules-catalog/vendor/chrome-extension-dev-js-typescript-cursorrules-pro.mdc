@@ -1,0 +1,89 @@
+---
+description: "Chrome 擴充功能開發（含 JavaScript、TypeScript、Electron 周邊可參考）。"
+globs: **/*
+alwaysApply: false
+---
+你熟悉 Chrome 擴充功能開發，以及 JavaScript、TypeScript、HTML、CSS、Shadcn UI、Radix UI、Tailwind 與 Web API。
+
+# 程式風格與結構
+
+- JavaScript/TypeScript 簡潔、技術準確，範例可執行  
+- 使用現代 JS 功能與最佳實務  
+- 偏好函式式寫法；少用 class  
+- 變數名要表意（如 isExtensionEnabled、hasPermission）  
+- 檔案角色清楚：manifest.json、背景腳本、內容腳本、彈出頁、選項頁  
+
+# 命名慣例
+
+- 檔名：小寫底線（如 content_script.js、background_worker.js）  
+- 函式、變數：camelCase  
+- 類別（若使用）：PascalCase  
+
+# TypeScript
+
+- 鼓勵用 TypeScript 提升型別安全  
+- 用 interface 描述訊息結構與 API 回傳  
+- 善用聯合型別與型別守衛做執行期檢查  
+
+# 擴充功能架構
+
+- 各元件職責分離  
+- 不同部分之間用訊息傳遞溝通  
+- 狀態用 chrome.storage API 管理  
+
+# Manifest 與權限
+
+- 優先使用最新 manifest v3（除非必須 v2）  
+- 權限採最小必要原則  
+- 能選用性權限就選用性權限  
+
+# 安全與隱私
+
+- 在 manifest.json 設定內容安全政策（CSP）  
+- 網路請求使用 HTTPS  
+- 清理、驗證使用者輸入與外部資料  
+- 錯誤處理與記錄要完善  
+
+# UI 與樣式
+
+- 彈出頁、選項頁要響應式  
+- 版面可用 CSS Grid 或 Flexbox  
+- 擴充功能 UI 風格一致  
+
+# 效能
+
+- 背景腳本資源占用盡量小  
+- 能用事件頁就不要常駐背景頁  
+- 非關鍵功能可懶載入  
+- 內容腳本對網頁效能影響要小  
+
+# 瀏覽器 API
+
+- 善用 chrome.* API（如 chrome.tabs、chrome.storage、chrome.runtime）  
+- 所有 API 呼叫都要有錯誤處理  
+- 排程任務優先 chrome.alarms，少用 setInterval  
+
+# 跨瀏覽器
+
+- 能共用 WebExtensions API 就共用  
+- 瀏覽器專屬功能要優雅降級  
+
+# 測試與除錯
+
+- 用 Chrome DevTools 除錯  
+- 核心功能要有單元測試  
+- 開發時用 Chrome 載入未封裝擴充功能測試  
+
+# 依上下文開發
+
+- 建議前要考慮整個專案，不要重複造輪子  
+- 新程式要與既有架構一致  
+- 加功能前先看清現有實作，避免矛盾或重複  
+
+# 程式輸出
+
+- 給程式時盡量給**完整可運作檔案**（含 import 等）  
+- 重要變更加簡短註解  
+- 檔案太大時給最相關的完整區段，並說明在整檔中的位置  
+
+請遵循 Chrome 擴充功能官方文件中的最佳實務、安全指引與 API 用法。

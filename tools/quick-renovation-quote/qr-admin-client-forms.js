@@ -168,8 +168,55 @@
     }).join('');
   }
 
+  /** 客戶頁就緒狀態：給頂部提示條用 */
+  function qrGetClientReadiness() {
+    var s = state.settings || {};
+    var schemes = s.schemeMenus || [];
+    var defs = s.itemDefs || [];
+    var priced = 0;
+    var sheetOk = 0;
+    defs.forEach(function (it) {
+      if (!it) return;
+      if ((it.price || 0) > 0) priced++;
+      var c = it.priceSheetMatchCode;
+      if (c === 'tab_ok' || c === 'legacy_ok') sheetOk++;
+    });
+    var hasSheetId = !!(String(s.priceSheetGvizId || '').trim());
+    var level = 'ok';
+    var msg = '設定就緒，可直接試算。內建單價可報價；若已填試算表 ID，開頁會嘗試同步最新單價。';
+    if (!schemes.length || !defs.length) {
+      level = 'error';
+      msg = '缺少方案或品項資料。請開「調單價／方案設定」→ 系統區按「一鍵完成初次設定」，或還原預設後儲存。';
+    } else if (!hasSheetId) {
+      level = 'warn';
+      msg =
+        '可用內建單價試算。若要跟公司試算表一致，請到管理頁「初次設定」貼上試算表 ID 並一鍵對表。';
+    } else if (sheetOk < Math.min(8, defs.length * 0.3)) {
+      level = 'warn';
+      msg =
+        '試算表 ID 已填，但多數品項尚未對到表（約 ' +
+        sheetOk +
+        '／' +
+        defs.length +
+        ' 筆）。建議到管理頁按「一鍵完成初次設定」或「立即對表」。';
+    }
+    return { level: level, msg: msg, priced: priced, sheetOk: sheetOk, total: defs.length };
+  }
+
+  function qrRenderClientSetupBanner() {
+    var el = document.getElementById('c_setupBanner');
+    if (!el) return;
+    var r = qrGetClientReadiness();
+    el.textContent = r.msg;
+    el.classList.remove('hidden', 'border-emerald-200', 'bg-emerald-50', 'text-emerald-950', 'border-amber-200', 'bg-amber-50', 'text-amber-950', 'border-red-200', 'bg-red-50', 'text-red-900');
+    if (r.level === 'error') el.classList.add('border-red-200', 'bg-red-50', 'text-red-900');
+    else if (r.level === 'warn') el.classList.add('border-amber-200', 'bg-amber-50', 'text-amber-950');
+    else el.classList.add('border-emerald-200', 'bg-emerald-50', 'text-emerald-950');
+  }
+
   function fillTemplateSelect() {
     var sel = document.getElementById('c_template');
+    if (!sel) return;
     sel.innerHTML = '';
     state.settings.templates.forEach(function (t) {
       var o = document.createElement('option');
@@ -265,10 +312,14 @@
   }
 
   function fillAdminForm() {
-    if (!document.getElementById('adminSaveBtn')) return;
+    if (!document.getElementById('adminSaveBtn') && !document.getElementById('adminSaveBtnTop')) return;
     var s = state.settings;
+    var sheetVal = s.priceSheetGvizId != null ? s.priceSheetGvizId : '';
     if (document.getElementById('s_sheetId')) {
-      document.getElementById('s_sheetId').value = s.priceSheetGvizId != null ? s.priceSheetGvizId : '';
+      document.getElementById('s_sheetId').value = sheetVal;
+    }
+    if (document.getElementById('qrQuickSetupSheetId')) {
+      document.getElementById('qrQuickSetupSheetId').value = sheetVal;
     }
     if (document.getElementById('s_floorWaste')) {
       document.getElementById('s_floorWaste').value = s.floorWaste != null ? s.floorWaste : DEFAULTS.floorWaste;

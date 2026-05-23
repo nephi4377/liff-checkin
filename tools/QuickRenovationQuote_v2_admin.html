@@ -241,9 +241,32 @@
 
       <!-- ═══ ③ 係數與系統 ═══ -->
       <section id="adminPanelSystem" class="qr-admin-panel hidden p-3 sm:p-5 space-y-4" data-admin-panel="system" aria-labelledby="adminPanelSystemTitle">
+        <div class="rounded-xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-white p-4 space-y-3 shadow-sm">
+          <h2 class="text-base font-bold text-amber-950 m-0" id="adminPanelSystemTitle">初次設定（建議先做這裡）</h2>
+          <p class="text-xs text-stone-700 m-0 leading-relaxed">
+            只要<strong>試算表 ID</strong>一項，按下面按鈕會自動：取得工作頁 → 對全部品項單價 → 儲存。進階（方案 JSON、快照、Firebase）請展開下方摺疊區。
+          </p>
+          <label class="block text-xs text-stone-700"
+            >試算表 ID（<code class="bg-white px-1 rounded">.../d/</code> 後段）
+            <input
+              id="qrQuickSetupSheetId"
+              type="text"
+              class="mt-1 w-full border border-amber-200 rounded-lg px-3 py-2 text-sm font-mono"
+              placeholder="預設已帶入公司計價表，可改"
+              autocomplete="off"
+          /></label>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" id="qrQuickSetupBtn" class="px-4 py-2 rounded-lg bg-amber-800 text-white text-sm font-medium hover:bg-amber-900"
+              >一鍵完成初次設定</button
+            >
+            <a href="QuickRenovationQuote_v2.html" class="px-4 py-2 rounded-lg border border-stone-300 bg-white text-sm no-underline text-stone-800 hover:bg-stone-50"
+              >完成，回客戶報價頁</a
+            >
+          </div>
+        </div>
         <div class="rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-xs text-stone-700 leading-relaxed">
-          <strong class="text-stone-900" id="adminPanelSystemTitle">係數與系統：</strong>
-          以下改動<strong>會影響試算結果</strong>；改完記得在同一區最上方的<strong>儲存設定</strong>。區塊可摺疊，一次只開一、兩項就好。
+          <strong class="text-stone-900">進階／係數：</strong>
+          以下改動<strong>會影響試算結果</strong>；改完記得按右上<strong>儲存設定</strong>。區塊可摺疊，不必一次全開。
         </div>
 
         <details open class="group rounded-xl border border-stone-200 bg-white shadow-sm overflow-hidden">

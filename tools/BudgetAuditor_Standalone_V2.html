@@ -1933,6 +1933,7 @@
         }
 
         try {
+            await reconcileClosedProjectsFromSheet();
             const snap     = await db.ref('quotations').once('value');
             if (!still()) return;
             const projects = snap.val() || {};
@@ -2068,6 +2069,96 @@
         hSync.innerText = t ? `快取${staleTag} · ${t}` : `快取${staleTag}（待同步）`;
     }
 
+    /** 讀取試算表「專案狀態」（含手改已結案）；後端會嘗試對帳 Firebase */
+    async function fetchSheetProjectClosureStatus(projectNo) {
+        if (!fbConfig.gasURL) return null;
+        const uid = currentUser?.userId ? String(currentUser.userId).trim() : '';
+        if (!uid || uid === 'unknown') return null;
+        try {
+            const url = new URL(fbConfig.gasURL);
+            url.searchParams.set('page', 'get_site_project_status');
+            url.searchParams.set('projectNo', projectNo);
+            url.searchParams.set('userId', uid);
+            if (currentUser.displayName) url.searchParams.set('userName', currentUser.displayName);
+            const res = await fetch(url.toString(), { method: 'GET' });
+            const result = await res.json();
+            if (result.success && result.data) return result.data;
+        } catch (e) { console.warn('[Closure] 無法讀取試算表狀態', e); }
+        return null;
+    }
+
+    function applyClosureFromSheetAuthority(meta) {
+        if (!appData) return false;
+        if (appData.is_closed) { refreshCloseProjectButton(); return false; }
+        appData.is_closed = true;
+        appData.closed_at = meta?.closed_at || appData.closed_at || new Date().toLocaleString();
+        appData.closed_by = meta?.closed_by || '案場資料（專案狀態）';
+        if (meta?.closure_source) appData.closure_source = meta.closure_source;
+        refreshCloseProjectButton();
+        saveToCache();
+        return true;
+    }
+
+    async function ensureClosureSyncedFromAuthority() {
+        if (!appData?.is_closed || !appData.案號) return;
+        try {
+            if (!firebase.apps.length) { firebase.initializeApp(buildFirebaseInitOptions()); tryAnonymousSignIn(); }
+            const snap = await firebase.database().ref(`quotations/${appData.案號}`).once('value');
+            const data = snap.val();
+            if (data?.is_closed || data?.context?.is_closed) return;
+            await syncToFirebase();
+        } catch (e) { console.warn('[Closure] Firebase 結案補寫失敗', e); }
+    }
+
+    async function applySheetClosureIfNeeded(projectNo) {
+        if (!projectNo) return;
+        const st = await fetchSheetProjectClosureStatus(projectNo);
+        if (!st?.isClosed) return;
+        if (applyClosureFromSheetAuthority({ closed_by: '案場資料（專案狀態）', closure_source: 'sheet' })) {
+            await ensureClosureSyncedFromAuthority();
+            showToast('此案於主控台／試算表已結案，驗收表已同步', 'info', 4000);
+        }
+    }
+
+    async function reconcileClosedProjectsFromSheet() {
+        if (!fbConfig.gasURL) return;
+        const uid = currentUser?.userId ? String(currentUser.userId).trim() : '';
+        if (!uid || uid === 'unknown') return;
+        try {
+            await fetch(fbConfig.gasURL, {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'reconcileProjectClosure',
+                    maxBatch: 8,
+                    userId: uid,
+                    userName: currentUser?.displayName || ''
+                })
+            });
+        } catch (e) { console.warn('[Closure] 批次對帳失敗', e); }
+    }
+
+    async function syncProjectStatusToConsole() {
+        if (!fbConfig.gasURL || !appData?.案號) return;
+        const uid = currentUser?.userId ? String(currentUser.userId).trim() : '';
+        if (!uid || uid === 'unknown') return;
+        try {
+            await fetch(fbConfig.gasURL, {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'updateProjectStatus',
+                    projectId: String(appData.案號).trim(),
+                    status: '已結案',
+                    userId: uid,
+                    userName: currentUser?.displayName || '驗收表'
+                })
+            });
+            showToast('主控台／試算表狀態已同步為已結案', 'success', 3500);
+        } catch (e) {
+            console.warn('[Closure] 試算表結案同步失敗', e);
+            showToast('試算表結案同步失敗（Firebase 已標記）', 'warning', 5000);
+        }
+    }
+
     async function loadFromFirebase(projectNo) {
         if (!fbConfig.databaseURL) { showToast('未設定 Database URL，無法連線雲端。', 'warning'); return; }
 
@@ -2123,6 +2214,7 @@
             if (!showedCache) showToast('雲端載入失敗: ' + err.message, 'error');
             else if (stillThisLoad()) showToast('雲端暫時無法更新，已保留本地快取', 'warning', 3500);
         }
+        if (stillThisLoad()) await applySheetClosureIfNeeded(projectNo);
     }
 
     async function fetchProjectMetadata(projectNo) {
@@ -2277,6 +2369,7 @@
             appData.closed_at = nowDisplay;
             appData.closed_by = currentUser?.displayName || '本地測試員';
             await syncToFirebase();
+            await syncProjectStatusToConsole();
             refreshCloseProjectButton();
             await refreshDashboard();
             showToast('已結案，概覽將不再顯示此案', 'success');
@@ -3047,6 +3140,16 @@
     dropZone.onclick  = null;
     dropZone.ondragover = e => e.preventDefault();
     dropZone.ondrop     = e => e.preventDefault();
+
+    window.addEventListener('message', (ev) => {
+        const msg = ev.data;
+        if (!msg || msg.type !== 'TANXIN_APPLY_PROJECT_CLOSURE') return;
+        const no = String(msg.projectNo || '').trim();
+        if (!no || !appData || String(appData.案號 || '').trim() !== no) return;
+        if (applyClosureFromSheetAuthority({ closed_by: msg.closedBy || '主控台', closure_source: 'managementconsole' })) {
+            ensureClosureSyncedFromAuthority().then(() => refreshCloseProjectButton());
+        }
+    });
 
     /* ============================================================
        INIT

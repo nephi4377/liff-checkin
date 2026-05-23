@@ -285,3 +285,71 @@ sequenceDiagram
 - **啟用條件**：僅當所有工項 `completion_percent === 100` 且尚未結案，按鈕才可點擊；否則維持灰化狀態。
 - **寫入欄位**：同步 Firebase 時帶入 `is_closed`、`closed_at`、`closed_by`，並保留於 `context` 供離線快取與回載。
 - **概覽過濾一致性**：Dashboard 仍以 `is_closed` 過濾，因此結案後案場會自動從「使用中案場」移除。
+
+### v3.2 (2026-05-23) - 統一結案（主控台／試算表／驗收表）
+- 行為定義見 **§9**；後端 `applyProjectClosureToFirebase_`、API `get_site_project_status` / `reconcileProjectClosure`。
+
+---
+
+## 9. 統一結案規格（Project Closure Unified）
+
+> **規格歸檔位置**：本節為**跨模組**結案行為之權威說明（驗收表 + 主控台 + Firebase + 試算表）。  
+> 主控台 API 矩陣仍見 `08_PROJECT_CONSOLE_CRUD_SPEC.md` §2（僅摘要並連結本節）。
+
+### 9.1 權威來源（單一真相）
+
+| 層級 | 欄位 | 用途 |
+|------|------|------|
+| **試算表** `案場資料`.`專案狀態` | 如 `已結案` | 主控台、排程、Hub 列表等**公司級**案場生命週期 |
+| **Firebase** `quotations/{案號}`.`is_closed`（及 `context.is_closed`） | 布林 + `closed_at` / `closed_by` | 驗收表 Dashboard、驗收頁結案鍵、工項 JSON 載入 |
+
+**正式結案**以試算表 `專案狀態 = 已結案` 為準；Firebase 必須跟隨標記 `is_closed`，供驗收表 UI 一致。
+
+### 9.2 結案入口與寫入順序
+
+| 入口 | 第一步 | 第二步（自動） |
+|------|--------|----------------|
+| **管理控制台**「將此專案結案」 | `updateProjectStatus` → 試算表 | 後端 `applyProjectClosureToFirebase_`；內嵌驗收表 `postMessage` 補標記 |
+| **驗收表**「結案」（須全工項 100%） | `syncToFirebase`（`is_closed`） | `updateProjectStatus` → 試算表 |
+| **試算表手改** `專案狀態` → `已結案` | （無即時觸發器） | 下次 `get_site_project_status` / `reconcileProjectClosure` / 載入該案驗收表時對帳 Firebase |
+
+### 9.3 防呆（必須遵守）
+
+1. **冪等**：已 `is_closed` 或試算表已是 `已結案`，重複操作僅記錄、不重複破壞資料。
+2. **不強制 100%**：主控台或試算表結案時，**不得**自動把 Firebase 工項 `completion_percent` 改為 100%（進度與結案狀態分離）。
+3. **驗收表按鈕**：僅在「全工項 100% 且尚未結案」時可點；若試算表已結案，載入後視為已結案（按鈕顯示「已結案」、不可再點）。
+4. **對帳節流**：後端 `reconcileProjectClosure` 每案號快取 1 小時（`closure_fb_sync_{案號}`），每請求最多處理 8 案，避免試算表大量手改時打爆 Firebase。
+5. **缺 Firebase 資料**：僅寫入頂層 `is_closed` stub；不建立假工項清單。
+6. **反向還原**：試算表改回非 `已結案` **不會**自動清除 Firebase `is_closed`（需另開需求）；避免誤改試算表導致驗收資料外露。
+7. **後端 Firebase 寫入**：可選 Script Property `FIREBASE_RTDB_AUTH`；未設定時依專案 RTDB Rules，失敗時試算表仍以已結案為準，前端載入驗收表時會再嘗試 `syncToFirebase` 補寫。
+
+### 9.4 API（project-console）
+
+| 動作 | 模式 | 說明 |
+|------|------|------|
+| `updateProjectStatus` | POST | `projectId` + `status: 已結案`；更新試算表並觸發 Firebase 結案 PATCH |
+| `get_site_project_status` | GET `page` + `projectNo` + `userId` | 回傳 `{ 專案狀態, isClosed }`；若已結案則觸發單案 Firebase 對帳 |
+| `reconcileProjectClosure` | POST | 掃描試算表所有 `已結案`，批次對帳 Firebase（`maxBatch` 預設 8） |
+
+### 9.5 驗收資料保存型式（結案後）
+
+結案**不刪除**工項 JSON，僅加上結案旗標：
+
+```json
+{
+  "is_closed": true,
+  "closed_at": "2026/05/23 14:30:00",
+  "closed_by": "王小明",
+  "closure_source": "updateProjectStatus",
+  "context": {
+    "案號": "770",
+    "is_closed": true,
+    "items": [ "…完整工項與 verification／status_logs 保留…" ],
+    "total_summary": { "overall_completion": 74 }
+  }
+}
+```
+
+- **雲端**：Firebase RTDB `quotations/{案號}`（見 §2.1）。
+- **摘要**：試算表 `audit_*` 欄位仍由 `updateAuditSummary` 更新，與結案旗標獨立。
+- **本機**：`localStorage` `audit_cache_{案號}` 含 `data.is_closed`，供離線顯示。

@@ -378,6 +378,16 @@ export function displayProjectInfo(overview, schedule) {
     if (!overview) { panel.innerHTML = '<p class="muted">無專案資訊</p>'; return; }
 
     const get = (key) => overview[key] || '未提供';
+    const getAddress = () => {
+        const candidates = [
+            overview['案場地址'],
+            overview.address,
+            overview['地址'],
+            overview.siteAddress
+        ];
+        const value = candidates.find(v => String(v || '').trim());
+        return value ? String(value).trim() : '未提供';
+    };
     
     // [v215.0 核心修正] 將結案按鈕的 HTML 產生邏輯移至 panel.innerHTML 內部。
     // 舊寫法將其放在外部，導致 innerHTML 賦值時沒有包含此按鈕。
@@ -410,7 +420,7 @@ export function displayProjectInfo(overview, schedule) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
-    const addrRaw = get('案場地址');
+    const addrRaw = getAddress();
     const addrMaps = `https://www.google.com/maps?q=${encodeURIComponent(addrRaw === '未提供' ? '' : addrRaw)}`;
     const addrNav = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addrRaw === '未提供' ? '' : addrRaw)}`;
 

@@ -28,11 +28,6 @@
       '</strong> 坪；本次客廚占餘額 <strong>' +
       round2(alloc.lkPct * 100) +
       '%</strong>。</p>';
-    var ageEl = document.querySelector('input[name=c_houseAge]:checked');
-    if (ageEl && ageEl.value === 'old') {
-      html +=
-        '<p class="mt-2 text-xs text-amber-950 border border-amber-200 bg-amber-50/90 rounded-lg px-2 py-2 leading-relaxed">您選擇「舊屋」：拆除、現況修補與管線變動差異大，<strong>本表仍以新屋邏輯試算</strong>，合價僅供方向參考，請務必現場評估。</p>';
-    }
     document.getElementById('c_allocTable').innerHTML = html;
   }
 
@@ -232,6 +227,10 @@
 
   function renderQuote() {
     var lines = collectQuoteLines();
+    if (!lines.length) {
+      alert('請至少勾選一項要列入報價的項目（步驟③的核取方塊）。');
+      return;
+    }
     var total = lines.reduce(function (a, l) { return a + l.sub; }, 0);
     var title = document.getElementById('c_title').value.trim() || '（未命名）';
     var sc = getSchemeById(getSelectedSchemeId());
@@ -468,27 +467,8 @@
     if (typeof renderAdminSnapshotsPanel === 'function') renderAdminSnapshotsPanel();
   };
 
-  function qrUpdateBuildingHint() {
-    var h = document.getElementById('c_buildingHint');
-    var sel = document.querySelector('input[name=c_building]:checked');
-    if (!h || !sel) return;
-    if (sel.value === 'house') {
-      h.textContent =
-        '透天案之樓層、外推與屋況與大樓差異大，試算公式尚未納入。請暫選「大樓／公寓」或改由設計師線下估價；後續版本會另開透天專用流程。';
-      h.classList.remove('hidden');
-    } else {
-      h.textContent = '';
-      h.classList.add('hidden');
-    }
-  }
-
   function runClientStep1Alloc() {
     loadSettings();
-    var bEl = document.querySelector('input[name=c_building]:checked');
-    if (bEl && bEl.value === 'house') {
-      alert('目前僅開放「大樓／公寓 · 新屋」自動試算。透天請改選大樓或洽設計師現場估價。');
-      return;
-    }
     var T = parseFloat(document.getElementById('c_totalPing').value);
     if (isNaN(T) || T <= 0) {
       alert('請輸入有效總坪數');
@@ -642,17 +622,14 @@
   }
 
   function qrAfterSettingsReady() {
+    if (typeof qrRenderClientSetupBanner === 'function') qrRenderClientSetupBanner();
+    var syncDone = function () {
+      if (typeof qrRenderClientSetupBanner === 'function') qrRenderClientSetupBanner();
+    };
     if (state.settings.priceSheetAutoOnOpen !== false && (state.settings.priceSheetGvizId || '').trim()) {
-      priceSyncPromise = syncPricesFromGviz({ silent: true });
+      priceSyncPromise = syncPricesFromGviz({ silent: true }).then(syncDone).catch(syncDone);
     }
     fillTemplateSelect();
-    qrUpdateBuildingHint();
-    if (!document.body.dataset.qrBuildingHintBound) {
-      document.body.dataset.qrBuildingHintBound = '1';
-      document.querySelectorAll('input[name=c_building]').forEach(function (r) {
-        r.addEventListener('change', qrUpdateBuildingHint);
-      });
-    }
   }
 
   /** 管理員獨立頁：左側分段導覽，只顯示一個主面板；上次分區記在 sessionStorage。 */
@@ -704,6 +681,7 @@
     try {
       var t = sessionStorage.getItem('qr_admin_section_v2');
       if (t === 'schemes' || t === 'system' || t === 'prices') pref = t;
+      if (!String((state.settings && state.settings.priceSheetGvizId) || '').trim()) pref = 'system';
     } catch (_e2) { /* ignore */
     }
 
@@ -730,7 +708,9 @@
   if (isAdminStandalonePage) qrAdminShellInitNavigation();
 
   loadSettings();
-  qrFbPullOnce({ silent: true, preferRemote: true })
+  var preferRemoteOnLoad =
+    typeof qrShouldPreferRemoteOnLoad === 'function' ? qrShouldPreferRemoteOnLoad() : false;
+  qrFbPullOnce({ silent: true, preferRemote: preferRemoteOnLoad })
     .then(function () {
       if (isAdminStandalonePage) qrAdminPageReady();
       else qrAfterSettingsReady();
@@ -739,6 +719,34 @@
       if (isAdminStandalonePage) qrAdminPageReady();
       else qrAfterSettingsReady();
     });
+
+  var quickSetupBtn = document.getElementById('qrQuickSetupBtn');
+  if (quickSetupBtn) {
+    quickSetupBtn.addEventListener('click', function () {
+      var inp = document.getElementById('qrQuickSetupSheetId');
+      var id = inp ? inp.value.trim() : '';
+      if (!id && document.getElementById('s_sheetId')) id = document.getElementById('s_sheetId').value.trim();
+      if (!id) {
+        alert('請先填試算表 ID（網址 /d/ 後面約 44 字元）。');
+        if (inp) inp.focus();
+        return;
+      }
+      if (typeof window.qrAdminQuickSetup !== 'function') {
+        alert('一鍵設定功能未載入，請重新整理頁面。');
+        return;
+      }
+      window
+        .qrAdminQuickSetup(id)
+        .then(function (n) {
+          if (typeof qrFlashAdminAction === 'function') {
+            qrFlashAdminAction('初次設定完成（對表 ' + (n || 0) + ' 筆）。可回客戶頁試算。', 'ok');
+          }
+        })
+        .catch(function (e) {
+          alert((e && e.message) || String(e));
+        });
+    });
+  }
 
   var pullBtn = document.getElementById('qrFbPullBtn');
   if (pullBtn) {

@@ -15,39 +15,40 @@
 <body class="bg-stone-100 text-stone-900 min-h-screen pb-24">
   <div class="max-w-4xl mx-auto px-3 py-5">
     <header class="no-print mb-4">
-      <h1 class="text-2xl font-bold text-amber-900">快速報價（參考用）</h1>
-      <p class="text-sm text-stone-600 mt-1">依房型與總坪數推估各空間坪數與長寬；<strong>方案菜單</strong>決定各常見項目的<strong>數量規則</strong>（非整單乘倍率）。<strong class="text-amber-900">本版試算：大樓／公寓 · 新屋</strong>；透天與舊屋條件不同，後續再擴充。實務仍需與設計師確認。</p>
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 class="text-2xl font-bold text-amber-900">快速報價（參考用）</h1>
+          <p class="text-sm text-stone-600 mt-1 max-w-2xl leading-relaxed">
+            四步完成：<strong>房型坪數</strong> → <strong>選方案</strong> → <strong>勾選項目</strong> → <strong>報價摘要</strong>。數量由方案規則帶入，可再手改。
+          </p>
+        </div>
+        <a
+          href="QuickRenovationQuote_v2_admin.html"
+          class="no-print shrink-0 text-xs px-3 py-2 rounded-lg border border-stone-300 bg-white text-stone-700 hover:bg-amber-50 hover:border-amber-300 no-underline"
+          >調單價／方案設定</a
+        >
+      </div>
+      <p id="c_setupBanner" class="hidden no-print text-xs mt-3 py-2 px-3 rounded-lg border leading-relaxed" role="status" aria-live="polite"></p>
       <p id="c_priceSyncBar" class="hidden no-print text-xs mt-2 py-1.5 px-2 rounded border border-amber-200 bg-amber-50/80 text-amber-950" role="status" aria-live="polite"></p>
+      <ol class="no-print mt-3 flex flex-wrap gap-2 text-[11px] text-stone-600 list-none p-0 m-0" aria-label="報價步驟">
+        <li class="px-2 py-1 rounded-full bg-amber-100 text-amber-950 border border-amber-200">① 坪數</li>
+        <li class="px-2 py-1 rounded-full bg-stone-100 border border-stone-200">② 方案</li>
+        <li class="px-2 py-1 rounded-full bg-stone-100 border border-stone-200">③ 明細</li>
+        <li class="px-2 py-1 rounded-full bg-stone-100 border border-stone-200">④ 摘要</li>
+      </ol>
     </header>
 
     <section id="clientSection" class="bg-white rounded-xl shadow p-4 md:p-6 space-y-6">
       <div id="cStep1" class="space-y-4">
-        <h2 class="text-lg font-semibold text-amber-900">① 案件條件、房型與總坪數（不含公設）</h2>
-        <div class="rounded-lg border border-stone-200 bg-stone-50/90 p-3 text-sm space-y-3">
-          <div class="font-medium text-stone-800">建物與屋況</div>
-          <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <span class="text-stone-500 text-xs shrink-0 w-16">型態</span>
-            <label class="inline-flex items-center gap-1.5 cursor-pointer"
-              ><input type="radio" name="c_building" value="condo" class="rounded" checked /> 大樓／公寓</label
-            >
-            <label class="inline-flex items-center gap-1.5 cursor-pointer"
-              ><input type="radio" name="c_building" value="house" class="rounded" /> 透天厝</label
-            >
-          </div>
-          <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <span class="text-stone-500 text-xs shrink-0 w-16">屋況</span>
-            <label class="inline-flex items-center gap-1.5 cursor-pointer"
-              ><input type="radio" name="c_houseAge" value="new" class="rounded" checked /> 新屋</label
-            >
-            <label class="inline-flex items-center gap-1.5 cursor-pointer"
-              ><input type="radio" name="c_houseAge" value="old" class="rounded" /> 舊屋／中古屋</label
-            >
-          </div>
-          <p id="c_buildingHint" class="hidden text-xs text-amber-950 border border-amber-200 rounded px-2 py-1.5 bg-amber-50/90 leading-relaxed"></p>
-        </div>
+        <h2 class="text-lg font-semibold text-amber-900">① 房型與總坪數（不含公設）</h2>
+        <p class="text-xs text-stone-500 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 leading-relaxed">
+          目前試算條件：<strong class="text-amber-900">大樓／公寓 · 新屋</strong>（透天、舊屋條件不同，日後另開；實務請與設計師確認）。
+        </p>
+        <input type="hidden" name="c_building" value="condo" />
+        <input type="hidden" name="c_houseAge" value="new" />
         <label class="block text-sm">房型模板</label>
         <select id="c_template" class="border rounded-lg px-3 py-2 w-full max-w-md"></select>
-        <p class="text-xs text-stone-500">「兩房一廳一衛」與「兩房一廳」相同：2 臥、1 客廚、浴廁列表取<strong>第一筆</strong>坪數（預設 1 坪）。三房為 1+1.5 兩筆。</p>
+        <p class="text-xs text-stone-500">「兩房一廳一衛」與「兩房一廳」相同：2 臥、1 客廚、浴廁取列表<strong>第一筆</strong>坪數。三房為 1＋1.5 兩筆。</p>
         <label class="block text-sm">總坪數（不含公設）</label>
         <input id="c_totalPing" type="number" min="1" step="0.1" value="20" class="border rounded-lg px-3 py-2 w-full max-w-xs" />
         <label class="block text-sm">案名／稱呼（選填）</label>
@@ -56,21 +57,21 @@
       </div>
 
       <div id="cStep2" class="hidden space-y-4 border-t pt-4">
-        <h2 class="text-lg font-semibold text-amber-900">② 推估結果（坪數 + 長寬比）</h2>
-        <p class="text-xs text-stone-500">客廚占餘額比例在設定區間內隨機；臥室依倍率拆分。</p>
+        <h2 class="text-lg font-semibold text-amber-900">② 推估結果與報價方案</h2>
+        <p class="text-xs text-stone-500">客廚占餘額比例在設定區間內隨機；臥室依倍率拆分。尺數依方案用該空間長邊或短邊換算台尺。</p>
         <div id="c_allocTable" class="overflow-x-auto text-sm"></div>
-        <p class="text-xs text-stone-600">尺數可捉<strong>該空間短邊或長邊</strong>（依菜單規則的 <code>edge</code>）換算台尺，÷30.3cm；<strong>定量</strong>品由菜單寫死尺、坪、組數。下列<strong>先選</strong>報價方案，再帶出各空間拆項（可之後在明細內手改或返回重選）。</p>
         <div class="no-print rounded-lg border border-amber-200 bg-amber-50/40 p-4 space-y-2">
-          <div class="text-sm font-medium text-amber-950">Step 2｜先選 <strong>報價方案</strong>（管理員可編的菜單）</div>
-          <p class="text-xs text-stone-600">選一組方案＝一組「數量規則（定量／變量＋%＋長邊或短邊）」的組合，下一步才產生勾選明細，避免直接進清單不知基準。</p>
+          <div class="text-sm font-medium text-amber-950">選一組<strong>報價方案</strong>（精簡／收納／造型等，於管理頁維護）</div>
           <div id="c_schemeRadios" class="flex flex-wrap gap-3 text-sm"></div>
         </div>
-        <button type="button" id="c_toItemsBtn" class="no-print px-5 py-2 bg-amber-800 text-white rounded-lg font-medium">下一步：依方案帶出項目明細</button>
+        <button type="button" id="c_toItemsBtn" class="no-print px-5 py-2 bg-amber-800 text-white rounded-lg font-medium">下一步：帶出項目明細</button>
       </div>
 
       <div id="cStep3" class="hidden space-y-4 border-t pt-4">
-        <h2 class="text-lg font-semibold text-amber-900">③ 項目明細（依工種分群：各空間內含地坪；再油漆→水電→保護，可手改數量）</h2>
-        <p class="text-xs text-stone-500">目前採用方案「<strong id="c_schemeNameStep3" class="text-amber-900">尚未產生</strong>」。切回上一步可<strong>變更方案</strong>並重帶入數量。進入報價前可<strong>手改數量</strong>，現場慣用<strong>整數</strong>或<strong>0.5</strong>一檔（坪、尺、盞等），系統不建議 0.01 微調。小計＝單價×數量，不整單乘一個倍率。</p>
+        <h2 class="text-lg font-semibold text-amber-900">③ 項目明細（可勾選、手改數量）</h2>
+        <p class="text-xs text-stone-500">
+          方案「<strong id="c_schemeNameStep3" class="text-amber-900">尚未產生</strong>」。<strong>請勾選</strong>要列入報價的項目（常見項已預勾）；數量建議用<strong>整數</strong>或<strong>0.5</strong>一檔。小計＝單價×數量。
+        </p>
         <div id="c_itemRows" class="space-y-2 text-sm"></div>
         <div class="no-print flex flex-wrap gap-2 pt-2">
           <button type="button" id="c_backToSchemeBtn" class="px-4 py-2 border border-amber-300 text-amber-900 rounded-lg">上一步：重選方案</button>
@@ -82,7 +83,7 @@
         <h2 class="text-lg font-semibold text-amber-900">④ 報價摘要（參考用）</h2>
         <div id="c_quoteOut" class="bg-stone-50 rounded-lg p-4 space-y-2"></div>
         <button type="button" id="c_printBtn" class="no-print px-5 py-2 border rounded-lg">列印／存 PDF</button>
-        <p class="text-xs text-stone-600 border-t pt-2">本報價僅依推估尺寸與菜單規則試算，<strong>不構成承諾</strong>；需求決定價錢，請與專業設計師討論後定案。</p>
+        <p class="text-xs text-stone-600 border-t pt-2">本報價僅依推估尺寸與方案規則試算，<strong>不構成承諾</strong>；請與專業設計師討論後定案。</p>
       </div>
     </section>
   </div>

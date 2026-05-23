@@ -89,7 +89,7 @@
 | 動作 | Action 名稱 | HTTP 模式 | 說明 |
 | :--- | :--- | :--- | :--- |
 | **Read** | `project` | `GET` | 取得單一專案的 Overview, Schedule, Logs 等全量資料。 |
-| **Update** | `updateProjectStatus` | `POST` | 變更專案狀態（如：結案）。 |
+| **Update** | `updateProjectStatus` | `POST` | 變更專案狀態（如：結案）。結案時會同步 Firebase `is_closed`；**完整結案流程、防呆、試算表手改對帳**見 **`12_BUDGET_AUDITOR_AND_CONSOLE_INTEGRATION_SPEC.md` §9**。 |
 
 ### B. 排程管理 (Schedule Management)
 | 動作 | Action 名稱 | HTTP 模式 | 說明 |

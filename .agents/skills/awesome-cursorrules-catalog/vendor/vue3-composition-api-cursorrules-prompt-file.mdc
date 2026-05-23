@@ -1,0 +1,43 @@
+---
+description: "Vue 3 開發與 Composition API 整合的 Cursor 規則。"
+globs: **/*
+alwaysApply: false
+---
+// Vue 3 Composition API 規則
+
+// Vue 3 Composition API 最佳實務
+
+const vue3CompositionApiBestPractices = [
+  "元件邏輯使用 setup() 函式",
+  "反應式狀態使用 ref 與 reactive",
+  "衍生資料使用 computed()",
+  "副作用使用 watch 與 watchEffect",
+  "生命週期使用 onMounted、onUpdated 等",
+  "依賴注入使用 provide / inject",
+];
+
+// 建議資料夾結構
+
+const folderStructure = `
+src/
+  components/
+  composables/
+  views/
+  router/
+  store/
+  assets/
+  App.vue
+  main.js
+`;
+
+// 其他建議
+
+const additionalInstructions = `
+1. 使用 TypeScript 提升型別安全
+2. 正確定義 props 與 emits
+3. 需要時使用 Vue 3 的 Teleport 元件
+4. 非同步元件使用 Suspense
+5. 實作妥善的錯誤處理
+6. 遵循 Vue 3 風格指南與命名慣例
+7. 開發與建置使用 Vite
+`;
