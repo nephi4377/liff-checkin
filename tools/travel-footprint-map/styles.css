@@ -89,6 +89,29 @@ body {
   width: 100%;
 }
 
+.version-badge {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+  background: rgba(212, 181, 106, 0.1);
+  border: 1px solid rgba(212, 181, 106, 0.3);
+  border-radius: 999px;
+  padding: 1px 7px;
+  vertical-align: middle;
+  margin-left: 4px;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+  cursor: default;
+  user-select: none;
+}
+
+.version-badge:hover {
+  opacity: 1;
+}
+
+
 .header-controls {
   display: flex;
   gap: 8px;
@@ -791,24 +814,6 @@ input[type="file"] { display: none; }
 }
 
 /* 自訂地圖彈窗 (D3 向量模式) */
-.map-popup {
-  position: absolute;
-  z-index: 30;
-  background: rgba(24, 21, 18, 0.96);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid var(--gold-dim);
-  border-radius: 10px;
-  padding: 14px 16px;
-  width: 240px;
-  font-size: 0.88rem;
-  line-height: 1.45;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
-  pointer-events: auto;
-  transform: translate(-50%, -100%); /* 水平置中，垂直在點的上方 */
-  margin-top: -15px; /* 與點保持一些距離 */
-  transition: opacity 0.15s ease, transform 0.15s ease;
-}
 
 .map-popup.hidden {
   display: none !important;
@@ -1162,3 +1167,78 @@ input[type="file"] { display: none; }
   font-size: 0.72rem;
   color: var(--text-dim);
 }
+
+/* 旅行手帳日記清單縮圖 */
+.journal-thumbnail {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--panel-border);
+  background: rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.journal-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* 移除 map-popup 原本可能干擾 JS 絕對定位計算的 transform 屬性 */
+.map-popup {
+  position: absolute;
+  z-index: 30;
+  background: rgba(24, 21, 18, 0.96);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--gold-dim);
+  border-radius: 10px;
+  padding: 14px 16px;
+  width: 240px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+/* D3 向量地圖照片貼圖樣式 */
+.photo-sticker {
+  cursor: pointer;
+  pointer-events: auto; /* 允許點擊貼圖打開手帳 */
+}
+
+.photo-sticker rect {
+  transition: filter 0.2s ease;
+}
+
+.photo-sticker:hover rect {
+  filter: drop-shadow(0px 5px 10px rgba(0,0,0,0.5)) !important;
+}
+
+.photo-sticker image {
+  pointer-events: none;
+}
+
+/* Leaflet 圖磚地圖照片貼圖樣式 */
+.leaflet-photo-sticker-icon {
+  background: transparent !important;
+  border: none !important;
+  overflow: visible !important;
+}
+
+.leaflet-photo-sticker-container {
+  transition: transform 0.2s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.2s ease;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.leaflet-photo-sticker-container:hover {
+  transform: scale(1.1) rotate(0deg) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5) !important;
+  z-index: 999999 !important;
+}
+

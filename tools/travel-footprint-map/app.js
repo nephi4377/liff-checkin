@@ -231,6 +231,7 @@
     journalPhotoUrlInput: document.getElementById("journalPhotoUrlInput"),
     manualLocPhotoUrl: document.getElementById("manualLocPhotoUrl"),
     btnFastReadUrl: document.getElementById("btnFastReadUrl"),
+    showPhotos: document.getElementById("showPhotos"),
   };
 
   const state = {
@@ -264,12 +265,15 @@
     sourceName: "",
     googleApiKey: localStorage.getItem("travelFootprintGoogleKey") || "",
     activePreset: "poster",
+    // 新增：控制照片貼圖顯示與同點照片堆疊索引
+    showPhotos: true,
+    photoActiveIndex: {} // posKey -> activeIndex
   };
 
   const VIEW_PAD = 28;
 
-  let svg, gRoot, gOcean, gMap, gMarkers, gLabels, gCompass, gDecoration, gTitleBlock, projection, path, zoom, width, height, resizeObserver;
-  let leafletMap, leafletLayer, leafletMarkers = [];
+  let svg, gRoot, gOcean, gMap, gMarkers, gLabels, gCompass, gDecoration, gTitleBlock, gFrame, gPhotoStickers, projection, path, zoom, width, height, resizeObserver;
+  let leafletMap, leafletLayer, leafletMarkers = [], leafletPhotoStickers = [];
   let mapMetrics = { w: 0, h: 0, bounds: null };
   let zoomRaf = 0;
   let pendingZoom = null;
@@ -781,6 +785,7 @@
     });
     updateMarkerZoom(k);
     refreshLabels(k);
+    renderD3PhotoStickers();
   }
 
   let tempJournalRating = 0;
@@ -788,6 +793,34 @@
 
   function showMarkerPopup(event, d, element) {
     state.activeMarkerId = d.id;
+    
+    // 同步照片堆疊 active index，當點擊 marker 或 sidebar 跳轉時，將該照片升到最上面
+    const jActive = state.journal[d.id];
+    if (jActive && jActive.photo) {
+      const posKey = d.lon.toFixed(4) + "_" + d.lat.toFixed(4);
+      const stack = [];
+      Object.keys(state.journal).forEach(function (key) {
+        const j = state.journal[key];
+        if (j && j.photo) {
+          const m = state.markers.find(function (x) { return x.id === key; });
+          if (m) {
+            const pk = m.lon.toFixed(4) + "_" + m.lat.toFixed(4);
+            if (pk === posKey) {
+              stack.push({ id: key, marker: m });
+            }
+          }
+        }
+      });
+      const idx = stack.findIndex(function(item) { return item.id === d.id; });
+      if (idx !== -1) {
+        state.photoActiveIndex[posKey] = idx;
+        if (isVectorMode()) {
+          renderD3PhotoStickers();
+        } else {
+          renderLeafletPhotoStickers();
+        }
+      }
+    }
     
     els.popupViewMode.classList.remove("hidden");
     els.popupEditMode.classList.add("hidden");
@@ -876,10 +909,295 @@
     }
     
     if (x !== undefined && y !== undefined) {
-      els.mapPopup.style.left = x + "px";
-      els.mapPopup.style.top = y + "px";
+      // 1. 先顯示並清除舊的樣式定位，以便瀏覽器計算高度
+      els.mapPopup.style.left = "0px";
+      els.mapPopup.style.top = "0px";
+      els.mapPopup.style.transform = "none";
+      els.mapPopup.style.margin = "0";
       els.mapPopup.classList.remove("hidden");
+
+      // 2. 獲取彈窗的實際寬高
+      const popupW = els.mapPopup.offsetWidth || 240;
+      const popupH = els.mapPopup.offsetHeight || 300;
+
+      // 3. 計算理想的 left, top (預設在點的上方置中)
+      let finalLeft = x - popupW / 2;
+      let finalTop = y - popupH - 15;
+
+      // 4. 防止左右超出 mapFrame 邊界
+      const frameW = els.mapFrame.clientWidth || 800;
+      const frameH = els.mapFrame.clientHeight || 500;
+
+      if (finalLeft < 10) {
+        finalLeft = 10;
+      } else if (finalLeft + popupW > frameW - 10) {
+        finalLeft = frameW - popupW - 10;
+      }
+
+      // 5. 防止上方超出邊界，如果上方放不下，就把彈窗放到點的下方
+      if (finalTop < 10) {
+        finalTop = y + 15; // 放到點的下方
+        // 如果下方也超出邊界，則限制在頂部 10px
+        if (finalTop + popupH > frameH - 10) {
+          finalTop = Math.max(10, frameH - popupH - 10);
+        }
+      }
+
+      // 6. 套用計算後的絕對座標
+      els.mapPopup.style.left = finalLeft + "px";
+      els.mapPopup.style.top = finalTop + "px";
     }
+  }
+
+  function getStableRotation(key) {
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) {
+      hash = key.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const deg = (Math.abs(hash) % 17) - 8;
+    return deg;
+  }
+
+  function renderD3PhotoStickers() {
+    if (!gPhotoStickers) return;
+    gPhotoStickers.selectAll("*").remove();
+    if (!state.showPhotos) return;
+
+    const k = state.zoomK;
+
+    // Group photos by their marker coordinate (stable position key)
+    const stacks = {};
+    Object.keys(state.journal).forEach(function (key) {
+      const j = state.journal[key];
+      if (j && j.photo) {
+        const marker = state.markers.find(function (m) { return m.id === key; });
+        if (marker) {
+          const posKey = marker.lon.toFixed(4) + "_" + marker.lat.toFixed(4);
+          if (!stacks[posKey]) {
+            stacks[posKey] = [];
+          }
+          stacks[posKey].push({
+            id: key,
+            photo: j.photo,
+            marker: marker,
+            rotate: getStableRotation(key),
+            posKey: posKey
+          });
+        }
+      }
+    });
+
+    const renderedEntries = [];
+    Object.keys(stacks).forEach(function (posKey) {
+      const stack = stacks[posKey];
+      let activeIdx = state.photoActiveIndex[posKey] || 0;
+      activeIdx = activeIdx % stack.length;
+      
+      const len = stack.length;
+      const pile = [];
+      if (len === 1) {
+        pile.push(stack[0]);
+      } else {
+        const showCount = Math.min(3, len);
+        for (let i = showCount - 1; i > 0; i--) {
+          const idx = (activeIdx + i) % len;
+          pile.push(stack[idx]);
+        }
+        pile.push(stack[activeIdx]); // Active photo is top of the pile
+      }
+
+      pile.forEach(function (item, pileIdx) {
+        item.pileIndex = pileIdx;
+        item.pileCount = len;
+        item.isActive = (pileIdx === pile.length - 1);
+        renderedEntries.push(item);
+      });
+    });
+
+    // Compute size S (screen width in pixels): capped between 8px and 100px (not larger than Taiwan)
+    const S = Math.max(8, Math.min(100, 18 * Math.pow(k, 0.7)));
+    const baseW = S / k;
+    const baseH = (S * 1.22) / k;
+    const padding = 2.5 / k;
+    const bottomPadding = 7.5 / k;
+
+    const stickers = gPhotoStickers.selectAll("g.photo-sticker")
+      .data(renderedEntries, function (d) { return d.id; })
+      .join("g")
+      .attr("class", "photo-sticker")
+      .attr("transform", function (d) {
+        const p = projection([d.marker.lon, d.marker.lat]);
+        if (!p) return null;
+        const r = markerGroupRadius(d.marker.count, k);
+        // Base offset next to marker in screen pixels, converted to projected space (preventing overlap)
+        const dx = (r + S / 2 + 4) / k;
+        const dy = -(r + (S * 1.22) / 2 + 4) / k;
+        // Stack offset in screen pixels (rendered as constant screen pixels, so divide by k)
+        const px = (d.pileIndex * 2) / k;
+        const py = -(d.pileIndex * 2) / k;
+
+        return "translate(" + (p[0] + dx + px) + "," + (p[1] + dy + py) + ") rotate(" + d.rotate + ")";
+      })
+      .on("click", function(event, d) {
+        event.stopPropagation();
+        if (d.pileCount > 1) {
+          const newActiveIdx = (state.photoActiveIndex[d.posKey] || 0) + 1;
+          state.photoActiveIndex[d.posKey] = newActiveIdx;
+          renderD3PhotoStickers();
+          saveToLocalStorage();
+          
+          // Switch popup view to the new active photo's marker details
+          const stack = stacks[d.posKey];
+          const nextActiveItem = stack[newActiveIdx % stack.length];
+          showMarkerPopup(event, nextActiveItem.marker, this);
+        } else {
+          showMarkerPopup(event, d.marker, this);
+        }
+      });
+
+    stickers.append("rect")
+      .attr("x", -baseW / 2)
+      .attr("y", -baseH / 2)
+      .attr("width", baseW)
+      .attr("height", baseH)
+      .attr("fill", "#ffffff")
+      .attr("stroke", "#dddddd")
+      .attr("stroke-width", 0.5 / k)
+      .attr("rx", 1 / k)
+      .style("filter", "drop-shadow(0px " + (2/k) + "px " + (5/k) + "px rgba(0,0,0,0.3))");
+
+    stickers.append("image")
+      .attr("href", function (d) { return d.photo; })
+      .attr("x", -baseW / 2 + padding)
+      .attr("y", -baseH / 2 + padding)
+      .attr("width", baseW - padding * 2)
+      .attr("height", baseH - padding - bottomPadding)
+      .attr("preserveAspectRatio", "xMidYMid slice");
+  }
+
+  function createLeafletPhotoStickerIcon(d, zoom) {
+    const rotate = getStableRotation(d.id);
+    // Base size scaling: zoom 3 is 18px, capped at 100px (allows going below 18px down to 8px)
+    const w = Math.max(8, Math.min(100, 18 * Math.pow(1.22, zoom - 3)));
+    const h = w * 1.22;
+    const padding = 2.5 * (w / 44);
+    const bottomPadding = 7.5 * (w / 44);
+    const scale = w / 44;
+
+    const baseR = markerBaseRadius(d.marker.count);
+    const zFactor = Math.pow(1.12, Math.max(0, zoom - 2));
+    const r = baseR * zFactor;
+
+    // Offset in screen space next to marker (preventing overlap)
+    const dx = r + 4 + d.pileIndex * 2;
+    const dy = -(r + h + 4 + d.pileIndex * 2);
+
+    const iconHtml = "<div class='leaflet-photo-sticker-container' style='" +
+                     "transform: rotate(" + rotate + "deg);" +
+                     "width: " + w + "px;" +
+                     "height: " + h + "px;" +
+                     "background: #ffffff;" +
+                     "padding: " + padding + "px " + padding + "px " + bottomPadding + "px " + padding + "px;" +
+                     "border: 0.5px solid #dddddd;" +
+                     "box-shadow: 0px " + (2*scale) + "px " + (5*scale) + "px rgba(0,0,0,0.3);" +
+                     "border-radius: " + (1*scale) + "px;" +
+                     "box-sizing: border-box;" +
+                     "margin-left: " + dx + "px;" +
+                     "margin-top: " + dy + "px;" +
+                     "'>" +
+                     "<img src='" + d.photo + "' style='width:100%; height:100%; object-fit:cover; display:block;'>" +
+                     "</div>";
+
+    return L.divIcon({
+      html: iconHtml,
+      className: "leaflet-photo-sticker-icon",
+      iconSize: [0, 0], // Anchor precisely at target coordinate, offset visually using CSS margins
+      iconAnchor: [0, 0]
+    });
+  }
+
+  function renderLeafletPhotoStickers() {
+    if (!leafletMap) return;
+    leafletPhotoStickers.forEach(function (s) { leafletMap.removeLayer(s); });
+    leafletPhotoStickers = [];
+
+    if (!state.showPhotos) return;
+
+    const z = leafletMap.getZoom();
+
+    // Group photos by their marker coordinate (stable position key)
+    const stacks = {};
+    Object.keys(state.journal).forEach(function (key) {
+      const j = state.journal[key];
+      if (j && j.photo) {
+        const marker = state.markers.find(function (m) { return m.id === key; });
+        if (marker) {
+          const posKey = marker.lon.toFixed(4) + "_" + marker.lat.toFixed(4);
+          if (!stacks[posKey]) {
+            stacks[posKey] = [];
+          }
+          stacks[posKey].push({
+            id: key,
+            photo: j.photo,
+            marker: marker,
+            rotate: getStableRotation(key),
+            posKey: posKey
+          });
+        }
+      }
+    });
+
+    const renderedEntries = [];
+    Object.keys(stacks).forEach(function (posKey) {
+      const stack = stacks[posKey];
+      let activeIdx = state.photoActiveIndex[posKey] || 0;
+      activeIdx = activeIdx % stack.length;
+      
+      const len = stack.length;
+      const pile = [];
+      if (len === 1) {
+        pile.push(stack[0]);
+      } else {
+        const showCount = Math.min(3, len);
+        for (let i = showCount - 1; i > 0; i--) {
+          const idx = (activeIdx + i) % len;
+          pile.push(stack[idx]);
+        }
+        pile.push(stack[activeIdx]); // Active photo is top of the pile
+      }
+
+      pile.forEach(function (item, pileIdx) {
+        item.pileIndex = pileIdx;
+        item.pileCount = len;
+        item.isActive = (pileIdx === pile.length - 1);
+        renderedEntries.push(item);
+      });
+    });
+
+    renderedEntries.forEach(function (d) {
+      const icon = createLeafletPhotoStickerIcon(d, z);
+      const photoMarker = L.marker([d.marker.lat, d.marker.lon], { icon: icon, zIndexOffset: -100 + d.pileIndex });
+      photoMarker.addTo(leafletMap);
+      
+      photoMarker.on("click", function(event) {
+        L.DomEvent.stopPropagation(event);
+        if (d.pileCount > 1) {
+          const newActiveIdx = (state.photoActiveIndex[d.posKey] || 0) + 1;
+          state.photoActiveIndex[d.posKey] = newActiveIdx;
+          renderLeafletPhotoStickers();
+          saveToLocalStorage();
+          
+          // Switch popup view to the new active photo's marker details
+          const stack = stacks[d.posKey];
+          const nextActiveItem = stack[newActiveIdx % stack.length];
+          showMarkerPopup(event, nextActiveItem.marker, this);
+        } else {
+          showMarkerPopup(event, d.marker, this);
+        }
+      });
+      
+      leafletPhotoStickers.push(photoMarker);
+    });
   }
 
   function updatePhotoEditUI(photoBase64) {
@@ -914,7 +1232,7 @@
     
     const keys = Object.keys(state.journal).filter(function (key) {
       const j = state.journal[key];
-      return j && (j.customName || j.date || j.rating || j.note);
+      return j && (j.customName || j.date || j.rating || j.note || j.photo);
     });
     
     if (!keys.length) {
@@ -945,15 +1263,25 @@
       const ratingStr = j.rating ? "★".repeat(j.rating) : "";
       const desc = j.note ? j.note : "";
       
+      const hasPhoto = !!j.photo;
+      const photoHtml = hasPhoto
+        ? "<div class='journal-thumbnail'><img src='" + j.photo + "' alt='縮圖'></div>"
+        : "";
+      
       return "<li class='journal-item' data-marker-id='" + key + "'>" +
-             "<div class='journal-title-row'>" +
-               "<span class='journal-title'>" + escapeHtml(title) + "</span>" +
-               "<span class='journal-date'>" + dateStr + "</span>" +
+             "<div style='display: flex; gap: 8px; align-items: flex-start;'>" +
+               photoHtml +
+               "<div style='flex: 1; min-width: 0;'>" +
+                 "<div class='journal-title-row'>" +
+                   "<span class='journal-title'>" + escapeHtml(title) + "</span>" +
+                   "<span class='journal-date'>" + dateStr + "</span>" +
+                 "</div>" +
+                 "<div class='journal-title-row' style='font-size:0.72rem; color:var(--gold); margin-top:2px; margin-bottom:2px;'>" +
+                   "<span>" + ratingStr + "</span>" +
+                 "</div>" +
+                 "<div class='journal-desc'>" + escapeHtml(desc) + "</div>" +
+               "</div>" +
              "</div>" +
-             "<div class='journal-title-row' style='font-size:0.72rem; color:var(--gold); margin-top:2px; margin-bottom:2px;'>" +
-               "<span>" + ratingStr + "</span>" +
-             "</div>" +
-             "<div class='journal-desc'>" + escapeHtml(desc) + "</div>" +
              "</li>";
     }).join("");
     
@@ -1003,6 +1331,7 @@
         customSignature: state.customSignature,
         showCompass: state.showCompass,
         showAirplane: state.showAirplane,
+        showPhotos: state.showPhotos,
         sourceName: state.sourceName
       }));
     } catch (e) {
@@ -1057,6 +1386,7 @@
         state.customSignature = settings.customSignature || "";
         state.showCompass = settings.showCompass !== undefined ? settings.showCompass : true;
         state.showAirplane = settings.showAirplane !== undefined ? settings.showAirplane : true;
+        state.showPhotos = settings.showPhotos !== undefined ? settings.showPhotos : true;
         state.sourceName = settings.sourceName || state.sourceName;
         
         els.themeSelect.value = state.theme;
@@ -1071,6 +1401,7 @@
         
         els.showCompass.checked = state.showCompass;
         els.showAirplane.checked = state.showAirplane;
+        if (els.showPhotos) els.showPhotos.checked = state.showPhotos;
         
         setSegmented(els.modeCluster.parentElement, state.mode === "cluster" ? els.modeCluster : els.modeAll);
         syncProjectionUi();
@@ -1120,6 +1451,7 @@
         customSignature: state.customSignature,
         showCompass: state.showCompass,
         showAirplane: state.showAirplane,
+        showPhotos: state.showPhotos,
         sourceName: state.sourceName
       }
     };
@@ -1158,6 +1490,7 @@
         state.customSignature = settings.customSignature || "";
         state.showCompass = settings.showCompass !== undefined ? settings.showCompass : true;
         state.showAirplane = settings.showAirplane !== undefined ? settings.showAirplane : true;
+        state.showPhotos = settings.showPhotos !== undefined ? settings.showPhotos : true;
         state.sourceName = settings.sourceName || "匯入的備份";
         
         els.themeSelect.value = state.theme;
@@ -1172,6 +1505,7 @@
         
         els.showCompass.checked = state.showCompass;
         els.showAirplane.checked = state.showAirplane;
+        if (els.showPhotos) els.showPhotos.checked = state.showPhotos;
         
         setSegmented(els.modeCluster.parentElement, state.mode === "cluster" ? els.modeCluster : els.modeAll);
         syncProjectionUi();
@@ -1288,6 +1622,37 @@
       .attr("d", "M 0,-10 L 1.5,-4 L 11,-1 L 11,1.5 L 1.5,1 L 1,7 L 4,9.5 L 4,11 L 0,10 L -4,11 L -4,9.5 L -1,7 L -1.5,1 L -11,1.5 L -11,-1 L -1.5,-4 Z")
       .attr("fill", t.edge)
       .attr("opacity", 0.7);
+  }
+
+  function renderPosterFrame() {
+    if (!gFrame) return;
+    gFrame.selectAll("*").remove();
+    
+    const t = theme().map;
+    if (isVectorMode()) {
+      gFrame.append("rect")
+        .attr("class", "poster-frame-outer")
+        .attr("x", 12)
+        .attr("y", 12)
+        .attr("width", width - 24)
+        .attr("height", height - 24)
+        .attr("fill", "none")
+        .attr("stroke", t.edge || t.landStroke)
+        .attr("stroke-width", 1.25)
+        .attr("opacity", 0.65);
+        
+      gFrame.append("rect")
+        .attr("class", "poster-frame-inner")
+        .attr("x", 16)
+        .attr("y", 16)
+        .attr("width", width - 32)
+        .attr("height", height - 32)
+        .attr("fill", "none")
+        .attr("stroke", t.edge || t.landStroke)
+        .attr("stroke-width", 0.5)
+        .attr("stroke-dasharray", "2.5,2.5")
+        .attr("opacity", 0.4);
+    }
   }
 
   function renderTitleBlock() {
@@ -1471,6 +1836,16 @@
         .attr("d", path)
         .attr("fill", t.bg)
         .attr("stroke", "none");
+
+      const graticule = d3.geoGraticule();
+      gOcean.selectAll("path.graticule").data([graticule()]).join("path")
+        .attr("class", "graticule")
+        .attr("d", path)
+        .attr("fill", "none")
+        .attr("stroke", t.edge || t.landStroke)
+        .attr("stroke-width", 0.4)
+        .attr("opacity", 0.12)
+        .attr("vector-effect", "non-scaling-stroke");
     }
 
     gMap.selectAll("path.land").data(state.landGeo.features).join("path")
@@ -1484,6 +1859,7 @@
     renderCompass();
     renderAirplane();
     renderTitleBlock();
+    renderPosterFrame();
     computeMapMetrics();
   }
 
@@ -1496,12 +1872,14 @@
     gRoot = svg.append("g");
     gOcean = gRoot.append("g").attr("class", "ocean-layer");
     gMap = gRoot.append("g").attr("class", "map-layer");
+    gPhotoStickers = gRoot.append("g").attr("class", "photo-stickers-layer");
     gMarkers = gRoot.append("g").attr("class", "marker-layer");
     gLabels = gRoot.append("g").attr("class", "label-layer");
     
     gCompass = svg.append("g").attr("class", "compass-layer");
     gDecoration = svg.append("g").attr("class", "decoration-layer");
     gTitleBlock = svg.append("g").attr("class", "title-block-layer");
+    gFrame = svg.append("g").attr("class", "frame-layer");
     
     zoom = d3.zoom()
       .scaleExtent([1, 12])
@@ -1537,6 +1915,51 @@
     state.zoomK = 1;
     zoom.transform(svg, id);
     applyVectorTransform(id, true);
+  }
+
+  // 重繪地圖裝飾與圖層，但保留現有縮放/平移狀態（不重設視角）
+  async function refreshMapInPlace() {
+    updateProjectionControls();
+    if (isVectorMode()) {
+      if (!svg) {
+        // 第一次初始化，需要完整流程
+        applyTheme(); // applyTheme 在向量模式下會 renderMap
+        initSvg();
+        renderMap();
+        resetVectorView();
+      } else {
+        // SVG 已存在，只需重繪（不重設視角）
+        // 注意：applyTheme() 在向量模式下會呼叫 renderMap()，所以此處只套用主題色彩 CSS 變數
+        showVectorMap();
+        // 直接套用主題 CSS 變數（不觸發 renderMap 的 applyTheme 路徑）
+        const t = theme();
+        const r = document.documentElement;
+        r.style.setProperty("--bg", t.ui.bg);
+        r.style.setProperty("--panel", t.ui.panel);
+        r.style.setProperty("--panel-border", t.ui.border);
+        r.style.setProperty("--gold", t.ui.accent);
+        r.style.setProperty("--gold-bright", t.map.marker);
+        r.style.setProperty("--text", t.ui.text);
+        r.style.setProperty("--text-dim", t.ui.textDim);
+        r.style.setProperty("--map-outer-bg", t.map.bg);
+        r.style.setProperty("--map-inner-bg", t.map.bg);
+        r.style.setProperty("--map-frame-border", t.map.landStrokeHi || t.map.landStroke);
+        if (els.themeSwatch) els.themeSwatch.innerHTML = t.swatch.map(function (c) {
+          return "<span style=\"background:" + c + "\"></span>";
+        }).join("");
+        // 自訂配色面板同步
+        if (state.theme === "custom" && els.customThemePanel) {
+          els.customThemePanel.classList.remove("hidden");
+        } else if (els.customThemePanel) {
+          els.customThemePanel.classList.add("hidden");
+        }
+        renderMap(); // 完整重繪地圖與所有裝飾
+      }
+    } else {
+      applyTheme(); // Tile 模式下 applyTheme 不觸發 renderMap
+      showTileMap();
+      await initLeaflet();
+    }
   }
 
   function loadGoogleScript(key) {
@@ -1695,6 +2118,7 @@
       
       leafletMarkers.push(marker);
     });
+    renderLeafletPhotoStickers();
   }
 
   async function initLeaflet() {
@@ -1733,6 +2157,7 @@
     
     if (gOcean) gOcean.style("display", null);
     if (gMap) gMap.style("display", null);
+    if (gPhotoStickers) gPhotoStickers.style("display", null);
     if (gMarkers) gMarkers.style("display", null);
     if (gLabels) gLabels.style("display", null);
     
@@ -1743,6 +2168,7 @@
       leafletMap = null;
       leafletLayer = null;
       leafletMarkers = [];
+      leafletPhotoStickers = [];
     }
   }
 
@@ -1752,6 +2178,7 @@
     
     if (gOcean) gOcean.style("display", "none");
     if (gMap) gMap.style("display", "none");
+    if (gPhotoStickers) gPhotoStickers.style("display", "none");
     if (gMarkers) gMarkers.style("display", "none");
     if (gLabels) gLabels.style("display", "none");
     
@@ -1835,6 +2262,9 @@
   }
 
   function openManualAddFormWithCoords(lat, lon) {
+    const tabBtn = document.querySelector(".tab-btn[data-tab='tab-journal']");
+    if (tabBtn) tabBtn.click();
+
     els.manualAddForm.classList.remove("hidden");
     els.manualLocLat.value = lat.toFixed(4);
     els.manualLocLon.value = lon.toFixed(4);
@@ -2136,15 +2566,19 @@
     els.baseMapSelect.value = preset.baseMap;
     syncProjectionUi();
     updatePresetUi(presetId);
-    applyTheme();
-    if (state.points.length) {
+    // 判斷是否需要重新渲染（已有地圖資料 OR landGeo 已載入的空白地圖）
+    if (state.landGeo || state.points.length) {
       try {
         setLoading(true);
-        await renderActiveMap();
+        // 使用 refreshMapInPlace 保留縮放狀態，避免每次切換風格都把地圖重設回初始視角
+        await refreshMapInPlace();
         setStatus(buildStatusLine());
       } finally {
         setLoading(false);
       }
+    } else {
+      // 尚未載入任何地圖資料，僅套用主題色彩
+      applyTheme();
     }
     toast(preset.toast, "success");
   }
@@ -2290,20 +2724,28 @@
     });
 
     // 編輯相片拖放上傳
+    els.popupPhotoEditZone.addEventListener("dragenter", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
     els.popupPhotoEditZone.addEventListener("dragover", function (e) {
       e.preventDefault();
+      e.stopPropagation();
       els.popupPhotoEditZone.style.borderColor = "var(--gold)";
       els.popupPhotoEditZone.style.background = "rgba(212, 181, 106, 0.1)";
     });
 
     els.popupPhotoEditZone.addEventListener("dragleave", function (e) {
       e.preventDefault();
+      e.stopPropagation();
       els.popupPhotoEditZone.style.borderColor = "var(--gold-dim)";
       els.popupPhotoEditZone.style.background = "rgba(0,0,0,0.18)";
     });
 
     els.popupPhotoEditZone.addEventListener("drop", async function (e) {
       e.preventDefault();
+      e.stopPropagation();
       els.popupPhotoEditZone.style.borderColor = "var(--gold-dim)";
       els.popupPhotoEditZone.style.background = "rgba(0,0,0,0.18)";
       const file = e.dataTransfer.files[0];
@@ -2671,6 +3113,18 @@
       saveToLocalStorage();
     });
 
+    if (els.showPhotos) {
+      els.showPhotos.addEventListener("change", function () {
+        state.showPhotos = els.showPhotos.checked;
+        if (isVectorMode()) {
+          renderD3PhotoStickers();
+        } else {
+          renderLeafletPhotoStickers();
+        }
+        saveToLocalStorage();
+      });
+    }
+
     // 備份配置檔匯出入
     els.btnExportBackup.addEventListener("click", exportBackup);
     els.backupFileInput.addEventListener("change", function () {
@@ -2838,8 +3292,23 @@
         };
         
         state.markers = buildMarkers(state.points);
+        
+        // 若地圖底圖尚未初始化（例如使用者第一次拖入照片），先載入底圖再渲染
         if (isVectorMode()) {
-          renderMarkers();
+          if (!state.landGeo) {
+            setStatus("正在載入世界地圖底圖…");
+            await loadLandGeo();
+          }
+          if (!svg) {
+            initSvg();
+            renderMap();
+            resetVectorView();
+          } else {
+            renderMap(); // 包含 renderMarkers、裝飾、貼圖
+          }
+          els.mapEmpty.classList.add("hidden");
+          els.mapEmpty.setAttribute("aria-hidden", "true");
+          els.mapSvg.classList.remove("hidden");
         } else {
           renderLeafletMarkers();
         }
@@ -2879,8 +3348,10 @@
         console.error(err);
       } finally {
         setLoading(false);
+        setStatus(buildStatusLine()); // 確保狀態列還原，不卡在「正在提取…」
       }
     });
+
 
     let resizeTimer;
     resizeObserver = new ResizeObserver(function () {

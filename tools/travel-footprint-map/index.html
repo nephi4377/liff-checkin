@@ -15,7 +15,7 @@
     <header class="header">
       <div class="header-main">
         <div class="title-wrap">
-          <h1>旅遊足跡地圖</h1>
+          <h1>旅遊足跡地圖 <span class="version-badge">v1.2</span></h1>
           <div class="header-controls">
             <button id="btnResetView" type="button" class="btn btn-header-control" disabled>重設視角</button>
             <button id="btnExport" type="button" class="btn btn-header-control" disabled>匯出 PNG</button>
@@ -120,6 +120,7 @@
       <aside class="sidebar" aria-label="操作面板">
         <div class="sidebar-tabs" role="tablist">
           <button type="button" class="tab-btn active" role="tab" aria-selected="true" data-tab="tab-data">足跡資料</button>
+          <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="tab-journal">旅行手帳</button>
           <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="tab-style">地圖風格</button>
           <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="tab-decor">海報自訂</button>
         </div>
@@ -179,8 +180,10 @@
               </ol>
             </details>
           </section>
+        </div>
 
-          <!-- 旅行手帳日記 -->
+        <!-- 分頁2: 旅行手帳 -->
+        <div id="tab-journal" class="tab-content hidden">
           <section class="card">
             <h2>旅行手帳日記</h2>
             <button id="btnStartManualAdd" type="button" class="btn btn-secondary" style="margin-bottom: 12px; font-size: 0.88rem; padding: 8px 12px;">📍 手動新增足跡點</button>
@@ -216,7 +219,7 @@
             </div>
             
             <label class="field-label">我的旅行日記</label>
-            <ul id="journalList" class="country-list empty-hint" style="max-height: 180px;">載入或手動記錄後，會列出已填寫日記的足跡</ul>
+            <ul id="journalList" class="country-list empty-hint" style="max-height: 480px;">載入或手動記錄後，會列出已填寫日記的足跡</ul>
           </section>
 
           <!-- 摘要統計 -->
@@ -334,6 +337,7 @@
               <button id="projRobinson" type="button" class="segmented-btn active" aria-pressed="true">羅賓森</button>
               <button id="projMercator" type="button" class="segmented-btn" aria-pressed="false">麥卡托</button>
             </div>
+
             <label class="field-label" for="markerSize">標記大小</label>
             <input id="markerSize" class="range" type="range" min="0.15" max="2.5" step="0.05" value="1.2">
             <div class="range-labels"><span>小</span><span id="markerSizeVal">1.2×</span><span>大</span></div>
@@ -365,6 +369,9 @@
               </label>
               <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; cursor: pointer;">
                 <input id="showAirplane" type="checkbox" checked style="accent-color: var(--gold);"> 顯示飛機與航線裝飾
+              </label>
+              <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; cursor: pointer;">
+                <input id="showPhotos" type="checkbox" checked style="accent-color: var(--gold);"> 顯示照片貼圖
               </label>
             </div>
           </section>

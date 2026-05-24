@@ -129,6 +129,10 @@ async function run() {
   }
 
   console.log('【測試步驟 6】測試側邊欄旅行手記日記點擊跳轉定位與平滑過渡…');
+  // 切換至旅行手帳分頁以使日記清單可見
+  await page.click('button[data-tab="tab-journal"]');
+  await page.waitForTimeout(500);
+
   // 點擊剛剛在側邊欄產生的日記項目
   const journalItems = page.locator('li.journal-item');
   const journalCount = await journalItems.count();
