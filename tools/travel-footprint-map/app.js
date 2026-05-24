@@ -1819,7 +1819,7 @@
     updateProjectionControls();
     applyTheme();
     if (isVectorMode()) {
-      if (!svg && state.points.length) initSvg();
+      if (!svg) initSvg();
       showVectorMap();
       renderMap();
       resetVectorView();
@@ -2912,7 +2912,22 @@
   
   // 優先加載 LocalStorage 緩存
   (async function () {
-    await loadFromLocalStorage();
+    const ok = await loadFromLocalStorage();
+    if (!ok) {
+      setLoading(true);
+      try {
+        if (isVectorMode()) await loadLandGeo();
+        els.mapEmpty.classList.add("hidden");
+        els.mapEmpty.setAttribute("aria-hidden", "true");
+        await renderActiveMap();
+        setStatus(buildStatusLine());
+      } catch (err) {
+        console.error("預設地圖載入失敗", err);
+        setStatus("載入失敗：" + err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
   })();
 })();
 

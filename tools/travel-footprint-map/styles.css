@@ -288,6 +288,11 @@ body {
   margin-bottom: 8px;
 }
 
+.select option {
+  background: var(--panel);
+  color: var(--text);
+}
+
 .select:focus, .text-input:focus {
   outline: none;
   border-color: var(--gold);
