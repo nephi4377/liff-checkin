@@ -1,0 +1,119 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "geometry": {
+        "coordinates": [
+          121.5645,
+          25.0339
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "date": "2026-05-24T12:00:00Z",
+        "google_maps_url": "http://maps.google.com/?cid=1234567890",
+        "location": {
+          "address": "110台灣台北市信義區信義路五段7號",
+          "country_code": "TW",
+          "name": "台北 101"
+        }
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          139.7454,
+          35.6586
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "date": "2026-05-24T12:01:00Z",
+        "google_maps_url": "http://maps.google.com/?cid=1234567891",
+        "location": {
+          "address": "日本〒105-0011 東京都港区芝公園４丁目２−８",
+          "country_code": "JP",
+          "name": "東京鐵塔"
+        }
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          2.2945,
+          48.8584
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "date": "2026-05-24T12:02:00Z",
+        "google_maps_url": "http://maps.google.com/?cid=1234567892",
+        "location": {
+          "address": "Champ de Mars, 5 Av. Anatole France, 75007 Paris, 法國",
+          "country_code": "FR",
+          "name": "巴黎艾菲爾鐵塔"
+        }
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -74.0445,
+          40.6892
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "date": "2026-05-24T12:03:00Z",
+        "google_maps_url": "http://maps.google.com/?cid=1234567893",
+        "location": {
+          "address": "New York, NY 10004美國",
+          "country_code": "US",
+          "name": "自由女神像"
+        }
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -0.1246,
+          51.5007
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "date": "2026-05-24T12:04:00Z",
+        "google_maps_url": "http://maps.google.com/?cid=1234567894",
+        "location": {
+          "address": "London SW1A 0AA英國",
+          "country_code": "GB",
+          "name": "大笨鐘"
+        }
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          151.2153,
+          -33.8568
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "date": "2026-05-24T12:05:00Z",
+        "google_maps_url": "http://maps.google.com/?cid=1234567895",
+        "location": {
+          "address": "Bennelong Point, Sydney NSW 2000澳洲",
+          "country_code": "AU",
+          "name": "雪梨歌劇院"
+        }
+      },
+      "type": "Feature"
+    }
+  ]
+}

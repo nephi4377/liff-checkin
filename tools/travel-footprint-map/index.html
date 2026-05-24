@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>旅遊足跡地圖</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3-geo-projection@3/dist/d3-geo-projection.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="header-main">
+        <div class="title-wrap">
+          <h1>旅遊足跡地圖</h1>
+          <div class="header-controls">
+            <button id="btnResetView" type="button" class="btn btn-header-control" disabled>重設視角</button>
+            <button id="btnExport" type="button" class="btn btn-header-control" disabled>匯出 PNG</button>
+          </div>
+        </div>
+        <p class="subtitle">載入 Google「已儲存的地點」JSON，在世界地圖上查看你去過哪裡</p>
+      </div>
+      <p id="statusLine" class="status-line" role="status" aria-live="polite">準備好了，請載入資料</p>
+    </header>
+
+    <div class="layout">
+      <main class="map-panel" id="mapPanel" aria-label="世界地圖">
+        <div class="map-outer" id="mapOuter">
+          <div class="map-frame" id="mapFrame">
+            <div id="mapEmpty" class="map-empty">
+              <p class="map-empty-title">還沒有足跡資料</p>
+              <p class="map-empty-hint">右側選單可載入 JSON，或先看 Takeout 匯出教學</p>
+            </div>
+            <div id="mapLoading" class="map-loading hidden" aria-hidden="true">
+              <div class="spinner" aria-hidden="true"></div>
+              <p>正在讀取並繪製地圖…</p>
+            </div>
+            <svg id="mapSvg" class="map-svg hidden" role="img" aria-label="旅遊足跡世界地圖"></svg>
+            <div id="mapLeaflet" class="map-leaflet hidden" aria-hidden="true"></div>
+            <div id="dropZoneMask" class="drop-zone-mask hidden">
+              <div class="drop-zone-content">
+                <span class="drop-zone-icon">📷</span>
+                <p class="drop-zone-text">放開滑鼠以讀取相片 EXIF 資訊，自動定位足跡點</p>
+              </div>
+            </div>
+            <div id="mapPopup" class="map-popup hidden" role="dialog" aria-label="旅行手記">
+              <button id="btnPopupClose" type="button" class="popup-close" aria-label="關閉彈窗">&times;</button>
+              
+              <!-- 1. 展示模式 (View Mode) -->
+              <div id="popupViewMode" class="popup-view-mode">
+                <div id="popupContent" class="popup-content"></div>
+                <div id="popupPhotoContainer" class="popup-photo-container hidden"></div>
+                <div id="popupJournalDisplay" class="popup-journal-display" style="margin-bottom: 12px; font-size: 0.82rem; line-height: 1.4; border-top: 1px dashed var(--panel-border); padding-top: 8px;"></div>
+                <div class="popup-actions">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span class="popup-action-label">更換標記：</span>
+                    <div class="popup-btn-group">
+                      <button class="popup-btn" data-type="glow" title="光點">🟢</button>
+                      <button class="popup-btn" data-type="flag" title="旗子">🚩</button>
+                      <button class="popup-btn" data-type="pin" title="圖釘">📌</button>
+                    </div>
+                  </div>
+                  <div style="display: flex; gap: 8px;">
+                    <button id="btnEditJournal" type="button" class="btn btn-secondary" style="padding: 6px; font-size: 0.8rem; flex: 1;">📝 編輯手記</button>
+                    <button id="btnDeleteLocation" type="button" class="btn btn-ghost hidden" style="padding: 6px; font-size: 0.8rem; flex: 1; border-color: var(--danger); color: #f0b0b0; margin-top: 0;">🗑 刪除足跡</button>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- 2. 編輯模式 (Edit Mode) -->
+              <div id="popupEditMode" class="popup-edit-mode hidden">
+                <h3 id="popupEditTitle" style="margin: 0 0 10px; font-size: 0.95rem; color: var(--gold-bright);">編輯旅行回憶</h3>
+                
+                <label class="field-label" for="journalNameInput">自訂顯示名稱</label>
+                <input id="journalNameInput" class="text-input" type="text" style="padding: 6px 8px; margin-bottom: 8px;" placeholder="例如：東京拉麵之旅">
+                
+                <label class="field-label" for="journalDateInput">造訪日期</label>
+                <input id="journalDateInput" class="text-input" type="date" style="padding: 6px 8px; margin-bottom: 8px;">
+                
+                <label class="field-label">旅行照片 (拖放或點擊相框上傳)</label>
+                <div id="popupPhotoEditZone" class="popup-photo-edit-zone" style="border: 1px dashed var(--gold-dim); border-radius: 8px; padding: 12px; text-align: center; cursor: pointer; background: rgba(0,0,0,0.18); margin-bottom: 8px; font-size: 0.8rem; color: var(--text-dim); transition: all 0.15s ease;">
+                  <div id="popupPhotoEditPreview" class="popup-photo-edit-preview hidden"></div>
+                  <div id="popupPhotoEditPlaceholder" class="popup-photo-edit-placeholder">
+                    <span>📸 點此或拖曳相片至此上傳</span>
+                  </div>
+                  <input id="journalPhotoInput" type="file" accept="image/jpeg,image/png" style="display:none;">
+                </div>
+                <button id="btnRemovePhoto" type="button" class="btn btn-ghost hidden" style="padding: 4px; font-size: 0.75rem; margin-top: 0; margin-bottom: 8px; border-color: var(--danger); color: #f0b0b0;">✕ 移除照片</button>
+
+                <label class="field-label" for="journalPhotoUrlInput">或貼上相片 URL 連結</label>
+                <input id="journalPhotoUrlInput" class="text-input" type="text" style="padding: 6px 8px; margin-bottom: 8px;" placeholder="https://example.com/photo.jpg">
+
+                <label class="field-label">推薦指數</label>
+                <div class="star-rating" style="display: flex; gap: 6px; margin-bottom: 8px;">
+                  <button type="button" class="star-btn" data-star="1" style="background:none; border:none; color:#666; font-size:1.4rem; cursor:pointer; padding:0; line-height:1;">★</button>
+                  <button type="button" class="star-btn" data-star="2" style="background:none; border:none; color:#666; font-size:1.4rem; cursor:pointer; padding:0; line-height:1;">★</button>
+                  <button type="button" class="star-btn" data-star="3" style="background:none; border:none; color:#666; font-size:1.4rem; cursor:pointer; padding:0; line-height:1;">★</button>
+                  <button type="button" class="star-btn" data-star="4" style="background:none; border:none; color:#666; font-size:1.4rem; cursor:pointer; padding:0; line-height:1;">★</button>
+                  <button type="button" class="star-btn" data-star="5" style="background:none; border:none; color:#666; font-size:1.4rem; cursor:pointer; padding:0; line-height:1;">★</button>
+                </div>
+                
+                <label class="field-label" for="journalNoteInput">旅行心得 / 日記備忘</label>
+                <textarea id="journalNoteInput" class="text-input" rows="3" style="padding: 6px 8px; margin-bottom: 10px; resize: none; font-family: inherit; font-size:0.82rem;" placeholder="寫下在這裡的旅行故事與回憶…"></textarea>
+                
+                <div style="display: flex; gap: 8px;">
+                  <button id="btnSaveJournal" type="button" class="btn btn-primary" style="padding: 6px; font-size: 0.82rem; flex: 1; margin-bottom: 0;">儲存</button>
+                  <button id="btnCancelJournal" type="button" class="btn btn-secondary" style="padding: 6px; font-size: 0.82rem; flex: 1;">取消</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="mapTooltip" class="map-tooltip hidden" role="tooltip"></div>
+      </main>
+
+      <aside class="sidebar" aria-label="操作面板">
+        <div class="sidebar-tabs" role="tablist">
+          <button type="button" class="tab-btn active" role="tab" aria-selected="true" data-tab="tab-data">足跡資料</button>
+          <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="tab-style">地圖風格</button>
+          <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="tab-decor">海報自訂</button>
+        </div>
+
+        <!-- 分頁1: 足跡資料 -->
+        <div id="tab-data" class="tab-content">
+          <section class="card card-primary">
+            <h2>載入資料</h2>
+            <p class="card-hint">支援 Google 匯出的 GeoJSON（已儲存的地點）</p>
+            <label class="btn btn-primary">
+               選擇 JSON 檔案
+              <input id="fileInput" type="file" accept=".json,application/json">
+            </label>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
+              <button id="btnExportBackup" type="button" class="btn btn-ghost" style="margin-top:0; padding: 8px 4px; font-size:0.8rem;" title="備份資料與海報設定為 JSON 檔">備份設定</button>
+              <label class="btn btn-ghost" style="margin-top:0; padding: 8px 4px; font-size:0.8rem; display: flex; align-items: center; justify-content: center; cursor: pointer;" title="載入備份 JSON 還原設定">
+                載入備份
+                <input id="backupFileInput" type="file" accept=".json,application/json">
+              </label>
+            </div>
+
+            <details class="takeout-guide">
+              <summary>如何從 Google 匯出？（圖文步驟）</summary>
+              <p class="card-hint">到 Google Takeout 下載「已儲存的地點」，解壓後找到 JSON 再載入本頁。</p>
+              <a class="btn btn-link" href="https://takeout.google.com/" target="_blank" rel="noopener noreferrer">開啟 Google Takeout ↗</a>
+
+              <ol class="takeout-steps">
+                <li>
+                  <div class="step-visual" aria-hidden="true">
+                    <svg viewBox="0 0 120 72" xmlns="http://www.w3.org/2000/svg"><rect width="120" height="72" rx="6" fill="#1a1814" stroke="#8a7344"/><text x="12" y="22" fill="#d4b56a" font-size="10">Google Takeout</text><rect x="12" y="30" width="96" height="10" rx="2" fill="#2a2418"/><rect x="12" y="46" width="70" height="10" rx="2" fill="#3d3420"/></svg>
+                  </div>
+                  <strong>① 開啟 Takeout</strong>
+                  <span>點上方按鈕，登入 Google 帳號</span>
+                </li>
+                <li>
+                  <div class="step-visual" aria-hidden="true">
+                    <svg viewBox="0 0 120 72" xmlns="http://www.w3.org/2000/svg"><rect width="120" height="72" rx="6" fill="#1a1814" stroke="#8a7344"/><rect x="12" y="14" width="14" height="14" rx="2" fill="#d4b56a"/><text x="32" y="24" fill="#e8dcc0" font-size="9">地圖（你的地點）</text><rect x="12" y="36" width="14" height="14" rx="2" fill="#2a2418" stroke="#666"/><text x="32" y="46" fill="#888" font-size="9">其他服務…</text></svg>
+                  </div>
+                  <strong>② 只勾「地圖」</strong>
+                  <span>取消全選 → 只留「地圖（你的地點）」</span>
+                </li>
+                <li>
+                  <div class="step-visual" aria-hidden="true">
+                    <svg viewBox="0 0 120 72" xmlns="http://www.w3.org/2000/svg"><rect width="120" height="72" rx="6" fill="#1a1814" stroke="#8a7344"/><rect x="12" y="20" width="96" height="32" rx="4" fill="#2a2418"/><text x="24" y="40" fill="#d4b56a" font-size="9">.zip 下載</text><path d="M70 36h20v8H70z" fill="#6aab6a"/></svg>
+                  </div>
+                  <strong>③ 建立匯出並下載</strong>
+                  <span>格式選 ZIP，等 Email 或頁面出現下載連結</span>
+                </li>
+                <li>
+                  <div class="step-visual" aria-hidden="true">
+                    <svg viewBox="0 0 120 72" xmlns="http://www.w3.org/2000/svg"><rect width="120" height="72" rx="6" fill="#1a1814" stroke="#8a7344"/><rect x="12" y="16" width="40" height="48" rx="3" fill="#222018" stroke="#8a7344"/><text x="18" y="32" fill="#d4b56a" font-size="7">已儲存</text><text x="18" y="42" fill="#d4b56a" font-size="7">的地點.json</text><path d="M58 40h40" stroke="#6aab6a" stroke-width="2"/><polygon points="98,40 90,36 90,44" fill="#6aab6a"/></svg>
+                  </div>
+                  <strong>④ 解壓並載入</strong>
+                  <span>路徑通常為 <code>Takeout/地圖/已儲存的地點.json</code>，用上方「選擇 JSON 檔案」</span>
+                </li>
+              </ol>
+            </details>
+          </section>
+
+          <!-- 旅行手帳日記 -->
+          <section class="card">
+            <h2>旅行手帳日記</h2>
+            <button id="btnStartManualAdd" type="button" class="btn btn-secondary" style="margin-bottom: 12px; font-size: 0.88rem; padding: 8px 12px;">📍 手動新增足跡點</button>
+            
+            <div id="manualAddForm" class="hidden" style="border: 1px dashed var(--gold-dim); border-radius: 8px; padding: 10px; margin-bottom: 12px; background: rgba(0,0,0,0.15); pointer-events: auto;">
+              <h3 style="margin: 0 0 8px; font-size: 0.85rem; color: var(--gold-bright);">手動新增足跡</h3>
+              <label class="field-label" for="manualLocName">地點名稱</label>
+              <input id="manualLocName" class="text-input" type="text" style="padding: 6px; font-size:0.8rem; margin-bottom: 6px;" placeholder="輸入地點，如：北海道">
+              
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+                <div>
+                  <label class="field-label" for="manualLocLat">緯度 (Lat)</label>
+                  <input id="manualLocLat" class="text-input" type="number" step="0.0001" style="padding: 6px; font-size:0.8rem; margin-bottom: 0;" placeholder="25.03">
+                </div>
+                <div>
+                  <label class="field-label" for="manualLocLon">經度 (Lon)</label>
+                  <input id="manualLocLon" class="text-input" type="number" step="0.0001" style="padding: 6px; font-size:0.8rem; margin-bottom: 0;" placeholder="121.56">
+                </div>
+              </div>
+
+              <label class="field-label" for="manualLocPhotoUrl">相片網址 (URL)</label>
+              <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+                <input id="manualLocPhotoUrl" class="text-input" type="text" style="padding: 6px; font-size:0.8rem; margin-bottom: 0; flex: 1;" placeholder="貼上相片網址">
+                <button id="btnFastReadUrl" type="button" class="btn btn-secondary" style="margin-top:0; padding: 6px; font-size:0.75rem; flex: 0 0 auto;">⚡ 快讀定位</button>
+              </div>
+              
+              <p class="card-hint" style="margin: 0 0 8px; font-size: 0.72rem; line-height:1.35;">提示：雙擊 D3 地圖空白處，或在圖磚地圖長按/右鍵亦可取點。</p>
+              
+              <div style="display: flex; gap: 6px;">
+                <button id="btnSubmitManualAdd" type="button" class="btn btn-primary" style="padding: 5px; font-size:0.8rem; flex:1; margin-bottom:0;">新增</button>
+                <button id="btnCancelManualAdd" type="button" class="btn btn-secondary" style="padding: 5px; font-size:0.8rem; flex:1;">取消</button>
+              </div>
+            </div>
+            
+            <label class="field-label">我的旅行日記</label>
+            <ul id="journalList" class="country-list empty-hint" style="max-height: 180px;">載入或手動記錄後，會列出已填寫日記的足跡</ul>
+          </section>
+
+          <!-- 摘要統計 -->
+          <section class="card">
+            <h2>摘要</h2>
+            <div id="summaryStats" class="summary-stats">
+              <div class="stat"><span class="stat-num">—</span><span class="stat-label">地點</span></div>
+              <div class="stat"><span class="stat-num">—</span><span class="stat-label">國家／地區</span></div>
+              <div class="stat"><span class="stat-num">—</span><span class="stat-label">地圖標記</span></div>
+            </div>
+            <ul id="countryList" class="country-list empty-hint">載入資料後會列出各國足跡</ul>
+          </section>
+        </div>
+
+        <!-- 分頁2: 地圖風格 -->
+        <div id="tab-style" class="tab-content hidden">
+          <section class="card card-presets">
+            <h2>一鍵風格</h2>
+            <p class="card-hint">免 API，點一下套用常用組合</p>
+            <div class="preset-grid" role="group" aria-label="一鍵風格">
+              <button type="button" class="preset-btn active" data-preset="poster" aria-pressed="true">
+                <span class="preset-icon" aria-hidden="true">🖼</span>
+                <span class="preset-title">裝飾海報</span>
+                <span class="preset-desc">向量 + 羅賓森</span>
+              </button>
+              <button type="button" class="preset-btn" data-preset="street-voyager" aria-pressed="false">
+                <span class="preset-icon" aria-hidden="true">🗺</span>
+                <span class="preset-title">街道 Voyager</span>
+                <span class="preset-desc">彩色、好認路</span>
+              </button>
+              <button type="button" class="preset-btn" data-preset="street-osm" aria-pressed="false">
+                <span class="preset-icon" aria-hidden="true">🧭</span>
+                <span class="preset-title">街道 OSM</span>
+                <span class="preset-desc">OpenStreetMap</span>
+              </button>
+              <button type="button" class="preset-btn" data-preset="satellite" aria-pressed="false">
+                <span class="preset-icon" aria-hidden="true">🛰</span>
+                <span class="preset-title">衛星空拍</span>
+                <span class="preset-desc">Esri 影像</span>
+              </button>
+            </div>
+            <p id="presetHint" class="card-hint">裝飾海報：白陸＋藍海高對比；配色可在「質感配色」更換</p>
+          </section>
+
+          <details class="card advanced">
+            <summary>底圖進階自訂</summary>
+            <label class="field-label" for="baseMapSelect">選擇底圖來源</label>
+            <select id="baseMapSelect" class="select">
+              <option value="vector">向量陸地（可羅賓森，裝飾風）</option>
+              <option value="carto-dark">Carto 深色（網路圖磚）</option>
+              <option value="carto-light">Carto 淺色（網路圖磚）</option>
+              <option value="carto-voyager">Carto Voyager（彩色）</option>
+              <option value="osm">OpenStreetMap（街道）</option>
+              <option value="esri-satellite">Esri 衛星影像</option>
+              <option value="google-road">Google 地圖（需金鑰）</option>
+              <option value="google-satellite">Google 衛星（需金鑰）</option>
+            </select>
+            <p id="baseMapHint" class="card-hint">進階自訂用；一般請用上方「一鍵風格」即可。</p>
+          </details>
+
+          <section class="card">
+            <h2>質感配色</h2>
+            <label class="field-label" for="themeSelect">整體色調</label>
+            <select id="themeSelect" class="select">
+              <option value="poster-white">海報·白陸藍海（掛軸風，預設）</option>
+              <option value="poster-teal">海報·深藍綠陸（百岳風）</option>
+              <option value="gold">曜金黑</option>
+              <option value="ocean">深海藍</option>
+              <option value="parchment">羊皮紙</option>
+              <option value="midnight">午夜藍</option>
+              <option value="aurora">極光綠</option>
+              <option value="rose">玫瑰暮</option>
+              <option value="custom">🎨 自訂專屬配色</option>
+            </select>
+            <div id="themeSwatch" class="theme-swatch" aria-hidden="true"></div>
+            
+            <div id="customThemePanel" class="custom-theme-panel hidden" style="margin-top: 12px; border-top: 1px dashed var(--panel-border); padding-top: 10px;">
+              <p class="card-hint" style="margin-bottom: 8px;">自訂色彩（即時套用）：</p>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px;">
+                <div>
+                  <label class="field-label" style="margin-bottom: 2px;">海洋背景</label>
+                  <input type="color" id="cpMapBg" value="#030304" style="width:100%; height:32px; border:1px solid var(--panel-border); border-radius:4px; cursor:pointer; background:none;">
+                </div>
+                <div>
+                  <label class="field-label" style="margin-bottom: 2px;">陸地填充</label>
+                  <input type="color" id="cpMapLand" value="#222018" style="width:100%; height:32px; border:1px solid var(--panel-border); border-radius:4px; cursor:pointer; background:none;">
+                </div>
+                <div>
+                  <label class="field-label" style="margin-bottom: 2px;">陸地邊框</label>
+                  <input type="color" id="cpMapLandStroke" value="#b89850" style="width:100%; height:32px; border:1px solid var(--panel-border); border-radius:4px; cursor:pointer; background:none;">
+                </div>
+                <div>
+                  <label class="field-label" style="margin-bottom: 2px;">標記顏色</label>
+                  <input type="color" id="cpMapMarker" value="#f0d080" style="width:100%; height:32px; border:1px solid var(--panel-border); border-radius:4px; cursor:pointer; background:none;">
+                </div>
+                <div>
+                  <label class="field-label" style="margin-bottom: 2px;">文字色彩</label>
+                  <input type="color" id="cpUiText" value="#e8dcc0" style="width:100%; height:32px; border:1px solid var(--panel-border); border-radius:4px; cursor:pointer; background:none;">
+                </div>
+                <div>
+                  <label class="field-label" style="margin-bottom: 2px;">邊框裝飾</label>
+                  <input type="color" id="cpUiBorder" value="#2a2418" style="width:100%; height:32px; border:1px solid var(--panel-border); border-radius:4px; cursor:pointer; background:none;">
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
+            <h2>顯示方式</h2>
+            <div class="segmented" role="group" aria-label="足跡顯示模式">
+              <button id="modeCluster" type="button" class="segmented-btn active" aria-pressed="true">重點城市</button>
+              <button id="modeAll" type="button" class="segmented-btn" aria-pressed="false">全部足跡</button>
+            </div>
+            <div id="projGroup" class="segmented" role="group" aria-label="地圖投影">
+              <button id="projRobinson" type="button" class="segmented-btn active" aria-pressed="true">羅賓森</button>
+              <button id="projMercator" type="button" class="segmented-btn" aria-pressed="false">麥卡托</button>
+            </div>
+            <label class="field-label" for="markerSize">標記大小</label>
+            <input id="markerSize" class="range" type="range" min="0.15" max="2.5" step="0.05" value="1.2">
+            <div class="range-labels"><span>小</span><span id="markerSizeVal">1.2×</span><span>大</span></div>
+            <label class="field-label" for="defaultMarkerSelect" style="margin-top: 10px;">預設標記圖示</label>
+            <select id="defaultMarkerSelect" class="select" style="margin-bottom: 0;">
+              <option value="glow">🟢 光點 (Glow)</option>
+              <option value="flag">🚩 旗子 (Flag)</option>
+              <option value="pin">📌 圖釘 (Pin)</option>
+            </select>
+          </section>
+        </div>
+
+        <!-- 分頁3: 海報自訂 -->
+        <div id="tab-decor" class="tab-content hidden">
+          <section class="card">
+            <h2>海報字體與裝飾</h2>
+            <label class="field-label" for="customTitleInput">主標題</label>
+            <input id="customTitleInput" class="text-input" type="text" placeholder="旅遊足跡  Travel Footprint">
+            
+            <label class="field-label" for="customSubtitleInput">英文短句 / 座右銘</label>
+            <input id="customSubtitleInput" class="text-input" type="text" placeholder="LET'S START THE JOURNEY">
+            
+            <label class="field-label" for="customSignatureInput">個人簽名 / 署名</label>
+            <input id="customSignatureInput" class="text-input" type="text" placeholder="你的名字或任何句子">
+            
+            <div class="checkbox-group" style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+              <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; cursor: pointer;">
+                <input id="showCompass" type="checkbox" checked style="accent-color: var(--gold);"> 顯示羅盤指北針
+              </label>
+              <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; cursor: pointer;">
+                <input id="showAirplane" type="checkbox" checked style="accent-color: var(--gold);"> 顯示飛機與航線裝飾
+              </label>
+            </div>
+          </section>
+
+          <details class="card card-muted advanced">
+            <summary>Google 地圖 API 金鑰（選用）</summary>
+            <p class="card-hint">Google 底圖需自行申請 API 金鑰，只儲存在你的瀏覽器，不會上傳。</p>
+            <label class="field-label" for="googleApiKey">API 金鑰</label>
+            <input id="googleApiKey" class="text-input" type="password" placeholder="貼上金鑰" autocomplete="off">
+            <button id="btnSaveGoogleKey" type="button" class="btn btn-secondary">儲存金鑰</button>
+            <button id="btnClearGoogleKey" type="button" class="btn btn-ghost">清除金鑰</button>
+          </details>
+
+          <section class="card card-muted">
+            <h2>地圖操作</h2>
+            <ul id="helpList" class="help-list">
+              <li>滾輪：放大／縮小（以滑鼠位置為中心）</li>
+              <li>拖曳：移動地圖</li>
+              <li>海報模式：陸海對比高，放大後海岸線不會變淡</li>
+              <li>點右側國家：跳到該區</li>
+            </ul>
+          </section>
+
+          <!-- 訪客地圖區域 -->
+          <div class="visitor-widget" id="visitorWidget">
+            <span>🗺️ 訪客統計地圖 (可在此嵌入 ClustrMaps 程式碼)</span>
+          </div>
+        </div>
+
+        <!-- 添心設計品牌頁腳 -->
+        <footer class="sidebar-footer">
+          <div class="privacy-footer-text">
+            🛡️ 本地隱私保證：本網頁為純前端工具，所有足跡與日記均儲存於您的本機瀏覽器中，絕不上傳雲端。
+          </div>
+          <div class="brand" style="margin-top: 8px;">添心設計 製作</div>
+          <div class="links">
+            <a href="https://tanxin.space/" target="_blank" rel="noopener" class="footer-link">
+              <svg class="link-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+              官方網站
+            </a>
+            <a href="https://www.facebook.com/TainanTanXin" target="_blank" rel="noopener" class="footer-link">
+              <svg class="link-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c4.56-.93 8-4.96 8-9.75z"/></svg>
+              Facebook
+            </a>
+          </div>
+        </footer>
+      </aside>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden" role="alert"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

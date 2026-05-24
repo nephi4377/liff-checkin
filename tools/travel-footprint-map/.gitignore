@@ -1,0 +1,4 @@
+# 排除個人真實足跡與評論，防止上傳至 GitHub
+data/my-saved-places.json
+data/my-saved-places-zh.json
+data/my-reviews.json
