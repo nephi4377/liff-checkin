@@ -91,6 +91,16 @@
       }
       saveSettingsLocalOnly();
     } else if (state.settings.schemaVersion < SCHEMA_V) {
+      if (state.settings.schemaVersion < 6) {
+        state.settings.mepSocketBase = 0;
+        state.settings.mepPerZone = 2;
+        (state.settings.itemDefs || []).forEach(function (it) {
+          if (it && it.id === 'mep_switches') {
+            it.unit = '座';
+            it.clientNote = '參考用「座」價。';
+          }
+        });
+      }
       mergeMissingItemDefsFromDefaults();
       ensureProtectSiteInAllSchemes();
       state.settings.schemaVersion = SCHEMA_V;
@@ -1203,12 +1213,15 @@
   }
 
   function showPriceSyncBar(msg, isError) {
+    if (document.getElementById('c_clientToast') && typeof qrClientToast === 'function' && !document.body.dataset.qrStandaloneAdmin) {
+      qrClientToast(msg, isError ? 'error' : 'info');
+    }
     var bar = document.getElementById('c_priceSyncBar');
     if (!bar) return;
     bar.textContent = msg;
     bar.className = isError
-      ? 'no-print text-xs mt-2 py-1.5 px-2 rounded border border-red-200 bg-red-50/90 text-red-900'
-      : 'no-print text-xs mt-2 py-1.5 px-2 rounded border border-amber-200 bg-amber-50/80 text-amber-950';
+      ? 'no-print text-sm mt-2 py-2 px-3 rounded-xl border border-red-200 bg-red-50/90 text-red-900'
+      : 'no-print text-sm mt-2 py-2 px-3 rounded-xl border border-amber-200 bg-amber-50/80 text-amber-950';
     bar.classList.remove('hidden');
     if (!isError) {
       setTimeout(function () {

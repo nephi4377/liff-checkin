@@ -11,79 +11,201 @@
       body { background: white !important; }
     }
   </style>
+  <style>
+    /* human-comfortable：主按鈕、步驟、觸控區 */
+    .qr-btn-primary {
+      min-height: 2.75rem;
+      padding: 0.625rem 1.25rem;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 0.75rem;
+      background: #92400e;
+      color: #fff;
+      box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+      transition: background 0.15s, transform 0.1s;
+    }
+    .qr-btn-primary:hover:not(:disabled) { background: #78350f; }
+    .qr-btn-primary:active:not(:disabled) { transform: scale(0.98); }
+    .qr-btn-primary:disabled { opacity: 0.65; cursor: wait; }
+    .qr-btn-secondary {
+      min-height: 2.75rem;
+      padding: 0.5rem 1rem;
+      font-size: 0.9375rem;
+      border-radius: 0.75rem;
+      border: 1px solid #d6d3d1;
+      background: #fff;
+      color: #44403c;
+    }
+    .qr-btn-secondary:hover:not(:disabled) { background: #fafaf9; border-color: #fcd34d; }
+    .qr-step-pill {
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.8125rem;
+      border: 1px solid #e7e5e4;
+      background: #f5f5f4;
+      color: #78716c;
+    }
+    .qr-step-pill.qr-step-active {
+      background: #fef3c7;
+      border-color: #fbbf24;
+      color: #78350f;
+      font-weight: 600;
+    }
+    .qr-step-pill.qr-step-done {
+      background: #ecfdf5;
+      border-color: #6ee7b7;
+      color: #065f46;
+    }
+    .qr-scheme-card {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-height: 2.75rem;
+      padding: 0.75rem 1rem;
+      border-radius: 0.75rem;
+      border: 2px solid #e7e5e4;
+      background: #fff;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .qr-scheme-card:has(input:checked) {
+      border-color: #b45309;
+      background: #fffbeb;
+    }
+    .qr-field-input {
+      min-height: 2.75rem;
+      font-size: 1rem;
+      border-radius: 0.75rem;
+    }
+    @media (min-width: 768px) {
+      .qr-sticky-actions {
+        position: static;
+        box-shadow: none;
+        border: none;
+        padding: 0;
+        background: transparent;
+      }
+    }
+    @media (max-width: 767px) {
+      .qr-sticky-actions {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 40;
+        padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+        background: rgba(255, 255, 255, 0.96);
+        border-top: 1px solid #e7e5e4;
+        box-shadow: 0 -4px 20px rgb(0 0 0 / 0.06);
+      }
+      body { padding-bottom: 5.5rem; }
+    }
+  </style>
 </head>
-<body class="bg-stone-100 text-stone-900 min-h-screen pb-24">
-  <div class="max-w-4xl mx-auto px-3 py-5">
-    <header class="no-print mb-4">
+<body class="bg-stone-100 text-stone-900 min-h-screen">
+  <div class="max-w-4xl mx-auto px-3 py-5 pb-8">
+    <header class="no-print mb-5">
+      <p class="text-sm text-stone-600 m-0 mb-1">這頁在做什麼</p>
       <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 class="text-2xl font-bold text-amber-900">快速報價（參考用）</h1>
-          <p class="text-sm text-stone-600 mt-1 max-w-2xl leading-relaxed">
-            四步完成：<strong>房型坪數</strong> → <strong>選方案</strong> → <strong>勾選項目</strong> → <strong>報價摘要</strong>。數量由方案規則帶入，可再手改。
-          </p>
-        </div>
-        <a
-          href="QuickRenovationQuote_v2_admin.html"
-          class="no-print shrink-0 text-xs px-3 py-2 rounded-lg border border-stone-300 bg-white text-stone-700 hover:bg-amber-50 hover:border-amber-300 no-underline"
-          >調單價／方案設定</a
-        >
+        <h1 class="text-2xl font-bold text-amber-900 m-0">快速報價（參考用）</h1>
       </div>
-      <p id="c_setupBanner" class="hidden no-print text-xs mt-3 py-2 px-3 rounded-lg border leading-relaxed" role="status" aria-live="polite"></p>
-      <p id="c_priceSyncBar" class="hidden no-print text-xs mt-2 py-1.5 px-2 rounded border border-amber-200 bg-amber-50/80 text-amber-950" role="status" aria-live="polite"></p>
-      <ol class="no-print mt-3 flex flex-wrap gap-2 text-[11px] text-stone-600 list-none p-0 m-0" aria-label="報價步驟">
-        <li class="px-2 py-1 rounded-full bg-amber-100 text-amber-950 border border-amber-200">① 坪數</li>
-        <li class="px-2 py-1 rounded-full bg-stone-100 border border-stone-200">② 方案</li>
-        <li class="px-2 py-1 rounded-full bg-stone-100 border border-stone-200">③ 明細</li>
-        <li class="px-2 py-1 rounded-full bg-stone-100 border border-stone-200">④ 摘要</li>
-      </ol>
+      <p id="c_setupBanner" class="hidden no-print text-sm mt-3 py-2.5 px-3 rounded-xl border leading-relaxed" role="status" aria-live="polite"></p>
+      <p id="c_clientToast" class="hidden no-print text-sm mt-2 py-2.5 px-3 rounded-xl border leading-relaxed" role="status" aria-live="assertive"></p>
+      <p id="c_priceSyncBar" class="hidden no-print text-sm mt-2 py-2 px-3 rounded-xl border border-amber-200 bg-amber-50/90 text-amber-950" role="status" aria-live="polite"></p>
+      <nav class="no-print mt-4 flex flex-wrap gap-2 list-none p-0 m-0" aria-label="目前進度">
+        <span id="qrStepPill1" data-qr-step="1" class="qr-step-pill qr-step-active">① 坪數</span>
+        <span id="qrStepPill2" data-qr-step="2" class="qr-step-pill">② 方案</span>
+        <span id="qrStepPill3" data-qr-step="3" class="qr-step-pill">③ 明細</span>
+        <span id="qrStepPill4" data-qr-step="4" class="qr-step-pill">④ 摘要</span>
+      </nav>
     </header>
 
-    <section id="clientSection" class="bg-white rounded-xl shadow p-4 md:p-6 space-y-6">
-      <div id="cStep1" class="space-y-4">
-        <h2 class="text-lg font-semibold text-amber-900">① 房型與總坪數（不含公設）</h2>
-        <p class="text-xs text-stone-500 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 leading-relaxed">
-          目前試算條件：<strong class="text-amber-900">大樓／公寓 · 新屋</strong>（透天、舊屋條件不同，日後另開；實務請與設計師確認）。
-        </p>
+    <section id="clientSection" class="bg-white rounded-2xl shadow-sm border border-stone-200/80 p-4 md:p-6 space-y-8">
+      <div id="cStep1" class="space-y-5">
+        <div>
+          <h2 class="text-lg font-semibold text-amber-900 m-0">① 房型與總坪數</h2>
+          <p class="text-sm text-stone-500 mt-1 m-0">不含公設；試算條件：大樓／公寓 · 新屋。</p>
+        </div>
         <input type="hidden" name="c_building" value="condo" />
         <input type="hidden" name="c_houseAge" value="new" />
-        <label class="block text-sm">房型模板</label>
-        <select id="c_template" class="border rounded-lg px-3 py-2 w-full max-w-md"></select>
-        <p class="text-xs text-stone-500">「兩房一廳一衛」與「兩房一廳」相同：2 臥、1 客廚、浴廁取列表<strong>第一筆</strong>坪數。三房為 1＋1.5 兩筆。</p>
-        <label class="block text-sm">總坪數（不含公設）</label>
-        <input id="c_totalPing" type="number" min="1" step="0.1" value="20" class="border rounded-lg px-3 py-2 w-full max-w-xs" />
-        <label class="block text-sm">案名／稱呼（選填）</label>
-        <input id="c_title" type="text" class="border rounded-lg px-3 py-2 w-full max-w-md" placeholder="例：張先生｜新竹案" />
-        <button type="button" id="c_calcBtn" class="no-print px-5 py-2 bg-amber-800 text-white rounded-lg font-medium">計算空間分配</button>
-      </div>
-
-      <div id="cStep2" class="hidden space-y-4 border-t pt-4">
-        <h2 class="text-lg font-semibold text-amber-900">② 推估結果與報價方案</h2>
-        <p class="text-xs text-stone-500">客廚占餘額比例在設定區間內隨機；臥室依倍率拆分。尺數依方案用該空間長邊或短邊換算台尺。</p>
-        <div id="c_allocTable" class="overflow-x-auto text-sm"></div>
-        <div class="no-print rounded-lg border border-amber-200 bg-amber-50/40 p-4 space-y-2">
-          <div class="text-sm font-medium text-amber-950">選一組<strong>報價方案</strong>（精簡／收納／造型等，於管理頁維護）</div>
-          <div id="c_schemeRadios" class="flex flex-wrap gap-3 text-sm"></div>
+        <div class="space-y-2">
+          <label for="c_template" class="block text-sm font-medium text-stone-800">房型</label>
+          <select id="c_template" class="qr-field-input border border-stone-300 px-3 py-2 w-full max-w-md focus:ring-2 focus:ring-amber-200 focus:border-amber-500 outline-none"></select>
         </div>
-        <button type="button" id="c_toItemsBtn" class="no-print px-5 py-2 bg-amber-800 text-white rounded-lg font-medium">下一步：帶出項目明細</button>
+        <div class="space-y-2">
+          <label for="c_totalPing" class="block text-sm font-medium text-stone-800">總坪數</label>
+          <input
+            id="c_totalPing"
+            type="number"
+            min="1"
+            step="0.1"
+            value="20"
+            inputmode="decimal"
+            class="qr-field-input border border-stone-300 px-3 py-2 w-full max-w-xs focus:ring-2 focus:ring-amber-200 focus:border-amber-500 outline-none"
+            aria-describedby="c_pingError"
+          />
+          <p id="c_pingError" class="hidden text-sm text-red-800 m-0" role="alert">請輸入大於 0 的坪數，例如 20 或 25.5。</p>
+        </div>
+        <div class="space-y-2">
+          <label for="c_title" class="block text-sm font-medium text-stone-800">案名（選填）</label>
+          <input
+            id="c_title"
+            type="text"
+            class="qr-field-input border border-stone-300 px-3 py-2 w-full max-w-md focus:ring-2 focus:ring-amber-200 outline-none"
+            placeholder="例：張先生｜新竹案"
+          />
+        </div>
+        <details class="text-xs text-stone-500">
+          <summary class="cursor-pointer text-stone-600 hover:text-amber-900">房型說明（選看）</summary>
+          <p class="mt-2 leading-relaxed m-0">兩房一廳一衛＝兩房一廳；浴廁取第一筆坪數。三房浴廁為 1＋1.5 坪。</p>
+        </details>
+        <div class="qr-sticky-actions no-print pt-1">
+          <button type="button" id="c_calcBtn" class="qr-btn-primary w-full sm:w-auto">下一步：計算空間</button>
+        </div>
       </div>
 
-      <div id="cStep3" class="hidden space-y-4 border-t pt-4">
-        <h2 class="text-lg font-semibold text-amber-900">③ 項目明細（可勾選、手改數量）</h2>
-        <p class="text-xs text-stone-500">
-          方案「<strong id="c_schemeNameStep3" class="text-amber-900">尚未產生</strong>」。<strong>請勾選</strong>要列入報價的項目（常見項已預勾）；數量建議用<strong>整數</strong>或<strong>0.5</strong>一檔。小計＝單價×數量。
+      <div id="cStep2" class="hidden space-y-5 border-t border-stone-100 pt-6">
+        <div>
+          <h2 class="text-lg font-semibold text-amber-900 m-0">② 空間推估與方案</h2>
+          <p class="text-sm text-stone-500 mt-1 m-0">確認坪數分配後，選一組報價方案。</p>
+        </div>
+        <div id="c_allocTable" class="overflow-x-auto text-sm rounded-xl border border-stone-200"></div>
+        <fieldset class="no-print space-y-3 border-0 p-0 m-0">
+          <legend class="text-sm font-medium text-stone-800 mb-2">報價方案</legend>
+          <div id="c_schemeRadios" class="flex flex-col sm:flex-row sm:flex-wrap gap-2"></div>
+        </fieldset>
+        <div class="qr-sticky-actions no-print">
+          <button type="button" id="c_toItemsBtn" class="qr-btn-primary w-full sm:w-auto">下一步：帶出項目</button>
+        </div>
+      </div>
+
+      <div id="cStep3" class="hidden space-y-5 border-t border-stone-100 pt-6">
+        <div>
+          <h2 class="text-lg font-semibold text-amber-900 m-0">③ 勾選項目</h2>
+          <p class="text-sm text-stone-500 mt-1 m-0">
+            方案：<strong id="c_schemeNameStep3" class="text-amber-900">—</strong>。勾選要報價的項目；數量可改（建議整數或 0.5）。
+          </p>
+        </div>
+        <p id="c_itemsEmptyHint" class="hidden text-sm text-amber-950 py-3 px-3 rounded-xl border border-amber-200 bg-amber-50 m-0" role="status">
+          尚無項目。請回上一步選方案，或到管理頁確認方案與品項已設定。
         </p>
         <div id="c_itemRows" class="space-y-2 text-sm"></div>
-        <div class="no-print flex flex-wrap gap-2 pt-2">
-          <button type="button" id="c_backToSchemeBtn" class="px-4 py-2 border border-amber-300 text-amber-900 rounded-lg">上一步：重選方案</button>
-          <button type="button" id="c_quoteBtn" class="px-5 py-2 bg-stone-800 text-white rounded-lg">產生報價摘要</button>
+        <div class="no-print flex flex-col sm:flex-row flex-wrap gap-2 qr-sticky-actions">
+          <button type="button" id="c_backToSchemeBtn" class="qr-btn-secondary w-full sm:w-auto order-2 sm:order-1">上一步</button>
+          <button type="button" id="c_quoteBtn" class="qr-btn-primary w-full sm:flex-1 sm:max-w-xs order-1 sm:order-2">產生報價摘要</button>
         </div>
       </div>
 
-      <div id="cStep4" class="hidden border-t pt-4 text-sm space-y-3">
-        <h2 class="text-lg font-semibold text-amber-900">④ 報價摘要（參考用）</h2>
-        <div id="c_quoteOut" class="bg-stone-50 rounded-lg p-4 space-y-2"></div>
-        <button type="button" id="c_printBtn" class="no-print px-5 py-2 border rounded-lg">列印／存 PDF</button>
-        <p class="text-xs text-stone-600 border-t pt-2">本報價僅依推估尺寸與方案規則試算，<strong>不構成承諾</strong>；請與專業設計師討論後定案。</p>
+      <div id="cStep4" class="hidden border-t border-stone-100 pt-6 text-sm space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h2 class="text-lg font-semibold text-amber-900 m-0">④ 報價摘要</h2>
+          <span id="c_quoteSuccessBadge" class="hidden text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-200">已產生</span>
+        </div>
+        <div id="c_quoteOut" class="bg-stone-50 rounded-xl border border-stone-200 p-4 space-y-2"></div>
+        <button type="button" id="c_printBtn" class="no-print qr-btn-secondary w-full sm:w-auto">列印或存成 PDF</button>
+        <p class="text-xs text-stone-500 m-0 border-t border-stone-100 pt-3 leading-relaxed">
+          僅供參考，不構成承諾；定案前請與設計師確認現場與圖面。
+        </p>
       </div>
     </section>
   </div>

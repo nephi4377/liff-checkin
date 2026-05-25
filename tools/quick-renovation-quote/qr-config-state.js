@@ -13,7 +13,7 @@
     projectId: '',
   };
   var PING_TO_M2 = 3.305785124;
-  var SCHEMA_V = 5;
+  var SCHEMA_V = 6;
 
   /** 客戶端／方案菜單表頭分群（數字愈小愈上面） */
   function menuBandOrderKey(band) {
@@ -146,8 +146,8 @@
     floorRound: 'int',
     trimMoldingRate: 0.05,
     touchupLump: 20000,
-    mepSocketBase: 30,
-    mepPerZone: 6,
+    mepSocketBase: 0,
+    mepPerZone: 2,
     balconyPing: 2,
     bathroomPings: [1, 1.5],
     lkShareMin: 0.5,
@@ -189,7 +189,7 @@
       { id: 'wardrobe2', zoneScope: 'all', menuBand: 'wood_full', sortKey: 2, group: '全室', groupTitle: '全室木作', quoteSection: '全室木作', displayRank: 215, menuMatrix: '次臥平均尺×%（舊合併列、少用）', label: '衣櫃(次臥短邊平均-舊)', unit: '尺', price: 3200, perSecondary: false, defaultOn: false, cabWood: false, hint: '併舊方案用', priceSheetTab: PRICE_TAB_WOOD, priceSheetItem: '開門高衣櫃-D60H240內', clientNote: '舊合併列：單價對照同主／次臥衣櫃 D60×H240。' },
       { id: 'paint_ceil', zoneScope: 'all', menuBand: 'paint', sortKey: 200, group: '油漆', groupTitle: '油漆工程', quoteSection: '油漆工程', displayRank: 220, menuMatrix: '變量・坪(面漆參考) | 不設邊', label: '面漆(天地壁-概估用坪)', unit: '坪', price: 600, defaultOn: true, cabWood: false, hint: '概估＝客+臥實鋪坪', priceSheetTab: PRICE_TAB_PAINT, priceSheetItem: '矽酸鈣/石膏天花板-乳膠漆', clientNote: '概估面漆：暫對天花乳膠漆列；可改牆面或水泥漆列。' },
       { id: 'paint_ac', zoneScope: 'all', menuBand: 'paint', sortKey: 201, group: '油漆', groupTitle: '油漆工程', quoteSection: '油漆工程', displayRank: 230, menuMatrix: '變量・全區包管短邊合計台尺', label: '矽鈣／包管油漆(參考台尺合)', unit: '尺', price: 200, defaultOn: true, cabWood: false, hint: '各空間包管一邊短尺加總', priceSheetTab: PRICE_TAB_PAINT, priceSheetItem: '油漆-冷氣包管', clientNote: '' },
-      { id: 'mep_switches', zoneScope: 'all', menuBand: 'mep', sortKey: 300, group: '水電', groupTitle: '水電工程', quoteSection: '水電工程', displayRank: 300, menuMatrix: '變量・點數(底+臥，管理員) | 全區', label: '出線/開關插座(參考-點)', unit: '式', price: 350, defaultOn: true, cabWood: false, hint: '底數+每區一參與', priceSheetTab: PRICE_TAB_MEP, priceSheetItem: '插座拉線新增/移位-一般作法', clientNote: '參考用「座」價；本工具數量語意為式／點時請手調或改對列。' },
+      { id: 'mep_switches', zoneScope: 'all', menuBand: 'mep', sortKey: 300, group: '水電', groupTitle: '水電工程', quoteSection: '水電工程', displayRank: 300, menuMatrix: '變量・點數(底+臥，管理員) | 全區', label: '出線/開關插座(參考-點)', unit: '座', price: 350, defaultOn: true, cabWood: false, hint: '底數+每區一參與', priceSheetTab: PRICE_TAB_MEP, priceSheetItem: '插座拉線新增/移位-一般作法', clientNote: '參考用「座」價。' },
       { id: 'mep_dedicated', zoneScope: 'all', menuBand: 'mep', sortKey: 301, group: '水電', groupTitle: '水電工程', quoteSection: '水電工程', displayRank: 302, menuMatrix: '定量(迴)', label: '專用迴路/220V(參考)', unit: '迴', price: 5000, defaultOn: true, cabWood: false, hint: '', priceSheetTab: PRICE_TAB_MEP, priceSheetItem: '新增5.5 專用迴路', clientNote: '表列單位為「處」；讀入後單位會以表為準。' },
       { id: 'mep_net', zoneScope: 'all', menuBand: 'mep', sortKey: 302, group: '水電', groupTitle: '水電工程', quoteSection: '水電工程', displayRank: 304, menuMatrix: '定量(點)', label: '網路/弱電延伸(參考)', unit: '點', price: 1500, defaultOn: true, cabWood: false, hint: '', priceSheetTab: PRICE_TAB_MEP, priceSheetItem: '網路線拉線/延長 +資訊座(延長工法)', clientNote: '' },
       { id: 'mep_tv', zoneScope: 'all', menuBand: 'mep', sortKey: 303, group: '水電', groupTitle: '水電工程', quoteSection: '水電工程', displayRank: 306, menuMatrix: '定量(路)', label: '有線電視/同軸(參考)', unit: '路', price: 1500, defaultOn: true, cabWood: false, hint: '', priceSheetTab: PRICE_TAB_MEP, priceSheetItem: '一孔電視', clientNote: '表無「路／同軸」專列：暫對「一孔電視」（組）；可改「電視(端末)」。' },

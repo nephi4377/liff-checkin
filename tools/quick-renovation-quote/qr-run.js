@@ -82,11 +82,11 @@
       var noteC = (it.clientNote && String(it.clientNote).trim()) || '';
       if (!noteC) noteC = (it.hint && String(it.hint).trim()) || '';
       var row = document.createElement('div');
-      row.className = 'flex flex-wrap items-center gap-2 border rounded-lg p-2';
+      row.className = 'flex flex-wrap items-center gap-2 border border-stone-200 rounded-xl p-3 min-h-[3rem] hover:bg-stone-50/50';
       var rid = drow.rowId;
       row.innerHTML =
         '<label class="inline-flex items-center gap-2 min-w-[200px]">' +
-        '<input type="checkbox" class="it-check" data-id="' +
+        '<input type="checkbox" class="it-check w-5 h-5 shrink-0 accent-amber-800" data-id="' +
         esc(rid) +
         '" />' +
         '<span>' +
@@ -133,6 +133,8 @@
         if (c) c.checked = true;
       }
     });
+    var emptyHint = document.getElementById('c_itemsEmptyHint');
+    if (emptyHint) emptyHint.classList.toggle('hidden', drows.length > 0);
   }
 
   function escDataIdForSelector(s) {
@@ -228,7 +230,11 @@
   function renderQuote() {
     var lines = collectQuoteLines();
     if (!lines.length) {
-      alert('請至少勾選一項要列入報價的項目（步驟③的核取方塊）。');
+      if (typeof qrClientToast === 'function') {
+        qrClientToast('請至少勾選一項要列入報價（在項目左側打勾）。', 'error');
+      }
+      var rows = document.getElementById('c_itemRows');
+      if (rows) rows.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
     var total = lines.reduce(function (a, l) { return a + l.sub; }, 0);
@@ -296,6 +302,14 @@
       money(total) +
       ' 元</div>';
     document.getElementById('cStep4').classList.remove('hidden');
+    var badge = document.getElementById('c_quoteSuccessBadge');
+    if (badge) badge.classList.remove('hidden');
+    if (typeof qrSetClientStep === 'function') qrSetClientStep(4);
+    if (typeof qrClientToast === 'function') qrClientToast('報價摘要已產生，可列印或存成 PDF。', 'ok');
+    setTimeout(function () {
+      var s4 = document.getElementById('cStep4');
+      if (s4) s4.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
   }
 
   function showClient() {
@@ -352,11 +366,11 @@
       syncSchemesJsonTextarea();
       readAdminForm();
       saveSettings().then(function (cloudOk) {
-        qrFlashAdminAction(cloudOk ? '設定已儲存（本機＋Firebase）。' : '設定已寫入本機；Firebase 暫時未同步。', cloudOk ? 'ok' : 'warn');
-        alert(
+        qrFlashAdminAction(
           cloudOk
-            ? '已儲存（本機與 Firebase）。'
-            : '已寫入本機；Firebase 同步失敗或未連線（見下方 Firebase 區狀態）。'
+            ? '設定已儲存（本機與雲端）。'
+            : '已寫入本機；雲端暫未同步，可稍後再按上傳或見下方狀態。',
+          cloudOk ? 'ok' : 'warn'
         );
       });
     };
@@ -471,9 +485,11 @@
     loadSettings();
     var T = parseFloat(document.getElementById('c_totalPing').value);
     if (isNaN(T) || T <= 0) {
-      alert('請輸入有效總坪數');
+      if (typeof qrShowPingError === 'function') qrShowPingError(true);
+      if (typeof qrClientToast === 'function') qrClientToast('請先填寫有效的總坪數。', 'error');
       return;
     }
+    if (typeof qrShowPingError === 'function') qrShowPingError(false);
     var alloc = computeAllocation(T, document.getElementById('c_template').value, state.settings);
     state.lastAlloc = alloc;
     renderAllocTable(alloc);
@@ -482,11 +498,24 @@
     document.getElementById('cStep2').classList.remove('hidden');
     document.getElementById('cStep3').classList.add('hidden');
     document.getElementById('cStep4').classList.add('hidden');
+    var badge = document.getElementById('c_quoteSuccessBadge');
+    if (badge) badge.classList.add('hidden');
+    if (typeof qrSetClientStep === 'function') qrSetClientStep(2);
+    if (typeof qrClientToast === 'function') qrClientToast('空間分配完成，請選報價方案。', 'ok');
+    setTimeout(function () {
+      var s2 = document.getElementById('cStep2');
+      if (s2) s2.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
   }
   var cCalcBtn = document.getElementById('c_calcBtn');
   if (cCalcBtn) {
     cCalcBtn.addEventListener('click', function () {
-      var go = function () { runClientStep1Alloc(); };
+      var btn = cCalcBtn;
+      var go = function () {
+        if (typeof qrBtnBusy === 'function') qrBtnBusy(btn, false);
+        runClientStep1Alloc();
+      };
+      if (typeof qrBtnBusy === 'function') qrBtnBusy(btn, true, '計算中…');
       if (priceSyncPromise && typeof priceSyncPromise.finally === 'function') {
         priceSyncPromise.finally(go);
       } else {
@@ -494,17 +523,29 @@
       }
     });
   }
+  var cPingInp = document.getElementById('c_totalPing');
+  if (cPingInp) {
+    cPingInp.addEventListener('input', function () {
+      if (typeof qrShowPingError === 'function') qrShowPingError(false);
+    });
+  }
   var cToItemsBtn = document.getElementById('c_toItemsBtn');
   if (cToItemsBtn) {
     cToItemsBtn.addEventListener('click', function () {
-      if (!state.lastAlloc) return;
+      if (!state.lastAlloc) {
+        if (typeof qrClientToast === 'function') qrClientToast('請先完成「計算空間」這一步。', 'error');
+        return;
+      }
+      if (typeof qrBtnBusy === 'function') qrBtnBusy(cToItemsBtn, true, '載入中…');
       getSelectedSchemeId();
       buildItemRows(state.lastAlloc);
+      if (typeof qrBtnBusy === 'function') qrBtnBusy(cToItemsBtn, false);
       document.getElementById('cStep3').classList.remove('hidden');
       if (document.getElementById('c_schemeNameStep3')) {
         var sc2 = getSchemeById(getSelectedSchemeId());
         document.getElementById('c_schemeNameStep3').textContent = sc2.name;
       }
+      if (typeof qrSetClientStep === 'function') qrSetClientStep(3);
       setTimeout(function () {
         var el = document.getElementById('cStep3');
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -515,6 +556,7 @@
   if (cBackToSchemeBtn) {
     cBackToSchemeBtn.addEventListener('click', function () {
       document.getElementById('cStep3').classList.add('hidden');
+      if (typeof qrSetClientStep === 'function') qrSetClientStep(2);
       var box = document.getElementById('c_schemeRadios');
       if (box) {
         setTimeout(function () {
@@ -524,7 +566,13 @@
     });
   }
   var cQuoteBtn = document.getElementById('c_quoteBtn');
-  if (cQuoteBtn) cQuoteBtn.addEventListener('click', renderQuote);
+  if (cQuoteBtn) {
+    cQuoteBtn.addEventListener('click', function () {
+      if (typeof qrBtnBusy === 'function') qrBtnBusy(cQuoteBtn, true, '產生中…');
+      renderQuote();
+      if (typeof qrBtnBusy === 'function') qrBtnBusy(cQuoteBtn, false);
+    });
+  }
   var cPrintBtn = document.getElementById('c_printBtn');
   if (cPrintBtn) {
     cPrintBtn.addEventListener('click', function () {
@@ -622,6 +670,7 @@
   }
 
   function qrAfterSettingsReady() {
+    if (typeof qrSetClientStep === 'function') qrSetClientStep(1);
     if (typeof qrRenderClientSetupBanner === 'function') qrRenderClientSetupBanner();
     var syncDone = function () {
       if (typeof qrRenderClientSetupBanner === 'function') qrRenderClientSetupBanner();

@@ -214,6 +214,65 @@
     else el.classList.add('border-emerald-200', 'bg-emerald-50', 'text-emerald-950');
   }
 
+  /** 客戶頁輕量提示（取代 alert；自動收起） */
+  function qrClientToast(msg, level) {
+    var el = document.getElementById('c_clientToast');
+    if (!el || !msg) return;
+    if (el._qrToastT) clearTimeout(el._qrToastT);
+    el.textContent = msg;
+    el.className =
+      'no-print text-sm mt-2 py-2.5 px-3 rounded-xl border leading-relaxed ' +
+      (level === 'error'
+        ? 'border-red-200 bg-red-50 text-red-900'
+        : level === 'ok'
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+          : 'border-stone-200 bg-stone-50 text-stone-800');
+    el.classList.remove('hidden');
+    el._qrToastT = setTimeout(function () {
+      el.classList.add('hidden');
+    }, level === 'error' ? 10000 : 5000);
+  }
+
+  function qrSetClientStep(step) {
+    var n = parseInt(step, 10) || 1;
+    document.querySelectorAll('[data-qr-step]').forEach(function (pill) {
+      var s = parseInt(pill.getAttribute('data-qr-step'), 10);
+      pill.classList.remove('qr-step-active', 'qr-step-done');
+      if (s === n) pill.classList.add('qr-step-active');
+      else if (s < n) pill.classList.add('qr-step-done');
+    });
+  }
+
+  function qrBtnBusy(btn, busy, busyLabel) {
+    if (!btn) return;
+    if (busy) {
+      if (!btn.dataset.qrIdleLabel) btn.dataset.qrIdleLabel = btn.textContent;
+      btn.disabled = true;
+      btn.setAttribute('aria-busy', 'true');
+      if (busyLabel) btn.textContent = busyLabel;
+    } else {
+      btn.disabled = false;
+      btn.removeAttribute('aria-busy');
+      if (btn.dataset.qrIdleLabel) btn.textContent = btn.dataset.qrIdleLabel;
+    }
+  }
+
+  function qrShowPingError(show) {
+    var inp = document.getElementById('c_totalPing');
+    var err = document.getElementById('c_pingError');
+    if (!inp || !err) return;
+    if (show) {
+      err.classList.remove('hidden');
+      inp.classList.add('border-red-400', 'ring-2', 'ring-red-100');
+      inp.setAttribute('aria-invalid', 'true');
+      inp.focus();
+    } else {
+      err.classList.add('hidden');
+      inp.classList.remove('border-red-400', 'ring-2', 'ring-red-100');
+      inp.removeAttribute('aria-invalid');
+    }
+  }
+
   function fillTemplateSelect() {
     var sel = document.getElementById('c_template');
     if (!sel) return;
@@ -237,15 +296,16 @@
     box.innerHTML = '';
     menus.forEach(function (sc) {
       var lab = document.createElement('label');
-      lab.className = 'inline-flex items-center gap-1';
+      lab.className = 'qr-scheme-card flex-1 min-w-[8rem]';
       var chk = sc.id === state.selectedSchemeId ? ' checked' : '';
       lab.innerHTML =
-        '<input type="radio" name="scheme" value="' +
+        '<input type="radio" name="scheme" class="w-4 h-4 shrink-0 accent-amber-800" value="' +
         esc(sc.id) +
         '"' +
         chk +
-        ' /> ' +
-        esc(sc.name);
+        ' /><span class="font-medium text-stone-800">' +
+        esc(sc.name) +
+        '</span>';
       box.appendChild(lab);
     });
     box.querySelectorAll('input[name=scheme]').forEach(function (inp) {
