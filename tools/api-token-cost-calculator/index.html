@@ -996,6 +996,7 @@
     let apiKey = '';
     let uploadedImageBase64 = null;
     let uploadedImageMimeType = null;
+    let uploadedImagesList = [];
     let historyLogs = [];
     let dataDirHandle = null;
 
@@ -1918,6 +1919,274 @@
     // Helper Functions
     function csvEscape(unsafe) {
       return unsafe.toString().replace(/"/g, '""');
+    }
+
+    // --- 載入後端日誌與照片連結串接邏輯 (human-comfortable) ---
+    let backendLogsList = []; // 快取當前案場的日誌陣列
+
+    async function loadProjectLogsFromBackend() {
+      const projInputVal = document.getElementById('live-project-id').value.trim();
+      const loadBtn = document.getElementById('btn-load-backend-logs');
+      
+      const backendUrlInput = document.getElementById('setting-backend-url');
+      const backendUserIdInput = document.getElementById('setting-backend-user-id');
+
+      const backendUrl = (backendUrlInput ? backendUrlInput.value.trim() : '') || localStorage.getItem('tx_backend_url') || 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
+      const userId = (backendUserIdInput ? backendUserIdInput.value.trim() : '') || localStorage.getItem('tx_backend_user_id') || 'Ud58333430513b7527106fa71d2e30151';
+
+      if (!backendUrl) {
+        showError('設定缺失', '請先前往 [模型與費率設定] 貼入您的 添心系統後端 WebApp API URL。');
+        return;
+      }
+
+      if (!userId) {
+        showError('設定缺失', '請先前往 [模型與費率設定] 貼入您的 添心系統後端 User ID (userId / uid)。');
+        return;
+      }
+
+      // 提取案號（例如 A2026-001 或 A26-01，支援多種案號命名）
+      const projIdMatch = projInputVal.match(/^[a-zA-Z0-9_-]+/);
+      const projectId = projIdMatch ? projIdMatch[0] : projInputVal;
+
+      if (!projectId) {
+        showError('案號為空', '請輸入有效的專案案號（例如：A2026-001）。');
+        return;
+      }
+
+      hideError();
+      loadBtn.disabled = true;
+      loadBtn.innerHTML = `<i class="fa-solid fa-spinner spinner"></i> 載入中`;
+
+      try {
+        const fetchUrl = `${backendUrl}?page=project&id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
+        const response = await fetch(fetchUrl);
+        const res = await response.json();
+
+        if (!response.ok || !res.success) {
+          throw new Error(res.message || `HTTP error! status: ${response.status}`);
+        }
+
+        // page=project API 回傳的資料結構中，dailyLogs 才是日誌陣列
+        backendLogsList = (res.data && res.data.dailyLogs) || [];
+        
+        if (backendLogsList.length === 0) {
+          alert(`案場 ${projectId} 載入成功，但該專案目前無已發布之施工日誌。`);
+          document.getElementById('backend-logs-group').style.display = 'none';
+          return;
+        }
+
+        // 動態填充日誌選擇下拉選單
+        const select = document.getElementById('backend-logs-select');
+        let html = '';
+        backendLogsList.forEach((log, index) => {
+          const dateStr = log.Timestamp ? new Date(log.Timestamp).toLocaleString('zh-TW', { hour12: false }) : '時間未知';
+          const title = log.Title || '無標題日誌';
+          html += `<option value="${index}">${escapeHtml(dateStr)} - ${escapeHtml(title)}</option>`;
+        });
+        select.innerHTML = html;
+        document.getElementById('backend-logs-group').style.display = 'block';
+
+        // 自動套用第一筆（最最新的一筆）
+        await applyBackendLog(0);
+
+      } catch (err) {
+        console.error(err);
+        showError('載入失敗', `無法載入專案資料，請檢查後端 API URL / User ID 是否正確與是否部署。細節: ${err.message}`);
+      } finally {
+        loadBtn.disabled = false;
+        loadBtn.innerHTML = `<i class="fa-solid fa-cloud-arrow-down"></i> 載入日誌`;
+      }
+    }
+
+    // 背景透過雙 CORS 代理下載 Google Drive 照片並轉成 Base64 (免改後端自動化方案)
+    async function downloadImageAsBase64WithFallback(fileId) {
+      // 優先使用 Google Drive 縮圖 (sz=w800)，載入速度快幾十倍且大量節省 Token 成本 (總監建議)
+      const displayUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+      
+      const proxies = [
+        (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+        (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+      ];
+
+      for (let proxy of proxies) {
+        try {
+          const fetchUrl = proxy(displayUrl);
+          const response = await fetch(fetchUrl);
+          if (!response.ok) continue;
+
+          const blob = await response.blob();
+          
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const base64 = reader.result.split(',')[1];
+              resolve({
+                base64: base64,
+                mimeType: blob.type || 'image/jpeg'
+              });
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (e) {
+          console.warn(`Proxy failed for photo ID ${fileId}, trying next...`, e);
+        }
+      }
+      throw new Error('All CORS proxies failed to download the image.');
+    }
+
+    async function applyBackendLog(index) {
+      const log = backendLogsList[index];
+      if (!log) return;
+
+      // 1. 填入內文
+      const contextTextarea = document.getElementById('live-context');
+      if (contextTextarea) {
+        contextTextarea.value = log.Content || '';
+      }
+
+      // 2. 清空既有的圖片預覽與上傳陣列 (避免前一次的資料殘留)
+      clearAllUploadedImages();
+
+      // 3. 解析照片
+      const photoLinksCsv = log.PhotoLinks || '';
+      if (!photoLinksCsv) {
+        saveInputDraft();
+        return;
+      }
+
+      const urls = photoLinksCsv.split(',').map(url => url.trim()).filter(Boolean);
+      if (urls.length === 0) {
+        saveInputDraft();
+        return;
+      }
+
+      const previewContainer = document.getElementById('upload-previews-list');
+      
+      // 溫柔提示卡片 (符合 human-comfortable 精神)
+      const tipCard = document.createElement('div');
+      tipCard.style.cssText = 'width: 100%; padding: 0.75rem; background: rgba(16, 185, 129, 0.1); border: 1px dashed rgba(16, 185, 129, 0.3); border-radius: 8px; margin-bottom: 0.5rem; font-size: 0.8rem; color: #34d399; display: flex; align-items: flex-start; gap: 0.5rem;';
+      tipCard.innerHTML = `
+        <i class="fa-solid fa-circle-check" style="margin-top: 0.15rem; color: #10b981;"></i>
+        <div>
+          <strong>照片背景載入系統：</strong>已秒速載入縮圖預覽。背景正在嘗試為 AI 自動編碼照片...<br>
+          <span style="color: var(--warning); font-size: 0.75rem;">* 若出現 <span style="background: var(--warning); color: #000; padding: 1px 3px; border-radius: 2px; font-weight: bold;">⚠️ 限制 (CORS)</span>，代表 Google 限制 API 自動存取。請點擊該圖下載，並直接拖回上方上傳區即可供 AI 分析。</span>
+        </div>
+      `;
+      previewContainer.appendChild(tipCard);
+
+      // 對於每張照片，在預覽區直接顯示 Google 縮圖 (自帶 Cookie 100% 成功) 並背景下載
+      urls.forEach((url, i) => {
+        const match = url.match(/\/d\/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)/);
+        const fileId = match ? (match[1] || match[2]) : null;
+
+        if (!fileId) return;
+
+        const thumbUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w600`;
+        const downloadUrl = `https://drive.google.com/uc?id=${fileId}&export=download`;
+
+        // 建立相片容器（首屏直載 thumbnail）
+        const item = document.createElement('div');
+        item.style.cssText = 'position: relative; width: 110px; height: 110px; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease;';
+        
+        item.innerHTML = `
+          <img src="${thumbUrl}" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.7;" onerror="this.src='https://placehold.co/110?text=無縮圖'">
+          <div class="loading-overlay" style="position: absolute; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; transition: opacity 0.2s ease;">
+            <i class="fa-solid fa-circle-notch spinner" style="color: var(--primary); font-size: 1.25rem;"></i>
+          </div>
+          <div class="status-badge" style="position: absolute; bottom: 4px; left: 4px; right: 4px; padding: 2px 0; border-radius: 4px; font-size: 0.65rem; text-align: center; background: rgba(15, 23, 42, 0.75); color: var(--text-muted); font-weight: 500; transition: all 0.2s ease;">
+            編碼中...
+          </div>
+          <button type="button" class="clear-img-btn" style="position: absolute; width: 20px; height: 20px; font-size: 0.7rem; top: 4px; right: 4px; display: none; z-index: 10;">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        `;
+        
+        previewContainer.appendChild(item);
+
+        // 背景非同步下載
+        downloadImageAsBase64WithFallback(fileId).then(res => {
+          if (!res) throw new Error('圖片轉換失敗');
+
+          // 自動 Push 到 uploadedImagesList
+          uploadedImagesList.push({
+            base64: res.base64,
+            mimeType: res.mimeType,
+            name: `drive_${fileId}.jpg`
+          });
+
+          const finalIndex = uploadedImagesList.length - 1;
+
+          // 載入完成 UI 更新
+          const overlay = item.querySelector('.loading-overlay');
+          if (overlay) overlay.remove();
+
+          const img = item.querySelector('img');
+          if (img) {
+            img.style.opacity = '1';
+            // 將圖片替換為本地載入的 Base64，確保預覽無誤
+            img.src = `data:${res.mimeType};base64,${res.base64}`;
+          }
+
+          const badge = item.querySelector('.status-badge');
+          if (badge) {
+            badge.style.background = 'rgba(16, 185, 129, 0.85)';
+            badge.style.color = '#ffffff';
+            badge.innerText = '✓ 自動 (AI)';
+          }
+
+          // 顯示刪除按鈕並綁定事件
+          const btn = item.querySelector('.clear-img-btn');
+          if (btn) {
+            btn.style.display = 'flex';
+            btn.onclick = (e) => {
+              e.stopPropagation();
+              removeUploadedImage(finalIndex);
+              item.remove();
+            };
+          }
+
+        }).catch(err => {
+          console.warn(`Failed to fetch and convert image ${fileId}:`, err);
+          
+          // 載入失敗 UI 更新 (CORS 阻擋) - 降級防退保留縮圖
+          const overlay = item.querySelector('.loading-overlay');
+          if (overlay) overlay.remove();
+
+          const img = item.querySelector('img');
+          if (img) img.style.opacity = '0.9'; // 保留縮圖顯示
+
+          const badge = item.querySelector('.status-badge');
+          if (badge) {
+            badge.style.background = 'rgba(245, 158, 11, 0.9)';
+            badge.style.color = '#ffffff';
+            badge.innerText = '⚠️ 限制 (CORS)';
+          }
+
+          // 讓整張卡片變成可以點選下載，並在 hover 顯示提示
+          item.style.cursor = 'pointer';
+          item.title = 'Google API 限制自動存取。點擊此處下載該圖，並拖回上方上傳區即可供 AI 分析。';
+          
+          // 卡片點擊事件：下載照片
+          item.onclick = (e) => {
+            // 如果點到刪除按鈕則不觸發下載
+            if (e.target.closest('.clear-img-btn')) return;
+            window.open(downloadUrl, '_blank');
+          };
+
+          // 顯示刪除按鈕並綁定事件
+          const btn = item.querySelector('.clear-img-btn');
+          if (btn) {
+            btn.style.display = 'flex';
+            btn.onclick = (e) => {
+              e.stopPropagation();
+              item.remove();
+            };
+          }
+        });
+      });
+
+      saveInputDraft();
     }
   </script>
 </body>
