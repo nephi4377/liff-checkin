@@ -18,7 +18,8 @@
         const CONSTANTS = {
             LIFF_ID: '2007974938-jVxn6y37',
             GAS_URL: 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec',
-            VERSION: 'v26.03.17.1335',
+            VERSION: 'v26.05.30.1400',
+            OFF_SITE_VALID_METERS: 200,
             CACHE_KEYS: {
                 PROFILE: 'checkin_user_profile_cache', // 使用者個人資料快取
                 HISTORY: 'checkin_history_records',     // 歷史打卡紀錄快取
@@ -103,6 +104,42 @@
         .status-icon svg {
             width: 1.25rem;
             height: 1.25rem;
+        }
+
+        .off-site-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+            margin: 0.75rem 0;
+        }
+
+        .off-site-chip {
+            font-size: 0.7rem;
+            line-height: 1.2;
+            padding: 0.35rem 0.65rem;
+            border-radius: 9999px;
+            border: 1px solid #cbd5e1;
+            background: #fff;
+            color: #475569;
+            transition: all 0.15s ease;
+        }
+
+        .off-site-chip.active {
+            border-color: #2563eb;
+            background: #eff6ff;
+            color: #1d4ed8;
+            font-weight: 700;
+        }
+
+        #offSiteReasonNote {
+            width: 100%;
+            margin-top: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            font-size: 0.75rem;
+            resize: vertical;
         }
     </style>
 </head>
@@ -201,6 +238,15 @@
                     </button>
                 </div>
             </div>
+        </div>
+
+        <!-- 離場說明（不在案場 200m 內時顯示；可複選、可不填） -->
+        <div id="offSitePanel" class="hidden mb-4 w-full text-left rounded-xl border border-amber-200 bg-amber-50/80 p-4">
+            <p class="text-[11px] text-amber-900 leading-relaxed font-medium text-center">
+                您不在案場範圍內，可選原因（可複選）或補充說明；不填仍會打卡並可能標記異常。
+            </p>
+            <div id="offSiteChipWrap" class="off-site-chips"></div>
+            <textarea id="offSiteReasonNote" rows="2" placeholder="補充說明（選填）"></textarea>
         </div>
 
         <!-- 主要動作按鈕：內建 Pulse 動畫與 Disable 灰階邏輯 -->
@@ -384,6 +430,107 @@
                         await new Promise(r => setTimeout(r, 1000));
                     }
                 }
+            }
+        };
+
+        /**
+         * AppOffSite - 離場說明（chip 可複選 + 補充；整合 CheckinSystem/reference/checkin_offsite_liff_snippet.js）
+         */
+        const AppOffSite = {
+            sites: [],
+            presets: [],
+            selectedTags: new Set(),
+            pendingPosition: null,
+            haversineMeters(lat1, lon1, lat2, lon2) {
+                const R = 6371e3;
+                const toRad = d => d * Math.PI / 180;
+                const dLat = toRad(lat2 - lat1);
+                const dLon = toRad(lon2 - lon1);
+                const a = Math.sin(dLat / 2) ** 2 +
+                    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+                return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            },
+            isOnSite(lat, lon) {
+                let min = Infinity;
+                (AppOffSite.sites || []).forEach(s => {
+                    const slat = parseFloat(s.latitude);
+                    const slon = parseFloat(s.longitude);
+                    if (isNaN(slat) || isNaN(slon)) return;
+                    const d = AppOffSite.haversineMeters(lat, lon, slat, slon);
+                    if (d < min) min = d;
+                });
+                if (!AppOffSite.sites.length) return true;
+                return min <= CONSTANTS.OFF_SITE_VALID_METERS;
+            },
+            async loadPresets() {
+                try {
+                    const data = await AppAPI.request({
+                        page: 'attendance_api',
+                        action: 'get_off_site_reason_presets'
+                    });
+                    if (data && data.presets && data.presets.length) {
+                        AppOffSite.presets = data.presets;
+                    }
+                } catch (e) {
+                    console.warn('[OffSite] loadPresets', e);
+                }
+            },
+            async loadSites() {
+                try {
+                    const data = await AppAPI.request({
+                        page: 'attendance_api',
+                        action: 'get_all_sites'
+                    });
+                    if (data && data.data) AppOffSite.sites = data.data;
+                } catch (e) {
+                    console.warn('[OffSite] loadSites', e);
+                }
+            },
+            async init() {
+                await Promise.all([AppOffSite.loadPresets(), AppOffSite.loadSites()]);
+            },
+            renderChips() {
+                const wrap = document.getElementById('offSiteChipWrap');
+                if (!wrap) return;
+                wrap.innerHTML = '';
+                AppOffSite.presets.forEach(tag => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'off-site-chip' + (AppOffSite.selectedTags.has(tag) ? ' active' : '');
+                    btn.textContent = tag;
+                    btn.onclick = () => {
+                        if (AppOffSite.selectedTags.has(tag)) AppOffSite.selectedTags.delete(tag);
+                        else AppOffSite.selectedTags.add(tag);
+                        btn.classList.toggle('active');
+                    };
+                    wrap.appendChild(btn);
+                });
+            },
+            showPanel() {
+                const panel = document.getElementById('offSitePanel');
+                if (!panel) return;
+                AppOffSite.renderChips();
+                panel.classList.remove('hidden');
+            },
+            hidePanel() {
+                const panel = document.getElementById('offSitePanel');
+                if (panel) panel.classList.add('hidden');
+            },
+            buildPayloadParams() {
+                const noteEl = document.getElementById('offSiteReasonNote');
+                const note = noteEl ? noteEl.value.trim() : '';
+                const tags = Array.from(AppOffSite.selectedTags);
+                const out = {};
+                if (tags.length) out.offSiteReasonTags = JSON.stringify(tags);
+                if (note) out.offSiteReasonNote = note;
+                return out;
+            },
+            reset() {
+                AppOffSite.selectedTags.clear();
+                AppOffSite.pendingPosition = null;
+                const noteEl = document.getElementById('offSiteReasonNote');
+                if (noteEl) noteEl.value = '';
+                AppOffSite.hidePanel();
             }
         };
 
@@ -584,6 +731,9 @@
                 document.getElementById('app-version').textContent = CONSTANTS.VERSION;
                 const updateNet = () => AppUI.updateIndicator('network', navigator.onLine ? 'success' : 'error', navigator.onLine ? '連線正常' : '已離線');
                 updateNet(); window.ononline = window.onoffline = updateNet;
+                if (navigator.onLine) {
+                    AppOffSite.init().catch(e => console.warn('[OffSite] init', e));
+                }
                 AppUI.renderHistory();
 
                 // 2. 優先嘗試載入身分快取，確保「離線/弱網」下按鈕仍可運作
@@ -632,13 +782,20 @@
             },
             /** 生命週期：執行打卡動作 */
             execute: async () => {
-                // 本頁面只允許一次打卡動作（「一頁一次」物理限制）
                 if (AppCore.pageSendOnce) {
                     AppUI.updateMessage('本頁已完成打卡操作，如需重新打卡請關閉此視窗後重新開啟。', 'text-amber-600');
                     return;
                 }
-                if (AppCore.isLocked) return; AppCore.isLocked = true;
+                if (AppCore.isLocked) return;
+
                 const btn = document.getElementById('checkin-button');
+
+                if (AppOffSite.pendingPosition) {
+                    await AppCore.submitCheckin(AppOffSite.pendingPosition);
+                    return;
+                }
+
+                AppCore.isLocked = true;
                 btn.disabled = true; btn.textContent = '定位中...'; btn.classList.remove('btn-pulse');
                 AppUI.updateIndicator('gps', 'pending', '定位中');
                 AppUI.setLoading(true, '確認經緯座標...');
@@ -646,33 +803,25 @@
                 try {
                     const pos = await AppGeo.withRetry();
                     AppUI.updateIndicator('gps', 'success', '定位成功');
+                    const lat = pos.coords.latitude;
+                    const lon = pos.coords.longitude;
 
-                    // 定位成功後，標記本頁已發起一次打卡動作
-                    // 此後即使失敗也不允許同頁重新嘗試，需要重新開啟頁面
-                    AppCore.pageSendOnce = true;
-
-                    const payload = {
-                        userId: AppCore.user.userId,
-                        userName: AppCore.user.displayName,
-                        lat: pos.coords.latitude,
-                        lon: pos.coords.longitude,
-                        // 加入 client 時間戳與本頁 instance id 供後端日誌/去重使用
-                        clientTimestamp: Date.now(),
-                        pageInstance: AppCore.pageInstance
-                    };
-
-                    AppUI.setLoading(true, '正在傳送數據...');
-                    btn.textContent = '傳送中...';
-
-                    try {
-                        // 統一出口發送（payload 已包含 pageInstance 與 clientTimestamp）
-                        const result = await AppAPI.dispatch(payload);
-                        AppCore.finalize(result);
-                    } catch (e) {
-                        // 發送失敗，存入隊列交由自動同步
-                        AppStorage.addToQueue(payload);
-                        AppCore.finalize({ status: 'success', message: '打卡成功！\n(紀錄已暫存，雲端將自動補傳)' });
+                    if (!AppOffSite.isOnSite(lat, lon)) {
+                        AppOffSite.pendingPosition = pos;
+                        AppOffSite.showPanel();
+                        AppUI.setLoading(false);
+                        AppUI.updateMessage(
+                            '您不在案場範圍內。<br>可選原因後按「確認打卡」；不填也可送出。',
+                            'text-amber-800 font-medium'
+                        );
+                        btn.disabled = false;
+                        btn.textContent = '確認打卡';
+                        btn.classList.add('btn-pulse');
+                        AppCore.isLocked = false;
+                        return;
                     }
+
+                    await AppCore.submitCheckin(pos);
                 } catch (err) {
                     AppUI.updateIndicator('gps', 'error', '定位失敗');
                     if (err.code === 1) {
@@ -681,9 +830,40 @@
                     } else {
                         AppUI.updateMessage(`打卡失敗: ${err.message}`, 'text-red-800');
                     }
-                    // 定位失敗時：本頁仍未標記 pageSendOnce，允許使用者重新點擊
                     btn.disabled = false; btn.textContent = '重新打卡'; btn.classList.add('btn-pulse');
                     AppCore.isLocked = false; AppUI.setLoading(false);
+                }
+            },
+            /** 定位完成後送出打卡（含離場說明參數） */
+            submitCheckin: async (pos) => {
+                if (AppCore.pageSendOnce) return;
+                AppCore.pageSendOnce = true;
+                AppCore.isLocked = true;
+
+                const btn = document.getElementById('checkin-button');
+                btn.disabled = true;
+                btn.textContent = '傳送中...';
+                btn.classList.remove('btn-pulse');
+                AppUI.setLoading(true, '正在傳送數據...');
+
+                const payload = {
+                    userId: AppCore.user.userId,
+                    userName: AppCore.user.displayName,
+                    lat: pos.coords.latitude,
+                    lon: pos.coords.longitude,
+                    clientTimestamp: Date.now(),
+                    pageInstance: AppCore.pageInstance,
+                    ...AppOffSite.buildPayloadParams()
+                };
+
+                try {
+                    const result = await AppAPI.dispatch(payload);
+                    AppOffSite.reset();
+                    AppCore.finalize(result);
+                } catch (e) {
+                    AppStorage.addToQueue(payload);
+                    AppOffSite.reset();
+                    AppCore.finalize({ status: 'success', message: '打卡成功！\n(紀錄已暫存，雲端將自動補傳)' });
                 }
             },
             /** 生命週期：處理結果與結算 */
@@ -707,7 +887,16 @@
                         document.getElementById('icon-default').classList.add('hidden');
                         document.getElementById('icon-offline').classList.remove('hidden');
                     }
-                    AppUI.updateMessage(res.message + (isSilentInit ? '' : '<br><span class="text-[9px] text-gray-400 mt-2 block italic font-bold">視窗將於 45 秒後自動關閉</span>'), isOff ? 'text-amber-700' : 'text-green-800');
+                    let offSiteHint = '';
+                    if (res.offSiteReasonDisplay) {
+                        offSiteHint += `<br><span class="text-[10px] text-amber-800 block mt-1">離場說明：${res.offSiteReasonDisplay}</span>`;
+                    } else if (res.offSiteAnomaly) {
+                        offSiteHint += `<br><span class="text-[10px] text-amber-700 block mt-1">${res.offSiteAnomaly}</span>`;
+                    }
+                    AppUI.updateMessage(
+                        res.message + offSiteHint + (isSilentInit ? '' : '<br><span class="text-[9px] text-gray-400 mt-2 block italic font-bold">視窗將於 45 秒後自動關閉</span>'),
+                        isOff ? 'text-amber-700' : 'text-green-800'
+                    );
                     if (!isSilentInit) {
                         setTimeout(() => { if (liff.closeWindow) liff.closeWindow(); }, CONSTANTS.TIMEOUTS.AUTO_CLOSE);
                     }

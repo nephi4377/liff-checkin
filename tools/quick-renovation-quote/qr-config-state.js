@@ -13,20 +13,20 @@
     projectId: '',
   };
   var PING_TO_M2 = 3.305785124;
-  var SCHEMA_V = 6;
+  var SCHEMA_V = 7;
 
   /** 客戶端／方案菜單表頭分群（數字愈小愈上面） */
   function menuBandOrderKey(band) {
     var M = {
-      wood_full: 5,
-      zone_lk: 20,
-      zone_master: 30,
-      zone_bed: 35,
+      protect: 1,
+      mep: 10,
+      wood_full: 20,
+      zone_lk: 30,
+      zone_master: 40,
+      zone_bed: 45,
       floor: 50,
       paint: 60,
-      mep: 70,
-      protect: 80,
-      finish: 90,
+      finish: 70,
       other: 99,
     };
     return M[band] != null ? M[band] : M.other;
@@ -88,7 +88,10 @@
       trim_molding: { type: 'trim_placeholder' },
       touchup_clean: { type: 'touchup_from_settings' },
       wardrobe2: { type: 'avg_secondary_short_shaku_scaled', scale: 0.5 },
-      protect_site: { type: 'fixed_shaku', value: 1 },
+      protect_indoor_floor: { type: 'sum_ping_paints' },
+      protect_doors: { type: 'fixed_shaku', value: 3 },
+      protect_public: { type: 'fixed_shaku', value: 1 },
+      clean_waste: { type: 'fixed_shaku', value: 1 },
     };
   }
   function defaultSchemeMenus() {
@@ -189,13 +192,16 @@
       { id: 'wardrobe2', zoneScope: 'all', menuBand: 'wood_full', sortKey: 2, group: '全室', groupTitle: '全室木作', quoteSection: '全室木作', displayRank: 215, menuMatrix: '次臥平均尺×%（舊合併列、少用）', label: '衣櫃(次臥短邊平均-舊)', unit: '尺', price: 3200, perSecondary: false, defaultOn: false, cabWood: false, hint: '併舊方案用', priceSheetTab: PRICE_TAB_WOOD, priceSheetItem: '開門高衣櫃-D60H240內', clientNote: '舊合併列：單價對照同主／次臥衣櫃 D60×H240。' },
       { id: 'paint_ceil', zoneScope: 'all', menuBand: 'paint', sortKey: 200, group: '油漆', groupTitle: '油漆工程', quoteSection: '油漆工程', displayRank: 220, menuMatrix: '變量・坪(面漆參考) | 不設邊', label: '面漆(天地壁-概估用坪)', unit: '坪', price: 600, defaultOn: true, cabWood: false, hint: '概估＝客+臥實鋪坪', priceSheetTab: PRICE_TAB_PAINT, priceSheetItem: '矽酸鈣/石膏天花板-乳膠漆', clientNote: '概估面漆：暫對天花乳膠漆列；可改牆面或水泥漆列。' },
       { id: 'paint_ac', zoneScope: 'all', menuBand: 'paint', sortKey: 201, group: '油漆', groupTitle: '油漆工程', quoteSection: '油漆工程', displayRank: 230, menuMatrix: '變量・全區包管短邊合計台尺', label: '矽鈣／包管油漆(參考台尺合)', unit: '尺', price: 200, defaultOn: true, cabWood: false, hint: '各空間包管一邊短尺加總', priceSheetTab: PRICE_TAB_PAINT, priceSheetItem: '油漆-冷氣包管', clientNote: '' },
-      { id: 'mep_switches', zoneScope: 'all', menuBand: 'mep', sortKey: 300, group: '水電', groupTitle: '水電工程', quoteSection: '水電工程', displayRank: 300, menuMatrix: '變量・點數(底+臥，管理員) | 全區', label: '出線/開關插座(參考-點)', unit: '座', price: 350, defaultOn: true, cabWood: false, hint: '底數+每區一參與', priceSheetTab: PRICE_TAB_MEP, priceSheetItem: '插座拉線新增/移位-一般作法', clientNote: '參考用「座」價。' },
+      { id: 'mep_switches', zoneScope: 'all', menuBand: 'mep', sortKey: 300, group: '水電', groupTitle: '水電工程', quoteSection: '水電工程', displayRank: 300, menuMatrix: '變量・點數(底+臥，管理員) | 全區', label: '出線/開關插座(參考-點)', unit: '座', price: 1170, defaultOn: true, cabWood: false, hint: '底數+每區一參與', priceSheetTab: PRICE_TAB_MEP, priceSheetItem: '插座拉線新增/移位-一般作法', clientNote: '參考用「座」價。' },
       { id: 'mep_dedicated', zoneScope: 'all', menuBand: 'mep', sortKey: 301, group: '水電', groupTitle: '水電工程', quoteSection: '水電工程', displayRank: 302, menuMatrix: '定量(迴)', label: '專用迴路/220V(參考)', unit: '迴', price: 5000, defaultOn: true, cabWood: false, hint: '', priceSheetTab: PRICE_TAB_MEP, priceSheetItem: '新增5.5 專用迴路', clientNote: '表列單位為「處」；讀入後單位會以表為準。' },
       { id: 'mep_net', zoneScope: 'all', menuBand: 'mep', sortKey: 302, group: '水電', groupTitle: '水電工程', quoteSection: '水電工程', displayRank: 304, menuMatrix: '定量(點)', label: '網路/弱電延伸(參考)', unit: '點', price: 1500, defaultOn: true, cabWood: false, hint: '', priceSheetTab: PRICE_TAB_MEP, priceSheetItem: '網路線拉線/延長 +資訊座(延長工法)', clientNote: '' },
       { id: 'mep_tv', zoneScope: 'all', menuBand: 'mep', sortKey: 303, group: '水電', groupTitle: '水電工程', quoteSection: '水電工程', displayRank: 306, menuMatrix: '定量(路)', label: '有線電視/同軸(參考)', unit: '路', price: 1500, defaultOn: true, cabWood: false, hint: '', priceSheetTab: PRICE_TAB_MEP, priceSheetItem: '一孔電視', clientNote: '表無「路／同軸」專列：暫對「一孔電視」（組）；可改「電視(端末)」。' },
       { id: 'mep_misc', zoneScope: 'all', menuBand: 'mep', sortKey: 304, group: '水電', groupTitle: '水電工程', quoteSection: '水電工程', displayRank: 308, menuMatrix: '定量(式)', label: '其餘水電(參考)', unit: '式', price: 3000, defaultOn: false, cabWood: false, hint: '', priceSheetTab: PRICE_TAB_MEP, priceSheetItem: '其他工程配合費', clientNote: '表內無「水電雜項」總列時請改對單項；勿再對到保護工程分頁。' },
       { id: 'mep_recess', zoneScope: 'all', menuBand: 'mep', sortKey: 305, group: '水電', groupTitle: '水電工程', quoteSection: '水電工程', displayRank: 310, menuMatrix: '變量・(客+臥坪)×1.5 盞(概估) | 全區', label: '嵌燈/筒燈(參考-盞)', unit: '盞', price: 500, defaultOn: true, cabWood: false, hint: '概估(客+臥坪）×1.5 盞', priceSheetTab: PRICE_TAB_MEP, priceSheetItem: '9mm嵌燈', clientNote: '' },
-      { id: 'protect_site', zoneScope: 'all', menuBand: 'protect', sortKey: 60, group: '保護', groupTitle: '保護工程', quoteSection: '保護工程', displayRank: 60, menuMatrix: '定量(式)', label: '施工期現場保護（參考）', unit: '式', price: 18000, defaultOn: true, cabWood: false, hint: '含走道、電梯口、角保等可併一式或拆列', priceSheetTab: PRICE_TAB_PROTECT, priceSheetItem: '粗步清潔及工具損耗', clientNote: '大樓案常含公設保護；請依表改對「地坪保護」「角保」等實際子目。' },
+      { id: 'protect_indoor_floor', zoneScope: 'all', menuBand: 'protect', sortKey: 60, group: '保護', groupTitle: '保護工程', quoteSection: '保護工程', displayRank: 60, menuMatrix: '變量・坪(面漆參考) | 不設邊', label: '室內保護工程-地坪+廚具', unit: '坪', price: 950, defaultOn: true, cabWood: false, hint: 'PP板+木板保護', priceSheetTab: PRICE_TAB_PROTECT, priceSheetItem: '地坪保護', clientNote: '標準計價表：PP板+全室木板。' },
+      { id: 'protect_doors', zoneScope: 'all', menuBand: 'protect', sortKey: 61, group: '保護', groupTitle: '保護工程', quoteSection: '保護工程', displayRank: 61, menuMatrix: '定量(式)', label: '室內保護工程-門及門框', unit: '處', price: 500, defaultOn: true, cabWood: false, hint: '一般為三房門組防撞保護', priceSheetTab: PRICE_TAB_PROTECT, priceSheetItem: '門及門框保護', clientNote: '防撞防刮保護處理。' },
+      { id: 'protect_public', zoneScope: 'all', menuBand: 'protect', sortKey: 62, group: '保護', groupTitle: '保護工程', quoteSection: '保護工程', displayRank: 62, menuMatrix: '定量(式)', label: '室外保護工程-梯廳+公設', unit: '式', price: 15000, defaultOn: true, cabWood: false, hint: '依物業規定電梯與梯廳走道保護', priceSheetTab: PRICE_TAB_PROTECT, priceSheetItem: '梯廳/公設保護', clientNote: '公設防撞與角保施工。' },
+      { id: 'clean_waste', zoneScope: 'all', menuBand: 'protect', sortKey: 63, group: '保護', groupTitle: '保護工程', quoteSection: '保護工程', displayRank: 63, menuMatrix: '定量(式)', label: '裝潢垃圾廢料清運', unit: '式', price: 12000, defaultOn: true, cabWood: false, hint: '裝潢期間廢料堆積清運', priceSheetTab: PRICE_TAB_PROTECT, priceSheetItem: '粗步清潔及垃圾清運', clientNote: '含現場粗步清潔、搬運及垃圾車清運費。' },
       { id: 'trim_molding', zoneScope: 'all', menuBand: 'finish', sortKey: 400, group: '收尾', groupTitle: '收邊與細清', quoteSection: '收邊與細清', displayRank: 400, menuMatrix: '佔位(式) ・ 金額=木作小計×% 見管理員', label: '木作+系統收邊(參考)', unit: '式', price: 0, lineKind: 'trim', defaultOn: true, cabWood: false, hint: '小計=下方木作+系統合計×設定%', quoteNote: 'trim', priceSheetTab: PRICE_TAB_WALLPAPER, priceSheetItem: '300CM內鋁製收邊條', clientNote: '表無「收邊％」整單列：報價小計仍依管理員％×木作小計；此欄僅供讀入單價參考（與實際收邊計價方式可能不同）。' },
       { id: 'touchup_clean', zoneScope: 'all', menuBand: 'finish', sortKey: 401, group: '收尾', groupTitle: '收邊與細清', quoteSection: '收邊與細清', displayRank: 410, menuMatrix: '佔位(定額) ・ 金額見管理員', label: '細清＋竣工後修補(參考)', unit: '式', price: 0, lineKind: 'touchup', defaultOn: true, cabWood: false, hint: '參考固定額，見管理員', priceSheetTab: PRICE_TAB_PAINT, priceSheetItem: '細清後局部髒污修補', clientNote: '表無與「定額細清＋竣工修補」完全對應之单列：報價金額仍依管理員定額；此欄對「細清後局部髒污修補」供參考單價。可改「木作後局部髒污損傷修補」。' },
     ],

@@ -1,0 +1,1924 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>添心系統 - AI API Token 成本與測試網頁</title>
+  
+  <!-- 引入 Google Fonts & FontAwesome -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- 引入 Marked Markdown 解析庫 -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    /* 全域 CSS 變數與 Reset */
+    :root {
+      --bg-gradient-start: #0f172a;
+      --bg-gradient-end: #1e293b;
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --primary-glow: rgba(59, 130, 246, 0.35);
+      
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.25);
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      
+      --input-bg: rgba(15, 23, 42, 0.6);
+      --input-border: rgba(255, 255, 255, 0.15);
+      --input-focus: #60a5fa;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', 'Outfit', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, var(--bg-gradient-start), var(--bg-gradient-end));
+      color: var(--text-main);
+      min-height: 100vh;
+      line-height: 1.6;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* 頂部 Header */
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    header h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 2.25rem;
+      font-weight: 700;
+      letter-spacing: -0.05em;
+      background: linear-gradient(to right, #60a5fa, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    /* 雙模頁籤 (Tabs) */
+    .tabs {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 0.5rem;
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1rem;
+      font-weight: 600;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      position: relative;
+      transition: color 0.2s ease;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-main);
+    }
+
+    .tab-btn.active {
+      color: var(--primary);
+    }
+
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -0.6rem;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: var(--primary);
+      border-radius: 2px;
+      box-shadow: 0 0 8px var(--primary-glow);
+    }
+
+    /* 版面配置 */
+    .grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 968px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* 卡片玻璃擬態 */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+      margin-bottom: 1.5rem;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .card:hover {
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .card-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding-bottom: 0.75rem;
+    }
+
+    .card-title i {
+      color: var(--primary);
+    }
+
+    /* 表單元件 */
+    .form-group {
+      margin-bottom: 1.25rem;
+      position: relative;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .input-wrapper i.prefix-icon {
+      position: absolute;
+      left: 1rem;
+      color: var(--text-muted);
+    }
+
+    .form-control {
+      width: 100%;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      color: var(--text-main);
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      transition: all 0.2s ease;
+    }
+
+    .input-wrapper .form-control {
+      padding-left: 2.75rem;
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: var(--input-focus);
+      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+    }
+
+    /* 密碼隱藏切換 */
+    .password-toggle {
+      position: absolute;
+      right: 1rem;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: color 0.2s ease;
+    }
+
+    .password-toggle:hover {
+      color: var(--text-main);
+    }
+
+    /* 模型設定與費率編輯表 */
+    .rates-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.5rem;
+      font-size: 0.85rem;
+    }
+
+    .rates-table th, .rates-table td {
+      padding: 0.5rem;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .rates-table th {
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .rates-table td input {
+      background: rgba(0,0,0,0.2);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--text-main);
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      width: 80px;
+      text-align: right;
+    }
+
+    /* 圖片上傳區 */
+    .upload-box {
+      border: 2px dashed var(--input-border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s ease, background 0.2s ease;
+      background: var(--input-bg);
+      margin-bottom: 1.25rem;
+    }
+
+    .upload-box:hover {
+      border-color: var(--primary);
+      background: rgba(59, 130, 246, 0.05);
+    }
+
+    .upload-box i {
+      font-size: 2rem;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .upload-preview-container {
+      display: none;
+      position: relative;
+      margin-top: 0.5rem;
+    }
+
+    .upload-preview {
+      max-width: 100%;
+      max-height: 200px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .clear-img-btn {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      background: rgba(239, 68, 68, 0.9);
+      border: none;
+      color: white;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s ease;
+    }
+
+    .clear-img-btn:hover {
+      background: rgba(220, 38, 38, 1);
+    }
+
+    /* 按鈕樣式 */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 0.75rem 1.5rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      width: 100%;
+    }
+
+    .btn:hover:not(:disabled) {
+      background: var(--primary-hover);
+      box-shadow: 0 0 15px var(--primary-glow);
+      transform: translateY(-1px);
+    }
+
+    .btn:active:not(:disabled) {
+      transform: translateY(1px);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      background: var(--text-muted);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.15);
+      box-shadow: none;
+    }
+
+    /* 成本結果看板 */
+    .cost-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .cost-card {
+      background: rgba(15, 23, 42, 0.4);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .cost-card.highlight {
+      grid-column: span 2;
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(59, 130, 246, 0.15));
+      border-color: var(--success);
+      box-shadow: 0 0 15px var(--success-glow);
+    }
+
+    .cost-card-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 0.25rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .cost-card-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    .cost-card-value.large {
+      font-size: 2.25rem;
+      color: var(--success);
+    }
+
+    .cost-card-value.large small {
+      font-size: 1rem;
+      font-weight: 400;
+      color: var(--text-muted);
+    }
+
+    .cost-details-list {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 0.75rem;
+      text-align: left;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding-top: 0.5rem;
+    }
+
+    .cost-details-list div {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.25rem;
+    }
+
+    /* 回應預覽區與四態 */
+    .response-wrapper {
+      min-height: 250px;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 8px;
+      padding: 1rem;
+      font-size: 0.95rem;
+      overflow-y: auto;
+      max-height: 500px;
+    }
+
+    /* 空狀態 */
+    .state-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      height: 100%;
+      min-height: 200px;
+      text-align: center;
+    }
+
+    .state-empty i {
+      font-size: 2.5rem;
+      margin-bottom: 0.75rem;
+      opacity: 0.5;
+    }
+
+    /* 載入中 (Skeleton) */
+    .state-loading {
+      display: none;
+    }
+
+    .skeleton-line {
+      height: 14px;
+      background: rgba(255, 255, 255, 0.05);
+      margin-bottom: 0.75rem;
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .skeleton-line::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+      animation: skeleton-wave 1.5s infinite;
+    }
+
+    @keyframes skeleton-wave {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+
+    /* 錯誤狀態 */
+    .state-error {
+      display: none;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid var(--danger);
+      border-radius: 8px;
+      padding: 1rem;
+      color: #fca5a5;
+      margin-bottom: 1rem;
+      align-items: flex-start;
+      gap: 0.75rem;
+    }
+
+    /* 成功 Markdown 排版 */
+    .markdown-body h1, .markdown-body h2, .markdown-body h3 {
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    .markdown-body p {
+      margin-bottom: 0.75rem;
+    }
+
+    .markdown-body code {
+      background: rgba(0,0,0,0.3);
+      padding: 0.1rem 0.3rem;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 0.85rem;
+    }
+
+    .markdown-body pre {
+      background: rgba(0,0,0,0.4);
+      padding: 0.75rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin-bottom: 0.75rem;
+    }
+
+    /* 歷史紀錄與核銷區 */
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .history-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .history-table-container {
+      overflow-x: auto;
+    }
+
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    .history-table th, .history-table td {
+      padding: 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .history-table th {
+      background: rgba(0, 0, 0, 0.2);
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .history-table tr:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .badge {
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .badge-success { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+    .badge-danger { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
+
+    /* 載入微調動畫 */
+    .spinner {
+      animation: spin 1s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>添心系統 · AI API Token 成本與測試</h1>
+      <p>精準解析每一筆 Prompt 調用成本，提供會計專案對帳與核銷之離線數據底座</p>
+    </header>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('live-test')"><i class="fa-solid fa-square-poll-vertical"></i> API 實時對接測試</button>
+      <button class="tab-btn" onclick="switchTab('manual-calculator')"><i class="fa-solid fa-calculator"></i> 手動 Token 估算器</button>
+      <button class="tab-btn" onclick="switchTab('settings')"><i class="fa-solid fa-sliders"></i> 模型與費率設定</button>
+    </div>
+
+    <!-- 錯誤提示區域 -->
+    <div id="global-error-box" class="state-error">
+      <i class="fa-solid fa-triangle-exclamation" style="font-size: 1.25rem; margin-top: 0.1rem;"></i>
+      <div>
+        <strong id="error-title">調用發生錯誤</strong>
+        <p id="error-message" style="margin-top: 0.25rem; font-size: 0.85rem;"></p>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- 左側操作面版 -->
+      <div class="left-panel">
+        
+        <!-- API 實時測試 Tab -->
+        <div id="tab-live-test" class="tab-content">
+          <!-- 資料連通區 -->
+          <div class="card" style="border-color: rgba(59, 130, 246, 0.3); background: rgba(59, 130, 246, 0.05); margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+              <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <i class="fa-solid fa-database" id="db-status-icon" style="color: var(--text-muted); font-size: 1.5rem; transition: color 0.3s ease;"></i>
+                <div style="flex: 1;">
+                  <div style="font-size: 0.95rem; font-weight: 600; color: var(--text-main);">本機 Data 自動歸檔系統</div>
+                  <div id="db-status-text" style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; margin-top: 0.1rem;">尚未連結本地 `data/` 資料夾。API 的發送與回應將無法自動存成 JSON 檔。</div>
+                  <div style="font-size: 0.7rem; color: var(--warning); opacity: 0.85; margin-top: 0.25rem; line-height: 1.3;">* 開發防呆：若使用 VS Code Live Server，背景寫檔會觸發熱重載刷新網頁，請於 Live Server 設定排除 `**/data/**` 或修改 `settings.json` 的 `liveServer.settings.ignoreFiles`。</div>
+                </div>
+              </div>
+              <button type="button" class="btn" id="btn-connect-dir" style="width: auto; padding: 0.4rem 1rem; font-size: 0.8rem;" onclick="connectDataDirectory()">
+                <i class="fa-solid fa-folder-open"></i> 連結 Data 資料夾
+              </button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <i class="fa-solid fa-paper-plane"></i>
+              <span>API 調用測試配置</span>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label" for="live-project-id">專案案號 / 案場名稱</label>
+              <div class="input-wrapper">
+                <i class="fa-solid fa-folder-open prefix-icon"></i>
+                <input type="text" id="live-project-id" class="form-control" placeholder="例如: A2026-001 客廳天花板工程">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="live-model">選用 AI 模型</label>
+              <select id="live-model" class="form-control" onchange="updateSelectedModelFee()">
+                <!-- JS 動態寫入 -->
+              </select>
+            </div>
+
+            <!-- 系統指令用途快速設定區 (human-comfortable) -->
+            <div class="form-group">
+              <label class="form-label" for="live-system-template">系統指令預設範本快速切換</label>
+              <select id="live-system-template" class="form-control" onchange="applySystemTemplate(this.value)">
+                <option value="none">-- 自由手動輸入 --</option>
+                <option value="assistant">【工務與設計助理】分析施工日報、核對現場狀況與推薦下一步進度</option>
+                <option value="inspector">【現場監工】針對照片與施工規範比對，指出不符工法處 (條列)</option>
+                <option value="audit">【報價單審計】核算報價單、查驗木作與水電點數概估合理性</option>
+                <option value="legal">【法規助理】對照室內裝修管理辦法與建照圖面規範進行合規性檢查</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="live-system-instruction">系統指令 (System Instruction)</label>
+              <textarea id="live-system-instruction" class="form-control" rows="3" placeholder="設定 AI 的角色定位與輸出格式限制，例如: 你是專業裝修監工..."></textarea>
+            </div>
+
+            <!-- 分離: 提示詞 (任務) 與 規範 (內文) -->
+            <div class="form-group">
+              <label class="form-label" for="live-prompt">用戶提示詞 (Prompt / 任務指引)</label>
+              <textarea id="live-prompt" class="form-control" rows="3" placeholder="輸入你要 AI 執行的具體工作任務..."></textarea>
+            </div>
+
+            <!-- 參考內文區 (例如合約、報價項目、日誌文字) -->
+            <div class="form-group">
+              <label class="form-label" for="live-context">參考內文 (Context) - 例如被審核的合約條文、報價單細目、施工日誌</label>
+              <textarea id="live-context" class="form-control" rows="4" placeholder="將要比對/審查的現場回報、報價單項目或合約文字置於此處..."></textarea>
+            </div>
+
+            <!-- 標準規範比對區 (對應資料庫快捷鍵) -->
+            <div class="form-group">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <label class="form-label" style="margin-bottom: 0;">比對標準規範 (Standards) - 標準法規與工法基準</label>
+                <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; width: auto;" onclick="openSpecsManager()">
+                  <i class="fa-solid fa-gear"></i> 管理標準規範庫
+                </button>
+              </div>
+              
+              <!-- 快捷插入常用規範的按鈕區 (動態加載) -->
+              <div id="specs-quick-insert-container" style="display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.5rem;">
+                <!-- 按鈕會由 JS 動態生成 -->
+              </div>
+              
+              <textarea id="live-standards" class="form-control" rows="4" placeholder="點選上方快捷按鈕載入，或自行填寫用來比對的工法、材料規格標準..."></textarea>
+            </div>
+
+            <!-- 施工多圖片上傳測試 -->
+            <div class="form-group">
+              <label class="form-label">上傳測試照片 (支援多張施工照比對)</label>
+              <div class="upload-box" onclick="document.getElementById('image-upload').click()">
+                <i class="fa-solid fa-images" style="font-size: 2rem;"></i>
+                <p style="font-size: 0.85rem; font-weight: 500; margin-top: 0.25rem;">拖曳或點選上傳一張或多張圖片 (支援多圖比對)</p>
+                <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 0.25rem;">* 2.5 Flash 多圖友善：每張大圖依解析度切割 (約 258~1032 Tokens)，請上傳高解析照以精準核驗。</span>
+                <input type="file" id="image-upload" accept="image/*" style="display: none;" multiple onchange="previewMultipleImages(this)">
+              </div>
+              
+              <!-- 多圖預覽容器 -->
+              <div id="upload-previews-list" style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem;">
+                <!-- 預覽圖卡片動態渲染 -->
+              </div>
+            </div>
+
+            <button id="send-api-btn" type="button" class="btn" onclick="sendApiRequest()">
+              <i class="fa-solid fa-bolt"></i> 發送並計算成本
+            </button>
+          </div>
+        </div>
+
+        <!-- 規範庫管理 Modal (隱藏面板) -->
+        <div id="specs-manager-modal" class="card" style="display: none; border-color: var(--primary); margin-top: 1rem;">
+          <div class="card-title" style="justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem;">
+            <span><i class="fa-solid fa-book-bookmark"></i> 標準規範庫設定</span>
+            <button type="button" class="clear-img-btn" style="position: static; border-radius: 4px; padding: 0.25rem 0.5rem; width: auto; height: auto;" onclick="closeSpecsManager()">關閉</button>
+          </div>
+          
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
+            在此新增或編輯常用的裝修標準，之後點擊即可快速插入「參考內文」中。
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">新增標準規範項目</label>
+            <input type="text" id="new-spec-title" class="form-control" placeholder="輸入快捷按鈕名稱 (例: 水電吊筋)" style="margin-bottom: 0.5rem;">
+            <textarea id="new-spec-content" class="form-control" rows="3" placeholder="輸入此項目的標準規範具體內文..."></textarea>
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+              <button class="btn btn-secondary" style="padding: 0.5rem 1rem;" onclick="addNewSpecItem()">
+                <i class="fa-solid fa-plus"></i> 新增至規範庫
+              </button>
+              <button class="btn btn-secondary" style="padding: 0.5rem 1rem; background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.2); color: #fcd34d;" onclick="resetToDefaultSpecs()">
+                <i class="fa-solid fa-rotate-left"></i> 重設回系統預設
+              </button>
+            </div>
+          </div>
+
+          <div style="border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.75rem;">
+            <label class="form-label">現有規範項目清冊</label>
+            <div id="specs-manager-list" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 200px; overflow-y: auto; padding-right: 0.25rem;">
+              <!-- 動態生成帶有刪除鈕的項目 -->
+            </div>
+          </div>
+        </div>
+
+        <!-- 手動計算器 Tab -->
+        <div id="tab-manual-calculator" class="tab-content" style="display: none;">
+          <div class="card">
+            <div class="card-title">
+              <i class="fa-solid fa-calculator"></i>
+              <span>快速 Token 換算</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="manual-project-id">專案案號 / 案場名稱</label>
+              <div class="input-wrapper">
+                <i class="fa-solid fa-folder-open prefix-icon"></i>
+                <input type="text" id="manual-project-id" class="form-control" placeholder="例如: A2026-001 (手動對帳)">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="manual-model">選用模型費率參考</label>
+              <select id="manual-model" class="form-control" onchange="syncManualModelRates()">
+                <!-- JS 動態寫入 -->
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="manual-input-tokens">輸入 Token 數 (Input Tokens)</label>
+              <input type="number" id="manual-input-tokens" class="form-control" value="0" oninput="calculateManualCost()">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="manual-output-tokens">輸出 Token 數 (Output Tokens)</label>
+              <input type="number" id="manual-output-tokens" class="form-control" value="0" oninput="calculateManualCost()">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="manual-input-fee">輸入費率 (USD / 每百萬 Token)</label>
+              <input type="number" id="manual-input-fee" class="form-control" step="0.001" oninput="calculateManualCost()">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="manual-output-fee">輸出費率 (USD / 每百萬 Token)</label>
+              <input type="number" id="manual-output-fee" class="form-control" step="0.001" oninput="calculateManualCost()">
+            </div>
+
+            <button class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="saveManualToHistory()">
+              <i class="fa-solid fa-floppy-disk"></i> 記錄此筆換算
+            </button>
+          </div>
+        </div>
+
+        <!-- 模型費率設定 Tab -->
+        <div id="tab-settings" class="tab-content" style="display: none;">
+          <div class="card">
+            <div class="card-title">
+              <i class="fa-solid fa-key"></i>
+              <span>API 金鑰與環境配置</span>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label" for="setting-gemini-key">Google Gemini API Key</label>
+              <div class="input-wrapper">
+                <i class="fa-solid fa-shield-halved prefix-icon"></i>
+                <input type="password" id="setting-gemini-key" class="form-control" placeholder="輸入 AI Studio API Key..." style="padding-right: 3rem;">
+                <i class="fa-solid fa-eye password-toggle" onclick="togglePasswordVisibility('setting-gemini-key')"></i>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="setting-exchange-rate">美金兌台幣匯率 (TWD / 1 USD)</label>
+              <input type="number" id="setting-exchange-rate" class="form-control" value="32.5" step="0.1" oninput="updateExchangeRate(this.value)">
+            </div>
+
+            <button class="btn" onclick="saveEnvSettings()">
+              <i class="fa-solid fa-circle-check"></i> 儲存設定
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <i class="fa-solid fa-circle-dollar-to-slot"></i>
+              <span>模型費率矩陣編輯 (每百萬 Tokens)</span>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: -0.75rem; margin-bottom: 1rem;">
+              修改此處設定值將會即時影響上述所有成本試算器。
+            </p>
+
+            <table class="rates-table">
+              <thead>
+                <tr>
+                  <th>模型代稱</th>
+                  <th>Input (USD)</th>
+                  <th>Output (USD)</th>
+                </tr>
+              </thead>
+              <tbody id="rates-table-body">
+                <!-- JS 動態寫入編輯欄位 -->
+              </tbody>
+            </table>
+
+            <button class="btn btn-secondary" style="margin-top: 1rem;" onclick="saveModelRatesSettings()">
+              <i class="fa-solid fa-floppy-disk"></i> 儲存費率矩陣
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 右側回應與計費資訊 -->
+      <div class="right-panel">
+        
+        <!-- 當前試算成本看板 -->
+        <div class="card" style="border-color: rgba(255, 255, 255, 0.15);">
+          <div class="card-title">
+            <i class="fa-solid fa-chart-pie"></i>
+            <span>當次調用成本看板</span>
+          </div>
+
+          <div class="cost-grid">
+            <div class="cost-card highlight">
+              <div class="cost-card-label">預估總花費 (TWD)</div>
+              <div id="cost-total-twd" class="cost-card-value large">NT$ 0.000</div>
+            </div>
+            <div class="cost-card">
+              <div class="cost-card-label">總花費 (USD)</div>
+              <div id="cost-total-usd" class="cost-card-value">$ 0.00000</div>
+            </div>
+            <div class="cost-card">
+              <div class="cost-card-label">匯率基準</div>
+              <div id="cost-rate-basis" class="cost-card-value" style="font-size: 1.15rem; color: var(--text-muted);">1 USD = 32.5</div>
+            </div>
+          </div>
+
+          <!-- Token 分項細節 -->
+          <div class="cost-details-list">
+            <div>
+              <span>選用模型代碼:</span>
+              <strong id="detail-model-name">-</strong>
+            </div>
+            <div>
+              <span>輸入 Token 數:</span>
+              <strong id="detail-input-tokens">0</strong>
+            </div>
+            <div>
+              <span>輸出 Token 數:</span>
+              <strong id="detail-output-tokens">0</strong>
+            </div>
+            <div>
+              <span>輸入費用 (USD / TWD):</span>
+              <strong id="detail-input-cost">$0.00 / NT$0.00</strong>
+            </div>
+            <div>
+              <span>輸出費用 (USD / TWD):</span>
+              <strong id="detail-output-cost">$0.00 / NT$0.00</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- API 回應內容 -->
+        <div class="card">
+          <div class="card-title">
+            <i class="fa-solid fa-message"></i>
+            <span>API 回傳內容預覽</span>
+          </div>
+
+          <div class="response-wrapper">
+            <!-- 空狀態 -->
+            <div id="response-empty" class="state-empty">
+              <i class="fa-regular fa-comment-dots"></i>
+              <p>等待發送測試...</p>
+              <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">串接成功後將在此以 Markdown 格式預覽 AI 的回傳。</span>
+            </div>
+
+            <!-- 載入中骨架屏 -->
+            <div id="response-loading" class="state-loading">
+              <div class="skeleton-line" style="width: 40%"></div>
+              <div class="skeleton-line" style="width: 85%"></div>
+              <div class="skeleton-line" style="width: 95%"></div>
+              <div class="skeleton-line" style="width: 70%"></div>
+              <div class="skeleton-line" style="width: 60%"></div>
+              <div style="text-align: center; margin-top: 1.5rem; color: var(--text-muted); font-size: 0.85rem;">
+                <i class="fa-solid fa-spinner spinner"></i> API 調用中，請稍候...
+              </div>
+            </div>
+
+            <!-- 成功渲染 Markdown 的 Container -->
+            <div id="response-success" class="markdown-body" style="display: none;"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 歷史稽核記錄表格卡片 -->
+    <div class="card" style="margin-top: 1.5rem;">
+      <div class="history-header">
+        <div class="card-title" style="border: none; margin-bottom: 0; padding-bottom: 0;">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          <span>歷史調用與成本對帳日誌</span>
+        </div>
+        <div class="history-actions">
+          <button class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem; width: auto;" onclick="exportHistoryCsv()">
+            <i class="fa-solid fa-file-csv"></i> 匯出會計核銷 CSV
+          </button>
+          <button class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem; width: auto; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.2); color: #fca5a5;" onclick="clearHistoryLog()">
+            <i class="fa-solid fa-trash-can"></i> 清除歷史記錄
+          </button>
+        </div>
+      </div>
+
+      <div class="history-table-container">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>案號 / 案場名稱</th>
+              <th>時間</th>
+              <th>模型</th>
+              <th>輸入 (Tokens)</th>
+              <th>輸出 (Tokens)</th>
+              <th>美金成本</th>
+              <th>台幣成本</th>
+              <th>狀態</th>
+            </tr>
+          </thead>
+          <tbody id="history-log-body">
+            <!-- JS 動態寫入紀錄 -->
+            <tr>
+              <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem 0;">無歷史調用紀錄。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // 2026年最新預設模型費率資料庫 (Gemini 1.5 已全數退役剔除)
+    const DEFAULT_MODEL_RATES = {
+      "gemini-2.5-flash": { name: "Gemini 2.5 Flash (最新主力)", input: 0.30, output: 2.50 },
+      "gemini-2.5-pro": { name: "Gemini 2.5 Pro (最新高級推理)", input: 1.25, output: 10.00 },
+      "gemini-3.5-flash": { name: "Gemini 3.5 Flash", input: 1.50, output: 9.00 },
+      "gemini-3.1-pro": { name: "Gemini 3.1 Pro", input: 2.00, output: 12.00 },
+      "gemini-3.1-flash-lite": { name: "Gemini 3.1 Flash-Lite (高性價比)", input: 0.25, output: 1.50 },
+      "gpt-4o-mini": { name: "GPT-4o Mini", input: 0.15, output: 0.60 },
+      "gpt-4o": { name: "GPT-4o", input: 2.50, output: 10.00 }
+    };
+
+    let modelRates = {};
+    let exchangeRate = 32.5;
+    let apiKey = '';
+    let uploadedImageBase64 = null;
+    let uploadedImageMimeType = null;
+    let historyLogs = [];
+    let dataDirHandle = null;
+
+    // 安全 HTML 轉義函數
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    // --- IndexedDB 儲存/獲取 FileSystemDirectoryHandle (解決刷新頁面權限失效痛點) ---
+    function openTianxinDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open("tianxin_calc_db", 1);
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains("handles")) {
+            db.createObjectStore("handles");
+          }
+        };
+        request.onsuccess = (e) => resolve(e.target.result);
+        request.onerror = (e) => reject(e.target.error);
+      });
+    }
+
+    async function storeDirectoryHandle(handle) {
+      try {
+        const db = await openTianxinDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction("handles", "readwrite");
+          const store = tx.objectStore("handles");
+          const req = store.put(handle, "data_dir");
+          req.onsuccess = () => resolve(true);
+          req.onerror = () => reject(req.error);
+        });
+      } catch (err) {
+        console.error("IndexedDB store error:", err);
+      }
+    }
+
+    async function getStoredDirectoryHandle() {
+      try {
+        const db = await openTianxinDB();
+        return new Promise((resolve) => {
+          const tx = db.transaction("handles", "readonly");
+          const store = tx.objectStore("handles");
+          const req = store.get("data_dir");
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => resolve(null);
+        });
+      } catch (err) {
+        console.error("IndexedDB read error:", err);
+        return null;
+      }
+    }
+
+    // --- 本機資料夾連通與存取權限處理 ---
+    async function initLocalDirectory() {
+      const handle = await getStoredDirectoryHandle();
+      if (handle) {
+        dataDirHandle = handle;
+        // 查詢權限
+        const perm = await handle.queryPermission({ mode: 'readwrite' });
+        if (perm === 'granted') {
+          updateDbStatusUI('connected', handle.name);
+          await scanDirectoryAndLoadLogs(handle);
+        } else {
+          updateDbStatusUI('requires_auth', handle.name);
+        }
+      }
+    }
+
+    function updateDbStatusUI(state, dirName = '') {
+      const icon = document.getElementById('db-status-icon');
+      const text = document.getElementById('db-status-text');
+      const btn = document.getElementById('btn-connect-dir');
+
+      if (state === 'connected') {
+        icon.style.color = 'var(--success)';
+        text.innerHTML = `🟢 已連結本地 <code style="background: rgba(0,0,0,0.3); padding: 0.1rem 0.3rem; border-radius: 4px;">data/</code> 資料夾：<strong>${escapeHtml(dirName)}</strong>。已啟用自動背景 JSON 存檔。`;
+        btn.innerHTML = `<i class="fa-solid fa-arrows-rotate"></i> 變更資料夾`;
+        btn.style.background = 'rgba(16, 185, 129, 0.15)';
+        btn.style.borderColor = 'rgba(16, 185, 129, 0.2)';
+        btn.style.color = '#34d399';
+      } else if (state === 'requires_auth') {
+        icon.style.color = 'var(--warning)';
+        text.innerHTML = `⚠️ 偵測到本地資料夾：<strong>${escapeHtml(dirName)}</strong>，需要瀏覽器授權讀寫以恢復檔案對接。`;
+        btn.innerHTML = `<i class="fa-solid fa-key"></i> 授權讀寫權限`;
+        btn.style.background = 'rgba(245, 158, 11, 0.15)';
+        btn.style.borderColor = 'rgba(245, 158, 11, 0.2)';
+        btn.style.color = '#fcd34d';
+      } else {
+        icon.style.color = 'var(--text-muted)';
+        text.innerHTML = `尚未連結本地 <code style="background: rgba(0,0,0,0.3); padding: 0.1rem 0.3rem; border-radius: 4px;">data/</code> 資料夾。API 的發送與回應將無法自動存成 JSON 檔。`;
+        btn.innerHTML = `<i class="fa-solid fa-folder-open"></i> 連結 Data 資料夾`;
+        btn.style.background = 'var(--primary)';
+        btn.style.borderColor = '';
+        btn.style.color = '';
+      }
+    }
+
+    async function connectDataDirectory() {
+      // 如果處於需要授權的狀態，直接索取權限而不彈出 picker
+      if (dataDirHandle && (await dataDirHandle.queryPermission({ mode: 'readwrite' })) !== 'granted') {
+        try {
+          const perm = await dataDirHandle.requestPermission({ mode: 'readwrite' });
+          if (perm === 'granted') {
+            updateDbStatusUI('connected', dataDirHandle.name);
+            await scanDirectoryAndLoadLogs(dataDirHandle);
+            alert('本機資料夾讀寫授權成功！已載入歷史 JSON 記錄。');
+          }
+          return;
+        } catch (err) {
+          console.error("Permission request failed", err);
+        }
+      }
+
+      // 否則開啟 picker 選擇資料夾
+      try {
+        const handle = await window.showDirectoryPicker({
+          mode: 'readwrite',
+          startIn: 'documents'
+        });
+        dataDirHandle = handle;
+        await storeDirectoryHandle(handle);
+        updateDbStatusUI('connected', handle.name);
+        await scanDirectoryAndLoadLogs(handle);
+        alert(`成功連結資料夾：${handle.name}！已為您啟用自動背景存檔並載入歷史紀錄。`);
+      } catch (err) {
+        console.error("Directory picker cancelled or failed", err);
+        if (err.name !== 'AbortError') {
+          alert('連結資料夾時發生錯誤，請確保瀏覽器支援 File System Access API。詳細訊息: ' + err.message);
+        }
+      }
+    }
+
+    // --- 儲存 JSON 記錄至本機資料夾 (A2026-001/A2026-001_YYYY-MM-DD_HH-mm-ss.json) ---
+    async function saveJsonToLocalDirectory(projId, requestBody, responseText, metrics) {
+      if (!dataDirHandle) {
+        console.log("No directory handle connected, skipped file writing.");
+        return null;
+      }
+
+      try {
+        // 1. 確認權限
+        const perm = await dataDirHandle.queryPermission({ mode: 'readwrite' });
+        if (perm !== 'granted') {
+          console.warn("Directory write permission not granted.");
+          return null;
+        }
+
+        // 2. 建立或取得案號子資料夾
+        const safeProjId = projId.replace(/[\\/:*?"<>|]/g, "_").trim() || "未定義案號";
+        const subDirHandle = await dataDirHandle.getDirectoryHandle(safeProjId, { create: true });
+
+        // 3. 建立檔名 (格式: 案號_YYYY-MM-DD_HH-mm-ss.json)
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const date = String(now.getDate()).padStart(2, '0');
+        const hour = String(now.getHours()).padStart(2, '0');
+        const min = String(now.getMinutes()).padStart(2, '0');
+        const sec = String(now.getSeconds()).padStart(2, '0');
+        const timestampStr = `${year}-${month}-${date}_${hour}-${min}-${sec}`;
+        const fileName = `${safeProjId}_${timestampStr}.json`;
+
+        // 4. 寫入 JSON 資料
+        const fileHandle = await subDirHandle.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        
+        const recordData = {
+          projectId: projId,
+          timestamp: now.toLocaleString('zh-TW', { hour12: false }),
+          model: metrics.model,
+          requestPayload: requestBody,
+          response: responseText,
+          metrics: {
+            inputTokens: metrics.inputTokens,
+            outputTokens: metrics.outputTokens,
+            costUsd: metrics.costUsd,
+            costTwd: metrics.costTwd,
+            exchangeRate: exchangeRate
+          }
+        };
+
+        await writable.write(JSON.stringify(recordData, null, 2));
+        await writable.close();
+        console.log(`Saved JSON record: ${safeProjId}/${fileName}`);
+        return fileName;
+      } catch (err) {
+        console.error("Failed to write JSON record file:", err);
+      }
+    }
+
+    // --- 遞迴掃描目錄下所有 JSON 檔並加載至歷史對帳列表 ---
+    async function scanDirectoryAndLoadLogs(dirHandle) {
+      try {
+        const list = [];
+        
+        // 1. 遍歷 data 底下的案號子目錄
+        for await (const entry of dirHandle.values()) {
+          if (entry.kind === 'directory') {
+            const subDirHandle = entry;
+            // 遍歷子目錄裡面的 .json 檔案
+            for await (const subEntry of subDirHandle.values()) {
+              if (subEntry.kind === 'file' && subEntry.name.endsWith('.json')) {
+                try {
+                  const file = await subEntry.getFile();
+                  const text = await file.text();
+                  const record = JSON.parse(text);
+                  
+                  // 重組為歷史紀錄所需欄位
+                  list.push({
+                    project: record.projectId || subDirHandle.name,
+                    timestamp: record.timestamp || new Date(file.lastModified).toLocaleString('zh-TW', { hour12: false }),
+                    model: record.model || 'Unknown',
+                    inputTokens: record.metrics?.inputTokens || 0,
+                    outputTokens: record.metrics?.outputTokens || 0,
+                    costUsd: record.metrics?.costUsd || 0,
+                    costTwd: record.metrics?.costTwd || 0,
+                    status: 'SUCCESS',
+                    requestPayload: record.requestPayload,
+                    response: record.response
+                  });
+                } catch (e) {
+                  console.warn("Failed to parse JSON file:", subEntry.name, e);
+                }
+              }
+            }
+          }
+        }
+
+        if (list.length > 0) {
+          // 依時間排序 (新 -> 舊)
+          list.sort((a, b) => new Date(b.timestamp.replace(/_/g, " ")) - new Date(a.timestamp.replace(/_/g, " ")));
+          historyLogs = list;
+          renderHistoryLogs();
+        }
+      } catch (err) {
+        console.error("Failed to scan directory:", err);
+      }
+    }
+
+    // 初始化載入
+    window.addEventListener('DOMContentLoaded', () => {
+      // 載入 localStorage
+      const savedRates = localStorage.getItem('tx_model_rates_v2');
+      if (savedRates) {
+        modelRates = JSON.parse(savedRates);
+      } else {
+        modelRates = JSON.parse(JSON.stringify(DEFAULT_MODEL_RATES));
+      }
+
+      const savedRate = localStorage.getItem('tx_exchange_rate');
+      if (savedRate) exchangeRate = parseFloat(savedRate);
+      document.getElementById('setting-exchange-rate').value = exchangeRate;
+      document.getElementById('cost-rate-basis').innerText = `1 USD = ${exchangeRate}`;
+
+      const savedKey = localStorage.getItem('tx_gemini_key');
+      if (savedKey) {
+        apiKey = savedKey;
+        document.getElementById('setting-gemini-key').value = savedKey;
+      }
+
+      const savedHistory = localStorage.getItem('tx_history_logs_v2');
+      if (savedHistory) {
+        historyLogs = JSON.parse(savedHistory);
+        renderHistoryLogs();
+      }
+
+      // 初始化下拉選單
+      renderModelSelectors();
+      // 初始化設定頁面的編輯表格
+      renderRatesTableEditor();
+      
+      // 更新對帳面板匯率文字
+      updateSelectedModelFee();
+
+      // 初始化本地 Data 資料夾連結
+      initLocalDirectory();
+    });
+
+    // 預設系統指令範本 (用於快速切換)
+    const SYSTEM_TEMPLATES = {
+      assistant: "你是「添心設計」的資深設計與工務助理。你的任務是僅依據施工照片與工務白話文，分析並判定三個核心施工維度：\n1. 【空間分區】：此照片位於案場的哪一個實體空間（例如：客廳、主臥、次臥、餐廳等）。\n2. 【施工項目】：限制僅判定為『天花板施工』或『壁板施工』。若非此兩者（如純水電、油漆、木作櫃體等），一律判定為『其他/暫不稽核』。\n3. 【完工度階段】：判定目前照片實體所屬的施工進度階段，限於以下三者：\n   - 階段 1：角材骨架期（角材剛架設、吊筋吊掛中）\n   - 階段 2：補強期（水電配管完畢、冷氣或重物處木心板補強打底中）\n   - 階段 3：封板期（矽酸鈣板封板完成，木作即將退場）\n\n回覆請使用繁體中文，尊稱「總監」，且保持極簡條列式，只列出上述三項判斷結果，絕不說多餘客套與空泛廢話。",
+      inspector: "你是「添心設計」的資深現場監工。請依據使用者提供的『參考內文 / 標準規範』，對照上傳的施工實況照進行比對。請用極簡的繁體中文條列指出不符規範之處與潛在施工隱憂。若無問題，請簡單回覆：『檢查通過，無明顯異常』。請勿有防客套贅詞。",
+      audit: "你是「添心設計」的工程審計稽核員。你的工作是核算與校查室內裝修報價單.請分析使用者提供的『參考內文 / 報價項目』，核對數量、單價計算與總體合理性，指出高於市場標準之工法計價或任何不合理灌水的項目（例如新成屋灌水基本水電費），以專業裝修條列分析呈現。",
+      legal: "你是「添心設計」的室內裝修法規顧問。請比對上傳之圖面照片與『參考內文 / 消防法規』，審查是否符合住宅區室內裝修管理辦法、消防排煙、逃生動線及綠建材比例等法定規範，列出合規與不合規項目。"
+    };
+
+    // 預設基本規範庫 (可由 localStorage 覆蓋)
+    const DEFAULT_SPECS = [
+      { id: "spec-1", title: "天花板工程標準 (Ceiling)", content: "【天花板木作施工階段判定標準】\n* 階段 1：角材骨架期 - 集成角材雙向交錯骨架架設中，吊筋使用膨脹螺絲固定於混凝土頂版。\n* 階段 2：補強期 - 冷氣室內機吊掛預定地、吊扇或大型重型燈具處，使用 18mm (6分) 木心板進行加強打底，空調管路避震分離。\n* 階段 3：封板期 - Qualified 防潮矽酸鈣板封板完成，拼接處切 45度 V型縫，留縫 3~5mm 用於油漆 AB 膠填縫。" },
+      { id: "spec-2", title: "壁板工程標準 (Wall)", content: "【壁板木作施工階段判定標準】\n* 階段 1：角材骨架期 - 靠外牆面施作防潮底漆或防潮布防護，打底角材骨架架設中（間距 36cm 內），垂直度以雷射水平儀校正。\n* 階段 2：補強期 - 壁掛電視或懸空重型設備安裝區域，使用 18mm 木心板打底加強，暗管 CD管/PVC軟管配管中。\n* 階段 3：封板期 - 飾面板或夾板封板完成，水平度與垂直度平整（誤差控制在 2mm 內）。" }
+    ];
+
+    // 預設用戶提示詞範本 (同步套用)
+    const USER_PROMPT_TEMPLATES = {
+      assistant: "請幫我分析附圖照片中『現場施工實況』，並對照下方的『比對標準規範』，僅判定並告訴我：\n1. 照片中施作的是哪一個空間？\n2. 這是天花板還是壁板施作？\n3. 這是哪一個完工階段？",
+      inspector: "請幫我對照下方提供的『參考內文 / 標準規範』，仔細核對上傳的現場施工照。指出有哪些工法細節、安裝數量或安全間距不符合規範？",
+      audit: "請幫我審核下方的『報價項目與單價』。比對現有的標準市場計價與合理損耗，分析是否有灌水、高估或重複計價的品項？",
+      legal: "請幫我比對上傳的室內裝修消防與隔間圖面。核對是否符合下方提供的『參考內文 / 消防法規』？請特別檢查防火門、煙霧偵測器及走道寬度。"
+    };
+
+    // --- 系統指令範本套用 ---
+    function applySystemTemplate(templateKey) {
+      const systemTextarea = document.getElementById('live-system-instruction');
+      const promptTextarea = document.getElementById('live-prompt');
+      
+      if (SYSTEM_TEMPLATES[templateKey]) {
+        systemTextarea.value = SYSTEM_TEMPLATES[templateKey];
+      } else {
+        systemTextarea.value = "";
+      }
+
+      if (USER_PROMPT_TEMPLATES[templateKey]) {
+        promptTextarea.value = USER_PROMPT_TEMPLATES[templateKey];
+      } else {
+        promptTextarea.value = "";
+      }
+    }
+
+    // --- 規範庫管理邏輯 ---
+    function loadSpecsLibrary() {
+      const savedSpecs = localStorage.getItem('tx_custom_specs');
+      if (savedSpecs) {
+        customSpecs = JSON.parse(savedSpecs);
+      } else {
+        customSpecs = JSON.parse(JSON.stringify(DEFAULT_SPECS));
+      }
+      renderSpecsButtons();
+    }
+
+    function renderSpecsButtons() {
+      const container = document.getElementById('specs-quick-insert-container');
+      container.innerHTML = '';
+
+      customSpecs.forEach(spec => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-secondary';
+        btn.style.cssText = 'padding: 0.25rem 0.6rem; font-size: 0.75rem; width: auto; background: rgba(59, 130, 246, 0.15); border-color: rgba(59,130,246,0.3); color: #93c5fd;';
+        btn.innerHTML = `<i class="fa-solid fa-file-invoice"></i> ${escapeHtml(spec.title)}`;
+        btn.onclick = () => insertSpecToContext(spec.content);
+        container.appendChild(btn);
+      });
+    }
+
+    function insertSpecToContext(content) {
+      const standardsTextarea = document.getElementById('live-standards');
+      if (standardsTextarea.value.trim() !== '') {
+        standardsTextarea.value += "\n\n" + content;
+      } else {
+        standardsTextarea.value = content;
+      }
+      standardsTextarea.focus();
+    }
+
+    // 規範庫管理 Modal (隱藏面板) 開閉
+    function openSpecsManager() {
+      const modal = document.getElementById('specs-manager-modal');
+      modal.style.display = 'block';
+      renderSpecsManagerList();
+      modal.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function closeSpecsManager() {
+      document.getElementById('specs-manager-modal').style.display = 'none';
+    }
+
+    function renderSpecsManagerList() {
+      const listContainer = document.getElementById('specs-manager-list');
+      listContainer.innerHTML = '';
+
+      customSpecs.forEach((spec, index) => {
+        const item = document.createElement('div');
+        item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 0.5rem; border-radius: 6px; font-size: 0.8rem;';
+        item.innerHTML = `
+          <div style="flex: 1; min-width: 0; padding-right: 0.5rem;">
+            <strong style="color: var(--text-main); display: block;">${escapeHtml(spec.title)}</strong>
+            <span style="color: var(--text-muted); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.75rem;">${escapeHtml(spec.content)}</span>
+          </div>
+          <button type="button" class="btn btn-secondary" style="width: auto; padding: 0.25rem 0.5rem; background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.2); color: #fca5a5;" onclick="deleteSpecItem(${index})">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        `;
+        listContainer.appendChild(item);
+      });
+    }
+
+    function addNewSpecItem() {
+      const titleInput = document.getElementById('new-spec-title');
+      const contentInput = document.getElementById('new-spec-content');
+      const title = titleInput.value.trim();
+      const content = contentInput.value.trim();
+
+      if (!title || !content) {
+        alert('請輸入規範項目的名稱與詳細內容！');
+        return;
+      }
+
+      const newSpec = {
+        id: 'spec-' + Date.now(),
+        title: title,
+        content: content
+      };
+
+      customSpecs.push(newSpec);
+      localStorage.setItem('tx_custom_specs', JSON.stringify(customSpecs));
+      
+      titleInput.value = '';
+      contentInput.value = '';
+
+      renderSpecsButtons();
+      renderSpecsManagerList();
+    }
+
+    function deleteSpecItem(index) {
+      if (confirm('確定要刪除此項規範快捷嗎？')) {
+        customSpecs.splice(index, 1);
+        localStorage.setItem('tx_custom_specs', JSON.stringify(customSpecs));
+        renderSpecsButtons();
+        renderSpecsManagerList();
+      }
+    }
+
+    function resetToDefaultSpecs() {
+      if (confirm('確定要將規範庫重設為系統預設值嗎？這將會覆蓋您現有的自訂快捷規範並載入最新木作與水電工法標準。')) {
+        customSpecs = JSON.parse(JSON.stringify(DEFAULT_SPECS));
+        localStorage.setItem('tx_custom_specs', JSON.stringify(customSpecs));
+        renderSpecsButtons();
+        renderSpecsManagerList();
+        alert('已重設為系統最新預設規範庫！');
+      }
+    }
+
+    // --- 多圖上傳處理與預覽 (human-comfortable) ---
+    function previewMultipleImages(input) {
+      const files = input.files;
+      if (files && files.length > 0) {
+        Array.from(files).forEach(file => {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            const base64Data = e.target.result.split(',')[1];
+            uploadedImagesList.push({
+              base64: base64Data,
+              mimeType: file.type,
+              name: file.name
+            });
+            renderImagesPreviews();
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+    }
+
+    function renderImagesPreviews() {
+      const container = document.getElementById('upload-previews-list');
+      container.innerHTML = '';
+
+      uploadedImagesList.forEach((img, index) => {
+        const item = document.createElement('div');
+        item.style.cssText = 'position: relative; width: 80px; height: 80px; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; overflow: hidden; background: #000;';
+        item.innerHTML = `
+          <img src="data:${img.mimeType};base64,${img.base64}" style="width: 100%; height: 100%; object-fit: cover;">
+          <button type="button" class="clear-img-btn" style="width: 18px; height: 18px; font-size: 0.65rem; top: 2px; right: 2px;" onclick="removeUploadedImage(${index})">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function removeUploadedImage(index) {
+      uploadedImagesList.splice(index, 1);
+      renderImagesPreviews();
+    }
+
+    function clearAllUploadedImages() {
+      uploadedImagesList = [];
+      document.getElementById('image-upload').value = '';
+      document.getElementById('upload-previews-list').innerHTML = '';
+    }
+
+    // 舊的預留相容性函數
+    function clearPreviewImage() {
+      clearAllUploadedImages();
+    }
+
+    // --- 擴充初始化 ---
+    window.addEventListener('DOMContentLoaded', () => {
+      loadSpecsLibrary();
+    });
+
+    let customSpecs = [];
+
+    // 實時對接發送 API
+    async function sendApiRequest() {
+      const projId = document.getElementById('live-project-id').value.trim() || '未定義案號';
+      const modelKey = document.getElementById('live-model').value;
+      const systemPrompt = document.getElementById('live-system-instruction').value.trim();
+      const userPrompt = document.getElementById('live-prompt').value.trim();
+      const contextText = document.getElementById('live-context').value.trim();
+      const standardsText = document.getElementById('live-standards').value.trim();
+      const sendBtn = document.getElementById('send-api-btn');
+
+      // 防呆機制
+      if (!apiKey) {
+        showError('金鑰缺失', '請先到 [模型與費率設定] 頁籤填入您的 Google Gemini API Key。');
+        return;
+      }
+      if (!userPrompt && uploadedImagesList.length === 0) {
+        showError('內容為空', '請至少輸入提示詞任務，或上傳測試現場施工照。');
+        return;
+      }
+
+      hideError();
+      
+      // UI 切換至載入中
+      sendBtn.disabled = true;
+      sendBtn.innerHTML = `<i class="fa-solid fa-spinner spinner"></i> 傳送中，請稍候...`;
+      document.getElementById('response-empty').style.display = 'none';
+      document.getElementById('response-success').style.display = 'none';
+      document.getElementById('response-loading').style.display = 'block';
+
+      // 建立 API Request Payload (Gemini API 格式，支援 3.x 世代)
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelKey}:generateContent?key=${apiKey}`;
+
+      const contents = [];
+      const parts = [];
+
+      // 若有多圖，全部塞入 parts 中
+      if (uploadedImagesList.length > 0) {
+        uploadedImagesList.forEach(img => {
+          parts.push({
+            inlineData: {
+              mimeType: img.mimeType,
+              data: img.base64
+            }
+          });
+        });
+      }
+
+      // 將 用戶提示詞、參考內文 與 比對標準 分離拼裝送給 AI
+      let combinedPrompt = "";
+      if (userPrompt) {
+        combinedPrompt += `【任務指令與提問】\n${userPrompt}\n\n`;
+      }
+      if (contextText) {
+        combinedPrompt += `【參考被審核內文 (Context)】\n${contextText}\n\n`;
+      }
+      if (standardsText) {
+        combinedPrompt += `【對照依據之標準規範 (Standards)】\n${standardsText}\n`;
+      }
+
+      if (combinedPrompt) {
+        parts.push({ text: combinedPrompt });
+      }
+
+      contents.push({ parts: parts });
+
+      const requestBody = { contents: contents };
+
+      // 塞入 system instruction
+      if (systemPrompt) {
+        requestBody.systemInstruction = {
+          parts: [{ text: systemPrompt }]
+        };
+      }
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error?.message || `HTTP error! status: ${response.status}`);
+        }
+
+        // 解析回應內容
+        const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const usage = data.usageMetadata || { promptTokenCount: 0, candidatesTokenCount: 0, totalTokenCount: 0 };
+        
+        // 渲染 Markdown 結果
+        document.getElementById('response-success').innerHTML = marked.parse(textResponse);
+        document.getElementById('response-loading').style.display = 'none';
+        document.getElementById('response-success').style.display = 'block';
+
+        // 進行成本試算
+        const inputTokens = usage.promptTokenCount;
+        const outputTokens = usage.candidatesTokenCount;
+        
+        const costs = calculateCostMetrics(modelKey, inputTokens, outputTokens);
+        displayCostMetrics(modelKey, inputTokens, outputTokens, costs);
+
+        // 建立寫檔用的計費 metrics 對象
+        const metricsObj = {
+          model: modelRates[modelKey]?.name || modelKey,
+          inputTokens,
+          outputTokens,
+          costUsd: costs.totalUsd,
+          costTwd: costs.totalTwd
+        };
+
+        // 1. 自動背景寫入本機 JSON 檔案 (data/[案號]/[案號]_[時間].json)
+        await saveJsonToLocalDirectory(projId, requestBody, textResponse, metricsObj);
+
+        // 2. 存入歷史日誌前，將 Request Payload 複製一份並將 Base64 大圖數據剔除，防止 LocalStorage 爆掉
+        let storagePayload = null;
+        if (requestBody) {
+          storagePayload = JSON.parse(JSON.stringify(requestBody));
+          if (storagePayload.contents?.[0]?.parts) {
+            storagePayload.contents[0].parts.forEach(part => {
+              if (part.inlineData) {
+                part.inlineData.data = `[BASE64_IMAGE_DATA_OMITTED_FOR_LOCALSTORAGE: ${part.inlineData.mimeType}]`;
+              }
+            });
+          }
+        }
+
+        // 3. 存入歷史日誌
+        saveToHistoryLogs({
+          project: projId,
+          timestamp: new Date().toLocaleString('zh-TW', { hour12: false }),
+          model: modelKey,
+          inputTokens,
+          outputTokens,
+          costUsd: costs.totalUsd,
+          costTwd: costs.totalTwd,
+          status: 'SUCCESS',
+          requestPayload: storagePayload,
+          response: textResponse
+        });
+
+      } catch (err) {
+        console.error(err);
+        showError('API 調用失敗', `呼叫 API 時發生問題，請檢查 API Key 是否正確。人話細節: ${err.message}`);
+        document.getElementById('response-loading').style.display = 'none';
+        document.getElementById('response-empty').style.display = 'block';
+
+        // 存入失敗歷史
+        saveToHistoryLogs({
+          project: projId,
+          timestamp: new Date().toLocaleString('zh-TW', { hour12: false }),
+          model: modelKey,
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          costTwd: 0,
+          status: 'FAILURE'
+        });
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = `<i class="fa-solid fa-bolt"></i> 發送並計算成本`;
+      }
+    }
+
+    // 計算費率公式
+    function calculateCostMetrics(modelKey, inputTokens, outputTokens) {
+      const rate = modelRates[modelKey] || { input: 0, output: 0 };
+      
+      const inputUsd = (inputTokens / 1000000) * rate.input;
+      const outputUsd = (outputTokens / 1000000) * rate.output;
+      const totalUsd = inputUsd + outputUsd;
+
+      const inputTwd = inputUsd * exchangeRate;
+      const outputTwd = outputUsd * exchangeRate;
+      const totalTwd = totalUsd * exchangeRate;
+
+      return {
+        inputUsd, outputUsd, totalUsd,
+        inputTwd, outputTwd, totalTwd
+      };
+    }
+
+    // 顯示成本到看板上
+    function displayCostMetrics(modelKey, inputTokens, outputTokens, costs) {
+      document.getElementById('cost-total-twd').innerText = `NT$ ${costs.totalTwd.toFixed(4)}`;
+      document.getElementById('cost-total-usd').innerText = `$ ${costs.totalUsd.toFixed(6)}`;
+      
+      document.getElementById('detail-model-name').innerText = modelRates[modelKey]?.name || modelKey;
+      document.getElementById('detail-input-tokens').innerText = inputTokens.toLocaleString();
+      document.getElementById('detail-output-tokens').innerText = outputTokens.toLocaleString();
+
+      document.getElementById('detail-input-cost').innerText = `$${costs.inputUsd.toFixed(6)} / NT$${costs.inputTwd.toFixed(4)}`;
+      document.getElementById('detail-output-cost').innerText = `$${costs.outputUsd.toFixed(6)} / NT$${costs.outputTwd.toFixed(4)}`;
+    }
+
+    // 錯誤視窗顯示與隱藏
+    function showError(title, msg) {
+      document.getElementById('error-title').innerText = title;
+      document.getElementById('error-message').innerText = msg;
+      document.getElementById('global-error-box').style.display = 'flex';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // 歷史還原與對帳細項回填
+    function loadHistoryRecord(index) {
+      const log = historyLogs[index];
+      if (!log) return;
+
+      // 試圖尋找當時使用的 model key
+      let matchedKey = '';
+      for (const [key, value] of Object.entries(modelRates)) {
+        if (value.name === log.model || key === log.model) {
+          matchedKey = key;
+          break;
+        }
+      }
+      const modelKeyForCalc = matchedKey || log.model;
+
+      // 1. 還原看板數據
+      displayCostMetrics(modelKeyForCalc, log.inputTokens, log.outputTokens, {
+        totalUsd: log.costUsd,
+        totalTwd: log.costTwd,
+        inputUsd: (log.inputTokens / 1000000) * (modelRates[modelKeyForCalc]?.input || 0),
+        outputUsd: (log.outputTokens / 1000000) * (modelRates[modelKeyForCalc]?.output || 0),
+        inputTwd: (log.inputTokens / 1000000) * (modelRates[modelKeyForCalc]?.input || 0) * exchangeRate,
+        outputTwd: (log.outputTokens / 1000000) * (modelRates[modelKeyForCalc]?.output || 0) * exchangeRate
+      });
+
+      // 2. 還原輸入欄位
+      document.getElementById('live-project-id').value = log.project;
+      
+      if (matchedKey) {
+        document.getElementById('live-model').value = matchedKey;
+      }
+
+      // 解析 requestPayload 以回填 UI 欄位
+      if (log.requestPayload) {
+        const systemText = log.requestPayload.systemInstruction?.parts?.[0]?.text || '';
+        document.getElementById('live-system-instruction').value = systemText;
+
+        const combinedPrompt = log.requestPayload.contents?.[0]?.parts?.find(p => p.text)?.text || '';
+        
+        let promptVal = '';
+        let contextVal = '';
+        let standardsVal = '';
+
+        const promptMatch = combinedPrompt.match(/【任務指令與提問】\n([\s\S]*?)(?=\n\n【參考被審核內文|$)/);
+        const contextMatch = combinedPrompt.match(/【參考被審核內文 \(Context\)】\n([\s\S]*?)(?=\n\n【對照依據|$)/);
+        const standardsMatch = combinedPrompt.match(/【對照依據之標準規範 \(Standards\)】\n([\s\S]*?)$/);
+
+        if (promptMatch) promptVal = promptMatch[1].trim();
+        if (contextMatch) contextVal = contextMatch[1].trim();
+        if (standardsMatch) standardsVal = standardsMatch[1].trim();
+
+        if (!promptVal && !contextVal && !standardsVal) {
+          promptVal = combinedPrompt;
+        }
+
+        document.getElementById('live-prompt').value = promptVal;
+        document.getElementById('live-context').value = contextVal;
+        document.getElementById('live-standards').value = standardsVal;
+      }
+
+      // 3. 還原 AI 輸出預覽
+      if (log.response) {
+        document.getElementById('response-empty').style.display = 'none';
+        document.getElementById('response-loading').style.display = 'none';
+        document.getElementById('response-success').innerHTML = marked.parse(log.response);
+        document.getElementById('response-success').style.display = 'block';
+        document.getElementById('response-success').scrollIntoView({ behavior: 'smooth' });
+      } else {
+        document.getElementById('response-success').style.display = 'none';
+        document.getElementById('response-loading').style.display = 'none';
+        document.getElementById('response-empty').style.display = 'block';
+      }
+
+      // 切換頁籤回實時測試頁，讓總監能直接看到還原內容
+      switchTab('live-test');
+    }
+
+    function hideError() {
+      document.getElementById('global-error-box').style.display = 'none';
+    }
+
+    // --- 手動計算器 Tab 邏輯 ---
+    function syncManualModelRates() {
+      const modelKey = document.getElementById('manual-model').value;
+      if (modelRates[modelKey]) {
+        document.getElementById('manual-input-fee').value = modelRates[modelKey].input;
+        document.getElementById('manual-output-fee').value = modelRates[modelKey].output;
+        calculateManualCost();
+      }
+    }
+
+    function calculateManualCost() {
+      const modelKey = document.getElementById('manual-model').value;
+      const inputTokens = parseInt(document.getElementById('manual-input-tokens').value) || 0;
+      const outputTokens = parseInt(document.getElementById('manual-output-tokens').value) || 0;
+      const inputRate = parseFloat(document.getElementById('manual-input-fee').value) || 0;
+      const outputRate = parseFloat(document.getElementById('manual-output-fee').value) || 0;
+
+      const inputUsd = (inputTokens / 1000000) * inputRate;
+      const outputUsd = (outputTokens / 1000000) * outputRate;
+      const totalUsd = inputUsd + outputUsd;
+
+      const inputTwd = inputUsd * exchangeRate;
+      const outputTwd = outputUsd * exchangeRate;
+      const totalTwd = totalUsd * exchangeRate;
+
+      displayCostMetrics(modelKey, inputTokens, outputTokens, {
+        inputUsd, outputUsd, totalUsd,
+        inputTwd, outputTwd, totalTwd
+      });
+    }
+
+    function saveManualToHistory() {
+      const projId = document.getElementById('manual-project-id').value.trim() || '手動估算案場';
+      const modelKey = document.getElementById('manual-model').value;
+      const inputTokens = parseInt(document.getElementById('manual-input-tokens').value) || 0;
+      const outputTokens = parseInt(document.getElementById('manual-output-tokens').value) || 0;
+      
+      const inputRate = parseFloat(document.getElementById('manual-input-fee').value) || 0;
+      const outputRate = parseFloat(document.getElementById('manual-output-fee').value) || 0;
+
+      const inputUsd = (inputTokens / 1000000) * inputRate;
+      const outputUsd = (outputTokens / 1000000) * outputRate;
+      const totalUsd = inputUsd + outputUsd;
+      const totalTwd = totalUsd * exchangeRate;
+
+      saveToHistoryLogs({
+        project: projId,
+        timestamp: new Date().toLocaleString('zh-TW', { hour12: false }),
+        model: modelKey + " (手動)",
+        inputTokens,
+        outputTokens,
+        costUsd: totalUsd,
+        costTwd: totalTwd,
+        status: 'SUCCESS'
+      });
+
+      alert('此筆換算紀錄已手動存入歷史日誌！');
+    }
+
+    // --- 歷史紀錄機制 ---
+    function saveToHistoryLogs(logObj) {
+      historyLogs.unshift(logObj); // 最新的一筆放最前面
+      localStorage.setItem('tx_history_logs_v2', JSON.stringify(historyLogs));
+      renderHistoryLogs();
+    }
+
+    function renderHistoryLogs() {
+      const tbody = document.getElementById('history-log-body');
+      if (historyLogs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem 0;">無歷史調用紀錄。</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = '';
+      historyLogs.forEach((log, index) => {
+        const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        tr.title = '點擊還原此筆發送請求與 AI 回覆內容';
+        tr.onclick = () => loadHistoryRecord(index);
+        
+        const badgeClass = log.status === 'SUCCESS' ? 'badge-success' : 'badge-danger';
+        const badgeLabel = log.status === 'SUCCESS' ? '成功' : '失敗';
+        
+        tr.innerHTML = `
+          <td style="font-weight: 500;">${escapeHtml(log.project)}</td>
+          <td style="color: var(--text-muted);">${log.timestamp}</td>
+          <td><code>${escapeHtml(log.model)}</code></td>
+          <td>${log.inputTokens.toLocaleString()}</td>
+          <td>${log.outputTokens.toLocaleString()}</td>
+          <td style="font-family: monospace;">$${log.costUsd.toFixed(6)}</td>
+          <td style="color: var(--success); font-weight: 600; font-family: monospace;">NT$ ${log.costTwd.toFixed(4)}</td>
+          <td><span class="badge ${badgeClass}">${badgeLabel}</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // 清除歷史
+    function clearHistoryLog() {
+      if (confirm('確定要清除所有的 Token 調用歷史紀錄嗎？清除後不可還原。')) {
+        historyLogs = [];
+        localStorage.removeItem('tx_history_logs_v2');
+        renderHistoryLogs();
+      }
+    }
+
+    // CSV 核銷對帳匯出
+    function exportHistoryCsv() {
+      if (historyLogs.length === 0) {
+        alert('目前無歷史數據，無法進行會計核銷匯出。');
+        return;
+      }
+
+      // CSV Header
+      let csvContent = '\uFEFF'; // UTF-8 BOM
+      csvContent += '專案案號/案場名稱,呼叫時間,使用的模型,輸入Token數,輸出Token數,美金費用(USD),台幣換算(TWD),調用狀態\r\n';
+
+      historyLogs.forEach(log => {
+        const proj = csvEscape(log.project);
+        const time = csvEscape(log.timestamp);
+        const model = csvEscape(log.model);
+        const status = log.status === 'SUCCESS' ? '成功' : '失敗';
+        
+        csvContent += `"${proj}","${time}","${model}",${log.inputTokens},${log.outputTokens},${log.costUsd.toFixed(6)},${log.costTwd.toFixed(4)},"${status}"\r\n`;
+      });
+
+      // 產生下載檔案
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `添心AI_Token_會計核銷日誌_${dateStr}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // Helper Functions
+    function csvEscape(unsafe) {
+      return unsafe.toString().replace(/"/g, '""');
+    }
+  </script>
+</body>
+</html>

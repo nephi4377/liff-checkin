@@ -176,6 +176,7 @@
             qty: 1,
             unitPrice: st,
             sub: st,
+            sort: drow.sort,
           });
         } else {
           var lump2 = typeof s.touchupLump === 'number' ? s.touchupLump : 20000;
@@ -187,6 +188,7 @@
             qty: 1,
             unitPrice: lump2,
             sub: Math.round(lump2),
+            sort: drow.sort,
           });
         }
         return;
@@ -203,6 +205,7 @@
         qty: q2,
         unitPrice: it.price,
         sub: Math.round(q2 * (it.price || 0)),
+        sort: drow.sort,
       });
       /* 子品項：各自獨立勾選，金額加到同一 section */
       if (Array.isArray(it.subItems) && it.subItems.length) {
@@ -220,6 +223,7 @@
             qty: subQ,
             unitPrice: sub.price || 0,
             sub: Math.round(subQ * (sub.price || 0)),
+            sort: drow.sort + 0.1,
           });
         });
       }
@@ -237,6 +241,10 @@
       if (rows) rows.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
+    // 依據原始排序列順序，對收集到的報價行進行穩定排序
+    lines.sort(function (a, b) {
+      return (a.sort || 0) - (b.sort || 0);
+    });
     var total = lines.reduce(function (a, l) { return a + l.sub; }, 0);
     var title = document.getElementById('c_title').value.trim() || '（未命名）';
     var sc = getSchemeById(getSelectedSchemeId());

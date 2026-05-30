@@ -1,0 +1,10 @@
+{
+  "liveServer.settings.ignoreFiles": [
+    "**/data/**",
+    "data/**",
+    "data",
+    "**/data",
+    "tools/api-token-cost-calculator/data/**",
+    ".vscode/**"
+  ]
+}

@@ -91,6 +91,10 @@
       }
       saveSettingsLocalOnly();
     } else if (state.settings.schemaVersion < SCHEMA_V) {
+      // 主動清除舊的 protect_site 品項，避免與新的四個保護項目衝突殘留
+      state.settings.itemDefs = (state.settings.itemDefs || []).filter(function (x) {
+        return x && x.id !== 'protect_site';
+      });
       if (state.settings.schemaVersion < 6) {
         state.settings.mepSocketBase = 0;
         state.settings.mepPerZone = 2;
@@ -591,12 +595,17 @@
   }
 
   function ensureProtectSiteInAllSchemes() {
-    var pr = defaultSchemeRulesBase().protect_site;
-    if (!pr) return;
+    var baseRules = defaultSchemeRulesBase();
+    var keys = ['protect_indoor_floor', 'protect_doors', 'protect_public', 'clean_waste'];
     (state.settings.schemeMenus || []).forEach(function (sc) {
       if (!sc) return;
       if (!sc.rules) sc.rules = {};
-      if (!sc.rules.protect_site) sc.rules.protect_site = JSON.parse(JSON.stringify(pr));
+      keys.forEach(function (key) {
+        if (!sc.rules[key] && baseRules[key]) {
+          sc.rules[key] = JSON.parse(JSON.stringify(baseRules[key]));
+        }
+      });
+      if (sc.rules.protect_site) delete sc.rules.protect_site;
     });
   }
 
@@ -750,9 +759,11 @@
 
   function mepSocketCountFromAlloc(alloc, s) {
     if (!alloc || !alloc.template) return 0;
-    var base = typeof s.mepSocketBase === 'number' ? s.mepSocketBase : 30;
-    var pz = typeof s.mepPerZone === 'number' ? s.mepPerZone : 6;
-    return Math.max(0, Math.round(base + pz * (1 + alloc.template.bedrooms)));
+    var kitchenLoop = 2; // 廚房電器增設專迴 (2點)
+    var tvWall = 3;      // 客廳電視牆移位與影音出線 (3點)
+    var roomMod = typeof s.mepPerZone === 'number' ? s.mepPerZone : 2; // 各房床頭/書桌局部移位 (每區預設 2點)
+    var bedrooms = alloc.template.bedrooms;
+    return Math.max(0, Math.round(kitchenLoop + tvWall + roomMod * bedrooms));
   }
 
   function avgSecondaryShortShaku(alloc) {

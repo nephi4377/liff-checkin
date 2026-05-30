@@ -174,7 +174,7 @@
                   <option value="sum_ac_shaku_paint">變量：各空間包管一邊短邊台尺加總</option>
                   <option value="floor_115">變量：地坪＝分空間實鋪×損耗再取整（floor_p）</option>
                   <option value="recess_15x">變量：嵌燈概估＝(客+臥坪)×1.5 向上</option>
-                  <option value="mep_sockets_bed">變量：出線點＝管理員底數＋每區參與</option>
+                  <option value="mep_sockets_bed">變量：出線點＝廚房專迴(2)+電視牆(3)+各房移位(2*房數)</option>
                   <option value="short_shaku_zone">變量：指到哪一間就量那一間的一邊台尺（要選空間）</option>
                   <option value="short_shaku_scaled">變量：一邊台尺× 比例%（要選空間＋%）</option>
                   <option value="shaku_edge_scaled">變量：依長邊或短邊台尺×%（要選空間＋邊＋%）</option>
@@ -349,8 +349,8 @@
             </label>
             <label>收邊費＝木作+系統 ×（例 0.05）<input id="s_trimRate" type="number" step="0.01" class="mt-1 w-full border rounded px-2 py-1" /></label>
             <label>細清＋竣工修補（元）<input id="s_touchup" type="number" step="100" class="mt-1 w-full border rounded px-2 py-1" /></label>
-            <label class="sm:col-span-2">水電出線：底數／每臥+客廳
-              <span class="grid grid-cols-2 gap-2 mt-1 max-w-md"><input id="s_mepBase" type="number" class="border rounded px-2 py-1" placeholder="底數 30" /><input id="s_mepPerRoom" type="number" class="border rounded px-2 py-1" placeholder="每區 6" /></span>
+            <label class="sm:col-span-2">水電出線：新增/移位加成 (新大樓無底數)
+              <span class="grid grid-cols-2 gap-2 mt-1 max-w-md"><input id="s_mepBase" type="hidden" value="0" /><input id="s_mepPerRoom" type="number" class="border rounded px-2 py-1" placeholder="每房預設 2" /></span>
             </label>
           </div>
         </details>
