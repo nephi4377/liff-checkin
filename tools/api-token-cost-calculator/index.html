@@ -1485,9 +1485,75 @@
       clearAllUploadedImages();
     }
 
-    // --- 擴充初始化 ---
+    // 初始化載入
     window.addEventListener('DOMContentLoaded', () => {
+      // 載入 localStorage
+      const savedRates = localStorage.getItem('tx_model_rates_v2');
+      if (savedRates) {
+        modelRates = JSON.parse(savedRates);
+      } else {
+        modelRates = JSON.parse(JSON.stringify(DEFAULT_MODEL_RATES));
+      }
+
+      const savedRate = localStorage.getItem('tx_exchange_rate');
+      if (savedRate) exchangeRate = parseFloat(savedRate);
+      if (document.getElementById('setting-exchange-rate')) {
+        document.getElementById('setting-exchange-rate').value = exchangeRate;
+      }
+      const costRateBasis = document.getElementById('cost-rate-basis');
+      if (costRateBasis) {
+        costRateBasis.innerText = `1 USD = ${exchangeRate}`;
+      }
+
+      const savedKey = localStorage.getItem('tx_gemini_key');
+      if (savedKey) {
+        apiKey = savedKey;
+        if (document.getElementById('setting-gemini-key')) {
+          document.getElementById('setting-gemini-key').value = savedKey;
+        }
+      }
+
+      const savedBackendUrl = localStorage.getItem('tx_backend_url') || 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
+      if (document.getElementById('setting-backend-url')) {
+        document.getElementById('setting-backend-url').value = savedBackendUrl;
+      }
+
+      const savedBackendUserId = localStorage.getItem('tx_backend_user_id') || 'Ud58333430513b7527106fa71d2e30151';
+      if (document.getElementById('setting-backend-user-id')) {
+        document.getElementById('setting-backend-user-id').value = savedBackendUserId;
+      }
+
+      const savedHistory = localStorage.getItem('tx_history_logs_v2');
+      if (savedHistory) {
+        historyLogs = JSON.parse(savedHistory);
+        renderHistoryLogs();
+      }
+
+      // 載入自訂規範庫
       loadSpecsLibrary();
+
+      // 初始化下拉選單
+      renderModelSelectors();
+      // 初始化設定頁面的編輯表格
+      renderRatesTableEditor();
+      
+      // 更新對帳面板匯率文字
+      updateSelectedModelFee();
+
+      // 載入輸入內容草稿 (human-comfortable)
+      loadInputDraft();
+
+      // 綁定草稿自動儲存監聽
+      DRAFT_FIELDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener('input', saveInputDraft);
+          el.addEventListener('change', saveInputDraft);
+        }
+      });
+
+      // 初始化本地 Data 資料夾連結
+      initLocalDirectory();
     });
 
     let customSpecs = [];
@@ -2187,6 +2253,198 @@
       });
 
       saveInputDraft();
+    }
+
+    // 1. 頁籤切換邏輯
+    function switchTab(tabId) {
+      const tabContents = document.querySelectorAll('.tab-content');
+      tabContents.forEach(content => {
+        content.style.display = 'none';
+      });
+
+      const activeContent = document.getElementById('tab-' + tabId);
+      if (activeContent) {
+        activeContent.style.display = 'block';
+      }
+
+      const tabBtns = document.querySelectorAll('.tab-btn');
+      tabBtns.forEach(btn => {
+        btn.classList.remove('active');
+        const onclickAttr = btn.getAttribute('onclick') || '';
+        if (onclickAttr.includes(tabId)) {
+          btn.classList.add('active');
+        }
+      });
+      
+      hideError();
+    }
+
+    // 2. 密碼欄位隱藏/顯示切換
+    function togglePasswordVisibility(inputId) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      
+      const icon = input.nextElementSibling;
+      if (input.type === 'password') {
+        input.type = 'text';
+        if (icon) {
+          icon.classList.remove('fa-eye');
+          icon.classList.add('fa-eye-slash');
+        }
+      } else {
+        input.type = 'password';
+        if (icon) {
+          icon.classList.remove('fa-eye-slash');
+          icon.classList.add('fa-eye');
+        }
+      }
+    }
+
+    // 3. 匯率即時更新
+    function updateExchangeRate(val) {
+      exchangeRate = parseFloat(val) || 32.5;
+    }
+
+    // 4. 儲存環境金鑰與匯率配置
+    function saveEnvSettings() {
+      const geminiKeyInput = document.getElementById('setting-gemini-key');
+      const exchangeRateInput = document.getElementById('setting-exchange-rate');
+      const backendUrlInput = document.getElementById('setting-backend-url');
+      const backendUserIdInput = document.getElementById('setting-backend-user-id');
+      if (!geminiKeyInput || !exchangeRateInput || !backendUrlInput || !backendUserIdInput) return;
+
+      apiKey = geminiKeyInput.value.trim();
+      exchangeRate = parseFloat(exchangeRateInput.value) || 32.5;
+      const backendUrl = backendUrlInput.value.trim();
+      const backendUserId = backendUserIdInput.value.trim();
+
+      localStorage.setItem('tx_gemini_key', apiKey);
+      localStorage.setItem('tx_exchange_rate', exchangeRate.toString());
+      localStorage.setItem('tx_backend_url', backendUrl);
+      localStorage.setItem('tx_backend_user_id', backendUserId);
+
+      const basis = document.getElementById('cost-rate-basis');
+      if (basis) {
+        basis.innerText = `1 USD = ${exchangeRate}`;
+      }
+
+      alert('環境配置設定已儲存！');
+    }
+
+    // 5. 動態寫入模型下拉選單
+    function renderModelSelectors() {
+      const liveModelSelect = document.getElementById('live-model');
+      const manualModelSelect = document.getElementById('manual-model');
+      if (!liveModelSelect || !manualModelSelect) return;
+
+      let optionsHtml = '';
+      for (const key in modelRates) {
+        if (modelRates.hasOwnProperty(key)) {
+          optionsHtml += `<option value="${key}">${escapeHtml(modelRates[key].name)}</option>`;
+        }
+      }
+      liveModelSelect.innerHTML = optionsHtml;
+      manualModelSelect.innerHTML = optionsHtml;
+    }
+
+    // 6. 動態生成費率矩陣編輯表
+    function renderRatesTableEditor() {
+      const tbody = document.getElementById('rates-table-body');
+      if (!tbody) return;
+
+      let html = '';
+      for (const [key, model] of Object.entries(modelRates)) {
+        html += `
+          <tr>
+            <td style="font-weight: 500;">${escapeHtml(model.name)} <br><small style="color: var(--text-muted);">${escapeHtml(key)}</small></td>
+            <td><input type="number" step="0.001" class="rate-editor-input" data-key="${key}" data-type="input" value="${model.input}"></td>
+            <td><input type="number" step="0.001" class="rate-editor-input" data-key="${key}" data-type="output" value="${model.output}"></td>
+          </tr>
+        `;
+      }
+      tbody.innerHTML = html;
+    }
+
+    // 7. 儲存模型費率設定
+    function saveModelRatesSettings() {
+      const inputs = document.querySelectorAll('.rate-editor-input');
+      inputs.forEach(input => {
+        const key = input.getAttribute('data-key');
+        const type = input.getAttribute('data-type');
+        const val = parseFloat(input.value) || 0;
+        
+        if (modelRates[key]) {
+          modelRates[key][type] = val;
+        }
+      });
+
+      localStorage.setItem('tx_model_rates_v2', JSON.stringify(modelRates));
+      
+      renderModelSelectors();
+      renderRatesTableEditor();
+      updateSelectedModelFee();
+      syncManualModelRates();
+      
+      alert('模型費率設定已儲存並生效！');
+    }
+
+    // 8. 更新當前實時測試模型費率顯示
+    function updateSelectedModelFee() {
+      const modelKey = document.getElementById('live-model').value;
+      const modelNameDetail = document.getElementById('detail-model-name');
+      if (modelNameDetail && modelRates[modelKey]) {
+        modelNameDetail.innerText = modelRates[modelKey].name;
+      }
+
+      // 當選取的是設計助理模型時，自動切換範本為 assistant
+      if (modelKey === 'tianxin-design-assistant') {
+        const templateSelect = document.getElementById('live-system-template');
+        if (templateSelect && templateSelect.value !== 'assistant') {
+          templateSelect.value = 'assistant';
+          applySystemTemplate('assistant');
+        }
+      }
+    }
+
+    // --- 本地草稿儲存與載入功能 (human-comfortable) ---
+    const DRAFT_FIELDS = [
+      'live-project-id',
+      'live-model',
+      'live-system-template',
+      'live-system-instruction',
+      'live-prompt',
+      'live-context',
+      'live-standards',
+      'setting-backend-url',
+      'setting-backend-user-id'
+    ];
+
+    function saveInputDraft() {
+      const draft = {};
+      DRAFT_FIELDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          draft[id] = el.value;
+        }
+      });
+      localStorage.setItem('tx_calc_input_draft', JSON.stringify(draft));
+    }
+
+    function loadInputDraft() {
+      const saved = localStorage.getItem('tx_calc_input_draft');
+      if (saved) {
+        try {
+          const draft = JSON.parse(saved);
+          DRAFT_FIELDS.forEach(id => {
+            const el = document.getElementById(id);
+            if (el && draft[id] !== undefined) {
+              el.value = draft[id];
+            }
+          });
+        } catch (e) {
+          console.error("Failed to load input draft:", e);
+        }
+      }
     }
   </script>
 </body>
