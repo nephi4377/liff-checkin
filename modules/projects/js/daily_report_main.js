@@ -16,12 +16,46 @@ import { lazyLoadImages } from './ui.js';
 window.extractDriveFileId = extractDriveFileId;
 
 let startDatePicker, endDatePicker, queryBtn, reportsContainer, placeholder, groupFilterContainer;
-let kpiDashboard, kpiAttendance, kpiLeave, kpiMissing, searchInput;
+let searchInput;
+
+/** 日報狀態 CSS 封裝（特休淡化、缺交警示） */
+const REPORT_STYLES = {
+    fullDayLeaveFade: 'opacity-60', // 特休人員整卡淡化 60% 透明度
+    missingReportRow: 'mt-2 p-2.5 bg-red-50/40 rounded-lg border border-red-100 flex items-center justify-between text-xs transition-all hover:bg-red-50',
+    leaveNoClockRow: 'mt-2 p-2 bg-gray-50/60 rounded-lg border border-gray-200/40 flex items-center gap-3 text-xs',
+};
 let currentViewMode = 'employee'; // [第三階段] 視角模式：'employee' 或 'project'
 let searchTerm = ''; // [人員檢索] 搜尋關鍵字
 let userProfile = null;
 let allFetchedEmployees = [];
 let allFetchedReports = [];
+
+/**
+ * 根據圖片網址，自動轉換為支援直連或縮圖免登入的網址（完美相容 Google Drive 與 Dropbox）
+ * @param {string} url - 原始圖片網址
+ * @param {number|string} size - 圖片尺寸 (用於 Google Drive, 如 300 或 1920)
+ * @returns {string} - 轉換後的網址
+ */
+function getPhotoUrl(url, size = 300) {
+    if (!url) return '';
+    url = url.trim();
+
+    // 1. 處理 Dropbox 連結 (核心優化)
+    if (url.includes('dropbox.com')) {
+        let directUrl = url.replace('www.dropbox.com', 'dl.dropboxusercontent.com');
+        directUrl = directUrl.replace('dl=0', 'raw=1');
+        return directUrl;
+    }
+
+    // 2. 處理 Google Drive 連結
+    if (url.includes('drive.google.com')) {
+        const fileId = window.extractDriveFileId(url);
+        return fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w${size}` : url;
+    }
+
+    // 3. 其他連結直接回傳
+    return url;
+}
 
 function getTwoWorkingDaysAgo(date) {
     let resultDate = new Date(date);
@@ -135,10 +169,6 @@ export function main() {
     reportsContainer = document.getElementById('reports-container');
     placeholder = document.getElementById('placeholder');
     groupFilterContainer = document.getElementById('group-filter-container');
-    kpiDashboard = document.getElementById('kpi-dashboard');
-    kpiAttendance = document.getElementById('kpi-attendance');
-    kpiLeave = document.getElementById('kpi-leave');
-    kpiMissing = document.getElementById('kpi-missing');
     searchInput = document.getElementById('person-search-input');
 
     const today = new Date();
@@ -223,24 +253,39 @@ async function fetchAndRenderReports(startDateStr, endDateStr) {
         const queryYear = startDate.getFullYear();
         const queryMonth = startDate.getMonth() + 1;
 
-        // [v1.0.7] 同時獲取打卡紀錄
+        // [v1.0.7] 同時獲取打卡紀錄與日報，並採用健全的錯誤防禦機制
         const [employees, reportsResult, scheduleData, attendanceData] = await Promise.all([
-            fetchEmployees(),
-            fetch(url).then(res => res.json()),
-            window.dailyReportApp.getScheduleDataForMonth(queryYear, queryMonth),
-            fetchAttendanceData(startDateStr, endDateStr)
+            fetchEmployees().catch(err => {
+                console.error('[降級警告] 獲取員工列表失敗:', err);
+                return [];
+            }),
+            fetch(url).then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return res.json();
+            }).catch(err => {
+                console.error('[降級警告] 獲取日誌失敗:', err);
+                return { success: false, data: [], message: err.message };
+            }),
+            window.dailyReportApp.getScheduleDataForMonth(queryYear, queryMonth).catch(err => {
+                console.error('[降級警告] 獲取排班資料失敗:', err);
+                return { schedule: {}, holidays: new Set() };
+            }),
+            fetchAttendanceData(startDateStr, endDateStr).catch(err => {
+                console.error('[降級警告] 獲取考勤數據失敗:', err);
+                return {};
+            })
         ]);
 
-        if (!reportsResult.success) {
-            throw new Error(reportsResult.message || '後端回傳一個未知的錯誤');
+        if (reportsResult && !reportsResult.success) {
+            console.warn('[降級警告] 日報數據載入異常，將進行空白陣列降級:', reportsResult.message);
         }
 
-        allFetchedEmployees = employees;
-        allFetchedReports = reportsResult.data;
-        window.currentScheduleData = scheduleData;
-        window.currentAttendanceData = attendanceData; // 儲存打卡紀錄
+        allFetchedEmployees = employees || [];
+        allFetchedReports = reportsResult?.data || [];
+        window.currentScheduleData = scheduleData || { schedule: {}, holidays: new Set() };
+        window.currentAttendanceData = attendanceData || {};
 
-        renderGroupFilters(employees);
+        renderGroupFilters(allFetchedEmployees);
         renderMainReports();
 
     } catch (error) {
@@ -297,10 +342,26 @@ function renderReportsByEmployee(employees, allReports, scheduleData) {
         return;
     }
 
-    const reportsByUserId = allReports.reduce((acc, report) => {
+    // [聯表效能優化] 預先對所有日報進行雙重雜湊關聯索引： UserID -> dateStr -> [reports]
+    const reportsByUserIdAndDate = {};
+    allReports.forEach(report => {
         const userId = report.UserID;
-        if (!acc[userId]) acc[userId] = [];
-        acc[userId].push(report);
+        if (!userId) return;
+        const dateStr = String(report.Timestamp).split('T')[0];
+        
+        if (!reportsByUserIdAndDate[userId]) {
+            reportsByUserIdAndDate[userId] = {};
+        }
+        if (!reportsByUserIdAndDate[userId][dateStr]) {
+            reportsByUserIdAndDate[userId][dateStr] = [];
+        }
+        reportsByUserIdAndDate[userId][dateStr].push(report);
+    });
+
+    // 建立 UserID 到該員工日報總數的映射
+    const reportsCountByUserId = allReports.reduce((acc, r) => {
+        const uid = r.UserID;
+        if (uid) acc[uid] = (acc[uid] || 0) + 1;
         return acc;
     }, {});
 
@@ -312,20 +373,15 @@ function renderReportsByEmployee(employees, allReports, scheduleData) {
 
     let lastGroup = null;
     filteredEmployees.forEach(employee => {
-        const employeeReports = reportsByUserId[employee.userId] || [];
-        const reportsByDate = employeeReports.reduce((acc, report) => {
-            const d = String(report.Timestamp).split('T')[0];
-            if (!acc[d]) acc[d] = [];
-            acc[d].push(report);
-            return acc;
-        }, {});
+        const employeeReportsCount = reportsCountByUserId[employee.userId] || 0;
+        const employeeReportsIndexed = reportsByUserIdAndDate[employee.userId] || {};
 
         const card = document.createElement('div');
-        card.className = 'bg-white p-6 rounded-lg shadow-md border-l-4 border-blue-500';
+        card.className = 'bg-white p-6 rounded-xl shadow-sm border border-gray-200/80 border-l-4 border-blue-500 transition-opacity duration-300';
 
         // 生成時間軸 HTML
         let timelineHtml = dateRange.map(dateStr => {
-            const dateReports = reportsByDate[dateStr] || [];
+            const dateReports = employeeReportsIndexed[dateStr] || [];
             const dateLabel = dateStr.replace(/-/g, '/');
 
             if (dateReports.length > 0) {
@@ -346,7 +402,7 @@ function renderReportsByEmployee(employees, allReports, scheduleData) {
                             
                             return `
                                 <div class="relative aspect-square overflow-hidden rounded-md cursor-pointer group">
-                                    <img data-src="https://drive.google.com/thumbnail?id=${window.extractDriveFileId(url)}&sz=w300"
+                                    <img data-src="${getPhotoUrl(url, 300)}"
                                          alt="現場照片"
                                          class="w-full h-full object-cover group-hover:opacity-80 transition-opacity lazy"
                                          onclick="openParentLightbox('${report.LogID}', ${index})">
@@ -364,52 +420,54 @@ function renderReportsByEmployee(employees, allReports, scheduleData) {
                         const workDesc = contentParts[0].replace('【施工內容】', '').trim();
                         const problemDesc = contentParts[1] ? contentParts[1].trim() : '';
                         if (workDesc) {
-                            contentHtml += `<p class="text-gray-800 whitespace-pre-wrap pl-2">${workDesc}</p>`;
+                            contentHtml += `<p class="text-gray-800 whitespace-pre-wrap pl-2 border-l-2 border-blue-200">${workDesc}</p>`;
                         }
                         if (problemDesc) {
-                            contentHtml += `<div class="mt-2"><h5 class="font-semibold text-red-600">問題回報：</h5><p class="text-red-800 whitespace-pre-wrap pl-2">${problemDesc}</p></div>`;
+                            contentHtml += `<div class="mt-2 pl-2 border-l-2 border-red-200"><h5 class="font-bold text-red-600">⚠️ 問題回報：</h5><p class="text-red-800 whitespace-pre-wrap pl-1">${problemDesc}</p></div>`;
                         }
                     }
 
                     return `
-                            <div class="mt-4 pt-4 border-t border-gray-200">
+                            <div class="mt-4 pt-4 border-t border-gray-150">
                                 <div class="flex justify-between items-center text-sm flex-wrap gap-2">
                                     <div class="flex items-center gap-2">
                                         <h3 class="font-bold text-gray-800">${dateLabel}</h3>
-                                        <span class="text-xs font-medium bg-gray-100 text-gray-800 py-0.5 px-2 rounded-full">#${String(report.ProjectName || 'N/A').replace(/^#/, '')}</span>
+                                        <span class="text-xs font-semibold bg-blue-50 text-blue-700 py-0.5 px-2 rounded-md">#${String(report.ProjectName || 'N/A').replace(/^#/, '')}</span>
                                     </div>
-                                    <span class="text-gray-500">${reportTime}</span>
+                                    <span class="text-gray-400 font-mono text-xs">${reportTime}</span>
                                 </div>
-                                <div class="text-sm mt-2">${contentHtml || '<p class="text-gray-500">無文字內容回報。</p>'}</div>
+                                <div class="text-sm mt-2">${contentHtml || '<p class="text-gray-400 italic">無文字內容回報。</p>'}</div>
                                 ${photosHtml}
                             </div>
                         `;
                 }).join('');
             } else {
-                // 無報告的情況，判斷假勤 (設計為超緊湊模式)
+                // 無報告的情況，判斷假勤 (設計為超緊湊高質感卡片樣式)
                 if (dateStr > todayStr) return ''; // 未來不顯示
 
                 const leaveInfo = window.dailyReportApp.getLeaveStatus(employee.userId, dateStr, scheduleData);
-                // [v1.0.7] 引入打卡判定
                 const userAttendance = window.currentAttendanceData[employee.userId]?.dailyData?.[dateStr];
                 const hasClockedIn = !!(userAttendance && userAttendance.checkIn && userAttendance.checkIn !== '---');
 
                 if (leaveInfo && leaveInfo.isFullDay && !hasClockedIn) {
                     return `
-                            <div class="mt-1 pt-1 border-t border-gray-50 flex items-center gap-3 text-[11px]">
-                                <span class="font-bold text-gray-400 w-16">${dateLabel}</span>
-                                <span class="text-gray-400 italic">[${leaveInfo.type}] (未進場)</span>
+                            <div class="${REPORT_STYLES.leaveNoClockRow}">
+                                <span class="font-mono font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">${dateLabel}</span>
+                                <span class="text-gray-400 italic font-medium">[${leaveInfo.type}] (排休未進場)</span>
                             </div>
                         `;
                 } else {
                     // 如果有上班打卡但沒交報告，或者是時段假期間應出勤卻沒交報告
-                    const statusText = hasClockedIn ? `⚠️ 缺交報告 (已進場 ${userAttendance.checkIn})` : `⚠️ 缺交報告 (應出勤)`;
-                    const leaveSuffix = (leaveInfo && !leaveInfo.isFullDay) ? ` <span class="text-[10px] opacity-70">[${leaveInfo.original}]</span>` : '';
+                    const statusText = hasClockedIn ? `缺交報告 (已進場打卡 ${userAttendance.checkIn})` : `缺交報告 (今日應出勤)`;
+                    const leaveSuffix = (leaveInfo && !leaveInfo.isFullDay) ? ` <span class="text-[10px] font-normal text-amber-600 bg-amber-50 px-1 rounded">${leaveInfo.original}</span>` : '';
 
                     return `
-                            <div class="mt-1 pt-1 border-t border-red-50 flex items-center gap-3 text-[11px]">
-                                <span class="font-bold text-red-400 w-16">${dateLabel}</span>
-                                <span class="text-red-500 font-bold">${statusText}${leaveSuffix}</span>
+                            <div class="${REPORT_STYLES.missingReportRow}">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="font-mono font-bold text-red-400 bg-red-100/50 px-1.5 py-0.5 rounded">${dateLabel}</span>
+                                    <span class="text-red-700 font-bold flex items-center gap-1">⚠️ ${statusText}${leaveSuffix}</span>
+                                </div>
+                                <span class="text-[9px] text-red-400 font-bold tracking-wider uppercase border border-red-200 px-1 rounded bg-red-100/20">Missing</span>
                             </div>
                         `;
                 }
@@ -418,21 +476,21 @@ function renderReportsByEmployee(employees, allReports, scheduleData) {
 
         // 獲取當前日期的請假狀態（用於 Header 顯示）
         const currentLeave = window.dailyReportApp.getLeaveStatus(employee.userId, startDatePicker.value, scheduleData);
-        const leaveBadge = currentLeave ? `<span class="ml-2 text-xs font-medium bg-red-100 text-red-700 py-0.5 px-2 rounded-full border border-red-200">${currentLeave.original}</span>` : '';
-        const opacityClass = (currentLeave && currentLeave.isFullDay) ? 'opacity-60' : '';
+        const leaveBadge = currentLeave ? `<span class="ml-2 text-xs font-semibold bg-amber-50 text-amber-700 py-0.5 px-2 rounded-md border border-amber-200/80">${currentLeave.original}</span>` : '';
+        const opacityClass = (currentLeave && currentLeave.isFullDay) ? REPORT_STYLES.fullDayLeaveFade : '';
 
         card.innerHTML = `
                 <div class="flex justify-between items-center">
                     <div class="flex items-center">
-                        <h2 class="text-xl font-bold text-gray-800">${employee.userName}</h2>
+                        <h2 class="text-xl font-extrabold text-gray-800">${employee.userName}</h2>
                         ${leaveBadge}
                     </div>
-                    <span class="text-sm font-medium bg-blue-100 text-blue-800 py-1 px-3 rounded-full">
-                        ${employeeReports.length} 則回報
+                    <span class="text-xs font-bold bg-blue-50 text-blue-700 py-1 px-3 rounded-full border border-blue-100">
+                        ${employeeReportsCount} 則回報
                     </span>
                 </div>
-                <div class="mt-2 ${opacityClass}">
-                    ${timelineHtml || '<p class="text-gray-500 text-sm mt-4">此區間無任何記錄。</p>'}
+                <div class="mt-2 transition-all ${opacityClass}">
+                    ${timelineHtml || '<p class="text-gray-400 text-sm mt-4 italic">此區間無任何記錄。</p>'}
                 </div>
             `;
         reportsContainer.appendChild(card);
@@ -440,8 +498,8 @@ function renderReportsByEmployee(employees, allReports, scheduleData) {
         const currentGroup = employee.group || '未分類';
         if (currentGroup !== lastGroup) {
             const groupHeader = document.createElement('h2');
-            groupHeader.className = 'text-lg font-bold text-gray-600 mt-8 mb-2 pb-1 border-b-2 border-gray-300';
-            groupHeader.textContent = currentGroup;
+            groupHeader.className = 'text-base font-extrabold text-gray-600 mt-8 mb-3 pb-1.5 border-b-2 border-gray-200 flex items-center gap-2';
+            groupHeader.innerHTML = `<span>👥 ${currentGroup}</span><span class="text-xs font-semibold bg-gray-100 text-gray-500 py-0.5 px-2 rounded-md">Group</span>`;
             reportsContainer.insertBefore(groupHeader, card);
             lastGroup = currentGroup;
         }
@@ -450,40 +508,41 @@ function renderReportsByEmployee(employees, allReports, scheduleData) {
     if (reportsContainer.children.length === 0) {
         showEmpty();
     } else {
-        // [v581.0 修正] 在所有報告卡片都渲染到 DOM 後，呼叫自訂的圖片延遲載入函式
         lazyLoadImages();
     }
 
-    // [第二階段] 更新 KPI 看板
-    updateKPIDashboard(employees, reportsByUserId, scheduleData);
+    // 更新新版 KPI 戰情面板
+    updateKPIDashboard(employees, reportsByUserIdAndDate, scheduleData);
 }
 
 /**
  * [第二階段] 計算並更新 KPI 看板數據
  */
-function updateKPIDashboard(employees, reportsByUserId, scheduleData) {
+/**
+ * [第二階段] 計算並更新 KPI 看板數據 (優化為高階主管質感)
+ */
+function updateKPIDashboard(employees, reportsByUserIdAndDate, scheduleData) {
+    const kpiDashboard = document.getElementById('kpi-dashboard');
     if (!kpiDashboard) return;
 
     const displayDateStr = startDatePicker.value; // 當前選擇日期
     const now = new Date();
     const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
 
-    // [v1.0.7] 邏輯重構：
-    // 1. 出勤 = 該日有「上班打卡」紀錄。
-    // 2. 請假 = 該日有全天假且無打卡。
-    // 3. 缺交 = 該日應出勤(或已打卡)且回報數為 0。
-    // 【重點】若查詢今日，缺交欄位會加註「昨日統計」
-
     let isQueryingToday = (displayDateStr === todayStr);
     let targetMissingDate = displayDateStr;
     let missingLabelSuffix = "";
 
+    const missingTitleEl = document.getElementById('kpi-missing-title');
     if (isQueryingToday) {
-        // 如果查今日，缺交人數跳過目前還沒報的，顯示「昨日」的最終缺交，對管理者更有意義
+        // 如果查今日，缺交人數跳過目前還沒報的，顯示「昨日」的最終缺交
         const yesterday = new Date(now);
         yesterday.setDate(now.getDate() - 1);
         targetMissingDate = yesterday.getFullYear() + '-' + String(yesterday.getMonth() + 1).padStart(2, '0') + '-' + String(yesterday.getDate()).padStart(2, '0');
         missingLabelSuffix = " (昨日)";
+        if (missingTitleEl) missingTitleEl.textContent = "昨日缺交統計";
+    } else {
+        if (missingTitleEl) missingTitleEl.textContent = "當日缺交統計";
     }
 
     let attendanceNames = [];
@@ -509,16 +568,52 @@ function updateKPIDashboard(employees, reportsByUserId, scheduleData) {
 
         // 應出勤條件：有打卡 OR (沒請全天假)
         const shouldHaveWorked = missingHasClockedIn || !(missingLeaveInfo && missingLeaveInfo.isFullDay);
-        const reportCount = (reportsByUserId[emp.userId] || []).filter(r => r.Timestamp.startsWith(targetMissingDate)).length;
+        
+        // 取得該員工於目標日期的日報列表
+        const reportCount = reportsByUserIdAndDate[emp.userId]?.[targetMissingDate]?.length || 0;
 
         if (shouldHaveWorked && reportCount === 0) {
             missingNames.push(emp.userName);
         }
     });
 
-    kpiAttendance.innerHTML = `<div class="text-[11px] opacity-70 mb-1">今日出勤</div><div>${attendanceNames.length}</div><div class="text-[10px] font-normal mt-1 opacity-80 leading-tight">${attendanceNames.join(', ')}</div>`;
-    kpiLeave.innerHTML = `<div class="text-[11px] opacity-70 mb-1">今日請假</div><div>${leaveNames.length}</div><div class="text-[10px] font-normal mt-1 opacity-80 leading-tight">${leaveNames.join(', ')}</div>`;
-    kpiMissing.innerHTML = `<div class="text-[11px] opacity-70 mb-1">缺交報告${missingLabelSuffix}</div><div>${missingNames.length}</div><div class="text-[10px] font-normal mt-1 opacity-80 leading-tight font-bold text-red-600">${missingNames.join(', ')}</div>`;
+    // 應到人數 = 員工人數 - 請假人數 (或直接算當日應出勤人數)
+    const totalExpected = employees.filter(emp => {
+        const leaveInfo = window.dailyReportApp.getLeaveStatus(emp.userId, displayDateStr, scheduleData);
+        const userAttendance = window.currentAttendanceData[emp.userId]?.dailyData?.[displayDateStr];
+        const hasClockedIn = !!(userAttendance && userAttendance.checkIn && userAttendance.checkIn !== '---');
+        return hasClockedIn || !(leaveInfo && leaveInfo.isFullDay);
+    }).length;
+
+    // 計算日報繳交率 (基於 targetMissingDate，因今日尚未過完，基於昨日統計更精確)
+    const expectedForMissingDate = employees.filter(emp => {
+        const leaveInfo = window.dailyReportApp.getLeaveStatus(emp.userId, targetMissingDate, scheduleData);
+        const userAttendance = window.currentAttendanceData[emp.userId]?.dailyData?.[targetMissingDate];
+        const hasClockedIn = !!(userAttendance && userAttendance.checkIn && userAttendance.checkIn !== '---');
+        return hasClockedIn || !(leaveInfo && leaveInfo.isFullDay);
+    }).length;
+
+    const submissionRate = expectedForMissingDate > 0 
+        ? Math.round(((expectedForMissingDate - missingNames.length) / expectedForMissingDate) * 100) 
+        : 100;
+
+    // 更新 DOM 內容
+    document.getElementById('kpi-attendance-count').textContent = attendanceNames.length;
+    document.getElementById('kpi-total-expected').textContent = totalExpected;
+    document.getElementById('kpi-attendance-names').innerHTML = attendanceNames.length > 0 
+        ? `<span class="text-blue-700">${attendanceNames.join(', ')}</span>` 
+        : '<span class="text-gray-400 italic">無出勤打卡記錄</span>';
+
+    document.getElementById('kpi-leave-count').textContent = leaveNames.length;
+    document.getElementById('kpi-leave-names').innerHTML = leaveNames.length > 0 
+        ? `<span class="text-amber-700">${leaveNames.join(', ')}</span>` 
+        : '<span class="text-gray-400 italic">無人休假/請假</span>';
+
+    document.getElementById('kpi-submission-rate').textContent = `${submissionRate}%`;
+    document.getElementById('kpi-submitted-count').textContent = (expectedForMissingDate - missingNames.length);
+    document.getElementById('kpi-missing-names').innerHTML = missingNames.length > 0 
+        ? `<span class="text-red-500 font-bold">🚨 缺交 (${missingNames.length}人): ${missingNames.join(', ')}</span>` 
+        : '<span class="text-emerald-600 italic">🎉 全員已完成回報</span>';
 
     kpiDashboard.classList.remove('hidden');
 }
@@ -536,6 +631,21 @@ function renderReportsByProject(employees, allReports, scheduleData) {
         acc[emp.userId] = emp;
         return acc;
     }, {});
+
+    // [效能優化] 預先對所有日報進行關聯索引以計算統計
+    const reportsByUserIdAndDate = {};
+    allReports.forEach(report => {
+        const userId = report.UserID;
+        if (!userId) return;
+        const dateStr = String(report.Timestamp).split('T')[0];
+        if (!reportsByUserIdAndDate[userId]) {
+            reportsByUserIdAndDate[userId] = {};
+        }
+        if (!reportsByUserIdAndDate[userId][dateStr]) {
+            reportsByUserIdAndDate[userId][dateStr] = [];
+        }
+        reportsByUserIdAndDate[userId][dateStr].push(report);
+    });
 
     // 進行日誌分組（按專案名稱）
     const reportsByProject = allReports.reduce((acc, report) => {
@@ -572,8 +682,12 @@ function renderReportsByProject(employees, allReports, scheduleData) {
             const userName = emp ? emp.userName : (report.userName || '未知人員');
 
             // 獲取請假狀態
-            const leaveInfo = window.dailyReportApp.getLeaveStatus(report.UserID, startDatePicker.value, scheduleData);
-            const leaveBadge = leaveInfo ? `<span class="ml-1 text-[10px] bg-red-100 text-red-600 px-1 rounded-sm">${leaveInfo.original}</span>` : '';
+            const reportDateStr = String(report.Timestamp).split('T')[0];
+            const leaveInfo = window.dailyReportApp.getLeaveStatus(report.UserID, reportDateStr, scheduleData);
+            const leaveBadge = leaveInfo ? `<span class="ml-1 text-[10px] bg-red-150 text-red-700 px-1.5 py-0.5 rounded">${leaveInfo.original}</span>` : '';
+            
+            // [特休人員日報淡化60%]
+            const opacityClass = (leaveInfo && leaveInfo.isFullDay) ? REPORT_STYLES.fullDayLeaveFade : '';
 
             let contentHtml = '';
             let photosHtml = '';
@@ -589,7 +703,7 @@ function renderReportsByProject(employees, allReports, scheduleData) {
                     
                     return `
                         <div class="relative aspect-square overflow-hidden rounded-md cursor-pointer group">
-                            <img data-src="https://drive.google.com/thumbnail?id=${window.extractDriveFileId(url)}&sz=w300" 
+                            <img data-src="${getPhotoUrl(url, 300)}" 
                                  alt="現場照片" 
                                  class="w-full h-full object-cover group-hover:opacity-80 transition-opacity lazy" 
                                  onclick="openParentLightbox('${report.LogID}', ${index})">
@@ -606,18 +720,18 @@ function renderReportsByProject(employees, allReports, scheduleData) {
                 const contentParts = String(report.Content).split('【問題回報】');
                 const workDesc = contentParts[0].replace('【施工內容】', '').trim();
                 const problemDesc = contentParts[1] ? contentParts[1].trim() : '';
-                if (workDesc) contentHtml += `<p class="text-gray-800 whitespace-pre-wrap pl-2 text-xs">${workDesc}</p>`;
-                if (problemDesc) contentHtml += `<div class="mt-1"><h5 class="text-xs font-semibold text-red-600 pl-2">問題：${problemDesc}</h5></div>`;
+                if (workDesc) contentHtml += `<p class="text-gray-800 whitespace-pre-wrap pl-2 border-l-2 border-blue-200 text-xs">${workDesc}</p>`;
+                if (problemDesc) contentHtml += `<div class="mt-1 pl-2 border-l-2 border-red-200"><h5 class="text-xs font-bold text-red-600">⚠️ 問題：${problemDesc}</h5></div>`;
             }
 
             return `
-                    <div class="mt-4 pt-3 border-t border-gray-100">
-                        <div class="flex justify-between items-center text-xs">
-                            <div class="flex items-center gap-1">
+                    <div class="mt-4 pt-3 border-t border-gray-100 ${opacityClass} transition-all">
+                        <div class="flex justify-between items-center text-xs mb-1.5">
+                            <div class="flex items-center gap-1.5">
                                 <span class="font-bold text-blue-700">${userName}</span>
                                 ${leaveBadge}
                             </div>
-                            <span class="text-gray-400 font-mono">${reportTime}</span>
+                            <span class="text-gray-400 font-mono text-[10px]">${reportTime}</span>
                         </div>
                         <div class="mt-1">${contentHtml}</div>
                         ${photosHtml}
@@ -628,7 +742,7 @@ function renderReportsByProject(employees, allReports, scheduleData) {
         card.innerHTML = `
                 <div class="flex justify-between items-center mb-2">
                     <h2 class="text-lg font-bold text-gray-800">🏗️ ${projName}</h2>
-                    <span class="text-xs font-medium bg-orange-100 text-orange-800 py-0.5 px-2 rounded-full">
+                    <span class="text-xs font-bold bg-orange-50 text-orange-700 py-0.5 px-2 rounded-full border border-orange-100">
                         ${reports.length} 筆回報
                     </span>
                 </div>
@@ -638,15 +752,8 @@ function renderReportsByProject(employees, allReports, scheduleData) {
     });
 
     lazyLoadImages();
-    // For project view, KPI dashboard still shows employee-centric data.
-    // We need to pass reportsByUserId to updateKPIDashboard.
-    const reportsByUserIdForKPI = allReports.reduce((acc, report) => {
-        const userId = report.UserID;
-        if (!acc[userId]) acc[userId] = [];
-        acc[userId].push(report);
-        return acc;
-    }, {});
-    updateKPIDashboard(employees, reportsByUserIdForKPI, scheduleData);
+    // 更新新版 KPI 戰情面板
+    updateKPIDashboard(employees, reportsByUserIdAndDate, scheduleData);
 }
 
 function showLoading() {
@@ -680,9 +787,7 @@ window.openParentLightbox = function (logId, startIndex) {
     if (!imageGroup) return;
     const originalUrls = JSON.parse(imageGroup.dataset.photos);
 
-    const largeImageUrls = originalUrls.map(url =>
-        `https://drive.google.com/thumbnail?id=${window.extractDriveFileId(url)}&sz=w1920`
-    );
+    const largeImageUrls = originalUrls.map(url => getPhotoUrl(url, 1920));
 
     window.parent.postMessage({
         type: 'openLightbox',

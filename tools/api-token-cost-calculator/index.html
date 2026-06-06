@@ -631,10 +631,23 @@
             
             <div class="form-group">
               <label class="form-label" for="live-project-id">專案案號 / 案場名稱</label>
-              <div class="input-wrapper">
-                <i class="fa-solid fa-folder-open prefix-icon"></i>
-                <input type="text" id="live-project-id" class="form-control" placeholder="例如: A2026-001 客廳天花板工程">
+              <div style="display: flex; gap: 0.5rem;">
+                <div class="input-wrapper" style="flex: 1;">
+                  <i class="fa-solid fa-folder-open prefix-icon"></i>
+                  <input type="text" id="live-project-id" class="form-control" placeholder="例如: A2026-001 客廳天花板工程">
+                </div>
+                <button type="button" id="btn-load-backend-logs" class="btn btn-secondary" style="width: auto; white-space: nowrap; padding: 0 1.25rem;" onclick="loadProjectLogsFromBackend()">
+                  <i class="fa-solid fa-cloud-arrow-down"></i> 載入日誌
+                </button>
               </div>
+            </div>
+
+            <!-- 後端施工日誌選擇下拉選單 (預設隱藏) -->
+            <div class="form-group" id="backend-logs-group" style="display: none;">
+              <label class="form-label" for="backend-logs-select">選擇已載入的施工日誌</label>
+              <select id="backend-logs-select" class="form-control" onchange="applyBackendLog(this.value)">
+                <!-- JS 動態寫入 -->
+              </select>
             </div>
 
             <div class="form-group">
@@ -2064,45 +2077,78 @@
       }
     }
 
+    // 輔助函數：利用 Canvas 將下載下來的圖片 Blob 壓縮至指定寬度 (如 800px) 以節省 Token 成本
+    function resizeImageBlob(blob, maxWidth = 800) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.src = URL.createObjectURL(blob);
+        img.onload = () => {
+          URL.revokeObjectURL(img.src);
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // 轉為 Base64 (0.85 壓縮率)
+          const base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+          resolve(base64);
+        };
+        img.onerror = (err) => {
+          URL.revokeObjectURL(img.src);
+          reject(err);
+        };
+      });
+    }
+
     // 背景透過雙 CORS 代理下載 Google Drive 照片並轉成 Base64 (免改後端自動化方案)
     async function downloadImageAsBase64WithFallback(fileId) {
-      // 優先使用 Google Drive 縮圖 (sz=w800)，載入速度快幾十倍且大量節省 Token 成本 (總監建議)
-      const displayUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+      // 1. 嘗試下載的兩個 Google Drive 端點 (優先下載縮圖以節省流量，次選公開下載 uc 檔案)
+      const targetUrls = [
+        `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`,
+        `https://drive.google.com/uc?id=${fileId}&export=download`
+      ];
       
       const proxies = [
         (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
         (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
       ];
 
-      for (let proxy of proxies) {
-        try {
-          const fetchUrl = proxy(displayUrl);
-          const response = await fetch(fetchUrl);
-          if (!response.ok) continue;
+      for (let targetUrl of targetUrls) {
+        for (let proxy of proxies) {
+          try {
+            const fetchUrl = proxy(targetUrl);
+            const response = await fetch(fetchUrl);
+            if (!response.ok) continue;
 
-          const blob = await response.blob();
-          
-          return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              const base64 = reader.result.split(',')[1];
-              resolve({
-                base64: base64,
-                mimeType: blob.type || 'image/jpeg'
-              });
+            const blob = await response.blob();
+            // 下載成功後，在前端利用 Canvas 進行壓縮，既能避免原圖過大耗 Token，又能保證無 CORS 安全畫布問題
+            const base64 = await resizeImageBlob(blob, 800);
+            
+            return {
+              base64: base64,
+              mimeType: blob.type || 'image/jpeg'
             };
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
-        } catch (e) {
-          console.warn(`Proxy failed for photo ID ${fileId}, trying next...`, e);
+          } catch (e) {
+            console.warn(`Proxy failed for target ${targetUrl} via proxy, trying next...`, e);
+          }
         }
       }
       throw new Error('All CORS proxies failed to download the image.');
     }
 
     async function applyBackendLog(index) {
-      const log = backendLogsList[index];
+      const idx = parseInt(index, 10);
+      if (isNaN(idx)) return;
+      const log = backendLogsList[idx];
       if (!log) return;
 
       // 1. 填入內文

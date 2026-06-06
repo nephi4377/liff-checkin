@@ -57,19 +57,53 @@
             </div>
         </div>
 
-        <!-- [第二階段] KPI 戰情看板 -->
-        <div id="kpi-dashboard" class="grid grid-cols-3 gap-3 mb-4 hidden">
-            <div class="bg-white p-3 rounded-lg shadow-md border-t-4 border-green-500 text-center">
-                <p class="text-xs text-gray-500 font-medium">🟢 今日出勤</p>
-                <p id="kpi-attendance" class="text-xl font-bold text-green-600">0</p>
+        <!-- [第二階段] KPI 戰情看板 (優化為高階主管質感) -->
+        <div id="kpi-dashboard" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5 hidden">
+            <!-- 應到與實到 -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200/80 border-l-4 border-blue-500">
+                <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-xs text-gray-500 font-bold tracking-wider">🟢 今日出勤</span>
+                    <span id="kpi-attendance-badge" class="text-[10px] font-semibold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">實到 / 應到</span>
+                </div>
+                <div class="flex items-baseline gap-1">
+                    <span id="kpi-attendance-count" class="text-2xl font-extrabold text-blue-600">0</span>
+                    <span class="text-gray-400 text-sm">/</span>
+                    <span id="kpi-total-expected" class="text-lg font-bold text-gray-600">0</span>
+                    <span class="text-xs text-gray-400 ml-1">人</span>
+                </div>
+                <div id="kpi-attendance-names" class="text-[11px] text-gray-500 font-medium mt-2 leading-relaxed border-t border-gray-100 pt-2 h-10 overflow-y-auto">
+                    -
+                </div>
             </div>
-            <div class="bg-white p-3 rounded-lg shadow-md border-t-4 border-gray-400 text-center">
-                <p class="text-xs text-gray-500 font-medium">🏖️ 本日請假</p>
-                <p id="kpi-leave" class="text-xl font-bold text-gray-600">0</p>
+
+            <!-- 本日請假 -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200/80 border-l-4 border-amber-500">
+                <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-xs text-gray-500 font-bold tracking-wider">🏖️ 本日請假</span>
+                    <span class="text-[10px] font-semibold bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">排休 / 請假</span>
+                </div>
+                <div class="flex items-baseline gap-1">
+                    <span id="kpi-leave-count" class="text-2xl font-extrabold text-amber-600">0</span>
+                    <span class="text-xs text-gray-400 ml-1">人</span>
+                </div>
+                <div id="kpi-leave-names" class="text-[11px] text-gray-500 font-medium mt-2 leading-relaxed border-t border-gray-100 pt-2 h-10 overflow-y-auto">
+                    -
+                </div>
             </div>
-            <div class="bg-white p-3 rounded-lg shadow-md border-t-4 border-red-500 text-center">
-                <p class="text-xs text-gray-500 font-medium">⚠️ 缺交報告</p>
-                <p id="kpi-missing" class="text-xl font-bold text-red-600">0</p>
+
+            <!-- 日報繳交率 -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200/80 border-l-4 border-emerald-500">
+                <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-xs text-gray-500 font-bold tracking-wider">📊 日報繳交率</span>
+                    <span id="kpi-missing-title" class="text-[10px] font-semibold bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded">昨日統計</span>
+                </div>
+                <div class="flex items-baseline gap-1">
+                    <span id="kpi-submission-rate" class="text-2xl font-extrabold text-emerald-600">0%</span>
+                    <span class="text-xs text-gray-400 ml-1">已繳交 (共 <span id="kpi-submitted-count" class="font-bold">0</span> 筆)</span>
+                </div>
+                <div id="kpi-missing-names" class="text-[11px] text-red-500 font-semibold mt-2 leading-relaxed border-t border-gray-100 pt-2 h-10 overflow-y-auto">
+                    -
+                </div>
             </div>
         </div>
 

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-Hant">  
 
 <head>
     <meta charset="UTF-8">
@@ -441,6 +441,8 @@
             presets: [],
             selectedTags: new Set(),
             pendingPosition: null,
+            isInitialized: false,
+            initPromise: null,
             haversineMeters(lat1, lon1, lat2, lon2) {
                 const R = 6371e3;
                 const toRad = d => d * Math.PI / 180;
@@ -449,6 +451,9 @@
                 const a = Math.sin(dLat / 2) ** 2 +
                     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
                 return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            },
+            hasSitesData() {
+                return Array.isArray(AppOffSite.sites) && AppOffSite.sites.length > 0;
             },
             isOnSite(lat, lon) {
                 let min = Infinity;
@@ -459,7 +464,8 @@
                     const d = AppOffSite.haversineMeters(lat, lon, slat, slon);
                     if (d < min) min = d;
                 });
-                if (!AppOffSite.sites.length) return true;
+                // 無案場資料時無法判定「在案場內」，改視為離場並顯示離場說明（避免空清單誤判直接送出）
+                if (!AppOffSite.sites.length) return false;
                 return min <= CONSTANTS.OFF_SITE_VALID_METERS;
             },
             async loadPresets() {
@@ -470,6 +476,7 @@
                     });
                     if (data && data.presets && data.presets.length) {
                         AppOffSite.presets = data.presets;
+                        AppStorage.save('checkin_presets_cache', data.presets, 30);
                     }
                 } catch (e) {
                     console.warn('[OffSite] loadPresets', e);
@@ -481,13 +488,30 @@
                         page: 'attendance_api',
                         action: 'get_all_sites'
                     });
-                    if (data && data.data) AppOffSite.sites = data.data;
+                    if (data && data.data) {
+                        AppOffSite.sites = data.data;
+                        AppStorage.save('checkin_sites_cache', data.data, 30);
+                    }
                 } catch (e) {
                     console.warn('[OffSite] loadSites', e);
                 }
             },
             async init() {
-                await Promise.all([AppOffSite.loadPresets(), AppOffSite.loadSites()]);
+                const cachedPresets = AppStorage.load('checkin_presets_cache');
+                if (cachedPresets) AppOffSite.presets = cachedPresets;
+                const cachedSites = AppStorage.load('checkin_sites_cache');
+                if (cachedSites && cachedSites.length) {
+                    AppOffSite.sites = cachedSites;
+                    AppOffSite.isInitialized = true;
+                }
+
+                if (AppOffSite.initPromise) return AppOffSite.initPromise;
+                if (!navigator.onLine) return;
+
+                AppOffSite.initPromise = Promise.all([AppOffSite.loadPresets(), AppOffSite.loadSites()]).then(() => {
+                    AppOffSite.isInitialized = true;
+                });
+                await AppOffSite.initPromise;
             },
             renderChips() {
                 const wrap = document.getElementById('offSiteChipWrap');
@@ -731,9 +755,7 @@
                 document.getElementById('app-version').textContent = CONSTANTS.VERSION;
                 const updateNet = () => AppUI.updateIndicator('network', navigator.onLine ? 'success' : 'error', navigator.onLine ? '連線正常' : '已離線');
                 updateNet(); window.ononline = window.onoffline = updateNet;
-                if (navigator.onLine) {
-                    AppOffSite.init().catch(e => console.warn('[OffSite] init', e));
-                }
+                AppOffSite.init().catch(e => console.warn('[OffSite] init', e));
                 AppUI.renderHistory();
 
                 // 2. 優先嘗試載入身分快取，確保「離線/弱網」下按鈕仍可運作
@@ -803,6 +825,18 @@
                 try {
                     const pos = await AppGeo.withRetry();
                     AppUI.updateIndicator('gps', 'success', '定位成功');
+
+                    // 若在線上且案場資料尚未加載完成，則在此等待，避免 isOnSite 誤判
+                    if (navigator.onLine && !AppOffSite.isInitialized) {
+                        btn.textContent = '比對案場中...';
+                        AppUI.setLoading(true, '載入案場資料比對中...');
+                        if (AppOffSite.initPromise) {
+                            await AppOffSite.initPromise;
+                        } else {
+                            await AppOffSite.init();
+                        }
+                    }
+
                     const lat = pos.coords.latitude;
                     const lon = pos.coords.longitude;
 
@@ -810,8 +844,11 @@
                         AppOffSite.pendingPosition = pos;
                         AppOffSite.showPanel();
                         AppUI.setLoading(false);
+                        const noSites = !AppOffSite.hasSitesData();
                         AppUI.updateMessage(
-                            '您不在案場範圍內。<br>可選原因後按「確認打卡」；不填也可送出。',
+                            noSites
+                                ? '⚠️ 無法取得案場清單（請確認網路或稍後重試）。<br>前端無法比對距離，請選離場原因後按「確認打卡」；不填也可送出，後端仍會比對。'
+                                : '您不在案場範圍內。<br>可選原因後按「確認打卡」；不填也可送出。',
                             'text-amber-800 font-medium'
                         );
                         btn.disabled = false;

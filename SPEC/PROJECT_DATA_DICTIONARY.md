@@ -86,6 +86,24 @@
 | └ `user` | `String` | 操作者姓名 |
 | └ `action` | `String` | 動作描述 (如: "進度變更: 0% -> 50%") |
 
+## 6. 每日回報與打卡整合 API (daily_report / attendance_api)
+
+本章節定義 `daily_report.html` 看板進行考勤與施工日誌聯表 (Join) 時，各 API 欄位的命名約定與對齊規範。
+
+| API 屬性名 | 資料格式 | Sheets 欄位對應 | 系統別 | 說明 |
+| :--- | :--- | :--- | :--- | :--- |
+| **userId** | `String` | LINE UID | 員工資料 / 考勤 | 小寫 `id`，用於員工基本資料、排班與打卡索引 |
+| **UserID** | `String` | LINE UID | 日誌系統 | 大寫 `ID`，用於日報/日誌關聯鍵 |
+| **userName** | `String` | LINE 顯示姓名 | 員工資料 / 考勤 | 小寫 `name`，用於員工基本資料、排班 |
+| **UserName** | `String` | LINE 顯示姓名 | 日誌系統 | 大寫 `Name` |
+| **pcName** | `String` | 設備名稱 | 員工資料 | 員工使用之設備識別名稱 |
+| **group** | `String` | 組別 | 員工資料 / API | API 屬性對應 Sheets 中的「組別」，如「設計一部」 |
+| **date** | `String` | 日期 | 考勤 / 排班 | 格式為 `YYYY-MM-DD` |
+| **checkIn** | `String` | 進場時間 | 考勤 (attendance) | 員工當日進場打卡時間 (e.g., "08:32")，無打卡顯示 "---" |
+| **checkOut** | `String` | 退場時間 | 考勤 (attendance) | 員工當日退場打卡時間 (e.g., "17:35")，無打卡顯示 "---" |
+| **Content** | `String` | Content | 日誌系統 | 完整回報內文 (含施工內容與問題回報) |
+| **PhotoLinks** | `String` | PhotoLinks | 日誌系統 | 以半形逗號分隔之圖片網址清單 |
+
 ---
 > [!IMPORTANT]
 > **開發規則**：
