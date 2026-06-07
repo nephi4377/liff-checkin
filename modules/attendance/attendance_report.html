@@ -27,7 +27,12 @@
         </header>
 
         <div class="bg-white p-6 rounded-lg shadow-md mb-6">
-            <h2 class="text-xl font-semibold mb-4">查詢條件</h2>
+            <h2 class="text-xl font-semibold mb-2">查詢條件</h2>
+            <p class="text-sm text-gray-500 mb-4">預設顯示每人小計；點姓名可展開逐日明細。選單一員工時，上方會多出統計卡片。</p>
+            <div class="flex flex-wrap gap-2 mb-4">
+                <button type="button" id="btn-range-this-month" class="text-sm px-3 py-1.5 rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100">本月</button>
+                <button type="button" id="btn-range-last-month" class="text-sm px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200">上月</button>
+            </div>
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                 <div>
                     <label for="start-date" class="block text-sm font-medium text-gray-700">開始日期</label>
@@ -51,12 +56,13 @@
                 <div class="flex items-center gap-2">
                     <button id="query-btn" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700 transition duration-300">查詢</button>
                     <!-- 【您的要求】新增匯出按鈕 -->
-                    <button id="export-csv-btn" title="將目前查詢結果匯出為 CSV 檔案" class="p-2 bg-green-600 text-white rounded-md hover:bg-green-700 hidden"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg></button>
+                    <button id="export-csv-btn" type="button" title="匯出會計用 CSV（含每人小計與逐日明細）" class="hidden whitespace-nowrap px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700">匯出 CSV</button>
                 </div>
             </div>
         </div>
 
-        <div id="summary-section" class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        <div id="summary-section" class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6" style="display: none;">
+            <p id="summary-scope-hint" class="col-span-full text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-3 py-2 mb-1" style="display:none;">以下為<strong>該員工</strong>於查詢區間的統計。</p>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">應到天數</div><div id="total-workdays" class="mt-1 text-3xl font-semibold text-gray-700">0</div></div>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">實到天數</div><div id="total-attended" class="mt-1 text-3xl font-semibold text-green-600">0</div></div>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總遲到(分)</div><div id="total-late" class="mt-1 text-3xl font-semibold text-orange-500">0</div></div>
@@ -65,6 +71,7 @@
         </div>
 
         <div id="results-container" class="bg-white p-6 rounded-lg shadow-md">
+             <h2 class="text-xl font-semibold mb-4">每人小計</h2>
              <div id="loading-spinner" class="text-center py-10" style="display: none;">載入中...</div>
              <div id="report-table-container"></div>
              <div id="map-container" style="display: none;">
@@ -102,7 +109,9 @@
 
     // 【您的要求】新增全域變數，用於儲存當前報表資料以供匯出
     let currentReportData = {};
-    // 【⭐️ 核心新增：全域變數，用於儲存員工班表資料 ⭐️】
+    let lastGlobalSummary = {};
+    let lastReportHolidays = new Set();
+    let expandedUserIds = new Set();
     let employeeShiftData = {};
 
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
@@ -225,6 +234,8 @@
 
         // 【⭐️ 核心修正：將所有事件綁定移至此處，確保 DOM 已載入 ⭐️】
         document.getElementById('query-btn').onclick = fetchReportData;
+        document.getElementById('btn-range-this-month').onclick = () => setMonthRange(0);
+        document.getElementById('btn-range-last-month').onclick = () => setMonthRange(-1);
         // 【您的要求】為匯出按鈕綁定事件
         document.getElementById('export-csv-btn').onclick = exportToCsv;
         document.getElementById('add-checkin-btn').onclick = () => {
@@ -392,9 +403,17 @@
                 if (response && response.success === false) {
                     throw new Error(response.message || '補打卡失敗');
                 }
-                showGlobalNotification(response.message || '補打卡成功！', 10000, 'success');
                 document.getElementById('checkin-modal').classList.remove('is-open');
-                optimisticUpdate(payload); // 執行樂觀更新，取代重新整理
+                const startDate = document.getElementById('start-date').value;
+                const endDate = document.getElementById('end-date').value;
+                const inRange = startDate && endDate && payload.date >= startDate && payload.date <= endDate;
+                const hasReport = currentReportData && Object.keys(currentReportData).length > 0;
+                if (inRange && hasReport) {
+                    showGlobalNotification('補登成功，正在更新報表…', 5000, 'info');
+                    fetchReportData();
+                } else {
+                    showGlobalNotification(response.message || '補打卡成功！', 10000, 'success');
+                }
             })
             .catch(error => {
                 alert(`補打卡失敗：${error.message}`);
@@ -405,69 +424,6 @@
                 btn.textContent = '送出';
             });
 
-    }
-
-    /**
-     * 【⭐️ 核心新增：樂觀更新函式 ⭐️】
-     * 在不重新載入所有資料的情況下，將新的打卡紀錄插入到現有的表格中。
-     * @param {object} checkinData - 包含 userId, date, time, eventType 的物件
-     */
-    function optimisticUpdate(checkinData) {
-        const tableBody = document.querySelector('#report-table-container tbody');
-        if (!tableBody) return; // 如果表格不存在，則不執行任何操作
-
-        const { userId, date, time, eventType } = checkinData;
-        const modalSelect = document.getElementById('modal-employee-select');
-        const opt = modalSelect?.options[modalSelect.selectedIndex];
-        const userName = (opt && opt.value === userId ? opt.text : '') || userId;
-
-        // 建立新的一列 (tr)
-        const newRow = document.createElement('tr');
-
-        // 判斷日期是否為假日/週末
-        const dateObj = new Date(date);
-        dateObj.setMinutes(dateObj.getMinutes() + dateObj.getTimezoneOffset());
-        const dayOfWeek = dateObj.getDay();
-        const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-        const dateClass = isWeekend ? 'text-red-600 font-bold' : '';
-
-        // 組合 HTML（動態文字跳脫，避免 XSS）
-        const safeName = escapeHtml(userName);
-        const safeDateCell = escapeHtml(`${date} (${weekdays[dayOfWeek]})`);
-        const inStr = escapeHtml(eventType === '上班' ? time : '---');
-        const outStr = escapeHtml(eventType === '下班' ? time : '---');
-        newRow.innerHTML = `
-            <td class="px-6 py-4 whitespace-nowrap font-medium">${safeName}</td>
-            <td class="px-6 py-4 whitespace-nowrap ${dateClass}">${safeDateCell}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-center">${inStr}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-center">${outStr}</td>
-            <td class="px-6 py-4 whitespace-nowrap">手動補登</td>
-            <td class="px-6 py-4 whitespace-nowrap text-center">0</td>
-            <td class="px-6 py-4 whitespace-nowrap text-center">0</td>
-            <td class="px-6 py-4 whitespace-nowrap">手動補登</td>
-        `;
-
-        // 與 renderReportTable 一致：依「同一員工」分組，日期由早到晚
-        const allRows = Array.from(tableBody.querySelectorAll('tr'));
-        const sameUserRows = allRows.filter((r) => r.cells[0] && r.cells[0].textContent.trim() === String(userName).trim());
-        if (sameUserRows.length === 0) {
-            tableBody.appendChild(newRow);
-            return;
-        }
-        let inserted = false;
-        for (const row of sameUserRows) {
-            const rowDate = row.cells[1].textContent.split(' ')[0];
-            if (date < rowDate) {
-                tableBody.insertBefore(newRow, row);
-                inserted = true;
-                break;
-            }
-        }
-        if (!inserted) {
-            const lastSame = sameUserRows[sameUserRows.length - 1];
-            lastSame.after(newRow);
-        }
     }
 
     function fetchReportData() {
@@ -506,8 +462,11 @@
                 const filteredRecords = Object.fromEntries(Object.entries(records).filter(([id]) => allowedUserIds.has(id)));
 
                 spinner.style.display = 'none';
-                renderSummary(data.summary);
-                renderReportTable(filteredRecords, new Set(data.holidays || [])); // 使用過濾後的資料進行渲染
+                lastGlobalSummary = data.summary || {};
+                lastReportHolidays = new Set(data.holidays || []);
+                expandedUserIds.clear();
+                renderSummary(data.summary, document.getElementById('employee-select').value);
+                renderReportView(filteredRecords, lastReportHolidays);
                 const mapRec = filteredRecords[userId];
                 const mapPts = mapRec?.mapPoints;
                 if (typeof google !== 'undefined' && userId && Array.isArray(mapPts) && mapPts.length > 0) {
@@ -526,197 +485,257 @@
             });
     }
 
-    /**
-     * 【您的要求】將當前報表資料匯出為 CSV 檔案
-     */
+    function setMonthRange(monthOffset) {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = now.getMonth() + monthOffset;
+        const start = new Date(y, m, 1);
+        const end = monthOffset === 0 ? now : new Date(y, m + 1, 0);
+        document.getElementById('start-date').value = start.toLocaleDateString('sv');
+        document.getElementById('end-date').value = end.toLocaleDateString('sv');
+    }
+
+    function getEmployeeStats(userData) {
+        if (userData.stats) return userData.stats;
+        const daily = userData.dailyData || {};
+        let lateMinutes = 0, earlyMinutes = 0, attended = 0, absent = 0, workDays = 0;
+        Object.values(daily).forEach((day) => {
+            lateMinutes += day.late || 0;
+            earlyMinutes += day.early || 0;
+            const st = String(day.status || '');
+            if (st === '缺勤' || st.startsWith('缺勤')) absent++;
+            if (st === '出勤' || st.startsWith('出勤') || st === '僅單次打卡' || st.startsWith('異常') || st === '加班' || st.includes('加班')) attended++;
+            if (st && st !== '應休' && !st.includes('休') && st !== '排休' && !st.startsWith('特休') && !st.startsWith('病假') && !st.startsWith('事假')) {
+                if (st === '出勤' || st.startsWith('出勤') || st === '缺勤' || st.startsWith('缺勤') || st === '僅單次打卡') workDays++;
+            }
+        });
+        return { workDays, attended, absent, lateMinutes, earlyMinutes };
+    }
+
+    function parseLeaveFromStatus(status) {
+        const s = String(status || '');
+        const m = s.match(/異常\(([^)]+)\)/);
+        if (m) return m[1];
+        if (['特休', '病假', '事假', '補休', '公假', '婚假', '喪假', '休假', '排休'].some((k) => s === k || s.startsWith(k))) return s.split('(')[0].split('·')[0];
+        const p = s.match(/^([^([]+)\(/);
+        return p ? p[1] : '';
+    }
+
+    function reportIncludesIncompleteToday() {
+        const endDate = document.getElementById('end-date').value;
+        const todayStr = new Date().toLocaleDateString('sv');
+        if (!endDate || endDate < todayStr) return false;
+        for (const userId in currentReportData) {
+            const day = currentReportData[userId].dailyData?.[todayStr];
+            if (!day) continue;
+            if (day.status === '僅單次打卡') return true;
+            if (!day.checkOut || day.checkOut === '---') return true;
+        }
+        return false;
+    }
+
     function exportToCsv() {
         if (!currentReportData || Object.keys(currentReportData).length === 0) {
-            alert('沒有可匯出的資料。');
+            showGlobalNotification('沒有可匯出的資料，請先查詢。', 5000, 'error');
             return;
         }
-
-        let csvContent = "員工姓名,日期,星期,上班時間,下班時間,狀態,遲到(分),早退(分),打卡地點\n";
-        const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
-
-        // 取得所有日期並排序，確保匯出順序正確
-        const allDates = new Set();
-        Object.values(currentReportData).forEach(userData => {
-            Object.keys(userData.dailyData || {}).forEach(date => allDates.add(date));
-        });
-        const sortedDates = Array.from(allDates).sort();
-
-        // 遍歷每一位員工
-        for (const userId in currentReportData) {
-            const userData = currentReportData[userId];
-            // 遍歷每一天
-            for (const dateStr of sortedDates) {
-                const day = (userData.dailyData || {})[dateStr];
-                if (!day) continue; // 如果該員工當天沒資料，則跳過
-
-                const dateObj = new Date(dateStr);
-                dateObj.setMinutes(dateObj.getMinutes() + dateObj.getTimezoneOffset());
-                const dayOfWeek = weekdays[dateObj.getDay()];
-
-                // 處理地點，將多行地點合併為一行
-                const pts = Array.isArray(userData.mapPoints) ? userData.mapPoints : [];
-                const dateSlash = dateStr.replace(/-/g, '/');
-                const checkInPoint = pts.find(p => p.eventType === '上班' && p.time && p.time.includes(dateSlash) && day.checkIn && p.time.endsWith(day.checkIn));
-                const checkOutPoint = pts.find(p => p.eventType === '下班' && p.time && p.time.includes(dateSlash) && day.checkOut && p.time.endsWith(day.checkOut));
-                let locationInfo = [];
-                if (checkInPoint) locationInfo.push(`上班: ${checkInPoint.address || '無'}`);
-                if (checkOutPoint) locationInfo.push(`下班: ${checkOutPoint.address || '無'}`);
-                // 將地點中的逗號替換為全形逗號，避免 CSV 格式錯亂
-                const locationStr = locationInfo.join('; ').replace(/,/g, '，');
-
-                const row = [
-                    csvEscapeField(userData.userName),
-                    csvEscapeField(dateStr),
-                    csvEscapeField(dayOfWeek),
-                    csvEscapeField(day.checkIn || ''),
-                    csvEscapeField(day.checkOut || ''),
-                    csvEscapeField(day.status || ''),
-                    day.late || 0,
-                    day.early || 0,
-                    csvEscapeField(locationStr)
-                ].join(',');
-                csvContent += row + "\n";
-            }
+        if (reportIncludesIncompleteToday()) {
+            const ok = confirm('查詢區間含「今天」，部分打卡可能尚未完成。\n建議以結算後資料為準。\n\n仍要匯出嗎？');
+            if (!ok) return;
         }
 
-        // 建立並觸發下載
-        const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' }); // 加入 BOM 以支援 Excel
-        const link = document.createElement("a");
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
         const startDate = document.getElementById('start-date').value;
         const endDate = document.getElementById('end-date').value;
-        link.setAttribute("download", `出勤紀錄_${startDate}_to_${endDate}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
+        const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+        let csvContent = '\uFEFF';
+        csvContent += '【每人小計】\n';
+        csvContent += '員工編號,員工姓名,應到天數,實到天數,遲到(分),早退(分),缺勤(天)\n';
+        const userIds = Object.keys(currentReportData).sort((a, b) =>
+            (currentReportData[a].userName || '').localeCompare(currentReportData[b].userName || '', 'zh-Hant'));
+        userIds.forEach((userId) => {
+            const u = currentReportData[userId];
+            const st = getEmployeeStats(u);
+            csvContent += [csvEscapeField(userId), csvEscapeField(u.userName), st.workDays, st.attended, st.lateMinutes, st.earlyMinutes, st.absent].join(',') + '\n';
+        });
+
+        csvContent += '\n【逐日明細】\n';
+        csvContent += '員工編號,員工姓名,日期,星期,上班時間,下班時間,狀態,假別,資料來源,遲到(分),早退(分)\n';
+        const allDates = new Set();
+        Object.values(currentReportData).forEach((u) => Object.keys(u.dailyData || {}).forEach((d) => allDates.add(d)));
+        const sortedDates = Array.from(allDates).sort();
+
+        userIds.forEach((userId) => {
+            const userData = currentReportData[userId];
+            sortedDates.forEach((dateStr) => {
+                const day = (userData.dailyData || {})[dateStr];
+                if (!day) return;
+                const dateObj = new Date(dateStr);
+                dateObj.setMinutes(dateObj.getMinutes() + dateObj.getTimezoneOffset());
+                csvContent += [
+                    csvEscapeField(userId), csvEscapeField(userData.userName), csvEscapeField(dateStr),
+                    csvEscapeField(weekdays[dateObj.getDay()]), csvEscapeField(day.checkIn || ''),
+                    csvEscapeField(day.checkOut || ''), csvEscapeField(day.status || ''),
+                    csvEscapeField(parseLeaveFromStatus(day.status)), csvEscapeField(day.dataSource || ''),
+                    day.late || 0, day.early || 0
+                ].join(',') + '\n';
+            });
+        });
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `出勤報表_${startDate}_至_${endDate}.csv`;
         link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        URL.revokeObjectURL(link.href);
+        showGlobalNotification('CSV 已下載。', 3000, 'success');
     }
 
-    function renderSummary(summary) {
-        document.getElementById('summary-section').style.display = 'grid';
-        const s = summary || {};
-        document.getElementById('total-workdays').textContent = s.totalWorkDays || 0;
-        document.getElementById('total-attended').textContent = s.totalAttendedDays || 0;
-        document.getElementById('total-late').textContent = s.totalLateMinutes || 0;
-        document.getElementById('total-early').textContent = s.totalEarlyMinutes || 0;
-        document.getElementById('total-absent').textContent = s.totalAbsentDays || 0;
+    function renderSummary(summary, selectedUserId) {
+        const section = document.getElementById('summary-section');
+        const hint = document.getElementById('summary-scope-hint');
+        if (!selectedUserId || !currentReportData[selectedUserId]) {
+            section.style.display = 'none';
+            return;
+        }
+        const st = getEmployeeStats(currentReportData[selectedUserId]);
+        section.style.display = 'grid';
+        hint.style.display = 'block';
+        document.getElementById('total-workdays').textContent = st.workDays;
+        document.getElementById('total-attended').textContent = st.attended;
+        document.getElementById('total-late').textContent = st.lateMinutes;
+        document.getElementById('total-early').textContent = st.earlyMinutes;
+        document.getElementById('total-absent').textContent = st.absent;
     }
-    
-    function renderReportTable(recordsByUser, holidays) {
+
+    function formatDayDisplay(day, dateStr, userId) {
+        const todayStr = new Date().toLocaleDateString('sv');
+        const now = new Date();
+        let displayStatus = day.status;
+        let displayCheckOut = day.checkOut || '---';
+        if (dateStr === todayStr) {
+            if (displayStatus === '僅單次打卡') displayStatus = '出勤';
+            const shiftData = employeeShiftData[userId];
+            if (shiftData?.shiftEnd) {
+                const shiftEndHour = parseInt(shiftData.shiftEnd.split(':')[0], 10);
+                if (now.getHours() < shiftEndHour) displayCheckOut = '---';
+            }
+        }
+        if (day.hasManualEntry && displayStatus && !String(displayStatus).includes('含補登')) {
+            displayStatus = `${displayStatus}（含補登）`;
+        }
+        return { displayStatus, displayCheckOut };
+    }
+
+    function statusClassForDay(day, dispStr) {
+        const rawStatus = day.status;
+        const s = String(dispStr ?? '');
+        if (s === '缺勤' || s.startsWith('缺勤') || String(rawStatus).startsWith('異常')) return 'text-red-600 font-bold';
+        if (rawStatus === '僅單次打卡') return 'text-purple-600 font-bold';
+        if (s.includes('加班')) return 'text-orange-600 font-bold';
+        if (s.includes('特休')) return 'text-blue-600 font-bold';
+        if (s.includes('病假')) return 'text-yellow-600 font-bold';
+        if (s.includes('事假')) return 'text-gray-500';
+        if (['補休', '公假', '婚假', '喪假'].some((k) => s.includes(k))) return 'text-indigo-600 font-bold';
+        return '';
+    }
+
+    function buildDailyDetailRows(userId, userData, holidays) {
+        const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+        const dailyData = userData.dailyData || {};
+        const sortedDates = Object.keys(dailyData).sort();
+        let rows = '';
+        sortedDates.forEach((dateStr) => {
+            const day = dailyData[dateStr];
+            const { displayStatus, displayCheckOut } = formatDayDisplay(day, dateStr, userId);
+            const dateObj = new Date(dateStr);
+            dateObj.setMinutes(dateObj.getMinutes() + dateObj.getTimezoneOffset());
+            const dayOfWeek = dateObj.getDay();
+            const isHoliday = holidays.has(dateStr) || dayOfWeek === 0 || dayOfWeek === 6;
+            const dateClass = isHoliday ? 'text-red-600 font-bold' : '';
+            const lateVal = day.late ?? 0;
+            const earlyVal = day.early ?? 0;
+            const statusClass = statusClassForDay(day, displayStatus);
+            const dateCellText = `${dateStr} (${weekdays[dayOfWeek]})`;
+            rows += `<tr class="bg-slate-50/80 text-sm">
+                <td class="px-4 py-2 pl-10 text-gray-400">↳</td>
+                <td class="px-4 py-2 ${dateClass}">${escapeHtml(dateCellText)}</td>
+                <td class="px-4 py-2 text-center">${escapeHtml(day.checkIn || '---')}</td>
+                <td class="px-4 py-2 text-center">${escapeHtml(displayCheckOut)}</td>
+                <td class="px-4 py-2 ${statusClass}">${escapeHtml(displayStatus || '')}</td>
+                <td class="px-4 py-2 text-center text-gray-600">${escapeHtml(day.dataSource || '—')}</td>
+                <td class="px-4 py-2 text-center ${lateVal > 0 ? 'text-orange-600 font-bold' : ''}">${escapeHtml(lateVal)}</td>
+                <td class="px-4 py-2 text-center ${earlyVal > 0 ? 'text-blue-600 font-bold' : ''}">${escapeHtml(earlyVal)}</td>
+            </tr>`;
+        });
+        return rows;
+    }
+
+    function renderReportView(recordsByUser, holidays) {
         const container = document.getElementById('report-table-container');
-        // [核心改造] 移除此處的過濾邏輯，因為傳入的 recordsByUser 已經是過濾後的資料。
         if (!recordsByUser || Object.keys(recordsByUser).length === 0) {
-            container.innerHTML = '<p class="text-center text-gray-500">此範圍內無出勤紀錄。</p>';
+            container.innerHTML = '<p class="text-center text-gray-500 py-8">此範圍內無出勤紀錄。</p>';
             return;
         }
 
-        // 【⭐️ 核心新增：取得今天的日期字串與當前時間，用於後續判斷 ⭐️】
-        const todayStr = new Date().toLocaleDateString('sv');
-        const now = new Date();
+        const userIds = Object.keys(recordsByUser).sort((a, b) =>
+            (recordsByUser[a].userName || '').localeCompare(recordsByUser[b].userName || '', 'zh-Hant'));
 
-        const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
-        let html = '<div class="bg-white p-6 rounded-lg shadow-md"><h2 class="text-xl font-semibold mb-4">出勤明細</h2><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">';
-        html += '<thead class="bg-gray-50"><tr>' +
-            '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">員工姓名</th>' +
-            '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">日期</th>' +
-            '<th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">上班</th>' +
-            '<th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">下班</th>' +
-            '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">狀態</th>' +
-            '<th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">遲到(分)</th>' +
-            '<th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">早退(分)</th>' +
-            '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">打卡地點</th>' +
-            '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-        
-        for (const userId in recordsByUser) {
-            const userData = recordsByUser[userId];
-            const dailyData = userData.dailyData || {};
-            // [修改] 取得所有日期的鍵並排序，確保顯示順序正確
-            const sortedDates = Object.keys(dailyData).sort();
-
-            for (const dateStr of sortedDates) {
-                const day = dailyData[dateStr];
-                const dateObj = new Date(dateStr);
-                dateObj.setMinutes(dateObj.getMinutes() + dateObj.getTimezoneOffset());
-                const dayOfWeek = dateObj.getDay();
-
-                const isHoliday = holidays.has(dateStr) || dayOfWeek === 0 || dayOfWeek === 6;
-                const dateClass = isHoliday ? 'text-red-600 font-bold' : '';
-
-                const lateVal = day.late ?? 0;
-                const earlyVal = day.early ?? 0;
-                const lateClass = lateVal > 0 ? 'text-orange-600 font-bold' : '';
-                const earlyClass = earlyVal > 0 ? 'text-blue-600 font-bold' : '';
-                // [核心改造] 新增異常狀態的 CSS class，使其顯示為紅色粗體
-                let displayStatus = day.status;
-                let displayCheckOut = day.checkOut || '---';
-
-                // 【⭐️ 核心新增：根據您的需求，加入三大判斷邏輯 ⭐️】
-                if (dateStr === todayStr) {
-                    // 1. 如果是今天，且狀態為「僅單次打卡」，則暫時顯示為「出勤」。
-                    if (displayStatus === '僅單次打卡') {
-                        displayStatus = '出勤';
-                    }
-                    // 2. 如果還沒到下班時間，則不顯示下班欄位。
-                    const shiftData = employeeShiftData[userId];
-                    if (shiftData && shiftData.shiftEnd) {
-                        const shiftEndHour = parseInt(shiftData.shiftEnd.split(':')[0], 10);
-                        if (now.getHours() < shiftEndHour) {
-                            displayCheckOut = '---';
-                        }
-                    }
-                }
-                // 3. 如果狀態為「缺勤」，則套用紅色粗體樣式。
-                // 【v42.0 核心改造】為不同的假別狀態新增對應的 CSS Class
-                let statusClass = '';
-                const rawStatus = day.status;
-                const dispStr = String(displayStatus ?? '');
-                if (dispStr === '缺勤' || rawStatus === '異常') statusClass = 'text-red-600 font-bold';
-                else if (rawStatus === '僅單次打卡') statusClass = 'text-purple-600 font-bold';
-                // [改善] 改用 .includes() 判斷，讓 "休假;加班[...]" 這類複合狀態也能正確顯示樣式
-                else if (dispStr.includes('加班')) statusClass = 'text-orange-600 font-bold';
-                else if (dispStr === '特休') statusClass = 'text-blue-600 font-bold';
-                else if (dispStr === '病假') statusClass = 'text-yellow-600 font-bold';
-                else if (dispStr === '事假') statusClass = 'text-gray-500';
-                else if (['補休', '公假', '婚假', '喪假'].includes(dispStr)) statusClass = 'text-indigo-600 font-bold';
-
-                // 【⭐️ 核心修正：從 mapPoints 中查找對應的打卡地點 ⭐️】
-                let locationHtml = '';
-                // [v2 修正] 將 dateStr 的 '-' 替換為 '/'，以匹配 mapPoints.time 的格式 (e.g., '2025/10/01')
-                const dateStrForSearch = dateStr.replace(/-/g, '/');
-                const pts = Array.isArray(userData.mapPoints) ? userData.mapPoints : [];
-
-                // 尋找上班打卡點
-                const checkInPoint = pts.find(p => p.eventType === '上班' && p.time && p.time.startsWith(dateStrForSearch) && day.checkIn && p.time.endsWith(day.checkIn));
-                if (checkInPoint && checkInPoint.address) {
-                    locationHtml += `<div class="text-xs">上班: ${escapeHtml(checkInPoint.address)}</div>`;
-                }
-                // 尋找下班打卡點
-                const checkOutPoint = pts.find(p => p.eventType === '下班' && p.time && p.time.startsWith(dateStrForSearch) && day.checkOut && p.time.endsWith(day.checkOut));
-                if (checkOutPoint && checkOutPoint.address) {
-                    locationHtml += `<div class="text-xs">下班: ${escapeHtml(checkOutPoint.address)}</div>`;
-                }
-
-                const dateCellText = `${dateStr} (${weekdays[dayOfWeek]})`;
-                html += `<tr>
-                    <td class="px-6 py-4 whitespace-nowrap font-medium">${escapeHtml(userData.userName)}</td>
-                    <td class="px-6 py-4 whitespace-nowrap ${dateClass}">${escapeHtml(dateCellText)}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-center">${escapeHtml(day.checkIn || '---')}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-center">${escapeHtml(displayCheckOut)}</td>
-                    <td class="px-6 py-4 whitespace-nowrap ${statusClass}">${escapeHtml(dispStr)}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-center ${lateClass}">${escapeHtml(lateVal)}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-center ${earlyClass}">${escapeHtml(earlyVal)}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${locationHtml || '---'}</td>
-                </tr>`;
-            }
+        let footnote = '<p class="text-xs text-gray-500 mt-3">點擊姓名展開／收合逐日明細。資料來源：打卡＝一般紀錄；含補登＝當日有手動補登。</p>';
+        if (lastGlobalSummary.offSiteMissingExplanationCount > 0) {
+            footnote += `<p class="text-xs text-amber-700 mt-1">本期間另有 ${lastGlobalSummary.offSiteMissingExplanationCount} 筆離場未填說明（見狀態欄）。</p>`;
         }
-        html += '</tbody></table></div></div>';
+
+        let html = '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200 text-sm">';
+        html += '<thead class="bg-gray-50"><tr>' +
+            '<th class="px-4 py-3 text-left font-medium text-gray-600">員工姓名</th>' +
+            '<th class="px-4 py-3 text-center font-medium text-gray-600">應到(天)</th>' +
+            '<th class="px-4 py-3 text-center font-medium text-gray-600">實到(天)</th>' +
+            '<th class="px-4 py-3 text-center font-medium text-gray-600">遲到(分)</th>' +
+            '<th class="px-4 py-3 text-center font-medium text-gray-600">早退(分)</th>' +
+            '<th class="px-4 py-3 text-center font-medium text-gray-600">缺勤(天)</th>' +
+            '<th class="px-4 py-3 text-center font-medium text-gray-600 w-16">明細</th>' +
+            '</tr></thead><tbody>';
+
+        userIds.forEach((userId) => {
+            const userData = recordsByUser[userId];
+            const st = getEmployeeStats(userData);
+            const expanded = expandedUserIds.has(userId);
+            const toggleIcon = expanded ? '▼' : '▶';
+            html += `<tr class="hover:bg-gray-50 border-t border-gray-100">
+                <td class="px-4 py-3 font-medium">
+                    <button type="button" class="emp-expand-btn text-left text-indigo-700 hover:underline font-semibold" data-user-id="${escapeAttr(userId)}">${escapeHtml(userData.userName)}</button>
+                </td>
+                <td class="px-4 py-3 text-center">${st.workDays}</td>
+                <td class="px-4 py-3 text-center text-green-700">${st.attended}</td>
+                <td class="px-4 py-3 text-center ${st.lateMinutes > 0 ? 'text-orange-600 font-bold' : ''}">${st.lateMinutes}</td>
+                <td class="px-4 py-3 text-center ${st.earlyMinutes > 0 ? 'text-blue-600 font-bold' : ''}">${st.earlyMinutes}</td>
+                <td class="px-4 py-3 text-center ${st.absent > 0 ? 'text-red-600 font-bold' : ''}">${st.absent}</td>
+                <td class="px-4 py-3 text-center text-gray-400">${toggleIcon}</td>
+            </tr>`;
+            if (expanded) {
+                html += `<tr class="bg-gray-100"><td colspan="7" class="px-2 py-2">
+                    <table class="min-w-full text-xs">
+                    <thead><tr class="text-gray-500">
+                        <th class="px-4 py-1"></th><th class="px-4 py-1 text-left">日期</th>
+                        <th class="px-4 py-1 text-center">上班</th><th class="px-4 py-1 text-center">下班</th>
+                        <th class="px-4 py-1 text-left">狀態</th><th class="px-4 py-1 text-center">資料來源</th>
+                        <th class="px-4 py-1 text-center">遲到</th><th class="px-4 py-1 text-center">早退</th>
+                    </tr></thead><tbody>${buildDailyDetailRows(userId, userData, holidays)}</tbody></table>
+                </td></tr>`;
+            }
+        });
+
+        html += `</tbody></table>${footnote}</div>`;
         container.innerHTML = html;
+
+        container.querySelectorAll('.emp-expand-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const uid = btn.getAttribute('data-user-id');
+                if (expandedUserIds.has(uid)) expandedUserIds.delete(uid);
+                else expandedUserIds.add(uid);
+                renderReportView(currentReportData, lastReportHolidays);
+            });
+        });
     }
 
     function getMarkerIcon(eventType, status) {

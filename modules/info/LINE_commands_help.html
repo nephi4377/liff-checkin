@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>添心 LINE 指令說明</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Noto Sans TC', sans-serif; background: #f8fafc; color: #1e293b; }
+    .nav-link.active { background: #eff6ff; color: #1d4ed8; font-weight: 600; }
+    pre.example {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.5rem;
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .tag-warn { background: #fef3c7; color: #92400e; }
+    .tag-ok { background: #dcfce7; color: #166534; }
+    .tag-info { background: #e0f2fe; color: #075985; }
+    .cmd-block { margin-bottom: 1rem; }
+    .cmd-block dt { font-weight: 600; color: #0f172a; }
+    .cmd-block dd { color: #475569; margin-left: 0; margin-top: 0.25rem; }
+  </style>
+</head>
+<body>
+  <div class="max-w-3xl mx-auto px-4 py-6 pb-16">
+    <header class="mb-8 text-center">
+      <p class="text-sm text-slate-500 mb-1">添心設計 · 內部系統</p>
+      <h1 class="text-2xl md:text-3xl font-bold text-slate-900">LINE 指令完整說明</h1>
+      <p class="mt-2 text-slate-600 text-base leading-relaxed">給現場與管理同仁：怎麼在群組寫進度、怎麼附照片、各種 # 指令怎麼用。</p>
+    </header>
+
+    <!-- 頁內跳轉 -->
+    <nav class="sticky top-0 z-10 bg-white/95 backdrop-blur border border-slate-200 rounded-xl p-3 mb-6 shadow-sm">
+      <p class="text-xs font-semibold text-slate-500 mb-2">跳到段落</p>
+      <div class="flex flex-wrap gap-2">
+        <a href="#section-progress" class="nav-link text-sm px-3 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">記現場進度</a>
+        <a href="#section-photos" class="nav-link text-sm px-3 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">照片怎麼傳</a>
+        <a href="#section-confuse" class="nav-link text-sm px-3 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">寫進度 vs 綁客戶</a>
+        <a href="#section-commands" class="nav-link text-sm px-3 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">指令一覽</a>
+        <a href="#section-faq" class="nav-link text-sm px-3 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100">常見問題</a>
+      </div>
+    </nav>
+
+    <!-- 記現場進度 -->
+    <section id="section-progress" class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-2">一、記現場進度（#752 這種）</h2>
+      <p class="text-slate-600 mb-4 leading-relaxed">在<strong>內部 LINE 群</strong>、且帳號有開權限時，用<strong>新的一行</strong>以 <code class="bg-slate-100 px-1 rounded">#</code> 加案號開頭，把進度記到主控台該案的日誌。</p>
+
+      <div class="space-y-3 mb-4">
+        <div class="flex gap-2 items-start">
+          <span class="tag-ok text-xs font-medium px-2 py-0.5 rounded shrink-0">正確</span>
+          <pre class="example flex-1">#752
+今天上午泥作收工
+明天貼磚</pre>
+        </div>
+        <div class="flex gap-2 items-start">
+          <span class="tag-warn text-xs font-medium px-2 py-0.5 rounded shrink-0">換案</span>
+          <pre class="example flex-1">#752
+752 進度…
+
+#880
+880 進度…</pre>
+        </div>
+      </div>
+
+      <ul class="text-slate-600 space-y-2 text-sm leading-relaxed list-disc pl-5">
+        <li><code class="bg-slate-100 px-1 rounded">#</code> 後面<strong>直接打數字</strong>（1～4 位），中間<strong>不要</strong>打「案號」兩字。</li>
+        <li>案號那一行下面幾行都算<strong>同一案</strong>，直到下一行又出現 <code class="bg-slate-100 px-1 rounded">#數字</code> 才換案。</li>
+        <li><code class="bg-slate-100 px-1 rounded">#752 標題</code> 或 <code class="bg-slate-100 px-1 rounded">#777陳</code> 這種緊接文字也可以。</li>
+        <li>成功時 LINE 會回 Flex 卡片，可點按鈕開啟該案工作區。</li>
+      </ul>
+    </section>
+
+    <!-- 照片 -->
+    <section id="section-photos" class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-2">二、照片怎麼傳（3 分鐘內）</h2>
+      <p class="text-slate-600 mb-4 leading-relaxed"><strong>先傳圖或先打案號都可以</strong>，系統會在 <strong>3 分鐘</strong> 內把照片併進日誌。</p>
+
+      <div class="grid gap-4 md:grid-cols-2 mb-4">
+        <div class="border border-blue-100 bg-blue-50/50 rounded-lg p-4">
+          <h3 class="font-semibold text-blue-900 mb-2">先傳圖 → 再打案號</h3>
+          <p class="text-sm text-slate-600 mb-2">照片會併入<strong>第一個案</strong>（同則訊息裡最上面的 # 案號區塊）。</p>
+          <pre class="example text-sm">（先傳 1～多張照片）
+#752
+（可只打案號，或加文字）</pre>
+        </div>
+        <div class="border border-emerald-100 bg-emerald-50/50 rounded-lg p-4">
+          <h3 class="font-semibold text-emerald-900 mb-2">先打案號 → 再傳圖</h3>
+          <p class="text-sm text-slate-600 mb-2">照片會併入<strong>最後一個案</strong>（同則訊息裡最後一個 # 案號區塊）。</p>
+          <pre class="example text-sm">#752
+泥作收工
+（3 分鐘內再傳照片）</pre>
+        </div>
+      </div>
+
+      <div class="border-l-4 border-amber-400 bg-amber-50 p-4 rounded-r-lg mb-4">
+        <p class="font-semibold text-amber-900 mb-1">同則寫兩案時</p>
+        <p class="text-sm text-amber-900/90 leading-relaxed">
+          <strong>先傳的圖</strong> → 併<strong>第一案</strong>（例如 #752）。<br>
+          <strong>後傳的圖</strong>（案號文字已送出之後）→ 併<strong>最後一案</strong>（例如 #880）。
+        </p>
+        <pre class="example mt-3 text-sm">（先傳照片）
+#752
+752 進度
+#880
+880 進度
+（之後再傳的照片 → 併 880 案）</pre>
+      </div>
+
+      <ul class="text-slate-600 space-y-2 text-sm leading-relaxed list-disc pl-5">
+        <li>超過 3 分鐘的照片<strong>不會</strong>自動併入上一則；請<strong>再打一次案號</strong>，或改為<strong>先傳圖再打案號</strong>。</li>
+        <li>照片<strong>不會跨人</strong>：A 傳的圖不會併進 B 打的案號。</li>
+        <li>只有文字、完全沒照片時，同日同案可能併成同一則日誌；<strong>有照片一律新開一則</strong>。</li>
+      </ul>
+    </section>
+
+    <!-- 寫進度 vs 綁客戶 -->
+    <section id="section-confuse" class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-3">三、寫進度 vs 綁客戶（別搞混）</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm border-collapse">
+          <thead>
+            <tr class="bg-slate-100 text-left">
+              <th class="p-3 border border-slate-200 font-semibold">寫法</th>
+              <th class="p-3 border border-slate-200 font-semibold">用途</th>
+              <th class="p-3 border border-slate-200 font-semibold">範例</th>
+            </tr>
+          </thead>
+          <tbody class="text-slate-700">
+            <tr>
+              <td class="p-3 border border-slate-200"><span class="tag-ok text-xs px-2 py-0.5 rounded">寫進度日誌</span><br><code>#752</code></td>
+              <td class="p-3 border border-slate-200">記現場進度到主控台工作區</td>
+              <td class="p-3 border border-slate-200"><pre class="example border-0 bg-transparent p-0 m-0">#752
+泥作完成</pre></td>
+            </tr>
+            <tr>
+              <td class="p-3 border border-slate-200"><span class="tag-info text-xs px-2 py-0.5 rounded">綁定客戶</span><br><code>#案號 752</code></td>
+              <td class="p-3 border border-slate-200">把 LINE 客戶／群組綁到案號（設計圖自動分類）</td>
+              <td class="p-3 border border-slate-200"><code>#案號 752</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="mt-3 text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg p-3">
+        若打成 <code class="bg-white px-1 rounded">#案號 752</code>，走的是<strong>客戶綁定</strong>，<strong>不會</strong>變成現場進度日誌。
+      </p>
+    </section>
+
+    <!-- 指令一覽：全部列出，不折疊 -->
+    <section id="section-commands" class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-2">四、指令一覽</h2>
+      <p class="text-sm text-slate-500 mb-5">在 LINE 輸入 <code class="bg-slate-100 px-1 rounded">#help</code> 可取得精簡版與本頁連結。</p>
+
+      <h3 class="text-base font-bold text-slate-800 mb-3 mt-4">現場與主控台</h3>
+      <dl class="cmd-block text-sm">
+        <dt>#752 …（行首 #＋1～4 位數字）</dt>
+        <dd>內部群寫進度日誌，見上文第一、二節。</dd>
+      </dl>
+      <dl class="cmd-block text-sm">
+        <dt>#主控台</dt>
+        <dd>開啟整合主控台。</dd>
+      </dl>
+      <dl class="cmd-block text-sm">
+        <dt>#專案 [案號]</dt>
+        <dd>開啟該案工作區。例：<code>#專案 752</code>；不填案號則為待審核日誌。</dd>
+      </dl>
+      <dl class="cmd-block text-sm">
+        <dt>#案場資訊 [關鍵字]</dt>
+        <dd>查案場詳細資訊、複製進場資料。例：<code>#案場資訊 752</code></dd>
+      </dl>
+      <dl class="cmd-block text-sm">
+        <dt>#新增案場</dt>
+        <dd>開啟表單建立新案場資料。</dd>
+      </dl>
+
+      <h3 class="text-base font-bold text-slate-800 mb-3 mt-6">客戶／群組</h3>
+      <dl class="cmd-block text-sm">
+        <dt>#案號 [3～6 位數字]</dt>
+        <dd>綁定客戶與案號。例：<code>#案號 752</code></dd>
+      </dl>
+      <dl class="cmd-block text-sm">
+        <dt>#客戶 [關鍵字]</dt>
+        <dd>模糊搜尋客戶。例：<code>#客戶 YUN</code></dd>
+      </dl>
+      <dl class="cmd-block text-sm">
+        <dt>#設定 [ID] [案號]</dt>
+        <dd>為指定 ID 設定案號。例：<code>#設定 U123456 752</code></dd>
+      </dl>
+
+      <h3 class="text-base font-bold text-slate-800 mb-3 mt-6">註冊</h3>
+      <dl class="cmd-block text-sm">
+        <dt>#員工報到</dt>
+        <dd>員工註冊身分並啟用選單。</dd>
+      </dl>
+      <dl class="cmd-block text-sm">
+        <dt>#廠商報到</dt>
+        <dd>廠商註冊身分並啟用選單。</dd>
+      </dl>
+
+      <h3 class="text-base font-bold text-slate-800 mb-3 mt-6">說明</h3>
+      <dl class="cmd-block text-sm">
+        <dt>#help</dt>
+        <dd>在 LINE 顯示精簡說明與「查看完整指令說明」按鈕（連到本頁）。</dd>
+      </dl>
+    </section>
+
+    <!-- 常見問題 -->
+    <section id="section-faq" class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-4">五、常見問題</h2>
+      <div class="space-y-4 text-sm text-slate-600 leading-relaxed">
+        <div>
+          <p class="font-semibold text-slate-800">Q：打了 #752 沒反應？</p>
+          <p class="mt-1">請確認：(1) 在<strong>內部群</strong> (2) 帳號有<strong>白名單權限</strong> (3) 格式是行首 <code>#752</code> 不是 <code>#案號 752</code>。</p>
+        </div>
+        <div>
+          <p class="font-semibold text-slate-800">Q：照片沒併進去？</p>
+          <p class="mt-1">是否超過 3 分鐘？請重打案號或先傳圖。多案同則時，確認照片是「先傳（第一案）」還是「後傳（最後一案）」。</p>
+        </div>
+        <div>
+          <p class="font-semibold text-slate-800">Q：空區塊沒寫入？</p>
+          <p class="mt-1">若某案區塊完全沒文字、也沒有可併照片，系統會提示該案未記錄；請在 # 案號後至少打一點內容，或先傳照片再打案號。</p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="text-center text-xs text-slate-400">
+      <p>添心設計 · 內部使用 · 規格以系統實際行為為準</p>
+      <p class="mt-1">LINE 群組輸入 <code class="bg-slate-100 px-1 rounded">#help</code> 可快速回到精簡說明</p>
+    </footer>
+  </div>
+
+  <script>
+    document.querySelectorAll('a[href^="#"]').forEach(function (a) {
+      a.addEventListener('click', function (e) {
+        var id = a.getAttribute('href').slice(1);
+        var el = document.getElementById(id);
+        if (el) {
+          e.preventDefault();
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+  </script>
+</body>
+</html>
