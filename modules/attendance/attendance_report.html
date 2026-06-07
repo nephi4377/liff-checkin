@@ -48,9 +48,15 @@
                         <option value="">所有員工</option>
                     </select>
                     <!-- 【您的要求】新增「顯示所有歷史員工」的核取方塊 -->
-                    <div class="mt-2 flex items-center">
-                        <input id="show-all-employees-checkbox" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                        <label for="show-all-employees-checkbox" class="ml-2 block text-sm text-gray-900">顯示所有歷史員工</label>
+                    <div class="mt-2 flex flex-col gap-1">
+                        <div class="flex items-center">
+                            <input id="show-all-employees-checkbox" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                            <label for="show-all-employees-checkbox" class="ml-2 block text-sm text-gray-900">顯示所有歷史員工</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input id="show-all-absent-checkbox" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                            <label for="show-all-absent-checkbox" class="ml-2 block text-sm text-gray-900">顯示全期缺勤</label>
+                        </div>
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
@@ -61,13 +67,14 @@
             </div>
         </div>
 
-        <div id="summary-section" class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6" style="display: none;">
+        <div id="summary-section" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6" style="display: none;">
             <p id="summary-scope-hint" class="col-span-full text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-3 py-2 mb-1" style="display:none;">以下為<strong>該員工</strong>於查詢區間的統計。</p>
-            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">應到天數</div><div id="total-workdays" class="mt-1 text-3xl font-semibold text-gray-700">0</div></div>
-            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">實到天數</div><div id="total-attended" class="mt-1 text-3xl font-semibold text-green-600">0</div></div>
+            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">應記帳(天)</div><div id="total-workdays" class="mt-1 text-3xl font-semibold text-gray-700">0</div></div>
+            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">實際出勤(天)</div><div id="total-attended" class="mt-1 text-3xl font-semibold text-green-600">0</div></div>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總遲到(分)</div><div id="total-late" class="mt-1 text-3xl font-semibold text-orange-500">0</div></div>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總早退(分)</div><div id="total-early" class="mt-1 text-3xl font-semibold text-blue-500">0</div></div>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總缺勤(天)</div><div id="total-absent" class="mt-1 text-3xl font-semibold text-red-600">0</div></div>
+            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">異常(天)</div><div id="total-anomaly" class="mt-1 text-3xl font-semibold text-amber-600">0</div></div>
         </div>
 
         <div id="results-container" class="bg-white p-6 rounded-lg shadow-md">
@@ -262,6 +269,11 @@
         // 【v175.0 核心改造】將 API 請求移至此處，並統一附上使用者資訊
         // 【您的要求】為「顯示所有歷史員工」核取方塊綁定事件
         document.getElementById('show-all-employees-checkbox').addEventListener('change', loadAndRenderEmployees);
+        document.getElementById('show-all-absent-checkbox').addEventListener('change', () => {
+            if (currentReportData && Object.keys(currentReportData).length) {
+                renderReportView(currentReportData, lastReportHolidays);
+            }
+        });
 
         const urlParams = new URLSearchParams(window.location.search);
         const uid = urlParams.get('uid') || 'unknown_user'; // 【v175.0 核心修正】從 URL 取得操作者資訊
@@ -495,8 +507,107 @@
         document.getElementById('end-date').value = end.toLocaleDateString('sv');
     }
 
+    /** 與後端 _getDayAnomalyTags_ 對齊 */
+    function getDayAnomalyTags(day) {
+        if (!day) return [];
+        if (day.anomalyTags && day.anomalyTags.length) return day.anomalyTags;
+        const tags = [];
+        const st = String(day.status || '');
+        if (st === '缺勤' || st.startsWith('缺勤')) tags.push('缺勤');
+        if (st === '僅單次打卡') tags.push('僅單次打卡');
+        if (st.startsWith('異常')) tags.push('休假仍打卡');
+        if (st.includes('缺記錄')) tags.push('缺班表');
+        if (day.offSiteAnomaly || st.includes('離場未填')) tags.push('離場未填');
+        if ((day.late || 0) > 0) tags.push('遲到');
+        if ((day.early || 0) > 0) tags.push('早退');
+        return tags;
+    }
+
+    function formatAnomalyDetailCell(day) {
+        const tags = getDayAnomalyTags(day);
+        const parts = [];
+        if (tags.length) parts.push(tags.join('、'));
+        const offNote = day?.offSiteReasonSummary && String(day.offSiteReasonSummary).trim();
+        if (offNote) parts.push(`離場：${offNote}`);
+        return parts.length ? parts.join('｜') : '—';
+    }
+
+    function dayCountsAsAnomaly(day) {
+        const tags = getDayAnomalyTags(day);
+        return tags.some((t) => t !== '遲到' && t !== '早退');
+    }
+
+    function countAnomalyDays(userData) {
+        if (userData.stats && userData.stats.anomalyDays != null) return userData.stats.anomalyDays;
+        return Object.values(userData.dailyData || {}).filter((d) => dayCountsAsAnomaly(d)).length;
+    }
+
+    /** 後端以 8h 工日回傳小數；UI 顯示小數天（例 0.44）並 tooltip 3.5/8 */
+    function formatDayAccounting(decimal) {
+        const n = Number(decimal);
+        if (!n || Number.isNaN(n)) return '0';
+        if (Math.abs(n - Math.round(n)) < 0.001) return String(Math.round(n));
+        return (Math.round(n * 100) / 100).toFixed(2);
+    }
+
+    function formatDayEighths(decimal) {
+        const n = Number(decimal);
+        if (!n || Number.isNaN(n)) return '0/8';
+        const hours = Math.round(n * 8 * 10) / 10;
+        if (hours <= 0) return '0/8';
+        return `${hours}/8`;
+    }
+
+    function dayAccountingTitle(decimal) {
+        const n = Number(decimal);
+        if (!n || Number.isNaN(n)) return '';
+        return `${formatDayEighths(n)} 天（8h 工日）`;
+    }
+
+    /** 全期僅缺勤（0 打卡、0 假別、有缺勤）— 與後端 stats.allAbsentPeriod 對齊 */
+    function isAllAbsentPeriodUser(userData) {
+        const st = userData?.stats;
+        if (!st) return false;
+        if (st.allAbsentPeriod === true) return true;
+        if (st.allAbsentPeriod === false) return false;
+        const leaveTotal = (st.annualLeave || 0) + (st.sickLeave || 0) + (st.personalLeave || 0);
+        return (st.workDays || 0) > 0 && (st.checkInDays || 0) === 0 && leaveTotal === 0 && (st.absent || 0) > 0;
+    }
+
+    function shouldShowEmployeeRow(userData) {
+        const showAllAbsent = document.getElementById('show-all-absent-checkbox')?.checked;
+        if (showAllAbsent) return true;
+        return !isAllAbsentPeriodUser(userData);
+    }
+
+    const ANOMALY_HANDLING_ROWS = [
+        ['缺勤', '核對假單；無假單依考勤辦法記缺勤'],
+        ['僅單次打卡', '請補下班卡，或由管理員手動補登'],
+        ['休假仍打卡', '確認誤打或更正假單／班表'],
+        ['缺班表', '請系統管理員補排班歷史'],
+        ['離場未填', '請員工補離場說明（LINE 或補登備註）'],
+        ['遲到／早退', '依考勤辦法扣款或事前報備'],
+        ['離場已填說明', '屬正常紀錄，不計入異常天數']
+    ];
+
+    function buildAnomalyHandlingFootnote() {
+        let html = '<details class="text-xs text-gray-600 mt-3"><summary class="cursor-pointer text-amber-800 font-medium">異常類型與處理方式（點開）</summary>';
+        html += '<table class="mt-2 w-full border border-gray-200 text-left"><thead class="bg-gray-50"><tr><th class="px-2 py-1 border-b">類型</th><th class="px-2 py-1 border-b">建議處理</th></tr></thead><tbody>';
+        ANOMALY_HANDLING_ROWS.forEach(([type, action]) => {
+            html += `<tr><td class="px-2 py-1 border-b align-top">${escapeHtml(type)}</td><td class="px-2 py-1 border-b">${escapeHtml(action)}</td></tr>`;
+        });
+        html += '</tbody></table></details>';
+        return html;
+    }
+
     function getEmployeeStats(userData) {
-        if (userData.stats) return userData.stats;
+        if (userData.stats) {
+            return {
+                ...userData.stats,
+                anomalyDays: userData.stats.anomalyDays ?? countAnomalyDays(userData),
+                flexibleMinutes: userData.stats.flexibleMinutes ?? userData.flexibleMinutes ?? 0
+            };
+        }
         const daily = userData.dailyData || {};
         let lateMinutes = 0, earlyMinutes = 0, attended = 0, absent = 0, workDays = 0;
         Object.values(daily).forEach((day) => {
@@ -509,7 +620,7 @@
                 if (st === '出勤' || st.startsWith('出勤') || st === '缺勤' || st.startsWith('缺勤') || st === '僅單次打卡') workDays++;
             }
         });
-        return { workDays, attended, absent, lateMinutes, earlyMinutes };
+        return { workDays, attended, absent, lateMinutes, earlyMinutes, anomalyDays: countAnomalyDays(userData), flexibleMinutes: userData.flexibleMinutes ?? 0 };
     }
 
     function parseLeaveFromStatus(status) {
@@ -549,17 +660,21 @@
         const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
         let csvContent = '\uFEFF';
         csvContent += '【每人小計】\n';
-        csvContent += '員工編號,員工姓名,應到天數,實到天數,遲到(分),早退(分),缺勤(天)\n';
-        const userIds = Object.keys(currentReportData).sort((a, b) =>
+        csvContent += '員工編號,員工姓名,應記帳(天),實際出勤(天),特休(天),病假(天),事假(天),加班(天),彈性(分),遲到(分),早退(分),缺勤(天),異常(天)\n';
+        const userIds = Object.keys(currentReportData).filter((id) => shouldShowEmployeeRow(currentReportData[id])).sort((a, b) =>
             (currentReportData[a].userName || '').localeCompare(currentReportData[b].userName || '', 'zh-Hant'));
         userIds.forEach((userId) => {
             const u = currentReportData[userId];
             const st = getEmployeeStats(u);
-            csvContent += [csvEscapeField(userId), csvEscapeField(u.userName), st.workDays, st.attended, st.lateMinutes, st.earlyMinutes, st.absent].join(',') + '\n';
+            csvContent += [
+                csvEscapeField(userId), csvEscapeField(u.userName), st.workDays, st.checkInDays ?? st.attended,
+                formatDayAccounting(st.annualLeave), formatDayAccounting(st.sickLeave), formatDayAccounting(st.personalLeave), formatDayAccounting(st.overtimeDays),
+                st.flexibleMinutes ?? '', st.lateMinutes, st.earlyMinutes, formatDayAccounting(st.absent), st.anomalyDays || 0
+            ].join(',') + '\n';
         });
 
         csvContent += '\n【逐日明細】\n';
-        csvContent += '員工編號,員工姓名,日期,星期,上班時間,下班時間,狀態,假別,資料來源,遲到(分),早退(分)\n';
+        csvContent += '員工編號,員工姓名,日期,星期,上班時間,下班時間,狀態,假別,資料來源,異常摘要,遲到(分),早退(分)\n';
         const allDates = new Set();
         Object.values(currentReportData).forEach((u) => Object.keys(u.dailyData || {}).forEach((d) => allDates.add(d)));
         const sortedDates = Array.from(allDates).sort();
@@ -576,6 +691,7 @@
                     csvEscapeField(weekdays[dateObj.getDay()]), csvEscapeField(day.checkIn || ''),
                     csvEscapeField(day.checkOut || ''), csvEscapeField(day.status || ''),
                     csvEscapeField(parseLeaveFromStatus(day.status)), csvEscapeField(day.dataSource || ''),
+                    csvEscapeField(formatAnomalyDetailCell(day)),
                     day.late || 0, day.early || 0
                 ].join(',') + '\n';
             });
@@ -601,10 +717,11 @@
         section.style.display = 'grid';
         hint.style.display = 'block';
         document.getElementById('total-workdays').textContent = st.workDays;
-        document.getElementById('total-attended').textContent = st.attended;
+        document.getElementById('total-attended').textContent = st.checkInDays ?? st.attended;
         document.getElementById('total-late').textContent = st.lateMinutes;
         document.getElementById('total-early').textContent = st.earlyMinutes;
-        document.getElementById('total-absent').textContent = st.absent;
+        document.getElementById('total-absent').textContent = formatDayAccounting(st.absent);
+        document.getElementById('total-anomaly').textContent = st.anomalyDays || 0;
     }
 
     function formatDayDisplay(day, dateStr, userId) {
@@ -636,6 +753,7 @@
         if (s.includes('病假')) return 'text-yellow-600 font-bold';
         if (s.includes('事假')) return 'text-gray-500';
         if (['補休', '公假', '婚假', '喪假'].some((k) => s.includes(k))) return 'text-indigo-600 font-bold';
+        if (getDayAnomalyTags(day).length > 0) return 'text-amber-700 font-medium';
         return '';
     }
 
@@ -655,6 +773,8 @@
             const lateVal = day.late ?? 0;
             const earlyVal = day.early ?? 0;
             const statusClass = statusClassForDay(day, displayStatus);
+            const anomalyText = formatAnomalyDetailCell(day);
+            const anomalyClass = anomalyText !== '—' ? 'text-amber-800 font-medium' : 'text-gray-400';
             const dateCellText = `${dateStr} (${weekdays[dayOfWeek]})`;
             rows += `<tr class="bg-slate-50/80 text-sm">
                 <td class="px-4 py-2 pl-10 text-gray-400">↳</td>
@@ -663,6 +783,7 @@
                 <td class="px-4 py-2 text-center">${escapeHtml(displayCheckOut)}</td>
                 <td class="px-4 py-2 ${statusClass}">${escapeHtml(displayStatus || '')}</td>
                 <td class="px-4 py-2 text-center text-gray-600">${escapeHtml(day.dataSource || '—')}</td>
+                <td class="px-4 py-2 ${anomalyClass}">${escapeHtml(anomalyText)}</td>
                 <td class="px-4 py-2 text-center ${lateVal > 0 ? 'text-orange-600 font-bold' : ''}">${escapeHtml(lateVal)}</td>
                 <td class="px-4 py-2 text-center ${earlyVal > 0 ? 'text-blue-600 font-bold' : ''}">${escapeHtml(earlyVal)}</td>
             </tr>`;
@@ -677,28 +798,50 @@
             return;
         }
 
-        const userIds = Object.keys(recordsByUser).sort((a, b) =>
+        const allUserIds = Object.keys(recordsByUser);
+        const hiddenAbsentCount = lastGlobalSummary.hiddenAllAbsentCount ??
+            allUserIds.filter((id) => isAllAbsentPeriodUser(recordsByUser[id])).length;
+        const userIds = allUserIds.filter((id) => shouldShowEmployeeRow(recordsByUser[id])).sort((a, b) =>
             (recordsByUser[a].userName || '').localeCompare(recordsByUser[b].userName || '', 'zh-Hant'));
 
-        let footnote = '<p class="text-xs text-gray-500 mt-3">點擊姓名展開／收合逐日明細。資料來源：打卡＝一般紀錄；含補登＝當日有手動補登。</p>';
-        if (lastGlobalSummary.offSiteMissingExplanationCount > 0) {
-            footnote += `<p class="text-xs text-amber-700 mt-1">本期間另有 ${lastGlobalSummary.offSiteMissingExplanationCount} 筆離場未填說明（見狀態欄）。</p>`;
+        if (userIds.length === 0) {
+            container.innerHTML = '<p class="text-center text-gray-500 py-8">目前無符合條件的紀錄。可勾選「顯示全期缺勤」查看整段缺勤人員。</p>';
+            return;
         }
+
+        const anomalyTotal = lastGlobalSummary.totalAnomalyDays ?? userIds.reduce((n, id) => n + countAnomalyDays(recordsByUser[id]), 0);
+        const offSiteMissing = lastGlobalSummary.offSiteMissingExplanationCount || 0;
+        let footnote = '<p class="text-xs text-gray-500 mt-3">點擊姓名展開逐日。<strong>應記帳(天)</strong>＝應上班日曆天數（每人每日最多 1）。<strong>特休／病假／事假／缺勤</strong>以小數天計（例：08:30→12:00 病假＝0.44，即 3.5h÷8h），分列<strong>不可</strong>加總當應記帳。<strong>遲到／早退</strong>為分鐘。預設隱藏全期缺勤（0 出勤且 0 假別）。</p>';
+        if (hiddenAbsentCount > 0 && !document.getElementById('show-all-absent-checkbox')?.checked) {
+            footnote += `<p class="text-xs text-gray-500 mt-1">已隱藏 <strong>${hiddenAbsentCount}</strong> 位全期缺勤（可勾選「顯示全期缺勤」）。</p>`;
+        }
+        if (anomalyTotal > 0) {
+            footnote += `<p class="text-xs text-amber-800 mt-1">本期間異常共 <strong>${anomalyTotal}</strong> 天`;
+            if (offSiteMissing > 0) footnote += `（含離場未填 <strong>${offSiteMissing}</strong> 天）`;
+            footnote += '。</p>';
+        }
+        footnote += buildAnomalyHandlingFootnote();
 
         let html = '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200 text-sm">';
         html += '<thead class="bg-gray-50"><tr>' +
             '<th class="px-4 py-3 text-left font-medium text-gray-600">員工姓名</th>' +
-            '<th class="px-4 py-3 text-center font-medium text-gray-600">應到(天)</th>' +
-            '<th class="px-4 py-3 text-center font-medium text-gray-600">實到(天)</th>' +
-            '<th class="px-4 py-3 text-center font-medium text-gray-600">遲到(分)</th>' +
-            '<th class="px-4 py-3 text-center font-medium text-gray-600">早退(分)</th>' +
-            '<th class="px-4 py-3 text-center font-medium text-gray-600">缺勤(天)</th>' +
-            '<th class="px-4 py-3 text-center font-medium text-gray-600 w-16">明細</th>' +
+            '<th class="px-4 py-3 text-center font-medium text-gray-600">應記帳</th>' +
+            '<th class="px-4 py-3 text-center font-medium text-gray-600">實際出勤</th>' +
+            '<th class="px-4 py-3 text-center font-medium text-gray-600">特休</th>' +
+            '<th class="px-4 py-3 text-center font-medium text-gray-600">病假</th>' +
+            '<th class="px-4 py-3 text-center font-medium text-gray-600">事假</th>' +
+            '<th class="px-4 py-3 text-center font-medium text-gray-600">加班</th>' +
+            '<th class="px-4 py-3 text-center font-medium text-gray-600">遲到</th>' +
+            '<th class="px-4 py-3 text-center font-medium text-gray-600">早退</th>' +
+            '<th class="px-4 py-3 text-center font-medium text-gray-600">缺勤</th>' +
+            '<th class="px-4 py-3 text-center font-medium text-gray-600">異常</th>' +
+            '<th class="px-4 py-3 text-center font-medium text-gray-600 w-12">明細</th>' +
             '</tr></thead><tbody>';
 
         userIds.forEach((userId) => {
             const userData = recordsByUser[userId];
             const st = getEmployeeStats(userData);
+            const anomalyN = st.anomalyDays || 0;
             const expanded = expandedUserIds.has(userId);
             const toggleIcon = expanded ? '▼' : '▶';
             html += `<tr class="hover:bg-gray-50 border-t border-gray-100">
@@ -706,19 +849,25 @@
                     <button type="button" class="emp-expand-btn text-left text-indigo-700 hover:underline font-semibold" data-user-id="${escapeAttr(userId)}">${escapeHtml(userData.userName)}</button>
                 </td>
                 <td class="px-4 py-3 text-center">${st.workDays}</td>
-                <td class="px-4 py-3 text-center text-green-700">${st.attended}</td>
+                <td class="px-4 py-3 text-center text-green-700">${st.checkInDays ?? st.attended}</td>
+                <td class="px-4 py-3 text-center text-gray-600" title="${escapeAttr(dayAccountingTitle(st.annualLeave))}">${formatDayAccounting(st.annualLeave)}</td>
+                <td class="px-4 py-3 text-center text-gray-600" title="${escapeAttr(dayAccountingTitle(st.sickLeave))}">${formatDayAccounting(st.sickLeave)}</td>
+                <td class="px-4 py-3 text-center text-gray-600" title="${escapeAttr(dayAccountingTitle(st.personalLeave))}">${formatDayAccounting(st.personalLeave)}</td>
+                <td class="px-4 py-3 text-center text-gray-600" title="${escapeAttr(dayAccountingTitle(st.overtimeDays))}">${formatDayAccounting(st.overtimeDays)}</td>
                 <td class="px-4 py-3 text-center ${st.lateMinutes > 0 ? 'text-orange-600 font-bold' : ''}">${st.lateMinutes}</td>
                 <td class="px-4 py-3 text-center ${st.earlyMinutes > 0 ? 'text-blue-600 font-bold' : ''}">${st.earlyMinutes}</td>
-                <td class="px-4 py-3 text-center ${st.absent > 0 ? 'text-red-600 font-bold' : ''}">${st.absent}</td>
+                <td class="px-4 py-3 text-center ${st.absent > 0 ? 'text-red-600 font-bold' : ''}" title="${escapeAttr(dayAccountingTitle(st.absent))}">${formatDayAccounting(st.absent)}</td>
+                <td class="px-4 py-3 text-center ${anomalyN > 0 ? 'text-amber-700 font-bold' : 'text-gray-400'}">${anomalyN}</td>
                 <td class="px-4 py-3 text-center text-gray-400">${toggleIcon}</td>
             </tr>`;
             if (expanded) {
-                html += `<tr class="bg-gray-100"><td colspan="7" class="px-2 py-2">
+                html += `<tr class="bg-gray-100"><td colspan="12" class="px-2 py-2">
                     <table class="min-w-full text-xs">
                     <thead><tr class="text-gray-500">
                         <th class="px-4 py-1"></th><th class="px-4 py-1 text-left">日期</th>
                         <th class="px-4 py-1 text-center">上班</th><th class="px-4 py-1 text-center">下班</th>
                         <th class="px-4 py-1 text-left">狀態</th><th class="px-4 py-1 text-center">資料來源</th>
+                        <th class="px-4 py-1 text-left">異常摘要</th>
                         <th class="px-4 py-1 text-center">遲到</th><th class="px-4 py-1 text-center">早退</th>
                     </tr></thead><tbody>${buildDailyDetailRows(userId, userData, holidays)}</tbody></table>
                 </td></tr>`;
