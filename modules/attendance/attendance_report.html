@@ -69,7 +69,7 @@
 
         <div id="summary-section" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6" style="display: none;">
             <p id="summary-scope-hint" class="col-span-full text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-3 py-2 mb-1" style="display:none;">以下為<strong>該員工</strong>於查詢區間的統計。</p>
-            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">應記帳(天)</div><div id="total-workdays" class="mt-1 text-3xl font-semibold text-gray-700">0</div></div>
+            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">標準工作日(天)</div><div id="total-workdays" class="mt-1 text-3xl font-semibold text-gray-700">0</div></div>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">實際出勤(天)</div><div id="total-attended" class="mt-1 text-3xl font-semibold text-green-600">0</div></div>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總遲到(分)</div><div id="total-late" class="mt-1 text-3xl font-semibold text-orange-500">0</div></div>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總早退(分)</div><div id="total-early" class="mt-1 text-3xl font-semibold text-blue-500">0</div></div>
@@ -660,7 +660,7 @@
         const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
         let csvContent = '\uFEFF';
         csvContent += '【每人小計】\n';
-        csvContent += '員工編號,員工姓名,應記帳(天),實際出勤(天),特休(天),病假(天),事假(天),加班(天),彈性(分),遲到(分),早退(分),缺勤(天),異常(天)\n';
+        csvContent += '員工編號,員工姓名,標準工作日(天),實際出勤(天),特休(天),病假(天),事假(天),加班(天),彈性(分),遲到(分),早退(分),缺勤(天),異常(天)\n';
         const userIds = Object.keys(currentReportData).filter((id) => shouldShowEmployeeRow(currentReportData[id])).sort((a, b) =>
             (currentReportData[a].userName || '').localeCompare(currentReportData[b].userName || '', 'zh-Hant'));
         userIds.forEach((userId) => {
@@ -811,7 +811,7 @@
 
         const anomalyTotal = lastGlobalSummary.totalAnomalyDays ?? userIds.reduce((n, id) => n + countAnomalyDays(recordsByUser[id]), 0);
         const offSiteMissing = lastGlobalSummary.offSiteMissingExplanationCount || 0;
-        let footnote = '<p class="text-xs text-gray-500 mt-3">點擊姓名展開逐日。<strong>應記帳(天)</strong>＝應上班日曆天數（每人每日最多 1）。<strong>特休／病假／事假／缺勤</strong>以小數天計（例：08:30→12:00 病假＝0.44，即 3.5h÷8h），分列<strong>不可</strong>加總當應記帳。<strong>遲到／早退</strong>為分鐘。預設隱藏全期缺勤（0 出勤且 0 假別）。</p>';
+        let footnote = '<p class="text-xs text-gray-500 mt-3">點擊姓名展開逐日。<strong>標準工作日(天)</strong>＝查詢區間應班母數（標準制：平日−國定假；排班制：區間−排休），<strong>全員同制別一致</strong>。排休／假日來加班只進<strong>加班</strong>欄，不計遲早退。假別／缺勤可為小數，<strong>不可</strong>加總對母數。預設隱藏全期缺勤。</p>';
         if (hiddenAbsentCount > 0 && !document.getElementById('show-all-absent-checkbox')?.checked) {
             footnote += `<p class="text-xs text-gray-500 mt-1">已隱藏 <strong>${hiddenAbsentCount}</strong> 位全期缺勤（可勾選「顯示全期缺勤」）。</p>`;
         }
@@ -825,7 +825,7 @@
         let html = '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200 text-sm">';
         html += '<thead class="bg-gray-50"><tr>' +
             '<th class="px-4 py-3 text-left font-medium text-gray-600">員工姓名</th>' +
-            '<th class="px-4 py-3 text-center font-medium text-gray-600">應記帳</th>' +
+            '<th class="px-4 py-3 text-center font-medium text-gray-600">標準工作日</th>' +
             '<th class="px-4 py-3 text-center font-medium text-gray-600">實際出勤</th>' +
             '<th class="px-4 py-3 text-center font-medium text-gray-600">特休</th>' +
             '<th class="px-4 py-3 text-center font-medium text-gray-600">病假</th>' +
