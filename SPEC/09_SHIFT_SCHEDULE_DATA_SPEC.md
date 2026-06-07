@@ -7,6 +7,8 @@
 ## 1. 取得員工清單 (Action: `get_employees`)
 用於初始化下拉選單與組別篩選器。
 
+> **與出勤儀表板區分**：排班／本頁使用一般 `filter`（預設在職）；出勤儀表板使用 `attendance_*` mode，詳見後端 `SPEC/11_EMPLOYEE_MANAGEMENT_SPEC.md` §3.1。
+
 ### 請求參數
 - `page`: `attendance_api`
 - `action`: `get_employees`

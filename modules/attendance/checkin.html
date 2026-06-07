@@ -18,8 +18,17 @@
         const CONSTANTS = {
             LIFF_ID: '2007974938-jVxn6y37',
             GAS_URL: 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec',
-            VERSION: 'v26.05.30.1400',
+            VERSION: 'v26.06.06.1745',
             OFF_SITE_VALID_METERS: 200,
+            ANOMALY_MISSING: '離場未填說明',
+            SITE_BG_RETRY_MS: 30000,
+            /** 本頁打卡流程已結束時一律顯示（成功／失敗／定位失敗皆同） */
+            PAGE_SESSION_END_MSG: '<strong>本頁已無法再按打卡。</strong><br>請關閉此 LINE 視窗（右上角 ✕），再從選單重新開啟「打卡」。',
+            FAIL_REOPEN_STEPS: [
+                '點 LINE 視窗右上角 <strong>✕</strong> 關閉此頁',
+                '重新從 LINE 選單開啟「打卡」',
+                '再按一次「立即打卡」'
+            ],
             CACHE_KEYS: {
                 PROFILE: 'checkin_user_profile_cache', // 使用者個人資料快取
                 HISTORY: 'checkin_history_records',     // 歷史打卡紀錄快取
@@ -28,9 +37,11 @@
             TIMEOUTS: {
                 INIT: 10000,       // LIFF 初始化逾時時間 (10s)
                 GEO: 12000,        // GPS 座標擷取逾時時間 (12s)
+                SITE_LOAD: 10000,  // 案場清單載入逾時 (10s)，逾時後仍可打卡
                 SYNC: 30000,       // API 通訊逾時時間 (30s)
                 AUTO_CLOSE: 45000  // 打卡成功後自動關閉頁面的倒數時間 (45s)
             },
+            SITE_ANOMALY_TAG: '案場資訊異常',
             MAX_RETRY: 3,          // GPS 定位失敗時的最大重試次數
             HISTORY_LIMIT: 15      // 前端介面顯示的歷史紀錄筆數上限
         };
@@ -115,9 +126,10 @@
         }
 
         .off-site-chip {
-            font-size: 0.7rem;
+            font-size: 0.75rem;
             line-height: 1.2;
-            padding: 0.35rem 0.65rem;
+            min-height: 44px;
+            padding: 0.5rem 0.75rem;
             border-radius: 9999px;
             border: 1px solid #cbd5e1;
             background: #fff;
@@ -140,6 +152,11 @@
             border-radius: 0.75rem;
             font-size: 0.75rem;
             resize: vertical;
+        }
+
+        .sites-sync-spinner {
+            border-top-color: #0284c7;
+            animation: spin 1s ease-in-out infinite;
         }
     </style>
 </head>
@@ -170,8 +187,19 @@
             </div>
         </div>
 
-        <!-- 狀態進程指示：連動 LINE 身分、網路與 GPS 的即時燈號 -->
-        <div class="grid grid-cols-3 gap-2 mb-8 text-center bg-gray-50 p-3 rounded-xl border border-gray-100">
+        <!-- 案場資訊同步提示（載入中顯示） -->
+        <div id="sites-sync-banner"
+            class="hidden mb-3 w-full flex items-center justify-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5">
+            <div class="sites-sync-spinner w-4 h-4 border-2 border-sky-200 rounded-full flex-shrink-0"></div>
+            <svg class="w-4 h-4 text-sky-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+            <span id="sites-sync-text" class="text-[10px] font-bold text-sky-800 tracking-wide">案場資訊更新中…</span>
+        </div>
+
+        <!-- 狀態進程指示：連動 LINE 身分、網路、案場與 GPS 的即時燈號 -->
+        <div class="grid grid-cols-4 gap-2 mb-8 text-center bg-gray-50 p-3 rounded-xl border border-gray-100">
             <div id="status-line" class="status-indicator status-pending">
                 <div class="status-icon mx-auto"><svg fill="currentColor" viewBox="0 0 24 24">
                         <path
@@ -179,21 +207,28 @@
                         <path
                             d="M12.01 6c-1.09 0-2.1.48-2.82 1.25l1.42 1.42C11.12 8.16 11.55 8 12.01 8c1.65 0 3 1.35 3 3s-1.35 3-3 3c-.46 0-.89-.16-1.28-.42L9.31 15.01C10.21 15.63 11.23 16 12.01 16c3.31 0 6-2.69 6-6s-2.69-6-6-6z" />
                     </svg></div>
-                <div class="text-[10px] font-bold mt-1 text-gray-400 uppercase">Identity</div>
+                <div class="text-[10px] font-bold mt-1 text-gray-400 uppercase">身分</div>
             </div>
             <div id="status-network" class="status-indicator status-pending">
                 <div class="status-icon mx-auto"><svg fill="currentColor" viewBox="0 0 24 24">
                         <path
                             d="M12 4.5C7.31 4.5 3.19 6.34 0 9.25l2.25 2.25C4.32 9.61 7.95 8 12 8s7.68 1.61 9.75 3.5l2.25-2.25C20.81 6.34 16.69 4.5 12 4.5zM12 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-4-4.5C9.66 13.5 10.76 13 12 13s2.34.5 3.5 1.5l-3.5 3.5-3.5-3.5z" />
                     </svg></div>
-                <div class="text-[10px] font-bold mt-1 text-gray-400 uppercase">Network</div>
+                <div class="text-[10px] font-bold mt-1 text-gray-400 uppercase">網路</div>
+            </div>
+            <div id="status-sites" class="status-indicator status-pending">
+                <div class="status-icon mx-auto"><svg fill="currentColor" viewBox="0 0 24 24">
+                        <path
+                            d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z" />
+                    </svg></div>
+                <div class="text-[10px] font-bold mt-1 text-gray-400 uppercase">案場</div>
             </div>
             <div id="status-gps" class="status-indicator status-pending">
                 <div class="status-icon mx-auto"><svg fill="currentColor" viewBox="0 0 24 24">
                         <path
                             d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
                     </svg></div>
-                <div class="text-[10px] font-bold mt-1 text-gray-400 uppercase">Location</div>
+                <div class="text-[10px] font-bold mt-1 text-gray-400 uppercase">定位</div>
             </div>
         </div>
 
@@ -207,12 +242,15 @@
                 <p id="loading-text" class="mt-2 text-gray-600 text-[10px] font-bold italic">系統處理中...</p>
             </div>
 
-            <!-- 歷史打卡紀錄：渲染最近 15 筆 -->
+            <!-- 操作／打卡紀錄：預設收起 -->
             <div id="checkin-history-container" class="mt-4 pt-3 border-t border-gray-200 w-full hidden">
-                <p class="text-[9px] text-gray-400 mb-2 font-black uppercase tracking-widest text-left px-2">Recent
-                    Records</p>
+                <button type="button" id="history-toggle"
+                    class="w-full text-left text-[10px] text-gray-500 font-bold px-2 py-1 flex items-center justify-between hover:text-blue-600">
+                    <span>操作紀錄</span>
+                    <span id="history-toggle-icon">▼</span>
+                </button>
                 <ul id="checkin-history-list"
-                    class="text-xs text-gray-600 font-mono space-y-2 max-h-48 overflow-y-auto text-left px-2 scrollbar-thin scrollbar-thumb-gray-200">
+                    class="hidden text-xs text-gray-600 font-mono space-y-2 max-h-48 overflow-y-auto text-left px-2 scrollbar-thin scrollbar-thumb-gray-200 mt-2">
                 </ul>
             </div>
 
@@ -347,6 +385,13 @@
                 if (h.length > CONSTANTS.HISTORY_LIMIT) h = h.slice(0, CONSTANTS.HISTORY_LIMIT);
                 AppStorage.save(CONSTANTS.CACHE_KEYS.HISTORY, h);
             },
+            getActionLogs: () => AppStorage.load('checkin_action_log') || [],
+            addActionLog: (record) => {
+                let h = AppStorage.getActionLogs();
+                h.unshift({ ...record, timestamp: Date.now() });
+                if (h.length > 50) h = h.slice(0, 50);
+                AppStorage.save('checkin_action_log', h, 30);
+            },
             getQueue: () => JSON.parse(localStorage.getItem(CONSTANTS.CACHE_KEYS.QUEUE) || '[]'),
             saveQueue: (q) => localStorage.setItem(CONSTANTS.CACHE_KEYS.QUEUE, JSON.stringify(q)),
             addToQueue: (r) => { const q = AppStorage.getQueue(); q.push(r); AppStorage.saveQueue(q); },
@@ -393,7 +438,10 @@
                     // [v2026.3.2] 主動偵測權限拒絕
                     if (e.code === 1) {
                         AppUI.updateIndicator('gps', 'error', '授權失敗');
-                        AppUI.updateMessage('<strong>您已拒絕位置授權</strong><br>系統無法取得座標。請依下方教學開啟權限。', 'text-red-700 font-bold');
+                        AppUI.updateMessage(
+                            '<strong>尚未開啟定位權限</strong><br>打卡需要知道您的位置，請先依下方「查看教學」開啟。<br><span class="text-[10px] text-gray-500 mt-2 block leading-relaxed">開好權限後請<strong>關閉此視窗</strong>，重新從選單開啟「打卡」。</span>',
+                            'text-red-700 font-bold'
+                        );
                         document.getElementById('checkin-button').disabled = true;
                         AppUI.showPermissionGuide(true);
                         console.warn('[GPS Prewarm] 使用者拒絕授權');
@@ -434,6 +482,41 @@
         };
 
         /**
+         * AppActionLog - 操作軌跡（寫入 P 欄 offSiteAnomaly 的 [軌跡] 段）
+         */
+        const AppActionLog = {
+            steps: [],
+            log(msg) {
+                const t = new Date();
+                const ts = `${t.getHours().toString().padStart(2, '0')}:${t.getMinutes().toString().padStart(2, '0')}`;
+                AppActionLog.steps.push(`${msg}@${ts}`);
+                AppStorage.addActionLog({ type: 'action', text: msg, at: Date.now() });
+            },
+            trail() {
+                return '[軌跡]' + AppActionLog.steps.join('→');
+            },
+            stripTrailForDisplay(anomaly) {
+                if (!anomaly) return '';
+                const s = String(anomaly);
+                let idx = s.indexOf('+[軌跡]');
+                if (idx < 0) idx = s.indexOf('|[軌跡]');
+                if (idx >= 0) return s.substring(0, idx).trim();
+                if (s.indexOf('[軌跡]') === 0) return '';
+                return s;
+            },
+            buildOffSiteAnomaly(businessAnomaly) {
+                const trail = AppActionLog.trail();
+                return businessAnomaly ? `${businessAnomaly}+${trail}` : trail;
+            },
+            resolveBusinessAnomaly(isOffSite, tags, note) {
+                if (!isOffSite) return '';
+                const hasTags = tags && tags.length > 0;
+                const hasNote = note && String(note).trim().length > 0;
+                return (hasTags || hasNote) ? '' : CONSTANTS.ANOMALY_MISSING;
+            }
+        };
+
+        /**
          * AppOffSite - 離場說明（chip 可複選 + 補充；整合 CheckinSystem/reference/checkin_offsite_liff_snippet.js）
          */
         const AppOffSite = {
@@ -443,6 +526,10 @@
             pendingPosition: null,
             isInitialized: false,
             initPromise: null,
+            firstAttemptDone: false,
+            siteFetchState: 'idle',
+            bgRetryCount: 0,
+            bgSyncRunning: false,
             haversineMeters(lat1, lon1, lat2, lon2) {
                 const R = 6371e3;
                 const toRad = d => d * Math.PI / 180;
@@ -513,6 +600,112 @@
                 });
                 await AppOffSite.initPromise;
             },
+            markSitesAnomalyAuto() {
+                AppOffSite.selectedTags.clear();
+                AppOffSite.selectedTags.add(CONSTANTS.SITE_ANOMALY_TAG);
+            },
+            refreshSitesIndicator() {
+                if (AppOffSite.hasSitesData()) {
+                    AppUI.updateIndicator('sites', 'success', '已同步');
+                } else if (AppOffSite.firstAttemptDone) {
+                    AppUI.updateIndicator('sites', 'error', '未取得');
+                } else {
+                    AppUI.updateIndicator('sites', 'pending', '更新中');
+                }
+            },
+            getSnapshot() {
+                return {
+                    hasSites: AppOffSite.hasSitesData(),
+                    firstAttemptDone: AppOffSite.firstAttemptDone,
+                    noSitesAtClick: !AppOffSite.hasSitesData()
+                };
+            },
+            async fetchSitesOnce() {
+                await Promise.all([AppOffSite.loadPresets(), AppOffSite.loadSites()]);
+                AppOffSite.isInitialized = true;
+                return AppOffSite.hasSitesData();
+            },
+            async runFirstSiteAttempt() {
+                if (AppOffSite.hasSitesData()) {
+                    AppOffSite.firstAttemptDone = true;
+                    AppOffSite.siteFetchState = 'ready';
+                    AppActionLog.log('案場快取就緒');
+                    AppOffSite.refreshSitesIndicator();
+                    AppCore.tryEnableCheckinButton();
+                    return;
+                }
+                if (!navigator.onLine) {
+                    AppOffSite.firstAttemptDone = true;
+                    AppOffSite.siteFetchState = 'unreachable';
+                    AppActionLog.log('案場離線略過');
+                    AppOffSite.refreshSitesIndicator();
+                    AppCore.tryEnableCheckinButton();
+                    return;
+                }
+                AppOffSite.siteFetchState = 'loading';
+                AppUI.setSitesSyncVisible(true);
+                AppActionLog.log('案場第1次');
+                const loadTask = AppOffSite.fetchSitesOnce();
+                const timedOut = await Promise.race([
+                    loadTask.then(() => false),
+                    new Promise(r => setTimeout(() => r(true), CONSTANTS.TIMEOUTS.SITE_LOAD))
+                ]);
+                AppUI.setSitesSyncVisible(false);
+                AppOffSite.firstAttemptDone = true;
+                if (AppOffSite.hasSitesData()) {
+                    AppOffSite.siteFetchState = 'ready';
+                    AppActionLog.log('案場就緒');
+                } else {
+                    AppOffSite.siteFetchState = 'unreachable';
+                    AppActionLog.log(timedOut ? '案場1逾時' : '案場1失敗');
+                    AppOffSite.startBackgroundSiteSync();
+                }
+                AppOffSite.refreshSitesIndicator();
+                AppCore.tryEnableCheckinButton();
+            },
+            startBackgroundSiteSync() {
+                if (AppOffSite.bgSyncRunning) return;
+                AppOffSite.bgSyncRunning = true;
+                const loop = async () => {
+                    if (AppOffSite.hasSitesData()) {
+                        AppOffSite.siteFetchState = 'ready';
+                        AppActionLog.log('背景案場成功');
+                        AppOffSite.refreshSitesIndicator();
+                        AppOffSite.bgSyncRunning = false;
+                        return;
+                    }
+                    if (!navigator.onLine) {
+                        setTimeout(loop, CONSTANTS.SITE_BG_RETRY_MS);
+                        return;
+                    }
+                    await new Promise(r => setTimeout(r, CONSTANTS.SITE_BG_RETRY_MS));
+                    if (AppOffSite.hasSitesData()) return;
+                    AppOffSite.bgRetryCount += 1;
+                    AppActionLog.log(`案場背景第${AppOffSite.bgRetryCount}次`);
+                    AppUI.setSitesSyncVisible(true);
+                    try { await AppOffSite.fetchSitesOnce(); } catch (e) { console.warn('[OffSite] bg', e); }
+                    AppUI.setSitesSyncVisible(false);
+                    if (AppOffSite.hasSitesData()) {
+                        AppOffSite.siteFetchState = 'ready';
+                        AppActionLog.log('案場就緒');
+                        AppOffSite.refreshSitesIndicator();
+                        AppOffSite.bgSyncRunning = false;
+                        return;
+                    }
+                    loop();
+                };
+                loop();
+            },
+            startSiteSyncOnPageLoad() {
+                const cachedSites = AppStorage.load('checkin_sites_cache');
+                const cachedPresets = AppStorage.load('checkin_presets_cache');
+                if (cachedPresets) AppOffSite.presets = cachedPresets;
+                if (cachedSites && cachedSites.length) {
+                    AppOffSite.sites = cachedSites;
+                    AppOffSite.isInitialized = true;
+                }
+                AppOffSite.runFirstSiteAttempt().catch(e => console.warn('[OffSite] first', e));
+            },
             renderChips() {
                 const wrap = document.getElementById('offSiteChipWrap');
                 if (!wrap) return;
@@ -523,8 +716,13 @@
                     btn.className = 'off-site-chip' + (AppOffSite.selectedTags.has(tag) ? ' active' : '');
                     btn.textContent = tag;
                     btn.onclick = () => {
-                        if (AppOffSite.selectedTags.has(tag)) AppOffSite.selectedTags.delete(tag);
-                        else AppOffSite.selectedTags.add(tag);
+                        if (AppOffSite.selectedTags.has(tag)) {
+                            AppOffSite.selectedTags.delete(tag);
+                            AppActionLog.log(`取消標籤:${tag}`);
+                        } else {
+                            AppOffSite.selectedTags.add(tag);
+                            AppActionLog.log(`選標籤:${tag}`);
+                        }
                         btn.classList.toggle('active');
                     };
                     wrap.appendChild(btn);
@@ -540,11 +738,14 @@
                 const panel = document.getElementById('offSitePanel');
                 if (panel) panel.classList.add('hidden');
             },
-            buildPayloadParams() {
+            buildPayloadParams(isOffSite) {
                 const noteEl = document.getElementById('offSiteReasonNote');
                 const note = noteEl ? noteEl.value.trim() : '';
                 const tags = Array.from(AppOffSite.selectedTags);
-                const out = {};
+                const businessAnomaly = AppActionLog.resolveBusinessAnomaly(isOffSite, tags, note);
+                const out = {
+                    offSiteAnomaly: AppActionLog.buildOffSiteAnomaly(businessAnomaly)
+                };
                 if (tags.length) out.offSiteReasonTags = JSON.stringify(tags);
                 if (note) out.offSiteReasonNote = note;
                 return out;
@@ -673,6 +874,17 @@
                 el.className = `status-indicator status-${status}`;
                 el.querySelector('div:last-child').textContent = text;
             },
+            setSitesSyncVisible: (show, text = '案場資訊更新中…') => {
+                const banner = document.getElementById('sites-sync-banner');
+                const label = document.getElementById('sites-sync-text');
+                if (label) label.textContent = text;
+                if (banner) banner.classList.toggle('hidden', !show);
+                if (show) {
+                    AppUI.updateIndicator('sites', 'pending', '更新中');
+                } else {
+                    AppOffSite.refreshSitesIndicator();
+                }
+            },
             setLoading: (show, text = '') => {
                 const loading = document.getElementById('loading');
                 const btn = document.getElementById('checkin-button');
@@ -704,12 +916,29 @@
             },
             showGuideModal: () => document.getElementById('guide-modal').classList.remove('hidden'),
             closeGuideModal: () => document.getElementById('guide-modal').classList.add('hidden'),
+            toggleHistoryList: () => {
+                const list = document.getElementById('checkin-history-list');
+                const icon = document.getElementById('history-toggle-icon');
+                if (!list) return;
+                list.classList.toggle('hidden');
+                if (icon) icon.textContent = list.classList.contains('hidden') ? '▼' : '▲';
+            },
             renderHistory: () => {
                 const h = AppStorage.getHistory();
+                const actions = AppStorage.getActionLogs();
                 const container = document.getElementById('checkin-history-container');
                 const list = document.getElementById('checkin-history-list');
-                if (!h.length) { container.classList.add('hidden'); return; }
+                if (!h.length && !actions.length) { container.classList.add('hidden'); return; }
                 container.classList.remove('hidden'); list.innerHTML = '';
+
+                actions.slice(0, 20).forEach(record => {
+                    const d = new Date(record.timestamp);
+                    const timeStr = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                    const li = document.createElement('li');
+                    li.className = 'flex justify-between items-center border-b border-gray-100 p-2 text-[10px] text-slate-500';
+                    li.innerHTML = `<span>${timeStr} ${record.text || record.type}</span>`;
+                    list.appendChild(li);
+                });
 
                 h.forEach(record => {
                     const isOffline = record.isOffline === true || (record.message && record.message.includes('離線'));
@@ -742,20 +971,59 @@
         };
 
         /** @core AppCore - 業務啟動與狀態機 (承重牆)
-         * 驅動打卡完整 Lifecycle：身分驗證 -> 定位 -> 發送 -> 鎖定 -> 關閉。
+         * 【單頁單次規則】
+         * 1. 每次開啟 LIFF 頁面 = 一次打卡機會。
+         * 2. 按「立即打卡」即啟動流程；定位失敗／送出失敗／成功後皆結束本頁，禁止再次打卡。
+         * 3. 離場時僅多一步「確認打卡」；仍屬同一次流程。
+         * 4. 要再打卡必須關閉視窗後重新開啟（新 pageInstance）。
          */
         const AppCore = {
             user: null, isLocked: false,
-            // 本頁面是否已發起過一次打卡（重開頁面後重置）
-            pageSendOnce: false,
-            // 本頁面實例 ID（用於日誌與去重追蹤）
+            pageFlowStarted: false,
+            pageSessionEnded: false,
             pageInstance: null,
+            formatFailMessage: (title, reason, extraSteps) => {
+                const steps = (extraSteps && extraSteps.length) ? extraSteps : CONSTANTS.FAIL_REOPEN_STEPS;
+                const stepLines = steps.map((s, i) => `${i + 1}. ${s}`).join('<br>');
+                return `<strong class="text-base">${title}</strong>`
+                    + `<br><span class="text-sm mt-2 block leading-relaxed">原因：${reason}</span>`
+                    + `<br><br><strong class="text-sm">請您這樣做：</strong>`
+                    + `<br><span class="text-sm leading-relaxed">${stepLines}</span>`;
+            },
+            endPageSession: (detailHtml, colorClass = 'text-red-800') => {
+                AppCore.pageSessionEnded = true;
+                AppCore.isLocked = true;
+                const btn = document.getElementById('checkin-button');
+                if (btn) {
+                    btn.textContent = '請關閉視窗';
+                    btn.className = 'w-full bg-gray-200 text-gray-400 font-bold py-5 px-6 rounded-xl text-xl cursor-not-allowed transform-none shadow-none';
+                    btn.disabled = true;
+                    btn.classList.remove('btn-pulse');
+                }
+                AppUI.setLoading(false);
+                const body = detailHtml || AppCore.formatFailMessage(
+                    '打卡未完成',
+                    '本次流程已結束。',
+                    CONSTANTS.FAIL_REOPEN_STEPS
+                );
+                const tail = `<br><br><span class="text-[11px] text-gray-500 block leading-relaxed border-t border-gray-200 pt-3 mt-1">${CONSTANTS.PAGE_SESSION_END_MSG}</span>`;
+                AppUI.updateMessage(body + tail, colorClass);
+            },
+            tryEnableCheckinButton: () => {
+                const btn = document.getElementById('checkin-button');
+                if (!btn || !AppCore.user || AppCore.pageSessionEnded) return;
+                if (AppOffSite.firstAttemptDone || AppOffSite.hasSitesData()) {
+                    btn.disabled = false;
+                }
+            },
             init: async () => {
-                // 1. 優先顯示基本資訊與網路狀態
+                AppActionLog.log('開頁');
                 document.getElementById('app-version').textContent = CONSTANTS.VERSION;
+                const histToggle = document.getElementById('history-toggle');
+                if (histToggle) histToggle.onclick = () => AppUI.toggleHistoryList();
                 const updateNet = () => AppUI.updateIndicator('network', navigator.onLine ? 'success' : 'error', navigator.onLine ? '連線正常' : '已離線');
                 updateNet(); window.ononline = window.onoffline = updateNet;
-                AppOffSite.init().catch(e => console.warn('[OffSite] init', e));
+                AppOffSite.startSiteSyncOnPageLoad();
                 AppUI.renderHistory();
 
                 // 2. 優先嘗試載入身分快取，確保「離線/弱網」下按鈕仍可運作
@@ -790,13 +1058,21 @@
 
                     // 產生本頁唯一 instance id
                     AppCore.pageInstance = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
-
+                    AppActionLog.log('身分成功');
+                    AppCore.tryEnableCheckinButton();
                     AppAPI.syncAll();
                 } catch (e) {
                     console.error('LIFF Init Error:', e);
                     if (!cached) {
                         AppUI.updateIndicator('line', 'error', '身分失效');
-                        AppUI.updateMessage(`驗證失敗: ${e.message}<br>請嘗試重新開啟頁面。`, 'text-red-700 font-bold');
+                        AppUI.updateMessage(
+                            AppCore.formatFailMessage(
+                                '無法連線身分',
+                                'LINE 驗證未完成，無法打卡。',
+                                ['關閉此 LINE 視窗', '重新從選單開啟「打卡」', '若仍失敗請檢查網路後再試']
+                            ),
+                            'text-red-700 font-bold'
+                        );
                     } else {
                         AppUI.updateIndicator('line', 'success', '離線認證');
                     }
@@ -804,19 +1080,22 @@
             },
             /** 生命週期：執行打卡動作 */
             execute: async () => {
-                if (AppCore.pageSendOnce) {
-                    AppUI.updateMessage('本頁已完成打卡操作，如需重新打卡請關閉此視窗後重新開啟。', 'text-amber-600');
-                    return;
-                }
-                if (AppCore.isLocked) return;
+                // 流程已結束或按鈕已鎖：按鈕應為 disabled，此處僅防極少數連點 race，不另顯示訊息
+                if (AppCore.pageSessionEnded || AppCore.isLocked) return;
 
                 const btn = document.getElementById('checkin-button');
 
                 if (AppOffSite.pendingPosition) {
-                    await AppCore.submitCheckin(AppOffSite.pendingPosition);
+                    AppActionLog.log('點擊確認打卡');
+                    await AppCore.submitCheckin(AppOffSite.pendingPosition, true);
                     return;
                 }
 
+                // 已啟動過且非離場確認：同上，靜默忽略
+                if (AppCore.pageFlowStarted) return;
+
+                AppCore.pageFlowStarted = true;
+                AppActionLog.log('點擊立即打卡');
                 AppCore.isLocked = true;
                 btn.disabled = true; btn.textContent = '定位中...'; btn.classList.remove('btn-pulse');
                 AppUI.updateIndicator('gps', 'pending', '定位中');
@@ -825,30 +1104,22 @@
                 try {
                     const pos = await AppGeo.withRetry();
                     AppUI.updateIndicator('gps', 'success', '定位成功');
-
-                    // 若在線上且案場資料尚未加載完成，則在此等待，避免 isOnSite 誤判
-                    if (navigator.onLine && !AppOffSite.isInitialized) {
-                        btn.textContent = '比對案場中...';
-                        AppUI.setLoading(true, '載入案場資料比對中...');
-                        if (AppOffSite.initPromise) {
-                            await AppOffSite.initPromise;
-                        } else {
-                            await AppOffSite.init();
-                        }
-                    }
+                    AppActionLog.log('定位成功');
 
                     const lat = pos.coords.latitude;
                     const lon = pos.coords.longitude;
+                    const snapshot = AppOffSite.getSnapshot();
 
                     if (!AppOffSite.isOnSite(lat, lon)) {
+                        AppActionLog.log(snapshot.noSitesAtClick ? '離場流程-無案場清單' : '離場流程-距離外');
+                        if (snapshot.noSitesAtClick) AppOffSite.markSitesAnomalyAuto();
                         AppOffSite.pendingPosition = pos;
                         AppOffSite.showPanel();
                         AppUI.setLoading(false);
-                        const noSites = !AppOffSite.hasSitesData();
                         AppUI.updateMessage(
-                            noSites
-                                ? '⚠️ 無法取得案場清單（請確認網路或稍後重試）。<br>前端無法比對距離，請選離場原因後按「確認打卡」；不填也可送出，後端仍會比對。'
-                                : '您不在案場範圍內。<br>可選原因後按「確認打卡」；不填也可送出。',
+                            snapshot.noSitesAtClick
+                                ? '無法取得案場清單，已預選「案場資訊異常」。<br>請按「確認打卡」送出。'
+                                : '您不在案場範圍內。<br>可選原因後按「確認打卡」；不填將標記離場未填說明。',
                             'text-amber-800 font-medium'
                         );
                         btn.disabled = false;
@@ -858,23 +1129,47 @@
                         return;
                     }
 
-                    await AppCore.submitCheckin(pos);
+                    AppActionLog.log('在案場內');
+                    await AppCore.submitCheckin(pos, false);
                 } catch (err) {
+                    AppActionLog.log('定位失敗');
                     AppUI.updateIndicator('gps', 'error', '定位失敗');
+                    AppUI.showPermissionGuide(err.code === 1);
+                    let detail;
                     if (err.code === 1) {
-                        AppUI.updateMessage('<strong>您已拒絕位置授權</strong><br>請依下方引導開啟權限後再試。', 'text-red-800');
-                        AppUI.showPermissionGuide(true);
+                        detail = AppCore.formatFailMessage(
+                            '打卡未完成',
+                            '手機未允許 LINE 使用定位，無法取得您的位置。',
+                            [
+                                '依本頁下方「查看教學」開啟定位權限',
+                                '關閉此 LINE 視窗',
+                                '重新開啟「打卡」後再按「立即打卡」'
+                            ]
+                        );
+                    } else if (String(err.message || '').includes('無回應') || err.code === 3) {
+                        detail = AppCore.formatFailMessage(
+                            '打卡未完成',
+                            '定位逾時，可能是訊號弱或 GPS 尚未就緒。',
+                            [
+                                '到戶外或窗邊讓訊號好一點',
+                                '關閉此 LINE 視窗後重新開啟「打卡」',
+                                '再按一次「立即打卡」'
+                            ]
+                        );
                     } else {
-                        AppUI.updateMessage(`打卡失敗: ${err.message}`, 'text-red-800');
+                        detail = AppCore.formatFailMessage(
+                            '打卡未完成',
+                            '無法取得定位座標。',
+                            CONSTANTS.FAIL_REOPEN_STEPS
+                        );
                     }
-                    btn.disabled = false; btn.textContent = '重新打卡'; btn.classList.add('btn-pulse');
-                    AppCore.isLocked = false; AppUI.setLoading(false);
+                    AppCore.endPageSession(detail, 'text-red-800');
                 }
             },
             /** 定位完成後送出打卡（含離場說明參數） */
-            submitCheckin: async (pos) => {
-                if (AppCore.pageSendOnce) return;
-                AppCore.pageSendOnce = true;
+            submitCheckin: async (pos, isOffSite) => {
+                if (AppCore.pageSessionEnded) return;
+                AppCore.pageSessionEnded = true;
                 AppCore.isLocked = true;
 
                 const btn = document.getElementById('checkin-button');
@@ -882,6 +1177,7 @@
                 btn.textContent = '傳送中...';
                 btn.classList.remove('btn-pulse');
                 AppUI.setLoading(true, '正在傳送數據...');
+                AppActionLog.log('送出打卡');
 
                 const payload = {
                     userId: AppCore.user.userId,
@@ -890,14 +1186,16 @@
                     lon: pos.coords.longitude,
                     clientTimestamp: Date.now(),
                     pageInstance: AppCore.pageInstance,
-                    ...AppOffSite.buildPayloadParams()
+                    ...AppOffSite.buildPayloadParams(isOffSite)
                 };
 
                 try {
                     const result = await AppAPI.dispatch(payload);
+                    AppActionLog.log('送出成功');
                     AppOffSite.reset();
                     AppCore.finalize(result);
                 } catch (e) {
+                    AppActionLog.log('送出離線暫存');
                     AppStorage.addToQueue(payload);
                     AppOffSite.reset();
                     AppCore.finalize({ status: 'success', message: '打卡成功！\n(紀錄已暫存，雲端將自動補傳)' });
@@ -910,11 +1208,10 @@
                 const isOff = res.status === 'success' && res.message.includes('離線');
                 if (res.status === 'success') {
                     if (!isSilentInit) {
-                        AppCore.isLocked = true; // 鎖定本次會話
                         AppStorage.addHistory({ message: res.message, isOffline: isOff, pageInstance: AppCore.pageInstance });
                     }
                     AppUI.renderHistory();
-                    // 成功後按鈕樣式：強制灰色鎖定，防止單次開啟後重複打卡。
+                    AppCore.isLocked = true;
                     if (btn) {
                         btn.textContent = '打卡完成';
                         btn.className = "w-full bg-gray-200 text-gray-400 font-bold py-5 px-6 rounded-xl text-xl cursor-not-allowed transform-none shadow-none";
@@ -928,32 +1225,53 @@
                     if (res.offSiteReasonDisplay) {
                         offSiteHint += `<br><span class="text-[10px] text-amber-800 block mt-1">離場說明：${res.offSiteReasonDisplay}</span>`;
                     } else if (res.offSiteAnomaly) {
-                        offSiteHint += `<br><span class="text-[10px] text-amber-700 block mt-1">${res.offSiteAnomaly}</span>`;
+                        const disp = AppActionLog.stripTrailForDisplay(res.offSiteAnomaly);
+                        if (disp) offSiteHint += `<br><span class="text-[10px] text-amber-700 block mt-1">${disp}</span>`;
                     }
                     AppUI.updateMessage(
-                        res.message + offSiteHint + (isSilentInit ? '' : '<br><span class="text-[9px] text-gray-400 mt-2 block italic font-bold">視窗將於 45 秒後自動關閉</span>'),
+                        res.message + offSiteHint + (isSilentInit ? '' : `<br><span class="text-[9px] text-gray-400 mt-2 block italic font-bold">視窗將於 45 秒後自動關閉，亦可手動關閉視窗</span><br><span class="text-[9px] text-gray-400 block">${CONSTANTS.PAGE_SESSION_END_MSG}</span>`),
                         isOff ? 'text-amber-700' : 'text-green-800'
                     );
                     if (!isSilentInit) {
                         setTimeout(() => { if (liff.closeWindow) liff.closeWindow(); }, CONSTANTS.TIMEOUTS.AUTO_CLOSE);
                     }
                 } else if (res.status === 'busy') {
-                    // 系統忙碌（dispatch 已在處理中）
-                    AppUI.updateMessage('系統忙碌，請關閉此視窗後重試（錯誤碼：E002）。', 'text-red-800');
-                    if (btn) { btn.disabled = true; btn.classList.remove('btn-pulse'); }
-                    AppCore.isLocked = false;
+                    AppCore.endPageSession(
+                        AppCore.formatFailMessage(
+                            '打卡未完成',
+                            '上一筆資料還在傳送中，請勿連續按按鈕。',
+                            [
+                                '稍等幾秒',
+                                '關閉此 LINE 視窗',
+                                '重新開啟「打卡」再試一次'
+                            ]
+                        ),
+                        'text-red-800'
+                    );
                 } else if (res.status === 'error') {
-                    // 明確的錯誤回傳，顯示錯誤代碼（若無則以 E001 為預設）
                     const code = res.errorCode || 'E001';
-                    const msg = res.message || '系統異常，請聯絡管理員。';
-                    AppUI.updateMessage(`打卡失敗（${code}）：${msg}<br>請關閉此視窗後重新開啟或聯絡管理員。`, 'text-red-800');
-                    if (btn) { btn.disabled = true; btn.classList.remove('btn-pulse'); }
-                    AppCore.isLocked = false;
+                    const msg = res.message || '伺服器暫時無法處理';
+                    AppCore.endPageSession(
+                        AppCore.formatFailMessage(
+                            '打卡未完成',
+                            `${msg}（參考代碼：${code}）`,
+                            [
+                                '關閉此 LINE 視窗',
+                                '重新開啟「打卡」再試',
+                                '若仍失敗，請截圖此畫面聯絡管理員'
+                            ]
+                        ),
+                        'text-red-800'
+                    );
                 } else {
-                    // 其他未預期狀態，使用通用錯誤提示
-                    AppUI.updateMessage('打卡失敗。請關閉此視窗後重新開啟頁面重新打卡。', 'text-red-800');
-                    if (btn) { btn.disabled = true; btn.classList.remove('btn-pulse'); }
-                    AppCore.isLocked = false;
+                    AppCore.endPageSession(
+                        AppCore.formatFailMessage(
+                            '打卡未完成',
+                            '系統未收到成功回覆。',
+                            CONSTANTS.FAIL_REOPEN_STEPS
+                        ),
+                        'text-red-800'
+                    );
                 }
             }
         };
