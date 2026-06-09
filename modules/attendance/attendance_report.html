@@ -523,13 +523,55 @@
         return tags;
     }
 
+    /** 單筆異常明細文字（與後端 anomalyDetails 對齊） */
+    function formatAnomalyDetailItem(d) {
+        if (!d || !d.tag) return '';
+        const prefix = d.at && d.at !== '整日' ? `${d.at} ${d.time || ''}`.trim() : (d.at === '整日' ? '' : '');
+        const detail = d.detail ? (d.tag === '離場' || d.tag === '缺勤' ? d.detail : `${d.detail}`) : '';
+        if (d.tag === '遲到' || d.tag === '早退') {
+            return `${prefix} ${d.tag} ${detail}`.trim();
+        }
+        if (d.tag === '離場') {
+            return `${prefix} ${d.tag}：${detail}`.trim();
+        }
+        if (prefix) return `${prefix} ${d.tag}${detail ? `（${detail}）` : ''}`.trim();
+        return `${d.tag}${detail ? `（${detail}）` : ''}`.trim();
+    }
+
     function formatAnomalyDetailCell(day) {
+        if (day?.anomalyDetails?.length) {
+            const lines = day.anomalyDetails.map(formatAnomalyDetailItem).filter(Boolean);
+            return lines.length ? lines.join('；') : '—';
+        }
         const tags = getDayAnomalyTags(day);
         const parts = [];
         if (tags.length) parts.push(tags.join('、'));
         const offNote = day?.offSiteReasonSummary && String(day.offSiteReasonSummary).trim();
         if (offNote) parts.push(`離場：${offNote}`);
         return parts.length ? parts.join('｜') : '—';
+    }
+
+    function formatPunchLocationText(punch) {
+        if (!punch) return '—';
+        if (!punch.lat && !punch.lng && !punch.displayLocation) return '無座標';
+        if (punch.isOnSite) return punch.displayLocation || '案場內';
+        const addr = punch.displayLocation || punch.address || '未知位置';
+        return punch.mapUrl ? `${addr} [地圖](${punch.mapUrl})` : addr;
+    }
+
+    function formatPunchLocationHtml(punch) {
+        if (!punch) return '<span class="text-gray-400">—</span>';
+        if (!punch.lat && !punch.lng && !punch.displayLocation) {
+            return '<span class="text-gray-400">無座標</span>';
+        }
+        if (punch.isOnSite) {
+            return `<span class="text-green-700 text-xs">${escapeHtml(punch.displayLocation || '案場內')}</span>`;
+        }
+        const addr = escapeHtml(punch.displayLocation || punch.address || '未知位置');
+        if (punch.mapUrl) {
+            return `<span class="text-amber-800 text-xs">${addr}</span> <a href="${escapeAttr(punch.mapUrl)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline text-xs whitespace-nowrap">地圖</a>`;
+        }
+        return `<span class="text-amber-800 text-xs">${addr}</span>`;
     }
 
     function dayCountsAsAnomaly(day) {
@@ -674,7 +716,7 @@
         });
 
         csvContent += '\n【逐日明細】\n';
-        csvContent += '員工編號,員工姓名,日期,星期,上班時間,下班時間,狀態,假別,資料來源,異常摘要,遲到(分),早退(分)\n';
+        csvContent += '員工編號,員工姓名,日期,星期,上班時間,下班時間,上班位置,下班位置,狀態,假別,資料來源,異常摘要,遲到(分),早退(分)\n';
         const allDates = new Set();
         Object.values(currentReportData).forEach((u) => Object.keys(u.dailyData || {}).forEach((d) => allDates.add(d)));
         const sortedDates = Array.from(allDates).sort();
@@ -686,10 +728,15 @@
                 if (!day) return;
                 const dateObj = new Date(dateStr);
                 dateObj.setMinutes(dateObj.getMinutes() + dateObj.getTimezoneOffset());
+                const inLoc = day.checkInLocation || (day.punches && day.punches[0]);
+                const outLoc = day.checkOutLocation || (day.punches && day.punches.length > 1 ? day.punches[day.punches.length - 1] : null);
                 csvContent += [
                     csvEscapeField(userId), csvEscapeField(userData.userName), csvEscapeField(dateStr),
                     csvEscapeField(weekdays[dateObj.getDay()]), csvEscapeField(day.checkIn || ''),
-                    csvEscapeField(day.checkOut || ''), csvEscapeField(day.status || ''),
+                    csvEscapeField(day.checkOut || ''),
+                    csvEscapeField(formatPunchLocationText(inLoc)),
+                    csvEscapeField(formatPunchLocationText(outLoc)),
+                    csvEscapeField(day.status || ''),
                     csvEscapeField(parseLeaveFromStatus(day.status)), csvEscapeField(day.dataSource || ''),
                     csvEscapeField(formatAnomalyDetailCell(day)),
                     day.late || 0, day.early || 0
@@ -776,14 +823,18 @@
             const anomalyText = formatAnomalyDetailCell(day);
             const anomalyClass = anomalyText !== '—' ? 'text-amber-800 font-medium' : 'text-gray-400';
             const dateCellText = `${dateStr} (${weekdays[dayOfWeek]})`;
+            const inLoc = day.checkInLocation || (day.punches && day.punches[0]) || null;
+            const outLoc = day.checkOutLocation || (day.punches && day.punches.length > 1 ? day.punches[day.punches.length - 1] : null) || null;
             rows += `<tr class="bg-slate-50/80 text-sm">
                 <td class="px-4 py-2 pl-10 text-gray-400">↳</td>
                 <td class="px-4 py-2 ${dateClass}">${escapeHtml(dateCellText)}</td>
                 <td class="px-4 py-2 text-center">${escapeHtml(day.checkIn || '---')}</td>
                 <td class="px-4 py-2 text-center">${escapeHtml(displayCheckOut)}</td>
+                <td class="px-4 py-2 max-w-[10rem]">${formatPunchLocationHtml(inLoc)}</td>
+                <td class="px-4 py-2 max-w-[10rem]">${formatPunchLocationHtml(outLoc)}</td>
                 <td class="px-4 py-2 ${statusClass}">${escapeHtml(displayStatus || '')}</td>
                 <td class="px-4 py-2 text-center text-gray-600">${escapeHtml(day.dataSource || '—')}</td>
-                <td class="px-4 py-2 ${anomalyClass}">${escapeHtml(anomalyText)}</td>
+                <td class="px-4 py-2 ${anomalyClass} text-xs leading-relaxed">${escapeHtml(anomalyText)}</td>
                 <td class="px-4 py-2 text-center ${lateVal > 0 ? 'text-orange-600 font-bold' : ''}">${escapeHtml(lateVal)}</td>
                 <td class="px-4 py-2 text-center ${earlyVal > 0 ? 'text-blue-600 font-bold' : ''}">${escapeHtml(earlyVal)}</td>
             </tr>`;
@@ -866,6 +917,7 @@
                     <thead><tr class="text-gray-500">
                         <th class="px-4 py-1"></th><th class="px-4 py-1 text-left">日期</th>
                         <th class="px-4 py-1 text-center">上班</th><th class="px-4 py-1 text-center">下班</th>
+                        <th class="px-4 py-1 text-left">上班位置</th><th class="px-4 py-1 text-left">下班位置</th>
                         <th class="px-4 py-1 text-left">狀態</th><th class="px-4 py-1 text-center">資料來源</th>
                         <th class="px-4 py-1 text-left">異常摘要</th>
                         <th class="px-4 py-1 text-center">遲到</th><th class="px-4 py-1 text-center">早退</th>
@@ -893,6 +945,8 @@
             color = (status === '遲到') ? '#F97316' : '#22C55E';
         } else if (eventType === '下班') {
             color = (status === '早退') ? '#EF4444' : '#3B82F6';
+        } else if (eventType === '中途') {
+            color = '#A855F7';
         }
         return {
             path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
@@ -939,11 +993,14 @@
             marker.addListener('click', ({ domEvent, latLng }) => {
                 const fill = getMarkerIcon(point.eventType, point.status).fillColor;
                 const statusText = (point.status === '準點') ? '' : `<span class="font-bold" style="color: ${fill};">(${escapeHtml(point.status)})</span>`;
+                const offSiteLine = point.offSiteReason
+                    ? `<div class="text-xs text-amber-800 mt-1">離場：${escapeHtml(point.offSiteReason)}</div>` : '';
                 const contentString = `
                     <div class="p-1" style="max-width: 250px;">
                         <div class="font-bold">${escapeHtml(point.eventType)} ${statusText}</div>
                         <div class="text-sm text-gray-600">${escapeHtml(point.time || '無時間資訊')}</div>
                         <div class="text-xs text-gray-800 mt-1">${escapeHtml(point.address || '無地址資訊')}</div>
+                        ${offSiteLine}
                     </div>`;
                 infoWindow.setContent(contentString);
                 infoWindow.open(marker.map, marker);
