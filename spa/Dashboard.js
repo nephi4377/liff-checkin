@@ -43,7 +43,8 @@ export default {
         const floorplanStraightenerUrl = computed(() => `#/floorplan-straightener`);
         const budgetWebUrl = computed(() => `#/budget-web`);
         const budgetAuditUrl = computed(() => `#/budget-audit`);
-        const accountingUrl = computed(() => 'https://liff.line.me/2007974938-2sM5jlVL?source=hub');
+        const accountingUrl = computed(() => '#/accounting-ingest');
+        const accountingHubUrl = computed(() => '#/accounting');
 
         const formatTimeAgo = (date) => {
             const seconds = Math.floor((new Date() - new Date(date)) / 1000);
@@ -336,6 +337,7 @@ export default {
             budgetWebUrl,
             budgetAuditUrl,
             accountingUrl,
+            accountingHubUrl,
             formatTimeAgo,
             handleReply,
             emit,
@@ -466,13 +468,23 @@ export default {
                     </div>
                 </a>
 
-                <!-- 1b. 收支登錄（外部 LIFF，與打卡同模式） -->
-                <a :href="accountingUrl" target="_blank"
+                <!-- 1b. 收支登錄（HUB 內嵌，共用員工／案場快取） -->
+                <a :href="accountingUrl"
                     class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-emerald-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">💰</div>
                     <div class="min-w-0 flex-1">
                         <h2 class="text-base font-bold text-gray-800 leading-tight">收支登錄</h2>
                         <p class="text-xs text-gray-500 mt-1 leading-snug">連續記帳；成功後可同步到進出款項群。</p>
+                    </div>
+                </a>
+
+                <!-- 1c. 會計功能選單 -->
+                <a :href="accountingHubUrl"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-teal-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center text-xl">📒</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">會計功能</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">廠商、收款帳戶、款項進度等會計頁面入口。</p>
                     </div>
                 </a>
 

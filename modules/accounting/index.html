@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>添心會計</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/accounting_api.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 480px; margin: 0 auto; background: #f4f6f8; }
+    h2 { margin: 0 0 4px; }
+    .sub { color: #555; font-size: 14px; margin: 0 0 16px; }
+    .card { display: block; background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); text-decoration: none; color: inherit; }
+    .card:active { background: #f8f9fa; }
+    .card h3 { margin: 0 0 4px; font-size: 17px; }
+    .card p { margin: 0; font-size: 14px; color: #555; }
+    .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; color: #1a73e8; margin-top: 8px; }
+    .tag.admin { background: #fce8e6; color: #c5221f; }
+    .hidden { display: none; }
+    #loading { text-align: center; padding: 48px 16px; color: #666; }
+  </style>
+</head>
+<body>
+  <div id="loading">載入中…</div>
+  <div id="app" class="hidden">
+    <h2>添心會計</h2>
+    <p class="sub" id="userLine">—</p>
+
+    <a class="card" href="accounting_ingest.html">
+      <h3>收支登錄</h3>
+      <p>記一筆收入或支出，可帶入 LINE 傳的照片。</p>
+    </a>
+
+    <a class="card" href="vendor_status.html">
+      <h3>款項進度</h3>
+      <p>查看廠商款項的審核與匯款狀態。</p>
+    </a>
+
+    <a class="card" href="vendors.html" id="linkVendors">
+      <h3>廠商名冊</h3>
+      <p>維護廠商主檔、統編與 LINE 綁定。</p>
+      <span class="tag admin">行政以上</span>
+    </a>
+
+    <a class="card" href="payees.html" id="linkPayees">
+      <h3>收款帳戶</h3>
+      <p>管理下包商、材料商與工人的銀行帳戶，供匯款使用。</p>
+      <span class="tag admin">行政以上</span>
+    </a>
+  </div>
+  <script>
+    (function () {
+      function showApp() {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+      }
+      (async function boot() {
+        try {
+          var session = await AccountingApi.initSession();
+          if (!session) return;
+          var perm = session.auth.permission || 0;
+          var mode = session.devBypass ? ' · 測試模式（無登入）' : '';
+          document.getElementById('userLine').textContent =
+            session.profile.displayName + ' · 權限 ' + perm + mode;
+          if (perm < 2) {
+            document.getElementById('linkVendors').style.display = 'none';
+            document.getElementById('linkPayees').style.display = 'none';
+          }
+          showApp();
+        } catch (e) {
+          document.getElementById('loading').textContent = e.message || String(e);
+        }
+      })();
+    })();
+  </script>
+</body>
+</html>

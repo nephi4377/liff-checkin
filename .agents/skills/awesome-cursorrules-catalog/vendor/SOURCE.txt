@@ -1,4 +1,0 @@
-Curated from https://github.com/PatrickJS/awesome-cursorrules (CC0)
-Snapshot: 2026-05-18
-Translated to 繁體中文: 2026-05-18
-Files are vendor/*.mdc; adopt into .cursor/rules/ only after aligning with SPEC and 00-general-plain-language.

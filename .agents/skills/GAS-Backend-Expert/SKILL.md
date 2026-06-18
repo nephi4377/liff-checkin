@@ -1,8 +1,6 @@
 ---
 name: gas-backend-expert
-description: >-
-  修改 Google 試算表後端（GAS）時使用。後端在 ../backend/ 倉庫；欄位以 PROJECT_DATA_DICTIONARY 為準；
-  含 WebApp 路由、錯誤回傳、Constants、試算表與部署注意事項。
+description: 改 GAS 後端
 ---
 
 # GAS 後端開發（骨架）
@@ -26,9 +24,9 @@ description: >-
 
 ## 必讀文件（CODING 側）
 
-- `SPEC/PROJECT_DATA_DICTIONARY.md` — 欄位名**唯一**準則
-- `SPEC/07_SYSTEM_FLOW_MAP.md` — 前後端怎麼串
-- 模組 SPEC（如 `SPEC/施工回報_系統完整_SPEC.md`、`SPEC/03_CHECKIN_SYSTEM_SPEC.md`）
+- `SPEC/專案全域資料字典.md` — 欄位名**唯一**準則
+- `SPEC/07_全量系統全景圖.md` — 前後端怎麼串
+- 模組 SPEC（如 `SPEC/施工回報_系統完整_SPEC.md`、`SPEC/03_員工打卡系統規格書.md`）
 
 ## 開發原則（摘要）
 
@@ -47,7 +45,7 @@ description: >-
 
 ## 與前端協作
 
-- 改欄位或 action 時：**同步**更新 `PROJECT_DATA_DICTIONARY.md` 與相關 SPEC。
+- 改欄位或 action 時：**同步**更新 `專案全域資料字典.md` 與相關 SPEC。
 - CODING 內只改呼叫端時，用 skill **`10-gas-and-spec-pointer`**（`.cursor/rules/`）對照即可。
 
 ## 部署（勿自動執行）

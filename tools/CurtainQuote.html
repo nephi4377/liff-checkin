@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>添心｜窗簾估價參考</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --cq-bg: #f8f6f3;
+      --cq-card: #ffffff;
+      --cq-ink: #292524;
+      --cq-muted: #78716c;
+      --cq-accent: #0d9488;
+      --cq-accent-dark: #0f766e;
+      --cq-warm: #b45309;
+      --cq-border: #e7e5e4;
+      --cq-shadow: 0 4px 24px rgb(41 37 36 / 0.06);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Noto Sans TC', system-ui, sans-serif;
+      background: linear-gradient(165deg, #faf8f5 0%, #f0fdfa 45%, #f8f6f3 100%);
+      color: var(--cq-ink);
+      min-height: 100vh;
+    }
+
+    .cq-btn-primary {
+      min-height: 2.75rem;
+      padding: 0.625rem 1.25rem;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 0.875rem;
+      background: linear-gradient(135deg, var(--cq-accent) 0%, var(--cq-accent-dark) 100%);
+      color: #fff;
+      border: none;
+      box-shadow: 0 2px 8px rgb(13 148 136 / 0.25);
+      transition: transform 0.12s, box-shadow 0.15s;
+      cursor: pointer;
+    }
+    .cq-btn-primary:hover { box-shadow: 0 4px 14px rgb(13 148 136 / 0.35); }
+    .cq-btn-primary:active { transform: scale(0.98); }
+
+    .cq-btn-secondary {
+      min-height: 2.75rem;
+      padding: 0.5rem 1rem;
+      font-size: 0.9375rem;
+      border-radius: 0.875rem;
+      border: 1px solid var(--cq-border);
+      background: #fff;
+      color: var(--cq-ink);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .cq-btn-secondary:hover { background: #fafaf9; border-color: #99f6e4; }
+
+    .cq-btn-ghost {
+      font-size: 0.8125rem;
+      padding: 0.35rem 0.65rem;
+      border-radius: 0.5rem;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--cq-muted);
+      cursor: pointer;
+    }
+    .cq-btn-ghost:hover { background: #f5f5f4; color: var(--cq-ink); }
+    .cq-btn-danger:hover { color: #b91c1c; background: #fef2f2; }
+
+    .cq-input {
+      width: 100%;
+      min-height: 2.75rem;
+      padding: 0.5rem 0.75rem;
+      font-size: 1rem;
+      border: 1px solid #d6d3d1;
+      border-radius: 0.75rem;
+      background: #fff;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .cq-input:focus {
+      border-color: var(--cq-accent);
+      box-shadow: 0 0 0 3px rgb(13 148 136 / 0.15);
+    }
+    .cq-select { appearance: auto; }
+
+    .cq-label {
+      display: block;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: #57534e;
+      margin-bottom: 0.35rem;
+    }
+    .cq-field-hint {
+      font-size: 0.75rem;
+      color: var(--cq-muted);
+      margin: 0.35rem 0 0;
+      line-height: 1.45;
+    }
+    .cq-label-req {
+      font-size: 0.6875rem;
+      color: #0d9488;
+      font-weight: 600;
+      margin-left: 0.35rem;
+    }
+    .cq-input-emphasis {
+      border-color: #5eead4;
+      background: #f0fdfa;
+    }
+
+    .cq-hero {
+      background: linear-gradient(135deg, #134e4a 0%, #0f766e 55%, #115e59 100%);
+      color: #fff;
+      border-radius: 1.25rem;
+      padding: 1.5rem 1.25rem;
+      box-shadow: var(--cq-shadow);
+      position: relative;
+      overflow: hidden;
+    }
+    .cq-hero::after {
+      content: '';
+      position: absolute;
+      right: -2rem;
+      top: -2rem;
+      width: 10rem;
+      height: 10rem;
+      background: radial-gradient(circle, rgb(255 255 255 / 0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .cq-hero h1 { font-size: 1.5rem; font-weight: 700; margin: 0; letter-spacing: 0.02em; }
+    .cq-hero p { margin: 0.5rem 0 0; font-size: 0.875rem; opacity: 0.9; line-height: 1.55; max-width: 36rem; }
+
+    .cq-panel {
+      background: var(--cq-card);
+      border: 1px solid rgb(231 229 228 / 0.9);
+      border-radius: 1.25rem;
+      padding: 1.25rem;
+      box-shadow: var(--cq-shadow);
+    }
+
+    .cq-window-card {
+      background: #fff;
+      border: 1px solid var(--cq-border);
+      border-radius: 1rem;
+      padding: 1rem 1.1rem;
+      margin-bottom: 1rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .cq-window-card:focus-within {
+      border-color: #5eead4;
+      box-shadow: 0 0 0 3px rgb(94 234 212 / 0.2);
+    }
+
+    .cq-card-head {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .cq-card-head-right {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+    .cq-card-badge {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: #ccfbf1;
+      color: #115e59;
+      padding: 0.2rem 0.5rem;
+      border-radius: 999px;
+    }
+    .cq-card-title {
+      flex: 1;
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 0;
+      color: var(--cq-warm);
+    }
+    .cq-card-actions { display: flex; gap: 0.25rem; }
+
+    .cq-card-price {
+      text-align: right;
+    }
+    .cq-card-price-amount {
+      display: inline-block;
+      font-size: 1.0625rem;
+      font-weight: 700;
+      color: #0f766e;
+      background: linear-gradient(135deg, #f0fdfa 0%, #ecfdf5 100%);
+      border: 1px solid #99f6e4;
+      border-radius: 0.625rem;
+      padding: 0.25rem 0.65rem;
+      white-space: nowrap;
+    }
+    .cq-card-price-pending {
+      font-size: 0.8125rem;
+      color: #a8a29e;
+      font-weight: 500;
+    }
+
+    .cq-breakdown-table {
+      width: 100%;
+      font-size: 0.8125rem;
+      border-collapse: collapse;
+      margin-top: 0.35rem;
+    }
+    .cq-breakdown-table td {
+      padding: 0.3rem 0;
+      border-bottom: 1px dashed #e7e5e4;
+    }
+    .cq-breakdown-table tfoot td {
+      border-bottom: none;
+      padding-top: 0.45rem;
+      font-weight: 600;
+      color: #115e59;
+    }
+    .cq-bd-num { text-align: right; white-space: nowrap; }
+    .cq-bd-total { font-size: 0.9375rem; color: #0f766e; }
+    .cq-calc-meta {
+      margin: 0;
+      font-size: 0.75rem;
+      color: #78716c;
+    }
+
+    .cq-per-window-summary {
+      margin-bottom: 1rem;
+      padding: 1rem 1.1rem;
+    }
+    .cq-summary-title {
+      font-size: 0.9375rem;
+      font-weight: 600;
+      color: #115e59;
+      margin: 0 0 0.65rem;
+    }
+    .cq-summary-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .cq-summary-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #f5f5f4;
+      font-size: 0.9375rem;
+    }
+    .cq-summary-item:last-child { border-bottom: none; }
+    .cq-summary-room { color: #44403c; font-weight: 500; }
+    .cq-summary-price { font-weight: 700; color: #0f766e; white-space: nowrap; }
+    .cq-summary-pending { font-size: 0.8125rem; color: #a8a29e; }
+    .cq-summary-foot {
+      margin: 0.75rem 0 0;
+      padding-top: 0.65rem;
+      border-top: 2px solid #ccfbf1;
+      font-size: 0.9375rem;
+      text-align: right;
+      color: #57534e;
+    }
+    .cq-summary-foot strong { color: #0f766e; font-size: 1.0625rem; }
+
+    .cq-card-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.85rem;
+    }
+    @media (min-width: 640px) {
+      .cq-card-grid { grid-template-columns: 1fr 1fr; }
+      .cq-field-span2 { grid-column: span 2; }
+    }
+
+    .cq-order-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.65rem;
+      margin-top: 0.5rem;
+    }
+    @media (min-width: 480px) {
+      .cq-order-row { grid-template-columns: repeat(4, 1fr); }
+    }
+    .cq-field-compact .cq-label { font-size: 0.75rem; }
+    .cq-input-compact { min-height: 2.5rem; font-size: 0.9375rem; }
+
+    .cq-advanced { margin-top: 0.65rem; font-size: 0.875rem; }
+    .cq-advanced summary {
+      cursor: pointer;
+      color: #57534e;
+      font-weight: 500;
+      padding: 0.35rem 0;
+    }
+    .cq-advanced-grid { margin-top: 0.65rem; }
+
+    .cq-spec-chip {
+      display: inline-block;
+      font-size: 0.75rem;
+      background: #fff;
+      border: 1px solid #d6d3d1;
+      border-radius: 999px;
+      padding: 0.1rem 0.5rem;
+      margin-left: 0.25rem;
+    }
+
+    .cq-specs-section { margin-bottom: 1.25rem; }
+    .cq-specs-title { font-size: 0.875rem; font-weight: 600; margin: 0 0 0.5rem; color: #115e59; }
+    .cq-specs-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+    .cq-specs-table th, .cq-specs-table td {
+      border: 1px solid #e7e5e4;
+      padding: 0.45rem 0.5rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    .cq-specs-table th { background: #f0fdfa; font-weight: 600; }
+
+    .cq-checks { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; padding-top: 0.5rem; }
+    .cq-check { display: flex; align-items: center; gap: 0.4rem; font-size: 0.875rem; color: #57534e; cursor: pointer; }
+    .cq-check input { width: 1.1rem; height: 1.1rem; accent-color: var(--cq-accent); }
+
+    .cq-calc-preview {
+      margin-top: 0.85rem;
+      padding: 0.75rem 0.9rem;
+      background: linear-gradient(90deg, #f0fdfa 0%, #fffbeb 100%);
+      border-radius: 0.75rem;
+      border: 1px solid #ccfbf1;
+    }
+    .cq-calc-hint { margin: 0; font-size: 0.875rem; color: #44403c; line-height: 1.5; }
+    .cq-calc-warn { color: #b45309; font-size: 0.8125rem; margin-top: 0.35rem; }
+    .cq-preview-total { color: var(--cq-accent-dark); }
+
+    .cq-sticky-bar {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      z-index: 50;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(8px);
+      border-top: 1px solid var(--cq-border);
+      padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+      box-shadow: 0 -4px 20px rgb(0 0 0 / 0.06);
+    }
+    @media (min-width: 768px) {
+      .cq-sticky-bar { position: static; background: transparent; border: none; box-shadow: none; padding: 0; backdrop-filter: none; }
+      body { padding-bottom: 0 !important; }
+    }
+    body { padding-bottom: 5.5rem; }
+
+    .cq-total-pill {
+      font-size: 1.125rem;
+      font-weight: 700;
+      color: var(--cq-accent-dark);
+    }
+
+    .cq-roadmap {
+      font-size: 0.8125rem;
+      color: var(--cq-muted);
+      border-top: 1px dashed var(--cq-border);
+      padding-top: 1rem;
+      margin-top: 1rem;
+    }
+    .cq-roadmap summary { cursor: pointer; color: #57534e; font-weight: 500; }
+    .cq-roadmap ul { margin: 0.5rem 0 0; padding-left: 1.2rem; line-height: 1.6; }
+
+    /* 估價單 */
+    .cq-quote-doc { font-size: 0.875rem; line-height: 1.5; }
+    .cq-quote-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid #115e59;
+    }
+    .cq-quote-brand-name { font-size: 1.25rem; font-weight: 700; color: #115e59; margin: 0; }
+    .cq-quote-brand-sub { font-size: 0.75rem; color: var(--cq-muted); margin: 0.15rem 0 0; }
+    .cq-quote-title { font-size: 1.125rem; font-weight: 600; margin: 0 0 0.35rem; color: var(--cq-ink); }
+    .cq-quote-meta { font-size: 0.8125rem; color: var(--cq-muted); margin: 0.15rem 0; }
+
+    .cq-quote-table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+    .cq-quote-table th {
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #57534e;
+      padding: 0.5rem 0.4rem;
+      border-bottom: 2px solid #e7e5e4;
+    }
+    .cq-quote-table td {
+      padding: 0.55rem 0.4rem;
+      border-bottom: 1px solid #f5f5f4;
+      vertical-align: top;
+    }
+    .cq-td-sub { font-size: 0.75rem; color: var(--cq-muted); }
+    .cq-td-num { text-align: right; white-space: nowrap; }
+    .cq-td-total { font-weight: 600; color: var(--cq-accent-dark); }
+    .cq-td-foot-label { text-align: right; font-weight: 600; padding-top: 0.75rem; }
+    .cq-grand-total { font-size: 1.125rem; font-weight: 700; color: #115e59; }
+    .cq-note-row td { font-size: 0.75rem; color: var(--cq-muted); font-style: italic; }
+
+    .cq-disclaimer {
+      background: #fafaf9;
+      border: 1px solid var(--cq-border);
+      border-radius: 0.75rem;
+      padding: 0.85rem 1rem;
+      margin-top: 1rem;
+    }
+    .cq-disclaimer-title { font-weight: 600; font-size: 0.8125rem; margin: 0 0 0.35rem; }
+    .cq-disclaimer ul { margin: 0; padding-left: 1.1rem; font-size: 0.75rem; color: #57534e; }
+    .cq-quote-footer { text-align: center; font-size: 0.6875rem; color: #a8a29e; margin: 1rem 0 0; }
+
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white !important; padding: 0 !important; }
+      .cq-panel { box-shadow: none; border: none; padding: 0; }
+      #cqQuotePanel { display: block !important; }
+      .cq-window-card, .cq-hero, details { display: none !important; }
+      .cq-quote-doc { font-size: 11pt; }
+    }
+  </style>
+</head>
+<body>
+  <div class="max-w-3xl mx-auto px-3 py-5 md:py-8">
+    <header class="cq-hero no-print mb-5">
+      <h1>窗簾估價參考</h1>
+      <p>輸入寬高、品牌型號與開法收法，系統推算才數與安裝費並產出估價單。開法收法不影響金額，但會印在單上供下單。</p>
+    </header>
+
+    <p id="cqDraftStatus" class="hidden no-print text-sm text-teal-800 bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 mb-4" role="status"></p>
+
+    <section class="cq-panel no-print mb-5 space-y-4">
+      <div>
+        <h2 class="text-base font-semibold text-stone-800 m-0">估價單資訊</h2>
+        <p class="text-sm text-stone-500 mt-1 m-0">選填；列印時會顯示在抬頭。</p>
+      </div>
+      <div class="grid sm:grid-cols-2 gap-3">
+        <label class="cq-field">
+          <span class="cq-label">案名／標題</span>
+          <input id="cqQuoteTitle" type="text" class="cq-input" placeholder="例：王小姐｜信義區案" />
+        </label>
+        <label class="cq-field">
+          <span class="cq-label">客戶姓名（選填）</span>
+          <input id="cqCustomerName" type="text" class="cq-input" placeholder="例：王小明" />
+        </label>
+      </div>
+    </section>
+
+    <details class="cq-panel no-print mb-5">
+      <summary class="font-medium text-stone-700 cursor-pointer">怎麼量？計價說明</summary>
+      <div class="mt-4 space-y-4 text-sm text-stone-600 leading-relaxed">
+        <ul class="m-0 pl-5 space-y-1">
+          <li><strong>布料單價每窗必填</strong>：布簾類為元／碼；捲簾／調光為元／才。</li>
+          <li><strong>布簾類</strong>：幅數→布錢→軌道（40元／尺）→車工（200元／幅）→安裝；算法見 SPEC §3.3.1。</li>
+          <li><strong>硬質簾</strong>：寬×高算才（基本 20 才），再乘每窗單價。</li>
+        </ul>
+        <div class="pt-2 border-t border-stone-100 max-w-xs">
+          <label class="cq-field">
+            <span class="cq-label">批次套用布料單價到所有窗</span>
+            <input id="cqGlobalFabric" type="number" min="0" class="cq-input" placeholder="留空略過" />
+          </label>
+        </div>
+        <button type="button" id="cqApplyGlobalPrices" class="cq-btn-secondary">套用到所有窗戶</button>
+      </div>
+    </details>
+
+    <section class="no-print mb-3 flex items-center justify-between gap-2">
+      <h2 class="text-base font-semibold text-stone-800 m-0">窗戶清單 <span class="text-stone-400 font-normal">（<span id="cqWindowCount">1</span> 扇）</span></h2>
+      <button type="button" id="cqAddWindowBtn" class="cq-btn-secondary text-sm">＋ 新增一窗</button>
+    </section>
+
+    <div id="cqWindowList" class="no-print"></div>
+
+    <section id="cqPerWindowSummary" class="cq-panel cq-per-window-summary no-print hidden" aria-live="polite"></section>
+
+    <section id="cqQuotePanel" class="cq-panel mt-6 hidden">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-4 no-print">
+        <h2 class="text-lg font-semibold text-teal-900 m-0">估價單</h2>
+        <button type="button" id="cqPrintBtn" class="cq-btn-secondary">列印或存成 PDF</button>
+      </div>
+      <div id="cqQuoteOut"></div>
+    </section>
+
+    <div class="cq-roadmap no-print">
+      <details>
+        <summary>未來升級項目（目前初版尚未開放）</summary>
+        <ul>
+          <li>布樣色卡選擇、完工案例照片</li>
+          <li>配件費（車位、掛座、裁軌等）、廠商級距表</li>
+          <li>人員模式（案號、單價覆寫、匯入客戶 JSON）</li>
+          <li>雲端價本同步、現場照片款式模擬</li>
+        </ul>
+      </details>
+    </div>
+  </div>
+
+  <div id="cqGrandTotalBar" class="cq-sticky-bar no-print">
+    <div class="max-w-3xl mx-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+      <div class="flex-1 flex items-center justify-between sm:justify-start gap-3">
+        <span class="text-sm text-stone-600">合計（未稅）</span>
+        <span id="cqGrandTotal" class="cq-total-pill">NT$ 0</span>
+      </div>
+      <button type="button" id="cqGenerateBtn" class="cq-btn-primary w-full sm:w-auto sm:min-w-[10rem]">產生估價單</button>
+    </div>
+  </div>
+
+  <script src="curtain-quote/cq-config-state.js"></script>
+  <script src="curtain-quote/cq-dim-calc.js"></script>
+  <script src="curtain-quote/cq-persist.js"></script>
+  <script src="curtain-quote/cq-quote-render.js"></script>
+  <script src="curtain-quote/cq-run.js"></script>
+</body>
+</html>

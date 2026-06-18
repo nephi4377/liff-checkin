@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>廠商名冊</title>
+  <title>收款帳戶</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_api.js"></script>
   <style>
@@ -13,9 +13,13 @@
     .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
     label { display: block; margin-top: 8px; font-weight: 600; font-size: 14px; }
     input { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .hint { font-size: 12px; color: #777; margin-top: 2px; }
     .btn { width: 100%; padding: 12px; margin-top: 10px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; background: #1a73e8; color: #fff; }
     .item { border-bottom: 1px solid #eee; padding: 10px 0; }
     .item:last-child { border-bottom: none; }
+    .bank { font-family: ui-monospace, monospace; font-size: 13px; color: #333; }
+    .inactive { opacity: .55; }
     #msg { color: #c5221f; font-size: 14px; }
     .hidden { display: none; }
     .nav { margin-bottom: 12px; font-size: 14px; }
@@ -26,17 +30,28 @@
   <div id="loading">載入中…</div>
   <div id="app" class="hidden">
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
-    <h2>廠商名冊</h2>
+    <h2>收款帳戶</h2>
     <p class="sub" id="userLine">—</p>
     <div id="msg"></div>
 
     <div class="card">
-      <h3 style="margin:0 0 8px">新增廠商</h3>
-      <label>名稱</label><input id="name" />
-      <label>統編</label><input id="tax_id" />
-      <label>LINE userId（選填）</label><input id="line_user_id" />
-      <label>聯絡人</label><input id="contact_name" />
-      <label>電話</label><input id="contact_phone" />
+      <h3 style="margin:0 0 8px">新增收款人</h3>
+      <label>姓名／廠商名稱</label><input id="name" />
+      <div class="row2">
+        <div>
+          <label>銀行代碼</label>
+          <input id="bank_code" inputmode="numeric" maxlength="3" placeholder="例：013" />
+          <div class="hint">3 碼</div>
+        </div>
+        <div>
+          <label>分行代碼</label>
+          <input id="branch_code" inputmode="numeric" maxlength="4" placeholder="例：1234" />
+          <div class="hint">4 碼</div>
+        </div>
+      </div>
+      <label>帳號</label><input id="account_no" inputmode="numeric" />
+      <label>戶名</label><input id="account_name" />
+      <label>聯絡電話（選填）</label><input id="phone" inputmode="tel" />
       <button type="button" class="btn" id="addBtn">新增</button>
     </div>
 
@@ -53,16 +68,23 @@
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
       }
+      function maskAccount(no) {
+        if (!no || no.length < 5) return no || '—';
+        return no.slice(0, 4) + '****' + no.slice(-3);
+      }
       async function loadList() {
-        var data = await AccountingApi.crudList(session, 'vendor', { page_size: 100 });
+        var data = await AccountingApi.crudList(session, 'payee', { page_size: 200 });
         var box = document.getElementById('list');
         box.innerHTML = '';
         if (!data.success) { setMsg(data.message); return; }
-        (data.data || []).forEach(function (v) {
+        (data.data || []).forEach(function (p) {
           var div = document.createElement('div');
-          div.className = 'item';
-          div.innerHTML = '<strong>' + (v.name || '') + '</strong><br><span class="sub">' +
-            (v.tax_id || '—') + ' · ' + (v.line_user_id || '未綁 LINE') + '</span>';
+          div.className = 'item' + (p.is_active === false || p.is_active === 'FALSE' ? ' inactive' : '');
+          var bankLine = (p.bank_code || '—') + '-' + (p.branch_code || '—') + ' · ' + maskAccount(p.account_no);
+          div.innerHTML = '<strong>' + (p.name || '') + '</strong>' +
+            (p.account_name ? '（' + p.account_name + '）' : '') + '<br>' +
+            '<span class="bank">' + bankLine + '</span><br>' +
+            '<span class="sub">' + (p.phone || '無電話') + '</span>';
           box.appendChild(div);
         });
         if (!data.data || !data.data.length) box.textContent = '尚無資料';
@@ -71,15 +93,20 @@
         setMsg('');
         var payload = {
           name: document.getElementById('name').value.trim(),
-          tax_id: document.getElementById('tax_id').value.trim(),
-          line_user_id: document.getElementById('line_user_id').value.trim(),
-          contact_name: document.getElementById('contact_name').value.trim(),
-          contact_phone: document.getElementById('contact_phone').value.trim()
+          bank_code: document.getElementById('bank_code').value.trim(),
+          branch_code: document.getElementById('branch_code').value.trim(),
+          account_no: document.getElementById('account_no').value.trim(),
+          account_name: document.getElementById('account_name').value.trim(),
+          phone: document.getElementById('phone').value.trim()
         };
-        if (!payload.name) { setMsg('請填廠商名稱'); return; }
-        var data = await AccountingApi.crudCreate(session, 'vendor', payload);
+        if (!payload.name) { setMsg('請填姓名或廠商名稱'); return; }
+        if (!payload.bank_code || payload.bank_code.length !== 3) { setMsg('銀行代碼須為 3 碼'); return; }
+        if (!payload.branch_code || payload.branch_code.length !== 4) { setMsg('分行代碼須為 4 碼'); return; }
+        if (!payload.account_no) { setMsg('請填帳號'); return; }
+        if (!payload.account_name) { setMsg('請填戶名'); return; }
+        var data = await AccountingApi.crudCreate(session, 'payee', payload);
         if (!data.success) { setMsg(data.message || '新增失敗'); return; }
-        ['name', 'tax_id', 'line_user_id', 'contact_name', 'contact_phone'].forEach(function (id) {
+        ['name', 'bank_code', 'branch_code', 'account_no', 'account_name', 'phone'].forEach(function (id) {
           document.getElementById(id).value = '';
         });
         await loadList();

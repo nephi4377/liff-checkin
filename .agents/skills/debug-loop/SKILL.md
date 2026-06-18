@@ -1,6 +1,6 @@
 ---
 name: debug-loop
-description: 執行除錯循環（理解→測試→分析→修復→再測試）並輸出四段報告。當使用者要求「除錯循環」、需要系統性排錯、根因分析、回歸驗證時使用。
+description: 除錯循環
 disable-model-invocation: true
 ---
 

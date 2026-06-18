@@ -21,7 +21,7 @@ const App = {
         const allProjects = ref([]);
         const notifications = ref([]);
         const pendingApprovals = ref(0);
-        // 當月班表（供「今日出勤」卡片使用）。結構同 09_SHIFT_SCHEDULE_DATA_SPEC 的 get_latest_schedule 回傳。
+        // 當月班表（供「今日出勤」卡片使用）。結構同 09_排班系統資料格式規格書 的 get_latest_schedule 回傳。
         const monthSchedule = ref({ schedule: {}, holidays: [] });
         // 班表是否正在向後端更新中（用於「快取優先 + 更新中 + 最新資訊」的狀態顯示）
         const scheduleLoading = ref(false);
@@ -69,9 +69,11 @@ const App = {
 
         if (cachedEmployees) {
             allEmployees.value = cachedEmployees;
+            window.spaAllEmployees = cachedEmployees;
         }
         if (cachedProjects) {
             allProjects.value = cachedProjects;
+            window.spaAllProjects = cachedProjects;
         }
         if (cachedSchedule && cachedSchedule.schedule) {
             monthSchedule.value = cachedSchedule;
@@ -106,6 +108,8 @@ const App = {
             // 【您的要求】新增報價單工具整合路由
             '#/budget-web': { name: 'iframe', src: 'tools/BudgetWeb_Standalone.html', title: '報價單解析器' },
             '#/budget-audit': { name: 'iframe', src: 'tools/BudgetAuditor_Standalone_V2.html', title: '案場驗收表' },
+            '#/accounting-ingest': { name: 'iframe', src: 'modules/accounting/accounting_ingest.html', title: '收支登錄' },
+            '#/accounting': { name: 'iframe', src: 'modules/accounting/index.html', title: '添心會計' },
         };
         // [v513.0 新增] 補上員工資料編輯頁面的路由
         routes['#/employee-editor'] = { name: 'iframe', src: 'modules/attendance/employee_editor.html', title: '員工資料編輯' }; // [v515.0 修正] 改為絕對路徑
@@ -341,7 +345,6 @@ const App = {
                     if (JSON.stringify(allEmployees.value) !== JSON.stringify(attendanceResult.employees)) {
                         allEmployees.value = attendanceResult.employees;
                         saveCache(EMPLOYEES_CACHE_KEY, attendanceResult.employees);
-                        // 【您的要求】核心新增：將員工列表暴露到全域，供 iframe 子頁面使用
                         window.spaAllEmployees = attendanceResult.employees;
                     }
                     pendingApprovals.value = attendanceResult.pendingRequests?.length || 0;
@@ -374,6 +377,7 @@ const App = {
                         allProjects.value = newProjects;
                         saveCache(PROJECTS_CACHE_KEY, newProjects);
                     }
+                    window.spaAllProjects = newProjects;
                     notifications.value = projectsResult.data.notifications || [];
                 }
             } catch (error) {

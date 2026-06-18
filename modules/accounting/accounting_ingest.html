@@ -27,6 +27,9 @@
     #loading { text-align: center; padding: 48px 16px; color: #666; }
     #pendingPreview img { max-width: 100%; border-radius: 8px; margin-top: 6px; }
     #recent { font-size: 13px; padding-left: 18px; }
+    .hint { font-size: 12px; color: #777; margin-top: 4px; }
+    #contextBar { font-size: 13px; color: #137333; background: #e6f4ea; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; }
+    #contextBar.warn { color: #b06000; background: #fef7e0; }
   </style>
 </head>
 <body>
@@ -35,6 +38,7 @@
     <h2>收支登錄</h2>
     <p class="sub" id="userLine">—</p>
     <p class="sub hidden" id="photoHint">已帶入 LINE 傳的照片。關閉視窗＝不送出。</p>
+    <div id="contextBar" class="hidden"></div>
     <div id="statusBar">本輪已記 <strong id="sessionCount">0</strong> 筆 · 可連續填多筆</div>
 
     <div class="card">
@@ -54,10 +58,15 @@
           </select>
         </div>
       </div>
+      <label id="projectPickWrap" class="hidden">快選案場</label>
+      <select id="projectPick" class="hidden"><option value="">手動填寫</option></select>
+      <p class="hint hidden" id="projectPickHint">選案場會自動帶入客戶名、訂編與店別</p>
       <div id="blockA">
         <label>收款日期</label><input id="txn_date" type="text" />
-        <label>客戶名</label><input id="party_name" type="text" />
-        <label>訂編</label><input id="project_no" type="text" />
+        <label>客戶名</label><input id="party_name" type="text" list="clientList" />
+        <datalist id="clientList"></datalist>
+        <label>訂編</label><input id="project_no" type="text" list="projectNoList" />
+        <datalist id="projectNoList"></datalist>
         <label>款項類別</label><input id="item_desc" type="text" />
         <label>金額</label><input id="amount" type="number" inputmode="numeric" />
         <label>是否入零用金</label><select id="petty_cash"><option>否</option><option>是</option></select>
@@ -70,7 +79,8 @@
         <label>支付金額</label><input id="amount_b" type="number" inputmode="numeric" />
         <label>款項月份</label><input id="expense_month" type="number" min="1" max="12" />
         <label>現金或零用金或匯款</label><input id="payment_method_b" type="text" />
-        <label>申請人</label><input id="applicant" type="text" />
+        <label>申請人</label><input id="applicant" type="text" list="applicantList" />
+        <datalist id="applicantList"></datalist>
       </div>
       <label>單據照片（選填）</label>
       <input id="photo" type="file" accept="image/*" capture="environment" />
@@ -85,6 +95,7 @@
     <div class="card hidden" id="recentCard"><strong>剛剛記的</strong><ul id="recent"></ul></div>
   </div>
 
+  <script src="../../shared/js/accounting_context.js"></script>
   <script>
     var CONSTANTS = {
       GAS_API: 'https://script.google.com/macros/s/AKfycbyibVTQk2eYEYXX5vb-TUFYsLIKWEg1bADR-7w1QFSg6kly3gyDAG3GkKuvQ0PBur05DA/exec',
@@ -95,7 +106,7 @@
     (function () {
       var profile = { userId: '', displayName: '' };
       var sessionCount = 0, submitting = false, idToken = '', devBypass = false;
-      var pendingPhotos = [], queryParams = {};
+      var pendingPhotos = [], queryParams = {}, hubContext = { projects: [], employees: [] };
       var kind = document.getElementById('kind');
       var blockA = document.getElementById('blockA');
       var blockB = document.getElementById('blockB');
@@ -110,6 +121,85 @@
         blockB.classList.toggle('hidden', isA);
       }
       kind.addEventListener('change', toggleBlocks);
+
+      function applyProjectPick(projectId) {
+        var p = hubContext.projects.find(function (x) { return x.id === projectId; });
+        if (!p) return;
+        document.getElementById('party_name').value = p.siteName || p.name || '';
+        document.getElementById('project_no').value = p.id;
+        var store = AccountingContext.mapStoreValue(p.store);
+        if (store) document.getElementById('store').value = store;
+      }
+
+      function setupHubContext() {
+        var ctx = AccountingContext.load();
+        hubContext.projects = ctx.projects;
+        hubContext.employees = ctx.employees;
+        var bar = document.getElementById('contextBar');
+        var pick = document.getElementById('projectPick');
+        var pickWrap = document.getElementById('projectPickWrap');
+        var pickHint = document.getElementById('projectPickHint');
+        var applicantList = document.getElementById('applicantList');
+        var clientList = document.getElementById('clientList');
+        var projectNoList = document.getElementById('projectNoList');
+
+        applicantList.innerHTML = '';
+        ctx.employees.forEach(function (emp) {
+          var name = String(emp.userName || '').trim();
+          if (!name) return;
+          var opt = document.createElement('option');
+          opt.value = name;
+          applicantList.appendChild(opt);
+        });
+
+        clientList.innerHTML = '';
+        projectNoList.innerHTML = '';
+        pick.innerHTML = '<option value="">手動填寫</option>';
+        ctx.projects.forEach(function (p) {
+          var label = p.id + (p.name ? ' · ' + p.name : '');
+          var opt = document.createElement('option');
+          opt.value = p.id;
+          opt.textContent = label;
+          pick.appendChild(opt);
+          if (p.name) {
+            var c = document.createElement('option');
+            c.value = p.name;
+            clientList.appendChild(c);
+          }
+          var n = document.createElement('option');
+          n.value = p.id;
+          projectNoList.appendChild(n);
+        });
+
+        if (ctx.projects.length) {
+          pickWrap.classList.remove('hidden');
+          pick.classList.remove('hidden');
+          pickHint.classList.remove('hidden');
+        }
+        pick.onchange = function () {
+          if (pick.value) applyProjectPick(pick.value);
+        };
+
+        var emp = AccountingContext.findEmployeeByUserId(ctx.employees, profile.userId);
+        var applicantDefault = emp ? emp.userName : profile.displayName;
+        if (applicantDefault && !document.getElementById('applicant').value) {
+          document.getElementById('applicant').value = applicantDefault;
+        }
+
+        var prefillId = queryParams['案號'] || queryParams.project || queryParams.project_no || '';
+        if (prefillId) {
+          pick.value = String(prefillId).trim();
+          if (pick.value) applyProjectPick(pick.value);
+        }
+
+        bar.classList.remove('hidden');
+        if (ctx.projects.length || ctx.employees.length) {
+          bar.textContent = '已載入快取：' + ctx.projects.length + ' 筆案場、' + ctx.employees.length + ' 位員工（免再打 API）';
+        } else {
+          bar.textContent = '尚無 HUB 快取。請先開一次主控台，或改用手動填寫。';
+          bar.classList.add('warn');
+        }
+      }
 
       function readQueryParams() {
         var q = {};
@@ -281,6 +371,7 @@
         profile.displayName = auth.display_name;
         document.getElementById('userLine').textContent = profile.displayName + ' · 測試模式（無登入）';
         showApp();
+        setupHubContext();
         if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
       }
 
@@ -327,6 +418,7 @@
           return;
         }
         showApp();
+        setupHubContext();
         if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
       }
       boot();

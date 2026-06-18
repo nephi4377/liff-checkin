@@ -2,7 +2,7 @@
 
 > **對象**：設計總監、前端維護者  
 > **核心模組**：`modules/projects/daily_report.html` + `js/daily_report_main.js`  
-> **欄位唯一來源**：`SPEC/PROJECT_DATA_DICTIONARY.md`（§6 每日回報與打卡整合 API）
+> **欄位唯一來源**：`SPEC/專案全域資料字典.md`（§6 每日回報與打卡整合 API）
 
 ---
 
@@ -95,7 +95,7 @@ sequenceDiagram
 ### 必守三條
 
 1. **先改字典，再改程式**  
-   新欄位、新 API key 必須先寫入 `SPEC/PROJECT_DATA_DICTIONARY.md`，禁止在前端自創 `projectId`、`ctx_project_no` 等別名。
+   新欄位、新 API key 必須先寫入 `SPEC/專案全域資料字典.md`，禁止在前端自創 `projectId`、`ctx_project_no` 等別名。
 
 2. **禁止 Mapping Table**  
    畫面綁定必須直接使用字典名稱，例如：
@@ -109,7 +109,7 @@ sequenceDiagram
 ### 建議流程
 
 ```
-需求 → 查 PROJECT_DATA_DICTIONARY §6
+需求 → 查 專案全域資料字典 §6
      → 缺欄位？先補字典 + 後端 backend/
      → 改 daily_report_main.js / daily_report.html
      → 本地開 daily_report.html?uid=...&name=... 驗證
@@ -136,7 +136,7 @@ sequenceDiagram
 | `modules/projects/js/daily_report_main.js` | 聯表、過濾、KPI、雙視角渲染 |
 | `modules/projects/js/ui.js` | 圖片 lazy load |
 | `shared/js/config.js` | GAS WebApp URL |
-| `SPEC/PROJECT_DATA_DICTIONARY.md` | 欄位唯一事實來源 |
+| `SPEC/專案全域資料字典.md` | 欄位唯一事實來源 |
 | `.agents/workflows/test_daily_report.md` | 自動化測試檢查清單 |
 
 ---

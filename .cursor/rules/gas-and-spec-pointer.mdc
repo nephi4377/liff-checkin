@@ -1,0 +1,12 @@
+---
+description: 改前端 API／config
+globs: shared/js/**,modules/**/js/**,**/config*.js
+alwaysApply: false
+---
+
+# GAS 與資料契約
+
+- GAS 後端在 **`../backend/`**，不在本倉庫；改 `doGet`／`action`／Sheet → 載入 **`GAS-Backend-Expert`**，到 backend 改。
+- 欄位名以 **`SPEC/專案全域資料字典.md`** 為準，不自創對照表。
+- 勿把網址、金鑰、LIFF ID 寫進 SPEC 或 rule；留在各頁 `config` 等既有位置。
+- GAS `clasp deploy`：使用者明確說「部署／發布」才做（細則見全域 User Rules）。

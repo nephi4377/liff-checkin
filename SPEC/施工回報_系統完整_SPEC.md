@@ -146,7 +146,7 @@ flowchart LR
 3. GAS 部署：`submitFastReport` 可路由、`ProcessFirebase` 與佇列觸發不堆積死觸發器。  
 4. 試算表 `UploadQueue` 欄位名稱與程式一致：`狀態`、`資料包(元數據)`、`Drive檔案ID列表`、以及批次相關欄位。  
 5. 正式上線前確認 `ENABLE_LOCAL_TEST_BYPASS === false`、LIFF/Endpoint/網域正確。  
-6. 欄位名稱與業務**資料字典**一致（見 `SPEC/PROJECT_DATA_DICTIONARY.md`）；GAS/前端欄位擴充時同步本檔 **§3** 與 **§1** 表格。
+6. 欄位名稱與業務**資料字典**一致（見 `SPEC/專案全域資料字典.md`）；GAS/前端欄位擴充時同步本檔 **§3** 與 **§1** 表格。
 
 ---
 
