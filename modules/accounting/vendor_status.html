@@ -64,11 +64,12 @@
       }
       (async function boot() {
         try {
-          var session = await AccountingApi.initLiff();
+          var session = await AccountingApi.initSession();
           if (!session) return;
-          document.getElementById('userLine').textContent = session.profile.displayName;
+          var mode = session.devBypass ? ' · 測試模式（無登入）' : '';
+          document.getElementById('userLine').textContent = session.profile.displayName + mode;
           showApp();
-          var data = await AccountingApi.vendorPaymentStatus(session.idToken);
+          var data = await AccountingApi.vendorPaymentStatus(session);
           renderItems(data);
         } catch (e) {
           document.getElementById('loading').textContent = e.message || String(e);

@@ -13,23 +13,41 @@ var AccountingApi = (function () {
     return res.json();
   }
 
+  function buildAuth(session) {
+    if (!session) return {};
+    if (session.devBypass) return { dev_bypass: true };
+    return { liff_id_token: session.idToken || '' };
+  }
+
+  function resolveAuth(sessionOrToken) {
+    if (typeof sessionOrToken === 'string') {
+      return { liff_id_token: sessionOrToken };
+    }
+    return buildAuth(sessionOrToken);
+  }
+
   return {
     GAS_API: GAS_API,
     post: post,
-    authMe: function (idToken) {
-      return post({ action: 'accounting_auth_me', liff_id_token: idToken });
+    buildAuth: buildAuth,
+    authMe: function (sessionOrToken) {
+      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
+        return post({ action: 'accounting_auth_me', dev_bypass: true });
+      }
+      var token = typeof sessionOrToken === 'string' ? sessionOrToken : (sessionOrToken && sessionOrToken.idToken);
+      return post({ action: 'accounting_auth_me', liff_id_token: token });
     },
-    crudList: function (idToken, entity, filter) {
-      return post({ action: 'crud_list', entity: entity, auth: { liff_id_token: idToken }, filter: filter || {} });
+    crudList: function (sessionOrToken, entity, filter) {
+      return post({ action: 'crud_list', entity: entity, auth: resolveAuth(sessionOrToken), filter: filter || {} });
     },
-    crudCreate: function (idToken, entity, payload) {
-      return post({ action: 'crud_create', entity: entity, auth: { liff_id_token: idToken }, payload: payload });
+    crudCreate: function (sessionOrToken, entity, payload) {
+      return post({ action: 'crud_create', entity: entity, auth: resolveAuth(sessionOrToken), payload: payload });
     },
-    crudUpdate: function (idToken, entity, id, payload) {
-      return post({ action: 'crud_update', entity: entity, id: id, auth: { liff_id_token: idToken }, payload: payload });
+    crudUpdate: function (sessionOrToken, entity, id, payload) {
+      return post({ action: 'crud_update', entity: entity, id: id, auth: resolveAuth(sessionOrToken), payload: payload });
     },
-    vendorPaymentStatus: function (idToken, filter) {
-      return post({ action: 'vendor_payment_status', auth: { liff_id_token: idToken }, filter: filter || {} });
+    vendorPaymentStatus: function (sessionOrToken, filter) {
+      return post({ action: 'vendor_payment_status', auth: resolveAuth(sessionOrToken), filter: filter || {} });
     },
     loadPolicy: async function () {
       var data = await post({ action: 'accounting_policy' });
@@ -50,7 +68,22 @@ var AccountingApi = (function () {
       var idToken = liff.getIDToken();
       var auth = await AccountingApi.authMe(idToken);
       if (!auth.success) throw new Error(auth.message || '驗證失敗');
-      return { profile: profile, idToken: idToken, auth: auth };
+      return { devBypass: false, profile: profile, idToken: idToken, auth: auth };
+    },
+    /** policy 開 authBypass 時略過 LIFF；否則走 initLiff */
+    initSession: async function (opts) {
+      var policy = await AccountingApi.loadPolicy();
+      if (policy.authBypass) {
+        var auth = await post({ action: 'accounting_auth_me', dev_bypass: true });
+        if (!auth.success) throw new Error(auth.message || '驗證失敗');
+        return {
+          devBypass: true,
+          profile: { userId: auth.user_id, displayName: auth.display_name },
+          idToken: '',
+          auth: auth
+        };
+      }
+      return AccountingApi.initLiff(opts);
     }
   };
 })();

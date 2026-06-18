@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>添心收支登錄</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/accounting_api.js"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 480px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 4px; }
@@ -93,7 +94,7 @@
 
     (function () {
       var profile = { userId: '', displayName: '' };
-      var sessionCount = 0, submitting = false, idToken = '';
+      var sessionCount = 0, submitting = false, idToken = '', devBypass = false;
       var pendingPhotos = [], queryParams = {};
       var kind = document.getElementById('kind');
       var blockA = document.getElementById('blockA');
@@ -194,17 +195,14 @@
       }
 
       async function loadPendingPhotos(token) {
-        var res = await fetch(CONSTANTS.GAS_API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({
-            action: 'accounting_pending_photos',
-            token: token,
-            user_id: profile.userId,
-            liff_id_token: idToken
-          })
-        });
-        var data = await res.json();
+        var body = {
+          action: 'accounting_pending_photos',
+          token: token,
+          user_id: profile.userId
+        };
+        if (devBypass) body.dev_bypass = true;
+        else body.liff_id_token = idToken;
+        var data = await AccountingApi.post(body);
         if (!data.success) { setMsg(data.message || '無法帶入照片'); return; }
         pendingPhotos = data.photos || [];
         showPendingPreviews(pendingPhotos);
@@ -221,19 +219,16 @@
           var photo = await readFileB64(photoFile);
           var photos = pendingPhotos.slice();
           if (photo) photos.push(photo);
-          var res = await fetch(CONSTANTS.GAS_API, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-              action: 'accounting_form_submit',
-              liff_id_token: idToken,
-              source: queryParams.source || 'liff',
-              user_id: profile.userId,
-              display_name: profile.displayName,
-              payload: { format: kind.value, fields: fields, photos: photos }
-            })
-          });
-          var data = await res.json();
+          var body = {
+            action: 'accounting_form_submit',
+            source: queryParams.source || (devBypass ? 'web_dev' : 'liff'),
+            user_id: profile.userId,
+            display_name: profile.displayName,
+            payload: { format: kind.value, fields: fields, photos: photos }
+          };
+          if (devBypass) body.dev_bypass = true;
+          else body.liff_id_token = idToken;
+          var data = await AccountingApi.post(body);
           if (!data.success) {
             setMsg(data.message || '送出失敗');
             return;
@@ -270,30 +265,42 @@
 
       async function loadPolicy() {
         try {
-          var res = await fetch(CONSTANTS.GAS_API, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ action: 'accounting_policy' })
-          });
-          var data = await res.json();
-          if (data.success && data.policy && data.policy.liffId) {
-            CONSTANTS.LIFF_ID = data.policy.liffId;
-          }
+          var policy = await AccountingApi.loadPolicy();
+          if (policy.liffId) CONSTANTS.LIFF_ID = policy.liffId;
+          devBypass = !!policy.authBypass;
         } catch (e) {}
+      }
+
+      async function bootDevBypass() {
+        var auth = await AccountingApi.post({ action: 'accounting_auth_me', dev_bypass: true });
+        if (!auth.success) {
+          setLoading(auth.message || '測試模式驗證失敗');
+          return;
+        }
+        profile.userId = auth.user_id;
+        profile.displayName = auth.display_name;
+        document.getElementById('userLine').textContent = profile.displayName + ' · 測試模式（無登入）';
+        showApp();
+        if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
       }
 
       async function boot() {
         queryParams = readQueryParams();
-        await loadPolicy();
-        if (!CONSTANTS.LIFF_ID) {
-          setLoading('LIFF 尚未設定，請在 LINE Developers 建立後寫入 ACCOUNTING_LIFF_ID');
-          return;
-        }
         document.getElementById('txn_date').value = todayRoc();
         document.getElementById('txn_date_b').value = todayRoc();
         document.getElementById('expense_month').value = String(new Date().getMonth() + 1);
         if (queryParams.kind === 'B' || queryParams.from === 'photo') kind.value = 'B';
         toggleBlocks();
+
+        await loadPolicy();
+        if (devBypass) {
+          await bootDevBypass();
+          return;
+        }
+        if (!CONSTANTS.LIFF_ID) {
+          setLoading('LIFF 尚未設定，請在 LINE Developers 建立後寫入 ACCOUNTING_LIFF_ID');
+          return;
+        }
 
         if (typeof liff === 'undefined') {
           setLoading('請用 LINE 開啟此頁');

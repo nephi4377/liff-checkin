@@ -44,14 +44,14 @@
   </div>
   <script>
     (function () {
-      var idToken = '';
+      var session = null;
       function setMsg(t) { document.getElementById('msg').textContent = t || ''; }
       function showApp() {
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
       }
       async function loadList() {
-        var data = await AccountingApi.crudList(idToken, 'vendor', { page_size: 100 });
+        var data = await AccountingApi.crudList(session, 'vendor', { page_size: 100 });
         var box = document.getElementById('list');
         box.innerHTML = '';
         if (!data.success) { setMsg(data.message); return; }
@@ -74,7 +74,7 @@
           contact_phone: document.getElementById('contact_phone').value.trim()
         };
         if (!payload.name) { setMsg('請填廠商名稱'); return; }
-        var data = await AccountingApi.crudCreate(idToken, 'vendor', payload);
+        var data = await AccountingApi.crudCreate(session, 'vendor', payload);
         if (!data.success) { setMsg(data.message || '新增失敗'); return; }
         ['name', 'tax_id', 'line_user_id', 'contact_name', 'contact_phone'].forEach(function (id) {
           document.getElementById(id).value = '';
@@ -83,14 +83,14 @@
       });
       (async function boot() {
         try {
-          var session = await AccountingApi.initLiff();
+          session = await AccountingApi.initSession();
           if (!session) return;
-          idToken = session.idToken;
           if ((session.auth.permission || 0) < 2) {
             document.getElementById('loading').textContent = '權限不足（需行政以上）';
             return;
           }
-          document.getElementById('userLine').textContent = session.profile.displayName + ' · 權限 ' + session.auth.permission;
+          var mode = session.devBypass ? ' · 測試模式（無登入）' : '';
+          document.getElementById('userLine').textContent = session.profile.displayName + ' · 權限 ' + session.auth.permission + mode;
           showApp();
           await loadList();
         } catch (e) {
