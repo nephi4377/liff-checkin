@@ -14,6 +14,10 @@ export const CONFIG = {
     HUB_LIFF_ID: '2007974938-2nPKg3J0', // 整合主控台 (SPA) 用
     REPORT_FORM_LIFF_ID: '2007974938-gOrjlzna', // 施工回報用
 
+    ACCOUNTING_LIFF_ID: '2007974938-2sM5jlVL', // 收支登錄
+    ACCOUNTING_GAS_WEB_APP_URL: 'https://script.google.com/macros/s/AKfycbyibVTQk2eYEYXX5vb-TUFYsLIKWEg1bADR-7w1QFSg6kly3gyDAG3GkKuvQ0PBur05DA/exec',
+    ACCOUNTING_FORM_PATH: '/modules/accounting/accounting_ingest.html',
+
     // Google Apps Script Web App URL 設定
     GAS_WEB_APP_URL: 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec', // 主 API
     ATTENDANCE_GAS_WEB_APP_URL: 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec', // 出勤 API

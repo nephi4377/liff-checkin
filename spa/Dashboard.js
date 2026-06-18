@@ -43,6 +43,7 @@ export default {
         const floorplanStraightenerUrl = computed(() => `#/floorplan-straightener`);
         const budgetWebUrl = computed(() => `#/budget-web`);
         const budgetAuditUrl = computed(() => `#/budget-audit`);
+        const accountingUrl = computed(() => 'https://liff.line.me/2007974938-2sM5jlVL?source=hub');
 
         const formatTimeAgo = (date) => {
             const seconds = Math.floor((new Date() - new Date(date)) / 1000);
@@ -128,7 +129,7 @@ export default {
         };
 
         // 從 schedule[uid] 中找出指定日期的 entries，並回傳 [{ label, timeRange }]
-        // key 格式參考 SPEC/09_SHIFT_SCHEDULE_DATA_SPEC.md：
+        // key 格式參考 SPEC/09_排班系統資料格式規格書.md：
         //   - "YYYY-MM-DD": "休假"
         //   - "YYYY-MM-DD:特休": "特休[08:00-12:00]" 或含事由 "特休 事由[08:00-12:00]"
         const parseScheduleEntry = (rawValue) => {
@@ -216,7 +217,7 @@ export default {
         });
 
         // 判斷是否為「真員工」且屬於排班對象：permission 2~4
-        // 依 SPEC/09_SHIFT_SCHEDULE_DATA_SPEC.md：2-4 為參與排班對象，5 為系統管理者/隱藏。
+        // 依 SPEC/09_排班系統資料格式規格書.md：2-4 為參與排班對象，5 為系統管理者/隱藏。
         const isSchedulableEmployee = (e) => {
             if (!e || e.status === '離職') return false;
             const p = Number(e.permission || 0);
@@ -334,6 +335,7 @@ export default {
             floorplanStraightenerUrl,
             budgetWebUrl,
             budgetAuditUrl,
+            accountingUrl,
             formatTimeAgo,
             handleReply,
             emit,
@@ -461,6 +463,16 @@ export default {
                     <div class="min-w-0 flex-1">
                         <h2 class="text-base font-bold text-gray-800 leading-tight">員工報到/打卡</h2>
                         <p class="text-xs text-gray-500 mt-1 leading-snug">開啟外部頁面進行報到註冊。</p>
+                    </div>
+                </a>
+
+                <!-- 1b. 收支登錄（外部 LIFF，與打卡同模式） -->
+                <a :href="accountingUrl" target="_blank"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-emerald-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">💰</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">收支登錄</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">連續記帳；成功後可同步到進出款項群。</p>
                     </div>
                 </a>
 

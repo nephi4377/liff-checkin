@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>添心收支登錄</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 480px; margin: 0 auto; background: #f4f6f8; }
+    h2 { margin: 0 0 4px; }
+    .sub { color: #555; font-size: 14px; margin: 0 0 12px; }
+    .card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    label { display: block; margin-top: 10px; font-weight: 600; font-size: 14px; }
+    label:first-child { margin-top: 0; }
+    input, select { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .hidden { display: none; }
+    .btn { width: 100%; padding: 14px; font-size: 16px; font-weight: 600; border: none; border-radius: 10px; margin-top: 10px; cursor: pointer; }
+    .btn-primary { background: #1a73e8; color: #fff; }
+    .btn-primary:disabled { opacity: .5; }
+    .btn-secondary { background: #e8eaed; color: #333; }
+    .btn-done { background: #34a853; color: #fff; }
+    #statusBar { font-size: 14px; padding: 8px 10px; background: #e8f0fe; border-radius: 8px; margin-bottom: 10px; }
+    #msg { color: #c5221f; font-size: 14px; }
+    #ok { color: #137333; font-size: 14px; }
+    #loading { text-align: center; padding: 48px 16px; color: #666; }
+    #pendingPreview img { max-width: 100%; border-radius: 8px; margin-top: 6px; }
+    #recent { font-size: 13px; padding-left: 18px; }
+  </style>
+</head>
+<body>
+  <div id="loading">載入中…</div>
+  <div id="app" class="hidden">
+    <h2>收支登錄</h2>
+    <p class="sub" id="userLine">—</p>
+    <p class="sub hidden" id="photoHint">已帶入 LINE 傳的照片。關閉視窗＝不送出。</p>
+    <div id="statusBar">本輪已記 <strong id="sessionCount">0</strong> 筆 · 可連續填多筆</div>
+
+    <div class="card">
+      <div class="row2">
+        <div>
+          <label>類型</label>
+          <select id="kind"><option value="A">收入</option><option value="B">支出</option></select>
+        </div>
+        <div>
+          <label>店別</label>
+          <select id="store">
+            <option value="">（不填）</option>
+            <option value="台南">台南</option>
+            <option value="高雄">高雄</option>
+            <option value="工廠">工廠</option>
+            <option value="行政">行政</option>
+          </select>
+        </div>
+      </div>
+      <div id="blockA">
+        <label>收款日期</label><input id="txn_date" type="text" />
+        <label>客戶名</label><input id="party_name" type="text" />
+        <label>訂編</label><input id="project_no" type="text" />
+        <label>款項類別</label><input id="item_desc" type="text" />
+        <label>金額</label><input id="amount" type="number" inputmode="numeric" />
+        <label>是否入零用金</label><select id="petty_cash"><option>否</option><option>是</option></select>
+        <label>現金還是匯款</label><input id="payment_method" type="text" />
+      </div>
+      <div id="blockB" class="hidden">
+        <label>支出日期</label><input id="txn_date_b" type="text" />
+        <label>廠商名稱</label><input id="party_name_b" type="text" />
+        <label>購買品名</label><input id="item_desc_b" type="text" />
+        <label>支付金額</label><input id="amount_b" type="number" inputmode="numeric" />
+        <label>款項月份</label><input id="expense_month" type="number" min="1" max="12" />
+        <label>現金或零用金或匯款</label><input id="payment_method_b" type="text" />
+        <label>申請人</label><input id="applicant" type="text" />
+      </div>
+      <label>單據照片（選填）</label>
+      <input id="photo" type="file" accept="image/*" capture="environment" />
+      <div id="pendingPreview" class="hidden"></div>
+    </div>
+
+    <button type="button" class="btn btn-primary" id="submit">送出這一筆</button>
+    <button type="button" class="btn btn-secondary hidden" id="nextBtn">清空，再記一筆</button>
+    <button type="button" class="btn btn-done hidden" id="doneBtn">完成離開</button>
+    <div id="msg"></div>
+    <div id="ok"></div>
+    <div class="card hidden" id="recentCard"><strong>剛剛記的</strong><ul id="recent"></ul></div>
+  </div>
+
+  <script>
+    var CONSTANTS = {
+      GAS_API: 'https://script.google.com/macros/s/AKfycbyibVTQk2eYEYXX5vb-TUFYsLIKWEg1bADR-7w1QFSg6kly3gyDAG3GkKuvQ0PBur05DA/exec',
+      LIFF_ID: '',
+      INIT_TIMEOUT_MS: 10000
+    };
+
+    (function () {
+      var profile = { userId: '', displayName: '' };
+      var sessionCount = 0, submitting = false, idToken = '';
+      var pendingPhotos = [], queryParams = {};
+      var kind = document.getElementById('kind');
+      var blockA = document.getElementById('blockA');
+      var blockB = document.getElementById('blockB');
+
+      function todayRoc() {
+        var d = new Date();
+        return (d.getFullYear() - 1911) + '/' + (d.getMonth() + 1) + '/' + d.getDate();
+      }
+      function toggleBlocks() {
+        var isA = kind.value === 'A';
+        blockA.classList.toggle('hidden', !isA);
+        blockB.classList.toggle('hidden', isA);
+      }
+      kind.addEventListener('change', toggleBlocks);
+
+      function readQueryParams() {
+        var q = {};
+        (window.location.search || '').replace(/^\?/, '').split('&').forEach(function (p) {
+          if (!p) return;
+          var i = p.indexOf('=');
+          var k = i >= 0 ? p.substring(0, i) : p;
+          var v = i >= 0 ? p.substring(i + 1) : '';
+          try { q[decodeURIComponent(k)] = decodeURIComponent(v); } catch (e) {}
+        });
+        return q;
+      }
+
+      function setLoading(t) { document.getElementById('loading').textContent = t; }
+      function setMsg(t) { document.getElementById('msg').textContent = t || ''; }
+      function setOk(t) { document.getElementById('ok').textContent = t || ''; }
+      function showApp() {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+      }
+
+      function readFileB64(file) {
+        return new Promise(function (resolve, reject) {
+          if (!file) return resolve(null);
+          var r = new FileReader();
+          r.onload = function () {
+            resolve({ filename: file.name, mimeType: file.type || 'image/jpeg', dataBase64: r.result.split(',')[1] });
+          };
+          r.onerror = reject;
+          r.readAsDataURL(file);
+        });
+      }
+
+      function collectFields() {
+        var isA = kind.value === 'A';
+        var fields = {
+          store: document.getElementById('store').value,
+          txn_date: isA ? document.getElementById('txn_date').value : document.getElementById('txn_date_b').value,
+          party_name: isA ? document.getElementById('party_name').value : document.getElementById('party_name_b').value,
+          item_desc: isA ? document.getElementById('item_desc').value : document.getElementById('item_desc_b').value,
+          amount: isA ? document.getElementById('amount').value : document.getElementById('amount_b').value,
+          payment_method: isA ? document.getElementById('payment_method').value : document.getElementById('payment_method_b').value
+        };
+        if (isA) {
+          fields.project_no = document.getElementById('project_no').value;
+          fields.petty_cash = document.getElementById('petty_cash').value;
+        } else {
+          fields.expense_month = document.getElementById('expense_month').value;
+          fields.applicant = document.getElementById('applicant').value;
+        }
+        return fields;
+      }
+
+      function clearVolatileFields(keepDate) {
+        var isA = kind.value === 'A';
+        if (isA) {
+          if (!keepDate) document.getElementById('txn_date').value = todayRoc();
+          ['party_name', 'project_no', 'item_desc', 'amount', 'payment_method'].forEach(function (id) {
+            document.getElementById(id).value = '';
+          });
+        } else {
+          if (!keepDate) document.getElementById('txn_date_b').value = todayRoc();
+          ['party_name_b', 'item_desc_b', 'amount_b', 'payment_method_b', 'applicant'].forEach(function (id) {
+            document.getElementById(id).value = '';
+          });
+        }
+        document.getElementById('photo').value = '';
+      }
+
+      function showPendingPreviews(photos) {
+        var box = document.getElementById('pendingPreview');
+        box.innerHTML = '';
+        if (!photos || !photos.length) { box.classList.add('hidden'); return; }
+        photos.forEach(function (p, idx) {
+          if (!p || !p.dataBase64) return;
+          var img = document.createElement('img');
+          img.src = 'data:' + (p.mimeType || 'image/jpeg') + ';base64,' + p.dataBase64;
+          img.alt = '單據' + (idx + 1);
+          box.appendChild(img);
+        });
+        box.classList.remove('hidden');
+        document.getElementById('photoHint').classList.remove('hidden');
+      }
+
+      async function loadPendingPhotos(token) {
+        var res = await fetch(CONSTANTS.GAS_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({
+            action: 'accounting_pending_photos',
+            token: token,
+            user_id: profile.userId,
+            liff_id_token: idToken
+          })
+        });
+        var data = await res.json();
+        if (!data.success) { setMsg(data.message || '無法帶入照片'); return; }
+        pendingPhotos = data.photos || [];
+        showPendingPreviews(pendingPhotos);
+      }
+
+      async function submitEntry() {
+        if (submitting) return;
+        setMsg(''); setOk('');
+        submitting = true;
+        document.getElementById('submit').disabled = true;
+        try {
+          var fields = collectFields();
+          var photoFile = document.getElementById('photo').files[0];
+          var photo = await readFileB64(photoFile);
+          var photos = pendingPhotos.slice();
+          if (photo) photos.push(photo);
+          var res = await fetch(CONSTANTS.GAS_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+              action: 'accounting_form_submit',
+              liff_id_token: idToken,
+              source: queryParams.source || 'liff',
+              user_id: profile.userId,
+              display_name: profile.displayName,
+              payload: { format: kind.value, fields: fields, photos: photos }
+            })
+          });
+          var data = await res.json();
+          if (!data.success) {
+            setMsg(data.message || '送出失敗');
+            return;
+          }
+          sessionCount++;
+          document.getElementById('sessionCount').textContent = String(sessionCount);
+          var ul = document.getElementById('recent');
+          var li = document.createElement('li');
+          li.textContent = (kind.value === 'A' ? '收入' : '支出') + ' ' + fields.party_name + ' → ' + data.sheet + ' 第' + data.row + '列';
+          ul.insertBefore(li, ul.firstChild);
+          document.getElementById('recentCard').classList.remove('hidden');
+          setOk('記好了！第 ' + sessionCount + ' 筆（' + data.sheet + ' 第 ' + data.row + ' 列）');
+          if (data.groupNotified) setOk(document.getElementById('ok').textContent + ' · 已同步通知');
+          pendingPhotos = [];
+          showPendingPreviews([]);
+          clearVolatileFields(true);
+          document.getElementById('nextBtn').classList.remove('hidden');
+          document.getElementById('doneBtn').classList.remove('hidden');
+        } catch (e) {
+          setMsg(String(e.message || e));
+        } finally {
+          submitting = false;
+          document.getElementById('submit').disabled = false;
+        }
+      }
+
+      document.getElementById('submit').addEventListener('click', submitEntry);
+      document.getElementById('nextBtn').addEventListener('click', function () {
+        setOk(''); setMsg(''); clearVolatileFields(false);
+      });
+      document.getElementById('doneBtn').addEventListener('click', function () {
+        if (typeof liff !== 'undefined' && liff.isInClient && liff.isInClient()) liff.closeWindow();
+      });
+
+      async function loadPolicy() {
+        try {
+          var res = await fetch(CONSTANTS.GAS_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'accounting_policy' })
+          });
+          var data = await res.json();
+          if (data.success && data.policy && data.policy.liffId) {
+            CONSTANTS.LIFF_ID = data.policy.liffId;
+          }
+        } catch (e) {}
+      }
+
+      async function boot() {
+        queryParams = readQueryParams();
+        await loadPolicy();
+        if (!CONSTANTS.LIFF_ID) {
+          setLoading('LIFF 尚未設定，請在 LINE Developers 建立後寫入 ACCOUNTING_LIFF_ID');
+          return;
+        }
+        document.getElementById('txn_date').value = todayRoc();
+        document.getElementById('txn_date_b').value = todayRoc();
+        document.getElementById('expense_month').value = String(new Date().getMonth() + 1);
+        if (queryParams.kind === 'B' || queryParams.from === 'photo') kind.value = 'B';
+        toggleBlocks();
+
+        if (typeof liff === 'undefined') {
+          setLoading('請用 LINE 開啟此頁');
+          return;
+        }
+        try {
+          setLoading('連線 LINE…');
+          await Promise.race([
+            liff.init({ liffId: CONSTANTS.LIFF_ID }),
+            new Promise(function (_, rej) { setTimeout(function () { rej(new Error('逾時')); }, CONSTANTS.INIT_TIMEOUT_MS); })
+          ]);
+          if (!liff.isLoggedIn()) {
+            setLoading('登入中…');
+            liff.login({ redirectUri: window.location.href });
+            return;
+          }
+          var p = await liff.getProfile();
+          profile.userId = p.userId;
+          profile.displayName = p.displayName;
+          idToken = liff.getIDToken();
+          document.getElementById('userLine').textContent = '你好，' + p.displayName;
+        } catch (e) {
+          setLoading('載入失敗：' + (e.message || e));
+          return;
+        }
+        showApp();
+        if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
+      }
+      boot();
+    })();
+  </script>
+</body>
+</html>

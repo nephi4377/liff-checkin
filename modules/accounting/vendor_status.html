@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>款項進度</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/accounting_api.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 560px; margin: 0 auto; background: #f4f6f8; }
+    h2 { margin: 0 0 8px; }
+    .sub { color: #555; font-size: 14px; }
+    .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .item { border-bottom: 1px solid #eee; padding: 12px 0; }
+    .item:last-child { border-bottom: none; }
+    .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin-right: 6px; }
+    #msg { color: #c5221f; font-size: 14px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div id="loading">載入中…</div>
+  <div id="app" class="hidden">
+    <h2>款項進度</h2>
+    <p class="sub" id="userLine">—</p>
+    <div id="msg"></div>
+    <div class="card" id="list">載入中…</div>
+  </div>
+  <script>
+    (function () {
+      function setMsg(t) { document.getElementById('msg').textContent = t || ''; }
+      function showApp() {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+      }
+      function renderItems(data) {
+        var box = document.getElementById('list');
+        box.innerHTML = '';
+        if (!data.success) {
+          box.textContent = data.message || '查詢失敗';
+          return;
+        }
+        var items = data.items || [];
+        if (data.vendor && data.vendor.name) {
+          var h = document.createElement('p');
+          h.className = 'sub';
+          h.textContent = '廠商：' + data.vendor.name;
+          box.appendChild(h);
+        }
+        if (!items.length) {
+          box.appendChild(document.createTextNode('目前沒有符合的款項紀錄'));
+          return;
+        }
+        items.forEach(function (it) {
+          var div = document.createElement('div');
+          div.className = 'item';
+          var amt = Number(it.amount || 0).toLocaleString();
+          div.innerHTML = '<div><strong>' + (it.summary || it.type) + '</strong></div>' +
+            '<div class="sub">' + (it.txn_date || '') + ' · ' + it.type + ' $' + amt + '</div>' +
+            '<div><span class="tag">' + (it.review_status || '待審') + '</span>' +
+            '<span class="tag">' + (it.payment_status || '未匯款') + '</span></div>';
+          box.appendChild(div);
+        });
+      }
+      (async function boot() {
+        try {
+          var session = await AccountingApi.initLiff();
+          if (!session) return;
+          document.getElementById('userLine').textContent = session.profile.displayName;
+          showApp();
+          var data = await AccountingApi.vendorPaymentStatus(session.idToken);
+          renderItems(data);
+        } catch (e) {
+          document.getElementById('loading').textContent = e.message || String(e);
+        }
+      })();
+    })();
+  </script>
+</body>
+</html>

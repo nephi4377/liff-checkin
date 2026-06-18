@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>廠商名冊</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/accounting_api.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 560px; margin: 0 auto; background: #f4f6f8; }
+    h2 { margin: 0 0 8px; }
+    .sub { color: #555; font-size: 14px; }
+    .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    label { display: block; margin-top: 8px; font-weight: 600; font-size: 14px; }
+    input { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; }
+    .btn { width: 100%; padding: 12px; margin-top: 10px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; background: #1a73e8; color: #fff; }
+    .item { border-bottom: 1px solid #eee; padding: 10px 0; }
+    .item:last-child { border-bottom: none; }
+    #msg { color: #c5221f; font-size: 14px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div id="loading">載入中…</div>
+  <div id="app" class="hidden">
+    <h2>廠商名冊</h2>
+    <p class="sub" id="userLine">—</p>
+    <div id="msg"></div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px">新增廠商</h3>
+      <label>名稱</label><input id="name" />
+      <label>統編</label><input id="tax_id" />
+      <label>LINE userId（選填）</label><input id="line_user_id" />
+      <label>聯絡人</label><input id="contact_name" />
+      <label>電話</label><input id="contact_phone" />
+      <button type="button" class="btn" id="addBtn">新增</button>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px">列表</h3>
+      <div id="list"></div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var idToken = '';
+      function setMsg(t) { document.getElementById('msg').textContent = t || ''; }
+      function showApp() {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+      }
+      async function loadList() {
+        var data = await AccountingApi.crudList(idToken, 'vendor', { page_size: 100 });
+        var box = document.getElementById('list');
+        box.innerHTML = '';
+        if (!data.success) { setMsg(data.message); return; }
+        (data.data || []).forEach(function (v) {
+          var div = document.createElement('div');
+          div.className = 'item';
+          div.innerHTML = '<strong>' + (v.name || '') + '</strong><br><span class="sub">' +
+            (v.tax_id || '—') + ' · ' + (v.line_user_id || '未綁 LINE') + '</span>';
+          box.appendChild(div);
+        });
+        if (!data.data || !data.data.length) box.textContent = '尚無資料';
+      }
+      document.getElementById('addBtn').addEventListener('click', async function () {
+        setMsg('');
+        var payload = {
+          name: document.getElementById('name').value.trim(),
+          tax_id: document.getElementById('tax_id').value.trim(),
+          line_user_id: document.getElementById('line_user_id').value.trim(),
+          contact_name: document.getElementById('contact_name').value.trim(),
+          contact_phone: document.getElementById('contact_phone').value.trim()
+        };
+        if (!payload.name) { setMsg('請填廠商名稱'); return; }
+        var data = await AccountingApi.crudCreate(idToken, 'vendor', payload);
+        if (!data.success) { setMsg(data.message || '新增失敗'); return; }
+        ['name', 'tax_id', 'line_user_id', 'contact_name', 'contact_phone'].forEach(function (id) {
+          document.getElementById(id).value = '';
+        });
+        await loadList();
+      });
+      (async function boot() {
+        try {
+          var session = await AccountingApi.initLiff();
+          if (!session) return;
+          idToken = session.idToken;
+          if ((session.auth.permission || 0) < 2) {
+            document.getElementById('loading').textContent = '權限不足（需行政以上）';
+            return;
+          }
+          document.getElementById('userLine').textContent = session.profile.displayName + ' · 權限 ' + session.auth.permission;
+          showApp();
+          await loadList();
+        } catch (e) {
+          document.getElementById('loading').textContent = e.message || String(e);
+        }
+      })();
+    })();
+  </script>
+</body>
+</html>
