@@ -52,7 +52,20 @@ var AccountingCache = (function () {
         var cached = read(session);
         if (cached) return mergeEnums(cached);
       }
-      var res = await AccountingApi.bootstrap(session);
+      if (typeof AccountingApi === 'undefined') {
+        throw new Error('AccountingApi 未載入，請確認 accounting_api.js 已引入');
+      }
+      var res;
+      if (typeof AccountingApi.bootstrap === 'function') {
+        res = await AccountingApi.bootstrap(session);
+      } else if (typeof AccountingApi.post === 'function') {
+        res = await AccountingApi.post({
+          action: 'accounting_bootstrap',
+          auth: AccountingApi.buildAuth ? AccountingApi.buildAuth(session) : { dev_bypass: !!session.devBypass }
+        });
+      } else {
+        throw new Error('AccountingApi 版本過舊，請強制重新整理（Ctrl+F5）');
+      }
       if (!res.success || !res.bootstrap) throw new Error(res.message || '載入主檔失敗');
       write(session, res.bootstrap);
       return mergeEnums(res.bootstrap);
