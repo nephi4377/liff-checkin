@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>收支審核</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_api.js?v=8"></script>
+  <script src="../../shared/js/accounting_api.js?v=9"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 600px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 8px; }
@@ -110,7 +110,8 @@
           '<div><span class="tag">' + (row.review_status || '待審') + '</span>' +
           '<span class="tag pay">' + (row.payment_status || '未匯款') + '</span></div>' +
           '<div class="sub">' + (row.reviewed_by ? '審核：' + row.reviewed_by + ' · ' + (row.reviewed_at || '') : '尚未審核') + '</div>' +
-          (row.note ? '<div class="sub">來源：' + row.note + '</div>' : '');
+          (row.note ? '<div class="sub">來源：' + row.note + '</div>' : '') +
+          '<div class="sub"><a href="attachments.html?ingest_id=' + encodeURIComponent(row.ingest_id || '') + '">查單據附件</a></div>';
         var actions = document.createElement('div');
         actions.className = 'actions';
         if (row.review_status !== '已審') {

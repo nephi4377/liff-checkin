@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>廠商名冊</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_master_data.js?v=8"></script>
-  <script src="../../shared/js/accounting_api.js?v=8"></script>
-  <script src="../../shared/js/accounting_cache.js?v=8"></script>
+  <script src="../../shared/js/accounting_master_data.js?v=9"></script>
+  <script src="../../shared/js/accounting_api.js?v=9"></script>
+  <script src="../../shared/js/accounting_cache.js?v=9"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 640px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 8px; }
@@ -28,7 +28,6 @@
     .item.paused { opacity: .65; }
     .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin: 2px 4px 2px 0; }
     .tag.pause { background: #fce8e6; color: #c5221f; }
-    .tag.area { background: #e6f4ea; color: #137333; }
     .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
     .file { font-size: 13px; padding: 6px 0; border-top: 1px dashed #eee; }
     .file a { color: #1a73e8; }
@@ -90,8 +89,6 @@
       </div>
       <label>Email</label><input id="contact_email" type="email" />
       <label>公司／工廠地址</label><input id="address" />
-      <label>服務區域（逗號分隔）</label>
-      <input id="service_areas" placeholder="例：雙北,桃園" />
       <p class="section-title">匯款資訊</p>
       <div class="row2">
         <div><label>銀行代碼</label><input id="bank_code" maxlength="3" inputmode="numeric" /></div>
@@ -105,10 +102,8 @@
       <select id="payment_terms"></select>
       <label>合作狀態</label>
       <select id="coop_status"></select>
-      <label>施工品質／配合度備註</label>
-      <textarea id="quality_note" placeholder="例：手藝佳但工期難約"></textarea>
-      <label>其他備註</label>
-      <textarea id="note"></textarea>
+      <label>備註</label>
+      <textarea id="note" placeholder="服務區域、施工品質、配合度或其他注意事項可寫在這裡"></textarea>
       <button type="button" class="btn btn-primary btn-block" id="saveBtn">儲存</button>
       <button type="button" class="btn btn-secondary btn-block hidden" id="cancelEditBtn">取消編輯</button>
     </div>
@@ -162,14 +157,12 @@
           contact_phone: $('contact_phone').value.trim(),
           contact_email: $('contact_email').value.trim(),
           address: $('address').value.trim(),
-          service_areas: $('service_areas').value.trim(),
           bank_code: $('bank_code').value.trim(),
           branch_name: $('branch_name').value.trim(),
           account_no: $('account_no').value.trim(),
           account_name: $('account_name').value.trim(),
           payment_terms: $('payment_terms').value,
           coop_status: $('coop_status').value || '合作中',
-          quality_note: $('quality_note').value.trim(),
           note: $('note').value.trim()
         };
       }
@@ -178,8 +171,8 @@
         $('editId').value = '';
         $('formTitle').textContent = '新增廠商';
         $('cancelEditBtn').classList.add('hidden');
-        ['name','tax_id','line_user_id','contact_name','contact_phone','contact_email','address','service_areas',
-          'bank_code','branch_name','account_no','account_name','quality_note','note'].forEach(function (id) {
+        ['name','tax_id','line_user_id','contact_name','contact_phone','contact_email','address',
+          'bank_code','branch_name','account_no','account_name','note'].forEach(function (id) {
           $(id).value = '';
         });
         $('trade_category').value = '其他';
@@ -201,15 +194,17 @@
         $('contact_phone').value = v.contact_phone || '';
         $('contact_email').value = v.contact_email || '';
         $('address').value = v.address || '';
-        $('service_areas').value = v.service_areas || '';
         $('bank_code').value = v.bank_code || '';
         $('branch_name').value = v.branch_name || '';
         $('account_no').value = v.account_no || '';
         $('account_name').value = v.account_name || '';
         $('payment_terms').value = v.payment_terms || '';
         $('coop_status').value = v.coop_status || '合作中';
-        $('quality_note').value = v.quality_note || '';
-        $('note').value = v.note || '';
+        var noteLines = [];
+        if (v.note) noteLines.push(String(v.note));
+        if (v.quality_note) noteLines.push(String(v.quality_note));
+        if (v.service_areas) noteLines.push('服務區域：' + v.service_areas);
+        $('note').value = noteLines.join('\n');
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
 
@@ -280,10 +275,6 @@
         rows.forEach(function (v) {
           var div = document.createElement('div');
           div.className = 'item' + (v.coop_status === '暫停合作' ? ' paused' : '');
-          var areas = String(v.service_areas || '').split(/[,，、]/).filter(Boolean);
-          var areaHtml = areas.map(function (a) {
-            return '<span class="tag area">' + a.trim() + '</span>';
-          }).join('');
           div.innerHTML =
             '<div><strong>' + (v.name || '') + '</strong> ' +
             '<span class="tag">' + (v.trade_category || '其他') + '</span>' +
@@ -291,8 +282,7 @@
             (v.coop_status === '暫停合作' ? '<span class="tag pause">暫停合作</span>' : '') +
             '</div>' +
             '<div class="sub">' + (v.tax_id || '—') + ' · ' + (v.contact_phone || '無電話') + '</div>' +
-            (areaHtml ? '<div>' + areaHtml + '</div>' : '') +
-            (v.quality_note ? '<div class="sub">評價：' + v.quality_note + '</div>' : '');
+            (v.note ? '<div class="sub">備註：' + v.note + '</div>' : '');
           var actions = document.createElement('div');
           actions.className = 'actions';
           var btnEdit = document.createElement('button');

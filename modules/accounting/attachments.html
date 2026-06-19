@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>單據附件</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/accounting_master_data.js?v=9"></script>
+  <script src="../../shared/js/accounting_api.js?v=9"></script>
+  <script src="../../shared/js/accounting_cache.js?v=9"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 600px; margin: 0 auto; background: #f4f6f8; }
+    h2 { margin: 0 0 8px; }
+    .sub { color: #555; font-size: 14px; }
+    .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    label { display: block; margin-top: 8px; font-weight: 600; font-size: 14px; }
+    input { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; }
+    .btn { width: 100%; padding: 12px; margin-top: 10px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; background: #1a73e8; color: #fff; }
+    .item { border-bottom: 1px solid #eee; padding: 12px 0; }
+    .item:last-child { border-bottom: none; }
+    .mono { font-family: ui-monospace, monospace; font-size: 12px; color: #555; word-break: break-all; }
+    #msg { color: #c5221f; font-size: 14px; }
+    .hidden { display: none; }
+    .nav { margin-bottom: 12px; font-size: 14px; }
+    .nav a { color: #1a73e8; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div id="loading">載入中…</div>
+  <div id="app" class="hidden">
+    <p class="nav"><a href="index.html">← 會計功能選單</a></p>
+    <h2>單據附件索引</h2>
+    <p class="sub" id="userLine">—</p>
+    <div id="msg"></div>
+
+    <div class="card">
+      <label>ingest_id（收支紀錄 ID，可貼部分）</label>
+      <input id="ingestId" placeholder="記帳後 G 欄備註的 [ingest:…] 內容" />
+      <label>關鍵字（檔名、試算表列等）</label>
+      <input id="keyword" placeholder="選填" />
+      <button type="button" class="btn" id="searchBtn">查詢</button>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px">結果</h3>
+      <div id="list">請輸入條件後查詢</div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var session = null;
+      function setMsg(t) { document.getElementById('msg').textContent = t || ''; }
+      function showApp() {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+      }
+      function renderList(rows) {
+        var box = document.getElementById('list');
+        box.innerHTML = '';
+        if (!rows.length) {
+          box.textContent = '沒有符合的附件';
+          return;
+        }
+        rows.forEach(function (a) {
+          var div = document.createElement('div');
+          div.className = 'item';
+          var link = a.drive_url
+            ? '<a href="' + a.drive_url + '" target="_blank" rel="noopener">' + (a.filename || '開啟檔案') + '</a>'
+            : (a.filename || '—');
+          div.innerHTML =
+            '<div>' + link + '</div>' +
+            '<div class="mono">' + (a.ingest_id || '') + '</div>' +
+            '<div class="sub">' + (a.ledger_sheet || '') + ' 第' + (a.ledger_row || '?') + '列 · ' + (a.uploaded_at || '') + '</div>';
+          box.appendChild(div);
+        });
+      }
+      document.getElementById('searchBtn').addEventListener('click', async function () {
+        setMsg('');
+        var filter = { page_size: 50 };
+        var iid = document.getElementById('ingestId').value.trim();
+        var kw = document.getElementById('keyword').value.trim();
+        if (iid) filter.ingest_id = iid;
+        if (kw) filter.keyword = kw;
+        if (!iid && !kw) { setMsg('請至少輸入 ingest_id 或關鍵字'); return; }
+        var data = await AccountingApi.crudList(session, 'attachment', filter);
+        if (!data.success) { setMsg(data.message || '查詢失敗'); return; }
+        renderList(data.data || []);
+      });
+      (async function boot() {
+        try {
+          session = await AccountingApi.initSession();
+          if (!session) return;
+          if ((session.auth.permission || 0) < 2) {
+            document.getElementById('loading').textContent = '權限不足（需行政以上）';
+            return;
+          }
+          if (!AccountingCache.get(session)) await AccountingCache.load(session);
+          var q = new URLSearchParams(window.location.search);
+          if (q.get('ingest_id')) document.getElementById('ingestId').value = q.get('ingest_id');
+          var mode = session.devBypass ? ' · 測試模式（無登入）' : '';
+          document.getElementById('userLine').textContent =
+            session.profile.displayName + ' · 權限 ' + session.auth.permission + mode;
+          showApp();
+          if (q.get('ingest_id')) document.getElementById('searchBtn').click();
+        } catch (e) {
+          document.getElementById('loading').textContent = e.message || String(e);
+        }
+      })();
+    })();
+  </script>
+</body>
+</html>
