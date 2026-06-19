@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>添心會計</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/accounting_master_data.js"></script>
+  <script src="../../shared/js/accounting_cache.js"></script>
   <script src="../../shared/js/accounting_api.js"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 480px; margin: 0 auto; background: #f4f6f8; }
@@ -47,6 +49,12 @@
       <p>管理下包商、材料商與工人的銀行帳戶，供匯款使用。</p>
       <span class="tag admin">行政以上</span>
     </a>
+
+    <a class="card" href="ledger_review.html" id="linkLedgerReview">
+      <h3>收支審核</h3>
+      <p>查看待審收支、核准或退回，並標記匯款狀態。</p>
+      <span class="tag admin">行政以上</span>
+    </a>
   </div>
   <script>
     (function () {
@@ -65,6 +73,9 @@
           if (perm < 2) {
             document.getElementById('linkVendors').style.display = 'none';
             document.getElementById('linkPayees').style.display = 'none';
+            document.getElementById('linkLedgerReview').style.display = 'none';
+          } else {
+            await AccountingCache.load(session);
           }
           showApp();
         } catch (e) {

@@ -1,0 +1,90 @@
+/**
+ * 會計系統共用快取 — 進入 index 時 bootstrap 一次，子頁讀快取
+ */
+var AccountingCache = (function () {
+  var STORAGE_KEY = 'tanxin_accounting_bootstrap_v1';
+
+  function storageKey(session) {
+    var uid = (session && session.auth && session.auth.user_id) || 'anon';
+    return STORAGE_KEY + ':' + uid;
+  }
+
+  function read(session) {
+    try {
+      var raw = sessionStorage.getItem(storageKey(session));
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      if (!parsed || !parsed.data) return null;
+      if (Date.now() - parsed.ts > (AccountingMasterData.TTL_MS || 300000)) return null;
+      return parsed.data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function write(session, data) {
+    try {
+      sessionStorage.setItem(storageKey(session), JSON.stringify({ ts: Date.now(), data: data }));
+    } catch (e) {}
+  }
+
+  function mergeEnums(data) {
+    if (!data || !data.enums) return data;
+    var e = data.enums;
+    AccountingMasterData.vendor_trade_categories = e.vendor_trade_categories || AccountingMasterData.vendor_trade_categories;
+    AccountingMasterData.vendor_cost_types = e.vendor_cost_types || AccountingMasterData.vendor_cost_types;
+    AccountingMasterData.vendor_coop_statuses = e.vendor_coop_statuses || AccountingMasterData.vendor_coop_statuses;
+    AccountingMasterData.vendor_payment_terms_presets = e.vendor_payment_terms_presets || AccountingMasterData.vendor_payment_terms_presets;
+    AccountingMasterData.vendor_service_area_presets = e.vendor_service_area_presets || AccountingMasterData.vendor_service_area_presets;
+    return data;
+  }
+
+  return {
+    clear: function (session) {
+      try { sessionStorage.removeItem(storageKey(session)); } catch (e) {}
+    },
+    get: function (session) {
+      return read(session);
+    },
+    load: async function (session, force) {
+      if (!session) throw new Error('需要登入');
+      if (!force) {
+        var cached = read(session);
+        if (cached) return mergeEnums(cached);
+      }
+      var res = await AccountingApi.bootstrap(session);
+      if (!res.success || !res.bootstrap) throw new Error(res.message || '載入主檔失敗');
+      write(session, res.bootstrap);
+      return mergeEnums(res.bootstrap);
+    },
+    vendors: function (session) {
+      var c = read(session);
+      return (c && c.masters && c.masters.vendors) || [];
+    },
+    payees: function (session) {
+      var c = read(session);
+      return (c && c.masters && c.masters.payees) || [];
+    },
+    enums: function (session) {
+      var c = read(session);
+      return (c && c.enums) || AccountingMasterData;
+    },
+    patchVendor: function (session, vendor) {
+      var c = read(session);
+      if (!c || !c.masters || !c.masters.vendors) return;
+      var list = c.masters.vendors;
+      var idx = list.findIndex(function (v) { return v.vendor_id === vendor.vendor_id; });
+      if (idx >= 0) list[idx] = vendor;
+      else list.unshift(vendor);
+      write(session, c);
+    },
+    removeVendor: function (session, vendorId) {
+      var c = read(session);
+      if (!c || !c.masters) return;
+      c.masters.vendors = (c.masters.vendors || []).filter(function (v) {
+        return v.vendor_id !== vendorId;
+      });
+      write(session, c);
+    }
+  };
+})();

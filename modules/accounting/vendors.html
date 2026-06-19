@@ -5,21 +5,39 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>廠商名冊</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/accounting_master_data.js"></script>
+  <script src="../../shared/js/accounting_cache.js"></script>
   <script src="../../shared/js/accounting_api.js"></script>
   <style>
-    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 560px; margin: 0 auto; background: #f4f6f8; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 640px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; }
     .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
     label { display: block; margin-top: 8px; font-weight: 600; font-size: 14px; }
-    input { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; }
-    .btn { width: 100%; padding: 12px; margin-top: 10px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; background: #1a73e8; color: #fff; }
-    .item { border-bottom: 1px solid #eee; padding: 10px 0; }
+    label.req::after { content: ' *'; color: #c5221f; }
+    input, select, textarea { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; font-size: 15px; }
+    textarea { min-height: 72px; resize: vertical; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btn { padding: 10px 14px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 14px; }
+    .btn-block { width: 100%; margin-top: 10px; }
+    .btn-primary { background: #1a73e8; color: #fff; }
+    .btn-secondary { background: #e8eaed; color: #333; }
+    .btn-warn { background: #fce8e6; color: #c5221f; }
+    .item { border-bottom: 1px solid #eee; padding: 12px 0; }
     .item:last-child { border-bottom: none; }
+    .item.paused { opacity: .65; }
+    .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin: 2px 4px 2px 0; }
+    .tag.pause { background: #fce8e6; color: #c5221f; }
+    .tag.area { background: #e6f4ea; color: #137333; }
+    .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .file { font-size: 13px; padding: 6px 0; border-top: 1px dashed #eee; }
+    .file a { color: #1a73e8; }
     #msg { color: #c5221f; font-size: 14px; }
+    #ok { color: #137333; font-size: 14px; }
     .hidden { display: none; }
     .nav { margin-bottom: 12px; font-size: 14px; }
     .nav a { color: #1a73e8; text-decoration: none; }
+    .section-title { font-size: 13px; color: #888; margin: 14px 0 6px; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -29,77 +47,335 @@
     <h2>廠商名冊</h2>
     <p class="sub" id="userLine">—</p>
     <div id="msg"></div>
+    <div id="ok"></div>
 
     <div class="card">
-      <h3 style="margin:0 0 8px">新增廠商</h3>
-      <label>名稱</label><input id="name" />
-      <label>統編</label><input id="tax_id" />
-      <label>LINE userId（選填）</label><input id="line_user_id" />
-      <label>聯絡人</label><input id="contact_name" />
-      <label>電話</label><input id="contact_phone" />
-      <button type="button" class="btn" id="addBtn">新增</button>
+      <h3 style="margin:0 0 8px">篩選</h3>
+      <div class="row2">
+        <div>
+          <label>工種</label>
+          <select id="filterTrade"><option value="">全部</option></select>
+        </div>
+        <div>
+          <label>合作狀態</label>
+          <select id="filterCoop">
+            <option value="">全部</option>
+            <option value="合作中">合作中</option>
+            <option value="暫停合作">暫停合作</option>
+          </select>
+        </div>
+      </div>
+      <label>關鍵字</label>
+      <input id="filterKw" placeholder="名稱、統編、電話…" />
+      <button type="button" class="btn btn-secondary btn-block" id="filterBtn">套用篩選</button>
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 8px">列表</h3>
+      <h3 id="formTitle" style="margin:0 0 8px">新增廠商</h3>
+      <input type="hidden" id="editId" />
+      <label class="req">名稱</label><input id="name" />
+      <div class="row2">
+        <div><label>統編</label><input id="tax_id" /></div>
+        <div>
+          <label class="req">工種／類別</label>
+          <select id="trade_category"></select>
+        </div>
+      </div>
+      <label>材料／工資屬性</label>
+      <select id="cost_type"></select>
+      <label class="req">LINE userId</label><input id="line_user_id" placeholder="Uxxxxxxxx…" />
+      <div class="row2">
+        <div><label>聯絡人</label><input id="contact_name" /></div>
+        <div><label>電話</label><input id="contact_phone" inputmode="tel" /></div>
+      </div>
+      <label>Email</label><input id="contact_email" type="email" />
+      <label>公司／工廠地址</label><input id="address" />
+      <label>服務區域（逗號分隔）</label>
+      <input id="service_areas" placeholder="例：雙北,桃園" />
+      <p class="section-title">匯款資訊</p>
+      <div class="row2">
+        <div><label>銀行代碼</label><input id="bank_code" maxlength="3" inputmode="numeric" /></div>
+        <div><label>分行名稱</label><input id="branch_name" /></div>
+      </div>
+      <div class="row2">
+        <div><label>帳號</label><input id="account_no" inputmode="numeric" /></div>
+        <div><label>戶名</label><input id="account_name" /></div>
+      </div>
+      <label>付款條件</label>
+      <select id="payment_terms"></select>
+      <label>合作狀態</label>
+      <select id="coop_status"></select>
+      <label>施工品質／配合度備註</label>
+      <textarea id="quality_note" placeholder="例：手藝佳但工期難約"></textarea>
+      <label>其他備註</label>
+      <textarea id="note"></textarea>
+      <button type="button" class="btn btn-primary btn-block" id="saveBtn">儲存</button>
+      <button type="button" class="btn btn-secondary btn-block hidden" id="cancelEditBtn">取消編輯</button>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px">列表 <span class="sub" id="listCount"></span></h3>
       <div id="list"></div>
     </div>
   </div>
   <script>
     (function () {
       var session = null;
-      function setMsg(t) { document.getElementById('msg').textContent = t || ''; }
-      function showApp() {
-        document.getElementById('loading').classList.add('hidden');
-        document.getElementById('app').classList.remove('hidden');
+      var allVendors = [];
+
+      function $(id) { return document.getElementById(id); }
+      function setMsg(t) { $('msg').textContent = t || ''; }
+      function setOk(t) { $('ok').textContent = t || ''; }
+
+      function fillSelect(id, options, withEmpty) {
+        var sel = $(id);
+        sel.innerHTML = withEmpty ? '<option value="">（請選）</option>' : '';
+        options.forEach(function (o) {
+          var opt = document.createElement('option');
+          opt.value = o; opt.textContent = o;
+          sel.appendChild(opt);
+        });
       }
-      async function loadList() {
-        var data = await AccountingApi.crudList(session, 'vendor', { page_size: 100 });
-        var box = document.getElementById('list');
+
+      function initFormOptions() {
+        fillSelect('trade_category', AccountingMasterData.vendor_trade_categories, false);
+        fillSelect('cost_type', AccountingMasterData.vendor_cost_types, true);
+        fillSelect('coop_status', AccountingMasterData.vendor_coop_statuses, false);
+        fillSelect('payment_terms', AccountingMasterData.vendor_payment_terms_presets, true);
+        fillSelect('filterTrade', [''].concat(AccountingMasterData.vendor_trade_categories), false);
+        $('filterTrade').options[0].textContent = '全部';
+      }
+
+      function showApp() {
+        $('loading').classList.add('hidden');
+        $('app').classList.remove('hidden');
+      }
+
+      function readForm() {
+        return {
+          name: $('name').value.trim(),
+          tax_id: $('tax_id').value.trim(),
+          trade_category: $('trade_category').value,
+          cost_type: $('cost_type').value,
+          line_user_id: $('line_user_id').value.trim(),
+          contact_name: $('contact_name').value.trim(),
+          contact_phone: $('contact_phone').value.trim(),
+          contact_email: $('contact_email').value.trim(),
+          address: $('address').value.trim(),
+          service_areas: $('service_areas').value.trim(),
+          bank_code: $('bank_code').value.trim(),
+          branch_name: $('branch_name').value.trim(),
+          account_no: $('account_no').value.trim(),
+          account_name: $('account_name').value.trim(),
+          payment_terms: $('payment_terms').value,
+          coop_status: $('coop_status').value || '合作中',
+          quality_note: $('quality_note').value.trim(),
+          note: $('note').value.trim()
+        };
+      }
+
+      function clearForm() {
+        $('editId').value = '';
+        $('formTitle').textContent = '新增廠商';
+        $('cancelEditBtn').classList.add('hidden');
+        ['name','tax_id','line_user_id','contact_name','contact_phone','contact_email','address','service_areas',
+          'bank_code','branch_name','account_no','account_name','quality_note','note'].forEach(function (id) {
+          $(id).value = '';
+        });
+        $('trade_category').value = '其他';
+        $('cost_type').value = '';
+        $('coop_status').value = '合作中';
+        $('payment_terms').value = '';
+      }
+
+      function fillForm(v) {
+        $('editId').value = v.vendor_id || '';
+        $('formTitle').textContent = '編輯廠商';
+        $('cancelEditBtn').classList.remove('hidden');
+        $('name').value = v.name || '';
+        $('tax_id').value = v.tax_id || '';
+        $('trade_category').value = v.trade_category || '其他';
+        $('cost_type').value = v.cost_type || '';
+        $('line_user_id').value = v.line_user_id || '';
+        $('contact_name').value = v.contact_name || '';
+        $('contact_phone').value = v.contact_phone || '';
+        $('contact_email').value = v.contact_email || '';
+        $('address').value = v.address || '';
+        $('service_areas').value = v.service_areas || '';
+        $('bank_code').value = v.bank_code || '';
+        $('branch_name').value = v.branch_name || '';
+        $('account_no').value = v.account_no || '';
+        $('account_name').value = v.account_name || '';
+        $('payment_terms').value = v.payment_terms || '';
+        $('coop_status').value = v.coop_status || '合作中';
+        $('quality_note').value = v.quality_note || '';
+        $('note').value = v.note || '';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      function filterLocal(rows) {
+        var tc = $('filterTrade').value;
+        var cs = $('filterCoop').value;
+        var kw = $('filterKw').value.trim().toLowerCase();
+        return rows.filter(function (v) {
+          if (tc && String(v.trade_category || '') !== tc) return false;
+          if (cs && String(v.coop_status || '合作中') !== cs) return false;
+          if (kw && JSON.stringify(v).toLowerCase().indexOf(kw) < 0) return false;
+          return true;
+        });
+      }
+
+      function renderFiles(box, vendor) {
+        var filesBox = document.createElement('div');
+        filesBox.className = 'files-box';
+        if (vendor.drive_folder_url) {
+          var link = document.createElement('a');
+          link.href = vendor.drive_folder_url;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.textContent = '開啟 Drive 資料夾';
+          link.style.fontSize = '13px';
+          filesBox.appendChild(link);
+        }
+        var btnFolder = document.createElement('button');
+        btnFolder.type = 'button';
+        btnFolder.className = 'btn btn-secondary';
+        btnFolder.textContent = vendor.drive_folder_id ? '重新整理檔案' : '建立檔案資料夾';
+        btnFolder.addEventListener('click', async function () {
+          setMsg('');
+          var data = await AccountingApi.vendorEnsureFolder(session, vendor.vendor_id);
+          if (!data.success) { setMsg(data.message || '失敗'); return; }
+          vendor.drive_folder_id = data.folder.drive_folder_id;
+          vendor.drive_folder_url = data.folder.drive_folder_url;
+          AccountingCache.patchVendor(session, vendor);
+          renderList();
+        });
+        filesBox.appendChild(btnFolder);
+        if (vendor.drive_folder_id) {
+          AccountingApi.vendorListFiles(session, vendor.drive_folder_id).then(function (fd) {
+            if (!fd.success) return;
+            (fd.files || []).forEach(function (f) {
+              var row = document.createElement('div');
+              row.className = 'file';
+              row.innerHTML = '<a href="' + f.url + '" target="_blank" rel="noopener">' + f.name + '</a>' +
+                ' <span class="sub">' + (f.updated || '') + '</span>';
+              filesBox.appendChild(row);
+            });
+            if (!fd.files || !fd.files.length) {
+              var empty = document.createElement('p');
+              empty.className = 'sub';
+              empty.textContent = '資料夾尚無檔案（可上傳報價單、合約、請款資料）';
+              filesBox.appendChild(empty);
+            }
+          });
+        }
+        box.appendChild(filesBox);
+      }
+
+      function renderList() {
+        var rows = filterLocal(allVendors);
+        $('listCount').textContent = '(' + rows.length + ' 家)';
+        var box = $('list');
         box.innerHTML = '';
-        if (!data.success) { setMsg(data.message); return; }
-        (data.data || []).forEach(function (v) {
+        rows.forEach(function (v) {
           var div = document.createElement('div');
-          div.className = 'item';
-          div.innerHTML = '<strong>' + (v.name || '') + '</strong><br><span class="sub">' +
-            (v.tax_id || '—') + ' · ' + (v.line_user_id || '未綁 LINE') + '</span>';
+          div.className = 'item' + (v.coop_status === '暫停合作' ? ' paused' : '');
+          var areas = String(v.service_areas || '').split(/[,，、]/).filter(Boolean);
+          var areaHtml = areas.map(function (a) {
+            return '<span class="tag area">' + a.trim() + '</span>';
+          }).join('');
+          div.innerHTML =
+            '<div><strong>' + (v.name || '') + '</strong> ' +
+            '<span class="tag">' + (v.trade_category || '其他') + '</span>' +
+            (v.cost_type ? '<span class="tag">' + v.cost_type + '</span>' : '') +
+            (v.coop_status === '暫停合作' ? '<span class="tag pause">暫停合作</span>' : '') +
+            '</div>' +
+            '<div class="sub">' + (v.tax_id || '—') + ' · ' + (v.contact_phone || '無電話') + '</div>' +
+            (areaHtml ? '<div>' + areaHtml + '</div>' : '') +
+            (v.quality_note ? '<div class="sub">評價：' + v.quality_note + '</div>' : '');
+          var actions = document.createElement('div');
+          actions.className = 'actions';
+          var btnEdit = document.createElement('button');
+          btnEdit.className = 'btn btn-secondary';
+          btnEdit.textContent = '編輯';
+          btnEdit.addEventListener('click', function () { fillForm(v); });
+          actions.appendChild(btnEdit);
+          var btnToggle = document.createElement('button');
+          btnToggle.className = 'btn btn-warn';
+          btnToggle.textContent = v.coop_status === '暫停合作' ? '恢復合作' : '暫停合作';
+          btnToggle.addEventListener('click', async function () {
+            var next = v.coop_status === '暫停合作' ? '合作中' : '暫停合作';
+            var data = await AccountingApi.crudUpdate(session, 'vendor', v.vendor_id, { coop_status: next });
+            if (!data.success) { setMsg(data.message); return; }
+            AccountingCache.patchVendor(session, data.data);
+            await refreshVendors(true);
+          });
+          actions.appendChild(btnToggle);
+          div.appendChild(actions);
+          renderFiles(div, v);
           box.appendChild(div);
         });
-        if (!data.data || !data.data.length) box.textContent = '尚無資料';
+        if (!rows.length) box.textContent = '沒有符合的廠商';
       }
-      document.getElementById('addBtn').addEventListener('click', async function () {
-        setMsg('');
-        var payload = {
-          name: document.getElementById('name').value.trim(),
-          tax_id: document.getElementById('tax_id').value.trim(),
-          line_user_id: document.getElementById('line_user_id').value.trim(),
-          contact_name: document.getElementById('contact_name').value.trim(),
-          contact_phone: document.getElementById('contact_phone').value.trim()
-        };
+
+      async function refreshVendors(fromCache) {
+        if (!fromCache) {
+          var boot = await AccountingCache.load(session, true);
+          allVendors = (boot.masters && boot.masters.vendors) || [];
+        } else {
+          allVendors = AccountingCache.vendors(session);
+        }
+        renderList();
+      }
+
+      $('saveBtn').addEventListener('click', async function () {
+        setMsg(''); setOk('');
+        var payload = readForm();
         if (!payload.name) { setMsg('請填廠商名稱'); return; }
-        var data = await AccountingApi.crudCreate(session, 'vendor', payload);
-        if (!data.success) { setMsg(data.message || '新增失敗'); return; }
-        ['name', 'tax_id', 'line_user_id', 'contact_name', 'contact_phone'].forEach(function (id) {
-          document.getElementById(id).value = '';
-        });
-        await loadList();
+        if (!payload.line_user_id) { setMsg('LINE userId 必填'); return; }
+        var editId = $('editId').value;
+        var data = editId
+          ? await AccountingApi.crudUpdate(session, 'vendor', editId, payload)
+          : await AccountingApi.crudCreate(session, 'vendor', payload);
+        if (!data.success) { setMsg(data.message || '儲存失敗'); return; }
+        AccountingCache.patchVendor(session, data.data);
+        setOk(editId ? '已更新' : '已新增');
+        clearForm();
+        await refreshVendors(true);
       });
+
+      $('cancelEditBtn').addEventListener('click', clearForm);
+      $('filterBtn').addEventListener('click', renderList);
+
       (async function boot() {
         try {
+          initFormOptions();
           session = await AccountingApi.initSession();
           if (!session) return;
           if ((session.auth.permission || 0) < 2) {
-            document.getElementById('loading').textContent = '權限不足（需行政以上）';
+            $('loading').textContent = '權限不足（需行政以上）';
             return;
           }
           var mode = session.devBypass ? ' · 測試模式（無登入）' : '';
-          document.getElementById('userLine').textContent = session.profile.displayName + ' · 權限 ' + session.auth.permission + mode;
+          $('userLine').textContent = session.profile.displayName + ' · 權限 ' + session.auth.permission + mode;
+          var cached = AccountingCache.get(session);
+          if (!cached) await AccountingCache.load(session);
+          else mergeEnumsFromCache(cached);
+          allVendors = AccountingCache.vendors(session);
           showApp();
-          await loadList();
+          renderList();
         } catch (e) {
-          document.getElementById('loading').textContent = e.message || String(e);
+          $('loading').textContent = e.message || String(e);
         }
       })();
+
+      function mergeEnumsFromCache(c) {
+        if (!c.enums) return;
+        Object.keys(c.enums).forEach(function (k) {
+          if (c.enums[k]) AccountingMasterData[k] = c.enums[k];
+        });
+        initFormOptions();
+      }
     })();
   </script>
 </body>

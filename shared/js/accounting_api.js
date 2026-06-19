@@ -49,6 +49,20 @@ var AccountingApi = (function () {
     vendorPaymentStatus: function (sessionOrToken, filter) {
       return post({ action: 'vendor_payment_status', auth: resolveAuth(sessionOrToken), filter: filter || {} });
     },
+    bootstrap: function (sessionOrToken) {
+      return post({ action: 'accounting_bootstrap', auth: resolveAuth(sessionOrToken) });
+    },
+    vendorEnsureFolder: function (sessionOrToken, vendorId) {
+      return post({ action: 'vendor_ensure_folder', auth: resolveAuth(sessionOrToken), vendor_id: vendorId });
+    },
+    vendorListFiles: function (sessionOrToken, driveFolderId, limit) {
+      return post({
+        action: 'vendor_list_files',
+        auth: resolveAuth(sessionOrToken),
+        drive_folder_id: driveFolderId,
+        limit: limit || 30
+      });
+    },
     loadPolicy: async function () {
       var data = await post({ action: 'accounting_policy' });
       return (data && data.policy) || {};
