@@ -1,8 +1,9 @@
 ﻿<!-- 
-  [版本號碼: v1.0.31]
-  [修改時間: 2026-04-23 Asia/Taipei]
+  [版本號碼: v1.0.32]
+  [修改時間: 2026-06-19 Asia/Taipei]
   [開發者: 添心室內裝修設計有限公司 - 技術顧問]
   [描述: 基於 React 與 OpenCV.js 的平面圖透視校正工具。
+         v1.0.32：鎖定 @babel/standalone@7.26.10，避免 unpkg 指向 Babel 8 導致 JSX 產生 import 而無法執行。
          v1.0.31：候選收斂至多 6 組；偵測虛線預設關閉、可勾選顯示並選極淡／稍清楚。
          v1.0.30：多策略偵測、整張外框備援。]
 -->
@@ -21,8 +22,8 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 
-    <!-- Babel (JSX 編譯器) -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Babel (JSX 編譯器) — 必須鎖 7.x；未鎖版時 unpkg 會導向 8.x，JSX 會編譯成 import 而報錯 -->
+    <script src="https://unpkg.com/@babel/standalone@7.26.10/babel.min.js"></script>
 
     <!-- 預先定義 OpenCV 回呼函數，確保在腳本載入前已存在 -->
     <script>

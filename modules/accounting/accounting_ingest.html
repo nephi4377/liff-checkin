@@ -73,6 +73,7 @@
         <label>現金還是匯款</label><input id="payment_method" type="text" />
       </div>
       <div id="blockB" class="hidden">
+        <label>案號（有填才記入案件毛利）</label><input id="project_no_b" type="text" list="projectNoList" />
         <label>支出日期</label><input id="txn_date_b" type="text" />
         <label>廠商名稱</label><input id="party_name_b" type="text" />
         <label>購買品名</label><input id="item_desc_b" type="text" />
@@ -127,6 +128,8 @@
         if (!p) return;
         document.getElementById('party_name').value = p.siteName || p.name || '';
         document.getElementById('project_no').value = p.id;
+        var pnb = document.getElementById('project_no_b');
+        if (pnb) pnb.value = p.id;
         var store = AccountingContext.mapStoreValue(p.store);
         if (store) document.getElementById('store').value = store;
       }
@@ -249,6 +252,7 @@
         } else {
           fields.expense_month = document.getElementById('expense_month').value;
           fields.applicant = document.getElementById('applicant').value;
+          fields.project_no = document.getElementById('project_no_b').value;
         }
         return fields;
       }

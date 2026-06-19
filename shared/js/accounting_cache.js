@@ -91,6 +91,21 @@ var AccountingCache = (function () {
       else list.unshift(vendor);
       write(session, c);
     },
+    vendorLineBindings: function (session, vendorId) {
+      var c = read(session);
+      var all = (c && c.masters && c.masters.vendor_line_bindings) || [];
+      return all.filter(function (b) { return String(b.vendor_id) === String(vendorId); });
+    },
+    patchVendorLineBinding: function (session, binding) {
+      var c = read(session);
+      if (!c || !c.masters) return;
+      c.masters.vendor_line_bindings = c.masters.vendor_line_bindings || [];
+      var list = c.masters.vendor_line_bindings;
+      var idx = list.findIndex(function (b) { return b.binding_id === binding.binding_id; });
+      if (idx >= 0) list[idx] = binding;
+      else list.unshift(binding);
+      write(session, c);
+    },
     removeVendor: function (session, vendorId) {
       var c = read(session);
       if (!c || !c.masters) return;

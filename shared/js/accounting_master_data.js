@@ -1,7 +1,7 @@
 /**
  * 會計主檔固定格式（對齊 backend/accounting-gas/SPEC/ACCOUNTING_MASTER_DATA_SPEC.md）
  */
-var ACCT_ASSET_VER = '9';
+var ACCT_ASSET_VER = '10';
 var AccountingMasterData = {
   CACHE_VERSION: 1,
   TTL_MS: 5 * 60 * 1000,
@@ -9,5 +9,9 @@ var AccountingMasterData = {
   vendor_cost_types: ['純材料商', '連工帶料', '純點工'],
   vendor_coop_statuses: ['合作中', '暫停合作'],
   vendor_payment_terms_presets: ['現結', '月結30天', '依工程進度', '其他'],
-  vendor_service_area_presets: ['雙北', '桃園', '台中', '台南', '高雄', '全台']
+  vendor_service_area_presets: ['雙北', '桃園', '台中', '台南', '高雄', '全台'],
+  margin_expense_categories: [
+    '木工', '系統櫃', '水電', '泥作', '油漆', '石材', '玻璃', '鐵工', '空調', '清潔',
+    '材料', '人工', '交通', '收入', '其他'
+  ]
 };

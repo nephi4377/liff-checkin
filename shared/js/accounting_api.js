@@ -55,12 +55,43 @@ var AccountingApi = (function () {
     vendorEnsureFolder: function (sessionOrToken, vendorId) {
       return post({ action: 'vendor_ensure_folder', auth: resolveAuth(sessionOrToken), vendor_id: vendorId });
     },
+    lineContactSearch: function (sessionOrToken, keyword, limit) {
+      return post({
+        action: 'line_contact_search',
+        auth: resolveAuth(sessionOrToken),
+        keyword: keyword,
+        limit: limit || 20
+      });
+    },
     vendorListFiles: function (sessionOrToken, driveFolderId, limit) {
       return post({
         action: 'vendor_list_files',
         auth: resolveAuth(sessionOrToken),
         drive_folder_id: driveFolderId,
         limit: limit || 30
+      });
+    },
+    marginListOverview: function (sessionOrToken) {
+      return post({ action: 'margin_list_overview', auth: resolveAuth(sessionOrToken) });
+    },
+    marginListLines: function (sessionOrToken, filter) {
+      return post({
+        action: 'margin_list_lines',
+        auth: resolveAuth(sessionOrToken),
+        project_no: (filter && filter.project_no) || '',
+        tab_name: (filter && filter.tab_name) || ''
+      });
+    },
+    marginAddLine: function (sessionOrToken, payload) {
+      return post({ action: 'margin_add_line', auth: resolveAuth(sessionOrToken), payload: payload || {} });
+    },
+    marginUpdateLine: function (sessionOrToken, tabName, rowIndex, payload) {
+      return post({
+        action: 'margin_update_line',
+        auth: resolveAuth(sessionOrToken),
+        tab_name: tabName,
+        row_index: rowIndex,
+        payload: payload || {}
       });
     },
     loadPolicy: async function () {

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>案件毛利</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/accounting_master_data.js?v=11"></script>
+  <script src="../../shared/js/accounting_api.js?v=11"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 640px; margin: 0 auto; background: #f4f6f8; }
+    h2 { margin: 0 0 8px; }
+    .sub { color: #555; font-size: 14px; }
+    .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    label { display: block; margin-top: 8px; font-weight: 600; font-size: 14px; }
+    select, input { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btn { padding: 10px 12px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; }
+    .btn-primary { background: #1a73e8; color: #fff; width: 100%; margin-top: 10px; }
+    .btn-secondary { background: #e8eaed; color: #333; }
+    .item { border-bottom: 1px solid #eee; padding: 12px 0; cursor: pointer; }
+    .item:last-child { border-bottom: none; }
+    .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin-right: 6px; }
+    .tag.rev { background: #e6f4ea; }
+    .tag.exp { background: #fce8e6; }
+    .profit-pos { color: #137333; font-weight: 700; }
+    .profit-neg { color: #c5221f; font-weight: 700; }
+    #msg { color: #c5221f; font-size: 14px; }
+    #ok { color: #137333; font-size: 14px; }
+    .hidden { display: none; }
+    .nav { margin-bottom: 12px; font-size: 14px; }
+    .nav a { color: #1a73e8; text-decoration: none; }
+    .line-item { border-bottom: 1px solid #eee; padding: 10px 0; font-size: 14px; }
+    .hint { font-size: 12px; color: #777; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <div id="loading">載入中…</div>
+  <div id="app" class="hidden">
+    <p class="nav"><a href="index.html">← 會計功能選單</a></p>
+    <h2>案件毛利</h2>
+    <p class="sub" id="userLine">—</p>
+    <div id="msg"></div>
+    <div id="ok"></div>
+
+    <div id="viewList">
+      <div class="card">
+        <h3 style="margin:0 0 8px">所有案子</h3>
+        <div id="overviewList">載入中…</div>
+        <button type="button" class="btn btn-primary" id="reloadOverview">重新載入</button>
+      </div>
+    </div>
+
+    <div id="viewDetail" class="hidden">
+      <div class="card">
+        <button type="button" class="btn btn-secondary" id="backBtn">← 返回列表</button>
+        <h3 id="detailTitle" style="margin:8px 0 4px">—</h3>
+        <p class="sub" id="detailSummary">—</p>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">費用明細</h3>
+        <div id="lineList"></div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">手動新增一筆</h3>
+        <p class="hint">費用類別可從選單挑，也可直接打字（例如特殊項目）</p>
+        <div class="row2">
+          <div>
+            <label>收支</label>
+            <select id="addType">
+              <option value="支出">支出</option>
+              <option value="收入">收入</option>
+            </select>
+          </div>
+          <div>
+            <label>日期</label>
+            <input id="addDate" type="text" placeholder="2026-06-19" />
+          </div>
+        </div>
+        <label>費用類別</label>
+        <input id="addCategory" list="categoryList" placeholder="選單或自由輸入" />
+        <datalist id="categoryList"></datalist>
+        <label>項目名稱</label>
+        <input id="addItem" placeholder="例：木工二期款" />
+        <label>金額</label>
+        <input id="addAmount" type="number" inputmode="numeric" />
+        <label>備註</label>
+        <input id="addNote" />
+        <button type="button" class="btn btn-primary" id="addBtn">新增</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var session = null;
+      var categories = AccountingMasterData.margin_expense_categories || [];
+      var current = null;
+
+      function setMsg(t) { document.getElementById('msg').textContent = t || ''; }
+      function setOk(t) { document.getElementById('ok').textContent = t || ''; }
+      function showApp() {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+      }
+      function todayIso() {
+        var d = new Date();
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      }
+      function fmtMoney(n) {
+        return (parseFloat(n) || 0).toLocaleString('zh-TW');
+      }
+      function fillCategoryDatalist() {
+        var dl = document.getElementById('categoryList');
+        dl.innerHTML = '';
+        categories.forEach(function (c) {
+          var o = document.createElement('option');
+          o.value = c;
+          dl.appendChild(o);
+        });
+      }
+      function renderOverview(items) {
+        var box = document.getElementById('overviewList');
+        box.innerHTML = '';
+        if (!items.length) {
+          box.textContent = '尚無案件；記帳時填案號會自動建立';
+          return;
+        }
+        items.forEach(function (it) {
+          var div = document.createElement('div');
+          div.className = 'item';
+          var profitClass = (it.gross_profit || 0) >= 0 ? 'profit-pos' : 'profit-neg';
+          div.innerHTML =
+            '<div><strong>' + (it.project_no || '—') + '</strong> ' + (it.client_name || '') + '</div>' +
+            '<div class="sub">' + (it.tab_name || '') + ' · ' + (it.store || '') + '</div>' +
+            '<div style="margin-top:6px">' +
+            '<span class="tag rev">收 ' + fmtMoney(it.revenue_total) + '</span>' +
+            '<span class="tag exp">支 ' + fmtMoney(it.expense_total) + '</span>' +
+            '<span class="' + profitClass + '">毛利 ' + fmtMoney(it.gross_profit) + '</span></div>';
+          div.addEventListener('click', function () { openDetail(it); });
+          box.appendChild(div);
+        });
+      }
+      async function loadOverview() {
+        setMsg('');
+        var data = await AccountingApi.marginListOverview(session);
+        if (!data.success) { setMsg(data.message); return; }
+        if (data.categories && data.categories.length) categories = data.categories;
+        fillCategoryDatalist();
+        renderOverview(data.items || []);
+      }
+      function renderLines(lines) {
+        var box = document.getElementById('lineList');
+        box.innerHTML = '';
+        if (!lines.length) {
+          box.textContent = '尚無明細';
+          return;
+        }
+        lines.forEach(function (ln) {
+          var div = document.createElement('div');
+          div.className = 'line-item';
+          var tagClass = ln.txn_type === '收入' ? 'rev' : 'exp';
+          var attach = ln.ingest_id
+            ? ' · <a href="attachments.html?ingest_id=' + encodeURIComponent(ln.ingest_id) + '">單據</a>'
+            : '';
+          div.innerHTML =
+            '<div><span class="tag ' + tagClass + '">' + (ln.txn_type || '') + '</span> ' +
+            (ln.category || '') + ' · ' + fmtMoney(ln.amount) + '</div>' +
+            '<div>' + (ln.item_name || '') + '</div>' +
+            '<div class="sub">' + (ln.txn_date || '') + ' · ' + (ln.source || '') + attach + '</div>';
+          box.appendChild(div);
+        });
+      }
+      async function openDetail(it) {
+        current = it;
+        document.getElementById('viewList').classList.add('hidden');
+        document.getElementById('viewDetail').classList.remove('hidden');
+        document.getElementById('detailTitle').textContent =
+          (it.project_no || '') + ' ' + (it.client_name || '');
+        document.getElementById('detailSummary').textContent =
+          '收 ' + fmtMoney(it.revenue_total) + ' · 支 ' + fmtMoney(it.expense_total) +
+          ' · 毛利 ' + fmtMoney(it.gross_profit);
+        document.getElementById('addDate').value = todayIso();
+        var data = await AccountingApi.marginListLines(session, {
+          tab_name: it.tab_name,
+          project_no: it.project_no
+        });
+        if (!data.success) { setMsg(data.message); return; }
+        if (data.categories && data.categories.length) categories = data.categories;
+        fillCategoryDatalist();
+        renderLines(data.lines || []);
+      }
+      document.getElementById('backBtn').addEventListener('click', function () {
+        document.getElementById('viewDetail').classList.add('hidden');
+        document.getElementById('viewList').classList.remove('hidden');
+        loadOverview();
+      });
+      document.getElementById('reloadOverview').addEventListener('click', loadOverview);
+      document.getElementById('addBtn').addEventListener('click', async function () {
+        if (!current) return;
+        setMsg('');
+        var payload = {
+          project_no: current.project_no,
+          client_name: current.client_name,
+          store: current.store,
+          order_no: current.order_no,
+          txn_type: document.getElementById('addType').value,
+          txn_date: document.getElementById('addDate').value,
+          category: document.getElementById('addCategory').value,
+          item_name: document.getElementById('addItem').value,
+          amount: document.getElementById('addAmount').value,
+          note: document.getElementById('addNote').value
+        };
+        var data = await AccountingApi.marginAddLine(session, payload);
+        if (!data.success) { setMsg(data.message); return; }
+        setOk('已新增');
+        document.getElementById('addItem').value = '';
+        document.getElementById('addAmount').value = '';
+        document.getElementById('addNote').value = '';
+        openDetail(current);
+      });
+
+      (async function boot() {
+        try {
+          fillCategoryDatalist();
+          document.getElementById('addDate').value = todayIso();
+          session = await AccountingApi.initSession();
+          if (!session) return;
+          if ((session.auth.permission || 0) < 4) {
+            document.getElementById('loading').textContent = '權限不足（需財務／老闆，權限 ≥ 4）';
+            return;
+          }
+          var mode = session.devBypass ? ' · 測試模式' : '';
+          document.getElementById('userLine').textContent =
+            session.profile.displayName + ' · 權限 ' + session.auth.permission + mode;
+          showApp();
+          await loadOverview();
+        } catch (e) {
+          document.getElementById('loading').textContent = e.message || String(e);
+        }
+      })();
+    })();
+  </script>
+</body>
+</html>
