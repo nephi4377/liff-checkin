@@ -195,11 +195,12 @@ var AccountingApi = (function () {
       if (session.devBypass) body.dev_bypass = true;
       return post(body);
     },
-    vendorRegisterOcr: function (session, photo) {
+    vendorRegisterOcr: function (session, photo, kind) {
       var body = {
         action: 'vendor_register_ocr',
         liff_id_token: session.idToken || '',
-        photo: photo || {}
+        photo: photo || {},
+        kind: kind || (photo && photo.kind) || 'passbook'
       };
       if (session.devBypass) body.dev_bypass = true;
       return post(body);

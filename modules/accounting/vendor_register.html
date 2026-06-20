@@ -5,11 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>廠商資料登記</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_master_data.js?v=11"></script>
-  <script src="../../shared/js/accounting_api.js?v=11"></script>
+  <script src="../../shared/js/accounting_master_data.js?v=12"></script>
+  <script src="../../shared/js/accounting_api.js?v=12"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 640px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 8px; }
+    h3 { margin: 0 0 8px; font-size: 16px; }
     .sub { color: #555; font-size: 14px; line-height: 1.5; }
     .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
     label { display: block; margin-top: 8px; font-weight: 600; font-size: 14px; }
@@ -20,21 +21,20 @@
     .btn { padding: 10px 14px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 14px; }
     .btn-block { width: 100%; margin-top: 10px; }
     .btn-primary { background: #1a73e8; color: #fff; }
-    .btn-secondary { background: #e8eaed; color: #333; }
-    .btn-warn { background: #fce8e6; color: #c5221f; }
     .btn:disabled { opacity: .5; cursor: not-allowed; }
     #msg { color: #c5221f; font-size: 14px; }
     #ok { color: #137333; font-size: 14px; }
     .hidden { display: none; }
-    .section-title { font-size: 13px; color: #888; margin: 14px 0 6px; font-weight: 600; }
+    .step-num { display: inline-block; background: #1a73e8; color: #fff; font-size: 12px; padding: 2px 8px; border-radius: 6px; margin-right: 6px; vertical-align: middle; }
     .status-pill { display: inline-block; font-size: 12px; padding: 4px 10px; border-radius: 999px; background: #fef7e0; color: #b06000; }
     .status-pill.ok { background: #e6f4ea; color: #137333; }
     .bind-item { border: 1px solid #e0e0e0; border-radius: 8px; padding: 8px 10px; margin: 6px 0; font-size: 13px; }
-    .bind-item .mono { font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all; color: #555; }
     .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin: 2px 4px 2px 0; }
     .photo-preview { max-width: 100%; border-radius: 8px; margin-top: 8px; }
-    .photo-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
     .hint { font-size: 13px; color: #666; margin-top: 4px; }
+    .ocr-status { font-size: 13px; margin-top: 6px; min-height: 1.2em; }
+    .ocr-status.ok { color: #137333; }
+    .ocr-status.err { color: #c5221f; }
   </style>
 </head>
 <body>
@@ -48,9 +48,24 @@
 
     <div class="card">
       <p class="sub" style="margin:0">
-        請填寫匯款與聯絡資料，並上傳存摺或匯款資訊照片供核對。
-        送出後即加入廠商名冊；若有疑慮行政會另行聯絡。
+        先拍照辨識（步驟 1、2），再核對下方資料。送出後即加入廠商名冊。
       </p>
+    </div>
+
+    <div class="card">
+      <h3><span class="step-num">1</span>名片或公司證明（選填）</h3>
+      <p class="hint">可帶入公司名稱、聯絡人、電話等。</p>
+      <input id="cardPhoto" type="file" accept="image/*" capture="environment" />
+      <div id="cardPreview"></div>
+      <p id="cardOcrStatus" class="ocr-status"></p>
+    </div>
+
+    <div class="card">
+      <h3><span class="step-num">2</span>存摺／匯款資訊（選填）</h3>
+      <p class="hint">可拍照自動帶入，或直接在下方的匯款欄位手動填寫。</p>
+      <input id="passbookPhoto" type="file" accept="image/*" capture="environment" />
+      <div id="passbookPreview"></div>
+      <p id="passbookOcrStatus" class="ocr-status"></p>
     </div>
 
     <div class="card">
@@ -62,13 +77,10 @@
       <div class="row2">
         <div><label>統一編號</label><input id="tax_id" inputmode="numeric" maxlength="8" /></div>
         <div>
-          <label class="req">工種／類別</label>
+          <label>工種／類別（選填）</label>
           <select id="trade_category"></select>
         </div>
       </div>
-
-      <label>材料／工資屬性</label>
-      <select id="cost_type"></select>
 
       <div class="row2">
         <div><label class="req">聯絡人</label><input id="contact_name" /></div>
@@ -81,8 +93,7 @@
       <label>公司／工廠地址</label>
       <input id="address" />
 
-      <p class="section-title">匯款資訊（必填）</p>
-      <p class="hint">可拍照存摺或匯款單，用下方「辨識帶入」自動填寫。</p>
+      <p class="section-title" style="font-size:13px;color:#888;margin:14px 0 6px;font-weight:600">匯款欄位（可手動修改）</p>
 
       <div class="row2">
         <div><label class="req">銀行代碼</label><input id="bank_code" maxlength="3" inputmode="numeric" placeholder="例：013" /></div>
@@ -93,38 +104,9 @@
         <div><label class="req">戶名</label><input id="account_name" /></div>
       </div>
 
-      <label class="req">存摺／匯款資訊照片</label>
-      <input id="passbookPhoto" type="file" accept="image/*" capture="environment" />
-      <div id="passbookPreview"></div>
-      <button type="button" class="btn btn-secondary btn-block" id="ocrBtn" disabled>辨識帶入匯款欄位</button>
-
-      <label>其他證明照片（選填）</label>
-      <input id="extraPhoto" type="file" accept="image/*" capture="environment" />
-      <p class="hint">可上傳名片、公司登記等，方便行政核對。</p>
-      <div id="extraPreview"></div>
-
-      <p class="section-title">LINE 聯絡身份</p>
-      <p class="hint">登入後會自動綁定您的 LINE；若在群組開啟此頁，可一併綁定群組 ID。</p>
+      <p class="section-title" style="font-size:13px;color:#888;margin:14px 0 6px;font-weight:600">LINE 聯絡身份</p>
+      <p class="hint">登入後會自動綁定您的 LINE，無需自行填寫 UID。</p>
       <div id="bindingList"></div>
-      <div class="row2">
-        <div>
-          <label>新增身份類型</label>
-          <select id="manualIdType">
-            <option value="user">UID（私訊）</option>
-            <option value="group">GID（群組）</option>
-          </select>
-        </div>
-        <div>
-          <label>用途</label>
-          <select id="bindPurpose">
-            <option value="報價">報價</option>
-            <option value="請款">請款</option>
-            <option value="一般">一般</option>
-          </select>
-        </div>
-      </div>
-      <input id="manualLineId" placeholder="貼上 U… 或 C…（選填）" />
-      <button type="button" class="btn btn-secondary btn-block" id="addBindBtn">加入 LINE 身份</button>
 
       <label>補充說明（選填）</label>
       <textarea id="vendor_note" placeholder="服務區域、可配合時段等"></textarea>
@@ -136,9 +118,8 @@
   <script>
     (function () {
       var session = null;
-      var pendingBindings = [];
+      var cardFile = null;
       var passbookFile = null;
-      var extraFile = null;
       var isUpdate = false;
 
       function $(id) { return document.getElementById(id); }
@@ -147,7 +128,7 @@
 
       function fillSelect(id, options, withEmpty) {
         var sel = $(id);
-        sel.innerHTML = withEmpty ? '<option value="">（請選）</option>' : '';
+        sel.innerHTML = withEmpty ? '<option value="">（不指定）</option>' : '';
         options.forEach(function (o) {
           var opt = document.createElement('option');
           opt.value = o; opt.textContent = o;
@@ -157,8 +138,7 @@
 
       function initFormOptions(enums) {
         enums = enums || {};
-        fillSelect('trade_category', enums.vendor_trade_categories || AccountingMasterData.vendor_trade_categories, false);
-        fillSelect('cost_type', enums.vendor_cost_types || AccountingMasterData.vendor_cost_types, true);
+        fillSelect('trade_category', enums.vendor_trade_categories || AccountingMasterData.vendor_trade_categories, true);
       }
 
       function showApp() {
@@ -166,12 +146,37 @@
         $('app').classList.remove('hidden');
       }
 
+      function normName(s) {
+        return String(s || '').trim().replace(/\s+/g, '');
+      }
+
+      function crossFillVendorAndAccountName() {
+        var n = $('name').value.trim();
+        var a = $('account_name').value.trim();
+        if (a && !n) $('name').value = a;
+        else if (n && !a) $('account_name').value = n;
+      }
+
+      function applyOcrFields(f) {
+        if (!f) return;
+        if (f.bank_code) $('bank_code').value = f.bank_code;
+        if (f.branch_name) $('branch_name').value = f.branch_name;
+        if (f.account_no) $('account_no').value = f.account_no;
+        if (f.account_name) $('account_name').value = f.account_name;
+        if (f.tax_id && !$('tax_id').value.trim()) $('tax_id').value = f.tax_id;
+        if (f.contact_name && !$('contact_name').value.trim()) $('contact_name').value = f.contact_name;
+        if (f.contact_phone && !$('contact_phone').value.trim()) $('contact_phone').value = f.contact_phone;
+        if (f.contact_email && !$('contact_email').value.trim()) $('contact_email').value = f.contact_email;
+        if (f.address && !$('address').value.trim()) $('address').value = f.address;
+        if (f.name && !$('name').value.trim()) $('name').value = f.name;
+        crossFillVendorAndAccountName();
+      }
+
       function readFormFields() {
         return {
           name: $('name').value.trim(),
           tax_id: $('tax_id').value.trim(),
-          trade_category: $('trade_category').value,
-          cost_type: $('cost_type').value,
+          trade_category: $('trade_category').value.trim(),
           contact_name: $('contact_name').value.trim(),
           contact_phone: $('contact_phone').value.trim(),
           contact_email: $('contact_email').value.trim(),
@@ -188,8 +193,7 @@
         if (!v) return;
         $('name').value = v.name || '';
         $('tax_id').value = v.tax_id || '';
-        $('trade_category').value = v.trade_category || '其他';
-        $('cost_type').value = v.cost_type || '';
+        $('trade_category').value = v.trade_category || '';
         $('contact_name').value = v.contact_name || '';
         $('contact_phone').value = v.contact_phone || '';
         $('contact_email').value = v.contact_email || '';
@@ -215,84 +219,40 @@
         box.innerHTML = '<span class="' + cls + '">目前狀態：' + st + '</span>';
       }
 
+      function buildAutoBindings() {
+        var out = [{
+          id_type: 'user',
+          line_id: session.profile.userId,
+          display_name: session.profile.displayName || '',
+          purpose: '一般',
+          is_primary: '是'
+        }];
+        var ctx = session && session.liffContext;
+        if (ctx && ctx.groupId) {
+          out.push({
+            id_type: 'group',
+            line_id: ctx.groupId,
+            display_name: (ctx.type || '群組') + '（本群組）',
+            purpose: '請款',
+            is_primary: '否'
+          });
+        }
+        return out;
+      }
+
       function renderBindings() {
         var box = $('bindingList');
         box.innerHTML = '';
-        if (!pendingBindings.length) {
-          box.innerHTML = '<p class="hint">尚無綁定</p>';
-          return;
-        }
-        pendingBindings.forEach(function (b, idx) {
+        buildAutoBindings().forEach(function (b) {
           var row = document.createElement('div');
           row.className = 'bind-item';
-          var typeLabel = b.id_type === 'group' ? 'GID 群組' : 'UID 私訊';
-          var locked = b.locked ? ' · 本帳號' : '';
+          var typeLabel = b.id_type === 'group' ? '群組 GID' : '您的 LINE';
           row.innerHTML =
             '<div><strong>' + (b.display_name || '—') + '</strong> ' +
             '<span class="tag">' + (b.purpose || '一般') + '</span> ' +
-            '<span class="tag">' + typeLabel + locked + '</span></div>' +
-            '<div class="mono">' + (b.line_id || '') + '</div>';
-          if (!b.locked) {
-            var btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'btn btn-warn';
-            btn.style.marginTop = '6px';
-            btn.textContent = '移除';
-            btn.addEventListener('click', function () {
-              pendingBindings.splice(idx, 1);
-              renderBindings();
-            });
-            row.appendChild(btn);
-          }
+            '<span class="tag">' + typeLabel + '</span></div>';
           box.appendChild(row);
         });
-      }
-
-      function ensureSelfBinding() {
-        if (!session || !session.profile) return;
-        var uid = session.profile.userId;
-        var has = pendingBindings.some(function (b) { return b.line_id === uid; });
-        if (!has) {
-          pendingBindings.unshift({
-            id_type: 'user',
-            line_id: uid,
-            display_name: session.profile.displayName || '',
-            purpose: '一般',
-            is_primary: '是',
-            locked: true
-          });
-        }
-      }
-
-      function suggestGroupBinding() {
-        var ctx = session && session.liffContext;
-        if (!ctx || !ctx.groupId) return;
-        var gid = ctx.groupId;
-        var has = pendingBindings.some(function (b) { return b.line_id === gid; });
-        if (has) return;
-        pendingBindings.push({
-          id_type: 'group',
-          line_id: gid,
-          display_name: (ctx.type || '群組') + '（自動偵測）',
-          purpose: '請款',
-          locked: false
-        });
-      }
-
-      function loadBindingsFromServer(list) {
-        pendingBindings = (list || []).map(function (b) {
-          return {
-            id_type: b.id_type || 'user',
-            line_id: b.line_id,
-            display_name: b.display_name || '',
-            purpose: b.purpose || '一般',
-            is_primary: b.is_primary || '否',
-            locked: b.id_type === 'user' && b.line_id === session.profile.userId
-          };
-        });
-        ensureSelfBinding();
-        suggestGroupBinding();
-        renderBindings();
       }
 
       function fileToBase64(file) {
@@ -312,7 +272,7 @@
         });
       }
 
-      function showPreview(inputId, boxId, file) {
+      function showPreview(boxId, file) {
         var box = $(boxId);
         box.innerHTML = '';
         if (!file) return;
@@ -323,99 +283,74 @@
         box.appendChild(img);
       }
 
+      function setOcrStatus(elId, text, ok) {
+        var el = $(elId);
+        el.textContent = text || '';
+        el.className = 'ocr-status' + (text ? (ok ? ' ok' : ' err') : '');
+      }
+
+      async function runOcr(file, kind, statusId) {
+        if (!file || !session) return;
+        setOcrStatus(statusId, '辨識中…', true);
+        try {
+          var photo = await fileToBase64(file);
+          photo.kind = kind;
+          var data = await AccountingApi.vendorRegisterOcr(session, photo, kind);
+          if (!data.success) {
+            setOcrStatus(statusId, data.message || '辨識失敗，請改手動填寫', false);
+            return;
+          }
+          applyOcrFields(data.fields || {});
+          setOcrStatus(statusId, '已帶入辨識結果，請核對是否正確', true);
+        } catch (e) {
+          setOcrStatus(statusId, e.message || String(e), false);
+        }
+      }
+
+      $('cardPhoto').addEventListener('change', function () {
+        cardFile = this.files && this.files[0] ? this.files[0] : null;
+        showPreview('cardPreview', cardFile);
+        if (cardFile) runOcr(cardFile, 'card', 'cardOcrStatus');
+        else setOcrStatus('cardOcrStatus', '', true);
+      });
+
       $('passbookPhoto').addEventListener('change', function () {
         passbookFile = this.files && this.files[0] ? this.files[0] : null;
-        showPreview('passbookPhoto', 'passbookPreview', passbookFile);
-        $('ocrBtn').disabled = !passbookFile;
+        showPreview('passbookPreview', passbookFile);
+        if (passbookFile) runOcr(passbookFile, 'passbook', 'passbookOcrStatus');
+        else setOcrStatus('passbookOcrStatus', '', true);
       });
 
-      $('extraPhoto').addEventListener('change', function () {
-        extraFile = this.files && this.files[0] ? this.files[0] : null;
-        showPreview('extraPhoto', 'extraPreview', extraFile);
-      });
-
-      $('ocrBtn').addEventListener('click', async function () {
-        setMsg(''); setOk('');
-        if (!passbookFile) { setMsg('請先選擇照片'); return; }
-        $('ocrBtn').disabled = true;
-        $('ocrBtn').textContent = '辨識中…';
-        try {
-          var photo = await fileToBase64(passbookFile);
-          var data = await AccountingApi.vendorRegisterOcr(session, photo);
-          if (!data.success) { setMsg(data.message || '辨識失敗'); return; }
-          var f = data.fields || {};
-          if (f.bank_code) $('bank_code').value = f.bank_code;
-          if (f.branch_name) $('branch_name').value = f.branch_name;
-          if (f.account_no) $('account_no').value = f.account_no;
-          if (f.account_name) $('account_name').value = f.account_name;
-          if (f.tax_id && !$('tax_id').value) $('tax_id').value = f.tax_id;
-          if (f.name && !$('name').value) $('name').value = f.name;
-          setOk('已帶入辨識結果，請核對是否正確');
-        } catch (e) {
-          setMsg(e.message || String(e));
-        } finally {
-          $('ocrBtn').disabled = !passbookFile;
-          $('ocrBtn').textContent = '辨識帶入匯款欄位';
-        }
-      });
-
-      $('addBindBtn').addEventListener('click', function () {
-        setMsg('');
-        var lineId = $('manualLineId').value.trim();
-        if (!lineId) { setMsg('請貼上 LINE ID'); return; }
-        if (pendingBindings.some(function (b) { return b.line_id === lineId; })) {
-          setMsg('此 ID 已在清單中');
-          return;
-        }
-        pendingBindings.push({
-          id_type: $('manualIdType').value,
-          line_id: lineId,
-          display_name: '',
-          purpose: $('bindPurpose').value,
-          locked: false
-        });
-        $('manualLineId').value = '';
-        renderBindings();
-        setOk('已加入');
-      });
+      $('account_name').addEventListener('blur', crossFillVendorAndAccountName);
+      $('name').addEventListener('blur', crossFillVendorAndAccountName);
 
       $('submitBtn').addEventListener('click', async function () {
         setMsg(''); setOk('');
         var fields = readFormFields();
         if (!fields.name) { setMsg('請填廠商／公司名稱'); return; }
-        if (!fields.trade_category) { setMsg('請選工種'); return; }
         if (!fields.contact_name) { setMsg('請填聯絡人'); return; }
         if (!fields.contact_phone) { setMsg('請填電話'); return; }
         if (!fields.bank_code) { setMsg('請填銀行代碼'); return; }
         if (!fields.account_no) { setMsg('請填帳號'); return; }
         if (!fields.account_name) { setMsg('請填戶名'); return; }
-        if (!isUpdate && !passbookFile) { setMsg('首次登記請上傳存摺或匯款資訊照片'); return; }
 
         $('submitBtn').disabled = true;
         $('submitBtn').textContent = '送出中…';
         try {
           var photos = [];
+          if (cardFile) {
+            var p0 = await fileToBase64(cardFile);
+            p0.kind = 'card';
+            photos.push(p0);
+          }
           if (passbookFile) {
             var p1 = await fileToBase64(passbookFile);
             p1.kind = 'passbook';
             photos.push(p1);
           }
-          if (extraFile) {
-            var p2 = await fileToBase64(extraFile);
-            p2.kind = 'extra';
-            photos.push(p2);
-          }
           var payload = Object.assign({}, fields, {
             photos: photos,
-            line_bindings: pendingBindings.map(function (b) {
-              return {
-                id_type: b.id_type,
-                line_id: b.line_id,
-                display_name: b.display_name,
-                purpose: b.purpose,
-                is_primary: b.is_primary || '否'
-              };
-            })
+            line_bindings: buildAutoBindings()
           });
           var data = await AccountingApi.vendorRegisterSubmit(session, payload);
           if (!data.success) { setMsg(data.message || '送出失敗'); return; }
@@ -424,14 +359,15 @@
             renderStatus(data.vendor);
             fillForm(data.vendor);
           }
-          if (data.bindings) loadBindingsFromServer(data.bindings);
+          renderBindings();
+          cardFile = null;
           passbookFile = null;
-          extraFile = null;
+          $('cardPhoto').value = '';
           $('passbookPhoto').value = '';
-          $('extraPhoto').value = '';
+          $('cardPreview').innerHTML = '';
           $('passbookPreview').innerHTML = '';
-          $('extraPreview').innerHTML = '';
-          $('ocrBtn').disabled = true;
+          setOcrStatus('cardOcrStatus', '', true);
+          setOcrStatus('passbookOcrStatus', '', true);
           isUpdate = true;
         } catch (e) {
           setMsg(e.message || String(e));
@@ -458,9 +394,8 @@
             renderStatus(data.vendor);
           } else {
             renderStatus(null);
-            $('trade_category').value = '其他';
           }
-          loadBindingsFromServer(data.bindings || session.bindings || []);
+          renderBindings();
           showApp();
         } catch (e) {
           $('loading').textContent = e.message || String(e);

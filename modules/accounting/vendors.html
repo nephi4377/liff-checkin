@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>廠商名冊</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_master_data.js?v=10"></script>
-  <script src="../../shared/js/accounting_api.js?v=10"></script>
-  <script src="../../shared/js/accounting_cache.js?v=10"></script>
+  <script src="../../shared/js/accounting_master_data.js?v=14"></script>
+  <script src="../../shared/js/accounting_api.js?v=14"></script>
+  <script src="../../shared/js/accounting_cache.js?v=14"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 640px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 8px; }
@@ -26,11 +26,43 @@
     .item { border-bottom: 1px solid #eee; padding: 12px 0; }
     .item:last-child { border-bottom: none; }
     .item.paused { opacity: .65; }
-    .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin: 2px 4px 2px 0; }
+    .vendor-card {
+      background: #fafafa;
+      border: 1px solid #e8eaed;
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .vendor-card:last-child { margin-bottom: 0; }
+    .vendor-card.paused { opacity: .7; background: #f5f5f5; }
+    .vendor-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    .vendor-name { font-size: 16px; font-weight: 700; line-height: 1.35; margin: 0; flex: 1; }
+    .vendor-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .vendor-meta { margin-top: 10px; font-size: 13px; color: #444; line-height: 1.6; }
+    .vendor-meta-row { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+    .vendor-meta-row + .vendor-meta-row { margin-top: 4px; }
+    .meta-label { color: #888; flex-shrink: 0; }
+    .vendor-note {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #666;
+      background: #fff;
+      border-radius: 8px;
+      padding: 8px 10px;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+    .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; color: #174ea6; }
     .tag.pause { background: #fce8e6; color: #c5221f; }
-    .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-    .file { font-size: 13px; padding: 6px 0; border-top: 1px dashed #eee; }
-    .file a { color: #1a73e8; }
+    .tag.ok { background: #e6f4ea; color: #137333; }
+    .tag.muted { background: #f1f3f4; color: #5f6368; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e8eaed; }
+    .files-box { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e0e0e0; }
+    .files-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 6px; }
+    .files-toolbar a { color: #1a73e8; font-size: 13px; font-weight: 600; text-decoration: none; }
+    .file { font-size: 13px; padding: 5px 0; }
+    .file a { color: #1a73e8; text-decoration: none; }
+    .file-list-empty { font-size: 12px; color: #888; margin: 4px 0 0; }
     #msg { color: #c5221f; font-size: 14px; }
     #ok { color: #137333; font-size: 14px; }
     .hidden { display: none; }
@@ -80,26 +112,26 @@
       <div class="row2">
         <div><label>統編</label><input id="tax_id" /></div>
         <div>
-          <label class="req">工種／類別</label>
+          <label>工種／類別（選填）</label>
           <select id="trade_category"></select>
         </div>
       </div>
-      <label>材料／工資屬性</label>
+      <label>材料／工資屬性（會計後台填）</label>
       <select id="cost_type"></select>
       <div class="row2">
-        <div><label>聯絡人</label><input id="contact_name" /></div>
-        <div><label>電話</label><input id="contact_phone" inputmode="tel" /></div>
+        <div><label class="req">聯絡人</label><input id="contact_name" /></div>
+        <div><label class="req">電話</label><input id="contact_phone" inputmode="tel" /></div>
       </div>
       <label>Email</label><input id="contact_email" type="email" />
       <label>公司／工廠地址</label><input id="address" />
       <p class="section-title">匯款資訊</p>
       <div class="row2">
-        <div><label>銀行代碼</label><input id="bank_code" maxlength="3" inputmode="numeric" /></div>
+        <div><label class="req">銀行代碼</label><input id="bank_code" maxlength="3" inputmode="numeric" /></div>
         <div><label>分行名稱</label><input id="branch_name" /></div>
       </div>
       <div class="row2">
-        <div><label>帳號</label><input id="account_no" inputmode="numeric" /></div>
-        <div><label>戶名</label><input id="account_name" /></div>
+        <div><label class="req">帳號</label><input id="account_no" inputmode="numeric" /></div>
+        <div><label class="req">戶名</label><input id="account_name" /></div>
       </div>
       <label>付款條件</label>
       <select id="payment_terms"></select>
@@ -109,25 +141,18 @@
       <textarea id="note" placeholder="服務區域、施工品質、配合度或其他注意事項可寫在這裡"></textarea>
 
       <p class="section-title">LINE 身份綁定（報價／請款辨識用）</p>
-      <p class="sub" style="margin:0 0 8px">從 project-console「顧客列表」搜尋名稱，帶入 UID 或 GID；可綁多筆。</p>
+      <p class="sub" style="margin:0 0 8px">從 project-console「顧客列表」搜尋名稱，從結果加入；無法手動貼 UID。</p>
       <div id="bindEditor" class="hidden">
         <label>搜尋顧客（名稱／案號）</label>
         <input id="lineSearchKw" placeholder="例：木工老王、752" />
-        <button type="button" class="btn btn-secondary btn-block" id="lineSearchBtn">搜尋顧客列表</button>
-        <div id="lineSearchResults"></div>
-        <label style="margin-top:12px">或手動貼上 LINE ID</label>
-        <div class="row2">
+        <div class="row2" style="margin-top:8px">
           <div>
-            <label>類型</label>
-            <select id="manualIdType"><option value="user">UID（私訊）</option><option value="group">GID（群組）</option></select>
-          </div>
-          <div>
-            <label>用途</label>
+            <label>加入時用途</label>
             <select id="bindPurpose"><option value="報價">報價</option><option value="請款">請款</option><option value="一般">一般</option></select>
           </div>
         </div>
-        <input id="manualLineId" placeholder="U… 或 C…" />
-        <button type="button" class="btn btn-secondary btn-block" id="manualBindBtn">加入綁定</button>
+        <button type="button" class="btn btn-secondary btn-block" id="lineSearchBtn">搜尋顧客列表</button>
+        <div id="lineSearchResults"></div>
         <h4 style="margin:14px 0 6px">已綁定</h4>
         <div id="bindingList"></div>
       </div>
@@ -161,7 +186,7 @@
       }
 
       function initFormOptions() {
-        fillSelect('trade_category', AccountingMasterData.vendor_trade_categories, false);
+        fillSelect('trade_category', AccountingMasterData.vendor_trade_categories, true);
         fillSelect('cost_type', AccountingMasterData.vendor_cost_types, true);
         fillSelect('coop_status', AccountingMasterData.vendor_coop_statuses, false);
         fillSelect('payment_terms', AccountingMasterData.vendor_payment_terms_presets, true);
@@ -240,7 +265,7 @@
       async function addBinding(vendorId, idType, lineId, displayName, purpose) {
         if (!vendorId) { setMsg('請先儲存廠商'); return; }
         lineId = String(lineId || '').trim();
-        if (!lineId) { setMsg('請輸入 LINE ID'); return; }
+        if (!lineId) { setMsg('請從搜尋結果選擇要加入的 LINE'); return; }
         var payload = {
           vendor_id: vendorId,
           id_type: idType || (lineId.indexOf('C') === 0 ? 'group' : 'user'),
@@ -252,7 +277,6 @@
         var data = await AccountingApi.crudCreate(session, 'vendor_line_binding', payload);
         if (!data.success) { setMsg(data.message || '綁定失敗'); return; }
         AccountingCache.patchVendorLineBinding(session, data.data);
-        $('manualLineId').value = '';
         $('lineSearchResults').innerHTML = '';
         setOk('已加入 LINE 綁定');
         renderBindings(vendorId);
@@ -291,10 +315,10 @@
         $('bindingList').innerHTML = '';
         $('lineSearchResults').innerHTML = '';
         ['name','tax_id','contact_name','contact_phone','contact_email','address',
-          'bank_code','branch_name','account_no','account_name','note','lineSearchKw','manualLineId'].forEach(function (id) {
+          'bank_code','branch_name','account_no','account_name','note','lineSearchKw'].forEach(function (id) {
           $(id).value = '';
         });
-        $('trade_category').value = '其他';
+        $('trade_category').value = '';
         $('cost_type').value = '';
         $('coop_status').value = '合作中';
         $('payment_terms').value = '';
@@ -356,22 +380,64 @@
         });
       }
 
+      function formatBankSummary(v) {
+        var code = String(v.bank_code || '').trim();
+        var acct = String(v.account_no || '').trim();
+        var branch = String(v.branch_name || '').trim();
+        if (!code && !acct && !branch) return '';
+        var parts = [];
+        if (code) parts.push(code + (branch ? ' ' + branch : ''));
+        if (acct) parts.push('帳號 ' + acct);
+        return parts.join(' · ');
+      }
+
+      function formatVendorMetaRows(v) {
+        var rows = [];
+        var contactParts = [];
+        if (v.contact_name) contactParts.push(String(v.contact_name));
+        if (v.contact_phone) contactParts.push(String(v.contact_phone));
+        if (contactParts.length) rows.push({ label: '聯絡', text: contactParts.join(' · ') });
+
+        if (v.tax_id) rows.push({ label: '統編', text: String(v.tax_id) });
+
+        var bank = formatBankSummary(v);
+        if (bank) rows.push({ label: '匯款', text: bank });
+        else if (v.bank_info) rows.push({ label: '匯款', text: String(v.bank_info) });
+
+        var bindN = AccountingCache.vendorLineBindings(session, v.vendor_id).filter(function (b) {
+          return String(b.is_active || '是') !== '否';
+        }).length;
+        if (bindN) rows.push({ label: 'LINE', text: bindN + ' 筆綁定' });
+
+        return rows;
+      }
+
+      function coopStatusTag(v) {
+        var st = String(v.coop_status || '合作中');
+        if (st === '暫停合作') return '<span class="tag pause">暫停合作</span>';
+        if (st === '待審核') return '<span class="tag pause">待審核</span>';
+        return '<span class="tag ok">合作中</span>';
+      }
+
       function renderFiles(box, vendor) {
         var filesBox = document.createElement('div');
         filesBox.className = 'files-box';
+        var toolbar = document.createElement('div');
+        toolbar.className = 'files-toolbar';
         if (vendor.drive_folder_url) {
           var link = document.createElement('a');
           link.href = vendor.drive_folder_url;
           link.target = '_blank';
           link.rel = 'noopener';
-          link.textContent = '開啟 Drive 資料夾';
-          link.style.fontSize = '13px';
-          filesBox.appendChild(link);
+          link.textContent = 'Drive 資料夾';
+          toolbar.appendChild(link);
         }
         var btnFolder = document.createElement('button');
         btnFolder.type = 'button';
         btnFolder.className = 'btn btn-secondary';
-        btnFolder.textContent = vendor.drive_folder_id ? '重新整理檔案' : '建立檔案資料夾';
+        btnFolder.style.padding = '6px 12px';
+        btnFolder.style.fontSize = '13px';
+        btnFolder.textContent = vendor.drive_folder_id ? '重新整理檔案' : '建立資料夾';
         btnFolder.addEventListener('click', async function () {
           setMsg('');
           var data = await AccountingApi.vendorEnsureFolder(session, vendor.vendor_id);
@@ -381,23 +447,25 @@
           AccountingCache.patchVendor(session, vendor);
           renderList();
         });
-        filesBox.appendChild(btnFolder);
+        toolbar.appendChild(btnFolder);
+        filesBox.appendChild(toolbar);
         if (vendor.drive_folder_id) {
           AccountingApi.vendorListFiles(session, vendor.drive_folder_id).then(function (fd) {
             if (!fd.success) return;
+            if (!fd.files || !fd.files.length) {
+              var empty = document.createElement('p');
+              empty.className = 'file-list-empty';
+              empty.textContent = '尚無附件（報價單、合約、存摺等）';
+              filesBox.appendChild(empty);
+              return;
+            }
             (fd.files || []).forEach(function (f) {
               var row = document.createElement('div');
               row.className = 'file';
               row.innerHTML = '<a href="' + f.url + '" target="_blank" rel="noopener">' + f.name + '</a>' +
-                ' <span class="sub">' + (f.updated || '') + '</span>';
+                (f.updated ? ' <span class="sub">' + f.updated + '</span>' : '');
               filesBox.appendChild(row);
             });
-            if (!fd.files || !fd.files.length) {
-              var empty = document.createElement('p');
-              empty.className = 'sub';
-              empty.textContent = '資料夾尚無檔案（可上傳報價單、合約、請款資料）';
-              filesBox.appendChild(empty);
-            }
           });
         }
         box.appendChild(filesBox);
@@ -410,22 +478,42 @@
         box.innerHTML = '';
         rows.forEach(function (v) {
           var div = document.createElement('div');
-          div.className = 'item' + (v.coop_status === '暫停合作' ? ' paused' : '');
-          div.innerHTML =
-            '<div><strong>' + (v.name || '') + '</strong> ' +
+          div.className = 'vendor-card' + (v.coop_status === '暫停合作' ? ' paused' : '');
+
+          var head = document.createElement('div');
+          head.className = 'vendor-head';
+          head.innerHTML =
+            '<p class="vendor-name">' + (v.name || '—') + '</p>' +
+            '<div>' + coopStatusTag(v) + '</div>';
+
+          var tags = document.createElement('div');
+          tags.className = 'vendor-tags';
+          tags.innerHTML =
             '<span class="tag">' + (v.trade_category || '其他') + '</span>' +
-            (v.cost_type ? '<span class="tag">' + v.cost_type + '</span>' : '') +
-            (v.coop_status === '暫停合作' ? '<span class="tag pause">暫停合作</span>' : '') +
-            (v.coop_status === '待審核' ? '<span class="tag pause">待審核</span>' : '') +
-            '</div>' +
-            '<div class="sub">' + (v.tax_id || '—') + ' · ' + (v.contact_phone || '無電話') + '</div>' +
-            (function () {
-              var n = AccountingCache.vendorLineBindings(session, v.vendor_id).filter(function (b) {
-                return String(b.is_active || '是') !== '否';
-              }).length;
-              return n ? '<div class="sub">LINE 綁定 ' + n + ' 筆</div>' : '';
-            })() +
-            (v.note ? '<div class="sub">備註：' + v.note + '</div>' : '');
+            (v.cost_type ? '<span class="tag muted">' + v.cost_type + '</span>' : '');
+
+          var meta = document.createElement('div');
+          meta.className = 'vendor-meta';
+          formatVendorMetaRows(v).forEach(function (row) {
+            var line = document.createElement('div');
+            line.className = 'vendor-meta-row';
+            line.innerHTML = '<span class="meta-label">' + row.label + '</span><span>' + row.text + '</span>';
+            meta.appendChild(line);
+          });
+
+          div.appendChild(head);
+          div.appendChild(tags);
+          if (meta.childNodes.length) div.appendChild(meta);
+
+          if (v.note) {
+            var note = document.createElement('div');
+            note.className = 'vendor-note';
+            var noteText = String(v.note);
+            note.textContent = noteText.length > 120 ? noteText.slice(0, 120) + '…' : noteText;
+            note.title = noteText;
+            div.appendChild(note);
+          }
+
           var actions = document.createElement('div');
           actions.className = 'actions';
           var btnEdit = document.createElement('button');
@@ -465,6 +553,11 @@
         setMsg(''); setOk('');
         var payload = readForm();
         if (!payload.name) { setMsg('請填廠商名稱'); return; }
+        if (!payload.contact_name) { setMsg('請填聯絡人'); return; }
+        if (!payload.contact_phone) { setMsg('請填電話'); return; }
+        if (!payload.bank_code) { setMsg('請填銀行代碼'); return; }
+        if (!payload.account_no) { setMsg('請填帳號'); return; }
+        if (!payload.account_name) { setMsg('請填戶名'); return; }
         var editId = $('editId').value;
         var data = editId
           ? await AccountingApi.crudUpdate(session, 'vendor', editId, payload)
@@ -493,17 +586,6 @@
           return;
         }
         renderSearchHits(data.items || []);
-      });
-
-      $('manualBindBtn').addEventListener('click', function () {
-        setMsg('');
-        addBinding(
-          $('editId').value,
-          $('manualIdType').value,
-          $('manualLineId').value,
-          '',
-          $('bindPurpose').value
-        );
       });
 
       $('cancelEditBtn').addEventListener('click', clearForm);
