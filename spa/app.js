@@ -2,7 +2,7 @@ import Dashboard from './Dashboard.js?v=26.05.07.3';
 import ProjectBoard from './ProjectBoard.js';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
-import { saveCache, loadCache } from '../shared/js/utils.js';
+import { saveCache, loadCache, hubPresenceCacheKey } from '../shared/js/utils.js';
 import { request as apiRequest } from '../modules/projects/js/projectApi.js'; // [重構] 改為引入統一的 projectApi 模組
 import { initializeTaskSender } from '../shared/js/taskSender.js'; // [v509.0 修正] 更新共用模組路徑
 
@@ -28,6 +28,7 @@ const App = {
         // 待審核假勤原始清單（包含 startTime/endTime），用於今日出勤的「待審核」標記
         const pendingRequestsRaw = ref([]);
         const todayPresence = ref({});
+        const presenceLoading = ref(false);
         const currentView = ref({ name: 'dashboard' });
         const lightbox = ref({
             visible: false,
@@ -62,11 +63,13 @@ const App = {
             const d = new Date();
             return `spa_hub_schedule_${d.getFullYear()}_${String(d.getMonth() + 1).padStart(2, '0')}`;
         };
+        const presenceCacheKey = () => hubPresenceCacheKey();
 
         // 1. 應用程式啟動時，立即嘗試從快取載入資料
         const cachedEmployees = loadCache(EMPLOYEES_CACHE_KEY);
         const cachedProjects = loadCache(PROJECTS_CACHE_KEY);
         const cachedSchedule = loadCache(scheduleCacheKey());
+        const cachedPresence = loadCache(presenceCacheKey());
 
         if (cachedEmployees) {
             allEmployees.value = cachedEmployees;
@@ -78,6 +81,9 @@ const App = {
         }
         if (cachedSchedule && cachedSchedule.schedule) {
             monthSchedule.value = cachedSchedule;
+        }
+        if (cachedPresence && typeof cachedPresence === 'object') {
+            todayPresence.value = cachedPresence;
         }
         // --- 快取策略結束 ---
 
@@ -196,6 +202,33 @@ const App = {
             url.searchParams.append('userName', userProfile.value.displayName);
             const response = await fetch(url);
             return response.json();
+        };
+
+        /** 今日打卡燈號（輕量 API，供快取＋背景更新） */
+        const fetchTodayPresence = async () => {
+            if (!userProfile.value) return { success: false };
+            const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
+            url.searchParams.append('page', 'attendance_api');
+            url.searchParams.append('action', 'get_hub_today_presence');
+            url.searchParams.append('userId', userProfile.value.userId);
+            const response = await fetch(url);
+            return response.json();
+        };
+
+        const refreshTodayPresenceInBackground = () => {
+            presenceLoading.value = true;
+            return fetchTodayPresence().then((result) => {
+                if (result && result.success && result.todayPresence) {
+                    if (JSON.stringify(todayPresence.value) !== JSON.stringify(result.todayPresence)) {
+                        todayPresence.value = result.todayPresence;
+                    }
+                    saveCache(presenceCacheKey(), result.todayPresence, 1);
+                }
+            }).catch((e) => {
+                console.warn('[Hub] 背景更新燈號失敗（維持快取）:', e);
+            }).finally(() => {
+                presenceLoading.value = false;
+            });
         };
 
         /** 合併兩次 get_latest_schedule 回傳（供主控台「今天／明天」橫跨兩個曆月時） */
@@ -365,10 +398,10 @@ const App = {
                     pendingApprovals.value = attendanceResult.pendingRequests?.length || 0;
                     // 將待審核假單原始資料留給「今日出勤」卡片使用（含 startTime/endTime）
                     pendingRequestsRaw.value = attendanceResult.pendingRequests || [];
-                    if (attendanceResult.todayPresence) {
-                        todayPresence.value = attendanceResult.todayPresence;
-                    }
                 }
+
+                // 今日燈號：SWR（先顯示快取，背景抓最新；TTL 1 天）
+                refreshTodayPresenceInBackground();
 
                 // 背景抓當月班表（SWR 策略：先顯示快取，背景更新後無縫替換，TTL 7 天）。
                 // 有無快取都會打 API；失敗時卡片維持快取內容。
@@ -474,6 +507,7 @@ const App = {
             pendingApprovals,
             pendingRequestsRaw,
             todayPresence,
+            presenceLoading,
             monthSchedule,
             scheduleLoading,
             hasAdminRights,
@@ -531,7 +565,7 @@ const App = {
                 <!-- [v428.0 UX優化] 將 Dashboard 和 ProjectBoard 都放入限寬容器中，提升閱讀體驗 -->
                 <!-- 【您的要求】核心修正：移除內層的寬度限制，統一由 main 元素控制 -->
                 <div v-if="currentView.name === 'dashboard'" class="py-6">
-                    <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :pendingRequestsRaw="pendingRequestsRaw" :todayPresence="todayPresence" :hasAdminRights="hasAdminRights" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" />
+                    <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :presenceLoading="presenceLoading" :pendingRequestsRaw="pendingRequestsRaw" :todayPresence="todayPresence" :hasAdminRights="hasAdminRights" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" />
                     <!-- 任務交辦中心容器 -->
                     <div v-if="hasAdminRights" id="task-sender-container" class="mt-4"></div>
                     <!-- 公開落地頁：緊接在任務交辦中心之後（無管理權者無交辦區，此景為主控台捲動到底） -->

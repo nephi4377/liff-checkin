@@ -14,7 +14,9 @@
         <template v-else>
             <header class="mb-4">
                 <h1 class="text-lg font-bold">全員出勤燈號看板</h1>
-                <p class="text-xs text-gray-500 mt-1">權限 4 以上可檢視 · 燈號僅「今天」依打卡位置顯示</p>
+                <p class="text-xs text-gray-500 mt-1">權限 4 以上可檢視 · 燈號僅「今天」依打卡位置顯示
+                    <span v-if="presenceRefreshing" class="text-blue-500 animate-pulse"> · 燈號更新中…</span>
+                </p>
             </header>
 
             <div class="bg-white border border-gray-200 rounded-lg p-3 mb-4 text-xs">
@@ -85,6 +87,7 @@
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
     <script type="module">
         import { CONFIG } from '../../shared/js/config.js';
+        import { loadCache, saveCache, hubPresenceCacheKey } from '../../shared/js/utils.js';
 
         const { createApp, ref, computed, onMounted } = Vue;
 
@@ -143,6 +146,8 @@
                 const error = ref('');
                 const board = ref(null);
                 const orangeLegend = ref([]);
+                const cachedPresence = loadCache(hubPresenceCacheKey()) || null;
+                const presenceRefreshing = ref(false);
 
                 const params = new URLSearchParams(window.location.search);
                 const userId = params.get('uid') || params.get('userId') || '';
@@ -162,11 +167,12 @@
                 });
 
                 const groupedRows = computed(() => {
-                    if (!board.value) return [];
-                    const scheduleByMonth = board.value.scheduleByMonth || {};
-                    const presenceMap = board.value.todayPresence || {};
+                    const scheduleByMonth = board.value?.scheduleByMonth || {};
+                    const presenceMap = board.value?.todayPresence || cachedPresence || {};
+                    const employees = board.value?.employees || [];
+                    if (!employees.length) return [];
                     const groups = {};
-                    (board.value.employees || []).forEach(emp => {
+                    employees.forEach(emp => {
                         const g = emp.group || '未分類';
                         if (!groups[g]) groups[g] = [];
                         const days = dayColumns.value.map(d =>
@@ -200,6 +206,7 @@
                         return;
                     }
                     try {
+                        presenceRefreshing.value = true;
                         const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
                         url.searchParams.set('page', 'attendance_api');
                         url.searchParams.set('action', 'get_hub_staff_board');
@@ -209,14 +216,18 @@
                         if (!data.success) throw new Error(data.message || '載入失敗');
                         board.value = data;
                         orangeLegend.value = data.orangeReasonsLegend || [];
+                        if (data.todayPresence) {
+                            saveCache(hubPresenceCacheKey(), data.todayPresence, 1);
+                        }
                     } catch (e) {
                         error.value = e.message || '載入失敗';
                     } finally {
                         loading.value = false;
+                        presenceRefreshing.value = false;
                     }
                 });
 
-                return { loading, error, dayColumns, groupedRows, orangeLegend, presenceTitle };
+                return { loading, error, dayColumns, groupedRows, orangeLegend, presenceTitle, presenceRefreshing };
             }
         }).mount('#app');
     </script>

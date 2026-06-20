@@ -9,6 +9,7 @@ export default {
         'allEmployees',
         'monthSchedule',       // { schedule: {uid: {日期: 狀態 或 '日期:類別': '狀態[時段]'}}, holidays: [...] }
         'scheduleLoading',     // 班表是否正在向後端更新中（快取優先 + 背景更新）
+        'presenceLoading',     // 今日燈號是否正在背景更新中
         'pendingRequestsRaw',  // [{userName, recordType, leaveType, startTime, endTime, status, ...}]
         'todayPresence',       // { [userId]: { light, label, reasons, hasCheckIn, checkInTime, ... } }
         'hasAdminRights',
@@ -392,7 +393,7 @@ export default {
                         <a v-if="hasAdminRights" :href="staffStatusBoardUrl"
                             class="text-[10px] text-blue-600 hover:underline font-medium">全員燈號看板（今／明／後天）→</a>
                         <span v-if="!hasAnyScheduleData" class="text-[10px] text-gray-400">載入班表中…</span>
-                        <span v-else-if="scheduleLoading" class="text-[10px] text-blue-500 animate-pulse" title="正在取得最新排班">更新中…</span>
+                        <span v-else-if="scheduleLoading || presenceLoading" class="text-[10px] text-blue-500 animate-pulse" title="正在取得最新排班或燈號">更新中…</span>
                     </div>
                 </div>
                 <div class="flex flex-wrap gap-2 text-[10px] text-gray-500 mb-2">

@@ -170,6 +170,13 @@ export function loadCache(key) {
   return cache.data;
 }
 
+/** 主控台今日打卡燈號 localStorage 鍵（依日期，與班表快取策略一致） */
+export function hubPresenceCacheKey(date = new Date()) {
+  const d = date;
+  const pad2 = (n) => String(n).padStart(2, '0');
+  return `spa_hub_presence_${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
 /**
  * [v552.0 新增] 以 GET 請求方式發送 API Payload，用於繞過 CORS 問題。
  * @param {string} baseUrl - 後端 API 的基礎 URL。
