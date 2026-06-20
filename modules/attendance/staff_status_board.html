@@ -146,7 +146,6 @@
 
                 const params = new URLSearchParams(window.location.search);
                 const userId = params.get('uid') || params.get('userId') || '';
-                const permission = parseInt(params.get('permission') || '1', 10);
 
                 const dayColumns = computed(() => {
                     const titles = ['今天', '明天', '後天'];
@@ -195,11 +194,6 @@
                 };
 
                 onMounted(async () => {
-                    if (permission < 4) {
-                        error.value = '權限不足，需權限 4 以上才能檢視此頁面。';
-                        loading.value = false;
-                        return;
-                    }
                     if (!userId) {
                         error.value = '缺少使用者身分，請從主控台進入。';
                         loading.value = false;

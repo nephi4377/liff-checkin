@@ -83,8 +83,18 @@ const App = {
 
         // --- 計算屬性 (Computed) ---
         const welcomeMessage = computed(() => userProfile.value ? `歡迎，${userProfile.value.displayName}！` : '歡迎！');
-        const currentUser = computed(() => allEmployees.value.find(emp => emp.userId === userProfile.value?.userId));
-        const hasAdminRights = computed(() => (currentUser.value?.permission || 1) >= 4);
+        // 權限 5 不在 attendance_active 名單時，改由 API 回傳的 operator 辨識身分
+        const operatorProfile = ref(null);
+        const currentUser = computed(() => {
+            const uid = userProfile.value?.userId;
+            if (!uid) return null;
+            const fromList = allEmployees.value.find(emp => emp.userId === uid);
+            if (fromList) return fromList;
+            const op = operatorProfile.value;
+            if (op && String(op.userId) === String(uid)) return op;
+            return null;
+        });
+        const hasAdminRights = computed(() => Number(currentUser.value?.permission || 0) >= 4);
 
         // [v411.0 SPA化] 簡易路由系統
         const routes = {
@@ -348,6 +358,9 @@ const App = {
                         allEmployees.value = attendanceResult.employees;
                         saveCache(EMPLOYEES_CACHE_KEY, attendanceResult.employees, 3);
                         window.spaAllEmployees = attendanceResult.employees;
+                    }
+                    if (attendanceResult.operator) {
+                        operatorProfile.value = attendanceResult.operator;
                     }
                     pendingApprovals.value = attendanceResult.pendingRequests?.length || 0;
                     // 將待審核假單原始資料留給「今日出勤」卡片使用（含 startTime/endTime）
