@@ -3,6 +3,8 @@
  */
 var AccountingApi = (function () {
   var GAS_API = 'https://script.google.com/macros/s/AKfycbyibVTQk2eYEYXX5vb-TUFYsLIKWEg1bADR-7w1QFSg6kly3gyDAG3GkKuvQ0PBur05DA/exec';
+  var MIN_PERMISSION = 4;
+  var PERM_DENIED_MSG = '權限不足（需財務／老闆，權限 ≥ 4）';
 
   async function post(body) {
     var res = await fetch(GAS_API, {
@@ -28,6 +30,8 @@ var AccountingApi = (function () {
 
   return {
     GAS_API: GAS_API,
+    MIN_PERMISSION: MIN_PERMISSION,
+    PERM_DENIED_MSG: PERM_DENIED_MSG,
     post: post,
     buildAuth: buildAuth,
     authMe: function (sessionOrToken) {
@@ -118,17 +122,24 @@ var AccountingApi = (function () {
     /** policy 開 authBypass 時略過 LIFF；否則走 initLiff */
     initSession: async function (opts) {
       var policy = await AccountingApi.loadPolicy();
+      var session;
       if (policy.authBypass) {
         var auth = await post({ action: 'accounting_auth_me', dev_bypass: true });
         if (!auth.success) throw new Error(auth.message || '驗證失敗');
-        return {
+        session = {
           devBypass: true,
           profile: { userId: auth.user_id, displayName: auth.display_name },
           idToken: '',
           auth: auth
         };
+      } else {
+        session = await AccountingApi.initLiff(opts);
       }
-      return AccountingApi.initLiff(opts);
+      if (!session) return null;
+      if ((session.auth.permission || 0) < MIN_PERMISSION) {
+        throw new Error(PERM_DENIED_MSG);
+      }
+      return session;
     }
   };
 })();

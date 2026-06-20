@@ -70,7 +70,7 @@
           var session = await AccountingApi.initSession();
           if (!session) return;
           var mode = session.devBypass ? ' · 測試模式（無登入）' : '';
-          document.getElementById('userLine').textContent = session.profile.displayName + mode;
+          document.getElementById('userLine').textContent = session.profile.displayName + ' · 權限 ' + session.auth.permission + mode;
           showApp();
           var data = await AccountingApi.vendorPaymentStatus(session);
           renderItems(data);

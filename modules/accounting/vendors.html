@@ -506,10 +506,6 @@
           initFormOptions();
           session = await AccountingApi.initSession();
           if (!session) return;
-          if ((session.auth.permission || 0) < 2) {
-            $('loading').textContent = '權限不足（需行政以上）';
-            return;
-          }
           var mode = session.devBypass ? ' · 測試模式（無登入）' : '';
           $('userLine').textContent = session.profile.displayName + ' · 權限 ' + session.auth.permission + mode;
           var cached = AccountingCache.get(session);

@@ -41,25 +41,25 @@
     <a class="card" href="vendors.html" id="linkVendors">
       <h3>廠商名冊</h3>
       <p>維護廠商主檔、統編與 LINE 綁定。</p>
-      <span class="tag admin">行政以上</span>
+      <span class="tag admin">財務以上</span>
     </a>
 
     <a class="card" href="payees.html" id="linkPayees">
       <h3>收款帳戶</h3>
       <p>管理下包商、材料商與工人的銀行帳戶，供匯款使用。</p>
-      <span class="tag admin">行政以上</span>
+      <span class="tag admin">財務以上</span>
     </a>
 
     <a class="card" href="ledger_review.html" id="linkLedgerReview">
       <h3>收支審核</h3>
       <p>查看待審收支、核准或退回，並標記匯款狀態。</p>
-      <span class="tag admin">行政以上</span>
+      <span class="tag admin">財務以上</span>
     </a>
 
     <a class="card" href="attachments.html" id="linkAttachments">
       <h3>單據附件</h3>
       <p>依 ingest_id 查詢記帳時上傳的 Drive 單據連結。</p>
-      <span class="tag admin">行政以上</span>
+      <span class="tag admin">財務以上</span>
     </a>
 
     <a class="card" href="project_margin.html" id="linkProjectMargin">
@@ -82,17 +82,7 @@
           var mode = session.devBypass ? ' · 測試模式（無登入）' : '';
           document.getElementById('userLine').textContent =
             session.profile.displayName + ' · 權限 ' + perm + mode;
-          if (perm < 2) {
-            document.getElementById('linkVendors').style.display = 'none';
-            document.getElementById('linkPayees').style.display = 'none';
-            document.getElementById('linkLedgerReview').style.display = 'none';
-            document.getElementById('linkAttachments').style.display = 'none';
-          } else {
-            await AccountingCache.load(session);
-          }
-          if (perm < 4) {
-            document.getElementById('linkProjectMargin').style.display = 'none';
-          }
+          await AccountingCache.load(session);
           showApp();
         } catch (e) {
           document.getElementById('loading').textContent = e.message || String(e);

@@ -469,7 +469,7 @@ export default {
                 </a>
 
                 <!-- 1b. 收支登錄（HUB 內嵌，共用員工／案場快取） -->
-                <a :href="accountingUrl"
+                <a v-if="currentUser && currentUser.permission >= 4" :href="accountingUrl"
                     class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-emerald-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">💰</div>
                     <div class="min-w-0 flex-1">
@@ -479,7 +479,7 @@ export default {
                 </a>
 
                 <!-- 1c. 會計功能選單 -->
-                <a :href="accountingHubUrl"
+                <a v-if="currentUser && currentUser.permission >= 4" :href="accountingHubUrl"
                     class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-teal-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center text-xl">📒</div>
                     <div class="min-w-0 flex-1">

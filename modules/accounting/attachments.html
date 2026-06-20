@@ -90,10 +90,6 @@
         try {
           session = await AccountingApi.initSession();
           if (!session) return;
-          if ((session.auth.permission || 0) < 2) {
-            document.getElementById('loading').textContent = '權限不足（需行政以上）';
-            return;
-          }
           if (!AccountingCache.get(session)) await AccountingCache.load(session);
           var q = new URLSearchParams(window.location.search);
           if (q.get('ingest_id')) document.getElementById('ingestId').value = q.get('ingest_id');

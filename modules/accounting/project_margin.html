@@ -225,10 +225,6 @@
           document.getElementById('addDate').value = todayIso();
           session = await AccountingApi.initSession();
           if (!session) return;
-          if ((session.auth.permission || 0) < 4) {
-            document.getElementById('loading').textContent = '權限不足（需財務／老闆，權限 ≥ 4）';
-            return;
-          }
           var mode = session.devBypass ? ' · 測試模式' : '';
           document.getElementById('userLine').textContent =
             session.profile.displayName + ' · 權限 ' + session.auth.permission + mode;
