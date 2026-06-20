@@ -251,6 +251,10 @@
         document.getElementById('newDesc').value = '';
         document.getElementById('newNote').value = '';
         await loadList();
+        if (!items.length) {
+          await new Promise(function (r) { setTimeout(r, 600); });
+          await loadList();
+        }
       });
 
       document.getElementById('exportBtn').addEventListener('click', async function () {
