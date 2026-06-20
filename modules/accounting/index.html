@@ -56,6 +56,18 @@
       <span class="tag admin">財務以上</span>
     </a>
 
+    <a class="card" href="vendor_payment_finance.html" id="linkVendorPaymentFinance">
+      <h3>廠商待匯款</h3>
+      <p>待匯款清單、財務直接新增、產出中信 TXT（同時寫收支）。</p>
+      <span class="tag admin">財務以上</span>
+    </a>
+
+    <a class="card" href="vendor_payment_approve.html" id="linkVendorPaymentApprove">
+      <h3>廠商請款審核</h3>
+      <p>審核廠商 LINE 上傳的請款／報價單，核准後進入待匯款。</p>
+      <span class="tag admin">權限 5</span>
+    </a>
+
     <a class="card" href="attachments.html" id="linkAttachments">
       <h3>單據附件</h3>
       <p>依 ingest_id 查詢記帳時上傳的 Drive 單據連結。</p>
@@ -82,6 +94,9 @@
           var mode = session.devBypass ? ' · 測試模式（無登入）' : '';
           document.getElementById('userLine').textContent =
             session.profile.displayName + ' · 權限 ' + perm + mode;
+          if (perm < 5) {
+            document.getElementById('linkVendorPaymentApprove').classList.add('hidden');
+          }
           await AccountingCache.load(session);
           showApp();
         } catch (e) {

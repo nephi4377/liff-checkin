@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>添心收支登錄</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_api.js?v=9"></script>
+  <script src="../../shared/js/accounting_api.js?v=11"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 480px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 4px; }
@@ -106,6 +106,7 @@
 
     (function () {
       var profile = { userId: '', displayName: '' };
+      var sessionRef = null;
       var sessionCount = 0, submitting = false, idToken = '', devBypass = false;
       var pendingPhotos = [], queryParams = {}, hubContext = { projects: [], employees: [] };
       var kind = document.getElementById('kind');
@@ -134,8 +135,7 @@
         if (store) document.getElementById('store').value = store;
       }
 
-      function setupHubContext() {
-        var ctx = AccountingContext.load();
+      function applyHubContextToUi(ctx) {
         hubContext.projects = ctx.projects;
         hubContext.employees = ctx.employees;
         var bar = document.getElementById('contextBar');
@@ -196,12 +196,32 @@
         }
 
         bar.classList.remove('hidden');
+        bar.classList.remove('warn');
         if (ctx.projects.length || ctx.employees.length) {
-          bar.textContent = '已載入快取：' + ctx.projects.length + ' 筆案場、' + ctx.employees.length + ' 位員工（免再打 API）';
+          var src = (ctx.source && (ctx.source.projects === 'api' || ctx.source.employees === 'api')) ? '伺服器' : '快取';
+          bar.textContent = '已載入' + src + '：' + ctx.projects.length + ' 筆案場、' + ctx.employees.length + ' 位員工';
         } else {
-          bar.textContent = '尚無 HUB 快取。請先開一次主控台，或改用手動填寫。';
+          bar.textContent = '無案場快選資料，請手動填寫';
           bar.classList.add('warn');
         }
+      }
+
+      async function setupHubContext(session) {
+        var ctx = AccountingContext.load();
+        if (!ctx.projects.length && !ctx.employees.length && session) {
+          try {
+            var remote = await AccountingApi.formContext(session);
+            if (remote.success) {
+              ctx = AccountingContext.load({
+                projects: remote.projects || [],
+                employees: remote.employees || []
+              });
+            }
+          } catch (eApi) {
+            console.warn('formContext', eApi);
+          }
+        }
+        applyHubContextToUi(ctx);
       }
 
       function readQueryParams() {
@@ -377,9 +397,10 @@
         }
         profile.userId = auth.user_id;
         profile.displayName = auth.display_name;
+        sessionRef = { devBypass: true, idToken: '', auth: auth };
         document.getElementById('userLine').textContent = profile.displayName + ' · 測試模式（無登入）';
         showApp();
-        setupHubContext();
+        await setupHubContext(sessionRef);
         if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
       }
 
@@ -405,6 +426,7 @@
           setLoading('請用 LINE 開啟此頁');
           return;
         }
+        var authMe = null;
         try {
           setLoading('連線 LINE…');
           await Promise.race([
@@ -420,7 +442,7 @@
           profile.userId = p.userId;
           profile.displayName = p.displayName;
           idToken = liff.getIDToken();
-          var authMe = await AccountingApi.authMe(idToken);
+          authMe = await AccountingApi.authMe(idToken);
           if (!authMe.success || (authMe.permission || 0) < AccountingApi.MIN_PERMISSION) {
             setLoading(AccountingApi.PERM_DENIED_MSG);
             return;
@@ -430,8 +452,9 @@
           setLoading('載入失敗：' + (e.message || e));
           return;
         }
+        sessionRef = { devBypass: false, idToken: idToken, auth: authMe, profile: profile };
         showApp();
-        setupHubContext();
+        await setupHubContext(sessionRef);
         if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
       }
       boot();

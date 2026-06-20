@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>廠商待匯款</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/accounting_master_data.js?v=12"></script>
+  <script src="../../shared/js/accounting_api.js?v=12"></script>
+  <script src="../../shared/js/accounting_cache.js?v=12"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 640px; margin: 0 auto; background: #f4f6f8; }
+    h2 { margin: 0 0 8px; }
+    .sub { color: #555; font-size: 14px; }
+    .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    label { display: block; margin-top: 8px; font-weight: 600; font-size: 14px; }
+    input, select, textarea { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btn { padding: 10px 14px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; }
+    .btn-primary { background: #1a73e8; color: #fff; width: 100%; padding: 12px; margin-top: 10px; }
+    .btn-ok { background: #34a853; color: #fff; }
+    .btn-muted { background: #e8eaed; color: #333; }
+    .item { border-bottom: 1px solid #eee; padding: 14px 0; }
+    .item:last-child { border-bottom: none; }
+    .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin-right: 6px; }
+    .tag.pay { background: #fef7e0; color: #b06000; }
+    .mono { font-family: ui-monospace, monospace; font-size: 12px; color: #555; word-break: break-all; }
+    .actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .bank { font-size: 13px; color: #444; margin-top: 4px; }
+    #msg { color: #c5221f; font-size: 14px; }
+    #ok { color: #137333; font-size: 14px; }
+    .hidden { display: none; }
+    .nav { margin-bottom: 12px; font-size: 14px; }
+    .nav a { color: #1a73e8; text-decoration: none; }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .chk { width: auto; margin-right: 8px; }
+    .edit-box { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ddd; }
+  </style>
+</head>
+<body>
+  <div id="loading">載入中…</div>
+  <div id="app" class="hidden">
+    <p class="nav"><a href="index.html">← 會計功能選單</a></p>
+    <h2>廠商待匯款</h2>
+    <p class="sub" id="userLine">—</p>
+    <p class="sub">核准或財務新增的項目會在這裡；勾選後產出中信 TXT，同時寫收支並標記已匯款。</p>
+    <div id="msg"></div>
+    <div id="ok"></div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px">新增待匯款（財務直接付廠商）</h3>
+      <label>廠商</label>
+      <select id="newVendor"></select>
+      <div class="row2">
+        <div>
+          <label>金額</label>
+          <input type="number" id="newAmount" inputmode="numeric" />
+        </div>
+        <div>
+          <label>案號</label>
+          <input type="text" id="newProject" placeholder="例：752" />
+        </div>
+      </div>
+      <label>品項說明</label>
+      <input type="text" id="newDesc" placeholder="例：磁磚尾款" />
+      <div class="row2">
+        <div>
+          <label>銀行代碼</label>
+          <input type="text" id="newBank" maxlength="3" inputmode="numeric" />
+        </div>
+        <div>
+          <label>帳號</label>
+          <input type="text" id="newAcct" inputmode="numeric" />
+        </div>
+      </div>
+      <label>戶名</label>
+      <input type="text" id="newAcctName" />
+      <label>備註（選填）</label>
+      <input type="text" id="newNote" />
+      <button type="button" class="btn btn-primary" id="addBtn">加入待匯款列表</button>
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <button type="button" class="btn btn-muted" id="reloadBtn">重新載入</button>
+        <button type="button" class="btn btn-muted" id="selAllBtn">全選</button>
+        <button type="button" class="btn btn-ok" id="exportBtn">產出中信 TXT（並寫收支）</button>
+      </div>
+      <h3 style="margin:0 0 8px">待匯款列表</h3>
+      <div id="list"></div>
+      <p class="sub hidden" id="emptyHint">目前沒有待匯款項目</p>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var session = null;
+      var vendors = [];
+      var items = [];
+
+      function setMsg(t) { document.getElementById('msg').textContent = t || ''; }
+      function setOk(t) { document.getElementById('ok').textContent = t || ''; }
+      function showApp() {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+      }
+
+      function bankLine(row) {
+        var code = String(row.bank_code || '').trim();
+        var acct = String(row.account_no || '').trim();
+        var name = String(row.account_name || '').trim();
+        if (!code && !acct) return '（匯款帳戶待補）';
+        return code + ' / ' + acct + ' / ' + name;
+      }
+
+      function fillVendorSelect() {
+        var sel = document.getElementById('newVendor');
+        sel.innerHTML = '<option value="">— 請選擇 —</option>';
+        vendors.forEach(function (v) {
+          if (v.is_active === false || v.is_active === 'FALSE') return;
+          var opt = document.createElement('option');
+          opt.value = v.vendor_id;
+          opt.textContent = v.name || v.vendor_id;
+          sel.appendChild(opt);
+        });
+      }
+
+      function onVendorPick() {
+        var vid = document.getElementById('newVendor').value;
+        var v = vendors.find(function (x) { return x.vendor_id === vid; });
+        if (!v) return;
+        document.getElementById('newBank').value = v.bank_code || '';
+        document.getElementById('newAcct').value = v.account_no || '';
+        document.getElementById('newAcctName').value = v.account_name || '';
+      }
+
+      function downloadTxt(filename, content) {
+        var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+
+      function renderItem(row) {
+        var div = document.createElement('div');
+        div.className = 'item';
+        var amount = parseInt(row.amount, 10) || 0;
+        var head = document.createElement('div');
+        head.className = 'actions';
+        var chk = document.createElement('input');
+        chk.type = 'checkbox';
+        chk.className = 'chk';
+        chk.value = row.payment_request_id;
+        chk.checked = true;
+        head.appendChild(chk);
+        var info = document.createElement('div');
+        info.innerHTML =
+          '<div><strong>' + (row.vendor_name || '廠商') + '</strong> ' +
+          '<span class="tag">' + (row.doc_type || '請款') + '</span>' +
+          (row.source === 'finance_manual' ? '<span class="tag pay">財務新增</span>' : '') +
+          '</div>' +
+          '<div class="sub">$' + amount + ' · 案號 ' + (row.project_no || '—') + '</div>' +
+          (row.item_desc ? '<div class="sub">' + row.item_desc + '</div>' : '') +
+          '<div class="bank">' + bankLine(row) + '</div>';
+        head.appendChild(info);
+        div.appendChild(head);
+
+        var edit = document.createElement('div');
+        edit.className = 'edit-box';
+        edit.innerHTML =
+          '<label>金額</label><input type="number" class="e-amount" value="' + (amount || '') + '" />' +
+          '<label>案號</label><input type="text" class="e-project" value="' + (row.project_no || '') + '" />' +
+          '<label>品項</label><input type="text" class="e-desc" value="' + (row.item_desc || '') + '" />' +
+          '<div class="row2">' +
+          '<div><label>銀行</label><input type="text" class="e-bank" value="' + (row.bank_code || '') + '" maxlength="3" /></div>' +
+          '<div><label>帳號</label><input type="text" class="e-acct" value="' + (row.account_no || '') + '" /></div>' +
+          '</div>' +
+          '<label>戶名</label><input type="text" class="e-name" value="' + (row.account_name || '') + '" />';
+
+        var saveBtn = document.createElement('button');
+        saveBtn.className = 'btn btn-muted';
+        saveBtn.textContent = '儲存修改';
+        saveBtn.onclick = async function () {
+          setMsg('');
+          var patch = {
+            amount: edit.querySelector('.e-amount').value,
+            project_no: edit.querySelector('.e-project').value.trim(),
+            item_desc: edit.querySelector('.e-desc').value.trim(),
+            bank_code: edit.querySelector('.e-bank').value.trim(),
+            account_no: edit.querySelector('.e-acct').value.trim(),
+            account_name: edit.querySelector('.e-name').value.trim()
+          };
+          var data = await AccountingApi.vendorPaymentUpdate(session, row.payment_request_id, patch);
+          if (!data.success) { setMsg(data.message || '儲存失敗'); return; }
+          setOk('已更新');
+          await loadList();
+        };
+        edit.appendChild(saveBtn);
+        div.appendChild(edit);
+        return div;
+      }
+
+      function selectedIds() {
+        return Array.prototype.slice.call(document.querySelectorAll('#list input.chk:checked'))
+          .map(function (el) { return el.value; });
+      }
+
+      async function loadList() {
+        setMsg('');
+        var data = await AccountingApi.vendorPaymentList(session, 'pending_payment');
+        if (!data.success) {
+          setMsg(data.message || '載入失敗');
+          return;
+        }
+        items = data.items || [];
+        var box = document.getElementById('list');
+        box.innerHTML = '';
+        document.getElementById('emptyHint').classList.toggle('hidden', items.length > 0);
+        items.forEach(function (row) {
+          box.appendChild(renderItem(row));
+        });
+      }
+
+      document.getElementById('newVendor').addEventListener('change', onVendorPick);
+      document.getElementById('reloadBtn').addEventListener('click', loadList);
+      document.getElementById('selAllBtn').addEventListener('click', function () {
+        document.querySelectorAll('#list input.chk').forEach(function (el) { el.checked = true; });
+      });
+
+      document.getElementById('addBtn').addEventListener('click', async function () {
+        setMsg('');
+        setOk('');
+        var payload = {
+          vendor_id: document.getElementById('newVendor').value,
+          amount: document.getElementById('newAmount').value,
+          project_no: document.getElementById('newProject').value.trim(),
+          item_desc: document.getElementById('newDesc').value.trim(),
+          bank_code: document.getElementById('newBank').value.trim(),
+          account_no: document.getElementById('newAcct').value.trim(),
+          account_name: document.getElementById('newAcctName').value.trim(),
+          note: document.getElementById('newNote').value.trim(),
+          doc_type: '直接匯款'
+        };
+        var data = await AccountingApi.vendorPaymentCreate(session, payload);
+        if (!data.success) { setMsg(data.message || '新增失敗'); return; }
+        setOk('已加入待匯款列表');
+        document.getElementById('newAmount').value = '';
+        document.getElementById('newProject').value = '';
+        document.getElementById('newDesc').value = '';
+        document.getElementById('newNote').value = '';
+        await loadList();
+      });
+
+      document.getElementById('exportBtn').addEventListener('click', async function () {
+        setMsg('');
+        setOk('');
+        var ids = selectedIds();
+        if (!ids.length) { setMsg('請先勾選要匯出的項目'); return; }
+        if (!confirm('將產出中信 TXT，並把勾選項目寫入收支、標記已匯款。確定？')) return;
+        var data = await AccountingApi.vendorPaymentExportCtbc(session, ids);
+        if (!data.success) {
+          setMsg(data.message || '匯出失敗');
+          return;
+        }
+        downloadTxt(data.filename || 'ctbc_vendor_batch.txt', data.content || '');
+        var msg = '已匯出 ' + (data.count || 0) + ' 筆，並寫入收支';
+        if (data.warnings && data.warnings.length) {
+          msg += '（部分略過：' + data.warnings.join('；') + '）';
+        }
+        setOk(msg);
+        await loadList();
+      });
+
+      (async function boot() {
+        try {
+          session = await AccountingApi.initSession();
+          if (!session) return;
+          document.getElementById('userLine').textContent =
+            (session.auth.display_name || session.profile.displayName) + ' · 權限 ' + session.auth.permission;
+          await AccountingCache.load(session);
+          vendors = AccountingCache.vendors(session) || [];
+          fillVendorSelect();
+          showApp();
+          await loadList();
+        } catch (e) {
+          document.getElementById('loading').textContent = e.message || String(e);
+        }
+      })();
+    })();
+  </script>
+</body>
+</html>

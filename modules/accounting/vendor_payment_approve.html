@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>廠商請款審核</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/accounting_api.js?v=11"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 640px; margin: 0 auto; background: #f4f6f8; }
+    h2 { margin: 0 0 8px; }
+    .sub { color: #555; font-size: 14px; }
+    .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    label { display: block; margin-top: 8px; font-weight: 600; font-size: 14px; }
+    input, textarea { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
+    .btn { padding: 10px 14px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; }
+    .btn-ok { background: #34a853; color: #fff; }
+    .btn-warn { background: #f9ab00; color: #333; }
+    .btn-primary { background: #1a73e8; color: #fff; width: 100%; padding: 12px; margin-top: 10px; }
+    .item { border-bottom: 1px solid #eee; padding: 14px 0; }
+    .item:last-child { border-bottom: none; }
+    .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin-right: 6px; }
+    .tag.pay { background: #fef7e0; color: #b06000; }
+    .mono { font-family: ui-monospace, monospace; font-size: 12px; color: #555; word-break: break-all; }
+    .actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .thumb { max-width: 100%; border-radius: 8px; margin-top: 8px; }
+    #msg { color: #c5221f; font-size: 14px; }
+    #ok { color: #137333; font-size: 14px; }
+    .hidden { display: none; }
+    .nav { margin-bottom: 12px; font-size: 14px; }
+    .nav a { color: #1a73e8; text-decoration: none; }
+    .need { color: #c5221f; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div id="loading">載入中…</div>
+  <div id="app" class="hidden">
+    <p class="nav"><a href="index.html">← 會計功能選單</a></p>
+    <h2>廠商請款審核</h2>
+    <p class="sub" id="userLine">—</p>
+    <div id="msg"></div>
+    <div id="ok"></div>
+
+    <div class="card">
+      <button type="button" class="btn btn-primary" id="reloadBtn">重新載入待審</button>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px">待審列表</h3>
+      <div id="list"></div>
+      <p class="sub" id="emptyHint" class="hidden">目前沒有待審項目</p>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var session = null;
+      var focusId = '';
+
+      function readQueryId() {
+        var q = (window.location.search || '').replace(/^\?/, '').split('&');
+        for (var i = 0; i < q.length; i++) {
+          var p = q[i].split('=');
+          if (p[0] === 'id') return decodeURIComponent(p[1] || '');
+        }
+        return '';
+      }
+
+      function setMsg(t) { document.getElementById('msg').textContent = t || ''; }
+      function setOk(t) { document.getElementById('ok').textContent = t || ''; }
+      function showApp() {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+      }
+
+      function driveLinks(raw) {
+        return String(raw || '').split(/\r?\n/).filter(Boolean);
+      }
+
+      function renderItem(row) {
+        var div = document.createElement('div');
+        div.className = 'item';
+        if (focusId && row.payment_request_id === focusId) {
+          div.style.background = '#f8f9ff';
+        }
+        var amount = parseInt(row.amount, 10) || 0;
+        var needProject = !String(row.project_no || '').trim();
+        var needAmount = amount <= 0;
+
+        div.innerHTML =
+          '<div><strong>' + (row.vendor_name || '廠商') + '</strong> ' +
+          '<span class="tag">' + (row.doc_type || '請款') + '</span>' +
+          '<span class="tag pay">' + (row.review_status || '待審') + '</span></div>' +
+          '<div class="mono">' + (row.payment_request_id || '') + '</div>' +
+          '<div class="sub">金額：' + (amount ? ('$' + amount) : '（待補）') +
+          ' · 案號：' + (row.project_no || '（待補）') + '</div>' +
+          (row.item_desc ? '<div class="sub">' + row.item_desc + '</div>' : '') +
+          (row.note ? '<div class="sub">備註：' + row.note + '</div>' : '');
+
+        var links = driveLinks(row.drive_urls);
+        links.forEach(function (url) {
+          var a = document.createElement('a');
+          a.href = url;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = '查看單據';
+          a.className = 'sub';
+          a.style.display = 'block';
+          div.appendChild(a);
+        });
+
+        var form = document.createElement('div');
+        form.innerHTML =
+          '<label>案號' + (needProject ? ' <span class="need">必填</span>' : '') + '</label>' +
+          '<input type="text" class="inp-project" value="' + (row.project_no || '') + '" placeholder="例：752" />' +
+          '<label>金額' + (needAmount ? ' <span class="need">必填</span>' : '') + '</label>' +
+          '<input type="number" class="inp-amount" value="' + (amount || '') + '" inputmode="numeric" />' +
+          '<label>品項說明</label>' +
+          '<input type="text" class="inp-desc" value="' + (row.item_desc || '') + '" />' +
+          '<label>退回原因（選填）</label>' +
+          '<input type="text" class="inp-reject" placeholder="退回時填寫" />';
+
+        var actions = document.createElement('div');
+        actions.className = 'actions';
+
+        var btnOk = document.createElement('button');
+        btnOk.className = 'btn btn-ok';
+        btnOk.textContent = '核准（加入待匯款）';
+        btnOk.onclick = async function () {
+          setMsg('');
+          var patch = {
+            project_no: form.querySelector('.inp-project').value.trim(),
+            amount: form.querySelector('.inp-amount').value,
+            item_desc: form.querySelector('.inp-desc').value.trim()
+          };
+          var data = await AccountingApi.vendorPaymentApprove(session, row.payment_request_id, patch);
+          if (!data.success) {
+            setMsg(data.message || '核准失敗');
+            return;
+          }
+          setOk('已核准，已加入待匯款列表');
+          loadList();
+        };
+
+        var btnReject = document.createElement('button');
+        btnReject.className = 'btn btn-warn';
+        btnReject.textContent = '退回';
+        btnReject.onclick = async function () {
+          var reason = form.querySelector('.inp-reject').value.trim() || '主管退回';
+          var data = await AccountingApi.vendorPaymentReject(session, row.payment_request_id, reason);
+          if (!data.success) { setMsg(data.message || '退回失敗'); return; }
+          setOk('已退回');
+          loadList();
+        };
+
+        actions.appendChild(btnOk);
+        actions.appendChild(btnReject);
+        div.appendChild(form);
+        div.appendChild(actions);
+        return div;
+      }
+
+      async function loadList() {
+        setMsg('');
+        var data = await AccountingApi.vendorPaymentList(session, 'pending_review');
+        if (!data.success) {
+          setMsg(data.message || '載入失敗');
+          return;
+        }
+        var box = document.getElementById('list');
+        box.innerHTML = '';
+        var items = data.items || [];
+        document.getElementById('emptyHint').classList.toggle('hidden', items.length > 0);
+        if (focusId) {
+          items.sort(function (a, b) {
+            if (a.payment_request_id === focusId) return -1;
+            if (b.payment_request_id === focusId) return 1;
+            return 0;
+          });
+        }
+        items.forEach(function (row) {
+          box.appendChild(renderItem(row));
+        });
+      }
+
+      document.getElementById('reloadBtn').addEventListener('click', loadList);
+
+      (async function boot() {
+        focusId = readQueryId();
+        try {
+          session = await AccountingApi.initVendorPaymentApproveSession();
+          if (!session) return;
+          document.getElementById('userLine').textContent =
+            (session.auth.display_name || session.profile.displayName) + ' · 權限 ' + session.auth.permission;
+          showApp();
+          await loadList();
+        } catch (e) {
+          document.getElementById('loading').textContent = e.message || String(e);
+        }
+      })();
+    })();
+  </script>
+</body>
+</html>

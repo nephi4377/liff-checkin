@@ -4,7 +4,11 @@
 var AccountingApi = (function () {
   var GAS_API = 'https://script.google.com/macros/s/AKfycbyibVTQk2eYEYXX5vb-TUFYsLIKWEg1bADR-7w1QFSg6kly3gyDAG3GkKuvQ0PBur05DA/exec';
   var MIN_PERMISSION = 4;
+  var SUPERVISOR_MIN_PERMISSION = 3;
+  var VENDOR_PAYMENT_APPROVE_MIN_PERMISSION = 5;
   var PERM_DENIED_MSG = '權限不足（需財務／老闆，權限 ≥ 4）';
+  var SUPERVISOR_DENIED_MSG = '權限不足（需主管，權限 ≥ 3）';
+  var VENDOR_PAYMENT_APPROVE_DENIED_MSG = '權限不足（廠商請款審核需權限 ≥ 5）';
 
   async function post(body) {
     var res = await fetch(GAS_API, {
@@ -31,7 +35,11 @@ var AccountingApi = (function () {
   return {
     GAS_API: GAS_API,
     MIN_PERMISSION: MIN_PERMISSION,
+    SUPERVISOR_MIN_PERMISSION: SUPERVISOR_MIN_PERMISSION,
+    VENDOR_PAYMENT_APPROVE_MIN_PERMISSION: VENDOR_PAYMENT_APPROVE_MIN_PERMISSION,
     PERM_DENIED_MSG: PERM_DENIED_MSG,
+    SUPERVISOR_DENIED_MSG: SUPERVISOR_DENIED_MSG,
+    VENDOR_PAYMENT_APPROVE_DENIED_MSG: VENDOR_PAYMENT_APPROVE_DENIED_MSG,
     post: post,
     buildAuth: buildAuth,
     authMe: function (sessionOrToken) {
@@ -75,6 +83,14 @@ var AccountingApi = (function () {
         limit: limit || 30
       });
     },
+    vendorUploadPhotos: function (sessionOrToken, vendorId, photos) {
+      return post({
+        action: 'vendor_upload_photos',
+        auth: resolveAuth(sessionOrToken),
+        vendor_id: vendorId,
+        photos: photos || []
+      });
+    },
     marginListOverview: function (sessionOrToken) {
       return post({ action: 'margin_list_overview', auth: resolveAuth(sessionOrToken) });
     },
@@ -101,6 +117,115 @@ var AccountingApi = (function () {
     loadPolicy: async function () {
       var data = await post({ action: 'accounting_policy' });
       return (data && data.policy) || {};
+    },
+    formContext: function (sessionOrToken) {
+      return post({ action: 'accounting_form_context', auth: resolveAuth(sessionOrToken) });
+    },
+    initSupervisorSession: async function (opts) {
+      var policy = await AccountingApi.loadPolicy();
+      var session;
+      if (policy.authBypass) {
+        var auth = await post({ action: 'accounting_auth_me', dev_bypass: true });
+        if (!auth.success) throw new Error(auth.message || '驗證失敗');
+        session = {
+          devBypass: true,
+          profile: { userId: auth.user_id, displayName: auth.display_name },
+          idToken: '',
+          auth: auth
+        };
+      } else {
+        session = await AccountingApi.initLiff(opts);
+      }
+      if (!session) return null;
+      if ((session.auth.permission || 0) < SUPERVISOR_MIN_PERMISSION) {
+        throw new Error(SUPERVISOR_DENIED_MSG);
+      }
+      return session;
+    },
+    initVendorPaymentApproveSession: async function (opts) {
+      var policy = await AccountingApi.loadPolicy();
+      var session;
+      if (policy.authBypass) {
+        var auth = await post({ action: 'accounting_auth_me', dev_bypass: true });
+        if (!auth.success) throw new Error(auth.message || '驗證失敗');
+        session = {
+          devBypass: true,
+          profile: { userId: auth.user_id, displayName: auth.display_name },
+          idToken: '',
+          auth: auth
+        };
+      } else {
+        session = await AccountingApi.initLiff(opts);
+      }
+      if (!session) return null;
+      if ((session.auth.permission || 0) < VENDOR_PAYMENT_APPROVE_MIN_PERMISSION) {
+        throw new Error(VENDOR_PAYMENT_APPROVE_DENIED_MSG);
+      }
+      return session;
+    },
+    vendorPaymentList: function (sessionOrToken, status) {
+      return post({
+        action: 'vendor_payment_list',
+        auth: resolveAuth(sessionOrToken),
+        status: status || 'pending_review'
+      });
+    },
+    vendorPaymentApprove: function (sessionOrToken, paymentRequestId, patch) {
+      return post({
+        action: 'vendor_payment_approve',
+        auth: resolveAuth(sessionOrToken),
+        payment_request_id: paymentRequestId,
+        project_no: patch && patch.project_no,
+        amount: patch && patch.amount,
+        item_desc: patch && patch.item_desc
+      });
+    },
+    vendorPaymentReject: function (sessionOrToken, paymentRequestId, reason) {
+      return post({
+        action: 'vendor_payment_reject',
+        auth: resolveAuth(sessionOrToken),
+        payment_request_id: paymentRequestId,
+        reject_reason: reason || ''
+      });
+    },
+    vendorPaymentCreate: function (sessionOrToken, payload) {
+      return post({
+        action: 'vendor_payment_create',
+        auth: resolveAuth(sessionOrToken),
+        vendor_id: payload.vendor_id,
+        amount: payload.amount,
+        project_no: payload.project_no,
+        item_desc: payload.item_desc,
+        txn_date: payload.txn_date,
+        note: payload.note,
+        bank_code: payload.bank_code,
+        account_no: payload.account_no,
+        account_name: payload.account_name,
+        doc_type: payload.doc_type
+      });
+    },
+    vendorPaymentUpdate: function (sessionOrToken, paymentRequestId, patch) {
+      return post({
+        action: 'vendor_payment_update',
+        auth: resolveAuth(sessionOrToken),
+        payment_request_id: paymentRequestId,
+        amount: patch.amount,
+        project_no: patch.project_no,
+        item_desc: patch.item_desc,
+        txn_date: patch.txn_date,
+        note: patch.note,
+        bank_code: patch.bank_code,
+        account_no: patch.account_no,
+        account_name: patch.account_name,
+        doc_type: patch.doc_type
+      });
+    },
+    vendorPaymentExportCtbc: function (sessionOrToken, paymentRequestIds) {
+      return post({
+        action: 'vendor_payment_export_ctbc',
+        auth: resolveAuth(sessionOrToken),
+        payment_request_ids: paymentRequestIds || []
+      });
     },
     initLiff: async function (opts) {
       opts = opts || {};

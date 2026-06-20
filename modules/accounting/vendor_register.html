@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>廠商資料登記</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_master_data.js?v=12"></script>
-  <script src="../../shared/js/accounting_api.js?v=12"></script>
+  <script src="../../shared/js/accounting_master_data.js?v=13"></script>
+  <script src="../../shared/js/accounting_api.js?v=13"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 640px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 8px; }
@@ -206,17 +206,17 @@
 
       function renderStatus(vendor) {
         var box = $('statusLine');
+        box.innerHTML = '';
         if (!vendor || !vendor.vendor_id) {
-          box.innerHTML = '<span class="status-pill">首次登記</span>';
           $('formTitle').textContent = '填寫廠商資料';
           isUpdate = false;
           return;
         }
         isUpdate = true;
         $('formTitle').textContent = '更新廠商資料';
-        var st = vendor.registration_status || '合作中';
-        var cls = st === '合作中' ? 'status-pill ok' : 'status-pill';
-        box.innerHTML = '<span class="' + cls + '">目前狀態：' + st + '</span>';
+        if (vendor.update_blocked) {
+          box.innerHTML = '<span class="status-pill">合作已暫停，如需更新資料請聯絡行政</span>';
+        }
       }
 
       function buildAutoBindings() {

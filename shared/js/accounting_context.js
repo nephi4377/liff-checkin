@@ -35,14 +35,14 @@ var AccountingContext = (function () {
 
   function normalizeProject(p) {
     if (!p) return null;
-    var id = String(p.id || p['案號'] || '').trim();
+    var id = String(p.id || p.project_no || p['案號'] || '').trim();
     if (!id) return null;
-    var name = String(p.name || p['案場名稱'] || p.siteName || '').trim();
+    var name = String(p.name || p.client_name || p['案場名稱'] || p.siteName || '').trim();
     return {
       id: id,
       name: name,
       siteName: String(p.siteName || name || '').trim(),
-      store: String(p['專案分區'] || '').trim()
+      store: String(p.store || p['專案分區'] || '').trim()
     };
   }
 
@@ -63,7 +63,7 @@ var AccountingContext = (function () {
     return leave === undefined || leave === null || String(leave).trim() === '';
   }
 
-  function load() {
+  function load(extra) {
     var employees = readParentArray('spaAllEmployees') || readLocalCache(CACHE_KEYS.employees) || [];
     var projectsRaw = readParentArray('spaAllProjects') || readLocalCache(CACHE_KEYS.projects) || [];
     var projects = [];
@@ -85,12 +85,39 @@ var AccountingContext = (function () {
       return String(a.userName || '').localeCompare(String(b.userName || ''), 'zh-Hant');
     });
 
+    if (extra && extra.projects && extra.projects.length) {
+      extra.projects.forEach(function (p) {
+        var n = normalizeProject(p);
+        if (!n || seen[n.id]) return;
+        seen[n.id] = true;
+        projects.push(n);
+      });
+      projects.sort(function (a, b) {
+        var na = parseInt(a.id, 10);
+        var nb = parseInt(b.id, 10);
+        if (!isNaN(na) && !isNaN(nb) && na !== nb) return nb - na;
+        return b.id.localeCompare(a.id, 'zh-Hant');
+      });
+    }
+    if (extra && extra.employees && extra.employees.length) {
+      var empSeen = {};
+      activeEmployees.forEach(function (e) { if (e.userName) empSeen[e.userName] = true; });
+      extra.employees.forEach(function (e) {
+        if (!e || !e.userName || empSeen[e.userName]) return;
+        empSeen[e.userName] = true;
+        activeEmployees.push({ userId: e.userId || '', userName: e.userName });
+      });
+      activeEmployees.sort(function (a, b) {
+        return String(a.userName || '').localeCompare(String(b.userName || ''), 'zh-Hant');
+      });
+    }
+
     return {
       employees: activeEmployees,
       projects: projects,
       source: {
-        employees: employees.length ? (readParentArray('spaAllEmployees') ? 'parent' : 'localStorage') : 'none',
-        projects: projects.length ? (readParentArray('spaAllProjects') ? 'parent' : 'localStorage') : 'none'
+        employees: activeEmployees.length ? (readParentArray('spaAllEmployees') ? 'parent' : (extra && extra.employees ? 'api' : 'localStorage')) : ((extra && extra.employees && extra.employees.length) ? 'api' : 'none'),
+        projects: projects.length ? (readParentArray('spaAllProjects') ? 'parent' : (extra && extra.projects ? 'api' : 'localStorage')) : ((extra && extra.projects && extra.projects.length) ? 'api' : 'none')
       }
     };
   }

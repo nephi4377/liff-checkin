@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>廠商名冊</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_master_data.js?v=14"></script>
-  <script src="../../shared/js/accounting_api.js?v=14"></script>
-  <script src="../../shared/js/accounting_cache.js?v=14"></script>
+  <script src="../../shared/js/accounting_master_data.js?v=15"></script>
+  <script src="../../shared/js/accounting_api.js?v=15"></script>
+  <script src="../../shared/js/accounting_cache.js?v=15"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 640px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 8px; }
@@ -72,6 +72,12 @@
     .bind-item { border: 1px solid #e0e0e0; border-radius: 8px; padding: 8px 10px; margin: 6px 0; font-size: 13px; }
     .bind-item .mono { font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all; }
     .search-hit { border: 1px solid #e8eaed; border-radius: 8px; padding: 8px; margin: 6px 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; }
+    .photo-preview { max-width: 100%; border-radius: 8px; margin-top: 8px; }
+    .hint { font-size: 13px; color: #666; margin-top: 4px; }
+    .ocr-status { font-size: 13px; margin-top: 6px; min-height: 1.2em; }
+    .ocr-status.ok { color: #137333; }
+    .ocr-status.err { color: #c5221f; }
+    .step-num { display: inline-block; background: #1a73e8; color: #fff; font-size: 12px; padding: 2px 8px; border-radius: 6px; margin-right: 6px; vertical-align: middle; }
   </style>
 </head>
 <body>
@@ -107,7 +113,26 @@
 
     <div class="card">
       <h3 id="formTitle" style="margin:0 0 8px">新增廠商</h3>
+      <p class="hint" style="margin:0 0 10px">可拍照辨識帶入欄位，儲存時一併存至 Drive 資料夾。</p>
       <input type="hidden" id="editId" />
+
+      <p class="section-title">照片輔助（選填）</p>
+      <div class="row2">
+        <div>
+          <label><span class="step-num">1</span>名片／公司證明</label>
+          <input id="cardPhoto" type="file" accept="image/*" capture="environment" />
+          <div id="cardPreview"></div>
+          <p id="cardOcrStatus" class="ocr-status"></p>
+        </div>
+        <div>
+          <label><span class="step-num">2</span>存摺／匯款資訊</label>
+          <input id="passbookPhoto" type="file" accept="image/*" capture="environment" />
+          <div id="passbookPreview"></div>
+          <p id="passbookOcrStatus" class="ocr-status"></p>
+        </div>
+      </div>
+
+      <p class="section-title">基本資料</p>
       <label class="req">名稱</label><input id="name" />
       <div class="row2">
         <div><label>統編</label><input id="tax_id" /></div>
@@ -170,6 +195,8 @@
     (function () {
       var session = null;
       var allVendors = [];
+      var cardFile = null;
+      var passbookFile = null;
 
       function $(id) { return document.getElementById(id); }
       function setMsg(t) { $('msg').textContent = t || ''; }
@@ -197,6 +224,108 @@
       function showApp() {
         $('loading').classList.add('hidden');
         $('app').classList.remove('hidden');
+      }
+
+      function crossFillVendorAndAccountName() {
+        var n = $('name').value.trim();
+        var a = $('account_name').value.trim();
+        if (a && !n) $('name').value = a;
+        else if (n && !a) $('account_name').value = n;
+      }
+
+      function applyOcrFields(f) {
+        if (!f) return;
+        if (f.bank_code) $('bank_code').value = f.bank_code;
+        if (f.branch_name) $('branch_name').value = f.branch_name;
+        if (f.account_no) $('account_no').value = f.account_no;
+        if (f.account_name) $('account_name').value = f.account_name;
+        if (f.tax_id && !$('tax_id').value.trim()) $('tax_id').value = f.tax_id;
+        if (f.contact_name && !$('contact_name').value.trim()) $('contact_name').value = f.contact_name;
+        if (f.contact_phone && !$('contact_phone').value.trim()) $('contact_phone').value = f.contact_phone;
+        if (f.contact_email && !$('contact_email').value.trim()) $('contact_email').value = f.contact_email;
+        if (f.address && !$('address').value.trim()) $('address').value = f.address;
+        if (f.name && !$('name').value.trim()) $('name').value = f.name;
+        crossFillVendorAndAccountName();
+      }
+
+      function fileToBase64(file) {
+        return new Promise(function (resolve, reject) {
+          var reader = new FileReader();
+          reader.onload = function () {
+            var dataUrl = reader.result || '';
+            var i = String(dataUrl).indexOf(',');
+            resolve({
+              dataBase64: i >= 0 ? dataUrl.substring(i + 1) : dataUrl,
+              mimeType: file.type || 'image/jpeg',
+              filename: file.name || 'photo.jpg'
+            });
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
+
+      function showPreview(boxId, file) {
+        var box = $(boxId);
+        box.innerHTML = '';
+        if (!file) return;
+        var img = document.createElement('img');
+        img.className = 'photo-preview';
+        img.src = URL.createObjectURL(file);
+        img.alt = '預覽';
+        box.appendChild(img);
+      }
+
+      function setOcrStatus(elId, text, ok) {
+        var el = $(elId);
+        el.textContent = text || '';
+        el.className = 'ocr-status' + (text ? (ok ? ' ok' : ' err') : '');
+      }
+
+      async function runOcr(file, kind, statusId) {
+        if (!file || !session) return;
+        setOcrStatus(statusId, '辨識中…', true);
+        try {
+          var photo = await fileToBase64(file);
+          photo.kind = kind;
+          var data = await AccountingApi.vendorRegisterOcr(session, photo, kind);
+          if (!data.success) {
+            setOcrStatus(statusId, data.message || '辨識失敗，請改手動填寫', false);
+            return;
+          }
+          applyOcrFields(data.fields || {});
+          setOcrStatus(statusId, '已帶入辨識結果，請核對是否正確', true);
+        } catch (e) {
+          setOcrStatus(statusId, e.message || String(e), false);
+        }
+      }
+
+      function clearPhotos() {
+        cardFile = null;
+        passbookFile = null;
+        $('cardPhoto').value = '';
+        $('passbookPhoto').value = '';
+        $('cardPreview').innerHTML = '';
+        $('passbookPreview').innerHTML = '';
+        setOcrStatus('cardOcrStatus', '', true);
+        setOcrStatus('passbookOcrStatus', '', true);
+      }
+
+      async function uploadPendingPhotos(vendorRec) {
+        if (!vendorRec || !vendorRec.vendor_id) return null;
+        var photos = [];
+        if (cardFile) {
+          var p0 = await fileToBase64(cardFile);
+          p0.kind = 'card';
+          photos.push(p0);
+        }
+        if (passbookFile) {
+          var p1 = await fileToBase64(passbookFile);
+          p1.kind = 'passbook';
+          photos.push(p1);
+        }
+        if (!photos.length) return null;
+        return AccountingApi.vendorUploadPhotos(session, vendorRec.vendor_id, photos);
       }
 
       function readForm() {
@@ -323,6 +452,7 @@
         $('coop_status').value = '合作中';
         $('payment_terms').value = '';
         $('bindPurpose').value = '報價';
+        clearPhotos();
       }
 
       function fillForm(v) {
@@ -349,6 +479,7 @@
         if (v.quality_note) noteLines.push(String(v.quality_note));
         if (v.service_areas) noteLines.push('服務區域：' + v.service_areas);
         $('note').value = noteLines.join('\n');
+        clearPhotos();
         renderBindings(v.vendor_id);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
@@ -563,12 +694,22 @@
           ? await AccountingApi.crudUpdate(session, 'vendor', editId, payload)
           : await AccountingApi.crudCreate(session, 'vendor', payload);
         if (!data.success) { setMsg(data.message || '儲存失敗'); return; }
-        AccountingCache.patchVendor(session, data.data);
+        var saved = data.data;
+        AccountingCache.patchVendor(session, saved);
+        var photoRes = await uploadPendingPhotos(saved);
+        if (photoRes && !photoRes.success) {
+          setMsg((photoRes.message || '照片未上傳') + '（廠商資料已儲存）');
+        } else if (photoRes && photoRes.success && photoRes.folder) {
+          saved.drive_folder_id = photoRes.folder.drive_folder_id;
+          saved.drive_folder_url = photoRes.folder.drive_folder_url;
+          AccountingCache.patchVendor(session, saved);
+          clearPhotos();
+        }
         if (!editId) {
-          fillForm(data.data);
-          setOk('已新增，可繼續加入 LINE 綁定');
+          fillForm(saved);
+          setOk(photoRes && photoRes.success ? '已新增（含照片），可繼續加入 LINE 綁定' : '已新增，可繼續加入 LINE 綁定');
         } else {
-          setOk('已更新');
+          setOk(photoRes && photoRes.success ? '已更新（含照片）' : '已更新');
           clearForm();
         }
         await refreshVendors(true);
@@ -590,6 +731,21 @@
 
       $('cancelEditBtn').addEventListener('click', clearForm);
       $('filterBtn').addEventListener('click', renderList);
+
+      $('cardPhoto').addEventListener('change', function () {
+        cardFile = this.files && this.files[0] ? this.files[0] : null;
+        showPreview('cardPreview', cardFile);
+        if (cardFile) runOcr(cardFile, 'card', 'cardOcrStatus');
+        else setOcrStatus('cardOcrStatus', '', true);
+      });
+      $('passbookPhoto').addEventListener('change', function () {
+        passbookFile = this.files && this.files[0] ? this.files[0] : null;
+        showPreview('passbookPreview', passbookFile);
+        if (passbookFile) runOcr(passbookFile, 'passbook', 'passbookOcrStatus');
+        else setOcrStatus('passbookOcrStatus', '', true);
+      });
+      $('account_name').addEventListener('blur', crossFillVendorAndAccountName);
+      $('name').addEventListener('blur', crossFillVendorAndAccountName);
 
       (async function boot() {
         try {
