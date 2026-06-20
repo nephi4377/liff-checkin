@@ -27,6 +27,7 @@ const App = {
         const scheduleLoading = ref(false);
         // 待審核假勤原始清單（包含 startTime/endTime），用於今日出勤的「待審核」標記
         const pendingRequestsRaw = ref([]);
+        const todayPresence = ref({});
         const currentView = ref({ name: 'dashboard' });
         const lightbox = ref({
             visible: false,
@@ -96,6 +97,7 @@ const App = {
             '#/daily-report': { name: 'iframe', src: 'modules/projects/daily_report.html', title: '團隊工作總覽' }, // [v515.0 修正] 改為絕對路徑
             '#/onboarding-flow': { name: 'iframe', src: 'modules/info/onboardingflow.html', title: '客戶接洽流程' }, // [v518.0 修正]
             '#/attendance-report': { name: 'iframe', src: 'modules/attendance/attendance_report.html', title: '出勤儀表板' }, // [v515.0 修正] 改為絕對路徑
+            '#/staff-status-board': { name: 'iframe', src: 'modules/attendance/staff_status_board.html', title: '全員出勤燈號看板' },
             '#/approval-dashboard': { name: 'iframe', src: 'modules/attendance/approval_dashboard.html', title: '假勤審核儀表板' }, // [v515.0 修正] 改為絕對路徑
             '#/leave-request': { name: 'iframe', src: 'modules/attendance/leave_request.html', title: '線上假勤申請' }, // [v515.0 修正] 改為絕對路徑
             '#/shift-schedule': { name: 'iframe', src: 'modules/attendance/shift_schedule.html', title: '員工排班系統' }, // [v515.0 修正] 改為絕對路徑
@@ -201,16 +203,16 @@ const App = {
             return { schedule, holidays };
         };
 
-        // 抓當月排班資料（供主控台人員出席使用）；若「明天」在下一個月，多抓一次並合併。
+        // 抓當月排班資料（供主控台人員出席使用）；若「明天／後天」跨月，多抓並合併。
         const fetchLatestScheduleForThisMonth = async () => {
             if (!userProfile.value) return { success: false };
             const now = new Date();
             const y = now.getFullYear();
             const m = now.getMonth() + 1;
-            const tomorrow = new Date(now);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            const ty = tomorrow.getFullYear();
-            const tm = tomorrow.getMonth() + 1;
+            const dayAfter = new Date(now);
+            dayAfter.setDate(dayAfter.getDate() + 2);
+            const ty = dayAfter.getFullYear();
+            const tm = dayAfter.getMonth() + 1;
 
             const fetchOne = async (year, month) => {
                 const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
@@ -344,12 +346,15 @@ const App = {
                 if (attendanceResult.success && attendanceResult.employees) {
                     if (JSON.stringify(allEmployees.value) !== JSON.stringify(attendanceResult.employees)) {
                         allEmployees.value = attendanceResult.employees;
-                        saveCache(EMPLOYEES_CACHE_KEY, attendanceResult.employees);
+                        saveCache(EMPLOYEES_CACHE_KEY, attendanceResult.employees, 3);
                         window.spaAllEmployees = attendanceResult.employees;
                     }
                     pendingApprovals.value = attendanceResult.pendingRequests?.length || 0;
                     // 將待審核假單原始資料留給「今日出勤」卡片使用（含 startTime/endTime）
                     pendingRequestsRaw.value = attendanceResult.pendingRequests || [];
+                    if (attendanceResult.todayPresence) {
+                        todayPresence.value = attendanceResult.todayPresence;
+                    }
                 }
 
                 // 背景抓當月班表（SWR 策略：先顯示快取，背景更新後無縫替換，TTL 7 天）。
@@ -375,7 +380,7 @@ const App = {
                     const newProjects = projectsResult.data.projects || [];
                     if (JSON.stringify(allProjects.value) !== JSON.stringify(newProjects)) {
                         allProjects.value = newProjects;
-                        saveCache(PROJECTS_CACHE_KEY, newProjects);
+                        saveCache(PROJECTS_CACHE_KEY, newProjects, 3);
                     }
                     window.spaAllProjects = newProjects;
                     notifications.value = projectsResult.data.notifications || [];
@@ -455,6 +460,7 @@ const App = {
             notifications,
             pendingApprovals,
             pendingRequestsRaw,
+            todayPresence,
             monthSchedule,
             scheduleLoading,
             hasAdminRights,
@@ -512,7 +518,7 @@ const App = {
                 <!-- [v428.0 UX優化] 將 Dashboard 和 ProjectBoard 都放入限寬容器中，提升閱讀體驗 -->
                 <!-- 【您的要求】核心修正：移除內層的寬度限制，統一由 main 元素控制 -->
                 <div v-if="currentView.name === 'dashboard'" class="py-6">
-                    <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :pendingRequestsRaw="pendingRequestsRaw" :hasAdminRights="hasAdminRights" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" />
+                    <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :pendingRequestsRaw="pendingRequestsRaw" :todayPresence="todayPresence" :hasAdminRights="hasAdminRights" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" />
                     <!-- 任務交辦中心容器 -->
                     <div v-if="hasAdminRights" id="task-sender-container" class="mt-4"></div>
                     <!-- 公開落地頁：緊接在任務交辦中心之後（無管理權者無交辦區，此景為主控台捲動到底） -->

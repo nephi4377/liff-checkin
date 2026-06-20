@@ -1,10 +1,11 @@
 /**
  * 會計主檔固定格式（對齊 backend/accounting-gas/SPEC/ACCOUNTING_MASTER_DATA_SPEC.md）
  */
-var ACCT_ASSET_VER = '10';
+var ACCT_ASSET_VER = '11';
 var AccountingMasterData = {
   CACHE_VERSION: 1,
-  TTL_MS: 5 * 60 * 1000,
+  /** 會計 bootstrap（廠商／收款帳戶／列舉）— 3 天；有改動時前端 patch + 背景重讀 */
+  TTL_MS: 3 * 24 * 60 * 60 * 1000,
   vendor_trade_categories: ['木工', '系統櫃', '水電', '泥作', '油漆', '石材', '玻璃', '鐵工', '空調', '清潔', '其他'],
   vendor_cost_types: ['純材料商', '連工帶料', '純點工'],
   vendor_coop_statuses: ['合作中', '暫停合作'],

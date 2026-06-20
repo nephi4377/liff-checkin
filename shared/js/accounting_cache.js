@@ -39,6 +39,24 @@ var AccountingCache = (function () {
     return data;
   }
 
+  function refreshInBackground(session) {
+    if (!session || typeof AccountingApi === 'undefined') return;
+    var p;
+    if (typeof AccountingApi.bootstrap === 'function') {
+      p = AccountingApi.bootstrap(session);
+    } else if (typeof AccountingApi.post === 'function') {
+      p = AccountingApi.post({
+        action: 'accounting_bootstrap',
+        auth: AccountingApi.buildAuth ? AccountingApi.buildAuth(session) : { dev_bypass: !!session.devBypass }
+      });
+    } else {
+      return;
+    }
+    p.then(function (res) {
+      if (res && res.success && res.bootstrap) write(session, res.bootstrap);
+    }).catch(function () {});
+  }
+
   return {
     clear: function (session) {
       try { sessionStorage.removeItem(storageKey(session)); } catch (e) {}
@@ -50,7 +68,11 @@ var AccountingCache = (function () {
       if (!session) throw new Error('需要登入');
       if (!force) {
         var cached = read(session);
-        if (cached) return mergeEnums(cached);
+        if (cached) {
+          mergeEnums(cached);
+          refreshInBackground(session);
+          return cached;
+        }
       }
       if (typeof AccountingApi === 'undefined') {
         throw new Error('AccountingApi 未載入，請確認 accounting_api.js 已引入');

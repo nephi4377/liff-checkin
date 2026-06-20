@@ -10,6 +10,7 @@ export default {
         'monthSchedule',       // { schedule: {uid: {日期: 狀態 或 '日期:類別': '狀態[時段]'}}, holidays: [...] }
         'scheduleLoading',     // 班表是否正在向後端更新中（快取優先 + 背景更新）
         'pendingRequestsRaw',  // [{userName, recordType, leaveType, startTime, endTime, status, ...}]
+        'todayPresence',       // { [userId]: { light, label, reasons, hasCheckIn, checkInTime, ... } }
         'hasAdminRights',
         'currentUser'
     ],
@@ -37,6 +38,7 @@ export default {
         const leaveRequestUrl = computed(() => `#/leave-request`);
         const shiftScheduleUrl = computed(() => `#/shift-schedule`);
         const attendanceReportUrl = computed(() => `#/attendance-report`);
+        const staffStatusBoardUrl = computed(() => `#/staff-status-board`);
         const employeeEditorUrl = computed(() => `#/employee-editor`);
         const reportUrl = computed(() => `#/report`);
         const layoutPlannerUrl = computed(() => `#/layout-planner`);
@@ -104,6 +106,21 @@ export default {
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
         const tomorrowStr = formatDateStr(tomorrow);
+
+        const presenceTitle = (p) => {
+            if (!p || p.light === 'none') return '';
+            let t = p.label || '';
+            if (p.reasons && p.reasons.length) t += '：' + p.reasons.join('；');
+            if (p.checkInTime) t += `（${p.checkInTime}）`;
+            return t;
+        };
+
+        const presenceDotClass = (userId, dayKey) => {
+            if (dayKey !== 'today') return '';
+            const p = props.todayPresence?.[userId];
+            if (!p || !p.light || p.light === 'none') return 'presence-none';
+            return `presence-${p.light}`;
+        };
 
         /** 與線上假勤申請一致（長詞先比對，避免「休」誤套「休假」） */
         const KNOWN_LEAVE_TYPES_SORTED = ['婚假', '喪假', '病假', '事假', '特休', '補休', '公假', '休假', '加班', '休'];
@@ -217,10 +234,11 @@ export default {
             return maps;
         });
 
-        // 判斷是否為「真員工」且屬於排班對象：permission 2~4
-        // 依 SPEC/09_排班系統資料格式規格書.md：2-4 為參與排班對象，5 為系統管理者/隱藏。
+        // 判斷是否為「真員工」且屬於排班對象：permission 2~4，排除離職與廠商
         const isSchedulableEmployee = (e) => {
-            if (!e || e.status === '離職') return false;
+            if (!e) return false;
+            const st = String(e.status || e['身份'] || '員工').trim();
+            if (st === '離職' || st === '廠商') return false;
             const p = Number(e.permission || 0);
             return p >= 2 && p <= 4;
         };
@@ -330,6 +348,9 @@ export default {
             leaveRequestUrl,
             shiftScheduleUrl,
             attendanceReportUrl,
+            staffStatusBoardUrl,
+            presenceTitle,
+            presenceDotClass,
             employeeEditorUrl,
             reportUrl,
             layoutPlannerUrl,
@@ -363,12 +384,23 @@ export default {
                 </form>
             </div>
 
-            <!-- 人員出席：今天／明天；假勤 chip 僅假別與時段 -->
+            <!-- 人員出席：今天／明天；假勤 chip 僅假別與時段；今天顯示打卡燈號 -->
             <div class="bg-white p-3 sm:p-4 rounded-lg shadow-md border border-gray-200 mb-4">
-                <div class="flex justify-between items-center mb-3">
+                <div class="flex justify-between items-center mb-3 flex-wrap gap-2">
                     <h2 class="text-sm font-bold text-gray-700">人員出席狀況（今天／明天）</h2>
-                    <span v-if="!hasAnyScheduleData" class="text-[10px] text-gray-400">載入班表中…</span>
-                    <span v-else-if="scheduleLoading" class="text-[10px] text-blue-500 animate-pulse" title="正在取得最新排班">更新中…</span>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <a v-if="hasAdminRights" :href="staffStatusBoardUrl"
+                            class="text-[10px] text-blue-600 hover:underline font-medium">全員燈號看板（今／明／後天）→</a>
+                        <span v-if="!hasAnyScheduleData" class="text-[10px] text-gray-400">載入班表中…</span>
+                        <span v-else-if="scheduleLoading" class="text-[10px] text-blue-500 animate-pulse" title="正在取得最新排班">更新中…</span>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-2 text-[10px] text-gray-500 mb-2">
+                    <span class="inline-flex items-center gap-1"><span class="presence-dot presence-red"></span>未打卡</span>
+                    <span class="inline-flex items-center gap-1"><span class="presence-dot presence-blue"></span>店面</span>
+                    <span class="inline-flex items-center gap-1"><span class="presence-dot presence-purple"></span>案場</span>
+                    <span class="inline-flex items-center gap-1"><span class="presence-dot presence-orange"></span>待確認</span>
+                    <span class="text-gray-400">（燈號僅今天）</span>
                 </div>
 
                 <div v-for="day in attendanceDays" :key="day.key" class="mb-4 last:mb-0 pb-3 last:pb-0 border-b border-gray-100 last:border-0">
@@ -379,6 +411,9 @@ export default {
                             <div class="flex flex-wrap gap-1.5">
                                 <span v-for="m in g.members" :key="day.key + '-' + m.userId"
                                     :class="['inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs', m.status.colorClass]">
+                                    <span v-if="day.key === 'today' && presenceDotClass(m.userId, day.key) !== 'presence-none'"
+                                        :class="['presence-dot flex-shrink-0', presenceDotClass(m.userId, day.key)]"
+                                        :title="presenceTitle(todayPresence && todayPresence[m.userId])"></span>
                                     <span class="font-medium">{{ m.userName }}</span>
                                     <span class="text-[10px] opacity-80">{{ m.status.label }}</span>
                                     <span v-if="m.pendingType" class="text-[9px] bg-white/70 text-yellow-700 border border-yellow-300 rounded px-1" title="此日有待審核假勤">待審</span>
@@ -581,6 +616,16 @@ export default {
                     </div>
                 </a>
 
+                <!-- 11b. 全員出勤燈號看板（管理） -->
+                <a v-if="hasAdminRights" :href="staffStatusBoardUrl"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xl">🚦</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">全員出勤燈號看板</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">今／明／後天排班與今日打卡燈號（權限 4+）。</p>
+                    </div>
+                </a>
+
                 <!-- 11. 出勤儀表板（管理） -->
                 <a v-if="hasAdminRights" :href="attendanceReportUrl"
                     class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
@@ -632,5 +677,20 @@ export default {
                 </a>
             </div>
         </div>
-    `
+    `,
+    // 燈號圓點樣式（僅本元件）
+    mounted() {
+        if (document.getElementById('hub-presence-dot-style')) return;
+        const style = document.createElement('style');
+        style.id = 'hub-presence-dot-style';
+        style.textContent = `
+            .presence-dot { width: 8px; height: 8px; border-radius: 9999px; display: inline-block; box-shadow: 0 0 0 1px rgba(0,0,0,.06); }
+            .presence-red { background: #ef4444; }
+            .presence-blue { background: #3b82f6; }
+            .presence-purple { background: #9333ea; }
+            .presence-orange { background: #f97316; }
+            .presence-none { display: none; }
+        `;
+        document.head.appendChild(style);
+    }
 };
