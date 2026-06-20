@@ -2,7 +2,7 @@ import Dashboard from './Dashboard.js?v=26.05.07.3';
 import ProjectBoard from './ProjectBoard.js';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
-import { saveCache, loadCache, hubPresenceCacheKey } from '../shared/js/utils.js';
+import { saveCache, loadCache, loadHubPresenceCache, saveHubPresenceCache } from '../shared/js/utils.js';
 import { request as apiRequest } from '../modules/projects/js/projectApi.js'; // [重構] 改為引入統一的 projectApi 模組
 import { initializeTaskSender } from '../shared/js/taskSender.js'; // [v509.0 修正] 更新共用模組路徑
 
@@ -63,13 +63,12 @@ const App = {
             const d = new Date();
             return `spa_hub_schedule_${d.getFullYear()}_${String(d.getMonth() + 1).padStart(2, '0')}`;
         };
-        const presenceCacheKey = () => hubPresenceCacheKey();
 
         // 1. 應用程式啟動時，立即嘗試從快取載入資料
         const cachedEmployees = loadCache(EMPLOYEES_CACHE_KEY);
         const cachedProjects = loadCache(PROJECTS_CACHE_KEY);
         const cachedSchedule = loadCache(scheduleCacheKey());
-        const cachedPresence = loadCache(presenceCacheKey());
+        const cachedPresence = loadHubPresenceCache();
 
         if (cachedEmployees) {
             allEmployees.value = cachedEmployees;
@@ -222,7 +221,7 @@ const App = {
                     if (JSON.stringify(todayPresence.value) !== JSON.stringify(result.todayPresence)) {
                         todayPresence.value = result.todayPresence;
                     }
-                    saveCache(presenceCacheKey(), result.todayPresence, 1);
+                    saveHubPresenceCache(result.todayPresence);
                 }
             }).catch((e) => {
                 console.warn('[Hub] 背景更新燈號失敗（維持快取）:', e);

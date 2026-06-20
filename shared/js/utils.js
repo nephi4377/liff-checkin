@@ -177,6 +177,61 @@ export function hubPresenceCacheKey(date = new Date()) {
   return `spa_hub_presence_${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
+/** 今日日期鍵 YYYY-MM-DD（燈號快取校驗用） */
+export function hubPresenceTodayStr(date = new Date()) {
+  const d = date;
+  const pad2 = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/** 清除非今日的燈號快取（隔天不重複使用昨日資料） */
+export function purgeStaleHubPresenceCaches() {
+  const todayKey = hubPresenceCacheKey();
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('spa_hub_presence_') && k !== todayKey) {
+        localStorage.removeItem(k);
+      }
+    }
+  } catch (e) {
+    console.warn('[Hub] 清除舊燈號快取失敗', e);
+  }
+}
+
+/** 讀取今日燈號快取；非今日或格式不符則回傳 null */
+export function loadHubPresenceCache() {
+  purgeStaleHubPresenceCaches();
+  const today = hubPresenceTodayStr();
+  const raw = loadCache(hubPresenceCacheKey());
+  if (!raw || typeof raw !== 'object') return null;
+  if (raw.date && raw.date !== today) return null;
+  if (raw.presence && typeof raw.presence === 'object') return raw.presence;
+  return null;
+}
+
+/** 寫入今日燈號快取（內含 date 欄位，TTL 1 天） */
+export function saveHubPresenceCache(presence) {
+  saveCache(hubPresenceCacheKey(), {
+    date: hubPresenceTodayStr(),
+    presence
+  }, 1);
+}
+
+/**
+ * 出席 chip 側邊燈號 class；僅「上班／加班」顯示，休假不顯示。
+ * 應上班且尚無打卡資料時先顯示紅燈（含隔日無快取、背景更新中）。
+ */
+export function resolvePresenceDotClass({ dayKey, statusKind, presence, presenceLoading }) {
+  if (dayKey !== 'today') return 'presence-none';
+  if (statusKind === 'leave' || statusKind === 'off') return 'presence-none';
+  if (statusKind !== 'work' && statusKind !== 'overtime') return 'presence-none';
+  const p = presence;
+  if (p && p.light && p.light !== 'none') return `presence-${p.light}`;
+  if (presenceLoading || !p || !p.hasCheckIn) return 'presence-red';
+  return 'presence-none';
+}
+
 /**
  * [v552.0 新增] 以 GET 請求方式發送 API Payload，用於繞過 CORS 問題。
  * @param {string} baseUrl - 後端 API 的基礎 URL。

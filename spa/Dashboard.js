@@ -1,4 +1,5 @@
 const { ref, computed } = Vue;
+import { resolvePresenceDotClass } from '../shared/js/utils.js';
 
 export default {
     name: 'Dashboard',
@@ -12,6 +13,7 @@ export default {
         'presenceLoading',     // 今日燈號是否正在背景更新中
         'pendingRequestsRaw',  // [{userName, recordType, leaveType, startTime, endTime, status, ...}]
         'todayPresence',       // { [userId]: { light, label, reasons, hasCheckIn, checkInTime, ... } }
+        'presenceLoading',     // 今日燈號背景更新中
         'hasAdminRights',
         'currentUser'
     ],
@@ -116,12 +118,12 @@ export default {
             return t;
         };
 
-        const presenceDotClass = (userId, dayKey) => {
-            if (dayKey !== 'today') return '';
-            const p = props.todayPresence?.[userId];
-            if (!p || !p.light || p.light === 'none') return 'presence-none';
-            return `presence-${p.light}`;
-        };
+        const presenceDotClass = (userId, dayKey, statusKind) => resolvePresenceDotClass({
+            dayKey,
+            statusKind,
+            presence: props.todayPresence?.[userId],
+            presenceLoading: props.presenceLoading
+        });
 
         /** 與線上假勤申請一致（長詞先比對，避免「休」誤套「休假」） */
         const KNOWN_LEAVE_TYPES_SORTED = ['婚假', '喪假', '病假', '事假', '特休', '補休', '公假', '休假', '加班', '休'];
@@ -412,8 +414,8 @@ export default {
                             <div class="flex flex-wrap gap-1.5">
                                 <span v-for="m in g.members" :key="day.key + '-' + m.userId"
                                     :class="['inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs', m.status.colorClass]">
-                                    <span v-if="day.key === 'today' && presenceDotClass(m.userId, day.key) !== 'presence-none'"
-                                        :class="['presence-dot flex-shrink-0', presenceDotClass(m.userId, day.key)]"
+                                    <span v-if="day.key === 'today' && presenceDotClass(m.userId, day.key, m.status.kind) !== 'presence-none'"
+                                        :class="['presence-dot flex-shrink-0', presenceDotClass(m.userId, day.key, m.status.kind)]"
                                         :title="presenceTitle(todayPresence && todayPresence[m.userId])"></span>
                                     <span class="font-medium">{{ m.userName }}</span>
                                     <span class="text-[10px] opacity-80">{{ m.status.label }}</span>
