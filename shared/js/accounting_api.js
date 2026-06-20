@@ -140,6 +140,69 @@ var AccountingApi = (function () {
         throw new Error(PERM_DENIED_MSG);
       }
       return session;
+    },
+    /** 廠商自填頁：LIFF 登入，不需員工權限 */
+    initVendorSession: async function (opts) {
+      opts = opts || {};
+      var policy = await AccountingApi.loadPolicy();
+      if (policy.authBypass) {
+        var auth = await post({ action: 'vendor_register_auth_me', dev_bypass: true });
+        if (!auth.success) throw new Error(auth.message || '驗證失敗');
+        return {
+          devBypass: true,
+          profile: { userId: auth.user_id, displayName: auth.display_name },
+          idToken: '',
+          auth: auth,
+          vendor: auth.vendor || null,
+          bindings: auth.bindings || []
+        };
+      }
+      var liffId = opts.liffId || policy.liffId || '';
+      if (!liffId) throw new Error('LIFF 尚未設定');
+      if (typeof liff === 'undefined') throw new Error('請用 LINE 開啟此頁面');
+      await liff.init({ liffId: liffId });
+      if (!liff.isLoggedIn()) {
+        liff.login({ redirectUri: window.location.href });
+        return null;
+      }
+      var profile = await liff.getProfile();
+      var idToken = liff.getIDToken();
+      var authRes = await post({ action: 'vendor_register_auth_me', liff_id_token: idToken });
+      if (!authRes.success) throw new Error(authRes.message || '驗證失敗');
+      var ctx = null;
+      try { ctx = liff.getContext(); } catch (eCtx) {}
+      return {
+        devBypass: false,
+        profile: profile,
+        idToken: idToken,
+        liffContext: ctx,
+        auth: authRes,
+        vendor: authRes.vendor || null,
+        bindings: authRes.bindings || []
+      };
+    },
+    vendorRegisterGet: function (session) {
+      var body = { action: 'vendor_register_get', liff_id_token: session.idToken || '' };
+      if (session.devBypass) body.dev_bypass = true;
+      return post(body);
+    },
+    vendorRegisterSubmit: function (session, payload) {
+      var body = {
+        action: 'vendor_register_submit',
+        liff_id_token: session.idToken || '',
+        payload: payload || {}
+      };
+      if (session.devBypass) body.dev_bypass = true;
+      return post(body);
+    },
+    vendorRegisterOcr: function (session, photo) {
+      var body = {
+        action: 'vendor_register_ocr',
+        liff_id_token: session.idToken || '',
+        photo: photo || {}
+      };
+      if (session.devBypass) body.dev_bypass = true;
+      return post(body);
     }
   };
 })();

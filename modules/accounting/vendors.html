@@ -62,6 +62,7 @@
           <label>合作狀態</label>
           <select id="filterCoop">
             <option value="">全部</option>
+            <option value="待審核">待審核</option>
             <option value="合作中">合作中</option>
             <option value="暫停合作">暫停合作</option>
           </select>
@@ -330,9 +331,15 @@
 
       function sortVendorsForList(rows) {
         return rows.slice().sort(function (a, b) {
-          var ap = String(a.coop_status || '合作中') === '暫停合作' ? 1 : 0;
-          var bp = String(b.coop_status || '合作中') === '暫停合作' ? 1 : 0;
-          if (ap !== bp) return ap - bp;
+          var rank = function (v) {
+            var s = String(v.coop_status || '合作中');
+            if (s === '待審核') return 0;
+            if (s === '暫停合作') return 2;
+            return 1;
+          };
+          var ar = rank(a);
+          var br = rank(b);
+          if (ar !== br) return ar - br;
           return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant');
         });
       }
@@ -409,6 +416,7 @@
             '<span class="tag">' + (v.trade_category || '其他') + '</span>' +
             (v.cost_type ? '<span class="tag">' + v.cost_type + '</span>' : '') +
             (v.coop_status === '暫停合作' ? '<span class="tag pause">暫停合作</span>' : '') +
+            (v.coop_status === '待審核' ? '<span class="tag pause">待審核</span>' : '') +
             '</div>' +
             '<div class="sub">' + (v.tax_id || '—') + ' · ' + (v.contact_phone || '無電話') + '</div>' +
             (function () {
