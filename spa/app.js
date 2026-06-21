@@ -1,7 +1,7 @@
 import Dashboard from './Dashboard.js?v=26.05.07.3';
 import ProjectBoard from './ProjectBoard.js';
 import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.06.21.2';
-import HubLeftSidebar from './HubLeftSidebar.js?v=26.06.21.2';
+import HubLeftSidebar from './HubLeftSidebar.js?v=26.06.21.3';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
 import { saveCache, loadCache, loadHubPresenceCache, saveHubPresenceCache, loadDailyCache, saveDailyCache, purgeStaleDailyCaches, hubSidebarDailyCacheKey, hubPresenceTodayStr } from '../shared/js/utils.js';
@@ -325,6 +325,11 @@ const App = {
             });
         };
 
+        const onTodayReportsUpdated = (list) => {
+            todayReports.value = list;
+            saveDailyCache(hubSidebarDailyCacheKey('spa_hub_today_reports'), list);
+        };
+
         /** 合併兩次 get_latest_schedule 回傳（供主控台「今天／明天」橫跨兩個曆月時） */
         const mergeSchedulePayloads = (a, b) => {
             const holidays = [...new Set([...(a.holidays || []), ...(b.holidays || [])])];
@@ -608,6 +613,7 @@ const App = {
             presenceLoading,
             todayReports,
             todayReportsLoading,
+            onTodayReportsUpdated,
             paymentTodos,
             paymentTodosLoading,
             monthSchedule,
@@ -669,7 +675,8 @@ const App = {
                     :todayReports="todayReports"
                     :todayReportsLoading="todayReportsLoading"
                     :paymentTodos="paymentTodos"
-                    :paymentTodosLoading="paymentTodosLoading" />
+                    :paymentTodosLoading="paymentTodosLoading"
+                    @reports-updated="onTodayReportsUpdated" />
                 <main :class="['flex-grow overflow-y-auto min-w-0', { 'container mx-auto max-w-2xl px-4 sm:px-6 lg:px-8': currentView.name !== 'iframe' }]">
                     <div v-if="currentView.name === 'dashboard'" class="py-6">
                         <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :presenceLoading="presenceLoading" :pendingRequestsRaw="pendingRequestsRaw" :todayPresence="todayPresence" :hasAdminRights="hasAdminRights" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" />
