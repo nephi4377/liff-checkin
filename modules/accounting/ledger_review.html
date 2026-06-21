@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>收支審核</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_api.js?v=9"></script>
+  <script src="../../shared/js/accounting_api.js?v=13"></script>
+  <script src="../../shared/js/accounting_lightbox.js?v=13"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 600px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 8px; }
@@ -18,25 +19,30 @@
     .btn-primary { background: #1a73e8; color: #fff; }
     .btn-ok { background: #34a853; color: #fff; }
     .btn-warn { background: #f9ab00; color: #333; }
+    .btn-muted { background: #e8eaed; color: #333; }
     .item { border-bottom: 1px solid #eee; padding: 12px 0; }
     .item:last-child { border-bottom: none; }
     .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin-right: 6px; }
+    .tag.vendor { background: #fef7e0; color: #b06000; }
     .tag.pay { background: #e6f4ea; }
-    .mono { font-family: ui-monospace, monospace; font-size: 12px; color: #555; word-break: break-all; }
-    .actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag.exp { background: #fce8e6; }
+    .actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     #msg { color: #c5221f; font-size: 14px; }
     #ok { color: #137333; font-size: 14px; }
     .hidden { display: none; }
     .nav { margin-bottom: 12px; font-size: 14px; }
     .nav a { color: #1a73e8; text-decoration: none; }
+    .headline { font-size: 16px; font-weight: 700; }
+    .amount { font-size: 18px; font-weight: 700; margin: 4px 0; }
   </style>
 </head>
 <body>
   <div id="loading">載入中…</div>
   <div id="app" class="hidden">
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
-    <h2>收支審核／匯款狀態</h2>
+    <h2>收支審核</h2>
     <p class="sub" id="userLine">—</p>
+    <p class="sub">群組記帳待審與廠商請款待審都在這裡；廠商核准後進「待匯款」。</p>
     <div id="msg"></div>
     <div id="ok"></div>
 
@@ -55,25 +61,27 @@
           <label>匯款狀態</label>
           <select id="filterPay">
             <option value="">全部</option>
-            <option value="未匯款" selected>未匯款</option>
+            <option value="未匯款">未匯款</option>
             <option value="已匯款">已匯款</option>
             <option value="已現金">已現金</option>
           </select>
         </div>
       </div>
-      <label>ingest_id 關鍵字（選填）</label>
-      <input id="filterId" placeholder="部分 UUID 即可" />
+      <label>關鍵字（對象／案號／品項）</label>
+      <input id="filterKw" placeholder="例：磁磚、752" />
       <button type="button" class="btn btn-primary" id="reloadBtn" style="width:100%;margin-top:10px;padding:12px">重新載入</button>
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 8px">列表</h3>
+      <h3 style="margin:0 0 8px">待審列表</h3>
       <div id="list"></div>
     </div>
   </div>
   <script>
     (function () {
       var session = null;
+      var canApproveVendor = false;
+
       function setMsg(t) { document.getElementById('msg').textContent = t || ''; }
       function setOk(t) { document.getElementById('ok').textContent = t || ''; }
       function showApp() {
@@ -81,78 +89,146 @@
         document.getElementById('app').classList.remove('hidden');
       }
       function buildFilter() {
-        var f = { page_size: 100 };
+        var f = {};
         var rs = document.getElementById('filterReview').value;
         var ps = document.getElementById('filterPay').value;
-        var iid = document.getElementById('filterId').value.trim();
-        if (rs) f.review_status = rs;
+        var kw = document.getElementById('filterKw').value.trim();
+        f.review_status = rs;
         if (ps) f.payment_status = ps;
-        if (iid) f.ingest_id = iid;
+        if (kw) f.keyword = kw;
         return f;
       }
-      async function saveRow(row, patch) {
-        setMsg('');
-        var payload = {
-          review_status: patch.review_status != null ? patch.review_status : row.review_status,
-          payment_status: patch.payment_status != null ? patch.payment_status : row.payment_status,
-          note: row.note || ''
-        };
-        var data = await AccountingApi.crudUpdate(session, 'ledger_status', row.ingest_id, payload);
-        if (!data.success) { setMsg(data.message || '更新失敗'); return false; }
-        setOk('已更新 ' + row.ingest_id.slice(0, 8) + '…');
+      function fmtMoney(n) {
+        return (parseInt(n, 10) || 0).toLocaleString('zh-TW');
+      }
+
+      async function approveLedger(item) {
+        var data = await AccountingApi.crudUpdate(session, 'ledger_status', item.ingest_id, {
+          review_status: '已審',
+          payment_status: item.payment_status || '未匯款',
+          note: item.note || ''
+        });
+        if (!data.success) { setMsg(data.message || '核准失敗'); return false; }
+        setOk('已核准：' + (item.party_name || item.summary));
         return true;
       }
-      function renderItem(row) {
+
+      async function rejectLedger(item) {
+        var data = await AccountingApi.crudUpdate(session, 'ledger_status', item.ingest_id, {
+          review_status: '退回',
+          payment_status: item.payment_status || '未匯款',
+          note: item.note || ''
+        });
+        if (!data.success) { setMsg(data.message || '退回失敗'); return false; }
+        setOk('已退回');
+        return true;
+      }
+
+      async function approveVendor(item) {
+        var data = await AccountingApi.vendorPaymentApprove(session, item.payment_request_id, {
+          project_no: item.project_no,
+          amount: item.amount,
+          item_desc: item.summary
+        });
+        if (!data.success) { setMsg(data.message || '核准失敗'); return false; }
+        setOk('廠商請款已核准，進入待匯款');
+        return true;
+      }
+
+      async function rejectVendor(item) {
+        var reason = prompt('退回原因（選填）', '主管退回') || '主管退回';
+        var data = await AccountingApi.vendorPaymentReject(session, item.payment_request_id, reason);
+        if (!data.success) { setMsg(data.message || '退回失敗'); return false; }
+        setOk('已退回廠商請款');
+        return true;
+      }
+
+      function renderItem(item) {
         var div = document.createElement('div');
         div.className = 'item';
+        var isVendor = item.kind === 'vendor_payment';
+        var typeTag = isVendor
+          ? '<span class="tag vendor">廠商' + (item.doc_type || '請款') + '</span>'
+          : '<span class="tag">' + (item.type || '收支') + '</span>';
         div.innerHTML =
-          '<div class="mono">' + (row.ingest_id || '') + '</div>' +
-          '<div><span class="tag">' + (row.review_status || '待審') + '</span>' +
-          '<span class="tag pay">' + (row.payment_status || '未匯款') + '</span></div>' +
-          '<div class="sub">' + (row.reviewed_by ? '審核：' + row.reviewed_by + ' · ' + (row.reviewed_at || '') : '尚未審核') + '</div>' +
-          (row.note ? '<div class="sub">來源：' + row.note + '</div>' : '') +
-          '<div class="sub"><a href="attachments.html?ingest_id=' + encodeURIComponent(row.ingest_id || '') + '">查單據附件</a></div>';
+          '<div class="headline">' + (item.party_name || '—') + '</div>' +
+          '<div class="amount">$' + fmtMoney(item.amount) + '</div>' +
+          '<div class="sub">案號 ' + (item.project_no || '—') + ' · ' + (item.txn_date || '—') + '</div>' +
+          '<div class="sub">' + (item.summary || '') + '</div>' +
+          '<div style="margin-top:6px">' + typeTag +
+          '<span class="tag pay">' + (item.review_status || '待審') + '</span>' +
+          '<span class="tag">' + (item.payment_status || '未匯款') + '</span></div>';
+
         var actions = document.createElement('div');
         actions.className = 'actions';
-        if (row.review_status !== '已審') {
+
+        if (item.has_attachments || (item.attachment_urls && item.attachment_urls.length)) {
+          var lbBtn = AccountingLightbox.makeButton(session, item, '看單據');
+          actions.appendChild(lbBtn);
+        }
+
+        if (item.review_status !== '已審') {
           var btnOk = document.createElement('button');
           btnOk.className = 'btn btn-ok';
-          btnOk.textContent = '核准';
+          btnOk.textContent = isVendor ? '核准 → 待匯款' : '核准';
           btnOk.addEventListener('click', async function () {
-            if (await saveRow(row, { review_status: '已審' })) await loadList();
+            setMsg('');
+            var ok = isVendor ? await approveVendor(item) : await approveLedger(item);
+            if (ok) await loadList();
           });
-          actions.appendChild(btnOk);
+          if (!isVendor || canApproveVendor) actions.appendChild(btnOk);
+          else {
+            var hint = document.createElement('span');
+            hint.className = 'sub';
+            hint.textContent = '（廠商核准需權限 ≥ 5）';
+            actions.appendChild(hint);
+          }
         }
-        if (row.review_status !== '退回') {
+        if (item.review_status !== '退回') {
           var btnReject = document.createElement('button');
           btnReject.className = 'btn btn-warn';
           btnReject.textContent = '退回';
           btnReject.addEventListener('click', async function () {
-            if (await saveRow(row, { review_status: '退回' })) await loadList();
+            setMsg('');
+            var ok = isVendor
+              ? (canApproveVendor ? await rejectVendor(item) : (setMsg('權限不足'), false))
+              : await rejectLedger(item);
+            if (ok) await loadList();
           });
-          actions.appendChild(btnReject);
+          if (!isVendor || canApproveVendor) actions.appendChild(btnReject);
         }
-        if (row.payment_status !== '已匯款') {
+        if (!isVendor && item.payment_status !== '已匯款' && item.review_status === '已審') {
           var btnPaid = document.createElement('button');
           btnPaid.className = 'btn btn-primary';
           btnPaid.textContent = '標記已匯款';
           btnPaid.addEventListener('click', async function () {
-            if (await saveRow(row, { payment_status: '已匯款', review_status: row.review_status === '待審' ? '已審' : row.review_status })) await loadList();
+            setMsg('');
+            var data = await AccountingApi.crudUpdate(session, 'ledger_status', item.ingest_id, {
+              review_status: '已審',
+              payment_status: '已匯款',
+              note: item.note || ''
+            });
+            if (!data.success) { setMsg(data.message); return; }
+            setOk('已標記匯款');
+            await loadList();
           });
           actions.appendChild(btnPaid);
         }
         div.appendChild(actions);
         return div;
       }
+
       async function loadList() {
         setOk('');
-        var data = await AccountingApi.crudList(session, 'ledger_status', buildFilter());
+        var data = await AccountingApi.ledgerReviewBundle(session, buildFilter());
         var box = document.getElementById('list');
         box.innerHTML = '';
         if (!data.success) { setMsg(data.message); return; }
-        (data.data || []).forEach(function (row) { box.appendChild(renderItem(row)); });
-        if (!data.data || !data.data.length) box.textContent = '沒有符合的紀錄';
+        canApproveVendor = !!data.can_approve_vendor;
+        (data.items || []).forEach(function (row) { box.appendChild(renderItem(row)); });
+        if (!data.items || !data.items.length) box.textContent = '沒有符合的紀錄';
       }
+
       document.getElementById('reloadBtn').addEventListener('click', loadList);
       (async function boot() {
         try {

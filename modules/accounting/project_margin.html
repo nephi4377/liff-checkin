@@ -6,7 +6,8 @@
   <title>案件毛利</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=11"></script>
-  <script src="../../shared/js/accounting_api.js?v=11"></script>
+  <script src="../../shared/js/accounting_api.js?v=13"></script>
+  <script src="../../shared/js/accounting_lightbox.js?v=13"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 640px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 8px; }
@@ -159,14 +160,15 @@
           var div = document.createElement('div');
           div.className = 'line-item';
           var tagClass = ln.txn_type === '收入' ? 'rev' : 'exp';
-          var attach = ln.ingest_id
-            ? ' · <a href="attachments.html?ingest_id=' + encodeURIComponent(ln.ingest_id) + '">單據</a>'
-            : '';
           div.innerHTML =
             '<div><span class="tag ' + tagClass + '">' + (ln.txn_type || '') + '</span> ' +
             (ln.category || '') + ' · ' + fmtMoney(ln.amount) + '</div>' +
             '<div>' + (ln.item_name || '') + '</div>' +
-            '<div class="sub">' + (ln.txn_date || '') + ' · ' + (ln.source || '') + attach + '</div>';
+            '<div class="sub">' + (ln.txn_date || '') +
+            (ln.source ? ' · ' + ln.source : '') + '</div>';
+          if (ln.has_attachments || (ln.attachment_urls && ln.attachment_urls.length)) {
+            div.appendChild(AccountingLightbox.makeButton(session, ln, '看單據'));
+          }
           box.appendChild(div);
         });
       }

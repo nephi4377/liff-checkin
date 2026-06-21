@@ -32,6 +32,7 @@ const ACTION_HANDLERS = {
             LogActions.handleDeleteLog(target.dataset.logId);
         }
     },
+    'markAiReviewed': (target) => LogActions.handleMarkAiReviewed(target.dataset.logId),
     'triggerPhotoUpload': LogActions.triggerPhotoUpload,
     'savePhotos': LogActions.handleSavePhotos,
     'closePhotoModal': LogActions.closePhotoModal,

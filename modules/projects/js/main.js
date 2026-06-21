@@ -1066,6 +1066,9 @@ document.addEventListener('click', (e) => {
         LogActions.handleDeleteLog(logId); // Call the handler only after confirmation.
       }
       break;
+    case 'markAiReviewed':
+      LogActions.handleMarkAiReviewed(logId);
+      break;
     // 【⭐️ 核心新增：處理照片管理視窗的按鈕事件 ⭐️】
     case 'triggerPhotoUpload':
       LogActions.triggerPhotoUpload();

@@ -1,11 +1,25 @@
 ---
 name: cloud-agent-runbook
-description: 跑環境與測試
+description: >-
+  本機跑 CODING 前端：serve 開站、LayoutPlanner 測試、LIFF 本地 bypass。
+  Use when 本地測試、開本地站、127.0.0.1:3000、Playwright、reportV3 bypass，
+  or user @ Cloud-Agent-Runbook. 改 GAS 後端不用本 skill，用 upload.bat。
 ---
 
 # Cloud Agent Runbook
 
-在本倉庫**跑起來、驗證、改完要測**時先讀本檔。架構與模組行為見 SPEC；分模組測試細節見同目錄 `RUNBOOK_DETAIL.md`。
+## 何時用（白話）
+
+| 要做的事 | 用不用 |
+|----------|--------|
+| 改完網頁，在本機 `127.0.0.1:3000` 看畫面 | **用**（@ 本 skill） |
+| 跑 LayoutPlanner 自動測試 | **用** |
+| 測施工回報頁、不想開 LINE | **用**（bypass，測完關回） |
+| 只改 `backend` GAS、或上線 | **不用**（`backend/upload.bat`） |
+
+**觸發範例**：`@Cloud-Agent-Runbook 幫我開本地站看 Dashboard`
+
+架構與模組行為見 SPEC；分模組細節見同目錄 `RUNBOOK_DETAIL.md`。
 
 ## 快覽
 

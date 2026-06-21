@@ -10,6 +10,7 @@ import { CONFIG } from '/shared/js/config.js';
 
 // [v579.0 重構] 引入共用模組
 import { extractDriveFileId } from '/shared/js/utils.js';
+import { buildAiAnalysisHtml } from './siteReportAiUi.js';
 // [v581.0 修正] 根據使用者要求，改為使用自訂的 lazyLoadImages 函式來處理圖片延遲載入
 import { lazyLoadImages } from './ui.js';
 
@@ -438,6 +439,7 @@ function renderReportsByEmployee(employees, allReports, scheduleData) {
                                 </div>
                                 <div class="text-sm mt-2">${contentHtml || '<p class="text-gray-400 italic">無文字內容回報。</p>'}</div>
                                 ${photosHtml}
+                                ${buildAiAnalysisHtml(report)}
                             </div>
                         `;
                 }).join('');
@@ -735,6 +737,7 @@ function renderReportsByProject(employees, allReports, scheduleData) {
                         </div>
                         <div class="mt-1">${contentHtml}</div>
                         ${photosHtml}
+                        ${buildAiAnalysisHtml(report)}
                     </div>
                 `;
         }).join('');

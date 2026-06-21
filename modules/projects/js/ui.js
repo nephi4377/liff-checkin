@@ -10,6 +10,7 @@
 import { state } from './state.js'; // 同一層
 // [v406.0 重構] 移除舊的 driveFileId，改為使用新的 extractDriveFileId 函式。
 import { logToPage, extractDriveFileId } from '/shared/js/utils.js'; // [v546.0 修正] 改為絕對路徑以解決本地測試 404 問題
+import { buildAiAnalysisHtml } from './siteReportAiUi.js';
 
 /**
  * 在等待 API 資料時，於主要內容區塊顯示骨架屏（載入中的動畫效果）。
@@ -243,6 +244,14 @@ export function _buildLogCard(log, isDraftMode) {
                 if (window.__openLightbox__) window.__openLightbox__(fullUrls, index);
             });
         });
+    }
+
+    const aiHtml = buildAiAnalysisHtml(log, { console: true, logId: log.LogID });
+    if (aiHtml) {
+        const aiWrap = document.createElement('div');
+        aiWrap.className = 'site-ai-wrap';
+        aiWrap.innerHTML = aiHtml;
+        card.insertBefore(aiWrap, buttonContainer);
     }
 
     // 【⭐️ 核心修正：移除行內樣式，改用 CSS class 統一管理顏色 ⭐️】

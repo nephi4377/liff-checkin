@@ -11,6 +11,7 @@ import { state } from './state.js'; // 同一層
 // [v547.0 修正] 將相對路徑改為絕對路徑，並合併重複的 import
 import { logToPage, extractDriveFileId, showGlobalNotification } from '/shared/js/utils.js';
 import { buildPhotoGrid, _buildLogCard } from './ui.js'; // 同一層
+import { buildAiAnalysisHtml } from './siteReportAiUi.js';
 import { request as apiRequest } from './projectApi.js'; // [v317.0 API化] 引入新的統一請求函式
 
 /** 處理文字編輯 */
@@ -325,6 +326,61 @@ export function handleDeleteLog(logId) {
         })
         .catch(error => logToPage(`❌ 刪除 LogID ${logId} 時發生錯誤: ${error.message}`, 'error'));
 }
+
+/** 標記施工回報 AI 已人工覆核 */
+export function handleMarkAiReviewed(logId) {
+    if (!logId) return;
+    const card = document.getElementById('log-' + logId);
+    const btn = card && card.querySelector('[data-action="markAiReviewed"]');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '處理中…';
+    }
+
+    apiRequest({
+        action: 'markSiteReportAiReviewed',
+        payload: {
+            logId: logId,
+            userId: state.currentUserId,
+            userName: state.currentUserName
+        }
+    })
+        .then(result => {
+            if (!result || !result.success) {
+                throw new Error((result && result.message) || '標記失敗');
+            }
+            const reviewed = result.data && result.data.AI_HumanReviewed
+                ? result.data.AI_HumanReviewed
+                : (state.currentUserName + ' @ ' + new Date().toLocaleString('zh-TW'));
+
+            const CACHE_KEY = `project_data_${state.projectId}_${state.currentUserId}`;
+            const cachedItem = localStorage.getItem(CACHE_KEY);
+            if (cachedItem) {
+                const cacheData = JSON.parse(cachedItem);
+                const logRow = (cacheData.data.dailyLogs || []).find(l => l.LogID === logId);
+                if (logRow) {
+                    logRow.AI_HumanReviewed = reviewed;
+                    localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+                }
+            }
+            const logInState = (state.currentLogsData || []).find(l => l.LogID === logId);
+            if (logInState) logInState.AI_HumanReviewed = reviewed;
+
+            const aiWrap = card && card.querySelector('.site-ai-wrap');
+            if (aiWrap && logInState) {
+                aiWrap.innerHTML = buildAiAnalysisHtml(logInState, { console: true, logId: logId });
+            }
+            showGlobalNotification('已標記為人工看過', 3000, 'success');
+        })
+        .catch(err => {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '標記已人工看過';
+            }
+            showGlobalNotification('標記失敗：' + err.message, 5000, 'error');
+        });
+}
+
 /**
  * [新增] 觸發隱藏的檔案上傳輸入框
  */

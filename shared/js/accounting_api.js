@@ -193,6 +193,7 @@ var AccountingApi = (function () {
         action: 'vendor_payment_create',
         auth: resolveAuth(sessionOrToken),
         vendor_id: payload.vendor_id,
+        vendor_name: payload.vendor_name,
         amount: payload.amount,
         project_no: payload.project_no,
         item_desc: payload.item_desc,
@@ -225,6 +226,34 @@ var AccountingApi = (function () {
         action: 'vendor_payment_export_ctbc',
         auth: resolveAuth(sessionOrToken),
         payment_request_ids: paymentRequestIds || []
+      });
+    },
+    vendorPaymentDelete: function (sessionOrToken, paymentRequestId) {
+      return post({
+        action: 'vendor_payment_delete',
+        auth: resolveAuth(sessionOrToken),
+        payment_request_id: paymentRequestId
+      });
+    },
+    vendorPaymentMarkPaid: function (sessionOrToken, paymentRequestIds) {
+      return post({
+        action: 'vendor_payment_mark_paid',
+        auth: resolveAuth(sessionOrToken),
+        payment_request_ids: paymentRequestIds || []
+      });
+    },
+    ledgerReviewBundle: function (sessionOrToken, filter) {
+      return post({
+        action: 'ledger_review_bundle',
+        auth: resolveAuth(sessionOrToken),
+        filter: filter || {}
+      });
+    },
+    cleanupTestData: function (sessionOrToken, confirm) {
+      return post({
+        action: 'accounting_cleanup_test',
+        auth: resolveAuth(sessionOrToken),
+        confirm: !!confirm
       });
     },
     initLiff: async function (opts) {

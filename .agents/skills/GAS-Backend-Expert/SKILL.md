@@ -1,60 +1,92 @@
 ---
 name: gas-backend-expert
-description: 改 GAS 後端
+description: >-
+  改 backend/ 內 Google Apps Script：API action、試算表、觸發器、LINE／Gemini／部署。
+  Use when editing GAS, backend API, clasp deploy, accounting-gas, CheckinSystem,
+  project-console, or frontend errors trace to backend.
 ---
 
-# GAS 後端開發（骨架）
+# GAS 後端開發
 
-> **CODING 倉庫只有前端**；本 skill 供助理改 **`backend/`** 倉庫內的 Apps Script 時遵循。內容可逐步補細。
+> **CODING 只有前端**；後端在 **`../backend/`**。改 API／試算表／觸發器時載入本 skill。
 
-## 何時載入
+## 何時用
 
-- 使用者要改 API、`action`、試算表寫入、觸發器、LINE／Dropbox／Gemini 整合
-- 前端報錯懷疑後端邏輯時（先對照 SPEC 與資料字典，再到 backend 查）
+- 改 `action`、試算表寫入、定時觸發、LINE／Dropbox／Gemini
+- 前端報錯懷疑後端（先對 **資料字典 + SPEC**，再到 backend 查）
+- 使用者說部署 GAS（仍須**明確**說「部署／發布」才執行 clasp）
 
-## 程式庫位置（相對 CODING）
+## 模組地圖（backend/ 下）
 
-| 模組 | 路徑（在 `backend/` 下） | 用途 |
-|------|---------------------------|------|
-| 考勤核心 | `CheckinSystem/` | 打卡、員工、排班、定時通知 |
-| 專案主控台 | `project-console/` | 案場、施工日誌、日報路由 |
-| 共用庫 | `core_library/` | Gemini、Dropbox、LINE 等共用 |
+| 模組 | 路徑 | 白話用途 |
+|------|------|----------|
+| 專案主控台 | `project-console/` | 案場、施工日誌、日報、LINE webhook、轉發會計 |
+| 考勤 | `CheckinSystem/` | 打卡、假勤、排班、生產力助手 API |
+| 會計 | `accounting-gas/` | 收支試算表、OCR、廠商請款、LINE 記帳 ingest |
+| 共用函式庫 | `core_library/` | LINE／Gemini 等 Library；**無 Web App** |
+| 專案排程 | `ProjectSchedule/` | 排程小工具（較獨立） |
 
-架構摘要可參：`backend/全專案系統技術規格書_自動生成.md`
+架構總覽：`backend/全專案系統技術規格書_自動生成.md`  
+帳號／scriptId：`backend/SPEC/GOOGLE_ACCOUNTS.md`
 
-## 必讀文件（CODING 側）
+## 必讀（CODING 側）
 
-- `SPEC/專案全域資料字典.md` — 欄位名**唯一**準則
-- `SPEC/07_全量系統全景圖.md` — 前後端怎麼串
-- 模組 SPEC（如 `SPEC/施工回報_系統完整_SPEC.md`、`SPEC/03_員工打卡系統規格書.md`）
+| 文件 | 用途 |
+|------|------|
+| `SPEC/專案全域資料字典.md` | 欄位名**唯一**準則 |
+| `SPEC/07_全量系統全景圖.md` | 前後端怎麼串 |
+| 模組 SPEC | 如 `施工回報_系統完整_SPEC`、`03_員工打卡系統規格書` |
 
-## 開發原則（摘要）
+會計細節：`backend/accounting-gas/SPEC/`（欄位見 `SHEET_COLUMN_MAP.md`）
 
-1. **常數集中**：工作表名稱、快取 TTL 等放在 `Constants.gs`，**不要**在邏輯裡硬編碼表名。
-2. **WebApp 路由**：`doGet` / `doPost` 依 `action`（或專案既有參數）分派；新 action 要對齊前端與 SPEC 表格。
-3. **回傳格式**：與現有 API 一致（通常 JSON：`success`、訊息、資料）；業務失敗與 HTTP 錯誤分開處理。
-4. **錯誤處理**：`try/catch` + 可讀訊息；敏感細節只寫 log，不直接回傳給前端。
-5. **試算表**：讀寫前確認欄位順序與字典一致；大量寫入注意配額與批次。
-6. **觸發器**：定時任務放 `ScheduledTasks.gs` 等專檔；避免重複建立相同觸發器。
-7. **Library**：共用邏輯放 `core_library`，專案內用 Library 引用，避免複製貼上。
+## 開發原則
+
+1. **常數集中** — 表名、TTL 放 `Constants.js`／`config_.js`，邏輯裡不硬編碼表名。
+2. **路由一致** — `doGet`／`doPost` 依 `action`（或 `page`）分派；新 action 對齊前端 + SPEC + 各模組 `WebApp.js` 描述表。
+3. **回傳格式** — 沿用該模組慣例（多為 JSON：`success`、訊息、`data`）；業務失敗勿混 HTTP 500 除非真的壞掉。
+4. **錯誤** — `try/catch` + 人話訊息；金鑰／堆疊只寫 log，不回前端。
+5. **試算表** — 欄位順序對字典；大量讀寫用批次（見下方關聯 skill）。
+6. **觸發器** — 定時任務放 `ScheduledTasks.js` 等專檔；部署後確認雲端觸發器未重複。
+7. **Library** — 共用放 `core_library`；改 Library 後要 **push Library**，引用它的專案才吃到新版。
 
 ## 安全
 
-- 金鑰、Token 用 **Script Properties** 或既有密鑰管理，**不要** commit 進 repo。
-- 權限採最小必要；對外 WebApp 要驗證呼叫來源／參數（依各模組現有做法延伸）。
+- 金鑰、Token → **Script Properties**；勿 commit。
+- Web App 對外要驗證來源／secret（各模組沿用既有做法，如 `INGEST_SECRET`）。
 
 ## 與前端協作
 
-- 改欄位或 action 時：**同步**更新 `專案全域資料字典.md` 與相關 SPEC。
-- CODING 內只改呼叫端時，用 skill **`10-gas-and-spec-pointer`**（`.cursor/rules/`）對照即可。
+- 改欄位或 action → **同步** `專案全域資料字典.md` + 相關 SPEC。
+- 只改 CODING 呼叫端 → `.cursor/rules/gas-and-spec-pointer.mdc`。
+- 前端 API 網址 → `shared/js/config.js`（勿寫進 SPEC／skill）。
 
 ## 部署（勿自動執行）
 
-- **`clasp push` / 部署**：僅在使用者明確說「部署、發布、Deploy」時執行。
-- 部署後若影響上線，提醒使用者驗證 WebApp URL 版本與關鍵 `action`。
+| 情境 | 做法 |
+|------|------|
+| **日常**（project-console／CheckinSystem） | `backend/upload.bat` → push `main` → GitHub Actions 自動 clasp |
+| **會計** accounting-gas | 子目錄 `deploy.bat`（`-u nephihuang`）或 Actions push `accounting-gas/**` |
+| **共用 Library** | `core_library/deploy.bat`（僅 push，無 Web App deploy） |
+| **緊急本機** | 各模組 `deploy.bat`；見 [reference.md](reference.md) |
 
-## 待補（之後可寫進本檔）
+- 僅在使用者明確說「部署、發布、Deploy」時跑 clasp。
+- push 後到 [Backend_GAS Actions](https://github.com/nephi4377/Backend_GAS/actions) 確認綠燈。
+- 改 `appsscript.json` 或新增定時函式 → 部署後查 GAS 雲端「觸發器」。
 
-- [ ] 各專案 `clasp` 設定與部署步驟
-- [ ] 常見 `action` 對照表
-- [ ] 配額／執行時間上限踩坑紀錄
+細節（clasp 帳號、deploymentId、action 索引、配額踩坑）→ **[reference.md](reference.md)**
+
+## 關聯 skill
+
+| Skill | 何時一起用 |
+|-------|-----------|
+| `gas-sheets-batch-io` | 試算表慢、逾時、迴圈內逐格讀寫 |
+| `gemini-usage-policy` | accounting-gas OCR、模型、token 額度 |
+| `debug-loop` | 已壞、要重現＋根因＋再測 |
+| `code-advisor` | 改完要審、尚未部署 |
+
+## 改完自檢
+
+- [ ] 欄位／action 與字典、SPEC、前端一致？
+- [ ] 無金鑰、無硬編碼表名？
+- [ ] 大量 Sheet 操作是批次而非迴圈逐格？
+- [ ] 需部署時已提醒使用者，且未擅自 clasp？

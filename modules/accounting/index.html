@@ -6,8 +6,8 @@
   <title>添心會計</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=10"></script>
-  <script src="../../shared/js/accounting_api.js?v=10"></script>
-  <script src="../../shared/js/accounting_cache.js?v=10"></script>
+  <script src="../../shared/js/accounting_api.js?v=13"></script>
+  <script src="../../shared/js/accounting_cache.js?v=13"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 480px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 4px; }
@@ -20,6 +20,7 @@
     .tag.admin { background: #fce8e6; color: #c5221f; }
     .hidden { display: none; }
     #loading { text-align: center; padding: 48px 16px; color: #666; }
+    #cacheHint { text-align: center; font-size: 13px; color: #888; margin-bottom: 8px; min-height: 18px; }
   </style>
 </head>
 <body>
@@ -27,6 +28,7 @@
   <div id="app" class="hidden">
     <h2>添心會計</h2>
     <p class="sub" id="userLine">—</p>
+    <p id="cacheHint"></p>
 
     <a class="card" href="accounting_ingest.html">
       <h3>收支登錄</h3>
@@ -44,15 +46,15 @@
       <span class="tag admin">財務以上</span>
     </a>
 
-    <a class="card" href="payees.html" id="linkPayees">
-      <h3>收款帳戶</h3>
-      <p>管理下包商、材料商與工人的銀行帳戶，供匯款使用。</p>
+    <a class="card hidden" href="payees.html" id="linkPayees">
+      <h3>收款帳戶（舊）</h3>
+      <p>已改由「待匯款」手動輸入或廠商名冊；員工帳戶待 Checkin 欄位。</p>
       <span class="tag admin">財務以上</span>
     </a>
 
     <a class="card" href="ledger_review.html" id="linkLedgerReview">
       <h3>收支審核</h3>
-      <p>查看待審收支、核准或退回，並標記匯款狀態。</p>
+      <p>群組記帳與廠商請款待審；核准後廠商款進待匯款。</p>
       <span class="tag admin">財務以上</span>
     </a>
 
@@ -62,15 +64,15 @@
       <span class="tag admin">財務以上</span>
     </a>
 
-    <a class="card" href="vendor_payment_approve.html" id="linkVendorPaymentApprove">
-      <h3>廠商請款審核</h3>
-      <p>審核廠商 LINE 上傳的請款／報價單，核准後進入待匯款。</p>
+    <a class="card hidden" href="vendor_payment_approve.html" id="linkVendorPaymentApprove">
+      <h3>廠商請款審核（舊）</h3>
+      <p>已併入「收支審核」。</p>
       <span class="tag admin">權限 5</span>
     </a>
 
     <a class="card" href="attachments.html" id="linkAttachments">
-      <h3>單據附件</h3>
-      <p>依 ingest_id 查詢記帳時上傳的 Drive 單據連結。</p>
+      <h3>單據附件（進階）</h3>
+      <p>依關鍵字查附件；各頁有照片時可直接燈箱預覽。</p>
       <span class="tag admin">財務以上</span>
     </a>
 
@@ -97,8 +99,15 @@
           if (perm < 5) {
             document.getElementById('linkVendorPaymentApprove').classList.add('hidden');
           }
-          await AccountingCache.load(session);
           showApp();
+          var hint = document.getElementById('cacheHint');
+          var hadCache = !!AccountingCache.get(session);
+          hint.textContent = hadCache ? '主檔背景更新中…' : '主檔載入中…';
+          AccountingCache.load(session).then(function () {
+            hint.textContent = '';
+          }).catch(function (e) {
+            hint.textContent = '主檔更新失敗：' + (e.message || e);
+          });
         } catch (e) {
           document.getElementById('loading').textContent = e.message || String(e);
         }
