@@ -6,7 +6,7 @@
   <title>單據附件</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=9"></script>
-  <script src="../../shared/js/accounting_api.js?v=9"></script>
+  <script src="../../shared/js/accounting_api.js?v=14"></script>
   <script src="../../shared/js/accounting_cache.js?v=9"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 600px; margin: 0 auto; background: #f4f6f8; }
@@ -36,6 +36,8 @@
     <div class="card">
       <label>ingest_id（收支紀錄 ID，可貼部分）</label>
       <input id="ingestId" placeholder="記帳後 G 欄備註的 [ingest:…] 內容" />
+      <label>請款單編號 payment_request_id（可貼部分）</label>
+      <input id="paymentRequestId" placeholder="廠商請款 UUID 前幾碼即可" />
       <label>關鍵字（檔名、試算表列等）</label>
       <input id="keyword" placeholder="選填" />
       <button type="button" class="btn" id="searchBtn">查詢</button>
@@ -69,7 +71,8 @@
             : (a.filename || '—');
           div.innerHTML =
             '<div>' + link + '</div>' +
-            '<div class="mono">' + (a.ingest_id || '') + '</div>' +
+            '<div class="mono">' + (a.ingest_id || '') +
+            (a.payment_request_id ? ' · PR:' + a.payment_request_id.slice(0, 8) + '…' : '') + '</div>' +
             '<div class="sub">' + (a.ledger_sheet || '') + ' 第' + (a.ledger_row || '?') + '列 · ' + (a.uploaded_at || '') + '</div>';
           box.appendChild(div);
         });
@@ -78,10 +81,12 @@
         setMsg('');
         var filter = { page_size: 50 };
         var iid = document.getElementById('ingestId').value.trim();
+        var prid = document.getElementById('paymentRequestId').value.trim();
         var kw = document.getElementById('keyword').value.trim();
         if (iid) filter.ingest_id = iid;
+        if (prid) filter.payment_request_id = prid;
         if (kw) filter.keyword = kw;
-        if (!iid && !kw) { setMsg('請至少輸入 ingest_id 或關鍵字'); return; }
+        if (!iid && !prid && !kw) { setMsg('請至少輸入 ingest_id、請款單編號或關鍵字'); return; }
         var data = await AccountingApi.crudList(session, 'attachment', filter);
         if (!data.success) { setMsg(data.message || '查詢失敗'); return; }
         renderList(data.data || []);
@@ -93,11 +98,12 @@
           if (!AccountingCache.get(session)) await AccountingCache.load(session);
           var q = new URLSearchParams(window.location.search);
           if (q.get('ingest_id')) document.getElementById('ingestId').value = q.get('ingest_id');
+          if (q.get('payment_request_id')) document.getElementById('paymentRequestId').value = q.get('payment_request_id');
           var mode = session.devBypass ? ' · 測試模式（無登入）' : '';
           document.getElementById('userLine').textContent =
             session.profile.displayName + ' · 權限 ' + session.auth.permission + mode;
           showApp();
-          if (q.get('ingest_id')) document.getElementById('searchBtn').click();
+          if (q.get('ingest_id') || q.get('payment_request_id')) document.getElementById('searchBtn').click();
         } catch (e) {
           document.getElementById('loading').textContent = e.message || String(e);
         }
