@@ -1,7 +1,7 @@
 import Dashboard from './Dashboard.js?v=26.05.07.3';
 import ProjectBoard from './ProjectBoard.js';
-import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.06.21.2';
-import HubLeftSidebar from './HubLeftSidebar.js?v=26.06.21.3';
+import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.06.21.4';
+import HubLeftSidebar from './HubLeftSidebar.js?v=26.06.21.4';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
 import { saveCache, loadCache, loadHubPresenceCache, saveHubPresenceCache, loadDailyCache, saveDailyCache, purgeStaleDailyCaches, hubSidebarDailyCacheKey, hubPresenceTodayStr } from '../shared/js/utils.js';
@@ -248,13 +248,23 @@ const App = {
             });
         };
 
+        const hubRecentReportsStartStr = () => {
+            const d = new Date();
+            d.setDate(d.getDate() - 2);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        };
+
         const fetchTodayReports = async () => {
             if (!userProfile.value) return { success: false };
-            const todayStr = hubPresenceTodayStr();
+            const startStr = hubRecentReportsStartStr();
+            const endStr = hubPresenceTodayStr();
             const url = new URL(CONFIG.GAS_WEB_APP_URL);
             url.searchParams.append('page', 'get_daily_reports');
-            url.searchParams.append('startDate', todayStr);
-            url.searchParams.append('endDate', todayStr);
+            url.searchParams.append('startDate', startStr);
+            url.searchParams.append('endDate', endStr);
             url.searchParams.append('userName', userProfile.value.displayName);
             const response = await fetch(url);
             return response.json();
@@ -674,6 +684,7 @@ const App = {
                     :currentUser="currentUser"
                     :todayReports="todayReports"
                     :todayReportsLoading="todayReportsLoading"
+                    :todayPresence="todayPresence"
                     :paymentTodos="paymentTodos"
                     :paymentTodosLoading="paymentTodosLoading"
                     @reports-updated="onTodayReportsUpdated" />

@@ -370,12 +370,12 @@ export function handleMarkAiReviewed(logId) {
             if (aiWrap && logInState) {
                 aiWrap.innerHTML = buildAiAnalysisHtml(logInState, { console: true, logId: logId });
             }
-            showGlobalNotification('已標記為人工看過', 3000, 'success');
+            showGlobalNotification('已標記已讀', 3000, 'success');
         })
         .catch(err => {
             if (btn) {
                 btn.disabled = false;
-                btn.textContent = '標記已人工看過';
+                btn.textContent = '標記已讀';
             }
             showGlobalNotification('標記失敗：' + err.message, 5000, 'error');
         });

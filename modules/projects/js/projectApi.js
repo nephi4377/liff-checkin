@@ -41,7 +41,7 @@ function postToGas(payload) {
 // 定義哪些 action 是讀取型 (用 GET)，哪些是寫入型 (用 POST + 任務佇列)
 // 注意：這裡的 action 名稱必須與後端 WebApp.js 中的 GET_ROUTES 和 processJob 的 switch case 完全對應。
 const READ_ACTIONS = new Set(['project', 'getSingleLog', 'getJobStatus', 'get_social_logs', 'get_comments']);
-const WRITE_ACTIONS = new Set(['createLog', 'updateLogText', 'updateLogPhotosWithUploads', 'deleteLog', 'markSiteReportAiReviewed', 'updateProjectStatus', 'createFromTemplate', 'updateSchedule', 'sendNotification', 'createUploadJob', 'uploadJobDataChunk', 'process_notification_action', 'add_comment']);
+const WRITE_ACTIONS = new Set(['createLog', 'updateLogText', 'updateLogPhotosWithUploads', 'deleteLog', 'markSiteReportAiReviewed', 'rerunSiteReportAiAnalysis', 'updateProjectStatus', 'createFromTemplate', 'updateSchedule', 'sendNotification', 'createUploadJob', 'uploadJobDataChunk', 'process_notification_action', 'add_comment']);
 
 /**
  * 獲取客戶端追蹤資訊

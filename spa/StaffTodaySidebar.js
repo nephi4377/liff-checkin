@@ -195,18 +195,19 @@ export default {
         };
     },
     template: `
-        <aside class="hidden lg:flex flex-col w-72 xl:w-80 flex-shrink-0 border-l border-gray-200 bg-gray-50/80">
+        <aside class="hidden lg:flex flex-col flex-shrink-0 border-l border-gray-200 bg-gray-50/80
+            w-80 xl:w-96 2xl:w-[26rem] min-w-[18rem] max-w-[28vw]">
             <div class="flex-shrink-0 px-3 py-2.5 border-b border-gray-200 bg-white">
                 <div class="flex items-center justify-between gap-2">
-                    <h2 class="text-sm font-bold text-gray-700">今日出勤燈號</h2>
+                    <h2 class="text-base font-bold text-gray-700">今日出勤燈號</h2>
                     <a :href="staffStatusBoardUrl"
-                        class="text-[10px] text-blue-600 hover:underline font-medium whitespace-nowrap"
+                        class="text-xs text-blue-600 hover:underline font-medium whitespace-nowrap"
                         title="查看今／明／後天">三日詳情 →</a>
                 </div>
-                <p class="text-[10px] text-gray-500 mt-0.5">{{ dayLabel }}
+                <p class="text-xs text-gray-500 mt-0.5">{{ dayLabel }}
                     <span v-if="isUpdating" class="text-blue-500 animate-pulse"> · 更新中</span>
                 </p>
-                <div class="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5 text-[9px] text-gray-500">
+                <div class="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5 text-[11px] text-gray-500">
                     <span class="inline-flex items-center gap-0.5"><span class="presence-dot presence-red"></span>未打卡</span>
                     <span class="inline-flex items-center gap-0.5"><span class="presence-dot presence-blue"></span>店面</span>
                     <span class="inline-flex items-center gap-0.5"><span class="presence-dot presence-purple"></span>案場</span>
@@ -216,7 +217,7 @@ export default {
             <div class="flex-grow overflow-y-auto px-2 py-2 space-y-3">
                 <template v-if="groupedRows.length > 0">
                     <div v-for="g in groupedRows" :key="g.group">
-                        <div class="text-[10px] text-gray-500 font-semibold px-1 mb-1 sticky top-0 bg-gray-50/95 py-0.5">{{ g.group }}</div>
+                        <div class="text-xs text-gray-500 font-semibold px-1 mb-1 sticky top-0 bg-gray-50/95 py-0.5">{{ g.group }}</div>
                         <ul class="space-y-1">
                             <li v-for="row in g.members" :key="row.userId"
                                 class="px-1 py-0.5 rounded hover:bg-white/80">
@@ -225,8 +226,8 @@ export default {
                                         :class="['presence-dot flex-shrink-0', presenceDotClass(row)]"
                                         :title="presenceTitle(row.presence)"></span>
                                     <span v-else class="w-2 flex-shrink-0"></span>
-                                    <span class="text-xs font-medium text-gray-800 truncate min-w-0 flex-shrink">{{ row.userName }}</span>
-                                    <span :class="['ml-auto flex-shrink-0 inline-flex px-1 py-px rounded-full border text-[9px] leading-tight', row.status.colorClass]">
+                                    <span class="text-sm font-medium text-gray-800 truncate min-w-0 flex-shrink">{{ row.userName }}</span>
+                                    <span :class="['ml-auto flex-shrink-0 inline-flex px-1.5 py-0.5 rounded-full border text-[11px] leading-tight', row.status.colorClass]">
                                         {{ row.status.label }}
                                     </span>
                                 </div>
@@ -234,11 +235,11 @@ export default {
                                     class="pl-3.5 mt-0.5">
                                     <button v-if="presenceMapUrl(row.presence)" type="button"
                                         @click="openMap(presenceMapUrl(row.presence))"
-                                        class="text-[9px] text-blue-600 hover:underline text-left truncate max-w-full block"
+                                        class="text-[11px] text-blue-600 hover:underline text-left truncate max-w-full block"
                                         :title="'在 Google Maps 查看：' + presenceLocationLabel(row.presence)">
                                         📍 {{ presenceLocationLabel(row.presence) }}
                                     </button>
-                                    <span v-else class="text-[9px] text-gray-400 truncate block">
+                                    <span v-else class="text-[11px] text-gray-400 truncate block">
                                         📍 {{ presenceLocationLabel(row.presence) }}
                                     </span>
                                 </div>
@@ -246,7 +247,7 @@ export default {
                         </ul>
                     </div>
                 </template>
-                <p v-else class="text-xs text-gray-500 text-center py-8">載入員工資料中…</p>
+                <p v-else class="text-sm text-gray-500 text-center py-8">載入員工資料中…</p>
             </div>
         </aside>
     `,

@@ -78,11 +78,11 @@ export function buildAiAnalysisHtml(report, opts) {
     }
 
     const reviewedHtml = reviewed
-        ? `<p class="text-[10px] text-emerald-700 mt-1 font-medium">✓ 已人工覆核：${escapeAiHtml(reviewed)}</p>`
+        ? `<p class="text-xs text-emerald-700 mt-1 font-medium">✓ 已讀：${escapeAiHtml(reviewed)}</p>`
         : '';
 
     const markBtnHtml = (opts.console && !reviewed && summary)
-        ? `<button type="button" class="btn btn-primary mt-2 text-xs py-1 px-2" data-action="markAiReviewed" data-log-id="${escapeAiHtml(logId)}">標記已人工看過</button>`
+        ? `<button type="button" class="btn btn-primary mt-2 text-xs py-1 px-2" data-action="markAiReviewed" data-log-id="${escapeAiHtml(logId)}">標記已讀</button>`
         : '';
 
     const disclaimerClass = opts.console ? 'text-[10px] text-gray-400 mt-1.5' : 'text-[10px] text-gray-400 mt-1.5';
