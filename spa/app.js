@@ -1,7 +1,7 @@
 import Dashboard from './Dashboard.js?v=26.05.07.3';
 import ProjectBoard from './ProjectBoard.js';
 import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.06.21.2';
-import HubLeftSidebar from './HubLeftSidebar.js?v=26.06.21.1';
+import HubLeftSidebar from './HubLeftSidebar.js?v=26.06.21.2';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
 import { saveCache, loadCache, loadHubPresenceCache, saveHubPresenceCache, loadDailyCache, saveDailyCache, purgeStaleDailyCaches, hubSidebarDailyCacheKey, hubPresenceTodayStr } from '../shared/js/utils.js';

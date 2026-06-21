@@ -1,4 +1,4 @@
-const { computed } = Vue;
+const { computed, toRefs } = Vue;
 
 export default {
     name: 'HubLeftSidebar',
@@ -11,6 +11,7 @@ export default {
         'paymentTodosLoading'
     ],
     setup(props) {
+        const { todayReportsLoading, paymentTodosLoading } = toRefs(props);
         const reportUrl = '#/report';
         const accountingHubUrl = '#/accounting';
         const vendorPaymentUrl = '#/accounting/vendor-payment-finance';
