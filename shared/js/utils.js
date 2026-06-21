@@ -210,12 +210,105 @@ export function loadHubPresenceCache() {
   return null;
 }
 
-/** 寫入今日燈號快取（內含 date 欄位，TTL 1 天） */
+/** 次日凌晨 00:00（本地時區） */
+export function getNextMidnightMs(from = new Date()) {
+  const d = new Date(from);
+  d.setDate(d.getDate() + 1);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+/** 依日期鍵寫入快取（過期：隔日 00:00） */
+export function saveDailyCache(key, data, dateStr = hubPresenceTodayStr()) {
+  const cache = {
+    data: { date: dateStr, payload: data },
+    expires: getNextMidnightMs()
+  };
+  try {
+    localStorage.setItem(key, JSON.stringify(cache));
+  } catch (e) {
+    console.error('儲存每日快取失敗:', e);
+  }
+}
+
+/** 讀取依日期鍵的快取；非今日則回傳 null */
+export function loadDailyCache(key, dateStr = hubPresenceTodayStr()) {
+  const cached = localStorage.getItem(key);
+  if (!cached) return null;
+  try {
+    const cache = JSON.parse(cached);
+    if (cache.expires < Date.now()) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    const raw = cache.data;
+    if (!raw || raw.date !== dateStr) return null;
+    return raw.payload ?? null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** 清除非今日的 `prefix_YYYY-MM-DD` 快取 */
+export function purgeStaleDailyCaches(prefix) {
+  const todaySuffix = hubPresenceTodayStr();
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(prefix) && !k.endsWith(todaySuffix)) {
+        localStorage.removeItem(k);
+      }
+    }
+  } catch (e) {
+    console.warn('[Hub] 清除舊每日快取失敗', e);
+  }
+}
+
+/** 主控台側欄快取鍵（依日期） */
+export function hubSidebarDailyCacheKey(prefix, date = new Date()) {
+  const d = date;
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const ds = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  return `${prefix}_${ds}`;
+}
+
+/** 由燈號資料組 Google Maps 連結 */
+export function buildPresenceMapUrl(presence) {
+  if (!presence) return '';
+  if (presence.mapUrl) return presence.mapUrl;
+  const lat = parseFloat(presence.lat);
+  const lng = parseFloat(presence.lng);
+  if (!isNaN(lat) && !isNaN(lng)) {
+    return `https://www.google.com/maps?q=${lat},${lng}`;
+  }
+  const label = presence.locationLabel || presence.proximityStatus || presence.closestSiteName || presence.address || '';
+  if (!label) return '';
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(label)}`;
+}
+
+/** 打卡範圍顯示文字（優先 proximity，其次地址／案場名） */
+export function buildPresenceLocationLabel(presence) {
+  if (!presence) return '';
+  if (presence.locationLabel) return presence.locationLabel;
+  const prox = String(presence.proximityStatus || '').trim();
+  if (prox) return prox;
+  if (presence.address) return presence.address;
+  if (presence.closestSiteName) return presence.closestSiteName;
+  return '';
+}
+
+/** 寫入今日燈號快取（內含 date 欄位，過期時間為隔日 00:00） */
 export function saveHubPresenceCache(presence) {
-  saveCache(hubPresenceCacheKey(), {
-    date: hubPresenceTodayStr(),
-    presence
-  }, 1);
+  const key = hubPresenceCacheKey();
+  const cache = {
+    data: { date: hubPresenceTodayStr(), presence },
+    expires: getNextMidnightMs()
+  };
+  try {
+    localStorage.setItem(key, JSON.stringify(cache));
+  } catch (e) {
+    console.error('儲存燈號快取失敗:', e);
+  }
 }
 
 /**

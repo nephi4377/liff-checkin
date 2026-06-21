@@ -1,15 +1,17 @@
 import Dashboard from './Dashboard.js?v=26.05.07.3';
 import ProjectBoard from './ProjectBoard.js';
+import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.06.21.2';
+import HubLeftSidebar from './HubLeftSidebar.js?v=26.06.21.1';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
-import { saveCache, loadCache, loadHubPresenceCache, saveHubPresenceCache } from '../shared/js/utils.js';
+import { saveCache, loadCache, loadHubPresenceCache, saveHubPresenceCache, loadDailyCache, saveDailyCache, purgeStaleDailyCaches, hubSidebarDailyCacheKey, hubPresenceTodayStr } from '../shared/js/utils.js';
 import { request as apiRequest } from '../modules/projects/js/projectApi.js'; // [重構] 改為引入統一的 projectApi 模組
 import { initializeTaskSender } from '../shared/js/taskSender.js'; // [v509.0 修正] 更新共用模組路徑
 
 const { createApp, ref, onMounted, computed, watch, nextTick } = Vue;
 
 const App = {
-    components: { Dashboard, ProjectBoard, IframeView }, // [v411.0 SPA化] 註冊 Iframe 元件
+    components: { Dashboard, ProjectBoard, StaffTodaySidebar, HubLeftSidebar, IframeView }, // [v411.0 SPA化] 註冊 Iframe 元件
     setup() {
         // --- 環境設定 ---
         // [v602.0 重構] 所有 URL 和 LIFF ID 改為從 config.js 讀取
@@ -29,6 +31,10 @@ const App = {
         const pendingRequestsRaw = ref([]);
         const todayPresence = ref({});
         const presenceLoading = ref(false);
+        const todayReports = ref([]);
+        const todayReportsLoading = ref(false);
+        const paymentTodos = ref({ pendingReview: [], pendingPayment: [] });
+        const paymentTodosLoading = ref(false);
         const currentView = ref({ name: 'dashboard' });
         const lightbox = ref({
             visible: false,
@@ -84,6 +90,16 @@ const App = {
         if (cachedPresence && typeof cachedPresence === 'object') {
             todayPresence.value = cachedPresence;
         }
+        purgeStaleDailyCaches('spa_hub_today_reports_');
+        purgeStaleDailyCaches('spa_hub_payment_todos_');
+        const cachedTodayReports = loadDailyCache(hubSidebarDailyCacheKey('spa_hub_today_reports'));
+        if (Array.isArray(cachedTodayReports)) {
+            todayReports.value = cachedTodayReports;
+        }
+        const cachedPaymentTodos = loadDailyCache(hubSidebarDailyCacheKey('spa_hub_payment_todos'));
+        if (cachedPaymentTodos && typeof cachedPaymentTodos === 'object') {
+            paymentTodos.value = cachedPaymentTodos;
+        }
         // --- 快取策略結束 ---
 
         // --- 計算屬性 (Computed) ---
@@ -127,6 +143,8 @@ const App = {
             '#/budget-audit': { name: 'iframe', src: 'tools/BudgetAuditor_Standalone_V2.html', title: '案場驗收表' },
             '#/accounting-ingest': { name: 'iframe', src: 'modules/accounting/accounting_ingest.html', title: '收支登錄' },
             '#/accounting': { name: 'iframe', src: 'modules/accounting/index.html', title: '添心會計' },
+            '#/accounting/vendor-payment-approve': { name: 'iframe', src: 'modules/accounting/vendor_payment_approve.html', title: '廠商請款審核' },
+            '#/accounting/vendor-payment-finance': { name: 'iframe', src: 'modules/accounting/vendor_payment_finance.html', title: '廠商待匯款' },
         };
         // [v513.0 新增] 補上員工資料編輯頁面的路由
         routes['#/employee-editor'] = { name: 'iframe', src: 'modules/attendance/employee_editor.html', title: '員工資料編輯' }; // [v515.0 修正] 改為絕對路徑
@@ -227,6 +245,83 @@ const App = {
                 console.warn('[Hub] 背景更新燈號失敗（維持快取）:', e);
             }).finally(() => {
                 presenceLoading.value = false;
+            });
+        };
+
+        const fetchTodayReports = async () => {
+            if (!userProfile.value) return { success: false };
+            const todayStr = hubPresenceTodayStr();
+            const url = new URL(CONFIG.GAS_WEB_APP_URL);
+            url.searchParams.append('page', 'get_daily_reports');
+            url.searchParams.append('startDate', todayStr);
+            url.searchParams.append('endDate', todayStr);
+            url.searchParams.append('userName', userProfile.value.displayName);
+            const response = await fetch(url);
+            return response.json();
+        };
+
+        const refreshTodayReportsInBackground = () => {
+            todayReportsLoading.value = true;
+            return fetchTodayReports().then((result) => {
+                if (result && result.success && Array.isArray(result.data)) {
+                    if (JSON.stringify(todayReports.value) !== JSON.stringify(result.data)) {
+                        todayReports.value = result.data;
+                    }
+                    saveDailyCache(hubSidebarDailyCacheKey('spa_hub_today_reports'), result.data);
+                }
+            }).catch((e) => {
+                console.warn('[Hub] 背景更新今日回報失敗（維持快取）:', e);
+            }).finally(() => {
+                todayReportsLoading.value = false;
+            });
+        };
+
+        const accountingPost = async (body) => {
+            const res = await fetch(CONFIG.ACCOUNTING_GAS_WEB_APP_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify(body)
+            });
+            return res.json();
+        };
+
+        const fetchPaymentTodos = async () => {
+            const perm = Number(currentUser.value?.permission || 0);
+            if (perm < 4) return { pendingReview: [], pendingPayment: [] };
+            let idToken = '';
+            try {
+                if (typeof liff !== 'undefined' && liff.getIDToken) {
+                    idToken = liff.getIDToken() || '';
+                }
+            } catch (e) { /* 本地測試略過 */ }
+            if (!idToken) return null;
+            const auth = { liff_id_token: idToken };
+            const todos = { pendingReview: [], pendingPayment: [] };
+            if (perm >= 5) {
+                const rv = await accountingPost({ action: 'vendor_payment_list', auth, status: 'pending_review' });
+                if (rv && rv.success) todos.pendingReview = rv.items || [];
+            }
+            if (perm >= 4) {
+                const pay = await accountingPost({ action: 'vendor_payment_list', auth, status: 'pending_payment' });
+                if (pay && pay.success) todos.pendingPayment = pay.items || [];
+            }
+            return todos;
+        };
+
+        const refreshPaymentTodosInBackground = () => {
+            if (Number(currentUser.value?.permission || 0) < 4) return Promise.resolve();
+            paymentTodosLoading.value = true;
+            return fetchPaymentTodos().then((todos) => {
+                if (todos && typeof todos === 'object') {
+                    if (JSON.stringify(paymentTodos.value) !== JSON.stringify(todos)) {
+                        paymentTodos.value = todos;
+                    }
+                    saveDailyCache(hubSidebarDailyCacheKey('spa_hub_payment_todos'), todos);
+                }
+            }).catch((e) => {
+                console.warn('[Hub] 背景更新款項待辦失敗（維持快取）:', e);
+            }).finally(() => {
+                paymentTodosLoading.value = false;
             });
         };
 
@@ -399,8 +494,12 @@ const App = {
                     pendingRequestsRaw.value = attendanceResult.pendingRequests || [];
                 }
 
-                // 今日燈號：SWR（先顯示快取，背景抓最新；TTL 1 天）
+                // 今日燈號：SWR（先顯示快取，背景抓最新；TTL 隔日 00:00）
                 refreshTodayPresenceInBackground();
+
+                // 主控台側欄：今日回報、款項待辦（SWR + 每日快取）
+                refreshTodayReportsInBackground();
+                refreshPaymentTodosInBackground();
 
                 // 背景抓當月班表（SWR 策略：先顯示快取，背景更新後無縫替換，TTL 7 天）。
                 // 有無快取都會打 API；失敗時卡片維持快取內容。
@@ -507,6 +606,10 @@ const App = {
             pendingRequestsRaw,
             todayPresence,
             presenceLoading,
+            todayReports,
+            todayReportsLoading,
+            paymentTodos,
+            paymentTodosLoading,
             monthSchedule,
             scheduleLoading,
             hasAdminRights,
@@ -558,47 +661,55 @@ const App = {
                 </div>
             </header>
 
-            <!-- [v419.0 UX優化] 主要內容區的寬度限制與 header 分離 -->
-            <!-- 【您的要求】核心修正：當視圖為 iframe 時，移除 main 元素的寬度限制，讓 iframe 可以全寬顯示 -->
-            <main :class="['flex-grow overflow-y-auto', { 'container mx-auto max-w-2xl px-4 sm:px-6 lg:px-8': currentView.name !== 'iframe' }]">
-                <!-- [v428.0 UX優化] 將 Dashboard 和 ProjectBoard 都放入限寬容器中，提升閱讀體驗 -->
-                <!-- 【您的要求】核心修正：移除內層的寬度限制，統一由 main 元素控制 -->
-                <div v-if="currentView.name === 'dashboard'" class="py-6">
-                    <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :presenceLoading="presenceLoading" :pendingRequestsRaw="pendingRequestsRaw" :todayPresence="todayPresence" :hasAdminRights="hasAdminRights" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" />
-                    <!-- 任務交辦中心容器 -->
-                    <div v-if="hasAdminRights" id="task-sender-container" class="mt-4"></div>
-                    <!-- 公開落地頁：緊接在任務交辦中心之後（無管理權者無交辦區，此景為主控台捲動到底） -->
-                    <div class="mt-4 bg-emerald-50/90 px-4 py-3 rounded-lg border border-emerald-200 flex flex-wrap items-center justify-between gap-3">
-                        <p class="text-sm text-gray-800 m-0 max-w-full">
-                            <span class="font-semibold text-emerald-900">公開落地頁</span>
-                            <span class="text-gray-600">（官網介紹／案例，貼給客戶）</span>
-                        </p>
-                        <div class="flex flex-wrap items-center gap-2 flex-shrink-0">
-                            <a :href="landingPagePublicUrl" target="_blank" rel="noopener noreferrer"
-                                class="inline-flex items-center text-sm font-semibold bg-white text-emerald-800 border border-emerald-300 py-1.5 px-3 rounded-md hover:bg-emerald-50">開啟網站</a>
-                            <button type="button" @click="copyLandingPageUrl"
-                                class="inline-flex items-center text-sm font-semibold bg-emerald-600 text-white py-1.5 px-3 rounded-md hover:bg-emerald-700">
-                                {{ landingPageUrlCopied ? '已複製' : '複製網址' }}
-                            </button>
+            <!-- [v419.0 UX優化] 主要內容區的寬度限制與 header 分離；桌面版管理員右側顯示今日燈號 -->
+            <div class="flex flex-grow overflow-hidden min-h-0">
+                <HubLeftSidebar v-if="hasAdminRights && currentView.name === 'dashboard'"
+                    :allProjects="allProjects"
+                    :currentUser="currentUser"
+                    :todayReports="todayReports"
+                    :todayReportsLoading="todayReportsLoading"
+                    :paymentTodos="paymentTodos"
+                    :paymentTodosLoading="paymentTodosLoading" />
+                <main :class="['flex-grow overflow-y-auto min-w-0', { 'container mx-auto max-w-2xl px-4 sm:px-6 lg:px-8': currentView.name !== 'iframe' }]">
+                    <div v-if="currentView.name === 'dashboard'" class="py-6">
+                        <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :presenceLoading="presenceLoading" :pendingRequestsRaw="pendingRequestsRaw" :todayPresence="todayPresence" :hasAdminRights="hasAdminRights" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" />
+                        <div v-if="hasAdminRights" id="task-sender-container" class="mt-4"></div>
+                        <div class="mt-4 bg-emerald-50/90 px-4 py-3 rounded-lg border border-emerald-200 flex flex-wrap items-center justify-between gap-3">
+                            <p class="text-sm text-gray-800 m-0 max-w-full">
+                                <span class="font-semibold text-emerald-900">公開落地頁</span>
+                                <span class="text-gray-600">（官網介紹／案例，貼給客戶）</span>
+                            </p>
+                            <div class="flex flex-wrap items-center gap-2 flex-shrink-0">
+                                <a :href="landingPagePublicUrl" target="_blank" rel="noopener noreferrer"
+                                    class="inline-flex items-center text-sm font-semibold bg-white text-emerald-800 border border-emerald-300 py-1.5 px-3 rounded-md hover:bg-emerald-50">開啟網站</a>
+                                <button type="button" @click="copyLandingPageUrl"
+                                    class="inline-flex items-center text-sm font-semibold bg-emerald-600 text-white py-1.5 px-3 rounded-md hover:bg-emerald-700">
+                                    {{ landingPageUrlCopied ? '已複製' : '複製網址' }}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div v-else-if="currentView.name === 'project-board'" class="py-6">
-                     <ProjectBoard :projects="allProjects" :userProfile="userProfile" :currentUser="currentUser" />
-                </div>
-                <!-- [v544.0 核心修正] 增加 v-if="userProfile" 判斷，確保在 userProfile 載入完成後才渲染 iframe -->
-                <div v-else-if="currentView.name === 'iframe' && userProfile" class="h-full">
-                    <!-- [v424.0 架構優化] 根據路由動態組合 iframe 的 src -->
-                    <IframeView :src="currentView.src + 
-                        (currentView.src.includes('?') ? '&' : '?') + 
-                        'uid=' + userProfile.userId + 
-                        '&name=' + userProfile.displayName +
-                        '&permission=' + (currentUser?.permission || 1) +
-                        '&shiftStart=' + (currentUser?.shiftStart || '08:30') +
-                        '&shiftEnd=' + (currentUser?.shiftEnd || '17:30') +
-                        (currentView.params || '')" />
-                </div>
-            </main>
+                    <div v-else-if="currentView.name === 'project-board'" class="py-6">
+                         <ProjectBoard :projects="allProjects" :userProfile="userProfile" :currentUser="currentUser" />
+                    </div>
+                    <div v-else-if="currentView.name === 'iframe' && userProfile" class="h-full">
+                        <IframeView :src="currentView.src + 
+                            (currentView.src.includes('?') ? '&' : '?') + 
+                            'uid=' + userProfile.userId + 
+                            '&name=' + userProfile.displayName +
+                            '&permission=' + (currentUser?.permission || 1) +
+                            '&shiftStart=' + (currentUser?.shiftStart || '08:30') +
+                            '&shiftEnd=' + (currentUser?.shiftEnd || '17:30') +
+                            (currentView.params || '')" />
+                    </div>
+                </main>
+                <StaffTodaySidebar v-if="hasAdminRights"
+                    :allEmployees="allEmployees"
+                    :monthSchedule="monthSchedule"
+                    :todayPresence="todayPresence"
+                    :presenceLoading="presenceLoading"
+                    :scheduleLoading="scheduleLoading" />
+            </div>
         </div>
     `
 };
