@@ -53,10 +53,16 @@
 
     <div class="card">
       <h3 style="margin:0 0 8px">新增待匯款</h3>
-      <label class="inline-chk"><input type="checkbox" id="manualMode" /> 不選廠商，手動輸入帳戶（一次性／員工）</label>
+      <label class="inline-chk"><input type="radio" name="payeeMode" value="vendor" checked /> 廠商</label>
+      <label class="inline-chk"><input type="radio" name="payeeMode" value="employee" /> 員工</label>
+      <label class="inline-chk"><input type="radio" name="payeeMode" value="manual" /> 手動帳戶</label>
       <div id="vendorPickBlock">
         <label>廠商</label>
         <select id="newVendor"></select>
+      </div>
+      <div id="employeePickBlock" class="hidden">
+        <label>員工（Checkin 員工資料）</label>
+        <select id="newEmployee"></select>
       </div>
       <div id="manualPayeeBlock" class="hidden">
         <label>收款人戶名</label>
@@ -110,7 +116,9 @@
     (function () {
       var session = null;
       var vendors = [];
+      var employees = [];
       var items = [];
+      var payeeMode = 'vendor';
 
       function setMsg(t) { document.getElementById('msg').textContent = t || ''; }
       function setOk(t) { document.getElementById('ok').textContent = t || ''; }
@@ -118,7 +126,10 @@
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
       }
-      function isManualMode() { return document.getElementById('manualMode').checked; }
+      function currentPayeeMode() {
+        var checked = document.querySelector('input[name="payeeMode"]:checked');
+        return checked ? checked.value : 'vendor';
+      }
 
       function bankLine(row) {
         var code = String(row.bank_code || '').trim();
@@ -135,16 +146,44 @@
         });
       }
 
-      function syncManualMode() {
-        var manual = isManualMode();
-        document.getElementById('vendorPickBlock').classList.toggle('hidden', manual);
-        document.getElementById('manualPayeeBlock').classList.toggle('hidden', !manual);
-        if (manual) {
-          document.getElementById('newVendor').value = '';
-          setBankFieldsReadonly(false);
+      function syncPayeeMode() {
+        payeeMode = currentPayeeMode();
+        document.getElementById('vendorPickBlock').classList.toggle('hidden', payeeMode !== 'vendor');
+        document.getElementById('employeePickBlock').classList.toggle('hidden', payeeMode !== 'employee');
+        document.getElementById('manualPayeeBlock').classList.toggle('hidden', payeeMode !== 'manual');
+        if (payeeMode === 'manual') setBankFieldsReadonly(false);
+        else onPayeePick();
+      }
+
+      function fillEmployeeSelect() {
+        var sel = document.getElementById('newEmployee');
+        sel.innerHTML = '<option value="">— 請選擇 —</option>';
+        employees.forEach(function (e) {
+          var opt = document.createElement('option');
+          opt.value = e.userId;
+          opt.textContent = (e.userName || '') + ((e.bank_code && e.account_no) ? '' : '（帳戶待補）');
+          sel.appendChild(opt);
+        });
+      }
+
+      function onPayeePick() {
+        if (payeeMode === 'manual') return;
+        var row = null;
+        if (payeeMode === 'vendor') {
+          var vid = document.getElementById('newVendor').value;
+          row = vendors.find(function (x) { return x.vendor_id === vid; });
         } else {
-          onVendorPick();
+          var uid = document.getElementById('newEmployee').value;
+          row = employees.find(function (x) { return x.userId === uid; });
         }
+        if (!row) {
+          setBankFieldsReadonly(false);
+          return;
+        }
+        document.getElementById('newBank').value = row.bank_code || '';
+        document.getElementById('newAcct').value = row.account_no || '';
+        document.getElementById('newAcctName').value = row.account_name || row.userName || row.name || '';
+        setBankFieldsReadonly(true);
       }
 
       function fillVendorSelect() {
@@ -159,19 +198,7 @@
         });
       }
 
-      function onVendorPick() {
-        if (isManualMode()) return;
-        var vid = document.getElementById('newVendor').value;
-        var v = vendors.find(function (x) { return x.vendor_id === vid; });
-        if (!v) {
-          setBankFieldsReadonly(false);
-          return;
-        }
-        document.getElementById('newBank').value = v.bank_code || '';
-        document.getElementById('newAcct').value = v.account_no || '';
-        document.getElementById('newAcctName').value = v.account_name || '';
-        setBankFieldsReadonly(true);
-      }
+      function onVendorPick() { onPayeePick(); }
 
       function downloadTxt(filename, content) {
         var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
@@ -199,8 +226,9 @@
         info.innerHTML =
           '<div><strong>' + (row.vendor_name || '收款人') + '</strong> ' +
           '<span class="tag">' + (row.doc_type || '請款') + '</span>' +
+          (row.source === 'staff_request' ? '<span class="tag pay">員工請款</span>' : '') +
           (row.source === 'finance_manual' ? '<span class="tag pay">財務新增</span>' : '') +
-          (!row.vendor_id ? '<span class="tag pay">手動帳戶</span>' : '') +
+          (!row.vendor_id && row.source !== 'staff_request' ? '<span class="tag pay">手動帳戶</span>' : '') +
           '</div>' +
           '<div class="sub">$' + amount.toLocaleString('zh-TW') + ' · 案號 ' + (row.project_no || '—') + '</div>' +
           (row.item_desc ? '<div class="sub">' + row.item_desc + '</div>' : '') +
@@ -263,8 +291,11 @@
         items.forEach(function (row) { box.appendChild(renderItem(row)); });
       }
 
-      document.getElementById('manualMode').addEventListener('change', syncManualMode);
-      document.getElementById('newVendor').addEventListener('change', onVendorPick);
+      document.querySelectorAll('input[name="payeeMode"]').forEach(function (el) {
+        el.addEventListener('change', syncPayeeMode);
+      });
+      document.getElementById('newVendor').addEventListener('change', onPayeePick);
+      document.getElementById('newEmployee').addEventListener('change', onPayeePick);
       document.getElementById('reloadBtn').addEventListener('click', loadList);
       document.getElementById('selAllBtn').addEventListener('click', function () {
         document.querySelectorAll('#list input.chk').forEach(function (el) { el.checked = true; });
@@ -299,10 +330,11 @@
       document.getElementById('addBtn').addEventListener('click', async function () {
         setMsg('');
         setOk('');
-        var manual = isManualMode();
+        var mode = currentPayeeMode();
         var payload = {
-          vendor_id: manual ? '' : document.getElementById('newVendor').value,
-          vendor_name: manual ? document.getElementById('manualPayee').value.trim() : '',
+          vendor_id: mode === 'vendor' ? document.getElementById('newVendor').value : '',
+          employee_user_id: mode === 'employee' ? document.getElementById('newEmployee').value : '',
+          vendor_name: mode === 'manual' ? document.getElementById('manualPayee').value.trim() : '',
           amount: document.getElementById('newAmount').value,
           project_no: document.getElementById('newProject').value.trim(),
           item_desc: document.getElementById('newDesc').value.trim(),
@@ -310,7 +342,7 @@
           account_no: document.getElementById('newAcct').value.trim(),
           account_name: document.getElementById('newAcctName').value.trim(),
           note: document.getElementById('newNote').value.trim(),
-          doc_type: manual ? '手動匯款' : '直接匯款'
+          doc_type: mode === 'manual' ? '手動匯款' : '直接匯款'
         };
         var data = await AccountingApi.vendorPaymentCreate(session, payload);
         if (!data.success) { setMsg(data.message || '新增失敗'); return; }
@@ -349,13 +381,29 @@
           document.getElementById('userLine').textContent =
             (session.auth.display_name || session.profile.displayName) + ' · 權限 ' + session.auth.permission;
           showApp();
-          var cached = AccountingCache.get(session);
-          if (cached) vendors = (cached.masters && cached.masters.vendors) || [];
+          var ctx = await AccountingApi.paymentRequestContext(session);
+          if (ctx.success) {
+            vendors = ctx.vendors || [];
+            employees = ctx.employees || [];
+          } else {
+            var cached = AccountingCache.get(session);
+            if (cached) vendors = (cached.masters && cached.masters.vendors) || [];
+          }
           fillVendorSelect();
+          fillEmployeeSelect();
+          syncPayeeMode();
           AccountingCache.load(session).then(function (c) {
-            vendors = AccountingCache.vendors(session) || [];
+            vendors = AccountingCache.vendors(session) || vendors;
             fillVendorSelect();
           }).catch(function () {});
+          if (!employees.length) {
+            AccountingApi.paymentRequestContext(session).then(function (c2) {
+              if (c2.success) {
+                employees = c2.employees || [];
+                fillEmployeeSelect();
+              }
+            }).catch(function () {});
+          }
           await loadList();
         } catch (e) {
           document.getElementById('loading').textContent = e.message || String(e);

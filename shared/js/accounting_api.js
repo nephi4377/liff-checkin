@@ -193,6 +193,7 @@ var AccountingApi = (function () {
         action: 'vendor_payment_create',
         auth: resolveAuth(sessionOrToken),
         vendor_id: payload.vendor_id,
+        employee_user_id: payload.employee_user_id,
         vendor_name: payload.vendor_name,
         amount: payload.amount,
         project_no: payload.project_no,
@@ -203,6 +204,31 @@ var AccountingApi = (function () {
         account_no: payload.account_no,
         account_name: payload.account_name,
         doc_type: payload.doc_type
+      });
+    },
+    paymentRequestContext: function (sessionOrToken) {
+      return post({
+        action: 'payment_request_context',
+        auth: resolveAuth(sessionOrToken)
+      });
+    },
+    staffPaymentSubmit: function (sessionOrToken, payload) {
+      return post({
+        action: 'staff_payment_submit',
+        auth: resolveAuth(sessionOrToken),
+        vendor_id: payload.vendor_id,
+        employee_user_id: payload.employee_user_id,
+        vendor_name: payload.vendor_name,
+        amount: payload.amount,
+        project_no: payload.project_no,
+        item_desc: payload.item_desc,
+        txn_date: payload.txn_date,
+        note: payload.note,
+        bank_code: payload.bank_code,
+        account_no: payload.account_no,
+        account_name: payload.account_name,
+        doc_type: payload.doc_type,
+        drive_urls: payload.drive_urls
       });
     },
     vendorPaymentUpdate: function (sessionOrToken, paymentRequestId, patch) {

@@ -325,6 +325,22 @@ export function resolvePresenceDotClass({ dayKey, statusKind, presence, presence
   return 'presence-none';
 }
 
+/** HH:mm → 當日分鐘數；無效回傳 null */
+export function parseTimeToMinutes(hm) {
+  const m = String(hm || '').trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+}
+
+/** 遲到分鐘（扣彈性後）；≤0 表示準時或彈性內 */
+export function computeLateMinutes(checkInTime, shiftStart, flexibleMinutes = 0) {
+  const ci = parseTimeToMinutes(checkInTime);
+  const ss = parseTimeToMinutes(shiftStart);
+  if (ci == null || ss == null) return 0;
+  const flex = Math.max(0, Number(flexibleMinutes) || 0);
+  return Math.max(0, ci - ss - flex);
+}
+
 /**
  * [v552.0 新增] 以 GET 請求方式發送 API Payload，用於繞過 CORS 問題。
  * @param {string} baseUrl - 後端 API 的基礎 URL。

@@ -246,7 +246,7 @@ export function _buildLogCard(log, isDraftMode) {
         });
     }
 
-    const aiHtml = buildAiAnalysisHtml(log, { console: true, logId: log.LogID });
+    const aiHtml = buildAiAnalysisHtml(log, { console: true, logId: log.LogID, currentUserId: state.currentUserId });
     if (aiHtml) {
         const aiWrap = document.createElement('div');
         aiWrap.className = 'site-ai-wrap';

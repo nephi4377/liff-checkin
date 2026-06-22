@@ -27,6 +27,95 @@ export function escapeAiHtml(text) {
         .replace(/"/g, '&quot;');
 }
 
+/** @returns {{ uid: string, name: string }[]} */
+export function parseAiHumanReviewed(raw) {
+    if (!raw || !String(raw).trim()) return [];
+    try {
+        const arr = JSON.parse(String(raw));
+        if (!Array.isArray(arr)) return [];
+        return arr
+            .filter(x => x && String(x.uid || '').trim())
+            .map(x => ({
+                uid: String(x.uid).trim(),
+                name: String(x.name || x.uid).trim()
+            }));
+    } catch (e) {
+        return [];
+    }
+}
+
+export function serializeAiHumanReviewed(list) {
+    if (!list || !list.length) return '';
+    return JSON.stringify(list);
+}
+
+export function isAiReviewedByUser(raw, userId) {
+    const uid = String(userId || '').trim();
+    if (!uid) return false;
+    return parseAiHumanReviewed(raw).some(r => r.uid === uid);
+}
+
+export function formatAiHumanReviewedLabel(raw) {
+    const names = parseAiHumanReviewed(raw).map(r => r.name).filter(Boolean);
+    if (!names.length) return '';
+    return names.join('、');
+}
+
+export function addAiHumanReviewer(raw, uid, name) {
+    const id = String(uid || '').trim();
+    if (!id) return String(raw || '');
+    const list = parseAiHumanReviewed(raw);
+    if (list.some(r => r.uid === id)) return serializeAiHumanReviewed(list);
+    list.push({ uid: id, name: String(name || id).trim() });
+    return serializeAiHumanReviewed(list);
+}
+
+/** @returns {{ photoObservations: {index:number,description:string}[], limitations: string[], qualityFlags: string[], acceptanceLine: string } | null} */
+export function getAiExpandableDetails(findings) {
+    if (!findings) return null;
+    const validated = findings.validated || {};
+    const raw = findings.raw || {};
+    const photoObservations = (raw.photo_observations || [])
+        .slice()
+        .sort((a, b) => (Number(a.photo_index) || 0) - (Number(b.photo_index) || 0))
+        .map(o => ({
+            index: Number(o.photo_index) || 0,
+            description: String(o.description || '').trim()
+        }))
+        .filter(o => o.description);
+    const limitations = raw.limitations || [];
+    const qualityFlags = (validated.accepted_quality_flags || [])
+        .map(f => String(f.issue || '').trim())
+        .filter(Boolean);
+    const acceptanceLine = validated.acceptance_line ? String(validated.acceptance_line).trim() : '';
+    if (!photoObservations.length && !limitations.length && !qualityFlags.length && !acceptanceLine) return null;
+    return { photoObservations, limitations, qualityFlags, acceptanceLine };
+}
+
+function buildAiDetailsPartsHtml(details) {
+    const parts = [];
+    if (details.photoObservations.length) {
+        const items = details.photoObservations.map(o =>
+            `<li class="ml-3 list-disc"><span class="font-semibold">#${o.index}</span> ${escapeAiHtml(o.description)}</li>`
+        ).join('');
+        parts.push('<p class="text-[11px] mt-1 font-semibold">各張照片：</p>'
+            + '<ul class="text-[11px] text-gray-700 space-y-0.5">' + items + '</ul>');
+    }
+    if (details.limitations.length) {
+        parts.push('<p class="text-[11px] text-gray-600 mt-1"><span class="font-semibold">限制：</span>'
+            + escapeAiHtml(details.limitations.join('；')) + '</p>');
+    }
+    if (details.qualityFlags.length) {
+        parts.push('<p class="text-[11px] mt-1"><span class="font-semibold">品質留意：</span>'
+            + escapeAiHtml(details.qualityFlags.join('、')) + '</p>');
+    }
+    if (details.acceptanceLine) {
+        parts.push('<p class="text-[11px] mt-1"><span class="font-semibold">驗收對照：</span>'
+            + escapeAiHtml(details.acceptanceLine) + '</p>');
+    }
+    return parts;
+}
+
 /**
  * @param {object} report ProjectLog 列
  * @param {{ console?: boolean, logId?: string }} [opts]
@@ -40,48 +129,32 @@ export function buildAiAnalysisHtml(report, opts) {
 
     const meta = AI_SIGNAL_META[signal] || AI_SIGNAL_META.skipped;
     const findings = parseAiFindingsJson(report);
-    const validated = findings && findings.validated ? findings.validated : null;
-    const acceptanceLine = validated && validated.acceptance_line ? validated.acceptance_line : '';
-    const reviewed = String(report.AI_HumanReviewed || '').trim();
+    const expandable = getAiExpandableDetails(findings);
+    const currentUserId = opts.currentUserId || '';
+    const reviewedByMe = isAiReviewedByUser(report.AI_HumanReviewed, currentUserId);
+    const reviewedLabel = formatAiHumanReviewedLabel(report.AI_HumanReviewed);
 
     const logId = opts.logId || report.LogID || '';
-    const showDetails = (signal === 'yellow' || signal === 'red') && findings;
     const detailId = `ai-detail-${logId}`;
     let detailsHtml = '';
 
-    if (showDetails && findings) {
-        const parts = [];
-        if (findings.raw && findings.raw.limitations && findings.raw.limitations.length) {
-            parts.push('<p class="text-[11px] text-gray-600 mt-1"><span class="font-semibold">限制：</span>'
-                + escapeAiHtml(findings.raw.limitations.join('；')) + '</p>');
-        }
-        if (validated && validated.accepted_quality_flags && validated.accepted_quality_flags.length) {
-            const flags = validated.accepted_quality_flags.map(f => escapeAiHtml(f.issue)).join('、');
-            parts.push('<p class="text-[11px] mt-1"><span class="font-semibold">品質留意：</span>' + flags + '</p>');
-        }
-        if (acceptanceLine) {
-            parts.push('<p class="text-[11px] mt-1"><span class="font-semibold">驗收對照：</span>'
-                + escapeAiHtml(acceptanceLine) + '</p>');
-        }
-        if (parts.length) {
-            detailsHtml = `
-                <button type="button" class="text-[11px] font-semibold ${meta.text} underline mt-1.5"
-                    onclick="document.getElementById('${detailId}').classList.toggle('hidden')">
-                    展開細項
-                </button>
-                <div id="${detailId}" class="hidden mt-1 pl-2 border-l-2 ${meta.border}">
-                    ${parts.join('')}
-                </div>`;
-        }
-    } else if (acceptanceLine) {
-        detailsHtml = `<p class="text-[11px] mt-1 text-gray-600">${escapeAiHtml(acceptanceLine)}</p>`;
+    if (expandable) {
+        const parts = buildAiDetailsPartsHtml(expandable);
+        detailsHtml = `
+            <button type="button" class="text-[11px] font-semibold ${meta.text} underline mt-1.5"
+                onclick="document.getElementById('${detailId}').classList.toggle('hidden')">
+                展開細項
+            </button>
+            <div id="${detailId}" class="hidden mt-1 pl-2 border-l-2 ${meta.border}">
+                ${parts.join('')}
+            </div>`;
     }
 
-    const reviewedHtml = reviewed
-        ? `<p class="text-xs text-emerald-700 mt-1 font-medium">✓ 已讀：${escapeAiHtml(reviewed)}</p>`
+    const reviewedHtml = reviewedLabel
+        ? `<p class="text-xs text-emerald-700 mt-1 font-medium">✓ 已讀：${escapeAiHtml(reviewedLabel)}</p>`
         : '';
 
-    const markBtnHtml = (opts.console && !reviewed && summary)
+    const markBtnHtml = (opts.console && !reviewedByMe && summary)
         ? `<button type="button" class="btn btn-primary mt-2 text-xs py-1 px-2" data-action="markAiReviewed" data-log-id="${escapeAiHtml(logId)}">標記已讀</button>`
         : '';
 

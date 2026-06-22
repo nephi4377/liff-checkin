@@ -1,4 +1,4 @@
-import { AI_SIGNAL_META, parseAiFindingsJson } from '../modules/projects/js/siteReportAiUi.js';
+import { AI_SIGNAL_META, parseAiFindingsJson, isAiReviewedByUser, getAiExpandableDetails } from '../modules/projects/js/siteReportAiUi.js';
 import { request as apiRequest } from '../modules/projects/js/projectApi.js';
 
 const { computed, ref, toRefs, watch } = Vue;
@@ -38,9 +38,9 @@ function normalizeProjectId(value) {
     return String(value || '').replace(/^#/, '').trim();
 }
 
-function aiPriority(report) {
+function aiPriority(report, userId) {
     const sig = String(report.AI_Signal || '').toLowerCase();
-    const reviewed = String(report.AI_HumanReviewed || '').trim();
+    const reviewed = isAiReviewedByUser(report.AI_HumanReviewed, userId);
     if ((sig === 'yellow' || sig === 'red') && !reviewed) return 0;
     if (sig === 'yellow' || sig === 'red') return 1;
     if (sig === 'green' && !reviewed) return 2;
@@ -105,9 +105,11 @@ export default {
                 .sort((a, b) => String(a.name).localeCompare(String(b.name), 'zh-Hant'));
         });
 
-        /** 未標記已讀的回報（左側只顯示這些） */
+        const currentUserId = computed(() => String(props.currentUser?.userId || '').trim());
+
+        /** 未標記已讀的回報（僅對目前登入者） */
         const unreadReports = computed(() =>
-            localReports.value.filter(r => !String(r.AI_HumanReviewed || '').trim())
+            localReports.value.filter(r => !isAiReviewedByUser(r.AI_HumanReviewed, currentUserId.value))
         );
 
         const reportedTodayProjectIds = computed(() => {
@@ -146,13 +148,14 @@ export default {
             }).sort((a, b) => String(a.name).localeCompare(String(b.name), 'zh-Hant'));
         });
 
-        const sortedReports = computed(() =>
-            [...unreadReports.value].sort((a, b) => {
-                const diff = aiPriority(a) - aiPriority(b);
+        const sortedReports = computed(() => {
+            const uid = currentUserId.value;
+            return [...unreadReports.value].sort((a, b) => {
+                const diff = aiPriority(a, uid) - aiPriority(b, uid);
                 if (diff !== 0) return diff;
                 return new Date(b.Timestamp) - new Date(a.Timestamp);
-            })
-        );
+            });
+        });
 
         const perm = computed(() => Number(props.currentUser?.permission || 0));
         const pendingReview = computed(() => (props.paymentTodos?.pendingReview || []));
@@ -172,16 +175,7 @@ export default {
             return AI_SIGNAL_META[signal] || AI_SIGNAL_META.skipped;
         };
 
-        const getAiDetails = (report) => {
-            const findings = parseAiFindingsJson(report);
-            if (!findings) return null;
-            const validated = findings.validated || {};
-            return {
-                limitations: (findings.raw && findings.raw.limitations) || [],
-                qualityFlags: (validated.accepted_quality_flags || []).map(f => f.issue),
-                acceptanceLine: validated.acceptance_line || ''
-            };
-        };
+        const getAiDetails = (report) => getAiExpandableDetails(parseAiFindingsJson(report));
 
         const hasAiBlock = (report) => !!(report.AI_Signal || report.AI_Summary);
         const isExpanded = (logId) => !!expandedLogIds.value[logId];
@@ -221,7 +215,10 @@ export default {
                 if (!result?.success) {
                     throw new Error(result?.message || '標記失敗');
                 }
-                const next = localReports.value.filter(r => r.LogID !== logId);
+                const reviewedValue = result.data?.AI_HumanReviewed ?? '';
+                const next = localReports.value.map(r =>
+                    r.LogID === logId ? { ...r, AI_HumanReviewed: reviewedValue } : r
+                );
                 syncReports(next);
             } catch (err) {
                 alert('標記失敗：' + (err.message || '請稍後再試'));
@@ -332,12 +329,20 @@ export default {
                                 </div>
                                 <p v-if="report.AI_Summary" class="mt-1 leading-snug" :class="getAiMeta(report).text">{{ report.AI_Summary }}</p>
 
-                                <button v-if="(report.AI_Signal === 'yellow' || report.AI_Signal === 'red') && getAiDetails(report)"
+                                <button v-if="getAiDetails(report)"
                                     type="button" @click="toggleExpanded(report.LogID)"
                                     class="text-xs font-semibold underline mt-1" :class="getAiMeta(report).text">
                                     {{ isExpanded(report.LogID) ? '收合細項' : '展開細項' }}
                                 </button>
                                 <div v-if="isExpanded(report.LogID) && getAiDetails(report)" class="mt-1 pl-2 border-l-2 space-y-1" :class="getAiMeta(report).border">
+                                    <div v-if="getAiDetails(report).photoObservations.length">
+                                        <p class="text-xs font-semibold">各張照片：</p>
+                                        <ul class="text-xs text-gray-700 space-y-0.5 mt-0.5">
+                                            <li v-for="obs in getAiDetails(report).photoObservations" :key="obs.index" class="ml-3 list-disc">
+                                                <span class="font-semibold">#{{ obs.index }}</span> {{ obs.description }}
+                                            </li>
+                                        </ul>
+                                    </div>
                                     <p v-if="getAiDetails(report).limitations.length" class="text-xs text-gray-600">
                                         <span class="font-semibold">限制：</span>{{ getAiDetails(report).limitations.join('；') }}
                                     </p>

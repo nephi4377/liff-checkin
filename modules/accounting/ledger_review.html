@@ -25,6 +25,8 @@
     .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin-right: 6px; }
     .tag.vendor { background: #fef7e0; color: #b06000; }
     .tag.pay { background: #e6f4ea; }
+    .tag.income { background: #e6f4ea; color: #137333; }
+    .tag.expense { background: #fce8e6; color: #c5221f; }
     .tag.exp { background: #fce8e6; }
     .actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     #msg { color: #c5221f; font-size: 14px; }
@@ -40,9 +42,9 @@
   <div id="loading">載入中…</div>
   <div id="app" class="hidden">
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
-    <h2>收支審核</h2>
+    <h2>請款審核</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub">群組記帳待審與廠商請款待審都在這裡；廠商核准後進「待匯款」。</p>
+    <p class="sub">只審「匯款請款」（未實現）；群組記帳的已實現收支不會出現在這裡。</p>
     <div id="msg"></div>
     <div id="ok"></div>
 
@@ -58,12 +60,12 @@
           </select>
         </div>
         <div>
-          <label>匯款狀態</label>
+          <label>付款狀態</label>
           <select id="filterPay">
             <option value="">全部</option>
-            <option value="未匯款">未匯款</option>
+            <option value="未匯款">待匯款</option>
             <option value="已匯款">已匯款</option>
-            <option value="已現金">已現金</option>
+            <option value="已現金">已現金（已實現）</option>
           </select>
         </div>
       </div>
@@ -102,26 +104,26 @@
         return (parseInt(n, 10) || 0).toLocaleString('zh-TW');
       }
 
-      async function approveLedger(item) {
-        var data = await AccountingApi.crudUpdate(session, 'ledger_status', item.ingest_id, {
-          review_status: '已審',
-          payment_status: item.payment_status || '未匯款',
-          note: item.note || ''
-        });
-        if (!data.success) { setMsg(data.message || '核准失敗'); return false; }
-        setOk('已核准：' + (item.party_name || item.summary));
-        return true;
+      function isPaymentRequest(item) {
+        return item.kind === 'vendor_payment' || item.kind === 'staff_payment';
       }
 
-      async function rejectLedger(item) {
-        var data = await AccountingApi.crudUpdate(session, 'ledger_status', item.ingest_id, {
-          review_status: '退回',
-          payment_status: item.payment_status || '未匯款',
-          note: item.note || ''
-        });
-        if (!data.success) { setMsg(data.message || '退回失敗'); return false; }
-        setOk('已退回');
-        return true;
+      function typeTagHtml(item) {
+        if (item.kind === 'staff_payment') {
+          return '<span class="tag expense">員工請款</span><span class="tag expense">未實現</span>';
+        }
+        if (item.kind === 'vendor_payment') {
+          return '<span class="tag vendor">廠商' + (item.doc_type || '請款') + '</span>' +
+            '<span class="tag expense">未實現</span>';
+        }
+        return '<span class="tag">請款</span>';
+      }
+
+      function paymentTagHtml(item) {
+        if (!isPaymentRequest(item)) return '';
+        var ps = String(item.payment_status || '未匯款');
+        if (ps === '未匯款') ps = '待匯款';
+        return '<span class="tag pay">' + ps + '</span>';
       }
 
       async function approveVendor(item) {
@@ -131,7 +133,7 @@
           item_desc: item.summary
         });
         if (!data.success) { setMsg(data.message || '核准失敗'); return false; }
-        setOk('廠商請款已核准，進入待匯款');
+        setOk('已核准，進入待匯款');
         return true;
       }
 
@@ -139,25 +141,22 @@
         var reason = prompt('退回原因（選填）', '主管退回') || '主管退回';
         var data = await AccountingApi.vendorPaymentReject(session, item.payment_request_id, reason);
         if (!data.success) { setMsg(data.message || '退回失敗'); return false; }
-        setOk('已退回廠商請款');
+        setOk('已退回請款');
         return true;
       }
 
       function renderItem(item) {
         var div = document.createElement('div');
         div.className = 'item';
-        var isVendor = item.kind === 'vendor_payment';
-        var typeTag = isVendor
-          ? '<span class="tag vendor">廠商' + (item.doc_type || '請款') + '</span>'
-          : '<span class="tag">' + (item.type || '收支') + '</span>';
+        var isRequest = isPaymentRequest(item);
         div.innerHTML =
           '<div class="headline">' + (item.party_name || '—') + '</div>' +
           '<div class="amount">$' + fmtMoney(item.amount) + '</div>' +
           '<div class="sub">案號 ' + (item.project_no || '—') + ' · ' + (item.txn_date || '—') + '</div>' +
           '<div class="sub">' + (item.summary || '') + '</div>' +
-          '<div style="margin-top:6px">' + typeTag +
+          '<div style="margin-top:6px">' + typeTagHtml(item) +
           '<span class="tag pay">' + (item.review_status || '待審') + '</span>' +
-          '<span class="tag">' + (item.payment_status || '未匯款') + '</span></div>';
+          paymentTagHtml(item) + '</div>';
 
         var actions = document.createElement('div');
         actions.className = 'actions';
@@ -170,17 +169,19 @@
         if (item.review_status !== '已審') {
           var btnOk = document.createElement('button');
           btnOk.className = 'btn btn-ok';
-          btnOk.textContent = isVendor ? '核准 → 待匯款' : '核准';
+          btnOk.textContent = '核准 → 待匯款';
           btnOk.addEventListener('click', async function () {
             setMsg('');
-            var ok = isVendor ? await approveVendor(item) : await approveLedger(item);
+            var ok = isRequest
+              ? (canApproveVendor ? await approveVendor(item) : (setMsg('權限不足（需 ≥5）'), false))
+              : false;
             if (ok) await loadList();
           });
-          if (!isVendor || canApproveVendor) actions.appendChild(btnOk);
-          else {
+          if (canApproveVendor) actions.appendChild(btnOk);
+          else if (isRequest) {
             var hint = document.createElement('span');
             hint.className = 'sub';
-            hint.textContent = '（廠商核准需權限 ≥ 5）';
+            hint.textContent = '（核准需權限 ≥ 5）';
             actions.appendChild(hint);
           }
         }
@@ -190,29 +191,12 @@
           btnReject.textContent = '退回';
           btnReject.addEventListener('click', async function () {
             setMsg('');
-            var ok = isVendor
+            var ok = isRequest
               ? (canApproveVendor ? await rejectVendor(item) : (setMsg('權限不足'), false))
-              : await rejectLedger(item);
+              : false;
             if (ok) await loadList();
           });
-          if (!isVendor || canApproveVendor) actions.appendChild(btnReject);
-        }
-        if (!isVendor && item.payment_status !== '已匯款' && item.review_status === '已審') {
-          var btnPaid = document.createElement('button');
-          btnPaid.className = 'btn btn-primary';
-          btnPaid.textContent = '標記已匯款';
-          btnPaid.addEventListener('click', async function () {
-            setMsg('');
-            var data = await AccountingApi.crudUpdate(session, 'ledger_status', item.ingest_id, {
-              review_status: '已審',
-              payment_status: '已匯款',
-              note: item.note || ''
-            });
-            if (!data.success) { setMsg(data.message); return; }
-            setOk('已標記匯款');
-            await loadList();
-          });
-          actions.appendChild(btnPaid);
+          if (canApproveVendor) actions.appendChild(btnReject);
         }
         div.appendChild(actions);
         return div;

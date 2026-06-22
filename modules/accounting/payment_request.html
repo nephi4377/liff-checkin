@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>匯款請款</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/accounting_api.js?v=14"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 640px; margin: 0 auto; background: #f4f6f8; }
+    h2 { margin: 0 0 8px; }
+    .sub { color: #555; font-size: 14px; }
+    .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    label { display: block; margin-top: 8px; font-weight: 600; font-size: 14px; }
+    input, select, textarea { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
+    input:read-only { background: #f1f3f4; color: #555; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btn { padding: 10px 14px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; }
+    .btn-primary { background: #1a73e8; color: #fff; width: 100%; padding: 12px; margin-top: 10px; }
+    .seg { display: flex; gap: 6px; margin-top: 6px; }
+    .seg button { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 8px; background: #fff; font-weight: 600; cursor: pointer; }
+    .seg button.active { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; }
+    #msg { color: #c5221f; font-size: 14px; }
+    #ok { color: #137333; font-size: 14px; }
+    .hidden { display: none; }
+    .nav { margin-bottom: 12px; font-size: 14px; }
+    .nav a { color: #1a73e8; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div id="loading">載入中…</div>
+  <div id="app" class="hidden">
+    <p class="nav"><a href="index.html">← 會計功能選單</a></p>
+    <h2>匯款請款（未實現）</h2>
+    <p class="sub" id="userLine">—</p>
+    <p class="sub">錢還沒付出去才用這頁。群組／表單記帳只記<strong>已發生</strong>的收支，不會進審核。</p>
+    <div id="msg"></div>
+    <div id="ok"></div>
+
+    <div class="card">
+      <label>收款對象</label>
+      <div class="seg" id="payeeSeg">
+        <button type="button" data-mode="vendor" class="active">廠商</button>
+        <button type="button" data-mode="employee">員工</button>
+        <button type="button" data-mode="manual">手動</button>
+      </div>
+      <div id="vendorPickBlock">
+        <label>廠商</label>
+        <select id="pickVendor"></select>
+      </div>
+      <div id="employeePickBlock" class="hidden">
+        <label>員工（Checkin 員工資料）</label>
+        <select id="pickEmployee"></select>
+      </div>
+      <div id="manualPayeeBlock" class="hidden">
+        <label>收款人戶名</label>
+        <input type="text" id="manualPayee" placeholder="匯款戶名" />
+      </div>
+      <div class="row2">
+        <div>
+          <label>金額</label>
+          <input type="number" id="amount" inputmode="numeric" />
+        </div>
+        <div>
+          <label>案號</label>
+          <input type="text" id="projectNo" placeholder="例：752" />
+        </div>
+      </div>
+      <label>品項說明</label>
+      <input type="text" id="itemDesc" placeholder="例：磁磚尾款" />
+      <div class="row2">
+        <div>
+          <label>銀行代碼</label>
+          <input type="text" id="bankCode" maxlength="3" inputmode="numeric" />
+        </div>
+        <div>
+          <label>帳號</label>
+          <input type="text" id="accountNo" inputmode="numeric" />
+        </div>
+      </div>
+      <label>戶名</label>
+      <input type="text" id="accountName" />
+      <label>備註（選填）</label>
+      <input type="text" id="note" />
+      <button type="button" class="btn btn-primary" id="submitBtn">送出請款（待主管審核）</button>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var session = null;
+      var vendors = [];
+      var employees = [];
+      var payeeMode = 'vendor';
+
+      function setMsg(t) { document.getElementById('msg').textContent = t || ''; }
+      function setOk(t) { document.getElementById('ok').textContent = t || ''; }
+      function showApp() {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+      }
+      function setBankReadonly(locked) {
+        ['bankCode', 'accountNo', 'accountName'].forEach(function (id) {
+          document.getElementById(id).readOnly = locked;
+        });
+      }
+      function setPayeeMode(mode) {
+        payeeMode = mode;
+        document.querySelectorAll('#payeeSeg button').forEach(function (btn) {
+          btn.classList.toggle('active', btn.getAttribute('data-mode') === mode);
+        });
+        document.getElementById('vendorPickBlock').classList.toggle('hidden', mode !== 'vendor');
+        document.getElementById('employeePickBlock').classList.toggle('hidden', mode !== 'employee');
+        document.getElementById('manualPayeeBlock').classList.toggle('hidden', mode !== 'manual');
+        if (mode === 'manual') setBankReadonly(false);
+        else onPayeePick();
+      }
+      function fillSelect(selId, rows, valueKey, labelFn, emptyLabel) {
+        var sel = document.getElementById(selId);
+        sel.innerHTML = '<option value="">' + emptyLabel + '</option>';
+        rows.forEach(function (row) {
+          var opt = document.createElement('option');
+          opt.value = row[valueKey] || '';
+          opt.textContent = labelFn(row);
+          sel.appendChild(opt);
+        });
+      }
+      function onPayeePick() {
+        if (payeeMode === 'manual') return;
+        var row = null;
+        if (payeeMode === 'vendor') {
+          var vid = document.getElementById('pickVendor').value;
+          row = vendors.find(function (x) { return x.vendor_id === vid; });
+          setBankReadonly(!!row);
+        } else {
+          var uid = document.getElementById('pickEmployee').value;
+          row = employees.find(function (x) { return x.userId === uid; });
+          setBankReadonly(!!row);
+        }
+        if (!row) {
+          setBankReadonly(false);
+          return;
+        }
+        document.getElementById('bankCode').value = row.bank_code || '';
+        document.getElementById('accountNo').value = row.account_no || '';
+        document.getElementById('accountName').value = row.account_name || row.userName || row.name || '';
+      }
+      function buildPayload() {
+        var payload = {
+          amount: document.getElementById('amount').value,
+          project_no: document.getElementById('projectNo').value.trim(),
+          item_desc: document.getElementById('itemDesc').value.trim(),
+          bank_code: document.getElementById('bankCode').value.trim(),
+          account_no: document.getElementById('accountNo').value.trim(),
+          account_name: document.getElementById('accountName').value.trim(),
+          note: document.getElementById('note').value.trim(),
+          doc_type: '匯款請款'
+        };
+        if (payeeMode === 'vendor') payload.vendor_id = document.getElementById('pickVendor').value;
+        else if (payeeMode === 'employee') payload.employee_user_id = document.getElementById('pickEmployee').value;
+        else payload.vendor_name = document.getElementById('manualPayee').value.trim();
+        return payload;
+      }
+
+      document.getElementById('payeeSeg').addEventListener('click', function (e) {
+        var btn = e.target.closest('button[data-mode]');
+        if (!btn) return;
+        setPayeeMode(btn.getAttribute('data-mode'));
+      });
+      document.getElementById('pickVendor').addEventListener('change', onPayeePick);
+      document.getElementById('pickEmployee').addEventListener('change', onPayeePick);
+      document.getElementById('submitBtn').addEventListener('click', async function () {
+        setMsg('');
+        setOk('');
+        var data = await AccountingApi.staffPaymentSubmit(session, buildPayload());
+        if (!data.success) { setMsg(data.message || '送出失敗'); return; }
+        setOk('已送出，待主管審核');
+        document.getElementById('amount').value = '';
+        document.getElementById('projectNo').value = '';
+        document.getElementById('itemDesc').value = '';
+        document.getElementById('note').value = '';
+      });
+
+      (async function boot() {
+        try {
+          session = await AccountingApi.initSession();
+          if (!session) return;
+          document.getElementById('userLine').textContent =
+            (session.auth.display_name || session.profile.displayName) + ' · 權限 ' + session.auth.permission;
+          showApp();
+          var ctx = await AccountingApi.paymentRequestContext(session);
+          if (!ctx.success) { setMsg(ctx.message); return; }
+          vendors = ctx.vendors || [];
+          employees = ctx.employees || [];
+          fillSelect('pickVendor', vendors, 'vendor_id', function (v) { return v.name || v.vendor_id; }, '— 請選擇廠商 —');
+          fillSelect('pickEmployee', employees, 'userId', function (e) {
+            var bank = (e.bank_code && e.account_no) ? '' : '（帳戶待補）';
+            return (e.userName || '') + bank;
+          }, '— 請選擇員工 —');
+          setPayeeMode('vendor');
+        } catch (e) {
+          document.getElementById('loading').textContent = e.message || String(e);
+        }
+      })();
+    })();
+  </script>
+</body>
+</html>

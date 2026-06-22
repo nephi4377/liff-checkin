@@ -349,9 +349,7 @@ export function handleMarkAiReviewed(logId) {
             if (!result || !result.success) {
                 throw new Error((result && result.message) || '標記失敗');
             }
-            const reviewed = result.data && result.data.AI_HumanReviewed
-                ? result.data.AI_HumanReviewed
-                : (state.currentUserName + ' @ ' + new Date().toLocaleString('zh-TW'));
+            const reviewed = result.data?.AI_HumanReviewed ?? '';
 
             const CACHE_KEY = `project_data_${state.projectId}_${state.currentUserId}`;
             const cachedItem = localStorage.getItem(CACHE_KEY);
@@ -368,7 +366,11 @@ export function handleMarkAiReviewed(logId) {
 
             const aiWrap = card && card.querySelector('.site-ai-wrap');
             if (aiWrap && logInState) {
-                aiWrap.innerHTML = buildAiAnalysisHtml(logInState, { console: true, logId: logId });
+                aiWrap.innerHTML = buildAiAnalysisHtml(logInState, {
+                    console: true,
+                    logId: logId,
+                    currentUserId: state.currentUserId
+                });
             }
             showGlobalNotification('已標記已讀', 3000, 'success');
         })

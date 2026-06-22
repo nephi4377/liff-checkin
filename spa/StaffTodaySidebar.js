@@ -1,5 +1,10 @@
 const { computed } = Vue;
-import { resolvePresenceDotClass, buildPresenceMapUrl, buildPresenceLocationLabel } from '../shared/js/utils.js';
+import {
+    resolvePresenceDotClass,
+    buildPresenceMapUrl,
+    buildPresenceLocationLabel,
+    computeLateMinutes
+} from '../shared/js/utils.js';
 
 const pad2 = (n) => String(n).padStart(2, '0');
 const formatDateStr = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -112,6 +117,41 @@ function deriveDayStatus(emp, dateStr, schedule, holidays) {
     return deriveStatusShiftSchedule(entries);
 }
 
+function isPendingRequestForDate(req, dateStr) {
+    if (!req) return false;
+    const toDateOnly = (iso) => {
+        if (!iso) return null;
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return null;
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    const s = toDateOnly(req.startTime);
+    const e = toDateOnly(req.endTime);
+    if (!s && !e) return false;
+    const sOk = !s || s <= dateStr;
+    const eOk = !e || e >= dateStr;
+    return sOk && eOk;
+}
+
+function buildRowAnomalyLines(row) {
+    const lines = [];
+    if (row.pendingType) lines.push(`待審：${row.pendingType}`);
+    (row.presence?.reasons || []).forEach(r => {
+        if (r) lines.push(String(r));
+    });
+    const shouldWork = row.status.kind === 'work' || row.status.kind === 'overtime';
+    if (shouldWork && row.presence?.hasCheckIn && row.presence.checkInTime) {
+        const late = computeLateMinutes(
+            row.presence.checkInTime,
+            row.shiftStart,
+            row.flexibleMinutes
+        );
+        if (late > 30) lines.push(`晚到 ${late} 分`);
+        else if (late > 0) lines.push(`遲到 ${late} 分`);
+    }
+    return [...new Set(lines.filter(Boolean))];
+}
+
 export default {
     name: 'StaffTodaySidebar',
     props: [
@@ -119,7 +159,8 @@ export default {
         'monthSchedule',
         'todayPresence',
         'presenceLoading',
-        'scheduleLoading'
+        'scheduleLoading',
+        'pendingRequestsRaw'
     ],
     setup(props) {
         const today = new Date();
@@ -133,6 +174,16 @@ export default {
             return st !== '離職' && st !== '廠商';
         };
 
+        const pendingMapToday = computed(() => {
+            const map = {};
+            (props.pendingRequestsRaw || []).forEach(req => {
+                if (isPendingRequestForDate(req, todayStr) && req.userName) {
+                    map[req.userName] = req.recordType || '待審核';
+                }
+            });
+            return map;
+        });
+
         const groupedRows = computed(() => {
             const schedule = props.monthSchedule?.schedule || {};
             const holidays = new Set(props.monthSchedule?.holidays || []);
@@ -144,12 +195,17 @@ export default {
                 const g = emp.group || '未分類';
                 if (!groups[g]) groups[g] = [];
                 const status = deriveDayStatus(emp, todayStr, schedule, holidays);
-                groups[g].push({
+                const row = {
                     userId: emp.userId,
                     userName: emp.userName,
                     status,
-                    presence: props.todayPresence?.[emp.userId] || null
-                });
+                    presence: props.todayPresence?.[emp.userId] || null,
+                    pendingType: pendingMapToday.value[emp.userName] || '',
+                    shiftStart: emp.shiftStart || '08:30',
+                    flexibleMinutes: Number(emp.flexibleMinutes || 0)
+                };
+                row.anomalyLines = buildRowAnomalyLines(row);
+                groups[g].push(row);
             });
 
             return Object.keys(groups).sort().map(g => ({
@@ -243,6 +299,12 @@ export default {
                                         📍 {{ presenceLocationLabel(row.presence) }}
                                     </span>
                                 </div>
+                                <ul v-if="row.anomalyLines && row.anomalyLines.length" class="pl-3.5 mt-0.5 space-y-0.5">
+                                    <li v-for="(line, idx) in row.anomalyLines" :key="row.userId + '-an-' + idx"
+                                        class="text-[11px] text-amber-800 leading-snug">
+                                        ⚠ {{ line }}
+                                    </li>
+                                </ul>
                             </li>
                         </ul>
                     </div>

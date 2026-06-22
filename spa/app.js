@@ -1,14 +1,16 @@
 import Dashboard from './Dashboard.js?v=26.05.07.3';
 import ProjectBoard from './ProjectBoard.js';
-import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.06.21.4';
-import HubLeftSidebar from './HubLeftSidebar.js?v=26.06.21.4';
+import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.06.21.6';
+import HubLeftSidebar from './HubLeftSidebar.js?v=26.06.21.5';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
 import { saveCache, loadCache, loadHubPresenceCache, saveHubPresenceCache, loadDailyCache, saveDailyCache, purgeStaleDailyCaches, hubSidebarDailyCacheKey, hubPresenceTodayStr } from '../shared/js/utils.js';
 import { request as apiRequest } from '../modules/projects/js/projectApi.js'; // [重構] 改為引入統一的 projectApi 模組
 import { initializeTaskSender } from '../shared/js/taskSender.js'; // [v509.0 修正] 更新共用模組路徑
 
-const { createApp, ref, onMounted, computed, watch, nextTick } = Vue;
+const { createApp, ref, onMounted, onUnmounted, computed, watch, nextTick } = Vue;
+
+const HUB_PRESENCE_POLL_MS = 30 * 60 * 1000;
 
 const App = {
     components: { Dashboard, ProjectBoard, StaffTodaySidebar, HubLeftSidebar, IframeView }, // [v411.0 SPA化] 註冊 Iframe 元件
@@ -246,6 +248,34 @@ const App = {
             }).finally(() => {
                 presenceLoading.value = false;
             });
+        };
+
+        let presencePollTimer = null;
+
+        const stopPresencePolling = () => {
+            if (presencePollTimer) {
+                clearInterval(presencePollTimer);
+                presencePollTimer = null;
+            }
+        };
+
+        const startPresencePolling = () => {
+            stopPresencePolling();
+            presencePollTimer = setInterval(() => {
+                refreshTodayPresenceInBackground();
+            }, HUB_PRESENCE_POLL_MS);
+        };
+
+        const syncPresenceRefreshForView = (viewName) => {
+            if (viewName === 'dashboard' && hasAdminRights.value) {
+                refreshTodayPresenceInBackground();
+                startPresencePolling();
+            } else {
+                stopPresencePolling();
+                if (hasAdminRights.value) {
+                    refreshTodayPresenceInBackground();
+                }
+            }
         };
 
         const hubRecentReportsStartStr = () => {
@@ -509,8 +539,8 @@ const App = {
                     pendingRequestsRaw.value = attendanceResult.pendingRequests || [];
                 }
 
-                // 今日燈號：SWR（先顯示快取，背景抓最新；TTL 隔日 00:00）
-                refreshTodayPresenceInBackground();
+                // 今日燈號：SWR（先顯示快取，背景抓最新；主控台另每 30 分更新）
+                syncPresenceRefreshForView(currentView.value.name);
 
                 // 主控台側欄：今日回報、款項待辦（SWR + 每日快取）
                 refreshTodayReportsInBackground();
@@ -584,6 +614,14 @@ const App = {
         };
         // 將監聽器放在 setup 函式的頂層，確保它只被註冊一次。
         window.addEventListener('message', handleIframeMessage);
+
+        watch([hasAdminRights, currentView], ([isAdmin, view]) => {
+            syncPresenceRefreshForView(view?.name || 'dashboard');
+        });
+
+        onUnmounted(() => {
+            stopPresencePolling();
+        });
 
         // 【您的要求】核心修正：監聽權限與當前視圖，確保任務交辦中心能被正確初始化
         watch([hasAdminRights, currentView, allEmployees], ([isAdmin, view, employees]) => {
@@ -721,12 +759,13 @@ const App = {
                             (currentView.params || '')" />
                     </div>
                 </main>
-                <StaffTodaySidebar v-if="hasAdminRights"
+                <StaffTodaySidebar v-if="hasAdminRights && currentView.name === 'dashboard'"
                     :allEmployees="allEmployees"
                     :monthSchedule="monthSchedule"
                     :todayPresence="todayPresence"
                     :presenceLoading="presenceLoading"
-                    :scheduleLoading="scheduleLoading" />
+                    :scheduleLoading="scheduleLoading"
+                    :pendingRequestsRaw="pendingRequestsRaw" />
             </div>
         </div>
     `
