@@ -9,9 +9,22 @@
   <script src="../../shared/js/accounting_api.js?v=15"></script>
   <script src="../../shared/js/accounting_cache.js?v=15"></script>
   <style>
-    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 640px; margin: 0 auto; background: #f4f6f8; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px 20px 32px; max-width: 1280px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; }
+    .page-layout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0 20px;
+      align-items: start;
+    }
+    @media (min-width: 960px) {
+      .page-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+      .page-col-list { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
+    }
+    @media (min-width: 1200px) {
+      .page-layout { grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); }
+    }
     .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
     label { display: block; margin-top: 8px; font-weight: 600; font-size: 14px; }
     label.req::after { content: ' *'; color: #c5221f; }
@@ -21,8 +34,33 @@
     .btn { padding: 10px 14px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 14px; }
     .btn-block { width: 100%; margin-top: 10px; }
     .btn-primary { background: #1a73e8; color: #fff; }
+    .btn-primary:disabled { opacity: .55; cursor: not-allowed; }
     .btn-secondary { background: #e8eaed; color: #333; }
+    .btn-secondary:disabled { opacity: .55; cursor: not-allowed; }
     .btn-warn { background: #fce8e6; color: #c5221f; }
+    .form-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .form-actions .btn { flex: 1 1 140px; margin-top: 0; }
+    .feedback-bar {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      margin: 10px 0 4px;
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.45;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+      animation: feedback-in .25s ease;
+    }
+    .feedback-bar.ok { background: #e6f4ea; color: #137333; border: 1px solid #ceead6; }
+    .feedback-bar.err { background: #fce8e6; color: #c5221f; border: 1px solid #f5c6c2; }
+    .feedback-bar.warn { background: #fef7e0; color: #b06000; border: 1px solid #f9e5b8; }
+    .feedback-icon { font-size: 18px; line-height: 1.2; flex-shrink: 0; }
+    @keyframes feedback-in {
+      from { opacity: 0; transform: translateY(-6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
     .item { border-bottom: 1px solid #eee; padding: 12px 0; }
     .item:last-child { border-bottom: none; }
     .item.paused { opacity: .65; }
@@ -63,8 +101,6 @@
     .file { font-size: 13px; padding: 5px 0; }
     .file a { color: #1a73e8; text-decoration: none; }
     .file-list-empty { font-size: 12px; color: #888; margin: 4px 0 0; }
-    #msg { color: #c5221f; font-size: 14px; }
-    #ok { color: #137333; font-size: 14px; }
     .hidden { display: none; }
     .nav { margin-bottom: 12px; font-size: 14px; }
     .nav a { color: #1a73e8; text-decoration: none; }
@@ -74,9 +110,15 @@
     .search-hit { border: 1px solid #e8eaed; border-radius: 8px; padding: 8px; margin: 6px 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; }
     .photo-preview { max-width: 100%; border-radius: 8px; margin-top: 8px; }
     .hint { font-size: 13px; color: #666; margin-top: 4px; }
-    .ocr-status { font-size: 13px; margin-top: 6px; min-height: 1.2em; }
+    .ocr-wrap { margin-top: 6px; }
+    .ocr-status { font-size: 13px; margin: 0; min-height: 1.2em; }
     .ocr-status.ok { color: #137333; }
     .ocr-status.err { color: #c5221f; }
+    .ocr-upload-status { font-size: 12px; margin: 4px 0 0; color: #5f6368; }
+    .ocr-upload-status.ok { color: #137333; }
+    .ocr-upload-status.err { color: #c5221f; }
+    .ocr-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .btn-ocr-retry { padding: 6px 12px; font-size: 13px; }
     .step-num { display: inline-block; background: #1a73e8; color: #fff; font-size: 12px; padding: 2px 8px; border-radius: 6px; margin-right: 6px; vertical-align: middle; }
   </style>
 </head>
@@ -86,9 +128,13 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>廠商名冊</h2>
     <p class="sub" id="userLine">—</p>
-    <div id="msg"></div>
-    <div id="ok"></div>
+    <div id="feedbackBar" class="feedback-bar hidden" role="status" aria-live="polite">
+      <span class="feedback-icon" id="feedbackIcon"></span>
+      <span id="feedbackText"></span>
+    </div>
 
+    <div class="page-layout">
+    <div class="page-col page-col-form">
     <div class="card">
       <h3 style="margin:0 0 8px">篩選</h3>
       <div class="row2">
@@ -113,7 +159,7 @@
 
     <div class="card">
       <h3 id="formTitle" style="margin:0 0 8px">新增廠商</h3>
-      <p class="hint" style="margin:0 0 10px">可拍照辨識帶入欄位，儲存時一併存至 Drive 資料夾。</p>
+      <p class="hint" style="margin:0 0 10px">可拍照自動辨識；編輯既有廠商時照片會立即存入 Drive 資料夾，新增則按儲存時一併存入。</p>
       <input type="hidden" id="editId" />
 
       <p class="section-title">照片輔助（選填）</p>
@@ -122,13 +168,25 @@
           <label><span class="step-num">1</span>名片／公司證明</label>
           <input id="cardPhoto" type="file" accept="image/*" capture="environment" />
           <div id="cardPreview"></div>
-          <p id="cardOcrStatus" class="ocr-status"></p>
+          <div class="ocr-wrap">
+            <p id="cardOcrStatus" class="ocr-status"></p>
+            <p id="cardUploadStatus" class="ocr-upload-status"></p>
+            <div class="ocr-actions">
+              <button type="button" class="btn btn-secondary btn-ocr-retry hidden" id="cardOcrRetry">重新辨識</button>
+            </div>
+          </div>
         </div>
         <div>
           <label><span class="step-num">2</span>存摺／匯款資訊</label>
           <input id="passbookPhoto" type="file" accept="image/*" capture="environment" />
           <div id="passbookPreview"></div>
-          <p id="passbookOcrStatus" class="ocr-status"></p>
+          <div class="ocr-wrap">
+            <p id="passbookOcrStatus" class="ocr-status"></p>
+            <p id="passbookUploadStatus" class="ocr-upload-status"></p>
+            <div class="ocr-actions">
+              <button type="button" class="btn btn-secondary btn-ocr-retry hidden" id="passbookOcrRetry">重新辨識</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -182,13 +240,19 @@
         <div id="bindingList"></div>
       </div>
       <p id="bindHint" class="sub">儲存廠商後可管理 LINE 綁定</p>
-      <button type="button" class="btn btn-primary btn-block" id="saveBtn">儲存</button>
-      <button type="button" class="btn btn-secondary btn-block hidden" id="cancelEditBtn">取消編輯</button>
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary" id="saveBtn">儲存</button>
+        <button type="button" class="btn btn-secondary hidden" id="cancelEditBtn">取消編輯</button>
+      </div>
+    </div>
     </div>
 
+    <div class="page-col page-col-list">
     <div class="card">
       <h3 style="margin:0 0 8px">列表 <span class="sub" id="listCount"></span></h3>
       <div id="list"></div>
+    </div>
+    </div>
     </div>
   </div>
   <script>
@@ -197,10 +261,48 @@
       var allVendors = [];
       var cardFile = null;
       var passbookFile = null;
+      var cardUploaded = false;
+      var passbookUploaded = false;
+      var saving = false;
+      var feedbackTimer = null;
+      var SAVE_BTN_LABEL = '儲存';
 
       function $(id) { return document.getElementById(id); }
-      function setMsg(t) { $('msg').textContent = t || ''; }
-      function setOk(t) { $('ok').textContent = t || ''; }
+
+      function showFeedback(kind, text, autoHideMs) {
+        var bar = $('feedbackBar');
+        var icon = $('feedbackIcon');
+        var msg = $('feedbackText');
+        if (feedbackTimer) {
+          clearTimeout(feedbackTimer);
+          feedbackTimer = null;
+        }
+        if (!text) {
+          bar.classList.add('hidden');
+          bar.className = 'feedback-bar hidden';
+          msg.textContent = '';
+          icon.textContent = '';
+          return;
+        }
+        bar.className = 'feedback-bar ' + (kind || 'ok');
+        icon.textContent = kind === 'err' ? '✕' : (kind === 'warn' ? '!' : '✓');
+        msg.textContent = text;
+        bar.classList.remove('hidden');
+        bar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        if (autoHideMs) {
+          feedbackTimer = setTimeout(function () { showFeedback('', ''); }, autoHideMs);
+        }
+      }
+
+      function setMsg(t) { showFeedback('err', t || ''); }
+      function setOk(t) { showFeedback('ok', t || '', 6000); }
+      function setWarn(t) { showFeedback('warn', t || '', 8000); }
+
+      function setSaveBusy(on) {
+        saving = on;
+        $('saveBtn').disabled = on;
+        $('saveBtn').textContent = on ? '儲存中…' : SAVE_BTN_LABEL;
+      }
 
       function fillSelect(id, options, withEmpty) {
         var sel = $(id);
@@ -276,56 +378,150 @@
         box.appendChild(img);
       }
 
-      function setOcrStatus(elId, text, ok) {
-        var el = $(elId);
-        el.textContent = text || '';
-        el.className = 'ocr-status' + (text ? (ok ? ' ok' : ' err') : '');
+      function photoKindMeta(kind) {
+        if (kind === 'card') {
+          return {
+            ocrStatusId: 'cardOcrStatus',
+            uploadStatusId: 'cardUploadStatus',
+            retryBtnId: 'cardOcrRetry'
+          };
+        }
+        return {
+          ocrStatusId: 'passbookOcrStatus',
+          uploadStatusId: 'passbookUploadStatus',
+          retryBtnId: 'passbookOcrRetry'
+        };
       }
 
-      async function runOcr(file, kind, statusId) {
-        if (!file || !session) return;
-        setOcrStatus(statusId, '辨識中…', true);
+      function setOcrStatus(kind, text, state) {
+        var meta = photoKindMeta(kind);
+        var el = $(meta.ocrStatusId);
+        el.textContent = text || '';
+        el.className = 'ocr-status' + (state === 'ok' ? ' ok' : (state === 'err' ? ' err' : ''));
+        $(meta.retryBtnId).classList.toggle('hidden', state !== 'err');
+        $(meta.retryBtnId).disabled = state === 'loading';
+      }
+
+      function setPhotoUploadStatus(kind, text, isErr) {
+        var el = $(photoKindMeta(kind).uploadStatusId);
+        el.textContent = text || '';
+        el.className = 'ocr-upload-status' + (text ? (isErr ? ' err' : ' ok') : '');
+      }
+
+      function patchVendorFolder(vendorId, folder) {
+        if (!vendorId || !folder || !folder.drive_folder_id) return;
+        var existing = allVendors.find(function (v) { return v.vendor_id === vendorId; }) || { vendor_id: vendorId };
+        var merged = Object.assign({}, existing, {
+          drive_folder_id: folder.drive_folder_id,
+          drive_folder_url: folder.drive_folder_url
+        });
+        AccountingCache.patchVendor(session, merged);
+        var idx = allVendors.findIndex(function (v) { return v.vendor_id === vendorId; });
+        if (idx >= 0) allVendors[idx] = merged;
+      }
+
+      function photosSavedMessage(photoRes) {
+        if (!photoRes) return '';
+        if (!photoRes.success && !photoRes.already_uploaded) return '';
+        if (cardUploaded && passbookUploaded) return '（名片與存摺已存入資料夾）';
+        if (cardUploaded || passbookUploaded) return '（照片已存入資料夾）';
+        return '';
+      }
+
+      async function runOcr(file, kind) {
+        if (!file || !session) return false;
+        setOcrStatus(kind, '辨識中…', 'loading');
         try {
           var photo = await fileToBase64(file);
           photo.kind = kind;
           var data = await AccountingApi.vendorRegisterOcr(session, photo, kind);
           if (!data.success) {
-            setOcrStatus(statusId, data.message || '辨識失敗，請改手動填寫', false);
-            return;
+            setOcrStatus(kind, data.message || '辨識失敗，請改手動填寫或按重新辨識', 'err');
+            return false;
           }
           applyOcrFields(data.fields || {});
-          setOcrStatus(statusId, '已帶入辨識結果，請核對是否正確', true);
+          setOcrStatus(kind, '已帶入辨識結果，請核對是否正確', 'ok');
+          return true;
         } catch (e) {
-          setOcrStatus(statusId, e.message || String(e), false);
+          setOcrStatus(kind, e.message || String(e), 'err');
+          return false;
         }
+      }
+
+      async function uploadPhotoToVendorFolder(file, kind, vendorId) {
+        if (!file || !vendorId || !session) return null;
+        if (kind === 'card' && cardUploaded) return { success: true, skipped: true };
+        if (kind === 'passbook' && passbookUploaded) return { success: true, skipped: true };
+
+        setPhotoUploadStatus(kind, '照片存入資料夾中…', false);
+        try {
+          var photo = await fileToBase64(file);
+          photo.kind = kind;
+          var data = await AccountingApi.vendorUploadPhotos(session, vendorId, [photo]);
+          if (!data.success) {
+            setPhotoUploadStatus(kind, '照片未存入：' + (data.message || '失敗'), true);
+            return data;
+          }
+          if (kind === 'card') cardUploaded = true;
+          else passbookUploaded = true;
+          patchVendorFolder(vendorId, data.folder);
+          setPhotoUploadStatus(kind, '照片已存入廠商資料夾', false);
+          return data;
+        } catch (e) {
+          setPhotoUploadStatus(kind, '照片未存入：' + (e.message || String(e)), true);
+          return { success: false, message: e.message || String(e) };
+        }
+      }
+
+      async function handlePhotoSelected(file, kind) {
+        if (!file) return;
+        var vendorId = $('editId').value.trim();
+        await runOcr(file, kind);
+        if (vendorId) await uploadPhotoToVendorFolder(file, kind, vendorId);
+        else setPhotoUploadStatus(kind, '儲存廠商後會一併存入資料夾', false);
       }
 
       function clearPhotos() {
         cardFile = null;
         passbookFile = null;
+        cardUploaded = false;
+        passbookUploaded = false;
         $('cardPhoto').value = '';
         $('passbookPhoto').value = '';
         $('cardPreview').innerHTML = '';
         $('passbookPreview').innerHTML = '';
-        setOcrStatus('cardOcrStatus', '', true);
-        setOcrStatus('passbookOcrStatus', '', true);
+        setOcrStatus('card', '', '');
+        setOcrStatus('passbook', '', '');
+        setPhotoUploadStatus('card', '', false);
+        setPhotoUploadStatus('passbook', '', false);
       }
 
       async function uploadPendingPhotos(vendorRec) {
         if (!vendorRec || !vendorRec.vendor_id) return null;
         var photos = [];
-        if (cardFile) {
+        if (cardFile && !cardUploaded) {
           var p0 = await fileToBase64(cardFile);
           p0.kind = 'card';
           photos.push(p0);
         }
-        if (passbookFile) {
+        if (passbookFile && !passbookUploaded) {
           var p1 = await fileToBase64(passbookFile);
           p1.kind = 'passbook';
           photos.push(p1);
         }
-        if (!photos.length) return null;
-        return AccountingApi.vendorUploadPhotos(session, vendorRec.vendor_id, photos);
+        if (!photos.length) {
+          if (cardUploaded || passbookUploaded) {
+            return { success: true, already_uploaded: true };
+          }
+          return null;
+        }
+        var data = await AccountingApi.vendorUploadPhotos(session, vendorRec.vendor_id, photos);
+        if (data && data.success) {
+          if (cardFile) cardUploaded = true;
+          if (passbookFile) passbookUploaded = true;
+          patchVendorFolder(vendorRec.vendor_id, data.folder);
+        }
+        return data;
       }
 
       function readForm() {
@@ -436,7 +632,8 @@
         });
       }
 
-      function clearForm() {
+      function clearForm(opts) {
+        opts = opts || {};
         $('editId').value = '';
         $('formTitle').textContent = '新增廠商';
         $('cancelEditBtn').classList.add('hidden');
@@ -453,9 +650,11 @@
         $('payment_terms').value = '';
         $('bindPurpose').value = '報價';
         clearPhotos();
+        if (opts.focusName !== false) $('name').focus();
       }
 
       function fillForm(v) {
+        showFeedback('', '');
         $('editId').value = v.vendor_id || '';
         $('formTitle').textContent = '編輯廠商';
         $('cancelEditBtn').classList.remove('hidden');
@@ -481,7 +680,8 @@
         $('note').value = noteLines.join('\n');
         clearPhotos();
         renderBindings(v.vendor_id);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        var formCard = document.querySelector('.page-col-form');
+        if (formCard) formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
 
       function sortVendorsForList(rows) {
@@ -681,7 +881,8 @@
       }
 
       $('saveBtn').addEventListener('click', async function () {
-        setMsg(''); setOk('');
+        if (saving) return;
+        showFeedback('', '');
         var payload = readForm();
         if (!payload.name) { setMsg('請填廠商名稱'); return; }
         if (!payload.contact_name) { setMsg('請填聯絡人'); return; }
@@ -690,29 +891,36 @@
         if (!payload.account_no) { setMsg('請填帳號'); return; }
         if (!payload.account_name) { setMsg('請填戶名'); return; }
         var editId = $('editId').value;
-        var data = editId
-          ? await AccountingApi.crudUpdate(session, 'vendor', editId, payload)
-          : await AccountingApi.crudCreate(session, 'vendor', payload);
-        if (!data.success) { setMsg(data.message || '儲存失敗'); return; }
-        var saved = data.data;
-        AccountingCache.patchVendor(session, saved);
-        var photoRes = await uploadPendingPhotos(saved);
-        if (photoRes && !photoRes.success) {
-          setMsg((photoRes.message || '照片未上傳') + '（廠商資料已儲存）');
-        } else if (photoRes && photoRes.success && photoRes.folder) {
-          saved.drive_folder_id = photoRes.folder.drive_folder_id;
-          saved.drive_folder_url = photoRes.folder.drive_folder_url;
+        var savedName = payload.name;
+        setSaveBusy(true);
+        try {
+          var data = editId
+            ? await AccountingApi.crudUpdate(session, 'vendor', editId, payload)
+            : await AccountingApi.crudCreate(session, 'vendor', payload);
+          if (!data.success) { setMsg(data.message || '儲存失敗'); return; }
+          var saved = data.data;
           AccountingCache.patchVendor(session, saved);
-          clearPhotos();
-        }
-        if (!editId) {
-          fillForm(saved);
-          setOk(photoRes && photoRes.success ? '已新增（含照片），可繼續加入 LINE 綁定' : '已新增，可繼續加入 LINE 綁定');
-        } else {
-          setOk(photoRes && photoRes.success ? '已更新（含照片）' : '已更新');
+          var photoRes = await uploadPendingPhotos(saved);
+          if (photoRes && !photoRes.success) {
+            setWarn((photoRes.message || '照片未上傳') + '（廠商資料已儲存）');
+          } else if (photoRes && photoRes.success && photoRes.folder) {
+            patchVendorFolder(saved.vendor_id, photoRes.folder);
+          }
+          var photoNote = photosSavedMessage(photoRes);
+          await refreshVendors(true);
           clearForm();
+          if (editId) {
+            setOk('已更新「' + savedName + '」' + photoNote + '，表單已清空，可繼續新增下一筆');
+          } else if (photoNote) {
+            setOk('已新增「' + savedName + '」' + photoNote + '，表單已清空，可繼續下一筆');
+          } else {
+            setOk('已新增「' + savedName + '」，表單已清空，可繼續下一筆');
+          }
+        } catch (e) {
+          setMsg(e.message || String(e));
+        } finally {
+          setSaveBusy(false);
         }
-        await refreshVendors(true);
       });
 
       $('lineSearchBtn').addEventListener('click', async function () {
@@ -729,20 +937,37 @@
         renderSearchHits(data.items || []);
       });
 
-      $('cancelEditBtn').addEventListener('click', clearForm);
+      $('cancelEditBtn').addEventListener('click', function () {
+        showFeedback('', '');
+        clearForm();
+      });
       $('filterBtn').addEventListener('click', renderList);
 
       $('cardPhoto').addEventListener('change', function () {
         cardFile = this.files && this.files[0] ? this.files[0] : null;
+        cardUploaded = false;
         showPreview('cardPreview', cardFile);
-        if (cardFile) runOcr(cardFile, 'card', 'cardOcrStatus');
-        else setOcrStatus('cardOcrStatus', '', true);
+        if (cardFile) handlePhotoSelected(cardFile, 'card');
+        else {
+          setOcrStatus('card', '', '');
+          setPhotoUploadStatus('card', '', false);
+        }
       });
       $('passbookPhoto').addEventListener('change', function () {
         passbookFile = this.files && this.files[0] ? this.files[0] : null;
+        passbookUploaded = false;
         showPreview('passbookPreview', passbookFile);
-        if (passbookFile) runOcr(passbookFile, 'passbook', 'passbookOcrStatus');
-        else setOcrStatus('passbookOcrStatus', '', true);
+        if (passbookFile) handlePhotoSelected(passbookFile, 'passbook');
+        else {
+          setOcrStatus('passbook', '', '');
+          setPhotoUploadStatus('passbook', '', false);
+        }
+      });
+      $('cardOcrRetry').addEventListener('click', function () {
+        if (cardFile) runOcr(cardFile, 'card');
+      });
+      $('passbookOcrRetry').addEventListener('click', function () {
+        if (passbookFile) runOcr(passbookFile, 'passbook');
       });
       $('account_name').addEventListener('blur', crossFillVendorAndAccountName);
       $('name').addEventListener('blur', crossFillVendorAndAccountName);
