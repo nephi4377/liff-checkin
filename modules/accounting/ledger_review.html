@@ -3,39 +3,45 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>收支審核</title>
+  <title>請款審核</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_api.js?v=13"></script>
+  <script src="../../shared/js/accounting_api.js?v=16"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=13"></script>
   <style>
-    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 600px; margin: 0 auto; background: #f4f6f8; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 640px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 8px; }
-    .sub { color: #555; font-size: 14px; }
+    .sub { color: #555; font-size: 14px; line-height: 1.45; }
     .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
     label { display: block; margin-top: 8px; font-weight: 600; font-size: 14px; }
-    select, input { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; }
+    select, input, textarea { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
     .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .btn { padding: 8px 12px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 13px; }
+    .btn { padding: 10px 14px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; }
+    .btn:disabled { opacity: .55; cursor: not-allowed; }
     .btn-primary { background: #1a73e8; color: #fff; }
     .btn-ok { background: #34a853; color: #fff; }
     .btn-warn { background: #f9ab00; color: #333; }
     .btn-muted { background: #e8eaed; color: #333; }
-    .item { border-bottom: 1px solid #eee; padding: 12px 0; }
-    .item:last-child { border-bottom: none; }
-    .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin-right: 6px; }
+    .btn-block { width: 100%; margin-top: 10px; padding: 12px; }
+    .item { border: 1px solid #e8eaed; border-radius: 10px; padding: 12px; margin-bottom: 10px; background: #fff; }
+    .item.focus { border-color: #1a73e8; background: #f8f9ff; }
+    .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin-right: 6px; margin-top: 4px; }
     .tag.vendor { background: #fef7e0; color: #b06000; }
     .tag.pay { background: #e6f4ea; }
-    .tag.income { background: #e6f4ea; color: #137333; }
     .tag.expense { background: #fce8e6; color: #c5221f; }
-    .tag.exp { background: #fce8e6; }
-    .actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-    #msg { color: #c5221f; font-size: 14px; }
-    #ok { color: #137333; font-size: 14px; }
+    .actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    #msg { color: #c5221f; font-size: 14px; margin: 8px 0; }
+    #ok { color: #137333; font-size: 14px; margin: 8px 0; }
     .hidden { display: none; }
     .nav { margin-bottom: 12px; font-size: 14px; }
     .nav a { color: #1a73e8; text-decoration: none; }
-    .headline { font-size: 16px; font-weight: 700; }
-    .amount { font-size: 18px; font-weight: 700; margin: 4px 0; }
+    .headline { font-size: 17px; font-weight: 700; }
+    .amount { font-size: 20px; font-weight: 700; margin: 4px 0; color: #1a73e8; }
+    .need { color: #c5221f; font-size: 12px; font-weight: 600; }
+    .review-panel { margin-top: 12px; padding-top: 12px; border-top: 1px dashed #ddd; }
+    .bulk-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .bulk-bar .sub { margin: 0; }
+    .mono { font-family: ui-monospace, monospace; font-size: 12px; color: #666; word-break: break-all; }
+    .bank-line { font-size: 13px; color: #444; margin-top: 6px; }
   </style>
 </head>
 <body>
@@ -44,9 +50,9 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>請款審核</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub">只審「匯款請款」（未實現）；群組記帳的已實現收支不會出現在這裡。</p>
-    <div id="msg"></div>
-    <div id="ok"></div>
+    <p class="sub">只審「匯款請款」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改金額／案號。</p>
+    <div id="msg" role="alert"></div>
+    <div id="ok" aria-live="polite"></div>
 
     <div class="card">
       <div class="row2">
@@ -65,16 +71,19 @@
             <option value="">全部</option>
             <option value="未匯款">待匯款</option>
             <option value="已匯款">已匯款</option>
-            <option value="已現金">已現金（已實現）</option>
           </select>
         </div>
       </div>
       <label>關鍵字（對象／案號／品項）</label>
       <input id="filterKw" placeholder="例：磁磚、752" />
-      <button type="button" class="btn btn-primary" id="reloadBtn" style="width:100%;margin-top:10px;padding:12px">重新載入</button>
+      <button type="button" class="btn btn-primary btn-block" id="reloadBtn">重新載入</button>
     </div>
 
     <div class="card">
+      <div id="bulkBar" class="bulk-bar hidden">
+        <p class="sub" id="bulkSummary">—</p>
+        <button type="button" class="btn btn-ok" id="bulkApproveBtn">全部核准（資料完整）</button>
+      </div>
       <h3 style="margin:0 0 8px">待審列表</h3>
       <div id="list"></div>
     </div>
@@ -83,6 +92,8 @@
     (function () {
       var session = null;
       var canApproveVendor = false;
+      var listItems = [];
+      var busy = false;
 
       function setMsg(t) { document.getElementById('msg').textContent = t || ''; }
       function setOk(t) { document.getElementById('ok').textContent = t || ''; }
@@ -103,103 +114,240 @@
       function fmtMoney(n) {
         return (parseInt(n, 10) || 0).toLocaleString('zh-TW');
       }
-
       function isPaymentRequest(item) {
         return item.kind === 'vendor_payment' || item.kind === 'staff_payment';
       }
-
-      function typeTagHtml(item) {
-        if (item.kind === 'staff_payment') {
-          return '<span class="tag expense">員工請款</span><span class="tag expense">未實現</span>';
-        }
-        if (item.kind === 'vendor_payment') {
-          return '<span class="tag vendor">廠商' + (item.doc_type || '請款') + '</span>' +
-            '<span class="tag expense">未實現</span>';
-        }
-        return '<span class="tag">請款</span>';
+      function isPending(item) {
+        return String(item.review_status || '') !== '已審' && String(item.review_status || '') !== '退回';
+      }
+      function itemReady(item) {
+        var amount = parseInt(item.amount, 10) || 0;
+        return !!(String(item.project_no || '').trim()) && amount > 0;
+      }
+      function readPatchFromPanel(panel, item) {
+        return {
+          project_no: panel.querySelector('.inp-project').value.trim(),
+          amount: panel.querySelector('.inp-amount').value,
+          item_desc: panel.querySelector('.inp-desc').value.trim() || item.summary
+        };
       }
 
-      function paymentTagHtml(item) {
-        if (!isPaymentRequest(item)) return '';
-        var ps = String(item.payment_status || '未匯款');
-        if (ps === '未匯款') ps = '待匯款';
-        return '<span class="tag pay">' + ps + '</span>';
-      }
-
-      async function approveVendor(item) {
-        var data = await AccountingApi.vendorPaymentApprove(session, item.payment_request_id, {
+      async function approveVendor(item, patch) {
+        patch = patch || {
           project_no: item.project_no,
           amount: item.amount,
           item_desc: item.summary
-        });
-        if (!data.success) { setMsg(data.message || '核准失敗'); return false; }
-        setOk('已核准，進入待匯款');
+        };
+        var data = await AccountingApi.vendorPaymentApprove(session, item.payment_request_id, patch);
+        if (!data.success) {
+          setMsg((item.party_name || '請款') + '：' + (data.message || '核准失敗'));
+          return false;
+        }
         return true;
       }
 
-      async function rejectVendor(item) {
-        var reason = prompt('退回原因（選填）', '主管退回') || '主管退回';
-        var data = await AccountingApi.vendorPaymentReject(session, item.payment_request_id, reason);
+      async function rejectVendor(item, reason) {
+        var data = await AccountingApi.vendorPaymentReject(session, item.payment_request_id, reason || '主管退回');
         if (!data.success) { setMsg(data.message || '退回失敗'); return false; }
-        setOk('已退回請款');
         return true;
+      }
+
+      function typeTags(item) {
+        var html = '';
+        if (item.kind === 'staff_payment') {
+          html += '<span class="tag expense">員工請款</span><span class="tag expense">未實現</span>';
+        } else if (item.kind === 'vendor_payment') {
+          html += '<span class="tag vendor">廠商' + (item.doc_type || '請款') + '</span><span class="tag expense">未實現</span>';
+        }
+        html += '<span class="tag pay">' + (item.review_status || '待審') + '</span>';
+        var ps = String(item.payment_status || '未匯款');
+        if (ps === '未匯款') ps = '待匯款';
+        html += '<span class="tag pay">' + ps + '</span>';
+        return html;
+      }
+
+      function renderReviewPanel(item) {
+        var panel = document.createElement('div');
+        panel.className = 'review-panel hidden';
+        var amount = parseInt(item.amount, 10) || 0;
+        var needProject = !String(item.project_no || '').trim();
+        var needAmount = amount <= 0;
+        panel.innerHTML =
+          '<label>案號' + (needProject ? ' <span class="need">必填</span>' : '') + '</label>' +
+          '<input type="text" class="inp-project" value="' + (item.project_no || '') + '" placeholder="例：752" />' +
+          '<label>金額' + (needAmount ? ' <span class="need">必填</span>' : '') + '</label>' +
+          '<input type="number" class="inp-amount" value="' + (amount || '') + '" inputmode="numeric" />' +
+          '<label>品項說明</label>' +
+          '<input type="text" class="inp-desc" value="' + (item.summary || '') + '" />' +
+          (item.bank_code || item.account_no
+            ? '<p class="bank-line">匯款：' + (item.bank_code || '—') + ' / ' + (item.account_no || '—') +
+              ' / ' + (item.account_name || item.party_name || '—') + '</p>'
+            : '') +
+          (item.note ? '<p class="sub">備註：' + item.note + '</p>' : '') +
+          '<label>退回原因（選填）</label>' +
+          '<input type="text" class="inp-reject" placeholder="退回時填寫" />' +
+          '<div class="actions" style="margin-top:12px">' +
+          '<button type="button" class="btn btn-ok btn-confirm-approve">確認核准</button>' +
+          '<button type="button" class="btn btn-warn btn-confirm-reject">退回</button>' +
+          '</div>';
+
+        panel.querySelector('.btn-confirm-approve').addEventListener('click', async function () {
+          if (busy || !canApproveVendor) return;
+          setMsg('');
+          busy = true;
+          var ok = await approveVendor(item, readPatchFromPanel(panel, item));
+          busy = false;
+          if (ok) { setOk('已核准「' + (item.party_name || '') + '」，進入待匯款'); await loadList(); }
+        });
+        panel.querySelector('.btn-confirm-reject').addEventListener('click', async function () {
+          if (busy || !canApproveVendor) return;
+          setMsg('');
+          var reason = panel.querySelector('.inp-reject').value.trim() || '主管退回';
+          busy = true;
+          var ok = await rejectVendor(item, reason);
+          busy = false;
+          if (ok) { setOk('已退回「' + (item.party_name || '') + '」'); await loadList(); }
+        });
+        return panel;
       }
 
       function renderItem(item) {
         var div = document.createElement('div');
         div.className = 'item';
         var isRequest = isPaymentRequest(item);
+        var pending = isPending(item);
+        var ready = itemReady(item);
+
         div.innerHTML =
           '<div class="headline">' + (item.party_name || '—') + '</div>' +
           '<div class="amount">$' + fmtMoney(item.amount) + '</div>' +
           '<div class="sub">案號 ' + (item.project_no || '—') + ' · ' + (item.txn_date || '—') + '</div>' +
           '<div class="sub">' + (item.summary || '') + '</div>' +
-          '<div style="margin-top:6px">' + typeTagHtml(item) +
-          '<span class="tag pay">' + (item.review_status || '待審') + '</span>' +
-          paymentTagHtml(item) + '</div>';
+          '<div class="mono">' + (item.payment_request_id ? item.payment_request_id.slice(0, 8) + '…' : '') + '</div>' +
+          '<div>' + typeTags(item) + '</div>';
 
         var actions = document.createElement('div');
         actions.className = 'actions';
+        var reviewPanel = renderReviewPanel(item);
 
-        if (item.has_attachments || (item.attachment_urls && item.attachment_urls.length)) {
-          var lbBtn = AccountingLightbox.makeButton(session, item, '看單據');
-          actions.appendChild(lbBtn);
-        }
-
-        if (item.review_status !== '已審') {
-          var btnOk = document.createElement('button');
-          btnOk.className = 'btn btn-ok';
-          btnOk.textContent = '核准 → 待匯款';
-          btnOk.addEventListener('click', async function () {
+        if (pending && isRequest && canApproveVendor) {
+          var btnQuick = document.createElement('button');
+          btnQuick.type = 'button';
+          btnQuick.className = 'btn btn-ok';
+          btnQuick.textContent = ready ? '快速核准' : '快速核准（需補資料）';
+          btnQuick.disabled = !ready;
+          btnQuick.title = ready ? '案號與金額已齊，直接進待匯款' : '請先點「審核」補案號或金額';
+          btnQuick.addEventListener('click', async function () {
+            if (busy || !ready) return;
             setMsg('');
-            var ok = isRequest
-              ? (canApproveVendor ? await approveVendor(item) : (setMsg('權限不足（需 ≥5）'), false))
-              : false;
-            if (ok) await loadList();
+            busy = true;
+            var ok = await approveVendor(item);
+            busy = false;
+            if (ok) { setOk('已核准「' + (item.party_name || '') + '」'); await loadList(); }
           });
-          if (canApproveVendor) actions.appendChild(btnOk);
-          else if (isRequest) {
-            var hint = document.createElement('span');
-            hint.className = 'sub';
-            hint.textContent = '（核准需權限 ≥ 5）';
-            actions.appendChild(hint);
-          }
-        }
-        if (item.review_status !== '退回') {
+          actions.appendChild(btnQuick);
+
+          var btnReview = document.createElement('button');
+          btnReview.type = 'button';
+          btnReview.className = 'btn btn-primary';
+          btnReview.textContent = '審核';
+          btnReview.addEventListener('click', async function () {
+            var open = reviewPanel.classList.toggle('hidden');
+            btnReview.textContent = open ? '審核' : '收合';
+            div.classList.toggle('focus', !open);
+            if (!open) {
+              var urls = item.attachment_urls && item.attachment_urls.length
+                ? item.attachment_urls
+                : await AccountingLightbox.fetchAttachmentUrls(session, item);
+              if (urls.length) AccountingLightbox.open(urls);
+            }
+          });
+          actions.appendChild(btnReview);
+
           var btnReject = document.createElement('button');
+          btnReject.type = 'button';
           btnReject.className = 'btn btn-warn';
           btnReject.textContent = '退回';
           btnReject.addEventListener('click', async function () {
-            setMsg('');
-            var ok = isRequest
-              ? (canApproveVendor ? await rejectVendor(item) : (setMsg('權限不足'), false))
-              : false;
-            if (ok) await loadList();
+            if (busy) return;
+            var reason = prompt('退回原因（選填）', '主管退回') || '主管退回';
+            busy = true;
+            var ok = await rejectVendor(item, reason);
+            busy = false;
+            if (ok) { setOk('已退回'); await loadList(); }
           });
-          if (canApproveVendor) actions.appendChild(btnReject);
+          actions.appendChild(btnReject);
+        } else if (pending && isRequest && !canApproveVendor) {
+          var hint = document.createElement('span');
+          hint.className = 'sub';
+          hint.textContent = '（核准需權限 ≥ 5）';
+          actions.appendChild(hint);
         }
+
+        if (item.has_attachments || (item.attachment_urls && item.attachment_urls.length)) {
+          actions.appendChild(AccountingLightbox.makeButton(session, item, '看請款單'));
+        } else if (pending && isRequest) {
+          var btnAtt = document.createElement('button');
+          btnAtt.type = 'button';
+          btnAtt.className = 'btn btn-muted';
+          btnAtt.textContent = '查附件';
+          btnAtt.addEventListener('click', async function () {
+            var urls = await AccountingLightbox.fetchAttachmentUrls(session, item);
+            if (!urls.length) { setMsg('這筆沒有上傳單據'); return; }
+            AccountingLightbox.open(urls);
+          });
+          actions.appendChild(btnAtt);
+        }
+
         div.appendChild(actions);
+        div.appendChild(reviewPanel);
         return div;
+      }
+
+      function updateBulkBar() {
+        var bar = document.getElementById('bulkBar');
+        var btn = document.getElementById('bulkApproveBtn');
+        var pending = listItems.filter(function (it) {
+          return isPaymentRequest(it) && isPending(it);
+        });
+        var ready = pending.filter(itemReady);
+        if (!canApproveVendor || !pending.length) {
+          bar.classList.add('hidden');
+          return;
+        }
+        bar.classList.remove('hidden');
+        document.getElementById('bulkSummary').textContent =
+          '待審 ' + pending.length + ' 筆 · 可一次核准 ' + ready.length + ' 筆（案號與金額已齊）';
+        btn.disabled = !ready.length || busy;
+      }
+
+      async function bulkApprove() {
+        var pending = listItems.filter(function (it) {
+          return isPaymentRequest(it) && isPending(it) && itemReady(it);
+        });
+        if (!pending.length) { setMsg('沒有可一次核准的項目（需有案號與金額）'); return; }
+        var skip = listItems.filter(function (it) {
+          return isPaymentRequest(it) && isPending(it) && !itemReady(it);
+        }).length;
+        var msg = '將核准 ' + pending.length + ' 筆，進入待匯款。';
+        if (skip) msg += '\n另有 ' + skip + ' 筆缺案號或金額，請個別審核。';
+        if (!confirm(msg + '\n\n確定？')) return;
+
+        setMsg('');
+        setOk('');
+        busy = true;
+        document.getElementById('bulkApproveBtn').disabled = true;
+        var okCount = 0;
+        var fail = 0;
+        for (var i = 0; i < pending.length; i++) {
+          setOk('核准中… ' + (i + 1) + ' / ' + pending.length);
+          var ok = await approveVendor(pending[i]);
+          if (ok) okCount++; else fail++;
+        }
+        busy = false;
+        if (fail) setMsg('完成：成功 ' + okCount + ' 筆，失敗 ' + fail + ' 筆');
+        else setOk('已全部核准 ' + okCount + ' 筆，進入待匯款');
+        await loadList();
       }
 
       async function loadList() {
@@ -207,19 +355,24 @@
         var data = await AccountingApi.ledgerReviewBundle(session, buildFilter());
         var box = document.getElementById('list');
         box.innerHTML = '';
-        if (!data.success) { setMsg(data.message); return; }
+        if (!data.success) { setMsg(data.message); listItems = []; updateBulkBar(); return; }
         canApproveVendor = !!data.can_approve_vendor;
-        (data.items || []).forEach(function (row) { box.appendChild(renderItem(row)); });
-        if (!data.items || !data.items.length) box.textContent = '沒有符合的紀錄';
+        listItems = data.items || [];
+        listItems.forEach(function (row) { box.appendChild(renderItem(row)); });
+        if (!listItems.length) box.innerHTML = '<p class="sub">沒有符合的紀錄</p>';
+        updateBulkBar();
       }
 
       document.getElementById('reloadBtn').addEventListener('click', loadList);
+      document.getElementById('bulkApproveBtn').addEventListener('click', bulkApprove);
+
       (async function boot() {
         try {
           session = await AccountingApi.initSession();
           if (!session) return;
-          var mode = session.devBypass ? ' · 測試模式（無登入）' : '';
-          document.getElementById('userLine').textContent = session.profile.displayName + ' · 權限 ' + session.auth.permission + mode;
+          var mode = session.devBypass ? ' · 測試模式' : '';
+          document.getElementById('userLine').textContent =
+            session.profile.displayName + ' · 權限 ' + session.auth.permission + mode;
           showApp();
           await loadList();
         } catch (e) {

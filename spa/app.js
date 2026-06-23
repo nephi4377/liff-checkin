@@ -145,7 +145,7 @@ const App = {
             '#/budget-audit': { name: 'iframe', src: 'tools/BudgetAuditor_Standalone_V2.html', title: '案場驗收表' },
             '#/accounting-ingest': { name: 'iframe', src: 'modules/accounting/accounting_ingest.html', title: '收支登錄' },
             '#/accounting': { name: 'iframe', src: 'modules/accounting/index.html', title: '添心會計' },
-            '#/accounting/vendor-payment-approve': { name: 'iframe', src: 'modules/accounting/vendor_payment_approve.html', title: '廠商請款審核' },
+            '#/accounting/vendor-payment-approve': { name: 'iframe', src: 'modules/accounting/ledger_review.html', title: '請款審核' },
             '#/accounting/vendor-payment-finance': { name: 'iframe', src: 'modules/accounting/vendor_payment_finance.html', title: '廠商待匯款' },
         };
         // [v513.0 新增] 補上員工資料編輯頁面的路由

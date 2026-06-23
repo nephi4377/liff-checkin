@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>匯款請款</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_api.js?v=14"></script>
+  <script src="../../shared/js/accounting_api.js?v=16"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 640px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 8px; }
@@ -20,11 +20,20 @@
     .seg { display: flex; gap: 6px; margin-top: 6px; }
     .seg button { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 8px; background: #fff; font-weight: 600; cursor: pointer; }
     .seg button.active { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; }
-    #msg { color: #c5221f; font-size: 14px; }
-    #ok { color: #137333; font-size: 14px; }
+    #msg { color: #c5221f; font-size: 14px; margin: 8px 0; }
     .hidden { display: none; }
     .nav { margin-bottom: 12px; font-size: 14px; }
     .nav a { color: #1a73e8; text-decoration: none; }
+    .btn-primary:disabled { opacity: .55; cursor: not-allowed; }
+    .btn-secondary { background: #e8eaed; color: #333; width: 100%; padding: 12px; margin-top: 8px; display: block; text-align: center; text-decoration: none; box-sizing: border-box; }
+    .success-card { text-align: center; }
+    .success-icon { width: 56px; height: 56px; margin: 0 auto 12px; border-radius: 50%; background: #e6f4ea; color: #137333; font-size: 28px; line-height: 56px; font-weight: 700; }
+    .success-title { margin: 0 0 6px; font-size: 20px; }
+    .success-next { color: #555; font-size: 14px; line-height: 1.5; margin: 0 0 14px; }
+    .summary { text-align: left; background: #f8f9fa; border-radius: 10px; padding: 12px 14px; margin: 0 0 14px; font-size: 14px; }
+    .summary dt { color: #666; margin-top: 8px; }
+    .summary dt:first-child { margin-top: 0; }
+    .summary dd { margin: 2px 0 0; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -34,10 +43,9 @@
     <h2>匯款請款（未實現）</h2>
     <p class="sub" id="userLine">—</p>
     <p class="sub">錢還沒付出去才用這頁。群組／表單記帳只記<strong>已發生</strong>的收支，不會進審核。</p>
-    <div id="msg"></div>
-    <div id="ok"></div>
+    <div id="msg" role="alert"></div>
 
-    <div class="card">
+    <div id="formCard" class="card">
       <label>收款對象</label>
       <div class="seg" id="payeeSeg">
         <button type="button" data-mode="vendor" class="active">廠商</button>
@@ -84,6 +92,15 @@
       <input type="text" id="note" />
       <button type="button" class="btn btn-primary" id="submitBtn">送出請款（待主管審核）</button>
     </div>
+
+    <div id="successCard" class="card success-card hidden" aria-live="polite">
+      <div class="success-icon" aria-hidden="true">✓</div>
+      <h3 class="success-title">請款已送出</h3>
+      <p class="success-next">主管會在「請款審核」處理；核准後才進入待匯款，此時<strong>還不會</strong>記入收支。</p>
+      <dl class="summary" id="successSummary"></dl>
+      <button type="button" class="btn btn-primary" id="anotherBtn">再送一筆</button>
+      <a class="btn btn-secondary" href="index.html">回會計選單</a>
+    </div>
   </div>
   <script>
     (function () {
@@ -91,9 +108,30 @@
       var vendors = [];
       var employees = [];
       var payeeMode = 'vendor';
+      var submitting = false;
 
       function setMsg(t) { document.getElementById('msg').textContent = t || ''; }
-      function setOk(t) { document.getElementById('ok').textContent = t || ''; }
+      function showForm() {
+        document.getElementById('formCard').classList.remove('hidden');
+        document.getElementById('successCard').classList.add('hidden');
+      }
+      function showSuccess(summary) {
+        var dl = document.getElementById('successSummary');
+        dl.innerHTML = '';
+        summary.forEach(function (row) {
+          var dt = document.createElement('dt');
+          dt.textContent = row.label;
+          var dd = document.createElement('dd');
+          dd.textContent = row.value;
+          dl.appendChild(dt);
+          dl.appendChild(dd);
+        });
+        document.getElementById('formCard').classList.add('hidden');
+        document.getElementById('successCard').classList.remove('hidden');
+        setMsg('');
+        window.scrollTo(0, 0);
+        document.getElementById('anotherBtn').focus();
+      }
       function showApp() {
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
@@ -144,6 +182,19 @@
         document.getElementById('accountNo').value = row.account_no || '';
         document.getElementById('accountName').value = row.account_name || row.userName || row.name || '';
       }
+      function getPayeeLabel() {
+        if (payeeMode === 'vendor') {
+          var vid = document.getElementById('pickVendor').value;
+          var v = vendors.find(function (x) { return x.vendor_id === vid; });
+          return v ? (v.name || v.vendor_id) : '';
+        }
+        if (payeeMode === 'employee') {
+          var uid = document.getElementById('pickEmployee').value;
+          var e = employees.find(function (x) { return x.userId === uid; });
+          return e ? (e.userName || uid) : '';
+        }
+        return document.getElementById('manualPayee').value.trim();
+      }
       function buildPayload() {
         var payload = {
           amount: document.getElementById('amount').value,
@@ -160,6 +211,34 @@
         else payload.vendor_name = document.getElementById('manualPayee').value.trim();
         return payload;
       }
+      function validateForm() {
+        if (payeeMode === 'vendor' && !document.getElementById('pickVendor').value) return '請選擇廠商';
+        if (payeeMode === 'employee' && !document.getElementById('pickEmployee').value) return '請選擇員工';
+        if (payeeMode === 'manual' && !document.getElementById('manualPayee').value.trim()) return '請填收款人戶名';
+        var amount = parseInt(document.getElementById('amount').value, 10);
+        if (!amount || amount <= 0) return '請填金額（須大於 0）';
+        if (!document.getElementById('projectNo').value.trim()) return '請填案號';
+        if (!document.getElementById('bankCode').value.trim() || !document.getElementById('accountNo').value.trim()) {
+          return '請補齊銀行代碼與帳號';
+        }
+        if (!document.getElementById('accountName').value.trim()) return '請填戶名';
+        return '';
+      }
+      function resetForm() {
+        document.getElementById('pickVendor').value = '';
+        document.getElementById('pickEmployee').value = '';
+        document.getElementById('manualPayee').value = '';
+        document.getElementById('amount').value = '';
+        document.getElementById('projectNo').value = '';
+        document.getElementById('itemDesc').value = '';
+        document.getElementById('bankCode').value = '';
+        document.getElementById('accountNo').value = '';
+        document.getElementById('accountName').value = '';
+        document.getElementById('note').value = '';
+        setPayeeMode('vendor');
+        setMsg('');
+        showForm();
+      }
 
       document.getElementById('payeeSeg').addEventListener('click', function (e) {
         var btn = e.target.closest('button[data-mode]');
@@ -169,16 +248,37 @@
       document.getElementById('pickVendor').addEventListener('change', onPayeePick);
       document.getElementById('pickEmployee').addEventListener('change', onPayeePick);
       document.getElementById('submitBtn').addEventListener('click', async function () {
+        if (submitting) return;
         setMsg('');
-        setOk('');
-        var data = await AccountingApi.staffPaymentSubmit(session, buildPayload());
-        if (!data.success) { setMsg(data.message || '送出失敗'); return; }
-        setOk('已送出，待主管審核');
-        document.getElementById('amount').value = '';
-        document.getElementById('projectNo').value = '';
-        document.getElementById('itemDesc').value = '';
-        document.getElementById('note').value = '';
+        var err = validateForm();
+        if (err) { setMsg(err); return; }
+        var payload = buildPayload();
+        var summary = [
+          { label: '收款對象', value: getPayeeLabel() },
+          { label: '金額', value: '$' + Number(payload.amount).toLocaleString('zh-TW') },
+          { label: '案號', value: payload.project_no },
+          { label: '品項', value: payload.item_desc || '匯款請款' }
+        ];
+        var btn = document.getElementById('submitBtn');
+        submitting = true;
+        btn.disabled = true;
+        btn.textContent = '送出中…';
+        try {
+          var data = await AccountingApi.staffPaymentSubmit(session, payload);
+          if (!data.success) { setMsg(data.message || '送出失敗'); return; }
+          if (data.payment_request_id) {
+            summary.push({ label: '單號', value: String(data.payment_request_id).slice(0, 8) + '…' });
+          }
+          showSuccess(summary);
+        } catch (e) {
+          setMsg(e.message || '送出失敗，請稍後再試');
+        } finally {
+          submitting = false;
+          btn.disabled = false;
+          btn.textContent = '送出請款（待主管審核）';
+        }
       });
+      document.getElementById('anotherBtn').addEventListener('click', resetForm);
 
       (async function boot() {
         try {

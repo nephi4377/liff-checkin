@@ -6,7 +6,7 @@
   <title>廠商名冊</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=15"></script>
-  <script src="../../shared/js/accounting_api.js?v=15"></script>
+  <script src="../../shared/js/accounting_api.js?v=16"></script>
   <script src="../../shared/js/accounting_cache.js?v=15"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px 20px 32px; max-width: 1280px; margin: 0 auto; background: #f4f6f8; }
@@ -224,22 +224,27 @@
       <textarea id="note" placeholder="服務區域、施工品質、配合度或其他注意事項可寫在這裡"></textarea>
 
       <p class="section-title">LINE 身份綁定（報價／請款辨識用）</p>
-      <p class="sub" style="margin:0 0 8px">從 project-console「顧客列表」搜尋名稱，從結果加入；無法手動貼 UID。</p>
+      <p class="sub" style="margin:0 0 8px">搜尋來源：<strong>會計官方 LINE @672zolga</strong> 聯絡人名單（加好友或傳訊息即自動收錄；與行政主帳 UID 不同）。</p>
       <div id="bindEditor" class="hidden">
-        <label>搜尋顧客（名稱／案號）</label>
-        <input id="lineSearchKw" placeholder="例：木工老王、752" />
+        <label>搜尋顧客（名稱／案號／UID）</label>
+        <input id="lineSearchKw" placeholder="例：木工老王、752、U 開頭 UID" />
         <div class="row2" style="margin-top:8px">
           <div>
             <label>加入時用途</label>
             <select id="bindPurpose"><option value="報價">報價</option><option value="請款">請款</option><option value="一般">一般</option></select>
           </div>
         </div>
-        <button type="button" class="btn btn-secondary btn-block" id="lineSearchBtn">搜尋顧客列表</button>
+        <button type="button" class="btn btn-secondary btn-block" id="lineSearchBtn">搜尋會計 LINE 聯絡人</button>
         <div id="lineSearchResults"></div>
+        <label style="margin-top:12px">手動貼 UID／GID（進階，顧客列表找不到時）</label>
+        <div class="row2">
+          <div><input id="lineManualId" placeholder="U… 私訊 UID 或 C… 群組 GID" class="mono" /></div>
+          <div><button type="button" class="btn btn-secondary btn-block" id="lineManualAddBtn">手動加入</button></div>
+        </div>
         <h4 style="margin:14px 0 6px">已綁定</h4>
         <div id="bindingList"></div>
       </div>
-      <p id="bindHint" class="sub">儲存廠商後可管理 LINE 綁定</p>
+      <p id="bindHint" class="sub">請先儲存廠商，或從右側列表點「編輯」，才會出現 LINE 綁定區。</p>
       <div class="form-actions">
         <button type="button" class="btn btn-primary" id="saveBtn">儲存</button>
         <button type="button" class="btn btn-secondary hidden" id="cancelEditBtn">取消編輯</button>
@@ -612,7 +617,7 @@
         var box = $('lineSearchResults');
         box.innerHTML = '';
         if (!items || !items.length) {
-          box.innerHTML = '<p class="sub">沒有符合的顧客</p>';
+          box.innerHTML = '<p class="sub">沒有符合的聯絡人（請確認對方已加會計 LINE @672zolga 並傳過訊息）</p>';
           return;
         }
         items.forEach(function (hit) {
@@ -641,7 +646,7 @@
         $('bindingList').innerHTML = '';
         $('lineSearchResults').innerHTML = '';
         ['name','tax_id','contact_name','contact_phone','contact_email','address',
-          'bank_code','branch_name','account_no','account_name','note','lineSearchKw'].forEach(function (id) {
+          'bank_code','branch_name','account_no','account_name','note','lineSearchKw','lineManualId'].forEach(function (id) {
           $(id).value = '';
         });
         $('trade_category').value = '';
@@ -908,13 +913,14 @@
           }
           var photoNote = photosSavedMessage(photoRes);
           await refreshVendors(true);
-          clearForm();
+          var refreshed = allVendors.find(function (v) { return v.vendor_id === saved.vendor_id; }) || saved;
+          fillForm(refreshed);
           if (editId) {
-            setOk('已更新「' + savedName + '」' + photoNote + '，表單已清空，可繼續新增下一筆');
+            setOk('已更新「' + savedName + '」' + photoNote + '，可繼續綁定 LINE，或點「取消編輯」新增下一筆');
           } else if (photoNote) {
-            setOk('已新增「' + savedName + '」' + photoNote + '，表單已清空，可繼續下一筆');
+            setOk('已新增「' + savedName + '」' + photoNote + '，請在下方綁定 LINE（請款辨識用）');
           } else {
-            setOk('已新增「' + savedName + '」，表單已清空，可繼續下一筆');
+            setOk('已新增「' + savedName + '」，請在下方綁定 LINE（請款辨識用）');
           }
         } catch (e) {
           setMsg(e.message || String(e));
@@ -935,6 +941,14 @@
           return;
         }
         renderSearchHits(data.items || []);
+      });
+
+      $('lineManualAddBtn').addEventListener('click', function () {
+        var lineId = $('lineManualId').value.trim();
+        if (!lineId) { setMsg('請貼上 UID 或 GID'); return; }
+        var idType = lineId.indexOf('C') === 0 ? 'group' : 'user';
+        addBinding($('editId').value, idType, lineId, '', $('bindPurpose').value);
+        $('lineManualId').value = '';
       });
 
       $('cancelEditBtn').addEventListener('click', function () {

@@ -19,9 +19,52 @@ var AccountingApi = (function () {
     return res.json();
   }
 
+  function readDevBypassQuery_() {
+    var perm = 0;
+    var uid = '';
+    try {
+      var q = new URLSearchParams(window.location.search);
+      var permStr = q.get('perm') || q.get('dev_perm') || q.get('permission') || '';
+      uid = q.get('dev_user') || q.get('dev_user_id') || q.get('uid') || '';
+      if (!permStr && !uid) {
+        permStr = sessionStorage.getItem('acct_dev_perm') || '';
+        uid = sessionStorage.getItem('acct_dev_user') || '';
+      } else {
+        if (permStr) sessionStorage.setItem('acct_dev_perm', permStr);
+        if (uid) sessionStorage.setItem('acct_dev_user', uid);
+      }
+      perm = permStr ? parseInt(permStr, 10) : 0;
+    } catch (e) {}
+    return { dev_permission: perm > 0 ? perm : 0, dev_user_id: uid };
+  }
+
+  function devBypassAuthBody_(action) {
+    var opts = readDevBypassQuery_();
+    var body = { action: action, dev_bypass: true };
+    if (opts.dev_permission) body.dev_permission = opts.dev_permission;
+    if (opts.dev_user_id) body.dev_user_id = opts.dev_user_id;
+    return { body: body, opts: opts };
+  }
+
+  function buildDevBypassSession_(auth, opts) {
+    return {
+      devBypass: true,
+      devPermission: opts.dev_permission || auth.permission || 0,
+      devUserId: opts.dev_user_id || '',
+      profile: { userId: auth.user_id, displayName: auth.display_name },
+      idToken: '',
+      auth: auth
+    };
+  }
+
   function buildAuth(session) {
     if (!session) return {};
-    if (session.devBypass) return { dev_bypass: true };
+    if (session.devBypass) {
+      var a = { dev_bypass: true };
+      if (session.devPermission) a.dev_permission = session.devPermission;
+      if (session.devUserId) a.dev_user_id = session.devUserId;
+      return a;
+    }
     return { liff_id_token: session.idToken || '' };
   }
 
@@ -44,7 +87,10 @@ var AccountingApi = (function () {
     buildAuth: buildAuth,
     authMe: function (sessionOrToken) {
       if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
-        return post({ action: 'accounting_auth_me', dev_bypass: true });
+        var pack = devBypassAuthBody_('accounting_auth_me');
+        if (sessionOrToken.devPermission) pack.body.dev_permission = sessionOrToken.devPermission;
+        if (sessionOrToken.devUserId) pack.body.dev_user_id = sessionOrToken.devUserId;
+        return post(pack.body);
       }
       var token = typeof sessionOrToken === 'string' ? sessionOrToken : (sessionOrToken && sessionOrToken.idToken);
       return post({ action: 'accounting_auth_me', liff_id_token: token });
@@ -125,14 +171,10 @@ var AccountingApi = (function () {
       var policy = await AccountingApi.loadPolicy();
       var session;
       if (policy.authBypass) {
-        var auth = await post({ action: 'accounting_auth_me', dev_bypass: true });
+        var pack = devBypassAuthBody_('accounting_auth_me');
+        var auth = await post(pack.body);
         if (!auth.success) throw new Error(auth.message || '驗證失敗');
-        session = {
-          devBypass: true,
-          profile: { userId: auth.user_id, displayName: auth.display_name },
-          idToken: '',
-          auth: auth
-        };
+        session = buildDevBypassSession_(auth, pack.opts);
       } else {
         session = await AccountingApi.initLiff(opts);
       }
@@ -146,14 +188,10 @@ var AccountingApi = (function () {
       var policy = await AccountingApi.loadPolicy();
       var session;
       if (policy.authBypass) {
-        var auth = await post({ action: 'accounting_auth_me', dev_bypass: true });
-        if (!auth.success) throw new Error(auth.message || '驗證失敗');
-        session = {
-          devBypass: true,
-          profile: { userId: auth.user_id, displayName: auth.display_name },
-          idToken: '',
-          auth: auth
-        };
+        var pack2 = devBypassAuthBody_('accounting_auth_me');
+        var auth2 = await post(pack2.body);
+        if (!auth2.success) throw new Error(auth2.message || '驗證失敗');
+        session = buildDevBypassSession_(auth2, pack2.opts);
       } else {
         session = await AccountingApi.initLiff(opts);
       }
@@ -304,14 +342,10 @@ var AccountingApi = (function () {
       var policy = await AccountingApi.loadPolicy();
       var session;
       if (policy.authBypass) {
-        var auth = await post({ action: 'accounting_auth_me', dev_bypass: true });
-        if (!auth.success) throw new Error(auth.message || '驗證失敗');
-        session = {
-          devBypass: true,
-          profile: { userId: auth.user_id, displayName: auth.display_name },
-          idToken: '',
-          auth: auth
-        };
+        var pack3 = devBypassAuthBody_('accounting_auth_me');
+        var auth3 = await post(pack3.body);
+        if (!auth3.success) throw new Error(auth3.message || '驗證失敗');
+        session = buildDevBypassSession_(auth3, pack3.opts);
       } else {
         session = await AccountingApi.initLiff(opts);
       }
