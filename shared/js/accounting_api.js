@@ -10,12 +10,24 @@ var AccountingApi = (function () {
   var SUPERVISOR_DENIED_MSG = '權限不足（需主管，權限 ≥ 3）';
   var VENDOR_PAYMENT_APPROVE_DENIED_MSG = '權限不足（廠商請款審核需權限 ≥ 5）';
 
-  async function post(body) {
-    var res = await fetch(GAS_API, {
+  async function post(body, timeoutMs) {
+    var opts = {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(body)
-    });
+    };
+    if (timeoutMs && timeoutMs > 0) {
+      var ctrl = new AbortController();
+      opts.signal = ctrl.signal;
+      var timer = setTimeout(function () { ctrl.abort(); }, timeoutMs);
+      try {
+        var res = await fetch(GAS_API, opts);
+        return res.json();
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    var res = await fetch(GAS_API, opts);
     return res.json();
   }
 
@@ -267,6 +279,61 @@ var AccountingApi = (function () {
         account_name: payload.account_name,
         doc_type: payload.doc_type,
         drive_urls: payload.drive_urls
+      });
+    },
+    paymentRequestComposeSubmit: function (sessionOrToken, payload) {
+      return post({
+        action: 'payment_request_compose_submit',
+        auth: resolveAuth(sessionOrToken),
+        vendor_id: payload.vendor_id,
+        employee_user_id: payload.employee_user_id,
+        vendor_name: payload.vendor_name,
+        doc_type: payload.doc_type,
+        order_no: payload.order_no,
+        note: payload.note,
+        bank_code: payload.bank_code,
+        account_no: payload.account_no,
+        account_name: payload.account_name,
+        allocations: payload.allocations || [],
+        photos: payload.photos || [],
+        from_line: payload.from_line
+      });
+    },
+    paymentRequestComposeDraft: function (sessionOrToken, draftToken) {
+      return post({
+        action: 'payment_request_compose_draft',
+        auth: resolveAuth(sessionOrToken),
+        draft_token: draftToken
+      });
+    },
+    paymentRequestOcrAnalyze: function (sessionOrToken, payload, timeoutMs) {
+      return post({
+        action: 'payment_request_ocr_analyze',
+        auth: resolveAuth(sessionOrToken),
+        draft_id: payload.draft_id,
+        photo_ids: payload.photo_ids || [],
+        photos: payload.photos || []
+      }, timeoutMs || 0);
+    },
+    paymentRequestSubmit: function (sessionOrToken, payload) {
+      return post({
+        action: 'payment_request_submit',
+        auth: resolveAuth(sessionOrToken),
+        submit_mode: payload.submit_mode || 'review',
+        draft_id: payload.draft_id,
+        vendor_id: payload.vendor_id,
+        employee_user_id: payload.employee_user_id,
+        vendor_name: payload.vendor_name,
+        doc_type: payload.doc_type,
+        order_no: payload.order_no,
+        txn_date: payload.txn_date,
+        note: payload.note,
+        bank_code: payload.bank_code,
+        account_no: payload.account_no,
+        account_name: payload.account_name,
+        allocations: payload.allocations || [],
+        photos: payload.photos || [],
+        from_line: payload.from_line
       });
     },
     vendorPaymentUpdate: function (sessionOrToken, paymentRequestId, patch) {

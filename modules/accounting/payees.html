@@ -6,8 +6,9 @@
   <title>收款帳戶</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=9"></script>
-  <script src="../../shared/js/accounting_api.js?v=9"></script>
-  <script src="../../shared/js/accounting_cache.js?v=9"></script>
+  <script src="../../shared/js/accounting_api.js?v=17"></script>
+  <script src="../../shared/js/accounting_cache.js?v=17"></script>
+  <script src="../../shared/js/accounting_ui.js?v=1"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 560px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 8px; }
@@ -23,6 +24,7 @@
     .bank { font-family: ui-monospace, monospace; font-size: 13px; color: #333; }
     .inactive { opacity: .55; }
     #msg { color: #c5221f; font-size: 14px; }
+    #ok { color: #137333; font-size: 14px; }
     .hidden { display: none; }
     .nav { margin-bottom: 12px; font-size: 14px; }
     .nav a { color: #1a73e8; text-decoration: none; }
@@ -35,6 +37,7 @@
     <h2>收款帳戶</h2>
     <p class="sub" id="userLine">—</p>
     <div id="msg"></div>
+    <div id="ok"></div>
 
     <div class="card">
       <h3 style="margin:0 0 8px">新增收款人</h3>
@@ -65,7 +68,9 @@
   <script>
     (function () {
       var session = null;
-      function setMsg(t) { document.getElementById('msg').textContent = t || ''; }
+      var ui = AccountingUi.bindMsg('msg', 'ok');
+      function setMsg(t) { ui.setMsg(t); }
+      function setOk(t) { ui.setOk(t); }
       function showApp() {
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
@@ -97,31 +102,38 @@
         if (!data.data || !data.data.length) box.textContent = '尚無資料';
       }
       document.getElementById('addBtn').addEventListener('click', async function () {
-        setMsg('');
-        var payload = {
-          name: document.getElementById('name').value.trim(),
-          bank_code: document.getElementById('bank_code').value.trim(),
-          branch_code: document.getElementById('branch_code').value.trim(),
-          account_no: document.getElementById('account_no').value.trim(),
-          account_name: document.getElementById('account_name').value.trim(),
-          phone: document.getElementById('phone').value.trim()
-        };
-        if (!payload.name) { setMsg('請填姓名或廠商名稱'); return; }
-        if (!payload.bank_code || payload.bank_code.length !== 3) { setMsg('銀行代碼須為 3 碼'); return; }
-        if (!payload.branch_code || payload.branch_code.length !== 4) { setMsg('分行代碼須為 4 碼'); return; }
-        if (!payload.account_no) { setMsg('請填帳號'); return; }
-        if (!payload.account_name) { setMsg('請填戶名'); return; }
-        var data = await AccountingApi.crudCreate(session, 'payee', payload);
-        if (!data.success) { setMsg(data.message || '新增失敗'); return; }
-        var boot = AccountingCache.get(session);
-        if (boot && boot.masters) {
-          boot.masters.payees = boot.masters.payees || [];
-          boot.masters.payees.unshift(data.data);
-        }
-        ['name', 'bank_code', 'branch_code', 'account_no', 'account_name', 'phone'].forEach(function (id) {
-          document.getElementById(id).value = '';
+        var btn = this;
+        await AccountingUi.runAsync(btn, {
+          busyLabel: '儲存中…',
+          startMessage: '正在新增收款帳戶…'
+        }, async function () {
+          ui.clear();
+          var payload = {
+            name: document.getElementById('name').value.trim(),
+            bank_code: document.getElementById('bank_code').value.trim(),
+            branch_code: document.getElementById('branch_code').value.trim(),
+            account_no: document.getElementById('account_no').value.trim(),
+            account_name: document.getElementById('account_name').value.trim(),
+            phone: document.getElementById('phone').value.trim()
+          };
+          if (!payload.name) { setMsg('請填姓名或廠商名稱'); return; }
+          if (!payload.bank_code || payload.bank_code.length !== 3) { setMsg('銀行代碼須為 3 碼'); return; }
+          if (!payload.branch_code || payload.branch_code.length !== 4) { setMsg('分行代碼須為 4 碼'); return; }
+          if (!payload.account_no) { setMsg('請填帳號'); return; }
+          if (!payload.account_name) { setMsg('請填戶名'); return; }
+          var data = await AccountingApi.crudCreate(session, 'payee', payload);
+          if (!data.success) { setMsg(data.message || '新增失敗'); return; }
+          var boot = AccountingCache.get(session);
+          if (boot && boot.masters) {
+            boot.masters.payees = boot.masters.payees || [];
+            boot.masters.payees.unshift(data.data);
+          }
+          ['name', 'bank_code', 'branch_code', 'account_no', 'account_name', 'phone'].forEach(function (id) {
+            document.getElementById(id).value = '';
+          });
+          setOk('已新增「' + payload.name + '」');
+          await loadList();
         });
-        await loadList();
       });
       (async function boot() {
         try {
