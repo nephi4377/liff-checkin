@@ -36,8 +36,15 @@
     .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
     .photo-tile { border: 1px solid #ddd; border-radius: 8px; padding: 6px; background: #fafafa; text-align: center; }
     .photo-tile img { width: 100%; height: 72px; object-fit: cover; border-radius: 4px; }
+    .photo-tile .file-thumb { width: 100%; height: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 4px; background: #eef2f7; color: #444; font-size: 12px; line-height: 1.3; padding: 4px; box-sizing: border-box; word-break: break-all; }
+    .photo-tile .file-thumb strong { font-size: 13px; color: #c5221f; }
     .photo-tile label { font-weight: normal; font-size: 12px; margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 4px; }
     .photo-tile .del { border: none; background: none; color: #c5221f; font-size: 11px; cursor: pointer; margin-top: 2px; }
+    .drop-zone { margin-top: 8px; padding: 20px 14px; border: 2px dashed #b0b8c4; border-radius: 12px; background: #f8fafc; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+    .drop-zone:hover, .drop-zone.drag-over { border-color: #1a73e8; background: #e8f0fe; }
+    .drop-zone p { margin: 0; font-size: 15px; color: #333; }
+    .drop-zone .hint { margin-top: 6px; font-size: 13px; color: #666; line-height: 1.45; }
+    .drop-zone input[type="file"] { display: none; }
     .ocr-status { font-size: 13px; color: #555; margin: 8px 0; min-height: 18px; }
     .btn-primary:disabled, .btn-secondary:disabled { opacity: .55; cursor: not-allowed; }
     .btn-row { display: flex; flex-direction: column; gap: 0; }
@@ -55,9 +62,13 @@
     <div id="warn" role="status"></div>
 
     <div id="formCard" class="card">
-      <label>單據照片（選填，最多 12 張）</label>
-      <p class="sub" id="photoCountLine">已 0 / 12 張</p>
-      <input type="file" id="photoInput" accept="image/*" multiple />
+      <label>單據附件（選填，最多 12 個）</label>
+      <p class="sub" id="photoCountLine">已 0 / 12 個</p>
+      <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="加入單據檔案">
+        <p>拖曳檔案到這裡，或點一下選擇</p>
+        <p class="hint">支援照片（JPG、PNG…）與 PDF，單檔最多 8 MB</p>
+        <input type="file" id="photoInput" accept="image/*,application/pdf,.pdf" multiple />
+      </div>
       <div class="photo-grid" id="photoGrid"></div>
       <button type="button" class="btn btn-secondary" id="ocrBtn" disabled>開始辨識</button>
       <p class="ocr-status" id="ocrStatus">尚未辨識</p>
@@ -280,6 +291,26 @@
         });
       }
 
+      function isPdfMime(mime) {
+        return String(mime || '').toLowerCase() === 'application/pdf';
+      }
+
+      function guessMime(file) {
+        var t = String((file && file.type) || '').toLowerCase();
+        if (t) return t;
+        var n = String((file && file.name) || '').toLowerCase();
+        if (n.slice(-4) === '.pdf') return 'application/pdf';
+        return 'image/jpeg';
+      }
+
+      function isAllowedFile(file) {
+        if (!file) return false;
+        var mime = guessMime(file);
+        if (mime === 'application/pdf') return true;
+        if (mime.indexOf('image/') === 0) return true;
+        return false;
+      }
+
       function selectedPhotoCount() {
         return photos.filter(function (p) { return p.selected; }).length;
       }
@@ -288,7 +319,7 @@
         var n = selectedPhotoCount();
         var btn = document.getElementById('ocrBtn');
         btn.disabled = n < 1 || submitting;
-        btn.textContent = (ocrAttempt > 0 ? '重新辨識（' + n + ' 張）' : '開始辨識（' + n + ' 張）');
+        btn.textContent = (ocrAttempt > 0 ? '重新辨識（' + n + ' 個）' : '開始辨識（' + n + ' 個）');
       }
 
       function renderPhotoGrid() {
@@ -297,11 +328,18 @@
         photos.forEach(function (p) {
           var tile = document.createElement('div');
           tile.className = 'photo-tile';
+          var isPdf = isPdfMime(p.mimeType);
           tile.innerHTML =
-            '<img alt="單據" />' +
+            (isPdf
+              ? '<div class="file-thumb"><strong>PDF</strong><span></span></div>'
+              : '<img alt="單據預覽" />') +
             '<label><input type="checkbox" class="chk-sel" ' + (p.selected ? 'checked' : '') + ' /> 辨識</label>' +
             '<button type="button" class="del">刪除</button>';
-          tile.querySelector('img').src = 'data:' + p.mimeType + ';base64,' + p.dataBase64;
+          if (isPdf) {
+            tile.querySelector('.file-thumb span').textContent = fileLabel({ name: p.filename });
+          } else {
+            tile.querySelector('img').src = 'data:' + p.mimeType + ';base64,' + p.dataBase64;
+          }
           tile.querySelector('.chk-sel').onchange = function (e) {
             p.selected = e.target.checked;
             updateOcrBtn();
@@ -312,20 +350,25 @@
           };
           grid.appendChild(tile);
         });
-        document.getElementById('photoCountLine').textContent = '已 ' + photos.length + ' / ' + MAX_PHOTOS + ' 張';
+        document.getElementById('photoCountLine').textContent = '已 ' + photos.length + ' / ' + MAX_PHOTOS + ' 個';
         updateOcrBtn();
       }
 
       function readFileB64(file) {
         return new Promise(function (resolve, reject) {
           if (!file) { resolve(null); return; }
-          if (file.size > MAX_BYTES) { reject(new Error('單張不可超過 8 MB：' + file.name)); return; }
+          if (!isAllowedFile(file)) {
+            reject(new Error('不支援的檔案類型：' + file.name + '（請用照片或 PDF）'));
+            return;
+          }
+          if (file.size > MAX_BYTES) { reject(new Error('單檔不可超過 8 MB：' + file.name)); return; }
+          var mimeType = guessMime(file);
           var r = new FileReader();
           r.onload = function () {
             resolve({
               photo_id: uid(),
               filename: file.name,
-              mimeType: file.type || 'image/jpeg',
+              mimeType: mimeType,
               dataBase64: r.result.split(',')[1],
               selected: true
             });
@@ -336,9 +379,10 @@
       }
 
       async function addPhotoFiles(fileList) {
+        setMsg('');
         for (var i = 0; i < fileList.length; i++) {
           if (photos.length >= MAX_PHOTOS) {
-            setMsg('最多 ' + MAX_PHOTOS + ' 張，請刪除多餘照片或另開一筆');
+            setMsg('最多 ' + MAX_PHOTOS + ' 個檔案，請刪除多餘的或另開一筆');
             break;
           }
           try {
@@ -387,7 +431,7 @@
 
       async function runOcr() {
         var selected = photos.filter(function (p) { return p.selected; });
-        if (!selected.length) { setMsg('請勾選至少一張照片'); return; }
+        if (!selected.length) { setMsg('請勾選至少一個檔案'); return; }
         setMsg('');
         setOk('');
         var btn = document.getElementById('ocrBtn');
@@ -524,6 +568,35 @@
       document.getElementById('photoInput').addEventListener('change', function (e) {
         addPhotoFiles(e.target.files || []);
       });
+      (function setupDropZone() {
+        var zone = document.getElementById('dropZone');
+        var input = document.getElementById('photoInput');
+        zone.addEventListener('click', function (e) {
+          if (e.target === input) return;
+          input.click();
+        });
+        zone.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+        });
+        ['dragenter', 'dragover'].forEach(function (ev) {
+          zone.addEventListener(ev, function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            zone.classList.add('drag-over');
+          });
+        });
+        ['dragleave', 'drop'].forEach(function (ev) {
+          zone.addEventListener(ev, function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            zone.classList.remove('drag-over');
+          });
+        });
+        zone.addEventListener('drop', function (e) {
+          var files = (e.dataTransfer && e.dataTransfer.files) ? e.dataTransfer.files : [];
+          if (files.length) addPhotoFiles(files);
+        });
+      })();
       document.getElementById('ocrBtn').addEventListener('click', runOcr);
       document.getElementById('payeeSeg').addEventListener('click', function (e) {
         var btn = e.target.closest('button[data-mode]');
