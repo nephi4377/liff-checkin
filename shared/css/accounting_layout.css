@@ -14,19 +14,13 @@ body.acct-page {
 
 body.acct-page .acct-main {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 @media (min-width: 960px) {
   body.acct-page {
     padding: 24px 32px 36px;
-  }
-
-  body.acct-page .acct-main {
-    max-width: min(1040px, calc(100vw - 340px));
-  }
-
-  body.acct-page-wide .acct-main {
-    max-width: min(1200px, calc(100vw - 340px));
   }
 }
 
@@ -48,9 +42,41 @@ body.acct-page .acct-main {
   }
 }
 
-/* 待付款申請：寬螢幕表單區塊 */
+/* 表單頁：卡片內距稍大 */
+@media (min-width: 960px) {
+  body.acct-page-form .card {
+    padding: 20px 24px;
+  }
+}
+
+/* 待付款申請：寬螢幕左傳檔、右填表 */
 @media (min-width: 1100px) {
-  .acct-payment-form .row2 {
+  .acct-pay-layout {
+    display: grid;
+    grid-template-columns: minmax(300px, 1fr) minmax(380px, 1.25fr);
+    gap: 28px 32px;
+    align-items: start;
+  }
+
+  .acct-payment-form .photo-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .acct-payment-form .alloc-row .row2 {
+    grid-template-columns: 1fr 1fr 1.5fr;
+  }
+}
+
+/* 通用表單：寬螢幕兩欄區塊（加 class acct-form-2col 於容器） */
+@media (min-width: 1100px) {
+  .acct-form-2col {
+    display: grid;
     grid-template-columns: 1fr 1fr;
+    gap: 20px 28px;
+    align-items: start;
+  }
+
+  .acct-form-2col > .acct-form-span2 {
+    grid-column: 1 / -1;
   }
 }
