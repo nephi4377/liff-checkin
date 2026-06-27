@@ -1,16 +1,22 @@
 /**
- * 會計系統共用 UI：浮動提示（10 秒）+ 可捲動訊息欄（窄螢幕底／寬螢幕右側）+ 操作紀錄
+ * 會計系統共用 UI：浮動提示（10 秒）+ 可捲動訊息欄 + 操作紀錄
+ * 紀錄儲存：localStorage（本機）+ 後端稽核試算表（accounting_client_log，背景上傳）
  */
 var AccountingUi = (function () {
   var TOAST_MS_DEFAULT = 10000;
   var MAX_LOG = 100;
+  var STORAGE_KEY = 'tanxin_acct_ui_log_v1';
+  var STORAGE_MAX = 300;
   var logs = [];
   var mounted = false;
   var dockEl = null;
   var logListEl = null;
+  var dockTitleEl = null;
   var toastStack = null;
   var btnStates = new WeakMap();
   var opts = { side: 'right' };
+  var operator = { session: null, userId: '', displayName: '', permission: 0 };
+  var _restoring = false;
 
   var KIND_LABEL = { ok: '完成', err: '錯誤', warn: '注意', info: '訊息', action: '動作' };
 
@@ -35,7 +41,8 @@ var AccountingUi = (function () {
       '#acctMsgDock{position:fixed;z-index:10040;background:#1e293b;color:#e2e8f0;',
       'font-size:13px;line-height:1.4;display:flex;flex-direction:column;box-shadow:0 -4px 24px rgba(0,0,0,.2)}',
       '#acctMsgDock .acct-dock-hd{padding:8px 12px;font-weight:700;font-size:12px;letter-spacing:.04em;',
-      'text-transform:uppercase;color:#94a3b8;border-bottom:1px solid #334155;flex-shrink:0;display:flex;justify-content:space-between;align-items:center}',
+      'text-transform:uppercase;color:#94a3b8;border-bottom:1px solid #334155;flex-shrink:0;display:flex;justify-content:space-between;align-items:center;gap:6px}',
+      '#acctMsgDock .acct-dock-actions{display:flex;gap:2px;flex-shrink:0}',
       '#acctMsgDock .acct-dock-clear{border:none;background:transparent;color:#94a3b8;font-size:12px;cursor:pointer;padding:4px 8px}',
       '#acctMsgDock .acct-dock-clear:hover{color:#fff}',
       '#acctMsgLog{overflow-y:auto;flex:1;padding:6px 10px;-webkit-overflow-scrolling:touch}',
@@ -70,10 +77,103 @@ var AccountingUi = (function () {
     return d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   }
 
+  function formatTimeFromIso(iso) {
+    if (!iso) return formatTime();
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return formatTime();
+    return d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function pageName() {
+    try {
+      var p = window.location.pathname || '';
+      return p.split('/').pop() || 'unknown';
+    } catch (e) {
+      return 'unknown';
+    }
+  }
+
   function normalizeKind(kind) {
     if (kind === 'error') return 'err';
     if (kind === 'success') return 'ok';
     return kind || 'info';
+  }
+
+  function readStorageList() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return [];
+      var list = JSON.parse(raw);
+      return Array.isArray(list) ? list : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function writeStorageList(list) {
+    try {
+      while (list.length > STORAGE_MAX) list.shift();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    } catch (e) {}
+    updateDockTitle();
+  }
+
+  function updateDockTitle() {
+    if (!dockTitleEl) return;
+    var n = readStorageList().length;
+    dockTitleEl.textContent = '狀態紀錄（本機 ' + n + '）';
+  }
+
+  function shouldSyncRemote(kind, text) {
+    if (kind === 'info' && text === '頁面已就緒') return false;
+    return true;
+  }
+
+  function persistEntry(kind, text) {
+    if (_restoring) return;
+    var entry = {
+      at: new Date().toISOString(),
+      page: pageName(),
+      operator_id: operator.userId || '',
+      operator_name: operator.displayName || '',
+      permission: operator.permission || 0,
+      kind: normalizeKind(kind),
+      text: String(text)
+    };
+    var list = readStorageList();
+    list.push(entry);
+    writeStorageList(list);
+
+    if (!shouldSyncRemote(kind, text)) return;
+    if (!operator.session) return;
+    if (typeof AccountingApi === 'undefined' || !AccountingApi.clientLog) return;
+    var summary = entry.text.length > 500 ? entry.text.slice(0, 500) + '…' : entry.text;
+    var detail = entry.text.length > 500 ? entry.text : '';
+    AccountingApi.clientLog(operator.session, {
+      page: entry.page,
+      kind: entry.kind,
+      summary: summary,
+      detail: detail
+    });
+  }
+
+  function restoreStoredLogs() {
+    _restoring = true;
+    try {
+      var list = readStorageList();
+      var recent = list.slice(-25);
+      recent.forEach(function (e) {
+        var prefix = e.operator_name ? '[' + e.operator_name + '] ' : '';
+        logs.unshift({
+          kind: normalizeKind(e.kind),
+          text: prefix + (e.text || ''),
+          at: formatTimeFromIso(e.at)
+        });
+      });
+      if (logs.length > MAX_LOG) logs.length = MAX_LOG;
+    } finally {
+      _restoring = false;
+    }
   }
 
   function renderLog() {
@@ -101,9 +201,11 @@ var AccountingUi = (function () {
 
   function pushLog(kind, text) {
     if (!text) return;
-    logs.unshift({ kind: normalizeKind(kind), text: String(text), at: formatTime() });
+    kind = normalizeKind(kind);
+    logs.unshift({ kind: kind, text: String(text), at: formatTime() });
     if (logs.length > MAX_LOG) logs.length = MAX_LOG;
     renderLog();
+    persistEntry(kind, text);
   }
 
   function toast(kind, text, ms) {
@@ -123,6 +225,33 @@ var AccountingUi = (function () {
     }, ms);
   }
 
+  function copyStoredLogs() {
+    var list = readStorageList();
+    var text = list.map(function (e) {
+      return [
+        e.at || '',
+        e.operator_name || e.operator_id || '—',
+        e.page || '',
+        e.kind || '',
+        e.text || ''
+      ].join('\t');
+    }).join('\n');
+    if (!text) {
+      pushLog('warn', '本機尚無已存紀錄');
+      return;
+    }
+    var header = '時間\t操作人\t頁面\t類型\t內容\n';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(header + text).then(function () {
+        toast('ok', '已複製 ' + list.length + ' 筆紀錄', 3000);
+      }).catch(function () {
+        pushLog('info', header + text);
+      });
+    } else {
+      pushLog('info', header + text);
+    }
+  }
+
   function ensureMount() {
     if (mounted) return;
     mounted = true;
@@ -139,14 +268,22 @@ var AccountingUi = (function () {
     dockEl.setAttribute('aria-label', '操作與狀態訊息');
     dockEl.className = opts.side === 'left' ? 'acct-dock-left' : 'acct-dock-right';
     dockEl.innerHTML =
-      '<div class="acct-dock-hd"><span>狀態紀錄</span><button type="button" class="acct-dock-clear" id="acctDockClear">清除</button></div>' +
+      '<div class="acct-dock-hd">' +
+      '<span id="acctDockTitle">狀態紀錄</span>' +
+      '<div class="acct-dock-actions">' +
+      '<button type="button" class="acct-dock-clear" id="acctDockCopy" title="複製本機紀錄">複製</button>' +
+      '<button type="button" class="acct-dock-clear" id="acctDockClear" title="只清畫面">清除</button>' +
+      '</div></div>' +
       '<div id="acctMsgLog" role="log" aria-live="polite"></div>';
     document.body.appendChild(dockEl);
+    dockTitleEl = document.getElementById('acctDockTitle');
     logListEl = document.getElementById('acctMsgLog');
     document.getElementById('acctDockClear').addEventListener('click', function () {
       logs = [];
       renderLog();
     });
+    document.getElementById('acctDockCopy').addEventListener('click', copyStoredLogs);
+    updateDockTitle();
 
     ['msg', 'ok', 'warn'].forEach(function (id) {
       var el = document.getElementById(id);
@@ -178,18 +315,24 @@ var AccountingUi = (function () {
     else if (status === 'start') toast('info', msg, 4000);
   }
 
-  /** 按鈕／切換等點擊 — 只寫訊息欄，不跳 Toast */
   function tap(label) {
     if (!label) return;
     pushLog('action', '點擊：' + String(label));
   }
 
-  /** 多行詳情（如送出表單摘要）— 只寫訊息欄 */
   function detail(title, body) {
     if (!title && !body) return;
     var text = String(title || '');
     if (body) text += (text ? '\n' : '') + String(body);
     pushLog('info', text);
+  }
+
+  function setOperator(session) {
+    if (!session) return;
+    operator.session = session;
+    operator.userId = (session.auth && session.auth.user_id) || (session.profile && session.profile.userId) || '';
+    operator.displayName = (session.auth && session.auth.display_name) || (session.profile && session.profile.displayName) || '';
+    operator.permission = (session.auth && session.auth.permission) || 0;
   }
 
   function setBtnBusy(btn, on, busyLabel) {
@@ -238,9 +381,14 @@ var AccountingUi = (function () {
       initOpts = initOpts || {};
       if (initOpts.side === 'left') opts.side = 'left';
       ensureMount();
+      restoreStoredLogs();
+      renderLog();
       pushLog('info', '頁面已就緒');
+      if (initOpts.session) setOperator(initOpts.session);
       return this;
     },
+    setOperator: setOperator,
+    getStoredLogs: readStorageList,
     toast: toast,
     log: pushLog,
     notify: notify,

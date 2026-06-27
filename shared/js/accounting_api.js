@@ -66,6 +66,14 @@ var AccountingApi = (function () {
     } catch (e) {}
   }
 
+  function notifyUiOperator_(session) {
+    try {
+      if (session && typeof AccountingUi !== 'undefined' && AccountingUi.setOperator) {
+        AccountingUi.setOperator(session);
+      }
+    } catch (e) {}
+  }
+
   function buildDevBypassSession_(auth, opts) {
     return {
       devBypass: true,
@@ -137,6 +145,18 @@ var AccountingApi = (function () {
     },
     bootstrap: function (sessionOrToken, timeoutMs) {
       return post({ action: 'accounting_bootstrap', auth: resolveAuth(sessionOrToken) }, timeoutMs || 120000);
+    },
+    /** 瀏覽器操作紀錄（背景上傳，失敗不影響 UI） */
+    clientLog: function (sessionOrToken, payload) {
+      if (!sessionOrToken) return Promise.resolve({ success: false });
+      return post({
+        action: 'accounting_client_log',
+        auth: resolveAuth(sessionOrToken),
+        page: (payload && payload.page) || '',
+        kind: (payload && payload.kind) || 'info',
+        summary: (payload && payload.summary) || '',
+        detail: (payload && payload.detail) || ''
+      }).catch(function () { return { success: false }; });
     },
     vendorEnsureFolder: function (sessionOrToken, vendorId) {
       return post({ action: 'vendor_ensure_folder', auth: resolveAuth(sessionOrToken), vendor_id: vendorId })
@@ -217,6 +237,7 @@ var AccountingApi = (function () {
       if ((session.auth.permission || 0) < SUPERVISOR_MIN_PERMISSION) {
         throw new Error(SUPERVISOR_DENIED_MSG);
       }
+      notifyUiOperator_(session);
       return session;
     },
     initVendorPaymentApproveSession: async function (opts) {
@@ -234,6 +255,7 @@ var AccountingApi = (function () {
       if ((session.auth.permission || 0) < VENDOR_PAYMENT_APPROVE_MIN_PERMISSION) {
         throw new Error(VENDOR_PAYMENT_APPROVE_DENIED_MSG);
       }
+      notifyUiOperator_(session);
       return session;
     },
     vendorPaymentList: function (sessionOrToken, status) {
@@ -443,6 +465,7 @@ var AccountingApi = (function () {
       if ((session.auth.permission || 0) < MIN_PERMISSION) {
         throw new Error(PERM_DENIED_MSG);
       }
+      notifyUiOperator_(session);
       return session;
     },
     /** 廠商自填頁：LIFF 登入，不需員工權限 */
