@@ -1,15 +1,14 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>待付款申請</title>
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=1" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_api.js?v=20"></script>
-  <script src="../../shared/js/accounting_ui.js?v=4"></script>
+  <script src="../../shared/js/accounting_ui.js?v=5"></script>
   <style>
-    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 640px; margin: 0 auto; background: #f4f6f8; }
-    @media (min-width: 960px) { body { max-width: 720px; } }
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; line-height: 1.5; }
     .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
@@ -57,9 +56,9 @@
     .btn-row { display: flex; flex-direction: column; gap: 0; }
   </style>
 </head>
-<body>
+<body class="acct-page">
   <div id="loading">載入中…</div>
-  <div id="app" class="hidden">
+  <div id="app" class="hidden acct-main">
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>待付款申請</h2>
     <p class="sub" id="userLine">—</p>
@@ -68,7 +67,7 @@
       <span class="on">① 傳單據</span><span>② 辨識</span><span>③ 確認收款人</span><span>④ 送出</span>
     </div>
 
-    <div id="formCard" class="card">
+    <div id="formCard" class="card acct-payment-form">
       <label>單據附件（選填，最多 12 個）</label>
       <p class="sub" id="photoCountLine">已 0 / 12 個</p>
       <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="加入單據檔案">

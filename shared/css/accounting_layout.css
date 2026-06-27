@@ -1,0 +1,56 @@
+/**
+ * 會計模組共用版面 — 電腦優先；右側訊息欄由 accounting_ui.js 留空
+ */
+body.acct-page {
+  font-family: system-ui, sans-serif;
+  margin: 0;
+  padding: 16px 20px 28px;
+  background: #f4f6f8;
+  box-sizing: border-box;
+  min-height: 100vh;
+  width: 100%;
+  max-width: none;
+}
+
+body.acct-page .acct-main {
+  width: 100%;
+}
+
+@media (min-width: 960px) {
+  body.acct-page {
+    padding: 24px 32px 36px;
+  }
+
+  body.acct-page .acct-main {
+    max-width: min(1040px, calc(100vw - 340px));
+  }
+
+  body.acct-page-wide .acct-main {
+    max-width: min(1200px, calc(100vw - 340px));
+  }
+}
+
+/* 功能選單：寬螢幕兩欄卡片 */
+@media (min-width: 960px) {
+  .acct-index-menu {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    align-content: start;
+  }
+
+  .acct-index-menu > :not(a.card) {
+    grid-column: 1 / -1;
+  }
+
+  .acct-index-menu > a.card {
+    margin-bottom: 0;
+  }
+}
+
+/* 待付款申請：寬螢幕表單區塊 */
+@media (min-width: 1100px) {
+  .acct-payment-form .row2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}

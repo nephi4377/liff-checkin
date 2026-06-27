@@ -1,15 +1,15 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>廠商資料登記</title>
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=1" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=13"></script>
   <script src="../../shared/js/accounting_api.js?v=20"></script>
-  <script src="../../shared/js/accounting_ui.js?v=4"></script>
+  <script src="../../shared/js/accounting_ui.js?v=5"></script>
   <style>
-    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 640px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 8px; }
     h3 { margin: 0 0 8px; font-size: 16px; }
     .sub { color: #555; font-size: 14px; line-height: 1.5; }
@@ -38,9 +38,9 @@
     .ocr-status.err { color: #c5221f; }
   </style>
 </head>
-<body>
+<body class="acct-page">
   <div id="loading">載入中…</div>
-  <div id="app" class="hidden">
+  <div id="app" class="hidden acct-main">
     <h2>廠商資料登記</h2>
     <p class="sub" id="userLine">—</p>
     <p class="sub" id="statusLine"></p>

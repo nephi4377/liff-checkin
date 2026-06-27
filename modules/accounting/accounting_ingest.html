@@ -1,14 +1,14 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>添心收支登錄</title>
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=1" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_api.js?v=20"></script>
-  <script src="../../shared/js/accounting_ui.js?v=4"></script>
+  <script src="../../shared/js/accounting_ui.js?v=5"></script>
   <style>
-    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 480px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 4px; }
     .sub { color: #555; font-size: 14px; margin: 0 0 12px; }
     .card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
@@ -33,9 +33,9 @@
     #contextBar.warn { color: #b06000; background: #fef7e0; }
   </style>
 </head>
-<body>
+<body class="acct-page">
   <div id="loading">載入中…</div>
-  <div id="app" class="hidden">
+  <div id="app" class="hidden acct-main">
     <h2>收支登錄</h2>
     <p class="sub" id="userLine">—</p>
     <p class="sub hidden" id="photoHint">已帶入 LINE 傳的照片。關閉視窗＝不送出。</p>

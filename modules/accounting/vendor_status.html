@@ -1,14 +1,14 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>款項進度</title>
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=1" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_api.js?v=20"></script>
-  <script src="../../shared/js/accounting_ui.js?v=4"></script>
+  <script src="../../shared/js/accounting_ui.js?v=5"></script>
   <style>
-    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 560px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 8px; }
     h3 { margin: 16px 0 8px; font-size: 15px; color: #333; }
     .sub { color: #555; font-size: 14px; }
@@ -27,9 +27,9 @@
     .empty { color: #888; font-size: 14px; padding: 8px 0; }
   </style>
 </head>
-<body>
+<body class="acct-page">
   <div id="loading">載入中…</div>
-  <div id="app" class="hidden">
+  <div id="app" class="hidden acct-main">
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>款項進度</h2>
     <p class="sub" id="userLine">—</p>

@@ -63,8 +63,9 @@ var AccountingUi = (function () {
       '#acctMsgDock{left:0;right:0;bottom:0;height:108px;border-radius:12px 12px 0 0}',
       '}',
       '@media (min-width:960px){',
-      'body.acct-ui-mounted.acct-ui-side-right{padding-right:304px!important}',
-      'body.acct-ui-mounted.acct-ui-side-left{padding-left:304px!important}',
+      'body.acct-ui-mounted.acct-ui-side-right{padding-right:304px!important;padding-left:0;max-width:none!important;margin:0!important}',
+      'body.acct-ui-mounted.acct-ui-side-left{padding-left:304px!important;padding-right:0;max-width:none!important;margin:0!important}',
+      'body.acct-page.acct-ui-mounted.acct-ui-side-right{padding-left:32px!important}',
       '#acctMsgDock.acct-dock-right{top:0;right:0;bottom:0;width:288px;border-radius:0;border-left:1px solid #334155}',
       '#acctMsgDock.acct-dock-left{top:0;left:0;bottom:0;width:288px;border-radius:0;border-right:1px solid #334155}',
       '}'
