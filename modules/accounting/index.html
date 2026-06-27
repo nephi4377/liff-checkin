@@ -6,8 +6,8 @@
   <title>添心會計</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=10"></script>
-  <script src="../../shared/js/accounting_api.js?v=18"></script>
-  <script src="../../shared/js/accounting_cache.js?v=18"></script>
+  <script src="../../shared/js/accounting_api.js?v=19"></script>
+  <script src="../../shared/js/accounting_cache.js?v=19"></script>
   <script src="../../shared/js/accounting_ui.js?v=2"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 480px; margin: 0 auto; background: #f4f6f8; }
@@ -112,15 +112,11 @@
             document.getElementById('linkVendorPaymentApprove').classList.add('hidden');
           }
           showApp();
-          var hint = document.getElementById('cacheHint');
-          var hadCache = !!AccountingCache.get(session);
-          if (!hadCache) {
-            hint.textContent = '主檔載入中…';
-            AccountingCache.load(session).then(function () {
-              hint.textContent = '';
-            }).catch(function (e) {
-              hint.textContent = '主檔載入失敗：' + (e.message || e);
-            });
+          if (!AccountingCache.get(session)) {
+            AccountingUi.action('主檔預載', 'start');
+            AccountingCache.load(session)
+              .then(function () { AccountingUi.action('主檔預載', 'ok'); })
+              .catch(function (e) { AccountingUi.action('主檔預載', 'fail', e.message || String(e)); });
           }
         } catch (e) {
           document.getElementById('loading').textContent = e.message || String(e);

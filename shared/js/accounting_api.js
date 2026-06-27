@@ -135,8 +135,8 @@ var AccountingApi = (function () {
     vendorPaymentStatus: function (sessionOrToken, filter) {
       return post({ action: 'vendor_payment_status', auth: resolveAuth(sessionOrToken), filter: filter || {} });
     },
-    bootstrap: function (sessionOrToken) {
-      return post({ action: 'accounting_bootstrap', auth: resolveAuth(sessionOrToken) });
+    bootstrap: function (sessionOrToken, timeoutMs) {
+      return post({ action: 'accounting_bootstrap', auth: resolveAuth(sessionOrToken) }, timeoutMs || 120000);
     },
     vendorEnsureFolder: function (sessionOrToken, vendorId) {
       return post({ action: 'vendor_ensure_folder', auth: resolveAuth(sessionOrToken), vendor_id: vendorId })
