@@ -130,6 +130,7 @@ const App = {
             '#/daily-report': { name: 'iframe', src: 'modules/projects/daily_report.html', title: '團隊工作總覽' }, // [v515.0 修正] 改為絕對路徑
             '#/onboarding-flow': { name: 'iframe', src: 'modules/info/onboardingflow.html', title: '客戶接洽流程' }, // [v518.0 修正]
             '#/attendance-report': { name: 'iframe', src: 'modules/attendance/attendance_report.html', title: '出勤儀表板' }, // [v515.0 修正] 改為絕對路徑
+            '#/my-personal': { name: 'iframe', src: 'modules/attendance/my_personal.html', title: '我的出勤與假勤' },
             '#/staff-status-board': { name: 'iframe', src: 'modules/attendance/staff_status_board.html', title: '全員出勤燈號看板' },
             '#/approval-dashboard': { name: 'iframe', src: 'modules/attendance/approval_dashboard.html', title: '假勤審核儀表板' }, // [v515.0 修正] 改為絕對路徑
             '#/leave-request': { name: 'iframe', src: 'modules/attendance/leave_request.html', title: '線上假勤申請' }, // [v515.0 修正] 改為絕對路徑
@@ -156,11 +157,18 @@ const App = {
             // [v425.0 架構優化] 處理帶有查詢參數的 hash 路由
             const [path, queryString] = hash.split('?');
             const route = routes[path] || routes['#'];
+            const hashParams = queryString ? `&${queryString}` : '';
+            const routeParams = route.params || '';
 
             currentView.value = {
                 ...route,
-                params: queryString ? `&${queryString}` : '' // 將 hash 中的參數轉給 iframe
+                params: hashParams + routeParams
             };
+            if (path === '#/attendance-report' && Number(currentUser.value?.permission || 0) > 0
+                && Number(currentUser.value?.permission || 0) < 4) {
+                window.location.replace('#/my-personal');
+                return;
+            }
             console.log(`[Router] Navigated to: ${hash}`, route);
         };
 
@@ -765,14 +773,14 @@ const App = {
                     <div v-else-if="currentView.name === 'project-board'" class="py-6">
                          <ProjectBoard :projects="allProjects" :userProfile="userProfile" :currentUser="currentUser" />
                     </div>
-                    <div v-else-if="currentView.name === 'iframe' && userProfile" class="h-full">
+                    <div v-else-if="currentView.name === 'iframe' && userProfile" class="h-full min-h-[70vh]">
                         <IframeView :src="currentView.src + 
                             (currentView.src.includes('?') ? '&' : '?') + 
-                            'uid=' + userProfile.userId + 
-                            '&name=' + userProfile.displayName +
-                            '&permission=' + (currentUser?.permission || 1) +
-                            '&shiftStart=' + (currentUser?.shiftStart || '08:30') +
-                            '&shiftEnd=' + (currentUser?.shiftEnd || '17:30') +
+                            'uid=' + encodeURIComponent(userProfile.userId) + 
+                            '&name=' + encodeURIComponent(userProfile.displayName) +
+                            '&permission=' + encodeURIComponent(currentUser?.permission || 1) +
+                            '&shiftStart=' + encodeURIComponent(currentUser?.shiftStart || '08:30') +
+                            '&shiftEnd=' + encodeURIComponent(currentUser?.shiftEnd || '17:30') +
                             (currentView.params || '')" />
                     </div>
                 </main>

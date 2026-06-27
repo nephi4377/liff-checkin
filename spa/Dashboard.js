@@ -41,6 +41,7 @@ export default {
         const leaveRequestUrl = computed(() => `#/leave-request`);
         const shiftScheduleUrl = computed(() => `#/shift-schedule`);
         const attendanceReportUrl = computed(() => `#/attendance-report`);
+        const myPersonalUrl = computed(() => `#/my-personal`);
         const staffStatusBoardUrl = computed(() => `#/staff-status-board`);
         const employeeEditorUrl = computed(() => `#/employee-editor`);
         const reportUrl = computed(() => `#/report`);
@@ -351,6 +352,7 @@ export default {
             leaveRequestUrl,
             shiftScheduleUrl,
             attendanceReportUrl,
+            myPersonalUrl,
             staffStatusBoardUrl,
             presenceTitle,
             presenceDotClass,
@@ -593,6 +595,16 @@ export default {
                     <div class="min-w-0 flex-1">
                         <h2 class="text-base font-bold text-gray-800 leading-tight">線上假勤申請</h2>
                         <p class="text-xs text-gray-500 mt-1 leading-snug">申請特休、病假、事假或回報加班。</p>
+                    </div>
+                </a>
+
+                <!-- 8b. 我的出勤與假勤（全員） -->
+                <a :href="myPersonalUrl"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-amber-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center text-xl">📋</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">我的出勤與假勤</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">查自己的打卡紀錄與假勤申請，僅本人可見。</p>
                     </div>
                 </a>
 

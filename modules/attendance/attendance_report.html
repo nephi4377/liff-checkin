@@ -17,18 +17,46 @@
             cursor: pointer;
             color: #1f2937;
         }
+        .personal-tab {
+            flex: 1;
+            min-height: 44px;
+            font-size: 0.9375rem;
+            font-weight: 600;
+            border-radius: 0.5rem;
+            transition: background-color 0.15s, color 0.15s;
+        }
+        .personal-tab-active {
+            background-color: rgb(37 99 235);
+            color: white;
+        }
+        .personal-tab-inactive {
+            background-color: rgb(243 244 246);
+            color: rgb(55 65 81);
+        }
+        .personal-tab-inactive:hover {
+            background-color: rgb(229 231 235);
+        }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-800">
-    <div class="container mx-auto p-4 md:p-8">
-        <header class="mb-6 flex justify-between items-center">
-            <h1 class="text-3xl font-bold text-gray-700">出勤儀表板</h1>
-            <button id="add-checkin-btn" class="bg-green-600 text-white font-bold py-2 px-4 rounded-md hover:bg-green-700">＋ 手動補打卡</button>
+<body class="bg-gray-50 text-gray-800">
+    <div class="container mx-auto p-4 md:p-8 max-w-5xl">
+        <header class="mb-6 flex justify-between items-center flex-wrap gap-3">
+            <div>
+                <h1 id="page-title" class="text-2xl md:text-3xl font-bold text-gray-800">出勤儀表板</h1>
+                <p id="page-subtitle" class="text-sm text-gray-500 mt-1 hidden">查自己的打卡與假勤，資料僅您本人可見</p>
+            </div>
+            <button id="add-checkin-btn" class="bg-green-600 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-green-700 transition">＋ 手動補打卡</button>
         </header>
 
-        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
-            <h2 class="text-xl font-semibold mb-2">查詢條件</h2>
-            <p class="text-sm text-gray-500 mb-4">預設顯示每人小計；點姓名可展開逐日明細。選單一員工時，上方會多出統計卡片。</p>
+        <nav id="personal-tabs" class="hidden flex gap-2 mb-6 bg-white p-1.5 rounded-xl shadow-sm border border-gray-100" role="tablist" aria-label="個人出勤與假勤">
+            <button type="button" id="tab-attendance" class="personal-tab personal-tab-active" role="tab" aria-selected="true">出勤紀錄</button>
+            <button type="button" id="tab-leave" class="personal-tab personal-tab-inactive" role="tab" aria-selected="false">假勤紀錄</button>
+        </nav>
+
+        <div id="attendance-main">
+        <div class="bg-white p-5 md:p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
+            <h2 id="query-section-title" class="text-lg font-semibold mb-2">查詢條件</h2>
+            <p id="query-section-hint" class="text-sm text-gray-500 mb-4">預設顯示每人小計；點姓名可展開逐日明細。選單一員工時，上方會多出統計卡片。</p>
             <div class="flex flex-wrap gap-2 mb-4">
                 <button type="button" id="btn-range-this-month" class="text-sm px-3 py-1.5 rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100">本月</button>
                 <button type="button" id="btn-range-last-month" class="text-sm px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200">上月</button>
@@ -42,7 +70,7 @@
                     <label for="end-date" class="block text-sm font-medium text-gray-700">結束日期</label>
                     <input type="date" id="end-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                 </div>
-                <div>
+                <div id="employee-select-wrap">
                     <label for="employee-select" class="block text-sm font-medium text-gray-700">選擇員工</label>
                     <select id="employee-select" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                         <option value="">所有員工</option>
@@ -77,14 +105,29 @@
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">異常(天)</div><div id="total-anomaly" class="mt-1 text-3xl font-semibold text-amber-600">0</div></div>
         </div>
 
-        <div id="results-container" class="bg-white p-6 rounded-lg shadow-md">
-             <h2 class="text-xl font-semibold mb-4">每人小計</h2>
-             <div id="loading-spinner" class="text-center py-10" style="display: none;">載入中...</div>
+        <div id="results-container" class="bg-white p-5 md:p-6 rounded-xl shadow-sm border border-gray-100">
+             <h2 id="results-section-title" class="text-lg font-semibold mb-4">每人小計</h2>
+             <div id="loading-spinner" class="text-center py-10 text-gray-500" style="display: none;">載入中…</div>
              <div id="report-table-container"></div>
              <div id="map-container" style="display: none;">
                  <h3 class="text-lg font-semibold mt-4">打卡地圖</h3>
                  <div id="map"></div>
              </div>
+        </div>
+        </div>
+
+        <div id="leave-panel" class="hidden">
+            <div class="bg-white p-5 md:p-6 rounded-xl shadow-sm border border-gray-100">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-800">我的假勤紀錄</h2>
+                        <p class="text-sm text-gray-500 mt-1">含請假、加班申請與審核狀態</p>
+                    </div>
+                    <a id="leave-apply-link" href="#" class="inline-flex items-center justify-center min-h-[44px] px-4 py-2 bg-amber-500 text-white text-sm font-bold rounded-lg hover:bg-amber-600 transition whitespace-nowrap">申請請假或加班</a>
+                </div>
+                <p id="leave-loading" class="text-center text-gray-500 py-8">載入中…</p>
+                <div id="leave-list" class="space-y-3"></div>
+            </div>
         </div>
     </div>
     
@@ -120,6 +163,20 @@
     let lastReportHolidays = new Set();
     let expandedUserIds = new Set();
     let employeeShiftData = {};
+
+    const urlParamsInit = new URLSearchParams(window.location.search);
+    const permFromUrl = parseInt(urlParamsInit.get('permission') || '1', 10);
+    const IS_PERSONAL = urlParamsInit.get('mode') === 'personal'
+        || /my_personal\.html/i.test(window.location.pathname || '')
+        || (permFromUrl > 0 && permFromUrl < 4);
+
+    const personalUserId = urlParamsInit.get('uid') || '';
+    const personalUserName = urlParamsInit.get('name') || '';
+    const personalPermission = permFromUrl;
+    const personalShiftStart = urlParamsInit.get('shiftStart') || '08:30';
+    const personalShiftEnd = urlParamsInit.get('shiftEnd') || '17:30';
+    let leaveLoaded = false;
+    let activePersonalTab = 'attendance';
 
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
 
@@ -233,6 +290,116 @@
         });
     }
 
+    function switchPersonalTab(tab) {
+        activePersonalTab = tab;
+        const attMain = document.getElementById('attendance-main');
+        const leavePanel = document.getElementById('leave-panel');
+        const tabAtt = document.getElementById('tab-attendance');
+        const tabLeave = document.getElementById('tab-leave');
+        const isAtt = tab === 'attendance';
+        attMain.classList.toggle('hidden', !isAtt);
+        leavePanel.classList.toggle('hidden', isAtt);
+        tabAtt.className = 'personal-tab ' + (isAtt ? 'personal-tab-active' : 'personal-tab-inactive');
+        tabLeave.className = 'personal-tab ' + (!isAtt ? 'personal-tab-active' : 'personal-tab-inactive');
+        tabAtt.setAttribute('aria-selected', isAtt ? 'true' : 'false');
+        tabLeave.setAttribute('aria-selected', !isAtt ? 'true' : 'false');
+        if (!isAtt && !leaveLoaded) fetchPersonalLeaveRequests();
+    }
+
+    function initPersonalMode() {
+        document.title = '我的出勤與假勤';
+        document.getElementById('page-title').textContent = '我的出勤與假勤';
+        document.getElementById('page-subtitle').classList.remove('hidden');
+        document.getElementById('personal-tabs').classList.remove('hidden');
+        document.getElementById('add-checkin-btn').style.display = 'none';
+        document.getElementById('employee-select-wrap').style.display = 'none';
+        document.getElementById('export-csv-btn').classList.add('hidden');
+        document.getElementById('query-section-title').textContent = '選擇日期';
+        document.getElementById('query-section-hint').textContent = '選好日期後按「查詢」，下方會顯示您的出勤統計與逐日明細。';
+        document.getElementById('results-section-title').textContent = '逐日明細';
+        const empSelect = document.getElementById('employee-select');
+        empSelect.innerHTML = `<option value="${escapeAttr(personalUserId)}">${escapeHtml(personalUserName || '我')}</option>`;
+        empSelect.value = personalUserId;
+        employeeShiftData[personalUserId] = {
+            shiftStart: personalShiftStart,
+            shiftEnd: personalShiftEnd
+        };
+        const leaveLink = document.getElementById('leave-apply-link');
+        leaveLink.href = '#/leave-request';
+        leaveLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            try {
+                if (window.parent && window.parent !== window) {
+                    window.parent.location.hash = '#/leave-request';
+                } else {
+                    window.location.hash = '#/leave-request';
+                }
+            } catch (err) {
+                window.location.hash = '#/leave-request';
+            }
+        });
+        document.getElementById('tab-attendance').addEventListener('click', () => switchPersonalTab('attendance'));
+        document.getElementById('tab-leave').addEventListener('click', () => switchPersonalTab('leave'));
+    }
+
+    async function fetchPersonalLeaveRequests() {
+        const listEl = document.getElementById('leave-list');
+        const loadingEl = document.getElementById('leave-loading');
+        loadingEl.style.display = 'block';
+        loadingEl.textContent = '載入中…';
+        listEl.innerHTML = '';
+        try {
+            const data = await fetchApi({
+                page: 'attendance_api',
+                action: 'get_my_leave_requests',
+                userId: personalUserId,
+                operatorId: personalUserId,
+                userName: personalUserName
+            });
+            if (data && data.success === false) throw new Error(data.message || '無法取得假勤紀錄');
+            renderPersonalLeaveList(Array.isArray(data?.data) ? data.data : []);
+            leaveLoaded = true;
+        } catch (error) {
+            listEl.innerHTML = `<p class="text-center text-red-600 py-6">載入失敗：${escapeHtml(error.message)}<br><span class="text-sm text-gray-500">請稍後再試，或改用上方按鈕申請假勤。</span></p>`;
+        } finally {
+            loadingEl.style.display = 'none';
+        }
+    }
+
+    function renderPersonalLeaveList(requests) {
+        const listEl = document.getElementById('leave-list');
+        if (!requests.length) {
+            listEl.innerHTML = '<p class="text-center text-gray-500 py-8">目前沒有假勤申請紀錄。<br><span class="text-sm">需要請假或加班，請按右上角「申請請假或加班」。</span></p>';
+            return;
+        }
+        const statusStyles = {
+            '待審核': 'bg-yellow-100 text-yellow-800 border-yellow-200',
+            '已批准': 'bg-green-100 text-green-800 border-green-200',
+            '已駁回': 'bg-red-100 text-red-800 border-red-200',
+            '已報備': 'bg-blue-100 text-blue-800 border-blue-200',
+            '已確認': 'bg-gray-100 text-gray-700 border-gray-200'
+        };
+        const formatDateTime = (isoStr) => {
+            if (!isoStr) return '—';
+            return new Date(isoStr).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+        };
+        listEl.innerHTML = requests.map((req) => {
+            const statusClass = statusStyles[req.status] || 'bg-gray-100 text-gray-700 border-gray-200';
+            const typeLabel = req.recordType === '加班' ? '加班' : '請假';
+            return `
+                <div class="p-4 border border-gray-100 rounded-xl bg-gray-50">
+                    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
+                        <div class="min-w-0">
+                            <p class="font-bold text-gray-800">${escapeHtml(req.leaveType || typeLabel)} <span class="text-sm font-normal text-gray-500">（${escapeHtml(typeLabel)}）</span></p>
+                            <p class="text-sm text-gray-600 mt-1">${escapeHtml(formatDateTime(req.startTime))} ～ ${escapeHtml(formatDateTime(req.endTime))}</p>
+                            ${req.reason ? `<p class="text-sm text-gray-600 mt-2 whitespace-pre-wrap">事由：${escapeHtml(req.reason)}</p>` : ''}
+                        </div>
+                        <span class="inline-flex self-start text-xs font-semibold px-2.5 py-1 rounded-full border ${statusClass}">${escapeHtml(req.status || '未知')}</span>
+                    </div>
+                </div>`;
+        }).join('');
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         const today = new Date();
         const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -279,7 +446,11 @@
         const uid = urlParams.get('uid') || 'unknown_user'; // 【v175.0 核心修正】從 URL 取得操作者資訊
         const name = urlParams.get('name') || 'Unknown User';
 
-        const userParams = { userId: uid, userName: name }; // 準備要傳給後端的通用參數
+        const userParams = { userId: uid, userName: name, operatorId: uid }; // 準備要傳給後端的通用參數
+
+        if (IS_PERSONAL) {
+            initPersonalMode();
+        }
 
         // 並行發送請求，提升載入速度
         fetchApi({ page: 'attendance_api', action: 'get_config', ...userParams })
@@ -293,7 +464,11 @@
             });
 
         // 獨立載入員工列表
-        loadAndRenderEmployees();
+        if (!IS_PERSONAL) {
+            loadAndRenderEmployees();
+        } else {
+            fetchReportData();
+        }
 
         function loadAndRenderEmployees() {
             const showAll = document.getElementById('show-all-employees-checkbox').checked;
@@ -396,6 +571,9 @@
             time: document.getElementById('modal-time').value,
             eventType: document.getElementById('modal-event-type').value,
         };
+        const urlParams = new URLSearchParams(window.location.search);
+        payload.operatorId = urlParams.get('uid') || '';
+        payload.operatorName = urlParams.get('name') || '';
 
         if (!payload.userId) {
             alert('請選擇員工。');
@@ -441,7 +619,8 @@
     function fetchReportData() {
         const startDate = document.getElementById('start-date').value;
         const endDate = document.getElementById('end-date').value;
-        const userId = document.getElementById('employee-select').value;
+        let userId = document.getElementById('employee-select').value;
+        if (IS_PERSONAL) userId = personalUserId;
         const spinner = document.getElementById('loading-spinner');
         
         spinner.style.display = 'block';
@@ -468,15 +647,21 @@
                 // 以出勤名單 (employeeShiftData) 篩報表列（後端 attendance_* mode 已排除廠商／權限≥5）。
                 const allowedUserIds = new Set(Object.keys(employeeShiftData));
                 const records = data.records || {}; // 增加保護，如果 data.records 為 null 或 undefined，則使用空物件
-                // 【您的要求】將過濾後的資料存到全域變數
-                currentReportData = Object.fromEntries(Object.entries(records).filter(([id]) => allowedUserIds.has(id)));
-
-                const filteredRecords = Object.fromEntries(Object.entries(records).filter(([id]) => allowedUserIds.has(id)));
+                let filteredRecords;
+                if (IS_PERSONAL) {
+                    filteredRecords = Object.fromEntries(Object.entries(records).filter(([id]) => id === personalUserId));
+                } else {
+                    filteredRecords = Object.fromEntries(Object.entries(records).filter(([id]) => allowedUserIds.has(id)));
+                }
+                currentReportData = filteredRecords;
 
                 spinner.style.display = 'none';
                 lastGlobalSummary = data.summary || {};
                 lastReportHolidays = new Set(data.holidays || []);
                 expandedUserIds.clear();
+                if (IS_PERSONAL) {
+                    Object.keys(filteredRecords).forEach((id) => expandedUserIds.add(id));
+                }
                 renderSummary(data.summary, document.getElementById('employee-select').value);
                 renderReportView(filteredRecords, lastReportHolidays);
                 const mapRec = filteredRecords[userId];
@@ -485,7 +670,7 @@
                     initMap(mapPts).catch(console.error);
                 }
                 // 【您的要求】查詢成功且有資料時，顯示匯出按鈕
-                if (Object.keys(filteredRecords).length > 0) {
+                if (Object.keys(filteredRecords).length > 0 && !IS_PERSONAL) {
                     document.getElementById('export-csv-btn').classList.remove('hidden');
                 }
             })
@@ -857,6 +1042,23 @@
 
         if (userIds.length === 0) {
             container.innerHTML = '<p class="text-center text-gray-500 py-8">目前無符合條件的紀錄。可勾選「顯示全期缺勤」查看整段缺勤人員。</p>';
+            return;
+        }
+
+        if (IS_PERSONAL && userIds.length >= 1) {
+            const userId = userIds[0];
+            const userData = recordsByUser[userId];
+            let html = '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200 text-sm">';
+            html += '<thead class="bg-gray-50"><tr>' +
+                '<th class="px-4 py-1"></th><th class="px-4 py-1 text-left font-medium text-gray-600">日期</th>' +
+                '<th class="px-4 py-1 text-center font-medium text-gray-600">上班</th><th class="px-4 py-1 text-center font-medium text-gray-600">下班</th>' +
+                '<th class="px-4 py-1 text-left font-medium text-gray-600">上班位置</th><th class="px-4 py-1 text-left font-medium text-gray-600">下班位置</th>' +
+                '<th class="px-4 py-1 text-left font-medium text-gray-600">狀態</th><th class="px-4 py-1 text-center font-medium text-gray-600">資料來源</th>' +
+                '<th class="px-4 py-1 text-left font-medium text-gray-600">異常摘要</th>' +
+                '<th class="px-4 py-1 text-center font-medium text-gray-600">遲到</th><th class="px-4 py-1 text-center font-medium text-gray-600">早退</th>' +
+                '</tr></thead><tbody>' + buildDailyDetailRows(userId, userData, holidays) + '</tbody></table>';
+            html += '<p class="text-xs text-gray-500 mt-3">排班制依<strong>個人班表</strong>判斷；國定假仍依表定時間計遲早退。班表排休日打卡不計遲早退。</p></div>';
+            container.innerHTML = html;
             return;
         }
 

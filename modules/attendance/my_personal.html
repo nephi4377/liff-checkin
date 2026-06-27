@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>我的出勤與假勤</title>
+    <style>
+        body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f9fafb; color: #374151; }
+    </style>
+</head>
+<body>
+    <p>正在開啟個人出勤頁…</p>
+    <script>
+        (function () {
+            var params = new URLSearchParams(window.location.search);
+            params.set('mode', 'personal');
+            window.location.replace('attendance_report.html?' + params.toString());
+        })();
+    </script>
+</body>
+</html>
