@@ -401,9 +401,18 @@ ${notes || '無'}`;
 
       // 7. 處理後端的回應
       function handleFormResponse(response) {
-        statusDiv.className = (response.status === 'success') ? 'alert alert-success' : 'alert alert-danger';
-        statusDiv.innerText = response.message;
-        if (response.status === 'success') {
+        const ok = response.status === 'success' || response.success === true;
+        statusDiv.className = ok ? 'alert alert-success' : 'alert alert-danger';
+        statusDiv.innerText = response.message || (ok ? '儲存成功' : '儲存失敗');
+        if (ok) {
+          try {
+            localStorage.removeItem('spa_hub_projects');
+          } catch (e) { /* ignore */ }
+          if (window.parent && window.parent !== window) {
+            try {
+              window.parent.postMessage({ type: 'spa_hub_invalidate_projects' }, '*');
+            } catch (e) { /* ignore */ }
+          }
           // [v75.1 修正] 成功後，延遲更長時間再重新載入，確保使用者能看到成功訊息。
           setTimeout(() => location.reload(), 2500);
         } else {

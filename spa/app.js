@@ -607,6 +607,23 @@ const App = {
             // if (event.origin !== 'https://your-expected-origin.com') return;
 
             const { type, payload } = event.data;
+            if (type === 'spa_hub_invalidate_projects') {
+                try { localStorage.removeItem(PROJECTS_CACHE_KEY); } catch (e) { /* ignore */ }
+                fetchHubProjectsData().then((projectsResult) => {
+                    if (projectsResult && projectsResult.success && projectsResult.data) {
+                        const newProjects = projectsResult.data.projects || [];
+                        allProjects.value = newProjects;
+                        saveCache(PROJECTS_CACHE_KEY, newProjects, 3);
+                        window.spaAllProjects = newProjects;
+                        if (projectsResult.data.notifications) {
+                            notifications.value = projectsResult.data.notifications;
+                        }
+                    }
+                }).catch((err) => {
+                    console.warn('[Hub] 案場快取重抓失敗:', err);
+                });
+                return;
+            }
             if (type === 'openLightbox' && payload) {
                 console.log('[Lightbox] Received message from iframe:', payload);
                 openLightbox(payload.images, payload.index);
