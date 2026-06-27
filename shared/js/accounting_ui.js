@@ -48,7 +48,7 @@ var AccountingUi = (function () {
       '.acct-log-tag-warn{background:#92400e;color:#fde68a}',
       '.acct-log-tag-info{background:#1e40af;color:#bfdbfe}',
       '.acct-log-tag-action{background:#475569;color:#e2e8f0}',
-      '.acct-log-text{flex:1;word-break:break-word}',
+      '.acct-log-text{flex:1;word-break:break-word;white-space:pre-wrap}',
       '.acct-ui-hide-legacy#msg,.acct-ui-hide-legacy#ok,.acct-ui-hide-legacy#warn{display:none!important}',
       '.btn[aria-busy="true"]{opacity:.7;cursor:wait}',
       '@media (max-width:959px){',
@@ -178,6 +178,20 @@ var AccountingUi = (function () {
     else if (status === 'start') toast('info', msg, 4000);
   }
 
+  /** 按鈕／切換等點擊 — 只寫訊息欄，不跳 Toast */
+  function tap(label) {
+    if (!label) return;
+    pushLog('action', '點擊：' + String(label));
+  }
+
+  /** 多行詳情（如送出表單摘要）— 只寫訊息欄 */
+  function detail(title, body) {
+    if (!title && !body) return;
+    var text = String(title || '');
+    if (body) text += (text ? '\n' : '') + String(body);
+    pushLog('info', text);
+  }
+
   function setBtnBusy(btn, on, busyLabel) {
     if (!btn) return;
     if (on) {
@@ -231,6 +245,8 @@ var AccountingUi = (function () {
     log: pushLog,
     notify: notify,
     action: action,
+    tap: tap,
+    detail: detail,
     feedback: feedback,
     clearLog: function () { logs = []; renderLog(); },
     show: function (kind, text, ms) { notify(normalizeKind(kind), text, { ms: ms }); },

@@ -6,7 +6,7 @@
   <title>待付款申請</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_api.js?v=19"></script>
-  <script src="../../shared/js/accounting_ui.js?v=2"></script>
+  <script src="../../shared/js/accounting_ui.js?v=3"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 640px; margin: 0 auto; background: #f4f6f8; }
     @media (min-width: 960px) { body { max-width: 720px; } }
@@ -218,8 +218,11 @@
         });
       }
 
-      function setPayeeMode(mode) {
+      var PAYEE_MODE_LABEL = { vendor: '廠商', employee: '員工', manual: '手動填戶名' };
+
+      function setPayeeMode(mode, fromUser) {
         payeeMode = mode;
+        if (fromUser) AccountingUi.tap('收款人模式 → ' + (PAYEE_MODE_LABEL[mode] || mode));
         document.querySelectorAll('#payeeSeg button').forEach(function (btn) {
           btn.classList.toggle('active', btn.getAttribute('data-mode') === mode);
         });
@@ -241,15 +244,17 @@
         });
       }
 
-      function onPayeePick() {
+      function onPayeePick(fromUser) {
         if (payeeMode === 'manual') return;
         var row = null;
         if (payeeMode === 'vendor') {
           row = vendors.find(function (x) { return x.vendor_id === document.getElementById('pickVendor').value; });
           setBankReadonly(!!row);
+          if (fromUser && row) AccountingUi.tap('選擇廠商：' + (row.name || row.vendor_id));
         } else {
           row = employees.find(function (x) { return x.userId === document.getElementById('pickEmployee').value; });
           setBankReadonly(!!row);
+          if (fromUser && row) AccountingUi.tap('選擇員工：' + (row.userName || row.userId));
         }
         if (!row) { setBankReadonly(false); return; }
         document.getElementById('bankCode').value = row.bank_code || '';
@@ -317,6 +322,7 @@
           btn.onclick = function () {
             var rows = readAllocRows();
             var idx = parseInt(btn.getAttribute('data-rm'), 10);
+            AccountingUi.tap('刪除明細第 ' + (idx + 1) + ' 列');
             rows.splice(idx, 1);
             renderAllocRows(rows);
           };
@@ -377,6 +383,7 @@
             updateOcrBtn();
           };
           tile.querySelector('.del').onclick = function () {
+            AccountingUi.tap('刪除附件：' + fileLabel({ name: p.filename }));
             photos = photos.filter(function (x) { return x.photo_id !== p.photo_id; });
             renderPhotoGrid();
           };
@@ -410,8 +417,40 @@
         });
       }
 
+      function summarizeSubmitPayload(payload) {
+        var lines = [];
+        lines.push('模式：' + (payload.submit_mode === 'finance_direct' ? '財務直送待匯款' : '送審'));
+        lines.push('單據類型：' + (payload.doc_type || '—'));
+        if (payload.order_no) lines.push('訂編：' + payload.order_no);
+        if (payload.txn_date) lines.push('單據日期：' + payload.txn_date);
+        if (payload.vendor_id) {
+          var v = vendors.find(function (x) { return x.vendor_id === payload.vendor_id; });
+          lines.push('廠商：' + (v ? v.name : payload.vendor_id));
+        } else if (payload.employee_user_id) {
+          var emp = employees.find(function (x) { return x.userId === payload.employee_user_id; });
+          lines.push('員工：' + (emp ? emp.userName : payload.employee_user_id));
+        } else if (payload.vendor_name) {
+          lines.push('手動戶名：' + payload.vendor_name);
+        }
+        lines.push('銀行 ' + (payload.bank_code || '—') + ' / ' + (payload.account_no || '—') + ' / ' + (payload.account_name || '—'));
+        lines.push('明細：');
+        var total = 0;
+        (payload.allocations || []).forEach(function (r, i) {
+          var amt = parseInt(r.amount, 10) || 0;
+          total += amt;
+          lines.push('  ' + (i + 1) + '. 案' + (r.project_no || '—') + ' $' + amt.toLocaleString('zh-TW') +
+            (r.item_desc ? ' ' + r.item_desc : ''));
+        });
+        lines.push('合計：$' + total.toLocaleString('zh-TW'));
+        if (payload.note) lines.push('備註：' + payload.note);
+        var photoNames = (payload.photos || []).map(function (p) { return p.filename || '檔案'; });
+        lines.push('附件 ' + photoNames.length + ' 個' + (photoNames.length ? '（' + photoNames.join('、') + '）' : ''));
+        return lines.join('\n');
+      }
+
       async function addPhotoFiles(fileList) {
         setMsg('');
+        var added = 0;
         for (var i = 0; i < fileList.length; i++) {
           if (photos.length >= MAX_PHOTOS) {
             setMsg('最多 ' + MAX_PHOTOS + ' 個檔案，請刪除多餘的或另開一筆');
@@ -419,11 +458,12 @@
           }
           try {
             var p = await readFileB64(fileList[i]);
-            if (p) photos.push(p);
+            if (p) { photos.push(p); added++; }
           } catch (e) {
             setMsg(e.message || String(e));
           }
         }
+        if (added) AccountingUi.tap('加入附件 ' + added + ' 個');
         renderPhotoGrid();
         document.getElementById('photoInput').value = '';
       }
@@ -537,6 +577,8 @@
         document.getElementById('submitBtn').disabled = true;
         document.getElementById('financeBtn').disabled = true;
         try {
+          AccountingUi.tap(label);
+          AccountingUi.detail('送出內容', summarizeSubmitPayload(payload));
           AccountingUi.action(label, 'start');
           var data = await AccountingApi.paymentRequestSubmit(session, payload);
           if (!data.success) {
@@ -593,6 +635,7 @@
       }
 
       function resetForm() {
+        AccountingUi.tap('再建一筆');
         document.getElementById('formCard').classList.remove('hidden');
         document.getElementById('successCard').classList.add('hidden');
         photos = [];
@@ -615,6 +658,7 @@
         var input = document.getElementById('photoInput');
         zone.addEventListener('click', function (e) {
           if (e.target === input) return;
+          AccountingUi.tap('選擇單據檔案');
           input.click();
         });
         zone.addEventListener('keydown', function (e) {
@@ -636,18 +680,25 @@
         });
         zone.addEventListener('drop', function (e) {
           var files = (e.dataTransfer && e.dataTransfer.files) ? e.dataTransfer.files : [];
-          if (files.length) addPhotoFiles(files);
+          if (files.length) {
+            AccountingUi.tap('拖曳加入檔案');
+            addPhotoFiles(files);
+          }
         });
       })();
-      document.getElementById('ocrBtn').addEventListener('click', runOcr);
+      document.getElementById('ocrBtn').addEventListener('click', function () {
+        AccountingUi.tap(document.getElementById('ocrBtn').textContent || '開始辨識');
+        runOcr();
+      });
       document.getElementById('payeeSeg').addEventListener('click', function (e) {
         var btn = e.target.closest('button[data-mode]');
         if (!btn) return;
-        setPayeeMode(btn.getAttribute('data-mode'));
+        setPayeeMode(btn.getAttribute('data-mode'), true);
       });
-      document.getElementById('pickVendor').addEventListener('change', onPayeePick);
-      document.getElementById('pickEmployee').addEventListener('change', onPayeePick);
+      document.getElementById('pickVendor').addEventListener('change', function () { onPayeePick(true); });
+      document.getElementById('pickEmployee').addEventListener('change', function () { onPayeePick(true); });
       document.getElementById('addAllocBtn').addEventListener('click', function () {
+        AccountingUi.tap('新增明細列');
         var rows = readAllocRows();
         rows.push({ project_no: '', amount: '', item_desc: '', source: 'manual' });
         renderAllocRows(rows);
