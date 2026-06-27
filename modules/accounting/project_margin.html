@@ -8,6 +8,7 @@
   <script src="../../shared/js/accounting_master_data.js?v=11"></script>
   <script src="../../shared/js/accounting_api.js?v=13"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=13"></script>
+  <script src="../../shared/js/accounting_ui.js?v=2"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 640px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 8px; }
@@ -93,12 +94,13 @@
   </div>
   <script>
     (function () {
+      AccountingUi.init();
       var session = null;
       var categories = AccountingMasterData.margin_expense_categories || [];
       var current = null;
 
-      function setMsg(t) { document.getElementById('msg').textContent = t || ''; }
-      function setOk(t) { document.getElementById('ok').textContent = t || ''; }
+      function setMsg(t) { if (t) AccountingUi.notify('err', t); }
+      function setOk(t) { if (t) AccountingUi.notify('ok', t); }
       function showApp() {
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');

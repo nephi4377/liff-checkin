@@ -6,8 +6,9 @@
   <title>廠商名冊</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=15"></script>
-  <script src="../../shared/js/accounting_api.js?v=16"></script>
-  <script src="../../shared/js/accounting_cache.js?v=15"></script>
+  <script src="../../shared/js/accounting_api.js?v=18"></script>
+  <script src="../../shared/js/accounting_cache.js?v=18"></script>
+  <script src="../../shared/js/accounting_ui.js?v=2"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px 20px 32px; max-width: 1280px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 8px; }
@@ -269,39 +270,18 @@
       var cardUploaded = false;
       var passbookUploaded = false;
       var saving = false;
-      var feedbackTimer = null;
       var SAVE_BTN_LABEL = '儲存';
 
       function $(id) { return document.getElementById(id); }
 
-      function showFeedback(kind, text, autoHideMs) {
-        var bar = $('feedbackBar');
-        var icon = $('feedbackIcon');
-        var msg = $('feedbackText');
-        if (feedbackTimer) {
-          clearTimeout(feedbackTimer);
-          feedbackTimer = null;
-        }
-        if (!text) {
-          bar.classList.add('hidden');
-          bar.className = 'feedback-bar hidden';
-          msg.textContent = '';
-          icon.textContent = '';
-          return;
-        }
-        bar.className = 'feedback-bar ' + (kind || 'ok');
-        icon.textContent = kind === 'err' ? '✕' : (kind === 'warn' ? '!' : '✓');
-        msg.textContent = text;
-        bar.classList.remove('hidden');
-        bar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        if (autoHideMs) {
-          feedbackTimer = setTimeout(function () { showFeedback('', ''); }, autoHideMs);
-        }
+      function showFeedback(kind, text) {
+        if (!text) return;
+        var k = kind === 'err' ? 'err' : (kind === 'warn' ? 'warn' : 'ok');
+        AccountingUi.notify(k, text);
       }
-
-      function setMsg(t) { showFeedback('err', t || ''); }
-      function setOk(t) { showFeedback('ok', t || '', 6000); }
-      function setWarn(t) { showFeedback('warn', t || '', 8000); }
+      function setMsg(t) { if (t) AccountingUi.notify('err', t); }
+      function setOk(t) { if (t) AccountingUi.notify('ok', t); }
+      function setWarn(t) { if (t) AccountingUi.notify('warn', t); }
 
       function setSaveBusy(on) {
         saving = on;
@@ -415,14 +395,12 @@
 
       function patchVendorFolder(vendorId, folder) {
         if (!vendorId || !folder || !folder.drive_folder_id) return;
-        var existing = allVendors.find(function (v) { return v.vendor_id === vendorId; }) || { vendor_id: vendorId };
-        var merged = Object.assign({}, existing, {
+        var idx = allVendors.findIndex(function (v) { return v.vendor_id === vendorId; });
+        if (idx < 0) return;
+        allVendors[idx] = Object.assign({}, allVendors[idx], {
           drive_folder_id: folder.drive_folder_id,
           drive_folder_url: folder.drive_folder_url
         });
-        AccountingCache.patchVendor(session, merged);
-        var idx = allVendors.findIndex(function (v) { return v.vendor_id === vendorId; });
-        if (idx >= 0) allVendors[idx] = merged;
       }
 
       function photosSavedMessage(photoRes) {
@@ -583,9 +561,8 @@
             if (!confirm('停用這筆 LINE 綁定？')) return;
             var data = await AccountingApi.crudUpdate(session, 'vendor_line_binding', b.binding_id, { is_active: '否' });
             if (!data.success) { setMsg(data.message); return; }
-            AccountingCache.patchVendorLineBinding(session, data.data);
+            await refreshVendors(false);
             renderBindings(vendorId);
-            await refreshVendors(true);
           });
           row.appendChild(btn);
           box.appendChild(row);
@@ -606,11 +583,10 @@
         };
         var data = await AccountingApi.crudCreate(session, 'vendor_line_binding', payload);
         if (!data.success) { setMsg(data.message || '綁定失敗'); return; }
-        AccountingCache.patchVendorLineBinding(session, data.data);
         $('lineSearchResults').innerHTML = '';
         setOk('已加入 LINE 綁定');
+        await refreshVendors(false);
         renderBindings(vendorId);
-        await refreshVendors(true);
       }
 
       function renderSearchHits(items) {
@@ -780,7 +756,7 @@
           if (!data.success) { setMsg(data.message || '失敗'); return; }
           vendor.drive_folder_id = data.folder.drive_folder_id;
           vendor.drive_folder_url = data.folder.drive_folder_url;
-          AccountingCache.patchVendor(session, vendor);
+          patchVendorFolder(vendor.vendor_id, data.folder);
           renderList();
         });
         toolbar.appendChild(btnFolder);
@@ -864,8 +840,7 @@
             var next = v.coop_status === '暫停合作' ? '合作中' : '暫停合作';
             var data = await AccountingApi.crudUpdate(session, 'vendor', v.vendor_id, { coop_status: next });
             if (!data.success) { setMsg(data.message); return; }
-            AccountingCache.patchVendor(session, data.data);
-            await refreshVendors(true);
+            await refreshVendors(false);
           });
           actions.appendChild(btnToggle);
           div.appendChild(actions);
@@ -904,7 +879,6 @@
             : await AccountingApi.crudCreate(session, 'vendor', payload);
           if (!data.success) { setMsg(data.message || '儲存失敗'); return; }
           var saved = data.data;
-          AccountingCache.patchVendor(session, saved);
           var photoRes = await uploadPendingPhotos(saved);
           if (photoRes && !photoRes.success) {
             setWarn((photoRes.message || '照片未上傳') + '（廠商資料已儲存）');
@@ -912,7 +886,7 @@
             patchVendorFolder(saved.vendor_id, photoRes.folder);
           }
           var photoNote = photosSavedMessage(photoRes);
-          await refreshVendors(true);
+          await refreshVendors(false);
           var refreshed = allVendors.find(function (v) { return v.vendor_id === saved.vendor_id; }) || saved;
           fillForm(refreshed);
           if (editId) {
@@ -987,6 +961,7 @@
       $('name').addEventListener('blur', crossFillVendorAndAccountName);
 
       (async function boot() {
+        AccountingUi.init();
         try {
           initFormOptions();
           session = await AccountingApi.initSession();

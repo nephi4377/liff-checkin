@@ -1,8 +1,17 @@
 /**
- * 會計系統共用快取 — 進入 index 時 bootstrap 一次，子頁讀快取
+ * 會計系統共用快取 — bootstrap 進 sessionStorage；CRUD 成功清除，下次 load 重抓
  */
 var AccountingCache = (function () {
   var STORAGE_KEY = 'tanxin_accounting_bootstrap_v1';
+
+  /** 寫入 bootstrap.masters 的 entity；CRUD 後整包清除。見 SPEC/18 §6.1.1 */
+  var BOOTSTRAP_INVALIDATE_ENTITIES = {
+    vendor: true,
+    payee: true,
+    category: true,
+    order_project_map: true,
+    vendor_line_binding: true
+  };
 
   function storageKey(session) {
     var uid = (session && session.auth && session.auth.user_id) || 'anon';
@@ -39,28 +48,18 @@ var AccountingCache = (function () {
     return data;
   }
 
-  function refreshInBackground(session) {
-    if (!session || typeof AccountingApi === 'undefined') return;
-    var p;
-    if (typeof AccountingApi.bootstrap === 'function') {
-      p = AccountingApi.bootstrap(session);
-    } else if (typeof AccountingApi.post === 'function') {
-      p = AccountingApi.post({
-        action: 'accounting_bootstrap',
-        auth: AccountingApi.buildAuth ? AccountingApi.buildAuth(session) : { dev_bypass: !!session.devBypass }
-      });
-    } else {
-      return;
-    }
-    p.then(function (res) {
-      if (res && res.success && res.bootstrap) write(session, res.bootstrap);
-    }).catch(function () {});
+  function clear(session) {
+    try { sessionStorage.removeItem(storageKey(session)); } catch (e) {}
+  }
+
+  function afterCrudSuccess(session, entity) {
+    if (!entity || !BOOTSTRAP_INVALIDATE_ENTITIES[entity]) return;
+    clear(session);
   }
 
   return {
-    clear: function (session) {
-      try { sessionStorage.removeItem(storageKey(session)); } catch (e) {}
-    },
+    clear: clear,
+    afterCrudSuccess: afterCrudSuccess,
     get: function (session) {
       return read(session);
     },
@@ -69,9 +68,7 @@ var AccountingCache = (function () {
       if (!force) {
         var cached = read(session);
         if (cached) {
-          mergeEnums(cached);
-          refreshInBackground(session);
-          return cached;
+          return mergeEnums(cached);
         }
       }
       if (typeof AccountingApi === 'undefined') {
@@ -104,37 +101,10 @@ var AccountingCache = (function () {
       var c = read(session);
       return (c && c.enums) || AccountingMasterData;
     },
-    patchVendor: function (session, vendor) {
-      var c = read(session);
-      if (!c || !c.masters || !c.masters.vendors) return;
-      var list = c.masters.vendors;
-      var idx = list.findIndex(function (v) { return v.vendor_id === vendor.vendor_id; });
-      if (idx >= 0) list[idx] = vendor;
-      else list.unshift(vendor);
-      write(session, c);
-    },
     vendorLineBindings: function (session, vendorId) {
       var c = read(session);
       var all = (c && c.masters && c.masters.vendor_line_bindings) || [];
       return all.filter(function (b) { return String(b.vendor_id) === String(vendorId); });
-    },
-    patchVendorLineBinding: function (session, binding) {
-      var c = read(session);
-      if (!c || !c.masters) return;
-      c.masters.vendor_line_bindings = c.masters.vendor_line_bindings || [];
-      var list = c.masters.vendor_line_bindings;
-      var idx = list.findIndex(function (b) { return b.binding_id === binding.binding_id; });
-      if (idx >= 0) list[idx] = binding;
-      else list.unshift(binding);
-      write(session, c);
-    },
-    removeVendor: function (session, vendorId) {
-      var c = read(session);
-      if (!c || !c.masters) return;
-      c.masters.vendors = (c.masters.vendors || []).filter(function (v) {
-        return v.vendor_id !== vendorId;
-      });
-      write(session, c);
     }
   };
 })();

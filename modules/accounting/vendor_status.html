@@ -6,6 +6,7 @@
   <title>款項進度</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_api.js?v=14"></script>
+  <script src="../../shared/js/accounting_ui.js?v=2"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 560px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 8px; }
@@ -37,6 +38,7 @@
   </div>
   <script>
     (function () {
+      AccountingUi.init();
       var STAGE_ORDER = ['請款待審', '待匯款', '已匯款', '已退回', '收支紀錄'];
       var STAGE_LABEL = {
         '請款待審': '待審核',
@@ -46,7 +48,7 @@
         '收支紀錄': '其他收支'
       };
 
-      function setMsg(t) { document.getElementById('msg').textContent = t || ''; }
+      function setMsg(t) { if (t) AccountingUi.notify('err', t); }
       function showApp() {
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');

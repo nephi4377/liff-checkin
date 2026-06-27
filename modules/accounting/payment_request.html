@@ -3,11 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>匯款請款</title>
+  <title>待付款申請</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_api.js?v=18"></script>
+  <script src="../../shared/js/accounting_ui.js?v=2"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 640px; margin: 0 auto; background: #f4f6f8; }
+    @media (min-width: 960px) { body { max-width: 720px; } }
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; line-height: 1.5; }
     .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
@@ -18,7 +20,12 @@
     .btn { padding: 10px 14px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; }
     .btn-primary { background: #1a73e8; color: #fff; width: 100%; padding: 12px; margin-top: 10px; }
     .btn-secondary { background: #e8eaed; color: #333; width: 100%; padding: 12px; margin-top: 8px; }
-    .btn-finance { background: #34a853; color: #fff; width: 100%; padding: 12px; margin-top: 8px; }
+    .steps { display: flex; gap: 6px; margin: 12px 0; font-size: 12px; color: #555; flex-wrap: wrap; }
+    .steps span { background: #e8eaed; padding: 4px 8px; border-radius: 6px; }
+    .steps span.on { background: #e8f0fe; color: #1a73e8; font-weight: 600; }
+    .bank-hint { font-size: 12px; color: #666; margin: 4px 0 0; }
+    .alloc-empty { color: #666; font-size: 14px; padding: 12px 0; }
+    .btn-finance { background: #fff; color: #34a853; border: 2px solid #34a853; width: 100%; padding: 10px; margin-top: 8px; font-size: 13px; }
     .btn-ghost { background: #fff; border: 1px dashed #1a73e8; color: #1a73e8; width: 100%; padding: 10px; margin-top: 8px; }
     .seg { display: flex; gap: 6px; margin-top: 6px; }
     .seg button { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 8px; background: #fff; font-weight: 600; cursor: pointer; }
@@ -54,12 +61,12 @@
   <div id="loading">載入中…</div>
   <div id="app" class="hidden">
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
-    <h2>匯款請款</h2>
+    <h2>待付款申請</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub">錢還沒付出去才用這頁。可傳單據給 AI 讀取，或手填明細後送審。</p>
-    <div id="msg" role="alert"></div>
-    <div id="ok" role="status"></div>
-    <div id="warn" role="status"></div>
+    <p class="sub">錢還沒付出去才用這頁：傳單據給 AI 讀取，或手填後送審。</p>
+    <div class="steps" aria-hidden="true">
+      <span class="on">① 傳單據</span><span>② 辨識</span><span>③ 確認收款人</span><span>④ 送出</span>
+    </div>
 
     <div id="formCard" class="card">
       <label>單據附件（選填，最多 12 個）</label>
@@ -80,11 +87,12 @@
         <option value="出貨">出貨</option>
       </select>
 
-      <label>收款對象</label>
+      <label>付給誰？</label>
+      <p class="sub" style="margin:4px 0 6px">廠商請款選廠商；員工代墊選員工；不在名冊選手動。</p>
       <div class="seg" id="payeeSeg">
         <button type="button" data-mode="vendor" class="active">廠商</button>
         <button type="button" data-mode="employee">員工</button>
-        <button type="button" data-mode="manual">手動</button>
+        <button type="button" data-mode="manual">手動填戶名</button>
       </div>
       <div id="vendorPickBlock">
         <label>廠商</label>
@@ -110,6 +118,7 @@
       </div>
       <label>戶名</label>
       <input type="text" id="accountName" />
+      <p class="bank-hint" id="bankHint">選廠商或員工後，銀行資料會自動帶入；要改請切「手動填戶名」。</p>
 
       <div class="row2">
         <div>
@@ -132,7 +141,7 @@
 
       <div class="btn-row">
         <button type="button" class="btn btn-primary" id="submitBtn">送出請款（待主管審核）</button>
-        <button type="button" class="btn btn-finance hidden" id="financeBtn">財務：直接進待匯款</button>
+        <button type="button" class="btn btn-finance hidden" id="financeBtn">進階：財務直送待匯款（跳過審核）</button>
       </div>
     </div>
 
@@ -145,6 +154,8 @@
   </div>
   <script>
     (function () {
+      AccountingUi.init();
+      var fb = AccountingUi.feedback();
       var MAX_PHOTOS = 12;
       var MAX_BYTES = 8 * 1024 * 1024;
       var OCR_TIMEOUT_MS = 180000;
@@ -160,9 +171,28 @@
       var submitting = false;
       var canFinanceDirect = false;
 
-      function setMsg(t) { document.getElementById('msg').textContent = t || ''; }
-      function setOk(t) { document.getElementById('ok').textContent = t || ''; }
-      function setWarn(t) { document.getElementById('warn').textContent = t || ''; }
+      function setMsg(t) { if (t) AccountingUi.notify('err', t); }
+      function setOk(t) { if (t) AccountingUi.notify('ok', t); }
+      function setWarn(t) { if (t) AccountingUi.notify('warn', t, { logOnly: false }); }
+      function fileLabel(meta) {
+        var n = String((meta && meta.name) || '檔案');
+        return n.length > 16 ? n.slice(0, 14) + '…' : n;
+      }
+      function isManualRowFilled(r) {
+        return !!(String(r.project_no || '').trim() || String(r.amount || '').trim() || String(r.item_desc || '').trim());
+      }
+      function applyOcrVendor(ocr) {
+        if (!ocr) return;
+        if (ocr.vendor_id) {
+          setPayeeMode('vendor');
+          document.getElementById('pickVendor').value = ocr.vendor_id;
+          onPayeePick();
+          AccountingUi.notify('ok', '已帶入廠商：' + (ocr.vendor_name || '（名冊）') + '，銀行帳戶已自動填入');
+        } else if (ocr.vendor_name) {
+          setPayeeMode('vendor');
+          AccountingUi.notify('warn', '單據寫「' + ocr.vendor_name + '」，名冊找不到，請手動選廠商');
+        }
+      }
       function uid() { return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
       function readQuery() {
@@ -240,7 +270,12 @@
       function renderAllocRows(rows) {
         var box = document.getElementById('allocList');
         box.innerHTML = '';
-        (rows || [{ project_no: '', amount: '', item_desc: '', source: 'manual' }]).forEach(function (row, idx) {
+        if (!rows || !rows.length) {
+          box.innerHTML = '<p class="alloc-empty">尚無明細。請點「新增一列」或先「開始辨識」。</p>';
+          updateTotal();
+          return;
+        }
+        rows.forEach(function (row, idx) {
           box.insertAdjacentHTML('beforeend', allocRowHtml(idx, row));
         });
         bindAllocEvents();
@@ -266,9 +301,7 @@
         }, 0);
         document.getElementById('totalAmt').textContent = sum.toLocaleString('zh-TW');
         if (lastOcrAmount > 0 && sum !== lastOcrAmount) {
-          setWarn('合計與 AI 讀到的總額（$' + lastOcrAmount.toLocaleString('zh-TW') + '）不一致，送審仍以你修改後為準。');
-        } else {
-          setWarn('');
+          AccountingUi.notify('warn', '合計 $' + sum.toLocaleString('zh-TW') + ' 與單據總額 $' + lastOcrAmount.toLocaleString('zh-TW') + ' 不同；確認後仍可送出', { logOnly: true });
         }
       }
 
@@ -285,7 +318,6 @@
             var rows = readAllocRows();
             var idx = parseInt(btn.getAttribute('data-rm'), 10);
             rows.splice(idx, 1);
-            if (!rows.length) rows.push({ project_no: '', amount: '', item_desc: '', source: 'manual' });
             renderAllocRows(rows);
           };
         });
@@ -432,14 +464,12 @@
       async function runOcr() {
         var selected = photos.filter(function (p) { return p.selected; });
         if (!selected.length) { setMsg('請勾選至少一個檔案'); return; }
-        setMsg('');
-        setOk('');
         var btn = document.getElementById('ocrBtn');
         var status = document.getElementById('ocrStatus');
-        btn.disabled = true;
-        status.textContent = '辨識中…（最長約 3 分鐘）';
         submitting = true;
-        try {
+        updateOcrBtn();
+        await AccountingUi.runAsync(btn, { actionLabel: 'AI 辨識單據', busyLabel: '辨識中…' }, async function () {
+          status.textContent = '辨識中…（最長約 3 分鐘）';
           var payload = {
             draft_id: draftId || undefined,
             photo_ids: selected.map(function (p) { return p.photo_id; }),
@@ -447,9 +477,8 @@
           };
           var data = await AccountingApi.paymentRequestOcrAnalyze(session, payload, OCR_TIMEOUT_MS);
           if (!data.success) {
-            setMsg(data.message || '辨識失敗');
             status.textContent = '辨識失敗';
-            return;
+            throw new Error(data.message || '辨識失敗');
           }
           draftId = data.draft_id || draftId;
           ocrAttempt = data.attempt_no || (ocrAttempt + 1);
@@ -457,11 +486,11 @@
           if (ocr.doc_type) document.getElementById('docType').value = ocr.doc_type;
           if (ocr.order_no) document.getElementById('orderNo').value = ocr.order_no;
           if (ocr.txn_date) document.getElementById('txnDate').value = ocr.txn_date.slice(0, 10);
-          if (ocr.vendor_id && payeeMode === 'vendor') document.getElementById('pickVendor').value = ocr.vendor_id;
-          else if (ocr.vendor_name && payeeMode === 'manual') document.getElementById('manualPayee').value = ocr.vendor_name;
-          onPayeePick();
+          applyOcrVendor(ocr);
 
-          var manualRows = readAllocRows().filter(function (r) { return r.source === 'manual'; });
+          var manualRows = readAllocRows().filter(function (r) {
+            return r.source === 'manual' && isManualRowFilled(r);
+          });
           var aiRows = (data.allocations || []).map(function (r) {
             return { project_no: r.project_no, amount: r.amount, item_desc: r.item_desc, source: 'ai' };
           });
@@ -469,23 +498,30 @@
           if (!aiRows.length && lastOcrAmount) {
             aiRows = [{ project_no: ocr.project_no || '', amount: lastOcrAmount, item_desc: ocr.item_desc || '', source: 'ai' }];
           }
-          renderAllocRows(manualRows.concat(aiRows.length ? aiRows : [{ project_no: '', amount: '', item_desc: '', source: 'manual' }]));
+          var merged = manualRows.concat(aiRows);
+          renderAllocRows(merged.length ? merged : []);
           status.textContent = '辨識完成（第 ' + ocrAttempt + ' 次）';
-          setOk('已帶入辨識結果，請確認後再送審');
-        } catch (e) {
-          setMsg(e.message || '辨識逾時或失敗');
+          var taxNote = '';
+          if (ocr.tax_amount > 0) {
+            taxNote = '；稅金 $' + Number(ocr.tax_amount).toLocaleString('zh-TW') + ' 已分攤進各案（含稅）';
+          } else if (ocr.is_tax_inclusive) {
+            taxNote = '；單據為含稅報價';
+          }
+          AccountingUi.log('ok', '辨識完成，共 ' + merged.length + ' 列明細' + taxNote);
+        }).catch(function (e) {
+          if (e && e.message) setMsg(e.message);
           status.textContent = '辨識失敗，可重試';
-        } finally {
+        }).finally(function () {
           submitting = false;
           updateOcrBtn();
-        }
+        });
       }
 
       async function submitRequest(mode) {
         if (submitting) return;
-        setMsg('');
         var err = validateForm();
         if (err) { setMsg(err); return; }
+        var label = mode === 'finance_direct' ? '財務直送待匯款' : '送出請款';
         var payload = buildPayeePayload({
           submit_mode: mode,
           draft_id: draftId || undefined,
@@ -501,15 +537,22 @@
         document.getElementById('submitBtn').disabled = true;
         document.getElementById('financeBtn').disabled = true;
         try {
+          AccountingUi.action(label, 'start');
           var data = await AccountingApi.paymentRequestSubmit(session, payload);
-          if (!data.success) { setMsg(data.message || '送出失敗'); return; }
+          if (!data.success) {
+            AccountingUi.action(label, 'fail', data.message || '送出失敗');
+            setMsg(data.message || '送出失敗');
+            return;
+          }
+          AccountingUi.action(label, 'ok', '單號 ' + String(data.payment_request_id || '').slice(0, 8));
           document.getElementById('formCard').classList.add('hidden');
           document.getElementById('successCard').classList.remove('hidden');
           document.getElementById('successHint').textContent = mode === 'finance_direct'
             ? '已進入待匯款清單。'
             : '主管會在「請款審核」處理；核准後才進待匯款。';
-          setOk('單號 ' + String(data.payment_request_id || '').slice(0, 8) + '…');
+          setOk('請款已送出');
         } catch (e) {
+          AccountingUi.action(label, 'fail', e.message || String(e));
           setMsg(e.message || '送出失敗');
         } finally {
           submitting = false;
@@ -559,10 +602,9 @@
         renderPhotoGrid();
         document.getElementById('ocrStatus').textContent = '尚未辨識';
         document.getElementById('note').value = '';
-        renderAllocRows([{ project_no: queryParams.project_no || '', amount: '', item_desc: '', source: 'manual' }]);
-        setMsg('');
-        setOk('');
-        setWarn('');
+        renderAllocRows(queryParams.project_no
+          ? [{ project_no: queryParams.project_no, amount: '', item_desc: '', source: 'manual' }]
+          : []);
       }
 
       document.getElementById('photoInput').addEventListener('change', function (e) {
@@ -617,6 +659,7 @@
       (async function boot() {
         queryParams = readQuery();
         try {
+          AccountingUi.action('載入頁面', 'start');
           session = await AccountingApi.initSession();
           if (!session) return;
           document.getElementById('userLine').textContent =
@@ -633,10 +676,13 @@
             return (e.userName || '') + ((e.bank_code && e.account_no) ? '' : '（帳戶待補）');
           }, '— 請選擇員工 —');
           setPayeeMode('vendor');
-          renderAllocRows([{ project_no: queryParams.project_no || '', amount: '', item_desc: '', source: 'manual' }]);
+          renderAllocRows(queryParams.project_no
+            ? [{ project_no: queryParams.project_no, amount: '', item_desc: '', source: 'manual' }]
+            : []);
           if (queryParams.doc_type) document.getElementById('docType').value = queryParams.doc_type;
           if (queryParams.pending) await loadPendingPhotos(queryParams.pending);
           if (queryParams.draft) await loadOcrDraft(queryParams.draft);
+          AccountingUi.action('載入頁面', 'ok');
         } catch (e) {
           document.getElementById('loading').textContent = e.message || String(e);
         }

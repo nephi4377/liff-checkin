@@ -58,6 +58,14 @@ var AccountingApi = (function () {
     return { body: body, opts: opts };
   }
 
+  function invalidateBootstrapAfterCrud_(sessionOrToken, entity) {
+    try {
+      if (typeof AccountingCache !== 'undefined' && AccountingCache.afterCrudSuccess) {
+        AccountingCache.afterCrudSuccess(sessionOrToken, entity);
+      }
+    } catch (e) {}
+  }
+
   function buildDevBypassSession_(auth, opts) {
     return {
       devBypass: true,
@@ -111,10 +119,18 @@ var AccountingApi = (function () {
       return post({ action: 'crud_list', entity: entity, auth: resolveAuth(sessionOrToken), filter: filter || {} });
     },
     crudCreate: function (sessionOrToken, entity, payload) {
-      return post({ action: 'crud_create', entity: entity, auth: resolveAuth(sessionOrToken), payload: payload });
+      return post({ action: 'crud_create', entity: entity, auth: resolveAuth(sessionOrToken), payload: payload })
+        .then(function (res) {
+          if (res && res.success) invalidateBootstrapAfterCrud_(sessionOrToken, entity);
+          return res;
+        });
     },
     crudUpdate: function (sessionOrToken, entity, id, payload) {
-      return post({ action: 'crud_update', entity: entity, id: id, auth: resolveAuth(sessionOrToken), payload: payload });
+      return post({ action: 'crud_update', entity: entity, id: id, auth: resolveAuth(sessionOrToken), payload: payload })
+        .then(function (res) {
+          if (res && res.success) invalidateBootstrapAfterCrud_(sessionOrToken, entity);
+          return res;
+        });
     },
     vendorPaymentStatus: function (sessionOrToken, filter) {
       return post({ action: 'vendor_payment_status', auth: resolveAuth(sessionOrToken), filter: filter || {} });
@@ -123,7 +139,11 @@ var AccountingApi = (function () {
       return post({ action: 'accounting_bootstrap', auth: resolveAuth(sessionOrToken) });
     },
     vendorEnsureFolder: function (sessionOrToken, vendorId) {
-      return post({ action: 'vendor_ensure_folder', auth: resolveAuth(sessionOrToken), vendor_id: vendorId });
+      return post({ action: 'vendor_ensure_folder', auth: resolveAuth(sessionOrToken), vendor_id: vendorId })
+        .then(function (res) {
+          if (res && res.success) invalidateBootstrapAfterCrud_(sessionOrToken, 'vendor');
+          return res;
+        });
     },
     lineContactSearch: function (sessionOrToken, keyword, limit) {
       return post({
@@ -147,6 +167,9 @@ var AccountingApi = (function () {
         auth: resolveAuth(sessionOrToken),
         vendor_id: vendorId,
         photos: photos || []
+      }).then(function (res) {
+        if (res && res.success) invalidateBootstrapAfterCrud_(sessionOrToken, 'vendor');
+        return res;
       });
     },
     marginListOverview: function (sessionOrToken) {

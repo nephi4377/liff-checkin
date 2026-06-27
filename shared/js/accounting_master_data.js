@@ -1,7 +1,7 @@
 /**
  * 會計主檔固定格式（對齊 backend/accounting-gas/SPEC/ACCOUNTING_MASTER_DATA_SPEC.md）
  */
-var ACCT_ASSET_VER = '11';
+var ACCT_ASSET_VER = '13';
 var AccountingMasterData = {
   CACHE_VERSION: 1,
   /** 會計 bootstrap（廠商／收款帳戶／列舉）— 3 天；有改動時前端 patch + 背景重讀 */

@@ -6,8 +6,9 @@
   <title>添心會計</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=10"></script>
-  <script src="../../shared/js/accounting_api.js?v=16"></script>
-  <script src="../../shared/js/accounting_cache.js?v=13"></script>
+  <script src="../../shared/js/accounting_api.js?v=18"></script>
+  <script src="../../shared/js/accounting_cache.js?v=18"></script>
+  <script src="../../shared/js/accounting_ui.js?v=2"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; max-width: 480px; margin: 0 auto; background: #f4f6f8; }
     h2 { margin: 0 0 4px; }
@@ -36,13 +37,13 @@
     </a>
 
     <a class="card" href="payment_request.html">
-      <h3>匯款請款</h3>
-      <p>還沒付的錢：傳單據 AI 辨識或手填明細，送審後待匯款。</p>
+      <h3>待付款申請</h3>
+      <p>還沒付的款：傳單據 AI 辨識或手填明細，送審後待匯款。</p>
     </a>
 
     <a class="card hidden" href="payment_request_compose.html" id="linkComposeLegacy">
       <h3>精細請款建單（舊）</h3>
-      <p>已併入匯款請款。</p>
+      <p>已併入待付款申請。</p>
     </a>
 
     <a class="card" href="vendor_status.html">
@@ -64,7 +65,7 @@
 
     <a class="card" href="ledger_review.html" id="linkLedgerReview">
       <h3>請款審核</h3>
-      <p>廠商／員工匯款請款待審；核准後進待匯款。</p>
+      <p>廠商／員工待付款申請待審；核准後進待匯款。</p>
       <span class="tag admin">財務以上</span>
     </a>
 
@@ -99,6 +100,7 @@
         document.getElementById('app').classList.remove('hidden');
       }
       (async function boot() {
+        AccountingUi.init();
         try {
           var session = await AccountingApi.initSession();
           if (!session) return;
@@ -112,12 +114,14 @@
           showApp();
           var hint = document.getElementById('cacheHint');
           var hadCache = !!AccountingCache.get(session);
-          hint.textContent = hadCache ? '主檔背景更新中…' : '主檔載入中…';
-          AccountingCache.load(session).then(function () {
-            hint.textContent = '';
-          }).catch(function (e) {
-            hint.textContent = '主檔更新失敗：' + (e.message || e);
-          });
+          if (!hadCache) {
+            hint.textContent = '主檔載入中…';
+            AccountingCache.load(session).then(function () {
+              hint.textContent = '';
+            }).catch(function (e) {
+              hint.textContent = '主檔載入失敗：' + (e.message || e);
+            });
+          }
         } catch (e) {
           document.getElementById('loading').textContent = e.message || String(e);
         }
