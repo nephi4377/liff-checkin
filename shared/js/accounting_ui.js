@@ -17,6 +17,22 @@ var AccountingUi = (function () {
   var opts = { side: 'right' };
   var operator = { session: null, userId: '', displayName: '', permission: 0 };
   var _restoring = false;
+  var _pendingNavIntent = null;
+
+  var PAGE_LABELS = {
+    'index.html': '會計功能選單',
+    'payment_request.html': '待付款申請',
+    'accounting_ingest.html': '收支登錄',
+    'ledger_review.html': '請款審核',
+    'vendor_payment_finance.html': '廠商待匯款',
+    'vendors.html': '廠商名冊',
+    'vendor_status.html': '款項進度',
+    'attachments.html': '單據附件',
+    'project_margin.html': '案件毛利',
+    'payees.html': '收款帳戶',
+    'vendor_register.html': '廠商自填',
+    'vendor_payment_approve.html': '廠商請款審核'
+  };
 
   var KIND_LABEL = { ok: '完成', err: '錯誤', warn: '注意', info: '訊息', action: '動作' };
 
@@ -94,6 +110,10 @@ var AccountingUi = (function () {
     }
   }
 
+  function pageLabel() {
+    return PAGE_LABELS[pageName()] || pageName();
+  }
+
   function normalizeKind(kind) {
     if (kind === 'error') return 'err';
     if (kind === 'success') return 'ok';
@@ -126,8 +146,30 @@ var AccountingUi = (function () {
   }
 
   function shouldSyncRemote(kind, text) {
-    if (kind === 'info' && text === '頁面已就緒') return false;
     return true;
+  }
+
+  function flushPendingNavIntent() {
+    if (!_pendingNavIntent) return;
+    var msg = _pendingNavIntent;
+    _pendingNavIntent = null;
+    pushLog('action', msg);
+  }
+
+  function consumeNavIntent() {
+    try {
+      var raw = sessionStorage.getItem('acct_nav_intent');
+      if (!raw) return;
+      sessionStorage.removeItem('acct_nav_intent');
+      var j = JSON.parse(raw);
+      if (!j || !j.label) return;
+      var href = String(j.href || '');
+      var cur = pageName();
+      if (href && cur && href !== cur && href.indexOf(cur) < 0) return;
+      var msg = '進入：' + j.label;
+      if (operator.session) pushLog('action', msg);
+      else _pendingNavIntent = msg;
+    } catch (e) {}
   }
 
   function persistEntry(kind, text) {
@@ -334,6 +376,24 @@ var AccountingUi = (function () {
     operator.userId = (session.auth && session.auth.user_id) || (session.profile && session.profile.userId) || '';
     operator.displayName = (session.auth && session.auth.display_name) || (session.profile && session.profile.displayName) || '';
     operator.permission = (session.auth && session.auth.permission) || 0;
+    flushPendingNavIntent();
+  }
+
+  function bindMenuCards(selector) {
+    document.querySelectorAll(selector || '#app a.card').forEach(function (a) {
+      a.addEventListener('click', function () {
+        var h3 = a.querySelector('h3');
+        var label = h3 ? h3.textContent.trim() : (a.getAttribute('href') || '');
+        try {
+          sessionStorage.setItem('acct_nav_intent', JSON.stringify({
+            label: label,
+            href: a.getAttribute('href') || '',
+            at: Date.now()
+          }));
+        } catch (e) {}
+        tap('點選：' + label);
+      });
+    });
   }
 
   function setBtnBusy(btn, on, busyLabel) {
@@ -383,12 +443,15 @@ var AccountingUi = (function () {
       if (initOpts.side === 'left') opts.side = 'left';
       ensureMount();
       restoreStoredLogs();
+      consumeNavIntent();
       renderLog();
-      pushLog('info', '頁面已就緒');
+      pushLog('info', '就緒：' + pageLabel());
       if (initOpts.session) setOperator(initOpts.session);
       return this;
     },
     setOperator: setOperator,
+    bindMenuCards: bindMenuCards,
+    pageLabel: pageLabel,
     getStoredLogs: readStorageList,
     toast: toast,
     log: pushLog,
