@@ -51,6 +51,7 @@
         <nav id="personal-tabs" class="hidden flex gap-2 mb-6 bg-white p-1.5 rounded-xl shadow-sm border border-gray-100" role="tablist" aria-label="個人出勤與假勤">
             <button type="button" id="tab-attendance" class="personal-tab personal-tab-active" role="tab" aria-selected="true">出勤紀錄</button>
             <button type="button" id="tab-leave" class="personal-tab personal-tab-inactive" role="tab" aria-selected="false">假勤紀錄</button>
+            <button type="button" id="tab-payroll" class="personal-tab personal-tab-inactive" role="tab" aria-selected="false">薪資核對</button>
         </nav>
 
         <div id="attendance-main">
@@ -129,6 +130,56 @@
                 <div id="leave-list" class="space-y-3"></div>
             </div>
         </div>
+
+        <div id="payroll-panel" class="hidden">
+            <div class="bg-white p-5 md:p-6 rounded-xl shadow-sm border border-gray-100">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-800">本月薪資出勤核對</h2>
+                        <p class="text-sm text-gray-500 mt-1">送出前請核對出勤與假勤；獎金由主管審核時填入</p>
+                    </div>
+                    <button type="button" id="payroll-refresh-btn" class="text-sm px-3 py-2 rounded-md bg-gray-100 hover:bg-gray-200">重新載入</button>
+                </div>
+                <p id="payroll-loading" class="text-center text-gray-500 py-8 hidden">載入中…</p>
+                <p id="payroll-error" class="hidden text-center text-red-600 py-6"></p>
+                <div id="payroll-form-wrap" class="hidden space-y-4">
+                    <div>
+                        <label for="payroll-period-select" class="block text-sm font-medium text-gray-700">結算期別</label>
+                        <select id="payroll-period-select" class="mt-1 block w-full rounded-md border-gray-300 sm:text-sm"></select>
+                        <p id="payroll-period-hint" class="text-xs text-gray-500 mt-1"></p>
+                    </div>
+                    <div id="payroll-stats-box" class="text-sm bg-gray-50 rounded-lg p-3 space-y-1"></div>
+                    <div id="payroll-monthly-rest" class="hidden text-xs text-gray-500">應休／實休由系統依班表與假勤計算</div>
+                    <div id="payroll-daily-days" class="hidden text-sm"><strong>本期出勤：</strong><span id="payroll-days-worked-val">0</span> 天</div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label for="payroll-overtime-hours" class="block text-sm font-medium text-gray-700">加班（小時）</label>
+                            <input type="number" id="payroll-overtime-hours" min="0" step="0.5" class="mt-1 block w-full rounded-md border-gray-300 sm:text-sm" placeholder="0">
+                        </div>
+                        <div>
+                            <label for="payroll-overtime-note" class="block text-sm font-medium text-gray-700">加班原因</label>
+                            <input type="text" id="payroll-overtime-note" class="mt-1 block w-full rounded-md border-gray-300 sm:text-sm" placeholder="請備註">
+                        </div>
+                        <div>
+                            <label for="payroll-remote-amount" class="block text-sm font-medium text-gray-700">遠程津貼（元）</label>
+                            <input type="number" id="payroll-remote-amount" min="0" step="1" class="mt-1 block w-full rounded-md border-gray-300 sm:text-sm" placeholder="有遠程工作才填">
+                        </div>
+                        <div>
+                            <label for="payroll-remote-note" class="block text-sm font-medium text-gray-700">遠程津貼說明</label>
+                            <input type="text" id="payroll-remote-note" class="mt-1 block w-full rounded-md border-gray-300 sm:text-sm" placeholder="必填若申請遠程津貼">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="payroll-supplement" class="block text-sm font-medium text-gray-700">補充事項</label>
+                        <textarea id="payroll-supplement" rows="2" class="mt-1 block w-full rounded-md border-gray-300 sm:text-sm" placeholder="其他需說明事項"></textarea>
+                    </div>
+                    <p class="text-xs text-gray-500">* 病假請主動附證明，未附者以事假計（依 V6.3 規範）</p>
+                    <div id="payroll-calc-box" class="border border-indigo-100 rounded-lg p-3 bg-indigo-50/50 text-sm"></div>
+                    <div id="payroll-status-box"></div>
+                    <button type="button" id="payroll-submit-btn" class="w-full sm:w-auto min-h-[44px] px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">送出薪資核對申請</button>
+                </div>
+            </div>
+        </div>
     </div>
     
     <div id="checkin-modal" class="modal fixed inset-0 bg-gray-600 bg-opacity-50 h-full w-full">
@@ -192,6 +243,7 @@
 <!-- 【⭐️ 核心改造：將內聯腳本改為模組，並從 utils.js 引入函式 ⭐️】 -->
 <script type="module">
     import { showGlobalNotification } from '/shared/js/utils.js';
+    import { initPayrollReviewPanel } from '/modules/attendance/payroll_review_panel.js';
 
     // 【您的要求】新增全域變數，用於儲存當前報表資料以供匯出
     let currentReportData = {};
@@ -212,6 +264,7 @@
     const personalShiftStart = urlParamsInit.get('shiftStart') || '08:30';
     const personalShiftEnd = urlParamsInit.get('shiftEnd') || '17:30';
     let leaveLoaded = false;
+    let payrollPanel = null;
     let activePersonalTab = 'attendance';
     let appealStatusMap = {};
     let pendingAppealContext = null;
@@ -332,16 +385,24 @@
         activePersonalTab = tab;
         const attMain = document.getElementById('attendance-main');
         const leavePanel = document.getElementById('leave-panel');
+        const payrollPanelEl = document.getElementById('payroll-panel');
         const tabAtt = document.getElementById('tab-attendance');
         const tabLeave = document.getElementById('tab-leave');
+        const tabPayroll = document.getElementById('tab-payroll');
         const isAtt = tab === 'attendance';
+        const isLeave = tab === 'leave';
+        const isPayroll = tab === 'payroll';
         attMain.classList.toggle('hidden', !isAtt);
-        leavePanel.classList.toggle('hidden', isAtt);
+        leavePanel.classList.toggle('hidden', !isLeave);
+        payrollPanelEl.classList.toggle('hidden', !isPayroll);
         tabAtt.className = 'personal-tab ' + (isAtt ? 'personal-tab-active' : 'personal-tab-inactive');
-        tabLeave.className = 'personal-tab ' + (!isAtt ? 'personal-tab-active' : 'personal-tab-inactive');
+        tabLeave.className = 'personal-tab ' + (isLeave ? 'personal-tab-active' : 'personal-tab-inactive');
+        tabPayroll.className = 'personal-tab ' + (isPayroll ? 'personal-tab-active' : 'personal-tab-inactive');
         tabAtt.setAttribute('aria-selected', isAtt ? 'true' : 'false');
-        tabLeave.setAttribute('aria-selected', !isAtt ? 'true' : 'false');
-        if (!isAtt && !leaveLoaded) fetchPersonalLeaveRequests();
+        tabLeave.setAttribute('aria-selected', isLeave ? 'true' : 'false');
+        tabPayroll.setAttribute('aria-selected', isPayroll ? 'true' : 'false');
+        if (isLeave && !leaveLoaded) fetchPersonalLeaveRequests();
+        if (isPayroll && payrollPanel) payrollPanel.loadIfNeeded();
     }
 
     function initPersonalMode() {
@@ -378,6 +439,13 @@
         });
         document.getElementById('tab-attendance').addEventListener('click', () => switchPersonalTab('attendance'));
         document.getElementById('tab-leave').addEventListener('click', () => switchPersonalTab('leave'));
+        document.getElementById('tab-payroll').addEventListener('click', () => switchPersonalTab('payroll'));
+        payrollPanel = initPayrollReviewPanel({
+            apiBaseUrl: API_BASE_URL,
+            userId: personalUserId,
+            userName: personalUserName,
+            showGlobalNotification
+        });
         document.getElementById('appeal-cancel-btn').addEventListener('click', () => {
             document.getElementById('appeal-modal').classList.remove('is-open');
             pendingAppealContext = null;
