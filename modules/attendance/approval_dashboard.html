@@ -66,6 +66,26 @@
         return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    function normalizeCheckinDate(raw) {
+        if (!raw) return '';
+        const s = String(raw).trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+        const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (iso) return iso[0];
+        const parts = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+        if (parts) {
+            return `${parts[1]}-${String(parts[2]).padStart(2, '0')}-${String(parts[3]).padStart(2, '0')}`;
+        }
+        const d = new Date(s);
+        if (!isNaN(d.getTime())) return d.toLocaleDateString('sv-SE');
+        return s.slice(0, 10);
+    }
+
+    function normalizeCheckinTime(raw) {
+        const m = String(raw || '').trim().match(/^(\d{1,2}):(\d{2})/);
+        return m ? `${m[1].padStart(2, '0')}:${m[2]}` : '';
+    }
+
     function switchApprovalTab(tab) {
         activeTab = tab;
         const isLeave = tab === 'leave';
@@ -176,6 +196,7 @@
         card.className = 'request-card bg-white p-5 rounded-lg shadow-md border-l-4 border-amber-400';
 
         const statusLabel = appeal.isLateSubmit && appeal.status === '待審' ? '逾期申訴' : appeal.status;
+        const targetDateYmd = normalizeCheckinDate(appeal.targetDate);
         const attachments = (appeal.attachmentUrls || '').split(';').filter(Boolean);
         const attachHtml = attachments.length
             ? `<div class="flex flex-wrap gap-2 mt-1">${attachments.map((u, i) =>
@@ -196,13 +217,13 @@
                     <input type="time" id="fix-time-${appeal.appealId}" class="rounded border-gray-300 text-sm" value="08:30">
                     <select id="fix-type-${appeal.appealId}" class="rounded border-gray-300 text-sm"><option value="上班">上班</option><option value="下班">下班</option></select>
                 </div>
-                <button type="button" data-appeal-fix="${appeal.appealId}" data-employee-id="${appeal.employeeUserId}" data-target-date="${appeal.targetDate}" class="w-full px-3 py-2 text-sm font-bold text-white bg-green-600 rounded-md hover:bg-green-700">執行補登</button>
+                <button type="button" data-appeal-fix="${appeal.appealId}" data-employee-id="${appeal.employeeUserId}" data-target-date="${escapeHtml(targetDateYmd)}" class="w-full px-3 py-2 text-sm font-bold text-white bg-green-600 rounded-md hover:bg-green-700">執行補登</button>
             </div>` : '';
 
         card.innerHTML = `
             <div class="flex justify-between items-start gap-2">
                 <div>
-                    <h3 class="text-lg font-bold text-gray-800">${escapeHtml(appeal.employeeName)} · ${escapeHtml(appeal.targetDate)}</h3>
+                    <h3 class="text-lg font-bold text-gray-800">${escapeHtml(appeal.employeeName)} · ${escapeHtml(targetDateYmd)}</h3>
                     <p class="text-sm text-gray-500">${escapeHtml(appeal.employeeGroup || '')} · ${escapeHtml(appeal.anomalyType)}</p>
                 </div>
                 <span class="text-xs font-semibold px-2 py-1 rounded-full bg-amber-100 text-amber-800">${escapeHtml(statusLabel)}</span>
@@ -226,7 +247,7 @@
                 <div class="flex flex-wrap justify-end gap-2">
                     <button type="button" data-appeal-decision="reject" data-appeal-id="${appeal.appealId}" class="px-3 py-2 text-sm font-bold text-white bg-red-500 rounded-md hover:bg-red-600">駁回</button>
                     <button type="button" data-appeal-decision="note_only" data-appeal-id="${appeal.appealId}" class="px-3 py-2 text-sm font-bold text-white bg-gray-500 rounded-md hover:bg-gray-600">僅備註</button>
-                    <button type="button" data-appeal-approve-fix="${appeal.appealId}" data-employee-id="${escapeHtml(appeal.employeeUserId)}" data-target-date="${escapeHtml(appeal.targetDate)}" class="px-3 py-2 text-sm font-bold text-white bg-green-600 rounded-md hover:bg-green-700">核准並補登</button>
+                    <button type="button" data-appeal-approve-fix="${appeal.appealId}" data-employee-id="${escapeHtml(appeal.employeeUserId)}" data-target-date="${escapeHtml(targetDateYmd)}" class="px-3 py-2 text-sm font-bold text-white bg-green-600 rounded-md hover:bg-green-700">核准並補登</button>
                 </div>
             </div>` : ''}
             ${manualBlock}
@@ -238,12 +259,17 @@
     }
 
     async function postManualCheckin(appealId, userId, date, time, eventType) {
+        const dateYmd = normalizeCheckinDate(date);
+        const timeHm = normalizeCheckinTime(time);
+        if (!dateYmd || !timeHm) {
+            throw new Error('日期或時間格式無效（請使用 YYYY-MM-DD 與 HH:mm）');
+        }
         const url = new URL(API_BASE_URL);
         url.searchParams.append('page', 'attendance_api');
         url.searchParams.append('action', 'add_manual_checkin');
         url.searchParams.append('userId', userId);
-        url.searchParams.append('date', date);
-        url.searchParams.append('time', time);
+        url.searchParams.append('date', dateYmd);
+        url.searchParams.append('time', timeHm);
         url.searchParams.append('eventType', eventType);
         url.searchParams.append('operatorId', userProfile.userId);
         url.searchParams.append('operatorName', userProfile.displayName);
