@@ -194,6 +194,17 @@
                     <input type="number" id="交通津貼" min="0" step="1" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="每期固定金額">
                 </div>
 
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="其他津貼" class="block text-gray-700 font-semibold mb-2">其他津貼（元）</label>
+                        <input type="number" id="其他津貼" min="0" step="1" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="例：證照津貼">
+                    </div>
+                    <div>
+                        <label for="其他津貼說明" class="block text-gray-700 font-semibold mb-2">其他津貼說明</label>
+                        <input type="text" id="其他津貼說明" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="例：證照津貼">
+                    </div>
+                </div>
+
                 <div>
                     <label for="薪資備註" class="block text-gray-700 font-semibold mb-2">薪資備註</label>
                     <input type="text" id="薪資備註" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="選填">
@@ -239,6 +250,8 @@
         const baseSalaryInput = document.getElementById('底薪');
         const fullAttendanceInput = document.getElementById('全勤獎金');
         const transportationInput = document.getElementById('交通津貼');
+        const otherAllowanceInput = document.getElementById('其他津貼');
+        const otherAllowanceNoteInput = document.getElementById('其他津貼說明');
         const payrollNoteInput = document.getElementById('薪資備註');
         const submitButton = document.getElementById('submit-button');
         const buttonText = document.getElementById('button-text');
@@ -461,6 +474,8 @@
             baseSalaryInput.value = '';
             fullAttendanceInput.value = '';
             transportationInput.value = '';
+            otherAllowanceInput.value = '';
+            otherAllowanceNoteInput.value = '';
             payrollNoteInput.value = '';
             userIdInput.readOnly = true;
             toggleShiftGroupFields(true); // [v522.0 新增] 確保新增時顯示
@@ -490,6 +505,8 @@
             baseSalaryInput.value = employee.baseSalary || employee.底薪 || '';
             fullAttendanceInput.value = employee.fullAttendanceBonusMax || employee.全勤獎金 || '';
             transportationInput.value = employee.transportationAllowance || employee.交通津貼 || '';
+            otherAllowanceInput.value = employee.otherAllowance || employee.其他津貼 || '';
+            otherAllowanceNoteInput.value = employee.otherAllowanceNote || employee.其他津貼說明 || '';
             payrollNoteInput.value = employee.payrollNote || employee.薪資備註 || '';
             userIdInput.readOnly = true;
             toggleShiftGroupFields(employee.permission != 1); // [v523.0 修正] 使用正規化後的 'permission'
@@ -555,6 +572,8 @@
                 底薪: baseSalaryInput.value !== '' ? Number(baseSalaryInput.value) : '',
                 全勤獎金: fullAttendanceInput.value !== '' ? Number(fullAttendanceInput.value) : '',
                 交通津貼: transportationInput.value !== '' ? Number(transportationInput.value) : '',
+                其他津貼: otherAllowanceInput.value !== '' ? Number(otherAllowanceInput.value) : '',
+                其他津貼說明: otherAllowanceNoteInput.value.trim(),
                 薪資備註: payrollNoteInput.value.trim(),
                 operatorUserId: currentUserProfile.userId,
                 operatorUserName: currentUserProfile.displayName
