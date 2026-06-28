@@ -78,7 +78,7 @@
   <div class="wrap">
     <header>
       <h1>添心 · 空間 AI 實驗室</h1>
-      <p class="sub">開案建空間指紋 → 施工照比對 → 施工回報 AI 測試（由 accounting-gas 代送 Gemini，自動記錄 token）</p>
+      <p class="sub">開案建空間指紋 → 施工照比對 → 施工回報 AI 測試（預設本機 Ollama 多模態，資料不上雲；可切換雲端 GAS+Gemini）</p>
     </header>
 
     <div id="err-box" class="err"></div>
@@ -95,25 +95,50 @@
         <!-- ① 開案指紋 -->
         <section id="panel-fingerprint" class="card">
           <h2><i class="fa-solid fa-map"></i> 開案 — 建立空間指紋</h2>
-          <p class="step-hint">上傳平面圖（選填）＋各空間施工前照 → 送 GAS 產生指紋 JSON。完成後可切到「空間比對」繼續測。</p>
+          <p class="step-hint">填預期空間數 → 上傳平面圖（選填）＋全部現場照 → <strong>分階段</strong>：每批 4 張掃描（每張 ≥8 個結構特徵：樑柱門窗、插座相對位置）→ 依特徵比對分群 → 未分配重分配 → 定案 spf_v1 指紋。完整過程記錄於右側 JSON。</p>
           <div class="field">
             <label>案號</label>
             <input id="project-no" type="text" placeholder="例如 764">
           </div>
+          <div class="row">
+            <div class="field">
+              <label>預期空間數量</label>
+              <input id="space-count" type="number" min="1" max="30" value="4">
+            </div>
+            <div class="field">
+              <label>空間名稱提示（選填，逗號分隔）</label>
+              <input id="space-names-hint" type="text" placeholder="例：客廳,主臥,次臥,廚房">
+            </div>
+          </div>
           <div class="field">
-            <label>平面配置圖（全案共用，選填）</label>
+            <label>平面配置圖（全案共用，選填；若有會當附圖第 1 張）</label>
             <div class="upload" id="upload-floor-plan">點選上傳平面圖</div>
             <input type="file" id="input-floor-plan" accept="image/*" class="hidden">
             <div class="thumbs" id="thumb-floor-plan"></div>
           </div>
           <div class="field">
-            <label>空間列表</label>
-            <div class="space-list" id="space-list"></div>
-            <div class="inline-btns" style="margin-top:0.5rem">
-              <button type="button" class="btn btn-secondary" id="btn-add-space"><i class="fa-solid fa-plus"></i> 新增空間</button>
-              <button type="button" class="btn btn-primary" id="btn-gen-fingerprint"><i class="fa-solid fa-fingerprint"></i> 產生選定空間指紋</button>
-            </div>
+            <label>開案現場照（一次上傳全部，可多張）</label>
+            <div class="upload" id="upload-batch-photos">點選上傳全部現場照</div>
+            <input type="file" id="input-batch-photos" accept="image/*" multiple class="hidden">
+            <div class="thumbs" id="thumb-batch-photos"></div>
+            <p id="batch-photo-hint" class="step-hint" style="margin-top:0.35rem"></p>
           </div>
+          <div class="field">
+            <label>指紋結果（<span class="fp-count-el">0</span> 個空間）</label>
+            <div class="space-list" id="space-list"></div>
+          </div>
+          <div class="inline-btns">
+            <button type="button" class="btn btn-primary" id="btn-gen-fingerprint"><i class="fa-solid fa-layer-group"></i> 分階段產出全部指紋</button>
+          </div>
+          <details class="step-hint" style="margin-top:0.75rem">
+            <summary style="cursor:pointer;color:var(--primary)">進階：單一空間補強（舊模式）</summary>
+            <div style="margin-top:0.5rem">
+              <div class="inline-btns">
+                <button type="button" class="btn btn-secondary" id="btn-add-space"><i class="fa-solid fa-plus"></i> 新增空間</button>
+                <button type="button" class="btn btn-secondary" id="btn-gen-fingerprint-one"><i class="fa-solid fa-fingerprint"></i> 僅產生選定空間</button>
+              </div>
+            </div>
+          </details>
         </section>
 
         <!-- ② 空間比對 -->
@@ -121,7 +146,7 @@
           <h2><i class="fa-solid fa-crosshairs"></i> 施工照 — 空間比對</h2>
           <p class="step-hint">使用左側已建好的指紋，上傳施工照判定屬哪個空間。結果可帶入「施工回報」。</p>
           <div class="field">
-            <label>已就緒指紋（<span id="fp-count">0</span> 個空間）</label>
+            <label>已就緒指紋（<span class="fp-count-el">0</span> 個空間）</label>
             <div id="fp-summary" class="step-hint"></div>
           </div>
           <div class="field">
@@ -174,30 +199,46 @@
         <section id="panel-settings" class="card hidden">
           <h2><i class="fa-solid fa-sliders"></i> 連線與 AI 參數</h2>
           <div class="field">
-            <label>accounting-gas Web App URL</label>
-            <input id="gas-url" type="url" placeholder="https://script.google.com/macros/s/.../exec">
+            <label>AI 連線模式</label>
+            <select id="provider-mode">
+              <option value="local">本機 Ollama（多模態，資料不上雲）</option>
+              <option value="cloud">雲端 GAS + Gemini</option>
+            </select>
           </div>
-          <div class="field">
-            <label>INGEST_SECRET（選填；未開 dev_bypass 時用）</label>
-            <input id="ingest-secret" type="password" placeholder="與 GAS Script Property 相同">
+          <div id="ollama-fields">
+            <div class="field">
+              <label>Ollama API 位址</label>
+              <input id="ollama-url" type="url" value="http://127.0.0.1:11434/v1" placeholder="http://127.0.0.1:11434/v1">
+            </div>
+            <p class="step-hint">請先確認 Ollama 已啟動，並已下載視覺模型（如 qwen2.5vl:7b）。回覆語言固定為繁體中文。</p>
           </div>
-          <div class="switch-row">
-            <span>dev_bypass（需後端 ACCOUNTING_AUTH_BYPASS=true）</span>
-            <input type="checkbox" id="dev-bypass" checked>
+          <div id="gas-fields">
+            <div class="field">
+              <label>accounting-gas Web App URL</label>
+              <input id="gas-url" type="url" placeholder="https://script.google.com/macros/s/.../exec">
+            </div>
+            <div class="field">
+              <label>INGEST_SECRET（選填；未開 dev_bypass 時用）</label>
+              <input id="ingest-secret" type="password" placeholder="與 GAS Script Property 相同">
+            </div>
+            <div class="switch-row">
+              <span>dev_bypass（需後端 ACCOUNTING_AUTH_BYPASS=true）</span>
+              <input type="checkbox" id="dev-bypass" checked>
+            </div>
           </div>
           <div class="row">
             <div class="field">
               <label>模型</label>
               <select id="param-model"></select>
             </div>
-            <div class="field">
-              <label>thinkingBudget（0=關, -1=動態）</label>
+            <div class="field" id="field-thinking">
+              <label>thinkingBudget（0=關, -1=動態，僅 Gemini）</label>
               <input id="param-thinking" type="number" value="0">
             </div>
           </div>
           <div class="row">
-            <div class="field">
-              <label>maxOutputTokens</label>
+            <div class="field" id="field-max-tokens">
+              <label>maxOutputTokens（僅雲端 Gemini）</label>
               <input id="param-max-tokens" type="number" value="4096">
             </div>
             <div class="field">
@@ -216,8 +257,8 @@
             </div>
           </div>
           <div class="row">
-            <div class="field">
-              <label>美金兌台幣（僅前端估算）</label>
+            <div class="field" id="field-fx">
+              <label>美金兌台幣（僅雲端估算）</label>
               <input id="param-fx" type="number" step="0.1" value="32.5">
             </div>
             <div class="field">
@@ -226,9 +267,10 @@
             </div>
           </div>
           <div class="field">
-            <label>補充 prompt（附加到各模式任務尾端）</label>
-            <textarea id="extra-prompt" rows="2" placeholder="測試用額外指示…"></textarea>
+            <label>補充 prompt（附加到各模式任務尾端；預設含繁體中文指示）</label>
+            <textarea id="extra-prompt" rows="2" placeholder="請一律使用繁體中文…"></textarea>
           </div>
+          <p id="cost-local-hint" class="step-hint hidden">本機模式：照片與分析全程在你電腦上完成，不經 GAS / Gemini，費用顯示為 0；輸出長度不限制（不設 max_tokens）。</p>
           <div class="inline-btns">
             <button type="button" class="btn btn-secondary" id="btn-save-settings"><i class="fa-solid fa-floppy-disk"></i> 儲存設定</button>
             <button type="button" class="btn btn-secondary" id="btn-ping"><i class="fa-solid fa-satellite-dish"></i> 測試連線</button>
@@ -264,6 +306,7 @@
         </div>
         <div class="card">
           <h2><i class="fa-solid fa-code"></i> AI 回傳 JSON</h2>
+          <p id="pipeline-status" class="step-hint hidden" style="margin-bottom:0.5rem"></p>
           <div class="out" id="output-json">等待執行…</div>
         </div>
         <div class="card">
