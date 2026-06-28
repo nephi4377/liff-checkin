@@ -210,6 +210,40 @@
                     <input type="text" id="薪資備註" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="選填">
                 </div>
 
+                <hr class="mt-2">
+                <h3 class="text-base font-semibold text-gray-800">保險設定</h3>
+                <p class="text-xs text-gray-500 -mt-1">勞健保依投保級距自動試算；木工等個人保工會者選「工會」。</p>
+
+                <div>
+                    <label for="保險類型" class="block text-gray-700 font-semibold mb-2">保險類型</label>
+                    <select id="保險類型" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white">
+                        <option value="">— 未設定 —</option>
+                        <option value="勞健保">勞健保（公司加保）</option>
+                        <option value="工會">工會（個人名義，如木工）</option>
+                        <option value="無">無／不加保</option>
+                    </select>
+                </div>
+
+                <div id="insurance-labor-health-wrap" class="hidden space-y-3">
+                    <div>
+                        <label for="投保級距" class="block text-gray-700 font-semibold mb-2">投保級距（元）</label>
+                        <input type="number" id="投保級距" min="0" step="1" class="w-full px-3 py-2 border border-gray-300 rounded-md" list="insured-level-datalist" placeholder="例：36300">
+                        <datalist id="insured-level-datalist"></datalist>
+                        <p class="text-xs text-gray-500 mt-1">請填勞健保投保薪資級距；系統試算勞保＋健保個人負擔。</p>
+                    </div>
+                </div>
+
+                <div id="insurance-union-wrap" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="工會保費" class="block text-gray-700 font-semibold mb-2">工會保費（元／月）</label>
+                        <input type="number" id="工會保費" min="0" step="1" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="個人每月自付">
+                    </div>
+                    <div>
+                        <label for="工會備註" class="block text-gray-700 font-semibold mb-2">工會備註</label>
+                        <input type="text" id="工會備註" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="例：木工職業工會">
+                    </div>
+                </div>
+
                 <div id="status-message" class="text-center min-h-[24px]"></div>
 
                 <button type="submit" id="submit-button" class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-lg hover:bg-blue-700 disabled:bg-gray-400">
@@ -253,6 +287,12 @@
         const otherAllowanceInput = document.getElementById('其他津貼');
         const otherAllowanceNoteInput = document.getElementById('其他津貼說明');
         const payrollNoteInput = document.getElementById('薪資備註');
+        const insuranceTypeSelect = document.getElementById('保險類型');
+        const insuredLevelInput = document.getElementById('投保級距');
+        const unionFeeInput = document.getElementById('工會保費');
+        const unionFeeNoteInput = document.getElementById('工會備註');
+        const insuranceLhWrap = document.getElementById('insurance-labor-health-wrap');
+        const insuranceUnionWrap = document.getElementById('insurance-union-wrap');
         const submitButton = document.getElementById('submit-button');
         const buttonText = document.getElementById('button-text');
         const buttonSpinner = document.getElementById('button-spinner');
@@ -298,6 +338,34 @@
             statusSelect.addEventListener('change', handleStatusChange);
             // [v529.0 新增] 監聽「顯示離職員工」勾選狀態的變化
             showResignedCheckbox.addEventListener('change', populateEmployeeDropdown);
+            insuranceTypeSelect.addEventListener('change', toggleInsuranceFields);
+            populateInsuredLevelDatalist();
+        }
+
+        const COMMON_INSURED_LEVELS = [
+            11100, 15840, 17880, 23100, 26400, 28800, 30300, 31800, 33300, 34800,
+            36300, 38200, 40100, 42000, 43900, 45800, 48200, 50600, 52800, 55400, 57800
+        ];
+
+        function populateInsuredLevelDatalist() {
+            const dl = document.getElementById('insured-level-datalist');
+            if (!dl) return;
+            dl.innerHTML = COMMON_INSURED_LEVELS.map((n) => `<option value="${n}">`).join('');
+        }
+
+        function toFormInsuranceType(v) {
+            if (!v) return '';
+            const s = String(v).trim();
+            if (s === 'union' || s === '工會' || s.indexOf('工會') >= 0) return '工會';
+            if (s === 'none' || s === '無' || s === '不加保') return '無';
+            if (s === 'labor_health' || s === '勞健保' || s.indexOf('勞健') >= 0) return '勞健保';
+            return s;
+        }
+
+        function toggleInsuranceFields() {
+            const t = insuranceTypeSelect.value;
+            insuranceLhWrap.classList.toggle('hidden', t !== '勞健保');
+            insuranceUnionWrap.classList.toggle('hidden', t !== '工會');
         }
 
         async function fetchEmployeesAndPopulateDropdown() {
@@ -477,6 +545,11 @@
             otherAllowanceInput.value = '';
             otherAllowanceNoteInput.value = '';
             payrollNoteInput.value = '';
+            insuranceTypeSelect.value = '';
+            insuredLevelInput.value = '';
+            unionFeeInput.value = '';
+            unionFeeNoteInput.value = '';
+            toggleInsuranceFields();
             userIdInput.readOnly = true;
             toggleShiftGroupFields(true); // [v522.0 新增] 確保新增時顯示
             submitButton.textContent = '儲存員工資料'; // [v524.0] 恢復為儲存
@@ -508,6 +581,11 @@
             otherAllowanceInput.value = employee.otherAllowance || employee.其他津貼 || '';
             otherAllowanceNoteInput.value = employee.otherAllowanceNote || employee.其他津貼說明 || '';
             payrollNoteInput.value = employee.payrollNote || employee.薪資備註 || '';
+            insuranceTypeSelect.value = toFormInsuranceType(employee.insuranceType || employee.保險類型);
+            insuredLevelInput.value = employee.insuredSalaryLevel || employee.投保級距 || '';
+            unionFeeInput.value = employee.unionFeeAmount || employee.工會保費 || '';
+            unionFeeNoteInput.value = employee.unionFeeNote || employee.工會備註 || '';
+            toggleInsuranceFields();
             userIdInput.readOnly = true;
             toggleShiftGroupFields(employee.permission != 1); // [v523.0 修正] 使用正規化後的 'permission'
             submitButton.textContent = '儲存變更';
@@ -575,6 +653,10 @@
                 其他津貼: otherAllowanceInput.value !== '' ? Number(otherAllowanceInput.value) : '',
                 其他津貼說明: otherAllowanceNoteInput.value.trim(),
                 薪資備註: payrollNoteInput.value.trim(),
+                保險類型: insuranceTypeSelect.value,
+                投保級距: insuredLevelInput.value !== '' ? Number(insuredLevelInput.value) : '',
+                工會保費: unionFeeInput.value !== '' ? Number(unionFeeInput.value) : '',
+                工會備註: unionFeeNoteInput.value.trim(),
                 operatorUserId: currentUserProfile.userId,
                 operatorUserName: currentUserProfile.displayName
             };

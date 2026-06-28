@@ -109,7 +109,17 @@ export function initPayrollReviewPanel(ctx) {
         const preview = calcPreview(settings, period.payType, snapshot, {
             remoteAllowanceAmount: Number(els.remoteAmount.value) || 0,
             overtimeHours: Number(els.overtimeHours.value) || 0
-        });
+        }, contextData.insurancePreview);
+        const ins = preview.insurance || contextData.insurancePreview || {};
+        let insHtml = '';
+        if (ins.type === 'labor_health' && (ins.total || 0) > 0) {
+            insHtml = `<p><strong>勞健保自付：</strong>${(ins.total || 0).toLocaleString()} 元（勞保 ${(ins.labor || 0).toLocaleString()}＋健保 ${(ins.health || 0).toLocaleString()}）</p>`;
+        } else if (ins.type === 'union' && (ins.union || ins.total || 0) > 0) {
+            insHtml = `<p><strong>工會保費：</strong>${(ins.union || ins.total || 0).toLocaleString()} 元</p>`;
+        } else if (ins.type === 'none') {
+            insHtml = `<p class="text-gray-500 text-xs">保險：不加保</p>`;
+        }
+        if (ins.note) insHtml += `<p class="text-xs text-gray-500">${esc(ins.note)}</p>`;
         els.calcBox.innerHTML = `
             <p class="text-xs text-amber-700 bg-amber-50 rounded p-2 mb-2">${esc(disclaimer)}</p>
             <p><strong>薪資類型：</strong>${isDaily ? '日薪' : '月薪'}（${esc(settings.payRule)}）</p>
@@ -120,6 +130,7 @@ export function initPayrollReviewPanel(ctx) {
             <p id="payroll-other-row" class="${preview.otherAllowance > 0 ? '' : 'hidden'}"><strong>其他津貼：</strong>${preview.otherAllowance.toLocaleString()} 元${settings.otherAllowanceNote ? `（${esc(settings.otherAllowanceNote)}）` : ''}</p>
             <p><strong>預估加班費：</strong>${preview.overtimePay.toLocaleString()} 元</p>
             <p id="payroll-remote-row"><strong>遠程津貼：</strong>${(Number(els.remoteAmount.value) || 0).toLocaleString()} 元</p>
+            ${insHtml}
             <p class="text-lg font-bold text-indigo-700 mt-2"><strong>預估實發：</strong>${preview.estimatedNet.toLocaleString()} 元</p>
         `;
 
@@ -139,11 +150,12 @@ export function initPayrollReviewPanel(ctx) {
         return Number.isInteger(n) ? String(n) : n.toFixed(2);
     }
 
-    function calcPreview(settings, payType, snapshot, input) {
+    function calcPreview(settings, payType, snapshot, input, insurancePreview) {
         const base = Number(settings.baseSalary) || 0;
         const remote = Number(input.remoteAllowanceAmount) || 0;
         const transport = Number(settings.transportationAllowance) || 0;
         const otherAllowance = Number(settings.otherAllowance) || 0;
+        const ins = insurancePreview || { total: 0, labor: 0, health: 0, union: 0, type: 'none' };
         const st = snapshot.stats || {};
         let earnedBase = base;
         let fullAttendanceBonus = 0;
@@ -158,8 +170,11 @@ export function initPayrollReviewPanel(ctx) {
             const hourly = payType === 'daily' ? base / 8 : base / 30 / 8;
             overtimePay = Math.round(hourly * 1.34 * overtimeHours);
         }
-        const estimatedNet = Math.round(earnedBase + fullAttendanceBonus + transport + otherAllowance + remote + overtimePay);
-        return { baseSalary: earnedBase, fullAttendanceBonus, transportationAllowance: transport, otherAllowance, overtimePay, estimatedNet };
+        const estimatedNet = Math.round(earnedBase + fullAttendanceBonus + transport + otherAllowance + remote + overtimePay - (ins.total || 0));
+        return {
+            baseSalary: earnedBase, fullAttendanceBonus, transportationAllowance: transport, otherAllowance,
+            overtimePay, estimatedNet, insurance: ins
+        };
     }
 
     async function submitReview() {
@@ -263,6 +278,13 @@ export function initPayrollReviewApproval(ctx) {
         let snap = {};
         try { snap = JSON.parse(row.statsSnapshot); } catch (e) { /* ignore */ }
         const st = snap.stats || {};
+        const ins = snap.insurance || {};
+        let insLine = '';
+        if (ins.type === 'labor_health' && (ins.total || 0) > 0) {
+            insLine = `<p><strong>勞健保自付：</strong>${Number(ins.total).toLocaleString()} 元（勞 ${Number(ins.labor || 0).toLocaleString()}＋健 ${Number(ins.health || 0).toLocaleString()}）</p>`;
+        } else if (ins.type === 'union' && (ins.union || ins.total || 0) > 0) {
+            insLine = `<p><strong>工會保費：</strong>${Number(ins.union || ins.total).toLocaleString()} 元</p>`;
+        }
         card.innerHTML = `
             <div class="flex justify-between gap-2">
                 <div>
@@ -279,6 +301,7 @@ export function initPayrollReviewApproval(ctx) {
                 <p><strong>預估本薪／全勤：</strong>${Number(row.baseSalary).toLocaleString()}／${Number(row.fullAttendanceBonus).toLocaleString()} 元</p>
                 <p><strong>遠程津貼：</strong>${Number(row.remoteAllowanceAmount).toLocaleString()} 元 ${row.remoteAllowanceNote ? `（${esc(row.remoteAllowanceNote)}）` : ''}</p>
                 <p><strong>加班：</strong>${row.overtimeHours} 小時 ${row.overtimeNote ? `— ${esc(row.overtimeNote)}` : ''}</p>
+                ${insLine}
                 <p><strong>補充：</strong>${esc(row.supplementNote || '—')}</p>
                 <p class="font-bold text-indigo-700">員工端預估實發：${Number(row.estimatedNet).toLocaleString()} 元</p>
             </div>
