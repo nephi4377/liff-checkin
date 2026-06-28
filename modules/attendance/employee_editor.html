@@ -154,6 +154,51 @@
                 </div>
                 <!-- 新增結束 -->
 
+                <hr>
+                <h2 class="text-lg font-semibold text-gray-800">薪資設定</h2>
+                <p class="text-xs text-gray-500 -mt-2">供「薪資出勤核對」使用；月薪填月薪、日薪填日薪。</p>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="薪資類型" class="block text-gray-700 font-semibold mb-2">薪資類型</label>
+                        <select id="薪資類型" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white">
+                            <option value="">— 未設定 —</option>
+                            <option value="月薪">月薪</option>
+                            <option value="日薪">日薪</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="發薪規則" class="block text-gray-700 font-semibold mb-2">發薪規則</label>
+                        <select id="發薪規則" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white">
+                            <option value="">— 未設定 —</option>
+                            <option value="月薪-10">月薪-10（10日發上個月）</option>
+                            <option value="日薪-1/11/21">日薪-1/11/21</option>
+                            <option value="日薪-1/16">日薪-1/16</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="底薪" class="block text-gray-700 font-semibold mb-2">底薪（元）</label>
+                        <input type="number" id="底薪" min="0" step="1" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="月薪或日薪">
+                    </div>
+                    <div>
+                        <label for="全勤獎金" class="block text-gray-700 font-semibold mb-2">全勤獎金（元）</label>
+                        <input type="number" id="全勤獎金" min="0" step="1" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="預設 2000">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="交通津貼" class="block text-gray-700 font-semibold mb-2">交通津貼（元）</label>
+                    <input type="number" id="交通津貼" min="0" step="1" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="每期固定金額">
+                </div>
+
+                <div>
+                    <label for="薪資備註" class="block text-gray-700 font-semibold mb-2">薪資備註</label>
+                    <input type="text" id="薪資備註" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="選填">
+                </div>
+
                 <div id="status-message" class="text-center min-h-[24px]"></div>
 
                 <button type="submit" id="submit-button" class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-lg hover:bg-blue-700 disabled:bg-gray-400">
@@ -189,6 +234,12 @@
         const emergencyContactPhoneInput = document.getElementById('緊急聯絡人電話');
         const phoneInput = document.getElementById('聯絡電話');
         const addressInput = document.getElementById('聯絡地址');
+        const payTypeSelect = document.getElementById('薪資類型');
+        const payRuleSelect = document.getElementById('發薪規則');
+        const baseSalaryInput = document.getElementById('底薪');
+        const fullAttendanceInput = document.getElementById('全勤獎金');
+        const transportationInput = document.getElementById('交通津貼');
+        const payrollNoteInput = document.getElementById('薪資備註');
         const submitButton = document.getElementById('submit-button');
         const buttonText = document.getElementById('button-text');
         const buttonSpinner = document.getElementById('button-spinner');
@@ -370,6 +421,23 @@
             });
         }
 
+        function toFormPayType(v) {
+            if (!v) return '';
+            const s = String(v).trim();
+            if (/日薪|daily/i.test(s)) return '日薪';
+            if (/月薪|monthly/i.test(s)) return '月薪';
+            return s;
+        }
+
+        function toFormPayRule(v) {
+            if (!v) return '';
+            const s = String(v).replace(/\s/g, '');
+            if (s === 'monthly-10' || s === '月薪-10' || s === '月薪10') return '月薪-10';
+            if (s === 'daily-1-11-21' || s === '日薪-1/11/21' || s === '日薪1/11/21') return '日薪-1/11/21';
+            if (s === 'daily-1-16' || s === '日薪-1/16' || s === '日薪1/16') return '日薪-1/16';
+            return String(v).trim();
+        }
+
         function clearForm() {
             userIdInput.value = '';
             userNameInput.value = '';
@@ -388,6 +456,12 @@
             nationalIdInput.value = '';
             emergencyContactInput.value = '';
             emergencyContactPhoneInput.value = '';
+            payTypeSelect.value = '';
+            payRuleSelect.value = '';
+            baseSalaryInput.value = '';
+            fullAttendanceInput.value = '';
+            transportationInput.value = '';
+            payrollNoteInput.value = '';
             userIdInput.readOnly = true;
             toggleShiftGroupFields(true); // [v522.0 新增] 確保新增時顯示
             submitButton.textContent = '儲存員工資料'; // [v524.0] 恢復為儲存
@@ -411,6 +485,12 @@
             nationalIdInput.value = employee.身分證字號 || '';
             emergencyContactInput.value = employee.緊急聯絡人 || '';
             emergencyContactPhoneInput.value = employee.緊急聯絡人電話 || '';
+            payTypeSelect.value = toFormPayType(employee.payType || employee.薪資類型);
+            payRuleSelect.value = toFormPayRule(employee.payRule || employee.發薪規則);
+            baseSalaryInput.value = employee.baseSalary || employee.底薪 || '';
+            fullAttendanceInput.value = employee.fullAttendanceBonusMax || employee.全勤獎金 || '';
+            transportationInput.value = employee.transportationAllowance || employee.交通津貼 || '';
+            payrollNoteInput.value = employee.payrollNote || employee.薪資備註 || '';
             userIdInput.readOnly = true;
             toggleShiftGroupFields(employee.permission != 1); // [v523.0 修正] 使用正規化後的 'permission'
             submitButton.textContent = '儲存變更';
@@ -470,6 +550,12 @@
                 身分證字號: nationalIdInput.value,
                 緊急聯絡人: emergencyContactInput.value,
                 緊急聯絡人電話: emergencyContactPhoneInput.value,
+                薪資類型: payTypeSelect.value,
+                發薪規則: payRuleSelect.value,
+                底薪: baseSalaryInput.value !== '' ? Number(baseSalaryInput.value) : '',
+                全勤獎金: fullAttendanceInput.value !== '' ? Number(fullAttendanceInput.value) : '',
+                交通津貼: transportationInput.value !== '' ? Number(transportationInput.value) : '',
+                薪資備註: payrollNoteInput.value.trim(),
                 operatorUserId: currentUserProfile.userId,
                 operatorUserName: currentUserProfile.displayName
             };
