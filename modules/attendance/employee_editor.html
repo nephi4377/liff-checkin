@@ -211,36 +211,30 @@
                 </div>
 
                 <hr class="mt-2">
-                <h3 class="text-base font-semibold text-gray-800">保險設定</h3>
-                <p class="text-xs text-gray-500 -mt-1">勞健保依投保級距自動試算；木工等個人保工會者選「工會」。</p>
+                <div id="insurance-section-wrap">
+                    <h3 class="text-base font-semibold text-gray-800">勞健保</h3>
+                    <p id="insurance-monthly-hint" class="text-xs text-gray-500 -mt-1">依政府投保級距表試算個人負擔（勞保＋健保）；僅月薪員工適用。</p>
+                    <p id="insurance-daily-notice" class="hidden text-xs text-gray-600 bg-gray-50 rounded p-2 mt-1">日薪員工勞健保由個人自行處理，系統不試算、不扣款。</p>
 
-                <div>
-                    <label for="保險類型" class="block text-gray-700 font-semibold mb-2">保險類型</label>
-                    <select id="保險類型" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white">
-                        <option value="">— 未設定 —</option>
-                        <option value="勞健保">勞健保（公司加保）</option>
-                        <option value="工會">工會（個人名義，如木工）</option>
-                        <option value="無">無／不加保</option>
-                    </select>
-                </div>
+                    <div id="insurance-fields-wrap" class="space-y-3 mt-2">
+                        <div>
+                            <label for="保險類型" class="block text-gray-700 font-semibold mb-2">加保方式</label>
+                            <select id="保險類型" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white">
+                                <option value="">— 未設定 —</option>
+                                <option value="勞健保">勞健保（公司加保）</option>
+                                <option value="無">不加保／個人自行處理</option>
+                            </select>
+                        </div>
 
-                <div id="insurance-labor-health-wrap" class="hidden space-y-3">
-                    <div>
-                        <label for="投保級距" class="block text-gray-700 font-semibold mb-2">投保級距（元）</label>
-                        <input type="number" id="投保級距" min="0" step="1" class="w-full px-3 py-2 border border-gray-300 rounded-md" list="insured-level-datalist" placeholder="例：36300">
-                        <datalist id="insured-level-datalist"></datalist>
-                        <p class="text-xs text-gray-500 mt-1">請填勞健保投保薪資級距；系統試算勞保＋健保個人負擔。</p>
-                    </div>
-                </div>
-
-                <div id="insurance-union-wrap" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label for="工會保費" class="block text-gray-700 font-semibold mb-2">工會保費（元／月）</label>
-                        <input type="number" id="工會保費" min="0" step="1" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="個人每月自付">
-                    </div>
-                    <div>
-                        <label for="工會備註" class="block text-gray-700 font-semibold mb-2">工會備註</label>
-                        <input type="text" id="工會備註" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="例：木工職業工會">
+                        <div id="insurance-labor-health-wrap" class="hidden space-y-3">
+                            <div>
+                                <label for="投保級距" class="block text-gray-700 font-semibold mb-2">投保級距</label>
+                                <select id="投保級距" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white">
+                                    <option value="">— 請選擇 —</option>
+                                </select>
+                                <p class="text-xs text-gray-500 mt-1">預設依底薪對應之級距；費率依勞動部／健保署公告公式試算。</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -288,11 +282,12 @@
         const otherAllowanceNoteInput = document.getElementById('其他津貼說明');
         const payrollNoteInput = document.getElementById('薪資備註');
         const insuranceTypeSelect = document.getElementById('保險類型');
-        const insuredLevelInput = document.getElementById('投保級距');
-        const unionFeeInput = document.getElementById('工會保費');
-        const unionFeeNoteInput = document.getElementById('工會備註');
+        const insuredLevelSelect = document.getElementById('投保級距');
         const insuranceLhWrap = document.getElementById('insurance-labor-health-wrap');
-        const insuranceUnionWrap = document.getElementById('insurance-union-wrap');
+        const insuranceFieldsWrap = document.getElementById('insurance-fields-wrap');
+        const insuranceDailyNotice = document.getElementById('insurance-daily-notice');
+        const insuranceMonthlyHint = document.getElementById('insurance-monthly-hint');
+        let insuredLevelTouched = false;
         const submitButton = document.getElementById('submit-button');
         const buttonText = document.getElementById('button-text');
         const buttonSpinner = document.getElementById('button-spinner');
@@ -339,24 +334,73 @@
             // [v529.0 新增] 監聽「顯示離職員工」勾選狀態的變化
             showResignedCheckbox.addEventListener('change', populateEmployeeDropdown);
             insuranceTypeSelect.addEventListener('change', toggleInsuranceFields);
-            populateInsuredLevelDatalist();
+            insuredLevelSelect.addEventListener('change', () => { insuredLevelTouched = true; });
+            baseSalaryInput.addEventListener('change', suggestInsuredLevelFromBase);
+            payTypeSelect.addEventListener('change', () => { syncInsuranceForPayType(); suggestInsuredLevelFromBase(); });
+            payRuleSelect.addEventListener('change', syncInsuranceForPayType);
+            populateInsuredLevelSelect();
         }
 
-        const COMMON_INSURED_LEVELS = [
-            11100, 15840, 17880, 23100, 26400, 28800, 30300, 31800, 33300, 34800,
-            36300, 38200, 40100, 42000, 43900, 45800, 48200, 50600, 52800, 55400, 57800
+        function isDailyPayEmployee() {
+            if (payTypeSelect.value === '日薪') return true;
+            const rule = String(payRuleSelect.value || '');
+            return rule.indexOf('日薪') === 0;
+        }
+
+        function syncInsuranceForPayType() {
+            const daily = isDailyPayEmployee();
+            insuranceFieldsWrap.classList.toggle('hidden', daily);
+            insuranceDailyNotice.classList.toggle('hidden', !daily);
+            insuranceMonthlyHint.classList.toggle('hidden', daily);
+            if (daily) {
+                insuranceTypeSelect.value = '無';
+                insuredLevelSelect.value = '';
+                insuredLevelTouched = false;
+                insuranceLhWrap.classList.add('hidden');
+            } else {
+                toggleInsuranceFields();
+            }
+        }
+
+        const INSURED_SALARY_LEVELS = [
+            11100, 12540, 13500, 15840, 16500, 17280, 17880, 19047, 20008, 21009,
+            22000, 23100, 24000, 25250, 26400, 27600, 28800, 30300, 31800, 33300,
+            34800, 36300, 38200, 40100, 42000, 43900, 45800, 48200, 50600, 52800,
+            55400, 57800, 60800, 63800, 66800, 69800, 72800, 76500, 80200, 83900,
+            87600, 92100, 96600, 101100, 105600, 110100
         ];
 
-        function populateInsuredLevelDatalist() {
-            const dl = document.getElementById('insured-level-datalist');
-            if (!dl) return;
-            dl.innerHTML = COMMON_INSURED_LEVELS.map((n) => `<option value="${n}">`).join('');
+        function resolveInsuredLevel(monthlyRef) {
+            const n = Math.round(Number(monthlyRef) || 0);
+            if (n <= 0) return '';
+            if (INSURED_SALARY_LEVELS.indexOf(n) >= 0) return String(n);
+            let best = INSURED_SALARY_LEVELS[0];
+            for (let i = 0; i < INSURED_SALARY_LEVELS.length; i++) {
+                if (INSURED_SALARY_LEVELS[i] <= n) best = INSURED_SALARY_LEVELS[i];
+                else break;
+            }
+            return String(best);
+        }
+
+        function populateInsuredLevelSelect() {
+            insuredLevelSelect.innerHTML = '<option value="">— 請選擇 —</option>' +
+                INSURED_SALARY_LEVELS.map((n) => `<option value="${n}">${n.toLocaleString()} 元</option>`).join('');
+        }
+
+        function suggestInsuredLevelFromBase() {
+            if (isDailyPayEmployee()) return;
+            if (insuranceTypeSelect.value !== '勞健保') return;
+            if (insuredLevelTouched && insuredLevelSelect.value) return;
+            const base = Number(baseSalaryInput.value) || 0;
+            if (base <= 0) return;
+            const level = resolveInsuredLevel(base);
+            if (level) insuredLevelSelect.value = level;
         }
 
         function toFormInsuranceType(v) {
             if (!v) return '';
             const s = String(v).trim();
-            if (s === 'union' || s === '工會' || s.indexOf('工會') >= 0) return '工會';
+            if (s === 'union' || s === '工會' || s.indexOf('工會') >= 0) return '無';
             if (s === 'none' || s === '無' || s === '不加保') return '無';
             if (s === 'labor_health' || s === '勞健保' || s.indexOf('勞健') >= 0) return '勞健保';
             return s;
@@ -365,7 +409,7 @@
         function toggleInsuranceFields() {
             const t = insuranceTypeSelect.value;
             insuranceLhWrap.classList.toggle('hidden', t !== '勞健保');
-            insuranceUnionWrap.classList.toggle('hidden', t !== '工會');
+            if (t === '勞健保') suggestInsuredLevelFromBase();
         }
 
         async function fetchEmployeesAndPopulateDropdown() {
@@ -546,10 +590,9 @@
             otherAllowanceNoteInput.value = '';
             payrollNoteInput.value = '';
             insuranceTypeSelect.value = '';
-            insuredLevelInput.value = '';
-            unionFeeInput.value = '';
-            unionFeeNoteInput.value = '';
-            toggleInsuranceFields();
+            insuredLevelSelect.value = '';
+            insuredLevelTouched = false;
+            syncInsuranceForPayType();
             userIdInput.readOnly = true;
             toggleShiftGroupFields(true); // [v522.0 新增] 確保新增時顯示
             submitButton.textContent = '儲存員工資料'; // [v524.0] 恢復為儲存
@@ -582,10 +625,15 @@
             otherAllowanceNoteInput.value = employee.otherAllowanceNote || employee.其他津貼說明 || '';
             payrollNoteInput.value = employee.payrollNote || employee.薪資備註 || '';
             insuranceTypeSelect.value = toFormInsuranceType(employee.insuranceType || employee.保險類型);
-            insuredLevelInput.value = employee.insuredSalaryLevel || employee.投保級距 || '';
-            unionFeeInput.value = employee.unionFeeAmount || employee.工會保費 || '';
-            unionFeeNoteInput.value = employee.unionFeeNote || employee.工會備註 || '';
-            toggleInsuranceFields();
+            insuredLevelTouched = false;
+            const savedLevel = employee.insuredSalaryLevel || employee.投保級距 || '';
+            if (savedLevel) {
+                insuredLevelSelect.value = String(savedLevel);
+                insuredLevelTouched = true;
+            } else {
+                suggestInsuredLevelFromBase();
+            }
+            syncInsuranceForPayType();
             userIdInput.readOnly = true;
             toggleShiftGroupFields(employee.permission != 1); // [v523.0 修正] 使用正規化後的 'permission'
             submitButton.textContent = '儲存變更';
@@ -653,10 +701,8 @@
                 其他津貼: otherAllowanceInput.value !== '' ? Number(otherAllowanceInput.value) : '',
                 其他津貼說明: otherAllowanceNoteInput.value.trim(),
                 薪資備註: payrollNoteInput.value.trim(),
-                保險類型: insuranceTypeSelect.value,
-                投保級距: insuredLevelInput.value !== '' ? Number(insuredLevelInput.value) : '',
-                工會保費: unionFeeInput.value !== '' ? Number(unionFeeInput.value) : '',
-                工會備註: unionFeeNoteInput.value.trim(),
+                保險類型: isDailyPayEmployee() ? '無' : insuranceTypeSelect.value,
+                投保級距: isDailyPayEmployee() ? '' : (insuredLevelSelect.value !== '' ? Number(insuredLevelSelect.value) : ''),
                 operatorUserId: currentUserProfile.userId,
                 operatorUserName: currentUserProfile.displayName
             };

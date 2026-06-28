@@ -79,9 +79,12 @@ export function initPayrollReviewPanel(ctx) {
     function renderContext() {
         if (!contextData) return;
         const { settings, period, periods, snapshot, existingReview, disclaimer } = contextData;
-        els.periodSelect.innerHTML = periods.map((p) =>
-            `<option value="${esc(p.periodLabel)}" ${p.periodLabel === period.periodLabel ? 'selected' : ''}>${esc(p.periodLabel)}（${esc(p.periodStart)}～${esc(p.periodEnd)}）</option>`
-        ).join('');
+        els.periodSelect.innerHTML = periods.map((p) => {
+            const tag = p.displayLabel || p.periodLabel;
+            const range = `${p.periodStart}～${p.periodEnd}`;
+            const payNote = p.payDate ? ` · 發薪 ${p.payDate.slice(5).replace('-', '/')}` : '';
+            return `<option value="${esc(p.periodLabel)}" ${p.periodLabel === period.periodLabel ? 'selected' : ''}>${esc(tag)} · ${esc(range)}${esc(payNote)}</option>`;
+        }).join('');
         els.hint.textContent = period.submitHint || '';
 
         const st = snapshot.stats || {};
@@ -112,12 +115,12 @@ export function initPayrollReviewPanel(ctx) {
         }, contextData.insurancePreview);
         const ins = preview.insurance || contextData.insurancePreview || {};
         let insHtml = '';
-        if (ins.type === 'labor_health' && (ins.total || 0) > 0) {
+        if (isDaily) {
+            insHtml = `<p class="text-gray-500 text-xs">勞健保：日薪員工自行處理（不扣款）</p>`;
+        } else if (ins.type === 'labor_health' && (ins.total || 0) > 0) {
             insHtml = `<p><strong>勞健保自付：</strong>${(ins.total || 0).toLocaleString()} 元（勞保 ${(ins.labor || 0).toLocaleString()}＋健保 ${(ins.health || 0).toLocaleString()}）</p>`;
-        } else if (ins.type === 'union' && (ins.union || ins.total || 0) > 0) {
-            insHtml = `<p><strong>工會保費：</strong>${(ins.union || ins.total || 0).toLocaleString()} 元</p>`;
         } else if (ins.type === 'none') {
-            insHtml = `<p class="text-gray-500 text-xs">保險：不加保</p>`;
+            insHtml = `<p class="text-gray-500 text-xs">保險：不加保／個人自行處理</p>`;
         }
         if (ins.note) insHtml += `<p class="text-xs text-gray-500">${esc(ins.note)}</p>`;
         els.calcBox.innerHTML = `
@@ -156,6 +159,7 @@ export function initPayrollReviewPanel(ctx) {
         const transport = Number(settings.transportationAllowance) || 0;
         const otherAllowance = Number(settings.otherAllowance) || 0;
         const ins = insurancePreview || { total: 0, labor: 0, health: 0, union: 0, type: 'none' };
+        const insDeduction = payType === 'daily' ? 0 : (ins.total || 0);
         const st = snapshot.stats || {};
         let earnedBase = base;
         let fullAttendanceBonus = 0;
@@ -170,7 +174,7 @@ export function initPayrollReviewPanel(ctx) {
             const hourly = payType === 'daily' ? base / 8 : base / 30 / 8;
             overtimePay = Math.round(hourly * 1.34 * overtimeHours);
         }
-        const estimatedNet = Math.round(earnedBase + fullAttendanceBonus + transport + otherAllowance + remote + overtimePay - (ins.total || 0));
+        const estimatedNet = Math.round(earnedBase + fullAttendanceBonus + transport + otherAllowance + remote + overtimePay - insDeduction);
         return {
             baseSalary: earnedBase, fullAttendanceBonus, transportationAllowance: transport, otherAllowance,
             overtimePay, estimatedNet, insurance: ins
@@ -280,10 +284,10 @@ export function initPayrollReviewApproval(ctx) {
         const st = snap.stats || {};
         const ins = snap.insurance || {};
         let insLine = '';
-        if (ins.type === 'labor_health' && (ins.total || 0) > 0) {
+        if (isDaily) {
+            insLine = `<p class="text-gray-500 text-xs">勞健保：日薪自行處理（不扣款）</p>`;
+        } else if (ins.type === 'labor_health' && (ins.total || 0) > 0) {
             insLine = `<p><strong>勞健保自付：</strong>${Number(ins.total).toLocaleString()} 元（勞 ${Number(ins.labor || 0).toLocaleString()}＋健 ${Number(ins.health || 0).toLocaleString()}）</p>`;
-        } else if (ins.type === 'union' && (ins.union || ins.total || 0) > 0) {
-            insLine = `<p><strong>工會保費：</strong>${Number(ins.union || ins.total).toLocaleString()} 元</p>`;
         }
         card.innerHTML = `
             <div class="flex justify-between gap-2">
