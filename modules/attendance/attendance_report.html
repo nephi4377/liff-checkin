@@ -156,7 +156,7 @@
     <div id="appeal-modal" class="modal fixed inset-0 bg-gray-600 bg-opacity-50 h-full w-full z-50">
       <div class="relative mx-auto my-8 p-5 border w-full max-w-md shadow-lg rounded-md bg-white max-h-[90vh] overflow-y-auto">
         <h3 class="text-lg font-semibold">提出出勤說明</h3>
-        <p class="text-sm text-gray-500 mt-1">異常日起 15 日內為一般申訴；逾期仍可送，會標示「逾期申訴」。</p>
+        <p class="text-sm text-gray-500 mt-1">異常日起 15 日內為一般申訴；逾期仍可送，會標示「逾期申訴」。附件選填；未附圖時說明請至少 20 字。</p>
         <div class="mt-4 space-y-4">
           <div>
             <label class="block text-sm font-medium text-gray-700">異常日期</label>
@@ -177,7 +177,7 @@
             <textarea id="appeal-reason" rows="3" class="mt-1 block w-full rounded-md border-gray-300 sm:text-sm" placeholder="請說明當日實際狀況…"></textarea>
           </div>
           <div>
-            <label for="appeal-attachments" class="block text-sm font-medium text-gray-700">附件（必填，可選多張）</label>
+            <label for="appeal-attachments" class="block text-sm font-medium text-gray-700">附件（選填，可選多張）</label>
             <input type="file" id="appeal-attachments" accept="image/*" multiple class="mt-1 block w-full text-sm text-gray-600">
           </div>
           <p id="appeal-system-hint" class="text-xs text-gray-500 bg-gray-50 rounded p-2"></p>
@@ -483,7 +483,10 @@
         const reason = document.getElementById('appeal-reason').value.trim();
         const files = document.getElementById('appeal-attachments').files;
         if (!reason) { alert('請填寫說明原因'); return; }
-        if (!files || !files.length) { alert('請至少上傳一張照片或截圖'); return; }
+        if ((!files || !files.length) && reason.length < 20) {
+            alert('未附附件時，說明原因請至少 20 字');
+            return;
+        }
 
         const btn = document.getElementById('appeal-submit-btn');
         btn.disabled = true;

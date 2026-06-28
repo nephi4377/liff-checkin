@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>添心設計 | 假勤審核儀表板</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="../../assets/css/style.css">
     <!-- [v516.0 修正] 更新共用模組 utils.js 的路徑 -->
     <script type="module" src="../../shared/js/utils.js"></script>
     <style>
@@ -44,9 +45,17 @@
         </div>
     </div>
 
+    <div id="lightbox" aria-hidden="true">
+        <div class="lb-wrap">
+            <img class="lb-img" alt="preview">
+            <button type="button" class="lb-close" aria-label="關閉">✕</button>
+        </div>
+    </div>
+
 <!-- 【v31.0 核心改造】將腳本改為 module，並引入 showGlobalNotification -->
 <script type="module">
     import { showGlobalNotification } from '../../shared/js/utils.js';
+    import { initLightbox } from '../../shared/js/lightbox.js';
 
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
     let userProfile = null;
@@ -169,7 +178,9 @@
         const statusLabel = appeal.isLateSubmit && appeal.status === '待審' ? '逾期申訴' : appeal.status;
         const attachments = (appeal.attachmentUrls || '').split(';').filter(Boolean);
         const attachHtml = attachments.length
-            ? attachments.map((u, i) => `<a href="${escapeHtml(u)}" target="_blank" rel="noopener" class="text-blue-600 underline text-sm">附件${i + 1}</a>`).join(' · ')
+            ? `<div class="flex flex-wrap gap-2 mt-1">${attachments.map((u, i) =>
+                `<button type="button" class="appeal-attach-thumb block w-16 h-16 rounded border border-gray-200 overflow-hidden p-0 bg-gray-50 hover:ring-2 hover:ring-blue-400 cursor-pointer" data-idx="${i}" title="點擊放大 附件${i + 1}"><img src="${escapeHtml(u)}" alt="附件${i + 1}" class="w-full h-full object-cover" loading="lazy"></button>`
+            ).join('')}</div>`
             : '<span class="text-gray-400 text-sm">無</span>';
 
         let snapshotText = appeal.systemSnapshot || '';
@@ -206,14 +217,49 @@
                 <input type="text" id="appeal-note-${appeal.appealId}" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" placeholder="審核回覆（駁回時必填）">
             </div>
             ${appeal.status === '待審' ? `
-            <div class="mt-4 flex flex-wrap justify-end gap-2">
-                <button data-appeal-decision="reject" data-appeal-id="${appeal.appealId}" class="px-3 py-2 text-sm font-bold text-white bg-red-500 rounded-md hover:bg-red-600">駁回</button>
-                <button data-appeal-decision="note_only" data-appeal-id="${appeal.appealId}" class="px-3 py-2 text-sm font-bold text-white bg-gray-500 rounded-md hover:bg-gray-600">僅備註</button>
-                <button data-appeal-decision="approve_fix" data-appeal-id="${appeal.appealId}" class="px-3 py-2 text-sm font-bold text-white bg-green-500 rounded-md hover:bg-green-600">核准（需補登）</button>
+            <div class="mt-4 p-3 bg-gray-50 rounded-md border border-gray-100 space-y-3">
+                <p class="text-sm font-medium text-gray-700">補登打卡（核准時一併完成）</p>
+                <div class="grid grid-cols-2 gap-2">
+                    <input type="time" id="fix-time-${appeal.appealId}" class="rounded border-gray-300 text-sm" value="08:30">
+                    <select id="fix-type-${appeal.appealId}" class="rounded border-gray-300 text-sm"><option value="上班">上班</option><option value="下班">下班</option></select>
+                </div>
+                <div class="flex flex-wrap justify-end gap-2">
+                    <button type="button" data-appeal-decision="reject" data-appeal-id="${appeal.appealId}" class="px-3 py-2 text-sm font-bold text-white bg-red-500 rounded-md hover:bg-red-600">駁回</button>
+                    <button type="button" data-appeal-decision="note_only" data-appeal-id="${appeal.appealId}" class="px-3 py-2 text-sm font-bold text-white bg-gray-500 rounded-md hover:bg-gray-600">僅備註</button>
+                    <button type="button" data-appeal-approve-fix="${appeal.appealId}" data-employee-id="${escapeHtml(appeal.employeeUserId)}" data-target-date="${escapeHtml(appeal.targetDate)}" class="px-3 py-2 text-sm font-bold text-white bg-green-600 rounded-md hover:bg-green-700">核准並補登</button>
+                </div>
             </div>` : ''}
             ${manualBlock}
         `;
+        if (attachments.length) {
+            card.dataset.attachmentUrls = JSON.stringify(attachments);
+        }
         return card;
+    }
+
+    async function postManualCheckin(appealId, userId, date, time, eventType) {
+        const url = new URL(API_BASE_URL);
+        url.searchParams.append('page', 'attendance_api');
+        url.searchParams.append('action', 'add_manual_checkin');
+        url.searchParams.append('userId', userId);
+        url.searchParams.append('date', date);
+        url.searchParams.append('time', time);
+        url.searchParams.append('eventType', eventType);
+        url.searchParams.append('operatorId', userProfile.userId);
+        url.searchParams.append('operatorName', userProfile.displayName);
+        url.searchParams.append('appealId', appealId);
+        const response = await fetch(url);
+        const result = await response.json();
+        if (!result.success) throw new Error(result.message || '補登失敗');
+        return result;
+    }
+
+    function removeAppealCard(appealId) {
+        const card = document.getElementById(`appeal-${appealId}`);
+        if (card) card.remove();
+        if (!document.getElementById('appeals-container').children.length) {
+            document.getElementById('no-appeals-message').classList.remove('hidden');
+        }
     }
 
     async function postAppealResolve(appealId, decision, reviewNote) {
@@ -233,6 +279,48 @@
     }
 
     async function handleAppealAction(event) {
+        const thumb = event.target.closest('.appeal-attach-thumb');
+        if (thumb) {
+            const card = thumb.closest('[data-attachment-urls]');
+            if (card && card.dataset.attachmentUrls && window.__openLightbox__) {
+                try {
+                    const urls = JSON.parse(card.dataset.attachmentUrls);
+                    const idx = parseInt(thumb.dataset.idx, 10) || 0;
+                    window.__openLightbox__(urls, idx);
+                } catch (e) { /* ignore */ }
+            }
+            return;
+        }
+
+        const approveFixBtn = event.target.closest('[data-appeal-approve-fix]');
+        if (approveFixBtn) {
+            const appealId = approveFixBtn.dataset.appealApproveFix;
+            const userId = approveFixBtn.dataset.employeeId;
+            const date = approveFixBtn.dataset.targetDate;
+            const time = document.getElementById(`fix-time-${appealId}`).value;
+            const eventType = document.getElementById(`fix-type-${appealId}`).value;
+            const noteInput = document.getElementById(`appeal-note-${appealId}`);
+            const reviewNote = noteInput ? noteInput.value.trim() : '';
+            if (!time) {
+                alert('請選擇補登時間');
+                return;
+            }
+            approveFixBtn.disabled = true;
+            approveFixBtn.textContent = '處理中…';
+            try {
+                await postAppealResolve(appealId, 'approve_fix', reviewNote);
+                await postManualCheckin(appealId, userId, date, time, eventType);
+                showGlobalNotification('已核准並補登，申訴已結案', 5000, 'success');
+                removeAppealCard(appealId);
+            } catch (error) {
+                alert(`核准並補登失敗：${error.message}\n若狀態已變「待補登」，可再按「執行補登」重試。`);
+                approveFixBtn.disabled = false;
+                approveFixBtn.textContent = '核准並補登';
+                fetchPendingAppeals();
+            }
+            return;
+        }
+
         const fixBtn = event.target.closest('[data-appeal-fix]');
         if (fixBtn) {
             fixBtn.disabled = true;
@@ -243,25 +331,9 @@
                 const date = fixBtn.dataset.targetDate;
                 const time = document.getElementById(`fix-time-${appealId}`).value;
                 const eventType = document.getElementById(`fix-type-${appealId}`).value;
-                const url = new URL(API_BASE_URL);
-                url.searchParams.append('page', 'attendance_api');
-                url.searchParams.append('action', 'add_manual_checkin');
-                url.searchParams.append('userId', userId);
-                url.searchParams.append('date', date);
-                url.searchParams.append('time', time);
-                url.searchParams.append('eventType', eventType);
-                url.searchParams.append('operatorId', userProfile.userId);
-                url.searchParams.append('operatorName', userProfile.displayName);
-                url.searchParams.append('appealId', appealId);
-                const response = await fetch(url);
-                const result = await response.json();
-                if (!result.success) throw new Error(result.message || '補登失敗');
-                showGlobalNotification(result.message || '補登成功，申訴已結案', 5000, 'success');
-                const card = document.getElementById(`appeal-${appealId}`);
-                if (card) card.remove();
-                if (!document.getElementById('appeals-container').children.length) {
-                    document.getElementById('no-appeals-message').classList.remove('hidden');
-                }
+                await postManualCheckin(appealId, userId, date, time, eventType);
+                showGlobalNotification('補登成功，申訴已結案', 5000, 'success');
+                removeAppealCard(appealId);
             } catch (error) {
                 alert(`補登失敗：${error.message}`);
                 fixBtn.disabled = false;
@@ -291,15 +363,7 @@
         try {
             await postAppealResolve(appealId, decision, reviewNote);
             showGlobalNotification('申訴已更新', 4000, 'success');
-            if (decision === 'approve_fix') {
-                fetchPendingAppeals();
-            } else {
-                const card = document.getElementById(`appeal-${appealId}`);
-                if (card) card.remove();
-                if (!document.getElementById('appeals-container').children.length) {
-                    document.getElementById('no-appeals-message').classList.remove('hidden');
-                }
-            }
+            removeAppealCard(appealId);
         } catch (error) {
             alert(`操作失敗：${error.message}`);
             btn.disabled = false;
@@ -408,6 +472,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+        initLightbox();
         main();
         document.getElementById('requests-container').addEventListener('click', handleApproval);
         document.getElementById('appeals-container').addEventListener('click', handleAppealAction);
