@@ -3,7 +3,7 @@
  */
 export function initPayrollReviewPanel(ctx) {
     const {
-        apiBaseUrl, userId, userName, showGlobalNotification
+        apiBaseUrl, userId, userName, showGlobalNotification, fetchApi
     } = ctx;
 
     const els = {
@@ -37,23 +37,39 @@ export function initPayrollReviewPanel(ctx) {
     }
 
     async function fetchContext(periodLabel) {
+        if (!userId) {
+            els.error.textContent = '缺少使用者 ID，請從主控台重新進入此頁面';
+            els.error.classList.remove('hidden');
+            return;
+        }
         els.loading.classList.remove('hidden');
         els.formWrap.classList.add('hidden');
         els.error.classList.add('hidden');
         try {
-            const url = new URL(apiBaseUrl);
-            url.searchParams.append('page', 'attendance_api');
-            url.searchParams.append('action', 'payroll_review');
-            url.searchParams.append('mode', 'context');
-            url.searchParams.append('operatorId', userId);
-            if (periodLabel) url.searchParams.append('periodLabel', periodLabel);
-            const res = await fetch(url);
-            const json = await res.json();
+            const params = {
+                page: 'attendance_api',
+                action: 'payroll_review',
+                mode: 'context',
+                operatorId: userId
+            };
+            if (periodLabel) params.periodLabel = periodLabel;
+            const json = fetchApi
+                ? await fetchApi(params)
+                : await (async () => {
+                    const url = new URL(apiBaseUrl);
+                    Object.entries(params).forEach(([k, v]) => url.searchParams.append(k, v));
+                    const res = await fetch(url);
+                    if (!res.ok) throw new Error(`伺服器回應 ${res.status}`);
+                    return res.json();
+                })();
             if (!json.success) throw new Error(json.message || '載入失敗');
             contextData = json.data;
             renderContext();
         } catch (err) {
-            els.error.textContent = err.message;
+            const msg = err.message === 'Failed to fetch'
+                ? '無法連線後端（請確認網路，或稍後再按「重新載入」）'
+                : err.message;
+            els.error.textContent = msg;
             els.error.classList.remove('hidden');
         } finally {
             els.loading.classList.add('hidden');
@@ -183,7 +199,10 @@ export function initPayrollReviewPanel(ctx) {
     }
 
     els.periodSelect.addEventListener('change', () => fetchContext(els.periodSelect.value));
-    els.refreshBtn.addEventListener('click', () => fetchContext(els.periodSelect.value));
+    els.refreshBtn.addEventListener('click', () => {
+        payrollLoaded = false;
+        fetchContext(els.periodSelect.value);
+    });
     els.submitBtn.addEventListener('click', submitReview);
     ['input', 'change'].forEach((ev) => {
         els.overtimeHours.addEventListener(ev, () => { if (contextData) renderContext(); });
