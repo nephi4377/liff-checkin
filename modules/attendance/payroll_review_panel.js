@@ -100,6 +100,7 @@ export function initPayrollReviewPanel(ctx) {
             <p><strong>底薪${isDaily ? '（日）' : ''}：</strong>${settings.baseSalary.toLocaleString()} 元</p>
             <p><strong>預估本薪：</strong>${preview.baseSalary.toLocaleString()} 元</p>
             <p id="payroll-full-att-row" class="${isDaily ? 'hidden' : ''}"><strong>預估全勤：</strong>${preview.fullAttendanceBonus.toLocaleString()} 元</p>
+            <p id="payroll-transport-row" class="${preview.transportationAllowance > 0 ? '' : 'hidden'}"><strong>交通津貼：</strong>${preview.transportationAllowance.toLocaleString()} 元</p>
             <p><strong>預估加班費：</strong>${preview.overtimePay.toLocaleString()} 元</p>
             <p id="payroll-remote-row"><strong>遠程津貼：</strong>${(Number(els.remoteAmount.value) || 0).toLocaleString()} 元</p>
             <p class="text-lg font-bold text-indigo-700 mt-2"><strong>預估實發：</strong>${preview.estimatedNet.toLocaleString()} 元</p>
@@ -124,6 +125,7 @@ export function initPayrollReviewPanel(ctx) {
     function calcPreview(settings, payType, snapshot, input) {
         const base = Number(settings.baseSalary) || 0;
         const remote = Number(input.remoteAllowanceAmount) || 0;
+        const transport = Number(settings.transportationAllowance) || 0;
         const st = snapshot.stats || {};
         let earnedBase = base;
         let fullAttendanceBonus = 0;
@@ -138,8 +140,8 @@ export function initPayrollReviewPanel(ctx) {
             const hourly = payType === 'daily' ? base / 8 : base / 30 / 8;
             overtimePay = Math.round(hourly * 1.34 * overtimeHours);
         }
-        const estimatedNet = Math.round(earnedBase + fullAttendanceBonus + remote + overtimePay);
-        return { baseSalary: earnedBase, fullAttendanceBonus, overtimePay, estimatedNet };
+        const estimatedNet = Math.round(earnedBase + fullAttendanceBonus + transport + remote + overtimePay);
+        return { baseSalary: earnedBase, fullAttendanceBonus, transportationAllowance: transport, overtimePay, estimatedNet };
     }
 
     async function submitReview() {
