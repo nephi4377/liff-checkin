@@ -412,25 +412,23 @@
             if (t === '勞健保') suggestInsuredLevelFromBase();
         }
 
+        function applyEmployeeList(list) {
+            allEmployees = list.sort((a, b) => a.userName.localeCompare(b.userName, 'zh-Hant'));
+            populateEmployeeDropdown();
+            populateGroupDatalist();
+        }
+
         async function fetchEmployeesAndPopulateDropdown() {
             try {
-                // [v527.0 優化] 優先從 localStorage 讀取主控台的快取
+                const selectedId = employeeSelect.value;
+                let hadCache = false;
+
+                // 先顯示主控台快取（較快），但一定會再向 API 取最新資料
                 const cachedEmployees = JSON.parse(localStorage.getItem('spa_hub_employees'));
                 if (cachedEmployees && Array.isArray(cachedEmployees)) {
                     console.log('⚡️ 從主控台快取載入員工資料。');
-                    allEmployees = cachedEmployees.sort((a, b) => a.userName.localeCompare(b.userName, 'zh-Hant'));
-                    populateEmployeeDropdown();
-                    populateGroupDatalist();
-                    // 背景靜默更新
-                    fetchApi({
-                        page: 'attendance_api', action: 'get_employees', filter: 'all',
-                        userId: currentUserProfile.userId, userName: currentUserProfile.displayName
-                    }).then(response => {
-                        if (response.success && JSON.stringify(allEmployees) !== JSON.stringify(response.data)) {
-                            localStorage.setItem('spa_hub_employees', JSON.stringify(response.data));
-                        }
-                    });
-                    return; // 快取命中，直接返回
+                    applyEmployeeList(cachedEmployees);
+                    hadCache = true;
                 }
 
                 const response = await fetchApi({
@@ -441,10 +439,13 @@
                     userName: currentUserProfile.displayName
                 });
                 if (response.success && Array.isArray(response.data)) {
-                    allEmployees = response.data.sort((a, b) => a.userName.localeCompare(b.userName, 'zh-Hant'));
-                    populateEmployeeDropdown();
-                    populateGroupDatalist(); // [v522.0 新增] 填充組別建議
-                } else {
+                    applyEmployeeList(response.data);
+                    localStorage.setItem('spa_hub_employees', JSON.stringify(response.data));
+                    if (selectedId && employeeSelect.querySelector(`option[value="${selectedId}"]`)) {
+                        employeeSelect.value = selectedId;
+                        handleEmployeeSelection();
+                    }
+                } else if (!hadCache) {
                     updateStatus(response.message || '無法載入員工列表。', 'error');
                 }
             } catch (error) {
@@ -546,6 +547,21 @@
             });
         }
 
+        /** 轉成 <input type="date"> 可顯示的 YYYY-MM-DD */
+        function toInputDateValue(v) {
+            if (v == null || v === '') return '';
+            if (v instanceof Date && !isNaN(v.getTime())) return v.toLocaleDateString('sv');
+            const s = String(v).trim();
+            if (!s) return '';
+            if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+            const iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
+            if (iso) return iso[1];
+            const m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+            if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+            const d = new Date(s);
+            return isNaN(d.getTime()) ? '' : d.toLocaleDateString('sv');
+        }
+
         function toFormPayType(v) {
             if (!v) return '';
             const s = String(v).trim();
@@ -607,12 +623,12 @@
             shiftStartInput.value = employee.shiftStart || ''; // [v523.0 修正] 使用正規化後的 'shiftStart'
             shiftEndInput.value = employee.shiftEnd || ''; // [v523.0 修正] 使用正規化後的 'shiftEnd'
             statusSelect.value = employee.status || '員工'; // [v523.0 修正] 使用正規化後的 'status'
-            hireDateInput.value = employee.hireDate || ''; // [v523.0 修正] 使用正規化後的 'hireDate'
-            resignationDateInput.value = employee.resignationDate || ''; // [v523.0 修正] 使用正規化後的 'resignationDate'
+            hireDateInput.value = toInputDateValue(employee.hireDate || employee.到職日);
+            resignationDateInput.value = toInputDateValue(employee.resignationDate || employee.離職日 || employee.離職日期);
             phoneInput.value = employee.聯絡電話 || '';
             addressInput.value = employee.聯絡地址 || '';
             emailInput.value = employee.email || '';
-            birthDateInput.value = employee.出生日期 || '';
+            birthDateInput.value = toInputDateValue(employee.出生日期);
             nationalIdInput.value = employee.身分證字號 || '';
             emergencyContactInput.value = employee.緊急聯絡人 || '';
             emergencyContactPhoneInput.value = employee.緊急聯絡人電話 || '';
