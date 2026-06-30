@@ -1,6 +1,6 @@
 # HUB 與會計 — 全域身分與應傳承資料
 
-**版本**：v1.2（2026-06-22）  
+**版本**：v1.3（2026-07-01）  
 **關聯**：[`15_會計系統模組規格書.md`](15_會計系統模組規格書.md)、[`18_會計與主檔快取策略.md`](18_會計與主檔快取策略.md)、[`08_專案主控台核心功能與通訊協定規格書.md`](08_專案主控台核心功能與通訊協定規格書.md)、backend `accounting-gas/SPEC/LINE_OA_SPEC.md`、`accounting-gas/SPEC/VENDOR_LINE_BINDING_SPEC.md`
 
 ---
@@ -53,7 +53,8 @@
 |------|----------|------|----------|------|
 | **`userId`** | Checkin `員工資料.userId` | 稽核、請款 `reviewed_by` 關聯、快取 key | ① HUB iframe URL：`uid`；② `sessionStorage`：`acct_dev_user`（過渡）／目標 `tanxin_operator_v1`；③ 正式會計：`liff_id_token` 僅記憶體，**不寫入 localStorage** | URL：僅當次導向；sessionStorage：**到分頁關閉**；token：LIFF 效期（約 1 小時內） |
 | **`userName`／`displayName`** | Checkin `userName` 或 LIFF profile | 畫面顯示、稽核欄位 | ① URL：`name`；② 與 operator 一併快取 | 同 `userId` |
-| **`permission`** | Checkin「權限」欄（1–5） | 會計 ≥4 進財務、≥5 核准請款 | ① URL：`permission`；② `sessionStorage`：`acct_dev_perm`；③ 正式：每次 `accounting_auth_me` 由後端查表 | sessionStorage 到分頁關閉；後端 ScriptCache `acct_emp_{userId}` **6 小時** |
+| **`permission`** | Checkin「權限」欄（1–5） | 會計 ≥4 進財務、≥5 核准請款 | ① URL：`permission`；② `sessionStorage`：`tanxin_operator_v1`（含 legacy `acct_dev_perm`）；③ 正式：每次 `accounting_auth_me` 由後端查表 | sessionStorage 到分頁關閉；後端 ScriptCache `acct_emp_{userId}` **6 小時** |
+| **`hubLiffId`**（選填） | HUB 官方 LIFF Channel ID（`config.js` `HUB_LIFF_ID`） | 會計 iframe 向父層 `postMessage` 索取 `id_token` 時辨識 Channel | ① URL：`hub_liff_id`；② `tanxin_operator_v1.hubLiffId` | 同 operator；**不寫 localStorage** |
 | **`group`**（選填） | Checkin 員工分組 | HUB 任務交辦、部分篩選 | URL 可擴充；或 HUB `spa_hub_employees` 內含 | 見 §2.2 |
 | **`status`／身份**（選填） | Checkin「身份」 | 離職拒登、廠商／員工區分 | **僅後端**查表，不建議前端快取當授權依據 | GAS 員工 cache 6 小時 |
 
@@ -61,8 +62,9 @@
 
 | 誰寫 | 誰讀 |
 |------|------|
-| `spa/app.js` iframe `src` 附加 `uid`／`name`／`permission` | 各 `modules/*` 靜態頁、`accounting_api.js` `readDevBypassQuery_` |
-| `accounting_api.js` 首次帶 query 時寫 `sessionStorage` | 會計子頁 `initSession`、相對連結跳轉後仍讀 storage |
+| `spa/app.js` iframe `src` 附加 `uid`／`name`／`permission`／`hub_liff_id` | 各 `modules/*` 靜態頁、`operator_context.js`、`accounting_api.js` |
+| `operator_context.js` 首次帶 query 時寫 `tanxin_operator_v1`（並同步 legacy `acct_dev_*`） | 會計子頁 `initSession`、相對連結跳轉後仍讀 storage |
+| `spa/app.js` 回應 iframe `request_hub_liff_token` → `hub_liff_token` | `accounting_api.js` 在 iframe 內向父層要 token |
 | accounting-gas `resolveAccountingAuth_` | 所有會計 `action`；`dev_user_id` 時 `fetchEmployeeByUserId_` |
 
 ### 2.2 參考主檔（建議傳承，非授權）
@@ -106,19 +108,22 @@
 ?uid={userProfile.userId}
 &name={userProfile.displayName}
 &permission={currentUser.permission}
+&hub_liff_id={CONFIG.HUB_LIFF_ID}
 &shiftStart=…&shiftEnd=…
 ```
 
 | 參數 | 對應全域欄位 | 會計頁消費方式 |
 |------|----------------|----------------|
-| `uid` | `userId` | `accounting_api.js` → `dev_user_id`（bypass）或顯示用 |
-| `name` | `displayName` | 畫面（待統一寫入 operator 快取） |
-| `permission` | `permission` | `dev_permission`（bypass）或僅顯示；**核准仍以後端查表為準** |
+| `uid` | `userId` | `OperatorContext` → `dev_user_id`（bypass）或顯示用 |
+| `name` | `displayName` | `OperatorContext.userName`／畫面 |
+| `permission` | `permission` | `OperatorContext` → `dev_permission`（bypass）；**核准仍以後端查表為準** |
+| `hub_liff_id` | 官方 HUB LIFF Channel | iframe 內 `accounting_api.js` 向父層 `postMessage` 取 token；寫入 `tanxin_operator_v1.hubLiffId` |
 
 **注意**
 
-1. 會計子頁若用 `<a href="ledger_review.html">` **相對連結**，query 會丟失 → 必須靠 `sessionStorage` 延續（現行 `acct_dev_user`／`acct_dev_perm`）。
-2. 其他模組（報價驗收、施工日報）已約定 `uid`／`userName`；會計應對齊同一組名稱，見 [`12_報價單審核與主控台整合規格書.md`](12_報價單審核與主控台整合規格書.md)。
+1. 會計子頁若用 `<a href="ledger_review.html">` **相對連結**，query 會丟失 → 靠 `OperatorContext`／`accounting_nav.js` `hubQueryString()` 延續（仍建議導覽走共用 helper）。
+2. `spa/app.js` 模板須透過 `setup()` 暴露 `hubLiffId`（**不可**在模板直接讀 `CONFIG`）。
+3. 其他模組（報價驗收、施工日報）已約定 `uid`／`userName`；會計應對齊同一組名稱，見 [`12_報價單審核與主控台整合規格書.md`](12_報價單審核與主控台整合規格書.md)。
 
 ---
 
@@ -139,17 +144,18 @@
 
 ---
 
-## 6. 目標：統一 operator 快取（待實作）
+## 6. 統一 operator 快取（已實作）
 
-現況 `acct_dev_user`／`acct_dev_perm` 命名偏會計 bypass；建議收斂為：
+實作檔：`shared/js/operator_context.js`（`sessionStorage` key：`tanxin_operator_v1`）。
 
 ```json
 // sessionStorage key: tanxin_operator_v1
 {
   "userId": "Uxxxxxxxx",
   "userName": "王小明",
+  "displayName": "王小明",
   "permission": 5,
-  "group": "行政",
+  "hubLiffId": "2007974938-xxxxxxxx",
   "source": "hub_iframe",
   "ts": 1719012345678
 }
@@ -158,27 +164,31 @@
 | 項目 | 規格 |
 |------|------|
 | **壽命** | 到瀏覽器分頁關閉；不寫 `localStorage` |
-| **更新** | HUB iframe 帶新 query 時覆寫；正式 LIFF 登入成功時覆寫 |
-| **清除** | 登出／LIFF 驗證失敗時 `removeItem` |
+| **更新** | HUB iframe 帶新 query 時 `mergeFromUrl` 覆寫；`accounting_auth_me` 成功時 `applySession` |
+| **清除** | 登出／LIFF 驗證失敗時 `OperatorContext.clear()` |
+| **相容** | 仍同步寫入 legacy `acct_dev_user`／`acct_dev_perm`，舊頁可過渡讀取 |
 
-實作時：`shared/js/operator_context.js`（新）供 HUB 子頁共用；`accounting_api.js` 改讀此 key。
+`accounting_api.js`、`accounting_nav.js`、`accounting_boot.js` 已改讀 `OperatorContext`。
 
 ---
 
-## 7. 實作現況對照（2026-06-22）
+## 7. 實作現況對照（2026-07-01）
 
 | 能力 | 狀態 |
 |------|------|
-| HUB iframe 帶 `uid`／`permission` | ✅ `spa/app.js` |
-| 會計讀 `uid`／`permission` query + sessionStorage | ✅ `accounting_api.js` |
+| HUB iframe 帶 `uid`／`permission`／`hub_liff_id` | ✅ `spa/app.js`（`hubLiffId` 經 `setup()` 暴露） |
+| HUB 父層回應 `request_hub_liff_token` | ✅ `spa/app.js` |
+| 統一 `tanxin_operator_v1` | ✅ `operator_context.js` |
+| 會計讀 operator + 安全 JSON + iframe token | ✅ `accounting_api.js` v23 |
+| 會計導覽保留 query | ✅ `accounting_nav.js` `hubQueryString()` |
+| 會計全頁 bootstrap 收斂 | ✅ `accounting_boot.js` + `modules/accounting/*.html` |
 | bypass 時用 `dev_user_id` 查 Checkin 真實權限 | ✅ `AuthBridge.getDevBypassAuth_` |
 | 收支登錄讀 HUB 員工／案場 | ✅ `AccountingContext` |
 | 會計 bootstrap 依 `userId` 分 key | ✅ `AccountingCache` |
-| 統一 `tanxin_operator_v1` | ⏳ 本文件定規，待收斂 |
-| HUB 傳 `name`／`group` 進 operator 快取 | ⏳ |
-| 會計相對連結保留 query | ❌ 靠 sessionStorage 補 |
+| HUB 傳 `group` 進 operator 快取 | ⏳ |
 | 方案 A 定案（員工只走官方 LINE → HUB） | ✅ 本文件 §0 |
 | 廠商綁定：會計 LINE 聯絡人 + 官方顧客列表雙搜尋 | ⏳ 見 `VENDOR_LINE_BINDING_SPEC` §6 |
+| HUB `index.html` 靜態資源版號（防快取舊 `app.js`） | ✅ `?v=` 與 `FRONTEND_VERSION` 同步 |
 
 ---
 
@@ -186,7 +196,8 @@
 
 | 層 | 路徑 |
 |----|------|
-| HUB 傳參 | `CODING/spa/app.js`（`IframeView` `src`） |
+| HUB 傳參 | `CODING/spa/app.js`（`IframeView` `src`）、`CODING/index.html`（`app.js?v=`） |
+| 操作者快取 | `CODING/shared/js/operator_context.js` |
 | 會計 API／session | `CODING/shared/js/accounting_api.js` |
 | 會計 HUB 案場／員工 | `CODING/shared/js/accounting_context.js` |
 | 會計主檔快取 | `CODING/shared/js/accounting_cache.js` |
@@ -202,6 +213,7 @@
 
 | 日期 | 變更 |
 |------|------|
+| 2026-07-01 | v1.3：§4 增 `hub_liff_id` 與 postMessage 協定；§6 OperatorContext 已實作；§7 對齊 6/30 會計收斂與 `hubLiffId` 修復；HUB `index.html` 版號防快取 |
 | 2026-06-22 | v1.2：§0 定案方案 A；§1.1 改為單一員工主檔；區分員工／廠商身分；廠商雙來源搜尋列未來 |
 | 2026-06-22 | v1.1：§1.1 HUB／會計可能讀不同試算表檔；三處 Script Property 對齊流程 |
 | 2026-06-22 | 初版：釐清 HUB／會計 UID 與應傳承欄位、儲存層與壽命；定 `tanxin_operator_v1` 收斂方向 |
