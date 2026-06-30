@@ -14,7 +14,7 @@ description: >-
 
 - 改 `action`、試算表寫入、定時觸發、LINE／Dropbox／Gemini
 - 前端報錯懷疑後端（先對 **資料字典 + SPEC**，再到 backend 查）
-- 使用者說部署 GAS（仍須**明確**說「部署／發布」才執行 clasp）
+- 使用者說部署 GAS → 先載入 **`deploy-runbook`**（SPEC → LOG → 備份 → 部署）；仍須**明確**說「部署／發布」才執行 clasp
 
 ## 模組地圖（backend/ 下）
 
@@ -62,6 +62,8 @@ description: >-
 
 ## 部署（勿自動執行）
 
+**閘門順序**（細則見 `deploy-runbook`）：SPEC 更新 → LOG 撰寫 → 必要備份 → 部署；有問題回報並暫停請示使用者。
+
 | 情境 | 做法 |
 |------|------|
 | **日常**（project-console／CheckinSystem） | `backend/upload.bat` → push `main` → GitHub Actions 自動 clasp |
@@ -82,6 +84,7 @@ description: >-
 | `gas-sheets-batch-io` | 試算表慢、逾時、迴圈內逐格讀寫 |
 | `gemini-usage-policy` | accounting-gas OCR、模型、token 額度 |
 | `debug-loop` | 已壞、要重現＋根因＋再測 |
+| `deploy-runbook` | 任何倉庫要上線前的四步閘門 |
 | `code-advisor` | 改完要審、尚未部署 |
 
 ## 改完自檢

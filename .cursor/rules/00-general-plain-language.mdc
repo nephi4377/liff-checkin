@@ -18,4 +18,5 @@ alwaysApply: false
 - 動手前讀 `SPEC/00_開發憲法.md`（若存在）。
 - 先查現有 API／函式；`@STABLE` 未明示不修改。
 - 大改或跨檔後追加 `LOG/YYYY-MM-DD_LOG.md` 一筆；小修可略。
+- 部署前四步閘門（SPEC → LOG → 備份 → 部署）見 **`deploy-runbook`** skill。
 - GAS、資料字典、`upload.bat`：見 `10-gas-and-spec-pointer`、`CODING-upload-deploy`。

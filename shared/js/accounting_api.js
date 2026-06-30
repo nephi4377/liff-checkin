@@ -266,14 +266,18 @@ var AccountingApi = (function () {
       });
     },
     vendorPaymentApprove: function (sessionOrToken, paymentRequestId, patch) {
-      return post({
+      var body = {
         action: 'vendor_payment_approve',
         auth: resolveAuth(sessionOrToken),
         payment_request_id: paymentRequestId,
         project_no: patch && patch.project_no,
         amount: patch && patch.amount,
         item_desc: patch && patch.item_desc
-      });
+      };
+      if (patch && patch.allocations && patch.allocations.length) {
+        body.allocations = patch.allocations;
+      }
+      return post(body);
     },
     vendorPaymentReject: function (sessionOrToken, paymentRequestId, reason) {
       return post({
@@ -462,6 +466,48 @@ var AccountingApi = (function () {
         session = await AccountingApi.initLiff(opts);
       }
       if (!session) return null;
+      if ((session.auth.permission || 0) < MIN_PERMISSION) {
+        throw new Error(PERM_DENIED_MSG);
+      }
+      notifyUiOperator_(session);
+      return session;
+    },
+    /** 待付款申請：員工（財務權限）或已登記廠商 */
+    initPaymentRequestSession: async function (opts) {
+      var policy = await AccountingApi.loadPolicy();
+      var session;
+      if (policy.authBypass) {
+        var packPr = devBypassAuthBody_('payment_request_auth_me');
+        var authPr = await post(packPr.body);
+        if (!authPr.success) throw new Error(authPr.message || '驗證失敗');
+        session = buildDevBypassSession_(authPr, packPr.opts);
+        session.auth = authPr;
+      } else {
+        opts = opts || {};
+        var liffId = opts.liffId || policy.liffId || '';
+        if (!liffId) throw new Error('LIFF 尚未設定');
+        if (typeof liff === 'undefined') throw new Error('請用 LINE 開啟此頁面');
+        await liff.init({ liffId: liffId });
+        if (!liff.isLoggedIn()) {
+          liff.login({ redirectUri: window.location.href });
+          return null;
+        }
+        var profile = await liff.getProfile();
+        var idToken = liff.getIDToken();
+        var authRes = await post({ action: 'payment_request_auth_me', liff_id_token: idToken });
+        if (!authRes.success) throw new Error(authRes.message || '驗證失敗');
+        session = {
+          devBypass: false,
+          profile: profile,
+          idToken: idToken,
+          auth: authRes
+        };
+      }
+      if (!session) return null;
+      if (String(session.auth.status || '') === '廠商') {
+        notifyUiOperator_(session);
+        return session;
+      }
       if ((session.auth.permission || 0) < MIN_PERMISSION) {
         throw new Error(PERM_DENIED_MSG);
       }

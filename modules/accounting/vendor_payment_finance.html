@@ -109,7 +109,7 @@
         <button type="button" class="btn btn-muted" id="selAllBtn">全選</button>
         <button type="button" class="btn btn-ok" id="exportBtn">匯出轉帳檔並完成匯款</button>
       </div>
-      <p class="sub">勾選後匯出：產生中信上傳工具用的<strong>整批匯款</strong> .txt（固定 500 字元／列，非薪轉檔）。並記入收支、標記已匯款。</p>
+      <p class="sub">勾選後匯出：產生中信上傳工具用的<strong>整批匯款</strong> .txt（固定 500 byte／列，非薪轉檔）。並記入收支、標記已匯款。<br />上傳中信時請選「整批匯款」、檔案編碼 <strong>BIG-5</strong>（勿選 UTF-8）。</p>
       <h3 style="margin:0 0 8px">待匯款列表</h3>
       <div id="list"></div>
       <p class="sub hidden" id="emptyHint">目前沒有待匯款項目</p>
@@ -207,6 +207,21 @@
 
       function downloadTxt(filename, content) {
         var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+
+      /** 中信整批匯款：下載 Big5 二進位（每列 500 byte） */
+      async function downloadCtbcBig5(filename, content) {
+        var text = String(content || '').replace(/^\uFEFF/, '');
+        var mod = await import('https://esm.sh/iconv-lite@0.6.3');
+        var iconv = mod.default || mod;
+        var bytes = iconv.encode(text, 'cp950');
+        var blob = new Blob([new Uint8Array(bytes)], { type: 'application/octet-stream' });
         var a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = filename;
@@ -412,8 +427,21 @@
             setMsg(data.message || '匯出失敗');
             return;
           }
-          downloadTxt(data.filename || 'ctbc_vendor_batch.txt', data.content || '');
-          var msg = '已完成 ' + (data.count || ids.length) + ' 筆（整批匯款）：檔案已下載，請用中信上傳工具選「整批匯款」匯入';
+          if (data.content_big5_base64) {
+            var bin = atob(data.content_big5_base64);
+            var arr = new Uint8Array(bin.length);
+            for (var bi = 0; bi < bin.length; bi++) arr[bi] = bin.charCodeAt(bi);
+            var blob = new Blob([arr], { type: 'application/octet-stream' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = data.filename || 'ctbc_vendor_batch.txt';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+          } else {
+            await downloadCtbcBig5(data.filename || 'ctbc_vendor_batch.txt', data.content || '');
+          }
+          var msg = '已完成 ' + (data.count || ids.length) + ' 筆（整批匯款）：檔案已下載。上傳中信請選「整批匯款」、編碼 BIG-5';
           if (data.warnings && data.warnings.length) {
             msg += '。部分略過：' + data.warnings.join('；');
           }

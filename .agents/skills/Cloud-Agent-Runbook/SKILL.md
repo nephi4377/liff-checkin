@@ -78,7 +78,7 @@ npm test             # 兩者合跑
 | 各模組怎麼測、curl、正式站驗證 | `RUNBOOK_DETAIL.md` |
 | 檔案與路由索引 | `SPEC/專案完整檔案清冊.md` |
 | 架構、模組規格 | `SPEC/01_系統架構深編規格書.md` |
-| 部署／上線 | `.agents/workflows/deploy.md`；Windows 用 `upload.bat` |
+| 部署／上線 | **`deploy-runbook`**（SPEC→LOG→備份→部署）；Windows 用 `upload.bat` |
 | 日報瀏覽器測試 | `.agents/workflows/test_daily_report.md` |
 | 改 GAS | `GAS-Backend-Expert` skill |
 

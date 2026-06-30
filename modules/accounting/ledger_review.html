@@ -6,7 +6,7 @@
   <title>請款審核</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=3" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_api.js?v=20"></script>
+  <script src="../../shared/js/accounting_api.js?v=22"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=17"></script>
   <script src="../../shared/js/accounting_ui.js?v=6"></script>
   <style>
@@ -43,6 +43,11 @@
     .bulk-bar .sub { margin: 0; }
     .mono { font-family: ui-monospace, monospace; font-size: 12px; color: #666; word-break: break-all; }
     .bank-line { font-size: 13px; color: #444; margin-top: 6px; }
+    .alloc-row { border: 1px solid #e0e0e0; border-radius: 10px; padding: 10px; margin-top: 8px; background: #fafafa; position: relative; }
+    .alloc-row .alloc-rm { position: absolute; top: 8px; right: 8px; border: none; background: transparent; color: #c5221f; font-size: 12px; cursor: pointer; }
+    .alloc-empty { color: #666; font-size: 14px; padding: 8px 0; }
+    .btn-ghost { background: #fff; border: 1px dashed #1a73e8; color: #1a73e8; width: 100%; padding: 10px; margin-top: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border-radius: 8px; }
+    .total-line { font-size: 16px; font-weight: 700; margin-top: 10px; text-align: right; color: #1a73e8; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -51,7 +56,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>請款審核</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub">只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改金額／案號。</p>
+    <p class="sub">只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改分攤（可多案）。</p>
     <div id="msg" role="alert"></div>
     <div id="ok" aria-live="polite"></div>
 
@@ -124,23 +129,118 @@
         return String(item.review_status || '') !== '已審' && String(item.review_status || '') !== '退回';
       }
       function itemReady(item) {
-        var amount = parseInt(item.amount, 10) || 0;
-        return !!(String(item.project_no || '').trim()) && amount > 0;
+        var rows = allocRowsFromItem(item);
+        if (!rows.length) return false;
+        var sum = 0;
+        for (var i = 0; i < rows.length; i++) {
+          if (!String(rows[i].project_no || '').trim()) return false;
+          var amt = parseInt(rows[i].amount, 10) || 0;
+          if (amt <= 0) return false;
+          sum += amt;
+        }
+        return sum > 0;
       }
-      function readPatchFromPanel(panel, item) {
-        return {
-          project_no: panel.querySelector('.inp-project').value.trim(),
-          amount: panel.querySelector('.inp-amount').value,
-          item_desc: panel.querySelector('.inp-desc').value.trim() || item.summary
-        };
+      function allocRowsFromItem(item) {
+        if (item.allocations && item.allocations.length) {
+          return item.allocations.map(function (a) {
+            return {
+              project_no: a.project_no || '',
+              amount: a.amount || '',
+              item_desc: a.item_desc || ''
+            };
+          });
+        }
+        return [{
+          project_no: item.project_no || '',
+          amount: item.amount || '',
+          item_desc: item.summary || ''
+        }];
+      }
+      function defaultPatchForItem(item) {
+        return { allocations: allocRowsFromItem(item) };
+      }
+      function readAllocRowsFromPanel(panel) {
+        var rows = [];
+        panel.querySelectorAll('.alloc-row').forEach(function (el) {
+          rows.push({
+            project_no: el.querySelector('.inp-pn').value.trim(),
+            amount: el.querySelector('.inp-amt').value,
+            item_desc: el.querySelector('.inp-desc').value.trim()
+          });
+        });
+        return rows;
+      }
+      function validateAllocRows(rows) {
+        if (!rows.length) return '請至少一列分攤（案號＋金額）';
+        for (var i = 0; i < rows.length; i++) {
+          if (!rows[i].project_no) return '第 ' + (i + 1) + ' 列請填案號';
+          if (!(parseInt(rows[i].amount, 10) > 0)) return '第 ' + (i + 1) + ' 列請填金額';
+        }
+        return '';
+      }
+      function updatePanelTotal(panel) {
+        var sum = readAllocRowsFromPanel(panel).reduce(function (s, r) {
+          return s + (parseInt(r.amount, 10) || 0);
+        }, 0);
+        var el = panel.querySelector('.alloc-total');
+        if (el) el.textContent = sum.toLocaleString('zh-TW');
+      }
+      function bindAllocPanelEvents(panel) {
+        panel.querySelectorAll('.inp-amt, .inp-pn, .inp-desc').forEach(function (inp) {
+          inp.oninput = function () { updatePanelTotal(panel); };
+        });
+        panel.querySelectorAll('.alloc-rm').forEach(function (btn) {
+          btn.onclick = function () {
+            var rows = readAllocRowsFromPanel(panel);
+            var idx = parseInt(btn.getAttribute('data-rm'), 10);
+            rows.splice(idx, 1);
+            renderAllocRowsInPanel(panel, rows);
+          };
+        });
+        var addBtn = panel.querySelector('.btn-add-alloc');
+        if (addBtn) {
+          addBtn.onclick = function () {
+            var rows = readAllocRowsFromPanel(panel);
+            rows.push({ project_no: '', amount: '', item_desc: '' });
+            renderAllocRowsInPanel(panel, rows);
+          };
+        }
+      }
+      function renderAllocRowsInPanel(panel, rows) {
+        var box = panel.querySelector('.alloc-list');
+        box.innerHTML = '';
+        if (!rows.length) {
+          box.innerHTML = '<p class="alloc-empty">尚無分攤列，請新增。</p>';
+          updatePanelTotal(panel);
+          return;
+        }
+        rows.forEach(function (row, idx) {
+          var el = document.createElement('div');
+          el.className = 'alloc-row';
+          el.setAttribute('data-idx', String(idx));
+          el.innerHTML =
+            '<button type="button" class="alloc-rm" data-rm="' + idx + '">刪除</button>' +
+            '<div class="row2"><div><label>案號</label><input class="inp-pn" placeholder="752" /></div>' +
+            '<div><label>金額</label><input class="inp-amt" type="number" inputmode="numeric" /></div></div>' +
+            '<label>品項</label><input class="inp-desc" placeholder="摘要" />';
+          el.querySelector('.inp-pn').value = row.project_no || '';
+          el.querySelector('.inp-amt').value = row.amount || '';
+          el.querySelector('.inp-desc').value = row.item_desc || '';
+          box.appendChild(el);
+        });
+        bindAllocPanelEvents(panel);
+        updatePanelTotal(panel);
+      }
+      function readPatchFromPanel(panel) {
+        return { allocations: readAllocRowsFromPanel(panel) };
       }
 
       async function approveVendor(item, patch) {
-        patch = patch || {
-          project_no: item.project_no,
-          amount: item.amount,
-          item_desc: item.summary
-        };
+        patch = patch || defaultPatchForItem(item);
+        if (patch.allocations) {
+          var err = validateAllocRows(patch.allocations);
+          if (err) { setMsg((item.party_name || '請款') + '：' + err); return false; }
+        }
         var data = await AccountingApi.vendorPaymentApprove(session, item.payment_request_id, patch);
         if (!data.success) {
           setMsg((item.party_name || '請款') + '：' + (data.message || '核准失敗'));
@@ -172,16 +272,13 @@
       function renderReviewPanel(item) {
         var panel = document.createElement('div');
         panel.className = 'review-panel hidden';
-        var amount = parseInt(item.amount, 10) || 0;
-        var needProject = !String(item.project_no || '').trim();
-        var needAmount = amount <= 0;
+        var ready = itemReady(item);
         panel.innerHTML =
-          '<label>案號' + (needProject ? ' <span class="need">必填</span>' : '') + '</label>' +
-          '<input type="text" class="inp-project" value="' + (item.project_no || '') + '" placeholder="例：752" />' +
-          '<label>金額' + (needAmount ? ' <span class="need">必填</span>' : '') + '</label>' +
-          '<input type="number" class="inp-amount" value="' + (amount || '') + '" inputmode="numeric" />' +
-          '<label>品項說明</label>' +
-          '<input type="text" class="inp-desc" value="' + (item.summary || '') + '" />' +
+          '<label>分攤明細（案號＋金額，可多案）' +
+          (ready ? '' : ' <span class="need">需補齊</span>') + '</label>' +
+          '<div class="alloc-list"></div>' +
+          '<button type="button" class="btn-ghost btn-add-alloc">＋ 新增一列</button>' +
+          '<div class="total-line">合計 $<span class="alloc-total">0</span></div>' +
           (item.bank_code || item.account_no
             ? '<p class="bank-line">匯款：' + (item.bank_code || '—') + ' / ' + (item.account_no || '—') +
               ' / ' + (item.account_name || item.party_name || '—') + '</p>'
@@ -193,6 +290,7 @@
           '<button type="button" class="btn btn-ok btn-confirm-approve">確認核准</button>' +
           '<button type="button" class="btn btn-warn btn-confirm-reject">退回</button>' +
           '</div>';
+        renderAllocRowsInPanel(panel, allocRowsFromItem(item));
 
         panel.querySelector('.btn-confirm-approve').addEventListener('click', async function () {
           if (busy || !canApproveVendor) return;
@@ -203,7 +301,10 @@
             lockSelectors: ['#bulkApproveBtn', '#reloadBtn', '#list .btn']
           }, async function () {
             ui.clear();
-            var ok = await approveVendor(item, readPatchFromPanel(panel, item));
+            var patch = readPatchFromPanel(panel);
+            var err = validateAllocRows(patch.allocations);
+            if (err) { setMsg(err); return; }
+            var ok = await approveVendor(item, patch);
             if (ok) { setOk('已核准「' + (item.party_name || '') + '」，進入待匯款'); await loadList(true); }
           });
         });
@@ -255,7 +356,7 @@
           btnQuick.className = 'btn btn-ok';
           btnQuick.textContent = ready ? '快速核准' : '快速核准（需補資料）';
           btnQuick.disabled = !ready;
-          btnQuick.title = ready ? '案號與金額已齊，直接進待匯款' : '請先點「審核」補案號或金額';
+          btnQuick.title = ready ? '分攤已齊，直接進待匯款' : '請先點「審核」補分攤列';
           btnQuick.addEventListener('click', async function () {
             if (busy || !ready) return;
             await AccountingUi.runAsync(btnQuick, {
@@ -347,7 +448,7 @@
         }
         bar.classList.remove('hidden');
         document.getElementById('bulkSummary').textContent =
-          '待審 ' + pending.length + ' 筆 · 可一次核准 ' + ready.length + ' 筆（案號與金額已齊）';
+          '待審 ' + pending.length + ' 筆 · 可一次核准 ' + ready.length + ' 筆（分攤已齊）';
         btn.disabled = !ready.length || busy;
       }
 
@@ -355,12 +456,12 @@
         var pending = listItems.filter(function (it) {
           return isPaymentRequest(it) && isPending(it) && itemReady(it);
         });
-        if (!pending.length) { setMsg('沒有可一次核准的項目（需有案號與金額）'); return; }
+        if (!pending.length) { setMsg('沒有可一次核准的項目（需有完整分攤）'); return; }
         var skip = listItems.filter(function (it) {
           return isPaymentRequest(it) && isPending(it) && !itemReady(it);
         }).length;
         var msg = '將核准 ' + pending.length + ' 筆，進入待匯款。';
-        if (skip) msg += '\n另有 ' + skip + ' 筆缺案號或金額，請個別審核。';
+        if (skip) msg += '\n另有 ' + skip + ' 筆分攤不完整，請個別審核。';
         if (!confirm(msg + '\n\n確定？')) return;
 
         setMsg('');

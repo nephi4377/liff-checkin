@@ -15,6 +15,7 @@
 
 | Skill | 何時用 |
 |-------|--------|
+| `**deploy-runbook**` | **任何倉庫要部署** → SPEC → LOG → 備份 → 部署；有問題暫停請示 |
 | `**lyra-4d-prompt**` | 需求還模糊 → 白話確認後在 Cursor **直接做** |
 | `**code-advisor**` | 程式寫好了 → **審**、列建議；預設等你勾才改 |
 | `**debug-loop**` | **已經壞了** → 重現、找根因、修、再測 |
@@ -69,6 +70,7 @@
 
 ```
 想法還亂           → lyra-4d-prompt
+要部署／上線       → deploy-runbook（GAS 再加 GAS-Backend-Expert）
 改 GAS 後端        → GAS-Backend-Expert（慢／逾時加 gas-sheets-batch-io；OCR 加 gemini-usage-policy）
 改完想審           → code-advisor
 已經出錯           → debug-loop

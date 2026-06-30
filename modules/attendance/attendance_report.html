@@ -36,6 +36,27 @@
         .personal-tab-inactive:hover {
             background-color: rgb(229 231 235);
         }
+        .appeal-reason-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.375rem;
+            margin-top: 0.5rem;
+        }
+        .appeal-reason-chip {
+            font-size: 0.75rem;
+            line-height: 1.25;
+            padding: 0.375rem 0.625rem;
+            border-radius: 9999px;
+            border: 1px solid #fcd34d;
+            background: #fffbeb;
+            color: #92400e;
+            cursor: pointer;
+            transition: background-color 0.15s, border-color 0.15s;
+        }
+        .appeal-reason-chip:hover {
+            background: #fef3c7;
+            border-color: #f59e0b;
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
@@ -207,7 +228,7 @@
     <div id="appeal-modal" class="modal fixed inset-0 bg-gray-600 bg-opacity-50 h-full w-full z-50">
       <div class="relative mx-auto my-8 p-5 border w-full max-w-md shadow-lg rounded-md bg-white max-h-[90vh] overflow-y-auto">
         <h3 class="text-lg font-semibold">提出出勤說明</h3>
-        <p class="text-sm text-gray-500 mt-1">異常日起 15 日內為一般申訴；逾期仍可送，會標示「逾期申訴」。附件選填；未附圖時說明請至少 20 字。</p>
+        <p class="text-sm text-gray-500 mt-1">異常日起 15 日內為一般申訴；逾期仍可送，會標示「逾期申訴」。說明原因必填；附件選填，是否充分由主管審核判斷。</p>
         <div class="mt-4 space-y-4">
           <div>
             <label class="block text-sm font-medium text-gray-700">異常日期</label>
@@ -217,6 +238,7 @@
             <label for="appeal-anomaly-type" class="block text-sm font-medium text-gray-700">異常類型</label>
             <select id="appeal-anomaly-type" class="mt-1 block w-full rounded-md border-gray-300 sm:text-sm">
               <option value="遲到">遲到</option>
+              <option value="早退">早退</option>
               <option value="缺卡">缺卡</option>
               <option value="僅單次打卡">僅單次打卡</option>
               <option value="離場未填">離場未填</option>
@@ -225,7 +247,9 @@
           </div>
           <div>
             <label for="appeal-reason" class="block text-sm font-medium text-gray-700">說明原因（必填）</label>
-            <textarea id="appeal-reason" rows="3" class="mt-1 block w-full rounded-md border-gray-300 sm:text-sm" placeholder="請說明當日實際狀況…"></textarea>
+            <p class="text-xs text-gray-500 mt-1">點選下方標籤快速帶入，可複選、可再修改</p>
+            <div id="appeal-reason-chips" class="appeal-reason-chips" role="group" aria-label="快速填寫標籤"></div>
+            <textarea id="appeal-reason" rows="3" class="mt-2 block w-full rounded-md border-gray-300 sm:text-sm" placeholder="請說明當日實際狀況…"></textarea>
           </div>
           <div>
             <label for="appeal-attachments" class="block text-sm font-medium text-gray-700">附件（選填，可選多張）</label>
@@ -452,6 +476,14 @@
             pendingAppealContext = null;
         });
         document.getElementById('appeal-submit-btn').addEventListener('click', submitAppealForm);
+        document.getElementById('appeal-reason-chips').addEventListener('click', (e) => {
+            const chip = e.target.closest('[data-appeal-reason-tag]');
+            if (!chip) return;
+            appendAppealReasonTag(chip.dataset.appealReasonTag);
+        });
+        document.getElementById('appeal-anomaly-type').addEventListener('change', () => {
+            renderAppealReasonChips(document.getElementById('appeal-anomaly-type').value);
+        });
         document.getElementById('report-table-container').addEventListener('click', (e) => {
             const btn = e.target.closest('[data-appeal-action]');
             if (!btn) return;
@@ -517,6 +549,48 @@
         }
     }
 
+    const APPEAL_REASON_TAGS = {
+        _common: ['實際有正常上下班', '已與主管口頭說明'],
+        遲到: ['交通壅塞', '案場收工延誤', '送材料或器材', '帶客戶看案場'],
+        早退: ['案場提早收工', '彈性上下班誤判', '看診或私事已請假'],
+        缺卡: ['忘記打上班卡', '忘記打下班卡', '手機沒電或網路異常'],
+        僅單次打卡: ['只打到上班卡', '只打到下班卡', '當日忘記第二次打卡'],
+        離場未填: ['去其他案場', '去材料行', '去銀行或行政', '看診短暫離開'],
+        其他: ['系統紀錄有誤', '忘記打卡']
+    };
+
+    function getAppealReasonTagsForType(anomalyType) {
+        const specific = APPEAL_REASON_TAGS[anomalyType] || APPEAL_REASON_TAGS['其他'] || [];
+        const common = APPEAL_REASON_TAGS._common || [];
+        const seen = new Set();
+        return [...specific, ...common].filter((t) => {
+            if (seen.has(t)) return false;
+            seen.add(t);
+            return true;
+        });
+    }
+
+    function renderAppealReasonChips(anomalyType) {
+        const wrap = document.getElementById('appeal-reason-chips');
+        if (!wrap) return;
+        const tags = getAppealReasonTagsForType(anomalyType);
+        wrap.innerHTML = tags.map((t) =>
+            `<button type="button" class="appeal-reason-chip" data-appeal-reason-tag="${escapeAttr(t)}">${escapeHtml(t)}</button>`
+        ).join('');
+    }
+
+    function appendAppealReasonTag(text) {
+        const ta = document.getElementById('appeal-reason');
+        if (!ta || !text) return;
+        const cur = ta.value.trim();
+        if (!cur) {
+            ta.value = text;
+        } else if (!cur.includes(text)) {
+            ta.value = `${cur}；${text}`;
+        }
+        ta.focus();
+    }
+
     function openAppealModal(dataset) {
         pendingAppealContext = {
             targetDate: dataset.date,
@@ -527,6 +601,7 @@
         document.getElementById('appeal-anomaly-type').value = dataset.anomaly || '其他';
         document.getElementById('appeal-reason').value = '';
         document.getElementById('appeal-attachments').value = '';
+        renderAppealReasonChips(dataset.anomaly || '其他');
         let hint = '';
         try {
             const snap = JSON.parse(dataset.snapshot || '{}');
@@ -552,10 +627,6 @@
         const reason = document.getElementById('appeal-reason').value.trim();
         const files = document.getElementById('appeal-attachments').files;
         if (!reason) { alert('請填寫說明原因'); return; }
-        if ((!files || !files.length) && reason.length < 20) {
-            alert('未附附件時，說明原因請至少 20 字');
-            return;
-        }
 
         const btn = document.getElementById('appeal-submit-btn');
         btn.disabled = true;

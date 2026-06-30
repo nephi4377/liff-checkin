@@ -120,6 +120,12 @@
     .ocr-upload-status.err { color: #c5221f; }
     .ocr-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
     .btn-ocr-retry { padding: 6px 12px; font-size: 13px; }
+    .list-filters {
+      padding-bottom: 12px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid #e8eaed;
+    }
+    .list-filters label:first-child { margin-top: 0; }
     .step-num { display: inline-block; background: #1a73e8; color: #fff; font-size: 12px; padding: 2px 8px; border-radius: 6px; margin-right: 6px; vertical-align: middle; }
   </style>
 </head>
@@ -136,28 +142,6 @@
 
     <div class="page-layout">
     <div class="page-col page-col-form">
-    <div class="card">
-      <h3 style="margin:0 0 8px">篩選</h3>
-      <div class="row2">
-        <div>
-          <label>工種</label>
-          <select id="filterTrade"><option value="">全部</option></select>
-        </div>
-        <div>
-          <label>合作狀態</label>
-          <select id="filterCoop">
-            <option value="">全部</option>
-            <option value="待審核">待審核</option>
-            <option value="合作中">合作中</option>
-            <option value="暫停合作">暫停合作</option>
-          </select>
-        </div>
-      </div>
-      <label>關鍵字</label>
-      <input id="filterKw" placeholder="名稱、統編、電話…" />
-      <button type="button" class="btn btn-secondary btn-block" id="filterBtn">套用篩選</button>
-    </div>
-
     <div class="card">
       <h3 id="formTitle" style="margin:0 0 8px">新增廠商</h3>
       <p class="hint" style="margin:0 0 10px">可拍照自動辨識；編輯既有廠商時照片會立即存入 Drive 資料夾，新增則按儲存時一併存入。</p>
@@ -255,7 +239,27 @@
 
     <div class="page-col page-col-list">
     <div class="card">
-      <h3 style="margin:0 0 8px">列表 <span class="sub" id="listCount"></span></h3>
+      <h3 style="margin:0 0 8px">廠商列表 <span class="sub" id="listCount"></span></h3>
+      <div class="list-filters">
+        <div class="row2">
+          <div>
+            <label>工種</label>
+            <select id="filterTrade"><option value="">全部</option></select>
+          </div>
+          <div>
+            <label>合作狀態</label>
+            <select id="filterCoop">
+              <option value="">全部</option>
+              <option value="待審核">待審核</option>
+              <option value="合作中">合作中</option>
+              <option value="暫停合作">暫停合作</option>
+            </select>
+          </div>
+        </div>
+        <label>關鍵字</label>
+        <input id="filterKw" placeholder="名稱、統編、電話…" />
+        <button type="button" class="btn btn-secondary btn-block" id="filterBtn">套用篩選</button>
+      </div>
       <div id="list"></div>
     </div>
     </div>
