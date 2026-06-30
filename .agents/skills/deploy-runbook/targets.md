@@ -39,6 +39,7 @@
 - 改 **API／欄位**：backend 與 CODING 字典、前端呼叫端須一致；部署順序通常 **backend → CODING**（或同一輪兩邊都跑閘門）。
 - 改 **core_library**：先 deploy Library，再 deploy 引用它的專案。
 - **會計** Web App 執行身分應為 nephihuang；見 `GAS-Backend-Expert/reference.md`。
+- **部署前必做 Step 0**：對照 LOG／`git log`／檔案修改時間，避免另一輪對話已部署卻重跑 `upload.bat`。
 
 ## 不必跑完整部署閘門
 

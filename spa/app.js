@@ -721,6 +721,7 @@ const App = {
             landingPagePublicUrl,
             landingPageUrlCopied,
             copyLandingPageUrl,
+            hubLiffId: CONFIG.HUB_LIFF_ID || '',
         };
     }, // [v418.1 修正] 補上遺失的逗號，解決 setup() 與 template 之間的語法錯誤
     template: `
@@ -794,7 +795,7 @@ const App = {
                             'uid=' + encodeURIComponent(userProfile.userId) + 
                             '&name=' + encodeURIComponent(userProfile.displayName) +
                             '&permission=' + encodeURIComponent(currentUser?.permission || 1) +
-                            '&hub_liff_id=' + encodeURIComponent(CONFIG.HUB_LIFF_ID || '') +
+                            '&hub_liff_id=' + encodeURIComponent(hubLiffId) +
                             '&shiftStart=' + encodeURIComponent(currentUser?.shiftStart || '08:30') +
                             '&shiftEnd=' + encodeURIComponent(currentUser?.shiftEnd || '17:30') +
                             (currentView.params || '')" />
