@@ -6,7 +6,7 @@
 
 透過 `/` 或對應檔案觸發：
 
-- `**/deploy**`（`workflows/deploy.md`）：推送 Git、部署記錄、可選 UI 驗證。
+- **部署／上線** → skill **`deploy-runbook`**（`@deploy-runbook` 或明確說「部署」）
 - `**/test-daily-report**`（`workflows/test_daily_report.md`）：日報相關瀏覽器測試。
 
 ## 2. 專業技能 (Skills)
@@ -63,7 +63,7 @@
 | 規則 | 說明 |
 |------|------|
 | `**00-general-plain-language.mdc**` | 白話、簡答 |
-| `**CODING-upload-deploy.mdc**` | 前端上傳 GitHub 用 `upload.bat` |
+| `**CODING-upload-deploy.mdc**` | 改 `upload.bat` 時自動提醒 → `deploy-runbook` |
 | `**gas-and-spec-pointer.mdc**` | 改 API／config：後端在 backend、欄位看資料字典 |
 
 ## 5. 快速選 skill

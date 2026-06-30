@@ -36,6 +36,20 @@ export function initPayrollReviewPanel(ctx) {
         return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
+    function formatInsuranceHtml(ins, isDaily) {
+        if (isDaily) {
+            return `<p class="text-gray-500 text-xs">勞健保：日薪員工自行處理（不扣款）</p>`;
+        }
+        if (!ins || ins.type === 'none' || !(ins.total > 0)) {
+            return `<p class="text-gray-500 text-xs">保險：不加保／個人自行處理</p>`;
+        }
+        const dep = Number(ins.healthDependentCount) || 0;
+        const depNote = dep > 0 ? `，健保含眷屬 ${dep} 人` : '';
+        let html = `<p><strong>勞健保自付：</strong>${(ins.total || 0).toLocaleString()} 元（勞保 ${(ins.labor || 0).toLocaleString()}＋健保 ${(ins.health || 0).toLocaleString()}${depNote}）</p>`;
+        if (ins.note) html += `<p class="text-xs text-gray-500">${esc(ins.note)}</p>`;
+        return html;
+    }
+
     async function fetchContext(periodLabel) {
         if (!userId) {
             els.error.textContent = '缺少使用者 ID，請從主控台重新進入此頁面';
@@ -114,15 +128,7 @@ export function initPayrollReviewPanel(ctx) {
             overtimeHours: Number(els.overtimeHours.value) || 0
         }, contextData.insurancePreview);
         const ins = preview.insurance || contextData.insurancePreview || {};
-        let insHtml = '';
-        if (isDaily) {
-            insHtml = `<p class="text-gray-500 text-xs">勞健保：日薪員工自行處理（不扣款）</p>`;
-        } else if (ins.type === 'labor_health' && (ins.total || 0) > 0) {
-            insHtml = `<p><strong>勞健保自付：</strong>${(ins.total || 0).toLocaleString()} 元（勞保 ${(ins.labor || 0).toLocaleString()}＋健保 ${(ins.health || 0).toLocaleString()}）</p>`;
-        } else if (ins.type === 'none') {
-            insHtml = `<p class="text-gray-500 text-xs">保險：不加保／個人自行處理</p>`;
-        }
-        if (ins.note) insHtml += `<p class="text-xs text-gray-500">${esc(ins.note)}</p>`;
+        const insHtml = formatInsuranceHtml(ins, isDaily);
         els.calcBox.innerHTML = `
             <p class="text-xs text-amber-700 bg-amber-50 rounded p-2 mb-2">${esc(disclaimer)}</p>
             <p><strong>薪資類型：</strong>${isDaily ? '日薪' : '月薪'}（${esc(settings.payRule)}）</p>
@@ -283,12 +289,7 @@ export function initPayrollReviewApproval(ctx) {
         try { snap = JSON.parse(row.statsSnapshot); } catch (e) { /* ignore */ }
         const st = snap.stats || {};
         const ins = snap.insurance || {};
-        let insLine = '';
-        if (isDaily) {
-            insLine = `<p class="text-gray-500 text-xs">勞健保：日薪自行處理（不扣款）</p>`;
-        } else if (ins.type === 'labor_health' && (ins.total || 0) > 0) {
-            insLine = `<p><strong>勞健保自付：</strong>${Number(ins.total).toLocaleString()} 元（勞 ${Number(ins.labor || 0).toLocaleString()}＋健 ${Number(ins.health || 0).toLocaleString()}）</p>`;
-        }
+        const insLine = formatInsuranceHtml(ins, isDaily);
         card.innerHTML = `
             <div class="flex justify-between gap-2">
                 <div>

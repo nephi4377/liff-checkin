@@ -6,7 +6,6 @@ alwaysApply: false
 
 # CODING 上傳 GitHub
 
-- 部署前依 **`deploy-runbook`** skill：**SPEC 更新 → LOG 撰寫 → 必要備份 → 部署**；有問題回報並暫停請示使用者。
-- 使用者要**備份＋commit＋push 到 `main`**（上傳／部署／PUSH／同步 GitHub）→ 在 CODING 根目錄執行 **`upload.bat`**（可加 `NONINTERACTIVE=1`）。
-- 路徑：倉庫根 **`upload.bat`**；本機常為 `C:\Users\a9999\Dropbox\CodeBackups\CODING\upload.bat`。
-- **不必**跑：僅 `git status`／log／diff 且不要 push；或使用者指定其他流程。
+- 部署流程 → **`deploy-runbook`** skill（SPEC → LOG → 備份 → 部署；有問題暫停請示）
+- 上線指令 → 倉庫根 **`upload.bat`**（可加 `NONINTERACTIVE=1`）
+- **不必**跑：僅 `git status`／diff 且不要 push
