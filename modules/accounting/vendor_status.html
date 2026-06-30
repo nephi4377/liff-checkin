@@ -6,8 +6,11 @@
   <title>款項進度</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=3" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_api.js?v=20"></script>
-  <script src="../../shared/js/accounting_ui.js?v=6"></script>
+  <script src="../../shared/js/operator_context.js?v=1"></script>
+  <script src="../../shared/js/accounting_api.js?v=23"></script>
+  <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_nav.js?v=1"></script>
+  <script src="../../shared/js/accounting_boot.js?v=1"></script>
   <style>
     h2 { margin: 0 0 8px; }
     h3 { margin: 16px 0 8px; font-size: 15px; color: #333; }
@@ -38,7 +41,7 @@
   </div>
   <script>
     (function () {
-      AccountingUi.init();
+      var session = null;
       var STAGE_ORDER = ['請款待審', '待匯款', '已匯款', '已退回', '收支紀錄'];
       var STAGE_LABEL = {
         '請款待審': '待審核',
@@ -128,17 +131,13 @@
         });
       }
       (async function boot() {
-        try {
-          var session = await AccountingApi.initSession();
-          if (!session) return;
-          var mode = session.devBypass ? ' · 測試模式（無登入）' : '';
-          document.getElementById('userLine').textContent = session.profile.displayName + ' · 權限 ' + session.auth.permission + mode;
-          showApp();
-          var data = await AccountingApi.vendorPaymentStatus(session);
-          renderItems(data);
-        } catch (e) {
-          document.getElementById('loading').textContent = e.message || String(e);
-        }
+        await AccountingBoot.run({
+          onReady: async function (sess) {
+            session = sess;
+            var data = await AccountingApi.vendorPaymentStatus(session);
+            renderItems(data);
+          }
+        });
       })();
     })();
   </script>

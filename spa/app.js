@@ -330,7 +330,10 @@ const App = {
                 headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify(body)
             });
-            return res.json();
+            const text = await res.text();
+            const trimmed = (text || '').trim();
+            if (!trimmed || trimmed.charAt(0) === '<') return { success: false, message: '會計 API 異常（HTTP ' + res.status + '）' };
+            try { return JSON.parse(trimmed); } catch (e) { return { success: false, message: '會計 API JSON 解析失敗' }; }
         };
 
         const fetchPaymentTodos = async () => {
@@ -635,6 +638,18 @@ const App = {
             if (type === 'openLightbox' && payload) {
                 console.log('[Lightbox] Received message from iframe:', payload);
                 openLightbox(payload.images, payload.index);
+                return;
+            }
+            if (type === 'request_hub_liff_token') {
+                try {
+                    const tok = (typeof liff !== 'undefined' && liff.getIDToken) ? (liff.getIDToken() || '') : '';
+                    if (tok && event.source && typeof event.source.postMessage === 'function') {
+                        event.source.postMessage({ type: 'hub_liff_token', token: tok }, event.origin || '*');
+                    }
+                } catch (e) {
+                    console.warn('[Hub] 無法提供 LIFF token 給 iframe:', e);
+                }
+                return;
             }
         };
         // 將監聽器放在 setup 函式的頂層，確保它只被註冊一次。
@@ -779,6 +794,7 @@ const App = {
                             'uid=' + encodeURIComponent(userProfile.userId) + 
                             '&name=' + encodeURIComponent(userProfile.displayName) +
                             '&permission=' + encodeURIComponent(currentUser?.permission || 1) +
+                            '&hub_liff_id=' + encodeURIComponent(CONFIG.HUB_LIFF_ID || '') +
                             '&shiftStart=' + encodeURIComponent(currentUser?.shiftStart || '08:30') +
                             '&shiftEnd=' + encodeURIComponent(currentUser?.shiftEnd || '17:30') +
                             (currentView.params || '')" />

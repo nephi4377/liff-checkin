@@ -1,6 +1,24 @@
 /**
  * 個人頁 — 薪資出勤核對申請（Phase B1）
  */
+
+function escPayrollHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function formatInsuranceHtml(ins, isDaily) {
+    if (isDaily) {
+        return `<p class="text-gray-500 text-xs">勞健保：日薪員工自行處理（不扣款）</p>`;
+    }
+    if (!ins || ins.type === 'none' || !(ins.total > 0)) {
+        return `<p class="text-gray-500 text-xs">勞健保：不加保／個人自行處理</p>`;
+    }
+    const dep = Number(ins.healthDependentCount) || 0;
+    const depNote = dep > 0 ? `，健保含眷屬 ${dep} 人` : '';
+    return `<p><strong>勞健保自付：</strong>−${(ins.total || 0).toLocaleString()} 元（勞保 ${(ins.labor || 0).toLocaleString()}＋健保 ${(ins.health || 0).toLocaleString()}${depNote}）</p>`;
+}
+
 export function initPayrollReviewPanel(ctx) {
     const {
         apiBaseUrl, userId, userName, showGlobalNotification, fetchApi
@@ -32,22 +50,7 @@ export function initPayrollReviewPanel(ctx) {
     let payrollLoaded = false;
 
     function esc(s) {
-        if (s == null) return '';
-        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-
-    function formatInsuranceHtml(ins, isDaily) {
-        if (isDaily) {
-            return `<p class="text-gray-500 text-xs">勞健保：日薪員工自行處理（不扣款）</p>`;
-        }
-        if (!ins || ins.type === 'none' || !(ins.total > 0)) {
-            return `<p class="text-gray-500 text-xs">保險：不加保／個人自行處理</p>`;
-        }
-        const dep = Number(ins.healthDependentCount) || 0;
-        const depNote = dep > 0 ? `，健保含眷屬 ${dep} 人` : '';
-        let html = `<p><strong>勞健保自付：</strong>${(ins.total || 0).toLocaleString()} 元（勞保 ${(ins.labor || 0).toLocaleString()}＋健保 ${(ins.health || 0).toLocaleString()}${depNote}）</p>`;
-        if (ins.note) html += `<p class="text-xs text-gray-500">${esc(ins.note)}</p>`;
-        return html;
+        return escPayrollHtml(s);
     }
 
     async function fetchContext(periodLabel) {
@@ -118,6 +121,7 @@ export function initPayrollReviewPanel(ctx) {
                 <p><strong>實休（系統）：</strong>${fmtDay(snapshot.rest?.actualRestDays)} 天</p>
                 <p><strong>特休／病假／事假：</strong>${fmtDay(st.annualLeave)}／${fmtDay(st.sickLeave)}／${fmtDay(st.personalLeave)}</p>
                 <p><strong>遲到／早退：</strong>${st.lateMinutes ?? 0}／${st.earlyMinutes ?? 0} 分</p>
+                ${(st.lateMinutesHeldSinglePunch || st.earlyMinutesHeldSinglePunch) ? `<p class="text-xs text-amber-700">僅單次打卡日 ${st.lateMinutesHeldSinglePunch || 0}／${st.earlyMinutesHeldSinglePunch || 0} 分暫不計入薪資試算，請先於出勤頁申訴調整</p>` : ''}
                 <p><strong>缺勤／異常：</strong>${fmtDay(st.absent)}／${st.anomalyDays ?? 0} 天</p>
             `;
         }
@@ -127,21 +131,7 @@ export function initPayrollReviewPanel(ctx) {
             remoteAllowanceAmount: Number(els.remoteAmount.value) || 0,
             overtimeHours: Number(els.overtimeHours.value) || 0
         }, contextData.insurancePreview);
-        const ins = preview.insurance || contextData.insurancePreview || {};
-        const insHtml = formatInsuranceHtml(ins, isDaily);
-        els.calcBox.innerHTML = `
-            <p class="text-xs text-amber-700 bg-amber-50 rounded p-2 mb-2">${esc(disclaimer)}</p>
-            <p><strong>薪資類型：</strong>${isDaily ? '日薪' : '月薪'}（${esc(settings.payRule)}）</p>
-            <p><strong>底薪${isDaily ? '（日）' : ''}：</strong>${settings.baseSalary.toLocaleString()} 元</p>
-            <p><strong>預估本薪：</strong>${preview.baseSalary.toLocaleString()} 元</p>
-            <p id="payroll-full-att-row" class="${isDaily ? 'hidden' : ''}"><strong>預估全勤：</strong>${preview.fullAttendanceBonus.toLocaleString()} 元</p>
-            <p id="payroll-transport-row" class="${preview.transportationAllowance > 0 ? '' : 'hidden'}"><strong>交通津貼：</strong>${preview.transportationAllowance.toLocaleString()} 元</p>
-            <p id="payroll-other-row" class="${preview.otherAllowance > 0 ? '' : 'hidden'}"><strong>其他津貼：</strong>${preview.otherAllowance.toLocaleString()} 元${settings.otherAllowanceNote ? `（${esc(settings.otherAllowanceNote)}）` : ''}</p>
-            <p><strong>預估加班費：</strong>${preview.overtimePay.toLocaleString()} 元</p>
-            <p id="payroll-remote-row"><strong>遠程津貼：</strong>${(Number(els.remoteAmount.value) || 0).toLocaleString()} 元</p>
-            ${insHtml}
-            <p class="text-lg font-bold text-indigo-700 mt-2"><strong>預估實發：</strong>${preview.estimatedNet.toLocaleString()} 元</p>
-        `;
+        els.calcBox.innerHTML = renderBreakdownHtml(preview, disclaimer, settings, period.payType);
 
         if (existingReview) {
             els.statusBox.innerHTML = `<p class="text-amber-800 bg-amber-50 rounded p-2">此期別已有「${esc(existingReview.status)}」申請（${esc(existingReview.submitTime?.slice(0, 10) || '')}）</p>`;
@@ -159,32 +149,199 @@ export function initPayrollReviewPanel(ctx) {
         return Number.isInteger(n) ? String(n) : n.toFixed(2);
     }
 
-    function calcPreview(settings, payType, snapshot, input, insurancePreview) {
+    function payrollLateEarlyFromStats(st) {
+        const late = st.lateMinutesPayroll != null ? st.lateMinutesPayroll : (st.lateMinutes || 0);
+        const early = st.earlyMinutesPayroll != null ? st.earlyMinutesPayroll : (st.earlyMinutes || 0);
+        return {
+            late, early,
+            heldLate: st.lateMinutesHeldSinglePunch || 0,
+            heldEarly: st.earlyMinutesHeldSinglePunch || 0
+        };
+    }
+
+    const PAYROLL_MONTHLY_DAYS = 30;
+    const PAYROLL_DAILY_HOURS = 8;
+
+    function payrollHourlyWage(baseSalary, payType) {
+        const base = Number(baseSalary) || 0;
+        if (base <= 0) return 0;
+        if (payType === 'daily') return base / PAYROLL_DAILY_HOURS;
+        return base / PAYROLL_MONTHLY_DAYS / PAYROLL_DAILY_HOURS;
+    }
+
+    function calcAbsentBaseDeduction(baseSalary, absentDays) {
+        const absent = Number(absentDays) || 0;
+        const base = Number(baseSalary) || 0;
+        if (absent <= 0 || base <= 0) return 0;
+        return Math.round(base / PAYROLL_MONTHLY_DAYS * absent);
+    }
+
+    function calcProratedFullAttendance(maxBonus, absentDays) {
+        const max = Number(maxBonus) || 0;
+        const absent = Number(absentDays) || 0;
+        if (max <= 0) return 0;
+        if (absent <= 0) return max;
+        return Math.max(0, max - Math.round(max / PAYROLL_MONTHLY_DAYS * absent));
+    }
+
+    function calcLateEarlyDeduction(hourlyWage, lateMinutes, earlyMinutes) {
+        const mins = (Number(lateMinutes) || 0) + (Number(earlyMinutes) || 0);
+        if (mins <= 0) return 0;
+        return Math.round((Number(hourlyWage) || 0) * mins / 60);
+    }
+
+    function calcOvertimePayLaborLaw(hourlyWage, hours) {
+        let h = Number(hours) || 0;
+        const wage = Number(hourlyWage) || 0;
+        if (h <= 0 || wage <= 0) return 0;
+        let pay = 0;
+        const t1 = Math.min(2, h);
+        pay += wage * (4 / 3) * t1;
+        h -= t1;
+        if (h > 0) {
+            const t2 = Math.min(2, h);
+            pay += wage * (5 / 3) * t2;
+            h -= t2;
+        }
+        if (h > 0) pay += wage * (5 / 3) * h;
+        return Math.round(pay);
+    }
+
+    function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePreview) {
         const base = Number(settings.baseSalary) || 0;
         const remote = Number(input.remoteAllowanceAmount) || 0;
         const transport = Number(settings.transportationAllowance) || 0;
         const otherAllowance = Number(settings.otherAllowance) || 0;
-        const ins = insurancePreview || { total: 0, labor: 0, health: 0, union: 0, type: 'none' };
+        const ins = insurancePreview || { total: 0, labor: 0, health: 0, type: 'none' };
         const insDeduction = payType === 'daily' ? 0 : (ins.total || 0);
         const st = snapshot.stats || {};
+        const additions = [];
+        const deductions = [];
+
         let earnedBase = base;
         let fullAttendanceBonus = 0;
+        let absentBaseDeduction = 0;
+        let attendanceTimeDeduction = 0;
+        const maxFullAttendance = Number(settings.fullAttendanceBonusMax) || 2000;
         if (payType === 'daily') {
             earnedBase = base * (Number(snapshot.daysWorked) || 0);
-        } else if ((st.anomalyDays || 0) === 0 && (st.absent || 0) === 0) {
-            fullAttendanceBonus = Number(settings.fullAttendanceBonusMax) || 2000;
+            additions.push({ label: '本薪（日薪 × 出勤天數）', amount: earnedBase });
+        } else {
+            const absent = Number(st.absent) || 0;
+            absentBaseDeduction = calcAbsentBaseDeduction(base, absent);
+            earnedBase = base - absentBaseDeduction;
+            fullAttendanceBonus = calcProratedFullAttendance(maxFullAttendance, absent);
+            const baseNote = absent > 0
+                ? `缺勤 ${fmtDay(absent)} 日，扣 ${absentBaseDeduction.toLocaleString()} 元（底薪÷30）`
+                : '';
+            additions.push({ label: '本薪', amount: earnedBase, note: baseNote });
+            if (fullAttendanceBonus > 0) {
+                const faNote = absent > 0 && fullAttendanceBonus < maxFullAttendance
+                    ? `上限 ${maxFullAttendance.toLocaleString()}，缺勤 ${fmtDay(absent)} 日按比例扣`
+                    : '';
+                additions.push({ label: '全勤獎金', amount: fullAttendanceBonus, note: faNote });
+            } else if (maxFullAttendance > 0 && absent > 0) {
+                deductions.push({
+                    label: '全勤獎金',
+                    amount: 0,
+                    note: `缺勤 ${fmtDay(absent)} 日，全勤未發（上限 ${maxFullAttendance.toLocaleString()} 元）`
+                });
+            }
+        }
+        if (transport > 0) additions.push({ label: '交通津貼', amount: transport });
+        if (otherAllowance > 0) {
+            additions.push({
+                label: '其他津貼',
+                amount: otherAllowance,
+                note: settings.otherAllowanceNote || ''
+            });
         }
         const overtimeHours = Number(input.overtimeHours) || 0;
         let overtimePay = 0;
         if (overtimeHours > 0 && base > 0) {
-            const hourly = payType === 'daily' ? base / 8 : base / 30 / 8;
-            overtimePay = Math.round(hourly * 1.34 * overtimeHours);
+            overtimePay = calcOvertimePayLaborLaw(payrollHourlyWage(base, payType), overtimeHours);
+            additions.push({
+                label: `加班費（${overtimeHours} 小時）`,
+                amount: overtimePay,
+                note: '勞基法第24條：前2h×4/3、次2h×5/3'
+            });
         }
-        const estimatedNet = Math.round(earnedBase + fullAttendanceBonus + transport + otherAllowance + remote + overtimePay - insDeduction);
+        if (remote > 0) additions.push({ label: '遠程津貼', amount: remote });
+
+        if (payType === 'daily') {
+            deductions.push({ label: '勞健保', amount: 0, note: '日薪員工自行處理（不扣款）' });
+        } else if (insDeduction > 0) {
+            const dep = Number(ins.healthDependentCount) || 0;
+            const depNote = dep > 0 ? `，含眷屬 ${dep} 人` : '';
+            deductions.push({
+                label: '勞健保自付',
+                amount: insDeduction,
+                note: `勞保 ${(ins.labor || 0).toLocaleString()}＋健保 ${(ins.health || 0).toLocaleString()}${depNote}`
+            });
+        } else if (ins.type === 'none') {
+            deductions.push({ label: '勞健保', amount: 0, note: '不加保／個人自行處理' });
+        }
+        const lateMin = st.lateMinutes || 0;
+        const earlyMin = st.earlyMinutes || 0;
+        const payLe = payrollLateEarlyFromStats(st);
+        if (payType !== 'daily') {
+            attendanceTimeDeduction = calcLateEarlyDeduction(payrollHourlyWage(base, payType), payLe.late, payLe.early);
+        }
+        if (lateMin > 0 || earlyMin > 0 || payLe.heldLate > 0 || payLe.heldEarly > 0) {
+            let note = `試算計入：遲到 ${payLe.late} 分、早退 ${payLe.early} 分（已扣除彈性30分）；時薪×分鐘÷60`;
+            if (payLe.heldLate > 0 || payLe.heldEarly > 0) {
+                note += `。僅單次打卡日 ${payLe.heldLate}／${payLe.heldEarly} 分暫不扣，請申訴調整`;
+            }
+            deductions.push({
+                label: '遲到早退扣款',
+                amount: attendanceTimeDeduction,
+                note
+            });
+        }
+        deductions.push({ label: '其他扣款', amount: 0, note: '主管審核時填入（員工送審時為 0）' });
+
+        const addTotal = additions.reduce((s, x) => s + (x.amount || 0), 0);
+        const dedTotal = deductions.reduce((s, x) => s + (x.amount || 0), 0);
+        const estimatedNet = Math.round(addTotal - dedTotal);
         return {
-            baseSalary: earnedBase, fullAttendanceBonus, transportationAllowance: transport, otherAllowance,
-            overtimePay, estimatedNet, insurance: ins
+            additions, deductions, addTotal, dedTotal, estimatedNet,
+            baseSalary: earnedBase, fullAttendanceBonus, transportationAllowance: transport,
+            otherAllowance, overtimePay, insurance: ins
         };
+    }
+
+    function renderBreakdownHtml(breakdown, disclaimer, settings, payType) {
+        const addRows = breakdown.additions.map((row) => {
+            const note = row.note ? `<span class="text-gray-500">（${esc(row.note)}）</span>` : '';
+            return `<li class="flex justify-between gap-2"><span>${esc(row.label)}${note}</span><span class="font-medium text-green-700">+${row.amount.toLocaleString()}</span></li>`;
+        }).join('');
+        const dedRows = breakdown.deductions.map((row) => {
+            const note = row.note ? `<span class="block text-gray-500 text-xs mt-0.5">${esc(row.note)}</span>` : '';
+            const amtCls = row.amount > 0 ? 'text-red-600 font-medium' : 'text-gray-400';
+            const amtText = row.amount > 0 ? `−${row.amount.toLocaleString()}` : '—';
+            return `<li class="py-1 border-b border-red-50 last:border-0"><div class="flex justify-between gap-2"><span>${esc(row.label)}</span><span class="${amtCls}">${amtText}</span></div>${note}</li>`;
+        }).join('');
+        return `
+            <p class="text-xs text-amber-700 bg-amber-50 rounded p-2 mb-3">${esc(disclaimer)}</p>
+            <p class="text-xs text-gray-500 mb-2">薪資類型：${payType === 'daily' ? '日薪' : '月薪'}（${esc(settings.payRule)}）· 底薪 ${settings.baseSalary.toLocaleString()} 元${payType === 'daily' ? '／日' : ''}</p>
+            <div class="grid sm:grid-cols-2 gap-3">
+                <div class="bg-white rounded-lg p-2 border border-green-100">
+                    <p class="text-xs font-bold text-green-800 mb-1">加項</p>
+                    <ul class="text-sm space-y-1">${addRows || '<li class="text-gray-400">—</li>'}</ul>
+                    <p class="text-xs text-right text-green-800 mt-2 font-semibold">小計 +${breakdown.addTotal.toLocaleString()}</p>
+                </div>
+                <div class="bg-white rounded-lg p-2 border border-red-100">
+                    <p class="text-xs font-bold text-red-800 mb-1">減項</p>
+                    <ul class="text-sm">${dedRows || '<li class="text-gray-400">—</li>'}</ul>
+                    <p class="text-xs text-right text-red-800 mt-2 font-semibold">小計 −${breakdown.dedTotal.toLocaleString()}</p>
+                </div>
+            </div>
+            <p class="text-lg font-bold text-indigo-700 mt-3 text-right">預估實發：${breakdown.estimatedNet.toLocaleString()} 元</p>
+        `;
+    }
+
+    function calcPreview(settings, payType, snapshot, input, insurancePreview) {
+        return buildPayrollBreakdown(settings, payType, snapshot, input, insurancePreview);
     }
 
     async function submitReview() {
@@ -253,8 +410,7 @@ export function initPayrollReviewApproval(ctx) {
     if (!container) return null;
 
     function esc(s) {
-        if (s == null) return '';
-        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return escPayrollHtml(s);
     }
 
     async function fetchPending() {
@@ -290,6 +446,9 @@ export function initPayrollReviewApproval(ctx) {
         const st = snap.stats || {};
         const ins = snap.insurance || {};
         const insLine = formatInsuranceHtml(ins, isDaily);
+        const dedHint = Number(row.deduction) > 0
+            ? `<p><strong>其他扣款：</strong>−${Number(row.deduction).toLocaleString()} 元</p>`
+            : `<p class="text-gray-500 text-xs">其他扣款：待審核填入</p>`;
         card.innerHTML = `
             <div class="flex justify-between gap-2">
                 <div>
@@ -306,7 +465,9 @@ export function initPayrollReviewApproval(ctx) {
                 <p><strong>預估本薪／全勤：</strong>${Number(row.baseSalary).toLocaleString()}／${Number(row.fullAttendanceBonus).toLocaleString()} 元</p>
                 <p><strong>遠程津貼：</strong>${Number(row.remoteAllowanceAmount).toLocaleString()} 元 ${row.remoteAllowanceNote ? `（${esc(row.remoteAllowanceNote)}）` : ''}</p>
                 <p><strong>加班：</strong>${row.overtimeHours} 小時 ${row.overtimeNote ? `— ${esc(row.overtimeNote)}` : ''}</p>
+                <p class="text-xs font-semibold text-red-800 mt-2">減項</p>
                 ${insLine}
+                ${dedHint}
                 <p><strong>補充：</strong>${esc(row.supplementNote || '—')}</p>
                 <p class="font-bold text-indigo-700">員工端預估實發：${Number(row.estimatedNet).toLocaleString()} 元</p>
             </div>
@@ -314,7 +475,7 @@ export function initPayrollReviewApproval(ctx) {
                 <label class="text-xs">全勤獎金<input type="number" id="pr-full-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" value="${row.fullAttendanceBonus}"></label>
                 <label class="text-xs">獎金<input type="number" id="pr-bonus-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" value="0"></label>
                 <label class="text-xs col-span-2">獎金事由<input type="text" id="pr-bonus-reason-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" placeholder="主管填入"></label>
-                <label class="text-xs">扣款<input type="number" id="pr-ded-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" value="${row.deduction || 0}"></label>
+                <label class="text-xs">扣款（其他）<input type="number" id="pr-ded-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" value="${row.deduction || 0}" placeholder="考勤罰款等"></label>
                 <label class="text-xs col-span-2">審核備註<input type="text" id="pr-note-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" placeholder="駁回時必填"></label>
             </div>
             <div class="mt-4 flex flex-wrap justify-end gap-2">

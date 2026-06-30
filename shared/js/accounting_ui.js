@@ -381,6 +381,10 @@ var AccountingUi = (function () {
 
   function bindMenuCards(selector) {
     document.querySelectorAll(selector || '#app a.card').forEach(function (a) {
+      var href = a.getAttribute('href') || '';
+      if (typeof AccountingNav !== 'undefined') {
+        a.setAttribute('href', AccountingNav.withHubQuery(href));
+      }
       a.addEventListener('click', function () {
         var h3 = a.querySelector('h3');
         var label = h3 ? h3.textContent.trim() : (a.getAttribute('href') || '');

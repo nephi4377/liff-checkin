@@ -6,9 +6,12 @@
   <title>待付款申請</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=3" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_master_data.js?v=14"></script>
-  <script src="../../shared/js/accounting_api.js?v=21"></script>
-  <script src="../../shared/js/accounting_ui.js?v=6"></script>
+  <script src="../../shared/js/accounting_master_data.js?v=15"></script>
+  <script src="../../shared/js/operator_context.js?v=1"></script>
+  <script src="../../shared/js/accounting_api.js?v=23"></script>
+  <script src="../../shared/js/accounting_cache.js?v=20"></script>
+  <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_nav.js?v=1"></script>
   <style>
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; line-height: 1.5; }
@@ -155,6 +158,7 @@
       <div id="allocList"></div>
       <button type="button" class="btn btn-ghost" id="addAllocBtn">＋ 新增一列</button>
       <div class="total-line">合計 $<span id="totalAmt">0</span></div>
+      <p class="sub" id="remitFeeHint" style="margin:4px 0 0;text-align:right;color:#555;font-size:13px;"></p>
 
       <label>備註（選填）</label>
       <input type="text" id="note" />
@@ -181,6 +185,7 @@
       var MAX_PHOTOS = 12;
       var MAX_BYTES = 8 * 1024 * 1024;
       var OCR_TIMEOUT_MS = 180000;
+      var REMIT_FEE_AMOUNT = 30;
       var NEW_VENDOR_ID = '__new__';
       var session = null;
       var vendors = [];
@@ -423,11 +428,26 @@
         return rows;
       }
 
+      function remitFeePreview(sum) {
+        if (!(sum > REMIT_FEE_AMOUNT)) return { fee: 0, net: sum };
+        return { fee: REMIT_FEE_AMOUNT, net: sum - REMIT_FEE_AMOUNT };
+      }
+
       function updateTotal() {
         var sum = readAllocRows().reduce(function (s, r) {
           return s + (parseInt(r.amount, 10) || 0);
         }, 0);
         document.getElementById('totalAmt').textContent = sum.toLocaleString('zh-TW');
+        var hint = document.getElementById('remitFeeHint');
+        var preview = remitFeePreview(sum);
+        if (preview.fee > 0) {
+          hint.textContent = '送出時將扣匯費 $' + preview.fee.toLocaleString('zh-TW') +
+            '，實付 $' + preview.net.toLocaleString('zh-TW') + '（審核前可改分攤）';
+        } else if (sum > 0) {
+          hint.textContent = '合計須大於 $' + REMIT_FEE_AMOUNT + ' 才會自動扣匯費';
+        } else {
+          hint.textContent = '';
+        }
         if (lastOcrAmount > 0 && sum !== lastOcrAmount) {
           AccountingUi.notify('warn', '合計 $' + sum.toLocaleString('zh-TW') + ' 與單據總額 $' + lastOcrAmount.toLocaleString('zh-TW') + ' 不同；確認後仍可送出', { logOnly: true });
         }
@@ -567,6 +587,11 @@
             (r.item_desc ? ' ' + r.item_desc : ''));
         });
         lines.push('合計：$' + total.toLocaleString('zh-TW'));
+        var feePreview = remitFeePreview(total);
+        if (feePreview.fee > 0) {
+          lines.push('匯費：-$' + feePreview.fee.toLocaleString('zh-TW') + '（自動扣，審核前可改）');
+          lines.push('實付：$' + feePreview.net.toLocaleString('zh-TW'));
+        }
         if (payload.note) lines.push('備註：' + payload.note);
         var photoNames = (payload.photos || []).map(function (p) { return p.filename || '檔案'; });
         lines.push('附件 ' + photoNames.length + ' 個' + (photoNames.length ? '（' + photoNames.join('、') + '）' : ''));
@@ -797,9 +822,12 @@
           AccountingUi.action(label, 'ok', '單號 ' + String(data.payment_request_id || '').slice(0, 8));
           document.getElementById('formCard').classList.add('hidden');
           document.getElementById('successCard').classList.remove('hidden');
-          document.getElementById('successHint').textContent = mode === 'finance_direct'
+          var feeNote = (data.remit_fee_deducted > 0)
+            ? '（已扣匯費 $' + data.remit_fee_deducted + '，審核前可改分攤）'
+            : '';
+          document.getElementById('successHint').textContent = (mode === 'finance_direct'
             ? '已進入待匯款清單。'
-            : '主管會在「請款審核」處理；核准後才進待匯款。';
+            : '主管會在「請款審核」處理；核准後才進待匯款。') + feeNote;
           setOk('請款已送出');
         } catch (e) {
           AccountingUi.action(label, 'fail', e.message || String(e));
@@ -920,8 +948,50 @@
       document.getElementById('financeBtn').addEventListener('click', function () { submitRequest('finance_direct'); });
       document.getElementById('anotherBtn').addEventListener('click', resetForm);
 
+      function primeVendorsFromCache(session) {
+        if (session && typeof AccountingCache !== 'undefined') {
+          var fromSession = AccountingCache.vendors(session);
+          if (fromSession.length) return fromSession;
+        }
+        return (typeof AccountingCache !== 'undefined' && AccountingCache.peekVendors) ? AccountingCache.peekVendors() : [];
+      }
+
+      function applyPaymentRequestContext(ctx) {
+        if (!ctx || !ctx.success) return false;
+        if (ctx.is_vendor_self && ctx.vendor_self) {
+          vendorSelf = ctx.vendor_self;
+          vendors = ctx.vendors || [ctx.vendor_self];
+          employees = [];
+          setupVendorSelfPortal(vendorSelf);
+        } else {
+          if (ctx.vendors && ctx.vendors.length) vendors = ctx.vendors;
+          if (ctx.employees && ctx.employees.length) employees = ctx.employees;
+          fillSelect('pickVendor', vendors, 'vendor_id', function (v) { return v.name || v.vendor_id; }, '— 請選擇廠商 —');
+          fillSelect('pickEmployee', employees, 'userId', function (e) {
+            return (e.userName || '') + ((e.bank_code && e.account_no) ? '' : '（帳戶待補）');
+          }, '— 請選擇員工 —');
+          if (!isVendorSelf) setPayeeMode('vendor');
+        }
+        canFinanceDirect = !!ctx.can_finance_direct;
+        canSaveVendor = !isVendorSelf && (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION;
+        if (canFinanceDirect) document.getElementById('financeBtn').classList.remove('hidden');
+        updateNewVendorBlock();
+        updateBankHint();
+        return true;
+      }
+
+      function finishPaymentRequestBoot() {
+        renderAllocRows(queryParams.project_no
+          ? [{ project_no: queryParams.project_no, amount: '', item_desc: '', source: 'manual' }]
+          : []);
+        if (queryParams.doc_type) document.getElementById('docType').value = queryParams.doc_type;
+        if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
+        if (queryParams.draft) loadOcrDraft(queryParams.draft).catch(function () {});
+      }
+
       (async function boot() {
         queryParams = readQuery();
+        if (typeof AccountingNav !== 'undefined') AccountingNav.init();
         try {
           AccountingUi.action('載入待付款申請', 'start');
           session = await AccountingApi.initPaymentRequestSession();
@@ -930,35 +1000,28 @@
           document.getElementById('userLine').textContent =
             (session.auth.display_name || session.profile.displayName) +
             (isVendorSelf ? ' · 廠商' : (' · 權限 ' + session.auth.permission));
-          showApp();
-          var ctx = await AccountingApi.paymentRequestContext(session);
-          if (!ctx.success) { setMsg(ctx.message); return; }
-          if (ctx.is_vendor_self && ctx.vendor_self) {
-            vendorSelf = ctx.vendor_self;
-            vendors = ctx.vendors || [ctx.vendor_self];
-            employees = [];
-            setupVendorSelfPortal(vendorSelf);
-          } else {
-            vendors = ctx.vendors || [];
-            employees = ctx.employees || [];
-            fillSelect('pickVendor', vendors, 'vendor_id', function (v) { return v.name || v.vendor_id; }, '— 請選擇廠商 —');
-            fillSelect('pickEmployee', employees, 'userId', function (e) {
-              return (e.userName || '') + ((e.bank_code && e.account_no) ? '' : '（帳戶待補）');
-            }, '— 請選擇員工 —');
-            setPayeeMode('vendor');
+          if (!isVendorSelf) {
+            vendors = primeVendorsFromCache(session);
+            if (vendors.length) fillSelect('pickVendor', vendors, 'vendor_id', function (v) { return v.name || v.vendor_id; }, '— 請選擇廠商 —');
           }
-          canFinanceDirect = !!ctx.can_finance_direct;
-          canSaveVendor = !isVendorSelf && (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION;
-          if (canFinanceDirect) document.getElementById('financeBtn').classList.remove('hidden');
-          updateNewVendorBlock();
-          updateBankHint();
-          renderAllocRows(queryParams.project_no
-            ? [{ project_no: queryParams.project_no, amount: '', item_desc: '', source: 'manual' }]
-            : []);
-          if (queryParams.doc_type) document.getElementById('docType').value = queryParams.doc_type;
-          if (queryParams.pending) await loadPendingPhotos(queryParams.pending);
-          if (queryParams.draft) await loadOcrDraft(queryParams.draft);
-          AccountingUi.action('載入待付款申請', 'ok');
+          showApp();
+          finishPaymentRequestBoot();
+          AccountingApi.paymentRequestContext(session).then(function (ctx) {
+            if (applyPaymentRequestContext(ctx)) AccountingUi.action('載入待付款申請', 'ok');
+            else if (ctx && ctx.message) setMsg(ctx.message);
+          }).catch(function (e) {
+            if (!vendors.length) setMsg(e.message || String(e));
+          });
+          if (typeof AccountingCache !== 'undefined' && !AccountingCache.get(session)) {
+            AccountingCache.load(session).then(function () {
+              if (isVendorSelf) return;
+              var fresh = AccountingCache.vendors(session);
+              if (fresh.length) {
+                vendors = fresh;
+                fillSelect('pickVendor', vendors, 'vendor_id', function (v) { return v.name || v.vendor_id; }, '— 請選擇廠商 —');
+              }
+            }).catch(function () {});
+          }
         } catch (e) {
           document.getElementById('loading').textContent = e.message || String(e);
         }

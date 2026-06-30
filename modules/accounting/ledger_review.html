@@ -6,9 +6,12 @@
   <title>請款審核</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=3" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_api.js?v=22"></script>
+  <script src="../../shared/js/operator_context.js?v=1"></script>
+  <script src="../../shared/js/accounting_api.js?v=23"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=17"></script>
-  <script src="../../shared/js/accounting_ui.js?v=6"></script>
+  <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_nav.js?v=1"></script>
+  <script src="../../shared/js/accounting_boot.js?v=1"></script>
   <style>
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; line-height: 1.45; }
@@ -96,7 +99,7 @@
   </div>
   <script>
     (function () {
-      AccountingUi.init();
+      AccountingLightbox.init();
       var session = null;
       var canApproveVendor = false;
       var listItems = [];
@@ -511,17 +514,12 @@
       document.getElementById('bulkApproveBtn').addEventListener('click', bulkApprove);
 
       (async function boot() {
-        try {
-          session = await AccountingApi.initSession();
-          if (!session) return;
-          var mode = session.devBypass ? ' · 測試模式' : '';
-          document.getElementById('userLine').textContent =
-            session.profile.displayName + ' · 權限 ' + session.auth.permission + mode;
-          showApp();
-          await loadList();
-        } catch (e) {
-          document.getElementById('loading').textContent = e.message || String(e);
-        }
+        await AccountingBoot.run({
+          onReady: async function (sess) {
+            session = sess;
+            await loadList();
+          }
+        });
       })();
     })();
   </script>

@@ -6,10 +6,13 @@
   <title>單據附件</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=3" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_master_data.js?v=9"></script>
-  <script src="../../shared/js/accounting_api.js?v=20"></script>
-  <script src="../../shared/js/accounting_cache.js?v=19"></script>
-  <script src="../../shared/js/accounting_ui.js?v=6"></script>
+  <script src="../../shared/js/accounting_master_data.js?v=15"></script>
+  <script src="../../shared/js/operator_context.js?v=1"></script>
+  <script src="../../shared/js/accounting_api.js?v=23"></script>
+  <script src="../../shared/js/accounting_cache.js?v=20"></script>
+  <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_nav.js?v=1"></script>
+  <script src="../../shared/js/accounting_boot.js?v=1"></script>
   <style>
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; }
@@ -51,7 +54,6 @@
   </div>
   <script>
     (function () {
-      AccountingUi.init();
       var session = null;
       function setMsg(t) { if (t) AccountingUi.notify('err', t); }
       function showApp() {
@@ -94,21 +96,16 @@
         renderList(data.data || []);
       });
       (async function boot() {
-        try {
-          session = await AccountingApi.initSession();
-          if (!session) return;
-          if (!AccountingCache.get(session)) await AccountingCache.load(session);
-          var q = new URLSearchParams(window.location.search);
-          if (q.get('ingest_id')) document.getElementById('ingestId').value = q.get('ingest_id');
-          if (q.get('payment_request_id')) document.getElementById('paymentRequestId').value = q.get('payment_request_id');
-          var mode = session.devBypass ? ' · 測試模式（無登入）' : '';
-          document.getElementById('userLine').textContent =
-            session.profile.displayName + ' · 權限 ' + session.auth.permission + mode;
-          showApp();
-          if (q.get('ingest_id') || q.get('payment_request_id')) document.getElementById('searchBtn').click();
-        } catch (e) {
-          document.getElementById('loading').textContent = e.message || String(e);
-        }
+        await AccountingBoot.run({
+          preloadBootstrap: true,
+          onReady: async function (sess) {
+            session = sess;
+            var q = new URLSearchParams(window.location.search);
+            if (q.get('ingest_id')) document.getElementById('ingestId').value = q.get('ingest_id');
+            if (q.get('payment_request_id')) document.getElementById('paymentRequestId').value = q.get('payment_request_id');
+            if (q.get('ingest_id') || q.get('payment_request_id')) document.getElementById('searchBtn').click();
+          }
+        });
       })();
     })();
   </script>

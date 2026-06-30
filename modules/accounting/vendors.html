@@ -7,9 +7,12 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=3" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=15"></script>
-  <script src="../../shared/js/accounting_api.js?v=20"></script>
-  <script src="../../shared/js/accounting_cache.js?v=19"></script>
-  <script src="../../shared/js/accounting_ui.js?v=6"></script>
+  <script src="../../shared/js/operator_context.js?v=1"></script>
+  <script src="../../shared/js/accounting_api.js?v=23"></script>
+  <script src="../../shared/js/accounting_cache.js?v=20"></script>
+  <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_nav.js?v=1"></script>
+  <script src="../../shared/js/accounting_boot.js?v=1"></script>
   <style>
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; }
@@ -735,6 +738,33 @@
         return '<span class="tag ok">合作中</span>';
       }
 
+      function loadVendorFilesList(filesBox, vendor) {
+        var listHost = filesBox.querySelector('.files-list-host');
+        if (!listHost) return;
+        listHost.textContent = '載入中…';
+        AccountingApi.vendorListFiles(session, vendor.drive_folder_id).then(function (fd) {
+          listHost.innerHTML = '';
+          if (!fd.success) {
+            listHost.textContent = '無法載入附件';
+            return;
+          }
+          if (!fd.files || !fd.files.length) {
+            listHost.className = 'file-list-empty';
+            listHost.textContent = '尚無附件（報價單、合約、存摺等）';
+            return;
+          }
+          (fd.files || []).forEach(function (f) {
+            var row = document.createElement('div');
+            row.className = 'file';
+            row.innerHTML = '<a href="' + f.url + '" target="_blank" rel="noopener">' + f.name + '</a>' +
+              (f.updated ? ' <span class="sub">' + f.updated + '</span>' : '');
+            listHost.appendChild(row);
+          });
+        }).catch(function () {
+          listHost.textContent = '無法載入附件';
+        });
+      }
+
       function renderFiles(box, vendor) {
         var filesBox = document.createElement('div');
         filesBox.className = 'files-box';
@@ -753,7 +783,7 @@
         btnFolder.className = 'btn btn-secondary';
         btnFolder.style.padding = '6px 12px';
         btnFolder.style.fontSize = '13px';
-        btnFolder.textContent = vendor.drive_folder_id ? '重新整理檔案' : '建立資料夾';
+        btnFolder.textContent = vendor.drive_folder_id ? '建立／同步資料夾' : '建立資料夾';
         btnFolder.addEventListener('click', async function () {
           setMsg('');
           var data = await AccountingApi.vendorEnsureFolder(session, vendor.vendor_id);
@@ -764,26 +794,22 @@
           renderList();
         });
         toolbar.appendChild(btnFolder);
-        filesBox.appendChild(toolbar);
         if (vendor.drive_folder_id) {
-          AccountingApi.vendorListFiles(session, vendor.drive_folder_id).then(function (fd) {
-            if (!fd.success) return;
-            if (!fd.files || !fd.files.length) {
-              var empty = document.createElement('p');
-              empty.className = 'file-list-empty';
-              empty.textContent = '尚無附件（報價單、合約、存摺等）';
-              filesBox.appendChild(empty);
-              return;
-            }
-            (fd.files || []).forEach(function (f) {
-              var row = document.createElement('div');
-              row.className = 'file';
-              row.innerHTML = '<a href="' + f.url + '" target="_blank" rel="noopener">' + f.name + '</a>' +
-                (f.updated ? ' <span class="sub">' + f.updated + '</span>' : '');
-              filesBox.appendChild(row);
-            });
+          var btnFiles = document.createElement('button');
+          btnFiles.type = 'button';
+          btnFiles.className = 'btn btn-secondary';
+          btnFiles.style.padding = '6px 12px';
+          btnFiles.style.fontSize = '13px';
+          btnFiles.textContent = '載入附件列表';
+          btnFiles.addEventListener('click', function () {
+            loadVendorFilesList(filesBox, vendor);
           });
+          toolbar.appendChild(btnFiles);
         }
+        filesBox.appendChild(toolbar);
+        var listHost = document.createElement('div');
+        listHost.className = 'files-list-host';
+        filesBox.appendChild(listHost);
         box.appendChild(filesBox);
       }
 
@@ -965,22 +991,23 @@
       $('name').addEventListener('blur', crossFillVendorAndAccountName);
 
       (async function boot() {
-        AccountingUi.init();
-        try {
-          initFormOptions();
-          session = await AccountingApi.initSession();
-          if (!session) return;
-          var mode = session.devBypass ? ' · 測試模式（無登入）' : '';
-          $('userLine').textContent = session.profile.displayName + ' · 權限 ' + session.auth.permission + mode;
-          var cached = AccountingCache.get(session);
-          if (!cached) await AccountingCache.load(session);
-          else mergeEnumsFromCache(cached);
-          allVendors = AccountingCache.vendors(session);
-          showApp();
-          renderList();
-        } catch (e) {
-          $('loading').textContent = e.message || String(e);
-        }
+        await AccountingBoot.run({
+          onReady: async function (sess) {
+            session = sess;
+            initFormOptions();
+            var cached = AccountingCache.get(session);
+            if (cached) mergeEnumsFromCache(cached);
+            allVendors = cached ? AccountingCache.vendors(session) : AccountingCache.peekVendors();
+            if (allVendors.length) renderList();
+            if (!cached) {
+              AccountingCache.load(session).then(function () {
+                allVendors = AccountingCache.vendors(session);
+                mergeEnumsFromCache(AccountingCache.get(session));
+                renderList();
+              }).catch(function (e) { setMsg(e.message || String(e)); });
+            }
+          }
+        });
       })();
 
       function mergeEnumsFromCache(c) {

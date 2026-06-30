@@ -10,6 +10,22 @@ var AccountingApi = (function () {
   var SUPERVISOR_DENIED_MSG = '權限不足（需主管，權限 ≥ 3）';
   var VENDOR_PAYMENT_APPROVE_DENIED_MSG = '權限不足（廠商請款審核需權限 ≥ 5）';
 
+  async function parseJsonResponse_(res) {
+    var text = await res.text();
+    var trimmed = (text || '').trim();
+    if (!trimmed) {
+      throw new Error('會計 API 回傳空白（HTTP ' + res.status + '）');
+    }
+    if (trimmed.charAt(0) === '<') {
+      throw new Error('會計 API 回傳 HTML 而非 JSON（HTTP ' + res.status + '），請確認 accounting-gas 已部署');
+    }
+    try {
+      return JSON.parse(trimmed);
+    } catch (e) {
+      throw new Error('會計 API JSON 解析失敗（HTTP ' + res.status + '）');
+    }
+  }
+
   async function post(body, timeoutMs) {
     var opts = {
       method: 'POST',
@@ -22,16 +38,20 @@ var AccountingApi = (function () {
       var timer = setTimeout(function () { ctrl.abort(); }, timeoutMs);
       try {
         var res = await fetch(GAS_API, opts);
-        return res.json();
+        return parseJsonResponse_(res);
       } finally {
         clearTimeout(timer);
       }
     }
     var res = await fetch(GAS_API, opts);
-    return res.json();
+    return parseJsonResponse_(res);
   }
 
   function readDevBypassQuery_() {
+    if (typeof OperatorContext !== 'undefined') {
+      OperatorContext.mergeFromUrl();
+      return OperatorContext.devBypassPayload();
+    }
     var perm = 0;
     var uid = '';
     try {
@@ -48,6 +68,49 @@ var AccountingApi = (function () {
       perm = permStr ? parseInt(permStr, 10) : 0;
     } catch (e) {}
     return { dev_permission: perm > 0 ? perm : 0, dev_user_id: uid };
+  }
+
+  function readHubLiffIdFromQuery_() {
+    if (typeof OperatorContext !== 'undefined') {
+      var id = OperatorContext.hubLiffId();
+      if (id) return id;
+    }
+    try {
+      var q = new URLSearchParams(window.location.search);
+      return q.get('hub_liff_id') || q.get('hub_liff') || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function requestParentHubLiffToken_() {
+    if (!window.parent || window.parent === window) return Promise.resolve('');
+    return new Promise(function (resolve) {
+      var done = false;
+      var timer = setTimeout(function () {
+        if (!done) { done = true; resolve(''); }
+      }, 2500);
+      function onMsg(e) {
+        if (!e.data || e.data.type !== 'hub_liff_token') return;
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        window.removeEventListener('message', onMsg);
+        resolve(e.data.token || '');
+      }
+      window.addEventListener('message', onMsg);
+      try {
+        window.parent.postMessage({ type: 'request_hub_liff_token' }, '*');
+      } catch (err) {
+        clearTimeout(timer);
+        resolve('');
+      }
+    });
+  }
+
+  function primeHubIdentityFromUrl_() {
+    if (typeof OperatorContext !== 'undefined') OperatorContext.mergeFromUrl();
+    else readDevBypassQuery_();
   }
 
   function devBypassAuthBody_(action) {
@@ -67,6 +130,9 @@ var AccountingApi = (function () {
   }
 
   function notifyUiOperator_(session) {
+    try {
+      if (session && typeof OperatorContext !== 'undefined') OperatorContext.applySession(session);
+    } catch (eOp) {}
     try {
       if (session && typeof AccountingUi !== 'undefined' && AccountingUi.setOperator) {
         AccountingUi.setOperator(session);
@@ -439,7 +505,19 @@ var AccountingApi = (function () {
     initLiff: async function (opts) {
       opts = opts || {};
       var policy = await AccountingApi.loadPolicy();
-      var liffId = opts.liffId || policy.liffId || '';
+      var parentToken = await requestParentHubLiffToken_();
+      if (parentToken) {
+        var authHub = await AccountingApi.authMe(parentToken);
+        if (authHub.success) {
+          return {
+            devBypass: false,
+            profile: { userId: authHub.user_id, displayName: authHub.display_name },
+            idToken: parentToken,
+            auth: authHub
+          };
+        }
+      }
+      var liffId = opts.liffId || readHubLiffIdFromQuery_() || policy.liffId || '';
       if (!liffId) throw new Error('LIFF 尚未設定');
       if (typeof liff === 'undefined') throw new Error('請用 LINE 開啟');
       await liff.init({ liffId: liffId });
@@ -483,25 +561,11 @@ var AccountingApi = (function () {
         session = buildDevBypassSession_(authPr, packPr.opts);
         session.auth = authPr;
       } else {
-        opts = opts || {};
-        var liffId = opts.liffId || policy.liffId || '';
-        if (!liffId) throw new Error('LIFF 尚未設定');
-        if (typeof liff === 'undefined') throw new Error('請用 LINE 開啟此頁面');
-        await liff.init({ liffId: liffId });
-        if (!liff.isLoggedIn()) {
-          liff.login({ redirectUri: window.location.href });
-          return null;
-        }
-        var profile = await liff.getProfile();
-        var idToken = liff.getIDToken();
-        var authRes = await post({ action: 'payment_request_auth_me', liff_id_token: idToken });
+        session = await AccountingApi.initLiff(opts);
+        if (!session) return null;
+        var authRes = await post({ action: 'payment_request_auth_me', liff_id_token: session.idToken });
         if (!authRes.success) throw new Error(authRes.message || '驗證失敗');
-        session = {
-          devBypass: false,
-          profile: profile,
-          idToken: idToken,
-          auth: authRes
-        };
+        session.auth = authRes;
       }
       if (!session) return null;
       if (String(session.auth.status || '') === '廠商') {
@@ -577,6 +641,11 @@ var AccountingApi = (function () {
       };
       if (session.devBypass) body.dev_bypass = true;
       return post(body);
-    }
+    },
+    primeHubIdentityFromUrl: primeHubIdentityFromUrl_,
+    requestParentHubLiffToken: requestParentHubLiffToken_
   };
 })();
+if (typeof OperatorContext === 'undefined') {
+  AccountingApi.primeHubIdentityFromUrl();
+}

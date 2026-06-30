@@ -6,9 +6,11 @@
   <title>廠商資料登記</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=3" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_master_data.js?v=13"></script>
-  <script src="../../shared/js/accounting_api.js?v=20"></script>
-  <script src="../../shared/js/accounting_ui.js?v=6"></script>
+  <script src="../../shared/js/accounting_master_data.js?v=15"></script>
+  <script src="../../shared/js/operator_context.js?v=1"></script>
+  <script src="../../shared/js/accounting_api.js?v=23"></script>
+  <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_nav.js?v=1"></script>
   <style>
     h2 { margin: 0 0 8px; }
     h3 { margin: 0 0 8px; font-size: 16px; }
@@ -380,6 +382,7 @@
       });
 
       (async function boot() {
+        if (typeof AccountingNav !== 'undefined') AccountingNav.init();
         try {
           initFormOptions();
           session = await AccountingApi.initVendorSession();

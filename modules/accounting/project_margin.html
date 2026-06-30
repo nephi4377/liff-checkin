@@ -6,10 +6,13 @@
   <title>案件毛利</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=3" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_master_data.js?v=11"></script>
-  <script src="../../shared/js/accounting_api.js?v=20"></script>
-  <script src="../../shared/js/accounting_lightbox.js?v=13"></script>
-  <script src="../../shared/js/accounting_ui.js?v=6"></script>
+  <script src="../../shared/js/accounting_master_data.js?v=15"></script>
+  <script src="../../shared/js/operator_context.js?v=1"></script>
+  <script src="../../shared/js/accounting_api.js?v=23"></script>
+  <script src="../../shared/js/accounting_lightbox.js?v=17"></script>
+  <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_nav.js?v=1"></script>
+  <script src="../../shared/js/accounting_boot.js?v=1"></script>
   <style>
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; }
@@ -94,7 +97,7 @@
   </div>
   <script>
     (function () {
-      AccountingUi.init();
+      AccountingLightbox.init();
       var session = null;
       var categories = AccountingMasterData.margin_expense_categories || [];
       var current = null;
@@ -224,19 +227,14 @@
       });
 
       (async function boot() {
-        try {
-          fillCategoryDatalist();
-          document.getElementById('addDate').value = todayIso();
-          session = await AccountingApi.initSession();
-          if (!session) return;
-          var mode = session.devBypass ? ' · 測試模式' : '';
-          document.getElementById('userLine').textContent =
-            session.profile.displayName + ' · 權限 ' + session.auth.permission + mode;
-          showApp();
-          await loadOverview();
-        } catch (e) {
-          document.getElementById('loading').textContent = e.message || String(e);
-        }
+        fillCategoryDatalist();
+        document.getElementById('addDate').value = todayIso();
+        await AccountingBoot.run({
+          onReady: async function (sess) {
+            session = sess;
+            await loadOverview();
+          }
+        });
       })();
     })();
   </script>

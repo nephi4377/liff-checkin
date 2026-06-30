@@ -6,10 +6,13 @@
   <title>收款帳戶</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=3" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_master_data.js?v=9"></script>
-  <script src="../../shared/js/accounting_api.js?v=20"></script>
-  <script src="../../shared/js/accounting_cache.js?v=19"></script>
-  <script src="../../shared/js/accounting_ui.js?v=6"></script>
+  <script src="../../shared/js/accounting_master_data.js?v=15"></script>
+  <script src="../../shared/js/operator_context.js?v=1"></script>
+  <script src="../../shared/js/accounting_api.js?v=23"></script>
+  <script src="../../shared/js/accounting_cache.js?v=20"></script>
+  <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_nav.js?v=1"></script>
+  <script src="../../shared/js/accounting_boot.js?v=1"></script>
   <style>
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; }
@@ -67,7 +70,6 @@
   </div>
   <script>
     (function () {
-      AccountingUi.init();
       var session = null;
       var ui = AccountingUi.feedback();
       function setMsg(t) { ui.setMsg(t); }
@@ -80,16 +82,10 @@
         if (!no || no.length < 5) return no || '—';
         return no.slice(0, 4) + '****' + no.slice(-3);
       }
-      async function loadList() {
-        if (!AccountingCache.get(session)) {
-          await AccountingCache.load(session);
-        }
-        var rows = AccountingCache.payees(session);
-        var data = { success: true, data: rows };
+      function renderPayeeRows(rows) {
         var box = document.getElementById('list');
         box.innerHTML = '';
-        if (!data.success) { setMsg(data.message); return; }
-        (data.data || []).forEach(function (p) {
+        (rows || []).forEach(function (p) {
           var div = document.createElement('div');
           div.className = 'item' + (p.is_active === false || p.is_active === 'FALSE' ? ' inactive' : '');
           var bankLine = (p.bank_code || '—') + '-' + (p.branch_code || '—') + ' · ' + maskAccount(p.account_no);
@@ -99,7 +95,19 @@
             '<span class="sub">' + (p.phone || '無電話') + '</span>';
           box.appendChild(div);
         });
-        if (!data.data || !data.data.length) box.textContent = '尚無資料';
+        if (!rows || !rows.length) box.textContent = '尚無資料';
+      }
+      async function loadList() {
+        var rows = AccountingCache.get(session) ? AccountingCache.payees(session) : AccountingCache.peekPayees();
+        if (rows.length) renderPayeeRows(rows);
+        if (!AccountingCache.get(session)) {
+          try {
+            await AccountingCache.load(session);
+            renderPayeeRows(AccountingCache.payees(session));
+          } catch (e) {
+            if (!rows.length) setMsg(e.message || String(e));
+          }
+        }
       }
       document.getElementById('addBtn').addEventListener('click', async function () {
         var btn = this;
@@ -131,16 +139,12 @@
         });
       });
       (async function boot() {
-        try {
-          session = await AccountingApi.initSession();
-          if (!session) return;
-          var mode = session.devBypass ? ' · 測試模式（無登入）' : '';
-          document.getElementById('userLine').textContent = session.profile.displayName + ' · 權限 ' + session.auth.permission + mode;
-          showApp();
-          await loadList();
-        } catch (e) {
-          document.getElementById('loading').textContent = e.message || String(e);
-        }
+        await AccountingBoot.run({
+          onReady: async function (sess) {
+            session = sess;
+            await loadList();
+          }
+        });
       })();
     })();
   </script>

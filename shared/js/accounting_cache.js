@@ -77,11 +77,39 @@ var AccountingCache = (function () {
     clear(session);
   }
 
+  function peekBootstrapRaw() {
+    try {
+      var prefix = STORAGE_KEY + ':';
+      for (var i = 0; i < sessionStorage.length; i++) {
+        var key = sessionStorage.key(i);
+        if (!key || key.indexOf(prefix) !== 0) continue;
+        var parsed = JSON.parse(sessionStorage.getItem(key));
+        if (!isFresh(parsed)) continue;
+        return parsed.data;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function mastersFromPeek(entity) {
+    var b = peekBootstrapRaw();
+    return (b && b.masters && b.masters[entity]) || [];
+  }
+
   return {
     clear: clear,
     afterCrudSuccess: afterCrudSuccess,
     get: function (session) {
       return read(session);
+    },
+    peekBootstrap: function () {
+      return peekBootstrapRaw();
+    },
+    peekVendors: function () {
+      return mastersFromPeek('vendors');
+    },
+    peekPayees: function () {
+      return mastersFromPeek('payees');
     },
     load: async function (session, force) {
       if (!session) throw new Error('需要登入');
