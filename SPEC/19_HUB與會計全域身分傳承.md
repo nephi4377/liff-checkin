@@ -201,7 +201,7 @@
 | 會計 API／session | `CODING/shared/js/accounting_api.js` |
 | 會計 HUB 案場／員工 | `CODING/shared/js/accounting_context.js` |
 | 會計主檔快取 | `CODING/shared/js/accounting_cache.js` |
-| HUB localStorage | `CODING/shared/js/utils.js`、`spa/app.js` |
+| HUB 待審紅點 | `spa/app.js`：`pendingApprovals` = 假勤 + 出勤申訴（`pendingAppeals`） |
 | 會計後端驗證 | `backend/accounting-gas/core/AuthBridge.js` |
 | HUB 員工 API | `backend/CheckinSystem/WebApp.js`（`get_hub_core_data`） |
 | 會計對齊 Checkin ID | `backend/accounting-gas/SetupOnce.js` → `setCheckinSpreadsheetIdOnce` |
@@ -213,6 +213,7 @@
 
 | 日期 | 變更 |
 |------|------|
+| 2026-07-01 | v1.4：`get_hub_core_data` 待審紅點含 `pendingAppeals`；假勤審核／申訴 UX |
 | 2026-07-01 | v1.3：§4 增 `hub_liff_id` 與 postMessage 協定；§6 OperatorContext 已實作；§7 對齊 6/30 會計收斂與 `hubLiffId` 修復；HUB `index.html` 版號防快取 |
 | 2026-06-22 | v1.2：§0 定案方案 A；§1.1 改為單一員工主檔；區分員工／廠商身分；廠商雙來源搜尋列未來 |
 | 2026-06-22 | v1.1：§1.1 HUB／會計可能讀不同試算表檔；三處 Script Property 對齊流程 |

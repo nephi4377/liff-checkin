@@ -642,6 +642,41 @@ var AccountingApi = (function () {
       if (session.devBypass) body.dev_bypass = true;
       return post(body);
     },
+    employeeBankOcr: function (sessionOrToken, photo, kind, operatorUserId) {
+      var body = Object.assign({
+        action: 'employee_bank_ocr',
+        photo: photo || {},
+        kind: kind || (photo && photo.kind) || 'passbook',
+        operatorUserId: operatorUserId || ''
+      }, authBody(sessionOrToken));
+      return post(body);
+    },
+    payrollRequestList: function (sessionOrToken, filter) {
+      var body = Object.assign({ action: 'payroll_request_list' }, authBody(sessionOrToken), filter || {});
+      return post(body);
+    },
+    payrollRequestApprove: function (sessionOrToken, payload) {
+      var body = Object.assign({ action: 'payroll_request_approve' }, authBody(sessionOrToken), payload || {});
+      return post(body);
+    },
+    payrollRequestReject: function (sessionOrToken, payload) {
+      var body = Object.assign({ action: 'payroll_request_reject' }, authBody(sessionOrToken), payload || {});
+      return post(body);
+    },
+    payrollRequestExport: function (sessionOrToken, payrollRequestIds) {
+      var body = Object.assign({
+        action: 'payroll_request_export',
+        payroll_request_ids: payrollRequestIds || []
+      }, authBody(sessionOrToken));
+      return post(body, 120000);
+    },
+    payrollRequestMarkPaid: function (sessionOrToken, payrollRequestIds) {
+      var body = Object.assign({
+        action: 'payroll_request_mark_paid',
+        payroll_request_ids: payrollRequestIds || []
+      }, authBody(sessionOrToken));
+      return post(body, 120000);
+    },
     primeHubIdentityFromUrl: primeHubIdentityFromUrl_,
     requestParentHubLiffToken: requestParentHubLiffToken_
   };

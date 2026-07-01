@@ -72,6 +72,18 @@
       <span class="tag admin">財務以上</span>
     </a>
 
+    <a class="card hidden" href="payroll_review.html" id="linkPayrollReview">
+      <h3>薪資審核</h3>
+      <p>員工從出勤頁送審後待主管核准；可填獎金與備註。</p>
+      <span class="tag admin">主管 ≥5</span>
+    </a>
+
+    <a class="card" href="payroll_finance.html" id="linkPayrollFinance">
+      <h3>薪資待匯款</h3>
+      <p>匯出中信薪轉檔（1000 byte／列）、登錄收支。非廠商整批匯款。</p>
+      <span class="tag admin">財務 ≥4</span>
+    </a>
+
     <a class="card" href="vendor_payment_finance.html" id="linkVendorPaymentFinance">
       <h3>廠商待匯款</h3>
       <p>待匯款清單、財務直接新增、匯出銀行轉帳檔並登錄收支。</p>
@@ -102,6 +114,9 @@
         onReady: async function (session) {
           if ((session.auth.permission || 0) < 5) {
             document.getElementById('linkVendorPaymentApprove').classList.add('hidden');
+            document.getElementById('linkPayrollReview').classList.add('hidden');
+          } else {
+            document.getElementById('linkPayrollReview').classList.remove('hidden');
           }
           AccountingUi.bindMenuCards('#app a.card');
           if (!AccountingCache.get(session)) {

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>薪資待匯款</title>
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=3" />
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/operator_context.js?v=1"></script>
+  <script src="../../shared/js/accounting_api.js?v=24"></script>
+  <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_nav.js?v=1"></script>
+  <script src="../../shared/js/accounting_boot.js?v=1"></script>
+  <style>
+    h2 { margin: 0 0 8px; }
+    .sub { color: #555; font-size: 14px; line-height: 1.45; }
+    .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .btn { padding: 10px 14px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; }
+    .btn:disabled { opacity: .55; cursor: not-allowed; }
+    .btn-primary { background: #1a73e8; color: #fff; width: 100%; padding: 12px; margin-top: 10px; }
+    .btn-ok { background: #34a853; color: #fff; }
+    .btn-muted { background: #e8eaed; color: #333; }
+    .item { border-bottom: 1px solid #eee; padding: 14px 0; }
+    .item:last-child { border-bottom: none; }
+    .chk { width: auto; margin-right: 8px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+    .bank { font-size: 13px; color: #444; margin-top: 4px; }
+    .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin-right: 6px; }
+    .tag.warn { background: #fce8e6; color: #c5221f; }
+    #msg { color: #c5221f; font-size: 14px; }
+    #ok { color: #137333; font-size: 14px; }
+    .hidden { display: none; }
+    .nav { margin-bottom: 12px; font-size: 14px; }
+    .nav a { color: #1a73e8; text-decoration: none; }
+  </style>
+</head>
+<body class="acct-page acct-page-form">
+  <div id="loading">載入中…</div>
+  <div id="app" class="hidden acct-main">
+    <p class="nav"><a href="index.html">← 會計功能選單</a></p>
+    <h2>薪資待匯款</h2>
+    <p class="sub" id="userLine">—</p>
+    <p class="sub">勾選後下載<strong>薪轉檔</strong>（非廠商整批匯款）。上傳中信請選「<strong>薪資轉帳</strong>」、編碼 <strong>BIG-5</strong>。</p>
+    <div id="msg" role="alert"></div>
+    <div id="ok" aria-live="polite"></div>
+
+    <div class="card">
+      <button type="button" class="btn btn-primary" id="reloadBtn">重新載入</button>
+      <button type="button" class="btn btn-primary" id="exportBtn">匯出薪轉檔並完成發薪</button>
+      <p class="sub" style="margin-top:10px">每月薪資請用此頁；單筆員工請款請用「廠商待匯款」。</p>
+    </div>
+
+    <div class="card">
+      <div id="list"></div>
+      <p id="emptyMsg" class="sub hidden">目前沒有待匯款薪資。</p>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var session = null;
+      var ui = AccountingUi.feedback();
+      function setMsg(t) { ui.setMsg(t); }
+      function setOk(t) { ui.setOk(t); }
+      function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+      async function downloadCtbcBig5(filename, content) {
+        var text = String(content || '').replace(/^\uFEFF/, '');
+        var mod = await import('https://esm.sh/iconv-lite@0.6.3');
+        var iconv = mod.default || mod;
+        var bytes = iconv.encode(text, 'cp950');
+        var blob = new Blob([new Uint8Array(bytes)], { type: 'application/octet-stream' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+
+      function renderItem(row) {
+        var div = document.createElement('div');
+        div.className = 'item';
+        var amount = parseInt(row.final_amount, 10) || parseInt(row.estimated_net, 10) || 0;
+        var incomplete = row.bank_incomplete;
+        var head = document.createElement('div');
+        head.className = 'actions';
+        var chk = document.createElement('input');
+        chk.type = 'checkbox';
+        chk.className = 'chk';
+        chk.value = row.payroll_request_id;
+        chk.checked = !incomplete;
+        chk.disabled = !!incomplete;
+        head.appendChild(chk);
+        var ac = String(row.account_no || '');
+        var tail = ac.length > 4 ? ac.slice(-4) : ac;
+        var info = document.createElement('div');
+        info.innerHTML =
+          '<div><strong>' + esc(row.employee_name) + '</strong> <span class="tag">' + esc(row.period_label) + '</span></div>' +
+          '<div class="sub">實發 $' + amount.toLocaleString('zh-TW') + '</div>' +
+          (row.bonus_note ? '<div class="sub">獎金備註：' + esc(row.bonus_note) + '</div>' : '') +
+          (incomplete
+            ? '<div class="tag warn">銀行帳戶不完整，無法匯出</div>'
+            : '<div class="bank">銀行 ' + esc(row.bank_code) + ' · 末四碼 ' + esc(tail) + '</div>');
+        head.appendChild(info);
+        div.appendChild(head);
+        return div;
+      }
+
+      async function loadList() {
+        setMsg(''); setOk('');
+        var list = document.getElementById('list');
+        list.innerHTML = '<p class="sub">載入中…</p>';
+        try {
+          var data = await AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
+          if (!data.success) throw new Error(data.message || '載入失敗');
+          list.innerHTML = '';
+          var items = (data.items || []).filter(function (r) {
+            return String(r.review_status) === '已審' && String(r.payment_status) !== '已匯款';
+          });
+          document.getElementById('emptyMsg').classList.toggle('hidden', items.length > 0);
+          items.forEach(function (row) { list.appendChild(renderItem(row)); });
+        } catch (e) {
+          list.innerHTML = '';
+          setMsg(e.message || String(e));
+        }
+      }
+
+      function selectedIds() {
+        return Array.prototype.slice.call(document.querySelectorAll('#list .chk:checked')).map(function (c) { return c.value; });
+      }
+
+      document.getElementById('reloadBtn').addEventListener('click', loadList);
+
+      document.getElementById('exportBtn').addEventListener('click', async function () {
+        var ids = selectedIds();
+        if (!ids.length) { setMsg('請先勾選要匯出的項目'); return; }
+        if (!confirm('將下載薪轉檔，並把 ' + ids.length + ' 筆記入收支、標記已發薪。\n\n確定？')) return;
+        var btn = document.getElementById('exportBtn');
+        await AccountingUi.runAsync(btn, {
+          busyLabel: '匯出中…',
+          startMessage: '正在產生薪轉檔並寫入收支…',
+          lockSelectors: ['#exportBtn', '#reloadBtn']
+        }, async function () {
+          setMsg(''); setOk('');
+          var data = await AccountingApi.payrollRequestExport(session, ids);
+          if (!data.success) throw new Error(data.message || '匯出失敗');
+          await downloadCtbcBig5(data.filename || 'ctbc_salary.txt', data.content || '');
+          setOk('已完成 ' + (data.count || ids.length) + ' 筆：檔案已下載。上傳中信請選「薪資轉帳」、BIG-5');
+          await loadList();
+        }).catch(function (e) { setMsg(e.message || String(e)); });
+      });
+
+      AccountingBoot.run({
+        minPermission: 4,
+        onReady: async function (s) {
+          session = s;
+          document.getElementById('loading').classList.add('hidden');
+          document.getElementById('app').classList.remove('hidden');
+          document.getElementById('userLine').textContent = (s.profile && s.profile.displayName) || '—';
+          await loadList();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

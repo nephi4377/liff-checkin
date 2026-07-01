@@ -29,8 +29,8 @@
             </header>
 
             <nav id="approval-tabs" class="flex gap-2 mb-6 bg-white p-1.5 rounded-xl shadow-sm border border-gray-100" role="tablist">
-                <button type="button" id="tab-leave-approval" class="flex-1 min-h-[44px] text-sm font-semibold rounded-lg bg-blue-600 text-white" role="tab" aria-selected="true">假勤</button>
-                <button type="button" id="tab-appeal-approval" class="flex-1 min-h-[44px] text-sm font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200" role="tab" aria-selected="false">出勤申訴</button>
+                <button type="button" id="tab-leave-approval" class="flex-1 min-h-[44px] text-sm font-semibold rounded-lg bg-blue-600 text-white flex items-center justify-center gap-1.5" role="tab" aria-selected="true">假勤<span id="tab-leave-badge" class="hidden min-w-[1.25rem] h-5 px-1 text-[10px] font-bold rounded-full bg-red-500 text-white"></span></button>
+                <button type="button" id="tab-appeal-approval" class="flex-1 min-h-[44px] text-sm font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center justify-center gap-1.5" role="tab" aria-selected="false">出勤申訴<span id="tab-appeal-badge" class="hidden min-w-[1.25rem] h-5 px-1 text-[10px] font-bold rounded-full bg-amber-500 text-white"></span></button>
                 <button type="button" id="tab-payroll-approval" class="hidden flex-1 min-h-[44px] text-sm font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200" role="tab" aria-selected="false">薪資核對</button>
             </nav>
 
@@ -145,39 +145,59 @@
         document.getElementById('loading-screen').style.display = 'none';
         document.getElementById('main-content').classList.remove('hidden');
         document.getElementById('welcome-message').textContent = `你好，${userProfile.displayName}，以下是待您處理的項目：`;
-        if (userPermission >= 5) {
-            document.getElementById('tab-payroll-approval').classList.remove('hidden');
-            payrollApproval = initPayrollReviewApproval({
-                apiBaseUrl: API_BASE_URL,
-                userProfile,
-                showGlobalNotification,
-                permission: userPermission
-            });
+        fetchAllPending();
+    }
+
+    function updateTabBadges(leaveCount, appealCount) {
+        const leaveBadge = document.getElementById('tab-leave-badge');
+        const appealBadge = document.getElementById('tab-appeal-badge');
+        if (leaveBadge) {
+            if (leaveCount > 0) {
+                leaveBadge.textContent = String(leaveCount);
+                leaveBadge.classList.remove('hidden');
+            } else {
+                leaveBadge.classList.add('hidden');
+            }
         }
-        fetchPendingRequests();
+        if (appealBadge) {
+            if (appealCount > 0) {
+                appealBadge.textContent = String(appealCount);
+                appealBadge.classList.remove('hidden');
+            } else {
+                appealBadge.classList.add('hidden');
+            }
+        }
+    }
+
+    async function fetchAllPending() {
+        const [leaveCount, appealCount] = await Promise.all([
+            fetchPendingRequests(),
+            fetchPendingAppeals()
+        ]);
+        updateTabBadges(leaveCount, appealCount);
+        if (leaveCount === 0 && appealCount > 0) {
+            switchApprovalTab('appeal');
+        }
     }
 
     async function fetchPendingRequests() {
+        let count = 0;
         try {
             const url = new URL(API_BASE_URL);
             url.searchParams.append('page', 'attendance_api');
-            url.searchParams.append('action', 'get_pending_requests'); // 呼叫新的 API
-            url.searchParams.append('userId', userProfile.userId); // 傳入管理者 ID 以供未來權限檢查
+            url.searchParams.append('action', 'get_pending_requests');
+            url.searchParams.append('userId', userProfile.userId);
 
             const response = await fetch(url);
             const result = await response.json();
-            // 【v39.0 核心新增】根據您的要求，將後端回傳的待審核項目顯示在 Console 中，方便偵錯。
             console.log('後端回傳的待審核項目:', result);
 
-            if (result.success && result.data.length > 0) {
-                const container = document.getElementById('requests-container');
-                container.innerHTML = '';
-                // 【v31.0 新增】更新 Hub 頁面的標籤
-                const pendingCount = result.data.length;
-                if (window.opener && window.opener.updateApprovalBadge) {
-                    window.opener.updateApprovalBadge(pendingCount);
-                }
+            const container = document.getElementById('requests-container');
+            container.innerHTML = '';
+            document.getElementById('no-requests-message').classList.add('hidden');
 
+            if (result.success && result.data.length > 0) {
+                count = result.data.length;
                 result.data.forEach(req => {
                     container.appendChild(createRequestCard(req));
                 });
@@ -187,9 +207,11 @@
         } catch (error) {
             document.getElementById('loading-screen').innerHTML = `<p class="text-red-500 font-semibold">載入失敗: ${error.message}</p>`;
         }
+        return count;
     }
 
     async function fetchPendingAppeals() {
+        let count = 0;
         try {
             const url = new URL(API_BASE_URL);
             url.searchParams.append('page', 'attendance_api');
@@ -204,6 +226,7 @@
             document.getElementById('no-appeals-message').classList.add('hidden');
 
             if (result.success && result.data.length > 0) {
+                count = result.data.length;
                 result.data.forEach((appeal) => container.appendChild(createAppealCard(appeal)));
             } else {
                 document.getElementById('no-appeals-message').classList.remove('hidden');
@@ -211,6 +234,7 @@
         } catch (error) {
             document.getElementById('appeals-container').innerHTML = `<p class="text-red-500 text-center py-8">載入申訴失敗：${escapeHtml(error.message)}</p>`;
         }
+        return count;
     }
 
     function createAppealCard(appeal) {
@@ -218,7 +242,7 @@
         card.id = `appeal-${appeal.appealId}`;
         card.className = 'request-card bg-white p-5 rounded-lg shadow-md border-l-4 border-amber-400';
 
-        const statusLabel = appeal.isLateSubmit && appeal.status === '待審' ? '逾期申訴' : appeal.status;
+        const statusLabel = appeal.isLateSubmit && appeal.status === '待審' ? '待審核（逾期送出）' : appeal.status;
         const targetDateYmd = normalizeCheckinDate(appeal.targetDate);
         const attachments = (appeal.attachmentUrls || '').split(';').filter(Boolean);
         const attachHtml = attachments.length

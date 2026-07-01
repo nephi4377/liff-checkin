@@ -512,10 +512,23 @@
 
     function formatAppealStatusLabel(appeal) {
         if (!appeal) return '';
-        let label = appeal.status || '';
-        if (appeal.isLateSubmit && appeal.status === '待審') label = '逾期申訴';
-        else if (appeal.isLateSubmit) label = `${label}（逾期）`;
-        return label;
+        const st = appeal.status || '';
+        if (st === '待審') return appeal.isLateSubmit ? '待審核（逾期送出）' : '待審核';
+        if (st === '待補登') return '待補登';
+        if (appeal.isLateSubmit) return `${st}（逾期）`;
+        return st;
+    }
+
+    function appealStatusTitle(appeal) {
+        if (!appeal) return '';
+        if (appeal.status === '待審') {
+            return appeal.isLateSubmit
+                ? '已送出申訴，超過 15 天後提出，請等候主管審核'
+                : '已送出申訴，請等候主管審核';
+        }
+        if (appeal.status === '待補登') return '主管要求補登打卡，完成後申訴結案';
+        if (appeal.status === '已駁回') return '申訴已駁回，若有疑問請聯絡主管';
+        return '';
     }
 
     function renderAppealCell(dateStr, day) {
@@ -524,7 +537,8 @@
         const appeal = appealStatusMap[appealMapKey(dateStr, anomalyType)];
         if (appeal && ['待審', '待補登', '已備註', '已修正', '已駁回'].includes(appeal.status)) {
             const cls = appeal.status === '已修正' ? 'text-green-700' : appeal.status === '已駁回' ? 'text-red-600' : 'text-amber-700';
-            return `<td class="px-4 py-2 text-center text-xs ${cls} font-medium">${escapeHtml(formatAppealStatusLabel(appeal))}</td>`;
+            const title = appealStatusTitle(appeal);
+            return `<td class="px-4 py-2 text-center text-xs ${cls} font-medium"${title ? ` title="${escapeAttr(title)}"` : ''}>${escapeHtml(formatAppealStatusLabel(appeal))}</td>`;
         }
         const snapshot = JSON.stringify({
             checkIn: day.checkIn, checkOut: day.checkOut, status: day.status,
@@ -1307,6 +1321,7 @@
     function statusClassForDay(day, dispStr) {
         const rawStatus = day.status;
         const s = String(dispStr ?? '');
+        if (s === '未到職' || s === '已離職' || rawStatus === '未到職' || rawStatus === '已離職') return 'text-gray-400';
         if (s === '缺勤' || s.startsWith('缺勤') || String(rawStatus).startsWith('異常')) return 'text-red-600 font-bold';
         if (rawStatus === '僅單次打卡') return 'text-purple-600 font-bold';
         if (s.includes('加班')) return 'text-orange-600 font-bold';
@@ -1389,7 +1404,7 @@
                 '<th class="px-4 py-1 text-center font-medium text-gray-600">遲到</th><th class="px-4 py-1 text-center font-medium text-gray-600">早退</th>' +
                 '<th class="px-4 py-1 text-center font-medium text-gray-600">申訴</th>' +
                 '</tr></thead><tbody>' + buildDailyDetailRows(userId, userData, holidays) + '</tbody></table>';
-            html += '<p class="text-xs text-gray-500 mt-3">有異常的日期可「提出說明」；審核通過後主管會手動補登修正。排班制依<strong>個人班表</strong>判斷；國定假仍依表定時間計遲早退。</p></div>';
+            html += '<p class="text-xs text-gray-500 mt-3">有異常的日期可「提出說明」；送出後申訴欄會顯示「待審核」，請等候主管處理。審核通過後主管會手動補登修正。排班制依<strong>個人班表</strong>判斷；國定假仍依表定時間計遲早退。</p></div>';
             container.innerHTML = html;
             return;
         }

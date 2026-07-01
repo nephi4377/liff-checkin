@@ -372,13 +372,13 @@ export function initPayrollReviewPanel(ctx) {
             });
             const json = await res.json();
             if (!json.success) throw new Error(json.message || '送出失敗');
-            showGlobalNotification(json.message || '已送出', 5000, 'success');
+            showGlobalNotification(json.message || '已送至會計待審，主管請至「添心會計 → 薪資審核」處理', 6000, 'success');
             await fetchContext(contextData.period.periodLabel);
         } catch (err) {
             alert(`送出失敗：${err.message}`);
             els.submitBtn.disabled = false;
         } finally {
-            els.submitBtn.textContent = '送出薪資核對申請';
+            els.submitBtn.textContent = '送出薪資申請至會計';
         }
     }
 
@@ -414,26 +414,8 @@ export function initPayrollReviewApproval(ctx) {
     }
 
     async function fetchPending() {
-        try {
-            const url = new URL(apiBaseUrl);
-            url.searchParams.append('page', 'attendance_api');
-            url.searchParams.append('action', 'payroll_review');
-            url.searchParams.append('mode', 'pending');
-            url.searchParams.append('operatorId', userProfile.userId);
-            const res = await fetch(url);
-            const json = await res.json();
-            container.innerHTML = '';
-            document.getElementById('no-payroll-message')?.classList.add('hidden');
-            if (json.success && json.data.length) {
-                json.data.forEach((row) => container.appendChild(createCard(row)));
-            } else if (json.success) {
-                document.getElementById('no-payroll-message')?.classList.remove('hidden');
-            } else {
-                container.innerHTML = `<p class="text-red-500 text-center py-8">${esc(json.message)}</p>`;
-            }
-        } catch (err) {
-            container.innerHTML = `<p class="text-red-500 text-center py-8">${esc(err.message)}</p>`;
-        }
+        container.innerHTML = '<p class="text-center text-gray-600 py-12 leading-relaxed">薪資審核已移至會計系統「<strong>薪資審核</strong>」。<br>請從主控台進入「添心會計」操作。</p>';
+        document.getElementById('no-payroll-message')?.classList.add('hidden');
     }
 
     function createCard(row) {

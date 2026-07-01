@@ -627,7 +627,7 @@ export default {
                             <h2 class="text-base font-bold text-gray-800 leading-tight">假勤審核儀表板</h2>
                             <span v-if="pendingApprovals > 0" class="flex-shrink-0 inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1 text-[10px] font-bold rounded-full bg-red-500 text-white animate-pulse">{{ pendingApprovals }}</span>
                         </div>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">集中審核請假與加班申請。</p>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">請假、加班與出勤申訴的待審項目。</p>
                     </div>
                 </a>
 

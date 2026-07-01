@@ -6,6 +6,8 @@
     <title>添心設計 | 員工資料編輯</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script src="../../shared/js/operator_context.js?v=1"></script>
+    <script src="../../shared/js/accounting_api.js?v=24"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
         .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
@@ -155,6 +157,40 @@
                 <!-- 新增結束 -->
 
                 <hr>
+                <h2 class="text-lg font-semibold text-gray-800">薪轉帳戶</h2>
+                <p class="text-xs text-gray-500 -mt-2">供會計「薪資待匯款」產生中信薪轉檔；可拍照自動帶入。</p>
+                <div class="mb-3">
+                    <label for="passbookPhoto" class="block text-gray-700 font-semibold mb-2">存摺／匯款資訊（選填）</label>
+                    <input type="file" id="passbookPhoto" accept="image/*" capture="environment" class="w-full text-sm text-gray-700" />
+                    <div id="passbookPreview" class="mt-2"></div>
+                    <p id="passbookOcrStatus" class="text-sm mt-1 text-gray-600"></p>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="bankCode" class="block text-gray-700 font-semibold mb-2">銀行代碼</label>
+                        <input type="text" id="bankCode" maxlength="3" inputmode="numeric" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="例：822" />
+                    </div>
+                    <div>
+                        <label for="branchName" class="block text-gray-700 font-semibold mb-2">分行名稱</label>
+                        <input type="text" id="branchName" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="例：台南分行" />
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="accountNo" class="block text-gray-700 font-semibold mb-2">帳號</label>
+                        <input type="text" id="accountNo" inputmode="numeric" class="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                    </div>
+                    <div>
+                        <label for="accountName" class="block text-gray-700 font-semibold mb-2">戶名</label>
+                        <input type="text" id="accountName" class="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                    </div>
+                </div>
+                <div>
+                    <label for="taxId" class="block text-gray-700 font-semibold mb-2">統編（選填）</label>
+                    <input type="text" id="taxId" inputmode="numeric" maxlength="8" class="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                </div>
+
+                <hr>
                 <h2 class="text-lg font-semibold text-gray-800">薪資設定</h2>
                 <p class="text-xs text-gray-500 -mt-2">供「薪資出勤核對」使用；月薪填月薪、日薪填日薪。</p>
 
@@ -276,6 +312,14 @@
         const nationalIdInput = document.getElementById('身分證字號');
         const emergencyContactInput = document.getElementById('緊急聯絡人');
         const emergencyContactPhoneInput = document.getElementById('緊急聯絡人電話');
+        const bankCodeInput = document.getElementById('bankCode');
+        const branchNameInput = document.getElementById('branchName');
+        const accountNoInput = document.getElementById('accountNo');
+        const accountNameInput = document.getElementById('accountName');
+        const taxIdInput = document.getElementById('taxId');
+        const passbookPhotoInput = document.getElementById('passbookPhoto');
+        const passbookPreview = document.getElementById('passbookPreview');
+        const passbookOcrStatus = document.getElementById('passbookOcrStatus');
         const phoneInput = document.getElementById('聯絡電話');
         const addressInput = document.getElementById('聯絡地址');
         const payTypeSelect = document.getElementById('薪資類型');
@@ -294,6 +338,78 @@
         const insuranceDailyNotice = document.getElementById('insurance-daily-notice');
         const insuranceMonthlyHint = document.getElementById('insurance-monthly-hint');
         let insuredLevelTouched = false;
+        let passbookFile = null;
+
+        function normalizeTaiwanPhoneDisplay(value) {
+            if (value == null || value === '') return '';
+            let s = String(value).replace(/\D/g, '');
+            if (!s) return '';
+            if (s.length === 7) return s;
+            if (s.charAt(0) !== '0') s = '0' + s;
+            return s;
+        }
+
+        function padBankCode3(value) {
+            let s = String(value || '').replace(/\D/g, '');
+            if (!s) return '';
+            while (s.length < 3) s = '0' + s;
+            if (s.length > 3) s = s.slice(-3);
+            return s;
+        }
+
+        function setPassbookOcrStatus(text, ok) {
+            passbookOcrStatus.textContent = text || '';
+            passbookOcrStatus.className = 'text-sm mt-1 ' + (text ? (ok ? 'text-green-700' : 'text-red-600') : 'text-gray-600');
+        }
+
+        function applyBankOcrFields(fields) {
+            const f = fields || {};
+            if (f.bank_code && !bankCodeInput.value.trim()) bankCodeInput.value = padBankCode3(f.bank_code);
+            if (f.branch_name && !branchNameInput.value.trim()) branchNameInput.value = f.branch_name;
+            if (f.account_no && !accountNoInput.value.trim()) accountNoInput.value = String(f.account_no).replace(/\D/g, '');
+            if (f.account_name && !accountNameInput.value.trim()) accountNameInput.value = f.account_name;
+        }
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const dataUrl = reader.result || '';
+                    const i = String(dataUrl).indexOf(',');
+                    resolve({
+                        dataBase64: i >= 0 ? dataUrl.substring(i + 1) : dataUrl,
+                        mimeType: file.type || 'image/jpeg',
+                        filename: file.name || 'photo.jpg'
+                    });
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function runPassbookOcr(file) {
+            if (!file || !currentUserProfile) return;
+            setPassbookOcrStatus('辨識中…', true);
+            try {
+                const photo = await fileToBase64(file);
+                photo.kind = 'passbook';
+                const data = await AccountingApi.employeeBankOcr(
+                    { idToken: '' },
+                    photo,
+                    'passbook',
+                    currentUserProfile.userId
+                );
+                if (!data.success) {
+                    setPassbookOcrStatus(data.message || '辨識失敗，請改手動填寫', false);
+                    return;
+                }
+                applyBankOcrFields(data.fields || {});
+                setPassbookOcrStatus('已帶入辨識結果，請核對是否正確', true);
+            } catch (e) {
+                setPassbookOcrStatus(e.message || String(e), false);
+            }
+        }
+
         const submitButton = document.getElementById('submit-button');
         const buttonText = document.getElementById('button-text');
         const buttonSpinner = document.getElementById('button-spinner');
@@ -344,6 +460,22 @@
             baseSalaryInput.addEventListener('change', suggestInsuredLevelFromBase);
             payTypeSelect.addEventListener('change', () => { syncInsuranceForPayType(); suggestInsuredLevelFromBase(); });
             payRuleSelect.addEventListener('change', syncInsuranceForPayType);
+            if (passbookPhotoInput) {
+                passbookPhotoInput.addEventListener('change', () => {
+                    passbookFile = passbookPhotoInput.files && passbookPhotoInput.files[0] ? passbookPhotoInput.files[0] : null;
+                    passbookPreview.innerHTML = '';
+                    if (passbookFile) {
+                        const img = document.createElement('img');
+                        img.src = URL.createObjectURL(passbookFile);
+                        img.alt = '存摺預覽';
+                        img.className = 'max-h-40 rounded border';
+                        passbookPreview.appendChild(img);
+                        runPassbookOcr(passbookFile);
+                    } else {
+                        setPassbookOcrStatus('', true);
+                    }
+                });
+            }
             populateInsuredLevelSelect();
         }
 
@@ -604,6 +736,15 @@
             nationalIdInput.value = '';
             emergencyContactInput.value = '';
             emergencyContactPhoneInput.value = '';
+            bankCodeInput.value = '';
+            branchNameInput.value = '';
+            accountNoInput.value = '';
+            accountNameInput.value = '';
+            taxIdInput.value = '';
+            passbookFile = null;
+            if (passbookPhotoInput) passbookPhotoInput.value = '';
+            if (passbookPreview) passbookPreview.innerHTML = '';
+            setPassbookOcrStatus('', true);
             payTypeSelect.value = '';
             payRuleSelect.value = '';
             baseSalaryInput.value = '';
@@ -633,13 +774,20 @@
             statusSelect.value = employee.status || '員工'; // [v523.0 修正] 使用正規化後的 'status'
             hireDateInput.value = toInputDateValue(employee.hireDate || employee.到職日);
             resignationDateInput.value = toInputDateValue(employee.resignationDate || employee.離職日 || employee.離職日期);
-            phoneInput.value = employee.聯絡電話 || '';
+            phoneInput.value = normalizeTaiwanPhoneDisplay(employee.contactPhone || employee.聯絡電話 || '');
             addressInput.value = employee.聯絡地址 || '';
             emailInput.value = employee.email || '';
             birthDateInput.value = toInputDateValue(employee.出生日期);
             nationalIdInput.value = employee.身分證字號 || '';
             emergencyContactInput.value = employee.緊急聯絡人 || '';
-            emergencyContactPhoneInput.value = employee.緊急聯絡人電話 || '';
+            emergencyContactPhoneInput.value = normalizeTaiwanPhoneDisplay(
+                employee.emergencyContactPhone || employee.緊急聯絡人電話 || ''
+            );
+            bankCodeInput.value = padBankCode3(employee.bankCode || employee.銀行代碼 || '');
+            branchNameInput.value = employee.branchName || employee.分行名稱 || '';
+            accountNoInput.value = String(employee.accountNo || employee.帳號 || '').replace(/\D/g, '');
+            accountNameInput.value = employee.accountName || employee.戶名 || '';
+            taxIdInput.value = employee.taxId || employee.統編 || '';
             payTypeSelect.value = toFormPayType(employee.payType || employee.薪資類型);
             payRuleSelect.value = toFormPayRule(employee.payRule || employee.發薪規則);
             baseSalaryInput.value = employee.baseSalary || employee.底薪 || '';
@@ -720,6 +868,11 @@
                 身分證字號: nationalIdInput.value,
                 緊急聯絡人: emergencyContactInput.value,
                 緊急聯絡人電話: emergencyContactPhoneInput.value,
+                銀行代碼: padBankCode3(bankCodeInput.value),
+                分行名稱: branchNameInput.value.trim(),
+                帳號: accountNoInput.value.replace(/\D/g, ''),
+                戶名: accountNameInput.value.trim(),
+                統編: taxIdInput.value.replace(/\D/g, ''),
                 薪資類型: payTypeSelect.value,
                 發薪規則: payRuleSelect.value,
                 底薪: baseSalaryInput.value !== '' ? Number(baseSalaryInput.value) : '',

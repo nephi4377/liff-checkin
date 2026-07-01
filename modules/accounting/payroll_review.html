@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>薪資審核</title>
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=3" />
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/operator_context.js?v=1"></script>
+  <script src="../../shared/js/accounting_api.js?v=24"></script>
+  <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_nav.js?v=1"></script>
+  <script src="../../shared/js/accounting_boot.js?v=1"></script>
+  <style>
+    h2 { margin: 0 0 8px; }
+    .sub { color: #555; font-size: 14px; line-height: 1.45; }
+    .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    label { display: block; margin-top: 8px; font-weight: 600; font-size: 14px; }
+    input, select, textarea { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btn { padding: 10px 14px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; }
+    .btn:disabled { opacity: .55; cursor: not-allowed; }
+    .btn-primary { background: #1a73e8; color: #fff; }
+    .btn-ok { background: #34a853; color: #fff; }
+    .btn-warn { background: #ea4335; color: #fff; }
+    .btn-block { width: 100%; margin-top: 10px; padding: 12px; }
+    .item { border: 1px solid #e8eaed; border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+    .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin-right: 6px; }
+    .tag.warn { background: #fce8e6; color: #c5221f; }
+    .amount { font-size: 20px; font-weight: 700; color: #1a73e8; margin: 4px 0; }
+    .bank { font-size: 13px; color: #444; margin-top: 6px; }
+    .review-panel { margin-top: 12px; padding-top: 12px; border-top: 1px dashed #ddd; }
+    #msg { color: #c5221f; font-size: 14px; margin: 8px 0; }
+    #ok { color: #137333; font-size: 14px; margin: 8px 0; }
+    .hidden { display: none; }
+    .nav { margin-bottom: 12px; font-size: 14px; }
+    .nav a { color: #1a73e8; text-decoration: none; }
+  </style>
+</head>
+<body class="acct-page acct-page-form">
+  <div id="loading">載入中…</div>
+  <div id="app" class="hidden acct-main">
+    <p class="nav"><a href="index.html">← 會計功能選單</a></p>
+    <h2>薪資審核</h2>
+    <p class="sub" id="userLine">—</p>
+    <p class="sub">員工從出勤頁送審後會出現在這裡。核准後進「薪資待匯款」，此時尚未發薪。</p>
+    <div id="msg" role="alert"></div>
+    <div id="ok" aria-live="polite"></div>
+
+    <div class="card">
+      <div class="row2">
+        <div>
+          <label>審核狀態</label>
+          <select id="filterReview">
+            <option value="pending_review" selected>待審</option>
+            <option value="">全部</option>
+          </select>
+        </div>
+        <div>
+          <label>姓名／期別</label>
+          <input id="filterKw" placeholder="例：張三、115/05" />
+        </div>
+      </div>
+      <button type="button" class="btn btn-primary btn-block" id="reloadBtn">重新載入</button>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px">待審列表</h3>
+      <div id="list"></div>
+      <p id="emptyMsg" class="sub hidden">目前沒有待審薪資。</p>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var session = null;
+      var ui = AccountingUi.feedback();
+      function setMsg(t) { ui.setMsg(t); }
+      function setOk(t) { ui.setOk(t); }
+      function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+      function bankLine(row) {
+        if (row.bank_incomplete) return '<span class="tag warn">銀行帳戶不完整，請至員工資料維護</span>';
+        var ac = String(row.account_no || '');
+        var tail = ac.length > 4 ? ac.slice(-4) : ac;
+        return '銀行 ' + esc(row.bank_code) + ' · 帳號末四碼 ' + esc(tail) + ' · ' + esc(row.account_name);
+      }
+
+      function renderItem(row) {
+        var div = document.createElement('div');
+        div.className = 'item';
+        div.id = 'pr-' + row.payroll_request_id;
+        var est = parseInt(row.estimated_net, 10) || 0;
+        var ot = Number(row.overtime_hours) || 0;
+        var remote = parseInt(row.remote_allowance, 10) || 0;
+        div.innerHTML =
+          '<div><strong>' + esc(row.employee_name) + '</strong> <span class="tag">' + esc(row.period_label) + '</span></div>' +
+          '<p class="amount">試算實發 ' + est.toLocaleString('zh-TW') + ' 元</p>' +
+          '<p class="sub">期間 ' + esc(row.period_start) + '～' + esc(row.period_end) + ' · 發薪日 ' + esc(row.pay_date) + '</p>' +
+          (ot > 0 ? '<p class="sub">加班 ' + ot + ' 小時</p>' : '') +
+          (remote > 0 ? '<p class="sub">遠程津貼 ' + remote.toLocaleString('zh-TW') + ' 元</p>' : '') +
+          (row.supplement_note ? '<p class="sub">補充：' + esc(row.supplement_note) + '</p>' : '') +
+          '<div class="bank">' + bankLine(row) + '</div>' +
+          '<div class="review-panel">' +
+          '<div class="row2">' +
+          '<div><label>獎金（元）</label><input type="number" id="bonus-' + row.payroll_request_id + '" min="0" step="1" value="0" /></div>' +
+          '<div><label>扣款（元）</label><input type="number" id="ded-' + row.payroll_request_id + '" min="0" step="1" value="' + (parseInt(row.deduction,10)||0) + '" /></div>' +
+          '</div>' +
+          '<label>確認實發（元）</label><input type="number" id="final-' + row.payroll_request_id + '" min="0" step="1" value="' + est + '" />' +
+          '<label>獎金／備註說明</label><input type="text" id="bnote-' + row.payroll_request_id + '" placeholder="例：專案獎金" />' +
+          '<label>審核備註</label><input type="text" id="note-' + row.payroll_request_id + '" placeholder="選填" />' +
+          '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
+          '<button type="button" class="btn btn-ok" data-approve="' + row.payroll_request_id + '">核准</button>' +
+          '<button type="button" class="btn btn-warn" data-reject="' + row.payroll_request_id + '">退回</button>' +
+          '</div></div>';
+        return div;
+      }
+
+      async function loadList() {
+        setMsg(''); setOk('');
+        var list = document.getElementById('list');
+        list.innerHTML = '<p class="sub">載入中…</p>';
+        try {
+          var data = await AccountingApi.payrollRequestList(session, {
+            status: document.getElementById('filterReview').value || 'pending_review',
+            keyword: document.getElementById('filterKw').value.trim()
+          });
+          if (!data.success) throw new Error(data.message || '載入失敗');
+          list.innerHTML = '';
+          var items = data.items || [];
+          document.getElementById('emptyMsg').classList.toggle('hidden', items.length > 0);
+          items.forEach(function (row) {
+            if (String(row.review_status) === '待審') list.appendChild(renderItem(row));
+          });
+          if (!list.children.length) document.getElementById('emptyMsg').classList.remove('hidden');
+        } catch (e) {
+          list.innerHTML = '';
+          setMsg(e.message || String(e));
+        }
+      }
+
+      document.getElementById('list').addEventListener('click', async function (e) {
+        var approveId = e.target.getAttribute('data-approve');
+        var rejectId = e.target.getAttribute('data-reject');
+        if (!approveId && !rejectId) return;
+        var id = approveId || rejectId;
+        e.target.disabled = true;
+        try {
+          if (rejectId) {
+            var reason = document.getElementById('note-' + id).value.trim();
+            if (!reason) { setMsg('退回時請填寫審核備註'); e.target.disabled = false; return; }
+            var rj = await AccountingApi.payrollRequestReject(session, {
+              payroll_request_id: id, reject_reason: reason
+            });
+            if (!rj.success) throw new Error(rj.message);
+            setOk(rj.message || '已退回');
+          } else {
+            var ap = await AccountingApi.payrollRequestApprove(session, {
+              payroll_request_id: id,
+              bonus_amount: Number(document.getElementById('bonus-' + id).value) || 0,
+              deduction: Number(document.getElementById('ded-' + id).value) || 0,
+              final_amount: Number(document.getElementById('final-' + id).value) || 0,
+              bonus_note: document.getElementById('bnote-' + id).value.trim(),
+              note: document.getElementById('note-' + id).value.trim()
+            });
+            if (!ap.success) throw new Error(ap.message);
+            setOk(ap.message || '已核准，會計可至薪資待匯款匯出');
+          }
+          document.getElementById('pr-' + id)?.remove();
+          if (!document.getElementById('list').children.length) {
+            document.getElementById('emptyMsg').classList.remove('hidden');
+          }
+        } catch (err) {
+          setMsg(err.message || String(err));
+          e.target.disabled = false;
+        }
+      });
+
+      document.getElementById('reloadBtn').addEventListener('click', loadList);
+
+      AccountingBoot.run({
+        minPermission: 5,
+        deniedMessage: '此頁需主管權限（≥5）',
+        onReady: async function (s) {
+          session = s;
+          document.getElementById('loading').classList.add('hidden');
+          document.getElementById('app').classList.remove('hidden');
+          document.getElementById('userLine').textContent = (s.profile && s.profile.displayName) || '—';
+          await loadList();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
