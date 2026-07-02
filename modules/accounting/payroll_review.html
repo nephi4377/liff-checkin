@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=3" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=24"></script>
+  <script src="../../shared/js/accounting_api.js?v=25"></script>
   <script src="../../shared/js/accounting_ui.js?v=7"></script>
   <script src="../../shared/js/accounting_nav.js?v=1"></script>
   <script src="../../shared/js/accounting_boot.js?v=1"></script>
@@ -53,6 +53,8 @@
           <label>審核狀態</label>
           <select id="filterReview">
             <option value="pending_review" selected>待審</option>
+            <option value="approved">已審（待匯款）</option>
+            <option value="rejected">已退回</option>
             <option value="">全部</option>
           </select>
         </div>
@@ -115,13 +117,27 @@
         return div;
       }
 
+      function renderReadOnlyItem(row) {
+        var div = document.createElement('div');
+        div.className = 'item';
+        var amount = parseInt(row.final_amount, 10) || parseInt(row.estimated_net, 10) || 0;
+        div.innerHTML =
+          '<div><strong>' + esc(row.employee_name) + '</strong> <span class="tag">' + esc(row.period_label) + '</span> ' +
+          '<span class="tag">' + esc(row.review_status) + '</span></div>' +
+          '<p class="amount">$' + amount.toLocaleString('zh-TW') + '</p>' +
+          (row.reject_reason ? '<p class="sub">退回原因：' + esc(row.reject_reason) + '</p>' : '') +
+          (row.bonus_note ? '<p class="sub">備註：' + esc(row.bonus_note) + '</p>' : '');
+        return div;
+      }
+
       async function loadList() {
         setMsg(''); setOk('');
         var list = document.getElementById('list');
         list.innerHTML = '<p class="sub">載入中…</p>';
+        var filterVal = document.getElementById('filterReview').value || 'pending_review';
         try {
           var data = await AccountingApi.payrollRequestList(session, {
-            status: document.getElementById('filterReview').value || 'pending_review',
+            status: filterVal,
             keyword: document.getElementById('filterKw').value.trim()
           });
           if (!data.success) throw new Error(data.message || '載入失敗');
@@ -129,7 +145,11 @@
           var items = data.items || [];
           document.getElementById('emptyMsg').classList.toggle('hidden', items.length > 0);
           items.forEach(function (row) {
-            if (String(row.review_status) === '待審') list.appendChild(renderItem(row));
+            if (filterVal === 'pending_review' && String(row.review_status) === '待審') {
+              list.appendChild(renderItem(row));
+            } else if (filterVal !== 'pending_review') {
+              list.appendChild(renderReadOnlyItem(row));
+            }
           });
           if (!list.children.length) document.getElementById('emptyMsg').classList.remove('hidden');
         } catch (e) {

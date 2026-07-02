@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=3" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=24"></script>
+  <script src="../../shared/js/accounting_api.js?v=25"></script>
   <script src="../../shared/js/accounting_ui.js?v=7"></script>
   <script src="../../shared/js/accounting_nav.js?v=1"></script>
   <script src="../../shared/js/accounting_boot.js?v=1"></script>
@@ -47,6 +47,7 @@
     <div class="card">
       <button type="button" class="btn btn-primary" id="reloadBtn">重新載入</button>
       <button type="button" class="btn btn-primary" id="exportBtn">匯出薪轉檔並完成發薪</button>
+      <button type="button" class="btn btn-muted" id="markPaidBtn" style="width:100%;padding:12px;margin-top:8px">不產檔，手動標記已發薪</button>
       <p class="sub" style="margin-top:10px">每月薪資請用此頁；單筆員工請款請用「廠商待匯款」。</p>
     </div>
 
@@ -139,13 +140,31 @@
         await AccountingUi.runAsync(btn, {
           busyLabel: '匯出中…',
           startMessage: '正在產生薪轉檔並寫入收支…',
-          lockSelectors: ['#exportBtn', '#reloadBtn']
+          lockSelectors: ['#exportBtn', '#reloadBtn', '#markPaidBtn']
         }, async function () {
           setMsg(''); setOk('');
           var data = await AccountingApi.payrollRequestExport(session, ids);
           if (!data.success) throw new Error(data.message || '匯出失敗');
           await downloadCtbcBig5(data.filename || 'ctbc_salary.txt', data.content || '');
           setOk('已完成 ' + (data.count || ids.length) + ' 筆：檔案已下載。上傳中信請選「薪資轉帳」、BIG-5');
+          await loadList();
+        }).catch(function (e) { setMsg(e.message || String(e)); });
+      });
+
+      document.getElementById('markPaidBtn').addEventListener('click', async function () {
+        var ids = selectedIds();
+        if (!ids.length) { setMsg('請先勾選要標記的項目'); return; }
+        if (!confirm('不產生薪轉檔，直接標記 ' + ids.length + ' 筆為已發薪並寫入收支？')) return;
+        var btn = document.getElementById('markPaidBtn');
+        await AccountingUi.runAsync(btn, {
+          busyLabel: '處理中…',
+          startMessage: '正在標記已發薪…',
+          lockSelectors: ['#exportBtn', '#reloadBtn', '#markPaidBtn']
+        }, async function () {
+          setMsg(''); setOk('');
+          var data = await AccountingApi.payrollRequestMarkPaid(session, ids);
+          if (!data.success) throw new Error(data.message || '標記失敗');
+          setOk(data.message || '已標記完成');
           await loadList();
         }).catch(function (e) { setMsg(e.message || String(e)); });
       });

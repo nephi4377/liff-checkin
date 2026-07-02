@@ -11,6 +11,7 @@
   <script src="../../shared/js/accounting_api.js?v=23"></script>
   <script src="../../shared/js/accounting_cache.js?v=20"></script>
   <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_form_helpers.js?v=4"></script>
   <script src="../../shared/js/accounting_nav.js?v=1"></script>
   <script src="../../shared/js/accounting_boot.js?v=1"></script>
   <style>
@@ -71,6 +72,9 @@
   <script>
     (function () {
       var session = null;
+      function normPhone(v) {
+        return AccountingFormHelpers.normalizeTaiwanPhone(v);
+      }
       var ui = AccountingUi.feedback();
       function setMsg(t) { ui.setMsg(t); }
       function setOk(t) { ui.setOk(t); }
@@ -92,7 +96,7 @@
           div.innerHTML = '<strong>' + (p.name || '') + '</strong>' +
             (p.account_name ? '（' + p.account_name + '）' : '') + '<br>' +
             '<span class="bank">' + bankLine + '</span><br>' +
-            '<span class="sub">' + (p.phone || '無電話') + '</span>';
+            '<span class="sub">' + (p.phone ? normPhone(p.phone) : '無電話') + '</span>';
           box.appendChild(div);
         });
         if (!rows || !rows.length) box.textContent = '尚無資料';
@@ -122,7 +126,7 @@
             branch_code: document.getElementById('branch_code').value.trim(),
             account_no: document.getElementById('account_no').value.trim(),
             account_name: document.getElementById('account_name').value.trim(),
-            phone: document.getElementById('phone').value.trim()
+            phone: normPhone(document.getElementById('phone').value.trim())
           };
           if (!payload.name) { setMsg('請填姓名或廠商名稱'); return; }
           if (!payload.bank_code || payload.bank_code.length !== 3) { setMsg('銀行代碼須為 3 碼'); return; }

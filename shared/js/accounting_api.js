@@ -643,39 +643,52 @@ var AccountingApi = (function () {
       return post(body);
     },
     employeeBankOcr: function (sessionOrToken, photo, kind, operatorUserId) {
-      var body = Object.assign({
+      var auth = resolveAuth(sessionOrToken);
+      var body = {
         action: 'employee_bank_ocr',
         photo: photo || {},
         kind: kind || (photo && photo.kind) || 'passbook',
         operatorUserId: operatorUserId || ''
-      }, authBody(sessionOrToken));
+      };
+      if (auth.liff_id_token) body.liff_id_token = auth.liff_id_token;
+      if (auth.dev_bypass) {
+        body.dev_bypass = true;
+        if (auth.dev_permission) body.dev_permission = auth.dev_permission;
+        if (auth.dev_user_id) body.dev_user_id = auth.dev_user_id;
+      }
       return post(body);
     },
     payrollRequestList: function (sessionOrToken, filter) {
-      var body = Object.assign({ action: 'payroll_request_list' }, authBody(sessionOrToken), filter || {});
-      return post(body);
+      return post(Object.assign({
+        action: 'payroll_request_list',
+        auth: resolveAuth(sessionOrToken)
+      }, filter || {}));
     },
     payrollRequestApprove: function (sessionOrToken, payload) {
-      var body = Object.assign({ action: 'payroll_request_approve' }, authBody(sessionOrToken), payload || {});
-      return post(body);
+      return post(Object.assign({
+        action: 'payroll_request_approve',
+        auth: resolveAuth(sessionOrToken)
+      }, payload || {}));
     },
     payrollRequestReject: function (sessionOrToken, payload) {
-      var body = Object.assign({ action: 'payroll_request_reject' }, authBody(sessionOrToken), payload || {});
-      return post(body);
+      return post(Object.assign({
+        action: 'payroll_request_reject',
+        auth: resolveAuth(sessionOrToken)
+      }, payload || {}));
     },
     payrollRequestExport: function (sessionOrToken, payrollRequestIds) {
-      var body = Object.assign({
+      return post({
         action: 'payroll_request_export',
+        auth: resolveAuth(sessionOrToken),
         payroll_request_ids: payrollRequestIds || []
-      }, authBody(sessionOrToken));
-      return post(body, 120000);
+      }, 120000);
     },
     payrollRequestMarkPaid: function (sessionOrToken, payrollRequestIds) {
-      var body = Object.assign({
+      return post({
         action: 'payroll_request_mark_paid',
+        auth: resolveAuth(sessionOrToken),
         payroll_request_ids: payrollRequestIds || []
-      }, authBody(sessionOrToken));
-      return post(body, 120000);
+      }, 120000);
     },
     primeHubIdentityFromUrl: primeHubIdentityFromUrl_,
     requestParentHubLiffToken: requestParentHubLiffToken_

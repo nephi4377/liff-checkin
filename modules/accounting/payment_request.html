@@ -441,10 +441,11 @@
         var hint = document.getElementById('remitFeeHint');
         var preview = remitFeePreview(sum);
         if (preview.fee > 0) {
-          hint.textContent = '送出時將扣匯費 $' + preview.fee.toLocaleString('zh-TW') +
-            '，實付 $' + preview.net.toLocaleString('zh-TW') + '（審核前可改分攤）';
+          hint.textContent = '入帳記請款全額 $' + sum.toLocaleString('zh-TW') +
+            '；中信實匯 $' + preview.net.toLocaleString('zh-TW') + '（扣匯費 $' + preview.fee.toLocaleString('zh-TW') +
+            '）。匯費另記一筆支出。';
         } else if (sum > 0) {
-          hint.textContent = '合計須大於 $' + REMIT_FEE_AMOUNT + ' 才會自動扣匯費';
+          hint.textContent = '合計須大於 $' + REMIT_FEE_AMOUNT + ' 時，實匯才會扣匯費';
         } else {
           hint.textContent = '';
         }
@@ -589,7 +590,8 @@
         lines.push('合計：$' + total.toLocaleString('zh-TW'));
         var feePreview = remitFeePreview(total);
         if (feePreview.fee > 0) {
-          lines.push('匯費：-$' + feePreview.fee.toLocaleString('zh-TW') + '（自動扣，審核前可改）');
+          lines.push('中信實匯：$' + feePreview.net.toLocaleString('zh-TW') + '（扣匯費 $' +
+            feePreview.fee.toLocaleString('zh-TW') + '）；入帳仍記全額，匯費另列支出');
           lines.push('實付：$' + feePreview.net.toLocaleString('zh-TW'));
         }
         if (payload.note) lines.push('備註：' + payload.note);
@@ -823,7 +825,7 @@
           document.getElementById('formCard').classList.add('hidden');
           document.getElementById('successCard').classList.remove('hidden');
           var feeNote = (data.remit_fee_deducted > 0)
-            ? '（已扣匯費 $' + data.remit_fee_deducted + '，審核前可改分攤）'
+            ? '（入帳全額 $' + (data.remit_fee_original_total || '') + '；實匯扣匯費 $' + data.remit_fee_deducted + '）'
             : '';
           document.getElementById('successHint').textContent = (mode === 'finance_direct'
             ? '已進入待匯款清單。'

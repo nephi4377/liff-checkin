@@ -134,7 +134,11 @@ export function initPayrollReviewPanel(ctx) {
         els.calcBox.innerHTML = renderBreakdownHtml(preview, disclaimer, settings, period.payType);
 
         if (existingReview) {
-            els.statusBox.innerHTML = `<p class="text-amber-800 bg-amber-50 rounded p-2">此期別已有「${esc(existingReview.status)}」申請（${esc(existingReview.submitTime?.slice(0, 10) || '')}）</p>`;
+            const st = String(existingReview.status || '');
+            const hint = (st === '已送會計' || st === '待審')
+                ? '（主管請至會計 → 薪資審核）'
+                : (st === '已審' ? '（財務請至會計 → 薪資待匯款）' : '');
+            els.statusBox.innerHTML = `<p class="text-amber-800 bg-amber-50 rounded p-2">此期別已有「${esc(st)}」申請（${esc(existingReview.submitTime?.slice(0, 10) || '')}）${esc(hint)}</p>`;
             els.submitBtn.disabled = true;
         } else {
             els.statusBox.innerHTML = '';

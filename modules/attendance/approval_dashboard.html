@@ -31,7 +31,6 @@
             <nav id="approval-tabs" class="flex gap-2 mb-6 bg-white p-1.5 rounded-xl shadow-sm border border-gray-100" role="tablist">
                 <button type="button" id="tab-leave-approval" class="flex-1 min-h-[44px] text-sm font-semibold rounded-lg bg-blue-600 text-white flex items-center justify-center gap-1.5" role="tab" aria-selected="true">假勤<span id="tab-leave-badge" class="hidden min-w-[1.25rem] h-5 px-1 text-[10px] font-bold rounded-full bg-red-500 text-white"></span></button>
                 <button type="button" id="tab-appeal-approval" class="flex-1 min-h-[44px] text-sm font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center justify-center gap-1.5" role="tab" aria-selected="false">出勤申訴<span id="tab-appeal-badge" class="hidden min-w-[1.25rem] h-5 px-1 text-[10px] font-bold rounded-full bg-amber-500 text-white"></span></button>
-                <button type="button" id="tab-payroll-approval" class="hidden flex-1 min-h-[44px] text-sm font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200" role="tab" aria-selected="false">薪資核對</button>
             </nav>
 
             <div id="leave-panel">
@@ -42,11 +41,6 @@
             <div id="appeal-panel" class="hidden">
                 <div id="appeals-container" class="space-y-4"></div>
                 <p id="no-appeals-message" class="text-center text-gray-500 py-12 hidden">目前沒有待處理的出勤申訴。</p>
-            </div>
-
-            <div id="payroll-panel" class="hidden">
-                <div id="payroll-reviews-container" class="space-y-4"></div>
-                <p id="no-payroll-message" class="text-center text-gray-500 py-12 hidden">目前沒有待審核的薪資核對申請。</p>
             </div>
         </div>
     </div>
@@ -62,13 +56,11 @@
 <script type="module">
     import { showGlobalNotification } from '../../shared/js/utils.js';
     import { initLightbox } from '../../shared/js/lightbox.js';
-    import { initPayrollReviewApproval } from './payroll_review_panel.js';
 
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
     let userProfile = null;
     let activeTab = 'leave';
     let userPermission = 1;
-    let payrollApproval = null;
 
     function escapeHtml(s) {
         if (s == null) return '';
@@ -99,23 +91,17 @@
         activeTab = tab;
         const isLeave = tab === 'leave';
         const isAppeal = tab === 'appeal';
-        const isPayroll = tab === 'payroll';
         document.getElementById('leave-panel').classList.toggle('hidden', !isLeave);
         document.getElementById('appeal-panel').classList.toggle('hidden', !isAppeal);
-        document.getElementById('payroll-panel').classList.toggle('hidden', !isPayroll);
         const tabLeave = document.getElementById('tab-leave-approval');
         const tabAppeal = document.getElementById('tab-appeal-approval');
-        const tabPayroll = document.getElementById('tab-payroll-approval');
-        const activeCls = 'flex-1 min-h-[44px] text-sm font-semibold rounded-lg bg-blue-600 text-white';
-        const inactiveCls = 'flex-1 min-h-[44px] text-sm font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200';
+        const activeCls = 'flex-1 min-h-[44px] text-sm font-semibold rounded-lg bg-blue-600 text-white flex items-center justify-center gap-1.5';
+        const inactiveCls = 'flex-1 min-h-[44px] text-sm font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center justify-center gap-1.5';
         tabLeave.className = isLeave ? activeCls : inactiveCls;
         tabAppeal.className = isAppeal ? activeCls : inactiveCls;
-        if (tabPayroll) tabPayroll.className = isPayroll ? activeCls : inactiveCls;
         tabLeave.setAttribute('aria-selected', isLeave ? 'true' : 'false');
         tabAppeal.setAttribute('aria-selected', isAppeal ? 'true' : 'false');
-        if (tabPayroll) tabPayroll.setAttribute('aria-selected', isPayroll ? 'true' : 'false');
         if (isAppeal) fetchPendingAppeals();
-        if (isPayroll && payrollApproval) payrollApproval.fetchPending();
     }
 
     async function main() {
@@ -551,7 +537,6 @@
         document.getElementById('appeals-container').addEventListener('click', handleAppealAction);
         document.getElementById('tab-leave-approval').addEventListener('click', () => switchApprovalTab('leave'));
         document.getElementById('tab-appeal-approval').addEventListener('click', () => switchApprovalTab('appeal'));
-        document.getElementById('tab-payroll-approval').addEventListener('click', () => switchApprovalTab('payroll'));
     });
 </script>    
 </body>

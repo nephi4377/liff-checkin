@@ -7,11 +7,16 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script src="../../shared/js/operator_context.js?v=1"></script>
-    <script src="../../shared/js/accounting_api.js?v=24"></script>
+    <script src="../../shared/js/accounting_api.js?v=25"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
         .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        .drop-zone { margin-top: 4px; padding: 18px 12px; border: 2px dashed #b0b8c4; border-radius: 10px; background: #f8fafc; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+        .drop-zone:hover, .drop-zone.drag-over { border-color: #3b82f6; background: #eff6ff; }
+        .drop-zone p { margin: 0; font-size: 14px; color: #374151; }
+        .drop-zone .hint { margin-top: 4px; font-size: 12px; color: #6b7280; }
+        .drop-zone input[type="file"] { display: none; }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -160,8 +165,12 @@
                 <h2 class="text-lg font-semibold text-gray-800">薪轉帳戶</h2>
                 <p class="text-xs text-gray-500 -mt-2">供會計「薪資待匯款」產生中信薪轉檔；可拍照自動帶入。</p>
                 <div class="mb-3">
-                    <label for="passbookPhoto" class="block text-gray-700 font-semibold mb-2">存摺／匯款資訊（選填）</label>
-                    <input type="file" id="passbookPhoto" accept="image/*" capture="environment" class="w-full text-sm text-gray-700" />
+                    <label class="block text-gray-700 font-semibold mb-2">存摺／匯款資訊（選填）</label>
+                    <div class="drop-zone" id="passbookDropZone" role="button" tabindex="0" aria-label="加入存摺照片">
+                        <p>拖曳圖片到這裡，或點一下選擇</p>
+                        <p class="hint">支援 JPG、PNG；可自動帶入銀行代碼、帳號、戶名</p>
+                        <input type="file" id="passbookPhoto" accept="image/*" capture="environment" />
+                    </div>
                     <div id="passbookPreview" class="mt-2"></div>
                     <p id="passbookOcrStatus" class="text-sm mt-1 text-gray-600"></p>
                 </div>
@@ -318,6 +327,7 @@
         const accountNameInput = document.getElementById('accountName');
         const taxIdInput = document.getElementById('taxId');
         const passbookPhotoInput = document.getElementById('passbookPhoto');
+        const passbookDropZone = document.getElementById('passbookDropZone');
         const passbookPreview = document.getElementById('passbookPreview');
         const passbookOcrStatus = document.getElementById('passbookOcrStatus');
         const phoneInput = document.getElementById('聯絡電話');
@@ -384,6 +394,73 @@
                 };
                 reader.onerror = reject;
                 reader.readAsDataURL(file);
+            });
+        }
+
+        function isImageFile(file) {
+            return file && String(file.type || '').indexOf('image/') === 0;
+        }
+
+        function showPassbookPreview(file) {
+            passbookPreview.innerHTML = '';
+            if (!file) return;
+            const img = document.createElement('img');
+            img.src = URL.createObjectURL(file);
+            img.alt = '存摺預覽';
+            img.className = 'max-h-40 rounded border';
+            passbookPreview.appendChild(img);
+        }
+
+        function handlePassbookFile(file) {
+            if (!file) {
+                passbookFile = null;
+                if (passbookPhotoInput) passbookPhotoInput.value = '';
+                showPassbookPreview(null);
+                setPassbookOcrStatus('', true);
+                return;
+            }
+            if (!isImageFile(file)) {
+                setPassbookOcrStatus('請上傳圖片檔（JPG、PNG 等）', false);
+                return;
+            }
+            passbookFile = file;
+            showPassbookPreview(file);
+            runPassbookOcr(file);
+        }
+
+        function setupPassbookDropZone() {
+            if (!passbookDropZone || !passbookPhotoInput) return;
+            passbookDropZone.addEventListener('click', (e) => {
+                if (e.target === passbookPhotoInput) return;
+                passbookPhotoInput.click();
+            });
+            passbookDropZone.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    passbookPhotoInput.click();
+                }
+            });
+            ['dragenter', 'dragover'].forEach((ev) => {
+                passbookDropZone.addEventListener(ev, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    passbookDropZone.classList.add('drag-over');
+                });
+            });
+            ['dragleave', 'drop'].forEach((ev) => {
+                passbookDropZone.addEventListener(ev, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    passbookDropZone.classList.remove('drag-over');
+                });
+            });
+            passbookDropZone.addEventListener('drop', (e) => {
+                const files = (e.dataTransfer && e.dataTransfer.files) ? e.dataTransfer.files : [];
+                if (files.length) handlePassbookFile(files[0]);
+            });
+            passbookPhotoInput.addEventListener('change', () => {
+                const file = passbookPhotoInput.files && passbookPhotoInput.files[0] ? passbookPhotoInput.files[0] : null;
+                handlePassbookFile(file);
             });
         }
 
@@ -460,22 +537,7 @@
             baseSalaryInput.addEventListener('change', suggestInsuredLevelFromBase);
             payTypeSelect.addEventListener('change', () => { syncInsuranceForPayType(); suggestInsuredLevelFromBase(); });
             payRuleSelect.addEventListener('change', syncInsuranceForPayType);
-            if (passbookPhotoInput) {
-                passbookPhotoInput.addEventListener('change', () => {
-                    passbookFile = passbookPhotoInput.files && passbookPhotoInput.files[0] ? passbookPhotoInput.files[0] : null;
-                    passbookPreview.innerHTML = '';
-                    if (passbookFile) {
-                        const img = document.createElement('img');
-                        img.src = URL.createObjectURL(passbookFile);
-                        img.alt = '存摺預覽';
-                        img.className = 'max-h-40 rounded border';
-                        passbookPreview.appendChild(img);
-                        runPassbookOcr(passbookFile);
-                    } else {
-                        setPassbookOcrStatus('', true);
-                    }
-                });
-            }
+            setupPassbookDropZone();
             populateInsuredLevelSelect();
         }
 
@@ -743,7 +805,7 @@
             taxIdInput.value = '';
             passbookFile = null;
             if (passbookPhotoInput) passbookPhotoInput.value = '';
-            if (passbookPreview) passbookPreview.innerHTML = '';
+            showPassbookPreview(null);
             setPassbookOcrStatus('', true);
             payTypeSelect.value = '';
             payRuleSelect.value = '';
@@ -958,6 +1020,9 @@
         }
 
         main();
+        if (typeof AccountingApi !== 'undefined' && AccountingApi.primeHubIdentityFromUrl) {
+            AccountingApi.primeHubIdentityFromUrl();
+        }
     </script>
 </body>
 </html>

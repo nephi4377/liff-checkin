@@ -9,7 +9,7 @@
   <script src="../../shared/js/operator_context.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=23"></script>
   <script src="../../shared/js/accounting_cache.js?v=20"></script>
-  <script src="../../shared/js/accounting_form_helpers.js?v=1"></script>
+  <script src="../../shared/js/accounting_form_helpers.js?v=3"></script>
   <script src="../../shared/js/accounting_ui.js?v=7"></script>
   <script src="../../shared/js/accounting_nav.js?v=1"></script>
   <style>
@@ -40,6 +40,34 @@
     .pay-tags button { flex: 1; min-width: 72px; padding: 10px 8px; border: 1px solid #ccc; border-radius: 8px; background: #fff; font-weight: 600; font-size: 15px; cursor: pointer; }
     .pay-tags button.active { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; }
     .pay-custom { margin-top: 6px; }
+    .vendor-combo-wrap { position: relative; }
+    .vendor-combo-panel {
+      position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 20;
+      background: #fff; border: 1px solid #ccc; border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.12); max-height: 220px; overflow: auto;
+    }
+    .vendor-combo-item {
+      display: block; width: 100%; text-align: left; border: none; background: #fff;
+      padding: 10px 12px; font-size: 15px; cursor: pointer;
+    }
+    .vendor-combo-item:hover, .vendor-combo-item.active { background: #e8f0fe; }
+    .vendor-combo-empty { padding: 10px 12px; font-size: 13px; color: #777; }
+    .alloc-block { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #ddd; }
+    .alloc-block .alloc-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .alloc-block .alloc-head strong { font-size: 14px; }
+    .alloc-block .alloc-sum { font-size: 13px; color: #555; }
+    .alloc-block .alloc-hint { font-size: 12px; color: #777; margin: 4px 0 8px; }
+    .alloc-block .alloc-hint.warn { color: #c5221f; }
+    .alloc-row { position: relative; border: 1px solid #e8eaed; border-radius: 8px; padding: 8px; margin-bottom: 8px; background: #fafafa; }
+    .alloc-row .alloc-rm {
+      position: absolute; top: 6px; right: 8px; border: none; background: none;
+      color: #c5221f; font-size: 12px; cursor: pointer; padding: 4px;
+    }
+    .alloc-empty { font-size: 13px; color: #777; margin: 0; }
+    .btn-ghost {
+      width: auto; padding: 8px 12px; font-size: 14px; background: #e8eaed; color: #333;
+      border: none; border-radius: 8px; cursor: pointer; margin-top: 0;
+    }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -90,10 +118,18 @@
       <div id="blockB" class="hidden">
         <label>案號（有填才記入案件毛利）</label><input id="project_no_b" type="text" list="projectNoList" />
         <label>支出日期</label><input id="txn_date_b" type="text" />
-        <label>廠商名稱</label><input id="party_name_b" type="text" list="vendorList" placeholder="可從名冊選或手動輸入" />
-        <datalist id="vendorList"></datalist>
+        <label>廠商名稱</label><input id="party_name_b" type="text" placeholder="打 1～2 字搜尋名冊，或手動輸入" />
         <label>購買品名</label><input id="item_desc_b" type="text" />
         <label>支付金額</label><input id="amount_b" type="number" inputmode="numeric" />
+        <div class="alloc-block" id="allocBlock">
+          <div class="alloc-head">
+            <strong>多案分攤（選填）</strong>
+            <span class="alloc-sum">合計 $<span id="allocSum">0</span></span>
+          </div>
+          <p class="alloc-hint" id="allocHint">一筆支出可拆到多個案場；有分攤時加總須等於支付金額。收支仍記 1 筆，毛利各案各記 1 列。</p>
+          <div id="allocList"></div>
+          <button type="button" class="btn-ghost" id="allocAddBtn">＋ 新增一案</button>
+        </div>
         <label>款項月份</label><input id="expense_month" type="number" min="1" max="12" />
         <label>付款方式</label>
         <div class="pay-tags" id="payTagsB">
@@ -132,6 +168,9 @@
       var sessionCount = 0, submitting = false, idToken = '', devBypass = false;
       var pendingPhotos = [], queryParams = {}, hubContext = { projects: [], employees: [] };
       var applicantDefault = '';
+      var cachedVendors = [];
+      var vendorCombobox = null;
+      var allocEditor = null;
       var kind = document.getElementById('kind');
       var blockA = document.getElementById('blockA');
       var blockB = document.getElementById('blockB');
@@ -170,7 +209,15 @@
       }
 
       function applyVendorsToUi(vendors) {
-        return AccountingFormHelpers.fillVendorDatalist(document.getElementById('vendorList'), vendors);
+        cachedVendors = vendors || [];
+        if (!vendorCombobox && document.getElementById('party_name_b')) {
+          vendorCombobox = AccountingFormHelpers.initVendorCombobox(
+            document.getElementById('party_name_b'),
+            function () { return cachedVendors; },
+            { minChars: 1, maxItems: 8 }
+          );
+        }
+        return cachedVendors.length;
       }
 
       function updateContextBar(ctx, vendorCount) {
@@ -260,7 +307,7 @@
         applyHubContextToUi(ctx, vendorCount);
 
         var needEmployees = !skipFormCtx && !ctx.projects.length && !ctx.employees.length;
-        var needVendors = !document.getElementById('vendorList').children.length;
+        var needVendors = !cachedVendors.length;
         if (!session || (!needEmployees && !needVendors)) return;
 
         var jobs = [];
@@ -270,7 +317,7 @@
             applyHubContextToUi(AccountingContext.load({
               projects: remote.projects || [],
               employees: remote.employees || []
-            }), document.getElementById('vendorList').children.length);
+            }), cachedVendors.length);
           }));
         }
         if (needVendors && typeof AccountingCache !== 'undefined') {
@@ -335,6 +382,14 @@
           fields.expense_month = document.getElementById('expense_month').value;
           fields.applicant = document.getElementById('applicant').value;
           fields.project_no = document.getElementById('project_no_b').value;
+          if (vendorCombobox) {
+            var vid = vendorCombobox.getVendorId();
+            if (vid) fields.vendor_id = vid;
+          }
+          if (allocEditor) {
+            var allocCheck = allocEditor.validate();
+            if (allocCheck.ok && allocCheck.rows.length) fields.allocations = allocCheck.rows;
+          }
         }
         return fields;
       }
@@ -352,8 +407,10 @@
           ['party_name_b', 'item_desc_b', 'amount_b'].forEach(function (id) {
             document.getElementById(id).value = '';
           });
+          if (vendorCombobox) vendorCombobox.clearVendorId();
           payPickerB.clear();
           setApplicantDefault();
+          if (allocEditor) allocEditor.clear();
         }
         document.getElementById('photo').value = '';
       }
@@ -390,6 +447,13 @@
       async function submitEntry() {
         if (submitting) return;
         setMsg(''); setOk('');
+        if (kind.value === 'B' && allocEditor) {
+          var allocErr = allocEditor.validate();
+          if (!allocErr.ok) {
+            setMsg(allocErr.message);
+            return;
+          }
+        }
         submitting = true;
         document.getElementById('submit').disabled = true;
         try {
@@ -479,6 +543,14 @@
         if (queryParams.kind === 'B' || queryParams.from === 'photo') kind.value = 'B';
         toggleBlocks();
         primeCachedUi();
+        allocEditor = AccountingFormHelpers.initAllocEditor(document.getElementById('allocList'), {
+          amountEl: document.getElementById('amount_b'),
+          sumEl: document.getElementById('allocSum'),
+          hintEl: document.getElementById('allocHint')
+        });
+        document.getElementById('allocAddBtn').addEventListener('click', function () {
+          if (allocEditor) allocEditor.addRow();
+        });
 
         await loadPolicy();
         if (devBypass) {
@@ -534,10 +606,10 @@
             applyHubContextToUi(AccountingContext.load({
               projects: remote.projects || [],
               employees: remote.employees || []
-            }), document.getElementById('vendorList').children.length);
+            }), cachedVendors.length);
           }).catch(function (e) { console.warn('formContext', e); });
         } else {
-          applyHubContextToUi(AccountingContext.load(), document.getElementById('vendorList').children.length);
+          applyHubContextToUi(AccountingContext.load(), cachedVendors.length);
         }
         setupHubContext(sessionRef, skippedFormCtx);
         if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});

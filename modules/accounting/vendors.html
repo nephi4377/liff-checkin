@@ -11,6 +11,7 @@
   <script src="../../shared/js/accounting_api.js?v=23"></script>
   <script src="../../shared/js/accounting_cache.js?v=20"></script>
   <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_form_helpers.js?v=4"></script>
   <script src="../../shared/js/accounting_nav.js?v=1"></script>
   <script src="../../shared/js/accounting_boot.js?v=1"></script>
   <style>
@@ -271,6 +272,9 @@
   <script>
     (function () {
       var session = null;
+      function normPhone(v) {
+        return AccountingFormHelpers.normalizeTaiwanPhone(v);
+      }
       var allVendors = [];
       var cardFile = null;
       var passbookFile = null;
@@ -335,7 +339,7 @@
         if (f.account_name) $('account_name').value = f.account_name;
         if (f.tax_id && !$('tax_id').value.trim()) $('tax_id').value = f.tax_id;
         if (f.contact_name && !$('contact_name').value.trim()) $('contact_name').value = f.contact_name;
-        if (f.contact_phone && !$('contact_phone').value.trim()) $('contact_phone').value = f.contact_phone;
+        if (f.contact_phone && !$('contact_phone').value.trim()) $('contact_phone').value = normPhone(f.contact_phone);
         if (f.contact_email && !$('contact_email').value.trim()) $('contact_email').value = f.contact_email;
         if (f.address && !$('address').value.trim()) $('address').value = f.address;
         if (f.name && !$('name').value.trim()) $('name').value = f.name;
@@ -521,7 +525,7 @@
           trade_category: $('trade_category').value,
           cost_type: $('cost_type').value,
           contact_name: $('contact_name').value.trim(),
-          contact_phone: $('contact_phone').value.trim(),
+          contact_phone: normPhone($('contact_phone').value.trim()),
           contact_email: $('contact_email').value.trim(),
           address: $('address').value.trim(),
           bank_code: $('bank_code').value.trim(),
@@ -652,7 +656,7 @@
         $('trade_category').value = v.trade_category || '其他';
         $('cost_type').value = v.cost_type || '';
         $('contact_name').value = v.contact_name || '';
-        $('contact_phone').value = v.contact_phone || '';
+        $('contact_phone').value = normPhone(v.contact_phone || '');
         $('contact_email').value = v.contact_email || '';
         $('address').value = v.address || '';
         $('bank_code').value = v.bank_code || '';
@@ -714,7 +718,7 @@
         var rows = [];
         var contactParts = [];
         if (v.contact_name) contactParts.push(String(v.contact_name));
-        if (v.contact_phone) contactParts.push(String(v.contact_phone));
+        if (v.contact_phone) contactParts.push(normPhone(v.contact_phone));
         if (contactParts.length) rows.push({ label: '聯絡', text: contactParts.join(' · ') });
 
         if (v.tax_id) rows.push({ label: '統編', text: String(v.tax_id) });
