@@ -7,11 +7,13 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=3" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=23"></script>
+  <script src="../../shared/js/accounting_api.js?v=26"></script>
+  <script src="../../shared/js/accounting_list_cache.js?v=1"></script>
+  <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=17"></script>
-  <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_ui.js?v=8"></script>
   <script src="../../shared/js/accounting_nav.js?v=1"></script>
-  <script src="../../shared/js/accounting_boot.js?v=1"></script>
+  <script src="../../shared/js/accounting_boot.js?v=2"></script>
   <style>
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; line-height: 1.45; }
@@ -102,11 +104,26 @@
       var session = null;
       var canApproveVendor = false;
       var listItems = [];
-      var busy = false;
       var ui = AccountingUi.feedback();
 
       function setMsg(t) { ui.setMsg(t); }
       function setOk(t) { ui.setOk(t); }
+      function listCacheKey() {
+        return 'ledger_review:' + JSON.stringify(buildFilter());
+      }
+      function removeFromListCache(id) {
+        if (typeof AccountingListCache === 'undefined') return;
+        AccountingListCache.patch(session, listCacheKey(), function (data) {
+          if (!data || !data.items) return;
+          data.items = data.items.filter(function (it) {
+            return it.payment_request_id !== id;
+          });
+        });
+      }
+      function itemQueueBusy(id) {
+        return typeof AccountingActionQueue !== 'undefined' &&
+          AccountingActionQueue.isPending('ledger_review', id);
+      }
       function showApp() {
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
@@ -295,33 +312,43 @@
         renderAllocRowsInPanel(panel, allocRowsFromItem(item));
 
         panel.querySelector('.btn-confirm-approve').addEventListener('click', async function () {
-          if (busy || !canApproveVendor) return;
+          if (!canApproveVendor || itemQueueBusy(item.payment_request_id)) return;
           var btn = panel.querySelector('.btn-confirm-approve');
           await AccountingUi.runAsync(btn, {
             busyLabel: '核准中…',
-            startMessage: '正在核准這筆請款…',
-            lockSelectors: ['#bulkApproveBtn', '#reloadBtn', '#list .btn']
+            queue: true,
+            queueId: 'ledger_review',
+            itemId: item.payment_request_id
           }, async function () {
             ui.clear();
             var patch = readPatchFromPanel(panel);
             var err = validateAllocRows(patch.allocations);
             if (err) { setMsg(err); return; }
             var ok = await approveVendor(item, patch);
-            if (ok) { setOk('已核准「' + (item.party_name || '') + '」，進入待匯款'); await loadList(true); }
+            if (ok) {
+              setOk('已核准「' + (item.party_name || '') + '」，進入待匯款');
+              removeFromListCache(item.payment_request_id);
+              await loadList(true);
+            }
           });
         });
         panel.querySelector('.btn-confirm-reject').addEventListener('click', async function () {
-          if (busy || !canApproveVendor) return;
+          if (!canApproveVendor || itemQueueBusy(item.payment_request_id)) return;
           var btn = panel.querySelector('.btn-confirm-reject');
           await AccountingUi.runAsync(btn, {
             busyLabel: '退回中…',
-            startMessage: '正在退回這筆請款…',
-            lockSelectors: ['#bulkApproveBtn', '#reloadBtn', '#list .btn']
+            queue: true,
+            queueId: 'ledger_review',
+            itemId: item.payment_request_id
           }, async function () {
             ui.clear();
             var reason = panel.querySelector('.inp-reject').value.trim() || '主管退回';
             var ok = await rejectVendor(item, reason);
-            if (ok) { setOk('已退回「' + (item.party_name || '') + '」'); await loadList(true); }
+            if (ok) {
+              setOk('已退回「' + (item.party_name || '') + '」');
+              removeFromListCache(item.payment_request_id);
+              await loadList(true);
+            }
           });
         });
         return panel;
@@ -360,15 +387,20 @@
           btnQuick.disabled = !ready;
           btnQuick.title = ready ? '分攤已齊，直接進待匯款' : '請先點「審核」補分攤列';
           btnQuick.addEventListener('click', async function () {
-            if (busy || !ready) return;
+            if (!ready || itemQueueBusy(item.payment_request_id)) return;
             await AccountingUi.runAsync(btnQuick, {
               busyLabel: '核准中…',
-              startMessage: '正在快速核准…',
-              lockSelectors: ['#bulkApproveBtn', '#reloadBtn', '#list .btn']
+              queue: true,
+              queueId: 'ledger_review',
+              itemId: item.payment_request_id
             }, async function () {
               ui.clear();
               var ok = await approveVendor(item);
-              if (ok) { setOk('已核准「' + (item.party_name || '') + '」，進入待匯款'); await loadList(true); }
+              if (ok) {
+                setOk('已核准「' + (item.party_name || '') + '」，進入待匯款');
+                removeFromListCache(item.payment_request_id);
+                await loadList(true);
+              }
             });
           });
           actions.appendChild(btnQuick);
@@ -395,16 +427,21 @@
           btnReject.className = 'btn btn-warn';
           btnReject.textContent = '退回';
           btnReject.addEventListener('click', async function () {
-            if (busy) return;
+            if (itemQueueBusy(item.payment_request_id)) return;
             var reason = prompt('退回原因（選填）', '主管退回') || '主管退回';
             await AccountingUi.runAsync(btnReject, {
               busyLabel: '退回中…',
-              startMessage: '正在退回…',
-              lockSelectors: ['#bulkApproveBtn', '#reloadBtn', '#list .btn']
+              queue: true,
+              queueId: 'ledger_review',
+              itemId: item.payment_request_id
             }, async function () {
               ui.clear();
               var ok = await rejectVendor(item, reason);
-              if (ok) { setOk('已退回「' + (item.party_name || '') + '」'); await loadList(true); }
+              if (ok) {
+                setOk('已退回「' + (item.party_name || '') + '」');
+                removeFromListCache(item.payment_request_id);
+                await loadList(true);
+              }
             });
           });
           actions.appendChild(btnReject);
@@ -451,7 +488,8 @@
         bar.classList.remove('hidden');
         document.getElementById('bulkSummary').textContent =
           '待審 ' + pending.length + ' 筆 · 可一次核准 ' + ready.length + ' 筆（分攤已齊）';
-        btn.disabled = !ready.length || busy;
+        btn.disabled = !ready.length ||
+          (typeof AccountingActionQueue !== 'undefined' && AccountingActionQueue.isPending('ledger_review', 'bulk'));
       }
 
       async function bulkApprove() {
@@ -468,33 +506,42 @@
 
         setMsg('');
         setOk('');
-        busy = true;
         updateBulkBar();
         var bulkBtn = document.getElementById('bulkApproveBtn');
         await AccountingUi.runAsync(bulkBtn, {
           busyLabel: '批次核准中…',
-          startMessage: '正在核准 ' + pending.length + ' 筆，請稍候…',
-          lockSelectors: ['#reloadBtn', '#list .btn']
+          queue: true,
+          queueId: 'ledger_review',
+          itemId: 'bulk'
         }, async function () {
           var okCount = 0;
           var fail = 0;
           for (var i = 0; i < pending.length; i++) {
             AccountingUi.warn('核准中… ' + (i + 1) + ' / ' + pending.length, 0);
             var ok = await approveVendor(pending[i]);
-            if (ok) okCount++; else fail++;
+            if (ok) {
+              okCount++;
+              removeFromListCache(pending[i].payment_request_id);
+            } else fail++;
           }
           if (fail) setMsg('完成：成功 ' + okCount + ' 筆，失敗 ' + fail + ' 筆');
           else setOk('已全部核准 ' + okCount + ' 筆，進入待匯款');
           await loadList(true);
         });
-        busy = false;
         updateBulkBar();
       }
 
-      async function loadList(silent) {
+      async function loadList(silent, force) {
         var run = async function () {
           if (!silent) ui.clear();
-          var data = await AccountingApi.ledgerReviewBundle(session, buildFilter());
+          var data;
+          if (typeof AccountingListCache !== 'undefined') {
+            data = await AccountingListCache.load(session, listCacheKey(), function () {
+              return AccountingApi.ledgerReviewBundle(session, buildFilter());
+            }, { force: !!force });
+          } else {
+            data = await AccountingApi.ledgerReviewBundle(session, buildFilter());
+          }
           var box = document.getElementById('list');
           box.innerHTML = '';
           if (!data.success) { setMsg(data.message); listItems = []; updateBulkBar(); return; }
@@ -509,7 +556,7 @@
         return AccountingUi.runAsync(reloadBtn, { busyLabel: '載入中…', clear: false }, run);
       }
 
-      document.getElementById('reloadBtn').addEventListener('click', loadList);
+      document.getElementById('reloadBtn').addEventListener('click', function () { loadList(false, true); });
       document.getElementById('bulkApproveBtn').addEventListener('click', bulkApprove);
 
       (async function boot() {

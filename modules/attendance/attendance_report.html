@@ -199,6 +199,19 @@
                     <div id="payroll-status-box"></div>
                     <button type="button" id="payroll-submit-btn" class="w-full sm:w-auto min-h-[44px] px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">送出薪資核對申請</button>
                 </div>
+                <div id="payroll-history-section" class="mt-8 pt-6 border-t border-gray-200">
+                    <div class="flex justify-between items-center gap-2 mb-3">
+                        <div>
+                            <h3 class="text-base font-semibold text-gray-800">已發放薪資明細</h3>
+                            <p class="text-xs text-gray-500 mt-0.5">發薪後由會計確認的金額，最近 12 期</p>
+                        </div>
+                        <button type="button" id="payroll-history-refresh-btn" class="text-sm px-3 py-2 rounded-md bg-gray-100 hover:bg-gray-200">重新載入</button>
+                    </div>
+                    <p id="payroll-history-loading" class="text-center text-gray-500 text-sm py-4 hidden">載入中…</p>
+                    <p id="payroll-history-empty" class="text-center text-gray-500 text-sm py-4 hidden">尚無發放紀錄</p>
+                    <div id="payroll-history-list" class="space-y-2"></div>
+                    <div id="payroll-payslip-detail" class="hidden mt-4"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -470,6 +483,9 @@
             userName: personalUserName,
             showGlobalNotification,
             fetchApi
+        });
+        document.getElementById('payroll-history-refresh-btn')?.addEventListener('click', () => {
+            payrollPanel?.refreshHistory?.();
         });
         document.getElementById('appeal-cancel-btn').addEventListener('click', () => {
             document.getElementById('appeal-modal').classList.remove('is-open');

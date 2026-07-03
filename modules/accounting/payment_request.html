@@ -8,9 +8,10 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=15"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=23"></script>
-  <script src="../../shared/js/accounting_cache.js?v=20"></script>
-  <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_context.js?v=1"></script>
+  <script src="../../shared/js/accounting_api.js?v=26"></script>
+  <script src="../../shared/js/accounting_cache.js?v=21"></script>
+  <script src="../../shared/js/accounting_ui.js?v=8"></script>
   <script src="../../shared/js/accounting_nav.js?v=1"></script>
   <style>
     h2 { margin: 0 0 8px; }
@@ -950,6 +951,17 @@
       document.getElementById('financeBtn').addEventListener('click', function () { submitRequest('finance_direct'); });
       document.getElementById('anotherBtn').addEventListener('click', resetForm);
 
+      function shouldFetchPaymentContext() {
+        if (isVendorSelf) return true;
+        return !vendors.length || !employees.length;
+      }
+
+      function primeEmployeesFromHub() {
+        if (employees.length || typeof AccountingContext === 'undefined') return;
+        var hub = AccountingContext.load();
+        if (hub.employees && hub.employees.length) employees = hub.employees;
+      }
+
       function primeVendorsFromCache(session) {
         if (session && typeof AccountingCache !== 'undefined') {
           var fromSession = AccountingCache.vendors(session);
@@ -1004,16 +1016,30 @@
             (isVendorSelf ? ' · 廠商' : (' · 權限 ' + session.auth.permission));
           if (!isVendorSelf) {
             vendors = primeVendorsFromCache(session);
+            primeEmployeesFromHub();
             if (vendors.length) fillSelect('pickVendor', vendors, 'vendor_id', function (v) { return v.name || v.vendor_id; }, '— 請選擇廠商 —');
+            if (employees.length) fillSelect('pickEmployee', employees, 'userId', function (e) {
+              return (e.userName || '') + ((e.bank_code && e.account_no) ? '' : '（帳戶待補）');
+            }, '— 請選擇員工 —');
           }
           showApp();
           finishPaymentRequestBoot();
-          AccountingApi.paymentRequestContext(session).then(function (ctx) {
-            if (applyPaymentRequestContext(ctx)) AccountingUi.action('載入待付款申請', 'ok');
-            else if (ctx && ctx.message) setMsg(ctx.message);
-          }).catch(function (e) {
-            if (!vendors.length) setMsg(e.message || String(e));
-          });
+          if (!shouldFetchPaymentContext()) {
+            applyPaymentRequestContext({
+              success: true,
+              vendors: vendors,
+              employees: employees,
+              can_finance_direct: (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION
+            });
+            AccountingUi.action('載入待付款申請', 'ok');
+          } else {
+            AccountingApi.paymentRequestContext(session).then(function (ctx) {
+              if (applyPaymentRequestContext(ctx)) AccountingUi.action('載入待付款申請', 'ok');
+              else if (ctx && ctx.message) setMsg(ctx.message);
+            }).catch(function (e) {
+              if (!vendors.length) setMsg(e.message || String(e));
+            });
+          }
           if (typeof AccountingCache !== 'undefined' && !AccountingCache.get(session)) {
             AccountingCache.load(session).then(function () {
               if (isVendorSelf) return;

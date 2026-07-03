@@ -3,6 +3,11 @@
  */
 var AccountingApi = (function () {
   var GAS_API = 'https://script.google.com/macros/s/AKfycbyibVTQk2eYEYXX5vb-TUFYsLIKWEg1bADR-7w1QFSg6kly3gyDAG3GkKuvQ0PBur05DA/exec';
+  var SESSION_POLICY_KEY = 'tanxin_accounting_policy_v1';
+  var SESSION_AUTH_PREFIX = 'tanxin_accounting_auth_v1:';
+  var SESSION_TOKEN_KEY = 'tanxin_accounting_liff_token_v1';
+  var POLICY_TTL_MS = 24 * 60 * 60 * 1000;
+  var AUTH_TTL_MS = 12 * 60 * 60 * 1000;
   var MIN_PERMISSION = 4;
   var SUPERVISOR_MIN_PERMISSION = 3;
   var VENDOR_PAYMENT_APPROVE_MIN_PERMISSION = 5;
@@ -10,14 +15,14 @@ var AccountingApi = (function () {
   var SUPERVISOR_DENIED_MSG = '權限不足（需主管，權限 ≥ 3）';
   var VENDOR_PAYMENT_APPROVE_DENIED_MSG = '權限不足（廠商請款審核需權限 ≥ 5）';
 
-  async function parseJsonResponse_(res) {
-    var text = await res.text();
+  async function parseJsonResponse_(res, textOpt) {
+    var text = textOpt != null ? String(textOpt) : await res.text();
     var trimmed = (text || '').trim();
     if (!trimmed) {
       throw new Error('會計 API 回傳空白（HTTP ' + res.status + '）');
     }
     if (trimmed.charAt(0) === '<') {
-      throw new Error('會計 API 回傳 HTML 而非 JSON（HTTP ' + res.status + '），請確認 accounting-gas 已部署');
+      throw new Error('會計 API 回傳 HTML 而非 JSON（HTTP ' + res.status + '）。若剛部署請等 1～2 分鐘重試；仍失敗請回報時間點');
     }
     try {
       return JSON.parse(trimmed);
@@ -26,25 +31,37 @@ var AccountingApi = (function () {
     }
   }
 
+  function shouldRetryGasHtml_(res, text) {
+    var trimmed = String(text || '').trim();
+    if (!trimmed || trimmed.charAt(0) !== '<') return false;
+    var code = res && res.status;
+    return code === 404 || code === 502 || code === 503;
+  }
+
   async function post(body, timeoutMs) {
     var opts = {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(body)
     };
+    var timer = null;
     if (timeoutMs && timeoutMs > 0) {
       var ctrl = new AbortController();
       opts.signal = ctrl.signal;
-      var timer = setTimeout(function () { ctrl.abort(); }, timeoutMs);
-      try {
-        var res = await fetch(GAS_API, opts);
-        return parseJsonResponse_(res);
-      } finally {
-        clearTimeout(timer);
-      }
+      timer = setTimeout(function () { ctrl.abort(); }, timeoutMs);
     }
-    var res = await fetch(GAS_API, opts);
-    return parseJsonResponse_(res);
+    try {
+      var res = await fetch(GAS_API, opts);
+      var text = await res.text();
+      if (shouldRetryGasHtml_(res, text)) {
+        await new Promise(function (r) { setTimeout(r, 2000); });
+        res = await fetch(GAS_API, opts);
+        text = await res.text();
+      }
+      return parseJsonResponse_(res, text);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   function readDevBypassQuery_() {
@@ -121,15 +138,80 @@ var AccountingApi = (function () {
     return { body: body, opts: opts };
   }
 
-  function invalidateBootstrapAfterCrud_(sessionOrToken, entity) {
+  function simpleHash_(s) {
+    var h = 0;
+    var str = String(s || '');
+    for (var i = 0; i < str.length; i++) {
+      h = ((h << 5) - h) + str.charCodeAt(i);
+      h |= 0;
+    }
+    return String(h);
+  }
+
+  function readSessionWrapped_(key, ttlMs) {
+    try {
+      var raw = sessionStorage.getItem(key);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      if (!parsed || parsed.data == null) return null;
+      if (ttlMs && (Date.now() - parsed.ts > ttlMs)) return null;
+      return parsed.data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function writeSessionWrapped_(key, data, ttlMs) {
+    try {
+      sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data: data, ttl: ttlMs || 0 }));
+    } catch (e) {}
+  }
+
+  function authCacheKey_(sessionOrToken) {
+    if (typeof sessionOrToken === 'object' && sessionOrToken) {
+      if (sessionOrToken.devBypass) {
+        return SESSION_AUTH_PREFIX + 'dev:' + (sessionOrToken.devUserId || '') + ':' + (sessionOrToken.devPermission || 0);
+      }
+      var tok = sessionOrToken.idToken || '';
+      if (tok) return SESSION_AUTH_PREFIX + 'liff:' + simpleHash_(tok);
+      if (sessionOrToken.auth && sessionOrToken.auth.user_id) {
+        return SESSION_AUTH_PREFIX + 'uid:' + sessionOrToken.auth.user_id;
+      }
+    }
+    if (typeof sessionOrToken === 'string' && sessionOrToken) {
+      return SESSION_AUTH_PREFIX + 'liff:' + simpleHash_(sessionOrToken);
+    }
+    return SESSION_AUTH_PREFIX + 'anon';
+  }
+
+  function rememberSession_(session) {
+    if (!session || !session.auth) return;
+    writeSessionWrapped_(authCacheKey_(session), session.auth, AUTH_TTL_MS);
+    if (session.idToken) {
+      try { sessionStorage.setItem(SESSION_TOKEN_KEY, session.idToken); } catch (eTok) {}
+    }
+    if (session.devBypass) {
+      writeSessionWrapped_(SESSION_AUTH_PREFIX + 'mode:dev', true, AUTH_TTL_MS);
+    }
+  }
+
+  function readCachedAuth_(sessionOrToken) {
+    return readSessionWrapped_(authCacheKey_(sessionOrToken), AUTH_TTL_MS);
+  }
+
+  function invalidateBootstrapAfterCrud_(sessionOrToken, entity, res) {
     try {
       if (typeof AccountingCache !== 'undefined' && AccountingCache.afterCrudSuccess) {
-        AccountingCache.afterCrudSuccess(sessionOrToken, entity);
+        var sess = typeof sessionOrToken === 'object' ? sessionOrToken : null;
+        AccountingCache.afterCrudSuccess(sess, entity, res);
       }
     } catch (e) {}
   }
 
   function notifyUiOperator_(session) {
+    try {
+      if (session) rememberSession_(session);
+    } catch (eRem) {}
     try {
       if (session && typeof OperatorContext !== 'undefined') OperatorContext.applySession(session);
     } catch (eOp) {}
@@ -195,14 +277,14 @@ var AccountingApi = (function () {
     crudCreate: function (sessionOrToken, entity, payload) {
       return post({ action: 'crud_create', entity: entity, auth: resolveAuth(sessionOrToken), payload: payload })
         .then(function (res) {
-          if (res && res.success) invalidateBootstrapAfterCrud_(sessionOrToken, entity);
+          if (res && res.success) invalidateBootstrapAfterCrud_(sessionOrToken, entity, res);
           return res;
         });
     },
     crudUpdate: function (sessionOrToken, entity, id, payload) {
       return post({ action: 'crud_update', entity: entity, id: id, auth: resolveAuth(sessionOrToken), payload: payload })
         .then(function (res) {
-          if (res && res.success) invalidateBootstrapAfterCrud_(sessionOrToken, entity);
+          if (res && res.success) invalidateBootstrapAfterCrud_(sessionOrToken, entity, res);
           return res;
         });
     },
@@ -227,7 +309,13 @@ var AccountingApi = (function () {
     vendorEnsureFolder: function (sessionOrToken, vendorId) {
       return post({ action: 'vendor_ensure_folder', auth: resolveAuth(sessionOrToken), vendor_id: vendorId })
         .then(function (res) {
-          if (res && res.success) invalidateBootstrapAfterCrud_(sessionOrToken, 'vendor');
+          if (res && res.success) {
+            var patchRes = res;
+            if (res.folder && !res.data) {
+              patchRes = { success: true, data: { vendor_id: vendorId, drive_folder_id: res.folder } };
+            }
+            invalidateBootstrapAfterCrud_(sessionOrToken, 'vendor', patchRes);
+          }
           return res;
         });
     },
@@ -254,7 +342,7 @@ var AccountingApi = (function () {
         vendor_id: vendorId,
         photos: photos || []
       }).then(function (res) {
-        if (res && res.success) invalidateBootstrapAfterCrud_(sessionOrToken, 'vendor');
+        if (res && res.success) invalidateBootstrapAfterCrud_(sessionOrToken, 'vendor', res);
         return res;
       });
     },
@@ -281,9 +369,43 @@ var AccountingApi = (function () {
         payload: payload || {}
       });
     },
-    loadPolicy: async function () {
+    loadPolicy: async function (opts) {
+      opts = opts || {};
+      var cached = !opts.force ? readSessionWrapped_(SESSION_POLICY_KEY, POLICY_TTL_MS) : null;
+      if (cached && !opts.background) {
+        post({ action: 'accounting_policy' }).then(function (data) {
+          var policy = (data && data.policy) || {};
+          writeSessionWrapped_(SESSION_POLICY_KEY, policy, POLICY_TTL_MS);
+        }).catch(function () {});
+        return cached;
+      }
       var data = await post({ action: 'accounting_policy' });
-      return (data && data.policy) || {};
+      var policy = (data && data.policy) || {};
+      writeSessionWrapped_(SESSION_POLICY_KEY, policy, POLICY_TTL_MS);
+      return policy;
+    },
+    tryCachedSession: function (opts) {
+      opts = opts || {};
+      var policy = readSessionWrapped_(SESSION_POLICY_KEY, POLICY_TTL_MS);
+      if (!policy) return null;
+      var minPerm = opts.minPermission != null ? opts.minPermission : MIN_PERMISSION;
+      if (policy.authBypass || readSessionWrapped_(SESSION_AUTH_PREFIX + 'mode:dev', AUTH_TTL_MS)) {
+        var pack = devBypassAuthBody_(opts.authAction || 'accounting_auth_me');
+        var auth = readSessionWrapped_(SESSION_AUTH_PREFIX + 'dev:' + (pack.opts.dev_user_id || '') + ':' + (pack.opts.dev_permission || 0), AUTH_TTL_MS);
+        if (!auth || (auth.permission || 0) < minPerm) return null;
+        return buildDevBypassSession_(auth, pack.opts);
+      }
+      var token = '';
+      try { token = sessionStorage.getItem(SESSION_TOKEN_KEY) || ''; } catch (eTok) {}
+      if (!token) return null;
+      var authHub = readSessionWrapped_(SESSION_AUTH_PREFIX + 'liff:' + simpleHash_(token), AUTH_TTL_MS);
+      if (!authHub || (authHub.permission || 0) < minPerm) return null;
+      return {
+        devBypass: false,
+        profile: { userId: authHub.user_id, displayName: authHub.display_name },
+        idToken: token,
+        auth: authHub
+      };
     },
     formContext: function (sessionOrToken) {
       return post({ action: 'accounting_form_context', auth: resolveAuth(sessionOrToken) });
@@ -689,6 +811,13 @@ var AccountingApi = (function () {
         auth: resolveAuth(sessionOrToken),
         payroll_request_ids: payrollRequestIds || []
       }, 120000);
+    },
+    payrollRequestNotifyPayslip: function (sessionOrToken, payrollRequestId) {
+      return post({
+        action: 'payroll_request_notify_payslip',
+        auth: resolveAuth(sessionOrToken),
+        payroll_request_id: payrollRequestId
+      });
     },
     primeHubIdentityFromUrl: primeHubIdentityFromUrl_,
     requestParentHubLiffToken: requestParentHubLiffToken_

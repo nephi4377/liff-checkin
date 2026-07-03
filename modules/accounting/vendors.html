@@ -8,12 +8,12 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=15"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=23"></script>
-  <script src="../../shared/js/accounting_cache.js?v=20"></script>
-  <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_api.js?v=26"></script>
+  <script src="../../shared/js/accounting_cache.js?v=21"></script>
+  <script src="../../shared/js/accounting_ui.js?v=8"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=4"></script>
   <script src="../../shared/js/accounting_nav.js?v=1"></script>
-  <script src="../../shared/js/accounting_boot.js?v=1"></script>
+  <script src="../../shared/js/accounting_boot.js?v=2"></script>
   <style>
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; }
@@ -920,7 +920,7 @@
             patchVendorFolder(saved.vendor_id, photoRes.folder);
           }
           var photoNote = photosSavedMessage(photoRes);
-          await refreshVendors(false);
+          await refreshVendors(true);
           var refreshed = allVendors.find(function (v) { return v.vendor_id === saved.vendor_id; }) || saved;
           fillForm(refreshed);
           if (editId) {

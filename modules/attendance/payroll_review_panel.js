@@ -9,14 +9,16 @@ function escPayrollHtml(s) {
 
 function formatInsuranceHtml(ins, isDaily) {
     if (isDaily) {
-        return `<p class="text-gray-500 text-xs">勞健保：日薪員工自行處理（不扣款）</p>`;
+        return `<p class="text-gray-500 text-xs">勞健保／勞退：日薪員工自行處理（不扣款）</p>`;
     }
     if (!ins || ins.type === 'none' || !(ins.total > 0)) {
-        return `<p class="text-gray-500 text-xs">勞健保：不加保／個人自行處理</p>`;
+        return `<p class="text-gray-500 text-xs">勞健保／勞退：不加保／個人自行處理</p>`;
     }
     const dep = Number(ins.healthDependentCount) || 0;
     const depNote = dep > 0 ? `，健保含眷屬 ${dep} 人` : '';
-    return `<p><strong>勞健保自付：</strong>−${(ins.total || 0).toLocaleString()} 元（勞保 ${(ins.labor || 0).toLocaleString()}＋健保 ${(ins.health || 0).toLocaleString()}${depNote}）</p>`;
+    const pension = Number(ins.pension) || 0;
+    const pensionNote = pension > 0 ? `＋勞退 ${pension.toLocaleString()}` : '';
+    return `<p><strong>勞健保／勞退自付：</strong>−${(ins.total || 0).toLocaleString()} 元（勞保 ${(ins.labor || 0).toLocaleString()}＋健保 ${(ins.health || 0).toLocaleString()}${pensionNote}${depNote}）</p>`;
 }
 
 export function initPayrollReviewPanel(ctx) {
@@ -216,7 +218,7 @@ export function initPayrollReviewPanel(ctx) {
         const remote = Number(input.remoteAllowanceAmount) || 0;
         const transport = Number(settings.transportationAllowance) || 0;
         const otherAllowance = Number(settings.otherAllowance) || 0;
-        const ins = insurancePreview || { total: 0, labor: 0, health: 0, type: 'none' };
+        const ins = insurancePreview || { total: 0, labor: 0, health: 0, pension: 0, type: 'none' };
         const insDeduction = payType === 'daily' ? 0 : (ins.total || 0);
         const st = snapshot.stats || {};
         const additions = [];
@@ -273,17 +275,19 @@ export function initPayrollReviewPanel(ctx) {
         if (remote > 0) additions.push({ label: '遠程津貼', amount: remote });
 
         if (payType === 'daily') {
-            deductions.push({ label: '勞健保', amount: 0, note: '日薪員工自行處理（不扣款）' });
+            deductions.push({ label: '勞健保／勞退', amount: 0, note: '日薪員工自行處理（不扣款）' });
         } else if (insDeduction > 0) {
             const dep = Number(ins.healthDependentCount) || 0;
             const depNote = dep > 0 ? `，含眷屬 ${dep} 人` : '';
+            const pension = Number(ins.pension) || 0;
+            const pensionNote = pension > 0 ? `＋勞退 ${pension.toLocaleString()}` : '';
             deductions.push({
-                label: '勞健保自付',
+                label: '勞健保／勞退自付',
                 amount: insDeduction,
-                note: `勞保 ${(ins.labor || 0).toLocaleString()}＋健保 ${(ins.health || 0).toLocaleString()}${depNote}`
+                note: `勞保 ${(ins.labor || 0).toLocaleString()}＋健保 ${(ins.health || 0).toLocaleString()}${pensionNote}${depNote}`
             });
         } else if (ins.type === 'none') {
-            deductions.push({ label: '勞健保', amount: 0, note: '不加保／個人自行處理' });
+            deductions.push({ label: '勞健保／勞退', amount: 0, note: '不加保／個人自行處理' });
         }
         const lateMin = st.lateMinutes || 0;
         const earlyMin = st.earlyMinutes || 0;
@@ -397,13 +401,127 @@ export function initPayrollReviewPanel(ctx) {
         els.remoteAmount.addEventListener(ev, () => { if (contextData) renderContext(); });
     });
 
+    const historyCtx = { apiBaseUrl, userId, fetchApi };
+    function loadPayslipHistoryLocal() {
+        return loadPayslipHistoryForPanel(historyCtx);
+    }
+
     return {
         loadIfNeeded() {
             if (payrollLoaded) return;
             payrollLoaded = true;
             fetchContext();
-        }
+            loadPayslipHistoryLocal();
+        },
+        refreshHistory: loadPayslipHistoryLocal
     };
+}
+
+function renderPayslipDetailHtml(detail, esc) {
+    const snap = detail.snapshot || {};
+    const earnings = snap.earnings || [];
+    const deductions = snap.deductions || [];
+    const earnRows = earnings.filter((e) => (e.amount || 0) > 0).map((e) => {
+        const note = e.note ? `<span class="text-gray-500 text-xs">（${esc(e.note)}）</span>` : '';
+        return `<li class="flex justify-between gap-2"><span>${esc(e.label)}${note}</span><span class="text-green-700">+${Number(e.amount).toLocaleString()}</span></li>`;
+    }).join('') || '<li class="text-gray-400">—</li>';
+    const dedRows = deductions.filter((d) => (d.amount || 0) > 0).map((d) => {
+        const note = d.note ? `<span class="block text-gray-500 text-xs">${esc(d.note)}</span>` : '';
+        return `<li class="py-1"><div class="flex justify-between gap-2"><span>${esc(d.label)}</span><span class="text-red-600">−${Number(d.amount).toLocaleString()}</span></div>${note}</li>`;
+    }).join('') || '<li class="text-gray-400">—</li>';
+    return `
+        <div class="bg-white border border-gray-200 rounded-lg p-4 text-sm space-y-3">
+            <div class="flex justify-between items-start gap-2">
+                <div>
+                    <p class="font-bold text-gray-800">${esc(detail.periodLabel)} 薪資明細</p>
+                    <p class="text-xs text-gray-500">${esc(detail.periodStart)}～${esc(detail.periodEnd)} · 發薪 ${esc(detail.payDate)}</p>
+                </div>
+                <span class="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800">已發放</span>
+            </div>
+            <div class="grid sm:grid-cols-2 gap-3">
+                <div><p class="text-xs font-bold text-green-800 mb-1">加項</p><ul class="space-y-1">${earnRows}</ul></div>
+                <div><p class="text-xs font-bold text-red-800 mb-1">扣項</p><ul>${dedRows}</ul></div>
+            </div>
+            <p class="text-right text-lg font-bold text-indigo-700">實發 ${Number(detail.finalAmount || 0).toLocaleString()} 元</p>
+            ${detail.bonusNote ? `<p class="text-xs text-gray-500">獎金備註：${esc(detail.bonusNote)}</p>` : ''}
+        </div>
+    `;
+}
+
+async function loadPayslipHistoryForPanel(ctx) {
+    const { apiBaseUrl, userId, fetchApi } = ctx;
+    const listEl = document.getElementById('payroll-history-list');
+    const loadingEl = document.getElementById('payroll-history-loading');
+    const detailEl = document.getElementById('payroll-payslip-detail');
+    const emptyEl = document.getElementById('payroll-history-empty');
+    if (!listEl || !userId) return;
+
+    function esc(s) { return escPayrollHtml(s); }
+
+    loadingEl?.classList.remove('hidden');
+    listEl.innerHTML = '';
+    detailEl?.classList.add('hidden');
+    try {
+        const params = {
+            page: 'attendance_api',
+            action: 'payroll_review',
+            mode: 'history',
+            operatorId: userId,
+            months: 12
+        };
+        const json = fetchApi
+            ? await fetchApi(params)
+            : await (async () => {
+                const url = new URL(apiBaseUrl);
+                Object.entries(params).forEach(([k, v]) => url.searchParams.append(k, v));
+                const res = await fetch(url);
+                return res.json();
+            })();
+        if (!json.success) throw new Error(json.message || '載入失敗');
+        const items = json.data || [];
+        emptyEl?.classList.toggle('hidden', items.length > 0);
+        listEl.innerHTML = items.map((row) => `
+            <button type="button" class="w-full text-left px-3 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 flex justify-between items-center gap-2 payroll-history-item" data-payslip-id="${esc(row.payslipId)}">
+                <span><strong>${esc(row.periodLabel)}</strong><span class="text-xs text-gray-500 block">${esc(row.periodStart)}～${esc(row.periodEnd)} · 發薪 ${esc(row.payDate || '')}</span></span>
+                <span class="font-bold text-indigo-700">${Number(row.finalAmount || 0).toLocaleString()} 元</span>
+            </button>
+        `).join('');
+        listEl.querySelectorAll('.payroll-history-item').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const payslipId = btn.dataset.payslipId;
+                if (!detailEl) return;
+                detailEl.classList.remove('hidden');
+                detailEl.innerHTML = '<p class="text-gray-500 text-sm py-2">載入明細…</p>';
+                const dParams = {
+                    page: 'attendance_api',
+                    action: 'payroll_review',
+                    mode: 'payslip',
+                    operatorId: userId,
+                    payslipId
+                };
+                const dJson = fetchApi
+                    ? await fetchApi(dParams)
+                    : await (async () => {
+                        const url = new URL(apiBaseUrl);
+                        Object.entries(dParams).forEach(([k, v]) => url.searchParams.append(k, v));
+                        const res = await fetch(url);
+                        return res.json();
+                    })();
+                if (!dJson.success || !dJson.data) {
+                    detailEl.innerHTML = `<p class="text-red-600 text-sm">${esc(dJson.message || '無法載入明細')}</p>`;
+                    return;
+                }
+                detailEl.innerHTML = renderPayslipDetailHtml(dJson.data, esc);
+            });
+        });
+    } catch (err) {
+        if (emptyEl) {
+            emptyEl.textContent = err.message || '載入發放紀錄失敗';
+            emptyEl.classList.remove('hidden');
+        }
+    } finally {
+        loadingEl?.classList.add('hidden');
+    }
 }
 
 export function initPayrollReviewApproval(ctx) {

@@ -7,10 +7,11 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=3" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=25"></script>
-  <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_api.js?v=26"></script>
+  <script src="../../shared/js/accounting_list_cache.js?v=1"></script>
+  <script src="../../shared/js/accounting_ui.js?v=8"></script>
   <script src="../../shared/js/accounting_nav.js?v=1"></script>
-  <script src="../../shared/js/accounting_boot.js?v=1"></script>
+  <script src="../../shared/js/accounting_boot.js?v=2"></script>
   <style>
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; line-height: 1.45; }
@@ -40,7 +41,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>薪資待匯款</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub">勾選後下載<strong>薪轉檔</strong>（非廠商整批匯款）。上傳中信請選「<strong>薪資轉帳</strong>」、編碼 <strong>BIG-5</strong>。</p>
+    <p class="sub">勾選後下載<strong>薪轉檔</strong>（非廠商整批匯款）。上傳中信請選「<strong>薪資轉帳</strong>」、編碼 <strong>BIG-5</strong>。發薪完成後系統會自動 LINE 通知員工薪資摘要。</p>
     <div id="msg" role="alert"></div>
     <div id="ok" aria-live="polite"></div>
 
@@ -107,12 +108,19 @@
         return div;
       }
 
-      async function loadList() {
+      async function loadList(force) {
         setMsg(''); setOk('');
         var list = document.getElementById('list');
         list.innerHTML = '<p class="sub">載入中…</p>';
         try {
-          var data = await AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
+          var data;
+          if (typeof AccountingListCache !== 'undefined') {
+            data = await AccountingListCache.load(session, 'payroll_finance:pending_payment', function () {
+              return AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
+            }, { force: !!force });
+          } else {
+            data = await AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
+          }
           if (!data.success) throw new Error(data.message || '載入失敗');
           list.innerHTML = '';
           var items = (data.items || []).filter(function (r) {
@@ -130,7 +138,7 @@
         return Array.prototype.slice.call(document.querySelectorAll('#list .chk:checked')).map(function (c) { return c.value; });
       }
 
-      document.getElementById('reloadBtn').addEventListener('click', loadList);
+      document.getElementById('reloadBtn').addEventListener('click', function () { loadList(true); });
 
       document.getElementById('exportBtn').addEventListener('click', async function () {
         var ids = selectedIds();
@@ -147,6 +155,9 @@
           if (!data.success) throw new Error(data.message || '匯出失敗');
           await downloadCtbcBig5(data.filename || 'ctbc_salary.txt', data.content || '');
           setOk('已完成 ' + (data.count || ids.length) + ' 筆：檔案已下載。上傳中信請選「薪資轉帳」、BIG-5');
+          if (typeof AccountingListCache !== 'undefined') {
+            AccountingListCache.invalidate(session, 'payroll_finance:pending_payment');
+          }
           await loadList();
         }).catch(function (e) { setMsg(e.message || String(e)); });
       });
@@ -165,6 +176,9 @@
           var data = await AccountingApi.payrollRequestMarkPaid(session, ids);
           if (!data.success) throw new Error(data.message || '標記失敗');
           setOk(data.message || '已標記完成');
+          if (typeof AccountingListCache !== 'undefined') {
+            AccountingListCache.invalidate(session, 'payroll_finance:pending_payment');
+          }
           await loadList();
         }).catch(function (e) { setMsg(e.message || String(e)); });
       });

@@ -7,10 +7,11 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=3" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=23"></script>
-  <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_api.js?v=26"></script>
+  <script src="../../shared/js/accounting_list_cache.js?v=1"></script>
+  <script src="../../shared/js/accounting_ui.js?v=8"></script>
   <script src="../../shared/js/accounting_nav.js?v=1"></script>
-  <script src="../../shared/js/accounting_boot.js?v=1"></script>
+  <script src="../../shared/js/accounting_boot.js?v=2"></script>
   <style>
     h2 { margin: 0 0 8px; }
     h3 { margin: 16px 0 8px; font-size: 15px; color: #333; }
@@ -134,7 +135,14 @@
         await AccountingBoot.run({
           onReady: async function (sess) {
             session = sess;
-            var data = await AccountingApi.vendorPaymentStatus(session);
+            var data;
+            if (typeof AccountingListCache !== 'undefined') {
+              data = await AccountingListCache.load(session, 'vendor_status', function () {
+                return AccountingApi.vendorPaymentStatus(session);
+              });
+            } else {
+              data = await AccountingApi.vendorPaymentStatus(session);
+            }
             renderItems(data);
           }
         });

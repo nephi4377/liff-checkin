@@ -7,10 +7,10 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=3" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=23"></script>
-  <script src="../../shared/js/accounting_cache.js?v=20"></script>
+  <script src="../../shared/js/accounting_api.js?v=26"></script>
+  <script src="../../shared/js/accounting_cache.js?v=21"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=3"></script>
-  <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_ui.js?v=8"></script>
   <script src="../../shared/js/accounting_nav.js?v=1"></script>
   <style>
     h2 { margin: 0 0 4px; }
@@ -154,7 +154,7 @@
     <div class="card hidden" id="recentCard"><strong>剛剛記的</strong><ul id="recent"></ul></div>
   </div>
 
-  <script src="../../shared/js/accounting_context.js"></script>
+  <script src="../../shared/js/accounting_context.js?v=1"></script>
   <script>
     var CONSTANTS = {
       GAS_API: 'https://script.google.com/macros/s/AKfycbyibVTQk2eYEYXX5vb-TUFYsLIKWEg1bADR-7w1QFSg6kly3gyDAG3GkKuvQ0PBur05DA/exec',
@@ -553,6 +553,19 @@
         });
 
         await loadPolicy();
+        var cachedSess = typeof AccountingApi.tryCachedSession === 'function'
+          ? AccountingApi.tryCachedSession({ minPermission: AccountingApi.MIN_PERMISSION })
+          : null;
+        if (cachedSess) {
+          sessionRef = cachedSess;
+          profile.userId = cachedSess.auth.user_id;
+          profile.displayName = cachedSess.auth.display_name;
+          document.getElementById('userLine').textContent = '你好，' + profile.displayName +
+            (cachedSess.devBypass ? ' · 測試模式' : '');
+          showApp();
+          setupHubContext(sessionRef);
+          if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
+        }
         if (devBypass) {
           await bootDevBypass();
           return;

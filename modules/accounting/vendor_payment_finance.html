@@ -8,12 +8,14 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=15"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=23"></script>
-  <script src="../../shared/js/accounting_cache.js?v=20"></script>
+  <script src="../../shared/js/accounting_api.js?v=26"></script>
+  <script src="../../shared/js/accounting_cache.js?v=21"></script>
+  <script src="../../shared/js/accounting_list_cache.js?v=1"></script>
+  <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=17"></script>
-  <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_ui.js?v=8"></script>
   <script src="../../shared/js/accounting_nav.js?v=1"></script>
-  <script src="../../shared/js/accounting_boot.js?v=1"></script>
+  <script src="../../shared/js/accounting_boot.js?v=2"></script>
   <style>
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; }
@@ -137,6 +139,23 @@
       function currentPayeeMode() {
         var checked = document.querySelector('input[name="payeeMode"]:checked');
         return checked ? checked.value : 'vendor';
+      }
+
+      function listCacheKey() { return 'vendor_payment:pending_payment'; }
+
+      function removeFromListCache(id) {
+        if (typeof AccountingListCache === 'undefined') return;
+        AccountingListCache.patch(session, listCacheKey(), function (data) {
+          if (!data || !data.items) return;
+          data.items = data.items.filter(function (row) {
+            return row.payment_request_id !== id;
+          });
+        });
+      }
+
+      function itemQueueBusy(id) {
+        return typeof AccountingActionQueue !== 'undefined' &&
+          AccountingActionQueue.isPending('vendor_payment', id);
       }
 
       function bankLine(row) {
@@ -271,16 +290,19 @@
         okBtn.textContent = 'OK 手動已匯';
         okBtn.addEventListener('click', async function () {
           if (!confirm('不產轉帳檔，直接標記已匯並寫收支？')) return;
+          if (itemQueueBusy(row.payment_request_id)) return;
           var btn = okBtn;
           await AccountingUi.runAsync(btn, {
             busyLabel: '處理中…',
-            startMessage: '正在標記已匯並寫入收支…',
-            lockSelectors: ['#list .btn']
+            queue: true,
+            queueId: 'vendor_payment',
+            itemId: row.payment_request_id
           }, async function () {
             ui.clear();
             var data = await AccountingApi.vendorPaymentMarkPaid(session, [row.payment_request_id]);
             if (!data.success) { setMsg(data.message || '失敗'); return; }
             setOk('已標記已匯，收支已登錄');
+            removeFromListCache(row.payment_request_id);
             await loadList(true);
           });
         });
@@ -291,16 +313,19 @@
         delBtn.textContent = '刪除';
         delBtn.addEventListener('click', async function () {
           if (!confirm('確定刪除此待匯款項目？')) return;
+          if (itemQueueBusy(row.payment_request_id)) return;
           var btn = delBtn;
           await AccountingUi.runAsync(btn, {
             busyLabel: '刪除中…',
-            startMessage: '正在刪除…',
-            lockSelectors: ['#list .btn']
+            queue: true,
+            queueId: 'vendor_payment',
+            itemId: row.payment_request_id
           }, async function () {
             ui.clear();
             var data = await AccountingApi.vendorPaymentDelete(session, row.payment_request_id);
             if (!data.success) { setMsg(data.message || '刪除失敗'); return; }
             setOk('已刪除此待匯款項目');
+            removeFromListCache(row.payment_request_id);
             await loadList(true);
           });
         });
@@ -314,10 +339,17 @@
           .map(function (el) { return el.value; });
       }
 
-      async function loadList(silent) {
+      async function loadList(silent, force) {
         var run = async function () {
           if (!silent) ui.clear();
-          var data = await AccountingApi.vendorPaymentList(session, 'pending_payment');
+          var data;
+          if (typeof AccountingListCache !== 'undefined') {
+            data = await AccountingListCache.load(session, listCacheKey(), function () {
+              return AccountingApi.vendorPaymentList(session, 'pending_payment');
+            }, { force: !!force });
+          } else {
+            data = await AccountingApi.vendorPaymentList(session, 'pending_payment');
+          }
           if (!data.success) {
             setMsg(data.message || '載入失敗');
             return;
@@ -339,7 +371,7 @@
       });
       document.getElementById('newVendor').addEventListener('change', onPayeePick);
       document.getElementById('newEmployee').addEventListener('change', onPayeePick);
-      document.getElementById('reloadBtn').addEventListener('click', loadList);
+      document.getElementById('reloadBtn').addEventListener('click', function () { loadList(false, true); });
       document.getElementById('selAllBtn').addEventListener('click', function () {
         document.querySelectorAll('#list input.chk').forEach(function (el) { el.checked = true; });
         setOk('已全選 ' + document.querySelectorAll('#list input.chk').length + ' 筆');
@@ -410,6 +442,9 @@
           document.getElementById('newProject').value = '';
           document.getElementById('newDesc').value = '';
           document.getElementById('newNote').value = '';
+          if (typeof AccountingListCache !== 'undefined') {
+            AccountingListCache.invalidate(session, listCacheKey());
+          }
           await loadList(true);
         });
       });
@@ -422,7 +457,7 @@
         await AccountingUi.runAsync(btn, {
           busyLabel: '匯出中…',
           startMessage: '正在產生轉帳檔並寫入收支，可能需要十幾秒…',
-          lockSelectors: ['#list .btn', '#addBtn', '#reloadBtn']
+          lockSelectors: ['#exportBtn', '#addBtn', '#reloadBtn']
         }, async function () {
           ui.clear();
           var data = await AccountingApi.vendorPaymentExportCtbc(session, ids);
@@ -449,9 +484,28 @@
             msg += '。部分略過：' + data.warnings.join('；');
           }
           setOk(msg);
+          if (typeof AccountingListCache !== 'undefined') {
+            AccountingListCache.invalidate(session, listCacheKey());
+          }
           await loadList(true);
         });
       });
+
+      function needPaymentRequestContext() {
+        return !vendors.length || !employees.length;
+      }
+
+      function loadPaymentRequestContextIfNeeded() {
+        if (!needPaymentRequestContext()) return;
+        AccountingApi.paymentRequestContext(session).then(function (ctx) {
+          if (!ctx.success) return;
+          if (ctx.vendors && ctx.vendors.length) vendors = ctx.vendors;
+          if (ctx.employees && ctx.employees.length) employees = ctx.employees;
+          fillVendorSelect();
+          fillEmployeeSelect();
+          syncPayeeMode();
+        }).catch(function () {});
+      }
 
       (async function boot() {
         await AccountingBoot.run({
@@ -464,18 +518,12 @@
               syncPayeeMode();
             }
             loadList().catch(function (e) { setMsg(e.message || String(e)); });
-            AccountingApi.paymentRequestContext(session).then(function (ctx) {
-              if (!ctx.success) return;
-              if (ctx.vendors && ctx.vendors.length) vendors = ctx.vendors;
-              if (ctx.employees && ctx.employees.length) employees = ctx.employees;
-              fillVendorSelect();
-              fillEmployeeSelect();
-              syncPayeeMode();
-            }).catch(function () {});
+            loadPaymentRequestContextIfNeeded();
             if (!AccountingCache.get(session)) {
               AccountingCache.load(session).then(function () {
                 vendors = AccountingCache.vendors(session) || vendors;
                 fillVendorSelect();
+                if (!employees.length) loadPaymentRequestContextIfNeeded();
               }).catch(function () {});
             }
           }

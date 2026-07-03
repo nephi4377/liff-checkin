@@ -7,10 +7,12 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=3" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=25"></script>
-  <script src="../../shared/js/accounting_ui.js?v=7"></script>
+  <script src="../../shared/js/accounting_api.js?v=26"></script>
+  <script src="../../shared/js/accounting_list_cache.js?v=1"></script>
+  <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
+  <script src="../../shared/js/accounting_ui.js?v=8"></script>
   <script src="../../shared/js/accounting_nav.js?v=1"></script>
-  <script src="../../shared/js/accounting_boot.js?v=1"></script>
+  <script src="../../shared/js/accounting_boot.js?v=2"></script>
   <style>
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; line-height: 1.45; }
@@ -130,28 +132,49 @@
         return div;
       }
 
-      async function loadList() {
+      function listCacheKey() {
+        return 'payroll_review:' + (document.getElementById('filterReview').value || 'pending_review') + ':' +
+          document.getElementById('filterKw').value.trim();
+      }
+
+      function renderListFromData(data) {
+        var list = document.getElementById('list');
+        list.innerHTML = '';
+        if (!data.success) throw new Error(data.message || '載入失敗');
+        var filterVal = document.getElementById('filterReview').value || 'pending_review';
+        var items = data.items || [];
+        document.getElementById('emptyMsg').classList.toggle('hidden', items.length > 0);
+        items.forEach(function (row) {
+          if (filterVal === 'pending_review' && String(row.review_status) === '待審') {
+            list.appendChild(renderItem(row));
+          } else if (filterVal !== 'pending_review') {
+            list.appendChild(renderReadOnlyItem(row));
+          }
+        });
+        if (!list.children.length) document.getElementById('emptyMsg').classList.remove('hidden');
+      }
+
+      async function loadList(force) {
         setMsg(''); setOk('');
         var list = document.getElementById('list');
         list.innerHTML = '<p class="sub">載入中…</p>';
-        var filterVal = document.getElementById('filterReview').value || 'pending_review';
         try {
-          var data = await AccountingApi.payrollRequestList(session, {
-            status: filterVal,
-            keyword: document.getElementById('filterKw').value.trim()
-          });
-          if (!data.success) throw new Error(data.message || '載入失敗');
-          list.innerHTML = '';
-          var items = data.items || [];
-          document.getElementById('emptyMsg').classList.toggle('hidden', items.length > 0);
-          items.forEach(function (row) {
-            if (filterVal === 'pending_review' && String(row.review_status) === '待審') {
-              list.appendChild(renderItem(row));
-            } else if (filterVal !== 'pending_review') {
-              list.appendChild(renderReadOnlyItem(row));
-            }
-          });
-          if (!list.children.length) document.getElementById('emptyMsg').classList.remove('hidden');
+          var filterVal = document.getElementById('filterReview').value || 'pending_review';
+          var data;
+          if (typeof AccountingListCache !== 'undefined') {
+            data = await AccountingListCache.load(session, listCacheKey(), function () {
+              return AccountingApi.payrollRequestList(session, {
+                status: filterVal,
+                keyword: document.getElementById('filterKw').value.trim()
+              });
+            }, { force: !!force });
+          } else {
+            data = await AccountingApi.payrollRequestList(session, {
+              status: filterVal,
+              keyword: document.getElementById('filterKw').value.trim()
+            });
+          }
+          renderListFromData(data);
         } catch (e) {
           list.innerHTML = '';
           setMsg(e.message || String(e));
@@ -163,11 +186,18 @@
         var rejectId = e.target.getAttribute('data-reject');
         if (!approveId && !rejectId) return;
         var id = approveId || rejectId;
-        e.target.disabled = true;
-        try {
+        if (typeof AccountingActionQueue !== 'undefined' &&
+            AccountingActionQueue.isPending('payroll_review', id)) return;
+        var btn = e.target;
+        await AccountingUi.runAsync(btn, {
+          busyLabel: approveId ? '核准中…' : '退回中…',
+          queue: true,
+          queueId: 'payroll_review',
+          itemId: id
+        }, async function () {
           if (rejectId) {
             var reason = document.getElementById('note-' + id).value.trim();
-            if (!reason) { setMsg('退回時請填寫審核備註'); e.target.disabled = false; return; }
+            if (!reason) { setMsg('退回時請填寫審核備註'); throw new Error('退回時請填寫審核備註'); }
             var rj = await AccountingApi.payrollRequestReject(session, {
               payroll_request_id: id, reject_reason: reason
             });
@@ -185,21 +215,28 @@
             if (!ap.success) throw new Error(ap.message);
             setOk(ap.message || '已核准，會計可至薪資待匯款匯出');
           }
+          if (typeof AccountingListCache !== 'undefined') {
+            AccountingListCache.patch(session, listCacheKey(), function (data) {
+              if (!data || !data.items) return;
+              data.items = data.items.filter(function (row) {
+                return row.payroll_request_id !== id;
+              });
+            });
+          }
           document.getElementById('pr-' + id)?.remove();
           if (!document.getElementById('list').children.length) {
             document.getElementById('emptyMsg').classList.remove('hidden');
           }
-        } catch (err) {
-          setMsg(err.message || String(err));
-          e.target.disabled = false;
-        }
+        }).catch(function (err) {
+          if (err && err.message && err.message !== '此項目已在處理中') setMsg(err.message);
+        });
       });
 
-      document.getElementById('reloadBtn').addEventListener('click', loadList);
+      document.getElementById('reloadBtn').addEventListener('click', function () { loadList(true); });
 
       AccountingBoot.run({
         minPermission: 5,
-        deniedMessage: '此頁需主管權限（≥5）',
+        deniedMsg: '此頁需主管權限（≥5）',
         onReady: async function (s) {
           session = s;
           document.getElementById('loading').classList.add('hidden');

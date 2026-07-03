@@ -1,5 +1,5 @@
 /**
- * 會計系統共用快取 — bootstrap 進 sessionStorage；CRUD 成功清除，下次 load 重抓
+ * 會計系統共用快取 — bootstrap 進 sessionStorage；CRUD 成功 patch 快取（安全時）
  */
 var AccountingCache = (function () {
   var STORAGE_KEY = 'tanxin_accounting_bootstrap_v1';
@@ -7,13 +7,29 @@ var AccountingCache = (function () {
   var _mem = {};
   var _inflight = {};
 
-  /** 寫入 bootstrap.masters 的 entity；CRUD 後整包清除。見 SPEC/18 §6.1.1 */
+  /** 寫入 bootstrap.masters 的 entity；CRUD 後優先 patch，無法 patch 才整包清除 */
   var BOOTSTRAP_INVALIDATE_ENTITIES = {
     vendor: true,
     payee: true,
     category: true,
     order_project_map: true,
     vendor_line_binding: true
+  };
+
+  var ENTITY_MASTER_KEY = {
+    vendor: 'vendors',
+    payee: 'payees',
+    category: 'categories',
+    order_project_map: 'order_project_map',
+    vendor_line_binding: 'vendor_line_bindings'
+  };
+
+  var ENTITY_ID_FIELD = {
+    vendor: 'vendor_id',
+    payee: 'payee_id',
+    category: 'category_id',
+    order_project_map: 'order_no',
+    vendor_line_binding: 'binding_id'
   };
 
   function ttlMs() {
@@ -72,8 +88,53 @@ var AccountingCache = (function () {
     try { sessionStorage.removeItem(key); } catch (e) {}
   }
 
-  function afterCrudSuccess(session, entity) {
+  function upsertMasterRow_(masters, masterKey, idField, row) {
+    if (!masters || !masterKey || !row) return false;
+    if (!masters[masterKey]) masters[masterKey] = [];
+    var list = masters[masterKey];
+    var id = row[idField];
+    if (id == null || id === '') return false;
+    var idx = -1;
+    for (var i = 0; i < list.length; i++) {
+      if (String(list[i][idField]) === String(id)) { idx = i; break; }
+    }
+    if (idx >= 0) list[idx] = Object.assign({}, list[idx], row);
+    else list.push(row);
+    return true;
+  }
+
+  function patchMaster(session, entity, row) {
+    if (!entity || !row || !BOOTSTRAP_INVALIDATE_ENTITIES[entity]) return false;
+    var data = read(session);
+    if (!data) return false;
+    var masterKey = ENTITY_MASTER_KEY[entity];
+    var idField = ENTITY_ID_FIELD[entity];
+    if (!masterKey || !idField) return false;
+    if (!data.masters) data.masters = {};
+    if (!upsertMasterRow_(data.masters, masterKey, idField, row)) return false;
+    write(session, data);
+    return true;
+  }
+
+  function patchVendorFields(session, vendorId, fields) {
+    if (!vendorId || !fields) return false;
+    var data = read(session);
+    if (!data || !data.masters || !data.masters.vendors) return false;
+    var list = data.masters.vendors;
+    var idx = -1;
+    for (var i = 0; i < list.length; i++) {
+      if (String(list[i].vendor_id) === String(vendorId)) { idx = i; break; }
+    }
+    if (idx < 0) return false;
+    list[idx] = Object.assign({}, list[idx], fields);
+    write(session, data);
+    return true;
+  }
+
+  function afterCrudSuccess(session, entity, res) {
     if (!entity || !BOOTSTRAP_INVALIDATE_ENTITIES[entity]) return;
+    var row = res && res.data;
+    if (row && patchMaster(session, entity, row)) return;
     clear(session);
   }
 
@@ -98,6 +159,8 @@ var AccountingCache = (function () {
 
   return {
     clear: clear,
+    patchMaster: patchMaster,
+    patchVendorFields: patchVendorFields,
     afterCrudSuccess: afterCrudSuccess,
     get: function (session) {
       return read(session);

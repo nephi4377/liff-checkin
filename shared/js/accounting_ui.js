@@ -478,6 +478,27 @@ var AccountingUi = (function () {
     runAsync: async function (btn, runOpts, fn) {
       runOpts = runOpts || {};
       var label = runOpts.actionLabel || runOpts.busyLabel || '處理中';
+
+      if ((runOpts.queue || runOpts.itemId != null) && typeof AccountingActionQueue !== 'undefined') {
+        return AccountingActionQueue.enqueue({
+          id: runOpts.itemId != null ? String(runOpts.itemId) : undefined,
+          btn: btn,
+          busyLabel: runOpts.busyLabel || '處理中…',
+          queueId: runOpts.queueId,
+          fn: async function () {
+            action(label, 'start');
+            try {
+              var qResult = await fn();
+              action(label, 'ok');
+              return qResult;
+            } catch (eQ) {
+              action(label, 'fail', eQ.message || String(eQ));
+              throw eQ;
+            }
+          }
+        });
+      }
+
       action(label, 'start');
       setBtnBusy(btn, true, runOpts.busyLabel || '處理中…');
       if (runOpts.lockSelectors) setButtonsDisabled(runOpts.lockSelectors, true);
