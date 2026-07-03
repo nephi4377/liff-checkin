@@ -70,7 +70,7 @@ export function addAiHumanReviewer(raw, uid, name) {
     return serializeAiHumanReviewed(list);
 }
 
-/** @returns {{ photoObservations: {index:number,description:string}[], limitations: string[], qualityFlags: string[], acceptanceLine: string } | null} */
+/** @returns {{ photoObservations: {index:number,description:string}[], handwrittenNotes: {index:number,transcription:string,meaning:string}[], workRecords: {title:string,detail:string,indices:number[],status:string}[], siteEntryStatus: string, limitations: string[], qualityFlags: string[], acceptanceLine: string } | null} */
 export function getAiExpandableDetails(findings) {
     if (!findings) return null;
     const validated = findings.validated || {};
@@ -83,22 +83,63 @@ export function getAiExpandableDetails(findings) {
             description: String(o.description || '').trim()
         }))
         .filter(o => o.description);
+    const handwrittenNotes = (raw.handwritten_notes || [])
+        .slice()
+        .sort((a, b) => (Number(a.photo_index) || 0) - (Number(b.photo_index) || 0))
+        .map(o => ({
+            index: Number(o.photo_index) || 0,
+            transcription: String(o.transcription || '').trim(),
+            meaning: String(o.meaning || '').trim()
+        }))
+        .filter(o => o.transcription || o.meaning);
+    const workRecords = (raw.work_records || [])
+        .map(w => ({
+            title: String(w.title || '').trim(),
+            detail: String(w.detail || '').trim(),
+            indices: (w.photo_indices || []).map(i => Number(i) || 0).filter(Boolean),
+            status: String(w.status || '').trim()
+        }))
+        .filter(w => w.title || w.detail);
+    const siteEntryStatus = String(raw.site_entry_status || '').trim();
     const limitations = raw.limitations || [];
     const qualityFlags = (validated.accepted_quality_flags || [])
         .map(f => String(f.issue || '').trim())
         .filter(Boolean);
     const acceptanceLine = validated.acceptance_line ? String(validated.acceptance_line).trim() : '';
-    if (!photoObservations.length && !limitations.length && !qualityFlags.length && !acceptanceLine) return null;
-    return { photoObservations, limitations, qualityFlags, acceptanceLine };
+    if (!photoObservations.length && !handwrittenNotes.length && !workRecords.length
+        && !siteEntryStatus && !limitations.length && !qualityFlags.length && !acceptanceLine) return null;
+    return { photoObservations, handwrittenNotes, workRecords, siteEntryStatus, limitations, qualityFlags, acceptanceLine };
 }
 
 function buildAiDetailsPartsHtml(details) {
     const parts = [];
+    if (details.siteEntryStatus) {
+        parts.push('<p class="text-[11px] mt-1"><span class="font-semibold">工種進場現況：</span>'
+            + escapeAiHtml(details.siteEntryStatus) + '</p>');
+    }
+    if (details.workRecords.length) {
+        const items = details.workRecords.map(w => {
+            const refs = w.indices.length ? ` <span class="text-gray-500">(#${w.indices.join('、#')})</span>` : '';
+            const title = w.title ? `<span class="font-semibold">${escapeAiHtml(w.title)}</span>：` : '';
+            return `<li class="ml-3 list-disc">${title}${escapeAiHtml(w.detail)}${refs}</li>`;
+        }).join('');
+        parts.push('<p class="text-[11px] mt-1 font-semibold">工況紀錄與建議修正：</p>'
+            + '<ul class="text-[11px] text-gray-700 space-y-0.5">' + items + '</ul>');
+    }
+    if (details.handwrittenNotes.length) {
+        const items = details.handwrittenNotes.map(o => {
+            const meaning = o.meaning ? ` — ${escapeAiHtml(o.meaning)}` : '';
+            return `<li class="ml-3 list-disc"><span class="font-semibold">#${o.index}</span> `
+                + `${escapeAiHtml(o.transcription)}${meaning}</li>`;
+        }).join('');
+        parts.push('<p class="text-[11px] mt-1 font-semibold">手寫／標記註記：</p>'
+            + '<ul class="text-[11px] text-gray-700 space-y-0.5">' + items + '</ul>');
+    }
     if (details.photoObservations.length) {
         const items = details.photoObservations.map(o =>
             `<li class="ml-3 list-disc"><span class="font-semibold">#${o.index}</span> ${escapeAiHtml(o.description)}</li>`
         ).join('');
-        parts.push('<p class="text-[11px] mt-1 font-semibold">各張照片：</p>'
+        parts.push('<p class="text-[11px] mt-1 font-semibold">重點照片：</p>'
             + '<ul class="text-[11px] text-gray-700 space-y-0.5">' + items + '</ul>');
     }
     if (details.limitations.length) {
@@ -166,7 +207,7 @@ export function buildAiAnalysisHtml(report, opts) {
                 <span>${meta.emoji}</span>
                 <span>AI 現場分析 · ${meta.label}</span>
             </div>
-            ${summary ? `<p class="text-xs mt-1.5 ${meta.text} leading-relaxed">${escapeAiHtml(summary)}</p>` : ''}
+            ${summary ? `<p class="text-xs mt-1.5 ${meta.text} leading-relaxed whitespace-pre-line">${escapeAiHtml(summary)}</p>` : ''}
             ${detailsHtml}
             ${reviewedHtml}
             ${markBtnHtml}

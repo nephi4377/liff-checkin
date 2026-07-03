@@ -327,7 +327,7 @@ export default {
                                     <span>{{ getAiMeta(report).emoji }}</span>
                                     <span>AI · {{ getAiMeta(report).label }}</span>
                                 </div>
-                                <p v-if="report.AI_Summary" class="mt-1 leading-snug" :class="getAiMeta(report).text">{{ report.AI_Summary }}</p>
+                                <p v-if="report.AI_Summary" class="mt-1 leading-snug whitespace-pre-line" :class="getAiMeta(report).text">{{ report.AI_Summary }}</p>
 
                                 <button v-if="getAiDetails(report)"
                                     type="button" @click="toggleExpanded(report.LogID)"
@@ -335,8 +335,29 @@ export default {
                                     {{ isExpanded(report.LogID) ? '收合細項' : '展開細項' }}
                                 </button>
                                 <div v-if="isExpanded(report.LogID) && getAiDetails(report)" class="mt-1 pl-2 border-l-2 space-y-1" :class="getAiMeta(report).border">
+                                    <p v-if="getAiDetails(report).siteEntryStatus" class="text-xs text-gray-700">
+                                        <span class="font-semibold">工種進場現況：</span>{{ getAiDetails(report).siteEntryStatus }}
+                                    </p>
+                                    <div v-if="getAiDetails(report).workRecords.length">
+                                        <p class="text-xs font-semibold">工況紀錄與建議修正：</p>
+                                        <ul class="text-xs text-gray-700 space-y-0.5 mt-0.5">
+                                            <li v-for="(wr, wi) in getAiDetails(report).workRecords" :key="wi" class="ml-3 list-disc">
+                                                <span v-if="wr.title" class="font-semibold">{{ wr.title }}：</span>{{ wr.detail }}
+                                                <span v-if="wr.indices.length" class="text-gray-500"> (#{{ wr.indices.join('、#') }})</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    <div v-if="getAiDetails(report).handwrittenNotes.length">
+                                        <p class="text-xs font-semibold">手寫／標記註記：</p>
+                                        <ul class="text-xs text-gray-700 space-y-0.5 mt-0.5">
+                                            <li v-for="hn in getAiDetails(report).handwrittenNotes" :key="hn.index" class="ml-3 list-disc">
+                                                <span class="font-semibold">#{{ hn.index }}</span> {{ hn.transcription }}
+                                                <span v-if="hn.meaning"> — {{ hn.meaning }}</span>
+                                            </li>
+                                        </ul>
+                                    </div>
                                     <div v-if="getAiDetails(report).photoObservations.length">
-                                        <p class="text-xs font-semibold">各張照片：</p>
+                                        <p class="text-xs font-semibold">重點照片：</p>
                                         <ul class="text-xs text-gray-700 space-y-0.5 mt-0.5">
                                             <li v-for="obs in getAiDetails(report).photoObservations" :key="obs.index" class="ml-3 list-disc">
                                                 <span class="font-semibold">#{{ obs.index }}</span> {{ obs.description }}
