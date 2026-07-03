@@ -89,3 +89,50 @@ body.acct-page .acct-main {
     grid-column: 1 / -1;
   }
 }
+
+/* 會計 SPA 殼層：index.html 固定頂部，子頁在 iframe 內嵌 */
+body.acct-shell-host #shellHeader {
+  margin-bottom: 12px;
+}
+
+body.acct-shell-host #shellBack {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+body.acct-shell-host #shellBack a {
+  color: #1a73e8;
+  text-decoration: none;
+}
+
+body.acct-shell-host #acctContentFrame {
+  display: block;
+  width: 100%;
+  min-height: calc(100vh - 140px);
+  border: none;
+  background: transparent;
+}
+
+body.acct-shell-host #acctContentFrame.hidden {
+  display: none;
+}
+
+@media (min-width: 960px) {
+  body.acct-shell-host #acctContentFrame {
+    width: 75%;
+    max-width: 75%;
+    margin-left: 20%;
+    margin-right: 5%;
+  }
+}
+
+/* 內嵌子頁：隱藏重複的選單列與使用者列 */
+body.acct-embed {
+  padding-top: 8px;
+}
+
+body.acct-embed .acct-shell-hide,
+body.acct-embed .nav,
+body.acct-embed #userLine {
+  display: none !important;
+}

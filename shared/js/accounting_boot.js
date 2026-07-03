@@ -4,7 +4,7 @@
 var AccountingBoot = (function () {
   function showApp() {
     var loading = document.getElementById('loading');
-    var app = document.getElementById('app');
+    var app = document.getElementById('app') || document.getElementById('shell');
     if (loading) loading.classList.add('hidden');
     if (app) app.classList.remove('hidden');
   }
@@ -52,6 +52,9 @@ var AccountingBoot = (function () {
    */
   async function run(opts) {
     opts = opts || {};
+    if (typeof AccountingNav !== 'undefined' && AccountingNav.isEmbed && AccountingNav.isEmbed()) {
+      opts.preloadBootstrap = false;
+    }
     if (typeof AccountingUi !== 'undefined') AccountingUi.init();
     if (typeof AccountingNav !== 'undefined') AccountingNav.init();
     var initFn = opts.initSession || function () { return AccountingApi.initSession(); };
@@ -65,6 +68,16 @@ var AccountingBoot = (function () {
           authAction: opts.authAction
         });
       } catch (eCache) {
+        cached = null;
+      }
+    }
+    if (!cached && typeof AccountingApi.tryProvisionalSession === 'function') {
+      try {
+        cached = AccountingApi.tryProvisionalSession({
+          minPermission: minPerm,
+          authAction: opts.authAction
+        });
+      } catch (eProv) {
         cached = null;
       }
     }

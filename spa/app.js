@@ -144,12 +144,12 @@ const App = {
             // 【您的要求】新增報價單工具整合路由
             '#/budget-web': { name: 'iframe', src: 'tools/BudgetWeb_Standalone.html', title: '報價單解析器' },
             '#/budget-audit': { name: 'iframe', src: 'tools/BudgetAuditor_Standalone_V2.html', title: '案場驗收表' },
-            '#/accounting-ingest': { name: 'iframe', src: 'modules/accounting/accounting_ingest.html', title: '收支登錄' },
+            '#/accounting-ingest': { name: 'iframe', src: 'modules/accounting/index.html', title: '收支登錄', params: '&route=accounting_ingest.html' },
             '#/accounting': { name: 'iframe', src: 'modules/accounting/index.html', title: '添心會計' },
-            '#/accounting/vendor-payment-approve': { name: 'iframe', src: 'modules/accounting/ledger_review.html', title: '請款審核' },
-            '#/accounting/vendor-payment-finance': { name: 'iframe', src: 'modules/accounting/vendor_payment_finance.html', title: '廠商待匯款' },
-            '#/accounting/payroll-review': { name: 'iframe', src: 'modules/accounting/payroll_review.html', title: '薪資審核' },
-            '#/accounting/payroll-finance': { name: 'iframe', src: 'modules/accounting/payroll_finance.html', title: '薪資待匯款' },
+            '#/accounting/vendor-payment-approve': { name: 'iframe', src: 'modules/accounting/index.html', title: '請款審核', params: '&route=ledger_review.html' },
+            '#/accounting/vendor-payment-finance': { name: 'iframe', src: 'modules/accounting/index.html', title: '廠商待匯款', params: '&route=vendor_payment_finance.html' },
+            '#/accounting/payroll-review': { name: 'iframe', src: 'modules/accounting/index.html', title: '薪資審核', params: '&route=payroll_review.html' },
+            '#/accounting/payroll-finance': { name: 'iframe', src: 'modules/accounting/index.html', title: '薪資待匯款', params: '&route=payroll_finance.html' },
         };
         // [v513.0 新增] 補上員工資料編輯頁面的路由
         routes['#/employee-editor'] = { name: 'iframe', src: 'modules/attendance/employee_editor.html', title: '員工資料編輯' }; // [v515.0 修正] 改為絕對路徑

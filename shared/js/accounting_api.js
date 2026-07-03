@@ -407,6 +407,35 @@ var AccountingApi = (function () {
         auth: authHub
       };
     },
+    /** 身分快取未命中時：用 HUB 已寫入的操作者 + 政策快取先顯示，背景再 initSession */
+    tryProvisionalSession: function (opts) {
+      opts = opts || {};
+      if (typeof OperatorContext === 'undefined') return null;
+      var policy = readSessionWrapped_(SESSION_POLICY_KEY, POLICY_TTL_MS);
+      if (!policy) return null;
+      var op = OperatorContext.read();
+      if (!op || !op.userId) return null;
+      var minPerm = opts.minPermission != null ? opts.minPermission : 0;
+      if ((op.permission || 0) < minPerm) return null;
+      var token = '';
+      try { token = sessionStorage.getItem(SESSION_TOKEN_KEY) || ''; } catch (eTok) {}
+      return {
+        devBypass: !!(policy.authBypass),
+        devPermission: op.permission || 0,
+        devUserId: op.userId,
+        profile: { userId: op.userId, displayName: op.displayName || op.userName || '' },
+        idToken: token,
+        auth: {
+          user_id: op.userId,
+          display_name: op.displayName || op.userName || '',
+          permission: op.permission || 0
+        },
+        provisional: true
+      };
+    },
+    cacheSession: function (session) {
+      notifyUiOperator_(session);
+    },
     formContext: function (sessionOrToken) {
       return post({ action: 'accounting_form_context', auth: resolveAuth(sessionOrToken) });
     },

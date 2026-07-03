@@ -4,15 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>添心會計</title>
-  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=3" />
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=4" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=15"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=26"></script>
+  <script src="../../shared/js/accounting_api.js?v=27"></script>
   <script src="../../shared/js/accounting_cache.js?v=21"></script>
-  <script src="../../shared/js/accounting_ui.js?v=8"></script>
-  <script src="../../shared/js/accounting_nav.js?v=1"></script>
-  <script src="../../shared/js/accounting_boot.js?v=2"></script>
+  <script src="../../shared/js/accounting_ui.js?v=9"></script>
+  <script src="../../shared/js/accounting_nav.js?v=2"></script>
+  <script src="../../shared/js/accounting_boot.js?v=4"></script>
+  <script src="../../shared/js/accounting_shell.js?v=1"></script>
   <style>
     h2 { margin: 0 0 4px; }
     .sub { color: #555; font-size: 14px; margin: 0 0 16px; }
@@ -29,9 +30,14 @@
 </head>
 <body class="acct-page">
   <div id="loading">載入中…</div>
-  <div id="app" class="hidden acct-main acct-index-menu">
-    <h2>添心會計</h2>
-    <p class="sub" id="userLine">—</p>
+  <div id="shell" class="hidden acct-main">
+    <header id="shellHeader">
+      <h2>添心會計</h2>
+      <p class="sub" id="userLine">—</p>
+      <p id="shellBack" class="hidden"><a href="#" id="shellBackLink">← 功能選單</a></p>
+    </header>
+
+    <div id="menuPanel" class="acct-index-menu">
     <p id="cacheHint"></p>
 
     <a class="card" href="accounting_ingest.html">
@@ -107,18 +113,34 @@
       <p>各案收入、支出明細與毛利；記帳有案號會自動寫入。</p>
       <span class="tag admin">財務以上</span>
     </a>
+    </div>
+
+    <iframe id="acctContentFrame" class="hidden" title="會計功能內容" loading="lazy"></iframe>
   </div>
   <script>
     (async function boot() {
       await AccountingBoot.run({
+        minPermission: 0,
+        preloadBootstrap: true,
         onReady: async function (session) {
-          if ((session.auth.permission || 0) < 5) {
+          var perm = session.auth.permission || 0;
+          if (perm < AccountingApi.MIN_PERMISSION) {
+            document.getElementById('linkVendors').classList.add('hidden');
+            document.getElementById('linkPayees').classList.add('hidden');
+            document.getElementById('linkLedgerReview').classList.add('hidden');
+            document.getElementById('linkPayrollFinance').classList.add('hidden');
+            document.getElementById('linkVendorPaymentFinance').classList.add('hidden');
+            document.getElementById('linkAttachments').classList.add('hidden');
+            document.getElementById('linkProjectMargin').classList.add('hidden');
+          }
+          if (perm < 5) {
             document.getElementById('linkVendorPaymentApprove').classList.add('hidden');
             document.getElementById('linkPayrollReview').classList.add('hidden');
           } else {
             document.getElementById('linkPayrollReview').classList.remove('hidden');
           }
-          AccountingUi.bindMenuCards('#app a.card');
+          AccountingUi.bindMenuCards('#menuPanel a.card');
+          if (typeof AccountingShell !== 'undefined') AccountingShell.initHost();
           if (!AccountingCache.get(session)) {
             AccountingUi.action('主檔預載', 'start');
             AccountingCache.load(session)

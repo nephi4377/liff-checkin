@@ -380,21 +380,25 @@ var AccountingUi = (function () {
   }
 
   function bindMenuCards(selector) {
-    document.querySelectorAll(selector || '#app a.card').forEach(function (a) {
+    document.querySelectorAll(selector || '#app a.card, #menuPanel a.card').forEach(function (a) {
       var href = a.getAttribute('href') || '';
       if (typeof AccountingNav !== 'undefined') {
         a.setAttribute('href', AccountingNav.withHubQuery(href));
       }
-      a.addEventListener('click', function () {
+      a.addEventListener('click', function (e) {
         var h3 = a.querySelector('h3');
         var label = h3 ? h3.textContent.trim() : (a.getAttribute('href') || '');
+        if (typeof AccountingShell !== 'undefined' && AccountingShell.isHost && AccountingShell.isHost()) {
+          e.preventDefault();
+          AccountingShell.navigateTo(a.getAttribute('href') || href);
+        }
         try {
           sessionStorage.setItem('acct_nav_intent', JSON.stringify({
             label: label,
             href: a.getAttribute('href') || '',
             at: Date.now()
           }));
-        } catch (e) {}
+        } catch (err) {}
         tap('點選：' + label);
       });
     });
