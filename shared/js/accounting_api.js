@@ -369,6 +369,85 @@ var AccountingApi = (function () {
         payload: payload || {}
       });
     },
+    marginGetDetail: function (sessionOrToken, filter) {
+      return post({
+        action: 'margin_get_detail',
+        auth: resolveAuth(sessionOrToken),
+        project_no: (filter && filter.project_no) || '',
+        tab_name: (filter && filter.tab_name) || ''
+      });
+    },
+    marginSaveContractAmount: function (sessionOrToken, payload) {
+      return post({
+        action: 'margin_save_contract_amount',
+        auth: resolveAuth(sessionOrToken),
+        project_no: payload.project_no,
+        tab_name: payload.tab_name || '',
+        contract_amount: payload.contract_amount,
+        use_quotation: payload.use_quotation,
+        refresh_auto: payload.refresh_auto
+      });
+    },
+    marginSaveDuration: function (sessionOrToken, payload) {
+      return post({
+        action: 'margin_save_duration',
+        auth: resolveAuth(sessionOrToken),
+        project_no: payload.project_no,
+        tab_name: payload.tab_name || '',
+        duration_start: payload.duration_start,
+        duration_end: payload.duration_end
+      });
+    },
+    marginRecalcBaseCost: function (sessionOrToken, payload) {
+      return post({
+        action: 'margin_recalc_base_cost',
+        auth: resolveAuth(sessionOrToken),
+        project_no: payload.project_no,
+        tab_name: payload.tab_name || ''
+      });
+    },
+    marginSaveBonusAllocations: function (sessionOrToken, payload) {
+      return post({
+        action: 'margin_save_bonus_allocations',
+        auth: resolveAuth(sessionOrToken),
+        project_no: payload.project_no,
+        bonus_allocations: payload.bonus_allocations || []
+      });
+    },
+    marginApplyBonus: function (sessionOrToken, payload) {
+      return post({
+        action: 'margin_apply_bonus',
+        auth: resolveAuth(sessionOrToken),
+        project_no: payload.project_no,
+        suggested_amount: payload.suggested_amount,
+        note: payload.note || ''
+      });
+    },
+    marginSaveLaborWages: function (sessionOrToken, payload) {
+      return post({
+        action: 'margin_save_labor_wages',
+        auth: resolveAuth(sessionOrToken),
+        project_no: payload.project_no,
+        labor_wages: payload.labor_wages || {}
+      });
+    },
+    marginRecalcLaborWages: function (sessionOrToken, payload) {
+      return post({
+        action: 'margin_recalc_labor_wages',
+        auth: resolveAuth(sessionOrToken),
+        project_no: payload.project_no,
+        tab_name: payload.tab_name || ''
+      });
+    },
+    marginSaveVendors: function (sessionOrToken, payload) {
+      return post({
+        action: 'margin_save_vendors',
+        auth: resolveAuth(sessionOrToken),
+        project_no: payload.project_no,
+        tab_name: payload.tab_name || '',
+        selected_vendors: payload.selected_vendors || []
+      });
+    },
     loadPolicy: async function (opts) {
       opts = opts || {};
       var cached = !opts.force ? readSessionWrapped_(SESSION_POLICY_KEY, POLICY_TTL_MS) : null;

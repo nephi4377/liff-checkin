@@ -8,13 +8,16 @@
 
 ### 1.1 專案對照
 
-| 模組 | 路徑 | clasp 建議帳號 | 日常部署 |
-|------|------|----------------|----------|
-| project-console | `backend/project-console` | nephihuang 或已授權協作 | `backend/upload.bat` → Actions |
-| CheckinSystem | `backend/CheckinSystem` | 同上 | 同上（改 `CheckinSystem/**` 觸發） |
+規則：**飲食 AI／accounting-gas → nephihuang**；**其餘後端 → tanxintainan002**。Git 一律 **nephi4377**。詳見 `backend/SPEC/GOOGLE_ACCOUNTS.md`。
+
+| 模組 | 路徑 | clasp 帳號 | 日常部署 |
+|------|------|------------|----------|
+| project-console | `backend/project-console` | **tanxintainan002** | `backend/upload.bat` → Actions |
+| CheckinSystem | `backend/CheckinSystem` | **tanxintainan002** | 同上（改 `CheckinSystem/**` 觸發） |
+| ProjectSchedule | `backend/ProjectSchedule` | **tanxintainan002** | Actions 通常僅 push |
+| core_library | `backend/core_library` | **tanxintainan002** | **`core_library/deploy.bat`**（Actions 不自動） |
 | accounting-gas | `backend/accounting-gas` | **nephihuang** | `accounting-gas/deploy.bat` 或 Actions |
-| core_library | `backend/core_library` | 依 `.clasprc` | **`core_library/deploy.bat`**（Actions 不自動） |
-| ProjectSchedule | `backend/ProjectSchedule` | 依 `.clasp.json` | Actions 通常僅 push |
+| 飲食AI小秘書 | `TanxinTools/飲食AI小秘書/gas` | **nephihuang** | `gas/deploy.bat` |
 
 ### 1.2 本機登入
 
@@ -23,7 +26,7 @@ npx @google/clasp@3.0.6-alpha login -u nephihuang
 npx @google/clasp@3.0.6-alpha login
 ```
 
-憑證：`%USERPROFILE%\.clasprc.json`。GitHub Secret `CLASPRC_JSON` 須能 push 對應 `scriptId`。
+憑證：`%USERPROFILE%\.clasprc.json`。Actions Secret `CLASPRC_JSON`：其餘後端用 **002**；會計路徑須能以 **nephihuang** push 對應 `scriptId`。
 
 ### 1.3 標準流程（project-console / CheckinSystem）
 

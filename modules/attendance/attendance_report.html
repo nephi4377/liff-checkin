@@ -127,6 +127,21 @@
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">異常(天)</div><div id="total-anomaly" class="mt-1 text-3xl font-semibold text-amber-600">0</div></div>
         </div>
 
+        <div id="payroll-admin-preview" class="hidden bg-white p-5 md:p-6 rounded-xl shadow-sm border border-indigo-100 mb-6">
+            <h2 id="payroll-admin-title" class="text-lg font-semibold text-indigo-800 mb-2">員工薪資試算預覽</h2>
+            <p class="text-sm text-gray-500 mb-3">權限 5 專用：選上方「單一員工」後顯示試算（唯讀，不可代送審）</p>
+            <div class="flex flex-wrap gap-3 items-end mb-3">
+                <div class="min-w-[200px]">
+                    <label for="payroll-admin-period" class="block text-sm font-medium text-gray-700">結算期別</label>
+                    <select id="payroll-admin-period" class="mt-1 block w-full rounded-md border-gray-300 sm:text-sm"></select>
+                </div>
+            </div>
+            <p id="payroll-admin-loading" class="text-gray-500 text-sm py-4 hidden">載入中…</p>
+            <p id="payroll-admin-error" class="text-red-600 text-sm hidden"></p>
+            <div id="payroll-admin-stats" class="text-sm bg-gray-50 rounded-lg p-3 mb-3"></div>
+            <div id="payroll-admin-calc" class="border border-indigo-100 rounded-lg p-3 bg-indigo-50/50 text-sm"></div>
+        </div>
+
         <div id="results-container" class="bg-white p-5 md:p-6 rounded-xl shadow-sm border border-gray-100">
              <h2 id="results-section-title" class="text-lg font-semibold mb-4">每人小計</h2>
              <div id="loading-spinner" class="text-center py-10 text-gray-500" style="display: none;">載入中…</div>
@@ -280,7 +295,7 @@
 <!-- 【⭐️ 核心改造：將內聯腳本改為模組，並從 utils.js 引入函式 ⭐️】 -->
 <script type="module">
     import { showGlobalNotification } from '/shared/js/utils.js';
-    import { initPayrollReviewPanel } from '/modules/attendance/payroll_review_panel.js';
+    import { initPayrollReviewPanel, initPayrollAdminPreview } from '/modules/attendance/payroll_review_panel.js';
 
     // 【您的要求】新增全域變數，用於儲存當前報表資料以供匯出
     let currentReportData = {};
@@ -302,6 +317,7 @@
     const personalShiftEnd = urlParamsInit.get('shiftEnd') || '17:30';
     let leaveLoaded = false;
     let payrollPanel = null;
+    let payrollAdminPreview = null;
     let activePersonalTab = 'attendance';
     let appealStatusMap = {};
     let pendingAppealContext = null;
@@ -820,6 +836,15 @@
         // 獨立載入員工列表
         if (!IS_PERSONAL) {
             loadAndRenderEmployees();
+            if (personalPermission >= 5) {
+                payrollAdminPreview = initPayrollAdminPreview({
+                    apiBaseUrl: API_BASE_URL,
+                    operatorId: uid,
+                    operatorPermission: personalPermission,
+                    showGlobalNotification,
+                    fetchApi
+                });
+            }
         } else {
             fetchReportData();
         }

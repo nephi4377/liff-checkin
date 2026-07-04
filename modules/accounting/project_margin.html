@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=15"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=26"></script>
+  <script src="../../shared/js/accounting_api.js?v=29"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=17"></script>
   <script src="../../shared/js/accounting_ui.js?v=10"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
@@ -37,6 +37,25 @@
     .nav a { color: #1a73e8; text-decoration: none; }
     .line-item { border-bottom: 1px solid #eee; padding: 10px 0; font-size: 14px; }
     .hint { font-size: 12px; color: #777; margin-top: 2px; }
+    .warn { color: #b06000; font-size: 13px; }
+    .section-title { margin: 0 0 8px; font-size: 15px; }
+    .ratio-row { display: grid; grid-template-columns: 1fr 80px; gap: 8px; align-items: center; margin-top: 6px; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .btn-row .btn { width: auto; margin-top: 0; flex: 1; min-width: 120px; }
+    .status-closed { color: #137333; }
+    .status-open { color: #b06000; }
+    details.base-detail { margin-top: 4px; font-size: 13px; color: #555; }
+    .check-pass { color: #137333; }
+    .check-fail { color: #c5221f; }
+    .check-row { padding: 8px 10px; border-radius: 8px; margin-top: 6px; font-size: 14px; line-height: 1.45; }
+    .check-row.pass { background: #e6f4ea; }
+    .check-row.fail { background: #fce8e6; }
+    .check-row.skip { background: #f1f3f4; color: #555; }
+    .btn:disabled { opacity: 0.65; cursor: wait; }
+    .contract-dirty { color: #b06000; font-weight: 600; }
+    #detailLoading { text-align: center; padding: 16px; color: #555; font-size: 14px; }
+    .vendor-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; font-size: 14px; }
+    .vendor-row input { width: auto; margin: 0; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -61,6 +80,73 @@
         <button type="button" class="btn btn-secondary" id="backBtn">← 返回列表</button>
         <h3 id="detailTitle" style="margin:8px 0 4px">—</h3>
         <p class="sub" id="detailSummary">—</p>
+        <div id="detailLoading" class="hidden">載入案件資料中…</div>
+      </div>
+      <div id="detailPanels">
+      <div class="card">
+        <h3 class="section-title">案件總額（驗收表核對）</h3>
+        <p class="hint" id="quotationHint">—</p>
+        <label>採用總額</label>
+        <input id="contractAmount" type="number" inputmode="numeric" />
+        <p class="hint" id="contractDirtyHint"></p>
+        <div class="btn-row">
+          <button type="button" class="btn btn-primary" id="saveContractBtn">儲存總額</button>
+          <button type="button" class="btn btn-secondary" id="refreshQuotationBtn">重新帶入驗收表</button>
+        </div>
+        <p class="hint" id="incomeCheckHint">—</p>
+      </div>
+      <div class="card">
+        <h3 class="section-title">工期</h3>
+        <p class="hint" id="projectStatusHint">—</p>
+        <div class="row2">
+          <div>
+            <label>開始日</label>
+            <input id="durationStart" type="text" placeholder="yyyy-MM-dd" />
+          </div>
+          <div>
+            <label>結束日</label>
+            <input id="durationEnd" type="text" placeholder="yyyy-MM-dd" />
+          </div>
+        </div>
+        <p class="hint" id="durationDaysHint">—</p>
+        <p class="hint">儲存工期後會一併重算基本費用</p>
+        <button type="button" class="btn btn-primary" id="saveDurationBtn">儲存工期</button>
+      </div>
+      <div class="card hidden" id="bonusAllocCard">
+        <h3 class="section-title">獎金分配比例</h3>
+        <p class="hint">多位負責人時，比例加總須為 100%</p>
+        <div id="bonusAllocList"></div>
+        <div class="btn-row">
+          <button type="button" class="btn btn-primary" id="saveBonusAllocBtn">儲存分配比例</button>
+        </div>
+      </div>
+      <div class="card hidden" id="bonusApplyCard">
+        <h3 class="section-title">申請獎金（結案後）</h3>
+        <label>建議獎金總額</label>
+        <input id="bonusSuggested" type="number" inputmode="numeric" />
+        <label>說明</label>
+        <input id="bonusNote" placeholder="選填" />
+        <button type="button" class="btn btn-primary" id="applyBonusBtn">產生獎金草稿</button>
+        <p class="hint" id="bonusDraftHint">—</p>
+      </div>
+      <div class="card hidden" id="vendorPickCard">
+        <h3 class="section-title">本案廠商（驗收表預判）</h3>
+        <p class="hint">依驗收表工種對應廠商主檔行業類別；可增刪勾選</p>
+        <div id="vendorPickList"></div>
+        <button type="button" class="btn btn-primary" id="saveVendorsBtn">儲存廠商勾選</button>
+      </div>
+      <div class="card hidden" id="checklistCard">
+        <h3 class="section-title">案件收支總結</h3>
+        <div id="checklistList"></div>
+      </div>
+      <div class="card hidden" id="laborWageCard">
+        <h3 class="section-title">施工人員工資（工務／木作／系統／油漆）</h3>
+        <p class="hint">可從廠商請款帶入或自填日薪／月薪；儲存後按「重算工資列」寫入毛利</p>
+        <div id="laborWageList"></div>
+        <div class="btn-row">
+          <button type="button" class="btn btn-secondary" id="saveLaborBtn">儲存工資設定</button>
+          <button type="button" class="btn btn-primary" id="recalcLaborBtn">重算工資列</button>
+        </div>
       </div>
       <div class="card">
         <h3 style="margin:0 0 8px">費用明細</h3>
@@ -93,6 +179,7 @@
         <input id="addNote" />
         <button type="button" class="btn btn-primary" id="addBtn">新增</button>
       </div>
+      </div>
     </div>
   </div>
   <script>
@@ -100,9 +187,35 @@
       var session = null;
       var categories = AccountingMasterData.margin_expense_categories || [];
       var current = null;
+      var detailData = null;
+      var contractDirty = false;
+      var laborRoles = ['工務', '木作', '系統', '油漆'];
 
       function setMsg(t) { if (t) AccountingUi.notify('err', t); }
       function setOk(t) { if (t) AccountingUi.notify('ok', t); }
+      function el(id) { return document.getElementById(id); }
+      function setBtnBusy(btn, busy, busyText) {
+        if (!btn) return;
+        if (busy) {
+          if (!btn.dataset.origText) btn.dataset.origText = btn.textContent;
+          btn.disabled = true;
+          btn.textContent = busyText || '處理中…';
+        } else {
+          btn.disabled = false;
+          if (btn.dataset.origText) btn.textContent = btn.dataset.origText;
+        }
+      }
+      async function runAction(btn, busyText, fn) {
+        setBtnBusy(btn, true, busyText);
+        try { return await fn(); }
+        finally { setBtnBusy(btn, false); }
+      }
+      function setDetailLoading(on) {
+        var loading = el('detailLoading');
+        var panels = el('detailPanels');
+        if (loading) loading.classList.toggle('hidden', !on);
+        if (panels) panels.classList.toggle('hidden', on);
+      }
       function showApp() {
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
@@ -147,11 +260,17 @@
       }
       async function loadOverview() {
         setMsg('');
-        var data = await AccountingApi.marginListOverview(session);
-        if (!data.success) { setMsg(data.message); return; }
-        if (data.categories && data.categories.length) categories = data.categories;
-        fillCategoryDatalist();
-        renderOverview(data.items || []);
+        var btn = el('reloadOverview');
+        setBtnBusy(btn, true, '載入中…');
+        try {
+          var data = await AccountingApi.marginListOverview(session);
+          if (!data.success) { setMsg(data.message || '無法載入案件列表，請稍後再試'); return; }
+          if (data.categories && data.categories.length) categories = data.categories;
+          fillCategoryDatalist();
+          renderOverview(data.items || []);
+        } finally {
+          setBtnBusy(btn, false);
+        }
       }
       function renderLines(lines) {
         var box = document.getElementById('lineList');
@@ -164,18 +283,255 @@
           var div = document.createElement('div');
           div.className = 'line-item';
           var tagClass = ln.txn_type === '收入' ? 'rev' : 'exp';
+          var extra = '';
+          if (ln.base_cost_breakdown) {
+            var b = ln.base_cost_breakdown;
+            extra = '<details class="base-detail"><summary>基本費用細項</summary>' +
+              '工資 ' + fmtMoney(b.base_wage) + ' · 五金 ' + fmtMoney(b.hardware_fee) +
+              ' · 清潔 ' + fmtMoney(b.cleaning_fee) + '</details>';
+          }
           div.innerHTML =
             '<div><span class="tag ' + tagClass + '">' + (ln.txn_type || '') + '</span> ' +
             (ln.category || '') + ' · ' + fmtMoney(ln.amount) + '</div>' +
             '<div>' + (ln.item_name || '') + '</div>' +
             '<div class="sub">' + (ln.txn_date || '') +
-            (ln.source ? ' · ' + ln.source : '') + '</div>';
+            (ln.source ? ' · ' + ln.source : '') + '</div>' + extra;
           if (ln.has_attachments || (ln.attachment_urls && ln.attachment_urls.length)) {
             div.appendChild(AccountingLightbox.makeButton(session, ln, '看單據'));
           }
           box.appendChild(div);
         });
       }
+
+      function renderBonusAllocations(persons, allocations) {
+        var card = el('bonusAllocCard');
+        var list = el('bonusAllocList');
+        list.innerHTML = '';
+        if (!persons || persons.length <= 1) {
+          card.classList.add('hidden');
+          return;
+        }
+        card.classList.remove('hidden');
+        var allocs = allocations && allocations.length ? allocations : persons.map(function (p, idx, arr) {
+          var base = Math.floor(100 / arr.length);
+          var rem = 100 - base * arr.length;
+          return { userId: p.userId, name: p.name, ratio: base + (idx === 0 ? rem : 0) };
+        });
+        allocs.forEach(function (a, idx) {
+          var row = document.createElement('div');
+          row.className = 'ratio-row';
+          row.innerHTML = '<span>' + (a.name || a.userId || '負責人') + '</span>';
+          var inp = document.createElement('input');
+          inp.type = 'number';
+          inp.min = '0';
+          inp.max = '100';
+          inp.step = '0.1';
+          inp.value = a.ratio != null ? a.ratio : '';
+          inp.dataset.idx = String(idx);
+          inp.dataset.userId = a.userId || '';
+          inp.dataset.name = a.name || '';
+          row.appendChild(inp);
+          var pct = document.createElement('span');
+          pct.textContent = '%';
+          row.appendChild(pct);
+          list.appendChild(row);
+        });
+      }
+
+      function collectBonusAllocations() {
+        var inputs = el('bonusAllocList').querySelectorAll('input[type="number"]');
+        var out = [];
+        inputs.forEach(function (inp) {
+          out.push({
+            userId: inp.dataset.userId || '',
+            name: inp.dataset.name || '',
+            ratio: parseFloat(inp.value) || 0
+          });
+        });
+        return out;
+      }
+
+      function renderLaborWages(laborWages) {
+        var card = el('laborWageCard');
+        var box = el('laborWageList');
+        box.innerHTML = '';
+        card.classList.remove('hidden');
+        laborRoles.forEach(function (role) {
+          var cfg = (laborWages && laborWages[role]) || { mode: 'vendor', daily: 0, monthly: 0, amount: 0 };
+          var wrap = document.createElement('div');
+          wrap.style.marginTop = '10px';
+          wrap.innerHTML =
+            '<strong>' + role + '</strong>' +
+            '<label>模式</label>' +
+            '<select data-role="' + role + '" class="labor-mode">' +
+            '<option value="vendor"' + (cfg.mode === 'vendor' ? ' selected' : '') + '>廠商請款帶入</option>' +
+            '<option value="manual"' + (cfg.mode === 'manual' ? ' selected' : '') + '>自填日薪／月薪</option>' +
+            '</select>' +
+            '<div class="row2">' +
+            '<div><label>日薪</label><input type="number" class="labor-daily" data-role="' + role + '" value="' + (cfg.daily || '') + '" /></div>' +
+            '<div><label>月薪</label><input type="number" class="labor-monthly" data-role="' + role + '" value="' + (cfg.monthly || '') + '" /></div>' +
+            '</div>' +
+            '<label>金額（廠商帶入或覆寫）</label>' +
+            '<input type="number" class="labor-amount" data-role="' + role + '" value="' + (cfg.amount || '') + '"' +
+            (cfg.manual_override ? ' data-touched="1"' : '') + ' />';
+          box.appendChild(wrap);
+        });
+        box.querySelectorAll('.labor-amount').forEach(function (inp) {
+          inp.addEventListener('input', function () { inp.dataset.touched = '1'; });
+        });
+      }
+
+      function collectLaborWages() {
+        var out = {};
+        laborRoles.forEach(function (role) {
+          var modeEl = document.querySelector('.labor-mode[data-role="' + role + '"]');
+          var dailyEl = document.querySelector('.labor-daily[data-role="' + role + '"]');
+          var monthlyEl = document.querySelector('.labor-monthly[data-role="' + role + '"]');
+          var amountEl = document.querySelector('.labor-amount[data-role="' + role + '"]');
+          out[role] = {
+            mode: modeEl ? modeEl.value : 'vendor',
+            daily: dailyEl ? parseFloat(dailyEl.value) || 0 : 0,
+            monthly: monthlyEl ? parseFloat(monthlyEl.value) || 0 : 0,
+            amount: amountEl ? parseFloat(amountEl.value) || 0 : 0,
+            manual_override: !!(amountEl && amountEl.dataset.touched === '1')
+          };
+        });
+        return out;
+      }
+
+      function renderVendorPick(vendors) {
+        var card = el('vendorPickCard');
+        var box = el('vendorPickList');
+        box.innerHTML = '';
+        if (!vendors || !vendors.length) {
+          card.classList.add('hidden');
+          return;
+        }
+        card.classList.remove('hidden');
+        vendors.forEach(function (v) {
+          var row = document.createElement('label');
+          row.className = 'vendor-row';
+          row.innerHTML =
+            '<input type="checkbox" data-vendor-id="' + (v.vendor_id || '') + '"' +
+            ' data-name="' + (v.name || '') + '"' +
+            ' data-trade="' + (v.trade_category || '') + '"' +
+            (v.selected ? ' checked' : '') + ' />' +
+            '<span>' + (v.name || v.vendor_id) + ' · ' + (v.trade_category || '') +
+            (v.predicted ? '（預判）' : '') + '</span>';
+          box.appendChild(row);
+        });
+      }
+
+      function collectSelectedVendors() {
+        var checks = el('vendorPickList').querySelectorAll('input[type="checkbox"]');
+        var out = [];
+        checks.forEach(function (cb) {
+          out.push({
+            vendor_id: cb.dataset.vendorId || '',
+            name: cb.dataset.name || '',
+            trade_category: cb.dataset.trade || '',
+            selected: cb.checked,
+            predicted: true
+          });
+        });
+        return out;
+      }
+
+      function renderChecklist(checklist) {
+        var card = el('checklistCard');
+        var box = el('checklistList');
+        box.innerHTML = '';
+        var items = (checklist && checklist.items) || [];
+        if (!items.length) {
+          card.classList.add('hidden');
+          return;
+        }
+        card.classList.remove('hidden');
+        items.forEach(function (it) {
+          var row = document.createElement('div');
+          var isSkip = !!it.skip_when_empty;
+          var rowCls = isSkip ? 'skip' : (it.pass ? 'pass' : 'fail');
+          row.className = 'check-row ' + rowCls;
+          var cls = it.pass ? 'check-pass' : 'check-fail';
+          var mark = isSkip ? '—' : (it.pass ? '✓' : '✗');
+          var extra = '';
+          if (it.id === 'income_match') {
+            extra = '<div class="hint" style="margin-top:4px">總額 ' + fmtMoney(it.contract_amount) +
+              '／收入 ' + fmtMoney(it.revenue_total) + '，差 ' + fmtMoney(it.diff) + '</div>';
+          }
+          if (it.id === 'vendors_paid' && it.vendors && it.vendors.length) {
+            extra = '<div class="hint" style="margin-top:4px">' + it.vendors.map(function (v) {
+              return (v.name || v.vendor_id) + '：' + (v.label || '');
+            }).join('；') + '</div>';
+          } else if (isSkip && it.hint) {
+            extra = '<div class="hint" style="margin-top:4px">' + it.hint + '</div>';
+          }
+          row.innerHTML = '<span class="' + cls + '">' + mark + ' ' + it.label + '</span>' + extra;
+          box.appendChild(row);
+        });
+      }
+
+      function renderDetailPanels(data) {
+        detailData = data;
+        var meta = data.meta || {};
+        var site = data.site || {};
+        var duration = data.duration || {};
+        var overview = data.overview || {};
+
+        var autoAmt = meta.contract_amount_auto || 0;
+        var hasPrice = meta.quotation_has_price_data;
+        el('quotationHint').textContent = hasPrice
+          ? ('驗收表自動總額：' + fmtMoney(autoAmt))
+          : '驗收表無價格資料，請手動填總額並儲存';
+        if (!hasPrice) el('quotationHint').className = 'warn';
+        else el('quotationHint').className = 'hint';
+
+        el('contractAmount').value = meta.contract_amount != null ? meta.contract_amount : '';
+        contractDirty = false;
+        el('contractDirtyHint').textContent = '';
+        el('contractDirtyHint').className = 'hint';
+
+        var rev = overview.revenue_total || 0;
+        var contract = parseFloat(meta.contract_amount) || 0;
+        var diff = contract - rev;
+        var incomeHint = el('incomeCheckHint');
+        incomeHint.textContent = '收入合計 ' + fmtMoney(rev) + ' · 差額 ' + fmtMoney(diff);
+        incomeHint.className = diff === 0 ? 'hint check-pass' : 'hint check-fail';
+        if (diff !== 0) {
+          incomeHint.textContent += '（尚未一致，請核對總額或收入）';
+        }
+
+        var statusCls = site.is_closed ? 'status-closed' : 'status-open';
+        el('projectStatusHint').innerHTML = '專案狀態：<span class="' + statusCls + '">' +
+          (site.project_status || '進行中') + '</span>' +
+          (duration.end_is_provisional ? '（未結案，結束日為試算用今天）' : '');
+
+        el('durationStart').value = duration.start || '';
+        el('durationEnd').value = duration.end || '';
+        el('durationDaysHint').textContent = '工期 ' + (duration.days || 0) + ' 天（含假日）';
+
+        renderBonusAllocations(site.responsible_persons, meta.bonus_allocations);
+
+        renderVendorPick(meta.selected_vendors || []);
+        renderChecklist(data.checklist);
+
+        var bonusCard = el('bonusApplyCard');
+        if (site.is_closed) {
+          bonusCard.classList.remove('hidden');
+          var draft = meta.bonus_draft;
+          el('bonusDraftHint').textContent = draft && draft.splits
+            ? ('已產生草稿：' + draft.splits.map(function (s) {
+              return (s.name || s.userId) + ' ' + fmtMoney(s.amount);
+            }).join('、'))
+            : '尚未產生獎金草稿';
+        } else {
+          bonusCard.classList.add('hidden');
+        }
+
+        renderLaborWages(meta.labor_wages);
+        renderLines(data.lines || []);
+      }
+
       async function openDetail(it) {
         current = it;
         document.getElementById('viewList').classList.add('hidden');
@@ -186,14 +542,20 @@
           '收 ' + fmtMoney(it.revenue_total) + ' · 支 ' + fmtMoney(it.expense_total) +
           ' · 毛利 ' + fmtMoney(it.gross_profit);
         document.getElementById('addDate').value = todayIso();
-        var data = await AccountingApi.marginListLines(session, {
-          tab_name: it.tab_name,
-          project_no: it.project_no
-        });
-        if (!data.success) { setMsg(data.message); return; }
-        if (data.categories && data.categories.length) categories = data.categories;
-        fillCategoryDatalist();
-        renderLines(data.lines || []);
+        setDetailLoading(true);
+        setMsg('');
+        try {
+          var data = await AccountingApi.marginGetDetail(session, {
+            tab_name: it.tab_name,
+            project_no: it.project_no
+          });
+          if (!data.success) { setMsg(data.message || '無法載入案件詳情'); return; }
+          if (data.categories && data.categories.length) categories = data.categories;
+          fillCategoryDatalist();
+          renderDetailPanels(data);
+        } finally {
+          setDetailLoading(false);
+        }
       }
       document.getElementById('backBtn').addEventListener('click', function () {
         document.getElementById('viewDetail').classList.add('hidden');
@@ -201,6 +563,150 @@
         loadOverview();
       });
       document.getElementById('reloadOverview').addEventListener('click', loadOverview);
+      el('contractAmount').addEventListener('input', function () {
+        contractDirty = true;
+        var hint = el('contractDirtyHint');
+        hint.textContent = '總額已修改，請按「儲存總額」才會寫入';
+        hint.className = 'hint contract-dirty';
+      });
+      el('saveContractBtn').addEventListener('click', async function () {
+        if (!current) return;
+        await runAction(el('saveContractBtn'), '儲存中…', async function () {
+          setMsg('');
+          var data = await AccountingApi.marginSaveContractAmount(session, {
+            project_no: current.project_no,
+            tab_name: current.tab_name,
+            contract_amount: el('contractAmount').value
+          });
+          if (!data.success) { setMsg(data.message || '儲存失敗，請確認金額'); return; }
+          setOk('總額已儲存');
+          renderDetailPanels(data);
+        });
+      });
+      el('refreshQuotationBtn').addEventListener('click', async function () {
+        if (!current) return;
+        await runAction(el('refreshQuotationBtn'), '讀取中…', async function () {
+          setMsg('');
+          var data = await AccountingApi.marginSaveContractAmount(session, {
+            project_no: current.project_no,
+            tab_name: current.tab_name,
+            refresh_auto: true
+          });
+          if (!data.success) { setMsg(data.message || '無法讀取驗收表'); return; }
+          setOk(data.meta && data.meta.contract_amount_manual
+            ? '已更新驗收表自動總額（手動總額未變）'
+            : '已從驗收表帶入總額');
+          renderDetailPanels(data);
+        });
+      });
+      el('saveDurationBtn').addEventListener('click', async function () {
+        if (!current) return;
+        await runAction(el('saveDurationBtn'), '儲存中…', async function () {
+          setMsg('');
+          var data = await AccountingApi.marginSaveDuration(session, {
+            project_no: current.project_no,
+            tab_name: current.tab_name,
+            duration_start: el('durationStart').value,
+            duration_end: el('durationEnd').value
+          });
+          if (!data.success) { setMsg(data.message || '工期儲存失敗'); return; }
+          var refreshed = await AccountingApi.marginRecalcBaseCost(session, {
+            project_no: current.project_no,
+            tab_name: current.tab_name
+          });
+          if (!refreshed.success) {
+            setOk('工期已儲存，但基本費用重算失敗，請稍後再試');
+            renderDetailPanels(data);
+            return;
+          }
+          setOk('工期已儲存，基本費用已重算');
+          renderDetailPanels(refreshed);
+        });
+      });
+      el('saveBonusAllocBtn').addEventListener('click', async function () {
+        if (!current) return;
+        await runAction(el('saveBonusAllocBtn'), '儲存中…', async function () {
+          setMsg('');
+          var allocs = collectBonusAllocations();
+          var sum = allocs.reduce(function (s, a) { return s + (parseFloat(a.ratio) || 0); }, 0);
+          if (Math.abs(sum - 100) > 0.01) {
+            setMsg('分配比例加總須為 100%（目前 ' + sum.toFixed(1) + '%）');
+            return;
+          }
+          var data = await AccountingApi.marginSaveBonusAllocations(session, {
+            project_no: current.project_no,
+            bonus_allocations: allocs
+          });
+          if (!data.success) { setMsg(data.message || '儲存失敗'); return; }
+          setOk('分配比例已儲存');
+          var refreshed = await AccountingApi.marginGetDetail(session, {
+            project_no: current.project_no,
+            tab_name: current.tab_name
+          });
+          if (refreshed.success) renderDetailPanels(refreshed);
+        });
+      });
+      el('applyBonusBtn').addEventListener('click', async function () {
+        if (!current) return;
+        await runAction(el('applyBonusBtn'), '處理中…', async function () {
+          setMsg('');
+          var data = await AccountingApi.marginApplyBonus(session, {
+            project_no: current.project_no,
+            suggested_amount: el('bonusSuggested').value,
+            note: el('bonusNote').value
+          });
+          if (!data.success) { setMsg(data.message || '無法產生獎金草稿'); return; }
+          setOk(data.message || '已產生獎金草稿');
+          var refreshed = await AccountingApi.marginGetDetail(session, {
+            project_no: current.project_no,
+            tab_name: current.tab_name
+          });
+          if (refreshed.success) renderDetailPanels(refreshed);
+        });
+      });
+      el('saveVendorsBtn').addEventListener('click', async function () {
+        if (!current) return;
+        await runAction(el('saveVendorsBtn'), '儲存中…', async function () {
+          setMsg('');
+          var data = await AccountingApi.marginSaveVendors(session, {
+            project_no: current.project_no,
+            tab_name: current.tab_name,
+            selected_vendors: collectSelectedVendors()
+          });
+          if (!data.success) { setMsg(data.message || '廠商儲存失敗'); return; }
+          setOk('廠商勾選已儲存');
+          renderDetailPanels(data);
+        });
+      });
+      el('saveLaborBtn').addEventListener('click', async function () {
+        if (!current) return;
+        await runAction(el('saveLaborBtn'), '儲存中…', async function () {
+          setMsg('');
+          var data = await AccountingApi.marginSaveLaborWages(session, {
+            project_no: current.project_no,
+            labor_wages: collectLaborWages()
+          });
+          if (!data.success) { setMsg(data.message || '工資設定儲存失敗'); return; }
+          setOk('工資設定已儲存');
+        });
+      });
+      el('recalcLaborBtn').addEventListener('click', async function () {
+        if (!current) return;
+        await runAction(el('recalcLaborBtn'), '重算中…', async function () {
+          setMsg('');
+          await AccountingApi.marginSaveLaborWages(session, {
+            project_no: current.project_no,
+            labor_wages: collectLaborWages()
+          });
+          var data = await AccountingApi.marginRecalcLaborWages(session, {
+            project_no: current.project_no,
+            tab_name: current.tab_name
+          });
+          if (!data.success) { setMsg(data.message || '工資重算失敗'); return; }
+          setOk('工資列已重算');
+          renderDetailPanels(data);
+        });
+      });
       document.getElementById('addBtn').addEventListener('click', async function () {
         if (!current) return;
         setMsg('');

@@ -1,16 +1,28 @@
 # 部署目標對照表
 
-> 由 `deploy-runbook` 分流。路徑以 `CodeBackups` 為根。
+> 由 `deploy-runbook` 分流。路徑以 `CodeBackups` 為根。  
+> 帳號細節以 [`backend/SPEC/GOOGLE_ACCOUNTS.md`](../../../backend/SPEC/GOOGLE_ACCOUNTS.md) 為準。
+
+## 帳號速查（部署前必對）
+
+| 類型 | 帳號 |
+|------|------|
+| GAS：**飲食 AI**、**accounting-gas** | **nephihuang**（`clasp -u nephihuang`） |
+| GAS：**其餘後端**（project-console、CheckinSystem、ProjectSchedule、core_library…） | **tanxintainan002** |
+| **前端／後端 Git**（push、`upload.bat`） | GitHub **`nephi4377`**（nephihuang 名下） |
+
+Git 與 GAS 身分分開：程式碼都推 `nephi4377`；只有 clasp／Web App 執行身分才分 nephihuang／002。
 
 ## 倉庫一覽
 
-| 倉庫 | 根目錄 | 日常部署指令 | LOG | 主要 SPEC |
-|------|--------|--------------|-----|-----------|
-| CODING 前端 | `CODING/` | `upload.bat` | `CODING/LOG/` | `CODING/SPEC/`、`專案全域資料字典.md` |
-| Backend GAS | `backend/` | `upload.bat` → Actions | `backend/LOG/` + 模組 `LOG/` | `project-console/SPEC/DEPLOYMENT_SPEC.md` |
-| accounting-gas | `backend/accounting-gas/` | `deploy.bat` | `accounting-gas/LOG/` | `accounting-gas/SPEC/` |
-| core_library | `backend/core_library/` | `deploy.bat`（僅 push） | `CheckinSystem/LOG/` 等交叉記錄 | Library 無 Web App |
-| 添心生產力助手 | `添心生產力助手/` | `upload.bat`（見該倉庫） | 倉庫內 `部署記錄*.md` | `SPEC/PROJECT_CONTEXT.md` |
+| 倉庫 | 根目錄 | GAS／clasp | 日常部署指令 | LOG | 主要 SPEC |
+|------|--------|------------|--------------|-----|-----------|
+| CODING 前端 | `CODING/` | —（Git：nephi4377） | `upload.bat` | `CODING/LOG/` | `CODING/SPEC/`、`專案全域資料字典.md` |
+| Backend GAS | `backend/` | **tanxintainan002**（多數模組） | `upload.bat` → Actions | `backend/LOG/` + 模組 `LOG/` | `project-console/SPEC/DEPLOYMENT_SPEC.md` |
+| accounting-gas | `backend/accounting-gas/` | **nephihuang** | `deploy.bat` | `accounting-gas/LOG/` | `accounting-gas/SPEC/` |
+| core_library | `backend/core_library/` | **tanxintainan002** | `deploy.bat`（僅 push） | `CheckinSystem/LOG/` 等交叉記錄 | Library 無 Web App |
+| 添心生產力助手 | `添心生產力助手/` | —（Git：nephi4377） | `upload.bat`（見該倉庫） | 倉庫內 `部署記錄*.md` | `SPEC/PROJECT_CONTEXT.md` |
+| 飲食 AI 小秘書 | `TanxinTools/飲食AI小秘書/` | **nephihuang** | `gas/deploy.bat` | `飲食AI小秘書/LOG/` | `飲食AI小秘書/SPEC/系統架構與部署.md` |
 
 ## backend 子模組（GitHub Actions 路徑觸發）
 
@@ -38,7 +50,7 @@
 
 - 改 **API／欄位**：backend 與 CODING 字典、前端呼叫端須一致；部署順序通常 **backend → CODING**（或同一輪兩邊都跑閘門）。
 - 改 **core_library**：先 deploy Library，再 deploy 引用它的專案。
-- **會計** Web App 執行身分應為 nephihuang；見 `GAS-Backend-Expert/reference.md`。
+- **會計／飲食 AI**：clasp 與 Web App 執行身分應為 **nephihuang**；其餘後端 GAS 用 **tanxintainan002**。見 `backend/SPEC/GOOGLE_ACCOUNTS.md`。
 - **部署前必做 Step 0**：對照 LOG／`git log`／檔案修改時間，避免另一輪對話已部署卻重跑 `upload.bat`。
 
 ## 不必跑完整部署閘門

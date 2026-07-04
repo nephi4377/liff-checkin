@@ -96,6 +96,13 @@
         var est = parseInt(row.estimated_net, 10) || 0;
         var ot = Number(row.overtime_hours) || 0;
         var remote = parseInt(row.remote_allowance, 10) || 0;
+        var marginBonus = parseInt(row.suggested_bonus_from_margin, 10) || 0;
+        var marginNote = String(row.suggested_bonus_note || '').trim();
+        var marginHint = '';
+        if (marginBonus > 0) {
+          marginHint = '<p class="sub" style="color:#b06000">案件毛利獎金草稿：' + marginBonus.toLocaleString('zh-TW') + ' 元' +
+            (marginNote ? '（' + esc(marginNote) + '）' : '') + ' — 可併入下方獎金欄</p>';
+        }
         div.innerHTML =
           '<div><strong>' + esc(row.employee_name) + '</strong> <span class="tag">' + esc(row.period_label) + '</span></div>' +
           '<p class="amount">試算實發 ' + est.toLocaleString('zh-TW') + ' 元</p>' +
@@ -103,14 +110,15 @@
           (ot > 0 ? '<p class="sub">加班 ' + ot + ' 小時</p>' : '') +
           (remote > 0 ? '<p class="sub">遠程津貼 ' + remote.toLocaleString('zh-TW') + ' 元</p>' : '') +
           (row.supplement_note ? '<p class="sub">補充：' + esc(row.supplement_note) + '</p>' : '') +
+          marginHint +
           '<div class="bank">' + bankLine(row) + '</div>' +
           '<div class="review-panel">' +
           '<div class="row2">' +
-          '<div><label>獎金（元）</label><input type="number" id="bonus-' + row.payroll_request_id + '" min="0" step="1" value="0" /></div>' +
+          '<div><label>獎金（元）</label><input type="number" id="bonus-' + row.payroll_request_id + '" min="0" step="1" value="' + marginBonus + '" /></div>' +
           '<div><label>扣款（元）</label><input type="number" id="ded-' + row.payroll_request_id + '" min="0" step="1" value="' + (parseInt(row.deduction,10)||0) + '" /></div>' +
           '</div>' +
-          '<label>確認實發（元）</label><input type="number" id="final-' + row.payroll_request_id + '" min="0" step="1" value="' + est + '" />' +
-          '<label>獎金／備註說明</label><input type="text" id="bnote-' + row.payroll_request_id + '" placeholder="例：專案獎金" />' +
+          '<label>確認實發（元）</label><input type="number" id="final-' + row.payroll_request_id + '" min="0" step="1" value="' + (est + marginBonus) + '" />' +
+          '<label>獎金／備註說明</label><input type="text" id="bnote-' + row.payroll_request_id + '" placeholder="例：專案獎金" value="' + esc(marginNote) + '" />' +
           '<label>審核備註</label><input type="text" id="note-' + row.payroll_request_id + '" placeholder="選填" />' +
           '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
           '<button type="button" class="btn btn-ok" data-approve="' + row.payroll_request_id + '">核准</button>' +
