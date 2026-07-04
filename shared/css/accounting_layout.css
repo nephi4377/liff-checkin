@@ -1,5 +1,7 @@
 /**
- * 會計模組共用版面 — 電腦優先；右側訊息欄由 accounting_ui.js 留空
+ * 會計模組共用版面
+ * 寬螢幕：左欄（系統資訊／導覽）保留，主內容約 55–65% 視窗寬；右側狀態欄由 accounting_ui.js 掛一次
+ * 單頁殼層內嵌子頁：主區撐滿 iframe，不重套左右留白、不重掛狀態欄
  */
 body.acct-page {
   font-family: system-ui, sans-serif;
@@ -23,12 +25,16 @@ body.acct-page .acct-main {
     padding: 24px 32px 36px;
   }
 
-  /* 主內容約 75% 寬：左留白 20%、右留白 5%（訊息欄另計） */
+  /*
+   * 主內容約 60vw（落在 55–65vw）；左側約 16vw 留給系統資訊／導覽區。
+   * 右側狀態欄佔位後，寬度不超出剩餘空間，避免與狀態欄重疊。
+   */
   body.acct-page .acct-main {
-    width: 75%;
-    max-width: 75%;
-    margin-left: 20%;
-    margin-right: 5%;
+    width: min(60vw, 100%);
+    max-width: 65vw;
+    min-width: 0;
+    margin-left: max(0px, min(16vw, calc(100% - min(60vw, 100%))));
+    margin-right: auto;
     box-sizing: border-box;
   }
 }
@@ -105,10 +111,13 @@ body.acct-shell-host #shellBack a {
   text-decoration: none;
 }
 
+/* iframe 在 .acct-main 內，寬度跟外層主欄，勿再套一層左右留白 */
 body.acct-shell-host #acctContentFrame {
   display: block;
   width: 100%;
+  max-width: 100%;
   min-height: calc(100vh - 140px);
+  margin: 0;
   border: none;
   background: transparent;
 }
@@ -117,22 +126,34 @@ body.acct-shell-host #acctContentFrame.hidden {
   display: none;
 }
 
-@media (min-width: 960px) {
-  body.acct-shell-host #acctContentFrame {
-    width: 75%;
-    max-width: 75%;
-    margin-left: 20%;
-    margin-right: 5%;
-  }
-}
-
-/* 內嵌子頁：隱藏重複的選單列與使用者列 */
+/* 內嵌子頁：隱藏重複的選單列與使用者列；主區撐滿 iframe（外層已負責比例） */
 body.acct-embed {
-  padding-top: 8px;
+  padding: 8px 12px 16px !important;
+  min-height: 0;
 }
 
 body.acct-embed .acct-shell-hide,
 body.acct-embed .nav,
 body.acct-embed #userLine {
   display: none !important;
+}
+
+body.acct-embed .acct-main,
+body.acct-embed.acct-page .acct-main {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* 手機：主區全寬，狀態欄改底部（由 accounting_ui.js） */
+@media (max-width: 959px) {
+  body.acct-page .acct-main {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin-left: 0;
+    margin-right: 0;
+  }
 }

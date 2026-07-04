@@ -35,6 +35,17 @@ var AccountingUi = (function () {
   };
 
   var KIND_LABEL = { ok: '完成', err: '錯誤', warn: '注意', info: '訊息', action: '動作' };
+  var parentLogBound = false;
+
+  /** 單頁殼層內嵌子頁：狀態欄只掛在外層，子頁不重掛 */
+  function isEmbedFrame() {
+    try {
+      if (new URLSearchParams(window.location.search).get('embed') !== '1') return false;
+      return !!(window.parent && window.parent !== window);
+    } catch (e) {
+      return false;
+    }
+  }
 
   function injectStyles() {
     if (document.getElementById('acct-ui-styles')) return;
@@ -44,6 +55,7 @@ var AccountingUi = (function () {
       'body.acct-ui-mounted{box-sizing:border-box}',
       'body.acct-ui-mounted.acct-ui-side-right{padding-right:0}',
       'body.acct-ui-mounted.acct-ui-side-left{padding-left:0}',
+      'body.acct-ui-embed{padding-right:0!important;padding-left:0!important;padding-bottom:0!important}',
       '#acctToastStack{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:10050;',
       'display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;width:min(92vw,420px)}',
       '.acct-toast{padding:12px 16px;border-radius:12px;font-size:15px;font-weight:600;line-height:1.45;',
@@ -75,13 +87,13 @@ var AccountingUi = (function () {
       '.acct-ui-hide-legacy#msg,.acct-ui-hide-legacy#ok,.acct-ui-hide-legacy#warn{display:none!important}',
       '.btn[aria-busy="true"]{opacity:.7;cursor:wait}',
       '@media (max-width:959px){',
-      'body.acct-ui-mounted{padding-bottom:118px!important}',
+      'body.acct-ui-mounted:not(.acct-ui-embed){padding-bottom:118px!important}',
       '#acctMsgDock{left:0;right:0;bottom:0;height:108px;border-radius:12px 12px 0 0}',
       '}',
       '@media (min-width:960px){',
-      'body.acct-ui-mounted.acct-ui-side-right{padding-right:304px!important;padding-left:0;max-width:none!important;margin:0!important}',
-      'body.acct-ui-mounted.acct-ui-side-left{padding-left:304px!important;padding-right:0;max-width:none!important;margin:0!important}',
-      'body.acct-page.acct-ui-mounted.acct-ui-side-right{padding-left:32px!important}',
+      'body.acct-ui-mounted.acct-ui-side-right:not(.acct-ui-embed){padding-right:304px!important;padding-left:0;max-width:none!important;margin:0!important}',
+      'body.acct-ui-mounted.acct-ui-side-left:not(.acct-ui-embed){padding-left:304px!important;padding-right:0;max-width:none!important;margin:0!important}',
+      'body.acct-page.acct-ui-mounted.acct-ui-side-right:not(.acct-ui-embed){padding-left:32px!important}',
       '#acctMsgDock.acct-dock-right{top:0;right:0;bottom:0;width:288px;border-radius:0;border-left:1px solid #334155}',
       '#acctMsgDock.acct-dock-left{top:0;left:0;bottom:0;width:288px;border-radius:0;border-right:1px solid #334155}',
       '}'
@@ -167,7 +179,7 @@ var AccountingUi = (function () {
       var cur = pageName();
       if (href && cur && href !== cur && href.indexOf(cur) < 0) return;
       var msg = '進入：' + j.label;
-      if (operator.session) pushLog('action', msg);
+      if (isEmbedFrame() || operator.session) pushLog('action', msg);
       else _pendingNavIntent = msg;
     } catch (e) {}
   }
@@ -242,13 +254,49 @@ var AccountingUi = (function () {
     logListEl.scrollTop = 0;
   }
 
-  function pushLog(kind, text) {
-    if (!text) return;
+  function appendLocalLog(kind, text, atIso) {
     kind = normalizeKind(kind);
-    logs.unshift({ kind: kind, text: String(text), at: formatTime() });
+    logs.unshift({
+      kind: kind,
+      text: String(text),
+      at: atIso ? formatTimeFromIso(atIso) : formatTime()
+    });
     if (logs.length > MAX_LOG) logs.length = MAX_LOG;
     renderLog();
     persistEntry(kind, text);
+  }
+
+  function pushLog(kind, text) {
+    if (!text) return;
+    kind = normalizeKind(kind);
+    if (isEmbedFrame()) {
+      try {
+        window.parent.postMessage({
+          type: 'acct_ui_log',
+          kind: kind,
+          text: String(text),
+          page: pageName(),
+          at: new Date().toISOString()
+        }, '*');
+      } catch (e) {}
+      return;
+    }
+    appendLocalLog(kind, text);
+  }
+
+  function onParentLogMessage(event) {
+    if (!event || !event.data || event.data.type !== 'acct_ui_log') return;
+    if (isEmbedFrame()) return;
+    if (!dockEl) return;
+    var text = event.data.text;
+    if (!text) return;
+    appendLocalLog(event.data.kind, text, event.data.at);
+  }
+
+  function bindParentLogListener() {
+    if (parentLogBound || isEmbedFrame()) return;
+    parentLogBound = true;
+    window.addEventListener('message', onParentLogMessage);
   }
 
   function toast(kind, text, ms) {
@@ -300,11 +348,25 @@ var AccountingUi = (function () {
     mounted = true;
     injectStyles();
     document.body.classList.add('acct-ui-mounted');
-    document.body.classList.add(opts.side === 'left' ? 'acct-ui-side-left' : 'acct-ui-side-right');
 
     toastStack = document.createElement('div');
     toastStack.id = 'acctToastStack';
     document.body.appendChild(toastStack);
+
+    ['msg', 'ok', 'warn'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.classList.add('acct-ui-hide-legacy');
+    });
+    var legacyBar = document.getElementById('acctFeedbackBar');
+    if (legacyBar) legacyBar.classList.add('hidden');
+
+    /* 單頁殼層內嵌：只保留浮動提示，狀態欄由外層掛一次 */
+    if (isEmbedFrame()) {
+      document.body.classList.add('acct-ui-embed');
+      return;
+    }
+
+    document.body.classList.add(opts.side === 'left' ? 'acct-ui-side-left' : 'acct-ui-side-right');
 
     dockEl = document.createElement('aside');
     dockEl.id = 'acctMsgDock';
@@ -327,13 +389,7 @@ var AccountingUi = (function () {
     });
     document.getElementById('acctDockCopy').addEventListener('click', copyStoredLogs);
     updateDockTitle();
-
-    ['msg', 'ok', 'warn'].forEach(function (id) {
-      var el = document.getElementById(id);
-      if (el) el.classList.add('acct-ui-hide-legacy');
-    });
-    var legacyBar = document.getElementById('acctFeedbackBar');
-    if (legacyBar) legacyBar.classList.add('hidden');
+    bindParentLogListener();
   }
 
   function notify(kind, text, options) {
@@ -450,6 +506,12 @@ var AccountingUi = (function () {
       initOpts = initOpts || {};
       if (initOpts.side === 'left') opts.side = 'left';
       ensureMount();
+      if (isEmbedFrame()) {
+        /* 內嵌子頁：不重掛狀態欄、不重播本機紀錄；操作仍轉給外層 */
+        consumeNavIntent();
+        if (initOpts.session) setOperator(initOpts.session);
+        return this;
+      }
       restoreStoredLogs();
       consumeNavIntent();
       renderLog();
