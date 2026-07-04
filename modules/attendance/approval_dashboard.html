@@ -13,6 +13,12 @@
         .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .request-card { transition: opacity 0.5s ease-out, transform 0.5s ease-out; }
+        .appeal-time-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+        .appeal-time-chip {
+            font-size: 12px; padding: 4px 10px; border-radius: 9999px;
+            background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; cursor: pointer;
+        }
+        .appeal-time-chip:hover { background: #c7d2fe; }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -85,6 +91,60 @@
     function normalizeCheckinTime(raw) {
         const m = String(raw || '').trim().match(/^(\d{1,2}):(\d{2})/);
         return m ? `${m[1].padStart(2, '0')}:${m[2]}` : '';
+    }
+
+    /** 將 HH:mm 加減分鐘，回傳 HH:mm */
+    function addMinutesToTime(hhmm, deltaMin) {
+        const m = String(hhmm || '').match(/^(\d{1,2}):(\d{2})/);
+        if (!m) return hhmm;
+        let total = parseInt(m[1], 10) * 60 + parseInt(m[2], 10) + (Number(deltaMin) || 0);
+        total = Math.max(0, Math.min(24 * 60 - 1, total));
+        const h = Math.floor(total / 60);
+        const min = total % 60;
+        return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+    }
+
+    function buildAppealTimeFillChips(appeal) {
+        const start = normalizeCheckinTime(appeal.shiftStart) || '08:30';
+        const end = normalizeCheckinTime(appeal.shiftEnd) || '17:30';
+        const flex = Number(appeal.flexibleMinutes) || 0;
+        const chips = [
+            { label: '標準上班', time: start, type: '上班' },
+            { label: '標準下班', time: end, type: '下班' }
+        ];
+        if (flex > 0) {
+            chips.splice(1, 0, { label: `彈性上班 +${flex}分`, time: addMinutesToTime(start, flex), type: '上班' });
+            chips.push({ label: `彈性下班 +${flex}分`, time: addMinutesToTime(end, flex), type: '下班' });
+        }
+        return chips.map((c) =>
+            `<button type="button" class="appeal-time-chip" data-appeal-time-fill="${escapeHtml(c.time)}" data-appeal-type-fill="${escapeHtml(c.type)}" title="填入 ${escapeHtml(c.time)}（${escapeHtml(c.type)}）">${escapeHtml(c.label)} ${escapeHtml(c.time)}</button>`
+        ).join('');
+    }
+
+    function renderAppealManualEntryBlock(appealId, appeal, variant) {
+        const chips = buildAppealTimeFillChips(appeal);
+        const defaultTime = normalizeCheckinTime(appeal.shiftStart) || '08:30';
+        const inner = `
+                <p class="text-sm font-medium ${variant === 'fix' ? 'text-green-800' : 'text-gray-700'}">${variant === 'fix' ? '請補登打卡（完成後申訴自動結案）' : '補登打卡（核准時一併完成）'}</p>
+                <div class="appeal-time-chips" role="group" aria-label="一鍵代入標準時間">${chips}</div>
+                <div class="grid grid-cols-2 gap-2">
+                    <input type="time" id="fix-time-${appeal.appealId}" class="rounded border-gray-300 text-sm" value="${escapeHtml(defaultTime)}">
+                    <select id="fix-type-${appeal.appealId}" class="rounded border-gray-300 text-sm"><option value="上班">上班</option><option value="下班">下班</option></select>
+                </div>`;
+        if (variant === 'fix') {
+            return `<div class="mt-4 p-3 bg-green-50 rounded-md border border-green-100 space-y-2">
+                ${inner}
+                <button type="button" data-appeal-fix="${appeal.appealId}" data-employee-id="${appeal.employeeUserId}" data-target-date="${escapeHtml(normalizeCheckinDate(appeal.targetDate))}" class="w-full px-3 py-2 text-sm font-bold text-white bg-green-600 rounded-md hover:bg-green-700">執行補登</button>
+            </div>`;
+        }
+        return `<div class="mt-4 p-3 bg-gray-50 rounded-md border border-gray-100 space-y-3">
+                ${inner}
+                <div class="flex flex-wrap justify-end gap-2">
+                    <button type="button" data-appeal-decision="reject" data-appeal-id="${appeal.appealId}" class="px-3 py-2 text-sm font-bold text-white bg-red-500 rounded-md hover:bg-red-600">駁回</button>
+                    <button type="button" data-appeal-decision="note_only" data-appeal-id="${appeal.appealId}" class="px-3 py-2 text-sm font-bold text-white bg-gray-500 rounded-md hover:bg-gray-600">僅備註</button>
+                    <button type="button" data-appeal-approve-fix="${appeal.appealId}" data-employee-id="${escapeHtml(appeal.employeeUserId)}" data-target-date="${escapeHtml(normalizeCheckinDate(appeal.targetDate))}" class="px-3 py-2 text-sm font-bold text-white bg-green-600 rounded-md hover:bg-green-700">核准並補登</button>
+                </div>
+            </div>`;
     }
 
     function switchApprovalTab(tab) {
@@ -243,15 +303,7 @@
             snapshotText = `上班 ${snap.checkIn || '—'}、下班 ${snap.checkOut || '—'}、狀態 ${snap.status || '—'}`;
         } catch (e) { /* keep raw */ }
 
-        const manualBlock = appeal.status === '待補登' ? `
-            <div class="mt-4 p-3 bg-green-50 rounded-md border border-green-100 space-y-2">
-                <p class="text-sm font-medium text-green-800">請補登打卡（完成後申訴自動結案）</p>
-                <div class="grid grid-cols-2 gap-2">
-                    <input type="time" id="fix-time-${appeal.appealId}" class="rounded border-gray-300 text-sm" value="08:30">
-                    <select id="fix-type-${appeal.appealId}" class="rounded border-gray-300 text-sm"><option value="上班">上班</option><option value="下班">下班</option></select>
-                </div>
-                <button type="button" data-appeal-fix="${appeal.appealId}" data-employee-id="${appeal.employeeUserId}" data-target-date="${escapeHtml(targetDateYmd)}" class="w-full px-3 py-2 text-sm font-bold text-white bg-green-600 rounded-md hover:bg-green-700">執行補登</button>
-            </div>` : '';
+        const manualBlock = appeal.status === '待補登' ? renderAppealManualEntryBlock(appeal.appealId, appeal, 'fix') : '';
 
         card.innerHTML = `
             <div class="flex justify-between items-start gap-2">
@@ -270,19 +322,7 @@
             <div id="appeal-note-wrap-${appeal.appealId}" class="hidden mt-3">
                 <input type="text" id="appeal-note-${appeal.appealId}" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" placeholder="審核回覆（駁回時必填）">
             </div>
-            ${appeal.status === '待審' ? `
-            <div class="mt-4 p-3 bg-gray-50 rounded-md border border-gray-100 space-y-3">
-                <p class="text-sm font-medium text-gray-700">補登打卡（核准時一併完成）</p>
-                <div class="grid grid-cols-2 gap-2">
-                    <input type="time" id="fix-time-${appeal.appealId}" class="rounded border-gray-300 text-sm" value="08:30">
-                    <select id="fix-type-${appeal.appealId}" class="rounded border-gray-300 text-sm"><option value="上班">上班</option><option value="下班">下班</option></select>
-                </div>
-                <div class="flex flex-wrap justify-end gap-2">
-                    <button type="button" data-appeal-decision="reject" data-appeal-id="${appeal.appealId}" class="px-3 py-2 text-sm font-bold text-white bg-red-500 rounded-md hover:bg-red-600">駁回</button>
-                    <button type="button" data-appeal-decision="note_only" data-appeal-id="${appeal.appealId}" class="px-3 py-2 text-sm font-bold text-white bg-gray-500 rounded-md hover:bg-gray-600">僅備註</button>
-                    <button type="button" data-appeal-approve-fix="${appeal.appealId}" data-employee-id="${escapeHtml(appeal.employeeUserId)}" data-target-date="${escapeHtml(targetDateYmd)}" class="px-3 py-2 text-sm font-bold text-white bg-green-600 rounded-md hover:bg-green-700">核准並補登</button>
-                </div>
-            </div>` : ''}
+            ${appeal.status === '待審' ? renderAppealManualEntryBlock(appeal.appealId, appeal, 'approve') : ''}
             ${manualBlock}
         `;
         if (attachments.length) {
@@ -338,6 +378,18 @@
     }
 
     async function handleAppealAction(event) {
+        const timeChip = event.target.closest('[data-appeal-time-fill]');
+        if (timeChip) {
+            const card = timeChip.closest('.request-card');
+            if (!card) return;
+            const appealId = card.id.replace(/^appeal-/, '');
+            const timeInput = document.getElementById(`fix-time-${appealId}`);
+            const typeSelect = document.getElementById(`fix-type-${appealId}`);
+            if (timeInput) timeInput.value = timeChip.dataset.appealTimeFill;
+            if (typeSelect && timeChip.dataset.appealTypeFill) typeSelect.value = timeChip.dataset.appealTypeFill;
+            return;
+        }
+
         const thumb = event.target.closest('.appeal-attach-thumb');
         if (thumb) {
             const card = thumb.closest('[data-attachment-urls]');

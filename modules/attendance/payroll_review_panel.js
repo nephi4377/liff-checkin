@@ -98,10 +98,15 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
 
     let earnedBase = base;
     let fullAttendanceBonus = 0;
-    const maxFullAttendance = Number(settings.fullAttendanceBonusMax) || 2000;
+    const maxFullAttendance = Number(settings.fullAttendanceBonusMax) || 0;
     if (payType === 'daily') {
-        earnedBase = base * (Number(snapshot.daysWorked) || 0);
-        additions.push({ label: '本薪（日薪 × 出勤天數）', amount: earnedBase });
+        const days = Number(snapshot.daysWorked) || 0;
+        earnedBase = base * days;
+        additions.push({
+            label: '本薪（日薪 × 出勤天數）',
+            amount: earnedBase,
+            note: `${days} 天 × ${base.toLocaleString()} 元／日`
+        });
     } else {
         const absent = Number(st.absent) || 0;
         const absentBaseDeduction = calcAbsentBaseDeduction(base, absent);
@@ -115,12 +120,12 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
             const faNote = absent > 0 && fullAttendanceBonus < maxFullAttendance
                 ? `上限 ${maxFullAttendance.toLocaleString()}，缺勤 ${fmtPayrollDay(absent)} 日按比例扣`
                 : '';
-            additions.push({ label: '全勤獎金', amount: fullAttendanceBonus, note: faNote });
+            additions.push({ label: '出勤獎金', amount: fullAttendanceBonus, note: faNote });
         } else if (maxFullAttendance > 0 && absent > 0) {
             deductions.push({
-                label: '全勤獎金',
+                label: '出勤獎金',
                 amount: 0,
-                note: `缺勤 ${fmtPayrollDay(absent)} 日，全勤未發（上限 ${maxFullAttendance.toLocaleString()} 元）`
+                note: `缺勤 ${fmtPayrollDay(absent)} 日，出勤獎金未發（上限 ${maxFullAttendance.toLocaleString()} 元）`
             });
         }
     }
@@ -156,14 +161,12 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
         deductions.push({ label: '勞健保／勞退', amount: 0, note: '不加保／個人自行處理' });
     }
     const payLe = payrollLateEarlyFromStats(st);
-    let attendanceTimeDeduction = 0;
-    if (payType !== 'daily') {
-        attendanceTimeDeduction = calcLateEarlyDeduction(payrollHourlyWage(base, payType), payLe.late, payLe.early);
-    }
+    const hourly = payrollHourlyWage(base, payType);
+    const attendanceTimeDeduction = calcLateEarlyDeduction(hourly, payLe.late, payLe.early);
     const lateMin = st.lateMinutes || 0;
     const earlyMin = st.earlyMinutes || 0;
     if (lateMin > 0 || earlyMin > 0 || payLe.heldLate > 0 || payLe.heldEarly > 0) {
-        let note = `試算計入：遲到 ${payLe.late} 分、早退 ${payLe.early} 分（已扣除彈性30分）；時薪×分鐘÷60`;
+        let note = `試算計入：遲到 ${payLe.late} 分、早退 ${payLe.early} 分（已扣除彈性30分）；時薪 ${Math.round(hourly).toLocaleString()} 元${payType === 'daily' ? '（日薪÷8）' : ''} × 分鐘÷60`;
         if (payLe.heldLate > 0 || payLe.heldEarly > 0) {
             note += `。僅單次打卡日 ${payLe.heldLate}／${payLe.heldEarly} 分暫不扣，請申訴調整`;
         }
@@ -195,7 +198,7 @@ function renderBreakdownHtml(breakdown, disclaimer, settings, payType, esc) {
     }).join('');
     return `
         <p class="text-xs text-amber-700 bg-amber-50 rounded p-2 mb-3">${escFn(disclaimer)}</p>
-        <p class="text-xs text-gray-500 mb-2">薪資類型：${payType === 'daily' ? '日薪' : '月薪'}（${escFn(settings.payRule)}）· 底薪 ${settings.baseSalary.toLocaleString()} 元${payType === 'daily' ? '／日' : ''}</p>
+        <p class="text-xs text-gray-500 mb-2">薪資類型：${payType === 'daily' ? '日薪' : '月薪'}（${escFn(settings.payRule)}）· 底薪 ${settings.baseSalary.toLocaleString()} 元${payType === 'daily' ? '／日（本薪＝日薪×出勤天數；遲早退依日薪÷8換算時薪扣款）' : ''}</p>
         <div class="grid sm:grid-cols-2 gap-3">
             <div class="bg-white rounded-lg p-2 border border-green-100">
                 <p class="text-xs font-bold text-green-800 mb-1">加項</p>
@@ -210,6 +213,20 @@ function renderBreakdownHtml(breakdown, disclaimer, settings, payType, esc) {
         </div>
         <p class="text-lg font-bold text-indigo-700 mt-3 text-right">預估實發：${breakdown.estimatedNet.toLocaleString()} 元</p>
     `;
+}
+
+function renderAnomalyDaysHtml(dayAnomalies, esc) {
+    const escFn = esc || escPayrollHtml;
+    if (!dayAnomalies || !dayAnomalies.length) return '';
+    const rows = dayAnomalies.map((d) => {
+        const statusNote = d.status ? ` <span class="text-gray-500">（${escFn(d.status)}）</span>` : '';
+        return `<li><span class="font-medium">${escFn(d.date)}</span> · ${escFn(d.summary)}${statusNote}</li>`;
+    }).join('');
+    return `<div class="text-amber-800 bg-amber-50 rounded p-2 text-sm mt-2">
+        <p class="font-semibold">本期出勤異常（含未申訴）</p>
+        <ul class="list-disc ml-4 mt-1 space-y-0.5">${rows}</ul>
+        <p class="text-xs text-amber-700 mt-1">員工未申訴者，主管審核時仍可參考；請至出勤報表或申訴審核處理</p>
+    </div>`;
 }
 
 function renderMarginBonusDraftsHtml(drafts, esc) {
@@ -352,9 +369,7 @@ export function initPayrollReviewPanel(ctx) {
         const { settings, period, periods, snapshot, existingReview, disclaimer, submitGate, marginBonusDrafts } = contextData;
         els.periodSelect.innerHTML = periods.map((p) => {
             const tag = p.displayLabel || p.periodLabel;
-            const range = `${p.periodStart}～${p.periodEnd}`;
-            const payNote = p.payDate ? ` · 發薪 ${p.payDate.slice(5).replace('-', '/')}` : '';
-            return `<option value="${esc(p.periodLabel)}" ${p.periodLabel === period.periodLabel ? 'selected' : ''}>${esc(tag)} · ${esc(range)}${esc(payNote)}</option>`;
+            return `<option value="${esc(p.periodLabel)}" ${p.periodLabel === period.periodLabel ? 'selected' : ''}>${esc(tag)}</option>`;
         }).join('');
         els.hint.textContent = period.submitHint || '';
 
@@ -365,7 +380,15 @@ export function initPayrollReviewPanel(ctx) {
 
         let statsHtml = '';
         if (isDaily) {
-            statsHtml = `<p><strong>本期出勤：</strong>${snapshot.daysWorked || 0} 天</p>`;
+            const reportDays = snapshot.checkInDaysReport ?? st.checkInDays ?? '—';
+            statsHtml = `
+                <p><strong>本期出勤（計薪）：</strong>${snapshot.daysWorked || 0} 天</p>
+                ${reportDays !== snapshot.daysWorked ? `<p class="text-xs text-gray-500">報表「實際出勤」：${reportDays} 天（排休日加班有打卡亦計入日薪）</p>` : ''}
+                <p><strong>遲到／早退：</strong>${st.lateMinutes ?? 0}／${st.earlyMinutes ?? 0} 分</p>
+                ${(st.lateMinutesHeldSinglePunch || st.earlyMinutesHeldSinglePunch) ? `<p class="text-xs text-amber-700">僅單次打卡日 ${st.lateMinutesHeldSinglePunch || 0}／${st.earlyMinutesHeldSinglePunch || 0} 分暫不計入薪資試算，請先於出勤頁申訴調整</p>` : ''}
+                <p class="text-xs text-gray-500">本薪＝日薪 × 出勤天數；遲早退扣款＝（日薪÷8）× 分鐘÷60（已扣彈性30分）</p>
+                ${renderAnomalyDaysHtml(snapshot.dayAnomalies, esc)}
+            `;
             document.getElementById('payroll-days-worked-val').textContent = snapshot.daysWorked || 0;
         } else {
             statsHtml = `
@@ -377,6 +400,7 @@ export function initPayrollReviewPanel(ctx) {
                 <p><strong>遲到／早退：</strong>${st.lateMinutes ?? 0}／${st.earlyMinutes ?? 0} 分</p>
                 ${(st.lateMinutesHeldSinglePunch || st.earlyMinutesHeldSinglePunch) ? `<p class="text-xs text-amber-700">僅單次打卡日 ${st.lateMinutesHeldSinglePunch || 0}／${st.earlyMinutesHeldSinglePunch || 0} 分暫不計入薪資試算，請先於出勤頁申訴調整</p>` : ''}
                 <p><strong>缺勤／異常：</strong>${fmtPayrollDay(st.absent)}／${st.anomalyDays ?? 0} 天</p>
+                ${renderAnomalyDaysHtml(snapshot.dayAnomalies, esc)}
             `;
         }
         els.statsBox.innerHTML = statsHtml;
@@ -620,7 +644,7 @@ export function initPayrollReviewApproval(ctx) {
                     ? `<p><strong>出勤：</strong>${row.daysWorked} 天</p>`
                     : `<p><strong>出勤／應休／實休：</strong>${st.checkInDays ?? '—'}／${row.scheduledRestDays}／${row.actualRestDays}</p>
                        <p><strong>遲早退：</strong>${st.lateMinutes ?? 0}／${st.earlyMinutes ?? 0} 分 · 異常 ${st.anomalyDays ?? 0} 天</p>`}
-                <p><strong>預估本薪／全勤：</strong>${Number(row.baseSalary).toLocaleString()}／${Number(row.fullAttendanceBonus).toLocaleString()} 元</p>
+                <p><strong>預估本薪／出勤獎金：</strong>${Number(row.baseSalary).toLocaleString()}／${Number(row.fullAttendanceBonus).toLocaleString()} 元</p>
                 <p><strong>遠程津貼：</strong>${Number(row.remoteAllowanceAmount).toLocaleString()} 元 ${row.remoteAllowanceNote ? `（${esc(row.remoteAllowanceNote)}）` : ''}</p>
                 <p><strong>加班：</strong>${row.overtimeHours} 小時 ${row.overtimeNote ? `— ${esc(row.overtimeNote)}` : ''}</p>
                 <p class="text-xs font-semibold text-red-800 mt-2">減項</p>
@@ -630,7 +654,7 @@ export function initPayrollReviewApproval(ctx) {
                 <p class="font-bold text-indigo-700">員工端預估實發：${Number(row.estimatedNet).toLocaleString()} 元</p>
             </div>
             <div class="mt-3 grid grid-cols-2 gap-2">
-                <label class="text-xs">全勤獎金<input type="number" id="pr-full-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" value="${row.fullAttendanceBonus}"></label>
+                <label class="text-xs">出勤獎金<input type="number" id="pr-full-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" value="${row.fullAttendanceBonus}"></label>
                 <label class="text-xs">獎金<input type="number" id="pr-bonus-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" value="0"></label>
                 <label class="text-xs col-span-2">獎金事由<input type="text" id="pr-bonus-reason-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" placeholder="主管填入"></label>
                 <label class="text-xs">扣款（其他）<input type="number" id="pr-ded-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" value="${row.deduction || 0}" placeholder="考勤罰款等"></label>
@@ -746,9 +770,15 @@ export function initPayrollAdminPreview(ctx) {
             }).join('');
             const st = adminContext.snapshot?.stats || {};
             const isDaily = adminContext.period.payType === 'daily';
+            const snap = adminContext.snapshot || {};
+            const anomalyBlock = renderAnomalyDaysHtml(snap.dayAnomalies, esc);
             statsBox.innerHTML = isDaily
-                ? `<p><strong>本期出勤：</strong>${adminContext.snapshot?.daysWorked || 0} 天</p>`
-                : `<p><strong>實際出勤：</strong>${st.checkInDays ?? '—'} 天 · 遲早退 ${st.lateMinutes ?? 0}／${st.earlyMinutes ?? 0} 分</p>`;
+                ? `<p><strong>本期出勤（計薪）：</strong>${snap.daysWorked || 0} 天</p>
+                   <p><strong>遲到／早退：</strong>${st.lateMinutes ?? 0}／${st.earlyMinutes ?? 0} 分</p>
+                   <p class="text-xs text-gray-500">本薪＝日薪×出勤天數；排休日加班有打卡亦計入</p>
+                   ${anomalyBlock}`
+                : `<p><strong>實際出勤：</strong>${st.checkInDays ?? '—'} 天 · 遲早退 ${st.lateMinutes ?? 0}／${st.earlyMinutes ?? 0} 分</p>
+                   ${anomalyBlock}`;
             const preview = buildPayrollBreakdown(
                 adminContext.settings,
                 adminContext.period.payType,
