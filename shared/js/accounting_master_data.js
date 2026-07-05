@@ -31,5 +31,25 @@ var AccountingMasterData = {
   margin_expense_categories: [
     '木工', '系統櫃', '五金', '廚衛', '水電', '泥作', '油漆', '石材', '玻璃', '金屬加工', '空調', '清潔',
     '材料', '人工', '交通', '收入', '其他'
+  ],
+  /** 案件毛利本案廠商 slot（偵測規則對齊 backend MasterEnums.js） */
+  margin_vendor_slots: [
+    { key: 'protection', label: '施工保護', trade_categories: [], cost_types: [] },
+    { key: 'demolition', label: '拆除工程', trade_categories: [], cost_types: ['連工帶料', '純點工'] },
+    { key: 'masonry', label: '泥作工程', trade_categories: ['泥作'], cost_types: [] },
+    { key: 'plumbing_electrical', label: '水電工程', trade_categories: ['水電'], cost_types: [] },
+    { key: 'building_material', label: '建材', trade_categories: ['木工'], cost_types: ['純材料商'] },
+    { key: 'wood_hardware', label: '木作五金', trade_categories: ['五金'], cost_types: [] },
+    { key: 'wood_labor', label: '木作工班', trade_categories: ['木工'], cost_types: ['連工帶料', '純點工'] },
+    { key: 'system_cabinet', label: '系統櫃', trade_categories: ['系統櫃'], cost_types: [] },
+    { key: 'paint', label: '油漆工程', trade_categories: ['油漆'], cost_types: [] },
+    { key: 'kitchen', label: '廚具設備', trade_categories: ['廚衛'], cost_types: [] },
+    { key: 'floor', label: '地板工程', trade_categories: ['木工'], cost_types: [] },
+    { key: 'stone', label: '石材工程', trade_categories: ['石材'], cost_types: [] },
+    { key: 'glass', label: '玻璃工程', trade_categories: ['玻璃'], cost_types: [] },
+    { key: 'metal', label: '金屬加工', trade_categories: ['金屬加工'], cost_types: [] },
+    { key: 'hvac', label: '空調工程', trade_categories: ['空調'], cost_types: [] },
+    { key: 'curtain', label: '窗簾工程', trade_categories: ['其他'], cost_types: [] },
+    { key: 'cleaning', label: '清潔工程', trade_categories: ['清潔'], cost_types: [] }
   ]
 };
