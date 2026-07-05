@@ -2,7 +2,7 @@
  * 會計系統共用快取 — bootstrap 進 sessionStorage；CRUD 成功 patch 快取（安全時）
  */
 var AccountingCache = (function () {
-  var STORAGE_KEY = 'tanxin_accounting_bootstrap_v3';
+  var STORAGE_KEY = 'tanxin_accounting_bootstrap_v4';
   var BOOTSTRAP_TIMEOUT_MS = 120000;
   var _mem = {};
   var _inflight = {};

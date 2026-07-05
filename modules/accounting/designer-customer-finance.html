@@ -90,7 +90,15 @@
     var activeTab = 'adj';
 
     function $(id) { return document.getElementById(id); }
-    function showMsg(t) { $('msg').textContent = t || ''; $('ok').textContent = ''; }
+    function friendlyApiError(t) {
+      var msg = String(t || '');
+      if (!msg) return '';
+      if (msg.indexOf('columns in the data does not match') >= 0 || msg.indexOf('欄數與範圍') >= 0) {
+        return '後端試算表欄位設定異常（資料 5 欄、範圍 24 欄），追加減／收款功能暫時無法使用。請聯繫管理員部署 accounting-gas 修補。';
+      }
+      return msg;
+    }
+    function showMsg(t) { $('msg').textContent = friendlyApiError(t); $('ok').textContent = ''; }
     function showOk(t) { $('ok').textContent = t || ''; $('msg').textContent = ''; }
 
     function statusLabel(st) {
