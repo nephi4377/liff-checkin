@@ -39,6 +39,15 @@
     .search-hit:hover { background: #f8f9fa; }
     .search-hit small { color: #666; display: block; margin-top: 2px; }
     .warn-box { background: #fef7e0; border-radius: 8px; padding: 10px; margin: 8px 0; font-size: 13px; color: #b06000; line-height: 1.45; }
+    .adj-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    .adj-table th, .adj-table td { border: 1px solid #e0e0e0; padding: 8px 6px; text-align: left; vertical-align: top; }
+    .adj-table th { background: #f8f9fa; font-weight: 600; }
+    .adj-table .num { text-align: right; white-space: nowrap; }
+    .adj-table .neg { color: #c5221f; }
+    .adj-table .actions { white-space: nowrap; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+    @media (max-width: 520px) { .form-grid { grid-template-columns: 1fr; } }
+    .form-hint { font-size: 12px; color: #666; margin-top: 2px; font-weight: 400; }
   </style>
 </head>
 <body class="acct-page">
@@ -151,9 +160,17 @@
       $('panelBind').classList.toggle('hidden', activeTab !== 'bind');
     }
 
+    function fmtMoney(n) {
+      var v = parseFloat(n);
+      if (isNaN(v)) return '—';
+      return (v < 0 ? '-' : '') + '$' + Math.abs(Math.round(v)).toLocaleString('zh-TW');
+    }
+
     function renderAdjPanel() {
       var adjs = detailData.adjustments || [];
-      var list = adjs.map(function (a) {
+      var rows = adjs.map(function (a) {
+        var tp = parseFloat(a.total_price);
+        if (isNaN(tp)) tp = String(a.type) === '減項' ? -(parseFloat(a.amount) || 0) : (parseFloat(a.amount) || 0);
         var btns = '';
         if (a.status === 'draft') {
           btns += '<button class="btn btn-primary" data-act="adj-submit" data-id="' + a.adjustment_id + '">送交客戶</button>';
@@ -165,23 +182,40 @@
         if (a.status === 'pending_company') {
           btns += '<button class="btn btn-primary" data-act="adj-company" data-id="' + a.adjustment_id + '">公司確認</button>';
         }
-        return '<div style="padding:8px 0;border-bottom:1px solid #eee">' +
-          '<span class="tag">' + statusLabel(a.status) + '</span> ' + a.type + ' $' + a.amount +
-          '<div>' + (a.item_desc || '') + '</div><div>' + btns + '</div></div>';
-      }).join('') || '<p>尚無追加減</p>';
+        return '<tr>' +
+          '<td class="num">' + (a.item_no || '—') + '</td>' +
+          '<td>' + (a.item_name || a.item_desc || '') + '</td>' +
+          '<td>' + (a.unit || '—') + '</td>' +
+          '<td class="num">' + (a.quantity !== '' && a.quantity != null ? a.quantity : '—') + '</td>' +
+          '<td class="num' + (tp < 0 ? ' neg' : '') + '">' + fmtMoney(tp) + '</td>' +
+          '<td>' + (a.note || '—') + '</td>' +
+          '<td class="actions"><span class="tag">' + statusLabel(a.status) + '</span><div style="margin-top:4px">' + btns + '</div></td></tr>';
+      }).join('');
+      var list = adjs.length
+        ? '<table class="adj-table"><thead><tr>' +
+          '<th>項次</th><th>項目</th><th>單位</th><th>數量</th><th>總價</th><th>備註</th><th>狀態／操作</th>' +
+          '</tr></thead><tbody>' + rows + '</tbody></table>'
+        : '<p>尚無追加減</p>';
       $('panelAdj').innerHTML =
         '<h4>追加減</h4>' + list +
         '<h4 style="margin-top:16px">新增草稿</h4>' +
-        '<label>類型<select id="newAdjType"><option>追加</option><option>減項</option></select></label>' +
-        '<label>描述<input id="newAdjDesc" /></label>' +
-        '<label>金額<input id="newAdjAmt" type="number" min="0" /></label>' +
+        '<p class="form-hint">項次建立後自動編號。減項請在總價填負數（例：-5000）。</p>' +
+        '<div class="form-grid">' +
+        '<label>項目<input id="newAdjName" placeholder="例：櫻花獨立式熱風烘乾洗碗機 E7881" /></label>' +
+        '<label>單位<input id="newAdjUnit" placeholder="例：臺" /></label>' +
+        '<label>數量<input id="newAdjQty" type="number" min="0" step="any" placeholder="1" /></label>' +
+        '<label>總價<input id="newAdjTotal" type="number" step="any" placeholder="31600 或 -5000" /></label>' +
+        '</div>' +
+        '<label>備註<input id="newAdjNote" placeholder="例：含安裝/20260527款項已付清" /></label>' +
         '<button class="btn btn-primary" id="btnNewAdj">建立草稿</button>';
       $('btnNewAdj').onclick = async function () {
         var res = await AccountingApi.cfAdjCreate(session, {
           project_no: currentProject,
-          type: $('newAdjType').value,
-          item_desc: $('newAdjDesc').value,
-          amount: $('newAdjAmt').value
+          item_name: $('newAdjName').value,
+          unit: $('newAdjUnit').value,
+          quantity: $('newAdjQty').value,
+          total_price: $('newAdjTotal').value,
+          note: $('newAdjNote').value
         });
         if (!res.success) showMsg(res.message); else { showOk('已建立'); openDetail(currentProject); }
       };
@@ -383,8 +417,7 @@
       onReady: async function (sess) {
         session = sess;
         var q = new URLSearchParams(location.search);
-        await loadTodos();
-        await loadOverview();
+        await Promise.all([loadTodos(), loadOverview()]);
         if (q.get('project_no')) openDetail(q.get('project_no'));
       }
     });

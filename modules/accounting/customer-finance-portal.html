@@ -27,6 +27,11 @@
     .hidden { display: none; }
     #msg { color: #c5221f; font-size: 14px; }
     select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 15px; }
+    .adj-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    .adj-table th, .adj-table td { border: 1px solid #e0e0e0; padding: 8px 6px; text-align: left; vertical-align: top; }
+    .adj-table th { background: #f8f9fa; font-weight: 600; }
+    .adj-table .num { text-align: right; white-space: nowrap; }
+    .adj-table .neg { color: #c5221f; }
   </style>
 </head>
 <body>
@@ -121,8 +126,20 @@
       renderRec(res.receipts || []);
     }
 
+    function fmtMoney(n) {
+      var v = parseFloat(n);
+      if (isNaN(v)) return '—';
+      return (v < 0 ? '-' : '') + '$' + Math.abs(Math.round(v)).toLocaleString('zh-TW');
+    }
+
     function renderAdj(items) {
-      $('adjList').innerHTML = items.length ? items.map(function (a) {
+      if (!items.length) {
+        $('adjList').innerHTML = '<p>目前無待確認追加減</p>';
+        return;
+      }
+      var rows = items.map(function (a) {
+        var tp = parseFloat(a.total_price);
+        if (isNaN(tp)) tp = String(a.type) === '減項' ? -(parseFloat(a.amount) || 0) : (parseFloat(a.amount) || 0);
         var btns = '';
         if (a.status === 'pending_customer') {
           btns = '<button class="btn btn-primary" data-adj-confirm="' + a.adjustment_id + '">① 我確認內容</button>';
@@ -130,10 +147,19 @@
         if (a.status === 'content_confirmed') {
           btns = '<button class="btn btn-primary" data-adj-sign="' + a.adjustment_id + '">② 電子簽名</button>';
         }
-        return '<div style="padding:10px 0;border-bottom:1px solid #eee">' +
-          '<span class="tag">' + statusLabel(a.status) + '</span> ' + a.type + ' $' + a.amount +
-          '<div style="margin-top:4px">' + (a.item_desc || '') + '</div>' + btns + '</div>';
-      }).join('') : '<p>目前無待確認追加減</p>';
+        return '<tr>' +
+          '<td class="num">' + (a.item_no || '—') + '</td>' +
+          '<td>' + (a.item_name || a.item_desc || '') + '</td>' +
+          '<td>' + (a.unit || '—') + '</td>' +
+          '<td class="num">' + (a.quantity !== '' && a.quantity != null ? a.quantity : '—') + '</td>' +
+          '<td class="num' + (tp < 0 ? ' neg' : '') + '">' + fmtMoney(tp) + '</td>' +
+          '<td>' + (a.note || '—') + '</td>' +
+          '<td><span class="tag">' + statusLabel(a.status) + '</span>' + btns + '</td></tr>';
+      }).join('');
+      $('adjList').innerHTML =
+        '<table class="adj-table"><thead><tr>' +
+        '<th>項次</th><th>項目</th><th>單位</th><th>數量</th><th>總價</th><th>備註</th><th>狀態</th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table>';
       $('adjList').querySelectorAll('[data-adj-confirm]').forEach(function (btn) {
         btn.onclick = async function () {
           var res = await AccountingApi.cfAdjCustomerConfirm(session, btn.getAttribute('data-adj-confirm'));
