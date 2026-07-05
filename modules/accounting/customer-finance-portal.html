@@ -8,6 +8,11 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=31"></script>
+  <!-- 客戶專用 LIFF（與員工會計 policy.liffId 分開）。LINE Developers Endpoint URL：
+       https://info.tanxin.space/modules/accounting/customer-finance-portal.html -->
+  <script>
+    var CUSTOMER_FINANCE_LIFF_ID = '2007974938-d2y1uA1G';
+  </script>
   <style>
     body { max-width: 640px; margin: 0 auto; padding: 16px; font-family: system-ui, sans-serif; }
     h2 { margin: 0 0 8px; font-size: 20px; }
@@ -193,7 +198,7 @@
 
     (async function boot() {
       try {
-        session = await AccountingApi.initCustomerPortalSession();
+        session = await AccountingApi.initCustomerPortalSession({ liffId: CUSTOMER_FINANCE_LIFF_ID });
         $('userLine').textContent = (session.portal && session.portal.display_name) || '客戶';
         fillProjects((session.portal && session.portal.projects) || []);
         $('loading').classList.add('hidden');
