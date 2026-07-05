@@ -440,13 +440,21 @@ var AccountingApi = (function () {
       });
     },
     marginSaveVendors: function (sessionOrToken, payload) {
-      return post({
+      var body = {
         action: 'margin_save_vendors',
         auth: resolveAuth(sessionOrToken),
         project_no: payload.project_no,
-        tab_name: payload.tab_name || '',
-        selected_vendors: payload.selected_vendors || []
-      });
+        tab_name: payload.tab_name || ''
+      };
+      if (payload.vendor_slots && typeof payload.vendor_slots === 'object') {
+        body.vendor_slots = payload.vendor_slots;
+        if (payload.vendor_slots_manual != null) {
+          body.vendor_slots_manual = payload.vendor_slots_manual;
+        }
+      } else {
+        body.selected_vendors = payload.selected_vendors || [];
+      }
+      return post(body);
     },
     loadPolicy: async function (opts) {
       opts = opts || {};

@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=15"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=29"></script>
+  <script src="../../shared/js/accounting_api.js?v=30"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=17"></script>
   <script src="../../shared/js/accounting_ui.js?v=10"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
@@ -56,6 +56,26 @@
     #detailLoading { text-align: center; padding: 16px; color: #555; font-size: 14px; }
     .vendor-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; font-size: 14px; }
     .vendor-row input { width: auto; margin: 0; }
+    .slot-block { border-bottom: 1px solid #eee; padding: 10px 0; }
+    .slot-block:last-of-type { border-bottom: none; }
+    .slot-header { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+    .slot-tag { font-size: 11px; font-weight: normal; margin-left: 6px; }
+    .slot-tag.detected { color: #1a73e8; }
+    .slot-tag.manual { color: #777; }
+    .vendor-slot-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; margin-top: 6px; }
+    .vendor-slot-row select { margin-top: 0; }
+    .btn-icon { padding: 8px 12px; min-width: 40px; width: auto; margin-top: 0; flex-shrink: 0; }
+    .manual-slot-add { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-top: 12px; padding-top: 10px; border-top: 1px solid #eee; }
+    .manual-slot-add select { flex: 1; min-width: 160px; margin-top: 0; }
+    .manual-slot-add .btn { width: auto; margin-top: 0; flex-shrink: 0; }
+    .slot-header-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .slot-remove-btn { width: auto; margin-top: 0; padding: 4px 10px; font-size: 12px; flex-shrink: 0; }
+    .slot-payment-block { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #ddd; }
+    .slot-payment-row { font-size: 13px; margin-top: 4px; line-height: 1.45; }
+    .slot-pay-paid { color: #137333; }
+    .slot-pay-pending { color: #c5221f; }
+    .slot-pay-none { color: #777; }
+    .slot-pay-partial { color: #b06000; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -130,10 +150,10 @@
         <p class="hint" id="bonusDraftHint">—</p>
       </div>
       <div class="card hidden" id="vendorPickCard">
-        <h3 class="section-title">本案廠商（驗收表預判）</h3>
-        <p class="hint">依驗收表工種對應廠商主檔行業類別；可增刪勾選</p>
+        <h3 class="section-title">本案廠商（驗收表大項目）</h3>
+        <p class="hint">依驗收表偵測的大項目選定廠商；同項目可選多家，亦可手動新增大項目</p>
         <div id="vendorPickList"></div>
-        <button type="button" class="btn btn-primary" id="saveVendorsBtn">儲存廠商勾選</button>
+        <button type="button" class="btn btn-primary" id="saveVendorsBtn">儲存本案廠商</button>
       </div>
       <div class="card hidden" id="checklistCard">
         <h3 class="section-title">案件收支總結</h3>
@@ -190,6 +210,8 @@
       var detailData = null;
       var contractDirty = false;
       var laborRoles = ['工務', '木作', '系統', '油漆'];
+      var vendorSlotDefs = [];
+      var allSlotCandidates = {};
 
       function setMsg(t) { if (t) AccountingUi.notify('err', t); }
       function setOk(t) { if (t) AccountingUi.notify('ok', t); }
@@ -399,7 +421,229 @@
         return out;
       }
 
-      function renderVendorPick(vendors) {
+      function escAttr(s) {
+        return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+      }
+
+      function buildVendorSelectHtml(candidates, selectedId, extraVendor) {
+        var html = '<option value="">— 請選擇 —</option>';
+        var seen = {};
+        (candidates || []).forEach(function (c) {
+          var vid = String(c.vendor_id || '').trim();
+          if (!vid || seen[vid]) return;
+          seen[vid] = true;
+          var sel = vid === selectedId ? ' selected' : '';
+          html += '<option value="' + escAttr(vid) + '" data-name="' + escAttr(c.name) + '"' + sel + '>' +
+            (c.name || vid) + '</option>';
+        });
+        if (selectedId && !seen[selectedId]) {
+          var name = (extraVendor && extraVendor.name) || selectedId;
+          html += '<option value="' + escAttr(selectedId) + '" data-name="' + escAttr(name) + '" selected>' +
+            name + '</option>';
+        }
+        return html;
+      }
+
+      function getShownSlotKeys() {
+        var keys = [];
+        el('vendorPickList').querySelectorAll('.slot-block').forEach(function (block) {
+          if (block.dataset.slotKey) keys.push(block.dataset.slotKey);
+        });
+        return keys;
+      }
+
+      function refreshManualSlotSelect() {
+        var sel = el('manualSlotSelect');
+        if (!sel) return;
+        var shown = {};
+        getShownSlotKeys().forEach(function (k) { shown[k] = true; });
+        sel.innerHTML = '<option value="">— 選擇大項目 —</option>';
+        vendorSlotDefs.forEach(function (def) {
+          if (!def || !def.key || shown[def.key]) return;
+          var opt = document.createElement('option');
+          opt.value = def.key;
+          opt.textContent = def.label || def.key;
+          sel.appendChild(opt);
+        });
+        var addBtn = el('addManualSlotBtn');
+        if (addBtn) addBtn.disabled = sel.options.length <= 1;
+      }
+
+      function buildVendorPool(slotsUi, legacyVendors, vendorCandidates) {
+        var pool = [];
+        var seen = {};
+        function add(v) {
+          var vid = String(v.vendor_id || '').trim();
+          if (!vid || seen[vid]) return;
+          seen[vid] = true;
+          pool.push({
+            vendor_id: vid,
+            name: String(v.name || '').trim(),
+            trade_category: String(v.trade_category || '').trim(),
+            cost_type: String(v.cost_type || '').trim()
+          });
+        }
+        (slotsUi || []).forEach(function (slot) {
+          (slot.candidates || []).forEach(add);
+          (slot.vendors || []).forEach(add);
+          if (slot.default_vendor) add(slot.default_vendor);
+        });
+        (legacyVendors || []).forEach(add);
+        (vendorCandidates || []).forEach(add);
+        return pool;
+      }
+
+      function getCandidatesForSlotKey(key, def, slotsUi) {
+        if (allSlotCandidates && allSlotCandidates[key] && allSlotCandidates[key].length) {
+          return allSlotCandidates[key];
+        }
+        if (vendorSlotDefs._candidatesCache && vendorSlotDefs._candidatesCache[key]) {
+          return vendorSlotDefs._candidatesCache[key];
+        }
+        (slotsUi || []).forEach(function (s) {
+          if (s.key === key && s.candidates && s.candidates.length) {
+            vendorSlotDefs._candidatesCache[key] = s.candidates;
+          }
+        });
+        if (vendorSlotDefs._candidatesCache && vendorSlotDefs._candidatesCache[key]) {
+          return vendorSlotDefs._candidatesCache[key];
+        }
+        var filtered = filterVendorsForSlotFromList_(vendorSlotDefs._allVendors || [], def);
+        vendorSlotDefs._candidatesCache[key] = filtered;
+        return filtered;
+      }
+
+      function createVendorSlotRow(slot, vendor, isLast) {
+        var row = document.createElement('div');
+        row.className = 'vendor-slot-row';
+        var vid = vendor ? String(vendor.vendor_id || '').trim() : '';
+        var sel = document.createElement('select');
+        sel.className = 'vendor-slot-select';
+        sel.innerHTML = buildVendorSelectHtml(slot.candidates, vid, vendor);
+        row.appendChild(sel);
+        if (isLast) {
+          var addBtn = document.createElement('button');
+          addBtn.type = 'button';
+          addBtn.className = 'btn btn-secondary btn-icon vendor-add-btn';
+          addBtn.textContent = '+';
+          addBtn.title = '同項目再加一家廠商';
+          row.appendChild(addBtn);
+        } else {
+          var spacer = document.createElement('span');
+          spacer.className = 'btn-icon';
+          spacer.style.visibility = 'hidden';
+          row.appendChild(spacer);
+        }
+        if (!isLast) {
+          var rmBtn = document.createElement('button');
+          rmBtn.type = 'button';
+          rmBtn.className = 'btn btn-secondary btn-icon vendor-rm-btn';
+          rmBtn.textContent = '−';
+          rmBtn.title = '移除此廠商';
+          row.appendChild(rmBtn);
+        } else {
+          var spacer2 = document.createElement('span');
+          spacer2.className = 'btn-icon';
+          spacer2.style.visibility = 'hidden';
+          row.appendChild(spacer2);
+        }
+        return row;
+      }
+
+      function createSlotBlock(slot) {
+        var block = document.createElement('div');
+        block.className = 'slot-block';
+        block.dataset.slotKey = slot.key;
+        block.dataset.manual = slot.manual ? '1' : '0';
+
+        var header = document.createElement('div');
+        header.className = 'slot-header-row';
+        var title = document.createElement('div');
+        title.className = 'slot-header';
+        title.textContent = slot.label || slot.key;
+        var tag = document.createElement('span');
+        tag.className = 'slot-tag ' + (slot.manual ? 'manual' : 'detected');
+        tag.textContent = slot.manual ? '（手動新增）' : '（驗收表）';
+        title.appendChild(tag);
+        header.appendChild(title);
+        if (slot.manual) {
+          var rmSlotBtn = document.createElement('button');
+          rmSlotBtn.type = 'button';
+          rmSlotBtn.className = 'btn btn-secondary slot-remove-btn';
+          rmSlotBtn.textContent = '移除';
+          rmSlotBtn.title = '移除此大項目';
+          rmSlotBtn.addEventListener('click', function () {
+            block.remove();
+            refreshManualSlotSelect();
+          });
+          header.appendChild(rmSlotBtn);
+        }
+        block.appendChild(header);
+
+        if (slot.default_vendor && slot.default_vendor.from_project_no) {
+          var defHint = document.createElement('p');
+          defHint.className = 'hint';
+          defHint.textContent = '慣用：案號 ' + slot.default_vendor.from_project_no +
+            (slot.default_vendor.name ? '（' + slot.default_vendor.name + '）' : '');
+          block.appendChild(defHint);
+        }
+
+        var rowsWrap = document.createElement('div');
+        rowsWrap.className = 'slot-vendor-rows';
+        var vendors = (slot.vendors && slot.vendors.length)
+          ? slot.vendors
+          : ((slot.default_vendor && slot.default_vendor.vendor_id)
+            ? [slot.default_vendor] : [{ vendor_id: '', name: '' }]);
+        vendors.forEach(function (v, idx) {
+          rowsWrap.appendChild(createVendorSlotRow(slot, v, idx === vendors.length - 1));
+        });
+        block.appendChild(rowsWrap);
+        return block;
+      }
+
+      function readVendorRowsFromWrap(rowsWrap) {
+        var out = [];
+        rowsWrap.querySelectorAll('.vendor-slot-row select').forEach(function (sel) {
+          var vid = String(sel.value || '').trim();
+          var opt = sel.options[sel.selectedIndex];
+          out.push({
+            vendor_id: vid,
+            name: (opt && opt.dataset.name) || (opt && opt.textContent) || ''
+          });
+        });
+        return out;
+      }
+
+      function rebuildVendorRows(rowsWrap, slot, vendors) {
+        rowsWrap.innerHTML = '';
+        var list = vendors && vendors.length ? vendors : [{ vendor_id: '', name: '' }];
+        list.forEach(function (v, idx) {
+          rowsWrap.appendChild(createVendorSlotRow(slot, v, idx === list.length - 1));
+        });
+        bindVendorSlotRowEvents(rowsWrap, slot);
+      }
+
+      function bindVendorSlotRowEvents(rowsWrap, slot) {
+        rowsWrap.querySelectorAll('.vendor-add-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var vendors = readVendorRowsFromWrap(rowsWrap);
+            vendors.push({ vendor_id: '', name: '' });
+            rebuildVendorRows(rowsWrap, slot, vendors);
+          });
+        });
+        rowsWrap.querySelectorAll('.vendor-rm-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var row = btn.closest('.vendor-slot-row');
+            if (!row) return;
+            var idx = Array.prototype.indexOf.call(rowsWrap.querySelectorAll('.vendor-slot-row'), row);
+            var vendors = readVendorRowsFromWrap(rowsWrap);
+            vendors.splice(idx, 1);
+            rebuildVendorRows(rowsWrap, slot, vendors);
+          });
+        });
+      }
+
+      function renderVendorPickLegacy(vendors) {
         var card = el('vendorPickCard');
         var box = el('vendorPickList');
         box.innerHTML = '';
@@ -408,13 +652,14 @@
           return;
         }
         card.classList.remove('hidden');
+        box.innerHTML = '<p class="warn">舊版廠商資料，請重新選定後儲存</p>';
         vendors.forEach(function (v) {
           var row = document.createElement('label');
           row.className = 'vendor-row';
           row.innerHTML =
-            '<input type="checkbox" data-vendor-id="' + (v.vendor_id || '') + '"' +
-            ' data-name="' + (v.name || '') + '"' +
-            ' data-trade="' + (v.trade_category || '') + '"' +
+            '<input type="checkbox" data-vendor-id="' + escAttr(v.vendor_id) + '"' +
+            ' data-name="' + escAttr(v.name) + '"' +
+            ' data-trade="' + escAttr(v.trade_category) + '"' +
             (v.selected ? ' checked' : '') + ' />' +
             '<span>' + (v.name || v.vendor_id) + ' · ' + (v.trade_category || '') +
             (v.predicted ? '（預判）' : '') + '</span>';
@@ -422,7 +667,127 @@
         });
       }
 
-      function collectSelectedVendors() {
+      function renderVendorPick(slotsUi, slotDefs, legacyVendors, vendorCandidates, candidatesMap) {
+        vendorSlotDefs = slotDefs || [];
+        allSlotCandidates = candidatesMap || {};
+        vendorSlotDefs._allVendors = buildVendorPool(slotsUi, legacyVendors, vendorCandidates);
+        vendorSlotDefs._candidatesCache = {};
+        Object.keys(allSlotCandidates).forEach(function (k) {
+          if (allSlotCandidates[k] && allSlotCandidates[k].length) {
+            vendorSlotDefs._candidatesCache[k] = allSlotCandidates[k];
+          }
+        });
+        (slotsUi || []).forEach(function (s) {
+          if (s.key && s.candidates && s.candidates.length) {
+            vendorSlotDefs._candidatesCache[s.key] = s.candidates;
+          }
+        });
+        var card = el('vendorPickCard');
+        var box = el('vendorPickList');
+        box.innerHTML = '';
+
+        if (!slotDefs || !slotDefs.length) {
+          renderVendorPickLegacy(legacyVendors);
+          return;
+        }
+
+        card.classList.remove('hidden');
+
+        if (!slotsUi || !slotsUi.length) {
+          var emptyHint = document.createElement('p');
+          emptyHint.className = 'hint';
+          emptyHint.textContent = '驗收表尚未偵測到大項目，請下方手動新增';
+          box.appendChild(emptyHint);
+        } else {
+          slotsUi.forEach(function (slot) {
+            var block = createSlotBlock(slot);
+            box.appendChild(block);
+            bindVendorSlotRowEvents(block.querySelector('.slot-vendor-rows'), slot);
+          });
+        }
+
+        var addWrap = document.createElement('div');
+        addWrap.className = 'manual-slot-add';
+        var addSel = document.createElement('select');
+        addSel.id = 'manualSlotSelect';
+        var addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.id = 'addManualSlotBtn';
+        addBtn.className = 'btn btn-secondary';
+        addBtn.textContent = '新增大項目';
+        addWrap.appendChild(addSel);
+        addWrap.appendChild(addBtn);
+        box.appendChild(addWrap);
+        refreshManualSlotSelect();
+
+        addBtn.addEventListener('click', function () {
+          var key = addSel.value;
+          if (!key) return;
+          var def = null;
+          vendorSlotDefs.forEach(function (d) { if (d && d.key === key) def = d; });
+          if (!def) return;
+          var candidates = getCandidatesForSlotKey(key, def, slotsUi);
+          var newSlot = {
+            key: def.key,
+            label: def.label || def.key,
+            manual: true,
+            detected: false,
+            candidates: candidates,
+            vendors: [],
+            default_vendor: null
+          };
+          var block = createSlotBlock(newSlot);
+          box.insertBefore(block, addWrap);
+          bindVendorSlotRowEvents(block.querySelector('.slot-vendor-rows'), newSlot);
+          addSel.value = '';
+          refreshManualSlotSelect();
+        });
+      }
+
+      function filterVendorsForSlotFromList_(vendors, def) {
+        var trades = def.trade_categories || [];
+        var costs = def.cost_types || [];
+        return (vendors || []).filter(function (v) {
+          var tc = String(v.trade_category || '').trim();
+          var ct = String(v.cost_type || '').trim();
+          if (trades.length && trades.indexOf(tc) < 0) return false;
+          if (costs.length && ct && costs.indexOf(ct) < 0) return false;
+          return true;
+        }).map(function (v) {
+          return {
+            vendor_id: String(v.vendor_id || '').trim(),
+            name: String(v.name || '').trim(),
+            trade_category: String(v.trade_category || '').trim()
+          };
+        }).sort(function (a, b) {
+          return String(a.name).localeCompare(String(b.name), 'zh-Hant');
+        });
+      }
+
+      function collectVendorSlots() {
+        var vendor_slots = {};
+        var vendor_slots_manual = [];
+        el('vendorPickList').querySelectorAll('.slot-block').forEach(function (block) {
+          var key = block.dataset.slotKey || '';
+          if (!key) return;
+          if (block.dataset.manual === '1') vendor_slots_manual.push(key);
+          var rows = [];
+          block.querySelectorAll('.vendor-slot-row select').forEach(function (sel, idx) {
+            var vid = String(sel.value || '').trim();
+            if (!vid) return;
+            var opt = sel.options[sel.selectedIndex];
+            rows.push({
+              vendor_id: vid,
+              name: (opt && opt.dataset.name) || (opt && opt.textContent) || '',
+              is_primary: idx === 0
+            });
+          });
+          if (rows.length) vendor_slots[key] = rows;
+        });
+        return { vendor_slots: vendor_slots, vendor_slots_manual: vendor_slots_manual };
+      }
+
+      function collectSelectedVendorsLegacy() {
         var checks = el('vendorPickList').querySelectorAll('input[type="checkbox"]');
         var out = [];
         checks.forEach(function (cb) {
@@ -437,16 +802,56 @@
         return out;
       }
 
-      function renderChecklist(checklist) {
+      function collectVendorSavePayload() {
+        if (el('vendorPickList').querySelector('.slot-block')) {
+          return collectVendorSlots();
+        }
+        return { selected_vendors: collectSelectedVendorsLegacy() };
+      }
+
+      function slotPaymentStatusClass(status) {
+        if (status === 'paid') return 'slot-pay-paid';
+        if (status === 'pending') return 'slot-pay-pending';
+        if (status === 'partial') return 'slot-pay-partial';
+        return 'slot-pay-none';
+      }
+
+      function renderSlotPaymentStatus(slots) {
+        var list = slots || [];
+        if (!list.length) return '';
+        var html = '<div class="slot-payment-block">';
+        list.forEach(function (slot) {
+          var cls = slotPaymentStatusClass(slot.slot_status);
+          html += '<div class="slot-payment-row ' + cls + '">' +
+            (slot.label || slot.key) + '：' + (slot.slot_label || '—') + '</div>';
+        });
+        html += '</div>';
+        return html;
+      }
+
+      function renderChecklist(checklist, slotPaymentStatus) {
         var card = el('checklistCard');
         var box = el('checklistList');
         box.innerHTML = '';
         var items = (checklist && checklist.items) || [];
-        if (!items.length) {
+        var slotRows = slotPaymentStatus;
+        if (!slotRows || !slotRows.length) {
+          items.forEach(function (it) {
+            if (it.id === 'vendors_paid' && it.vendor_slot_payment_status) {
+              slotRows = it.vendor_slot_payment_status;
+            }
+          });
+        }
+        if (!items.length && !(slotRows && slotRows.length)) {
           card.classList.add('hidden');
           return;
         }
         card.classList.remove('hidden');
+        if (slotRows && slotRows.length) {
+          var slotWrap = document.createElement('div');
+          slotWrap.innerHTML = renderSlotPaymentStatus(slotRows);
+          box.appendChild(slotWrap);
+        }
         items.forEach(function (it) {
           var row = document.createElement('div');
           var isSkip = !!it.skip_when_empty;
@@ -462,6 +867,10 @@
           if (it.id === 'vendors_paid' && it.vendors && it.vendors.length) {
             extra = '<div class="hint" style="margin-top:4px">' + it.vendors.map(function (v) {
               return (v.name || v.vendor_id) + '：' + (v.label || '');
+            }).join('；') + '</div>';
+          } else if (it.id === 'vendors_paid' && it.vendor_slot_payment_status && it.vendor_slot_payment_status.length) {
+            extra = '<div class="hint" style="margin-top:4px">' + it.vendor_slot_payment_status.map(function (s) {
+              return (s.label || s.key) + '：' + (s.slot_label || '');
             }).join('；') + '</div>';
           } else if (isSkip && it.hint) {
             extra = '<div class="hint" style="margin-top:4px">' + it.hint + '</div>';
@@ -512,8 +921,14 @@
 
         renderBonusAllocations(site.responsible_persons, meta.bonus_allocations);
 
-        renderVendorPick(meta.selected_vendors || []);
-        renderChecklist(data.checklist);
+        renderVendorPick(
+          data.vendor_slots_ui || [],
+          data.vendor_slot_defs || [],
+          meta.selected_vendors || [],
+          data.vendor_candidates || [],
+          data.all_slot_candidates || {}
+        );
+        renderChecklist(data.checklist, data.vendor_slot_payment_status);
 
         var bonusCard = el('bonusApplyCard');
         if (site.is_closed) {
@@ -668,13 +1083,12 @@
         if (!current) return;
         await runAction(el('saveVendorsBtn'), '儲存中…', async function () {
           setMsg('');
-          var data = await AccountingApi.marginSaveVendors(session, {
-            project_no: current.project_no,
-            tab_name: current.tab_name,
-            selected_vendors: collectSelectedVendors()
-          });
+          var payload = collectVendorSavePayload();
+          payload.project_no = current.project_no;
+          payload.tab_name = current.tab_name;
+          var data = await AccountingApi.marginSaveVendors(session, payload);
           if (!data.success) { setMsg(data.message || '廠商儲存失敗'); return; }
-          setOk('廠商勾選已儲存');
+          setOk('本案廠商已儲存');
           renderDetailPanels(data);
         });
       });
