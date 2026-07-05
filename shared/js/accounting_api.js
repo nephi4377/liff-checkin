@@ -935,6 +935,164 @@ var AccountingApi = (function () {
         payroll_request_id: payrollRequestId
       });
     },
+    cfOverview: function (sessionOrToken, showClosed) {
+      return post({
+        action: 'margin_customer_finance_overview',
+        auth: resolveAuth(sessionOrToken),
+        show_closed: !!showClosed
+      });
+    },
+    cfDetail: function (sessionOrToken, projectNo) {
+      return post({
+        action: 'margin_customer_finance_detail',
+        auth: resolveAuth(sessionOrToken),
+        project_no: projectNo
+      });
+    },
+    cfTodos: function (sessionOrToken, openOnly) {
+      return post({
+        action: 'margin_customer_finance_todos',
+        auth: resolveAuth(sessionOrToken),
+        open_only: openOnly !== false
+      });
+    },
+    cfAdjCreate: function (sessionOrToken, payload) {
+      return post(Object.assign({ action: 'margin_adjustment_create', auth: resolveAuth(sessionOrToken) }, payload || {}));
+    },
+    cfAdjUpdate: function (sessionOrToken, payload) {
+      return post(Object.assign({ action: 'margin_adjustment_update', auth: resolveAuth(sessionOrToken) }, payload || {}));
+    },
+    cfAdjSubmit: function (sessionOrToken, adjustmentId) {
+      return post({ action: 'margin_adjustment_submit', auth: resolveAuth(sessionOrToken), adjustment_id: adjustmentId });
+    },
+    cfAdjWithdraw: function (sessionOrToken, adjustmentId) {
+      return post({ action: 'margin_adjustment_withdraw', auth: resolveAuth(sessionOrToken), adjustment_id: adjustmentId });
+    },
+    cfAdjVoid: function (sessionOrToken, adjustmentId, reason) {
+      return post({ action: 'margin_adjustment_void', auth: resolveAuth(sessionOrToken), adjustment_id: adjustmentId, void_reason: reason || '' });
+    },
+    cfAdjCompanyConfirm: function (sessionOrToken, adjustmentId) {
+      return post({ action: 'margin_adjustment_company_confirm', auth: resolveAuth(sessionOrToken), adjustment_id: adjustmentId });
+    },
+    cfRecCreate: function (sessionOrToken, payload) {
+      return post(Object.assign({ action: 'margin_receipt_create', auth: resolveAuth(sessionOrToken) }, payload || {}));
+    },
+    cfRecUpdate: function (sessionOrToken, payload) {
+      return post(Object.assign({ action: 'margin_receipt_update', auth: resolveAuth(sessionOrToken) }, payload || {}));
+    },
+    cfRecSubmit: function (sessionOrToken, receiptId) {
+      return post({ action: 'margin_receipt_submit', auth: resolveAuth(sessionOrToken), receipt_id: receiptId });
+    },
+    cfRecSignDesigner: function (sessionOrToken, receiptId) {
+      return post({ action: 'margin_receipt_sign_designer', auth: resolveAuth(sessionOrToken), receipt_id: receiptId });
+    },
+    cfRecSignFinance: function (sessionOrToken, receiptId) {
+      return post({ action: 'margin_receipt_sign_finance', auth: resolveAuth(sessionOrToken), receipt_id: receiptId });
+    },
+    cfRecVoid: function (sessionOrToken, receiptId, reason) {
+      return post({ action: 'margin_receipt_void', auth: resolveAuth(sessionOrToken), receipt_id: receiptId, void_reason: reason || '' });
+    },
+    cfPortalBind: function (sessionOrToken, payload) {
+      return post(Object.assign({ action: 'client_portal_bind', auth: resolveAuth(sessionOrToken) }, payload || {}));
+    },
+    cfPortalRevoke: function (sessionOrToken, bindingId) {
+      return post({ action: 'client_portal_revoke', auth: resolveAuth(sessionOrToken), binding_id: bindingId });
+    },
+    officialCustomerSearch: function (sessionOrToken, keyword, limit) {
+      return post({
+        action: 'official_customer_search',
+        auth: resolveAuth(sessionOrToken),
+        keyword: keyword,
+        limit: limit || 20
+      });
+    },
+    cfPortalAuth: function (sessionOrToken) {
+      var body = { action: 'margin_customer_finance_portal_auth', auth: resolveAuth(sessionOrToken) };
+      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
+        body.dev_bypass = true;
+        if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
+      }
+      return post(body);
+    },
+    cfPortalData: function (sessionOrToken, projectNo) {
+      var body = { action: 'margin_customer_finance_portal_data', auth: resolveAuth(sessionOrToken), project_no: projectNo };
+      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
+        body.dev_bypass = true;
+        if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
+      }
+      return post(body);
+    },
+    cfAdjCustomerConfirm: function (sessionOrToken, adjustmentId) {
+      var body = { action: 'margin_adjustment_customer_confirm_content', auth: resolveAuth(sessionOrToken), adjustment_id: adjustmentId };
+      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
+        body.dev_bypass = true;
+        if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
+      }
+      return post(body);
+    },
+    cfAdjCustomerSign: function (sessionOrToken, adjustmentId, signData) {
+      var body = { action: 'margin_adjustment_customer_sign', auth: resolveAuth(sessionOrToken), adjustment_id: adjustmentId, sign_data_base64: signData || '' };
+      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
+        body.dev_bypass = true;
+        if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
+      }
+      return post(body);
+    },
+    cfRecCustomerStage1: function (sessionOrToken, receiptId) {
+      var body = { action: 'margin_receipt_customer_confirm_stage1', auth: resolveAuth(sessionOrToken), receipt_id: receiptId };
+      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
+        body.dev_bypass = true;
+        if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
+      }
+      return post(body);
+    },
+    cfRecCustomerStage2: function (sessionOrToken, receiptId) {
+      var body = { action: 'margin_receipt_customer_confirm_stage2', auth: resolveAuth(sessionOrToken), receipt_id: receiptId };
+      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
+        body.dev_bypass = true;
+        if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
+      }
+      return post(body);
+    },
+    initCustomerFinanceSession: async function (opts) {
+      var policy = await AccountingApi.loadPolicy();
+      var session;
+      if (policy.authBypass) {
+        var pack = devBypassAuthBody_('accounting_auth_me');
+        var auth = await post(pack.body);
+        if (!auth.success) throw new Error(auth.message || '驗證失敗');
+        session = buildDevBypassSession_(auth, pack.opts);
+      } else {
+        session = await AccountingApi.initLiff(opts);
+      }
+      if (!session) return null;
+      if ((session.auth.permission || 0) < SUPERVISOR_MIN_PERMISSION) {
+        throw new Error(SUPERVISOR_DENIED_MSG);
+      }
+      notifyUiOperator_(session);
+      return session;
+    },
+    initCustomerPortalSession: async function (opts) {
+      var policy = await AccountingApi.loadPolicy();
+      if (policy.authBypass) {
+        var pack = devBypassAuthBody_('margin_customer_finance_portal_auth');
+        var portal = await post(pack.body);
+        if (!portal.success) throw new Error(portal.message || '客戶綁定驗證失敗');
+        return {
+          devBypass: true,
+          devUserId: pack.opts.dev_user_id || '',
+          idToken: '',
+          profile: { userId: portal.user_id, displayName: portal.display_name },
+          portal: portal
+        };
+      }
+      var session = await AccountingApi.initLiff(opts);
+      if (!session || !session.idToken) throw new Error('LIFF 登入失敗');
+      var portal = await AccountingApi.cfPortalAuth(session);
+      if (!portal.success) throw new Error(portal.message || '客戶綁定驗證失敗');
+      session.portal = portal;
+      return session;
+    },
     primeHubIdentityFromUrl: primeHubIdentityFromUrl_,
     requestParentHubLiffToken: requestParentHubLiffToken_
   };

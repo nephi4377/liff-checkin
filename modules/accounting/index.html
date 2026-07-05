@@ -113,6 +113,12 @@
       <p>各案收入、支出明細與毛利；記帳有案號會自動寫入。</p>
       <span class="tag admin">財務以上</span>
     </a>
+
+    <a class="card hidden" href="designer-customer-finance.html" id="linkCustomerFinance">
+      <h3>追加減與收款</h3>
+      <p>登記追加減、收款收據；客戶 LIFF 雙階段確認。</p>
+      <span class="tag">設計師 ≥3</span>
+    </a>
     </div>
 
     <iframe id="acctContentFrame" class="hidden" title="會計功能內容" loading="lazy"></iframe>
@@ -138,6 +144,9 @@
             document.getElementById('linkPayrollReview').classList.add('hidden');
           } else {
             document.getElementById('linkPayrollReview').classList.remove('hidden');
+          }
+          if (perm >= AccountingApi.SUPERVISOR_MIN_PERMISSION) {
+            document.getElementById('linkCustomerFinance').classList.remove('hidden');
           }
           AccountingUi.bindMenuCards('#menuPanel a.card');
           if (typeof AccountingShell !== 'undefined') AccountingShell.initHost();

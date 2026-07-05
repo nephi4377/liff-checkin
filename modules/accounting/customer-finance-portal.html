@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>我的案件追加減與收款</title>
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/operator_context.js?v=1"></script>
+  <script src="../../shared/js/accounting_api.js?v=31"></script>
+  <style>
+    body { max-width: 640px; margin: 0 auto; padding: 16px; font-family: system-ui, sans-serif; }
+    h2 { margin: 0 0 8px; font-size: 20px; }
+    .sub { color: #555; font-size: 14px; margin-bottom: 12px; }
+    .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; }
+    .btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: 600; font-size: 15px; margin-top: 8px; cursor: pointer; }
+    .btn-primary { background: #06c755; color: #fff; }
+    .btn-secondary { background: #e8eaed; color: #333; }
+    .warn-box { background: #fef7e0; border-radius: 8px; padding: 10px; font-size: 13px; margin: 8px 0; color: #5f4400; }
+    #signCanvas { border: 1px solid #ccc; border-radius: 8px; width: 100%; height: 160px; touch-action: none; }
+    .hidden { display: none; }
+    #msg { color: #c5221f; font-size: 14px; }
+    select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 15px; }
+  </style>
+</head>
+<body>
+  <div id="loading">載入中…</div>
+  <div id="app" class="hidden">
+    <h2>我的案件紀錄</h2>
+    <p class="sub" id="userLine">—</p>
+    <div id="msg"></div>
+
+    <div class="card">
+      <label>選擇案號</label>
+      <select id="projectSelect"></select>
+    </div>
+
+    <div id="content">
+      <div class="card">
+        <h3 style="margin:0 0 8px">追加減</h3>
+        <div id="adjList">—</div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">收款紀錄</h3>
+        <div id="recList">—</div>
+      </div>
+    </div>
+
+    <div id="signModal" class="hidden card">
+      <h3>電子簽名</h3>
+      <canvas id="signCanvas"></canvas>
+      <button class="btn btn-secondary" id="btnClearSign">清除</button>
+      <button class="btn btn-primary" id="btnSubmitSign">提交簽名</button>
+      <button class="btn btn-secondary" id="btnCancelSign">取消</button>
+    </div>
+  </div>
+  <script>
+  (function () {
+    var session = null;
+    var pendingSignAdjId = null;
+    var canvas = document.getElementById('signCanvas');
+    var ctx = canvas.getContext('2d');
+    var drawing = false;
+
+    function $(id) { return document.getElementById(id); }
+    function showMsg(t) { $('msg').textContent = t || ''; }
+
+    function statusLabel(st) {
+      var map = {
+        pending_customer: '待您確認', content_confirmed: '待簽名', pending_company: '公司已收到',
+        company_confirmed: '已生效', pending_customer: '待確認',
+        customer_stage1: '待最終確認', customer_confirmed: '已確認'
+      };
+      return map[st] || st;
+    }
+
+    function setupCanvas() {
+      var rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * 2;
+      canvas.height = rect.height * 2;
+      ctx.scale(2, 2);
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = '#111';
+    }
+
+    function pos(e) {
+      var r = canvas.getBoundingClientRect();
+      var t = e.touches ? e.touches[0] : e;
+      return { x: t.clientX - r.left, y: t.clientY - r.top };
+    }
+    canvas.addEventListener('mousedown', function (e) { drawing = true; var p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
+    canvas.addEventListener('mousemove', function (e) { if (!drawing) return; var p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
+    canvas.addEventListener('mouseup', function () { drawing = false; });
+    canvas.addEventListener('touchstart', function (e) { e.preventDefault(); drawing = true; var p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
+    canvas.addEventListener('touchmove', function (e) { e.preventDefault(); if (!drawing) return; var p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
+    canvas.addEventListener('touchend', function () { drawing = false; });
+
+    function fillProjects(projects) {
+      var sel = $('projectSelect');
+      sel.innerHTML = (projects || []).map(function (p) {
+        return '<option value="' + p.project_no + '">' + p.project_no + ' ' + (p.site_name || '') + '</option>';
+      }).join('');
+      if (!projects.length) sel.innerHTML = '<option value="">（尚無綁定案件）</option>';
+      sel.onchange = loadData;
+    }
+
+    async function loadData() {
+      var pno = $('projectSelect').value;
+      if (!pno) return;
+      showMsg('');
+      var res = await AccountingApi.cfPortalData(session, pno);
+      if (!res.success) { showMsg(res.message); return; }
+      renderAdj(res.adjustments || []);
+      renderRec(res.receipts || []);
+    }
+
+    function renderAdj(items) {
+      $('adjList').innerHTML = items.length ? items.map(function (a) {
+        var btns = '';
+        if (a.status === 'pending_customer') {
+          btns = '<button class="btn btn-primary" data-adj-confirm="' + a.adjustment_id + '">① 我確認內容</button>';
+        }
+        if (a.status === 'content_confirmed') {
+          btns = '<button class="btn btn-primary" data-adj-sign="' + a.adjustment_id + '">② 電子簽名</button>';
+        }
+        return '<div style="padding:10px 0;border-bottom:1px solid #eee">' +
+          '<span class="tag">' + statusLabel(a.status) + '</span> ' + a.type + ' $' + a.amount +
+          '<div style="margin-top:4px">' + (a.item_desc || '') + '</div>' + btns + '</div>';
+      }).join('') : '<p>目前無待確認追加減</p>';
+      $('adjList').querySelectorAll('[data-adj-confirm]').forEach(function (btn) {
+        btn.onclick = async function () {
+          var res = await AccountingApi.cfAdjCustomerConfirm(session, btn.getAttribute('data-adj-confirm'));
+          if (!res.success) showMsg(res.message); else loadData();
+        };
+      });
+      $('adjList').querySelectorAll('[data-adj-sign]').forEach(function (btn) {
+        btn.onclick = function () {
+          pendingSignAdjId = btn.getAttribute('data-adj-sign');
+          setupCanvas();
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          $('signModal').classList.remove('hidden');
+        };
+      });
+    }
+
+    function renderRec(items) {
+      var stage2Hint = '確認後此收款紀錄將寫入您的案件紀錄，請再次核對金額、日期與階段名稱。款項相關請務必謹慎確認。';
+      $('recList').innerHTML = items.length ? items.map(function (r) {
+        var btns = '';
+        if (r.status === 'pending_customer') {
+          btns = '<button class="btn btn-primary" data-rec-s1="' + r.receipt_id + '">① 確認此收款紀錄</button>';
+        }
+        if (r.status === 'customer_stage1') {
+          btns = '<div class="warn-box">' + stage2Hint + '</div>' +
+            '<button class="btn btn-primary" data-rec-s2="' + r.receipt_id + '">② 我確認已收到此收款紀錄</button>';
+        }
+        return '<div style="padding:10px 0;border-bottom:1px solid #eee">' +
+          '<span class="tag">' + statusLabel(r.status) + '</span><br/>' +
+          '收據編號 ' + (r.receipt_no || '') + '<br/>' +
+          (r.stage_label || '') + ' · $' + r.amount + ' · ' + (r.received_at || '') +
+          btns + '</div>';
+      }).join('') : '<p>目前無待確認收款</p>';
+      $('recList').querySelectorAll('[data-rec-s1]').forEach(function (btn) {
+        btn.onclick = async function () {
+          var res = await AccountingApi.cfRecCustomerStage1(session, btn.getAttribute('data-rec-s1'));
+          if (!res.success) showMsg(res.message); else loadData();
+        };
+      });
+      $('recList').querySelectorAll('[data-rec-s2]').forEach(function (btn) {
+        btn.onclick = async function () {
+          if (!confirm(stage2Hint + '\n\n確定要提交？提交後不可取消。')) return;
+          var res = await AccountingApi.cfRecCustomerStage2(session, btn.getAttribute('data-rec-s2'));
+          if (!res.success) showMsg(res.message); else loadData();
+        };
+      });
+    }
+
+    $('btnClearSign').onclick = function () { ctx.clearRect(0, 0, canvas.width, canvas.height); };
+    $('btnCancelSign').onclick = function () { pendingSignAdjId = null; $('signModal').classList.add('hidden'); };
+    $('btnSubmitSign').onclick = async function () {
+      if (!pendingSignAdjId) return;
+      var data = canvas.toDataURL('image/png');
+      var res = await AccountingApi.cfAdjCustomerSign(session, pendingSignAdjId, data);
+      if (!res.success) showMsg(res.message);
+      else {
+        pendingSignAdjId = null;
+        $('signModal').classList.add('hidden');
+        loadData();
+      }
+    };
+
+    (async function boot() {
+      try {
+        session = await AccountingApi.initCustomerPortalSession();
+        $('userLine').textContent = (session.portal && session.portal.display_name) || '客戶';
+        fillProjects((session.portal && session.portal.projects) || []);
+        $('loading').classList.add('hidden');
+        $('app').classList.remove('hidden');
+        if ($('projectSelect').value) loadData();
+      } catch (e) {
+        $('loading').textContent = e.message || '載入失敗';
+      }
+    })();
+  })();
+  </script>
+</body>
+</html>

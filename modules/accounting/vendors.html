@@ -216,7 +216,7 @@
       <p class="sub" style="margin:0 0 8px">搜尋來源：<strong>會計官方 LINE @672zolga</strong> 聯絡人名單（加好友或傳訊息即自動收錄；與行政主帳 UID 不同）。</p>
       <div id="bindEditor" class="hidden">
         <label>搜尋顧客（名稱／案號／UID）</label>
-        <input id="lineSearchKw" placeholder="例：木工老王、752、U 開頭 UID" />
+        <input id="lineSearchKw" placeholder="例：木作老王、752、U 開頭 UID" />
         <div class="row2" style="margin-top:8px">
           <div>
             <label>加入時用途</label>
@@ -653,7 +653,7 @@
         setBindEditorVisible(true);
         $('name').value = v.name || '';
         $('tax_id').value = v.tax_id || '';
-        $('trade_category').value = v.trade_category || '其他';
+        $('trade_category').value = AccountingMasterData.normalizeVendorTradeCategory(v.trade_category) || '其他';
         $('cost_type').value = v.cost_type || '';
         $('contact_name').value = v.contact_name || '';
         $('contact_phone').value = normPhone(v.contact_phone || '');
@@ -696,7 +696,7 @@
         var cs = $('filterCoop').value;
         var kw = $('filterKw').value.trim().toLowerCase();
         return rows.filter(function (v) {
-          if (tc && String(v.trade_category || '') !== tc) return false;
+          if (tc && AccountingMasterData.normalizeVendorTradeCategory(v.trade_category) !== tc) return false;
           if (cs && String(v.coop_status || '合作中') !== cs) return false;
           if (kw && JSON.stringify(v).toLowerCase().indexOf(kw) < 0) return false;
           return true;
@@ -835,7 +835,7 @@
           var tags = document.createElement('div');
           tags.className = 'vendor-tags';
           tags.innerHTML =
-            '<span class="tag">' + (v.trade_category || '其他') + '</span>' +
+            '<span class="tag">' + (AccountingMasterData.normalizeVendorTradeCategory(v.trade_category) || '其他') + '</span>' +
             (v.cost_type ? '<span class="tag muted">' + v.cost_type + '</span>' : '');
 
           var meta = document.createElement('div');

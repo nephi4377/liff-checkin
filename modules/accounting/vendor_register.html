@@ -201,7 +201,7 @@
         if (!v) return;
         $('name').value = v.name || '';
         $('tax_id').value = v.tax_id || '';
-        $('trade_category').value = v.trade_category || '';
+        $('trade_category').value = AccountingMasterData.normalizeVendorTradeCategory(v.trade_category) || '';
         $('contact_name').value = v.contact_name || '';
         $('contact_phone').value = normPhone(v.contact_phone || '');
         $('contact_email').value = v.contact_email || '';

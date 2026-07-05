@@ -76,6 +76,18 @@
     .slot-pay-pending { color: #c5221f; }
     .slot-pay-none { color: #777; }
     .slot-pay-partial { color: #b06000; }
+    #vendorPickList { display: grid; grid-template-columns: 1fr; gap: 0; }
+    @media (min-width: 640px) {
+      #vendorPickList { grid-template-columns: 1fr 1fr; gap: 0 16px; }
+      #vendorPickList .manual-slot-add { grid-column: 1 / -1; }
+    }
+    .slot-vendor-pay-detail { font-size: 12px; color: #555; margin-left: 12px; }
+    .base-cost-lines { margin-top: 4px; font-size: 13px; color: #555; line-height: 1.5; }
+    .cf-summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px; }
+    .cf-summary-grid .hint { font-size: 12px; color: #777; margin-bottom: 2px; }
+    .cf-summary-val { font-weight: 600; }
+    .cf-outstanding-pos { color: #137333; }
+    .cf-outstanding-neg { color: #c5221f; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -100,6 +112,7 @@
         <button type="button" class="btn btn-secondary" id="backBtn">← 返回列表</button>
         <h3 id="detailTitle" style="margin:8px 0 4px">—</h3>
         <p class="sub" id="detailSummary">—</p>
+        <p class="nav" id="cfManageLink" style="margin:8px 0"><a href="designer-customer-finance.html">管理追加減與收款 →</a></p>
         <div id="detailLoading" class="hidden">載入案件資料中…</div>
       </div>
       <div id="detailPanels">
@@ -114,6 +127,12 @@
           <button type="button" class="btn btn-secondary" id="refreshQuotationBtn">重新帶入驗收表</button>
         </div>
         <p class="hint" id="incomeCheckHint">—</p>
+      </div>
+      <div class="card hidden" id="cfSummaryCard">
+        <h3 class="section-title">追加減與收款摘要</h3>
+        <p class="hint">有效合約額＝案件總額＋已生效追加減；未收＝有效合約額−客戶已確認收款</p>
+        <div id="cfSummaryBody" class="cf-summary-grid"></div>
+        <p class="nav" style="margin-top:10px"><a id="cfSummaryLink" href="designer-customer-finance.html">管理追加減與收款 →</a></p>
       </div>
       <div class="card">
         <h3 class="section-title">工期</h3>
@@ -192,7 +211,7 @@
         <input id="addCategory" list="categoryList" placeholder="選單或自由輸入" />
         <datalist id="categoryList"></datalist>
         <label>項目名稱</label>
-        <input id="addItem" placeholder="例：木工二期款" />
+        <input id="addItem" placeholder="例：木作二期款" />
         <label>金額</label>
         <input id="addAmount" type="number" inputmode="numeric" />
         <label>備註</label>
@@ -748,7 +767,7 @@
         var trades = def.trade_categories || [];
         var costs = def.cost_types || [];
         return (vendors || []).filter(function (v) {
-          var tc = String(v.trade_category || '').trim();
+          var tc = AccountingMasterData.normalizeVendorTradeCategory(v.trade_category);
           var ct = String(v.cost_type || '').trim();
           if (trades.length && trades.indexOf(tc) < 0) return false;
           if (costs.length && ct && costs.indexOf(ct) < 0) return false;
@@ -816,17 +835,61 @@
         return 'slot-pay-none';
       }
 
+      function formatVendorPaymentLabel(v) {
+        if (!v || v.status === 'no_request') {
+          return (v && v.name ? v.name : '—') + '：尚無請款';
+        }
+        var paidParts = (v.payments || []).filter(function (p) { return p.paid; }).map(function (p) {
+          return (p.pay_date || '—') + ' ' + fmtMoney(p.amount);
+        });
+        if (paidParts.length) {
+          return (v.name || v.vendor_id) + '：' + paidParts.join('、');
+        }
+        return (v.name || v.vendor_id) + '：' + (v.label || '尚有未匯款');
+      }
+
       function renderSlotPaymentStatus(slots) {
-        var list = slots || [];
+        var list = (slots || []).filter(function (slot) {
+          return slot.slot_status !== 'empty';
+        });
         if (!list.length) return '';
         var html = '<div class="slot-payment-block">';
         list.forEach(function (slot) {
           var cls = slotPaymentStatusClass(slot.slot_status);
           html += '<div class="slot-payment-row ' + cls + '">' +
-            (slot.label || slot.key) + '：' + (slot.slot_label || '—') + '</div>';
+            (slot.label || slot.key) + '：' + (slot.slot_label || '—');
+          if (slot.vendors && slot.vendors.length) {
+            slot.vendors.forEach(function (v) {
+              if (v.status === 'no_request') return;
+              html += '<div class="slot-vendor-pay-detail">' + formatVendorPaymentLabel(v) + '</div>';
+            });
+          }
+          html += '</div>';
         });
         html += '</div>';
         return html;
+      }
+
+      function renderCustomerFinanceSummary(summary, projectNo) {
+        var card = el('cfSummaryCard');
+        var box = el('cfSummaryBody');
+        var link = el('cfSummaryLink');
+        if (!summary) {
+          card.classList.add('hidden');
+          return;
+        }
+        card.classList.remove('hidden');
+        if (link && projectNo) {
+          link.href = 'designer-customer-finance.html?project_no=' + encodeURIComponent(projectNo);
+        }
+        var outstanding = parseFloat(summary.outstanding) || 0;
+        var outCls = outstanding <= 0 ? 'cf-outstanding-pos' : 'cf-outstanding-neg';
+        box.innerHTML =
+          '<div><div class="hint">案件總額</div><div class="cf-summary-val">' + fmtMoney(summary.contract_amount) + '</div></div>' +
+          '<div><div class="hint">追加減淨額</div><div class="cf-summary-val">' + fmtMoney(summary.adjustments_net) + '</div></div>' +
+          '<div><div class="hint">有效合約額</div><div class="cf-summary-val">' + fmtMoney(summary.effective_contract) + '</div></div>' +
+          '<div><div class="hint">已確認收款</div><div class="cf-summary-val">' + fmtMoney(summary.receipts_confirmed_total) + '</div></div>' +
+          '<div style="grid-column:1/-1"><div class="hint">未收金額</div><div class="cf-summary-val ' + outCls + '">' + fmtMoney(outstanding) + '</div></div>';
       }
 
       function renderChecklist(checklist, slotPaymentStatus) {
@@ -864,9 +927,21 @@
             extra = '<div class="hint" style="margin-top:4px">總額 ' + fmtMoney(it.contract_amount) +
               '／收入 ' + fmtMoney(it.revenue_total) + '，差 ' + fmtMoney(it.diff) + '</div>';
           }
+          if (it.id === 'base_cost' && it.base_cost_breakdown) {
+            var b = it.base_cost_breakdown;
+            extra = '<div class="base-cost-lines">工資 ' + fmtMoney(b.base_wage) +
+              ' · 五金 ' + fmtMoney(b.hardware_fee) +
+              ' · 清潔 ' + fmtMoney(b.cleaning_fee) +
+              ' · 合計 ' + fmtMoney(b.total) + '</div>';
+          }
+          if (it.id === 'project_closed') {
+            var statusText = it.project_status || '（未填）';
+            extra = '<div class="hint" style="margin-top:4px">案場狀態：' + statusText +
+              (it.close_date ? ' · 結案日 ' + it.close_date : '') + '</div>';
+          }
           if (it.id === 'vendors_paid' && it.vendors && it.vendors.length) {
             extra = '<div class="hint" style="margin-top:4px">' + it.vendors.map(function (v) {
-              return (v.name || v.vendor_id) + '：' + (v.label || '');
+              return formatVendorPaymentLabel(v);
             }).join('；') + '</div>';
           } else if (it.id === 'vendors_paid' && it.vendor_slot_payment_status && it.vendor_slot_payment_status.length) {
             extra = '<div class="hint" style="margin-top:4px">' + it.vendor_slot_payment_status.map(function (s) {
@@ -911,8 +986,9 @@
         }
 
         var statusCls = site.is_closed ? 'status-closed' : 'status-open';
+        var statusLabel = site.project_status || (site.is_closed ? '已結案' : '進行中');
         el('projectStatusHint').innerHTML = '專案狀態：<span class="' + statusCls + '">' +
-          (site.project_status || '進行中') + '</span>' +
+          statusLabel + '</span>' +
           (duration.end_is_provisional ? '（未結案，結束日為試算用今天）' : '');
 
         el('durationStart').value = duration.start || '';
@@ -928,6 +1004,7 @@
           data.vendor_candidates || [],
           data.all_slot_candidates || {}
         );
+        renderCustomerFinanceSummary(data.customer_finance_summary, data.project_no);
         renderChecklist(data.checklist, data.vendor_slot_payment_status);
 
         var bonusCard = el('bonusApplyCard');
@@ -956,6 +1033,11 @@
         document.getElementById('detailSummary').textContent =
           '收 ' + fmtMoney(it.revenue_total) + ' · 支 ' + fmtMoney(it.expense_total) +
           ' · 毛利 ' + fmtMoney(it.gross_profit);
+        var cfLink = document.getElementById('cfManageLink');
+        if (cfLink) {
+          cfLink.innerHTML = '<a href="designer-customer-finance.html?project_no=' +
+            encodeURIComponent(it.project_no || '') + '">管理追加減與收款 →</a>';
+        }
         document.getElementById('addDate').value = todayIso();
         setDetailLoading(true);
         setMsg('');

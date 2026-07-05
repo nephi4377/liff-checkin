@@ -80,6 +80,7 @@ var AccountingCache = (function () {
     AccountingMasterData.vendor_payment_terms_presets = e.vendor_payment_terms_presets || AccountingMasterData.vendor_payment_terms_presets;
     AccountingMasterData.vendor_service_area_presets = e.vendor_service_area_presets || AccountingMasterData.vendor_service_area_presets;
     AccountingMasterData.margin_vendor_slots = e.margin_vendor_slots || AccountingMasterData.margin_vendor_slots;
+    AccountingMasterData.margin_expense_categories = e.margin_expense_categories || AccountingMasterData.margin_expense_categories;
     return data;
   }
 
