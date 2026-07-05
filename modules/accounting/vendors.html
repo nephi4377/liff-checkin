@@ -6,10 +6,10 @@
   <title>廠商名冊</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_master_data.js?v=15"></script>
+  <script src="../../shared/js/accounting_master_data.js?v=16"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=26"></script>
-  <script src="../../shared/js/accounting_cache.js?v=22"></script>
+  <script src="../../shared/js/accounting_cache.js?v=23"></script>
   <script src="../../shared/js/accounting_ui.js?v=10"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=4"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
@@ -192,7 +192,7 @@
       <select id="cost_type"></select>
       <div class="row2">
         <div><label class="req">聯絡人</label><input id="contact_name" /></div>
-        <div><label class="req">電話</label><input id="contact_phone" inputmode="tel" /></div>
+        <div><label>電話</label><input id="contact_phone" inputmode="tel" /></div>
       </div>
       <label>Email</label><input id="contact_email" type="email" />
       <label>公司／工廠地址</label><input id="address" />
@@ -900,7 +900,6 @@
         var payload = readForm();
         if (!payload.name) { setMsg('請填廠商名稱'); return; }
         if (!payload.contact_name) { setMsg('請填聯絡人'); return; }
-        if (!payload.contact_phone) { setMsg('請填電話'); return; }
         if (!payload.bank_code) { setMsg('請填銀行代碼'); return; }
         if (!payload.account_no) { setMsg('請填帳號'); return; }
         if (!payload.account_name) { setMsg('請填戶名'); return; }

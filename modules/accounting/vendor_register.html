@@ -6,7 +6,7 @@
   <title>廠商資料登記</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_master_data.js?v=15"></script>
+  <script src="../../shared/js/accounting_master_data.js?v=16"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=26"></script>
   <script src="../../shared/js/accounting_ui.js?v=10"></script>
@@ -88,7 +88,7 @@
 
       <div class="row2">
         <div><label class="req">聯絡人</label><input id="contact_name" /></div>
-        <div><label class="req">電話</label><input id="contact_phone" inputmode="tel" /></div>
+        <div><label>電話</label><input id="contact_phone" inputmode="tel" /></div>
       </div>
 
       <label>Email</label>
@@ -337,7 +337,6 @@
         var fields = readFormFields();
         if (!fields.name) { setMsg('請填廠商／公司名稱'); return; }
         if (!fields.contact_name) { setMsg('請填聯絡人'); return; }
-        if (!fields.contact_phone) { setMsg('請填電話'); return; }
         if (!fields.bank_code) { setMsg('請填銀行代碼'); return; }
         if (!fields.account_no) { setMsg('請填帳號'); return; }
         if (!fields.account_name) { setMsg('請填戶名'); return; }
