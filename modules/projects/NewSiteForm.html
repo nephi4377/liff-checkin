@@ -190,7 +190,7 @@
           rows="3"></textarea>
       </div>
 
-      <div id="customerBindSection" class="card mt-4" style="display:none">
+      <div id="customerBindSection" class="card mt-4">
         <div class="card-body">
           <h5 class="card-title">客戶 LINE 綁定</h5>
           <p class="text-muted small">與「追加減與收款管理」相同：綁定後客戶可從 LINE 查看並確認本案追加減／收款。</p>
@@ -273,23 +273,30 @@
         return cfSession;
       }
 
+      function getCustomerBindProjectNo() {
+        return String(originalProjectCode || form.projectCode.value || '').trim();
+      }
+
       async function refreshCustomerBindPanel() {
         if (!customerBindSection || !customerBindMount) return;
-        const pno = String(originalProjectCode || form.projectCode.value || '').trim();
-        if (currentMode !== 'update' || !pno) {
-          customerBindSection.style.display = 'none';
+        customerBindSection.style.display = 'block';
+        const pno = getCustomerBindProjectNo();
+        showCustomerBindMsg('');
+        if (!pno) {
+          customerBindMount.innerHTML =
+            '<p class="text-muted small">請先選擇現有案場或輸入案號後，方可綁定客戶 LINE。</p>';
           return;
         }
-        customerBindSection.style.display = 'block';
-        showCustomerBindMsg('');
         if (!cfSession) {
           customerBindMount.innerHTML = '<p class="text-muted small">載入會計權限中…</p>';
           await initCustomerBindAuth();
         }
         if (!cfSession) {
-          customerBindMount.innerHTML = '<p class="text-warning small">無法取得會計登入（需設計師權限 ≥ 3）。請至「追加減與收款管理」綁定客戶。</p>';
+          customerBindMount.innerHTML =
+            '<p class="text-warning small">無法取得會計登入（需設計師權限 ≥ 3）。請至「追加減與收款管理」綁定客戶，或確認已從 LINE 開啟本頁。</p>';
           return;
         }
+        customerBindMount.innerHTML = '<p class="text-muted small">載入綁定資料中…</p>';
         try {
           const res = await AccountingApi.cfDetail(cfSession, pno);
           if (!res.success) {
@@ -312,8 +319,17 @@
       // 【v126.0 新增】後端 API 的 URL
       const API_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
 
+      // 案號欄位變更時同步更新綁定區塊
+      form.projectCode.addEventListener('input', () => {
+        if (currentMode === 'create') refreshCustomerBindPanel();
+      });
+
       // 1. 頁面載入時，取得所有案場列表
       window.onload = () => {
+        if (typeof AccountingApi !== 'undefined' && AccountingApi.primeHubIdentityFromUrl) {
+          AccountingApi.primeHubIdentityFromUrl();
+        }
+        refreshCustomerBindPanel();
         // 【v110.4 偵錯強化】記錄前端的「輸入」，顯示要發送給後端的請求。
         console.log('[NewSiteForm][Input] 準備向後端請求案場列表 (get_all_sites)...');
 
@@ -497,7 +513,7 @@ ${notes || '無'}`;
         submitBtn.classList.replace('btn-success', 'btn-primary');
         statusDiv.innerText = '';
         statusDiv.className = 'mt-3';
-        if (customerBindSection) customerBindSection.style.display = 'none';
+        refreshCustomerBindPanel();
       }
 
       // 7. 處理後端的回應
