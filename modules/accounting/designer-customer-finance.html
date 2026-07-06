@@ -9,7 +9,7 @@
   <script src="../../shared/js/operator_context.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=33"></script>
   <script src="../../shared/js/accounting_boot.js?v=4"></script>
-  <script src="../../shared/js/customer_finance_ui.js?v=1"></script>
+  <script src="../../shared/js/customer_finance_ui.js?v=2"></script>
   <script src="../../shared/js/customer_finance_bind.js?v=1"></script>
   <style>
     h2 { margin: 0 0 8px; }
@@ -61,6 +61,7 @@
     .tabs { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
     .tab { padding: 8px 12px; border-radius: 8px; background: #f1f3f4; cursor: pointer; font-size: 14px; }
     .tab.active { background: #1a73e8; color: #fff; }
+    .tab.is-busy { opacity: 0.65; cursor: wait; pointer-events: none; }
     .audit-line { font-size: 12px; color: #555; border-left: 3px solid #ddd; padding-left: 8px; margin: 6px 0; }
     #msg { color: #c5221f; font-size: 14px; }
     #ok { color: #137333; font-size: 14px; }
@@ -192,7 +193,11 @@
           ' <a href="#" data-pno="' + t.project_no + '">查看</a></div>';
       }).join('');
       $('todoBox').querySelectorAll('a').forEach(function (a) {
-        a.onclick = function (e) { e.preventDefault(); openDetail(a.getAttribute('data-pno')); };
+        a.onclick = function (e) {
+          e.preventDefault();
+          if (detailBusy) return;
+          openDetail(a.getAttribute('data-pno'));
+        };
       });
     }
 
@@ -442,6 +447,12 @@
         btn.onclick = function () {
           var id = btn.getAttribute('data-id');
           var act = btn.getAttribute('data-act');
+          var voidReason = '';
+          if (act === 'adj-void') {
+            voidReason = prompt('作廢原因（可留空）') || '';
+          } else if (act === 'rec-void') {
+            voidReason = prompt('作廢原因') || '';
+          }
           CustomerFinanceUi.runBtnAsync(btn, async function () {
             var res;
             if (act === 'adj-submit') res = await AccountingApi.cfAdjSubmit(session, id);
@@ -455,10 +466,10 @@
                 return;
               }
             }
-            else if (act === 'adj-void') res = await AccountingApi.cfAdjVoid(session, id, prompt('作廢原因（可留空）') || '');
+            else if (act === 'adj-void') res = await AccountingApi.cfAdjVoid(session, id, voidReason);
             else if (act === 'rec-submit') res = await AccountingApi.cfRecSubmit(session, id);
             else if (act === 'rec-sign-d') res = await AccountingApi.cfRecSignDesigner(session, id);
-            else if (act === 'rec-void') res = await AccountingApi.cfRecVoid(session, id, prompt('作廢原因') || '');
+            else if (act === 'rec-void') res = await AccountingApi.cfRecVoid(session, id, voidReason);
             if (!res) return;
             if (!res.success) showMsg(res.message);
             else { showOk('完成'); await openDetail(currentProject); await loadTodos(); }
@@ -467,8 +478,25 @@
       });
     }
 
+    var tabBusy = false;
     document.querySelectorAll('.tab').forEach(function (t) {
-      t.onclick = function () { activeTab = t.getAttribute('data-tab'); renderPanels(); };
+      t.onclick = function () {
+        var next = t.getAttribute('data-tab');
+        if (tabBusy || next === activeTab) return;
+        tabBusy = true;
+        document.querySelectorAll('.tab').forEach(function (el) {
+          el.classList.add('is-busy');
+        });
+        activeTab = next;
+        try {
+          renderPanels();
+        } finally {
+          tabBusy = false;
+          document.querySelectorAll('.tab').forEach(function (el) {
+            el.classList.remove('is-busy');
+          });
+        }
+      };
     });
     $('backList').onclick = function (e) {
       e.preventDefault();

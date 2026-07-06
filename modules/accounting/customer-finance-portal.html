@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=33"></script>
-  <script src="../../shared/js/customer_finance_ui.js?v=1"></script>
+  <script src="../../shared/js/customer_finance_ui.js?v=2"></script>
   <!-- 客戶專用 LIFF（與員工會計 policy.liffId 分開）。LINE Developers Endpoint URL：
        https://info.tanxin.space/modules/accounting/customer-finance-portal.html -->
   <script>
@@ -135,18 +135,41 @@
         return '<option value="' + p.project_no + '">' + p.project_no + ' ' + (p.site_name || '') + '</option>';
       }).join('');
       if (!projects.length) sel.innerHTML = '<option value="">（尚無綁定案件）</option>';
-      sel.onchange = loadData;
+      sel.onchange = function () {
+        if (sel.disabled) return;
+        sel.disabled = true;
+        sel.classList.add('is-busy');
+        loadData().finally(function () {
+          sel.disabled = false;
+          sel.classList.remove('is-busy');
+        });
+      };
+    }
+
+    function setContentBusy(on) {
+      var box = $('content');
+      if (!box) return;
+      box.classList.toggle('is-busy', !!on);
+      box.style.opacity = on ? '0.55' : '';
+      box.style.pointerEvents = on ? 'none' : '';
     }
 
     async function loadData() {
       var pno = $('projectSelect').value;
       if (!pno) return;
       showMsg('');
-      var res = await AccountingApi.cfPortalData(session, pno);
-      if (!res.success) { showMsg(res.message); return; }
-      renderAdj(res.adjustments || []);
-      renderRec(res.receipts || []);
-      focusDeepLinkEntity();
+      setContentBusy(true);
+      $('projectSelect').disabled = true;
+      try {
+        var res = await AccountingApi.cfPortalData(session, pno);
+        if (!res.success) { showMsg(res.message); return; }
+        renderAdj(res.adjustments || []);
+        renderRec(res.receipts || []);
+        focusDeepLinkEntity();
+      } finally {
+        setContentBusy(false);
+        $('projectSelect').disabled = false;
+      }
     }
 
     function focusDeepLinkEntity() {

@@ -57,6 +57,7 @@
     .tabs { display: flex; gap: 8px; margin: 0 0 12px; flex-wrap: wrap; }
     .tab-btn { padding: 10px 14px; border: none; border-radius: 8px; background: #f1f3f4; cursor: pointer; font-size: 14px; font-weight: 600; }
     .tab-btn.active { background: #1a73e8; color: #fff; }
+    .tab-btn.is-busy { opacity: 0.65; cursor: wait; }
     .tag.cash { background: #fef7e0; color: #b06000; }
   </style>
 </head>
@@ -410,6 +411,7 @@
         panel.querySelector('.btn-confirm-approve').addEventListener('click', async function () {
           var cacheId = itemCacheId(item);
           if (!canApproveIncome || itemQueueBusy(cacheId)) return;
+          if (!confirm('確定核準此收款並寫入案件收支（收入列）？')) return;
           var btn = panel.querySelector('.btn-confirm-approve');
           await AccountingUi.runAsync(btn, {
             busyLabel: '核准中…',
@@ -418,7 +420,6 @@
             itemId: cacheId
           }, async function () {
             ui.clear();
-            if (!confirm('確定核準此收款並寫入案件收支（收入列）？')) return;
             var note = panel.querySelector('.inp-approve-note').value.trim();
             var ok = await approveIncome(item, note);
             if (ok) {
@@ -901,10 +902,20 @@
       document.querySelectorAll('.tab-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
           var next = btn.getAttribute('data-tab') || 'vendor';
-          if (next === activeTab) return;
+          if (next === activeTab || btn.disabled) return;
+          var tabs = document.querySelectorAll('.tab-btn');
+          tabs.forEach(function (b) {
+            b.disabled = true;
+            b.classList.add('is-busy');
+          });
           activeTab = next;
           updateTabUi();
-          loadList(false, true);
+          loadList(false, true).finally(function () {
+            tabs.forEach(function (b) {
+              b.disabled = false;
+              b.classList.remove('is-busy');
+            });
+          });
         });
       });
 
