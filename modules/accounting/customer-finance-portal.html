@@ -7,7 +7,8 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=33"></script>
+  <script src="../../shared/js/accounting_api.js?v=34"></script>
+  <script src="../../shared/js/accounting_list_cache.js?v=2"></script>
   <script src="../../shared/js/customer_finance_ui.js?v=2"></script>
   <!-- 客戶專用 LIFF（與員工會計 policy.liffId 分開）。LINE Developers Endpoint URL：
        https://info.tanxin.space/modules/accounting/customer-finance-portal.html -->
@@ -154,14 +155,23 @@
       box.style.pointerEvents = on ? 'none' : '';
     }
 
-    async function loadData() {
+    async function loadData(forceRefresh) {
       var pno = $('projectSelect').value;
       if (!pno) return;
       showMsg('');
       setContentBusy(true);
       $('projectSelect').disabled = true;
       try {
-        var res = await AccountingApi.cfPortalData(session, pno);
+        var fetchFn = function () { return AccountingApi.cfPortalData(session, pno); };
+        var res;
+        if (typeof AccountingListCache !== 'undefined' && !forceRefresh) {
+          res = await AccountingListCache.loadPortalData(session, pno, fetchFn);
+        } else {
+          res = await fetchFn();
+          if (typeof AccountingListCache !== 'undefined' && res && res.success) {
+            AccountingListCache.loadPortalData(session, pno, function () { return Promise.resolve(res); }, { force: true });
+          }
+        }
         if (!res.success) { showMsg(res.message); return; }
         renderAdj(res.adjustments || []);
         renderRec(res.receipts || []);
@@ -170,6 +180,41 @@
         setContentBusy(false);
         $('projectSelect').disabled = false;
       }
+    }
+
+    function showRecStage2Locally(receiptId) {
+      var row = document.querySelector('[data-rec-id="' + receiptId + '"]');
+      if (!row) return;
+      var stage2Hint = '確認後此收款紀錄將寫入您的案件紀錄，請再次核對金額、日期與階段名稱。款項相關請務必謹慎確認。';
+      var tag = row.querySelector('.tag');
+      if (tag) tag.textContent = statusLabel('customer_stage1');
+      var oldBtns = row.querySelectorAll('[data-rec-s1]');
+      oldBtns.forEach(function (b) { b.remove(); });
+      if (row.querySelector('[data-rec-s2]')) return;
+      var wrap = document.createElement('div');
+      wrap.innerHTML = '<div class="warn-box">' + stage2Hint + '</div>' +
+        '<button class="btn btn-primary" data-rec-s2="' + receiptId + '">② 我確認已收到此收款紀錄</button>';
+      row.appendChild(wrap);
+      bindRecStage2Button(wrap.querySelector('[data-rec-s2]'));
+    }
+
+    function bindRecStage2Button(btn) {
+      if (!btn || btn._bound) return;
+      btn._bound = true;
+      var stage2Hint = '確認後此收款紀錄將寫入您的案件紀錄，請再次核對金額、日期與階段名稱。款項相關請務必謹慎確認。';
+      btn.onclick = function () {
+        if (!confirm(stage2Hint + '\n\n確定要提交？提交後不可取消。')) return;
+        CustomerFinanceUi.runBtnAsync(btn, async function () {
+          var res = await AccountingApi.cfRecCustomerStage2(session, btn.getAttribute('data-rec-s2'));
+          if (!res.success) showMsg(res.message);
+          else {
+            if (typeof AccountingListCache !== 'undefined') {
+              AccountingListCache.invalidatePortalData(session, $('projectSelect').value);
+            }
+            return loadData(true);
+          }
+        }, { busyLabel: '處理中…', lockRoot: $('recList') });
+      };
     }
 
     function focusDeepLinkEntity() {
@@ -266,19 +311,20 @@
       $('recList').querySelectorAll('[data-rec-s1]').forEach(function (btn) {
         btn.onclick = function () {
           CustomerFinanceUi.runBtnAsync(btn, async function () {
-            var res = await AccountingApi.cfRecCustomerStage1(session, btn.getAttribute('data-rec-s1'));
-            if (!res.success) showMsg(res.message); else return loadData();
+            var rid = btn.getAttribute('data-rec-s1');
+            var res = await AccountingApi.cfRecCustomerStage1(session, rid);
+            if (!res.success) showMsg(res.message);
+            else {
+              if (typeof AccountingListCache !== 'undefined') {
+                AccountingListCache.invalidatePortalData(session, $('projectSelect').value);
+              }
+              showRecStage2Locally(rid);
+            }
           }, { busyLabel: '處理中…', lockRoot: $('recList') });
         };
       });
       $('recList').querySelectorAll('[data-rec-s2]').forEach(function (btn) {
-        btn.onclick = function () {
-          if (!confirm(stage2Hint + '\n\n確定要提交？提交後不可取消。')) return;
-          CustomerFinanceUi.runBtnAsync(btn, async function () {
-            var res = await AccountingApi.cfRecCustomerStage2(session, btn.getAttribute('data-rec-s2'));
-            if (!res.success) showMsg(res.message); else return loadData();
-          }, { busyLabel: '處理中…', lockRoot: $('recList') });
-        };
+        bindRecStage2Button(btn);
       });
     }
 

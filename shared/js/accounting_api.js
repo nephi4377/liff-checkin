@@ -327,6 +327,27 @@ var AccountingApi = (function () {
         limit: limit || 20
       });
     },
+    lineContactList: function (sessionOrToken, limit) {
+      return post({
+        action: 'line_contact_search',
+        auth: resolveAuth(sessionOrToken),
+        fetch_all: true,
+        limit: limit || 5000
+      });
+    },
+    cachedLineContactSearch: async function (sessionOrToken, keyword, limit) {
+      if (typeof AccountingListCache === 'undefined') {
+        return AccountingApi.lineContactSearch(sessionOrToken, keyword, limit);
+      }
+      var items = await AccountingListCache.searchMasterList(
+        sessionOrToken,
+        AccountingListCache.MASTER_KEYS.line_contact,
+        keyword,
+        function () { return AccountingApi.lineContactList(sessionOrToken); },
+        { limit: limit || 20, filterFields: ['name', 'line_id', 'project_no'] }
+      );
+      return { success: true, items: items, source: 'accounting_line_contact', cached: true };
+    },
     vendorListFiles: function (sessionOrToken, driveFolderId, limit) {
       return post({
         action: 'vendor_list_files',
@@ -1045,6 +1066,27 @@ var AccountingApi = (function () {
         keyword: keyword,
         limit: limit || 20
       });
+    },
+    officialCustomerList: function (sessionOrToken, limit) {
+      return post({
+        action: 'official_customer_search',
+        auth: resolveAuth(sessionOrToken),
+        fetch_all: true,
+        limit: limit || 5000
+      });
+    },
+    cachedOfficialCustomerSearch: async function (sessionOrToken, keyword, limit) {
+      if (typeof AccountingListCache === 'undefined') {
+        return AccountingApi.officialCustomerSearch(sessionOrToken, keyword, limit);
+      }
+      var items = await AccountingListCache.searchMasterList(
+        sessionOrToken,
+        AccountingListCache.MASTER_KEYS.official_customer,
+        keyword,
+        function () { return AccountingApi.officialCustomerList(sessionOrToken); },
+        { limit: limit || 20, filterFields: ['name', 'line_id', 'project_codes'] }
+      );
+      return { success: true, items: items, cached: true };
     },
     cfPortalAuth: function (sessionOrToken) {
       var body = { action: 'margin_customer_finance_portal_auth', auth: resolveAuth(sessionOrToken) };

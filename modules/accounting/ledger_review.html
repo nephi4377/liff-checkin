@@ -120,7 +120,7 @@
 
       var TAB_DESC = {
         vendor: '只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改分攤（可多案）。',
-        customer_receipt: '審核<strong>現金收款財務簽核</strong>與<strong>客戶已確認收款</strong>（核准入案件收支）。CustomerReceipts 為主檔，核准後寫入案件毛利收入列。'
+        customer_receipt: '審核<strong>現金收款財務簽核</strong>與<strong>案件收入／客戶收款</strong>（收支登錄先入佇列；財務核准後推送客戶；客戶二階確認後寫入案件收支）。'
       };
 
       function setMsg(t) { ui.setMsg(t); }

@@ -206,7 +206,7 @@
       </div>
       <div class="card">
         <h3 style="margin:0 0 8px">手動新增一筆</h3>
-        <p class="hint">費用類別可從選單挑，也可直接打字（例如特殊項目）</p>
+        <p class="hint">選「收入」時改送請款審核→財務核准→客戶確認後才寫入本頁明細</p>
         <div class="row2">
           <div>
             <label>收支</label>
@@ -1298,7 +1298,11 @@
         };
         var data = await AccountingApi.marginAddLine(session, payload);
         if (!data.success) { setMsg(data.message); return; }
-        setOk('已新增');
+        if (data.review_queue) {
+          setOk(data.message || '已送請款審核，財務核准後將推送客戶確認');
+        } else {
+          setOk('已新增');
+        }
         document.getElementById('addItem').value = '';
         document.getElementById('addAmount').value = '';
         document.getElementById('addNote').value = '';
