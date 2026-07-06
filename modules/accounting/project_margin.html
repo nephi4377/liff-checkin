@@ -88,6 +88,10 @@
     .cf-summary-val { font-weight: 600; }
     .cf-outstanding-pos { color: #137333; }
     .cf-outstanding-neg { color: #c5221f; }
+    .triangle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; margin-bottom: 10px; padding: 10px; background: #f8f9fa; border-radius: 8px; }
+    .triangle-grid .lbl { color: #777; font-size: 12px; }
+    .furniture-banner { background: #e8f0fe; border-radius: 8px; padding: 10px; font-size: 13px; margin-bottom: 8px; color: #174ea6; }
+    .check-row.warn { background: #fef7e0; color: #5f4400; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -133,6 +137,15 @@
         <p class="hint">有效合約額＝案件總額＋已生效追加減；未收＝有效合約額−客戶已確認收款</p>
         <div id="cfSummaryBody" class="cf-summary-grid"></div>
         <p class="nav" style="margin-top:10px"><a id="cfSummaryLink" href="designer-customer-finance.html">管理追加減與收款 →</a></p>
+      </div>
+      <div class="card hidden" id="furnitureCard">
+        <h3 class="section-title">家具訂單（選填）</h3>
+        <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-top:4px">
+          <input type="checkbox" id="hasFurnitureOrder" style="width:auto;margin:0" />
+          本案含家具訂單
+        </label>
+        <p class="hint" id="furnitureHint">有家具者另走家具訂編流程，不與裝修收款混表</p>
+        <button type="button" class="btn btn-secondary" id="saveFurnitureBtn" style="width:auto;margin-top:8px">儲存標記</button>
       </div>
       <div class="card">
         <h3 class="section-title">工期</h3>
@@ -892,7 +905,38 @@
           '<div style="grid-column:1/-1"><div class="hint">未收金額</div><div class="cf-summary-val ' + outCls + '">' + fmtMoney(outstanding) + '</div></div>';
       }
 
-      function renderChecklist(checklist, slotPaymentStatus) {
+      function renderTriangleSummary(summary, revenueTotal) {
+        if (!summary) return '';
+        var effective = parseFloat(summary.effective_contract) || 0;
+        var receipts = parseFloat(summary.receipts_confirmed_total) || 0;
+        var outstanding = parseFloat(summary.outstanding) || 0;
+        var revenue = parseFloat(revenueTotal) || 0;
+        var incDiff = effective - revenue;
+        var recDiff = receipts - revenue;
+        return '<div class="triangle-grid">' +
+          '<div><div class="lbl">有效合約</div><strong>' + fmtMoney(effective) + '</strong></div>' +
+          '<div><div class="lbl">毛利收入合計</div><strong>' + fmtMoney(revenue) + '</strong>' +
+          (incDiff !== 0 ? ' <span class="check-fail">差 ' + fmtMoney(incDiff) + '</span>' : ' <span class="check-pass">✓</span>') + '</div>' +
+          '<div><div class="lbl">已確認收款</div><strong>' + fmtMoney(receipts) + '</strong>' +
+          (recDiff !== 0 ? ' <span class="check-fail">差 ' + fmtMoney(recDiff) + '</span>' : ' <span class="check-pass">✓</span>') + '</div>' +
+          '<div><div class="lbl">未收</div><strong>' + fmtMoney(outstanding) + '</strong></div>' +
+          '<div style="grid-column:1/-1" class="hint">三角：有效合約 ' + fmtMoney(effective) + ' ＝ 已收 ' +
+          fmtMoney(receipts) + ' ＋ 未收 ' + fmtMoney(outstanding) +
+          (effective === receipts + outstanding ? ' <span class="check-pass">✓</span>' : ' <span class="check-fail">✗</span>') +
+          '</div></div>';
+      }
+
+      function renderFurnitureMeta(meta) {
+        var card = el('furnitureCard');
+        var checked = !!(meta && meta.has_furniture_order);
+        card.classList.remove('hidden');
+        el('hasFurnitureOrder').checked = checked;
+        el('furnitureHint').textContent = checked
+          ? '本案含家具訂單：家具訂編與裝修收款分開追蹤'
+          : '有家具者另走家具訂編流程，不與裝修收款混表';
+      }
+
+      function renderChecklist(checklist, slotPaymentStatus, cfSummary, revenueTotal) {
         var card = el('checklistCard');
         var box = el('checklistList');
         box.innerHTML = '';
@@ -910,6 +954,12 @@
           return;
         }
         card.classList.remove('hidden');
+        if (cfSummary) {
+          var tri = document.createElement('div');
+          tri.innerHTML = '<h4 style="margin:0 0 6px;font-size:14px">B5 三角核對</h4>' +
+            renderTriangleSummary(cfSummary, revenueTotal);
+          box.appendChild(tri);
+        }
         if (slotRows && slotRows.length) {
           var slotWrap = document.createElement('div');
           slotWrap.innerHTML = renderSlotPaymentStatus(slotRows);
@@ -918,14 +968,26 @@
         items.forEach(function (it) {
           var row = document.createElement('div');
           var isSkip = !!it.skip_when_empty;
-          var rowCls = isSkip ? 'skip' : (it.pass ? 'pass' : 'fail');
+          var isInfo = !!it.informational;
+          var isWarnOnly = !!it.warn_only;
+          var rowCls = isSkip ? 'skip' : (isWarnOnly && !it.pass ? 'warn' : (isInfo ? 'pass' : (it.pass ? 'pass' : 'fail')));
           row.className = 'check-row ' + rowCls;
-          var cls = it.pass ? 'check-pass' : 'check-fail';
-          var mark = isSkip ? '—' : (it.pass ? '✓' : '✗');
+          var cls = (it.pass || isInfo) ? 'check-pass' : (isWarnOnly ? '' : 'check-fail');
+          var mark = isSkip ? '—' : (isInfo ? 'ℹ' : (it.pass ? '✓' : (isWarnOnly ? '!' : '✗')));
           var extra = '';
           if (it.id === 'income_match') {
             extra = '<div class="hint" style="margin-top:4px">總額 ' + fmtMoney(it.contract_amount) +
               '／收入 ' + fmtMoney(it.revenue_total) + '，差 ' + fmtMoney(it.diff) + '</div>';
+          }
+          if (it.id === 'cf_effective_vs_revenue' || it.id === 'cf_receipts_vs_revenue') {
+            extra = '<div class="hint" style="margin-top:4px">差 ' + fmtMoney(it.diff) + '</div>';
+          }
+          if (it.id === 'cf_triangle_balance') {
+            extra = '<div class="hint" style="margin-top:4px">有效 ' + fmtMoney(it.effective_contract) +
+              ' ＝ 已收 ' + fmtMoney(it.receipts_confirmed_total) + ' ＋ 未收 ' + fmtMoney(it.outstanding) + '</div>';
+          }
+          if (it.id === 'cf_receipt_proofs' && it.hint) {
+            extra = '<div class="hint" style="margin-top:4px">' + it.hint + '</div>';
           }
           if (it.id === 'base_cost' && it.base_cost_breakdown) {
             var b = it.base_cost_breakdown;
@@ -1005,7 +1067,9 @@
           data.all_slot_candidates || {}
         );
         renderCustomerFinanceSummary(data.customer_finance_summary, data.project_no);
-        renderChecklist(data.checklist, data.vendor_slot_payment_status);
+        renderFurnitureMeta(meta);
+        renderChecklist(data.checklist, data.vendor_slot_payment_status,
+          data.customer_finance_summary, overview.revenue_total || 0);
 
         var bonusCard = el('bonusApplyCard');
         if (site.is_closed) {
@@ -1065,6 +1129,20 @@
         var hint = el('contractDirtyHint');
         hint.textContent = '總額已修改，請按「儲存總額」才會寫入';
         hint.className = 'hint contract-dirty';
+      });
+      el('saveFurnitureBtn').addEventListener('click', async function () {
+        if (!current) return;
+        await runAction(el('saveFurnitureBtn'), '儲存中…', async function () {
+          setMsg('');
+          var data = await AccountingApi.marginSaveHasFurnitureOrder(session, {
+            project_no: current.project_no,
+            tab_name: current.tab_name,
+            has_furniture_order: el('hasFurnitureOrder').checked
+          });
+          if (!data.success) { setMsg(data.message || '儲存失敗'); return; }
+          setOk('家具標記已儲存');
+          renderDetailPanels(data);
+        });
       });
       el('saveContractBtn').addEventListener('click', async function () {
         if (!current) return;

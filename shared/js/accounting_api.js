@@ -456,6 +456,15 @@ var AccountingApi = (function () {
       }
       return post(body);
     },
+    marginSaveHasFurnitureOrder: function (sessionOrToken, payload) {
+      return post({
+        action: 'margin_save_has_furniture_order',
+        auth: resolveAuth(sessionOrToken),
+        project_no: payload.project_no,
+        tab_name: payload.tab_name || '',
+        has_furniture_order: !!payload.has_furniture_order
+      });
+    },
     loadPolicy: async function (opts) {
       opts = opts || {};
       var cached = !opts.force ? readSessionWrapped_(SESSION_POLICY_KEY, POLICY_TTL_MS) : null;
@@ -991,6 +1000,37 @@ var AccountingApi = (function () {
     },
     cfRecVoid: function (sessionOrToken, receiptId, reason) {
       return post({ action: 'margin_receipt_void', auth: resolveAuth(sessionOrToken), receipt_id: receiptId, void_reason: reason || '' });
+    },
+    cfRecIncomeApprove: function (sessionOrToken, receiptId, note) {
+      return post({
+        action: 'margin_receipt_income_approve',
+        auth: resolveAuth(sessionOrToken),
+        receipt_id: receiptId,
+        note: note || ''
+      });
+    },
+    cfRecIncomeReject: function (sessionOrToken, receiptId, note) {
+      return post({
+        action: 'margin_receipt_income_reject',
+        auth: resolveAuth(sessionOrToken),
+        receipt_id: receiptId,
+        note: note || ''
+      });
+    },
+    cfRecIncomeApproveBulk: function (sessionOrToken, projectNo, note) {
+      return post({
+        action: 'margin_receipt_income_approve_bulk',
+        auth: resolveAuth(sessionOrToken),
+        project_no: projectNo,
+        note: note || ''
+      });
+    },
+    cfAdjExportPdf: function (sessionOrToken, adjustmentId) {
+      return post({
+        action: 'margin_adjustment_export_pdf',
+        auth: resolveAuth(sessionOrToken),
+        adjustment_id: adjustmentId
+      });
     },
     cfPortalBind: function (sessionOrToken, payload) {
       return post(Object.assign({ action: 'client_portal_bind', auth: resolveAuth(sessionOrToken) }, payload || {}));

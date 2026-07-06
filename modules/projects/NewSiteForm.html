@@ -62,6 +62,26 @@
       border: 1px solid #ced4da;
       border-radius: .25rem;
     }
+
+    #customerBindSection .bind-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
+      font-size: 13px;
+    }
+    #customerBindSection .mono { font-family: ui-monospace, monospace; font-size: 12px; color: #444; }
+    #customerBindSection .search-hit {
+      padding: 8px; border: 1px solid #e0e0e0; border-radius: 8px; margin-top: 6px; cursor: pointer;
+    }
+    #customerBindSection .search-hit:hover { background: #f8f9fa; }
+    #customerBindSection .warn-box {
+      background: #fef7e0; border-radius: 8px; padding: 10px; margin: 8px 0;
+      font-size: 13px; color: #b06000;
+    }
+    #customerBindSection .btn.is-busy { opacity: 0.75; cursor: wait; }
   </style>
 </head>
 
@@ -170,6 +190,16 @@
           rows="3"></textarea>
       </div>
 
+      <div id="customerBindSection" class="card mt-4" style="display:none">
+        <div class="card-body">
+          <h5 class="card-title">客戶 LINE 綁定</h5>
+          <p class="text-muted small">與「追加減與收款管理」相同：綁定後客戶可從 LINE 查看並確認本案追加減／收款。</p>
+          <div id="customerBindMsg" class="text-danger small"></div>
+          <div id="customerBindOk" class="text-success small"></div>
+          <div id="customerBindMount"></div>
+        </div>
+      </div>
+
       <div class="form-group">
         <button type="submit" class="btn btn-primary" id="submitBtn">提交</button>
       </div>
@@ -192,6 +222,12 @@
       </div>
     </div>
 
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script src="../../shared/js/operator_context.js?v=1"></script>
+    <script src="../../shared/js/accounting_api.js?v=33"></script>
+    <script src="../../shared/js/customer_finance_ui.js?v=1"></script>
+    <script src="../../shared/js/customer_finance_bind.js?v=1"></script>
+
     <script>
       const form = document.getElementById("siteForm");
       const submitBtn = document.getElementById("submitBtn");
@@ -210,6 +246,68 @@
 
       let currentMode = 'create'; // 'create' or 'update'
       let originalProjectCode = '';
+      let cfSession = null;
+      const customerBindSection = document.getElementById('customerBindSection');
+      const customerBindMount = document.getElementById('customerBindMount');
+
+      function showCustomerBindMsg(t) {
+        const el = document.getElementById('customerBindMsg');
+        if (el) el.textContent = t || '';
+        const okEl = document.getElementById('customerBindOk');
+        if (okEl && t) okEl.textContent = '';
+      }
+      function showCustomerBindOk(t) {
+        showCustomerBindMsg('');
+        const el = document.getElementById('customerBindOk');
+        if (el) el.textContent = t || '';
+      }
+
+      async function initCustomerBindAuth() {
+        if (typeof AccountingApi === 'undefined' || cfSession) return cfSession;
+        try {
+          cfSession = await AccountingApi.initCustomerFinanceSession();
+        } catch (e) {
+          console.warn('[NewSiteForm] 客戶綁定需會計權限:', e.message || e);
+          cfSession = null;
+        }
+        return cfSession;
+      }
+
+      async function refreshCustomerBindPanel() {
+        if (!customerBindSection || !customerBindMount) return;
+        const pno = String(originalProjectCode || form.projectCode.value || '').trim();
+        if (currentMode !== 'update' || !pno) {
+          customerBindSection.style.display = 'none';
+          return;
+        }
+        customerBindSection.style.display = 'block';
+        showCustomerBindMsg('');
+        if (!cfSession) {
+          customerBindMount.innerHTML = '<p class="text-muted small">載入會計權限中…</p>';
+          await initCustomerBindAuth();
+        }
+        if (!cfSession) {
+          customerBindMount.innerHTML = '<p class="text-warning small">無法取得會計登入（需設計師權限 ≥ 3）。請至「追加減與收款管理」綁定客戶。</p>';
+          return;
+        }
+        try {
+          const res = await AccountingApi.cfDetail(cfSession, pno);
+          if (!res.success) {
+            customerBindMount.innerHTML = '<p class="text-danger small">' + (res.message || '載入失敗') + '</p>';
+            return;
+          }
+          CustomerFinanceBind.render(customerBindMount, {
+            session: cfSession,
+            projectNo: pno,
+            detail: res,
+            onMsg: showCustomerBindMsg,
+            onOk: showCustomerBindOk,
+            onRefresh: refreshCustomerBindPanel
+          });
+        } catch (e) {
+          customerBindMount.innerHTML = '<p class="text-danger small">' + (e.message || e) + '</p>';
+        }
+      }
 
       // 【v126.0 新增】後端 API 的 URL
       const API_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
@@ -239,6 +337,7 @@
           .then(([sitesResponse, employeesResponse]) => {
             populateProjectSelector(sitesResponse);
             populateEmployeeModal(employeesResponse);
+            initCustomerBindAuth();
           })
           .catch(error => {
             console.error('[NewSiteForm] 載入初始資料失敗:', error);
@@ -384,6 +483,7 @@ ${notes || '無'}`;
           formTitle.innerText = `更新案場資料 (#${originalProjectCode})`;
           submitBtn.innerText = '更新資料';
           submitBtn.classList.replace('btn-primary', 'btn-success');
+          refreshCustomerBindPanel();
         }
       }
 
@@ -397,6 +497,7 @@ ${notes || '無'}`;
         submitBtn.classList.replace('btn-success', 'btn-primary');
         statusDiv.innerText = '';
         statusDiv.className = 'mt-3';
+        if (customerBindSection) customerBindSection.style.display = 'none';
       }
 
       // 7. 處理後端的回應

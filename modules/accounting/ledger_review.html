@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=26"></script>
+  <script src="../../shared/js/accounting_api.js?v=33"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=1"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=17"></script>
@@ -34,6 +34,7 @@
     .tag.vendor { background: #fef7e0; color: #b06000; }
     .tag.pay { background: #e6f4ea; }
     .tag.expense { background: #fce8e6; color: #c5221f; }
+    .tag.income { background: #e6f4ea; color: #137333; }
     .actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     #msg { color: #c5221f; font-size: 14px; margin: 8px 0; }
     #ok { color: #137333; font-size: 14px; margin: 8px 0; }
@@ -53,6 +54,10 @@
     .alloc-empty { color: #666; font-size: 14px; padding: 8px 0; }
     .btn-ghost { background: #fff; border: 1px dashed #1a73e8; color: #1a73e8; width: 100%; padding: 10px; margin-top: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border-radius: 8px; }
     .total-line { font-size: 16px; font-weight: 700; margin-top: 10px; text-align: right; color: #1a73e8; }
+    .tabs { display: flex; gap: 8px; margin: 0 0 12px; flex-wrap: wrap; }
+    .tab-btn { padding: 10px 14px; border: none; border-radius: 8px; background: #f1f3f4; cursor: pointer; font-size: 14px; font-weight: 600; }
+    .tab-btn.active { background: #1a73e8; color: #fff; }
+    .tag.cash { background: #fef7e0; color: #b06000; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -61,7 +66,11 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>請款審核</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub">只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改分攤（可多案）。</p>
+    <div class="tabs">
+      <button type="button" class="tab-btn active" data-tab="vendor">廠商請款</button>
+      <button type="button" class="tab-btn" data-tab="customer_receipt">客戶收款核準</button>
+    </div>
+    <p class="sub" id="tabDesc">只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改分攤（可多案）。</p>
     <div id="msg" role="alert"></div>
     <div id="ok" aria-live="polite"></div>
 
@@ -77,7 +86,7 @@
           </select>
         </div>
         <div>
-          <label>付款狀態</label>
+          <label id="filterPayLabel">付款狀態</label>
           <select id="filterPay">
             <option value="">全部</option>
             <option value="未匯款">待匯款</option>
@@ -85,7 +94,7 @@
           </select>
         </div>
       </div>
-      <label>關鍵字（對象／案號／品項）</label>
+      <label id="filterKwLabel">關鍵字（對象／案號／品項）</label>
       <input id="filterKw" placeholder="例：磁磚、752" />
       <button type="button" class="btn btn-primary btn-block" id="reloadBtn">重新載入</button>
     </div>
@@ -102,12 +111,46 @@
   <script>
     (function () {
       var session = null;
+      var activeTab = 'vendor';
       var canApproveVendor = false;
+      var canApproveIncome = false;
       var listItems = [];
       var ui = AccountingUi.feedback();
 
+      var TAB_DESC = {
+        vendor: '只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改分攤（可多案）。',
+        customer_receipt: '審核<strong>現金收款財務簽核</strong>與<strong>客戶已確認收款</strong>（核准入案件收支）。CustomerReceipts 為主檔，核准後寫入案件毛利收入列。'
+      };
+
       function setMsg(t) { ui.setMsg(t); }
       function setOk(t) { ui.setOk(t); }
+      function updateTabUi() {
+        document.querySelectorAll('.tab-btn').forEach(function (btn) {
+          btn.classList.toggle('active', btn.getAttribute('data-tab') === activeTab);
+        });
+        var desc = document.getElementById('tabDesc');
+        if (desc) desc.innerHTML = TAB_DESC[activeTab] || TAB_DESC.vendor;
+        var paySel = document.getElementById('filterPay');
+        var payLabel = document.getElementById('filterPayLabel');
+        var kwLabel = document.getElementById('filterKwLabel');
+        if (activeTab === 'customer_receipt') {
+          if (payLabel) payLabel.textContent = '入帳狀態';
+          if (kwLabel) kwLabel.textContent = '關鍵字（案號／收據編號／階段）';
+          if (paySel) paySel.innerHTML =
+            '<option value="">全部</option>' +
+            '<option value="未入帳">待入帳</option>' +
+            '<option value="已入帳">已入帳</option>';
+        } else {
+          if (payLabel) payLabel.textContent = '付款狀態';
+          if (kwLabel) kwLabel.textContent = '關鍵字（對象／案號／品項）';
+          if (paySel) paySel.innerHTML =
+            '<option value="">全部</option>' +
+            '<option value="未匯款">待匯款</option>' +
+            '<option value="已匯款">已匯款</option>';
+        }
+        document.getElementById('bulkApproveBtn').textContent =
+          activeTab === 'customer_receipt' ? '全部核准入帳' : '全部核准（資料完整）';
+      }
       function listCacheKey() {
         return 'ledger_review:' + JSON.stringify(buildFilter());
       }
@@ -116,9 +159,18 @@
         AccountingListCache.patch(session, listCacheKey(), function (data) {
           if (!data || !data.items) return;
           data.items = data.items.filter(function (it) {
+            if (it.kind === 'customer_receipt_income' || it.kind === 'customer_receipt_cash_sign') {
+              return it.receipt_id !== id;
+            }
             return it.payment_request_id !== id;
           });
         });
+      }
+      function itemCacheId(item) {
+        if (item.kind === 'customer_receipt_income' || item.kind === 'customer_receipt_cash_sign') {
+          return item.receipt_id;
+        }
+        return item.payment_request_id;
       }
       function itemQueueBusy(id) {
         return typeof AccountingActionQueue !== 'undefined' &&
@@ -136,6 +188,7 @@
         f.review_status = rs;
         if (ps) f.payment_status = ps;
         if (kw) f.keyword = kw;
+        f.tab = activeTab;
         return f;
       }
       function fmtMoney(n) {
@@ -144,10 +197,25 @@
       function isPaymentRequest(item) {
         return item.kind === 'vendor_payment' || item.kind === 'staff_payment';
       }
+      function isCustomerReceiptIncome(item) {
+        return item.kind === 'customer_receipt_income';
+      }
+      function isCustomerReceiptCashSign(item) {
+        return item.kind === 'customer_receipt_cash_sign';
+      }
+      function isCustomerReceiptItem(item) {
+        return isCustomerReceiptIncome(item) || isCustomerReceiptCashSign(item);
+      }
+      function isReviewableItem(item) {
+        return isPaymentRequest(item) || isCustomerReceiptItem(item);
+      }
       function isPending(item) {
         return String(item.review_status || '') !== '已審' && String(item.review_status || '') !== '退回';
       }
       function itemReady(item) {
+        if (isCustomerReceiptIncome(item)) {
+          return !!(String(item.project_no || '').trim() && (parseInt(item.amount, 10) || 0) > 0);
+        }
         var rows = allocRowsFromItem(item);
         if (!rows.length) return false;
         var sum = 0;
@@ -274,18 +342,113 @@
         return true;
       }
 
+      async function approveIncome(item, note) {
+        var data = await AccountingApi.cfRecIncomeApprove(session, item.receipt_id, note || '');
+        if (!data.success) {
+          setMsg((item.receipt_no || '收款') + '：' + (data.message || '核准失敗'));
+          return false;
+        }
+        return true;
+      }
+
+      async function rejectIncome(item, reason) {
+        var data = await AccountingApi.cfRecIncomeReject(session, item.receipt_id, reason || '主管退回');
+        if (!data.success) { setMsg(data.message || '退回失敗'); return false; }
+        return true;
+      }
+
+      async function signFinanceReceipt(item) {
+        var data = await AccountingApi.cfRecSignFinance(session, item.receipt_id);
+        if (!data.success) {
+          setMsg((item.receipt_no || '收款') + '：' + (data.message || '財務簽核失敗'));
+          return false;
+        }
+        return true;
+      }
+
       function typeTags(item) {
         var html = '';
-        if (item.kind === 'staff_payment') {
+        if (item.kind === 'customer_receipt_income') {
+          html += '<span class="tag income">客戶收款入帳</span>';
+        } else if (item.kind === 'customer_receipt_cash_sign') {
+          html += '<span class="tag cash">現金財務簽核</span>';
+        } else if (item.kind === 'staff_payment') {
           html += '<span class="tag expense">員工請款</span><span class="tag expense">未實現</span>';
         } else if (item.kind === 'vendor_payment') {
           html += '<span class="tag vendor">廠商' + (item.doc_type || '請款') + '</span><span class="tag expense">未實現</span>';
         }
         html += '<span class="tag pay">' + (item.review_status || '待審') + '</span>';
         var ps = String(item.payment_status || '未匯款');
-        if (ps === '未匯款') ps = '待匯款';
+        if (isCustomerReceiptItem(item)) {
+          ps = ps === '未入帳' ? '待入帳' : ps;
+        } else if (ps === '未匯款') {
+          ps = '待匯款';
+        }
         html += '<span class="tag pay">' + ps + '</span>';
         return html;
+      }
+
+      function renderIncomeReviewPanel(item) {
+        var panel = document.createElement('div');
+        panel.className = 'review-panel hidden';
+        panel.innerHTML =
+          '<p class="sub">收據編號 ' + (item.receipt_no || '—') + ' · ' + (item.stage_label || item.summary || '') +
+          ' · ' + (item.method || '') + '</p>' +
+          (item.note ? '<p class="sub">備註：' + item.note + '</p>' : '') +
+          (item.income_review_note ? '<p class="sub">審核備註：' + item.income_review_note + '</p>' : '') +
+          '<label>核准備註（選填）</label>' +
+          '<input type="text" class="inp-approve-note" placeholder="核准入帳時可填" />' +
+          '<label>退回原因（選填）</label>' +
+          '<input type="text" class="inp-reject" placeholder="退回時填寫" />' +
+          '<div class="actions" style="margin-top:12px">' +
+          '<button type="button" class="btn btn-ok btn-confirm-approve">確認核准入帳</button>' +
+          '<button type="button" class="btn btn-warn btn-confirm-reject">退回</button>' +
+          '</div>' +
+          '<p class="sub" style="margin-top:8px"><a href="designer-customer-finance.html?project_no=' +
+          encodeURIComponent(item.project_no || '') + '">查看追加減與收款詳情 →</a></p>';
+
+        panel.querySelector('.btn-confirm-approve').addEventListener('click', async function () {
+          var cacheId = itemCacheId(item);
+          if (!canApproveIncome || itemQueueBusy(cacheId)) return;
+          var btn = panel.querySelector('.btn-confirm-approve');
+          await AccountingUi.runAsync(btn, {
+            busyLabel: '核准中…',
+            queue: true,
+            queueId: 'ledger_review',
+            itemId: cacheId
+          }, async function () {
+            ui.clear();
+            if (!confirm('確定核準此收款並寫入案件收支（收入列）？')) return;
+            var note = panel.querySelector('.inp-approve-note').value.trim();
+            var ok = await approveIncome(item, note);
+            if (ok) {
+              setOk('已核准入帳「' + (item.receipt_no || item.project_no) + '」');
+              removeFromListCache(cacheId);
+              await loadList(true);
+            }
+          });
+        });
+        panel.querySelector('.btn-confirm-reject').addEventListener('click', async function () {
+          var cacheId = itemCacheId(item);
+          if (!canApproveIncome || itemQueueBusy(cacheId)) return;
+          var btn = panel.querySelector('.btn-confirm-reject');
+          await AccountingUi.runAsync(btn, {
+            busyLabel: '退回中…',
+            queue: true,
+            queueId: 'ledger_review',
+            itemId: cacheId
+          }, async function () {
+            ui.clear();
+            var reason = panel.querySelector('.inp-reject').value.trim() || '主管退回';
+            var ok = await rejectIncome(item, reason);
+            if (ok) {
+              setOk('已退回「' + (item.receipt_no || item.project_no) + '」');
+              removeFromListCache(cacheId);
+              await loadList(true);
+            }
+          });
+        });
+        return panel;
       }
 
       function renderReviewPanel(item) {
@@ -358,11 +521,16 @@
         var div = document.createElement('div');
         div.className = 'item';
         var isRequest = isPaymentRequest(item);
+        var isIncome = isCustomerReceiptIncome(item);
+        var isCashSign = isCustomerReceiptCashSign(item);
         var pending = isPending(item);
         var ready = itemReady(item);
+        var cacheId = itemCacheId(item);
 
         div.innerHTML =
-          '<div class="headline">' + (item.party_name || '—') + '</div>' +
+          '<div class="headline">' + (isCashSign
+            ? ('現金收款 · ' + (item.receipt_no || '—'))
+            : (isIncome ? ('客戶收款 · ' + (item.receipt_no || '—')) : (item.party_name || '—'))) + '</div>' +
           '<div class="amount">$' + fmtMoney(item.amount) + '</div>' +
           '<div class="sub">案號 ' + (item.project_no || '—') + ' · ' + (item.txn_date || '—') + '</div>' +
           '<div class="sub">' + (item.summary || '') + '</div>' +
@@ -372,14 +540,119 @@
                 (a.item_desc ? ' ' + a.item_desc : '');
             }).join('；') + '</div>'
             : '') +
-          '<div class="mono">' + (item.payment_request_id ? item.payment_request_id.slice(0, 8) + '…' : '') + '</div>' +
+          (isIncome && item.ingest_id
+            ? '<div class="sub">案件收支 ingest：' + item.ingest_id + '</div>'
+            : '') +
+          '<div class="mono">' + ((isIncome || isCashSign)
+            ? (item.receipt_id ? item.receipt_id.slice(0, 8) + '…' : '')
+            : (item.payment_request_id ? item.payment_request_id.slice(0, 8) + '…' : '')) + '</div>' +
           '<div>' + typeTags(item) + '</div>';
 
         var actions = document.createElement('div');
         actions.className = 'actions';
-        var reviewPanel = renderReviewPanel(item);
+        var reviewPanel = isIncome ? renderIncomeReviewPanel(item) : (isCashSign ? null : renderReviewPanel(item));
 
-        if (pending && isRequest && canApproveVendor) {
+        if (pending && isCashSign && canApproveIncome) {
+          var btnCashSign = document.createElement('button');
+          btnCashSign.type = 'button';
+          btnCashSign.className = 'btn btn-ok';
+          btnCashSign.textContent = '財務簽核';
+          btnCashSign.title = '現金收款第二簽，完成後送交客戶確認';
+          btnCashSign.addEventListener('click', async function () {
+            if (itemQueueBusy(cacheId)) return;
+            await AccountingUi.runAsync(btnCashSign, {
+              busyLabel: '簽核中…',
+              queue: true,
+              queueId: 'ledger_review',
+              itemId: cacheId
+            }, async function () {
+              ui.clear();
+              var ok = await signFinanceReceipt(item);
+              if (ok) {
+                setOk('已財務簽核「' + (item.receipt_no || item.project_no) + '」，待客戶確認');
+                removeFromListCache(cacheId);
+                await loadList(true);
+              }
+            });
+          });
+          actions.appendChild(btnCashSign);
+          var cashLink = document.createElement('a');
+          cashLink.className = 'sub';
+          cashLink.href = 'designer-customer-finance.html?project_no=' + encodeURIComponent(item.project_no || '');
+          cashLink.textContent = '查看收款詳情 →';
+          cashLink.style.marginLeft = '4px';
+          actions.appendChild(cashLink);
+        } else if (pending && isCashSign && !canApproveIncome) {
+          var cashHint = document.createElement('span');
+          cashHint.className = 'sub';
+          cashHint.textContent = '（財務簽核需權限 ≥ 4）';
+          actions.appendChild(cashHint);
+        } else if (pending && isIncome && canApproveIncome) {
+          var btnIncomeQuick = document.createElement('button');
+          btnIncomeQuick.type = 'button';
+          btnIncomeQuick.className = 'btn btn-ok';
+          btnIncomeQuick.textContent = '快速核准入帳';
+          btnIncomeQuick.title = '寫入案件收支收入列';
+          btnIncomeQuick.addEventListener('click', async function () {
+            if (itemQueueBusy(cacheId)) return;
+            if (!confirm('確定核準此收款並寫入案件收支（收入列）？')) return;
+            await AccountingUi.runAsync(btnIncomeQuick, {
+              busyLabel: '核准中…',
+              queue: true,
+              queueId: 'ledger_review',
+              itemId: cacheId
+            }, async function () {
+              ui.clear();
+              var ok = await approveIncome(item);
+              if (ok) {
+                setOk('已核准入帳「' + (item.receipt_no || item.project_no) + '」');
+                removeFromListCache(cacheId);
+                await loadList(true);
+              }
+            });
+          });
+          actions.appendChild(btnIncomeQuick);
+
+          var btnIncomeReview = document.createElement('button');
+          btnIncomeReview.type = 'button';
+          btnIncomeReview.className = 'btn btn-primary';
+          btnIncomeReview.textContent = '審核';
+          btnIncomeReview.addEventListener('click', function () {
+            var open = reviewPanel.classList.toggle('hidden');
+            btnIncomeReview.textContent = open ? '審核' : '收合';
+            div.classList.toggle('focus', !open);
+          });
+          actions.appendChild(btnIncomeReview);
+
+          var btnIncomeReject = document.createElement('button');
+          btnIncomeReject.type = 'button';
+          btnIncomeReject.className = 'btn btn-warn';
+          btnIncomeReject.textContent = '退回';
+          btnIncomeReject.addEventListener('click', async function () {
+            if (itemQueueBusy(cacheId)) return;
+            var reason = prompt('退回原因（選填）', '主管退回') || '主管退回';
+            await AccountingUi.runAsync(btnIncomeReject, {
+              busyLabel: '退回中…',
+              queue: true,
+              queueId: 'ledger_review',
+              itemId: cacheId
+            }, async function () {
+              ui.clear();
+              var ok = await rejectIncome(item, reason);
+              if (ok) {
+                setOk('已退回「' + (item.receipt_no || item.project_no) + '」');
+                removeFromListCache(cacheId);
+                await loadList(true);
+              }
+            });
+          });
+          actions.appendChild(btnIncomeReject);
+        } else if (pending && isIncome && !canApproveIncome) {
+          var incomeHint = document.createElement('span');
+          incomeHint.className = 'sub';
+          incomeHint.textContent = '（核准入帳需權限 ≥ 4）';
+          actions.appendChild(incomeHint);
+        } else if (pending && isRequest && canApproveVendor) {
           var btnQuick = document.createElement('button');
           btnQuick.type = 'button';
           btnQuick.className = 'btn btn-ok';
@@ -470,38 +743,104 @@
         }
 
         div.appendChild(actions);
-        div.appendChild(reviewPanel);
+        if (reviewPanel) div.appendChild(reviewPanel);
         return div;
       }
 
       function updateBulkBar() {
         var bar = document.getElementById('bulkBar');
         var btn = document.getElementById('bulkApproveBtn');
-        var pending = listItems.filter(function (it) {
+        var pendingVendor = listItems.filter(function (it) {
           return isPaymentRequest(it) && isPending(it);
         });
-        var ready = pending.filter(itemReady);
-        if (!canApproveVendor || !pending.length) {
+        var pendingIncome = listItems.filter(function (it) {
+          return isCustomerReceiptIncome(it) && isPending(it);
+        });
+        var readyVendor = pendingVendor.filter(itemReady);
+        var readyIncome = pendingIncome.filter(itemReady);
+        var canBulk = activeTab === 'vendor'
+          ? (canApproveVendor && readyVendor.length)
+          : (canApproveIncome && readyIncome.length);
+        if (!canBulk) {
           bar.classList.add('hidden');
           return;
         }
         bar.classList.remove('hidden');
-        document.getElementById('bulkSummary').textContent =
-          '待審 ' + pending.length + ' 筆 · 可一次核准 ' + ready.length + ' 筆（分攤已齊）';
-        btn.disabled = !ready.length ||
+        if (activeTab === 'customer_receipt') {
+          document.getElementById('bulkSummary').textContent =
+            '收款入帳待審 ' + pendingIncome.length + ' 筆（可一次核准 ' + readyIncome.length + '）';
+          btn.disabled = !readyIncome.length ||
+            (typeof AccountingActionQueue !== 'undefined' && AccountingActionQueue.isPending('ledger_review', 'bulk'));
+          return;
+        }
+        var parts = [];
+        if (pendingVendor.length) {
+          parts.push('請款待審 ' + pendingVendor.length + ' 筆（可快速核准 ' + readyVendor.length + '）');
+        }
+        document.getElementById('bulkSummary').textContent = parts.join(' · ');
+        btn.disabled = !readyVendor.length ||
           (typeof AccountingActionQueue !== 'undefined' && AccountingActionQueue.isPending('ledger_review', 'bulk'));
       }
 
       async function bulkApprove() {
-        var pending = listItems.filter(function (it) {
+        if (activeTab === 'customer_receipt') {
+          var pendingIncomeOnly = listItems.filter(function (it) {
+            return isCustomerReceiptIncome(it) && isPending(it) && itemReady(it);
+          });
+          if (!pendingIncomeOnly.length) { setMsg('沒有可一次核准的收款入帳項目'); return; }
+          var projectNos = [];
+          var seen = {};
+          pendingIncomeOnly.forEach(function (it) {
+            var pno = String(it.project_no || '').trim();
+            if (pno && !seen[pno]) { seen[pno] = true; projectNos.push(pno); }
+          });
+          var confirmMsg = projectNos.length === 1
+            ? ('將一鍵核准案號 ' + projectNos[0] + ' 所有待審收款並寫入案件收支。\n\n確定？')
+            : ('將對 ' + projectNos.length + ' 個案號批次核准入帳（列表待審 ' + pendingIncomeOnly.length + ' 筆）。\n\n確定？');
+          if (!confirm(confirmMsg)) return;
+          setMsg('');
+          setOk('');
+          updateBulkBar();
+          var bulkBtnCr = document.getElementById('bulkApproveBtn');
+          await AccountingUi.runAsync(bulkBtnCr, {
+            busyLabel: '批次核准中…',
+            queue: true,
+            queueId: 'ledger_review',
+            itemId: 'bulk'
+          }, async function () {
+            var okCount = 0;
+            var fail = 0;
+            for (var j = 0; j < projectNos.length; j++) {
+              AccountingUi.warn('核准中… ' + (j + 1) + ' / ' + projectNos.length + ' 案', 0);
+              var res = await AccountingApi.cfRecIncomeApproveBulk(session, projectNos[j]);
+              if (res.success) {
+                okCount += res.approved || 0;
+                pendingIncomeOnly.forEach(function (it) {
+                  if (String(it.project_no || '').trim() === projectNos[j]) {
+                    removeFromListCache(itemCacheId(it));
+                  }
+                });
+              } else {
+                fail++;
+                setMsg((res.message || '批次核准失敗') + '（案號 ' + projectNos[j] + '）');
+              }
+            }
+            if (fail) setMsg('完成：已核准 ' + okCount + ' 筆，' + fail + ' 案失敗');
+            else setOk('已全部核准入帳 ' + okCount + ' 筆');
+            await loadList(true);
+          });
+          updateBulkBar();
+          return;
+        }
+        var pendingVendor = listItems.filter(function (it) {
           return isPaymentRequest(it) && isPending(it) && itemReady(it);
         });
-        if (!pending.length) { setMsg('沒有可一次核准的項目（需有完整分攤）'); return; }
-        var skip = listItems.filter(function (it) {
+        if (!pendingVendor.length) { setMsg('沒有可一次核准的請款項目（需有完整分攤）'); return; }
+        var skipVendor = listItems.filter(function (it) {
           return isPaymentRequest(it) && isPending(it) && !itemReady(it);
         }).length;
-        var msg = '將核准 ' + pending.length + ' 筆，進入待匯款。';
-        if (skip) msg += '\n另有 ' + skip + ' 筆分攤不完整，請個別審核。';
+        var msg = '將核准 ' + pendingVendor.length + ' 筆，進入待匯款。';
+        if (skipVendor) msg += '\n另有 ' + skipVendor + ' 筆分攤不完整，請個別審核。';
         if (!confirm(msg + '\n\n確定？')) return;
 
         setMsg('');
@@ -516,12 +855,12 @@
         }, async function () {
           var okCount = 0;
           var fail = 0;
-          for (var i = 0; i < pending.length; i++) {
-            AccountingUi.warn('核准中… ' + (i + 1) + ' / ' + pending.length, 0);
-            var ok = await approveVendor(pending[i]);
+          for (var i = 0; i < pendingVendor.length; i++) {
+            AccountingUi.warn('核准中… ' + (i + 1) + ' / ' + pendingVendor.length, 0);
+            var ok = await approveVendor(pendingVendor[i]);
             if (ok) {
               okCount++;
-              removeFromListCache(pending[i].payment_request_id);
+              removeFromListCache(itemCacheId(pendingVendor[i]));
             } else fail++;
           }
           if (fail) setMsg('完成：成功 ' + okCount + ' 筆，失敗 ' + fail + ' 筆');
@@ -546,6 +885,7 @@
           box.innerHTML = '';
           if (!data.success) { setMsg(data.message); listItems = []; updateBulkBar(); return; }
           canApproveVendor = !!data.can_approve_vendor;
+          canApproveIncome = !!(data.can_approve_income || data.can_approve_customer_receipt);
           listItems = data.items || [];
           listItems.forEach(function (row) { box.appendChild(renderItem(row)); });
           if (!listItems.length) box.innerHTML = '<p class="sub">沒有符合的紀錄</p>';
@@ -558,11 +898,21 @@
 
       document.getElementById('reloadBtn').addEventListener('click', function () { loadList(false, true); });
       document.getElementById('bulkApproveBtn').addEventListener('click', bulkApprove);
+      document.querySelectorAll('.tab-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var next = btn.getAttribute('data-tab') || 'vendor';
+          if (next === activeTab) return;
+          activeTab = next;
+          updateTabUi();
+          loadList(false, true);
+        });
+      });
 
       (async function boot() {
         await AccountingBoot.run({
           onReady: async function (sess) {
             session = sess;
+            updateTabUi();
             await loadList();
           }
         });

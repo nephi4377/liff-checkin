@@ -7,8 +7,10 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=32"></script>
+  <script src="../../shared/js/accounting_api.js?v=33"></script>
   <script src="../../shared/js/accounting_boot.js?v=4"></script>
+  <script src="../../shared/js/customer_finance_ui.js?v=1"></script>
+  <script src="../../shared/js/customer_finance_bind.js?v=1"></script>
   <style>
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; }
@@ -48,6 +50,8 @@
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
     @media (max-width: 520px) { .form-grid { grid-template-columns: 1fr; } }
     .form-hint { font-size: 12px; color: #666; margin-top: 2px; font-weight: 400; }
+    .btn.is-busy { opacity: 0.75; cursor: wait; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
   </style>
 </head>
 <body class="acct-page">
@@ -119,6 +123,7 @@
         if (p.pending_customer_adj) badges += '<span class="tag warn">客戶待確認 ' + p.pending_customer_adj + '</span>';
         if (p.pending_company_adj) badges += '<span class="tag warn">待公司確認 ' + p.pending_company_adj + '</span>';
         if (p.pending_cash_sign) badges += '<span class="tag warn">現金待簽 ' + p.pending_cash_sign + '</span>';
+        if (p.pending_income_review) badges += '<span class="tag warn">收入待審 ' + p.pending_income_review + '</span>';
         return '<div class="item" data-pno="' + p.project_no + '">' +
           '<strong>' + p.project_no + '</strong> ' + (p.client_name || '') +
           (p.is_closed ? ' <span class="tag">已結案</span>' : '') +
@@ -174,6 +179,15 @@
       return (v < 0 ? '-' : '') + '$' + Math.abs(Math.round(v)).toLocaleString('zh-TW');
     }
 
+    function incomeReviewLabel(st) {
+      var map = {
+        pending_review: '收入審核中',
+        approved: '已入案件收支',
+        rejected: '收入審核退回'
+      };
+      return map[st] || '';
+    }
+
     function renderAdjPanel() {
       var adjs = detailData.adjustments || [];
       var rows = adjs.map(function (a) {
@@ -190,7 +204,11 @@
         if (a.status === 'pending_company') {
           btns += '<button class="btn btn-primary" data-act="adj-company" data-id="' + a.adjustment_id + '">公司確認</button>';
         }
-        return '<tr>' +
+        if (['customer_signed', 'pending_company', 'company_confirmed'].indexOf(a.status) >= 0
+          && (session.auth.permission || 0) >= 4) {
+          btns += '<button class="btn btn-secondary" data-act="adj-pdf" data-id="' + a.adjustment_id + '">匯出 PDF</button>';
+        }
+        return '<tr data-adj-id="' + a.adjustment_id + '">' +
           '<td class="num">' + (a.item_no || '—') + '</td>' +
           '<td>' + (a.item_name || a.item_desc || '') + '</td>' +
           '<td>' + (a.unit || '—') + '</td>' +
@@ -216,36 +234,69 @@
         '</div>' +
         '<label>備註<input id="newAdjNote" placeholder="例：含安裝/20260527款項已付清" /></label>' +
         '<button class="btn btn-primary" id="btnNewAdj">建立草稿</button>';
-      $('btnNewAdj').onclick = async function () {
-        var res = await AccountingApi.cfAdjCreate(session, {
-          project_no: currentProject,
-          item_name: $('newAdjName').value,
-          unit: $('newAdjUnit').value,
-          quantity: $('newAdjQty').value,
-          total_price: $('newAdjTotal').value,
-          note: $('newAdjNote').value
-        });
-        if (!res.success) showMsg(res.message); else { showOk('已建立'); openDetail(currentProject); }
+      $('btnNewAdj').onclick = function () {
+        CustomerFinanceUi.runBtnAsync($('btnNewAdj'), async function () {
+          var res = await AccountingApi.cfAdjCreate(session, {
+            project_no: currentProject,
+            item_name: $('newAdjName').value,
+            unit: $('newAdjUnit').value,
+            quantity: $('newAdjQty').value,
+            total_price: $('newAdjTotal').value,
+            note: $('newAdjNote').value
+          });
+          if (!res.success) showMsg(res.message);
+          else { showOk('已建立'); return openDetail(currentProject); }
+        }, { busyLabel: '建立中…', lockRoot: $('panelAdj') });
       };
       bindActionButtons($('panelAdj'));
     }
 
+    function downloadPdfBase64(filename, b64) {
+      var bin = atob(b64);
+      var len = bin.length;
+      var bytes = new Uint8Array(len);
+      for (var i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+      var blob = new Blob([bytes], { type: 'application/pdf' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename || '追加減.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+    }
+
     function renderRecPanel() {
       var recs = detailData.receipts || [];
-      var perm = session.auth.permission || 0;
       var list = recs.map(function (r) {
         var btns = '';
+        var reviewSt = r.income_review_status || '';
+        var reviewTag = reviewSt ? '<span class="tag' + (reviewSt === 'pending_review' ? ' warn' : (reviewSt === 'approved' ? ' ok' : '')) + '">' +
+          incomeReviewLabel(reviewSt) + '</span> ' : '';
         if (r.status === 'draft') btns += '<button class="btn btn-primary" data-act="rec-submit" data-id="' + r.receipt_id + '">送審</button>';
-        if (r.status === 'pending_signatures') {
+        if (r.status === 'pending_signatures' && String(r.method) === '現金' && !r.designer_signed_at) {
           btns += '<button class="btn btn-secondary" data-act="rec-sign-d" data-id="' + r.receipt_id + '">設計師簽</button>';
-          if (perm >= 4) btns += '<button class="btn btn-secondary" data-act="rec-sign-f" data-id="' + r.receipt_id + '">財務簽</button>';
+        }
+        if (r.status === 'pending_signatures' && String(r.method) === '現金' && r.designer_signed_at && !r.finance_signed_at) {
+          btns += '<span class="form-hint">待財務簽核 → 請至 <a href="ledger_review.html">請款審核</a></span>';
         }
         if (r.status !== 'void' && r.status !== 'customer_confirmed') {
           btns += '<button class="btn btn-danger" data-act="rec-void" data-id="' + r.receipt_id + '">作廢</button>';
+        } else if (r.status === 'customer_confirmed' && reviewSt === 'rejected') {
+          btns += '<button class="btn btn-danger" data-act="rec-void" data-id="' + r.receipt_id + '">作廢</button>';
         }
-        return '<div style="padding:8px 0;border-bottom:1px solid #eee">' +
-          '<span class="tag">' + statusLabel(r.status) + '</span> ' + (r.receipt_no || '') +
+        var reviewHint = reviewSt === 'pending_review'
+          ? '<div class="form-hint">收入待審：請至 <a href="ledger_review.html">請款審核</a> 核准入案件收支</div>'
+          : '';
+        var ingestHint = (reviewSt === 'approved' && r.ingest_id)
+          ? '<div class="form-hint">案件收支 ingest：' + r.ingest_id + '</div>' : '';
+        return '<div style="padding:8px 0;border-bottom:1px solid #eee" data-rec-id="' + r.receipt_id + '">' +
+          '<span class="tag">' + statusLabel(r.status) + '</span> ' + reviewTag +
+          (r.receipt_no || '') +
           ' · ' + (r.stage_label || '') + ' $' + r.amount + ' · ' + (r.method || '') +
+          reviewHint +
+          ingestHint +
           '<div>' + btns + '</div></div>';
       }).join('') || '<p>尚無收款</p>';
       $('panelRec').innerHTML =
@@ -256,15 +307,18 @@
         '<label>方式<select id="newRecMethod"><option>轉帳</option><option>現金</option></select></label>' +
         '<label>收款日<input id="newRecDate" type="date" /></label>' +
         '<button class="btn btn-primary" id="btnNewRec">建立草稿</button>';
-      $('btnNewRec').onclick = async function () {
-        var res = await AccountingApi.cfRecCreate(session, {
-          project_no: currentProject,
-          stage_label: $('newRecStage').value,
-          amount: $('newRecAmt').value,
-          method: $('newRecMethod').value,
-          received_at: $('newRecDate').value || undefined
-        });
-        if (!res.success) showMsg(res.message); else { showOk('已建立 ' + (res.receipt && res.receipt.receipt_no)); openDetail(currentProject); }
+      $('btnNewRec').onclick = function () {
+        CustomerFinanceUi.runBtnAsync($('btnNewRec'), async function () {
+          var res = await AccountingApi.cfRecCreate(session, {
+            project_no: currentProject,
+            stage_label: $('newRecStage').value,
+            amount: $('newRecAmt').value,
+            method: $('newRecMethod').value,
+            received_at: $('newRecDate').value || undefined
+          });
+          if (!res.success) showMsg(res.message);
+          else { showOk('已建立 ' + (res.receipt && res.receipt.receipt_no)); return openDetail(currentProject); }
+        }, { busyLabel: '建立中…', lockRoot: $('panelRec') });
       };
       bindActionButtons($('panelRec'));
     }
@@ -279,129 +333,43 @@
     }
 
     function renderBindPanel() {
-      var bindings = detailData.portal_bindings || [];
-      var warnings = detailData.unbound_customer_warnings || [];
-      var warnHtml = warnings.length
-        ? '<div class="warn-box"><strong>⚠ 顧客列表已有本案號但未綁定 LIFF</strong><br>' +
-          warnings.map(function (w) {
-            return (w.customer_name || '（無名稱）') + ' · ' + (w.customer_line_user_id || '') +
-              (w.project_codes ? ' · 案號：' + w.project_codes : '');
-          }).join('<br>') + '</div>'
-        : '';
-      var listHtml = bindings.length ? bindings.map(function (b) {
-        var title = b.customer_name ? (b.customer_name + ' · ') : '';
-        var codesHint = b.official_project_codes
-          ? '<div class="mono">顧客列表案號：' + b.official_project_codes + '</div>' : '';
-        return '<div class="bind-row">' +
-          '<div><strong>' + title + (b.customer_line_user_id || '') + '</strong>' +
-          codesHint +
-          '<div class="mono">綁定於 ' + (b.bound_at || '') + '</div></div>' +
-          '<button class="btn btn-danger" data-revoke="' + b.binding_id + '">解除</button></div>';
-      }).join('') : '<p class="sub">尚無綁定客戶（客戶無法從 LINE 查看本案追加減／收款）</p>';
-
-      $('panelBind').innerHTML =
-        '<h4>客戶 LINE 綁定</h4>' +
-        '<p class="sub">綁定後客戶才可從 LIFF 查看並確認本案追加減／收款。綁定時會同步追加案號至顧客列表（若尚未存在）。</p>' +
-        warnHtml +
-        '<h4 style="margin-top:12px">已綁定</h4>' + listHtml +
-        '<h4 style="margin-top:16px">新增綁定</h4>' +
-        '<label>搜尋官方 LINE 顧客列表（名稱／案號／UID）</label>' +
-        '<div style="display:flex;gap:8px;margin-top:4px">' +
-        '<input id="bindSearchKw" placeholder="例：王小姐、752、U 開頭" style="flex:1;margin-top:0" />' +
-        '<button class="btn btn-secondary" id="btnBindSearch" style="margin-top:0;white-space:nowrap">搜尋</button></div>' +
-        '<div id="bindSearchResults"></div>' +
-        '<label style="margin-top:12px">或手動貼 LINE userId</label>' +
-        '<input id="bindLineUid" placeholder="Uxxxxxxxx" class="mono" />' +
-        '<button class="btn btn-primary" id="btnBind">建立綁定</button>';
-
-      $('panelBind').querySelectorAll('[data-revoke]').forEach(function (btn) {
-        btn.onclick = async function () {
-          if (!confirm('確定解除這位客戶的綁定？解除後客戶將無法查看本案。')) return;
-          var res = await AccountingApi.cfPortalRevoke(session, btn.getAttribute('data-revoke'));
-          if (!res.success) showMsg(res.message);
-          else { showOk('已解除綁定'); openDetail(currentProject); }
-        };
+      $('panelBind').innerHTML = '<h4>客戶 LINE 綁定</h4><div id="cfBindMount"></div>';
+      CustomerFinanceBind.render($('cfBindMount'), {
+        session: session,
+        projectNo: currentProject,
+        detail: detailData,
+        onMsg: showMsg,
+        onOk: showOk,
+        onRefresh: function () { return openDetail(currentProject); }
       });
-
-      $('btnBindSearch').onclick = async function () {
-        var kw = $('bindSearchKw').value.trim();
-        if (!kw) { showMsg('請輸入搜尋關鍵字'); return; }
-        showMsg('');
-        $('bindSearchResults').innerHTML = '<p class="sub">搜尋中…</p>';
-        var res = await AccountingApi.officialCustomerSearch(session, kw);
-        if (!res.success) {
-          $('bindSearchResults').innerHTML = '<p class="sub">' + (res.message || '搜尋失敗') + '</p>';
-          return;
-        }
-        var items = res.items || [];
-        if (!items.length) {
-          $('bindSearchResults').innerHTML = '<p class="sub">找不到符合的客戶，可改用手動貼 UID。</p>';
-          return;
-        }
-        $('bindSearchResults').innerHTML = items.map(function (it, idx) {
-          var codes = String(it.project_codes || '');
-          var hasThis = codes.indexOf(currentProject) >= 0;
-          var hint = hasThis ? '（顧客列表已有本案號）' : (codes ? '（顧客列表案號：' + codes + '）' : '（顧客列表尚未填案號）');
-          return '<div class="search-hit" data-idx="' + idx + '">' +
-            (it.name || '—') + hint +
-            '<small class="mono">' + (it.line_id || '') + ' · ' + (it.id_type === 'group' ? '群組' : '個人') + '</small></div>';
-        }).join('');
-        $('bindSearchResults').querySelectorAll('.search-hit').forEach(function (el) {
-          el.onclick = async function () {
-            var it = items[Number(el.getAttribute('data-idx'))];
-            if (!it || !it.line_id) return;
-            if (it.id_type === 'group') {
-              showMsg('群組 GID 無法用於客戶 LIFF 個人登入，請選個人 UID 或請客戶用個人帳號加好友。');
-              return;
-            }
-            var res2 = await AccountingApi.cfPortalBind(session, {
-              project_no: currentProject,
-              customer_line_user_id: it.line_id,
-              note: 'from:official_customer_list'
-            });
-            if (!res2.success) showMsg(res2.message);
-            else {
-              var syncMsg = res2.customer_list_sync && res2.customer_list_sync.updated
-                ? '（已同步顧客列表案號）' : '';
-              showOk((res2.already_bound ? '此客戶已綁定本案' : '已綁定 ' + (it.name || it.line_id)) + syncMsg);
-              openDetail(currentProject);
-            }
-          };
-        });
-      };
-
-      $('btnBind').onclick = async function () {
-        var uid = $('bindLineUid').value.trim();
-        if (!uid) { showMsg('請填 userId'); return; }
-        var res = await AccountingApi.cfPortalBind(session, { project_no: currentProject, customer_line_user_id: uid });
-        if (!res.success) showMsg(res.message);
-        else {
-          var syncMsg2 = res.customer_list_sync && res.customer_list_sync.updated
-            ? '（已同步顧客列表案號）' : '';
-          showOk((res.already_bound ? '此客戶已綁定本案' : '已綁定') + syncMsg2);
-          openDetail(currentProject);
-        }
-      };
     }
 
     function bindActionButtons(root) {
       root.querySelectorAll('[data-act]').forEach(function (btn) {
-        btn.onclick = async function () {
+        btn.onclick = function () {
           var id = btn.getAttribute('data-id');
           var act = btn.getAttribute('data-act');
-          var res;
-          try {
+          CustomerFinanceUi.runBtnAsync(btn, async function () {
+            var res;
             if (act === 'adj-submit') res = await AccountingApi.cfAdjSubmit(session, id);
             else if (act === 'adj-withdraw') res = await AccountingApi.cfAdjWithdraw(session, id);
             else if (act === 'adj-company') res = await AccountingApi.cfAdjCompanyConfirm(session, id);
+            else if (act === 'adj-pdf') {
+              res = await AccountingApi.cfAdjExportPdf(session, id);
+              if (res.success && res.pdf_base64) {
+                downloadPdfBase64(res.filename, res.pdf_base64);
+                showOk('PDF 已下載');
+                return;
+              }
+            }
             else if (act === 'adj-void') res = await AccountingApi.cfAdjVoid(session, id, prompt('作廢原因（可留空）') || '');
             else if (act === 'rec-submit') res = await AccountingApi.cfRecSubmit(session, id);
             else if (act === 'rec-sign-d') res = await AccountingApi.cfRecSignDesigner(session, id);
-            else if (act === 'rec-sign-f') res = await AccountingApi.cfRecSignFinance(session, id);
             else if (act === 'rec-void') res = await AccountingApi.cfRecVoid(session, id, prompt('作廢原因') || '');
+            if (!res) return;
             if (!res.success) showMsg(res.message);
-            else { showOk('完成'); openDetail(currentProject); loadTodos(); }
-          } catch (e) { showMsg(String(e.message || e)); }
+            else { showOk('完成'); await openDetail(currentProject); await loadTodos(); }
+          }, { busyLabel: '處理中…', lockRoot: root });
         };
       });
     }

@@ -7,7 +7,8 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=31"></script>
+  <script src="../../shared/js/accounting_api.js?v=33"></script>
+  <script src="../../shared/js/customer_finance_ui.js?v=1"></script>
   <!-- 客戶專用 LIFF（與員工會計 policy.liffId 分開）。LINE Developers Endpoint URL：
        https://info.tanxin.space/modules/accounting/customer-finance-portal.html -->
   <script>
@@ -32,6 +33,7 @@
     .adj-table th { background: #f8f9fa; font-weight: 600; }
     .adj-table .num { text-align: right; white-space: nowrap; }
     .adj-table .neg { color: #c5221f; }
+    .btn:disabled, .btn.is-busy { opacity: 0.65; cursor: wait; }
   </style>
 </head>
 <body>
@@ -75,6 +77,26 @@
 
     function $(id) { return document.getElementById(id); }
     function showMsg(t) { $('msg').textContent = t || ''; }
+
+    function parsePortalDeepLink() {
+      var params = new URLSearchParams(window.location.search);
+      var projectNo = params.get('project_no') || '';
+      var entity = params.get('entity') || '';
+      var entityId = params.get('id') || '';
+      var liffState = params.get('liff.state');
+      if (liffState) {
+        var inner = liffState.charAt(0) === '?' ? liffState.slice(1) : liffState;
+        try {
+          var innerParams = new URLSearchParams(decodeURIComponent(inner));
+          projectNo = projectNo || innerParams.get('project_no') || '';
+          entity = entity || innerParams.get('entity') || '';
+          entityId = entityId || innerParams.get('id') || '';
+        } catch (e) {}
+      }
+      return { projectNo: projectNo, entity: entity, entityId: entityId };
+    }
+
+    var deepLink = parsePortalDeepLink();
 
     function statusLabel(st) {
       var map = {
@@ -124,6 +146,29 @@
       if (!res.success) { showMsg(res.message); return; }
       renderAdj(res.adjustments || []);
       renderRec(res.receipts || []);
+      focusDeepLinkEntity();
+    }
+
+    function focusDeepLinkEntity() {
+      if (!deepLink.entityId) return;
+      var target = null;
+      if (deepLink.entity === 'adjustment') {
+        target = document.querySelector('[data-adj-id="' + deepLink.entityId + '"]')
+          || document.querySelector('[data-adj-confirm="' + deepLink.entityId + '"]')
+          || document.querySelector('[data-adj-sign="' + deepLink.entityId + '"]');
+      } else if (deepLink.entity === 'receipt') {
+        target = document.querySelector('[data-rec-id="' + deepLink.entityId + '"]')
+          || document.querySelector('[data-rec-s1="' + deepLink.entityId + '"]')
+          || document.querySelector('[data-rec-s2="' + deepLink.entityId + '"]');
+      }
+      if (!target) return;
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.style.outline = '2px solid #06c755';
+      setTimeout(function () { target.style.outline = ''; }, 4000);
+      var signBtn = document.querySelector('[data-adj-sign="' + deepLink.entityId + '"]');
+      if (deepLink.entity === 'adjustment' && signBtn) {
+        signBtn.click();
+      }
     }
 
     function fmtMoney(n) {
@@ -147,7 +192,7 @@
         if (a.status === 'content_confirmed') {
           btns = '<button class="btn btn-primary" data-adj-sign="' + a.adjustment_id + '">② 電子簽名</button>';
         }
-        return '<tr>' +
+        return '<tr data-adj-id="' + a.adjustment_id + '">' +
           '<td class="num">' + (a.item_no || '—') + '</td>' +
           '<td>' + (a.item_name || a.item_desc || '') + '</td>' +
           '<td>' + (a.unit || '—') + '</td>' +
@@ -161,9 +206,11 @@
         '<th>項次</th><th>項目</th><th>單位</th><th>數量</th><th>總價</th><th>備註</th><th>狀態</th>' +
         '</tr></thead><tbody>' + rows + '</tbody></table>';
       $('adjList').querySelectorAll('[data-adj-confirm]').forEach(function (btn) {
-        btn.onclick = async function () {
-          var res = await AccountingApi.cfAdjCustomerConfirm(session, btn.getAttribute('data-adj-confirm'));
-          if (!res.success) showMsg(res.message); else loadData();
+        btn.onclick = function () {
+          CustomerFinanceUi.runBtnAsync(btn, async function () {
+            var res = await AccountingApi.cfAdjCustomerConfirm(session, btn.getAttribute('data-adj-confirm'));
+            if (!res.success) showMsg(res.message); else return loadData();
+          }, { busyLabel: '處理中…', lockRoot: $('adjList') });
         };
       });
       $('adjList').querySelectorAll('[data-adj-sign]').forEach(function (btn) {
@@ -187,39 +234,45 @@
           btns = '<div class="warn-box">' + stage2Hint + '</div>' +
             '<button class="btn btn-primary" data-rec-s2="' + r.receipt_id + '">② 我確認已收到此收款紀錄</button>';
         }
-        return '<div style="padding:10px 0;border-bottom:1px solid #eee">' +
+        return '<div style="padding:10px 0;border-bottom:1px solid #eee" data-rec-id="' + r.receipt_id + '">' +
           '<span class="tag">' + statusLabel(r.status) + '</span><br/>' +
           '收據編號 ' + (r.receipt_no || '') + '<br/>' +
           (r.stage_label || '') + ' · $' + r.amount + ' · ' + (r.received_at || '') +
           btns + '</div>';
       }).join('') : '<p>目前無待確認收款</p>';
       $('recList').querySelectorAll('[data-rec-s1]').forEach(function (btn) {
-        btn.onclick = async function () {
-          var res = await AccountingApi.cfRecCustomerStage1(session, btn.getAttribute('data-rec-s1'));
-          if (!res.success) showMsg(res.message); else loadData();
+        btn.onclick = function () {
+          CustomerFinanceUi.runBtnAsync(btn, async function () {
+            var res = await AccountingApi.cfRecCustomerStage1(session, btn.getAttribute('data-rec-s1'));
+            if (!res.success) showMsg(res.message); else return loadData();
+          }, { busyLabel: '處理中…', lockRoot: $('recList') });
         };
       });
       $('recList').querySelectorAll('[data-rec-s2]').forEach(function (btn) {
-        btn.onclick = async function () {
+        btn.onclick = function () {
           if (!confirm(stage2Hint + '\n\n確定要提交？提交後不可取消。')) return;
-          var res = await AccountingApi.cfRecCustomerStage2(session, btn.getAttribute('data-rec-s2'));
-          if (!res.success) showMsg(res.message); else loadData();
+          CustomerFinanceUi.runBtnAsync(btn, async function () {
+            var res = await AccountingApi.cfRecCustomerStage2(session, btn.getAttribute('data-rec-s2'));
+            if (!res.success) showMsg(res.message); else return loadData();
+          }, { busyLabel: '處理中…', lockRoot: $('recList') });
         };
       });
     }
 
     $('btnClearSign').onclick = function () { ctx.clearRect(0, 0, canvas.width, canvas.height); };
     $('btnCancelSign').onclick = function () { pendingSignAdjId = null; $('signModal').classList.add('hidden'); };
-    $('btnSubmitSign').onclick = async function () {
+    $('btnSubmitSign').onclick = function () {
       if (!pendingSignAdjId) return;
-      var data = canvas.toDataURL('image/png');
-      var res = await AccountingApi.cfAdjCustomerSign(session, pendingSignAdjId, data);
-      if (!res.success) showMsg(res.message);
-      else {
-        pendingSignAdjId = null;
-        $('signModal').classList.add('hidden');
-        loadData();
-      }
+      CustomerFinanceUi.runBtnAsync($('btnSubmitSign'), async function () {
+        var data = canvas.toDataURL('image/png');
+        var res = await AccountingApi.cfAdjCustomerSign(session, pendingSignAdjId, data);
+        if (!res.success) showMsg(res.message);
+        else {
+          pendingSignAdjId = null;
+          $('signModal').classList.add('hidden');
+          return loadData();
+        }
+      }, { busyLabel: '提交中…', lockRoot: $('signModal') });
     };
 
     (async function boot() {
@@ -227,6 +280,9 @@
         session = await AccountingApi.initCustomerPortalSession({ liffId: CUSTOMER_FINANCE_LIFF_ID });
         $('userLine').textContent = (session.portal && session.portal.display_name) || '客戶';
         fillProjects((session.portal && session.portal.projects) || []);
+        if (deepLink.projectNo) {
+          $('projectSelect').value = deepLink.projectNo;
+        }
         $('loading').classList.add('hidden');
         $('app').classList.remove('hidden');
         if ($('projectSelect').value) loadData();

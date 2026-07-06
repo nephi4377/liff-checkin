@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>加入官方 LINE</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC', sans-serif;
+      background: linear-gradient(165deg, #eef2f6 0%, #e3e9ef 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      color: #1f2937;
+    }
+    .card {
+      width: 100%;
+      max-width: 400px;
+      background: #fff;
+      border-radius: 16px;
+      padding: 28px 22px;
+      box-shadow: 0 8px 32px rgba(15, 23, 42, 0.1);
+      text-align: center;
+    }
+    h1 { font-size: 1.25rem; margin: 0 0 8px; }
+    p { margin: 0 0 12px; line-height: 1.55; color: #4b5563; font-size: 15px; }
+    .status { margin-top: 16px; font-size: 15px; }
+    .ok { color: #137333; }
+    .err { color: #c5221f; }
+    .spin {
+      width: 36px; height: 36px; margin: 16px auto 0;
+      border: 3px solid #e5e7eb; border-top-color: #06c755;
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+  <script>
+    // LINE Developers 建立「FB 綁定」LIFF 後填入（與 FB_BIND_LIFF_ID Script Property 相同）
+    var FB_BIND_LIFF_ID = '2007974938-gCcmakrL';
+    var GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
+  </script>
+</head>
+<body>
+  <div class="card">
+    <h1>添心設計官方 LINE</h1>
+    <p id="lead">正在為您完成綁定…</p>
+    <div id="spinner" class="spin" aria-hidden="true"></div>
+    <p id="status" class="status" role="status"></p>
+  </div>
+  <script>
+    (function () {
+      var lead = document.getElementById('lead');
+      var status = document.getElementById('status');
+      var spinner = document.getElementById('spinner');
+
+      function setError(msg) {
+        if (spinner) spinner.style.display = 'none';
+        lead.textContent = '綁定未完成';
+        status.textContent = msg;
+        status.className = 'status err';
+      }
+
+      function setOk(msg) {
+        if (spinner) spinner.style.display = 'none';
+        lead.textContent = '綁定完成';
+        status.textContent = msg;
+        status.className = 'status ok';
+      }
+
+      function readFbBindToken() {
+        var q = new URLSearchParams(window.location.search);
+        var token = q.get('fbBind') || q.get('fb_bind') || '';
+        if (token) return token;
+        try {
+          var state = q.get('liff.state');
+          if (state) {
+            var inner = new URLSearchParams(decodeURIComponent(state));
+            return inner.get('fbBind') || inner.get('fb_bind') || '';
+          }
+        } catch (e) { /* ignore */ }
+        return '';
+      }
+
+      function postBind(token, idToken, profile) {
+        return fetch(GAS_WEB_APP_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'fb_bind',
+            fbBind: token,
+            liff_id_token: idToken,
+            user_id: profile && profile.userId,
+            display_name: profile && profile.displayName
+          })
+        }).then(function (res) { return res.json(); });
+      }
+
+      async function main() {
+        var token = readFbBindToken();
+        if (!token) {
+          setError('連結不完整，請回到 Facebook 重新點選官方 LINE 連結。');
+          return;
+        }
+
+        var liffId = FB_BIND_LIFF_ID;
+        if (!liffId) {
+          var qLiff = new URLSearchParams(window.location.search).get('liff_id');
+          if (qLiff) liffId = qLiff;
+        }
+        if (!liffId) {
+          setError('系統尚未設定 LIFF，請聯絡客服。');
+          return;
+        }
+
+        try {
+          await liff.init({ liffId: liffId });
+        } catch (e) {
+          setError('LINE 載入失敗，請關閉後從 Facebook 連結重開。');
+          return;
+        }
+
+        if (!liff.isLoggedIn()) {
+          liff.login({ redirectUri: window.location.href });
+          return;
+        }
+
+        var profile;
+        try {
+          profile = await liff.getProfile();
+        } catch (e2) {
+          setError('無法取得 LINE 身分，請稍後再試。');
+          return;
+        }
+
+        var idToken = liff.getIDToken();
+        try {
+          var result = await postBind(token, idToken, profile);
+          if (result && result.success) {
+            setOk(result.message || '您現在可以在 LINE 與我們即時聯繫。');
+          } else {
+            setError((result && result.message) || '綁定失敗，請稍後再試。');
+          }
+        } catch (e3) {
+          setError('連線失敗，請確認網路後重試。');
+        }
+      }
+
+      main();
+    })();
+  </script>
+</body>
+</html>
