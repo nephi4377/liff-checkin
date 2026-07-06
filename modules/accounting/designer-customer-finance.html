@@ -15,8 +15,38 @@
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; }
     .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-    .item { border-bottom: 1px solid #eee; padding: 12px 0; cursor: pointer; }
-    .item:last-child { border-bottom: none; }
+    .project-card {
+      display: block;
+      border: 1px solid #dadce0;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin: 8px 0;
+      cursor: pointer;
+      background: #fff;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, transform 0.1s ease;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .project-card:hover {
+      border-color: #1a73e8;
+      box-shadow: 0 2px 8px rgba(26, 115, 232, 0.12);
+      background: #f8fbff;
+    }
+    .project-card:active:not(.is-loading) {
+      transform: scale(0.99);
+      background: #e8f0fe;
+    }
+    .project-card.is-loading {
+      opacity: 0.72;
+      pointer-events: none;
+      cursor: wait;
+      border-color: #1a73e8;
+      background: #f1f6fd;
+    }
+    .project-card .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .project-card .chevron { color: #1a73e8; font-size: 18px; line-height: 1.2; flex-shrink: 0; }
+    .project-card .hint { margin-top: 6px; font-size: 13px; color: #555; }
+    #overviewList.is-busy .project-card:not(.is-loading) { opacity: 0.55; pointer-events: none; }
     .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin-right: 6px; }
     .tag.warn { background: #fef7e0; color: #b06000; }
     .tag.ok { background: #e6f4ea; color: #137333; }
@@ -92,6 +122,7 @@
     var currentProject = '';
     var detailData = null;
     var activeTab = 'adj';
+    var detailBusy = false;
 
     function $(id) { return document.getElementById(id); }
     function friendlyApiError(t) {
@@ -114,6 +145,25 @@
       return map[st] || st;
     }
 
+    function setOverviewBusy(on, loadingPno) {
+      $('overviewList').classList.toggle('is-busy', !!on);
+      $('overviewList').querySelectorAll('.project-card').forEach(function (el) {
+        var isTarget = loadingPno && el.getAttribute('data-pno') === loadingPno;
+        el.classList.toggle('is-loading', !!on && isTarget);
+        if (on && isTarget) el.setAttribute('aria-busy', 'true');
+        else el.removeAttribute('aria-busy');
+      });
+    }
+
+    function bindOverviewCards() {
+      $('overviewList').querySelectorAll('.project-card').forEach(function (el) {
+        el.onclick = function () {
+          if (detailBusy) return;
+          openDetail(el.getAttribute('data-pno'));
+        };
+      });
+    }
+
     async function loadOverview() {
       showMsg('');
       var res = await AccountingApi.cfOverview(session, $('showClosed').checked);
@@ -124,15 +174,14 @@
         if (p.pending_company_adj) badges += '<span class="tag warn">待公司確認 ' + p.pending_company_adj + '</span>';
         if (p.pending_cash_sign) badges += '<span class="tag warn">現金待簽 ' + p.pending_cash_sign + '</span>';
         if (p.pending_income_review) badges += '<span class="tag warn">收入待審 ' + p.pending_income_review + '</span>';
-        return '<div class="item" data-pno="' + p.project_no + '">' +
-          '<strong>' + p.project_no + '</strong> ' + (p.client_name || '') +
-          (p.is_closed ? ' <span class="tag">已結案</span>' : '') +
+        return '<div class="project-card" role="button" tabindex="0" data-pno="' + p.project_no + '">' +
+          '<div class="card-head"><div><strong>' + p.project_no + '</strong> ' + (p.client_name || '') +
+          (p.is_closed ? ' <span class="tag">已結案</span>' : '') + '</div>' +
+          '<span class="chevron" aria-hidden="true">›</span></div>' +
           '<div class="hint">' + badges + '已收確認 $' + (p.receipts_confirmed_total || 0) + '</div></div>';
       }).join('') || '<p>尚無案件</p>';
       $('overviewList').innerHTML = html;
-      $('overviewList').querySelectorAll('.item').forEach(function (el) {
-        el.onclick = function () { openDetail(el.getAttribute('data-pno')); };
-      });
+      bindOverviewCards();
     }
 
     async function loadTodos() {
@@ -147,16 +196,46 @@
       });
     }
 
+    function mergeCreatedAdj(adj) {
+      if (!detailData || !adj) return false;
+      detailData.adjustments = detailData.adjustments || [];
+      detailData.adjustments.push(adj);
+      detailData.adjustments.sort(function (a, b) {
+        var na = parseInt(a.item_no, 10);
+        var nb = parseInt(b.item_no, 10);
+        if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+        return String(a.created_at || '').localeCompare(String(b.created_at || ''));
+      });
+      renderPanels();
+      return true;
+    }
+
+    function mergeCreatedRec(rec) {
+      if (!detailData || !rec) return false;
+      detailData.receipts = detailData.receipts || [];
+      detailData.receipts.push(rec);
+      renderPanels();
+      return true;
+    }
+
     async function openDetail(pno) {
+      if (detailBusy) return;
+      detailBusy = true;
       currentProject = pno;
       showMsg('');
-      var res = await AccountingApi.cfDetail(session, pno);
-      if (!res.success) { showMsg(res.message); return; }
-      detailData = res;
-      $('viewList').classList.add('hidden');
-      $('viewDetail').classList.remove('hidden');
-      $('detailTitle').textContent = '案號 ' + pno + ' ' + ((res.site && res.site.site_name) || '');
-      renderPanels();
+      setOverviewBusy(true, pno);
+      try {
+        var res = await AccountingApi.cfDetail(session, pno);
+        if (!res.success) { showMsg(res.message); return; }
+        detailData = res;
+        $('viewList').classList.add('hidden');
+        $('viewDetail').classList.remove('hidden');
+        $('detailTitle').textContent = '案號 ' + pno + ' ' + ((res.site && res.site.site_name) || '');
+        renderPanels();
+      } finally {
+        detailBusy = false;
+        setOverviewBusy(false);
+      }
     }
 
     function renderPanels() {
@@ -245,7 +324,15 @@
             note: $('newAdjNote').value
           });
           if (!res.success) showMsg(res.message);
-          else { showOk('已建立'); return openDetail(currentProject); }
+          else {
+            showOk('已建立');
+            if (!mergeCreatedAdj(res.adjustment)) return openDetail(currentProject);
+            $('newAdjName').value = '';
+            $('newAdjUnit').value = '';
+            $('newAdjQty').value = '';
+            $('newAdjTotal').value = '';
+            $('newAdjNote').value = '';
+          }
         }, { busyLabel: '建立中…', lockRoot: $('panelAdj') });
       };
       bindActionButtons($('panelAdj'));
@@ -317,7 +404,13 @@
             received_at: $('newRecDate').value || undefined
           });
           if (!res.success) showMsg(res.message);
-          else { showOk('已建立 ' + (res.receipt && res.receipt.receipt_no)); return openDetail(currentProject); }
+          else {
+            showOk('已建立 ' + (res.receipt && res.receipt.receipt_no));
+            if (!mergeCreatedRec(res.receipt)) return openDetail(currentProject);
+            $('newRecStage').value = '';
+            $('newRecAmt').value = '';
+            $('newRecDate').value = '';
+          }
         }, { busyLabel: '建立中…', lockRoot: $('panelRec') });
       };
       bindActionButtons($('panelRec'));
