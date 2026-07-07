@@ -213,6 +213,12 @@
       function isPending(item) {
         return String(item.review_status || '') !== '已審' && String(item.review_status || '') !== '退回';
       }
+      function parseAllocAmount(val) {
+        var s = String(val || '').trim().replace(/[,，\s]/g, '');
+        if (!s) return NaN;
+        var n = parseInt(s, 10);
+        return isNaN(n) ? NaN : n;
+      }
       function itemReady(item) {
         if (isCustomerReceiptIncome(item)) {
           return !!(String(item.project_no || '').trim() && (parseInt(item.amount, 10) || 0) > 0);
@@ -222,8 +228,9 @@
         var sum = 0;
         for (var i = 0; i < rows.length; i++) {
           if (!String(rows[i].project_no || '').trim()) return false;
-          var amt = parseInt(rows[i].amount, 10) || 0;
-          if (amt <= 0) return false;
+          var amt = parseAllocAmount(rows[i].amount);
+          if (isNaN(amt) || amt === 0) return false;
+          if (amt < 0 && !String(rows[i].item_desc || '').trim()) return false;
           sum += amt;
         }
         return sum > 0;
@@ -260,10 +267,19 @@
       }
       function validateAllocRows(rows) {
         if (!rows.length) return '請至少一列分攤（案號＋金額）';
+        var sum = 0;
         for (var i = 0; i < rows.length; i++) {
           if (!rows[i].project_no) return '第 ' + (i + 1) + ' 列請填案號';
-          if (!(parseInt(rows[i].amount, 10) > 0)) return '第 ' + (i + 1) + ' 列請填金額';
+          var amt = parseAllocAmount(rows[i].amount);
+          if (isNaN(amt) || amt === 0) {
+            return '第 ' + (i + 1) + ' 列請填有效金額（扣款可填負數，如借支 −30000）';
+          }
+          if (amt < 0 && !String(rows[i].item_desc || '').trim()) {
+            return '第 ' + (i + 1) + ' 列扣款請填品項（如廠商借支）';
+          }
+          sum += amt;
         }
+        if (sum <= 0) return '分攤合計須大於 0（扣款後實付金額）';
         return '';
       }
       function updatePanelTotal(panel) {
@@ -309,8 +325,8 @@
           el.innerHTML =
             '<button type="button" class="alloc-rm" data-rm="' + idx + '">刪除</button>' +
             '<div class="row2"><div><label>案號</label><input class="inp-pn" placeholder="752" /></div>' +
-            '<div><label>金額</label><input class="inp-amt" type="number" inputmode="numeric" /></div></div>' +
-            '<label>品項</label><input class="inp-desc" placeholder="摘要" />';
+            '<div><label>金額</label><input class="inp-amt" type="number" inputmode="numeric" placeholder="扣款填負數" /></div></div>' +
+            '<label>品項</label><input class="inp-desc" placeholder="摘要；扣款請註明如廠商借支" />';
           el.querySelector('.inp-pn').value = row.project_no || '';
           el.querySelector('.inp-amt').value = row.amount || '';
           el.querySelector('.inp-desc').value = row.item_desc || '';
@@ -457,7 +473,7 @@
         panel.className = 'review-panel hidden';
         var ready = itemReady(item);
         panel.innerHTML =
-          '<label>分攤明細（案號＋金額，可多案）' +
+          '<label>分攤明細（案號＋金額，可多案；扣款填負數）' +
           (ready ? '' : ' <span class="need">需補齊</span>') + '</label>' +
           '<div class="alloc-list"></div>' +
           '<button type="button" class="btn-ghost btn-add-alloc">＋ 新增一列</button>' +

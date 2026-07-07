@@ -11,6 +11,7 @@
   <script src="../../shared/js/accounting_context.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=26"></script>
   <script src="../../shared/js/accounting_cache.js?v=24"></script>
+  <script src="../../shared/js/accounting_form_helpers.js?v=4"></script>
   <script src="../../shared/js/accounting_ui.js?v=10"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <style>
@@ -61,6 +62,23 @@
     .ocr-status { font-size: 13px; color: #555; margin: 8px 0; min-height: 18px; }
     .btn-primary:disabled, .btn-secondary:disabled { opacity: .55; cursor: not-allowed; }
     .btn-row { display: flex; flex-direction: column; gap: 0; }
+    .vendor-filter-label { font-size: 13px; font-weight: 600; color: #555; margin-top: 8px; }
+    .link-btn {
+      background: none; border: none; color: #1a73e8; font-size: 13px; padding: 6px 0;
+      cursor: pointer; text-align: left; width: auto; font-weight: 600; margin-top: 4px;
+    }
+    .vendor-combo-wrap { position: relative; }
+    .vendor-combo-panel {
+      position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 20;
+      background: #fff; border: 1px solid #ccc; border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.12); max-height: 220px; overflow: auto;
+    }
+    .vendor-combo-item {
+      display: block; width: 100%; text-align: left; border: none; background: #fff;
+      padding: 10px 12px; font-size: 15px; cursor: pointer;
+    }
+    .vendor-combo-item:hover, .vendor-combo-item.active { background: #e8f0fe; }
+    .vendor-combo-empty { padding: 10px 12px; font-size: 13px; color: #777; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -98,7 +116,7 @@
       </select>
 
       <label>付給誰？</label>
-      <p class="sub" id="payeeHint" style="margin:4px 0 6px">廠商請款選廠商；不在名冊選「新廠商」；員工代墊選員工。</p>
+      <p class="sub" id="payeeHint" style="margin:4px 0 6px">廠商請款：可先選工項分類，再打 1～2 字搜尋；不在名冊請點下方連結。</p>
       <div class="seg" id="payeeSeg">
         <button type="button" data-mode="vendor" class="active">廠商</button>
         <button type="button" data-mode="employee">員工</button>
@@ -106,7 +124,11 @@
       </div>
       <div id="vendorPickBlock">
         <label>廠商</label>
-        <select id="pickVendor"></select>
+        <label class="vendor-filter-label" for="filterVendorTrade">工項分類（可先篩再搜）</label>
+        <select id="filterVendorTrade"><option value="">全部分類</option></select>
+        <input type="text" id="pickVendorInput" placeholder="打 1～2 字搜尋名冊" autocomplete="off" />
+        <input type="hidden" id="pickVendor" value="" />
+        <button type="button" class="link-btn" id="pickNewVendorBtn">不在名冊 → 改填新廠商</button>
         <div id="newVendorBlock" class="hidden">
           <label>新廠商名稱</label>
           <input type="text" id="newVendorName" placeholder="公司或收款戶名" />
@@ -192,6 +214,7 @@
       var vendors = [];
       var employees = [];
       var payeeMode = 'vendor';
+      var vendorCombobox = null;
       var photos = [];
       var draftId = '';
       var ocrAttempt = 0;
@@ -235,17 +258,99 @@
           updateBankHint();
         }
       }
+      function getVendorPickId() {
+        return String(document.getElementById('pickVendor').value || '').trim();
+      }
+
+      function setVendorPickId(id, displayName) {
+        document.getElementById('pickVendor').value = id || '';
+        var inp = document.getElementById('pickVendorInput');
+        if (inp && displayName !== undefined) inp.value = displayName || '';
+      }
+
+      function getFilteredVendors() {
+        var trade = document.getElementById('filterVendorTrade')
+          ? document.getElementById('filterVendorTrade').value
+          : '';
+        var list = vendors || [];
+        if (!trade) return list;
+        return list.filter(function (v) {
+          var tc = (typeof AccountingMasterData !== 'undefined' && AccountingMasterData.normalizeVendorTradeCategory)
+            ? AccountingMasterData.normalizeVendorTradeCategory(v.trade_category)
+            : String(v.trade_category || '').trim();
+          return tc === trade;
+        });
+      }
+
+      function fillVendorTradeFilter() {
+        var sel = document.getElementById('filterVendorTrade');
+        if (!sel) return;
+        var prev = sel.value;
+        var cats = (typeof AccountingMasterData !== 'undefined' && AccountingMasterData.vendor_trade_categories)
+          ? AccountingMasterData.vendor_trade_categories.slice()
+          : [];
+        sel.innerHTML = '<option value="">全部分類</option>';
+        cats.forEach(function (c) {
+          var opt = document.createElement('option');
+          opt.value = c;
+          opt.textContent = c;
+          sel.appendChild(opt);
+        });
+        if (prev && Array.prototype.some.call(sel.options, function (o) { return o.value === prev; })) {
+          sel.value = prev;
+        }
+      }
+
+      function initVendorPicker() {
+        if (isVendorSelf || !document.getElementById('pickVendorInput')) return;
+        fillVendorTradeFilter();
+        if (vendorCombobox) return;
+        var inp = document.getElementById('pickVendorInput');
+        vendorCombobox = AccountingFormHelpers.initVendorCombobox(
+          inp,
+          function () { return getFilteredVendors(); },
+          { minChars: 1, maxItems: 10 }
+        );
+        inp.addEventListener('change', function () {
+          if (isNewVendorPick()) return;
+          document.getElementById('pickVendor').value = vendorCombobox.getVendorId() || '';
+          onPayeePick();
+        });
+        inp.addEventListener('input', function () {
+          if (isNewVendorPick()) return;
+          if (!inp.value.trim()) document.getElementById('pickVendor').value = '';
+        });
+        var tradeSel = document.getElementById('filterVendorTrade');
+        if (tradeSel) {
+          tradeSel.addEventListener('change', function () {
+            if (inp === document.activeElement) inp.dispatchEvent(new Event('input', { bubbles: true }));
+          });
+        }
+        var newBtn = document.getElementById('pickNewVendorBtn');
+        if (newBtn) {
+          newBtn.addEventListener('click', function () {
+            document.getElementById('pickVendor').value = NEW_VENDOR_ID;
+            if (vendorCombobox) vendorCombobox.clearVendorId();
+            inp.value = '';
+            updateNewVendorBlock();
+            onPayeePick(true);
+            AccountingUi.tap('新廠商（不在名冊）');
+          });
+        }
+      }
+
       function applyOcrVendor(ocr) {
         if (!ocr) return;
         if (isVendorSelf) return;
         if (ocr.vendor_id) {
           setPayeeMode('vendor');
-          document.getElementById('pickVendor').value = ocr.vendor_id;
+          var v = vendors.find(function (x) { return x.vendor_id === ocr.vendor_id; });
+          setVendorPickId(ocr.vendor_id, v ? (v.name || ocr.vendor_name) : (ocr.vendor_name || ''));
           onPayeePick();
           AccountingUi.notify('ok', '已帶入廠商：' + (ocr.vendor_name || '（名冊）') + '，銀行帳戶已自動填入');
         } else if (ocr.vendor_name) {
           setPayeeMode('vendor');
-          document.getElementById('pickVendor').value = NEW_VENDOR_ID;
+          setVendorPickId(NEW_VENDOR_ID);
           document.getElementById('newVendorName').value = ocr.vendor_name;
           onPayeePick();
           AccountingUi.notify('warn', '單據寫「' + ocr.vendor_name + '」，名冊找不到，已切換為新廠商');
@@ -272,7 +377,7 @@
       }
 
       function isNewVendorPick() {
-        return payeeMode === 'vendor' && document.getElementById('pickVendor').value === NEW_VENDOR_ID;
+        return payeeMode === 'vendor' && getVendorPickId() === NEW_VENDOR_ID;
       }
 
       function defaultBankHintText() {
@@ -309,19 +414,11 @@
       }
 
       function fillVendorSelect() {
-        var sel = document.getElementById('pickVendor');
-        var prev = sel.value;
-        sel.innerHTML =
-          '<option value="">— 請選擇廠商 —</option>' +
-          '<option value="' + NEW_VENDOR_ID + '">— 新廠商（不在名冊）—</option>';
-        vendors.forEach(function (row) {
-          var opt = document.createElement('option');
-          opt.value = row.vendor_id || '';
-          opt.textContent = row.name || row.vendor_id;
-          sel.appendChild(opt);
-        });
-        if (prev && (prev === NEW_VENDOR_ID || vendors.some(function (v) { return v.vendor_id === prev; }))) {
-          sel.value = prev;
+        fillVendorTradeFilter();
+        var prevId = getVendorPickId();
+        if (prevId && prevId !== NEW_VENDOR_ID) {
+          var v = vendors.find(function (x) { return x.vendor_id === prevId; });
+          if (v) setVendorPickId(prevId, v.name || v.vendor_id);
         }
       }
 
@@ -375,7 +472,7 @@
         }
         var row = null;
         if (payeeMode === 'vendor') {
-          row = vendors.find(function (x) { return x.vendor_id === document.getElementById('pickVendor').value; });
+          row = vendors.find(function (x) { return x.vendor_id === getVendorPickId(); });
           setBankReadonly(!!row);
           if (fromUser && row) AccountingUi.tap('選擇廠商：' + (row.name || row.vendor_id));
         } else {
@@ -651,7 +748,7 @@
         if (isVendorSelf && vendorSelf) {
           payload.vendor_id = vendorSelf.vendor_id;
         } else if (payeeMode === 'vendor') {
-          var vid = document.getElementById('pickVendor').value;
+          var vid = getVendorPickId();
           if (vid === NEW_VENDOR_ID) payload.vendor_name = document.getElementById('newVendorName').value.trim();
           else payload.vendor_id = vid;
         } else if (payeeMode === 'employee') payload.employee_user_id = document.getElementById('pickEmployee').value;
@@ -666,8 +763,8 @@
       function validateForm() {
         if (!isVendorSelf) {
           if (payeeMode === 'vendor') {
-            var vid = document.getElementById('pickVendor').value;
-            if (!vid) return '請選擇廠商，或選「新廠商（不在名冊）」';
+            var vid = getVendorPickId();
+            if (!vid) return '請搜尋並選擇廠商，或點「不在名冊 → 改填新廠商」';
             if (vid === NEW_VENDOR_ID && !document.getElementById('newVendorName').value.trim()) return '請填新廠商名稱';
           }
           if (payeeMode === 'employee' && !document.getElementById('pickEmployee').value) return '請選擇員工';
@@ -722,7 +819,7 @@
             account_name: saved.account_name || accountName
           });
           fillVendorSelect();
-          document.getElementById('pickVendor').value = saved.vendor_id;
+          setVendorPickId(saved.vendor_id, saved.name || name);
           document.getElementById('newVendorName').value = '';
           onPayeePick();
           setOk('已存入廠商名冊：' + (saved.name || name));
@@ -934,7 +1031,6 @@
         if (!btn) return;
         setPayeeMode(btn.getAttribute('data-mode'), true);
       });
-      document.getElementById('pickVendor').addEventListener('change', function () { onPayeePick(true); });
       document.getElementById('pickEmployee').addEventListener('change', function () { onPayeePick(true); });
       document.getElementById('bankCode').addEventListener('input', updateBankHint);
       document.getElementById('saveVendorBtn').addEventListener('click', function () {
@@ -980,7 +1076,7 @@
         } else {
           if (ctx.vendors && ctx.vendors.length) vendors = ctx.vendors;
           if (ctx.employees && ctx.employees.length) employees = ctx.employees;
-          fillSelect('pickVendor', vendors, 'vendor_id', function (v) { return v.name || v.vendor_id; }, '— 請選擇廠商 —');
+          fillVendorSelect();
           fillSelect('pickEmployee', employees, 'userId', function (e) {
             return (e.userName || '') + ((e.bank_code && e.account_no) ? '' : '（帳戶待補）');
           }, '— 請選擇員工 —');
@@ -1017,7 +1113,8 @@
           if (!isVendorSelf) {
             vendors = primeVendorsFromCache(session);
             primeEmployeesFromHub();
-            if (vendors.length) fillSelect('pickVendor', vendors, 'vendor_id', function (v) { return v.name || v.vendor_id; }, '— 請選擇廠商 —');
+            initVendorPicker();
+            if (vendors.length) fillVendorSelect();
             if (employees.length) fillSelect('pickEmployee', employees, 'userId', function (e) {
               return (e.userName || '') + ((e.bank_code && e.account_no) ? '' : '（帳戶待補）');
             }, '— 請選擇員工 —');
@@ -1046,7 +1143,7 @@
               var fresh = AccountingCache.vendors(session);
               if (fresh.length) {
                 vendors = fresh;
-                fillSelect('pickVendor', vendors, 'vendor_id', function (v) { return v.name || v.vendor_id; }, '— 請選擇廠商 —');
+                fillVendorSelect();
               }
             }).catch(function () {});
           }

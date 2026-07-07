@@ -359,7 +359,7 @@
           box.innerHTML = '';
           document.getElementById('emptyHint').classList.toggle('hidden', items.length > 0);
           items.forEach(function (row) { box.appendChild(renderItem(row)); });
-          if (!items.length && !silent) ui.warn('目前沒有待匯款項目', 4000);
+          if (!items.length && !silent) ui.setWarn('目前沒有待匯款項目');
         };
         if (silent) return run();
         var reloadBtn = document.getElementById('reloadBtn');
@@ -481,7 +481,8 @@
           }
           var msg = '已完成 ' + (data.count || ids.length) + ' 筆（整批匯款）：檔案已下載。上傳中信請選「整批匯款」、編碼 BIG-5';
           if (data.warnings && data.warnings.length) {
-            msg += '。部分略過：' + data.warnings.join('；');
+            setMsg('以下項目未匯出、未寫收支：' + data.warnings.join('；'));
+            msg += '（另有 ' + data.warnings.length + ' 筆略過，見上方紅字）';
           }
           setOk(msg);
           if (typeof AccountingListCache !== 'undefined') {

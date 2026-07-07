@@ -9,7 +9,7 @@
   <script src="../../shared/js/operator_context.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=26"></script>
   <script src="../../shared/js/accounting_cache.js?v=24"></script>
-  <script src="../../shared/js/accounting_form_helpers.js?v=3"></script>
+  <script src="../../shared/js/accounting_form_helpers.js?v=5"></script>
   <script src="../../shared/js/accounting_ui.js?v=10"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <style>
@@ -68,6 +68,11 @@
       width: auto; padding: 8px 12px; font-size: 14px; background: #e8eaed; color: #333;
       border: none; border-radius: 8px; cursor: pointer; margin-top: 0;
     }
+    .drop-zone { margin-top: 8px; padding: 20px 14px; border: 2px dashed #b0b8c4; border-radius: 12px; background: #f8fafc; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+    .drop-zone:hover, .drop-zone.drag-over { border-color: #1a73e8; background: #e8f0fe; }
+    .drop-zone p { margin: 0; font-size: 15px; color: #333; }
+    .drop-zone .hint { margin-top: 6px; font-size: 13px; color: #666; line-height: 1.45; }
+    .drop-zone input[type="file"] { display: none; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -116,19 +121,16 @@
         <input class="pay-custom" id="payment_method" type="text" placeholder="或自行輸入其他方式" autocomplete="off" />
       </div>
       <div id="blockB" class="hidden">
-        <label>案號（有填才記入案件毛利）</label><input id="project_no_b" type="text" list="projectNoList" />
         <label>支出日期</label><input id="txn_date_b" type="text" />
         <label>廠商名稱</label><input id="party_name_b" type="text" placeholder="打 1～2 字搜尋名冊，或手動輸入" />
-        <label>購買品名</label><input id="item_desc_b" type="text" />
         <label>支付金額</label><input id="amount_b" type="number" inputmode="numeric" />
         <div class="alloc-block" id="allocBlock">
           <div class="alloc-head">
-            <strong>多案分攤（選填）</strong>
+            <strong>分攤明細</strong>
             <span class="alloc-sum">合計 $<span id="allocSum">0</span></span>
           </div>
-          <p class="alloc-hint" id="allocHint">一筆支出可拆到多個案場；有分攤時加總須等於支付金額。收支仍記 1 筆，毛利各案各記 1 列。</p>
+          <p class="alloc-hint" id="allocHint">每筆支出至少填一列：案號、品項、金額；加總須等於支付金額。</p>
           <div id="allocList"></div>
-          <button type="button" class="btn-ghost" id="allocAddBtn">＋ 新增一案</button>
         </div>
         <label>款項月份</label><input id="expense_month" type="number" min="1" max="12" />
         <label>付款方式</label>
@@ -142,7 +144,12 @@
         <datalist id="applicantList"></datalist>
       </div>
       <label>單據照片（選填）</label>
-      <input id="photo" type="file" accept="image/*" capture="environment" />
+      <div class="drop-zone" id="photoDropZone" role="button" tabindex="0" aria-label="加入單據照片">
+        <p>拖曳照片到這裡，或點一下選擇</p>
+        <p class="hint">可選多張 JPG、PNG 等圖片</p>
+        <input type="file" id="photoInput" accept="image/*" capture="environment" multiple />
+      </div>
+      <p class="hint" id="photoCountLine">已 0 張</p>
       <div id="pendingPreview" class="hidden"></div>
     </div>
 
@@ -166,7 +173,7 @@
       var profile = { userId: '', displayName: '' };
       var sessionRef = null;
       var sessionCount = 0, submitting = false, idToken = '', devBypass = false;
-      var pendingPhotos = [], queryParams = {}, hubContext = { projects: [], employees: [] };
+      var pendingPhotos = [], localPhotos = [], queryParams = {}, hubContext = { projects: [], employees: [] };
       var applicantDefault = '';
       var cachedVendors = [];
       var vendorCombobox = null;
@@ -193,19 +200,48 @@
       }
       kind.addEventListener('change', toggleBlocks);
 
+      function monthFromRocDate(s) {
+        if (!s) return null;
+        var parts = String(s).trim().replace(/[／]/g, '/').split('/');
+        if (parts.length < 2) return null;
+        var m = parseInt(parts[1], 10);
+        return (m >= 1 && m <= 12) ? m : null;
+      }
+
+      function seedProfileFromOperatorContext() {
+        if (typeof OperatorContext === 'undefined') return;
+        var op = OperatorContext.read();
+        if (!op || !op.userId) return;
+        profile.userId = op.userId;
+        profile.displayName = op.displayName || op.userName || profile.displayName;
+      }
+
       function applyProjectPick(projectId) {
         var p = hubContext.projects.find(function (x) { return x.id === projectId; });
         if (!p) return;
-        document.getElementById('party_name').value = p.siteName || p.name || '';
-        document.getElementById('project_no').value = p.id;
-        var pnb = document.getElementById('project_no_b');
-        if (pnb) pnb.value = p.id;
+        if (kind.value === 'A') {
+          document.getElementById('party_name').value = p.siteName || p.name || '';
+          document.getElementById('project_no').value = p.id;
+        } else if (allocEditor) {
+          var rows = allocEditor.read();
+          if (!rows.length) rows = [{ project_no: '', item_desc: '', amount: '' }];
+          rows[0].project_no = p.id;
+          allocEditor.setRows(rows);
+        }
         var store = AccountingContext.mapStoreValue(p.store);
         if (store) document.getElementById('store').value = store;
       }
 
       function setApplicantDefault() {
-        if (applicantDefault) document.getElementById('applicant').value = applicantDefault;
+        var name = AccountingFormHelpers.resolveApplicantName(
+          hubContext.employees, profile.userId, profile.displayName
+        );
+        if (name) {
+          applicantDefault = name;
+          document.getElementById('applicant').value = name;
+        } else if (applicantDefault) {
+          document.getElementById('applicant').value = applicantDefault;
+        }
       }
 
       function applyVendorsToUi(vendors) {
@@ -218,6 +254,25 @@
           );
         }
         return cachedVendors.length;
+      }
+
+      function ensureVendorsLoaded(session) {
+        if (!session || typeof AccountingCache === 'undefined') return;
+        var fromSession = AccountingCache.vendors(session);
+        var fromPeek = AccountingCache.peekVendors ? AccountingCache.peekVendors() : [];
+        var n = applyVendorsToUi(fromSession.length ? fromSession : fromPeek);
+        updateContextBar(hubContext, n);
+        if (n) return;
+        AccountingCache.load(session).then(function () {
+          var loaded = applyVendorsToUi(AccountingCache.vendors(session));
+          updateContextBar(hubContext, loaded);
+        }).catch(function () {
+          var bar = document.getElementById('contextBar');
+          if (bar) {
+            bar.textContent = '廠商名冊載入失敗，請重新整理或手動輸入廠商名';
+            bar.classList.add('warn');
+          }
+        });
       }
 
       function updateContextBar(ctx, vendorCount) {
@@ -321,10 +376,18 @@
           }));
         }
         if (needVendors && typeof AccountingCache !== 'undefined') {
-          jobs.push(AccountingCache.load(session).then(function () {
-            var n = applyVendorsToUi(AccountingCache.vendors(session));
-            updateContextBar(hubContext, n);
-          }).catch(function () {}));
+          jobs.push(Promise.resolve().then(function () {
+            return AccountingCache.load(session).then(function () {
+              var n = applyVendorsToUi(AccountingCache.vendors(session));
+              updateContextBar(hubContext, n);
+            });
+          }).catch(function () {
+            var bar = document.getElementById('contextBar');
+            if (bar && !cachedVendors.length) {
+              bar.textContent = '廠商名冊載入失敗，請重新整理或手動輸入廠商名';
+              bar.classList.add('warn');
+            }
+          }));
         }
         Promise.all(jobs).catch(function (e) { console.warn('context refresh', e); });
       }
@@ -371,7 +434,7 @@
           store: document.getElementById('store').value,
           txn_date: isA ? document.getElementById('txn_date').value : document.getElementById('txn_date_b').value,
           party_name: isA ? document.getElementById('party_name').value : document.getElementById('party_name_b').value,
-          item_desc: isA ? document.getElementById('item_desc').value : document.getElementById('item_desc_b').value,
+          item_desc: isA ? document.getElementById('item_desc').value : '',
           amount: isA ? document.getElementById('amount').value : document.getElementById('amount_b').value,
           payment_method: isA ? document.getElementById('payment_method').value : document.getElementById('payment_method_b').value
         };
@@ -381,14 +444,17 @@
         } else {
           fields.expense_month = document.getElementById('expense_month').value;
           fields.applicant = document.getElementById('applicant').value;
-          fields.project_no = document.getElementById('project_no_b').value;
           if (vendorCombobox) {
             var vid = vendorCombobox.getVendorId();
             if (vid) fields.vendor_id = vid;
           }
           if (allocEditor) {
             var allocCheck = allocEditor.validate();
-            if (allocCheck.ok && allocCheck.rows.length) fields.allocations = allocCheck.rows;
+            if (allocCheck.ok && allocCheck.rows.length) {
+              fields.allocations = allocCheck.rows;
+              fields.project_no = allocCheck.project_no || '';
+              fields.item_desc = allocCheck.item_desc || '';
+            }
           }
         }
         return fields;
@@ -404,7 +470,7 @@
           payPickerA.clear();
         } else {
           if (!keepDate) document.getElementById('txn_date_b').value = todayRoc();
-          ['party_name_b', 'item_desc_b', 'amount_b'].forEach(function (id) {
+          ['party_name_b', 'amount_b'].forEach(function (id) {
             document.getElementById(id).value = '';
           });
           if (vendorCombobox) vendorCombobox.clearVendorId();
@@ -412,14 +478,24 @@
           setApplicantDefault();
           if (allocEditor) allocEditor.clear();
         }
-        document.getElementById('photo').value = '';
+        localPhotos = [];
+        document.getElementById('photoInput').value = '';
+        showPendingPreviews(pendingPhotos);
+      }
+
+      function updatePhotoCountLine() {
+        var line = document.getElementById('photoCountLine');
+        if (!line) return;
+        var n = pendingPhotos.length + localPhotos.length;
+        line.textContent = '已 ' + n + ' 張';
       }
 
       function showPendingPreviews(photos) {
         var box = document.getElementById('pendingPreview');
         box.innerHTML = '';
-        if (!photos || !photos.length) { box.classList.add('hidden'); return; }
-        photos.forEach(function (p, idx) {
+        var all = (photos || []).concat(localPhotos || []);
+        if (!all.length) { box.classList.add('hidden'); updatePhotoCountLine(); return; }
+        all.forEach(function (p, idx) {
           if (!p || !p.dataBase64) return;
           var img = document.createElement('img');
           img.src = 'data:' + (p.mimeType || 'image/jpeg') + ';base64,' + p.dataBase64;
@@ -427,7 +503,23 @@
           box.appendChild(img);
         });
         box.classList.remove('hidden');
-        document.getElementById('photoHint').classList.remove('hidden');
+        if (photos && photos.length) document.getElementById('photoHint').classList.remove('hidden');
+        updatePhotoCountLine();
+      }
+
+      async function addLocalPhotos(fileList) {
+        setMsg('');
+        var added = 0;
+        for (var i = 0; i < fileList.length; i++) {
+          try {
+            var p = await readFileB64(fileList[i]);
+            if (p) { localPhotos.push(p); added++; }
+          } catch (e) {
+            setMsg(e.message || String(e));
+          }
+        }
+        if (added) showPendingPreviews(pendingPhotos);
+        document.getElementById('photoInput').value = '';
       }
 
       async function loadPendingPhotos(token) {
@@ -458,10 +550,7 @@
         document.getElementById('submit').disabled = true;
         try {
           var fields = collectFields();
-          var photoFile = document.getElementById('photo').files[0];
-          var photo = await readFileB64(photoFile);
-          var photos = pendingPhotos.slice();
-          if (photo) photos.push(photo);
+          var photos = pendingPhotos.slice().concat(localPhotos);
           var body = {
             action: 'accounting_form_submit',
             source: queryParams.source || (devBypass ? 'web_dev' : 'liff'),
@@ -486,6 +575,7 @@
           setOk('記好了！第 ' + sessionCount + ' 筆（' + data.sheet + ' 第 ' + data.row + ' 列）');
           if (data.groupNotified) setOk(document.getElementById('ok').textContent + ' · 已同步通知');
           pendingPhotos = [];
+          localPhotos = [];
           showPendingPreviews([]);
           clearVolatileFields(true);
           document.getElementById('nextBtn').classList.remove('hidden');
@@ -514,32 +604,39 @@
         } catch (e) {}
       }
 
+      async function finishBoot(session) {
+        sessionRef = session;
+        profile.userId = session.auth.user_id;
+        profile.displayName = session.auth.display_name;
+        document.getElementById('userLine').textContent = '你好，' + profile.displayName +
+          (session.devBypass ? ' · 測試模式' : '');
+        showApp();
+        setupHubContext(sessionRef);
+        ensureVendorsLoaded(sessionRef);
+        if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
+      }
+
       async function bootDevBypass() {
-        var auth = await AccountingApi.post({ action: 'accounting_auth_me', dev_bypass: true });
-        if (!auth.success) {
-          setLoading(auth.message || '測試模式驗證失敗');
-          return;
-        }
-        if ((auth.permission || 0) < AccountingApi.MIN_PERMISSION) {
+        var session = await AccountingApi.initSession();
+        if (!session || (session.auth.permission || 0) < AccountingApi.MIN_PERMISSION) {
           setLoading(AccountingApi.PERM_DENIED_MSG);
           return;
         }
-        profile.userId = auth.user_id;
-        profile.displayName = auth.display_name;
-        sessionRef = { devBypass: true, idToken: '', auth: auth };
-        document.getElementById('userLine').textContent = profile.displayName + ' · 測試模式（無登入）';
-        showApp();
-        setupHubContext(sessionRef);
-        if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
+        await finishBoot(session);
       }
 
       async function boot() {
         AccountingUi.init();
         if (typeof AccountingNav !== 'undefined') AccountingNav.init();
         queryParams = readQueryParams();
+        seedProfileFromOperatorContext();
         document.getElementById('txn_date').value = todayRoc();
         document.getElementById('txn_date_b').value = todayRoc();
         document.getElementById('expense_month').value = String(new Date().getMonth() + 1);
+        document.getElementById('txn_date_b').addEventListener('input', function () {
+          var m = monthFromRocDate(this.value);
+          if (m) document.getElementById('expense_month').value = String(m);
+        });
         if (queryParams.kind === 'B' || queryParams.from === 'photo') kind.value = 'B';
         toggleBlocks();
         primeCachedUi();
@@ -548,23 +645,51 @@
           sumEl: document.getElementById('allocSum'),
           hintEl: document.getElementById('allocHint')
         });
-        document.getElementById('allocAddBtn').addEventListener('click', function () {
-          if (allocEditor) allocEditor.addRow();
+        document.getElementById('photoInput').addEventListener('change', function (e) {
+          addLocalPhotos(e.target.files || []);
         });
+        (function setupPhotoDropZone() {
+          var zone = document.getElementById('photoDropZone');
+          var input = document.getElementById('photoInput');
+          zone.addEventListener('click', function (e) {
+            if (e.target === input) return;
+            input.click();
+          });
+          zone.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+          });
+          ['dragenter', 'dragover'].forEach(function (ev) {
+            zone.addEventListener(ev, function (e) {
+              e.preventDefault();
+              e.stopPropagation();
+              zone.classList.add('drag-over');
+            });
+          });
+          ['dragleave', 'drop'].forEach(function (ev) {
+            zone.addEventListener(ev, function (e) {
+              e.preventDefault();
+              e.stopPropagation();
+              zone.classList.remove('drag-over');
+            });
+          });
+          zone.addEventListener('drop', function (e) {
+            var files = (e.dataTransfer && e.dataTransfer.files) ? e.dataTransfer.files : [];
+            if (files.length) addLocalPhotos(files);
+          });
+        })();
+        var prefillProject = queryParams['案號'] || queryParams.project || queryParams.project_no || '';
+        if (prefillProject && kind.value === 'B' && allocEditor) {
+          applyProjectPick(String(prefillProject).trim());
+        }
+        updatePhotoCountLine();
 
         await loadPolicy();
         var cachedSess = typeof AccountingApi.tryCachedSession === 'function'
           ? AccountingApi.tryCachedSession({ minPermission: AccountingApi.MIN_PERMISSION })
           : null;
         if (cachedSess) {
-          sessionRef = cachedSess;
-          profile.userId = cachedSess.auth.user_id;
-          profile.displayName = cachedSess.auth.display_name;
-          document.getElementById('userLine').textContent = '你好，' + profile.displayName +
-            (cachedSess.devBypass ? ' · 測試模式' : '');
-          showApp();
-          setupHubContext(sessionRef);
-          if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
+          await finishBoot(cachedSess);
+          if (devBypass) return;
         }
         if (devBypass) {
           await bootDevBypass();
