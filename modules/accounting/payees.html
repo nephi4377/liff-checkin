@@ -23,6 +23,8 @@
     .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .hint { font-size: 12px; color: #777; margin-top: 2px; }
     .btn { width: 100%; padding: 12px; margin-top: 10px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; background: #1a73e8; color: #fff; }
+    .btn:disabled { opacity: .55; cursor: not-allowed; }
+    .btn-secondary { background: #e8eaed; color: #333; }
     .item { border-bottom: 1px solid #eee; padding: 10px 0; }
     .item:last-child { border-bottom: none; }
     .bank { font-family: ui-monospace, monospace; font-size: 13px; color: #333; }
@@ -66,12 +68,14 @@
 
     <div class="card">
       <h3 style="margin:0 0 8px">列表</h3>
+      <button type="button" class="btn btn-secondary" id="reloadBtn" style="margin-top:0;margin-bottom:10px">重新整理</button>
       <div id="list"></div>
     </div>
   </div>
   <script>
     (function () {
       var session = null;
+      var allPayees = [];
       function normPhone(v) {
         return AccountingFormHelpers.normalizeTaiwanPhone(v);
       }
@@ -101,16 +105,21 @@
         });
         if (!rows || !rows.length) box.textContent = '尚無資料';
       }
-      async function loadList() {
-        var rows = AccountingCache.get(session) ? AccountingCache.payees(session) : AccountingCache.peekPayees();
-        if (rows.length) renderPayeeRows(rows);
-        if (!AccountingCache.get(session)) {
-          try {
-            await AccountingCache.load(session);
-            renderPayeeRows(AccountingCache.payees(session));
-          } catch (e) {
-            if (!rows.length) setMsg(e.message || String(e));
-          }
+      function refreshPayeesFromCache() {
+        allPayees = AccountingCache.payees(session);
+        renderPayeeRows(allPayees);
+      }
+      function bootstrapPayees() {
+        var cached = AccountingCache.get(session);
+        allPayees = cached ? AccountingCache.payees(session) : AccountingCache.peekPayees();
+        if (allPayees.length) renderPayeeRows(allPayees);
+        if (!cached) {
+          AccountingCache.load(session).then(function () {
+            allPayees = AccountingCache.payees(session);
+            renderPayeeRows(allPayees);
+          }).catch(function (e) {
+            if (!allPayees.length) setMsg(e.message || String(e));
+          });
         }
       }
       document.getElementById('addBtn').addEventListener('click', async function () {
@@ -139,14 +148,28 @@
             document.getElementById(id).value = '';
           });
           setOk('已新增「' + payload.name + '」');
-          await loadList();
+          if (AccountingCache.get(session)) {
+            refreshPayeesFromCache();
+          } else if (data.data) {
+            var exists = allPayees.some(function (p) { return String(p.payee_id) === String(data.data.payee_id); });
+            if (!exists) allPayees = allPayees.concat([data.data]);
+            renderPayeeRows(allPayees);
+          }
+        });
+      });
+      document.getElementById('reloadBtn').addEventListener('click', async function () {
+        var btn = this;
+        await AccountingUi.runAsync(btn, { busyLabel: '載入中…', clear: false }, async function () {
+          ui.clear();
+          await AccountingCache.load(session, true);
+          refreshPayeesFromCache();
         });
       });
       (async function boot() {
         await AccountingBoot.run({
           onReady: async function (sess) {
             session = sess;
-            await loadList();
+            bootstrapPayees();
           }
         });
       })();

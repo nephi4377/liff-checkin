@@ -11,7 +11,7 @@
   <script src="../../shared/js/accounting_context.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=26"></script>
   <script src="../../shared/js/accounting_cache.js?v=24"></script>
-  <script src="../../shared/js/accounting_form_helpers.js?v=4"></script>
+  <script src="../../shared/js/accounting_form_helpers.js?v=5"></script>
   <script src="../../shared/js/accounting_ui.js?v=10"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <style>
@@ -79,6 +79,14 @@
     }
     .vendor-combo-item:hover, .vendor-combo-item.active { background: #e8f0fe; }
     .vendor-combo-empty { padding: 10px 12px; font-size: 13px; color: #777; }
+    #formCard { position: relative; }
+    .form-submit-overlay {
+      position: absolute; inset: 0; z-index: 15;
+      background: rgba(255,255,255,.78); border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; font-weight: 600; color: #1a73e8;
+      pointer-events: all;
+    }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -262,10 +270,23 @@
         return String(document.getElementById('pickVendor').value || '').trim();
       }
 
+      function syncHiddenVendorPickFromCombobox() {
+        if (isNewVendorPick() || !vendorCombobox) return;
+        document.getElementById('pickVendor').value = vendorCombobox.getVendorId() || getVendorPickId() || '';
+      }
+
       function setVendorPickId(id, displayName) {
         document.getElementById('pickVendor').value = id || '';
         var inp = document.getElementById('pickVendorInput');
         if (inp && displayName !== undefined) inp.value = displayName || '';
+        if (!vendorCombobox) return;
+        if (!id || id === NEW_VENDOR_ID) {
+          vendorCombobox.clearVendorId();
+          return;
+        }
+        var v = vendors.find(function (x) { return x.vendor_id === id; });
+        if (v) vendorCombobox.setVendor(v);
+        else if (displayName !== undefined) vendorCombobox.setVendor({ vendor_id: id, name: displayName });
       }
 
       function getFilteredVendors() {
@@ -313,12 +334,16 @@
         );
         inp.addEventListener('change', function () {
           if (isNewVendorPick()) return;
-          document.getElementById('pickVendor').value = vendorCombobox.getVendorId() || '';
+          syncHiddenVendorPickFromCombobox();
           onPayeePick();
         });
         inp.addEventListener('input', function () {
           if (isNewVendorPick()) return;
-          if (!inp.value.trim()) document.getElementById('pickVendor').value = '';
+          if (!inp.value.trim()) {
+            document.getElementById('pickVendor').value = '';
+            return;
+          }
+          syncHiddenVendorPickFromCombobox();
         });
         var tradeSel = document.getElementById('filterVendorTrade');
         if (tradeSel) {
@@ -810,17 +835,20 @@
           var data = await AccountingApi.crudCreate(session, 'vendor', payload);
           if (!data.success) throw new Error(data.message || '存入名冊失敗');
           var saved = data.data;
-          vendors.push({
+          var row = {
             vendor_id: saved.vendor_id,
             name: saved.name || name,
+            trade_category: saved.trade_category || '其他',
             bank_code: saved.bank_code || bankCode,
             branch_name: saved.branch_name || branchName,
             account_no: saved.account_no || accountNo,
             account_name: saved.account_name || accountName
-          });
+          };
+          vendors.push(row);
           fillVendorSelect();
-          setVendorPickId(saved.vendor_id, saved.name || name);
+          setVendorPickId(row.vendor_id, row.name);
           document.getElementById('newVendorName').value = '';
+          updateNewVendorBlock();
           onPayeePick();
           setOk('已存入廠商名冊：' + (saved.name || name));
         }).catch(function (e) {
@@ -890,11 +918,36 @@
         });
       }
 
+      function setFormSubmitOverlay(show, text) {
+        var card = document.getElementById('formCard');
+        var el = document.getElementById('formSubmitOverlay');
+        if (show) {
+          if (!el) {
+            el = document.createElement('div');
+            el.id = 'formSubmitOverlay';
+            el.className = 'form-submit-overlay';
+            el.setAttribute('aria-live', 'polite');
+            card.appendChild(el);
+          }
+          el.textContent = text || '送出中…';
+          el.style.display = 'flex';
+        } else if (el) {
+          el.style.display = 'none';
+        }
+      }
+
+      function hasLargePhotoPayload() {
+        return photos.length >= 2;
+      }
+
       async function submitRequest(mode) {
         if (submitting) return;
         var err = validateForm();
         if (err) { setMsg(err); return; }
         var label = mode === 'finance_direct' ? '財務直送待匯款' : '送出請款';
+        var btn = mode === 'finance_direct'
+          ? document.getElementById('financeBtn')
+          : document.getElementById('submitBtn');
         var payload = buildPayeePayload({
           submit_mode: mode,
           draft_id: draftId || undefined,
@@ -906,20 +959,18 @@
           photos: photosPayload(),
           from_line: queryParams.from === 'line' || queryParams.from === 'ocr'
         });
+        var useOverlay = hasLargePhotoPayload();
         submitting = true;
-        document.getElementById('submitBtn').disabled = true;
-        document.getElementById('financeBtn').disabled = true;
-        try {
+        updateOcrBtn();
+        await AccountingUi.runAsync(btn, {
+          busyLabel: '送出中…',
+          actionLabel: label
+        }, async function () {
+          if (useOverlay) setFormSubmitOverlay(true, '送出中…');
           AccountingUi.tap(label);
           AccountingUi.detail('送出內容', summarizeSubmitPayload(payload));
-          AccountingUi.action(label, 'start');
           var data = await AccountingApi.paymentRequestSubmit(session, payload);
-          if (!data.success) {
-            AccountingUi.action(label, 'fail', data.message || '送出失敗');
-            setMsg(data.message || '送出失敗');
-            return;
-          }
-          AccountingUi.action(label, 'ok', '單號 ' + String(data.payment_request_id || '').slice(0, 8));
+          if (!data.success) throw new Error(data.message || '送出失敗');
           document.getElementById('formCard').classList.add('hidden');
           document.getElementById('successCard').classList.remove('hidden');
           var feeNote = (data.remit_fee_deducted > 0)
@@ -929,14 +980,13 @@
             ? '已進入待匯款清單。'
             : '主管會在「請款審核」處理；核准後才進待匯款。') + feeNote;
           setOk('請款已送出');
-        } catch (e) {
-          AccountingUi.action(label, 'fail', e.message || String(e));
+        }).catch(function (e) {
           setMsg(e.message || '送出失敗');
-        } finally {
+        }).finally(function () {
           submitting = false;
-          document.getElementById('submitBtn').disabled = false;
-          document.getElementById('financeBtn').disabled = false;
-        }
+          updateOcrBtn();
+          setFormSubmitOverlay(false);
+        });
       }
 
       async function loadPendingPhotos(token) {
@@ -1107,6 +1157,7 @@
           session = await AccountingApi.initPaymentRequestSession();
           if (!session) return;
           isVendorSelf = String(session.auth.status || '') === '廠商';
+          canSaveVendor = !isVendorSelf && (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION;
           document.getElementById('userLine').textContent =
             (session.auth.display_name || session.profile.displayName) +
             (isVendorSelf ? ' · 廠商' : (' · 權限 ' + session.auth.permission));

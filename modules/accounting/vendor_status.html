@@ -29,6 +29,10 @@
     .nav { margin-bottom: 12px; font-size: 14px; }
     .nav a { color: #1a73e8; text-decoration: none; }
     .empty { color: #888; font-size: 14px; padding: 8px 0; }
+    .btn { padding: 10px 14px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; }
+    .btn:disabled { opacity: .55; cursor: not-allowed; }
+    .btn-primary { background: #1a73e8; color: #fff; }
+    .btn-block { width: 100%; margin: 10px 0; padding: 12px; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -38,6 +42,7 @@
     <h2>款項進度</h2>
     <p class="sub" id="userLine">—</p>
     <div id="msg"></div>
+    <button type="button" class="btn btn-primary btn-block" id="reloadBtn">重新整理</button>
     <div id="list"></div>
   </div>
   <script>
@@ -131,19 +136,34 @@
           box.appendChild(card);
         });
       }
+      async function loadList(force) {
+        var data;
+        if (typeof AccountingListCache !== 'undefined') {
+          data = await AccountingListCache.load(session, 'vendor_status', function () {
+            return AccountingApi.vendorPaymentStatus(session);
+          }, { force: !!force });
+        } else {
+          data = await AccountingApi.vendorPaymentStatus(session);
+        }
+        renderItems(data);
+      }
+      document.getElementById('reloadBtn').addEventListener('click', function () {
+        var btn = document.getElementById('reloadBtn');
+        AccountingUi.runAsync(btn, { busyLabel: '載入中…', clear: false }, function () {
+          return loadList(true);
+        }).catch(function (e) {
+          setMsg(e.message || String(e));
+        });
+      });
       (async function boot() {
         await AccountingBoot.run({
           onReady: async function (sess) {
             session = sess;
-            var data;
-            if (typeof AccountingListCache !== 'undefined') {
-              data = await AccountingListCache.load(session, 'vendor_status', function () {
-                return AccountingApi.vendorPaymentStatus(session);
-              });
-            } else {
-              data = await AccountingApi.vendorPaymentStatus(session);
+            try {
+              await loadList(false);
+            } catch (e) {
+              setMsg(e.message || String(e));
             }
-            renderItems(data);
           }
         });
       })();

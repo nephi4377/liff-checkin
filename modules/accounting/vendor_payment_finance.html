@@ -153,6 +153,64 @@
         });
       }
 
+      function itemDomId(id) { return 'vp-' + id; }
+
+      function removeItemFromView(id) {
+        removeFromListCache(id);
+        items = items.filter(function (row) { return row.payment_request_id !== id; });
+        var el = document.getElementById(itemDomId(id));
+        if (el) el.remove();
+        document.getElementById('emptyHint').classList.toggle('hidden', items.length > 0);
+        if (!items.length) ui.setWarn('目前沒有待匯款項目');
+      }
+
+      function removeItemsFromView(ids) {
+        (ids || []).forEach(function (id) { removeItemFromView(id); });
+      }
+
+      function patchCacheAppend(row) {
+        if (typeof AccountingListCache === 'undefined') return;
+        AccountingListCache.patch(session, listCacheKey(), function (data) {
+          if (!data) return;
+          if (!data.items) data.items = [];
+          data.items.unshift(row);
+        });
+      }
+
+      function buildRowFromCreate(payload, data, mode) {
+        var vendorName = payload.vendor_name;
+        if (mode === 'vendor') {
+          var v = vendors.find(function (x) { return x.vendor_id === payload.vendor_id; });
+          vendorName = v ? (v.name || v.vendor_id) : vendorName;
+        } else if (mode === 'employee') {
+          var e = employees.find(function (x) { return x.userId === payload.employee_user_id; });
+          vendorName = e ? (e.userName || e.userId) : vendorName;
+        }
+        return {
+          payment_request_id: data.payment_request_id,
+          vendor_id: payload.vendor_id || '',
+          vendor_name: vendorName || payload.account_name,
+          doc_type: payload.doc_type || '直接匯款',
+          review_status: data.review_status || '已審',
+          payment_status: data.payment_status || '未匯款',
+          amount: parseInt(payload.amount, 10) || 0,
+          project_no: payload.project_no,
+          item_desc: payload.item_desc,
+          bank_code: payload.bank_code,
+          account_no: payload.account_no,
+          account_name: payload.account_name,
+          note: payload.note,
+          source: mode === 'employee' ? 'staff_request' : 'finance_manual'
+        };
+      }
+
+      function appendItemToView(row) {
+        items.unshift(row);
+        var box = document.getElementById('list');
+        box.insertBefore(renderItem(row), box.firstChild);
+        document.getElementById('emptyHint').classList.add('hidden');
+      }
+
       function itemQueueBusy(id) {
         return typeof AccountingActionQueue !== 'undefined' &&
           AccountingActionQueue.isPending('vendor_payment', id);
@@ -255,6 +313,7 @@
       function renderItem(row) {
         var div = document.createElement('div');
         div.className = 'item';
+        div.id = itemDomId(row.payment_request_id);
         var amount = parseInt(row.amount, 10) || 0;
         var head = document.createElement('div');
         head.className = 'actions';
@@ -302,8 +361,7 @@
             var data = await AccountingApi.vendorPaymentMarkPaid(session, [row.payment_request_id]);
             if (!data.success) { setMsg(data.message || '失敗'); return; }
             setOk('已標記已匯，收支已登錄');
-            removeFromListCache(row.payment_request_id);
-            await loadList(true);
+            removeItemFromView(row.payment_request_id);
           });
         });
         actions.appendChild(okBtn);
@@ -325,8 +383,7 @@
             var data = await AccountingApi.vendorPaymentDelete(session, row.payment_request_id);
             if (!data.success) { setMsg(data.message || '刪除失敗'); return; }
             setOk('已刪除此待匯款項目');
-            removeFromListCache(row.payment_request_id);
-            await loadList(true);
+            removeItemFromView(row.payment_request_id);
           });
         });
         actions.appendChild(delBtn);
@@ -442,10 +499,14 @@
           document.getElementById('newProject').value = '';
           document.getElementById('newDesc').value = '';
           document.getElementById('newNote').value = '';
-          if (typeof AccountingListCache !== 'undefined') {
+          if (data.payment_request_id) {
+            var row = buildRowFromCreate(payload, data, mode);
+            patchCacheAppend(row);
+            appendItemToView(row);
+          } else if (typeof AccountingListCache !== 'undefined') {
             AccountingListCache.invalidate(session, listCacheKey());
+            await loadList(true, true);
           }
-          await loadList(true);
         });
       });
 
@@ -456,8 +517,7 @@
         if (!confirm('將下載銀行轉帳檔（.txt），並把 ' + ids.length + ' 筆記入收支、標記已匯款。\n\n確定？')) return;
         await AccountingUi.runAsync(btn, {
           busyLabel: '匯出中…',
-          startMessage: '正在產生轉帳檔並寫入收支，可能需要十幾秒…',
-          lockSelectors: ['#exportBtn', '#addBtn', '#reloadBtn']
+          startMessage: '正在產生轉帳檔並寫入收支，可能需要十幾秒…'
         }, async function () {
           ui.clear();
           var data = await AccountingApi.vendorPaymentExportCtbc(session, ids);
@@ -485,10 +545,8 @@
             msg += '（另有 ' + data.warnings.length + ' 筆略過，見上方紅字）';
           }
           setOk(msg);
-          if (typeof AccountingListCache !== 'undefined') {
-            AccountingListCache.invalidate(session, listCacheKey());
-          }
-          await loadList(true);
+          var exportedIds = data.payment_request_ids || ids;
+          removeItemsFromView(exportedIds);
         });
       });
 

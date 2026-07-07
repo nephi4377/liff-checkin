@@ -9,6 +9,7 @@
   <script src="../../shared/js/operator_context.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=26"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=1"></script>
+  <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
   <script src="../../shared/js/accounting_ui.js?v=10"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=4"></script>
@@ -79,9 +80,34 @@
         a.remove();
       }
 
+      function listCacheKey() { return 'payroll_finance:pending_payment'; }
+
+      function removeFromListCache(ids) {
+        if (typeof AccountingListCache === 'undefined') return;
+        var idSet = {};
+        (ids || []).forEach(function (id) { idSet[id] = true; });
+        AccountingListCache.patch(session, listCacheKey(), function (data) {
+          if (!data || !data.items) return;
+          data.items = data.items.filter(function (row) {
+            return !idSet[row.payroll_request_id];
+          });
+        });
+      }
+
+      function removeItemsFromView(ids) {
+        removeFromListCache(ids);
+        (ids || []).forEach(function (id) {
+          var el = document.getElementById('pf-' + id);
+          if (el) el.remove();
+        });
+        var remaining = document.querySelectorAll('#list .item').length;
+        document.getElementById('emptyMsg').classList.toggle('hidden', remaining > 0);
+      }
+
       function renderItem(row) {
         var div = document.createElement('div');
         div.className = 'item';
+        div.id = 'pf-' + row.payroll_request_id;
         var amount = parseInt(row.final_amount, 10) || parseInt(row.estimated_net, 10) || 0;
         var incomplete = row.bank_incomplete;
         var head = document.createElement('div');
@@ -108,37 +134,42 @@
         return div;
       }
 
-      async function loadList(force) {
-        setMsg(''); setOk('');
-        var list = document.getElementById('list');
-        list.innerHTML = '<p class="sub">載入中…</p>';
-        try {
-          var data;
-          if (typeof AccountingListCache !== 'undefined') {
-            data = await AccountingListCache.load(session, 'payroll_finance:pending_payment', function () {
-              return AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
-            }, { force: !!force });
-          } else {
-            data = await AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
+      async function loadList(silent, force) {
+        var run = async function () {
+          if (!silent) { setMsg(''); setOk(''); }
+          var list = document.getElementById('list');
+          if (!silent) list.innerHTML = '<p class="sub">載入中…</p>';
+          try {
+            var data;
+            if (typeof AccountingListCache !== 'undefined') {
+              data = await AccountingListCache.load(session, listCacheKey(), function () {
+                return AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
+              }, { force: !!force });
+            } else {
+              data = await AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
+            }
+            if (!data.success) throw new Error(data.message || '載入失敗');
+            list.innerHTML = '';
+            var items = (data.items || []).filter(function (r) {
+              return String(r.review_status) === '已審' && String(r.payment_status) !== '已匯款';
+            });
+            document.getElementById('emptyMsg').classList.toggle('hidden', items.length > 0);
+            items.forEach(function (row) { list.appendChild(renderItem(row)); });
+          } catch (e) {
+            list.innerHTML = '';
+            setMsg(e.message || String(e));
           }
-          if (!data.success) throw new Error(data.message || '載入失敗');
-          list.innerHTML = '';
-          var items = (data.items || []).filter(function (r) {
-            return String(r.review_status) === '已審' && String(r.payment_status) !== '已匯款';
-          });
-          document.getElementById('emptyMsg').classList.toggle('hidden', items.length > 0);
-          items.forEach(function (row) { list.appendChild(renderItem(row)); });
-        } catch (e) {
-          list.innerHTML = '';
-          setMsg(e.message || String(e));
-        }
+        };
+        if (silent) return run();
+        var reloadBtn = document.getElementById('reloadBtn');
+        return AccountingUi.runAsync(reloadBtn, { busyLabel: '載入中…' }, run);
       }
 
       function selectedIds() {
         return Array.prototype.slice.call(document.querySelectorAll('#list .chk:checked')).map(function (c) { return c.value; });
       }
 
-      document.getElementById('reloadBtn').addEventListener('click', function () { loadList(true); });
+      document.getElementById('reloadBtn').addEventListener('click', function () { loadList(false, true); });
 
       document.getElementById('exportBtn').addEventListener('click', async function () {
         var ids = selectedIds();
@@ -147,18 +178,14 @@
         var btn = document.getElementById('exportBtn');
         await AccountingUi.runAsync(btn, {
           busyLabel: '匯出中…',
-          startMessage: '正在產生薪轉檔並寫入收支…',
-          lockSelectors: ['#exportBtn', '#reloadBtn', '#markPaidBtn']
+          actionLabel: '匯出薪轉檔'
         }, async function () {
           setMsg(''); setOk('');
           var data = await AccountingApi.payrollRequestExport(session, ids);
           if (!data.success) throw new Error(data.message || '匯出失敗');
           await downloadCtbcBig5(data.filename || 'ctbc_salary.txt', data.content || '');
           setOk('已完成 ' + (data.count || ids.length) + ' 筆：檔案已下載。上傳中信請選「薪資轉帳」、BIG-5');
-          if (typeof AccountingListCache !== 'undefined') {
-            AccountingListCache.invalidate(session, 'payroll_finance:pending_payment');
-          }
-          await loadList();
+          removeItemsFromView(data.payroll_request_ids || ids);
         }).catch(function (e) { setMsg(e.message || String(e)); });
       });
 
@@ -169,17 +196,13 @@
         var btn = document.getElementById('markPaidBtn');
         await AccountingUi.runAsync(btn, {
           busyLabel: '處理中…',
-          startMessage: '正在標記已發薪…',
-          lockSelectors: ['#exportBtn', '#reloadBtn', '#markPaidBtn']
+          actionLabel: '手動標記已發薪'
         }, async function () {
           setMsg(''); setOk('');
           var data = await AccountingApi.payrollRequestMarkPaid(session, ids);
           if (!data.success) throw new Error(data.message || '標記失敗');
           setOk(data.message || '已標記完成');
-          if (typeof AccountingListCache !== 'undefined') {
-            AccountingListCache.invalidate(session, 'payroll_finance:pending_payment');
-          }
-          await loadList();
+          removeItemsFromView(data.payroll_request_ids || ids);
         }).catch(function (e) { setMsg(e.message || String(e)); });
       });
 

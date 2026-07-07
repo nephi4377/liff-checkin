@@ -237,6 +237,14 @@ var AccountingFormHelpers = (function () {
       refresh: function () {},
       getVendorId: function () { return pickedVendorId || inputEl.dataset.vendorId || ''; },
       clearVendorId: clearPickedVendor,
+      setVendor: function (v) {
+        if (!v || !v.vendor_id) {
+          clearPickedVendor();
+          return;
+        }
+        inputEl.value = vendorDisplayName(v);
+        setPickedVendor(v);
+      },
       destroy: function () {
         hidePanel();
         clearPickedVendor();

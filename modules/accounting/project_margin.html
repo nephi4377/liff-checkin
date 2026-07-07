@@ -11,6 +11,7 @@
   <script src="../../shared/js/accounting_api.js?v=30"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=17"></script>
   <script src="../../shared/js/accounting_ui.js?v=10"></script>
+  <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=4"></script>
   <style>
@@ -259,10 +260,49 @@
           if (btn.dataset.origText) btn.textContent = btn.dataset.origText;
         }
       }
-      async function runAction(btn, busyText, fn) {
-        setBtnBusy(btn, true, busyText);
-        try { return await fn(); }
-        finally { setBtnBusy(btn, false); }
+      function projectQueueId() {
+        return current && current.project_no ? 'margin_' + current.project_no : 'margin';
+      }
+      function isFullDetailPayload(data) {
+        return !!(data && data.success && data.meta && Array.isArray(data.lines));
+      }
+      function applyBonusAllocResult(data) {
+        if (isFullDetailPayload(data)) {
+          renderDetailPanels(data);
+          return;
+        }
+        if (!detailData) return;
+        if (!detailData.meta) detailData.meta = {};
+        if (data.bonus_allocations) detailData.meta.bonus_allocations = data.bonus_allocations;
+        renderBonusAllocations(
+          (detailData.site || {}).responsible_persons,
+          detailData.meta.bonus_allocations
+        );
+      }
+      function applyBonusDraftResult(data) {
+        if (isFullDetailPayload(data)) {
+          renderDetailPanels(data);
+          return;
+        }
+        if (!detailData) return;
+        if (!detailData.meta) detailData.meta = {};
+        if (data.bonus_draft) detailData.meta.bonus_draft = data.bonus_draft;
+        var draft = data.bonus_draft;
+        el('bonusDraftHint').textContent = draft && draft.splits
+          ? ('已產生草稿：' + draft.splits.map(function (s) {
+            return (s.name || s.userId) + ' ' + fmtMoney(s.amount);
+          }).join('、'))
+          : '尚未產生獎金草稿';
+      }
+      async function runAction(btn, busyText, fn, opts) {
+        opts = opts || {};
+        var runOpts = { busyLabel: busyText, clear: false };
+        if (opts.queue) {
+          runOpts.queue = true;
+          runOpts.queueId = projectQueueId();
+          runOpts.itemId = opts.itemId || (btn && btn.id) || undefined;
+        }
+        return AccountingUi.runAsync(btn, runOpts, fn);
       }
       function setDetailLoading(on) {
         var loading = el('detailLoading');
@@ -1142,7 +1182,7 @@
           if (!data.success) { setMsg(data.message || '儲存失敗'); return; }
           setOk('家具標記已儲存');
           renderDetailPanels(data);
-        });
+        }, { queue: true });
       });
       el('saveContractBtn').addEventListener('click', async function () {
         if (!current) return;
@@ -1156,7 +1196,7 @@
           if (!data.success) { setMsg(data.message || '儲存失敗，請確認金額'); return; }
           setOk('總額已儲存');
           renderDetailPanels(data);
-        });
+        }, { queue: true });
       });
       el('refreshQuotationBtn').addEventListener('click', async function () {
         if (!current) return;
@@ -1172,7 +1212,7 @@
             ? '已更新驗收表自動總額（手動總額未變）'
             : '已從驗收表帶入總額');
           renderDetailPanels(data);
-        });
+        }, { queue: true });
       });
       el('saveDurationBtn').addEventListener('click', async function () {
         if (!current) return;
@@ -1185,18 +1225,9 @@
             duration_end: el('durationEnd').value
           });
           if (!data.success) { setMsg(data.message || '工期儲存失敗'); return; }
-          var refreshed = await AccountingApi.marginRecalcBaseCost(session, {
-            project_no: current.project_no,
-            tab_name: current.tab_name
-          });
-          if (!refreshed.success) {
-            setOk('工期已儲存，但基本費用重算失敗，請稍後再試');
-            renderDetailPanels(data);
-            return;
-          }
           setOk('工期已儲存，基本費用已重算');
-          renderDetailPanels(refreshed);
-        });
+          renderDetailPanels(data);
+        }, { queue: true });
       });
       el('saveBonusAllocBtn').addEventListener('click', async function () {
         if (!current) return;
@@ -1214,12 +1245,8 @@
           });
           if (!data.success) { setMsg(data.message || '儲存失敗'); return; }
           setOk('分配比例已儲存');
-          var refreshed = await AccountingApi.marginGetDetail(session, {
-            project_no: current.project_no,
-            tab_name: current.tab_name
-          });
-          if (refreshed.success) renderDetailPanels(refreshed);
-        });
+          applyBonusAllocResult(data);
+        }, { queue: true });
       });
       el('applyBonusBtn').addEventListener('click', async function () {
         if (!current) return;
@@ -1232,12 +1259,8 @@
           });
           if (!data.success) { setMsg(data.message || '無法產生獎金草稿'); return; }
           setOk(data.message || '已產生獎金草稿');
-          var refreshed = await AccountingApi.marginGetDetail(session, {
-            project_no: current.project_no,
-            tab_name: current.tab_name
-          });
-          if (refreshed.success) renderDetailPanels(refreshed);
-        });
+          applyBonusDraftResult(data);
+        }, { queue: true });
       });
       el('saveVendorsBtn').addEventListener('click', async function () {
         if (!current) return;
@@ -1250,7 +1273,7 @@
           if (!data.success) { setMsg(data.message || '廠商儲存失敗'); return; }
           setOk('本案廠商已儲存');
           renderDetailPanels(data);
-        });
+        }, { queue: true });
       });
       el('saveLaborBtn').addEventListener('click', async function () {
         if (!current) return;
@@ -1262,7 +1285,7 @@
           });
           if (!data.success) { setMsg(data.message || '工資設定儲存失敗'); return; }
           setOk('工資設定已儲存');
-        });
+        }, { queue: true });
       });
       el('recalcLaborBtn').addEventListener('click', async function () {
         if (!current) return;
@@ -1279,34 +1302,36 @@
           if (!data.success) { setMsg(data.message || '工資重算失敗'); return; }
           setOk('工資列已重算');
           renderDetailPanels(data);
-        });
+        }, { queue: true });
       });
       document.getElementById('addBtn').addEventListener('click', async function () {
         if (!current) return;
-        setMsg('');
-        var payload = {
-          project_no: current.project_no,
-          client_name: current.client_name,
-          store: current.store,
-          order_no: current.order_no,
-          txn_type: document.getElementById('addType').value,
-          txn_date: document.getElementById('addDate').value,
-          category: document.getElementById('addCategory').value,
-          item_name: document.getElementById('addItem').value,
-          amount: document.getElementById('addAmount').value,
-          note: document.getElementById('addNote').value
-        };
-        var data = await AccountingApi.marginAddLine(session, payload);
-        if (!data.success) { setMsg(data.message); return; }
-        if (data.review_queue) {
-          setOk(data.message || '已送請款審核，財務核准後將推送客戶確認');
-        } else {
-          setOk('已新增');
-        }
-        document.getElementById('addItem').value = '';
-        document.getElementById('addAmount').value = '';
-        document.getElementById('addNote').value = '';
-        openDetail(current);
+        await runAction(el('addBtn'), '新增中…', async function () {
+          setMsg('');
+          var payload = {
+            project_no: current.project_no,
+            client_name: current.client_name,
+            store: current.store,
+            order_no: current.order_no,
+            txn_type: document.getElementById('addType').value,
+            txn_date: document.getElementById('addDate').value,
+            category: document.getElementById('addCategory').value,
+            item_name: document.getElementById('addItem').value,
+            amount: document.getElementById('addAmount').value,
+            note: document.getElementById('addNote').value
+          };
+          var data = await AccountingApi.marginAddLine(session, payload);
+          if (!data.success) { setMsg(data.message); return; }
+          if (data.review_queue) {
+            setOk(data.message || '已送請款審核，財務核准後將推送客戶確認');
+          } else {
+            setOk('已新增');
+          }
+          document.getElementById('addItem').value = '';
+          document.getElementById('addAmount').value = '';
+          document.getElementById('addNote').value = '';
+          openDetail(current);
+        });
       });
 
       (async function boot() {

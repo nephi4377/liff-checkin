@@ -281,9 +281,6 @@
       var passbookFile = null;
       var cardUploaded = false;
       var passbookUploaded = false;
-      var saving = false;
-      var SAVE_BTN_LABEL = '儲存';
-
       function $(id) { return document.getElementById(id); }
 
       function showFeedback(kind, text) {
@@ -295,10 +292,29 @@
       function setOk(t) { if (t) AccountingUi.notify('ok', t); }
       function setWarn(t) { if (t) AccountingUi.notify('warn', t); }
 
-      function setSaveBusy(on) {
-        saving = on;
-        $('saveBtn').disabled = on;
-        $('saveBtn').textContent = on ? '儲存中…' : SAVE_BTN_LABEL;
+      function hasPendingPhotoUpload() {
+        return (cardFile && !cardUploaded) || (passbookFile && !passbookUploaded);
+      }
+
+      function runBackgroundPhotoUpload(vendorRec) {
+        if (!vendorRec || !hasPendingPhotoUpload()) return;
+        uploadPendingPhotos(vendorRec).then(function (photoRes) {
+          if (!photoRes) return;
+          if (!photoRes.success && !photoRes.already_uploaded) {
+            setWarn((photoRes.message || '照片未上傳') + '（廠商資料已儲存）');
+            return;
+          }
+          if (photoRes.folder) {
+            patchVendorFolder(vendorRec.vendor_id, photoRes.folder);
+            refreshVendors(true);
+          }
+          if (cardFile && cardUploaded) setPhotoUploadStatus('card', '照片已存入廠商資料夾', false);
+          if (passbookFile && passbookUploaded) setPhotoUploadStatus('passbook', '照片已存入廠商資料夾', false);
+          var photoNote = photosSavedMessage(photoRes);
+          if (photoNote) setOk('照片已上傳' + photoNote);
+        }).catch(function (e) {
+          setWarn((e.message || '照片上傳失敗') + '（廠商資料已儲存）');
+        });
       }
 
       function fillSelect(id, options, withEmpty) {
@@ -571,34 +587,40 @@
           btn.textContent = '停用';
           btn.addEventListener('click', async function () {
             if (!confirm('停用這筆 LINE 綁定？')) return;
-            var data = await AccountingApi.crudUpdate(session, 'vendor_line_binding', b.binding_id, { is_active: '否' });
-            if (!data.success) { setMsg(data.message); return; }
-            await refreshVendors(false);
-            renderBindings(vendorId);
+            await AccountingUi.runAsync(btn, { busyLabel: '處理中…', clear: false }, async function () {
+              var data = await AccountingApi.crudUpdate(session, 'vendor_line_binding', b.binding_id, { is_active: '否' });
+              if (!data.success) { setMsg(data.message); return; }
+              refreshVendors(true);
+              renderBindings(vendorId);
+            });
           });
           row.appendChild(btn);
           box.appendChild(row);
         });
       }
 
-      async function addBinding(vendorId, idType, lineId, displayName, purpose) {
+      async function addBinding(vendorId, idType, lineId, displayName, purpose, btn) {
         if (!vendorId) { setMsg('請先儲存廠商'); return; }
         lineId = String(lineId || '').trim();
         if (!lineId) { setMsg('請從搜尋結果選擇要加入的 LINE'); return; }
-        var payload = {
-          vendor_id: vendorId,
-          id_type: idType || (lineId.indexOf('C') === 0 ? 'group' : 'user'),
-          line_id: lineId,
-          display_name: displayName || '',
-          purpose: purpose || $('bindPurpose').value || '一般',
-          is_primary: '否'
+        var run = async function () {
+          var payload = {
+            vendor_id: vendorId,
+            id_type: idType || (lineId.indexOf('C') === 0 ? 'group' : 'user'),
+            line_id: lineId,
+            display_name: displayName || '',
+            purpose: purpose || $('bindPurpose').value || '一般',
+            is_primary: '否'
+          };
+          var data = await AccountingApi.crudCreate(session, 'vendor_line_binding', payload);
+          if (!data.success) { setMsg(data.message || '綁定失敗'); return; }
+          $('lineSearchResults').innerHTML = '';
+          setOk('已加入 LINE 綁定');
+          refreshVendors(true);
+          renderBindings(vendorId);
         };
-        var data = await AccountingApi.crudCreate(session, 'vendor_line_binding', payload);
-        if (!data.success) { setMsg(data.message || '綁定失敗'); return; }
-        $('lineSearchResults').innerHTML = '';
-        setOk('已加入 LINE 綁定');
-        await refreshVendors(false);
-        renderBindings(vendorId);
+        if (btn) await AccountingUi.runAsync(btn, { busyLabel: '加入中…', clear: false }, run);
+        else await run();
       }
 
       function renderSearchHits(items) {
@@ -618,7 +640,7 @@
           btn.className = 'btn btn-secondary';
           btn.textContent = '加入';
           btn.addEventListener('click', function () {
-            addBinding($('editId').value, hit.id_type, hit.line_id, hit.name, $('bindPurpose').value);
+            addBinding($('editId').value, hit.id_type, hit.line_id, hit.name, $('bindPurpose').value, btn);
           });
           row.appendChild(btn);
           box.appendChild(row);
@@ -872,10 +894,12 @@
           btnToggle.className = 'btn btn-warn';
           btnToggle.textContent = v.coop_status === '暫停合作' ? '恢復合作' : '暫停合作';
           btnToggle.addEventListener('click', async function () {
-            var next = v.coop_status === '暫停合作' ? '合作中' : '暫停合作';
-            var data = await AccountingApi.crudUpdate(session, 'vendor', v.vendor_id, { coop_status: next });
-            if (!data.success) { setMsg(data.message); return; }
-            await refreshVendors(false);
+            await AccountingUi.runAsync(btnToggle, { busyLabel: '處理中…', clear: false }, async function () {
+              var next = v.coop_status === '暫停合作' ? '合作中' : '暫停合作';
+              var data = await AccountingApi.crudUpdate(session, 'vendor', v.vendor_id, { coop_status: next });
+              if (!data.success) { setMsg(data.message); return; }
+              refreshVendors(true);
+            });
           });
           actions.appendChild(btnToggle);
           div.appendChild(actions);
@@ -896,7 +920,6 @@
       }
 
       $('saveBtn').addEventListener('click', async function () {
-        if (saving) return;
         showFeedback('', '');
         var payload = readForm();
         if (!payload.name) { setMsg('請填廠商名稱'); return; }
@@ -906,35 +929,30 @@
         if (!payload.account_name) { setMsg('請填戶名'); return; }
         var editId = $('editId').value;
         var savedName = payload.name;
-        setSaveBusy(true);
+        var saved = null;
         try {
-          var data = editId
-            ? await AccountingApi.crudUpdate(session, 'vendor', editId, payload)
-            : await AccountingApi.crudCreate(session, 'vendor', payload);
-          if (!data.success) { setMsg(data.message || '儲存失敗'); return; }
-          var saved = data.data;
-          var photoRes = await uploadPendingPhotos(saved);
-          if (photoRes && !photoRes.success) {
-            setWarn((photoRes.message || '照片未上傳') + '（廠商資料已儲存）');
-          } else if (photoRes && photoRes.success && photoRes.folder) {
-            patchVendorFolder(saved.vendor_id, photoRes.folder);
-          }
-          var photoNote = photosSavedMessage(photoRes);
-          await refreshVendors(true);
-          var refreshed = allVendors.find(function (v) { return v.vendor_id === saved.vendor_id; }) || saved;
-          fillForm(refreshed);
-          if (editId) {
-            setOk('已更新「' + savedName + '」' + photoNote + '，可繼續綁定 LINE，或點「取消編輯」新增下一筆');
-          } else if (photoNote) {
-            setOk('已新增「' + savedName + '」' + photoNote + '，請在下方綁定 LINE（請款辨識用）');
-          } else {
-            setOk('已新增「' + savedName + '」，請在下方綁定 LINE（請款辨識用）');
-          }
+          await AccountingUi.runAsync($('saveBtn'), {
+            busyLabel: '儲存中…',
+            actionLabel: '儲存廠商'
+          }, async function () {
+            var data = editId
+              ? await AccountingApi.crudUpdate(session, 'vendor', editId, payload)
+              : await AccountingApi.crudCreate(session, 'vendor', payload);
+            if (!data.success) { setMsg(data.message || '儲存失敗'); return; }
+            saved = data.data;
+            refreshVendors(true);
+            var refreshed = allVendors.find(function (v) { return v.vendor_id === saved.vendor_id; }) || saved;
+            fillForm(refreshed);
+            if (editId) {
+              setOk('已更新「' + savedName + '」，可繼續綁定 LINE，或點「取消編輯」新增下一筆');
+            } else {
+              setOk('已新增「' + savedName + '」，請在下方綁定 LINE（請款辨識用）');
+            }
+          });
         } catch (e) {
           setMsg(e.message || String(e));
-        } finally {
-          setSaveBusy(false);
         }
+        if (saved) runBackgroundPhotoUpload(saved);
       });
 
       $('lineSearchBtn').addEventListener('click', async function () {
@@ -952,11 +970,13 @@
       });
 
       $('lineManualAddBtn').addEventListener('click', function () {
+        var btn = this;
         var lineId = $('lineManualId').value.trim();
         if (!lineId) { setMsg('請貼上 UID 或 GID'); return; }
         var idType = lineId.indexOf('C') === 0 ? 'group' : 'user';
-        addBinding($('editId').value, idType, lineId, '', $('bindPurpose').value);
-        $('lineManualId').value = '';
+        addBinding($('editId').value, idType, lineId, '', $('bindPurpose').value, btn).then(function () {
+          $('lineManualId').value = '';
+        });
       });
 
       $('cancelEditBtn').addEventListener('click', function () {

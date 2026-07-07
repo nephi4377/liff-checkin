@@ -120,7 +120,7 @@
 
       var TAB_DESC = {
         vendor: '只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改分攤（可多案）。',
-        customer_receipt: '審核<strong>現金收款財務簽核</strong>與<strong>案件收入／客戶收款</strong>（收支登錄先入佇列；財務核准後推送客戶；客戶二階確認後寫入案件收支）。'
+        customer_receipt: '審核<strong>現金收款財務簽核</strong>與<strong>案件收入／客戶收款</strong>（收支登錄收入登錄後<strong>直接推送客戶確認</strong>並寫入案件毛利；財務可選擇性覆核，不阻擋客戶確認）。'
       };
 
       function setMsg(t) { ui.setMsg(t); }
@@ -166,6 +166,16 @@
             return it.payment_request_id !== id;
           });
         });
+      }
+      function itemDomId(id) { return 'lr-' + id; }
+      function removeItemFromView(id) {
+        removeFromListCache(id);
+        listItems = listItems.filter(function (it) { return itemCacheId(it) !== id; });
+        var el = document.getElementById(itemDomId(id));
+        if (el) el.remove();
+        var box = document.getElementById('list');
+        if (!box.children.length) box.innerHTML = '<p class="sub">沒有符合的紀錄</p>';
+        updateBulkBar();
       }
       function itemCacheId(item) {
         if (item.kind === 'customer_receipt_income' || item.kind === 'customer_receipt_cash_sign') {
@@ -440,8 +450,7 @@
             var ok = await approveIncome(item, note);
             if (ok) {
               setOk('已核准入帳「' + (item.receipt_no || item.project_no) + '」');
-              removeFromListCache(cacheId);
-              await loadList(true);
+              removeItemFromView(cacheId);
             }
           });
         });
@@ -460,8 +469,7 @@
             var ok = await rejectIncome(item, reason);
             if (ok) {
               setOk('已退回「' + (item.receipt_no || item.project_no) + '」');
-              removeFromListCache(cacheId);
-              await loadList(true);
+              removeItemFromView(cacheId);
             }
           });
         });
@@ -507,8 +515,7 @@
             var ok = await approveVendor(item, patch);
             if (ok) {
               setOk('已核准「' + (item.party_name || '') + '」，進入待匯款');
-              removeFromListCache(item.payment_request_id);
-              await loadList(true);
+              removeItemFromView(item.payment_request_id);
             }
           });
         });
@@ -526,8 +533,7 @@
             var ok = await rejectVendor(item, reason);
             if (ok) {
               setOk('已退回「' + (item.party_name || '') + '」');
-              removeFromListCache(item.payment_request_id);
-              await loadList(true);
+              removeItemFromView(item.payment_request_id);
             }
           });
         });
@@ -544,6 +550,7 @@
         var ready = itemReady(item);
         var cacheId = itemCacheId(item);
 
+        div.id = itemDomId(cacheId);
         div.innerHTML =
           '<div class="headline">' + (isCashSign
             ? ('現金收款 · ' + (item.receipt_no || '—'))
@@ -587,8 +594,7 @@
               var ok = await signFinanceReceipt(item);
               if (ok) {
                 setOk('已財務簽核「' + (item.receipt_no || item.project_no) + '」，待客戶確認');
-                removeFromListCache(cacheId);
-                await loadList(true);
+                removeItemFromView(cacheId);
               }
             });
           });
@@ -623,8 +629,7 @@
               var ok = await approveIncome(item);
               if (ok) {
                 setOk('已核准入帳「' + (item.receipt_no || item.project_no) + '」');
-                removeFromListCache(cacheId);
-                await loadList(true);
+                removeItemFromView(cacheId);
               }
             });
           });
@@ -658,8 +663,7 @@
               var ok = await rejectIncome(item, reason);
               if (ok) {
                 setOk('已退回「' + (item.receipt_no || item.project_no) + '」');
-                removeFromListCache(cacheId);
-                await loadList(true);
+                removeItemFromView(cacheId);
               }
             });
           });
@@ -688,8 +692,7 @@
               var ok = await approveVendor(item);
               if (ok) {
                 setOk('已核准「' + (item.party_name || '') + '」，進入待匯款');
-                removeFromListCache(item.payment_request_id);
-                await loadList(true);
+                removeItemFromView(item.payment_request_id);
               }
             });
           });
@@ -729,8 +732,7 @@
               var ok = await rejectVendor(item, reason);
               if (ok) {
                 setOk('已退回「' + (item.party_name || '') + '」');
-                removeFromListCache(item.payment_request_id);
-                await loadList(true);
+                removeItemFromView(item.payment_request_id);
               }
             });
           });
@@ -834,7 +836,7 @@
                 okCount += res.approved || 0;
                 pendingIncomeOnly.forEach(function (it) {
                   if (String(it.project_no || '').trim() === projectNos[j]) {
-                    removeFromListCache(itemCacheId(it));
+                    removeItemFromView(itemCacheId(it));
                   }
                 });
               } else {
@@ -844,7 +846,7 @@
             }
             if (fail) setMsg('完成：已核准 ' + okCount + ' 筆，' + fail + ' 案失敗');
             else setOk('已全部核准入帳 ' + okCount + ' 筆');
-            await loadList(true);
+            updateBulkBar();
           });
           updateBulkBar();
           return;
@@ -877,12 +879,12 @@
             var ok = await approveVendor(pendingVendor[i]);
             if (ok) {
               okCount++;
-              removeFromListCache(itemCacheId(pendingVendor[i]));
+              removeItemFromView(itemCacheId(pendingVendor[i]));
             } else fail++;
           }
           if (fail) setMsg('完成：成功 ' + okCount + ' 筆，失敗 ' + fail + ' 筆');
           else setOk('已全部核准 ' + okCount + ' 筆，進入待匯款');
-          await loadList(true);
+          updateBulkBar();
         });
         updateBulkBar();
       }
@@ -918,19 +920,11 @@
       document.querySelectorAll('.tab-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
           var next = btn.getAttribute('data-tab') || 'vendor';
-          if (next === activeTab || btn.disabled) return;
-          var tabs = document.querySelectorAll('.tab-btn');
-          tabs.forEach(function (b) {
-            b.disabled = true;
-            b.classList.add('is-busy');
-          });
+          if (next === activeTab) return;
           activeTab = next;
           updateTabUi();
-          loadList(false, true).finally(function () {
-            tabs.forEach(function (b) {
-              b.disabled = false;
-              b.classList.remove('is-busy');
-            });
+          loadList(false, false).then(function () {
+            loadList(true, true);
           });
         });
       });

@@ -9,9 +9,11 @@ var AccountingApi = (function () {
   var POLICY_TTL_MS = 24 * 60 * 60 * 1000;
   var AUTH_TTL_MS = 12 * 60 * 60 * 1000;
   var MIN_PERMISSION = 4;
+  var INGEST_MIN_PERMISSION = 2;
   var SUPERVISOR_MIN_PERMISSION = 3;
   var VENDOR_PAYMENT_APPROVE_MIN_PERMISSION = 5;
   var PERM_DENIED_MSG = '權限不足（需財務／老闆，權限 ≥ 4）';
+  var INGEST_PERM_DENIED_MSG = '權限不足（收支登錄需權限 ≥ 2）';
   var SUPERVISOR_DENIED_MSG = '權限不足（需主管，權限 ≥ 3）';
   var VENDOR_PAYMENT_APPROVE_DENIED_MSG = '權限不足（廠商請款審核需權限 ≥ 5）';
 
@@ -254,9 +256,11 @@ var AccountingApi = (function () {
   return {
     GAS_API: GAS_API,
     MIN_PERMISSION: MIN_PERMISSION,
+    INGEST_MIN_PERMISSION: INGEST_MIN_PERMISSION,
     SUPERVISOR_MIN_PERMISSION: SUPERVISOR_MIN_PERMISSION,
     VENDOR_PAYMENT_APPROVE_MIN_PERMISSION: VENDOR_PAYMENT_APPROVE_MIN_PERMISSION,
     PERM_DENIED_MSG: PERM_DENIED_MSG,
+    INGEST_PERM_DENIED_MSG: INGEST_PERM_DENIED_MSG,
     SUPERVISOR_DENIED_MSG: SUPERVISOR_DENIED_MSG,
     VENDOR_PAYMENT_APPROVE_DENIED_MSG: VENDOR_PAYMENT_APPROVE_DENIED_MSG,
     post: post,
@@ -814,6 +818,25 @@ var AccountingApi = (function () {
       if (!session) return null;
       if ((session.auth.permission || 0) < MIN_PERMISSION) {
         throw new Error(PERM_DENIED_MSG);
+      }
+      notifyUiOperator_(session);
+      return session;
+    },
+    /** 收支登錄：權限 ≥ 2 */
+    initIngestSession: async function (opts) {
+      var policy = await AccountingApi.loadPolicy();
+      var session;
+      if (policy.authBypass) {
+        var packIng = devBypassAuthBody_('accounting_auth_me');
+        var authIng = await post(packIng.body);
+        if (!authIng.success) throw new Error(authIng.message || '驗證失敗');
+        session = buildDevBypassSession_(authIng, packIng.opts);
+      } else {
+        session = await AccountingApi.initLiff(opts);
+      }
+      if (!session) return null;
+      if ((session.auth.permission || 0) < INGEST_MIN_PERMISSION) {
+        throw new Error(INGEST_PERM_DENIED_MSG);
       }
       notifyUiOperator_(session);
       return session;

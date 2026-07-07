@@ -82,18 +82,21 @@
         });
       }
       document.getElementById('searchBtn').addEventListener('click', async function () {
-        setMsg('');
-        var filter = { page_size: 50 };
-        var iid = document.getElementById('ingestId').value.trim();
-        var prid = document.getElementById('paymentRequestId').value.trim();
-        var kw = document.getElementById('keyword').value.trim();
-        if (iid) filter.ingest_id = iid;
-        if (prid) filter.payment_request_id = prid;
-        if (kw) filter.keyword = kw;
-        if (!iid && !prid && !kw) { setMsg('請至少輸入 ingest_id、請款單編號或關鍵字'); return; }
-        var data = await AccountingApi.crudList(session, 'attachment', filter);
-        if (!data.success) { setMsg(data.message || '查詢失敗'); return; }
-        renderList(data.data || []);
+        var searchBtn = document.getElementById('searchBtn');
+        await AccountingUi.runAsync(searchBtn, { busyLabel: '查詢中…', clear: false }, async function () {
+          setMsg('');
+          var filter = { page_size: 50 };
+          var iid = document.getElementById('ingestId').value.trim();
+          var prid = document.getElementById('paymentRequestId').value.trim();
+          var kw = document.getElementById('keyword').value.trim();
+          if (iid) filter.ingest_id = iid;
+          if (prid) filter.payment_request_id = prid;
+          if (kw) filter.keyword = kw;
+          if (!iid && !prid && !kw) { setMsg('請至少輸入 ingest_id、請款單編號或關鍵字'); return; }
+          var data = await AccountingApi.crudList(session, 'attachment', filter);
+          if (!data.success) { setMsg(data.message || '查詢失敗'); return; }
+          renderList(data.data || []);
+        });
       });
       (async function boot() {
         await AccountingBoot.run({

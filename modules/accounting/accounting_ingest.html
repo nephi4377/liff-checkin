@@ -172,7 +172,7 @@
     (function () {
       var profile = { userId: '', displayName: '' };
       var sessionRef = null;
-      var sessionCount = 0, submitting = false, idToken = '', devBypass = false;
+      var sessionCount = 0, idToken = '', devBypass = false;
       var pendingPhotos = [], localPhotos = [], queryParams = {}, hubContext = { projects: [], employees: [] };
       var applicantDefault = '';
       var cachedVendors = [];
@@ -537,7 +537,6 @@
       }
 
       async function submitEntry() {
-        if (submitting) return;
         setMsg(''); setOk('');
         if (kind.value === 'B' && allocEditor) {
           var allocErr = allocEditor.validate();
@@ -546,9 +545,12 @@
             return;
           }
         }
-        submitting = true;
-        document.getElementById('submit').disabled = true;
-        try {
+        var btn = document.getElementById('submit');
+        await AccountingUi.runAsync(btn, {
+          actionLabel: '送出這一筆',
+          busyLabel: '送出中…'
+        }, async function () {
+          AccountingUi.tap('送出這一筆');
           var fields = collectFields();
           var photos = pendingPhotos.slice().concat(localPhotos);
           var body = {
@@ -561,10 +563,7 @@
           if (devBypass) body.dev_bypass = true;
           else body.liff_id_token = idToken;
           var data = await AccountingApi.post(body);
-          if (!data.success) {
-            setMsg(data.message || '送出失敗');
-            return;
-          }
+          if (!data.success) throw new Error(data.message || '送出失敗');
           sessionCount++;
           document.getElementById('sessionCount').textContent = String(sessionCount);
           var ul = document.getElementById('recent');
@@ -580,12 +579,9 @@
           clearVolatileFields(true);
           document.getElementById('nextBtn').classList.remove('hidden');
           document.getElementById('doneBtn').classList.remove('hidden');
-        } catch (e) {
-          setMsg(String(e.message || e));
-        } finally {
-          submitting = false;
-          document.getElementById('submit').disabled = false;
-        }
+        }).catch(function (e) {
+          setMsg(e.message || String(e));
+        });
       }
 
       document.getElementById('submit').addEventListener('click', submitEntry);
@@ -617,9 +613,9 @@
       }
 
       async function bootDevBypass() {
-        var session = await AccountingApi.initSession();
-        if (!session || (session.auth.permission || 0) < AccountingApi.MIN_PERMISSION) {
-          setLoading(AccountingApi.PERM_DENIED_MSG);
+        var session = await AccountingApi.initIngestSession();
+        if (!session || (session.auth.permission || 0) < AccountingApi.INGEST_MIN_PERMISSION) {
+          setLoading(AccountingApi.INGEST_PERM_DENIED_MSG);
           return;
         }
         await finishBoot(session);
@@ -685,7 +681,7 @@
 
         await loadPolicy();
         var cachedSess = typeof AccountingApi.tryCachedSession === 'function'
-          ? AccountingApi.tryCachedSession({ minPermission: AccountingApi.MIN_PERMISSION })
+          ? AccountingApi.tryCachedSession({ minPermission: AccountingApi.INGEST_MIN_PERMISSION })
           : null;
         if (cachedSess) {
           await finishBoot(cachedSess);
@@ -725,8 +721,8 @@
           var needFormCtx = !ctxCached.projects.length && !ctxCached.employees.length;
           var formCtxPromise = needFormCtx ? AccountingApi.formContext(tokenSession) : null;
           authMe = await AccountingApi.authMe(idToken);
-          if (!authMe.success || (authMe.permission || 0) < AccountingApi.MIN_PERMISSION) {
-            setLoading(AccountingApi.PERM_DENIED_MSG);
+          if (!authMe.success || (authMe.permission || 0) < AccountingApi.INGEST_MIN_PERMISSION) {
+            setLoading(AccountingApi.INGEST_PERM_DENIED_MSG);
             return;
           }
           document.getElementById('userLine').textContent = '你好，' + p.displayName;
