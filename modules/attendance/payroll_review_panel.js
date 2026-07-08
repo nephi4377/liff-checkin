@@ -62,6 +62,22 @@ function calcPersonalLeaveDeduction(baseSalary, personalLeaveDays, payType) {
     return Math.round(base / PAYROLL_MONTHLY_DAYS * days);
 }
 
+function calcSickLeaveDeduction(baseSalary, sickLeaveDays, payType) {
+    const days = Number(sickLeaveDays) || 0;
+    const base = Number(baseSalary) || 0;
+    if (days <= 0 || base <= 0) return 0;
+    if (payType === 'daily') return 0;
+    return Math.round(base / PAYROLL_MONTHLY_DAYS * days * 0.5);
+}
+
+function calcPayrollPayableDays(workPunchDays, stats) {
+    const st = stats || {};
+    const annual = Number(st.annualLeave) || 0;
+    const comp = Number(st.compensatoryLeave) || 0;
+    const sick = Number(st.sickLeave) || 0;
+    return (Number(workPunchDays) || 0) + annual + comp + sick * 0.5;
+}
+
 function calcProratedFullAttendance(maxBonus, absentDays) {
     const max = Number(maxBonus) || 0;
     const absent = Number(absentDays) || 0;
@@ -108,29 +124,41 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
     let fullAttendanceBonus = 0;
     const maxFullAttendance = Number(settings.fullAttendanceBonusMax) || 0;
     let personalLeaveDeduction = 0;
+    let sickLeaveDeduction = 0;
     if (payType === 'daily') {
         const days = Number(snapshot.daysWorked) || 0;
         const personalLeave = Number(st.personalLeave) || 0;
+        const workPunchDays = snapshot.workPunchDays != null ? snapshot.workPunchDays : days;
         earnedBase = base * days;
         personalLeaveDeduction = calcPersonalLeaveDeduction(base, personalLeave, payType);
+        const annual = Number(st.annualLeave) || 0;
+        const comp = Number(st.compensatoryLeave) || 0;
+        const sick = Number(st.sickLeave) || 0;
+        const dayParts = [`打卡 ${fmtPayrollDay(workPunchDays)} 天`];
+        if (annual > 0) dayParts.push(`特休 ${fmtPayrollDay(annual)} 天`);
+        if (comp > 0) dayParts.push(`補休 ${fmtPayrollDay(comp)} 天`);
+        if (sick > 0) dayParts.push(`病假 ${fmtPayrollDay(sick)} 天（半薪）`);
         const dayNote = personalLeave > 0
-            ? `${days} 天 × ${base.toLocaleString()} 元／日；事假 ${fmtPayrollDay(personalLeave)} 日另扣`
-            : `${days} 天 × ${base.toLocaleString()} 元／日`;
+            ? `${dayParts.join('＋')}；事假 ${fmtPayrollDay(personalLeave)} 日另扣`
+            : `${dayParts.join('＋')} × ${base.toLocaleString()} 元／日`;
         additions.push({
-            label: '本薪（日薪 × 出勤天數）',
+            label: '本薪（日薪 × 計薪天數）',
             amount: earnedBase,
             note: dayNote
         });
     } else {
         const absent = Number(st.absent) || 0;
         const personalLeave = Number(st.personalLeave) || 0;
+        const sickLeave = Number(st.sickLeave) || 0;
         const absentBaseDeduction = calcAbsentBaseDeduction(base, absent);
-        const personalLeaveDeduction = calcPersonalLeaveDeduction(base, personalLeave, payType);
-        earnedBase = base - absentBaseDeduction - personalLeaveDeduction;
+        personalLeaveDeduction = calcPersonalLeaveDeduction(base, personalLeave, payType);
+        sickLeaveDeduction = calcSickLeaveDeduction(base, sickLeave, payType);
+        earnedBase = base - absentBaseDeduction - personalLeaveDeduction - sickLeaveDeduction;
         fullAttendanceBonus = calcProratedFullAttendance(maxFullAttendance, absent);
         const baseNotes = [];
         if (absent > 0) baseNotes.push(`缺勤 ${fmtPayrollDay(absent)} 日，扣 ${absentBaseDeduction.toLocaleString()} 元`);
         if (personalLeave > 0) baseNotes.push(`事假 ${fmtPayrollDay(personalLeave)} 日，扣 ${personalLeaveDeduction.toLocaleString()} 元`);
+        if (sickLeave > 0) baseNotes.push(`病假 ${fmtPayrollDay(sickLeave)} 日半薪，扣 ${sickLeaveDeduction.toLocaleString()} 元`);
         const baseNote = baseNotes.length ? `${baseNotes.join('；')}（底薪÷30）` : '';
         additions.push({ label: '本薪', amount: earnedBase, note: baseNote });
         if (fullAttendanceBonus > 0) {
@@ -223,7 +251,7 @@ function renderBreakdownHtml(breakdown, disclaimer, settings, payType, esc) {
     }).join('');
     return `
         <p class="text-xs text-amber-700 bg-amber-50 rounded p-2 mb-3">${escFn(disclaimer)}</p>
-        <p class="text-xs text-gray-500 mb-2">薪資類型：${payType === 'daily' ? '日薪' : '月薪'}（${escFn(settings.payRule)}）· 底薪 ${settings.baseSalary.toLocaleString()} 元${payType === 'daily' ? '／日（本薪＝日薪×出勤天數；遲早退依日薪÷8換算時薪扣款）' : ''}</p>
+        <p class="text-xs text-gray-500 mb-2">薪資類型：${payType === 'daily' ? '日薪' : '月薪'}（${escFn(settings.payRule)}）· 底薪 ${settings.baseSalary.toLocaleString()} 元${payType === 'daily' ? '／日（本薪＝日薪×計薪天數；含特休／補休全薪、病假半薪；遲早退依日薪÷8換算時薪扣款）' : ''}</p>
         <div class="grid sm:grid-cols-2 gap-3">
             <div class="bg-white rounded-lg p-2 border border-green-100">
                 <p class="text-xs font-bold text-green-800 mb-1">加項</p>
@@ -406,12 +434,14 @@ export function initPayrollReviewPanel(ctx) {
         let statsHtml = '';
         if (isDaily) {
             const reportDays = snapshot.checkInDaysReport ?? st.checkInDays ?? '—';
+            const punchDays = snapshot.workPunchDays != null ? snapshot.workPunchDays : snapshot.daysWorked;
             statsHtml = `
-                <p><strong>本期出勤（計薪）：</strong>${snapshot.daysWorked || 0} 天</p>
-                ${reportDays !== snapshot.daysWorked ? `<p class="text-xs text-gray-500">報表「實際出勤」：${reportDays} 天（排休日加班有打卡亦計入日薪）</p>` : ''}
+                <p><strong>本期計薪天數：</strong>${snapshot.daysWorked || 0} 天</p>
+                <p class="text-xs text-gray-500">打卡 ${fmtPayrollDay(punchDays)} 天；特休 ${fmtPayrollDay(st.annualLeave)}／補休 ${fmtPayrollDay(st.compensatoryLeave)}／病假 ${fmtPayrollDay(st.sickLeave)}（半薪計入）</p>
+                ${reportDays !== punchDays ? `<p class="text-xs text-gray-500">報表「實際出勤」：${reportDays} 天</p>` : ''}
                 <p><strong>遲到／早退：</strong>${st.lateMinutes ?? 0}／${st.earlyMinutes ?? 0} 分</p>
                 ${(st.lateMinutesHeldSinglePunch || st.earlyMinutesHeldSinglePunch) ? `<p class="text-xs text-amber-700">僅單次打卡日 ${st.lateMinutesHeldSinglePunch || 0}／${st.earlyMinutesHeldSinglePunch || 0} 分暫不計入薪資試算，請先於出勤頁申訴調整</p>` : ''}
-                <p class="text-xs text-gray-500">本薪＝日薪 × 出勤天數；遲早退扣款＝（日薪÷8）× 分鐘÷60（已扣彈性30分）</p>
+                <p class="text-xs text-gray-500">日薪＝日薪×計薪天數（含特休／補休全薪、病假半薪）；事假另扣；遲早退＝（日薪÷8）×分鐘÷60</p>
                 ${renderAnomalyDaysHtml(snapshot.dayAnomalies, esc)}
             `;
             document.getElementById('payroll-days-worked-val').textContent = snapshot.daysWorked || 0;
@@ -421,7 +451,7 @@ export function initPayrollReviewPanel(ctx) {
                 <p><strong>實際出勤：</strong>${st.checkInDays ?? st.attended ?? '—'} 天</p>
                 <p><strong>應休（系統）：</strong>${snapshot.rest?.scheduledRestDays ?? '—'} 天</p>
                 <p><strong>實休（系統）：</strong>${fmtPayrollDay(snapshot.rest?.actualRestDays)} 天</p>
-                <p><strong>特休／病假／事假：</strong>${fmtPayrollDay(st.annualLeave)}／${fmtPayrollDay(st.sickLeave)}／${fmtPayrollDay(st.personalLeave)}</p>
+                <p><strong>特休／病假／事假／補休：</strong>${fmtPayrollDay(st.annualLeave)}／${fmtPayrollDay(st.sickLeave)}／${fmtPayrollDay(st.personalLeave)}／${fmtPayrollDay(st.compensatoryLeave)}</p>
                 <p><strong>遲到／早退：</strong>${st.lateMinutes ?? 0}／${st.earlyMinutes ?? 0} 分</p>
                 ${(st.lateMinutesHeldSinglePunch || st.earlyMinutesHeldSinglePunch) ? `<p class="text-xs text-amber-700">僅單次打卡日 ${st.lateMinutesHeldSinglePunch || 0}／${st.earlyMinutesHeldSinglePunch || 0} 分暫不計入薪資試算，請先於出勤頁申訴調整</p>` : ''}
                 <p><strong>缺勤／異常：</strong>${fmtPayrollDay(st.absent)}／${st.anomalyDays ?? 0} 天</p>
