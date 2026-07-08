@@ -37,7 +37,8 @@ export function parseAiHumanReviewed(raw) {
             .filter(x => x && String(x.uid || '').trim())
             .map(x => ({
                 uid: String(x.uid).trim(),
-                name: String(x.name || x.uid).trim()
+                name: String(x.name || x.uid).trim(),
+                verdict: String(x.verdict || x.feedback || x.type || '').trim()
             }));
     } catch (e) {
         return [];
@@ -53,6 +54,17 @@ export function isAiReviewedByUser(raw, userId) {
     const uid = String(userId || '').trim();
     if (!uid) return false;
     return parseAiHumanReviewed(raw).some(r => r.uid === uid);
+}
+
+export function getAiHumanFeedbackForUser(raw, userId) {
+    const uid = String(userId || '').trim();
+    if (!uid) return null;
+    const item = parseAiHumanReviewed(raw).find(r => r.uid === uid);
+    if (!item) return null;
+    return {
+        verdict: String(item.verdict || '').trim(),
+        name: item.name || uid
+    };
 }
 
 export function formatAiHumanReviewedLabel(raw) {
@@ -172,8 +184,8 @@ export function buildAiAnalysisHtml(report, opts) {
     const findings = parseAiFindingsJson(report);
     const expandable = getAiExpandableDetails(findings);
     const currentUserId = opts.currentUserId || '';
+    const myFeedback = getAiHumanFeedbackForUser(report.AI_HumanReviewed, currentUserId);
     const reviewedByMe = isAiReviewedByUser(report.AI_HumanReviewed, currentUserId);
-    const reviewedLabel = formatAiHumanReviewedLabel(report.AI_HumanReviewed);
 
     const logId = opts.logId || report.LogID || '';
     const detailId = `ai-detail-${logId}`;
@@ -191,12 +203,32 @@ export function buildAiAnalysisHtml(report, opts) {
             </div>`;
     }
 
-    const reviewedHtml = reviewedLabel
-        ? `<p class="text-xs text-emerald-700 mt-1 font-medium">✓ 已讀：${escapeAiHtml(reviewedLabel)}</p>`
-        : '';
+    let reviewedHtml = '';
+    if (myFeedback && myFeedback.verdict) {
+        const verdictText = myFeedback.verdict === 'good' ? '好' : (myFeedback.verdict === 'bad' ? '需改' : myFeedback.verdict);
+        reviewedHtml = `<p class="text-xs text-emerald-700 mt-1 font-medium">✓ 已回饋：${escapeAiHtml(verdictText)}</p>`;
+    } else if (reviewedByMe) {
+        // 適配舊資料：只有已讀，沒有 verdict
+        const reviewedLabel = formatAiHumanReviewedLabel(report.AI_HumanReviewed);
+        reviewedHtml = reviewedLabel
+            ? `<p class="text-xs text-emerald-700 mt-1 font-medium">✓ 已讀：${escapeAiHtml(reviewedLabel)}</p>`
+            : '';
+    }
 
-    const markBtnHtml = (opts.console && !reviewedByMe && summary)
-        ? `<button type="button" class="btn btn-primary mt-2 text-xs py-1 px-2" data-action="markAiReviewed" data-log-id="${escapeAiHtml(logId)}">標記已讀</button>`
+    const markBtnHtml = (opts.console && (!myFeedback || !myFeedback.verdict) && summary)
+        ? `
+            <div class="flex flex-wrap gap-1.5 mt-2">
+              <button type="button"
+                class="btn btn-primary mt-2 text-xs py-1 px-2"
+                data-action="markAiFeedback"
+                data-log-id="${escapeAiHtml(logId)}"
+                data-feedback="good">好</button>
+              <button type="button"
+                class="btn btn-ghost mt-2 text-xs py-1 px-2"
+                data-action="markAiFeedback"
+                data-log-id="${escapeAiHtml(logId)}"
+                data-feedback="bad">需改</button>
+            </div>`
         : '';
 
     const disclaimerClass = opts.console ? 'text-[10px] text-gray-400 mt-1.5' : 'text-[10px] text-gray-400 mt-1.5';

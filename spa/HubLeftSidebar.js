@@ -201,7 +201,7 @@ export default {
             if (pid) openProject(pid);
         };
 
-        const markAiReviewed = async (report) => {
+        const markAiFeedback = async (report, verdict) => {
             const logId = report.LogID;
             if (!logId || markingLogId.value) return;
             const userId = props.currentUser?.userId || '';
@@ -210,7 +210,7 @@ export default {
             try {
                 const result = await apiRequest({
                     action: 'markSiteReportAiReviewed',
-                    payload: { logId, userId, userName }
+                    payload: { logId, userId, userName, verdict }
                 });
                 if (!result?.success) {
                     throw new Error(result?.message || '標記失敗');
@@ -278,7 +278,7 @@ export default {
             toggleExpanded,
             openProject,
             openReportProject,
-            markAiReviewed,
+            markAiFeedback,
             rerunAiAnalysis,
             markingLogId,
             rerunningLogId
@@ -377,10 +377,16 @@ export default {
 
                                 <div class="flex flex-wrap gap-1.5 mt-2">
                                     <button type="button"
-                                        @click="markAiReviewed(report)"
+                                        @click="markAiFeedback(report, 'good')"
                                         :disabled="markingLogId === report.LogID"
                                         class="text-xs font-semibold bg-blue-600 text-white px-2.5 py-1 rounded hover:bg-blue-700 disabled:opacity-50">
-                                        {{ markingLogId === report.LogID ? '處理中…' : '標記已讀' }}
+                                        {{ markingLogId === report.LogID ? '處理中…' : '好' }}
+                                    </button>
+                                    <button type="button"
+                                        @click="markAiFeedback(report, 'bad')"
+                                        :disabled="markingLogId === report.LogID"
+                                        class="text-xs font-semibold bg-white border border-gray-300 text-gray-700 px-2.5 py-1 rounded hover:bg-gray-50 disabled:opacity-50">
+                                        {{ markingLogId === report.LogID ? '處理中…' : '需改' }}
                                     </button>
                                     <button type="button"
                                         @click="rerunAiAnalysis(report)"

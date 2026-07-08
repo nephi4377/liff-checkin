@@ -1067,7 +1067,10 @@ document.addEventListener('click', (e) => {
       }
       break;
     case 'markAiReviewed':
-      LogActions.handleMarkAiReviewed(logId);
+      LogActions.handleMarkAiReviewed(logId, target.dataset?.verdict);
+      break;
+    case 'markAiFeedback':
+      LogActions.handleMarkAiReviewed(logId, target.dataset?.feedback);
       break;
     // 【⭐️ 核心新增：處理照片管理視窗的按鈕事件 ⭐️】
     case 'triggerPhotoUpload':

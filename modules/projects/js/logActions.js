@@ -328,10 +328,17 @@ export function handleDeleteLog(logId) {
 }
 
 /** 標記施工回報 AI 已人工覆核 */
-export function handleMarkAiReviewed(logId) {
+export function handleMarkAiReviewed(logId, verdict) {
     if (!logId) return;
     const card = document.getElementById('log-' + logId);
-    const btn = card && card.querySelector('[data-action="markAiReviewed"]');
+    let btn = null;
+    const v = String(verdict || '').trim();
+    if (v) {
+        btn = card && card.querySelector(`[data-action="markAiFeedback"][data-feedback="${v}"]`);
+    }
+    if (!btn) {
+        btn = card && card.querySelector('[data-action="markAiReviewed"]');
+    }
     if (btn) {
         btn.disabled = true;
         btn.textContent = '處理中…';
@@ -342,7 +349,8 @@ export function handleMarkAiReviewed(logId) {
         payload: {
             logId: logId,
             userId: state.currentUserId,
-            userName: state.currentUserName
+            userName: state.currentUserName,
+            verdict: v
         }
     })
         .then(result => {
@@ -372,7 +380,8 @@ export function handleMarkAiReviewed(logId) {
                     currentUserId: state.currentUserId
                 });
             }
-            showGlobalNotification('已標記已讀', 3000, 'success');
+            const msg = v === 'good' ? '已標記：好' : (v === 'bad' ? '已標記：需改' : '已標記已讀');
+            showGlobalNotification(msg, 3000, 'success');
         })
         .catch(err => {
             if (btn) {
