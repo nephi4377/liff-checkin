@@ -54,6 +54,14 @@ function calcAbsentBaseDeduction(baseSalary, absentDays) {
     return Math.round(base / PAYROLL_MONTHLY_DAYS * absent);
 }
 
+function calcPersonalLeaveDeduction(baseSalary, personalLeaveDays, payType) {
+    const days = Number(personalLeaveDays) || 0;
+    const base = Number(baseSalary) || 0;
+    if (days <= 0 || base <= 0) return 0;
+    if (payType === 'daily') return Math.round(base * days);
+    return Math.round(base / PAYROLL_MONTHLY_DAYS * days);
+}
+
 function calcProratedFullAttendance(maxBonus, absentDays) {
     const max = Number(maxBonus) || 0;
     const absent = Number(absentDays) || 0;
@@ -99,22 +107,31 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
     let earnedBase = base;
     let fullAttendanceBonus = 0;
     const maxFullAttendance = Number(settings.fullAttendanceBonusMax) || 0;
+    let personalLeaveDeduction = 0;
     if (payType === 'daily') {
         const days = Number(snapshot.daysWorked) || 0;
+        const personalLeave = Number(st.personalLeave) || 0;
         earnedBase = base * days;
+        personalLeaveDeduction = calcPersonalLeaveDeduction(base, personalLeave, payType);
+        const dayNote = personalLeave > 0
+            ? `${days} 天 × ${base.toLocaleString()} 元／日；事假 ${fmtPayrollDay(personalLeave)} 日另扣`
+            : `${days} 天 × ${base.toLocaleString()} 元／日`;
         additions.push({
             label: '本薪（日薪 × 出勤天數）',
             amount: earnedBase,
-            note: `${days} 天 × ${base.toLocaleString()} 元／日`
+            note: dayNote
         });
     } else {
         const absent = Number(st.absent) || 0;
+        const personalLeave = Number(st.personalLeave) || 0;
         const absentBaseDeduction = calcAbsentBaseDeduction(base, absent);
-        earnedBase = base - absentBaseDeduction;
+        const personalLeaveDeduction = calcPersonalLeaveDeduction(base, personalLeave, payType);
+        earnedBase = base - absentBaseDeduction - personalLeaveDeduction;
         fullAttendanceBonus = calcProratedFullAttendance(maxFullAttendance, absent);
-        const baseNote = absent > 0
-            ? `缺勤 ${fmtPayrollDay(absent)} 日，扣 ${absentBaseDeduction.toLocaleString()} 元（底薪÷30）`
-            : '';
+        const baseNotes = [];
+        if (absent > 0) baseNotes.push(`缺勤 ${fmtPayrollDay(absent)} 日，扣 ${absentBaseDeduction.toLocaleString()} 元`);
+        if (personalLeave > 0) baseNotes.push(`事假 ${fmtPayrollDay(personalLeave)} 日，扣 ${personalLeaveDeduction.toLocaleString()} 元`);
+        const baseNote = baseNotes.length ? `${baseNotes.join('；')}（底薪÷30）` : '';
         additions.push({ label: '本薪', amount: earnedBase, note: baseNote });
         if (fullAttendanceBonus > 0) {
             const faNote = absent > 0 && fullAttendanceBonus < maxFullAttendance
@@ -171,6 +188,14 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
             note += `。僅單次打卡日 ${payLe.heldLate}／${payLe.heldEarly} 分暫不扣，請申訴調整`;
         }
         deductions.push({ label: '遲到早退扣款', amount: attendanceTimeDeduction, note });
+    }
+    if (personalLeaveDeduction > 0 && payType === 'daily') {
+        const personalLeave = Number(st.personalLeave) || 0;
+        deductions.push({
+            label: '事假扣款',
+            amount: personalLeaveDeduction,
+            note: `事假 ${fmtPayrollDay(personalLeave)} 日（日薪×天數）`
+        });
     }
     deductions.push({ label: '其他扣款', amount: 0, note: '主管審核時填入（員工送審時為 0）' });
 
