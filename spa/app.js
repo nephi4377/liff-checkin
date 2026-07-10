@@ -149,7 +149,7 @@ const App = {
             // 【您的要求】新增報價單工具整合路由
             '#/budget-web': { name: 'iframe', src: 'tools/BudgetWeb_Standalone.html', title: '報價單解析器' },
             '#/budget-audit': { name: 'iframe', src: 'tools/BudgetAuditor_Standalone_V2.html', title: '案場驗收表' },
-            '#/accounting-ingest': { name: 'iframe', src: 'modules/accounting/index.html', title: '收支登錄', params: '&route=accounting_ingest.html' },
+            '#/accounting-ingest': { name: 'iframe', src: 'modules/accounting/index.html', title: '添心會計' },
             '#/accounting': { name: 'iframe', src: 'modules/accounting/index.html', title: '添心會計' },
             '#/accounting/vendor-payment-approve': { name: 'iframe', src: 'modules/accounting/index.html', title: '請款審核', params: '&route=ledger_review.html' },
             '#/accounting/vendor-payment-finance': { name: 'iframe', src: 'modules/accounting/index.html', title: '廠商待匯款', params: '&route=vendor_payment_finance.html' },
@@ -157,7 +157,7 @@ const App = {
             '#/accounting/payroll-finance': { name: 'iframe', src: 'modules/accounting/index.html', title: '薪資待匯款', params: '&route=payroll_finance.html' },
             '#/accounting/payment-request': { name: 'iframe', src: 'modules/accounting/index.html', title: '待付款申請', params: '&route=payment_request.html' },
             '#/help': { name: 'iframe', src: 'modules/help/index.html', title: '使用教學' },
-            '#/help/accounting-ingest': { name: 'iframe', src: 'modules/help/accounting-ingest.html', title: '收支登錄說明' },
+            '#/help/accounting-ingest': { name: 'iframe', src: 'modules/help/payment-request.html', title: '待請款說明' },
             '#/help/payroll': { name: 'iframe', src: 'modules/help/payroll.html', title: '薪資說明' },
             '#/help/payroll/employee': { name: 'iframe', src: 'modules/help/payroll-employee.html', title: '薪資 — 員工送審' },
             '#/help/payroll/review': { name: 'iframe', src: 'modules/help/payroll-review.html', title: '薪資 — 審核' },

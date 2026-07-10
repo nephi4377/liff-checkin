@@ -10,7 +10,7 @@ var AccountingShell = (function () {
   var currentPage = '';
 
   var PAGE_TITLES = {
-    'accounting_ingest.html': '收支登錄',
+    'accounting_ingest.html': '收支登錄（已停用）',
     'payment_request.html': '待付款申請',
     'payment_request_compose.html': '精細請款建單',
     'vendor_status.html': '款項進度',

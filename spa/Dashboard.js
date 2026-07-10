@@ -49,10 +49,9 @@ export default {
         const floorplanStraightenerUrl = computed(() => `#/floorplan-straightener`);
         const budgetWebUrl = computed(() => `#/budget-web`);
         const budgetAuditUrl = computed(() => `#/budget-audit`);
-        const accountingUrl = computed(() => '#/accounting-ingest');
         const accountingHubUrl = computed(() => '#/accounting');
         const helpUrl = computed(() => '#/help');
-        const helpAccountingUrl = computed(() => '#/help/accounting-ingest');
+        const helpAccountingUrl = computed(() => '#/help/payment-request');
         const helpPayrollUrl = computed(() => '#/help/payroll');
         const helpPayrollReviewUrl = computed(() => '#/help/payroll/review');
         const helpPaymentRequestUrl = computed(() => '#/help/payment-request');
@@ -368,7 +367,6 @@ export default {
             floorplanStraightenerUrl,
             budgetWebUrl,
             budgetAuditUrl,
-            accountingUrl,
             accountingHubUrl,
             helpUrl,
             helpAccountingUrl,
@@ -408,7 +406,7 @@ export default {
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center text-xl">📖</div>
                     <div class="min-w-0 flex-1">
                         <h2 class="text-base font-bold text-sky-900 leading-tight">使用教學</h2>
-                        <p class="text-xs text-sky-800/80 mt-0.5 leading-snug">系統操作說明、收支登錄、薪資與請款流程。</p>
+                        <p class="text-xs text-sky-800/80 mt-0.5 leading-snug">系統操作說明、待請款、薪資與會計流程。</p>
                     </div>
                     <span class="flex-shrink-0 text-sky-600 text-sm font-bold group-hover:translate-x-0.5 transition-transform">查看 →</span>
                 </div>
@@ -533,23 +531,13 @@ export default {
                     </div>
                 </a>
 
-                <!-- 1b. 收支登錄（HUB 內嵌，共用員工／案場快取） -->
-                <a v-if="currentUser && currentUser.permission >= 2" :href="accountingUrl"
-                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-emerald-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">💰</div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">收支登錄</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">連續記帳；成功後可同步到進出款項群。</p>
-                    </div>
-                </a>
-
-                <!-- 1c. 會計功能選單 -->
+                <!-- 1b. 會計功能選單（已取代獨立收支登錄，避免與 HUB 流程不同步） -->
                 <a v-if="currentUser && currentUser.permission >= 4" :href="accountingHubUrl"
                     class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-teal-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center text-xl">📒</div>
                     <div class="min-w-0 flex-1">
                         <h2 class="text-base font-bold text-gray-800 leading-tight">會計功能</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">廠商、收款帳戶、款項進度等會計頁面入口。</p>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">待付款、審核、匯款、案件毛利與薪資入口。</p>
                     </div>
                 </a>
 
@@ -736,13 +724,13 @@ export default {
                     </div>
                 </a>
 
-                <!-- 18. 收支登錄說明 -->
+                <!-- 18. 待請款／會計說明 -->
                 <a :href="helpAccountingUrl"
                     class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-sky-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center text-xl">💡</div>
                     <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">收支登錄說明</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">記帳、分攤案號與 LINE 快速記帳。</p>
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">待請款說明</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">申請、審核、匯款；已取代獨立收支登錄頁。</p>
                     </div>
                 </a>
 
