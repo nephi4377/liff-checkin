@@ -80,7 +80,7 @@
       var ui = AccountingUi.feedback();
       function setMsg(t) { ui.setMsg(t); }
       function setOk(t) { ui.setOk(t); }
-      function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+      function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 
       function bankLine(row) {
         if (row.bank_incomplete) return '<span class="tag warn">銀行帳戶不完整，請至員工資料維護</span>';
@@ -97,6 +97,71 @@
           var amtText = amt > 0 ? (sign + amt.toLocaleString('zh-TW')) : '—';
           return '<li style="margin:2px 0"><span>' + esc(row.label) + note + '</span> <strong>' + amtText + '</strong></li>';
         }).join('') + '</ul>';
+      }
+
+      function isEditableDeductionLabel(label) {
+        var s = String(label || '');
+        if (!s) return false;
+        if (s.indexOf('其他扣款') >= 0) return false;
+        return true;
+      }
+
+      function editableDeductionsHtml(deductions, prId) {
+        if (!deductions || !deductions.length) return '<p class="sub">—</p>';
+        return '<ul style="margin:4px 0;padding-left:0;list-style:none;font-size:13px">' + deductions.map(function (row, idx) {
+          var amt = parseInt(row.amount, 10) || 0;
+          var note = row.note ? '<span style="color:#777;display:block;font-size:12px">' + esc(row.note) + '</span>' : '';
+          if (!isEditableDeductionLabel(row.label)) {
+            var amtText = amt > 0 ? '−' + amt.toLocaleString('zh-TW') : '—';
+            return '<li style="margin:4px 0;padding:6px 0;border-bottom:1px solid #f0f0f0"><span>' + esc(row.label) + '</span> <strong style="float:right">' + amtText + '</strong>' + note + '</li>';
+          }
+          return '<li style="margin:4px 0;padding:6px 0;border-bottom:1px solid #f0f0f0">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
+            '<span>' + esc(row.label) + '</span>' +
+            '<span style="display:flex;align-items:center;gap:4px;white-space:nowrap">−' +
+            '<input type="number" class="ded-line-input" min="0" step="1" ' +
+            'data-pr="' + prId + '" data-idx="' + idx + '" data-orig="' + amt + '" data-label="' + esc(row.label) + '" ' +
+            'value="' + amt + '" style="width:96px;padding:6px;border:1px solid #ccc;border-radius:6px;font-size:14px" />' +
+            '</span></div>' + note + '</li>';
+        }).join('') + '</ul>' +
+          '<p class="sub" style="margin:4px 0 0;color:#666">減項有異議可直接改金額；實發會自動重算。請在審核備註寫原因。</p>';
+      }
+
+      function recalcFinalAmount(prId) {
+        var root = document.getElementById('pr-' + prId);
+        if (!root) return;
+        var est = parseInt(root.getAttribute('data-est'), 10) || 0;
+        var bonusEl = document.getElementById('bonus-' + prId);
+        var dedEl = document.getElementById('ded-' + prId);
+        var finalEl = document.getElementById('final-' + prId);
+        if (!finalEl) return;
+        var bonus = Number(bonusEl && bonusEl.value) || 0;
+        var otherDed = Number(dedEl && dedEl.value) || 0;
+        var delta = 0;
+        root.querySelectorAll('.ded-line-input').forEach(function (inp) {
+          var orig = parseInt(inp.getAttribute('data-orig'), 10) || 0;
+          var now = Math.max(0, parseInt(inp.value, 10) || 0);
+          delta += (orig - now);
+        });
+        finalEl.value = String(Math.max(0, est + delta + bonus - otherDed));
+      }
+
+      function collectDeductionOverrides(prId) {
+        var root = document.getElementById('pr-' + prId);
+        if (!root) return [];
+        var out = [];
+        root.querySelectorAll('.ded-line-input').forEach(function (inp) {
+          var orig = parseInt(inp.getAttribute('data-orig'), 10) || 0;
+          var now = Math.max(0, parseInt(inp.value, 10) || 0);
+          if (now === orig) return;
+          out.push({
+            label: inp.getAttribute('data-label') || '',
+            original_amount: orig,
+            amount: now,
+            idx: parseInt(inp.getAttribute('data-idx'), 10)
+          });
+        });
+        return out;
       }
 
       function projectRewardHtml(row) {
@@ -122,6 +187,7 @@
         div.className = 'item';
         div.id = 'pr-' + row.payroll_request_id;
         var est = parseInt(row.estimated_net, 10) || 0;
+        div.setAttribute('data-est', String(est));
         var ot = Number(row.overtime_hours) || 0;
         var remote = parseInt(row.remote_allowance, 10) || 0;
         var pb = row.payroll_breakdown || {};
@@ -135,7 +201,7 @@
           breakdownBlock =
             '<div class="row2" style="margin-top:8px">' +
             '<div><p class="sub" style="font-weight:600;color:#137333;margin:0">加項</p>' + lineItemsHtml(additions, '+') + '</div>' +
-            '<div><p class="sub" style="font-weight:600;color:#c5221f;margin:0">減項</p>' + lineItemsHtml(deductions, '−') + '</div>' +
+            '<div><p class="sub" style="font-weight:600;color:#c5221f;margin:0">減項（可改）</p>' + editableDeductionsHtml(deductions, row.payroll_request_id) + '</div>' +
             '</div>';
         }
         div.innerHTML =
@@ -150,12 +216,12 @@
           '<div class="bank">' + bankLine(row) + '</div>' +
           '<div class="review-panel">' +
           '<div class="row2">' +
-          '<div><label>一般獎金（元）</label><input type="number" id="bonus-' + row.payroll_request_id + '" min="0" step="1" value="0" /></div>' +
-          '<div><label>其他扣款（元）</label><input type="number" id="ded-' + row.payroll_request_id + '" min="0" step="1" value="' + (parseInt(row.deduction,10)||0) + '" /></div>' +
+          '<div><label>一般獎金（元）</label><input type="number" id="bonus-' + row.payroll_request_id + '" class="recalc-final" min="0" step="1" value="0" /></div>' +
+          '<div><label>其他扣款（元）</label><input type="number" id="ded-' + row.payroll_request_id + '" class="recalc-final" min="0" step="1" value="' + (parseInt(row.deduction,10)||0) + '" /></div>' +
           '</div>' +
           '<label>確認實發（元）</label><input type="number" id="final-' + row.payroll_request_id + '" min="0" step="1" value="' + est + '" />' +
           '<label>獎金／備註說明</label><input type="text" id="bnote-' + row.payroll_request_id + '" placeholder="例：介紹獎金、年終（勿填專案報酬）" value="" />' +
-          '<label>審核備註</label><input type="text" id="note-' + row.payroll_request_id + '" placeholder="選填；減項說明可改" value="' + esc(row.supplement_note || '') + '" />' +
+          '<label>審核備註</label><input type="text" id="note-' + row.payroll_request_id + '" placeholder="減項有改請寫原因" value="' + esc(row.supplement_note || '') + '" />' +
           '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
           '<button type="button" class="btn btn-ok" data-approve="' + row.payroll_request_id + '">核准</button>' +
           '<button type="button" class="btn btn-warn" data-reject="' + row.payroll_request_id + '">退回</button>' +
@@ -225,6 +291,19 @@
         }
       }
 
+      document.getElementById('list').addEventListener('input', function (e) {
+        var t = e.target;
+        if (!t) return;
+        var prId = null;
+        if (t.classList && t.classList.contains('ded-line-input')) {
+          prId = t.getAttribute('data-pr');
+        } else if (t.classList && t.classList.contains('recalc-final')) {
+          var m = (t.id || '').match(/^(?:bonus|ded)-(.+)$/);
+          prId = m && m[1];
+        }
+        if (prId) recalcFinalAmount(prId);
+      });
+
       document.getElementById('list').addEventListener('click', async function (e) {
         var approveId = e.target.getAttribute('data-approve');
         var rejectId = e.target.getAttribute('data-reject');
@@ -248,13 +327,28 @@
             if (!rj.success) throw new Error(rj.message);
             setOk(rj.message || '已退回');
           } else {
+            var overrides = collectDeductionOverrides(id);
+            var noteVal = document.getElementById('note-' + id).value.trim();
+            if (overrides.length && !noteVal) {
+              setMsg('有調整減項時請在審核備註寫原因');
+              throw new Error('有調整減項時請在審核備註寫原因');
+            }
+            if (overrides.length) {
+              var adjLines = overrides.map(function (o) {
+                return o.label + ' ' + o.original_amount + '→' + o.amount;
+              }).join('；');
+              if (noteVal.indexOf('減項調整') < 0) {
+                noteVal = (noteVal ? noteVal + '；' : '') + '減項調整：' + adjLines;
+              }
+            }
             var ap = await AccountingApi.payrollRequestApprove(session, {
               payroll_request_id: id,
               bonus_amount: Number(document.getElementById('bonus-' + id).value) || 0,
               deduction: Number(document.getElementById('ded-' + id).value) || 0,
               final_amount: Number(document.getElementById('final-' + id).value) || 0,
               bonus_note: document.getElementById('bnote-' + id).value.trim(),
-              note: document.getElementById('note-' + id).value.trim()
+              note: noteVal,
+              deduction_overrides: overrides
             });
             if (!ap.success) throw new Error(ap.message);
             setOk(ap.message || '已核准，會計可至薪資待匯款匯出');
