@@ -1,4 +1,4 @@
-import Dashboard from './Dashboard.js?v=26.05.07.3';
+import Dashboard from './Dashboard.js?v=26.07.08.1';
 import ProjectBoard from './ProjectBoard.js';
 import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.06.21.6';
 import HubLeftSidebar from './HubLeftSidebar.js?v=26.06.21.5';
@@ -118,6 +118,11 @@ const App = {
             return null;
         });
         const hasAdminRights = computed(() => Number(currentUser.value?.permission || 0) >= 4);
+        const isHelpActive = computed(() => {
+            const hash = window.location.hash || '#';
+            const path = hash.split('?')[0];
+            return path === '#/help' || path.startsWith('#/help/');
+        });
 
         // [v411.0 SPA化] 簡易路由系統
         const routes = {
@@ -150,6 +155,21 @@ const App = {
             '#/accounting/vendor-payment-finance': { name: 'iframe', src: 'modules/accounting/index.html', title: '廠商待匯款', params: '&route=vendor_payment_finance.html' },
             '#/accounting/payroll-review': { name: 'iframe', src: 'modules/accounting/index.html', title: '薪資審核', params: '&route=payroll_review.html' },
             '#/accounting/payroll-finance': { name: 'iframe', src: 'modules/accounting/index.html', title: '薪資待匯款', params: '&route=payroll_finance.html' },
+            '#/accounting/payment-request': { name: 'iframe', src: 'modules/accounting/index.html', title: '待付款申請', params: '&route=payment_request.html' },
+            '#/help': { name: 'iframe', src: 'modules/help/index.html', title: '使用教學' },
+            '#/help/accounting-ingest': { name: 'iframe', src: 'modules/help/accounting-ingest.html', title: '收支登錄說明' },
+            '#/help/payroll': { name: 'iframe', src: 'modules/help/payroll.html', title: '薪資說明' },
+            '#/help/payroll/employee': { name: 'iframe', src: 'modules/help/payroll-employee.html', title: '薪資 — 員工送審' },
+            '#/help/payroll/review': { name: 'iframe', src: 'modules/help/payroll-review.html', title: '薪資 — 審核' },
+            '#/help/payroll/finance': { name: 'iframe', src: 'modules/help/payroll-finance.html', title: '薪資 — 待匯款' },
+            '#/help/payment-request': { name: 'iframe', src: 'modules/help/payment-request.html', title: '待請款說明' },
+            '#/help/payment-request/apply': { name: 'iframe', src: 'modules/help/payment-request-apply.html', title: '待請款 — 申請' },
+            '#/help/payment-request/review': { name: 'iframe', src: 'modules/help/payment-request-review.html', title: '待請款 — 審核' },
+            '#/help/payment-request/finance': { name: 'iframe', src: 'modules/help/payment-request-finance.html', title: '待請款 — 匯款' },
+            '#/help/attendance': { name: 'iframe', src: 'modules/help/attendance.html', title: '出勤與假勤說明' },
+            '#/help/projects': { name: 'iframe', src: 'modules/help/projects.html', title: '案場與施工回報說明' },
+            '#/help/design-tools': { name: 'iframe', src: 'modules/help/design-tools.html', title: '設計工具說明' },
+            '#/help/budget': { name: 'iframe', src: 'modules/help/budget.html', title: '報價與驗收說明' },
         };
         // [v513.0 新增] 補上員工資料編輯頁面的路由
         routes['#/employee-editor'] = { name: 'iframe', src: 'modules/attendance/employee_editor.html', title: '員工資料編輯' }; // [v515.0 修正] 改為絕對路徑
@@ -726,6 +746,7 @@ const App = {
             landingPageUrlCopied,
             copyLandingPageUrl,
             hubLiffId: CONFIG.HUB_LIFF_ID || '',
+            isHelpActive,
         };
     }, // [v418.1 修正] 補上遺失的逗號，解決 setup() 與 template 之間的語法錯誤
     template: `
@@ -748,13 +769,11 @@ const App = {
             <!-- [v420.0 RWD優化] 增加手機版 header 的響應式設計 -->
             <header class="flex-shrink-0 border-b border-gray-200 py-0.5">
                 <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center container mx-auto px-4 sm:px-6 lg:px-8 gap-1">
-                     <!-- [v421.0 UX優化] 移除標題與歡迎詞，讓版面更簡潔 -->
-                     <div class="flex items-center">
-                         <!-- [v423.0 UX優化] 移除 v-if，讓導覽列在 iframe 頁面也顯示 -->
-                         <!-- [v612.0 UX優化] 縮小上下 padding，字級維持 text-base，讓主內容有更多版面 -->
+                     <div class="flex items-center flex-wrap gap-x-6 gap-y-1">
                          <nav class="-mb-px flex gap-6" aria-label="Tabs">
                              <a href="#/dashboard" :class="['py-1.5 px-1 text-base font-bold', currentView.name === 'dashboard' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:border-gray-300']">主控台</a>
                              <a href="#/project-board" :class="['py-1.5 px-1 text-base font-bold', currentView.name === 'project-board' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:border-gray-300']">專案看板</a>
+                             <a href="#/help" :class="['py-1.5 px-1 text-base font-bold', isHelpActive ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:border-gray-300']">使用教學</a>
                          </nav>
                      </div>
                 </div>

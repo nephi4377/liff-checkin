@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>薪資 — 薪資審核</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/modules/help/help.css">
+</head>
+<body class="help-page">
+  <div class="help-wrap wide">
+    <p class="help-back"><a href="#/help/payroll" data-hub-route="#/help/payroll">← 薪資總覽</a></p>
+    <header class="help-header">
+      <h1>薪資 ② 薪資審核</h1>
+      <p class="lead">主管（權限 ≥ 5）審核薪資單（員工自審或主管代開）。請逐筆確認本薪、加減項與一般獎金，填寫後<strong>核准</strong>或<strong>退回並說明原因</strong>。專案報酬只顯示、不併入本月薪資。</p>
+    </header>
+
+    <nav class="help-subnav">
+      <a href="#/help/payroll/employee">① 員工送審</a>
+      <a href="#/help/payroll/review">② 薪資審核</a>
+      <a href="#/help/payroll/finance">③ 待匯款</a>
+    </nav>
+
+    <section id="flowchart" class="help-section help-flow-section">
+      <h2>審核流程圖</h2>
+      <figure class="help-img-ph" data-img="/assets/help/payroll/02-review-flow.png" data-alt="薪資審核流程">
+        <div class="help-img-placeholder">📷 <code>02-review-flow.png</code><br>薪資審核流程圖（核准／退回分支）</div>
+      </figure>
+      <div class="help-flow">
+        <div class="help-flow-step is-start">待審列表</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step">開啟送審單（員工自審／主管代開）</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step">核對本薪、減項、一般獎金；專案報酬僅對照</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-branch">
+          <div class="help-flow-branch-col">
+            <span class="help-flow-branch-label">核准</span>
+            <div class="help-flow-step">填獎金、扣款、備註</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step is-end">進薪資待匯款</div>
+          </div>
+          <div class="help-flow-branch-col">
+            <span class="help-flow-branch-label">退回</span>
+            <div class="help-flow-step">填退回原因</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step is-end">員工修改後重送</div>
+          </div>
+        </div>
+      </div>
+      <p class="help-flow-note">核准時<strong>不會</strong>立刻登錄收支；等財務匯款後一併處理。</p>
+    </section>
+
+    <section class="help-section">
+      <h2>操作步驟</h2>
+      <ol class="help-steps">
+        <li>主控台 → 會計功能 →「<strong>薪資審核</strong>」，或網址 <code>#/accounting/payroll-review</code>。</li>
+        <li>在待審列表找到該員工、該期別，點進入詳情。</li>
+        <li>核對本薪（完整底薪）、缺勤／事假／病假等<strong>減項</strong>、加班／津貼與備註。</li>
+        <li>必要時調整<strong>一般獎金、其他扣款</strong>（專案報酬不填進獎金欄、不併薪）。</li>
+        <li>確認銀行帳戶完整 → 按「<strong>核准</strong>」；有疑慮則「<strong>退回</strong>」並填原因。</li>
+        <li>核准後項目進入「薪資待匯款」，由財務處理匯款。</li>
+      </ol>
+      <figure class="help-img-ph" data-img="/assets/help/payroll/04-payroll-review.png" data-alt="薪資審核列表">
+        <div class="help-img-placeholder">📷 <code>04-payroll-review.png</code><br>薪資審核列表畫面</div>
+      </figure>
+      <figure class="help-img-ph" data-img="/assets/help/payroll/04b-review-detail.png" data-alt="審核詳情">
+        <div class="help-img-placeholder">📷 <code>04b-review-detail.png</code><br>審核詳情：出勤明細、獎金扣款、核准／退回按鈕</div>
+      </figure>
+      <figure class="help-img-ph" data-img="/assets/help/payroll/04c-reject-reason.png" data-alt="退回原因">
+        <div class="help-img-placeholder">📷 <code>04c-reject-reason.png</code><br>退回時填寫原因（員工看得到）</div>
+      </figure>
+      <a class="help-cta" href="#/accounting/payroll-review" data-hub-route="#/accounting/payroll-review">前往薪資審核 →</a>
+    </section>
+
+    <section class="help-section">
+      <h2>核准前檢查清單</h2>
+      <table class="help-table">
+        <thead><tr><th>檢查項目</th><th>說明</th></tr></thead>
+        <tbody>
+          <tr><td>出勤與請假</td><td>本薪完整列示；缺勤／事假／病假／颱風假應在減項可見</td></tr>
+          <tr><td>一般獎金／扣款</td><td>有調整請寫備註；勿把專案報酬填進獎金欄</td></tr>
+          <tr><td>銀行帳戶</td><td>缺帳戶時無法匯款，請先請員工或管理員補齊</td></tr>
+          <tr><td>專案報酬</td><td>待審頁只顯示（含施工／結案日），另簽收另付，不併本月薪資</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="help-section">
+      <h2>待辦提醒</h2>
+      <p>主控台左側「款項待辦」會顯示待審薪資筆數（管理員可見）。員工未送審時，主管也可在出勤報表代開審；收到後請盡快審核，避免影響發薪時程。</p>
+      <div class="help-callout"><strong>注意：</strong>正式核准請到會計 → 薪資審核；出勤報表的代開審只負責建立待審單。</div>
+    </section>
+
+    <footer class="help-footer">下一步：<a href="#/help/payroll/finance">薪資待匯款說明 →</a></footer>
+  </div>
+  <script src="/modules/help/help.js"></script>
+</body>
+</html>

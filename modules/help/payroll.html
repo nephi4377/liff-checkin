@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>薪資 — 使用說明總覽</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/modules/help/help.css">
+</head>
+<body class="help-page">
+  <div class="help-wrap wide">
+    <p class="help-back"><a href="#/help" data-hub-route="#/help">← 使用說明目錄</a></p>
+    <header class="help-header">
+      <h1>薪資</h1>
+      <p class="lead">員工在<strong>個人出勤頁</strong>核對並送審（或主管代開審）；主管在<strong>會計 → 薪資審核</strong>核准或退回；財務匯款後，員工於網頁與 LINE 查看實領。專案報酬另付，不併薪資單。</p>
+    </header>
+
+    <section id="flowchart" class="help-section help-flow-section">
+      <h2>總流程圖</h2>
+      <figure class="help-img-ph" data-img="/assets/help/payroll/00-flow-diagram.png" data-alt="薪資總流程">
+        <div class="help-img-placeholder">📷 待補圖：薪資全流程<br><small><code>assets/help/payroll/00-flow-diagram.png</code></small></div>
+      </figure>
+      <div class="help-flow" aria-label="薪資主流程">
+        <div class="help-flow-step is-role-emp">員工：核對並送審</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step is-role-mgr">主管：薪資審核 ≥5</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-branch">
+          <div class="help-flow-branch-col">
+            <span class="help-flow-branch-label">核准</span>
+            <div class="help-flow-step is-role-fin">財務：薪資待匯款 ≥4</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step is-end">員工查看實領</div>
+          </div>
+          <div class="help-flow-branch-col">
+            <span class="help-flow-branch-label">退回</span>
+            <div class="help-flow-step is-role-emp">員工修改後重送</div>
+          </div>
+        </div>
+      </div>
+      <p class="help-flow-note">考勤儀表板<strong>不再</strong>審核薪資，請到會計模組處理。</p>
+    </section>
+
+    <section class="help-section">
+      <h2>分階段說明</h2>
+      <p>依你的身分點下方卡片，查看步驟與截圖位置。</p>
+      <div class="help-card-grid" style="margin-top:.85rem;">
+        <a class="help-card" href="#/help/payroll/employee">
+          <h3>① 員工核對送審</h3>
+          <p>我的出勤與假勤 → 選期別 → 確認出勤與試算 → 送出薪資核對。</p>
+          <span class="badge">全體員工 · 網頁</span>
+        </a>
+        <a class="help-card" href="#/help/payroll/review">
+          <h3>② 薪資審核</h3>
+          <p>主管查看送審單、填獎金扣款、核准或退回並說明原因。</p>
+          <span class="badge">權限 ≥ 5</span>
+        </a>
+        <a class="help-card" href="#/help/payroll/finance">
+          <h3>③ 薪資待匯款</h3>
+          <p>匯出中信薪轉檔、銀行匯款後標記已匯；員工收到 LINE 通知。</p>
+          <span class="badge">權限 ≥ 4</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="help-section">
+      <h2>常見問題</h2>
+      <table class="help-table">
+        <thead><tr><th>狀況</th><th>怎麼做</th></tr></thead>
+        <tbody>
+          <tr><td>送審後發現填錯</td><td>須等主管<strong>退回</strong>後才能改</td></tr>
+          <tr><td>不知道審核進度</td><td>個人頁看狀態；主管看會計 → 薪資審核</td></tr>
+          <tr><td>匯款帳戶有誤</td><td>請管理人員更新員工資料中的銀行帳戶</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer class="help-footer">添心設計 · 內部使用</footer>
+  </div>
+  <script src="/modules/help/help.js"></script>
+</body>
+</html>

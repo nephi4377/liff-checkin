@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>出勤與假勤 — 使用說明</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/modules/help/help.css">
+</head>
+<body class="help-page">
+  <div class="help-wrap wide">
+    <p class="help-back"><a href="#/help" data-hub-route="#/help">← 使用說明目錄</a></p>
+    <header class="help-header">
+      <h1>出勤與假勤</h1>
+      <p class="lead">打卡、請假、排班與薪資核對都在這裡。一般員工用<strong>我的出勤與假勤</strong>；主管用<strong>假勤審核</strong>與<strong>排班</strong>。</p>
+    </header>
+
+    <nav class="help-nav">
+      <p>跳到段落</p>
+      <div class="help-nav-links">
+        <a href="#personal">我的出勤</a>
+        <a href="#leave">請假申請</a>
+        <a href="#approval">假勤審核</a>
+        <a href="#schedule">排班</a>
+        <a href="#tips">提醒</a>
+      </div>
+    </nav>
+
+    <section id="flowchart" class="help-section help-flow-section">
+      <h2>怎麼選？</h2>
+      <figure class="help-img-ph" data-img="/assets/help/attendance/00-overview.png" data-alt="出勤功能總覽">
+        <div class="help-img-placeholder">📷 <code>assets/help/attendance/00-overview.png</code><br>出勤與假勤功能總覽圖（選填）</div>
+      </figure>
+      <div class="help-card-grid" style="margin-top:.85rem;">
+        <a class="help-card" href="#personal">
+          <h3>查自己、送薪資</h3>
+          <p>我的出勤與假勤</p>
+          <span class="badge">全體員工</span>
+        </a>
+        <a class="help-card" href="#leave">
+          <h3>要請假</h3>
+          <p>線上假勤申請</p>
+          <span class="badge">全體員工</span>
+        </a>
+        <a class="help-card" href="#approval">
+          <h3>審別人假單</h3>
+          <p>假勤審核儀表板</p>
+          <span class="badge">主管</span>
+        </a>
+      </div>
+    </section>
+
+    <section id="personal" class="help-section">
+      <h2><span class="help-mode-badge web">網頁</span> 我的出勤與假勤</h2>
+      <p>查看自己的打卡、請假、排班與薪資核對。發薪前請在此送出薪資核對（詳見<a href="#/help/payroll/employee">薪資送審說明</a>）。</p>
+      <ol class="help-steps">
+        <li>主控台 →「<strong>我的出勤與假勤</strong>」。</li>
+        <li>可切換月份，查看打卡紀錄、請假與排班。</li>
+        <li>發薪期間切到薪資區塊核對並送審。</li>
+      </ol>
+      <figure class="help-img-ph" data-img="/assets/help/attendance/01-my-personal.png" data-alt="我的出勤與假勤">
+        <div class="help-img-placeholder">📷 <code>01-my-personal.png</code><br>我的出勤與假勤主畫面</div>
+      </figure>
+      <a class="help-cta" href="#/my-personal" data-hub-route="#/my-personal">前往我的出勤與假勤 →</a>
+    </section>
+
+    <section id="leave" class="help-section">
+      <h2><span class="help-mode-badge web">網頁</span> 線上假勤申請</h2>
+      <ol class="help-steps">
+        <li>主控台 →「<strong>線上假勤申請</strong>」。</li>
+        <li>選擇假別、日期與時段，填寫原因。</li>
+        <li>送出後等待主管審核；核准前請留意排班與交接。</li>
+      </ol>
+      <figure class="help-img-ph" data-img="/assets/help/attendance/02-leave-request.png" data-alt="假勤申請">
+        <div class="help-img-placeholder">📷 <code>02-leave-request.png</code><br>線上假勤申請表單</div>
+      </figure>
+      <div class="help-callout"><strong>提醒：</strong>特休建議提前申請；當日臨時請假請同步通知主管。請假超過 3 天請先完成交接。</div>
+      <a class="help-cta" href="#/leave-request" data-hub-route="#/leave-request">前往假勤申請 →</a>
+    </section>
+
+    <section id="approval" class="help-section">
+      <h2><span class="help-mode-badge web">網頁</span> 假勤審核（主管）</h2>
+      <ol class="help-steps">
+        <li>主控台 →「<strong>假勤審核儀表板</strong>」。</li>
+        <li>查看待審假單，確認人力與排班是否足夠。</li>
+        <li>核准或退回，並填寫說明。</li>
+      </ol>
+      <figure class="help-img-ph" data-img="/assets/help/attendance/03-approval.png" data-alt="假勤審核">
+        <div class="help-img-placeholder">📷 <code>03-approval.png</code><br>假勤審核儀表板</div>
+      </figure>
+      <a class="help-cta" href="#/approval-dashboard" data-hub-route="#/approval-dashboard">前往假勤審核 →</a>
+    </section>
+
+    <section id="schedule" class="help-section">
+      <h2><span class="help-mode-badge web">網頁</span> 排班與出勤看板</h2>
+      <table class="help-table">
+        <thead><tr><th>功能</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr><td>員工排班系統</td><td>編排與查看班表（管理員）</td></tr>
+          <tr><td>出勤儀表板</td><td>團隊出勤總覽（管理員）</td></tr>
+          <tr><td>全員出勤燈號看板</td><td>今日／明日打卡燈號一目了然</td></tr>
+        </tbody>
+      </table>
+      <figure class="help-img-ph" data-img="/assets/help/attendance/04-schedule.png" data-alt="排班系統">
+        <div class="help-img-placeholder">📷 <code>04-schedule.png</code><br>員工排班系統畫面</div>
+      </figure>
+    </section>
+
+    <section id="tips" class="help-section">
+      <h2>打卡與補卡提醒</h2>
+      <ul>
+        <li>上下班都需打卡；當天臨時請假仍須打卡並註明請假時數。</li>
+        <li>未打卡請當天或隔天補註明原因，並請管理人員簽名，勿累積到月底。</li>
+        <li>設備故障無法打卡請立即回報。</li>
+        <li>不得代打卡或偽造紀錄。</li>
+      </ul>
+    </section>
+
+    <footer class="help-footer">薪資送審請見：<a href="#/help/payroll/employee">員工核對送審 →</a></footer>
+  </div>
+  <script src="/modules/help/help.js"></script>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>待請款 — 申請送審</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/modules/help/help.css">
+</head>
+<body class="help-page">
+  <div class="help-wrap wide">
+    <p class="help-back"><a href="#/help/payment-request" data-hub-route="#/help/payment-request">← 待請款總覽</a></p>
+    <header class="help-header">
+      <h1>待請款 ① 申請送審</h1>
+      <p class="lead">上傳廠商單據並送出審核。可用 LINE 傳圖，或在網頁用 AI 辨識後手動確認。</p>
+    </header>
+
+    <nav class="help-subnav">
+      <a href="#/help/payment-request/apply">① 申請</a>
+      <a href="#/help/payment-request/review">② 審核</a>
+      <a href="#/help/payment-request/finance">③ 匯款</a>
+    </nav>
+
+    <section id="flowchart" class="help-section help-flow-section">
+      <h2>申請流程圖</h2>
+      <figure class="help-img-ph" data-img="/assets/help/payment-request/01-apply-flow.png" data-alt="申請流程">
+        <div class="help-img-placeholder">📷 <code>01-apply-flow.png</code><br>申請階段流程圖（LINE／網頁）</div>
+      </figure>
+      <div class="help-mode-grid">
+        <div class="help-mode-card line">
+          <h3><span class="help-mode-badge line">LINE</span> 傳圖送審</h3>
+          <div class="help-flow">
+            <div class="help-flow-step is-start">#請款 或選單</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step">3 分鐘內傳圖</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step">OCR 核對卡</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step is-end">確認 → 待審</div>
+          </div>
+          <figure class="help-img-ph" data-img="/assets/help/payment-request/10-line-request.png" data-alt="LINE 請款">
+            <div class="help-img-placeholder">📷 <code>10-line-request.png</code><br>LINE #請款＋傳圖與核對卡</div>
+          </figure>
+        </div>
+        <div class="help-mode-card web">
+          <h3><span class="help-mode-badge web">網頁</span> 待付款申請</h3>
+          <div class="help-flow">
+            <div class="help-flow-step is-start">開啟表單</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step">①傳單據 ②辨識</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step">③確認收款人 ④送出</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step is-end">進請款審核</div>
+          </div>
+          <figure class="help-img-ph" data-img="/assets/help/payment-request/01-menu-entry.png" data-alt="會計選單入口">
+            <div class="help-img-placeholder">📷 <code>01-menu-entry.png</code><br>會計功能選單「待付款申請」</div>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="help-section">
+      <h2>網頁操作步驟</h2>
+      <ol class="help-steps">
+        <li><strong>開啟</strong> — 會計功能 →「待付款申請」，或 <code>#/accounting/payment-request</code>。</li>
+        <li><strong>上傳單據</strong> — 拖曳照片／PDF（最多 12 個，單檔 8 MB）。</li>
+        <li><strong>AI 辨識</strong> — 按「開始辨識」帶入金額、日期；<strong>務必人工核對</strong>。</li>
+        <li><strong>填收款資訊</strong> — 選廠商、工項、銀行帳號；新增明細列與分攤案號。</li>
+        <li><strong>送出審核</strong> — 總額與分攤加總正確後送出。</li>
+      </ol>
+      <figure class="help-img-ph" data-img="/assets/help/payment-request/02-upload-ocr.png" data-alt="上傳與辨識">
+        <div class="help-img-placeholder">📷 <code>02-upload-ocr.png</code><br>上傳區與 AI 辨識按鈕</div>
+      </figure>
+      <figure class="help-img-ph" data-img="/assets/help/payment-request/03-vendor-bank.png" data-alt="廠商與帳號">
+        <div class="help-img-placeholder">📷 <code>03-vendor-bank.png</code><br>廠商選擇與收款帳號</div>
+      </figure>
+      <figure class="help-img-ph" data-img="/assets/help/payment-request/04-submit.png" data-alt="送出審核">
+        <div class="help-img-placeholder">📷 <code>04-submit.png</code><br>明細確認與送出審核</div>
+      </figure>
+      <a class="help-cta" href="#/accounting/payment-request" data-hub-route="#/accounting/payment-request">前往待付款申請 →</a>
+    </section>
+
+    <section class="help-section">
+      <h2>LINE 送單方式</h2>
+      <table class="help-table">
+        <thead><tr><th>方式</th><th>說明</th></tr></thead>
+        <tbody>
+          <tr><td>進出群 #請款＋圖</td><td>行政轉貼或直接在進出／轉貼群操作</td></tr>
+          <tr><td>廠商私訊（已綁定）</td><td>先 #請款 或 Rich Menu，再傳圖；全程靜默送審</td></tr>
+          <tr><td>多張圖片</td><td>≥2 張可能直接開待付款申請頁補資料</td></tr>
+        </tbody>
+      </table>
+      <figure class="help-img-ph" data-img="/assets/help/payment-request/11-line-vendor-menu.png" data-alt="廠商 Rich Menu">
+        <div class="help-img-placeholder">📷 <code>11-line-vendor-menu.png</code><br>廠商 Rich Menu 請款按鈕</div>
+      </figure>
+    </section>
+
+    <footer class="help-footer">下一步：<a href="#/help/payment-request/review">請款審核說明 →</a></footer>
+  </div>
+  <script src="/modules/help/help.js"></script>
+</body>
+</html>

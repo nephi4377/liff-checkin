@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>案場與施工回報 — 使用說明</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/modules/help/help.css">
+</head>
+<body class="help-page">
+  <div class="help-wrap wide">
+    <p class="help-back"><a href="#/help" data-hub-route="#/help">← 使用說明目錄</a></p>
+    <header class="help-header">
+      <h1>案場與施工回報</h1>
+      <p class="lead">從建立案場、專案工作區到每日施工回報。主控台首頁可快速開啟案號；團隊進度用<strong>工作總覽</strong>掌握。</p>
+    </header>
+
+    <nav class="help-nav">
+      <p>跳到段落</p>
+      <div class="help-nav-links">
+        <a href="#site">案場資料</a>
+        <a href="#console">專案工作區</a>
+        <a href="#report">施工回報</a>
+        <a href="#daily">工作總覽</a>
+      </div>
+    </nav>
+
+    <section id="flowchart" class="help-section help-flow-section">
+      <h2>典型流程</h2>
+      <figure class="help-img-ph" data-img="/assets/help/projects/00-flow.png" data-alt="案場施工流程">
+        <div class="help-img-placeholder">📷 <code>assets/help/projects/00-flow.png</code><br>案場建立 → 工作區 → 施工回報流程圖（選填）</div>
+      </figure>
+      <div class="help-flow">
+        <div class="help-flow-step is-start">新增／更新案場</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step">專案工作區管理</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step is-end">每日施工回報</div>
+      </div>
+    </section>
+
+    <section id="site" class="help-section">
+      <h2>新增／修改案場資料</h2>
+      <ol class="help-steps">
+        <li>主控台 →「<strong>新增／修改案場資料</strong>」。</li>
+        <li>可選既有案場更新，或建立新案場基本資料。</li>
+        <li>案號、地址、客戶等欄位請填完整，方便後續報價與記帳分攤。</li>
+      </ol>
+      <figure class="help-img-ph" data-img="/assets/help/projects/01-new-site.png" data-alt="案場表單">
+        <div class="help-img-placeholder">📷 <code>01-new-site.png</code><br>新增／修改案場表單</div>
+      </figure>
+      <a class="help-cta" href="#/new-site" data-hub-route="#/new-site">前往案場資料 →</a>
+    </section>
+
+    <section id="console" class="help-section">
+      <h2>專案工作區</h2>
+      <p>單一案場的任務、文件與進度管理中心。主控台首頁輸入案號可快速開啟。</p>
+      <ol class="help-steps">
+        <li>主控台首頁輸入<strong>案號</strong> → 開啟，或進入「專案工作區」。</li>
+        <li>查看該案待辦、文件與團隊動態。</li>
+      </ol>
+      <figure class="help-img-ph" data-img="/assets/help/projects/02-console.png" data-alt="專案工作區">
+        <div class="help-img-placeholder">📷 <code>02-console.png</code><br>專案工作區主畫面</div>
+      </figure>
+      <a class="help-cta" href="#/project-console" data-hub-route="#/project-console">前往專案工作區 →</a>
+    </section>
+
+    <section id="report" class="help-section">
+      <h2>施工回報</h2>
+      <p>到案場後填寫當日施工內容、照片上傳。請在 LINE 環境開啟以完成身分驗證。</p>
+      <ol class="help-steps">
+        <li>主控台 →「<strong>施工回報</strong>」，或從專案工作區進入。</li>
+        <li>選擇案場、填寫今日進度與備註。</li>
+        <li>上傳施工照片，送出後團隊可在工作總覽看到。</li>
+      </ol>
+      <figure class="help-img-ph" data-img="/assets/help/projects/03-report.png" data-alt="施工回報">
+        <div class="help-img-placeholder">📷 <code>03-report.png</code><br>施工回報表單與照片上傳</div>
+      </figure>
+      <a class="help-cta" href="#/report" data-hub-route="#/report">前往施工回報 →</a>
+    </section>
+
+    <section id="daily" class="help-section">
+      <h2>團隊工作總覽</h2>
+      <p>查看全團隊當日回報摘要，掌握各案進度。</p>
+      <figure class="help-img-ph" data-img="/assets/help/projects/04-daily-report.png" data-alt="工作總覽">
+        <div class="help-img-placeholder">📷 <code>04-daily-report.png</code><br>團隊工作總覽畫面</div>
+      </figure>
+      <a class="help-cta" href="#/daily-report" data-hub-route="#/daily-report">前往工作總覽 →</a>
+    </section>
+
+    <footer class="help-footer">添心設計 · 內部使用</footer>
+  </div>
+  <script src="/modules/help/help.js"></script>
+</body>
+</html>

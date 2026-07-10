@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>薪資 — 員工核對送審</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/modules/help/help.css">
+</head>
+<body class="help-page">
+  <div class="help-wrap wide">
+    <p class="help-back"><a href="#/help/payroll" data-hub-route="#/help/payroll">← 薪資總覽</a></p>
+    <header class="help-header">
+      <h1>薪資 ① 員工核對送審</h1>
+      <p class="lead">每期發薪前，請在<strong>我的出勤與假勤</strong>確認出勤、請假與試算金額，無誤後送出。送出後會鎖定，須等主管退回才能修改。</p>
+    </header>
+
+    <nav class="help-subnav">
+      <a href="#/help/payroll/employee">① 員工送審</a>
+      <a href="#/help/payroll/review">② 薪資審核</a>
+      <a href="#/help/payroll/finance">③ 待匯款</a>
+    </nav>
+
+    <section id="flowchart" class="help-section help-flow-section">
+      <h2>送審流程圖</h2>
+      <figure class="help-img-ph" data-img="/assets/help/payroll/01-employee-flow.png" data-alt="員工送審流程">
+        <div class="help-img-placeholder">📷 <code>01-employee-flow.png</code><br>員工核對送審流程圖</div>
+      </figure>
+      <div class="help-flow">
+        <div class="help-flow-step is-start">我的出勤與假勤</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step">選發薪期別</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step">檢查出勤、請假、試算</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step is-optional">異常？提出說明申訴</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step is-end">送出薪資核對</div>
+      </div>
+      <p class="help-flow-note">須等該期<strong>最後一天下班後</strong>才能送出。</p>
+    </section>
+
+    <section class="help-section">
+      <h2>操作步驟</h2>
+      <ol class="help-steps">
+        <li>主控台 →「<strong>我的出勤與假勤</strong>」。</li>
+        <li>切到<strong>薪資</strong>區塊，選擇發薪期別。</li>
+        <li>確認出勤天數、遲到早退、假別與試算金額。</li>
+        <li>若有加班、津貼或說明，在對應欄位填寫。</li>
+        <li>確認無誤後按「<strong>送出薪資核對</strong>」。</li>
+      </ol>
+      <figure class="help-img-ph" data-img="/assets/help/payroll/02-personal-payroll-panel.png" data-alt="個人頁薪資核對">
+        <div class="help-img-placeholder">📷 <code>02-personal-payroll-panel.png</code><br>個人出勤頁薪資核對區塊</div>
+      </figure>
+      <figure class="help-img-ph" data-img="/assets/help/payroll/03-submit-button.png" data-alt="送出薪資核對">
+        <div class="help-img-placeholder">📷 <code>03-submit-button.png</code><br>期別選擇與送出按鈕</div>
+      </figure>
+      <a class="help-cta" href="#/my-personal" data-hub-route="#/my-personal">前往我的出勤與假勤 →</a>
+    </section>
+
+    <section class="help-section">
+      <h2>發薪後：查看實領</h2>
+      <p>財務匯款完成後，可在個人頁「實領歷史」查看明細，並收到 LINE 通知（須已加會計官方帳號好友）。</p>
+      <figure class="help-img-ph" data-img="/assets/help/payroll/07-payslip-history.png" data-alt="實領歷史">
+        <div class="help-img-placeholder">📷 <code>07-payslip-history.png</code><br>個人頁實領歷史明細</div>
+      </figure>
+      <figure class="help-img-ph" data-img="/assets/help/payroll/06-line-payslip-notify.png" data-alt="LINE 薪資通知">
+        <div class="help-img-placeholder">📷 <code>06-line-payslip-notify.png</code><br>LINE 發薪通知訊息</div>
+      </figure>
+    </section>
+
+    <section class="help-section">
+      <h2>提醒</h2>
+      <ul>
+        <li>只能看<strong>自己的</strong>薪資資料。</li>
+        <li>銀行帳戶請事先在員工資料中確認正確，避免匯款失敗。</li>
+        <li>送審後若要修改，請聯絡主管<strong>退回</strong>後再重送。</li>
+      </ul>
+    </section>
+
+    <footer class="help-footer">主管審核請見：<a href="#/help/payroll/review">薪資審核說明 →</a></footer>
+  </div>
+  <script src="/modules/help/help.js"></script>
+</body>
+</html>

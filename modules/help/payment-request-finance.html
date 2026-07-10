@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>待請款 — 廠商待匯款</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/modules/help/help.css">
+</head>
+<body class="help-page">
+  <div class="help-wrap wide">
+    <p class="help-back"><a href="#/help/payment-request" data-hub-route="#/help/payment-request">← 待請款總覽</a></p>
+    <header class="help-header">
+      <h1>待請款 ③ 廠商待匯款</h1>
+      <p class="lead">財務（權限 ≥ 4）處理已核准的廠商請款：匯出中信轉帳檔、完成匯款並登錄收支。</p>
+    </header>
+
+    <nav class="help-subnav">
+      <a href="#/help/payment-request/apply">① 申請</a>
+      <a href="#/help/payment-request/review">② 審核</a>
+      <a href="#/help/payment-request/finance">③ 匯款</a>
+    </nav>
+
+    <section id="flowchart" class="help-section help-flow-section">
+      <h2>匯款流程圖</h2>
+      <figure class="help-img-ph" data-img="/assets/help/payment-request/03-finance-flow.png" data-alt="匯款流程">
+        <div class="help-img-placeholder">📷 <code>03-finance-flow.png</code><br>廠商待匯款流程圖</div>
+      </figure>
+      <div class="help-flow">
+        <div class="help-flow-step is-start">待匯款清單</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step">勾選本期項目</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-branch">
+          <div class="help-flow-branch-col">
+            <span class="help-flow-branch-label">匯出 TXT</span>
+            <div class="help-flow-step">中信轉帳檔</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step is-end">寫收支＋已匯款</div>
+          </div>
+          <div class="help-flow-branch-col">
+            <span class="help-flow-branch-label">手動結案</span>
+            <div class="help-flow-step">標記已匯款</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step is-end">同樣寫收支</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="help-section">
+      <h2>操作步驟</h2>
+      <ol class="help-steps">
+        <li>會計功能 →「廠商待匯款」，或 <code>#/accounting/vendor-payment-finance</code>。</li>
+        <li>檢查廠商銀行帳號是否完整（紅字警示須先補）。</li>
+        <li>勾選要匯的項目，匯出<strong>中信 TAB 分隔轉帳檔</strong>。</li>
+        <li>上傳至網銀完成匯款；或無 TXT 時直接「標記已匯款」。</li>
+        <li>系統自動以支出格式寫入收支試算表，請款單結案。</li>
+      </ol>
+      <figure class="help-img-ph" data-img="/assets/help/payment-request/06-finance-list.png" data-alt="待匯款清單">
+        <div class="help-img-placeholder">📷 <code>06-finance-list.png</code><br>廠商待匯款清單與勾選</div>
+      </figure>
+      <figure class="help-img-ph" data-img="/assets/help/payment-request/06b-export-txt.png" data-alt="匯出轉帳檔">
+        <div class="help-img-placeholder">📷 <code>06b-export-txt.png</code><br>匯出中信轉帳檔按鈕</div>
+      </figure>
+      <a class="help-cta" href="#/accounting/vendor-payment-finance" data-hub-route="#/accounting/vendor-payment-finance">前往廠商待匯款 →</a>
+    </section>
+
+    <section class="help-section">
+      <h2>匯款後查詢</h2>
+      <ul>
+        <li>「款項進度」可查看各筆從待審到已匯款狀態。</li>
+        <li>「單據附件」可依請款單編號搜尋附件與 ingest 關聯。</li>
+        <li>廠商若已綁定 LINE，匯款後可收到查收通知（規劃中／依部署）。</li>
+      </ul>
+      <figure class="help-img-ph" data-img="/assets/help/payment-request/07-vendor-status.png" data-alt="款項進度">
+        <div class="help-img-placeholder">📷 <code>07-vendor-status.png</code><br>款項進度查詢畫面</div>
+      </figure>
+    </section>
+
+    <footer class="help-footer">添心設計 · 內部使用</footer>
+  </div>
+  <script src="/modules/help/help.js"></script>
+</body>
+</html>

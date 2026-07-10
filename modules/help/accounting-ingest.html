@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>收支登錄 — 使用說明</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/modules/help/help.css">
+</head>
+<body class="help-page">
+  <div class="help-wrap wide">
+    <p class="help-back"><a href="#/help" data-hub-route="#/help">← 使用說明目錄</a></p>
+    <header class="help-header">
+      <h1>收支登錄</h1>
+      <p class="lead">記錄<strong>已經收付完成</strong>的款項。可用 <strong>LINE</strong> 快速記帳，或在 <strong>主控台／網頁表單</strong> 連續填多筆、分攤案號、附單據。</p>
+    </header>
+
+    <nav class="help-nav">
+      <p>跳到段落</p>
+      <div class="help-nav-links">
+        <a href="#flowchart">總流程圖</a>
+        <a href="#line-mode">LINE 模式</a>
+        <a href="#web-mode">網頁模式</a>
+        <a href="#income-expense">收入／支出</a>
+        <a href="#tips">提醒</a>
+      </div>
+    </nav>
+
+    <!-- ===== 頂部：完整總流程 ===== -->
+    <section id="flowchart" class="help-section help-flow-section">
+      <h2>總流程圖</h2>
+      <p>先判斷款項狀態與使用管道，再進入對應步驟。</p>
+      <figure class="help-img-ph" data-img="/assets/help/accounting-ingest/00-flow-diagram.png" data-alt="收支登錄總流程圖">
+        <div class="help-img-placeholder">📷 待補圖：收支登錄總流程（含 LINE／網頁分支）<br><small>路徑：<code>assets/help/accounting-ingest/00-flow-diagram.png</code></small></div>
+      </figure>
+      <div class="help-flow" aria-label="收支登錄總流程">
+        <div class="help-flow-step is-start">款項已收／已付？<small>是 → 收支登錄；否 → 待付款申請</small></div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-branch">
+          <div class="help-flow-branch-col">
+            <span class="help-flow-branch-label">LINE 模式</span>
+            <div class="help-flow-step">進出群貼 A/B 格式<br><small>或私訊傳圖開表單</small></div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step">系統解析／帶照片</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step is-end">寫入試算表</div>
+          </div>
+          <div class="help-flow-branch-col">
+            <span class="help-flow-branch-label">網頁模式</span>
+            <div class="help-flow-step">主控台開收支登錄<br><small>#/accounting-ingest</small></div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step">填表單＋分攤＋照片</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step is-end">送出記帳</div>
+          </div>
+        </div>
+      </div>
+      <p class="help-flow-note">權限 ≥ 2（行政以上）才能使用。錢還沒付出去請改看 <a href="#/help/payment-request">待請款說明</a>。</p>
+    </section>
+
+    <!-- ===== LINE 模式 ===== -->
+    <section id="line-mode" class="help-section">
+      <h2><span class="help-mode-badge line">LINE</span> LINE 模式</h2>
+      <p>適合在工地、外出時快速記帳。分兩種常見情境：</p>
+
+      <div class="help-mode-grid">
+        <div class="help-mode-card line">
+          <h3>① 進出款項群 — 文字記帳</h3>
+          <div class="help-flow">
+            <div class="help-flow-step is-start">在進出群貼格式</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step">Bot 解析 A（收入）或 B（支出）</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step is-optional">缺欄位 → Flex 確認卡</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step is-end">回覆「記好了」</div>
+          </div>
+          <figure class="help-img-ph" data-img="/assets/help/accounting-ingest/10-line-group-text.png" data-alt="LINE 進出群文字記帳">
+            <div class="help-img-placeholder">📷 <code>10-line-group-text.png</code><br>進出群貼 A/B 格式與 Bot 回覆</div>
+          </figure>
+        </div>
+        <div class="help-mode-card line">
+          <h3>② 私訊官方帳號 — 傳圖開表單</h3>
+          <div class="help-flow">
+            <div class="help-flow-step is-start">傳收據／轉帳截圖</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step">收到 Flex 表單連結</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step">在 LINE 內填完送出</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step is-end">照片自動帶入</div>
+          </div>
+          <figure class="help-img-ph" data-img="/assets/help/accounting-ingest/11-line-photo-form.png" data-alt="LINE 傳圖開表單">
+            <div class="help-img-placeholder">📷 <code>11-line-photo-form.png</code><br>私訊傳圖 → Flex 表單畫面</div>
+          </figure>
+        </div>
+      </div>
+
+      <h3>LINE 輔助指令</h3>
+      <table class="help-table">
+        <thead><tr><th>輸入</th><th>效果</th></tr></thead>
+        <tbody>
+          <tr><td><code>#格式</code></td><td>跳出收款／支出範本，複製後改內容再貼上</td></tr>
+          <tr><td>格式 A（收入）</td><td>收款日期、客戶名、訂編、款項、金額、付款方式…</td></tr>
+          <tr><td>格式 B（支出）</td><td>支出日期、廠商、金額、案號分攤、付款方式…</td></tr>
+          <tr><td>短時間重複貼文</td><td>Bot 詢問是否重複記帳</td></tr>
+        </tbody>
+      </table>
+      <figure class="help-img-ph" data-img="/assets/help/accounting-ingest/12-line-format-help.png" data-alt="LINE #格式 範本">
+        <div class="help-img-placeholder">📷 <code>12-line-format-help.png</code><br>#格式 範本 Flex 卡片</div>
+      </figure>
+
+      <div class="help-callout"><strong>注意：</strong>LINE 內開表單須通過身分驗證；開發測試可用 bypass。關閉視窗＝不送出。</div>
+    </section>
+
+    <!-- ===== 網頁模式 ===== -->
+    <section id="web-mode" class="help-section">
+      <h2><span class="help-mode-badge web">網頁</span> 主控台／網頁模式</h2>
+      <p>適合辦公室連續記帳、需要分攤多案、或要用主控台快選案場／員工。</p>
+
+      <div class="help-flow" aria-label="網頁記帳流程">
+        <div class="help-flow-step is-start">主控台 → 收支登錄</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step">選收入或支出</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step">填日期、金額、對象、付款方式</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step is-optional">快選案場（HUB 有快取時）</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step is-optional">分攤案號（支出建議填）</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step is-optional">拖曳上傳單據照片</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step">送出這一筆</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step is-end">可「再記一筆」連續填寫</div>
+      </div>
+
+      <figure class="help-img-ph" data-img="/assets/help/accounting-ingest/01-form-overview.png" data-alt="收支登錄主畫面">
+        <div class="help-img-placeholder">📷 <code>01-form-overview.png</code><br>收支登錄主畫面全覽</div>
+      </figure>
+
+      <div class="help-step-block">
+        <h3>步驟 1 — 開啟</h3>
+        <ol class="help-steps">
+          <li>登入主控台，點「收支登錄」卡片，或網址 <code>#/accounting-ingest</code>。</li>
+          <li>從主控台進入時，員工與案場快選會自動帶入（免重打 API）。</li>
+        </ol>
+        <figure class="help-img-ph" data-img="/assets/help/accounting-ingest/02-hub-card.png" data-alt="主控台收支登錄卡片">
+          <div class="help-img-placeholder">📷 <code>02-hub-card.png</code><br>主控台「收支登錄」卡片位置</div>
+        </figure>
+      </div>
+
+      <div class="help-step-block">
+        <h3>步驟 2 — 填寫與分攤</h3>
+        <ol class="help-steps">
+          <li><strong>收入</strong>：客戶名、訂編、款項類別、是否入零用金。</li>
+          <li><strong>支出</strong>：搜尋選廠商、填分攤列（案號＋品項＋金額），加總須等於支付金額。</li>
+          <li>付款方式可點選標籤（現金／匯款／零用金）或自行輸入。</li>
+        </ol>
+        <figure class="help-img-ph" data-img="/assets/help/accounting-ingest/03-allocation.png" data-alt="案號分攤">
+          <div class="help-img-placeholder">📷 <code>03-allocation.png</code><br>分攤明細與金額加總提示</div>
+        </figure>
+      </div>
+
+      <div class="help-step-block">
+        <h3>步驟 3 — 送出</h3>
+        <ol class="help-steps">
+          <li>按「送出這一筆」，成功後上方顯示本輪已記幾筆。</li>
+          <li>選「清空，再記一筆」連續輸入；部分欄位會保留上一筆值。</li>
+          <li>完成後可按「完成離開」。</li>
+        </ol>
+        <figure class="help-img-ph" data-img="/assets/help/accounting-ingest/04-success-line-sync.png" data-alt="送出成功">
+          <div class="help-img-placeholder">📷 <code>04-success-line-sync.png</code><br>送出成功與連續記帳狀態列</div>
+        </figure>
+      </div>
+
+      <a class="help-cta" href="#/accounting-ingest" data-hub-route="#/accounting-ingest">前往收支登錄 →</a>
+    </section>
+
+    <!-- ===== 收入 vs 支出 ===== -->
+    <section id="income-expense" class="help-section">
+      <h2>收入與支出欄位對照</h2>
+      <table class="help-table">
+        <thead><tr><th>類型</th><th>必填重點</th><th>分攤</th></tr></thead>
+        <tbody>
+          <tr><td>收入（A）</td><td>客戶名、訂編、金額、收款日期</td><td>通常單案；有訂編會進案件毛利</td></tr>
+          <tr><td>支出（B）</td><td>廠商、金額、支出日期、付款方式</td><td>建議填分攤列；至少一列案號</td></tr>
+        </tbody>
+      </table>
+      <figure class="help-img-ph" data-img="/assets/help/accounting-ingest/05-income-vs-expense.png" data-alt="收入支出切換">
+        <div class="help-img-placeholder">📷 <code>05-income-vs-expense.png</code><br>類型切換後欄位差異</div>
+      </figure>
+    </section>
+
+    <section id="tips" class="help-section">
+      <h2>常見提醒</h2>
+      <ul>
+        <li><strong>已付款</strong>用收支登錄；<strong>還沒付款</strong>用待付款申請（會走審核）。</li>
+        <li>主控台先開過一次，快選案場／員工會比較完整；單獨開 LINE 仍可手動填。</li>
+        <li>有填案號的收支會自動進「案件毛利」（財務權限可查看）。</li>
+        <li>收入登錄後可能推送客戶確認（與請款審核不同流程）。</li>
+      </ul>
+    </section>
+
+    <footer class="help-footer">添心設計 · 內部使用 · 規格以系統實際行為為準</footer>
+  </div>
+  <script src="/modules/help/help.js"></script>
+</body>
+</html>

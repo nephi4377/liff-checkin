@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>設計工具 — 使用說明</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/modules/help/help.css">
+</head>
+<body class="help-page">
+  <div class="help-wrap wide">
+    <p class="help-back"><a href="#/help" data-hub-route="#/help">← 使用說明目錄</a></p>
+    <header class="help-header">
+      <h1>設計工具</h1>
+      <p class="lead">室內配置規劃與平面圖校正。建議在<strong>電腦大螢幕</strong>操作；手機僅適合簡單查看。</p>
+    </header>
+
+    <section class="help-section help-flow-section">
+      <h2>工具一覽</h2>
+      <figure class="help-img-ph" data-img="/assets/help/design/00-overview.png" data-alt="設計工具總覽">
+        <div class="help-img-placeholder">📷 <code>assets/help/design/00-overview.png</code><br>設計工具入口總覽（選填）</div>
+      </figure>
+      <div class="help-card-grid" style="margin-top:.85rem;">
+        <a class="help-card" href="#planner">
+          <h3>互動式室內設計規劃</h3>
+          <p>平面配置、家具擺放與動線規劃。</p>
+        </a>
+        <a class="help-card" href="#straightener">
+          <h3>平面圖校正工具</h3>
+          <p>校正掃描或拍照的平面圖比例與歪斜。</p>
+        </a>
+      </div>
+    </section>
+
+    <section id="planner" class="help-section">
+      <h2>互動式室內設計規劃工具</h2>
+      <ol class="help-steps">
+        <li>主控台 →「<strong>互動式室內設計規劃工具</strong>」。</li>
+        <li>載入或繪製平面圖，拖放家具與固定元素。</li>
+        <li>調整尺寸與配置後儲存，供提案或施工參考。</li>
+      </ol>
+      <figure class="help-img-ph" data-img="/assets/help/design/01-layout-planner.png" data-alt="配置規劃工具">
+        <div class="help-img-placeholder">📷 <code>01-layout-planner.png</code><br>Layout Planner 主畫面</div>
+      </figure>
+      <a class="help-cta" href="#/layout-planner" data-hub-route="#/layout-planner">開啟配置規劃工具 →</a>
+    </section>
+
+    <section id="straightener" class="help-section">
+      <h2>平面圖校正工具</h2>
+      <ol class="help-steps">
+        <li>主控台 →「<strong>平面圖校正工具</strong>」。</li>
+        <li>上傳原始平面圖（掃描或照片）。</li>
+        <li>標定參考點與比例，輸出校正後的圖檔供規劃工具使用。</li>
+      </ol>
+      <figure class="help-img-ph" data-img="/assets/help/design/02-floorplan-straightener.png" data-alt="平面圖校正">
+        <div class="help-img-placeholder">📷 <code>02-floorplan-straightener.png</code><br>平面圖校正工具畫面</div>
+      </figure>
+      <a class="help-cta" href="#/floorplan-straightener" data-hub-route="#/floorplan-straightener">開啟平面圖校正 →</a>
+    </section>
+
+    <section class="help-section">
+      <h2>建議使用順序</h2>
+      <div class="help-flow">
+        <div class="help-flow-step is-start">平面圖校正</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step">匯入配置規劃工具</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step is-end">輸出配置給客戶或施工</div>
+      </div>
+    </section>
+
+    <footer class="help-footer">添心設計 · 內部使用</footer>
+  </div>
+  <script src="/modules/help/help.js"></script>
+</body>
+</html>

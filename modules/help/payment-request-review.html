@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>待請款 — 請款審核</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/modules/help/help.css">
+</head>
+<body class="help-page">
+  <div class="help-wrap wide">
+    <p class="help-back"><a href="#/help/payment-request" data-hub-route="#/help/payment-request">← 待請款總覽</a></p>
+    <header class="help-header">
+      <h1>待請款 ② 請款審核</h1>
+      <p class="lead">主管（權限 ≥ 5）審核待付款申請。資料完整可<strong>快速核准</strong>；有疑慮請進入詳審看單據、改分攤。</p>
+    </header>
+
+    <nav class="help-subnav">
+      <a href="#/help/payment-request/apply">① 申請</a>
+      <a href="#/help/payment-request/review">② 審核</a>
+      <a href="#/help/payment-request/finance">③ 匯款</a>
+    </nav>
+
+    <section id="flowchart" class="help-section help-flow-section">
+      <h2>審核流程圖</h2>
+      <figure class="help-img-ph" data-img="/assets/help/payment-request/02-review-flow.png" data-alt="審核流程">
+        <div class="help-img-placeholder">📷 <code>02-review-flow.png</code><br>請款審核流程圖</div>
+      </figure>
+      <div class="help-flow">
+        <div class="help-flow-step is-start">待審列表</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step">看請款單／附件</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-branch">
+          <div class="help-flow-branch-col">
+            <span class="help-flow-branch-label">快速核准</span>
+            <div class="help-flow-step is-end">進待匯款</div>
+          </div>
+          <div class="help-flow-branch-col">
+            <span class="help-flow-branch-label">詳審</span>
+            <div class="help-flow-step">改案號／分攤</div>
+            <div class="help-flow-arrow">↓</div>
+            <div class="help-flow-step is-end">核准或退回</div>
+          </div>
+        </div>
+      </div>
+      <p class="help-flow-note">核准時<strong>不寫收支</strong>；等財務匯款後才登錄。</p>
+    </section>
+
+    <section class="help-section">
+      <h2>操作步驟</h2>
+      <ol class="help-steps">
+        <li>會計功能 →「請款審核」，或 <code>#/accounting/vendor-payment-approve</code>。</li>
+        <li>切換分頁：<strong>廠商請款</strong>／員工請款（若有）。</li>
+        <li>分攤完整者可用「快速核准」；否則點「審核」進入詳情。</li>
+        <li>核准須補齊<strong>案號、金額</strong>；退回須填原因。</li>
+        <li>核准後項目進入「廠商待匯款」。</li>
+      </ol>
+      <figure class="help-img-ph" data-img="/assets/help/payment-request/05-ledger-review.png" data-alt="請款審核列表">
+        <div class="help-img-placeholder">📷 <code>05-ledger-review.png</code><br>請款審核列表與快速核准</div>
+      </figure>
+      <figure class="help-img-ph" data-img="/assets/help/payment-request/05b-review-detail.png" data-alt="審核詳情">
+        <div class="help-img-placeholder">📷 <code>05b-review-detail.png</code><br>審核詳情、看單據、改分攤</div>
+      </figure>
+      <a class="help-cta" href="#/accounting/vendor-payment-approve" data-hub-route="#/accounting/vendor-payment-approve">前往請款審核 →</a>
+    </section>
+
+    <section class="help-section">
+      <h2><span class="help-mode-badge line">LINE</span> 審核通知</h2>
+      <p>新請款送出後，系統會 Push 通知主管（須已加會計官方帳號好友）。Push 失敗會排入佇列，於進出群下次發言時重試。</p>
+      <figure class="help-img-ph" data-img="/assets/help/payment-request/12-line-review-notify.png" data-alt="LINE 審核通知">
+        <div class="help-img-placeholder">📷 <code>12-line-review-notify.png</code><br>LINE 請款待審通知</div>
+      </figure>
+    </section>
+
+    <footer class="help-footer">下一步：<a href="#/help/payment-request/finance">廠商待匯款說明 →</a></footer>
+  </div>
+  <script src="/modules/help/help.js"></script>
+</body>
+</html>

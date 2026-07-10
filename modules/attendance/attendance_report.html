@@ -129,15 +129,17 @@
 
         <div id="payroll-admin-preview" class="hidden bg-white p-5 md:p-6 rounded-xl shadow-sm border border-indigo-100 mb-6">
             <h2 id="payroll-admin-title" class="text-lg font-semibold text-indigo-800 mb-2">員工薪資試算預覽</h2>
-            <p class="text-sm text-gray-500 mb-3">權限 5 專用：選上方「單一員工」後顯示試算（唯讀，不可代送審）</p>
+            <p class="text-sm text-gray-500 mb-3">權限 5：選上方「單一員工」後可試算；員工未送審時也可「代開審」送進會計待審。</p>
             <div class="flex flex-wrap gap-3 items-end mb-3">
                 <div class="min-w-[200px]">
                     <label for="payroll-admin-period" class="block text-sm font-medium text-gray-700">結算期別</label>
                     <select id="payroll-admin-period" class="mt-1 block w-full rounded-md border-gray-300 sm:text-sm"></select>
                 </div>
+                <button type="button" id="payroll-admin-submit-btn" class="px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">代開審（送會計待審）</button>
             </div>
             <p id="payroll-admin-loading" class="text-gray-500 text-sm py-4 hidden">載入中…</p>
             <p id="payroll-admin-error" class="text-red-600 text-sm hidden"></p>
+            <p id="payroll-admin-ok" class="text-green-700 text-sm hidden"></p>
             <div id="payroll-admin-stats" class="text-sm bg-gray-50 rounded-lg p-3 mb-3"></div>
             <div id="payroll-admin-calc" class="border border-indigo-100 rounded-lg p-3 bg-indigo-50/50 text-sm"></div>
         </div>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>待請款 — 使用說明總覽</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/modules/help/help.css">
+</head>
+<body class="help-page">
+  <div class="help-wrap wide">
+    <p class="help-back"><a href="#/help" data-hub-route="#/help">← 使用說明目錄</a></p>
+    <header class="help-header">
+      <h1>待請款（待付款申請）</h1>
+      <p class="lead">款項<strong>還沒付出去</strong>時使用。可分三階段：申請 → 審核 → 匯款。支援 <strong>LINE 傳圖送審</strong>與<strong>網頁表單</strong>。</p>
+    </header>
+
+    <section id="flowchart" class="help-section help-flow-section">
+      <h2>總流程圖</h2>
+      <figure class="help-img-ph" data-img="/assets/help/payment-request/00-flow-diagram.png" data-alt="待請款總流程">
+        <div class="help-img-placeholder">📷 待補圖：待請款全流程<br><small><code>assets/help/payment-request/00-flow-diagram.png</code></small></div>
+      </figure>
+      <div class="help-flow help-flow-wide" aria-label="待請款總流程">
+        <div class="help-flow-step is-start">錢還沒付</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-branch">
+          <div class="help-flow-branch-col">
+            <span class="help-flow-branch-label">LINE</span>
+            <div class="help-flow-step">#請款＋傳圖<br><small>或廠商私訊</small></div>
+          </div>
+          <div class="help-flow-branch-col">
+            <span class="help-flow-branch-label">網頁</span>
+            <div class="help-flow-step">待付款申請表單</div>
+          </div>
+        </div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step is-role-mgr">請款審核 ≥5</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step is-role-fin">廠商待匯款 ≥4</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step is-end">匯款＋登錄收支</div>
+      </div>
+      <p class="help-flow-note">已付款請改用 <a href="#/help/accounting-ingest">收支登錄</a>，不經審核。</p>
+    </section>
+
+    <section class="help-section">
+      <h2>分階段說明</h2>
+      <p>點下方進入各階段詳細步驟與截圖位置。</p>
+      <div class="help-card-grid" style="margin-top:.85rem;">
+        <a class="help-card" href="#/help/payment-request/apply">
+          <h3>① 申請送審</h3>
+          <p>LINE 傳圖／#請款，或網頁上傳單據、AI 辨識、填廠商與分攤後送出。</p>
+          <span class="badge">員工、廠商、行政</span>
+        </a>
+        <a class="help-card" href="#/help/payment-request/review">
+          <h3>② 請款審核</h3>
+          <p>主管／財務核准或退回；可快速核准或進入詳審改分攤。</p>
+          <span class="badge">權限 ≥ 5</span>
+        </a>
+        <a class="help-card" href="#/help/payment-request/finance">
+          <h3>③ 廠商待匯款</h3>
+          <p>匯出中信轉帳檔、標記已匯款；系統同時登錄收支。</p>
+          <span class="badge">權限 ≥ 4</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="help-section">
+      <h2>與收支登錄的差別</h2>
+      <table class="help-table">
+        <thead><tr><th>情境</th><th>用哪個</th></tr></thead>
+        <tbody>
+          <tr><td>發票到了、錢還沒匯</td><td>待付款申請 → 審核 → 匯款</td></tr>
+          <tr><td>現金已付、轉帳已完成</td><td>收支登錄（直接記帳）</td></tr>
+          <tr><td>員工薪資</td><td>薪資流程（另見薪資說明）</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer class="help-footer">添心設計 · 內部使用</footer>
+  </div>
+  <script src="/modules/help/help.js"></script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>薪資 — 薪資待匯款</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/modules/help/help.css">
+</head>
+<body class="help-page">
+  <div class="help-wrap wide">
+    <p class="help-back"><a href="#/help/payroll" data-hub-route="#/help/payroll">← 薪資總覽</a></p>
+    <header class="help-header">
+      <h1>薪資 ③ 薪資待匯款</h1>
+      <p class="lead">財務（權限 ≥ 4）處理已核准的薪資。與「廠商待匯款」分開；匯出中信薪轉檔、銀行匯款後標記已匯，系統會通知員工。</p>
+    </header>
+
+    <nav class="help-subnav">
+      <a href="#/help/payroll/employee">① 員工送審</a>
+      <a href="#/help/payroll/review">② 薪資審核</a>
+      <a href="#/help/payroll/finance">③ 待匯款</a>
+    </nav>
+
+    <section id="flowchart" class="help-section help-flow-section">
+      <h2>匯款流程圖</h2>
+      <figure class="help-img-ph" data-img="/assets/help/payroll/03-finance-flow.png" data-alt="薪資匯款流程">
+        <div class="help-img-placeholder">📷 <code>03-finance-flow.png</code><br>薪資待匯款流程圖</div>
+      </figure>
+      <div class="help-flow">
+        <div class="help-flow-step is-start">薪資待匯款列表</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step">勾選本期項目</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step">匯出中信薪轉檔</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step">銀行完成匯款</div>
+        <div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step is-end">標記已匯＋通知員工</div>
+      </div>
+    </section>
+
+    <section class="help-section">
+      <h2>操作步驟</h2>
+      <ol class="help-steps">
+        <li>會計功能 →「<strong>薪資待匯款</strong>」，或 <code>#/accounting/payroll-finance</code>。</li>
+        <li>確認列表中的員工、金額與銀行帳戶無誤。</li>
+        <li>勾選要匯款的項目，按「<strong>匯出中信薪轉檔</strong>」。</li>
+        <li>至網路銀行上傳轉帳檔並完成匯款。</li>
+        <li>回到系統標記「<strong>已匯款</strong>」— 員工會收到 LINE 通知，並可於個人頁查看實領。</li>
+      </ol>
+      <figure class="help-img-ph" data-img="/assets/help/payroll/05-payroll-finance.png" data-alt="薪資待匯款">
+        <div class="help-img-placeholder">📷 <code>05-payroll-finance.png</code><br>薪資待匯款清單與匯出按鈕</div>
+      </figure>
+      <figure class="help-img-ph" data-img="/assets/help/payroll/05b-export-txt.png" data-alt="匯出薪轉檔">
+        <div class="help-img-placeholder">📷 <code>05b-export-txt.png</code><br>匯出中信薪轉檔畫面</div>
+      </figure>
+      <a class="help-cta" href="#/accounting/payroll-finance" data-hub-route="#/accounting/payroll-finance">前往薪資待匯款 →</a>
+    </section>
+
+    <section class="help-section">
+      <h2><span class="help-mode-badge line">LINE</span> 發薪通知</h2>
+      <p>標記已匯款後，員工會收到 Push 通知（須已加會計官方帳號好友）。</p>
+      <figure class="help-img-ph" data-img="/assets/help/payroll/06-line-payslip-notify.png" data-alt="LINE 薪資通知">
+        <div class="help-img-placeholder">📷 <code>06-line-payslip-notify.png</code><br>LINE 發薪通知訊息</div>
+      </figure>
+    </section>
+
+    <section class="help-section">
+      <h2>提醒</h2>
+      <ul>
+        <li>薪資匯款與廠商匯款<strong>分開處理</strong>，請勿混用頁面。</li>
+        <li>匯款前請確認員工銀行帳戶已在員工資料中維護完整。</li>
+        <li>主控台左側「款項待辦」會顯示待匯筆數。</li>
+      </ul>
+    </section>
+
+    <footer class="help-footer">員工送審請見：<a href="#/help/payroll/employee">員工核對送審 →</a></footer>
+  </div>
+  <script src="/modules/help/help.js"></script>
+</body>
+</html>

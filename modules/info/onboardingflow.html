@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添心設計｜互動式客戶接洽流程</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 React, ReactDOM, 和 Babel -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- 【⭐️ 核心修正：移除 window.onload，改用 Babel 標準執行流程 ⭐️】 -->
+    <!-- 1. 將 script 移至 body 結尾，確保所有函式庫已載入。 -->
+    <!-- 2. 使用 data-presets="react" 明確告知 Babel 如何轉換。 -->
+    <!-- 3. 移除手動呼叫的 renderApp() 和 Babel.transform()，讓 Babel 自動處理。 -->
+    <script type="text/babel" data-presets="react">
+        // 添心設計｜互動式客戶接洽流程 v1
+        // 說明：
+        // 1) 左側為主流程步驟（直線、可逐步展開）。
+        // 2) 右側為每個步驟的「話術範例 + 實際案例」，可開合檢視。
+        // 3) 第一階段「寒喧」內含多方案（框內多卡片），代表同階段不同話術。
+        // 4) 適合投影簡報 / 內訓 / 官網嵌入。Tailwind 風格、無外部 API。
+
+        const { useState } = React;
+        
+        // 【⭐️ 核心重構：內嵌 SVG 圖示，徹底移除外部依賴，解決所有載入問題 ⭐️】
+        // 建立一個包含所有圖示 React 元件的物件。
+        const Icons = {
+            ChevronDown: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m6 9 6 6 6-6"/></svg>
+            ),
+            ChevronRight: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m9 18 6-6-6-6"/></svg>
+            ),
+            MessagesSquare: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v10l-4-4h-6a2 2 0 0 1-2-2v-2"/></svg>
+            ),
+            FileText: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+            ),
+            ArrowDown: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+            ),
+            BadgeInfo: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+            ),
+            MoveRight: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M18 8L22 12L18 16"/><path d="M2 12H22"/></svg>
+            ),
+            Workflow: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg>
+            ),
+            Copy: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            )
+        };
+
+        const STAGES = [
+          {
+            id: "s1",
+            title: "第一階段｜初步接洽",
+            note: "建立信任感、降低商業感，以地點分流為主，不急著詢問細節。",
+            group: true,
+            // [核心修改] 根據您的要求，豐富化第一階段的方案內容，使其更具體、更具引導性。
+            options: [
+              {
+                label: "方案一｜地點分流，建立專業",
+                script: "您好，我是添心設計的[你的名字]。<br><br>為了能幫您安排最適合的設計師與工務團隊，想先請問這次的案場是在台南還是高雄呢？",
+                effect: "快速釐清服務範圍，同時展現公司團隊分工的專業性。",
+                nextAction: "根據客戶回覆的地點，立即轉介給該區的負責設計師，並告知客戶：『好的，我立刻請我們高雄的[設計師姓名]設計師與您聯繫，他對那邊的案場經驗比較豐富！』"
+              },
+              {
+                label: "方案二｜來源破冰，延續話題",
+                script: "您好，謝謝您聯繫添心設計！<br><br>方便請問您是透過朋友介紹，還是看到我們哪個作品找來的呢？想了解一下您喜歡的風格！",
+                effect: "將制式問候轉為有溫度的對話，從客戶感興趣的話題切入。",
+                nextAction: "順著客戶提到的作品或風格，延伸討論：『那部影片的北歐風我們也很喜歡！您是特別喜歡其中的木質元素，還是明亮的採光呢？』藉此深入了解客戶偏好，再邀約諮詢。"
+              },
+              {
+                label: "方案三｜時程切入，展現專業",
+                script: "您好！<br><br>想先請問您預計什麼時候會需要入住呢？<br>我們可以根據您的時程，來反推設計與工程的規劃，確保一切都能在您的期望內完成。",
+                effect: "從客戶關心的「時間點」切入，展現您對專案時程的掌控力，並快速篩選出有明確需求的客戶。",
+                nextAction: "將客戶的時程視為首要目標，並以此為基礎邀約：『了解，若要在[時間]前入住，我們的設計和工程現在就需要開始規劃了。這週您方便約個時間，我們來排個詳細時程表嗎？』"
+              },
+              {
+                label: "方案四｜主動提供價值，建立專家形象",
+                script: "您好，謝謝您聯繫添心！<br><br>您可以先簡單描述一下是新成屋還是舊屋翻新，以及最困擾您的問題是什麼嗎？",
+                effect: "展現樂於助人的專業態度，而非急於銷售，讓客戶卸下心防開啟有價值的諮詢對話。",
+                nextAction: "針對客戶提出的問題，給予一個簡單但專業的初步建議，並順勢引導至下一步：『採光問題可以透過調整格局或使用玻璃隔間來改善。想更深入了解的話，我建議我們約個現場丈量，這樣我的建議會更精準。』"
+              },
+              {
+                label: "方案五｜預算初步探詢，高效篩選",
+                script: "您好，謝謝您聯繫添心設計！<br><br>為了讓我們能更精準地為您評估，方便請問您對這次的裝修有初步的預算範圍嗎？<br>或者，您也可以告訴我們最希望改造的空間，我們先從單一空間的預算開始討論也可以喔！",
+                effect: "直接切入預算，快速篩選出有明確預算概念、意願較高的客戶，節省雙方時間。同時提供單一空間討論的選項，降低客戶直接回答總預算的壓力。",
+                nextAction: "若客戶提供預算，可直接判斷是否符合公司接案標準，並提供對應的案例參考。若客戶只提供空間，則可針對該空間提供概估費用，並邀約進一步諮詢。"
+              },
+              {
+                label: "方案六｜情境描繪法",
+                script: "您好！很高興您找到我們。如果可以，請您用一句話描述您對『理想的家』的想像是什麼樣的畫面呢？<br><br>是充滿陽光的午後書房，還是能讓全家一起看電影的舒適客廳？",
+                effect: "用感性的方式開場，引導客戶從生活情境出發，建立情感連結，而非僅是功能討論。",
+                nextAction: "根據客戶描述的畫面，延伸詢問相關細節，例如：『聽起來很棒！那您對客廳的沙發或電視牆有什麼特別的想法嗎？』"
+              },
+              {
+                label: "方案七｜經驗探詢法",
+                script: "您好！謝謝您聯繫添心設計。想冒昧請教一下，您過去是否有過裝修的經驗呢？<br><br>無論是好的或不好的經驗，都很歡迎與我們分享，這能幫助我們更了解您在意的細節。",
+                effect: "展現您重視客戶過去的經驗與感受，建立同理心，並從中快速掌握客戶的「地雷」與「期望」。",
+                nextAction: "若客戶分享了不好的經驗，可強調我們的流程如何避免類似問題發生，建立信任感。"
+              },
+              {
+                label: "方案八｜服務範疇釐清法",
+                script: "您好，謝謝聯繫！<br><br>想先跟您確認一下，請問您這次主要是需要全屋的設計規劃，還是針對特定空間（如廚房、浴室）的改造，或是系統櫃的訂製呢？",
+                effect: "快速界定服務範圍，讓後續的對話能更聚焦，並第一時間判斷案件類型。",
+                nextAction: "根據客戶回覆的服務類型，指派最擅長該領域的設計師，並提供相關的作品集參考。"
+              },
+              {
+                label: "方案九｜快速估價法",
+                script: "您好！如果您方便提供大概的室內坪數和屋況（新成屋/舊屋），我們可以先提供一個非常初步的預算範圍給您參考，讓您對費用有個概念，您覺得如何？",
+                effect: "主動提供價值，滿足客戶對價格的好奇心，同時也能快速篩選預算差距過大的客群。",
+                nextAction: "提供一個合理的預算區間後，強調『這只是一個概估，詳細報價還是需要現場丈量後才能更精準』，並順勢邀約丈量。"
+              },
+              {
+                label: "方案十｜痛點強攻法",
+                script: "您好，謝謝您聯繫添心！在我們開始規劃前，想先了解一下，目前您的房子有哪個問題最讓您困擾呢？<br><br>是收納空間永遠不夠、採光昏暗，還是格局不符合現在的生活習慣？",
+                effect: "直接切入客戶最想解決的問題，讓客戶感覺您是來解決問題的專家，而非只是銷售員。",
+                nextAction: "針對客戶提出的痛點，給予一個初步的專業建議，例如：『收納問題我們可以透過高櫃或臥榻來解決，這部分我們有很多經驗。』，建立專業形象。"
+              }
+            ],
+          },
+          // 【⭐️ 核心擴充：為第二階段增加多個方案 ⭐️】
+          {
+            id: "s2",
+            title: "第二階段｜約時間諮詢",
+            note: "提供彈性選項，引導客戶做出決定。",
+            group: true,
+            options: [
+              {
+                label: "方案一｜開放式邀約",
+                script: "為了更深入了解您的需求，想邀約您來我們門市進行一次初步諮詢。<br><br>我們門市地址在[此處填寫您的公司地址]，營業時間是每日上午 8:30 到下午 5:30，包含假日也都能安排。<br><br>請問您這週哪個時段方便呢？",
+                effect: "直接提供明確且包含假日的營業時間，給予客戶最大彈性，展現服務誠意。",
+                nextAction: "若客戶回覆時段，立即確認並敲定時間、地點。"
+              },
+              {
+                label: "方案二｜二選一式邀約",
+                script: "不曉得您這週三的上午，或是週五的下午，哪個時段比較方便呢？<br><br>我們可以約個時間到我們位於[此處填寫您的公司地址]的門市聊聊細節，或是安排線上會議也可以喔！",
+                effect: "提供具體選項與地點，幫助猶豫不決的客戶快速做決定。",
+                nextAction: "客戶選擇後，立即確認並發送行事曆邀請。"
+              },
+              {
+                label: "方案三｜價值導向式邀約",
+                script: "為了讓我們的討論更具體，也方便我們提供更精準的初步建議，我們很樂意安排一次免費的現場丈量與諮詢。<br><br>請問您這週方便我們過去一趟嗎？",
+                effect: "直接提供高價值的免費服務（現場丈量），展現解決問題的誠意與專業自信，強力促成下一步行動。",
+                nextAction: "客戶同意後，立即約定丈量時間，並提醒客戶可以先準備好格局圖或相關資料，加速討論效率。"
+              },
+              {
+                label: "方案四｜問題解決導向式邀約",
+                script: "聽起來您對於 [客戶提到的問題，例如：收納不足] 感到很困擾。<br><br>針對這個問題，我們有許多實務經驗可以跟您分享。不如我們約個時間，我直接帶您看幾個我們處理類似問題的案例，並為您說明解決方案，您覺得如何？",
+                effect: "直接回應客戶的痛點，將邀約的目的從「諮詢」轉化為「解決問題」，讓客戶感覺到這次會面將帶來實質幫助，提高赴約意願。",
+                nextAction: "客戶同意後，立即約定時間，並在諮詢前準備好 1-2 個與客戶問題相關的成功案例，作為討論核心。"
+              },
+              {
+                label: "方案五｜線上優先法",
+                script: "為了節省您寶貴的時間，我們可以先安排一次 15-20 分鐘的線上視訊會議，初步了解您的需求與風格偏好。<br><br>如果討論後覺得合適，我們再約現場丈量，您覺得這樣的方式方便嗎？",
+                effect: "提供一個低門檻、高效率的初步接觸方式，特別適合忙碌或尚在觀望階段的客戶。",
+                nextAction: "客戶同意後，立即發送會議連結與時間選項，完成線上會議預約。"
+              },
+              {
+                label: "方案六｜案例分享法",
+                script: "我注意到您對我們的 [某個作品] 很有興趣。該案的屋主當初也有類似的需求。<br><br>如果您方便，我們可以約個時間，我詳細跟您分享當時我們是如何規劃的，以及一些沒放在影片中的設計巧思，相信對您會很有幫助。",
+                effect: "以客戶感興趣的實際案例作為誘因，將邀約從「銷售」轉化為「經驗分享」，降低客戶戒心。",
+                nextAction: "準備好該案例的詳細圖文資料，在諮詢時進行深度分享。"
+              },
+              {
+                label: "方案七｜時程緊迫法",
+                script: "了解，如果要在您期望的 [入住時間] 前順利完工，我們的設計與工程規劃現在就需要開始了。<br><br>事不宜遲，我們這週約個時間碰面，直接把時程表排出來，您看如何？",
+                effect: "利用客戶自己的時程壓力作為推力，強調立即行動的必要性，適合需求明確且時程較趕的客戶。",
+                nextAction: "在諮詢時，準備一份時程規劃表，與客戶一同確認每個階段的時間點。"
+              },
+              {
+                label: "方案八｜設計師魅力法",
+                script: "根據您的需求，我認為我們的 [設計師姓名] 設計師非常適合您。他/她對於 [客戶在意的風格或功能] 特別有研究。<br><br>我幫您看看他/她這週的檔期，幫您安排一個諮詢時間好嗎？",
+                effect: "凸顯設計師的個人專業與特長，讓客戶感覺受到重視，並對即將到來的諮詢充滿期待。",
+                nextAction: "事先與該位設計師溝通客戶的背景，讓諮詢過程更順暢。"
+              },
+              {
+                label: "方案九｜活動限定法",
+                script: "剛好我們公司最近有一個活動，只要在本月底前完成諮詢並簽訂設計委任，就能享有 [優惠內容，例如：設計費折抵或贈送智能家居小物]。<br><br>名額有限，我先幫您預約一個諮詢時段好嗎？",
+                effect: "創造稀有性與急迫感，提供一個立即行動的強力誘因。此方法需搭配公司實際行銷活動使用。",
+                nextAction: "客戶赴約時，主動再次說明活動內容，增加簽約動機。"
+              },
+              {
+                label: "方案十｜鄰近案例法",
+                script: "我們最近剛好在您家附近 [社區名稱或路段] 有一個案場正在施工/剛完工，風格和您的需求有點類似。<br><br>如果您不介意，我們可以約個時間帶您過去現場感受一下實際的空間感與施工品質，您覺得呢？",
+                effect: "提供親身體驗的機會，眼見為憑，是建立信任感最強大的方式。此方法需取得該案場屋主同意。",
+                nextAction: "與該案場屋主協調好時間，並準備好相關介紹資料，引導客戶參觀。"
+              }
+            ]
+          },
+          // 【⭐️ 核心擴充：為第三階段增加多個方案 ⭐️】
+          {
+            id: "s3",
+            title: "第三階段｜索要相關資訊",
+            note: "在諮詢前取得圖面，能大幅提升溝通效率。",
+            group: true,
+            options: [
+              {
+                label: "方案一｜直接請求", // 保持不變
+                script: "為了讓我們後續的討論更有效率，方便先提供您府上的格局圖、或是幾張現場照片嗎？<br><br>我先幫您初步看看，這樣討論時會更有方向喔！", // 保持不變
+                effect: "將抽象討論轉為具體圖像溝通，快速聚焦問題。", // 保持不變
+                nextAction: "收到圖面後，給予初步回饋並確認諮詢時要討論的重點。" // 保持不變
+              },
+              {
+                label: "方案二｜價值交換",
+                script: "如果您方便提供格局圖，我可以在諮詢前，先幫您檢視一下有沒有明顯的動線問題，這樣我們見面時就能直接討論解決方案了！",
+                effect: "提供額外價值（免費檢視），增加客戶提供圖面的意願。",
+                nextAction: "收到圖面後，找出 1-2 個可以優化的點，作為諮詢時的切入點。"
+              },
+              {
+                label: "方案三｜預算對焦法",
+                script: "為了讓我們的討論更有效率，如果您方便提供格局圖，我們可以根據您的預算，先做一個初步的空間配置與費用概估。<br><br>這樣我們見面時，就能直接針對具體的方案來討論，而不是天馬行空地亂想。",
+                effect: "將「圖面」與「預算」兩大核心要素綁定，強調索取圖面是為了提供更務實的財務規劃。",
+                nextAction: "收到圖面後，製作一份簡易的空間費用分析，作為諮詢時的討論基礎。"
+              },
+              {
+                label: "方案四｜問題導向法",
+                script: "您上次提到對於 [採光不足] 的問題很困擾。如果您能提供格局圖，我可以先研究一下您家的座向與開窗位置，幫您思考幾種改善採光的可能性。",
+                effect: "聚焦於解決客戶已提出的具體問題，讓客戶感覺到您正在為他著想，從而更願意提供資訊。",
+                nextAction: "針對圖面進行分析，並在諮詢時提出 2-3 個具體的採光改善建議。"
+              },
+              {
+                label: "方案五｜便利性強調法",
+                script: "如果您手邊剛好有建商給的電子檔格局圖（CAD檔或PDF檔），可以直接傳給我們，這樣最快最準確！<br><br>如果沒有也沒關係，用手機把紙本的格局圖拍清楚給我們也可以喔！",
+                effect: "降低客戶提供資料的心理門檻，告知客戶各種形式的圖面都可以，重點是先求有再求好。",
+                nextAction: "收到任何形式的圖面後，都先給予正面回饋：『收到了，謝謝您！我先研究一下！』"
+              },
+              {
+                label: "方案六｜專業術語法",
+                script: "為了讓我們能進行初步的『圖面會診』，需要麻煩您提供一下格局圖。<br><br>我們會從動線、採光、通風等專業角度為您分析，讓您對空間的潛力有更深入的了解。",
+                effect: "使用「圖面會診」等專業術語，提升設計師的專家形象，讓客戶感覺提供圖面是專業諮詢的必要步驟。",
+                nextAction: "在諮詢時，確實從動線、採光等角度提出專業見解。"
+              },
+              {
+                label: "方案七｜安全感建立法",
+                script: "請您放心，您提供的所有資料我們都會嚴格保密，僅作為內部設計規劃使用。<br><br>方便請您現在傳格局圖給我們嗎？",
+                effect: "主動提及隱私保護，消除客戶對於個資外洩的疑慮，增加提供資料的意願。",
+                nextAction: "確實遵守保密承諾，妥善保管客戶資料。"
+              },
+              {
+                label: "方案八｜同理心對比法",
+                script: "我完全理解在沒有具體畫面的情況下很難討論，就像醫生看診也需要X光片一樣。<br><br>格局圖就是我們的X光片，有了它，我們的討論才能對症下藥！",
+                effect: "使用生動的比喻，讓客戶輕鬆理解提供圖面的重要性與必要性。",
+                nextAction: "收到圖面後，延續比喻：『好的，X光片收到了，我來幫您看看骨架有沒有問題！』"
+              },
+              {
+                label: "方案九｜時程提醒法",
+                script: "我們的設計師目前手上有幾個案子在進行，如果能先拿到您的格局圖，他可以利用空檔時間先幫您思考。<br><br>這樣可以加快我們整個設計的進程喔！",
+                effect: "暗示設計師很搶手，並將「提供圖面」與「加快進度」連結，創造雙贏的局面。",
+                nextAction: "收到圖面後，盡快給予一個初步的想法或回饋，印證「加快進程」的說法。"
+              },
+              {
+                label: "方案十｜下一步明確化",
+                script: "收到您的格局圖後，我們的下一步就是 [預計的下一步驟，例如：為您規劃初步的櫃體配置]。<br><br>現在方便提供給我們嗎？",
+                effect: "清楚告知客戶，提供圖面後會發生什麼事，消除未知感，讓客戶更願意配合。",
+                nextAction: "確實執行所承諾的下一步驟。"
+              }
+            ]
+          },
+          // 【⭐️ 核心擴充：將後續所有階段改為多方案格式 ⭐️】
+          {
+            id: "s4",
+            title: "第四階段｜確定諮詢時間",
+            note: "明確告知客戶已安排的時間，並友善提醒變動需提前通知。",
+            group: true,
+            options: [{
+                label: "方案一｜確認並提醒",
+               script: "好的，再次與您確認諮詢資訊：<br><br><strong>時間：</strong>(此處寫合適的時間)<br><strong>地點：</strong>[此處填寫您的公司地址]<br><strong>事宜：</strong>初步設計需求諮詢<br><br>期待與您見面！",
+                effect: "使用條列式訊息，讓客戶能一目了然地掌握重要資訊，展現專業與貼心。",
+                nextAction: "1. 將此事件加入公司行事曆，並邀請相關設計師。<br>2. 與設計師最終確認此行程。<br>3. 將門市的 Google Maps 連結與停車資訊一併傳送給客戶。"
+            },
+            {
+                label: "方案二｜附帶提醒法",
+                script: "好的，時間已為您保留！<br><br><strong>時間：</strong>(此處寫合適的時間)<br><strong>地點：</strong>[此處填寫您的公司地址]<br><br>提醒您，可以先想想目前家中最困擾您的 2-3 個問題，或蒐集一些喜歡的風格照片，這樣我們討論時會更有方向喔！",
+                effect: "在確認時間的同時，給予客戶「課前作業」，引導客戶在諮詢前進行思考，提升諮詢效率。",
+                nextAction: "在諮詢開場時，主動詢問客戶準備的資料，開啟話題。"
+            },
+            {
+                label: "方案三｜雙重確認法",
+                script: "沒問題！時間、地點已確認。<br><br>為了避免遺忘，我會在諮詢前一天下午再次傳訊息提醒您，請問方便嗎？",
+                effect: "主動提出諮詢前再次提醒，展現貼心與細心，同時也降低客戶臨時爽約的機率。",
+                nextAction: "在行事曆上設定「諮詢前一天」的提醒任務，確保準時發送提醒訊息。"
+            },
+            {
+                label: "方案四｜感謝與期待法",
+                script: "非常感謝您抽出寶貴的時間！我們非常期待與您當面聊聊您對家的想法。<br><br>時間：(此處寫合適的時間)<br>地點：[此處填寫您的公司地址]<br><br>那我們到時候見！",
+                effect: "表達感謝與期待，讓客戶感覺受到重視，營造正向的互動氛圍。",
+                nextAction: "諮詢當天，準備茶水點心，營造舒適的洽談環境。"
+            },
+            {
+                label: "方案五｜交通指引法",
+                script: "好的，時間就這麼定了！<br><br>我們門市地址在 [此處填寫您的公司地址]，這是我們的 Google Maps 連結：[地圖連結]<br><br>附近 [停車資訊，例如：路邊停車格或附近有付費停車場]，開車來很方便。期待您的蒞臨！",
+                effect: "主動提供詳細的交通資訊，解決客戶「如何前往」的潛在問題，極大化貼心服務的感受。",
+                nextAction: "確保提供的地圖連結與停車資訊正確無誤。"
+            }]
+          },
+          {
+            id: "s5",
+            title: "第五階段｜諮詢需求與想法",
+            note: "透過結構化的問題集，全面挖掘客戶的深層需求與生活習慣。",
+            group: true,
+            options: [{
+                label: "需求探索問題集",
+                script: `在開始規劃前，我想透過幾個問題更深入地了解您的生活：<div class='grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 mt-2'><ul class='list-disc list-inside space-y-1'><li><strong>家庭成員與習慣：</strong>家裡有幾位成員？有沒有寵物？大家平常最常待在哪個空間？</li><li><strong>生活情境：</strong>您對『家』的夢想畫面是什麼？希望它成為一個什麼樣的場所？</li><li><strong>風格偏好：</strong>有沒有特別喜歡或不喜歡的顏色、材質或風格？</li><li><strong>收納需求：</strong>目前家中最困擾您的收納問題是什麼？有沒有大量的藏書、衣物或收藏品需要空間？</li><li><strong>特殊需求：</strong>是否有在家工作的需求？對廚房或衛浴有沒有特別的期待？</li><li><strong>早晨日常：</strong>家庭成員的起床時間與出門流程是？會不會有搶廁所的狀況？</li><li><strong>居家辦公：</strong>需要獨立的書房，還是客廳角落的辦公區即可？</li><li><strong>影音娛樂：</strong>您們喜歡看電視、電影還是聽音樂？對音響設備有特殊要求嗎？</li></ul><ul class='list-disc list-inside space-y-1'><li><strong>烹飪習慣：</strong>下廚頻率高嗎？偏好中式熱炒還是西式輕食？需要中島嗎？</li><li><strong>用餐習慣：</strong>習慣在餐桌上用餐，還是喜歡在客廳配電視？</li><li><strong>訪客頻率：</strong>常有朋友或家人來訪嗎？需要額外的客房或彈性空間嗎？</li><li><strong>清潔習慣：</strong>您偏好容易維護的材質嗎？有掃地機器人嗎？</li><li><strong>未來規劃：</strong>未來 5-10 年，家庭成員或生活方式可能會有什麼變化？</li><li><strong>過敏狀況：</strong>家中有成員對特定材質（如：塵蟎、甲醛）過敏嗎？</li><li><strong>風水考量：</strong>是否有任何風水上的禁忌或需求需要我們注意？</li></ul></div>`,
+                effect: "引導客戶從具體生活細節出發，讓設計師能掌握到比風格更重要的「生活模式」，使設計更貼近真實需求。這些問題也能展現設計師的專業與細心。",
+                nextAction: "將客戶的回答詳細記錄下來，作為設計的核心依據。可考慮將此問題集製作成線上表單，在諮詢前讓客戶填寫。"
+            }]
+          },
+          {
+            id: "s6",
+            title: "第六階段｜討論預算",
+          note: "提供多種預算討論的切入方式，建立信任感並找出最務實的方案。",
+            group: true,
+            options: [
+                {
+                    label: "方案一｜直接詢問法",
+                    script: "為了讓我們的規劃更貼近您的期望，想先了解一下，這次裝修您預計投入的預算範圍大概是多少呢？",
+                    effect: "最直接的方式，適用於已有明確預算概念的客戶。",
+                    nextAction: "根據客戶提出的預算，直接進行初步的可行性評估。"
+                },
+                {
+                    label: "方案二｜分項估算法",
+                    script: "如果還沒有總預算的想法也沒關係。<br><br>我們可以反過來，從您最想完成的項目開始，例如『廚房』、『主臥收納』，我先幫您估算這些核心項目的費用，我們再來逐步建立完整的預算藍圖。",
+                    effect: "將一個大的預算問題，拆解成數個小問題，降低客戶的心理壓力，並讓他對錢花在哪更有概念。",
+                    nextAction: "引導客戶列出 2-3 個最優先的項目，並提供一個概估的費用區間。"
+                },
+                {
+                    label: "方案三｜價值排序法",
+                    script: "為了確保每一分錢都花在刀口上，我想了解您對新家最重要的期望是什麼？<br><br>例如，有些人最重視的是要有『一個能讓全家一起看電影的大客廳』，有些人則希望『每個房間都有極致的收納空間』。<br><br>對您來說，最不可或缺的空間或功能是什麼呢？",
+                    effect: "適用於預算不明確或較為感性的客戶，透過價值觀排序，幫助設計師了解客戶的真實需求，避免後續因預算問題產生爭議。",
+                    nextAction: "記錄下客戶描述的核心場景，並在後續的設計與報價中，優先滿足這些關鍵需求，將預算做最有效的分配。"
+                },
+                {
+                    label: "方案四｜案例參考法",
+                    script: "這是一個我們之前做過的案子，格局和坪數跟您家有點類似，當時整體的工程費用大約是 [金額] 元。<br><br>您可以參考這個金額，來評估您希望投入的預算範圍。",
+                    effect: "提供一個具體的、可參考的實際案例，讓客戶對費用有一個更真實的錨點，避免漫天喊價。",
+                    nextAction: "準備 2-3 個不同預算等級且格局相似的案例，根據客戶反應提供不同參考。"
+                },
+                {
+                    label: "方案五｜級距選擇法",
+                    script: "一般來說，類似您這樣 [坪數] 坪的 [新成屋/舊屋翻新] 案場，根據材質與設計複雜度的不同，預算通常會落在幾個區間：<br>A. [較低金額] (基礎工程+標準系統櫃)<br>B. [中等金額] (含部分木作造型與材質提升)<br>C. [較高金額] (高階材質、全室木作或進口設備)<br><br>請問您初步會傾向哪個範圍呢？",
+                    effect: "提供清晰的選項，幫助對預算完全沒概念的客戶快速定位，同時也讓設計師了解客戶的期望水平。",
+                    nextAction: "根據客戶選擇的級距，提供對應風格與材質的建議。"
+                },
+                {
+                    label: "方案六｜單坪估算法",
+                    script: "以我們的經驗，[新成屋/舊屋翻新] 的裝修費用，在不動格局的情況下，每坪的費用大約會落在 [金額] 元之間。<br><br>您可以根據您的坪數 [坪數] 坪，來做一個初步的總價預估。",
+                    effect: "提供一個業界通用的快速估算方式，讓客戶能快速自己算出一個大概的總價。",
+                    nextAction: "強調這只是一個非常粗略的估算，實際費用會因設計、材料、工法而有很大差異，需以詳細報價為準。"
+                },
+                {
+                    label: "方案七｜排除法",
+                    script: "沒關係，我們先不談總預算。反過來想，有沒有哪些項目是您覺得『一定不需要』或『可以先不做』的呢？<br><br>例如天花板的間接照明、電視牆的特殊材質等等。我們先把非必要的項目排除，剩下的就是您核心需求的預算了。",
+                    effect: "逆向思考，幫助客戶釐清需求的優先順序，從而間接推導出預算的核心範圍。",
+                    nextAction: "記錄下客戶認為非必要的項目，在後續規劃中作為降低預算的選項。"
+                },
+                {
+                    label: "方案八｜信任建立法",
+                    script: "預算的部分請您放心，我們公司最大的原則就是『透明』。在設計定案後，我們會提供一份非常詳細的報價單，上面會清楚列出每一個項目的單價和數量，一毛錢都不會灌水。<br><br>現在，您可以先專注於您對家的夢想，預算的事，我們可以一步步來建立。",
+                    effect: "當客戶對預算問題表現出防備時，先不追問，而是強調公司的誠信與透明原則，以建立信任感為優先。",
+                    nextAction: "在後續的討論中，適時地提醒不同材質或工法的價差，逐步建立客戶的預算概念。"
+                },
+                {
+                    label: "方案九｜分期付款說明法",
+                    script: "關於費用，我們是採分階段付款的方式，通常會分為 3-4 期。例如簽約付第一期，木工進場付第二期...等等。<br><br>這樣的做法可以減輕您一次性付款的壓力。您可以根據這個模式，來規劃您的資金運用與預算。",
+                    effect: "從付款方式切入，緩解客戶對一次性大筆支出的焦慮，讓他們感覺預算是可控的。",
+                    nextAction: "提供一份詳細的付款階段說明給客戶參考。"
+                },
+                {
+                    label: "方案十｜設計費折抵強調法",
+                    script: "在討論預算時，也想先跟您說明，我們前期收取的『專案啟動金』，在您後續簽訂工程合約時，是可以『全額折抵』工程款的喔！<br><br>所以這筆費用並不是額外的支出，您可以放心地投入初步的設計規劃。",
+                    effect: "再次強調啟動金的可折抵性，降低客戶對於投入前期設計成本的疑慮，讓預算討論更順暢。",
+                    nextAction: "在報價單中明確標示出設計費折抵的欄位。"
+                }
+            ]
+          },
+          {
+            id: "s7",
+            title: "第七階段｜說明公司流程",
+            note: "透明化流程，讓客戶清楚了解每個步驟，增加安全感。",
+            group: true,
+            options: [{
+                label: "方案一｜流程圖說明",
+                script: "這是我們的標準服務流程圖，從設計、施工到驗收的每個環節都非常清楚。<br><br>我們堅持報價透明、不二價，確保您的權益。",
+                effect: "客戶看到清晰的付款與保固說明圖表後，對公司的專業度與信任感大幅提升。",
+                nextAction: "提供一份流程說明的紙本或電子檔給客戶，並口頭強調關鍵節點（如：簽約、付款、驗收）。"
+            }]
+          },
+          {
+            id: "s8",
+            title: "第八階段｜確認專案啟動",
+            note: "說明啟動金的用途與可折抵的優惠，降低客戶簽約門檻。",
+            group: true,
+            options: [{
+                label: "方案一｜啟動金與折抵",
+                script: "確認啟動專案後，我們會先收取一筆設計啟動金，用來支付 3D 圖的繪製費用。<br><br>這筆費用在後續簽訂工程合約時，是可以全額折抵的喔！",
+                effect: "客戶理解啟動金可折抵後，爽快支付單間設計費 3,000 元，讓專案順利進入下一階段。",
+                nextAction: "簽訂「專案啟動委任書」，並開立啟動金收據給客戶，完成財務程序。"
+            }]
+          },
+          {
+            id: "s9",
+            title: "第九階段｜現場丈量",
+            note: "此階段為內部執行事項，重點在於精準測量與記錄。",
+            group: true,
+            options: [{
+                label: "內部執行重點",
+                script: "1. 使用雷射測距儀精準測量所有牆面、樑柱、門窗尺寸。<br>2. 拍攝全景及各個角落的現況照片，特別注意結構、管線與瑕疵處。<br>3. 確認所有插座、開關、水源與排水孔的確切位置。<br>4. 邀請屋主一同巡視，**現場感受空間並初步交流想法**，例如『這裡的光線很好，適合做個臥榻』，並記錄下來。<br>5. 檢查天地壁的水平與垂直度，確認是否有歪斜。<br>6. 記錄現有大型家具尺寸，評估是否保留沿用。",
+                effect: "確保後續圖面繪製的準確性，避免因尺寸錯誤導致設計變更或施工問題。",
+                nextAction: "將所有丈量數據與照片整理歸檔至專案資料夾，並同步給負責的設計師。"
+            }]
+          },
+          {
+            id: "s10",
+            title: "第十階段｜規劃設計 (平面圖)",
+            note: "此階段為內部執行事項，重點在於將客戶需求轉化為平面圖，並進行內部審核。",
+            group: true,
+            options: [{
+                label: "內部執行重點",
+                script: "1. 根據丈量結果與客戶需求，繪製初步的平面配置圖 (1-2 個方案)。<br>2. 規劃主要的系統櫃配置與尺寸。<br>3. 標示出初步的水電迴路與插座位置。<br>4. **與總監進行初步圖面審核**，確認大方向可行性。<br>5. 根據風格方向，**蒐集相關的空間意象圖/參考照片**，作為輔助溝通材料。",
+                effect: "產出經過內部審核的設計初稿，並準備好視覺參考，讓與客戶的溝通更有效率。",
+                nextAction: "與客戶預約看平面配置圖的時間，並準備進入 3D 繪圖階段。"
+            }]
+          },
+          {
+            id: "s11",
+            title: "第十一階段｜3D 圖面繪製",
+            note: "此階段為內部執行事項，重點在於將設計視覺化。",
+            group: true,
+            options: [{
+                label: "內部執行重點",
+                script: "1. 根據確認的平面圖，建立空間 3D 模型。<br>2. 套用客戶偏好的主要材質、顏色與燈光設定。<br>3. 渲染出多個角度的擬真效果圖，呈現空間氛圍。<br>4. **初步渲染完成後，與總監討論細節**，確認風格、材質搭配與設計細節是否到位。",
+                effect: "讓客戶能預見未來的家，大幅降低認知落差，加速設計定案。",
+                nextAction: "將渲染圖整理成提案簡報，準備與客戶進行詳細的風格與材質討論。"
+            }]
+          },
+          {
+            id: "s12",
+            title: "第十二階段｜最終提案與報價",
+            note: "此階段為內部執行事項，重點在於製作詳盡透明的報價單，並進行最終審核。",
+            group: true,
+            options: [{
+                label: "內部執行重點",
+                script: "1. 根據最終確認的設計圖，拆分所有工程項目與數量。<br>2. 詳列各項目的材質、規格、單價與總價。<br>3. 清楚載明施工項目與費用。<br>4. **報價單完成後，由總監進行最終審核**，確保無漏項或錯誤。",
+                effect: "提供一份完整、透明、無模糊空間的報價單，是建立最終信任的關鍵。",
+                nextAction: "與客戶預約正式提案時間，說明最終設計方案與詳細報價，並準備簽訂工程合約。"
+            }]
+          },
+        ];
+
+        // 【您的要求】新增：複製按鈕元件
+        function CopyButtons({ scriptText }) {
+            const [copyStatus, setCopyStatus] = useState('');
+
+            const handleCopy = (location) => {
+                const addresses = {
+                    '台南': '台南市中華西路一段219號',
+                    '高雄': '高雄市大順三路359巷10號'
+                };
+
+                // 【您的要求】全面優化複製邏輯
+                // 1. 將 "我是添心設計的[你的名字]" 或 "您好，我是添心設計的[你的名字]" 替換為更專業的問候語
+                // 2. 將 "(此處寫合適的時間)" 替換為更醒目的提示
+                // 3. 將地址佔位符替換為對應門市地址
+                // 4. 清除所有 HTML 標籤 (如 <strong>, <li>, <ul>, <div>)
+                // 5. 將 <br> 標籤替換為換行符號 \n，並處理多餘的空行，優化排版
+                const processedText = scriptText
+                    .replace(/您好，我是添心設計的\[你的名字\]。/g, '您好，添心設計很高興為您服務。')
+                    .replace(/\(此處寫合適的時間\)/g, '【請填寫時間】')
+                    .replace(/\[此處填寫您的公司地址\]/g, addresses[location])
+                    .replace(/<li>/gi, '\n- ') // 將 <li> 轉換為項目符號
+                    .replace(/<[^>]+>/g, '')     // 移除所有剩餘的 HTML 標籤
+                    .replace(/<br\s*\/?>/gi, '\n') // 將 <br> 轉換為換行
+                    .replace(/\n{3,}/g, '\n\n')    // 將三個以上的連續換行，壓縮為兩個
+                    .replace(/^\s+|\s+$/g, '');   // 清除開頭和結尾的空白
+
+                navigator.clipboard.writeText(processedText).then(() => {
+                    setCopyStatus(`已複製 ${location} 版本！`);
+                    setTimeout(() => setCopyStatus(''), 2000); // 2秒後清除狀態
+                }).catch(err => {
+                    console.error('複製失敗:', err);
+                    setCopyStatus('複製失敗');
+                    setTimeout(() => setCopyStatus(''), 2000);
+                });
+            };
+
+            return (
+                <div className="flex items-center gap-2">
+                    {/* 【您的要求】讓按鈕更清晰 */}
+                    {copyStatus ? (
+                        <span className="text-xs text-green-600 font-semibold">{copyStatus}</span>
+                    ) : (
+                        <>
+                            <button onClick={() => handleCopy('台南')} className="text-xs font-semibold text-zinc-500 hover:text-zinc-800 flex items-center gap-1 bg-zinc-100 hover:bg-zinc-200 px-2 py-1 rounded-md transition-colors">
+                                <Icons.Copy className="w-3 h-3" />
+                                <span>複製台南</span>
+                            </button>
+                            <button onClick={() => handleCopy('高雄')} className="text-xs font-semibold text-zinc-500 hover:text-zinc-800 flex items-center gap-1 bg-zinc-100 hover:bg-zinc-200 px-2 py-1 rounded-md transition-colors">
+                                <Icons.Copy className="w-3 h-3" />
+                                <span>複製高雄</span>
+                            </button>
+                        </>
+                    )}
+                </div>
+            );
+        }
+
+        function StageCard({ stage, active, onClick }) {
+            return (
+                <div className={`rounded-2xl border p-4 transition-all ${active ? "border-black shadow" : "border-zinc-300"}`}>
+                    <button onClick={onClick} className="w-full flex items-center justify-between">
+                        <div className="text-left">
+                            <div className="text-sm tracking-widest text-zinc-500">STEP</div>
+                            <h3 className="text-lg font-semibold">{stage.title}</h3>
+                            {stage.note && <p className="text-sm text-zinc-600 mt-1">{stage.note}</p>}
+                        </div>
+                        {active ? <Icons.ChevronDown className="w-6 h-6 flex-shrink-0" /> : <Icons.ChevronRight className="w-6 h-6 flex-shrink-0" />}
+                    </button>
+
+                    {active && (
+                        <div className="mt-4 space-y-4">
+                            {stage.group ? (
+                                <div className="grid md:grid-cols-2 gap-3">
+                                    {stage.options.map((opt, idx) => (
+                                        <div key={idx} className="rounded-xl border border-zinc-200 p-4 bg-white flex flex-col gap-3">
+                                            <div className="font-semibold text-zinc-800">{opt.label}</div>
+                                            
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between items-center">
+                                                    <div className="text-sm font-medium text-zinc-500">對話腳本</div>
+                                                    <CopyButtons scriptText={opt.script} />
+                                                </div>
+                                                <p className="text-zinc-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: opt.script }}></p>
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <div className="text-sm font-medium text-zinc-500">預期效果</div>
+                                                <p className="text-zinc-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: opt.effect }}></p>
+                                            </div>
+                                            
+                                            <details className="group text-sm">
+                                                <summary className="flex items-center gap-1 cursor-pointer font-medium text-green-700 list-none">
+                                                    <Icons.ChevronRight className="w-4 h-4 group-open:rotate-90 transition-transform" />
+                                                    <span>顯示下一步行動</span>
+                                                </summary>
+                                                <p className="mt-2 pl-5 text-zinc-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: opt.nextAction }}></p>
+                                            </details>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                // 【⭐️ 核心修正：用一個外層 div 包裹，解決 JSX 語法錯誤 ⭐️】
+                                <div className="rounded-xl border border-zinc-200 p-4 bg-white space-y-3">
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between items-center">
+                                            <div className="text-sm font-medium text-zinc-500">對話腳本</div>
+                                            <CopyButtons scriptText={stage.script} />
+                                        </div>
+                                        <p className="text-zinc-700 leading-relaxed">{stage.script}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="text-sm font-medium text-zinc-500">案例效果</div>
+                                        <p className="text-zinc-700 leading-relaxed">{stage.effect}</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function App() {
+            // 【⭐️ 核心修正：將初始狀態設為 null，讓所有項目預設為收合狀態 ⭐️】
+            const [activeId, setActiveId] = useState(null);
+
+            // 【⭐️ 核心優化：自動計算 stageCount，未來維護 STAGES 更方便 ⭐️】
+            const PROCESS_PHASES = [
+              { title: "線上初步接洽", stageIds: ["s1", "s2", "s3", "s4"] },
+              { title: "諮詢與確認", stageIds: ["s5", "s6", "s7", "s8"] },
+              { title: "專案啟動與執行", stageIds: ["s9", "s10", "s11", "s12"] },
+            ];
+
+            // 【⭐️ 核心新增：為每個階段定義顏色，實現「色階」效果 ⭐️】
+            const PHASE_COLORS = [
+                { text: 'text-sky-700', bg: 'bg-sky-100', border: 'border-sky-300' },
+                { text: 'text-amber-700', bg: 'bg-amber-100', border: 'border-amber-300' },
+                { text: 'text-green-700', bg: 'bg-green-100', border: 'border-green-300' },
+            ];
+
+            return (
+                <div className="min-h-screen w-full bg-zinc-50 py-8">
+                    <div className="max-w-6xl mx-auto px-4">
+                        <header className="flex items-center gap-3 mb-8">
+                            <Icons.Workflow className="w-6 h-6 text-zinc-700" />
+                            <h1 className="text-2xl font-semibold">添心設計｜客戶接洽流程（互動版）</h1>
+                        </header>
+
+                        {/* 【⭐️ 核心重構：改為階段式區塊，左側為垂直長條標題 ⭐️】 */}
+                        {(() => {
+                            // 【⭐️ 核心修正：建立一個外部計數器，確保步驟編號永遠正確 ⭐️】
+                            let stepCounter = 0;
+                        return (<div className="space-y-12">
+                            {PROCESS_PHASES.map((phase, phaseIndex) => { 
+                                // 根據 phase.stageIds 從 STAGES 中篩選出對應的步驟
+                                const phaseStages = STAGES.filter(s => phase.stageIds.includes(s.id));
+                                if (phaseStages.length === 0) return null; // 如果此階段無步驟，則不渲染
+                                const colors = PHASE_COLORS[phaseIndex % PHASE_COLORS.length];
+
+                                // 根據步驟數量決定是否要顯示多方案的註記
+                                const isMultiOption = phaseStages.length === 1 && phaseStages[0].group;
+
+                                return (
+                                    <div key={phaseIndex} className="flex gap-4 md:gap-6">
+                                        {/* 左側：垂直長條標題 */}
+                                        <div className="flex-shrink-0 flex justify-center">
+                                            <div className={`flex flex-col items-center justify-center text-center font-bold p-2 rounded-lg ${colors.text} ${colors.bg}`}>
+                                                {phase.title.split('').map((char, charIndex) => (
+                                                    <span key={charIndex}>{char}</span>
+                                                ))}
+                                                {isMultiOption && <span className="text-xs mt-2 opacity-80 writing-mode-vertical-lr">(多方案)</span>}
+                                            </div>
+                                        </div>
+                                        {/* 右側：主流程時間軸 */}
+                                        <div className="flex-grow">
+                                            <ol className={`relative border-l ${colors.border}`}>
+                                                {phaseStages.map((s, i) => (
+                                                    <li key={s.id} className="ml-8 mb-8">
+                                                        {/* 使用外部計數器來產生正確的步驟編號 */}
+                                                        <span className="absolute -left-4 flex h-8 w-8 items-center justify-center rounded-full bg-black text-white">{++stepCounter}</span>
+                                                        <StageCard stage={s} active={activeId === s.id} onClick={() => setActiveId(activeId === s.id ? null : s.id)} />
+                                                    </li>
+                                                ))}
+                                            </ol>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                                </div>);
+                            })()}
+    
+                        </div>
+                    </div>
+                );
+            }
+        
+
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(<App />);
+    </script>
+</body>
+</html>  

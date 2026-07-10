@@ -45,7 +45,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>薪資審核</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub">員工從出勤頁送審後會出現在這裡。核准後進「薪資待匯款」，此時尚未發薪。</p>
+    <p class="sub">員工自審或主管代開審後會出現在這裡。待審可見本薪／加減項／一般獎金明細；專案報酬只顯示不併薪。核准後進「薪資待匯款」。</p>
     <div id="msg" role="alert"></div>
     <div id="ok" aria-live="polite"></div>
 
@@ -89,6 +89,34 @@
         return '銀行 ' + esc(row.bank_code) + ' · 帳號末四碼 ' + esc(tail) + ' · ' + esc(row.account_name);
       }
 
+      function lineItemsHtml(rows, sign) {
+        if (!rows || !rows.length) return '<p class="sub">—</p>';
+        return '<ul style="margin:4px 0;padding-left:18px;font-size:13px">' + rows.map(function (row) {
+          var amt = parseInt(row.amount, 10) || 0;
+          var note = row.note ? ' <span style="color:#777">（' + esc(row.note) + '）</span>' : '';
+          var amtText = amt > 0 ? (sign + amt.toLocaleString('zh-TW')) : '—';
+          return '<li style="margin:2px 0"><span>' + esc(row.label) + note + '</span> <strong>' + amtText + '</strong></li>';
+        }).join('') + '</ul>';
+      }
+
+      function projectRewardHtml(row) {
+        var items = row.project_rewards || row.margin_bonus_drafts || [];
+        if (!items.length) return '';
+        var total = parseInt(row.project_reward_total, 10) || items.reduce(function (s, d) {
+          return s + (parseInt(d.amount, 10) || 0);
+        }, 0);
+        var lis = items.map(function (d) {
+          var start = d.start_date || '—';
+          var close = d.close_date || '—';
+          var note = d.note ? '（' + esc(d.note) + '）' : '';
+          return '<li>案號 ' + esc(d.project_no) + '：' + (parseInt(d.amount,10)||0).toLocaleString('zh-TW') +
+            ' 元 · 施工 ' + esc(start) + '～結案 ' + esc(close) + note + '</li>';
+        }).join('');
+        return '<div style="margin-top:8px;padding:8px;background:#fff8e8;border-radius:8px;border:1px solid #f0e0b8">' +
+          '<p class="sub" style="margin:0 0 4px;font-weight:600;color:#8a5a00">專案報酬（合計 ' + total.toLocaleString('zh-TW') + ' 元，不併入本月薪資）</p>' +
+          '<ul style="margin:0;padding-left:18px;font-size:13px">' + lis + '</ul></div>';
+      }
+
       function renderItem(row) {
         var div = document.createElement('div');
         div.className = 'item';
@@ -96,30 +124,38 @@
         var est = parseInt(row.estimated_net, 10) || 0;
         var ot = Number(row.overtime_hours) || 0;
         var remote = parseInt(row.remote_allowance, 10) || 0;
-        var marginBonus = parseInt(row.suggested_bonus_from_margin, 10) || 0;
-        var marginNote = String(row.suggested_bonus_note || '').trim();
-        var marginHint = '';
-        if (marginBonus > 0) {
-          marginHint = '<p class="sub" style="color:#b06000">案件毛利獎金草稿：' + marginBonus.toLocaleString('zh-TW') + ' 元' +
-            (marginNote ? '（' + esc(marginNote) + '）' : '') + ' — 可併入下方獎金欄</p>';
+        var pb = row.payroll_breakdown || {};
+        var additions = pb.additions || [];
+        var deductions = pb.deductions || [];
+        var selfTag = row.employee_self_reviewed === false
+          ? '<span class="tag warn">主管代開</span>'
+          : '<span class="tag">員工自審</span>';
+        var breakdownBlock = '';
+        if (additions.length || deductions.length) {
+          breakdownBlock =
+            '<div class="row2" style="margin-top:8px">' +
+            '<div><p class="sub" style="font-weight:600;color:#137333;margin:0">加項</p>' + lineItemsHtml(additions, '+') + '</div>' +
+            '<div><p class="sub" style="font-weight:600;color:#c5221f;margin:0">減項</p>' + lineItemsHtml(deductions, '−') + '</div>' +
+            '</div>';
         }
         div.innerHTML =
-          '<div><strong>' + esc(row.employee_name) + '</strong> <span class="tag">' + esc(row.period_label) + '</span></div>' +
+          '<div><strong>' + esc(row.employee_name) + '</strong> <span class="tag">' + esc(row.period_label) + '</span> ' + selfTag + '</div>' +
           '<p class="amount">試算實發 ' + est.toLocaleString('zh-TW') + ' 元</p>' +
           '<p class="sub">期間 ' + esc(row.period_start) + '～' + esc(row.period_end) + ' · 發薪日 ' + esc(row.pay_date) + '</p>' +
           (ot > 0 ? '<p class="sub">加班 ' + ot + ' 小時</p>' : '') +
           (remote > 0 ? '<p class="sub">遠程津貼 ' + remote.toLocaleString('zh-TW') + ' 元</p>' : '') +
-          (row.supplement_note ? '<p class="sub">補充：' + esc(row.supplement_note) + '</p>' : '') +
-          marginHint +
+          (row.supplement_note ? '<p class="sub">補充／減項備註：' + esc(row.supplement_note) + '</p>' : '') +
+          breakdownBlock +
+          projectRewardHtml(row) +
           '<div class="bank">' + bankLine(row) + '</div>' +
           '<div class="review-panel">' +
           '<div class="row2">' +
-          '<div><label>獎金（元）</label><input type="number" id="bonus-' + row.payroll_request_id + '" min="0" step="1" value="' + marginBonus + '" /></div>' +
-          '<div><label>扣款（元）</label><input type="number" id="ded-' + row.payroll_request_id + '" min="0" step="1" value="' + (parseInt(row.deduction,10)||0) + '" /></div>' +
+          '<div><label>一般獎金（元）</label><input type="number" id="bonus-' + row.payroll_request_id + '" min="0" step="1" value="0" /></div>' +
+          '<div><label>其他扣款（元）</label><input type="number" id="ded-' + row.payroll_request_id + '" min="0" step="1" value="' + (parseInt(row.deduction,10)||0) + '" /></div>' +
           '</div>' +
-          '<label>確認實發（元）</label><input type="number" id="final-' + row.payroll_request_id + '" min="0" step="1" value="' + (est + marginBonus) + '" />' +
-          '<label>獎金／備註說明</label><input type="text" id="bnote-' + row.payroll_request_id + '" placeholder="例：專案獎金" value="' + esc(marginNote) + '" />' +
-          '<label>審核備註</label><input type="text" id="note-' + row.payroll_request_id + '" placeholder="選填" />' +
+          '<label>確認實發（元）</label><input type="number" id="final-' + row.payroll_request_id + '" min="0" step="1" value="' + est + '" />' +
+          '<label>獎金／備註說明</label><input type="text" id="bnote-' + row.payroll_request_id + '" placeholder="例：介紹獎金、年終（勿填專案報酬）" value="" />' +
+          '<label>審核備註</label><input type="text" id="note-' + row.payroll_request_id + '" placeholder="選填；減項說明可改" value="' + esc(row.supplement_note || '') + '" />' +
           '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
           '<button type="button" class="btn btn-ok" data-approve="' + row.payroll_request_id + '">核准</button>' +
           '<button type="button" class="btn btn-warn" data-reject="' + row.payroll_request_id + '">退回</button>' +

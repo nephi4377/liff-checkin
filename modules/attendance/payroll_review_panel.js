@@ -125,6 +125,7 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
     const maxFullAttendance = Number(settings.fullAttendanceBonusMax) || 0;
     let personalLeaveDeduction = 0;
     let sickLeaveDeduction = 0;
+    let absentBaseDeduction = 0;
     if (payType === 'daily') {
         const days = Number(snapshot.daysWorked) || 0;
         const personalLeave = Number(st.personalLeave) || 0;
@@ -139,7 +140,7 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
         if (comp > 0) dayParts.push(`補休 ${fmtPayrollDay(comp)} 天`);
         if (sick > 0) dayParts.push(`病假 ${fmtPayrollDay(sick)} 天（半薪）`);
         const dayNote = personalLeave > 0
-            ? `${dayParts.join('＋')}；事假 ${fmtPayrollDay(personalLeave)} 日另扣`
+            ? `${dayParts.join('＋')}；事假 ${fmtPayrollDay(personalLeave)} 日另列減項`
             : `${dayParts.join('＋')} × ${base.toLocaleString()} 元／日`;
         additions.push({
             label: '本薪（日薪 × 計薪天數）',
@@ -150,17 +151,12 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
         const absent = Number(st.absent) || 0;
         const personalLeave = Number(st.personalLeave) || 0;
         const sickLeave = Number(st.sickLeave) || 0;
-        const absentBaseDeduction = calcAbsentBaseDeduction(base, absent);
+        absentBaseDeduction = calcAbsentBaseDeduction(base, absent);
         personalLeaveDeduction = calcPersonalLeaveDeduction(base, personalLeave, payType);
         sickLeaveDeduction = calcSickLeaveDeduction(base, sickLeave, payType);
-        earnedBase = base - absentBaseDeduction - personalLeaveDeduction - sickLeaveDeduction;
+        earnedBase = base;
         fullAttendanceBonus = calcProratedFullAttendance(maxFullAttendance, absent);
-        const baseNotes = [];
-        if (absent > 0) baseNotes.push(`缺勤 ${fmtPayrollDay(absent)} 日，扣 ${absentBaseDeduction.toLocaleString()} 元`);
-        if (personalLeave > 0) baseNotes.push(`事假 ${fmtPayrollDay(personalLeave)} 日，扣 ${personalLeaveDeduction.toLocaleString()} 元`);
-        if (sickLeave > 0) baseNotes.push(`病假 ${fmtPayrollDay(sickLeave)} 日半薪，扣 ${sickLeaveDeduction.toLocaleString()} 元`);
-        const baseNote = baseNotes.length ? `${baseNotes.join('；')}（底薪÷30）` : '';
-        additions.push({ label: '本薪', amount: earnedBase, note: baseNote });
+        additions.push({ label: '本薪', amount: earnedBase, note: '完整底薪（假別另列減項）' });
         if (fullAttendanceBonus > 0) {
             const faNote = absent > 0 && fullAttendanceBonus < maxFullAttendance
                 ? `上限 ${maxFullAttendance.toLocaleString()}，缺勤 ${fmtPayrollDay(absent)} 日按比例扣`
@@ -171,6 +167,35 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
                 label: '出勤獎金',
                 amount: 0,
                 note: `缺勤 ${fmtPayrollDay(absent)} 日，出勤獎金未發（上限 ${maxFullAttendance.toLocaleString()} 元）`
+            });
+        }
+        if (absent > 0 || absentBaseDeduction > 0) {
+            deductions.push({
+                label: '缺勤扣款',
+                amount: absentBaseDeduction,
+                note: `缺勤 ${fmtPayrollDay(absent)} 日（底薪÷30）`
+            });
+        }
+        if (personalLeave > 0 || personalLeaveDeduction > 0) {
+            deductions.push({
+                label: '事假扣款',
+                amount: personalLeaveDeduction,
+                note: `事假 ${fmtPayrollDay(personalLeave)} 日（底薪÷30）`
+            });
+        }
+        if (sickLeave > 0 || sickLeaveDeduction > 0) {
+            deductions.push({
+                label: '病假扣款（半薪）',
+                amount: sickLeaveDeduction,
+                note: `病假 ${fmtPayrollDay(sickLeave)} 日 × 0.5（底薪÷30）`
+            });
+        }
+        const typhoon = Number(st.typhoonLeave) || 0;
+        if (typhoon > 0) {
+            deductions.push({
+                label: '颱風假',
+                amount: 0,
+                note: `颱風假 ${fmtPayrollDay(typhoon)} 日；扣款規則待主管確認`
             });
         }
     }
@@ -230,10 +255,17 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
     const addTotal = additions.reduce((s, x) => s + (x.amount || 0), 0);
     const dedTotal = deductions.reduce((s, x) => s + (x.amount || 0), 0);
     const estimatedNet = Math.round(addTotal - dedTotal);
+    const autoRemarkParts = deductions
+        .filter((d) => d.label !== '其他扣款' && d.label !== '勞健保／勞退' && (d.amount > 0 || d.label === '颱風假'))
+        .map((d) => {
+            if (d.amount > 0) return `${d.label} −${d.amount.toLocaleString()}`;
+            return d.note || d.label;
+        });
     return {
         additions, deductions, addTotal, dedTotal, estimatedNet,
         baseSalary: earnedBase, fullAttendanceBonus, transportationAllowance: transport,
-        otherAllowance, overtimePay, insurance: ins
+        otherAllowance, overtimePay, insurance: ins,
+        autoRemark: autoRemarkParts.join('；')
     };
 }
 
@@ -283,17 +315,26 @@ function renderAnomalyDaysHtml(dayAnomalies, esc) {
 }
 
 function renderMarginBonusDraftsHtml(drafts, esc) {
+    return buildProjectRewardHtml(drafts, esc);
+}
+
+function buildProjectRewardHtml(drafts, esc) {
     const escFn = esc || escPayrollHtml;
     if (!drafts || !drafts.length) return '';
     const rows = drafts.map((d) => {
         const note = d.note ? `（${escFn(d.note)}）` : '';
-        return `<li>案號 ${escFn(d.project_no)}：${Number(d.amount || 0).toLocaleString()} 元${note}</li>`;
+        const start = d.start_date ? escFn(d.start_date) : '—';
+        const close = d.close_date ? escFn(d.close_date) : '—';
+        return `<li class="py-1 border-b border-amber-100 last:border-0">
+            <div class="flex justify-between gap-2"><span>案號 ${escFn(d.project_no)}</span><span class="font-medium">${Number(d.amount || 0).toLocaleString()} 元</span></div>
+            <p class="text-xs text-gray-500">開始施工 ${start} · 結案 ${close}${note}</p>
+        </li>`;
     }).join('');
     const total = drafts.reduce((s, d) => s + (Number(d.amount) || 0), 0);
-    return `<div class="text-amber-800 bg-amber-50 rounded p-2 text-sm mt-2">
-        <p class="font-semibold">待併入案件獎金草稿（合計 ${total.toLocaleString()} 元）</p>
-        <ul class="list-disc ml-4 mt-1">${rows}</ul>
-        <p class="text-xs text-amber-700 mt-1">主管審核薪資時會併入獎金欄</p>
+    return `<div class="text-amber-900 bg-amber-50 rounded p-2 text-sm mt-2 border border-amber-100">
+        <p class="font-semibold">專案報酬（合計 ${total.toLocaleString()} 元）</p>
+        <ul class="mt-1">${rows}</ul>
+        <p class="text-xs text-amber-800 mt-1">僅供對照，不併入本月薪資實發；另簽收另付。</p>
     </div>`;
 }
 
@@ -452,6 +493,7 @@ export function initPayrollReviewPanel(ctx) {
                 <p><strong>應休（系統）：</strong>${snapshot.rest?.scheduledRestDays ?? '—'} 天</p>
                 <p><strong>實休（系統）：</strong>${fmtPayrollDay(snapshot.rest?.actualRestDays)} 天</p>
                 <p><strong>特休／病假／事假／補休：</strong>${fmtPayrollDay(st.annualLeave)}／${fmtPayrollDay(st.sickLeave)}／${fmtPayrollDay(st.personalLeave)}／${fmtPayrollDay(st.compensatoryLeave)}</p>
+                ${(Number(st.typhoonLeave) > 0) ? `<p><strong>颱風假：</strong>${fmtPayrollDay(st.typhoonLeave)} 天</p>` : ''}
                 <p><strong>遲到／早退：</strong>${st.lateMinutes ?? 0}／${st.earlyMinutes ?? 0} 分</p>
                 ${(st.lateMinutesHeldSinglePunch || st.earlyMinutesHeldSinglePunch) ? `<p class="text-xs text-amber-700">僅單次打卡日 ${st.lateMinutesHeldSinglePunch || 0}／${st.earlyMinutesHeldSinglePunch || 0} 分暫不計入薪資試算，請先於出勤頁申訴調整</p>` : ''}
                 <p><strong>缺勤／異常：</strong>${fmtPayrollDay(st.absent)}／${st.anomalyDays ?? 0} 天</p>
@@ -465,6 +507,14 @@ export function initPayrollReviewPanel(ctx) {
             overtimeHours: Number(els.overtimeHours.value) || 0
         }, contextData.insurancePreview);
         els.calcBox.innerHTML = renderBreakdownHtml(preview, disclaimer, settings, period.payType, esc);
+        if (els.supplement && !els.supplement.dataset.userEdited) {
+            const existingNote = existingReview ? String(existingReview.supplementNote || '').trim() : '';
+            if (existingNote) {
+                els.supplement.value = existingNote;
+            } else if (preview.autoRemark) {
+                els.supplement.value = preview.autoRemark;
+            }
+        }
 
         if (existingReview) {
             const st = String(existingReview.status || '');
@@ -523,12 +573,21 @@ export function initPayrollReviewPanel(ctx) {
         }
     }
 
-    els.periodSelect.addEventListener('change', () => fetchContext(els.periodSelect.value));
+    els.periodSelect.addEventListener('change', () => {
+        if (els.supplement) delete els.supplement.dataset.userEdited;
+        fetchContext(els.periodSelect.value);
+    });
     els.refreshBtn.addEventListener('click', () => {
         payrollLoaded = false;
+        if (els.supplement) delete els.supplement.dataset.userEdited;
         fetchContext(els.periodSelect.value);
     });
     els.submitBtn.addEventListener('click', submitReview);
+    if (els.supplement) {
+        els.supplement.addEventListener('input', () => {
+            els.supplement.dataset.userEdited = '1';
+        });
+    }
     ['input', 'change'].forEach((ev) => {
         els.overtimeHours.addEventListener(ev, () => { if (contextData) renderContext(); });
         els.remoteAmount.addEventListener(ev, () => { if (contextData) renderContext(); });
@@ -558,9 +617,10 @@ function renderPayslipDetailHtml(detail, esc) {
         const note = e.note ? `<span class="text-gray-500 text-xs">（${esc(e.note)}）</span>` : '';
         return `<li class="flex justify-between gap-2"><span>${esc(e.label)}${note}</span><span class="text-green-700">+${Number(e.amount).toLocaleString()}</span></li>`;
     }).join('') || '<li class="text-gray-400">—</li>';
-    const dedRows = deductions.filter((d) => (d.amount || 0) > 0).map((d) => {
+    const dedRows = deductions.filter((d) => (d.amount || 0) > 0 || String(d.label || '').indexOf('颱風') >= 0).map((d) => {
         const note = d.note ? `<span class="block text-gray-500 text-xs">${esc(d.note)}</span>` : '';
-        return `<li class="py-1"><div class="flex justify-between gap-2"><span>${esc(d.label)}</span><span class="text-red-600">−${Number(d.amount).toLocaleString()}</span></div>${note}</li>`;
+        const amtText = (d.amount || 0) > 0 ? `−${Number(d.amount).toLocaleString()}` : '—';
+        return `<li class="py-1"><div class="flex justify-between gap-2"><span>${esc(d.label)}</span><span class="text-red-600">${amtText}</span></div>${note}</li>`;
     }).join('') || '<li class="text-gray-400">—</li>';
     return `
         <div class="bg-white border border-gray-200 rounded-lg p-4 text-sm space-y-3">
@@ -779,15 +839,60 @@ export function initPayrollAdminPreview(ctx) {
     const periodSelect = document.getElementById('payroll-admin-period');
     const loadingEl = document.getElementById('payroll-admin-loading');
     const errorEl = document.getElementById('payroll-admin-error');
+    const okEl = document.getElementById('payroll-admin-ok');
     const calcBox = document.getElementById('payroll-admin-calc');
     const statsBox = document.getElementById('payroll-admin-stats');
     const titleEl = document.getElementById('payroll-admin-title');
+    const submitBtn = document.getElementById('payroll-admin-submit-btn');
     if (!wrap || !empSelect || !periodSelect) return null;
 
     wrap.classList.remove('hidden');
     let adminContext = null;
 
     function esc(s) { return escPayrollHtml(s); }
+
+    async function managerSubmit() {
+        if (!adminContext?.period || !empSelect.value) return;
+        if (adminContext.existingReview) {
+            alert('此期別已有申請');
+            return;
+        }
+        if (!confirm(`確定為「${adminContext.previewEmployee?.userName || ''}」代開審 ${adminContext.period.periodLabel}？`)) return;
+        submitBtn.disabled = true;
+        okEl?.classList.add('hidden');
+        errorEl?.classList.add('hidden');
+        try {
+            const payload = {
+                action: 'payroll_review',
+                op: 'manager_submit',
+                operatorId,
+                targetUserId: empSelect.value,
+                periodLabel: adminContext.period.periodLabel,
+                overtimeHours: 0,
+                remoteAllowanceAmount: 0,
+                supplementNote: ''
+            };
+            const res = await fetch(apiBaseUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.message || '代開審失敗');
+            if (okEl) {
+                okEl.textContent = json.message || '已代開審';
+                okEl.classList.remove('hidden');
+            }
+            showGlobalNotification?.(json.message || '已代開審並送會計待審', 5000, 'success');
+            await loadPreview();
+        } catch (err) {
+            if (errorEl) {
+                errorEl.textContent = err.message || '代開審失敗';
+                errorEl.classList.remove('hidden');
+            }
+            submitBtn.disabled = false;
+        }
+    }
 
     async function loadPreview() {
         const targetUserId = empSelect.value;
@@ -818,7 +923,7 @@ export function initPayrollAdminPreview(ctx) {
             if (!json.success) throw new Error(json.message || '載入失敗');
             adminContext = json.data;
             const empName = adminContext.previewEmployee?.userName || empSelect.selectedOptions[0]?.textContent || '';
-            if (titleEl) titleEl.textContent = `${empName} — 薪資試算預覽（唯讀）`;
+            if (titleEl) titleEl.textContent = `${empName} — 薪資試算（可代開審）`;
             periodSelect.innerHTML = (adminContext.periods || []).map((p) => {
                 const tag = p.displayLabel || p.periodLabel;
                 return `<option value="${esc(p.periodLabel)}" ${p.periodLabel === adminContext.period.periodLabel ? 'selected' : ''}>${esc(tag)}</option>`;
@@ -827,12 +932,14 @@ export function initPayrollAdminPreview(ctx) {
             const isDaily = adminContext.period.payType === 'daily';
             const snap = adminContext.snapshot || {};
             const anomalyBlock = renderAnomalyDaysHtml(snap.dayAnomalies, esc);
+            const existing = adminContext.existingReview;
             statsBox.innerHTML = isDaily
                 ? `<p><strong>本期出勤（計薪）：</strong>${snap.daysWorked || 0} 天</p>
                    <p><strong>遲到／早退：</strong>${st.lateMinutes ?? 0}／${st.earlyMinutes ?? 0} 分</p>
-                   <p class="text-xs text-gray-500">本薪＝日薪×出勤天數；排休日加班有打卡亦計入</p>
+                   <p class="text-xs text-gray-500">本薪＝日薪×計薪天數；假別／缺勤另列減項</p>
                    ${anomalyBlock}`
                 : `<p><strong>實際出勤：</strong>${st.checkInDays ?? '—'} 天 · 遲早退 ${st.lateMinutes ?? 0}／${st.earlyMinutes ?? 0} 分</p>
+                   <p><strong>缺勤／事假／病假／颱風：</strong>${fmtPayrollDay(st.absent)}／${fmtPayrollDay(st.personalLeave)}／${fmtPayrollDay(st.sickLeave)}／${fmtPayrollDay(st.typhoonLeave)}</p>
                    ${anomalyBlock}`;
             const preview = buildPayrollBreakdown(
                 adminContext.settings,
@@ -843,7 +950,14 @@ export function initPayrollAdminPreview(ctx) {
             );
             let html = renderBreakdownHtml(preview, adminContext.disclaimer, adminContext.settings, adminContext.period.payType, esc);
             html += renderMarginBonusDraftsHtml(adminContext.marginBonusDrafts, esc);
+            if (existing) {
+                html += `<p class="text-amber-800 bg-amber-50 rounded p-2 mt-2 text-sm">此期別已有「${esc(existing.status)}」申請，無需再代開審。</p>`;
+            }
             calcBox.innerHTML = html;
+            if (submitBtn) {
+                submitBtn.disabled = !!existing;
+                submitBtn.title = existing ? '此期別已有申請' : '';
+            }
         } catch (err) {
             if (errorEl) {
                 errorEl.textContent = err.message || '載入失敗';
@@ -856,5 +970,6 @@ export function initPayrollAdminPreview(ctx) {
 
     periodSelect.addEventListener('change', loadPreview);
     empSelect.addEventListener('change', loadPreview);
+    submitBtn?.addEventListener('click', managerSubmit);
     return { refresh: loadPreview };
 }
