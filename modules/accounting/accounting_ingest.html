@@ -3,38 +3,752 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>收支登錄已停用</title>
+  <title>添心收支登錄</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/operator_context.js?v=1"></script>
+  <script src="../../shared/js/accounting_api.js?v=26"></script>
+  <script src="../../shared/js/accounting_cache.js?v=24"></script>
+  <script src="../../shared/js/accounting_form_helpers.js?v=5"></script>
+  <script src="../../shared/js/accounting_ui.js?v=10"></script>
+  <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <style>
-    .box { max-width: 520px; margin: 48px auto; padding: 24px; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-    h2 { margin: 0 0 8px; }
-    p { color: #444; line-height: 1.5; }
-    a.btn { display: inline-block; margin-top: 12px; margin-right: 8px; padding: 10px 14px; background: #1a73e8; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; }
-    a.btn.secondary { background: #5f6368; }
+    h2 { margin: 0 0 4px; }
+    .sub { color: #555; font-size: 14px; margin: 0 0 12px; }
+    .card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    label { display: block; margin-top: 10px; font-weight: 600; font-size: 14px; }
+    label:first-child { margin-top: 0; }
+    input, select { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
+    input:read-only { background: #f1f3f4; color: #333; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .hidden { display: none; }
+    .btn { width: 100%; padding: 14px; font-size: 16px; font-weight: 600; border: none; border-radius: 10px; margin-top: 10px; cursor: pointer; }
+    .btn-primary { background: #1a73e8; color: #fff; }
+    .btn-primary:disabled { opacity: .5; }
+    .btn-secondary { background: #e8eaed; color: #333; }
+    .btn-done { background: #34a853; color: #fff; }
+    #statusBar { font-size: 14px; padding: 8px 10px; background: #e8f0fe; border-radius: 8px; margin-bottom: 10px; }
+    #msg { color: #c5221f; font-size: 14px; }
+    #ok { color: #137333; font-size: 14px; }
+    #loading { text-align: center; padding: 48px 16px; color: #666; }
+    #pendingPreview img { max-width: 100%; border-radius: 8px; margin-top: 6px; }
+    #recent { font-size: 13px; padding-left: 18px; }
+    .hint { font-size: 12px; color: #777; margin-top: 4px; }
+    #contextBar { font-size: 13px; color: #137333; background: #e6f4ea; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; }
+    #contextBar.warn { color: #b06000; background: #fef7e0; }
+    .pay-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .pay-tags button { flex: 1; min-width: 72px; padding: 10px 8px; border: 1px solid #ccc; border-radius: 8px; background: #fff; font-weight: 600; font-size: 15px; cursor: pointer; }
+    .pay-tags button.active { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; }
+    .pay-custom { margin-top: 6px; }
+    .vendor-combo-wrap { position: relative; }
+    .vendor-combo-panel {
+      position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 20;
+      background: #fff; border: 1px solid #ccc; border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.12); max-height: 220px; overflow: auto;
+    }
+    .vendor-combo-item {
+      display: block; width: 100%; text-align: left; border: none; background: #fff;
+      padding: 10px 12px; font-size: 15px; cursor: pointer;
+    }
+    .vendor-combo-item:hover, .vendor-combo-item.active { background: #e8f0fe; }
+    .vendor-combo-empty { padding: 10px 12px; font-size: 13px; color: #777; }
+    .alloc-block { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #ddd; }
+    .alloc-block .alloc-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .alloc-block .alloc-head strong { font-size: 14px; }
+    .alloc-block .alloc-sum { font-size: 13px; color: #555; }
+    .alloc-block .alloc-hint { font-size: 12px; color: #777; margin: 4px 0 8px; }
+    .alloc-block .alloc-hint.warn { color: #c5221f; }
+    .alloc-row { position: relative; border: 1px solid #e8eaed; border-radius: 8px; padding: 8px; margin-bottom: 8px; background: #fafafa; }
+    .alloc-row .alloc-rm {
+      position: absolute; top: 6px; right: 8px; border: none; background: none;
+      color: #c5221f; font-size: 12px; cursor: pointer; padding: 4px;
+    }
+    .alloc-empty { font-size: 13px; color: #777; margin: 0; }
+    .btn-ghost {
+      width: auto; padding: 8px 12px; font-size: 14px; background: #e8eaed; color: #333;
+      border: none; border-radius: 8px; cursor: pointer; margin-top: 0;
+    }
+    .drop-zone { margin-top: 8px; padding: 20px 14px; border: 2px dashed #b0b8c4; border-radius: 12px; background: #f8fafc; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+    .drop-zone:hover, .drop-zone.drag-over { border-color: #1a73e8; background: #e8f0fe; }
+    .drop-zone p { margin: 0; font-size: 15px; color: #333; }
+    .drop-zone .hint { margin-top: 6px; font-size: 13px; color: #666; line-height: 1.45; }
+    .drop-zone input[type="file"] { display: none; }
   </style>
 </head>
-<body class="acct-page">
-  <div class="box">
-    <h2>獨立「收支登錄」頁已停用</h2>
-    <p>此頁與會計 HUB 流程不同步（收入會略過待審／客戶確認），已改由<strong>會計功能選單</strong>統一入口。</p>
-    <p>尚未付款請用「待付款申請」；案件收入／收款請走會計選單內的案件毛利與收款流程。</p>
-    <a class="btn" href="index.html">前往會計功能選單</a>
-    <a class="btn secondary" href="payment_request.html">待付款申請</a>
+<body class="acct-page acct-page-form">
+  <div id="loading">載入中…</div>
+  <div id="app" class="hidden acct-main">
+    <h2>收支登錄</h2>
+    <p class="sub" id="userLine">—</p>
+    <p class="sub hidden" id="photoHint">已帶入 LINE 傳的照片。關閉視窗＝不送出。</p>
+    <div id="contextBar" class="hidden"></div>
+    <div id="statusBar">本輪已記 <strong id="sessionCount">0</strong> 筆 · 可連續填多筆</div>
+
+    <div class="card">
+      <div class="row2">
+        <div>
+          <label>類型</label>
+          <select id="kind"><option value="A">收入</option><option value="B">支出</option></select>
+        </div>
+        <div>
+          <label>店別</label>
+          <select id="store">
+            <option value="">（不填）</option>
+            <option value="台南">台南</option>
+            <option value="高雄">高雄</option>
+            <option value="工廠">工廠</option>
+            <option value="行政">行政</option>
+          </select>
+        </div>
+      </div>
+      <label id="projectPickWrap" class="hidden">快選案場</label>
+      <select id="projectPick" class="hidden"><option value="">手動填寫</option></select>
+      <p class="hint hidden" id="projectPickHint">選案場會自動帶入客戶名、訂編與店別</p>
+      <div id="blockA">
+        <label>收款日期</label><input id="txn_date" type="text" />
+        <label>客戶名</label><input id="party_name" type="text" list="clientList" />
+        <datalist id="clientList"></datalist>
+        <label>訂編</label><input id="project_no" type="text" list="projectNoList" />
+        <datalist id="projectNoList"></datalist>
+        <label>款項類別</label><input id="item_desc" type="text" />
+        <label>金額</label><input id="amount" type="number" inputmode="numeric" />
+        <label>是否入零用金</label><select id="petty_cash"><option>否</option><option>是</option></select>
+        <label>付款方式</label>
+        <div class="pay-tags" id="payTagsA">
+          <button type="button" data-val="現金">現金</button>
+          <button type="button" data-val="匯款">匯款</button>
+        </div>
+        <input class="pay-custom" id="payment_method" type="text" placeholder="或自行輸入其他方式" autocomplete="off" />
+      </div>
+      <div id="blockB" class="hidden">
+        <label>支出日期</label><input id="txn_date_b" type="text" />
+        <label>廠商名稱</label><input id="party_name_b" type="text" placeholder="打 1～2 字搜尋名冊，或手動輸入" />
+        <label>支付金額</label><input id="amount_b" type="number" inputmode="numeric" />
+        <div class="alloc-block" id="allocBlock">
+          <div class="alloc-head">
+            <strong>分攤明細</strong>
+            <span class="alloc-sum">合計 $<span id="allocSum">0</span></span>
+          </div>
+          <p class="alloc-hint" id="allocHint">每筆支出至少填一列：案號、品項、金額；加總須等於支付金額。</p>
+          <div id="allocList"></div>
+        </div>
+        <label>款項月份</label><input id="expense_month" type="number" min="1" max="12" />
+        <label>付款方式</label>
+        <div class="pay-tags" id="payTagsB">
+          <button type="button" data-val="現金">現金</button>
+          <button type="button" data-val="零用金">零用金</button>
+          <button type="button" data-val="匯款">匯款</button>
+        </div>
+        <input class="pay-custom" id="payment_method_b" type="text" placeholder="或自行輸入其他方式" autocomplete="off" />
+        <label>申請人</label><input id="applicant" type="text" list="applicantList" readonly />
+        <datalist id="applicantList"></datalist>
+      </div>
+      <label>單據照片（選填）</label>
+      <div class="drop-zone" id="photoDropZone" role="button" tabindex="0" aria-label="加入單據照片">
+        <p>拖曳照片到這裡，或點一下選擇</p>
+        <p class="hint">可選多張 JPG、PNG 等圖片</p>
+        <input type="file" id="photoInput" accept="image/*" capture="environment" multiple />
+      </div>
+      <p class="hint" id="photoCountLine">已 0 張</p>
+      <div id="pendingPreview" class="hidden"></div>
+    </div>
+
+    <button type="button" class="btn btn-primary" id="submit">送出這一筆</button>
+    <button type="button" class="btn btn-secondary hidden" id="nextBtn">清空，再記一筆</button>
+    <button type="button" class="btn btn-done hidden" id="doneBtn">完成離開</button>
+    <div id="msg"></div>
+    <div id="ok"></div>
+    <div class="card hidden" id="recentCard"><strong>剛剛記的</strong><ul id="recent"></ul></div>
   </div>
+
+  <script src="../../shared/js/accounting_context.js?v=1"></script>
   <script>
+    var CONSTANTS = {
+      GAS_API: 'https://script.google.com/macros/s/AKfycbyibVTQk2eYEYXX5vb-TUFYsLIKWEg1bADR-7w1QFSg6kly3gyDAG3GkKuvQ0PBur05DA/exec',
+      LIFF_ID: '',
+      INIT_TIMEOUT_MS: 10000
+    };
+
     (function () {
-      try {
-        if (window.top && window.top !== window && window.top.location) {
-          var h = String(window.top.location.hash || '');
-          if (h.indexOf('accounting-ingest') >= 0) {
-            window.top.location.hash = '#/accounting';
+      var profile = { userId: '', displayName: '' };
+      var sessionRef = null;
+      var sessionCount = 0, idToken = '', devBypass = false;
+      var pendingPhotos = [], localPhotos = [], queryParams = {}, hubContext = { projects: [], employees: [] };
+      var applicantDefault = '';
+      var cachedVendors = [];
+      var vendorCombobox = null;
+      var allocEditor = null;
+      var kind = document.getElementById('kind');
+      var blockA = document.getElementById('blockA');
+      var blockB = document.getElementById('blockB');
+
+      function initPaymentPicker(containerEl, inputEl) {
+        return AccountingFormHelpers.initPaymentMethodPicker(containerEl, inputEl);
+      }
+
+      var payPickerA = initPaymentPicker(document.getElementById('payTagsA'), document.getElementById('payment_method'));
+      var payPickerB = initPaymentPicker(document.getElementById('payTagsB'), document.getElementById('payment_method_b'));
+
+      function todayRoc() {
+        var d = new Date();
+        return (d.getFullYear() - 1911) + '/' + (d.getMonth() + 1) + '/' + d.getDate();
+      }
+      function toggleBlocks() {
+        var isA = kind.value === 'A';
+        blockA.classList.toggle('hidden', !isA);
+        blockB.classList.toggle('hidden', isA);
+      }
+      kind.addEventListener('change', toggleBlocks);
+
+      function monthFromRocDate(s) {
+        if (!s) return null;
+        var parts = String(s).trim().replace(/[／]/g, '/').split('/');
+        if (parts.length < 2) return null;
+        var m = parseInt(parts[1], 10);
+        return (m >= 1 && m <= 12) ? m : null;
+      }
+
+      function seedProfileFromOperatorContext() {
+        if (typeof OperatorContext === 'undefined') return;
+        var op = OperatorContext.read();
+        if (!op || !op.userId) return;
+        profile.userId = op.userId;
+        profile.displayName = op.displayName || op.userName || profile.displayName;
+      }
+
+      function applyProjectPick(projectId) {
+        var p = hubContext.projects.find(function (x) { return x.id === projectId; });
+        if (!p) return;
+        if (kind.value === 'A') {
+          document.getElementById('party_name').value = p.siteName || p.name || '';
+          document.getElementById('project_no').value = p.id;
+        } else if (allocEditor) {
+          var rows = allocEditor.read();
+          if (!rows.length) rows = [{ project_no: '', item_desc: '', amount: '' }];
+          rows[0].project_no = p.id;
+          allocEditor.setRows(rows);
+        }
+        var store = AccountingContext.mapStoreValue(p.store);
+        if (store) document.getElementById('store').value = store;
+      }
+
+      function setApplicantDefault() {
+        var name = AccountingFormHelpers.resolveApplicantName(
+          hubContext.employees, profile.userId, profile.displayName
+        );
+        if (name) {
+          applicantDefault = name;
+          document.getElementById('applicant').value = name;
+        } else if (applicantDefault) {
+          document.getElementById('applicant').value = applicantDefault;
+        }
+      }
+
+      function applyVendorsToUi(vendors) {
+        cachedVendors = vendors || [];
+        if (!vendorCombobox && document.getElementById('party_name_b')) {
+          vendorCombobox = AccountingFormHelpers.initVendorCombobox(
+            document.getElementById('party_name_b'),
+            function () { return cachedVendors; },
+            { minChars: 1, maxItems: 8 }
+          );
+        }
+        return cachedVendors.length;
+      }
+
+      function ensureVendorsLoaded(session) {
+        if (!session || typeof AccountingCache === 'undefined') return;
+        var fromSession = AccountingCache.vendors(session);
+        var fromPeek = AccountingCache.peekVendors ? AccountingCache.peekVendors() : [];
+        var n = applyVendorsToUi(fromSession.length ? fromSession : fromPeek);
+        updateContextBar(hubContext, n);
+        if (n) return;
+        AccountingCache.load(session).then(function () {
+          var loaded = applyVendorsToUi(AccountingCache.vendors(session));
+          updateContextBar(hubContext, loaded);
+        }).catch(function () {
+          var bar = document.getElementById('contextBar');
+          if (bar) {
+            bar.textContent = '廠商名冊載入失敗，請重新整理或手動輸入廠商名';
+            bar.classList.add('warn');
+          }
+        });
+      }
+
+      function updateContextBar(ctx, vendorCount) {
+        var bar = document.getElementById('contextBar');
+        bar.classList.remove('hidden');
+        bar.classList.remove('warn');
+        var parts = [];
+        if (ctx.projects.length || ctx.employees.length) {
+          var src = (ctx.source && (ctx.source.projects === 'api' || ctx.source.employees === 'api')) ? '伺服器' : '快取';
+          parts.push(src + '：' + ctx.projects.length + ' 筆案場、' + ctx.employees.length + ' 位員工');
+        }
+        if (vendorCount) parts.push(vendorCount + ' 家廠商');
+        if (parts.length) {
+          bar.textContent = '已載入 ' + parts.join(' · ');
+        } else {
+          bar.textContent = '無快選資料，請手動填寫';
+          bar.classList.add('warn');
+        }
+      }
+
+      function applyHubContextToUi(ctx, vendorCount) {
+        hubContext.projects = ctx.projects;
+        hubContext.employees = ctx.employees;
+        var pick = document.getElementById('projectPick');
+        var pickWrap = document.getElementById('projectPickWrap');
+        var pickHint = document.getElementById('projectPickHint');
+        var applicantList = document.getElementById('applicantList');
+        var clientList = document.getElementById('clientList');
+        var projectNoList = document.getElementById('projectNoList');
+
+        applicantList.innerHTML = '';
+        ctx.employees.forEach(function (emp) {
+          var name = String(emp.userName || '').trim();
+          if (!name) return;
+          var opt = document.createElement('option');
+          opt.value = name;
+          applicantList.appendChild(opt);
+        });
+
+        clientList.innerHTML = '';
+        projectNoList.innerHTML = '';
+        pick.innerHTML = '<option value="">手動填寫</option>';
+        ctx.projects.forEach(function (p) {
+          var label = p.id + (p.name ? ' · ' + p.name : '');
+          var opt = document.createElement('option');
+          opt.value = p.id;
+          opt.textContent = label;
+          pick.appendChild(opt);
+          if (p.name) {
+            var c = document.createElement('option');
+            c.value = p.name;
+            clientList.appendChild(c);
+          }
+          var n = document.createElement('option');
+          n.value = p.id;
+          projectNoList.appendChild(n);
+        });
+
+        if (ctx.projects.length) {
+          pickWrap.classList.remove('hidden');
+          pick.classList.remove('hidden');
+          pickHint.classList.remove('hidden');
+        }
+        pick.onchange = function () {
+          if (pick.value) applyProjectPick(pick.value);
+        };
+
+        applicantDefault = AccountingFormHelpers.resolveApplicantName(ctx.employees, profile.userId, profile.displayName) || applicantDefault;
+        setApplicantDefault();
+
+        var prefillId = queryParams['案號'] || queryParams.project || queryParams.project_no || '';
+        if (prefillId) {
+          pick.value = String(prefillId).trim();
+          if (pick.value) applyProjectPick(pick.value);
+        }
+
+        updateContextBar(ctx, vendorCount != null ? vendorCount : applyVendorsToUi(AccountingCache.peekVendors()));
+      }
+
+      function setupHubContext(session, skipFormCtx) {
+        var ctx = AccountingContext.load();
+        var vendorCount = applyVendorsToUi(AccountingCache.peekVendors());
+        if (session && typeof AccountingCache !== 'undefined') {
+          var cached = AccountingCache.vendors(session);
+          if (cached.length) vendorCount = applyVendorsToUi(cached);
+        }
+        applyHubContextToUi(ctx, vendorCount);
+
+        var needEmployees = !skipFormCtx && !ctx.projects.length && !ctx.employees.length;
+        var needVendors = !cachedVendors.length;
+        if (!session || (!needEmployees && !needVendors)) return;
+
+        var jobs = [];
+        if (needEmployees) {
+          jobs.push(AccountingApi.formContext(session).then(function (remote) {
+            if (!remote.success) return;
+            applyHubContextToUi(AccountingContext.load({
+              projects: remote.projects || [],
+              employees: remote.employees || []
+            }), cachedVendors.length);
+          }));
+        }
+        if (needVendors && typeof AccountingCache !== 'undefined') {
+          jobs.push(Promise.resolve().then(function () {
+            return AccountingCache.load(session).then(function () {
+              var n = applyVendorsToUi(AccountingCache.vendors(session));
+              updateContextBar(hubContext, n);
+            });
+          }).catch(function () {
+            var bar = document.getElementById('contextBar');
+            if (bar && !cachedVendors.length) {
+              bar.textContent = '廠商名冊載入失敗，請重新整理或手動輸入廠商名';
+              bar.classList.add('warn');
+            }
+          }));
+        }
+        Promise.all(jobs).catch(function (e) { console.warn('context refresh', e); });
+      }
+
+      function primeCachedUi() {
+        applyHubContextToUi(AccountingContext.load(), applyVendorsToUi(AccountingCache.peekVendors()));
+      }
+
+      function readQueryParams() {
+        var q = {};
+        (window.location.search || '').replace(/^\?/, '').split('&').forEach(function (p) {
+          if (!p) return;
+          var i = p.indexOf('=');
+          var k = i >= 0 ? p.substring(0, i) : p;
+          var v = i >= 0 ? p.substring(i + 1) : '';
+          try { q[decodeURIComponent(k)] = decodeURIComponent(v); } catch (e) {}
+        });
+        return q;
+      }
+
+      function setLoading(t) { document.getElementById('loading').textContent = t; }
+      function setMsg(t) { if (t) AccountingUi.notify('err', t); }
+      function setOk(t) { if (t) AccountingUi.notify('ok', t); }
+      function showApp() {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+      }
+
+      function readFileB64(file) {
+        return new Promise(function (resolve, reject) {
+          if (!file) return resolve(null);
+          var r = new FileReader();
+          r.onload = function () {
+            resolve({ filename: file.name, mimeType: file.type || 'image/jpeg', dataBase64: r.result.split(',')[1] });
+          };
+          r.onerror = reject;
+          r.readAsDataURL(file);
+        });
+      }
+
+      function collectFields() {
+        var isA = kind.value === 'A';
+        var fields = {
+          store: document.getElementById('store').value,
+          txn_date: isA ? document.getElementById('txn_date').value : document.getElementById('txn_date_b').value,
+          party_name: isA ? document.getElementById('party_name').value : document.getElementById('party_name_b').value,
+          item_desc: isA ? document.getElementById('item_desc').value : '',
+          amount: isA ? document.getElementById('amount').value : document.getElementById('amount_b').value,
+          payment_method: isA ? document.getElementById('payment_method').value : document.getElementById('payment_method_b').value
+        };
+        if (isA) {
+          fields.project_no = document.getElementById('project_no').value;
+          fields.petty_cash = document.getElementById('petty_cash').value;
+        } else {
+          fields.expense_month = document.getElementById('expense_month').value;
+          fields.applicant = document.getElementById('applicant').value;
+          if (vendorCombobox) {
+            var vid = vendorCombobox.getVendorId();
+            if (vid) fields.vendor_id = vid;
+          }
+          if (allocEditor) {
+            var allocCheck = allocEditor.validate();
+            if (allocCheck.ok && allocCheck.rows.length) {
+              fields.allocations = allocCheck.rows;
+              fields.project_no = allocCheck.project_no || '';
+              fields.item_desc = allocCheck.item_desc || '';
+            }
+          }
+        }
+        return fields;
+      }
+
+      function clearVolatileFields(keepDate) {
+        var isA = kind.value === 'A';
+        if (isA) {
+          if (!keepDate) document.getElementById('txn_date').value = todayRoc();
+          ['party_name', 'project_no', 'item_desc', 'amount'].forEach(function (id) {
+            document.getElementById(id).value = '';
+          });
+          payPickerA.clear();
+        } else {
+          if (!keepDate) document.getElementById('txn_date_b').value = todayRoc();
+          ['party_name_b', 'amount_b'].forEach(function (id) {
+            document.getElementById(id).value = '';
+          });
+          if (vendorCombobox) vendorCombobox.clearVendorId();
+          payPickerB.clear();
+          setApplicantDefault();
+          if (allocEditor) allocEditor.clear();
+        }
+        localPhotos = [];
+        document.getElementById('photoInput').value = '';
+        showPendingPreviews(pendingPhotos);
+      }
+
+      function updatePhotoCountLine() {
+        var line = document.getElementById('photoCountLine');
+        if (!line) return;
+        var n = pendingPhotos.length + localPhotos.length;
+        line.textContent = '已 ' + n + ' 張';
+      }
+
+      function showPendingPreviews(photos) {
+        var box = document.getElementById('pendingPreview');
+        box.innerHTML = '';
+        var all = (photos || []).concat(localPhotos || []);
+        if (!all.length) { box.classList.add('hidden'); updatePhotoCountLine(); return; }
+        all.forEach(function (p, idx) {
+          if (!p || !p.dataBase64) return;
+          var img = document.createElement('img');
+          img.src = 'data:' + (p.mimeType || 'image/jpeg') + ';base64,' + p.dataBase64;
+          img.alt = '單據' + (idx + 1);
+          box.appendChild(img);
+        });
+        box.classList.remove('hidden');
+        if (photos && photos.length) document.getElementById('photoHint').classList.remove('hidden');
+        updatePhotoCountLine();
+      }
+
+      async function addLocalPhotos(fileList) {
+        setMsg('');
+        var added = 0;
+        for (var i = 0; i < fileList.length; i++) {
+          try {
+            var p = await readFileB64(fileList[i]);
+            if (p) { localPhotos.push(p); added++; }
+          } catch (e) {
+            setMsg(e.message || String(e));
+          }
+        }
+        if (added) showPendingPreviews(pendingPhotos);
+        document.getElementById('photoInput').value = '';
+      }
+
+      async function loadPendingPhotos(token) {
+        var body = {
+          action: 'accounting_pending_photos',
+          token: token,
+          user_id: profile.userId
+        };
+        if (devBypass) body.dev_bypass = true;
+        else body.liff_id_token = idToken;
+        var data = await AccountingApi.post(body);
+        if (!data.success) { setMsg(data.message || '無法帶入照片'); return; }
+        pendingPhotos = data.photos || [];
+        showPendingPreviews(pendingPhotos);
+      }
+
+      async function submitEntry() {
+        setMsg(''); setOk('');
+        if (kind.value === 'B' && allocEditor) {
+          var allocErr = allocEditor.validate();
+          if (!allocErr.ok) {
+            setMsg(allocErr.message);
             return;
           }
         }
-      } catch (e) { /* cross-origin ignore */ }
-      setTimeout(function () {
-        window.location.replace('index.html');
-      }, 2500);
+        var btn = document.getElementById('submit');
+        await AccountingUi.runAsync(btn, {
+          actionLabel: '送出這一筆',
+          busyLabel: '送出中…'
+        }, async function () {
+          AccountingUi.tap('送出這一筆');
+          var fields = collectFields();
+          var photos = pendingPhotos.slice().concat(localPhotos);
+          var body = {
+            action: 'accounting_form_submit',
+            source: queryParams.source || (devBypass ? 'web_dev' : 'liff'),
+            user_id: profile.userId,
+            display_name: profile.displayName,
+            payload: { format: kind.value, fields: fields, photos: photos }
+          };
+          if (devBypass) body.dev_bypass = true;
+          else body.liff_id_token = idToken;
+          var data = await AccountingApi.post(body);
+          if (!data.success) throw new Error(data.message || '送出失敗');
+          sessionCount++;
+          document.getElementById('sessionCount').textContent = String(sessionCount);
+          var ul = document.getElementById('recent');
+          var li = document.createElement('li');
+          li.textContent = (kind.value === 'A' ? '收入' : '支出') + ' ' + fields.party_name + ' → ' + data.sheet + ' 第' + data.row + '列';
+          ul.insertBefore(li, ul.firstChild);
+          document.getElementById('recentCard').classList.remove('hidden');
+          setOk('記好了！第 ' + sessionCount + ' 筆（' + data.sheet + ' 第 ' + data.row + ' 列）');
+          if (data.groupNotified) setOk(document.getElementById('ok').textContent + ' · 已同步通知');
+          pendingPhotos = [];
+          localPhotos = [];
+          showPendingPreviews([]);
+          clearVolatileFields(true);
+          document.getElementById('nextBtn').classList.remove('hidden');
+          document.getElementById('doneBtn').classList.remove('hidden');
+        }).catch(function (e) {
+          setMsg(e.message || String(e));
+        });
+      }
+
+      document.getElementById('submit').addEventListener('click', submitEntry);
+      document.getElementById('nextBtn').addEventListener('click', function () {
+        setOk(''); setMsg(''); clearVolatileFields(false);
+      });
+      document.getElementById('doneBtn').addEventListener('click', function () {
+        if (typeof liff !== 'undefined' && liff.isInClient && liff.isInClient()) liff.closeWindow();
+      });
+
+      async function loadPolicy() {
+        try {
+          var policy = await AccountingApi.loadPolicy();
+          if (policy.liffId) CONSTANTS.LIFF_ID = policy.liffId;
+          devBypass = !!policy.authBypass;
+        } catch (e) {}
+      }
+
+      async function finishBoot(session) {
+        sessionRef = session;
+        profile.userId = session.auth.user_id;
+        profile.displayName = session.auth.display_name;
+        document.getElementById('userLine').textContent = '你好，' + profile.displayName +
+          (session.devBypass ? ' · 測試模式' : '');
+        showApp();
+        setupHubContext(sessionRef);
+        ensureVendorsLoaded(sessionRef);
+        if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
+      }
+
+      async function bootDevBypass() {
+        var session = await AccountingApi.initIngestSession();
+        if (!session || (session.auth.permission || 0) < AccountingApi.INGEST_MIN_PERMISSION) {
+          setLoading(AccountingApi.INGEST_PERM_DENIED_MSG);
+          return;
+        }
+        await finishBoot(session);
+      }
+
+      async function boot() {
+        AccountingUi.init();
+        if (typeof AccountingNav !== 'undefined') AccountingNav.init();
+        queryParams = readQueryParams();
+        seedProfileFromOperatorContext();
+        document.getElementById('txn_date').value = todayRoc();
+        document.getElementById('txn_date_b').value = todayRoc();
+        document.getElementById('expense_month').value = String(new Date().getMonth() + 1);
+        document.getElementById('txn_date_b').addEventListener('input', function () {
+          var m = monthFromRocDate(this.value);
+          if (m) document.getElementById('expense_month').value = String(m);
+        });
+        if (queryParams.kind === 'B' || queryParams.from === 'photo') kind.value = 'B';
+        toggleBlocks();
+        primeCachedUi();
+        allocEditor = AccountingFormHelpers.initAllocEditor(document.getElementById('allocList'), {
+          amountEl: document.getElementById('amount_b'),
+          sumEl: document.getElementById('allocSum'),
+          hintEl: document.getElementById('allocHint')
+        });
+        document.getElementById('photoInput').addEventListener('change', function (e) {
+          addLocalPhotos(e.target.files || []);
+        });
+        (function setupPhotoDropZone() {
+          var zone = document.getElementById('photoDropZone');
+          var input = document.getElementById('photoInput');
+          zone.addEventListener('click', function (e) {
+            if (e.target === input) return;
+            input.click();
+          });
+          zone.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+          });
+          ['dragenter', 'dragover'].forEach(function (ev) {
+            zone.addEventListener(ev, function (e) {
+              e.preventDefault();
+              e.stopPropagation();
+              zone.classList.add('drag-over');
+            });
+          });
+          ['dragleave', 'drop'].forEach(function (ev) {
+            zone.addEventListener(ev, function (e) {
+              e.preventDefault();
+              e.stopPropagation();
+              zone.classList.remove('drag-over');
+            });
+          });
+          zone.addEventListener('drop', function (e) {
+            var files = (e.dataTransfer && e.dataTransfer.files) ? e.dataTransfer.files : [];
+            if (files.length) addLocalPhotos(files);
+          });
+        })();
+        var prefillProject = queryParams['案號'] || queryParams.project || queryParams.project_no || '';
+        if (prefillProject && kind.value === 'B' && allocEditor) {
+          applyProjectPick(String(prefillProject).trim());
+        }
+        updatePhotoCountLine();
+
+        await loadPolicy();
+        var cachedSess = typeof AccountingApi.tryCachedSession === 'function'
+          ? AccountingApi.tryCachedSession({ minPermission: AccountingApi.INGEST_MIN_PERMISSION })
+          : null;
+        if (cachedSess) {
+          await finishBoot(cachedSess);
+          if (devBypass) return;
+        }
+        if (devBypass) {
+          await bootDevBypass();
+          return;
+        }
+        if (!CONSTANTS.LIFF_ID) {
+          setLoading('LIFF 尚未設定，請在 LINE Developers 建立後寫入 ACCOUNTING_LIFF_ID');
+          return;
+        }
+
+        if (typeof liff === 'undefined') {
+          setLoading('請用 LINE 開啟此頁');
+          return;
+        }
+        var authMe = null;
+        try {
+          setLoading('連線 LINE…');
+          await Promise.race([
+            liff.init({ liffId: CONSTANTS.LIFF_ID }),
+            new Promise(function (_, rej) { setTimeout(function () { rej(new Error('逾時')); }, CONSTANTS.INIT_TIMEOUT_MS); })
+          ]);
+          if (!liff.isLoggedIn()) {
+            setLoading('登入中…');
+            liff.login({ redirectUri: window.location.href });
+            return;
+          }
+          var p = await liff.getProfile();
+          profile.userId = p.userId;
+          profile.displayName = p.displayName;
+          idToken = liff.getIDToken();
+          var tokenSession = { idToken: idToken };
+          var ctxCached = AccountingContext.load();
+          var needFormCtx = !ctxCached.projects.length && !ctxCached.employees.length;
+          var formCtxPromise = needFormCtx ? AccountingApi.formContext(tokenSession) : null;
+          authMe = await AccountingApi.authMe(idToken);
+          if (!authMe.success || (authMe.permission || 0) < AccountingApi.INGEST_MIN_PERMISSION) {
+            setLoading(AccountingApi.INGEST_PERM_DENIED_MSG);
+            return;
+          }
+          document.getElementById('userLine').textContent = '你好，' + p.displayName;
+        } catch (e) {
+          setLoading('載入失敗：' + (e.message || e));
+          return;
+        }
+        sessionRef = { devBypass: false, idToken: idToken, auth: authMe, profile: profile };
+        showApp();
+        var skippedFormCtx = false;
+        if (formCtxPromise) {
+          skippedFormCtx = true;
+          formCtxPromise.then(function (remote) {
+            if (!remote || !remote.success) return;
+            applyHubContextToUi(AccountingContext.load({
+              projects: remote.projects || [],
+              employees: remote.employees || []
+            }), cachedVendors.length);
+          }).catch(function (e) { console.warn('formContext', e); });
+        } else {
+          applyHubContextToUi(AccountingContext.load(), cachedVendors.length);
+        }
+        setupHubContext(sessionRef, skippedFormCtx);
+        if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
+      }
+      boot();
     })();
   </script>
 </body>
