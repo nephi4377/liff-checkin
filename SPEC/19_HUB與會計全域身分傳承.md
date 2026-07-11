@@ -74,7 +74,7 @@
 | **員工名單** | 在職員工 `userId`、`userName`、`permission`… | `localStorage` `spa_hub_employees`；父層 `window.spaAllEmployees` | **3 天**（SWR 背景更新） | `AccountingContext`、收支登錄快選 |
 | **案場列表** | 案號、客戶名、店別… | `localStorage` `spa_hub_projects`；父層 `spaAllProjects` | **3 天** | `AccountingContext`、記帳案號快選 |
 | **當月班表** | HUB 排程 | `localStorage` `spa_hub_schedule_{YYYY}_{MM}` | **7 天** | HUB 主控台（會計較少直接用） |
-| **會計 bootstrap** | 廠商、收款帳戶、列舉… | `sessionStorage` `tanxin_accounting_bootstrap_v1:{userId}` | **3 天** | `AccountingCache`；**依 operator userId 分 key** |
+| **會計 bootstrap** | 廠商、收款帳戶、列舉… | `sessionStorage` `tanxin_accounting_bootstrap_v4:{userId}` | **3 天** | `AccountingCache`；**依 operator userId 分 key**；CRUD 成功優先 patch |
 
 詳見 [`18_會計與主檔快取策略.md`](18_會計與主檔快取策略.md) §4。
 

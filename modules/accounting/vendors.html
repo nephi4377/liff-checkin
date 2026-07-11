@@ -46,6 +46,36 @@
     .btn-warn { background: #fce8e6; color: #c5221f; }
     .form-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
     .form-actions .btn { flex: 1 1 140px; margin-top: 0; }
+    .form-card.is-editing {
+      border: 2px solid #1a73e8;
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, .12), 0 1px 3px rgba(0,0,0,.08);
+    }
+    .form-card.is-editing.just-saved {
+      animation: form-saved-flash .9s ease;
+    }
+    @keyframes form-saved-flash {
+      0% { box-shadow: 0 0 0 0 rgba(19, 115, 51, .45), 0 1px 3px rgba(0,0,0,.08); }
+      40% { box-shadow: 0 0 0 6px rgba(19, 115, 51, .2), 0 1px 3px rgba(0,0,0,.08); }
+      100% { box-shadow: 0 0 0 3px rgba(26, 115, 232, .12), 0 1px 3px rgba(0,0,0,.08); }
+    }
+    .form-title-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 8px;
+    }
+    .form-title-row h3 { margin: 0; }
+    .mode-badge {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 999px;
+      letter-spacing: .02em;
+    }
+    .mode-badge.create { background: #e8f0fe; color: #174ea6; }
+    .mode-badge.edit { background: #137333; color: #fff; }
     .feedback-bar {
       display: flex;
       align-items: flex-start;
@@ -147,8 +177,11 @@
 
     <div class="page-layout">
     <div class="page-col page-col-form">
-    <div class="card">
-      <h3 id="formTitle" style="margin:0 0 8px">新增廠商</h3>
+    <div class="card form-card" id="formCard">
+      <div class="form-title-row">
+        <h3 id="formTitle">新增廠商</h3>
+        <span class="mode-badge create" id="modeBadge">新增模式</span>
+      </div>
       <p class="hint" style="margin:0 0 10px">可拍照自動辨識；編輯既有廠商時照片會立即存入 Drive 資料夾，新增則按儲存時一併存入。</p>
       <input type="hidden" id="editId" />
 
@@ -284,13 +317,43 @@
       function $(id) { return document.getElementById(id); }
 
       function showFeedback(kind, text) {
-        if (!text) return;
+        var bar = $('feedbackBar');
+        var icon = $('feedbackIcon');
+        var txt = $('feedbackText');
+        if (!text) {
+          bar.classList.add('hidden');
+          txt.textContent = '';
+          icon.textContent = '';
+          return;
+        }
         var k = kind === 'err' ? 'err' : (kind === 'warn' ? 'warn' : 'ok');
+        bar.className = 'feedback-bar ' + k;
+        bar.classList.remove('hidden');
+        icon.textContent = k === 'ok' ? '✓' : (k === 'warn' ? '!' : '✕');
+        txt.textContent = text;
         AccountingUi.notify(k, text);
       }
-      function setMsg(t) { if (t) AccountingUi.notify('err', t); }
-      function setOk(t) { if (t) AccountingUi.notify('ok', t); }
-      function setWarn(t) { if (t) AccountingUi.notify('warn', t); }
+      function setMsg(t) { if (t) showFeedback('err', t); else showFeedback('', ''); }
+      function setOk(t) { if (t) showFeedback('ok', t); }
+      function setWarn(t) { if (t) showFeedback('warn', t); }
+
+      function setFormMode(isEdit, opts) {
+        opts = opts || {};
+        var card = $('formCard');
+        $('formTitle').textContent = isEdit ? '編輯廠商' : '新增廠商';
+        $('modeBadge').textContent = isEdit ? '編輯模式' : '新增模式';
+        $('modeBadge').className = 'mode-badge ' + (isEdit ? 'edit' : 'create');
+        $('cancelEditBtn').classList.toggle('hidden', !isEdit);
+        $('saveBtn').textContent = isEdit ? '更新' : '儲存';
+        card.classList.toggle('is-editing', !!isEdit);
+        setBindEditorVisible(!!isEdit);
+        if (opts.flash) {
+          card.classList.remove('just-saved');
+          void card.offsetWidth;
+          card.classList.add('just-saved');
+          setTimeout(function () { card.classList.remove('just-saved'); }, 1000);
+        }
+      }
 
       function hasPendingPhotoUpload() {
         return (cardFile && !cardUploaded) || (passbookFile && !passbookUploaded);
@@ -650,9 +713,7 @@
       function clearForm(opts) {
         opts = opts || {};
         $('editId').value = '';
-        $('formTitle').textContent = '新增廠商';
-        $('cancelEditBtn').classList.add('hidden');
-        setBindEditorVisible(false);
+        setFormMode(false);
         $('bindingList').innerHTML = '';
         $('lineSearchResults').innerHTML = '';
         ['name','tax_id','contact_name','contact_phone','contact_email','address',
@@ -668,12 +729,11 @@
         if (opts.focusName !== false) $('name').focus();
       }
 
-      function fillForm(v) {
-        showFeedback('', '');
+      function fillForm(v, opts) {
+        opts = opts || {};
+        if (!opts.keepFeedback) showFeedback('', '');
         $('editId').value = v.vendor_id || '';
-        $('formTitle').textContent = '編輯廠商';
-        $('cancelEditBtn').classList.remove('hidden');
-        setBindEditorVisible(true);
+        setFormMode(true, { flash: !!opts.flash });
         $('name').value = v.name || '';
         $('tax_id').value = v.tax_id || '';
         $('trade_category').value = AccountingMasterData.normalizeVendorTradeCategory(v.trade_category) || '其他';
@@ -693,10 +753,10 @@
         if (v.quality_note) noteLines.push(String(v.quality_note));
         if (v.service_areas) noteLines.push('服務區域：' + v.service_areas);
         $('note').value = noteLines.join('\n');
-        clearPhotos();
+        if (!opts.keepPhotos) clearPhotos();
         renderBindings(v.vendor_id);
-        var formCard = document.querySelector('.page-col-form');
-        if (formCard) formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        var scrollTarget = opts.scrollToBind ? $('bindEditor') : $('formCard');
+        if (scrollTarget) scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
 
       function sortVendorsForList(rows) {
@@ -930,29 +990,44 @@
         var editId = $('editId').value;
         var savedName = payload.name;
         var saved = null;
+        var wasCreate = !editId;
         try {
           await AccountingUi.runAsync($('saveBtn'), {
             busyLabel: '儲存中…',
-            actionLabel: '儲存廠商'
+            actionLabel: wasCreate ? '新增廠商' : '更新廠商'
           }, async function () {
             var data = editId
               ? await AccountingApi.crudUpdate(session, 'vendor', editId, payload)
               : await AccountingApi.crudCreate(session, 'vendor', payload);
             if (!data.success) { setMsg(data.message || '儲存失敗'); return; }
             saved = data.data;
-            refreshVendors(true);
-            var refreshed = allVendors.find(function (v) { return v.vendor_id === saved.vendor_id; }) || saved;
-            fillForm(refreshed);
-            if (editId) {
-              setOk('已更新「' + savedName + '」，可繼續綁定 LINE，或點「取消編輯」新增下一筆');
-            } else {
-              setOk('已新增「' + savedName + '」，請在下方綁定 LINE（請款辨識用）');
+            if (saved && saved.vendor_id) {
+              AccountingCache.patchMaster(session, 'vendor', saved);
             }
+            refreshVendors(true);
+            var refreshed = (saved && allVendors.find(function (v) {
+              return v.vendor_id === saved.vendor_id;
+            })) || saved;
+            if (!refreshed || !refreshed.vendor_id) {
+              setMsg('已儲存，但無法進入編輯（缺少廠商編號），請從右側列表點「編輯」');
+              return;
+            }
+            fillForm(refreshed, {
+              keepFeedback: true,
+              keepPhotos: true,
+              flash: true,
+              scrollToBind: wasCreate
+            });
+            if (wasCreate) {
+              setOk('已新增「' + savedName + '」，已進入編輯模式。請在下方綁定 LINE（請款辨識用），或按「取消編輯」清空再新增下一筆');
+            } else {
+              setOk('已更新「' + savedName + '」。可繼續綁定 LINE，或按「取消編輯」清空表單');
+            }
+            if (saved) runBackgroundPhotoUpload(saved);
           });
         } catch (e) {
           setMsg(e.message || String(e));
         }
-        if (saved) runBackgroundPhotoUpload(saved);
       });
 
       $('lineSearchBtn').addEventListener('click', async function () {
