@@ -7,9 +7,9 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=26"></script>
+  <script src="../../shared/js/accounting_api.js?v=31"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=1"></script>
-  <script src="../../shared/js/accounting_ui.js?v=10"></script>
+  <script src="../../shared/js/accounting_ui.js?v=11"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=4"></script>
   <style>
@@ -157,8 +157,26 @@
       });
       (async function boot() {
         await AccountingBoot.run({
+          minPermission: 0,
+          deniedMsg: '需已登記廠商或財務權限（≥4）',
+          initSession: async function () {
+            var s = await AccountingApi.initPaymentRequestSession();
+            if (!s) return null;
+            var isVendor = String(s.auth.status || '') === '廠商';
+            var isStaff = (s.auth.permission || 0) >= AccountingApi.MIN_PERMISSION;
+            if (!isVendor && !isStaff) {
+              throw new Error('需已登記廠商或財務權限（≥4）');
+            }
+            return s;
+          },
           onReady: async function (sess) {
             session = sess;
+            var isVendor = String(sess.auth.status || '') === '廠商';
+            var isStaff = (sess.auth.permission || 0) >= AccountingApi.MIN_PERMISSION;
+            if (!isVendor && !isStaff) {
+              AccountingBoot.setLoading('需已登記廠商或財務權限（≥4）');
+              return;
+            }
             try {
               await loadList(false);
             } catch (e) {

@@ -449,11 +449,13 @@ export default {
                         <ul class="space-y-1">
                             <li v-for="item in pendingReview.slice(0, 5)" :key="'rv-' + item.payment_request_id"
                                 class="px-1.5 py-1 rounded bg-white border border-amber-100">
-                                <div class="font-medium text-gray-800 truncate">{{ item.vendor_name || '廠商' }}</div>
-                                <div class="text-xs text-gray-500 truncate">
-                                    {{ formatAmount(item.amount) }} 元
-                                    <span v-if="item.project_no"> · 案 {{ item.project_no }}</span>
-                                </div>
+                                <a href="#/accounting/vendor-payment-approve" class="block hover:bg-amber-50 rounded -mx-0.5 px-0.5">
+                                    <div class="font-medium text-gray-800 truncate">{{ item.vendor_name || '廠商' }}</div>
+                                    <div class="text-xs text-gray-500 truncate">
+                                        {{ formatAmount(item.amount) }} 元
+                                        <span v-if="item.project_no"> · 案 {{ item.project_no }}</span>
+                                    </div>
+                                </a>
                             </li>
                         </ul>
                         <a v-if="pendingReview.length > 5" href="#/accounting/vendor-payment-approve"
@@ -464,11 +466,13 @@ export default {
                         <ul class="space-y-1">
                             <li v-for="item in pendingPayment.slice(0, 5)" :key="'pay-' + item.payment_request_id"
                                 class="px-1.5 py-1 rounded bg-white border border-teal-100">
-                                <div class="font-medium text-gray-800 truncate">{{ item.vendor_name || '廠商' }}</div>
-                                <div class="text-xs text-gray-500 truncate">
-                                    {{ formatAmount(item.amount) }} 元
-                                    <span v-if="item.project_no"> · 案 {{ item.project_no }}</span>
-                                </div>
+                                <a :href="vendorPaymentUrl" class="block hover:bg-teal-50 rounded -mx-0.5 px-0.5">
+                                    <div class="font-medium text-gray-800 truncate">{{ item.vendor_name || '廠商' }}</div>
+                                    <div class="text-xs text-gray-500 truncate">
+                                        {{ formatAmount(item.amount) }} 元
+                                        <span v-if="item.project_no"> · 案 {{ item.project_no }}</span>
+                                    </div>
+                                </a>
                             </li>
                         </ul>
                         <a v-if="pendingPayment.length > 5" :href="vendorPaymentUrl"

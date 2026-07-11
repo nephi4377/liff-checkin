@@ -12,7 +12,10 @@ var AccountingApi = (function () {
   var INGEST_MIN_PERMISSION = 2;
   var SUPERVISOR_MIN_PERMISSION = 3;
   var VENDOR_PAYMENT_APPROVE_MIN_PERMISSION = 5;
+  /** 匯款請款／款項進度：在職員工即可（對齊「登入即可送審」） */
+  var PAYMENT_REQUEST_MIN_PERMISSION = 1;
   var PERM_DENIED_MSG = '權限不足（需財務／老闆，權限 ≥ 4）';
+  var PAYMENT_REQUEST_DENIED_MSG = '權限不足（需為在職員工或已登記廠商）';
   var INGEST_PERM_DENIED_MSG = '權限不足（收支登錄需權限 ≥ 2）';
   var SUPERVISOR_DENIED_MSG = '權限不足（需主管，權限 ≥ 3）';
   var VENDOR_PAYMENT_APPROVE_DENIED_MSG = '權限不足（廠商請款審核需權限 ≥ 5）';
@@ -256,10 +259,12 @@ var AccountingApi = (function () {
   return {
     GAS_API: GAS_API,
     MIN_PERMISSION: MIN_PERMISSION,
+    PAYMENT_REQUEST_MIN_PERMISSION: PAYMENT_REQUEST_MIN_PERMISSION,
     INGEST_MIN_PERMISSION: INGEST_MIN_PERMISSION,
     SUPERVISOR_MIN_PERMISSION: SUPERVISOR_MIN_PERMISSION,
     VENDOR_PAYMENT_APPROVE_MIN_PERMISSION: VENDOR_PAYMENT_APPROVE_MIN_PERMISSION,
     PERM_DENIED_MSG: PERM_DENIED_MSG,
+    PAYMENT_REQUEST_DENIED_MSG: PAYMENT_REQUEST_DENIED_MSG,
     INGEST_PERM_DENIED_MSG: INGEST_PERM_DENIED_MSG,
     SUPERVISOR_DENIED_MSG: SUPERVISOR_DENIED_MSG,
     VENDOR_PAYMENT_APPROVE_DENIED_MSG: VENDOR_PAYMENT_APPROVE_DENIED_MSG,
@@ -392,6 +397,14 @@ var AccountingApi = (function () {
         tab_name: tabName,
         row_index: rowIndex,
         payload: payload || {}
+      });
+    },
+    marginDeleteLine: function (sessionOrToken, tabName, rowIndex) {
+      return post({
+        action: 'margin_delete_line',
+        auth: resolveAuth(sessionOrToken),
+        tab_name: tabName,
+        row_index: rowIndex
       });
     },
     marginGetDetail: function (sessionOrToken, filter) {
@@ -841,7 +854,7 @@ var AccountingApi = (function () {
       notifyUiOperator_(session);
       return session;
     },
-    /** 待付款申請：員工（財務權限）或已登記廠商 */
+    /** 待付款申請／款項進度：在職員工或已登記廠商（登入即可） */
     initPaymentRequestSession: async function (opts) {
       var policy = await AccountingApi.loadPolicy();
       var session;
@@ -863,8 +876,8 @@ var AccountingApi = (function () {
         notifyUiOperator_(session);
         return session;
       }
-      if ((session.auth.permission || 0) < MIN_PERMISSION) {
-        throw new Error(PERM_DENIED_MSG);
+      if ((session.auth.permission || 0) < PAYMENT_REQUEST_MIN_PERMISSION) {
+        throw new Error(PAYMENT_REQUEST_DENIED_MSG);
       }
       notifyUiOperator_(session);
       return session;

@@ -31,7 +31,12 @@ var AccountingUi = (function () {
     'project_margin.html': '案件毛利',
     'payees.html': '收款帳戶',
     'vendor_register.html': '廠商自填',
-    'vendor_payment_approve.html': '廠商請款審核'
+    'vendor_payment_approve.html': '廠商請款審核',
+    'payroll_review.html': '薪資審核',
+    'payroll_finance.html': '薪資待匯款',
+    'designer-customer-finance.html': '追加減與收款',
+    'customer-finance-portal.html': '客戶案件紀錄',
+    'payment_request_compose.html': '精細請款建單'
   };
 
   var KIND_LABEL = { ok: '完成', err: '錯誤', warn: '注意', info: '訊息', action: '動作' };

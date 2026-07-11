@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=17"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=30"></script>
+  <script src="../../shared/js/accounting_api.js?v=31"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=17"></script>
   <script src="../../shared/js/accounting_ui.js?v=10"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
@@ -37,6 +37,10 @@
     .nav { margin-bottom: 12px; font-size: 14px; }
     .nav a { color: #1a73e8; text-decoration: none; }
     .line-item { border-bottom: 1px solid #eee; padding: 10px 0; font-size: 14px; }
+    .line-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .line-actions .btn { width: auto; margin-top: 0; padding: 6px 12px; font-size: 13px; }
+    .line-edit { margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 8px; }
+    .line-edit .btn-row { margin-top: 8px; }
     .hint { font-size: 12px; color: #777; margin-top: 2px; }
     .warn { color: #b06000; font-size: 13px; }
     .section-title { margin: 0 0 8px; font-size: 15px; }
@@ -377,6 +381,7 @@
           var div = document.createElement('div');
           div.className = 'line-item';
           var tagClass = ln.txn_type === '收入' ? 'rev' : 'exp';
+          var isAuto = String(ln.source || '') === '自動';
           var extra = '';
           if (ln.base_cost_breakdown) {
             var b = ln.base_cost_breakdown;
@@ -389,11 +394,105 @@
             (ln.category || '') + ' · ' + fmtMoney(ln.amount) + '</div>' +
             '<div>' + (ln.item_name || '') + '</div>' +
             '<div class="sub">' + (ln.txn_date || '') +
-            (ln.source ? ' · ' + ln.source : '') + '</div>' + extra;
+            (ln.source ? ' · ' + ln.source : '') +
+            (ln.note ? ' · ' + ln.note : '') + '</div>' + extra;
           if (ln.has_attachments || (ln.attachment_urls && ln.attachment_urls.length)) {
             div.appendChild(AccountingLightbox.makeButton(session, ln, '看單據'));
           }
+          var actions = document.createElement('div');
+          actions.className = 'line-actions';
+          var editBtn = document.createElement('button');
+          editBtn.type = 'button';
+          editBtn.className = 'btn btn-secondary';
+          editBtn.textContent = '修改';
+          editBtn.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            toggleLineEdit(div, ln, isAuto);
+          });
+          actions.appendChild(editBtn);
+          if (!isAuto) {
+            var delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'btn btn-secondary';
+            delBtn.textContent = '刪除';
+            delBtn.addEventListener('click', function (ev) {
+              ev.stopPropagation();
+              deleteLine(ln, delBtn);
+            });
+            actions.appendChild(delBtn);
+          } else {
+            var hint = document.createElement('span');
+            hint.className = 'hint';
+            hint.textContent = '自動列不可刪；金額請在收支表改';
+            actions.appendChild(hint);
+          }
+          div.appendChild(actions);
           box.appendChild(div);
+        });
+      }
+
+      function toggleLineEdit(container, ln, isAuto) {
+        var existing = container.querySelector('.line-edit');
+        if (existing) {
+          existing.remove();
+          return;
+        }
+        var form = document.createElement('div');
+        form.className = 'line-edit';
+        form.innerHTML =
+          '<div class="row2">' +
+          '<div><label>日期</label><input class="le-date" type="text" /></div>' +
+          '<div><label>金額' + (isAuto ? '（自動列不可改）' : '') + '</label>' +
+          '<input class="le-amount" type="number" inputmode="numeric" ' + (isAuto ? 'disabled' : '') + ' /></div>' +
+          '</div>' +
+          '<label>費用類別</label><input class="le-category" list="categoryList" />' +
+          '<label>項目名稱</label><input class="le-item" />' +
+          '<label>備註</label><input class="le-note" />' +
+          '<div class="btn-row">' +
+          '<button type="button" class="btn btn-primary le-save">儲存</button>' +
+          '<button type="button" class="btn btn-secondary le-cancel">取消</button>' +
+          '</div>';
+        form.querySelector('.le-date').value = ln.txn_date || '';
+        form.querySelector('.le-amount').value = ln.amount != null ? ln.amount : '';
+        form.querySelector('.le-category').value = ln.category || '';
+        form.querySelector('.le-item').value = ln.item_name || '';
+        form.querySelector('.le-note').value = ln.note || '';
+        form.querySelector('.le-cancel').addEventListener('click', function () { form.remove(); });
+        form.querySelector('.le-save').addEventListener('click', async function () {
+          var btn = form.querySelector('.le-save');
+          await runAction(btn, '儲存中…', async function () {
+            setMsg('');
+            var payload = {
+              txn_date: form.querySelector('.le-date').value,
+              category: form.querySelector('.le-category').value,
+              item_name: form.querySelector('.le-item').value,
+              note: form.querySelector('.le-note').value
+            };
+            if (!isAuto) payload.amount = form.querySelector('.le-amount').value;
+            var data = await AccountingApi.marginUpdateLine(
+              session,
+              current.tab_name,
+              ln.row_index,
+              payload
+            );
+            if (!data.success) { setMsg(data.message || '更新失敗'); return; }
+            setOk('已更新明細');
+            openDetail(current);
+          });
+        });
+        container.appendChild(form);
+      }
+
+      async function deleteLine(ln, btn) {
+        if (!current || !ln || !ln.row_index) return;
+        var label = (ln.item_name || ln.category || '此筆') + ' ' + fmtMoney(ln.amount);
+        if (!window.confirm('確定刪除「' + label + '」？')) return;
+        await runAction(btn, '刪除中…', async function () {
+          setMsg('');
+          var data = await AccountingApi.marginDeleteLine(session, current.tab_name, ln.row_index);
+          if (!data.success) { setMsg(data.message || '刪除失敗'); return; }
+          setOk('已刪除明細');
+          openDetail(current);
         });
       }
 

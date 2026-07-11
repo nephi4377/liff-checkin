@@ -23,6 +23,8 @@ var AccountingShell = (function () {
     'vendor_payment_approve.html': '廠商請款審核',
     'attachments.html': '單據附件',
     'project_margin.html': '案件毛利',
+    'designer-customer-finance.html': '追加減與收款',
+    'customer-finance-portal.html': '客戶案件紀錄',
     'vendor_register.html': '廠商自填'
   };
 
