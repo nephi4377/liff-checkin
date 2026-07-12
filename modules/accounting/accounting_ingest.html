@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=26"></script>
+  <script src="../../shared/js/accounting_api.js?v=37"></script>
   <script src="../../shared/js/accounting_cache.js?v=26"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=5"></script>
   <script src="../../shared/js/accounting_ui.js?v=10"></script>
@@ -715,6 +715,20 @@
         if (devBypass) {
           await bootDevBypass();
           return;
+        }
+        var inHubIframeBoot = window.parent && window.parent !== window;
+        if (inHubIframeBoot && typeof AccountingApi.initIngestSession === 'function') {
+          try {
+            setLoading('向主控台索取登入憑證…');
+            var hubSess = await AccountingApi.initIngestSession();
+            if (hubSess) {
+              await finishBoot(hubSess);
+              return;
+            }
+          } catch (eHub) {
+            setLoading('載入失敗：' + (eHub.message || eHub));
+            return;
+          }
         }
         if (!CONSTANTS.LIFF_ID) {
           setLoading('LIFF 尚未設定，請在 LINE Developers 建立後寫入 ACCOUNTING_LIFF_ID');

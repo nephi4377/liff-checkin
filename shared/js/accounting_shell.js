@@ -8,6 +8,7 @@ var AccountingShell = (function () {
   var menuEl = null;
   var backEl = null;
   var currentPage = '';
+  var pendingTokenRequestSource = null;
 
   var PAGE_TITLES = {
     'accounting_ingest.html': '收支登錄',
@@ -125,6 +126,7 @@ var AccountingShell = (function () {
       return;
     }
     if (type === 'request_hub_liff_token') {
+      pendingTokenRequestSource = event.source || null;
       try {
         if (window.parent && window.parent !== window) {
           window.parent.postMessage({ type: 'request_hub_liff_token', forwardFrom: 'acct_shell' }, '*');
@@ -132,11 +134,18 @@ var AccountingShell = (function () {
       } catch (eFwd) {}
       return;
     }
-    if (type === 'hub_liff_token' && isHost && event.source && typeof event.source.postMessage === 'function') {
+    if (type === 'hub_liff_token' && isHost) {
+      var tok = event.data.token || '';
+      if (pendingTokenRequestSource && typeof pendingTokenRequestSource.postMessage === 'function') {
+        try {
+          pendingTokenRequestSource.postMessage({ type: 'hub_liff_token', token: tok }, '*');
+        } catch (eRelaySrc) {}
+        pendingTokenRequestSource = null;
+      }
       try {
         var frame = document.getElementById('acctContentFrame');
         if (frame && frame.contentWindow) {
-          frame.contentWindow.postMessage({ type: 'hub_liff_token', token: event.data.token || '' }, '*');
+          frame.contentWindow.postMessage({ type: 'hub_liff_token', token: tok }, '*');
         }
       } catch (eRelay) {}
     }

@@ -860,6 +860,7 @@ var AccountingApi = (function () {
         if (parentToken) {
           var authHub = await AccountingApi.authMe(parentToken);
           if (authHub.success) {
+            try { sessionStorage.setItem(SESSION_TOKEN_KEY, parentToken); } catch (eTokHub) {}
             return {
               devBypass: false,
               profile: { userId: authHub.user_id, displayName: authHub.display_name },
@@ -867,6 +868,14 @@ var AccountingApi = (function () {
               auth: authHub
             };
           }
+        }
+        var provHub = AccountingApi.tryProvisionalSession({
+          minPermission: opts.minPermission != null ? opts.minPermission : 0,
+          authAction: 'accounting_auth_me'
+        });
+        if (provHub && provHub.auth && provHub.auth.userId) {
+          console.warn('[Accounting] Hub LIFF token 未取得，暫用 HUB 操作者身分');
+          return provHub;
         }
         throw new Error('無法從主控台取得登入憑證，請關閉後重新從 LINE 開啟主控台');
       }

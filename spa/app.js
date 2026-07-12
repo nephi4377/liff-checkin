@@ -134,6 +134,32 @@ const App = {
             }
         })();
 
+        /** HUB LIFF token 快取：供 iframe postMessage 索取（須與 handleIframeMessage 同層） */
+        const hubIdTokenRef = { value: '' };
+        const refreshHubIdToken = () => {
+            try {
+                if (typeof liff !== 'undefined' && liff.getIDToken) {
+                    const t = liff.getIDToken() || '';
+                    if (t) hubIdTokenRef.value = t;
+                    return t || hubIdTokenRef.value || '';
+                }
+            } catch (e) {
+                console.warn('[Hub] refreshHubIdToken:', e);
+            }
+            return hubIdTokenRef.value || '';
+        };
+
+        /** 會計 iframe 須等員工名單就緒再掛載，避免 permission 更新導致整頁重載 */
+        const iframeMountReady = computed(() => {
+            if (!userProfile.value?.userId) return false;
+            const view = currentView.value;
+            if (view?.name !== 'iframe') return false;
+            const src = String(view.src || '');
+            if (src.indexOf('modules/accounting/') < 0) return true;
+            if (currentUser.value) return true;
+            return allEmployees.value.length > 0;
+        });
+
         // [v411.0 SPA化] 簡易路由系統
         const routes = {
             '#': { name: 'dashboard' },
@@ -645,23 +671,7 @@ const App = {
         };
 
         // --- 生命週期鉤子 (Lifecycle Hooks) ---
-        onMounted(async () => {
-            // [v559.2 核心修正] 立即註冊 iframe 訊息監聽器，確保不會錯過任何來自 iframe 的 postMessage。
-        const hubIdTokenRef = { value: '' };
-
-        const refreshHubIdToken = () => {
-            try {
-                if (typeof liff !== 'undefined' && liff.getIDToken) {
-                    const t = liff.getIDToken() || '';
-                    if (t) hubIdTokenRef.value = t;
-                    return t || hubIdTokenRef.value || '';
-                }
-            } catch (e) {
-                console.warn('[Hub] refreshHubIdToken:', e);
-            }
-            return hubIdTokenRef.value || '';
-        };
-            // [v559.8] onMounted 只負責觸發非同步初始化，本身保持同步。
+        onMounted(() => {
             initializeApplication();
         });
 
@@ -698,7 +708,15 @@ const App = {
                 return;
             }
             if (type === 'request_hub_liff_token') {
-                let tok = refreshHubIdToken();
+                let tok = '';
+                try {
+                    tok = refreshHubIdToken();
+                } catch (eTok) {
+                    console.warn('[Hub] request_hub_liff_token handler:', eTok);
+                    try {
+                        if (typeof liff !== 'undefined' && liff.getIDToken) tok = liff.getIDToken() || '';
+                    } catch (e2) { /* ignore */ }
+                }
                 if (!tok) {
                     console.warn('[Hub] iframe 索取 LIFF token 但主控台目前為空（可能逾時，請重新從 LINE 開啟）');
                 }
@@ -779,6 +797,7 @@ const App = {
             copyLandingPageUrl,
             hubLiffId: CONFIG.HUB_LIFF_ID || '',
             iframeDebugParam,
+            iframeMountReady,
             isHelpActive,
         };
     }, // [v418.1 修正] 補上遺失的逗號，解決 setup() 與 template 之間的語法錯誤
@@ -850,7 +869,7 @@ const App = {
                     <div v-else-if="currentView.name === 'project-board'" class="py-6">
                          <ProjectBoard :projects="allProjects" :userProfile="userProfile" :currentUser="currentUser" />
                     </div>
-                    <div v-else-if="currentView.name === 'iframe' && userProfile" class="h-full min-h-[70vh]">
+                    <div v-else-if="currentView.name === 'iframe' && iframeMountReady" class="h-full min-h-[70vh]">
                         <IframeView :src="currentView.src + 
                             (currentView.src.includes('?') ? '&' : '?') + 
                             'uid=' + encodeURIComponent(userProfile.userId) + 

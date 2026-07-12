@@ -195,11 +195,11 @@
 
 | 能力 | 狀態 |
 |------|------|
-| HUB iframe 帶 `uid`／`permission`／`hub_liff_id` | ✅ `spa/app.js`（`hubLiffId` 經 `setup()` 暴露） |
-| HUB 父層回應 `request_hub_liff_token` | ✅ `spa/app.js` |
+| HUB iframe 帶 `uid`／`permission`／`hub_liff_id` | ✅ `spa/app.js`（`hubLiffId` 經 `setup()` 暴露）；**會計 iframe 等 `currentUser` 就緒再掛載**，避免 `permission` 更新整頁重載 |
+| HUB 父層回應 `request_hub_liff_token` | ✅ `spa/app.js`（`refreshHubIdToken` 須與 `handleIframeMessage` **同 setup 作用域**） |
 | 統一 `tanxin_operator_v1` | ✅ `operator_context.js` |
 | **全站參考主檔 `HubRefCache`（`tanxin_ref_v1:*`）** | ✅ `hub_ref_cache.js`；HUB 寫入、iframe 只讀 |
-| 會計讀 operator + 安全 JSON + iframe token | ✅ `accounting_api.js` |
+| 會計讀 operator + 安全 JSON + iframe token | ✅ `accounting_api.js` v37（`window.top` 索取；token 失敗時 **暫用 operator**；殼層 `pendingTokenRequestSource` 轉發） |
 | 會計導覽保留 query | ✅ `accounting_nav.js` `hubQueryString()` |
 | 會計全頁 bootstrap 收斂 | ✅ `accounting_boot.js` + `modules/accounting/*.html` |
 | bypass 時用 `dev_user_id` 查 Checkin 真實權限 | ✅ `AuthBridge.getDevBypassAuth_` |
