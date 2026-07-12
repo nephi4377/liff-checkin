@@ -47,8 +47,9 @@ var AccountingApi = (function () {
 
   async function post(body, timeoutMs) {
     var actionName = (body && body.action) || 'api';
+    var trackUi = actionName !== 'accounting_client_log';
     var t0 = Date.now();
-    if (typeof AccountingUi !== 'undefined' && AccountingUi.apiStart) {
+    if (trackUi && typeof AccountingUi !== 'undefined' && AccountingUi.apiStart) {
       AccountingUi.apiStart(actionName);
     }
     var opts = {
@@ -71,14 +72,14 @@ var AccountingApi = (function () {
         text = await res.text();
       }
       var parsed = parseJsonResponse_(res, text);
-      if (typeof AccountingUi !== 'undefined' && AccountingUi.apiEnd) {
+      if (trackUi && typeof AccountingUi !== 'undefined' && AccountingUi.apiEnd) {
         var extra = parsed && parsed.success === false && parsed.message ? parsed.message : '';
         if (parsed && parsed.gas_cached) extra = (extra ? extra + ' · ' : '') + 'GAS 快取';
         AccountingUi.apiEnd(actionName, Date.now() - t0, !!(parsed && parsed.success !== false), extra);
       }
       return parsed;
     } catch (e) {
-      if (typeof AccountingUi !== 'undefined' && AccountingUi.apiEnd) {
+      if (trackUi && typeof AccountingUi !== 'undefined' && AccountingUi.apiEnd) {
         AccountingUi.apiEnd(actionName, Date.now() - t0, false, e.message || String(e));
       }
       throw e;

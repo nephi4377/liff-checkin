@@ -22,6 +22,10 @@ var AccountingUi = (function () {
   var _actionTimers = {};
   var _progressEl = null;
   var _apiInflight = 0;
+  var _remoteQueue = [];
+  var _remoteTimer = null;
+  var REMOTE_DEBOUNCE_MS = 8000;
+  var REMOTE_MAX_PER_FLUSH = 15;
 
   function isDebugMode() {
     try {
@@ -206,8 +210,39 @@ var AccountingUi = (function () {
     dockTitleEl.textContent = '狀態紀錄（本機 ' + n + '）';
   }
 
-  function shouldSyncRemote(kind, text) {
-    return true;
+  function shouldSyncRemote(kind) {
+    kind = normalizeKind(kind);
+    return kind !== 'info';
+  }
+
+  function scheduleRemoteFlush() {
+    if (_remoteTimer) return;
+    _remoteTimer = setTimeout(flushRemoteQueue, REMOTE_DEBOUNCE_MS);
+  }
+
+  function flushRemoteQueue() {
+    _remoteTimer = null;
+    if (!_remoteQueue.length) return;
+    if (!operator.session) return;
+    if (typeof AccountingApi === 'undefined' || !AccountingApi.clientLog) return;
+    var batch = _remoteQueue.splice(0, REMOTE_MAX_PER_FLUSH);
+    if (_remoteQueue.length) scheduleRemoteFlush();
+    var pages = {};
+    batch.forEach(function (e) { pages[e.page] = true; });
+    var page = Object.keys(pages).length === 1 ? batch[0].page : pageName();
+    var kind = 'action';
+    if (batch.some(function (e) { return e.kind === 'err'; })) kind = 'err';
+    else if (batch.some(function (e) { return e.kind === 'warn'; })) kind = 'warn';
+    else if (batch.some(function (e) { return e.kind === 'ok'; })) kind = 'ok';
+    var summary = batch.map(function (e) { return e.text; }).join('\n');
+    var detail = summary.length > 500 ? summary : '';
+    if (summary.length > 500) summary = summary.slice(0, 500) + '…';
+    AccountingApi.clientLog(operator.session, {
+      page: page,
+      kind: kind,
+      summary: summary,
+      detail: detail
+    });
   }
 
   function flushPendingNavIntent() {
@@ -248,17 +283,15 @@ var AccountingUi = (function () {
     list.push(entry);
     writeStorageList(list);
 
-    if (!shouldSyncRemote(kind, text)) return;
+    if (!shouldSyncRemote(kind)) return;
     if (!operator.session) return;
     if (typeof AccountingApi === 'undefined' || !AccountingApi.clientLog) return;
-    var summary = entry.text.length > 500 ? entry.text.slice(0, 500) + '…' : entry.text;
-    var detail = entry.text.length > 500 ? entry.text : '';
-    AccountingApi.clientLog(operator.session, {
+    _remoteQueue.push({
       page: entry.page,
       kind: entry.kind,
-      summary: summary,
-      detail: detail
+      text: entry.text
     });
+    scheduleRemoteFlush();
   }
 
   function restoreStoredLogs() {
@@ -439,6 +472,7 @@ var AccountingUi = (function () {
     document.getElementById('acctDockCopy').addEventListener('click', copyStoredLogs);
     updateDockTitle();
     bindParentLogListener();
+    window.addEventListener('pagehide', flushRemoteQueue);
   }
 
   function notify(kind, text, options) {
