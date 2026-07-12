@@ -1,6 +1,6 @@
 # HUB 與會計 — 全域身分與應傳承資料
 
-**版本**：v1.3（2026-07-01）  
+**版本**：v1.5（2026-07-12）  
 **關聯**：[`15_會計系統模組規格書.md`](15_會計系統模組規格書.md)、[`18_會計與主檔快取策略.md`](18_會計與主檔快取策略.md)、[`08_專案主控台核心功能與通訊協定規格書.md`](08_專案主控台核心功能與通訊協定規格書.md)、backend `accounting-gas/SPEC/LINE_OA_SPEC.md`、`accounting-gas/SPEC/VENDOR_LINE_BINDING_SPEC.md`
 
 ---
@@ -69,15 +69,34 @@
 
 ### 2.2 參考主檔（建議傳承，非授權）
 
-| 資料 | 內容 | 儲存 | 壽命 | 讀取模組 |
-|------|------|------|------|----------|
-| **員工名單** | 在職員工 `userId`、`userName`、`permission`… | `localStorage` `spa_hub_employees`；父層 `window.spaAllEmployees` | **3 天**（SWR 背景更新） | `AccountingContext`、收支登錄快選 |
-| **案場列表** | 案號、客戶名、店別… | `localStorage` `spa_hub_projects`；父層 `spaAllProjects` | **3 天** | `AccountingContext`、記帳案號快選 |
-| **當月班表** | HUB 排程 | `localStorage` `spa_hub_schedule_{YYYY}_{MM}` | **7 天** | HUB 主控台（會計較少直接用） |
-| **會計 bootstrap** | 廠商、收款帳戶、列舉… | `sessionStorage` `tanxin_accounting_bootstrap_v4:{userId}` | **3 天** | `AccountingCache`；**依 operator userId 分 key**；CRUD 成功優先 patch |
+**定案（v1.5）**：員工／案場／官方顧客名冊收斂至 **`HubRefCache`**（`tanxin_ref_v1:*`），HUB 預熱寫入、各 iframe **只讀**；CRUD 後由對應模組 patch／invalidate。
 
-詳見 [`18_會計與主檔快取策略.md`](18_會計與主檔快取策略.md) §4。
+| 資料 | 內容 | 儲存 key | 記憶體 | 壽命 | 讀取模組 |
+|------|------|----------|--------|------|----------|
+| **員工名單** | 在職員工 `userId`、`userName`、`permission`… | `localStorage` **`tanxin_ref_v1:employees`**（相容 legacy `spa_hub_employees`） | `window.__tanxinRef.employees`；父層 `spaAllEmployees` | **3 天** TTL；**24h SWR** 背景重抓 | HUB、`AccountingContext`、收支登錄快選 |
+| **案場列表** | 案號、客戶名、店別… | **`tanxin_ref_v1:projects`**（相容 `spa_hub_projects`） | `window.__tanxinRef.projects`；父層 `spaAllProjects` | **3 天**；**24h SWR** | HUB、`AccountingContext`、記帳案號快選 |
+| **官方顧客名冊** | `official_customer_search` 整包 | **`tanxin_ref_v1:customers`**（全公司共用，**不分 userId**） | `window.__tanxinRef.customers` | **24 小時** | `AccountingListCache.searchMasterList`、客戶財務綁定 |
+| **當月班表** | HUB 排程 | `spa_hub_schedule_{YYYY}_{MM}` | — | **7 天** | HUB 主控台（會計較少直接用） |
+| **會計 bootstrap** | 廠商、收款帳戶、列舉… | `sessionStorage` `tanxin_accounting_bootstrap_v4:{userId}` | 模組內 `_mem` | **3 天** | `AccountingCache`；**依 operator userId 分 key**；CRUD 成功優先 patch |
 
+**讀寫責任（參考主檔）**
+
+| 誰寫 | 誰讀 | 備註 |
+|------|------|------|
+| HUB `spa/app.js`：`get_hub_core_data` 成功 → `HubRefCache.set('employees'/'projects')` | 會計 iframe：`HubRefCache.read()` → 父層 `spaAll*` 優先 | iframe **不應**再各自打員工／案場 API |
+| 會計 `searchMasterList(official_customer)` 首次 `fetch_all` → `HubRefCache.set('customers')` | 各會計頁本地 keyword 篩選 | 綁定成功 `invalidate('customers')` |
+| `NewSiteForm` 等 postMessage `spa_hub_invalidate_projects` | HUB 重抓後 `HubRefCache.set('projects')` | 案場 CRUD 後清快取 |
+
+**與其他快取的分工**
+
+| 模組 | 管什麼 | 為什麼分開 |
+|------|--------|------------|
+| `OperatorContext` | 操作者 `userId`／權限／`hubLiffId` | **授權**；`sessionStorage`、到分頁關閉 |
+| `HubRefCache` | 員工／案場／顧客**參考名冊** | 全站共用、長 TTL；**非授權** |
+| `AccountingCache` | 會計 bootstrap（廠商、帳戶…） | 依 **userId** 分 key；含會計專用主檔 |
+| `AccountingListCache` | 交易列表、LINE 聯絡人、portal 案號 | 列表依 userId；`official_customer` 已併入 `HubRefCache` |
+
+詳見 [`18_會計與主檔快取策略.md`](18_會計與主檔快取策略.md) §4、§9（HubRefCache）。
 ### 2.3 僅當次有效（可傳、不持久）
 
 | 資料 | 說明 | 壽命 |
@@ -172,35 +191,40 @@
 
 ---
 
-## 7. 實作現況對照（2026-07-01）
+## 7. 實作現況對照（2026-07-12）
 
 | 能力 | 狀態 |
 |------|------|
 | HUB iframe 帶 `uid`／`permission`／`hub_liff_id` | ✅ `spa/app.js`（`hubLiffId` 經 `setup()` 暴露） |
 | HUB 父層回應 `request_hub_liff_token` | ✅ `spa/app.js` |
 | 統一 `tanxin_operator_v1` | ✅ `operator_context.js` |
-| 會計讀 operator + 安全 JSON + iframe token | ✅ `accounting_api.js` v23 |
+| **全站參考主檔 `HubRefCache`（`tanxin_ref_v1:*`）** | ✅ `hub_ref_cache.js`；HUB 寫入、iframe 只讀 |
+| 會計讀 operator + 安全 JSON + iframe token | ✅ `accounting_api.js` |
 | 會計導覽保留 query | ✅ `accounting_nav.js` `hubQueryString()` |
 | 會計全頁 bootstrap 收斂 | ✅ `accounting_boot.js` + `modules/accounting/*.html` |
 | bypass 時用 `dev_user_id` 查 Checkin 真實權限 | ✅ `AuthBridge.getDevBypassAuth_` |
-| 收支登錄讀 HUB 員工／案場 | ✅ `AccountingContext` |
+| 收支登錄讀 HUB 員工／案場 | ✅ `AccountingContext` → `HubRefCache` |
+| 官方顧客名冊共用快取 | ✅ `AccountingListCache` + `tanxin_ref_v1:customers` |
 | 會計 bootstrap 依 `userId` 分 key | ✅ `AccountingCache` |
 | HUB 傳 `group` 進 operator 快取 | ⏳ |
 | 方案 A 定案（員工只走官方 LINE → HUB） | ✅ 本文件 §0 |
 | 廠商綁定：會計 LINE 聯絡人 + 官方顧客列表雙搜尋 | ⏳ 見 `VENDOR_LINE_BINDING_SPEC` §6 |
 | HUB `index.html` 靜態資源版號（防快取舊 `app.js`） | ✅ `?v=` 與 `FRONTEND_VERSION` 同步 |
-
+| legacy `spa_hub_*` key 自動遷移 | ✅ 首次讀取時寫入 `tanxin_ref_v1:*` |
+| **GAS Tier1 定時預熱**（員工／案場／顧客 ScriptCache） | ✅ `MasterCacheWarm.js` 兩專案；每 2h 觸發器需部署後執行 `setupHotMasterCacheWarmTriggers_` 或 Checkin `setupScheduledTriggers` |
 ---
 
 ## 8. 相關程式路徑
 
 | 層 | 路徑 |
 |----|------|
-| HUB 傳參 | `CODING/spa/app.js`（`IframeView` `src`）、`CODING/index.html`（`app.js?v=`） |
+| HUB 傳參 | `CODING/spa/app.js`（`IframeView` `src`）、`CODING/index.html`（`hub_ref_cache.js`、`app.js?v=`） |
 | 操作者快取 | `CODING/shared/js/operator_context.js` |
+| **全站參考主檔** | `CODING/shared/js/hub_ref_cache.js` |
 | 會計 API／session | `CODING/shared/js/accounting_api.js` |
-| 會計 HUB 案場／員工 | `CODING/shared/js/accounting_context.js` |
+| 會計 HUB 案場／員工 | `CODING/shared/js/accounting_context.js`（讀 `HubRefCache`） |
 | 會計主檔快取 | `CODING/shared/js/accounting_cache.js` |
+| 會計列表／顧客名冊 | `CODING/shared/js/accounting_list_cache.js` |
 | HUB 待審紅點 | `spa/app.js`：`pendingApprovals` = 假勤 + 出勤申訴（`pendingAppeals`） |
 | 會計後端驗證 | `backend/accounting-gas/core/AuthBridge.js` |
 | HUB 員工 API | `backend/CheckinSystem/WebApp.js`（`get_hub_core_data`） |
@@ -209,10 +233,52 @@
 
 ---
 
-## 9. 變更紀錄
+## 9. HubRefCache 模組規格（v1.5 新增）
+
+**檔案**：`shared/js/hub_ref_cache.js` → 全域 `HubRefCache`
+
+### 9.1 Storage 格式
+
+```json
+// localStorage: tanxin_ref_v1:employees（projects / customers 同結構）
+{
+  "data": [ /* 陣列 */ ],
+  "expires": 1719900000000,
+  "savedAt": 1719800000000
+}
+```
+
+### 9.2 API（白話）
+
+| 方法 | 用途 |
+|------|------|
+| `get(kind)` | 讀記憶體 → localStorage（含 legacy 遷移） |
+| `set(kind, data, { days })` | 寫入 localStorage + `window.__tanxinRef` + 父層 `spaAll*`（employees/projects） |
+| `read(kind)` | iframe：**父層 `spaAll*` 優先**，否則 `get` |
+| `isStale(kind)` | 是否超過 24h SWR（供 HUB 背景更新判斷，可選） |
+| `invalidate(kind)` | CRUD 或 postMessage 後清除 |
+| `sourceLabel(kind)` | 除錯：`'parent'`／`'hub_ref_cache'`／`'none'` |
+
+`kind`：`employees`｜`projects`｜`customers`
+
+### 9.3 載入順序
+
+1. HUB `index.html`：`<script src="shared/js/hub_ref_cache.js">` **早於** `spa/app.js`
+2. 會計 iframe：需用 `AccountingContext` 或 `official_customer` 搜尋的頁面，在對應 script **之前**引入 `hub_ref_cache.js`
+3. 未引入時：`AccountingContext` fallback legacy `spa_hub_*`；`AccountingListCache` fallback 舊 per-user master key
+
+### 9.4 事件
+
+寫入成功後派發 `tanxin-ref-updated`（`detail.kind`），供未來 HUB 卡片或 iframe 訂閱刷新（現行可選）。
+
+---
+
+## 10. 變更紀錄
 
 | 日期 | 變更 |
 |------|------|
+| 2026-07-12 | v1.5.1：GAS Tier1 `warmHotMasterCaches_`（CheckinSystem 員工；project-console 案場／顧客／員工）；前端 HubRefCache |
+| 2026-07-12 | v1.5：§2.2 參考主檔收斂 `HubRefCache`（`tanxin_ref_v1:*`）；§9 模組規格；§7 對照表；顧客名冊全站共用 |
 | 2026-07-01 | v1.4：`get_hub_core_data` 待審紅點含 `pendingAppeals`；假勤審核／申訴 UX |
 | 2026-07-01 | v1.3：§4 增 `hub_liff_id` 與 postMessage 協定；§6 OperatorContext 已實作；§7 對齊 6/30 會計收斂與 `hubLiffId` 修復；HUB `index.html` 版號防快取 |
 | 2026-06-22 | v1.2：§0 定案方案 A；§1.1 改為單一員工主檔；區分員工／廠商身分；廠商雙來源搜尋列未來 |

@@ -63,28 +63,29 @@ const App = {
             });
         };
 
-        // --- [v429.0 效能優化] 快取優先策略 ---
-        const EMPLOYEES_CACHE_KEY = 'spa_hub_employees';
-        const PROJECTS_CACHE_KEY = 'spa_hub_projects';
-        // 班表依「年-月」分鍵快取，TTL 7 天（仍會背景重抓最新；久未開啟時本機資料較舊，屬可接受取捨）
+        // --- [v429.0 效能優化] 快取優先策略（HubRefCache 統一 key）---
         const scheduleCacheKey = () => {
             const d = new Date();
             return `spa_hub_schedule_${d.getFullYear()}_${String(d.getMonth() + 1).padStart(2, '0')}`;
         };
 
+        const hubRef = () => (typeof window !== 'undefined' ? window.HubRefCache : null);
+
         // 1. 應用程式啟動時，立即嘗試從快取載入資料
-        const cachedEmployees = loadCache(EMPLOYEES_CACHE_KEY);
-        const cachedProjects = loadCache(PROJECTS_CACHE_KEY);
+        const cachedEmployees = hubRef() ? hubRef().get('employees') : loadCache('spa_hub_employees');
+        const cachedProjects = hubRef() ? hubRef().get('projects') : loadCache('spa_hub_projects');
         const cachedSchedule = loadCache(scheduleCacheKey());
         const cachedPresence = loadHubPresenceCache();
 
         if (cachedEmployees) {
             allEmployees.value = cachedEmployees;
-            window.spaAllEmployees = cachedEmployees;
+            if (hubRef()) hubRef().set('employees', cachedEmployees);
+            else window.spaAllEmployees = cachedEmployees;
         }
         if (cachedProjects) {
             allProjects.value = cachedProjects;
-            window.spaAllProjects = cachedProjects;
+            if (hubRef()) hubRef().set('projects', cachedProjects);
+            else window.spaAllProjects = cachedProjects;
         }
         if (cachedSchedule && cachedSchedule.schedule) {
             monthSchedule.value = cachedSchedule;
@@ -569,10 +570,12 @@ const App = {
                 const [attendanceResult, projectsResult] = await Promise.all([fetchAttendanceData(), fetchHubProjectsData()]);
 
                 if (attendanceResult.success && attendanceResult.employees) {
-                    if (JSON.stringify(allEmployees.value) !== JSON.stringify(attendanceResult.employees)) {
-                        allEmployees.value = attendanceResult.employees;
-                        saveCache(EMPLOYEES_CACHE_KEY, attendanceResult.employees, 3);
-                        window.spaAllEmployees = attendanceResult.employees;
+                    const emps = attendanceResult.employees;
+                    if (hubRef()) hubRef().set('employees', emps);
+                    else saveCache('spa_hub_employees', emps, 3);
+                    window.spaAllEmployees = emps;
+                    if (JSON.stringify(allEmployees.value) !== JSON.stringify(emps)) {
+                        allEmployees.value = emps;
                     }
                     if (attendanceResult.operator) {
                         operatorProfile.value = attendanceResult.operator;
@@ -612,11 +615,12 @@ const App = {
 
                 if (projectsResult.success && projectsResult.data) {
                     const newProjects = projectsResult.data.projects || [];
+                    if (hubRef()) hubRef().set('projects', newProjects);
+                    else saveCache('spa_hub_projects', newProjects, 3);
+                    window.spaAllProjects = newProjects;
                     if (JSON.stringify(allProjects.value) !== JSON.stringify(newProjects)) {
                         allProjects.value = newProjects;
-                        saveCache(PROJECTS_CACHE_KEY, newProjects, 3);
                     }
-                    window.spaAllProjects = newProjects;
                     notifications.value = projectsResult.data.notifications || [];
                 }
             } catch (error) {
@@ -653,12 +657,16 @@ const App = {
 
             const { type, payload } = event.data;
             if (type === 'spa_hub_invalidate_projects') {
-                try { localStorage.removeItem(PROJECTS_CACHE_KEY); } catch (e) { /* ignore */ }
+                try {
+                    if (hubRef()) hubRef().invalidate('projects');
+                    else localStorage.removeItem('spa_hub_projects');
+                } catch (e) { /* ignore */ }
                 fetchHubProjectsData().then((projectsResult) => {
                     if (projectsResult && projectsResult.success && projectsResult.data) {
                         const newProjects = projectsResult.data.projects || [];
                         allProjects.value = newProjects;
-                        saveCache(PROJECTS_CACHE_KEY, newProjects, 3);
+                        if (hubRef()) hubRef().set('projects', newProjects);
+                        else saveCache('spa_hub_projects', newProjects, 3);
                         window.spaAllProjects = newProjects;
                         if (projectsResult.data.notifications) {
                             notifications.value = projectsResult.data.notifications;

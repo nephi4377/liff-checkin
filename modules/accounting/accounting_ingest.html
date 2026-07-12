@@ -161,7 +161,8 @@
     <div class="card hidden" id="recentCard"><strong>剛剛記的</strong><ul id="recent"></ul></div>
   </div>
 
-  <script src="../../shared/js/accounting_context.js?v=1"></script>
+  <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
+  <script src="../../shared/js/accounting_context.js?v=3"></script>
   <script>
     var CONSTANTS = {
       GAS_API: 'https://script.google.com/macros/s/AKfycbyibVTQk2eYEYXX5vb-TUFYsLIKWEg1bADR-7w1QFSg6kly3gyDAG3GkKuvQ0PBur05DA/exec',
@@ -353,20 +354,38 @@
       }
 
       function setupHubContext(session, skipFormCtx) {
+        var inHubIframe = window.parent && window.parent !== window;
+
+        function finish(ctx, vendorCount) {
+          applyHubContextToUi(ctx, vendorCount);
+        }
+
         var ctx = AccountingContext.load();
         var vendorCount = applyVendorsToUi(AccountingCache.peekVendors());
         if (session && typeof AccountingCache !== 'undefined') {
           var cached = AccountingCache.vendors(session);
           if (cached.length) vendorCount = applyVendorsToUi(cached);
         }
-        applyHubContextToUi(ctx, vendorCount);
+        finish(ctx, vendorCount);
 
         var needEmployees = !skipFormCtx && !ctx.projects.length && !ctx.employees.length;
         var needVendors = !cachedVendors.length;
         if (!session || (!needEmployees && !needVendors)) return;
 
         var jobs = [];
-        if (needEmployees) {
+        if (needEmployees && inHubIframe && typeof AccountingContext.waitForHubData === 'function') {
+          jobs.push(AccountingContext.waitForHubData({ timeoutMs: 15000 }).then(function (ready) {
+            if (ready.employees.length || ready.projects.length) {
+              applyHubContextToUi(ready, cachedVendors.length);
+            } else {
+              var bar = document.getElementById('contextBar');
+              if (bar) {
+                bar.textContent = '員工／案場資料尚未載入，請稍候或重新整理主控台';
+                bar.classList.add('warn');
+              }
+            }
+          }));
+        } else if (needEmployees && !inHubIframe) {
           jobs.push(AccountingApi.formContext(session).then(function (remote) {
             if (!remote.success) return;
             applyHubContextToUi(AccountingContext.load({
@@ -724,7 +743,8 @@
           idToken = liff.getIDToken();
           var tokenSession = { idToken: idToken };
           var ctxCached = AccountingContext.load();
-          var needFormCtx = !ctxCached.projects.length && !ctxCached.employees.length;
+          var inHubIframe = window.parent && window.parent !== window;
+          var needFormCtx = !inHubIframe && !ctxCached.projects.length && !ctxCached.employees.length;
           var formCtxPromise = needFormCtx ? AccountingApi.formContext(tokenSession) : null;
           authMe = await AccountingApi.authMe(idToken);
           if (!authMe.success || (authMe.permission || 0) < AccountingApi.INGEST_MIN_PERMISSION) {
@@ -739,7 +759,14 @@
         sessionRef = { devBypass: false, idToken: idToken, auth: authMe, profile: profile };
         showApp();
         var skippedFormCtx = false;
-        if (formCtxPromise) {
+        var inHubIframe = window.parent && window.parent !== window;
+        if (inHubIframe && typeof AccountingContext.waitForHubData === 'function') {
+          skippedFormCtx = true;
+          AccountingContext.waitForHubData({ timeoutMs: 12000 }).then(function (ready) {
+            applyHubContextToUi(ready, cachedVendors.length);
+            setupHubContext(sessionRef, true);
+          });
+        } else if (formCtxPromise) {
           skippedFormCtx = true;
           formCtxPromise.then(function (remote) {
             if (!remote || !remote.success) return;
@@ -751,7 +778,7 @@
         } else {
           applyHubContextToUi(AccountingContext.load(), cachedVendors.length);
         }
-        setupHubContext(sessionRef, skippedFormCtx);
+        if (!inHubIframe) setupHubContext(sessionRef, skippedFormCtx);
         if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
       }
       boot();

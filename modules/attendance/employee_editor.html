@@ -6,6 +6,7 @@
     <title>添心設計 | 員工資料編輯</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
     <script src="../../shared/js/operator_context.js?v=1"></script>
     <script src="../../shared/js/accounting_api.js?v=25"></script>
     <style>
@@ -631,7 +632,18 @@
                 let hadCache = false;
 
                 // 先顯示主控台快取（較快），但一定會再向 API 取最新資料
-                const cachedEmployees = JSON.parse(localStorage.getItem('spa_hub_employees'));
+                var cachedEmployees = null;
+                if (typeof HubRefCache !== 'undefined') {
+                    cachedEmployees = HubRefCache.get('employees');
+                } else {
+                    try {
+                        var raw = localStorage.getItem('spa_hub_employees');
+                        if (raw) {
+                            var parsed = JSON.parse(raw);
+                            cachedEmployees = Array.isArray(parsed) ? parsed : (parsed && parsed.data);
+                        }
+                    } catch (e) { /* ignore */ }
+                }
                 if (cachedEmployees && Array.isArray(cachedEmployees)) {
                     console.log('⚡️ 從主控台快取載入員工資料。');
                     applyEmployeeList(cachedEmployees);
@@ -647,7 +659,11 @@
                 });
                 if (response.success && Array.isArray(response.data)) {
                     applyEmployeeList(response.data);
-                    localStorage.setItem('spa_hub_employees', JSON.stringify(response.data));
+                    if (typeof HubRefCache !== 'undefined') {
+                        HubRefCache.set('employees', response.data);
+                    } else {
+                        localStorage.setItem('spa_hub_employees', JSON.stringify(response.data));
+                    }
                     if (selectedId && employeeSelect.querySelector(`option[value="${selectedId}"]`)) {
                         employeeSelect.value = selectedId;
                         handleEmployeeSelection();

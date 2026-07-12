@@ -66,8 +66,37 @@ var AccountingListCache = (function () {
     } catch (e) {}
   }
 
+  function isGlobalRefList(listKey) {
+    return listKey === 'official_customer' && typeof HubRefCache !== 'undefined';
+  }
+
   function masterKey(session, listKey) {
+    if (isGlobalRefList(listKey)) return HubRefCache.storageKey('customers');
     return MASTER_PREFIX + userId(session) + ':' + listKey;
+  }
+
+  function readMasterRef(listKey, ttlMs) {
+    if (listKey === 'official_customer' && typeof HubRefCache !== 'undefined') {
+      var data = HubRefCache.get('customers');
+      if (!data) return null;
+      var ts = HubRefCache.savedAt('customers');
+      if (!ts || Date.now() - ts > ttlMs) return null;
+      return { ts: ts, data: data };
+    }
+    return null;
+  }
+
+  function writeMasterRef(listKey, items) {
+    if (listKey === 'official_customer' && typeof HubRefCache !== 'undefined') {
+      HubRefCache.set('customers', items);
+      return;
+    }
+  }
+
+  function invalidateMasterRef(listKey) {
+    if (listKey === 'official_customer' && typeof HubRefCache !== 'undefined') {
+      HubRefCache.invalidate('customers');
+    }
   }
 
   function filterItemsByKeyword(items, keyword, fields) {
@@ -179,7 +208,17 @@ var AccountingListCache = (function () {
       }
 
       if (!force) {
-        var cached = readRaw(key, ttl, 'local');
+        var cached = isGlobalRefList(listKey)
+          ? readMasterRef(listKey, ttl)
+          : readRaw(key, ttl, 'local');
+        if (!cached && isGlobalRefList(listKey)) {
+          var legacyKey = MASTER_PREFIX + userId(session) + ':' + listKey;
+          var legacy = readRaw(legacyKey, ttl, 'local');
+          if (legacy && legacy.data) {
+            writeMasterRef(listKey, legacy.data);
+            cached = legacy;
+          }
+        }
         if (cached && cached.data) {
           var hits = pick(cached.data);
           if (hits.length || !kw) return hits;
@@ -193,7 +232,8 @@ var AccountingListCache = (function () {
 
       _inflight[key] = Promise.resolve(fetchAllFn()).then(function (res) {
         var items = (res && res.items) ? res.items : (Array.isArray(res) ? res : []);
-        write(key, items, 'local');
+        if (isGlobalRefList(listKey)) writeMasterRef(listKey, items);
+        else write(key, items, 'local');
         return items;
       }).catch(function () {
         return [];
@@ -205,6 +245,7 @@ var AccountingListCache = (function () {
       return pick(freshItems || []);
     },
     invalidateMasterList: function (session, listKey) {
+      invalidateMasterRef(listKey);
       clearKey(masterKey(session, listKey));
     },
     /** 客戶 portal 案號資料 — 7 天快取 + 背景重讀 */

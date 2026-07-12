@@ -1,36 +1,45 @@
 /**
- * 會計表單：讀取 HUB 已快取的員工／案場（localStorage 或父層 SPA）
+ * 會計表單：讀取 HUB 已快取的員工／案場（HubRefCache → 父層 SPA → localStorage）
  */
 var AccountingContext = (function () {
-  var CACHE_KEYS = {
-    employees: 'spa_hub_employees',
-    projects: 'spa_hub_projects'
-  };
   var STORE_OPTIONS = ['台南', '高雄', '工廠', '行政'];
 
-  function readLocalCache(key) {
+  function readViaHubRef(kind) {
+    if (typeof HubRefCache === 'undefined') return null;
+    return HubRefCache.read(kind);
+  }
+
+  function readLocalLegacy(key) {
     try {
       var raw = localStorage.getItem(key);
       if (!raw) return null;
-      var cache = JSON.parse(raw);
-      if (!cache || cache.expires < Date.now()) {
+      var parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+      if (!parsed || parsed.expires < Date.now()) {
         localStorage.removeItem(key);
         return null;
       }
-      return cache.data;
+      return parsed.data;
     } catch (e) {
       return null;
     }
   }
 
-  function readParentArray(name) {
-    try {
-      if (!window.parent || window.parent === window) return null;
-      var data = window.parent[name];
-      return Array.isArray(data) ? data : null;
-    } catch (e) {
-      return null;
-    }
+  function readTanxinKey(kind) {
+    var key = kind === 'employees' ? 'tanxin_ref_v1:employees' : 'tanxin_ref_v1:projects';
+    return readLocalLegacy(key);
+  }
+
+  function readEmployees() {
+    var viaRef = readViaHubRef('employees');
+    if (viaRef && viaRef.length) return viaRef;
+    return readTanxinKey('employees') || readLocalLegacy('spa_hub_employees') || [];
+  }
+
+  function readProjectsRaw() {
+    var viaRef = readViaHubRef('projects');
+    if (viaRef && viaRef.length) return viaRef;
+    return readTanxinKey('projects') || readLocalLegacy('spa_hub_projects') || [];
   }
 
   function normalizeProject(p) {
@@ -63,9 +72,17 @@ var AccountingContext = (function () {
     return leave === undefined || leave === null || String(leave).trim() === '';
   }
 
+  function sourceFor(kind, hasData, extraField) {
+    if (typeof HubRefCache !== 'undefined' && HubRefCache.readFromParent(kind)) return 'parent';
+    if (typeof HubRefCache !== 'undefined' && HubRefCache.get(kind)) return 'hub_ref_cache';
+    if (hasData) return 'localStorage';
+    if (extraField) return 'api';
+    return 'none';
+  }
+
   function load(extra) {
-    var employees = readParentArray('spaAllEmployees') || readLocalCache(CACHE_KEYS.employees) || [];
-    var projectsRaw = readParentArray('spaAllProjects') || readLocalCache(CACHE_KEYS.projects) || [];
+    var employees = readEmployees();
+    var projectsRaw = readProjectsRaw();
     var projects = [];
     var seen = {};
     (projectsRaw || []).forEach(function (p) {
@@ -116,8 +133,8 @@ var AccountingContext = (function () {
       employees: activeEmployees,
       projects: projects,
       source: {
-        employees: activeEmployees.length ? (readParentArray('spaAllEmployees') ? 'parent' : (extra && extra.employees ? 'api' : 'localStorage')) : ((extra && extra.employees && extra.employees.length) ? 'api' : 'none'),
-        projects: projects.length ? (readParentArray('spaAllProjects') ? 'parent' : (extra && extra.projects ? 'api' : 'localStorage')) : ((extra && extra.projects && extra.projects.length) ? 'api' : 'none')
+        employees: sourceFor('employees', activeEmployees.length > 0, extra && extra.employees && extra.employees.length),
+        projects: sourceFor('projects', projects.length > 0, extra && extra.projects && extra.projects.length)
       }
     };
   }
@@ -129,8 +146,26 @@ var AccountingContext = (function () {
     }) || null;
   }
 
+  /** HUB iframe 內：主控台資料可能晚幾秒才到，短暫等待避免空白下拉 */
+  function waitForHubData(opts) {
+    opts = opts || {};
+    var timeoutMs = opts.timeoutMs || 15000;
+    var intervalMs = opts.intervalMs || 400;
+    var start = Date.now();
+    return new Promise(function (resolve) {
+      function tick() {
+        var ctx = load();
+        if (ctx.employees.length || ctx.projects.length) return resolve(ctx);
+        if (Date.now() - start >= timeoutMs) return resolve(ctx);
+        setTimeout(tick, intervalMs);
+      }
+      tick();
+    });
+  }
+
   return {
     load: load,
+    waitForHubData: waitForHubData,
     mapStoreValue: mapStoreValue,
     findEmployeeByUserId: findEmployeeByUserId,
     STORE_OPTIONS: STORE_OPTIONS

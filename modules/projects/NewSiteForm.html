@@ -225,7 +225,8 @@
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script src="../../shared/js/operator_context.js?v=1"></script>
     <script src="../../shared/js/accounting_api.js?v=34"></script>
-    <script src="../../shared/js/accounting_list_cache.js?v=2"></script>
+    <script src="../../shared/js/hub_ref_cache.js?v=1"></script>
+    <script src="../../shared/js/accounting_list_cache.js?v=3"></script>
     <script src="../../shared/js/customer_finance_ui.js?v=2"></script>
     <script src="../../shared/js/customer_finance_bind.js?v=2"></script>
 
@@ -524,7 +525,8 @@ ${notes || '無'}`;
         statusDiv.innerText = response.message || (ok ? '儲存成功' : '儲存失敗');
         if (ok) {
           try {
-            localStorage.removeItem('spa_hub_projects');
+            if (typeof HubRefCache !== 'undefined') HubRefCache.invalidate('projects');
+            else localStorage.removeItem('spa_hub_projects');
           } catch (e) { /* ignore */ }
           if (window.parent && window.parent !== window) {
             try {

@@ -8,7 +8,8 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=17"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_context.js?v=1"></script>
+  <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
+  <script src="../../shared/js/accounting_context.js?v=3"></script>
   <script src="../../shared/js/accounting_api.js?v=31"></script>
   <script src="../../shared/js/accounting_cache.js?v=26"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=5"></script>
@@ -1262,9 +1263,12 @@
         return !vendors.length || !employees.length;
       }
 
-      function primeEmployeesFromHub() {
+      async function primeEmployeesFromHub() {
         if (employees.length || typeof AccountingContext === 'undefined') return;
-        var hub = AccountingContext.load();
+        var inHubIframe = window.parent && window.parent !== window;
+        var hub = inHubIframe && AccountingContext.waitForHubData
+          ? await AccountingContext.waitForHubData({ timeoutMs: 12000 })
+          : AccountingContext.load();
         if (hub.employees && hub.employees.length) employees = hub.employees;
       }
 
@@ -1323,7 +1327,7 @@
             (isVendorSelf ? ' · 廠商' : (' · 權限 ' + session.auth.permission));
           if (!isVendorSelf) {
             vendors = primeVendorsFromCache(session);
-            primeEmployeesFromHub();
+            await primeEmployeesFromHub();
             initVendorPicker();
             if (vendors.length) fillVendorSelect();
             if (employees.length) fillSelect('pickEmployee', employees, 'userId', function (e) {
