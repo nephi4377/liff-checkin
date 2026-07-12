@@ -509,8 +509,8 @@
     $('showClosed').onchange = loadOverview;
 
     AccountingBoot.run({
-      minPermission: 3,
-      deniedMsg: AccountingApi.SUPERVISOR_DENIED_MSG,
+      minPermission: 2,
+      deniedMsg: AccountingApi.CUSTOMER_FINANCE_DENIED_MSG,
       initSession: function () { return AccountingApi.initCustomerFinanceSession(); },
       onReady: async function (sess) {
         session = sess;

@@ -8,8 +8,8 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=17"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=27"></script>
-  <script src="../../shared/js/accounting_cache.js?v=24"></script>
+  <script src="../../shared/js/accounting_api.js?v=28"></script>
+  <script src="../../shared/js/accounting_cache.js?v=26"></script>
   <script src="../../shared/js/accounting_ui.js?v=11"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=4"></script>
@@ -17,12 +17,38 @@
   <style>
     h2 { margin: 0 0 4px; }
     .sub { color: #555; font-size: 14px; margin: 0 0 16px; }
-    .card { display: block; background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); text-decoration: none; color: inherit; }
-    .card:active { background: #f8f9fa; }
-    .card h3 { margin: 0 0 4px; font-size: 17px; }
-    .card p { margin: 0; font-size: 14px; color: #555; }
-    .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; color: #1a73e8; margin-top: 8px; }
-    .tag.admin { background: #fce8e6; color: #c5221f; }
+    .menu-section { margin-bottom: 18px; }
+    .menu-section-title {
+      font-size: 12px; font-weight: 700; color: #0f766e; letter-spacing: 0.04em;
+      margin: 0 0 10px; padding: 0 2px;
+    }
+    .menu-section-title.admin { color: #b45309; }
+    .card {
+      display: flex; gap: 12px; align-items: flex-start;
+      background: linear-gradient(135deg, #fff 0%, #f8fafc 100%);
+      border: 1px solid #e2e8f0; border-radius: 14px;
+      padding: 14px 16px; margin-bottom: 10px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+      text-decoration: none; color: inherit;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+    .card:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08); border-color: #99f6e4; }
+    .card:active { transform: translateY(0); }
+    .card-icon {
+      flex-shrink: 0; width: 40px; height: 40px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center; font-size: 20px;
+    }
+    .card-icon.sky { background: #e0f2fe; }
+    .card-icon.violet { background: #ede9fe; }
+    .card-icon.emerald { background: #d1fae5; }
+    .card-icon.teal { background: #ccfbf1; }
+    .card-icon.amber { background: #fef3c7; }
+    .card-body { min-width: 0; flex: 1; }
+    .card h3 { margin: 0 0 4px; font-size: 16px; font-weight: 700; color: #0f172a; }
+    .card p { margin: 0; font-size: 13px; color: #64748b; line-height: 1.45; }
+    .tag { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 999px; margin-top: 8px; font-weight: 600; }
+    .tag.staff { background: #ccfbf1; color: #0f766e; }
+    .tag.admin { background: #ffedd5; color: #c2410c; }
     .hidden { display: none; }
     #loading { text-align: center; padding: 48px 16px; color: #666; }
     #cacheHint { text-align: center; font-size: 13px; color: #888; margin-bottom: 8px; min-height: 18px; }
@@ -32,7 +58,7 @@
   <div id="loading">載入中…</div>
   <div id="shell" class="hidden acct-main">
     <header id="shellHeader">
-      <h2>添心會計</h2>
+      <h2>會計系統</h2>
       <p class="sub" id="userLine">—</p>
       <p id="shellBack" class="hidden"><a href="#" id="shellBackLink">← 功能選單</a></p>
     </header>
@@ -40,80 +66,147 @@
     <div id="menuPanel" class="acct-index-menu">
     <p id="cacheHint"></p>
 
-    <a class="card" href="payment_request.html">
-      <h3>待付款申請</h3>
-      <p>還沒付的款：傳單據 AI 辨識或手填明細，送審後待匯款。</p>
-    </a>
+    <div class="menu-section hidden" id="sectionDenied">
+      <p class="menu-section-title">無法使用</p>
+      <div class="card" style="cursor:default;opacity:0.92">
+        <span class="card-icon teal">🔒</span>
+        <span class="card-body">
+          <h3>權限不足</h3>
+          <p>會計系統需權限 ≥ 2（行政以上）。請款／款項進度請由廠商 LINE 入口進入。</p>
+        </span>
+      </div>
+    </div>
 
-    <a class="card hidden" href="payment_request_compose.html" id="linkComposeLegacy">
-      <h3>精細請款建單（舊）</h3>
-      <p>已併入待付款申請。</p>
-    </a>
+    <div class="menu-section" id="sectionStaff">
+      <p class="menu-section-title">日常款項 · 行政以上</p>
 
-    <a class="card" href="vendor_status.html">
-      <h3>款項進度</h3>
-      <p>查看廠商款項的審核與匯款狀態。</p>
-    </a>
+      <a class="card" href="accounting_ingest.html" id="linkIngest">
+        <span class="card-icon emerald">💰</span>
+        <span class="card-body">
+          <h3>收支登錄</h3>
+          <p>已付款／已收款記帳；可帶案號與照片。</p>
+          <span class="tag staff">權限 ≥2</span>
+        </span>
+      </a>
 
-    <a class="card" href="vendors.html" id="linkVendors">
-      <h3>廠商名冊</h3>
-      <p>維護廠商主檔、統編與 LINE 綁定。</p>
-      <span class="tag admin">財務以上</span>
-    </a>
+      <a class="card" href="payment_request.html" id="linkPaymentRequest">
+        <span class="card-icon sky">📤</span>
+        <span class="card-body">
+          <h3>待付款申請</h3>
+          <p>還沒付的款：傳單據 AI 辨識或手填明細，送審後待匯款。</p>
+          <span class="tag staff">權限 ≥2</span>
+        </span>
+      </a>
 
-    <a class="card hidden" href="payees.html" id="linkPayees">
-      <h3>收款帳戶（舊）</h3>
-      <p>已改由「待匯款」手動輸入或廠商名冊；員工帳戶待 Checkin 欄位。</p>
-      <span class="tag admin">財務以上</span>
-    </a>
+      <a class="card" href="designer-customer-finance.html" id="linkCustomerFinance">
+        <span class="card-icon violet">📋</span>
+        <span class="card-body">
+          <h3>追加減與收款</h3>
+          <p>登記追加減、收款收據；客戶 LIFF 雙階段確認。</p>
+          <span class="tag staff">權限 ≥2</span>
+        </span>
+      </a>
 
-    <a class="card" href="ledger_review.html" id="linkLedgerReview">
-      <h3>請款審核</h3>
-      <p>廠商／員工待付款申請待審；核准後進待匯款。</p>
-      <span class="tag admin">財務以上</span>
-    </a>
+      <a class="card" href="vendor_status.html">
+        <span class="card-icon teal">📊</span>
+        <span class="card-body">
+          <h3>款項進度</h3>
+          <p>查看廠商款項的審核與匯款狀態。</p>
+        </span>
+      </a>
+    </div>
 
-    <a class="card hidden" href="payroll_review.html" id="linkPayrollReview">
-      <h3>薪資審核</h3>
-      <p>員工從出勤頁送審後待主管核准；可填獎金與備註。</p>
-      <span class="tag admin">主管 ≥5</span>
-    </a>
+    <div class="menu-section" id="sectionFinance">
+      <p class="menu-section-title admin">財務管理 · 權限 4 以上</p>
 
-    <a class="card" href="payroll_finance.html" id="linkPayrollFinance">
-      <h3>薪資待匯款</h3>
-      <p>匯出中信薪轉檔（1000 byte／列）、登錄收支。非廠商整批匯款。</p>
-      <span class="tag admin">財務 ≥4</span>
-    </a>
+      <a class="card hidden" href="payment_request_compose.html" id="linkComposeLegacy">
+        <span class="card-icon sky">📄</span>
+        <span class="card-body">
+          <h3>精細請款建單（舊）</h3>
+          <p>已併入待付款申請。</p>
+        </span>
+      </a>
 
-    <a class="card" href="vendor_payment_finance.html" id="linkVendorPaymentFinance">
-      <h3>廠商待匯款</h3>
-      <p>待匯款清單、財務直接新增、匯出銀行轉帳檔並登錄收支。</p>
-      <span class="tag admin">財務以上</span>
-    </a>
+      <a class="card" href="vendors.html" id="linkVendors">
+        <span class="card-icon amber">🏢</span>
+        <span class="card-body">
+          <h3>廠商名冊</h3>
+          <p>維護廠商主檔、統編與 LINE 綁定。</p>
+          <span class="tag admin">財務以上</span>
+        </span>
+      </a>
 
-    <a class="card hidden" href="vendor_payment_approve.html" id="linkVendorPaymentApprove">
-      <h3>廠商請款審核（舊）</h3>
-      <p>已併入「請款審核」。</p>
-      <span class="tag admin">權限 5</span>
-    </a>
+      <a class="card hidden" href="payees.html" id="linkPayees">
+        <span class="card-icon amber">🏦</span>
+        <span class="card-body">
+          <h3>收款帳戶（舊）</h3>
+          <p>已改由「待匯款」手動輸入或廠商名冊。</p>
+          <span class="tag admin">財務以上</span>
+        </span>
+      </a>
 
-    <a class="card" href="attachments.html" id="linkAttachments">
-      <h3>單據附件（進階）</h3>
-      <p>依關鍵字查附件；各頁有照片時可直接燈箱預覽。</p>
-      <span class="tag admin">財務以上</span>
-    </a>
+      <a class="card" href="ledger_review.html" id="linkLedgerReview">
+        <span class="card-icon amber">✅</span>
+        <span class="card-body">
+          <h3>請款審核</h3>
+          <p>廠商／員工待付款申請待審；核准後進待匯款。</p>
+          <span class="tag admin">財務以上</span>
+        </span>
+      </a>
 
-    <a class="card" href="project_margin.html" id="linkProjectMargin">
-      <h3>案件毛利</h3>
-      <p>各案收入、支出明細與毛利；記帳有案號會自動寫入。</p>
-      <span class="tag admin">財務以上</span>
-    </a>
+      <a class="card hidden" href="payroll_review.html" id="linkPayrollReview">
+        <span class="card-icon amber">💼</span>
+        <span class="card-body">
+          <h3>薪資審核</h3>
+          <p>員工從出勤頁送審後待主管核准；可填獎金與備註。</p>
+          <span class="tag admin">主管 ≥5</span>
+        </span>
+      </a>
 
-    <a class="card hidden" href="designer-customer-finance.html" id="linkCustomerFinance">
-      <h3>追加減與收款</h3>
-      <p>登記追加減、收款收據；客戶 LIFF 雙階段確認。</p>
-      <span class="tag">設計師 ≥3</span>
-    </a>
+      <a class="card" href="payroll_finance.html" id="linkPayrollFinance">
+        <span class="card-icon amber">💵</span>
+        <span class="card-body">
+          <h3>薪資待匯款</h3>
+          <p>匯出中信薪轉檔、登錄收支。</p>
+          <span class="tag admin">財務 ≥4</span>
+        </span>
+      </a>
+
+      <a class="card" href="vendor_payment_finance.html" id="linkVendorPaymentFinance">
+        <span class="card-icon amber">🏧</span>
+        <span class="card-body">
+          <h3>廠商待匯款</h3>
+          <p>待匯款清單、匯出銀行轉帳檔並登錄收支。</p>
+          <span class="tag admin">財務以上</span>
+        </span>
+      </a>
+
+      <a class="card hidden" href="vendor_payment_approve.html" id="linkVendorPaymentApprove">
+        <span class="card-icon amber">📝</span>
+        <span class="card-body">
+          <h3>廠商請款審核（舊）</h3>
+          <p>已併入「請款審核」。</p>
+        </span>
+      </a>
+
+      <a class="card" href="attachments.html" id="linkAttachments">
+        <span class="card-icon amber">📎</span>
+        <span class="card-body">
+          <h3>單據附件（進階）</h3>
+          <p>依關鍵字查附件；各頁有照片時可直接燈箱預覽。</p>
+          <span class="tag admin">財務以上</span>
+        </span>
+      </a>
+
+      <a class="card" href="project_margin.html" id="linkProjectMargin">
+        <span class="card-icon amber">📈</span>
+        <span class="card-body">
+          <h3>案件毛利</h3>
+          <p>各案收入、支出明細與毛利；記帳有案號會自動寫入。</p>
+          <span class="tag admin">財務以上</span>
+        </span>
+      </a>
+    </div>
     </div>
 
     <iframe id="acctContentFrame" class="hidden" title="會計功能內容" loading="lazy"></iframe>
@@ -122,17 +215,36 @@
     (async function boot() {
       await AccountingBoot.run({
         minPermission: 0,
-        preloadBootstrap: true,
+        initSession: function (opts) { return AccountingApi.initLiff(opts); },
+        preloadBootstrap: false,
         onReady: async function (session) {
           var perm = session.auth.permission || 0;
-          if (perm < AccountingApi.MIN_PERMISSION) {
-            document.getElementById('linkVendors').classList.add('hidden');
-            document.getElementById('linkPayees').classList.add('hidden');
-            document.getElementById('linkLedgerReview').classList.add('hidden');
-            document.getElementById('linkPayrollFinance').classList.add('hidden');
-            document.getElementById('linkVendorPaymentFinance').classList.add('hidden');
-            document.getElementById('linkAttachments').classList.add('hidden');
-            document.getElementById('linkProjectMargin').classList.add('hidden');
+          var isVendor = String(session.auth.status || '') === '廠商';
+          var staffMin = AccountingApi.INGEST_MIN_PERMISSION;
+          var financeMin = AccountingApi.MIN_PERMISSION;
+          var staffSection = document.getElementById('sectionStaff');
+          var financeSection = document.getElementById('sectionFinance');
+          var deniedSection = document.getElementById('sectionDenied');
+
+          if (perm >= staffMin || isVendor) {
+            staffSection.classList.remove('hidden');
+            deniedSection.classList.add('hidden');
+          } else {
+            staffSection.classList.add('hidden');
+            financeSection.classList.add('hidden');
+            deniedSection.classList.remove('hidden');
+            return;
+          }
+
+          if (perm < staffMin || isVendor) {
+            document.getElementById('linkIngest').classList.add('hidden');
+            document.getElementById('linkCustomerFinance').classList.add('hidden');
+          }
+
+          if (perm < financeMin) {
+            financeSection.classList.add('hidden');
+          } else {
+            financeSection.classList.remove('hidden');
           }
           if (perm < 5) {
             document.getElementById('linkVendorPaymentApprove').classList.add('hidden');
@@ -140,14 +252,13 @@
           } else {
             document.getElementById('linkPayrollReview').classList.remove('hidden');
           }
-          if (perm >= AccountingApi.SUPERVISOR_MIN_PERMISSION) {
-            document.getElementById('linkCustomerFinance').classList.remove('hidden');
-          }
+
           AccountingUi.bindMenuCards('#menuPanel a.card');
           if (typeof AccountingShell !== 'undefined') AccountingShell.initHost();
-          if (!AccountingCache.get(session)) {
+          if (perm >= staffMin && typeof AccountingCache !== 'undefined' && AccountingCache.needsStaffBootstrap(session)) {
+            var hadBootstrap = !!AccountingCache.get(session);
             AccountingUi.action('主檔預載', 'start');
-            AccountingCache.load(session)
+            AccountingCache.load(session, hadBootstrap)
               .then(function () { AccountingUi.action('主檔預載', 'ok'); })
               .catch(function (e) { AccountingUi.action('主檔預載', 'fail', e.message || String(e)); });
           }

@@ -34,8 +34,10 @@ var AccountingMasterData = {
     if (!tc) return '';
     return this.vendor_trade_category_migration[tc] || tc;
   },
-  /** 會計主檔包（廠商／收款帳戶／列舉）— 3 天；自己改過就地更新那一筆，進頁不背景重抓 */
+  /** 會計主檔包（廠商／收款帳戶／列舉）— 3 天 TTL；逾 SWR_MS 背景重抓（SWR） */
   TTL_MS: 3 * 24 * 60 * 60 * 1000,
+  /** 有快取時，超過此時間背景 revalidate（對齊 AccountingListCache 單人模式） */
+  SWR_MS: 24 * 60 * 60 * 1000,
   vendor_trade_categories: [
     '木作外包廠商', '建材', '地板', '系統櫃', '五金', '水電', '泥作', '油漆', '石材/人造石', '玻璃',
     '金屬加工', '空調', '清潔/拆除', '家具', '其他'

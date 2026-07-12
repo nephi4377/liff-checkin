@@ -10,7 +10,7 @@
   <script src="../../shared/js/operator_context.js?v=1"></script>
   <script src="../../shared/js/accounting_context.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=31"></script>
-  <script src="../../shared/js/accounting_cache.js?v=24"></script>
+  <script src="../../shared/js/accounting_cache.js?v=26"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=5"></script>
   <script src="../../shared/js/accounting_ui.js?v=10"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
@@ -233,6 +233,15 @@
       var canSaveVendor = false;
       var isVendorSelf = false;
       var vendorSelf = null;
+
+      window.addEventListener('accounting-bootstrap-updated', function () {
+        if (!session || isVendorSelf || typeof AccountingCache === 'undefined') return;
+        var fresh = AccountingCache.vendors(session);
+        if (fresh.length) {
+          vendors = fresh;
+          fillVendorSelect();
+        }
+      });
 
       function setMsg(t) { if (t) AccountingUi.notify('err', t); }
       function setOk(t) { if (t) AccountingUi.notify('ok', t); }
@@ -1188,8 +1197,9 @@
               if (!vendors.length) setMsg(e.message || String(e));
             });
           }
-          if (typeof AccountingCache !== 'undefined' && !AccountingCache.get(session)) {
-            AccountingCache.load(session).then(function () {
+          if (!isVendorSelf && typeof AccountingCache !== 'undefined' && AccountingCache.needsStaffBootstrap(session)) {
+            var hadBootstrap = !!AccountingCache.get(session);
+            AccountingCache.load(session, hadBootstrap).then(function () {
               if (isVendorSelf) return;
               var fresh = AccountingCache.vendors(session);
               if (fresh.length) {

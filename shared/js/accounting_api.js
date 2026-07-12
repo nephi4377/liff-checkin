@@ -10,6 +10,7 @@ var AccountingApi = (function () {
   var AUTH_TTL_MS = 12 * 60 * 60 * 1000;
   var MIN_PERMISSION = 4;
   var INGEST_MIN_PERMISSION = 2;
+  var CUSTOMER_FINANCE_MIN_PERMISSION = 2;
   var SUPERVISOR_MIN_PERMISSION = 3;
   var VENDOR_PAYMENT_APPROVE_MIN_PERMISSION = 5;
   /** 匯款請款／款項進度：在職員工即可（對齊「登入即可送審」） */
@@ -17,6 +18,7 @@ var AccountingApi = (function () {
   var PERM_DENIED_MSG = '權限不足（需財務／老闆，權限 ≥ 4）';
   var PAYMENT_REQUEST_DENIED_MSG = '權限不足（需為在職員工或已登記廠商）';
   var INGEST_PERM_DENIED_MSG = '權限不足（收支登錄需權限 ≥ 2）';
+  var CUSTOMER_FINANCE_DENIED_MSG = '權限不足（追加減與收款需權限 ≥ 2）';
   var SUPERVISOR_DENIED_MSG = '權限不足（需主管，權限 ≥ 3）';
   var VENDOR_PAYMENT_APPROVE_DENIED_MSG = '權限不足（廠商請款審核需權限 ≥ 5）';
 
@@ -261,11 +263,13 @@ var AccountingApi = (function () {
     MIN_PERMISSION: MIN_PERMISSION,
     PAYMENT_REQUEST_MIN_PERMISSION: PAYMENT_REQUEST_MIN_PERMISSION,
     INGEST_MIN_PERMISSION: INGEST_MIN_PERMISSION,
+    CUSTOMER_FINANCE_MIN_PERMISSION: CUSTOMER_FINANCE_MIN_PERMISSION,
     SUPERVISOR_MIN_PERMISSION: SUPERVISOR_MIN_PERMISSION,
     VENDOR_PAYMENT_APPROVE_MIN_PERMISSION: VENDOR_PAYMENT_APPROVE_MIN_PERMISSION,
     PERM_DENIED_MSG: PERM_DENIED_MSG,
     PAYMENT_REQUEST_DENIED_MSG: PAYMENT_REQUEST_DENIED_MSG,
     INGEST_PERM_DENIED_MSG: INGEST_PERM_DENIED_MSG,
+    CUSTOMER_FINANCE_DENIED_MSG: CUSTOMER_FINANCE_DENIED_MSG,
     SUPERVISOR_DENIED_MSG: SUPERVISOR_DENIED_MSG,
     VENDOR_PAYMENT_APPROVE_DENIED_MSG: VENDOR_PAYMENT_APPROVE_DENIED_MSG,
     post: post,
@@ -1184,8 +1188,8 @@ var AccountingApi = (function () {
         session = await AccountingApi.initLiff(opts);
       }
       if (!session) return null;
-      if ((session.auth.permission || 0) < SUPERVISOR_MIN_PERMISSION) {
-        throw new Error(SUPERVISOR_DENIED_MSG);
+      if ((session.auth.permission || 0) < CUSTOMER_FINANCE_MIN_PERMISSION) {
+        throw new Error(CUSTOMER_FINANCE_DENIED_MSG);
       }
       notifyUiOperator_(session);
       return session;

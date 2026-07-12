@@ -49,7 +49,6 @@ export default {
         const floorplanStraightenerUrl = computed(() => `#/floorplan-straightener`);
         const budgetWebUrl = computed(() => `#/budget-web`);
         const budgetAuditUrl = computed(() => `#/budget-audit`);
-        const accountingUrl = computed(() => '#/accounting-ingest');
         const accountingHubUrl = computed(() => '#/accounting');
         const helpUrl = computed(() => '#/help');
         const helpAccountingUrl = computed(() => '#/help/accounting-ingest');
@@ -368,7 +367,6 @@ export default {
             floorplanStraightenerUrl,
             budgetWebUrl,
             budgetAuditUrl,
-            accountingUrl,
             accountingHubUrl,
             helpUrl,
             helpAccountingUrl,
@@ -533,27 +531,17 @@ export default {
                     </div>
                 </a>
 
-                <!-- 1b. 收支登錄（僅 HUB 入口；會計選單不重複放） -->
-                <a v-if="currentUser && currentUser.permission >= 2" :href="accountingUrl"
-                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-emerald-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">💰</div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">收支登錄</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">連續記帳；成功後可同步到進出款項群。</p>
-                    </div>
-                </a>
-
-                <!-- 1c. 會計功能選單 -->
-                <a v-if="currentUser && currentUser.permission >= 4" :href="accountingHubUrl"
+                <!-- 2. 會計系統（單一入口；日常與財務功能在內部分區） -->
+                <a v-if="currentUser && currentUser.permission >= 2" :href="accountingHubUrl"
                     class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-teal-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center text-xl">📒</div>
                     <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">會計功能</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">待付款、審核、匯款、案件毛利與薪資入口。</p>
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">會計系統</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">收支登錄、請款、追加減與收款；財務審核依權限顯示。</p>
                     </div>
                 </a>
 
-                <!-- 2. 施工回報 -->
+                <!-- 3. 施工回報 -->
                 <a :href="reportUrl"
                     class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-purple-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center text-xl">📝</div>

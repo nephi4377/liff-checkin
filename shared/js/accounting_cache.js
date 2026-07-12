@@ -1,11 +1,14 @@
 /**
  * 會計系統共用快取 — bootstrap 進 sessionStorage；CRUD 成功 patch 快取（安全時）
+ * TTL 3 天；SWR 24 小時（有快取先顯示，背景再打 accounting_bootstrap）
  */
 var AccountingCache = (function () {
   var STORAGE_KEY = 'tanxin_accounting_bootstrap_v4';
   var BOOTSTRAP_TIMEOUT_MS = 120000;
+  var DEFAULT_SWR_MS = 24 * 60 * 60 * 1000;
   var _mem = {};
   var _inflight = {};
+  var _swrInflight = {};
 
   /** 寫入 bootstrap.masters 的 entity；CRUD 後優先 patch，無法 patch 才整包清除 */
   var BOOTSTRAP_INVALIDATE_ENTITIES = {
@@ -36,6 +39,10 @@ var AccountingCache = (function () {
     return (typeof AccountingMasterData !== 'undefined' && AccountingMasterData.TTL_MS) || 300000;
   }
 
+  function swrMs() {
+    return (typeof AccountingMasterData !== 'undefined' && AccountingMasterData.SWR_MS) || DEFAULT_SWR_MS;
+  }
+
   function storageKey(session) {
     var uid = (session && session.auth && session.auth.user_id) || 'anon';
     return STORAGE_KEY + ':' + uid;
@@ -45,19 +52,24 @@ var AccountingCache = (function () {
     return wrapped && wrapped.data && (Date.now() - wrapped.ts <= ttlMs());
   }
 
-  function read(session) {
+  function readWrapped(session) {
     var key = storageKey(session);
-    if (_mem[key] && isFresh(_mem[key])) return _mem[key].data;
+    if (_mem[key] && isFresh(_mem[key])) return _mem[key];
     try {
       var raw = sessionStorage.getItem(key);
       if (!raw) return null;
       var parsed = JSON.parse(raw);
       if (!isFresh(parsed)) return null;
       _mem[key] = parsed;
-      return parsed.data;
+      return parsed;
     } catch (e) {
       return null;
     }
+  }
+
+  function read(session) {
+    var wrapped = readWrapped(session);
+    return wrapped ? wrapped.data : null;
   }
 
   function write(session, data) {
@@ -84,9 +96,51 @@ var AccountingCache = (function () {
     return data;
   }
 
+  function notifyBootstrapUpdated_(session) {
+    try {
+      window.dispatchEvent(new CustomEvent('accounting-bootstrap-updated', {
+        detail: { userId: session && session.auth && session.auth.user_id }
+      }));
+    } catch (e) {}
+  }
+
+  async function fetchBootstrapFromApi_(session) {
+    if (typeof AccountingApi === 'undefined') {
+      throw new Error('AccountingApi 未載入，請確認 accounting_api.js 已引入');
+    }
+    var res;
+    if (typeof AccountingApi.bootstrap === 'function') {
+      res = await AccountingApi.bootstrap(session, BOOTSTRAP_TIMEOUT_MS);
+    } else if (typeof AccountingApi.post === 'function') {
+      res = await AccountingApi.post({
+        action: 'accounting_bootstrap',
+        auth: AccountingApi.buildAuth ? AccountingApi.buildAuth(session) : { dev_bypass: !!session.devBypass }
+      }, BOOTSTRAP_TIMEOUT_MS);
+    } else {
+      throw new Error('AccountingApi 版本過舊，請強制重新整理（Ctrl+F5）');
+    }
+    if (!res.success || !res.bootstrap) throw new Error(res.message || '載入主檔失敗');
+    write(session, res.bootstrap);
+    return mergeEnums(res.bootstrap);
+  }
+
+  function backgroundRevalidate(session) {
+    var key = storageKey(session);
+    if (_swrInflight[key] || _inflight[key]) return;
+    _swrInflight[key] = fetchBootstrapFromApi_(session).then(function (data) {
+      notifyBootstrapUpdated_(session);
+      return data;
+    }).catch(function () {
+      return null;
+    }).finally(function () {
+      delete _swrInflight[key];
+    });
+  }
+
   function clear(session) {
     var key = storageKey(session);
     delete _mem[key];
+    delete _swrInflight[key];
     try { sessionStorage.removeItem(key); } catch (e) {}
   }
 
@@ -160,6 +214,7 @@ var AccountingCache = (function () {
   }
 
   return {
+    SWR_MS: DEFAULT_SWR_MS,
     clear: clear,
     patchMaster: patchMaster,
     patchVendorFields: patchVendorFields,
@@ -176,40 +231,31 @@ var AccountingCache = (function () {
     peekPayees: function () {
       return mastersFromPeek('payees');
     },
+    /** 無快取，或快取裡沒有廠商（舊版 bootstrap／權限不足時可能發生） */
+    needsStaffBootstrap: function (session) {
+      var cached = read(session);
+      if (!cached) return true;
+      var vendors = (cached.masters && cached.masters.vendors) || [];
+      return vendors.length === 0;
+    },
     load: async function (session, force) {
       if (!session) throw new Error('需要登入');
       if (!force) {
-        var cached = read(session);
-        if (cached) return mergeEnums(cached);
+        var wrapped = readWrapped(session);
+        if (wrapped) {
+          var age = Date.now() - wrapped.ts;
+          if (age > swrMs()) backgroundRevalidate(session);
+          return mergeEnums(wrapped.data);
+        }
       }
       var key = storageKey(session);
       if (_inflight[key]) return _inflight[key];
 
-      _inflight[key] = (async function () {
-        if (typeof AccountingApi === 'undefined') {
-          throw new Error('AccountingApi 未載入，請確認 accounting_api.js 已引入');
-        }
-        var res;
-        if (typeof AccountingApi.bootstrap === 'function') {
-          res = await AccountingApi.bootstrap(session, BOOTSTRAP_TIMEOUT_MS);
-        } else if (typeof AccountingApi.post === 'function') {
-          res = await AccountingApi.post({
-            action: 'accounting_bootstrap',
-            auth: AccountingApi.buildAuth ? AccountingApi.buildAuth(session) : { dev_bypass: !!session.devBypass }
-          }, BOOTSTRAP_TIMEOUT_MS);
-        } else {
-          throw new Error('AccountingApi 版本過舊，請強制重新整理（Ctrl+F5）');
-        }
-        if (!res.success || !res.bootstrap) throw new Error(res.message || '載入主檔失敗');
-        write(session, res.bootstrap);
-        return mergeEnums(res.bootstrap);
-      })();
-
-      try {
-        return await _inflight[key];
-      } finally {
+      _inflight[key] = fetchBootstrapFromApi_(session).finally(function () {
         delete _inflight[key];
-      }
+      });
+
+      return _inflight[key];
     },
     vendors: function (session) {
       var c = read(session);
