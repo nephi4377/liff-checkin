@@ -517,7 +517,8 @@ var AccountingUi = (function () {
     if (_apiInflight <= 0) clearProgress();
     else setProgress('還有 ' + _apiInflight + ' 項資料載入中…');
     if (isDebugMode() || slow || action === 'accounting_bootstrap' || action === 'accounting_auth_me') {
-      if (ok) step(label + (slow ? '（偏慢）' : ''), detail);
+      var tag = (extra && extra.indexOf('GAS 快取') >= 0) ? '（GAS 快取）' : '';
+      if (ok) step(label + (slow ? '（偏慢）' : '') + tag, detail);
       else action(label, 'fail', detail);
     }
   }

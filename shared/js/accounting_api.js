@@ -73,6 +73,7 @@ var AccountingApi = (function () {
       var parsed = parseJsonResponse_(res, text);
       if (typeof AccountingUi !== 'undefined' && AccountingUi.apiEnd) {
         var extra = parsed && parsed.success === false && parsed.message ? parsed.message : '';
+        if (parsed && parsed.gas_cached) extra = (extra ? extra + ' · ' : '') + 'GAS 快取';
         AccountingUi.apiEnd(actionName, Date.now() - t0, !!(parsed && parsed.success !== false), extra);
       }
       return parsed;

@@ -9,6 +9,7 @@ var AccountingCache = (function () {
   var _mem = {};
   var _inflight = {};
   var _swrInflight = {};
+  var INFLIGHT_STORAGE_PREFIX = 'tanxin_bootstrap_inflight_v1:';
 
   /** 寫入 bootstrap.masters 的 entity；CRUD 後優先 patch，無法 patch 才整包清除 */
   var BOOTSTRAP_INVALIDATE_ENTITIES = {
@@ -103,6 +104,47 @@ var AccountingCache = (function () {
     return data;
   }
 
+  function inflightStorageKey_(session) {
+    return INFLIGHT_STORAGE_PREFIX + storageKey(session);
+  }
+
+  function markBootstrapInflight_(session) {
+    try {
+      sessionStorage.setItem(inflightStorageKey_(session), String(Date.now()));
+    } catch (e) {}
+  }
+
+  function clearBootstrapInflight_(session) {
+    try { sessionStorage.removeItem(inflightStorageKey_(session)); } catch (e) {}
+  }
+
+  function isBootstrapInflight_(session) {
+    try {
+      var raw = sessionStorage.getItem(inflightStorageKey_(session));
+      if (!raw) return false;
+      return Date.now() - parseInt(raw, 10) < BOOTSTRAP_TIMEOUT_MS + 15000;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function waitForBootstrap_(session, maxMs) {
+    var started = Date.now();
+    return new Promise(function (resolve, reject) {
+      function tick() {
+        var wrapped = readWrapped(session);
+        if (wrapped) return resolve(mergeEnums(wrapped.data));
+        if (!isBootstrapInflight_(session) && ! _inflight[storageKey(session)]) {
+          return reject(new Error('主檔載入未完成'));
+        }
+        if (Date.now() - started > maxMs) {
+          return reject(new Error('主檔載入逾時（' + Math.round(maxMs / 1000) + ' 秒）'));
+        }
+        setTimeout(tick, 250);
+      }
+      tick();
+    });
+  }
   function notifyBootstrapUpdated_(session) {
     try {
       window.dispatchEvent(new CustomEvent('accounting-bootstrap-updated', {
@@ -133,6 +175,7 @@ var AccountingCache = (function () {
       throw new Error('AccountingApi 版本過舊，請強制重新整理（Ctrl+F5）');
     }
     if (!res.success || !res.bootstrap) throw new Error(res.message || '載入主檔失敗');
+    if (res.gas_cached) traceUi('主檔', '後端快取命中');
     write(session, res.bootstrap);
     var vendorCount = ((res.bootstrap.masters && res.bootstrap.masters.vendors) || []).length;
     traceUi('主檔', '已寫入快取 · 廠商 ' + vendorCount + ' 筆');
@@ -141,7 +184,7 @@ var AccountingCache = (function () {
 
   function backgroundRevalidate(session) {
     var key = storageKey(session);
-    if (_swrInflight[key] || _inflight[key]) return;
+    if (_swrInflight[key] || _inflight[key] || isBootstrapInflight_(session)) return;
     _swrInflight[key] = fetchBootstrapFromApi_(session).then(function (data) {
       notifyBootstrapUpdated_(session);
       return data;
@@ -271,9 +314,15 @@ var AccountingCache = (function () {
       }
       var key = storageKey(session);
       if (_inflight[key]) return _inflight[key];
+      if (!force && isBootstrapInflight_(session)) {
+        traceUi('主檔', '等待外框載入中（不重複請求）…');
+        return waitForBootstrap_(session, BOOTSTRAP_TIMEOUT_MS + 15000);
+      }
 
+      markBootstrapInflight_(session);
       _inflight[key] = fetchBootstrapFromApi_(session).finally(function () {
         delete _inflight[key];
+        clearBootstrapInflight_(session);
       });
 
       return _inflight[key];

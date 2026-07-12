@@ -9,8 +9,8 @@
   <script src="../../shared/js/accounting_master_data.js?v=17"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=35"></script>
-  <script src="../../shared/js/accounting_cache.js?v=27"></script>
-  <script src="../../shared/js/accounting_ui.js?v=12"></script>
+  <script src="../../shared/js/accounting_cache.js?v=28"></script>
+  <script src="../../shared/js/accounting_ui.js?v=13"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=5"></script>
   <script src="../../shared/js/accounting_shell.js?v=2"></script>
@@ -256,9 +256,8 @@
           AccountingUi.bindMenuCards('#menuPanel a.card');
           if (typeof AccountingShell !== 'undefined') AccountingShell.initHost();
           if (perm >= staffMin && typeof AccountingCache !== 'undefined' && AccountingCache.needsStaffBootstrap(session)) {
-            var hadBootstrap = !!AccountingCache.get(session);
             AccountingUi.action('主檔預載', 'start');
-            AccountingCache.load(session, hadBootstrap)
+            AccountingCache.load(session, true)
               .then(function () { AccountingUi.action('主檔預載', 'ok'); })
               .catch(function (e) { AccountingUi.action('主檔預載', 'fail', e.message || String(e)); });
           }
