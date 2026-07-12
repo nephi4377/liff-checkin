@@ -18,6 +18,49 @@ var AccountingUi = (function () {
   var operator = { session: null, userId: '', displayName: '', permission: 0 };
   var _restoring = false;
   var _pendingNavIntent = null;
+  var _bootAt = Date.now();
+  var _actionTimers = {};
+  var _progressEl = null;
+  var _apiInflight = 0;
+
+  function isDebugMode() {
+    try {
+      return new URLSearchParams(window.location.search).get('debug') === '1';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function formatMs(ms) {
+    var n = Math.max(0, Math.round(ms || 0));
+    if (n < 1000) return n + ' 毫秒';
+    return (n / 1000).toFixed(1) + ' 秒';
+  }
+
+  function formatAgeMs(ms) {
+    var n = Math.max(0, Math.round(ms || 0));
+    if (n < 60000) return Math.round(n / 1000) + ' 秒前';
+    if (n < 3600000) return Math.round(n / 60000) + ' 分鐘前';
+    return Math.round(n / 3600000) + ' 小時前';
+  }
+
+  function ensureProgressEl() {
+    var loading = document.getElementById('loading');
+    if (!loading || _progressEl) return;
+    _progressEl = document.createElement('p');
+    _progressEl.className = 'acct-loading-detail';
+    _progressEl.setAttribute('aria-live', 'polite');
+    loading.appendChild(_progressEl);
+  }
+
+  function setProgress(text) {
+    ensureProgressEl();
+    if (_progressEl) _progressEl.textContent = text || '';
+  }
+
+  function clearProgress() {
+    if (_progressEl) _progressEl.textContent = '';
+  }
 
   var PAGE_LABELS = {
     'index.html': '會計功能選單',
@@ -89,6 +132,7 @@ var AccountingUi = (function () {
       '.acct-log-tag-info{background:#1e40af;color:#bfdbfe}',
       '.acct-log-tag-action{background:#475569;color:#e2e8f0}',
       '.acct-log-text{flex:1;word-break:break-word;white-space:pre-wrap}',
+      '.acct-loading-detail{margin:8px 0 0;font-size:13px;color:#64748b;line-height:1.45}',
       '.acct-ui-hide-legacy#msg,.acct-ui-hide-legacy#ok,.acct-ui-hide-legacy#warn{display:none!important}',
       '.btn[aria-busy="true"]{opacity:.7;cursor:wait}',
       '@media (max-width:959px){',
@@ -409,14 +453,73 @@ var AccountingUi = (function () {
   function action(label, status, detail) {
     var k = 'action';
     var msg = String(label || '操作');
-    if (status === 'start') msg = '▶ ' + msg + '…';
-    else if (status === 'ok') { k = 'ok'; msg = '✓ ' + msg; }
-    else if (status === 'fail') { k = 'err'; msg = '✕ ' + msg; }
+    var key = msg.replace(/^▶\s|^✓\s|^✕\s/, '').replace(/…$/, '');
+    if (status === 'start') {
+      _actionTimers[key] = Date.now();
+      msg = '▶ ' + msg + '…';
+    } else if (status === 'ok') {
+      k = 'ok';
+      msg = '✓ ' + msg;
+      var elapsedOk = _actionTimers[key] ? Date.now() - _actionTimers[key] : 0;
+      delete _actionTimers[key];
+      if (elapsedOk && !detail) detail = formatMs(elapsedOk);
+      else if (elapsedOk && detail) detail = detail + ' · ' + formatMs(elapsedOk);
+    } else if (status === 'fail') {
+      k = 'err';
+      msg = '✕ ' + msg;
+      var elapsedFail = _actionTimers[key] ? Date.now() - _actionTimers[key] : 0;
+      delete _actionTimers[key];
+      if (elapsedFail && !detail) detail = formatMs(elapsedFail);
+      else if (elapsedFail && detail) detail = detail + ' · ' + formatMs(elapsedFail);
+    }
     if (detail) msg += ' — ' + detail;
     pushLog(k, msg);
     if (status === 'ok') toast('ok', msg, TOAST_MS_DEFAULT);
     else if (status === 'fail') toast('err', msg, TOAST_MS_DEFAULT);
     else if (status === 'start') toast('info', msg, 4000);
+  }
+
+  function step(label, detail) {
+    if (!label) return;
+    var msg = String(label);
+    if (detail) msg += ' — ' + detail;
+    msg += ' · 已耗 ' + formatMs(Date.now() - _bootAt);
+    pushLog('info', msg);
+  }
+
+  var API_LABELS = {
+    accounting_auth_me: '驗證身分',
+    accounting_policy: '讀取設定',
+    accounting_bootstrap: '載入主檔',
+    accounting_form_context: '表單資料',
+    payment_request_auth_me: '請款身分',
+    crud_list: '讀取列表',
+    vendor_payment_list: '讀取請款',
+    ledger_review_bundle: '讀取審核包'
+  };
+
+  function apiLabel(action) {
+    return API_LABELS[action] || ('API ' + action);
+  }
+
+  function apiStart(action) {
+    _apiInflight += 1;
+    var label = apiLabel(action);
+    setProgress(label + '…' + (_apiInflight > 1 ? '（' + _apiInflight + ' 項進行中）' : ''));
+    if (isDebugMode()) action(label, 'start');
+  }
+
+  function apiEnd(action, ms, ok, extra) {
+    _apiInflight = Math.max(0, _apiInflight - 1);
+    var label = apiLabel(action);
+    var slow = ms >= 1200;
+    var detail = (extra || '') + (extra ? ' · ' : '') + formatMs(ms);
+    if (_apiInflight <= 0) clearProgress();
+    else setProgress('還有 ' + _apiInflight + ' 項資料載入中…');
+    if (isDebugMode() || slow || action === 'accounting_bootstrap' || action === 'accounting_auth_me') {
+      if (ok) step(label + (slow ? '（偏慢）' : ''), detail);
+      else action(label, 'fail', detail);
+    }
   }
 
   function tap(label) {
@@ -532,6 +635,13 @@ var AccountingUi = (function () {
     log: pushLog,
     notify: notify,
     action: action,
+    step: step,
+    setProgress: setProgress,
+    clearProgress: clearProgress,
+    apiStart: apiStart,
+    apiEnd: apiEnd,
+    isDebugMode: isDebugMode,
+    formatMs: formatMs,
     tap: tap,
     detail: detail,
     feedback: feedback,

@@ -124,6 +124,15 @@ const App = {
             return path === '#/help' || path.startsWith('#/help/');
         });
 
+        /** 父頁 ?debug=1 轉給 iframe（會計除錯追蹤） */
+        const iframeDebugParam = (() => {
+            try {
+                return new URLSearchParams(window.location.search).get('debug') === '1' ? '&debug=1' : '';
+            } catch (e) {
+                return '';
+            }
+        })();
+
         // [v411.0 SPA化] 簡易路由系統
         const routes = {
             '#': { name: 'dashboard' },
@@ -666,13 +675,14 @@ const App = {
                 return;
             }
             if (type === 'request_hub_liff_token') {
+                let tok = '';
                 try {
-                    const tok = (typeof liff !== 'undefined' && liff.getIDToken) ? (liff.getIDToken() || '') : '';
-                    if (tok && event.source && typeof event.source.postMessage === 'function') {
-                        event.source.postMessage({ type: 'hub_liff_token', token: tok }, event.origin || '*');
-                    }
+                    tok = (typeof liff !== 'undefined' && liff.getIDToken) ? (liff.getIDToken() || '') : '';
                 } catch (e) {
                     console.warn('[Hub] 無法提供 LIFF token 給 iframe:', e);
+                }
+                if (event.source && typeof event.source.postMessage === 'function') {
+                    event.source.postMessage({ type: 'hub_liff_token', token: tok }, event.origin || '*');
                 }
                 return;
             }
@@ -747,6 +757,7 @@ const App = {
             landingPageUrlCopied,
             copyLandingPageUrl,
             hubLiffId: CONFIG.HUB_LIFF_ID || '',
+            iframeDebugParam,
             isHelpActive,
         };
     }, // [v418.1 修正] 補上遺失的逗號，解決 setup() 與 template 之間的語法錯誤
@@ -827,7 +838,8 @@ const App = {
                             '&hub_liff_id=' + encodeURIComponent(hubLiffId) +
                             '&shiftStart=' + encodeURIComponent(currentUser?.shiftStart || '08:30') +
                             '&shiftEnd=' + encodeURIComponent(currentUser?.shiftEnd || '17:30') +
-                            (currentView.params || '')" />
+                            (currentView.params || '') +
+                            iframeDebugParam" />
                     </div>
                 </main>
                 <StaffTodaySidebar v-if="hasAdminRights && currentView.name === 'dashboard'"

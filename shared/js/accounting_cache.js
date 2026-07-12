@@ -43,6 +43,13 @@ var AccountingCache = (function () {
     return (typeof AccountingMasterData !== 'undefined' && AccountingMasterData.SWR_MS) || DEFAULT_SWR_MS;
   }
 
+  function formatAgeLabel_(ms) {
+    var n = Math.max(0, Math.round(ms || 0));
+    if (n < 60000) return Math.round(n / 1000) + ' 秒前';
+    if (n < 3600000) return Math.round(n / 60000) + ' 分鐘前';
+    return Math.round(n / 3600000) + ' 小時前';
+  }
+
   function storageKey(session) {
     var uid = (session && session.auth && session.auth.user_id) || 'anon';
     return STORAGE_KEY + ':' + uid;
@@ -104,10 +111,16 @@ var AccountingCache = (function () {
     } catch (e) {}
   }
 
+  function traceUi(label, detail) {
+    if (typeof AccountingUi === 'undefined') return;
+    if (AccountingUi.step) AccountingUi.step(label, detail);
+  }
+
   async function fetchBootstrapFromApi_(session) {
     if (typeof AccountingApi === 'undefined') {
       throw new Error('AccountingApi 未載入，請確認 accounting_api.js 已引入');
     }
+    traceUi('主檔', '向後端讀取中…');
     var res;
     if (typeof AccountingApi.bootstrap === 'function') {
       res = await AccountingApi.bootstrap(session, BOOTSTRAP_TIMEOUT_MS);
@@ -121,6 +134,8 @@ var AccountingCache = (function () {
     }
     if (!res.success || !res.bootstrap) throw new Error(res.message || '載入主檔失敗');
     write(session, res.bootstrap);
+    var vendorCount = ((res.bootstrap.masters && res.bootstrap.masters.vendors) || []).length;
+    traceUi('主檔', '已寫入快取 · 廠商 ' + vendorCount + ' 筆');
     return mergeEnums(res.bootstrap);
   }
 
@@ -244,7 +259,13 @@ var AccountingCache = (function () {
         var wrapped = readWrapped(session);
         if (wrapped) {
           var age = Date.now() - wrapped.ts;
-          if (age > swrMs()) backgroundRevalidate(session);
+          var vendorCount = ((wrapped.data.masters && wrapped.data.masters.vendors) || []).length;
+          if (age > swrMs()) {
+            traceUi('主檔快取', '先顯示 · ' + formatAgeLabel_(age) + ' · 背景更新中');
+            backgroundRevalidate(session);
+          } else {
+            traceUi('主檔快取', '直接顯示 · ' + formatAgeLabel_(age) + ' · 廠商 ' + vendorCount + ' 筆');
+          }
           return mergeEnums(wrapped.data);
         }
       }

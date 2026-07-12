@@ -12,6 +12,17 @@ var AccountingBoot = (function () {
   function setLoading(text) {
     var loading = document.getElementById('loading');
     if (loading) loading.textContent = text;
+    if (typeof AccountingUi !== 'undefined' && AccountingUi.setProgress) {
+      AccountingUi.setProgress(text ? '' : '');
+    }
+  }
+
+  function traceStep(label, detail) {
+    if (typeof AccountingUi !== 'undefined' && AccountingUi.step) AccountingUi.step(label, detail);
+  }
+
+  function traceProgress(text) {
+    if (typeof AccountingUi !== 'undefined' && AccountingUi.setProgress) AccountingUi.setProgress(text);
   }
 
   function formatUserLine(session, extra) {
@@ -36,10 +47,13 @@ var AccountingBoot = (function () {
   function backgroundRevalidate(initFn, session, opts) {
     initFn().then(function (fresh) {
       if (!fresh) return;
+      traceStep('背景驗證', '身分已更新');
       applySessionUi(fresh, opts);
       if (typeof AccountingUi !== 'undefined' && AccountingUi.setOperator) AccountingUi.setOperator(fresh);
       if (typeof opts.onRevalidate === 'function') opts.onRevalidate(fresh);
-    }).catch(function () {});
+    }).catch(function (e) {
+      traceStep('背景驗證', '略過 — ' + (e.message || String(e)));
+    });
   }
 
   /**
@@ -57,6 +71,8 @@ var AccountingBoot = (function () {
     }
     if (typeof AccountingUi !== 'undefined') AccountingUi.init();
     if (typeof AccountingNav !== 'undefined') AccountingNav.init();
+    if (typeof AccountingUi !== 'undefined') AccountingUi.action('啟動頁面', 'start');
+    traceProgress('檢查本機登入…');
     var initFn = opts.initSession || function () { return AccountingApi.initSession(); };
     var minPerm = opts.minPermission != null ? opts.minPermission : AccountingApi.MIN_PERMISSION;
 
@@ -67,6 +83,7 @@ var AccountingBoot = (function () {
           minPermission: minPerm,
           authAction: opts.authAction
         });
+        if (cached) traceStep('登入快取', '直接沿用上次驗證');
       } catch (eCache) {
         cached = null;
       }
@@ -77,6 +94,7 @@ var AccountingBoot = (function () {
           minPermission: minPerm,
           authAction: opts.authAction
         });
+        if (cached) traceStep('暫用身分', '先顯示畫面，背景再驗證');
       } catch (eProv) {
         cached = null;
       }
@@ -88,26 +106,38 @@ var AccountingBoot = (function () {
           throw new Error(opts.deniedMsg || AccountingApi.PERM_DENIED_MSG);
         }
         applySessionUi(cached, opts);
+        if (typeof AccountingUi !== 'undefined') {
+          AccountingUi.action('啟動頁面', 'ok', '快取登入');
+          AccountingUi.clearProgress();
+        }
         if (typeof opts.onReady === 'function') await opts.onReady(cached);
+        traceProgress('背景重新驗證身分…');
         backgroundRevalidate(initFn, cached, opts);
         return cached;
       } catch (eCachedRun) {
         setLoading(eCachedRun.message || String(eCachedRun));
+        if (typeof AccountingUi !== 'undefined') AccountingUi.action('啟動頁面', 'fail', eCachedRun.message || String(eCachedRun));
         return null;
       }
     }
 
     try {
+      traceProgress('向後端驗證身分…');
       var session = await initFn();
       if (!session) return null;
       if ((session.auth.permission || 0) < minPerm) {
         throw new Error(opts.deniedMsg || AccountingApi.PERM_DENIED_MSG);
       }
       applySessionUi(session, opts);
+      if (typeof AccountingUi !== 'undefined') {
+        AccountingUi.action('啟動頁面', 'ok');
+        AccountingUi.clearProgress();
+      }
       if (typeof opts.onReady === 'function') await opts.onReady(session);
       return session;
     } catch (e) {
       setLoading(e.message || String(e));
+      if (typeof AccountingUi !== 'undefined') AccountingUi.action('啟動頁面', 'fail', e.message || String(e));
       return null;
     }
   }

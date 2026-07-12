@@ -46,6 +46,11 @@ var AccountingApi = (function () {
   }
 
   async function post(body, timeoutMs) {
+    var actionName = (body && body.action) || 'api';
+    var t0 = Date.now();
+    if (typeof AccountingUi !== 'undefined' && AccountingUi.apiStart) {
+      AccountingUi.apiStart(actionName);
+    }
     var opts = {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
@@ -65,7 +70,17 @@ var AccountingApi = (function () {
         res = await fetch(GAS_API, opts);
         text = await res.text();
       }
-      return parseJsonResponse_(res, text);
+      var parsed = parseJsonResponse_(res, text);
+      if (typeof AccountingUi !== 'undefined' && AccountingUi.apiEnd) {
+        var extra = parsed && parsed.success === false && parsed.message ? parsed.message : '';
+        AccountingUi.apiEnd(actionName, Date.now() - t0, !!(parsed && parsed.success !== false), extra);
+      }
+      return parsed;
+    } catch (e) {
+      if (typeof AccountingUi !== 'undefined' && AccountingUi.apiEnd) {
+        AccountingUi.apiEnd(actionName, Date.now() - t0, false, e.message || String(e));
+      }
+      throw e;
     } finally {
       if (timer) clearTimeout(timer);
     }
@@ -107,13 +122,22 @@ var AccountingApi = (function () {
     }
   }
 
-  function requestParentHubLiffToken_() {
+  function isInHubIframe_() {
+    if (!window.parent || window.parent === window) return false;
+    if (typeof OperatorContext !== 'undefined') {
+      var op = OperatorContext.read();
+      if (op && op.userId && op.hubLiffId) return true;
+    }
+    return !!readHubLiffIdFromQuery_();
+  }
+
+  function requestParentHubLiffTokenOnce_() {
     if (!window.parent || window.parent === window) return Promise.resolve('');
     return new Promise(function (resolve) {
       var done = false;
       var timer = setTimeout(function () {
         if (!done) { done = true; resolve(''); }
-      }, 2500);
+      }, 3000);
       function onMsg(e) {
         if (!e.data || e.data.type !== 'hub_liff_token') return;
         if (done) return;
@@ -130,6 +154,25 @@ var AccountingApi = (function () {
         resolve('');
       }
     });
+  }
+
+  async function requestParentHubLiffToken_(opts) {
+    opts = opts || {};
+    var attempts = opts.attempts || 3;
+    var delayMs = opts.delayMs || 600;
+    for (var i = 0; i < attempts; i++) {
+      var tok = await requestParentHubLiffTokenOnce_();
+      if (tok) return tok;
+      if (i < attempts - 1) {
+        await new Promise(function (r) { setTimeout(r, delayMs); });
+      }
+    }
+    return '';
+  }
+
+  function resolveLiffIdForInit_(opts, policy) {
+    if (opts && opts.liffId) return opts.liffId;
+    return (policy && policy.liffId) || '';
   }
 
   function primeHubIdentityFromUrl_() {
@@ -794,19 +837,25 @@ var AccountingApi = (function () {
     initLiff: async function (opts) {
       opts = opts || {};
       var policy = await AccountingApi.loadPolicy();
-      var parentToken = await requestParentHubLiffToken_();
-      if (parentToken) {
-        var authHub = await AccountingApi.authMe(parentToken);
-        if (authHub.success) {
-          return {
-            devBypass: false,
-            profile: { userId: authHub.user_id, displayName: authHub.display_name },
-            idToken: parentToken,
-            auth: authHub
-          };
+      if (isInHubIframe_()) {
+        if (typeof AccountingUi !== 'undefined' && AccountingUi.setProgress) {
+          AccountingUi.setProgress('向主控台索取登入憑證…');
         }
+        var parentToken = await requestParentHubLiffToken_();
+        if (parentToken) {
+          var authHub = await AccountingApi.authMe(parentToken);
+          if (authHub.success) {
+            return {
+              devBypass: false,
+              profile: { userId: authHub.user_id, displayName: authHub.display_name },
+              idToken: parentToken,
+              auth: authHub
+            };
+          }
+        }
+        throw new Error('無法從主控台取得登入憑證，請關閉後重新從 LINE 開啟主控台');
       }
-      var liffId = opts.liffId || readHubLiffIdFromQuery_() || policy.liffId || '';
+      var liffId = resolveLiffIdForInit_(opts, policy);
       if (!liffId) throw new Error('LIFF 尚未設定');
       if (typeof liff === 'undefined') throw new Error('請用 LINE 開啟');
       await liff.init({ liffId: liffId });
