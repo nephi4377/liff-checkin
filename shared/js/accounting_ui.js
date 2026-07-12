@@ -1,6 +1,5 @@
 /**
- * 會計系統共用 UI：浮動提示（10 秒）+ 可捲動訊息欄 + 操作紀錄
- * 紀錄儲存：localStorage（本機）+ 後端稽核試算表（accounting_client_log，背景上傳）
+ * 會計系統共用 UI：浮動提示 +（僅 debug=1）右側狀態紀錄
  */
 var AccountingUi = (function () {
   var TOAST_MS_DEFAULT = 10000;
@@ -22,10 +21,6 @@ var AccountingUi = (function () {
   var _actionTimers = {};
   var _progressEl = null;
   var _apiInflight = 0;
-  var _remoteQueue = [];
-  var _remoteTimer = null;
-  var REMOTE_DEBOUNCE_MS = 8000;
-  var REMOTE_MAX_PER_FLUSH = 15;
 
   function isDebugMode() {
     try {
@@ -210,39 +205,8 @@ var AccountingUi = (function () {
     dockTitleEl.textContent = '狀態紀錄（本機 ' + n + '）';
   }
 
-  function shouldSyncRemote(kind) {
-    kind = normalizeKind(kind);
-    return kind !== 'info';
-  }
-
-  function scheduleRemoteFlush() {
-    if (_remoteTimer) return;
-    _remoteTimer = setTimeout(flushRemoteQueue, REMOTE_DEBOUNCE_MS);
-  }
-
-  function flushRemoteQueue() {
-    _remoteTimer = null;
-    if (!_remoteQueue.length) return;
-    if (!operator.session) return;
-    if (typeof AccountingApi === 'undefined' || !AccountingApi.clientLog) return;
-    var batch = _remoteQueue.splice(0, REMOTE_MAX_PER_FLUSH);
-    if (_remoteQueue.length) scheduleRemoteFlush();
-    var pages = {};
-    batch.forEach(function (e) { pages[e.page] = true; });
-    var page = Object.keys(pages).length === 1 ? batch[0].page : pageName();
-    var kind = 'action';
-    if (batch.some(function (e) { return e.kind === 'err'; })) kind = 'err';
-    else if (batch.some(function (e) { return e.kind === 'warn'; })) kind = 'warn';
-    else if (batch.some(function (e) { return e.kind === 'ok'; })) kind = 'ok';
-    var summary = batch.map(function (e) { return e.text; }).join('\n');
-    var detail = summary.length > 500 ? summary : '';
-    if (summary.length > 500) summary = summary.slice(0, 500) + '…';
-    AccountingApi.clientLog(operator.session, {
-      page: page,
-      kind: kind,
-      summary: summary,
-      detail: detail
-    });
+  function shouldSyncRemote() {
+    return false;
   }
 
   function flushPendingNavIntent() {
@@ -282,16 +246,6 @@ var AccountingUi = (function () {
     var list = readStorageList();
     list.push(entry);
     writeStorageList(list);
-
-    if (!shouldSyncRemote(kind)) return;
-    if (!operator.session) return;
-    if (typeof AccountingApi === 'undefined' || !AccountingApi.clientLog) return;
-    _remoteQueue.push({
-      page: entry.page,
-      kind: entry.kind,
-      text: entry.text
-    });
-    scheduleRemoteFlush();
   }
 
   function restoreStoredLogs() {
@@ -349,7 +303,7 @@ var AccountingUi = (function () {
   }
 
   function pushLog(kind, text) {
-    if (!text) return;
+    if (!text || !isDebugMode()) return;
     kind = normalizeKind(kind);
     if (isEmbedFrame()) {
       try {
@@ -448,6 +402,8 @@ var AccountingUi = (function () {
       return;
     }
 
+    if (!isDebugMode()) return;
+
     document.body.classList.add(opts.side === 'left' ? 'acct-ui-side-left' : 'acct-ui-side-right');
 
     dockEl = document.createElement('aside');
@@ -472,7 +428,6 @@ var AccountingUi = (function () {
     document.getElementById('acctDockCopy').addEventListener('click', copyStoredLogs);
     updateDockTitle();
     bindParentLogListener();
-    window.addEventListener('pagehide', flushRemoteQueue);
   }
 
   function notify(kind, text, options) {
@@ -510,11 +465,11 @@ var AccountingUi = (function () {
     pushLog(k, msg);
     if (status === 'ok') toast('ok', msg, TOAST_MS_DEFAULT);
     else if (status === 'fail') toast('err', msg, TOAST_MS_DEFAULT);
-    else if (status === 'start') toast('info', msg, 4000);
+    else if (status === 'start' && isDebugMode()) toast('info', msg, 4000);
   }
 
   function step(label, detail) {
-    if (!label) return;
+    if (!label || !isDebugMode()) return;
     var msg = String(label);
     if (detail) msg += ' — ' + detail;
     msg += ' · 已耗 ' + formatMs(Date.now() - _bootAt);
@@ -655,10 +610,14 @@ var AccountingUi = (function () {
         if (initOpts.session) setOperator(initOpts.session);
         return this;
       }
-      restoreStoredLogs();
-      consumeNavIntent();
-      renderLog();
-      pushLog('info', '就緒：' + pageLabel());
+      if (isDebugMode()) {
+        restoreStoredLogs();
+        consumeNavIntent();
+        renderLog();
+        pushLog('info', '就緒：' + pageLabel());
+      } else {
+        consumeNavIntent();
+      }
       if (initOpts.session) setOperator(initOpts.session);
       return this;
     },
