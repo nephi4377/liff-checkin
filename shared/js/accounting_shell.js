@@ -118,9 +118,27 @@ var AccountingShell = (function () {
   }
 
   function handleMessage(event) {
-    if (!isHost || !event || !event.data) return;
-    if (event.data.type === 'acct_shell_nav') {
+    if (!event || !event.data) return;
+    var type = event.data.type;
+    if (isHost && type === 'acct_shell_nav') {
       navigateTo(event.data.route || '');
+      return;
+    }
+    if (type === 'request_hub_liff_token') {
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'request_hub_liff_token', forwardFrom: 'acct_shell' }, '*');
+        }
+      } catch (eFwd) {}
+      return;
+    }
+    if (type === 'hub_liff_token' && isHost && event.source && typeof event.source.postMessage === 'function') {
+      try {
+        var frame = document.getElementById('acctContentFrame');
+        if (frame && frame.contentWindow) {
+          frame.contentWindow.postMessage({ type: 'hub_liff_token', token: event.data.token || '' }, '*');
+        }
+      } catch (eRelay) {}
     }
   }
 

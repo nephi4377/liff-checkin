@@ -125,6 +125,10 @@ var AccountingApi = (function () {
 
   function isInHubIframe_() {
     if (!window.parent || window.parent === window) return false;
+    try {
+      if (window.top && window.top !== window) return true;
+    } catch (eTop) {}
+    if (typeof AccountingNav !== 'undefined' && AccountingNav.isEmbed && AccountingNav.isEmbed()) return true;
     if (typeof OperatorContext !== 'undefined') {
       var op = OperatorContext.read();
       if (op && op.userId && op.hubLiffId) return true;
@@ -132,13 +136,22 @@ var AccountingApi = (function () {
     return !!readHubLiffIdFromQuery_();
   }
 
+  /** 會計殼層內嵌 iframe 須向最外層 HUB 要 token，不可只找直接 parent */
+  function getHubMessageTarget_() {
+    try {
+      if (window.top && window.top !== window) return window.top;
+    } catch (e) {}
+    return (window.parent && window.parent !== window) ? window.parent : null;
+  }
+
   function requestParentHubLiffTokenOnce_() {
-    if (!window.parent || window.parent === window) return Promise.resolve('');
+    var target = getHubMessageTarget_();
+    if (!target) return Promise.resolve('');
     return new Promise(function (resolve) {
       var done = false;
       var timer = setTimeout(function () {
         if (!done) { done = true; resolve(''); }
-      }, 3000);
+      }, 4000);
       function onMsg(e) {
         if (!e.data || e.data.type !== 'hub_liff_token') return;
         if (done) return;
@@ -149,9 +162,10 @@ var AccountingApi = (function () {
       }
       window.addEventListener('message', onMsg);
       try {
-        window.parent.postMessage({ type: 'request_hub_liff_token' }, '*');
+        target.postMessage({ type: 'request_hub_liff_token' }, '*');
       } catch (err) {
         clearTimeout(timer);
+        window.removeEventListener('message', onMsg);
         resolve('');
       }
     });
@@ -159,8 +173,8 @@ var AccountingApi = (function () {
 
   async function requestParentHubLiffToken_(opts) {
     opts = opts || {};
-    var attempts = opts.attempts || 3;
-    var delayMs = opts.delayMs || 600;
+    var attempts = opts.attempts || 4;
+    var delayMs = opts.delayMs || 800;
     for (var i = 0; i < attempts; i++) {
       var tok = await requestParentHubLiffTokenOnce_();
       if (tok) return tok;

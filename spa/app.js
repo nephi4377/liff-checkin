@@ -565,6 +565,7 @@ const App = {
                         return;
                     }
                     userProfile.value = await liff.getProfile();
+                    refreshHubIdToken();
                 }
 
                 const [attendanceResult, projectsResult] = await Promise.all([fetchAttendanceData(), fetchHubProjectsData()]);
@@ -646,6 +647,20 @@ const App = {
         // --- 生命週期鉤子 (Lifecycle Hooks) ---
         onMounted(async () => {
             // [v559.2 核心修正] 立即註冊 iframe 訊息監聽器，確保不會錯過任何來自 iframe 的 postMessage。
+        const hubIdTokenRef = { value: '' };
+
+        const refreshHubIdToken = () => {
+            try {
+                if (typeof liff !== 'undefined' && liff.getIDToken) {
+                    const t = liff.getIDToken() || '';
+                    if (t) hubIdTokenRef.value = t;
+                    return t || hubIdTokenRef.value || '';
+                }
+            } catch (e) {
+                console.warn('[Hub] refreshHubIdToken:', e);
+            }
+            return hubIdTokenRef.value || '';
+        };
             // [v559.8] onMounted 只負責觸發非同步初始化，本身保持同步。
             initializeApplication();
         });
@@ -683,11 +698,9 @@ const App = {
                 return;
             }
             if (type === 'request_hub_liff_token') {
-                let tok = '';
-                try {
-                    tok = (typeof liff !== 'undefined' && liff.getIDToken) ? (liff.getIDToken() || '') : '';
-                } catch (e) {
-                    console.warn('[Hub] 無法提供 LIFF token 給 iframe:', e);
+                let tok = refreshHubIdToken();
+                if (!tok) {
+                    console.warn('[Hub] iframe 索取 LIFF token 但主控台目前為空（可能逾時，請重新從 LINE 開啟）');
                 }
                 if (event.source && typeof event.source.postMessage === 'function') {
                     event.source.postMessage({ type: 'hub_liff_token', token: tok }, event.origin || '*');
