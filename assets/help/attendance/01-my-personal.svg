@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 272" width="520" height="272">
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="260.0" y="28" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="15" font-weight="700" fill="#0f172a">我的出勤與假勤</text>
+  <rect x="16" y="44" width="488" height="192" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="16" y="44" width="488" height="28" rx="10" fill="#f1f5f9"/>
+  <rect x="28" y="52" width="10" height="10" rx="2" fill="#f87171"/>
+  <rect x="44" y="52" width="10" height="10" rx="2" fill="#fbbf24"/>
+  <rect x="60" y="52" width="10" height="10" rx="2" fill="#4ade80"/>
+  <rect x="400" y="78" width="88" height="22" rx="6" fill="#eff6ff" stroke="#93c5fd"/>
+  <text x="444" y="93" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" font-weight="600" fill="#1d4ed8">個人頁</text>
+  <text x="36" y="108" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" font-weight="600" fill="#64748b">月份切換</text>
+  <rect x="36" y="114" width="448" height="22" rx="5" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="36" y="142" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" font-weight="600" fill="#64748b">打卡紀錄</text>
+  <rect x="36" y="148" width="448" height="22" rx="5" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="36" y="176" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" font-weight="600" fill="#64748b">請假列表</text>
+  <rect x="36" y="182" width="448" height="22" rx="5" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="36" y="210" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" font-weight="600" fill="#64748b">薪資核對區塊</text>
+  <rect x="36" y="216" width="448" height="22" rx="5" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="260.0" y="258" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#94a3b8">示意圖 · 實際畫面以系統為準</text>
+</svg>

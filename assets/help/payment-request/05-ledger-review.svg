@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 230" width="560" height="230">
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="280.0" y="28" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="15" font-weight="700" fill="#0f172a">請款審核列表</text>
+  <rect x="16" y="44" width="528" height="150" rx="10" fill="#fff" stroke="#cbd5e1"/>
+  <text x="28" y="72" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" font-weight="700" fill="#475569">廠商</text>
+  <text x="156" y="72" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" font-weight="700" fill="#475569">金額</text>
+  <text x="284" y="72" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" font-weight="700" fill="#475569">狀態</text>
+  <text x="412" y="72" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" font-weight="700" fill="#475569">申請日</text>
+  <line x1="24" y1="78" x2="536" y2="78" stroke="#e2e8f0"/>
+  <text x="28" y="100" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#334155">○○木作</text>
+  <text x="156" y="100" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#334155">$12,000</text>
+  <text x="284" y="100" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#334155">待審</text>
+  <text x="412" y="100" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#334155">07/10</text>
+  <text x="28" y="128" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#334155">△△五金</text>
+  <text x="156" y="128" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#334155">$3,500</text>
+  <text x="284" y="128" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#334155">待審</text>
+  <text x="412" y="128" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#334155">07/11</text>
+  <rect x="28" y="160" width="64" height="24" rx="5" fill="#eff6ff" stroke="#93c5fd"/>
+  <text x="60.0" y="176" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#1d4ed8">快速核准</text>
+  <rect x="100" y="160" width="42" height="24" rx="5" fill="#eff6ff" stroke="#93c5fd"/>
+  <text x="121.0" y="176" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#1d4ed8">審核</text>
+  <text x="280.0" y="216" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#94a3b8">示意圖 · 實際畫面以系統為準</text>
+</svg>

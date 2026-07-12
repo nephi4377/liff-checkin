@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 236" width="420" height="236">
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="210.0" y="28" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="15" font-weight="700" fill="#0f172a">LINE · 進出群文字記帳（收入 A）</text>
+  <rect x="20" y="44" width="380" height="146" rx="16" fill="#fff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="210.0" y="62" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" font-weight="600" fill="#64748b">LINE</text>
+  <rect x="200" y="78" width="180" height="116" rx="10" fill="#dcfce7" stroke="#86efac"/>
+  <text x="212" y="96" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" fill="#334155">收款日期：115/07/10</text>
+  <text x="212" y="112" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" fill="#334155">客戶名：王小姐</text>
+  <text x="212" y="128" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" fill="#334155">訂編：TX2401</text>
+  <text x="212" y="144" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" fill="#334155">款項：尾款</text>
+  <text x="212" y="160" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" fill="#334155">金額：50000</text>
+  <text x="212" y="176" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" fill="#334155">付款方式：匯款</text>
+  <rect x="40" y="206" width="180" height="52" rx="10" fill="#fff" stroke="#e2e8f0"/>
+  <text x="52" y="224" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" fill="#334155">✓ 已記好收入</text>
+  <text x="52" y="240" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" fill="#334155">試算表第 128 列</text>
+  <text x="210.0" y="222" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#94a3b8">示意圖 · 實際畫面以系統為準</text>
+</svg>

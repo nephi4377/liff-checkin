@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 178" width="420" height="178">
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="210.0" y="28" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="15" font-weight="700" fill="#0f172a">LINE · 審核通知</text>
+  <rect x="20" y="44" width="380" height="88" rx="16" fill="#fff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="210.0" y="62" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" font-weight="600" fill="#64748b">LINE</text>
+  <rect x="40" y="78" width="180" height="84" rx="10" fill="#fff" stroke="#e2e8f0"/>
+  <text x="52" y="96" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" fill="#334155">【請款審核】</text>
+  <text x="52" y="112" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" fill="#334155">○○木作 $12,000</text>
+  <text x="52" y="128" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" fill="#334155">狀態：已核准</text>
+  <text x="52" y="144" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" fill="#334155">→ 進入待匯款</text>
+  <text x="210.0" y="164" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#94a3b8">示意圖 · 實際畫面以系統為準</text>
+</svg>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 270" width="480" height="270">
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="240.0" y="28" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="15" font-weight="700" fill="#0f172a">支出 — 案號分攤</text>
+  <rect x="20" y="50" width="440" height="200" rx="10" fill="#fff" stroke="#cbd5e1"/>
+  <text x="36" y="78" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" font-weight="700" fill="#334155">分攤明細</text>
+  <text x="380" y="78" text-anchor="end" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#1d4ed8">合計 $3,500</text>
+  <text x="36" y="100" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" font-weight="600" fill="#64748b">案號 · 品項 · 金額</text>
+  <rect x="36" y="108" width="408" height="24" rx="4" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="48" y="124" font-family="Consolas", "Courier New", monospace font-size="10" fill="#334155">TX2401 · 木工代工 · $2,000</text>
+  <rect x="36" y="138" width="408" height="24" rx="4" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="48" y="154" font-family="Consolas", "Courier New", monospace font-size="10" fill="#334155">TX2401 · 運費 · $1,500</text>
+  <rect x="36" y="178" width="100" height="26" rx="6" fill="#eff6ff" stroke="#93c5fd"/>
+  <text x="86" y="196" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#1d4ed8">＋ 新增一列</text>
+  <text x="36" y="230" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#166534">✓ 分攤加總＝支付金額</text>
+  <text x="240.0" y="256" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#94a3b8">示意圖 · 實際畫面以系統為準</text>
+</svg>

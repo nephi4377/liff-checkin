@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 320" width="560" height="320">
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="280.0" y="28" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="15" font-weight="700" fill="#0f172a">收入 vs 支出欄位</text>
+  <rect x="16" y="44" width="528" height="240" rx="10" fill="#fff" stroke="#cbd5e1"/>
+  <rect x="28" y="64" width="256" height="210" rx="8" fill="#f0fdf4" stroke="#86efac"/>
+  <text x="156.0" y="84" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" font-weight="700" fill="#334155">收入 A</text>
+  <text x="38" y="100" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#475569">收款日期</text>
+  <rect x="38" y="104" width="236" height="18" rx="4" fill="#fff" stroke="#e2e8f0"/>
+  <text x="38" y="130" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#475569">客戶名</text>
+  <rect x="38" y="134" width="236" height="18" rx="4" fill="#fff" stroke="#e2e8f0"/>
+  <text x="38" y="160" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#475569">訂編</text>
+  <rect x="38" y="164" width="236" height="18" rx="4" fill="#fff" stroke="#e2e8f0"/>
+  <text x="38" y="190" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#475569">款項類別</text>
+  <rect x="38" y="194" width="236" height="18" rx="4" fill="#fff" stroke="#e2e8f0"/>
+  <text x="38" y="220" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#475569">金額</text>
+  <rect x="38" y="224" width="236" height="18" rx="4" fill="#fff" stroke="#e2e8f0"/>
+  <text x="38" y="250" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#475569">入零用金</text>
+  <rect x="38" y="254" width="236" height="18" rx="4" fill="#fff" stroke="#e2e8f0"/>
+  <rect x="292" y="64" width="256" height="210" rx="8" fill="#eff6ff" stroke="#93c5fd"/>
+  <text x="420.0" y="84" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" font-weight="700" fill="#334155">支出 B</text>
+  <text x="302" y="100" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#475569">支出日期</text>
+  <rect x="302" y="104" width="236" height="18" rx="4" fill="#fff" stroke="#e2e8f0"/>
+  <text x="302" y="130" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#475569">廠商名稱</text>
+  <rect x="302" y="134" width="236" height="18" rx="4" fill="#fff" stroke="#e2e8f0"/>
+  <text x="302" y="160" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#475569">支付金額</text>
+  <rect x="302" y="164" width="236" height="18" rx="4" fill="#fff" stroke="#e2e8f0"/>
+  <text x="302" y="190" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#475569">分攤明細</text>
+  <rect x="302" y="194" width="236" height="18" rx="4" fill="#fff" stroke="#e2e8f0"/>
+  <text x="302" y="220" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#475569">款項月份</text>
+  <rect x="302" y="224" width="236" height="18" rx="4" fill="#fff" stroke="#e2e8f0"/>
+  <text x="302" y="250" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#475569">申請人</text>
+  <rect x="302" y="254" width="236" height="18" rx="4" fill="#fff" stroke="#e2e8f0"/>
+  <text x="280.0" y="306" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="10" fill="#94a3b8">示意圖 · 實際畫面以系統為準</text>
+</svg>

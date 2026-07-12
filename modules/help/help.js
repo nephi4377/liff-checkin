@@ -51,6 +51,17 @@
       img.alt = fig.getAttribute('data-alt') || '';
       fig.appendChild(img);
     };
+    img.onerror = function () {
+      var section = fig.closest('.help-flow-section');
+      if (section && section.querySelector('.help-flow')) {
+        fig.remove();
+        return;
+      }
+      var ph = fig.querySelector('.help-img-placeholder');
+      if (ph && ph.textContent.indexOf('載入流程圖') >= 0) {
+        fig.remove();
+      }
+    };
     img.src = src;
   });
 })();
