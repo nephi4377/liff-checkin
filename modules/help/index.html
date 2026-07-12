@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>主控台使用說明</title>
+  <title>使用教學</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,32 +14,29 @@
   <div class="help-wrap wide">
     <header class="help-header">
       <p style="font-size:.8rem;color:#64748b;margin:0 0 .25rem;">添心設計 · 內部系統</p>
-      <h1>主控台使用說明</h1>
-      <p class="lead">各功能含<strong>流程圖</strong>、<strong>操作步驟</strong>與<strong>截圖位置</strong>。圖片請依各頁提示放到 <code>assets/help/</code> 對應資料夾，放好會自動顯示。</p>
+      <h1>使用教學</h1>
+      <p class="lead">主控台各功能的<strong>流程圖</strong>、<strong>操作步驟</strong>與<strong>畫面截圖</strong>集中於此。流程圖已內建；操作截圖請依各頁提示放到 <code>assets/help/</code>，放好會自動顯示。</p>
     </header>
 
     <section id="flowchart" class="help-section help-flow-section">
       <h2>會計與款項 — 怎麼選？</h2>
-      <figure class="help-img-ph" data-img="/assets/help/00-accounting-overview.png" data-alt="會計功能總覽">
-        <div class="help-img-placeholder">📷 <code>assets/help/00-accounting-overview.png</code><br>三條款項流程總覽圖（選填）</div>
-      </figure>
-      <div class="help-flow" aria-label="三條款項流程">
+      <div class="help-flow help-flow-accounting" aria-label="三條款項流程">
         <div class="help-flow-step is-start">這筆款…</div>
         <div class="help-flow-arrow">↓</div>
-        <div class="help-flow-branch">
+        <div class="help-flow-branch help-flow-branch-accounting">
           <div class="help-flow-branch-col">
             <span class="help-flow-branch-label">已收／已付</span>
-            <div class="help-flow-step">HUB 收支登錄</div>
+            <div class="help-flow-step">會計系統 → 收支登錄</div>
             <div class="help-flow-arrow">↓</div>
             <div class="help-flow-step is-end">直接記帳</div>
           </div>
           <div class="help-flow-branch-col">
             <span class="help-flow-branch-label">還沒付款</span>
-            <div class="help-flow-step">待請款</div>
+            <div class="help-flow-step">待付款申請</div>
             <div class="help-flow-arrow">↓</div>
             <div class="help-flow-step">申請→審核→匯款</div>
           </div>
-          <div class="help-flow-branch-col">
+          <div class="help-flow-branch-col help-flow-branch-col-span">
             <span class="help-flow-branch-label">員工薪資</span>
             <div class="help-flow-step">員工送審</div>
             <div class="help-flow-arrow">↓</div>
@@ -53,18 +50,23 @@
       <h2>會計與款項 <span class="help-tag help-tag-pri">優先</span></h2>
       <div class="help-card-grid" style="margin-top:.85rem;">
         <a class="help-card" href="#/help/accounting-ingest">
-          <h3>① 收支登錄</h3>
-          <p>已收／已付記帳。入口在主控台 HUB（會計選單不重複放）。</p>
+          <h3>收支登錄說明</h3>
+          <p>已收／已付記帳、分攤案號與 LINE 快速記帳。入口：主控台「會計系統」→ 收支登錄。</p>
           <span class="badge">LINE ＋ 網頁</span>
         </a>
         <a class="help-card" href="#/help/payroll">
-          <h3>② 薪資</h3>
+          <h3>薪資說明</h3>
           <p>員工送審 → 主管審核 → 財務匯款 → LINE 通知。</p>
           <span class="badge">全體員工 · 含 3 子頁</span>
         </a>
+        <a class="help-card" href="#/help/payroll/review">
+          <h3>薪資審核說明</h3>
+          <p>核准、退回與獎金扣款步驟（主管權限 ≥ 5）。</p>
+          <span class="badge">主管 ≥5</span>
+        </a>
         <a class="help-card" href="#/help/payment-request">
-          <h3>③ 待請款</h3>
-          <p>還沒付款：申請、審核、匯款三階段；LINE 傳圖或網頁表單。</p>
+          <h3>待付款申請說明</h3>
+          <p>還沒付款：網頁申請→審核→匯款；LINE #請款 可開啟同一頁。</p>
           <span class="badge">LINE ＋ 網頁 · 含 3 子頁</span>
         </a>
       </div>
@@ -74,8 +76,8 @@
       <h2>出勤與案場</h2>
       <div class="help-card-grid">
         <a class="help-card" href="#/help/attendance">
-          <h3>出勤與假勤</h3>
-          <p>打卡、請假、排班、薪資核對入口。</p>
+          <h3>出勤與假勤說明</h3>
+          <p>打卡、請假、排班與薪資核對入口。</p>
           <span class="badge">全體員工</span>
         </a>
         <a class="help-card" href="#/help/projects">
@@ -114,7 +116,7 @@
     </section>
 
     <footer class="help-footer">
-      <p>從主控台頂部「使用教學」可回到本頁</p>
+      <p>從主控台頂部「📖 使用教學」可回到本頁</p>
     </footer>
   </div>
   <script src="/modules/help/help.js"></script>

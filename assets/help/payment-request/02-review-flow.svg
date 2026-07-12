@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 600" width="700" height="600">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="350.0" y="36" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="20" font-weight="700" fill="#0f172a">待付款申請 — 審核階段</text>
+  <text x="350.0" y="58" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="12" fill="#64748b">添心設計 · 內部系統使用教學</text>
+  <rect x="280" y="78" width="140" height="40" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="350.0" y="98.0" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="13" font-weight="700" fill="#334155">待審列表</text>  <line x1="350" y1="118" x2="350" y2="138" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr)"/>  <rect x="250" y="142" width="200" height="40" rx="10" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+  <text x="350.0" y="162.0" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="13" font-weight="700" fill="#1e40af">看請款單／附件</text>  <line x1="350" y1="182" x2="350" y2="202" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr)"/>  <text x="175" y="218" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" font-weight="600" fill="#64748b">快速核准</text>  <rect x="85" y="228" width="180" height="40" rx="10" fill="#dcfce7" stroke="#86efac" stroke-width="1.5"/>
+  <text x="175.0" y="248.0" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="13" font-weight="700" fill="#166534">進待匯款</text>  <text x="525" y="218" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" font-weight="600" fill="#64748b">詳審</text>  <rect x="435" y="228" width="180" height="40" rx="10" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+  <text x="525.0" y="248.0" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="13" font-weight="700" fill="#1e40af">改案號／分攤</text>  <line x1="525" y1="268" x2="525" y2="288" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr)"/>  <rect x="435" y="292" width="180" height="40" rx="10" fill="#dcfce7" stroke="#86efac" stroke-width="1.5"/>
+  <text x="525.0" y="312.0" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="13" font-weight="700" fill="#166534">核准或退回</text>  <text x="350" y="360" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" fill="#64748b">核准時不寫收支；等財務匯款後才登錄</text></svg>

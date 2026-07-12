@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 600" width="700" height="600">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <text x="350.0" y="36" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="20" font-weight="700" fill="#0f172a">薪資 — 總流程</text>
+  <text x="350.0" y="58" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="12" fill="#64748b">添心設計 · 內部系統使用教學</text>
+  <rect x="250" y="78" width="200" height="44" rx="10" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+  <text x="350.0" y="100.0" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="13" font-weight="700" fill="#166534">員工：核對並送審</text>  <line x1="350" y1="122" x2="350" y2="142" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr)"/>  <rect x="240" y="146" width="220" height="44" rx="10" fill="#fef3c7" stroke="#fde68a" stroke-width="1.5"/>
+  <text x="350.0" y="168.0" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="13" font-weight="700" fill="#92400e">主管：薪資審核 ≥ 5</text>  <line x1="350" y1="190" x2="350" y2="210" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr)"/>  <text x="175" y="228" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" font-weight="600" fill="#64748b">核准</text>  <rect x="85" y="238" width="180" height="44" rx="10" fill="#e0f2fe" stroke="#7dd3fc" stroke-width="1.5"/>
+  <text x="175.0" y="260.0" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="13" font-weight="700" fill="#075985">財務：待匯款 ≥ 4</text>  <line x1="175" y1="282" x2="175" y2="302" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr)"/>  <rect x="85" y="306" width="180" height="40" rx="10" fill="#dcfce7" stroke="#86efac" stroke-width="1.5"/>
+  <text x="175.0" y="326.0" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="13" font-weight="700" fill="#166534">員工查看實領</text>  <text x="525" y="228" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" font-weight="600" fill="#64748b">退回</text>  <rect x="435" y="238" width="180" height="40" rx="10" fill="#fef3c7" stroke="#fde68a" stroke-width="1.5"/>
+  <text x="525.0" y="258.0" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="13" font-weight="700" fill="#92400e">填退回原因</text>  <line x1="525" y1="278" x2="525" y2="298" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr)"/>  <rect x="435" y="302" width="180" height="40" rx="10" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+  <text x="525.0" y="322.0" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="13" font-weight="700" fill="#166534">員工修改後重送</text>  <text x="350" y="380" text-anchor="middle" font-family="Noto Sans TC", "Microsoft JhengHei", sans-serif font-size="11" fill="#64748b">考勤儀表板不再審核薪資，請到會計模組處理</text></svg>

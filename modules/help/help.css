@@ -124,6 +124,37 @@ body.help-page {
   font-size: .78rem; color: #64748b; text-align: center; margin-top: .65rem; line-height: 1.5;
 }
 .help-flow-wide .help-flow-step { max-width: 9.5rem; }
+
+/* 會計三條路：手機單排窄欄；寬螢幕上排兩欄、下排一欄置中 */
+.help-flow-accounting {
+  width: 100%;
+  max-width: 18rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+.help-flow-accounting .help-flow-step { max-width: 100%; width: 100%; box-sizing: border-box; }
+.help-flow-branch-accounting {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  width: 100%;
+  margin: 0;
+}
+.help-flow-branch-accounting .help-flow-branch-col { width: 100%; }
+@media (min-width: 640px) {
+  .help-flow-accounting { max-width: 28rem; }
+  .help-flow-branch-accounting {
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem 1.25rem;
+  }
+  .help-flow-branch-accounting .help-flow-branch-col-span {
+    grid-column: 1 / -1;
+    max-width: 11rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
 @media (min-width: 640px) {
   .help-flow-horizontal {
     flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center;

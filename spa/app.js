@@ -163,10 +163,10 @@ const App = {
             '#/help/payroll/employee': { name: 'iframe', src: 'modules/help/payroll-employee.html', title: '薪資 — 員工送審' },
             '#/help/payroll/review': { name: 'iframe', src: 'modules/help/payroll-review.html', title: '薪資 — 審核' },
             '#/help/payroll/finance': { name: 'iframe', src: 'modules/help/payroll-finance.html', title: '薪資 — 待匯款' },
-            '#/help/payment-request': { name: 'iframe', src: 'modules/help/payment-request.html', title: '待請款說明' },
-            '#/help/payment-request/apply': { name: 'iframe', src: 'modules/help/payment-request-apply.html', title: '待請款 — 申請' },
-            '#/help/payment-request/review': { name: 'iframe', src: 'modules/help/payment-request-review.html', title: '待請款 — 審核' },
-            '#/help/payment-request/finance': { name: 'iframe', src: 'modules/help/payment-request-finance.html', title: '待請款 — 匯款' },
+            '#/help/payment-request': { name: 'iframe', src: 'modules/help/payment-request.html', title: '待付款申請說明' },
+            '#/help/payment-request/apply': { name: 'iframe', src: 'modules/help/payment-request-apply.html', title: '待付款申請 — 申請' },
+            '#/help/payment-request/review': { name: 'iframe', src: 'modules/help/payment-request-review.html', title: '待付款申請 — 審核' },
+            '#/help/payment-request/finance': { name: 'iframe', src: 'modules/help/payment-request-finance.html', title: '待付款申請 — 匯款' },
             '#/help/attendance': { name: 'iframe', src: 'modules/help/attendance.html', title: '出勤與假勤說明' },
             '#/help/projects': { name: 'iframe', src: 'modules/help/projects.html', title: '案場與施工回報說明' },
             '#/help/design-tools': { name: 'iframe', src: 'modules/help/design-tools.html', title: '設計工具說明' },
@@ -774,7 +774,12 @@ const App = {
                          <nav class="-mb-px flex gap-6" aria-label="Tabs">
                              <a href="#/dashboard" :class="['py-1.5 px-1 text-base font-bold', currentView.name === 'dashboard' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:border-gray-300']">主控台</a>
                              <a href="#/project-board" :class="['py-1.5 px-1 text-base font-bold', currentView.name === 'project-board' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:border-gray-300']">專案看板</a>
-                             <a href="#/help" :class="['py-1.5 px-1 text-base font-bold', isHelpActive ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:border-gray-300']">使用教學</a>
+                             <a href="#/help" :class="[
+                                 'inline-flex items-center gap-1.5 py-1.5 px-3 rounded-lg text-base font-bold transition-colors border',
+                                 isHelpActive
+                                     ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
+                                     : 'bg-sky-50 text-sky-800 border-sky-300 hover:bg-sky-100 hover:border-sky-400'
+                             ]"><span aria-hidden="true">📖</span>使用教學</a>
                          </nav>
                      </div>
                 </div>

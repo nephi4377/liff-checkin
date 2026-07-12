@@ -50,12 +50,6 @@ export default {
         const budgetWebUrl = computed(() => `#/budget-web`);
         const budgetAuditUrl = computed(() => `#/budget-audit`);
         const accountingHubUrl = computed(() => '#/accounting');
-        const helpUrl = computed(() => '#/help');
-        const helpAccountingUrl = computed(() => '#/help/accounting-ingest');
-        const helpPayrollUrl = computed(() => '#/help/payroll');
-        const helpPayrollReviewUrl = computed(() => '#/help/payroll/review');
-        const helpPaymentRequestUrl = computed(() => '#/help/payment-request');
-        const helpAttendanceUrl = computed(() => '#/help/attendance');
 
         const formatTimeAgo = (date) => {
             const seconds = Math.floor((new Date() - new Date(date)) / 1000);
@@ -368,12 +362,6 @@ export default {
             budgetWebUrl,
             budgetAuditUrl,
             accountingHubUrl,
-            helpUrl,
-            helpAccountingUrl,
-            helpPayrollUrl,
-            helpPayrollReviewUrl,
-            helpPaymentRequestUrl,
-            helpAttendanceUrl,
             formatTimeAgo,
             handleReply,
             emit,
@@ -398,19 +386,6 @@ export default {
                     <button type="submit" class="flex-shrink-0 bg-blue-600 text-white text-sm font-bold py-1.5 px-4 rounded-md hover:bg-blue-700">開啟</button>
                 </form>
             </div>
-
-            <!-- 使用教學：置頂醒目入口（不需捲動即可看見） -->
-            <a :href="helpUrl"
-                class="group block bg-gradient-to-r from-sky-50 to-blue-50 rounded-xl shadow-sm border border-sky-200 border-l-4 border-l-sky-500 px-4 py-3 mb-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                <div class="flex items-center gap-3">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center text-xl">📖</div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-sky-900 leading-tight">使用教學</h2>
-                        <p class="text-xs text-sky-800/80 mt-0.5 leading-snug">系統操作說明、收支登錄、薪資與請款流程。</p>
-                    </div>
-                    <span class="flex-shrink-0 text-sky-600 text-sm font-bold group-hover:translate-x-0.5 transition-transform">查看 →</span>
-                </div>
-            </a>
 
             <!-- 人員出席：今天／明天；假勤 chip 僅假別與時段；今天顯示打卡燈號 -->
             <div class="bg-white p-3 sm:p-4 rounded-lg shadow-md border border-gray-200 mb-4">
@@ -701,66 +676,6 @@ export default {
                     <div class="min-w-0 flex-1">
                         <h2 class="text-base font-bold text-gray-800 leading-tight">客戶常見問答 (FAQ)</h2>
                         <p class="text-xs text-gray-500 mt-1 leading-snug">快速查詢與回覆常見問題。</p>
-                    </div>
-                </a>
-
-                <!-- 16. 系統使用說明 -->
-                <a :href="helpUrl"
-                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-sky-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center text-xl">📖</div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">系統使用說明</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">整合主控台各功能入口與操作教學。</p>
-                    </div>
-                </a>
-
-                <!-- 17. 出勤與假勤說明 -->
-                <a :href="helpAttendanceUrl"
-                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-sky-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center text-xl">💡</div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">出勤與假勤說明</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">打卡、請假、排班與薪資核對入口。</p>
-                    </div>
-                </a>
-
-                <!-- 18. 收支登錄說明 -->
-                <a :href="helpAccountingUrl"
-                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-sky-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center text-xl">💡</div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">收支登錄說明</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">記帳、分攤案號與 LINE 快速記帳（入口在 HUB）。</p>
-                    </div>
-                </a>
-
-                <!-- 19. 薪資說明 -->
-                <a :href="helpPayrollUrl"
-                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-sky-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center text-xl">💡</div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">薪資說明</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">員工送審、主管審核、財務匯款。</p>
-                    </div>
-                </a>
-
-                <!-- 20. 薪資審核說明（主管） -->
-                <a v-if="currentUser && currentUser.permission >= 5" :href="helpPayrollReviewUrl"
-                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-amber-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center text-xl">✓</div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">薪資審核說明</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">核准、退回與獎金扣款步驟。</p>
-                    </div>
-                </a>
-
-                <!-- 21. 待請款說明 -->
-                <a :href="helpPaymentRequestUrl"
-                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-sky-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center text-xl">💡</div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">待請款說明</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">廠商請款、審核與匯款說明。</p>
                     </div>
                 </a>
             </div>

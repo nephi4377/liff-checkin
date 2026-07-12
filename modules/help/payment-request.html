@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>待請款 — 使用說明總覽</title>
+  <title>待付款申請 — 使用說明總覽</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,26 +14,26 @@
   <div class="help-wrap wide">
     <p class="help-back"><a href="#/help" data-hub-route="#/help">← 使用說明目錄</a></p>
     <header class="help-header">
-      <h1>待請款（待付款申請）</h1>
-      <p class="lead">款項<strong>還沒付出去</strong>時使用。可分三階段：申請 → 審核 → 匯款。支援 <strong>LINE 傳圖送審</strong>與<strong>網頁表單</strong>。</p>
+      <h1>待付款申請</h1>
+      <p class="lead">款項<strong>還沒付出去</strong>時使用。可分三階段：申請 → 審核 → 匯款。請款以<strong>待付款申請網頁</strong>為主；LINE 打 <code>#請款</code> 僅開啟網頁入口（<strong>傳圖不會自動建單</strong>）。</p>
     </header>
 
     <section id="flowchart" class="help-section help-flow-section">
       <h2>總流程圖</h2>
-      <figure class="help-img-ph" data-img="/assets/help/payment-request/00-flow-diagram.png" data-alt="待請款總流程">
-        <div class="help-img-placeholder">📷 待補圖：待請款全流程<br><small><code>assets/help/payment-request/00-flow-diagram.png</code></small></div>
+      <figure class="help-img-ph" data-img="/assets/help/payment-request/00-flow-diagram.svg" data-alt="待付款申請總流程">
+        <div class="help-img-placeholder">載入流程圖中…</div>
       </figure>
-      <div class="help-flow help-flow-wide" aria-label="待請款總流程">
+      <div class="help-flow help-flow-wide" aria-label="待付款申請總流程">
         <div class="help-flow-step is-start">錢還沒付</div>
         <div class="help-flow-arrow">↓</div>
         <div class="help-flow-branch">
           <div class="help-flow-branch-col">
-            <span class="help-flow-branch-label">LINE</span>
-            <div class="help-flow-step">#請款＋傳圖<br><small>或廠商私訊</small></div>
+            <span class="help-flow-branch-label">LINE（選用）</span>
+            <div class="help-flow-step">#請款<br><small>回覆開啟待付款申請</small></div>
           </div>
           <div class="help-flow-branch-col">
-            <span class="help-flow-branch-label">網頁</span>
-            <div class="help-flow-step">待付款申請表單</div>
+            <span class="help-flow-branch-label">網頁（主要）</span>
+            <div class="help-flow-step">待付款申請表單<br><small>上傳單據、辨識、送審</small></div>
           </div>
         </div>
         <div class="help-flow-arrow">↓</div>
@@ -43,7 +43,8 @@
         <div class="help-flow-arrow">↓</div>
         <div class="help-flow-step is-end">匯款＋登錄收支</div>
       </div>
-      <p class="help-flow-note">已付款請用主控台 <a href="#/help/accounting-ingest">收支登錄</a>（HUB）；會計選單不再重複放此入口。</p>
+      <p class="help-flow-note">2026-07-11 起：LINE 只傳圖<strong>不會</strong>自動核對卡或建單，請一律在網頁完成申請。</p>
+      <p class="help-flow-note">已付款請用 <a href="#/help/accounting-ingest">收支登錄</a>；入口：主控台「會計系統」。</p>
     </section>
 
     <section class="help-section">
@@ -52,7 +53,7 @@
       <div class="help-card-grid" style="margin-top:.85rem;">
         <a class="help-card" href="#/help/payment-request/apply">
           <h3>① 申請送審</h3>
-          <p>LINE 傳圖／#請款，或網頁上傳單據、AI 辨識、填廠商與分攤後送出。</p>
+          <p>網頁上傳單據、AI 辨識、填廠商與分攤後送出；LINE 可打 #請款 開啟同一頁。</p>
           <span class="badge">員工、廠商、行政</span>
         </a>
         <a class="help-card" href="#/help/payment-request/review">
@@ -73,7 +74,7 @@
       <table class="help-table">
         <thead><tr><th>情況</th><th>請用</th></tr></thead>
         <tbody>
-          <tr><td>還沒付款／發票到了還沒匯</td><td>待請款（申請→審核→匯款）</td></tr>
+          <tr><td>還沒付款／發票到了還沒匯</td><td>待付款申請（申請→審核→匯款）</td></tr>
           <tr><td>現金已付、轉帳已完成</td><td>主控台 HUB「收支登錄」</td></tr>
           <tr><td>員工薪資</td><td>薪資流程（另見薪資說明）</td></tr>
         </tbody>
