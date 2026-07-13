@@ -31,7 +31,8 @@
       PHOTO_UNIT_MAX_RETRIES: 3,  // 單張相片重試次數
       PHOTO_UNIT_RETRY_BASE_MS: 400,  // 單張相片重試間隔
       GAS_FETCH_TIMEOUT_MS: 120000,  // GAS 連線逾時  
-      CLIENT_VER: '2026.04.12-V3.14',  // 版本號
+      CLIENT_VER: '2026.07.13-V3.15',  // 版本號
+      LIFF_INIT_TIMEOUT_MS: 15000,  // LIFF 初始化逾時（逾時仍保留表單 UI）
       FAILURE_REPORT_PREFIX: 'failure-report',  // 失敗報告前綴
       MAX_FAILURE_REPORT_JSON_BYTES: 480000,  // 失敗報告 JSON 大小上限
       IDB_KEY_TRACE: 'sessionTraceDraft',  // IDB 記錄鍵
@@ -292,6 +293,7 @@
       IDB_STORE,
       IDB_KEY,
       MAX_LOG_LINES,
+      LIFF_INIT_TIMEOUT_MS,
     } = window.__REPORT_V3_CONFIG__;
 
     let v3FirebaseStorage = null;
@@ -896,14 +898,16 @@
         }
       };
 
-      try {
-        await signInAnonymously(auth);
-        reportTrace('Firebase 匿名登入成功');
-        console.log('[V3] Firebase 匿名登入成功');
-      } catch (authError) {
-        console.error('[V3] Firebase 匿名登入失敗', authError);
-        window.logGlobalError('Firebase Auth', `匿名登入失敗 (${authError.code})，請確認 Firebase 已啟用匿名登入。`);
-      }
+      // Firebase 匿名登入改背景執行，避免弱網／LINE WebView 卡住時整頁無法綁定 UI
+      void signInAnonymously(auth)
+        .then(() => {
+          reportTrace('Firebase 匿名登入成功');
+          console.log('[V3] Firebase 匿名登入成功');
+        })
+        .catch((authError) => {
+          console.error('[V3] Firebase 匿名登入失敗', authError);
+          window.logGlobalError('Firebase Auth', `匿名登入失敗 (${authError.code})，請確認 Firebase 已啟用匿名登入。`);
+        });
 
       const form = document.getElementById('report-form');
       const submitButton = document.getElementById('submit-button');
@@ -917,6 +921,8 @@
       let userProfile = null;
       /** 從 IndexedDB 還原的照片（無法寫回 input，改由程式直接送） */
       let restoredPhotoInfos = null;
+      let staticUiBound = false;
+      let submitFlowBound = false;
 
       async function ensureAuthBeforeSubmit() {
         if (auth.currentUser) return;
@@ -930,6 +936,16 @@
         }
       }
 
+      async function initLiffWithTimeout() {
+        const timeoutMs = Number(LIFF_INIT_TIMEOUT_MS) || 15000;
+        await Promise.race([
+          liff.init({ liffId: LIFF_ID }),
+          new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('LIFF 初始化逾時')), timeoutMs);
+          }),
+        ]);
+      }
+
       async function main() {
         const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
         const urlParams = new URLSearchParams(window.location.search);
@@ -940,27 +956,30 @@
           console.warn('[V3] 本地測試模式（ENABLE_LOCAL_TEST_BYPASS=true）');
           document.getElementById('v3-local-banner').classList.remove('hidden');
           userProfile = { userId: 'Ud58333430513b7527106fa71d2e30151', displayName: '本地測試員' };
-          initializeEventListeners();
+          bindSubmitFlow();
         } else if (uid && name) {
           let displayName = name;
           try { displayName = decodeURIComponent(name); } catch (_) { /* 保持原字串 */ }
           userProfile = { userId: uid, displayName };
-          initializeEventListeners();
+          bindSubmitFlow();
         } else {
           try {
-            await liff.init({ liffId: LIFF_ID });
+            await initLiffWithTimeout();
             if (!liff.isLoggedIn()) { liff.login(); return; }
             userProfile = await liff.getProfile();
-            initializeEventListeners();
+            bindSubmitFlow();
           } catch (error) {
             console.error('LIFF 初始化失敗:', error);
-            updateStatus('頁面初始化失敗，請在 LINE 中開啟或重新載入。', 'error');
+            updateStatus('身分驗證尚未完成，請關閉後在 LINE 重新開啟；表單可先填寫與選照片。', 'error');
             submitButton.disabled = true;
           }
         }
       }
 
-      function initializeEventListeners() {
+      function bindStaticUI() {
+        if (staticUiBound) return;
+        staticUiBound = true;
+
         setupFileInputUI('sitePhotos', 'sitePhotosLabel', 'sitePhotosCount');
         setupFileInputUI('problemPhotos', 'problemPhotosLabel', 'problemPhotosCount');
         initializeHelperButtons();
@@ -977,6 +996,14 @@
         }
         workTypeSelect.addEventListener('change', () => localStorage.setItem('lastSelectedWorkType', workTypeSelect.value));
 
+        document.getElementById('sitePhotos').addEventListener('change', () => { restoredPhotoInfos = null; });
+        document.getElementById('problemPhotos').addEventListener('change', () => { restoredPhotoInfos = null; });
+      }
+
+      function bindSubmitFlow() {
+        if (submitFlowBound) return;
+        submitFlowBound = true;
+
         form.addEventListener('submit', handleFormSubmit);
 
         document.getElementById('btn-copy-debug-log').addEventListener('click', async () => {
@@ -988,9 +1015,6 @@
             window.prompt('請長按下方文字、全選並複製：', text);
           }
         });
-
-        document.getElementById('sitePhotos').addEventListener('change', () => { restoredPhotoInfos = null; });
-        document.getElementById('problemPhotos').addEventListener('change', () => { restoredPhotoInfos = null; });
 
         document.getElementById('btn-pending-apply').addEventListener('click', async () => {
           const rec = await idbLoadPending();
@@ -1566,6 +1590,7 @@
         });
       }
 
+      bindStaticUI();
       main();
     });
   </script>
