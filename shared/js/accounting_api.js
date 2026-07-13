@@ -453,21 +453,23 @@ var AccountingApi = (function () {
     marginAddLine: function (sessionOrToken, payload) {
       return post({ action: 'margin_add_line', auth: resolveAuth(sessionOrToken), payload: payload || {} });
     },
-    marginUpdateLine: function (sessionOrToken, tabName, rowIndex, payload) {
+    marginUpdateLine: function (sessionOrToken, tabName, rowIndex, payload, projectNo) {
       return post({
         action: 'margin_update_line',
         auth: resolveAuth(sessionOrToken),
         tab_name: tabName,
         row_index: rowIndex,
+        project_no: projectNo || '',
         payload: payload || {}
       });
     },
-    marginDeleteLine: function (sessionOrToken, tabName, rowIndex) {
+    marginDeleteLine: function (sessionOrToken, tabName, rowIndex, projectNo) {
       return post({
         action: 'margin_delete_line',
         auth: resolveAuth(sessionOrToken),
         tab_name: tabName,
-        row_index: rowIndex
+        row_index: rowIndex,
+        project_no: projectNo || ''
       });
     },
     marginGetDetail: function (sessionOrToken, filter) {

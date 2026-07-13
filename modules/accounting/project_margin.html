@@ -473,7 +473,8 @@
               session,
               current.tab_name,
               ln.row_index,
-              payload
+              payload,
+              current.project_no
             );
             if (!data.success) { setMsg(data.message || '更新失敗'); return; }
             setOk('已更新明細');
@@ -489,7 +490,7 @@
         if (!window.confirm('確定刪除「' + label + '」？')) return;
         await runAction(btn, '刪除中…', async function () {
           setMsg('');
-          var data = await AccountingApi.marginDeleteLine(session, current.tab_name, ln.row_index);
+          var data = await AccountingApi.marginDeleteLine(session, current.tab_name, ln.row_index, current.project_no);
           if (!data.success) { setMsg(data.message || '刪除失敗'); return; }
           setOk('已刪除明細');
           openDetail(current);
@@ -1158,6 +1159,10 @@
 
       function renderDetailPanels(data) {
         detailData = data;
+        if (current) {
+          if (data.tab_name) current.tab_name = data.tab_name;
+          if (data.project_no) current.project_no = data.project_no;
+        }
         var meta = data.meta || {};
         var site = data.site || {};
         var duration = data.duration || {};

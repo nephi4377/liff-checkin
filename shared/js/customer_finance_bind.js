@@ -109,8 +109,10 @@ var CustomerFinanceBind = (function () {
                 var codes = String(it.project_codes || '');
                 var hasThis = codes.indexOf(projectNo) >= 0;
                 var hint = hasThis ? '（顧客列表已有本案號）' : (codes ? '（顧客列表案號：' + esc(codes) + '）' : '（顧客列表尚未填案號）');
+                var inactiveHint = String(it.status || '').toLowerCase() === 'inactive'
+                  ? ' <span style="color:#c0392b">〔曾標為不活躍，綁定時會自動恢復〕</span>' : '';
                 return '<div class="search-hit" data-idx="' + idx + '">' +
-                  esc(it.name || '—') + hint +
+                  esc(it.name || '—') + hint + inactiveHint +
                   '<small class="mono">' + esc(it.line_id || '') + ' · ' + (it.id_type === 'group' ? '群組' : '個人') + '</small></div>';
               }).join('');
               searchResults.querySelectorAll('.search-hit').forEach(function (el) {
@@ -131,10 +133,11 @@ var CustomerFinanceBind = (function () {
                       else {
                         var syncMsg = res2.customer_list_sync && res2.customer_list_sync.updated
                           ? '（已同步顧客列表案號）' : '';
+                        var reactMsg = res2.customer_reactivated ? '（已恢復顧客為活躍）' : '';
                         if (typeof AccountingListCache !== 'undefined') {
                           AccountingListCache.invalidateMasterList(session, AccountingListCache.MASTER_KEYS.official_customer);
                         }
-                        onOk((res2.already_bound ? '此客戶已綁定本案' : '已綁定 ' + (it.name || it.line_id)) + syncMsg);
+                        onOk((res2.already_bound ? '此客戶已綁定本案' : '已綁定 ' + (it.name || it.line_id)) + syncMsg + reactMsg);
                         return onRefresh();
                       }
                     });
@@ -158,7 +161,11 @@ var CustomerFinanceBind = (function () {
               else {
                 var syncMsg = res.customer_list_sync && res.customer_list_sync.updated
                   ? '（已同步顧客列表案號）' : '';
-                onOk((res.already_bound ? '此客戶已綁定本案' : '已綁定') + syncMsg);
+                var reactMsg = res.customer_reactivated ? '（已恢復顧客為活躍）' : '';
+                if (typeof AccountingListCache !== 'undefined') {
+                  AccountingListCache.invalidateMasterList(session, AccountingListCache.MASTER_KEYS.official_customer);
+                }
+                onOk((res.already_bound ? '此客戶已綁定本案' : '已綁定') + syncMsg + reactMsg);
                 lineUid.value = '';
                 return onRefresh();
               }
