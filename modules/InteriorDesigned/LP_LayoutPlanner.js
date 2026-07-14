@@ -45,6 +45,9 @@ let currentDrawingType = null; // [v8.23 修復] 補回遺失的 global 變數
 let drawingType = null;
 let currentDrawingPoints = [];
 let drawnAreas = [];
+/** 報價單手動覆寫（lineKey → 欄位）；隨佈局儲存 */
+let quotationManualOverrides = {};
+let budgetEditMode = false;
 let selectedAreaId = null;
 let isDraggingVertex = false;
 let draggedAreaId = null;
@@ -74,6 +77,30 @@ const getSvg = (k) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg
 
 // 移除內建元件，改為由 Google Sheet 動態載入
 let cabinetCategories = {};
+
+/** 分類圖層顯示順序（報價單、圖層面板共用） */
+const LP_GROUP_DISPLAY_ORDER = [
+    '保護工程',
+    '拆除工程',
+    '其他工程',
+    '水電', '水電工程',
+    '泥作工程',
+    '木作', '木作工程',
+    '天花板工程',
+    '油漆工程',
+    '櫃體', '系統櫃',
+    '地板工程',
+    '門片', '門窗工程',
+    '玻璃工程',
+    '衛浴', '衛浴設備',
+    '家具家電', '家具', '家電',
+    '雜項工程',
+    '清潔工程',
+    '未分類'
+];
+
+/** 分類圖層可見性：false = 隱藏 */
+let layerVisibility = {};
 
 // 價格計算函式（cmToFeet 見 LP_core.js）
 function calculatePrice(cabinet) {
@@ -297,6 +324,7 @@ async function loadFromSheets() {
         }
 
         renderComponentList();
+        renderLayerVisibilityPanel();
         showGlobalNotification(`✅ 成功載入 ${Object.values(cabinetCategories).flat().length} 個元件`, 3000, 'success');
         dbgLog(`[Input] 成功載入 ${Object.values(cabinetCategories).flat().length} 個元件`);
     } catch (error) {
@@ -418,6 +446,116 @@ function addCabinet(data, x, y) {
     deselectAllAnnotations(); // [新增] 取消選取標註
     updateQuotation();
     saveState(); // [修正] 新增元件後保存狀態
+    renderLayerVisibilityPanel();
+}
+
+function getAreaLayerGroup(area) {
+    if (!area || area.type === 'wall') return null;
+    if (area.linkedComponent?.group) return area.linkedComponent.group;
+    if (area.type === 'floor') return '地板工程';
+    if (area.type === 'ceiling') return '木作';
+    return '未分類';
+}
+
+function sortLayerGroupNames(names) {
+    const uniq = [...new Set(names.filter(Boolean))];
+    return uniq.sort((a, b) => {
+        const idxA = LP_GROUP_DISPLAY_ORDER.indexOf(a);
+        const idxB = LP_GROUP_DISPLAY_ORDER.indexOf(b);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return a.localeCompare(b, 'zh-Hant');
+    });
+}
+
+function collectLayerGroupNames() {
+    const names = new Set();
+    Object.keys(cabinetCategories).forEach((g) => names.add(g));
+    placedCabinets.forEach((cab) => names.add(cab.data.group || '未分類'));
+    placedAnnotations.forEach((anno) => names.add(anno.data.group || '其他工程'));
+    drawnAreas.forEach((area) => {
+        const g = getAreaLayerGroup(area);
+        if (g) names.add(g);
+    });
+    return sortLayerGroupNames([...names]);
+}
+
+function isLayerGroupVisible(groupName) {
+    if (!groupName) return true;
+    return layerVisibility[groupName] !== false;
+}
+
+function countLayerGroupItems(groupName) {
+    let n = 0;
+    placedCabinets.forEach((cab) => {
+        if ((cab.data.group || '未分類') === groupName) n++;
+    });
+    placedAnnotations.forEach((anno) => {
+        if ((anno.data.group || '其他工程') === groupName) n++;
+    });
+    drawnAreas.forEach((area) => {
+        if (area.type !== 'wall' && getAreaLayerGroup(area) === groupName) n++;
+    });
+    return n;
+}
+
+function layerPanelEscape(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function renderLayerVisibilityPanel() {
+    const list = document.getElementById('layer-visibility-list');
+    if (!list) return;
+    const groups = collectLayerGroupNames();
+    if (!groups.length) {
+        list.innerHTML = '<p class="text-[10px] text-gray-400">載入元件後顯示分類</p>';
+        return;
+    }
+    list.innerHTML = groups.map((g) => {
+        const checked = isLayerGroupVisible(g);
+        const cnt = countLayerGroupItems(g);
+        const cntLabel = cnt > 0 ? ` <span class="text-gray-400 font-normal">(${cnt})</span>` : '';
+        return `<label class="flex items-center gap-2 text-xs text-gray-700">
+            <input type="checkbox" class="layer-vis-toggle" data-group="${layerPanelEscape(g)}" ${checked ? 'checked' : ''}>
+            <span>${layerPanelEscape(g)}${cntLabel}</span>
+        </label>`;
+    }).join('');
+}
+
+function applyLayerVisibilityRefresh() {
+    renderAllCabinets();
+    renderAllAnnotations();
+    renderAllDrawnAreas();
+}
+
+function onLayerVisibilityToggle(groupName, visible) {
+    layerVisibility[groupName] = visible;
+    if (!visible) {
+        if (selectedCabId) {
+            const cab = placedCabinets.find((c) => c.id === selectedCabId);
+            if (cab && (cab.data.group || '未分類') === groupName) deselectAll();
+            const anno = placedAnnotations.find((a) => a.id === selectedCabId);
+            if (anno && (anno.data.group || '其他工程') === groupName) deselectAll();
+        }
+        if (selectedAreaId) {
+            const area = drawnAreas.find((a) => a.id === selectedAreaId);
+            if (area && getAreaLayerGroup(area) === groupName) deselectAllAreas();
+        }
+    }
+    applyLayerVisibilityRefresh();
+}
+
+function setAllLayerVisibility(visible) {
+    collectLayerGroupNames().forEach((g) => {
+        layerVisibility[g] = visible;
+    });
+    renderLayerVisibilityPanel();
+    applyLayerVisibilityRefresh();
 }
 
 function renderAllCabinets() {
@@ -425,12 +563,9 @@ function renderAllCabinets() {
     const existingCabinets = canvas.querySelectorAll('.placed-cabinet');
     existingCabinets.forEach(el => el.remove());
 
-    // [新增] 檢查是否顯示家具圖層
-    const showCabinets = document.getElementById('show-cabinets-toggle') ? document.getElementById('show-cabinets-toggle').checked : true;
-    if (!showCabinets) return;
-
-    // 根據 placedCabinets 陣列重新渲染所有元件
+    // 依分類圖層過濾
     placedCabinets.forEach(cab => {
+        if (!isLayerGroupVisible(cab.data.group || '未分類')) return;
         renderCabinet(cab);
     });
 
@@ -461,14 +596,18 @@ function renderAllDrawnAreas() {
 
     // 先渲染所有未選取的區域
     unselectedAreas.forEach(area => {
-        if ((area.type === 'ceiling' && showCeilings) || (area.type === 'floor' && showFloors) || (area.type === 'wall' && showWalls)) {
+        const typeOk = (area.type === 'ceiling' && showCeilings) || (area.type === 'floor' && showFloors) || (area.type === 'wall' && showWalls);
+        const groupOk = area.type === 'wall' || isLayerGroupVisible(getAreaLayerGroup(area));
+        if (typeOk && groupOk) {
             renderSingleArea(layer, area, false);
         }
     });
 
     // 最後再渲染選取的區域，確保它在最上層
     if (selectedArea) {
-        if ((selectedArea.type === 'ceiling' && showCeilings) || (selectedArea.type === 'floor' && showFloors) || (selectedArea.type === 'wall' && showWalls)) {
+        const typeOk = (selectedArea.type === 'ceiling' && showCeilings) || (selectedArea.type === 'floor' && showFloors) || (selectedArea.type === 'wall' && showWalls);
+        const groupOk = selectedArea.type === 'wall' || isLayerGroupVisible(getAreaLayerGroup(selectedArea));
+        if (typeOk && groupOk) {
             renderSingleArea(layer, selectedArea, true);
             // [您的要求] 為選取的區域產生可拖曳的頂點
             renderVertexHandles(selectedArea);
@@ -658,6 +797,7 @@ function addAnnotation() {
     selectAnnotation(anno.id);
     saveState();
     updateQuotation();
+    renderLayerVisibilityPanel();
     showGlobalNotification('已新增工程標註', 2000, 'success');
 }
 
@@ -665,10 +805,6 @@ function addAnnotation() {
 function renderAllAnnotations() {
     const layer = document.getElementById('annotation-layer');
     layer.innerHTML = '';
-
-    // 檢查是否顯示標註圖層
-    const showAnnotations = document.getElementById('show-annotations-toggle') ? document.getElementById('show-annotations-toggle').checked : true;
-    if (!showAnnotations) return;
 
     // 1. 建立 SVG 容器用於繪製連接線 (在底層)
     const svgns = "http://www.w3.org/2000/svg";
@@ -682,6 +818,7 @@ function renderAllAnnotations() {
     layer.appendChild(svg);
 
     placedAnnotations.forEach(anno => {
+        if (!isLayerGroupVisible(anno.data.group || '其他工程')) return;
         // A. 繪製連接線與指示點 (SVG)
         // 連接線
         const line = document.createElementNS(svgns, "line");
@@ -1238,6 +1375,8 @@ function updateSelectedGroup() {
     }
     saveState();
     updateQuotation();
+    renderLayerVisibilityPanel();
+    applyLayerVisibilityRefresh();
 }
 
 function handleKeyDown(e) {
@@ -1466,6 +1605,7 @@ function deleteCabById(id) {
     renderAllCabinets();
     updateQuotation();
     saveState(); // [您的要求] 儲存狀態
+    renderLayerVisibilityPanel();
 }
 
 // [新增] 刪除標註
@@ -1475,6 +1615,7 @@ function deleteAnnotation(id) {
     renderAllAnnotations();
     updateQuotation();
     saveState();
+    renderLayerVisibilityPanel();
 }
 
 // [v6.0 核心修正] 輔助函式：將角度轉換為弧度
@@ -2105,7 +2246,9 @@ function saveLayout() {
             scale: bgScale,
             src: document.getElementById('bg-img').src
         },
-        constructionArea: constructionAreaEl ? constructionAreaEl.value : ''
+        constructionArea: constructionAreaEl ? constructionAreaEl.value : '',
+        quotationManualOverrides: quotationManualOverrides,
+        layerVisibility: layerVisibility
     };
 
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(layoutData, null, 2));
@@ -2571,12 +2714,16 @@ function calculateFullQuotation() {
         if (item.group === '地板工程') subtotals.floorCost += (basePrice + addonsTotal);
 
         // 合併鍵：價格／副屬性等 + spatialCluster（相鄰群）；寬高／坪數不在 sizeMk，故不相鄰不同群即分列
+        // 櫃體／標註：每個實例獨立一列，副屬性（如二抽）緊跟該櫃體，不與他處同類合併
         const locMk = item.spatialCluster ? `_${item.spatialCluster}` : '';
-        const key = `${grp}_${item.name}_${currentUnitPrice}_${currentUnit}_${item.pricingType}_${item.note || ''}_${addonsKey}_${sizeMk}${locMk}`;
+        const instanceMk = (item.source === 'cabinet' || item.source === 'annotation') ? `_${item.id}` : '';
+        const key = `${grp}_${item.name}_${currentUnitPrice}_${currentUnit}_${item.pricingType}_${item.note || ''}_${addonsKey}_${sizeMk}${locMk}${instanceMk}`;
 
         if (!groups[key]) {
             groups[key] = {
                 isConstruction: item.source === 'area', // 標記來源
+                sourceType: item.source,
+                sourceId: item.id,
                 name: item.name,
                 group: item.group,
                 unit: currentUnit,
@@ -2617,8 +2764,13 @@ function calculateFullQuotation() {
     // 3. 將群組轉換回 lineItems 陣列
     groupOrder.forEach(key => {
         const group = groups[key];
+        const mainLineKey = group.sourceType && group.sourceId
+            ? `${group.sourceType}_${group.sourceId}`
+            : `grp_${key}`;
         lineItems.push({
             isConstruction: group.isConstruction,
+            lineKey: mainLineKey,
+            isAddon: false,
             name: group.name,
             unit: group.unit,
             group: group.group, // [新增] 傳遞群組
@@ -2630,9 +2782,11 @@ function calculateFullQuotation() {
 
         // 加入該項目的副屬性
         if (group.addons) {
-            Object.values(group.addons).forEach(addon => {
+            Object.entries(group.addons).forEach(([addonKey, addon]) => {
                 lineItems.push({
                     isConstruction: false,
+                    lineKey: `${mainLineKey}_addon_${addonKey}`,
+                    isAddon: true,
                     name: addon.name,
                     unit: addon.unit,
                     group: group.group, // [新增] 副屬性跟隨主項目的群組
@@ -2648,33 +2802,47 @@ function calculateFullQuotation() {
     // [新增] 報價單分組排序邏輯
     const groupedLineItems = [];
     const itemGroups = {};
-    
+
     lineItems.forEach(item => {
         const g = item.group || '其他';
         if (!itemGroups[g]) itemGroups[g] = [];
         itemGroups[g].push(item);
     });
 
+    /** 主項目與其 └ 副屬性視為一組；只排序主項目，副屬性緊跟主項目下方 */
+    function quotationSortRowsPreservingAddons(rows) {
+        const blocks = [];
+        let current = null;
+        rows.forEach((item) => {
+            const isAddon = item.isAddon || (item.name || '').startsWith('└');
+            if (!isAddon) {
+                current = { main: item, addons: [] };
+                blocks.push(current);
+            } else if (current) {
+                current.addons.push(item);
+            } else {
+                blocks.push({ main: item, addons: [] });
+            }
+        });
+        blocks.sort((a, b) => {
+            const an = a.main.name || '';
+            const bn = b.main.name || '';
+            const c1 = an.localeCompare(bn, 'zh-Hant');
+            if (c1 !== 0) return c1;
+            const c2 = (a.main.sizeLabel || '').localeCompare((b.main.sizeLabel || ''), 'zh-Hant');
+            if (c2 !== 0) return c2;
+            return (b.main.totalPrice || 0) - (a.main.totalPrice || 0);
+        });
+        const out = [];
+        blocks.forEach((b) => {
+            out.push(b.main);
+            b.addons.forEach((a) => out.push(a));
+        });
+        return out;
+    }
+
     // 定義群組顯示順序
-    // [修正] 擴充排序清單，整合 Google Sheet 的分類名稱 (簡稱) 與系統自動產生的分類 (全稱)
-    const preferredOrder = [
-        '保護工程', 
-        '拆除工程', 
-        '其他工程', // [新增]
-        '水電', '水電工程', 
-        '泥作工程', 
-        '木作', '木作工程', 
-        '天花板工程', 
-        '油漆工程', 
-        '櫃體', '系統櫃', 
-        '地板工程', 
-        '門片', '門窗工程',
-        '玻璃工程', 
-        '衛浴', '衛浴設備',
-        '家具家電', '家具', '家電',
-        '雜項工程', 
-        '清潔工程'
-    ];
+    const preferredOrder = LP_GROUP_DISPLAY_ORDER;
     
     const sortedGroupNames = Object.keys(itemGroups).sort((a, b) => {
         const idxA = preferredOrder.indexOf(a);
@@ -2686,55 +2854,169 @@ function calculateFullQuotation() {
     });
 
     sortedGroupNames.forEach(gName => {
-        groupedLineItems.push({ isHeader: true, name: gName });
-        const rows = itemGroups[gName].slice().sort((a, b) => {
-            const an = (a.name || '').replace(/^└\s*/, '');
-            const bn = (b.name || '').replace(/^└\s*/, '');
-            const c1 = an.localeCompare(bn, 'zh-Hant');
-            if (c1 !== 0) return c1;
-            const c2 = (a.sizeLabel || '').localeCompare((b.sizeLabel || ''), 'zh-Hant');
-            if (c2 !== 0) return c2;
-            return (b.totalPrice || 0) - (a.totalPrice || 0);
-        });
-        rows.forEach(item => groupedLineItems.push(item));
+        groupedLineItems.push({ isHeader: true, lineKey: `hdr_${gName}`, name: gName });
+        quotationSortRowsPreservingAddons(itemGroups[gName]).forEach((item) => groupedLineItems.push(item));
     });
 
     return { lineItems: groupedLineItems, subtotals, grandTotal };
 }
 
+function escapeHtml(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+/** 報價備註欄顯示（含手動覆寫） */
+function quotationDisplaySpecNote(item) {
+    const o = item.lineKey ? quotationManualOverrides[item.lineKey] : null;
+    if (o && o.specNote !== undefined) return String(o.specNote);
+    return quotationMergedSpecNote(item);
+}
+
+/** 自動計算 + 手動覆寫／隱藏列 */
+function getQuotationForDisplay() {
+    const calc = calculateFullQuotation();
+    let grandTotal = 0;
+    const lineItems = [];
+
+    calc.lineItems.forEach((item) => {
+        if (item.isHeader) {
+            lineItems.push(item);
+            return;
+        }
+        const o = item.lineKey ? quotationManualOverrides[item.lineKey] : null;
+        if (o && o.hidden) return;
+
+        const merged = { ...item };
+        if (o) {
+            if (o.name !== undefined) merged.name = o.name;
+            if (o.unit !== undefined) merged.unit = o.unit;
+            if (o.quantity !== undefined) merged.quantity = o.quantity;
+            if (o.totalPrice !== undefined) merged.totalPrice = o.totalPrice;
+            if (o.note !== undefined) merged.note = o.note;
+            if (o.sizeLabel !== undefined) merged.sizeLabel = o.sizeLabel;
+        }
+        grandTotal += Number(merged.totalPrice) || 0;
+        lineItems.push(merged);
+    });
+
+    return { lineItems, subtotals: calc.subtotals, grandTotal };
+}
+
+function onBudgetFieldEdit(lineKey, field, rawValue) {
+    if (!lineKey) return;
+    if (!quotationManualOverrides[lineKey]) quotationManualOverrides[lineKey] = {};
+    if (field === 'quantity' || field === 'totalPrice') {
+        quotationManualOverrides[lineKey][field] = rawValue === '' ? '' : (parseFloat(rawValue) || 0);
+    } else {
+        quotationManualOverrides[lineKey][field] = rawValue;
+    }
+    const quotation = getQuotationForDisplay();
+    const totalEl = document.getElementById('modal-total-price');
+    if (totalEl) totalEl.innerText = `$${quotation.grandTotal.toLocaleString()} `;
+    updateQuotation();
+}
+
+function hideQuotationRow(lineKey) {
+    if (!lineKey) return;
+    if (!quotationManualOverrides[lineKey]) quotationManualOverrides[lineKey] = {};
+    quotationManualOverrides[lineKey].hidden = true;
+    renderBudgetTable();
+    updateQuotation();
+}
+
+function resetQuotationToAuto() {
+    quotationManualOverrides = {};
+    budgetEditMode = false;
+    const btn = document.getElementById('budget-edit-toggle-btn');
+    if (btn) btn.textContent = '編輯報價';
+    const container = document.getElementById('budget-table-container');
+    if (container) container.classList.remove('budget-edit-mode');
+    const modal = document.getElementById('budget-modal');
+    if (modal) modal.classList.remove('budget-edit-mode');
+    renderBudgetTable();
+    updateQuotation();
+    showGlobalNotification('已還原為自動計算報價', 2000, 'info');
+}
+
+function toggleBudgetEditMode() {
+    budgetEditMode = !budgetEditMode;
+    const btn = document.getElementById('budget-edit-toggle-btn');
+    if (btn) btn.textContent = budgetEditMode ? '完成編輯' : '編輯報價';
+    const container = document.getElementById('budget-table-container');
+    if (container) container.classList.toggle('budget-edit-mode', budgetEditMode);
+    const modal = document.getElementById('budget-modal');
+    if (modal) modal.classList.toggle('budget-edit-mode', budgetEditMode);
+    renderBudgetTable();
+}
+
+function renderBudgetTable() {
+    const quotation = getQuotationForDisplay();
+    const tableBody = document.getElementById('budget-table-body');
+    if (!tableBody) return;
+
+    let itemIndex = 1;
+    const rows = [];
+
+    quotation.lineItems.forEach((item) => {
+        if (item.isHeader) {
+            rows.push(`
+                <tr class="bg-gray-100 font-bold">
+                    <td class="px-2 py-2 border-b text-center"></td>
+                    <td class="px-2 py-2 border-b text-gray-700" colspan="5">${escapeHtml(item.name)}</td>
+                </tr>`);
+            return;
+        }
+
+        const rowCls = item.isAddon ? 'budget-addon-row' : '';
+        const lk = escapeHtml(item.lineKey || '');
+        const qtyVal = item.quantity > 0 ? item.quantity : '';
+        const priceVal = item.totalPrice > 0 ? item.totalPrice : '';
+        const specNote = quotationDisplaySpecNote(item);
+        const o = item.lineKey ? quotationManualOverrides[item.lineKey] : null;
+
+        rows.push(`
+            <tr class="${rowCls}" data-line-key="${lk}">
+                <td class="px-2 py-2 border-b text-center">${itemIndex++}</td>
+                <td class="px-2 py-2 border-b budget-col-name">
+                    <button type="button" class="budget-hide-row-btn budget-edit-only" data-line-key="${lk}" title="隱藏此列">✕</button>
+                    <span class="budget-display-value">${escapeHtml(item.name)}</span>
+                    <input type="text" class="budget-edit-input w-full border rounded px-1 py-0.5 text-sm" data-line-key="${lk}" data-field="name" value="${escapeHtml(o && o.name !== undefined ? o.name : item.name)}">
+                </td>
+                <td class="px-2 py-2 border-b">
+                    <span class="budget-display-value">${escapeHtml(item.unit)}</span>
+                    <input type="text" class="budget-edit-input w-full border rounded px-1 py-0.5 text-sm text-center" data-line-key="${lk}" data-field="unit" value="${escapeHtml(o && o.unit !== undefined ? o.unit : item.unit)}">
+                </td>
+                <td class="px-2 py-2 border-b text-center">
+                    <span class="budget-display-value">${qtyVal}</span>
+                    <input type="number" step="any" class="budget-edit-input w-full border rounded px-1 py-0.5 text-sm text-center" data-line-key="${lk}" data-field="quantity" value="${qtyVal}">
+                </td>
+                <td class="px-2 py-2 border-b text-right">
+                    <span class="budget-display-value">${priceVal ? '$' + Number(priceVal).toLocaleString() : ''}</span>
+                    <input type="number" step="any" class="budget-edit-input w-full border rounded px-1 py-0.5 text-sm text-right" data-line-key="${lk}" data-field="totalPrice" value="${priceVal}">
+                </td>
+                <td class="px-2 py-2 border-b text-xs text-gray-600">
+                    <span class="budget-display-value">${escapeHtml(specNote)}</span>
+                    <input type="text" class="budget-edit-input w-full border rounded px-1 py-0.5 text-xs" data-line-key="${lk}" data-field="specNote" value="${escapeHtml(o && o.specNote !== undefined ? o.specNote : specNote)}">
+                </td>
+            </tr>`);
+    });
+
+    tableBody.innerHTML = rows.join('');
+    const totalEl = document.getElementById('modal-total-price');
+    if (totalEl) totalEl.innerText = `$${quotation.grandTotal.toLocaleString()} `;
+}
 
 // [錯誤修正] 新增遺漏的 showBudgetModal 和 closeBudgetModal 函式
 function showBudgetModal() {
-    // [您的要求] 核心重構：此函式現在只負責「顯示」
-    const quotation = calculateFullQuotation();
-    const tableBody = document.getElementById('budget-table-body');
-    tableBody.innerHTML = '';
-    let itemIndex = 1;
-
-    quotation.lineItems.forEach(item => {
-        if (item.isHeader) {
-            // [新增] 渲染標題列
-            const row = `
-                <tr class="bg-gray-100 font-bold">
-                    <td class="px-2 py-2 border-b text-center"></td>
-                    <td class="px-2 py-2 border-b text-gray-700" colspan="5">${item.name}</td>
-                </tr>`;
-            tableBody.innerHTML += row;
-        } else {
-            const row = `
-                <tr>
-                    <td class="px-2 py-2 border-b text-center">${itemIndex++}</td>
-                    <td class="px-2 py-2 border-b">${item.name}</td>
-                    <td class="px-2 py-2 border-b">${item.unit}</td>
-                    <td class="px-2 py-2 border-b text-center">${item.quantity > 0 ? item.quantity : ''}</td>
-                    <td class="px-2 py-2 border-b text-right">${item.totalPrice > 0 ? '$' + item.totalPrice.toLocaleString() : ''}</td>
-                    <td class="px-2 py-2 border-b text-xs text-gray-600">${quotationMergedSpecNote(item)}</td>
-                </tr>`;
-            tableBody.innerHTML += row;
-        }
-    });
-
-    document.getElementById('modal-total-price').innerText = `$${quotation.grandTotal.toLocaleString()} `;
+    const container = document.getElementById('budget-table-container');
+    if (container) container.classList.toggle('budget-edit-mode', budgetEditMode);
+    const modal = document.getElementById('budget-modal');
+    if (modal) modal.classList.toggle('budget-edit-mode', budgetEditMode);
+    renderBudgetTable();
     document.getElementById('budget-modal').style.display = 'flex';
 }
 
@@ -2746,7 +3028,7 @@ function closeBudgetModal() {
  * [您的要求] 新增：將報價單匯出為 CSV 檔案
  */
 function exportBudgetAsCSV() {
-    const quotation = calculateFullQuotation();
+    const quotation = getQuotationForDisplay();
     const headers = ['項次', '項目', '單位', '數量', '總價', '備註'];
     let csvContent = headers.join(',') + '\n';
     let itemIndex = 1;
@@ -2762,7 +3044,7 @@ function exportBudgetAsCSV() {
                 item.unit,
                 item.quantity > 0 ? item.quantity : '', // [修正] 0不顯示
                 item.totalPrice > 0 ? item.totalPrice : '', // [修正] 0元不顯示
-                `"${quotationMergedSpecNote(item).replace(/"/g, '""')}"` // 備註（含尺寸），對齊 BudgetWeb spec 欄
+                `"${quotationDisplaySpecNote(item).replace(/"/g, '""')}"` // 備註（含尺寸），對齊 BudgetWeb spec 欄
             ];
             csvContent += row.join(',') + '\n';
         }
@@ -2788,9 +3070,8 @@ function exportBudgetAsCSV() {
 
 // [錯誤修正] 新增遺漏的 updateQuotation 函式
 function updateQuotation() {
-    // [您的要求] 核心重構：此函式現在只負責「顯示」
-    const quotation = calculateFullQuotation();
-    const { subtotals, grandTotal } = quotation;
+    const quotation = getQuotationForDisplay();
+    const { grandTotal } = quotation;
 
     document.getElementById('total-price-display').innerText = `$${Math.round(grandTotal).toLocaleString()}`;
 }
@@ -3367,7 +3648,9 @@ function saveState() {
             scale: bgScale,
             src: document.getElementById('bg-img').src
         },
-        constructionArea: constructionAreaEl ? constructionAreaEl.value : ''
+        constructionArea: constructionAreaEl ? constructionAreaEl.value : '',
+        quotationManualOverrides: quotationManualOverrides,
+        layerVisibility: layerVisibility
     };
 
     // 避免儲存與上一步完全相同的狀態
@@ -3498,10 +3781,23 @@ function bindEventListeners() {
     document.getElementById('show-ceilings-toggle').addEventListener('change', renderAllDrawnAreas);
     document.getElementById('show-floors-toggle').addEventListener('change', renderAllDrawnAreas);
     if (document.getElementById('show-walls-toggle')) document.getElementById('show-walls-toggle').addEventListener('change', renderAllDrawnAreas);
-    
-    // [新增] 標註與家具圖層切換
-    document.getElementById('show-cabinets-toggle').addEventListener('change', renderAllCabinets);
-    document.getElementById('show-annotations-toggle').addEventListener('change', renderAllAnnotations);
+
+    // 分類圖層切換
+    const layerList = document.getElementById('layer-visibility-list');
+    if (layerList && !layerList.dataset.lpLayerBound) {
+        layerList.dataset.lpLayerBound = '1';
+        layerList.addEventListener('change', (e) => {
+            const el = e.target;
+            if (!el.classList.contains('layer-vis-toggle')) return;
+            onLayerVisibilityToggle(el.dataset.group, el.checked);
+            renderLayerVisibilityPanel();
+        });
+    }
+    const layerShowAllBtn = document.getElementById('layer-show-all-btn');
+    if (layerShowAllBtn) layerShowAllBtn.addEventListener('click', () => setAllLayerVisibility(true));
+    const layerHideAllBtn = document.getElementById('layer-hide-all-btn');
+    if (layerHideAllBtn) layerHideAllBtn.addEventListener('click', () => setAllLayerVisibility(false));
+
     document.getElementById('add-annotation-btn').addEventListener('click', addAnnotation);
 
     // [修正] 鎖定牆壁時，同時更新元件與繪圖區域
@@ -3548,6 +3844,23 @@ function bindEventListeners() {
     // 預算明細 Modal
     document.getElementById('budget-modal-close-btn').addEventListener('click', closeBudgetModal);
     document.getElementById('export-csv-btn').addEventListener('click', exportBudgetAsCSV);
+    const budgetEditBtn = document.getElementById('budget-edit-toggle-btn');
+    if (budgetEditBtn) budgetEditBtn.addEventListener('click', toggleBudgetEditMode);
+    const budgetResetBtn = document.getElementById('budget-reset-auto-btn');
+    if (budgetResetBtn) budgetResetBtn.addEventListener('click', resetQuotationToAuto);
+    const budgetTableBody = document.getElementById('budget-table-body');
+    if (budgetTableBody && !budgetTableBody.dataset.lpBudgetEditBound) {
+        budgetTableBody.dataset.lpBudgetEditBound = '1';
+        budgetTableBody.addEventListener('input', (e) => {
+            const el = e.target;
+            if (!el.classList.contains('budget-edit-input')) return;
+            onBudgetFieldEdit(el.dataset.lineKey, el.dataset.field, el.value);
+        });
+        budgetTableBody.addEventListener('click', (e) => {
+            const btn = e.target.closest('.budget-hide-row-btn');
+            if (btn) hideQuotationRow(btn.dataset.lineKey);
+        });
+    }
     const printBtn = document.getElementById('print-budget-btn');
     if (printBtn) printBtn.addEventListener('click', () => window.print());
 
@@ -3752,7 +4065,9 @@ function autoSave(silent = false) {
                 scale: bgScale,
                 src: document.getElementById('bg-img').src
             },
-            constructionArea: constructionAreaEl ? constructionAreaEl.value : ''
+            constructionArea: constructionAreaEl ? constructionAreaEl.value : '',
+            quotationManualOverrides: quotationManualOverrides,
+            layerVisibility: layerVisibility
         };
 
         localStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(layoutData));
@@ -3800,6 +4115,8 @@ function loadLayoutFromData(layoutData) {
     });
     drawnAreas = layoutData.drawnAreas || [];
     placedAnnotations = layoutData.placedAnnotations || []; // [新增]
+    quotationManualOverrides = layoutData.quotationManualOverrides || {};
+    layerVisibility = layoutData.layerVisibility || {};
 
     if (layoutData.background) {
         bgPosition = layoutData.background.position || { x: 0, y: 0 };
@@ -3829,6 +4146,7 @@ function loadLayoutFromData(layoutData) {
     renderAllCabinets();
     renderAllDrawnAreas();
     renderAllAnnotations(); // [新增]
+    renderLayerVisibilityPanel();
     updateBgTransform();
     saveState();
     updateQuotation();
@@ -3886,12 +4204,14 @@ async function downloadDesignFilesAsZip() {
                 scale: bgScale,
                 src: document.getElementById('bg-img').src
             },
-            constructionArea: constructionAreaEl ? constructionAreaEl.value : ''
+            constructionArea: constructionAreaEl ? constructionAreaEl.value : '',
+            quotationManualOverrides: quotationManualOverrides,
+            layerVisibility: layerVisibility
         };
         zip.file(`佈局資料_${dateString}.json`, JSON.stringify(layoutData, null, 2));
 
         // 3. 加入預算 CSV 檔案
-        const quotation = calculateFullQuotation();
+        const quotation = getQuotationForDisplay();
         const headers = ['項次', '項目', '單位', '數量', '總價', '備註'];
         let csvContent = headers.join(',') + '\n';
         let itemIndex = 1;
@@ -3906,7 +4226,7 @@ async function downloadDesignFilesAsZip() {
                     item.unit,
                     item.quantity,
                     item.totalPrice,
-                    `"${quotationMergedSpecNote(item).replace(/"/g, '""')}"`
+                    `"${quotationDisplaySpecNote(item).replace(/"/g, '""')}"`
                 ];
                 csvContent += row.join(',') + '\n';
             }

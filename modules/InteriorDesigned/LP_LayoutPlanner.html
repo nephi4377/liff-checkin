@@ -639,6 +639,63 @@
             stroke-width: 3px;
         }
 
+        /* 報價單：副屬性列縮排 */
+        .budget-addon-row td {
+            background-color: #fafafa;
+        }
+
+        .budget-addon-row .budget-col-name,
+        .budget-addon-row .budget-col-name .budget-display-value {
+            padding-left: 1.25rem;
+            color: #6b7280;
+            font-size: 0.8rem;
+        }
+
+        .budget-addon-row .budget-edit-input[data-field="name"] {
+            margin-left: 1.25rem;
+            color: #6b7280;
+            font-size: 0.8rem;
+        }
+
+        /* 報價單：編輯模式 */
+        .budget-edit-input,
+        .budget-hide-row-btn {
+            display: none;
+        }
+
+        .budget-edit-mode .budget-display-value {
+            display: none;
+        }
+
+        .budget-edit-mode .budget-edit-input,
+        .budget-edit-mode .budget-hide-row-btn {
+            display: inline-block;
+        }
+
+        .budget-hide-row-btn {
+            margin-right: 0.25rem;
+            color: #9ca3af;
+            font-size: 0.75rem;
+            line-height: 1;
+            padding: 0 0.2rem;
+        }
+
+        .budget-hide-row-btn:hover {
+            color: #ef4444;
+        }
+
+        #budget-modal .budget-edit-only {
+            display: none;
+        }
+
+        #budget-modal.budget-edit-mode .budget-edit-only {
+            display: inline-block;
+        }
+
+        #budget-modal.budget-edit-mode p.budget-edit-only {
+            display: block;
+        }
+
         /* [您的要求] 新增：PDF 匯出 (列印) 專用樣式 */
         @media print {
 
@@ -677,8 +734,15 @@
 
             /* [優化] 隱藏列印時不需要的按鈕與關閉圖示 */
             #budget-modal-close-btn,
-            #budget-action-buttons {
+            #budget-action-buttons,
+            .budget-edit-only,
+            .budget-hide-row-btn,
+            .budget-edit-input {
                 display: none !important;
+            }
+
+            .budget-display-value {
+                display: inline !important;
             }
 
             /* [您的要求] 優化列印樣式，避免標題和表尾被分頁切斷 */
@@ -774,13 +838,17 @@
                 <div class="bg-orange-50 p-3 rounded border border-orange-100">
                     <h2 class="font-bold text-orange-800 text-sm mb-2">2. 工程標註</h2>
                     <button id="add-annotation-btn" class="w-full py-1.5 bg-orange-500 text-white rounded hover:bg-orange-600 text-xs mb-2">新增工程項目 (如:拆除)</button>
-                    <div class="space-y-1">
-                        <label class="flex items-center gap-2 text-xs font-bold text-gray-700">
-                            <input type="checkbox" id="show-cabinets-toggle" checked> 顯示家具/櫃體
-                        </label>
-                        <label class="flex items-center gap-2 text-xs font-bold text-gray-700">
-                            <input type="checkbox" id="show-annotations-toggle" checked> 顯示工程標註
-                        </label>
+                    <div class="mt-2 border-t border-orange-200 pt-2">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs font-bold text-gray-700">分類圖層</span>
+                            <span class="space-x-2">
+                                <button type="button" id="layer-show-all-btn" class="text-[10px] text-blue-600 hover:underline">全開</button>
+                                <button type="button" id="layer-hide-all-btn" class="text-[10px] text-gray-500 hover:underline">全關</button>
+                            </span>
+                        </div>
+                        <div id="layer-visibility-list" class="space-y-1 max-h-36 overflow-y-auto">
+                            <p class="text-[10px] text-gray-400">載入元件後顯示分類</p>
+                        </div>
                     </div>
                     <div class="mt-2">
                         <label class="text-xs font-bold text-gray-700">施工面積（選填）</label>
@@ -1091,11 +1159,16 @@
                 此報價單僅為根據當前設計所做的初步估算，僅供參考。實際費用可能因現場狀況、材料選擇、施工工法及各家施工廠商報價而有所差異，最終價格以簽訂之正式工程合約為準。
             </div>
             <!-- [修正] 加入 ID 以便列印時隱藏 -->
-            <div id="budget-action-buttons" class="mt-6 flex justify-end gap-2">
+            <div id="budget-action-buttons" class="mt-6 flex flex-wrap justify-end gap-2 items-center">
+                <button id="budget-edit-toggle-btn" type="button"
+                    class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">編輯報價</button>
+                <button id="budget-reset-auto-btn" type="button"
+                    class="budget-edit-only bg-amber-100 text-amber-900 border border-amber-300 px-3 py-1 rounded text-sm hover:bg-amber-200">還原自動計算</button>
                 <button id="print-budget-btn" class="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700">列印 / 儲存 PDF</button>
                 <button id="export-csv-btn"
                     class="bg-green-700 text-white px-3 py-1 rounded text-sm hover:bg-green-800">匯出 CSV</button>
             </div>
+            <p class="budget-edit-only mt-2 text-xs text-gray-500">編輯模式：可改項目、數量、總價、備註；按 ✕ 可隱藏該列。修改會隨佈局一起儲存。</p>
             <!-- [新增] 諮詢詳細報價區塊 -->
             <div class="mt-6 border-t pt-4">
                 <div class="bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg p-4">
