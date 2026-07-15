@@ -298,6 +298,7 @@
         <label>關鍵字</label>
         <input id="filterKw" placeholder="名稱、統編、電話…" />
         <button type="button" class="btn btn-secondary btn-block" id="filterBtn">套用篩選</button>
+        <button type="button" class="btn btn-secondary btn-block" id="syncDriveBtn" title="將 ~裝潢建材廠商 資料夾連結到廠商主檔">同步 Drive 舊資料夾</button>
       </div>
       <div id="list"></div>
     </div>
@@ -1089,6 +1090,28 @@
       });
       $('account_name').addEventListener('blur', crossFillVendorAndAccountName);
       $('name').addEventListener('blur', crossFillVendorAndAccountName);
+
+      $('syncDriveBtn').addEventListener('click', async function () {
+        showFeedback('', '');
+        try {
+          var preview = await AccountingApi.vendorSyncLegacyDrive(session, { confirm: false });
+          if (!preview.success) { setMsg(preview.message || '預覽失敗'); return; }
+          var s = preview.stats || {};
+          var msg = preview.message || ('可連結 ' + (s.linked || 0) + ' 家、新增 ' + (s.created || 0) + ' 家');
+          if (!window.confirm(msg + '\n\n確定要寫入試算表嗎？')) return;
+          var done = await AccountingUi.runAsync($('syncDriveBtn'), {
+            busyLabel: '同步中…',
+            actionLabel: '同步 Drive 舊資料夾'
+          }, function () {
+            return AccountingApi.vendorSyncLegacyDrive(session, { confirm: true });
+          });
+          if (!done.success) { setMsg(done.message || '同步失敗'); return; }
+          showFeedback('success', done.message || '同步完成');
+          refreshVendors(true);
+        } catch (e) {
+          setMsg(e.message || String(e));
+        }
+      });
 
       (async function boot() {
         await AccountingBoot.run({

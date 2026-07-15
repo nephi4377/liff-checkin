@@ -391,6 +391,21 @@ var AccountingApi = (function () {
           return res;
         });
     },
+    vendorSyncLegacyDrive: function (sessionOrToken, options) {
+      options = options || {};
+      return post({
+        action: 'vendor_sync_legacy_drive',
+        auth: resolveAuth(sessionOrToken),
+        confirm: !!options.confirm,
+        create_missing: options.create_missing !== false,
+        include_empty: !!options.include_empty
+      }).then(function (res) {
+        if (res && res.success && options.confirm) {
+          invalidateBootstrapAfterCrud_(sessionOrToken, 'vendor', res);
+        }
+        return res;
+      });
+    },
     lineContactSearch: function (sessionOrToken, keyword, limit) {
       return post({
         action: 'line_contact_search',
