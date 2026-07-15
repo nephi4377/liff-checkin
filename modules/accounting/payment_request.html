@@ -47,6 +47,9 @@
     .alloc-row { border: 1px solid #e0e0e0; border-radius: 10px; padding: 10px; margin-top: 8px; background: #fafafa; position: relative; }
     .alloc-row .rm { position: absolute; top: 8px; right: 8px; border: none; background: transparent; color: #c5221f; font-size: 12px; cursor: pointer; }
     .alloc-row .tag-src { font-size: 11px; color: #888; margin-left: 6px; }
+    .tax-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; font-weight: normal; }
+    .tax-row input[type="checkbox"] { width: auto; margin: 0; }
+    .pretax-hint { font-size: 12px; color: #666; }
     .total-line { font-size: 18px; font-weight: 700; margin-top: 10px; text-align: right; }
     .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
     .photo-tile { border: 1px solid #ddd; border-radius: 8px; padding: 6px; background: #fafafa; text-align: center; }
@@ -222,6 +225,8 @@
       var MAX_BYTES = 8 * 1024 * 1024;
       var OCR_TIMEOUT_MS = 180000;
       var REMIT_FEE_AMOUNT = 30;
+      var TAX_RATE = 0.05;
+      var TAX_NOTE_MARKER = '【稅別】';
       var NEW_VENDOR_ID = '__new__';
       var MANUAL_VENDOR_PICK = '__manual__';
       var session = null;
@@ -666,11 +671,26 @@
       function allocRowHtml(idx, row) {
         row = row || {};
         var src = row.source === 'manual' ? '<span class="tag-src">手動</span>' : (row.source === 'ai' ? '<span class="tag-src">AI</span>' : '');
-        return '<div class="alloc-row" data-idx="' + idx + '" data-source="' + (row.source || '') + '">' +
+        var checked = !!row.tax_inclusive;
+        var ocrInc = !!row.ocr_tax_inclusive;
+        var uncheckFree = ocrInc && row.tax_uncheck_free !== false;
+        var amt = parseAllocAmount(row.amount);
+        var taxDisabled = !isNaN(amt) && amt < 0;
+        if (taxDisabled) checked = false;
+        var pretaxText = '';
+        if (checked && !isNaN(amt) && amt !== 0 && amt > 0) {
+          pretaxText = '未稅 $' + removeTaxAmount(amt).toLocaleString('zh-TW');
+        }
+        return '<div class="alloc-row" data-idx="' + idx + '" data-source="' + (row.source || '') + '"' +
+          ' data-ocr-tax-inclusive="' + (ocrInc ? '1' : '0') + '"' +
+          ' data-tax-uncheck-free="' + (uncheckFree ? '1' : '0') + '">' +
           '<button type="button" class="rm" data-rm="' + idx + '">刪除</button>' +
           '<div class="row2"><div><label>案號' + src + '</label><input class="inp-pn" value="' + (row.project_no || '') + '" placeholder="752" /></div>' +
-          '<div><label>金額</label><input class="inp-amt" type="number" inputmode="numeric" value="' + (row.amount || '') + '" /></div></div>' +
-          '<label>品項</label><input class="inp-desc" value="' + (row.item_desc || '') + '" placeholder="摘要" /></div>';
+          '<div><label>金額</label><input class="inp-amt" type="number" inputmode="numeric" placeholder="折讓填負數" value="' + (row.amount || '') + '" /></div></div>' +
+          '<label>品項</label><input class="inp-desc" value="' + (row.item_desc || '') + '" placeholder="摘要" />' +
+          '<label class="tax-row"><input type="checkbox" class="inp-tax"' +
+          (checked ? ' checked' : '') + (taxDisabled ? ' disabled' : '') + ' />含稅' +
+          '<span class="pretax-hint">' + pretaxText + '</span></label></div>';
       }
 
       function renderAllocRows(rows) {
@@ -685,17 +705,22 @@
           box.insertAdjacentHTML('beforeend', allocRowHtml(idx, row));
         });
         bindAllocEvents();
+        syncTaxFormNote();
         updateTotal();
       }
 
       function readAllocRows() {
         var rows = [];
         document.querySelectorAll('#allocList .alloc-row').forEach(function (el) {
+          var taxCb = el.querySelector('.inp-tax');
           rows.push({
             project_no: el.querySelector('.inp-pn').value.trim(),
             amount: el.querySelector('.inp-amt').value,
             item_desc: el.querySelector('.inp-desc').value.trim(),
-            source: el.getAttribute('data-source') || 'manual'
+            source: el.getAttribute('data-source') || 'manual',
+            tax_inclusive: taxCb ? taxCb.checked : false,
+            ocr_tax_inclusive: el.getAttribute('data-ocr-tax-inclusive') === '1',
+            tax_uncheck_free: el.getAttribute('data-tax-uncheck-free') === '1'
           });
         });
         return rows;
@@ -716,7 +741,7 @@
         if (preview.fee > 0) {
           hint.textContent = '入帳記請款全額 $' + sum.toLocaleString('zh-TW') +
             '；中信實匯 $' + preview.net.toLocaleString('zh-TW') + '（扣匯費 $' + preview.fee.toLocaleString('zh-TW') +
-            '）。匯費另記一筆支出。';
+            '）；入帳記全額，摘要加註扣匯費（不另開支出列）。';
         } else if (sum > 0) {
           hint.textContent = '合計須大於 $' + REMIT_FEE_AMOUNT + ' 時，實匯才會扣匯費';
         } else {
@@ -731,8 +756,26 @@
         document.querySelectorAll('#allocList .inp-amt, #allocList .inp-pn, #allocList .inp-desc').forEach(function (inp) {
           inp.oninput = function () {
             var row = inp.closest('.alloc-row');
-            if (row) row.setAttribute('data-source', 'manual');
+            if (row) {
+              row.setAttribute('data-source', 'manual');
+              if (inp.classList.contains('inp-amt')) {
+                updatePretaxHint(row);
+                var taxCb = row.querySelector('.inp-tax');
+                if (taxCb) {
+                  var a = parseAllocAmount(inp.value);
+                  taxCb.disabled = !isNaN(a) && a < 0;
+                  if (taxCb.disabled) taxCb.checked = false;
+                }
+              }
+            }
+            syncTaxFormNote();
             updateTotal();
+          };
+        });
+        document.querySelectorAll('#allocList .inp-tax').forEach(function (cb) {
+          cb.onchange = function () {
+            var row = cb.closest('.alloc-row');
+            if (row) onTaxCheckboxChange(row);
           };
         });
         document.querySelectorAll('#allocList .rm').forEach(function (btn) {
@@ -864,7 +907,7 @@
         var feePreview = remitFeePreview(total);
         if (feePreview.fee > 0) {
           lines.push('中信實匯：$' + feePreview.net.toLocaleString('zh-TW') + '（扣匯費 $' +
-            feePreview.fee.toLocaleString('zh-TW') + '）；入帳仍記全額，匯費另列支出');
+            feePreview.fee.toLocaleString('zh-TW') + '）；入帳仍記全額，摘要加註扣匯費');
           lines.push('實付：$' + feePreview.net.toLocaleString('zh-TW'));
         }
         if (payload.note) lines.push('備註：' + payload.note);
@@ -935,6 +978,126 @@
         return payload;
       }
 
+      function parseAllocAmount(val) {
+        var s = String(val || '').trim().replace(/[,，\s]/g, '');
+        if (!s) return NaN;
+        var n = parseInt(s, 10);
+        return isNaN(n) ? NaN : n;
+      }
+
+      function addTaxAmount(amt) {
+        return Math.round(amt * (1 + TAX_RATE));
+      }
+
+      function removeTaxAmount(amt) {
+        return Math.round(amt / (1 + TAX_RATE));
+      }
+
+      function stripTaxTag(desc) {
+        return String(desc || '').replace(/\s*[\(（]?(含稅|未稅)[\)）]?/g, '').trim();
+      }
+
+      function applyTaxTag(desc, inclusive) {
+        var base = stripTaxTag(desc);
+        var tag = inclusive ? '(含稅)' : '(未稅)';
+        return base ? base + ' ' + tag : tag;
+      }
+
+      function inferRowTaxInclusive(row, ocr) {
+        if (row && row.tax_inclusive != null) return !!row.tax_inclusive;
+        var desc = String((row && row.item_desc) || '');
+        if (desc.indexOf('未稅') >= 0) return false;
+        if (desc.indexOf('含稅') >= 0) return true;
+        if (ocr && (ocr.is_tax_inclusive || (parseInt(ocr.tax_amount, 10) || 0) > 0)) {
+          var rowAmt = parseInt(row && row.amount, 10) || 0;
+          var headerAmt = parseInt(ocr.amount, 10) || 0;
+          if (rowAmt > 0 && headerAmt > 0 && rowAmt === headerAmt) return true;
+        }
+        return false;
+      }
+
+      function defaultManualAllocRow(projectNo) {
+        return {
+          project_no: projectNo || '',
+          amount: '',
+          item_desc: '',
+          source: 'manual',
+          tax_inclusive: false,
+          ocr_tax_inclusive: false,
+          tax_uncheck_free: false
+        };
+      }
+
+      function buildAiAllocRow(r, ocr) {
+        var rowInc = r.tax_inclusive != null ? !!r.tax_inclusive : inferRowTaxInclusive(r, ocr);
+        var desc = String(r.item_desc || '').trim();
+        if (!desc) desc = applyTaxTag('', rowInc);
+        else if (desc.indexOf('含稅') < 0 && desc.indexOf('未稅') < 0) desc = applyTaxTag(desc, rowInc);
+        return {
+          project_no: r.project_no,
+          amount: r.amount,
+          item_desc: desc,
+          source: 'ai',
+          tax_inclusive: rowInc,
+          ocr_tax_inclusive: rowInc,
+          tax_uncheck_free: rowInc
+        };
+      }
+
+      function updatePretaxHint(rowEl) {
+        var cb = rowEl.querySelector('.inp-tax');
+        var hintEl = rowEl.querySelector('.pretax-hint');
+        if (!hintEl || !cb) return;
+        var amt = parseAllocAmount(rowEl.querySelector('.inp-amt').value);
+        if (!cb.checked || isNaN(amt) || amt === 0 || amt < 0) {
+          hintEl.textContent = '';
+          return;
+        }
+        var pretax = removeTaxAmount(Math.abs(amt)) * (amt < 0 ? -1 : 1);
+        hintEl.textContent = '未稅 $' + pretax.toLocaleString('zh-TW');
+      }
+
+      function syncTaxFormNote() {
+        var noteEl = document.getElementById('note');
+        if (!noteEl) return;
+        var parts = readAllocRows().filter(function (r) {
+          return String(r.project_no || '').trim();
+        }).map(function (r) {
+          return r.project_no + (r.tax_inclusive ? '含稅' : '未稅');
+        });
+        var taxLine = parts.length ? TAX_NOTE_MARKER + parts.join('、') : '';
+        var cur = String(noteEl.value || '');
+        var stripped = cur.replace(/【稅別】[^；\n]*/g, '').replace(/^[；\s]+|[；\s]+$/g, '').trim();
+        noteEl.value = taxLine ? (stripped ? stripped + '；' + taxLine : taxLine) : stripped;
+      }
+
+      function onTaxCheckboxChange(rowEl) {
+        var cb = rowEl.querySelector('.inp-tax');
+        var amtInp = rowEl.querySelector('.inp-amt');
+        var descInp = rowEl.querySelector('.inp-desc');
+        if (!cb || !amtInp || !descInp) return;
+        var amt = parseAllocAmount(amtInp.value);
+        if (isNaN(amt) || amt === 0 || amt < 0) return;
+
+        var checked = cb.checked;
+        var ocrInc = rowEl.getAttribute('data-ocr-tax-inclusive') === '1';
+        var uncheckFree = rowEl.getAttribute('data-tax-uncheck-free') === '1';
+
+        if (checked) {
+          if (!ocrInc || !uncheckFree) amtInp.value = addTaxAmount(amt);
+        } else if (ocrInc && uncheckFree) {
+          rowEl.setAttribute('data-tax-uncheck-free', '0');
+        } else {
+          amtInp.value = removeTaxAmount(amt);
+        }
+
+        descInp.value = applyTaxTag(descInp.value, checked);
+        updatePretaxHint(rowEl);
+        rowEl.setAttribute('data-source', 'manual');
+        syncTaxFormNote();
+        updateTotal();
+      }
+
       function validateForm() {
         if (!isVendorSelf) {
           if (payeeMode === 'vendor') {
@@ -949,10 +1112,19 @@
         }
         var rows = readAllocRows();
         if (!rows.length) return '請新增明細列';
+        var sum = 0;
         for (var i = 0; i < rows.length; i++) {
           if (!rows[i].project_no) return '第 ' + (i + 1) + ' 列請填案號';
-          if (!(parseInt(rows[i].amount, 10) > 0)) return '第 ' + (i + 1) + ' 列請填金額';
+          var amt = parseAllocAmount(rows[i].amount);
+          if (isNaN(amt) || amt === 0) {
+            return '第 ' + (i + 1) + ' 列請填有效金額（折讓可填負數）';
+          }
+          if (amt < 0 && !String(rows[i].item_desc || '').trim()) {
+            return '第 ' + (i + 1) + ' 列折讓請填品項（如折讓3%）';
+          }
+          sum += amt;
         }
+        if (sum <= 0) return '合計須大於 0（折讓後實付金額）';
         if (!document.getElementById('bankCode').value.trim() || !document.getElementById('accountNo').value.trim()) {
           return '請補齊銀行代碼與帳號';
         }
@@ -1054,11 +1226,15 @@
             return r.source === 'manual' && isManualRowFilled(r);
           });
           var aiRows = (data.allocations || []).map(function (r) {
-            return { project_no: r.project_no, amount: r.amount, item_desc: r.item_desc, source: 'ai' };
+            return buildAiAllocRow(r, ocr);
           });
           lastOcrAmount = parseInt(ocr.amount, 10) || 0;
           if (!aiRows.length && lastOcrAmount) {
-            aiRows = [{ project_no: ocr.project_no || '', amount: lastOcrAmount, item_desc: ocr.item_desc || '', source: 'ai' }];
+            aiRows = [buildAiAllocRow({
+              project_no: ocr.project_no || '',
+              amount: lastOcrAmount,
+              item_desc: ocr.item_desc || ''
+            }, ocr)];
           }
           var merged = manualRows.concat(aiRows);
           renderAllocRows(merged.length ? merged : []);
@@ -1176,7 +1352,7 @@
         if (d.order_no) document.getElementById('orderNo').value = d.order_no;
         if (d.allocations && d.allocations.length) {
           renderAllocRows(d.allocations.map(function (r) {
-            return { project_no: r.project_no, amount: r.amount, item_desc: r.item_desc, source: 'ai' };
+            return buildAiAllocRow(r, d.ocr || {});
           }));
         }
       }
@@ -1193,7 +1369,7 @@
         document.getElementById('ocrStatus').textContent = '尚未辨識';
         document.getElementById('note').value = '';
         renderAllocRows(queryParams.project_no
-          ? [{ project_no: queryParams.project_no, amount: '', item_desc: '', source: 'manual' }]
+          ? [defaultManualAllocRow(queryParams.project_no)]
           : []);
       }
 
@@ -1251,7 +1427,7 @@
       document.getElementById('addAllocBtn').addEventListener('click', function () {
         AccountingUi.tap('新增明細列');
         var rows = readAllocRows();
-        rows.push({ project_no: '', amount: '', item_desc: '', source: 'manual' });
+        rows.push(defaultManualAllocRow());
         renderAllocRows(rows);
       });
       document.getElementById('submitBtn').addEventListener('click', function () { submitRequest('review'); });
@@ -1306,7 +1482,7 @@
 
       function finishPaymentRequestBoot() {
         renderAllocRows(queryParams.project_no
-          ? [{ project_no: queryParams.project_no, amount: '', item_desc: '', source: 'manual' }]
+          ? [defaultManualAllocRow(queryParams.project_no)]
           : []);
         if (queryParams.doc_type) document.getElementById('docType').value = queryParams.doc_type;
         if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});

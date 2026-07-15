@@ -814,7 +814,8 @@ var AccountingApi = (function () {
         bank_code: patch.bank_code,
         account_no: patch.account_no,
         account_name: patch.account_name,
-        doc_type: patch.doc_type
+        doc_type: patch.doc_type,
+        remit_fee_apply: patch.remit_fee_apply
       });
     },
     vendorPaymentExportCtbc: function (sessionOrToken, paymentRequestIds) {

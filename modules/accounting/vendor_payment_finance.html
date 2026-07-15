@@ -46,6 +46,8 @@
     .actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .inline-chk { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-weight: 600; }
     .inline-chk input { width: auto; margin: 0; }
+    .fee-preview { margin: 4px 0 0 28px; color: #555; font-size: 13px; }
+    .fee-chk { margin-top: 8px; font-weight: 600; font-size: 13px; }
     #ocrInput { display: none; }
   </style>
 </head>
@@ -116,7 +118,7 @@
         <button type="button" class="btn btn-muted" id="selAllBtn">全選</button>
         <button type="button" class="btn btn-ok" id="exportBtn">匯出轉帳檔並完成匯款</button>
       </div>
-      <p class="sub">勾選後匯出：產生中信上傳工具用的<strong>整批匯款</strong> .txt（固定 500 byte／列，非薪轉檔）。並記入收支、標記已匯款。<br />上傳中信時請選「整批匯款」、檔案編碼 <strong>BIG-5</strong>（勿選 UTF-8）。</p>
+      <p class="sub">勾選後匯出：產生中信上傳工具用的<strong>整批匯款</strong> .txt（固定 500 byte／列，非薪轉檔）。並記入收支、標記已匯款。<br />每筆可勾選<strong>是否扣匯費 $30</strong>（入帳仍記請款全額，摘要加註扣匯費；不另開支出列）。<br />上傳中信時請選「整批匯款」、檔案編碼 <strong>BIG-5</strong>（勿選 UTF-8）。</p>
       <h3 style="margin:0 0 8px">待匯款列表</h3>
       <div id="list"></div>
       <p class="sub hidden" id="emptyHint">目前沒有待匯款項目</p>
@@ -130,6 +132,62 @@
       var items = [];
       var payeeMode = 'vendor';
       var ui = AccountingUi.feedback();
+      var REMIT_FEE = 30;
+
+      function parseRemitFeeApply(row) {
+        var raw = String(row && row.remit_fee_apply != null ? row.remit_fee_apply : '').trim();
+        if (raw === '否') return false;
+        if (raw === '是') return true;
+        var gross = parseInt(row && row.amount, 10) || 0;
+        return gross > REMIT_FEE;
+      }
+
+      function ctbcAmountForRow(row) {
+        var gross = parseInt(row.amount, 10) || 0;
+        if (gross <= 0) return 0;
+        return parseRemitFeeApply(row) && gross > REMIT_FEE ? gross - REMIT_FEE : gross;
+      }
+
+      function feePreviewText(row) {
+        var gross = parseInt(row.amount, 10) || 0;
+        if (gross <= 0) return '';
+        var net = ctbcAmountForRow(row);
+        var fee = parseRemitFeeApply(row) && gross > REMIT_FEE ? REMIT_FEE : 0;
+        if (fee > 0) {
+          return '入帳 $' + gross.toLocaleString('zh-TW') + ' · 中信實匯 $' +
+            net.toLocaleString('zh-TW') + '（扣匯費 $' + fee.toLocaleString('zh-TW') + '，摘要加註）';
+        }
+        return '入帳 $' + gross.toLocaleString('zh-TW') + ' · 中信實匯同額（不扣匯費）';
+      }
+
+      function patchListCacheRemitFee(id, val) {
+        if (typeof AccountingListCache === 'undefined') return;
+        AccountingListCache.patch(session, listCacheKey(), function (data) {
+          if (!data || !data.items) return;
+          data.items.forEach(function (row) {
+            if (row.payment_request_id === id) row.remit_fee_apply = val;
+          });
+        });
+      }
+
+      async function saveRemitFeeApply(row, apply, feeCb) {
+        if (itemQueueBusy(row.payment_request_id)) return;
+        var val = apply ? '是' : '否';
+        await AccountingUi.runAsync(feeCb, { busyLabel: '儲存中…', clear: false }, async function () {
+          ui.clear();
+          var data = await AccountingApi.vendorPaymentUpdate(session, row.payment_request_id, {
+            remit_fee_apply: val
+          });
+          if (!data.success) throw new Error(data.message || '儲存匯費選項失敗');
+          row.remit_fee_apply = val;
+          patchListCacheRemitFee(row.payment_request_id, val);
+          var preview = feeCb.closest('.item').querySelector('.fee-preview');
+          if (preview) preview.textContent = feePreviewText(row);
+        }).catch(function (e) {
+          feeCb.checked = !apply;
+          setMsg(e.message || String(e));
+        });
+      }
 
       function setMsg(t) { ui.setMsg(t); }
       function setOk(t) { ui.setOk(t); }
@@ -201,6 +259,7 @@
           account_no: payload.account_no,
           account_name: payload.account_name,
           note: payload.note,
+          remit_fee_apply: (parseInt(payload.amount, 10) || 0) > REMIT_FEE ? '是' : '否',
           source: mode === 'employee' ? 'staff_request' : 'finance_manual'
         };
       }
@@ -337,6 +396,30 @@
           '<div class="bank">' + bankLine(row) + '</div>';
         head.appendChild(info);
         div.appendChild(head);
+
+        if (amount > REMIT_FEE) {
+          var feeWrap = document.createElement('label');
+          feeWrap.className = 'inline-chk fee-chk';
+          var feeCb = document.createElement('input');
+          feeCb.type = 'checkbox';
+          feeCb.className = 'fee-apply';
+          feeCb.checked = parseRemitFeeApply(row);
+          feeCb.addEventListener('change', function () {
+            saveRemitFeeApply(row, feeCb.checked, feeCb);
+          });
+          feeWrap.appendChild(feeCb);
+          feeWrap.appendChild(document.createTextNode(' 扣匯費 $' + REMIT_FEE + '（中信實匯較少）'));
+          div.appendChild(feeWrap);
+          var feePreview = document.createElement('div');
+          feePreview.className = 'sub fee-preview';
+          feePreview.textContent = feePreviewText(row);
+          div.appendChild(feePreview);
+        } else if (amount > 0) {
+          var smallFee = document.createElement('div');
+          smallFee.className = 'sub fee-preview';
+          smallFee.textContent = '金額 ≤ $' + REMIT_FEE + '，不適用匯費扣款';
+          div.appendChild(smallFee);
+        }
 
         var actions = document.createElement('div');
         actions.className = 'actions';
