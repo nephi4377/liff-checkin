@@ -248,7 +248,7 @@
       <textarea id="note" placeholder="服務區域、施工品質、配合度或其他注意事項可寫在這裡"></textarea>
 
       <p class="section-title">LINE 身份綁定（報價／請款辨識用）</p>
-      <p class="sub" style="margin:0 0 8px">搜尋來源：<strong>會計官方 LINE @672zolga</strong> 聯絡人名單（加好友或傳訊息即自動收錄；與行政主帳 UID 不同）。</p>
+      <p class="sub" style="margin:0 0 8px">搜尋來源：<strong>會計 LINE @672zolga</strong> ＋ <strong>添心官方 LINE</strong> 顧客列表（兩邊 UID 不同，可各綁一筆）。</p>
       <div id="bindEditor" class="hidden">
         <label>搜尋顧客（名稱／案號／UID）</label>
         <input id="lineSearchKw" placeholder="例：木作老王、752、U 開頭 UID" />
@@ -258,7 +258,7 @@
             <select id="bindPurpose"><option value="報價">報價</option><option value="請款">請款</option><option value="一般">一般</option></select>
           </div>
         </div>
-        <button type="button" class="btn btn-secondary btn-block" id="lineSearchBtn">搜尋會計 LINE 聯絡人</button>
+        <button type="button" class="btn btn-secondary btn-block" id="lineSearchBtn">搜尋 LINE 聯絡人（會計＋官方）</button>
         <div id="lineSearchResults"></div>
         <label style="margin-top:12px">手動貼 UID／GID（進階，顧客列表找不到時）</label>
         <div class="row2">
@@ -640,10 +640,12 @@
           var row = document.createElement('div');
           row.className = 'bind-item';
           var typeLabel = b.id_type === 'group' ? 'GID 群組' : 'UID 私訊';
+          var chLabel = (String(b.note || '').indexOf('channel:official') >= 0) ? '官方 LINE' : '會計 LINE';
           row.innerHTML =
             '<div><strong>' + (b.display_name || '—') + '</strong> ' +
             '<span class="tag">' + (b.purpose || '一般') + '</span> ' +
-            '<span class="tag">' + typeLabel + '</span></div>' +
+            '<span class="tag">' + typeLabel + '</span> ' +
+            '<span class="tag">' + chLabel + '</span></div>' +
             '<div class="mono">' + (b.line_id || '') + '</div>';
           var btn = document.createElement('button');
           btn.type = 'button';
@@ -664,7 +666,7 @@
         });
       }
 
-      async function addBinding(vendorId, idType, lineId, displayName, purpose, btn) {
+      async function addBinding(vendorId, idType, lineId, displayName, purpose, btn, lineChannel) {
         if (!vendorId) { setMsg('請先儲存廠商'); return; }
         lineId = String(lineId || '').trim();
         if (!lineId) { setMsg('請從搜尋結果選擇要加入的 LINE'); return; }
@@ -675,7 +677,8 @@
             line_id: lineId,
             display_name: displayName || '',
             purpose: purpose || $('bindPurpose').value || '一般',
-            is_primary: '否'
+            is_primary: '否',
+            line_channel: lineChannel || 'accounting'
           };
           var data = await AccountingApi.crudCreate(session, 'vendor_line_binding', payload);
           if (!data.success) { setMsg(data.message || '綁定失敗'); return; }
@@ -692,20 +695,21 @@
         var box = $('lineSearchResults');
         box.innerHTML = '';
         if (!items || !items.length) {
-          box.innerHTML = '<p class="sub">沒有符合的聯絡人（請確認對方已加會計 LINE @672zolga 並傳過訊息）</p>';
+          box.innerHTML = '<p class="sub">沒有符合的聯絡人（請確認對方已加會計 LINE 或官方 LINE）</p>';
           return;
         }
         items.forEach(function (hit) {
           var row = document.createElement('div');
           row.className = 'search-hit';
-          var label = (hit.name || '') + (hit.project_no ? ' · 案號 ' + hit.project_no : '');
+          var ch = hit.line_channel === 'official' ? '官方 LINE' : '會計 LINE';
+          var label = (hit.name || '') + (hit.project_no ? ' · 案號 ' + hit.project_no : '') + ' · ' + ch;
           row.innerHTML = '<div><div>' + label + '</div><div class="mono">' + hit.line_id + '</div></div>';
           var btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'btn btn-secondary';
           btn.textContent = '加入';
           btn.addEventListener('click', function () {
-            addBinding($('editId').value, hit.id_type, hit.line_id, hit.name, $('bindPurpose').value, btn);
+            addBinding($('editId').value, hit.id_type, hit.line_id, hit.name, $('bindPurpose').value, btn, hit.line_channel);
           });
           row.appendChild(btn);
           box.appendChild(row);
@@ -1097,7 +1101,19 @@
           var preview = await AccountingApi.vendorSyncLegacyDrive(session, { confirm: false });
           if (!preview.success) { setMsg(preview.message || '預覽失敗'); return; }
           var s = preview.stats || {};
-          var msg = preview.message || ('可連結 ' + (s.linked || 0) + ' 家、新增 ' + (s.created || 0) + ' 家');
+          var lines = [];
+          lines.push('【可連結 ' + (s.linked || 0) + ' 家】試算表已有，補 Drive 連結：');
+          (preview.details || []).filter(function (d) { return d.action === 'would_link'; }).forEach(function (d) {
+            lines.push('  • ' + (d.vendor_name || '—') + ' ← 資料夾「' + (d.folder_name || '—') + '」');
+          });
+          lines.push('');
+          lines.push('【新增 ' + (s.created || 0) + ' 家】Drive 有、試算表沒有（狀態：待審核）：');
+          (preview.details || []).filter(function (d) { return d.action === 'would_create'; }).slice(0, 40).forEach(function (d) {
+            lines.push('  • ' + (d.name || '—') + '（' + (d.trade_category || '其他') + '）');
+          });
+          if ((s.created || 0) > 40) lines.push('  …另有 ' + ((s.created || 0) - 40) + ' 家（完整清單同步後可在名冊篩「待審核」）');
+          if (s.skipped_empty) lines.push('\n略過空資料夾：' + s.skipped_empty + ' 個');
+          var msg = lines.join('\n');
           if (!window.confirm(msg + '\n\n確定要寫入試算表嗎？')) return;
           var done = await AccountingUi.runAsync($('syncDriveBtn'), {
             busyLabel: '同步中…',

@@ -12,7 +12,7 @@ var AccountingShell = (function () {
 
   var PAGE_TITLES = {
     'accounting_ingest.html': '收支登錄',
-    'payment_request.html': '待付款申請',
+    'payment_request.html': '廠商存檔或待付款',
     'payment_request_compose.html': '精細請款建單',
     'vendor_status.html': '款項進度',
     'vendors.html': '廠商名冊',
@@ -26,7 +26,8 @@ var AccountingShell = (function () {
     'project_margin.html': '案件毛利',
     'designer-customer-finance.html': '追加減與收款',
     'customer-finance-portal.html': '客戶案件紀錄',
-    'vendor_register.html': '廠商自填'
+    'vendor_register.html': '廠商自填',
+    'vendor_docs.html': '廠商存檔或待付款'
   };
 
   function normalizePage(href) {
@@ -49,8 +50,22 @@ var AccountingShell = (function () {
     if (window.location.hash !== next) window.location.hash = next;
   }
 
+  function readShellForwardQuery() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var parts = [];
+      params.forEach(function (val, key) {
+        if (key === 'route' || key === 'embed') return;
+        parts.push(encodeURIComponent(key) + '=' + encodeURIComponent(val));
+      });
+      return parts.length ? '&' + parts.join('&') : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
   function buildFrameSrc(page) {
-    var base = page + (page.indexOf('?') >= 0 ? '&' : '?') + 'embed=1';
+    var base = page + (page.indexOf('?') >= 0 ? '&' : '?') + 'embed=1' + readShellForwardQuery();
     if (typeof AccountingNav !== 'undefined') return AccountingNav.withHubQuery(base);
     return base;
   }

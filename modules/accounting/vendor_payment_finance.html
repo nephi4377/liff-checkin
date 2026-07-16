@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=17"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=38"></script>
+  <script src="../../shared/js/accounting_api.js?v=39"></script>
   <script src="../../shared/js/accounting_cache.js?v=26"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=1"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=3"></script>
@@ -118,7 +118,8 @@
         <button type="button" class="btn btn-muted" id="selAllBtn">全選</button>
         <button type="button" class="btn btn-ok" id="exportBtn">匯出轉帳檔並完成匯款</button>
       </div>
-      <p class="sub">勾選後匯出：產生中信上傳工具用的<strong>整批匯款</strong> .txt（固定 500 byte／列，非薪轉檔）。並記入收支、標記已匯款。<br />每筆可勾選<strong>是否扣匯費 $30</strong>（入帳仍記請款全額，摘要加註扣匯費；不另開支出列）。<br />上傳中信時請選「整批匯款」、檔案編碼 <strong>BIG-5</strong>（勿選 UTF-8）。</p>
+      <label class="inline-chk"><input type="checkbox" id="linePushChk" checked /> 匯出後 LINE 推播匯款通知給廠商（已綁定 UID）</label>
+      <p class="sub">勾選後匯出：產生中信上傳工具用的<strong>整批匯款</strong> .txt（固定 500 byte／列，非薪轉檔）。並記入收支、標記已匯款。<br />入帳日：<strong>上午匯出＝當日</strong>、<strong>下午匯出＝隔日</strong>（台北時間 12:00 為界）。<br />每筆可勾選<strong>是否扣匯費 $30</strong>（入帳仍記請款全額，摘要加註扣匯費；不另開支出列）。<br />上傳中信時請選「整批匯款」、檔案編碼 <strong>BIG-5</strong>（勿選 UTF-8）。</p>
       <h3 style="margin:0 0 8px">待匯款列表</h3>
       <div id="list"></div>
       <p class="sub hidden" id="emptyHint">目前沒有待匯款項目</p>
@@ -594,17 +595,54 @@
         });
       });
 
+      function formatRemitDateHint() {
+        var now = new Date();
+        var parts = new Intl.DateTimeFormat('zh-TW', {
+          timeZone: 'Asia/Taipei', hour: 'numeric', hour12: false
+        }).formatToParts(now);
+        var hour = 0;
+        parts.forEach(function (p) { if (p.type === 'hour') hour = parseInt(p.value, 10) || 0; });
+        return hour < 12 ? '當日' : '隔日';
+      }
+
+      function summarizePushResults(data) {
+        var lines = [];
+        if (data.remit_date) lines.push('入帳日：' + data.remit_date);
+        var unlinked = data.unlinked_vendors || [];
+        if (unlinked.length) {
+          lines.push('未綁 LINE（無法推播）：' + unlinked.map(function (u) {
+            return u.vendor_name || u.vendor_id || '—';
+          }).join('、'));
+        }
+        var pushes = data.push_results || [];
+        if (pushes.length) {
+          var ok = pushes.filter(function (p) { return p.ok; }).length;
+          lines.push('LINE 推播：' + ok + '/' + pushes.length + ' 成功');
+          pushes.filter(function (p) { return !p.ok; }).forEach(function (p) {
+            lines.push('推播失敗 ' + (p.vendor_name || '') + '（' + (p.line_channel || 'accounting') + '）');
+          });
+        } else if (data.line_push && !unlinked.length) {
+          lines.push('LINE 推播：無需推播的廠商');
+        }
+        return lines.join('\n');
+      }
+
       document.getElementById('exportBtn').addEventListener('click', async function () {
         var btn = this;
         var ids = selectedIds();
         if (!ids.length) { setMsg('請先勾選要匯出的項目'); return; }
-        if (!confirm('將下載銀行轉帳檔（.txt），並把 ' + ids.length + ' 筆記入收支、標記已匯款。\n\n確定？')) return;
+        var linePush = document.getElementById('linePushChk').checked;
+        var confirmMsg = '將下載銀行轉帳檔（.txt），並把 ' + ids.length + ' 筆記入收支、標記已匯款。\n' +
+          '入帳日預設：' + formatRemitDateHint() + '。\n' +
+          (linePush ? '並 LINE 推播匯款通知給已綁定廠商。\n' : '不推播 LINE。\n') +
+          '\n確定？';
+        if (!confirm(confirmMsg)) return;
         await AccountingUi.runAsync(btn, {
           busyLabel: '匯出中…',
           startMessage: '正在產生轉帳檔並寫入收支，可能需要十幾秒…'
         }, async function () {
           ui.clear();
-          var data = await AccountingApi.vendorPaymentExportCtbc(session, ids);
+          var data = await AccountingApi.vendorPaymentExportCtbc(session, ids, { line_push: linePush });
           if (!data.success) {
             setMsg(data.message || '匯出失敗');
             return;
@@ -624,9 +662,15 @@
             await downloadCtbcBig5(data.filename || 'ctbc_vendor_batch.txt', data.content || '');
           }
           var msg = '已完成 ' + (data.count || ids.length) + ' 筆（整批匯款）：檔案已下載。上傳中信請選「整批匯款」、編碼 BIG-5';
+          var pushSummary = summarizePushResults(data);
+          if (pushSummary) msg += '\n' + pushSummary;
           if (data.warnings && data.warnings.length) {
             setMsg('以下項目未匯出、未寫收支：' + data.warnings.join('；'));
             msg += '（另有 ' + data.warnings.length + ' 筆略過，見上方紅字）';
+          }
+          if ((data.unlinked_vendors || []).length) {
+            setMsg(((document.getElementById('msg').textContent || '') ? document.getElementById('msg').textContent + '\n' : '') +
+              '未綁 LINE：' + data.unlinked_vendors.map(function (u) { return u.vendor_name; }).join('、'));
           }
           setOk(msg);
           var exportedIds = data.payment_request_ids || ids;

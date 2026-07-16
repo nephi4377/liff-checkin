@@ -454,6 +454,34 @@ var AccountingApi = (function () {
         return res;
       });
     },
+    vendorDocSubmit: function (sessionOrToken, payload) {
+      return post({
+        action: 'vendor_doc_submit',
+        auth: resolveAuth(sessionOrToken),
+        payload: payload || {}
+      });
+    },
+    vendorDocList: function (sessionOrToken, filter) {
+      return post({
+        action: 'vendor_doc_list',
+        auth: resolveAuth(sessionOrToken),
+        filter: filter || {}
+      });
+    },
+    vendorDocOcrAnalyze: function (sessionOrToken, payload, timeoutMs) {
+      return post({
+        action: 'vendor_doc_ocr_analyze',
+        auth: resolveAuth(sessionOrToken),
+        payload: payload || {}
+      }, timeoutMs || 120000);
+    },
+    vendorDocDeactivate: function (sessionOrToken, vendorDocId) {
+      return post({
+        action: 'vendor_doc_deactivate',
+        auth: resolveAuth(sessionOrToken),
+        vendor_doc_id: vendorDocId
+      });
+    },
     marginListOverview: function (sessionOrToken) {
       return post({ action: 'margin_list_overview', auth: resolveAuth(sessionOrToken) });
     },
@@ -833,11 +861,13 @@ var AccountingApi = (function () {
         remit_fee_apply: patch.remit_fee_apply
       });
     },
-    vendorPaymentExportCtbc: function (sessionOrToken, paymentRequestIds) {
+    vendorPaymentExportCtbc: function (sessionOrToken, paymentRequestIds, options) {
+      options = options || {};
       return post({
         action: 'vendor_payment_export_ctbc',
         auth: resolveAuth(sessionOrToken),
-        payment_request_ids: paymentRequestIds || []
+        payment_request_ids: paymentRequestIds || [],
+        line_push: options.line_push !== false
       });
     },
     vendorPaymentDelete: function (sessionOrToken, paymentRequestId) {

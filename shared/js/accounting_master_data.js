@@ -46,6 +46,7 @@ var AccountingMasterData = {
   vendor_coop_statuses: ['待審核', '合作中', '暫停合作'],
   vendor_payment_terms_presets: ['現結', '月結30天', '依工程進度', '其他'],
   vendor_service_area_presets: ['雙北', '桃園', '台中', '台南', '高雄', '全台'],
+  vendor_doc_types: ['報價單', '合約', '型錄', '規格書', '其他'],
   margin_expense_categories: [
     '木作外包廠商', '建材', '地板', '系統櫃', '五金', '水電', '泥作', '油漆', '石材/人造石', '玻璃',
     '金屬加工', '空調', '清潔/拆除', '家具', '材料', '人工', '交通', '基本費用', '收入', '其他'

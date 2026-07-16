@@ -63,7 +63,7 @@ var AccountingUi = (function () {
 
   var PAGE_LABELS = {
     'index.html': '會計功能選單',
-    'payment_request.html': '待付款申請',
+    'payment_request.html': '廠商存檔或待付款',
     'accounting_ingest.html': '收支登錄',
     'ledger_review.html': '請款審核',
     'vendor_payment_finance.html': '廠商待匯款',
