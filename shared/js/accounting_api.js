@@ -867,8 +867,7 @@ var AccountingApi = (function () {
       return post({
         action: 'vendor_payment_export_ctbc',
         auth: resolveAuth(sessionOrToken),
-        payment_request_ids: paymentRequestIds || [],
-        line_push: options.line_push !== false
+        payment_request_ids: paymentRequestIds || []
       });
     },
     vendorPaymentDelete: function (sessionOrToken, paymentRequestId) {
@@ -878,11 +877,14 @@ var AccountingApi = (function () {
         payment_request_id: paymentRequestId
       });
     },
-    vendorPaymentMarkPaid: function (sessionOrToken, paymentRequestIds) {
+    vendorPaymentMarkPaid: function (sessionOrToken, paymentRequestIds, options) {
+      options = options || {};
       return post({
         action: 'vendor_payment_mark_paid',
         auth: resolveAuth(sessionOrToken),
-        payment_request_ids: paymentRequestIds || []
+        payment_request_ids: paymentRequestIds || [],
+        mark_all: options.mark_all === true,
+        line_push: options.line_push !== false
       });
     },
     ledgerReviewBundle: function (sessionOrToken, filter) {

@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=17"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=39"></script>
+  <script src="../../shared/js/accounting_api.js?v=40"></script>
   <script src="../../shared/js/accounting_cache.js?v=26"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=1"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=3"></script>
@@ -31,6 +31,7 @@
     .btn-ok { background: #34a853; color: #fff; }
     .btn-warn { background: #ea4335; color: #fff; }
     .btn-muted { background: #e8eaed; color: #333; }
+    .btn-secondary { background: #5f6368; color: #fff; }
     .item { border-bottom: 1px solid #eee; padding: 14px 0; }
     .item:last-child { border-bottom: none; }
     .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin-right: 6px; }
@@ -116,10 +117,15 @@
       <div class="toolbar">
         <button type="button" class="btn btn-muted" id="reloadBtn">重新載入</button>
         <button type="button" class="btn btn-muted" id="selAllBtn">全選</button>
-        <button type="button" class="btn btn-ok" id="exportBtn">匯出轉帳檔並完成匯款</button>
+        <button type="button" class="btn btn-muted" id="selNoneBtn">全不選</button>
+        <button type="button" class="btn btn-secondary" id="exportBtn">匯出轉帳檔</button>
+        <button type="button" class="btn btn-ok" id="markPaidBtn">標記已匯款</button>
+        <button type="button" class="btn btn-ok" id="markAllPaidBtn">一鍵全標已匯款</button>
       </div>
-      <label class="inline-chk"><input type="checkbox" id="linePushChk" checked /> 匯出後 LINE 推播匯款通知給廠商（已綁定 UID）</label>
-      <p class="sub">勾選後匯出：產生中信上傳工具用的<strong>整批匯款</strong> .txt（固定 500 byte／列，非薪轉檔）。並記入收支、標記已匯款。<br />入帳日：<strong>上午匯出＝當日</strong>、<strong>下午匯出＝隔日</strong>（台北時間 12:00 為界）。<br />每筆可勾選<strong>是否扣匯費 $30</strong>（入帳仍記請款全額，摘要加註扣匯費；不另開支出列）。<br />上傳中信時請選「整批匯款」、檔案編碼 <strong>BIG-5</strong>（勿選 UTF-8）。</p>
+      <p class="sub"><strong>① 匯出轉帳檔</strong>：只下載中信整批匯款 .txt，不改狀態、不寫收支、不推播。<br />
+        <strong>② 上傳中信網銀</strong>：選「整批匯款」、編碼 <strong>BIG-5</strong>。<br />
+        <strong>③ 標記已匯款</strong>：確認銀行已匯出後，勾選項目按「標記已匯款」→ 寫收支、標已匯款、LINE 推播廠商（已綁定 UID）。入帳日＝標記當日。<br />
+        每筆可勾選<strong>是否扣匯費 $30</strong>（入帳仍記請款全額，摘要加註扣匯費；不另開支出列）。</p>
       <h3 style="margin:0 0 8px">待匯款列表</h3>
       <div id="list"></div>
       <p class="sub hidden" id="emptyHint">目前沒有待匯款項目</p>
@@ -431,9 +437,9 @@
 
         var okBtn = document.createElement('button');
         okBtn.className = 'btn btn-ok';
-        okBtn.textContent = 'OK 手動已匯';
+        okBtn.textContent = '標記已匯款';
         okBtn.addEventListener('click', async function () {
-          if (!confirm('不產轉帳檔，直接標記已匯並寫收支？')) return;
+          if (!confirm('確認銀行已匯款？將寫收支、標已匯款並 LINE 通知廠商。')) return;
           if (itemQueueBusy(row.payment_request_id)) return;
           var btn = okBtn;
           await AccountingUi.runAsync(btn, {
@@ -445,7 +451,13 @@
             ui.clear();
             var data = await AccountingApi.vendorPaymentMarkPaid(session, [row.payment_request_id]);
             if (!data.success) { setMsg(data.message || '失敗'); return; }
-            setOk('已標記已匯，收支已登錄');
+            var msg = '已標記已匯款';
+            var pushSummary = summarizePushResults(data);
+            if (pushSummary) msg += '\n' + pushSummary;
+            if ((data.unlinked_vendors || []).length) {
+              setMsg('未綁 LINE：' + data.unlinked_vendors.map(function (u) { return u.vendor_name; }).join('、'));
+            }
+            setOk(msg);
             removeItemFromView(row.payment_request_id);
           });
         });
@@ -517,6 +529,10 @@
       document.getElementById('selAllBtn').addEventListener('click', function () {
         document.querySelectorAll('#list input.chk').forEach(function (el) { el.checked = true; });
         setOk('已全選 ' + document.querySelectorAll('#list input.chk').length + ' 筆');
+      });
+      document.getElementById('selNoneBtn').addEventListener('click', function () {
+        document.querySelectorAll('#list input.chk').forEach(function (el) { el.checked = false; });
+        setOk('已取消全選');
       });
 
       document.getElementById('ocrBtn').addEventListener('click', function () {
@@ -595,16 +611,6 @@
         });
       });
 
-      function formatRemitDateHint() {
-        var now = new Date();
-        var parts = new Intl.DateTimeFormat('zh-TW', {
-          timeZone: 'Asia/Taipei', hour: 'numeric', hour12: false
-        }).formatToParts(now);
-        var hour = 0;
-        parts.forEach(function (p) { if (p.type === 'hour') hour = parseInt(p.value, 10) || 0; });
-        return hour < 12 ? '當日' : '隔日';
-      }
-
       function summarizePushResults(data) {
         var lines = [];
         if (data.remit_date) lines.push('入帳日：' + data.remit_date);
@@ -621,28 +627,71 @@
           pushes.filter(function (p) { return !p.ok; }).forEach(function (p) {
             lines.push('推播失敗 ' + (p.vendor_name || '') + '（' + (p.line_channel || 'accounting') + '）');
           });
-        } else if (data.line_push && !unlinked.length) {
+        } else if (data.line_push !== false && !unlinked.length) {
           lines.push('LINE 推播：無需推播的廠商');
         }
         return lines.join('\n');
       }
 
+      async function runMarkPaid(ids, btn, opts) {
+        opts = opts || {};
+        if (!ids.length && !opts.markAll) {
+          setMsg('請先勾選要標記的項目');
+          return;
+        }
+        var countLabel = opts.markAll ? ('列表全部 ' + items.length + ' 筆') : (ids.length + ' 筆');
+        if (!confirm('確認銀行已匯款？將標記 ' + countLabel + ' 為已匯款、寫收支，並 LINE 通知廠商。\n入帳日＝今日。')) return;
+        await AccountingUi.runAsync(btn, {
+          busyLabel: '處理中…',
+          startMessage: '正在寫入收支並推播通知，可能需要十幾秒…'
+        }, async function () {
+          ui.clear();
+          var data = await AccountingApi.vendorPaymentMarkPaid(session, ids, {
+            mark_all: !!opts.markAll,
+            line_push: true
+          });
+          if (!data.success) {
+            setMsg(data.message || '標記失敗');
+            return;
+          }
+          var msg = '已標記 ' + (data.marked || ids.length) + ' 筆已匯款';
+          var pushSummary = summarizePushResults(data);
+          if (pushSummary) msg += '\n' + pushSummary;
+          if (data.warnings && data.warnings.length) {
+            setMsg('以下項目未標記：' + data.warnings.join('；'));
+            msg += '（另有 ' + data.warnings.length + ' 筆略過，見上方紅字）';
+          }
+          if ((data.unlinked_vendors || []).length) {
+            setMsg(((document.getElementById('msg').textContent || '') ? document.getElementById('msg').textContent + '\n' : '') +
+              '未綁 LINE：' + data.unlinked_vendors.map(function (u) { return u.vendor_name; }).join('、'));
+          }
+          setOk(msg);
+          removeItemsFromView(data.payment_request_ids || ids);
+        });
+      }
+
+      document.getElementById('markPaidBtn').addEventListener('click', function () {
+        runMarkPaid(selectedIds(), this);
+      });
+
+      document.getElementById('markAllPaidBtn').addEventListener('click', function () {
+        if (!items.length) { setMsg('目前沒有待匯款項目'); return; }
+        runMarkPaid([], this, { markAll: true });
+      });
+
       document.getElementById('exportBtn').addEventListener('click', async function () {
         var btn = this;
         var ids = selectedIds();
         if (!ids.length) { setMsg('請先勾選要匯出的項目'); return; }
-        var linePush = document.getElementById('linePushChk').checked;
-        var confirmMsg = '將下載銀行轉帳檔（.txt），並把 ' + ids.length + ' 筆記入收支、標記已匯款。\n' +
-          '入帳日預設：' + formatRemitDateHint() + '。\n' +
-          (linePush ? '並 LINE 推播匯款通知給已綁定廠商。\n' : '不推播 LINE。\n') +
-          '\n確定？';
+        var confirmMsg = '將下載銀行轉帳檔（.txt）共 ' + ids.length + ' 筆。\n' +
+          '不會改狀態、不寫收支、不推播 LINE。\n\n上傳中信後，請回來按「標記已匯款」。\n\n確定？';
         if (!confirm(confirmMsg)) return;
         await AccountingUi.runAsync(btn, {
           busyLabel: '匯出中…',
-          startMessage: '正在產生轉帳檔並寫入收支，可能需要十幾秒…'
+          startMessage: '正在產生轉帳檔…'
         }, async function () {
           ui.clear();
-          var data = await AccountingApi.vendorPaymentExportCtbc(session, ids, { line_push: linePush });
+          var data = await AccountingApi.vendorPaymentExportCtbc(session, ids);
           if (!data.success) {
             setMsg(data.message || '匯出失敗');
             return;
@@ -661,20 +710,12 @@
           } else {
             await downloadCtbcBig5(data.filename || 'ctbc_vendor_batch.txt', data.content || '');
           }
-          var msg = '已完成 ' + (data.count || ids.length) + ' 筆（整批匯款）：檔案已下載。上傳中信請選「整批匯款」、編碼 BIG-5';
-          var pushSummary = summarizePushResults(data);
-          if (pushSummary) msg += '\n' + pushSummary;
+          var msg = '已下載 ' + (data.count || ids.length) + ' 筆轉帳檔。上傳中信請選「整批匯款」、編碼 BIG-5';
           if (data.warnings && data.warnings.length) {
-            setMsg('以下項目未匯出、未寫收支：' + data.warnings.join('；'));
+            setMsg('以下項目未匯出：' + data.warnings.join('；'));
             msg += '（另有 ' + data.warnings.length + ' 筆略過，見上方紅字）';
           }
-          if ((data.unlinked_vendors || []).length) {
-            setMsg(((document.getElementById('msg').textContent || '') ? document.getElementById('msg').textContent + '\n' : '') +
-              '未綁 LINE：' + data.unlinked_vendors.map(function (u) { return u.vendor_name; }).join('、'));
-          }
           setOk(msg);
-          var exportedIds = data.payment_request_ids || ids;
-          removeItemsFromView(exportedIds);
         });
       });
 
