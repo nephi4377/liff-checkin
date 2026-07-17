@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=38"></script>
+  <script src="../../shared/js/accounting_api.js?v=39"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=1"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=3"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
@@ -52,6 +52,9 @@
     .bank-line { font-size: 13px; color: #444; margin-top: 6px; }
     .alloc-row { border: 1px solid #e0e0e0; border-radius: 10px; padding: 10px; margin-top: 8px; background: #fafafa; position: relative; }
     .alloc-row .alloc-rm { position: absolute; top: 8px; right: 8px; border: none; background: transparent; color: #c5221f; font-size: 12px; cursor: pointer; }
+    .tax-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; font-weight: normal; }
+    .tax-row input[type="checkbox"] { width: auto; margin: 0; }
+    .pretax-hint { font-size: 12px; color: #666; }
     .alloc-empty { color: #666; font-size: 14px; padding: 8px 0; }
     .btn-ghost { background: #fff; border: 1px dashed #1a73e8; color: #1a73e8; width: 100%; padding: 10px; margin-top: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border-radius: 8px; }
     .total-line { font-size: 16px; font-weight: 700; margin-top: 10px; text-align: right; color: #1a73e8; }
@@ -118,6 +121,8 @@
       var canApproveIncome = false;
       var listItems = [];
       var ui = AccountingUi.feedback();
+      var TAX_RATE = 0.05;
+      var TAX_NOTE_MARKER = '【稅別】';
 
       var TAB_DESC = {
         vendor: '只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改分攤（可多案）。',
@@ -230,6 +235,112 @@
         var n = parseInt(s, 10);
         return isNaN(n) ? NaN : n;
       }
+      function addTaxAmount(amt) {
+        return Math.round(amt * (1 + TAX_RATE));
+      }
+      function removeTaxAmount(amt) {
+        return Math.round(amt / (1 + TAX_RATE));
+      }
+      function stripTaxTag(desc) {
+        return String(desc || '').replace(/\s*[\(（]?(含稅|未稅)[\)）]?/g, '').trim();
+      }
+      function applyTaxTag(desc, inclusive) {
+        var base = stripTaxTag(desc);
+        var tag = inclusive ? '(含稅)' : '(未稅)';
+        return base ? base + ' ' + tag : tag;
+      }
+      function taxNoteFromItemNote(note, projectNo) {
+        var pn = String(projectNo || '').trim();
+        if (!pn) return null;
+        var m = String(note || '').match(/【稅別】([^；\n]*)/);
+        if (!m) return null;
+        if (m[1].indexOf(pn + '含稅') >= 0) return true;
+        if (m[1].indexOf(pn + '未稅') >= 0) return false;
+        return null;
+      }
+      function inferAllocRowTax(row, itemNote) {
+        var desc = String((row && row.item_desc) || '');
+        var taxInc = false;
+        var ocrInc = false;
+        if (row && row.tax_inclusive != null) {
+          taxInc = !!row.tax_inclusive;
+        } else if (desc.indexOf('未稅') >= 0) {
+          taxInc = false;
+        } else if (desc.indexOf('含稅') >= 0) {
+          taxInc = true;
+          ocrInc = true;
+        } else {
+          var fromNote = taxNoteFromItemNote(itemNote, row.project_no);
+          if (fromNote != null) taxInc = fromNote;
+        }
+        if (row && row.ocr_tax_inclusive != null) ocrInc = !!row.ocr_tax_inclusive;
+        else if (!ocrInc && taxInc && desc.indexOf('含稅') >= 0) ocrInc = true;
+        var uncheckFree = row && row.tax_uncheck_free != null
+          ? !!row.tax_uncheck_free
+          : ocrInc;
+        return {
+          project_no: row.project_no || '',
+          amount: row.amount || '',
+          item_desc: row.item_desc || '',
+          tax_inclusive: taxInc,
+          ocr_tax_inclusive: ocrInc,
+          tax_uncheck_free: uncheckFree
+        };
+      }
+      function updatePretaxHint(rowEl) {
+        var cb = rowEl.querySelector('.inp-tax');
+        var hintEl = rowEl.querySelector('.pretax-hint');
+        if (!hintEl || !cb) return;
+        var amt = parseAllocAmount(rowEl.querySelector('.inp-amt').value);
+        if (!cb.checked || isNaN(amt) || amt === 0 || amt < 0) {
+          hintEl.textContent = '';
+          return;
+        }
+        var pretax = removeTaxAmount(Math.abs(amt)) * (amt < 0 ? -1 : 1);
+        hintEl.textContent = '未稅 $' + pretax.toLocaleString('zh-TW');
+      }
+      function syncTaxNoteForPanel(panel) {
+        var noteEl = panel.querySelector('.inp-note');
+        if (!noteEl) return;
+        var parts = readAllocRowsFromPanel(panel).filter(function (r) {
+          return String(r.project_no || '').trim();
+        }).map(function (r) {
+          return r.project_no + (r.tax_inclusive ? '含稅' : '未稅');
+        });
+        var taxLine = parts.length ? TAX_NOTE_MARKER + parts.join('、') : '';
+        var cur = String(noteEl.value || '');
+        var stripped = cur.replace(/【稅別】[^；\n]*/g, '').replace(/^[；\s]+|[；\s]+$/g, '').trim();
+        noteEl.value = taxLine ? (stripped ? stripped + '；' + taxLine : taxLine) : stripped;
+        var noteTextEl = panel.querySelector('.note-text');
+        var noteLine = panel.querySelector('.note-line');
+        if (noteTextEl) noteTextEl.textContent = noteEl.value;
+        if (noteLine) noteLine.classList.toggle('hidden', !noteEl.value);
+      }
+      function onTaxCheckboxChange(panel, rowEl) {
+        var cb = rowEl.querySelector('.inp-tax');
+        var amtInp = rowEl.querySelector('.inp-amt');
+        var descInp = rowEl.querySelector('.inp-desc');
+        if (!cb || !amtInp || !descInp) return;
+        var amt = parseAllocAmount(amtInp.value);
+        if (isNaN(amt) || amt === 0 || amt < 0) return;
+
+        var checked = cb.checked;
+        var ocrInc = rowEl.getAttribute('data-ocr-tax-inclusive') === '1';
+        var uncheckFree = rowEl.getAttribute('data-tax-uncheck-free') === '1';
+
+        if (checked) {
+          if (!ocrInc || !uncheckFree) amtInp.value = addTaxAmount(amt);
+        } else if (ocrInc && uncheckFree) {
+          rowEl.setAttribute('data-tax-uncheck-free', '0');
+        } else {
+          amtInp.value = removeTaxAmount(amt);
+        }
+
+        descInp.value = applyTaxTag(descInp.value, checked);
+        updatePretaxHint(rowEl);
+        syncTaxNoteForPanel(panel);
+        updatePanelTotal(panel);
+      }
       function itemReady(item) {
         if (isCustomerReceiptIncome(item)) {
           return !!(String(item.project_no || '').trim() && (parseInt(item.amount, 10) || 0) > 0);
@@ -247,20 +358,21 @@
         return sum > 0;
       }
       function allocRowsFromItem(item) {
+        var itemNote = String(item.note || '');
         if (item.allocations && item.allocations.length) {
           return item.allocations.map(function (a) {
-            return {
+            return inferAllocRowTax({
               project_no: a.project_no || '',
               amount: a.amount || '',
               item_desc: a.item_desc || ''
-            };
+            }, itemNote);
           });
         }
-        return [{
+        return [inferAllocRowTax({
           project_no: item.project_no || '',
           amount: item.amount || '',
           item_desc: item.summary || ''
-        }];
+        }, itemNote)];
       }
       function defaultPatchForItem(item) {
         return { allocations: allocRowsFromItem(item) };
@@ -268,10 +380,14 @@
       function readAllocRowsFromPanel(panel) {
         var rows = [];
         panel.querySelectorAll('.alloc-row').forEach(function (el) {
+          var taxCb = el.querySelector('.inp-tax');
           rows.push({
             project_no: el.querySelector('.inp-pn').value.trim(),
             amount: el.querySelector('.inp-amt').value,
-            item_desc: el.querySelector('.inp-desc').value.trim()
+            item_desc: el.querySelector('.inp-desc').value.trim(),
+            tax_inclusive: taxCb ? taxCb.checked : false,
+            ocr_tax_inclusive: el.getAttribute('data-ocr-tax-inclusive') === '1',
+            tax_uncheck_free: el.getAttribute('data-tax-uncheck-free') === '1'
           });
         });
         return rows;
@@ -302,7 +418,26 @@
       }
       function bindAllocPanelEvents(panel) {
         panel.querySelectorAll('.inp-amt, .inp-pn, .inp-desc').forEach(function (inp) {
-          inp.oninput = function () { updatePanelTotal(panel); };
+          inp.oninput = function () {
+            var row = inp.closest('.alloc-row');
+            if (row && inp.classList.contains('inp-amt')) {
+              updatePretaxHint(row);
+              var taxCb = row.querySelector('.inp-tax');
+              if (taxCb) {
+                var a = parseAllocAmount(inp.value);
+                taxCb.disabled = !isNaN(a) && a < 0;
+                if (taxCb.disabled) taxCb.checked = false;
+              }
+            }
+            syncTaxNoteForPanel(panel);
+            updatePanelTotal(panel);
+          };
+        });
+        panel.querySelectorAll('.inp-tax').forEach(function (cb) {
+          cb.onchange = function () {
+            var row = cb.closest('.alloc-row');
+            if (row) onTaxCheckboxChange(panel, row);
+          };
         });
         panel.querySelectorAll('.alloc-rm').forEach(function (btn) {
           btn.onclick = function () {
@@ -316,10 +451,40 @@
         if (addBtn) {
           addBtn.onclick = function () {
             var rows = readAllocRowsFromPanel(panel);
-            rows.push({ project_no: '', amount: '', item_desc: '' });
+            rows.push({
+              project_no: '',
+              amount: '',
+              item_desc: '',
+              tax_inclusive: false,
+              ocr_tax_inclusive: false,
+              tax_uncheck_free: false
+            });
             renderAllocRowsInPanel(panel, rows);
           };
         }
+      }
+      function allocRowHtml(idx, row) {
+        row = row || {};
+        var checked = !!row.tax_inclusive;
+        var ocrInc = !!row.ocr_tax_inclusive;
+        var uncheckFree = ocrInc && row.tax_uncheck_free !== false;
+        var amt = parseAllocAmount(row.amount);
+        var taxDisabled = !isNaN(amt) && amt < 0;
+        if (taxDisabled) checked = false;
+        var pretaxText = '';
+        if (checked && !isNaN(amt) && amt !== 0 && amt > 0) {
+          pretaxText = '未稅 $' + removeTaxAmount(amt).toLocaleString('zh-TW');
+        }
+        return '<div class="alloc-row" data-idx="' + idx + '"' +
+          ' data-ocr-tax-inclusive="' + (ocrInc ? '1' : '0') + '"' +
+          ' data-tax-uncheck-free="' + (uncheckFree ? '1' : '0') + '">' +
+          '<button type="button" class="alloc-rm" data-rm="' + idx + '">刪除</button>' +
+          '<div class="row2"><div><label>案號</label><input class="inp-pn" placeholder="752" /></div>' +
+          '<div><label>金額</label><input class="inp-amt" type="number" inputmode="numeric" placeholder="扣款填負數" /></div></div>' +
+          '<label>品項</label><input class="inp-desc" placeholder="摘要；扣款請註明如廠商借支" />' +
+          '<label class="tax-row"><input type="checkbox" class="inp-tax"' +
+          (checked ? ' checked' : '') + (taxDisabled ? ' disabled' : '') + ' />含稅' +
+          '<span class="pretax-hint">' + pretaxText + '</span></label></div>';
       }
       function renderAllocRowsInPanel(panel, rows) {
         var box = panel.querySelector('.alloc-list');
@@ -331,23 +496,22 @@
         }
         rows.forEach(function (row, idx) {
           var el = document.createElement('div');
-          el.className = 'alloc-row';
-          el.setAttribute('data-idx', String(idx));
-          el.innerHTML =
-            '<button type="button" class="alloc-rm" data-rm="' + idx + '">刪除</button>' +
-            '<div class="row2"><div><label>案號</label><input class="inp-pn" placeholder="752" /></div>' +
-            '<div><label>金額</label><input class="inp-amt" type="number" inputmode="numeric" placeholder="扣款填負數" /></div></div>' +
-            '<label>品項</label><input class="inp-desc" placeholder="摘要；扣款請註明如廠商借支" />';
-          el.querySelector('.inp-pn').value = row.project_no || '';
-          el.querySelector('.inp-amt').value = row.amount || '';
-          el.querySelector('.inp-desc').value = row.item_desc || '';
-          box.appendChild(el);
+          el.innerHTML = allocRowHtml(idx, row);
+          var rowEl = el.firstChild;
+          rowEl.querySelector('.inp-pn').value = row.project_no || '';
+          rowEl.querySelector('.inp-amt').value = row.amount || '';
+          rowEl.querySelector('.inp-desc').value = row.item_desc || '';
+          box.appendChild(rowEl);
         });
         bindAllocPanelEvents(panel);
+        syncTaxNoteForPanel(panel);
         updatePanelTotal(panel);
       }
       function readPatchFromPanel(panel) {
-        return { allocations: readAllocRowsFromPanel(panel) };
+        var patch = { allocations: readAllocRowsFromPanel(panel) };
+        var noteEl = panel.querySelector('.inp-note');
+        if (noteEl) patch.note = noteEl.value.trim();
+        return patch;
       }
 
       async function approveVendor(item, patch) {
@@ -491,7 +655,8 @@
             ? '<p class="bank-line">匯款：' + (item.bank_code || '—') + ' / ' + (item.account_no || '—') +
               ' / ' + (item.account_name || item.party_name || '—') + '</p>'
             : '') +
-          (item.note ? '<p class="sub">備註：' + item.note + '</p>' : '') +
+          '<input type="hidden" class="inp-note" value="" />' +
+          '<p class="sub note-line hidden">備註：<span class="note-text"></span></p>' +
           '<label>退回原因（選填）</label>' +
           '<input type="text" class="inp-reject" placeholder="退回時填寫" />' +
           '<div class="actions" style="margin-top:12px">' +
@@ -499,6 +664,9 @@
           '<button type="button" class="btn btn-warn btn-confirm-reject">退回</button>' +
           '</div>';
         renderAllocRowsInPanel(panel, allocRowsFromItem(item));
+        var noteEl = panel.querySelector('.inp-note');
+        if (noteEl) noteEl.value = String(item.note || '');
+        syncTaxNoteForPanel(panel);
 
         panel.querySelector('.btn-confirm-approve').addEventListener('click', async function () {
           if (!canApproveVendor || itemQueueBusy(item.payment_request_id)) return;

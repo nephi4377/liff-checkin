@@ -736,6 +736,7 @@ var AccountingApi = (function () {
       if (patch && patch.allocations && patch.allocations.length) {
         body.allocations = patch.allocations;
       }
+      if (patch && patch.note != null) body.note = patch.note;
       return post(body);
     },
     vendorPaymentReject: function (sessionOrToken, paymentRequestId, reason) {
