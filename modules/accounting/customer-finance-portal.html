@@ -7,12 +7,13 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=38"></script>
+  <script src="../../shared/js/accounting_api.js?v=39"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=1"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=3"></script>
   <script src="../../shared/js/customer_finance_ui.js?v=2"></script>
   <!-- 客戶專用 LIFF（與員工會計 policy.liffId 分開）。LINE Developers Endpoint URL：
-       https://info.tanxin.space/modules/accounting/customer-finance-portal.html -->
+       https://info.tanxin.space/modules/accounting/customer-finance-portal.html
+       員工預覽全部案子：?staff_preview=1（可加 &project_no=案號） -->
   <script>
     var CUSTOMER_FINANCE_LIFF_ID = '2007974938-d2y1uA1G';
   </script>
@@ -26,6 +27,16 @@
     .btn-primary { background: #06c755; color: #fff; }
     .btn-secondary { background: #e8eaed; color: #333; }
     .warn-box { background: #fef7e0; border-radius: 8px; padding: 10px; font-size: 13px; margin: 8px 0; color: #5f4400; }
+    .preview-banner {
+      background: #e8f0fe;
+      border: 1px solid #aecbfa;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 13px;
+      color: #174ea6;
+      margin-bottom: 12px;
+      line-height: 1.45;
+    }
     #signCanvas { border: 1px solid #ccc; border-radius: 8px; width: 100%; height: 160px; touch-action: none; }
     .hidden { display: none; }
     #msg { color: #c5221f; font-size: 14px; }
@@ -41,6 +52,7 @@
 <body>
   <div id="loading">載入中…</div>
   <div id="app" class="hidden">
+    <div id="previewBanner" class="preview-banner hidden">員工預覽模式（唯讀）：可切換全部案號，畫面與客戶相同，但無法代為確認或簽名。</div>
     <h2>我的案件紀錄</h2>
     <p class="sub" id="userLine">—</p>
     <div id="msg"></div>
@@ -72,6 +84,7 @@
   <script>
   (function () {
     var session = null;
+    var staffPreview = false;
     var pendingSignAdjId = null;
     var canvas = document.getElementById('signCanvas');
     var ctx = canvas.getContext('2d');
@@ -85,6 +98,8 @@
       var projectNo = params.get('project_no') || '';
       var entity = params.get('entity') || '';
       var entityId = params.get('id') || '';
+      var previewRaw = params.get('staff_preview') || params.get('preview') || '';
+      var isStaffPreview = previewRaw === '1' || previewRaw === 'true' || previewRaw === 'yes';
       var liffState = params.get('liff.state');
       if (liffState) {
         var inner = liffState.charAt(0) === '?' ? liffState.slice(1) : liffState;
@@ -93,12 +108,17 @@
           projectNo = projectNo || innerParams.get('project_no') || '';
           entity = entity || innerParams.get('entity') || '';
           entityId = entityId || innerParams.get('id') || '';
+          if (!isStaffPreview) {
+            var p2 = innerParams.get('staff_preview') || innerParams.get('preview') || '';
+            isStaffPreview = p2 === '1' || p2 === 'true' || p2 === 'yes';
+          }
         } catch (e) {}
       }
-      return { projectNo: projectNo, entity: entity, entityId: entityId };
+      return { projectNo: projectNo, entity: entity, entityId: entityId, staffPreview: isStaffPreview };
     }
 
     var deepLink = parsePortalDeepLink();
+    staffPreview = !!deepLink.staffPreview;
 
     function statusLabel(st) {
       var map = {
@@ -163,7 +183,8 @@
       setContentBusy(true);
       $('projectSelect').disabled = true;
       try {
-        var fetchFn = function () { return AccountingApi.cfPortalData(session, pno); };
+        var portalOpts = staffPreview ? { staffPreview: true } : {};
+        var fetchFn = function () { return AccountingApi.cfPortalData(session, pno, portalOpts); };
         var res;
         if (typeof AccountingListCache !== 'undefined' && !forceRefresh) {
           res = await AccountingListCache.loadPortalData(session, pno, fetchFn);
@@ -234,6 +255,7 @@
       target.scrollIntoView({ behavior: 'smooth', block: 'center' });
       target.style.outline = '2px solid #06c755';
       setTimeout(function () { target.style.outline = ''; }, 4000);
+      if (staffPreview) return;
       var signBtn = document.querySelector('[data-adj-sign="' + deepLink.entityId + '"]');
       if (deepLink.entity === 'adjustment' && signBtn) {
         signBtn.click();
@@ -255,10 +277,10 @@
         var tp = parseFloat(a.total_price);
         if (isNaN(tp)) tp = String(a.type) === '減項' ? -(parseFloat(a.amount) || 0) : (parseFloat(a.amount) || 0);
         var btns = '';
-        if (a.status === 'pending_customer') {
+        if (!staffPreview && a.status === 'pending_customer') {
           btns = '<button class="btn btn-primary" data-adj-confirm="' + a.adjustment_id + '">① 我確認內容</button>';
         }
-        if (a.status === 'content_confirmed') {
+        if (!staffPreview && a.status === 'content_confirmed') {
           btns = '<button class="btn btn-primary" data-adj-sign="' + a.adjustment_id + '">② 電子簽名</button>';
         }
         return '<tr data-adj-id="' + a.adjustment_id + '">' +
@@ -296,10 +318,10 @@
       var stage2Hint = '確認後此收款紀錄將寫入您的案件紀錄，請再次核對金額、日期與階段名稱。款項相關請務必謹慎確認。';
       $('recList').innerHTML = items.length ? items.map(function (r) {
         var btns = '';
-        if (r.status === 'pending_customer') {
+        if (!staffPreview && r.status === 'pending_customer') {
           btns = '<button class="btn btn-primary" data-rec-s1="' + r.receipt_id + '">① 確認此收款紀錄</button>';
         }
-        if (r.status === 'customer_stage1') {
+        if (!staffPreview && r.status === 'customer_stage1') {
           btns = '<div class="warn-box">' + stage2Hint + '</div>' +
             '<button class="btn btn-primary" data-rec-s2="' + r.receipt_id + '">② 我確認已收到此收款紀錄</button>';
         }
@@ -347,7 +369,13 @@
 
     (async function boot() {
       try {
-        session = await AccountingApi.initCustomerPortalSession({ liffId: CUSTOMER_FINANCE_LIFF_ID });
+        session = await AccountingApi.initCustomerPortalSession({
+          liffId: staffPreview ? undefined : CUSTOMER_FINANCE_LIFF_ID,
+          staffPreview: staffPreview
+        });
+        if (staffPreview) {
+          $('previewBanner').classList.remove('hidden');
+        }
         $('userLine').textContent = (session.portal && session.portal.display_name) || '客戶';
         fillProjects((session.portal && session.portal.projects) || []);
         if (deepLink.projectNo) {

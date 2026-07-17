@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=38"></script>
+  <script src="../../shared/js/accounting_api.js?v=39"></script>
   <script src="../../shared/js/accounting_boot.js?v=4"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=1"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=3"></script>
@@ -90,7 +90,7 @@
 <body class="acct-page">
   <div id="loading">載入中…</div>
   <div id="app" class="hidden acct-main">
-    <p class="nav"><a href="index.html">← 會計功能選單</a> · <a href="project_margin.html">案件毛利</a></p>
+    <p class="nav"><a href="index.html">← 會計功能選單</a> · <a href="project_margin.html">案件毛利</a> · <a href="customer-finance-portal.html?staff_preview=1" target="_blank" rel="noopener">預覽客戶畫面</a></p>
     <h2>追加減與收款管理</h2>
     <p class="sub" id="userLine">—</p>
     <div id="msg"></div>
@@ -238,6 +238,15 @@
         $('viewList').classList.add('hidden');
         $('viewDetail').classList.remove('hidden');
         $('detailTitle').textContent = '案號 ' + pno + ' ' + ((res.site && res.site.site_name) || '');
+        var previewHref = 'customer-finance-portal.html?staff_preview=1&project_no=' + encodeURIComponent(pno);
+        var previewLink = document.getElementById('previewClientLink');
+        if (!previewLink) {
+          previewLink = document.createElement('p');
+          previewLink.className = 'nav';
+          previewLink.id = 'previewClientLink';
+          $('detailTitle').insertAdjacentElement('afterend', previewLink);
+        }
+        previewLink.innerHTML = '<a href="' + previewHref + '" target="_blank" rel="noopener">以客戶畫面預覽此案</a>';
         renderPanels();
       } finally {
         detailBusy = false;

@@ -1253,19 +1253,25 @@ var AccountingApi = (function () {
       );
       return { success: true, items: items, cached: true };
     },
-    cfPortalAuth: function (sessionOrToken) {
+    cfPortalAuth: function (sessionOrToken, opts) {
+      opts = opts || {};
       var body = { action: 'margin_customer_finance_portal_auth', auth: resolveAuth(sessionOrToken) };
+      if (opts.staffPreview) body.staff_preview = true;
       if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
         body.dev_bypass = true;
         if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
+        if (sessionOrToken.devPermission) body.dev_permission = sessionOrToken.devPermission;
       }
       return post(body);
     },
-    cfPortalData: function (sessionOrToken, projectNo) {
+    cfPortalData: function (sessionOrToken, projectNo, opts) {
+      opts = opts || {};
       var body = { action: 'margin_customer_finance_portal_data', auth: resolveAuth(sessionOrToken), project_no: projectNo };
+      if (opts.staffPreview) body.staff_preview = true;
       if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
         body.dev_bypass = true;
         if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
+        if (sessionOrToken.devPermission) body.dev_permission = sessionOrToken.devPermission;
       }
       return post(body);
     },
@@ -1275,6 +1281,9 @@ var AccountingApi = (function () {
         body.dev_bypass = true;
         if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
       }
+      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.staffPreview) {
+        body.staff_preview = true;
+      }
       return post(body);
     },
     cfAdjCustomerSign: function (sessionOrToken, adjustmentId, signData) {
@@ -1282,6 +1291,9 @@ var AccountingApi = (function () {
       if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
         body.dev_bypass = true;
         if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
+      }
+      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.staffPreview) {
+        body.staff_preview = true;
       }
       return post(body);
     },
@@ -1291,6 +1303,9 @@ var AccountingApi = (function () {
         body.dev_bypass = true;
         if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
       }
+      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.staffPreview) {
+        body.staff_preview = true;
+      }
       return post(body);
     },
     cfRecCustomerStage2: function (sessionOrToken, receiptId) {
@@ -1298,6 +1313,9 @@ var AccountingApi = (function () {
       if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
         body.dev_bypass = true;
         if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
+      }
+      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.staffPreview) {
+        body.staff_preview = true;
       }
       return post(body);
     },
@@ -1319,7 +1337,27 @@ var AccountingApi = (function () {
       notifyUiOperator_(session);
       return session;
     },
+    /**
+     * 客戶 LIFF 登入；opts.staffPreview=true 時改走員工身分，可看全部案號（唯讀）
+     */
     initCustomerPortalSession: async function (opts) {
+      opts = opts || {};
+      if (opts.staffPreview) {
+        var empSession = AccountingApi.tryCachedSession({
+          minPermission: CUSTOMER_FINANCE_MIN_PERMISSION,
+          authAction: 'accounting_auth_me'
+        });
+        if (!empSession) {
+          empSession = await AccountingApi.initCustomerFinanceSession(opts);
+        }
+        if (!empSession) return null;
+        var portalStaff = await AccountingApi.cfPortalAuth(empSession, { staffPreview: true });
+        if (!portalStaff.success) throw new Error(portalStaff.message || '員工預覽驗證失敗');
+        empSession.staffPreview = true;
+        empSession.portal = portalStaff;
+        notifyUiOperator_(empSession);
+        return empSession;
+      }
       var policy = await AccountingApi.loadPolicy();
       if (policy.authBypass) {
         var pack = devBypassAuthBody_('margin_customer_finance_portal_auth');
