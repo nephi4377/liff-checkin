@@ -1,0 +1,227 @@
+:root {
+  --bg0: #0e1116;
+  --bg1: #161b22;
+  --ink: #e6edf3;
+  --muted: #8b949e;
+  --accent: #3dd6c6;
+  --warn: #d4a017;
+  --line: #30363d;
+  --btn: #21262d;
+  --btn-hover: #30363d;
+  --affect: #7ee787;
+  --font-display: "Segoe UI", "Noto Sans TC", sans-serif;
+  --font-body: "Iowan Old Style", "Source Han Serif TC", "Noto Serif TC", Georgia, serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: radial-gradient(1200px 600px at 10% -10%, #1a2332 0%, var(--bg0) 55%);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+body {
+  padding: 1.25rem;
+}
+
+.app {
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.75rem;
+}
+
+.top h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-family: var(--font-display);
+}
+
+.meta strong { color: var(--accent); font-weight: 600; }
+
+.writer-badge {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+}
+
+.writer-badge.writer-ai {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.writer-badge.writer-local {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 200px;
+  gap: 1rem;
+}
+
+@media (max-width: 720px) {
+  .layout { grid-template-columns: 1fr; }
+}
+
+.panel {
+  background: color-mix(in srgb, var(--bg1) 88%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1rem;
+}
+
+.narrative {
+  min-height: 280px;
+  max-height: 52vh;
+  overflow: auto;
+  line-height: 1.75;
+  font-size: 1.05rem;
+}
+
+.narrative .entry {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px dashed var(--line);
+}
+
+.narrative .entry h3 {
+  margin: 0 0 0.4rem;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.narrative .choice-line {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-style: italic;
+  margin: 0.35rem 0 0.75rem;
+}
+
+.side h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-family: var(--font-display);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.side p { margin: 0.35rem 0; font-size: 0.9rem; font-family: var(--font-display); }
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+button {
+  font-family: var(--font-display);
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--btn);
+  color: var(--ink);
+  padding: 0.65rem 0.9rem;
+  border-radius: 4px;
+  font-size: 0.95rem;
+}
+
+button:hover:not(:disabled) { background: var(--btn-hover); border-color: var(--accent); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+button.affect::after {
+  content: " ·印";
+  color: var(--affect);
+  font-size: 0.75rem;
+}
+
+.lobby label {
+  display: block;
+  margin: 0.75rem 0 0.25rem;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+}
+
+.lobby input, .lobby select {
+  width: 100%;
+  max-width: 360px;
+  padding: 0.55rem 0.65rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--bg0);
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.banner {
+  color: var(--warn);
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  min-height: 1.2em;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.hidden { display: none !important; }
+
+.ending-note {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+}
+
+.cloud-log {
+  margin: 0.5rem 0;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+}
+
+.cloud-log a {
+  color: var(--accent);
+}
+
+.cloud-err {
+  color: var(--warn);
+  margin-left: 0.35rem;
+}
+
+.side-hint {
+  margin-top: 0.75rem !important;
+  color: var(--muted);
+  font-size: 0.78rem !important;
+  line-height: 1.4;
+}

@@ -51,6 +51,25 @@ export default {
         const budgetAuditUrl = computed(() => `#/budget-audit`);
         const accountingHubUrl = computed(() => '#/accounting');
 
+        /** 副本文字冒險：外部靜態站（非 iframe）；完整 URL 供開啟／複製 */
+        const storyAdventurePublicUrl = 'https://info.tanxin.space/tools/story-adventure/';
+        const storyAdventureUrlCopied = ref(false);
+        let storyAdventureCopyTimer = null;
+        const copyStoryAdventureUrl = () => {
+            const url = storyAdventurePublicUrl;
+            if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+                window.prompt('請長按或全選複製以下網址：', url);
+                return;
+            }
+            navigator.clipboard.writeText(url).then(() => {
+                storyAdventureUrlCopied.value = true;
+                if (storyAdventureCopyTimer) clearTimeout(storyAdventureCopyTimer);
+                storyAdventureCopyTimer = setTimeout(() => { storyAdventureUrlCopied.value = false; }, 2500);
+            }).catch(() => {
+                window.prompt('複製失敗，請手動複製：', url);
+            });
+        };
+
         const formatTimeAgo = (date) => {
             const seconds = Math.floor((new Date() - new Date(date)) / 1000);
             let interval = seconds / 31536000;
@@ -362,6 +381,9 @@ export default {
             budgetWebUrl,
             budgetAuditUrl,
             accountingHubUrl,
+            storyAdventurePublicUrl,
+            storyAdventureUrlCopied,
+            copyStoryAdventureUrl,
             formatTimeAgo,
             handleReply,
             emit,
@@ -545,6 +567,24 @@ export default {
                         <p class="text-xs text-gray-500 mt-1 leading-snug">上傳 Excel 並自動解析工項分區。</p>
                     </div>
                 </a>
+
+                <!-- 4b. 副本文字冒險（外部網站：開啟＋複製連結，非 iframe） -->
+                <div
+                    class="bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-violet-500 p-4 flex items-start gap-3">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center text-xl">📖</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">副本文字冒險</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">外部網站：可選走向的短篇故事（獨立分頁開啟）。</p>
+                        <div class="flex flex-wrap items-center gap-2 mt-2">
+                            <a :href="storyAdventurePublicUrl" target="_blank" rel="noopener noreferrer"
+                                class="inline-flex items-center text-xs font-semibold bg-white text-violet-800 border border-violet-300 py-1 px-2.5 rounded-md hover:bg-violet-50">開啟網站</a>
+                            <button type="button" @click="copyStoryAdventureUrl"
+                                class="inline-flex items-center text-xs font-semibold bg-violet-600 text-white py-1 px-2.5 rounded-md hover:bg-violet-700">
+                                {{ storyAdventureUrlCopied ? '已複製' : '複製連結' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- 5. 新增／修改案場資料 -->
                 <a :href="addSiteUrl"

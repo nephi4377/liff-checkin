@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>副本文字冒險</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <h1 id="storyTitle">副本文字冒險</h1>
+      <div class="meta">
+        <span id="writerBadge" class="writer-badge">—</span>
+        · <span id="progress">—</span>
+        · <span id="personaShort">—</span>
+      </div>
+    </header>
+    <div class="banner" id="banner"></div>
+
+    <section id="lobby" class="panel lobby">
+      <p>這是一則可選走向的短篇：主題＝故事入口；開局會先定人物與大綱，再寫前幾節。你的選擇推動人物、承諾與代價。</p>
+      <label for="theme">主題（本篇舞台；空白＝隨機）</label>
+      <input id="theme" value="" placeholder="空白則隨機抽主題" />
+      <label for="maxChoices">故事長度（選擇次數上限）</label>
+      <input id="maxChoices" type="number" min="5" max="500" value="20" />
+      <p style="color:var(--muted);font-size:0.85rem;font-family:var(--font-display)">
+        預設 20 方便試玩；正式可改 100。有「·印」的選項會被故事記住。
+      </p>
+      <div class="actions-row">
+        <button type="button" id="btnStart">開始新故事</button>
+        <button type="button" id="btnResume">繼續上次</button>
+      </div>
+    </section>
+
+    <section id="play" class="hidden">
+      <div class="layout">
+        <div class="panel">
+          <div class="narrative" id="narrative" aria-live="polite"></div>
+          <div class="choices" id="choices"></div>
+          <div id="endingBox" class="ending-note hidden">
+            <p>本局結束。</p>
+            <p id="cloudLogEnding" class="cloud-log hidden"></p>
+            <div class="actions-row">
+              <button type="button" id="btnDownload">下載故事文字檔</button>
+              <button type="button" id="btnAgain">再開一局</button>
+            </div>
+          </div>
+        </div>
+        <aside class="panel side">
+          <h2>本篇人物</h2>
+          <p id="sideCast">—</p>
+          <h2 style="margin-top:1rem">狀態</h2>
+          <p id="sidePhase">—</p>
+          <p id="sideFlags">選項帶「·印」會被故事記住</p>
+          <p id="cloudLogSide" class="cloud-log hidden"></p>
+          <p class="side-hint">AI 紀錄寫在試算表「故事AI紀錄」</p>
+          <div class="actions-row">
+            <button type="button" id="btnLobby">回大廳</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </div>
+
+  <script src="config.js?v=6"></script>
+  <script src="js/persona.js?v=6"></script>
+  <script src="js/generator.js?v=6"></script>
+  <script src="js/engine.js?v=6"></script>
+  <script src="js/api.js?v=6"></script>
+  <script src="js/ui.js?v=6"></script>
+</body>
+</html>
