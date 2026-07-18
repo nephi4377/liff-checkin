@@ -3,7 +3,7 @@
  * TTL 3 天；SWR 24 小時（有快取先顯示，背景再打 accounting_bootstrap）
  */
 var AccountingCache = (function () {
-  var STORAGE_KEY = 'tanxin_accounting_bootstrap_v5';
+  var STORAGE_KEY = 'tanxin_accounting_bootstrap_v6';
   var BOOTSTRAP_TIMEOUT_MS = 120000;
   var DEFAULT_SWR_MS = 24 * 60 * 60 * 1000;
   var _mem = {};

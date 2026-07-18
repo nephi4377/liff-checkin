@@ -9,7 +9,7 @@
   <script src="../../shared/js/accounting_master_data.js?v=18"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=38"></script>
-  <script src="../../shared/js/accounting_cache.js?v=29"></script>
+  <script src="../../shared/js/accounting_cache.js?v=30"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=1"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=3"></script>
   <script src="../../shared/js/accounting_ui.js?v=16"></script>
@@ -247,18 +247,12 @@
       <label>備註</label>
       <textarea id="note" placeholder="服務區域、施工品質、配合度或其他注意事項可寫在這裡"></textarea>
 
-      <p class="section-title">LINE 身份綁定（報價／請款辨識用）</p>
-      <p class="sub" style="margin:0 0 8px">搜尋來源：<strong>會計 LINE @672zolga</strong> ＋ <strong>添心官方 LINE</strong> 顧客列表（兩邊 UID 不同，可各綁一筆）。</p>
+      <p class="section-title">LINE 身份綁定（請款辨識用）</p>
+      <p class="sub" style="margin:0 0 8px">搜尋來源：<strong>會計 LINE</strong> ＋ <strong>官方 LINE</strong>（兩邊 UID 不同，必須分開綁）。資料存在廠商主檔兩欄，舊「廠商LINE綁定」分頁部署後可刪。暫停合作整廠不認；綁錯請「移除」。</p>
       <div id="bindEditor" class="hidden">
         <label>搜尋顧客（名稱／案號／UID）</label>
         <input id="lineSearchKw" placeholder="例：木作老王、752、U 開頭 UID" />
-        <div class="row2" style="margin-top:8px">
-          <div>
-            <label>加入時用途</label>
-            <select id="bindPurpose"><option value="報價">報價</option><option value="請款">請款</option><option value="一般">一般</option></select>
-          </div>
-        </div>
-        <button type="button" class="btn btn-secondary btn-block" id="lineSearchBtn">搜尋 LINE 聯絡人（會計＋官方）</button>
+        <button type="button" class="btn btn-secondary btn-block" id="lineSearchBtn" style="margin-top:8px">搜尋 LINE 聯絡人（會計＋官方）</button>
         <div id="lineSearchResults"></div>
         <label style="margin-top:12px">手動貼 UID／GID（進階，顧客列表找不到時）</label>
         <div class="row2">
@@ -643,7 +637,6 @@
           var chLabel = (String(b.note || '').indexOf('channel:official') >= 0) ? '官方 LINE' : '會計 LINE';
           row.innerHTML =
             '<div><strong>' + (b.display_name || '—') + '</strong> ' +
-            '<span class="tag">' + (b.purpose || '一般') + '</span> ' +
             '<span class="tag">' + typeLabel + '</span> ' +
             '<span class="tag">' + chLabel + '</span></div>' +
             '<div class="mono">' + (b.line_id || '') + '</div>';
@@ -651,9 +644,9 @@
           btn.type = 'button';
           btn.className = 'btn btn-warn';
           btn.style.marginTop = '6px';
-          btn.textContent = '停用';
+          btn.textContent = '移除';
           btn.addEventListener('click', async function () {
-            if (!confirm('停用這筆 LINE 綁定？')) return;
+            if (!confirm('移除此 LINE 綁定？\n（廠商暫停合作請改合作狀態，不必在此一個個關。）')) return;
             await AccountingUi.runAsync(btn, { busyLabel: '處理中…', clear: false }, async function () {
               var data = await AccountingApi.crudUpdate(session, 'vendor_line_binding', b.binding_id, { is_active: '否' });
               if (!data.success) { setMsg(data.message); return; }
@@ -666,7 +659,7 @@
         });
       }
 
-      async function addBinding(vendorId, idType, lineId, displayName, purpose, btn, lineChannel) {
+      async function addBinding(vendorId, idType, lineId, displayName, btn, lineChannel) {
         if (!vendorId) { setMsg('請先儲存廠商'); return; }
         lineId = String(lineId || '').trim();
         if (!lineId) { setMsg('請從搜尋結果選擇要加入的 LINE'); return; }
@@ -676,7 +669,7 @@
             id_type: idType || (lineId.indexOf('C') === 0 ? 'group' : 'user'),
             line_id: lineId,
             display_name: displayName || '',
-            purpose: purpose || $('bindPurpose').value || '一般',
+            purpose: '一般',
             is_primary: '否',
             line_channel: lineChannel || 'accounting'
           };
@@ -709,7 +702,7 @@
           btn.className = 'btn btn-secondary';
           btn.textContent = '加入';
           btn.addEventListener('click', function () {
-            addBinding($('editId').value, hit.id_type, hit.line_id, hit.name, $('bindPurpose').value, btn, hit.line_channel);
+            addBinding($('editId').value, hit.id_type, hit.line_id, hit.name, btn, hit.line_channel);
           });
           row.appendChild(btn);
           box.appendChild(row);
@@ -730,7 +723,6 @@
         $('cost_type').value = '';
         $('coop_status').value = '合作中';
         $('payment_terms').value = '';
-        $('bindPurpose').value = '報價';
         clearPhotos();
         if (opts.focusName !== false) $('name').focus();
       }
@@ -1055,7 +1047,7 @@
         var lineId = $('lineManualId').value.trim();
         if (!lineId) { setMsg('請貼上 UID 或 GID'); return; }
         var idType = lineId.indexOf('C') === 0 ? 'group' : 'user';
-        addBinding($('editId').value, idType, lineId, '', $('bindPurpose').value, btn).then(function () {
+        addBinding($('editId').value, idType, lineId, '', btn).then(function () {
           $('lineManualId').value = '';
         });
       });
