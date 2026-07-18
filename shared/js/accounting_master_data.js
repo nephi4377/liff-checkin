@@ -1,7 +1,7 @@
 /**
  * 會計主檔固定格式（對齊 backend/accounting-gas/SPEC/ACCOUNTING_MASTER_DATA_SPEC.md）
  */
-var ACCT_ASSET_VER = '17';
+var ACCT_ASSET_VER = '19';
 var AccountingMasterData = {
   CACHE_VERSION: 1,
   /** 台灣金融機構代碼（3 碼）→ 銀行名稱，供匯款欄位即時提示 */

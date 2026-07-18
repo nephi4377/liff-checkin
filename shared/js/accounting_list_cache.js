@@ -1,8 +1,8 @@
 /**
  * 會計列表快取 — 整包列表一次取回；CRUD 後 patch／invalidate；手動重新載入仍有效
  *
- * 單人使用：長 TTL（與 bootstrap 同為 3 天），SWR 24 小時 — 靠 CRUD patch 維新，少打背景 API。
- * 多人協作時：改回 MULTI_USER（列表 90 秒、SWR 30 秒），他人改動較快反映。
+ * 現行預設 MULTI_USER：列表 90 秒、SWR 30 秒 — 多人同審／同匯時較不易看舊單。
+ * 單人長 TTL（3 天）保留為 SINGLE_USER，需要時再改 DEFAULT。
  *
  * searchMasterList — 顧客列表／LINE 聯絡人等主檔搜尋：localStorage 24h，先本地篩選，無結果或過期才打 GAS。
  */
@@ -11,12 +11,12 @@ var AccountingListCache = (function () {
   var MASTER_PREFIX = 'tanxin_acct_master_list_v1:';
   /** 顧客列表／LINE 聯絡人名冊（使用者指定 24 小時） */
   var MASTER_LIST_TTL_MS = 24 * 60 * 60 * 1000;
-  /** 多人協作建議值（改 DEFAULT 時參考） */
+  /** 多人協作（現行預設） */
   var MULTI_USER = { TTL_MS: 90000, SWR_MS: 30000 };
-  /** 單人使用（現行預設） */
+  /** 單人長暫存（可改回 DEFAULT） */
   var SINGLE_USER = { TTL_MS: 3 * 24 * 60 * 60 * 1000, SWR_MS: 24 * 60 * 60 * 1000 };
-  var DEFAULT_TTL_MS = SINGLE_USER.TTL_MS;
-  var SWR_MS = SINGLE_USER.SWR_MS;
+  var DEFAULT_TTL_MS = MULTI_USER.TTL_MS;
+  var SWR_MS = MULTI_USER.SWR_MS;
   var _mem = {};
   var _inflight = {};
 

@@ -7,13 +7,13 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=38"></script>
-  <script src="../../shared/js/hub_ref_cache.js?v=1"></script>
-  <script src="../../shared/js/accounting_list_cache.js?v=3"></script>
+  <script src="../../shared/js/accounting_api.js?v=40"></script>
+  <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
+  <script src="../../shared/js/accounting_list_cache.js?v=4"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
   <script src="../../shared/js/accounting_ui.js?v=16"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
-  <script src="../../shared/js/accounting_boot.js?v=4"></script>
+  <script src="../../shared/js/accounting_boot.js?v=5"></script>
   <style>
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; line-height: 1.45; }
@@ -66,7 +66,7 @@
           <input id="filterKw" placeholder="例：張三、115/05" />
         </div>
       </div>
-      <button type="button" class="btn btn-primary btn-block" id="reloadBtn">重新載入</button>
+      <button type="button" class="btn btn-primary btn-block" id="reloadBtn" title="略過暫存，立刻向後端重抓最新清單">重新載入最新</button>
     </div>
 
     <div class="card">
