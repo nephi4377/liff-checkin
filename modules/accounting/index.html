@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
@@ -6,14 +6,14 @@
   <title>添心會計</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_master_data.js?v=17"></script>
+  <script src="../../shared/js/accounting_master_data.js?v=18"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=38"></script>
-  <script src="../../shared/js/accounting_cache.js?v=28"></script>
-  <script src="../../shared/js/accounting_ui.js?v=15"></script>
+  <script src="../../shared/js/accounting_cache.js?v=29"></script>
+  <script src="../../shared/js/accounting_ui.js?v=16"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=5"></script>
-  <script src="../../shared/js/accounting_shell.js?v=4"></script>
+  <script src="../../shared/js/accounting_shell.js?v=5"></script>
   <style>
     h2 { margin: 0 0 4px; }
     .sub { color: #555; font-size: 14px; margin: 0 0 16px; }
@@ -118,28 +118,11 @@
     <div class="menu-section" id="sectionFinance">
       <p class="menu-section-title admin">財務管理 · 權限 4 以上</p>
 
-      <a class="card hidden" href="payment_request_compose.html" id="linkComposeLegacy">
-        <span class="card-icon sky">📄</span>
-        <span class="card-body">
-          <h3>精細請款建單（舊）</h3>
-          <p>已併入待付款申請。</p>
-        </span>
-      </a>
-
       <a class="card" href="vendors.html" id="linkVendors">
         <span class="card-icon amber">🏢</span>
         <span class="card-body">
           <h3>廠商名冊</h3>
-          <p>維護廠商主檔、統編與 LINE 綁定。</p>
-          <span class="tag admin">財務以上</span>
-        </span>
-      </a>
-
-      <a class="card hidden" href="payees.html" id="linkPayees">
-        <span class="card-icon amber">🏦</span>
-        <span class="card-body">
-          <h3>收款帳戶（舊）</h3>
-          <p>已改由「待匯款」手動輸入或廠商名冊。</p>
+          <p>維護廠商主檔、統編與 LINE 綁定（同一頁，不多開）。</p>
           <span class="tag admin">財務以上</span>
         </span>
       </a>
@@ -148,7 +131,7 @@
         <span class="card-icon amber">✅</span>
         <span class="card-body">
           <h3>請款審核</h3>
-          <p>廠商／員工待付款申請待審；核准後進待匯款。</p>
+          <p>廠商／員工待付款申請待審；核准後進待匯款。狀態在此與待匯款／款項進度查看。</p>
           <span class="tag admin">財務以上</span>
         </span>
       </a>
@@ -177,14 +160,6 @@
           <h3>廠商待匯款</h3>
           <p>待匯款清單、匯出銀行轉帳檔並登錄收支。</p>
           <span class="tag admin">財務以上</span>
-        </span>
-      </a>
-
-      <a class="card hidden" href="vendor_payment_approve.html" id="linkVendorPaymentApprove">
-        <span class="card-icon amber">📝</span>
-        <span class="card-body">
-          <h3>廠商請款審核（舊）</h3>
-          <p>已併入「請款審核」。</p>
         </span>
       </a>
 
@@ -246,7 +221,6 @@
             financeSection.classList.remove('hidden');
           }
           if (perm < 5) {
-            document.getElementById('linkVendorPaymentApprove').classList.add('hidden');
             document.getElementById('linkPayrollReview').classList.add('hidden');
           } else {
             document.getElementById('linkPayrollReview').classList.remove('hidden');

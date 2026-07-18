@@ -574,7 +574,7 @@ export default {
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center text-xl">📖</div>
                     <div class="min-w-0 flex-1">
                         <h2 class="text-base font-bold text-gray-800 leading-tight">副本文字冒險</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">外部網站：可選走向的短篇故事（獨立分頁開啟）。</p>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">可選走向的短篇：選擇會改氣氛或埋鈎子，自由發展（獨立分頁）。</p>
                         <div class="flex flex-wrap items-center gap-2 mt-2">
                             <a :href="storyAdventurePublicUrl" target="_blank" rel="noopener noreferrer"
                                 class="inline-flex items-center text-xs font-semibold bg-white text-violet-800 border border-violet-300 py-1 px-2.5 rounded-md hover:bg-violet-50">開啟網站</a>

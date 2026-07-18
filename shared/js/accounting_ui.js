@@ -71,7 +71,7 @@ var AccountingUi = (function () {
     'vendor_status.html': '款項進度',
     'attachments.html': '單據附件',
     'project_margin.html': '案件毛利',
-    'payees.html': '收款帳戶',
+    'payees.html': '收款帳戶（已廢棄）',
     'vendor_register.html': '廠商自填',
     'vendor_payment_approve.html': '廠商請款審核',
     'payroll_review.html': '薪資審核',

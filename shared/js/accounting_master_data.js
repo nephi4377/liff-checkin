@@ -34,7 +34,8 @@ var AccountingMasterData = {
     if (!tc) return '';
     return this.vendor_trade_category_migration[tc] || tc;
   },
-  /** 會計主檔包（廠商／收款帳戶／列舉）— 3 天 TTL；逾 SWR_MS 背景重抓（SWR） */
+  /** 會計主檔包（廠商／LINE 綁定／訂編對照／列舉）— 3 天 TTL；逾 SWR_MS 背景重抓（SWR）
+   *  2026-07-18：收款帳戶、費用分類已廢棄，不再依賴 bootstrap 這兩包 */
   TTL_MS: 3 * 24 * 60 * 60 * 1000,
   /** 有快取時，超過此時間背景 revalidate（對齊 AccountingListCache 單人模式） */
   SWR_MS: 24 * 60 * 60 * 1000,

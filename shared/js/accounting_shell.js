@@ -16,7 +16,7 @@ var AccountingShell = (function () {
     'payment_request_compose.html': '精細請款建單',
     'vendor_status.html': '款項進度',
     'vendors.html': '廠商名冊',
-    'payees.html': '收款帳戶',
+    'payees.html': '收款帳戶（已廢棄）',
     'ledger_review.html': '請款審核',
     'payroll_review.html': '薪資審核',
     'payroll_finance.html': '薪資待匯款',
