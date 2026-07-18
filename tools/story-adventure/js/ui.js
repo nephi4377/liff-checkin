@@ -19,23 +19,46 @@
     cloudLogSide: document.getElementById('cloudLogSide'),
     cloudLogEnding: document.getElementById('cloudLogEnding'),
     theme: document.getElementById('theme'),
-    maxChoices: document.getElementById('maxChoices')
+    maxChoices: document.getElementById('maxChoices'),
+    btnResume: document.getElementById('btnResume'),
+    resumeHint: document.getElementById('resumeHint')
   };
 
   document.getElementById('btnStart').addEventListener('click', onStart);
-  document.getElementById('btnResume').addEventListener('click', onResume);
+  el.btnResume.addEventListener('click', onResume);
   document.getElementById('btnAgain').addEventListener('click', onAgain);
   document.getElementById('btnDownload').addEventListener('click', onDownload);
   document.getElementById('btnLobby').addEventListener('click', showLobby);
 
+  refreshLobbyCacheUi();
+
   function setBanner(t) {
     el.banner.textContent = t || '';
+  }
+
+  function refreshLobbyCacheUi() {
+    var sum = window.StoryStorage ? StoryStorage.peekSummary() : null;
+    if (!sum) {
+      el.btnResume.disabled = true;
+      el.btnResume.textContent = '繼續上一局';
+      if (el.resumeHint) el.resumeHint.textContent = '本機尚無可續進度（重整後可在期限內恢復）。';
+      return;
+    }
+    el.btnResume.disabled = false;
+    el.btnResume.textContent = sum.ended ? '查看上一局結局' : '繼續上一局';
+    if (el.resumeHint) {
+      var theme = sum.theme ? '「' + sum.theme + '」' : '上一局';
+      el.resumeHint.textContent = sum.ended
+        ? theme + '已結束 · 本機再留 3 天 · ' + (sum.choiceCount || 0) + '/' + (sum.maxChoices || '')
+        : theme + '進行中 · 本機留 30 天 · ' + (sum.choiceCount || 0) + '/' + (sum.maxChoices || '');
+    }
   }
 
   function showLobby() {
     el.lobby.classList.remove('hidden');
     el.play.classList.add('hidden');
     setBanner('');
+    refreshLobbyCacheUi();
   }
 
   function showPlay() {
@@ -48,6 +71,7 @@
     busy = true;
     setBanner('正在寫本篇人物與前幾節…（約十餘秒）');
     try {
+      // 重開清除：先清本機再開新局（api 內亦會清）
       await StoryApi.call('restart');
       var max = parseInt(el.maxChoices.value, 10) || 20;
       var data = await StoryApi.call('new_story', {
@@ -66,6 +90,7 @@
       } else {
         setBanner(data.meta && data.meta.generating ? '後續章節準備中…' : '');
       }
+      refreshLobbyCacheUi();
     } catch (e) {
       setBanner(String(e.message || e));
     } finally {
@@ -74,14 +99,27 @@
   }
 
   async function onResume() {
-    var data = await StoryApi.call('status');
-    if (!data.ok) {
-      setBanner(data.message || '沒有可繼續的進度');
-      return;
+    if (busy) return;
+    busy = true;
+    setBanner('讀取進度…');
+    try {
+      var data = await StoryApi.call('status');
+      if (!data.ok) {
+        // 伺服器沒有時，本機快取仍可顯示（本地模式 status 已含；遠端靠 cacheRun 還原）
+        setBanner(data.message || '沒有可繼續的進度');
+        refreshLobbyCacheUi();
+        return;
+      }
+      el.narrative.innerHTML = '';
+      render(data, true);
+      showPlay();
+      setBanner(data.player && data.player.ended ? '已從本機／伺服器恢復上一局。' : '');
+    } catch (e) {
+      setBanner(String(e.message || e));
+    } finally {
+      busy = false;
+      refreshLobbyCacheUi();
     }
-    el.narrative.innerHTML = '';
-    render(data, true);
-    showPlay();
   }
 
   async function onAgain() {
@@ -175,7 +213,6 @@
         el.sideCast.textContent = '（開局後顯示）';
       }
     }
-    // 不把英文旗標 key 塞給玩家看
     el.sideFlags.textContent =
       meta.writer === 'local' && meta.writerError
         ? 'AI 備註：' + String(meta.writerError).slice(0, 48)

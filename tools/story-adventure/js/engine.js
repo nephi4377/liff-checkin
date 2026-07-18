@@ -1,7 +1,6 @@
 (function (global) {
   var REFILL = 4;
   var KEY = 'sao_story_player_id';
-  var RUN_KEY = 'sao_story_run';
 
   function getPlayerId() {
     var id = localStorage.getItem(KEY);
@@ -13,12 +12,19 @@
   }
 
   function saveRun(run) {
-    localStorage.setItem(RUN_KEY, JSON.stringify(run));
+    if (global.StoryStorage) {
+      StoryStorage.saveRun(run);
+      return;
+    }
+    try {
+      localStorage.setItem('sao_story_run', JSON.stringify(run));
+    } catch (e) {}
   }
 
   function loadRun() {
+    if (global.StoryStorage) return StoryStorage.loadRun();
     try {
-      return JSON.parse(localStorage.getItem(RUN_KEY) || 'null');
+      return JSON.parse(localStorage.getItem('sao_story_run') || 'null');
     } catch (e) {
       return null;
     }
@@ -154,7 +160,8 @@
         bufferRemaining: bufferDepth(run),
         writer: 'local'
       },
-      logText: run.logText || ''
+      logText: run.logText || '',
+      cacheRun: global.StoryStorage ? StoryStorage.sanitizeRun(run) : null
     };
   }
 
@@ -267,6 +274,7 @@
       }
       run.ended = true;
       run.endingId = next.endingId;
+      run.endedAt = new Date().toISOString();
       logEnding(run);
     }
 
@@ -291,7 +299,12 @@
   }
 
   function restart() {
-    localStorage.removeItem(RUN_KEY);
+    if (global.StoryStorage) StoryStorage.clearRun();
+    else {
+      try {
+        localStorage.removeItem('sao_story_run');
+      } catch (e) {}
+    }
     return { ok: true, player: { playerId: getPlayerId() }, scene: null, choices: [] };
   }
 
