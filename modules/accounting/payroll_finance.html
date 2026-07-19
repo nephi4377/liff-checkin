@@ -35,6 +35,11 @@
     .hidden { display: none; }
     .nav { margin-bottom: 12px; font-size: 14px; }
     .nav a { color: #1a73e8; text-decoration: none; }
+    label { display: block; margin-top: 8px; font-weight: 600; font-size: 14px; }
+    input, select, textarea { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .inline-chk { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-weight: 600; font-size: 14px; }
+    .inline-chk input { width: auto; margin: 0; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -61,13 +66,42 @@
     </div>
 
     <div class="card">
-      <div id="list"></div>
+      <h3 style="margin:0 0 8px">事後補登發薪</h3>
+      <p class="sub">未走正常送審、或已私下／網銀轉帳時，補建紀錄。走帳金額會寫收支與員工發放明細；私下補差僅內部備註。</p>
+      <label>員工</label>
+      <select id="bfEmployee"><option value="">載入中…</option></select>
+      <div class="row2">
+        <div><label>期別</label><input id="bfPeriod" placeholder="115/06" /></div>
+        <div><label>發薪日</label><input id="bfPayDate" type="date" /></div>
+      </div>
+      <div class="row2">
+        <div><label>走帳／實發（元）</label><input id="bfFinal" type="number" min="1" step="1" /></div>
+        <div><label>私下補差（元，內部）</label><input id="bfOffAmt" type="number" min="0" step="1" value="0" /></div>
+      </div>
+      <label>私下補差備註（內部）</label>
+      <input id="bfOffNote" placeholder="例：超過薪轉上限部分" />
+      <label>補登說明</label>
+      <input id="bfNote" placeholder="例：已網銀轉帳，補登發放明細" />
+      <label>收支付款方式</label>
+      <select id="bfPayMethod">
+        <option value="匯款" selected>匯款（網銀／非薪轉檔）</option>
+        <option value="薪轉">薪轉</option>
+        <option value="其他">其他</option>
+      </select>
+      <label class="inline-chk"><input type="checkbox" id="bfMarkPaid" checked /> 送出後直接標記已發薪（寫收支）</label>
+      <label class="inline-chk"><input type="checkbox" id="bfLineNotify" checked /> LINE 通知員工薪資摘要</label>
+      <label class="inline-chk"><input type="checkbox" id="bfAllowDup" /> 允許同期別重複（已有未結案時）</label>
+      <button type="button" class="btn btn-primary" id="backfillBtn">送出補登</button>
+    </div>
+
+    <div class="card">
       <p id="emptyMsg" class="sub hidden">目前沒有待匯款薪資。</p>
     </div>
   </div>
   <script>
     (function () {
       var session = null;
+      var employees = [];
       var ui = AccountingUi.feedback();
       function setMsg(t) { ui.setMsg(t); }
       function setOk(t) { ui.setOk(t); }
@@ -245,6 +279,64 @@
         runMarkPaid([], document.getElementById('markAllPaidBtn'), { markAll: true });
       });
 
+      document.getElementById('markAllPaidBtn').addEventListener('click', function () {
+        runMarkPaid([], document.getElementById('markAllPaidBtn'), { markAll: true });
+      });
+
+      function fillEmployeeSelect() {
+        var sel = document.getElementById('bfEmployee');
+        sel.innerHTML = '<option value="">— 請選擇 —</option>';
+        employees.forEach(function (e) {
+          var opt = document.createElement('option');
+          opt.value = e.userId;
+          opt.textContent = (e.userName || e.displayName || e.userId) + (e.status && e.status !== '在職' ? '（' + e.status + '）' : '');
+          sel.appendChild(opt);
+        });
+      }
+
+      async function loadEmployees() {
+        try {
+          var ctx = await AccountingApi.paymentRequestContext(session);
+          if (ctx.success && ctx.employees && ctx.employees.length) {
+            employees = ctx.employees;
+            fillEmployeeSelect();
+          }
+        } catch (e) {
+          document.getElementById('bfEmployee').innerHTML = '<option value="">無法載入員工</option>';
+        }
+      }
+
+      document.getElementById('backfillBtn').addEventListener('click', async function () {
+        var uid = document.getElementById('bfEmployee').value;
+        var period = document.getElementById('bfPeriod').value.trim();
+        var finalAmt = Number(document.getElementById('bfFinal').value) || 0;
+        if (!uid) { setMsg('請選擇員工'); return; }
+        if (!period) { setMsg('請填期別'); return; }
+        if (finalAmt <= 0) { setMsg('走帳金額須大於 0'); return; }
+        if (!confirm('補登 ' + period + ' 走帳 $' + finalAmt.toLocaleString('zh-TW') + '？\n私下補差不會寫進收支或員工明細。')) return;
+        var btn = document.getElementById('backfillBtn');
+        await AccountingUi.runAsync(btn, { busyLabel: '補登中…' }, async function () {
+          setMsg(''); setOk('');
+          var payDate = document.getElementById('bfPayDate').value;
+          var data = await AccountingApi.payrollRequestManualBackfill(session, {
+            employee_user_id: uid,
+            period_label: period,
+            pay_date: payDate || undefined,
+            final_amount: finalAmt,
+            off_record_amount: Number(document.getElementById('bfOffAmt').value) || 0,
+            off_record_note: document.getElementById('bfOffNote').value.trim(),
+            note: document.getElementById('bfNote').value.trim(),
+            ledger_payment_method: document.getElementById('bfPayMethod').value,
+            mark_paid: document.getElementById('bfMarkPaid').checked,
+            line_notify: document.getElementById('bfLineNotify').checked,
+            allow_duplicate: document.getElementById('bfAllowDup').checked
+          });
+          if (!data.success) throw new Error(data.message || '補登失敗');
+          setOk(data.message || '已補登');
+          if (!data.marked_paid) await loadList(false, true);
+        }).catch(function (e) { setMsg(e.message || String(e)); });
+      });
+
       AccountingBoot.run({
         minPermission: 4,
         onReady: async function (s) {
@@ -252,7 +344,10 @@
           document.getElementById('loading').classList.add('hidden');
           document.getElementById('app').classList.remove('hidden');
           document.getElementById('userLine').textContent = (s.profile && s.profile.displayName) || '—';
-          await loadList();
+          var today = new Date();
+          var iso = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+          document.getElementById('bfPayDate').value = iso;
+          await Promise.all([loadList(), loadEmployees()]);
         }
       });
     })();

@@ -1130,6 +1130,12 @@ var AccountingApi = (function () {
         payroll_request_id: payrollRequestId
       });
     },
+    payrollRequestManualBackfill: function (sessionOrToken, payload) {
+      return post(Object.assign({
+        action: 'payroll_request_manual_backfill',
+        auth: resolveAuth(sessionOrToken)
+      }, payload || {}), 120000);
+    },
     cfOverview: function (sessionOrToken, showClosed) {
       return post({
         action: 'margin_customer_finance_overview',

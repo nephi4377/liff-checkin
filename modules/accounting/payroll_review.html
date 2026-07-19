@@ -9,7 +9,7 @@
   <script src="../../shared/js/operator_context.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=40"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
-  <script src="../../shared/js/accounting_list_cache.js?v=4"></script>
+  <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
   <script src="../../shared/js/accounting_ui.js?v=16"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
@@ -46,7 +46,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>薪資審核</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub">員工自審或主管代開審後會出現在這裡。待審可見本薪／加減項／一般獎金明細；專案報酬只顯示不併薪。核准後進「薪資待匯款」。</p>
+    <p class="sub">員工自審或主管代開審後會出現在這裡。<strong>走帳／薪轉金額</strong>只填公司帳戶實際匯款數（避開薪轉上限／二代健保）；私下補差填內部欄位，不進收支與員工明細。</p>
     <div id="msg" role="alert"></div>
     <div id="ok" aria-live="polite"></div>
 
@@ -220,7 +220,12 @@
           '<div><label>一般獎金（元）</label><input type="number" id="bonus-' + row.payroll_request_id + '" class="recalc-final" min="0" step="1" value="0" /></div>' +
           '<div><label>其他扣款（元）</label><input type="number" id="ded-' + row.payroll_request_id + '" class="recalc-final" min="0" step="1" value="' + (parseInt(row.deduction,10)||0) + '" /></div>' +
           '</div>' +
-          '<label>確認實發（元）</label><input type="number" id="final-' + row.payroll_request_id + '" min="0" step="1" value="' + est + '" />' +
+          '<label>走帳／薪轉金額（元）</label><input type="number" id="final-' + row.payroll_request_id + '" min="0" step="1" value="' + est + '" />' +
+          '<p class="sub" style="margin:4px 0 0">試算實發 ' + est.toLocaleString('zh-TW') + ' 元；若因薪轉上限只匯部分，請改填實際走帳金額。</p>' +
+          '<div class="row2">' +
+          '<div><label>私下補差（元，內部）</label><input type="number" id="offamt-' + row.payroll_request_id + '" min="0" step="1" value="0" /></div>' +
+          '<div><label>私下補差備註（內部）</label><input type="text" id="offnote-' + row.payroll_request_id + '" placeholder="僅財務可見，不進員工明細" value="" /></div>' +
+          '</div>' +
           '<label>獎金／備註說明</label><input type="text" id="bnote-' + row.payroll_request_id + '" placeholder="例：介紹獎金、年終（勿填專案報酬）" value="" />' +
           '<label>審核備註</label><input type="text" id="note-' + row.payroll_request_id + '" placeholder="減項有改請寫原因" value="' + esc(row.supplement_note || '') + '" />' +
           '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
@@ -278,7 +283,12 @@
                 status: filterVal,
                 keyword: document.getElementById('filterKw').value.trim()
               });
-            }, { force: !!force });
+            }, {
+              force: !!force,
+              onUpdate: force ? null : function (fresh) {
+                try { renderListFromData(fresh); } catch (e) {}
+              }
+            });
           } else {
             data = await AccountingApi.payrollRequestList(session, {
               status: filterVal,
@@ -347,6 +357,8 @@
               bonus_amount: Number(document.getElementById('bonus-' + id).value) || 0,
               deduction: Number(document.getElementById('ded-' + id).value) || 0,
               final_amount: Number(document.getElementById('final-' + id).value) || 0,
+              off_record_amount: Number(document.getElementById('offamt-' + id).value) || 0,
+              off_record_note: document.getElementById('offnote-' + id).value.trim(),
               bonus_note: document.getElementById('bnote-' + id).value.trim(),
               note: noteVal,
               deduction_overrides: overrides
