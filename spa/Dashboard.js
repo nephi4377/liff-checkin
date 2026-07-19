@@ -568,13 +568,13 @@ export default {
                     </div>
                 </a>
 
-                <!-- 4b. 副本文字冒險（外部網站：開啟＋複製連結，非 iframe） -->
-                <div
+                <!-- 4b. 副本文字冒險（實驗中：僅權限 5 可見；外部網站：開啟＋複製連結，非 iframe） -->
+                <div v-if="currentUser && currentUser.permission >= 5"
                     class="bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-violet-500 p-4 flex items-start gap-3">
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center text-xl">📖</div>
                     <div class="min-w-0 flex-1">
                         <h2 class="text-base font-bold text-gray-800 leading-tight">副本文字冒險</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">可選走向的短篇：選擇會改氣氛或埋鈎子，自由發展（獨立分頁）。</p>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">實驗中 · 可選走向的短篇：選擇會改氣氛或埋鈎子，自由發展（獨立分頁）。</p>
                         <div class="flex flex-wrap items-center gap-2 mt-2">
                             <a :href="storyAdventurePublicUrl" target="_blank" rel="noopener noreferrer"
                                 class="inline-flex items-center text-xs font-semibold bg-white text-violet-800 border border-violet-300 py-1 px-2.5 rounded-md hover:bg-violet-50">開啟網站</a>
@@ -675,7 +675,7 @@ export default {
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xl">📊</div>
                     <div class="min-w-0 flex-1">
                         <h2 class="text-base font-bold text-gray-800 leading-tight">出勤儀表板</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">查詢遲到、早退與缺勤紀錄。</p>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">查詢遲到、早退、缺勤與假勤年度統計。</p>
                     </div>
                 </a>
 

@@ -17,7 +17,8 @@
             cursor: pointer;
             color: #1f2937;
         }
-        .personal-tab {
+        .personal-tab,
+        .manager-tab {
             flex: 1;
             min-height: 44px;
             font-size: 0.9375rem;
@@ -25,16 +26,26 @@
             border-radius: 0.5rem;
             transition: background-color 0.15s, color 0.15s;
         }
-        .personal-tab-active {
+        .personal-tab-active,
+        .manager-tab-active {
             background-color: rgb(37 99 235);
             color: white;
         }
-        .personal-tab-inactive {
+        .personal-tab-inactive,
+        .manager-tab-inactive {
             background-color: rgb(243 244 246);
             color: rgb(55 65 81);
         }
-        .personal-tab-inactive:hover {
+        .personal-tab-inactive:hover,
+        .manager-tab-inactive:hover {
             background-color: rgb(229 231 235);
+        }
+        .lys-th-sort {
+            cursor: pointer;
+            user-select: none;
+        }
+        .lys-th-sort:hover {
+            color: rgb(29 78 216);
         }
         .appeal-reason-chips {
             display: flex;
@@ -73,6 +84,11 @@
             <button type="button" id="tab-attendance" class="personal-tab personal-tab-active" role="tab" aria-selected="true">出勤紀錄</button>
             <button type="button" id="tab-leave" class="personal-tab personal-tab-inactive" role="tab" aria-selected="false">假勤紀錄</button>
             <button type="button" id="tab-payroll" class="personal-tab personal-tab-inactive" role="tab" aria-selected="false">薪資核對</button>
+        </nav>
+
+        <nav id="manager-tabs" class="hidden flex gap-2 mb-6 bg-white p-1.5 rounded-xl shadow-sm border border-gray-100" role="tablist" aria-label="出勤與假勤統計">
+            <button type="button" id="tab-mgr-attendance" class="manager-tab manager-tab-active" role="tab" aria-selected="true">出勤報表</button>
+            <button type="button" id="tab-mgr-leave-year" class="manager-tab manager-tab-inactive" role="tab" aria-selected="false">假勤年度統計</button>
         </nav>
 
         <div id="attendance-main">
@@ -153,6 +169,59 @@
                  <div id="map"></div>
              </div>
         </div>
+        </div>
+
+        <!-- 管理模式：員工假勤年度統計（permission > 4） -->
+        <div id="leave-year-stats-panel" class="hidden">
+            <div id="lys-denied" class="hidden bg-white p-6 rounded-xl shadow-sm border border-amber-100">
+                <h2 class="text-lg font-semibold text-amber-900">權限不足</h2>
+                <p class="text-sm text-amber-800 mt-2">假勤年度統計需權限 5 以上才能查看。您仍可使用上方「出勤報表」查詢打卡與區間假勤。</p>
+            </div>
+            <div id="lys-content" class="bg-white p-5 md:p-6 rounded-xl shadow-sm border border-gray-100">
+                <div class="flex flex-col gap-4 mb-5">
+                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                        <div>
+                            <h2 class="text-lg font-semibold text-gray-800">員工假勤年度統計</h2>
+                            <p class="text-sm text-gray-500 mt-1">依曆年統計已核准假勤（待審不計）。剩餘特休僅在有給額時顯示。</p>
+                        </div>
+                        <p id="lys-meta" class="text-xs text-gray-400 sm:text-right whitespace-nowrap"></p>
+                    </div>
+                    <div class="flex flex-col sm:flex-row flex-wrap gap-3 items-stretch sm:items-end">
+                        <div class="min-w-[8rem]">
+                            <label for="lys-year" class="block text-sm font-medium text-gray-700">年度</label>
+                            <select id="lys-year" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"></select>
+                        </div>
+                        <div class="flex-1 min-w-[10rem]">
+                            <label for="lys-search" class="block text-sm font-medium text-gray-700">搜尋姓名或組別</label>
+                            <input type="search" id="lys-search" placeholder="輸入關鍵字…" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" autocomplete="off">
+                        </div>
+                        <button type="button" id="lys-load-btn" class="min-h-[42px] px-5 py-2 bg-blue-600 text-white text-sm font-bold rounded-md hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed">載入</button>
+                    </div>
+                    <div class="flex flex-wrap gap-3 text-xs text-gray-500">
+                        <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-blue-400"></span>有使用特休</span>
+                        <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-500"></span>特休已用偏高</span>
+                        <span class="inline-flex items-center gap-1.5 text-red-600 font-medium">剩餘少會標紅</span>
+                    </div>
+                </div>
+                <div id="lys-loading" class="hidden text-center py-12 text-gray-500">載入中…</div>
+                <div id="lys-error" class="hidden text-center py-10 text-red-600 bg-red-50 rounded-lg border border-red-100 px-4"></div>
+                <div id="lys-empty" class="hidden text-center py-12 text-gray-500"></div>
+                <div id="lys-table-wrap" class="hidden overflow-x-auto -mx-1 px-1 rounded-lg border border-gray-100">
+                    <table class="min-w-[36rem] w-full text-sm">
+                        <thead id="lys-thead">
+                            <tr class="bg-gray-50 border-b border-gray-200 text-gray-600">
+                                <th class="px-3 py-2.5 text-left font-semibold lys-th-sort whitespace-nowrap" data-lys-sort="employeeGroup">組別<span class="lys-sort-mark text-blue-600"></span></th>
+                                <th class="px-3 py-2.5 text-left font-semibold sticky left-0 bg-gray-50 z-[2] lys-th-sort whitespace-nowrap shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]" data-lys-sort="employeeName">姓名<span class="lys-sort-mark text-blue-600"></span></th>
+                                <th class="px-3 py-2.5 text-center font-semibold lys-th-sort whitespace-nowrap" data-lys-sort="annualLeaveDays">特休已用<span class="lys-sort-mark text-blue-600"></span></th>
+                                <th class="px-3 py-2.5 text-center font-semibold lys-th-sort whitespace-nowrap" data-lys-sort="sickLeaveDays">病假<span class="lys-sort-mark text-blue-600"></span></th>
+                                <th class="px-3 py-2.5 text-center font-semibold lys-th-sort whitespace-nowrap" data-lys-sort="personalLeaveDays">事假<span class="lys-sort-mark text-blue-600"></span></th>
+                                <th class="px-3 py-2.5 text-center font-semibold lys-th-sort whitespace-nowrap" data-lys-sort="annualLeaveRemaining">剩餘特休<span class="lys-sort-mark text-blue-600"></span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="lys-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
         <div id="leave-panel" class="hidden">
@@ -298,6 +367,7 @@
 <script type="module">
     import { showGlobalNotification } from '/shared/js/utils.js';
     import { initPayrollReviewPanel, initPayrollAdminPreview } from '/modules/attendance/payroll_review_panel.js';
+    import { initLeaveYearStatsManager } from '/modules/attendance/leave_year_stats_manager.js';
 
     // 【您的要求】新增全域變數，用於儲存當前報表資料以供匯出
     let currentReportData = {};
@@ -320,7 +390,9 @@
     let leaveLoaded = false;
     let payrollPanel = null;
     let payrollAdminPreview = null;
+    let leaveYearStatsManager = null;
     let activePersonalTab = 'attendance';
+    let activeManagerTab = 'attendance';
     let appealStatusMap = {};
     let pendingAppealContext = null;
 
@@ -458,6 +530,37 @@
         tabPayroll.setAttribute('aria-selected', isPayroll ? 'true' : 'false');
         if (isLeave && !leaveLoaded) fetchPersonalLeaveRequests();
         if (isPayroll && payrollPanel) payrollPanel.loadIfNeeded();
+    }
+
+    function switchManagerTab(tab) {
+        activeManagerTab = tab;
+        const attMain = document.getElementById('attendance-main');
+        const lysPanel = document.getElementById('leave-year-stats-panel');
+        const tabAtt = document.getElementById('tab-mgr-attendance');
+        const tabLys = document.getElementById('tab-mgr-leave-year');
+        const isAtt = tab === 'attendance';
+        const isLys = tab === 'leave-year';
+        attMain.classList.toggle('hidden', !isAtt);
+        lysPanel.classList.toggle('hidden', !isLys);
+        tabAtt.className = 'manager-tab ' + (isAtt ? 'manager-tab-active' : 'manager-tab-inactive');
+        tabLys.className = 'manager-tab ' + (isLys ? 'manager-tab-active' : 'manager-tab-inactive');
+        tabAtt.setAttribute('aria-selected', isAtt ? 'true' : 'false');
+        tabLys.setAttribute('aria-selected', isLys ? 'true' : 'false');
+        const addBtn = document.getElementById('add-checkin-btn');
+        if (addBtn) addBtn.style.display = isAtt ? '' : 'none';
+        if (isLys && leaveYearStatsManager) leaveYearStatsManager.loadIfNeeded();
+    }
+
+    function initManagerModeTabs(uid) {
+        if (personalPermission <= 4) return;
+        document.getElementById('manager-tabs').classList.remove('hidden');
+        leaveYearStatsManager = initLeaveYearStatsManager({
+            fetchApi,
+            operatorId: uid,
+            permission: personalPermission
+        });
+        document.getElementById('tab-mgr-attendance').addEventListener('click', () => switchManagerTab('attendance'));
+        document.getElementById('tab-mgr-leave-year').addEventListener('click', () => switchManagerTab('leave-year'));
     }
 
     function initPersonalMode() {
@@ -838,6 +941,7 @@
         // 獨立載入員工列表
         if (!IS_PERSONAL) {
             loadAndRenderEmployees();
+            initManagerModeTabs(uid);
             if (personalPermission >= 5) {
                 payrollAdminPreview = initPayrollAdminPreview({
                     apiBaseUrl: API_BASE_URL,
