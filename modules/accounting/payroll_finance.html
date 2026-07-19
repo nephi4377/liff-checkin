@@ -9,7 +9,7 @@
   <script src="../../shared/js/operator_context.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=40"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
-  <script src="../../shared/js/accounting_list_cache.js?v=4"></script>
+  <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
   <script src="../../shared/js/accounting_ui.js?v=16"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
@@ -43,15 +43,21 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>薪資待匯款</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub">勾選後下載<strong>薪轉檔</strong>（非廠商整批匯款）。上傳中信請選「<strong>薪資轉帳</strong>」、編碼 <strong>BIG-5</strong>。發薪完成後系統會自動 LINE 通知員工薪資摘要。</p>
+    <p class="sub">勾選後下載<strong>薪轉檔</strong>（非廠商整批匯款）。上傳中信請選「<strong>薪資轉帳</strong>」、編碼 <strong>BIG-5</strong>。確認銀行已匯出後，再按「標記已發薪」。</p>
     <div id="msg" role="alert"></div>
     <div id="ok" aria-live="polite"></div>
 
     <div class="card">
       <button type="button" class="btn btn-primary" id="reloadBtn" title="略過暫存，立刻向後端重抓最新清單">重新載入最新</button>
-      <button type="button" class="btn btn-primary" id="exportBtn">匯出薪轉檔並完成發薪</button>
-      <button type="button" class="btn btn-muted" id="markPaidBtn" style="width:100%;padding:12px;margin-top:8px">不產檔，手動標記已發薪</button>
-      <p class="sub" style="margin-top:10px">每月薪資請用此頁；單筆員工請款請用「廠商待匯款」。</p>
+      <button type="button" class="btn btn-secondary" id="exportBtn" style="width:100%;padding:12px;margin-top:8px;background:#5f6368;color:#fff">匯出薪轉檔</button>
+      <button type="button" class="btn btn-ok" id="markPaidBtn" style="width:100%;padding:12px;margin-top:8px">標記已發薪</button>
+      <button type="button" class="btn btn-ok" id="markAllPaidBtn" style="width:100%;padding:12px;margin-top:8px">一鍵全標已發薪</button>
+      <p class="sub" style="margin-top:10px">
+        <strong>① 匯出薪轉檔</strong>：只下載 .txt，不改狀態、不寫收支、不推播 LINE。<br />
+        <strong>② 上傳中信</strong>：請選「薪資轉帳」、BIG-5。<br />
+        <strong>③ 標記已發薪</strong>：確認銀行已匯出後按鈕 → 寫收支、標已發薪、LINE 通知員工薪資摘要。<br />
+        每月薪資請用此頁；單筆員工請款請用「廠商待匯款」。
+      </p>
     </div>
 
     <div class="card">
@@ -140,22 +146,30 @@
           if (!silent) { setMsg(''); setOk(''); }
           var list = document.getElementById('list');
           if (!silent) list.innerHTML = '<p class="sub">載入中…</p>';
-          try {
-            var data;
-            if (typeof AccountingListCache !== 'undefined') {
-              data = await AccountingListCache.load(session, listCacheKey(), function () {
-                return AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
-              }, { force: !!force });
-            } else {
-              data = await AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
-            }
-            if (!data.success) throw new Error(data.message || '載入失敗');
+          function applyListData(data) {
+            if (!data || !data.success) throw new Error((data && data.message) || '載入失敗');
             list.innerHTML = '';
             var items = (data.items || []).filter(function (r) {
               return String(r.review_status) === '已審' && String(r.payment_status) !== '已匯款';
             });
             document.getElementById('emptyMsg').classList.toggle('hidden', items.length > 0);
             items.forEach(function (row) { list.appendChild(renderItem(row)); });
+          }
+          try {
+            var data;
+            if (typeof AccountingListCache !== 'undefined') {
+              data = await AccountingListCache.load(session, listCacheKey(), function () {
+                return AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
+              }, {
+                force: !!force,
+                onUpdate: force ? null : function (fresh) {
+                  try { applyListData(fresh); } catch (e) {}
+                }
+              });
+            } else {
+              data = await AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
+            }
+            applyListData(data);
           } catch (e) {
             list.innerHTML = '';
             setMsg(e.message || String(e));
@@ -175,7 +189,9 @@
       document.getElementById('exportBtn').addEventListener('click', async function () {
         var ids = selectedIds();
         if (!ids.length) { setMsg('請先勾選要匯出的項目'); return; }
-        if (!confirm('將下載薪轉檔，並把 ' + ids.length + ' 筆記入收支、標記已發薪。\n\n確定？')) return;
+        var confirmMsg = '將下載薪轉檔（.txt）共 ' + ids.length + ' 筆。\n' +
+          '不會改狀態、不寫收支、不推播 LINE。\n\n上傳中信後，請回來按「標記已發薪」。\n\n確定？';
+        if (!confirm(confirmMsg)) return;
         var btn = document.getElementById('exportBtn');
         await AccountingUi.runAsync(btn, {
           busyLabel: '匯出中…',
@@ -185,26 +201,48 @@
           var data = await AccountingApi.payrollRequestExport(session, ids);
           if (!data.success) throw new Error(data.message || '匯出失敗');
           await downloadCtbcBig5(data.filename || 'ctbc_salary.txt', data.content || '');
-          setOk('已完成 ' + (data.count || ids.length) + ' 筆：檔案已下載。上傳中信請選「薪資轉帳」、BIG-5');
-          removeItemsFromView(data.payroll_request_ids || ids);
+          var msg = '已下載 ' + (data.count || ids.length) + ' 筆薪轉檔。上傳中信請選「薪資轉帳」、BIG-5';
+          if (data.warnings && data.warnings.length) {
+            setMsg('以下項目未匯出：' + data.warnings.join('；'));
+            msg += '（另有 ' + data.warnings.length + ' 筆略過，見上方紅字）';
+          }
+          setOk(msg);
         }).catch(function (e) { setMsg(e.message || String(e)); });
       });
 
-      document.getElementById('markPaidBtn').addEventListener('click', async function () {
-        var ids = selectedIds();
-        if (!ids.length) { setMsg('請先勾選要標記的項目'); return; }
-        if (!confirm('不產生薪轉檔，直接標記 ' + ids.length + ' 筆為已發薪並寫入收支？')) return;
-        var btn = document.getElementById('markPaidBtn');
+      async function runMarkPaid(ids, btn, opts) {
+        opts = opts || {};
+        if (!ids.length && !opts.markAll) {
+          setMsg('請先勾選要標記的項目');
+          return;
+        }
+        var countLabel = opts.markAll ? '列表全部待匯款' : (ids.length + ' 筆');
+        if (!confirm('確認銀行已匯出？將標記 ' + countLabel + ' 為已發薪、寫收支，並 LINE 通知員工薪資摘要。\n入帳日＝今日。')) return;
         await AccountingUi.runAsync(btn, {
           busyLabel: '處理中…',
-          actionLabel: '手動標記已發薪'
+          actionLabel: '標記已發薪',
+          startMessage: '正在寫入收支並推播通知，可能需要十幾秒…'
         }, async function () {
           setMsg(''); setOk('');
-          var data = await AccountingApi.payrollRequestMarkPaid(session, ids);
+          var data = await AccountingApi.payrollRequestMarkPaid(session, ids, { mark_all: !!opts.markAll });
           if (!data.success) throw new Error(data.message || '標記失敗');
-          setOk(data.message || '已標記完成');
+          var msg = '已標記 ' + (data.marked || data.count || ids.length) + ' 筆已發薪';
+          if (data.remit_date) msg += '（入帳日 ' + data.remit_date + '）';
+          if (data.warnings && data.warnings.length) {
+            setMsg('以下項目未標記：' + data.warnings.join('；'));
+            msg += '（另有 ' + data.warnings.length + ' 筆略過，見上方紅字）';
+          }
+          setOk(msg);
           removeItemsFromView(data.payroll_request_ids || ids);
         }).catch(function (e) { setMsg(e.message || String(e)); });
+      }
+
+      document.getElementById('markPaidBtn').addEventListener('click', function () {
+        runMarkPaid(selectedIds(), document.getElementById('markPaidBtn'));
+      });
+
+      document.getElementById('markAllPaidBtn').addEventListener('click', function () {
+        runMarkPaid([], document.getElementById('markAllPaidBtn'), { markAll: true });
       });
 
       AccountingBoot.run({

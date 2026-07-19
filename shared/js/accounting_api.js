@@ -1116,12 +1116,12 @@ var AccountingApi = (function () {
         payroll_request_ids: payrollRequestIds || []
       }, 120000);
     },
-    payrollRequestMarkPaid: function (sessionOrToken, payrollRequestIds) {
-      return post({
+    payrollRequestMarkPaid: function (sessionOrToken, payrollRequestIds, options) {
+      return post(Object.assign({
         action: 'payroll_request_mark_paid',
         auth: resolveAuth(sessionOrToken),
         payroll_request_ids: payrollRequestIds || []
-      }, 120000);
+      }, options || {}), 120000);
     },
     payrollRequestNotifyPayslip: function (sessionOrToken, payrollRequestId) {
       return post({
