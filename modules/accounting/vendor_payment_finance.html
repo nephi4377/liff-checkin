@@ -125,7 +125,7 @@
       <p class="sub"><strong>① 匯出轉帳檔</strong>：只下載中信整批匯款 .txt，不改狀態、不寫收支、不推播。<br />
         <strong>② 上傳中信網銀</strong>：選「整批匯款」、編碼 <strong>BIG-5</strong>。<br />
         <strong>③ 標記已匯款</strong>：確認銀行已匯出後，勾選項目按「標記已匯款」→ 寫收支、標已匯款、LINE 推播廠商（已綁定 UID）。入帳日＝標記當日。<br />
-        每筆可勾選<strong>是否扣匯費 $30</strong>（入帳仍記請款全額，摘要加註扣匯費；不另開支出列）。</p>
+        每筆可勾選<strong>是否扣匯費 $30</strong>（中信實匯較少；入帳＝請款全額＋匯費<strong>一筆</strong>，不另開匯費列）。</p>
       <h3 style="margin:0 0 8px">待匯款列表</h3>
       <div id="list"></div>
       <p class="sub hidden" id="emptyHint">目前沒有待匯款項目</p>
@@ -161,8 +161,9 @@
         var net = ctbcAmountForRow(row);
         var fee = parseRemitFeeApply(row) && gross > REMIT_FEE ? REMIT_FEE : 0;
         if (fee > 0) {
-          return '入帳 $' + gross.toLocaleString('zh-TW') + ' · 中信實匯 $' +
-            net.toLocaleString('zh-TW') + '（扣匯費 $' + fee.toLocaleString('zh-TW') + '，摘要加註）';
+          return '入帳 $' + (gross + fee).toLocaleString('zh-TW') +
+            '（本金 $' + gross.toLocaleString('zh-TW') + '＋匯費 $' + fee.toLocaleString('zh-TW') +
+            '，一筆）· 中信實匯 $' + net.toLocaleString('zh-TW');
         }
         return '入帳 $' + gross.toLocaleString('zh-TW') + ' · 中信實匯同額（不扣匯費）';
       }
