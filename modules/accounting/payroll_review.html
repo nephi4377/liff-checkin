@@ -46,7 +46,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>薪資審核</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub">員工自審或主管代開審後會出現在這裡。<strong>走帳／薪轉金額</strong>只填公司帳戶實際匯款數（避開薪轉上限／二代健保）；私下補差填內部欄位，不進收支與員工明細。</p>
+    <p class="sub">員工自審或主管代開審後會出現在這裡。核准後由財務在「薪資待匯款」決定薪轉與額外發放金額。</p>
     <div id="msg" role="alert"></div>
     <div id="ok" aria-live="polite"></div>
 
@@ -134,7 +134,7 @@
         var est = parseInt(root.getAttribute('data-est'), 10) || 0;
         var bonusEl = document.getElementById('bonus-' + prId);
         var dedEl = document.getElementById('ded-' + prId);
-        var finalEl = document.getElementById('final-' + prId);
+        var finalEl = document.getElementById('est-display-' + prId);
         if (!finalEl) return;
         var bonus = Number(bonusEl && bonusEl.value) || 0;
         var otherDed = Number(dedEl && dedEl.value) || 0;
@@ -144,7 +144,7 @@
           var now = Math.max(0, parseInt(inp.value, 10) || 0);
           delta += (orig - now);
         });
-        finalEl.value = String(Math.max(0, est + delta + bonus - otherDed));
+        finalEl.textContent = Math.max(0, est + delta + bonus - otherDed).toLocaleString('zh-TW');
       }
 
       function collectDeductionOverrides(prId) {
@@ -207,7 +207,7 @@
         }
         div.innerHTML =
           '<div><strong>' + esc(row.employee_name) + '</strong> <span class="tag">' + esc(row.period_label) + '</span> ' + selfTag + '</div>' +
-          '<p class="amount">試算實發 ' + est.toLocaleString('zh-TW') + ' 元</p>' +
+          '<p class="amount">試算實發 <span id="est-display-' + row.payroll_request_id + '">' + est.toLocaleString('zh-TW') + '</span> 元</p>' +
           '<p class="sub">期間 ' + esc(row.period_start) + '～' + esc(row.period_end) + ' · 發薪日 ' + esc(row.pay_date) + '</p>' +
           (ot > 0 ? '<p class="sub">加班 ' + ot + ' 小時</p>' : '') +
           (remote > 0 ? '<p class="sub">遠程津貼 ' + remote.toLocaleString('zh-TW') + ' 元</p>' : '') +
@@ -220,14 +220,9 @@
           '<div><label>一般獎金（元）</label><input type="number" id="bonus-' + row.payroll_request_id + '" class="recalc-final" min="0" step="1" value="0" /></div>' +
           '<div><label>其他扣款（元）</label><input type="number" id="ded-' + row.payroll_request_id + '" class="recalc-final" min="0" step="1" value="' + (parseInt(row.deduction,10)||0) + '" /></div>' +
           '</div>' +
-          '<label>走帳／薪轉金額（元）</label><input type="number" id="final-' + row.payroll_request_id + '" min="0" step="1" value="' + est + '" />' +
-          '<p class="sub" style="margin:4px 0 0">試算實發 ' + est.toLocaleString('zh-TW') + ' 元；若因薪轉上限只匯部分，請改填實際走帳金額。</p>' +
-          '<div class="row2">' +
-          '<div><label>私下補差（元，內部）</label><input type="number" id="offamt-' + row.payroll_request_id + '" min="0" step="1" value="0" /></div>' +
-          '<div><label>私下補差備註（內部）</label><input type="text" id="offnote-' + row.payroll_request_id + '" placeholder="僅財務可見，不進員工明細" value="" /></div>' +
-          '</div>' +
           '<label>獎金／備註說明</label><input type="text" id="bnote-' + row.payroll_request_id + '" placeholder="例：介紹獎金、年終（勿填專案報酬）" value="" />' +
           '<label>審核備註</label><input type="text" id="note-' + row.payroll_request_id + '" placeholder="減項有改請寫原因" value="' + esc(row.supplement_note || '') + '" />' +
+          '<p class="sub" style="margin-top:8px">薪轉／額外金額請至「薪資待匯款」調整。</p>' +
           '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
           '<button type="button" class="btn btn-ok" data-approve="' + row.payroll_request_id + '">核准</button>' +
           '<button type="button" class="btn btn-warn" data-reject="' + row.payroll_request_id + '">退回</button>' +
@@ -356,9 +351,6 @@
               payroll_request_id: id,
               bonus_amount: Number(document.getElementById('bonus-' + id).value) || 0,
               deduction: Number(document.getElementById('ded-' + id).value) || 0,
-              final_amount: Number(document.getElementById('final-' + id).value) || 0,
-              off_record_amount: Number(document.getElementById('offamt-' + id).value) || 0,
-              off_record_note: document.getElementById('offnote-' + id).value.trim(),
               bonus_note: document.getElementById('bnote-' + id).value.trim(),
               note: noteVal,
               deduction_overrides: overrides

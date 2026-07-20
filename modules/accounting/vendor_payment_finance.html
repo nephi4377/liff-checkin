@@ -62,6 +62,7 @@
     <p class="sub" style="margin-top:6px">每月<strong>員工薪資</strong>請至「<a href="payroll_finance.html">薪資待匯款</a>」，勿用此頁匯出。</p>
     <div id="msg"></div>
     <div id="ok"></div>
+    <div id="emailDrafts" class="card hidden" style="margin-top:12px"></div>
 
     <div class="card">
       <h3 style="margin:0 0 8px">新增待匯款</h3>
@@ -621,6 +622,37 @@
         });
       });
 
+      function renderVendorEmailDrafts(drafts) {
+        var box = document.getElementById('emailDrafts');
+        if (!box) return;
+        box.innerHTML = '';
+        if (!drafts || !drafts.length) { box.classList.add('hidden'); return; }
+        box.classList.remove('hidden');
+        box.innerHTML = '<h3 style="margin:0 0 8px">匯款通知 — EMAIL 替代方案</h3><p class="sub">LINE 推播失敗或未綁定時，請用下方開信或複製內容手動寄給廠商（副本會計 nephihuang@gmail.com）。</p>';
+        drafts.forEach(function (d) {
+          if (!d || !d.body) return;
+          var div = document.createElement('div');
+          div.style.cssText = 'background:#f8f9fa;border-radius:8px;padding:10px;margin-top:8px;font-size:13px';
+          div.innerHTML = '<strong>' + (d.vendor_name || d.subject || '匯款通知') + '</strong>' +
+            (d.to ? (' → ' + d.to) : '（無廠商 email，寄至會計）');
+          var copyBtn = document.createElement('button');
+          copyBtn.type = 'button';
+          copyBtn.className = 'btn btn-muted';
+          copyBtn.style.marginTop = '6px';
+          copyBtn.textContent = '複製內容';
+          copyBtn.onclick = function () { navigator.clipboard.writeText(d.body).then(function () { alert('已複製'); }); };
+          var mailBtn = document.createElement('a');
+          mailBtn.className = 'btn btn-muted';
+          mailBtn.style.display = 'inline-block';
+          mailBtn.style.marginLeft = '6px';
+          mailBtn.textContent = 'mailto 開信';
+          mailBtn.href = d.mailto_url || '#';
+          div.appendChild(copyBtn);
+          div.appendChild(mailBtn);
+          box.appendChild(div);
+        });
+      }
+
       function summarizePushResults(data) {
         var lines = [];
         if (data.remit_date) lines.push('入帳日：' + data.remit_date);
@@ -669,6 +701,14 @@
           var msg = '已標記 ' + (data.marked || ids.length) + ' 筆已匯款';
           var pushSummary = summarizePushResults(data);
           if (pushSummary) msg += '\n' + pushSummary;
+          var drafts = (data.email_drafts || []).slice();
+          (data.push_results || []).forEach(function (p) {
+            if (p.email_draft && (!p.ok)) drafts.push(p.email_draft);
+          });
+          (data.unlinked_vendors || []).forEach(function (u) {
+            if (u.email_draft) drafts.push(u.email_draft);
+          });
+          if (drafts.length) renderVendorEmailDrafts(drafts);
           if (data.warnings && data.warnings.length) {
             setMsg('以下項目未標記：' + data.warnings.join('；'));
             msg += '（另有 ' + data.warnings.length + ' 筆略過，見上方紅字）';

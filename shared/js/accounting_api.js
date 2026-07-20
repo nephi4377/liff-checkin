@@ -1120,12 +1120,12 @@ var AccountingApi = (function () {
         auth: resolveAuth(sessionOrToken)
       }, payload || {}));
     },
-    payrollRequestExport: function (sessionOrToken, payrollRequestIds) {
-      return post({
+    payrollRequestExport: function (sessionOrToken, payrollRequestIds, options) {
+      return post(Object.assign({
         action: 'payroll_request_export',
         auth: resolveAuth(sessionOrToken),
         payroll_request_ids: payrollRequestIds || []
-      }, 120000);
+      }, options || {}), 120000);
     },
     payrollRequestMarkPaid: function (sessionOrToken, payrollRequestIds, options) {
       return post(Object.assign({

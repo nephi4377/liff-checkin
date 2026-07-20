@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=40"></script>
+  <script src="../../shared/js/accounting_api.js?v=41"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
@@ -22,7 +22,7 @@
     .btn:disabled { opacity: .55; cursor: not-allowed; }
     .btn-primary { background: #1a73e8; color: #fff; width: 100%; padding: 12px; margin-top: 10px; }
     .btn-ok { background: #34a853; color: #fff; }
-    .btn-muted { background: #e8eaed; color: #333; }
+    .btn-link { background: #e8f0fe; color: #1a73e8; width: 100%; margin-top: 6px; }
     .item { border-bottom: 1px solid #eee; padding: 14px 0; }
     .item:last-child { border-bottom: none; }
     .chk { width: auto; margin-right: 8px; }
@@ -30,82 +30,99 @@
     .bank { font-size: 13px; color: #444; margin-top: 4px; }
     .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin-right: 6px; }
     .tag.warn { background: #fce8e6; color: #c5221f; }
-    #msg { color: #c5221f; font-size: 14px; }
-    #ok { color: #137333; font-size: 14px; }
+    #msg { color: #c5221f; font-size: 14px; white-space: pre-wrap; }
+    #ok { color: #137333; font-size: 14px; white-space: pre-wrap; }
     .hidden { display: none; }
     .nav { margin-bottom: 12px; font-size: 14px; }
     .nav a { color: #1a73e8; text-decoration: none; }
     label { display: block; margin-top: 8px; font-weight: 600; font-size: 14px; }
-    input, select, textarea { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
+    input, select { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
     .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .inline-chk { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-weight: 600; font-size: 14px; }
-    .inline-chk input { width: auto; margin: 0; }
+    .pay-panel { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ddd; }
+    .total-line { font-weight: 700; color: #1a73e8; margin-top: 6px; }
+    #emailDrafts .draft { background: #f8f9fa; border-radius: 8px; padding: 10px; margin-top: 8px; font-size: 13px; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
   <div id="loading">載入中…</div>
   <div id="app" class="hidden acct-main">
-    <p class="nav"><a href="index.html">← 會計功能選單</a></p>
+    <p class="nav"><a href="index.html">← 會計功能選單</a> · <a href="payroll_backfill.html">薪資歷史補登</a></p>
     <h2>薪資待匯款</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub">勾選後下載<strong>薪轉檔</strong>（非廠商整批匯款）。上傳中信請選「<strong>薪資轉帳</strong>」、編碼 <strong>BIG-5</strong>。確認銀行已匯出後，再按「標記已發薪」。</p>
+    <p class="sub">每筆可調<strong>薪轉金額</strong>與<strong>額外發放</strong>（現金／另筆轉帳）。標記已發薪時：收支記<strong>總實發一筆</strong>，並 EMAIL 員工薪資明細。</p>
     <div id="msg" role="alert"></div>
     <div id="ok" aria-live="polite"></div>
+    <div id="emailDrafts" class="card hidden"></div>
 
     <div class="card">
-      <button type="button" class="btn btn-primary" id="reloadBtn" title="略過暫存，立刻向後端重抓最新清單">重新載入最新</button>
+      <button type="button" class="btn btn-primary" id="reloadBtn">重新載入最新</button>
       <button type="button" class="btn btn-secondary" id="exportBtn" style="width:100%;padding:12px;margin-top:8px;background:#5f6368;color:#fff">匯出薪轉檔</button>
       <button type="button" class="btn btn-ok" id="markPaidBtn" style="width:100%;padding:12px;margin-top:8px">標記已發薪</button>
       <button type="button" class="btn btn-ok" id="markAllPaidBtn" style="width:100%;padding:12px;margin-top:8px">一鍵全標已發薪</button>
       <p class="sub" style="margin-top:10px">
-        <strong>① 匯出薪轉檔</strong>：只下載 .txt，不改狀態、不寫收支、不推播 LINE。<br />
-        <strong>② 上傳中信</strong>：請選「薪資轉帳」、BIG-5。<br />
-        <strong>③ 標記已發薪</strong>：確認銀行已匯出後按鈕 → 寫收支、標已發薪、LINE 通知員工薪資摘要。<br />
-        每月薪資請用此頁；單筆員工請款請用「廠商待匯款」。
+        <strong>① 匯出薪轉檔</strong>：依各筆「薪轉金額」產檔，不改狀態。<br />
+        <strong>② 上傳中信</strong>：薪資轉帳、BIG-5。<br />
+        <strong>③ 標記已發薪</strong>：寫收支（總實發）＋員工薪資歷史＋EMAIL 明細。
       </p>
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 8px">事後補登發薪</h3>
-      <p class="sub">未走正常送審、或已私下／網銀轉帳時，補建紀錄。走帳金額會寫收支與員工發放明細；私下補差僅內部備註。</p>
-      <label>員工</label>
-      <select id="bfEmployee"><option value="">載入中…</option></select>
-      <div class="row2">
-        <div><label>期別</label><input id="bfPeriod" placeholder="115/06" /></div>
-        <div><label>發薪日</label><input id="bfPayDate" type="date" /></div>
-      </div>
-      <div class="row2">
-        <div><label>走帳／實發（元）</label><input id="bfFinal" type="number" min="1" step="1" /></div>
-        <div><label>私下補差（元，內部）</label><input id="bfOffAmt" type="number" min="0" step="1" value="0" /></div>
-      </div>
-      <label>私下補差備註（內部）</label>
-      <input id="bfOffNote" placeholder="例：超過薪轉上限部分" />
-      <label>補登說明</label>
-      <input id="bfNote" placeholder="例：已網銀轉帳，補登發放明細" />
-      <label>收支付款方式</label>
-      <select id="bfPayMethod">
-        <option value="匯款" selected>匯款（網銀／非薪轉檔）</option>
-        <option value="薪轉">薪轉</option>
-        <option value="其他">其他</option>
-      </select>
-      <label class="inline-chk"><input type="checkbox" id="bfMarkPaid" checked /> 送出後直接標記已發薪（寫收支）</label>
-      <label class="inline-chk"><input type="checkbox" id="bfLineNotify" checked /> LINE 通知員工薪資摘要</label>
-      <label class="inline-chk"><input type="checkbox" id="bfAllowDup" /> 允許同期別重複（已有未結案時）</label>
-      <button type="button" class="btn btn-primary" id="backfillBtn">送出補登</button>
-    </div>
-
-    <div class="card">
+      <h3 style="margin:0 0 8px">待匯款清單</h3>
+      <div id="list"></div>
       <p id="emptyMsg" class="sub hidden">目前沒有待匯款薪資。</p>
     </div>
   </div>
   <script>
     (function () {
       var session = null;
-      var employees = [];
       var ui = AccountingUi.feedback();
       function setMsg(t) { ui.setMsg(t); }
       function setOk(t) { ui.setOk(t); }
       function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+      function transferDefault(row) {
+        return parseInt(row.transfer_amount, 10) || parseInt(row.final_amount, 10) || parseInt(row.estimated_net, 10) || 0;
+      }
+      function extraDefault(row) {
+        return parseInt(row.off_record_amount, 10) || 0;
+      }
+
+      function updateTotalDisplay(id) {
+        var transfer = Number(document.getElementById('xfer-' + id).value) || 0;
+        var extra = Number(document.getElementById('extra-' + id).value) || 0;
+        var el = document.getElementById('total-' + id);
+        if (el) el.textContent = '總實發 $' + (transfer + extra).toLocaleString('zh-TW');
+      }
+
+      function renderEmailDrafts(drafts) {
+        var box = document.getElementById('emailDrafts');
+        box.innerHTML = '';
+        if (!drafts || !drafts.length) { box.classList.add('hidden'); return; }
+        box.classList.remove('hidden');
+        box.innerHTML = '<h3 style="margin:0 0 8px">EMAIL 待手動寄送</h3><p class="sub">系統無法自動寄出時，請用下方按鈕開信或複製內容。</p>';
+        drafts.forEach(function (d, idx) {
+          if (!d || !d.body) return;
+          var div = document.createElement('div');
+          div.className = 'draft';
+          var title = (d.subject || '薪資明細') + (d.to ? ' → ' + d.to : '（員工未填 email，寄至會計）');
+          div.innerHTML = '<div><strong>' + esc(title) + '</strong></div>';
+          var copyBtn = document.createElement('button');
+          copyBtn.type = 'button';
+          copyBtn.className = 'btn btn-link';
+          copyBtn.textContent = '複製信件內容';
+          copyBtn.addEventListener('click', function () {
+            navigator.clipboard.writeText(d.body || '').then(function () { alert('已複製'); });
+          });
+          var mailBtn = document.createElement('a');
+          mailBtn.className = 'btn btn-link';
+          mailBtn.style.display = 'block';
+          mailBtn.textContent = '用 Email 開啟（mailto）';
+          mailBtn.href = d.mailto_url || ('mailto:' + encodeURIComponent(d.fallback_to || 'nephihuang@gmail.com'));
+          div.appendChild(copyBtn);
+          div.appendChild(mailBtn);
+          box.appendChild(div);
+        });
+      }
 
       async function downloadCtbcBig5(filename, content) {
         var text = String(content || '').replace(/^\uFEFF/, '');
@@ -129,9 +146,7 @@
         (ids || []).forEach(function (id) { idSet[id] = true; });
         AccountingListCache.patch(session, listCacheKey(), function (data) {
           if (!data || !data.items) return;
-          data.items = data.items.filter(function (row) {
-            return !idSet[row.payroll_request_id];
-          });
+          data.items = data.items.filter(function (row) { return !idSet[row.payroll_request_id]; });
         });
       }
 
@@ -141,43 +156,80 @@
           var el = document.getElementById('pf-' + id);
           if (el) el.remove();
         });
-        var remaining = document.querySelectorAll('#list .item').length;
-        document.getElementById('emptyMsg').classList.toggle('hidden', remaining > 0);
+        document.getElementById('emptyMsg').classList.toggle('hidden', document.querySelectorAll('#list .item').length > 0);
       }
 
       function renderItem(row) {
+        var id = row.payroll_request_id;
         var div = document.createElement('div');
         div.className = 'item';
-        div.id = 'pf-' + row.payroll_request_id;
-        var amount = parseInt(row.final_amount, 10) || parseInt(row.estimated_net, 10) || 0;
+        div.id = 'pf-' + id;
+        var xfer = transferDefault(row);
+        var extra = extraDefault(row);
+        var est = parseInt(row.estimated_net, 10) || 0;
         var incomplete = row.bank_incomplete;
         var head = document.createElement('div');
         head.className = 'actions';
         var chk = document.createElement('input');
         chk.type = 'checkbox';
         chk.className = 'chk';
-        chk.value = row.payroll_request_id;
+        chk.value = id;
         chk.checked = !incomplete;
         chk.disabled = !!incomplete;
         head.appendChild(chk);
         var ac = String(row.account_no || '');
         var tail = ac.length > 4 ? ac.slice(-4) : ac;
         var info = document.createElement('div');
+        info.style.flex = '1';
         info.innerHTML =
           '<div><strong>' + esc(row.employee_name) + '</strong> <span class="tag">' + esc(row.period_label) + '</span></div>' +
-          '<div class="sub">實發 $' + amount.toLocaleString('zh-TW') + '</div>' +
-          (row.bonus_note ? '<div class="sub">獎金備註：' + esc(row.bonus_note) + '</div>' : '') +
-          (incomplete
-            ? '<div class="tag warn">銀行帳戶不完整，無法匯出</div>'
-            : '<div class="bank">銀行 ' + esc(row.bank_code) + ' · 末四碼 ' + esc(tail) + '</div>');
+          '<div class="sub">試算實發 $' + est.toLocaleString('zh-TW') + '</div>' +
+          (incomplete ? '<div class="tag warn">銀行帳戶不完整，無法匯出薪轉</div>' :
+            '<div class="bank">銀行 ' + esc(row.bank_code) + ' · 末四碼 ' + esc(tail) + '</div>');
         head.appendChild(info);
         div.appendChild(head);
+        var panel = document.createElement('div');
+        panel.className = 'pay-panel';
+        panel.innerHTML =
+          '<div class="row2">' +
+          '<div><label>薪轉金額（元）</label><input type="number" id="xfer-' + id + '" min="0" step="1" value="' + xfer + '" /></div>' +
+          '<div><label>額外發放（元）</label><input type="number" id="extra-' + id + '" min="0" step="1" value="' + extra + '" /></div>' +
+          '</div>' +
+          '<div class="row2">' +
+          '<div><label>額外方式</label><select id="xmeth-' + id + '">' +
+          '<option value="現金">現金</option><option value="匯款">另筆轉帳</option><option value="其他">其他</option></select></div>' +
+          '<div><label>額外備註</label><input id="xnote-' + id + '" placeholder="例：超過薪轉上限" value="' + esc(row.off_record_note || '') + '" /></div>' +
+          '</div>' +
+          '<p class="total-line" id="total-' + id + '">總實發 $' + (xfer + extra).toLocaleString('zh-TW') + '</p>';
+        div.appendChild(panel);
+        ['xfer-' + id, 'extra-' + id].forEach(function (elId) {
+          panel.querySelector('#' + elId).addEventListener('input', function () { updateTotalDisplay(id); });
+        });
+        var meth = panel.querySelector('#xmeth-' + id);
+        if (row.extra_method) meth.value = row.extra_method;
         return div;
+      }
+
+      function collectPaymentPatches(ids) {
+        var map = {};
+        (ids || []).forEach(function (id) {
+          map[id] = {
+            transfer_amount: Number(document.getElementById('xfer-' + id).value) || 0,
+            extra_amount: Number(document.getElementById('extra-' + id).value) || 0,
+            extra_method: document.getElementById('xmeth-' + id).value,
+            off_record_note: document.getElementById('xnote-' + id).value.trim()
+          };
+        });
+        return map;
+      }
+
+      function allItemIds() {
+        return Array.prototype.slice.call(document.querySelectorAll('#list .chk')).map(function (c) { return c.value; });
       }
 
       async function loadList(silent, force) {
         var run = async function () {
-          if (!silent) { setMsg(''); setOk(''); }
+          if (!silent) { setMsg(''); setOk(''); renderEmailDrafts([]); }
           var list = document.getElementById('list');
           if (!silent) list.innerHTML = '<p class="sub">載入中…</p>';
           function applyListData(data) {
@@ -189,29 +241,18 @@
             document.getElementById('emptyMsg').classList.toggle('hidden', items.length > 0);
             items.forEach(function (row) { list.appendChild(renderItem(row)); });
           }
-          try {
-            var data;
-            if (typeof AccountingListCache !== 'undefined') {
-              data = await AccountingListCache.load(session, listCacheKey(), function () {
-                return AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
-              }, {
-                force: !!force,
-                onUpdate: force ? null : function (fresh) {
-                  try { applyListData(fresh); } catch (e) {}
-                }
-              });
-            } else {
-              data = await AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
-            }
-            applyListData(data);
-          } catch (e) {
-            list.innerHTML = '';
-            setMsg(e.message || String(e));
+          var data;
+          if (typeof AccountingListCache !== 'undefined') {
+            data = await AccountingListCache.load(session, listCacheKey(), function () {
+              return AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
+            }, { force: !!force, onUpdate: force ? null : function (fresh) { try { applyListData(fresh); } catch (e) {} } });
+          } else {
+            data = await AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
           }
+          applyListData(data);
         };
         if (silent) return run();
-        var reloadBtn = document.getElementById('reloadBtn');
-        return AccountingUi.runAsync(reloadBtn, { busyLabel: '載入中…' }, run);
+        return AccountingUi.runAsync(document.getElementById('reloadBtn'), { busyLabel: '載入中…' }, run);
       }
 
       function selectedIds() {
@@ -223,48 +264,43 @@
       document.getElementById('exportBtn').addEventListener('click', async function () {
         var ids = selectedIds();
         if (!ids.length) { setMsg('請先勾選要匯出的項目'); return; }
-        var confirmMsg = '將下載薪轉檔（.txt）共 ' + ids.length + ' 筆。\n' +
-          '不會改狀態、不寫收支、不推播 LINE。\n\n上傳中信後，請回來按「標記已發薪」。\n\n確定？';
-        if (!confirm(confirmMsg)) return;
-        var btn = document.getElementById('exportBtn');
-        await AccountingUi.runAsync(btn, {
-          busyLabel: '匯出中…',
-          actionLabel: '匯出薪轉檔'
-        }, async function () {
+        if (!confirm('將依「薪轉金額」下載 ' + ids.length + ' 筆薪轉檔。\n不改狀態、不寫收支。\n\n確定？')) return;
+        await AccountingUi.runAsync(document.getElementById('exportBtn'), { busyLabel: '匯出中…' }, async function () {
           setMsg(''); setOk('');
-          var data = await AccountingApi.payrollRequestExport(session, ids);
+          var data = await AccountingApi.payrollRequestExport(session, ids, { payment_by_id: collectPaymentPatches(ids) });
           if (!data.success) throw new Error(data.message || '匯出失敗');
           await downloadCtbcBig5(data.filename || 'ctbc_salary.txt', data.content || '');
-          var msg = '已下載 ' + (data.count || ids.length) + ' 筆薪轉檔。上傳中信請選「薪資轉帳」、BIG-5';
-          if (data.warnings && data.warnings.length) {
-            setMsg('以下項目未匯出：' + data.warnings.join('；'));
-            msg += '（另有 ' + data.warnings.length + ' 筆略過，見上方紅字）';
-          }
-          setOk(msg);
+          setOk('已下載 ' + (data.count || ids.length) + ' 筆薪轉檔');
         }).catch(function (e) { setMsg(e.message || String(e)); });
       });
 
       async function runMarkPaid(ids, btn, opts) {
         opts = opts || {};
-        if (!ids.length && !opts.markAll) {
-          setMsg('請先勾選要標記的項目');
-          return;
-        }
-        var countLabel = opts.markAll ? '列表全部待匯款' : (ids.length + ' 筆');
-        if (!confirm('確認銀行已匯出？將標記 ' + countLabel + ' 為已發薪、寫收支，並 LINE 通知員工薪資摘要。\n入帳日＝今日。')) return;
-        await AccountingUi.runAsync(btn, {
-          busyLabel: '處理中…',
-          actionLabel: '標記已發薪',
-          startMessage: '正在寫入收支並推播通知，可能需要十幾秒…'
-        }, async function () {
-          setMsg(''); setOk('');
-          var data = await AccountingApi.payrollRequestMarkPaid(session, ids, { mark_all: !!opts.markAll });
+        if (!ids.length && !opts.markAll) { setMsg('請先勾選要標記的項目'); return; }
+        if (opts.markAll) ids = allItemIds();
+        if (!ids.length) { setMsg('目前沒有待匯款項目'); return; }
+        if (!confirm('確認銀行已匯出？將標記 ' + ids.length + ' 筆已發薪、寫收支（總實發），並 EMAIL 員工。\n入帳日＝今日。')) return;
+        await AccountingUi.runAsync(btn, { busyLabel: '處理中…', startMessage: '寫入收支並寄送 EMAIL…' }, async function () {
+          setMsg(''); setOk(''); renderEmailDrafts([]);
+          var data = await AccountingApi.payrollRequestMarkPaid(session, ids, {
+            mark_all: !!opts.markAll,
+            payment_by_id: collectPaymentPatches(ids),
+            email_notify: true
+          });
           if (!data.success) throw new Error(data.message || '標記失敗');
-          var msg = '已標記 ' + (data.marked || data.count || ids.length) + ' 筆已發薪';
+          var msg = '已標記 ' + (data.marked || ids.length) + ' 筆已發薪';
           if (data.remit_date) msg += '（入帳日 ' + data.remit_date + '）';
+          var drafts = [];
+          (data.email_results || []).forEach(function (r) {
+            if (r.draft) drafts.push(r.draft);
+            else if (r.email_notify && r.email_notify.draft) drafts.push(r.email_notify.draft);
+          });
+          if (drafts.length) {
+            setMsg('部分 EMAIL 需手動寄送（見下方）');
+            renderEmailDrafts(drafts);
+          }
           if (data.warnings && data.warnings.length) {
-            setMsg('以下項目未標記：' + data.warnings.join('；'));
-            msg += '（另有 ' + data.warnings.length + ' 筆略過，見上方紅字）';
+            setMsg((document.getElementById('msg').textContent ? document.getElementById('msg').textContent + '\n' : '') + data.warnings.join('；'));
           }
           setOk(msg);
           removeItemsFromView(data.payroll_request_ids || ids);
@@ -272,69 +308,10 @@
       }
 
       document.getElementById('markPaidBtn').addEventListener('click', function () {
-        runMarkPaid(selectedIds(), document.getElementById('markPaidBtn'));
+        runMarkPaid(selectedIds(), this);
       });
-
       document.getElementById('markAllPaidBtn').addEventListener('click', function () {
-        runMarkPaid([], document.getElementById('markAllPaidBtn'), { markAll: true });
-      });
-
-      document.getElementById('markAllPaidBtn').addEventListener('click', function () {
-        runMarkPaid([], document.getElementById('markAllPaidBtn'), { markAll: true });
-      });
-
-      function fillEmployeeSelect() {
-        var sel = document.getElementById('bfEmployee');
-        sel.innerHTML = '<option value="">— 請選擇 —</option>';
-        employees.forEach(function (e) {
-          var opt = document.createElement('option');
-          opt.value = e.userId;
-          opt.textContent = (e.userName || e.displayName || e.userId) + (e.status && e.status !== '在職' ? '（' + e.status + '）' : '');
-          sel.appendChild(opt);
-        });
-      }
-
-      async function loadEmployees() {
-        try {
-          var ctx = await AccountingApi.paymentRequestContext(session);
-          if (ctx.success && ctx.employees && ctx.employees.length) {
-            employees = ctx.employees;
-            fillEmployeeSelect();
-          }
-        } catch (e) {
-          document.getElementById('bfEmployee').innerHTML = '<option value="">無法載入員工</option>';
-        }
-      }
-
-      document.getElementById('backfillBtn').addEventListener('click', async function () {
-        var uid = document.getElementById('bfEmployee').value;
-        var period = document.getElementById('bfPeriod').value.trim();
-        var finalAmt = Number(document.getElementById('bfFinal').value) || 0;
-        if (!uid) { setMsg('請選擇員工'); return; }
-        if (!period) { setMsg('請填期別'); return; }
-        if (finalAmt <= 0) { setMsg('走帳金額須大於 0'); return; }
-        if (!confirm('補登 ' + period + ' 走帳 $' + finalAmt.toLocaleString('zh-TW') + '？\n私下補差不會寫進收支或員工明細。')) return;
-        var btn = document.getElementById('backfillBtn');
-        await AccountingUi.runAsync(btn, { busyLabel: '補登中…' }, async function () {
-          setMsg(''); setOk('');
-          var payDate = document.getElementById('bfPayDate').value;
-          var data = await AccountingApi.payrollRequestManualBackfill(session, {
-            employee_user_id: uid,
-            period_label: period,
-            pay_date: payDate || undefined,
-            final_amount: finalAmt,
-            off_record_amount: Number(document.getElementById('bfOffAmt').value) || 0,
-            off_record_note: document.getElementById('bfOffNote').value.trim(),
-            note: document.getElementById('bfNote').value.trim(),
-            ledger_payment_method: document.getElementById('bfPayMethod').value,
-            mark_paid: document.getElementById('bfMarkPaid').checked,
-            line_notify: document.getElementById('bfLineNotify').checked,
-            allow_duplicate: document.getElementById('bfAllowDup').checked
-          });
-          if (!data.success) throw new Error(data.message || '補登失敗');
-          setOk(data.message || '已補登');
-          if (!data.marked_paid) await loadList(false, true);
-        }).catch(function (e) { setMsg(e.message || String(e)); });
+        runMarkPaid([], this, { markAll: true });
       });
 
       AccountingBoot.run({
@@ -344,10 +321,7 @@
           document.getElementById('loading').classList.add('hidden');
           document.getElementById('app').classList.remove('hidden');
           document.getElementById('userLine').textContent = (s.profile && s.profile.displayName) || '—';
-          var today = new Date();
-          var iso = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-          document.getElementById('bfPayDate').value = iso;
-          await Promise.all([loadList(), loadEmployees()]);
+          await loadList();
         }
       });
     })();

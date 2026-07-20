@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>薪資歷史補登</title>
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/operator_context.js?v=1"></script>
+  <script src="../../shared/js/accounting_api.js?v=41"></script>
+  <script src="../../shared/js/accounting_ui.js?v=16"></script>
+  <script src="../../shared/js/accounting_boot.js?v=5"></script>
+  <style>
+    h2 { margin: 0 0 8px; }
+    .sub { color: #555; font-size: 14px; line-height: 1.45; }
+    .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .btn { padding: 10px 14px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; }
+    .btn-primary { background: #1a73e8; color: #fff; width: 100%; padding: 12px; margin-top: 10px; }
+    .btn-link { background: #e8f0fe; color: #1a73e8; width: 100%; margin-top: 8px; }
+    label { display: block; margin-top: 8px; font-weight: 600; font-size: 14px; }
+    input, select { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .inline-chk { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-weight: 600; font-size: 14px; }
+    .inline-chk input { width: auto; margin: 0; }
+    #msg { color: #c5221f; font-size: 14px; white-space: pre-wrap; }
+    #ok { color: #137333; font-size: 14px; }
+    .hidden { display: none; }
+    .nav { margin-bottom: 12px; font-size: 14px; }
+    .nav a { color: #1a73e8; text-decoration: none; }
+    .draft { background: #f8f9fa; border-radius: 8px; padding: 10px; margin-top: 10px; font-size: 13px; }
+  </style>
+</head>
+<body class="acct-page acct-page-form">
+  <div id="loading">載入中…</div>
+  <div id="app" class="hidden acct-main">
+    <p class="nav"><a href="index.html">← 會計功能選單</a> · <a href="payroll_finance.html">薪資待匯款</a></p>
+    <h2>薪資歷史補登</h2>
+    <p class="sub" id="userLine">—</p>
+    <p class="sub">用於<strong>已發過薪</strong>、要補進員工「已發放紀錄」的情況。<strong>不寫收支</strong>、不進待匯款。員工可在 HUB 查薪資明細；可選 EMAIL 通知。</p>
+    <div id="msg" role="alert"></div>
+    <div id="ok" aria-live="polite"></div>
+    <div id="emailDraft" class="card hidden"></div>
+
+    <div class="card">
+      <label>員工</label>
+      <select id="bfEmployee"><option value="">載入中…</option></select>
+      <div class="row2">
+        <div><label>期別</label><input id="bfPeriod" placeholder="115/06" /></div>
+        <div><label>發薪日</label><input id="bfPayDate" type="date" /></div>
+      </div>
+      <div class="row2">
+        <div><label>實發總額（元）</label><input id="bfTotal" type="number" min="1" step="1" /></div>
+        <div><label>參考：薪轉／額外（選填）</label><input id="bfXfer" type="number" min="0" step="1" placeholder="薪轉" /></div>
+      </div>
+      <label>補登說明</label>
+      <input id="bfNote" placeholder="例：已現金發放，補登歷史紀錄" />
+      <label class="inline-chk"><input type="checkbox" id="bfEmail" checked /> EMAIL 通知員工（需員工資料有 email）</label>
+      <label class="inline-chk"><input type="checkbox" id="bfAllowDup" /> 允許同期別已有紀錄時重複補登</label>
+      <button type="button" class="btn btn-primary" id="backfillBtn">送出補登</button>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var session = null;
+      var ui = AccountingUi.feedback();
+      function setMsg(t) { ui.setMsg(t); }
+      function setOk(t) { ui.setOk(t); }
+
+      function showEmailDraft(draft) {
+        var box = document.getElementById('emailDraft');
+        if (!draft || !draft.body) { box.classList.add('hidden'); return; }
+        box.classList.remove('hidden');
+        box.innerHTML = '<h3 style="margin:0 0 8px">EMAIL 草稿</h3><p class="sub">' + (draft.to ? ('收件：' + draft.to) : '員工未填 email，請寄至 ' + (draft.fallback_to || 'nephihuang@gmail.com')) + '</p>';
+        var copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'btn btn-link';
+        copyBtn.textContent = '複製信件內容';
+        copyBtn.onclick = function () { navigator.clipboard.writeText(draft.body).then(function () { alert('已複製'); }); };
+        var mailBtn = document.createElement('a');
+        mailBtn.className = 'btn btn-link';
+        mailBtn.textContent = '用 Email 開啟';
+        mailBtn.href = draft.mailto_url || '#';
+        box.appendChild(copyBtn);
+        box.appendChild(mailBtn);
+      }
+
+      async function loadEmployees() {
+        try {
+          var ctx = await AccountingApi.paymentRequestContext(session);
+          var sel = document.getElementById('bfEmployee');
+          sel.innerHTML = '<option value="">— 請選擇 —</option>';
+          (ctx.employees || []).forEach(function (e) {
+            var opt = document.createElement('option');
+            opt.value = e.userId;
+            opt.textContent = (e.userName || e.displayName || e.userId);
+            sel.appendChild(opt);
+          });
+        } catch (e) {
+          document.getElementById('bfEmployee').innerHTML = '<option value="">無法載入員工</option>';
+        }
+      }
+
+      document.getElementById('backfillBtn').addEventListener('click', async function () {
+        var uid = document.getElementById('bfEmployee').value;
+        var period = document.getElementById('bfPeriod').value.trim();
+        var total = Number(document.getElementById('bfTotal').value) || 0;
+        if (!uid) { setMsg('請選擇員工'); return; }
+        if (!period) { setMsg('請填期別'); return; }
+        if (total <= 0) { setMsg('實發總額須大於 0'); return; }
+        if (!confirm('補登 ' + period + ' 實發 $' + total.toLocaleString('zh-TW') + ' 至薪資歷史？\n不會寫收支。')) return;
+        var btn = this;
+        await AccountingUi.runAsync(btn, { busyLabel: '補登中…' }, async function () {
+          setMsg(''); setOk(''); showEmailDraft(null);
+          var xfer = Number(document.getElementById('bfXfer').value) || 0;
+          var data = await AccountingApi.payrollRequestManualBackfill(session, {
+            employee_user_id: uid,
+            period_label: period,
+            pay_date: document.getElementById('bfPayDate').value || undefined,
+            total_amount: total,
+            transfer_amount: xfer,
+            extra_amount: xfer > 0 ? Math.max(0, total - xfer) : 0,
+            note: document.getElementById('bfNote').value.trim(),
+            email_notify: document.getElementById('bfEmail').checked,
+            allow_duplicate: document.getElementById('bfAllowDup').checked
+          });
+          if (!data.success) throw new Error(data.message || '補登失敗');
+          setOk(data.message || '已補登');
+          showEmailDraft(data.email_draft || (data.email_notify && data.email_notify.draft));
+        }).catch(function (e) { setMsg(e.message || String(e)); });
+      });
+
+      AccountingBoot.run({
+        minPermission: 4,
+        onReady: async function (s) {
+          session = s;
+          document.getElementById('loading').classList.add('hidden');
+          document.getElementById('app').classList.remove('hidden');
+          document.getElementById('userLine').textContent = (s.profile && s.profile.displayName) || '—';
+          var today = new Date();
+          document.getElementById('bfPayDate').value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+          await loadEmployees();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
