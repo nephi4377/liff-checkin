@@ -125,7 +125,7 @@
       <p class="sub"><strong>① 匯出轉帳檔</strong>：只下載中信整批匯款 .txt，不改狀態、不寫收支、不推播。<br />
         <strong>② 上傳中信網銀</strong>：選「整批匯款」、編碼 <strong>BIG-5</strong>。<br />
         <strong>③ 標記已匯款</strong>：確認銀行已匯出後，勾選項目按「標記已匯款」→ 寫收支、標已匯款、LINE 推播廠商（已綁定 UID）。入帳日＝標記當日。<br />
-        每筆可勾選<strong>是否扣匯費 $30</strong>：<br />
+        每筆可勾選<strong>是否扣匯費 $30</strong>（新建時依廠商名冊「預設扣匯費」帶入，可再改）：<br />
         ・<strong>有勾</strong>＝中信實匯少 $30（廠商少收）；分攤／收支／毛利<strong>不加</strong>匯費<br />
         ・<strong>沒勾</strong>＝公司幫出匯費；收支金額＋$30，加在<strong>金額最大</strong>那一案（不另開匯費列、不另標「匯費」）</p>
       <h3 style="margin:0 0 8px">待匯款列表</h3>
@@ -252,13 +252,16 @@
 
       function buildRowFromCreate(payload, data, mode) {
         var vendorName = payload.vendor_name;
+        var feeDefault = '是';
         if (mode === 'vendor') {
           var v = vendors.find(function (x) { return x.vendor_id === payload.vendor_id; });
           vendorName = v ? (v.name || v.vendor_id) : vendorName;
+          if (v && String(v.remit_fee_default || '').trim() === '否') feeDefault = '否';
         } else if (mode === 'employee') {
           var e = employees.find(function (x) { return x.userId === payload.employee_user_id; });
           vendorName = e ? (e.userName || e.userId) : vendorName;
         }
+        var amt = parseInt(payload.amount, 10) || 0;
         return {
           payment_request_id: data.payment_request_id,
           vendor_id: payload.vendor_id || '',
@@ -266,14 +269,14 @@
           doc_type: payload.doc_type || '直接匯款',
           review_status: data.review_status || '已審',
           payment_status: data.payment_status || '未匯款',
-          amount: parseInt(payload.amount, 10) || 0,
+          amount: amt,
           project_no: payload.project_no,
           item_desc: payload.item_desc,
           bank_code: payload.bank_code,
           account_no: payload.account_no,
           account_name: payload.account_name,
           note: payload.note,
-          remit_fee_apply: (parseInt(payload.amount, 10) || 0) > REMIT_FEE ? '是' : '否',
+          remit_fee_apply: amt > REMIT_FEE ? feeDefault : '否',
           source: mode === 'employee' ? 'staff_request' : 'finance_manual'
         };
       }

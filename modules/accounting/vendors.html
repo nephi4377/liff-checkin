@@ -242,6 +242,12 @@
       </div>
       <label>付款條件</label>
       <select id="payment_terms"></select>
+      <label>預設扣匯費</label>
+      <select id="remit_fee_default">
+        <option value="是">是（廠商少收 $30）</option>
+        <option value="否">否（公司幫出匯費）</option>
+      </select>
+      <p class="sub" style="margin:4px 0 10px">新建請款／待匯款時自動帶入；單筆仍可在待匯款頁改。未填視同「是」。</p>
       <label>合作狀態</label>
       <select id="coop_status"></select>
       <label>備註</label>
@@ -609,6 +615,7 @@
           account_no: $('account_no').value.trim(),
           account_name: $('account_name').value.trim(),
           payment_terms: $('payment_terms').value,
+          remit_fee_default: $('remit_fee_default').value || '是',
           coop_status: $('coop_status').value || '合作中',
           note: $('note').value.trim()
         };
@@ -723,6 +730,7 @@
         $('cost_type').value = '';
         $('coop_status').value = '合作中';
         $('payment_terms').value = '';
+        $('remit_fee_default').value = '是';
         clearPhotos();
         if (opts.focusName !== false) $('name').focus();
       }
@@ -745,6 +753,7 @@
         $('account_no').value = v.account_no || '';
         $('account_name').value = v.account_name || '';
         $('payment_terms').value = v.payment_terms || '';
+        $('remit_fee_default').value = String(v.remit_fee_default || '').trim() === '否' ? '否' : '是';
         $('coop_status').value = v.coop_status || '合作中';
         var noteLines = [];
         if (v.note) noteLines.push(String(v.note));
@@ -807,6 +816,9 @@
         var bank = formatBankSummary(v);
         if (bank) rows.push({ label: '匯款', text: bank });
         else if (v.bank_info) rows.push({ label: '匯款', text: String(v.bank_info) });
+
+        var feeDef = String(v.remit_fee_default || '').trim() === '否' ? '否（公司出）' : '是（扣廠商）';
+        rows.push({ label: '匯費', text: feeDef });
 
         var bindN = AccountingCache.vendorLineBindings(session, v.vendor_id).filter(function (b) {
           return String(b.is_active || '是') !== '否';

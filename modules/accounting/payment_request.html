@@ -789,6 +789,7 @@
           setBankReadonly(false);
           if (fromUser) AccountingUi.tap('新廠商（不在名冊）');
           updateBankHint();
+          updateTotal();
           return;
         }
         var row = null;
@@ -801,12 +802,13 @@
           setBankReadonly(!!row);
           if (fromUser && row) AccountingUi.tap('選擇員工：' + (row.userName || row.userId));
         }
-        if (!row) { setBankReadonly(false); updateBankHint(); return; }
+        if (!row) { setBankReadonly(false); updateBankHint(); updateTotal(); return; }
         document.getElementById('bankCode').value = row.bank_code || '';
         document.getElementById('branchName').value = row.branch_name || '';
         document.getElementById('accountNo').value = row.account_no || '';
         document.getElementById('accountName').value = row.account_name || row.userName || row.name || '';
         updateBankHint();
+        updateTotal();
       }
 
       function allocRowHtml(idx, row) {
@@ -872,6 +874,14 @@
         return { fee: REMIT_FEE_AMOUNT, net: sum - REMIT_FEE_AMOUNT };
       }
 
+      function selectedVendorRemitFeeDefault() {
+        var vid = typeof getVendorPickId === 'function' ? getVendorPickId() : '';
+        if (!vid || !vendors || !vendors.length) return true;
+        var v = vendors.find(function (x) { return x.vendor_id === vid; });
+        if (!v) return true;
+        return String(v.remit_fee_default || '').trim() !== '否';
+      }
+
       function updateTotal() {
         var sum = readAllocRows().reduce(function (s, r) {
           return s + (parseInt(r.amount, 10) || 0);
@@ -879,10 +889,17 @@
         document.getElementById('totalAmt').textContent = sum.toLocaleString('zh-TW');
         var hint = document.getElementById('remitFeeHint');
         var preview = remitFeePreview(sum);
+        var deduct = selectedVendorRemitFeeDefault();
         if (preview.fee > 0) {
-          hint.textContent = '預設「扣匯費」：中信實匯 $' + preview.net.toLocaleString('zh-TW') +
-            '；入帳／分攤先依請款全額 $' + sum.toLocaleString('zh-TW') +
-            '（待匯款可改為公司出匯費，那時入帳才＋$30）。';
+          if (deduct) {
+            hint.textContent = '依廠商預設「扣匯費」：中信實匯 $' + preview.net.toLocaleString('zh-TW') +
+              '；入帳／分攤先依請款全額 $' + sum.toLocaleString('zh-TW') +
+              '（待匯款可改為公司出匯費，那時入帳才＋$30）。';
+          } else {
+            hint.textContent = '依廠商預設「公司出匯費」：中信實匯 $' + sum.toLocaleString('zh-TW') +
+              '；入帳＝全額＋$' + REMIT_FEE_AMOUNT +
+              '（待匯款可改為扣匯費）。';
+          }
         } else if (sum > 0) {
           hint.textContent = '合計須大於 $' + REMIT_FEE_AMOUNT + ' 才適用匯費選項';
         } else {
@@ -1070,11 +1087,14 @@
         lines.push('合計：$' + total.toLocaleString('zh-TW'));
         var feePreview = remitFeePreview(total);
         if (feePreview.fee > 0) {
-          lines.push('入帳：$' + (total + feePreview.fee).toLocaleString('zh-TW') +
-            '（本金＋匯費一筆，不另開匯費列）');
-          lines.push('中信實匯：$' + feePreview.net.toLocaleString('zh-TW') + '（扣匯費 $' +
-            feePreview.fee.toLocaleString('zh-TW') + '）');
-          lines.push('實付：$' + feePreview.net.toLocaleString('zh-TW'));
+          var deduct = selectedVendorRemitFeeDefault();
+          if (deduct) {
+            lines.push('依廠商預設扣匯費：中信實匯 $' + feePreview.net.toLocaleString('zh-TW') +
+              '；入帳＝請款全額 $' + total.toLocaleString('zh-TW'));
+          } else {
+            lines.push('依廠商預設公司出匯費：中信實匯 $' + total.toLocaleString('zh-TW') +
+              '；入帳＝全額＋$' + feePreview.fee.toLocaleString('zh-TW'));
+          }
         }
         if (payload.note) lines.push('備註：' + payload.note);
         var photoNames = (payload.photos || []).map(function (p) { return p.filename || '檔案'; });
