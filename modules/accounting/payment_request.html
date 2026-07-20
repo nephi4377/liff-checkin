@@ -880,11 +880,11 @@
         var hint = document.getElementById('remitFeeHint');
         var preview = remitFeePreview(sum);
         if (preview.fee > 0) {
-          hint.textContent = '入帳 $' + (sum + preview.fee).toLocaleString('zh-TW') +
-            '（本金 $' + sum.toLocaleString('zh-TW') + '＋匯費 $' + preview.fee.toLocaleString('zh-TW') +
-            '，一筆、不另開匯費列）；中信實匯 $' + preview.net.toLocaleString('zh-TW') + '。';
+          hint.textContent = '預設「扣匯費」：中信實匯 $' + preview.net.toLocaleString('zh-TW') +
+            '；入帳／分攤先依請款全額 $' + sum.toLocaleString('zh-TW') +
+            '（待匯款可改為公司出匯費，那時入帳才＋$30）。';
         } else if (sum > 0) {
-          hint.textContent = '合計須大於 $' + REMIT_FEE_AMOUNT + ' 時，實匯才會扣匯費';
+          hint.textContent = '合計須大於 $' + REMIT_FEE_AMOUNT + ' 才適用匯費選項';
         } else {
           hint.textContent = '';
         }
