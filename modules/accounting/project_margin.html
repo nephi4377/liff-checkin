@@ -52,10 +52,19 @@
     details.base-detail { margin-top: 4px; font-size: 13px; color: #555; }
     .check-pass { color: #137333; }
     .check-fail { color: #c5221f; }
-    .check-row { padding: 8px 10px; border-radius: 8px; margin-top: 6px; font-size: 14px; line-height: 1.45; }
+    .check-row { padding: 4px 8px; border-radius: 6px; margin-top: 3px; font-size: 12px; line-height: 1.35; }
     .check-row.pass { background: #e6f4ea; }
     .check-row.fail { background: #fce8e6; }
     .check-row.skip { background: #f1f3f4; color: #555; }
+    .check-row .hint, .check-row .base-cost-lines { font-size: 11px !important; margin-top: 2px !important; }
+    #checklistCard { padding: 10px 12px; }
+    #checklistCard .section-title { margin-bottom: 4px; font-size: 13px; }
+    .bonus-compact .section-title { font-size: 13px; }
+    .bonus-compact { padding: 10px 12px; }
+    .bonus-compact .ratio-row { grid-template-columns: 1fr 56px 14px; gap: 4px; margin-top: 4px; font-size: 13px; }
+    .bonus-compact input, .bonus-compact label { font-size: 13px; }
+    .bonus-compact .btn { padding: 6px 10px; font-size: 13px; }
+    .duration-readonly input { background: #f1f3f4; color: #555; }
     .btn:disabled { opacity: 0.65; cursor: wait; }
     .contract-dirty { color: #b06000; font-weight: 600; }
     #detailLoading { text-align: center; padding: 16px; color: #555; font-size: 14px; }
@@ -93,8 +102,8 @@
     .cf-summary-val { font-weight: 600; }
     .cf-outstanding-pos { color: #137333; }
     .cf-outstanding-neg { color: #c5221f; }
-    .triangle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; margin-bottom: 10px; padding: 10px; background: #f8f9fa; border-radius: 8px; }
-    .triangle-grid .lbl { color: #777; font-size: 12px; }
+    .triangle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; font-size: 11px; margin-bottom: 6px; padding: 6px 8px; background: #f8f9fa; border-radius: 6px; }
+    .triangle-grid .lbl { color: #777; font-size: 10px; }
     .furniture-banner { background: #e8f0fe; border-radius: 8px; padding: 10px; font-size: 13px; margin-bottom: 8px; color: #174ea6; }
     .check-row.warn { background: #fef7e0; color: #5f4400; }
   </style>
@@ -125,6 +134,10 @@
         <div id="detailLoading" class="hidden">載入案件資料中…</div>
       </div>
       <div id="detailPanels">
+      <div class="card hidden" id="checklistCard">
+        <h3 class="section-title">案件收支總結</h3>
+        <div id="checklistList"></div>
+      </div>
       <div class="card">
         <h3 class="section-title">案件總額（驗收表核對）</h3>
         <p class="hint" id="quotationHint">—</p>
@@ -143,75 +156,53 @@
         <div id="cfSummaryBody" class="cf-summary-grid"></div>
         <p class="nav" style="margin-top:10px"><a id="cfSummaryLink" href="designer-customer-finance.html">管理追加減與收款 →</a></p>
       </div>
-      <div class="card hidden" id="furnitureCard">
-        <h3 class="section-title">家具訂單（選填）</h3>
-        <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-top:4px">
-          <input type="checkbox" id="hasFurnitureOrder" style="width:auto;margin:0" />
-          本案含家具訂單
-        </label>
-        <p class="hint" id="furnitureHint">有家具者另走家具訂編流程，不與裝修收款混表</p>
-        <button type="button" class="btn btn-secondary" id="saveFurnitureBtn" style="width:auto;margin-top:8px">儲存標記</button>
-      </div>
-      <div class="card">
-        <h3 class="section-title">工期</h3>
+      <div class="card duration-readonly">
+        <h3 class="section-title">工期（僅顯示）</h3>
         <p class="hint" id="projectStatusHint">—</p>
         <div class="row2">
           <div>
             <label>開始日</label>
-            <input id="durationStart" type="text" placeholder="yyyy-MM-dd" />
+            <input id="durationStart" type="text" placeholder="yyyy-MM-dd" readonly />
           </div>
           <div>
             <label>結束日</label>
-            <input id="durationEnd" type="text" placeholder="yyyy-MM-dd" />
+            <input id="durationEnd" type="text" placeholder="yyyy-MM-dd" readonly />
           </div>
         </div>
         <p class="hint" id="durationDaysHint">—</p>
-        <p class="hint">儲存工期後會一併重算基本費用</p>
-        <button type="button" class="btn btn-primary" id="saveDurationBtn">儲存工期</button>
+        <p class="hint">來自案場排程／結案日；若要改請到案場結案流程，此頁不修改</p>
+        <button type="button" class="btn btn-primary hidden" id="saveDurationBtn" tabindex="-1" aria-hidden="true">儲存工期</button>
       </div>
-      <div class="card hidden" id="bonusAllocCard">
-        <h3 class="section-title">獎金分配比例</h3>
-        <p class="hint">多位負責人時，比例加總須為 100%</p>
+      <div class="card hidden bonus-compact" id="bonusAllocCard">
+        <h3 class="section-title">獎金分配</h3>
+        <p class="hint">多位負責人時加總須 100%</p>
         <div id="bonusAllocList"></div>
         <div class="btn-row">
-          <button type="button" class="btn btn-primary" id="saveBonusAllocBtn">儲存分配比例</button>
+          <button type="button" class="btn btn-primary" id="saveBonusAllocBtn">儲存比例</button>
         </div>
       </div>
-      <div class="card hidden" id="bonusApplyCard">
-        <h3 class="section-title">申請獎金（結案後）</h3>
-        <label>建議獎金總額</label>
+      <div class="card hidden bonus-compact" id="bonusApplyCard">
+        <h3 class="section-title">申請獎金</h3>
+        <label>建議總額</label>
         <input id="bonusSuggested" type="number" inputmode="numeric" />
         <label>說明</label>
         <input id="bonusNote" placeholder="選填" />
-        <button type="button" class="btn btn-primary" id="applyBonusBtn">產生獎金草稿</button>
+        <button type="button" class="btn btn-primary" id="applyBonusBtn">產生草稿</button>
         <p class="hint" id="bonusDraftHint">—</p>
       </div>
       <div class="card hidden" id="vendorPickCard">
         <h3 class="section-title">本案廠商（驗收表大項目）</h3>
-        <p class="hint">依驗收表偵測的大項目選定廠商；同項目可選多家，亦可手動新增大項目</p>
+        <p class="hint">依驗收表偵測選定；同項目可多家。廠商名冊只維護名冊，本案選誰只在這裡</p>
         <div id="vendorPickList"></div>
         <button type="button" class="btn btn-primary" id="saveVendorsBtn">儲存本案廠商</button>
-      </div>
-      <div class="card hidden" id="checklistCard">
-        <h3 class="section-title">案件收支總結</h3>
-        <div id="checklistList"></div>
-      </div>
-      <div class="card hidden" id="laborWageCard">
-        <h3 class="section-title">施工人員工資（工務／木作／系統／油漆）</h3>
-        <p class="hint">可從廠商請款帶入或自填日薪／月薪；儲存後按「重算工資列」寫入毛利</p>
-        <div id="laborWageList"></div>
-        <div class="btn-row">
-          <button type="button" class="btn btn-secondary" id="saveLaborBtn">儲存工資設定</button>
-          <button type="button" class="btn btn-primary" id="recalcLaborBtn">重算工資列</button>
-        </div>
       </div>
       <div class="card">
         <h3 style="margin:0 0 8px">費用明細</h3>
         <div id="lineList"></div>
       </div>
       <div class="card">
-        <h3 style="margin:0 0 8px">手動新增一筆</h3>
-        <p class="hint">選「收入」時改送請款審核→財務核准→客戶確認後才寫入本頁明細</p>
+        <h3 style="margin:0 0 8px">手動新增一筆（只寫毛利）</h3>
+        <p class="hint">支出＝只加在本案毛利，不寫入收支明細。收入＝走追加減／收款確認流程，也不直接寫收支明細</p>
         <div class="row2">
           <div>
             <label>收支</label>
@@ -547,32 +538,8 @@
 
       function renderLaborWages(laborWages) {
         var card = el('laborWageCard');
-        var box = el('laborWageList');
-        box.innerHTML = '';
-        card.classList.remove('hidden');
-        laborRoles.forEach(function (role) {
-          var cfg = (laborWages && laborWages[role]) || { mode: 'vendor', daily: 0, monthly: 0, amount: 0 };
-          var wrap = document.createElement('div');
-          wrap.style.marginTop = '10px';
-          wrap.innerHTML =
-            '<strong>' + role + '</strong>' +
-            '<label>模式</label>' +
-            '<select data-role="' + role + '" class="labor-mode">' +
-            '<option value="vendor"' + (cfg.mode === 'vendor' ? ' selected' : '') + '>廠商請款帶入</option>' +
-            '<option value="manual"' + (cfg.mode === 'manual' ? ' selected' : '') + '>自填日薪／月薪</option>' +
-            '</select>' +
-            '<div class="row2">' +
-            '<div><label>日薪</label><input type="number" class="labor-daily" data-role="' + role + '" value="' + (cfg.daily || '') + '" /></div>' +
-            '<div><label>月薪</label><input type="number" class="labor-monthly" data-role="' + role + '" value="' + (cfg.monthly || '') + '" /></div>' +
-            '</div>' +
-            '<label>金額（廠商帶入或覆寫）</label>' +
-            '<input type="number" class="labor-amount" data-role="' + role + '" value="' + (cfg.amount || '') + '"' +
-            (cfg.manual_override ? ' data-touched="1"' : '') + ' />';
-          box.appendChild(wrap);
-        });
-        box.querySelectorAll('.labor-amount').forEach(function (inp) {
-          inp.addEventListener('input', function () { inp.dataset.touched = '1'; });
-        });
+        if (card) card.classList.add('hidden');
+        // 施工工資改由收支／請款登錄進毛利，此頁不再設定
       }
 
       function collectLaborWages() {
@@ -1067,13 +1034,7 @@
       }
 
       function renderFurnitureMeta(meta) {
-        var card = el('furnitureCard');
-        var checked = !!(meta && meta.has_furniture_order);
-        card.classList.remove('hidden');
-        el('hasFurnitureOrder').checked = checked;
-        el('furnitureHint').textContent = checked
-          ? '本案含家具訂單：家具訂編與裝修收款分開追蹤'
-          : '有家具者另走家具訂編流程，不與裝修收款混表';
+        // 家具標記已從頁面移除（僅標記、無後續流程）
       }
 
       function renderChecklist(checklist, slotPaymentStatus, cfSummary, revenueTotal) {
@@ -1096,7 +1057,7 @@
         card.classList.remove('hidden');
         if (cfSummary) {
           var tri = document.createElement('div');
-          tri.innerHTML = '<h4 style="margin:0 0 6px;font-size:14px">B5 三角核對</h4>' +
+          tri.innerHTML = '<div class="hint" style="margin:0 0 4px;font-weight:600">三角核對</div>' +
             renderTriangleSummary(cfSummary, revenueTotal);
           box.appendChild(tri);
         }
@@ -1211,7 +1172,6 @@
           data.all_slot_candidates || {}
         );
         renderCustomerFinanceSummary(data.customer_finance_summary, data.project_no);
-        renderFurnitureMeta(meta);
         renderChecklist(data.checklist, data.vendor_slot_payment_status,
           data.customer_finance_summary, overview.revenue_total || 0);
 
@@ -1273,20 +1233,6 @@
         var hint = el('contractDirtyHint');
         hint.textContent = '總額已修改，請按「儲存總額」才會寫入';
         hint.className = 'hint contract-dirty';
-      });
-      el('saveFurnitureBtn').addEventListener('click', async function () {
-        if (!current) return;
-        await runAction(el('saveFurnitureBtn'), '儲存中…', async function () {
-          setMsg('');
-          var data = await AccountingApi.marginSaveHasFurnitureOrder(session, {
-            project_no: current.project_no,
-            tab_name: current.tab_name,
-            has_furniture_order: el('hasFurnitureOrder').checked
-          });
-          if (!data.success) { setMsg(data.message || '儲存失敗'); return; }
-          setOk('家具標記已儲存');
-          renderDetailPanels(data);
-        }, { queue: true });
       });
       el('saveContractBtn').addEventListener('click', async function () {
         if (!current) return;
@@ -1379,7 +1325,7 @@
           renderDetailPanels(data);
         }, { queue: true });
       });
-      el('saveLaborBtn').addEventListener('click', async function () {
+      if (el('saveLaborBtn')) el('saveLaborBtn').addEventListener('click', async function () {
         if (!current) return;
         await runAction(el('saveLaborBtn'), '儲存中…', async function () {
           setMsg('');
@@ -1391,7 +1337,7 @@
           setOk('工資設定已儲存');
         }, { queue: true });
       });
-      el('recalcLaborBtn').addEventListener('click', async function () {
+      if (el('recalcLaborBtn')) el('recalcLaborBtn').addEventListener('click', async function () {
         if (!current) return;
         await runAction(el('recalcLaborBtn'), '重算中…', async function () {
           setMsg('');
