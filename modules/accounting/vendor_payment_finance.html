@@ -623,9 +623,11 @@
         var pushes = data.push_results || [];
         if (pushes.length) {
           var ok = pushes.filter(function (p) { return p.ok; }).length;
-          lines.push('LINE 推播：' + ok + '/' + pushes.length + ' 成功');
+          lines.push('LINE 推播：' + ok + '/' + pushes.length + ' 成功（同窗口多筆已合併成一則）');
           pushes.filter(function (p) { return !p.ok; }).forEach(function (p) {
-            lines.push('推播失敗 ' + (p.vendor_name || '') + '（' + (p.line_channel || 'accounting') + '）');
+            var chLabel = p.line_channel === 'official' ? '官方 LINE' : '會計 LINE';
+            var why = p.message || (p.channel === 'no_token' ? 'token 未設定' : '');
+            lines.push('推播失敗 ' + (p.vendor_name || '') + '（' + chLabel + (why ? '：' + why : '') + '）');
           });
         } else if (data.line_push !== false && !unlinked.length) {
           lines.push('LINE 推播：無需推播的廠商');

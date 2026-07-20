@@ -884,7 +884,18 @@ var AccountingApi = (function () {
         auth: resolveAuth(sessionOrToken),
         payment_request_ids: paymentRequestIds || [],
         mark_all: options.mark_all === true,
-        line_push: options.line_push !== false
+        line_push: options.line_push !== false,
+        repair_missing_ledger: options.repair_missing_ledger === true
+      });
+    },
+    /** 已匯款但缺收支列 → 補寫（不推播） */
+    vendorPaymentRepairLedger: function (sessionOrToken, opts) {
+      opts = opts || {};
+      return post({
+        action: 'vendor_payment_repair_ledger',
+        auth: resolveAuth(sessionOrToken),
+        payment_request_ids: opts.payment_request_ids || opts.ids || [],
+        ingest_ids: opts.ingest_ids || []
       });
     },
     ledgerReviewBundle: function (sessionOrToken, filter) {
