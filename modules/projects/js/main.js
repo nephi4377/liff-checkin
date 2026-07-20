@@ -254,6 +254,7 @@ function handleDataResponse(data) {
         get('備註-特別注意事項').trim()
       ].filter(Boolean).join('\n');
 
+      const startDate = get('開工日').trim() || get('專案起始日').trim() || '未填寫';
       const infoText = `進場資訊
 1.案名：${get('案場名稱').trim() || '未填寫'}
 2.地址：${get('案場地址').trim() || '未填寫'}
@@ -261,8 +262,9 @@ function handleDataResponse(data) {
 4.入門方式：${get('入門方式').trim() || '未填寫'}
 5.設計師：${get('設計師').trim() || '未填寫'}
 6.保證金事宜：${get('保證金事宜').trim() || '未填寫'}
-7.衛浴使用說明：${get('衛浴使用說明').trim() || '無'}
-8.案場注意事項：
+7.開工日：${startDate}
+8.衛浴使用說明：${get('衛浴使用說明').trim() || '無'}
+9.案場注意事項：
 ${notes || '無'}`;
 
       navigator.clipboard.writeText(infoText).then(() => {

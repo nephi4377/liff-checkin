@@ -460,6 +460,7 @@ export function displayProjectInfo(overview, schedule) {
           <li><strong>入門方式:</strong> ${esc(get('入門方式'))}</li>
           <li><strong>停車方式:</strong> ${esc(get('停車方式'))}</li>
           <li><strong>施工進場時間:</strong> ${esc(get('施工進場時間'))}</li>
+          <li><strong>開工日:</strong> ${esc((get('開工日') !== '未提供' ? get('開工日') : get('專案起始日')))}</li>
           <li><strong>保證金事宜:</strong> ${esc(get('保證金事宜'))}</li>
         </ul>
       </div>
