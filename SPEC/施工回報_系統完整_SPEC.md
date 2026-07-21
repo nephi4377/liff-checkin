@@ -63,7 +63,8 @@ flowchart LR
 - 每張圖片：`firebaseURL` 存在則 `UrlFetchApp.fetch` 下載；否則可解析 `data`（data URL Base64）建立 Blob（**雙軌降級**與遷移計劃中「回退到 Base64」一致）。
 - 寫入 Drive 暫存樹狀目錄（`DRIVE_TEMP_FOLDER_ID` 下，依 `projectId`／`logId`），設定連結可檢視，收集 `driveFileIds`；若來源為 Firebase 成功刪除遠端物件，則以 **GCS REST + OAuth**（`deleteFromFirebase_`）清理。
 - 單筆處理完畢將 `資料包(元數據)` 精簡、`狀態` 改 `待處理`，並排程 `processUploadQueue`。
-- **失敗／重試：** 可重試錯誤（含「找不到指定 ID」）→ 清 `folder_id_p_`／`folder_id_l_` cache → 標 `[Firebase待搬運] (重試n)`，延遲 1→2→5→10→15 分鐘再喚醒；滿 5 次 → `Firebase搬運失敗(已達上限): …` 並 `MailApp` 寄信（收件：`MANAGER_EMAIL` 或預設 `nephihuang@gmail.com`）。
+- **失敗／重試：** 可重試錯誤（含「找不到指定 ID」）→ 清 `folder_id_p_`／`folder_id_l_`／`folderId_for_` cache → 標 `[Firebase待搬運] (重試n)`，延遲 1→2→5→10→15 分鐘再喚醒；滿 5 次 → `Firebase搬運失敗(已達上限): …` 並 `MailApp` 寄信（收件：`MANAGER_EMAIL` 或預設 `nephihuang@gmail.com`）。
+- **防再犯：** 資料夾快取命中但開不到時，當場清快取並依案號／LogID **重建資料夾**，不把失效 ID 連踩滿 5 次。
 - 「搬運中」逾約 15 分鐘自動回收為可重試；觸發器採「先清再建」避免漏喚醒。
 
 **歸檔主線（`processUploadQueue` + `executeFullReportLogic`）**（見 `line_reply.js`）：
@@ -72,7 +73,7 @@ flowchart LR
 - 同 batch 須前一 chunk＝`已完成` 才處理下一列；前段最終失敗**不擋**其他 batch，寄信內容會列出卡住後段。
 - `chunkIndex === 1`：建日誌草稿、寫入「每日工作回報 (回覆)」；後續 chunk 追加照片至同一 `logId` 之日誌。
 - `chunkIndex === totalChunks`：將完成訊息丟入 LINE 回覆佇列。
-- **失敗／重試：** → `待重試 (n)`＋同上遞增延遲；滿 5 次 → `處理失敗(已達上限): …`＋寄信（同一列只寄一次）。「處理中」逾約 15 分鐘回收。
+- **失敗／重試：** Drive 檔開失敗會拋錯進重試（不清空標已完成）；「找不到指定 ID」時清 folder cache。→ `待重試 (n)`＋遞增延遲；滿 5 次 → `處理失敗(已達上限): …`＋寄信。「處理中」逾約 15 分鐘回收。
 
 **佇列狀態機（白話）**
 
