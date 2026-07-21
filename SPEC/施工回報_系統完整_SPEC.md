@@ -59,17 +59,41 @@ flowchart LR
 
 **後台搬運要點（`processFirebaseToDrive_`）**（見 `FirebaseHandler.js`）：
 
-- 讀狀態為 `[Firebase待搬運]` 之列；以 Lock 避免並行寫亂序。
+- 讀狀態為 `[Firebase待搬運]`（含 `(重試n)`）之列；以 Lock 避免並行寫亂序。
 - 每張圖片：`firebaseURL` 存在則 `UrlFetchApp.fetch` 下載；否則可解析 `data`（data URL Base64）建立 Blob（**雙軌降級**與遷移計劃中「回退到 Base64」一致）。
 - 寫入 Drive 暫存樹狀目錄（`DRIVE_TEMP_FOLDER_ID` 下，依 `projectId`／`logId`），設定連結可檢視，收集 `driveFileIds`；若來源為 Firebase 成功刪除遠端物件，則以 **GCS REST + OAuth**（`deleteFromFirebase_`）清理。
-- 單筆處理完畢將 `資料包(元數據)` 精簡、`狀態` 改 `待處理`，觸發條件滿足時呼叫 `processUploadQueue()`。
-- 佇列仍滿則以短延遲再次排程 `processFirebaseToDrive_`；觸發器在流程結尾清理，避免堆積。
+- 單筆處理完畢將 `資料包(元數據)` 精簡、`狀態` 改 `待處理`，並排程 `processUploadQueue`。
+- **失敗／重試：** 可重試錯誤（含「找不到指定 ID」）→ 清 `folder_id_p_`／`folder_id_l_` cache → 標 `[Firebase待搬運] (重試n)`，延遲 1→2→5→10→15 分鐘再喚醒；滿 5 次 → `Firebase搬運失敗(已達上限): …` 並 `MailApp` 寄信（收件：`MANAGER_EMAIL` 或預設 `nephihuang@gmail.com`）。
+- 「搬運中」逾約 15 分鐘自動回收為可重試；觸發器採「先清再建」避免漏喚醒。
 
 **歸檔主線（`processUploadQueue` + `executeFullReportLogic`）**（見 `line_reply.js`）：
 
-- 讀 `待處理`：讀 `資料包(元數據)` 與 `Drive檔案ID列表` → 執行 Dropbox 與 Drive 公開連結產生。
+- 讀 `待處理`／`待重試 (n)`（且重試延遲已到）：讀 `資料包(元數據)` 與 `Drive檔案ID列表` → 執行 Dropbox 與 Drive 公開連結產生。
+- 同 batch 須前一 chunk＝`已完成` 才處理下一列；前段最終失敗**不擋**其他 batch，寄信內容會列出卡住後段。
 - `chunkIndex === 1`：建日誌草稿、寫入「每日工作回報 (回覆)」；後續 chunk 追加照片至同一 `logId` 之日誌。
 - `chunkIndex === totalChunks`：將完成訊息丟入 LINE 回覆佇列。
+- **失敗／重試：** → `待重試 (n)`＋同上遞增延遲；滿 5 次 → `處理失敗(已達上限): …`＋寄信（同一列只寄一次）。「處理中」逾約 15 分鐘回收。
+
+**佇列狀態機（白話）**
+
+```mermaid
+flowchart LR
+  A[Firebase待搬運] -->|搬運成功| B[待處理]
+  A -->|失敗可重試| A2[Firebase待搬運重試]
+  A2 -->|滿5次| AF[Firebase最終失敗並寄信]
+  B -->|歸檔成功| C[已完成]
+  B -->|失敗可重試| B2[待重試]
+  B2 -->|滿5次| BF[處理最終失敗並寄信]
+```
+
+| 白話（圖上） | 程式對照 |
+|---|---|
+| Firebase待搬運 | 狀態 `[Firebase待搬運]`／`(重試n)`；`processFirebaseToDrive_` |
+| 待處理／待重試 | 狀態 `待處理`／`待重試 (n)`；`processUploadQueue` |
+| 已完成 | 狀態 `已完成` |
+| Firebase／處理最終失敗並寄信 | `…(已達上限): …`＋`_sendUploadQueueAlertEmail_` |
+
+**手動維運（GAS 編輯器）**：`rescueStuckUploadQueue_`、`retryFirebaseFailures_`、`clearDriveFolderCacheKeys_`、`kickProcessUploadQueue_`（見 `UploadQueueOps.js`）。
 
 `handleFastReport_` 會依照片數量以 **每 4 張一塊** 寫多列（與佇列消化邏輯相同 chunk 模型），`logId` 以 `CacheService` 綁定 `batchId` 約 30 分鐘，使同一批照片共用同一日誌。
 
