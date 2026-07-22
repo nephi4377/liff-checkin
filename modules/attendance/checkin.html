@@ -18,7 +18,7 @@
         const CONSTANTS = {
             LIFF_ID: '2007974938-jVxn6y37',
             GAS_URL: 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec',
-            VERSION: 'v26.06.06.1745',
+            VERSION: 'v26.07.22.2354',
             OFF_SITE_VALID_METERS: 200,
             ANOMALY_MISSING: '離場未填說明',
             SITE_BG_RETRY_MS: 30000,
@@ -431,8 +431,8 @@
                         timestamp: Date.now()
                     };
                     AppUI.updateIndicator('gps', 'success', '定位就緒');
-                    // 座標就緒後，若身分已驗證，提前啟用按鈕
-                    if (AppCore.user) document.getElementById('checkin-button').disabled = false;
+                    // 座標就緒後啟用按鈕，但仍須等案場首次載入完成或已有快取（避免搶跑誤標「案場資訊異常」）
+                    AppCore.tryEnableCheckinButton();
                     console.log('[GPS Prewarm] 座標預熱完畢', AppGeo.cachedLocation.coords);
                 } catch (e) {
                     // [v2026.3.2] 主動偵測權限拒絕
@@ -530,6 +530,7 @@
             siteFetchState: 'idle',
             bgRetryCount: 0,
             bgSyncRunning: false,
+            bgRefreshPromise: null,
             haversineMeters(lat1, lon1, lat2, lon2) {
                 const R = 6371e3;
                 const toRad = d => d * Math.PI / 180;
@@ -575,13 +576,15 @@
                         page: 'attendance_api',
                         action: 'get_all_sites'
                     });
-                    if (data && data.data) {
+                    if (data && Array.isArray(data.data) && data.data.length > 0) {
                         AppOffSite.sites = data.data;
                         AppStorage.save('checkin_sites_cache', data.data, 30);
+                        return true;
                     }
                 } catch (e) {
                     console.warn('[OffSite] loadSites', e);
                 }
+                return AppOffSite.hasSitesData();
             },
             async init() {
                 const cachedPresets = AppStorage.load('checkin_presets_cache');
@@ -605,7 +608,9 @@
                 AppOffSite.selectedTags.add(CONSTANTS.SITE_ANOMALY_TAG);
             },
             refreshSitesIndicator() {
-                if (AppOffSite.hasSitesData()) {
+                if (AppOffSite.siteFetchState === 'refreshing' && AppOffSite.hasSitesData()) {
+                    AppUI.updateIndicator('sites', 'success', '更新中');
+                } else if (AppOffSite.hasSitesData()) {
                     AppUI.updateIndicator('sites', 'success', '已同步');
                 } else if (AppOffSite.firstAttemptDone) {
                     AppUI.updateIndicator('sites', 'error', '未取得');
@@ -625,6 +630,47 @@
                 AppOffSite.isInitialized = true;
                 return AppOffSite.hasSitesData();
             },
+            /** 方案 A：有快取也背景更新（stale-while-revalidate），失敗則沿用舊快取 */
+            refreshSitesInBackground(options = {}) {
+                const silent = options.silent !== false;
+                if (!navigator.onLine) return Promise.resolve(AppOffSite.hasSitesData());
+                if (AppOffSite.bgRefreshPromise) return AppOffSite.bgRefreshPromise;
+
+                const hadData = AppOffSite.hasSitesData();
+                if (hadData) AppOffSite.siteFetchState = 'refreshing';
+                AppOffSite.refreshSitesIndicator();
+                if (!silent && !hadData) AppUI.setSitesSyncVisible(true);
+
+                AppOffSite.bgRefreshPromise = AppOffSite.fetchSitesOnce()
+                    .then((ok) => {
+                        if (ok) {
+                            AppOffSite.siteFetchState = 'ready';
+                            AppActionLog.log(hadData ? '案場背景更新' : '案場就緒');
+                        } else if (!hadData) {
+                            AppOffSite.siteFetchState = 'unreachable';
+                        } else {
+                            AppOffSite.siteFetchState = 'ready';
+                            AppActionLog.log('案場背景更新失敗沿用快取');
+                        }
+                        AppOffSite.refreshSitesIndicator();
+                        return ok || hadData;
+                    })
+                    .catch((e) => {
+                        console.warn('[OffSite] bg refresh', e);
+                        if (hadData) {
+                            AppOffSite.siteFetchState = 'ready';
+                            AppActionLog.log('案場背景更新失敗沿用快取');
+                        }
+                        AppOffSite.refreshSitesIndicator();
+                        return hadData;
+                    })
+                    .finally(() => {
+                        AppOffSite.bgRefreshPromise = null;
+                        if (!silent && !hadData) AppUI.setSitesSyncVisible(false);
+                    });
+
+                return AppOffSite.bgRefreshPromise;
+            },
             async runFirstSiteAttempt() {
                 if (AppOffSite.hasSitesData()) {
                     AppOffSite.firstAttemptDone = true;
@@ -632,6 +678,7 @@
                     AppActionLog.log('案場快取就緒');
                     AppOffSite.refreshSitesIndicator();
                     AppCore.tryEnableCheckinButton();
+                    AppOffSite.refreshSitesInBackground({ silent: true });
                     return;
                 }
                 if (!navigator.onLine) {
@@ -1108,6 +1155,18 @@
 
                     const lat = pos.coords.latitude;
                     const lon = pos.coords.longitude;
+
+                    // 案場仍在首次載入時，定位後再等一輪（不阻擋已逾時可打卡的設計）
+                    if (!AppOffSite.hasSitesData() && AppOffSite.siteFetchState === 'loading') {
+                        AppActionLog.log('打卡前等待案場');
+                        AppUI.setLoading(true, '同步案場資訊...');
+                        await Promise.race([
+                            AppOffSite.fetchSitesOnce(),
+                            new Promise(r => setTimeout(r, CONSTANTS.TIMEOUTS.SITE_LOAD))
+                        ]);
+                        AppUI.setLoading(true, '確認經緯座標...');
+                    }
+
                     const snapshot = AppOffSite.getSnapshot();
 
                     if (!AppOffSite.isOnSite(lat, lon)) {
