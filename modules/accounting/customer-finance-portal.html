@@ -7,9 +7,9 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=40"></script>
+  <script src="../../shared/js/accounting_api.js?v=41"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
-  <script src="../../shared/js/accounting_list_cache.js?v=4"></script>
+  <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/customer_finance_ui.js?v=2"></script>
   <!-- 客戶專用 LIFF（與員工會計 policy.liffId 分開）。LINE Developers Endpoint URL：
        https://info.tanxin.space/modules/accounting/customer-finance-portal.html
@@ -63,7 +63,12 @@
     </div>
 
     <div id="content">
-      <div class="card">
+      <!--
+        【未來待確認】總監指示：先不看追加減
+        暫時對客戶（含員工預覽）隱藏此區塊；後端 API 與下方繪製／確認／簽名邏輯保留不刪。
+        恢復時：移除此卡的 hidden class，並把腳本內 SHOW_CUSTOMER_ADJUSTMENTS 改回 true。
+      -->
+      <div class="card hidden" id="adjSection">
         <h3 style="margin:0 0 8px">追加減</h3>
         <div id="adjList">—</div>
       </div>
@@ -85,6 +90,8 @@
   (function () {
     var session = null;
     var staffPreview = false;
+    // 【未來待確認】總監指示：先不看追加減 — false＝不繪製／不深連結開啟；後端 API 不動。改 true 可恢復。
+    var SHOW_CUSTOMER_ADJUSTMENTS = false;
     var pendingSignAdjId = null;
     var canvas = document.getElementById('signCanvas');
     var ctx = canvas.getContext('2d');
@@ -195,7 +202,10 @@
           }
         }
         if (!res.success) { showMsg(res.message); return; }
-        renderAdj(res.adjustments || []);
+        // 【未來待確認】先不看追加減：略過前端繪製，仍照常顯示收款
+        if (SHOW_CUSTOMER_ADJUSTMENTS) {
+          renderAdj(res.adjustments || []);
+        }
         renderRec(res.receipts || []);
         focusDeepLinkEntity();
       } finally {
@@ -243,6 +253,8 @@
       if (!deepLink.entityId) return;
       var target = null;
       if (deepLink.entity === 'adjustment') {
+        // 【未來待確認】先不看追加減：深連結也不自動捲到／開啟簽名
+        if (!SHOW_CUSTOMER_ADJUSTMENTS) return;
         target = document.querySelector('[data-adj-id="' + deepLink.entityId + '"]')
           || document.querySelector('[data-adj-confirm="' + deepLink.entityId + '"]')
           || document.querySelector('[data-adj-sign="' + deepLink.entityId + '"]');

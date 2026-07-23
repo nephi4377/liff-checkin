@@ -84,6 +84,7 @@
             <button type="button" id="tab-attendance" class="personal-tab personal-tab-active" role="tab" aria-selected="true">出勤紀錄</button>
             <button type="button" id="tab-leave" class="personal-tab personal-tab-inactive" role="tab" aria-selected="false">假勤紀錄</button>
             <button type="button" id="tab-payroll" class="personal-tab personal-tab-inactive" role="tab" aria-selected="false">薪資核對</button>
+            <button type="button" id="tab-year-stats" class="personal-tab personal-tab-inactive" role="tab" aria-selected="false">年度統計</button>
         </nav>
 
         <nav id="manager-tabs" class="hidden flex gap-2 mb-6 bg-white p-1.5 rounded-xl shadow-sm border border-gray-100" role="tablist" aria-label="出勤與假勤統計">
@@ -238,6 +239,44 @@
             </div>
         </div>
 
+        <div id="year-stats-panel" class="hidden">
+            <div class="bg-white p-5 md:p-6 rounded-xl shadow-sm border border-gray-100">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-800">假勤年度統計</h2>
+                        <p class="text-sm text-gray-500 mt-1">曆年 1/1～12/31；特休給額依到職日自動試算（人事可覆寫）。離職週年結算請洽人事。</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <select id="lysp-year" class="text-sm rounded-md border-gray-300 shadow-sm min-h-[44px] px-2" aria-label="選擇年度"></select>
+                        <button type="button" id="lysp-refresh-btn" class="text-sm px-3 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 min-h-[44px]">重新整理統計</button>
+                        <button type="button" id="lysp-go-leave-btn" class="text-sm px-3 py-2 rounded-md bg-gray-100 hover:bg-gray-200 min-h-[44px]">假勤紀錄</button>
+                    </div>
+                </div>
+                <p id="lysp-meta" class="text-xs text-gray-500 mb-4"></p>
+                <p id="lysp-loading" class="hidden text-center text-gray-500 py-8">載入中…</p>
+                <div id="lysp-error" class="hidden text-center text-red-600 py-6"></div>
+                <div id="lysp-empty" class="text-center text-gray-500 py-8"></div>
+                <div id="lysp-content" class="hidden space-y-6">
+                    <div id="lysp-summary-cards" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"></div>
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-700 mb-2">特休</h3>
+                        <div id="lysp-annual-block"></div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center gap-2 mb-2">
+                            <h3 class="text-sm font-semibold text-gray-700">特休使用明細</h3>
+                        </div>
+                        <div id="lysp-annual-details"></div>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-700 mb-2">各月小計</h3>
+                        <div id="lysp-monthly" class="space-y-2"></div>
+                    </div>
+                    <div id="lysp-disposition" class="bg-amber-50 border border-amber-100 rounded-xl p-4"></div>
+                </div>
+            </div>
+        </div>
+
         <div id="payroll-panel" class="hidden">
             <div class="bg-white p-5 md:p-6 rounded-xl shadow-sm border border-gray-100">
                 <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
@@ -367,7 +406,8 @@
 <script type="module">
     import { showGlobalNotification } from '/shared/js/utils.js';
     import { initPayrollReviewPanel, initPayrollAdminPreview } from '/modules/attendance/payroll_review_panel.js';
-    import { initLeaveYearStatsManager } from '/modules/attendance/leave_year_stats_manager.js';
+    import { initLeaveYearStatsManager } from '/modules/attendance/leave_year_stats_manager.js?v=20260723';
+    import { initLeaveYearStatsPanel } from '/modules/attendance/leave_year_stats_panel.js?v=20260723';
 
     // 【您的要求】新增全域變數，用於儲存當前報表資料以供匯出
     let currentReportData = {};
@@ -385,12 +425,15 @@
     const personalUserId = urlParamsInit.get('uid') || '';
     const personalUserName = urlParamsInit.get('name') || '';
     const personalPermission = permFromUrl;
+    /** 個人「年度統計」分頁：僅權限 4 或 5（主管／人事）；一般員工不顯示 */
+    const CAN_VIEW_PERSONAL_YEAR_STATS = personalPermission === 4 || personalPermission === 5;
     const personalShiftStart = urlParamsInit.get('shiftStart') || '08:30';
     const personalShiftEnd = urlParamsInit.get('shiftEnd') || '17:30';
     let leaveLoaded = false;
     let payrollPanel = null;
     let payrollAdminPreview = null;
     let leaveYearStatsManager = null;
+    let leaveYearStatsPanel = null;
     let activePersonalTab = 'attendance';
     let activeManagerTab = 'attendance';
     let appealStatusMap = {};
@@ -513,23 +556,32 @@
         const attMain = document.getElementById('attendance-main');
         const leavePanel = document.getElementById('leave-panel');
         const payrollPanelEl = document.getElementById('payroll-panel');
+        const yearStatsPanelEl = document.getElementById('year-stats-panel');
         const tabAtt = document.getElementById('tab-attendance');
         const tabLeave = document.getElementById('tab-leave');
         const tabPayroll = document.getElementById('tab-payroll');
+        const tabYearStats = document.getElementById('tab-year-stats');
         const isAtt = tab === 'attendance';
         const isLeave = tab === 'leave';
         const isPayroll = tab === 'payroll';
+        const isYearStats = tab === 'year-stats' && !!tabYearStats;
         attMain.classList.toggle('hidden', !isAtt);
         leavePanel.classList.toggle('hidden', !isLeave);
         payrollPanelEl.classList.toggle('hidden', !isPayroll);
+        yearStatsPanelEl.classList.toggle('hidden', !isYearStats);
         tabAtt.className = 'personal-tab ' + (isAtt ? 'personal-tab-active' : 'personal-tab-inactive');
         tabLeave.className = 'personal-tab ' + (isLeave ? 'personal-tab-active' : 'personal-tab-inactive');
         tabPayroll.className = 'personal-tab ' + (isPayroll ? 'personal-tab-active' : 'personal-tab-inactive');
+        if (tabYearStats) {
+            tabYearStats.className = 'personal-tab ' + (isYearStats ? 'personal-tab-active' : 'personal-tab-inactive');
+            tabYearStats.setAttribute('aria-selected', isYearStats ? 'true' : 'false');
+        }
         tabAtt.setAttribute('aria-selected', isAtt ? 'true' : 'false');
         tabLeave.setAttribute('aria-selected', isLeave ? 'true' : 'false');
         tabPayroll.setAttribute('aria-selected', isPayroll ? 'true' : 'false');
         if (isLeave && !leaveLoaded) fetchPersonalLeaveRequests();
         if (isPayroll && payrollPanel) payrollPanel.loadIfNeeded();
+        if (isYearStats && leaveYearStatsPanel) leaveYearStatsPanel.loadIfNeeded();
     }
 
     function switchManagerTab(tab) {
@@ -598,6 +650,17 @@
         document.getElementById('tab-attendance').addEventListener('click', () => switchPersonalTab('attendance'));
         document.getElementById('tab-leave').addEventListener('click', () => switchPersonalTab('leave'));
         document.getElementById('tab-payroll').addEventListener('click', () => switchPersonalTab('payroll'));
+        if (CAN_VIEW_PERSONAL_YEAR_STATS) {
+            document.getElementById('tab-year-stats').addEventListener('click', () => switchPersonalTab('year-stats'));
+            leaveYearStatsPanel = initLeaveYearStatsPanel({
+                fetchApi,
+                operatorId: personalUserId,
+                onGoLeaveTab: () => switchPersonalTab('leave')
+            });
+        } else {
+            document.getElementById('tab-year-stats')?.remove();
+            document.getElementById('year-stats-panel')?.remove();
+        }
         payrollPanel = initPayrollReviewPanel({
             apiBaseUrl: API_BASE_URL,
             userId: personalUserId,
