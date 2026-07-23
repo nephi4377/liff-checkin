@@ -18,7 +18,7 @@
         const CONSTANTS = {
             LIFF_ID: '2007974938-jVxn6y37',
             GAS_URL: 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec',
-            VERSION: 'v26.07.22.2354',
+            VERSION: 'v26.07.23.2330',
             OFF_SITE_VALID_METERS: 200,
             ANOMALY_MISSING: '離場未填說明',
             SITE_BG_RETRY_MS: 30000,
@@ -42,6 +42,23 @@
                 AUTO_CLOSE: 45000  // 打卡成功後自動關閉頁面的倒數時間 (45s)
             },
             SITE_ANOMALY_TAG: '案場資訊異常',
+            /** 須與 backend CheckinSystem/Constants.js OFF_SITE_REASON_TAGS 同步 */
+            OFF_SITE_REASON_PRESETS: [
+                '下班打卡延遲／在他處打卡',
+                '案場資訊異常',
+                '尚未進場或缺乏案場資訊',
+                '外勤／其他地點',
+                '定位／訊號偏差',
+                '其他',
+                '臨時辦公室／倉庫',
+                '材料採購／代收',
+                '拜訪客戶／廠商',
+                '交通壅塞延遲',
+                '案場停工／未開工',
+                '天候／安全因素',
+                '設備／車輛待修',
+                '主管指派外勤'
+            ],
             MAX_RETRY: 3,          // GPS 定位失敗時的最大重試次數
             HISTORY_LIMIT: 15      // 前端介面顯示的歷史紀錄筆數上限
         };
@@ -278,10 +295,10 @@
             </div>
         </div>
 
-        <!-- 離場說明（不在案場 200m 內時顯示；可複選、可不填） -->
+        <!-- 離場說明（打卡已送出後、不在案場時可選填） -->
         <div id="offSitePanel" class="hidden mb-4 w-full text-left rounded-xl border border-amber-200 bg-amber-50/80 p-4">
             <p class="text-[11px] text-amber-900 leading-relaxed font-medium text-center">
-                您不在案場範圍內，可選原因（可複選）或補充說明；不填仍會打卡並可能標記異常。
+                打卡已送出。您不在案場範圍內，可選原因（可複選）或補充說明；不填也可直接關閉視窗。
             </p>
             <div id="offSiteChipWrap" class="off-site-chips"></div>
             <textarea id="offSiteReasonNote" rows="2" placeholder="補充說明（選填）"></textarea>
@@ -291,6 +308,10 @@
         <button id="checkin-button"
             class="w-full bg-blue-600 text-white font-black py-5 px-6 rounded-xl text-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all transform hover:scale-105 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none btn-pulse"
             disabled> 立即打卡 </button>
+        <button type="button" id="offSiteSkipBtn"
+            class="hidden mt-3 w-full text-[11px] font-bold text-gray-500 py-2 underline underline-offset-2 hover:text-gray-700">
+            略過離場說明，關閉視窗
+        </button>
     </div>
 
     <!-- 權限引導彈窗 [v2026.3.28] -->
@@ -521,11 +542,9 @@
          */
         const AppOffSite = {
             sites: [],
-            presets: [],
+            presets: CONSTANTS.OFF_SITE_REASON_PRESETS.slice(),
             selectedTags: new Set(),
-            pendingPosition: null,
             isInitialized: false,
-            initPromise: null,
             firstAttemptDone: false,
             siteFetchState: 'idle',
             bgRetryCount: 0,
@@ -556,20 +575,6 @@
                 if (!AppOffSite.sites.length) return false;
                 return min <= CONSTANTS.OFF_SITE_VALID_METERS;
             },
-            async loadPresets() {
-                try {
-                    const data = await AppAPI.request({
-                        page: 'attendance_api',
-                        action: 'get_off_site_reason_presets'
-                    });
-                    if (data && data.presets && data.presets.length) {
-                        AppOffSite.presets = data.presets;
-                        AppStorage.save('checkin_presets_cache', data.presets, 30);
-                    }
-                } catch (e) {
-                    console.warn('[OffSite] loadPresets', e);
-                }
-            },
             async loadSites() {
                 try {
                     const data = await AppAPI.request({
@@ -586,22 +591,10 @@
                 }
                 return AppOffSite.hasSitesData();
             },
-            async init() {
-                const cachedPresets = AppStorage.load('checkin_presets_cache');
-                if (cachedPresets) AppOffSite.presets = cachedPresets;
-                const cachedSites = AppStorage.load('checkin_sites_cache');
-                if (cachedSites && cachedSites.length) {
-                    AppOffSite.sites = cachedSites;
-                    AppOffSite.isInitialized = true;
-                }
-
-                if (AppOffSite.initPromise) return AppOffSite.initPromise;
-                if (!navigator.onLine) return;
-
-                AppOffSite.initPromise = Promise.all([AppOffSite.loadPresets(), AppOffSite.loadSites()]).then(() => {
-                    AppOffSite.isInitialized = true;
-                });
-                await AppOffSite.initPromise;
+            async fetchSitesOnce() {
+                await AppOffSite.loadSites();
+                AppOffSite.isInitialized = true;
+                return AppOffSite.hasSitesData();
             },
             markSitesAnomalyAuto() {
                 AppOffSite.selectedTags.clear();
@@ -624,11 +617,6 @@
                     firstAttemptDone: AppOffSite.firstAttemptDone,
                     noSitesAtClick: !AppOffSite.hasSitesData()
                 };
-            },
-            async fetchSitesOnce() {
-                await Promise.all([AppOffSite.loadPresets(), AppOffSite.loadSites()]);
-                AppOffSite.isInitialized = true;
-                return AppOffSite.hasSitesData();
             },
             /** 方案 A：有快取也背景更新（stale-while-revalidate），失敗則沿用舊快取 */
             refreshSitesInBackground(options = {}) {
@@ -745,8 +733,6 @@
             },
             startSiteSyncOnPageLoad() {
                 const cachedSites = AppStorage.load('checkin_sites_cache');
-                const cachedPresets = AppStorage.load('checkin_presets_cache');
-                if (cachedPresets) AppOffSite.presets = cachedPresets;
                 if (cachedSites && cachedSites.length) {
                     AppOffSite.sites = cachedSites;
                     AppOffSite.isInitialized = true;
@@ -785,13 +771,17 @@
                 const panel = document.getElementById('offSitePanel');
                 if (panel) panel.classList.add('hidden');
             },
-            buildPayloadParams(isOffSite) {
+            buildPrimaryPayloadParams(isOffSite) {
+                const biz = isOffSite ? CONSTANTS.ANOMALY_MISSING : '';
+                return { offSiteAnomaly: AppActionLog.buildOffSiteAnomaly(biz) };
+            },
+            buildReasonUpdateParams() {
                 const noteEl = document.getElementById('offSiteReasonNote');
                 const note = noteEl ? noteEl.value.trim() : '';
                 const tags = Array.from(AppOffSite.selectedTags);
-                const businessAnomaly = AppActionLog.resolveBusinessAnomaly(isOffSite, tags, note);
+                const businessAnomaly = AppActionLog.resolveBusinessAnomaly(true, tags, note);
                 const out = {
-                    offSiteAnomaly: AppActionLog.buildOffSiteAnomaly(businessAnomaly)
+                    offSiteAnomaly: AppActionLog.buildOffSiteAnomaly(businessAnomaly || CONSTANTS.ANOMALY_MISSING)
                 };
                 if (tags.length) out.offSiteReasonTags = JSON.stringify(tags);
                 if (note) out.offSiteReasonNote = note;
@@ -799,7 +789,6 @@
             },
             reset() {
                 AppOffSite.selectedTags.clear();
-                AppOffSite.pendingPosition = null;
                 const noteEl = document.getElementById('offSiteReasonNote');
                 if (noteEl) noteEl.value = '';
                 AppOffSite.hidePanel();
@@ -900,11 +889,18 @@
                 let remaining = q;
                 for (const item of q) {
                     try {
-                        const res = await AppAPI.dispatch(item);
-                        if (res.status === 'success') {
+                        let ok = false;
+                        if (item.action === 'update_off_site_reason') {
+                            const res = await AppAPI.request(item);
+                            ok = res && res.success === true;
+                        } else {
+                            const res = await AppAPI.dispatch(item);
+                            ok = res && res.status === 'success';
+                        }
+                        if (ok) {
                             remaining = remaining.filter(r => r.timestamp !== item.timestamp);
                         }
-                    } catch (e) { break; } // 網絡不通則停止同步
+                    } catch (e) { break; }
                 }
                 AppStorage.saveQueue(remaining);
             }
@@ -1020,8 +1016,8 @@
         /** @core AppCore - 業務啟動與狀態機 (承重牆)
          * 【單頁單次規則】
          * 1. 每次開啟 LIFF 頁面 = 一次打卡機會。
-         * 2. 按「立即打卡」即啟動流程；定位失敗／送出失敗／成功後皆結束本頁，禁止再次打卡。
-         * 3. 離場時僅多一步「確認打卡」；仍屬同一次流程。
+         * 2. 按「立即打卡」→ 定位 → **立即送出打卡**（第一次傳送）。
+         * 3. 若不在案場：可選填離場說明（第二次傳送）；不填亦有打卡紀錄。
          * 4. 要再打卡必須關閉視窗後重新開啟（新 pageInstance）。
          */
         const AppCore = {
@@ -1029,6 +1025,9 @@
             pageFlowStarted: false,
             pageSessionEnded: false,
             pageInstance: null,
+            checkinClientTimestamp: null,
+            awaitingOffSiteReason: false,
+            primaryResultMessage: '',
             formatFailMessage: (title, reason, extraSteps) => {
                 const steps = (extraSteps && extraSteps.length) ? extraSteps : CONSTANTS.FAIL_REOPEN_STEPS;
                 const stepLines = steps.map((s, i) => `${i + 1}. ${s}`).join('<br>');
@@ -1068,6 +1067,8 @@
                 document.getElementById('app-version').textContent = CONSTANTS.VERSION;
                 const histToggle = document.getElementById('history-toggle');
                 if (histToggle) histToggle.onclick = () => AppUI.toggleHistoryList();
+                const skipBtn = document.getElementById('offSiteSkipBtn');
+                if (skipBtn) skipBtn.onclick = () => AppCore.skipOffSiteReason();
                 const updateNet = () => AppUI.updateIndicator('network', navigator.onLine ? 'success' : 'error', navigator.onLine ? '連線正常' : '已離線');
                 updateNet(); window.ononline = window.onoffline = updateNet;
                 AppOffSite.startSiteSyncOnPageLoad();
@@ -1127,20 +1128,16 @@
             },
             /** 生命週期：執行打卡動作 */
             execute: async () => {
-                // 流程已結束或按鈕已鎖：按鈕應為 disabled，此處僅防極少數連點 race，不另顯示訊息
                 if (AppCore.pageSessionEnded || AppCore.isLocked) return;
 
-                const btn = document.getElementById('checkin-button');
-
-                if (AppOffSite.pendingPosition) {
-                    AppActionLog.log('點擊確認打卡');
-                    await AppCore.submitCheckin(AppOffSite.pendingPosition, true);
+                if (AppCore.awaitingOffSiteReason) {
+                    await AppCore.submitOffSiteReason();
                     return;
                 }
 
-                // 已啟動過且非離場確認：同上，靜默忽略
                 if (AppCore.pageFlowStarted) return;
 
+                const btn = document.getElementById('checkin-button');
                 AppCore.pageFlowStarted = true;
                 AppActionLog.log('點擊立即打卡');
                 AppCore.isLocked = true;
@@ -1156,7 +1153,6 @@
                     const lat = pos.coords.latitude;
                     const lon = pos.coords.longitude;
 
-                    // 案場仍在首次載入時，定位後再等一輪（不阻擋已逾時可打卡的設計）
                     if (!AppOffSite.hasSitesData() && AppOffSite.siteFetchState === 'loading') {
                         AppActionLog.log('打卡前等待案場');
                         AppUI.setLoading(true, '同步案場資訊...');
@@ -1167,29 +1163,12 @@
                         AppUI.setLoading(true, '確認經緯座標...');
                     }
 
-                    const snapshot = AppOffSite.getSnapshot();
-
-                    if (!AppOffSite.isOnSite(lat, lon)) {
-                        AppActionLog.log(snapshot.noSitesAtClick ? '離場流程-無案場清單' : '離場流程-距離外');
-                        if (snapshot.noSitesAtClick) AppOffSite.markSitesAnomalyAuto();
-                        AppOffSite.pendingPosition = pos;
-                        AppOffSite.showPanel();
-                        AppUI.setLoading(false);
-                        AppUI.updateMessage(
-                            snapshot.noSitesAtClick
-                                ? '無法取得案場清單，已預選「案場資訊異常」。<br>請按「確認打卡」送出。'
-                                : '您不在案場範圍內。<br>可選原因後按「確認打卡」；不填將標記離場未填說明。',
-                            'text-amber-800 font-medium'
-                        );
-                        btn.disabled = false;
-                        btn.textContent = '確認打卡';
-                        btn.classList.add('btn-pulse');
-                        AppCore.isLocked = false;
-                        return;
+                    const isOffSiteFe = !AppOffSite.isOnSite(lat, lon);
+                    if (!AppOffSite.hasSitesData() && isOffSiteFe) {
+                        AppOffSite.markSitesAnomalyAuto();
                     }
-
-                    AppActionLog.log('在案場內');
-                    await AppCore.submitCheckin(pos, false);
+                    AppActionLog.log(isOffSiteFe ? '判定離場-先送打卡' : '在案場內-送打卡');
+                    await AppCore.submitCheckinPrimary(pos, isOffSiteFe);
                 } catch (err) {
                     AppActionLog.log('定位失敗');
                     AppUI.updateIndicator('gps', 'error', '定位失敗');
@@ -1225,40 +1204,131 @@
                     AppCore.endPageSession(detail, 'text-red-800');
                 }
             },
-            /** 定位完成後送出打卡（含離場說明參數） */
-            submitCheckin: async (pos, isOffSite) => {
+            /** 第一次傳送：定位後立即打卡（不含離場原因，離場時僅標記未填） */
+            submitCheckinPrimary: async (pos, isOffSiteFe) => {
                 if (AppCore.pageSessionEnded) return;
-                AppCore.pageSessionEnded = true;
-                AppCore.isLocked = true;
 
                 const btn = document.getElementById('checkin-button');
                 btn.disabled = true;
                 btn.textContent = '傳送中...';
                 btn.classList.remove('btn-pulse');
-                AppUI.setLoading(true, '正在傳送數據...');
+                AppUI.setLoading(true, '正在傳送打卡...');
                 AppActionLog.log('送出打卡');
 
+                AppCore.checkinClientTimestamp = Date.now();
                 const payload = {
                     userId: AppCore.user.userId,
                     userName: AppCore.user.displayName,
                     lat: pos.coords.latitude,
                     lon: pos.coords.longitude,
-                    clientTimestamp: Date.now(),
+                    clientTimestamp: AppCore.checkinClientTimestamp,
                     pageInstance: AppCore.pageInstance,
-                    ...AppOffSite.buildPayloadParams(isOffSite)
+                    ...AppOffSite.buildPrimaryPayloadParams(isOffSiteFe)
                 };
 
                 try {
                     const result = await AppAPI.dispatch(payload);
                     AppActionLog.log('送出成功');
+                    if (result.status !== 'success' || (result.message && result.message.includes('失敗'))) {
+                        AppCore.finalize(result);
+                        return;
+                    }
+
+                    AppCore.primaryResultMessage = result.message || '';
+                    AppStorage.addHistory({
+                        message: result.message,
+                        isOffline: false,
+                        pageInstance: AppCore.pageInstance
+                    });
+                    AppUI.renderHistory();
+
+                    const needReason = result.onSite === false;
+                    if (needReason) {
+                        AppCore.awaitingOffSiteReason = true;
+                        AppCore.isLocked = false;
+                        AppUI.setLoading(false);
+                        AppOffSite.showPanel();
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.textContent = '送出離場說明';
+                            btn.classList.add('btn-pulse');
+                        }
+                        const skipBtn = document.getElementById('offSiteSkipBtn');
+                        if (skipBtn) skipBtn.classList.remove('hidden');
+                        AppUI.updateMessage(
+                            `${AppCore.primaryResultMessage}<br><br><span class="text-amber-800 font-medium">打卡已記錄。可選填離場說明，或按下方略過直接關閉。</span>`,
+                            'text-green-800'
+                        );
+                        return;
+                    }
+
                     AppOffSite.reset();
                     AppCore.finalize(result);
                 } catch (e) {
                     AppActionLog.log('送出離線暫存');
-                    AppStorage.addToQueue(payload);
+                    AppStorage.addToQueue({ ...payload, timestamp: Date.now() });
                     AppOffSite.reset();
                     AppCore.finalize({ status: 'success', message: '打卡成功！\n(紀錄已暫存，雲端將自動補傳)' });
                 }
+            },
+            /** 第二次傳送：補寫離場說明（選填） */
+            submitOffSiteReason: async () => {
+                if (!AppCore.awaitingOffSiteReason || AppCore.pageSessionEnded) return;
+                AppCore.isLocked = true;
+                const btn = document.getElementById('checkin-button');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = '傳送中...';
+                    btn.classList.remove('btn-pulse');
+                }
+                AppUI.setLoading(true, '正在傳送離場說明...');
+                AppActionLog.log('送出離場說明');
+
+                const payload = {
+                    page: 'attendance_api',
+                    action: 'update_off_site_reason',
+                    userId: AppCore.user.userId,
+                    clientTimestamp: AppCore.checkinClientTimestamp,
+                    ...AppOffSite.buildReasonUpdateParams()
+                };
+
+                try {
+                    const res = await AppAPI.request(payload);
+                    if (res && res.success) {
+                        AppActionLog.log(res.pending ? '離場說明已排隊' : '離場說明成功');
+                    } else {
+                        AppActionLog.log('離場說明失敗');
+                    }
+                } catch (e) {
+                    AppActionLog.log('離場說明離線暫存');
+                    AppStorage.addToQueue({ ...payload, timestamp: Date.now() });
+                }
+                AppCore.completeOffSiteFlow();
+            },
+            skipOffSiteReason: () => {
+                if (!AppCore.awaitingOffSiteReason || AppCore.pageSessionEnded) return;
+                AppActionLog.log('略過離場說明');
+                AppCore.completeOffSiteFlow();
+            },
+            completeOffSiteFlow: () => {
+                AppCore.awaitingOffSiteReason = false;
+                AppCore.pageSessionEnded = true;
+                AppCore.isLocked = true;
+                AppOffSite.reset();
+                const skipBtn = document.getElementById('offSiteSkipBtn');
+                if (skipBtn) skipBtn.classList.add('hidden');
+                const btn = document.getElementById('checkin-button');
+                if (btn) {
+                    btn.textContent = '打卡完成';
+                    btn.className = 'w-full bg-gray-200 text-gray-400 font-bold py-5 px-6 rounded-xl text-xl cursor-not-allowed transform-none shadow-none';
+                    btn.disabled = true;
+                }
+                AppUI.setLoading(false);
+                AppUI.updateMessage(
+                    `${AppCore.primaryResultMessage}<br><span class="text-[9px] text-gray-400 mt-2 block italic font-bold">視窗將於 45 秒後自動關閉，亦可手動關閉視窗</span><br><span class="text-[9px] text-gray-400 block">${CONSTANTS.PAGE_SESSION_END_MSG}</span>`,
+                    'text-green-800'
+                );
+                setTimeout(() => { if (liff.closeWindow) liff.closeWindow(); }, CONSTANTS.TIMEOUTS.AUTO_CLOSE);
             },
             /** 生命週期：處理結果與結算 */
             finalize: (res, isSilentInit = false) => {
