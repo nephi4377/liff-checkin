@@ -4,7 +4,7 @@ import {
     buildPresenceMapUrl,
     buildPresenceLocationLabel,
     computeLateMinutes
-} from '../shared/js/utils.js';
+} from '../shared/js/utils.js?v=26.07.24.1';
 
 const pad2 = (n) => String(n).padStart(2, '0');
 const formatDateStr = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;

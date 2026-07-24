@@ -1,10 +1,10 @@
-import Dashboard from './Dashboard.js?v=26.07.19.1';
+import Dashboard from './Dashboard.js?v=26.07.24.1';
 import ProjectBoard from './ProjectBoard.js';
-import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.06.21.6';
+import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.07.24.1';
 import HubLeftSidebar from './HubLeftSidebar.js?v=26.06.21.5';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
-import { saveCache, loadCache, loadHubPresenceCache, saveHubPresenceCache, loadDailyCache, saveDailyCache, purgeStaleDailyCaches, hubSidebarDailyCacheKey, hubPresenceTodayStr } from '../shared/js/utils.js';
+import { saveCache, loadCache, loadHubPresenceCache, saveHubPresenceCache, loadDailyCache, saveDailyCache, purgeStaleDailyCaches, hubSidebarDailyCacheKey, hubPresenceTodayStr } from '../shared/js/utils.js?v=26.07.24.1';
 import { request as apiRequest } from '../modules/projects/js/projectApi.js'; // [重構] 改為引入統一的 projectApi 模組
 import { initializeTaskSender } from '../shared/js/taskSender.js'; // [v509.0 修正] 更新共用模組路徑
 
@@ -334,13 +334,16 @@ const App = {
             }, HUB_PRESENCE_POLL_MS);
         };
 
+        // 權限 2+ 可見「人員出席」燈號；不可只限權限 4+，否則一般員工會因無資料而誤顯示紅燈
+        const canViewPresenceLights = computed(() => Number(currentUser.value?.permission || 0) >= 2);
+
         const syncPresenceRefreshForView = (viewName) => {
-            if (viewName === 'dashboard' && hasAdminRights.value) {
+            if (viewName === 'dashboard' && canViewPresenceLights.value) {
                 refreshTodayPresenceInBackground();
                 startPresencePolling();
             } else {
                 stopPresencePolling();
-                if (hasAdminRights.value) {
+                if (canViewPresenceLights.value) {
                     refreshTodayPresenceInBackground();
                 }
             }
@@ -613,9 +616,14 @@ const App = {
                         (attendanceResult.pendingAppeals?.length || 0);
                     // 將待審核假單原始資料留給「今日出勤」卡片使用（含 startTime/endTime）
                     pendingRequestsRaw.value = attendanceResult.pendingRequests || [];
+                    // 核心資料已含今日燈號；先套用，避免權限 2 尚未背景更新時誤顯紅燈
+                    if (attendanceResult.todayPresence && typeof attendanceResult.todayPresence === 'object') {
+                        todayPresence.value = attendanceResult.todayPresence;
+                        saveHubPresenceCache(attendanceResult.todayPresence);
+                    }
                 }
 
-                // 今日燈號：SWR（先顯示快取，背景抓最新；主控台另每 30 分更新）
+                // 今日燈號：SWR（先顯示快取／核心資料，背景抓最新；主控台另每 30 分更新）
                 syncPresenceRefreshForView(currentView.value.name);
 
                 // 主控台側欄：今日回報、款項待辦（SWR + 每日快取）
@@ -730,7 +738,7 @@ const App = {
         // 將監聽器放在 setup 函式的頂層，確保它只被註冊一次。
         window.addEventListener('message', handleIframeMessage);
 
-        watch([hasAdminRights, currentView], ([isAdmin, view]) => {
+        watch([canViewPresenceLights, currentView], ([, view]) => {
             syncPresenceRefreshForView(view?.name || 'dashboard');
         });
 

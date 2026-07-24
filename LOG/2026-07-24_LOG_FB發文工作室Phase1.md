@@ -24,6 +24,8 @@
 
 | 項目 | 值 |
 |------|-----|
-| 狀態 | 待 `upload.bat`（NONINTERACTIVE） |
-| 預期 BAK | `../BAK/CODING_YYYYMMDD_HHmm_<電腦名>/` |
-| 預期 URL | `https://info.tanxin.space/tools/fb-post-studio/` |
+| 狀態 | **已上線**（2026-07-24 17:38） |
+| CODING commit | `586a587`（`v26.07.01.1` / `20260724_1738`） |
+| BAK | `BAK/CODING_20260724_1738_TX34` |
+| 正式 URL | `https://info.tanxin.space/tools/fb-post-studio/`（目錄與 `index.html` 皆 200） |
+| 抽測 | 頁面可開；LOGO 若用 placeholder 見 `assets/README.md` |

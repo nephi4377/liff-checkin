@@ -956,8 +956,9 @@ var AccountingApi = (function () {
       if (!auth.success) throw new Error(auth.message || '驗證失敗');
       return { devBypass: false, profile: profile, idToken: idToken, auth: auth };
     },
-    /** policy 開 authBypass 時略過 LIFF；否則走 initLiff */
+    /** policy 開 authBypass 時略過 LIFF；否則走 initLiff。門檻預設 ≥4（財務頁）；選單／日常頁請傳 minPermission */
     initSession: async function (opts) {
+      opts = opts || {};
       var policy = await AccountingApi.loadPolicy();
       var session;
       if (policy.authBypass) {
@@ -969,8 +970,15 @@ var AccountingApi = (function () {
         session = await AccountingApi.initLiff(opts);
       }
       if (!session) return null;
-      if ((session.auth.permission || 0) < MIN_PERMISSION) {
-        throw new Error(PERM_DENIED_MSG);
+      var minPerm = opts.minPermission != null ? opts.minPermission : MIN_PERMISSION;
+      if ((session.auth.permission || 0) < minPerm) {
+        var denied = opts.deniedMsg;
+        if (!denied) {
+          if (minPerm >= MIN_PERMISSION) denied = PERM_DENIED_MSG;
+          else if (minPerm >= INGEST_MIN_PERMISSION) denied = INGEST_PERM_DENIED_MSG;
+          else denied = '權限不足（需權限 ≥ ' + minPerm + '）';
+        }
+        throw new Error(denied);
       }
       notifyUiOperator_(session);
       return session;

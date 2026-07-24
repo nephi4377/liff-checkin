@@ -1,5 +1,5 @@
 const { ref, computed } = Vue;
-import { resolvePresenceDotClass } from '../shared/js/utils.js';
+import { resolvePresenceDotClass } from '../shared/js/utils.js?v=26.07.24.1';
 
 export default {
     name: 'Dashboard',

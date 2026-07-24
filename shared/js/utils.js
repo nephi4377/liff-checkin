@@ -313,7 +313,7 @@ export function saveHubPresenceCache(presence) {
 
 /**
  * 出席 chip 側邊燈號 class；僅「上班／加班」顯示，休假不顯示。
- * 應上班且尚無打卡資料時先顯示紅燈（含隔日無快取、背景更新中）。
+ * 背景更新中可暫顯紅燈；若尚無燈號資料則不顯示（避免權限不足／尚未載入時誤判未打卡）。
  */
 export function resolvePresenceDotClass({ dayKey, statusKind, presence, presenceLoading }) {
   if (dayKey !== 'today') return 'presence-none';
@@ -321,7 +321,8 @@ export function resolvePresenceDotClass({ dayKey, statusKind, presence, presence
   if (statusKind !== 'work' && statusKind !== 'overtime') return 'presence-none';
   const p = presence;
   if (p && p.light && p.light !== 'none') return `presence-${p.light}`;
-  if (presenceLoading || !p || !p.hasCheckIn) return 'presence-red';
+  if (presenceLoading) return 'presence-red';
+  if (p && !p.hasCheckIn) return 'presence-red';
   return 'presence-none';
 }
 

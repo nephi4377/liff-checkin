@@ -73,8 +73,10 @@ var AccountingBoot = (function () {
     if (typeof AccountingNav !== 'undefined') AccountingNav.init();
     if (typeof AccountingUi !== 'undefined') AccountingUi.action('啟動頁面', 'start');
     traceProgress('檢查本機登入…');
-    var initFn = opts.initSession || function () { return AccountingApi.initSession(); };
     var minPerm = opts.minPermission != null ? opts.minPermission : AccountingApi.MIN_PERMISSION;
+    var initOpts = { minPermission: minPerm, deniedMsg: opts.deniedMsg, authAction: opts.authAction };
+    var initFn = opts.initSession || function (bootOpts) { return AccountingApi.initSession(bootOpts); };
+    var runInit = function () { return initFn(initOpts); };
 
     var cached = null;
     if (typeof AccountingApi.tryCachedSession === 'function') {
@@ -112,7 +114,7 @@ var AccountingBoot = (function () {
         }
         if (typeof opts.onReady === 'function') await opts.onReady(cached);
         traceProgress('背景重新驗證身分…');
-        backgroundRevalidate(initFn, cached, opts);
+        backgroundRevalidate(runInit, cached, opts);
         return cached;
       } catch (eCachedRun) {
         setLoading(eCachedRun.message || String(eCachedRun));
@@ -123,7 +125,7 @@ var AccountingBoot = (function () {
 
     try {
       traceProgress('向後端驗證身分…');
-      var session = await initFn();
+      var session = await runInit();
       if (!session) return null;
       if ((session.auth.permission || 0) < minPerm) {
         throw new Error(opts.deniedMsg || AccountingApi.PERM_DENIED_MSG);

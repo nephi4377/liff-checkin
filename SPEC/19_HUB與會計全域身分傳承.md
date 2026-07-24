@@ -53,7 +53,7 @@
 |------|----------|------|----------|------|
 | **`userId`** | Checkin `員工資料.userId` | 稽核、請款 `reviewed_by` 關聯、快取 key | ① HUB iframe URL：`uid`；② `sessionStorage`：`acct_dev_user`（過渡）／目標 `tanxin_operator_v1`；③ 正式會計：`liff_id_token` 僅記憶體，**不寫入 localStorage** | URL：僅當次導向；sessionStorage：**到分頁關閉**；token：LIFF 效期（約 1 小時內） |
 | **`userName`／`displayName`** | Checkin `userName` 或 LIFF profile | 畫面顯示、稽核欄位 | ① URL：`name`；② 與 operator 一併快取 | 同 `userId` |
-| **`permission`** | Checkin「權限」欄（1–5） | 會計 ≥4 進財務、≥5 核准請款 | ① URL：`permission`；② `sessionStorage`：`tanxin_operator_v1`（含 legacy `acct_dev_perm`）；③ 正式：每次 `accounting_auth_me` 由後端查表 | sessionStorage 到分頁關閉；後端 ScriptCache `acct_emp_{userId}` **6 小時** |
+| **`permission`** | Checkin「權限」欄（1–5） | 會計選單／日常 ≥2、財務頁 ≥4、核准請款 ≥5 | ① URL：`permission`；② `sessionStorage`：`tanxin_operator_v1`（含 legacy `acct_dev_perm`）；③ 正式：每次 `accounting_auth_me` 由後端查表 | sessionStorage 到分頁關閉；後端 ScriptCache `acct_emp_{userId}` **6 小時** |
 | **`hubLiffId`**（選填） | HUB 官方 LIFF Channel ID（`config.js` `HUB_LIFF_ID`） | 會計 iframe 向父層 `postMessage` 索取 `id_token` 時辨識 Channel | ① URL：`hub_liff_id`；② `tanxin_operator_v1.hubLiffId` | 同 operator；**不寫 localStorage** |
 | **`group`**（選填） | Checkin 員工分組 | HUB 任務交辦、部分篩選 | URL 可擴充；或 HUB `spa_hub_employees` 內含 | 見 §2.2 |
 | **`status`／身份**（選填） | Checkin「身份」 | 離職拒登、廠商／員工區分 | **僅後端**查表，不建議前端快取當授權依據 | GAS 員工 cache 6 小時 |

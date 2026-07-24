@@ -1,6 +1,7 @@
 # FB 發文工作室 — 開發規格書（Phase 1）
 
-> **狀態**：Phase 1 待部署／上線（人工發文：文案＋AI 改圖＋Canvas 精修）  
+> **狀態**：Phase 1 已上線（人工發文：文案＋AI 改圖＋Canvas 精修）  
+> **正式網址**：https://info.tanxin.space/tools/fb-post-studio/  
 > **前端**：`CODING/tools/fb-post-studio/`  
 > **後端**：`backend/accounting-gas/FbPostStudio.js`（經 `WebApp.js` 路由）  
 > **粉專**：https://www.facebook.com/TainanTanXin  
