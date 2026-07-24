@@ -19,6 +19,8 @@ window.FB_POST_STUDIO_CONFIG = {
   FB_PAGE_URL: 'https://www.facebook.com/TainanTanXin',
   STORAGE_KEY: 'tx_fb_post_studio_v1',
   COPY_HISTORY_KEY: 'tx_fb_post_studio_copy_history_v1',
+  STICKER_DB_KEY: 'tx_fb_post_studio_stickers_v1',
+  STICKER_MAX: 40,
 
   /** 語氣選項（預設活潑親切） */
   TONE_OPTIONS: [
@@ -27,6 +29,64 @@ window.FB_POST_STUDIO_CONFIG = {
     { value: '輕鬆聊天', label: '輕鬆聊天' },
     { value: '正式簡潔', label: '正式簡潔' }
   ],
+
+  /**
+   * 文案標籤（可多選組合）— 對齊改圖標籤 UX
+   * 合成順序：prefix → middle → suffix → 自由補充（extra_notes）
+   * 與類型／語氣一併送後端 fb_post_generate
+   */
+  COPY_TAGS: {
+    prefix: [
+      { id: 'hook', label: '開場鉤子', text: '開頭用一句吸睛鉤子抓住滑動中的讀者' },
+      { id: 'finish_joy', label: '完工喜悅', text: '帶出完工喜悅與交付成就感' },
+      { id: 'warm_daily', label: '溫馨日常', text: '溫馨日常、居家生活感' },
+      { id: 'consult_pro', label: '專業諮詢感', text: '偏專業諮詢、可信賴的室內設計顧問口吻' },
+      { id: 'promo_limit', label: '促銷限時', text: '帶出限時／活動感（勿虛構不實優惠）' },
+      { id: 'story', label: '故事敘事', text: '用簡短故事帶出空間改變' }
+    ],
+    middle: [
+      { id: 'space_highlight', label: '空間亮點', text: '著重空間動線與視覺亮點' },
+      { id: 'material', label: '材質工法', text: '說明材質與工法細節（依圖實寫，勿瞎掰）' },
+      { id: 'lifestyle', label: '生活場景', text: '連結真實生活使用場景' },
+      { id: 'before_after', label: '前後對比', text: '若有對比感，輕描前後差異（勿造假）' },
+      { id: 'client_feel', label: '客戶感受', text: '描述住起來的感受（禁止洩漏真實姓名／地址／電話等個資）' },
+      { id: 'storage', label: '實用收納', text: '強調實用收納與生活機能' },
+      { id: 'light', label: '採光氛圍', text: '突出採光、燈光與氛圍' }
+    ],
+    suffix: [
+      { id: 'cta_line', label: 'CTA 加 LINE', text: '結尾 CTA 邀請加入官方 LINE 諮詢' },
+      { id: 'cta_fb', label: 'CTA 私訊粉專', text: '結尾 CTA 邀請私訊粉專了解' },
+      { id: 'cta_measure', label: '邀請預約丈量', text: '結尾邀請預約丈量或到府諮詢' },
+      { id: 'htag_more', label: 'hashtag 偏多', text: 'hashtags 可偏多（約 6～8 個）' },
+      { id: 'htag_less', label: 'hashtag 精簡', text: 'hashtags 精簡（約 3～5 個）' },
+      { id: 'tone_casual', label: '語氣更口語', text: '語氣再更口語、像跟朋友聊天' },
+      { id: 'tone_pro', label: '語氣更專業', text: '語氣再更專業穩重，仍保持親切' },
+      { id: 'emoji_soft', label: '適度 emoji', text: '適度穿插 emoji，不要整篇貼滿' }
+    ]
+  },
+
+  /**
+   * 短影音 S1（瀏覽器合成；ffmpeg.wasm 走 CDN，不進 git）
+   */
+  REEL: {
+    WIDTH: 720,
+    HEIGHT: 1280,
+    MIN_SLIDES: 2,
+    MAX_SLIDES: 10,
+    SEC_PER_SLIDE: 2.4,
+    FPS: 24,
+    MAX_TOTAL_SEC: 28,
+    FFMPEG_CORE_BASE: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd',
+    FFMPEG_JS: 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js',
+    FFMPEG_UTIL: 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js',
+    /** 內建 BGM：瀏覽器程序生成，無二進位資產 */
+    BGM_PRESETS: [
+      { id: 'off', label: '無音樂' },
+      { id: 'soft', label: '輕柔氛圍（內建）' },
+      { id: 'warm', label: '溫暖居家（內建）' },
+      { id: 'bright', label: '明亮節奏（內建）' }
+    ]
+  },
 
   /**
    * AI 改圖標籤（可多選組合）
