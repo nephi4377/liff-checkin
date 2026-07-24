@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>添心 · FB 發文工作室</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg0: #0b1220; --bg1: #141f33; --card: rgba(22, 32, 52, 0.88);
+      --border: rgba(255,255,255,0.08); --text: #f1f5f9; --muted: #94a3b8;
+      --primary: #60a5fa; --primary-d: #3b82f6; --ok: #34d399; --warn: #fbbf24; --bad: #f87171;
+      --input: rgba(8, 14, 26, 0.65); --accent: #38bdf8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: linear-gradient(145deg, var(--bg0), var(--bg1));
+      color: var(--text); min-height: 100vh; padding: 1.25rem;
+    }
+    h1 {
+      font-family: Outfit, sans-serif; font-size: 1.7rem;
+      background: linear-gradient(90deg, #7dd3fc, #93c5fd);
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .wrap { max-width: 1280px; margin: 0 auto; }
+    .sub { color: var(--muted); font-size: 0.9rem; margin-top: 0.35rem; line-height: 1.5; }
+    .sub a { color: var(--accent); }
+    .grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 1rem; margin-top: 1.1rem; }
+    @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+      padding: 1rem 1.1rem; margin-bottom: 1rem; backdrop-filter: blur(10px);
+    }
+    .card h2 {
+      font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem;
+      display: flex; align-items: center; gap: 0.45rem;
+    }
+    .card h2 i { color: var(--primary); }
+    .step-hint { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.75rem; line-height: 1.5; }
+    .field { margin-bottom: 0.75rem; }
+    label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 0.3rem; }
+    input, select, textarea {
+      width: 100%; background: var(--input); border: 1px solid var(--border);
+      color: var(--text); border-radius: 8px; padding: 0.55rem 0.65rem; font-size: 0.88rem;
+    }
+    textarea { min-height: 96px; resize: vertical; }
+    input:focus, select:focus, textarea:focus {
+      outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; }
+    @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+      border: none; border-radius: 8px; padding: 0.6rem 1rem; font-weight: 600;
+      font-size: 0.88rem; cursor: pointer;
+    }
+    .btn-primary { background: var(--primary-d); color: #fff; width: 100%; }
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.06); }
+    .btn-secondary {
+      background: rgba(255,255,255,0.06); color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .inline-btns { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .inline-btns .btn { width: auto; flex: 1; min-width: 120px; }
+    .upload {
+      border: 2px dashed var(--border); border-radius: 10px; padding: 1.1rem;
+      text-align: center; color: var(--muted); cursor: pointer; font-size: 0.85rem;
+    }
+    .upload:hover, .upload.drag { border-color: var(--primary); color: var(--text); }
+    .preview-box {
+      margin-top: 0.65rem; border-radius: 10px; overflow: hidden;
+      border: 1px solid var(--border); background: #000; min-height: 120px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .preview-box img { max-width: 100%; max-height: 320px; display: block; object-fit: contain; }
+    .preview-empty { color: var(--muted); font-size: 0.85rem; padding: 2rem; }
+    .preset-grid { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.65rem; }
+    .chip {
+      border: 1px solid var(--border); background: transparent; color: var(--muted);
+      padding: 0.35rem 0.7rem; border-radius: 999px; cursor: pointer;
+      font-size: 0.78rem; font-weight: 600;
+    }
+    .chip:hover, .chip.active {
+      color: var(--primary); border-color: rgba(96,165,250,0.45);
+      background: rgba(59,130,246,0.12);
+    }
+    .compare {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem;
+    }
+    @media (max-width: 600px) { .compare { grid-template-columns: 1fr; } }
+    .compare figure {
+      border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #000;
+    }
+    .compare figcaption {
+      font-size: 0.72rem; color: var(--muted); padding: 0.35rem 0.5rem;
+      background: rgba(0,0,0,0.45);
+    }
+    .compare img { width: 100%; max-height: 240px; object-fit: contain; display: block; }
+    .versions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+    .ver-btn {
+      border: 1px solid var(--border); background: rgba(0,0,0,0.2); color: var(--muted);
+      border-radius: 8px; padding: 0.25rem; cursor: pointer;
+    }
+    .ver-btn.active { border-color: var(--primary); color: var(--text); }
+    .ver-btn img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; display: block; }
+    .warn-box {
+      background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3);
+      color: #fde68a; padding: 0.55rem 0.7rem; border-radius: 8px;
+      font-size: 0.8rem; margin-bottom: 0.75rem; line-height: 1.45;
+    }
+    .err {
+      display: none; background: rgba(248,113,113,0.12);
+      border: 1px solid rgba(248,113,113,0.35); color: #fecaca;
+      padding: 0.65rem; border-radius: 8px; margin-bottom: 0.75rem; font-size: 0.85rem;
+    }
+    .err.show { display: block; }
+    .ok-box {
+      display: none; background: rgba(52,211,153,0.1);
+      border: 1px solid rgba(52,211,153,0.3); color: #a7f3d0;
+      padding: 0.55rem 0.7rem; border-radius: 8px; margin-bottom: 0.75rem; font-size: 0.85rem;
+    }
+    .ok-box.show { display: block; }
+    .slider-row { display: grid; grid-template-columns: 72px 1fr 48px; gap: 0.5rem; align-items: center; margin-bottom: 0.45rem; font-size: 0.8rem; color: var(--muted); }
+    .slider-row input[type="range"] { width: 100%; accent-color: var(--primary); }
+    .hidden { display: none !important; }
+    .status-line { font-size: 0.78rem; color: var(--muted); margin-top: 0.5rem; }
+    .status-line.ok { color: var(--ok); }
+    .status-line.bad { color: var(--bad); }
+    .tags-preview { font-size: 0.82rem; color: var(--accent); margin-top: 0.35rem; word-break: break-word; }
+    canvas#edit-canvas { max-width: 100%; border-radius: 10px; border: 1px solid var(--border); background: #111; display: block; margin: 0 auto; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>添心 · FB 發文工作室</h1>
+      <p class="sub">
+        上傳原圖 → Gemini 文案＋AI 改圖 → Canvas 精修與疊 LOGO → 複製／下載，人工貼到
+        <a id="fb-page-link" href="https://www.facebook.com/TainanTanXin" target="_blank" rel="noopener">粉專</a>。
+        Phase 1 不自動發文。
+      </p>
+    </header>
+
+    <div id="err-box" class="err" role="alert"></div>
+    <div id="ok-box" class="ok-box"></div>
+
+    <div class="grid">
+      <div>
+        <!-- 1. 上傳 -->
+        <section class="card" id="section-upload">
+          <h2><i class="fa-solid fa-image"></i> ① 上傳原圖</h2>
+          <p class="step-hint">拖放或點選上傳；前端會壓縮至約 4MB 以內再送後端。</p>
+          <div class="upload" id="upload-zone">點選或拖放照片到這裡</div>
+          <input type="file" id="input-photo" accept="image/*" class="hidden">
+          <div class="preview-box" id="orig-preview">
+            <span class="preview-empty">尚未上傳</span>
+          </div>
+          <p class="status-line" id="upload-meta"></p>
+        </section>
+
+        <!-- 2. 文案 -->
+        <section class="card" id="section-copy">
+          <h2><i class="fa-solid fa-pen-nib"></i> ② 文案生成</h2>
+          <div class="row">
+            <div class="field">
+              <label>貼文類型</label>
+              <select id="post-type">
+                <option value="完工案例">完工案例</option>
+                <option value="設計分享">設計分享</option>
+                <option value="促銷">促銷</option>
+                <option value="日常">日常</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>語氣</label>
+              <input id="tone" type="text" value="專業溫暖" placeholder="例如：專業溫暖">
+            </div>
+          </div>
+          <div class="field">
+            <label>補充說明（選填）</label>
+            <textarea id="extra-notes" placeholder="例如：這是 776 案客廳完工，強調採光與收納"></textarea>
+          </div>
+          <button type="button" class="btn btn-primary" id="btn-generate-copy">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> 生成文案
+          </button>
+          <div class="field" style="margin-top:0.85rem">
+            <label>標題</label>
+            <input id="copy-headline" type="text" placeholder="生成後可編輯">
+          </div>
+          <div class="field">
+            <label>正文</label>
+            <textarea id="copy-body" placeholder="生成後可編輯"></textarea>
+          </div>
+          <div class="field">
+            <label>Hashtags（空白或逗號分隔）</label>
+            <input id="copy-hashtags" type="text" placeholder="#添心設計 #台南室內設計">
+            <div class="tags-preview" id="tags-preview"></div>
+          </div>
+          <div class="field">
+            <label>CTA</label>
+            <input id="copy-cta" type="text" placeholder="行動呼籲">
+          </div>
+          <div class="field">
+            <label>畫面備註（內部）</label>
+            <input id="copy-image-notes" type="text" readonly>
+          </div>
+          <div class="inline-btns">
+            <button type="button" class="btn btn-secondary" id="btn-copy-text">
+              <i class="fa-regular fa-copy"></i> 一鍵複製貼文
+            </button>
+            <button type="button" class="btn btn-ghost" id="btn-open-fb">
+              <i class="fa-brands fa-facebook"></i> 開粉專
+            </button>
+          </div>
+        </section>
+
+        <!-- 3. AI 改圖 -->
+        <section class="card" id="section-edit-ai">
+          <h2><i class="fa-solid fa-wand-magic-sparkles"></i> ③ AI 改圖</h2>
+          <div class="warn-box">
+            AI 改圖可能改變細節，完工案例發文前請人工確認。每次請求約消耗 <strong>1 次改圖</strong>。
+            LOGO 請用下方精修疊加，不要叫 AI 畫品牌字。
+          </div>
+          <div class="preset-grid" id="preset-grid"></div>
+          <div class="field">
+            <label>改圖指令</label>
+            <textarea id="edit-instruction" placeholder="請依原圖……"></textarea>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>輸出比例（選填）</label>
+              <select id="edit-aspect">
+                <option value="">維持原圖比例</option>
+                <option value="1:1">1:1</option>
+                <option value="4:5">4:5</option>
+                <option value="16:9">16:9</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>&nbsp;</label>
+              <button type="button" class="btn btn-primary" id="btn-edit-image">
+                <i class="fa-solid fa-images"></i> 執行改圖
+              </button>
+            </div>
+          </div>
+          <div class="compare" id="compare-box">
+            <figure>
+              <figcaption>原圖／上一版來源</figcaption>
+              <div id="compare-before" class="preview-box"><span class="preview-empty">—</span></div>
+            </figure>
+            <figure>
+              <figcaption>本次改圖結果</figcaption>
+              <div id="compare-after" class="preview-box"><span class="preview-empty">—</span></div>
+            </figure>
+          </div>
+          <p class="step-hint" id="edit-note" style="margin-top:0.5rem"></p>
+          <label>版本（可回退）</label>
+          <div class="versions" id="version-list"></div>
+          <div class="inline-btns" style="margin-top:0.75rem">
+            <button type="button" class="btn btn-secondary" id="btn-adopt">
+              <i class="fa-solid fa-check"></i> 採用此圖（進精修）
+            </button>
+            <button type="button" class="btn btn-ghost" id="btn-use-original">
+              採用原圖
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <div>
+        <!-- 4. 精修 -->
+        <section class="card" id="section-refine">
+          <h2><i class="fa-solid fa-sliders"></i> ④ 手動精修 + LOGO</h2>
+          <p class="step-hint">在「採用圖」上調整亮度／裁切／疊真實 LOGO，再下載 JPG。</p>
+          <canvas id="edit-canvas" width="800" height="800"></canvas>
+          <div style="margin-top:0.85rem">
+            <div class="slider-row"><span>亮度</span><input type="range" id="adj-brightness" min="-40" max="40" value="0"><span id="val-brightness">0</span></div>
+            <div class="slider-row"><span>對比</span><input type="range" id="adj-contrast" min="-40" max="40" value="0"><span id="val-contrast">0</span></div>
+            <div class="slider-row"><span>飽和</span><input type="range" id="adj-saturate" min="-60" max="60" value="0"><span id="val-saturate">0</span></div>
+          </div>
+          <div class="field" style="margin-top:0.65rem">
+            <label>裁切比例</label>
+            <div class="preset-grid">
+              <button type="button" class="chip active" data-crop="free">自由</button>
+              <button type="button" class="chip" data-crop="1:1">1:1</button>
+              <button type="button" class="chip" data-crop="4:5">4:5</button>
+              <button type="button" class="chip" data-crop="16:9">16:9</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>LOGO 來源</label>
+            <div class="inline-btns">
+              <button type="button" class="btn btn-secondary" id="btn-logo-default">使用內建 LOGO</button>
+              <button type="button" class="btn btn-ghost" id="btn-logo-upload">上傳自訂</button>
+              <input type="file" id="input-logo" accept="image/png,image/svg+xml,image/*" class="hidden">
+            </div>
+            <p class="status-line" id="logo-status">尚未載入 LOGO</p>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>LOGO 位置</label>
+              <select id="logo-pos">
+                <option value="br">右下</option>
+                <option value="bl">左下</option>
+                <option value="tr">右上</option>
+                <option value="tl">左上</option>
+                <option value="center">置中</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>顯示 LOGO</label>
+              <select id="logo-enabled">
+                <option value="1">是</option>
+                <option value="0">否</option>
+              </select>
+            </div>
+          </div>
+          <div class="slider-row"><span>大小%</span><input type="range" id="logo-scale" min="5" max="40" value="14"><span id="val-logo-scale">14</span></div>
+          <div class="slider-row"><span>透明%</span><input type="range" id="logo-opacity" min="20" max="100" value="90"><span id="val-logo-opacity">90</span></div>
+          <div class="inline-btns" style="margin-top:0.75rem">
+            <button type="button" class="btn btn-primary" id="btn-download">
+              <i class="fa-solid fa-download"></i> 下載 JPG
+            </button>
+            <button type="button" class="btn btn-ghost" id="btn-save-draft">儲存草稿</button>
+          </div>
+        </section>
+
+        <!-- 設定 -->
+        <section class="card" id="section-settings">
+          <h2><i class="fa-solid fa-gear"></i> 設定／連線</h2>
+          <div class="field">
+            <label>Accounting GAS URL</label>
+            <input id="gas-url" type="text">
+          </div>
+          <div class="field">
+            <label>Ingest secret（選填）</label>
+            <input id="ingest-secret" type="password" autocomplete="off" placeholder="有設定才填">
+          </div>
+          <div class="field">
+            <label><input type="checkbox" id="dev-bypass" checked style="width:auto;margin-right:0.4rem"> 開發 bypass（本機／測試）</label>
+          </div>
+          <div class="inline-btns">
+            <button type="button" class="btn btn-secondary" id="btn-ping">測試連線</button>
+            <button type="button" class="btn btn-ghost" id="btn-save-settings">儲存設定</button>
+          </div>
+          <p class="status-line" id="ping-status">尚未測試</p>
+          <p class="step-hint" style="margin-top:0.65rem">
+            未部署新 action 前，ping／生成／改圖會失敗屬正常；可先驗證本頁 UI 與錯誤提示。
+          </p>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="studio.js"></script>
+</body>
+</html>

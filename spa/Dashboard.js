@@ -70,6 +70,25 @@ export default {
             });
         };
 
+        /** FB 發文工作室：外部靜態工具（權限 ≥ 3） */
+        const fbPostStudioPublicUrl = 'https://info.tanxin.space/tools/fb-post-studio/';
+        const fbPostStudioUrlCopied = ref(false);
+        let fbPostStudioCopyTimer = null;
+        const copyFbPostStudioUrl = () => {
+            const url = fbPostStudioPublicUrl;
+            if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+                window.prompt('請長按或全選複製以下網址：', url);
+                return;
+            }
+            navigator.clipboard.writeText(url).then(() => {
+                fbPostStudioUrlCopied.value = true;
+                if (fbPostStudioCopyTimer) clearTimeout(fbPostStudioCopyTimer);
+                fbPostStudioCopyTimer = setTimeout(() => { fbPostStudioUrlCopied.value = false; }, 2500);
+            }).catch(() => {
+                window.prompt('複製失敗，請手動複製：', url);
+            });
+        };
+
         const formatTimeAgo = (date) => {
             const seconds = Math.floor((new Date() - new Date(date)) / 1000);
             let interval = seconds / 31536000;
@@ -384,6 +403,9 @@ export default {
             storyAdventurePublicUrl,
             storyAdventureUrlCopied,
             copyStoryAdventureUrl,
+            fbPostStudioPublicUrl,
+            fbPostStudioUrlCopied,
+            copyFbPostStudioUrl,
             formatTimeAgo,
             handleReply,
             emit,
@@ -581,6 +603,24 @@ export default {
                             <button type="button" @click="copyStoryAdventureUrl"
                                 class="inline-flex items-center text-xs font-semibold bg-violet-600 text-white py-1 px-2.5 rounded-md hover:bg-violet-700">
                                 {{ storyAdventureUrlCopied ? '已複製' : '複製連結' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4c. FB 發文工作室（外部工具；權限 ≥ 3） -->
+                <div v-if="currentUser && currentUser.permission >= 3"
+                    class="bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-sky-500 p-4 flex items-start gap-3">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center text-xl">📣</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">FB 發文工作室</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">上傳完工照 → AI 文案＋改圖 → 疊 LOGO 下載，人工貼粉專（獨立分頁）。</p>
+                        <div class="flex flex-wrap items-center gap-2 mt-2">
+                            <a :href="fbPostStudioPublicUrl" target="_blank" rel="noopener noreferrer"
+                                class="inline-flex items-center text-xs font-semibold bg-white text-sky-800 border border-sky-300 py-1 px-2.5 rounded-md hover:bg-sky-50">開啟網站</a>
+                            <button type="button" @click="copyFbPostStudioUrl"
+                                class="inline-flex items-center text-xs font-semibold bg-sky-600 text-white py-1 px-2.5 rounded-md hover:bg-sky-700">
+                                {{ fbPostStudioUrlCopied ? '已複製' : '複製連結' }}
                             </button>
                         </div>
                     </div>
