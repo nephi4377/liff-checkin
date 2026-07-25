@@ -50,7 +50,9 @@
     reelAudioBlob: null,
     reelLastUrl: null,
     dragThumbIdx: null,
-    adoptPulseId: null
+    adoptPulseId: null,
+    selectedEmojiId: null,
+    emojiDrag: { active: false, id: null, offsetX: 0, offsetY: 0 }
   };
 
   function emptyTagIds() {
@@ -563,7 +565,8 @@
       }],
       selectedVersionId: 'orig',
       adopted: null,
-      batch: false
+      batch: false,
+      emojiOverlays: []
     };
   }
 
@@ -714,6 +717,7 @@
     if (im.adopted) {
       adoptPhoto(im.adopted, '已採用圖', true);
     }
+    syncEmojiControls();
   }
 
   function removeImage(id) {
@@ -1690,6 +1694,248 @@
     });
   }
 
+  /* ---------- emoji overlays ---------- */
+
+  var EMOJI_FONT_STACK_ = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+
+  function getEmojiOverlays(im) {
+    if (!im) return [];
+    if (!Array.isArray(im.emojiOverlays)) im.emojiOverlays = [];
+    return im.emojiOverlays;
+  }
+
+  function getSelectedEmojiOverlay(im) {
+    im = im || getSelectedImage();
+    if (!im || !state.selectedEmojiId) return null;
+    return getEmojiOverlays(im).find(function (o) { return o.id === state.selectedEmojiId; }) || null;
+  }
+
+  function clampRatio(v) {
+    return Math.max(0.05, Math.min(0.95, v));
+  }
+
+  function canvasPointFromClient(clientX, clientY) {
+    var canvas = $('edit-canvas');
+    var rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return { x: 0.5, y: 0.5, px: 0, py: 0 };
+    var px = (clientX - rect.left) * (canvas.width / rect.width);
+    var py = (clientY - rect.top) * (canvas.height / rect.height);
+    return {
+      x: clampRatio(px / canvas.width),
+      y: clampRatio(py / canvas.height),
+      px: px,
+      py: py
+    };
+  }
+
+  function hitTestEmoji(px, py, overlays, canvas) {
+    var i;
+    for (i = overlays.length - 1; i >= 0; i--) {
+      var o = overlays[i];
+      var cx = o.x * canvas.width;
+      var cy = o.y * canvas.height;
+      var half = (o.size || CFG.EMOJI_DEFAULT_SIZE || 52) / 2;
+      if (px >= cx - half && px <= cx + half && py >= cy - half && py <= cy + half) {
+        return o;
+      }
+    }
+    return null;
+  }
+
+  function addEmojiOverlay(char, x, y) {
+    var im = getSelectedImage();
+    if (!im) {
+      showError('請先選中一張圖');
+      return null;
+    }
+    if (!state.sourceImg) {
+      showError('請先「採用此圖」或「採用原圖」再貼 emoji');
+      return null;
+    }
+    var overlay = {
+      id: uid('emo'),
+      char: String(char || '').trim(),
+      x: clampRatio(x == null ? 0.5 : x),
+      y: clampRatio(y == null ? 0.5 : y),
+      size: parseInt(($('emoji-size') && $('emoji-size').value) || CFG.EMOJI_DEFAULT_SIZE || 52, 10) || 52
+    };
+    if (!overlay.char) return null;
+    getEmojiOverlays(im).push(overlay);
+    state.selectedEmojiId = overlay.id;
+    redrawCanvas();
+    syncEmojiControls();
+    return overlay;
+  }
+
+  function addEmojiAtCenter(char) {
+    addEmojiOverlay(char, 0.5, 0.5);
+  }
+
+  function removeSelectedEmoji() {
+    var im = getSelectedImage();
+    if (!im || !state.selectedEmojiId) return;
+    im.emojiOverlays = getEmojiOverlays(im).filter(function (o) {
+      return o.id !== state.selectedEmojiId;
+    });
+    state.selectedEmojiId = null;
+    redrawCanvas();
+    syncEmojiControls();
+  }
+
+  function clearEmojiOverlays() {
+    var im = getSelectedImage();
+    if (!im) return;
+    im.emojiOverlays = [];
+    state.selectedEmojiId = null;
+    redrawCanvas();
+    syncEmojiControls();
+    showOk('已清除本圖全部 emoji');
+  }
+
+  function syncEmojiControls() {
+    var im = getSelectedImage();
+    var overlays = getEmojiOverlays(im);
+    var selected = getSelectedEmojiOverlay(im);
+    var controls = $('emoji-controls');
+    var status = $('emoji-status');
+    if (controls) controls.classList.toggle('hidden', !selected);
+    if (selected && $('emoji-size')) {
+      $('emoji-size').value = String(selected.size || CFG.EMOJI_DEFAULT_SIZE || 52);
+      if ($('val-emoji-size')) $('val-emoji-size').textContent = $('emoji-size').value;
+    }
+    if (status) {
+      status.textContent = overlays.length
+        ? ('本圖已有 ' + overlays.length + ' 個 emoji' + (selected ? '（已選：' + selected.char + '）' : ''))
+        : '尚未加 emoji';
+      status.className = 'status-line' + (overlays.length ? ' ok' : '');
+    }
+  }
+
+  function renderEmojiPalette() {
+    var root = $('emoji-palette-root');
+    if (!root) return;
+    root.innerHTML = '';
+    var groups = CFG.BUILTIN_EMOJIS || [];
+    groups.forEach(function (group) {
+      var title = document.createElement('div');
+      title.className = 'emoji-group-title';
+      title.textContent = group.category || 'Emoji';
+      root.appendChild(title);
+      var row = document.createElement('div');
+      row.className = 'emoji-palette';
+      (group.items || []).forEach(function (char) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'emoji-chip';
+        btn.textContent = char;
+        btn.title = '拖到畫布，或點一下加在中央';
+        btn.setAttribute('draggable', 'true');
+        btn.addEventListener('dragstart', function (e) {
+          if (e.dataTransfer) {
+            e.dataTransfer.setData('text/emoji', char);
+            e.dataTransfer.setData('text/plain', char);
+            e.dataTransfer.effectAllowed = 'copy';
+          }
+        });
+        btn.addEventListener('click', function () {
+          addEmojiAtCenter(char);
+        });
+        row.appendChild(btn);
+      });
+      root.appendChild(row);
+    });
+  }
+
+  function drawEmojiOverlays(ctx, canvas, overlays, selectedId) {
+    if (!overlays || !overlays.length) return;
+    overlays.forEach(function (o) {
+      var size = o.size || CFG.EMOJI_DEFAULT_SIZE || 52;
+      var cx = o.x * canvas.width;
+      var cy = o.y * canvas.height;
+      ctx.save();
+      ctx.font = size + 'px ' + EMOJI_FONT_STACK_;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(o.char, cx, cy);
+      if (selectedId && o.id === selectedId) {
+        var half = size / 2 + 4;
+        ctx.strokeStyle = 'rgba(96,165,250,0.95)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 4]);
+        ctx.strokeRect(cx - half, cy - half, half * 2, half * 2);
+        ctx.setLineDash([]);
+      }
+      ctx.restore();
+    });
+  }
+
+  function bindCanvasEmoji() {
+    var canvas = $('edit-canvas');
+    var stage = $('canvas-stage');
+    if (!canvas || !stage) return;
+
+    stage.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      stage.classList.add('drop-target');
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    });
+    stage.addEventListener('dragleave', function () {
+      stage.classList.remove('drop-target');
+    });
+    stage.addEventListener('drop', function (e) {
+      e.preventDefault();
+      stage.classList.remove('drop-target');
+      var char = '';
+      if (e.dataTransfer) {
+        char = e.dataTransfer.getData('text/emoji') || e.dataTransfer.getData('text/plain');
+      }
+      if (!char) return;
+      var pt = canvasPointFromClient(e.clientX, e.clientY);
+      addEmojiOverlay(char, pt.x, pt.y);
+    });
+
+    canvas.addEventListener('pointerdown', function (e) {
+      if (!state.sourceImg) return;
+      var im = getSelectedImage();
+      if (!im) return;
+      var pt = canvasPointFromClient(e.clientX, e.clientY);
+      var hit = hitTestEmoji(pt.px, pt.py, getEmojiOverlays(im), canvas);
+      if (hit) {
+        state.selectedEmojiId = hit.id;
+        state.emojiDrag.active = true;
+        state.emojiDrag.id = hit.id;
+        state.emojiDrag.offsetX = pt.px - hit.x * canvas.width;
+        state.emojiDrag.offsetY = pt.py - hit.y * canvas.height;
+        try { canvas.setPointerCapture(e.pointerId); } catch (eCap) {}
+      } else {
+        state.selectedEmojiId = null;
+      }
+      redrawCanvas();
+      syncEmojiControls();
+    });
+
+    canvas.addEventListener('pointermove', function (e) {
+      if (!state.emojiDrag.active || !state.emojiDrag.id) return;
+      var im = getSelectedImage();
+      if (!im) return;
+      var overlay = getEmojiOverlays(im).find(function (o) { return o.id === state.emojiDrag.id; });
+      if (!overlay) return;
+      var pt = canvasPointFromClient(e.clientX, e.clientY);
+      overlay.x = clampRatio((pt.px - state.emojiDrag.offsetX) / canvas.width);
+      overlay.y = clampRatio((pt.py - state.emojiDrag.offsetY) / canvas.height);
+      redrawCanvas();
+    });
+
+    function endEmojiDrag(e) {
+      if (!state.emojiDrag.active) return;
+      state.emojiDrag.active = false;
+      state.emojiDrag.id = null;
+      try { canvas.releasePointerCapture(e.pointerId); } catch (eRel) {}
+    }
+    canvas.addEventListener('pointerup', endEmojiDrag);
+    canvas.addEventListener('pointercancel', endEmojiDrag);
+  }
+
   /* ---------- canvas refine ---------- */
 
   function loadImageFromPhoto(photo) {
@@ -1889,6 +2135,9 @@
       ctx.drawImage(state.logoImg, x, y, lw, lh);
       ctx.restore();
     }
+
+    var im = getSelectedImage();
+    drawEmojiOverlays(ctx, canvas, getEmojiOverlays(im), state.selectedEmojiId);
   }
 
   function adoptPhoto(photo, label, quiet) {
@@ -2275,6 +2524,7 @@
       }
       var im = list[idx];
       var photo = im.adopted || (im.currentEdit) || im.original;
+      state.selectedId = im.id;
       loadImageFromPhoto(photo).then(function (img) {
         state.sourceImg = img;
         redrawCanvas();
@@ -2484,6 +2734,21 @@
     if ($('btn-logo-all')) {
       $('btn-logo-all').addEventListener('click', applyLogoToAll);
     }
+    if ($('btn-emoji-delete')) {
+      $('btn-emoji-delete').addEventListener('click', removeSelectedEmoji);
+    }
+    if ($('btn-emoji-clear')) {
+      $('btn-emoji-clear').addEventListener('click', clearEmojiOverlays);
+    }
+    if ($('emoji-size')) {
+      $('emoji-size').addEventListener('input', function () {
+        var selected = getSelectedEmojiOverlay();
+        if (!selected) return;
+        selected.size = parseInt($('emoji-size').value, 10) || CFG.EMOJI_DEFAULT_SIZE || 52;
+        if ($('val-emoji-size')) $('val-emoji-size').textContent = String(selected.size);
+        redrawCanvas();
+      });
+    }
     $('btn-save-settings').addEventListener('click', saveSettings);
     $('btn-reset-refine').addEventListener('click', resetRefine);
     $('btn-rot-90').addEventListener('click', function () {
@@ -2671,7 +2936,9 @@
     renderFilterPresets();
     bindUpload();
     bindSiteImport();
+    bindCanvasEmoji();
     bindUi();
+    renderEmojiPalette();
     syncTagsPreview();
     syncRefineSlidersFromState();
     renderCopyHistory();

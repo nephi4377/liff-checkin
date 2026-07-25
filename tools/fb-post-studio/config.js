@@ -129,5 +129,22 @@ window.FB_POST_STUDIO_CONFIG = {
     { id: 'warm', label: '溫暖', brightness: 6, contrast: 2, saturate: 12, warm: 18 },
     { id: 'fresh', label: '清透', brightness: 10, contrast: 8, saturate: -4, warm: -6 },
     { id: 'punch', label: '對比加強', brightness: 2, contrast: 18, saturate: 10, warm: 0 }
-  ]
+  ],
+
+  /** 內建 Emoji（Unicode 系統字元，免費；可拖到精修畫布） */
+  BUILTIN_EMOJIS: [
+    {
+      category: '常用',
+      items: ['✨', '🏠', '💡', '🌿', '☀️', '❤️', '👍', '🎉', '📍', '🔥']
+    },
+    {
+      category: '空間',
+      items: ['🛋️', '🪴', '🍽️', '🛁', '🚪', '🛏️', '🪞', '🧺', '📐', '🔆']
+    },
+    {
+      category: '互動',
+      items: ['📩', '📞', '💬', '👉', '✔️', '⭐', '🆕', '🎁', '💯', '🙌']
+    }
+  ],
+  EMOJI_DEFAULT_SIZE: 52
 };
