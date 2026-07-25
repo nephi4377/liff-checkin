@@ -1,18 +1,32 @@
 # FB 發文工作室 — 開發規格書（Phase 1＋強化）
 
 > **狀態**：Phase 1 已上線；本輪＝六步精靈＋文案標籤＋貼圖庫＋**發前檢查**＋轉檔／短影音失敗引導  
+> **進行中（Phase B＋代理＋影片選取）**：步驟①案場匯入走「取媒體 base64」代理；影片可列／預覽／選取  
 > **正式網址**：https://info.tanxin.space/tools/fb-post-studio/  
 > **前端**：`CODING/tools/fb-post-studio/`  
-> **後端**：`backend/accounting-gas/FbPostStudio.js`（經 `WebApp.js` 路由）  
+> **後端**：`backend/accounting-gas/FbPostStudio.js`（經 `WebApp.js` 路由；Dropbox 清單／取檔由 **project-console** 實作再轉呼）  
 > **粉專**：https://www.facebook.com/TainanTanXin  
 > **短影音專章**：[`22_FB_REEL_STUDIO_SPEC.md`](22_FB_REEL_STUDIO_SPEC.md)  
 > **Phase 2**：Meta Graph 排程發文（本規格僅預留，不實作）
 
 ---
 
+## 開發分期（Dropbox 匯入／影音）
+
+| 階段 | 做什麼 | 狀態 |
+|------|--------|------|
+| **Phase 0** | 後端 list API：依案號找 Dropbox「完工照」資料夾，列出照片與實拍影片 | **已完成** |
+| **Phase A** | 後端 `fetch_project_completion_media`：依 path 取媒體→base64（解 CORS）；前端匯入以此為主 | **本輪** |
+| **Phase B** | 前端步驟①：案號 → 勾選 → 匯入；影片可列／預覽／選取（剪輯暫緩） | **本輪** |
+| **更後** | 實拍影片 AI／半自動剪輯進短影音（超出現行瀏覽器合成） | 未做 |
+
+資料夾慣例：專案夾下名稱含「**完工照**」且**不含**「美照」（例：案號 `734` 下常見 `1160722完工照`）。照片與實拍影片放**同一**完工照資料夾。
+
+---
+
 ## 一句話
 
-上傳一至多張完工／空間照 → 分步精靈：選圖 → **組合標籤寫文案** → 組合標籤 AI 改圖 → Canvas 精修／LOGO／貼圖 → 複製文案／下載 JPG →（可選）瀏覽器合成 9:16 短影音，人工貼到粉專。
+上傳一至多張完工／空間照（或之後依案號從雲端完工照匯入）→ 分步精靈：選圖 → **組合標籤寫文案** → 組合標籤 AI 改圖 → Canvas 精修／LOGO／貼圖 → 複製文案／下載 JPG →（可選）瀏覽器合成 9:16 短影音，人工貼到粉專。
 
 ---
 
@@ -20,7 +34,7 @@
 
 ```mermaid
 flowchart TB
-  S1["① 選圖：上傳一至多張"] --> S2["② 寫文案：標籤＋類型／語氣"]
+  S1["① 選圖：本機上傳，或依案號從雲端完工照匯入"] --> S2["② 寫文案：標籤＋類型／語氣"]
   S2 --> S3["③ AI 改圖：前綴A＋C＋中間＋後面"]
   S3 --> S4["④ 精修＋LOGO／貼圖"]
   S4 --> S5["⑤ 完成：發前檢查 → 複製／下載"]
@@ -32,7 +46,10 @@ flowchart TB
 
 | 白話（圖上） | 程式對照 |
 |---|---|
-| ① 選圖 | 前端壓縮 ≤4MB／張，上限 `MAX_IMAGES` → `state.images`；精靈 `setWizardStep(1)` |
+| ① 選圖（本機上傳） | 前端壓縮 ≤4MB／張，上限 `MAX_IMAGES` → `state.images`；精靈 `setWizardStep(1)` |
+| ① 依案號從雲端完工照匯入 | `list_project_completion_media`（`media_type=image|video`、`include_preview`）；UI：案號＋類型＋載入＋多選＋「匯入所選」→ 照片進 `addPhotos`；影片進 `state.siteVideos` |
+| ① 匯入位元組 | **主路徑** `fetch_project_completion_media`（path→base64）；失敗再試 `preview_url`／`IMAGE_CORS_PROXIES`；本機測可用假資料／`?mock_completion=1` |
+| ⑥ 案場實拍影片 | 步驟⑥顯示已選影片：預覽／下載／移除；**.mov 標示站內剪輯受限**；照片合成短影音仍走既有 `reel.js` |
 | ② 文案標籤＋類型／語氣 | `COPY_TAGS` 多選 → `composeCopyTagsPayload()`；與 `post_type`／`tone`／`extra_notes` 一併送出 |
 | ② 把全部圖一起交給後端寫文案 | `action: fb_post_generate` + `photos[]` + `copy_tags[]` → `handleFbPostGenerate_` |
 | 本機存一版文案紀錄（含標籤） | `localStorage` `COPY_HISTORY_KEY`；欄位含 `copyTags`／`copyTagLabels`／`copyTagIds` |
@@ -54,11 +71,90 @@ flowchart TB
 認證與 AiVisionLab 相同：`resolveAiLabAuth_`（權限 ≥ 3，或 ingest secret）。  
 圖片正規化：`normalizeAiLabPhotoInput_`。
 
-| action | 說明 | 模型 |
-|--------|------|------|
-| `fb_post_ping` | 健康檢查、是否已設 Gemini | — |
+| action | 說明 | 模型／實作位置 |
+|--------|------|----------------|
+| `fb_post_ping` | 健康檢查、是否已設 Gemini | accounting-gas |
 | `fb_post_generate` | 一至多張原圖 → FB 文案 JSON（可含文案標籤） | `gemini-2.5-flash` |
 | `fb_post_edit_image` | **單張**原圖＋指令 → 改圖 base64（前端可迴圈批次） | `gemini-3.1-flash-image` |
+| `list_project_completion_media` | 依案號列出 Dropbox「完工照」內照片／影片（Phase 0） | accounting-gas **轉呼** project-console |
+| `fetch_project_completion_media` | 依 Dropbox `path` 取媒體 → base64（過大可改回傳暫存連結） | accounting-gas **轉呼** project-console |
+
+### `list_project_completion_media`（Phase 0）
+
+**呼叫端點（給前端）**：accounting-gas Web App，`action: list_project_completion_media`（同其他 `fb_post_*`）。  
+**實際讀 Dropbox**：project-console `page=list_project_completion_media`（內部 secret；勿給瀏覽器直接拿 secret）。
+
+**請求（重點欄位）**
+
+- `project_code`（或 `projectNo`）：案號，必填（測試慣例可用 `734`）
+- `media_type`（選填）：`image`｜`video`｜`all`（預設 `all`）
+- `limit`（選填）：單次回傳筆數上限（後端會封頂，避免 GAS 逾時）
+- `cursor`（選填）：上一頁回傳的游標，用於續列
+- `include_preview`（選填）：`true` 時盡力附 `preview_url`（較慢；預設略過）
+
+**尋找規則**
+
+1. 在 Dropbox 設計圖根目錄**只找**案號對應專案夾（**不**因查詢而新建空夾）
+2. 專案夾下子資料夾：名稱含「完工照」且**不含**「美照」（例：`1160722完工照`）
+3. 於該資料夾遞迴列檔；依副檔名判 `kind`：`image`｜`video`｜`other`
+
+**回應 `data`（示意）**
+
+```json
+{
+  "project_code": "734",
+  "project_folder": "/添心設計/設計圖/…",
+  "completion_folders": ["/…/1160722完工照"],
+  "media_type": "all",
+  "items": [
+    {
+      "name": "客廳.jpg",
+      "path": "/添心設計/設計圖/…/客廳.jpg",
+      "ext": "jpg",
+      "kind": "image",
+      "size": 123456,
+      "preview_url": null
+    }
+  ],
+  "count": 1,
+  "truncated": false,
+  "next_cursor": null
+}
+```
+
+### `fetch_project_completion_media`（Phase A）
+
+**呼叫端點（給前端）**：accounting-gas Web App，`action: fetch_project_completion_media`。  
+**實際下載**：project-console `page=fetch_project_completion_media`（內部 secret）。
+
+**請求**
+
+- `path`：Dropbox 絕對路徑（必填；通常來自 list 回傳的 `items[].path`）
+- `project_code`（強烈建議）：案號；有則驗證 path 必須落在該案「完工照」夾下
+- `allow_link_fallback`（選填）：超過體積上限時改回傳暫存連結（預設 true）
+
+**體積上限（原始位元組）**
+
+- 照片約 8MB；影片約 12MB（超過則 `delivery=link`＋`temp_url`，或失敗訊息）
+
+**回應 `data`（示意）**
+
+```json
+{
+  "name": "客廳.jpg",
+  "path": "/添心設計/設計圖/…/客廳.jpg",
+  "ext": "jpg",
+  "kind": "image",
+  "mime_type": "image/jpeg",
+  "size": 123456,
+  "delivery": "base64",
+  "data_base64": "...",
+  "temp_url": null,
+  "truncated": false
+}
+```
+
+`delivery=link` 時：`data_base64` 為 null，附 `temp_url` 與人話 `message`（常見於大影片）。
 
 ### `fb_post_generate` 請求／回應
 
@@ -129,12 +225,12 @@ Usage log：`feature=fb_post_edit`。
 
 每步有「上一步／下一步」與頂部步驟指示。未上傳圖時無法進步驟 2+；未選中圖時無法進步驟 3–4（會提示）。第 6 步可跳過。
 
-1. **選圖**：拖放／多選；上限 `MAX_IMAGES`（預設 10）；圖庫縮圖列常駐於後續步驟  
+1. **選圖**：拖放／多選；**或**案號載入雲端完工照／影片 → 勾選 → 匯入（照片壓縮進圖庫；影片進已選清單）；上限 `MAX_IMAGES`（預設 10）；圖庫縮圖列常駐於後續步驟。  
 2. **寫文案**：類型、語氣（預設活潑親切）、**文案標籤前綴／中間／後面**、補充 →「用全部圖生成文案」→ 可編輯；本機版本歷史（約 40 筆，含選用標籤）  
 3. **AI 改圖**：前綴 A（鏡頭／構圖）＋前綴 C（用途／情境）＋中間效果＋後面約束＋自由文字；即時預覽；單張或批次；版本回退；採用此圖 → 自動進步驟 4  
 4. **精修＋LOGO／貼圖**：亮度／對比／飽和／銳化／旋轉／暗角／色溫；濾鏡；**裁切比例**；疊真實 LOGO；**貼圖素材庫**（一鍵轉透明 PNG）  
-5. **完成**：**發前檢查**（LOGO／貼圖或「本次不加」、文案長短、個資人工勾選、圖可下載）→ 通過或強制確認後強調「複製貼文／下載」；開粉專  
-6. **短影音（可選）**：見 SPEC 22（進度條：載入引擎／拼片／編碼／完成；失敗降級 WebM）  
+5. **完成**：**發前檢查**（LOGO／貼圖或「本次不加」、文案長短、個資人工勾選、圖可下載）→ 通過或強制確認後強調「複製／下載」；開粉專  
+6. **短影音（可選）**：照片合成見 SPEC 22；另顯示案場已選影片（預覽／下載）；**.mov 站內剪輯受限**，對齊既有 reel（照片合成）流程
 
 設定／連線摺疊在頁底。
 
@@ -196,6 +292,8 @@ Usage log：`feature=fb_post_edit`。
 6. 步驟 5 發前檢查：LOGO／文案／個資／可下載；未通過時複製／下載會擋並提示  
 7. 短影音：有進度階段；wasm 失敗降級 WebM＋說明（見 SPEC 22）  
 8. 文案／改圖皆有 usage log；未授權回失敗訊息  
+9. 步驟①案場匯入：填案號→載入→勾選→匯入；照片走取圖代理進圖庫；載入／空／錯／成功有人話；本機上傳仍可用；假資料可測介面  
+10. 影片：類型選「影片」可列／勾選／匯入；步驟⑥可預覽／下載；.mov 有限制說明；照片短影音合成仍可用  
 
 ---
 
@@ -205,11 +303,14 @@ Usage log：`feature=fb_post_edit`。
 |------|------|
 | 改圖成本 | Image 模型按張計費；批次＝張數 |
 | GAS 時限 | 批次改圖前端逐張＋間隔；張數多可能逾時，宜分批 |
-| GAS 回應體積 | 前端先壓輸入；多圖文案 base64 總量需注意 |
+| GAS 回應體積 | 取媒體 base64 有體積上限（圖約 8MB／影約 12MB）；過大改連結或請本機上傳 |
 | 真實性 | 完工案例避免過度造假；發文前人工確認 |
 | LOGO／.ai | 複雜 AI 無法保證；以 PNG 為準 |
 | 短影音記憶體 | 限制張數／時長；CDN 被擋則 WebM |
 | Phase 2 | 需 Meta `pages_manage_posts` 等審核 |
+| Dropbox list | GAS 逾時／檔案極多時需 `limit`／`cursor`；找專案夾時不可誤建空夾 |
+| 案場匯入 CORS | **主路徑**後端代理 base64；公開 CORS 代理僅備援 |
+| 影片匯入／AI 剪輯 | 本輪＝列／預覽／選取／下載；站內 AI 剪輯未做；.mov 瀏覽器剪輯受限 |
 
 ---
 
@@ -223,6 +324,9 @@ Usage log：`feature=fb_post_edit`。
 | `CODING/tools/fb-post-studio/stickers.js` | 貼圖轉換＋本機庫 |
 | `CODING/tools/fb-post-studio/reel.js` | 短影音合成 |
 | `CODING/tools/fb-post-studio/assets/` | LOGO 與 CDN／轉換說明 |
-| `backend/accounting-gas/FbPostStudio.js` | 後端（多圖文案＋`copy_tags` prompt） |
-| `backend/accounting-gas/WebApp.js` | 註冊 3 個 action |
+| `backend/accounting-gas/FbPostStudio.js` | 後端（多圖文案＋`copy_tags`；list 轉呼） |
+| `backend/accounting-gas/WebApp.js` | 註冊 `fb_post_*`＋`list_project_completion_media` |
+| `backend/project-console/dropbox_api.js` | Dropbox；`findProjectFolder_`（找-only） |
+| `backend/project-console/CompletionMediaList.js` | 依案號列完工照／影片；依 path 取媒體 base64 |
+| `backend/project-console/WebApp.js` | `page=list_project_completion_media`／`fetch_project_completion_media` |
 | `CODING/SPEC/22_FB_REEL_STUDIO_SPEC.md` | 短影音專章 |

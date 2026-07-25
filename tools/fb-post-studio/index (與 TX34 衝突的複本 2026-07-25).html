@@ -190,48 +190,6 @@
     canvas#edit-canvas { max-width: 100%; border-radius: 10px; border: 1px solid var(--border); background: #111; display: block; margin: 0 auto; }
     .check-inline { display: flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; color: var(--muted); margin: 0.5rem 0; }
     .check-inline input { width: auto; }
-    .import-divider {
-      display: flex; align-items: center; gap: 0.65rem;
-      margin: 1rem 0 0.85rem; color: var(--muted); font-size: 0.78rem; font-weight: 600;
-    }
-    .import-divider::before, .import-divider::after {
-      content: ''; flex: 1; height: 1px; background: var(--border);
-    }
-    .import-panel {
-      background: rgba(8, 14, 26, 0.35); border: 1px solid var(--border);
-      border-radius: 10px; padding: 0.85rem 0.9rem; margin-bottom: 0.85rem;
-    }
-    .import-panel h3 {
-      font-size: 0.92rem; font-weight: 600; margin-bottom: 0.35rem;
-      display: flex; align-items: center; gap: 0.4rem;
-    }
-    .import-panel h3 i { color: var(--accent); }
-    .import-pick-grid .thumb.pick-on {
-      border-color: var(--ok); box-shadow: 0 0 0 2px rgba(52,211,153,0.35);
-    }
-    .import-pick-grid .thumb .pick-mark {
-      position: absolute; bottom: 4px; right: 4px; width: 22px; height: 22px;
-      border-radius: 50%; background: rgba(52,211,153,0.95); color: #052e1a;
-      font-size: 0.75rem; font-weight: 700; display: none;
-      align-items: center; justify-content: center;
-    }
-    .import-pick-grid .thumb.pick-on .pick-mark { display: flex; }
-    .import-pick-grid .thumb.no-preview {
-      display: flex; align-items: center; justify-content: center;
-      padding: 0.4rem; text-align: center; font-size: 0.68rem; color: var(--muted);
-      line-height: 1.3; word-break: break-all;
-    }
-    .import-pick-grid .thumb.kind-video { opacity: 1; cursor: pointer; }
-    .import-pick-grid .thumb.kind-video .badge { background: rgba(251,191,36,0.9); color: #111; }
-    .import-pick-grid .thumb.kind-video video {
-      width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit;
-    }
-    .site-videos-panel { margin-top: 1rem; }
-    .site-videos-panel .thumb { position: relative; }
-    .site-videos-panel .thumb video { width: 100%; max-height: 180px; display: block; background: #111; }
-    .site-videos-panel .vid-actions { display: flex; gap: 0.35rem; margin-top: 0.35rem; flex-wrap: wrap; }
-    .site-videos-panel .vid-actions .btn { padding: 0.25rem 0.55rem; font-size: 0.8rem; }
-    .site-videos-limit-note { color: #92400e; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 0.55rem 0.75rem; margin-top: 0.5rem; }
 
     /* Wizard */
     .wizard-bar {
@@ -277,8 +235,64 @@
       font-size: 0.85rem; line-height: 1.55; color: var(--muted);
     }
     .finish-summary strong { color: var(--text); }
-    #reel-preview-wrap video { max-width: 100%; border-radius: 8px; }
-    #reel-fallback-note { color: var(--warn); }
+    .preflight {
+      border: 1px solid var(--border); border-radius: 10px;
+      background: rgba(0,0,0,0.22); padding: 0.75rem 0.85rem; margin-bottom: 0.85rem;
+    }
+    .preflight h3 {
+      font-size: 0.9rem; font-weight: 700; margin-bottom: 0.55rem;
+      display: flex; align-items: center; gap: 0.4rem;
+    }
+    .preflight h3 i { color: var(--warn); }
+    .preflight-list { list-style: none; margin: 0 0 0.55rem; padding: 0; }
+    .preflight-list li {
+      display: flex; gap: 0.5rem; align-items: flex-start;
+      font-size: 0.82rem; line-height: 1.45; color: var(--muted);
+      padding: 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .preflight-list li:last-child { border-bottom: none; }
+    .preflight-list .mark {
+      flex: 0 0 auto; width: 1.15rem; text-align: center; font-weight: 700;
+    }
+    .preflight-list li.ok { color: #a7f3d0; }
+    .preflight-list li.ok .mark { color: var(--ok); }
+    .preflight-list li.warn { color: #fde68a; }
+    .preflight-list li.warn .mark { color: var(--warn); }
+    .preflight-list li.bad { color: #fecaca; }
+    .preflight-list li.bad .mark { color: var(--bad); }
+    .preflight-status { font-size: 0.8rem; margin-top: 0.35rem; color: var(--muted); }
+    .preflight-status.ready { color: var(--ok); }
+    .preflight-status.blocked { color: var(--warn); }
+    .finish-cta.dimmed .btn-primary {
+      opacity: 0.55; filter: grayscale(0.25);
+    }
+    .finish-cta .cta-hint {
+      font-size: 0.78rem; color: var(--muted); margin-bottom: 0.5rem; line-height: 1.45;
+    }
+    .finish-cta.ready .cta-hint { color: var(--ok); }
+    .convert-fail-guide {
+      display: none; margin-top: 0.55rem;
+      background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.35);
+      color: #fecaca; padding: 0.7rem 0.8rem; border-radius: 8px;
+      font-size: 0.82rem; line-height: 1.5;
+    }
+    .convert-fail-guide.show { display: block; }
+    .convert-fail-guide ol { margin: 0.4rem 0 0.55rem 1.1rem; }
+    .convert-fail-guide .btn { margin-top: 0.25rem; }
+    .progress-wrap {
+      display: none; margin-top: 0.65rem;
+      background: rgba(0,0,0,0.35); border: 1px solid var(--border);
+      border-radius: 999px; height: 10px; overflow: hidden;
+    }
+    .progress-wrap.show { display: block; }
+    .progress-bar {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, #38bdf8, #60a5fa);
+      transition: width 0.25s ease;
+    }
+    .reel-stage {
+      font-size: 0.8rem; color: var(--accent); margin-top: 0.35rem; min-height: 1.2em;
+    }
   </style>
 </head>
 <body>
@@ -286,9 +300,9 @@
     <header>
       <h1>添心 · FB 發文工作室</h1>
       <p class="sub">
-        分五步完成圖文，可選第 6 步短影音 → 複製／下載，再人工貼到
+        分六步完成：選圖 → 文案 → AI 改圖 → 精修＋LOGO／貼圖 → 複製／下載 →（可選）短影音，再人工貼到
         <a id="fb-page-link" href="https://www.facebook.com/TainanTanXin" target="_blank" rel="noopener">粉專</a>。
-        Phase 1 不自動發文。
+        Phase 1 不自動發文；短影音可跳過。
       </p>
     </header>
 
@@ -314,42 +328,7 @@
     <!-- 1. 選圖 -->
     <section class="card wizard-panel" data-step="1" id="section-upload">
       <h2><i class="fa-solid fa-images"></i> ① 選圖</h2>
-      <p class="step-hint">可從案場雲端完工照匯入，或本機上傳（合計上限 <span id="max-images-label">10</span> 張）。文案會用<strong>全部圖</strong>一起生成；改圖／精修以「選中圖」為主。</p>
-
-      <div class="import-panel" id="panel-site-import">
-        <h3><i class="fa-solid fa-cloud-arrow-down"></i> 從案場匯入完工照</h3>
-        <p class="step-hint" style="margin-bottom:0.55rem">輸入案號 → 載入 → 勾選 →「匯入所選」。照片進圖庫；影片進步驟⑥可預覽／下載。匯入走後端代理（避免雲端跨網域擋下載）。</p>
-        <div class="row">
-          <div class="field">
-            <label for="import-project-code">案號</label>
-            <input id="import-project-code" type="text" inputmode="numeric" placeholder="例如 734" autocomplete="off">
-          </div>
-          <div class="field">
-            <label for="import-media-type">類型</label>
-            <select id="import-media-type" title="照片進圖庫；影片可列／預覽／選取">
-              <option value="image" selected>照片</option>
-              <option value="video">影片</option>
-            </select>
-          </div>
-        </div>
-        <div class="inline-btns">
-          <button type="button" class="btn btn-primary" id="btn-load-completion">
-            <i class="fa-solid fa-folder-open"></i> 載入
-          </button>
-          <button type="button" class="btn btn-ghost hidden" id="btn-load-more-completion">載入更多</button>
-        </div>
-        <p class="status-line" id="import-status" role="status">輸入案號後按「載入」</p>
-        <div class="thumb-grid import-pick-grid hidden" id="import-grid" aria-label="案場完工照清單"></div>
-        <div class="inline-btns hidden" id="import-actions" style="margin-top:0.65rem">
-          <button type="button" class="btn btn-secondary" id="btn-import-select-all">全選</button>
-          <button type="button" class="btn btn-ghost" id="btn-import-clear-sel">取消勾選</button>
-          <button type="button" class="btn btn-primary" id="btn-import-selected" disabled>
-            <i class="fa-solid fa-download"></i> 匯入所選
-          </button>
-        </div>
-      </div>
-
-      <div class="import-divider">或本機上傳</div>
+      <p class="step-hint">可一次選多張（上限 <span id="max-images-label">10</span>）。文案會用<strong>全部圖</strong>一起生成；改圖／精修以「選中圖」為主。</p>
       <div class="upload" id="upload-zone">點選或拖放照片到這裡（可多選）</div>
       <input type="file" id="input-photo" accept="image/*" multiple class="hidden">
       <div class="inline-btns" style="margin-top:0.5rem">
@@ -376,6 +355,14 @@
           <select id="tone"></select>
         </div>
       </div>
+      <div class="tag-group-title">文案標籤 · 前綴（可多選）</div>
+      <div class="tag-grid" id="copy-tag-prefix"></div>
+      <div class="tag-section-label">中間（內容重點）— 可多選</div>
+      <div class="tag-grid" id="copy-tag-middle"></div>
+      <div class="tag-section-label">後面（CTA／hashtag／語氣）— 可多選</div>
+      <div class="tag-grid" id="copy-tag-suffix"></div>
+      <label>將送出的文案標籤預覽</label>
+      <div class="instr-preview" id="copy-tag-preview">（未選標籤＝預設活潑親切＋適度 emoji）</div>
       <div class="field">
         <label>補充說明（選填）</label>
         <textarea id="extra-notes" placeholder="例如：這是 776 案客廳完工，強調採光與收納"></textarea>
@@ -528,14 +515,60 @@
       <div class="field">
         <label>LOGO 來源</label>
         <div class="warn-box" style="margin-top:0.35rem">
-          瀏覽器<strong>無法讀取 .ai</strong>。請從 Illustrator 匯出<strong>透明 PNG（建議 ≥2000px）或 SVG</strong> 再上傳。詳見 <code>assets/README.md</code>。
+          無 Illustrator 時可試「一鍵轉透明 PNG」（僅 PDF 相容的簡易 .ai／PNG／SVG）。
+          複雜 .ai <strong>請先匯出透明 PNG 再上傳</strong>。詳見 <code>assets/README.md</code>。
         </div>
         <div class="inline-btns">
           <button type="button" class="btn btn-secondary" id="btn-logo-default">使用內建 LOGO</button>
           <button type="button" class="btn btn-ghost" id="btn-logo-upload">上傳自訂 LOGO</button>
-          <input type="file" id="input-logo" accept="image/png,image/svg+xml,image/webp,image/jpeg,.png,.svg,.webp,.jpg,.jpeg" class="hidden">
+          <input type="file" id="input-logo" accept="image/png,image/svg+xml,image/webp,image/jpeg,.png,.svg,.webp,.jpg,.jpeg,.ai,application/pdf" class="hidden">
         </div>
         <p class="status-line" id="logo-status">尚未載入 LOGO</p>
+        <div class="convert-fail-guide" id="logo-fail-guide" role="alert">
+          <strong>.ai 轉透明 PNG 失敗</strong>
+          <ol>
+            <li>用 Illustrator／其他工具開啟原檔</li>
+            <li>匯出為 <strong>透明 PNG</strong>（長邊建議 ≥2000px）</li>
+            <li>再按「上傳自訂 LOGO」選 PNG（不要再傳複雜 .ai）</li>
+          </ol>
+          <button type="button" class="btn btn-primary" id="btn-logo-upload-png">
+            <i class="fa-solid fa-file-image"></i> 改傳透明 PNG
+          </button>
+        </div>
+      </div>
+
+      <div class="field" style="margin-top:0.85rem">
+        <label>貼圖素材庫（本機）</label>
+        <div class="info-box">
+          上傳 .ai／PNG／SVG → 盡力轉透明 PNG 存本機。可套用為 LOGO／貼圖。
+          <strong>複雜 .ai 常失敗</strong>：請用 Illustrator（或其他工具）匯出「透明 PNG」再上傳。
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>分類標籤</label>
+            <input id="sticker-category" type="text" placeholder="例如：LOGO、角標、促銷章" value="貼圖">
+          </div>
+          <div class="field">
+            <label>新增素材</label>
+            <button type="button" class="btn btn-secondary btn-block" id="btn-sticker-upload">
+              <i class="fa-solid fa-plus"></i> 上傳並轉換
+            </button>
+            <input type="file" id="input-sticker" accept=".ai,.png,.svg,.webp,.jpg,.jpeg,image/*,application/pdf" class="hidden">
+          </div>
+        </div>
+        <p class="status-line" id="sticker-status">素材庫載入中…</p>
+        <div class="convert-fail-guide" id="sticker-fail-guide" role="alert">
+          <strong>轉檔失敗：請改傳透明 PNG</strong>
+          <ol>
+            <li>用 Illustrator／其他工具開啟 .ai</li>
+            <li>匯出（Export）為 <strong>PNG</strong>，勾選<strong>透明背景</strong></li>
+            <li>回到這裡點「上傳並轉換」，選剛匯出的 PNG</li>
+          </ol>
+          <button type="button" class="btn btn-primary" id="btn-sticker-upload-png">
+            <i class="fa-solid fa-file-image"></i> 改傳透明 PNG
+          </button>
+        </div>
+        <div class="thumb-grid" id="sticker-grid"></div>
       </div>
       <div class="row">
         <div class="field">
@@ -566,78 +599,89 @@
     <!-- 5. 完成 -->
     <section class="card wizard-panel hidden" data-step="5" id="section-finish">
       <h2><i class="fa-solid fa-flag-checkered"></i> ⑤ 完成</h2>
-      <p class="step-hint">複製文案、下載成品 JPG，再到粉專人工貼上。可回上一步微調。</p>
+      <p class="step-hint">先過發前檢查，再複製文案、下載成品 JPG，到粉專人工貼上。</p>
       <div class="finish-summary" id="finish-summary">尚無摘要</div>
-      <div class="inline-btns">
-        <button type="button" class="btn btn-secondary" id="btn-copy-text">
-          <i class="fa-regular fa-copy"></i> 一鍵複製貼文
-        </button>
-        <button type="button" class="btn btn-ghost" id="btn-open-fb">
-          <i class="fa-brands fa-facebook"></i> 開粉專
-        </button>
+
+      <div class="preflight" id="preflight-box">
+        <h3><i class="fa-solid fa-clipboard-check"></i> 發前檢查</h3>
+        <ul class="preflight-list" id="preflight-list"></ul>
+        <label class="check-inline">
+          <input type="checkbox" id="preflight-skip-logo"> 本次不加 LOGO／貼圖
+        </label>
+        <label class="check-inline">
+          <input type="checkbox" id="preflight-privacy-ok"> 已目視確認：無門牌、真人臉、全名／電話等個資（或已遮）
+        </label>
+        <label class="check-inline">
+          <input type="checkbox" id="preflight-force-ok"> 仍有提醒，但我確認可以複製／下載
+        </label>
+        <p class="preflight-status" id="preflight-status">檢查中…</p>
       </div>
-      <div class="inline-btns" style="margin-top:0.65rem">
-        <button type="button" class="btn btn-primary" id="btn-download">
-          <i class="fa-solid fa-download"></i> 下載目前 JPG
-        </button>
-        <button type="button" class="btn btn-secondary" id="btn-download-all">下載全部成品</button>
+
+      <div class="finish-cta dimmed" id="finish-cta">
+        <p class="cta-hint" id="finish-cta-hint">通過發前檢查後，下方「複製文案／下載」會成為主要操作。</p>
+        <div class="inline-btns">
+          <button type="button" class="btn btn-secondary" id="btn-copy-text">
+            <i class="fa-regular fa-copy"></i> 一鍵複製貼文
+          </button>
+          <button type="button" class="btn btn-ghost" id="btn-open-fb">
+            <i class="fa-brands fa-facebook"></i> 開粉專
+          </button>
+        </div>
+        <div class="inline-btns" style="margin-top:0.65rem">
+          <button type="button" class="btn btn-primary" id="btn-download">
+            <i class="fa-solid fa-download"></i> 下載目前 JPG
+          </button>
+          <button type="button" class="btn btn-secondary" id="btn-download-all">下載全部成品</button>
+        </div>
       </div>
-      <div class="inline-btns" style="margin-top:0.65rem">
-        <button type="button" class="btn btn-secondary" id="btn-go-reel">
-          <i class="fa-solid fa-film"></i> 製作短影音（選填）
-        </button>
-      </div>
+      <p class="step-hint" style="margin-top:0.75rem">可選：下一步做「短影音」；不需要可直接結束或回上一步。</p>
     </section>
 
-    <!-- 6. 短影音（選填） -->
+    <!-- 6. 短影音（可跳過） -->
     <section class="card wizard-panel hidden" data-step="6" id="section-reel">
-      <h2><i class="fa-solid fa-film"></i> ⑥ 短影音（選填）</h2>
-      <p class="step-hint">把已採用／最新版<strong>照片</strong>組成 9:16 短影音（2～10 張）。純本機合成、不走後端。案場<strong>實拍影片</strong>可在下方預覽／下載選取；站內自動剪輯暫緩。.mov 多半無法在瀏覽器內剪輯。</p>
-      <div class="field">
-        <label>照片素材（合成用）</label>
-        <div class="thumb-grid" id="reel-source-grid"></div>
-        <p class="status-line" id="reel-source-meta">—</p>
+      <h2><i class="fa-solid fa-clapperboard"></i> ⑥ 短影音（可跳過）</h2>
+      <div class="info-box">
+        用已採用／精修圖組成 9:16 短影音（淡入淡出＋輕微 Ken Burns）。合成在瀏覽器完成；
+        引擎從網路載入。若載入失敗會<strong>自動改匯出 WebM</strong>（仍可下載，粉專有時較愛 MP4）。
+        建議 2～10 張、總長約 ≤28 秒。合成中請看下方進度，勿以為當掉。
       </div>
-      <div class="site-videos-panel" id="site-videos-panel">
-        <label>已選案場影片</label>
-        <div class="thumb-grid" id="site-videos-grid"></div>
-        <p class="status-line" id="site-videos-meta">尚未從案場匯入影片</p>
-        <p class="site-videos-limit-note hidden" id="site-videos-limit-note" role="status"></p>
-      </div>
+      <p class="step-hint" id="reel-source-hint">將使用已採用圖；不足時改用最新版本。</p>
       <div class="row">
         <div class="field">
-          <label>每張秒數 <span id="val-reel-sec">2.4</span></label>
-          <input type="range" id="reel-sec-per-slide" min="1.2" max="4" step="0.1" value="2.4">
+          <label>每張停留（秒）</label>
+          <input id="reel-sec" type="number" min="1.2" max="4" step="0.2" value="2.4">
         </div>
         <div class="field">
           <label>背景音樂</label>
           <select id="reel-bgm"></select>
         </div>
       </div>
+      <label class="check-inline">
+        <input type="checkbox" id="reel-music-off"> 關閉音樂
+      </label>
       <div class="field">
-        <label><input type="checkbox" id="reel-music-off" style="width:auto;margin-right:0.4rem"> 不要音樂</label>
+        <label>或上傳音檔（mp3／wav／m4a）</label>
+        <input type="file" id="input-reel-audio" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg">
+        <p class="status-line" id="reel-audio-status">未上傳（可用內建程序音）</p>
       </div>
-      <div class="field">
-        <label>或上傳音檔（選填）</label>
-        <input type="file" id="input-reel-audio" accept="audio/*">
-      </div>
-      <p class="status-line" id="reel-progress">尚未合成</p>
-      <p class="status-line hidden" id="reel-fallback-note"></p>
-      <div class="preview-box hidden" id="reel-preview-wrap">
-        <video id="reel-preview" controls playsinline></video>
-      </div>
-      <div class="inline-btns" style="margin-top:0.75rem">
-        <button type="button" class="btn btn-primary" id="btn-reel-compose">
-          <i class="fa-solid fa-clapperboard"></i> 開始合成
+      <div class="inline-btns">
+        <button type="button" class="btn btn-primary" id="btn-reel-export">
+          <i class="fa-solid fa-file-video"></i> 合成並匯出
         </button>
-        <button type="button" class="btn btn-secondary" id="btn-reel-download" disabled>
-          <i class="fa-solid fa-download"></i> 下載影片
+        <button type="button" class="btn btn-secondary" id="btn-reel-copy-caption">
+          <i class="fa-regular fa-copy"></i> 複製文案當影片說明
         </button>
-        <button type="button" class="btn btn-ghost" id="btn-reel-copy-caption">
-          <i class="fa-regular fa-copy"></i> 複製影片說明
-        </button>
-        <button type="button" class="btn btn-ghost" id="btn-reel-skip">跳過，回到選圖</button>
+        <button type="button" class="btn btn-ghost" id="btn-reel-skip">跳過短影音</button>
       </div>
+      <p class="status-line" id="reel-status">尚未合成</p>
+      <p class="reel-stage" id="reel-stage"></p>
+      <div class="progress-wrap" id="reel-progress-wrap" aria-hidden="true">
+        <div class="progress-bar" id="reel-progress-bar"></div>
+      </div>
+      <div class="preview-box" id="reel-preview" style="margin-top:0.65rem;min-height:180px">
+        <span class="preview-empty">合成後可在此預覽</span>
+      </div>
+      <div class="warn-box" id="reel-fallback-note" style="display:none;margin-top:0.65rem"></div>
     </section>
 
     <details class="card settings-details" id="section-settings">
@@ -653,9 +697,6 @@
         </div>
         <div class="field">
           <label><input type="checkbox" id="dev-bypass" checked style="width:auto;margin-right:0.4rem"> 開發 bypass（本機／測試）</label>
-        </div>
-        <div class="field">
-          <label><input type="checkbox" id="mock-completion" style="width:auto;margin-right:0.4rem"> 案場匯入用假資料（本機測介面；正式連線請關掉）</label>
         </div>
         <div class="inline-btns">
           <button type="button" class="btn btn-secondary" id="btn-ping">測試連線</button>
@@ -674,7 +715,15 @@
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    if (window['pdfjsLib']) {
+      window['pdfjsLib'].GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+  </script>
   <script src="config.js"></script>
+  <script src="stickers.js"></script>
   <script src="reel.js"></script>
   <script src="studio.js"></script>
 </body>
