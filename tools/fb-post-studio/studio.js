@@ -122,10 +122,18 @@
   function setBusy(btn, busy, labelBusy, labelIdle) {
     if (!btn) return;
     btn.disabled = !!busy;
-    if (busy && labelBusy) btn.dataset._label = btn.innerHTML;
-    if (busy && labelBusy) btn.innerHTML = labelBusy;
-    if (!busy && (labelIdle || btn.dataset._label)) {
-      btn.innerHTML = labelIdle || btn.dataset._label;
+    if (busy) {
+      if (!btn.dataset._busy) {
+        btn.dataset._label = btn.innerHTML;
+        btn.dataset._busy = '1';
+      }
+      if (labelBusy) btn.innerHTML = labelBusy;
+    } else {
+      if (labelIdle || btn.dataset._label) {
+        btn.innerHTML = labelIdle || btn.dataset._label;
+      }
+      delete btn.dataset._label;
+      delete btn.dataset._busy;
     }
   }
 
@@ -182,9 +190,11 @@
     return state.images.find(function (im) { return im.id === state.selectedId; }) || null;
   }
 
-  function getBatchImages() {
+  function getBatchImages(strict) {
     var list = state.images.filter(function (im) { return im.batch; });
-    return list.length ? list : (getSelectedImage() ? [getSelectedImage()] : []);
+    if (list.length) return list;
+    if (strict) return [];
+    return getSelectedImage() ? [getSelectedImage()] : [];
   }
 
   /* ---------- resize ---------- */
@@ -2698,9 +2708,13 @@
     $('edit-instruction').value = instruction;
 
     var scope = $('edit-scope').value;
-    var targets = scope === 'batch' ? getBatchImages() : (getSelectedImage() ? [getSelectedImage()] : []);
+    var targets = scope === 'batch'
+      ? getBatchImages(true)
+      : (getSelectedImage() ? [getSelectedImage()] : []);
     if (!targets.length) {
-      showError('請先選中或勾選要改的圖');
+      showError(scope === 'batch'
+        ? '請先在縮圖勾選要批次的圖（或按「全選批次」）'
+        : '請先選中一張圖');
       return;
     }
 
@@ -2713,6 +2727,7 @@
     }
 
     var btn = $('btn-edit-image');
+    var btnIdleHtml = '<i class="fa-solid fa-images"></i> 執行改圖';
     var aspect = $('edit-aspect').value;
     var i = 0;
     var styleReference = null;
@@ -2720,7 +2735,7 @@
 
     function next() {
       if (i >= targets.length) {
-        setBusy(btn, false);
+        setBusy(btn, false, null, btnIdleHtml);
         selectImage(state.selectedId);
         renderThumbs();
         showOk('改圖完成（' + targets.length + ' 張）');
@@ -2744,7 +2759,7 @@
         i += 1;
         setTimeout(next, 400);
       }).catch(function (e) {
-        setBusy(btn, false);
+        setBusy(btn, false, null, btnIdleHtml);
         showError((e.message || String(e)) + '（已完成 ' + i + '/' + targets.length + '）');
         selectImage(state.selectedId);
       });
@@ -3049,8 +3064,9 @@
     $('btn-clear-images').addEventListener('click', clearImages);
     $('btn-batch-all').addEventListener('click', function () {
       state.images.forEach(function (im) { im.batch = true; });
+      if ($('edit-scope')) $('edit-scope').value = 'batch';
       renderThumbs();
-      showOk('已全選批次');
+      showOk('已全選批次（套用範圍已切為「批次：已勾選圖」）');
     });
     $('btn-batch-none').addEventListener('click', function () {
       state.images.forEach(function (im) { im.batch = false; });
