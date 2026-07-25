@@ -1135,12 +1135,17 @@
           if (it.id === 'cf_receipt_proofs' && it.hint) {
             extra = '<div class="hint" style="margin-top:4px">' + it.hint + '</div>';
           }
-          if (it.id === 'base_cost' && it.base_cost_breakdown) {
-            var b = it.base_cost_breakdown;
-            extra = '<div class="base-cost-lines">工資 ' + fmtMoney(b.base_wage) +
-              ' · 五金 ' + fmtMoney(b.hardware_fee) +
-              ' · 清潔 ' + fmtMoney(b.cleaning_fee) +
-              ' · 合計 ' + fmtMoney(b.total) + '</div>';
+          if (it.id === 'base_cost') {
+            if (it.base_cost_breakdown) {
+              var b = it.base_cost_breakdown;
+              extra = '<div class="base-cost-lines">工資 ' + fmtMoney(b.base_wage) +
+                ' · 五金 ' + fmtMoney(b.hardware_fee) +
+                ' · 清潔 ' + fmtMoney(b.cleaning_fee) +
+                ' · 合計 ' + fmtMoney(b.total) + '</div>';
+            }
+            if (it.hint) {
+              extra += '<div class="hint" style="margin-top:4px">' + it.hint + '</div>';
+            }
           }
           if (it.id === 'project_closed') {
             var statusText = it.project_status || '（未填）';
@@ -1184,6 +1189,20 @@
         var site = data.site || {};
         var duration = data.duration || {};
         var overview = data.overview || {};
+
+        // 開詳情／寫入後：上方摘要與三角核對一律用重算後的總覽數字
+        var sumEl = document.getElementById('detailSummary');
+        if (sumEl) {
+          sumEl.textContent =
+            '收 ' + fmtMoney(overview.revenue_total) + ' · 支 ' + fmtMoney(overview.expense_total) +
+            ' · 毛利 ' + fmtMoney(overview.gross_profit);
+        }
+        if (current) {
+          if (overview.revenue_total != null) current.revenue_total = overview.revenue_total;
+          if (overview.expense_total != null) current.expense_total = overview.expense_total;
+          if (overview.gross_profit != null) current.gross_profit = overview.gross_profit;
+          if (overview.updated_at != null) current.updated_at = overview.updated_at;
+        }
 
         var autoAmt = meta.contract_amount_auto || 0;
         var hasPrice = meta.quotation_has_price_data;
