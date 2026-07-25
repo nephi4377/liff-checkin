@@ -86,7 +86,7 @@ flowchart TB
 3. 無影片是空態；建立中是處理中；缺路徑是錯誤；下載後是成功；送單按鈕防連點
 4. JSON 含案號、來源類型、路徑、選填 `segs`、建立時間與 `pending`
 5. `Watch-Queue.ps1 -Once` 能處理工單並回寫 processing／completed／failed 與結果資料夾
-6. 照片合成、音樂、文案複製與 MP4→WebM 降級仍可用
+6. 照片合成、音樂（曲庫／AI 氛圍／上傳＋試播）、文案複製與 MP4→WebM 降級仍可用
 
 ---
 
@@ -95,7 +95,7 @@ flowchart TB
 | 路徑 | 用途 |
 |------|------|
 | `tools/fb-post-studio/reel.js` | 合成／CDN ffmpeg／降級 |
-| `tools/fb-post-studio/config.js` → `REEL` | 尺寸、CDN URL、BGM 預設 |
+| `tools/fb-post-studio/config.js` → `REEL` | 尺寸、CDN URL、BGM 曲庫（`assets/bgm/`）、AI 氛圍作曲 |
 | `tools/fb-post-studio/index.html` | 步驟 6 UI |
 | `tools/fb-post-studio/studio.js` | 影片清單只記路徑、產生與下載工單 |
 | `tools/fb-post-studio/assets/README.md` | CDN／不進 git 說明 |
