@@ -168,10 +168,6 @@
             <label>案號（選填）</label>
             <input type="text" id="archiveProjectNo" placeholder="例：752" />
           </div>
-          <div>
-            <label>訂編（選填）</label>
-            <input type="text" id="archiveOrderNo" placeholder="例：A123" />
-          </div>
         </div>
         <label>備註（選填）</label>
         <textarea id="archiveTitle" rows="2" placeholder="例：第三版報價、含安裝費"></textarea>
@@ -230,10 +226,6 @@
         <div>
           <label>單據日期</label>
           <input type="date" id="txnDate" />
-        </div>
-        <div>
-          <label>訂編（選填）</label>
-          <input type="text" id="orderNo" />
         </div>
       </div>
 
@@ -1062,7 +1054,7 @@
         var lines = [];
         lines.push('模式：' + (payload.submit_mode === 'finance_direct' ? '財務直送待匯款' : '送審'));
         lines.push('單據類型：' + (payload.doc_type || '—'));
-        if (payload.order_no) lines.push('訂編：' + payload.order_no);
+        if (payload.project_no) lines.push('案號：' + payload.project_no);
         if (payload.txn_date) lines.push('單據日期：' + payload.txn_date);
         if (payload.vendor_id) {
           var v = vendors.find(function (x) { return x.vendor_id === payload.vendor_id; });
@@ -1403,7 +1395,6 @@
         if (ocr.vendor_name) lines.push('廠商：' + ocr.vendor_name + (ocr.vendor_matched ? '（名冊已對到）' : ''));
         if (ocr.doc_type) lines.push('類型：' + ocr.doc_type);
         if (ocr.project_no) lines.push('案號：' + ocr.project_no);
-        if (ocr.order_no) lines.push('訂編：' + ocr.order_no);
         if (ocr.amount) lines.push('金額：$' + Number(ocr.amount).toLocaleString('zh-TW'));
         if (ocr.item_desc) lines.push('摘要：' + ocr.item_desc);
         if (ocr.summary) lines.push('說明：' + ocr.summary);
@@ -1431,7 +1422,6 @@
           }
         }
         if (ocr.project_no) document.getElementById('archiveProjectNo').value = ocr.project_no;
-        if (ocr.order_no) document.getElementById('archiveOrderNo').value = ocr.order_no;
         var noteParts = [];
         if (ocr.summary) noteParts.push(ocr.summary);
         else if (ocr.item_desc) noteParts.push(ocr.item_desc);
@@ -1561,7 +1551,7 @@
           vendor_id: getVendorPickId(),
           doc_type: document.getElementById('archiveDocType').value,
           project_no: document.getElementById('archiveProjectNo').value.trim(),
-          order_no: document.getElementById('archiveOrderNo').value.trim(),
+          order_no: '',
           title: document.getElementById('archiveTitle').value.trim(),
           files: archiveFilesPayload()
         };
@@ -1656,7 +1646,6 @@
           ocrAttempt = data.attempt_no || (ocrAttempt + 1);
           var ocr = data.ocr || {};
           if (ocr.doc_type) document.getElementById('docType').value = ocr.doc_type;
-          if (ocr.order_no) document.getElementById('orderNo').value = ocr.order_no;
           if (ocr.txn_date) document.getElementById('txnDate').value = ocr.txn_date.slice(0, 10);
           applyOcrVendor(ocr);
 
@@ -1730,7 +1719,7 @@
           submit_mode: mode,
           draft_id: draftId || undefined,
           doc_type: document.getElementById('docType').value,
-          order_no: document.getElementById('orderNo').value.trim(),
+          order_no: '',
           txn_date: document.getElementById('txnDate').value,
           note: document.getElementById('note').value.trim(),
           allocations: readAllocRows(),
@@ -1791,7 +1780,6 @@
         if (!data.success || !data.draft) return;
         var d = data.draft;
         if (d.doc_type) document.getElementById('docType').value = d.doc_type;
-        if (d.order_no) document.getElementById('orderNo').value = d.order_no;
         if (d.allocations && d.allocations.length) {
           renderAllocRows(d.allocations.map(function (r) {
             return buildAiAllocRow(r, d.ocr || {});

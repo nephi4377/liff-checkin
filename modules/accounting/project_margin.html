@@ -170,7 +170,7 @@
           </div>
         </div>
         <p class="hint" id="durationDaysHint">—</p>
-        <p class="hint">來自案場排程／結案日；若要改請到案場結案流程，此頁不修改</p>
+        <p class="hint">開始日：案場「專案起始日」；空白則用保護／木作／油漆／系統工程第一則已發布施工紀錄。結束日：結案日（未結案暫用今天）。此頁僅顯示不修改。</p>
         <button type="button" class="btn btn-primary hidden" id="saveDurationBtn" tabindex="-1" aria-hidden="true">儲存工期</button>
       </div>
       <div class="card hidden bonus-compact" id="bonusAllocCard">
@@ -1216,7 +1216,13 @@
 
         el('durationStart').value = duration.start || '';
         el('durationEnd').value = duration.end || '';
-        el('durationDaysHint').textContent = '工期 ' + (duration.days || 0) + ' 天（含假日）';
+        var daysHint = '工期 ' + (duration.days || 0) + ' 天（含假日）';
+        if (duration.start_source === 'project_log') {
+          daysHint += '（開始日取自保護／木作／油漆／系統工程第一則施工紀錄）';
+        } else if (!duration.start) {
+          daysHint += '（開始日空白：案場未填起始日，且尚無符合的施工紀錄）';
+        }
+        el('durationDaysHint').textContent = daysHint;
 
         renderBonusAllocations(site.responsible_persons, meta.bonus_allocations);
 
@@ -1278,6 +1284,11 @@
           if (!data.success) { setMsg(data.message || '無法載入案件詳情'); return; }
           if (data.categories && data.categories.length) categories = data.categories;
           fillCategoryDatalist();
+          // 後端開詳情會覆寫總覽「分頁名稱」；前端跟著作業用正確工作頁
+          if (data.tab_name) {
+            it.tab_name = data.tab_name;
+            current.tab_name = data.tab_name;
+          }
           renderDetailPanels(data);
         } finally {
           setDetailLoading(false);

@@ -39,7 +39,7 @@
         <div class="help-flow-branch">
           <div class="help-flow-branch-col">
             <span class="help-flow-branch-label">收入 A</span>
-            <div class="help-flow-step">客戶、訂編、款項</div>
+            <div class="help-flow-step">客戶、案號、款項</div>
           </div>
           <div class="help-flow-branch-col">
             <span class="help-flow-branch-label">支出 B</span>
@@ -59,7 +59,7 @@
       <div class="help-flow">
         <div class="help-flow-step is-start">貼格式 A 或 #格式 複製收款範本</div>
         <div class="help-flow-arrow">↓</div>
-        <div class="help-flow-step">Bot 解析：日期、客戶、訂編、款項、金額</div>
+        <div class="help-flow-step">Bot 解析：日期、客戶、案號、款項、金額</div>
         <div class="help-flow-arrow">↓</div>
         <div class="help-flow-step is-end">回覆「記好了」</div>
       </div>
@@ -68,7 +68,7 @@
         <tbody>
           <tr><td>收款日期</td><td>民國或西元日期</td></tr>
           <tr><td>客戶名</td><td>付款客戶</td></tr>
-          <tr><td>訂編</td><td>案場訂單編號；有填會進案件毛利</td></tr>
+          <tr><td>案號</td><td>裝修案號；有填會進案件毛利</td></tr>
           <tr><td>款項類別</td><td>例：訂金、尾款、追加款</td></tr>
           <tr><td>金額</td><td>實收金額</td></tr>
           <tr><td>付款方式</td><td>現金／匯款等</td></tr>
@@ -138,10 +138,10 @@
         <thead><tr><th>欄位</th><th>必填</th><th>說明</th></tr></thead>
         <tbody>
           <tr><td>店別</td><td>選填</td><td>台南／高雄／工廠／行政；快選案場可自動帶入</td></tr>
-          <tr><td>快選案場</td><td>選填</td><td>選後自動帶客戶名、訂編、店別</td></tr>
+          <tr><td>快選案場</td><td>選填</td><td>選後自動帶客戶名、案號、店別</td></tr>
           <tr><td>收款日期</td><td>✓</td><td>民國格式</td></tr>
           <tr><td>客戶名</td><td>✓</td><td>付款客戶</td></tr>
-          <tr><td>訂編</td><td>建議</td><td>有訂編會進案件毛利</td></tr>
+          <tr><td>案號</td><td>建議</td><td>有案號會進案件毛利</td></tr>
           <tr><td>款項類別</td><td>✓</td><td>訂金、尾款等</td></tr>
           <tr><td>金額</td><td>✓</td><td>實收金額</td></tr>
           <tr><td>是否入零用金</td><td>✓</td><td>是／否</td></tr>
@@ -198,7 +198,7 @@
       <ul>
         <li><strong>收入與支出欄位不同</strong>——切換類型後請對照上方各自說明，勿混用 A／B 欄位名稱。</li>
         <li><strong>已付款</strong>用收支登錄；<strong>還沒付款</strong>用待付款申請。</li>
-        <li>有訂編（收入）或分攤案號（支出）會進案件毛利。</li>
+        <li>有案號（收入）或分攤案號（支出）會進案件毛利。</li>
         <li>收入登錄後可能推送客戶確認（與請款審核不同）。</li>
         <li>LINE 內開表單須通過身分驗證；關閉視窗＝不送出。</li>
       </ul>
