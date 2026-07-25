@@ -80,7 +80,43 @@
       overflow: hidden; background: #000; cursor: pointer; aspect-ratio: 1;
     }
     .thumb.selected { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(59,130,246,0.35); }
+    .thumb.adopted {
+      border-color: var(--ok);
+      box-shadow: 0 0 0 3px rgba(52,211,153,0.5), 0 0 16px rgba(52,211,153,0.25);
+    }
+    .thumb.adopted-pulse { animation: adoptPulse 0.75s ease-out; }
+    @keyframes adoptPulse {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(52,211,153,0.7); }
+      40% { transform: scale(1.04); box-shadow: 0 0 0 8px rgba(52,211,153,0.35); }
+      100% { transform: scale(1); box-shadow: 0 0 0 3px rgba(52,211,153,0.5); }
+    }
     .thumb.batch-on { outline: 2px dashed rgba(52,211,153,0.7); outline-offset: 1px; }
+    .thumb.dragging { opacity: 0.45; border-style: dashed; }
+    .thumb.drag-over { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(56,189,248,0.45); }
+    .thumb .adopt-mark {
+      position: absolute; bottom: 4px; left: 4px; width: 24px; height: 24px;
+      border-radius: 50%; background: rgba(52,211,153,0.95); color: #052e1a;
+      font-size: 0.72rem; font-weight: 700; display: none;
+      align-items: center; justify-content: center; z-index: 2;
+    }
+    .thumb.adopted .adopt-mark { display: flex; }
+    .thumb .order-btns {
+      position: absolute; bottom: 4px; right: 4px; display: flex; gap: 2px; z-index: 2;
+    }
+    .thumb .order-btns button {
+      width: 20px; height: 20px; border: none; border-radius: 4px;
+      background: rgba(0,0,0,0.72); color: #fff; font-size: 0.62rem;
+      cursor: pointer; line-height: 1; padding: 0;
+    }
+    .thumb .order-btns button:hover { background: rgba(59,130,246,0.9); }
+    .thumb .order-btns button:disabled { opacity: 0.35; cursor: default; }
+    .step-divider {
+      display: flex; align-items: center; gap: 0.65rem;
+      margin: 1.1rem 0 0.85rem; color: var(--muted); font-size: 0.82rem; font-weight: 700;
+    }
+    .step-divider::before, .step-divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
     .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .thumb .badge {
       position: absolute; top: 4px; left: 4px; font-size: 0.65rem; font-weight: 700;
@@ -286,7 +322,7 @@
     <header>
       <h1>添心 · FB 發文工作室</h1>
       <p class="sub">
-        分五步完成圖文，可選第 6 步短影音 → 複製／下載，再人工貼到
+        分四步完成圖文，可選第 5 步短影音 → 複製／下載，再人工貼到
         <a id="fb-page-link" href="https://www.facebook.com/TainanTanXin" target="_blank" rel="noopener">粉專</a>。
         Phase 1 不自動發文。
       </p>
@@ -298,15 +334,14 @@
     <nav class="wizard-bar" id="wizard-bar" aria-label="步驟">
       <button type="button" class="wizard-step active" data-goto-step="1"><span class="num">1</span>選圖</button>
       <button type="button" class="wizard-step" data-goto-step="2"><span class="num">2</span>文案</button>
-      <button type="button" class="wizard-step" data-goto-step="3"><span class="num">3</span>AI 改圖</button>
-      <button type="button" class="wizard-step" data-goto-step="4"><span class="num">4</span>精修</button>
-      <button type="button" class="wizard-step" data-goto-step="5"><span class="num">5</span>完成</button>
-      <button type="button" class="wizard-step" data-goto-step="6"><span class="num">6</span>短影音</button>
+      <button type="button" class="wizard-step" data-goto-step="3"><span class="num">3</span>產圖精修</button>
+      <button type="button" class="wizard-step" data-goto-step="4"><span class="num">4</span>完成</button>
+      <button type="button" class="wizard-step" data-goto-step="5"><span class="num">5</span>短影音</button>
     </nav>
-    <p class="wizard-progress" id="wizard-progress">步驟 1／6 · 選圖</p>
+    <p class="wizard-progress" id="wizard-progress">步驟 1／5 · 選圖</p>
 
     <div class="card thumb-strip hidden" id="thumb-strip">
-      <h3>目前圖庫（點選中；Ctrl／Cmd 點＝批次勾選）</h3>
+      <h3>目前圖庫（點選中；拖曳或 ↑↓ 調順序；Ctrl／Cmd 點＝批次勾選）</h3>
       <div class="thumb-grid" id="thumb-grid"></div>
       <p class="status-line" id="upload-meta">尚未上傳</p>
     </div>
@@ -318,7 +353,7 @@
 
       <div class="import-panel" id="panel-site-import">
         <h3><i class="fa-solid fa-cloud-arrow-down"></i> 從案場匯入完工照</h3>
-        <p class="step-hint" style="margin-bottom:0.55rem">輸入案號 → 載入清單 → 勾選。照片會匯入圖庫；影片只記錄檔名與 Dropbox 路徑，留到步驟⑥送給本機助手，<strong>不會把整支影片抓進瀏覽器</strong>。</p>
+        <p class="step-hint">輸入案號 → 載入清單 → 勾選。照片會匯入圖庫；影片只記錄檔名與 Dropbox 路徑，留到步驟⑤送給本機助手，<strong>不會把整支影片抓進瀏覽器</strong>。</p>
         <div class="row">
           <div class="field">
             <label for="import-project-code">案號</label>
@@ -410,14 +445,14 @@
       </div>
     </section>
 
-    <!-- 3. AI 改圖 -->
-    <section class="card wizard-panel hidden" data-step="3" id="section-edit-ai">
-      <h2><i class="fa-solid fa-wand-magic-sparkles"></i> ③ AI 改圖</h2>
+    <!-- 3. 產圖＋精修 -->
+    <section class="card wizard-panel hidden" data-step="3" id="section-edit-refine">
+      <h2><i class="fa-solid fa-wand-magic-sparkles"></i> ③ 產圖＋精修</h2>
       <div class="warn-box">
         AI 改圖可能改變細節，完工案例發文前請人工確認。每張約消耗 <strong>1 次改圖</strong>。
-        比例請到下一步「精修」裁切；LOGO 也請用精修疊加，不要叫 AI 畫品牌字。
+        產圖後可直接在下方精修、裁切與疊 LOGO，不必切換步驟。
       </div>
-      <p class="step-hint" id="edit-target-hint">目前對「選中圖」改圖；可勾選多張批次套用同一組標籤（逐張送出）。</p>
+      <p class="step-hint" id="edit-target-hint">目前對「選中圖」改圖；可勾選多張批次套用同一組標籤（逐張送出，整組會盡量維持一致風格）。</p>
 
       <div class="tag-group-title">前綴 A · 鏡頭／構圖（可多選）</div>
       <div class="tag-grid" id="tag-prefix-a"></div>
@@ -442,9 +477,12 @@
       <label class="check-inline">
         <input type="checkbox" id="instr-manual-lock"> 我已手動改指令（暫停自動覆寫）
       </label>
+      <label class="check-inline">
+        <input type="checkbox" id="edit-consistent-batch" checked> 批次改圖時維持整組風格一致（建議開啟）
+      </label>
       <div class="row">
         <div class="field">
-          <label>API 輸出比例（選填；畫面裁切請下一步）</label>
+          <label>API 輸出比例（選填）</label>
           <select id="edit-aspect">
             <option value="">維持原圖比例</option>
             <option value="1:1">1:1</option>
@@ -483,17 +521,14 @@
       <div class="versions" id="version-list"></div>
       <div class="inline-btns" style="margin-top:0.75rem">
         <button type="button" class="btn btn-secondary" id="btn-adopt">
-          <i class="fa-solid fa-check"></i> 採用此圖（進精修）
+          <i class="fa-solid fa-check"></i> 採用此圖
         </button>
         <button type="button" class="btn btn-ghost" id="btn-use-original">採用原圖</button>
-        <button type="button" class="btn btn-ghost" id="btn-adopt-all-latest">全部採用最新版進精修</button>
+        <button type="button" class="btn btn-ghost" id="btn-adopt-all-latest">全部採用最新版</button>
       </div>
-    </section>
 
-    <!-- 4. 精修＋LOGO -->
-    <section class="card wizard-panel hidden" data-step="4" id="section-refine">
-      <h2><i class="fa-solid fa-sliders"></i> ④ 精修＋LOGO</h2>
-      <p class="step-hint">對「目前選中並已採用」的圖調整亮度、裁切比例與 LOGO。比例在此調，不要靠前綴標籤。</p>
+      <div class="step-divider" id="refine-section">精修＋LOGO</div>
+      <p class="step-hint">採用後可直接調整亮度、裁切比例與 LOGO；比例在此調，不要靠前綴標籤。</p>
       <canvas id="edit-canvas" width="800" height="800"></canvas>
 
       <div class="tag-section-label">濾鏡預設</div>
@@ -559,13 +594,16 @@
       <div class="slider-row"><span>大小%</span><input type="range" id="logo-scale" min="5" max="40" value="14"><span id="val-logo-scale">14</span></div>
       <div class="slider-row"><span>透明%</span><input type="range" id="logo-opacity" min="20" max="100" value="90"><span id="val-logo-opacity">90</span></div>
       <div class="inline-btns" style="margin-top:0.75rem">
+        <button type="button" class="btn btn-primary" id="btn-logo-all">
+          <i class="fa-solid fa-stamp"></i> 一鍵全部加上 LOGO
+        </button>
         <button type="button" class="btn btn-ghost" id="btn-save-draft">儲存草稿</button>
       </div>
     </section>
 
-    <!-- 5. 完成 -->
-    <section class="card wizard-panel hidden" data-step="5" id="section-finish">
-      <h2><i class="fa-solid fa-flag-checkered"></i> ⑤ 完成</h2>
+    <!-- 4. 完成 -->
+    <section class="card wizard-panel hidden" data-step="4" id="section-finish">
+      <h2><i class="fa-solid fa-flag-checkered"></i> ④ 完成</h2>
       <p class="step-hint">複製文案、下載成品 JPG，再到粉專人工貼上。可回上一步微調。</p>
       <div class="finish-summary" id="finish-summary">尚無摘要</div>
       <div class="inline-btns">
@@ -589,9 +627,9 @@
       </div>
     </section>
 
-    <!-- 6. 短影音（選填） -->
-    <section class="card wizard-panel hidden" data-step="6" id="section-reel">
-      <h2><i class="fa-solid fa-film"></i> ⑥ 短影音（選填）</h2>
+    <!-- 5. 短影音（選填） -->
+    <section class="card wizard-panel hidden" data-step="5" id="section-reel">
+      <h2><i class="fa-solid fa-film"></i> ⑤ 短影音（選填）</h2>
       <p class="step-hint"><strong>實拍影片改成送單給本機助手。</strong>網頁只整理案號、檔名、路徑與精華秒數，不下載影片、不在瀏覽器剪片。原有的「照片合成短影音」仍保留在下方。</p>
       <div class="info-box">
         <strong>怎麼做：</strong>選好案場影片，或貼上本機影片完整路徑 → 下載工單 JSON → 把工單放進 queue 資料夾 → 執行收單指令。助手跑完後，到原影片旁的「短影音試看」資料夾拿檔。
@@ -702,7 +740,7 @@
   <div class="wizard-nav">
     <div class="wizard-nav-inner">
       <button type="button" class="btn btn-ghost" id="btn-wizard-prev">上一步</button>
-      <span class="wizard-nav-meta" id="wizard-nav-meta">1／6</span>
+      <span class="wizard-nav-meta" id="wizard-nav-meta">1／5</span>
       <button type="button" class="btn btn-primary" id="btn-wizard-next">下一步</button>
     </div>
   </div>

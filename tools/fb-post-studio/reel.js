@@ -84,52 +84,85 @@
   }
 
   /**
-   * 產生內建程序 BGM（WAV ArrayBuffer）— 無二進位進 git
+   * 產生內建程序 BGM（WAV ArrayBuffer）— 柔和氛圍，避免刺耳電子音
    */
   function synthesizeBgm(presetId, durationSec) {
     var sampleRate = 44100;
     var n = Math.max(1, Math.floor(sampleRate * durationSec));
     var ctx = new (global.OfflineAudioContext || global.webkitOfflineAudioContext)(2, n, sampleRate);
     var t0 = ctx.currentTime;
+    var end = durationSec;
+
     var master = ctx.createGain();
-    master.gain.value = 0.12;
+    master.gain.setValueAtTime(0, t0);
+    master.gain.linearRampToValueAtTime(0.09, t0 + 1.2);
+    master.gain.setValueAtTime(0.09, t0 + Math.max(1.5, end - 1.5));
+    master.gain.linearRampToValueAtTime(0, t0 + end);
+
+    var lowpass = ctx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = presetId === 'bright' ? 2200 : 1600;
+    lowpass.Q.value = 0.6;
+    lowpass.connect(master);
     master.connect(ctx.destination);
 
-    function tone(freq, type, start, len, gain) {
+    function padChord(freqs, start, len, gain) {
+      freqs.forEach(function (freq, idx) {
+        var o = ctx.createOscillator();
+        var g = ctx.createGain();
+        o.type = idx === 0 ? 'sine' : 'triangle';
+        o.frequency.value = freq;
+        var atk = 0.35 + idx * 0.08;
+        g.gain.setValueAtTime(0, t0 + start);
+        g.gain.linearRampToValueAtTime(gain * (idx === 0 ? 1 : 0.55), t0 + start + atk);
+        g.gain.linearRampToValueAtTime(gain * 0.45, t0 + start + len * 0.75);
+        g.gain.linearRampToValueAtTime(0, t0 + start + len);
+        o.connect(g);
+        g.connect(lowpass);
+        o.start(t0 + start);
+        o.stop(t0 + start + len + 0.05);
+      });
+    }
+
+    function pluck(freq, start, len, gain) {
       var o = ctx.createOscillator();
       var g = ctx.createGain();
-      o.type = type || 'sine';
+      o.type = 'sine';
       o.frequency.value = freq;
       g.gain.setValueAtTime(0, t0 + start);
-      g.gain.linearRampToValueAtTime(gain, t0 + start + 0.08);
-      g.gain.linearRampToValueAtTime(gain * 0.7, t0 + start + len * 0.7);
-      g.gain.linearRampToValueAtTime(0, t0 + start + len);
+      g.gain.linearRampToValueAtTime(gain, t0 + start + 0.04);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
       o.connect(g);
-      g.connect(master);
+      g.connect(lowpass);
       o.start(t0 + start);
       o.stop(t0 + start + len + 0.05);
     }
 
-    var i;
+    var chords;
     if (presetId === 'warm') {
-      for (i = 0; i < durationSec; i += 2) {
-        tone(220, 'triangle', i, 1.8, 0.35);
-        tone(277.2, 'sine', i + 0.2, 1.6, 0.22);
-        tone(329.6, 'sine', i + 0.4, 1.4, 0.18);
-      }
+      chords = [[174.6, 220, 261.6], [196, 246.9, 293.7], [220, 277.2, 329.6], [196, 246.9, 293.7]];
     } else if (presetId === 'bright') {
-      for (i = 0; i < durationSec; i += 1) {
-        tone(392, 'sine', i, 0.35, 0.25);
-        tone(493.9, 'triangle', i + 0.35, 0.35, 0.2);
-        tone(587.3, 'sine', i + 0.7, 0.25, 0.18);
-      }
+      chords = [[261.6, 329.6, 392], [293.7, 369.9, 440], [329.6, 415.3, 493.9], [293.7, 369.9, 440]];
+    } else if (presetId === 'soft') {
+      chords = [[196, 246.9, 293.7], [174.6, 220, 261.6], [220, 277.2, 329.6], [196, 246.9, 293.7]];
     } else {
-      // soft
-      for (i = 0; i < durationSec; i += 3) {
-        tone(174.6, 'sine', i, 2.8, 0.3);
-        tone(261.6, 'sine', i + 0.3, 2.5, 0.2);
-        tone(349.2, 'triangle', i + 0.6, 2.2, 0.15);
+      // ambient（預設）：慢和弦＋輕琶音
+      chords = [[130.8, 164.8, 196], [146.8, 185, 220], [164.8, 207.7, 246.9], [146.8, 185, 220]];
+    }
+
+    var bar = presetId === 'bright' ? 2.2 : 3.4;
+    var t = 0;
+    var ci = 0;
+    while (t < end - 0.5) {
+      var len = Math.min(bar, end - t);
+      padChord(chords[ci % chords.length], t, len, presetId === 'bright' ? 0.22 : 0.18);
+      if (presetId === 'ambient' || presetId === 'soft') {
+        var chord = chords[ci % chords.length];
+        pluck(chord[1] * 2, t + bar * 0.35, 1.6, 0.06);
+        pluck(chord[2] * 1.5, t + bar * 0.62, 1.4, 0.05);
       }
+      t += bar;
+      ci += 1;
     }
 
     return ctx.startRendering().then(function (buffer) {
@@ -437,7 +470,7 @@
           return null;
         });
       } else {
-        var preset = opts.bgmPreset || 'soft';
+        var preset = opts.bgmPreset || 'ambient';
         if (preset === 'off') {
           audioReady = Promise.resolve(null);
         } else {

@@ -8,16 +8,18 @@
   var DEFAULT_GAS = CFG.GAS_URL || '';
   var MAX_IMAGES = CFG.MAX_IMAGES || 10;
   var COPY_HISTORY_MAX = CFG.COPY_HISTORY_MAX || 40;
-  var WIZARD_MAX = 6;
+  var WIZARD_MAX = 5;
 
   var WIZARD_STEPS = [
     { n: 1, title: '選圖' },
     { n: 2, title: '寫文案' },
-    { n: 3, title: 'AI 改圖' },
-    { n: 4, title: '精修＋LOGO' },
-    { n: 5, title: '完成' },
-    { n: 6, title: '短影音' }
+    { n: 3, title: '產圖精修' },
+    { n: 4, title: '完成' },
+    { n: 5, title: '短影音' }
   ];
+
+  var BATCH_CONSISTENCY_SUFFIX_ =
+    '【整組一致】這是多張同一貼文的照片，請維持與參考圖相同的色溫、對比、光線氛圍與調性，避免每張風格落差過大。';
 
   var state = {
     images: [],
@@ -46,7 +48,9 @@
     localVideoNames: [],
     workOrderBusy: false,
     reelAudioBlob: null,
-    reelLastUrl: null
+    reelLastUrl: null,
+    dragThumbIdx: null,
+    adoptPulseId: null
   };
 
   function emptyTagIds() {
@@ -350,14 +354,14 @@
 
   function canEnterStep(n) {
     if (n <= 1) return { ok: true };
-    if (n === 6) {
+    if (n === 5) {
       return { ok: true };
     }
     if (!state.images.length) {
       return { ok: false, msg: '請先上傳至少一張圖，才能進入下一步' };
     }
-    if (n >= 3 && n <= 4 && !state.selectedId) {
-      return { ok: false, msg: '請先在圖庫點選一張圖，再進 AI 改圖／精修' };
+    if (n === 3 && !state.selectedId) {
+      return { ok: false, msg: '請先在圖庫點選一張圖，再進產圖精修' };
     }
     return { ok: true };
   }
@@ -404,13 +408,13 @@
     if ($('btn-wizard-prev')) $('btn-wizard-prev').disabled = n <= 1;
     if ($('btn-wizard-next')) {
       if (n >= WIZARD_MAX) $('btn-wizard-next').textContent = '回到選圖';
-      else if (n === 5) $('btn-wizard-next').textContent = '製作短影音';
+      else if (n === 4) $('btn-wizard-next').textContent = '製作短影音';
       else $('btn-wizard-next').textContent = '下一步';
     }
     syncThumbStrip();
-    if (n === 4) redrawCanvas();
-    if (n === 5) updateFinishSummary();
-    if (n === 6) {
+    if (n === 3) redrawCanvas();
+    if (n === 4) updateFinishSummary();
+    if (n === 5) {
       refreshReelSourceUi();
       renderSiteVideosPanel();
     }
@@ -574,6 +578,26 @@
       : '請先選中一張圖再改圖。';
   }
 
+  function moveImage(fromIdx, toIdx) {
+    if (fromIdx === toIdx) return;
+    if (fromIdx < 0 || toIdx < 0 || fromIdx >= state.images.length || toIdx >= state.images.length) return;
+    var item = state.images.splice(fromIdx, 1)[0];
+    state.images.splice(toIdx, 0, item);
+    renderThumbs();
+    refreshReelSourceUi();
+  }
+
+  function flashAdoptedThumb(id) {
+    state.adoptPulseId = id;
+    renderThumbs();
+    window.setTimeout(function () {
+      if (state.adoptPulseId === id) {
+        state.adoptPulseId = null;
+        renderThumbs();
+      }
+    }, 800);
+  }
+
   function renderThumbs() {
     var grid = $('thumb-grid');
     grid.innerHTML = '';
@@ -581,13 +605,24 @@
       var div = document.createElement('div');
       div.className = 'thumb' +
         (im.id === state.selectedId ? ' selected' : '') +
-        (im.batch ? ' batch-on' : '');
+        (im.batch ? ' batch-on' : '') +
+        (im.adopted ? ' adopted' : '') +
+        (state.adoptPulseId === im.id ? ' adopted-pulse' : '');
+      div.setAttribute('draggable', 'true');
+      div.dataset.idx = String(idx);
       div.innerHTML =
         '<span class="badge">' + (idx + 1) + '</span>' +
+        '<span class="adopt-mark" title="已採用"><i class="fa-solid fa-check"></i></span>' +
         '<button type="button" class="rm" title="移除">&times;</button>' +
-        '<img alt="" src="' + (im.original.preview || '') + '">';
+        '<img alt="" src="' + (im.original.preview || '') + '">' +
+        '<span class="order-btns">' +
+        '<button type="button" class="order-up" title="往前">↑</button>' +
+        '<button type="button" class="order-down" title="往後">↓</button>' +
+        '</span>';
       div.addEventListener('click', function (e) {
-        if (e.target && e.target.classList.contains('rm')) return;
+        if (e.target && (e.target.classList.contains('rm') ||
+            e.target.classList.contains('order-up') ||
+            e.target.classList.contains('order-down'))) return;
         if (e.ctrlKey || e.metaKey) {
           im.batch = !im.batch;
           renderThumbs();
@@ -598,6 +633,55 @@
       div.querySelector('.rm').addEventListener('click', function (e) {
         e.stopPropagation();
         removeImage(im.id);
+      });
+      var upBtn = div.querySelector('.order-up');
+      var downBtn = div.querySelector('.order-down');
+      if (upBtn) {
+        upBtn.disabled = idx === 0;
+        upBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          moveImage(idx, idx - 1);
+        });
+      }
+      if (downBtn) {
+        downBtn.disabled = idx === state.images.length - 1;
+        downBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          moveImage(idx, idx + 1);
+        });
+      }
+      div.addEventListener('dragstart', function (e) {
+        state.dragThumbIdx = idx;
+        div.classList.add('dragging');
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', String(idx));
+        }
+      });
+      div.addEventListener('dragend', function () {
+        state.dragThumbIdx = null;
+        div.classList.remove('dragging');
+        grid.querySelectorAll('.thumb.drag-over').forEach(function (el) {
+          el.classList.remove('drag-over');
+        });
+      });
+      div.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        div.classList.add('drag-over');
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      });
+      div.addEventListener('dragleave', function () {
+        div.classList.remove('drag-over');
+      });
+      div.addEventListener('drop', function (e) {
+        e.preventDefault();
+        div.classList.remove('drag-over');
+        var from = state.dragThumbIdx;
+        if (from == null && e.dataTransfer) {
+          from = parseInt(e.dataTransfer.getData('text/plain'), 10);
+        }
+        if (!(from >= 0)) return;
+        moveImage(from, idx);
       });
       grid.appendChild(div);
     });
@@ -1193,10 +1277,10 @@
       renderImportGrid();
       var parts = [];
       if (importedPhotos.length) parts.push('照片 ' + importedPhotos.length + ' 張進圖庫');
-      if (importedVideos.length) parts.push('影片 ' + importedVideos.length + ' 支已加入步驟⑥工單');
+      if (importedVideos.length) parts.push('影片 ' + importedVideos.length + ' 支已加入步驟⑤工單');
       if (images.length > room && room >= 0) parts.push('超過圖庫上限的照片已略過');
       setImportStatus('已完成：' + (parts.join('；') || '無') + '。', 'ok');
-      if (importedVideos.length) showOk('影片路徑已記錄，可到步驟⑥下載工單');
+      if (importedVideos.length) showOk('影片路徑已記錄，可到步驟⑤下載工單');
       else if (importedPhotos.length) showOk('已匯入照片');
     }).catch(function (e) {
       var msg = (e && e.message) ? e.message : String(e);
@@ -1262,32 +1346,36 @@
       photos.slice(0, 10).forEach(function (p, i) {
         var div = document.createElement('div');
         div.className = 'thumb';
-        div.innerHTML = '<img alt="reel-' + i + '" src="' + (p.preview || dataUrlFromPhoto(p)) + '">';
+        div.innerHTML =
+          '<span class="badge">' + (i + 1) + '</span>' +
+          '<img alt="reel-' + i + '" src="' + (p.preview || dataUrlFromPhoto(p)) + '">';
         grid.appendChild(div);
       });
     }
     if (meta) {
       var adopted = state.images.filter(function (im) { return im.adopted; }).length;
       meta.textContent = '可用圖 ' + photos.length + ' 張（已採用 ' + adopted +
-        '）。照片合成短影音建議 2～10 張；實拍影片請用上方工單交給本機助手。';
+        '）。順序與上方圖庫相同；照片合成短影音建議 2～10 張。';
     }
     fillReelBgmOptions();
   }
 
   function fillReelBgmOptions() {
     var sel = $('reel-bgm');
-    if (!sel || sel.options.length) return;
-    var presets = (CFG.REEL && CFG.REEL.BGM_PRESETS) || [
-      { id: 'off', label: '無音樂' },
-      { id: 'soft', label: '輕柔氛圍（內建）' }
-    ];
-    presets.forEach(function (p) {
-      var o = document.createElement('option');
-      o.value = p.id;
-      o.textContent = p.label;
-      sel.appendChild(o);
-    });
-    if (!sel.value) sel.value = 'soft';
+    if (!sel) return;
+    if (!sel.options.length) {
+      var presets = (CFG.REEL && CFG.REEL.BGM_PRESETS) || [
+        { id: 'off', label: '無音樂' },
+        { id: 'ambient', label: '輕柔氛圍（推薦）' }
+      ];
+      presets.forEach(function (p) {
+        var o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.label;
+        sel.appendChild(o);
+      });
+    }
+    if (!sel.value || sel.value === 'soft') sel.value = 'ambient';
   }
 
   function renderSiteVideosPanel() {
@@ -1297,8 +1385,8 @@
     var note = $('site-videos-limit-note');
     if (!wrap || !grid) return;
     var list = state.siteVideos || [];
-    wrap.classList.toggle('hidden', list.length === 0 && state.wizardStep !== 6);
-    if (state.wizardStep === 6) wrap.classList.remove('hidden');
+    wrap.classList.toggle('hidden', list.length === 0 && state.wizardStep !== 5);
+    if (state.wizardStep === 5) wrap.classList.remove('hidden');
     grid.innerHTML = '';
     list.forEach(function (v) {
       var div = document.createElement('div');
@@ -1508,7 +1596,7 @@
     }
 
     var musicOff = $('reel-music-off') && $('reel-music-off').checked;
-    var bgm = ($('reel-bgm') && $('reel-bgm').value) || 'soft';
+    var bgm = ($('reel-bgm') && $('reel-bgm').value) || 'ambient';
     var sec = parseFloat($('reel-sec-per-slide') && $('reel-sec-per-slide').value) || 2.4;
 
     api.composeReel({
@@ -1814,8 +1902,10 @@
       state.sourceImg = img;
       redrawCanvas();
       if (!quiet) {
-        showOk('已採用' + (label || '圖片') + '，可到「精修＋LOGO」調整');
-        setWizardStep(4, { force: true });
+        showOk('已採用' + (label || '圖片') + '，可在下方精修');
+        if (im) flashAdoptedThumb(im.id);
+        var refine = $('refine-section');
+        if (refine) refine.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }).catch(function (e) {
       if (!quiet) showError(e.message || String(e));
@@ -1952,7 +2042,7 @@
     return { source: source, version: version, note: res.note || '' };
   }
 
-  function editOneImage(im, instruction, aspect) {
+  function editOneImage(im, instruction, aspect, referencePhoto) {
     var source = im.working || im.original;
     var payload = {
       photo: photoPayload(source),
@@ -1960,6 +2050,9 @@
       model: CFG.IMAGE_MODEL
     };
     if (aspect) payload.aspect_ratio = aspect;
+    if (referencePhoto && (referencePhoto.data_base64 || referencePhoto.dataBase64)) {
+      payload.reference_photo = photoPayload(referencePhoto);
+    }
     return postGas('fb_post_edit_image', payload).then(function (res) {
       if (!res || !res.success) {
         throw new Error((res && res.message) || ('改圖失敗：' + (im.name || im.id)));
@@ -1984,21 +2077,37 @@
       return;
     }
 
+    var useConsistent = !($('edit-consistent-batch') && !$('edit-consistent-batch').checked);
+    if (targets.length > 1 && useConsistent && instruction.indexOf('【整組一致】') < 0) {
+      instruction = instruction.replace(/\s*$/, '');
+      if (instruction && instruction.charAt(instruction.length - 1) !== '。') instruction += '。';
+      instruction += BATCH_CONSISTENCY_SUFFIX_;
+      $('edit-instruction').value = instruction;
+    }
+
     var btn = $('btn-edit-image');
     var aspect = $('edit-aspect').value;
     var i = 0;
+    var styleReference = null;
     setBusy(btn, true, '<i class="fa-solid fa-spinner fa-spin"></i> 改圖中 0/' + targets.length + '…');
 
     function next() {
       if (i >= targets.length) {
         setBusy(btn, false);
         selectImage(state.selectedId);
+        renderThumbs();
         showOk('改圖完成（' + targets.length + ' 張）');
         return;
       }
       var im = targets[i];
       setBusy(btn, true, '<i class="fa-solid fa-spinner fa-spin"></i> 改圖中 ' + (i + 1) + '/' + targets.length + '…');
-      editOneImage(im, instruction, aspect).then(function (result) {
+      editOneImage(im, instruction, aspect, styleReference).then(function (result) {
+        if (useConsistent && targets.length > 1 && !styleReference && result.version) {
+          styleReference = {
+            data_base64: result.version.data_base64,
+            mime_type: result.version.mime_type
+          };
+        }
         if (im.id === state.selectedId) {
           setPreviewEl($('compare-before'), result.source);
           setPreviewEl($('compare-after'), result.version);
@@ -2006,7 +2115,6 @@
           renderVersions();
         }
         i += 1;
-        // 小間隔，避免連續打爆 GAS
         setTimeout(next, 400);
       }).catch(function (e) {
         setBusy(btn, false);
@@ -2015,6 +2123,79 @@
       });
     }
     next();
+  }
+
+  function blobToPhotoPayload(blob, name) {
+    return new Promise(function (resolve, reject) {
+      if (!blob) {
+        reject(new Error('無法匯出圖片'));
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function () {
+        var dataUrl = reader.result;
+        resolve({
+          data_base64: dataUrl.split(',')[1],
+          mime_type: blob.type || 'image/jpeg',
+          preview: dataUrl,
+          name: name || 'export.jpg'
+        });
+      };
+      reader.onerror = function () { reject(new Error('讀取匯出圖失敗')); };
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function exportCurrentCanvasPhoto(name) {
+    redrawCanvas();
+    return canvasToBlob($('edit-canvas')).then(function (blob) {
+      return blobToPhotoPayload(blob, name);
+    });
+  }
+
+  function applyLogoToAll() {
+    if (!state.logoImg) {
+      showError('請先載入 LOGO（內建或上傳）');
+      return;
+    }
+    if ($('logo-enabled').value !== '1') {
+      showError('請先將「顯示 LOGO」設為「是」');
+      return;
+    }
+    if (!state.images.length) {
+      showError('尚無圖片');
+      return;
+    }
+    var btn = $('btn-logo-all');
+    var savedSelected = state.selectedId;
+    var idx = 0;
+    setBusy(btn, true, '<i class="fa-solid fa-spinner fa-spin"></i> 套用中…');
+    hideError();
+
+    function step() {
+      if (idx >= state.images.length) {
+        if (savedSelected) selectImage(savedSelected);
+        renderThumbs();
+        setBusy(btn, false, null, '<i class="fa-solid fa-stamp"></i> 一鍵全部加上 LOGO');
+        showOk('已為全部 ' + state.images.length + ' 張圖加上 LOGO（含精修設定）');
+        return;
+      }
+      var im = state.images[idx];
+      var photo = im.adopted || im.currentEdit || im.original;
+      loadImageFromPhoto(photo).then(function (img) {
+        state.sourceImg = img;
+        return exportCurrentCanvasPhoto(im.name || ('img-' + (idx + 1)));
+      }).then(function (baked) {
+        im.adopted = baked;
+        flashAdoptedThumb(im.id);
+        idx += 1;
+        setTimeout(step, 100);
+      }).catch(function () {
+        idx += 1;
+        setTimeout(step, 100);
+      });
+    }
+    step();
   }
 
   function handleCopyText() {
@@ -2291,13 +2472,18 @@
         };
       });
       var sel = getSelectedImage();
-      if (sel && sel.adopted) adoptPhoto(sel.adopted, '最新版');
-      showOk('全部圖已標記採用最新版（可用「下載全部成品」）');
+      if (sel && sel.adopted) adoptPhoto(sel.adopted, '最新版', true);
+      renderThumbs();
+      state.images.forEach(function (im) { flashAdoptedThumb(im.id); });
+      showOk('全部圖已標記採用最新版（綠框＋✓）');
     });
 
     $('btn-download').addEventListener('click', handleDownload);
     $('btn-download-all').addEventListener('click', handleDownloadAll);
     $('btn-save-draft').addEventListener('click', saveDraft);
+    if ($('btn-logo-all')) {
+      $('btn-logo-all').addEventListener('click', applyLogoToAll);
+    }
     $('btn-save-settings').addEventListener('click', saveSettings);
     $('btn-reset-refine').addEventListener('click', resetRefine);
     $('btn-rot-90').addEventListener('click', function () {
@@ -2405,13 +2591,13 @@
     ].forEach(function (id) {
       var el = $(id);
       if (el) el.addEventListener('input', function () {
-        if (state.wizardStep === 5) updateFinishSummary();
+        if (state.wizardStep === 4) updateFinishSummary();
       });
     });
 
     if ($('btn-go-reel')) {
       $('btn-go-reel').addEventListener('click', function () {
-        setWizardStep(6);
+        setWizardStep(5);
       });
     }
     if ($('input-local-video')) {

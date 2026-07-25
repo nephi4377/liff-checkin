@@ -115,7 +115,8 @@ window.FB_POST_STUDIO_CONFIG = {
     FFMPEG_UTIL: 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js',
     BGM_PRESETS: [
       { id: 'off', label: '無音樂' },
-      { id: 'soft', label: '輕柔氛圍（內建）' },
+      { id: 'ambient', label: '輕柔氛圍（推薦）' },
+      { id: 'soft', label: '溫暖慢板（內建）' },
       { id: 'warm', label: '溫暖居家（內建）' },
       { id: 'bright', label: '明亮節奏（內建）' }
     ]
