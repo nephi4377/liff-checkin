@@ -209,7 +209,100 @@
     return ab;
   }
 
-  function blobFromArrayBuffer(ab, mime) {
+  function findBgmTrack(presetId) {
+    var tracks = (CFG && CFG.BGM_TRACKS) || [];
+    var i;
+    for (i = 0; i < tracks.length; i++) {
+      if (tracks[i].id === presetId) return tracks[i];
+    }
+    return null;
+  }
+
+  function resolveTrackUrl(track) {
+    if (!track) return '';
+    if (track.path) {
+      if (typeof global.location !== 'undefined' && global.location.href) {
+        var base = global.location.href.replace(/[#?].*$/, '').replace(/[^/]+$/, '');
+        return base + String(track.path).replace(/^\//, '');
+      }
+      return track.path;
+    }
+    return track.url || '';
+  }
+
+  /**
+   * 載入免版權 MP3 → 循環／裁切到影片長度 → WAV
+   */
+  function loadBgmTrack(trackOrUrl, durationSec, onProgress) {
+    var url = typeof trackOrUrl === 'string' ? trackOrUrl : resolveTrackUrl(trackOrUrl);
+    if (!url) return Promise.reject(new Error('沒有音樂網址'));
+    if (onProgress) onProgress(0, 1, '載入免版權音樂…');
+    return fetch(url, { mode: 'cors' }).then(function (res) {
+      if (!res.ok) throw new Error('音樂載入失敗 HTTP ' + res.status);
+      return res.arrayBuffer();
+    }).then(function (ab) {
+      var sampleRate = 44100;
+      var scratch = new (global.OfflineAudioContext || global.webkitOfflineAudioContext)(2, 8, sampleRate);
+      return scratch.decodeAudioData(ab.slice(0)).then(function (decoded) {
+        var channels = Math.min(2, decoded.numberOfChannels || 1);
+        var frames = Math.max(1, Math.ceil(sampleRate * durationSec));
+        var ctx = new (global.OfflineAudioContext || global.webkitOfflineAudioContext)(channels, frames, sampleRate);
+        var master = ctx.createGain();
+        master.gain.setValueAtTime(0, 0);
+        master.gain.linearRampToValueAtTime(0.85, 1.0);
+        master.gain.setValueAtTime(0.85, Math.max(1.1, durationSec - 1.2));
+        master.gain.linearRampToValueAtTime(0, durationSec);
+        master.connect(ctx.destination);
+
+        var t = 0;
+        while (t < durationSec) {
+          var src = ctx.createBufferSource();
+          src.buffer = decoded;
+          src.connect(master);
+          src.start(t);
+          t += decoded.duration;
+        }
+        if (onProgress) onProgress(1, 1, '音樂就緒');
+        return ctx.startRendering();
+      });
+    }).then(function (buffer) {
+      return audioBufferToWav(buffer);
+    });
+  }
+
+  function resolveBgmAudio(opts, totalSec, onProgress) {
+    var musicOff = !!opts.musicOff || opts.bgmPreset === 'off';
+    if (musicOff) return Promise.resolve(null);
+    if (opts.audioBlob) {
+      return opts.audioBlob.arrayBuffer().then(function (ab) {
+        return { ab: ab, blob: opts.audioBlob };
+      }).catch(function () {
+        return null;
+      });
+    }
+
+    var preset = opts.bgmPreset || CFG.BGM_DEFAULT || 'track_serene';
+    if (preset === 'off') return Promise.resolve(null);
+
+    var track = findBgmTrack(preset);
+    if (track && (track.path || track.url)) {
+      return loadBgmTrack(track, totalSec + 0.5, onProgress).then(function (ab) {
+        return { ab: ab, blob: blobFromArrayBuffer(ab, 'audio/wav') };
+      }).catch(function (err) {
+        if (onProgress) {
+          onProgress(0, 1, '曲庫檔案未找到，改走 AI 氛圍作曲：' + (err && err.message ? err.message : ''));
+        }
+        return synthesizeBgm('ambient', totalSec + 0.5).then(function (ab) {
+          return { ab: ab, blob: blobFromArrayBuffer(ab, 'audio/wav') };
+        });
+      });
+    }
+
+    return synthesizeBgm(preset, totalSec + 0.5).then(function (ab) {
+      return { ab: ab, blob: blobFromArrayBuffer(ab, 'audio/wav') };
+    });
+  }
+
     return new Blob([ab], { type: mime || 'application/octet-stream' });
   }
 
@@ -458,27 +551,11 @@
     return Promise.all(urls.map(loadImage)).then(function (images) {
       onProgress(1, 4, '拼片素材就緒');
       var totalSec = Math.min(MAX_TOTAL, images.length * sec);
-      var musicOff = !!opts.musicOff || opts.bgmPreset === 'off';
-      var audioReady;
-
-      if (musicOff) {
-        audioReady = Promise.resolve(null);
-      } else if (opts.audioBlob) {
-        audioReady = opts.audioBlob.arrayBuffer().then(function (ab) {
-          return { ab: ab, blob: opts.audioBlob };
-        }).catch(function () {
-          return null;
-        });
-      } else {
-        var preset = opts.bgmPreset || 'ambient';
-        if (preset === 'off') {
-          audioReady = Promise.resolve(null);
-        } else {
-          audioReady = synthesizeBgm(preset, totalSec + 0.5).then(function (ab) {
-            return { ab: ab, blob: blobFromArrayBuffer(ab, 'audio/wav') };
-          });
-        }
-      }
+      var audioReady = resolveBgmAudio({
+        musicOff: !!opts.musicOff,
+        bgmPreset: opts.bgmPreset,
+        audioBlob: opts.audioBlob
+      }, totalSec, onProgress);
 
       return audioReady.then(function (audioPack) {
         onProgress(0, 1, '渲染影格（拼片）');
@@ -499,6 +576,8 @@
   global.FbPostReel = {
     composeReel: composeReel,
     ensureFfmpeg: ensureFfmpeg,
-    synthesizeBgm: synthesizeBgm
+    synthesizeBgm: synthesizeBgm,
+    loadBgmTrack: loadBgmTrack,
+    findBgmTrack: findBgmTrack
   };
 })(window);

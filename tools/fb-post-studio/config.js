@@ -114,12 +114,23 @@ window.FB_POST_STUDIO_CONFIG = {
     FFMPEG_JS: 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js',
     FFMPEG_UTIL: 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js',
     BGM_PRESETS: [
-      { id: 'off', label: '無音樂' },
-      { id: 'ambient', label: '輕柔氛圍（推薦）' },
-      { id: 'soft', label: '溫暖慢板（內建）' },
-      { id: 'warm', label: '溫暖居家（內建）' },
-      { id: 'bright', label: '明亮節奏（內建）' }
-    ]
+      { id: 'ambient', label: '輕柔氛圍' },
+      { id: 'soft', label: '溫暖慢板' },
+      { id: 'warm', label: '溫暖居家' },
+      { id: 'bright', label: '明亮節奏' }
+    ],
+    /**
+     * 免版權真實曲目：MP3 放在 tools/fb-post-studio/assets/bgm/（同站載入，無 CORS 問題）
+     * 來源建議 Mixkit／Pixabay，授權可商用；放置方式見 assets/bgm/README.md
+     */
+    BGM_TRACKS: [
+      { id: 'track_serene', label: '靜謐空間（慢板）', path: 'assets/bgm/serene.mp3', license: 'Mixkit Free License' },
+      { id: 'track_dream', label: '柔和夢境', path: 'assets/bgm/dream.mp3', license: 'Mixkit Free License' },
+      { id: 'track_warm', label: '暖陽午後', path: 'assets/bgm/warm.mp3', license: 'Mixkit Free License' },
+      { id: 'track_piano', label: '鋼琴小品', path: 'assets/bgm/piano.mp3', license: 'Mixkit Free License' },
+      { id: 'track_light', label: '輕快日常', path: 'assets/bgm/light.mp3', license: 'Mixkit Free License' }
+    ],
+    BGM_DEFAULT: 'track_serene'
   },
 
   /** Canvas 濾鏡預設（簡易 CSS／參數近似） */

@@ -1367,19 +1367,68 @@
   function fillReelBgmOptions() {
     var sel = $('reel-bgm');
     if (!sel) return;
-    if (!sel.options.length) {
-      var presets = (CFG.REEL && CFG.REEL.BGM_PRESETS) || [
-        { id: 'off', label: '無音樂' },
-        { id: 'ambient', label: '輕柔氛圍（推薦）' }
-      ];
-      presets.forEach(function (p) {
-        var o = document.createElement('option');
-        o.value = p.id;
-        o.textContent = p.label;
-        sel.appendChild(o);
+    var prev = sel.value;
+    sel.innerHTML = '';
+
+    function addGroup(label) {
+      var g = document.createElement('optgroup');
+      g.label = label;
+      sel.appendChild(g);
+      return g;
+    }
+    function addOpt(group, id, text) {
+      var o = document.createElement('option');
+      o.value = id;
+      o.textContent = text;
+      group.appendChild(o);
+    }
+
+    var gOff = addGroup('無音樂');
+    addOpt(gOff, 'off', '不要音樂');
+
+    var tracks = (CFG.REEL && CFG.REEL.BGM_TRACKS) || [];
+    if (tracks.length) {
+      var gTracks = addGroup('免版權曲庫（真實伴奏）');
+      tracks.forEach(function (t) {
+        addOpt(gTracks, t.id, t.label);
       });
     }
-    if (!sel.value || sel.value === 'soft') sel.value = 'ambient';
+
+    var presets = (CFG.REEL && CFG.REEL.BGM_PRESETS) || [];
+    if (presets.length) {
+      var gAi = addGroup('AI 氛圍作曲（本機生成）');
+      presets.forEach(function (p) {
+        addOpt(gAi, p.id, p.label);
+      });
+    }
+
+    var def = (CFG.REEL && CFG.REEL.BGM_DEFAULT) || 'track_serene';
+    var hasPrev = prev && sel.querySelector('option[value="' + prev + '"]');
+    sel.value = hasPrev ? prev : def;
+    updateReelBgmHint();
+  }
+
+  function updateReelBgmHint() {
+    var hint = $('reel-bgm-hint');
+    var sel = $('reel-bgm');
+    if (!hint || !sel) return;
+    var val = sel.value || '';
+    var track = (CFG.REEL && CFG.REEL.BGM_TRACKS || []).find(function (t) { return t.id === val; });
+    if (track) {
+      hint.innerHTML = '已選 <strong>免版權曲庫</strong>：' + track.label +
+        '（' + (track.license || 'Mixkit') + '，可商用）。上傳音檔時會覆蓋此選項。';
+      return;
+    }
+    if (val === 'off') {
+      hint.textContent = '本次合成不加音樂。';
+      return;
+    }
+    if (val) {
+      hint.innerHTML = '已選 <strong>AI 氛圍作曲</strong>：瀏覽器即時生成、免版權，但較不像完整歌曲。上傳音檔時會覆蓋此選項。';
+      return;
+    }
+    hint.innerHTML =
+      '<strong>免版權曲庫</strong>：真實伴奏（Mixkit，可商用）。<strong>AI 氛圍作曲</strong>：瀏覽器即時生成、免版權但較像氛圍音。若上傳自己的音檔，會優先使用上傳檔（請確認你有使用權）。';
   }
 
   function renderSiteVideosPanel() {
@@ -1600,7 +1649,7 @@
     }
 
     var musicOff = $('reel-music-off') && $('reel-music-off').checked;
-    var bgm = ($('reel-bgm') && $('reel-bgm').value) || 'ambient';
+    var bgm = ($('reel-bgm') && $('reel-bgm').value) || ((CFG.REEL && CFG.REEL.BGM_DEFAULT) || 'track_serene');
     var sec = parseFloat($('reel-sec-per-slide') && $('reel-sec-per-slide').value) || 2.4;
 
     api.composeReel({
@@ -2431,6 +2480,7 @@
       }
       var im = state.images[idx];
       var photo = im.adopted || im.currentEdit || im.original;
+      state.selectedId = im.id;
       loadImageFromPhoto(photo).then(function (img) {
         state.sourceImg = img;
         return exportCurrentCanvasPhoto(im.name || ('img-' + (idx + 1)));
@@ -2925,6 +2975,23 @@
       $('input-reel-audio').addEventListener('change', function () {
         var f = $('input-reel-audio').files && $('input-reel-audio').files[0];
         state.reelAudioBlob = f || null;
+        var status = $('reel-audio-status');
+        if (status) {
+          status.textContent = f
+            ? ('已選上傳音檔：' + f.name + '（合成時優先使用）')
+            : '未上傳';
+          status.className = 'status-line' + (f ? ' ok' : '');
+        }
+        if (f && $('reel-music-off')) $('reel-music-off').checked = false;
+      });
+    }
+    if ($('reel-bgm')) {
+      $('reel-bgm').addEventListener('change', updateReelBgmHint);
+    }
+    if ($('reel-music-off')) {
+      $('reel-music-off').addEventListener('change', function () {
+        if ($('reel-music-off').checked && $('reel-bgm')) $('reel-bgm').value = 'off';
+        updateReelBgmHint();
       });
     }
   }

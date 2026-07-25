@@ -724,12 +724,17 @@
           <select id="reel-bgm"></select>
         </div>
       </div>
+      <p class="step-hint" id="reel-bgm-hint">
+        <strong>免版權曲庫</strong>：真實伴奏（Mixkit，可商用）。<strong>AI 氛圍作曲</strong>：瀏覽器即時生成、免版權但較像氛圍音。
+        若上傳自己的音檔，會優先使用上傳檔（請確認你有使用權）。
+      </p>
       <div class="field">
         <label><input type="checkbox" id="reel-music-off" style="width:auto;margin-right:0.4rem"> 不要音樂</label>
       </div>
       <div class="field">
-        <label>或上傳音檔（選填）</label>
-        <input type="file" id="input-reel-audio" accept="audio/*">
+        <label>或上傳音檔（選填；有上傳時優先於下拉選單）</label>
+        <input type="file" id="input-reel-audio" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg">
+        <p class="status-line" id="reel-audio-status">未上傳</p>
       </div>
       <p class="status-line" id="reel-progress">尚未合成</p>
       <p class="status-line hidden" id="reel-fallback-note"></p>
