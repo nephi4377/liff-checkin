@@ -303,7 +303,105 @@
     });
   }
 
+  function blobFromArrayBuffer(ab, mime) {
     return new Blob([ab], { type: mime || 'application/octet-stream' });
+  }
+
+  function playPreviewBlob(blob, maxSec) {
+    return new Promise(function (resolve, reject) {
+      if (!blob || !blob.size) {
+        reject(new Error('沒有可播放的音訊'));
+        return;
+      }
+      var url = URL.createObjectURL(blob);
+      var audio = new Audio(url);
+      var cleaned = false;
+      var cap = parseFloat(maxSec);
+      function cleanup() {
+        if (cleaned) return;
+        cleaned = true;
+        try { URL.revokeObjectURL(url); } catch (e0) {}
+      }
+      function finish() {
+        cleanup();
+        resolve({ audio: audio, stop: function () {} });
+      }
+      if (cap > 0) {
+        audio.addEventListener('timeupdate', function onTime() {
+          if (audio.currentTime >= cap) {
+            audio.removeEventListener('timeupdate', onTime);
+            try { audio.pause(); } catch (eCap) {}
+            finish();
+          }
+        });
+      }
+      audio.addEventListener('ended', function () {
+        cleanup();
+        resolve({ audio: audio, stop: function () {} });
+      });
+      audio.addEventListener('error', function () {
+        cleanup();
+        reject(new Error('播放失敗'));
+      });
+      var playPromise = audio.play();
+      if (playPromise && playPromise.then) {
+        playPromise.then(function () {
+          resolve({
+            audio: audio,
+            url: url,
+            stop: function () {
+              try { audio.pause(); } catch (e1) {}
+              cleanup();
+            }
+          });
+        }).catch(function (e2) {
+          cleanup();
+          reject(e2);
+        });
+      } else {
+        resolve({
+          audio: audio,
+          url: url,
+          stop: function () {
+            try { audio.pause(); } catch (e3) {}
+            cleanup();
+          }
+        });
+      }
+    });
+  }
+
+  /**
+   * 試播背景音樂（約 12～14 秒；不影響合成）
+   * @param {string} preset 曲庫 id 或 AI 氛圍 preset
+   * @param {object} opts { audioBlob, previewSec }
+   */
+  function previewBgm(preset, opts) {
+    opts = opts || {};
+    var previewSec = parseFloat(opts.previewSec);
+    if (!(previewSec > 0)) previewSec = 14;
+
+    if (opts.audioBlob) {
+      return playPreviewBlob(opts.audioBlob, previewSec);
+    }
+    if (!preset || preset === 'off') {
+      return Promise.reject(new Error('請先選一首音樂，或上傳音檔'));
+    }
+
+    var track = findBgmTrack(preset);
+    if (track && (track.path || track.url)) {
+      var url = resolveTrackUrl(track);
+      return fetch(url, { mode: 'cors' }).then(function (res) {
+        if (!res.ok) throw new Error('找不到音樂檔（HTTP ' + res.status + '）。請依 assets/bgm/README.md 放置 MP3');
+        return res.blob();
+      }).then(function (blob) {
+        return playPreviewBlob(blob, previewSec);
+      });
+    }
+
+    return synthesizeBgm(preset, previewSec).then(function (wavAb) {
+      return playPreviewBlob(blobFromArrayBuffer(wavAb, 'audio/wav'));
+    });
   }
 
   /**
@@ -578,6 +676,8 @@
     ensureFfmpeg: ensureFfmpeg,
     synthesizeBgm: synthesizeBgm,
     loadBgmTrack: loadBgmTrack,
-    findBgmTrack: findBgmTrack
+    findBgmTrack: findBgmTrack,
+    previewBgm: previewBgm,
+    resolveTrackUrl: resolveTrackUrl
   };
 })(window);

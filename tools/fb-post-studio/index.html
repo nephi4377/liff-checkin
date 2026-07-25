@@ -722,6 +722,15 @@
         <div class="field">
           <label>背景音樂</label>
           <select id="reel-bgm"></select>
+          <div class="inline-btns" style="margin-top:0.45rem">
+            <button type="button" class="btn btn-secondary" id="btn-reel-bgm-preview">
+              <i class="fa-solid fa-play"></i> 試播
+            </button>
+            <button type="button" class="btn btn-ghost hidden" id="btn-reel-bgm-preview-stop">
+              <i class="fa-solid fa-stop"></i> 停止試播
+            </button>
+          </div>
+          <p class="status-line" id="reel-bgm-preview-status">選好音樂後按「試播」預覽約 14 秒</p>
         </div>
       </div>
       <p class="step-hint" id="reel-bgm-hint">

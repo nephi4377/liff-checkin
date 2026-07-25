@@ -49,6 +49,7 @@
     workOrderBusy: false,
     reelAudioBlob: null,
     reelLastUrl: null,
+    reelBgmPreview: null,
     dragThumbIdx: null,
     adoptPulseId: null,
     selectedEmojiId: null,
@@ -419,6 +420,7 @@
     if (n === 5) {
       refreshReelSourceUi();
       renderSiteVideosPanel();
+      syncReelBgmPreviewButtons(!!state.reelBgmPreview);
     }
     hideError();
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1364,6 +1366,86 @@
     fillReelBgmOptions();
   }
 
+  function setReelBgmPreviewStatus(msg, kind) {
+    var el = $('reel-bgm-preview-status');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.classList.remove('ok', 'bad');
+    if (kind === 'ok') el.classList.add('ok');
+    if (kind === 'bad') el.classList.add('bad');
+  }
+
+  function syncReelBgmPreviewButtons(playing) {
+    var btnPlay = $('btn-reel-bgm-preview');
+    var btnStop = $('btn-reel-bgm-preview-stop');
+    var musicOff = $('reel-music-off') && $('reel-music-off').checked;
+    if (btnPlay) btnPlay.disabled = !!musicOff;
+    if (btnStop) btnStop.classList.toggle('hidden', !playing);
+  }
+
+  function stopReelBgmPreview(quiet) {
+    if (state.reelBgmPreview && state.reelBgmPreview.stop) {
+      try { state.reelBgmPreview.stop(); } catch (e0) {}
+    }
+    state.reelBgmPreview = null;
+    syncReelBgmPreviewButtons(false);
+    if (!quiet) setReelBgmPreviewStatus('已停止試播');
+  }
+
+  function handleReelBgmPreview() {
+    var api = window.FbPostReel;
+    if (!api || !api.previewBgm) {
+      showError('短影音模組未載入');
+      return;
+    }
+    if ($('reel-music-off') && $('reel-music-off').checked) {
+      showError('已勾選「不要音樂」');
+      return;
+    }
+    stopReelBgmPreview(true);
+    var btn = $('btn-reel-bgm-preview');
+    var preset = ($('reel-bgm') && $('reel-bgm').value) || ((CFG.REEL && CFG.REEL.BGM_DEFAULT) || 'track_serene');
+    var label = '選項';
+    if (state.reelAudioBlob) {
+      label = '上傳音檔';
+    } else if (preset === 'off') {
+      showError('請先選一首音樂');
+      return;
+    } else {
+      var track = (CFG.REEL && CFG.REEL.BGM_TRACKS || []).find(function (t) { return t.id === preset; });
+      if (track) label = track.label;
+      else {
+        var ai = (CFG.REEL && CFG.REEL.BGM_PRESETS || []).find(function (p) { return p.id === preset; });
+        if (ai) label = 'AI：' + ai.label;
+      }
+    }
+    setBusy(btn, true, '<i class="fa-solid fa-spinner fa-spin"></i> 準備試播…');
+    setReelBgmPreviewStatus('正在載入「' + label + '」…');
+    hideError();
+
+    api.previewBgm(preset, {
+      audioBlob: state.reelAudioBlob,
+      previewSec: 14
+    }).then(function (player) {
+      state.reelBgmPreview = player;
+      syncReelBgmPreviewButtons(true);
+      setReelBgmPreviewStatus('試播中：' + label + '（約 14 秒，可按停止）', 'ok');
+      if (player && player.audio) {
+        player.audio.addEventListener('ended', function () {
+          state.reelBgmPreview = null;
+          syncReelBgmPreviewButtons(false);
+          setReelBgmPreviewStatus('試播結束：' + label, 'ok');
+        }, { once: true });
+      }
+    }).catch(function (e) {
+      setReelBgmPreviewStatus((e && e.message) ? e.message : String(e), 'bad');
+      showError((e && e.message) ? e.message : String(e));
+      syncReelBgmPreviewButtons(false);
+    }).then(function () {
+      setBusy(btn, false, null, '<i class="fa-solid fa-play"></i> 試播');
+    });
+  }
+
   function fillReelBgmOptions() {
     var sel = $('reel-bgm');
     if (!sel) return;
@@ -1406,6 +1488,7 @@
     var hasPrev = prev && sel.querySelector('option[value="' + prev + '"]');
     sel.value = hasPrev ? prev : def;
     updateReelBgmHint();
+    syncReelBgmPreviewButtons(false);
   }
 
   function updateReelBgmHint() {
@@ -1625,6 +1708,7 @@
 
   function handleReelCompose() {
     hideError();
+    stopReelBgmPreview(true);
     var api = window.FbPostReel;
     if (!api || !api.composeReel) {
       showError('短影音模組未載入');
@@ -2983,14 +3067,31 @@
           status.className = 'status-line' + (f ? ' ok' : '');
         }
         if (f && $('reel-music-off')) $('reel-music-off').checked = false;
+        stopReelBgmPreview(true);
+        syncReelBgmPreviewButtons(false);
       });
     }
     if ($('reel-bgm')) {
-      $('reel-bgm').addEventListener('change', updateReelBgmHint);
+      $('reel-bgm').addEventListener('change', function () {
+        stopReelBgmPreview(true);
+        updateReelBgmHint();
+      });
+    }
+    if ($('btn-reel-bgm-preview')) {
+      $('btn-reel-bgm-preview').addEventListener('click', handleReelBgmPreview);
+    }
+    if ($('btn-reel-bgm-preview-stop')) {
+      $('btn-reel-bgm-preview-stop').addEventListener('click', function () {
+        stopReelBgmPreview(false);
+      });
     }
     if ($('reel-music-off')) {
       $('reel-music-off').addEventListener('change', function () {
-        if ($('reel-music-off').checked && $('reel-bgm')) $('reel-bgm').value = 'off';
+        if ($('reel-music-off').checked) {
+          if ($('reel-bgm')) $('reel-bgm').value = 'off';
+          stopReelBgmPreview(true);
+        }
+        syncReelBgmPreviewButtons(false);
         updateReelBgmHint();
       });
     }
