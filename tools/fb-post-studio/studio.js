@@ -41,8 +41,10 @@
       loading: false,
       importing: false
     },
-    /** 從案場匯入的實拍影片（與照片圖庫分開） */
+    /** 實拍影片工單來源；只記錄路徑，不把影片位元組載入瀏覽器 */
     siteVideos: [],
+    localVideoNames: [],
+    workOrderBusy: false,
     reelAudioBlob: null,
     reelLastUrl: null
   };
@@ -349,10 +351,7 @@
   function canEnterStep(n) {
     if (n <= 1) return { ok: true };
     if (n === 6) {
-      if (state.images.length >= 2 || (state.siteVideos && state.siteVideos.length)) {
-        return { ok: true };
-      }
-      return { ok: false, msg: '短影音需要至少 2 張圖，或先在步驟①匯入／選取影片' };
+      return { ok: true };
     }
     if (!state.images.length) {
       return { ok: false, msg: '請先上傳至少一張圖，才能進入下一步' };
@@ -699,9 +698,11 @@
     if (actions) actions.classList.toggle('hidden', !hasItems);
     if (btn) {
       btn.disabled = n === 0 || state.siteImport.importing || state.siteImport.loading;
+      var videoOnly = state.siteImport.mediaType === 'video';
       btn.innerHTML = state.siteImport.importing
-        ? '<i class="fa-solid fa-spinner fa-spin"></i> 匯入中…'
-        : ('<i class="fa-solid fa-download"></i> 匯入所選' + (n ? '（' + n + '）' : ''));
+        ? '<i class="fa-solid fa-spinner fa-spin"></i> 處理中…'
+        : ('<i class="fa-solid ' + (videoOnly ? 'fa-list-check' : 'fa-download') + '"></i> ' +
+          (videoOnly ? '加入短影音工單' : '匯入所選') + (n ? '（' + n + '）' : ''));
     }
     var more = $('btn-load-more-completion');
     if (more) {
@@ -790,9 +791,9 @@
       project_code: projectCode,
       media_type: mediaType,
       limit: opts.limit != null ? opts.limit : (cm.LIMIT || 40),
-      include_preview: opts.include_preview != null
-        ? opts.include_preview
-        : (cm.INCLUDE_PREVIEW !== false)
+      include_preview: mediaType === 'video'
+        ? false
+        : (opts.include_preview != null ? opts.include_preview : (cm.INCLUDE_PREVIEW !== false))
     };
     if (opts.cursor) payload.cursor = opts.cursor;
 
@@ -804,24 +805,11 @@
 
   /** 後端代理：依 path 取媒體 base64（解 Dropbox CORS） */
   function fetchCompletionMediaViaProxy(path, projectCode) {
+    if (/\.(mp4|mov|m4v|webm)$/i.test(String(path || ''))) {
+      return Promise.reject(new Error('實拍影片只送本機工單，不可經後端代理取檔'));
+    }
     if (isMockCompletionEnabled()) {
       var name = String(path || '').split('/').pop() || 'mock.jpg';
-      var isVid = /\.(mp4|mov|m4v|webm)$/i.test(name);
-      if (isVid) {
-        return Promise.resolve({
-          success: true,
-          data: {
-            name: name,
-            path: path,
-            kind: 'video',
-            mime_type: /\.mov$/i.test(name) ? 'video/quicktime' : 'video/mp4',
-            delivery: 'link',
-            data_base64: null,
-            temp_url: null,
-            message: '假資料模式：影片僅模擬選取，無真實預覽位元組'
-          }
-        });
-      }
       var dataUrl = makeMockPreviewDataUrl(name.replace(/\.[^.]+$/, ''), '#64748b');
       return Promise.resolve({
         success: true,
@@ -931,63 +919,20 @@
   }
 
   /**
-   * 匯入一支影片：優先代理；過大則連結模式；假資料僅記錄選取
+   * 實拍影片只記錄清單 API 回傳的路徑；不經後端代理抓影片。
    */
   function importVideoItem(it) {
-    var projectCode = state.siteImport.projectCode || '';
     var ext = String(it.ext || (it.name || '').split('.').pop() || '').toLowerCase();
-    var movLimited = ext === 'mov';
-
-    function pack(d, extra) {
-      var previewUrl = (d && (d.temp_url || d.preview_url)) || it.preview_url || null;
-      var objUrl = null;
-      if (d && d.data_base64) {
-        try {
-          var blob = base64ToBlob(d.data_base64, d.mime_type || 'video/mp4');
-          objUrl = URL.createObjectURL(blob);
-        } catch (e0) {}
-      }
-      return Object.assign({
-        id: 'vid_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
-        name: (d && d.name) || it.name,
-        path: it.path,
-        ext: ext,
-        kind: 'video',
-        mime_type: (d && d.mime_type) || (movLimited ? 'video/quicktime' : 'video/mp4'),
-        size: (d && d.size) != null ? d.size : it.size,
-        delivery: (d && d.delivery) || (objUrl ? 'base64' : 'link'),
-        preview_url: previewUrl,
-        object_url: objUrl,
-        data_base64: (d && d.data_base64) || null,
-        movLimited: movLimited,
-        note: movLimited
-          ? '此為 .mov：多數瀏覽器無法在站內剪輯，請下載後用本機工具，或改用照片合成短影音。'
-          : ((d && d.message) || '')
-      }, extra || {});
-    }
-
-    if (!it.path) {
-      return Promise.resolve(pack(null, { note: '缺少路徑，僅能記錄檔名' }));
-    }
-
-    return fetchCompletionMediaViaProxy(it.path, projectCode).then(function (res) {
-      if (!res || res.success === false) {
-        // 仍允許以清單 preview_url 選取
-        if (it.preview_url) {
-          return pack({ delivery: 'link', temp_url: it.preview_url, name: it.name }, {
-            note: ((res && res.message) || '代理取檔失敗') + '；已改用清單預覽連結選取。'
-          });
-        }
-        throw new Error((res && res.message) || '取影片失敗');
-      }
-      return pack(res.data || {});
-    }).catch(function (e) {
-      if (it.preview_url) {
-        return pack({ delivery: 'link', temp_url: it.preview_url, name: it.name }, {
-          note: (e.message || String(e)) + '；已改用清單預覽連結選取。'
-        });
-      }
-      throw e;
+    return Promise.resolve({
+      id: uid('vid'),
+      name: it.name || '未命名影片',
+      path: it.path || '',
+      ext: ext,
+      kind: 'video',
+      size: it.size,
+      source_type: 'dropbox_relative',
+      project_code: state.siteImport.projectCode || '',
+      note: '只記錄 Dropbox 路徑；影片不會進入瀏覽器。'
     });
   }
 
@@ -1025,24 +970,14 @@
         + (!it.preview_url && !isVideo ? ' no-preview' : '');
       div.setAttribute('role', 'button');
       div.setAttribute('tabindex', '0');
-      div.title = it.name + (isVideo && /\.mov$/i.test(it.name || '')
-        ? '（.mov：可選取／預覽；站內剪輯受限）'
-        : '');
+      div.title = it.name + (isVideo ? '（只列檔名與路徑，不會下載影片）' : '');
 
       var badge = document.createElement('span');
       badge.className = 'badge';
       badge.textContent = isVideo ? '影片' : '照片';
       div.appendChild(badge);
 
-      if (isVideo && it.preview_url) {
-        var vid = document.createElement('video');
-        vid.src = it.preview_url;
-        vid.muted = true;
-        vid.playsInline = true;
-        vid.preload = 'metadata';
-        vid.setAttribute('aria-label', it.name);
-        div.appendChild(vid);
-      } else if (it.preview_url && !isVideo) {
+      if (it.preview_url && !isVideo) {
         var img = document.createElement('img');
         img.alt = it.name;
         img.loading = 'lazy';
@@ -1126,7 +1061,9 @@
     var typeHint = state.siteImport.mediaType === 'video' ? '影片' : '照片';
     setImportStatus(
       mockHint + '已載入 ' + state.siteImport.items.length + ' 筆' + typeHint + folderHint + moreHint +
-      '。點縮圖勾選後按「匯入所選」。',
+      '。' + (state.siteImport.mediaType === 'video'
+        ? '勾選檔名後按「加入短影音工單」；只記錄路徑，不會下載影片。'
+        : '點縮圖勾選後按「匯入所選」。'),
       'ok'
     );
     renderImportGrid();
@@ -1237,7 +1174,7 @@
 
     videos.forEach(function (it) {
       chain = chain.then(function () {
-        setImportStatus('正在匯入影片：' + it.name);
+        setImportStatus('正在記錄影片路徑：' + it.name);
         return importVideoItem(it).then(function (vid) {
           importedVideos.push(vid);
         });
@@ -1256,13 +1193,10 @@
       renderImportGrid();
       var parts = [];
       if (importedPhotos.length) parts.push('照片 ' + importedPhotos.length + ' 張進圖庫');
-      if (importedVideos.length) parts.push('影片 ' + importedVideos.length + ' 支已選入（步驟⑥可預覽）');
+      if (importedVideos.length) parts.push('影片 ' + importedVideos.length + ' 支已加入步驟⑥工單');
       if (images.length > room && room >= 0) parts.push('超過圖庫上限的照片已略過');
-      var movNote = importedVideos.some(function (v) { return v.movLimited; })
-        ? '；.mov 多半無法在瀏覽器內剪輯，請見步驟⑥說明'
-        : '';
-      setImportStatus('已匯入：' + (parts.join('；') || '無') + movNote + '。', 'ok');
-      if (importedVideos.length) showOk('影片已選入，可到步驟⑥預覽');
+      setImportStatus('已完成：' + (parts.join('；') || '無') + '。', 'ok');
+      if (importedVideos.length) showOk('影片路徑已記錄，可到步驟⑥下載工單');
       else if (importedPhotos.length) showOk('已匯入照片');
     }).catch(function (e) {
       var msg = (e && e.message) ? e.message : String(e);
@@ -1335,7 +1269,7 @@
     if (meta) {
       var adopted = state.images.filter(function (im) { return im.adopted; }).length;
       meta.textContent = '可用圖 ' + photos.length + ' 張（已採用 ' + adopted +
-        '）。照片合成短影音建議 2～10 張。案場實拍影片見下方「已選影片」。';
+        '）。照片合成短影音建議 2～10 張；實拍影片請用上方工單交給本機助手。';
     }
     fillReelBgmOptions();
   }
@@ -1368,35 +1302,21 @@
     grid.innerHTML = '';
     list.forEach(function (v) {
       var div = document.createElement('div');
-      div.className = 'thumb kind-video' + (v.movLimited ? ' mov-limited' : '');
+      div.className = 'thumb kind-video';
       div.title = v.name + (v.note ? ' — ' + v.note : '');
       var badge = document.createElement('span');
       badge.className = 'badge';
-      badge.textContent = v.movLimited ? 'MOV' : '影片';
+      badge.textContent = v.source_type === 'local_path' ? '本機' : '案場';
       div.appendChild(badge);
-      var src = v.object_url || v.preview_url;
-      if (src) {
-        var vid = document.createElement('video');
-        vid.src = src;
-        vid.controls = true;
-        vid.playsInline = true;
-        vid.preload = 'metadata';
-        div.appendChild(vid);
-      } else {
-        var span = document.createElement('span');
-        span.textContent = v.name || '影片';
-        div.appendChild(span);
-      }
+      var span = document.createElement('span');
+      span.textContent = v.name || '影片';
+      div.appendChild(span);
+      var path = document.createElement('small');
+      path.textContent = v.path || '尚無路徑';
+      path.style.wordBreak = 'break-all';
+      div.appendChild(path);
       var actions = document.createElement('div');
       actions.className = 'vid-actions';
-      var dl = document.createElement('button');
-      dl.type = 'button';
-      dl.className = 'btn btn-ghost';
-      dl.textContent = '下載';
-      dl.addEventListener('click', function (e) {
-        e.stopPropagation();
-        downloadSiteVideo(v);
-      });
       var rm = document.createElement('button');
       rm.type = 'button';
       rm.className = 'btn btn-ghost';
@@ -1404,55 +1324,136 @@
       rm.addEventListener('click', function (e) {
         e.stopPropagation();
         state.siteVideos = state.siteVideos.filter(function (x) { return x.id !== v.id; });
-        if (v.object_url) {
-          try { URL.revokeObjectURL(v.object_url); } catch (e0) {}
-        }
         renderSiteVideosPanel();
       });
-      actions.appendChild(dl);
       actions.appendChild(rm);
       div.appendChild(actions);
       grid.appendChild(div);
     });
     if (meta) {
       meta.textContent = list.length
-        ? ('已選影片 ' + list.length + ' 支（可預覽／下載；站內 AI 剪輯暫緩）')
-        : '尚未從案場匯入影片。可回步驟①改類型為「影片」載入勾選。';
+        ? ('已選影片 ' + list.length + ' 支。下一步請下載工單 JSON。')
+        : '尚未選影片。可回步驟①依案號勾選，或在下方貼本機完整路徑。';
     }
     if (note) {
-      var hasMov = list.some(function (v) { return v.movLimited; });
-      note.classList.toggle('hidden', !hasMov && list.length === 0);
+      note.classList.toggle('hidden', list.length === 0);
       if (list.length) {
         note.classList.remove('hidden');
-        note.textContent = hasMov
-          ? '限制：.mov 多半無法在瀏覽器內剪輯或穩定播放。請下載後用本機工具，或改用上方「照片合成短影音」（既有 reel 流程）。'
-          : '實拍影片可預覽／下載選取；站內自動剪輯尚未開放。照片短影音請用上方合成按鈕（既有流程）。';
+        note.textContent = '網頁只保存這些檔名與路徑，不會讀取影片內容。本機助手收到工單後才會從 Dropbox 同步資料夾讀檔。';
       }
     }
   }
 
-  function downloadSiteVideo(v) {
-    if (!v) return;
-    if (v.object_url) {
-      var a = document.createElement('a');
-      a.href = v.object_url;
-      a.download = v.name || 'video.mp4';
-      a.click();
-      showOk('已開始下載影片');
+  function setWorkOrderStatus(msg, kind) {
+    var el = $('work-order-status');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.classList.remove('ok', 'bad');
+    if (kind === 'ok') el.classList.add('ok');
+    if (kind === 'bad') el.classList.add('bad');
+  }
+
+  function addLocalVideoPaths() {
+    var input = $('local-video-paths');
+    var raw = input ? input.value : '';
+    var paths = raw.split(/\r?\n/).map(function (s) { return s.trim().replace(/^["']|["']$/g, ''); }).filter(Boolean);
+    if (!paths.length) {
+      setWorkOrderStatus('請先貼上至少一支影片的完整路徑。', 'bad');
+      if (input) input.focus();
       return;
     }
-    if (v.data_base64) {
-      var blob = base64ToBlob(v.data_base64, v.mime_type || 'video/mp4');
-      downloadBlob(blob, v.name || 'video.mp4');
-      showOk('已開始下載影片');
+    var invalid = paths.filter(function (p) { return !/^[a-zA-Z]:\\.+\.(mov|mp4|m4v|webm)$/i.test(p); });
+    if (invalid.length) {
+      setWorkOrderStatus('有路徑不完整。請貼上從磁碟代號開始、含副檔名的完整路徑。', 'bad');
       return;
     }
-    if (v.preview_url) {
-      window.open(v.preview_url, '_blank', 'noopener');
-      showOk('已開啟影片連結（若無法下載請另存）');
+    paths.forEach(function (p) {
+      var exists = state.siteVideos.some(function (v) { return String(v.path).toLowerCase() === p.toLowerCase(); });
+      if (exists) return;
+      state.siteVideos.push({
+        id: uid('vid'),
+        name: p.split('\\').pop(),
+        path: p,
+        ext: (p.split('.').pop() || '').toLowerCase(),
+        kind: 'video',
+        source_type: 'local_path',
+        project_code: ($('import-project-code') && $('import-project-code').value.trim()) || '',
+        note: '本機完整路徑；影片不會上傳。'
+      });
+    });
+    input.value = '';
+    renderSiteVideosPanel();
+    setWorkOrderStatus('本機影片已加入。確認清單後下載工單 JSON。', 'ok');
+  }
+
+  function normalizeDropboxRelativePath(path) {
+    return String(path || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  }
+
+  function makeWorkOrder() {
+    var videos = (state.siteVideos || []).map(function (v) {
+      return {
+        filename: v.name || '',
+        source_type: v.source_type === 'local_path' ? 'local_path' : 'dropbox_relative',
+        path: v.source_type === 'local_path' ? v.path : normalizeDropboxRelativePath(v.path)
+      };
+    });
+    var projectCode = ($('import-project-code') && $('import-project-code').value.trim()) ||
+      (state.siteImport && state.siteImport.projectCode) || '';
+    var now = new Date();
+    return {
+      schema_version: 1,
+      job_id: 'fb-reel-' + now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) + '-' + Math.random().toString(36).slice(2, 6),
+      case_id: projectCode,
+      videos: videos,
+      segs: (($('work-order-segs') && $('work-order-segs').value) || '').trim() || null,
+      created_at: now.toISOString(),
+      status: 'pending',
+      status_message: '等待本機助手收單',
+      source: 'fb-post-studio'
+    };
+  }
+
+  function handleDownloadWorkOrder() {
+    if (state.workOrderBusy) return;
+    if (!state.siteVideos || !state.siteVideos.length) {
+      setWorkOrderStatus('尚未選影片。請先從案場清單勾選，或貼上本機完整路徑。', 'bad');
       return;
     }
-    showError('此影片沒有可下載的內容');
+    var missingPath = state.siteVideos.some(function (v) { return !v.path; });
+    if (missingPath) {
+      setWorkOrderStatus('有影片缺少路徑，請移除後重新選取。', 'bad');
+      return;
+    }
+    var btn = $('btn-download-work-order');
+    state.workOrderBusy = true;
+    setBusy(btn, true, '<i class="fa-solid fa-spinner fa-spin"></i> 建立中…');
+    setWorkOrderStatus('正在建立工單…');
+    window.setTimeout(function () {
+      try {
+        var job = makeWorkOrder();
+        var blob = new Blob([JSON.stringify(job, null, 2)], { type: 'application/json;charset=utf-8' });
+        downloadBlob(blob, job.job_id + '.json');
+        setWorkOrderStatus('工單已下載。請把 JSON 放進 queue 資料夾，再執行收單指令。', 'ok');
+        showOk('短影音工單已下載');
+      } catch (e) {
+        setWorkOrderStatus('建立工單失敗：' + (e.message || String(e)), 'bad');
+      }
+      state.workOrderBusy = false;
+      setBusy(btn, false, null, '<i class="fa-solid fa-file-arrow-down"></i> 下載工單 JSON');
+    }, 0);
+  }
+
+  function copyPlainText(text, okMessage) {
+    if (!navigator.clipboard || !navigator.clipboard.writeText) {
+      showError('瀏覽器無法自動複製，請手動選取畫面上的文字。');
+      return;
+    }
+    navigator.clipboard.writeText(text).then(function () {
+      showOk(okMessage);
+    }).catch(function () {
+      showError('複製失敗，請手動選取文字。');
+    });
   }
 
   function mapReelProgress(a, b, label) {
@@ -1490,7 +1491,7 @@
     }
     var photos = getReelSourcePhotos();
     if (photos.length < 2) {
-      showError('照片合成至少需要 2 張圖。案場實拍影片請用下方預覽／下載（站內剪輯暫緩）。');
+      showError('照片合成至少需要 2 張圖。案場實拍影片請改用上方「下載工單 JSON」交給本機助手。');
       return;
     }
     var urls = photos.map(function (p) { return p.preview || dataUrlFromPhoto(p); }).filter(Boolean);
@@ -2411,6 +2412,40 @@
     if ($('btn-go-reel')) {
       $('btn-go-reel').addEventListener('click', function () {
         setWizardStep(6);
+      });
+    }
+    if ($('input-local-video')) {
+      $('input-local-video').addEventListener('change', function () {
+        var files = Array.prototype.slice.call($('input-local-video').files || []);
+        state.localVideoNames = files.map(function (f) { return f.name; });
+        var status = $('local-video-file-status');
+        if (status) {
+          status.textContent = files.length
+            ? '已選 ' + files.length + ' 支：' + state.localVideoNames.join('、') + '。請在下方貼上完整路徑。'
+            : '尚未選本機影片';
+        }
+      });
+    }
+    if ($('btn-add-local-videos')) {
+      $('btn-add-local-videos').addEventListener('click', addLocalVideoPaths);
+    }
+    if ($('btn-download-work-order')) {
+      $('btn-download-work-order').addEventListener('click', handleDownloadWorkOrder);
+    }
+    if ($('btn-copy-queue-path')) {
+      $('btn-copy-queue-path').addEventListener('click', function () {
+        copyPlainText(
+          'D:\\Dropbox\\CodeBackups\\TanxinTools\\short-video-workflow\\queue\\',
+          'queue 路徑已複製'
+        );
+      });
+    }
+    if ($('btn-copy-watch-command')) {
+      $('btn-copy-watch-command').addEventListener('click', function () {
+        copyPlainText(
+          'powershell -NoProfile -ExecutionPolicy Bypass -File "D:\\Dropbox\\CodeBackups\\TanxinTools\\short-video-workflow\\Watch-Queue.ps1" -Once',
+          '收單指令已複製'
+        );
       });
     }
     if ($('btn-reel-compose')) {

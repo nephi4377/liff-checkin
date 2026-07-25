@@ -22,34 +22,49 @@
     .btn { width: 100%; padding: 12px; margin-top: 10px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; background: #1a73e8; color: #fff; }
     .item { border-bottom: 1px solid #eee; padding: 12px 0; }
     .item:last-child { border-bottom: none; }
-    .mono { font-family: ui-monospace, monospace; font-size: 12px; color: #555; word-break: break-all; }
+    .mono { font-family: ui-monospace, monospace; font-size: 11px; color: #888; word-break: break-all; }
+    .meta-line { font-size: 14px; margin-top: 4px; color: #333; }
     #msg { color: #c5221f; font-size: 14px; }
     .hidden { display: none; }
     .nav { margin-bottom: 12px; font-size: 14px; }
     .nav a { color: #1a73e8; text-decoration: none; }
+    details.adv { margin-top: 12px; font-size: 14px; color: #555; }
+    details.adv summary { cursor: pointer; font-weight: 600; color: #1a73e8; }
+    details.adv .adv-body { margin-top: 4px; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
   <div id="loading">載入中…</div>
   <div id="app" class="hidden acct-main">
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
-    <h2>單據附件索引</h2>
+    <h2>單據附件</h2>
     <p class="sub" id="userLine">—</p>
+    <p class="sub">用案號或廠商名找照片／檔案連結（可同時填或擇一）。</p>
     <div id="msg"></div>
 
     <div class="card">
-      <label>ingest_id（收支紀錄 ID，可貼部分）</label>
-      <input id="ingestId" placeholder="記帳後 G 欄備註的 [ingest:…] 內容" />
-      <label>請款單編號 payment_request_id（可貼部分）</label>
-      <input id="paymentRequestId" placeholder="廠商請款 UUID 前幾碼即可" />
-      <label>關鍵字（檔名、試算表列等）</label>
-      <input id="keyword" placeholder="選填" />
+      <label for="projectNo">案號</label>
+      <input id="projectNo" placeholder="例如 752（可貼部分）" autocomplete="off" />
+      <label for="vendorName">廠商名</label>
+      <input id="vendorName" placeholder="例如 某某工程（可貼部分）" autocomplete="off" />
       <button type="button" class="btn" id="searchBtn">查詢</button>
+
+      <details class="adv" id="advBox">
+        <summary>進階條件（對帳／工程用）</summary>
+        <div class="adv-body">
+          <label for="ingestId">記帳編號 ingest_id</label>
+          <input id="ingestId" placeholder="收支備註 [ingest:…] 內容，可貼部分" />
+          <label for="paymentRequestId">請款單編號</label>
+          <input id="paymentRequestId" placeholder="請款 UUID 前幾碼即可" />
+          <label for="keyword">關鍵字</label>
+          <input id="keyword" placeholder="檔名或其他欄位文字" />
+        </div>
+      </details>
     </div>
 
     <div class="card">
       <h3 style="margin:0 0 8px">結果</h3>
-      <div id="list">請輸入條件後查詢</div>
+      <div id="list">請輸入案號或廠商名後查詢</div>
     </div>
   </div>
   <script>
@@ -59,6 +74,11 @@
       function showApp() {
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
+      }
+      function esc(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
       }
       function renderList(rows) {
         var box = document.getElementById('list');
@@ -71,13 +91,21 @@
           var div = document.createElement('div');
           div.className = 'item';
           var link = a.drive_url
-            ? '<a href="' + a.drive_url + '" target="_blank" rel="noopener">' + (a.filename || '開啟檔案') + '</a>'
-            : (a.filename || '—');
+            ? '<a href="' + esc(a.drive_url) + '" target="_blank" rel="noopener">' + esc(a.filename || '開啟檔案') + '</a>'
+            : esc(a.filename || '—');
+          var project = a.project_no ? ('案號 ' + a.project_no) : '案號 —';
+          var vendor = a.vendor_name ? ('廠商 ' + a.vendor_name) : '廠商 —';
+          var tech = [];
+          if (a.ingest_id) tech.push('記帳 ' + String(a.ingest_id).slice(0, 8) + '…');
+          if (a.payment_request_id) tech.push('請款 ' + String(a.payment_request_id).slice(0, 8) + '…');
+          if (a.vendor_id) tech.push('廠商ID ' + a.vendor_id);
           div.innerHTML =
-            '<div>' + link + '</div>' +
-            '<div class="mono">' + (a.ingest_id || '') +
-            (a.payment_request_id ? ' · PR:' + a.payment_request_id.slice(0, 8) + '…' : '') + '</div>' +
-            '<div class="sub">' + (a.ledger_sheet || '') + ' 第' + (a.ledger_row || '?') + '列 · ' + (a.uploaded_at || '') + '</div>';
+            '<div class="meta-line"><strong>' + esc(project) + '</strong>　' + esc(vendor) + '</div>' +
+            '<div style="margin-top:6px">' + link + '</div>' +
+            '<div class="sub">上傳時間 ' + esc(a.uploaded_at || '—') +
+            (a.ledger_sheet ? (' · ' + esc(a.ledger_sheet) + ' 第' + esc(a.ledger_row || '?') + '列') : '') +
+            '</div>' +
+            (tech.length ? '<div class="mono">' + esc(tech.join(' · ')) + '</div>' : '');
           box.appendChild(div);
         });
       }
@@ -86,13 +114,20 @@
         await AccountingUi.runAsync(searchBtn, { busyLabel: '查詢中…', clear: false }, async function () {
           setMsg('');
           var filter = { page_size: 50 };
+          var projectNo = document.getElementById('projectNo').value.trim();
+          var vendorName = document.getElementById('vendorName').value.trim();
           var iid = document.getElementById('ingestId').value.trim();
           var prid = document.getElementById('paymentRequestId').value.trim();
           var kw = document.getElementById('keyword').value.trim();
+          if (projectNo) filter.project_no = projectNo;
+          if (vendorName) filter.vendor_name = vendorName;
           if (iid) filter.ingest_id = iid;
           if (prid) filter.payment_request_id = prid;
           if (kw) filter.keyword = kw;
-          if (!iid && !prid && !kw) { setMsg('請至少輸入 ingest_id、請款單編號或關鍵字'); return; }
+          if (!projectNo && !vendorName && !iid && !prid && !kw) {
+            setMsg('請至少填案號或廠商名（或展開進階條件）');
+            return;
+          }
           var data = await AccountingApi.crudList(session, 'attachment', filter);
           if (!data.success) { setMsg(data.message || '查詢失敗'); return; }
           renderList(data.data || []);
@@ -104,9 +139,17 @@
           onReady: async function (sess) {
             session = sess;
             var q = new URLSearchParams(window.location.search);
+            if (q.get('project_no')) document.getElementById('projectNo').value = q.get('project_no');
+            if (q.get('vendor_name')) document.getElementById('vendorName').value = q.get('vendor_name');
             if (q.get('ingest_id')) document.getElementById('ingestId').value = q.get('ingest_id');
             if (q.get('payment_request_id')) document.getElementById('paymentRequestId').value = q.get('payment_request_id');
-            if (q.get('ingest_id') || q.get('payment_request_id')) document.getElementById('searchBtn').click();
+            if (q.get('keyword')) document.getElementById('keyword').value = q.get('keyword');
+            if (q.get('ingest_id') || q.get('payment_request_id')) {
+              document.getElementById('advBox').open = true;
+            }
+            if (q.get('project_no') || q.get('vendor_name') || q.get('ingest_id') || q.get('payment_request_id') || q.get('keyword')) {
+              document.getElementById('searchBtn').click();
+            }
           }
         });
       })();

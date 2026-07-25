@@ -261,6 +261,30 @@
       function isFullDetailPayload(data) {
         return !!(data && data.success && data.meta && Array.isArray(data.lines));
       }
+      /** 寫入 API 若已回整包詳情就直接刷新；否則才重抓 */
+      function applyDetailOrReload(data) {
+        if (isFullDetailPayload(data)) {
+          if (data.categories && data.categories.length) {
+            categories = data.categories;
+            fillCategoryDatalist();
+          }
+          if (current && data.overview) {
+            var ov = data.overview;
+            var sumEl = document.getElementById('detailSummary');
+            if (sumEl) {
+              sumEl.textContent =
+                '收 ' + fmtMoney(ov.revenue_total) + ' · 支 ' + fmtMoney(ov.expense_total) +
+                ' · 毛利 ' + fmtMoney(ov.gross_profit);
+            }
+            if (ov.revenue_total != null) current.revenue_total = ov.revenue_total;
+            if (ov.expense_total != null) current.expense_total = ov.expense_total;
+            if (ov.gross_profit != null) current.gross_profit = ov.gross_profit;
+          }
+          renderDetailPanels(data);
+          return;
+        }
+        if (current) openDetail(current);
+      }
       function applyBonusAllocResult(data) {
         if (isFullDetailPayload(data)) {
           renderDetailPanels(data);
@@ -469,7 +493,7 @@
             );
             if (!data.success) { setMsg(data.message || '更新失敗'); return; }
             setOk('已更新明細');
-            openDetail(current);
+            applyDetailOrReload(data);
           });
         });
         container.appendChild(form);
@@ -484,7 +508,7 @@
           var data = await AccountingApi.marginDeleteLine(session, current.tab_name, ln.row_index, current.project_no);
           if (!data.success) { setMsg(data.message || '刪除失敗'); return; }
           setOk('已刪除明細');
-          openDetail(current);
+          applyDetailOrReload(data);
         });
       }
 
@@ -1066,7 +1090,28 @@
           slotWrap.innerHTML = renderSlotPaymentStatus(slotRows);
           box.appendChild(slotWrap);
         }
+
+        // 三角核對已顯示的項目不再重複列；通過／資訊列摺疊
+        var duplicateIds = {
+          cf_triangle_balance: 1,
+          cf_effective_vs_revenue: 1,
+          cf_receipts_vs_revenue: 1,
+          cf_outstanding_hint: 1,
+          income_match: 1
+        };
+        var primary = [];
+        var secondary = [];
         items.forEach(function (it) {
+          if (cfSummary && duplicateIds[it.id]) return;
+          if (it.id === 'vendors_paid' && slotRows && slotRows.length) return;
+          var isSkip = !!it.skip_when_empty;
+          var isInfo = !!it.informational;
+          var needsAttention = !it.pass && !isSkip && !isInfo;
+          if (needsAttention) primary.push(it);
+          else secondary.push(it);
+        });
+
+        function appendCheckRow(it, parent) {
           var row = document.createElement('div');
           var isSkip = !!it.skip_when_empty;
           var isInfo = !!it.informational;
@@ -1106,16 +1151,27 @@
             extra = '<div class="hint" style="margin-top:4px">' + it.vendors.map(function (v) {
               return formatVendorPaymentLabel(v);
             }).join('；') + '</div>';
-          } else if (it.id === 'vendors_paid' && it.vendor_slot_payment_status && it.vendor_slot_payment_status.length) {
-            extra = '<div class="hint" style="margin-top:4px">' + it.vendor_slot_payment_status.map(function (s) {
-              return (s.label || s.key) + '：' + (s.slot_label || '');
-            }).join('；') + '</div>';
           } else if (isSkip && it.hint) {
             extra = '<div class="hint" style="margin-top:4px">' + it.hint + '</div>';
           }
           row.innerHTML = '<span class="' + cls + '">' + mark + ' ' + it.label + '</span>' + extra;
-          box.appendChild(row);
-        });
+          parent.appendChild(row);
+        }
+
+        primary.forEach(function (it) { appendCheckRow(it, box); });
+        if (secondary.length) {
+          var fold = document.createElement('details');
+          fold.className = 'base-detail';
+          fold.style.marginTop = '6px';
+          var failCount = primary.length;
+          var sum = document.createElement('summary');
+          sum.textContent = failCount
+            ? ('其他檢查 ' + secondary.length + ' 項（上方 ' + failCount + ' 項需留意）')
+            : ('其他檢查 ' + secondary.length + ' 項（皆通過／資訊）');
+          fold.appendChild(sum);
+          secondary.forEach(function (it) { appendCheckRow(it, fold); });
+          box.appendChild(fold);
+        }
       }
 
       function renderDetailPanels(data) {
@@ -1171,7 +1227,12 @@
           data.vendor_candidates || [],
           data.all_slot_candidates || {}
         );
-        renderCustomerFinanceSummary(data.customer_finance_summary, data.project_no);
+        // 三角核對已在收支總結，避免下方再重複一張摘要卡
+        if (data.customer_finance_summary) {
+          el('cfSummaryCard').classList.add('hidden');
+        } else {
+          renderCustomerFinanceSummary(data.customer_finance_summary, data.project_no);
+        }
         renderChecklist(data.checklist, data.vendor_slot_payment_status,
           data.customer_finance_summary, overview.revenue_total || 0);
 
@@ -1380,7 +1441,7 @@
           document.getElementById('addItem').value = '';
           document.getElementById('addAmount').value = '';
           document.getElementById('addNote').value = '';
-          openDetail(current);
+          applyDetailOrReload(data);
         });
       });
 

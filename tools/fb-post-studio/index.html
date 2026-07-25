@@ -318,7 +318,7 @@
 
       <div class="import-panel" id="panel-site-import">
         <h3><i class="fa-solid fa-cloud-arrow-down"></i> 從案場匯入完工照</h3>
-        <p class="step-hint" style="margin-bottom:0.55rem">輸入案號 → 載入 → 勾選 →「匯入所選」。照片進圖庫；影片進步驟⑥可預覽／下載。匯入走後端代理（避免雲端跨網域擋下載）。</p>
+        <p class="step-hint" style="margin-bottom:0.55rem">輸入案號 → 載入清單 → 勾選。照片會匯入圖庫；影片只記錄檔名與 Dropbox 路徑，留到步驟⑥送給本機助手，<strong>不會把整支影片抓進瀏覽器</strong>。</p>
         <div class="row">
           <div class="field">
             <label for="import-project-code">案號</label>
@@ -326,7 +326,7 @@
           </div>
           <div class="field">
             <label for="import-media-type">類型</label>
-            <select id="import-media-type" title="照片進圖庫；影片可列／預覽／選取">
+            <select id="import-media-type" title="照片進圖庫；影片只列檔名供送單">
               <option value="image" selected>照片</option>
               <option value="video">影片</option>
             </select>
@@ -592,17 +592,50 @@
     <!-- 6. 短影音（選填） -->
     <section class="card wizard-panel hidden" data-step="6" id="section-reel">
       <h2><i class="fa-solid fa-film"></i> ⑥ 短影音（選填）</h2>
-      <p class="step-hint">把已採用／最新版<strong>照片</strong>組成 9:16 短影音（2～10 張）。純本機合成、不走後端。案場<strong>實拍影片</strong>可在下方預覽／下載選取；站內自動剪輯暫緩。.mov 多半無法在瀏覽器內剪輯。</p>
+      <p class="step-hint"><strong>實拍影片改成送單給本機助手。</strong>網頁只整理案號、檔名、路徑與精華秒數，不下載影片、不在瀏覽器剪片。原有的「照片合成短影音」仍保留在下方。</p>
+      <div class="info-box">
+        <strong>怎麼做：</strong>選好案場影片，或貼上本機影片完整路徑 → 下載工單 JSON → 把工單放進 queue 資料夾 → 執行收單指令。助手跑完後，到原影片旁的「短影音試看」資料夾拿檔。
+      </div>
+      <div class="site-videos-panel" id="site-videos-panel">
+        <label>這張工單要處理的影片</label>
+        <div class="thumb-grid" id="site-videos-grid"></div>
+        <p class="status-line" id="site-videos-meta">尚未選影片。可回步驟①依案號勾選，或在下方貼本機完整路徑。</p>
+        <p class="site-videos-limit-note hidden" id="site-videos-limit-note" role="status"></p>
+      </div>
+      <div class="field">
+        <label for="input-local-video">本機選檔（只用來確認檔名，不會上傳）</label>
+        <input type="file" id="input-local-video" accept="video/*,.mov,.mp4,.m4v,.webm" multiple>
+        <p class="status-line" id="local-video-file-status">尚未選本機影片</p>
+      </div>
+      <div class="field">
+        <label for="local-video-paths">本機影片完整路徑（每行一支）</label>
+        <textarea id="local-video-paths" placeholder="例如：D:\Dropbox\添心設計\設計圖\734 案場\1160722完工照\xxx.mov"></textarea>
+        <p class="step-hint">瀏覽器基於安全不會顯示完整路徑，所以選檔後仍要貼上完整路徑。本機助手只讀原檔，不會搬移、改名或覆寫。</p>
+        <button type="button" class="btn btn-secondary" id="btn-add-local-videos">加入這張工單</button>
+      </div>
+      <div class="field">
+        <label for="work-order-segs">想保留的片段（選填）</label>
+        <input id="work-order-segs" type="text" placeholder="例如 0.8:5.2,16:6；留空會先取開頭 25 秒">
+      </div>
+      <p class="status-line" id="work-order-status" role="status">尚未建立工單</p>
+      <div class="inline-btns" style="margin-top:0.75rem">
+        <button type="button" class="btn btn-primary" id="btn-download-work-order">
+          <i class="fa-solid fa-file-arrow-down"></i> 下載工單 JSON
+        </button>
+        <button type="button" class="btn btn-secondary" id="btn-copy-queue-path">複製 queue 路徑</button>
+        <button type="button" class="btn btn-ghost" id="btn-copy-watch-command">複製收單指令</button>
+      </div>
+      <div class="warn-box" style="margin-top:0.75rem">
+        網頁不能直接寫入電腦資料夾。下載後，請把 JSON 放到
+        <code>D:\Dropbox\CodeBackups\TanxinTools\short-video-workflow\queue\</code>，
+        再執行收單指令。工單狀態會從 pending（等待）改成 processing（處理中），最後變成 completed（完成）或 failed（失敗）。
+      </div>
+
+      <div class="import-divider">或用照片合成短影音（原有功能）</div>
       <div class="field">
         <label>照片素材（合成用）</label>
         <div class="thumb-grid" id="reel-source-grid"></div>
         <p class="status-line" id="reel-source-meta">—</p>
-      </div>
-      <div class="site-videos-panel" id="site-videos-panel">
-        <label>已選案場影片</label>
-        <div class="thumb-grid" id="site-videos-grid"></div>
-        <p class="status-line" id="site-videos-meta">尚未從案場匯入影片</p>
-        <p class="site-videos-limit-note hidden" id="site-videos-limit-note" role="status"></p>
       </div>
       <div class="row">
         <div class="field">

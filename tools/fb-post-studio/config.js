@@ -14,17 +14,17 @@ window.FB_POST_STUDIO_CONFIG = {
   MAX_IMAGES: 10,
   /**
    * 步驟① 從案場匯入完工照（list_project_completion_media）
-   * 匯入位元組：優先 fetch_project_completion_media（後端代理→base64，解 CORS）
-   * 失敗再試 preview_url 直連／IMAGE_CORS_PROXIES
+   * 照片匯入：優先 fetch_project_completion_media（後端代理→base64，解 CORS）
+   * 實拍影片：list API 只列檔名／路徑，前端不抓影片位元組
    */
   COMPLETION_MEDIA: {
     /** 單次載入筆數（後端另有封頂） */
     LIMIT: 40,
-    /** 列表時附 preview_url（縮圖／影片預覽用） */
+    /** 照片列表附 preview_url；影片查詢會由程式強制關閉 */
     INCLUDE_PREVIEW: true,
     /** 預設列照片；可改選影片 */
     DEFAULT_MEDIA_TYPE: 'image',
-    /** 匯入以「依 path 取媒體→base64」代理為主 */
+    /** 照片匯入以「依 path 取媒體→base64」代理為主；影片不使用 */
     USE_MEDIA_PROXY: true,
     /** 本機測 UI 四態；正式站請關。亦可 ?mock_completion=1 */
     USE_MOCK: false,

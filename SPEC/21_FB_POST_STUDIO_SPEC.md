@@ -1,7 +1,7 @@
 # FB 發文工作室 — 開發規格書（Phase 1＋強化）
 
-> **狀態**：Phase 1 已上線；本輪＝六步精靈＋文案標籤＋貼圖庫＋**發前檢查**＋轉檔／短影音失敗引導  
-> **進行中（Phase B＋代理＋影片選取）**：步驟①案場匯入走「取媒體 base64」代理；影片可列／預覽／選取  
+> **狀態**：Phase 1 已上線；本輪收斂實拍短影音為「網頁送單 → 本機助手處理」
+> **產品決策**：網頁不剪實拍影片，也不從雲端把整支影片下載進瀏覽器；影片清單只帶檔名與路徑
 > **正式網址**：https://info.tanxin.space/tools/fb-post-studio/  
 > **前端**：`CODING/tools/fb-post-studio/`  
 > **後端**：`backend/accounting-gas/FbPostStudio.js`（經 `WebApp.js` 路由；Dropbox 清單／取檔由 **project-console** 實作再轉呼）  
@@ -16,9 +16,9 @@
 | 階段 | 做什麼 | 狀態 |
 |------|--------|------|
 | **Phase 0** | 後端 list API：依案號找 Dropbox「完工照」資料夾，列出照片與實拍影片 | **已完成** |
-| **Phase A** | 後端 `fetch_project_completion_media`：依 path 取媒體→base64（解 CORS）；前端匯入以此為主 | **本輪** |
-| **Phase B** | 前端步驟①：案號 → 勾選 → 匯入；影片可列／預覽／選取（剪輯暫緩） | **本輪** |
-| **更後** | 實拍影片 AI／半自動剪輯進短影音（超出現行瀏覽器合成） | 未做 |
+| **Phase A** | 照片可由後端依 path 取圖；實拍影片禁止走這條路 | **照片保留** |
+| **Phase B** | 步驟①案號 → 列清單 → 勾選；照片匯入圖庫，影片只記錄檔名／Dropbox 相對路徑 | **本輪收斂** |
+| **本機助手** | 步驟⑥下載 JSON 工單 → 放入固定 queue → 本機助手讀已同步影片並產生試看 | **本輪** |
 
 資料夾慣例：專案夾下名稱含「**完工照**」且**不含**「美照」（例：案號 `734` 下常見 `1160722完工照`）。照片與實拍影片放**同一**完工照資料夾。
 
@@ -26,7 +26,7 @@
 
 ## 一句話
 
-上傳一至多張完工／空間照（或之後依案號從雲端完工照匯入）→ 分步精靈：選圖 → **組合標籤寫文案** → 組合標籤 AI 改圖 → Canvas 精修／LOGO／貼圖 → 複製文案／下載 JPG →（可選）瀏覽器合成 9:16 短影音，人工貼到粉專。
+照片可做文案、改圖、精修與圖轉短影音；實拍影片則只在網頁選檔與下載工單，交由 `TanxinTools/short-video-workflow/` 本機助手讀 Dropbox 同步檔處理。
 
 ---
 
@@ -34,11 +34,12 @@
 
 ```mermaid
 flowchart TB
-  S1["① 選圖：本機上傳，或依案號從雲端完工照匯入"] --> S2["② 寫文案：標籤＋類型／語氣"]
+  S1["① 選照片，或依案號勾選實拍影片檔名"] --> S2["② 寫文案：標籤＋類型／語氣"]
   S2 --> S3["③ AI 改圖：前綴A＋C＋中間＋後面"]
   S3 --> S4["④ 精修＋LOGO／貼圖"]
   S4 --> S5["⑤ 完成：發前檢查 → 複製／下載"]
-  S5 --> S6["⑥ 短影音（可跳過）"]
+  S5 --> S6["⑥ 實拍影片下載工單，交給本機助手"]
+  S6 --> S7["助手完成後，到原影片旁拿試看檔"]
   S5 -.->|"之後"| Schedule["粉專排程發文"]
 ```
 
@@ -47,9 +48,11 @@ flowchart TB
 | 白話（圖上） | 程式對照 |
 |---|---|
 | ① 選圖（本機上傳） | 前端壓縮 ≤4MB／張，上限 `MAX_IMAGES` → `state.images`；精靈 `setWizardStep(1)` |
-| ① 依案號從雲端完工照匯入 | `list_project_completion_media`（`media_type=image|video`、`include_preview`）；UI：案號＋類型＋載入＋多選＋「匯入所選」→ 照片進 `addPhotos`；影片進 `state.siteVideos` |
-| ① 匯入位元組 | **主路徑** `fetch_project_completion_media`（path→base64）；失敗再試 `preview_url`／`IMAGE_CORS_PROXIES`；本機測可用假資料／`?mock_completion=1` |
-| ⑥ 案場實拍影片 | 步驟⑥顯示已選影片：預覽／下載／移除；**.mov 標示站內剪輯受限**；照片合成短影音仍走既有 `reel.js` |
+| ① 依案號選照片或實拍影片 | `list_project_completion_media`；照片可附縮圖並匯入 `state.images`，影片查詢固定 `include_preview=false`，只把 `name/path` 放入 `state.siteVideos` |
+| ① 取得檔案內容 | `fetch_project_completion_media` 與 CORS 備援只用於照片；實拍影片不得呼叫取檔代理 |
+| ⑥ 實拍影片送單 | `makeWorkOrder()` 產生 JSON；`handleDownloadWorkOrder()` 下載；可貼 `local_path`，案場影片使用 `dropbox_relative` |
+| 本機助手收單 | `TanxinTools/short-video-workflow/Watch-Queue.ps1` 監看 `queue/`，呼叫 `New-ShortPreview.ps1`，並把四態與結果寫回工單 |
+| ⑥ 照片合成短影音 | 原有 `reel.js` 保留；只處理照片，不接實拍影片 |
 | ② 文案標籤＋類型／語氣 | `COPY_TAGS` 多選 → `composeCopyTagsPayload()`；與 `post_type`／`tone`／`extra_notes` 一併送出 |
 | ② 把全部圖一起交給後端寫文案 | `action: fb_post_generate` + `photos[]` + `copy_tags[]` → `handleFbPostGenerate_` |
 | 本機存一版文案紀錄（含標籤） | `localStorage` `COPY_HISTORY_KEY`；欄位含 `copyTags`／`copyTagLabels`／`copyTagIds` |
@@ -77,7 +80,7 @@ flowchart TB
 | `fb_post_generate` | 一至多張原圖 → FB 文案 JSON（可含文案標籤） | `gemini-2.5-flash` |
 | `fb_post_edit_image` | **單張**原圖＋指令 → 改圖 base64（前端可迴圈批次） | `gemini-3.1-flash-image` |
 | `list_project_completion_media` | 依案號列出 Dropbox「完工照」內照片／影片（Phase 0） | accounting-gas **轉呼** project-console |
-| `fetch_project_completion_media` | 依 Dropbox `path` 取媒體 → base64（過大可改回傳暫存連結） | accounting-gas **轉呼** project-console |
+| `fetch_project_completion_media` | 依 Dropbox `path` 取照片 → base64；FB 發文工作室不得用它抓實拍影片 | accounting-gas **轉呼** project-console |
 
 ### `list_project_completion_media`（Phase 0）
 
@@ -90,7 +93,7 @@ flowchart TB
 - `media_type`（選填）：`image`｜`video`｜`all`（預設 `all`）
 - `limit`（選填）：單次回傳筆數上限（後端會封頂，避免 GAS 逾時）
 - `cursor`（選填）：上一頁回傳的游標，用於續列
-- `include_preview`（選填）：`true` 時盡力附 `preview_url`（較慢；預設略過）
+- `include_preview`（選填）：照片可為 `true`；實拍影片前端固定送 `false`，只列目錄，不拉預覽或整檔
 
 **尋找規則**
 
@@ -122,10 +125,10 @@ flowchart TB
 }
 ```
 
-### `fetch_project_completion_media`（Phase A）
+### `fetch_project_completion_media`（Phase A，照片限定）
 
 **呼叫端點（給前端）**：accounting-gas Web App，`action: fetch_project_completion_media`。  
-**實際下載**：project-console `page=fetch_project_completion_media`（內部 secret）。
+**實際下載**：project-console `page=fetch_project_completion_media`（內部 secret）。FB 發文工作室只用於照片；影片即使 API 技術上可回傳，也不是本產品流程。
 
 **請求**
 
@@ -154,7 +157,7 @@ flowchart TB
 }
 ```
 
-`delivery=link` 時：`data_base64` 為 null，附 `temp_url` 與人話 `message`（常見於大影片）。
+`delivery=link` 時：`data_base64` 為 null，附 `temp_url` 與人話 `message`（例如照片超過體積上限）。實拍影片不使用本段流程。
 
 ### `fb_post_generate` 請求／回應
 
@@ -230,7 +233,7 @@ Usage log：`feature=fb_post_edit`。
 3. **AI 改圖**：前綴 A（鏡頭／構圖）＋前綴 C（用途／情境）＋中間效果＋後面約束＋自由文字；即時預覽；單張或批次；版本回退；採用此圖 → 自動進步驟 4  
 4. **精修＋LOGO／貼圖**：亮度／對比／飽和／銳化／旋轉／暗角／色溫；濾鏡；**裁切比例**；疊真實 LOGO；**貼圖素材庫**（一鍵轉透明 PNG）  
 5. **完成**：**發前檢查**（LOGO／貼圖或「本次不加」、文案長短、個資人工勾選、圖可下載）→ 通過或強制確認後強調「複製／下載」；開粉專  
-6. **短影音（可選）**：照片合成見 SPEC 22；另顯示案場已選影片（預覽／下載）；**.mov 站內剪輯受限**，對齊既有 reel（照片合成）流程
+6. **短影音（可選）**：實拍影片顯示檔名／路徑，可補本機完整路徑與精華秒數，下載 JSON 工單交給本機助手；照片合成見 SPEC 22 並繼續保留
 
 設定／連線摺疊在頁底。
 
@@ -249,7 +252,8 @@ Usage log：`feature=fb_post_edit`。
 | 情境 | 畫面行為 |
 |------|----------|
 | `.ai` 轉透明 PNG 失敗 | 顯示步驟：Illustrator 匯出透明 PNG → 「改傳透明 PNG」按鈕 |
-| 短影音 CDN／ffmpeg 失敗 | 自動降級 WebM＋說明可重試 MP4；進度條／階段文字避免以為當掉 |
+| 照片合成 CDN／ffmpeg 失敗 | 自動降級 WebM＋說明可重試 MP4；進度條／階段文字避免以為當掉 |
+| 實拍影片送單失敗 | 顯示缺案號／缺路徑／無影片等人話；按鈕處理中時停用，成功後提示把 JSON 放進 queue |
 
 ### 文案標籤重點（`config.COPY_TAGS`）
 
@@ -290,10 +294,12 @@ Usage log：`feature=fb_post_edit`。
 4. 前綴僅 A／C，預覽指令**無**尺寸類標籤；精修可裁切比例  
 5. 貼圖庫可上傳轉換（失敗有「改傳透明 PNG」步驟引導）；可套用到精修  
 6. 步驟 5 發前檢查：LOGO／文案／個資／可下載；未通過時複製／下載會擋並提示  
-7. 短影音：有進度階段；wasm 失敗降級 WebM＋說明（見 SPEC 22）  
+7. 照片短影音：有進度階段；wasm 失敗降級 WebM＋說明（見 SPEC 22）
 8. 文案／改圖皆有 usage log；未授權回失敗訊息  
 9. 步驟①案場匯入：填案號→載入→勾選→匯入；照片走取圖代理進圖庫；載入／空／錯／成功有人話；本機上傳仍可用；假資料可測介面  
-10. 影片：類型選「影片」可列／勾選／匯入；步驟⑥可預覽／下載；.mov 有限制說明；照片短影音合成仍可用  
+10. 影片：類型選「影片」只列檔名／路徑，可勾選加入工單；Network 不得出現影片取檔代理或整支影片下載
+11. 步驟⑥可貼本機完整路徑、填選填 `segs`、下載 JSON；有空／處理中／錯誤／成功四態且按鈕防連點
+12. `Watch-Queue.ps1 -Once` 可把 pending 改 processing，完成後改 completed；失敗改 failed 並寫原因；輸出仍在原影片旁 `短影音試看`
 
 ---
 
@@ -303,14 +309,15 @@ Usage log：`feature=fb_post_edit`。
 |------|------|
 | 改圖成本 | Image 模型按張計費；批次＝張數 |
 | GAS 時限 | 批次改圖前端逐張＋間隔；張數多可能逾時，宜分批 |
-| GAS 回應體積 | 取媒體 base64 有體積上限（圖約 8MB／影約 12MB）；過大改連結或請本機上傳 |
+| GAS 回應體積 | 只有照片走取檔 base64；實拍影片不經 GAS／瀏覽器傳輸 |
 | 真實性 | 完工案例避免過度造假；發文前人工確認 |
 | LOGO／.ai | 複雜 AI 無法保證；以 PNG 為準 |
-| 短影音記憶體 | 限制張數／時長；CDN 被擋則 WebM |
+| 照片短影音記憶體 | 限制張數／時長；CDN 被擋則 WebM |
 | Phase 2 | 需 Meta `pages_manage_posts` 等審核 |
 | Dropbox list | GAS 逾時／檔案極多時需 `limit`／`cursor`；找專案夾時不可誤建空夾 |
-| 案場匯入 CORS | **主路徑**後端代理 base64；公開 CORS 代理僅備援 |
-| 影片匯入／AI 剪輯 | 本輪＝列／預覽／選取／下載；站內 AI 剪輯未做；.mov 瀏覽器剪輯受限 |
+| 照片案場匯入 CORS | 照片主路徑為後端代理 base64；公開 CORS 代理僅備援；影片不使用 |
+| 實拍影片 | 網頁只送單；瀏覽器不預覽、不下載、不剪片。本機必須先完成 Dropbox 同步 |
+| 本機路徑 | 瀏覽器不會透露選檔完整路徑，使用者需貼上完整路徑；助手只讀原檔 |
 
 ---
 
@@ -330,3 +337,5 @@ Usage log：`feature=fb_post_edit`。
 | `backend/project-console/CompletionMediaList.js` | 依案號列完工照／影片；依 path 取媒體 base64 |
 | `backend/project-console/WebApp.js` | `page=list_project_completion_media`／`fetch_project_completion_media` |
 | `CODING/SPEC/22_FB_REEL_STUDIO_SPEC.md` | 短影音專章 |
+| `TanxinTools/short-video-workflow/Watch-Queue.ps1` | 本機監看 JSON 工單、執行試看流程、回寫狀態 |
+| `TanxinTools/short-video-workflow/README.md` | 送單到拿檔的白話操作 |
