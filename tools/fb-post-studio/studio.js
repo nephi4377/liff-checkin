@@ -8,16 +8,18 @@
   var DEFAULT_GAS = CFG.GAS_URL || '';
   var MAX_IMAGES = CFG.MAX_IMAGES || 10;
   var COPY_HISTORY_MAX = CFG.COPY_HISTORY_MAX || 40;
-  var WIZARD_MAX = 6;
+  var WIZARD_MAX = 5;
 
   var WIZARD_STEPS = [
     { n: 1, title: '選圖' },
     { n: 2, title: '寫文案' },
-    { n: 3, title: 'AI 改圖' },
-    { n: 4, title: '精修＋LOGO' },
-    { n: 5, title: '完成' },
-    { n: 6, title: '短影音' }
+    { n: 3, title: '產圖精修' },
+    { n: 4, title: '完成' },
+    { n: 5, title: '短影音' }
   ];
+
+  var BATCH_CONSISTENCY_SUFFIX_ =
+    '【整組一致】這是多張同一貼文的照片，請維持與參考圖相同的色溫、對比、光線氛圍與調性，避免每張風格落差過大。';
 
   var state = {
     images: [],
@@ -46,7 +48,14 @@
     localVideoNames: [],
     workOrderBusy: false,
     reelAudioBlob: null,
-    reelLastUrl: null
+    reelLastUrl: null,
+    reelBgmPreview: null,
+    dragThumbIdx: null,
+    adoptPulseId: null,
+    selectedEmojiId: null,
+    emojiDrag: { active: false, id: null, offsetX: 0, offsetY: 0 },
+    stickers: [],
+    overlayImageCache: {}
   };
 
   function emptyTagIds() {
@@ -350,14 +359,14 @@
 
   function canEnterStep(n) {
     if (n <= 1) return { ok: true };
-    if (n === 6) {
+    if (n === 5) {
       return { ok: true };
     }
     if (!state.images.length) {
       return { ok: false, msg: '請先上傳至少一張圖，才能進入下一步' };
     }
-    if (n >= 3 && n <= 4 && !state.selectedId) {
-      return { ok: false, msg: '請先在圖庫點選一張圖，再進 AI 改圖／精修' };
+    if (n === 3 && !state.selectedId) {
+      return { ok: false, msg: '請先在圖庫點選一張圖，再進產圖精修' };
     }
     return { ok: true };
   }
@@ -404,15 +413,16 @@
     if ($('btn-wizard-prev')) $('btn-wizard-prev').disabled = n <= 1;
     if ($('btn-wizard-next')) {
       if (n >= WIZARD_MAX) $('btn-wizard-next').textContent = '回到選圖';
-      else if (n === 5) $('btn-wizard-next').textContent = '製作短影音';
+      else if (n === 4) $('btn-wizard-next').textContent = '製作短影音';
       else $('btn-wizard-next').textContent = '下一步';
     }
     syncThumbStrip();
-    if (n === 4) redrawCanvas();
-    if (n === 5) updateFinishSummary();
-    if (n === 6) {
+    if (n === 3) redrawCanvas();
+    if (n === 4) updateFinishSummary();
+    if (n === 5) {
       refreshReelSourceUi();
       renderSiteVideosPanel();
+      syncReelBgmPreviewButtons(!!state.reelBgmPreview);
     }
     hideError();
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -559,7 +569,8 @@
       }],
       selectedVersionId: 'orig',
       adopted: null,
-      batch: false
+      batch: false,
+      emojiOverlays: []
     };
   }
 
@@ -574,6 +585,26 @@
       : '請先選中一張圖再改圖。';
   }
 
+  function moveImage(fromIdx, toIdx) {
+    if (fromIdx === toIdx) return;
+    if (fromIdx < 0 || toIdx < 0 || fromIdx >= state.images.length || toIdx >= state.images.length) return;
+    var item = state.images.splice(fromIdx, 1)[0];
+    state.images.splice(toIdx, 0, item);
+    renderThumbs();
+    refreshReelSourceUi();
+  }
+
+  function flashAdoptedThumb(id) {
+    state.adoptPulseId = id;
+    renderThumbs();
+    window.setTimeout(function () {
+      if (state.adoptPulseId === id) {
+        state.adoptPulseId = null;
+        renderThumbs();
+      }
+    }, 800);
+  }
+
   function renderThumbs() {
     var grid = $('thumb-grid');
     grid.innerHTML = '';
@@ -581,13 +612,24 @@
       var div = document.createElement('div');
       div.className = 'thumb' +
         (im.id === state.selectedId ? ' selected' : '') +
-        (im.batch ? ' batch-on' : '');
+        (im.batch ? ' batch-on' : '') +
+        (im.adopted ? ' adopted' : '') +
+        (state.adoptPulseId === im.id ? ' adopted-pulse' : '');
+      div.setAttribute('draggable', 'true');
+      div.dataset.idx = String(idx);
       div.innerHTML =
         '<span class="badge">' + (idx + 1) + '</span>' +
+        '<span class="adopt-mark" title="已採用"><i class="fa-solid fa-check"></i></span>' +
         '<button type="button" class="rm" title="移除">&times;</button>' +
-        '<img alt="" src="' + (im.original.preview || '') + '">';
+        '<img alt="" src="' + (im.original.preview || '') + '">' +
+        '<span class="order-btns">' +
+        '<button type="button" class="order-up" title="往前">↑</button>' +
+        '<button type="button" class="order-down" title="往後">↓</button>' +
+        '</span>';
       div.addEventListener('click', function (e) {
-        if (e.target && e.target.classList.contains('rm')) return;
+        if (e.target && (e.target.classList.contains('rm') ||
+            e.target.classList.contains('order-up') ||
+            e.target.classList.contains('order-down'))) return;
         if (e.ctrlKey || e.metaKey) {
           im.batch = !im.batch;
           renderThumbs();
@@ -598,6 +640,55 @@
       div.querySelector('.rm').addEventListener('click', function (e) {
         e.stopPropagation();
         removeImage(im.id);
+      });
+      var upBtn = div.querySelector('.order-up');
+      var downBtn = div.querySelector('.order-down');
+      if (upBtn) {
+        upBtn.disabled = idx === 0;
+        upBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          moveImage(idx, idx - 1);
+        });
+      }
+      if (downBtn) {
+        downBtn.disabled = idx === state.images.length - 1;
+        downBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          moveImage(idx, idx + 1);
+        });
+      }
+      div.addEventListener('dragstart', function (e) {
+        state.dragThumbIdx = idx;
+        div.classList.add('dragging');
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', String(idx));
+        }
+      });
+      div.addEventListener('dragend', function () {
+        state.dragThumbIdx = null;
+        div.classList.remove('dragging');
+        grid.querySelectorAll('.thumb.drag-over').forEach(function (el) {
+          el.classList.remove('drag-over');
+        });
+      });
+      div.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        div.classList.add('drag-over');
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      });
+      div.addEventListener('dragleave', function () {
+        div.classList.remove('drag-over');
+      });
+      div.addEventListener('drop', function (e) {
+        e.preventDefault();
+        div.classList.remove('drag-over');
+        var from = state.dragThumbIdx;
+        if (from == null && e.dataTransfer) {
+          from = parseInt(e.dataTransfer.getData('text/plain'), 10);
+        }
+        if (!(from >= 0)) return;
+        moveImage(from, idx);
       });
       grid.appendChild(div);
     });
@@ -630,6 +721,10 @@
     if (im.adopted) {
       adoptPhoto(im.adopted, '已採用圖', true);
     }
+    ensureOverlayImagesLoaded(getEmojiOverlays(im)).then(function () {
+      if (getSelectedImage() === im) redrawCanvas();
+    });
+    syncEmojiControls();
   }
 
   function removeImage(id) {
@@ -1193,10 +1288,10 @@
       renderImportGrid();
       var parts = [];
       if (importedPhotos.length) parts.push('照片 ' + importedPhotos.length + ' 張進圖庫');
-      if (importedVideos.length) parts.push('影片 ' + importedVideos.length + ' 支已加入步驟⑥工單');
+      if (importedVideos.length) parts.push('影片 ' + importedVideos.length + ' 支已加入步驟⑤工單');
       if (images.length > room && room >= 0) parts.push('超過圖庫上限的照片已略過');
       setImportStatus('已完成：' + (parts.join('；') || '無') + '。', 'ok');
-      if (importedVideos.length) showOk('影片路徑已記錄，可到步驟⑥下載工單');
+      if (importedVideos.length) showOk('影片路徑已記錄，可到步驟⑤下載工單');
       else if (importedPhotos.length) showOk('已匯入照片');
     }).catch(function (e) {
       var msg = (e && e.message) ? e.message : String(e);
@@ -1262,32 +1357,166 @@
       photos.slice(0, 10).forEach(function (p, i) {
         var div = document.createElement('div');
         div.className = 'thumb';
-        div.innerHTML = '<img alt="reel-' + i + '" src="' + (p.preview || dataUrlFromPhoto(p)) + '">';
+        div.innerHTML =
+          '<span class="badge">' + (i + 1) + '</span>' +
+          '<img alt="reel-' + i + '" src="' + (p.preview || dataUrlFromPhoto(p)) + '">';
         grid.appendChild(div);
       });
     }
     if (meta) {
       var adopted = state.images.filter(function (im) { return im.adopted; }).length;
       meta.textContent = '可用圖 ' + photos.length + ' 張（已採用 ' + adopted +
-        '）。照片合成短影音建議 2～10 張；實拍影片請用上方工單交給本機助手。';
+        '）。順序與上方圖庫相同；照片合成短影音建議 2～10 張。';
     }
     fillReelBgmOptions();
   }
 
+  function setReelBgmPreviewStatus(msg, kind) {
+    var el = $('reel-bgm-preview-status');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.classList.remove('ok', 'bad');
+    if (kind === 'ok') el.classList.add('ok');
+    if (kind === 'bad') el.classList.add('bad');
+  }
+
+  function syncReelBgmPreviewButtons(playing) {
+    var btnPlay = $('btn-reel-bgm-preview');
+    var btnStop = $('btn-reel-bgm-preview-stop');
+    var musicOff = $('reel-music-off') && $('reel-music-off').checked;
+    if (btnPlay) btnPlay.disabled = !!musicOff;
+    if (btnStop) btnStop.classList.toggle('hidden', !playing);
+  }
+
+  function stopReelBgmPreview(quiet) {
+    if (state.reelBgmPreview && state.reelBgmPreview.stop) {
+      try { state.reelBgmPreview.stop(); } catch (e0) {}
+    }
+    state.reelBgmPreview = null;
+    syncReelBgmPreviewButtons(false);
+    if (!quiet) setReelBgmPreviewStatus('已停止試播');
+  }
+
+  function handleReelBgmPreview() {
+    var api = window.FbPostReel;
+    if (!api || !api.previewBgm) {
+      showError('短影音模組未載入');
+      return;
+    }
+    if ($('reel-music-off') && $('reel-music-off').checked) {
+      showError('已勾選「不要音樂」');
+      return;
+    }
+    stopReelBgmPreview(true);
+    var btn = $('btn-reel-bgm-preview');
+    var preset = ($('reel-bgm') && $('reel-bgm').value) || ((CFG.REEL && CFG.REEL.BGM_DEFAULT) || 'track_serene');
+    var label = '選項';
+    if (state.reelAudioBlob) {
+      label = '上傳音檔';
+    } else if (preset === 'off') {
+      showError('請先選一首音樂');
+      return;
+    } else {
+      var track = (CFG.REEL && CFG.REEL.BGM_TRACKS || []).find(function (t) { return t.id === preset; });
+      if (track) label = track.label;
+      else {
+        var ai = (CFG.REEL && CFG.REEL.BGM_PRESETS || []).find(function (p) { return p.id === preset; });
+        if (ai) label = 'AI：' + ai.label;
+      }
+    }
+    setBusy(btn, true, '<i class="fa-solid fa-spinner fa-spin"></i> 準備試播…');
+    setReelBgmPreviewStatus('正在載入「' + label + '」…');
+    hideError();
+
+    api.previewBgm(preset, {
+      audioBlob: state.reelAudioBlob,
+      previewSec: 14
+    }).then(function (player) {
+      state.reelBgmPreview = player;
+      syncReelBgmPreviewButtons(true);
+      setReelBgmPreviewStatus('試播中：' + label + '（約 14 秒，可按停止）', 'ok');
+      if (player && player.audio) {
+        player.audio.addEventListener('ended', function () {
+          state.reelBgmPreview = null;
+          syncReelBgmPreviewButtons(false);
+          setReelBgmPreviewStatus('試播結束：' + label, 'ok');
+        }, { once: true });
+      }
+    }).catch(function (e) {
+      setReelBgmPreviewStatus((e && e.message) ? e.message : String(e), 'bad');
+      showError((e && e.message) ? e.message : String(e));
+      syncReelBgmPreviewButtons(false);
+    }).then(function () {
+      setBusy(btn, false, null, '<i class="fa-solid fa-play"></i> 試播');
+    });
+  }
+
   function fillReelBgmOptions() {
     var sel = $('reel-bgm');
-    if (!sel || sel.options.length) return;
-    var presets = (CFG.REEL && CFG.REEL.BGM_PRESETS) || [
-      { id: 'off', label: '無音樂' },
-      { id: 'soft', label: '輕柔氛圍（內建）' }
-    ];
-    presets.forEach(function (p) {
+    if (!sel) return;
+    var prev = sel.value;
+    sel.innerHTML = '';
+
+    function addGroup(label) {
+      var g = document.createElement('optgroup');
+      g.label = label;
+      sel.appendChild(g);
+      return g;
+    }
+    function addOpt(group, id, text) {
       var o = document.createElement('option');
-      o.value = p.id;
-      o.textContent = p.label;
-      sel.appendChild(o);
-    });
-    if (!sel.value) sel.value = 'soft';
+      o.value = id;
+      o.textContent = text;
+      group.appendChild(o);
+    }
+
+    var gOff = addGroup('無音樂');
+    addOpt(gOff, 'off', '不要音樂');
+
+    var tracks = (CFG.REEL && CFG.REEL.BGM_TRACKS) || [];
+    if (tracks.length) {
+      var gTracks = addGroup('免版權曲庫（真實伴奏）');
+      tracks.forEach(function (t) {
+        addOpt(gTracks, t.id, t.label);
+      });
+    }
+
+    var presets = (CFG.REEL && CFG.REEL.BGM_PRESETS) || [];
+    if (presets.length) {
+      var gAi = addGroup('AI 氛圍作曲（本機生成）');
+      presets.forEach(function (p) {
+        addOpt(gAi, p.id, p.label);
+      });
+    }
+
+    var def = (CFG.REEL && CFG.REEL.BGM_DEFAULT) || 'track_serene';
+    var hasPrev = prev && sel.querySelector('option[value="' + prev + '"]');
+    sel.value = hasPrev ? prev : def;
+    updateReelBgmHint();
+    syncReelBgmPreviewButtons(false);
+  }
+
+  function updateReelBgmHint() {
+    var hint = $('reel-bgm-hint');
+    var sel = $('reel-bgm');
+    if (!hint || !sel) return;
+    var val = sel.value || '';
+    var track = (CFG.REEL && CFG.REEL.BGM_TRACKS || []).find(function (t) { return t.id === val; });
+    if (track) {
+      hint.innerHTML = '已選 <strong>免版權曲庫</strong>：' + track.label +
+        '（' + (track.license || 'Mixkit') + '，可商用）。上傳音檔時會覆蓋此選項。';
+      return;
+    }
+    if (val === 'off') {
+      hint.textContent = '本次合成不加音樂。';
+      return;
+    }
+    if (val) {
+      hint.innerHTML = '已選 <strong>AI 氛圍作曲</strong>：瀏覽器即時生成、免版權，但較不像完整歌曲。上傳音檔時會覆蓋此選項。';
+      return;
+    }
+    hint.innerHTML =
+      '<strong>免版權曲庫</strong>：真實伴奏（Mixkit，可商用）。<strong>AI 氛圍作曲</strong>：瀏覽器即時生成、免版權但較像氛圍音。若上傳自己的音檔，會優先使用上傳檔（請確認你有使用權）。';
   }
 
   function renderSiteVideosPanel() {
@@ -1297,8 +1526,8 @@
     var note = $('site-videos-limit-note');
     if (!wrap || !grid) return;
     var list = state.siteVideos || [];
-    wrap.classList.toggle('hidden', list.length === 0 && state.wizardStep !== 6);
-    if (state.wizardStep === 6) wrap.classList.remove('hidden');
+    wrap.classList.toggle('hidden', list.length === 0 && state.wizardStep !== 5);
+    if (state.wizardStep === 5) wrap.classList.remove('hidden');
     grid.innerHTML = '';
     list.forEach(function (v) {
       var div = document.createElement('div');
@@ -1484,6 +1713,7 @@
 
   function handleReelCompose() {
     hideError();
+    stopReelBgmPreview(true);
     var api = window.FbPostReel;
     if (!api || !api.composeReel) {
       showError('短影音模組未載入');
@@ -1508,7 +1738,7 @@
     }
 
     var musicOff = $('reel-music-off') && $('reel-music-off').checked;
-    var bgm = ($('reel-bgm') && $('reel-bgm').value) || 'soft';
+    var bgm = ($('reel-bgm') && $('reel-bgm').value) || ((CFG.REEL && CFG.REEL.BGM_DEFAULT) || 'track_serene');
     var sec = parseFloat($('reel-sec-per-slide') && $('reel-sec-per-slide').value) || 2.4;
 
     api.composeReel({
@@ -1600,6 +1830,488 @@
       });
       box.appendChild(btn);
     });
+  }
+
+  /* ---------- emoji + asset overlays ---------- */
+
+  var EMOJI_FONT_STACK_ = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+
+  function overlayLabel(o) {
+    if (!o) return '';
+    if (o.type === 'asset' || o.assetId) return o.name || '素材';
+    return o.char || '';
+  }
+
+  function findStickerById(id) {
+    return (state.stickers || []).find(function (s) { return s.id === id; }) || null;
+  }
+
+  function resolveOverlayPreview(o) {
+    if (!o) return '';
+    if (o.preview) return o.preview;
+    if (o.assetId) {
+      var item = findStickerById(o.assetId);
+      if (item && item.preview) {
+        o.preview = item.preview;
+        return item.preview;
+      }
+    }
+    return '';
+  }
+
+  function overlayCacheKey(o) {
+    return o.assetId || o.preview || o.id || '';
+  }
+
+  function preloadOverlayImage(o) {
+    if (!o) return Promise.resolve(null);
+    var key = overlayCacheKey(o);
+    if (!key) return Promise.resolve(null);
+    if (state.overlayImageCache[key]) return Promise.resolve(state.overlayImageCache[key]);
+    var preview = resolveOverlayPreview(o);
+    if (!preview) return Promise.resolve(null);
+    var api = window.FbPostStickers;
+    var loader = api && api.loadImageFromUrl
+      ? api.loadImageFromUrl(preview)
+      : loadImageFromPhoto({ preview: preview });
+    return loader.then(function (img) {
+      state.overlayImageCache[key] = img;
+      return img;
+    }).catch(function () {
+      return null;
+    });
+  }
+
+  function ensureOverlayImagesLoaded(overlays) {
+    return Promise.all((overlays || []).map(preloadOverlayImage));
+  }
+
+  function getOverlayImage(o) {
+    var key = overlayCacheKey(o);
+    return key ? state.overlayImageCache[key] || null : null;
+  }
+
+  function overlayDrawSize(o, canvas) {
+    var size = o.size || CFG.EMOJI_DEFAULT_SIZE || 52;
+    var w = size;
+    var h = size;
+    if (o.type === 'asset' || o.assetId) {
+      var img = getOverlayImage(o);
+      if (img) {
+        var ratio = (img.naturalHeight || img.height) / (img.naturalWidth || img.width || 1);
+        h = w * ratio;
+      }
+    }
+    return {
+      cx: o.x * canvas.width,
+      cy: o.y * canvas.height,
+      w: w,
+      h: h
+    };
+  }
+
+  function showConvertFailGuide(which, msg) {
+    var guide = $(which === 'logo' ? 'logo-fail-guide' : 'sticker-fail-guide');
+    if (guide) guide.classList.add('show');
+    var friendly =
+      '轉檔失敗。請用 Illustrator／其他工具匯出「透明 PNG」後再上傳（不要再傳複雜 .ai）。' +
+      (msg ? '\n原因：' + msg : '');
+    showError(friendly);
+  }
+
+  function hideConvertFailGuide(which) {
+    var guide = $(which === 'logo' ? 'logo-fail-guide' : 'sticker-fail-guide');
+    if (guide) guide.classList.remove('show');
+  }
+
+  function renderStickerGrid() {
+    var box = $('sticker-grid');
+    var status = $('sticker-status');
+    if (!box) return;
+    box.innerHTML = '';
+    var list = state.stickers || [];
+    if (status) {
+      status.textContent = list.length
+        ? ('本機素材 ' + list.length + ' 筆（可拖曳或點一下加到畫布）')
+        : '尚無素材，請上傳 PNG／SVG';
+      status.className = 'status-line' + (list.length ? ' ok' : '');
+    }
+    list.forEach(function (item) {
+      var wrap = document.createElement('div');
+      wrap.className = 'thumb';
+      wrap.title = (item.category || '') + ' · ' + (item.name || '');
+      wrap.setAttribute('draggable', 'true');
+      wrap.innerHTML =
+        '<img alt="sticker" src="' + item.preview + '">' +
+        '<span class="badge">' + (item.category || '貼圖') + '</span>' +
+        '<button type="button" class="rm" title="刪除">×</button>';
+      wrap.addEventListener('dragstart', function (e) {
+        if (e.dataTransfer) {
+          e.dataTransfer.setData('application/x-fb-asset-id', item.id);
+          e.dataTransfer.setData('text/plain', item.name || 'sticker');
+          e.dataTransfer.effectAllowed = 'copy';
+        }
+      });
+      wrap.querySelector('.rm').addEventListener('click', function (e) {
+        e.stopPropagation();
+        var api = window.FbPostStickers;
+        if (!api) return;
+        api.removeSticker(item.id).then(function () {
+          return refreshStickers();
+        }).then(function () {
+          showOk('已刪除素材');
+        });
+      });
+      wrap.addEventListener('click', function (e) {
+        if (e.target && e.target.classList && e.target.classList.contains('rm')) return;
+        addAssetOverlayAtCenter(item);
+      });
+      box.appendChild(wrap);
+    });
+  }
+
+  function refreshStickers() {
+    var api = window.FbPostStickers;
+    if (!api) {
+      if ($('sticker-status')) {
+        $('sticker-status').textContent = '貼圖模組未載入';
+        $('sticker-status').className = 'status-line bad';
+      }
+      return Promise.resolve();
+    }
+    return api.listStickers().then(function (list) {
+      state.stickers = list || [];
+      renderStickerGrid();
+      return ensureOverlayImagesLoaded(state.stickers);
+    }).catch(function (e) {
+      if ($('sticker-status')) {
+        $('sticker-status').textContent = e.message || String(e);
+        $('sticker-status').className = 'status-line bad';
+      }
+    });
+  }
+
+  function handleStickerUpload(file) {
+    var api = window.FbPostStickers;
+    if (!api) {
+      showError('貼圖模組未載入');
+      return;
+    }
+    var cat = ($('sticker-category') && $('sticker-category').value) || '貼圖';
+    hideConvertFailGuide('sticker');
+    if ($('sticker-status')) {
+      $('sticker-status').textContent = '轉換中…（.ai 可能需幾秒）';
+      $('sticker-status').className = 'status-line';
+    }
+    api.addConvertedSticker(file, cat).then(function (entry) {
+      hideConvertFailGuide('sticker');
+      showOk((entry.note || '已加入素材庫') + '：' + (entry.name || ''));
+      return refreshStickers();
+    }).catch(function (e) {
+      var msg = e.message || String(e);
+      showConvertFailGuide('sticker', msg);
+      if ($('sticker-status')) {
+        $('sticker-status').textContent = '失敗 → 請改傳透明 PNG';
+        $('sticker-status').className = 'status-line bad';
+      }
+    });
+  }
+
+  function getEmojiOverlays(im) {
+    if (!im) return [];
+    if (!Array.isArray(im.emojiOverlays)) im.emojiOverlays = [];
+    return im.emojiOverlays;
+  }
+
+  function getSelectedEmojiOverlay(im) {
+    im = im || getSelectedImage();
+    if (!im || !state.selectedEmojiId) return null;
+    return getEmojiOverlays(im).find(function (o) { return o.id === state.selectedEmojiId; }) || null;
+  }
+
+  function clampRatio(v) {
+    return Math.max(0.05, Math.min(0.95, v));
+  }
+
+  function canvasPointFromClient(clientX, clientY) {
+    var canvas = $('edit-canvas');
+    var rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return { x: 0.5, y: 0.5, px: 0, py: 0 };
+    var px = (clientX - rect.left) * (canvas.width / rect.width);
+    var py = (clientY - rect.top) * (canvas.height / rect.height);
+    return {
+      x: clampRatio(px / canvas.width),
+      y: clampRatio(py / canvas.height),
+      px: px,
+      py: py
+    };
+  }
+
+  function hitTestEmoji(px, py, overlays, canvas) {
+    var i;
+    for (i = overlays.length - 1; i >= 0; i--) {
+      var o = overlays[i];
+      var box = overlayDrawSize(o, canvas);
+      if (px >= box.cx - box.w / 2 && px <= box.cx + box.w / 2 &&
+          py >= box.cy - box.h / 2 && py <= box.cy + box.h / 2) {
+        return o;
+      }
+    }
+    return null;
+  }
+
+  function addEmojiOverlay(char, x, y) {
+    var im = getSelectedImage();
+    if (!im) {
+      showError('請先選中一張圖');
+      return null;
+    }
+    if (!state.sourceImg) {
+      showError('請先「採用此圖」或「採用原圖」再貼 emoji');
+      return null;
+    }
+    var overlay = {
+      id: uid('emo'),
+      char: String(char || '').trim(),
+      x: clampRatio(x == null ? 0.5 : x),
+      y: clampRatio(y == null ? 0.5 : y),
+      size: parseInt(($('emoji-size') && $('emoji-size').value) || CFG.EMOJI_DEFAULT_SIZE || 52, 10) || 52
+    };
+    if (!overlay.char) return null;
+    getEmojiOverlays(im).push(overlay);
+    state.selectedEmojiId = overlay.id;
+    redrawCanvas();
+    syncEmojiControls();
+    return overlay;
+  }
+
+  function addEmojiAtCenter(char) {
+    addEmojiOverlay(char, 0.5, 0.5);
+  }
+
+  function addAssetOverlay(item, x, y) {
+    var im = getSelectedImage();
+    if (!im) {
+      showError('請先選中一張圖');
+      return null;
+    }
+    if (!state.sourceImg) {
+      showError('請先「採用此圖」或「採用原圖」再貼素材');
+      return null;
+    }
+    if (!item || !item.preview) return null;
+    var overlay = {
+      id: uid('emo'),
+      type: 'asset',
+      assetId: item.id,
+      name: item.name || '素材',
+      preview: item.preview,
+      x: clampRatio(x == null ? 0.5 : x),
+      y: clampRatio(y == null ? 0.5 : y),
+      size: parseInt(($('emoji-size') && $('emoji-size').value) || CFG.EMOJI_DEFAULT_SIZE || 52, 10) || 52
+    };
+    getEmojiOverlays(im).push(overlay);
+    state.selectedEmojiId = overlay.id;
+    preloadOverlayImage(overlay).then(function () {
+      redrawCanvas();
+      syncEmojiControls();
+    });
+    redrawCanvas();
+    syncEmojiControls();
+    return overlay;
+  }
+
+  function addAssetOverlayAtCenter(item) {
+    addAssetOverlay(item, 0.5, 0.5);
+  }
+
+  function removeSelectedEmoji() {
+    var im = getSelectedImage();
+    if (!im || !state.selectedEmojiId) return;
+    im.emojiOverlays = getEmojiOverlays(im).filter(function (o) {
+      return o.id !== state.selectedEmojiId;
+    });
+    state.selectedEmojiId = null;
+    redrawCanvas();
+    syncEmojiControls();
+  }
+
+  function clearEmojiOverlays() {
+    var im = getSelectedImage();
+    if (!im) return;
+    im.emojiOverlays = [];
+    state.selectedEmojiId = null;
+    redrawCanvas();
+    syncEmojiControls();
+    showOk('已清除本圖全部貼圖');
+  }
+
+  function syncEmojiControls() {
+    var im = getSelectedImage();
+    var overlays = getEmojiOverlays(im);
+    var selected = getSelectedEmojiOverlay(im);
+    var controls = $('emoji-controls');
+    var status = $('emoji-status');
+    if (controls) controls.classList.toggle('hidden', !selected);
+    if (selected && $('emoji-size')) {
+      $('emoji-size').value = String(selected.size || CFG.EMOJI_DEFAULT_SIZE || 52);
+      if ($('val-emoji-size')) $('val-emoji-size').textContent = $('emoji-size').value;
+    }
+    if (status) {
+      status.textContent = overlays.length
+        ? ('本圖已有 ' + overlays.length + ' 個貼圖' +
+          (selected ? '（已選：' + overlayLabel(selected) + '）' : ''))
+        : '尚未加 emoji／素材';
+      status.className = 'status-line' + (overlays.length ? ' ok' : '');
+    }
+  }
+
+  function renderEmojiPalette() {
+    var root = $('emoji-palette-root');
+    if (!root) return;
+    root.innerHTML = '';
+    var groups = CFG.BUILTIN_EMOJIS || [];
+    groups.forEach(function (group) {
+      var title = document.createElement('div');
+      title.className = 'emoji-group-title';
+      title.textContent = group.category || 'Emoji';
+      root.appendChild(title);
+      var row = document.createElement('div');
+      row.className = 'emoji-palette';
+      (group.items || []).forEach(function (char) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'emoji-chip';
+        btn.textContent = char;
+        btn.title = '拖到畫布，或點一下加在中央';
+        btn.setAttribute('draggable', 'true');
+        btn.addEventListener('dragstart', function (e) {
+          if (e.dataTransfer) {
+            e.dataTransfer.setData('text/emoji', char);
+            e.dataTransfer.setData('text/plain', char);
+            e.dataTransfer.effectAllowed = 'copy';
+          }
+        });
+        btn.addEventListener('click', function () {
+          addEmojiAtCenter(char);
+        });
+        row.appendChild(btn);
+      });
+      root.appendChild(row);
+    });
+  }
+
+  function drawEmojiOverlays(ctx, canvas, overlays, selectedId) {
+    if (!overlays || !overlays.length) return;
+    overlays.forEach(function (o) {
+      var box = overlayDrawSize(o, canvas);
+      ctx.save();
+      if (o.type === 'asset' || o.assetId) {
+        var img = getOverlayImage(o);
+        if (img) {
+          ctx.drawImage(img, box.cx - box.w / 2, box.cy - box.h / 2, box.w, box.h);
+          if (selectedId && o.id === selectedId) {
+            ctx.strokeStyle = 'rgba(96,165,250,0.95)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 4]);
+            ctx.strokeRect(box.cx - box.w / 2 - 4, box.cy - box.h / 2 - 4, box.w + 8, box.h + 8);
+            ctx.setLineDash([]);
+          }
+        } else {
+          preloadOverlayImage(o).then(function (loaded) {
+            if (loaded) redrawCanvas();
+          });
+        }
+      } else {
+        var size = o.size || CFG.EMOJI_DEFAULT_SIZE || 52;
+        ctx.font = size + 'px ' + EMOJI_FONT_STACK_;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(o.char, box.cx, box.cy);
+        if (selectedId && o.id === selectedId) {
+          var half = size / 2 + 4;
+          ctx.strokeStyle = 'rgba(96,165,250,0.95)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 4]);
+          ctx.strokeRect(box.cx - half, box.cy - half, half * 2, half * 2);
+          ctx.setLineDash([]);
+        }
+      }
+      ctx.restore();
+    });
+  }
+
+  function bindCanvasEmoji() {
+    var canvas = $('edit-canvas');
+    var stage = $('canvas-stage');
+    if (!canvas || !stage) return;
+
+    stage.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      stage.classList.add('drop-target');
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    });
+    stage.addEventListener('dragleave', function () {
+      stage.classList.remove('drop-target');
+    });
+    stage.addEventListener('drop', function (e) {
+      e.preventDefault();
+      stage.classList.remove('drop-target');
+      var pt = canvasPointFromClient(e.clientX, e.clientY);
+      if (e.dataTransfer) {
+        var assetId = e.dataTransfer.getData('application/x-fb-asset-id');
+        if (assetId) {
+          var item = findStickerById(assetId);
+          if (item) {
+            addAssetOverlay(item, pt.x, pt.y);
+            return;
+          }
+        }
+        var char = e.dataTransfer.getData('text/emoji') || e.dataTransfer.getData('text/plain');
+        if (char) addEmojiOverlay(char, pt.x, pt.y);
+      }
+    });
+
+    canvas.addEventListener('pointerdown', function (e) {
+      if (!state.sourceImg) return;
+      var im = getSelectedImage();
+      if (!im) return;
+      var pt = canvasPointFromClient(e.clientX, e.clientY);
+      var hit = hitTestEmoji(pt.px, pt.py, getEmojiOverlays(im), canvas);
+      if (hit) {
+        state.selectedEmojiId = hit.id;
+        state.emojiDrag.active = true;
+        state.emojiDrag.id = hit.id;
+        state.emojiDrag.offsetX = pt.px - hit.x * canvas.width;
+        state.emojiDrag.offsetY = pt.py - hit.y * canvas.height;
+        try { canvas.setPointerCapture(e.pointerId); } catch (eCap) {}
+      } else {
+        state.selectedEmojiId = null;
+      }
+      redrawCanvas();
+      syncEmojiControls();
+    });
+
+    canvas.addEventListener('pointermove', function (e) {
+      if (!state.emojiDrag.active || !state.emojiDrag.id) return;
+      var im = getSelectedImage();
+      if (!im) return;
+      var overlay = getEmojiOverlays(im).find(function (o) { return o.id === state.emojiDrag.id; });
+      if (!overlay) return;
+      var pt = canvasPointFromClient(e.clientX, e.clientY);
+      overlay.x = clampRatio((pt.px - state.emojiDrag.offsetX) / canvas.width);
+      overlay.y = clampRatio((pt.py - state.emojiDrag.offsetY) / canvas.height);
+      redrawCanvas();
+    });
+
+    function endEmojiDrag(e) {
+      if (!state.emojiDrag.active) return;
+      state.emojiDrag.active = false;
+      state.emojiDrag.id = null;
+      try { canvas.releasePointerCapture(e.pointerId); } catch (eRel) {}
+    }
+    canvas.addEventListener('pointerup', endEmojiDrag);
+    canvas.addEventListener('pointercancel', endEmojiDrag);
   }
 
   /* ---------- canvas refine ---------- */
@@ -1801,6 +2513,9 @@
       ctx.drawImage(state.logoImg, x, y, lw, lh);
       ctx.restore();
     }
+
+    var im = getSelectedImage();
+    drawEmojiOverlays(ctx, canvas, getEmojiOverlays(im), state.selectedEmojiId);
   }
 
   function adoptPhoto(photo, label, quiet) {
@@ -1814,8 +2529,10 @@
       state.sourceImg = img;
       redrawCanvas();
       if (!quiet) {
-        showOk('已採用' + (label || '圖片') + '，可到「精修＋LOGO」調整');
-        setWizardStep(4, { force: true });
+        showOk('已採用' + (label || '圖片') + '，可在下方精修');
+        if (im) flashAdoptedThumb(im.id);
+        var refine = $('refine-section');
+        if (refine) refine.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }).catch(function (e) {
       if (!quiet) showError(e.message || String(e));
@@ -1952,7 +2669,7 @@
     return { source: source, version: version, note: res.note || '' };
   }
 
-  function editOneImage(im, instruction, aspect) {
+  function editOneImage(im, instruction, aspect, referencePhoto) {
     var source = im.working || im.original;
     var payload = {
       photo: photoPayload(source),
@@ -1960,6 +2677,9 @@
       model: CFG.IMAGE_MODEL
     };
     if (aspect) payload.aspect_ratio = aspect;
+    if (referencePhoto && (referencePhoto.data_base64 || referencePhoto.dataBase64)) {
+      payload.reference_photo = photoPayload(referencePhoto);
+    }
     return postGas('fb_post_edit_image', payload).then(function (res) {
       if (!res || !res.success) {
         throw new Error((res && res.message) || ('改圖失敗：' + (im.name || im.id)));
@@ -1984,21 +2704,37 @@
       return;
     }
 
+    var useConsistent = !($('edit-consistent-batch') && !$('edit-consistent-batch').checked);
+    if (targets.length > 1 && useConsistent && instruction.indexOf('【整組一致】') < 0) {
+      instruction = instruction.replace(/\s*$/, '');
+      if (instruction && instruction.charAt(instruction.length - 1) !== '。') instruction += '。';
+      instruction += BATCH_CONSISTENCY_SUFFIX_;
+      $('edit-instruction').value = instruction;
+    }
+
     var btn = $('btn-edit-image');
     var aspect = $('edit-aspect').value;
     var i = 0;
+    var styleReference = null;
     setBusy(btn, true, '<i class="fa-solid fa-spinner fa-spin"></i> 改圖中 0/' + targets.length + '…');
 
     function next() {
       if (i >= targets.length) {
         setBusy(btn, false);
         selectImage(state.selectedId);
+        renderThumbs();
         showOk('改圖完成（' + targets.length + ' 張）');
         return;
       }
       var im = targets[i];
       setBusy(btn, true, '<i class="fa-solid fa-spinner fa-spin"></i> 改圖中 ' + (i + 1) + '/' + targets.length + '…');
-      editOneImage(im, instruction, aspect).then(function (result) {
+      editOneImage(im, instruction, aspect, styleReference).then(function (result) {
+        if (useConsistent && targets.length > 1 && !styleReference && result.version) {
+          styleReference = {
+            data_base64: result.version.data_base64,
+            mime_type: result.version.mime_type
+          };
+        }
         if (im.id === state.selectedId) {
           setPreviewEl($('compare-before'), result.source);
           setPreviewEl($('compare-after'), result.version);
@@ -2006,7 +2742,6 @@
           renderVersions();
         }
         i += 1;
-        // 小間隔，避免連續打爆 GAS
         setTimeout(next, 400);
       }).catch(function (e) {
         setBusy(btn, false);
@@ -2015,6 +2750,80 @@
       });
     }
     next();
+  }
+
+  function blobToPhotoPayload(blob, name) {
+    return new Promise(function (resolve, reject) {
+      if (!blob) {
+        reject(new Error('無法匯出圖片'));
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function () {
+        var dataUrl = reader.result;
+        resolve({
+          data_base64: dataUrl.split(',')[1],
+          mime_type: blob.type || 'image/jpeg',
+          preview: dataUrl,
+          name: name || 'export.jpg'
+        });
+      };
+      reader.onerror = function () { reject(new Error('讀取匯出圖失敗')); };
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function exportCurrentCanvasPhoto(name) {
+    redrawCanvas();
+    return canvasToBlob($('edit-canvas')).then(function (blob) {
+      return blobToPhotoPayload(blob, name);
+    });
+  }
+
+  function applyLogoToAll() {
+    if (!state.logoImg) {
+      showError('請先載入 LOGO（內建或上傳）');
+      return;
+    }
+    if ($('logo-enabled').value !== '1') {
+      showError('請先將「顯示 LOGO」設為「是」');
+      return;
+    }
+    if (!state.images.length) {
+      showError('尚無圖片');
+      return;
+    }
+    var btn = $('btn-logo-all');
+    var savedSelected = state.selectedId;
+    var idx = 0;
+    setBusy(btn, true, '<i class="fa-solid fa-spinner fa-spin"></i> 套用中…');
+    hideError();
+
+    function step() {
+      if (idx >= state.images.length) {
+        if (savedSelected) selectImage(savedSelected);
+        renderThumbs();
+        setBusy(btn, false, null, '<i class="fa-solid fa-stamp"></i> 一鍵全部加上 LOGO');
+        showOk('已為全部 ' + state.images.length + ' 張圖加上 LOGO（含精修設定）');
+        return;
+      }
+      var im = state.images[idx];
+      var photo = im.adopted || im.currentEdit || im.original;
+      state.selectedId = im.id;
+      loadImageFromPhoto(photo).then(function (img) {
+        state.sourceImg = img;
+        return exportCurrentCanvasPhoto(im.name || ('img-' + (idx + 1)));
+      }).then(function (baked) {
+        im.adopted = baked;
+        flashAdoptedThumb(im.id);
+        idx += 1;
+        setTimeout(step, 100);
+      }).catch(function () {
+        idx += 1;
+        setTimeout(step, 100);
+      });
+    }
+    step();
   }
 
   function handleCopyText() {
@@ -2094,6 +2903,7 @@
       }
       var im = list[idx];
       var photo = im.adopted || (im.currentEdit) || im.original;
+      state.selectedId = im.id;
       loadImageFromPhoto(photo).then(function (img) {
         state.sourceImg = img;
         redrawCanvas();
@@ -2291,13 +3101,51 @@
         };
       });
       var sel = getSelectedImage();
-      if (sel && sel.adopted) adoptPhoto(sel.adopted, '最新版');
-      showOk('全部圖已標記採用最新版（可用「下載全部成品」）');
+      if (sel && sel.adopted) adoptPhoto(sel.adopted, '最新版', true);
+      renderThumbs();
+      state.images.forEach(function (im) { flashAdoptedThumb(im.id); });
+      showOk('全部圖已標記採用最新版（綠框＋✓）');
     });
 
     $('btn-download').addEventListener('click', handleDownload);
     $('btn-download-all').addEventListener('click', handleDownloadAll);
     $('btn-save-draft').addEventListener('click', saveDraft);
+    if ($('btn-logo-all')) {
+      $('btn-logo-all').addEventListener('click', applyLogoToAll);
+    }
+    if ($('btn-emoji-delete')) {
+      $('btn-emoji-delete').addEventListener('click', removeSelectedEmoji);
+    }
+    if ($('btn-emoji-clear')) {
+      $('btn-emoji-clear').addEventListener('click', clearEmojiOverlays);
+    }
+    if ($('emoji-size')) {
+      $('emoji-size').addEventListener('input', function () {
+        var selected = getSelectedEmojiOverlay();
+        if (!selected) return;
+        selected.size = parseInt($('emoji-size').value, 10) || CFG.EMOJI_DEFAULT_SIZE || 52;
+        if ($('val-emoji-size')) $('val-emoji-size').textContent = String(selected.size);
+        redrawCanvas();
+      });
+    }
+    if ($('btn-sticker-upload')) {
+      $('btn-sticker-upload').addEventListener('click', function () {
+        $('input-sticker').click();
+      });
+    }
+    if ($('btn-sticker-upload-png')) {
+      $('btn-sticker-upload-png').addEventListener('click', function () {
+        $('input-sticker').click();
+      });
+    }
+    if ($('input-sticker')) {
+      $('input-sticker').addEventListener('change', function () {
+        var f = $('input-sticker').files && $('input-sticker').files[0];
+        if (!f) return;
+        handleStickerUpload(f);
+        $('input-sticker').value = '';
+      });
+    }
     $('btn-save-settings').addEventListener('click', saveSettings);
     $('btn-reset-refine').addEventListener('click', resetRefine);
     $('btn-rot-90').addEventListener('click', function () {
@@ -2405,13 +3253,13 @@
     ].forEach(function (id) {
       var el = $(id);
       if (el) el.addEventListener('input', function () {
-        if (state.wizardStep === 5) updateFinishSummary();
+        if (state.wizardStep === 4) updateFinishSummary();
       });
     });
 
     if ($('btn-go-reel')) {
       $('btn-go-reel').addEventListener('click', function () {
-        setWizardStep(6);
+        setWizardStep(5);
       });
     }
     if ($('input-local-video')) {
@@ -2474,6 +3322,40 @@
       $('input-reel-audio').addEventListener('change', function () {
         var f = $('input-reel-audio').files && $('input-reel-audio').files[0];
         state.reelAudioBlob = f || null;
+        var status = $('reel-audio-status');
+        if (status) {
+          status.textContent = f
+            ? ('已選上傳音檔：' + f.name + '（合成時優先使用）')
+            : '未上傳';
+          status.className = 'status-line' + (f ? ' ok' : '');
+        }
+        if (f && $('reel-music-off')) $('reel-music-off').checked = false;
+        stopReelBgmPreview(true);
+        syncReelBgmPreviewButtons(false);
+      });
+    }
+    if ($('reel-bgm')) {
+      $('reel-bgm').addEventListener('change', function () {
+        stopReelBgmPreview(true);
+        updateReelBgmHint();
+      });
+    }
+    if ($('btn-reel-bgm-preview')) {
+      $('btn-reel-bgm-preview').addEventListener('click', handleReelBgmPreview);
+    }
+    if ($('btn-reel-bgm-preview-stop')) {
+      $('btn-reel-bgm-preview-stop').addEventListener('click', function () {
+        stopReelBgmPreview(false);
+      });
+    }
+    if ($('reel-music-off')) {
+      $('reel-music-off').addEventListener('change', function () {
+        if ($('reel-music-off').checked) {
+          if ($('reel-bgm')) $('reel-bgm').value = 'off';
+          stopReelBgmPreview(true);
+        }
+        syncReelBgmPreviewButtons(false);
+        updateReelBgmHint();
       });
     }
   }
@@ -2485,7 +3367,10 @@
     renderFilterPresets();
     bindUpload();
     bindSiteImport();
+    bindCanvasEmoji();
     bindUi();
+    renderEmojiPalette();
+    refreshStickers();
     syncTagsPreview();
     syncRefineSlidersFromState();
     renderCopyHistory();

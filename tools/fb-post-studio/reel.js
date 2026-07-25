@@ -84,52 +84,85 @@
   }
 
   /**
-   * 產生內建程序 BGM（WAV ArrayBuffer）— 無二進位進 git
+   * 產生內建程序 BGM（WAV ArrayBuffer）— 柔和氛圍，避免刺耳電子音
    */
   function synthesizeBgm(presetId, durationSec) {
     var sampleRate = 44100;
     var n = Math.max(1, Math.floor(sampleRate * durationSec));
     var ctx = new (global.OfflineAudioContext || global.webkitOfflineAudioContext)(2, n, sampleRate);
     var t0 = ctx.currentTime;
+    var end = durationSec;
+
     var master = ctx.createGain();
-    master.gain.value = 0.12;
+    master.gain.setValueAtTime(0, t0);
+    master.gain.linearRampToValueAtTime(0.09, t0 + 1.2);
+    master.gain.setValueAtTime(0.09, t0 + Math.max(1.5, end - 1.5));
+    master.gain.linearRampToValueAtTime(0, t0 + end);
+
+    var lowpass = ctx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = presetId === 'bright' ? 2200 : 1600;
+    lowpass.Q.value = 0.6;
+    lowpass.connect(master);
     master.connect(ctx.destination);
 
-    function tone(freq, type, start, len, gain) {
+    function padChord(freqs, start, len, gain) {
+      freqs.forEach(function (freq, idx) {
+        var o = ctx.createOscillator();
+        var g = ctx.createGain();
+        o.type = idx === 0 ? 'sine' : 'triangle';
+        o.frequency.value = freq;
+        var atk = 0.35 + idx * 0.08;
+        g.gain.setValueAtTime(0, t0 + start);
+        g.gain.linearRampToValueAtTime(gain * (idx === 0 ? 1 : 0.55), t0 + start + atk);
+        g.gain.linearRampToValueAtTime(gain * 0.45, t0 + start + len * 0.75);
+        g.gain.linearRampToValueAtTime(0, t0 + start + len);
+        o.connect(g);
+        g.connect(lowpass);
+        o.start(t0 + start);
+        o.stop(t0 + start + len + 0.05);
+      });
+    }
+
+    function pluck(freq, start, len, gain) {
       var o = ctx.createOscillator();
       var g = ctx.createGain();
-      o.type = type || 'sine';
+      o.type = 'sine';
       o.frequency.value = freq;
       g.gain.setValueAtTime(0, t0 + start);
-      g.gain.linearRampToValueAtTime(gain, t0 + start + 0.08);
-      g.gain.linearRampToValueAtTime(gain * 0.7, t0 + start + len * 0.7);
-      g.gain.linearRampToValueAtTime(0, t0 + start + len);
+      g.gain.linearRampToValueAtTime(gain, t0 + start + 0.04);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + start + len);
       o.connect(g);
-      g.connect(master);
+      g.connect(lowpass);
       o.start(t0 + start);
       o.stop(t0 + start + len + 0.05);
     }
 
-    var i;
+    var chords;
     if (presetId === 'warm') {
-      for (i = 0; i < durationSec; i += 2) {
-        tone(220, 'triangle', i, 1.8, 0.35);
-        tone(277.2, 'sine', i + 0.2, 1.6, 0.22);
-        tone(329.6, 'sine', i + 0.4, 1.4, 0.18);
-      }
+      chords = [[174.6, 220, 261.6], [196, 246.9, 293.7], [220, 277.2, 329.6], [196, 246.9, 293.7]];
     } else if (presetId === 'bright') {
-      for (i = 0; i < durationSec; i += 1) {
-        tone(392, 'sine', i, 0.35, 0.25);
-        tone(493.9, 'triangle', i + 0.35, 0.35, 0.2);
-        tone(587.3, 'sine', i + 0.7, 0.25, 0.18);
-      }
+      chords = [[261.6, 329.6, 392], [293.7, 369.9, 440], [329.6, 415.3, 493.9], [293.7, 369.9, 440]];
+    } else if (presetId === 'soft') {
+      chords = [[196, 246.9, 293.7], [174.6, 220, 261.6], [220, 277.2, 329.6], [196, 246.9, 293.7]];
     } else {
-      // soft
-      for (i = 0; i < durationSec; i += 3) {
-        tone(174.6, 'sine', i, 2.8, 0.3);
-        tone(261.6, 'sine', i + 0.3, 2.5, 0.2);
-        tone(349.2, 'triangle', i + 0.6, 2.2, 0.15);
+      // ambient（預設）：慢和弦＋輕琶音
+      chords = [[130.8, 164.8, 196], [146.8, 185, 220], [164.8, 207.7, 246.9], [146.8, 185, 220]];
+    }
+
+    var bar = presetId === 'bright' ? 2.2 : 3.4;
+    var t = 0;
+    var ci = 0;
+    while (t < end - 0.5) {
+      var len = Math.min(bar, end - t);
+      padChord(chords[ci % chords.length], t, len, presetId === 'bright' ? 0.22 : 0.18);
+      if (presetId === 'ambient' || presetId === 'soft') {
+        var chord = chords[ci % chords.length];
+        pluck(chord[1] * 2, t + bar * 0.35, 1.6, 0.06);
+        pluck(chord[2] * 1.5, t + bar * 0.62, 1.4, 0.05);
       }
+      t += bar;
+      ci += 1;
     }
 
     return ctx.startRendering().then(function (buffer) {
@@ -176,8 +209,199 @@
     return ab;
   }
 
+  function findBgmTrack(presetId) {
+    var tracks = (CFG && CFG.BGM_TRACKS) || [];
+    var i;
+    for (i = 0; i < tracks.length; i++) {
+      if (tracks[i].id === presetId) return tracks[i];
+    }
+    return null;
+  }
+
+  function resolveTrackUrl(track) {
+    if (!track) return '';
+    if (track.path) {
+      if (typeof global.location !== 'undefined' && global.location.href) {
+        var base = global.location.href.replace(/[#?].*$/, '').replace(/[^/]+$/, '');
+        return base + String(track.path).replace(/^\//, '');
+      }
+      return track.path;
+    }
+    return track.url || '';
+  }
+
+  /**
+   * 載入免版權 MP3 → 循環／裁切到影片長度 → WAV
+   */
+  function loadBgmTrack(trackOrUrl, durationSec, onProgress) {
+    var url = typeof trackOrUrl === 'string' ? trackOrUrl : resolveTrackUrl(trackOrUrl);
+    if (!url) return Promise.reject(new Error('沒有音樂網址'));
+    if (onProgress) onProgress(0, 1, '載入免版權音樂…');
+    return fetch(url, { mode: 'cors' }).then(function (res) {
+      if (!res.ok) throw new Error('音樂載入失敗 HTTP ' + res.status);
+      return res.arrayBuffer();
+    }).then(function (ab) {
+      var sampleRate = 44100;
+      var scratch = new (global.OfflineAudioContext || global.webkitOfflineAudioContext)(2, 8, sampleRate);
+      return scratch.decodeAudioData(ab.slice(0)).then(function (decoded) {
+        var channels = Math.min(2, decoded.numberOfChannels || 1);
+        var frames = Math.max(1, Math.ceil(sampleRate * durationSec));
+        var ctx = new (global.OfflineAudioContext || global.webkitOfflineAudioContext)(channels, frames, sampleRate);
+        var master = ctx.createGain();
+        master.gain.setValueAtTime(0, 0);
+        master.gain.linearRampToValueAtTime(0.85, 1.0);
+        master.gain.setValueAtTime(0.85, Math.max(1.1, durationSec - 1.2));
+        master.gain.linearRampToValueAtTime(0, durationSec);
+        master.connect(ctx.destination);
+
+        var t = 0;
+        while (t < durationSec) {
+          var src = ctx.createBufferSource();
+          src.buffer = decoded;
+          src.connect(master);
+          src.start(t);
+          t += decoded.duration;
+        }
+        if (onProgress) onProgress(1, 1, '音樂就緒');
+        return ctx.startRendering();
+      });
+    }).then(function (buffer) {
+      return audioBufferToWav(buffer);
+    });
+  }
+
+  function resolveBgmAudio(opts, totalSec, onProgress) {
+    var musicOff = !!opts.musicOff || opts.bgmPreset === 'off';
+    if (musicOff) return Promise.resolve(null);
+    if (opts.audioBlob) {
+      return opts.audioBlob.arrayBuffer().then(function (ab) {
+        return { ab: ab, blob: opts.audioBlob };
+      }).catch(function () {
+        return null;
+      });
+    }
+
+    var preset = opts.bgmPreset || CFG.BGM_DEFAULT || 'track_serene';
+    if (preset === 'off') return Promise.resolve(null);
+
+    var track = findBgmTrack(preset);
+    if (track && (track.path || track.url)) {
+      return loadBgmTrack(track, totalSec + 0.5, onProgress).then(function (ab) {
+        return { ab: ab, blob: blobFromArrayBuffer(ab, 'audio/wav') };
+      }).catch(function (err) {
+        if (onProgress) {
+          onProgress(0, 1, '曲庫檔案未找到，改走 AI 氛圍作曲：' + (err && err.message ? err.message : ''));
+        }
+        return synthesizeBgm('ambient', totalSec + 0.5).then(function (ab) {
+          return { ab: ab, blob: blobFromArrayBuffer(ab, 'audio/wav') };
+        });
+      });
+    }
+
+    return synthesizeBgm(preset, totalSec + 0.5).then(function (ab) {
+      return { ab: ab, blob: blobFromArrayBuffer(ab, 'audio/wav') };
+    });
+  }
+
   function blobFromArrayBuffer(ab, mime) {
     return new Blob([ab], { type: mime || 'application/octet-stream' });
+  }
+
+  function playPreviewBlob(blob, maxSec) {
+    return new Promise(function (resolve, reject) {
+      if (!blob || !blob.size) {
+        reject(new Error('沒有可播放的音訊'));
+        return;
+      }
+      var url = URL.createObjectURL(blob);
+      var audio = new Audio(url);
+      var cleaned = false;
+      var cap = parseFloat(maxSec);
+      function cleanup() {
+        if (cleaned) return;
+        cleaned = true;
+        try { URL.revokeObjectURL(url); } catch (e0) {}
+      }
+      function finish() {
+        cleanup();
+        resolve({ audio: audio, stop: function () {} });
+      }
+      if (cap > 0) {
+        audio.addEventListener('timeupdate', function onTime() {
+          if (audio.currentTime >= cap) {
+            audio.removeEventListener('timeupdate', onTime);
+            try { audio.pause(); } catch (eCap) {}
+            finish();
+          }
+        });
+      }
+      audio.addEventListener('ended', function () {
+        cleanup();
+        resolve({ audio: audio, stop: function () {} });
+      });
+      audio.addEventListener('error', function () {
+        cleanup();
+        reject(new Error('播放失敗'));
+      });
+      var playPromise = audio.play();
+      if (playPromise && playPromise.then) {
+        playPromise.then(function () {
+          resolve({
+            audio: audio,
+            url: url,
+            stop: function () {
+              try { audio.pause(); } catch (e1) {}
+              cleanup();
+            }
+          });
+        }).catch(function (e2) {
+          cleanup();
+          reject(e2);
+        });
+      } else {
+        resolve({
+          audio: audio,
+          url: url,
+          stop: function () {
+            try { audio.pause(); } catch (e3) {}
+            cleanup();
+          }
+        });
+      }
+    });
+  }
+
+  /**
+   * 試播背景音樂（約 12～14 秒；不影響合成）
+   * @param {string} preset 曲庫 id 或 AI 氛圍 preset
+   * @param {object} opts { audioBlob, previewSec }
+   */
+  function previewBgm(preset, opts) {
+    opts = opts || {};
+    var previewSec = parseFloat(opts.previewSec);
+    if (!(previewSec > 0)) previewSec = 14;
+
+    if (opts.audioBlob) {
+      return playPreviewBlob(opts.audioBlob, previewSec);
+    }
+    if (!preset || preset === 'off') {
+      return Promise.reject(new Error('請先選一首音樂，或上傳音檔'));
+    }
+
+    var track = findBgmTrack(preset);
+    if (track && (track.path || track.url)) {
+      var url = resolveTrackUrl(track);
+      return fetch(url, { mode: 'cors' }).then(function (res) {
+        if (!res.ok) throw new Error('找不到音樂檔（HTTP ' + res.status + '）。請依 assets/bgm/README.md 放置 MP3');
+        return res.blob();
+      }).then(function (blob) {
+        return playPreviewBlob(blob, previewSec);
+      });
+    }
+
+    return synthesizeBgm(preset, previewSec).then(function (wavAb) {
+      return playPreviewBlob(blobFromArrayBuffer(wavAb, 'audio/wav'));
+    });
   }
 
   /**
@@ -425,27 +649,11 @@
     return Promise.all(urls.map(loadImage)).then(function (images) {
       onProgress(1, 4, '拼片素材就緒');
       var totalSec = Math.min(MAX_TOTAL, images.length * sec);
-      var musicOff = !!opts.musicOff || opts.bgmPreset === 'off';
-      var audioReady;
-
-      if (musicOff) {
-        audioReady = Promise.resolve(null);
-      } else if (opts.audioBlob) {
-        audioReady = opts.audioBlob.arrayBuffer().then(function (ab) {
-          return { ab: ab, blob: opts.audioBlob };
-        }).catch(function () {
-          return null;
-        });
-      } else {
-        var preset = opts.bgmPreset || 'soft';
-        if (preset === 'off') {
-          audioReady = Promise.resolve(null);
-        } else {
-          audioReady = synthesizeBgm(preset, totalSec + 0.5).then(function (ab) {
-            return { ab: ab, blob: blobFromArrayBuffer(ab, 'audio/wav') };
-          });
-        }
-      }
+      var audioReady = resolveBgmAudio({
+        musicOff: !!opts.musicOff,
+        bgmPreset: opts.bgmPreset,
+        audioBlob: opts.audioBlob
+      }, totalSec, onProgress);
 
       return audioReady.then(function (audioPack) {
         onProgress(0, 1, '渲染影格（拼片）');
@@ -466,6 +674,10 @@
   global.FbPostReel = {
     composeReel: composeReel,
     ensureFfmpeg: ensureFfmpeg,
-    synthesizeBgm: synthesizeBgm
+    synthesizeBgm: synthesizeBgm,
+    loadBgmTrack: loadBgmTrack,
+    findBgmTrack: findBgmTrack,
+    previewBgm: previewBgm,
+    resolveTrackUrl: resolveTrackUrl
   };
 })(window);
