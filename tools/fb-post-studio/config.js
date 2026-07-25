@@ -157,5 +157,9 @@ window.FB_POST_STUDIO_CONFIG = {
       items: ['📩', '📞', '💬', '👉', '✔️', '⭐', '🆕', '🎁', '💯', '🙌']
     }
   ],
-  EMOJI_DEFAULT_SIZE: 52
+  EMOJI_DEFAULT_SIZE: 52,
+
+  /** 本機素材庫（IndexedDB）；與 stickers.js 共用 */
+  STICKER_DB_KEY: 'tx_fb_post_studio_stickers_v1',
+  STICKER_MAX: 40
 };

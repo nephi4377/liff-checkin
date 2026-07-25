@@ -246,6 +246,22 @@
     .emoji-chip:active { cursor: grabbing; }
     .emoji-controls { margin-top: 0.65rem; }
     .emoji-controls.hidden { display: none; }
+    .emoji-chip.asset-chip {
+      width: 2.55rem; height: 2.55rem; padding: 0.2rem;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .emoji-chip.asset-chip img {
+      width: 100%; height: 100%; object-fit: contain; pointer-events: none;
+    }
+    .asset-library-grid .thumb { cursor: grab; }
+    .asset-library-grid .thumb:active { cursor: grabbing; }
+    .convert-fail-guide {
+      display: none; background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3);
+      color: #fde68a; padding: 0.55rem 0.7rem; border-radius: 8px;
+      font-size: 0.8rem; margin-top: 0.55rem; line-height: 1.45;
+    }
+    .convert-fail-guide.show { display: block; }
+    .convert-fail-guide ol { margin: 0.4rem 0 0.55rem 1.1rem; }
     .check-inline { display: flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; color: var(--muted); margin: 0.5rem 0; }
     .check-inline input { width: auto; }
     .import-divider {
@@ -553,17 +569,46 @@
       <p class="step-hint">採用後可直接調整亮度、裁切比例與 LOGO；可從下方 emoji 面板<strong>拖曳或點一下</strong>加到畫布上，再在畫布上拖移位置。</p>
 
       <div class="emoji-panel" id="emoji-panel">
-        <label>內建 Emoji（免費、系統字元）</label>
-        <p class="step-hint" style="margin-bottom:0.45rem">拖到畫布上，或點一下加在畫布中央。每張圖的 emoji 分開記錄。</p>
+        <label>Emoji ＋ 素材庫</label>
+        <p class="step-hint" style="margin-bottom:0.45rem">內建 emoji 或本機素材都可<strong>拖到畫布</strong>、或<strong>點一下</strong>加在中央。每張圖分開記錄。</p>
         <div id="emoji-palette-root"></div>
+
+        <div class="step-divider" style="margin-top:0.75rem">我的素材庫（本機，可一直增加）</div>
+        <div class="row">
+          <div class="field">
+            <label for="sticker-category">分類標籤（選填）</label>
+            <input id="sticker-category" type="text" placeholder="角標、促銷章、品牌貼紙…" value="貼圖">
+          </div>
+        </div>
+        <div class="inline-btns">
+          <button type="button" class="btn btn-secondary" id="btn-sticker-upload">
+            <i class="fa-solid fa-plus"></i> 上傳素材
+          </button>
+          <button type="button" class="btn btn-ghost" id="btn-sticker-upload-png">
+            改傳透明 PNG
+          </button>
+          <input type="file" id="input-sticker" accept=".png,.svg,.webp,.jpg,.jpeg,image/*" class="hidden">
+        </div>
+        <p class="step-hint">建議透明 PNG 或 SVG；瀏覽器無法直接讀 .ai，請先匯出 PNG。</p>
+        <div class="convert-fail-guide" id="sticker-fail-guide" role="alert">
+          <strong>轉檔失敗：請改傳透明 PNG</strong>
+          <ol>
+            <li>用 Illustrator 開啟原檔</li>
+            <li>匯出為 PNG，勾選透明背景</li>
+            <li>再按「改傳透明 PNG」選檔</li>
+          </ol>
+        </div>
+        <p class="status-line" id="sticker-status">素材庫載入中…</p>
+        <div class="thumb-grid asset-library-grid" id="sticker-grid"></div>
+
         <div class="emoji-controls hidden" id="emoji-controls">
           <div class="slider-row"><span>選中大小</span><input type="range" id="emoji-size" min="20" max="120" value="52"><span id="val-emoji-size">52</span></div>
           <div class="inline-btns">
             <button type="button" class="btn btn-ghost" id="btn-emoji-delete">刪除選中</button>
-            <button type="button" class="btn btn-ghost" id="btn-emoji-clear">清除本圖全部 emoji</button>
+            <button type="button" class="btn btn-ghost" id="btn-emoji-clear">清除本圖全部貼圖</button>
           </div>
         </div>
-        <p class="status-line" id="emoji-status">尚未加 emoji</p>
+        <p class="status-line" id="emoji-status">尚未加 emoji／素材</p>
       </div>
 
       <div class="canvas-stage" id="canvas-stage">
@@ -799,6 +844,7 @@
   </div>
 
   <script src="config.js"></script>
+  <script src="stickers.js"></script>
   <script src="reel.js"></script>
   <script src="studio.js"></script>
 </body>

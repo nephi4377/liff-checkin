@@ -53,7 +53,9 @@
     dragThumbIdx: null,
     adoptPulseId: null,
     selectedEmojiId: null,
-    emojiDrag: { active: false, id: null, offsetX: 0, offsetY: 0 }
+    emojiDrag: { active: false, id: null, offsetX: 0, offsetY: 0 },
+    stickers: [],
+    overlayImageCache: {}
   };
 
   function emptyTagIds() {
@@ -719,6 +721,9 @@
     if (im.adopted) {
       adoptPhoto(im.adopted, '已採用圖', true);
     }
+    ensureOverlayImagesLoaded(getEmojiOverlays(im)).then(function () {
+      if (getSelectedImage() === im) redrawCanvas();
+    });
     syncEmojiControls();
   }
 
@@ -1827,9 +1832,190 @@
     });
   }
 
-  /* ---------- emoji overlays ---------- */
+  /* ---------- emoji + asset overlays ---------- */
 
   var EMOJI_FONT_STACK_ = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+
+  function overlayLabel(o) {
+    if (!o) return '';
+    if (o.type === 'asset' || o.assetId) return o.name || '素材';
+    return o.char || '';
+  }
+
+  function findStickerById(id) {
+    return (state.stickers || []).find(function (s) { return s.id === id; }) || null;
+  }
+
+  function resolveOverlayPreview(o) {
+    if (!o) return '';
+    if (o.preview) return o.preview;
+    if (o.assetId) {
+      var item = findStickerById(o.assetId);
+      if (item && item.preview) {
+        o.preview = item.preview;
+        return item.preview;
+      }
+    }
+    return '';
+  }
+
+  function overlayCacheKey(o) {
+    return o.assetId || o.preview || o.id || '';
+  }
+
+  function preloadOverlayImage(o) {
+    if (!o) return Promise.resolve(null);
+    var key = overlayCacheKey(o);
+    if (!key) return Promise.resolve(null);
+    if (state.overlayImageCache[key]) return Promise.resolve(state.overlayImageCache[key]);
+    var preview = resolveOverlayPreview(o);
+    if (!preview) return Promise.resolve(null);
+    var api = window.FbPostStickers;
+    var loader = api && api.loadImageFromUrl
+      ? api.loadImageFromUrl(preview)
+      : loadImageFromPhoto({ preview: preview });
+    return loader.then(function (img) {
+      state.overlayImageCache[key] = img;
+      return img;
+    }).catch(function () {
+      return null;
+    });
+  }
+
+  function ensureOverlayImagesLoaded(overlays) {
+    return Promise.all((overlays || []).map(preloadOverlayImage));
+  }
+
+  function getOverlayImage(o) {
+    var key = overlayCacheKey(o);
+    return key ? state.overlayImageCache[key] || null : null;
+  }
+
+  function overlayDrawSize(o, canvas) {
+    var size = o.size || CFG.EMOJI_DEFAULT_SIZE || 52;
+    var w = size;
+    var h = size;
+    if (o.type === 'asset' || o.assetId) {
+      var img = getOverlayImage(o);
+      if (img) {
+        var ratio = (img.naturalHeight || img.height) / (img.naturalWidth || img.width || 1);
+        h = w * ratio;
+      }
+    }
+    return {
+      cx: o.x * canvas.width,
+      cy: o.y * canvas.height,
+      w: w,
+      h: h
+    };
+  }
+
+  function showConvertFailGuide(which, msg) {
+    var guide = $(which === 'logo' ? 'logo-fail-guide' : 'sticker-fail-guide');
+    if (guide) guide.classList.add('show');
+    var friendly =
+      '轉檔失敗。請用 Illustrator／其他工具匯出「透明 PNG」後再上傳（不要再傳複雜 .ai）。' +
+      (msg ? '\n原因：' + msg : '');
+    showError(friendly);
+  }
+
+  function hideConvertFailGuide(which) {
+    var guide = $(which === 'logo' ? 'logo-fail-guide' : 'sticker-fail-guide');
+    if (guide) guide.classList.remove('show');
+  }
+
+  function renderStickerGrid() {
+    var box = $('sticker-grid');
+    var status = $('sticker-status');
+    if (!box) return;
+    box.innerHTML = '';
+    var list = state.stickers || [];
+    if (status) {
+      status.textContent = list.length
+        ? ('本機素材 ' + list.length + ' 筆（可拖曳或點一下加到畫布）')
+        : '尚無素材，請上傳 PNG／SVG';
+      status.className = 'status-line' + (list.length ? ' ok' : '');
+    }
+    list.forEach(function (item) {
+      var wrap = document.createElement('div');
+      wrap.className = 'thumb';
+      wrap.title = (item.category || '') + ' · ' + (item.name || '');
+      wrap.setAttribute('draggable', 'true');
+      wrap.innerHTML =
+        '<img alt="sticker" src="' + item.preview + '">' +
+        '<span class="badge">' + (item.category || '貼圖') + '</span>' +
+        '<button type="button" class="rm" title="刪除">×</button>';
+      wrap.addEventListener('dragstart', function (e) {
+        if (e.dataTransfer) {
+          e.dataTransfer.setData('application/x-fb-asset-id', item.id);
+          e.dataTransfer.setData('text/plain', item.name || 'sticker');
+          e.dataTransfer.effectAllowed = 'copy';
+        }
+      });
+      wrap.querySelector('.rm').addEventListener('click', function (e) {
+        e.stopPropagation();
+        var api = window.FbPostStickers;
+        if (!api) return;
+        api.removeSticker(item.id).then(function () {
+          return refreshStickers();
+        }).then(function () {
+          showOk('已刪除素材');
+        });
+      });
+      wrap.addEventListener('click', function (e) {
+        if (e.target && e.target.classList && e.target.classList.contains('rm')) return;
+        addAssetOverlayAtCenter(item);
+      });
+      box.appendChild(wrap);
+    });
+  }
+
+  function refreshStickers() {
+    var api = window.FbPostStickers;
+    if (!api) {
+      if ($('sticker-status')) {
+        $('sticker-status').textContent = '貼圖模組未載入';
+        $('sticker-status').className = 'status-line bad';
+      }
+      return Promise.resolve();
+    }
+    return api.listStickers().then(function (list) {
+      state.stickers = list || [];
+      renderStickerGrid();
+      return ensureOverlayImagesLoaded(state.stickers);
+    }).catch(function (e) {
+      if ($('sticker-status')) {
+        $('sticker-status').textContent = e.message || String(e);
+        $('sticker-status').className = 'status-line bad';
+      }
+    });
+  }
+
+  function handleStickerUpload(file) {
+    var api = window.FbPostStickers;
+    if (!api) {
+      showError('貼圖模組未載入');
+      return;
+    }
+    var cat = ($('sticker-category') && $('sticker-category').value) || '貼圖';
+    hideConvertFailGuide('sticker');
+    if ($('sticker-status')) {
+      $('sticker-status').textContent = '轉換中…（.ai 可能需幾秒）';
+      $('sticker-status').className = 'status-line';
+    }
+    api.addConvertedSticker(file, cat).then(function (entry) {
+      hideConvertFailGuide('sticker');
+      showOk((entry.note || '已加入素材庫') + '：' + (entry.name || ''));
+      return refreshStickers();
+    }).catch(function (e) {
+      var msg = e.message || String(e);
+      showConvertFailGuide('sticker', msg);
+      if ($('sticker-status')) {
+        $('sticker-status').textContent = '失敗 → 請改傳透明 PNG';
+        $('sticker-status').className = 'status-line bad';
+      }
+    });
+  }
 
   function getEmojiOverlays(im) {
     if (!im) return [];
@@ -1865,10 +2051,9 @@
     var i;
     for (i = overlays.length - 1; i >= 0; i--) {
       var o = overlays[i];
-      var cx = o.x * canvas.width;
-      var cy = o.y * canvas.height;
-      var half = (o.size || CFG.EMOJI_DEFAULT_SIZE || 52) / 2;
-      if (px >= cx - half && px <= cx + half && py >= cy - half && py <= cy + half) {
+      var box = overlayDrawSize(o, canvas);
+      if (px >= box.cx - box.w / 2 && px <= box.cx + box.w / 2 &&
+          py >= box.cy - box.h / 2 && py <= box.cy + box.h / 2) {
         return o;
       }
     }
@@ -1904,6 +2089,42 @@
     addEmojiOverlay(char, 0.5, 0.5);
   }
 
+  function addAssetOverlay(item, x, y) {
+    var im = getSelectedImage();
+    if (!im) {
+      showError('請先選中一張圖');
+      return null;
+    }
+    if (!state.sourceImg) {
+      showError('請先「採用此圖」或「採用原圖」再貼素材');
+      return null;
+    }
+    if (!item || !item.preview) return null;
+    var overlay = {
+      id: uid('emo'),
+      type: 'asset',
+      assetId: item.id,
+      name: item.name || '素材',
+      preview: item.preview,
+      x: clampRatio(x == null ? 0.5 : x),
+      y: clampRatio(y == null ? 0.5 : y),
+      size: parseInt(($('emoji-size') && $('emoji-size').value) || CFG.EMOJI_DEFAULT_SIZE || 52, 10) || 52
+    };
+    getEmojiOverlays(im).push(overlay);
+    state.selectedEmojiId = overlay.id;
+    preloadOverlayImage(overlay).then(function () {
+      redrawCanvas();
+      syncEmojiControls();
+    });
+    redrawCanvas();
+    syncEmojiControls();
+    return overlay;
+  }
+
+  function addAssetOverlayAtCenter(item) {
+    addAssetOverlay(item, 0.5, 0.5);
+  }
+
   function removeSelectedEmoji() {
     var im = getSelectedImage();
     if (!im || !state.selectedEmojiId) return;
@@ -1922,7 +2143,7 @@
     state.selectedEmojiId = null;
     redrawCanvas();
     syncEmojiControls();
-    showOk('已清除本圖全部 emoji');
+    showOk('已清除本圖全部貼圖');
   }
 
   function syncEmojiControls() {
@@ -1938,8 +2159,9 @@
     }
     if (status) {
       status.textContent = overlays.length
-        ? ('本圖已有 ' + overlays.length + ' 個 emoji' + (selected ? '（已選：' + selected.char + '）' : ''))
-        : '尚未加 emoji';
+        ? ('本圖已有 ' + overlays.length + ' 個貼圖' +
+          (selected ? '（已選：' + overlayLabel(selected) + '）' : ''))
+        : '尚未加 emoji／素材';
       status.className = 'status-line' + (overlays.length ? ' ok' : '');
     }
   }
@@ -1982,21 +2204,38 @@
   function drawEmojiOverlays(ctx, canvas, overlays, selectedId) {
     if (!overlays || !overlays.length) return;
     overlays.forEach(function (o) {
-      var size = o.size || CFG.EMOJI_DEFAULT_SIZE || 52;
-      var cx = o.x * canvas.width;
-      var cy = o.y * canvas.height;
+      var box = overlayDrawSize(o, canvas);
       ctx.save();
-      ctx.font = size + 'px ' + EMOJI_FONT_STACK_;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(o.char, cx, cy);
-      if (selectedId && o.id === selectedId) {
-        var half = size / 2 + 4;
-        ctx.strokeStyle = 'rgba(96,165,250,0.95)';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 4]);
-        ctx.strokeRect(cx - half, cy - half, half * 2, half * 2);
-        ctx.setLineDash([]);
+      if (o.type === 'asset' || o.assetId) {
+        var img = getOverlayImage(o);
+        if (img) {
+          ctx.drawImage(img, box.cx - box.w / 2, box.cy - box.h / 2, box.w, box.h);
+          if (selectedId && o.id === selectedId) {
+            ctx.strokeStyle = 'rgba(96,165,250,0.95)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 4]);
+            ctx.strokeRect(box.cx - box.w / 2 - 4, box.cy - box.h / 2 - 4, box.w + 8, box.h + 8);
+            ctx.setLineDash([]);
+          }
+        } else {
+          preloadOverlayImage(o).then(function (loaded) {
+            if (loaded) redrawCanvas();
+          });
+        }
+      } else {
+        var size = o.size || CFG.EMOJI_DEFAULT_SIZE || 52;
+        ctx.font = size + 'px ' + EMOJI_FONT_STACK_;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(o.char, box.cx, box.cy);
+        if (selectedId && o.id === selectedId) {
+          var half = size / 2 + 4;
+          ctx.strokeStyle = 'rgba(96,165,250,0.95)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 4]);
+          ctx.strokeRect(box.cx - half, box.cy - half, half * 2, half * 2);
+          ctx.setLineDash([]);
+        }
       }
       ctx.restore();
     });
@@ -2018,13 +2257,19 @@
     stage.addEventListener('drop', function (e) {
       e.preventDefault();
       stage.classList.remove('drop-target');
-      var char = '';
-      if (e.dataTransfer) {
-        char = e.dataTransfer.getData('text/emoji') || e.dataTransfer.getData('text/plain');
-      }
-      if (!char) return;
       var pt = canvasPointFromClient(e.clientX, e.clientY);
-      addEmojiOverlay(char, pt.x, pt.y);
+      if (e.dataTransfer) {
+        var assetId = e.dataTransfer.getData('application/x-fb-asset-id');
+        if (assetId) {
+          var item = findStickerById(assetId);
+          if (item) {
+            addAssetOverlay(item, pt.x, pt.y);
+            return;
+          }
+        }
+        var char = e.dataTransfer.getData('text/emoji') || e.dataTransfer.getData('text/plain');
+        if (char) addEmojiOverlay(char, pt.x, pt.y);
+      }
     });
 
     canvas.addEventListener('pointerdown', function (e) {
@@ -2883,6 +3128,24 @@
         redrawCanvas();
       });
     }
+    if ($('btn-sticker-upload')) {
+      $('btn-sticker-upload').addEventListener('click', function () {
+        $('input-sticker').click();
+      });
+    }
+    if ($('btn-sticker-upload-png')) {
+      $('btn-sticker-upload-png').addEventListener('click', function () {
+        $('input-sticker').click();
+      });
+    }
+    if ($('input-sticker')) {
+      $('input-sticker').addEventListener('change', function () {
+        var f = $('input-sticker').files && $('input-sticker').files[0];
+        if (!f) return;
+        handleStickerUpload(f);
+        $('input-sticker').value = '';
+      });
+    }
     $('btn-save-settings').addEventListener('click', saveSettings);
     $('btn-reset-refine').addEventListener('click', resetRefine);
     $('btn-rot-90').addEventListener('click', function () {
@@ -3107,6 +3370,7 @@
     bindCanvasEmoji();
     bindUi();
     renderEmojiPalette();
+    refreshStickers();
     syncTagsPreview();
     syncRefineSlidersFromState();
     renderCopyHistory();
