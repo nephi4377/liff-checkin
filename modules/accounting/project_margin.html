@@ -1106,7 +1106,8 @@
           if (it.id === 'vendors_paid' && slotRows && slotRows.length) return;
           var isSkip = !!it.skip_when_empty;
           var isInfo = !!it.informational;
-          var needsAttention = !it.pass && !isSkip && !isInfo;
+          // warn_only（核對用）項目不列入「需要注意」，避免核對項變成紅色阻擋
+          var needsAttention = !it.pass && !isSkip && !isInfo && !it.warn_only;
           if (needsAttention) primary.push(it);
           else secondary.push(it);
         });
