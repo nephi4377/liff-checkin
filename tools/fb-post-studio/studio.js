@@ -41,8 +41,12 @@
       projectCode: '',
       mediaType: 'image',
       loading: false,
-      importing: false
+      importing: false,
+      restorePaths: null,
+      loadTimerId: null,
+      loadStartedAt: 0
     },
+    lastImportedPaths: [],
     /** 實拍影片工單來源；只記錄路徑，不把影片位元組載入瀏覽器 */
     siteVideos: [],
     localVideoNames: [],
@@ -111,6 +115,14 @@
   }
 
   function hideError() { $('err-box').classList.remove('show'); }
+
+  /** 步驟切換提示：不捲到頁頂，避免打斷操作 */
+  function showGateMsg(msg) {
+    var box = $('err-box');
+    box.textContent = msg;
+    box.classList.add('show');
+    $('ok-box').classList.remove('show');
+  }
 
   function showOk(msg) {
     var box = $('ok-box');
@@ -253,6 +265,7 @@
       $('dev-bypass').checked = s.devBypass !== false;
       if ($('mock-completion')) {
         var mockDefault = !!(CFG.COMPLETION_MEDIA && CFG.COMPLETION_MEDIA.USE_MOCK);
+        if (window.location.hostname === 'info.tanxin.space') mockDefault = false;
         $('mock-completion').checked = s.mockCompletion != null ? !!s.mockCompletion : mockDefault;
       }
       if ($('import-project-code') && s.lastProjectCode) {
@@ -265,6 +278,9 @@
       var q = new URLSearchParams(window.location.search || '');
       if (q.get('mock_completion') === '1' && $('mock-completion')) {
         $('mock-completion').checked = true;
+      }
+      if (/info\.tanxin\.space$/i.test(window.location.hostname) && $('mock-completion') && q.get('mock_completion') !== '1') {
+        $('mock-completion').checked = false;
       }
     } catch (eQ) {}
     if (CFG.FB_PAGE_URL) {
@@ -367,13 +383,23 @@
     return found ? found.title : '';
   }
 
+  function hasSavedCopyContent() {
+    var h = ($('copy-headline') && $('copy-headline').value || '').trim();
+    var b = ($('copy-body') && $('copy-body').value || '').trim();
+    if (h || b) return true;
+    return loadCopyHistory().length > 0;
+  }
+
   function canEnterStep(n) {
     if (n <= 1) return { ok: true };
     if (n === 5) {
       return { ok: true };
     }
+    if (n === 2 && hasSavedCopyContent()) {
+      return { ok: true };
+    }
     if (!state.images.length) {
-      return { ok: false, msg: '請先上傳至少一張圖，才能進入下一步' };
+      return { ok: false, msg: '請先上傳至少一張圖，才能進入下一步（有文案草稿或版本紀錄時可直接進「寫文案」）' };
     }
     if (n === 3 && !state.selectedId) {
       return { ok: false, msg: '請先在圖庫點選一張圖，再進產圖精修' };
@@ -401,7 +427,7 @@
     if (!opts.force) {
       var gate = canEnterStep(n);
       if (!gate.ok) {
-        showError(gate.msg);
+        showGateMsg(gate.msg);
         return false;
       }
     }
@@ -789,6 +815,65 @@
     if (kind === 'bad') el.classList.add('bad');
   }
 
+  function clearLoadElapsedTimer() {
+    if (state.siteImport.loadTimerId) {
+      clearInterval(state.siteImport.loadTimerId);
+      state.siteImport.loadTimerId = null;
+    }
+  }
+
+  function startLoadElapsedStatus(baseMsg) {
+    state.siteImport.loadStartedAt = Date.now();
+    clearLoadElapsedTimer();
+    state.siteImport.loadTimerId = setInterval(function () {
+      var sec = Math.floor((Date.now() - state.siteImport.loadStartedAt) / 1000);
+      var hint = sec >= 15 ? '（案場資料多時可能需 1～2 分鐘）' : '';
+      setImportStatus(baseMsg + '…已 ' + sec + ' 秒' + hint);
+    }, 1000);
+  }
+
+  function applyRestoreSelectionIfNeeded() {
+    var paths = state.siteImport.restorePaths;
+    if (!paths || !paths.length) return;
+    var matched = 0;
+    paths.forEach(function (p) {
+      var hit = state.siteImport.items.some(function (it) {
+        return (it.path || it.name) === p;
+      });
+      if (hit) {
+        state.siteImport.selected[p] = true;
+        matched++;
+      }
+    });
+    state.siteImport.restorePaths = null;
+    if (matched) {
+      renderImportGrid();
+      setImportStatus('已還原上次勾選 ' + matched + ' 張，可按「匯入所選」。', 'ok');
+    }
+  }
+
+  function runPromisePool(items, worker, concurrency) {
+    var idx = 0;
+    var active = 0;
+    return new Promise(function (resolve, reject) {
+      function pump() {
+        if (idx >= items.length && active === 0) {
+          resolve();
+          return;
+        }
+        while (active < concurrency && idx < items.length) {
+          var i = idx++;
+          active++;
+          worker(items[i], i).then(function () {
+            active--;
+            pump();
+          }).catch(reject);
+        }
+      }
+      pump();
+    });
+  }
+
   function selectedImportCount() {
     return Object.keys(state.siteImport.selected).filter(function (k) {
       return state.siteImport.selected[k];
@@ -1172,6 +1257,7 @@
       'ok'
     );
     renderImportGrid();
+    applyRestoreSelectionIfNeeded();
     if (!data._mock) showOk('案場清單已載入');
     else showOk('已用假資料載入（僅測介面）');
   }
@@ -1199,7 +1285,8 @@
     state.siteImport.projectCode = projectCode;
     setBusy($('btn-load-completion'), true, '<i class="fa-solid fa-spinner fa-spin"></i> 載入中…');
     setBusy($('btn-load-more-completion'), true);
-    setImportStatus(append ? '繼續載入中…' : ('正在向雲端查詢完工' + (mediaType === 'video' ? '影片' : '照') + '…'));
+    var loadBaseMsg = append ? '繼續載入' : ('正在向雲端查詢完工' + (mediaType === 'video' ? '影片' : '照'));
+    startLoadElapsedStatus(loadBaseMsg);
     syncImportActionButtons();
     hideError();
 
@@ -1217,6 +1304,7 @@
     }).then(function (res) {
       applyCompletionListResult(res, !!append);
     }).catch(function (e) {
+      clearLoadElapsedTimer();
       var msg = (e && e.message) ? e.message : String(e);
       setImportStatus('載入失敗：' + msg + '。若後端尚未部署，可到頁底設定勾「案場匯入用假資料」。', 'bad');
       showError(msg);
@@ -1227,6 +1315,7 @@
       }
     }).then(function () {
       state.siteImport.loading = false;
+      clearLoadElapsedTimer();
       setBusy($('btn-load-completion'), false, null, '<i class="fa-solid fa-folder-open"></i> 載入');
       setBusy($('btn-load-more-completion'), false, null, '載入更多');
       syncImportActionButtons();
@@ -1266,27 +1355,37 @@
 
     var importedPhotos = [];
     var importedVideos = [];
-    var chain = Promise.resolve();
-
+    var importTasks = [];
     toImportImg.forEach(function (it) {
-      chain = chain.then(function () {
-        setImportStatus('正在匯入照片（' + (importedPhotos.length + 1) + '/' + toImportImg.length + '）：' + it.name);
-        return importImageItem(it).then(function (photo) {
-          importedPhotos.push(photo);
-        });
-      });
+      importTasks.push({ type: 'image', item: it });
     });
-
     videos.forEach(function (it) {
-      chain = chain.then(function () {
-        setImportStatus('正在記錄影片路徑：' + it.name);
-        return importVideoItem(it).then(function (vid) {
-          importedVideos.push(vid);
-        });
-      });
+      importTasks.push({ type: 'video', item: it });
     });
+    var doneCount = 0;
+    var importTotal = importTasks.length;
 
-    chain.then(function () {
+    var importChain = importTotal
+      ? runPromisePool(importTasks, function (task) {
+        var p = task.type === 'image'
+          ? importImageItem(task.item).then(function (photo) {
+            importedPhotos.push(photo);
+          })
+          : importVideoItem(task.item).then(function (vid) {
+            importedVideos.push(vid);
+          });
+        return p.then(function () {
+          doneCount++;
+          setImportStatus('正在匯入（' + doneCount + '/' + importTotal + '）：' + task.item.name);
+        });
+      }, 3)
+      : Promise.resolve();
+
+    importChain.then(function () {
+      if (importedPhotos.length) {
+        state.lastImportedPaths = toImportImg.map(function (it) { return it.path || it.name; });
+        state.siteImport.restorePaths = state.lastImportedPaths.slice();
+      }
       if (importedPhotos.length) addPhotos(importedPhotos);
       if (importedVideos.length) {
         state.siteVideos = (state.siteVideos || []).concat(importedVideos);
@@ -1303,6 +1402,7 @@
       setImportStatus('已完成：' + (parts.join('；') || '無') + '。', 'ok');
       if (importedVideos.length) showOk('影片路徑已記錄，可到步驟⑤下載工單');
       else if (importedPhotos.length) showOk('已匯入照片');
+      saveDraft({ silent: true });
     }).catch(function (e) {
       var msg = (e && e.message) ? e.message : String(e);
       setImportStatus('匯入失敗：' + msg, 'bad');
@@ -2645,7 +2745,8 @@
         image_notes: d.image_notes || ''
       };
       pushCopyHistory(entry);
-      showOk('文案已生成並存入本機版本（共 ' + state.images.length + ' 張圖）');
+      saveDraft({ silent: true });
+      showOk('文案已生成，已自動存草稿與版本紀錄（共 ' + state.images.length + ' 張圖）');
     }).catch(function (e) {
       showError(e.message || String(e));
     }).then(function () {
@@ -2938,8 +3039,10 @@
     step();
   }
 
-  function saveDraft() {
+  function saveDraft(opts) {
+    opts = opts || {};
     try {
+      var projectCode = $('import-project-code') ? $('import-project-code').value.trim() : '';
       var draft = {
         postType: $('post-type').value,
         tone: $('tone').value,
@@ -2960,14 +3063,22 @@
         logoEnabled: $('logo-enabled').value,
         tagIds: state.tagIds,
         wizardStep: state.wizardStep,
+        lastProjectCode: projectCode || state.siteImport.projectCode || '',
+        lastImportedPaths: state.lastImportedPaths || [],
+        siteImportSnapshot: {
+          projectCode: projectCode || state.siteImport.projectCode || '',
+          mediaType: state.siteImport.mediaType || 'image'
+        },
         imagesMeta: state.images.map(function (im) {
           return { id: im.id, name: im.name };
         })
       };
       localStorage.setItem(CFG.STORAGE_KEY + '_draft', JSON.stringify(draft));
-      showOk('草稿已儲存（文案／精修／標籤；多圖本體請重新上傳）');
+      if (!opts.silent) {
+        showOk('草稿已儲存（文案／精修／標籤；多圖本體請重新上傳）');
+      }
     } catch (e) {
-      showError('草稿儲存失敗：' + (e.message || e));
+      if (!opts.silent) showError('草稿儲存失敗：' + (e.message || e));
     }
   }
 
@@ -3003,6 +3114,24 @@
       renderFilterPresets();
       if (d.instruction) $('instr-manual-lock').checked = true;
       if (d.wizardStep) state.wizardStep = d.wizardStep;
+      if (Array.isArray(d.lastImportedPaths) && d.lastImportedPaths.length) {
+        state.lastImportedPaths = d.lastImportedPaths.slice();
+        if (!state.images.length) {
+          state.siteImport.restorePaths = d.lastImportedPaths.slice();
+        }
+      }
+      if (d.lastProjectCode && $('import-project-code') && !$('import-project-code').value.trim()) {
+        $('import-project-code').value = d.lastProjectCode;
+      }
+      if (d.siteImportSnapshot) {
+        if (d.siteImportSnapshot.projectCode) {
+          state.siteImport.projectCode = d.siteImportSnapshot.projectCode;
+        }
+        if (d.siteImportSnapshot.mediaType) {
+          state.siteImport.mediaType = d.siteImportSnapshot.mediaType;
+          if ($('import-media-type')) $('import-media-type').value = d.siteImportSnapshot.mediaType;
+        }
+      }
     } catch (e0) {}
   }
 

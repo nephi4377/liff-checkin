@@ -89,6 +89,25 @@ export default {
             });
         };
 
+        /** SketchUp 渲染工作室：外部靜態工具（權限 ≥ 3） */
+        const sketchupRenderStudioPublicUrl = 'https://info.tanxin.space/tools/sketchup-render-studio/';
+        const sketchupRenderStudioUrlCopied = ref(false);
+        let sketchupRenderStudioCopyTimer = null;
+        const copySketchupRenderStudioUrl = () => {
+            const url = sketchupRenderStudioPublicUrl;
+            if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+                window.prompt('請長按或全選複製以下網址：', url);
+                return;
+            }
+            navigator.clipboard.writeText(url).then(() => {
+                sketchupRenderStudioUrlCopied.value = true;
+                if (sketchupRenderStudioCopyTimer) clearTimeout(sketchupRenderStudioCopyTimer);
+                sketchupRenderStudioCopyTimer = setTimeout(() => { sketchupRenderStudioUrlCopied.value = false; }, 2500);
+            }).catch(() => {
+                window.prompt('複製失敗，請手動複製：', url);
+            });
+        };
+
         const formatTimeAgo = (date) => {
             const seconds = Math.floor((new Date() - new Date(date)) / 1000);
             let interval = seconds / 31536000;
@@ -621,6 +640,24 @@ export default {
                             <button type="button" @click="copyFbPostStudioUrl"
                                 class="inline-flex items-center text-xs font-semibold bg-sky-600 text-white py-1 px-2.5 rounded-md hover:bg-sky-700">
                                 {{ fbPostStudioUrlCopied ? '已複製' : '複製連結' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4d. SketchUp 渲染工作室（外部工具；權限 ≥ 3） -->
+                <div v-if="currentUser && currentUser.permission >= 3"
+                    class="bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-amber-500 p-4 flex items-start gap-3">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center text-xl">🏠</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">SketchUp 渲染工作室</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">上傳 SketchUp 截圖 → AI 寫實室內渲染，支援多圖批次與燈光標籤（獨立分頁）。</p>
+                        <div class="flex flex-wrap items-center gap-2 mt-2">
+                            <a :href="sketchupRenderStudioPublicUrl" target="_blank" rel="noopener noreferrer"
+                                class="inline-flex items-center text-xs font-semibold bg-white text-amber-800 border border-amber-300 py-1 px-2.5 rounded-md hover:bg-amber-50">開啟網站</a>
+                            <button type="button" @click="copySketchupRenderStudioUrl"
+                                class="inline-flex items-center text-xs font-semibold bg-amber-600 text-white py-1 px-2.5 rounded-md hover:bg-amber-700">
+                                {{ sketchupRenderStudioUrlCopied ? '已複製' : '複製連結' }}
                             </button>
                         </div>
                     </div>

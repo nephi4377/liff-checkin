@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>SketchUp 渲染工作室｜添心設計</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body>
+  <div id="loading" class="loading">載入中…</div>
+
+  <div id="app" class="app hidden">
+    <header class="topbar">
+      <div>
+        <h1>SketchUp 渲染工作室</h1>
+        <p id="userLine" class="sub">—</p>
+      </div>
+      <div class="topbar-actions">
+        <button type="button" id="btnAdd" class="btn btn-secondary">＋ 加入圖片</button>
+        <input type="file" id="fileInput" accept="image/*" multiple hidden />
+      </div>
+    </header>
+
+    <section class="controls card" id="controlsPanel">
+      <div class="prompt-scope">
+        <label class="inline-check">
+          <input type="checkbox" id="useCustomPrompt" />
+          此圖自訂 Prompt
+        </label>
+        <span id="promptScopeHint" class="hint">未勾選：全部圖片沿用下方全域設定</span>
+      </div>
+      <div class="control-row">
+        <label>空間類型</label>
+        <input type="text" id="roomTypeInput" placeholder="客廳、主臥、廚房…（可留空）" />
+      </div>
+      <div class="control-row">
+        <label>設計風格</label>
+        <select id="styleSelect"></select>
+      </div>
+      <div class="control-row">
+        <label>整體光線</label>
+        <select id="lightingSelect"></select>
+      </div>
+      <div class="control-block">
+        <label>燈光來源標籤 <span class="hint">（可多選，會對應窗戶／坎燈／櫃內燈等位置）</span></label>
+        <div id="lightTagChips" class="chips"></div>
+      </div>
+      <div class="control-row">
+        <label>補充說明</label>
+        <textarea id="extraNotes" rows="2" placeholder="例：加強中島下方燈帶、客廳落地窗自然光…"></textarea>
+      </div>
+      <div class="control-actions">
+        <button type="button" id="btnAnalyze" class="btn btn-secondary">分析建議</button>
+        <button type="button" id="btnRenderOne" class="btn btn-primary">渲染目前圖</button>
+        <button type="button" id="btnRenderAll" class="btn btn-primary">批次渲染全部</button>
+      </div>
+      <p id="statusMsg" class="status-msg"></p>
+      <details class="dev-panel">
+        <summary>進階／測試設定</summary>
+        <div class="control-row">
+          <label>GAS URL</label>
+          <input type="text" id="gasUrlInput" placeholder="accounting-gas Web App /exec" />
+        </div>
+        <label class="inline-check">
+          <input type="checkbox" id="devBypassInput" />
+          開發 bypass（本機測試）
+        </label>
+        <div class="control-row">
+          <label>ingest secret</label>
+          <input type="password" id="ingestSecretInput" placeholder="（可選）" />
+        </div>
+      </details>
+    </section>
+
+    <section class="compare-wrap">
+      <div class="compare card">
+        <div class="compare-pane">
+          <div class="pane-label">原圖</div>
+          <div class="pane-media" id="paneOriginal">
+            <div class="placeholder">請加入 SketchUp 截圖</div>
+          </div>
+        </div>
+        <div class="compare-pane">
+          <div class="pane-label">渲染結果</div>
+          <div class="pane-media" id="paneRendered">
+            <div class="placeholder" id="renderPlaceholder">選擇圖片後按「渲染」</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="filmstrip card">
+      <div class="filmstrip-head">
+        <span>圖片列表</span>
+        <span id="filmMeta" class="hint"></span>
+      </div>
+      <div id="thumbRow" class="thumb-row"></div>
+      <div id="versionRow" class="version-row hidden">
+        <span class="version-label">此圖版本</span>
+        <div id="versionThumbs" class="version-thumbs"></div>
+      </div>
+    </section>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
