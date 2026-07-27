@@ -215,7 +215,10 @@
       </div>
 
       <p class="section-title">基本資料</p>
-      <label class="req">名稱</label><input id="name" />
+      <label class="req">名稱</label><input id="name" placeholder="平常怎麼叫這家，例如：亨特地板" />
+      <label>別名／發票公司名</label>
+      <input id="name_aliases" placeholder="單據上公司名，多個用逗號隔開。例：必美貿易有限公司" />
+      <p class="sub" style="margin:4px 0 10px">請款辨識讀到這些名字時，會自動對到上面的「名稱」並帶入匯款帳戶。</p>
       <div class="row2">
         <div><label>統編</label><input id="tax_id" /></div>
         <div>
@@ -296,7 +299,7 @@
           </div>
         </div>
         <label>關鍵字</label>
-        <input id="filterKw" placeholder="名稱、統編、電話…" />
+        <input id="filterKw" placeholder="名稱、別名、統編、電話…" />
         <button type="button" class="btn btn-secondary btn-block" id="filterBtn">套用篩選</button>
         <button type="button" class="btn btn-secondary btn-block" id="syncDriveBtn" title="將 ~裝潢建材廠商 資料夾連結到廠商主檔">同步 Drive 舊資料夾</button>
       </div>
@@ -603,6 +606,7 @@
       function readForm() {
         return {
           name: $('name').value.trim(),
+          name_aliases: $('name_aliases').value.trim(),
           tax_id: $('tax_id').value.trim(),
           trade_category: $('trade_category').value,
           cost_type: $('cost_type').value,
@@ -722,7 +726,7 @@
         setFormMode(false);
         $('bindingList').innerHTML = '';
         $('lineSearchResults').innerHTML = '';
-        ['name','tax_id','contact_name','contact_phone','contact_email','address',
+        ['name','name_aliases','tax_id','contact_name','contact_phone','contact_email','address',
           'bank_code','branch_name','account_no','account_name','note','lineSearchKw','lineManualId'].forEach(function (id) {
           $(id).value = '';
         });
@@ -741,6 +745,7 @@
         $('editId').value = v.vendor_id || '';
         setFormMode(true, { flash: !!opts.flash });
         $('name').value = v.name || '';
+        $('name_aliases').value = v.name_aliases || '';
         $('tax_id').value = v.tax_id || '';
         $('trade_category').value = AccountingMasterData.normalizeVendorTradeCategory(v.trade_category) || '其他';
         $('cost_type').value = v.cost_type || '';
@@ -812,6 +817,7 @@
         if (contactParts.length) rows.push({ label: '聯絡', text: contactParts.join(' · ') });
 
         if (v.tax_id) rows.push({ label: '統編', text: String(v.tax_id) });
+        if (v.name_aliases) rows.push({ label: '別名', text: String(v.name_aliases) });
 
         var bank = formatBankSummary(v);
         if (bank) rows.push({ label: '匯款', text: bank });

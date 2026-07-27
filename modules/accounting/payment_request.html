@@ -652,7 +652,13 @@
           }
           setVendorPickId(ocr.vendor_id, v ? (v.name || ocr.vendor_name) : (ocr.vendor_name || ''));
           onPayeePick();
-          AccountingUi.notify('ok', '已帶入廠商：' + (ocr.vendor_name || '（名冊）') + '，銀行帳戶已自動填入');
+          var matchedLabel = (v && v.name) || ocr.vendor_name || '（名冊）';
+          var rawOcrName = String(ocr.ocr_vendor_name || '').trim();
+          if (rawOcrName && rawOcrName !== matchedLabel) {
+            AccountingUi.notify('ok', '已帶入廠商：' + matchedLabel + '（單據寫「' + rawOcrName + '」），銀行帳戶已自動填入');
+          } else {
+            AccountingUi.notify('ok', '已帶入廠商：' + matchedLabel + '，銀行帳戶已自動填入');
+          }
         } else if (ocr.vendor_name) {
           setPayeeMode('vendor');
           setVendorPickId(NEW_VENDOR_ID);
