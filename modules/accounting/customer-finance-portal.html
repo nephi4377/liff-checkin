@@ -62,7 +62,23 @@
       <select id="projectSelect"></select>
     </div>
 
-    <div id="content">
+    <!-- 首屏：兩張大卡 -->
+    <div id="mainMenu">
+      <div class="card menu-card" id="cardReceipt" style="cursor:pointer;text-align:center;padding:24px 14px;">
+        <div style="font-size:32px;margin-bottom:8px;">💰</div>
+        <h3 style="margin:0;font-size:18px;">收款確認</h3>
+        <p style="color:#555;font-size:13px;margin:6px 0 0;">查看收款紀錄並確認</p>
+      </div>
+      <div class="card menu-card" id="cardMaterial" style="cursor:pointer;text-align:center;padding:24px 14px;">
+        <div style="font-size:32px;margin-bottom:8px;">🎨</div>
+        <h3 style="margin:0;font-size:18px;">選材</h3>
+        <p style="color:#555;font-size:13px;margin:6px 0 0;">查看設計師為您安排的材料</p>
+      </div>
+    </div>
+
+    <!-- 收款紀錄（第二層） -->
+    <div id="content" class="hidden">
+      <button class="btn btn-secondary" id="btnBackFromRec" style="margin-bottom:12px;">← 返回</button>
       <!--
         【未來待確認】總監指示：先不看追加減
         暫時對客戶（含員工預覽）隱藏此區塊；後端 API 與下方繪製／確認／簽名邏輯保留不刪。
@@ -75,6 +91,15 @@
       <div class="card">
         <h3 style="margin:0 0 8px">收款紀錄</h3>
         <div id="recList">—</div>
+      </div>
+    </div>
+
+    <!-- 選材清單（第二層，唯讀） -->
+    <div id="materialView" class="hidden">
+      <button class="btn btn-secondary" id="btnBackFromMat" style="margin-bottom:12px;">← 返回</button>
+      <div class="card">
+        <h3 style="margin:0 0 8px">選材清單</h3>
+        <div id="matList">載入中…</div>
       </div>
     </div>
 
@@ -361,6 +386,61 @@
       $('recList').querySelectorAll('[data-rec-s2]').forEach(function (btn) {
         bindRecStage2Button(btn);
       });
+    }
+
+    /* ── 首屏兩卡切換 ── */
+    function showMainMenu() {
+      $('mainMenu').classList.remove('hidden');
+      $('content').classList.add('hidden');
+      $('materialView').classList.add('hidden');
+    }
+    $('cardReceipt').onclick = function () {
+      $('mainMenu').classList.add('hidden');
+      $('content').classList.remove('hidden');
+      if ($('projectSelect').value) loadData();
+    };
+    $('cardMaterial').onclick = function () {
+      $('mainMenu').classList.add('hidden');
+      $('materialView').classList.remove('hidden');
+      loadMaterials();
+    };
+    $('btnBackFromRec').onclick = showMainMenu;
+    $('btnBackFromMat').onclick = showMainMenu;
+
+    /* ── 選材唯讀載入 ── */
+    async function loadMaterials() {
+      var pno = $('projectSelect').value;
+      if (!pno) { $('matList').innerHTML = '<p>請先選擇案號</p>'; return; }
+      $('matList').innerHTML = '載入中…';
+      try {
+        var portalOpts = staffPreview ? { staffPreview: true } : {};
+        var res = await AccountingApi.materialPortalList(session, pno, portalOpts);
+        if (!res.success) { $('matList').innerHTML = '<p>' + (res.message || '載入失敗') + '</p>'; return; }
+        if (!res.items || !res.items.length) { $('matList').innerHTML = '<p>目前尚無選材資料</p>'; return; }
+        $('matList').innerHTML = res.items.map(function (m) {
+          var photos = (m.photo_urls || '').split(',').filter(Boolean);
+          var photoHtml = photos.length ? photos.map(function (u) {
+            return '<img src="' + u + '" style="width:80px;height:80px;object-fit:cover;border-radius:6px;margin:4px 4px 0 0;" />';
+          }).join('') : '';
+          return '<div style="padding:10px 0;border-bottom:1px solid #eee">' +
+            '<span class="tag">' + (m.category || '—') + '</span> ' +
+            '<strong>' + (m.item_name || '—') + '</strong><br/>' +
+            (m.spec ? '<span style="font-size:13px;color:#555">規格：' + m.spec + '</span><br/>' : '') +
+            (m.unit || m.quantity ? '<span style="font-size:13px;color:#555">' + (m.quantity || '') + ' ' + (m.unit || '') + '</span><br/>' : '') +
+            (m.note ? '<span style="font-size:13px;color:#888">備註：' + m.note + '</span><br/>' : '') +
+            (photoHtml ? '<div style="margin-top:6px">' + photoHtml + '</div>' : '') +
+            '</div>';
+        }).join('');
+      } catch (e) {
+        $('matList').innerHTML = '<p>載入錯誤：' + (e.message || e) + '</p>';
+      }
+    }
+
+    /* ── deep link: entity=material 時直接開選材 ── */
+    if (deepLink.entity === 'material') {
+      setTimeout(function () {
+        if ($('cardMaterial')) $('cardMaterial').click();
+      }, 300);
     }
 
     $('btnClearSign').onclick = function () { ctx.clearRect(0, 0, canvas.width, canvas.height); };

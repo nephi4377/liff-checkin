@@ -110,11 +110,13 @@
       <div class="tabs">
         <span class="tab active" data-tab="adj">追加減</span>
         <span class="tab" data-tab="rec">收款</span>
+        <span class="tab" data-tab="mat">選材</span>
         <span class="tab" data-tab="audit">稽核</span>
         <span class="tab" data-tab="bind">客戶綁定</span>
       </div>
       <div id="panelAdj" class="card"></div>
       <div id="panelRec" class="card hidden"></div>
+      <div id="panelMat" class="card hidden"></div>
       <div id="panelAudit" class="card hidden"></div>
       <div id="panelBind" class="card hidden"></div>
     </div>
@@ -257,6 +259,7 @@
     function renderPanels() {
       renderAdjPanel();
       renderRecPanel();
+      renderMatPanel();
       renderAuditPanel();
       renderBindPanel();
       document.querySelectorAll('.tab').forEach(function (t) {
@@ -264,8 +267,22 @@
       });
       $('panelAdj').classList.toggle('hidden', activeTab !== 'adj');
       $('panelRec').classList.toggle('hidden', activeTab !== 'rec');
+      $('panelMat').classList.toggle('hidden', activeTab !== 'mat');
       $('panelAudit').classList.toggle('hidden', activeTab !== 'audit');
       $('panelBind').classList.toggle('hidden', activeTab !== 'bind');
+    }
+
+    function renderMatPanel() {
+      var pno = currentProject || '';
+      var href = 'designer-material-selection.html?project_no=' + encodeURIComponent(pno);
+      var previewHref = 'customer-finance-portal.html?staff_preview=1&project_no=' + encodeURIComponent(pno) + '&entity=material';
+      $('panelMat').innerHTML =
+        '<h4>選材</h4>' +
+        '<p class="form-hint">在此案登記材料；儲存後客戶端立刻可見。修改會留變更紀錄。</p>' +
+        '<p style="margin:12px 0">' +
+        '<a class="btn btn-primary" href="' + href + '" style="display:inline-block;text-decoration:none">開啟選材專頁 →</a> ' +
+        '<a class="btn btn-secondary" href="' + previewHref + '" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none">預覽客戶選材畫面</a>' +
+        '</p>';
     }
 
     function fmtMoney(n) {
@@ -526,7 +543,10 @@
         session = sess;
         var q = new URLSearchParams(location.search);
         await Promise.all([loadTodos(), loadOverview()]);
-        if (q.get('project_no')) openDetail(q.get('project_no'));
+        if (q.get('project_no')) {
+          if (q.get('tab') === 'mat') activeTab = 'mat';
+          openDetail(q.get('project_no'));
+        }
       }
     });
   })();

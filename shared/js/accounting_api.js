@@ -1278,6 +1278,57 @@ var AccountingApi = (function () {
       );
       return { success: true, items: items, cached: true };
     },
+    /** 選材 — 設計師寫入 */
+    materialCreate: function (sessionOrToken, payload) {
+      return post(Object.assign({ action: 'margin_material_create', auth: resolveAuth(sessionOrToken) }, payload || {}));
+    },
+    materialUpdate: function (sessionOrToken, payload) {
+      return post(Object.assign({ action: 'margin_material_update', auth: resolveAuth(sessionOrToken) }, payload || {}));
+    },
+    materialVoid: function (sessionOrToken, materialId) {
+      return post({ action: 'margin_material_void', auth: resolveAuth(sessionOrToken), material_id: materialId });
+    },
+    materialUploadPhoto: function (sessionOrToken, payload) {
+      return post({
+        action: 'margin_material_upload_photo',
+        auth: resolveAuth(sessionOrToken),
+        material_id: payload.material_id,
+        project_no: payload.project_no,
+        photos: payload.photos || []
+      });
+    },
+    materialDesignerList: function (sessionOrToken, projectNo) {
+      return post({ action: 'margin_material_designer_list', auth: resolveAuth(sessionOrToken), project_no: projectNo });
+    },
+    materialAuditLog: function (sessionOrToken, filter) {
+      return post({
+        action: 'margin_material_audit_log',
+        auth: resolveAuth(sessionOrToken),
+        material_id: (filter && filter.material_id) || '',
+        project_no: (filter && filter.project_no) || ''
+      });
+    },
+    /** 選材 — 客戶唯讀 */
+    materialPortalList: function (sessionOrToken, projectNo, opts) {
+      opts = opts || {};
+      var body = { action: 'margin_material_portal_list', auth: resolveAuth(sessionOrToken), project_no: projectNo };
+      if (opts.staffPreview) body.staff_preview = true;
+      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
+        body.dev_bypass = true;
+        if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
+      }
+      return post(body);
+    },
+    materialPortalDetail: function (sessionOrToken, materialId, opts) {
+      opts = opts || {};
+      var body = { action: 'margin_material_portal_detail', auth: resolveAuth(sessionOrToken), material_id: materialId };
+      if (opts.staffPreview) body.staff_preview = true;
+      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
+        body.dev_bypass = true;
+        if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
+      }
+      return post(body);
+    },
     cfPortalAuth: function (sessionOrToken, opts) {
       opts = opts || {};
       var body = { action: 'margin_customer_finance_portal_auth', auth: resolveAuth(sessionOrToken) };
