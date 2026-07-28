@@ -331,7 +331,61 @@
     });
   }
 
-  function collectRenderPayload(item, referencePhoto) {
+  function readRenderModeFromControls() {
+    var checked = document.querySelector('input[name="renderMode"]:checked');
+    return checked ? checked.value : 'fidelity';
+  }
+
+  function readPreserveFromControls() {
+    return {
+      ceiling_type: !!($('preserveCeiling') && $('preserveCeiling').checked),
+      beam_color: !!($('preserveBeam') && $('preserveBeam').checked),
+      wall_paint: !!($('preserveWall') && $('preserveWall').checked),
+      lines_openings: !!($('preserveLines') && $('preserveLines').checked),
+      furniture_layout: !!($('preserveLayout') && $('preserveLayout').checked)
+    };
+  }
+
+  function collectRenderSettings(modeOverride) {
+    return {
+      render_mode: modeOverride || readRenderModeFromControls(),
+      preserve: readPreserveFromControls()
+    };
+  }
+
+  function hideAnalyzeSummary() {
+    var el = $('analyzeSummary');
+    if (!el) return;
+    el.classList.add('hidden');
+    el.innerHTML = '';
+  }
+
+  function showAnalyzeSummary(d) {
+    var el = $('analyzeSummary');
+    if (!el) return;
+    d = d || {};
+    var parts = [];
+    if (d.room_type) parts.push('空間：' + d.room_type);
+    if (d.detected_ceiling_type) parts.push('天花：' + d.detected_ceiling_type);
+    if (d.detected_beam_notes) parts.push('樑柱：' + d.detected_beam_notes);
+    if (d.material_notes) parts.push('材質：' + d.material_notes);
+    if (d.render_hints) parts.push('渲染建議：' + d.render_hints);
+    var warns = d.warnings || [];
+    if (warns.length) parts.push('注意：' + warns.join('；'));
+    if (!parts.length) {
+      hideAnalyzeSummary();
+      return;
+    }
+    el.innerHTML = parts.map(function (p) {
+      if (p.indexOf('注意：') === 0) {
+        return '<div class="warn">' + escapeHtml(p) + '</div>';
+      }
+      return '<div>' + escapeHtml(p) + '</div>';
+    }).join('');
+    el.classList.remove('hidden');
+  }
+
+  function collectRenderPayload(item, referencePhoto, modeOverride) {
     saveControlsToTarget();
     var prompt = getEffectivePromptForItem(item);
     var payload = {
@@ -342,20 +396,27 @@
       extra_notes: prompt.extraNotes,
       light_source_tags: prompt.lightSourceTags.slice()
     };
+    var settings = collectRenderSettings(modeOverride);
+    payload.render_mode = settings.render_mode;
+    payload.preserve = settings.preserve;
     if (referencePhoto) payload.reference_photo = referencePhoto;
     return payload;
   }
 
-  function collectGlobalPayloadBase() {
+  function collectGlobalPayloadBase(modeOverride) {
     saveControlsToTarget();
     var g = state.globalPrompt;
-    return {
+    var payload = {
       room_type: g.roomType,
       style: g.style,
       lighting: g.lighting,
       extra_notes: g.extraNotes,
       light_source_tags: g.lightSourceTags.slice()
     };
+    var settings = collectRenderSettings(modeOverride);
+    payload.render_mode = settings.render_mode;
+    payload.preserve = settings.preserve;
+    return payload;
   }
 
   function imageObjToPreview(image) {
@@ -375,10 +436,10 @@
     item.activeVersionIndex = item.versions.length - 1;
   }
 
-  function renderOneItem(item, referencePhoto) {
+  function renderOneItem(item, referencePhoto, modeOverride) {
     item.rendering = true;
     updateCompareView();
-    return apiPost('sketchup_render', collectRenderPayload(item, referencePhoto))
+    return apiPost('sketchup_render', collectRenderPayload(item, referencePhoto, modeOverride))
       .then(function (res) {
         item.rendering = false;
         if (!res.success) throw new Error(res.message || '渲染失敗');
@@ -400,19 +461,21 @@
     return null;
   }
 
-  function renderCurrent() {
+  function renderCurrent(modeOverride) {
     if (state.busy) return;
     var item = getActiveItem();
     if (!item) {
       setStatus('請先加入圖片', 'error');
       return;
     }
+    var mode = modeOverride || readRenderModeFromControls();
+    var statusLabel = mode === 'fidelity' ? '保真渲染中…' : '美化渲染中…';
     state.busy = true;
-    setStatus('正在渲染第 ' + (state.activeIndex + 1) + ' 張…');
+    setStatus(statusLabel + '（第 ' + (state.activeIndex + 1) + ' 張）');
     disableButtons(true);
     var anchor = getStyleAnchorImage();
     var ref = anchor && anchor !== (getActiveVersion(item) && getActiveVersion(item).image) ? anchor : null;
-    renderOneItem(item, ref)
+    renderOneItem(item, ref, mode)
       .then(function () {
         setStatus('渲染完成', 'ok');
         updateCompareView();
@@ -437,7 +500,7 @@
       chain = chain.then(function () {
         setStatus('批次渲染中 ' + (idx + 1) + ' / ' + state.items.length + '…');
         state.activeIndex = idx;
-        return renderOneItem(item, anchor).then(function (res) {
+        return renderOneItem(item, anchor, readRenderModeFromControls()).then(function (res) {
           if (!anchor && res && res.image) anchor = res.image;
           updateCompareView();
         }).catch(function (err) {
@@ -458,7 +521,7 @@
     state.busy = true;
     disableButtons(true);
     setStatus('批次渲染中（整案風格一致）…');
-    var payload = collectGlobalPayloadBase();
+    var payload = collectGlobalPayloadBase(readRenderModeFromControls());
     payload.photos = state.items.map(function (it) { return it.photo; });
     payload.items = state.items.map(function (it) { return buildItemOverride(it); });
     var anchor = getStyleAnchorImage();
@@ -494,26 +557,34 @@
     setStatus('分析中…');
     saveControlsToTarget();
     var prompt = getEffectivePromptForItem(item);
+    var settings = collectRenderSettings();
     apiPost('sketchup_render_analyze', {
       photo: item.photo,
       room_type: prompt.roomType,
       style: prompt.style,
       lighting: prompt.lighting,
       light_source_tags: prompt.lightSourceTags.slice(),
-      extra_notes: prompt.extraNotes
+      extra_notes: prompt.extraNotes,
+      render_mode: settings.render_mode,
+      preserve: settings.preserve
     }).then(function (res) {
       if (!res.success) throw new Error(res.message || '分析失敗');
       var d = res.data || {};
       var target = getEditingPrompt();
       if (d.room_type) target.roomType = d.room_type;
-      if (d.suggested_style) target.style = d.suggested_style;
+      if (settings.render_mode !== 'fidelity' && d.suggested_style) target.style = d.suggested_style;
       if (d.suggested_lighting) target.lighting = d.suggested_lighting;
       if (Array.isArray(d.suggested_light_source_tags)) {
         target.lightSourceTags = d.suggested_light_source_tags.slice();
       }
-      if (d.render_hints) target.extraNotes = d.render_hints;
+      var notes = [];
+      if (d.render_hints) notes.push(d.render_hints);
+      if (d.detected_ceiling_type) notes.push('保留天花：' + d.detected_ceiling_type);
+      if (d.detected_beam_notes) notes.push('樑柱：' + d.detected_beam_notes);
+      if (notes.length) target.extraNotes = notes.join('；');
       writePromptToControls(target);
-      setStatus('分析完成' + (d.room_type ? ('｜' + d.room_type) : ''), 'ok');
+      showAnalyzeSummary(d);
+      setStatus('分析完成' + (d.room_type ? ('｜' + d.room_type) : '') + '，請確認上方摘要後再渲染', 'ok');
     }).catch(function (err) {
       setStatus(err.message || String(err), 'error');
     }).finally(function () {
@@ -523,7 +594,7 @@
   }
 
   function disableButtons(disabled) {
-    ['btnAnalyze', 'btnRenderOne', 'btnRenderAll', 'btnAdd'].forEach(function (id) {
+    ['btnAnalyze', 'btnRenderFidelity', 'btnRenderStyled', 'btnRenderAll', 'btnAdd'].forEach(function (id) {
       $(id).disabled = !!disabled;
     });
   }
@@ -568,7 +639,8 @@
       addFiles(e.target.files);
       e.target.value = '';
     });
-    $('btnRenderOne').addEventListener('click', renderCurrent);
+    $('btnRenderFidelity').addEventListener('click', function () { renderCurrent('fidelity'); });
+    $('btnRenderStyled').addEventListener('click', function () { renderCurrent(null); });
     $('btnRenderAll').addEventListener('click', renderAllViaBatchApi);
     $('btnAnalyze').addEventListener('click', analyzeCurrent);
 
@@ -605,8 +677,8 @@
     state.stylePresets = data.style_presets || [];
     state.lightingPresets = data.lighting_presets || [];
     state.lightSourceTags = data.light_source_tags || [];
-    renderSelectOptions($('styleSelect'), state.stylePresets, '（依分析建議）');
-    renderSelectOptions($('lightingSelect'), state.lightingPresets, '（依分析建議）');
+    renderSelectOptions($('styleSelect'), state.stylePresets, '（依原圖，不另改風格）');
+    renderSelectOptions($('lightingSelect'), state.lightingPresets, '（依原圖光線）');
     renderLightTagChips(state.globalPrompt.lightSourceTags);
     updatePromptScopeUi();
   }

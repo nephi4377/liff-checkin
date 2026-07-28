@@ -10,7 +10,7 @@
   --ok: #6fcf97;
   --radius: 14px;
   --topbar-h: 64px;
-  --controls-h: 220px;
+  --controls-h: 320px;
   --film-h: 132px;
 }
 
@@ -81,6 +81,43 @@ html, body {
 }
 
 .control-block { margin-bottom: 10px; }
+
+.block-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.mode-radios, .preserve-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.preserve-block {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.analyze-summary {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(126, 184, 218, 0.35);
+  background: rgba(126, 184, 218, 0.08);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.analyze-summary .warn {
+  color: var(--accent);
+  margin-top: 6px;
+}
 
 .prompt-scope {
   display: flex;

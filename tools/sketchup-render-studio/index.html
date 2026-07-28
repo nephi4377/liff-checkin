@@ -23,6 +23,25 @@
     </header>
 
     <section class="controls card" id="controlsPanel">
+      <div class="control-block mode-block">
+        <label class="block-label">渲染模式</label>
+        <div class="mode-radios">
+          <label class="inline-check"><input type="radio" name="renderMode" value="fidelity" checked /> 保真（只加光線質感）</label>
+          <label class="inline-check"><input type="radio" name="renderMode" value="enhance" /> 風格美化</label>
+          <label class="inline-check"><input type="radio" name="renderMode" value="creative" /> 自由發揮</label>
+        </div>
+      </div>
+      <div class="control-block preserve-block">
+        <label class="block-label">這些不要動 <span class="hint">（預設全勾；要改請取消並寫在補充說明）</span></label>
+        <div class="preserve-chips">
+          <label class="inline-check"><input type="checkbox" id="preserveCeiling" checked /> 天花類型</label>
+          <label class="inline-check"><input type="checkbox" id="preserveBeam" checked /> 樑柱顏色</label>
+          <label class="inline-check"><input type="checkbox" id="preserveWall" checked /> 牆面油漆</label>
+          <label class="inline-check"><input type="checkbox" id="preserveLines" checked /> 線條／開口</label>
+          <label class="inline-check"><input type="checkbox" id="preserveLayout" checked /> 家具擺位</label>
+        </div>
+      </div>
+      <div id="analyzeSummary" class="analyze-summary hidden" aria-live="polite"></div>
       <div class="prompt-scope">
         <label class="inline-check">
           <input type="checkbox" id="useCustomPrompt" />
@@ -51,8 +70,9 @@
         <textarea id="extraNotes" rows="2" placeholder="例：加強中島下方燈帶、客廳落地窗自然光…"></textarea>
       </div>
       <div class="control-actions">
-        <button type="button" id="btnAnalyze" class="btn btn-secondary">分析建議</button>
-        <button type="button" id="btnRenderOne" class="btn btn-primary">渲染目前圖</button>
+        <button type="button" id="btnAnalyze" class="btn btn-secondary">分析這張圖</button>
+        <button type="button" id="btnRenderFidelity" class="btn btn-primary">只加光線質感</button>
+        <button type="button" id="btnRenderStyled" class="btn btn-secondary">依下方設定美化</button>
         <button type="button" id="btnRenderAll" class="btn btn-primary">批次渲染全部</button>
       </div>
       <p id="statusMsg" class="status-msg"></p>
