@@ -10,7 +10,6 @@
   --ok: #6fcf97;
   --radius: 14px;
   --topbar-h: 64px;
-  --controls-h: 320px;
   --film-h: 132px;
 }
 
@@ -35,8 +34,8 @@ html, body {
 
 .app {
   min-height: 100vh;
-  display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   padding: 10px;
 }
@@ -254,11 +253,14 @@ textarea { resize: vertical; min-height: 56px; }
 }
 
 .compare-wrap {
-  min-height: 0;
+  flex: 1 1 auto;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
 }
 
 .compare {
-  height: calc(100vh - var(--topbar-h) - var(--controls-h) - var(--film-h) - 50px);
+  flex: 1 1 auto;
   min-height: 280px;
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -292,8 +294,10 @@ textarea { resize: vertical; min-height: 56px; }
 }
 
 .pane-media img {
-  width: 100%;
-  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
   object-fit: contain;
   display: block;
 }
@@ -393,8 +397,7 @@ textarea { resize: vertical; min-height: 56px; }
 @media (max-width: 900px) {
   .compare {
     grid-template-columns: 1fr;
-    height: auto;
   }
-  .compare-pane { min-height: 38vh; }
+  .compare-pane { min-height: 36vh; }
   .control-row { grid-template-columns: 1fr; }
 }

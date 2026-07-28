@@ -56,6 +56,65 @@
     });
   }
 
+  function setLoadingMsg(msg) {
+    var el = $('loading');
+    if (el && !el.classList.contains('hidden')) el.textContent = msg || '載入中…';
+  }
+
+  var POLICY_CACHE_KEY = 'sketchup_render_policy_v1';
+
+  function tryLoadPolicyCache() {
+    try {
+      var raw = sessionStorage.getItem(POLICY_CACHE_KEY);
+      if (!raw) return null;
+      var obj = JSON.parse(raw);
+      if (!obj || !obj.ts || Date.now() - obj.ts > 300000) return null;
+      return obj.policy || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function savePolicyCache(policy) {
+    try {
+      sessionStorage.setItem(POLICY_CACHE_KEY, JSON.stringify({ ts: Date.now(), policy: policy }));
+    } catch (e) { /* ignore */ }
+  }
+
+  var ALLOWED_ASPECT = [
+    { key: '1:1', r: 1 },
+    { key: '4:5', r: 0.8 },
+    { key: '16:9', r: 16 / 9 },
+    { key: '3:2', r: 1.5 },
+    { key: '4:3', r: 4 / 3 }
+  ];
+
+  function pickAspectRatio(w, h) {
+    if (!w || !h) return '';
+    var ratio = w / h;
+    var best = ALLOWED_ASPECT[0];
+    var bestDiff = Math.abs(ratio - best.r);
+    for (var i = 1; i < ALLOWED_ASPECT.length; i++) {
+      var diff = Math.abs(ratio - ALLOWED_ASPECT[i].r);
+      if (diff < bestDiff) {
+        best = ALLOWED_ASPECT[i];
+        bestDiff = diff;
+      }
+    }
+    return best.key;
+  }
+
+  function measurePreviewAspect(previewUrl) {
+    return new Promise(function (resolve) {
+      var img = new Image();
+      img.onload = function () {
+        resolve(pickAspectRatio(img.naturalWidth, img.naturalHeight));
+      };
+      img.onerror = function () { resolve(''); };
+      img.src = previewUrl;
+    });
+  }
+
   function apiPost(action, payload) {
     payload = payload || {};
     payload.action = action;
@@ -227,6 +286,7 @@
     if (!tagsSame && c.lightSourceTags && c.lightSourceTags.length) {
       out.light_source_tags = c.lightSourceTags.slice();
     }
+    if (item.aspectRatio) out.aspect_ratio = item.aspectRatio;
     if (!Object.keys(out).length) return { use_global: true };
     return out;
   }
@@ -399,6 +459,7 @@
     var settings = collectRenderSettings(modeOverride);
     payload.render_mode = settings.render_mode;
     payload.preserve = settings.preserve;
+    if (item.aspectRatio) payload.aspect_ratio = item.aspectRatio;
     if (referencePhoto) payload.reference_photo = referencePhoto;
     return payload;
   }
@@ -611,16 +672,19 @@
     Promise.all(files.map(function (file, idx) {
       return fileToBase64(file).then(function (photo) {
         var previewUrl = 'data:' + photo.mime_type + ';base64,' + photo.data_base64;
-        state.items.push({
-          id: 'img_' + Date.now() + '_' + idx,
-          name: file.name || ('圖 ' + (state.items.length + 1)),
-          previewUrl: previewUrl,
-          photo: photo,
-          versions: [],
-          activeVersionIndex: 0,
-          rendering: false,
-          useCustomPrompt: false,
-          customPrompt: null
+        return measurePreviewAspect(previewUrl).then(function (aspectRatio) {
+          state.items.push({
+            id: 'img_' + Date.now() + '_' + idx,
+            name: file.name || ('圖 ' + (state.items.length + 1)),
+            previewUrl: previewUrl,
+            photo: photo,
+            aspectRatio: aspectRatio,
+            versions: [],
+            activeVersionIndex: 0,
+            rendering: false,
+            useCustomPrompt: false,
+            customPrompt: null
+          });
         });
       });
     })).then(function () {
@@ -686,17 +750,24 @@
   function fetchAccountingPolicy() {
     var url = ($('gasUrlInput') && $('gasUrlInput').value.trim()) || CONFIG.apiUrl || CFG.GAS_URL || '';
     if (!url) return Promise.resolve({});
+    var cached = tryLoadPolicyCache();
+    if (cached) return Promise.resolve(cached);
     return fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ action: 'accounting_policy' })
     }).then(function (r) { return r.json(); })
-      .then(function (data) { return (data && data.policy) || data || {}; })
-      .catch(function () { return {}; });
+      .then(function (data) {
+        var policy = (data && data.policy) || data || {};
+        if (policy && (policy.liffId || policy.accountingGasWebAppUrl)) savePolicyCache(policy);
+        return policy;
+      })
+      .catch(function () { return tryLoadPolicyCache() || {}; });
   }
 
   function loadPolicyAndSession() {
     return fetchAccountingPolicy().then(function (policy) {
+      policy = policy || {};
       if (policy && policy.accountingGasWebAppUrl) {
         CONFIG.apiUrl = policy.accountingGasWebAppUrl;
         if ($('gasUrlInput')) $('gasUrlInput').value = CONFIG.apiUrl;
@@ -708,24 +779,34 @@
         var q = new URLSearchParams(location.search);
         CONFIG.apiUrl = q.get('api') || CFG.GAS_URL || '';
       }
+      if (!CONFIG.liffId && CFG.LIFF_ID) CONFIG.liffId = CFG.LIFF_ID;
 
       if (CONFIG.authBypass || ($('devBypassInput') && $('devBypassInput').checked)) {
         CONFIG.authBypass = true;
         state.userName = '開發模式';
         $('userLine').textContent = state.userName;
+        setLoadingMsg('正在確認服務…');
         return apiPost('sketchup_render_ping', {});
       }
 
-      if (!CONFIG.liffId) throw new Error('尚未設定 LIFF');
+      if (!CONFIG.liffId) {
+        throw new Error('尚未設定 LIFF（請從 LINE 開啟，或稍後再試）');
+      }
+      if (typeof liff === 'undefined') {
+        throw new Error('LINE 登入元件未載入，請重新整理');
+      }
+
+      setLoadingMsg('正在登入 LINE…');
       return liff.init({ liffId: CONFIG.liffId }).then(function () {
         if (!liff.isLoggedIn()) {
-          liff.login({ redirectUri: location.href });
+          liff.login({ redirectUri: location.href.split('#')[0] });
           return Promise.reject(new Error('導向登入'));
         }
         return liff.getProfile().then(function (p) {
           state.userName = p.displayName || p.userId;
           $('userLine').textContent = state.userName;
           state.idToken = liff.getIDToken();
+          setLoadingMsg('正在確認服務…');
           return apiPost('sketchup_render_ping', {});
         });
       });
@@ -742,6 +823,7 @@
         || location.hostname === '127.0.0.1';
     }
     CONFIG.apiUrl = ($('gasUrlInput') && $('gasUrlInput').value.trim()) || CFG.GAS_URL || '';
+    CONFIG.liffId = CFG.LIFF_ID || '';
     CONFIG.authBypass = $('devBypassInput') && $('devBypassInput').checked;
 
     if (!CONFIG.apiUrl) {
@@ -749,6 +831,7 @@
       return;
     }
 
+    setLoadingMsg('正在連線後端…');
     loadPolicyAndSession()
       .then(function (ping) {
         if (!ping || !ping.success) throw new Error((ping && ping.message) || '連線失敗');
