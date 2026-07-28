@@ -23,4 +23,5 @@ HUB 入口與後端認證門檻由 ≥ 3 降為 ≥ 2，權限 2 即可使用渲
 
 - CODING：僅推送本變更（`Dashboard.js`／SPEC／本 LOG）；未含工作區其他選材 WIP
 - accounting-gas：**@239**（見後端 LOG）
-- 補修連結：待 push（漏 return 暴露）
+- 補修連結：`aff2a7a`（漏 return 暴露）
+- 再修：HUB「開啟網站」改 `liff.openWindow({ external: true })`（LINE 內 `_blank` 常無反應）

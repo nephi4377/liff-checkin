@@ -93,6 +93,17 @@ export default {
         const sketchupRenderStudioPublicUrl = 'https://info.tanxin.space/tools/sketchup-render-studio/';
         const sketchupRenderStudioUrlCopied = ref(false);
         let sketchupRenderStudioCopyTimer = null;
+        /** LINE 內 target=_blank 常無反應；優先用 openWindow 開外部瀏覽器 */
+        const openSketchupRenderStudio = () => {
+            const url = sketchupRenderStudioPublicUrl;
+            try {
+                if (typeof liff !== 'undefined' && typeof liff.openWindow === 'function') {
+                    liff.openWindow({ url: url, external: true });
+                    return;
+                }
+            } catch (e) { /* fall through */ }
+            window.open(url, '_blank', 'noopener,noreferrer');
+        };
         const copySketchupRenderStudioUrl = () => {
             const url = sketchupRenderStudioPublicUrl;
             if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
@@ -427,6 +438,7 @@ export default {
             copyFbPostStudioUrl,
             sketchupRenderStudioPublicUrl,
             sketchupRenderStudioUrlCopied,
+            openSketchupRenderStudio,
             copySketchupRenderStudioUrl,
             formatTimeAgo,
             handleReply,
@@ -656,8 +668,8 @@ export default {
                         <h2 class="text-base font-bold text-gray-800 leading-tight">SketchUp 渲染工作室</h2>
                         <p class="text-xs text-gray-500 mt-1 leading-snug">上傳 SketchUp 截圖 → AI 寫實室內渲染，支援多圖批次與燈光標籤（獨立分頁）。</p>
                         <div class="flex flex-wrap items-center gap-2 mt-2">
-                            <a :href="sketchupRenderStudioPublicUrl" target="_blank" rel="noopener noreferrer"
-                                class="inline-flex items-center text-xs font-semibold bg-white text-amber-800 border border-amber-300 py-1 px-2.5 rounded-md hover:bg-amber-50">開啟網站</a>
+                            <button type="button" @click="openSketchupRenderStudio"
+                                class="inline-flex items-center text-xs font-semibold bg-white text-amber-800 border border-amber-300 py-1 px-2.5 rounded-md hover:bg-amber-50">開啟網站</button>
                             <button type="button" @click="copySketchupRenderStudioUrl"
                                 class="inline-flex items-center text-xs font-semibold bg-amber-600 text-white py-1 px-2.5 rounded-md hover:bg-amber-700">
                                 {{ sketchupRenderStudioUrlCopied ? '已複製' : '複製連結' }}
