@@ -89,7 +89,7 @@ export default {
             });
         };
 
-        /** SketchUp 渲染工作室：外部靜態工具（權限 ≥ 3） */
+        /** SketchUp 渲染工作室：外部靜態工具（權限 ≥ 2） */
         const sketchupRenderStudioPublicUrl = 'https://info.tanxin.space/tools/sketchup-render-studio/';
         const sketchupRenderStudioUrlCopied = ref(false);
         let sketchupRenderStudioCopyTimer = null;
@@ -645,8 +645,8 @@ export default {
                     </div>
                 </div>
 
-                <!-- 4d. SketchUp 渲染工作室（外部工具；權限 ≥ 3） -->
-                <div v-if="currentUser && currentUser.permission >= 3"
+                <!-- 4d. SketchUp 渲染工作室（外部工具；權限 ≥ 2） -->
+                <div v-if="currentUser && currentUser.permission >= 2"
                     class="bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-amber-500 p-4 flex items-start gap-3">
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center text-xl">🏠</div>
                     <div class="min-w-0 flex-1">

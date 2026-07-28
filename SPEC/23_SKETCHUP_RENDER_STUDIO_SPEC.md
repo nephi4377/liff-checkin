@@ -22,7 +22,7 @@
 | `tools/sketchup-render-studio/app.js` | 前端邏輯（LIFF／dev bypass、批次 API） |
 | `tools/sketchup-render-studio/config.js` | `GAS_URL`、`PUBLIC_URL`、`MAX_IMAGES` |
 | `tools/sketchup-render-studio/styles.css` | 版面樣式 |
-| `spa/Dashboard.js` | HUB 卡片（權限 ≥ 3；外連） |
+| `spa/Dashboard.js` | HUB 卡片（權限 ≥ 2；外連） |
 
 ---
 
@@ -38,7 +38,7 @@
 
 ## API（accounting-gas）
 
-認證同 FB 發文工作室／AI 實驗室：LIFF 權限 ≥ 3，或 `secret`／`dev_bypass`。
+認證：LIFF 權限 ≥ 2，或 `secret`／`dev_bypass`（後端 `resolveSketchupRenderAuth_`；與 AI 實驗室門檻分開）。
 
 | action | 說明 |
 |--------|------|
