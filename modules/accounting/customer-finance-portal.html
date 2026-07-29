@@ -47,6 +47,17 @@
     .adj-table .num { text-align: right; white-space: nowrap; }
     .adj-table .neg { color: #c5221f; }
     .btn:disabled, .btn.is-busy { opacity: 0.65; cursor: wait; }
+    .tag-part { background: #f3e8ff; color: #6b21a8; }
+    .mat-photo { width: 88px; height: 88px; object-fit: cover; border-radius: 8px; margin: 6px 6px 0 0; cursor: pointer; }
+    .lightbox {
+      position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 9999;
+      display: flex; align-items: center; justify-content: center; padding: 16px;
+    }
+    .lightbox img { max-width: 100%; max-height: 90vh; border-radius: 8px; }
+    .lightbox-close {
+      position: absolute; top: 12px; right: 12px; background: #fff; border: none;
+      border-radius: 8px; padding: 10px 14px; font-size: 14px; font-weight: 600; min-height: 44px; cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -72,7 +83,7 @@
       <div class="card menu-card" id="cardMaterial" style="cursor:pointer;text-align:center;padding:24px 14px;">
         <div style="font-size:32px;margin-bottom:8px;">🎨</div>
         <h3 style="margin:0;font-size:18px;">選材</h3>
-        <p style="color:#555;font-size:13px;margin:6px 0 0;">查看設計師為您安排的材料</p>
+        <p style="color:#555;font-size:13px;margin:6px 0 0;">唯讀查看設計師放在案件 Dropbox 的選材照片。舊檔掃描進來的可能標「未分類」，內容仍以照片為準。</p>
       </div>
     </div>
 
@@ -99,6 +110,7 @@
       <button class="btn btn-secondary" id="btnBackFromMat" style="margin-bottom:12px;">← 返回</button>
       <div class="card">
         <h3 style="margin:0 0 8px">選材清單</h3>
+        <div class="warn-box">此頁只能看，不能改。若內容不對，請通知設計師重新整理選材。</div>
         <div id="matList">載入中…</div>
       </div>
     </div>
@@ -407,6 +419,21 @@
     $('btnBackFromRec').onclick = showMainMenu;
     $('btnBackFromMat').onclick = showMainMenu;
 
+    function splitLabels(raw) {
+      return String(raw || '').split(/[、,;｜|]/).map(function (s) { return s.trim(); }).filter(Boolean);
+    }
+
+    function openMatLightbox(url) {
+      var box = document.createElement('div');
+      box.className = 'lightbox';
+      box.setAttribute('role', 'dialog');
+      box.innerHTML = '<button type="button" class="lightbox-close">關閉</button><img src="' + url + '" alt="選材照片大圖" />';
+      function close() { if (box.parentNode) box.parentNode.removeChild(box); }
+      box.querySelector('.lightbox-close').onclick = close;
+      box.addEventListener('click', function (e) { if (e.target === box) close(); });
+      document.body.appendChild(box);
+    }
+
     /* ── 選材唯讀載入 ── */
     async function loadMaterials() {
       var pno = $('projectSelect').value;
@@ -415,24 +442,49 @@
       try {
         var portalOpts = staffPreview ? { staffPreview: true } : {};
         var res = await AccountingApi.materialPortalList(session, pno, portalOpts);
-        if (!res.success) { $('matList').innerHTML = '<p>' + (res.message || '載入失敗') + '</p>'; return; }
+        if (!res.success) {
+          $('matList').innerHTML = '<p>' + (res.message || '載入失敗，請稍後再試') +
+            '</p><button type="button" class="btn btn-secondary" id="btnRetryMat">再試一次</button>';
+          var retry = $('btnRetryMat');
+          if (retry) retry.onclick = loadMaterials;
+          return;
+        }
         if (!res.items || !res.items.length) { $('matList').innerHTML = '<p>目前尚無選材資料</p>'; return; }
         $('matList').innerHTML = res.items.map(function (m) {
-          var photos = (m.photo_urls || '').split(',').filter(Boolean);
+          var photos = (m.photo_urls || '').split(/[,;]/).map(function (s) { return s.trim(); }).filter(Boolean);
           var photoHtml = photos.length ? photos.map(function (u) {
-            return '<img src="' + u + '" style="width:80px;height:80px;object-fit:cover;border-radius:6px;margin:4px 4px 0 0;" />';
+            return '<img class="mat-photo" src="' + u + '" alt="選材照片" data-full="' + u + '" />';
           }).join('') : '';
-          return '<div style="padding:10px 0;border-bottom:1px solid #eee">' +
-            '<span class="tag">' + (m.category || '—') + '</span> ' +
-            '<strong>' + (m.item_name || '—') + '</strong><br/>' +
-            (m.spec ? '<span style="font-size:13px;color:#555">規格：' + m.spec + '</span><br/>' : '') +
-            (m.unit || m.quantity ? '<span style="font-size:13px;color:#555">' + (m.quantity || '') + ' ' + (m.unit || '') + '</span><br/>' : '') +
-            (m.note ? '<span style="font-size:13px;color:#888">備註：' + m.note + '</span><br/>' : '') +
-            (photoHtml ? '<div style="margin-top:6px">' + photoHtml + '</div>' : '') +
+          var spaceLabels = splitLabels(m.space_labels);
+          var partLabels = splitLabels(m.part_labels);
+          var labelHtml = '';
+          if (spaceLabels.length) {
+            labelHtml += spaceLabels.map(function (l) { return '<span class="tag">' + l + '</span>'; }).join(' ');
+          }
+          if (partLabels.length) {
+            labelHtml += (labelHtml ? ' ' : '') +
+              partLabels.map(function (l) { return '<span class="tag tag-part">' + l + '</span>'; }).join(' ');
+          }
+          if (!labelHtml) {
+            labelHtml = m.item_name
+              ? '<span class="tag">' + (m.category || '材料') + '</span> <strong>' + m.item_name + '</strong>'
+              : '<span class="tag">選材</span>';
+          }
+          return '<div style="padding:12px 0;border-bottom:1px solid #eee">' +
+            labelHtml +
+            (m.selected_at ? '<div style="font-size:14px;color:#555;margin-top:6px">定案日：' + m.selected_at + '</div>' : '') +
+            (m.note ? '<div style="font-size:14px;color:#666;margin-top:4px">補充說明：' + m.note + '</div>' : '') +
+            (photoHtml ? '<div style="margin-top:8px">' + photoHtml + '</div>' : '<div style="font-size:13px;color:#999;margin-top:6px">尚無照片</div>') +
             '</div>';
         }).join('');
+        $('matList').querySelectorAll('img[data-full]').forEach(function (img) {
+          img.addEventListener('click', function () { openMatLightbox(img.getAttribute('data-full') || img.src); });
+        });
       } catch (e) {
-        $('matList').innerHTML = '<p>載入錯誤：' + (e.message || e) + '</p>';
+        $('matList').innerHTML = '<p>載入失敗，請稍後再試</p>' +
+          '<button type="button" class="btn btn-secondary" id="btnRetryMat">再試一次</button>';
+        var retry2 = $('btnRetryMat');
+        if (retry2) retry2.onclick = loadMaterials;
       }
     }
 

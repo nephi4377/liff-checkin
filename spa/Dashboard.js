@@ -50,6 +50,7 @@ export default {
         const budgetWebUrl = computed(() => `#/budget-web`);
         const budgetAuditUrl = computed(() => `#/budget-audit`);
         const accountingHubUrl = computed(() => '#/accounting');
+        const materialSelectionUrl = computed(() => '#/material-selection');
 
         /** 副本文字冒險：外部靜態站（非 iframe）；完整 URL 供開啟／複製 */
         const storyAdventurePublicUrl = 'https://info.tanxin.space/tools/story-adventure/';
@@ -425,6 +426,7 @@ export default {
             presenceDotClass,
             employeeEditorUrl,
             reportUrl,
+            materialSelectionUrl,
             layoutPlannerUrl,
             floorplanStraightenerUrl,
             budgetWebUrl,
@@ -601,6 +603,16 @@ export default {
                     <div class="min-w-0 flex-1">
                         <h2 class="text-base font-bold text-gray-800 leading-tight">施工回報</h2>
                         <p class="text-xs text-gray-500 mt-1 leading-snug">在此上傳每日施工進度與照片。</p>
+                    </div>
+                </a>
+
+                <!-- 3b. 選材（專案／設計線；非會計） -->
+                <a v-if="currentUser && currentUser.permission >= 2" :href="materialSelectionUrl"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-sky-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center text-xl">🎨</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">選材</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">登記案場材料照片與空間；客人立刻可見。</p>
                     </div>
                 </a>
 

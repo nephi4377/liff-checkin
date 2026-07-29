@@ -1,4 +1,4 @@
-import Dashboard from './Dashboard.js?v=26.07.24.1';
+import Dashboard from './Dashboard.js?v=26.07.28.1';
 import ProjectBoard from './ProjectBoard.js';
 import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.07.24.1';
 import HubLeftSidebar from './HubLeftSidebar.js?v=26.06.21.5';
@@ -179,6 +179,7 @@ const App = {
             // [v424.0 架構優化] 將專案工作區與施工回報改為內嵌 iframe
             '#/project-console': { name: 'iframe', src: 'modules/projects/managementconsole.html', title: '專案工作區' }, // [v543.0 修正] 改為正確的模組路徑
             '#/report': { name: 'iframe', src: 'modules/projects/reportV3.html', title: '施工回報' }, // [v605.3] 修正相容性後重新啟用 V3 版本
+            '#/material-selection': { name: 'iframe', src: 'modules/projects/designer-material-selection.html', title: '選材管理' },
             // 【您的要求】新增互動式室內設計規劃工具與平面圖校正工具的路由
             '#/layout-planner': { name: 'iframe', src: 'modules/InteriorDesigned/LP_LayoutPlanner.html', title: '互動式室內設計規劃工具' },
             '#/floorplan-straightener': { name: 'iframe', src: 'modules/InteriorDesigned/floorplan-straightener.html', title: '平面圖校正工具' },

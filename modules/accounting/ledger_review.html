@@ -198,14 +198,13 @@
         document.getElementById('app').classList.remove('hidden');
       }
       function buildFilter() {
-        var f = {};
+        var f = { tab: activeTab };
         var rs = document.getElementById('filterReview').value;
         var ps = document.getElementById('filterPay').value;
         var kw = document.getElementById('filterKw').value.trim();
         f.review_status = rs;
         if (ps) f.payment_status = ps;
         if (kw) f.keyword = kw;
-        f.tab = activeTab;
         return f;
       }
       function fmtMoney(n) {
@@ -1085,6 +1084,16 @@
       }
 
       document.getElementById('reloadBtn').addEventListener('click', function () { loadList(false, true); });
+      ['filterReview', 'filterPay', 'filterKw'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('change', function () { loadList(false, true); });
+        if (id === 'filterKw') {
+          el.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') loadList(false, true);
+          });
+        }
+      });
       document.getElementById('bulkApproveBtn').addEventListener('click', bulkApprove);
       document.querySelectorAll('.tab-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -1103,7 +1112,10 @@
           onReady: async function (sess) {
             session = sess;
             updateTabUi();
-            await loadList();
+            if (typeof AccountingListCache !== 'undefined') {
+              AccountingListCache.invalidatePrefix(session, 'ledger_review:');
+            }
+            await loadList(false, true);
           }
         });
       })();

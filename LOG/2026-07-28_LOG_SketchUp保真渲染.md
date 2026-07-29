@@ -20,4 +20,5 @@
 
 ## 部署
 
-- 待：accounting-gas clasp + CODING push
+- accounting-gas：**@240**（2026-07-28）
+- CODING：`c1af28c`

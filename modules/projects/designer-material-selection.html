@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>選材管理</title>
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/operator_context.js?v=1"></script>
+  <script src="../../shared/js/accounting_api.js?v=44"></script>
+  <style>
+    body { max-width: 720px; margin: 0 auto; padding: 16px; font-family: system-ui, sans-serif; background: #f9fafb; }
+    h2 { margin: 0 0 12px; font-size: 20px; }
+    .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); border: 1px solid #f3f4f6; }
+    .tag { display: inline-block; font-size: 12px; padding: 4px 8px; border-radius: 6px; background: #e8f0fe; color: #174ea6; margin: 2px 4px 2px 0; }
+    .tag-part { background: #f3e8ff; color: #6b21a8; }
+    .tag-void { background: #fce8e6; color: #c5221f; }
+    .btn { display: block; width: 100%; padding: 14px; border: none; border-radius: 8px; font-weight: 600; font-size: 15px; margin-top: 8px; cursor: pointer; min-height: 48px; }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-secondary { background: #e8eaed; color: #333; }
+    .btn-danger { background: #fce8e6; color: #c5221f; }
+    .btn-sm { display: inline-block; width: auto; padding: 10px 14px; font-size: 14px; margin: 6px 6px 0 0; min-height: 44px; }
+    .btn:disabled { opacity: 0.6; cursor: wait; }
+    select, input, textarea { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; margin-top: 6px; }
+    select:focus, input:focus, textarea:focus { outline: none; box-shadow: 0 0 0 2px rgba(37,99,235,.35); border-color: #2563eb; }
+    textarea { min-height: 72px; resize: vertical; }
+    label { display: block; font-weight: 600; font-size: 14px; margin-top: 14px; }
+    .hint { font-size: 13px; color: #6b7280; font-weight: 400; margin-top: 4px; line-height: 1.4; }
+    #msg { color: #c5221f; font-size: 14px; margin: 8px 0; line-height: 1.45; }
+    #msg.ok { color: #15803d; }
+    .hidden { display: none; }
+    .mat-item { padding: 14px 0; border-bottom: 1px solid #eee; }
+    .mat-item img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; margin: 6px 6px 0 0; cursor: pointer; }
+    .audit-row { font-size: 13px; color: #555; padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
+    .chip-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 12px; border-radius: 8px; border: 1px solid #d1d5db;
+      background: #fff; cursor: pointer; font-size: 14px; user-select: none;
+      min-height: 44px;
+    }
+    .chip input { width: auto; margin: 0; }
+    .chip.on { border-color: #2563eb; background: #eff6ff; color: #1e40af; font-weight: 600; }
+    .chip.part.on { border-color: #7c3aed; background: #f5f3ff; color: #5b21b6; }
+    .lightbox {
+      position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 9999;
+      display: flex; align-items: center; justify-content: center; padding: 16px;
+    }
+    .lightbox img { max-width: 100%; max-height: 90vh; border-radius: 8px; }
+    .lightbox-close {
+      position: absolute; top: 12px; right: 12px; background: #fff; border: none;
+      border-radius: 8px; padding: 10px 14px; font-size: 14px; font-weight: 600; min-height: 44px; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">載入中…</div>
+  <div id="app" class="hidden">
+    <h2>選材管理</h2>
+    <p class="hint" style="margin:0 0 8px">存檔後客人立刻看得到；照片會存進案件 Dropbox 的「選材」資料夾。改錯請「作廢」後再新增，不要直接改舊筆。歷史舊檔若曾用自由命名匯入，空間可能顯示「未分類」或從檔名猜到的空間，可作廢後用標準標籤重建。</p>
+    <div id="msg" role="status" aria-live="polite"></div>
+
+    <div class="card">
+      <label for="projectSelect">選擇案號</label>
+      <select id="projectSelect"><option value="">—</option></select>
+    </div>
+
+    <div id="listView">
+      <button type="button" class="btn btn-primary" id="btnAdd">＋ 新增選材</button>
+      <div id="matList" style="margin-top:12px;">請先選擇案號</div>
+      <div class="card" id="auditSection" style="margin-top:16px;">
+        <h3 style="margin:0 0 8px;font-size:15px;">變更歷程</h3>
+        <div id="auditList">—</div>
+      </div>
+    </div>
+
+    <div id="formView" class="hidden">
+      <button type="button" class="btn btn-secondary" id="btnBackToList">← 返回列表</button>
+      <div class="card">
+        <h3 id="formTitle" style="margin:0 0 8px">新增選材</h3>
+        <p class="hint" style="margin:0 0 4px">這一筆＝哪幾個空間、哪些部位／材料定了什麼樣（靠照片＋標籤說清楚）。</p>
+
+        <label>空間標籤（可複選，至少一個）</label>
+        <div class="hint">常用：客餐廳、主臥、次臥、全室、玄關、衛浴、陽台</div>
+        <div class="chip-grid" id="spaceGrid"></div>
+
+        <label>部位／材料標籤（可複選）</label>
+        <div class="hint">地板、磁磚、油漆／乳膠漆、櫃體、門板、中島／枱面、五金、燈具、窗簾、其他</div>
+        <div class="chip-grid" id="partGrid"></div>
+
+        <label for="fSelectedAt">定案日</label>
+        <div class="hint">預設為今天；選照片後可帶拍照日，也可自行修改。定案日只記在系統，不寫進檔名；檔名格式：空間_部位_流水號。</div>
+        <input type="date" id="fSelectedAt" />
+
+        <label for="fNote">補充說明（選填）</label>
+        <div class="hint">品牌、型號、色號等；可不填＝靠照片說明</div>
+        <textarea id="fNote" placeholder="例如品牌、型號、色號…"></textarea>
+
+        <label for="fPhotos">照片（1～3 張）</label>
+        <input type="file" id="fPhotos" accept="image/*" multiple />
+        <div class="hint">只收照片檔，最多 3 張。</div>
+        <div id="fPhotoPreview" style="margin-top:8px;"></div>
+        <button type="button" class="btn btn-primary" id="btnSave">儲存（客人立刻可見）</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    var session = null;
+    var SPACE_PRESETS = ['客餐廳', '主臥', '次臥', '全室', '玄關', '衛浴', '陽台'];
+    var PART_PRESETS = ['地板', '磁磚', '油漆／乳膠漆', '櫃體', '門板', '中島／枱面', '五金', '燈具', '窗簾', '其他'];
+    var urlProjectNo = '';
+    var voidBusy = false;
+
+    function $(id) { return document.getElementById(id); }
+    function showMsg(t, ok) {
+      var el = $('msg');
+      el.textContent = t || '';
+      el.className = ok ? 'ok' : '';
+    }
+
+    function todayYmd() {
+      var d = new Date();
+      var y = d.getFullYear();
+      var m = String(d.getMonth() + 1).padStart(2, '0');
+      var day = String(d.getDate()).padStart(2, '0');
+      return y + '-' + m + '-' + day;
+    }
+
+    function parseQueryProjectNo() {
+      var params = new URLSearchParams(window.location.search);
+      var p = params.get('project_no') || '';
+      var hash = window.location.hash || '';
+      if (!p && hash.indexOf('?') >= 0) {
+        try {
+          var hp = new URLSearchParams(hash.split('?')[1] || '');
+          p = hp.get('project_no') || '';
+        } catch (e) {}
+      }
+      return String(p || '').trim();
+    }
+
+    function splitLabels(raw) {
+      return String(raw || '').split(/[、,;｜|]/).map(function (s) { return s.trim(); }).filter(Boolean);
+    }
+
+    function renderChipGrid(gridId, presets, selected, partStyle) {
+      selected = selected || [];
+      var set = {};
+      selected.forEach(function (s) { set[s] = true; });
+      var el = $(gridId);
+      el.innerHTML = presets.map(function (label) {
+        var on = !!set[label];
+        return '<label class="chip' + (partStyle ? ' part' : '') + (on ? ' on' : '') + '">' +
+          '<input type="checkbox" value="' + label + '"' + (on ? ' checked' : '') + ' />' +
+          label + '</label>';
+      }).join('');
+      el.querySelectorAll('input').forEach(function (inp) {
+        inp.addEventListener('change', function () {
+          inp.closest('.chip').classList.toggle('on', inp.checked);
+        });
+      });
+    }
+
+    function getCheckedFromGrid(gridId) {
+      var out = [];
+      $(gridId).querySelectorAll('input:checked').forEach(function (inp) {
+        out.push(inp.value);
+      });
+      return out;
+    }
+
+    function fileDateYmd(file) {
+      if (!file || !file.lastModified) return todayYmd();
+      var d = new Date(file.lastModified);
+      var y = d.getFullYear();
+      var m = String(d.getMonth() + 1).padStart(2, '0');
+      var day = String(d.getDate()).padStart(2, '0');
+      return y + '-' + m + '-' + day;
+    }
+
+    function openLightbox(url) {
+      var box = document.createElement('div');
+      box.className = 'lightbox';
+      box.setAttribute('role', 'dialog');
+      box.innerHTML = '<button type="button" class="lightbox-close">關閉</button><img src="' + url + '" alt="選材照片大圖" />';
+      function close() { if (box.parentNode) box.parentNode.removeChild(box); }
+      box.querySelector('.lightbox-close').onclick = close;
+      box.addEventListener('click', function (e) { if (e.target === box) close(); });
+      document.body.appendChild(box);
+    }
+
+    function bindPhotoClicks(container) {
+      if (!container) return;
+      container.querySelectorAll('img[data-full]').forEach(function (img) {
+        img.addEventListener('click', function () { openLightbox(img.getAttribute('data-full') || img.src); });
+      });
+    }
+
+    function actionLabel(action) {
+      if (action === 'create') return '新增';
+      if (action === 'void') return '作廢';
+      if (action === 'update') return '更新照片';
+      return action || '—';
+    }
+
+    async function boot() {
+      urlProjectNo = parseQueryProjectNo();
+      try {
+        session = await AccountingApi.initSession({ minPermission: 2 });
+        if (!session) return;
+        $('loading').classList.add('hidden');
+        $('app').classList.remove('hidden');
+        renderChipGrid('spaceGrid', SPACE_PRESETS, [], false);
+        renderChipGrid('partGrid', PART_PRESETS, [], true);
+        await loadProjectOptions();
+      } catch (e) {
+        $('loading').textContent = (e && e.message) ? e.message : '載入失敗，請重新整理再試';
+      }
+    }
+
+    async function loadProjectOptions() {
+      try {
+        var overview = await AccountingApi.cfOverview(session, true);
+        if (!overview.success) {
+          showMsg(overview.message || '案號載入失敗，請稍後再試');
+          return;
+        }
+        var sel = $('projectSelect');
+        var projects = overview.projects || [];
+        sel.innerHTML = '<option value="">— 選擇案號 —</option>' +
+          projects.map(function (p) {
+            return '<option value="' + p.project_no + '">' + p.project_no + ' ' + (p.site_name || '') + '</option>';
+          }).join('');
+        if (urlProjectNo) {
+          sel.value = urlProjectNo;
+          if (sel.value !== urlProjectNo) {
+            var opt = document.createElement('option');
+            opt.value = urlProjectNo;
+            opt.textContent = urlProjectNo + '（網址帶入）';
+            sel.appendChild(opt);
+            sel.value = urlProjectNo;
+          }
+          loadList();
+          loadAudit();
+        }
+      } catch (e) {
+        showMsg('案號載入失敗：' + ((e && e.message) || '請檢查網路後再試'));
+      }
+    }
+
+    $('projectSelect').onchange = function () {
+      if (this.value) {
+        loadList();
+        loadAudit();
+      } else {
+        $('matList').innerHTML = '請先選擇案號';
+      }
+    };
+
+    function splitPhotos(raw) {
+      return String(raw || '').split(/[,;]/).map(function (s) { return s.trim(); }).filter(Boolean);
+    }
+
+    async function loadList() {
+      var pno = $('projectSelect').value;
+      if (!pno) return;
+      $('matList').innerHTML = '載入中…';
+      try {
+        var res = await AccountingApi.materialDesignerList(session, pno);
+        if (!res.success) { $('matList').innerHTML = '<p>' + (res.message || '載入失敗，請稍後再試') + '</p>'; return; }
+        if (res.space_label_presets && res.space_label_presets.length) {
+          SPACE_PRESETS = res.space_label_presets;
+        }
+        if (res.part_label_presets && res.part_label_presets.length) {
+          PART_PRESETS = res.part_label_presets;
+        }
+        if (!res.items || !res.items.length) { $('matList').innerHTML = '<p>尚無選材紀錄</p>'; return; }
+        $('matList').innerHTML = res.items.map(function (m) {
+          var isVoid = m.status === 'void';
+          var photos = splitPhotos(m.photo_urls);
+          var photoHtml = photos.map(function (u) {
+            return '<img src="' + u + '" alt="選材照片" data-full="' + u + '" />';
+          }).join('');
+          var spaceLabels = splitLabels(m.space_labels);
+          var partLabels = splitLabels(m.part_labels);
+          var labelHtml = '';
+          if (spaceLabels.length) {
+            labelHtml += spaceLabels.map(function (l) { return '<span class="tag">' + l + '</span>'; }).join('');
+          }
+          if (partLabels.length) {
+            labelHtml += partLabels.map(function (l) { return '<span class="tag tag-part">' + l + '</span>'; }).join('');
+          }
+          if (!labelHtml) {
+            labelHtml = m.item_name
+              ? '<span class="tag">' + (m.category || '舊資料') + '</span> <strong>' + m.item_name + '</strong>'
+              : '<span class="tag">—</span>';
+          }
+          var btns = '';
+          if (!isVoid) {
+            btns =
+              '<button type="button" class="btn btn-sm btn-danger" data-void="' + m.material_id + '">作廢</button>' +
+              '<button type="button" class="btn btn-sm btn-secondary" data-void-new="' + m.material_id + '">作廢並新建</button>';
+          }
+          return '<div class="mat-item">' +
+            (isVoid ? '<span class="tag tag-void">已作廢</span> ' : '') +
+            labelHtml +
+            (m.selected_at ? '<div style="font-size:13px;color:#555;margin-top:6px">定案日：' + m.selected_at + '</div>' : '') +
+            (m.note ? '<div style="font-size:13px;color:#666;margin-top:2px">補充說明：' + m.note + '</div>' : '') +
+            (photoHtml ? '<div class="photo-row">' + photoHtml + '</div>' : '<div class="hint">尚無照片</div>') +
+            btns + '</div>';
+        }).join('');
+        bindPhotoClicks($('matList'));
+        $('matList').querySelectorAll('[data-void]').forEach(function (btn) {
+          btn.addEventListener('click', function () { window._voidMaterial(btn.getAttribute('data-void')); });
+        });
+        $('matList').querySelectorAll('[data-void-new]').forEach(function (btn) {
+          btn.addEventListener('click', function () { window._voidThenNew(btn.getAttribute('data-void-new')); });
+        });
+      } catch (e) {
+        $('matList').innerHTML = '<p>載入失敗：' + ((e && e.message) || '請稍後再試') + '</p>';
+      }
+    }
+
+    async function loadAudit() {
+      var pno = $('projectSelect').value;
+      if (!pno) return;
+      try {
+        var res = await AccountingApi.materialAuditLog(session, { project_no: pno });
+        if (!res.success || !res.logs || !res.logs.length) {
+          $('auditList').innerHTML = '（尚無變更紀錄）';
+          return;
+        }
+        $('auditList').innerHTML = res.logs.slice().reverse().map(function (log) {
+          return '<div class="audit-row">' +
+            '<strong>' + actionLabel(log.action) + '</strong> · ' + (log.actor_name || '—') +
+            ' · ' + (log.occurred_at || '') +
+            (log.diff_summary ? '<br/>' + log.diff_summary : '') +
+            '</div>';
+        }).join('');
+      } catch (e) {
+        $('auditList').innerHTML = '歷程載入失敗，請稍後再試';
+      }
+    }
+
+    function openCreateForm(prefill) {
+      if (!$('projectSelect').value) { showMsg('請先選擇案號'); return; }
+      clearForm();
+      if (prefill) {
+        renderChipGrid('spaceGrid', SPACE_PRESETS, splitLabels(prefill.space_labels), false);
+        renderChipGrid('partGrid', PART_PRESETS, splitLabels(prefill.part_labels), true);
+        if (prefill.selected_at) $('fSelectedAt').value = prefill.selected_at;
+        if (prefill.note) $('fNote').value = prefill.note;
+      }
+      $('formTitle').textContent = '新增選材';
+      $('listView').classList.add('hidden');
+      $('formView').classList.remove('hidden');
+      showMsg('');
+    }
+
+    $('btnAdd').onclick = function () { openCreateForm(null); };
+    $('btnBackToList').onclick = function () {
+      $('formView').classList.add('hidden');
+      $('listView').classList.remove('hidden');
+      showMsg('');
+    };
+
+    function clearForm() {
+      renderChipGrid('spaceGrid', SPACE_PRESETS, [], false);
+      renderChipGrid('partGrid', PART_PRESETS, [], true);
+      $('fSelectedAt').value = todayYmd();
+      delete $('fSelectedAt').dataset.userEdited;
+      $('fNote').value = '';
+      $('fPhotos').value = '';
+      $('fPhotoPreview').innerHTML = '';
+    }
+
+    $('fPhotos').onchange = function () {
+      var files = this.files;
+      var preview = $('fPhotoPreview');
+      preview.innerHTML = '';
+      if (!files || !files.length) return;
+      if (files.length > 3) {
+        showMsg('最多 3 張照片，請重新選擇');
+        this.value = '';
+        return;
+      }
+      if (!$('fSelectedAt').dataset.userEdited) {
+        $('fSelectedAt').value = fileDateYmd(files[0]);
+      }
+      for (var i = 0; i < files.length; i++) {
+        (function (file) {
+          var reader = new FileReader();
+          reader.onload = function () {
+            var img = document.createElement('img');
+            img.src = reader.result;
+            img.alt = '預覽';
+            img.style.cssText = 'width:80px;height:80px;object-fit:cover;border-radius:6px;margin:4px;';
+            preview.appendChild(img);
+          };
+          reader.readAsDataURL(file);
+        })(files[i]);
+      }
+    };
+
+    $('fSelectedAt').addEventListener('change', function () {
+      this.dataset.userEdited = '1';
+    });
+
+    window._voidMaterial = async function (mid) {
+      if (voidBusy) return;
+      if (!confirm('確定要作廢此選材？\n作廢後客人不再看到這筆。\n（可先取消）')) return;
+      voidBusy = true;
+      showMsg('處理中…');
+      try {
+        var res = await AccountingApi.materialVoid(session, mid);
+        if (!res.success) { showMsg(res.message || '作廢失敗，請稍後再試'); return; }
+        showMsg('已作廢，客人端不會再看到這筆', true);
+        loadList();
+        loadAudit();
+      } catch (e) {
+        showMsg('作廢失敗：' + ((e && e.message) || '請檢查網路後再試'));
+      } finally {
+        voidBusy = false;
+      }
+    };
+
+    /** 作廢後開啟新增表單，並帶入原空間／部位／定案日／補充說明方便改錯 */
+    window._voidThenNew = async function (mid) {
+      if (voidBusy) return;
+      if (!confirm('將作廢這筆，並開啟新增表單（可帶入原空間、部位／材料與定案日）。\n確定？（可先取消）')) return;
+      voidBusy = true;
+      showMsg('處理中…');
+      try {
+        var pno = $('projectSelect').value;
+        var listRes = await AccountingApi.materialDesignerList(session, pno);
+        var m = (listRes.items || []).find(function (x) { return x.material_id === mid; });
+        var voidRes = await AccountingApi.materialVoid(session, mid);
+        if (!voidRes.success) { showMsg(voidRes.message || '作廢失敗，請稍後再試'); return; }
+        loadList();
+        loadAudit();
+        openCreateForm(m ? {
+          space_labels: m.space_labels,
+          part_labels: m.part_labels,
+          selected_at: m.selected_at || todayYmd(),
+          note: m.note || ''
+        } : null);
+        showMsg('已作廢原筆，請補照片後儲存新筆（客人只會看到新筆）', true);
+      } catch (e) {
+        showMsg('操作失敗：' + ((e && e.message) || '請稍後再試'));
+      } finally {
+        voidBusy = false;
+      }
+    };
+
+    $('btnSave').onclick = async function () {
+      var btn = $('btnSave');
+      if (btn.disabled) return;
+      btn.disabled = true;
+      btn.textContent = '處理中…';
+      showMsg('');
+      try {
+        var spaces = getCheckedFromGrid('spaceGrid');
+        if (!spaces.length) { showMsg('請至少選一個空間標籤'); return; }
+        var parts = getCheckedFromGrid('partGrid');
+        var files = $('fPhotos').files;
+        if (!files || files.length < 1) { showMsg('請至少上傳 1 張照片'); return; }
+        if (files.length > 3) { showMsg('最多 3 張照片'); return; }
+        if (!$('projectSelect').value) { showMsg('請先選擇案號'); return; }
+
+        var payload = {
+          project_no: $('projectSelect').value,
+          space_labels: spaces,
+          part_labels: parts,
+          selected_at: $('fSelectedAt').value || todayYmd(),
+          note: $('fNote').value
+        };
+        var res = await AccountingApi.materialCreate(session, payload);
+        if (!res.success) { showMsg(res.message || '儲存失敗，請稍後再試'); return; }
+        var mid = res.material_id;
+
+        var photos = [];
+        for (var i = 0; i < files.length; i++) {
+          photos.push(await readFileAsBase64_(files[i]));
+        }
+        var upRes = await AccountingApi.materialUploadPhoto(session, {
+          material_id: mid,
+          project_no: $('projectSelect').value,
+          photos: photos
+        });
+        if (!upRes.success) {
+          showMsg('選材文字已建立，但照片上傳失敗：' + (upRes.message || '請檢查網路') + '。請作廢這筆後重試。');
+        } else {
+          showMsg('已儲存，客人立刻可見', true);
+        }
+
+        $('formView').classList.add('hidden');
+        $('listView').classList.remove('hidden');
+        loadList();
+        loadAudit();
+      } catch (e) {
+        showMsg('儲存失敗：' + ((e && e.message) || '請檢查網路後再試'));
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '儲存（客人立刻可見）';
+      }
+    };
+
+    function readFileAsBase64_(file) {
+      return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function () {
+          var base64 = reader.result.split(',')[1];
+          resolve({ data_base64: base64, mime_type: file.type || 'image/jpeg', filename: file.name });
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    boot();
+  })();
+  </script>
+</body>
+</html>

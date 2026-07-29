@@ -1,6 +1,6 @@
 /**
- * LINE Rich Menu — 員工 2500×1686、廠商／客戶 2500×843（熱區與 createRichMenu.js 一致）。
- * 版型：V2 內部版＋客戶版三欄；配色：低飽和灰藍、灰綠、冷灰。
+ * LINE Rich Menu — 員工 2500×1686、廠商 2500×843、客戶未綁四格／會員六格 2500×843。
+ * 版型：V2 內部版；客戶版對齊 2026-07-28 定稿。
  *
  * 執行：npm install && node render-richmenus.mjs
  */
@@ -151,8 +151,111 @@ function vendorSvg() {
 </svg>`;
 }
 
-/** 客戶版 2500×843：三欄均分（與 createRichMenu CUSTOMER areas 對齊：834 / 833 / 833） */
-function customerSvg() {
+/** 客戶未綁｜四格 2×2（熱區與 createCustomerRichMenus.js 一致：1250×422 + 1250×421） */
+function customerGuestSvg() {
+  const w = 2500;
+  const h = 843;
+  const p = 20;
+  const r = 32;
+  const colWidths = [1250, 1250];
+  const rowHeights = [422, 421];
+  const labels = [
+    { title: "申請綁定專案", sub: "綁定裝修案", grad: "cg0", row: 0, col: 0 },
+    { title: "了解添心", sub: "公司介紹", grad: "cg1", row: 0, col: 1 },
+    { title: "常見問題", sub: "FAQ", grad: "cg2", row: 1, col: 0 },
+    { title: "Facebook", sub: "外開社群", grad: "cg3", row: 1, col: 1 },
+  ];
+  const cards = labels.map((lb) => {
+    const cellX = colWidths.slice(0, lb.col).reduce((a, b) => a + b, 0);
+    const cellY = rowHeights.slice(0, lb.row).reduce((a, b) => a + b, 0);
+    const cw = colWidths[lb.col];
+    const ch = rowHeights[lb.row];
+    const cx = cellX + cw / 2;
+    const cy = cellY + ch / 2;
+    return `
+  <g filter="url(#csh)">
+    <rect x="${cellX + p}" y="${cellY + p}" width="${cw - 2 * p}" height="${ch - 2 * p}" rx="${r}" fill="url(#${lb.grad})"/>
+  </g>
+  <text x="${cx}" y="${cy + 8}" text-anchor="middle" font-family="Segoe UI, PingFang TC, Microsoft JhengHei, sans-serif" font-size="44" font-weight="700" fill="#ffffff">${lb.title}</text>
+  <text x="${cx}" y="${cy + 58}" text-anchor="middle" font-family="Segoe UI, PingFang TC, Microsoft JhengHei, sans-serif" font-size="24" font-weight="500" fill="${M.sub}">${lb.sub}</text>`;
+  }).join("\n");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  <defs>
+    <linearGradient id="cbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="${M.bg0}"/>
+      <stop offset="100%" stop-color="${M.bg1}"/>
+    </linearGradient>
+    <linearGradient id="cg0" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${M.in0}"/><stop offset="100%" stop-color="${M.in1}"/></linearGradient>
+    <linearGradient id="cg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${M.rep0}"/><stop offset="100%" stop-color="${M.rep1}"/></linearGradient>
+    <linearGradient id="cg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${M.ct0}"/><stop offset="100%" stop-color="${M.ct1}"/></linearGradient>
+    <linearGradient id="cg3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7a8a9a"/><stop offset="100%" stop-color="#5c6773"/></linearGradient>
+    <filter id="csh" x="-5%" y="-10%" width="110%" height="125%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#1e293b" flood-opacity="0.1"/>
+    </filter>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#cbg)"/>
+${cards}
+</svg>`;
+}
+
+/** 客戶會員｜六格 3×2（熱區與 createCustomerRichMenus.js 一致：834+833+833 × 422+421） */
+function customerMemberSvg() {
+  const w = 2500;
+  const h = 843;
+  const p = 16;
+  const r = 28;
+  const colWidths = [834, 833, 833];
+  const rowHeights = [422, 421];
+  const labels = [
+    { title: "收款確認", sub: "LIFF", grad: "cm0", row: 0, col: 0 },
+    { title: "我的案場", sub: "選材", grad: "cm1", row: 0, col: 1 },
+    { title: "綁定新專案", sub: "申請", grad: "cm2", row: 0, col: 2 },
+    { title: "了解添心", sub: "落地頁", grad: "cm3", row: 1, col: 0 },
+    { title: "常見問題", sub: "FAQ", grad: "cm4", row: 1, col: 1 },
+    { title: "Facebook", sub: "外開", grad: "cm5", row: 1, col: 2 },
+  ];
+  const cards = labels.map((lb) => {
+    const cellX = colWidths.slice(0, lb.col).reduce((a, b) => a + b, 0);
+    const cellY = rowHeights.slice(0, lb.row).reduce((a, b) => a + b, 0);
+    const cw = colWidths[lb.col];
+    const ch = rowHeights[lb.row];
+    const cx = cellX + cw / 2;
+    const cy = cellY + ch / 2;
+    const fs = lb.title.length > 5 ? 32 : 36;
+    return `
+  <g filter="url(#msh)">
+    <rect x="${cellX + p}" y="${cellY + p}" width="${cw - 2 * p}" height="${ch - 2 * p}" rx="${r}" fill="url(#${lb.grad})"/>
+  </g>
+  <text x="${cx}" y="${cy + 6}" text-anchor="middle" font-family="Segoe UI, PingFang TC, Microsoft JhengHei, sans-serif" font-size="${fs}" font-weight="700" fill="#ffffff">${lb.title}</text>
+  <text x="${cx}" y="${cy + 52}" text-anchor="middle" font-family="Segoe UI, PingFang TC, Microsoft JhengHei, sans-serif" font-size="20" font-weight="500" fill="${M.sub}">${lb.sub}</text>`;
+  }).join("\n");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  <defs>
+    <linearGradient id="mbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="${M.bg0}"/>
+      <stop offset="100%" stop-color="${M.bg1}"/>
+    </linearGradient>
+    <linearGradient id="cm0" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${M.in0}"/><stop offset="100%" stop-color="${M.in1}"/></linearGradient>
+    <linearGradient id="cm1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${M.rep0}"/><stop offset="100%" stop-color="${M.rep1}"/></linearGradient>
+    <linearGradient id="cm2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#9aa8b8"/><stop offset="100%" stop-color="#7a8796"/></linearGradient>
+    <linearGradient id="cm3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${M.ct0}"/><stop offset="100%" stop-color="${M.ct1}"/></linearGradient>
+    <linearGradient id="cm4" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#8fa9a3"/><stop offset="100%" stop-color="#6e8580"/></linearGradient>
+    <linearGradient id="cm5" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7a8a9a"/><stop offset="100%" stop-color="#5c6773"/></linearGradient>
+    <filter id="msh" x="-4%" y="-10%" width="108%" height="125%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#1e293b" flood-opacity="0.1"/>
+    </filter>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#mbg)"/>
+${cards}
+</svg>`;
+}
+
+/** @deprecated 舊三格客戶版；保留供對照，不再輸出 */
+function customerSvgLegacy() {
   const w = 2500;
   const h = 843;
   const p = 28;
@@ -231,28 +334,35 @@ async function main() {
   const outDir = __dirname;
   const empSvgBuf = Buffer.from(employeeSvg(), "utf8");
   const venSvgBuf = Buffer.from(vendorSvg(), "utf8");
-  const cusSvgBuf = Buffer.from(customerSvg(), "utf8");
+  const guestSvgBuf = Buffer.from(customerGuestSvg(), "utf8");
+  const memberSvgBuf = Buffer.from(customerMemberSvg(), "utf8");
 
   const empPng = path.join(outDir, "employee_richmenu_v2.png");
   const venPng = path.join(outDir, "vendor_richmenu_v2.png");
-  const cusPng = path.join(outDir, "customer_richmenu_v2.png");
+  const guestPng = path.join(outDir, "customer_guest_richmenu_v1.png");
+  const memberPng = path.join(outDir, "customer_member_richmenu_v1.png");
   const empJpg = path.join(outDir, "employee_richmenu_v2.jpg");
   const venJpg = path.join(outDir, "vendor_richmenu_v2.jpg");
-  const cusJpg = path.join(outDir, "customer_richmenu_v2.jpg");
+  const guestJpg = path.join(outDir, "customer_guest_richmenu_v1.jpg");
+  const memberJpg = path.join(outDir, "customer_member_richmenu_v1.jpg");
 
   await sharp(empSvgBuf).png({ compressionLevel: 9 }).toFile(empPng);
   await sharp(venSvgBuf).png({ compressionLevel: 9 }).toFile(venPng);
-  await sharp(cusSvgBuf).png({ compressionLevel: 9 }).toFile(cusPng);
+  await sharp(guestSvgBuf).png({ compressionLevel: 9 }).toFile(guestPng);
+  await sharp(memberSvgBuf).png({ compressionLevel: 9 }).toFile(memberPng);
   await sharp(empSvgBuf).jpeg({ quality: 93, mozjpeg: true }).toFile(empJpg);
   await sharp(venSvgBuf).jpeg({ quality: 93, mozjpeg: true }).toFile(venJpg);
-  await sharp(cusSvgBuf).jpeg({ quality: 93, mozjpeg: true }).toFile(cusJpg);
+  await sharp(guestSvgBuf).jpeg({ quality: 93, mozjpeg: true }).toFile(guestJpg);
+  await sharp(memberSvgBuf).jpeg({ quality: 93, mozjpeg: true }).toFile(memberJpg);
 
   const em = await sharp(empPng).metadata();
   const ve = await sharp(venPng).metadata();
-  const cu = await sharp(cusPng).metadata();
-  console.log("OK", empPng, em.width, "x", em.height, "(V2 muted)");
-  console.log("OK", venPng, ve.width, "x", ve.height, "(V2 muted)");
-  console.log("OK", cusPng, cu.width, "x", cu.height, "(customer)");
+  const gu = await sharp(guestPng).metadata();
+  const me = await sharp(memberPng).metadata();
+  console.log("OK", empPng, em.width, "x", em.height, "(employee)");
+  console.log("OK", venPng, ve.width, "x", ve.height, "(vendor)");
+  console.log("OK", guestPng, gu.width, "x", gu.height, "(customer guest 2x2)");
+  console.log("OK", memberPng, me.width, "x", me.height, "(customer member 3x2)");
 }
 
 main().catch((e) => {

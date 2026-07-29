@@ -130,7 +130,7 @@
         <button type="button" class="btn btn-secondary" id="backBtn">← 返回列表</button>
         <h3 id="detailTitle" style="margin:8px 0 4px">—</h3>
         <p class="sub" id="detailSummary">—</p>
-        <p class="nav" id="cfManageLink" style="margin:8px 0"><a href="designer-customer-finance.html">管理追加減與收款 →</a> · <a href="designer-material-selection.html">選材管理 →</a></p>
+        <p class="nav" id="cfManageLink" style="margin:8px 0"><a href="designer-customer-finance.html">管理追加減與收款 →</a> · <a href="../projects/designer-material-selection.html">選材管理 →</a></p>
         <div id="detailLoading" class="hidden">載入案件資料中…</div>
       </div>
       <div id="detailPanels">
@@ -1292,7 +1292,7 @@
         if (cfLink) {
           cfLink.innerHTML = '<a href="designer-customer-finance.html?project_no=' +
             encodeURIComponent(it.project_no || '') + '">管理追加減與收款 →</a> · ' +
-            '<a href="designer-material-selection.html?project_no=' +
+            '<a href="../projects/designer-material-selection.html?project_no=' +
             encodeURIComponent(it.project_no || '') + '">選材管理 →</a>';
         }
         document.getElementById('addDate').value = todayIso();

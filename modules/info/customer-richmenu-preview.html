@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>客戶 Rich Menu 預覽（測試用）</title>
+  <style>
+    :root {
+      --bg: #f0f2f5;
+      --ink: #2b3036;
+      --muted: #5f6b7a;
+      --accent: #174ea6;
+      --banner: #e8f0fe;
+      --banner-border: #aecbfa;
+      --card-shadow: 0 8px 24px rgba(30, 41, 59, 0.08);
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+      background: linear-gradient(180deg, #f7f8fa 0%, var(--bg) 100%);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 20px 16px 48px; }
+    .badge {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #fef7e0;
+      color: #92400e;
+      margin-bottom: 8px;
+    }
+    h1 { margin: 0 0 8px; font-size: 1.6rem; }
+    .lead { color: var(--muted); margin: 0 0 16px; font-size: 15px; }
+    .notice {
+      background: var(--banner);
+      border: 1px solid var(--banner-border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      font-size: 14px;
+      color: var(--accent);
+      margin-bottom: 24px;
+    }
+    section {
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: var(--card-shadow);
+      padding: 18px 16px 20px;
+      margin-bottom: 20px;
+    }
+    section h2 { margin: 0 0 4px; font-size: 1.15rem; }
+    section .hint { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
+  .case-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 14px;
+      font-size: 14px;
+    }
+    .case-row label { font-weight: 600; }
+    .case-row input {
+      width: 88px;
+      padding: 8px 10px;
+      border: 1px solid #c4c7cc;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+    .richmenu {
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #dde1e6;
+      background: var(--bg);
+      aspect-ratio: 2500 / 843;
+      display: grid;
+      gap: 3px;
+      padding: 3px;
+    }
+    .richmenu.guest { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+    .richmenu.member { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
+    .cell {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 8px 6px 36px;
+      border-radius: 10px;
+      color: #fff;
+      min-height: 0;
+    }
+    .cell .title { font-weight: 700; font-size: clamp(11px, 2.8vw, 15px); }
+    .cell .sub { font-size: clamp(9px, 2vw, 11px); opacity: 0.85; margin-top: 2px; }
+    .cell .preview-btn {
+      position: absolute;
+      bottom: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 5px 10px;
+      border: none;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.95);
+      color: #1e293b;
+      cursor: pointer;
+      white-space: nowrap;
+      text-decoration: none;
+    }
+    .cell .preview-btn:hover { background: #fff; }
+    .c0 { background: linear-gradient(135deg, #8f9eb0, #6f7d8f); }
+    .c1 { background: linear-gradient(135deg, #8fa9a3, #6e8580); }
+    .c2 { background: linear-gradient(135deg, #8d97a3, #6f7782); }
+    .c3 { background: linear-gradient(135deg, #7a8a9a, #5c6773); }
+    .c4 { background: linear-gradient(135deg, #9aa8b8, #7a8796); }
+    .staff-links {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid #e8eaed;
+    }
+    .staff-links h3 { margin: 0 0 8px; font-size: 14px; }
+    .link-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+    .link-grid a {
+      font-size: 13px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: #f1f3f4;
+      color: #1a73e8;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .link-grid a:hover { background: #e8f0fe; }
+    footer { font-size: 12px; color: var(--muted); text-align: center; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <span class="badge">測試用 · 未上線</span>
+    <h1>客戶 Rich Menu 預覽</h1>
+    <p class="lead">在瀏覽器查看選單版面與各格連結；不必用手機 LINE 實測。下方按鈕會開啟與客人相同的網頁（員工預覽模式）。</p>
+    <div class="notice">
+      <strong>說明：</strong>本頁僅預覽版面與連結。正式 LINE 聊天室下方的 Rich Menu <strong>尚未上線</strong>。
+      「上傳圖到公開網址」是日後要在 LINE 掛選單時才需要的步驟，<strong>不是</strong>日常驗收方式。
+    </div>
+
+    <div class="case-row">
+      <label for="projectNo">預覽案號</label>
+      <input id="projectNo" type="text" inputmode="numeric" value="742" />
+      <span style="color:var(--muted);font-size:13px;">收款／案場預覽會帶此案號</span>
+    </div>
+
+    <section>
+      <h2>未綁定客戶｜四格（2×2）</h2>
+      <p class="hint">上排：申請綁定專案｜了解添心　／　下排：常見問題｜Facebook</p>
+      <div class="richmenu guest" id="guestMenu">
+        <div class="cell c0" data-key="bind">
+          <span class="title">申請綁定專案</span>
+          <span class="sub">綁定裝修案</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+        </div>
+        <div class="cell c1" data-key="landing">
+          <span class="title">了解添心</span>
+          <span class="sub">公司介紹</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+        </div>
+        <div class="cell c2" data-key="faq">
+          <span class="title">常見問題</span>
+          <span class="sub">FAQ</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+        </div>
+        <div class="cell c3" data-key="fb">
+          <span class="title">Facebook</span>
+          <span class="sub">外開社群</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>已綁定會員｜六格（3×2）</h2>
+      <p class="hint">上排：收款確認｜我的案場｜綁定新專案　／　下排：了解添心｜常見問題｜Facebook</p>
+      <div class="richmenu member" id="memberMenu">
+        <div class="cell c0" data-key="receipt">
+          <span class="title">收款確認</span>
+          <span class="sub">LIFF</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+        </div>
+        <div class="cell c1" data-key="material">
+          <span class="title">我的案場</span>
+          <span class="sub">選材</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+        </div>
+        <div class="cell c4" data-key="bind">
+          <span class="title">綁定新專案</span>
+          <span class="sub">申請</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+        </div>
+        <div class="cell c2" data-key="landing">
+          <span class="title">了解添心</span>
+          <span class="sub">落地頁</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+        </div>
+        <div class="cell c1" data-key="faq">
+          <span class="title">常見問題</span>
+          <span class="sub">FAQ</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+        </div>
+        <div class="cell c3" data-key="fb">
+          <span class="title">Facebook</span>
+          <span class="sub">外開</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="staff-links">
+      <h3>內部視角（設計師／同仁）</h3>
+      <div class="link-grid" id="staffLinks"></div>
+    </section>
+
+    <footer>圖稿比例 2500×843，與 LINE Rich Menu 一致。圖檔可由 <code>CODING/richmenu-preview</code> 產生。</footer>
+  </div>
+
+  <script>
+    (function () {
+      var ORIGIN = 'https://info.tanxin.space';
+      var PATH = {
+        portal: '../accounting/customer-finance-portal.html',
+        designer: '../projects/designer-material-selection.html',
+        landing: 'LandingPage.html',
+        faq: 'FAQ.html',
+        fb: 'https://www.facebook.com/TainanTanXin'
+      };
+
+      function abs(path) {
+        if (/^https?:\/\//i.test(path)) return path;
+        try {
+          return new URL(path, window.location.href).href;
+        } catch (e) {
+          return ORIGIN + '/modules/info/' + path.replace(/^\.\.\//, '../');
+        }
+      }
+
+      function projectNo() {
+        var v = String(document.getElementById('projectNo').value || '').trim();
+        return v || '742';
+      }
+
+      function portalPreview(qs) {
+        var base = abs(PATH.portal);
+        var p = 'staff_preview=1&project_no=' + encodeURIComponent(projectNo());
+        if (qs) p += '&' + qs;
+        return base + (base.indexOf('?') >= 0 ? '&' : '?') + p;
+      }
+
+      var TARGETS = {
+        bind: function () { return abs(PATH.landing) + '#bind-placeholder'; },
+        landing: function () { return abs(PATH.landing); },
+        faq: function () { return abs(PATH.faq); },
+        fb: function () { return PATH.fb; },
+        receipt: function () { return portalPreview(''); },
+        material: function () { return portalPreview('entity=material'); }
+      };
+
+      function wireCells(root) {
+        root.querySelectorAll('.cell[data-key]').forEach(function (cell) {
+          var key = cell.getAttribute('data-key');
+          var btn = cell.querySelector('.preview-btn');
+          if (!btn || !TARGETS[key]) return;
+          btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            window.open(TARGETS[key](), '_blank', 'noopener');
+          });
+        });
+      }
+
+      function wireStaffLinks() {
+        var pno = projectNo();
+        var links = [
+          { label: '客戶收款（預覽）', href: portalPreview('') },
+          { label: '客戶案場／選材（預覽）', href: portalPreview('entity=material') },
+          { label: '設計師選材登記', href: abs(PATH.designer) + '?project_no=' + encodeURIComponent(pno) }
+        ];
+        var box = document.getElementById('staffLinks');
+        box.innerHTML = '';
+        links.forEach(function (item) {
+          var a = document.createElement('a');
+          a.href = item.href;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = item.label;
+          box.appendChild(a);
+        });
+      }
+
+      wireCells(document.getElementById('guestMenu'));
+      wireCells(document.getElementById('memberMenu'));
+      wireStaffLinks();
+      document.getElementById('projectNo').addEventListener('change', wireStaffLinks);
+      document.getElementById('projectNo').addEventListener('input', wireStaffLinks);
+    })();
+  </script>
+</body>
+</html>
