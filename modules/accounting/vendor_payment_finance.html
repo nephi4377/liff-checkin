@@ -149,7 +149,12 @@
         if (raw === '否') return false;
         if (raw === '是') return true;
         var gross = parseInt(row && row.amount, 10) || 0;
-        return gross > REMIT_FEE;
+        if (gross <= REMIT_FEE) return false;
+        if (row && row.vendor_id) {
+          var v = vendors.find(function (x) { return x.vendor_id === row.vendor_id; });
+          if (v && String(v.remit_fee_default || '').trim() === '否') return false;
+        }
+        return true;
       }
 
       function ctbcAmountForRow(row) {

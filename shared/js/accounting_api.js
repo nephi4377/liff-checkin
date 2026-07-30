@@ -3,6 +3,8 @@
  */
 var AccountingApi = (function () {
   var GAS_API = 'https://script.google.com/macros/s/AKfycbyibVTQk2eYEYXX5vb-TUFYsLIKWEg1bADR-7w1QFSg6kly3gyDAG3GkKuvQ0PBur05DA/exec';
+  /** 選材 API — project-console（與 shared/js/config.js GAS_WEB_APP_URL 相同） */
+  var PROJECT_CONSOLE_API = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
   var SESSION_POLICY_KEY = 'tanxin_accounting_policy_v1';
   var SESSION_AUTH_PREFIX = 'tanxin_accounting_auth_v1:';
   var SESSION_TOKEN_KEY = 'tanxin_accounting_liff_token_v1';
@@ -45,7 +47,7 @@ var AccountingApi = (function () {
     return code === 404 || code === 502 || code === 503;
   }
 
-  async function post(body, timeoutMs) {
+  async function postToUrl_(apiUrl, body, timeoutMs, apiLabel) {
     var actionName = (body && body.action) || 'api';
     var trackUi = actionName !== 'accounting_client_log';
     var t0 = Date.now();
@@ -64,17 +66,17 @@ var AccountingApi = (function () {
       timer = setTimeout(function () { ctrl.abort(); }, timeoutMs);
     }
     try {
-      var res = await fetch(GAS_API, opts);
+      var res = await fetch(apiUrl, opts);
       var text = await res.text();
       if (shouldRetryGasHtml_(res, text)) {
         await new Promise(function (r) { setTimeout(r, 2000); });
-        res = await fetch(GAS_API, opts);
+        res = await fetch(apiUrl, opts);
         text = await res.text();
       }
       var parsed = parseJsonResponse_(res, text);
       if (trackUi && typeof AccountingUi !== 'undefined' && AccountingUi.apiEnd) {
         var extra = parsed && parsed.success === false && parsed.message ? parsed.message : '';
-        if (parsed && parsed.gas_cached) extra = (extra ? extra + ' · ' : '') + 'GAS 快取';
+        if (parsed && parsed.gas_cached) extra = (extra ? extra + ' · ' : '') + (apiLabel || 'GAS') + ' 快取';
         AccountingUi.apiEnd(actionName, Date.now() - t0, !!(parsed && parsed.success !== false), extra);
       }
       return parsed;
@@ -86,6 +88,15 @@ var AccountingApi = (function () {
     } finally {
       if (timer) clearTimeout(timer);
     }
+  }
+
+  async function post(body, timeoutMs) {
+    return postToUrl_(GAS_API, body, timeoutMs, '會計');
+  }
+
+  /** 選材專用 — 打 project-console，不再經 accounting-gas */
+  async function postMaterial(body, timeoutMs) {
+    return postToUrl_(PROJECT_CONSOLE_API, body, timeoutMs, '主控台');
   }
 
   function readDevBypassQuery_() {
@@ -319,6 +330,7 @@ var AccountingApi = (function () {
 
   return {
     GAS_API: GAS_API,
+    PROJECT_CONSOLE_API: PROJECT_CONSOLE_API,
     MIN_PERMISSION: MIN_PERMISSION,
     PAYMENT_REQUEST_MIN_PERMISSION: PAYMENT_REQUEST_MIN_PERMISSION,
     INGEST_MIN_PERMISSION: INGEST_MIN_PERMISSION,
@@ -332,6 +344,7 @@ var AccountingApi = (function () {
     SUPERVISOR_DENIED_MSG: SUPERVISOR_DENIED_MSG,
     VENDOR_PAYMENT_APPROVE_DENIED_MSG: VENDOR_PAYMENT_APPROVE_DENIED_MSG,
     post: post,
+    postMaterial: postMaterial,
     buildAuth: buildAuth,
     authMe: function (sessionOrToken) {
       if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
@@ -1278,18 +1291,18 @@ var AccountingApi = (function () {
       );
       return { success: true, items: items, cached: true };
     },
-    /** 選材 — 設計師寫入 */
+    /** 選材 — 設計師寫入（project-console） */
     materialCreate: function (sessionOrToken, payload) {
-      return post(Object.assign({ action: 'margin_material_create', auth: resolveAuth(sessionOrToken) }, payload || {}));
+      return postMaterial(Object.assign({ action: 'margin_material_create', auth: resolveAuth(sessionOrToken) }, payload || {}));
     },
     materialUpdate: function (sessionOrToken, payload) {
-      return post(Object.assign({ action: 'margin_material_update', auth: resolveAuth(sessionOrToken) }, payload || {}));
+      return postMaterial(Object.assign({ action: 'margin_material_update', auth: resolveAuth(sessionOrToken) }, payload || {}));
     },
     materialVoid: function (sessionOrToken, materialId) {
-      return post({ action: 'margin_material_void', auth: resolveAuth(sessionOrToken), material_id: materialId });
+      return postMaterial({ action: 'margin_material_void', auth: resolveAuth(sessionOrToken), material_id: materialId });
     },
     materialUploadPhoto: function (sessionOrToken, payload) {
-      return post({
+      return postMaterial({
         action: 'margin_material_upload_photo',
         auth: resolveAuth(sessionOrToken),
         material_id: payload.material_id,
@@ -1298,17 +1311,17 @@ var AccountingApi = (function () {
       });
     },
     materialDesignerList: function (sessionOrToken, projectNo) {
-      return post({ action: 'margin_material_designer_list', auth: resolveAuth(sessionOrToken), project_no: projectNo });
+      return postMaterial({ action: 'margin_material_designer_list', auth: resolveAuth(sessionOrToken), project_no: projectNo });
     },
     materialAuditLog: function (sessionOrToken, filter) {
-      return post({
+      return postMaterial({
         action: 'margin_material_audit_log',
         auth: resolveAuth(sessionOrToken),
         material_id: (filter && filter.material_id) || '',
         project_no: (filter && filter.project_no) || ''
       });
     },
-    /** 選材 — 客戶唯讀 */
+    /** 選材 — 客戶唯讀（project-console） */
     materialPortalList: function (sessionOrToken, projectNo, opts) {
       opts = opts || {};
       var body = { action: 'margin_material_portal_list', auth: resolveAuth(sessionOrToken), project_no: projectNo };
@@ -1317,7 +1330,7 @@ var AccountingApi = (function () {
         body.dev_bypass = true;
         if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
       }
-      return post(body);
+      return postMaterial(body);
     },
     materialPortalDetail: function (sessionOrToken, materialId, opts) {
       opts = opts || {};
@@ -1327,7 +1340,7 @@ var AccountingApi = (function () {
         body.dev_bypass = true;
         if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
       }
-      return post(body);
+      return postMaterial(body);
     },
     cfPortalAuth: function (sessionOrToken, opts) {
       opts = opts || {};
