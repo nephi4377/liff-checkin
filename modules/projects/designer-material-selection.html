@@ -169,7 +169,8 @@
 
     <div class="card">
       <label for="projectSelect" style="margin-top:0">選擇案號</label>
-      <select id="projectSelect"><option value="">—</option></select>
+      <select id="projectSelect"><option value="">— 選擇案號 —</option></select>
+      <p id="projectSyncHint" class="hint hidden" style="margin-top:8px">正在背景更新案號清單…</p>
       <div id="projectManual" class="hidden">
         <label for="projectInput">案號清單暫無資料時，請手動輸入案號</label>
         <div class="hint">例如 790。輸入後按「載入此案選材」。</div>
@@ -229,6 +230,8 @@
     var lastListItems = [];
     var PROJECT_LIST_CACHE_KEY = 'material_project_options_v1';
     var PROJECT_LIST_TTL_MS = 24 * 60 * 60 * 1000;
+    var SESSION_PROJECTS_KEY = 'tanxin_mat_projects_v1';
+    var projectBgRefreshPromise = null;
 
     function $(id) { return document.getElementById(id); }
     function showMsg(t, ok) {
@@ -355,33 +358,82 @@
     function normalizeProjectRows(rows) {
       return (rows || []).map(function (p) {
         var no = String(p.project_no || p.id || p['案號'] || p.code || '').trim();
-        var name = p.site_name || p.name || p.client_name || p['案場名稱'] || p.customer_name || '';
+        var name = p.site_name || p.name || p.client_name || p['案場名稱'] || p.customer_name || p.tab_name || '';
         return no ? { project_no: no, site_name: name } : null;
       }).filter(Boolean);
+    }
+
+    function toHubProjectShape_(projects) {
+      return (projects || []).map(function (p) {
+        return { id: p.project_no, name: p.site_name || '', project_no: p.project_no, site_name: p.site_name || '' };
+      });
+    }
+
+    function persistProjectCache_(projects) {
+      if (!projects || !projects.length) return;
+      try {
+        sessionStorage.setItem(SESSION_PROJECTS_KEY, JSON.stringify({ ts: Date.now(), projects: projects }));
+      } catch (e) {}
+      try {
+        if (typeof HubRefCache !== 'undefined') {
+          HubRefCache.set('projects', toHubProjectShape_(projects));
+        }
+      } catch (e2) {}
+    }
+
+    function readSessionProjects_() {
+      try {
+        var raw = sessionStorage.getItem(SESSION_PROJECTS_KEY);
+        if (!raw) return [];
+        var parsed = JSON.parse(raw);
+        if (parsed && parsed.ts && (Date.now() - parsed.ts < PROJECT_LIST_TTL_MS) &&
+            parsed.projects && parsed.projects.length) {
+          return normalizeProjectRows(parsed.projects);
+        }
+      } catch (e) {}
+      return [];
     }
 
     function projectsFromHubRef_() {
       try {
         if (typeof HubRefCache === 'undefined') return [];
-        return normalizeProjectRows(HubRefCache.get('projects') || []);
+        // read() 會先讀 iframe 父層 spaAllProjects，再讀 localStorage
+        return normalizeProjectRows(HubRefCache.read('projects') || []);
       } catch (e) {
         return [];
       }
+    }
+
+    function setProjectSyncHint_(visible) {
+      var el = $('projectSyncHint');
+      if (!el) return;
+      el.classList.toggle('hidden', !visible);
     }
 
     async function fetchProjectOptionsNetwork_() {
       var projects = [];
       var warn = '';
       try {
-        var overview = await AccountingApi.cfOverview(session, true);
-        if (overview && overview.success) {
-          // 客帳總覽回傳 items（不是 projects）
-          projects = normalizeProjectRows(overview.items || overview.projects || []);
-        } else {
-          warn = (overview && overview.message) || '案號清單載入失敗';
+        var margin = await AccountingApi.marginListOverview(session);
+        if (margin && margin.success) {
+          projects = normalizeProjectRows((margin.items || []).map(function (it) {
+            return { project_no: it.project_no, site_name: it.client_name || it.tab_name || '' };
+          }));
+        } else if (margin && margin.message) {
+          warn = margin.message;
         }
-      } catch (e) {
-        warn = '案號清單載入失敗：' + ((e && e.message) || '請檢查網路');
+      } catch (eMargin) {}
+      if (!projects.length) {
+        try {
+          var overview = await AccountingApi.cfOverview(session, true);
+          if (overview && overview.success) {
+            projects = normalizeProjectRows(overview.items || overview.projects || []);
+          } else if (!warn) {
+            warn = (overview && overview.message) || '案號清單載入失敗';
+          }
+        } catch (e) {
+          if (!warn) warn = '案號清單載入失敗：' + ((e && e.message) || '請檢查網路');
+        }
       }
       if (!projects.length) {
         try {
@@ -392,21 +444,20 @@
       return { projects: projects, warn: warn };
     }
 
-    async function loadProjectOptionsCached_() {
+    function readProjectCacheImmediate_() {
       var hub = projectsFromHubRef_();
       if (hub.length) return { projects: hub, warn: '', source: 'hub' };
+      var sess = readSessionProjects_();
+      if (sess.length) return { projects: sess, warn: '', source: 'session' };
+      return { projects: [], warn: '', source: 'none' };
+    }
 
-      var cacheKey = 'tanxin_mat_projects_v1';
-      try {
-        var raw = sessionStorage.getItem(cacheKey);
-        if (raw) {
-          var parsed = JSON.parse(raw);
-          if (parsed && parsed.ts && (Date.now() - parsed.ts < PROJECT_LIST_TTL_MS) &&
-              parsed.projects && parsed.projects.length) {
-            return { projects: parsed.projects, warn: '', source: 'session' };
-          }
-        }
-      } catch (eSess) {}
+    async function loadProjectOptionsCached_(opts) {
+      opts = opts || {};
+      if (!opts.force) {
+        var immediate = readProjectCacheImmediate_();
+        if (immediate.projects.length) return immediate;
+      }
 
       if (typeof AccountingListCache !== 'undefined') {
         try {
@@ -414,12 +465,10 @@
             session,
             PROJECT_LIST_CACHE_KEY,
             function () { return fetchProjectOptionsNetwork_(); },
-            { ttlMs: PROJECT_LIST_TTL_MS, swrMs: 60 * 60 * 1000 }
+            { ttlMs: PROJECT_LIST_TTL_MS, swrMs: 60 * 60 * 1000, force: !!opts.force }
           );
           if (wrapped && wrapped.projects && wrapped.projects.length) {
-            try {
-              sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), projects: wrapped.projects }));
-            } catch (eW) {}
+            persistProjectCache_(wrapped.projects);
             return { projects: wrapped.projects, warn: wrapped.warn || '', source: 'list_cache' };
           }
           if (wrapped && (!wrapped.projects || !wrapped.projects.length)) {
@@ -429,12 +478,30 @@
       }
 
       var pack = await fetchProjectOptionsNetwork_();
-      if (pack.projects && pack.projects.length) {
-        try {
-          sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), projects: pack.projects }));
-        } catch (eW2) {}
-      }
+      if (pack.projects && pack.projects.length) persistProjectCache_(pack.projects);
       return pack;
+    }
+
+    function refreshProjectOptionsInBackground_() {
+      if (projectBgRefreshPromise) return projectBgRefreshPromise;
+      setProjectSyncHint_(true);
+      projectBgRefreshPromise = fetchProjectOptionsNetwork_()
+        .then(function (pack) {
+          var projects = (pack && pack.projects) || [];
+          if (projects.length) {
+            persistProjectCache_(projects);
+            fillProjectSelect_(projects);
+            $('projectManual').classList.add('hidden');
+            showMsg('');
+          }
+          return pack;
+        })
+        .catch(function () { return null; })
+        .finally(function () {
+          projectBgRefreshPromise = null;
+          setProjectSyncHint_(false);
+        });
+      return projectBgRefreshPromise;
     }
 
     function fillProjectSelect_(projects) {
@@ -511,6 +578,14 @@
         $('app').classList.remove('hidden');
         renderChipGrid('spaceGrid', SPACE_PRESETS, [], false);
         renderChipGrid('partGrid', PART_PRESETS, [], true);
+        window.addEventListener('tanxin-ref-updated', function (e) {
+          if (!e.detail || e.detail.kind !== 'projects') return;
+          var hub = projectsFromHubRef_();
+          if (hub.length) {
+            fillProjectSelect_(hub);
+            $('projectManual').classList.add('hidden');
+          }
+        });
         await loadProjectOptions();
       } catch (e) {
         $('loading').textContent = (e && e.message) ? e.message : '載入失敗，請重新整理再試';
@@ -518,22 +593,32 @@
     }
 
     async function loadProjectOptions() {
-      // 網址已帶案號時先載入列表，不必等案號下拉整批抓完
       if (urlProjectNo) {
         applyProjectNo(urlProjectNo, urlProjectNo + '（網址帶入）');
         $('projectInput').value = urlProjectNo;
       }
-      var pack = await loadProjectOptionsCached_();
-      var projects = (pack && pack.projects) || [];
-      var warn = (pack && pack.warn) || '';
-      fillProjectSelect_(projects);
-      var needManual = !projects.length;
-      if (needManual) $('projectManual').classList.remove('hidden');
-      else $('projectManual').classList.add('hidden');
-      if (!urlProjectNo && needManual) {
-        showMsg((warn ? warn + '。' : '') + '目前沒有可選案號，請在下方手動輸入案號後載入。');
-      } else if (!projects.length && warn && urlProjectNo) {
-        showMsg(warn + '（已用網址案號載入選材）');
+
+      var immediate = readProjectCacheImmediate_();
+      if (immediate.projects.length) {
+        fillProjectSelect_(immediate.projects);
+        $('projectManual').classList.add('hidden');
+      }
+
+      // 有快取也背景更新（SWR）；無快取則等網路
+      var bg = refreshProjectOptionsInBackground_();
+      if (!immediate.projects.length) {
+        var pack = await bg;
+        var projects = (pack && pack.projects) || [];
+        var warn = (pack && pack.warn) || '';
+        fillProjectSelect_(projects);
+        var needManual = !projects.length;
+        if (needManual) $('projectManual').classList.remove('hidden');
+        else $('projectManual').classList.add('hidden');
+        if (!urlProjectNo && needManual) {
+          showMsg((warn ? warn + '。' : '') + '目前沒有可選案號，請在下方手動輸入案號後載入。');
+        } else if (!projects.length && warn && urlProjectNo) {
+          showMsg(warn + '（已用網址案號載入選材）');
+        }
       }
     }
 
