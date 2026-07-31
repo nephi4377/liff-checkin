@@ -1,0 +1,9 @@
+{
+  "cleanUrls": false,
+  "rewrites": [
+    {
+      "source": "/modules/projects/designer-material-selection",
+      "destination": "/modules/projects/designer-material-selection.html"
+    }
+  ]
+}
