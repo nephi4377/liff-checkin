@@ -342,6 +342,38 @@ export function computeLateMinutes(checkInTime, shiftStart, flexibleMinutes = 0)
   return Math.max(0, ci - ss - flex);
 }
 
+/** 當日分鐘數 → HH:mm；無效回傳 null */
+export function formatMinutesToTime(totalMins) {
+  if (totalMins == null || Number.isNaN(totalMins)) return null;
+  const t = Math.max(0, Math.min(24 * 60 - 1, Math.round(totalMins)));
+  const h = Math.floor(t / 60);
+  const min = t % 60;
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
+/**
+ * 預計下班時間（單向彈性：不得早於 shiftEnd，遲到在彈性內可往後延）
+ * 例：08:30～17:30、彈性 30 分 → 07:53 到仍 17:30；09:00 到為 18:00
+ */
+export function computeExpectedOffTime(checkInTime, shiftStart, shiftEnd, flexibleMinutes = 0) {
+  const ci = parseTimeToMinutes(checkInTime);
+  const ss = parseTimeToMinutes(shiftStart);
+  const se = parseTimeToMinutes(shiftEnd);
+  if (ci == null || ss == null || se == null) return null;
+  const flex = Math.max(0, Number(flexibleMinutes) || 0);
+  const lateWithinFlex = Math.max(0, Math.min(flex, ci - ss));
+  return formatMinutesToTime(se + lateWithinFlex);
+}
+
+/** 早退分鐘（對照預計下班）；≤0 表示準時或彈性內 */
+export function computeEarlyMinutes(checkOutTime, checkInTime, shiftStart, shiftEnd, flexibleMinutes = 0) {
+  const co = parseTimeToMinutes(checkOutTime);
+  const expectedOff = computeExpectedOffTime(checkInTime, shiftStart, shiftEnd, flexibleMinutes);
+  const eo = parseTimeToMinutes(expectedOff);
+  if (co == null || eo == null) return 0;
+  return Math.max(0, eo - co);
+}
+
 /**
  * [v552.0 新增] 以 GET 請求方式發送 API Payload，用於繞過 CORS 問題。
  * @param {string} baseUrl - 後端 API 的基礎 URL。

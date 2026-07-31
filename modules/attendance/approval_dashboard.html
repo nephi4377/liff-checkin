@@ -110,11 +110,11 @@
         const flex = Number(appeal.flexibleMinutes) || 0;
         const chips = [
             { label: '標準上班', time: start, type: '上班' },
-            { label: '標準下班', time: end, type: '下班' }
+            { label: '最早下班', time: end, type: '下班' }
         ];
         if (flex > 0) {
-            chips.splice(1, 0, { label: `彈性上班 +${flex}分`, time: addMinutesToTime(start, flex), type: '上班' });
-            chips.push({ label: `彈性下班 +${flex}分`, time: addMinutesToTime(end, flex), type: '下班' });
+            chips.splice(1, 0, { label: `最晚上班 +${flex}分`, time: addMinutesToTime(start, flex), type: '上班' });
+            chips.push({ label: `最晚下班（滿彈性遲到）`, time: addMinutesToTime(end, flex), type: '下班' });
         }
         return chips.map((c) =>
             `<button type="button" class="appeal-time-chip" data-appeal-time-fill="${escapeHtml(c.time)}" data-appeal-type-fill="${escapeHtml(c.type)}" title="填入 ${escapeHtml(c.time)}（${escapeHtml(c.type)}）">${escapeHtml(c.label)} ${escapeHtml(c.time)}</button>`
