@@ -7,78 +7,191 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=45"></script>
+  <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
+  <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
+  <script src="../../shared/js/accounting_api.js?v=47"></script>
   <style>
-    body { max-width: 720px; margin: 0 auto; padding: 16px; font-family: system-ui, sans-serif; background: #f9fafb; }
-    h2 { margin: 0 0 12px; font-size: 20px; }
-    .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); border: 1px solid #f3f4f6; }
-    .tag { display: inline-block; font-size: 12px; padding: 4px 8px; border-radius: 6px; background: #e8f0fe; color: #174ea6; margin: 2px 4px 2px 0; }
-    .tag-part { background: #f3e8ff; color: #6b21a8; }
-    .tag-void { background: #fce8e6; color: #c5221f; }
-    .btn { display: block; width: 100%; padding: 14px; border: none; border-radius: 8px; font-weight: 600; font-size: 15px; margin-top: 8px; cursor: pointer; min-height: 48px; }
-    .btn-primary { background: #2563eb; color: #fff; }
-    .btn-primary:hover { background: #1d4ed8; }
-    .btn-secondary { background: #e8eaed; color: #333; }
-    .btn-danger { background: #fce8e6; color: #c5221f; }
-    .btn-sm { display: inline-block; width: auto; padding: 10px 14px; font-size: 14px; margin: 6px 6px 0 0; min-height: 44px; }
-    .btn:disabled { opacity: 0.6; cursor: wait; }
-    select, input, textarea { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; margin-top: 6px; }
-    select:focus, input:focus, textarea:focus { outline: none; box-shadow: 0 0 0 2px rgba(37,99,235,.35); border-color: #2563eb; }
+    :root {
+      --mat-bg: #f4f6f8;
+      --mat-surface: #fff;
+      --mat-ink: #1f2937;
+      --mat-muted: #6b7280;
+      --mat-line: #e5e7eb;
+      --mat-blue: #1a73e8;
+      --mat-blue-soft: #e8f0fe;
+      --mat-blue-ink: #174ea6;
+      --mat-teal: #0f766e;
+      --mat-teal-soft: #ecfdf5;
+      --mat-danger: #c5221f;
+      --mat-danger-soft: #fce8e6;
+      --mat-radius: 12px;
+      --mat-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+    }
+    body {
+      max-width: 720px; margin: 0 auto; padding: 20px 16px 40px;
+      font-family: "Segoe UI", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      background: var(--mat-bg); color: var(--mat-ink); line-height: 1.5;
+    }
+    #loading {
+      padding: 48px 16px; text-align: center; color: var(--mat-muted); font-size: 15px;
+    }
+    .page-header { margin-bottom: 16px; animation: matFadeUp .35s ease both; }
+    .page-kicker {
+      display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
+      color: var(--mat-blue-ink); background: var(--mat-blue-soft);
+      padding: 4px 10px; border-radius: 6px; margin-bottom: 10px;
+    }
+    h2 { margin: 0 0 8px; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+    .lead { margin: 0; font-size: 14px; color: var(--mat-muted); line-height: 1.55; }
+    .card {
+      background: var(--mat-surface); border-radius: var(--mat-radius); padding: 16px 16px 18px;
+      margin: 12px 0; box-shadow: var(--mat-shadow); border: 1px solid var(--mat-line);
+    }
+    .tag {
+      display: inline-block; font-size: 12px; font-weight: 600; padding: 4px 9px;
+      border-radius: 6px; background: var(--mat-blue-soft); color: var(--mat-blue-ink);
+      margin: 0 6px 6px 0; vertical-align: middle;
+    }
+    .tag-part { background: var(--mat-teal-soft); color: var(--mat-teal); }
+    .tag-void { background: var(--mat-danger-soft); color: var(--mat-danger); }
+    .btn {
+      display: block; width: 100%; padding: 14px; border: none; border-radius: 10px;
+      font-weight: 600; font-size: 15px; margin-top: 8px; cursor: pointer; min-height: 48px;
+      transition: transform .12s ease, background-color .15s ease, box-shadow .15s ease, opacity .15s ease;
+    }
+    .btn:active:not(:disabled) { transform: scale(0.985); }
+    .btn-primary { background: var(--mat-blue); color: #fff; box-shadow: 0 1px 2px rgba(26,115,232,.25); }
+    .btn-primary:hover { background: #1557b0; }
+    .btn-secondary { background: #eef1f4; color: #374151; }
+    .btn-secondary:hover { background: #e4e8ed; }
+    .btn-danger { background: var(--mat-danger-soft); color: var(--mat-danger); }
+    .btn-danger:hover { background: #fad2cf; }
+    .btn-sm {
+      display: inline-block; width: auto; padding: 10px 14px; font-size: 14px;
+      margin: 0 8px 0 0; min-height: 44px;
+    }
+    .btn:disabled { opacity: 0.6; cursor: wait; transform: none; }
+    select, input, textarea {
+      width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid #cfd5dd;
+      font-size: 16px; box-sizing: border-box; margin-top: 6px; background: #fff;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    select:focus, input:focus, textarea:focus {
+      outline: none; box-shadow: 0 0 0 3px rgba(26,115,232,.22); border-color: var(--mat-blue);
+    }
     textarea { min-height: 72px; resize: vertical; }
-    label { display: block; font-weight: 600; font-size: 14px; margin-top: 14px; }
-    .hint { font-size: 13px; color: #6b7280; font-weight: 400; margin-top: 4px; line-height: 1.4; }
-    #msg { color: #c5221f; font-size: 14px; margin: 8px 0; line-height: 1.45; }
+    label { display: block; font-weight: 600; font-size: 14px; margin-top: 14px; color: #374151; }
+    .hint { font-size: 13px; color: var(--mat-muted); font-weight: 400; margin-top: 4px; line-height: 1.45; }
+    #msg {
+      color: var(--mat-danger); font-size: 14px; margin: 8px 0; line-height: 1.45;
+      min-height: 1.2em; transition: opacity .2s ease;
+    }
     #msg.ok { color: #15803d; }
-    .hidden { display: none; }
-    .mat-item { padding: 14px 0; border-bottom: 1px solid #eee; }
-    .mat-item img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; margin: 6px 6px 0 0; cursor: pointer; }
-    .audit-row { font-size: 13px; color: #555; padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
+    .hidden { display: none !important; }
+    .mat-list { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+    .mat-item {
+      background: var(--mat-surface); border: 1px solid var(--mat-line); border-radius: var(--mat-radius);
+      padding: 14px 14px 12px; box-shadow: var(--mat-shadow);
+      animation: matFadeUp .32s ease both;
+    }
+    .mat-item.is-void { opacity: 0.72; background: #fafafa; }
+    .mat-item .mat-meta { font-size: 13px; color: #4b5563; margin-top: 8px; line-height: 1.45; }
+    .mat-item .mat-note { font-size: 13px; color: #6b7280; margin-top: 4px; line-height: 1.45; }
+    .mat-item .mat-actions { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 0; }
+    .photo-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .photo-fail {
+      width: 104px; min-height: 104px; box-sizing: border-box; padding: 8px;
+      border-radius: 10px; border: 1px dashed #d1d5db; background: #f9fafb;
+      font-size: 12px; color: var(--mat-muted); line-height: 1.35;
+      display: flex; align-items: center; justify-content: center; text-align: center;
+    }
+    .mat-item img, .photo-row img, #fPhotoPreview img {
+      width: 104px; height: 104px; object-fit: cover; border-radius: 10px;
+      cursor: pointer; border: 1px solid var(--mat-line);
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .mat-item img:hover, .photo-row img:hover {
+      transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16,24,40,.12);
+    }
+    .empty-state {
+      text-align: center; padding: 28px 16px; color: var(--mat-muted);
+      background: var(--mat-surface); border: 1px dashed #d1d5db; border-radius: var(--mat-radius);
+      font-size: 14px; line-height: 1.5;
+    }
+    .empty-state strong { display: block; color: var(--mat-ink); font-size: 15px; margin-bottom: 6px; }
+    .section-title { margin: 0 0 10px; font-size: 15px; font-weight: 700; color: #374151; }
+    .audit-row {
+      font-size: 13px; color: #4b5563; padding: 10px 0;
+      border-bottom: 1px solid #f0f2f4;
+    }
+    .audit-row:last-child { border-bottom: none; }
     .chip-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
     .chip {
       display: inline-flex; align-items: center; gap: 6px;
-      padding: 10px 12px; border-radius: 8px; border: 1px solid #d1d5db;
+      padding: 10px 12px; border-radius: 10px; border: 1px solid #d1d5db;
       background: #fff; cursor: pointer; font-size: 14px; user-select: none;
-      min-height: 44px;
+      min-height: 44px; transition: border-color .15s ease, background-color .15s ease, transform .12s ease;
     }
+    .chip:active { transform: scale(0.98); }
     .chip input { width: auto; margin: 0; }
-    .chip.on { border-color: #2563eb; background: #eff6ff; color: #1e40af; font-weight: 600; }
-    .chip.part.on { border-color: #7c3aed; background: #f5f3ff; color: #5b21b6; }
+    .chip.on { border-color: var(--mat-blue); background: var(--mat-blue-soft); color: var(--mat-blue-ink); font-weight: 600; }
+    .chip.part.on { border-color: var(--mat-teal); background: var(--mat-teal-soft); color: var(--mat-teal); }
     .lightbox {
-      position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 9999;
+      position: fixed; inset: 0; background: rgba(15,23,42,.88); z-index: 9999;
       display: flex; align-items: center; justify-content: center; padding: 16px;
+      animation: matFadeIn .18s ease both;
     }
-    .lightbox img { max-width: 100%; max-height: 90vh; border-radius: 8px; }
+    .lightbox img { max-width: 100%; max-height: 90vh; border-radius: 10px; }
     .lightbox-close {
       position: absolute; top: 12px; right: 12px; background: #fff; border: none;
-      border-radius: 8px; padding: 10px 14px; font-size: 14px; font-weight: 600; min-height: 44px; cursor: pointer;
+      border-radius: 8px; padding: 10px 14px; font-size: 14px; font-weight: 600;
+      min-height: 44px; cursor: pointer;
+    }
+    @keyframes matFadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes matFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
   </style>
 </head>
 <body>
   <div id="loading">載入中…</div>
   <div id="app" class="hidden">
-    <h2>選材管理</h2>
-    <p class="hint" style="margin:0 0 8px">存檔後客人立刻看得到；照片會存進案件 Dropbox 的「選材」資料夾。改錯請「作廢」後再新增，不要直接改舊筆。歷史舊檔若曾用自由命名匯入，空間可能顯示「未分類」或從檔名猜到的空間，可作廢後用標準標籤重建。</p>
+    <header class="page-header">
+      <span class="page-kicker">專案選材</span>
+      <h2>選材管理</h2>
+      <p class="lead">存檔後客人立刻看得到；照片會存進案件 Dropbox 的「選材」資料夾。補充說明、空間／部位可直接編輯；換照片請「作廢並新建」。歷史舊檔若曾用自由命名匯入，空間可能顯示「未分類」或從檔名猜到的空間，可編輯標籤或作廢後重建。</p>
+    </header>
     <div id="msg" role="status" aria-live="polite"></div>
 
     <div class="card">
-      <label for="projectSelect">選擇案號</label>
-      <select id="projectSelect"><option value="">—</option></select>
+      <label for="projectSelect" style="margin-top:0">選擇案號</label>
+      <select id="projectSelect"><option value="">— 選擇案號 —</option></select>
+      <p id="projectSyncHint" class="hint hidden" style="margin-top:8px">正在背景更新案號清單…</p>
+      <div id="projectManual" class="hidden">
+        <label for="projectInput">案號清單暫無資料時，請手動輸入案號</label>
+        <div class="hint">例如 790。輸入後按「載入此案選材」。</div>
+        <input type="text" id="projectInput" inputmode="numeric" placeholder="案號" autocomplete="off" />
+        <button type="button" class="btn btn-secondary" id="btnLoadProject" style="margin-top:10px">載入此案選材</button>
+      </div>
     </div>
 
     <div id="listView">
       <button type="button" class="btn btn-primary" id="btnAdd">＋ 新增選材</button>
-      <div id="matList" style="margin-top:12px;">請先選擇案號</div>
+      <div id="matList" class="mat-list"><div class="empty-state"><strong>請先選擇案號</strong>選定後會列出這案的選材紀錄</div></div>
       <div class="card" id="auditSection" style="margin-top:16px;">
-        <h3 style="margin:0 0 8px;font-size:15px;">變更歷程</h3>
+        <h3 class="section-title">變更歷程</h3>
         <div id="auditList">—</div>
       </div>
     </div>
 
     <div id="formView" class="hidden">
       <button type="button" class="btn btn-secondary" id="btnBackToList">← 返回列表</button>
-      <div class="card">
-        <h3 id="formTitle" style="margin:0 0 8px">新增選材</h3>
+      <div class="card" style="animation: matFadeUp .28s ease both;">
+        <h3 id="formTitle" class="section-title" style="font-size:17px">新增選材</h3>
         <p class="hint" style="margin:0 0 4px">這一筆＝哪幾個空間、哪些部位／材料定了什麼樣（靠照片＋標籤說清楚）。</p>
 
         <label>空間標籤（可複選，至少一個）</label>
@@ -97,9 +210,9 @@
         <div class="hint">品牌、型號、色號等；可不填＝靠照片說明</div>
         <textarea id="fNote" placeholder="例如品牌、型號、色號…"></textarea>
 
-        <label for="fPhotos">照片（1～3 張）</label>
+        <label for="fPhotos" id="fPhotosLabel">照片（1～3 張）</label>
         <input type="file" id="fPhotos" accept="image/*" multiple />
-        <div class="hint">只收照片檔，最多 3 張。</div>
+        <div class="hint" id="fPhotosHint">只收照片檔，最多 3 張。</div>
         <div id="fPhotoPreview" style="margin-top:8px;"></div>
         <button type="button" class="btn btn-primary" id="btnSave">儲存（客人立刻可見）</button>
       </div>
@@ -113,6 +226,12 @@
     var PART_PRESETS = ['地板', '磁磚', '油漆／乳膠漆', '櫃體', '門板', '中島／枱面', '五金', '燈具', '窗簾', '其他'];
     var urlProjectNo = '';
     var voidBusy = false;
+    var editingMaterialId = '';
+    var lastListItems = [];
+    var PROJECT_LIST_CACHE_KEY = 'material_project_options_v1';
+    var PROJECT_LIST_TTL_MS = 24 * 60 * 60 * 1000;
+    var SESSION_PROJECTS_KEY = 'tanxin_mat_projects_v1';
+    var projectBgRefreshPromise = null;
 
     function $(id) { return document.getElementById(id); }
     function showMsg(t, ok) {
@@ -202,19 +321,271 @@
     function actionLabel(action) {
       if (action === 'create') return '新增';
       if (action === 'void') return '作廢';
-      if (action === 'update') return '更新照片';
+      if (action === 'update') return '更新';
       return action || '—';
+    }
+
+    function ensureProjectOption(pno, label) {
+      var sel = $('projectSelect');
+      var value = String(pno || '').trim();
+      if (!value) return;
+      if (sel.value === value) return;
+      var found = false;
+      for (var i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].value === value) { found = true; break; }
+      }
+      if (!found) {
+        var opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = label || (value + '（手動／網址）');
+        sel.appendChild(opt);
+      }
+      sel.value = value;
+    }
+
+    function applyProjectNo(pno, label) {
+      var value = String(pno || '').trim();
+      if (!value) {
+        showMsg('請先輸入或選擇案號');
+        return;
+      }
+      ensureProjectOption(value, label);
+      showMsg('');
+      loadList();
+      loadAudit();
+    }
+
+    function normalizeProjectRows(rows) {
+      return (rows || []).map(function (p) {
+        var no = String(p.project_no || p.id || p['案號'] || p.code || '').trim();
+        var name = p.site_name || p.name || p.client_name || p['案場名稱'] || p.customer_name || p.tab_name || '';
+        return no ? { project_no: no, site_name: name } : null;
+      }).filter(Boolean);
+    }
+
+    function toHubProjectShape_(projects) {
+      return (projects || []).map(function (p) {
+        return { id: p.project_no, name: p.site_name || '', project_no: p.project_no, site_name: p.site_name || '' };
+      });
+    }
+
+    function persistProjectCache_(projects) {
+      if (!projects || !projects.length) return;
+      try {
+        sessionStorage.setItem(SESSION_PROJECTS_KEY, JSON.stringify({ ts: Date.now(), projects: projects }));
+      } catch (e) {}
+      try {
+        if (typeof HubRefCache !== 'undefined') {
+          HubRefCache.set('projects', toHubProjectShape_(projects));
+        }
+      } catch (e2) {}
+    }
+
+    function readSessionProjects_() {
+      try {
+        var raw = sessionStorage.getItem(SESSION_PROJECTS_KEY);
+        if (!raw) return [];
+        var parsed = JSON.parse(raw);
+        if (parsed && parsed.ts && (Date.now() - parsed.ts < PROJECT_LIST_TTL_MS) &&
+            parsed.projects && parsed.projects.length) {
+          return normalizeProjectRows(parsed.projects);
+        }
+      } catch (e) {}
+      return [];
+    }
+
+    function projectsFromHubRef_() {
+      try {
+        if (typeof HubRefCache === 'undefined') return [];
+        // read() 會先讀 iframe 父層 spaAllProjects，再讀 localStorage
+        return normalizeProjectRows(HubRefCache.read('projects') || []);
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function setProjectSyncHint_(visible) {
+      var el = $('projectSyncHint');
+      if (!el) return;
+      el.classList.toggle('hidden', !visible);
+    }
+
+    async function fetchProjectOptionsNetwork_() {
+      var projects = [];
+      var warn = '';
+      try {
+        var margin = await AccountingApi.marginListOverview(session);
+        if (margin && margin.success) {
+          projects = normalizeProjectRows((margin.items || []).map(function (it) {
+            return { project_no: it.project_no, site_name: it.client_name || it.tab_name || '' };
+          }));
+        } else if (margin && margin.message) {
+          warn = margin.message;
+        }
+      } catch (eMargin) {}
+      if (!projects.length) {
+        try {
+          var overview = await AccountingApi.cfOverview(session, true);
+          if (overview && overview.success) {
+            projects = normalizeProjectRows(overview.items || overview.projects || []);
+          } else if (!warn) {
+            warn = (overview && overview.message) || '案號清單載入失敗';
+          }
+        } catch (e) {
+          if (!warn) warn = '案號清單載入失敗：' + ((e && e.message) || '請檢查網路');
+        }
+      }
+      if (!projects.length) {
+        try {
+          var ctx = await AccountingApi.formContext(session);
+          projects = normalizeProjectRows((ctx && ctx.projects) || []);
+        } catch (e2) {}
+      }
+      return { projects: projects, warn: warn };
+    }
+
+    function readProjectCacheImmediate_() {
+      var hub = projectsFromHubRef_();
+      if (hub.length) return { projects: hub, warn: '', source: 'hub' };
+      var sess = readSessionProjects_();
+      if (sess.length) return { projects: sess, warn: '', source: 'session' };
+      return { projects: [], warn: '', source: 'none' };
+    }
+
+    async function loadProjectOptionsCached_(opts) {
+      opts = opts || {};
+      if (!opts.force) {
+        var immediate = readProjectCacheImmediate_();
+        if (immediate.projects.length) return immediate;
+      }
+
+      if (typeof AccountingListCache !== 'undefined') {
+        try {
+          var wrapped = await AccountingListCache.load(
+            session,
+            PROJECT_LIST_CACHE_KEY,
+            function () { return fetchProjectOptionsNetwork_(); },
+            { ttlMs: PROJECT_LIST_TTL_MS, swrMs: 60 * 60 * 1000, force: !!opts.force }
+          );
+          if (wrapped && wrapped.projects && wrapped.projects.length) {
+            persistProjectCache_(wrapped.projects);
+            return { projects: wrapped.projects, warn: wrapped.warn || '', source: 'list_cache' };
+          }
+          if (wrapped && (!wrapped.projects || !wrapped.projects.length)) {
+            AccountingListCache.invalidate(session, PROJECT_LIST_CACHE_KEY);
+          }
+        } catch (eCache) {}
+      }
+
+      var pack = await fetchProjectOptionsNetwork_();
+      if (pack.projects && pack.projects.length) persistProjectCache_(pack.projects);
+      return pack;
+    }
+
+    function refreshProjectOptionsInBackground_() {
+      if (projectBgRefreshPromise) return projectBgRefreshPromise;
+      setProjectSyncHint_(true);
+      projectBgRefreshPromise = fetchProjectOptionsNetwork_()
+        .then(function (pack) {
+          var projects = (pack && pack.projects) || [];
+          if (projects.length) {
+            persistProjectCache_(projects);
+            fillProjectSelect_(projects);
+            $('projectManual').classList.add('hidden');
+            showMsg('');
+          }
+          return pack;
+        })
+        .catch(function () { return null; })
+        .finally(function () {
+          projectBgRefreshPromise = null;
+          setProjectSyncHint_(false);
+        });
+      return projectBgRefreshPromise;
+    }
+
+    function fillProjectSelect_(projects) {
+      var sel = $('projectSelect');
+      var current = sel.value || urlProjectNo || '';
+      sel.innerHTML = '<option value="">— 選擇案號 —</option>' +
+        (projects || []).map(function (p) {
+          return '<option value="' + p.project_no + '">' + p.project_no + ' ' + (p.site_name || '') + '</option>';
+        }).join('');
+      if (current) ensureProjectOption(current, current + (urlProjectNo && current === urlProjectNo ? '（網址帶入）' : ''));
+    }
+
+    /** Dropbox 分享／舊連結轉成瀏覽器可當 img 的網址 */
+    function toDisplayPhotoUrl_(url) {
+      var u = String(url || '').trim();
+      if (!u) return '';
+      if (u.indexOf('dropbox.com') >= 0) {
+        u = u.replace('www.dropbox.com', 'dl.dropboxusercontent.com');
+        u = u.replace('?dl=0', '?raw=1').replace('&dl=0', '&raw=1');
+        u = u.replace('?dl=1', '?raw=1').replace('&dl=1', '&raw=1');
+      }
+      if (u.indexOf('http://') === 0 && window.location.protocol === 'https:') {
+        u = 'https://' + u.slice(7);
+      }
+      return u;
+    }
+
+    function renderPhotoHtml_(photos) {
+      if (!photos || !photos.length) {
+        return '<div class="hint" style="margin-top:8px">尚無照片</div>';
+      }
+      return '<div class="photo-row">' + photos.map(function (raw) {
+        var u = toDisplayPhotoUrl_(raw);
+        var safe = String(u).replace(/"/g, '&quot;');
+        return '<img src="' + safe + '" alt="選材照片" data-full="' + safe + '" data-raw="' +
+          String(raw).replace(/"/g, '&quot;') + '" />';
+      }).join('') + '</div>';
+    }
+
+    function bindPhotoErrors_(container) {
+      if (!container) return;
+      container.querySelectorAll('.photo-row img').forEach(function (img) {
+        img.addEventListener('error', function () {
+          if (img.dataset.retried === '1') {
+            var fail = document.createElement('div');
+            fail.className = 'photo-fail';
+            fail.textContent = '照片無法顯示（連結可能已過期，部署後端重算後再重整）';
+            if (img.parentNode) img.parentNode.replaceChild(fail, img);
+            return;
+          }
+          img.dataset.retried = '1';
+          var raw = img.getAttribute('data-raw') || img.src;
+          var alt = toDisplayPhotoUrl_(raw);
+          if (alt && alt !== img.src) img.src = alt;
+          else {
+            var fail2 = document.createElement('div');
+            fail2.className = 'photo-fail';
+            fail2.textContent = '照片無法顯示（連結可能已過期）';
+            if (img.parentNode) img.parentNode.replaceChild(fail2, img);
+          }
+        });
+      });
     }
 
     async function boot() {
       urlProjectNo = parseQueryProjectNo();
       try {
         session = await AccountingApi.initSession({ minPermission: 2 });
-        if (!session) return;
+        if (!session) {
+          $('loading').textContent = '無法確認身分。本機請用完整網址開啟（含 project_no、perm、dev_user_id），或從主控台進入。';
+          return;
+        }
         $('loading').classList.add('hidden');
         $('app').classList.remove('hidden');
         renderChipGrid('spaceGrid', SPACE_PRESETS, [], false);
         renderChipGrid('partGrid', PART_PRESETS, [], true);
+        window.addEventListener('tanxin-ref-updated', function (e) {
+          if (!e.detail || e.detail.kind !== 'projects') return;
+          var hub = projectsFromHubRef_();
+          if (hub.length) {
+            fillProjectSelect_(hub);
+            $('projectManual').classList.add('hidden');
+          }
+        });
         await loadProjectOptions();
       } catch (e) {
         $('loading').textContent = (e && e.message) ? e.message : '載入失敗，請重新整理再試';
@@ -222,32 +593,32 @@
     }
 
     async function loadProjectOptions() {
-      try {
-        var overview = await AccountingApi.cfOverview(session, true);
-        if (!overview.success) {
-          showMsg(overview.message || '案號載入失敗，請稍後再試');
-          return;
+      if (urlProjectNo) {
+        applyProjectNo(urlProjectNo, urlProjectNo + '（網址帶入）');
+        $('projectInput').value = urlProjectNo;
+      }
+
+      var immediate = readProjectCacheImmediate_();
+      if (immediate.projects.length) {
+        fillProjectSelect_(immediate.projects);
+        $('projectManual').classList.add('hidden');
+      }
+
+      // 有快取也背景更新（SWR）；無快取則等網路
+      var bg = refreshProjectOptionsInBackground_();
+      if (!immediate.projects.length) {
+        var pack = await bg;
+        var projects = (pack && pack.projects) || [];
+        var warn = (pack && pack.warn) || '';
+        fillProjectSelect_(projects);
+        var needManual = !projects.length;
+        if (needManual) $('projectManual').classList.remove('hidden');
+        else $('projectManual').classList.add('hidden');
+        if (!urlProjectNo && needManual) {
+          showMsg((warn ? warn + '。' : '') + '目前沒有可選案號，請在下方手動輸入案號後載入。');
+        } else if (!projects.length && warn && urlProjectNo) {
+          showMsg(warn + '（已用網址案號載入選材）');
         }
-        var sel = $('projectSelect');
-        var projects = overview.projects || [];
-        sel.innerHTML = '<option value="">— 選擇案號 —</option>' +
-          projects.map(function (p) {
-            return '<option value="' + p.project_no + '">' + p.project_no + ' ' + (p.site_name || '') + '</option>';
-          }).join('');
-        if (urlProjectNo) {
-          sel.value = urlProjectNo;
-          if (sel.value !== urlProjectNo) {
-            var opt = document.createElement('option');
-            opt.value = urlProjectNo;
-            opt.textContent = urlProjectNo + '（網址帶入）';
-            sel.appendChild(opt);
-            sel.value = urlProjectNo;
-          }
-          loadList();
-          loadAudit();
-        }
-      } catch (e) {
-        showMsg('案號載入失敗：' + ((e && e.message) || '請檢查網路後再試'));
       }
     }
 
@@ -256,9 +627,19 @@
         loadList();
         loadAudit();
       } else {
-        $('matList').innerHTML = '請先選擇案號';
+        $('matList').innerHTML = '<div class="empty-state"><strong>請先選擇案號</strong>選定後會列出這案的選材紀錄</div>';
       }
     };
+
+    $('btnLoadProject').onclick = function () {
+      applyProjectNo($('projectInput').value);
+    };
+    $('projectInput').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        applyProjectNo($('projectInput').value);
+      }
+    });
 
     function splitPhotos(raw) {
       return String(raw || '').split(/[,;]/).map(function (s) { return s.trim(); }).filter(Boolean);
@@ -267,23 +648,29 @@
     async function loadList() {
       var pno = $('projectSelect').value;
       if (!pno) return;
-      $('matList').innerHTML = '載入中…';
+      $('matList').innerHTML = '<div class="empty-state">載入中…</div>';
       try {
         var res = await AccountingApi.materialDesignerList(session, pno);
-        if (!res.success) { $('matList').innerHTML = '<p>' + (res.message || '載入失敗，請稍後再試') + '</p>'; return; }
+        if (!res.success) {
+          $('matList').innerHTML = '<div class="empty-state"><strong>載入失敗</strong>' + (res.message || '請稍後再試') + '</div>';
+          return;
+        }
         if (res.space_label_presets && res.space_label_presets.length) {
           SPACE_PRESETS = res.space_label_presets;
         }
         if (res.part_label_presets && res.part_label_presets.length) {
           PART_PRESETS = res.part_label_presets;
         }
-        if (!res.items || !res.items.length) { $('matList').innerHTML = '<p>尚無選材紀錄</p>'; return; }
-        $('matList').innerHTML = res.items.map(function (m) {
+        if (!res.items || !res.items.length) {
+          lastListItems = [];
+          $('matList').innerHTML = '<div class="empty-state"><strong>尚無選材紀錄</strong>按上方「新增選材」建立第一筆</div>';
+          return;
+        }
+        lastListItems = res.items.slice();
+        $('matList').innerHTML = res.items.map(function (m, idx) {
           var isVoid = m.status === 'void';
           var photos = splitPhotos(m.photo_urls);
-          var photoHtml = photos.map(function (u) {
-            return '<img src="' + u + '" alt="選材照片" data-full="' + u + '" />';
-          }).join('');
+          var photoHtml = renderPhotoHtml_(photos);
           var spaceLabels = splitLabels(m.space_labels);
           var partLabels = splitLabels(m.part_labels);
           var labelHtml = '';
@@ -301,18 +688,25 @@
           var btns = '';
           if (!isVoid) {
             btns =
+              '<div class="mat-actions">' +
+              '<button type="button" class="btn btn-sm btn-secondary" data-edit="' + m.material_id + '">編輯說明／空間</button>' +
               '<button type="button" class="btn btn-sm btn-danger" data-void="' + m.material_id + '">作廢</button>' +
-              '<button type="button" class="btn btn-sm btn-secondary" data-void-new="' + m.material_id + '">作廢並新建</button>';
+              '<button type="button" class="btn btn-sm btn-secondary" data-void-new="' + m.material_id + '">作廢並新建</button>' +
+              '</div>';
           }
-          return '<div class="mat-item">' +
+          return '<div class="mat-item' + (isVoid ? ' is-void' : '') + '" style="animation-delay:' + (Math.min(idx, 8) * 0.04) + 's">' +
             (isVoid ? '<span class="tag tag-void">已作廢</span> ' : '') +
-            labelHtml +
-            (m.selected_at ? '<div style="font-size:13px;color:#555;margin-top:6px">定案日：' + m.selected_at + '</div>' : '') +
-            (m.note ? '<div style="font-size:13px;color:#666;margin-top:2px">補充說明：' + m.note + '</div>' : '') +
-            (photoHtml ? '<div class="photo-row">' + photoHtml + '</div>' : '<div class="hint">尚無照片</div>') +
+            '<div class="mat-labels">' + labelHtml + '</div>' +
+            (m.selected_at ? '<div class="mat-meta">定案日：' + m.selected_at + '</div>' : '') +
+            (m.note ? '<div class="mat-note">補充說明：' + m.note + '</div>' : '') +
+            photoHtml +
             btns + '</div>';
         }).join('');
         bindPhotoClicks($('matList'));
+        bindPhotoErrors_($('matList'));
+        $('matList').querySelectorAll('[data-edit]').forEach(function (btn) {
+          btn.addEventListener('click', function () { openEditForm(btn.getAttribute('data-edit')); });
+        });
         $('matList').querySelectorAll('[data-void]').forEach(function (btn) {
           btn.addEventListener('click', function () { window._voidMaterial(btn.getAttribute('data-void')); });
         });
@@ -320,7 +714,7 @@
           btn.addEventListener('click', function () { window._voidThenNew(btn.getAttribute('data-void-new')); });
         });
       } catch (e) {
-        $('matList').innerHTML = '<p>載入失敗：' + ((e && e.message) || '請稍後再試') + '</p>';
+        $('matList').innerHTML = '<div class="empty-state"><strong>載入失敗</strong>' + ((e && e.message) || '請稍後再試') + '</div>';
       }
     }
 
@@ -345,9 +739,19 @@
       }
     }
 
+    function setFormMode_(isEdit) {
+      $('fPhotosLabel').classList.toggle('hidden', !!isEdit);
+      $('fPhotos').classList.toggle('hidden', !!isEdit);
+      $('fPhotosHint').classList.toggle('hidden', !!isEdit);
+      $('fPhotoPreview').classList.toggle('hidden', !!isEdit);
+      $('btnSave').textContent = isEdit ? '儲存修改' : '儲存（客人立刻可見）';
+    }
+
     function openCreateForm(prefill) {
       if (!$('projectSelect').value) { showMsg('請先選擇案號'); return; }
+      editingMaterialId = '';
       clearForm();
+      setFormMode_(false);
       if (prefill) {
         renderChipGrid('spaceGrid', SPACE_PRESETS, splitLabels(prefill.space_labels), false);
         renderChipGrid('partGrid', PART_PRESETS, splitLabels(prefill.part_labels), true);
@@ -360,8 +764,26 @@
       showMsg('');
     }
 
+    function openEditForm(mid) {
+      var m = (lastListItems || []).find(function (x) { return x.material_id === mid; });
+      if (!m) { showMsg('找不到這筆選材，請重新整理列表'); return; }
+      if (m.status === 'void') { showMsg('已作廢的選材不能編輯'); return; }
+      editingMaterialId = mid;
+      clearForm();
+      setFormMode_(true);
+      renderChipGrid('spaceGrid', SPACE_PRESETS, splitLabels(m.space_labels), false);
+      renderChipGrid('partGrid', PART_PRESETS, splitLabels(m.part_labels), true);
+      $('fSelectedAt').value = m.selected_at || todayYmd();
+      $('fNote').value = m.note || '';
+      $('formTitle').textContent = '編輯說明／空間';
+      $('listView').classList.add('hidden');
+      $('formView').classList.remove('hidden');
+      showMsg('可改空間、部位、定案日與補充說明；照片請用「作廢並新建」重傳。');
+    }
+
     $('btnAdd').onclick = function () { openCreateForm(null); };
     $('btnBackToList').onclick = function () {
+      editingMaterialId = '';
       $('formView').classList.add('hidden');
       $('listView').classList.remove('hidden');
       showMsg('');
@@ -397,7 +819,7 @@
             var img = document.createElement('img');
             img.src = reader.result;
             img.alt = '預覽';
-            img.style.cssText = 'width:80px;height:80px;object-fit:cover;border-radius:6px;margin:4px;';
+            img.style.cssText = 'width:104px;height:104px;object-fit:cover;border-radius:10px;margin:0 8px 8px 0;border:1px solid #e5e7eb;';
             preview.appendChild(img);
           };
           reader.readAsDataURL(file);
@@ -459,16 +881,36 @@
       var btn = $('btnSave');
       if (btn.disabled) return;
       btn.disabled = true;
+      var isEdit = !!editingMaterialId;
       btn.textContent = '處理中…';
       showMsg('');
       try {
         var spaces = getCheckedFromGrid('spaceGrid');
         if (!spaces.length) { showMsg('請至少選一個空間標籤'); return; }
         var parts = getCheckedFromGrid('partGrid');
+        if (!$('projectSelect').value) { showMsg('請先選擇案號'); return; }
+
+        if (isEdit) {
+          var upd = await AccountingApi.materialUpdate(session, {
+            material_id: editingMaterialId,
+            space_labels: spaces,
+            part_labels: parts,
+            selected_at: $('fSelectedAt').value || todayYmd(),
+            note: $('fNote').value
+          });
+          if (!upd.success) { showMsg(upd.message || '儲存失敗，請稍後再試'); return; }
+          editingMaterialId = '';
+          $('formView').classList.add('hidden');
+          $('listView').classList.remove('hidden');
+          await loadList();
+          loadAudit();
+          showMsg('已更新說明與空間，客人端會看到最新內容', true);
+          return;
+        }
+
         var files = $('fPhotos').files;
         if (!files || files.length < 1) { showMsg('請至少上傳 1 張照片'); return; }
         if (files.length > 3) { showMsg('最多 3 張照片'); return; }
-        if (!$('projectSelect').value) { showMsg('請先選擇案號'); return; }
 
         var payload = {
           project_no: $('projectSelect').value,
@@ -491,10 +933,15 @@
           photos: photos
         });
         if (!upRes.success) {
-          showMsg('選材文字已建立，但照片上傳失敗：' + (upRes.message || '請檢查網路') + '。請作廢這筆後重試。');
-        } else {
-          showMsg('已儲存，客人立刻可見', true);
+          try { await AccountingApi.materialVoid(session, mid); } catch (voidErr) { /* 盡力作廢 */ }
+          showMsg('照片上傳失敗，已取消這筆選材：' + (upRes.message || '請檢查網路後再試'));
+          $('formView').classList.add('hidden');
+          $('listView').classList.remove('hidden');
+          loadList();
+          loadAudit();
+          return;
         }
+        showMsg('已儲存，客人立刻可見', true);
 
         $('formView').classList.add('hidden');
         $('listView').classList.remove('hidden');
@@ -504,7 +951,7 @@
         showMsg('儲存失敗：' + ((e && e.message) || '請檢查網路後再試'));
       } finally {
         btn.disabled = false;
-        btn.textContent = '儲存（客人立刻可見）';
+        btn.textContent = editingMaterialId ? '儲存修改' : '儲存（客人立刻可見）';
       }
     };
 

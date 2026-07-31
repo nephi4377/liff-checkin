@@ -328,6 +328,18 @@ var AccountingApi = (function () {
     return buildAuth(sessionOrToken);
   }
 
+  /** 選材設計師 API：dev_bypass 同時寫在 body 頂層（對齊 project-console MaterialPortalAccess） */
+  function buildMaterialPostBody_(sessionOrToken, body) {
+    var out = Object.assign({}, body || {}, { auth: resolveAuth(sessionOrToken) });
+    var auth = out.auth || {};
+    if (auth.dev_bypass) {
+      out.dev_bypass = true;
+      if (auth.dev_permission) out.dev_permission = auth.dev_permission;
+      if (auth.dev_user_id) out.dev_user_id = auth.dev_user_id;
+    }
+    return out;
+  }
+
   return {
     GAS_API: GAS_API,
     PROJECT_CONSOLE_API: PROJECT_CONSOLE_API,
@@ -1293,33 +1305,31 @@ var AccountingApi = (function () {
     },
     /** 選材 — 設計師寫入（project-console） */
     materialCreate: function (sessionOrToken, payload) {
-      return postMaterial(Object.assign({ action: 'margin_material_create', auth: resolveAuth(sessionOrToken) }, payload || {}));
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, Object.assign({ action: 'margin_material_create' }, payload || {})));
     },
     materialUpdate: function (sessionOrToken, payload) {
-      return postMaterial(Object.assign({ action: 'margin_material_update', auth: resolveAuth(sessionOrToken) }, payload || {}));
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, Object.assign({ action: 'margin_material_update' }, payload || {})));
     },
     materialVoid: function (sessionOrToken, materialId) {
-      return postMaterial({ action: 'margin_material_void', auth: resolveAuth(sessionOrToken), material_id: materialId });
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, { action: 'margin_material_void', material_id: materialId }));
     },
     materialUploadPhoto: function (sessionOrToken, payload) {
-      return postMaterial({
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
         action: 'margin_material_upload_photo',
-        auth: resolveAuth(sessionOrToken),
         material_id: payload.material_id,
         project_no: payload.project_no,
         photos: payload.photos || []
-      });
+      }));
     },
     materialDesignerList: function (sessionOrToken, projectNo) {
-      return postMaterial({ action: 'margin_material_designer_list', auth: resolveAuth(sessionOrToken), project_no: projectNo });
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, { action: 'margin_material_designer_list', project_no: projectNo }));
     },
     materialAuditLog: function (sessionOrToken, filter) {
-      return postMaterial({
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
         action: 'margin_material_audit_log',
-        auth: resolveAuth(sessionOrToken),
         material_id: (filter && filter.material_id) || '',
         project_no: (filter && filter.project_no) || ''
-      });
+      }));
     },
     /** 選材 — 客戶唯讀（project-console） */
     materialPortalList: function (sessionOrToken, projectNo, opts) {
