@@ -150,8 +150,8 @@
 
 | 模式 | GAS | 前端身分 | 權限來源 |
 |------|-----|----------|----------|
-| **開發 bypass** | `ACCOUNTING_AUTH_BYPASS=true` | `dev_bypass` +（應）`dev_user_id`／`dev_permission` | 優先 Checkin 查 `dev_user_id`；否則 `ACCOUNTING_DEV_PERMISSION`（預設 4） |
-| **正式（方案 A）** | bypass 關閉 | HUB iframe 內：官方 LIFF `liff_id_token` 或延續 HUB 傳入之 `userId` | `verifyLiffIdToken`（**官方 Channel**）→ `fetchEmployeeByUserId_` |
+| **開發 bypass** | `ACCOUNTING_AUTH_BYPASS=true`（accounting-gas；選材另讀同旗或 `accounting_policy.authBypass`） | `dev_bypass` +（應）`dev_user_id`／`dev_permission` | 優先 Checkin 查 `dev_user_id`；否則 `ACCOUNTING_DEV_PERMISSION`（預設 4） |
+| **正式（方案 A）** | bypass 關閉 | HUB iframe 內：官方 LIFF `liff_id_token`（選材 POST **頂層＋auth** 皆可）或延續 HUB 傳入之 `userId` | 會計／選材（project-console）皆依序驗 **官方 Channel 2007974938** 與 **會計 Bot 2010424425** → 再查員工表 |
 
 **Script Properties（accounting-gas，勿寫進版控）**
 

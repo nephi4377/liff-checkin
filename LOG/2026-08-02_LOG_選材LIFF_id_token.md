@@ -22,4 +22,6 @@ Backend_GAS `project-console`：雙 Channel 驗證 + bypass 探測快取修正�
 
 ## 部署
 
-- **未部署**（需明確說部署）
+- **已部署**（2026-08-02）：`CODING/upload.bat` NONINTERACTIVE → push `main`
+- commit：`f0ed220`（選材頂層 liff_id_token＋Hub 暫用身分）
+- 備份：腳本 robocopy `../BAK/CODING_<時間戳>_<電腦名>/`
