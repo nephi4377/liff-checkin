@@ -36,6 +36,10 @@
       padding: 48px 16px; text-align: center; color: var(--mat-muted); font-size: 15px;
     }
     .page-header { margin-bottom: 16px; animation: matFadeUp .35s ease both; }
+    .page-title-row {
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 12px; margin: 0 0 8px;
+    }
+    .page-title-row h2 { margin: 0; }
     .page-kicker {
       display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
       color: var(--mat-blue-ink); background: var(--mat-blue-soft);
@@ -43,6 +47,33 @@
     }
     h2 { margin: 0 0 8px; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
     .lead { margin: 0; font-size: 14px; color: var(--mat-muted); line-height: 1.55; }
+    .status-pill {
+      display: inline-block; font-size: 12px; font-weight: 600; color: var(--mat-blue-ink);
+      background: var(--mat-blue-soft); padding: 4px 10px; border-radius: 6px;
+    }
+    .status-pill.is-idle { display: none; }
+    .project-toolbar {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 10px;
+    }
+    .project-toolbar label.show-closed {
+      margin-top: 0; font-weight: 500; font-size: 14px; color: #4b5563;
+      display: inline-flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer;
+    }
+    .project-toolbar label.show-closed input { width: auto; margin: 0; }
+    .mat-skel {
+      background: var(--mat-surface); border: 1px solid var(--mat-line); border-radius: var(--mat-radius);
+      padding: 14px; box-shadow: var(--mat-shadow);
+    }
+    .mat-skel-bar {
+      height: 12px; border-radius: 6px; background: linear-gradient(90deg, #eef1f4 25%, #f7f8fa 50%, #eef1f4 75%);
+      background-size: 200% 100%; animation: matShimmer 1.2s ease-in-out infinite; margin-bottom: 10px;
+    }
+    .mat-skel-bar.short { width: 42%; }
+    .mat-skel-bar.mid { width: 68%; }
+    @keyframes matShimmer {
+      0% { background-position: 100% 0; }
+      100% { background-position: -100% 0; }
+    }
     .card {
       background: var(--mat-surface); border-radius: var(--mat-radius); padding: 16px 16px 18px;
       margin: 12px 0; box-shadow: var(--mat-shadow); border: 1px solid var(--mat-line);
@@ -136,6 +167,15 @@
     .chip input { width: auto; margin: 0; }
     .chip.on { border-color: var(--mat-blue); background: var(--mat-blue-soft); color: var(--mat-blue-ink); font-weight: 600; }
     .chip.part.on { border-color: var(--mat-teal); background: var(--mat-teal-soft); color: var(--mat-teal); }
+    .chip-custom-row {
+      display: flex; gap: 8px; margin-top: 10px; align-items: stretch;
+    }
+    .chip-custom-row input {
+      flex: 1; margin-top: 0; min-width: 0;
+    }
+    .chip-custom-row .btn-sm {
+      margin: 0; flex-shrink: 0; white-space: nowrap;
+    }
     .lightbox {
       position: fixed; inset: 0; background: rgba(15,23,42,.88); z-index: 9999;
       display: flex; align-items: center; justify-content: center; padding: 16px;
@@ -158,19 +198,25 @@
   </style>
 </head>
 <body>
-  <div id="loading">載入中…</div>
-  <div id="app" class="hidden">
+  <div id="loading" class="hidden">載入中…</div>
+  <div id="app">
     <header class="page-header">
       <span class="page-kicker">專案選材</span>
-      <h2>選材管理</h2>
-      <p class="lead">存檔後客人立刻看得到；照片會存進案件 Dropbox 的「選材」資料夾。補充說明、空間／部位可直接編輯；換照片請「作廢並新建」。歷史舊檔若曾用自由命名匯入，空間可能顯示「未分類」或從檔名猜到的空間，可編輯標籤或作廢後重建。</p>
+      <div class="page-title-row">
+        <h2>選材管理</h2>
+        <span id="pageStatus" class="status-pill" role="status" aria-live="polite">載入中…</span>
+      </div>
+      <p class="lead">存檔後客人立刻看得到；照片以案件 Dropbox「選材」為主（畫面優先顯示），並備一份 Google 雲端硬碟副本。補充說明、空間／部位可直接編輯；換照片請「作廢並新建」。歷史舊檔若曾用自由命名匯入，空間可能顯示「未分類」或從檔名猜到的空間，可編輯標籤或作廢後重建。</p>
     </header>
     <div id="msg" role="status" aria-live="polite"></div>
 
     <div class="card">
       <label for="projectSelect" style="margin-top:0">選擇案號</label>
       <select id="projectSelect"><option value="">— 選擇案號 —</option></select>
-      <p id="projectSyncHint" class="hint hidden" style="margin-top:8px">正在背景更新案號清單…</p>
+      <div class="project-toolbar">
+        <label class="show-closed"><input type="checkbox" id="showClosed" /> 顯示已結案</label>
+        <p id="projectSyncHint" class="hint hidden" style="margin:0">案號清單更新中…</p>
+      </div>
       <div id="projectManual" class="hidden">
         <label for="projectInput">案號清單暫無資料時，請手動輸入案號</label>
         <div class="hint">例如 790。輸入後按「載入此案選材」。</div>
@@ -181,6 +227,7 @@
 
     <div id="listView">
       <button type="button" class="btn btn-primary" id="btnAdd">＋ 新增選材</button>
+      <p id="listSyncHint" class="hint hidden" style="margin-top:8px">選材列表更新中…</p>
       <div id="matList" class="mat-list"><div class="empty-state"><strong>請先選擇案號</strong>選定後會列出這案的選材紀錄</div></div>
       <div class="card" id="auditSection" style="margin-top:16px;">
         <h3 class="section-title">變更歷程</h3>
@@ -195,12 +242,20 @@
         <p class="hint" style="margin:0 0 4px">這一筆＝哪幾個空間、哪些部位／材料定了什麼樣（靠照片＋標籤說清楚）。</p>
 
         <label>空間標籤（可複選，至少一個）</label>
-        <div class="hint">常用：客餐廳、主臥、次臥、全室、玄關、衛浴、陽台</div>
+        <div class="hint">上方點常用；下方可自己打字按「加入」。再點已選可取消。至少要有一個。</div>
         <div class="chip-grid" id="spaceGrid"></div>
+        <div class="chip-custom-row">
+          <input type="text" id="spaceCustomInput" placeholder="例如：書房" autocomplete="off" maxlength="40" />
+          <button type="button" class="btn btn-sm btn-secondary" id="btnAddSpace">加入</button>
+        </div>
 
         <label>部位／材料標籤（可複選）</label>
-        <div class="hint">地板、磁磚、油漆／乳膠漆、櫃體、門板、中島／枱面、五金、燈具、窗簾、其他</div>
+        <div class="hint">上方點常用；下方可自己打字按「加入」。再點已選可取消。</div>
         <div class="chip-grid" id="partGrid"></div>
+        <div class="chip-custom-row">
+          <input type="text" id="partCustomInput" placeholder="例如：壁紙" autocomplete="off" maxlength="40" />
+          <button type="button" class="btn btn-sm btn-secondary" id="btnAddPart">加入</button>
+        </div>
 
         <label for="fSelectedAt">定案日</label>
         <div class="hint">預設為今天；選照片後可帶拍照日，也可自行修改。定案日只記在系統，不寫進檔名；檔名格式：空間_部位_流水號。</div>
@@ -228,16 +283,46 @@
     var voidBusy = false;
     var editingMaterialId = '';
     var lastListItems = [];
-    var PROJECT_LIST_CACHE_KEY = 'material_project_options_v1';
+    var allProjectsCache_ = [];
+    var PROJECT_LIST_CACHE_KEY = 'material_project_options_v2';
     var PROJECT_LIST_TTL_MS = 24 * 60 * 60 * 1000;
-    var SESSION_PROJECTS_KEY = 'tanxin_mat_projects_v1';
+    var SESSION_PROJECTS_KEY = 'tanxin_mat_projects_v2';
+    var MATERIAL_LIST_PREFIX = 'tanxin_mat_list_v1:';
+    var MATERIAL_LIST_TTL_MS = 10 * 60 * 1000;
     var projectBgRefreshPromise = null;
+    var listLoadGen_ = 0;
+    var auditLoadGen_ = 0;
 
     function $(id) { return document.getElementById(id); }
     function showMsg(t, ok) {
       var el = $('msg');
       el.textContent = t || '';
       el.className = ok ? 'ok' : '';
+    }
+    function setPageStatus_(text) {
+      var el = $('pageStatus');
+      if (!el) return;
+      var t = String(text || '').trim();
+      el.textContent = t;
+      el.classList.toggle('is-idle', !t);
+    }
+    function setProjectSyncHint_(visible, text) {
+      var el = $('projectSyncHint');
+      if (!el) return;
+      if (text) el.textContent = text;
+      el.classList.toggle('hidden', !visible);
+    }
+    function setListSyncHint_(visible) {
+      var el = $('listSyncHint');
+      if (!el) return;
+      el.classList.toggle('hidden', !visible);
+    }
+    function listSkeletonHtml_() {
+      return '<div class="mat-skel" aria-hidden="true">' +
+        '<div class="mat-skel-bar mid"></div><div class="mat-skel-bar short"></div><div class="mat-skel-bar"></div>' +
+        '</div><div class="mat-skel" aria-hidden="true">' +
+        '<div class="mat-skel-bar mid"></div><div class="mat-skel-bar short"></div>' +
+        '</div><div class="empty-state" style="margin-top:4px;border:none;background:transparent;padding:8px"><strong>更新中…</strong>正在載入此案選材</div>';
     }
 
     function todayYmd() {
@@ -265,16 +350,38 @@
       return String(raw || '').split(/[、,;｜|]/).map(function (s) { return s.trim(); }).filter(Boolean);
     }
 
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    /** 畫 chip：常用 presets ∪ 已選（含自訂／編輯帶回的非常用） */
     function renderChipGrid(gridId, presets, selected, partStyle) {
       selected = selected || [];
       var set = {};
       selected.forEach(function (s) { set[s] = true; });
+      var labels = [];
+      var seen = {};
+      (presets || []).forEach(function (p) {
+        if (!p || seen[p]) return;
+        seen[p] = true;
+        labels.push(p);
+      });
+      selected.forEach(function (s) {
+        if (!s || seen[s]) return;
+        seen[s] = true;
+        labels.push(s);
+      });
       var el = $(gridId);
-      el.innerHTML = presets.map(function (label) {
+      el.innerHTML = labels.map(function (label) {
         var on = !!set[label];
+        var safe = escapeHtml(label);
         return '<label class="chip' + (partStyle ? ' part' : '') + (on ? ' on' : '') + '">' +
-          '<input type="checkbox" value="' + label + '"' + (on ? ' checked' : '') + ' />' +
-          label + '</label>';
+          '<input type="checkbox" value="' + safe + '"' + (on ? ' checked' : '') + ' />' +
+          safe + '</label>';
       }).join('');
       el.querySelectorAll('input').forEach(function (inp) {
         inp.addEventListener('change', function () {
@@ -289,6 +396,33 @@
         out.push(inp.value);
       });
       return out;
+    }
+
+    /** 從輸入框加入自訂標籤；空字／重複用人話提示 */
+    function addCustomLabelFromInput(gridId, presets, inputId, partStyle, kindName) {
+      var input = $(inputId);
+      if (!input) return;
+      var raw = String(input.value || '').trim();
+      if (!raw) {
+        showMsg('請先輸入要加入的' + kindName);
+        input.focus();
+        return;
+      }
+      if (/[、,;｜|]/.test(raw)) {
+        showMsg('標籤請不要含「、」逗號等分隔符號，改成一般名稱即可');
+        input.focus();
+        return;
+      }
+      var current = getCheckedFromGrid(gridId);
+      if (current.indexOf(raw) >= 0) {
+        showMsg('「' + raw + '」已經選過了');
+        input.focus();
+        return;
+      }
+      current.push(raw);
+      renderChipGrid(gridId, presets, current, partStyle);
+      input.value = '';
+      showMsg('已加入「' + raw + '」', true);
     }
 
     function fileDateYmd(file) {
@@ -355,28 +489,51 @@
       loadAudit();
     }
 
+    function coerceClosed_(p) {
+      if (!p) return false;
+      if (p.is_closed === true || p.is_closed === 1 || p.is_closed === '1' || p.is_closed === 'true') return true;
+      var st = String(p.project_status || p['專案狀態'] || p.status || '').trim();
+      return st === '已結案';
+    }
+
+    function projectNoSortKey_(no) {
+      var n = parseInt(String(no || '').replace(/\D/g, ''), 10);
+      return isNaN(n) ? 0 : n;
+    }
+
+    function sortProjects_(projects) {
+      return (projects || []).slice().sort(function (a, b) {
+        var ac = !!a.is_closed;
+        var bc = !!b.is_closed;
+        if (ac !== bc) return ac ? 1 : -1;
+        return projectNoSortKey_(b.project_no) - projectNoSortKey_(a.project_no);
+      });
+    }
+
     function normalizeProjectRows(rows) {
-      return (rows || []).map(function (p) {
+      return sortProjects_((rows || []).map(function (p) {
         var no = String(p.project_no || p.id || p['案號'] || p.code || '').trim();
         var name = p.site_name || p.name || p.client_name || p['案場名稱'] || p.customer_name || p.tab_name || '';
-        return no ? { project_no: no, site_name: name } : null;
-      }).filter(Boolean);
+        return no ? { project_no: no, site_name: name, is_closed: coerceClosed_(p) } : null;
+      }).filter(Boolean));
     }
 
     function toHubProjectShape_(projects) {
-      return (projects || []).map(function (p) {
+      return (projects || []).filter(function (p) { return !p.is_closed; }).map(function (p) {
         return { id: p.project_no, name: p.site_name || '', project_no: p.project_no, site_name: p.site_name || '' };
       });
     }
 
     function persistProjectCache_(projects) {
       if (!projects || !projects.length) return;
+      var normalized = normalizeProjectRows(projects);
       try {
-        sessionStorage.setItem(SESSION_PROJECTS_KEY, JSON.stringify({ ts: Date.now(), projects: projects }));
+        sessionStorage.setItem(SESSION_PROJECTS_KEY, JSON.stringify({ ts: Date.now(), projects: normalized }));
       } catch (e) {}
       try {
         if (typeof HubRefCache !== 'undefined') {
-          HubRefCache.set('projects', toHubProjectShape_(projects));
+          var hubShape = toHubProjectShape_(normalized);
+          if (hubShape.length) HubRefCache.set('projects', hubShape);
         }
       } catch (e2) {}
     }
@@ -397,43 +554,42 @@
     function projectsFromHubRef_() {
       try {
         if (typeof HubRefCache === 'undefined') return [];
-        // read() 會先讀 iframe 父層 spaAllProjects，再讀 localStorage
+        // read() 會先讀 iframe 父層 spaAllProjects，再讀 localStorage（通常僅進行中）
         return normalizeProjectRows(HubRefCache.read('projects') || []);
       } catch (e) {
         return [];
       }
     }
 
-    function setProjectSyncHint_(visible) {
-      var el = $('projectSyncHint');
-      if (!el) return;
-      el.classList.toggle('hidden', !visible);
-    }
-
     async function fetchProjectOptionsNetwork_() {
       var projects = [];
       var warn = '';
+      // 優先客戶財務總覽（含 is_closed），對齊進行中／已結案
       try {
-        var margin = await AccountingApi.marginListOverview(session);
-        if (margin && margin.success) {
-          projects = normalizeProjectRows((margin.items || []).map(function (it) {
-            return { project_no: it.project_no, site_name: it.client_name || it.tab_name || '' };
-          }));
-        } else if (margin && margin.message) {
-          warn = margin.message;
+        var overview = await AccountingApi.cfOverview(session, true);
+        if (overview && overview.success) {
+          projects = normalizeProjectRows(overview.items || overview.projects || []);
+        } else if (overview && overview.message) {
+          warn = overview.message;
         }
-      } catch (eMargin) {}
+      } catch (e) {
+        warn = '案號清單載入失敗：' + ((e && e.message) || '請檢查網路');
+      }
       if (!projects.length) {
         try {
-          var overview = await AccountingApi.cfOverview(session, true);
-          if (overview && overview.success) {
-            projects = normalizeProjectRows(overview.items || overview.projects || []);
-          } else if (!warn) {
-            warn = (overview && overview.message) || '案號清單載入失敗';
+          var margin = await AccountingApi.marginListOverview(session);
+          if (margin && margin.success) {
+            projects = normalizeProjectRows((margin.items || []).map(function (it) {
+              return {
+                project_no: it.project_no,
+                site_name: it.client_name || it.tab_name || '',
+                is_closed: coerceClosed_(it)
+              };
+            }));
+          } else if (!warn && margin && margin.message) {
+            warn = margin.message;
           }
-        } catch (e) {
-          if (!warn) warn = '案號清單載入失敗：' + ((e && e.message) || '請檢查網路');
-        }
+        } catch (eMargin) {}
       }
       if (!projects.length) {
         try {
@@ -445,46 +601,17 @@
     }
 
     function readProjectCacheImmediate_() {
-      var hub = projectsFromHubRef_();
-      if (hub.length) return { projects: hub, warn: '', source: 'hub' };
       var sess = readSessionProjects_();
       if (sess.length) return { projects: sess, warn: '', source: 'session' };
+      var hub = projectsFromHubRef_();
+      if (hub.length) return { projects: hub, warn: '', source: 'hub' };
       return { projects: [], warn: '', source: 'none' };
-    }
-
-    async function loadProjectOptionsCached_(opts) {
-      opts = opts || {};
-      if (!opts.force) {
-        var immediate = readProjectCacheImmediate_();
-        if (immediate.projects.length) return immediate;
-      }
-
-      if (typeof AccountingListCache !== 'undefined') {
-        try {
-          var wrapped = await AccountingListCache.load(
-            session,
-            PROJECT_LIST_CACHE_KEY,
-            function () { return fetchProjectOptionsNetwork_(); },
-            { ttlMs: PROJECT_LIST_TTL_MS, swrMs: 60 * 60 * 1000, force: !!opts.force }
-          );
-          if (wrapped && wrapped.projects && wrapped.projects.length) {
-            persistProjectCache_(wrapped.projects);
-            return { projects: wrapped.projects, warn: wrapped.warn || '', source: 'list_cache' };
-          }
-          if (wrapped && (!wrapped.projects || !wrapped.projects.length)) {
-            AccountingListCache.invalidate(session, PROJECT_LIST_CACHE_KEY);
-          }
-        } catch (eCache) {}
-      }
-
-      var pack = await fetchProjectOptionsNetwork_();
-      if (pack.projects && pack.projects.length) persistProjectCache_(pack.projects);
-      return pack;
     }
 
     function refreshProjectOptionsInBackground_() {
       if (projectBgRefreshPromise) return projectBgRefreshPromise;
-      setProjectSyncHint_(true);
+      setProjectSyncHint_(true, '案號清單更新中…');
+      if (!allProjectsCache_.length) setPageStatus_('更新中…');
       projectBgRefreshPromise = fetchProjectOptionsNetwork_()
         .then(function (pack) {
           var projects = (pack && pack.projects) || [];
@@ -492,26 +619,67 @@
             persistProjectCache_(projects);
             fillProjectSelect_(projects);
             $('projectManual').classList.add('hidden');
-            showMsg('');
+            if (pack.warn) {
+              /* 有清單就不蓋掉；僅背景失敗時保留畫面 */
+            } else {
+              showMsg('');
+            }
+          } else if (pack && pack.warn && !allProjectsCache_.length) {
+            showMsg(pack.warn);
           }
           return pack;
         })
-        .catch(function () { return null; })
+        .catch(function () {
+          /* 失敗不抹已顯示案號 */
+          return null;
+        })
         .finally(function () {
           projectBgRefreshPromise = null;
           setProjectSyncHint_(false);
+          if (allProjectsCache_.length || $('projectSelect').value) setPageStatus_('');
         });
       return projectBgRefreshPromise;
     }
 
+    function projectOptionHtml_(p) {
+      var label = p.project_no + ' ' + (p.site_name || '');
+      if (p.is_closed) label += '（已結案）';
+      return '<option value="' + escapeHtml(p.project_no) + '">' + escapeHtml(label) + '</option>';
+    }
+
     function fillProjectSelect_(projects) {
+      allProjectsCache_ = normalizeProjectRows(projects || []);
+      renderProjectSelect_();
+    }
+
+    function renderProjectSelect_() {
       var sel = $('projectSelect');
       var current = sel.value || urlProjectNo || '';
-      sel.innerHTML = '<option value="">— 選擇案號 —</option>' +
-        (projects || []).map(function (p) {
-          return '<option value="' + p.project_no + '">' + p.project_no + ' ' + (p.site_name || '') + '</option>';
-        }).join('');
-      if (current) ensureProjectOption(current, current + (urlProjectNo && current === urlProjectNo ? '（網址帶入）' : ''));
+      var showClosed = !!( $('showClosed') && $('showClosed').checked );
+      var open = [];
+      var closed = [];
+      allProjectsCache_.forEach(function (p) {
+        if (p.is_closed) closed.push(p);
+        else open.push(p);
+      });
+      var html = '<option value="">— 選擇案號 —</option>';
+      if (open.length) {
+        html += '<optgroup label="進行中">' + open.map(projectOptionHtml_).join('') + '</optgroup>';
+      }
+      if (showClosed && closed.length) {
+        html += '<optgroup label="已結案">' + closed.map(projectOptionHtml_).join('') + '</optgroup>';
+      }
+      sel.innerHTML = html;
+      if (current) {
+        var found = allProjectsCache_.filter(function (p) { return p.project_no === current; })[0];
+        var suffix = '';
+        if (found && found.is_closed) suffix = '（已結案）';
+        else if (urlProjectNo && current === urlProjectNo) suffix = '（網址帶入）';
+        ensureProjectOption(current, current + (found && found.site_name ? ' ' + found.site_name : '') + suffix);
+      }
+      if (!open.length && closed.length && !showClosed && !current) {
+        showMsg('目前可選的都是已結案案號，請勾「顯示已結案」後再選。');
+      }
     }
 
     /** Dropbox 分享／舊連結轉成瀏覽器可當 img 的網址 */
@@ -548,7 +716,7 @@
           if (img.dataset.retried === '1') {
             var fail = document.createElement('div');
             fail.className = 'photo-fail';
-            fail.textContent = '照片無法顯示（連結可能已過期，部署後端重算後再重整）';
+            fail.textContent = '照片無法顯示（Dropbox 連結可能已過期，且尚無可用的雲端硬碟副本；請重新上傳）';
             if (img.parentNode) img.parentNode.replaceChild(fail, img);
             return;
           }
@@ -568,27 +736,43 @@
 
     async function boot() {
       urlProjectNo = parseQueryProjectNo();
+      $('app').classList.remove('hidden');
+      $('loading').classList.add('hidden');
+      setPageStatus_('載入中…');
+      renderChipGrid('spaceGrid', SPACE_PRESETS, [], false);
+      renderChipGrid('partGrid', PART_PRESETS, [], true);
+      // 身分確認前先出快取案號框架
+      var early = readProjectCacheImmediate_();
+      if (early.projects.length) {
+        fillProjectSelect_(early.projects);
+        $('projectManual').classList.add('hidden');
+        setPageStatus_('更新中…');
+      }
       try {
         session = await AccountingApi.initSession({ minPermission: 2 });
         if (!session) {
-          $('loading').textContent = '無法確認身分。本機請用完整網址開啟（含 project_no、perm、dev_user_id），或從主控台進入。';
+          setPageStatus_('');
+          showMsg('無法確認身分。本機請用完整網址開啟（含 project_no、perm、dev_user_id），或從主控台進入。');
           return;
         }
-        $('loading').classList.add('hidden');
-        $('app').classList.remove('hidden');
-        renderChipGrid('spaceGrid', SPACE_PRESETS, [], false);
-        renderChipGrid('partGrid', PART_PRESETS, [], true);
         window.addEventListener('tanxin-ref-updated', function (e) {
           if (!e.detail || e.detail.kind !== 'projects') return;
           var hub = projectsFromHubRef_();
-          if (hub.length) {
-            fillProjectSelect_(hub);
-            $('projectManual').classList.add('hidden');
-          }
+          if (!hub.length) return;
+          // 合併進既有（含已結案）快取，勿整包覆蓋成僅進行中
+          var map = {};
+          allProjectsCache_.forEach(function (p) { map[p.project_no] = p; });
+          hub.forEach(function (p) {
+            if (!map[p.project_no]) map[p.project_no] = p;
+            else if (!map[p.project_no].site_name && p.site_name) map[p.project_no].site_name = p.site_name;
+          });
+          fillProjectSelect_(Object.keys(map).map(function (k) { return map[k]; }));
+          $('projectManual').classList.add('hidden');
         });
         await loadProjectOptions();
       } catch (e) {
-        $('loading').textContent = (e && e.message) ? e.message : '載入失敗，請重新整理再試';
+        setPageStatus_('');
+        showMsg((e && e.message) ? e.message : '載入失敗，請重新整理再試');
       }
     }
 
@@ -602,6 +786,10 @@
       if (immediate.projects.length) {
         fillProjectSelect_(immediate.projects);
         $('projectManual').classList.add('hidden');
+        setPageStatus_('更新中…');
+      } else {
+        setPageStatus_('載入中…');
+        setProjectSyncHint_(true, '案號清單載入中…');
       }
 
       // 有快取也背景更新（SWR）；無快取則等網路
@@ -619,7 +807,9 @@
         } else if (!projects.length && warn && urlProjectNo) {
           showMsg(warn + '（已用網址案號載入選材）');
         }
+        setPageStatus_('');
       }
+      // 有快取時標題旁維持「更新中」直到背景刷新結束（refresh.finally）
     }
 
     $('projectSelect').onchange = function () {
@@ -627,9 +817,18 @@
         loadList();
         loadAudit();
       } else {
+        listLoadGen_ += 1;
+        setListSyncHint_(false);
         $('matList').innerHTML = '<div class="empty-state"><strong>請先選擇案號</strong>選定後會列出這案的選材紀錄</div>';
+        $('auditList').innerHTML = '—';
       }
     };
+
+    if ($('showClosed')) {
+      $('showClosed').onchange = function () {
+        renderProjectSelect_();
+      };
+    }
 
     $('btnLoadProject').onclick = function () {
       applyProjectNo($('projectInput').value);
@@ -645,97 +844,161 @@
       return String(raw || '').split(/[,;]/).map(function (s) { return s.trim(); }).filter(Boolean);
     }
 
+    function materialCacheKey_(pno) {
+      return MATERIAL_LIST_PREFIX + String(pno || '').trim();
+    }
+
+    function readMaterialListCache_(pno) {
+      try {
+        var raw = sessionStorage.getItem(materialCacheKey_(pno));
+        if (!raw) return null;
+        var parsed = JSON.parse(raw);
+        if (!parsed || !parsed.ts || (Date.now() - parsed.ts > MATERIAL_LIST_TTL_MS)) return null;
+        return parsed.data || null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function writeMaterialListCache_(pno, data) {
+      try {
+        sessionStorage.setItem(materialCacheKey_(pno), JSON.stringify({ ts: Date.now(), data: data }));
+      } catch (e) {}
+    }
+
+    function invalidateMaterialListCache_(pno) {
+      try {
+        sessionStorage.removeItem(materialCacheKey_(pno));
+      } catch (e) {}
+    }
+
+    function applyListPayload_(res) {
+      if (res.space_label_presets && res.space_label_presets.length) {
+        SPACE_PRESETS = res.space_label_presets;
+      }
+      if (res.part_label_presets && res.part_label_presets.length) {
+        PART_PRESETS = res.part_label_presets;
+      }
+      if (!res.items || !res.items.length) {
+        lastListItems = [];
+        $('matList').innerHTML = '<div class="empty-state"><strong>尚無選材紀錄</strong>按上方「新增選材」建立第一筆</div>';
+        return;
+      }
+      lastListItems = res.items.slice();
+      $('matList').innerHTML = res.items.map(function (m, idx) {
+        var isVoid = m.status === 'void';
+        var photos = splitPhotos(m.photo_urls);
+        var photoHtml = m.photos_purged
+          ? '<div class="hint" style="margin-top:8px">照片已超過保留期限（結案後約 2 年已清除雲端照）</div>'
+          : renderPhotoHtml_(photos);
+        var spaceLabels = splitLabels(m.space_labels);
+        var partLabels = splitLabels(m.part_labels);
+        var labelHtml = '';
+        if (spaceLabels.length) {
+          labelHtml += spaceLabels.map(function (l) { return '<span class="tag">' + escapeHtml(l) + '</span>'; }).join('');
+        }
+        if (partLabels.length) {
+          labelHtml += partLabels.map(function (l) { return '<span class="tag tag-part">' + escapeHtml(l) + '</span>'; }).join('');
+        }
+        if (!labelHtml) {
+          labelHtml = m.item_name
+            ? '<span class="tag">' + escapeHtml(m.category || '舊資料') + '</span> <strong>' + escapeHtml(m.item_name) + '</strong>'
+            : '<span class="tag">—</span>';
+        }
+        var btns = '';
+        if (!isVoid) {
+          btns =
+            '<div class="mat-actions">' +
+            '<button type="button" class="btn btn-sm btn-secondary" data-edit="' + escapeHtml(m.material_id) + '">編輯說明／空間</button>' +
+            '<button type="button" class="btn btn-sm btn-danger" data-void="' + escapeHtml(m.material_id) + '">作廢</button>' +
+            '<button type="button" class="btn btn-sm btn-secondary" data-void-new="' + escapeHtml(m.material_id) + '">作廢並新建</button>' +
+            '</div>';
+        }
+        return '<div class="mat-item' + (isVoid ? ' is-void' : '') + '" style="animation-delay:' + (Math.min(idx, 8) * 0.04) + 's">' +
+          (isVoid ? '<span class="tag tag-void">已作廢</span> ' : '') +
+          '<div class="mat-labels">' + labelHtml + '</div>' +
+          (m.selected_at ? '<div class="mat-meta">定案日：' + escapeHtml(m.selected_at) + '</div>' : '') +
+          (m.note ? '<div class="mat-note">補充說明：' + escapeHtml(m.note) + '</div>' : '') +
+          photoHtml +
+          btns + '</div>';
+      }).join('');
+      bindPhotoClicks($('matList'));
+      bindPhotoErrors_($('matList'));
+      $('matList').querySelectorAll('[data-edit]').forEach(function (btn) {
+        btn.addEventListener('click', function () { openEditForm(btn.getAttribute('data-edit')); });
+      });
+      $('matList').querySelectorAll('[data-void]').forEach(function (btn) {
+        btn.addEventListener('click', function () { window._voidMaterial(btn.getAttribute('data-void')); });
+      });
+      $('matList').querySelectorAll('[data-void-new]').forEach(function (btn) {
+        btn.addEventListener('click', function () { window._voidThenNew(btn.getAttribute('data-void-new')); });
+      });
+    }
+
     async function loadList() {
       var pno = $('projectSelect').value;
       if (!pno) return;
-      $('matList').innerHTML = '<div class="empty-state">載入中…</div>';
+      var gen = ++listLoadGen_;
+      var cached = readMaterialListCache_(pno);
+      setListSyncHint_(true);
+      if (cached && cached.items) {
+        applyListPayload_(cached);
+      } else {
+        $('matList').innerHTML = listSkeletonHtml_();
+      }
       try {
         var res = await AccountingApi.materialDesignerList(session, pno);
+        if (gen !== listLoadGen_) return;
         if (!res.success) {
-          $('matList').innerHTML = '<div class="empty-state"><strong>載入失敗</strong>' + (res.message || '請稍後再試') + '</div>';
+          if (!cached) {
+            $('matList').innerHTML = '<div class="empty-state"><strong>載入失敗</strong>' + escapeHtml(res.message || '請稍後再試') + '</div>';
+          } else {
+            showMsg(res.message || '列表更新失敗，仍顯示先前內容；可再選一次案號重試');
+          }
           return;
         }
-        if (res.space_label_presets && res.space_label_presets.length) {
-          SPACE_PRESETS = res.space_label_presets;
-        }
-        if (res.part_label_presets && res.part_label_presets.length) {
-          PART_PRESETS = res.part_label_presets;
-        }
-        if (!res.items || !res.items.length) {
-          lastListItems = [];
-          $('matList').innerHTML = '<div class="empty-state"><strong>尚無選材紀錄</strong>按上方「新增選材」建立第一筆</div>';
-          return;
-        }
-        lastListItems = res.items.slice();
-        $('matList').innerHTML = res.items.map(function (m, idx) {
-          var isVoid = m.status === 'void';
-          var photos = splitPhotos(m.photo_urls);
-          var photoHtml = renderPhotoHtml_(photos);
-          var spaceLabels = splitLabels(m.space_labels);
-          var partLabels = splitLabels(m.part_labels);
-          var labelHtml = '';
-          if (spaceLabels.length) {
-            labelHtml += spaceLabels.map(function (l) { return '<span class="tag">' + l + '</span>'; }).join('');
-          }
-          if (partLabels.length) {
-            labelHtml += partLabels.map(function (l) { return '<span class="tag tag-part">' + l + '</span>'; }).join('');
-          }
-          if (!labelHtml) {
-            labelHtml = m.item_name
-              ? '<span class="tag">' + (m.category || '舊資料') + '</span> <strong>' + m.item_name + '</strong>'
-              : '<span class="tag">—</span>';
-          }
-          var btns = '';
-          if (!isVoid) {
-            btns =
-              '<div class="mat-actions">' +
-              '<button type="button" class="btn btn-sm btn-secondary" data-edit="' + m.material_id + '">編輯說明／空間</button>' +
-              '<button type="button" class="btn btn-sm btn-danger" data-void="' + m.material_id + '">作廢</button>' +
-              '<button type="button" class="btn btn-sm btn-secondary" data-void-new="' + m.material_id + '">作廢並新建</button>' +
-              '</div>';
-          }
-          return '<div class="mat-item' + (isVoid ? ' is-void' : '') + '" style="animation-delay:' + (Math.min(idx, 8) * 0.04) + 's">' +
-            (isVoid ? '<span class="tag tag-void">已作廢</span> ' : '') +
-            '<div class="mat-labels">' + labelHtml + '</div>' +
-            (m.selected_at ? '<div class="mat-meta">定案日：' + m.selected_at + '</div>' : '') +
-            (m.note ? '<div class="mat-note">補充說明：' + m.note + '</div>' : '') +
-            photoHtml +
-            btns + '</div>';
-        }).join('');
-        bindPhotoClicks($('matList'));
-        bindPhotoErrors_($('matList'));
-        $('matList').querySelectorAll('[data-edit]').forEach(function (btn) {
-          btn.addEventListener('click', function () { openEditForm(btn.getAttribute('data-edit')); });
+        writeMaterialListCache_(pno, {
+          items: res.items || [],
+          space_label_presets: res.space_label_presets || null,
+          part_label_presets: res.part_label_presets || null
         });
-        $('matList').querySelectorAll('[data-void]').forEach(function (btn) {
-          btn.addEventListener('click', function () { window._voidMaterial(btn.getAttribute('data-void')); });
-        });
-        $('matList').querySelectorAll('[data-void-new]').forEach(function (btn) {
-          btn.addEventListener('click', function () { window._voidThenNew(btn.getAttribute('data-void-new')); });
-        });
+        applyListPayload_(res);
+        showMsg('');
       } catch (e) {
-        $('matList').innerHTML = '<div class="empty-state"><strong>載入失敗</strong>' + ((e && e.message) || '請稍後再試') + '</div>';
+        if (gen !== listLoadGen_) return;
+        if (!cached) {
+          $('matList').innerHTML = '<div class="empty-state"><strong>載入失敗</strong>' + escapeHtml((e && e.message) || '請稍後再試') + '</div>';
+        } else {
+          showMsg('列表更新失敗，仍顯示先前內容；請檢查網路後再試');
+        }
+      } finally {
+        if (gen === listLoadGen_) setListSyncHint_(false);
       }
     }
 
     async function loadAudit() {
       var pno = $('projectSelect').value;
       if (!pno) return;
+      var gen = ++auditLoadGen_;
+      var hadContent = ($('auditList').textContent || '').trim() && ($('auditList').textContent || '').trim() !== '—';
+      if (!hadContent) $('auditList').innerHTML = '更新中…';
       try {
         var res = await AccountingApi.materialAuditLog(session, { project_no: pno });
+        if (gen !== auditLoadGen_) return;
         if (!res.success || !res.logs || !res.logs.length) {
           $('auditList').innerHTML = '（尚無變更紀錄）';
           return;
         }
         $('auditList').innerHTML = res.logs.slice().reverse().map(function (log) {
           return '<div class="audit-row">' +
-            '<strong>' + actionLabel(log.action) + '</strong> · ' + (log.actor_name || '—') +
-            ' · ' + (log.occurred_at || '') +
-            (log.diff_summary ? '<br/>' + log.diff_summary : '') +
+            '<strong>' + escapeHtml(actionLabel(log.action)) + '</strong> · ' + escapeHtml(log.actor_name || '—') +
+            ' · ' + escapeHtml(log.occurred_at || '') +
+            (log.diff_summary ? '<br/>' + escapeHtml(log.diff_summary) : '') +
             '</div>';
         }).join('');
       } catch (e) {
-        $('auditList').innerHTML = '歷程載入失敗，請稍後再試';
+        if (gen !== auditLoadGen_) return;
+        if (!hadContent) $('auditList').innerHTML = '歷程載入失敗，請稍後再試';
       }
     }
 
@@ -789,9 +1052,29 @@
       showMsg('');
     };
 
+    function bindCustomLabelAdd_(btnId, inputId, gridId, getPresets, partStyle, kindName) {
+      var btn = $(btnId);
+      var input = $(inputId);
+      if (!btn || !input) return;
+      btn.addEventListener('click', function () {
+        if (btn.disabled) return;
+        addCustomLabelFromInput(gridId, getPresets(), inputId, partStyle, kindName);
+      });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          addCustomLabelFromInput(gridId, getPresets(), inputId, partStyle, kindName);
+        }
+      });
+    }
+    bindCustomLabelAdd_('btnAddSpace', 'spaceCustomInput', 'spaceGrid', function () { return SPACE_PRESETS; }, false, '空間標籤');
+    bindCustomLabelAdd_('btnAddPart', 'partCustomInput', 'partGrid', function () { return PART_PRESETS; }, true, '部位標籤');
+
     function clearForm() {
       renderChipGrid('spaceGrid', SPACE_PRESETS, [], false);
       renderChipGrid('partGrid', PART_PRESETS, [], true);
+      if ($('spaceCustomInput')) $('spaceCustomInput').value = '';
+      if ($('partCustomInput')) $('partCustomInput').value = '';
       $('fSelectedAt').value = todayYmd();
       delete $('fSelectedAt').dataset.userEdited;
       $('fNote').value = '';
@@ -839,6 +1122,7 @@
       try {
         var res = await AccountingApi.materialVoid(session, mid);
         if (!res.success) { showMsg(res.message || '作廢失敗，請稍後再試'); return; }
+        invalidateMaterialListCache_($('projectSelect').value);
         showMsg('已作廢，客人端不會再看到這筆', true);
         loadList();
         loadAudit();
@@ -861,6 +1145,7 @@
         var m = (listRes.items || []).find(function (x) { return x.material_id === mid; });
         var voidRes = await AccountingApi.materialVoid(session, mid);
         if (!voidRes.success) { showMsg(voidRes.message || '作廢失敗，請稍後再試'); return; }
+        invalidateMaterialListCache_(pno);
         loadList();
         loadAudit();
         openCreateForm(m ? {
@@ -886,7 +1171,7 @@
       showMsg('');
       try {
         var spaces = getCheckedFromGrid('spaceGrid');
-        if (!spaces.length) { showMsg('請至少選一個空間標籤'); return; }
+        if (!spaces.length) { showMsg('請至少選一個空間標籤（可點常用，或自己打字加入）'); return; }
         var parts = getCheckedFromGrid('partGrid');
         if (!$('projectSelect').value) { showMsg('請先選擇案號'); return; }
 
@@ -902,6 +1187,7 @@
           editingMaterialId = '';
           $('formView').classList.add('hidden');
           $('listView').classList.remove('hidden');
+          invalidateMaterialListCache_($('projectSelect').value);
           await loadList();
           loadAudit();
           showMsg('已更新說明與空間，客人端會看到最新內容', true);
@@ -937,6 +1223,7 @@
           showMsg('照片上傳失敗，已取消這筆選材：' + (upRes.message || '請檢查網路後再試'));
           $('formView').classList.add('hidden');
           $('listView').classList.remove('hidden');
+          invalidateMaterialListCache_($('projectSelect').value);
           loadList();
           loadAudit();
           return;
@@ -945,6 +1232,7 @@
 
         $('formView').classList.add('hidden');
         $('listView').classList.remove('hidden');
+        invalidateMaterialListCache_($('projectSelect').value);
         loadList();
         loadAudit();
       } catch (e) {

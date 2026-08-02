@@ -368,15 +368,37 @@ var AccountingUi = (function () {
       return;
     }
     var header = '時間\t操作人\t頁面\t類型\t內容\n';
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(header + text).then(function () {
-        toast('ok', '已複製 ' + list.length + ' 筆紀錄', 3000);
-      }).catch(function () {
-        pushLog('info', header + text);
-      });
-    } else {
-      pushLog('info', header + text);
+    copyText(header + text, { okToast: '已複製 ' + list.length + ' 筆紀錄' });
+  }
+
+  /**
+   * 複製文字到剪貼簿；失敗時可回傳 false，呼叫端可顯示可選取備援
+   * @return {Promise<boolean>}
+   */
+  function copyText(text, options) {
+    options = options || {};
+    var payload = String(text || '');
+    if (!payload) {
+      toast('warn', options.emptyToast || '沒有可複製的內容', 3000);
+      return Promise.resolve(false);
     }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(payload).then(function () {
+        if (options.okToast !== false) {
+          toast('ok', options.okToast || '已複製', 3000);
+        }
+        return true;
+      }).catch(function () {
+        if (options.failToast !== false) {
+          toast('warn', options.failToast || '無法自動複製，請手動選取文字', 4000);
+        }
+        return false;
+      });
+    }
+    if (options.failToast !== false) {
+      toast('warn', options.failToast || '無法自動複製，請手動選取文字', 4000);
+    }
+    return Promise.resolve(false);
   }
 
   function ensureMount() {
@@ -628,6 +650,7 @@ var AccountingUi = (function () {
     toast: toast,
     log: pushLog,
     notify: notify,
+    copyText: copyText,
     action: action,
     step: step,
     setProgress: setProgress,

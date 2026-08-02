@@ -135,18 +135,46 @@ var AccountingListCache = (function () {
     PORTAL_DATA_TTL_MS: 7 * 24 * 60 * 60 * 1000,
     key: storageKey,
     masterKey: masterKey,
+    /** 只讀本機快取，不打網路；無資料回 null */
+    peek: function (session, listKey, ttlMs) {
+      var wrapped = readRaw(storageKey(session, listKey), ttlMs || DEFAULT_TTL_MS * 4);
+      return wrapped ? wrapped.data : null;
+    },
     load: async function (session, listKey, fetchFn, opts) {
       opts = opts || {};
       var ttl = opts.ttlMs || DEFAULT_TTL_MS;
       var swr = opts.swrMs != null ? opts.swrMs : SWR_MS;
       var force = !!opts.force;
+      var alwaysRevalidate = !!opts.alwaysRevalidate;
+      var onUpdate = typeof opts.onUpdate === 'function' ? opts.onUpdate : null;
       var key = storageKey(session, listKey);
+
+      function runBackground() {
+        if (_inflight[key]) {
+          if (onUpdate) {
+            _inflight[key].then(function (data) {
+              if (data != null) onUpdate(data);
+            }).catch(function () {});
+          }
+          return;
+        }
+        _inflight[key] = Promise.resolve(fetchFn()).then(function (data) {
+          write(key, data);
+          if (onUpdate) onUpdate(data);
+          return data;
+        }).catch(function (err) {
+          if (onUpdate) onUpdate(null, err);
+          return null;
+        }).finally(function () {
+          delete _inflight[key];
+        });
+      }
 
       if (!force) {
         var cached = readRaw(key, ttl);
         if (cached) {
           var age = Date.now() - cached.ts;
-          if (age > swr) backgroundRevalidate(key, fetchFn, ttl);
+          if (alwaysRevalidate || age > swr) runBackground();
           return cached.data;
         }
       }

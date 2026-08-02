@@ -8,9 +8,10 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=42"></script>
+  <script src="../../shared/js/accounting_api.js?v=43"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=17"></script>
-  <script src="../../shared/js/accounting_ui.js?v=16"></script>
+  <script src="../../shared/js/accounting_list_cache.js?v=6"></script>
+  <script src="../../shared/js/accounting_ui.js?v=17"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=6"></script>
@@ -106,6 +107,29 @@
     .triangle-grid .lbl { color: #777; font-size: 10px; }
     .furniture-banner { background: #e8f0fe; border-radius: 8px; padding: 10px; font-size: 13px; margin-bottom: 8px; color: #174ea6; }
     .check-row.warn { background: #fef7e0; color: #5f4400; }
+    .list-status { font-size: 13px; color: #555; margin: 0 0 8px; }
+    .list-status.syncing { color: #1a73e8; }
+    .list-status.slow { color: #b06000; font-weight: 600; }
+    .list-error { background: #fce8e6; color: #5f2120; border-radius: 8px; padding: 10px; margin: 0 0 10px; font-size: 14px; }
+    .list-error .err-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .list-error .err-actions .btn { width: auto; margin-top: 0; flex: 0 1 auto; min-width: 100px; }
+    .list-error .err-fallback { margin-top: 8px; font-size: 12px; color: #555; white-space: pre-wrap; word-break: break-word; }
+    .section-label { font-size: 13px; font-weight: 700; color: #333; margin: 14px 0 4px; }
+    .section-label:first-child { margin-top: 4px; }
+    .item.old-closed { opacity: 0.72; }
+    .item-main { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+    .item-main-left { min-width: 0; }
+    .item-profit { white-space: nowrap; font-size: 15px; }
+    .item-sub { margin-top: 4px; font-size: 13px; color: #666; }
+    .skel-item { border-bottom: 1px solid #eee; padding: 14px 0; }
+    .skel-line { height: 12px; border-radius: 6px; background: linear-gradient(90deg, #eee 25%, #f5f5f5 50%, #eee 75%); background-size: 200% 100%; animation: skel-shine 1.2s ease-in-out infinite; margin: 6px 0; }
+    .skel-line.w60 { width: 60%; }
+    .skel-line.w40 { width: 40%; }
+    .skel-line.w30 { width: 30%; margin-left: auto; }
+    @keyframes skel-shine { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    #oldClosedToggle { width: 100%; margin-top: 8px; }
+    #detailErrorBox { margin-top: 8px; }
+    #detailLoading.slow { color: #b06000; font-weight: 600; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -120,8 +144,12 @@
     <div id="viewList">
       <div class="card">
         <h3 style="margin:0 0 8px">所有案子</h3>
-        <div id="overviewList">載入中…</div>
-        <button type="button" class="btn btn-primary" id="reloadOverview" title="略過暫存，立刻向後端重抓最新清單">重新載入最新</button>
+        <div id="listStatusBar" class="list-status hidden"></div>
+        <div id="listErrorBox" class="list-error hidden"></div>
+        <label for="overviewSearch">搜尋案號或客戶</label>
+        <input id="overviewSearch" type="search" placeholder="輸入案號或客戶名" autocomplete="off" />
+        <button type="button" class="btn btn-primary" id="reloadOverview" title="略過暫存，立刻向後端重抓最新清單">重新載入</button>
+        <div id="overviewList" style="margin-top:12px"></div>
       </div>
     </div>
 
@@ -132,6 +160,7 @@
         <p class="sub" id="detailSummary">—</p>
         <p class="nav" id="cfManageLink" style="margin:8px 0"><a href="designer-customer-finance.html">管理追加減與收款 →</a> · <a href="../projects/designer-material-selection.html">選材管理 →</a></p>
         <div id="detailLoading" class="hidden">載入案件資料中…</div>
+        <div id="detailErrorBox" class="list-error hidden"></div>
       </div>
       <div id="detailPanels">
       <div class="card hidden" id="checklistCard">
@@ -240,6 +269,17 @@
       var laborRoles = ['工務', '木作', '系統', '油漆'];
       var vendorSlotDefs = [];
       var allSlotCandidates = {};
+      var overviewItems = [];
+      var listSearchQuery = '';
+      var oldClosedExpanded = false;
+      var listStatusBackfillTried = false;
+      var listSlowTimer = null;
+      var detailSlowTimer = null;
+      var lastListError = null;
+      var lastDetailError = null;
+      var LIST_CACHE_KEY = 'project_margin';
+      var RECENT_CLOSED_DAYS = 180;
+      var SLOW_HINT_MS = 4000;
 
       function setMsg(t) { if (t) AccountingUi.notify('err', t); }
       function setOk(t) { if (t) AccountingUi.notify('ok', t); }
@@ -279,6 +319,10 @@
             if (ov.revenue_total != null) current.revenue_total = ov.revenue_total;
             if (ov.expense_total != null) current.expense_total = ov.expense_total;
             if (ov.gross_profit != null) current.gross_profit = ov.gross_profit;
+            if (ov.project_status != null) current.project_status = ov.project_status;
+            if (ov.close_date != null) current.close_date = ov.close_date;
+            if (ov.is_closed != null) current.is_closed = ov.is_closed;
+            patchOverviewItemFromDetail(Object.assign({ project_no: current.project_no }, ov));
           }
           renderDetailPanels(data);
           return;
@@ -323,11 +367,29 @@
         }
         return AccountingUi.runAsync(btn, runOpts, fn);
       }
-      function setDetailLoading(on) {
+      function setDetailLoading(on, text) {
         var loading = el('detailLoading');
         var panels = el('detailPanels');
-        if (loading) loading.classList.toggle('hidden', !on);
+        if (loading) {
+          loading.classList.toggle('hidden', !on);
+          loading.classList.remove('slow');
+          loading.textContent = text || '載入案件資料中…';
+        }
         if (panels) panels.classList.toggle('hidden', on);
+        if (!on && detailSlowTimer) {
+          clearTimeout(detailSlowTimer);
+          detailSlowTimer = null;
+        }
+      }
+      function startDetailSlowHint() {
+        if (detailSlowTimer) clearTimeout(detailSlowTimer);
+        detailSlowTimer = setTimeout(function () {
+          var loading = el('detailLoading');
+          if (loading && !loading.classList.contains('hidden')) {
+            loading.textContent = '詳情更新中…';
+            loading.classList.add('slow');
+          }
+        }, SLOW_HINT_MS);
       }
       function showApp() {
         document.getElementById('loading').classList.add('hidden');
@@ -340,6 +402,42 @@
       function fmtMoney(n) {
         return (parseFloat(n) || 0).toLocaleString('zh-TW');
       }
+      function escHtml(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+      function parseIsoDate(s) {
+        var m = String(s || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (!m) return null;
+        var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+        return isNaN(d.getTime()) ? null : d;
+      }
+      function daysSinceClose(closeDate) {
+        var d = parseIsoDate(closeDate);
+        if (!d) return null;
+        var now = new Date();
+        var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        return Math.floor((today - d) / 86400000);
+      }
+      /** recent=剛結案／open=進行中／old=舊結案（含結案日空白） */
+      function classifyOverviewItem(it) {
+        var status = String(it.project_status || '').trim();
+        var closed = status === '已結案' || it.is_closed === true;
+        if (!closed) return 'open';
+        var closeDate = String(it.close_date || '').trim();
+        if (!closeDate) return 'old';
+        var days = daysSinceClose(closeDate);
+        if (days != null && days >= 0 && days <= RECENT_CLOSED_DAYS) return 'recent';
+        return 'old';
+      }
+      function bucketLabel(bucket) {
+        if (bucket === 'recent') return '剛結案';
+        if (bucket === 'open') return '進行中';
+        return '舊結案';
+      }
       function fillCategoryDatalist() {
         var dl = document.getElementById('categoryList');
         dl.innerHTML = '';
@@ -349,40 +447,335 @@
           dl.appendChild(o);
         });
       }
-      function renderOverview(items) {
-        var box = document.getElementById('overviewList');
+      function setListStatus(text, kind) {
+        var bar = el('listStatusBar');
+        if (!bar) return;
+        if (!text) {
+          bar.className = 'list-status hidden';
+          bar.textContent = '';
+          return;
+        }
+        bar.className = 'list-status' + (kind === 'slow' ? ' slow' : kind === 'sync' ? ' syncing' : '');
+        bar.textContent = text;
+      }
+      function clearListSlowTimer() {
+        if (listSlowTimer) {
+          clearTimeout(listSlowTimer);
+          listSlowTimer = null;
+        }
+      }
+      function startListSlowHint(hasContent) {
+        clearListSlowTimer();
+        listSlowTimer = setTimeout(function () {
+          var bar = el('listStatusBar');
+          if (!bar || bar.classList.contains('hidden')) return;
+          if (hasContent) setListStatus('列表還在更新…', 'slow');
+          else setListStatus('還在載入，請稍候…', 'slow');
+        }, SLOW_HINT_MS);
+      }
+      function buildReportText(ctx) {
+        ctx = ctx || {};
+        var lines = [
+          '【案件毛利回報】',
+          '時間：' + new Date().toLocaleString('zh-TW', { hour12: false }),
+          '頁面：案件毛利',
+          '動作：' + (ctx.action || '—')
+        ];
+        if (ctx.project_no || ctx.client_name) {
+          lines.push('案號：' + (ctx.project_no || '—') + (ctx.client_name ? '　客戶：' + ctx.client_name : ''));
+        }
+        lines.push('錯誤：' + (ctx.message || '未知錯誤'));
+        if (ctx.tech) lines.push('技術摘要：' + String(ctx.tech).slice(0, 240));
+        return lines.join('\n');
+      }
+      function renderErrorBox(boxId, ctx, onRetry) {
+        var box = el(boxId);
+        if (!box) return;
+        var report = buildReportText(ctx);
+        box.classList.remove('hidden');
         box.innerHTML = '';
-        if (!items.length) {
+        var p = document.createElement('div');
+        p.textContent = ctx.message || '發生錯誤';
+        box.appendChild(p);
+        var actions = document.createElement('div');
+        actions.className = 'err-actions';
+        var retryBtn = document.createElement('button');
+        retryBtn.type = 'button';
+        retryBtn.className = 'btn btn-primary';
+        retryBtn.textContent = '再試一次';
+        retryBtn.addEventListener('click', function () {
+          if (typeof onRetry === 'function') onRetry();
+        });
+        actions.appendChild(retryBtn);
+        var copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'btn btn-secondary';
+        copyBtn.textContent = '複製回報';
+        var fallback = document.createElement('pre');
+        fallback.className = 'err-fallback hidden';
+        fallback.textContent = report;
+        copyBtn.addEventListener('click', function () {
+          setBtnBusy(copyBtn, true, '複製中…');
+          AccountingUi.copyText(report, { okToast: '已複製回報' }).then(function (ok) {
+            setBtnBusy(copyBtn, false);
+            if (ok) {
+              copyBtn.textContent = '已複製';
+              setTimeout(function () { copyBtn.textContent = '複製回報'; }, 1600);
+            } else {
+              fallback.classList.remove('hidden');
+            }
+          });
+        });
+        actions.appendChild(copyBtn);
+        box.appendChild(actions);
+        box.appendChild(fallback);
+      }
+      function clearListError() {
+        lastListError = null;
+        var box = el('listErrorBox');
+        if (box) {
+          box.classList.add('hidden');
+          box.innerHTML = '';
+        }
+      }
+      function clearDetailError() {
+        lastDetailError = null;
+        var box = el('detailErrorBox');
+        if (box) {
+          box.classList.add('hidden');
+          box.innerHTML = '';
+        }
+      }
+      function showListSkeleton() {
+        var box = el('overviewList');
+        if (!box) return;
+        var html = '';
+        for (var i = 0; i < 5; i++) {
+          html += '<div class="skel-item"><div class="skel-line w60"></div><div class="skel-line w40"></div></div>';
+        }
+        box.innerHTML = html;
+      }
+      function matchSearch(it, q) {
+        if (!q) return true;
+        var hay = ((it.project_no || '') + ' ' + (it.client_name || '') + ' ' + (it.store || '')).toLowerCase();
+        return hay.indexOf(q) >= 0;
+      }
+      function sortRecentClosed(a, b) {
+        var da = parseIsoDate(a.close_date);
+        var db = parseIsoDate(b.close_date);
+        var ta = da ? da.getTime() : 0;
+        var tb = db ? db.getTime() : 0;
+        return tb - ta;
+      }
+      function makeOverviewItemEl(it, bucket) {
+        var div = document.createElement('div');
+        div.className = 'item' + (bucket === 'old' ? ' old-closed' : '');
+        var profitClass = (it.gross_profit || 0) >= 0 ? 'profit-pos' : 'profit-neg';
+        var statusText = bucketLabel(bucket);
+        var store = String(it.store || '').trim() || '—';
+        div.innerHTML =
+          '<div class="item-main">' +
+          '<div class="item-main-left"><strong>' + escHtml(it.project_no || '—') + '</strong> ' +
+          escHtml(it.client_name || '') + '</div>' +
+          '<div class="item-profit ' + profitClass + '">毛利 ' + fmtMoney(it.gross_profit) + '</div>' +
+          '</div>' +
+          '<div class="item-sub">' + escHtml(store) + ' · ' + statusText + '</div>';
+        div.addEventListener('click', function () { openDetail(it); });
+        return div;
+      }
+      function renderOverview() {
+        var box = el('overviewList');
+        if (!box) return;
+        box.innerHTML = '';
+        var q = String(listSearchQuery || '').trim().toLowerCase();
+        var searching = !!q;
+        var recent = [];
+        var open = [];
+        var old = [];
+        overviewItems.forEach(function (it) {
+          if (!matchSearch(it, q)) return;
+          var bucket = classifyOverviewItem(it);
+          if (bucket === 'recent') recent.push(it);
+          else if (bucket === 'open') open.push(it);
+          else old.push(it);
+        });
+        recent.sort(sortRecentClosed);
+
+        function appendSection(title, items, bucket) {
+          if (!items.length) return;
+          var label = document.createElement('div');
+          label.className = 'section-label';
+          label.textContent = title + '（' + items.length + '）';
+          box.appendChild(label);
+          items.forEach(function (it) { box.appendChild(makeOverviewItemEl(it, bucket)); });
+        }
+
+        if (searching) {
+          var label = document.createElement('div');
+          label.className = 'section-label';
+          label.textContent = '搜尋結果';
+          box.appendChild(label);
+          var all = recent.concat(open, old);
+          if (!all.length) {
+            var empty = document.createElement('p');
+            empty.className = 'sub';
+            empty.textContent = '找不到符合的案子，可清空搜尋回到預設列表';
+            box.appendChild(empty);
+            return;
+          }
+          all.forEach(function (it) {
+            box.appendChild(makeOverviewItemEl(it, classifyOverviewItem(it)));
+          });
+          return;
+        }
+
+        if (!recent.length && !open.length && !old.length) {
           box.textContent = '尚無案件；記帳時填案號會自動建立';
           return;
         }
-        items.forEach(function (it) {
-          var div = document.createElement('div');
-          div.className = 'item';
-          var profitClass = (it.gross_profit || 0) >= 0 ? 'profit-pos' : 'profit-neg';
-          div.innerHTML =
-            '<div><strong>' + (it.project_no || '—') + '</strong> ' + (it.client_name || '') + '</div>' +
-            '<div class="sub">' + (it.tab_name || '') + ' · ' + (it.store || '') + '</div>' +
-            '<div style="margin-top:6px">' +
-            '<span class="tag rev">收 ' + fmtMoney(it.revenue_total) + '</span>' +
-            '<span class="tag exp">支 ' + fmtMoney(it.expense_total) + '</span>' +
-            '<span class="' + profitClass + '">毛利 ' + fmtMoney(it.gross_profit) + '</span></div>';
-          div.addEventListener('click', function () { openDetail(it); });
-          box.appendChild(div);
+        appendSection('剛結案', recent, 'recent');
+        appendSection('進行中', open, 'open');
+        if (old.length) {
+          var toggle = document.createElement('button');
+          toggle.type = 'button';
+          toggle.className = 'btn btn-secondary';
+          toggle.id = 'oldClosedToggle';
+          toggle.textContent = oldClosedExpanded
+            ? '收合舊結案'
+            : ('展開舊結案（' + old.length + '）');
+          toggle.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            oldClosedExpanded = !oldClosedExpanded;
+            renderOverview();
+          });
+          box.appendChild(toggle);
+          if (oldClosedExpanded) appendSection('舊結案', old, 'old');
+        }
+      }
+      function applyOverviewData(data, opts) {
+        opts = opts || {};
+        if (!data || !data.success) return false;
+        if (data.categories && data.categories.length) {
+          categories = data.categories;
+          fillCategoryDatalist();
+        }
+        overviewItems = data.items || [];
+        renderOverview();
+        if (!listStatusBackfillTried && overviewItems.length) {
+          var missing = 0;
+          overviewItems.forEach(function (it) {
+            if (!String(it.project_status || '').trim()) missing++;
+          });
+          if (missing > 0) {
+            listStatusBackfillTried = true;
+            maybeBackfillOverviewStatus();
+          }
+        }
+        return true;
+      }
+      function patchOverviewItemFromDetail(ov) {
+        if (!ov || !ov.project_no) return;
+        var found = false;
+        overviewItems = overviewItems.map(function (it) {
+          if (String(it.project_no) !== String(ov.project_no)) return it;
+          found = true;
+          return Object.assign({}, it, {
+            revenue_total: ov.revenue_total != null ? ov.revenue_total : it.revenue_total,
+            expense_total: ov.expense_total != null ? ov.expense_total : it.expense_total,
+            gross_profit: ov.gross_profit != null ? ov.gross_profit : it.gross_profit,
+            project_status: ov.project_status != null ? ov.project_status : it.project_status,
+            close_date: ov.close_date != null ? ov.close_date : it.close_date,
+            is_closed: ov.is_closed != null ? ov.is_closed : it.is_closed,
+            tab_name: ov.tab_name || it.tab_name,
+            updated_at: ov.updated_at || it.updated_at
+          });
+        });
+        if (!found) overviewItems.push(ov);
+        if (typeof AccountingListCache !== 'undefined') {
+          AccountingListCache.patch(session, LIST_CACHE_KEY, function (data) {
+            if (!data || !data.items) return;
+            data.items = overviewItems;
+          });
+        }
+      }
+      async function maybeBackfillOverviewStatus() {
+        try {
+          var data = await AccountingApi.marginBackfillOverviewStatus(session);
+          if (data && data.success && data.items) {
+            applyOverviewData(data);
+            if (typeof AccountingListCache !== 'undefined') {
+              AccountingListCache.load(session, LIST_CACHE_KEY, function () {
+                return Promise.resolve(data);
+              }, { force: true });
+            }
+          }
+        } catch (e) { /* 補齊失敗不擋列表 */ }
+      }
+      async function fetchOverviewNetwork(opts) {
+        opts = opts || {};
+        return AccountingApi.marginListOverview(session, {
+          backfill_missing_status: !!opts.backfill_missing_status
         });
       }
-      async function loadOverview() {
-        setMsg('');
+      async function loadOverview(opts) {
+        opts = opts || {};
+        var force = !!opts.force;
         var btn = el('reloadOverview');
-        setBtnBusy(btn, true, '載入中…');
+        clearListError();
+        clearListSlowTimer();
+
+        var cached = null;
+        if (typeof AccountingListCache !== 'undefined') {
+          cached = AccountingListCache.peek(session, LIST_CACHE_KEY);
+        }
+        var painted = !!(cached && cached.success && Array.isArray(cached.items));
+        if (painted) {
+          applyOverviewData(cached);
+          setListStatus(force ? '強制更新中…' : '列表更新中…', 'sync');
+        } else if (overviewItems.length) {
+          renderOverview();
+          painted = true;
+          setListStatus(force ? '強制更新中…' : '列表更新中…', 'sync');
+        } else {
+          showListSkeleton();
+          setListStatus('載入中…', 'sync');
+        }
+        startListSlowHint(painted);
+        if (force) setBtnBusy(btn, true, '載入中…');
+
         try {
-          var data = await AccountingApi.marginListOverview(session);
-          if (!data.success) { setMsg(data.message || '無法載入案件列表，請稍後再試'); return; }
-          if (data.categories && data.categories.length) categories = data.categories;
-          fillCategoryDatalist();
-          renderOverview(data.items || []);
+          var data;
+          // 失敗勿寫入快取，避免下次進頁 peek 到 success:false 而無法立刻畫舊列表
+          var fetchOk = async function () {
+            var d = await fetchOverviewNetwork();
+            if (!d || !d.success) {
+              var err = new Error((d && d.message) || '無法載入案件列表，請稍後再試');
+              err.listPayload = d;
+              throw err;
+            }
+            return d;
+          };
+          if (typeof AccountingListCache !== 'undefined') {
+            data = await AccountingListCache.load(session, LIST_CACHE_KEY, fetchOk, { force: true });
+          } else {
+            data = await fetchOk();
+          }
+          applyOverviewData(data);
+          clearListError();
+          setListStatus('');
+        } catch (e) {
+          var errMsg = e.message || String(e) || '無法載入案件列表';
+          lastListError = {
+            action: force ? '強制重新載入列表' : '更新列表',
+            message: errMsg,
+            tech: String(e && e.stack ? e.stack : e).slice(0, 200)
+          };
+          setListStatus('');
+          if (!painted) el('overviewList').innerHTML = '';
+          renderErrorBox('listErrorBox', lastListError, function () { loadOverview({ force: true }); });
         } finally {
-          setBtnBusy(btn, false);
+          clearListSlowTimer();
+          if (force) setBtnBusy(btn, false);
         }
       }
       function renderLines(lines) {
@@ -1281,6 +1674,9 @@
 
       async function openDetail(it) {
         current = it;
+        detailData = null;
+        lastDetailError = null;
+        clearDetailError();
         document.getElementById('viewList').classList.add('hidden');
         document.getElementById('viewDetail').classList.remove('hidden');
         document.getElementById('detailTitle').textContent =
@@ -1296,32 +1692,83 @@
             encodeURIComponent(it.project_no || '') + '">選材管理 →</a>';
         }
         document.getElementById('addDate').value = todayIso();
-        setDetailLoading(true);
+        setDetailLoading(true, '載入案件資料中…');
+        startDetailSlowHint();
         setMsg('');
+        var failed = false;
         try {
           var data = await AccountingApi.marginGetDetail(session, {
             tab_name: it.tab_name,
             project_no: it.project_no
           });
-          if (!data.success) { setMsg(data.message || '無法載入案件詳情'); return; }
+          if (!data.success) {
+            failed = true;
+            lastDetailError = {
+              action: '開案詳情',
+              project_no: it.project_no,
+              client_name: it.client_name,
+              message: data.message || '無法載入案件詳情'
+            };
+            setDetailLoading(false);
+            el('detailPanels').classList.add('hidden');
+            renderErrorBox('detailErrorBox', lastDetailError, function () { openDetail(it); });
+            return;
+          }
           if (data.categories && data.categories.length) categories = data.categories;
           fillCategoryDatalist();
-          // 後端開詳情會覆寫總覽「分頁名稱」；前端跟著作業用正確工作頁
           if (data.tab_name) {
             it.tab_name = data.tab_name;
             current.tab_name = data.tab_name;
           }
+          if (data.overview) {
+            var ov = data.overview;
+            if (ov.revenue_total != null) current.revenue_total = ov.revenue_total;
+            if (ov.expense_total != null) current.expense_total = ov.expense_total;
+            if (ov.gross_profit != null) current.gross_profit = ov.gross_profit;
+            if (ov.project_status != null) current.project_status = ov.project_status;
+            if (ov.close_date != null) current.close_date = ov.close_date;
+            if (ov.is_closed != null) current.is_closed = ov.is_closed;
+            patchOverviewItemFromDetail(Object.assign({ project_no: it.project_no }, ov));
+          }
+          clearDetailError();
           renderDetailPanels(data);
-        } finally {
+        } catch (e) {
+          failed = true;
+          lastDetailError = {
+            action: '開案詳情',
+            project_no: it.project_no,
+            client_name: it.client_name,
+            message: e.message || String(e) || '無法載入案件詳情',
+            tech: String(e && e.stack ? e.stack : e).slice(0, 200)
+          };
           setDetailLoading(false);
+          el('detailPanels').classList.add('hidden');
+          renderErrorBox('detailErrorBox', lastDetailError, function () { openDetail(it); });
+        } finally {
+          if (detailSlowTimer) {
+            clearTimeout(detailSlowTimer);
+            detailSlowTimer = null;
+          }
+          if (!failed) setDetailLoading(false);
         }
       }
       document.getElementById('backBtn').addEventListener('click', function () {
         document.getElementById('viewDetail').classList.add('hidden');
         document.getElementById('viewList').classList.remove('hidden');
-        loadOverview();
+        clearDetailError();
+        renderOverview();
+        loadOverview({ force: false });
       });
-      document.getElementById('reloadOverview').addEventListener('click', loadOverview);
+      document.getElementById('reloadOverview').addEventListener('click', function () {
+        loadOverview({ force: true });
+      });
+      var searchInput = document.getElementById('overviewSearch');
+      if (searchInput) {
+        searchInput.addEventListener('input', function () {
+          listSearchQuery = searchInput.value || '';
+          renderOverview();
+        });
+      }
       el('contractAmount').addEventListener('input', function () {
         contractDirty = true;
         var hint = el('contractDirtyHint');
@@ -1481,10 +1928,11 @@
       (async function boot() {
         fillCategoryDatalist();
         document.getElementById('addDate').value = todayIso();
+        // 不在此先畫骨架：有快取時由 loadOverview peek 立刻畫可點列表
         await AccountingBoot.run({
           onReady: async function (sess) {
             session = sess;
-            await loadOverview();
+            await loadOverview({ force: false });
           }
         });
       })();

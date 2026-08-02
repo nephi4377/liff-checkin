@@ -507,8 +507,19 @@ var AccountingApi = (function () {
         vendor_doc_id: vendorDocId
       });
     },
-    marginListOverview: function (sessionOrToken) {
-      return post({ action: 'margin_list_overview', auth: resolveAuth(sessionOrToken) });
+    marginListOverview: function (sessionOrToken, opts) {
+      opts = opts || {};
+      return post({
+        action: 'margin_list_overview',
+        auth: resolveAuth(sessionOrToken),
+        backfill_missing_status: !!opts.backfill_missing_status
+      });
+    },
+    marginBackfillOverviewStatus: function (sessionOrToken) {
+      return post({
+        action: 'margin_backfill_overview_status',
+        auth: resolveAuth(sessionOrToken)
+      });
     },
     marginListLines: function (sessionOrToken, filter) {
       return post({
