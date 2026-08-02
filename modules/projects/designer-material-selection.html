@@ -9,7 +9,7 @@
   <script src="../../shared/js/operator_context.js?v=1"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
-  <script src="../../shared/js/accounting_api.js?v=49"></script>
+  <script src="../../shared/js/accounting_api.js?v=48"></script>
   <style>
     :root {
       --mat-bg: #f4f6f8;
@@ -206,7 +206,7 @@
         <h2>選材管理</h2>
         <span id="pageStatus" class="status-pill" role="status" aria-live="polite">載入中…</span>
       </div>
-      <p class="lead">存檔後客人立刻看得到；照片以案件 Dropbox「選材」為主（畫面優先顯示），並備一份 Google 雲端硬碟副本。補充說明、空間／部位可直接編輯；換照片請「作廢並新建」。歷史舊檔若曾用自由命名匯入，空間可能顯示「未分類」或從檔名猜到的空間，可編輯標籤或作廢後重建。舊掃描若照片連結過期，可按「修補失效照片」對回 Dropbox 並補雲端硬碟副本。</p>
+      <p class="lead">存檔後客人立刻看得到；照片以案件 Dropbox「選材」為主（畫面優先顯示），並備一份 Google 雲端硬碟副本。補充說明、空間／部位可直接編輯；換照片請「作廢並新建」。歷史舊檔若曾用自由命名匯入，空間可能顯示「未分類」或從檔名猜到的空間，可編輯標籤或作廢後重建。開列表時若舊掃描連結失效，會自動對回 Dropbox 並補雲端硬碟副本。</p>
     </header>
     <div id="msg" role="status" aria-live="polite"></div>
 
@@ -227,8 +227,6 @@
 
     <div id="listView">
       <button type="button" class="btn btn-primary" id="btnAdd">＋ 新增選材</button>
-      <button type="button" class="btn btn-secondary" id="btnRepairPhotos" style="margin-top:8px">修補失效照片</button>
-      <p class="hint" style="margin-top:6px">舊掃描匯入的暫時連結過期時用：依案號到 Dropbox「選材」夾對原檔名，補寫路徑與雲端硬碟副本（每案最多約 20 筆）。</p>
       <p id="listSyncHint" class="hint hidden" style="margin-top:8px">選材列表更新中…</p>
       <div id="matList" class="mat-list"><div class="empty-state"><strong>請先選擇案號</strong>選定後會列出這案的選材紀錄</div></div>
       <div class="card" id="auditSection" style="margin-top:16px;">
@@ -1047,38 +1045,6 @@
     }
 
     $('btnAdd').onclick = function () { openCreateForm(null); };
-    $('btnRepairPhotos').onclick = async function () {
-      var pno = $('projectSelect').value;
-      if (!pno) { showMsg('請先選擇案號'); return; }
-      if (!session) { showMsg('尚未確認身分，請重新整理'); return; }
-      var btn = $('btnRepairPhotos');
-      if (btn) btn.disabled = true;
-      setPageStatus_('修補照片中…');
-      showMsg('正在對回 Dropbox 並補雲端硬碟副本，請稍候…');
-      try {
-        var res = await AccountingApi.materialRepairPhotos(session, pno, {});
-        if (!res || res.success === false) {
-          showMsg((res && res.message) || '修補失敗');
-          return;
-        }
-        invalidateMaterialListCache_(pno);
-        await loadList();
-        var failHint = '';
-        if ((res.failed || 0) > 0 && res.results && res.results.length) {
-          var firstFail = res.results.filter(function (r) { return r && !r.ok; })[0];
-          if (firstFail && firstFail.message) failHint = '；例如：' + firstFail.message;
-        }
-        showMsg(
-          (res.message || ('修補完成：成功 ' + (res.repaired || 0))) + failHint,
-          (res.failed || 0) === 0
-        );
-      } catch (e) {
-        showMsg((e && e.message) ? e.message : '修補失敗');
-      } finally {
-        setPageStatus_('');
-        if (btn) btn.disabled = false;
-      }
-    };
     $('btnBackToList').onclick = function () {
       editingMaterialId = '';
       $('formView').classList.add('hidden');

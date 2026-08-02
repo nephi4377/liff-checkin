@@ -1349,16 +1349,6 @@ var AccountingApi = (function () {
         project_no: (filter && filter.project_no) || ''
       }));
     },
-    /** 修補失效／舊掃描照片：對回 Dropbox 路徑並補 Drive（project-console） */
-    materialRepairPhotos: function (sessionOrToken, projectNo, opts) {
-      opts = opts || {};
-      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
-        action: 'margin_material_repair_photos',
-        project_no: projectNo,
-        material_id: opts.material_id || '',
-        dry_run: opts.dry_run === true
-      }), 60000);
-    },
     /** 選材 — 客戶唯讀（project-console） */
     materialPortalList: function (sessionOrToken, projectNo, opts) {
       opts = opts || {};
