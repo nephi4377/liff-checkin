@@ -328,7 +328,7 @@ var AccountingApi = (function () {
     return buildAuth(sessionOrToken);
   }
 
-  /** 選材設計師 API：dev_bypass 同時寫在 body 頂層（對齊 project-console MaterialPortalAccess） */
+  /** 選材設計師 API：dev_bypass／liff_id_token 同時寫在 body 頂層（對齊 project-console MaterialPortalAccess） */
   function buildMaterialPostBody_(sessionOrToken, body) {
     var out = Object.assign({}, body || {}, { auth: resolveAuth(sessionOrToken) });
     var auth = out.auth || {};
@@ -336,6 +336,9 @@ var AccountingApi = (function () {
       out.dev_bypass = true;
       if (auth.dev_permission) out.dev_permission = auth.dev_permission;
       if (auth.dev_user_id) out.dev_user_id = auth.dev_user_id;
+    }
+    if (auth.liff_id_token) {
+      out.liff_id_token = auth.liff_id_token;
     }
     return out;
   }
@@ -972,7 +975,11 @@ var AccountingApi = (function () {
           minPermission: opts.minPermission != null ? opts.minPermission : 0,
           authAction: 'accounting_auth_me'
         });
-        if (provHub && provHub.auth && provHub.auth.userId) {
+        // auth 用 user_id；亦接受已有 idToken／devBypass，否則選材 API 會回「缺少 liff_id_token」
+        var provUid = provHub && provHub.auth
+          ? (provHub.auth.user_id || provHub.auth.userId || '')
+          : '';
+        if (provHub && provUid && (provHub.idToken || provHub.devBypass)) {
           console.warn('[Accounting] Hub LIFF token 未取得，暫用 HUB 操作者身分');
           return provHub;
         }
@@ -1345,21 +1352,25 @@ var AccountingApi = (function () {
     /** 選材 — 客戶唯讀（project-console） */
     materialPortalList: function (sessionOrToken, projectNo, opts) {
       opts = opts || {};
-      var body = { action: 'margin_material_portal_list', auth: resolveAuth(sessionOrToken), project_no: projectNo };
-      if (opts.staffPreview) body.staff_preview = true;
-      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
-        body.dev_bypass = true;
-        if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
+      var body = buildMaterialPostBody_(sessionOrToken, {
+        action: 'margin_material_portal_list',
+        project_no: projectNo
+      });
+      if (opts.staffPreview) {
+        body.staff_preview = true;
+        if (body.auth) body.auth.staff_preview = true;
       }
       return postMaterial(body);
     },
     materialPortalDetail: function (sessionOrToken, materialId, opts) {
       opts = opts || {};
-      var body = { action: 'margin_material_portal_detail', auth: resolveAuth(sessionOrToken), material_id: materialId };
-      if (opts.staffPreview) body.staff_preview = true;
-      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
-        body.dev_bypass = true;
-        if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
+      var body = buildMaterialPostBody_(sessionOrToken, {
+        action: 'margin_material_portal_detail',
+        material_id: materialId
+      });
+      if (opts.staffPreview) {
+        body.staff_preview = true;
+        if (body.auth) body.auth.staff_preview = true;
       }
       return postMaterial(body);
     },
