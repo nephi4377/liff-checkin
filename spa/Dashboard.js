@@ -15,6 +15,7 @@ export default {
         'todayPresence',       // { [userId]: { light, label, reasons, hasCheckIn, checkInTime, ... } }
         'presenceLoading',     // 今日燈號背景更新中
         'hasAdminRights',
+        'canViewStaffStatusBoard',
         'currentUser'
     ],
     emits: ['notification-action', 'clear-notifications'],
@@ -472,7 +473,7 @@ export default {
                 <div class="flex justify-between items-center mb-3 flex-wrap gap-2">
                     <h2 class="text-sm font-bold text-gray-700">人員出席狀況（今天／明天）</h2>
                     <div class="flex items-center gap-2 flex-wrap">
-                        <a v-if="hasAdminRights" :href="staffStatusBoardUrl"
+                        <a v-if="canViewStaffStatusBoard" :href="staffStatusBoardUrl"
                             class="text-[10px] text-blue-600 hover:underline font-medium">全員燈號看板（今／明／後天）→</a>
                         <span v-if="!hasAnyScheduleData" class="text-[10px] text-gray-400">載入班表中…</span>
                         <span v-else-if="scheduleLoading || presenceLoading" class="text-[10px] text-blue-500 animate-pulse" title="正在取得最新排班或燈號">更新中…</span>
@@ -763,13 +764,13 @@ export default {
                     </div>
                 </a>
 
-                <!-- 11b. 全員出勤燈號看板（管理） -->
-                <a v-if="hasAdminRights" :href="staffStatusBoardUrl"
+                <!-- 11b. 全員出勤燈號看板（權限 ≥ 3） -->
+                <a v-if="canViewStaffStatusBoard" :href="staffStatusBoardUrl"
                     class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xl">🚦</div>
                     <div class="min-w-0 flex-1">
                         <h2 class="text-base font-bold text-gray-800 leading-tight">全員出勤燈號看板</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">今／明／後天排班與今日打卡燈號（權限 4+）。</p>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">今／明／後天排班與今日打卡燈號（權限 3+）。</p>
                     </div>
                 </a>
 

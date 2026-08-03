@@ -119,6 +119,8 @@ const App = {
             return null;
         });
         const hasAdminRights = computed(() => Number(currentUser.value?.permission || 0) >= 4);
+        /** 全員出勤燈號看板／右側今日燈號：權限 ≥ 3 可見（其餘管理功能仍 ≥ 4） */
+        const canViewStaffStatusBoard = computed(() => Number(currentUser.value?.permission || 0) >= 3);
         const isHelpActive = computed(() => {
             const hash = window.location.hash || '#';
             const path = hash.split('?')[0];
@@ -791,6 +793,7 @@ const App = {
             monthSchedule,
             scheduleLoading,
             hasAdminRights,
+            canViewStaffStatusBoard,
             handleNotificationAction,
             clearAllNotifications,
             currentUser,
@@ -859,7 +862,7 @@ const App = {
                     @reports-updated="onTodayReportsUpdated" />
                 <main :class="['flex-grow overflow-y-auto min-w-0', { 'container mx-auto max-w-2xl px-4 sm:px-6 lg:px-8': currentView.name !== 'iframe' }]">
                     <div v-if="currentView.name === 'dashboard'" class="py-6">
-                        <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :presenceLoading="presenceLoading" :pendingRequestsRaw="pendingRequestsRaw" :todayPresence="todayPresence" :hasAdminRights="hasAdminRights" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" />
+                        <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :presenceLoading="presenceLoading" :pendingRequestsRaw="pendingRequestsRaw" :todayPresence="todayPresence" :hasAdminRights="hasAdminRights" :canViewStaffStatusBoard="canViewStaffStatusBoard" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" />
                         <div v-if="hasAdminRights" id="task-sender-container" class="mt-4"></div>
                         <div class="mt-4 bg-emerald-50/90 px-4 py-3 rounded-lg border border-emerald-200 flex flex-wrap items-center justify-between gap-3">
                             <p class="text-sm text-gray-800 m-0 max-w-full">
@@ -892,7 +895,7 @@ const App = {
                             iframeDebugParam" />
                     </div>
                 </main>
-                <StaffTodaySidebar v-if="hasAdminRights && currentView.name === 'dashboard'"
+                <StaffTodaySidebar v-if="canViewStaffStatusBoard && currentView.name === 'dashboard'"
                     :allEmployees="allEmployees"
                     :monthSchedule="monthSchedule"
                     :todayPresence="todayPresence"
