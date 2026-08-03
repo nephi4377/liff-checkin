@@ -130,8 +130,19 @@ var AccountingBoot = (function () {
           AccountingUi.clearProgress();
         }
         if (typeof opts.onReady === 'function') await opts.onReady(cached);
+        // 背景驗證成功後也要重跑選單／門檻（否則升權後仍沿用舊畫面）
+        var revalOpts = Object.assign({}, opts, {
+          onRevalidate: async function (fresh) {
+            if (typeof opts.onRevalidate === 'function') await opts.onRevalidate(fresh);
+            else if (typeof opts.onReady === 'function'
+                && Number((cached.auth && cached.auth.permission) || 0)
+                  !== Number((fresh.auth && fresh.auth.permission) || 0)) {
+              await opts.onReady(fresh);
+            }
+          }
+        });
         traceProgress('背景重新驗證身分…');
-        backgroundRevalidate(runInit, cached, opts);
+        backgroundRevalidate(runInit, cached, revalOpts);
         return cached;
       } catch (eCachedRun) {
         var msgCache = eCachedRun.message || String(eCachedRun);

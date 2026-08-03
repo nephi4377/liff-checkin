@@ -700,6 +700,17 @@ var AccountingApi = (function () {
       if (!token) return null;
       var authHub = readSessionWrapped_(SESSION_AUTH_PREFIX + 'liff:' + simpleHash_(token), AUTH_TTL_MS);
       if (!authHub || (authHub.permission || 0) < minPerm) return null;
+      // HUB 帶入權限與快取不同 → 視為過期，強制重驗（常見：剛改員工權限）
+      try {
+        if (typeof OperatorContext !== 'undefined') {
+          OperatorContext.mergeFromUrl();
+          var opHub = OperatorContext.read();
+          if (opHub && opHub.userId && String(opHub.userId) === String(authHub.user_id || '')
+              && (parseInt(opHub.permission, 10) || 0) !== (parseInt(authHub.permission, 10) || 0)) {
+            return null;
+          }
+        }
+      } catch (eHubPerm) {}
       return {
         devBypass: false,
         profile: { userId: authHub.user_id, displayName: authHub.display_name },

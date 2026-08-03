@@ -7,12 +7,12 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
-  <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=46"></script>
+  <script src="../../shared/js/operator_context.js?v=2"></script>
+  <script src="../../shared/js/accounting_api.js?v=47"></script>
   <script src="../../shared/js/accounting_cache.js?v=30"></script>
   <script src="../../shared/js/accounting_ui.js?v=18"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
-  <script src="../../shared/js/accounting_boot.js?v=7"></script>
+  <script src="../../shared/js/accounting_boot.js?v=8"></script>
   <script src="../../shared/js/accounting_shell.js?v=5"></script>
   <style>
     h2 { margin: 0 0 4px; }
@@ -206,55 +206,75 @@
   </div>
   <script>
     (async function boot() {
+      function applyMenuVisibility(session) {
+        var hubOp = null;
+        try {
+          if (typeof OperatorContext !== 'undefined') {
+            OperatorContext.mergeFromUrl();
+            hubOp = OperatorContext.read();
+          }
+        } catch (eOp) {}
+        var authPerm = Number((session.auth && session.auth.permission) || 0);
+        var hubPerm = hubOp && String(hubOp.userId || '') === String((session.auth && session.auth.user_id) || '')
+          ? Number(hubOp.permission || 0) : 0;
+        // 選單顯示取 HUB／會計驗證較高者，避免升權後仍被舊快取擋住
+        var perm = Math.max(authPerm, hubPerm);
+        var isVendor = String(session.auth.status || '') === '廠商';
+        var staffMin = AccountingApi.INGEST_MIN_PERMISSION;
+        var supervisorMin = AccountingApi.SUPERVISOR_MIN_PERMISSION;
+        var financeMin = AccountingApi.MIN_PERMISSION;
+        var staffSection = document.getElementById('sectionStaff');
+        var financeSection = document.getElementById('sectionFinance');
+        var deniedSection = document.getElementById('sectionDenied');
+
+        if (perm >= staffMin || isVendor) {
+          staffSection.classList.remove('hidden');
+          deniedSection.classList.add('hidden');
+        } else {
+          staffSection.classList.add('hidden');
+          financeSection.classList.add('hidden');
+          deniedSection.classList.remove('hidden');
+          return;
+        }
+
+        if (perm < staffMin || isVendor) {
+          document.getElementById('linkIngest').classList.add('hidden');
+          document.getElementById('linkCustomerFinance').classList.add('hidden');
+        } else {
+          document.getElementById('linkIngest').classList.remove('hidden');
+          document.getElementById('linkCustomerFinance').classList.remove('hidden');
+        }
+
+        if (perm < supervisorMin) {
+          financeSection.classList.add('hidden');
+        } else {
+          financeSection.classList.remove('hidden');
+          var financeOnlyIds = ['linkLedgerReview', 'linkPayrollFinance', 'linkVendorPaymentFinance'];
+          financeOnlyIds.forEach(function (id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            if (perm < financeMin) el.classList.add('hidden');
+            else el.classList.remove('hidden');
+          });
+        }
+        if (perm < 5) {
+          document.getElementById('linkPayrollReview').classList.add('hidden');
+        } else {
+          document.getElementById('linkPayrollReview').classList.remove('hidden');
+        }
+      }
+
       await AccountingBoot.run({
         minPermission: 0,
         initSession: function (opts) { return AccountingApi.initSession(opts); },
         preloadBootstrap: false,
         onReady: async function (session) {
-          var perm = session.auth.permission || 0;
-          var isVendor = String(session.auth.status || '') === '廠商';
-          var staffMin = AccountingApi.INGEST_MIN_PERMISSION;
-          var supervisorMin = AccountingApi.SUPERVISOR_MIN_PERMISSION;
-          var financeMin = AccountingApi.MIN_PERMISSION;
-          var staffSection = document.getElementById('sectionStaff');
-          var financeSection = document.getElementById('sectionFinance');
-          var deniedSection = document.getElementById('sectionDenied');
-
-          if (perm >= staffMin || isVendor) {
-            staffSection.classList.remove('hidden');
-            deniedSection.classList.add('hidden');
-          } else {
-            staffSection.classList.add('hidden');
-            financeSection.classList.add('hidden');
-            deniedSection.classList.remove('hidden');
-            return;
-          }
-
-          if (perm < staffMin || isVendor) {
-            document.getElementById('linkIngest').classList.add('hidden');
-            document.getElementById('linkCustomerFinance').classList.add('hidden');
-          }
-
-          if (perm < supervisorMin) {
-            financeSection.classList.add('hidden');
-          } else {
-            financeSection.classList.remove('hidden');
-            var financeOnlyIds = ['linkLedgerReview', 'linkPayrollFinance', 'linkVendorPaymentFinance'];
-            financeOnlyIds.forEach(function (id) {
-              var el = document.getElementById(id);
-              if (!el) return;
-              if (perm < financeMin) el.classList.add('hidden');
-              else el.classList.remove('hidden');
-            });
-          }
-          if (perm < 5) {
-            document.getElementById('linkPayrollReview').classList.add('hidden');
-          } else {
-            document.getElementById('linkPayrollReview').classList.remove('hidden');
-          }
+          applyMenuVisibility(session);
 
           AccountingUi.bindMenuCards('#menuPanel a.card');
           if (typeof AccountingShell !== 'undefined') AccountingShell.initHost();
+          var perm = Number((session.auth && session.auth.permission) || 0);
+          var staffMin = AccountingApi.INGEST_MIN_PERMISSION;
           if (perm >= staffMin && typeof AccountingCache !== 'undefined' && AccountingCache.needsStaffBootstrap(session)) {
             AccountingUi.action('主檔預載', 'start');
             var hint = document.getElementById('cacheHint');
@@ -284,6 +304,9 @@
                 }
               });
           }
+        },
+        onRevalidate: async function (fresh) {
+          applyMenuVisibility(fresh);
         }
       });
     })();

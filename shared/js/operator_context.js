@@ -87,12 +87,21 @@ var OperatorContext = (function () {
     if (!session) return;
     var auth = session.auth || {};
     var profile = session.profile || {};
+    var prev = read();
+    var uid = auth.user_id || profile.userId || '';
+    var authPerm = parseInt(auth.permission, 10) || 0;
+    // HUB iframe 帶入的權限較新時，勿被會計舊身分快取往下蓋（升權後選單會消失）
+    var hubPerm = 0;
+    if (prev && String(prev.userId || '') === String(uid)
+        && (prev.source === 'hub_iframe' || prev.source === 'hub')) {
+      hubPerm = parseInt(prev.permission, 10) || 0;
+    }
     write({
-      userId: auth.user_id || profile.userId || '',
+      userId: uid,
       userName: auth.display_name || profile.displayName || '',
       displayName: auth.display_name || profile.displayName || '',
-      permission: auth.permission || 0,
-      hubLiffId: read() ? (read().hubLiffId || '') : '',
+      permission: Math.max(authPerm, hubPerm),
+      hubLiffId: prev ? (prev.hubLiffId || '') : '',
       source: session.devBypass ? 'dev_bypass' : 'liff'
     });
   }
