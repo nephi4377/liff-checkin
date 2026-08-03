@@ -132,6 +132,18 @@ var AccountingUi = (function () {
       '.acct-log-tag-action{background:#475569;color:#e2e8f0}',
       '.acct-log-text{flex:1;word-break:break-word;white-space:pre-wrap}',
       '.acct-loading-detail{margin:8px 0 0;font-size:13px;color:#64748b;line-height:1.45}',
+      '.acct-fatal-err{max-width:420px;margin:0 auto;text-align:left;padding:8px 4px}',
+      '.acct-fatal-err h3{margin:0 0 8px;font-size:17px;color:#991b1b}',
+      '.acct-fatal-err .acct-fatal-msg{margin:0 0 12px;font-size:15px;line-height:1.5;color:#334155;word-break:break-word}',
+      '.acct-fatal-err .acct-fatal-hint{margin:0 0 14px;font-size:13px;color:#64748b;line-height:1.45}',
+      '.acct-fatal-err .err-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}',
+      '.acct-fatal-err .err-actions .btn{min-height:40px;padding:8px 14px;border-radius:10px;border:1px solid #cbd5e1;',
+      'background:#fff;color:#0f172a;font-size:14px;font-weight:600;cursor:pointer}',
+      '.acct-fatal-err .err-actions .btn-primary{background:#0f766e;border-color:#0f766e;color:#fff}',
+      '.acct-fatal-err .err-actions .btn-mail{background:#1d4ed8;border-color:#1d4ed8;color:#fff}',
+      '.acct-fatal-err .err-fallback{margin:0;padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;',
+      'font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:180px;overflow:auto}',
+      '.acct-fatal-err .err-fallback.hidden{display:none}',
       '.acct-ui-hide-legacy#msg,.acct-ui-hide-legacy#ok,.acct-ui-hide-legacy#warn{display:none!important}',
       '.btn[aria-busy="true"]{opacity:.7;cursor:wait}',
       '@media (max-width:959px){',
@@ -620,7 +632,141 @@ var AccountingUi = (function () {
     };
   }
 
+  /** 失敗回報預設收件（與薪資／匯款 fallback 一致） */
+  var ERROR_REPORT_EMAIL = 'nephihuang@gmail.com';
+
+  function buildErrorReportText(ctx) {
+    ctx = ctx || {};
+    var lines = [
+      '【添心會計・錯誤回報】',
+      '時間：' + new Date().toLocaleString('zh-TW', { hour12: false }),
+      '頁面：' + (ctx.page || pageLabel()),
+      '網址：' + (typeof location !== 'undefined' ? String(location.href || '').slice(0, 240) : ''),
+      '動作：' + (ctx.action || '開啟頁面')
+    ];
+    if (operator.displayName || operator.userId) {
+      lines.push('操作人：' + (operator.displayName || '—') + (operator.userId ? '（' + operator.userId + '）' : ''));
+    }
+    if (ctx.project_no || ctx.client_name) {
+      lines.push('案號：' + (ctx.project_no || '—') + (ctx.client_name ? '　客戶：' + ctx.client_name : ''));
+    }
+    lines.push('錯誤：' + (ctx.message || '未知錯誤'));
+    if (ctx.tech) lines.push('技術摘要：' + String(ctx.tech).slice(0, 400));
+    return lines.join('\n');
+  }
+
+  function buildErrorMailtoUrl(reportText, ctx) {
+    ctx = ctx || {};
+    var subject = '添心會計錯誤回報・' + (ctx.page || pageLabel());
+    var body = String(reportText || '').slice(0, 1600);
+    return 'mailto:' + encodeURIComponent(ERROR_REPORT_EMAIL) +
+      '?subject=' + encodeURIComponent(subject) +
+      '&body=' + encodeURIComponent(body);
+  }
+
+  /**
+   * 致命／開頁失敗：人話說明 + 再試 + 複製 + 開信寄到信箱
+   * @param {HTMLElement|string} target - 容器或 id（預設 #loading）
+   * @param {object} ctx - { message, action, page, tech, onRetry }
+   */
+  function showFatalError(target, ctx) {
+    ctx = ctx || {};
+    ensureMount();
+    var el = typeof target === 'string' ? document.getElementById(target) : target;
+    if (!el) el = document.getElementById('loading');
+    if (!el) {
+      toast('err', ctx.message || '發生錯誤', 8000);
+      return null;
+    }
+    var report = buildErrorReportText(ctx);
+    el.classList.remove('hidden');
+    el.innerHTML = '';
+    _progressEl = null;
+
+    var wrap = document.createElement('div');
+    wrap.className = 'acct-fatal-err';
+    wrap.setAttribute('role', 'alert');
+
+    var title = document.createElement('h3');
+    title.textContent = '無法繼續';
+    wrap.appendChild(title);
+
+    var msg = document.createElement('p');
+    msg.className = 'acct-fatal-msg';
+    msg.textContent = ctx.message || '發生錯誤';
+    wrap.appendChild(msg);
+
+    var hint = document.createElement('p');
+    hint.className = 'acct-fatal-hint';
+    hint.textContent = '可再試一次；仍不行請複製錯誤內容，或開信寄到 ' + ERROR_REPORT_EMAIL + '。';
+    wrap.appendChild(hint);
+
+    var actions = document.createElement('div');
+    actions.className = 'err-actions';
+
+    var retryBtn = document.createElement('button');
+    retryBtn.type = 'button';
+    retryBtn.className = 'btn btn-primary';
+    retryBtn.textContent = '再試一次';
+    retryBtn.addEventListener('click', function () {
+      if (typeof ctx.onRetry === 'function') {
+        setBtnBusy(retryBtn, true, '重試中…');
+        Promise.resolve(ctx.onRetry()).catch(function () {}).finally(function () {
+          setBtnBusy(retryBtn, false);
+        });
+      } else {
+        location.reload();
+      }
+    });
+    actions.appendChild(retryBtn);
+
+    var fallback = document.createElement('pre');
+    fallback.className = 'err-fallback hidden';
+    fallback.textContent = report;
+
+    var copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'btn';
+    copyBtn.textContent = '複製錯誤';
+    copyBtn.addEventListener('click', function () {
+      setBtnBusy(copyBtn, true, '複製中…');
+      copyText(report, { okToast: '已複製錯誤內容' }).then(function (ok) {
+        setBtnBusy(copyBtn, false);
+        if (ok) {
+          copyBtn.textContent = '已複製';
+          setTimeout(function () { copyBtn.textContent = '複製錯誤'; }, 1600);
+        } else {
+          fallback.classList.remove('hidden');
+          try {
+            var range = document.createRange();
+            range.selectNodeContents(fallback);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+          } catch (eSel) {}
+        }
+      });
+    });
+    actions.appendChild(copyBtn);
+
+    var mailBtn = document.createElement('a');
+    mailBtn.className = 'btn btn-mail';
+    mailBtn.textContent = '傳送到信箱';
+    mailBtn.href = buildErrorMailtoUrl(report, ctx);
+    mailBtn.addEventListener('click', function () {
+      tap('傳送到信箱（錯誤回報）');
+    });
+    actions.appendChild(mailBtn);
+
+    wrap.appendChild(actions);
+    wrap.appendChild(fallback);
+    el.appendChild(wrap);
+    pushLog('err', ctx.message || '無法繼續');
+    return wrap;
+  }
+
   return {
+    ERROR_REPORT_EMAIL: ERROR_REPORT_EMAIL,
     TOAST_MS: TOAST_MS_DEFAULT,
     init: function (initOpts) {
       initOpts = initOpts || {};
@@ -651,6 +797,9 @@ var AccountingUi = (function () {
     log: pushLog,
     notify: notify,
     copyText: copyText,
+    buildErrorReportText: buildErrorReportText,
+    buildErrorMailtoUrl: buildErrorMailtoUrl,
+    showFatalError: showFatalError,
     action: action,
     step: step,
     setProgress: setProgress,

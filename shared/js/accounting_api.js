@@ -510,6 +510,25 @@ var AccountingApi = (function () {
         vendor_doc_id: vendorDocId
       });
     },
+    /** LINE 單據快審清單（≥2） */
+    quickReviewList: function (sessionOrToken, filter) {
+      return post({
+        action: 'quick_review_list',
+        auth: resolveAuth(sessionOrToken),
+        filter: filter || {}
+      }, 45000);
+    },
+    /** 快審五類分類；請款回傳 payment_url／pending_token */
+    quickReviewClassify: function (sessionOrToken, payload) {
+      return post({
+        action: 'quick_review_classify',
+        auth: resolveAuth(sessionOrToken),
+        quick_review_id: (payload && payload.quick_review_id) || '',
+        category: (payload && payload.category) || '',
+        vendor_id: (payload && payload.vendor_id) || '',
+        note: (payload && payload.note) || ''
+      }, 45000);
+    },
     marginListOverview: function (sessionOrToken, opts) {
       opts = opts || {};
       return post({
@@ -1018,6 +1037,7 @@ var AccountingApi = (function () {
         var denied = opts.deniedMsg;
         if (!denied) {
           if (minPerm >= MIN_PERMISSION) denied = PERM_DENIED_MSG;
+          else if (minPerm >= SUPERVISOR_MIN_PERMISSION) denied = SUPERVISOR_DENIED_MSG;
           else if (minPerm >= INGEST_MIN_PERMISSION) denied = INGEST_PERM_DENIED_MSG;
           else denied = '權限不足（需權限 ≥ ' + minPerm + '）';
         }

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
@@ -10,9 +10,9 @@
   <script src="../../shared/js/operator_context.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=42"></script>
   <script src="../../shared/js/accounting_cache.js?v=30"></script>
-  <script src="../../shared/js/accounting_ui.js?v=16"></script>
+  <script src="../../shared/js/accounting_ui.js?v=18"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
-  <script src="../../shared/js/accounting_boot.js?v=6"></script>
+  <script src="../../shared/js/accounting_boot.js?v=7"></script>
   <style>
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; }
@@ -135,6 +135,7 @@
       });
       (async function boot() {
         await AccountingBoot.run({
+          minPermission: AccountingApi.SUPERVISOR_MIN_PERMISSION,
           preloadBootstrap: true,
           onReady: async function (sess) {
             session = sess;

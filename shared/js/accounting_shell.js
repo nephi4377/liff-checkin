@@ -13,6 +13,7 @@ var AccountingShell = (function () {
   var PAGE_TITLES = {
     'accounting_ingest.html': '收支登錄',
     'payment_request.html': '廠商存檔或待付款',
+    'quick_review.html': '單據快審',
     'payment_request_compose.html': '精細請款建單',
     'vendor_status.html': '款項進度',
     'vendors.html': '廠商名冊',

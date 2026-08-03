@@ -17,6 +17,23 @@ var AccountingBoot = (function () {
     }
   }
 
+  function showBootError(message, opts) {
+    opts = opts || {};
+    var msg = message || '開啟失敗';
+    if (typeof AccountingUi !== 'undefined' && AccountingUi.showFatalError) {
+      AccountingUi.clearProgress();
+      AccountingUi.showFatalError('loading', {
+        message: msg,
+        action: opts.action || '開啟頁面',
+        page: opts.page,
+        tech: opts.tech,
+        onRetry: opts.onRetry || function () { location.reload(); }
+      });
+      return;
+    }
+    setLoading(msg);
+  }
+
   function traceStep(label, detail) {
     if (typeof AccountingUi !== 'undefined' && AccountingUi.step) AccountingUi.step(label, detail);
   }
@@ -117,8 +134,9 @@ var AccountingBoot = (function () {
         backgroundRevalidate(runInit, cached, opts);
         return cached;
       } catch (eCachedRun) {
-        setLoading(eCachedRun.message || String(eCachedRun));
-        if (typeof AccountingUi !== 'undefined') AccountingUi.action('啟動頁面', 'fail', eCachedRun.message || String(eCachedRun));
+        var msgCache = eCachedRun.message || String(eCachedRun);
+        showBootError(msgCache, { action: '快取登入', tech: String(eCachedRun && eCachedRun.stack || msgCache).slice(0, 400) });
+        if (typeof AccountingUi !== 'undefined') AccountingUi.action('啟動頁面', 'fail', msgCache);
         return null;
       }
     }
@@ -138,8 +156,9 @@ var AccountingBoot = (function () {
       if (typeof opts.onReady === 'function') await opts.onReady(session);
       return session;
     } catch (e) {
-      setLoading(e.message || String(e));
-      if (typeof AccountingUi !== 'undefined') AccountingUi.action('啟動頁面', 'fail', e.message || String(e));
+      var msg = e.message || String(e);
+      showBootError(msg, { action: '驗證身分', tech: String(e && e.stack || msg).slice(0, 400) });
+      if (typeof AccountingUi !== 'undefined') AccountingUi.action('啟動頁面', 'fail', msg);
       return null;
     }
   }
@@ -148,6 +167,7 @@ var AccountingBoot = (function () {
     run: run,
     showApp: showApp,
     setLoading: setLoading,
+    showBootError: showBootError,
     formatUserLine: formatUserLine
   };
 })();

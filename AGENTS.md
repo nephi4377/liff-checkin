@@ -1,0 +1,26 @@
+# AGENTS.md
+
+專案細節與操作手冊見 `README.md`、`README_CODING.md`、`PROJECT_MAP.md`、`SPEC/`，
+以及 `.agents/skills/Cloud-Agent-Runbook/`（本地開站、測試、LIFF bypass）。
+
+## Cursor Cloud specific instructions
+
+此段給「環境已由 update script 安裝好依賴」的後續 cloud agent，只記非顯而易見的啟動／執行注意事項。
+
+### 這是什麼
+- 純靜態前端：Vue 3 SPA + iframe 模組（`modules/`），從 **repo 根目錄** 用 `serve` 開站。
+- 後端是另一個 repo 的 Google Apps Script（`shared/js/config.js` 指定 URL），本 repo 不含後端程式。
+
+### 啟動本地站（不放進 update script）
+- 主控台：`npx --yes serve@14 -l 8080 .`，開 `http://127.0.0.1:8080/`。
+- `serve` 會對 `.html` 做 clean-URL 301 轉址（例：`/modules/.../foo.html` → `/modules/.../foo`），curl 檢查時屬正常，非錯誤。
+- LayoutPlanner 也可單獨開：`npm run serve --prefix modules/InteriorDesigned`（`:8765`）。
+
+### Lint / 測試 / 建置
+- 沒有 lint step，也沒有 build step（靜態站，直接 serve）。
+- 唯一自動化測試在 `modules/InteriorDesigned`：`npm test --prefix modules/InteriorDesigned`（Vitest 單元 + Playwright e2e）。e2e 會自動起 `serve@8765`。
+
+### 可測 / 不可測範圍
+- **可本地端到端驗證**：`modules/InteriorDesigned` LayoutPlanner（不需登入，桌機視窗即可，無「僅限手機」遮罩）。
+- **多數其他模組**（`daily_report`、`projects`、`attendance` 等）走 LINE LIFF 身分，本地只能驗 UI；完整流程需正式站或 `reportV3.html` 的 local bypass（測完務必改回 false，見 Runbook）。
+- LayoutPlanner 頁的「施工面積」欄位僅供備註／匯出，不自動連動預算金額（預算需靠新增工程項目），$0 為預期行為。

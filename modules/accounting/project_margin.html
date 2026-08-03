@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
@@ -11,10 +11,10 @@
   <script src="../../shared/js/accounting_api.js?v=43"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=17"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=6"></script>
-  <script src="../../shared/js/accounting_ui.js?v=17"></script>
+  <script src="../../shared/js/accounting_ui.js?v=18"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
-  <script src="../../shared/js/accounting_boot.js?v=6"></script>
+  <script src="../../shared/js/accounting_boot.js?v=7"></script>
   <style>
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; }
@@ -1930,6 +1930,7 @@
         document.getElementById('addDate').value = todayIso();
         // 不在此先畫骨架：有快取時由 loadOverview peek 立刻畫可點列表
         await AccountingBoot.run({
+          minPermission: AccountingApi.SUPERVISOR_MIN_PERMISSION,
           onReady: async function (sess) {
             session = sess;
             await loadOverview({ force: false });

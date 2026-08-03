@@ -8,11 +8,11 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=42"></script>
+  <script src="../../shared/js/accounting_api.js?v=46"></script>
   <script src="../../shared/js/accounting_cache.js?v=30"></script>
-  <script src="../../shared/js/accounting_ui.js?v=16"></script>
+  <script src="../../shared/js/accounting_ui.js?v=18"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
-  <script src="../../shared/js/accounting_boot.js?v=6"></script>
+  <script src="../../shared/js/accounting_boot.js?v=7"></script>
   <script src="../../shared/js/accounting_shell.js?v=5"></script>
   <style>
     h2 { margin: 0 0 4px; }
@@ -98,6 +98,15 @@
         </span>
       </a>
 
+      <a class="card" href="quick_review.html" id="linkQuickReview">
+        <span class="card-icon amber">⚡</span>
+        <span class="card-body">
+          <h3>單據快審</h3>
+          <p>LINE 傳來的圖／PDF：已存廠商夾，在此標廢棄／請款／報價／出貨／其他。</p>
+          <span class="tag staff">權限 ≥2</span>
+        </span>
+      </a>
+
       <a class="card" href="designer-customer-finance.html" id="linkCustomerFinance">
         <span class="card-icon violet">📋</span>
         <span class="card-body">
@@ -117,14 +126,14 @@
     </div>
 
     <div class="menu-section" id="sectionFinance">
-      <p class="menu-section-title admin">財務管理 · 權限 4 以上</p>
+      <p class="menu-section-title admin">財務／主管 · 權限 3 以上</p>
 
       <a class="card" href="vendors.html" id="linkVendors">
         <span class="card-icon amber">🏢</span>
         <span class="card-body">
           <h3>廠商名冊</h3>
           <p>維護廠商主檔、統編與 LINE 綁定（同一頁，不多開）。</p>
-          <span class="tag admin">財務以上</span>
+          <span class="tag admin">主管 ≥3</span>
         </span>
       </a>
 
@@ -133,7 +142,7 @@
         <span class="card-body">
           <h3>請款審核</h3>
           <p>廠商／員工待付款申請待審；核准後進待匯款。狀態在此與待匯款／款項進度查看。</p>
-          <span class="tag admin">財務以上</span>
+          <span class="tag admin">財務 ≥4</span>
         </span>
       </a>
 
@@ -160,7 +169,7 @@
         <span class="card-body">
           <h3>薪資歷史補登</h3>
           <p>已發薪補進員工歷史紀錄；不寫收支。</p>
-          <span class="tag admin">財務 ≥4</span>
+          <span class="tag admin">主管 ≥3</span>
         </span>
       </a>
 
@@ -169,7 +178,7 @@
         <span class="card-body">
           <h3>廠商待匯款</h3>
           <p>待匯款清單、匯出銀行轉帳檔並登錄收支。</p>
-          <span class="tag admin">財務以上</span>
+          <span class="tag admin">財務 ≥4</span>
         </span>
       </a>
 
@@ -178,7 +187,7 @@
         <span class="card-body">
           <h3>單據附件（進階）</h3>
           <p>依關鍵字查附件；各頁有照片時可直接燈箱預覽。</p>
-          <span class="tag admin">財務以上</span>
+          <span class="tag admin">主管 ≥3</span>
         </span>
       </a>
 
@@ -187,7 +196,7 @@
         <span class="card-body">
           <h3>案件毛利</h3>
           <p>各案收入、支出明細與毛利；記帳有案號會自動寫入。</p>
-          <span class="tag admin">財務以上</span>
+          <span class="tag admin">主管 ≥3</span>
         </span>
       </a>
     </div>
@@ -205,6 +214,7 @@
           var perm = session.auth.permission || 0;
           var isVendor = String(session.auth.status || '') === '廠商';
           var staffMin = AccountingApi.INGEST_MIN_PERMISSION;
+          var supervisorMin = AccountingApi.SUPERVISOR_MIN_PERMISSION;
           var financeMin = AccountingApi.MIN_PERMISSION;
           var staffSection = document.getElementById('sectionStaff');
           var financeSection = document.getElementById('sectionFinance');
@@ -225,10 +235,17 @@
             document.getElementById('linkCustomerFinance').classList.add('hidden');
           }
 
-          if (perm < financeMin) {
+          if (perm < supervisorMin) {
             financeSection.classList.add('hidden');
           } else {
             financeSection.classList.remove('hidden');
+            var financeOnlyIds = ['linkLedgerReview', 'linkPayrollFinance', 'linkVendorPaymentFinance'];
+            financeOnlyIds.forEach(function (id) {
+              var el = document.getElementById(id);
+              if (!el) return;
+              if (perm < financeMin) el.classList.add('hidden');
+              else el.classList.remove('hidden');
+            });
           }
           if (perm < 5) {
             document.getElementById('linkPayrollReview').classList.add('hidden');
@@ -240,9 +257,32 @@
           if (typeof AccountingShell !== 'undefined') AccountingShell.initHost();
           if (perm >= staffMin && typeof AccountingCache !== 'undefined' && AccountingCache.needsStaffBootstrap(session)) {
             AccountingUi.action('主檔預載', 'start');
+            var hint = document.getElementById('cacheHint');
+            if (hint) hint.textContent = '主檔更新中…';
             AccountingCache.load(session, true)
-              .then(function () { AccountingUi.action('主檔預載', 'ok'); })
-              .catch(function (e) { AccountingUi.action('主檔預載', 'fail', e.message || String(e)); });
+              .then(function () {
+                AccountingUi.action('主檔預載', 'ok');
+                if (hint) hint.textContent = '';
+              })
+              .catch(function (e) {
+                var msg = e.message || String(e);
+                AccountingUi.action('主檔預載', 'fail', msg);
+                if (hint) {
+                  hint.textContent = '';
+                  AccountingUi.showFatalError(hint, {
+                    message: '主檔載入失敗：' + msg + '（選單仍可進多數功能）',
+                    action: '主檔預載',
+                    tech: String(e && e.stack || msg).slice(0, 400),
+                    onRetry: function () {
+                      hint.textContent = '主檔更新中…';
+                      return AccountingCache.load(session, true).then(function () {
+                        AccountingUi.action('主檔預載', 'ok');
+                        hint.innerHTML = '';
+                      });
+                    }
+                  });
+                }
+              });
           }
         }
       });
