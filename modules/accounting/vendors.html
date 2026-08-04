@@ -12,7 +12,7 @@
   <script src="../../shared/js/accounting_cache.js?v=30"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
-  <script src="../../shared/js/accounting_ui.js?v=18"></script>
+  <script src="../../shared/js/accounting_ui.js?v=19"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=5"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=7"></script>
@@ -230,17 +230,18 @@
       <select id="cost_type"></select>
       <div class="row2">
         <div><label class="req">聯絡人</label><input id="contact_name" /></div>
-        <div><label>電話</label><input id="contact_phone" inputmode="tel" /></div>
+        <div><label>電話</label><input id="contact_phone" type="text" inputmode="tel" autocomplete="tel" /></div>
       </div>
       <label>Email</label><input id="contact_email" type="email" />
       <label>公司／工廠地址</label><input id="address" />
       <p class="section-title">匯款資訊</p>
       <div class="row2">
-        <div><label class="req">銀行代碼</label><input id="bank_code" maxlength="3" inputmode="numeric" /></div>
-        <div><label>分行名稱</label><input id="branch_name" /></div>
+        <div><label class="req">銀行代碼</label><input id="bank_code" type="text" maxlength="3" inputmode="numeric" autocomplete="off" /></div>
+        <div><label>分行名稱</label><input id="branch_name" placeholder="例：成功分行、台銀安南" /></div>
       </div>
+      <p id="branchHint" class="sub" style="margin:0 0 10px"></p>
       <div class="row2">
-        <div><label class="req">帳號</label><input id="account_no" inputmode="numeric" /></div>
+        <div><label class="req">帳號</label><input id="account_no" type="text" inputmode="numeric" autocomplete="off" /></div>
         <div><label class="req">戶名</label><input id="account_name" /></div>
       </div>
       <label>付款條件</label>
@@ -336,7 +337,9 @@
         bar.classList.remove('hidden');
         icon.textContent = k === 'ok' ? '✓' : (k === 'warn' ? '!' : '✕');
         txt.textContent = text;
-        AccountingUi.notify(k, text);
+        // 頁內已有綠／紅條：錯誤仍 toast；成功／警告只寫狀態紀錄，避免與「儲存完成」toast 重疊
+        if (k === 'err') AccountingUi.notify('err', text);
+        else if (typeof AccountingUi.log === 'function') AccountingUi.log(k, text);
       }
       function setMsg(t) { if (t) showFeedback('err', t); else showFeedback('', ''); }
       function setOk(t) { if (t) showFeedback('ok', t); }
@@ -607,22 +610,66 @@
         return {
           name: $('name').value.trim(),
           name_aliases: $('name_aliases').value.trim(),
-          tax_id: $('tax_id').value.trim(),
+          tax_id: String($('tax_id').value || '').trim(),
           trade_category: $('trade_category').value,
           cost_type: $('cost_type').value,
           contact_name: $('contact_name').value.trim(),
           contact_phone: normPhone($('contact_phone').value.trim()),
           contact_email: $('contact_email').value.trim(),
           address: $('address').value.trim(),
-          bank_code: $('bank_code').value.trim(),
+          bank_code: String($('bank_code').value || '').trim(),
           branch_name: $('branch_name').value.trim(),
-          account_no: $('account_no').value.trim(),
+          account_no: String($('account_no').value || '').trim(),
           account_name: $('account_name').value.trim(),
           payment_terms: $('payment_terms').value,
           remit_fee_default: $('remit_fee_default').value || '是',
           coop_status: $('coop_status').value || '合作中',
           note: $('note').value.trim()
         };
+      }
+
+      var branchCheckSeq = 0;
+      function setBranchHint(text, kind) {
+        var el = $('branchHint');
+        if (!el) return;
+        el.textContent = text || '';
+        el.style.color = kind === 'err' ? '#b91c1c' : (kind === 'ok' ? '#15803d' : '');
+      }
+      async function checkBranchHint() {
+        var bank = String($('bank_code').value || '').trim();
+        var branch = String($('branch_name').value || '').trim();
+        if (!branch) {
+          setBranchHint('分行名稱建議填寫（例：成功分行）。空白時匯款可能用預設代號，較容易出錯。', '');
+          return { success: true, skipped: true };
+        }
+        if (!bank) {
+          setBranchHint('已填分行時請先填銀行代碼，才能檢查匯款代號。', 'err');
+          return { success: false, message: '已填分行名稱時請一併填銀行代碼' };
+        }
+        var seq = ++branchCheckSeq;
+        setBranchHint('正在檢查分行代號…', '');
+        try {
+          var data = await AccountingApi.ctbcLookupBranch(session, bank, branch);
+          if (seq !== branchCheckSeq) return { success: true };
+          if (!data.success) {
+            setBranchHint(data.message || '分行無法對照匯款代號', 'err');
+            // 明確對照失敗 → 擋存檔；其餘（未部署／網路）可確認後仍存
+            if (data.message && String(data.message).indexOf('無法對照') >= 0) return data;
+            var cont = window.confirm((data.message || '分行檢查失敗') + '\n\n仍要存檔嗎？（後端部署後會強制檢查）');
+            return cont ? { success: true } : data;
+          }
+          if (data.skipped) {
+            setBranchHint('', '');
+            return data;
+          }
+          setBranchHint('可對照匯款代號 ' + (data.bank7 || '') + '（可存檔）', 'ok');
+          return data;
+        } catch (e) {
+          if (seq !== branchCheckSeq) return { success: true };
+          setBranchHint('分行檢查暫時失敗：' + (e.message || e), 'err');
+          var cont2 = window.confirm('分行檢查暫時失敗：' + (e.message || e) + '\n\n仍要存檔嗎？');
+          return cont2 ? { success: true } : { success: false, message: e.message || String(e) };
+        }
       }
 
       function setBindEditorVisible(on) {
@@ -735,6 +782,7 @@
         $('coop_status').value = '合作中';
         $('payment_terms').value = '';
         $('remit_fee_default').value = '是';
+        setBranchHint('', '');
         clearPhotos();
         if (opts.focusName !== false) $('name').focus();
       }
@@ -767,6 +815,7 @@
         $('note').value = noteLines.join('\n');
         if (!opts.keepPhotos) clearPhotos();
         renderBindings(v.vendor_id);
+        checkBranchHint();
         var scrollTarget = opts.scrollToBind ? $('bindEditor') : $('formCard');
         if (scrollTarget) scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
@@ -1003,14 +1052,56 @@
         if (!payload.bank_code) { setMsg('請填銀行代碼'); return; }
         if (!payload.account_no) { setMsg('請填帳號'); return; }
         if (!payload.account_name) { setMsg('請填戶名'); return; }
+        if (payload.branch_name) {
+          var branchOk = await checkBranchHint();
+          if (!branchOk || branchOk.success === false) {
+            setMsg((branchOk && branchOk.message) || '分行名稱無法對照匯款代號，請修正後再存');
+            return;
+          }
+        }
         var editId = $('editId').value;
         var savedName = payload.name;
         var saved = null;
         var wasCreate = !editId;
+        var forceDuplicate = false;
+        if (wasCreate) {
+          var dupName = allVendors.filter(function (v) {
+            return String(v.is_active || '是') !== '否'
+              && String(v.name || '').trim() === savedName;
+          })[0];
+          if (dupName) {
+            var goEdit = window.confirm(
+              '名冊裡已有同名廠商「' + savedName + '」。\n\n按「確定」改開該筆編輯；按「取消」則可選擇是否仍要新增同名。'
+            );
+            if (goEdit) {
+              fillForm(dupName, { flash: true, scrollToBind: true });
+              setWarn('已改為編輯既有「' + savedName + '」，避免重複建檔');
+              return;
+            }
+            var forceDup = window.confirm('仍要新增另一筆同名「' + savedName + '」嗎？');
+            if (!forceDup) return;
+            forceDuplicate = true;
+          }
+          if (payload.tax_id) {
+            var dupTax = allVendors.filter(function (v) {
+              return String(v.is_active || '是') !== '否'
+                && String(v.tax_id || '').trim() === payload.tax_id
+                && String(v.name || '').trim() !== savedName;
+            })[0];
+            if (dupTax) {
+              var cont = window.confirm(
+                '統編「' + payload.tax_id + '」已用於廠商「' + (dupTax.name || '') + '」。\n\n仍要新增這一筆嗎？'
+              );
+              if (!cont) return;
+            }
+          }
+        }
+        if (forceDuplicate) payload.force_duplicate = true;
         try {
           await AccountingUi.runAsync($('saveBtn'), {
             busyLabel: '儲存中…',
-            actionLabel: wasCreate ? '新增廠商' : '更新廠商'
+            actionLabel: wasCreate ? '新增廠商' : '更新廠商',
+            toastOnOk: false
           }, async function () {
             var data = editId
               ? await AccountingApi.crudUpdate(session, 'vendor', editId, payload)
@@ -1104,6 +1195,8 @@
       });
       $('account_name').addEventListener('blur', crossFillVendorAndAccountName);
       $('name').addEventListener('blur', crossFillVendorAndAccountName);
+      $('bank_code').addEventListener('blur', checkBranchHint);
+      $('branch_name').addEventListener('blur', checkBranchHint);
 
       $('syncDriveBtn').addEventListener('click', async function () {
         showFeedback('', '');

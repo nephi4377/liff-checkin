@@ -473,7 +473,8 @@ var AccountingUi = (function () {
     toast(kind, text, options.ms != null ? options.ms : TOAST_MS_DEFAULT);
   }
 
-  function action(label, status, detail) {
+  function action(label, status, detail, opts) {
+    opts = opts || {};
     var k = 'action';
     var msg = String(label || '操作');
     var key = msg.replace(/^▶\s|^✓\s|^✕\s/, '').replace(/…$/, '');
@@ -497,6 +498,8 @@ var AccountingUi = (function () {
     }
     if (detail) msg += ' — ' + detail;
     pushLog(k, msg);
+    var allowToast = opts.toast !== false;
+    if (!allowToast) return;
     if (status === 'ok') toast('ok', msg, TOAST_MS_DEFAULT);
     else if (status === 'fail') toast('err', msg, TOAST_MS_DEFAULT);
     else if (status === 'start' && isDebugMode()) toast('info', msg, 4000);
@@ -825,6 +828,9 @@ var AccountingUi = (function () {
     runAsync: async function (btn, runOpts, fn) {
       runOpts = runOpts || {};
       var label = runOpts.actionLabel || runOpts.busyLabel || '處理中';
+      // toastOnOk／toastOnFail：頁面已有專屬成功列時可關，避免雙重提示重疊
+      var toastOnOk = runOpts.toastOnOk !== false;
+      var toastOnFail = runOpts.toastOnFail !== false;
 
       if ((runOpts.queue || runOpts.itemId != null) && typeof AccountingActionQueue !== 'undefined') {
         return AccountingActionQueue.enqueue({
@@ -836,10 +842,10 @@ var AccountingUi = (function () {
             action(label, 'start');
             try {
               var qResult = await fn();
-              action(label, 'ok');
+              action(label, 'ok', null, { toast: toastOnOk });
               return qResult;
             } catch (eQ) {
-              action(label, 'fail', eQ.message || String(eQ));
+              action(label, 'fail', eQ.message || String(eQ), { toast: toastOnFail });
               throw eQ;
             }
           }
@@ -851,10 +857,10 @@ var AccountingUi = (function () {
       if (runOpts.lockSelectors) setButtonsDisabled(runOpts.lockSelectors, true);
       try {
         var result = await fn();
-        action(label, 'ok');
+        action(label, 'ok', null, { toast: toastOnOk });
         return result;
       } catch (e) {
-        action(label, 'fail', e.message || String(e));
+        action(label, 'fail', e.message || String(e), { toast: toastOnFail });
         throw e;
       } finally {
         setBtnBusy(btn, false);

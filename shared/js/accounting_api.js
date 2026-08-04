@@ -388,6 +388,15 @@ var AccountingApi = (function () {
           return res;
         });
     },
+    /** 銀行代碼＋分行名稱 → 財金 7 碼對照（廠商名冊存檔前檢查） */
+    ctbcLookupBranch: function (sessionOrToken, bankCode, branchName) {
+      return post({
+        action: 'ctbc_lookup_branch',
+        auth: resolveAuth(sessionOrToken),
+        bank_code: bankCode || '',
+        branch_name: branchName || ''
+      });
+    },
     vendorPaymentStatus: function (sessionOrToken, filter) {
       return post({ action: 'vendor_payment_status', auth: resolveAuth(sessionOrToken), filter: filter || {} });
     },
