@@ -908,8 +908,11 @@
                 statusSelect.value = '離職';
             } else if (permission === 1) {
                 statusSelect.value = '廠商';
+                resignationDateInput.value = '';
             } else {
                 statusSelect.value = '員工'; // [v523.0 修正]
+                // 復職／改回員工：清掉離職日，避免出勤報表整月仍顯示「已離職」
+                resignationDateInput.value = '';
             }
             toggleShiftGroupFields(permission != 1);
         }
@@ -923,6 +926,10 @@
                 permissionSelect.value = '0';
             } else if (statusSelect.value === '廠商') {
                 permissionSelect.value = '1';
+                resignationDateInput.value = '';
+            } else {
+                // 改回員工：自動清掉離職日
+                resignationDateInput.value = '';
             }
             toggleShiftGroupFields(statusSelect.value !== '廠商');
         }
@@ -947,7 +954,8 @@
                 shiftEndTime: shiftEndInput.value,
                 身份: statusSelect.value,
                 到職日: hireDateInput.value,
-                離職日: resignationDateInput.value,
+                // 非離職身份儲存時強制清空離職日（避免復職後仍整月顯示「已離職」）
+                離職日: statusSelect.value === '離職' ? resignationDateInput.value : '',
                 聯絡電話: phoneInput.value,
                 聯絡地址: addressInput.value,
                 email: emailInput.value,
