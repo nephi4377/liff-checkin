@@ -49,7 +49,7 @@
 
 | 檔案 | 內容 |
 |------|------|
-| `**Attendance-System.md**` | 假勤 API、特休／事假／病假判定 |
+| `**Attendance-System.md**` | 假勤 API、特休／事假／病假判定；出勤獎金 legacy／v2（詳 `SPEC/22_假勤與出勤獎金規則計劃.md`） |
 
 **架構與跨倉庫**（無獨立 knowledge 檔時請讀）：
 

@@ -75,5 +75,19 @@
 *   **主動偏移**：當首頁日期選擇「今日」時，**「缺交報告」** 欄位會自動切換為 **「昨日統計」**。
 *   **設計初衷**：解決上午打開系統時，因今日尚未到下班時間而產生的「大量偽缺交」視覺壓迫感。
 
+### 3.4 出勤獎金政策（legacy／v2）
+
+> 完整規則與人怎麼走完：`SPEC/22_假勤與出勤獎金規則計劃.md`；程式對照：`SPEC/22_假勤與出勤獎金規則_實作備註.md`。
+
+| 項目 | 說明 |
+|------|------|
+| 開關 | Checkin GAS Script Property `ATTENDANCE_BONUS_POLICY`＝`legacy`（缺省）或 `v2` |
+| API | `payroll_review` context 回傳 `attendanceBonusPolicy`；前端依此選公式 |
+| **legacy** | 獎金＝上限 −（上限÷30×缺勤）；事假／病假不進獎金；颱風假減項 0、「待主管確認」 |
+| **v2** | 缺勤或事假→獎金 0；普通病假按日扣；颱風假／生理假不扣；生理假統計欄 `menstrualLeave` 與病假分開 |
+| 生理假 | 請假可選「生理假」；legacy 仍可能併入病假統計；v2 才分開且不扣獎金 |
+| 颱風日 | 老闆（權限 ≥ 5）於假勤審核儀表板「標颱風日」→ API `mark_typhoon_day` 寫班表 |
+| 宣布後 | 設 `ATTENDANCE_BONUS_POLICY=v2`；抽樣對 SPEC/22 §5；更新 help 註記與 LOG |
+
 ---
-*Refined by Antigravity v1.0.7 @ 2026-02-25*
+*Refined by Antigravity v1.0.7 @ 2026-02-25；出勤獎金雙軌 2026-08-04*

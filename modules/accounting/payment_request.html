@@ -47,7 +47,8 @@
     .alloc-row { border: 1px solid #e0e0e0; border-radius: 10px; padding: 10px; margin-top: 8px; background: #fafafa; position: relative; }
     .alloc-row .rm { position: absolute; top: 8px; right: 8px; border: none; background: transparent; color: #c5221f; font-size: 12px; cursor: pointer; }
     .alloc-row .tag-src { font-size: 11px; color: #888; margin-left: 6px; }
-    .tax-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; font-weight: normal; }
+    .tax-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 6px; font-size: 13px; font-weight: normal; }
+    .tax-row label { display: inline-flex; align-items: center; gap: 4px; font-weight: normal; margin: 0; }
     .tax-row input[type="checkbox"] { width: auto; margin: 0; }
     .pretax-hint { font-size: 12px; color: #666; }
     .total-line { font-size: 18px; font-weight: 700; margin-top: 10px; text-align: right; }
@@ -813,11 +814,13 @@
         row = row || {};
         var src = row.source === 'manual' ? '<span class="tag-src">手動</span>' : (row.source === 'ai' ? '<span class="tag-src">AI</span>' : '');
         var checked = !!row.tax_inclusive;
+        var taxAdd = !!row.tax_add_applied;
         var ocrInc = !!row.ocr_tax_inclusive;
         var uncheckFree = ocrInc && row.tax_uncheck_free !== false;
         var amt = parseAllocAmount(row.amount);
         var taxDisabled = !isNaN(amt) && amt < 0;
-        if (taxDisabled) checked = false;
+        if (taxDisabled) { checked = false; taxAdd = false; }
+        if (taxAdd) checked = true;
         var pretaxText = '';
         if (checked && !isNaN(amt) && amt !== 0 && amt > 0) {
           pretaxText = '未稅 $' + removeTaxAmount(amt).toLocaleString('zh-TW');
@@ -829,9 +832,12 @@
           '<div class="row2"><div><label>案號' + src + '</label><input class="inp-pn" value="' + (row.project_no || '') + '" placeholder="752" /></div>' +
           '<div><label>金額</label><input class="inp-amt" type="number" inputmode="numeric" placeholder="折讓填負數" value="' + (row.amount || '') + '" /></div></div>' +
           '<label>品項</label><input class="inp-desc" value="' + (row.item_desc || '') + '" placeholder="摘要" />' +
-          '<label class="tax-row"><input type="checkbox" class="inp-tax"' +
-          (checked ? ' checked' : '') + (taxDisabled ? ' disabled' : '') + ' />含稅' +
-          '<span class="pretax-hint">' + pretaxText + '</span></label></div>';
+          '<div class="tax-row">' +
+          '<label><input type="checkbox" class="inp-tax"' +
+          (checked ? ' checked' : '') + (taxDisabled ? ' disabled' : '') + ' />含稅</label>' +
+          '<label><input type="checkbox" class="inp-tax-add"' +
+          (taxAdd ? ' checked' : '') + (taxDisabled ? ' disabled' : '') + ' />未稅加 5%</label>' +
+          '<span class="pretax-hint">' + pretaxText + '</span></div></div>';
       }
 
       function renderAllocRows(rows) {
@@ -854,12 +860,14 @@
         var rows = [];
         document.querySelectorAll('#allocList .alloc-row').forEach(function (el) {
           var taxCb = el.querySelector('.inp-tax');
+          var taxAddCb = el.querySelector('.inp-tax-add');
           rows.push({
             project_no: el.querySelector('.inp-pn').value.trim(),
             amount: el.querySelector('.inp-amt').value,
             item_desc: el.querySelector('.inp-desc').value.trim(),
             source: el.getAttribute('data-source') || 'manual',
             tax_inclusive: taxCb ? taxCb.checked : false,
+            tax_add_applied: taxAddCb ? taxAddCb.checked : false,
             ocr_tax_inclusive: el.getAttribute('data-ocr-tax-inclusive') === '1',
             tax_uncheck_free: el.getAttribute('data-tax-uncheck-free') === '1'
           });
@@ -908,6 +916,19 @@
         }
       }
 
+      function setTaxControlsDisabled(row, disabled) {
+        var taxCb = row.querySelector('.inp-tax');
+        var taxAddCb = row.querySelector('.inp-tax-add');
+        if (taxCb) {
+          taxCb.disabled = disabled;
+          if (disabled) taxCb.checked = false;
+        }
+        if (taxAddCb) {
+          taxAddCb.disabled = disabled;
+          if (disabled) taxAddCb.checked = false;
+        }
+      }
+
       function bindAllocEvents() {
         document.querySelectorAll('#allocList .inp-amt, #allocList .inp-pn, #allocList .inp-desc').forEach(function (inp) {
           inp.oninput = function () {
@@ -916,12 +937,8 @@
               row.setAttribute('data-source', 'manual');
               if (inp.classList.contains('inp-amt')) {
                 updatePretaxHint(row);
-                var taxCb = row.querySelector('.inp-tax');
-                if (taxCb) {
-                  var a = parseAllocAmount(inp.value);
-                  taxCb.disabled = !isNaN(a) && a < 0;
-                  if (taxCb.disabled) taxCb.checked = false;
-                }
+                var a = parseAllocAmount(inp.value);
+                setTaxControlsDisabled(row, !isNaN(a) && a < 0);
               }
             }
             syncTaxFormNote();
@@ -931,7 +948,13 @@
         document.querySelectorAll('#allocList .inp-tax').forEach(function (cb) {
           cb.onchange = function () {
             var row = cb.closest('.alloc-row');
-            if (row) onTaxCheckboxChange(row);
+            if (row) onTaxInclusiveChange(row);
+          };
+        });
+        document.querySelectorAll('#allocList .inp-tax-add').forEach(function (cb) {
+          cb.onchange = function () {
+            var row = cb.closest('.alloc-row');
+            if (row) onTaxAddChange(row);
           };
         });
         document.querySelectorAll('#allocList .rm').forEach(function (btn) {
@@ -1212,6 +1235,7 @@
           item_desc: '',
           source: 'manual',
           tax_inclusive: false,
+          tax_add_applied: false,
           ocr_tax_inclusive: false,
           tax_uncheck_free: false
         };
@@ -1228,6 +1252,7 @@
           item_desc: desc,
           source: 'ai',
           tax_inclusive: rowInc,
+          tax_add_applied: false,
           ocr_tax_inclusive: rowInc,
           tax_uncheck_free: rowInc
         };
@@ -1260,27 +1285,50 @@
         noteEl.value = taxLine ? (stripped ? stripped + '；' + taxLine : taxLine) : stripped;
       }
 
-      function onTaxCheckboxChange(rowEl) {
+      /** 含稅：只標記，不改金額。若同時取消「未稅加 5%」則還原加成。 */
+      function onTaxInclusiveChange(rowEl) {
         var cb = rowEl.querySelector('.inp-tax');
+        var addCb = rowEl.querySelector('.inp-tax-add');
         var amtInp = rowEl.querySelector('.inp-amt');
         var descInp = rowEl.querySelector('.inp-desc');
         if (!cb || !amtInp || !descInp) return;
-        var amt = parseAllocAmount(amtInp.value);
-        if (isNaN(amt) || amt === 0 || amt < 0) return;
 
-        var checked = cb.checked;
-        var ocrInc = rowEl.getAttribute('data-ocr-tax-inclusive') === '1';
-        var uncheckFree = rowEl.getAttribute('data-tax-uncheck-free') === '1';
-
-        if (checked) {
-          if (!ocrInc || !uncheckFree) amtInp.value = addTaxAmount(amt);
-        } else if (ocrInc && uncheckFree) {
-          rowEl.setAttribute('data-tax-uncheck-free', '0');
-        } else {
-          amtInp.value = removeTaxAmount(amt);
+        if (!cb.checked && addCb && addCb.checked) {
+          addCb.checked = false;
+          var amt = parseAllocAmount(amtInp.value);
+          if (!isNaN(amt) && amt > 0) amtInp.value = removeTaxAmount(amt);
         }
 
-        descInp.value = applyTaxTag(descInp.value, checked);
+        descInp.value = applyTaxTag(descInp.value, cb.checked);
+        updatePretaxHint(rowEl);
+        rowEl.setAttribute('data-source', 'manual');
+        syncTaxFormNote();
+        updateTotal();
+      }
+
+      /** 未稅加 5%：勾選加成並標含稅；取消則還原金額並改未稅。 */
+      function onTaxAddChange(rowEl) {
+        var cb = rowEl.querySelector('.inp-tax');
+        var addCb = rowEl.querySelector('.inp-tax-add');
+        var amtInp = rowEl.querySelector('.inp-amt');
+        var descInp = rowEl.querySelector('.inp-desc');
+        if (!addCb || !amtInp || !descInp) return;
+        var amt = parseAllocAmount(amtInp.value);
+        if (isNaN(amt) || amt === 0 || amt < 0) {
+          addCb.checked = false;
+          return;
+        }
+
+        if (addCb.checked) {
+          amtInp.value = addTaxAmount(amt);
+          if (cb) cb.checked = true;
+          descInp.value = applyTaxTag(descInp.value, true);
+        } else {
+          amtInp.value = removeTaxAmount(amt);
+          if (cb) cb.checked = false;
+          descInp.value = applyTaxTag(descInp.value, false);
+        }
+
         updatePretaxHint(rowEl);
         rowEl.setAttribute('data-source', 'manual');
         syncTaxFormNote();
@@ -1754,6 +1802,7 @@
             ? '已進入待匯款清單。'
             : '主管會在「請款審核」處理；核准後才進待匯款。') + feeNote;
           setOk('請款已送出');
+          clearPaymentFormData();
         }).catch(function (e) {
           setMsg(e.message || '送出失敗');
         }).finally(function () {
@@ -1793,10 +1842,8 @@
         }
       }
 
-      function resetForm() {
-        AccountingUi.tap('再建一筆');
-        document.getElementById('formCard').classList.remove('hidden');
-        document.getElementById('successCard').classList.add('hidden');
+      /** 送出成功或再建一筆時清掉單據／明細，避免同一包內容再送一次。 */
+      function clearPaymentFormData() {
         photos = [];
         draftId = '';
         ocrAttempt = 0;
@@ -1805,6 +1852,8 @@
         renderPhotoGrid();
         document.getElementById('ocrStatus').textContent = '尚未辨識';
         document.getElementById('ocrPanel').classList.add('hidden');
+        var ocrPreview = document.getElementById('ocrPreview');
+        if (ocrPreview) ocrPreview.textContent = '';
         document.getElementById('modeSuggest').classList.add('hidden');
         document.getElementById('note').value = '';
         document.getElementById('archiveTitle').value = '';
@@ -1813,6 +1862,13 @@
             ? [defaultManualAllocRow(queryParams.project_no)]
             : []);
         }
+      }
+
+      function resetForm() {
+        AccountingUi.tap('再建一筆');
+        clearPaymentFormData();
+        document.getElementById('formCard').classList.remove('hidden');
+        document.getElementById('successCard').classList.add('hidden');
         if (pageMode === 'archive') loadArchiveList().catch(function () {});
       }
 

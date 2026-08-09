@@ -138,17 +138,45 @@ const App = {
 
         /** HUB LIFF token 快取：供 iframe postMessage 索取（須與 handleIframeMessage 同層） */
         const hubIdTokenRef = { value: '' };
+        const isHubIdTokenFresh = (token) => {
+            try {
+                if (!token) return false;
+                const parts = String(token).split('.');
+                if (parts.length < 2) return false;
+                let b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+                while (b64.length % 4) b64 += '=';
+                const json = decodeURIComponent(Array.prototype.map.call(atob(b64), (c) =>
+                    '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+                ).join(''));
+                const payload = JSON.parse(json);
+                const exp = parseInt(payload && payload.exp, 10) || 0;
+                return exp > (Math.floor(Date.now() / 1000) + 60);
+            } catch (e) {
+                return false;
+            }
+        };
         const refreshHubIdToken = () => {
             try {
                 if (typeof liff !== 'undefined' && liff.getIDToken) {
                     const t = liff.getIDToken() || '';
-                    if (t) hubIdTokenRef.value = t;
-                    return t || hubIdTokenRef.value || '';
+                    if (t && isHubIdTokenFresh(t)) {
+                        hubIdTokenRef.value = t;
+                        return t;
+                    }
+                    // SDK 可能仍回傳已過期 JWT；勿把過期快取再傳給 iframe
+                    if (t && !isHubIdTokenFresh(t)) {
+                        hubIdTokenRef.value = '';
+                        return '';
+                    }
                 }
             } catch (e) {
                 console.warn('[Hub] refreshHubIdToken:', e);
             }
-            return hubIdTokenRef.value || '';
+            if (hubIdTokenRef.value && isHubIdTokenFresh(hubIdTokenRef.value)) {
+                return hubIdTokenRef.value;
+            }
+            hubIdTokenRef.value = '';
+            return '';
         };
 
         /** 會計 iframe 須等員工名單就緒再掛載，避免 permission 更新導致整頁重載 */
@@ -728,10 +756,11 @@ const App = {
                     console.warn('[Hub] request_hub_liff_token handler:', eTok);
                     try {
                         if (typeof liff !== 'undefined' && liff.getIDToken) tok = liff.getIDToken() || '';
+                        if (tok && !isHubIdTokenFresh(tok)) tok = '';
                     } catch (e2) { /* ignore */ }
                 }
                 if (!tok) {
-                    console.warn('[Hub] iframe 索取 LIFF token 但主控台目前為空（可能逾時，請重新從 LINE 開啟）');
+                    console.warn('[Hub] iframe 索取 LIFF token 但主控台目前為空或已過期（請重新從 LINE 開啟）');
                 }
                 if (event.source && typeof event.source.postMessage === 'function') {
                     event.source.postMessage({ type: 'hub_liff_token', token: tok }, event.origin || '*');

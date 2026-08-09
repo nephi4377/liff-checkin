@@ -39,6 +39,21 @@
                 <button type="button" id="tab-appeal-approval" class="flex-1 min-h-[44px] text-sm font-semibold rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center justify-center gap-1.5" role="tab" aria-selected="false">出勤申訴<span id="tab-appeal-badge" class="hidden min-w-[1.25rem] h-5 px-1 text-[10px] font-bold rounded-full bg-amber-500 text-white"></span></button>
             </nav>
 
+            <div id="typhoon-mark-card" class="hidden mb-6 bg-white rounded-xl shadow-sm border border-sky-100 p-4">
+                <h2 class="text-base font-bold text-gray-800">標颱風日（老闆）</h2>
+                <p class="text-sm text-gray-500 mt-1">選日期後，將<strong>在職員工</strong>當日班表標成「颱風假」（不當缺勤）。需權限 5。</p>
+                <div class="mt-3 flex flex-col sm:flex-row gap-3 sm:items-end">
+                    <label class="flex-1 text-sm text-gray-700">日期
+                        <input type="date" id="typhoon-date" class="mt-1 w-full rounded-lg border-gray-300 text-sm">
+                    </label>
+                    <label class="flex-1 text-sm text-gray-700">備註（選填）
+                        <input type="text" id="typhoon-note" maxlength="40" placeholder="例如：北北基停班" class="mt-1 w-full rounded-lg border-gray-300 text-sm">
+                    </label>
+                    <button type="button" id="typhoon-mark-btn" class="min-h-[44px] px-4 rounded-lg bg-sky-600 text-white text-sm font-semibold hover:bg-sky-700 disabled:opacity-50">標為颱風日</button>
+                </div>
+                <p id="typhoon-mark-status" class="text-sm text-gray-600 mt-2 hidden"></p>
+            </div>
+
             <div id="leave-panel">
                 <div id="requests-container" class="space-y-4"></div>
                 <p id="no-requests-message" class="text-center text-gray-500 py-12 hidden">太棒了！目前沒有任何待審核的假勤項目。</p>
@@ -191,7 +206,69 @@
         document.getElementById('loading-screen').style.display = 'none';
         document.getElementById('main-content').classList.remove('hidden');
         document.getElementById('welcome-message').textContent = `你好，${userProfile.displayName}，以下是待您處理的項目：`;
+        setupTyphoonMarkCard();
         fetchAllPending();
+    }
+
+    function setupTyphoonMarkCard() {
+        const card = document.getElementById('typhoon-mark-card');
+        if (!card) return;
+        if (userPermission < 5) {
+            card.classList.add('hidden');
+            return;
+        }
+        card.classList.remove('hidden');
+        const dateInput = document.getElementById('typhoon-date');
+        if (dateInput && !dateInput.value) {
+            dateInput.value = new Date().toLocaleDateString('sv-SE');
+        }
+        const btn = document.getElementById('typhoon-mark-btn');
+        if (btn && !btn.dataset.bound) {
+            btn.dataset.bound = '1';
+            btn.addEventListener('click', handleMarkTyphoonDay);
+        }
+    }
+
+    async function handleMarkTyphoonDay() {
+        const btn = document.getElementById('typhoon-mark-btn');
+        const statusEl = document.getElementById('typhoon-mark-status');
+        const dateStr = document.getElementById('typhoon-date')?.value || '';
+        const note = document.getElementById('typhoon-note')?.value?.trim() || '';
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            showGlobalNotification('請先選擇日期', 5000, 'error');
+            return;
+        }
+        if (!confirm(`確定將 ${dateStr} 標為颱風假（在職員工全員）？\n已有颱風假的人會略過。`)) return;
+
+        btn.disabled = true;
+        const oldText = btn.textContent;
+        btn.textContent = '標註中…';
+        statusEl.classList.remove('hidden');
+        statusEl.textContent = '處理中，請稍候…';
+        statusEl.className = 'text-sm text-sky-700 mt-2';
+
+        try {
+            const url = new URL(API_BASE_URL);
+            url.searchParams.append('page', 'attendance_api');
+            url.searchParams.append('action', 'mark_typhoon_day');
+            url.searchParams.append('operatorId', userProfile.userId);
+            url.searchParams.append('date', dateStr);
+            if (note) url.searchParams.append('note', note);
+
+            const response = await fetch(url);
+            const result = await response.json();
+            if (!result.success) throw new Error(result.message || '標註失敗');
+            statusEl.textContent = result.message || '已完成';
+            statusEl.className = 'text-sm text-green-700 mt-2';
+            showGlobalNotification(result.message || '已標為颱風日', 6000, 'success');
+        } catch (err) {
+            statusEl.textContent = err.message || '標註失敗';
+            statusEl.className = 'text-sm text-red-600 mt-2';
+            showGlobalNotification(err.message || '標註失敗', 8000, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = oldText;
+        }
     }
 
     function updateTabBadges(leaveCount, appealCount) {

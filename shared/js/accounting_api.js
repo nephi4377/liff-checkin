@@ -23,6 +23,42 @@ var AccountingApi = (function () {
   var CUSTOMER_FINANCE_DENIED_MSG = '權限不足（追加減與收款需權限 ≥ 2）';
   var SUPERVISOR_DENIED_MSG = '權限不足（需主管，權限 ≥ 3）';
   var VENDOR_PAYMENT_APPROVE_DENIED_MSG = '權限不足（廠商請款審核需權限 ≥ 5）';
+  var HUB_RELOGIN_MSG = '登入已過期，請關閉後重新從 LINE 開啟主控台';
+  /** IdToken 距過期少於此秒數視為不可用（略早於 LINE 約 1 小時效期） */
+  var LIFF_TOKEN_SKEW_SEC = 60;
+
+  function clearStoredLiffToken_() {
+    try { sessionStorage.removeItem(SESSION_TOKEN_KEY); } catch (eClr) {}
+  }
+
+  /** 解析 LIFF JWT payload（僅讀 exp／sub，不驗簽） */
+  function decodeJwtPayload_(token) {
+    try {
+      var parts = String(token || '').split('.');
+      if (parts.length < 2) return null;
+      var b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) b64 += '=';
+      var json = null;
+      if (typeof atob === 'function') {
+        json = decodeURIComponent(Array.prototype.map.call(atob(b64), function (c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+      }
+      return json ? JSON.parse(json) : null;
+    } catch (eJwt) {
+      return null;
+    }
+  }
+
+  /** true＝尚可用；空白／無法解析／已過期 → false */
+  function isLiffIdTokenFresh_(token) {
+    if (!token) return false;
+    var payload = decodeJwtPayload_(token);
+    if (!payload || payload.exp == null) return false;
+    var expSec = parseInt(payload.exp, 10) || 0;
+    if (!expSec) return false;
+    return expSec > (Math.floor(Date.now() / 1000) + LIFF_TOKEN_SKEW_SEC);
+  }
 
   async function parseJsonResponse_(res, textOpt) {
     var text = textOpt != null ? String(textOpt) : await res.text();
@@ -706,7 +742,10 @@ var AccountingApi = (function () {
       }
       var token = '';
       try { token = sessionStorage.getItem(SESSION_TOKEN_KEY) || ''; } catch (eTok) {}
-      if (!token) return null;
+      if (!token || !isLiffIdTokenFresh_(token)) {
+        if (token) clearStoredLiffToken_();
+        return null;
+      }
       var authHub = readSessionWrapped_(SESSION_AUTH_PREFIX + 'liff:' + simpleHash_(token), AUTH_TTL_MS);
       if (!authHub || (authHub.permission || 0) < minPerm) return null;
       // HUB 帶入權限與快取不同 → 視為過期，強制重驗（常見：剛改員工權限）
@@ -727,7 +766,7 @@ var AccountingApi = (function () {
         auth: authHub
       };
     },
-    /** 身分快取未命中時：用 HUB 已寫入的操作者 + 政策快取先顯示，背景再 initSession */
+    /** 身分快取未命中時：用 HUB 已寫入的操作者 + 政策快取先顯示，背景再 initSession（正式模式須有未過期 token） */
     tryProvisionalSession: function (opts) {
       opts = opts || {};
       if (typeof OperatorContext === 'undefined') return null;
@@ -737,10 +776,17 @@ var AccountingApi = (function () {
       if (!op || !op.userId) return null;
       var minPerm = opts.minPermission != null ? opts.minPermission : 0;
       if ((op.permission || 0) < minPerm) return null;
+      var bypass = !!(policy.authBypass);
       var token = '';
       try { token = sessionStorage.getItem(SESSION_TOKEN_KEY) || ''; } catch (eTok) {}
+      if (token && !isLiffIdTokenFresh_(token)) {
+        clearStoredLiffToken_();
+        token = '';
+      }
+      // 正式模式：沒有可用 token 就不要暫用 HUB 身分（避免畫面看起來已登入、寫入卻失敗）
+      if (!bypass && !token) return null;
       return {
-        devBypass: !!(policy.authBypass),
+        devBypass: bypass,
         devPermission: op.permission || 0,
         devUserId: op.userId,
         profile: { userId: op.userId, displayName: op.displayName || op.userName || '' },
@@ -998,6 +1044,10 @@ var AccountingApi = (function () {
           AccountingUi.setProgress('向主控台索取登入憑證…');
         }
         var parentToken = await requestParentHubLiffToken_();
+        if (parentToken && !isLiffIdTokenFresh_(parentToken)) {
+          clearStoredLiffToken_();
+          parentToken = '';
+        }
         if (parentToken) {
           var authHub = await AccountingApi.authMe(parentToken);
           if (authHub.success) {
@@ -1009,20 +1059,25 @@ var AccountingApi = (function () {
               auth: authHub
             };
           }
+          // 後端已拒（常見：IdToken expired）→ 清快取並要求重開，勿靜默改用 URL 身分
+          clearStoredLiffToken_();
+          console.warn('[Accounting] Hub LIFF token 驗證失敗:', (authHub && authHub.message) || '驗證失敗');
+          throw new Error(HUB_RELOGIN_MSG);
         }
         var provHub = AccountingApi.tryProvisionalSession({
           minPermission: opts.minPermission != null ? opts.minPermission : 0,
           authAction: 'accounting_auth_me'
         });
-        // auth 用 user_id；亦接受已有 idToken／devBypass，否則選材 API 會回「缺少 liff_id_token」
+        // 僅 bypass 或仍有未過期 token 時暫用；否則請使用者重開 LINE
         var provUid = provHub && provHub.auth
           ? (provHub.auth.user_id || provHub.auth.userId || '')
           : '';
         if (provHub && provUid && (provHub.idToken || provHub.devBypass)) {
-          console.warn('[Accounting] Hub LIFF token 未取得，暫用 HUB 操作者身分');
+          console.warn('[Accounting] Hub LIFF token 暫未取得，暫用 HUB 操作者身分（稍後背景驗證）');
           return provHub;
         }
-        throw new Error('無法從主控台取得登入憑證，請關閉後重新從 LINE 開啟主控台');
+        clearStoredLiffToken_();
+        throw new Error(HUB_RELOGIN_MSG);
       }
       var liffId = resolveLiffIdForInit_(opts, policy);
       if (!liffId) throw new Error('LIFF 尚未設定');

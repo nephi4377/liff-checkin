@@ -69,7 +69,15 @@ var AccountingBoot = (function () {
       if (typeof AccountingUi !== 'undefined' && AccountingUi.setOperator) AccountingUi.setOperator(fresh);
       if (typeof opts.onRevalidate === 'function') opts.onRevalidate(fresh);
     }).catch(function (e) {
-      traceStep('背景驗證', '略過 — ' + (e.message || String(e)));
+      var msg = (e && e.message) || String(e);
+      traceStep('背景驗證', '失敗 — ' + msg);
+      // 登入過期：勿 silently 略過（否則畫面像已登入、寫入卻失敗）
+      if (/過期|重新從 LINE|登入憑證/.test(msg)) {
+        showBootError(msg, {
+          action: '重新驗證身分',
+          onRetry: function () { location.reload(); }
+        });
+      }
     });
   }
 
