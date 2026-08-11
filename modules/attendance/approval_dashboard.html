@@ -40,16 +40,33 @@
             </nav>
 
             <div id="typhoon-mark-card" class="hidden mb-6 bg-white rounded-xl shadow-sm border border-sky-100 p-4">
-                <h2 class="text-base font-bold text-gray-800">標颱風日（老闆）</h2>
-                <p class="text-sm text-gray-500 mt-1">選日期後，將<strong>在職員工</strong>當日班表標成「颱風假」（不當缺勤）。需權限 5。</p>
-                <div class="mt-3 flex flex-col sm:flex-row gap-3 sm:items-end">
-                    <label class="flex-1 text-sm text-gray-700">日期
+                <h2 class="text-base font-bold text-gray-800">標特別假／颱風日（老闆）</h2>
+                <p class="text-sm text-gray-500 mt-1">選日期後標<strong>在職員工</strong>當日班表。可選扣薪與否、獎金怎麼算。需權限 5。</p>
+                <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="text-sm text-gray-700">日期
                         <input type="date" id="typhoon-date" class="mt-1 w-full rounded-lg border-gray-300 text-sm">
                     </label>
-                    <label class="flex-1 text-sm text-gray-700">備註（選填）
-                        <input type="text" id="typhoon-note" maxlength="40" placeholder="例如：北北基停班" class="mt-1 w-full rounded-lg border-gray-300 text-sm">
+                    <label class="text-sm text-gray-700">備註／假名（選填）
+                        <input type="text" id="typhoon-note" maxlength="40" placeholder="例如：北北基停班、尾牙特休" class="mt-1 w-full rounded-lg border-gray-300 text-sm">
                     </label>
-                    <button type="button" id="typhoon-mark-btn" class="min-h-[44px] px-4 rounded-lg bg-sky-600 text-white text-sm font-semibold hover:bg-sky-700 disabled:opacity-50">標為颱風日</button>
+                    <fieldset class="text-sm text-gray-700 sm:col-span-2">
+                        <legend class="font-medium">本薪</legend>
+                        <div class="mt-2 flex flex-wrap gap-4">
+                            <label class="inline-flex items-center gap-2"><input type="radio" name="special-pay" value="0" checked> 不扣薪</label>
+                            <label class="inline-flex items-center gap-2"><input type="radio" name="special-pay" value="1"> 扣薪（底薪÷30×日）</label>
+                        </div>
+                    </fieldset>
+                    <fieldset id="special-bonus-fieldset" class="text-sm text-gray-700 sm:col-span-2 hidden">
+                        <legend class="font-medium">出勤獎金（扣薪時）</legend>
+                        <div class="mt-2 flex flex-wrap gap-4">
+                            <label class="inline-flex items-center gap-2"><input type="radio" name="special-bonus" value="cancel" checked> 整筆不發</label>
+                            <label class="inline-flex items-center gap-2"><input type="radio" name="special-bonus" value="keep"> 獎金照舊（只扣本薪）</label>
+                        </div>
+                    </fieldset>
+                </div>
+                <div class="mt-4 flex flex-col sm:flex-row gap-2">
+                    <button type="button" id="special-leave-mark-btn" class="min-h-[44px] px-4 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">標特別假</button>
+                    <button type="button" id="typhoon-mark-btn" class="min-h-[44px] px-4 rounded-lg bg-sky-600 text-white text-sm font-semibold hover:bg-sky-700 disabled:opacity-50">快捷：標颱風日（不扣薪）</button>
                 </div>
                 <p id="typhoon-mark-status" class="text-sm text-gray-600 mt-2 hidden"></p>
             </div>
@@ -222,15 +239,32 @@
         if (dateInput && !dateInput.value) {
             dateInput.value = new Date().toLocaleDateString('sv-SE');
         }
+        const syncBonus = () => {
+            const deduct = document.querySelector('input[name="special-pay"]:checked')?.value === '1';
+            document.getElementById('special-bonus-fieldset')?.classList.toggle('hidden', !deduct);
+        };
+        document.querySelectorAll('input[name="special-pay"]').forEach((el) => {
+            if (!el.dataset.bound) {
+                el.dataset.bound = '1';
+                el.addEventListener('change', syncBonus);
+            }
+        });
+        syncBonus();
+        const specialBtn = document.getElementById('special-leave-mark-btn');
+        if (specialBtn && !specialBtn.dataset.bound) {
+            specialBtn.dataset.bound = '1';
+            specialBtn.addEventListener('click', () => handleMarkCompanyLeave('special'));
+        }
         const btn = document.getElementById('typhoon-mark-btn');
         if (btn && !btn.dataset.bound) {
             btn.dataset.bound = '1';
-            btn.addEventListener('click', handleMarkTyphoonDay);
+            btn.addEventListener('click', () => handleMarkCompanyLeave('typhoon'));
         }
     }
 
-    async function handleMarkTyphoonDay() {
-        const btn = document.getElementById('typhoon-mark-btn');
+    async function handleMarkCompanyLeave(preset) {
+        const specialBtn = document.getElementById('special-leave-mark-btn');
+        const typhoonBtn = document.getElementById('typhoon-mark-btn');
         const statusEl = document.getElementById('typhoon-mark-status');
         const dateStr = document.getElementById('typhoon-date')?.value || '';
         const note = document.getElementById('typhoon-note')?.value?.trim() || '';
@@ -238,11 +272,25 @@
             showGlobalNotification('請先選擇日期', 5000, 'error');
             return;
         }
-        if (!confirm(`確定將 ${dateStr} 標為颱風假（在職員工全員）？\n已有颱風假的人會略過。`)) return;
+        const isTyphoon = preset === 'typhoon';
+        const payDeduct = !isTyphoon && document.querySelector('input[name="special-pay"]:checked')?.value === '1';
+        const bonusMode = document.querySelector('input[name="special-bonus"]:checked')?.value || 'cancel';
+        let confirmMsg;
+        if (isTyphoon) {
+            confirmMsg = `確定將 ${dateStr} 標為颱風假（在職員工、不扣薪）？`;
+        } else if (!payDeduct) {
+            confirmMsg = `確定將 ${dateStr} 標為特別假·不扣薪（在職員工）？`;
+        } else {
+            confirmMsg = `確定將 ${dateStr} 標為特別假·扣薪·${bonusMode === 'keep' ? '獎金照舊' : '獎金不發'}？`;
+        }
+        if (!confirm(`${confirmMsg}\n已標過相同類型的人會略過。`)) return;
 
-        btn.disabled = true;
-        const oldText = btn.textContent;
-        btn.textContent = '標註中…';
+        const buttons = [specialBtn, typhoonBtn].filter(Boolean);
+        buttons.forEach((b) => { b.disabled = true; });
+        const oldSpecial = specialBtn?.textContent;
+        const oldTyphoon = typhoonBtn?.textContent;
+        if (specialBtn) specialBtn.textContent = '標註中…';
+        if (typhoonBtn) typhoonBtn.textContent = '標註中…';
         statusEl.classList.remove('hidden');
         statusEl.textContent = '處理中，請稍候…';
         statusEl.className = 'text-sm text-sky-700 mt-2';
@@ -250,25 +298,35 @@
         try {
             const url = new URL(API_BASE_URL);
             url.searchParams.append('page', 'attendance_api');
-            url.searchParams.append('action', 'mark_typhoon_day');
+            url.searchParams.append('action', isTyphoon ? 'mark_typhoon_day' : 'mark_company_leave_day');
             url.searchParams.append('operatorId', userProfile.userId);
             url.searchParams.append('date', dateStr);
             if (note) url.searchParams.append('note', note);
+            if (!isTyphoon) {
+                url.searchParams.append('preset', 'special');
+                url.searchParams.append('payDeduct', payDeduct ? 'true' : 'false');
+                if (payDeduct) url.searchParams.append('bonusMode', bonusMode);
+            }
 
             const response = await fetch(url);
             const result = await response.json();
             if (!result.success) throw new Error(result.message || '標註失敗');
             statusEl.textContent = result.message || '已完成';
             statusEl.className = 'text-sm text-green-700 mt-2';
-            showGlobalNotification(result.message || '已標為颱風日', 6000, 'success');
+            showGlobalNotification(result.message || '已標註', 6000, 'success');
         } catch (err) {
             statusEl.textContent = err.message || '標註失敗';
             statusEl.className = 'text-sm text-red-600 mt-2';
             showGlobalNotification(err.message || '標註失敗', 8000, 'error');
         } finally {
-            btn.disabled = false;
-            btn.textContent = oldText;
+            buttons.forEach((b) => { b.disabled = false; });
+            if (specialBtn && oldSpecial) specialBtn.textContent = oldSpecial;
+            if (typhoonBtn && oldTyphoon) typhoonBtn.textContent = oldTyphoon;
         }
+    }
+
+    async function handleMarkTyphoonDay() {
+        return handleMarkCompanyLeave('typhoon');
     }
 
     function updateTabBadges(leaveCount, appealCount) {

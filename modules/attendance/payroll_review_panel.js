@@ -177,15 +177,18 @@ function calcFullAttendanceBonus(policy, maxBonus, stats) {
     if (max <= 0) return 0;
     const st = stats || {};
     const pol = normalizeAttendanceBonusPolicy(policy);
+    const specialCancel = Number(st.specialLeaveUnpaidCancelBonus) || 0;
     if (pol === 'v2') {
         const typhoon = Number(st.typhoonLeave) || 0;
-        const absent = Math.max(0, (Number(st.absent) || 0) - typhoon);
+        const specialPaid = Number(st.specialLeavePaid) || 0;
+        const absent = Math.max(0, (Number(st.absent) || 0) - typhoon - specialPaid);
         const personal = Number(st.personalLeave) || 0;
-        if (absent > 0 || personal > 0) return 0;
+        if (absent > 0 || personal > 0 || specialCancel > 0) return 0;
         const sick = Number(st.sickLeave) || 0;
         if (sick <= 0) return max;
         return Math.max(0, max - Math.round(max / PAYROLL_MONTHLY_DAYS * sick));
     }
+    if (specialCancel > 0) return 0;
     return calcProratedFullAttendance(max, Number(st.absent) || 0);
 }
 
@@ -194,9 +197,14 @@ function fullAttendanceBonusNote(policy, maxBonus, amount, stats) {
     const st = stats || {};
     const pol = normalizeAttendanceBonusPolicy(policy);
     if (max <= 0) return '';
+    const specialCancel = Number(st.specialLeaveUnpaidCancelBonus) || 0;
+    if (specialCancel > 0 && amount <= 0) {
+        return `特別假（扣薪·獎金不發）${fmtPayrollDay(specialCancel)} 日，出勤獎金整筆不發（上限 ${max.toLocaleString()} 元）`;
+    }
     if (pol === 'v2') {
         const typhoon = Number(st.typhoonLeave) || 0;
-        const absent = Math.max(0, (Number(st.absent) || 0) - typhoon);
+        const specialPaid = Number(st.specialLeavePaid) || 0;
+        const absent = Math.max(0, (Number(st.absent) || 0) - typhoon - specialPaid);
         const personal = Number(st.personalLeave) || 0;
         const sick = Number(st.sickLeave) || 0;
         if (absent > 0) return `缺勤 ${fmtPayrollDay(absent)} 日，出勤獎金整筆不發（上限 ${max.toLocaleString()} 元）`;
@@ -204,7 +212,7 @@ function fullAttendanceBonusNote(policy, maxBonus, amount, stats) {
         if (sick > 0 && amount < max) {
             return `上限 ${max.toLocaleString()}，普通病假 ${fmtPayrollDay(sick)} 日按比例扣`;
         }
-        return amount > 0 ? '' : '';
+        return '';
     }
     const absent = Number(st.absent) || 0;
     if (absent > 0 && amount < max && amount > 0) {
@@ -284,8 +292,14 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
         });
     } else {
         const typhoon = Number(st.typhoonLeave) || 0;
+        const specialPaid = Number(st.specialLeavePaid) || 0;
+        const specialCancel = Number(st.specialLeaveUnpaidCancelBonus) || 0;
+        const specialKeep = Number(st.specialLeaveUnpaidKeepBonus) || 0;
+        const specialUnpaid = specialCancel + specialKeep;
         const rawAbsent = Number(st.absent) || 0;
-        const absent = policy === 'v2' ? Math.max(0, rawAbsent - typhoon) : rawAbsent;
+        const absent = policy === 'v2'
+            ? Math.max(0, rawAbsent - typhoon - specialPaid)
+            : rawAbsent;
         const personalLeave = Number(st.personalLeave) || 0;
         const sickLeave = Number(st.sickLeave) || 0;
         const menstrualLeave = Number(st.menstrualLeave) || 0;
@@ -293,6 +307,7 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
         const sickForDeduction = policy === 'v2' ? sickLeave : sickLeave + menstrualLeave;
         absentBaseDeduction = calcAbsentBaseDeduction(base, absent);
         personalLeaveDeduction = calcPersonalLeaveDeduction(base, personalLeave, payType);
+        const specialLeaveDeduction = calcPersonalLeaveDeduction(base, specialUnpaid, payType);
         sickLeaveDeduction = calcSickLeaveDeduction(base, sickForDeduction, payType);
         const prorate = calcProratedMonthlyBaseSalary(
             base,
@@ -304,22 +319,21 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
         earnedBase = prorate.amount;
         employedDaysInPeriod = prorate.employedDays;
         coversFullPeriod = !!prorate.coversFullPeriod;
-        fullAttendanceBonus = calcFullAttendanceBonus(policy, maxFullAttendance, {
+        const bonusStats = {
             absent: rawAbsent,
             personalLeave,
             sickLeave,
-            typhoonLeave: typhoon
-        });
+            typhoonLeave: typhoon,
+            specialLeavePaid: specialPaid,
+            specialLeaveUnpaidCancelBonus: specialCancel,
+            specialLeaveUnpaidKeepBonus: specialKeep
+        };
+        fullAttendanceBonus = calcFullAttendanceBonus(policy, maxFullAttendance, bonusStats);
         const baseNote = coversFullPeriod
             ? '完整底薪（假別另列減項）'
             : `底薪 ${base.toLocaleString()} ÷30 × 在職 ${fmtPayrollDay(employedDaysInPeriod)} 日`;
         additions.push({ label: '本薪', amount: earnedBase, note: baseNote });
-        const faNote = fullAttendanceBonusNote(policy, maxFullAttendance, fullAttendanceBonus, {
-            absent: rawAbsent,
-            personalLeave,
-            sickLeave,
-            typhoonLeave: typhoon
-        });
+        const faNote = fullAttendanceBonusNote(policy, maxFullAttendance, fullAttendanceBonus, bonusStats);
         if (fullAttendanceBonus > 0) {
             additions.push({ label: '出勤獎金', amount: fullAttendanceBonus, note: faNote });
         } else if (maxFullAttendance > 0 && faNote) {
@@ -343,6 +357,15 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
                 note: `事假 ${fmtPayrollDay(personalLeave)} 日（底薪÷30）`
             });
         }
+        if (specialUnpaid > 0 || specialLeaveDeduction > 0) {
+            deductions.push({
+                label: '特別假扣款',
+                amount: specialLeaveDeduction,
+                note: `扣薪特別假 ${fmtPayrollDay(specialUnpaid)} 日（底薪÷30）` +
+                    (specialCancel > 0 ? `；其中獎金不發 ${fmtPayrollDay(specialCancel)} 日` : '') +
+                    (specialKeep > 0 ? `；其中獎金照舊 ${fmtPayrollDay(specialKeep)} 日` : '')
+            });
+        }
         if (sickForDeduction > 0 || sickLeaveDeduction > 0) {
             deductions.push({
                 label: '病假扣款（半薪）',
@@ -357,6 +380,13 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
                 label: '生理假',
                 amount: 0,
                 note: `生理假 ${fmtPayrollDay(menstrualLeave)} 日；不扣出勤獎金`
+            });
+        }
+        if (specialPaid > 0) {
+            deductions.push({
+                label: '特別假（不扣薪）',
+                amount: 0,
+                note: `特別假 ${fmtPayrollDay(specialPaid)} 日；本薪照給、不扣出勤獎金`
             });
         }
         if (typhoon > 0) {
@@ -426,7 +456,7 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
     const dedTotal = deductions.reduce((s, x) => s + (x.amount || 0), 0);
     const estimatedNet = Math.round(addTotal - dedTotal);
     const autoRemarkParts = deductions
-        .filter((d) => d.label !== '其他扣款' && d.label !== '勞健保／勞退' && (d.amount > 0 || d.label === '颱風假' || d.label === '生理假' || (d.label === '出勤獎金' && d.amount === 0)))
+        .filter((d) => d.label !== '其他扣款' && d.label !== '勞健保／勞退' && (d.amount > 0 || d.label === '颱風假' || d.label === '生理假' || d.label === '特別假（不扣薪）' || (d.label === '出勤獎金' && d.amount === 0)))
         .map((d) => {
             if (d.amount > 0) return `${d.label} −${d.amount.toLocaleString()}`;
             return d.note || d.label;
