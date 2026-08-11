@@ -945,8 +945,26 @@ var AccountingApi = (function () {
         auth: resolveAuth(sessionOrToken),
         draft_id: payload.draft_id,
         photo_ids: payload.photo_ids || [],
-        photos: payload.photos || []
+        photos: payload.photos || [],
+        vendor_id: payload.vendor_id || '',
+        project_no: payload.project_no || '',
+        force_vendor_hint: !!payload.force_vendor_hint,
+        ocr_stage: payload.ocr_stage || '',
+        prefer_vendor_hint: payload.prefer_vendor_hint || ''
       }, timeoutMs || 0);
+    },
+    vendorPaymentOcrCommonHintGet: function (sessionOrToken) {
+      return post({
+        action: 'vendor_payment_ocr_common_hint_get',
+        auth: resolveAuth(sessionOrToken)
+      });
+    },
+    vendorPaymentOcrCommonHintSet: function (sessionOrToken, commonHint) {
+      return post({
+        action: 'vendor_payment_ocr_common_hint_set',
+        auth: resolveAuth(sessionOrToken),
+        common_hint: commonHint == null ? '' : String(commonHint)
+      });
     },
     paymentRequestSubmit: function (sessionOrToken, payload) {
       return post({

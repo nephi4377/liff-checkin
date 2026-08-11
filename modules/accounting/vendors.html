@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=42"></script>
+  <script src="../../shared/js/accounting_api.js?v=47"></script>
   <script src="../../shared/js/accounting_cache.js?v=30"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
@@ -176,6 +176,15 @@
       <span id="feedbackText"></span>
     </div>
 
+    <div class="card" id="commonOcrHintCard">
+      <h3 style="margin:0 0 8px">請款辨識－通用指令</h3>
+      <p class="sub" style="margin:0 0 8px">全公司共用，會加在每次請款辨識上。各廠特殊樣式請寫在下方「專用辨識說明」。權限 ≥3 可儲存。</p>
+      <label>通用辨識指令</label>
+      <textarea id="commonOcrHint" placeholder="例：買方若為添心設計／添鑫創意不要當廠商；對帳單請用本期合計，不要用本期應收…"></textarea>
+      <p class="sub" id="commonOcrHintMeta" style="margin:4px 0 8px"></p>
+      <button type="button" class="btn btn-secondary" id="saveCommonOcrHintBtn" style="width:auto">儲存通用指令</button>
+    </div>
+
     <div class="page-layout">
     <div class="page-col page-col-form">
     <div class="card form-card" id="formCard">
@@ -252,6 +261,17 @@
         <option value="否">否（公司幫出匯費）</option>
       </select>
       <p class="sub" style="margin:4px 0 10px">新建請款／待匯款時自動帶入；單筆仍可在待匯款頁改。未填視同「是」。</p>
+      <label>預設稅別模式</label>
+      <select id="tax_mode_default">
+        <option value="">（不強制，交給辨識／人工）</option>
+        <option value="inclusive">已含稅</option>
+        <option value="per_row">未稅・逐筆加 5%</option>
+        <option value="prorate">未稅・整張加稅分攤</option>
+      </select>
+      <p class="sub" style="margin:4px 0 10px">選這家廠商請款時，若尚未手動改過稅別，會自動帶此模式。</p>
+      <label>專用辨識說明</label>
+      <textarea id="ocr_hint" placeholder="這家單據怎麼讀：例：藍星對帳單依工程名稱歸案號；右側發票稅金要加總；本期合計不要用本期應收…"></textarea>
+      <p class="sub" style="margin:4px 0 10px">僅此廠商；第一輪辨識不夠好且已對到這家時，會自動用這段再辨一次。</p>
       <label>合作狀態</label>
       <select id="coop_status"></select>
       <label>備註</label>
@@ -623,6 +643,8 @@
           account_name: $('account_name').value.trim(),
           payment_terms: $('payment_terms').value,
           remit_fee_default: $('remit_fee_default').value || '是',
+          tax_mode_default: $('tax_mode_default').value || '',
+          ocr_hint: $('ocr_hint').value.trim(),
           coop_status: $('coop_status').value || '合作中',
           note: $('note').value.trim()
         };
@@ -774,7 +796,7 @@
         $('bindingList').innerHTML = '';
         $('lineSearchResults').innerHTML = '';
         ['name','name_aliases','tax_id','contact_name','contact_phone','contact_email','address',
-          'bank_code','branch_name','account_no','account_name','note','lineSearchKw','lineManualId'].forEach(function (id) {
+          'bank_code','branch_name','account_no','account_name','note','ocr_hint','lineSearchKw','lineManualId'].forEach(function (id) {
           $(id).value = '';
         });
         $('trade_category').value = '';
@@ -782,6 +804,7 @@
         $('coop_status').value = '合作中';
         $('payment_terms').value = '';
         $('remit_fee_default').value = '是';
+        $('tax_mode_default').value = '';
         setBranchHint('', '');
         clearPhotos();
         if (opts.focusName !== false) $('name').focus();
@@ -807,6 +830,8 @@
         $('account_name').value = v.account_name || '';
         $('payment_terms').value = v.payment_terms || '';
         $('remit_fee_default').value = String(v.remit_fee_default || '').trim() === '否' ? '否' : '是';
+        $('tax_mode_default').value = String(v.tax_mode_default || '').trim();
+        $('ocr_hint').value = v.ocr_hint || '';
         $('coop_status').value = v.coop_status || '合作中';
         var noteLines = [];
         if (v.note) noteLines.push(String(v.note));
@@ -874,6 +899,12 @@
 
         var feeDef = String(v.remit_fee_default || '').trim() === '否' ? '否（公司出）' : '是（扣廠商）';
         rows.push({ label: '匯費', text: feeDef });
+        var taxDef = String(v.tax_mode_default || '').trim();
+        if (taxDef) {
+          var taxLabel = taxDef === 'per_row' ? '逐筆加 5%' : (taxDef === 'prorate' ? '整張分攤' : (taxDef === 'inclusive' ? '已含稅' : taxDef));
+          rows.push({ label: '稅別', text: taxLabel });
+        }
+        if (String(v.ocr_hint || '').trim()) rows.push({ label: '辨識', text: '有專用說明' });
 
         var bindN = AccountingCache.vendorLineBindings(session, v.vendor_id).filter(function (b) {
           return String(b.is_active || '是') !== '否';
@@ -1232,12 +1263,33 @@
         }
       });
 
+      async function loadCommonOcrHint() {
+        try {
+          var data = await AccountingApi.vendorPaymentOcrCommonHintGet(session);
+          if (!data.success) return;
+          $('commonOcrHint').value = data.common_hint || '';
+          $('commonOcrHintMeta').textContent = '最多 ' + (data.max_chars || 4000) + ' 字；目前 ' + String(data.common_hint || '').length + ' 字';
+        } catch (eHint) {}
+      }
+
+      $('saveCommonOcrHintBtn').addEventListener('click', async function () {
+        var btn = $('saveCommonOcrHintBtn');
+        await AccountingUi.runAsync(btn, { busyLabel: '儲存中…', actionLabel: '儲存通用辨識指令' }, async function () {
+          var data = await AccountingApi.vendorPaymentOcrCommonHintSet(session, $('commonOcrHint').value);
+          if (!data.success) throw new Error(data.message || '儲存失敗');
+          $('commonOcrHint').value = data.common_hint || '';
+          $('commonOcrHintMeta').textContent = '最多 ' + (data.max_chars || 4000) + ' 字；目前 ' + String(data.common_hint || '').length + ' 字';
+          showFeedback('success', '已儲存通用辨識指令');
+        });
+      });
+
       (async function boot() {
         await AccountingBoot.run({
           minPermission: AccountingApi.SUPERVISOR_MIN_PERMISSION,
           onReady: async function (sess) {
             session = sess;
             initFormOptions();
+            await loadCommonOcrHint();
             var cached = AccountingCache.get(session);
             if (cached) mergeEnumsFromCache(cached);
             allVendors = cached ? AccountingCache.vendors(session) : AccountingCache.peekVendors();

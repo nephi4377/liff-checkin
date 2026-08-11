@@ -7,10 +7,11 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
+  <script src="../../shared/js/accounting_tax_mode.js?v=1"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=46"></script>
+  <script src="../../shared/js/accounting_api.js?v=47"></script>
   <script src="../../shared/js/accounting_cache.js?v=30"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=5"></script>
   <script src="../../shared/js/accounting_ui.js?v=18"></script>
@@ -50,6 +51,11 @@
     .tax-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 6px; font-size: 13px; font-weight: normal; }
     .tax-row label { display: inline-flex; align-items: center; gap: 4px; font-weight: normal; margin: 0; }
     .tax-row input[type="checkbox"] { width: auto; margin: 0; }
+    .tax-mode-block { margin-top: 10px; }
+    .tax-mode-block > label { margin-top: 0; }
+    .tax-mode-seg { margin-top: 6px; }
+    .tax-mode-prorate-row { margin-top: 8px; }
+    .tax-mode-prorate-row.hidden { display: none; }
     .pretax-hint { font-size: 12px; color: #666; }
     .total-line { font-size: 18px; font-weight: 700; margin-top: 10px; text-align: right; }
     .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
@@ -130,6 +136,7 @@
       </div>
       <div class="photo-grid" id="photoGrid"></div>
       <button type="button" class="btn btn-secondary" id="ocrBtn" disabled>辨識勾選的檔案（選用）</button>
+      <button type="button" class="btn btn-ghost hidden" id="ocrVendorRetryBtn" style="margin-top:8px">用此廠商規則再辨一次</button>
       <p class="ocr-status" id="ocrStatus">尚未辨識</p>
       <div id="ocrPanel" class="ocr-panel hidden">
         <strong>辨識結果</strong>
@@ -231,6 +238,10 @@
       </div>
 
       <label>明細（案號＋金額，至少一列）</label>
+      <div class="tax-mode-block" id="taxModeBlock">
+        <label>稅別模式（整張統一）</label>
+        <div id="taxModeSegHost"></div>
+      </div>
       <div id="allocList"></div>
       <button type="button" class="btn btn-ghost" id="addAllocBtn">＋ 新增一列</button>
       <div class="total-line">合計 $<span id="totalAmt">0</span></div>
@@ -303,6 +314,11 @@
       var pageMode = 'archive';
       var lastArchiveOcr = null;
       var canArchiveDelete = false;
+      var taxMode = 'inclusive';
+      var taxModeTouched = false;
+      var lastOcrTaxAmount = 0;
+      var ocrForceVendorHint = false;
+      var lastOcrNeedVendorRetry = false;
 
       function maxPhotos() {
         return pageMode === 'archive' ? MAX_PHOTOS_ARCHIVE : MAX_PHOTOS_PAYMENT;
@@ -637,9 +653,27 @@
         }
       }
 
+      function isOwnCompanyPayeeName(name) {
+        var raw = String(name || '').trim();
+        if (!raw) return false;
+        var n = raw.toLowerCase().replace(/\s+/g, '').replace(/[（）()．.・·]/g, '')
+          .replace(/股份有限公司|有限公司|公司/g, '');
+        var tokens = ['添心設計', '添鑫創意', '添心室內裝修', '添鑫創意室內裝修'];
+        for (var i = 0; i < tokens.length; i++) {
+          var t = tokens[i].toLowerCase().replace(/\s+/g, '').replace(/股份有限公司|有限公司|公司/g, '');
+          if (n === t || n.indexOf(t) >= 0 || t.indexOf(n) >= 0) return true;
+        }
+        return false;
+      }
+
       function applyOcrVendor(ocr) {
         if (!ocr) return;
         if (isVendorSelf) return;
+        if (ocr.own_company_name_dropped || isOwnCompanyPayeeName(ocr.ocr_vendor_name || ocr.ocr_vendor_name_raw || ocr.vendor_name)) {
+          AccountingUi.notify('warn', '單據上的「' + (ocr.ocr_vendor_name || ocr.ocr_vendor_name_raw || ocr.vendor_name || '添心／添鑫') + '」是客戶標示我們，已忽略，請改選真實廠商');
+          applyOcrBankFields(ocr);
+          return;
+        }
         if (ocr.vendor_id) {
           setPayeeMode('vendor');
           var v = vendors.find(function (x) { return x.vendor_id === ocr.vendor_id; });
@@ -654,7 +688,7 @@
           setVendorPickId(ocr.vendor_id, v ? (v.name || ocr.vendor_name) : (ocr.vendor_name || ''));
           onPayeePick();
           var matchedLabel = (v && v.name) || ocr.vendor_name || '（名冊）';
-          var rawOcrName = String(ocr.ocr_vendor_name || '').trim();
+          var rawOcrName = String(ocr.ocr_vendor_name || ocr.ocr_vendor_name_raw || '').trim();
           if (rawOcrName && rawOcrName !== matchedLabel) {
             AccountingUi.notify('ok', '已帶入廠商：' + matchedLabel + '（單據寫「' + rawOcrName + '」），銀行帳戶已自動填入');
           } else {
@@ -796,6 +830,11 @@
           row = vendors.find(function (x) { return x.vendor_id === getVendorPickId(); });
           setBankReadonly(!!row);
           if (fromUser && row) AccountingUi.tap('選擇廠商：' + (row.name || row.vendor_id));
+          if (row && !taxModeTouched && typeof AccountingTaxMode !== 'undefined') {
+            var defMode = AccountingTaxMode.normalizeMode(row.tax_mode_default);
+            if (defMode) setTaxModeQuiet(defMode);
+          }
+          updateOcrVendorRetryBtn();
         } else {
           row = employees.find(function (x) { return x.userId === document.getElementById('pickEmployee').value; });
           setBankReadonly(!!row);
@@ -814,20 +853,17 @@
         row = row || {};
         var src = row.source === 'manual' ? '<span class="tag-src">手動</span>' : (row.source === 'ai' ? '<span class="tag-src">AI</span>' : '');
         var checked = !!row.tax_inclusive;
-        var taxAdd = !!row.tax_add_applied;
-        var ocrInc = !!row.ocr_tax_inclusive;
-        var uncheckFree = ocrInc && row.tax_uncheck_free !== false;
         var amt = parseAllocAmount(row.amount);
         var taxDisabled = !isNaN(amt) && amt < 0;
-        if (taxDisabled) { checked = false; taxAdd = false; }
-        if (taxAdd) checked = true;
+        if (taxDisabled) checked = false;
         var pretaxText = '';
         if (checked && !isNaN(amt) && amt !== 0 && amt > 0) {
           pretaxText = '未稅 $' + removeTaxAmount(amt).toLocaleString('zh-TW');
         }
+        var baseAttr = (row._base_amount != null && row._base_amount !== '') ? String(row._base_amount) : '';
         return '<div class="alloc-row" data-idx="' + idx + '" data-source="' + (row.source || '') + '"' +
-          ' data-ocr-tax-inclusive="' + (ocrInc ? '1' : '0') + '"' +
-          ' data-tax-uncheck-free="' + (uncheckFree ? '1' : '0') + '">' +
+          ' data-ocr-tax-inclusive="' + (row.ocr_tax_inclusive ? '1' : '0') + '"' +
+          ' data-base-amount="' + baseAttr + '">' +
           '<button type="button" class="rm" data-rm="' + idx + '">刪除</button>' +
           '<div class="row2"><div><label>案號' + src + '</label><input class="inp-pn" value="' + (row.project_no || '') + '" placeholder="752" /></div>' +
           '<div><label>金額</label><input class="inp-amt" type="number" inputmode="numeric" placeholder="折讓填負數" value="' + (row.amount || '') + '" /></div></div>' +
@@ -835,8 +871,6 @@
           '<div class="tax-row">' +
           '<label><input type="checkbox" class="inp-tax"' +
           (checked ? ' checked' : '') + (taxDisabled ? ' disabled' : '') + ' />含稅</label>' +
-          '<label><input type="checkbox" class="inp-tax-add"' +
-          (taxAdd ? ' checked' : '') + (taxDisabled ? ' disabled' : '') + ' />未稅加 5%</label>' +
           '<span class="pretax-hint">' + pretaxText + '</span></div></div>';
       }
 
@@ -860,19 +894,106 @@
         var rows = [];
         document.querySelectorAll('#allocList .alloc-row').forEach(function (el) {
           var taxCb = el.querySelector('.inp-tax');
-          var taxAddCb = el.querySelector('.inp-tax-add');
+          var baseRaw = el.getAttribute('data-base-amount');
           rows.push({
             project_no: el.querySelector('.inp-pn').value.trim(),
             amount: el.querySelector('.inp-amt').value,
             item_desc: el.querySelector('.inp-desc').value.trim(),
             source: el.getAttribute('data-source') || 'manual',
             tax_inclusive: taxCb ? taxCb.checked : false,
-            tax_add_applied: taxAddCb ? taxAddCb.checked : false,
+            tax_add_applied: false,
             ocr_tax_inclusive: el.getAttribute('data-ocr-tax-inclusive') === '1',
-            tax_uncheck_free: el.getAttribute('data-tax-uncheck-free') === '1'
+            _base_amount: baseRaw !== null && baseRaw !== '' ? baseRaw : undefined
           });
         });
         return rows;
+      }
+
+      function getProrateTaxInput() {
+        var el = document.querySelector('#taxModeSegHost .inp-tax-amount');
+        return el ? el.value : '';
+      }
+
+      function setProrateTaxInput(v) {
+        var el = document.querySelector('#taxModeSegHost .inp-tax-amount');
+        if (el) el.value = v != null && v !== '' ? v : '';
+      }
+
+      function renderTaxModeSeg() {
+        var host = document.getElementById('taxModeSegHost');
+        if (!host || typeof AccountingTaxMode === 'undefined') return;
+        host.innerHTML = AccountingTaxMode.segHtml(taxMode, 'payment');
+        setProrateTaxInput(lastOcrTaxAmount > 0 ? lastOcrTaxAmount : '');
+        host.querySelectorAll('[data-tax-mode]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var next = btn.getAttribute('data-tax-mode');
+            if (!next || next === taxMode) return;
+            if (!window.confirm('切換稅別模式會依新模式重算明細金額，確定？')) return;
+            applyTaxMode(next, { confirmSwitch: true });
+          });
+        });
+        var btn5 = host.querySelector('.btn-tax-5pct');
+        if (btn5) {
+          btn5.addEventListener('click', function () {
+            var bases = AccountingTaxMode.applyModeToRows(readAllocRows(), 'inclusive', { prevMode: taxMode });
+            var pretax = 0;
+            bases.forEach(function (r) {
+              var a = parseAllocAmount(r.amount);
+              if (!isNaN(a) && a > 0) pretax += a;
+            });
+            setProrateTaxInput(Math.round(pretax * 0.05));
+            taxMode = 'inclusive';
+            renderAllocRows(bases);
+            applyTaxMode('prorate', { force: true });
+          });
+        }
+        var taxInp = host.querySelector('.inp-tax-amount');
+        if (taxInp) {
+          taxInp.addEventListener('change', function () {
+            if (taxMode === 'prorate') applyTaxMode('prorate', { force: true });
+          });
+        }
+      }
+
+      function syncTaxModeFormNote() {
+        var noteEl = document.getElementById('note');
+        if (!noteEl || typeof AccountingTaxMode === 'undefined') return;
+        noteEl.value = AccountingTaxMode.syncModeNote(noteEl.value, taxMode);
+        syncTaxFormNote();
+      }
+
+      function applyTaxMode(nextMode, opts) {
+        opts = opts || {};
+        var next = (typeof AccountingTaxMode !== 'undefined')
+          ? (AccountingTaxMode.normalizeMode(nextMode) || 'inclusive')
+          : 'inclusive';
+        var prev = taxMode;
+        var rows = readAllocRows();
+        if (!rows.length) {
+          taxMode = next;
+          taxModeTouched = true;
+          renderTaxModeSeg();
+          syncTaxModeFormNote();
+          return;
+        }
+        var applied = AccountingTaxMode.applyModeToRows(rows, next, {
+          prevMode: prev,
+          taxAmount: getProrateTaxInput()
+        });
+        taxMode = next;
+        taxModeTouched = true;
+        renderAllocRows(applied);
+        renderTaxModeSeg();
+        syncTaxModeFormNote();
+        AccountingUi.tap('稅別模式：' + AccountingTaxMode.modeLabel(next));
+      }
+
+      function setTaxModeQuiet(nextMode) {
+        taxMode = (typeof AccountingTaxMode !== 'undefined')
+          ? (AccountingTaxMode.normalizeMode(nextMode) || 'inclusive')
+          : 'inclusive';
+        renderTaxModeSeg();
+        syncTaxModeFormNote();
       }
 
       function remitFeePreview(sum) {
@@ -918,14 +1039,9 @@
 
       function setTaxControlsDisabled(row, disabled) {
         var taxCb = row.querySelector('.inp-tax');
-        var taxAddCb = row.querySelector('.inp-tax-add');
         if (taxCb) {
           taxCb.disabled = disabled;
           if (disabled) taxCb.checked = false;
-        }
-        if (taxAddCb) {
-          taxAddCb.disabled = disabled;
-          if (disabled) taxAddCb.checked = false;
         }
       }
 
@@ -939,6 +1055,7 @@
                 updatePretaxHint(row);
                 var a = parseAllocAmount(inp.value);
                 setTaxControlsDisabled(row, !isNaN(a) && a < 0);
+                if (!isNaN(a)) row.setAttribute('data-base-amount', String(a));
               }
             }
             syncTaxFormNote();
@@ -949,12 +1066,6 @@
           cb.onchange = function () {
             var row = cb.closest('.alloc-row');
             if (row) onTaxInclusiveChange(row);
-          };
-        });
-        document.querySelectorAll('#allocList .inp-tax-add').forEach(function (cb) {
-          cb.onchange = function () {
-            var row = cb.closest('.alloc-row');
-            if (row) onTaxAddChange(row);
           };
         });
         document.querySelectorAll('#allocList .rm').forEach(function (btn) {
@@ -1003,6 +1114,32 @@
         btn.textContent = n > 0
           ? ('辨識勾選的檔案（' + n + ' 個）')
           : '辨識勾選的檔案（選用）';
+        updateOcrVendorRetryBtn();
+      }
+
+      function selectedVendorHasOcrHint() {
+        var vid = getVendorPickId();
+        if (!vid || vid === NEW_VENDOR_ID) return false;
+        var v = vendors.find(function (x) { return x.vendor_id === vid; });
+        return !!(v && String(v.ocr_hint || '').trim());
+      }
+
+      function updateOcrVendorRetryBtn(ocrData) {
+        var btn = document.getElementById('ocrVendorRetryBtn');
+        if (!btn) return;
+        if (ocrData && ocrData.need_vendor_for_retry) lastOcrNeedVendorRetry = true;
+        if (ocrData && ocrData.success && !ocrData.ocr_weak && !ocrData.need_vendor_for_retry) {
+          lastOcrNeedVendorRetry = false;
+        }
+        var ocrable = photos.filter(function (p) { return p.selected && isOcrableMime(p.mimeType, p.filename); });
+        var show = pageMode === 'payment' && ocrable.length > 0 && selectedVendorHasOcrHint();
+        btn.classList.toggle('hidden', !show);
+        btn.disabled = submitting || ocrable.length < 1;
+        if (lastOcrNeedVendorRetry && show) {
+          btn.textContent = '用此廠商規則再辨一次（建議）';
+        } else {
+          btn.textContent = '用此廠商規則再辨一次';
+        }
       }
 
       function renderPhotoGrid() {
@@ -1285,50 +1422,13 @@
         noteEl.value = taxLine ? (stripped ? stripped + '；' + taxLine : taxLine) : stripped;
       }
 
-      /** 含稅：只標記，不改金額。若同時取消「未稅加 5%」則還原加成。 */
+      /** 含稅：只標記，不改金額（稅別加成改由上方三模式處理） */
       function onTaxInclusiveChange(rowEl) {
         var cb = rowEl.querySelector('.inp-tax');
-        var addCb = rowEl.querySelector('.inp-tax-add');
         var amtInp = rowEl.querySelector('.inp-amt');
         var descInp = rowEl.querySelector('.inp-desc');
         if (!cb || !amtInp || !descInp) return;
-
-        if (!cb.checked && addCb && addCb.checked) {
-          addCb.checked = false;
-          var amt = parseAllocAmount(amtInp.value);
-          if (!isNaN(amt) && amt > 0) amtInp.value = removeTaxAmount(amt);
-        }
-
         descInp.value = applyTaxTag(descInp.value, cb.checked);
-        updatePretaxHint(rowEl);
-        rowEl.setAttribute('data-source', 'manual');
-        syncTaxFormNote();
-        updateTotal();
-      }
-
-      /** 未稅加 5%：勾選加成並標含稅；取消則還原金額並改未稅。 */
-      function onTaxAddChange(rowEl) {
-        var cb = rowEl.querySelector('.inp-tax');
-        var addCb = rowEl.querySelector('.inp-tax-add');
-        var amtInp = rowEl.querySelector('.inp-amt');
-        var descInp = rowEl.querySelector('.inp-desc');
-        if (!addCb || !amtInp || !descInp) return;
-        var amt = parseAllocAmount(amtInp.value);
-        if (isNaN(amt) || amt === 0 || amt < 0) {
-          addCb.checked = false;
-          return;
-        }
-
-        if (addCb.checked) {
-          amtInp.value = addTaxAmount(amt);
-          if (cb) cb.checked = true;
-          descInp.value = applyTaxTag(descInp.value, true);
-        } else {
-          amtInp.value = removeTaxAmount(amt);
-          if (cb) cb.checked = false;
-          descInp.value = applyTaxTag(descInp.value, false);
-        }
-
         updatePretaxHint(rowEl);
         rowEl.setAttribute('data-source', 'manual');
         syncTaxFormNote();
@@ -1686,14 +1786,20 @@
         }
         await AccountingUi.runAsync(btn, { actionLabel: 'AI 辨識單據', busyLabel: '辨識中…' }, async function () {
           status.textContent = '辨識中…（最長約 3 分鐘）';
+          var vid = getVendorPickId();
+          if (vid === NEW_VENDOR_ID) vid = '';
           var payload = {
             draft_id: draftId || undefined,
             photo_ids: selected.map(function (p) { return p.photo_id; }),
-            photos: photosPayload()
+            photos: photosPayload(),
+            vendor_id: vid || '',
+            force_vendor_hint: !!ocrForceVendorHint
           };
+          ocrForceVendorHint = false;
           var data = await AccountingApi.paymentRequestOcrAnalyze(session, payload, OCR_TIMEOUT_MS);
           if (!data.success) {
             status.textContent = '辨識失敗';
+            updateOcrVendorRetryBtn(data);
             throw new Error(data.message || '辨識失敗');
           }
           draftId = data.draft_id || draftId;
@@ -1718,18 +1824,51 @@
             }, ocr)];
           }
           var merged = manualRows.concat(aiRows);
-          renderAllocRows(merged.length ? merged : []);
-          status.textContent = '辨識完成（第 ' + ocrAttempt + ' 次）';
+          lastOcrTaxAmount = parseInt(ocr.tax_amount, 10) || 0;
+          var suggested = (typeof AccountingTaxMode !== 'undefined')
+            ? AccountingTaxMode.suggestModeFromOcr(ocr)
+            : 'inclusive';
+          if (!taxModeTouched) {
+            taxMode = suggested;
+          }
+          if (suggested === 'inclusive' || ocr.is_tax_inclusive || lastOcrTaxAmount > 0) {
+            renderAllocRows(merged.length ? merged : []);
+            setTaxModeQuiet(taxModeTouched ? taxMode : 'inclusive');
+          } else if (!taxModeTouched && suggested === 'prorate') {
+            taxMode = 'prorate';
+            renderAllocRows(merged.length ? merged : []);
+            renderTaxModeSeg();
+            if (lastOcrTaxAmount > 0) setProrateTaxInput(lastOcrTaxAmount);
+            applyTaxMode('prorate', { force: true });
+          } else {
+            renderAllocRows(merged.length ? merged : []);
+            renderTaxModeSeg();
+          }
+          syncTaxModeFormNote();
+          var stageNote = '';
+          if (data.auto_second_pass) stageNote = '（已自動用廠商專用指令再辨一次）';
+          else if (data.ocr_stages && data.ocr_stages.length > 1) stageNote = '（辨識 ' + data.ocr_stages.length + ' 輪）';
+          else if (data.used_vendor_hint) stageNote = '（已套用廠商專用指令）';
+          status.textContent = '辨識完成（第 ' + ocrAttempt + ' 次）' + stageNote;
           var taxNote = '';
           if (ocr.tax_amount > 0) {
             taxNote = '；稅金 $' + Number(ocr.tax_amount).toLocaleString('zh-TW') + ' 已分攤進各案（含稅）';
           } else if (ocr.is_tax_inclusive) {
             taxNote = '；單據為含稅報價';
           }
-          AccountingUi.log('ok', '辨識完成，共 ' + merged.length + ' 列明細' + taxNote);
-          document.getElementById('ocrPreview').textContent = formatArchiveOcrPreview(ocr);
+          if (data.need_vendor_for_retry || data.ocr_weak) {
+            AccountingUi.notify('warn', data.need_vendor_for_retry
+              ? '結果偏弱：請選廠商後按「用此廠商規則再辨一次」'
+              : '結果偏弱，可改手填或再辨一次');
+          }
+          AccountingUi.log('ok', '辨識完成，共 ' + merged.length + ' 列明細' + taxNote + stageNote);
+          document.getElementById('ocrPreview').textContent = formatArchiveOcrPreview(ocr) +
+            (data.elapsed_ms ? '\n（耗時 ' + Math.round(data.elapsed_ms / 1000) + ' 秒）' : '') +
+            (data.used_common_hint ? '\n（已套用通用指令）' : '') +
+            (data.used_vendor_hint ? '\n（已套用廠商專用指令）' : '');
           document.getElementById('ocrPanel').classList.remove('hidden');
           showModeSuggest(ocr);
+          updateOcrVendorRetryBtn(data);
         }).catch(function (e) {
           if (e && e.message) setMsg(e.message);
           status.textContent = '辨識失敗，可重試';
@@ -1848,6 +1987,9 @@
         draftId = '';
         ocrAttempt = 0;
         lastOcrAmount = 0;
+        lastOcrTaxAmount = 0;
+        taxMode = 'inclusive';
+        taxModeTouched = false;
         lastArchiveOcr = null;
         renderPhotoGrid();
         document.getElementById('ocrStatus').textContent = '尚未辨識';
@@ -1862,6 +2004,8 @@
             ? [defaultManualAllocRow(queryParams.project_no)]
             : []);
         }
+        renderTaxModeSeg();
+        syncTaxModeFormNote();
       }
 
       function resetForm() {
@@ -1910,6 +2054,20 @@
       })();
       document.getElementById('ocrBtn').addEventListener('click', function () {
         AccountingUi.tap(document.getElementById('ocrBtn').textContent || '開始辨識');
+        runOcr();
+      });
+      document.getElementById('ocrVendorRetryBtn').addEventListener('click', function () {
+        var vid = getVendorPickId();
+        if (!vid || vid === NEW_VENDOR_ID) {
+          setMsg('請先選名冊廠商（且該廠有填專用辨識說明）');
+          return;
+        }
+        if (!selectedVendorHasOcrHint()) {
+          setMsg('這家廠商尚未填「專用辨識說明」，請到廠商名冊設定');
+          return;
+        }
+        AccountingUi.tap('用此廠商規則再辨一次');
+        ocrForceVendorHint = true;
         runOcr();
       });
       document.getElementById('pageModeSeg').addEventListener('click', function (e) {
@@ -2016,6 +2174,7 @@
           renderAllocRows(queryParams.project_no
             ? [defaultManualAllocRow(queryParams.project_no)]
             : []);
+          renderTaxModeSeg();
         }
         if (queryParams.doc_type) {
           document.getElementById('docType').value = queryParams.doc_type;

@@ -6,6 +6,7 @@
   <title>請款審核</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/accounting_tax_mode.js?v=1"></script>
   <script src="../../shared/js/operator_context.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=42"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
@@ -55,6 +56,9 @@
     .tax-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 6px; font-size: 13px; font-weight: normal; }
     .tax-row label { display: inline-flex; align-items: center; gap: 4px; font-weight: normal; margin: 0; }
     .tax-row input[type="checkbox"] { width: auto; margin: 0; }
+    .tax-mode-seg { margin-top: 6px; }
+    .tax-mode-prorate-row { margin-top: 8px; }
+    .tax-mode-prorate-row.hidden { display: none; }
     .pretax-hint { font-size: 12px; color: #666; }
     .alloc-empty { color: #666; font-size: 14px; padding: 8px 0; }
     .btn-ghost { background: #fff; border: 1px dashed #1a73e8; color: #1a73e8; width: 100%; padding: 10px; margin-top: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border-radius: 8px; }
@@ -317,52 +321,77 @@
         if (noteTextEl) noteTextEl.textContent = noteEl.value;
         if (noteLine) noteLine.classList.toggle('hidden', !noteEl.value);
       }
-      /** 含稅：只標記，不改金額。若同時取消「未稅加 5%」則還原加成。 */
+      /** 含稅：只標記，不改金額 */
       function onTaxInclusiveChange(panel, rowEl) {
         var cb = rowEl.querySelector('.inp-tax');
-        var addCb = rowEl.querySelector('.inp-tax-add');
         var amtInp = rowEl.querySelector('.inp-amt');
         var descInp = rowEl.querySelector('.inp-desc');
         if (!cb || !amtInp || !descInp) return;
-
-        if (!cb.checked && addCb && addCb.checked) {
-          addCb.checked = false;
-          var amt = parseAllocAmount(amtInp.value);
-          if (!isNaN(amt) && amt > 0) amtInp.value = removeTaxAmount(amt);
-        }
-
         descInp.value = applyTaxTag(descInp.value, cb.checked);
         updatePretaxHint(rowEl);
         syncTaxNoteForPanel(panel);
         updatePanelTotal(panel);
       }
-
-      /** 未稅加 5%：勾選加成並標含稅；取消則還原金額並改未稅。 */
-      function onTaxAddChange(panel, rowEl) {
-        var cb = rowEl.querySelector('.inp-tax');
-        var addCb = rowEl.querySelector('.inp-tax-add');
-        var amtInp = rowEl.querySelector('.inp-amt');
-        var descInp = rowEl.querySelector('.inp-desc');
-        if (!addCb || !amtInp || !descInp) return;
-        var amt = parseAllocAmount(amtInp.value);
-        if (isNaN(amt) || amt === 0 || amt < 0) {
-          addCb.checked = false;
-          return;
+      function getPanelTaxMode(panel) {
+        return panel.getAttribute('data-tax-mode') || 'inclusive';
+      }
+      function setPanelTaxMode(panel, mode, opts) {
+        opts = opts || {};
+        if (typeof AccountingTaxMode === 'undefined') return;
+        var next = AccountingTaxMode.normalizeMode(mode) || 'inclusive';
+        var prev = getPanelTaxMode(panel);
+        if (!opts.force && next !== prev && opts.confirm !== false) {
+          if (!window.confirm('切換稅別模式會依新模式重算明細金額，確定？')) return;
         }
-
-        if (addCb.checked) {
-          amtInp.value = addTaxAmount(amt);
-          if (cb) cb.checked = true;
-          descInp.value = applyTaxTag(descInp.value, true);
-        } else {
-          amtInp.value = removeTaxAmount(amt);
-          if (cb) cb.checked = false;
-          descInp.value = applyTaxTag(descInp.value, false);
-        }
-
-        updatePretaxHint(rowEl);
+        var rows = readAllocRowsFromPanel(panel);
+        var taxInp = panel.querySelector('.inp-tax-amount');
+        var applied = AccountingTaxMode.applyModeToRows(rows, next, {
+          prevMode: prev,
+          taxAmount: taxInp ? taxInp.value : ''
+        });
+        panel.setAttribute('data-tax-mode', next);
+        renderAllocRowsInPanel(panel, applied);
+        renderPanelTaxModeSeg(panel);
+        var noteEl = panel.querySelector('.inp-note');
+        if (noteEl) noteEl.value = AccountingTaxMode.syncModeNote(noteEl.value, next);
         syncTaxNoteForPanel(panel);
-        updatePanelTotal(panel);
+      }
+      function renderPanelTaxModeSeg(panel) {
+        var host = panel.querySelector('.tax-mode-host');
+        if (!host || typeof AccountingTaxMode === 'undefined') return;
+        var mode = getPanelTaxMode(panel);
+        host.innerHTML = AccountingTaxMode.segHtml(mode, 'review');
+        host.querySelectorAll('[data-tax-mode]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            setPanelTaxMode(panel, btn.getAttribute('data-tax-mode'));
+          });
+        });
+        var btn5 = host.querySelector('.btn-tax-5pct');
+        if (btn5) {
+          btn5.addEventListener('click', function () {
+            var bases = AccountingTaxMode.applyModeToRows(readAllocRowsFromPanel(panel), 'inclusive', {
+              prevMode: getPanelTaxMode(panel)
+            });
+            var pretax = 0;
+            bases.forEach(function (r) {
+              var a = parseAllocAmount(r.amount);
+              if (!isNaN(a) && a > 0) pretax += a;
+            });
+            var taxInp = host.querySelector('.inp-tax-amount');
+            if (taxInp) taxInp.value = Math.round(pretax * 0.05);
+            panel.setAttribute('data-tax-mode', 'inclusive');
+            renderAllocRowsInPanel(panel, bases);
+            setPanelTaxMode(panel, 'prorate', { force: true, confirm: false });
+          });
+        }
+        var taxInp = host.querySelector('.inp-tax-amount');
+        if (taxInp) {
+          taxInp.addEventListener('change', function () {
+            if (getPanelTaxMode(panel) === 'prorate') {
+              setPanelTaxMode(panel, 'prorate', { force: true, confirm: false });
+            }
+          });
+        }
       }
       function itemReady(item) {
         if (isCustomerReceiptIncome(item)) {
@@ -379,6 +408,32 @@
           sum += amt;
         }
         return sum > 0;
+      }
+
+      function isOwnCompanyPayeeName(name) {
+        var raw = String(name || '').trim();
+        if (!raw) return false;
+        var n = raw.toLowerCase().replace(/\s+/g, '').replace(/[（）()．.・·]/g, '')
+          .replace(/股份有限公司|有限公司|公司/g, '');
+        var tokens = ['添心設計', '添鑫創意', '添心室內裝修', '添鑫創意室內裝修'];
+        for (var i = 0; i < tokens.length; i++) {
+          var t = tokens[i].toLowerCase().replace(/\s+/g, '').replace(/股份有限公司|有限公司|公司/g, '');
+          if (n === t || n.indexOf(t) >= 0 || t.indexOf(n) >= 0) return true;
+        }
+        return false;
+      }
+
+      /** 軟提醒用，不阻擋核准 */
+      function vendorHintForItem(item) {
+        var vid = String(item.vendor_id || '').trim();
+        var vn = String(item.party_name || item.vendor_name || '').trim();
+        if (isOwnCompanyPayeeName(vn)) {
+          return '提醒：廠商欄仍是本公司抬頭（客戶標示我們），建議改選真實廠商';
+        }
+        if (!vid || !vn || vn === '待對廠商') {
+          return '提醒：尚未對上名冊，建議先選真實廠商（單據沒寫名字也可手選）';
+        }
+        return '';
       }
       function allocRowsFromItem(item) {
         var itemNote = String(item.note || '');
@@ -404,15 +459,15 @@
         var rows = [];
         panel.querySelectorAll('.alloc-row').forEach(function (el) {
           var taxCb = el.querySelector('.inp-tax');
-          var taxAddCb = el.querySelector('.inp-tax-add');
+          var baseRaw = el.getAttribute('data-base-amount');
           rows.push({
             project_no: el.querySelector('.inp-pn').value.trim(),
             amount: el.querySelector('.inp-amt').value,
             item_desc: el.querySelector('.inp-desc').value.trim(),
             tax_inclusive: taxCb ? taxCb.checked : false,
-            tax_add_applied: taxAddCb ? taxAddCb.checked : false,
+            tax_add_applied: false,
             ocr_tax_inclusive: el.getAttribute('data-ocr-tax-inclusive') === '1',
-            tax_uncheck_free: el.getAttribute('data-tax-uncheck-free') === '1'
+            _base_amount: baseRaw !== null && baseRaw !== '' ? baseRaw : undefined
           });
         });
         return rows;
@@ -443,14 +498,9 @@
       }
       function setTaxControlsDisabled(row, disabled) {
         var taxCb = row.querySelector('.inp-tax');
-        var taxAddCb = row.querySelector('.inp-tax-add');
         if (taxCb) {
           taxCb.disabled = disabled;
           if (disabled) taxCb.checked = false;
-        }
-        if (taxAddCb) {
-          taxAddCb.disabled = disabled;
-          if (disabled) taxAddCb.checked = false;
         }
       }
 
@@ -462,6 +512,7 @@
               updatePretaxHint(row);
               var a = parseAllocAmount(inp.value);
               setTaxControlsDisabled(row, !isNaN(a) && a < 0);
+              if (!isNaN(a)) row.setAttribute('data-base-amount', String(a));
             }
             syncTaxNoteForPanel(panel);
             updatePanelTotal(panel);
@@ -471,12 +522,6 @@
           cb.onchange = function () {
             var row = cb.closest('.alloc-row');
             if (row) onTaxInclusiveChange(panel, row);
-          };
-        });
-        panel.querySelectorAll('.inp-tax-add').forEach(function (cb) {
-          cb.onchange = function () {
-            var row = cb.closest('.alloc-row');
-            if (row) onTaxAddChange(panel, row);
           };
         });
         panel.querySelectorAll('.alloc-rm').forEach(function (btn) {
@@ -497,8 +542,7 @@
               item_desc: '',
               tax_inclusive: false,
               tax_add_applied: false,
-              ocr_tax_inclusive: false,
-              tax_uncheck_free: false
+              ocr_tax_inclusive: false
             });
             renderAllocRowsInPanel(panel, rows);
           };
@@ -507,20 +551,17 @@
       function allocRowHtml(idx, row) {
         row = row || {};
         var checked = !!row.tax_inclusive;
-        var taxAdd = !!row.tax_add_applied;
-        var ocrInc = !!row.ocr_tax_inclusive;
-        var uncheckFree = ocrInc && row.tax_uncheck_free !== false;
         var amt = parseAllocAmount(row.amount);
         var taxDisabled = !isNaN(amt) && amt < 0;
-        if (taxDisabled) { checked = false; taxAdd = false; }
-        if (taxAdd) checked = true;
+        if (taxDisabled) checked = false;
         var pretaxText = '';
         if (checked && !isNaN(amt) && amt !== 0 && amt > 0) {
           pretaxText = '未稅 $' + removeTaxAmount(amt).toLocaleString('zh-TW');
         }
+        var baseAttr = (row._base_amount != null && row._base_amount !== '') ? String(row._base_amount) : '';
         return '<div class="alloc-row" data-idx="' + idx + '"' +
-          ' data-ocr-tax-inclusive="' + (ocrInc ? '1' : '0') + '"' +
-          ' data-tax-uncheck-free="' + (uncheckFree ? '1' : '0') + '">' +
+          ' data-ocr-tax-inclusive="' + (row.ocr_tax_inclusive ? '1' : '0') + '"' +
+          ' data-base-amount="' + baseAttr + '">' +
           '<button type="button" class="alloc-rm" data-rm="' + idx + '">刪除</button>' +
           '<div class="row2"><div><label>案號</label><input class="inp-pn" placeholder="752" /></div>' +
           '<div><label>金額</label><input class="inp-amt" type="number" inputmode="numeric" placeholder="扣款填負數" /></div></div>' +
@@ -528,8 +569,6 @@
           '<div class="tax-row">' +
           '<label><input type="checkbox" class="inp-tax"' +
           (checked ? ' checked' : '') + (taxDisabled ? ' disabled' : '') + ' />含稅</label>' +
-          '<label><input type="checkbox" class="inp-tax-add"' +
-          (taxAdd ? ' checked' : '') + (taxDisabled ? ' disabled' : '') + ' />未稅加 5%</label>' +
           '<span class="pretax-hint">' + pretaxText + '</span></div></div>';
       }
       function renderAllocRowsInPanel(panel, rows) {
@@ -570,6 +609,9 @@
         if (!data.success) {
           setMsg((item.party_name || '請款') + '：' + (data.message || '核准失敗'));
           return false;
+        }
+        if (data.warnings && data.warnings.length) {
+          AccountingUi.notify('warn', data.warnings.join('；'));
         }
         return true;
       }
@@ -691,9 +733,16 @@
         var panel = document.createElement('div');
         panel.className = 'review-panel hidden';
         var ready = itemReady(item);
+        var initMode = 'inclusive';
+        if (typeof AccountingTaxMode !== 'undefined') {
+          initMode = AccountingTaxMode.parseModeFromNote(item.note) || 'inclusive';
+        }
+        panel.setAttribute('data-tax-mode', initMode);
         panel.innerHTML =
           '<label>分攤明細（案號＋金額，可多案；扣款填負數）' +
           (ready ? '' : ' <span class="need">需補齊</span>') + '</label>' +
+          '<label style="margin-top:10px">稅別模式（整張統一）</label>' +
+          '<div class="tax-mode-host"></div>' +
           '<div class="alloc-list"></div>' +
           '<button type="button" class="btn-ghost btn-add-alloc">＋ 新增一列</button>' +
           '<div class="total-line">合計 $<span class="alloc-total">0</span></div>' +
@@ -710,8 +759,14 @@
           '<button type="button" class="btn btn-warn btn-confirm-reject">退回</button>' +
           '</div>';
         renderAllocRowsInPanel(panel, allocRowsFromItem(item));
+        renderPanelTaxModeSeg(panel);
         var noteEl = panel.querySelector('.inp-note');
-        if (noteEl) noteEl.value = String(item.note || '');
+        if (noteEl) {
+          noteEl.value = String(item.note || '');
+          if (typeof AccountingTaxMode !== 'undefined') {
+            noteEl.value = AccountingTaxMode.syncModeNote(noteEl.value, initMode);
+          }
+        }
         syncTaxNoteForPanel(panel);
 
         panel.querySelector('.btn-confirm-approve').addEventListener('click', async function () {
@@ -781,6 +836,9 @@
             : '') +
           (isIncome && item.ingest_id
             ? '<div class="sub">案件收支 ingest：' + item.ingest_id + '</div>'
+            : '') +
+          (isRequest && vendorHintForItem(item)
+            ? '<div class="sub" style="color:#b06000">' + vendorHintForItem(item) + '</div>'
             : '') +
           '<div class="mono">' + ((isIncome || isCashSign)
             ? (item.receipt_id ? item.receipt_id.slice(0, 8) + '…' : '')
