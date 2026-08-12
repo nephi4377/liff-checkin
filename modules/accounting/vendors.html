@@ -130,7 +130,19 @@
     .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; color: #174ea6; }
     .tag.pause { background: #fce8e6; color: #c5221f; }
     .tag.ok { background: #e6f4ea; color: #137333; }
+    .tag.warn { background: #fef7e0; color: #b06000; }
+    .tag.bad { background: #fce8e6; color: #c5221f; }
     .tag.muted { background: #f1f3f4; color: #5f6368; }
+    .pay-history-list { margin-top: 10px; }
+    .pay-history-item { border: 1px solid #e8eaed; border-radius: 10px; padding: 10px 12px; margin: 8px 0; background: #fafafa; }
+    .pay-history-item .pay-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .pay-history-item .btn-sm { padding: 6px 10px; font-size: 13px; margin-top: 0; }
+    .pay-history-edit {
+      margin-top: 10px; padding: 12px; border: 1px solid #c2d7f7; border-radius: 10px; background: #f8fbff;
+    }
+    .pay-history-edit h4 { margin: 0 0 8px; font-size: 14px; }
+    .pay-empty { color: #888; font-size: 14px; padding: 8px 0; }
+    a.btn { display: inline-block; text-align: center; text-decoration: none; box-sizing: border-box; }
     .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e8eaed; }
     .files-box { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e0e0e0; }
     .files-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 6px; }
@@ -297,6 +309,51 @@
         <button type="button" class="btn btn-primary" id="saveBtn">儲存</button>
         <button type="button" class="btn btn-secondary hidden" id="cancelEditBtn">取消編輯</button>
       </div>
+
+      <div id="payHistorySection" class="hidden">
+        <p class="section-title">請款／匯款紀錄（近 12 個月）</p>
+        <p class="sub" style="margin:0 0 8px">看這家廠商的過往請款與匯款進度。新增請款會帶入這家廠商；待匯款可於此編輯或刪除（需財務權限 ≥4）。已匯款僅供查看。</p>
+        <div class="form-actions" style="margin-top:0">
+          <a class="btn btn-primary" id="payHistoryAddBtn" href="payment_request.html" target="_blank" rel="noopener">新增請款</a>
+          <button type="button" class="btn btn-secondary" id="payHistoryReloadBtn">重新整理</button>
+        </div>
+        <div id="payHistoryEdit" class="pay-history-edit hidden">
+          <h4>編輯待匯款</h4>
+          <input type="hidden" id="payEditId" value="" />
+          <div class="row2">
+            <div>
+              <label>金額</label>
+              <input id="payEditAmount" type="number" min="1" step="1" />
+            </div>
+            <div>
+              <label>案號</label>
+              <input id="payEditProject" />
+            </div>
+          </div>
+          <label>摘要</label>
+          <input id="payEditDesc" />
+          <div class="row2">
+            <div>
+              <label>交易日</label>
+              <input id="payEditTxnDate" type="date" />
+            </div>
+            <div>
+              <label>扣匯費</label>
+              <select id="payEditRemitFee">
+                <option value="是">是（扣廠商）</option>
+                <option value="否">否（公司出）</option>
+              </select>
+            </div>
+          </div>
+          <label>備註</label>
+          <textarea id="payEditNote" rows="2"></textarea>
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary" id="payEditSaveBtn">儲存此筆</button>
+            <button type="button" class="btn btn-secondary" id="payEditCancelBtn">取消</button>
+          </div>
+        </div>
+        <div id="payHistoryList" class="pay-history-list"></div>
+      </div>
     </div>
     </div>
 
@@ -375,12 +432,222 @@
         $('saveBtn').textContent = isEdit ? '更新' : '儲存';
         card.classList.toggle('is-editing', !!isEdit);
         setBindEditorVisible(!!isEdit);
+        $('payHistorySection').classList.toggle('hidden', !isEdit);
+        if (!isEdit) {
+          resetPayHistoryUi();
+        }
         if (opts.flash) {
           card.classList.remove('just-saved');
           void card.offsetWidth;
           card.classList.add('just-saved');
           setTimeout(function () { card.classList.remove('just-saved'); }, 1000);
         }
+      }
+
+      var payHistoryItems = [];
+      var PAY_STAGE_ORDER = ['請款待審', '待匯款', '已匯款', '已退回', '收支紀錄'];
+      var PAY_STAGE_LABEL = {
+        '請款待審': '待審核',
+        '待匯款': '待匯款',
+        '已匯款': '已匯款',
+        '已退回': '已退回',
+        '收支紀錄': '其他收支'
+      };
+
+      function canEditPayments() {
+        return session && session.auth && (session.auth.permission || 0) >= 4;
+      }
+
+      function resetPayHistoryUi() {
+        payHistoryItems = [];
+        $('payHistoryList').innerHTML = '';
+        hidePayEditForm();
+        $('payHistoryAddBtn').href = 'payment_request.html';
+      }
+
+      function hidePayEditForm() {
+        $('payHistoryEdit').classList.add('hidden');
+        $('payEditId').value = '';
+        $('payEditAmount').value = '';
+        $('payEditProject').value = '';
+        $('payEditDesc').value = '';
+        $('payEditTxnDate').value = '';
+        $('payEditRemitFee').value = '是';
+        $('payEditNote').value = '';
+      }
+
+      function payTagClass(stage) {
+        if (stage === '請款待審' || stage === '待匯款') return 'tag warn';
+        if (stage === '已匯款') return 'tag ok';
+        if (stage === '已退回') return 'tag bad';
+        return 'tag muted';
+      }
+
+      function renderPayPhotos(urls) {
+        if (!urls || !urls.length) return '';
+        var html = '<div class="sub" style="margin-top:4px">';
+        urls.forEach(function (u, i) {
+          html += '<a href="' + u + '" target="_blank" rel="noopener" style="margin-right:8px;color:#1a73e8">附件' + (i + 1) + '</a>';
+        });
+        return html + '</div>';
+      }
+
+      function openPayEditForm(it) {
+        if (!canEditPayments()) {
+          setMsg('編輯待匯款需財務權限（≥4）');
+          return;
+        }
+        $('payEditId').value = it.payment_request_id || '';
+        $('payEditAmount').value = it.amount || '';
+        $('payEditProject').value = it.project_no || '';
+        $('payEditDesc').value = it.item_desc || it.summary || '';
+        $('payEditTxnDate').value = String(it.txn_date || '').slice(0, 10);
+        $('payEditRemitFee').value = String(it.remit_fee_apply || '').trim() === '否' ? '否' : '是';
+        $('payEditNote').value = it.note || '';
+        $('payHistoryEdit').classList.remove('hidden');
+        $('payHistoryEdit').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      function renderPayHistoryItem(it) {
+        var wrap = document.createElement('div');
+        wrap.className = 'pay-history-item';
+        var amt = Number(it.amount || 0).toLocaleString('zh-TW');
+        var meta = (it.txn_date || '') +
+          (it.project_no ? ' · 案號 ' + it.project_no : '') +
+          (it.store ? ' · ' + it.store : '') +
+          ' · $' + amt;
+        var tags = '<span class="' + payTagClass(it.stage) + '">' +
+          (PAY_STAGE_LABEL[it.stage] || it.stage || '—') + '</span>';
+        if (it.reject_reason) {
+          tags += '<div class="sub" style="color:#c5221f;margin-top:4px">' + it.reject_reason + '</div>';
+        }
+        wrap.innerHTML =
+          '<div><strong>' + (it.summary || it.item_desc || '請款') + '</strong></div>' +
+          '<div class="sub">' + meta + '</div>' +
+          '<div style="margin-top:4px">' + tags + '</div>' +
+          renderPayPhotos(it.attachment_urls);
+        var canMutate = canEditPayments() && it.stage === '待匯款' && it.payment_request_id;
+        if (canMutate) {
+          var actions = document.createElement('div');
+          actions.className = 'pay-actions';
+          var editBtn = document.createElement('button');
+          editBtn.type = 'button';
+          editBtn.className = 'btn btn-secondary btn-sm';
+          editBtn.textContent = '編輯';
+          editBtn.addEventListener('click', function () { openPayEditForm(it); });
+          var delBtn = document.createElement('button');
+          delBtn.type = 'button';
+          delBtn.className = 'btn btn-warn btn-sm';
+          delBtn.textContent = '刪除';
+          delBtn.addEventListener('click', function () { deletePayItem(it, delBtn); });
+          actions.appendChild(editBtn);
+          actions.appendChild(delBtn);
+          wrap.appendChild(actions);
+        } else if (it.stage === '請款待審' && it.payment_request_id) {
+          var linkRow = document.createElement('div');
+          linkRow.className = 'pay-actions';
+          var reviewLink = document.createElement('a');
+          reviewLink.className = 'btn btn-secondary btn-sm';
+          reviewLink.href = 'ledger_review.html';
+          reviewLink.target = '_blank';
+          reviewLink.rel = 'noopener';
+          reviewLink.textContent = '前往審核';
+          linkRow.appendChild(reviewLink);
+          wrap.appendChild(linkRow);
+        }
+        return wrap;
+      }
+
+      function renderPayHistory(items) {
+        var box = $('payHistoryList');
+        box.innerHTML = '';
+        payHistoryItems = items || [];
+        if (!payHistoryItems.length) {
+          box.innerHTML = '<p class="pay-empty">目前沒有請款／匯款紀錄</p>';
+          return;
+        }
+        var groups = {};
+        payHistoryItems.forEach(function (it) {
+          var st = it.stage || '收支紀錄';
+          if (!groups[st]) groups[st] = [];
+          groups[st].push(it);
+        });
+        PAY_STAGE_ORDER.forEach(function (stage) {
+          var list = groups[stage];
+          if (!list || !list.length) return;
+          var head = document.createElement('p');
+          head.className = 'section-title';
+          head.style.marginTop = '12px';
+          head.textContent = (PAY_STAGE_LABEL[stage] || stage) + '（' + list.length + '）';
+          box.appendChild(head);
+          list.forEach(function (it) {
+            box.appendChild(renderPayHistoryItem(it));
+          });
+        });
+      }
+
+      async function loadPayHistory(vendorId, force) {
+        if (!vendorId || !session) return;
+        $('payHistoryAddBtn').href = 'payment_request.html?vendor_id=' + encodeURIComponent(vendorId);
+        var box = $('payHistoryList');
+        box.innerHTML = '<p class="pay-empty">載入款項紀錄中…</p>';
+        hidePayEditForm();
+        try {
+          var data = await AccountingApi.vendorPaymentStatus(session, { vendor_id: vendorId });
+          if (!data || !data.success) {
+            box.innerHTML = '<p class="pay-empty">' + ((data && data.message) || '查詢失敗') + '</p>';
+            return;
+          }
+          renderPayHistory(data.items || []);
+        } catch (e) {
+          box.innerHTML = '<p class="pay-empty">' + (e.message || String(e)) + '</p>';
+        }
+      }
+
+      async function deletePayItem(it, btn) {
+        if (!canEditPayments()) {
+          setMsg('刪除需財務權限（≥4）');
+          return;
+        }
+        if (!it || !it.payment_request_id) return;
+        if (!window.confirm('確定刪除這筆待匯款？\n' + (it.summary || '') + ' $' + (it.amount || 0))) return;
+        await AccountingUi.runAsync(btn, { busyLabel: '刪除中…', clear: false }, async function () {
+          var data = await AccountingApi.vendorPaymentDelete(session, it.payment_request_id);
+          if (!data.success) throw new Error(data.message || '刪除失敗');
+          setOk('已刪除待匯款');
+          await loadPayHistory($('editId').value, true);
+        }).catch(function (e) {
+          setMsg(e.message || String(e));
+        });
+      }
+
+      async function savePayEdit(btn) {
+        if (!canEditPayments()) {
+          setMsg('編輯需財務權限（≥4）');
+          return;
+        }
+        var id = $('payEditId').value.trim();
+        if (!id) { setMsg('找不到請款編號'); return; }
+        var amount = parseInt($('payEditAmount').value, 10) || 0;
+        var projectNo = $('payEditProject').value.trim();
+        if (amount <= 0) { setMsg('金額須大於 0'); return; }
+        if (!projectNo) { setMsg('案號不可空白'); return; }
+        await AccountingUi.runAsync(btn, { busyLabel: '儲存中…', clear: false }, async function () {
+          var data = await AccountingApi.vendorPaymentUpdate(session, id, {
+            amount: amount,
+            project_no: projectNo,
+            item_desc: $('payEditDesc').value.trim(),
+            txn_date: $('payEditTxnDate').value.trim(),
+            note: $('payEditNote').value.trim(),
+            remit_fee_apply: $('payEditRemitFee').value
+          });
+          if (!data.success) throw new Error(data.message || '儲存失敗');
+          setOk('已更新待匯款');
+          hidePayEditForm();
+          await loadPayHistory($('editId').value, true);
+        }).catch(function (e) {
+          setMsg(e.message || String(e));
+        });
       }
 
       function hasPendingPhotoUpload() {
@@ -841,6 +1108,7 @@
         if (!opts.keepPhotos) clearPhotos();
         renderBindings(v.vendor_id);
         checkBranchHint();
+        if (v.vendor_id) loadPayHistory(v.vendor_id, !!opts.forcePayHistory);
         var scrollTarget = opts.scrollToBind ? $('bindEditor') : $('formCard');
         if (scrollTarget) scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
@@ -1197,6 +1465,19 @@
         clearForm();
       });
       $('filterBtn').addEventListener('click', renderList);
+      $('payHistoryReloadBtn').addEventListener('click', function () {
+        var vid = $('editId').value.trim();
+        if (!vid) return;
+        AccountingUi.runAsync($('payHistoryReloadBtn'), { busyLabel: '載入中…', clear: false }, function () {
+          return loadPayHistory(vid, true);
+        }).catch(function (e) {
+          setMsg(e.message || String(e));
+        });
+      });
+      $('payEditCancelBtn').addEventListener('click', hidePayEditForm);
+      $('payEditSaveBtn').addEventListener('click', function () {
+        savePayEdit($('payEditSaveBtn'));
+      });
 
       $('cardPhoto').addEventListener('change', function () {
         cardFile = this.files && this.files[0] ? this.files[0] : null;
