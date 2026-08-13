@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>申請綁定專案</title>
+  <meta property="og:title" content="申請綁定專案">
+  <meta name="apple-mobile-web-app-title" content="申請綁定專案">
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
@@ -222,6 +224,7 @@
 
     var deepLink = parsePortalDeepLink();
     staffPreview = !!deepLink.staffPreview;
+    document.title = deepLink.bind ? '申請綁定專案' : '我的案件';
 
     function statusLabel(st) {
       var map = {
