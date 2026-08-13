@@ -1640,9 +1640,9 @@ var AccountingApi = (function () {
      */
     initCustomerPortalSession: async function (opts) {
       opts = opts || {};
-      var policyForPreview = await AccountingApi.loadPolicy();
-      var wantStaffPreview = !!(opts.staffPreview || (policyForPreview && policyForPreview.authBypass));
+      var wantStaffPreview = !!opts.staffPreview;
       if (wantStaffPreview) {
+        var policyForPreview = await AccountingApi.loadPolicy();
         if (policyForPreview && policyForPreview.authBypass) {
           var packStaff = devBypassAuthBody_('margin_customer_finance_portal_auth');
           packStaff.body.staff_preview = true;

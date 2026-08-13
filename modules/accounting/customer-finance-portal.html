@@ -3,20 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>我的案件追加減與收款</title>
+  <title>申請綁定專案</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=53"></script>
+  <script src="../../shared/js/accounting_api.js?v=54"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/customer_finance_ui.js?v=2"></script>
   <!-- 客戶專用 LIFF（與員工會計 policy.liffId 分開）。LINE Developers Endpoint URL：
        https://info.tanxin.space/modules/accounting/customer-finance-portal.html
-       申請綁定：#bind=1（勿用 ?）。尚未綁定時即使沒帶參數也會看到申請畫面。
+       申請綁定：?bind=1。尚未綁定時即使沒帶參數也會看到申請畫面。
        開發測試（略過登入）同樣列出全部案件。 -->
   <script>
     var CUSTOMER_FINANCE_LIFF_ID = '2007974938-d2y1uA1G';
+    (function setCustomerPortalTitle_() {
+      var t = String(window.location.hash || '') + String(window.location.search || '');
+      document.title = /bind=1/.test(t) ? '申請綁定專案' : '我的案件';
+    })();
   </script>
   <style>
     body { max-width: 640px; margin: 0 auto; padding: 16px; font-family: system-ui, sans-serif; }
@@ -497,6 +501,7 @@
     }
 
     function showBindView(hasProjects) {
+      document.title = hasProjects ? '綁定其他專案' : '申請綁定專案';
       $('bindView').classList.remove('hidden');
       $('portalView').classList.add('hidden');
       $('bindFormCard').classList.remove('hidden');
@@ -508,6 +513,7 @@
     }
 
     function showPortalView() {
+      document.title = '我的案件';
       $('bindView').classList.add('hidden');
       $('portalView').classList.remove('hidden');
       showMainMenu();
@@ -663,6 +669,14 @@
     };
 
     (async function boot() {
+      var bindIntent = !!deepLink.bind;
+      if (bindIntent && !staffPreview) {
+        $('loading').classList.add('hidden');
+        $('app').classList.remove('hidden');
+        showBindView(false);
+        $('btnBindSubmit').disabled = true;
+        $('bindStatus').textContent = '請稍候，正在確認您的 LINE…';
+      }
       try {
         session = await AccountingApi.initCustomerPortalSession({
           liffId: staffPreview ? undefined : CUSTOMER_FINANCE_LIFF_ID,
@@ -683,12 +697,27 @@
         }
         $('loading').classList.add('hidden');
         $('app').classList.remove('hidden');
-        var openBind = !staffPreview && (deepLink.bind || !projects.length);
-        if (openBind) showBindView(projects.length > 0);
-        else showPortalView();
+        var openBind = !staffPreview && (bindIntent || !projects.length);
+        if (openBind) {
+          showBindView(projects.length > 0);
+          $('btnBindSubmit').disabled = false;
+          $('bindStatus').textContent = '請填合約上的案號、地址，再填業主姓名或手機末四碼（擇一）。對上就會立刻綁定。';
+        } else {
+          showPortalView();
+        }
         if (!openBind && $('projectSelect').value) loadData();
       } catch (e) {
-        $('loading').textContent = e.message || '載入失敗';
+        $('loading').classList.add('hidden');
+        $('app').classList.remove('hidden');
+        if (bindIntent) {
+          showBindView(false);
+          $('btnBindSubmit').disabled = true;
+          showBindMsg(e.message || '載入失敗，請關閉後再從官方 LINE 打開', 'err');
+        } else {
+          $('loading').classList.remove('hidden');
+          $('app').classList.add('hidden');
+          $('loading').textContent = e.message || '載入失敗';
+        }
       }
     })();
   })();
