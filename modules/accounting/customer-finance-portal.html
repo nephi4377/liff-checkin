@@ -7,13 +7,13 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=52"></script>
+  <script src="../../shared/js/accounting_api.js?v=53"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/customer_finance_ui.js?v=2"></script>
   <!-- 客戶專用 LIFF（與員工會計 policy.liffId 分開）。LINE Developers Endpoint URL：
        https://info.tanxin.space/modules/accounting/customer-finance-portal.html
-       員工預覽全部案子：#staff_preview=1（勿用 ?，LINE 回跳網址不能帶參數；可加 project_no=案號）
+       申請綁定：#bind=1（勿用 ?）。尚未綁定時即使沒帶參數也會看到申請畫面。
        開發測試（略過登入）同樣列出全部案件。 -->
   <script>
     var CUSTOMER_FINANCE_LIFF_ID = '2007974938-d2y1uA1G';
@@ -59,12 +59,52 @@
       position: absolute; top: 12px; right: 12px; background: #fff; border: none;
       border-radius: 8px; padding: 10px 14px; font-size: 14px; font-weight: 600; min-height: 44px; cursor: pointer;
     }
+    .bind-field { display: block; font-size: 15px; font-weight: 600; margin: 14px 0 6px; }
+    .bind-field input {
+      display: block; width: 100%; box-sizing: border-box; margin-top: 6px;
+      padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; min-height: 44px;
+    }
+    .bind-field input:focus { outline: none; border-color: #06c755; box-shadow: 0 0 0 3px rgba(6,199,85,.2); }
+    #bindMsg { min-height: 1.4em; margin-top: 10px; font-size: 14px; line-height: 1.5; }
+    #bindMsg.ok { color: #137333; }
+    #bindMsg.err { color: #c5221f; }
+    #bindStatus { font-size: 13px; color: #555; margin: 0 0 12px; line-height: 1.5; }
   </style>
 </head>
 <body>
-  <div id="loading">載入中…</div>
+  <div id="loading">正在打開…<br><span class="sub">請稍候，正在確認您的 LINE</span></div>
   <div id="app" class="hidden">
     <div id="previewBanner" class="preview-banner hidden">員工預覽模式（唯讀）：可切換全部案號，畫面與客戶相同，但無法代為確認或簽名。</div>
+
+    <div id="bindView" class="hidden">
+      <h2 id="bindTitle">申請綁定專案</h2>
+      <p class="sub" id="bindStatus">請填合約上的案號、地址，再填業主姓名或手機末四碼（擇一）。對上就會立刻綁定。</p>
+      <div id="bindFormCard" class="card">
+        <label class="bind-field">案號
+          <input id="bindProjectNo" type="text" inputmode="numeric" autocomplete="off" placeholder="例如 725">
+        </label>
+        <label class="bind-field">施工地址
+          <input id="bindAddress" type="text" autocomplete="street-address" placeholder="路名與門牌即可，例如 中華東路一段88號">
+        </label>
+        <label class="bind-field">業主姓名
+          <input id="bindOwnerName" type="text" autocomplete="name" placeholder="合約上的屋主姓名">
+        </label>
+        <label class="bind-field">手機末四碼
+          <input id="bindLast4" type="tel" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="例如 5678">
+        </label>
+        <p class="sub" style="margin-top:12px">姓名或末四碼填一項即可。對不上時請設計師在內部協助綁定。</p>
+        <p id="bindMsg" role="status"></p>
+        <button type="button" class="btn btn-primary" id="btnBindSubmit">送出綁定</button>
+        <button type="button" class="btn btn-secondary hidden" id="btnBindBack">回我的案件</button>
+      </div>
+      <div id="bindDoneCard" class="card hidden">
+        <h3 style="margin:0 0 8px">綁定完成</h3>
+        <p id="bindDoneText" class="sub">這一戶已經連上您的 LINE。請關掉本頁回到聊天室，下方選單會換成會員功能（收款確認、我的案場）。</p>
+        <button type="button" class="btn btn-primary" id="btnBindEnter">進入我的案件</button>
+      </div>
+    </div>
+
+    <div id="portalView">
     <h2>我的案件紀錄</h2>
     <p class="sub" id="userLine">—</p>
     <div id="msg"></div>
@@ -85,6 +125,11 @@
         <div style="font-size:32px;margin-bottom:8px;">🎨</div>
         <h3 style="margin:0;font-size:18px;">選材</h3>
         <p style="color:#555;font-size:13px;margin:6px 0 0;">唯讀查看選材照片（以案件 Dropbox 為主顯示）。舊檔掃描進來的可能標「未分類」，內容仍以照片為準。</p>
+      </div>
+      <div class="card menu-card" id="cardBind" style="cursor:pointer;text-align:center;padding:24px 14px;">
+        <div style="font-size:32px;margin-bottom:8px;">🔗</div>
+        <h3 style="margin:0;font-size:18px;">綁定其他專案</h3>
+        <p style="color:#555;font-size:13px;margin:6px 0 0;">再連一戶案號</p>
       </div>
     </div>
 
@@ -123,6 +168,7 @@
       <button class="btn btn-primary" id="btnSubmitSign">提交簽名</button>
       <button class="btn btn-secondary" id="btnCancelSign">取消</button>
     </div>
+    </div>
   </div>
   <script>
   (function () {
@@ -146,7 +192,9 @@
       var entityId = params.get('id') || hashParams.get('id') || '';
       var previewRaw = params.get('staff_preview') || params.get('preview') ||
         hashParams.get('staff_preview') || hashParams.get('preview') || '';
+      var bindRaw = params.get('bind') || hashParams.get('bind') || '';
       var isStaffPreview = previewRaw === '1' || previewRaw === 'true' || previewRaw === 'yes';
+      var wantBind = bindRaw === '1' || bindRaw === 'true' || bindRaw === 'yes';
       var liffState = params.get('liff.state');
       if (liffState) {
         var inner = liffState.charAt(0) === '?' ? liffState.slice(1) : liffState;
@@ -159,9 +207,13 @@
             var p2 = innerParams.get('staff_preview') || innerParams.get('preview') || '';
             isStaffPreview = p2 === '1' || p2 === 'true' || p2 === 'yes';
           }
+          if (!wantBind) {
+            var b2 = innerParams.get('bind') || '';
+            wantBind = b2 === '1' || b2 === 'true' || b2 === 'yes';
+          }
         } catch (e) {}
       }
-      return { projectNo: projectNo, entity: entity, entityId: entityId, staffPreview: isStaffPreview };
+      return { projectNo: projectNo, entity: entity, entityId: entityId, staffPreview: isStaffPreview, bind: wantBind };
     }
 
     var deepLink = parsePortalDeepLink();
@@ -434,8 +486,77 @@
       $('materialView').classList.remove('hidden');
       loadMaterials();
     };
+    $('cardBind').onclick = function () { showBindView(true); };
     $('btnBackFromRec').onclick = showMainMenu;
     $('btnBackFromMat').onclick = showMainMenu;
+
+    function showBindMsg(text, kind) {
+      var el = $('bindMsg');
+      el.textContent = text || '';
+      el.className = kind ? kind : '';
+    }
+
+    function showBindView(hasProjects) {
+      $('bindView').classList.remove('hidden');
+      $('portalView').classList.add('hidden');
+      $('bindFormCard').classList.remove('hidden');
+      $('bindDoneCard').classList.add('hidden');
+      showBindMsg('');
+      $('bindTitle').textContent = hasProjects ? '綁定其他專案' : '申請綁定專案';
+      if (hasProjects) $('btnBindBack').classList.remove('hidden');
+      else $('btnBindBack').classList.add('hidden');
+    }
+
+    function showPortalView() {
+      $('bindView').classList.add('hidden');
+      $('portalView').classList.remove('hidden');
+      showMainMenu();
+    }
+
+    $('btnBindBack').onclick = showPortalView;
+    $('btnBindEnter').onclick = showPortalView;
+
+    $('btnBindSubmit').onclick = function () {
+      if (staffPreview) {
+        showBindMsg('員工預覽不能代客人綁定。請客人用自己的 LINE 打開。', 'err');
+        return;
+      }
+      var projectNo = $('bindProjectNo').value.trim();
+      var address = $('bindAddress').value.trim();
+      var ownerName = $('bindOwnerName').value.trim();
+      var last4 = $('bindLast4').value.trim();
+      if (!projectNo) { showBindMsg('請填寫案號', 'err'); return; }
+      if (!address) { showBindMsg('請填寫施工地址（路名與門牌即可）', 'err'); return; }
+      if (!ownerName && !last4) { showBindMsg('請填寫業主姓名或手機末四碼，其中一項即可', 'err'); return; }
+      CustomerFinanceUi.runBtnAsync($('btnBindSubmit'), async function () {
+        showBindMsg('處理中，請稍候…', '');
+        var res = await AccountingApi.cfPortalSelfBind(session, {
+          project_no: projectNo,
+          address: address,
+          owner_name: ownerName,
+          phone_last4: last4
+        });
+        if (!res || !res.success) {
+          showBindMsg((res && res.message) || '綁定未完成，請稍後再試', 'err');
+          return;
+        }
+        var portal = await AccountingApi.cfPortalAuth(session);
+        if (portal && portal.success) {
+          session.portal = portal;
+          fillProjects(portal.projects || []);
+          if (res.project_no) $('projectSelect').value = res.project_no;
+        }
+        $('bindFormCard').classList.add('hidden');
+        $('bindDoneCard').classList.remove('hidden');
+        var extra = res.already_bound ? '這一戶本來就已綁定。' : '這一戶已經連上您的 LINE。';
+        $('bindDoneText').textContent = extra +
+          '請關掉本頁回到聊天室，下方選單會換成會員功能（收款確認、我的案場）。若還沒換，請把 LINE 完全關掉再開一次。';
+        if ($('btnBindEnter')) {
+          var hasNow = (session.portal && session.portal.projects && session.portal.projects.length);
+          $('btnBindEnter').classList.toggle('hidden', !hasNow);
+        }
+      }, { busyLabel: '處理中…', lockRoot: $('bindFormCard') });
+    };
 
     function splitLabels(raw) {
       return String(raw || '').split(/[、,;｜|]/).map(function (s) { return s.trim(); }).filter(Boolean);
@@ -552,13 +673,20 @@
           $('previewBanner').classList.remove('hidden');
         }
         $('userLine').textContent = (session.portal && session.portal.display_name) || '客戶';
-        fillProjects((session.portal && session.portal.projects) || []);
+        var projects = (session.portal && session.portal.projects) || [];
+        fillProjects(projects);
         if (deepLink.projectNo) {
           $('projectSelect').value = deepLink.projectNo;
         }
+        if (staffPreview) {
+          $('cardBind').classList.add('hidden');
+        }
         $('loading').classList.add('hidden');
         $('app').classList.remove('hidden');
-        if ($('projectSelect').value) loadData();
+        var openBind = !staffPreview && (deepLink.bind || !projects.length);
+        if (openBind) showBindView(projects.length > 0);
+        else showPortalView();
+        if (!openBind && $('projectSelect').value) loadData();
       } catch (e) {
         $('loading').textContent = e.message || '載入失敗';
       }

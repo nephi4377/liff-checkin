@@ -1463,6 +1463,14 @@ var AccountingApi = (function () {
     cfPortalBind: function (sessionOrToken, payload) {
       return post(Object.assign({ action: 'client_portal_bind', auth: resolveAuth(sessionOrToken) }, payload || {}));
     },
+    cfPortalSelfBind: function (sessionOrToken, payload) {
+      var body = Object.assign({ action: 'client_portal_self_bind', auth: resolveAuth(sessionOrToken) }, payload || {});
+      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
+        body.dev_bypass = true;
+        if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
+      }
+      return post(body);
+    },
     cfPortalRevoke: function (sessionOrToken, bindingId) {
       return post({ action: 'client_portal_revoke', auth: resolveAuth(sessionOrToken), binding_id: bindingId });
     },

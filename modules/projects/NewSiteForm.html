@@ -115,6 +115,17 @@
       </div>
 
       <div class="form-group">
+        <label for="ownerName">業主姓名</label>
+        <input type="text" class="form-control" id="ownerName" name="ownerName"
+          placeholder="合約上的屋主姓名（選填；不出現在進場資訊／LINE）">
+      </div>
+      <div class="form-group">
+        <label for="ownerPhone">業主手機</label>
+        <input type="tel" class="form-control" id="ownerPhone" name="ownerPhone"
+          placeholder="09xxxxxxxx（選填，請保留開頭 0；不出現在進場資訊／LINE）" inputmode="tel" autocomplete="tel">
+      </div>
+
+      <div class="form-group">
         <label for="projectCode">案號 (必填)</label>
         <input type="text" class="form-control" id="projectCode" name="projectCode" required>
       </div>
@@ -469,6 +480,8 @@ ${notes || '無'}`;
             'siteName': 'siteName', 
             'siteAddress': 'address', 
             'projectCode': '案號',
+            'ownerName': '業主姓名',
+            'ownerPhone': '業主手機',
             'responsiblePerson': '專案負責人',
             'designer': '設計師',
             'assistant': '助理',
@@ -556,6 +569,8 @@ ${notes || '無'}`;
           siteAddress: this.siteAddress.value, // 對齊後端必填驗證
           address: this.siteAddress.value,
           '案號': this.projectCode.value,
+          '業主姓名': this.ownerName.value.trim(),
+          '業主手機': this.ownerPhone.value.trim(),
           '專案負責人': this.responsiblePerson.value,
           '設計師': this.designer.value,
           '助理': this.assistant.value,

@@ -432,6 +432,10 @@ export function displayProjectInfo(overview, schedule) {
     const addrRaw = getAddress();
     const addrMaps = `https://www.google.com/maps?q=${encodeURIComponent(addrRaw === '未提供' ? '' : addrRaw)}`;
     const addrNav = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addrRaw === '未提供' ? '' : addrRaw)}`;
+    const ownerPhoneRaw = String(overview['業主手機'] || '').trim();
+    const ownerPhoneHtml = ownerPhoneRaw
+      ? `<a href="tel:${esc(ownerPhoneRaw)}">${esc(ownerPhoneRaw)}</a>`
+      : esc(get('業主手機'));
 
     // 經典直列：專案基本資料 → 案名／地址 → 團隊／現場／備註／工班／結案（手機於右欄內捲動閱讀；範本改至「工程排程」）
     panel.innerHTML = `
@@ -442,6 +446,8 @@ export function displayProjectInfo(overview, schedule) {
           <strong>案場地址</strong>　<a href="${addrMaps}" target="_blank" rel="noopener noreferrer">${esc(addrRaw)}</a>
           <a class="project-info-nav-inline" href="${addrNav}" target="_blank" rel="noopener noreferrer">開啟導航</a>
         </p>
+        <p class="project-info-line"><strong>業主姓名</strong>　${esc(get('業主姓名'))}</p>
+        <p class="project-info-line"><strong>業主手機</strong>　${ownerPhoneHtml}</p>
         <button type="button" id="copy-project-info-btn" class="btn btn-info btn-copy-site-info w-full"
           aria-label="複製案場資訊全文到剪貼簿，可貼到 LINE 或其他 App">📋 複製案場資訊</button>
       </div>
