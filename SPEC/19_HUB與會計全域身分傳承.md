@@ -1,6 +1,6 @@
 # HUB 與會計 — 全域身分與應傳承資料
 
-**版本**：v1.8（2026-08-13）  
+**版本**：v1.9（2026-08-13）  
 **關聯**：[`15_會計系統模組規格書.md`](15_會計系統模組規格書.md)、[`18_會計與主檔快取策略.md`](18_會計與主檔快取策略.md)、[`08_專案主控台核心功能與通訊協定規格書.md`](08_專案主控台核心功能與通訊協定規格書.md)、backend `accounting-gas/SPEC/LINE_OA_SPEC.md`、`accounting-gas/SPEC/VENDOR_LINE_BINDING_SPEC.md`
 
 ---
@@ -55,6 +55,10 @@
 4. 要再開：執行 `setAccountingErrorReportOnce(true)`。
 
 對照後端：`accounting-gas/SPEC/LINE_OA_SPEC.md` §5.1。
+
+### 選材（project-console）從主控台進
+
+選材 API 不走會計 GAS。從主控台進時**一定要帶員工編號**（網址 `uid`／本分頁記住的人），可同時寫在請求本體與 `auth`；後端認 `user_id`／`uid`／`userId`。有通行證才走 LINE 驗證。編號沒送到＝畫面「缺少身分」。
 
 ---
 
@@ -255,6 +259,7 @@
 | 統一 `tanxin_operator_v1` | ✅ `operator_context.js` |
 | **全站參考主檔 `HubRefCache`（`tanxin_ref_v1:*`）** | ✅ `hub_ref_cache.js`；HUB 寫入、iframe 只讀 |
 | 會計讀 operator；從主控台進**不借通行證** | ✅ `accounting_api.js` v49（本分頁 `user_id`；後端查員工表） |
+| 選材從主控台進：請求必帶員工編號（網址／本分頁） | ✅ `accounting_api.js` v53；project-console 認 `user_id`／`uid`／`userId` |
 | 會計導覽保留 query | ✅ `accounting_nav.js` `hubQueryString()` |
 | 會計全頁 bootstrap 收斂 | ✅ `accounting_boot.js` + `modules/accounting/*.html` |
 | bypass 時用 `dev_user_id` 查 Checkin 真實權限 | ✅ `AuthBridge.getDevBypassAuth_` |
@@ -332,6 +337,7 @@
 
 | 日期 | 變更 |
 |------|------|
+| 2026-08-13 | v1.9：選材請求必帶員工編號；後端認 `uid`／`userId` |
 | 2026-07-12 | v1.5.1：GAS Tier1 `warmHotMasterCaches_`（CheckinSystem 員工；project-console 案場／顧客／員工）；前端 HubRefCache |
 | 2026-07-12 | v1.5：§2.2 參考主檔收斂 `HubRefCache`（`tanxin_ref_v1:*`）；§9 模組規格；§7 對照表；顧客名冊全站共用 |
 | 2026-07-01 | v1.4：`get_hub_core_data` 待審紅點含 `pendingAppeals`；假勤審核／申訴 UX |

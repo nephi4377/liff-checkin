@@ -423,7 +423,7 @@ var AccountingApi = (function () {
       return a;
     }
     if (isHubStaffSession_(session)) {
-      var uid = (session.auth && session.auth.user_id) || (session.profile && session.profile.userId) || '';
+      var uid = (session.auth && session.auth.user_id) || (session.profile && session.profile.userId) || pickStaffUserId_(session);
       return uid ? { user_id: uid } : {};
     }
     return { liff_id_token: session.idToken || '' };
@@ -436,7 +436,27 @@ var AccountingApi = (function () {
     return buildAuth(sessionOrToken);
   }
 
-  /** 選材設計師 API：dev_bypass／liff_id_token 同時寫在 body 頂層（對齊 project-console MaterialPortalAccess） */
+  function pickStaffUserId_(sessionOrToken) {
+    if (sessionOrToken && typeof sessionOrToken === 'object') {
+      var a = sessionOrToken.auth || {};
+      var p = sessionOrToken.profile || {};
+      var fromSess = a.user_id || a.userId || p.userId || p.user_id || sessionOrToken.devUserId || '';
+      if (fromSess) return String(fromSess).trim();
+    }
+    primeHubIdentityFromUrl_();
+    if (typeof OperatorContext !== 'undefined') {
+      var op = OperatorContext.read();
+      if (op && op.userId) return String(op.userId).trim();
+    }
+    try {
+      var q = new URLSearchParams(window.location.search);
+      return String(q.get('uid') || q.get('dev_user_id') || q.get('dev_user') || '').trim();
+    } catch (eUid) {
+      return '';
+    }
+  }
+
+  /** 選材設計師 API：dev_bypass／通行證／員工編號同時寫在 body 頂層（對齊 project-console） */
   function buildMaterialPostBody_(sessionOrToken, body) {
     var out = Object.assign({}, body || {}, { auth: resolveAuth(sessionOrToken) });
     var auth = out.auth || {};
@@ -448,8 +468,12 @@ var AccountingApi = (function () {
     if (auth.liff_id_token) {
       out.liff_id_token = auth.liff_id_token;
     }
-    if (auth.user_id) {
-      out.user_id = auth.user_id;
+    var uid = auth.user_id || pickStaffUserId_(sessionOrToken);
+    if (uid) {
+      out.user_id = uid;
+      out.uid = uid;
+      if (!out.auth) out.auth = {};
+      out.auth.user_id = uid;
     }
     return out;
   }
