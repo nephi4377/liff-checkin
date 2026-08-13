@@ -102,7 +102,7 @@ var OperatorContext = (function () {
       displayName: auth.display_name || profile.displayName || '',
       permission: Math.max(authPerm, hubPerm),
       hubLiffId: prev ? (prev.hubLiffId || '') : '',
-      source: session.devBypass ? 'dev_bypass' : 'liff'
+      source: session.fromHub ? 'hub_iframe' : (session.devBypass ? 'dev_bypass' : 'liff')
     });
   }
 

@@ -1,5 +1,5 @@
 /**
- * 會計系統共用快取 — bootstrap 進 sessionStorage；CRUD 成功 patch 快取（安全時）
+ * 會計系統共用快取 — bootstrap 進 sessionStorage＋localStorage（子頁 iframe 才能看到外框已載的名冊）
  * TTL 3 天；SWR 24 小時（有快取先顯示，背景再打 accounting_bootstrap）
  */
 var AccountingCache = (function () {
@@ -36,6 +36,19 @@ var AccountingCache = (function () {
     vendor_line_binding: 'binding_id'
   };
 
+  try {
+    window.addEventListener('storage', function (e) {
+      if (!e || !e.key || e.key.indexOf(STORAGE_KEY + ':') !== 0) return;
+      if (!e.newValue) return;
+      try {
+        var parsed = JSON.parse(e.newValue);
+        if (!isFresh(parsed)) return;
+        _mem[e.key] = parsed;
+        notifyBootstrapUpdated_({ auth: { user_id: e.key.slice((STORAGE_KEY + ':').length) } });
+      } catch (err) {}
+    });
+  } catch (eListen) {}
+
   function ttlMs() {
     return (typeof AccountingMasterData !== 'undefined' && AccountingMasterData.TTL_MS) || 300000;
   }
@@ -60,19 +73,25 @@ var AccountingCache = (function () {
     return wrapped && wrapped.data && (Date.now() - wrapped.ts <= ttlMs());
   }
 
-  function readWrapped(session) {
-    var key = storageKey(session);
-    if (_mem[key] && isFresh(_mem[key])) return _mem[key];
+  function readStore_(storage, key) {
     try {
-      var raw = sessionStorage.getItem(key);
+      var raw = storage.getItem(key);
       if (!raw) return null;
       var parsed = JSON.parse(raw);
       if (!isFresh(parsed)) return null;
-      _mem[key] = parsed;
       return parsed;
     } catch (e) {
       return null;
     }
+  }
+
+  function readWrapped(session) {
+    var key = storageKey(session);
+    if (_mem[key] && isFresh(_mem[key])) return _mem[key];
+    var parsed = readStore_(sessionStorage, key) || readStore_(localStorage, key);
+    if (!parsed) return null;
+    _mem[key] = parsed;
+    return parsed;
   }
 
   function read(session) {
@@ -83,12 +102,10 @@ var AccountingCache = (function () {
   function write(session, data) {
     var key = storageKey(session);
     var wrapped = { ts: Date.now(), data: data };
+    var raw = JSON.stringify(wrapped);
     _mem[key] = wrapped;
-    try {
-      sessionStorage.setItem(key, JSON.stringify(wrapped));
-    } catch (e) {
-      /* sessionStorage 滿了仍保留本分頁記憶體快取 */
-    }
+    try { sessionStorage.setItem(key, raw); } catch (e) {}
+    try { localStorage.setItem(key, raw); } catch (e2) {}
   }
 
   function mergeEnums(data) {
@@ -108,19 +125,31 @@ var AccountingCache = (function () {
     return INFLIGHT_STORAGE_PREFIX + storageKey(session);
   }
 
+  function readInflightTs_(key) {
+    var raw = '';
+    try { raw = localStorage.getItem(key) || ''; } catch (eL) {}
+    if (!raw) {
+      try { raw = sessionStorage.getItem(key) || ''; } catch (eS) {}
+    }
+    return raw;
+  }
+
   function markBootstrapInflight_(session) {
-    try {
-      sessionStorage.setItem(inflightStorageKey_(session), String(Date.now()));
-    } catch (e) {}
+    var key = inflightStorageKey_(session);
+    var ts = String(Date.now());
+    try { localStorage.setItem(key, ts); } catch (e1) {}
+    try { sessionStorage.setItem(key, ts); } catch (e2) {}
   }
 
   function clearBootstrapInflight_(session) {
-    try { sessionStorage.removeItem(inflightStorageKey_(session)); } catch (e) {}
+    var key = inflightStorageKey_(session);
+    try { localStorage.removeItem(key); } catch (e1) {}
+    try { sessionStorage.removeItem(key); } catch (e2) {}
   }
 
   function isBootstrapInflight_(session) {
     try {
-      var raw = sessionStorage.getItem(inflightStorageKey_(session));
+      var raw = readInflightTs_(inflightStorageKey_(session));
       if (!raw) return false;
       return Date.now() - parseInt(raw, 10) < BOOTSTRAP_TIMEOUT_MS + 15000;
     } catch (e) {
@@ -128,23 +157,65 @@ var AccountingCache = (function () {
     }
   }
 
-  function waitForBootstrap_(session, maxMs) {
+  function broadcastBootstrapReady_(session) {
+    notifyBootstrapUpdated_(session);
+    var uid = session && session.auth && session.auth.user_id;
+    var msg = { type: 'acct_bootstrap_ready', userId: uid || '' };
+    try {
+      if (window.parent && window.parent !== window) window.parent.postMessage(msg, '*');
+    } catch (eP) {}
+    try {
+      var frame = document.getElementById('acctContentFrame');
+      if (frame && frame.contentWindow) frame.contentWindow.postMessage(msg, '*');
+    } catch (eF) {}
+  }
+
+  /** 先看快取；沒有就等外框那一次載完（含外框尚未開始的寬限） */
+  function waitForReady_(session, maxMs) {
+    maxMs = maxMs || 60000;
+    var graceMs = (window.parent && window.parent !== window) ? 4000 : 0;
     var started = Date.now();
     return new Promise(function (resolve, reject) {
-      function tick() {
+      var timer = null;
+      function cleanup() {
+        window.removeEventListener('accounting-bootstrap-updated', onPing);
+        window.removeEventListener('message', onMsg);
+        window.removeEventListener('storage', onStorage);
+        if (timer) clearInterval(timer);
+      }
+      function succeed(data) {
+        cleanup();
+        resolve(mergeEnums(data));
+      }
+      function check() {
         var wrapped = readWrapped(session);
-        if (wrapped) return resolve(mergeEnums(wrapped.data));
-        if (!isBootstrapInflight_(session) && ! _inflight[storageKey(session)]) {
-          return reject(new Error('主檔載入未完成'));
-        }
-        if (Date.now() - started > maxMs) {
+        if (wrapped && wrapped.data) return succeed(wrapped.data);
+        var elapsed = Date.now() - started;
+        var busy = isBootstrapInflight_(session) || !!_inflight[storageKey(session)];
+        if (elapsed > maxMs) {
+          cleanup();
           return reject(new Error('主檔載入逾時（' + Math.round(maxMs / 1000) + ' 秒）'));
         }
-        setTimeout(tick, 250);
+        if (busy || elapsed < graceMs) return;
+        cleanup();
+        reject(new Error('主檔尚未開始載入'));
       }
-      tick();
+      function onPing() { check(); }
+      function onMsg(e) {
+        if (e && e.data && e.data.type === 'acct_bootstrap_ready') check();
+      }
+      function onStorage(e) {
+        if (!e || !e.key) return;
+        if (e.key.indexOf(STORAGE_KEY) === 0 || e.key.indexOf(INFLIGHT_STORAGE_PREFIX) === 0) check();
+      }
+      window.addEventListener('accounting-bootstrap-updated', onPing);
+      window.addEventListener('message', onMsg);
+      window.addEventListener('storage', onStorage);
+      timer = setInterval(check, 250);
+      check();
     });
   }
+
   function notifyBootstrapUpdated_(session) {
     try {
       window.dispatchEvent(new CustomEvent('accounting-bootstrap-updated', {
@@ -177,6 +248,7 @@ var AccountingCache = (function () {
     if (!res.success || !res.bootstrap) throw new Error(res.message || '載入主檔失敗');
     if (res.gas_cached) traceUi('主檔', '後端快取命中');
     write(session, res.bootstrap);
+    broadcastBootstrapReady_(session);
     var vendorCount = ((res.bootstrap.masters && res.bootstrap.masters.vendors) || []).length;
     traceUi('主檔', '已寫入快取 · 廠商 ' + vendorCount + ' 筆');
     return mergeEnums(res.bootstrap);
@@ -200,6 +272,7 @@ var AccountingCache = (function () {
     delete _mem[key];
     delete _swrInflight[key];
     try { sessionStorage.removeItem(key); } catch (e) {}
+    try { localStorage.removeItem(key); } catch (e2) {}
   }
 
   function upsertMasterRow_(masters, masterKey, idField, row) {
@@ -252,18 +325,22 @@ var AccountingCache = (function () {
     clear(session);
   }
 
-  function peekBootstrapRaw() {
+  function peekFromStorage_(storage) {
     try {
       var prefix = STORAGE_KEY + ':';
-      for (var i = 0; i < sessionStorage.length; i++) {
-        var key = sessionStorage.key(i);
+      for (var i = 0; i < storage.length; i++) {
+        var key = storage.key(i);
         if (!key || key.indexOf(prefix) !== 0) continue;
-        var parsed = JSON.parse(sessionStorage.getItem(key));
+        var parsed = JSON.parse(storage.getItem(key));
         if (!isFresh(parsed)) continue;
         return parsed.data;
       }
     } catch (e) {}
     return null;
+  }
+
+  function peekBootstrapRaw() {
+    return peekFromStorage_(sessionStorage) || peekFromStorage_(localStorage);
   }
 
   function mastersFromPeek(entity) {
@@ -314,9 +391,15 @@ var AccountingCache = (function () {
       }
       var key = storageKey(session);
       if (_inflight[key]) return _inflight[key];
-      if (!force && isBootstrapInflight_(session)) {
-        traceUi('主檔', '等待外框載入中（不重複請求）…');
-        return waitForBootstrap_(session, BOOTSTRAP_TIMEOUT_MS + 15000);
+      if (!force) {
+        traceUi('主檔', '等待外框載入…');
+        try {
+          return await waitForReady_(session, 60000);
+        } catch (waitErr) {
+          var afterWait = readWrapped(session);
+          if (afterWait) return mergeEnums(afterWait.data);
+          traceUi('主檔', '外框未完成，本頁接著載');
+        }
       }
 
       markBootstrapInflight_(session);

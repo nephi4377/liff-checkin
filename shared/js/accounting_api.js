@@ -23,7 +23,18 @@ var AccountingApi = (function () {
   var CUSTOMER_FINANCE_DENIED_MSG = '權限不足（追加減與收款需權限 ≥ 2）';
   var SUPERVISOR_DENIED_MSG = '權限不足（需主管，權限 ≥ 3）';
   var VENDOR_PAYMENT_APPROVE_DENIED_MSG = '權限不足（廠商請款審核需權限 ≥ 5）';
-  var HUB_RELOGIN_MSG = '登入已過期，請關閉後重新從 LINE 開啟主控台';
+  var HUB_RELOGIN_MSG = '請從主控台重新開啟會計';
+  function logApiFailure_(actionName, err, notify) {
+    if (actionName === 'accounting_error_report' || actionName === 'accounting_client_log') return;
+    if (typeof AccountingUi === 'undefined' || !AccountingUi.reportFailure) return;
+    try {
+      AccountingUi.reportFailure({
+        action: actionName,
+        message: (err && err.message) || String(err || 'API 失敗'),
+        notify: !!notify
+      });
+    } catch (eRep) {}
+  }
   /** IdToken 距過期少於此秒數視為不可用（略早於 LINE 約 1 小時效期） */
   var LIFF_TOKEN_SKEW_SEC = 60;
 
@@ -85,7 +96,7 @@ var AccountingApi = (function () {
 
   async function postToUrl_(apiUrl, body, timeoutMs, apiLabel) {
     var actionName = (body && body.action) || 'api';
-    var trackUi = actionName !== 'accounting_client_log';
+    var trackUi = actionName !== 'accounting_client_log' && actionName !== 'accounting_error_report';
     var t0 = Date.now();
     if (trackUi && typeof AccountingUi !== 'undefined' && AccountingUi.apiStart) {
       AccountingUi.apiStart(actionName);
@@ -102,12 +113,19 @@ var AccountingApi = (function () {
       timer = setTimeout(function () { ctrl.abort(); }, timeoutMs);
     }
     try {
-      var res = await fetch(apiUrl, opts);
-      var text = await res.text();
-      if (shouldRetryGasHtml_(res, text)) {
-        await new Promise(function (r) { setTimeout(r, 2000); });
+      var res = null;
+      var text = '';
+      var attempt = 0;
+      var maxAttempts = 3;
+      while (attempt < maxAttempts) {
+        attempt += 1;
         res = await fetch(apiUrl, opts);
         text = await res.text();
+        if (attempt < maxAttempts && shouldRetryGasHtml_(res, text)) {
+          await new Promise(function (r) { setTimeout(r, 2000 * attempt); });
+          continue;
+        }
+        break;
       }
       var parsed = parseJsonResponse_(res, text);
       if (trackUi && typeof AccountingUi !== 'undefined' && AccountingUi.apiEnd) {
@@ -115,11 +133,15 @@ var AccountingApi = (function () {
         if (parsed && parsed.gas_cached) extra = (extra ? extra + ' · ' : '') + (apiLabel || 'GAS') + ' 快取';
         AccountingUi.apiEnd(actionName, Date.now() - t0, !!(parsed && parsed.success !== false), extra);
       }
+      if (parsed && parsed.success === false) {
+        logApiFailure_(actionName, { message: parsed.message || '失敗' }, false);
+      }
       return parsed;
     } catch (e) {
       if (trackUi && typeof AccountingUi !== 'undefined' && AccountingUi.apiEnd) {
         AccountingUi.apiEnd(actionName, Date.now() - t0, false, e.message || String(e));
       }
+      logApiFailure_(actionName, e, false);
       throw e;
     } finally {
       if (timer) clearTimeout(timer);
@@ -133,6 +155,22 @@ var AccountingApi = (function () {
   /** 選材專用 — 打 project-console，不再經 accounting-gas */
   async function postMaterial(body, timeoutMs) {
     return postToUrl_(PROJECT_CONSOLE_API, body, timeoutMs, '主控台');
+  }
+
+  async function initStaffSessionCore_(opts) {
+    opts = opts || {};
+    var hubOp = readHubOperator_();
+    if (hubOp) {
+      var action = opts.authAction || 'accounting_auth_me';
+      var auth = await post({
+        action: action,
+        user_id: hubOp.userId,
+        auth: { user_id: hubOp.userId }
+      });
+      if (!auth.success) throw new Error(auth.message || '驗證失敗');
+      return buildHubSession_(auth);
+    }
+    return AccountingApi.initLiff(opts);
   }
 
   function readDevBypassQuery_() {
@@ -285,6 +323,9 @@ var AccountingApi = (function () {
       if (sessionOrToken.devBypass) {
         return SESSION_AUTH_PREFIX + 'dev:' + (sessionOrToken.devUserId || '') + ':' + (sessionOrToken.devPermission || 0);
       }
+      if (sessionOrToken.fromHub && sessionOrToken.auth && sessionOrToken.auth.user_id) {
+        return SESSION_AUTH_PREFIX + 'uid:' + sessionOrToken.auth.user_id;
+      }
       var tok = sessionOrToken.idToken || '';
       if (tok) return SESSION_AUTH_PREFIX + 'liff:' + simpleHash_(tok);
       if (sessionOrToken.auth && sessionOrToken.auth.user_id) {
@@ -346,6 +387,33 @@ var AccountingApi = (function () {
     };
   }
 
+  function buildHubSession_(auth) {
+    return {
+      fromHub: true,
+      devBypass: false,
+      profile: { userId: auth.user_id, displayName: auth.display_name },
+      idToken: '',
+      auth: auth
+    };
+  }
+
+  function readHubOperator_() {
+    primeHubIdentityFromUrl_();
+    if (typeof OperatorContext === 'undefined') return null;
+    var op = OperatorContext.read();
+    if (!op || !op.userId) return null;
+    var fromHub = isInHubIframe_() || op.source === 'hub_iframe' || op.source === 'hub' || !!op.hubLiffId;
+    if (!fromHub) return null;
+    return op;
+  }
+
+  function isHubStaffSession_(session) {
+    if (!session || session.devBypass) return false;
+    if (session.fromHub) return true;
+    if (!session.idToken && session.auth && session.auth.user_id) return true;
+    return false;
+  }
+
   function buildAuth(session) {
     if (!session) return {};
     if (session.devBypass) {
@@ -353,6 +421,10 @@ var AccountingApi = (function () {
       if (session.devPermission) a.dev_permission = session.devPermission;
       if (session.devUserId) a.dev_user_id = session.devUserId;
       return a;
+    }
+    if (isHubStaffSession_(session)) {
+      var uid = (session.auth && session.auth.user_id) || (session.profile && session.profile.userId) || '';
+      return uid ? { user_id: uid } : {};
     }
     return { liff_id_token: session.idToken || '' };
   }
@@ -375,6 +447,9 @@ var AccountingApi = (function () {
     }
     if (auth.liff_id_token) {
       out.liff_id_token = auth.liff_id_token;
+    }
+    if (auth.user_id) {
+      out.user_id = auth.user_id;
     }
     return out;
   }
@@ -403,6 +478,11 @@ var AccountingApi = (function () {
         if (sessionOrToken.devPermission) pack.body.dev_permission = sessionOrToken.devPermission;
         if (sessionOrToken.devUserId) pack.body.dev_user_id = sessionOrToken.devUserId;
         return post(pack.body);
+      }
+      if (typeof sessionOrToken === 'object' && sessionOrToken && isHubStaffSession_(sessionOrToken)) {
+        var hubUid = (sessionOrToken.auth && sessionOrToken.auth.user_id)
+          || (sessionOrToken.profile && sessionOrToken.profile.userId) || '';
+        return post({ action: 'accounting_auth_me', user_id: hubUid, auth: { user_id: hubUid } });
       }
       var token = typeof sessionOrToken === 'string' ? sessionOrToken : (sessionOrToken && sessionOrToken.idToken);
       return post({ action: 'accounting_auth_me', liff_id_token: token });
@@ -438,6 +518,27 @@ var AccountingApi = (function () {
     },
     bootstrap: function (sessionOrToken, timeoutMs) {
       return post({ action: 'accounting_bootstrap', auth: resolveAuth(sessionOrToken) }, timeoutMs || 120000);
+    },
+    /** 失敗寫 Logs Explorer；notify=true 才寄信（失敗不擋畫面） */
+    reportError: function (sessionOrToken, payload) {
+      payload = payload || {};
+      var body = {
+        action: 'accounting_error_report',
+        page: payload.page || '',
+        message: payload.message || '',
+        report_text: payload.report_text || payload.detail || '',
+        url: payload.url || '',
+        fail_count: payload.fail_count || 1,
+        notify: !!payload.notify
+      };
+      if (sessionOrToken) {
+        body.auth = resolveAuth(sessionOrToken);
+        if (body.auth && body.auth.user_id) body.user_id = body.auth.user_id;
+      } else if (typeof OperatorContext !== 'undefined') {
+        var op = OperatorContext.read();
+        if (op && op.userId) body.user_id = op.userId;
+      }
+      return post(body).catch(function () { return { success: false }; });
     },
     /** 瀏覽器操作紀錄（背景上傳，失敗不影響 UI） */
     clientLog: function (sessionOrToken, payload) {
@@ -731,14 +832,18 @@ var AccountingApi = (function () {
     },
     tryCachedSession: function (opts) {
       opts = opts || {};
-      var policy = readSessionWrapped_(SESSION_POLICY_KEY, POLICY_TTL_MS);
-      if (!policy) return null;
       var minPerm = opts.minPermission != null ? opts.minPermission : MIN_PERMISSION;
-      if (policy.authBypass || readSessionWrapped_(SESSION_AUTH_PREFIX + 'mode:dev', AUTH_TTL_MS)) {
-        var pack = devBypassAuthBody_(opts.authAction || 'accounting_auth_me');
-        var auth = readSessionWrapped_(SESSION_AUTH_PREFIX + 'dev:' + (pack.opts.dev_user_id || '') + ':' + (pack.opts.dev_permission || 0), AUTH_TTL_MS);
-        if (!auth || (auth.permission || 0) < minPerm) return null;
-        return buildDevBypassSession_(auth, pack.opts);
+      primeHubIdentityFromUrl_();
+      var hubOp = readHubOperator_();
+      if (hubOp) {
+        var authUid = readSessionWrapped_(SESSION_AUTH_PREFIX + 'uid:' + hubOp.userId, AUTH_TTL_MS);
+        var auth = authUid || {
+          user_id: hubOp.userId,
+          display_name: hubOp.displayName || hubOp.userName || '',
+          permission: hubOp.permission || 0
+        };
+        if ((auth.permission || 0) < minPerm) return null;
+        return buildHubSession_(auth);
       }
       var token = '';
       try { token = sessionStorage.getItem(SESSION_TOKEN_KEY) || ''; } catch (eTok) {}
@@ -748,17 +853,6 @@ var AccountingApi = (function () {
       }
       var authHub = readSessionWrapped_(SESSION_AUTH_PREFIX + 'liff:' + simpleHash_(token), AUTH_TTL_MS);
       if (!authHub || (authHub.permission || 0) < minPerm) return null;
-      // HUB 帶入權限與快取不同 → 視為過期，強制重驗（常見：剛改員工權限）
-      try {
-        if (typeof OperatorContext !== 'undefined') {
-          OperatorContext.mergeFromUrl();
-          var opHub = OperatorContext.read();
-          if (opHub && opHub.userId && String(opHub.userId) === String(authHub.user_id || '')
-              && (parseInt(opHub.permission, 10) || 0) !== (parseInt(authHub.permission, 10) || 0)) {
-            return null;
-          }
-        }
-      } catch (eHubPerm) {}
       return {
         devBypass: false,
         profile: { userId: authHub.user_id, displayName: authHub.display_name },
@@ -766,38 +860,34 @@ var AccountingApi = (function () {
         auth: authHub
       };
     },
-    /** 身分快取未命中時：用 HUB 已寫入的操作者 + 政策快取先顯示，背景再 initSession（正式模式須有未過期 token） */
+    /** 從主控台進來：先用本分頁記住的人顯示畫面，背景再向後端核對員工表 */
     tryProvisionalSession: function (opts) {
       opts = opts || {};
       if (typeof OperatorContext === 'undefined') return null;
-      var policy = readSessionWrapped_(SESSION_POLICY_KEY, POLICY_TTL_MS);
-      if (!policy) return null;
+      primeHubIdentityFromUrl_();
       var op = OperatorContext.read();
       if (!op || !op.userId) return null;
       var minPerm = opts.minPermission != null ? opts.minPermission : 0;
       if ((op.permission || 0) < minPerm) return null;
-      var bypass = !!(policy.authBypass);
-      var token = '';
-      try { token = sessionStorage.getItem(SESSION_TOKEN_KEY) || ''; } catch (eTok) {}
-      if (token && !isLiffIdTokenFresh_(token)) {
-        clearStoredLiffToken_();
-        token = '';
-      }
-      // 正式模式：沒有可用 token 就不要暫用 HUB 身分（避免畫面看起來已登入、寫入卻失敗）
-      if (!bypass && !token) return null;
-      return {
-        devBypass: bypass,
-        devPermission: op.permission || 0,
-        devUserId: op.userId,
-        profile: { userId: op.userId, displayName: op.displayName || op.userName || '' },
-        idToken: token,
-        auth: {
+      var hubOp = readHubOperator_();
+      var cachedUid = readSessionWrapped_(SESSION_AUTH_PREFIX + 'uid:' + op.userId, AUTH_TTL_MS);
+      if (hubOp) {
+        return Object.assign(buildHubSession_(cachedUid || {
           user_id: op.userId,
           display_name: op.displayName || op.userName || '',
           permission: op.permission || 0
-        },
-        provisional: true
-      };
+        }), { provisional: true });
+      }
+      if (cachedUid && (cachedUid.permission || 0) >= minPerm) {
+        return {
+          fromHub: false,
+          provisional: true,
+          profile: { userId: cachedUid.user_id, displayName: cachedUid.display_name },
+          idToken: '',
+          auth: cachedUid
+        };
+      }
+      return null;
     },
     cacheSession: function (session) {
       notifyUiOperator_(session);
@@ -806,16 +896,7 @@ var AccountingApi = (function () {
       return post({ action: 'accounting_form_context', auth: resolveAuth(sessionOrToken) });
     },
     initSupervisorSession: async function (opts) {
-      var policy = await AccountingApi.loadPolicy();
-      var session;
-      if (policy.authBypass) {
-        var pack = devBypassAuthBody_('accounting_auth_me');
-        var auth = await post(pack.body);
-        if (!auth.success) throw new Error(auth.message || '驗證失敗');
-        session = buildDevBypassSession_(auth, pack.opts);
-      } else {
-        session = await AccountingApi.initLiff(opts);
-      }
+      var session = await initStaffSessionCore_(opts);
       if (!session) return null;
       if ((session.auth.permission || 0) < SUPERVISOR_MIN_PERMISSION) {
         throw new Error(SUPERVISOR_DENIED_MSG);
@@ -824,16 +905,7 @@ var AccountingApi = (function () {
       return session;
     },
     initVendorPaymentApproveSession: async function (opts) {
-      var policy = await AccountingApi.loadPolicy();
-      var session;
-      if (policy.authBypass) {
-        var pack2 = devBypassAuthBody_('accounting_auth_me');
-        var auth2 = await post(pack2.body);
-        if (!auth2.success) throw new Error(auth2.message || '驗證失敗');
-        session = buildDevBypassSession_(auth2, pack2.opts);
-      } else {
-        session = await AccountingApi.initLiff(opts);
-      }
+      var session = await initStaffSessionCore_(opts);
       if (!session) return null;
       if ((session.auth.permission || 0) < VENDOR_PAYMENT_APPROVE_MIN_PERMISSION) {
         throw new Error(VENDOR_PAYMENT_APPROVE_DENIED_MSG);
@@ -1056,47 +1128,20 @@ var AccountingApi = (function () {
     },
     initLiff: async function (opts) {
       opts = opts || {};
-      var policy = await AccountingApi.loadPolicy();
       if (isInHubIframe_()) {
-        if (typeof AccountingUi !== 'undefined' && AccountingUi.setProgress) {
-          AccountingUi.setProgress('向主控台索取登入憑證…');
+        var hubOpInline = readHubOperator_();
+        if (hubOpInline) {
+          var authInline = await post({
+            action: 'accounting_auth_me',
+            user_id: hubOpInline.userId,
+            auth: { user_id: hubOpInline.userId }
+          });
+          if (!authInline.success) throw new Error(authInline.message || '驗證失敗');
+          return buildHubSession_(authInline);
         }
-        var parentToken = await requestParentHubLiffToken_();
-        if (parentToken && !isLiffIdTokenFresh_(parentToken)) {
-          clearStoredLiffToken_();
-          parentToken = '';
-        }
-        if (parentToken) {
-          var authHub = await AccountingApi.authMe(parentToken);
-          if (authHub.success) {
-            try { sessionStorage.setItem(SESSION_TOKEN_KEY, parentToken); } catch (eTokHub) {}
-            return {
-              devBypass: false,
-              profile: { userId: authHub.user_id, displayName: authHub.display_name },
-              idToken: parentToken,
-              auth: authHub
-            };
-          }
-          // 後端已拒（常見：IdToken expired）→ 清快取並要求重開，勿靜默改用 URL 身分
-          clearStoredLiffToken_();
-          console.warn('[Accounting] Hub LIFF token 驗證失敗:', (authHub && authHub.message) || '驗證失敗');
-          throw new Error(HUB_RELOGIN_MSG);
-        }
-        var provHub = AccountingApi.tryProvisionalSession({
-          minPermission: opts.minPermission != null ? opts.minPermission : 0,
-          authAction: 'accounting_auth_me'
-        });
-        // 僅 bypass 或仍有未過期 token 時暫用；否則請使用者重開 LINE
-        var provUid = provHub && provHub.auth
-          ? (provHub.auth.user_id || provHub.auth.userId || '')
-          : '';
-        if (provHub && provUid && (provHub.idToken || provHub.devBypass)) {
-          console.warn('[Accounting] Hub LIFF token 暫未取得，暫用 HUB 操作者身分（稍後背景驗證）');
-          return provHub;
-        }
-        clearStoredLiffToken_();
         throw new Error(HUB_RELOGIN_MSG);
       }
+      var policy = await AccountingApi.loadPolicy();
       var liffId = resolveLiffIdForInit_(opts, policy);
       if (!liffId) throw new Error('LIFF 尚未設定');
       if (typeof liff === 'undefined') throw new Error('請用 LINE 開啟');
@@ -1111,19 +1156,10 @@ var AccountingApi = (function () {
       if (!auth.success) throw new Error(auth.message || '驗證失敗');
       return { devBypass: false, profile: profile, idToken: idToken, auth: auth };
     },
-    /** policy 開 authBypass 時略過 LIFF；否則走 initLiff。門檻預設 ≥4（財務頁）；選單／日常頁請傳 minPermission */
+    /** 從主控台進來用本分頁身分；直接開網址才走 LINE。門檻預設 ≥4（財務頁）；選單／日常頁請傳 minPermission */
     initSession: async function (opts) {
       opts = opts || {};
-      var policy = await AccountingApi.loadPolicy();
-      var session;
-      if (policy.authBypass) {
-        var pack3 = devBypassAuthBody_('accounting_auth_me');
-        var auth3 = await post(pack3.body);
-        if (!auth3.success) throw new Error(auth3.message || '驗證失敗');
-        session = buildDevBypassSession_(auth3, pack3.opts);
-      } else {
-        session = await AccountingApi.initLiff(opts);
-      }
+      var session = await initStaffSessionCore_(opts);
       if (!session) return null;
       var minPerm = opts.minPermission != null ? opts.minPermission : MIN_PERMISSION;
       if ((session.auth.permission || 0) < minPerm) {
@@ -1141,16 +1177,7 @@ var AccountingApi = (function () {
     },
     /** 收支登錄：權限 ≥ 2 */
     initIngestSession: async function (opts) {
-      var policy = await AccountingApi.loadPolicy();
-      var session;
-      if (policy.authBypass) {
-        var packIng = devBypassAuthBody_('accounting_auth_me');
-        var authIng = await post(packIng.body);
-        if (!authIng.success) throw new Error(authIng.message || '驗證失敗');
-        session = buildDevBypassSession_(authIng, packIng.opts);
-      } else {
-        session = await AccountingApi.initLiff(opts);
-      }
+      var session = await initStaffSessionCore_(opts);
       if (!session) return null;
       if ((session.auth.permission || 0) < INGEST_MIN_PERMISSION) {
         throw new Error(INGEST_PERM_DENIED_MSG);
@@ -1160,18 +1187,24 @@ var AccountingApi = (function () {
     },
     /** 待付款申請／款項進度：在職員工或已登記廠商（登入即可） */
     initPaymentRequestSession: async function (opts) {
-      var policy = await AccountingApi.loadPolicy();
+      opts = opts || {};
+      var hubOpPr = readHubOperator_();
       var session;
-      if (policy.authBypass) {
-        var packPr = devBypassAuthBody_('payment_request_auth_me');
-        var authPr = await post(packPr.body);
+      if (hubOpPr) {
+        var authPr = await post({
+          action: 'payment_request_auth_me',
+          user_id: hubOpPr.userId,
+          auth: { user_id: hubOpPr.userId }
+        });
         if (!authPr.success) throw new Error(authPr.message || '驗證失敗');
-        session = buildDevBypassSession_(authPr, packPr.opts);
-        session.auth = authPr;
+        session = buildHubSession_(authPr);
       } else {
         session = await AccountingApi.initLiff(opts);
         if (!session) return null;
-        var authRes = await post({ action: 'payment_request_auth_me', liff_id_token: session.idToken });
+        var authBody = isHubStaffSession_(session)
+          ? { action: 'payment_request_auth_me', user_id: session.auth.user_id, auth: { user_id: session.auth.user_id } }
+          : { action: 'payment_request_auth_me', liff_id_token: session.idToken };
+        var authRes = await post(authBody);
         if (!authRes.success) throw new Error(authRes.message || '驗證失敗');
         session.auth = authRes;
       }
@@ -1554,16 +1587,7 @@ var AccountingApi = (function () {
       return post(body);
     },
     initCustomerFinanceSession: async function (opts) {
-      var policy = await AccountingApi.loadPolicy();
-      var session;
-      if (policy.authBypass) {
-        var pack = devBypassAuthBody_('accounting_auth_me');
-        var auth = await post(pack.body);
-        if (!auth.success) throw new Error(auth.message || '驗證失敗');
-        session = buildDevBypassSession_(auth, pack.opts);
-      } else {
-        session = await AccountingApi.initLiff(opts);
-      }
+      var session = await initStaffSessionCore_(opts);
       if (!session) return null;
       if ((session.auth.permission || 0) < CUSTOMER_FINANCE_MIN_PERMISSION) {
         throw new Error(CUSTOMER_FINANCE_DENIED_MSG);

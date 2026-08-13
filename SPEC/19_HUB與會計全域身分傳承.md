@@ -1,11 +1,51 @@
 # HUB 與會計 — 全域身分與應傳承資料
 
-**版本**：v1.5（2026-07-12）  
+**版本**：v1.7（2026-08-13）  
 **關聯**：[`15_會計系統模組規格書.md`](15_會計系統模組規格書.md)、[`18_會計與主檔快取策略.md`](18_會計與主檔快取策略.md)、[`08_專案主控台核心功能與通訊協定規格書.md`](08_專案主控台核心功能與通訊協定規格書.md)、backend `accounting-gas/SPEC/LINE_OA_SPEC.md`、`accounting-gas/SPEC/VENDOR_LINE_BINDING_SPEC.md`
 
 ---
 
-## 0. 定案：方案 A（員工進會計）
+## 0. 人怎麼走完（2026-08-13 定案）
+
+**目標**：從主控台點進會計，幾秒內看到選單；不要再出現「測試模式」；開著主控台超過一小時再進會計，也不該因通行證過期卡住。
+
+### 從主控台進會計（正常）
+
+| 步驟 | 人做什麼 | 畫面呈現 | 結果／下一步 |
+|------|----------|----------|----------------|
+| 1 開始 | 在 LINE 開主控台，點「會計系統」 | 立刻看到會計外框；狀態寫「核對身分」或先出選單 | — |
+| 2 進行中 | 可等 | 超過數秒仍看得出在跑；不要整頁空白乾等 | — |
+| 3a 成功 | 看選單 | 頂列：`姓名 · 權限 N · 主控台`（**沒有**「測試模式」） | 可點日常／財務功能 |
+| 3b 失敗 | 看說明、再試 | 人話說「請從主控台重新開啟會計」；可再試 | 回主控台重點一次 |
+
+### 失敗怎麼記（Logs Explorer／信箱）
+
+| 情況 | 人看到什麼 | 系統做什麼 |
+|------|------------|------------|
+| 一般失敗（例如某次 API 沒過、廠商名冊這次沒載到，但頁面還能用） | 頁面上的提示或狀態列；**沒有**「無法繼續」、**不**跳出複製錯誤 | 寫入 Logs Explorer（搜尋 `FAIL`） |
+| 全失敗（畫面「無法繼續」，做不下去） | 再試、複製錯誤；狀態寫「錯誤紀錄產生中」 | Logs Explorer（搜尋 `ERROR_REPORT`）＋自動寄信；十分鐘內相同錯誤只寄一封 |
+
+| 步驟 | 人做什麼 | 畫面呈現 | 結果／下一步 |
+|------|----------|----------|----------------|
+| 1 開始 | 畫面出現「無法繼續」 | 立刻有再試、複製錯誤 | 系統已在記錄並準備寄信 |
+| 2 進行中 | 可按再試或複製 | 「複製錯誤」一鍵複製整份紀錄 | 後端寫入 Logs Explorer，並自動寄到信箱 |
+| 3a 成功 | 看提示 | 「錯誤已記錄並寄到 nephihuang@gmail.com」；按鈕變「已寄到信箱」 | 可再試或離開 |
+| 3b 寄信沒送出 | 按「複製錯誤」或「開信寄出」 | 人話說明；開信是備案 | 你仍拿得到同一份紀錄 |
+
+### 直接開會計網址（沒經過主控台）
+
+| 步驟 | 人做什麼 | 畫面呈現 | 結果／下一步 |
+|------|----------|----------|----------------|
+| 1 開始 | 用書籤或貼上網址開啟 | 「請用 LINE 開啟」或跳去 LINE 登入 | — |
+| 2 進行中 | 在 LINE 完成登入 | 載入中 | — |
+| 3a 成功 | 看選單 | 姓名與權限；同一分頁再切子頁可沿用 | 可操作 |
+| 3b 失敗 | 看說明 | 人話＋可再試；不要只顯示錯誤碼 | 改從主控台進，或再登入 |
+
+**正式站測試模式：關閉。** 廠商入口仍走自己的 LINE 登入，不走員工主控台這條。
+
+---
+
+## 0.1 定案：方案 A（員工進會計）
 
 | 項目 | 規格 |
 |------|------|
@@ -23,7 +63,7 @@
 |------|------|
 | **唯一員工鍵** | Checkin「員工資料」的 **`userId`（LINE UID）** 是全公司員工身分的準則，HUB、會計、考勤都應對到同一列 |
 | **HUB 主控台** | SPA 用 **LIFF 登入** → `userProfile.userId`；iframe 開子頁時帶 `uid`／`permission` 等 query |
-| **會計靜態頁（員工）** | 方案 A：隨 HUB iframe，沿用**官方 LINE** 的 `userId`；正式可驗官方 LIFF token 或 HUB 已傳 `uid`；開發：`ACCOUNTING_AUTH_BYPASS` + `dev_user_id` |
+| **會計靜態頁（員工）** | 方案 A：隨 HUB iframe，沿用官方 LINE 的 `userId`；**從主控台進不向 HUB 借通行證**；後端用編號查員工表。直接開網址才自己 LINE 登入。正式站測試模式關閉 |
 | **看起來不同** | 常見原因：① bypass 沒帶 HUB 的 `uid`；② 子頁相對連結丟失 query；③ **把廠商 `vendor_id`／綁定 UID 和員工 `userId` 搞混**；④ 誤用**會計 LINE** 的 UID 去查員工表（官方與會計 Channel 的 UID **本來就不同**） |
 
 **結論（員工）**：財務同仁只認 **官方 LINE → HUB → 會計** 這條路；`userId` 對應**同一份**員工試算表同一列即可。  
@@ -136,7 +176,7 @@
 | `uid` | `userId` | `OperatorContext` → `dev_user_id`（bypass）或顯示用 |
 | `name` | `displayName` | `OperatorContext.userName`／畫面 |
 | `permission` | `permission` | `OperatorContext` → `dev_permission`（bypass）；**核准仍以後端查表為準** |
-| `hub_liff_id` | 官方 HUB LIFF Channel | iframe 內 `accounting_api.js` 向父層 `postMessage` 取 token；寫入 `tanxin_operator_v1.hubLiffId` |
+| `hub_liff_id` | 用來辨識「這次是從主控台進來」 | 寫入本分頁記憶；**不再**向主控台借通行證 |
 
 **注意**
 
@@ -146,12 +186,14 @@
 
 ---
 
-## 5. 開發期 vs 正式期
+## 5. 正式期身分（2026-08-13）
 
-| 模式 | GAS | 前端身分 | 權限來源 |
-|------|-----|----------|----------|
-| **開發 bypass** | `ACCOUNTING_AUTH_BYPASS=true`（accounting-gas；選材另讀同旗或 `accounting_policy.authBypass`） | `dev_bypass` +（應）`dev_user_id`／`dev_permission` | 優先 Checkin 查 `dev_user_id`；否則 `ACCOUNTING_DEV_PERMISSION`（預設 4） |
-| **正式（方案 A）** | bypass 關閉 | HUB iframe 內：官方 LIFF `liff_id_token`（選材 POST **頂層＋auth** 皆可）或延續 HUB 傳入之 `userId` | 會計／選材（project-console）皆依序驗 **官方 Channel 2007974938** 與 **會計 Bot 2010424425** → 再查員工表 |
+| 模式 | 人的入口 | 身分怎麼認 | 權限來源 |
+|------|----------|------------|----------|
+| **從主控台進** | LINE → 主控台 → 會計 | 本分頁記住的使用者編號 | 後端查員工表（不信網址上的權限數字） |
+| **直接開網址** | 書籤／貼上連結 | 自己 LINE 登入；同一分頁可沿用 | 同上，查員工表 |
+| **廠商入口** | 會計官方 LINE | 廠商自己的 LINE 登入 | 廠商名冊，不是員工權限 |
+| **測試模式** | 正式站**關閉** | — | GAS `ACCOUNTING_AUTH_BYPASS=false` |
 
 **Script Properties（accounting-gas，勿寫進版控）**
 
@@ -199,7 +241,7 @@
 | HUB 父層回應 `request_hub_liff_token` | ✅ `spa/app.js`（`refreshHubIdToken` 須與 `handleIframeMessage` **同 setup 作用域**） |
 | 統一 `tanxin_operator_v1` | ✅ `operator_context.js` |
 | **全站參考主檔 `HubRefCache`（`tanxin_ref_v1:*`）** | ✅ `hub_ref_cache.js`；HUB 寫入、iframe 只讀 |
-| 會計讀 operator + 安全 JSON + iframe token | ✅ `accounting_api.js` v37（`window.top` 索取；token 失敗時 **暫用 operator**；殼層 `pendingTokenRequestSource` 轉發） |
+| 會計讀 operator；從主控台進**不借通行證** | ✅ `accounting_api.js` v49（本分頁 `user_id`；後端查員工表） |
 | 會計導覽保留 query | ✅ `accounting_nav.js` `hubQueryString()` |
 | 會計全頁 bootstrap 收斂 | ✅ `accounting_boot.js` + `modules/accounting/*.html` |
 | bypass 時用 `dev_user_id` 查 Checkin 真實權限 | ✅ `AuthBridge.getDevBypassAuth_` |

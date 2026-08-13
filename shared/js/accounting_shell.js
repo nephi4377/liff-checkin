@@ -141,6 +141,18 @@ var AccountingShell = (function () {
       navigateTo(event.data.route || '');
       return;
     }
+    if (type === 'acct_bootstrap_ready' && isHost) {
+      try {
+        var bootFrame = document.getElementById('acctContentFrame');
+        if (bootFrame && bootFrame.contentWindow) {
+          bootFrame.contentWindow.postMessage({
+            type: 'acct_bootstrap_ready',
+            userId: event.data.userId || ''
+          }, '*');
+        }
+      } catch (eBoot) {}
+      return;
+    }
     if (type === 'request_hub_liff_token') {
       pendingTokenRequestSource = event.source || null;
       try {

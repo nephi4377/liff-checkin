@@ -637,6 +637,39 @@ var AccountingUi = (function () {
 
   /** 失敗回報預設收件（與薪資／匯款 fallback 一致） */
   var ERROR_REPORT_EMAIL = 'nephihuang@gmail.com';
+  var _lastReportKey = '';
+  var _lastReportAt = 0;
+
+  function reportFailure(ctx) {
+    ctx = ctx || {};
+    var notify = !!ctx.notify;
+    var report = notify ? buildErrorReportText(ctx) : '';
+    if (notify) {
+      var key = String(ctx.action || '') + '|' + String(ctx.message || '');
+      if (key === _lastReportKey && (Date.now() - _lastReportAt) < 30000) {
+        return Promise.resolve({ success: true, deduped: true });
+      }
+      _lastReportKey = key;
+      _lastReportAt = Date.now();
+    }
+    if (typeof AccountingApi === 'undefined' || !AccountingApi.reportError) {
+      return Promise.resolve({ success: false });
+    }
+    return AccountingApi.reportError(operator.session, {
+      page: ctx.page || pageLabel(),
+      message: ctx.message || '',
+      report_text: report,
+      url: typeof location !== 'undefined' ? String(location.href || '') : '',
+      fail_count: ctx.fail_count || 1,
+      notify: notify
+    });
+  }
+
+  function reportPersistentError(ctx) {
+    ctx = ctx || {};
+    ctx.notify = true;
+    return reportFailure(ctx);
+  }
 
   function buildErrorReportText(ctx) {
     ctx = ctx || {};
@@ -701,7 +734,7 @@ var AccountingUi = (function () {
 
     var hint = document.createElement('p');
     hint.className = 'acct-fatal-hint';
-    hint.textContent = '可再試一次；仍不行請複製錯誤內容，或開信寄到 ' + ERROR_REPORT_EMAIL + '。';
+    hint.textContent = '錯誤紀錄產生中…可再試一次，或按「複製錯誤」。';
     wrap.appendChild(hint);
 
     var actions = document.createElement('div');
@@ -754,7 +787,7 @@ var AccountingUi = (function () {
 
     var mailBtn = document.createElement('a');
     mailBtn.className = 'btn btn-mail';
-    mailBtn.textContent = '傳送到信箱';
+    mailBtn.textContent = '寄送中…';
     mailBtn.href = buildErrorMailtoUrl(report, ctx);
     mailBtn.addEventListener('click', function () {
       tap('傳送到信箱（錯誤回報）');
@@ -765,6 +798,21 @@ var AccountingUi = (function () {
     wrap.appendChild(fallback);
     el.appendChild(wrap);
     pushLog('err', ctx.message || '無法繼續');
+    reportPersistentError(ctx).then(function (res) {
+      if (res && (res.emailed || res.deduped)) {
+        hint.textContent = '錯誤已記錄並寄到 ' + ERROR_REPORT_EMAIL + '。可再試一次，或按「複製錯誤」。';
+        mailBtn.textContent = res.deduped ? '稍早已寄過' : '已寄到信箱';
+      } else if (res && res.logged && !res.emailed) {
+        hint.textContent = '錯誤已寫入紀錄。寄信未送出時，請按「複製錯誤」或開信寄出。';
+        mailBtn.textContent = '開信寄出';
+      } else {
+        hint.textContent = '請按「複製錯誤」；也可開信寄到 ' + ERROR_REPORT_EMAIL + '。';
+        mailBtn.textContent = '開信寄出';
+      }
+    }).catch(function () {
+      hint.textContent = '請按「複製錯誤」，或開信寄到 ' + ERROR_REPORT_EMAIL + '。';
+      mailBtn.textContent = '開信寄出';
+    });
     return wrap;
   }
 
@@ -803,6 +851,8 @@ var AccountingUi = (function () {
     buildErrorReportText: buildErrorReportText,
     buildErrorMailtoUrl: buildErrorMailtoUrl,
     showFatalError: showFatalError,
+    reportPersistentError: reportPersistentError,
+    reportFailure: reportFailure,
     action: action,
     step: step,
     setProgress: setProgress,

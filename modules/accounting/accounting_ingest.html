@@ -6,11 +6,11 @@
   <title>添心收支登錄</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/operator_context.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=42"></script>
-  <script src="../../shared/js/accounting_cache.js?v=30"></script>
+  <script src="../../shared/js/operator_context.js?v=3"></script>
+  <script src="../../shared/js/accounting_api.js?v=51"></script>
+  <script src="../../shared/js/accounting_cache.js?v=32"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=5"></script>
-  <script src="../../shared/js/accounting_ui.js?v=18"></script>
+  <script src="../../shared/js/accounting_ui.js?v=20"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <style>
     h2 { margin: 0 0 4px; }
@@ -264,14 +264,28 @@
         var n = applyVendorsToUi(fromSession.length ? fromSession : fromPeek);
         updateContextBar(hubContext, n);
         if (n) return;
+        var bar = document.getElementById('contextBar');
+        if (bar) {
+          bar.classList.remove('hidden');
+          bar.classList.remove('warn');
+          bar.textContent = '廠商名冊載入中…';
+        }
         AccountingCache.load(session).then(function () {
           var loaded = applyVendorsToUi(AccountingCache.vendors(session));
           updateContextBar(hubContext, loaded);
         }).catch(function () {
-          var bar = document.getElementById('contextBar');
+          if (cachedVendors.length) return;
           if (bar) {
-            bar.textContent = '廠商名冊載入失敗，請重新整理或手動輸入廠商名';
             bar.classList.add('warn');
+            bar.textContent = '廠商名冊這次沒載到，可再進一次本頁';
+          }
+          if (typeof AccountingUi !== 'undefined' && AccountingUi.reportFailure) {
+            AccountingUi.reportFailure({
+              action: '載入廠商名冊',
+              message: '廠商名冊載入失敗（已等待並重試）',
+              fail_count: 2,
+              notify: false
+            });
           }
         });
       }
@@ -395,18 +409,7 @@
           }));
         }
         if (needVendors && typeof AccountingCache !== 'undefined') {
-          jobs.push(Promise.resolve().then(function () {
-            return AccountingCache.load(session).then(function () {
-              var n = applyVendorsToUi(AccountingCache.vendors(session));
-              updateContextBar(hubContext, n);
-            });
-          }).catch(function () {
-            var bar = document.getElementById('contextBar');
-            if (bar && !cachedVendors.length) {
-              bar.textContent = '廠商名冊載入失敗，請重新整理或手動輸入廠商名';
-              bar.classList.add('warn');
-            }
-          }));
+          ensureVendorsLoaded(session);
         }
         Promise.all(jobs).catch(function (e) { console.warn('context refresh', e); });
       }
@@ -541,14 +544,28 @@
         document.getElementById('photoInput').value = '';
       }
 
+      function attachIngestAuth(body) {
+        if (sessionRef && sessionRef.fromHub && sessionRef.auth && sessionRef.auth.user_id) {
+          body.user_id = sessionRef.auth.user_id;
+          body.auth = { user_id: sessionRef.auth.user_id };
+          return;
+        }
+        if (sessionRef && sessionRef.devBypass) {
+          body.dev_bypass = true;
+          if (sessionRef.devUserId) body.dev_user_id = sessionRef.devUserId;
+          return;
+        }
+        var tok = idToken || (sessionRef && sessionRef.idToken) || '';
+        if (tok) body.liff_id_token = tok;
+      }
+
       async function loadPendingPhotos(token) {
         var body = {
           action: 'accounting_pending_photos',
           token: token,
           user_id: profile.userId
         };
-        if (devBypass) body.dev_bypass = true;
-        else body.liff_id_token = idToken;
+        attachIngestAuth(body);
         var data = await AccountingApi.post(body);
         if (!data.success) { setMsg(data.message || '無法帶入照片'); return; }
         pendingPhotos = data.photos || [];
@@ -574,13 +591,12 @@
           var photos = pendingPhotos.slice().concat(localPhotos);
           var body = {
             action: 'accounting_form_submit',
-            source: queryParams.source || (devBypass ? 'web_dev' : 'liff'),
+            source: queryParams.source || ((sessionRef && sessionRef.fromHub) ? 'hub' : 'liff'),
             user_id: profile.userId,
             display_name: profile.displayName,
             payload: { format: kind.value, fields: fields, photos: photos }
           };
-          if (devBypass) body.dev_bypass = true;
-          else body.liff_id_token = idToken;
+          attachIngestAuth(body);
           var data = await AccountingApi.post(body);
           if (!data.success) throw new Error(data.message || '送出失敗');
           sessionCount++;
@@ -615,7 +631,7 @@
         try {
           var policy = await AccountingApi.loadPolicy();
           if (policy.liffId) CONSTANTS.LIFF_ID = policy.liffId;
-          devBypass = !!policy.authBypass;
+          devBypass = false;
         } catch (e) {}
       }
 
@@ -624,7 +640,7 @@
         profile.userId = session.auth.user_id;
         profile.displayName = session.auth.display_name;
         document.getElementById('userLine').textContent = '你好，' + profile.displayName +
-          (session.devBypass ? ' · 測試模式' : '');
+          (session.fromHub ? ' · 主控台' : (session.devBypass ? ' · 測試模式' : ''));
         showApp();
         setupHubContext(sessionRef);
         ensureVendorsLoaded(sessionRef);
@@ -708,18 +724,17 @@
         var cachedSess = typeof AccountingApi.tryCachedSession === 'function'
           ? AccountingApi.tryCachedSession({ minPermission: AccountingApi.INGEST_MIN_PERMISSION })
           : null;
-        if (cachedSess) {
-          await finishBoot(cachedSess);
-          if (devBypass) return;
+        if (!cachedSess && typeof AccountingApi.tryProvisionalSession === 'function') {
+          cachedSess = AccountingApi.tryProvisionalSession({ minPermission: AccountingApi.INGEST_MIN_PERMISSION });
         }
-        if (devBypass) {
-          await bootDevBypass();
-          return;
+        if (cachedSess) {
+          idToken = cachedSess.idToken || '';
+          await finishBoot(cachedSess);
         }
         var inHubIframeBoot = window.parent && window.parent !== window;
         if (inHubIframeBoot && typeof AccountingApi.initIngestSession === 'function') {
           try {
-            setLoading('向主控台索取登入憑證…');
+            setLoading('核對身分…');
             var hubSess = await AccountingApi.initIngestSession();
             if (hubSess) {
               await finishBoot(hubSess);

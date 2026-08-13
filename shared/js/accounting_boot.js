@@ -46,7 +46,9 @@ var AccountingBoot = (function () {
     var auth = session.auth || {};
     var name = auth.display_name || (session.profile && session.profile.displayName) || '—';
     var perm = auth.permission || 0;
-    var mode = session.devBypass ? ' · 測試模式（無登入）' : '';
+    var mode = '';
+    if (session.devBypass) mode = ' · 測試模式（無登入）';
+    else if (session.fromHub) mode = ' · 主控台';
     var suffix = extra ? (' · ' + extra) : '';
     return name + ' · 權限 ' + perm + mode + suffix;
   }
