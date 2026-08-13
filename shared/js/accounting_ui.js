@@ -78,6 +78,7 @@ var AccountingUi = (function () {
     'payroll_finance.html': '薪資待匯款',
     'designer-customer-finance.html': '追加減與收款',
     'customer-finance-portal.html': '客戶案件紀錄',
+    'designer-material-selection.html': '選材管理',
     'payment_request_compose.html': '精細請款建單'
   };
 

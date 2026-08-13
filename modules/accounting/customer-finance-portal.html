@@ -7,13 +7,14 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=51"></script>
+  <script src="../../shared/js/accounting_api.js?v=52"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/customer_finance_ui.js?v=2"></script>
   <!-- 客戶專用 LIFF（與員工會計 policy.liffId 分開）。LINE Developers Endpoint URL：
        https://info.tanxin.space/modules/accounting/customer-finance-portal.html
-       員工預覽全部案子：?staff_preview=1（可加 &project_no=案號） -->
+       員工預覽全部案子：#staff_preview=1（勿用 ?，LINE 回跳網址不能帶參數；可加 project_no=案號）
+       開發測試（略過登入）同樣列出全部案件。 -->
   <script>
     var CUSTOMER_FINANCE_LIFF_ID = '2007974938-d2y1uA1G';
   </script>
@@ -139,10 +140,12 @@
 
     function parsePortalDeepLink() {
       var params = new URLSearchParams(window.location.search);
-      var projectNo = params.get('project_no') || '';
-      var entity = params.get('entity') || '';
-      var entityId = params.get('id') || '';
-      var previewRaw = params.get('staff_preview') || params.get('preview') || '';
+      var hashParams = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
+      var projectNo = params.get('project_no') || hashParams.get('project_no') || '';
+      var entity = params.get('entity') || hashParams.get('entity') || '';
+      var entityId = params.get('id') || hashParams.get('id') || '';
+      var previewRaw = params.get('staff_preview') || params.get('preview') ||
+        hashParams.get('staff_preview') || hashParams.get('preview') || '';
       var isStaffPreview = previewRaw === '1' || previewRaw === 'true' || previewRaw === 'yes';
       var liffState = params.get('liff.state');
       if (liffState) {
@@ -311,6 +314,21 @@
       }
     }
 
+    function fmtReceiptDate(v) {
+      var s = String(v || '').trim();
+      if (!s) return '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      var d = new Date(s);
+      if (!isNaN(d.getTime())) {
+        try {
+          return d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
+        } catch (eTz) {
+          return d.toLocaleDateString('sv-SE');
+        }
+      }
+      return s.slice(0, 10);
+    }
+
     function fmtMoney(n) {
       var v = parseFloat(n);
       if (isNaN(v)) return '—';
@@ -377,7 +395,7 @@
         return '<div style="padding:10px 0;border-bottom:1px solid #eee" data-rec-id="' + r.receipt_id + '">' +
           '<span class="tag">' + statusLabel(r.status) + '</span><br/>' +
           '收據編號 ' + (r.receipt_no || '') + '<br/>' +
-          (r.stage_label || '') + ' · $' + r.amount + ' · ' + (r.received_at || '') +
+          (r.stage_label || '') + ' · $' + r.amount + ' · ' + fmtReceiptDate(r.received_at) +
           btns + '</div>';
       }).join('') : '<p>目前無待確認收款</p>';
       $('recList').querySelectorAll('[data-rec-s1]').forEach(function (btn) {
@@ -520,6 +538,7 @@
           liffId: staffPreview ? undefined : CUSTOMER_FINANCE_LIFF_ID,
           staffPreview: staffPreview
         });
+        if (session && session.staffPreview) staffPreview = true;
         if (staffPreview) {
           $('previewBanner').classList.remove('hidden');
         }

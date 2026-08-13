@@ -9,7 +9,8 @@
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
-  <script src="../../shared/js/accounting_api.js?v=48"></script>
+  <script src="../../shared/js/accounting_api.js?v=52"></script>
+  <script src="../../shared/js/accounting_ui.js?v=20"></script>
   <style>
     :root {
       --mat-bg: #f4f6f8;
@@ -331,6 +332,39 @@
       var m = String(d.getMonth() + 1).padStart(2, '0');
       var day = String(d.getDate()).padStart(2, '0');
       return y + '-' + m + '-' + day;
+    }
+
+    function fmtTaipeiDate(v) {
+      var s = String(v || '').trim();
+      if (!s) return '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      var d = new Date(s);
+      if (!isNaN(d.getTime())) {
+        try {
+          return d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
+        } catch (eTz) {
+          return d.toLocaleDateString('sv-SE');
+        }
+      }
+      return s.slice(0, 10);
+    }
+
+    function showListError_(targetId, message, ctx) {
+      ctx = ctx || {};
+      var elId = targetId || 'matList';
+      if (typeof AccountingUi !== 'undefined' && AccountingUi.showFatalError) {
+        AccountingUi.showFatalError(elId, {
+          message: message || '載入失敗',
+          action: ctx.action || '載入選材',
+          page: '選材管理',
+          tech: ctx.tech || message || '',
+          project_no: $('projectSelect') ? $('projectSelect').value : '',
+          onRetry: ctx.onRetry
+        });
+        return;
+      }
+      var box = $(elId);
+      if (box) box.innerHTML = '<div class="empty-state"><strong>載入失敗</strong>' + escapeHtml(message || '請稍後再試') + '</div>';
     }
 
     function parseQueryProjectNo() {
@@ -752,8 +786,14 @@
         session = await AccountingApi.initSession({ minPermission: 2 });
         if (!session) {
           setPageStatus_('');
-          showMsg('無法確認身分。本機請用完整網址開啟（含 project_no、perm、dev_user_id），或從主控台進入。');
+          showListError_('loading', '無法確認身分。請從主控台進入，或用 LINE 開啟。', {
+            action: '確認身分',
+            onRetry: function () { location.reload(); }
+          });
           return;
+        }
+        if (typeof AccountingUi !== 'undefined' && AccountingUi.init) {
+          AccountingUi.init({ session: session });
         }
         window.addEventListener('tanxin-ref-updated', function (e) {
           if (!e.detail || e.detail.kind !== 'projects') return;
@@ -772,7 +812,11 @@
         await loadProjectOptions();
       } catch (e) {
         setPageStatus_('');
-        showMsg((e && e.message) ? e.message : '載入失敗，請重新整理再試');
+        showListError_('loading', (e && e.message) || '載入失敗，請重新整理再試', {
+          action: '開啟選材',
+          tech: (e && e.message) || '',
+          onRetry: function () { location.reload(); }
+        });
       }
     }
 
@@ -917,7 +961,7 @@
         return '<div class="mat-item' + (isVoid ? ' is-void' : '') + '" style="animation-delay:' + (Math.min(idx, 8) * 0.04) + 's">' +
           (isVoid ? '<span class="tag tag-void">已作廢</span> ' : '') +
           '<div class="mat-labels">' + labelHtml + '</div>' +
-          (m.selected_at ? '<div class="mat-meta">定案日：' + escapeHtml(m.selected_at) + '</div>' : '') +
+          (m.selected_at ? '<div class="mat-meta">定案日：' + escapeHtml(fmtTaipeiDate(m.selected_at)) + '</div>' : '') +
           (m.note ? '<div class="mat-note">補充說明：' + escapeHtml(m.note) + '</div>' : '') +
           photoHtml +
           btns + '</div>';
@@ -951,9 +995,20 @@
         if (gen !== listLoadGen_) return;
         if (!res.success) {
           if (!cached) {
-            $('matList').innerHTML = '<div class="empty-state"><strong>載入失敗</strong>' + escapeHtml(res.message || '請稍後再試') + '</div>';
+            showListError_('matList', res.message || '載入失敗', {
+              action: '載入選材列表',
+              tech: res.message,
+              onRetry: function () { return loadList(); }
+            });
           } else {
             showMsg(res.message || '列表更新失敗，仍顯示先前內容；可再選一次案號重試');
+            if (typeof AccountingUi !== 'undefined' && AccountingUi.reportFailure) {
+              AccountingUi.reportFailure({
+                action: '載入選材列表',
+                message: res.message || '列表更新失敗',
+                notify: false
+              });
+            }
           }
           return;
         }
@@ -967,8 +1022,12 @@
       } catch (e) {
         if (gen !== listLoadGen_) return;
         if (!cached) {
-          $('matList').innerHTML = '<div class="empty-state"><strong>載入失敗</strong>' + escapeHtml((e && e.message) || '請稍後再試') + '</div>';
-        } else {
+            showListError_('matList', (e && e.message) || '載入失敗', {
+              action: '載入選材列表',
+              tech: (e && e.message) || '',
+              onRetry: function () { return loadList(); }
+            });
+          } else {
           showMsg('列表更新失敗，仍顯示先前內容；請檢查網路後再試');
         }
       } finally {
@@ -992,7 +1051,7 @@
         $('auditList').innerHTML = res.logs.slice().reverse().map(function (log) {
           return '<div class="audit-row">' +
             '<strong>' + escapeHtml(actionLabel(log.action)) + '</strong> · ' + escapeHtml(log.actor_name || '—') +
-            ' · ' + escapeHtml(log.occurred_at || '') +
+            ' · ' + escapeHtml(fmtTaipeiDate(log.occurred_at)) +
             (log.diff_summary ? '<br/>' + escapeHtml(log.diff_summary) : '') +
             '</div>';
         }).join('');
@@ -1018,7 +1077,7 @@
       if (prefill) {
         renderChipGrid('spaceGrid', SPACE_PRESETS, splitLabels(prefill.space_labels), false);
         renderChipGrid('partGrid', PART_PRESETS, splitLabels(prefill.part_labels), true);
-        if (prefill.selected_at) $('fSelectedAt').value = prefill.selected_at;
+        if (prefill.selected_at) $('fSelectedAt').value = fmtTaipeiDate(prefill.selected_at);
         if (prefill.note) $('fNote').value = prefill.note;
       }
       $('formTitle').textContent = '新增選材';

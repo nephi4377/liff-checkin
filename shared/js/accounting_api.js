@@ -522,6 +522,10 @@ var AccountingApi = (function () {
     /** 失敗寫 Logs Explorer；notify=true 才寄信（失敗不擋畫面） */
     reportError: function (sessionOrToken, payload) {
       payload = payload || {};
+      var cachedPolicy = readSessionWrapped_(SESSION_POLICY_KEY, POLICY_TTL_MS);
+      if (cachedPolicy && cachedPolicy.errorReportEnabled === false) {
+        return Promise.resolve({ success: true, skipped: true });
+      }
       var body = {
         action: 'accounting_error_report',
         page: payload.page || '',
@@ -1596,11 +1600,28 @@ var AccountingApi = (function () {
       return session;
     },
     /**
-     * 客戶 LIFF 登入；opts.staffPreview=true 時改走員工身分，可看全部案號（唯讀）
+     * 客戶 LIFF 登入；opts.staffPreview=true 時改走員工身分，可看全部案號（唯讀）。
+     * 開發測試（略過登入）同樣走員工預覽，才列得出全部案件。
      */
     initCustomerPortalSession: async function (opts) {
       opts = opts || {};
-      if (opts.staffPreview) {
+      var policyForPreview = await AccountingApi.loadPolicy();
+      var wantStaffPreview = !!(opts.staffPreview || (policyForPreview && policyForPreview.authBypass));
+      if (wantStaffPreview) {
+        if (policyForPreview && policyForPreview.authBypass) {
+          var packStaff = devBypassAuthBody_('margin_customer_finance_portal_auth');
+          packStaff.body.staff_preview = true;
+          var portalBypass = await post(packStaff.body);
+          if (!portalBypass.success) throw new Error(portalBypass.message || '員工預覽驗證失敗');
+          return {
+            devBypass: true,
+            staffPreview: true,
+            devUserId: packStaff.opts.dev_user_id || '',
+            idToken: '',
+            profile: { userId: portalBypass.user_id, displayName: portalBypass.display_name },
+            portal: portalBypass
+          };
+        }
         var empSession = AccountingApi.tryCachedSession({
           minPermission: CUSTOMER_FINANCE_MIN_PERMISSION,
           authAction: 'accounting_auth_me'
@@ -1615,19 +1636,6 @@ var AccountingApi = (function () {
         empSession.portal = portalStaff;
         notifyUiOperator_(empSession);
         return empSession;
-      }
-      var policy = await AccountingApi.loadPolicy();
-      if (policy.authBypass) {
-        var pack = devBypassAuthBody_('margin_customer_finance_portal_auth');
-        var portal = await post(pack.body);
-        if (!portal.success) throw new Error(portal.message || '客戶綁定驗證失敗');
-        return {
-          devBypass: true,
-          devUserId: pack.opts.dev_user_id || '',
-          idToken: '',
-          profile: { userId: portal.user_id, displayName: portal.display_name },
-          portal: portal
-        };
       }
       var session = await AccountingApi.initLiff(opts);
       if (!session || !session.idToken) throw new Error('LIFF 登入失敗');
