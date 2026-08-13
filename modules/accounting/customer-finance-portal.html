@@ -500,6 +500,15 @@
         }).join('');
         $('matList').querySelectorAll('img[data-full]').forEach(function (img) {
           img.addEventListener('click', function () { openMatLightbox(img.getAttribute('data-full') || img.src); });
+          img.addEventListener('error', function () {
+            if (img.dataset.retried === '1') return;
+            img.dataset.retried = '1';
+            var m = String(img.src || '').match(/[?&]id=([^&]+)/);
+            if (m && m[1]) {
+              img.src = 'https://drive.google.com/thumbnail?id=' + decodeURIComponent(m[1]) + '&sz=w1200';
+              img.setAttribute('data-full', img.src);
+            }
+          });
         });
       } catch (e) {
         $('matList').innerHTML = '<p>載入失敗，請稍後再試</p>' +

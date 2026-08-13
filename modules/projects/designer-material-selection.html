@@ -9,7 +9,7 @@
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
-  <script src="../../shared/js/accounting_api.js?v=53"></script>
+  <script src="../../shared/js/accounting_api.js?v=54"></script>
   <script src="../../shared/js/accounting_ui.js?v=20"></script>
   <style>
     :root {
@@ -120,7 +120,8 @@
     }
     #msg.ok { color: #15803d; }
     .hidden { display: none !important; }
-    .mat-list { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+    .list-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+    .list-toolbar .btn { width: auto; margin-top: 0; }
     .mat-item {
       background: var(--mat-surface); border: 1px solid var(--mat-line); border-radius: var(--mat-radius);
       padding: 14px 14px 12px; box-shadow: var(--mat-shadow);
@@ -227,7 +228,11 @@
     </div>
 
     <div id="listView">
-      <button type="button" class="btn btn-primary" id="btnAdd">＋ 新增選材</button>
+      <div class="list-toolbar">
+        <button type="button" class="btn btn-primary" id="btnAdd">＋ 新增選材</button>
+        <button type="button" class="btn btn-secondary" id="btnScanDbx">掃描 Dropbox 選材夾</button>
+      </div>
+      <p class="hint" style="margin-top:8px">掃描會讀名稱含「選材」的資料夾（例如 0705選材），把還沒進列表的照片加進來。施工照／PIC 不會掃。</p>
       <p id="listSyncHint" class="hint hidden" style="margin-top:8px">選材列表更新中…</p>
       <div id="matList" class="mat-list"><div class="empty-state"><strong>請先選擇案號</strong>選定後會列出這案的選材紀錄</div></div>
       <div class="card" id="auditSection" style="margin-top:16px;">
@@ -731,15 +736,56 @@
       return u;
     }
 
-    function renderPhotoHtml_(photos) {
-      if (!photos || !photos.length) {
-        return '<div class="hint" style="margin-top:8px">尚無照片</div>';
+    function isTempDropboxUrl_(url) {
+      var u = String(url || '').toLowerCase();
+      if (!u || u.indexOf('dropboxusercontent.com') < 0) return false;
+      return u.indexOf('/cd/') >= 0 || u.indexOf('/t/') >= 0 || u.indexOf('/get/') >= 0;
+    }
+
+    function driveFallbackUrls_(fileId) {
+      var id = String(fileId || '').trim();
+      if (!id || id.indexOf('id:') === 0 || id.length < 20) return [];
+      return [
+        'https://drive.google.com/uc?export=view&id=' + id,
+        'https://drive.google.com/thumbnail?id=' + id + '&sz=w1200',
+        'https://lh3.googleusercontent.com/d/' + id
+      ];
+    }
+
+    function collectPhotoCandidates_(raw, driveId) {
+      var seen = {};
+      var out = [];
+      function add(u) {
+        u = toDisplayPhotoUrl_(u);
+        if (!u || isTempDropboxUrl_(u) || seen[u]) return;
+        seen[u] = true;
+        out.push(u);
       }
-      return '<div class="photo-row">' + photos.map(function (raw) {
-        var u = toDisplayPhotoUrl_(raw);
-        var safe = String(u).replace(/"/g, '&quot;');
-        return '<img src="' + safe + '" alt="選材照片" data-full="' + safe + '" data-raw="' +
-          String(raw).replace(/"/g, '&quot;') + '" />';
+      driveFallbackUrls_(driveId).forEach(add);
+      add(raw);
+      return out;
+    }
+
+    function renderPhotoHtml_(photos, driveIds) {
+      driveIds = driveIds || [];
+      if (!photos || !photos.length) {
+        var hasDrive = driveIds.filter(Boolean).length;
+        if (hasDrive) {
+          photos = driveIds.map(function () { return ''; });
+        } else {
+          return '<div class="hint" style="margin-top:8px">尚無照片</div>';
+        }
+      }
+      return '<div class="photo-row">' + photos.map(function (raw, i) {
+        var candidates = collectPhotoCandidates_(raw, driveIds[i] || '');
+        var first = candidates[0] || toDisplayPhotoUrl_(raw);
+        if (!first) {
+          return '<div class="photo-fail">照片更新中…</div>';
+        }
+        var safe = String(first).replace(/"/g, '&quot;');
+        var candAttr = candidates.join('|').replace(/"/g, '&quot;');
+        return '<img src="' + safe + '" alt="選材照片" data-full="' + safe +
+          '" data-cands="' + candAttr + '" />';
       }).join('') + '</div>';
     }
 
@@ -747,23 +793,18 @@
       if (!container) return;
       container.querySelectorAll('.photo-row img').forEach(function (img) {
         img.addEventListener('error', function () {
-          if (img.dataset.retried === '1') {
-            var fail = document.createElement('div');
-            fail.className = 'photo-fail';
-            fail.textContent = '照片無法顯示（Dropbox 連結可能已過期，且尚無可用的雲端硬碟副本；請重新上傳）';
-            if (img.parentNode) img.parentNode.replaceChild(fail, img);
+          var cands = String(img.getAttribute('data-cands') || '').split('|').filter(Boolean);
+          var idx = parseInt(img.dataset.candIdx || '0', 10) + 1;
+          if (idx < cands.length) {
+            img.dataset.candIdx = String(idx);
+            img.src = cands[idx];
+            img.setAttribute('data-full', cands[idx]);
             return;
           }
-          img.dataset.retried = '1';
-          var raw = img.getAttribute('data-raw') || img.src;
-          var alt = toDisplayPhotoUrl_(raw);
-          if (alt && alt !== img.src) img.src = alt;
-          else {
-            var fail2 = document.createElement('div');
-            fail2.className = 'photo-fail';
-            fail2.textContent = '照片無法顯示（連結可能已過期）';
-            if (img.parentNode) img.parentNode.replaceChild(fail2, img);
-          }
+          var fail = document.createElement('div');
+          fail.className = 'photo-fail';
+          fail.textContent = '照片暫時無法顯示，請再整理一次';
+          if (img.parentNode) img.parentNode.replaceChild(fail, img);
         });
       });
     }
@@ -928,13 +969,21 @@
         $('matList').innerHTML = '<div class="empty-state"><strong>尚無選材紀錄</strong>按上方「新增選材」建立第一筆</div>';
         return;
       }
-      lastListItems = res.items.slice();
-      $('matList').innerHTML = res.items.map(function (m, idx) {
+      lastListItems = res.items.map(function (m) {
+        var urls = splitPhotos(m.photo_urls).filter(function (u) { return !isTempDropboxUrl_(u); });
+        if (urls.length === splitPhotos(m.photo_urls).length) return m;
+        var copy = {};
+        Object.keys(m).forEach(function (k) { copy[k] = m[k]; });
+        copy.photo_urls = urls.join(',');
+        return copy;
+      });
+      $('matList').innerHTML = lastListItems.map(function (m, idx) {
         var isVoid = m.status === 'void';
         var photos = splitPhotos(m.photo_urls);
+        var driveIds = splitPhotos(m.drive_file_ids);
         var photoHtml = m.photos_purged
           ? '<div class="hint" style="margin-top:8px">照片已超過保留期限（結案後約 2 年已清除雲端照）</div>'
-          : renderPhotoHtml_(photos);
+          : renderPhotoHtml_(photos, driveIds);
         var spaceLabels = splitLabels(m.space_labels);
         var partLabels = splitLabels(m.part_labels);
         var labelHtml = '';
@@ -1109,6 +1158,40 @@
     }
 
     $('btnAdd').onclick = function () { openCreateForm(null); };
+    if ($('btnScanDbx')) {
+      $('btnScanDbx').onclick = async function () {
+        var pno = $('projectSelect').value;
+        if (!pno) { showMsg('請先選擇案號'); return; }
+        if (!session) {
+          try {
+            session = (typeof AccountingApi.tryCachedSession === 'function'
+              ? AccountingApi.tryCachedSession({ minPermission: 2 }) : null)
+              || await AccountingApi.initSession({ minPermission: 2 });
+          } catch (eSess) {
+            showMsg((eSess && eSess.message) || '請從主控台重新進入');
+            return;
+          }
+        }
+        var btn = $('btnScanDbx');
+        btn.disabled = true;
+        setPageStatus_('掃描 Dropbox…');
+        showMsg('');
+        try {
+          var res = await AccountingApi.materialScanImport(session, pno);
+          if (!res || !res.success) {
+            showMsg((res && res.message) || '掃描失敗');
+            return;
+          }
+          showMsg(res.message || ('新增 ' + (res.imported || 0) + ' 筆'), true);
+          await loadList();
+        } catch (eScan) {
+          showMsg((eScan && eScan.message) || '掃描失敗');
+        } finally {
+          btn.disabled = false;
+          setPageStatus_('');
+        }
+      };
+    }
     $('btnBackToList').onclick = function () {
       editingMaterialId = '';
       $('formView').classList.add('hidden');

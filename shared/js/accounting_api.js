@@ -1516,6 +1516,9 @@ var AccountingApi = (function () {
     materialDesignerList: function (sessionOrToken, projectNo) {
       return postMaterial(buildMaterialPostBody_(sessionOrToken, { action: 'margin_material_designer_list', project_no: projectNo }));
     },
+    materialScanImport: function (sessionOrToken, projectNo) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, { action: 'margin_material_scan_import', project_no: projectNo }), 60000);
+    },
     materialAuditLog: function (sessionOrToken, filter) {
       return postMaterial(buildMaterialPostBody_(sessionOrToken, {
         action: 'margin_material_audit_log',
