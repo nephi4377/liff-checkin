@@ -349,9 +349,19 @@ function bgFile(name) {
   return path.join(__dirname, "bg", name);
 }
 
-async function roundedPhotoCell({ src, w, h, wash, radius }) {
-  const photo = await sharp(src)
-    .resize(w, h, { fit: "cover", position: "attention" })
+async function roundedPhotoCell({ src, w, h, wash, radius, zoom = 1.42 }) {
+  const zw = Math.max(w, Math.round(w * zoom));
+  const zh = Math.max(h, Math.round(h * zoom));
+  const grown = await sharp(src)
+    .resize(zw, zh, { fit: "cover", position: "attention" })
+    .toBuffer();
+  const photo = await sharp(grown)
+    .extract({
+      left: Math.floor((zw - w) / 2),
+      top: Math.floor((zh - h) / 2),
+      width: w,
+      height: h,
+    })
     .toBuffer();
   const washSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
     <defs>
@@ -455,8 +465,8 @@ async function main() {
   await renderCustomerPhotoMenu({
     colWidths: [1250, 1250],
     rowHeights: [422, 421],
-    pad: 22,
-    radius: 40,
+    pad: 4,
+    radius: 12,
     pngPath: guestPng,
     jpgPath: guestJpg,
     cells: [
@@ -470,8 +480,8 @@ async function main() {
   await renderCustomerPhotoMenu({
     colWidths: [834, 833, 833],
     rowHeights: [422, 421],
-    pad: 16,
-    radius: 32,
+    pad: 3,
+    radius: 10,
     pngPath: memberPng,
     jpgPath: memberJpg,
     cells: [

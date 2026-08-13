@@ -31,3 +31,4 @@
 - 圖稿已可開：https://info.tanxin.space/modules/info/asset/richmenu/customer_guest_richmenu_v1.jpg
 - 黃俊豪 LINE 已掛未綁四格（2026-08-13 16:37）
 - 同日稍後：標題加大後換圖（仍同一套選單，不重建）
+- 晚間：總監要照片放大、維持半幅。縮小格距並拉近實景，重出 JPG 後重建選單再掛測試帳
