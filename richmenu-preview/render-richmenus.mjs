@@ -151,19 +151,27 @@ function vendorSvg() {
 </svg>`;
 }
 
+/** 客戶色票：對齊落地頁米白／木質／植栽綠（與內部冷灰分開） */
+const C = {
+  canvas: "#f7f3ea",
+  ink: "#2a3c35",
+  muted: "#5c6b62",
+  accent: "#3d5a4c",
+};
+
 /** 客戶未綁｜四格 2×2（熱區與 createCustomerRichMenus.js 一致：1250×422 + 1250×421） */
 function customerGuestSvg() {
   const w = 2500;
   const h = 843;
-  const p = 20;
-  const r = 32;
+  const p = 22;
+  const r = 40;
   const colWidths = [1250, 1250];
   const rowHeights = [422, 421];
   const labels = [
-    { title: "申請綁定專案", sub: "綁定裝修案", grad: "cg0", row: 0, col: 0 },
-    { title: "了解添心", sub: "公司介紹", grad: "cg1", row: 0, col: 1 },
-    { title: "常見問題", sub: "FAQ", grad: "cg2", row: 1, col: 0 },
-    { title: "Facebook", sub: "外開社群", grad: "cg3", row: 1, col: 1 },
+    { title: "申請綁定專案", sub: "把案子跟您連在一起", fill: "cgSand", row: 0, col: 0 },
+    { title: "了解添心", sub: "看看我們怎麼做家", fill: "cgSage", row: 0, col: 1 },
+    { title: "常見問題", sub: "先幫您解惑", fill: "cgLinen", row: 1, col: 0 },
+    { title: "Facebook", sub: "看作品日常", fill: "cgStone", row: 1, col: 1 },
   ];
   const cards = labels.map((lb) => {
     const cellX = colWidths.slice(0, lb.col).reduce((a, b) => a + b, 0);
@@ -174,25 +182,25 @@ function customerGuestSvg() {
     const cy = cellY + ch / 2;
     return `
   <g filter="url(#csh)">
-    <rect x="${cellX + p}" y="${cellY + p}" width="${cw - 2 * p}" height="${ch - 2 * p}" rx="${r}" fill="url(#${lb.grad})"/>
+    <rect x="${cellX + p}" y="${cellY + p}" width="${cw - 2 * p}" height="${ch - 2 * p}" rx="${r}" fill="url(#${lb.fill})"/>
   </g>
-  <text x="${cx}" y="${cy + 8}" text-anchor="middle" font-family="Segoe UI, PingFang TC, Microsoft JhengHei, sans-serif" font-size="44" font-weight="700" fill="#ffffff">${lb.title}</text>
-  <text x="${cx}" y="${cy + 58}" text-anchor="middle" font-family="Segoe UI, PingFang TC, Microsoft JhengHei, sans-serif" font-size="24" font-weight="500" fill="${M.sub}">${lb.sub}</text>`;
+  <text x="${cx}" y="${cy - 8}" text-anchor="middle" font-family="Noto Sans TC, PingFang TC, Microsoft JhengHei, sans-serif" font-size="46" font-weight="700" fill="${C.ink}">${lb.title}</text>
+  <text x="${cx}" y="${cy + 46}" text-anchor="middle" font-family="Noto Sans TC, PingFang TC, Microsoft JhengHei, sans-serif" font-size="26" font-weight="500" fill="${C.muted}">${lb.sub}</text>`;
   }).join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
   <defs>
-    <linearGradient id="cbg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="${M.bg0}"/>
-      <stop offset="100%" stop-color="${M.bg1}"/>
+    <linearGradient id="cbg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#faf7f0"/>
+      <stop offset="100%" stop-color="${C.canvas}"/>
     </linearGradient>
-    <linearGradient id="cg0" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${M.in0}"/><stop offset="100%" stop-color="${M.in1}"/></linearGradient>
-    <linearGradient id="cg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${M.rep0}"/><stop offset="100%" stop-color="${M.rep1}"/></linearGradient>
-    <linearGradient id="cg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${M.ct0}"/><stop offset="100%" stop-color="${M.ct1}"/></linearGradient>
-    <linearGradient id="cg3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7a8a9a"/><stop offset="100%" stop-color="#5c6773"/></linearGradient>
+    <linearGradient id="cgSand" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#f3e6d4"/><stop offset="100%" stop-color="#ead9c4"/></linearGradient>
+    <linearGradient id="cgSage" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#e4eee6"/><stop offset="100%" stop-color="#d5e0d4"/></linearGradient>
+    <linearGradient id="cgLinen" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#faf6ee"/><stop offset="100%" stop-color="#f3eadc"/></linearGradient>
+    <linearGradient id="cgStone" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#eee8de"/><stop offset="100%" stop-color="#e4ddd0"/></linearGradient>
     <filter id="csh" x="-5%" y="-10%" width="110%" height="125%">
-      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#1e293b" flood-opacity="0.1"/>
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#2a3c35" flood-opacity="0.08"/>
     </filter>
   </defs>
   <rect width="100%" height="100%" fill="url(#cbg)"/>
@@ -205,16 +213,17 @@ function customerMemberSvg() {
   const w = 2500;
   const h = 843;
   const p = 16;
-  const r = 28;
+  const r = 32;
   const colWidths = [834, 833, 833];
   const rowHeights = [422, 421];
+  const fills = ["cgSand", "cgSage", "cgLinen", "cgSage", "cgLinen", "cgStone"];
   const labels = [
-    { title: "收款確認", sub: "LIFF", grad: "cm0", row: 0, col: 0 },
-    { title: "我的案場", sub: "選材", grad: "cm1", row: 0, col: 1 },
-    { title: "綁定新專案", sub: "申請", grad: "cm2", row: 0, col: 2 },
-    { title: "了解添心", sub: "落地頁", grad: "cm3", row: 1, col: 0 },
-    { title: "常見問題", sub: "FAQ", grad: "cm4", row: 1, col: 1 },
-    { title: "Facebook", sub: "外開", grad: "cm5", row: 1, col: 2 },
+    { title: "收款確認", sub: "核對這一期款項", fill: fills[0], row: 0, col: 0 },
+    { title: "我的案場", sub: "選材與案子紀錄", fill: fills[1], row: 0, col: 1 },
+    { title: "綁定新專案", sub: "再加一個案子", fill: fills[2], row: 0, col: 2 },
+    { title: "了解添心", sub: "看看我們怎麼做家", fill: fills[3], row: 1, col: 0 },
+    { title: "常見問題", sub: "先幫您解惑", fill: fills[4], row: 1, col: 1 },
+    { title: "Facebook", sub: "看作品日常", fill: fills[5], row: 1, col: 2 },
   ];
   const cards = labels.map((lb) => {
     const cellX = colWidths.slice(0, lb.col).reduce((a, b) => a + b, 0);
@@ -223,30 +232,28 @@ function customerMemberSvg() {
     const ch = rowHeights[lb.row];
     const cx = cellX + cw / 2;
     const cy = cellY + ch / 2;
-    const fs = lb.title.length > 5 ? 32 : 36;
+    const fs = lb.title.length > 5 ? 34 : 38;
     return `
   <g filter="url(#msh)">
-    <rect x="${cellX + p}" y="${cellY + p}" width="${cw - 2 * p}" height="${ch - 2 * p}" rx="${r}" fill="url(#${lb.grad})"/>
+    <rect x="${cellX + p}" y="${cellY + p}" width="${cw - 2 * p}" height="${ch - 2 * p}" rx="${r}" fill="url(#${lb.fill})"/>
   </g>
-  <text x="${cx}" y="${cy + 6}" text-anchor="middle" font-family="Segoe UI, PingFang TC, Microsoft JhengHei, sans-serif" font-size="${fs}" font-weight="700" fill="#ffffff">${lb.title}</text>
-  <text x="${cx}" y="${cy + 52}" text-anchor="middle" font-family="Segoe UI, PingFang TC, Microsoft JhengHei, sans-serif" font-size="20" font-weight="500" fill="${M.sub}">${lb.sub}</text>`;
+  <text x="${cx}" y="${cy - 4}" text-anchor="middle" font-family="Noto Sans TC, PingFang TC, Microsoft JhengHei, sans-serif" font-size="${fs}" font-weight="700" fill="${C.ink}">${lb.title}</text>
+  <text x="${cx}" y="${cy + 42}" text-anchor="middle" font-family="Noto Sans TC, PingFang TC, Microsoft JhengHei, sans-serif" font-size="20" font-weight="500" fill="${C.muted}">${lb.sub}</text>`;
   }).join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
   <defs>
-    <linearGradient id="mbg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="${M.bg0}"/>
-      <stop offset="100%" stop-color="${M.bg1}"/>
+    <linearGradient id="mbg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#faf7f0"/>
+      <stop offset="100%" stop-color="${C.canvas}"/>
     </linearGradient>
-    <linearGradient id="cm0" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${M.in0}"/><stop offset="100%" stop-color="${M.in1}"/></linearGradient>
-    <linearGradient id="cm1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${M.rep0}"/><stop offset="100%" stop-color="${M.rep1}"/></linearGradient>
-    <linearGradient id="cm2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#9aa8b8"/><stop offset="100%" stop-color="#7a8796"/></linearGradient>
-    <linearGradient id="cm3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${M.ct0}"/><stop offset="100%" stop-color="${M.ct1}"/></linearGradient>
-    <linearGradient id="cm4" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#8fa9a3"/><stop offset="100%" stop-color="#6e8580"/></linearGradient>
-    <linearGradient id="cm5" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7a8a9a"/><stop offset="100%" stop-color="#5c6773"/></linearGradient>
+    <linearGradient id="cgSand" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#f3e6d4"/><stop offset="100%" stop-color="#ead9c4"/></linearGradient>
+    <linearGradient id="cgSage" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#e4eee6"/><stop offset="100%" stop-color="#d5e0d4"/></linearGradient>
+    <linearGradient id="cgLinen" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#faf6ee"/><stop offset="100%" stop-color="#f3eadc"/></linearGradient>
+    <linearGradient id="cgStone" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#eee8de"/><stop offset="100%" stop-color="#e4ddd0"/></linearGradient>
     <filter id="msh" x="-4%" y="-10%" width="108%" height="125%">
-      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#1e293b" flood-opacity="0.1"/>
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#2a3c35" flood-opacity="0.08"/>
     </filter>
   </defs>
   <rect width="100%" height="100%" fill="url(#mbg)"/>
@@ -330,12 +337,106 @@ function customerSvgLegacy() {
 </svg>`;
 }
 
+const WASH = {
+  /** 2026-08-13 總監定案：奶油金＋現況排列 */
+  sand: { top: "#C9A258", topOp: "0.28", bot: "#5C401C", botOp: "0.52" },
+  sage: { top: "#BAA88C", topOp: "0.28", bot: "#4A3A2A", botOp: "0.54" },
+  linen: { top: "#FAF0DC", topOp: "0.22", bot: "#6E583A", botOp: "0.48" },
+  stone: { top: "#B08E62", topOp: "0.26", bot: "#3E2E20", botOp: "0.56" },
+};
+
+function bgFile(name) {
+  return path.join(__dirname, "bg", name);
+}
+
+async function roundedPhotoCell({ src, w, h, wash, radius }) {
+  const photo = await sharp(src)
+    .resize(w, h, { fit: "cover", position: "attention" })
+    .toBuffer();
+  const washSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
+    <defs>
+      <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${wash.top}" stop-opacity="${wash.topOp}"/>
+        <stop offset="100%" stop-color="${wash.bot}" stop-opacity="${wash.botOp}"/>
+      </linearGradient>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#g)"/>
+  </svg>`);
+  const tinted = await sharp(photo)
+    .composite([{ input: washSvg, blend: "over" }])
+    .png()
+    .toBuffer();
+  const mask = Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}" rx="${radius}" fill="#fff"/></svg>`
+  );
+  return sharp(tinted)
+    .composite([{ input: mask, blend: "dest-in" }])
+    .png()
+    .toBuffer();
+}
+
+function customerTextSvg(w, h, cells) {
+  const texts = cells.map((c) => {
+    const fs = c.title.length > 5 ? 34 : c.fs || 42;
+    const subFs = c.subFs || 22;
+    return `
+  <text x="${c.cx}" y="${c.cy - 6}" text-anchor="middle" font-family="Noto Sans TC, PingFang TC, Microsoft JhengHei, sans-serif" font-size="${fs}" font-weight="700" fill="#faf7f0">${c.title}</text>
+  <text x="${c.cx}" y="${c.cy + 36}" text-anchor="middle" font-family="Noto Sans TC, PingFang TC, Microsoft JhengHei, sans-serif" font-size="${subFs}" font-weight="500" fill="rgba(250,247,240,0.92)">${c.sub}</text>`;
+  }).join("");
+  return Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  <defs>
+    <filter id="ts"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#2a2018" flood-opacity="0.55"/></filter>
+  </defs>
+  <g filter="url(#ts)">${texts}</g>
+</svg>`);
+}
+
+async function renderCustomerPhotoMenu({ colWidths, rowHeights, pad, radius, cells, pngPath, jpgPath }) {
+  const w = 2500;
+  const h = 843;
+  const composites = [];
+  const textCells = [];
+  for (const cell of cells) {
+    const cellX = colWidths.slice(0, cell.col).reduce((a, b) => a + b, 0);
+    const cellY = rowHeights.slice(0, cell.row).reduce((a, b) => a + b, 0);
+    const cw = colWidths[cell.col];
+    const ch = rowHeights[cell.row];
+    const innerW = cw - 2 * pad;
+    const innerH = ch - 2 * pad;
+    const buf = await roundedPhotoCell({
+      src: cell.src,
+      w: innerW,
+      h: innerH,
+      wash: cell.wash,
+      radius,
+    });
+    composites.push({ input: buf, left: cellX + pad, top: cellY + pad });
+    textCells.push({
+      title: cell.title,
+      sub: cell.sub,
+      cx: cellX + cw / 2,
+      cy: cellY + ch / 2 + 18,
+      fs: cell.fs,
+      subFs: cell.subFs,
+    });
+  }
+  const canvas = sharp({
+    create: { width: w, height: h, channels: 3, background: { r: 247, g: 243, b: 234 } },
+  });
+  const withPhotos = await canvas.composite(composites).png().toBuffer();
+  const withText = await sharp(withPhotos)
+    .composite([{ input: await sharp(customerTextSvg(w, h, textCells)).png().toBuffer() }])
+    .png({ compressionLevel: 9 })
+    .toBuffer();
+  await sharp(withText).toFile(pngPath);
+  await sharp(withText).jpeg({ quality: 90, mozjpeg: true }).toFile(jpgPath);
+}
+
 async function main() {
   const outDir = __dirname;
   const empSvgBuf = Buffer.from(employeeSvg(), "utf8");
   const venSvgBuf = Buffer.from(vendorSvg(), "utf8");
-  const guestSvgBuf = Buffer.from(customerGuestSvg(), "utf8");
-  const memberSvgBuf = Buffer.from(customerMemberSvg(), "utf8");
 
   const empPng = path.join(outDir, "employee_richmenu_v2.png");
   const venPng = path.join(outDir, "vendor_richmenu_v2.png");
@@ -348,12 +449,40 @@ async function main() {
 
   await sharp(empSvgBuf).png({ compressionLevel: 9 }).toFile(empPng);
   await sharp(venSvgBuf).png({ compressionLevel: 9 }).toFile(venPng);
-  await sharp(guestSvgBuf).png({ compressionLevel: 9 }).toFile(guestPng);
-  await sharp(memberSvgBuf).png({ compressionLevel: 9 }).toFile(memberPng);
   await sharp(empSvgBuf).jpeg({ quality: 93, mozjpeg: true }).toFile(empJpg);
   await sharp(venSvgBuf).jpeg({ quality: 93, mozjpeg: true }).toFile(venJpg);
-  await sharp(guestSvgBuf).jpeg({ quality: 93, mozjpeg: true }).toFile(guestJpg);
-  await sharp(memberSvgBuf).jpeg({ quality: 93, mozjpeg: true }).toFile(memberJpg);
+
+  await renderCustomerPhotoMenu({
+    colWidths: [1250, 1250],
+    rowHeights: [422, 421],
+    pad: 22,
+    radius: 40,
+    pngPath: guestPng,
+    jpgPath: guestJpg,
+    cells: [
+      { row: 0, col: 0, src: bgFile("sand-closet.jpg"), wash: WASH.sand, title: "申請綁定專案", sub: "把案子跟您連在一起" },
+      { row: 0, col: 1, src: bgFile("sage-green-sofa.jpg"), wash: WASH.sage, title: "了解添心", sub: "看看我們怎麼做家" },
+      { row: 1, col: 0, src: bgFile("linen-american.jpg"), wash: WASH.linen, title: "常見問題", sub: "先幫您解惑" },
+      { row: 1, col: 1, src: bgFile("stone-glass.jpg"), wash: WASH.stone, title: "Facebook", sub: "看作品日常" },
+    ],
+  });
+
+  await renderCustomerPhotoMenu({
+    colWidths: [834, 833, 833],
+    rowHeights: [422, 421],
+    pad: 16,
+    radius: 32,
+    pngPath: memberPng,
+    jpgPath: memberJpg,
+    cells: [
+      { row: 0, col: 0, src: bgFile("sand-workspace.jpg"), wash: WASH.sand, title: "收款確認", sub: "核對這一期款項", fs: 36 },
+      { row: 0, col: 1, src: bgFile("sage-living.jpg"), wash: WASH.sage, title: "我的案場", sub: "選材與案子紀錄", fs: 36 },
+      { row: 0, col: 2, src: bgFile("linen-kids.jpg"), wash: WASH.linen, title: "綁定新專案", sub: "再加一個案子", fs: 34 },
+      { row: 1, col: 0, src: bgFile("sage-green-sofa.jpg"), wash: WASH.sage, title: "了解添心", sub: "看看我們怎麼做家", fs: 36 },
+      { row: 1, col: 1, src: bgFile("linen-american.jpg"), wash: WASH.linen, title: "常見問題", sub: "先幫您解惑", fs: 36 },
+      { row: 1, col: 2, src: bgFile("stone-glass.jpg"), wash: WASH.stone, title: "Facebook", sub: "看作品日常", fs: 36 },
+    ],
+  });
 
   const em = await sharp(empPng).metadata();
   const ve = await sharp(venPng).metadata();

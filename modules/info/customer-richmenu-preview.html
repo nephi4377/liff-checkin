@@ -1,27 +1,39 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-Hant" data-scheme="champagne" data-layout="a">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>客戶 Rich Menu 預覽（測試用）</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #f0f2f5;
-      --ink: #2b3036;
-      --muted: #5f6b7a;
-      --accent: #174ea6;
-      --banner: #e8f0fe;
-      --banner-border: #aecbfa;
-      --card-shadow: 0 8px 24px rgba(30, 41, 59, 0.08);
-      --radius: 14px;
+      --bg: #f7f3ea;
+      --ink: #2a3c35;
+      --muted: #5c6b62;
+      --accent: #3d5a4c;
+      --banner: #efe6d4;
+      --banner-border: #dcc9a8;
+      --card-shadow: 0 10px 28px rgba(42, 60, 53, 0.08);
+      --radius: 16px;
+      --sand: #ead9c4;
+      --sage: #d5e0d4;
+      --linen: #f3eadc;
+      --stone: #e4ddd0;
+      --cream: #faf7f0;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: "Segoe UI", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
-      background: linear-gradient(180deg, #f7f8fa 0%, var(--bg) 100%);
+      font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
       color: var(--ink);
-      line-height: 1.5;
+      line-height: 1.55;
+      background-color: var(--bg);
+      background-image:
+        radial-gradient(ellipse 80% 55% at 15% 8%, rgba(180, 205, 188, 0.35), transparent 52%),
+        radial-gradient(ellipse 70% 50% at 88% 18%, rgba(232, 218, 195, 0.55), transparent 48%),
+        linear-gradient(180deg, #faf7f0 0%, #f4efe6 55%, #eef2ed 100%);
     }
     .wrap { max-width: 920px; margin: 0 auto; padding: 20px 16px 48px; }
     .badge {
@@ -30,11 +42,11 @@
       font-weight: 600;
       padding: 4px 10px;
       border-radius: 999px;
-      background: #fef7e0;
-      color: #92400e;
+      background: #efe6d4;
+      color: #6b5340;
       margin-bottom: 8px;
     }
-    h1 { margin: 0 0 8px; font-size: 1.6rem; }
+    h1 { margin: 0 0 8px; font-size: 1.55rem; letter-spacing: 0.02em; }
     .lead { color: var(--muted); margin: 0 0 16px; font-size: 15px; }
     .notice {
       background: var(--banner);
@@ -46,15 +58,16 @@
       margin-bottom: 24px;
     }
     section {
-      background: #fff;
+      background: rgba(255, 252, 247, 0.92);
       border-radius: var(--radius);
       box-shadow: var(--card-shadow);
+      border: 1px solid rgba(255, 255, 255, 0.9);
       padding: 18px 16px 20px;
       margin-bottom: 20px;
     }
-    section h2 { margin: 0 0 4px; font-size: 1.15rem; }
+    section h2 { margin: 0 0 4px; font-size: 1.12rem; }
     section .hint { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
-  .case-row {
+    .case-row {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
@@ -66,19 +79,21 @@
     .case-row input {
       width: 88px;
       padding: 8px 10px;
-      border: 1px solid #c4c7cc;
+      border: 1px solid #d4c6b0;
       border-radius: 8px;
       font-size: 15px;
+      background: #fffdf8;
+      color: var(--ink);
     }
     .richmenu {
-      border-radius: 12px;
+      border-radius: 18px;
       overflow: hidden;
-      border: 1px solid #dde1e6;
-      background: var(--bg);
+      border: 1px solid #e4ddd0;
+      background: #f4efe6;
       aspect-ratio: 2500 / 843;
       display: grid;
-      gap: 3px;
-      padding: 3px;
+      gap: 8px;
+      padding: 8px;
     }
     .richmenu.guest { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
     .richmenu.member { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
@@ -87,54 +102,171 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-end;
       text-align: center;
-      padding: 8px 6px 36px;
-      border-radius: 10px;
-      color: #fff;
+      padding: 10px 8px 36px;
+      border-radius: 14px;
+      color: #faf7f0;
       min-height: 0;
+      overflow: hidden;
+      background-size: cover;
+      background-position: center;
+      box-shadow: 0 6px 16px rgba(42, 60, 53, 0.12);
     }
-    .cell .title { font-weight: 700; font-size: clamp(11px, 2.8vw, 15px); }
-    .cell .sub { font-size: clamp(9px, 2vw, 11px); opacity: 0.85; margin-top: 2px; }
+    .cell::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: var(--wash);
+      pointer-events: none;
+    }
+    .cell > * { position: relative; z-index: 1; }
+    .cell .icon {
+      width: 22px;
+      height: 22px;
+      margin-bottom: 4px;
+      color: #faf7f0;
+      flex-shrink: 0;
+      filter: drop-shadow(0 1px 2px rgba(42, 32, 24, 0.45));
+    }
+    .cell .icon svg { width: 100%; height: 100%; display: block; }
+    .cell .title {
+      font-weight: 700;
+      font-size: clamp(12px, 2.9vw, 16px);
+      letter-spacing: 0.02em;
+      text-shadow: 0 1px 8px rgba(42, 32, 24, 0.55);
+    }
+    .cell .sub {
+      font-size: clamp(9px, 2vw, 12px);
+      color: rgba(250, 247, 240, 0.92);
+      margin-top: 3px;
+      font-weight: 500;
+      text-shadow: 0 1px 6px rgba(42, 32, 24, 0.5);
+    }
     .cell .preview-btn {
       position: absolute;
       bottom: 6px;
       left: 50%;
       transform: translateX(-50%);
+      z-index: 2;
       font-size: 11px;
       font-weight: 600;
       padding: 5px 10px;
       border: none;
-      border-radius: 6px;
-      background: rgba(255,255,255,0.95);
-      color: #1e293b;
+      border-radius: 999px;
+      background: rgba(255, 252, 247, 0.95);
+      color: var(--accent);
       cursor: pointer;
       white-space: nowrap;
       text-decoration: none;
+      box-shadow: 0 1px 4px rgba(42, 60, 53, 0.08);
     }
     .cell .preview-btn:hover { background: #fff; }
-    .c0 { background: linear-gradient(135deg, #8f9eb0, #6f7d8f); }
-    .c1 { background: linear-gradient(135deg, #8fa9a3, #6e8580); }
-    .c2 { background: linear-gradient(135deg, #8d97a3, #6f7782); }
-    .c3 { background: linear-gradient(135deg, #7a8a9a, #5c6773); }
-    .c4 { background: linear-gradient(135deg, #9aa8b8, #7a8796); }
+    /* 色系一・Hermès橘棕 */
+    html[data-scheme="hermes"] .c-sand { --wash: linear-gradient(180deg, rgba(224, 122, 61, 0.18), rgba(92, 46, 24, 0.50)); }
+    html[data-scheme="hermes"] .c-sage { --wash: linear-gradient(180deg, rgba(127, 160, 138, 0.18), rgba(42, 60, 53, 0.52)); }
+    html[data-scheme="hermes"] .c-linen { --wash: linear-gradient(180deg, rgba(243, 230, 212, 0.16), rgba(92, 74, 56, 0.48)); }
+    html[data-scheme="hermes"] .c-stone { --wash: linear-gradient(180deg, rgba(168, 161, 152, 0.16), rgba(58, 54, 50, 0.52)); }
+    /* 色系二・奶油金（2026-08-13 總監定案：奶油金＋現況排列） */
+    html[data-scheme="champagne"] .c-sand { --wash: linear-gradient(180deg, rgba(201, 162, 88, 0.28), rgba(92, 64, 28, 0.52)); }
+    html[data-scheme="champagne"] .c-sage { --wash: linear-gradient(180deg, rgba(186, 168, 140, 0.28), rgba(74, 58, 42, 0.54)); }
+    html[data-scheme="champagne"] .c-linen { --wash: linear-gradient(180deg, rgba(250, 240, 220, 0.22), rgba(110, 88, 58, 0.48)); }
+    html[data-scheme="champagne"] .c-stone { --wash: linear-gradient(180deg, rgba(176, 142, 98, 0.26), rgba(62, 46, 32, 0.56)); }
+    /* 色系三・深苔綠 */
+    html[data-scheme="moss"] .c-sand { --wash: linear-gradient(180deg, rgba(176, 92, 58, 0.22), rgba(72, 40, 28, 0.56)); }
+    html[data-scheme="moss"] .c-sage { --wash: linear-gradient(180deg, rgba(58, 92, 72, 0.28), rgba(26, 42, 36, 0.62)); }
+    html[data-scheme="moss"] .c-linen { --wash: linear-gradient(180deg, rgba(210, 198, 170, 0.22), rgba(58, 64, 52, 0.54)); }
+    html[data-scheme="moss"] .c-stone { --wash: linear-gradient(180deg, rgba(90, 98, 92, 0.28), rgba(32, 36, 34, 0.60)); }
+    /* 色系四・胡桃木 */
+    html[data-scheme="walnut"] .c-sand { --wash: linear-gradient(180deg, rgba(140, 92, 52, 0.28), rgba(48, 28, 16, 0.60)); }
+    html[data-scheme="walnut"] .c-sage { --wash: linear-gradient(180deg, rgba(110, 88, 64, 0.26), rgba(42, 32, 24, 0.58)); }
+    html[data-scheme="walnut"] .c-linen { --wash: linear-gradient(180deg, rgba(196, 168, 132, 0.22), rgba(64, 44, 28, 0.54)); }
+    html[data-scheme="walnut"] .c-stone { --wash: linear-gradient(180deg, rgba(92, 72, 56, 0.30), rgba(28, 20, 14, 0.62)); }
+    /* 色系五・石灰岩 */
+    html[data-scheme="limestone"] .c-sand { --wash: linear-gradient(180deg, rgba(186, 176, 160, 0.28), rgba(72, 68, 60, 0.54)); }
+    html[data-scheme="limestone"] .c-sage { --wash: linear-gradient(180deg, rgba(168, 176, 168, 0.26), rgba(64, 70, 66, 0.56)); }
+    html[data-scheme="limestone"] .c-linen { --wash: linear-gradient(180deg, rgba(232, 226, 214, 0.24), rgba(88, 84, 76, 0.50)); }
+    html[data-scheme="limestone"] .c-stone { --wash: linear-gradient(180deg, rgba(148, 148, 144, 0.28), rgba(48, 48, 46, 0.60)); }
+    /* 色系六・赤陶 */
+    html[data-scheme="terracotta"] .c-sand { --wash: linear-gradient(180deg, rgba(196, 88, 58, 0.28), rgba(92, 36, 24, 0.58)); }
+    html[data-scheme="terracotta"] .c-sage { --wash: linear-gradient(180deg, rgba(168, 112, 88, 0.26), rgba(72, 44, 32, 0.56)); }
+    html[data-scheme="terracotta"] .c-linen { --wash: linear-gradient(180deg, rgba(232, 196, 168, 0.22), rgba(110, 58, 40, 0.52)); }
+    html[data-scheme="terracotta"] .c-stone { --wash: linear-gradient(180deg, rgba(140, 92, 76, 0.28), rgba(56, 32, 26, 0.60)); }
+    /* 色系七・墨金 */
+    html[data-scheme="inkgold"] .c-sand { --wash: linear-gradient(180deg, rgba(196, 154, 74, 0.32), rgba(28, 24, 18, 0.68)); }
+    html[data-scheme="inkgold"] .c-sage { --wash: linear-gradient(180deg, rgba(120, 128, 108, 0.28), rgba(22, 26, 22, 0.66)); }
+    html[data-scheme="inkgold"] .c-linen { --wash: linear-gradient(180deg, rgba(210, 186, 130, 0.24), rgba(36, 32, 24, 0.62)); }
+    html[data-scheme="inkgold"] .c-stone { --wash: linear-gradient(180deg, rgba(88, 84, 76, 0.32), rgba(16, 16, 14, 0.70)); }
+    /* 色系八・灰泥粉 */
+    html[data-scheme="plaster"] .c-sand { --wash: linear-gradient(180deg, rgba(196, 140, 124, 0.26), rgba(88, 56, 52, 0.54)); }
+    html[data-scheme="plaster"] .c-sage { --wash: linear-gradient(180deg, rgba(176, 160, 148, 0.24), rgba(72, 60, 56, 0.54)); }
+    html[data-scheme="plaster"] .c-linen { --wash: linear-gradient(180deg, rgba(236, 216, 204, 0.22), rgba(96, 72, 68, 0.50)); }
+    html[data-scheme="plaster"] .c-stone { --wash: linear-gradient(180deg, rgba(160, 140, 136, 0.26), rgba(56, 44, 42, 0.58)); }
+    .compare-bar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(250, 247, 240, 0.96);
+      border: 1px solid #e4d5bc;
+      border-radius: var(--radius);
+      box-shadow: var(--card-shadow);
+      padding: 14px 14px 12px;
+      margin-bottom: 20px;
+    }
+    .compare-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .compare-label {
+      font-size: 13px;
+      font-weight: 700;
+      min-width: 4.5em;
+    }
+    .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pills button {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid #d4c6b0;
+      background: #fffdf8;
+      color: var(--ink);
+      cursor: pointer;
+    }
+    .pills button.is-on {
+      background: #2a3c35;
+      border-color: #2a3c35;
+      color: #faf7f0;
+    }
+    .pills .tag {
+      margin-left: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      opacity: 0.85;
+    }
+    .compare-note { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
     .staff-links {
       margin-top: 16px;
       padding-top: 14px;
-      border-top: 1px solid #e8eaed;
+      border-top: 1px solid #eadfce;
     }
     .staff-links h3 { margin: 0 0 8px; font-size: 14px; }
     .link-grid { display: flex; flex-wrap: wrap; gap: 8px; }
     .link-grid a {
       font-size: 13px;
       padding: 8px 12px;
-      border-radius: 8px;
-      background: #f1f3f4;
-      color: #1a73e8;
+      border-radius: 999px;
+      background: #efe6d4;
+      color: var(--accent);
       text-decoration: none;
-      font-weight: 500;
+      font-weight: 600;
     }
-    .link-grid a:hover { background: #e8f0fe; }
+    .link-grid a:hover { background: #e4d5bc; }
     footer { font-size: 12px; color: var(--muted); text-align: center; margin-top: 8px; }
   </style>
 </head>
@@ -144,9 +276,34 @@
     <h1>客戶 Rich Menu 預覽</h1>
     <p class="lead">在瀏覽器查看選單版面與各格連結；不必用手機 LINE 實測。下方按鈕會開啟與客人相同的網頁（員工預覽模式）。</p>
     <div class="notice">
-      <strong>說明：</strong>本頁僅預覽版面與連結。正式 LINE 聊天室下方的 Rich Menu <strong>尚未上線</strong>。
-      「上傳圖到公開網址」是日後要在 LINE 掛選單時才需要的步驟，<strong>不是</strong>日常驗收方式。
+      <strong>說明：</strong>本頁僅預覽版面與連結。正式 LINE 聊天室下方的選單 <strong>尚未上線</strong>。
+      Facebook 那格掛上 LINE 後會<strong>跳出 LINE、用外部瀏覽器或粉專 App 開</strong>，不會卡在 LINE 裡。
     </div>
+
+    <section class="compare-bar" aria-label="色系與底圖排列">
+      <div class="compare-row">
+        <span class="compare-label">色系</span>
+        <div class="pills" id="schemePills">
+          <button type="button" data-scheme="hermes">一・Hermès橘棕</button>
+          <button type="button" data-scheme="champagne" class="is-on">二・奶油金<span class="tag">已存</span></button>
+          <button type="button" data-scheme="moss">三・深苔綠</button>
+          <button type="button" data-scheme="walnut">四・胡桃木</button>
+          <button type="button" data-scheme="limestone">五・石灰岩</button>
+          <button type="button" data-scheme="terracotta">六・赤陶</button>
+          <button type="button" data-scheme="inkgold">七・墨金</button>
+          <button type="button" data-scheme="plaster">八・灰泥粉</button>
+        </div>
+      </div>
+      <div class="compare-row">
+        <span class="compare-label">底圖排列</span>
+        <div class="pills" id="layoutPills">
+          <button type="button" data-layout="a" class="is-on">現況</button>
+          <button type="button" data-layout="b">客廳置中</button>
+          <button type="button" data-layout="c">暖木集中</button>
+        </div>
+      </div>
+      <p class="compare-note">定案：<strong>奶油金＋現況排列</strong>。其他色系仍可對照；改排列只換哪張圖在哪一格。</p>
+    </section>
 
     <div class="case-row">
       <label for="projectNo">預覽案號</label>
@@ -158,25 +315,29 @@
       <h2>未綁定客戶｜四格（2×2）</h2>
       <p class="hint">上排：申請綁定專案｜了解添心　／　下排：常見問題｜Facebook</p>
       <div class="richmenu guest" id="guestMenu">
-        <div class="cell c0" data-key="bind">
+        <div class="cell c-sand" data-key="bind">
+          <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="8" width="10" height="10" rx="2"/><rect x="11" y="4" width="10" height="10" rx="2"/></svg></span>
           <span class="title">申請綁定專案</span>
-          <span class="sub">綁定裝修案</span>
-          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+          <span class="sub">把案子跟您連在一起</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">打開客人畫面</a>
         </div>
-        <div class="cell c1" data-key="landing">
+        <div class="cell c-sage" data-key="landing">
+          <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10.5V20h12v-9.5"/><path d="M10 20v-5h4v5"/></svg></span>
           <span class="title">了解添心</span>
-          <span class="sub">公司介紹</span>
-          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+          <span class="sub">看看我們怎麼做家</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">打開客人畫面</a>
         </div>
-        <div class="cell c2" data-key="faq">
+        <div class="cell c-linen" data-key="faq">
+          <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 7.5h12a2 2 0 0 1 2 2V15a2 2 0 0 1-2 2H10l-4 3v-3H6a2 2 0 0 1-2-2V9.5a2 2 0 0 1 2-2z"/><path d="M12 10v.5"/><circle cx="12" cy="13.2" r="0.6" fill="currentColor" stroke="none"/></svg></span>
           <span class="title">常見問題</span>
-          <span class="sub">FAQ</span>
-          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+          <span class="sub">先幫您解惑</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">打開客人畫面</a>
         </div>
-        <div class="cell c3" data-key="fb">
+        <div class="cell c-stone" data-key="fb">
+          <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.2"/><path d="M13.2 8.2h-1.3c-.9 0-1.5.6-1.5 1.5v1.4H9.2v1.8h1.2V16h1.9v-3.1h1.5l.3-1.8h-1.8V9.9c0-.2.2-.4.5-.4h1.4V8.2z" fill="currentColor" stroke="none"/></svg></span>
           <span class="title">Facebook</span>
-          <span class="sub">外開社群</span>
-          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+          <span class="sub">看作品日常（跳出 LINE）</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">打開客人畫面</a>
         </div>
       </div>
     </section>
@@ -185,35 +346,41 @@
       <h2>已綁定會員｜六格（3×2）</h2>
       <p class="hint">上排：收款確認｜我的案場｜綁定新專案　／　下排：了解添心｜常見問題｜Facebook</p>
       <div class="richmenu member" id="memberMenu">
-        <div class="cell c0" data-key="receipt">
+        <div class="cell c-sand" data-key="receipt">
+          <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 5h10v14l-2-1.2-2 1.2-2-1.2-2 1.2-2-1.2V5z"/><path d="M9 9h6M9 12h6M9 15h4"/></svg></span>
           <span class="title">收款確認</span>
-          <span class="sub">LIFF</span>
-          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+          <span class="sub">核對這一期款項</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">打開客人畫面</a>
         </div>
-        <div class="cell c1" data-key="material">
+        <div class="cell c-sage" data-key="material">
+          <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="4" y="7" width="16" height="12" rx="1.5"/><path d="M4 12h16M12 7v12"/></svg></span>
           <span class="title">我的案場</span>
-          <span class="sub">選材</span>
-          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+          <span class="sub">選材與案子紀錄</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">打開客人畫面</a>
         </div>
-        <div class="cell c4" data-key="bind">
+        <div class="cell c-linen" data-key="bind">
+          <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="8" width="10" height="10" rx="2"/><rect x="11" y="4" width="10" height="10" rx="2"/></svg></span>
           <span class="title">綁定新專案</span>
-          <span class="sub">申請</span>
-          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+          <span class="sub">再加一個案子</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">打開客人畫面</a>
         </div>
-        <div class="cell c2" data-key="landing">
+        <div class="cell c-sage" data-key="landing">
+          <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10.5V20h12v-9.5"/><path d="M10 20v-5h4v5"/></svg></span>
           <span class="title">了解添心</span>
-          <span class="sub">落地頁</span>
-          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+          <span class="sub">看看我們怎麼做家</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">打開客人畫面</a>
         </div>
-        <div class="cell c1" data-key="faq">
+        <div class="cell c-linen" data-key="faq">
+          <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 7.5h12a2 2 0 0 1 2 2V15a2 2 0 0 1-2 2H10l-4 3v-3H6a2 2 0 0 1-2-2V9.5a2 2 0 0 1 2-2z"/></svg></span>
           <span class="title">常見問題</span>
-          <span class="sub">FAQ</span>
-          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+          <span class="sub">先幫您解惑</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">打開客人畫面</a>
         </div>
-        <div class="cell c3" data-key="fb">
+        <div class="cell c-stone" data-key="fb">
+          <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.2"/></svg></span>
           <span class="title">Facebook</span>
-          <span class="sub">外開</span>
-          <a class="preview-btn" href="#" target="_blank" rel="noopener">預覽客人畫面</a>
+          <span class="sub">看作品日常（跳出 LINE）</span>
+          <a class="preview-btn" href="#" target="_blank" rel="noopener">打開客人畫面</a>
         </div>
       </div>
     </section>
@@ -223,7 +390,7 @@
       <div class="link-grid" id="staffLinks"></div>
     </section>
 
-    <footer>圖稿比例 2500×843，與 LINE Rich Menu 一致。圖檔可由 <code>CODING/richmenu-preview</code> 產生。</footer>
+    <footer>定案：奶油金＋現況排列。底圖為添心完工實景。圖稿比例 2500×843。</footer>
   </div>
 
   <script>
@@ -234,7 +401,7 @@
         designer: '../projects/designer-material-selection.html',
         landing: 'LandingPage.html',
         faq: 'FAQ.html',
-        fb: 'https://www.facebook.com/TainanTanXin'
+        fb: 'https://www.facebook.com/TainanTanXin?openExternalBrowser=1'
       };
 
       function abs(path) {
@@ -297,6 +464,78 @@
           box.appendChild(a);
         });
       }
+
+      var PHOTO = {
+        closet: '../../richmenu-preview/bg/web-sand-closet.jpg',
+        workspace: '../../richmenu-preview/bg/web-sand-workspace.jpg',
+        greenSofa: '../../richmenu-preview/bg/web-sage-green-sofa.jpg',
+        living: '../../richmenu-preview/bg/web-sage-living.jpg',
+        american: '../../richmenu-preview/bg/web-linen-american.jpg',
+        kids: '../../richmenu-preview/bg/web-linen-kids.jpg',
+        glass: '../../richmenu-preview/bg/web-stone-glass.jpg'
+      };
+      var LAYOUTS = {
+        a: {
+          guest: { bind: 'closet', landing: 'greenSofa', faq: 'american', fb: 'glass' },
+          member: { receipt: 'workspace', material: 'living', bind: 'kids', landing: 'greenSofa', faq: 'american', fb: 'glass' }
+        },
+        b: {
+          guest: { bind: 'living', landing: 'greenSofa', faq: 'closet', fb: 'american' },
+          member: { receipt: 'greenSofa', material: 'living', bind: 'workspace', landing: 'closet', faq: 'kids', fb: 'glass' }
+        },
+        c: {
+          guest: { bind: 'closet', landing: 'workspace', faq: 'kids', fb: 'living' },
+          member: { receipt: 'closet', material: 'workspace', bind: 'kids', landing: 'american', faq: 'greenSofa', fb: 'glass' }
+        }
+      };
+
+      function applyPhotos(layoutId) {
+        var layout = LAYOUTS[layoutId] || LAYOUTS.a;
+        [['guestMenu', 'guest'], ['memberMenu', 'member']].forEach(function (pair) {
+          var root = document.getElementById(pair[0]);
+          var map = layout[pair[1]];
+          root.querySelectorAll('.cell[data-key]').forEach(function (cell) {
+            var photoKey = map[cell.getAttribute('data-key')];
+            var url = PHOTO[photoKey];
+            cell.style.backgroundImage = url ? 'url("' + url + '")' : '';
+          });
+        });
+      }
+
+      function setScheme(id) {
+        document.documentElement.setAttribute('data-scheme', id);
+        document.querySelectorAll('#schemePills button').forEach(function (btn) {
+          btn.classList.toggle('is-on', btn.getAttribute('data-scheme') === id);
+        });
+        try { localStorage.setItem('tx-richmenu-scheme-v2', id); } catch (e) {}
+      }
+
+      function setLayout(id) {
+        document.documentElement.setAttribute('data-layout', id);
+        document.querySelectorAll('#layoutPills button').forEach(function (btn) {
+          btn.classList.toggle('is-on', btn.getAttribute('data-layout') === id);
+        });
+        applyPhotos(id);
+        try { localStorage.setItem('tx-richmenu-layout-v2', id); } catch (e) {}
+      }
+
+      document.getElementById('schemePills').addEventListener('click', function (e) {
+        var btn = e.target.closest('button[data-scheme]');
+        if (btn) setScheme(btn.getAttribute('data-scheme'));
+      });
+      document.getElementById('layoutPills').addEventListener('click', function (e) {
+        var btn = e.target.closest('button[data-layout]');
+        if (btn) setLayout(btn.getAttribute('data-layout'));
+      });
+
+      var savedScheme = 'champagne';
+      var savedLayout = 'a';
+      try {
+        savedScheme = localStorage.getItem('tx-richmenu-scheme-v2') || 'champagne';
+        savedLayout = localStorage.getItem('tx-richmenu-layout-v2') || 'a';
+      } catch (e) {}
+      setScheme(savedScheme);
+      setLayout(savedLayout);
 
       wireCells(document.getElementById('guestMenu'));
       wireCells(document.getElementById('memberMenu'));
