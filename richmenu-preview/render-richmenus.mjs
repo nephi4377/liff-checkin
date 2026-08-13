@@ -1,5 +1,5 @@
 /**
- * LINE Rich Menu — 員工 2500×1686、廠商 2500×843、客戶未綁四格／會員六格 2500×843。
+ * LINE Rich Menu — 員工／客戶未綁四格／會員六格 2500×1686（全幅）、廠商 2500×843。
  * 版型：V2 內部版；客戶版對齊 2026-07-28 定稿。
  *
  * 執行：npm install && node render-richmenus.mjs
@@ -387,11 +387,11 @@ async function roundedPhotoCell({ src, w, h, wash, radius, zoom = 1.42 }) {
 
 function customerTextSvg(w, h, cells) {
   const texts = cells.map((c) => {
-    const fs = c.fs || (c.title.length > 5 ? 100 : 112);
-    const subFs = c.subFs || 42;
+    const fs = c.fs || (c.title.length > 5 ? 118 : 132);
+    const subFs = c.subFs || 48;
     return `
-  <text x="${c.cx}" y="${c.cy - 10}" text-anchor="middle" font-family="Noto Sans TC, PingFang TC, Microsoft JhengHei, sans-serif" font-size="${fs}" font-weight="700" fill="#faf7f0">${c.title}</text>
-  <text x="${c.cx}" y="${c.cy + 50}" text-anchor="middle" font-family="Noto Sans TC, PingFang TC, Microsoft JhengHei, sans-serif" font-size="${subFs}" font-weight="600" fill="rgba(250,247,240,0.96)">${c.sub}</text>`;
+  <text x="${c.cx}" y="${c.cy - 12}" text-anchor="middle" font-family="Noto Sans TC, PingFang TC, Microsoft JhengHei, sans-serif" font-size="${fs}" font-weight="700" fill="#faf7f0">${c.title}</text>
+  <text x="${c.cx}" y="${c.cy + 56}" text-anchor="middle" font-family="Noto Sans TC, PingFang TC, Microsoft JhengHei, sans-serif" font-size="${subFs}" font-weight="600" fill="rgba(250,247,240,0.96)">${c.sub}</text>`;
   }).join("");
   return Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
@@ -404,7 +404,7 @@ function customerTextSvg(w, h, cells) {
 
 async function renderCustomerPhotoMenu({ colWidths, rowHeights, pad, radius, cells, pngPath, jpgPath }) {
   const w = 2500;
-  const h = 843;
+  const h = 1686;
   const composites = [];
   const textCells = [];
   for (const cell of cells) {
@@ -426,7 +426,7 @@ async function renderCustomerPhotoMenu({ colWidths, rowHeights, pad, radius, cel
       title: cell.title,
       sub: cell.sub,
       cx: cellX + cw / 2,
-      cy: cellY + ch - 78,
+      cy: cellY + ch - 140,
       fs: cell.fs,
       subFs: cell.subFs,
     });
@@ -440,7 +440,7 @@ async function renderCustomerPhotoMenu({ colWidths, rowHeights, pad, radius, cel
     .png({ compressionLevel: 9 })
     .toBuffer();
   await sharp(withText).toFile(pngPath);
-  await sharp(withText).jpeg({ quality: 90, mozjpeg: true }).toFile(jpgPath);
+  await sharp(withText).jpeg({ quality: 86, mozjpeg: true }).toFile(jpgPath);
 }
 
 async function main() {
@@ -464,9 +464,9 @@ async function main() {
 
   await renderCustomerPhotoMenu({
     colWidths: [1250, 1250],
-    rowHeights: [422, 421],
-    pad: 4,
-    radius: 12,
+    rowHeights: [843, 843],
+    pad: 8,
+    radius: 18,
     pngPath: guestPng,
     jpgPath: guestJpg,
     cells: [
@@ -479,18 +479,18 @@ async function main() {
 
   await renderCustomerPhotoMenu({
     colWidths: [834, 833, 833],
-    rowHeights: [422, 421],
-    pad: 3,
-    radius: 10,
+    rowHeights: [843, 843],
+    pad: 6,
+    radius: 14,
     pngPath: memberPng,
     jpgPath: memberJpg,
     cells: [
-      { row: 0, col: 0, src: bgFile("sand-workspace.jpg"), wash: WASH.sand, title: "收款確認", sub: "核對這一期款項", fs: 78, subFs: 34 },
-      { row: 0, col: 1, src: bgFile("sage-living.jpg"), wash: WASH.sage, title: "我的案場", sub: "選材與案子紀錄", fs: 78, subFs: 34 },
-      { row: 0, col: 2, src: bgFile("linen-kids.jpg"), wash: WASH.linen, title: "綁定新專案", sub: "再加一個案子", fs: 72, subFs: 34 },
-      { row: 1, col: 0, src: bgFile("sage-green-sofa.jpg"), wash: WASH.sage, title: "了解添心", sub: "看看我們怎麼做家", fs: 78, subFs: 34 },
-      { row: 1, col: 1, src: bgFile("linen-american.jpg"), wash: WASH.linen, title: "常見問題", sub: "先幫您解惑", fs: 78, subFs: 34 },
-      { row: 1, col: 2, src: bgFile("stone-glass.jpg"), wash: WASH.stone, title: "Facebook", sub: "看作品日常", fs: 78, subFs: 34 },
+      { row: 0, col: 0, src: bgFile("sand-workspace.jpg"), wash: WASH.sand, title: "收款確認", sub: "核對這一期款項", fs: 96, subFs: 40 },
+      { row: 0, col: 1, src: bgFile("sage-living.jpg"), wash: WASH.sage, title: "我的案場", sub: "選材與案子紀錄", fs: 96, subFs: 40 },
+      { row: 0, col: 2, src: bgFile("linen-kids.jpg"), wash: WASH.linen, title: "綁定新專案", sub: "再加一個案子", fs: 88, subFs: 40 },
+      { row: 1, col: 0, src: bgFile("sage-green-sofa.jpg"), wash: WASH.sage, title: "了解添心", sub: "看看我們怎麼做家", fs: 96, subFs: 40 },
+      { row: 1, col: 1, src: bgFile("linen-american.jpg"), wash: WASH.linen, title: "常見問題", sub: "先幫您解惑", fs: 96, subFs: 40 },
+      { row: 1, col: 2, src: bgFile("stone-glass.jpg"), wash: WASH.stone, title: "Facebook", sub: "看作品日常", fs: 96, subFs: 40 },
     ],
   });
 
