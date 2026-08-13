@@ -339,10 +339,10 @@ function customerSvgLegacy() {
 
 const WASH = {
   /** 2026-08-13 總監定案：奶油金＋現況排列 */
-  sand: { top: "#C9A258", topOp: "0.28", bot: "#5C401C", botOp: "0.52" },
-  sage: { top: "#BAA88C", topOp: "0.28", bot: "#4A3A2A", botOp: "0.54" },
-  linen: { top: "#FAF0DC", topOp: "0.22", bot: "#6E583A", botOp: "0.48" },
-  stone: { top: "#B08E62", topOp: "0.26", bot: "#3E2E20", botOp: "0.56" },
+  sand: { top: "#C9A258", topOp: "0.22", bot: "#3A2814", botOp: "0.68" },
+  sage: { top: "#BAA88C", topOp: "0.22", bot: "#2E2418", botOp: "0.70" },
+  linen: { top: "#FAF0DC", topOp: "0.18", bot: "#4A3A24", botOp: "0.64" },
+  stone: { top: "#B08E62", topOp: "0.22", bot: "#2A2016", botOp: "0.72" },
 };
 
 function bgFile(name) {
@@ -377,16 +377,16 @@ async function roundedPhotoCell({ src, w, h, wash, radius }) {
 
 function customerTextSvg(w, h, cells) {
   const texts = cells.map((c) => {
-    const fs = c.title.length > 5 ? 34 : c.fs || 42;
-    const subFs = c.subFs || 22;
+    const fs = c.fs || (c.title.length > 5 ? 100 : 112);
+    const subFs = c.subFs || 42;
     return `
-  <text x="${c.cx}" y="${c.cy - 6}" text-anchor="middle" font-family="Noto Sans TC, PingFang TC, Microsoft JhengHei, sans-serif" font-size="${fs}" font-weight="700" fill="#faf7f0">${c.title}</text>
-  <text x="${c.cx}" y="${c.cy + 36}" text-anchor="middle" font-family="Noto Sans TC, PingFang TC, Microsoft JhengHei, sans-serif" font-size="${subFs}" font-weight="500" fill="rgba(250,247,240,0.92)">${c.sub}</text>`;
+  <text x="${c.cx}" y="${c.cy - 10}" text-anchor="middle" font-family="Noto Sans TC, PingFang TC, Microsoft JhengHei, sans-serif" font-size="${fs}" font-weight="700" fill="#faf7f0">${c.title}</text>
+  <text x="${c.cx}" y="${c.cy + 50}" text-anchor="middle" font-family="Noto Sans TC, PingFang TC, Microsoft JhengHei, sans-serif" font-size="${subFs}" font-weight="600" fill="rgba(250,247,240,0.96)">${c.sub}</text>`;
   }).join("");
   return Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
   <defs>
-    <filter id="ts"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#2a2018" flood-opacity="0.55"/></filter>
+    <filter id="ts"><feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#2a2018" flood-opacity="0.75"/></filter>
   </defs>
   <g filter="url(#ts)">${texts}</g>
 </svg>`);
@@ -416,7 +416,7 @@ async function renderCustomerPhotoMenu({ colWidths, rowHeights, pad, radius, cel
       title: cell.title,
       sub: cell.sub,
       cx: cellX + cw / 2,
-      cy: cellY + ch / 2 + 18,
+      cy: cellY + ch - 78,
       fs: cell.fs,
       subFs: cell.subFs,
     });
@@ -475,12 +475,12 @@ async function main() {
     pngPath: memberPng,
     jpgPath: memberJpg,
     cells: [
-      { row: 0, col: 0, src: bgFile("sand-workspace.jpg"), wash: WASH.sand, title: "收款確認", sub: "核對這一期款項", fs: 36 },
-      { row: 0, col: 1, src: bgFile("sage-living.jpg"), wash: WASH.sage, title: "我的案場", sub: "選材與案子紀錄", fs: 36 },
-      { row: 0, col: 2, src: bgFile("linen-kids.jpg"), wash: WASH.linen, title: "綁定新專案", sub: "再加一個案子", fs: 34 },
-      { row: 1, col: 0, src: bgFile("sage-green-sofa.jpg"), wash: WASH.sage, title: "了解添心", sub: "看看我們怎麼做家", fs: 36 },
-      { row: 1, col: 1, src: bgFile("linen-american.jpg"), wash: WASH.linen, title: "常見問題", sub: "先幫您解惑", fs: 36 },
-      { row: 1, col: 2, src: bgFile("stone-glass.jpg"), wash: WASH.stone, title: "Facebook", sub: "看作品日常", fs: 36 },
+      { row: 0, col: 0, src: bgFile("sand-workspace.jpg"), wash: WASH.sand, title: "收款確認", sub: "核對這一期款項", fs: 78, subFs: 34 },
+      { row: 0, col: 1, src: bgFile("sage-living.jpg"), wash: WASH.sage, title: "我的案場", sub: "選材與案子紀錄", fs: 78, subFs: 34 },
+      { row: 0, col: 2, src: bgFile("linen-kids.jpg"), wash: WASH.linen, title: "綁定新專案", sub: "再加一個案子", fs: 72, subFs: 34 },
+      { row: 1, col: 0, src: bgFile("sage-green-sofa.jpg"), wash: WASH.sage, title: "了解添心", sub: "看看我們怎麼做家", fs: 78, subFs: 34 },
+      { row: 1, col: 1, src: bgFile("linen-american.jpg"), wash: WASH.linen, title: "常見問題", sub: "先幫您解惑", fs: 78, subFs: 34 },
+      { row: 1, col: 2, src: bgFile("stone-glass.jpg"), wash: WASH.stone, title: "Facebook", sub: "看作品日常", fs: 78, subFs: 34 },
     ],
   });
 

@@ -27,4 +27,7 @@
 
 ## 部署
 
-- CODING：`git push origin main`（只加本波檔案，未跑 `upload.bat` 的 `git add .`，以免送出完工原圖）
+- CODING：`3ec3107` push `origin main`（只加本波檔案，未跑 `upload.bat` 的 `git add .`，以免送出完工原圖）
+- 圖稿已可開：https://info.tanxin.space/modules/info/asset/richmenu/customer_guest_richmenu_v1.jpg
+- 黃俊豪 LINE 已掛未綁四格（2026-08-13 16:37）
+- 同日稍後：標題加大後換圖（仍同一套選單，不重建）
