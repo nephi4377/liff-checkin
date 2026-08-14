@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=54"></script>
+  <script src="../../shared/js/accounting_api.js?v=55"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/customer_finance_ui.js?v=2"></script>
@@ -648,12 +648,7 @@
       }
     }
 
-    /* ── deep link: entity=material 時直接開選材 ── */
-    if (deepLink.entity === 'material') {
-      setTimeout(function () {
-        if ($('cardMaterial')) $('cardMaterial').click();
-      }, 300);
-    }
+    /* ── 選材：開頁帶 entity=material 時由 boot 直接打開，不再額外等 300ms ── */
 
     $('btnClearSign').onclick = function () { ctx.clearRect(0, 0, canvas.width, canvas.height); };
     $('btnCancelSign').onclick = function () { pendingSignAdjId = null; $('signModal').classList.add('hidden'); };
@@ -683,7 +678,10 @@
       try {
         session = await AccountingApi.initCustomerPortalSession({
           liffId: staffPreview ? undefined : CUSTOMER_FINANCE_LIFF_ID,
-          staffPreview: staffPreview
+          staffPreview: staffPreview,
+          projectNo: deepLink.projectNo || '',
+          includeData: !bindIntent && deepLink.entity !== 'material',
+          wakeMaterial: deepLink.entity === 'material'
         });
         if (session && session.staffPreview) staffPreview = true;
         if (staffPreview) {
@@ -708,7 +706,30 @@
         } else {
           showPortalView();
         }
-        if (!openBind && $('projectSelect').value) loadData();
+        if (!openBind && $('projectSelect').value && deepLink.entity !== 'material') {
+          var pnoNow = String($('projectSelect').value || '');
+          var bundled = session.portal && session.portal.receipts &&
+            String(session.portal.project_no || '') === pnoNow;
+          if (bundled) {
+            if (SHOW_CUSTOMER_ADJUSTMENTS) renderAdj(session.portal.adjustments || []);
+            renderRec(session.portal.receipts || []);
+            focusDeepLinkEntity();
+            if (typeof AccountingListCache !== 'undefined') {
+              AccountingListCache.loadPortalData(session, pnoNow, function () {
+                return Promise.resolve({
+                  success: true,
+                  receipts: session.portal.receipts || [],
+                  adjustments: session.portal.adjustments || []
+                });
+              }, { force: true });
+            }
+          } else {
+            loadData();
+          }
+        }
+        if (!openBind && deepLink.entity === 'material' && $('cardMaterial')) {
+          $('cardMaterial').click();
+        }
       } catch (e) {
         $('loading').classList.add('hidden');
         $('app').classList.remove('hidden');

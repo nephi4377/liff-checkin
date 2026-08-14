@@ -1563,6 +1563,8 @@ var AccountingApi = (function () {
       opts = opts || {};
       var body = { action: 'margin_customer_finance_portal_auth', auth: resolveAuth(sessionOrToken) };
       if (opts.staffPreview) body.staff_preview = true;
+      if (opts.includeData) body.include_data = true;
+      if (opts.projectNo) body.project_no = String(opts.projectNo).trim();
       if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
         body.dev_bypass = true;
         if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
@@ -1665,18 +1667,49 @@ var AccountingApi = (function () {
           empSession = await AccountingApi.initCustomerFinanceSession(opts);
         }
         if (!empSession) return null;
-        var portalStaff = await AccountingApi.cfPortalAuth(empSession, { staffPreview: true });
+        if (opts.wakeMaterial) {
+          try {
+            fetch(PROJECT_CONSOLE_API + '?page=material_ping', { method: 'GET' }).catch(function () {});
+          } catch (eWakeStaff) {}
+        }
+        var portalStaff = await AccountingApi.cfPortalAuth(empSession, {
+          staffPreview: true,
+          includeData: opts.includeData !== false,
+          projectNo: opts.projectNo || ''
+        });
         if (!portalStaff.success) throw new Error(portalStaff.message || '員工預覽驗證失敗');
         empSession.staffPreview = true;
         empSession.portal = portalStaff;
         notifyUiOperator_(empSession);
         return empSession;
       }
-      var session = await AccountingApi.initLiff(opts);
-      if (!session || !session.idToken) throw new Error('LIFF 登入失敗');
-      var portal = await AccountingApi.cfPortalAuth(session);
+      var liffId = opts.liffId;
+      if (!liffId) {
+        var policy = await AccountingApi.loadPolicy();
+        liffId = resolveLiffIdForInit_(opts, policy);
+      }
+      if (!liffId) throw new Error('LIFF 尚未設定');
+      if (typeof liff === 'undefined') throw new Error('請用 LINE 開啟');
+      await liff.init({ liffId: liffId });
+      if (!liff.isLoggedIn()) {
+        liff.login({ redirectUri: window.location.href });
+        return null;
+      }
+      var idToken = liff.getIDToken();
+      if (!idToken) throw new Error('LIFF 登入失敗');
+      var session = { devBypass: false, idToken: idToken, profile: {}, portal: null };
+      if (opts.wakeMaterial) {
+        try {
+          fetch(PROJECT_CONSOLE_API + '?page=material_ping', { method: 'GET' }).catch(function () {});
+        } catch (eWake) {}
+      }
+      var portal = await AccountingApi.cfPortalAuth(session, {
+        includeData: opts.includeData !== false,
+        projectNo: opts.projectNo || ''
+      });
       if (!portal.success) throw new Error(portal.message || '客戶綁定驗證失敗');
       session.portal = portal;
+      session.profile = { userId: portal.user_id, displayName: portal.display_name };
       return session;
     },
     primeHubIdentityFromUrl: primeHubIdentityFromUrl_,
