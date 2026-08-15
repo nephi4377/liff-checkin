@@ -102,7 +102,7 @@
         <p id="bindMsg" role="status"></p>
         <button type="button" class="btn btn-primary" id="btnBindSubmit">送出綁定</button>
         <button type="button" class="btn btn-secondary hidden" id="btnLiffRelogin">重新登入 LINE</button>
-        <button type="button" class="btn btn-secondary hidden" id="btnBindBack">回我的案件</button>
+        <button type="button" class="btn btn-secondary hidden" id="btnBindBack">回選材</button>
       </div>
       <div id="bindDoneCard" class="card hidden">
         <h3 style="margin:0 0 8px">綁定完成</h3>
@@ -112,7 +112,7 @@
     </div>
 
     <div id="portalView">
-    <h2>我的案件紀錄</h2>
+    <h2 id="portalHeading">我的案件紀錄</h2>
     <p class="sub" id="userLine">—</p>
     <div id="msg"></div>
 
@@ -121,28 +121,11 @@
       <select id="projectSelect"></select>
     </div>
 
-    <!-- 首屏：兩張大卡 -->
-    <div id="mainMenu">
-      <div class="card menu-card" id="cardReceipt" style="cursor:pointer;text-align:center;padding:24px 14px;">
-        <div style="font-size:32px;margin-bottom:8px;">💰</div>
-        <h3 style="margin:0;font-size:18px;">收款確認</h3>
-        <p style="color:#555;font-size:13px;margin:6px 0 0;">查看收款紀錄並確認</p>
-      </div>
-      <div class="card menu-card" id="cardMaterial" style="cursor:pointer;text-align:center;padding:24px 14px;">
-        <div style="font-size:32px;margin-bottom:8px;">🎨</div>
-        <h3 style="margin:0;font-size:18px;">選材</h3>
-        <p style="color:#555;font-size:13px;margin:6px 0 0;">唯讀查看選材照片（以案件 Dropbox 為主顯示）。舊檔掃描進來的可能標「未分類」，內容仍以照片為準。</p>
-      </div>
-      <div class="card menu-card" id="cardBind" style="cursor:pointer;text-align:center;padding:24px 14px;">
-        <div style="font-size:32px;margin-bottom:8px;">🔗</div>
-        <h3 style="margin:0;font-size:18px;">綁定其他專案</h3>
-        <p style="color:#555;font-size:13px;margin:6px 0 0;">再連一戶案號</p>
-      </div>
-    </div>
+    <!-- 舊首屏三卡已停用：收款／選材／綁定改由 LINE 大圖分鍵進入 -->
+    <div id="mainMenu" class="hidden"></div>
 
-    <!-- 收款紀錄（第二層） -->
+    <!-- 收款（收款確認那一鍵直達） -->
     <div id="content" class="hidden">
-      <button class="btn btn-secondary" id="btnBackFromRec" style="margin-bottom:12px;">← 返回</button>
       <!--
         【未來待確認】總監指示：先不看追加減
         暫時對客戶（含員工預覽）隱藏此區塊；後端 API 與下方繪製／確認／簽名邏輯保留不刪。
@@ -158,9 +141,8 @@
       </div>
     </div>
 
-    <!-- 選材清單（第二層，唯讀） -->
+    <!-- 選材（我的案場那一鍵直達，頁內不再放其他功能鍵） -->
     <div id="materialView" class="hidden">
-      <button class="btn btn-secondary" id="btnBackFromMat" style="margin-bottom:12px;">← 返回</button>
       <div class="card">
         <h3 style="margin:0 0 8px">選材清單</h3>
         <div class="warn-box">此頁只能看，不能改。若內容不對，請通知設計師重新整理選材。</div>
@@ -268,10 +250,12 @@
         if (sel.disabled) return;
         sel.disabled = true;
         sel.classList.add('is-busy');
-        loadData().finally(function () {
+        var done = function () {
           sel.disabled = false;
           sel.classList.remove('is-busy');
-        });
+        };
+        var p = (deepLink.entity === 'material') ? loadMaterials() : loadData();
+        Promise.resolve(p).finally(done);
       };
     }
 
@@ -478,25 +462,30 @@
       });
     }
 
-    /* ── 首屏兩卡切換 ── */
-    function showMainMenu() {
-      $('mainMenu').classList.remove('hidden');
-      $('content').classList.add('hidden');
-      $('materialView').classList.add('hidden');
-    }
-    $('cardReceipt').onclick = function () {
+    /* 收款／選材分鍵進入；頁內不再用功能卡互切 */
+    function showReceiptView() {
+      document.title = '我的裝修案';
+      $('bindView').classList.add('hidden');
+      $('portalView').classList.remove('hidden');
       $('mainMenu').classList.add('hidden');
       $('content').classList.remove('hidden');
-      if ($('projectSelect').value) loadData();
-    };
-    $('cardMaterial').onclick = function () {
+      $('materialView').classList.add('hidden');
+      $('portalHeading').textContent = '收款確認';
+    }
+    function showMaterialOnlyView() {
+      document.title = '我的裝修案';
+      $('bindView').classList.add('hidden');
+      $('portalView').classList.remove('hidden');
       $('mainMenu').classList.add('hidden');
+      $('content').classList.add('hidden');
       $('materialView').classList.remove('hidden');
-      loadMaterials();
-    };
-    $('cardBind').onclick = function () { showBindView(true); };
-    $('btnBackFromRec').onclick = showMainMenu;
-    $('btnBackFromMat').onclick = showMainMenu;
+      $('portalHeading').textContent = '選材';
+      if ($('projectSelect').value) loadMaterials();
+    }
+    function showPortalByMenuKey() {
+      if (deepLink.entity === 'material' || deepLink.bind) showMaterialOnlyView();
+      else showReceiptView();
+    }
 
     function showBindMsg(text, kind) {
       var el = $('bindMsg');
@@ -512,15 +501,11 @@
       $('bindDoneCard').classList.add('hidden');
       showBindMsg('');
       $('bindTitle').textContent = hasProjects ? '綁定其他專案' : '申請綁定專案';
-      if (hasProjects) $('btnBindBack').classList.remove('hidden');
-      else $('btnBindBack').classList.add('hidden');
+      $('btnBindBack').classList.add('hidden');
     }
 
     function showPortalView() {
-      document.title = '我的裝修案';
-      $('bindView').classList.add('hidden');
-      $('portalView').classList.remove('hidden');
-      showMainMenu();
+      showPortalByMenuKey();
     }
 
     $('btnBindBack').onclick = showPortalView;
@@ -707,9 +692,6 @@
         if (deepLink.projectNo) {
           $('projectSelect').value = deepLink.projectNo;
         }
-        if (staffPreview) {
-          $('cardBind').classList.add('hidden');
-        }
         $('loading').classList.add('hidden');
         $('app').classList.remove('hidden');
         var openBind = !staffPreview && (bindIntent || !projects.length);
@@ -740,9 +722,6 @@
           } else {
             loadData();
           }
-        }
-        if (!openBind && deepLink.entity === 'material' && $('cardMaterial')) {
-          $('cardMaterial').click();
         }
       } catch (e) {
         $('loading').classList.add('hidden');
