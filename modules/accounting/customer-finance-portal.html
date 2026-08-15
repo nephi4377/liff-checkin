@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>申請綁定專案</title>
-  <meta property="og:title" content="申請綁定專案">
-  <meta name="apple-mobile-web-app-title" content="申請綁定專案">
+  <title>我的裝修案</title>
+  <meta property="og:title" content="我的裝修案">
+  <meta name="apple-mobile-web-app-title" content="我的裝修案">
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=55"></script>
+  <script src="../../shared/js/accounting_api.js?v=56"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/customer_finance_ui.js?v=2"></script>
@@ -21,7 +21,7 @@
     var CUSTOMER_FINANCE_LIFF_ID = '2007974938-d2y1uA1G';
     (function setCustomerPortalTitle_() {
       var t = String(window.location.hash || '') + String(window.location.search || '');
-      document.title = /bind=1/.test(t) ? '申請綁定專案' : '我的案件';
+      document.title = '我的裝修案';
     })();
   </script>
   <style>
@@ -224,7 +224,7 @@
 
     var deepLink = parsePortalDeepLink();
     staffPreview = !!deepLink.staffPreview;
-    document.title = deepLink.bind ? '申請綁定專案' : '我的案件';
+    document.title = '我的裝修案';
 
     function statusLabel(st) {
       var map = {
@@ -504,7 +504,7 @@
     }
 
     function showBindView(hasProjects) {
-      document.title = hasProjects ? '綁定其他專案' : '申請綁定專案';
+      document.title = '我的裝修案';
       $('bindView').classList.remove('hidden');
       $('portalView').classList.add('hidden');
       $('bindFormCard').classList.remove('hidden');
@@ -516,7 +516,7 @@
     }
 
     function showPortalView() {
-      document.title = '我的案件';
+      document.title = '我的裝修案';
       $('bindView').classList.add('hidden');
       $('portalView').classList.remove('hidden');
       showMainMenu();
@@ -641,7 +641,11 @@
           });
         });
       } catch (e) {
-        $('matList').innerHTML = '<p>載入失敗，請稍後再試</p>' +
+        var failMsg = (e && e.message) ? String(e.message) : '載入失敗，請稍後再試';
+        if (/Failed to fetch|NetworkError|Load failed/i.test(failMsg)) {
+          failMsg = '選材資料暫時連不上，請稍後再試';
+        }
+        $('matList').innerHTML = '<p>' + failMsg + '</p>' +
           '<button type="button" class="btn btn-secondary" id="btnRetryMat">再試一次</button>';
         var retry2 = $('btnRetryMat');
         if (retry2) retry2.onclick = loadMaterials;

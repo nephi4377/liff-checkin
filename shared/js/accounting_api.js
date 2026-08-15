@@ -1545,7 +1545,8 @@ var AccountingApi = (function () {
         body.staff_preview = true;
         if (body.auth) body.auth.staff_preview = true;
       }
-      return postMaterial(body);
+      // 客戶頁已能連會計；直連主控台帶 LINE 身分會 Failed to fetch
+      return post(body);
     },
     materialPortalDetail: function (sessionOrToken, materialId, opts) {
       opts = opts || {};
@@ -1557,7 +1558,7 @@ var AccountingApi = (function () {
         body.staff_preview = true;
         if (body.auth) body.auth.staff_preview = true;
       }
-      return postMaterial(body);
+      return post(body);
     },
     cfPortalAuth: function (sessionOrToken, opts) {
       opts = opts || {};
