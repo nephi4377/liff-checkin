@@ -1691,13 +1691,22 @@ var AccountingApi = (function () {
       }
       if (!liffId) throw new Error('LIFF 尚未設定');
       if (typeof liff === 'undefined') throw new Error('請用 LINE 開啟');
-      await liff.init({ liffId: liffId });
-      if (!liff.isLoggedIn()) {
+      await liff.init({ liffId: liffId, withLoginOnExternalBrowser: true });
+      var reloginKey = 'cf_portal_liff_relogin_once';
+      function reloginCustomerLiff_() {
+        try { liff.logout(); } catch (eOut) {}
         liff.login({ redirectUri: window.location.href });
+      }
+      if (!liff.isLoggedIn()) {
+        reloginCustomerLiff_();
         return null;
       }
       var idToken = liff.getIDToken();
-      if (!idToken) throw new Error('LIFF 登入失敗');
+      if (!idToken || !isLiffIdTokenFresh_(idToken)) {
+        try { sessionStorage.setItem(reloginKey, '1'); } catch (eSet) {}
+        reloginCustomerLiff_();
+        return null;
+      }
       var session = { devBypass: false, idToken: idToken, profile: {}, portal: null };
       if (opts.wakeMaterial) {
         try {
@@ -1708,7 +1717,18 @@ var AccountingApi = (function () {
         includeData: opts.includeData !== false,
         projectNo: opts.projectNo || ''
       });
-      if (!portal.success) throw new Error(portal.message || '客戶綁定驗證失敗');
+      if (!portal.success) {
+        var failMsg = portal.message || '客戶綁定驗證失敗';
+        var already = false;
+        try { already = sessionStorage.getItem(reloginKey) === '1'; } catch (eGet) {}
+        if (!already && /LIFF 驗證失敗|登入失敗/.test(failMsg)) {
+          try { sessionStorage.setItem(reloginKey, '1'); } catch (eSet2) {}
+          reloginCustomerLiff_();
+          return null;
+        }
+        throw new Error(failMsg);
+      }
+      try { sessionStorage.removeItem(reloginKey); } catch (eClr) {}
       session.portal = portal;
       session.profile = { userId: portal.user_id, displayName: portal.display_name };
       return session;

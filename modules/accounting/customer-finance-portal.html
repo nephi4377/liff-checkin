@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=56"></script>
+  <script src="../../shared/js/accounting_api.js?v=57"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/customer_finance_ui.js?v=2"></script>
@@ -101,6 +101,7 @@
         <p class="sub" style="margin-top:12px">姓名或末四碼填一項即可。對不上時請設計師在內部協助綁定。</p>
         <p id="bindMsg" role="status"></p>
         <button type="button" class="btn btn-primary" id="btnBindSubmit">送出綁定</button>
+        <button type="button" class="btn btn-secondary hidden" id="btnLiffRelogin">重新登入 LINE</button>
         <button type="button" class="btn btn-secondary hidden" id="btnBindBack">回我的案件</button>
       </div>
       <div id="bindDoneCard" class="card hidden">
@@ -524,6 +525,15 @@
 
     $('btnBindBack').onclick = showPortalView;
     $('btnBindEnter').onclick = showPortalView;
+    $('btnLiffRelogin').onclick = function () {
+      try { sessionStorage.removeItem('cf_portal_liff_relogin_once'); } catch (eClr) {}
+      if (typeof liff === 'undefined') {
+        showBindMsg('請從官方 LINE 打開此頁', 'err');
+        return;
+      }
+      try { liff.logout(); } catch (eOut) {}
+      liff.login({ redirectUri: window.location.href });
+    };
 
     $('btnBindSubmit').onclick = function () {
       if (staffPreview) {
@@ -740,7 +750,8 @@
         if (bindIntent) {
           showBindView(false);
           $('btnBindSubmit').disabled = true;
-          showBindMsg(e.message || '載入失敗，請關閉後再從官方 LINE 打開', 'err');
+          $('btnLiffRelogin').classList.remove('hidden');
+          showBindMsg((e.message || '載入失敗') + '。請按「重新登入 LINE」，或用手機官方 LINE 打開。', 'err');
         } else {
           $('loading').classList.remove('hidden');
           $('app').classList.add('hidden');
