@@ -562,6 +562,29 @@
       }, { busyLabel: '處理中…', lockRoot: $('bindFormCard') });
     };
 
+    function fmtPortalDate(v) {
+      var s = String(v || '').trim();
+      if (!s) return '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      var d = new Date(s);
+      if (!isNaN(d.getTime())) {
+        try {
+          return d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
+        } catch (eTz) {
+          return d.toLocaleDateString('sv-SE');
+        }
+      }
+      return s.slice(0, 10);
+    }
+    function portalPhotoSrc(u) {
+      var s = String(u || '').trim();
+      var m = s.match(/[?&]id=([^&]+)/);
+      if (m && m[1]) {
+        return 'https://drive.google.com/thumbnail?id=' + decodeURIComponent(m[1]) + '&sz=w1200';
+      }
+      return s;
+    }
+
     function splitLabels(raw) {
       return String(raw || '').split(/[、,;｜|]/).map(function (s) { return s.trim(); }).filter(Boolean);
     }
@@ -596,7 +619,8 @@
         $('matList').innerHTML = res.items.map(function (m) {
           var photos = (m.photo_urls || '').split(/[,;]/).map(function (s) { return s.trim(); }).filter(Boolean);
           var photoHtml = photos.length ? photos.map(function (u) {
-            return '<img class="mat-photo" src="' + u + '" alt="選材照片" data-full="' + u + '" />';
+            var src = portalPhotoSrc(u);
+            return '<img class="mat-photo" src="' + src + '" alt="選材照片" data-full="' + src + '" />';
           }).join('') : '';
           var photoHint = m.photos_purged
             ? (m.photos_purged_message || '照片已超過保留期限，如需查閱請聯絡設計師。')
@@ -618,7 +642,7 @@
           }
           return '<div style="padding:12px 0;border-bottom:1px solid #eee">' +
             labelHtml +
-            (m.selected_at ? '<div style="font-size:14px;color:#555;margin-top:6px">定案日：' + m.selected_at + '</div>' : '') +
+            (m.selected_at ? '<div style="font-size:14px;color:#555;margin-top:6px">定案日：' + fmtPortalDate(m.selected_at) + '</div>' : '') +
             (m.note ? '<div style="font-size:14px;color:#666;margin-top:4px">補充說明：' + m.note + '</div>' : '') +
             (photoHtml ? '<div style="margin-top:8px">' + photoHtml + '</div>' : '<div style="font-size:13px;color:#999;margin-top:6px">' + photoHint + '</div>') +
             '</div>';
