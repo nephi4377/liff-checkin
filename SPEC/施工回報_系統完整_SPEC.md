@@ -141,6 +141,7 @@ flowchart LR
 
 - 一般照片：`reports/{projectId}/{batchId}/{timestamp}_{idx}_{rand}_{safeName}`
 - 失敗記錄：前綴見 `__REPORT_V3_CONFIG__.FAILURE_REPORT_PREFIX`（例：`failure-report/...`）
+- **選材客人快層（同一桶、另一前綴）**：`material-selection/{案號}/…`。施工回報搬運**不要**處理此前綴；生命週期 30 天須在 Firebase Console 另設。
 
 僅在規則允許匿名寫入上述前綴時可運作；規則變更須與本檔一併檢視。
 

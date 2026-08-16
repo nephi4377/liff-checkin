@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=57"></script>
+  <script src="../../shared/js/accounting_api.js?v=60"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/customer_finance_ui.js?v=2"></script>
@@ -34,7 +34,25 @@
     .btn-primary { background: #06c755; color: #fff; }
     .btn-secondary { background: #e8eaed; color: #333; }
     .warn-box { background: #fef7e0; border-radius: 8px; padding: 10px; font-size: 13px; margin: 8px 0; color: #5f4400; }
-    .preview-banner {
+    .test-phase-note {
+      background: #fff8e1;
+      border: 1px solid #f6de7a;
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin: 0 0 14px;
+      color: #5d4e00;
+      line-height: 1.55;
+    }
+    .test-phase-note strong {
+      display: block;
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .test-phase-note p {
+      margin: 0;
+      font-size: 15px;
+    }
       background: #e8f0fe;
       border: 1px solid #aecbfa;
       border-radius: 8px;
@@ -56,6 +74,14 @@
     .btn:disabled, .btn.is-busy { opacity: 0.65; cursor: wait; }
     .tag-part { background: #f3e8ff; color: #6b21a8; }
     .mat-photo { width: 88px; height: 88px; object-fit: cover; border-radius: 8px; margin: 6px 6px 0 0; cursor: pointer; }
+    .mat-photo-wrap { position: relative; display: inline-block; }
+    .mat-photo-ph {
+      position: absolute; inset: 6px 6px 0 0; width: 88px; height: 88px;
+      border-radius: 8px; background: #f3f4f6; color: #6b7280;
+      font-size: 12px; display: flex; align-items: center; justify-content: center;
+    }
+    .mat-photo-ph.hidden { display: none; }
+    .mat-sync { font-size: 13px; color: #555; font-weight: 500; margin-left: 8px; }
     .lightbox {
       position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 9999;
       display: flex; align-items: center; justify-content: center; padding: 16px;
@@ -81,6 +107,10 @@
   <div id="loading">正在打開…<br><span class="sub">請稍候，正在確認您的 LINE</span></div>
   <div id="app" class="hidden">
     <div id="previewBanner" class="preview-banner hidden">員工預覽模式（唯讀）：可切換全部案號，畫面與客戶相同，但無法代為確認或簽名。</div>
+    <div class="test-phase-note" role="note">
+      <strong>測試階段</strong>
+      <p>目前僅作為參考使用。自 2026-08-16 開始測試，這天之前的資料不一定齊全。您仍可查看、確認收款或申請綁定。</p>
+    </div>
 
     <div id="bindView" class="hidden">
       <h2 id="bindTitle">申請綁定專案</h2>
@@ -144,7 +174,7 @@
     <!-- 選材（我的案場那一鍵直達，頁內不再放其他功能鍵） -->
     <div id="materialView" class="hidden">
       <div class="card">
-        <h3 style="margin:0 0 8px">選材清單</h3>
+        <h3 style="margin:0 0 8px">選材清單 <span id="matSyncHint" class="mat-sync hidden">更新中…</span></h3>
         <div class="warn-box">此頁只能看，不能改。若內容不對，請通知設計師重新整理選材。</div>
         <div id="matList">載入中…</div>
       </div>
@@ -163,6 +193,7 @@
   (function () {
     var session = null;
     var staffPreview = false;
+    var matCacheFillSent_ = {};
     // 【未來待確認】總監指示：先不看追加減 — false＝不繪製／不深連結開啟；後端 API 不動。改 true 可恢復。
     var SHOW_CUSTOMER_ADJUSTMENTS = false;
     var pendingSignAdjId = null;
@@ -579,8 +610,14 @@
     function portalPhotoSrc(u) {
       var s = String(u || '').trim();
       var m = s.match(/[?&]id=([^&]+)/);
-      if (m && m[1]) {
+      if (m && m[1] && /drive\.google\.com|docs\.google\.com/i.test(s)) {
         return 'https://drive.google.com/thumbnail?id=' + decodeURIComponent(m[1]) + '&sz=w1200';
+      }
+      if (/dropbox\.com/i.test(s)) {
+        s = s.replace('www.dropbox.com', 'dl.dropboxusercontent.com');
+        s = s.replace('?dl=0', '?raw=1').replace('&dl=0', '&raw=1');
+        s = s.replace('?dl=1', '?raw=1').replace('&dl=1', '&raw=1');
+        if (s.indexOf('raw=1') < 0) s += (s.indexOf('?') >= 0 ? '&' : '?') + 'raw=1';
       }
       return s;
     }
@@ -604,15 +641,24 @@
     async function loadMaterials() {
       var pno = $('projectSelect').value;
       if (!pno) { $('matList').innerHTML = '<p>請先選擇案號</p>'; return; }
-      $('matList').innerHTML = '載入中…';
+      var sync = $('matSyncHint');
+      if (sync) sync.classList.remove('hidden');
+      var hasCards = !!$('matList').querySelector('.mat-item');
+      if (!hasCards) {
+        $('matList').innerHTML = '<p>空間、部位與日期會先出現；照片可能稍慢。</p>';
+      }
       try {
         var portalOpts = staffPreview ? { staffPreview: true } : {};
         var res = await AccountingApi.materialPortalList(session, pno, portalOpts);
         if (!res.success) {
-          $('matList').innerHTML = '<p>' + (res.message || '載入失敗，請稍後再試') +
-            '</p><button type="button" class="btn btn-secondary" id="btnRetryMat">再試一次</button>';
-          var retry = $('btnRetryMat');
-          if (retry) retry.onclick = loadMaterials;
+          if (!hasCards) {
+            $('matList').innerHTML = '<p>' + (res.message || '載入失敗，請稍後再試') +
+              '</p><button type="button" class="btn btn-secondary" id="btnRetryMat">再試一次</button>';
+            var retry = $('btnRetryMat');
+            if (retry) retry.onclick = loadMaterials;
+          } else {
+            showMsg(res.message || '清單暫時更新不到，已保留剛才看到的內容');
+          }
           return;
         }
         if (!res.items || !res.items.length) { $('matList').innerHTML = '<p>目前尚無選材資料</p>'; return; }
@@ -620,11 +666,14 @@
           var photos = (m.photo_urls || '').split(/[,;]/).map(function (s) { return s.trim(); }).filter(Boolean);
           var photoHtml = photos.length ? photos.map(function (u) {
             var src = portalPhotoSrc(u);
-            return '<img class="mat-photo" src="' + src + '" alt="選材照片" data-full="' + src + '" />';
+            return '<span class="mat-photo-wrap"><span class="mat-photo-ph">載入中</span><img class="mat-photo" src="' + src + '" alt="選材照片" data-full="' + src + '" /></span>';
           }).join('') : '';
-          var photoHint = m.photos_purged
-            ? (m.photos_purged_message || '照片已超過保留期限，如需查閱請聯絡設計師。')
-            : (photoHtml ? '' : '尚無照片');
+          var photoHint = '';
+          if (m.photos_purged) {
+            photoHint = m.photos_purged_message || '照片已超過保留期限，如需查閱請聯絡設計師。';
+          } else if (!photoHtml) {
+            photoHint = m.photos_pending ? '照片載入中，清單已有這一筆。' : '尚無照片';
+          }
           var spaceLabels = splitLabels(m.space_labels);
           var partLabels = splitLabels(m.part_labels);
           var labelHtml = '';
@@ -640,7 +689,7 @@
               ? '<span class="tag">' + (m.category || '材料') + '</span> <strong>' + m.item_name + '</strong>'
               : '<span class="tag">選材</span>';
           }
-          return '<div style="padding:12px 0;border-bottom:1px solid #eee">' +
+          return '<div class="mat-item" style="padding:12px 0;border-bottom:1px solid #eee">' +
             labelHtml +
             (m.selected_at ? '<div style="font-size:14px;color:#555;margin-top:6px">定案日：' + fmtPortalDate(m.selected_at) + '</div>' : '') +
             (m.note ? '<div style="font-size:14px;color:#666;margin-top:4px">補充說明：' + m.note + '</div>' : '') +
@@ -649,25 +698,70 @@
         }).join('');
         $('matList').querySelectorAll('img[data-full]').forEach(function (img) {
           img.addEventListener('click', function () { openMatLightbox(img.getAttribute('data-full') || img.src); });
+          img.addEventListener('load', function () {
+            var ph = img.parentNode && img.parentNode.querySelector('.mat-photo-ph');
+            if (ph) ph.classList.add('hidden');
+          });
           img.addEventListener('error', function () {
-            if (img.dataset.retried === '1') return;
+            var ph = img.parentNode && img.parentNode.querySelector('.mat-photo-ph');
+            if (img.dataset.retried === '1') {
+              img.alt = '照片暫時打不開';
+              img.style.display = 'none';
+              if (ph) {
+                ph.classList.remove('hidden');
+                ph.textContent = '暫時打不開';
+              } else {
+                var hint = document.createElement('div');
+                hint.style.cssText = 'font-size:13px;color:#999;margin-top:4px';
+                hint.textContent = '照片暫時打不開，請通知設計師重新整理選材。';
+                if (img.parentNode) img.parentNode.appendChild(hint);
+              }
+              return;
+            }
             img.dataset.retried = '1';
-            var m = String(img.src || '').match(/[?&]id=([^&]+)/);
-            if (m && m[1]) {
-              img.src = 'https://drive.google.com/thumbnail?id=' + decodeURIComponent(m[1]) + '&sz=w1200';
-              img.setAttribute('data-full', img.src);
+            var next = portalPhotoSrc(img.getAttribute('data-full') || img.src);
+            if (next && next !== img.src) {
+              img.src = next;
+              img.setAttribute('data-full', next);
+              return;
+            }
+            img.alt = '照片暫時打不開';
+            img.style.display = 'none';
+            if (ph) {
+              ph.classList.remove('hidden');
+              ph.textContent = '暫時打不開';
             }
           });
         });
+        var fillOne = (res.items || []).filter(function (m) {
+          return m && m.needs_cache_fill && m.material_id;
+        })[0];
+        if (fillOne && !matCacheFillSent_[pno] && typeof AccountingApi.materialPortalCacheOne === 'function') {
+          matCacheFillSent_[pno] = true;
+          var fillOpts = staffPreview ? { staffPreview: true } : {};
+          AccountingApi.materialPortalCacheOne(session, pno, fillOne.material_id, fillOpts)
+            .then(function (fillRes) {
+              if (fillRes && fillRes.uploaded && $('projectSelect').value === pno) {
+                loadMaterials();
+              }
+            })
+            .catch(function () { /* 清單已出，補圖失敗不改成連不上 */ });
+        }
       } catch (e) {
         var failMsg = (e && e.message) ? String(e.message) : '載入失敗，請稍後再試';
         if (/Failed to fetch|NetworkError|Load failed/i.test(failMsg)) {
           failMsg = '選材資料暫時連不上，請稍後再試';
         }
-        $('matList').innerHTML = '<p>' + failMsg + '</p>' +
-          '<button type="button" class="btn btn-secondary" id="btnRetryMat">再試一次</button>';
-        var retry2 = $('btnRetryMat');
-        if (retry2) retry2.onclick = loadMaterials;
+        if (!hasCards) {
+          $('matList').innerHTML = '<p>' + failMsg + '</p>' +
+            '<button type="button" class="btn btn-secondary" id="btnRetryMat">再試一次</button>';
+          var retry2 = $('btnRetryMat');
+          if (retry2) retry2.onclick = loadMaterials;
+        } else {
+          showMsg(failMsg);
+        }
+      } finally {
+        if (sync) sync.classList.add('hidden');
       }
     }
 

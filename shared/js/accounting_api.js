@@ -24,6 +24,8 @@ var AccountingApi = (function () {
   var SUPERVISOR_DENIED_MSG = '權限不足（需主管，權限 ≥ 3）';
   var VENDOR_PAYMENT_APPROVE_DENIED_MSG = '權限不足（廠商請款審核需權限 ≥ 5）';
   var HUB_RELOGIN_MSG = '請從主控台重新開啟會計';
+  /** 一般讀寫逾時；OCR 等長操作請自行傳 0（不限）或更長毫秒 */
+  var DEFAULT_TIMEOUT_MS = 60000;
   function logApiFailure_(actionName, err, notify) {
     if (actionName === 'accounting_error_report' || actionName === 'accounting_client_log') return;
     if (typeof AccountingUi === 'undefined' || !AccountingUi.reportFailure) return;
@@ -138,18 +140,24 @@ var AccountingApi = (function () {
       }
       return parsed;
     } catch (e) {
-      if (trackUi && typeof AccountingUi !== 'undefined' && AccountingUi.apiEnd) {
-        AccountingUi.apiEnd(actionName, Date.now() - t0, false, e.message || String(e));
+      var err = e;
+      var raw = (e && e.message) || String(e || '');
+      if ((e && e.name === 'AbortError') || /abort/i.test(raw)) {
+        err = new Error('連線逾時，請再試一次');
       }
-      logApiFailure_(actionName, e, false);
-      throw e;
+      if (trackUi && typeof AccountingUi !== 'undefined' && AccountingUi.apiEnd) {
+        AccountingUi.apiEnd(actionName, Date.now() - t0, false, err.message || raw);
+      }
+      logApiFailure_(actionName, err, false);
+      throw err;
     } finally {
       if (timer) clearTimeout(timer);
     }
   }
 
   async function post(body, timeoutMs) {
-    return postToUrl_(GAS_API, body, timeoutMs, '會計');
+    var ms = timeoutMs === undefined ? DEFAULT_TIMEOUT_MS : timeoutMs;
+    return postToUrl_(GAS_API, body, ms, '會計');
   }
 
   /** 選材專用 — 打 project-console，不再經 accounting-gas */
@@ -1527,6 +1535,9 @@ var AccountingApi = (function () {
     materialScanImport: function (sessionOrToken, projectNo) {
       return postMaterial(buildMaterialPostBody_(sessionOrToken, { action: 'margin_material_scan_import', project_no: projectNo }), 60000);
     },
+    materialScanStatus: function (sessionOrToken) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, { action: 'margin_material_scan_status' }));
+    },
     materialAuditLog: function (sessionOrToken, filter) {
       return postMaterial(buildMaterialPostBody_(sessionOrToken, {
         action: 'margin_material_audit_log',
@@ -1559,6 +1570,20 @@ var AccountingApi = (function () {
         if (body.auth) body.auth.staff_preview = true;
       }
       return post(body);
+    },
+    /** 選材快層：開頁後最多補一張（不擋清單；失敗當沒發生） */
+    materialPortalCacheOne: function (sessionOrToken, projectNo, materialId, opts) {
+      opts = opts || {};
+      var body = buildMaterialPostBody_(sessionOrToken, {
+        action: 'margin_material_portal_cache_one',
+        project_no: projectNo,
+        material_id: materialId
+      });
+      if (opts.staffPreview) {
+        body.staff_preview = true;
+        if (body.auth) body.auth.staff_preview = true;
+      }
+      return post(body, 20000);
     },
     cfPortalAuth: function (sessionOrToken, opts) {
       opts = opts || {};

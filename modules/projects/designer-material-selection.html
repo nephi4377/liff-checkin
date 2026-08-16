@@ -9,7 +9,7 @@
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
-  <script src="../../shared/js/accounting_api.js?v=54"></script>
+  <script src="../../shared/js/accounting_api.js?v=59"></script>
   <script src="../../shared/js/accounting_ui.js?v=20"></script>
   <style>
     :root {
@@ -230,9 +230,10 @@
     <div id="listView">
       <div class="list-toolbar">
         <button type="button" class="btn btn-primary" id="btnAdd">＋ 新增選材</button>
-        <button type="button" class="btn btn-secondary" id="btnScanDbx">掃描 Dropbox 選材夾</button>
+        <button type="button" class="btn btn-secondary" id="btnScanDbx">現在補一次</button>
       </div>
-      <p class="hint" style="margin-top:8px">掃描會讀名稱含「選材」的資料夾（例如 0705選材），把還沒進列表的照片加進來。施工照／PIC 不會掃。</p>
+      <p class="hint" style="margin-top:8px">平常每天會自動把未結案的新照片加進清單。剛丟進選材夾、不想等明天，再按這顆（只補這一案）。施工照／PIC 不會掃。</p>
+      <p id="dailyScanHint" class="hint" style="margin-top:8px"></p>
       <p id="listSyncHint" class="hint hidden" style="margin-top:8px">選材列表更新中…</p>
       <div id="matList" class="mat-list"><div class="empty-state"><strong>請先選擇案號</strong>選定後會列出這案的選材紀錄</div></div>
       <div class="card" id="auditSection" style="margin-top:16px;">
@@ -851,6 +852,7 @@
           $('projectManual').classList.add('hidden');
         });
         await loadProjectOptions();
+        refreshDailyScanHint_();
       } catch (e) {
         setPageStatus_('');
         showListError_('loading', (e && e.message) || '載入失敗，請重新整理再試', {
@@ -1157,6 +1159,15 @@
       showMsg('可改空間、部位、定案日與補充說明；照片請用「作廢並新建」重傳。');
     }
 
+    async function refreshDailyScanHint_() {
+      var el = $('dailyScanHint');
+      if (!el || !session || typeof AccountingApi.materialScanStatus !== 'function') return;
+      try {
+        var st = await AccountingApi.materialScanStatus(session);
+        if (st && st.success && st.last_message) el.textContent = st.last_message;
+      } catch (eHint) { /* 部署前可能還沒有此接口 */ }
+    }
+
     $('btnAdd').onclick = function () { openCreateForm(null); };
     if ($('btnScanDbx')) {
       $('btnScanDbx').onclick = async function () {
@@ -1174,20 +1185,24 @@
         }
         var btn = $('btnScanDbx');
         btn.disabled = true;
-        setPageStatus_('掃描 Dropbox…');
+        var prevLabel = btn.textContent;
+        btn.textContent = '處理中…';
+        setPageStatus_('正在補這一案…');
         showMsg('');
         try {
           var res = await AccountingApi.materialScanImport(session, pno);
           if (!res || !res.success) {
-            showMsg((res && res.message) || '掃描失敗');
+            showMsg((res && res.message) || '這次沒補成，請稍後再試一次');
             return;
           }
           showMsg(res.message || ('新增 ' + (res.imported || 0) + ' 筆'), true);
           await loadList();
+          refreshDailyScanHint_();
         } catch (eScan) {
-          showMsg((eScan && eScan.message) || '掃描失敗');
+          showMsg((eScan && eScan.message) || '這次沒補成，請稍後再試一次');
         } finally {
           btn.disabled = false;
+          btn.textContent = prevLabel;
           setPageStatus_('');
         }
       };
