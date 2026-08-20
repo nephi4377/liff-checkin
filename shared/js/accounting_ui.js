@@ -63,7 +63,9 @@ var AccountingUi = (function () {
 
   var PAGE_LABELS = {
     'index.html': '會計功能選單',
-    'payment_request.html': '廠商存檔或待付款',
+    'payment_request.html': '待付款請款',
+    'quick_review.html': '單據與存檔',
+    'vendor_docs.html': '單據與存檔',
     'accounting_ingest.html': '收支登錄',
     'ledger_review.html': '請款審核',
     'vendor_payment_finance.html': '廠商待匯款',
@@ -147,6 +149,31 @@ var AccountingUi = (function () {
       '.acct-fatal-err .err-fallback.hidden{display:none}',
       '.acct-ui-hide-legacy#msg,.acct-ui-hide-legacy#ok,.acct-ui-hide-legacy#warn{display:none!important}',
       '.btn[aria-busy="true"]{opacity:.7;cursor:wait}',
+      '.acct-dlg-overlay{position:fixed;inset:0;z-index:10060;background:rgba(15,23,42,.45);',
+      'display:flex;align-items:flex-end;justify-content:center;padding:16px;box-sizing:border-box}',
+      '@media (min-width:640px){.acct-dlg-overlay{align-items:center}}',
+      '.acct-dlg{width:min(92vw,420px);max-height:min(88vh,640px);overflow:auto;background:#fff;',
+      'border-radius:16px;padding:18px 16px 16px;box-shadow:0 16px 48px rgba(15,23,42,.28)}',
+      '.acct-dlg h3{margin:0 0 8px;font-size:18px;color:#0f172a}',
+      '.acct-dlg .acct-dlg-sum{margin:0 0 10px;font-size:15px;font-weight:600;color:#1a73e8;word-break:break-word}',
+      '.acct-dlg .acct-dlg-hint{margin:0 0 14px;font-size:14px;line-height:1.45;color:#475569}',
+      '.acct-dlg-actions{display:flex;flex-direction:column;gap:8px;margin-top:12px}',
+      '.acct-dlg-cancel{width:100%;min-height:48px;padding:12px 16px;border:none;border-radius:10px;',
+      'background:#e8eaed;color:#0f172a;font-size:16px;font-weight:700;cursor:pointer}',
+      '.acct-dlg-next,.acct-dlg-ok{width:100%;min-height:44px;padding:10px 16px;border:none;border-radius:10px;',
+      'font-size:15px;font-weight:600;cursor:pointer}',
+      '.acct-dlg-next{background:#1a73e8;color:#fff}',
+      '.acct-dlg-ok{background:#f9ab00;color:#333}',
+      '.acct-dlg-chips{display:flex;flex-direction:column;gap:8px}',
+      '.acct-dlg-chip{min-height:48px;padding:12px 14px;border:2px solid #e2e8f0;border-radius:12px;',
+      'background:#f8fafc;color:#0f172a;font-size:16px;font-weight:600;text-align:left;cursor:pointer}',
+      '.acct-dlg-chip:hover,.acct-dlg-chip:focus{border-color:#1a73e8;background:#eff6ff}',
+      '.acct-dlg-chip.is-on{border-color:#1a73e8;background:#dbeafe;box-shadow:inset 0 0 0 1px #1a73e8}',
+      '.acct-dlg-other{margin-top:10px}',
+      '.acct-dlg-other.hidden{display:none}',
+      '.acct-dlg-other textarea{width:100%;min-height:72px;margin-top:6px;padding:10px;box-sizing:border-box;',
+      'border:1px solid #cbd5e1;border-radius:8px;font-size:16px}',
+      '.acct-dlg-step.hidden{display:none}',
       '@media (max-width:959px){',
       'body.acct-ui-mounted:not(.acct-ui-embed){padding-bottom:118px!important}',
       '#acctMsgDock{left:0;right:0;bottom:0;height:108px;border-radius:12px 12px 0 0}',
@@ -817,6 +844,152 @@ var AccountingUi = (function () {
     return wrap;
   }
 
+  var REJECT_CHIPS = [
+    '金額或明細不對',
+    '附件不足／看不清',
+    '對象或案號不對',
+    '先退回、請重送'
+  ];
+
+  /**
+   * 退回二階段確認：先問要不要退，再點現成原因（或填其他）。
+   * 取消／關掉／點遮罩 → resolve(null)，不送後端。
+   * 點現成標籤 → 立刻 resolve({ reason })；「其他」需再按確定退回。
+   */
+  function confirmReject(opts) {
+    opts = opts || {};
+    var chips = (opts.chips && opts.chips.length) ? opts.chips : REJECT_CHIPS;
+    var summary = String(opts.summary || '').trim();
+    var preset = String(opts.reason || '').trim();
+
+    injectStyles();
+    return new Promise(function (resolve) {
+      var prev = document.getElementById('acctRejectDlg');
+      if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+
+      var settled = false;
+      function finish(result) {
+        if (settled) return;
+        settled = true;
+        document.removeEventListener('keydown', onKey);
+        if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        resolve(result);
+      }
+
+      var overlay = document.createElement('div');
+      overlay.id = 'acctRejectDlg';
+      overlay.className = 'acct-dlg-overlay';
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-modal', 'true');
+      overlay.setAttribute('aria-labelledby', 'acctRejectTitle1');
+
+      overlay.innerHTML =
+        '<div class="acct-dlg">' +
+          '<div class="acct-dlg-step" data-step="1">' +
+            '<h3 id="acctRejectTitle1">確定要退回這筆？</h3>' +
+            (summary ? '<p class="acct-dlg-sum"></p>' : '') +
+            '<p class="acct-dlg-hint">取消或關掉視窗＝不會退回。下一步才選原因。</p>' +
+            '<div class="acct-dlg-actions">' +
+              '<button type="button" class="acct-dlg-cancel" data-act="cancel">取消</button>' +
+              '<button type="button" class="acct-dlg-next" data-act="next">下一步：選原因</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="acct-dlg-step hidden" data-step="2">' +
+            '<h3 id="acctRejectTitle2">為什麼退回？</h3>' +
+            '<p class="acct-dlg-hint">點一個現成原因即可，不必打字。點了就送出。</p>' +
+            '<div class="acct-dlg-chips"></div>' +
+            '<div class="acct-dlg-other hidden">' +
+              '<label for="acctRejectOther">其他原因</label>' +
+              '<textarea id="acctRejectOther" rows="3" placeholder="可留空，或寫給對方看的說明"></textarea>' +
+              '<div class="acct-dlg-actions">' +
+                '<button type="button" class="acct-dlg-ok" data-act="ok">確定退回</button>' +
+              '</div>' +
+            '</div>' +
+            '<div class="acct-dlg-actions">' +
+              '<button type="button" class="acct-dlg-cancel" data-act="cancel">取消</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+
+      var sumEl = overlay.querySelector('.acct-dlg-sum');
+      if (sumEl) sumEl.textContent = summary;
+
+      var chipBox = overlay.querySelector('.acct-dlg-chips');
+      var otherWrap = overlay.querySelector('.acct-dlg-other');
+      var otherInput = overlay.querySelector('#acctRejectOther');
+      var matchedChip = false;
+      chips.forEach(function (label) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'acct-dlg-chip';
+        btn.textContent = label;
+        if (preset && preset === label) {
+          btn.classList.add('is-on');
+          matchedChip = true;
+        }
+        btn.addEventListener('click', function () {
+          if (settled) return;
+          overlay.querySelectorAll('.acct-dlg-chip').forEach(function (c) {
+            c.classList.remove('is-on');
+            c.disabled = true;
+          });
+          btn.classList.add('is-on');
+          finish({ reason: label });
+        });
+        chipBox.appendChild(btn);
+      });
+      var otherChip = document.createElement('button');
+      otherChip.type = 'button';
+      otherChip.className = 'acct-dlg-chip';
+      otherChip.textContent = '其他（自己寫）';
+      if (preset && !matchedChip) otherChip.classList.add('is-on');
+      otherChip.addEventListener('click', function () {
+        overlay.querySelectorAll('.acct-dlg-chip').forEach(function (c) { c.classList.remove('is-on'); });
+        otherChip.classList.add('is-on');
+        otherWrap.classList.remove('hidden');
+        otherInput.focus();
+      });
+      chipBox.appendChild(otherChip);
+      if (preset && !matchedChip) {
+        otherInput.value = preset;
+        otherWrap.classList.remove('hidden');
+      }
+
+      function showStep2() {
+        overlay.querySelector('[data-step="1"]').classList.add('hidden');
+        overlay.querySelector('[data-step="2"]').classList.remove('hidden');
+        overlay.setAttribute('aria-labelledby', 'acctRejectTitle2');
+      }
+
+      overlay.addEventListener('click', function (e) {
+        var actEl = e.target && e.target.closest ? e.target.closest('[data-act]') : null;
+        var act = actEl ? actEl.getAttribute('data-act') : '';
+        if (e.target === overlay || act === 'cancel') {
+          finish(null);
+          return;
+        }
+        if (act === 'next') {
+          showStep2();
+          return;
+        }
+        if (act === 'ok') {
+          finish({ reason: String(otherInput.value || '').trim() });
+        }
+      });
+
+      function onKey(e) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          finish(null);
+        }
+      }
+      document.addEventListener('keydown', onKey);
+      document.body.appendChild(overlay);
+      var cancelBtn = overlay.querySelector('[data-step="1"] .acct-dlg-cancel');
+      if (cancelBtn) cancelBtn.focus();
+    });
+  }
+
   return {
     ERROR_REPORT_EMAIL: ERROR_REPORT_EMAIL,
     TOAST_MS: TOAST_MS_DEFAULT,
@@ -852,6 +1025,8 @@ var AccountingUi = (function () {
     buildErrorReportText: buildErrorReportText,
     buildErrorMailtoUrl: buildErrorMailtoUrl,
     showFatalError: showFatalError,
+    confirmReject: confirmReject,
+    REJECT_CHIPS: REJECT_CHIPS,
     reportPersistentError: reportPersistentError,
     reportFailure: reportFailure,
     action: action,

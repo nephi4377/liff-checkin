@@ -8,12 +8,12 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=51"></script>
+  <script src="../../shared/js/accounting_api.js?v=58"></script>
   <script src="../../shared/js/accounting_cache.js?v=32"></script>
-  <script src="../../shared/js/accounting_ui.js?v=20"></script>
+  <script src="../../shared/js/accounting_ui.js?v=22"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=9"></script>
-  <script src="../../shared/js/accounting_shell.js?v=6"></script>
+  <script src="../../shared/js/accounting_shell.js?v=7"></script>
   <style>
     h2 { margin: 0 0 4px; }
     .sub { color: #555; font-size: 14px; margin: 0 0 16px; }
@@ -89,20 +89,20 @@
         </span>
       </a>
 
-      <a class="card" href="payment_request.html" id="linkPaymentRequest">
-        <span class="card-icon sky">📁</span>
+      <a class="card" href="payment_request.html?mode=payment" id="linkPaymentRequest">
+        <span class="card-icon sky">💸</span>
         <span class="card-body">
-          <h3>廠商存檔或待付款</h3>
-          <p>報價合約等存檔歸檔，或待付款請款送審；同一頁切換模式。</p>
+          <h3>待付款請款</h3>
+          <p>錢還沒付：上傳發票、填金額與分攤，送主管審核後再匯款。</p>
           <span class="tag staff">權限 ≥2</span>
         </span>
       </a>
 
       <a class="card" href="quick_review.html" id="linkQuickReview">
-        <span class="card-icon amber">⚡</span>
+        <span class="card-icon amber">📁</span>
         <span class="card-body">
-          <h3>單據快審</h3>
-          <p>LINE 傳來的圖／PDF：已存廠商夾，在此標廢棄／請款／報價／出貨／其他。</p>
+          <h3>單據與存檔</h3>
+          <p>LINE 傳來的單據在此分類；報價、合約也可在同一頁上傳進廠商資料夾。</p>
           <span class="tag staff">權限 ≥2</span>
         </span>
       </a>

@@ -12,8 +12,8 @@ var AccountingShell = (function () {
 
   var PAGE_TITLES = {
     'accounting_ingest.html': '收支登錄',
-    'payment_request.html': '廠商存檔或待付款',
-    'quick_review.html': '單據快審',
+    'payment_request.html': '待付款請款',
+    'quick_review.html': '單據與存檔',
     'payment_request_compose.html': '精細請款建單',
     'vendor_status.html': '款項進度',
     'vendors.html': '廠商名冊',
@@ -28,7 +28,7 @@ var AccountingShell = (function () {
     'designer-customer-finance.html': '追加減與收款',
     'customer-finance-portal.html': '客戶案件紀錄',
     'vendor_register.html': '廠商自填',
-    'vendor_docs.html': '廠商存檔或待付款'
+    'vendor_docs.html': '單據與存檔'
   };
 
   function normalizePage(href) {

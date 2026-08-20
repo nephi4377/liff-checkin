@@ -130,6 +130,27 @@
     #oldClosedToggle { width: 100%; margin-top: 8px; }
     #detailErrorBox { margin-top: 8px; }
     #detailLoading.slow { color: #b06000; font-weight: 600; }
+    .profit-hero { font-size: 22px; font-weight: 800; margin: 8px 0 4px; line-height: 1.3; }
+    details.acct-fold > summary {
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 16px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      list-style: none;
+    }
+    details.acct-fold > summary::-webkit-details-marker { display: none; }
+    details.acct-fold > summary::after {
+      content: '展開';
+      margin-left: auto;
+      font-size: 13px;
+      font-weight: 600;
+      color: #1a73e8;
+      flex-shrink: 0;
+    }
+    details.acct-fold[open] > summary::after { content: '收合'; }
+    details.acct-fold .fold-body { margin-top: 8px; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -157,6 +178,7 @@
       <div class="card">
         <button type="button" class="btn btn-secondary" id="backBtn">← 返回列表</button>
         <h3 id="detailTitle" style="margin:8px 0 4px">—</h3>
+        <p class="profit-hero" id="detailProfitHero">—</p>
         <p class="sub" id="detailSummary">—</p>
         <p class="nav" id="cfManageLink" style="margin:8px 0"><a href="designer-customer-finance.html">管理追加減與收款 →</a> · <a href="../projects/designer-material-selection.html">選材管理 →</a></p>
         <div id="detailLoading" class="hidden">載入案件資料中…</div>
@@ -167,8 +189,9 @@
         <h3 class="section-title">案件收支總結</h3>
         <div id="checklistList"></div>
       </div>
-      <div class="card">
-        <h3 class="section-title">案件總額（驗收表核對）</h3>
+      <details class="card acct-fold">
+        <summary>案件總額（驗收表核對）</summary>
+        <div class="fold-body">
         <p class="hint" id="quotationHint">—</p>
         <label>採用總額</label>
         <input id="contractAmount" type="number" inputmode="numeric" />
@@ -178,15 +201,19 @@
           <button type="button" class="btn btn-secondary" id="refreshQuotationBtn">重新帶入驗收表</button>
         </div>
         <p class="hint" id="incomeCheckHint">—</p>
-      </div>
-      <div class="card hidden" id="cfSummaryCard">
-        <h3 class="section-title">追加減與收款摘要</h3>
+        </div>
+      </details>
+      <details class="card acct-fold hidden" id="cfSummaryCard">
+        <summary>追加減與收款摘要</summary>
+        <div class="fold-body">
         <p class="hint">有效合約額＝案件總額＋已生效追加減；未收＝有效合約額−客戶已確認收款</p>
         <div id="cfSummaryBody" class="cf-summary-grid"></div>
         <p class="nav" style="margin-top:10px"><a id="cfSummaryLink" href="designer-customer-finance.html">管理追加減與收款 →</a></p>
-      </div>
-      <div class="card duration-readonly">
-        <h3 class="section-title">工期（僅顯示）</h3>
+        </div>
+      </details>
+      <details class="card acct-fold duration-readonly">
+        <summary>工期（僅顯示）</summary>
+        <div class="fold-body">
         <p class="hint" id="projectStatusHint">—</p>
         <div class="row2">
           <div>
@@ -201,36 +228,46 @@
         <p class="hint" id="durationDaysHint">—</p>
         <p class="hint">開始日：案場「專案起始日」；空白則用保護／木作／油漆／系統工程第一則已發布施工紀錄。結束日：結案日（未結案暫用今天）。此頁僅顯示不修改。</p>
         <button type="button" class="btn btn-primary hidden" id="saveDurationBtn" tabindex="-1" aria-hidden="true">儲存工期</button>
-      </div>
-      <div class="card hidden bonus-compact" id="bonusAllocCard">
-        <h3 class="section-title">獎金分配</h3>
+        </div>
+      </details>
+      <details class="card acct-fold hidden bonus-compact" id="bonusAllocCard">
+        <summary>獎金分配</summary>
+        <div class="fold-body">
         <p class="hint">多位負責人時加總須 100%</p>
         <div id="bonusAllocList"></div>
         <div class="btn-row">
           <button type="button" class="btn btn-primary" id="saveBonusAllocBtn">儲存比例</button>
         </div>
-      </div>
-      <div class="card hidden bonus-compact" id="bonusApplyCard">
-        <h3 class="section-title">申請獎金</h3>
+        </div>
+      </details>
+      <details class="card acct-fold hidden bonus-compact" id="bonusApplyCard">
+        <summary>申請獎金</summary>
+        <div class="fold-body">
         <label>建議總額</label>
         <input id="bonusSuggested" type="number" inputmode="numeric" />
         <label>說明</label>
         <input id="bonusNote" placeholder="選填" />
         <button type="button" class="btn btn-primary" id="applyBonusBtn">產生草稿</button>
         <p class="hint" id="bonusDraftHint">—</p>
-      </div>
-      <div class="card hidden" id="vendorPickCard">
-        <h3 class="section-title">本案廠商（驗收表大項目）</h3>
+        </div>
+      </details>
+      <details class="card acct-fold hidden" id="vendorPickCard">
+        <summary>本案廠商（驗收表大項目）</summary>
+        <div class="fold-body">
         <p class="hint">依驗收表偵測選定；同項目可多家。廠商名冊只維護名冊，本案選誰只在這裡</p>
         <div id="vendorPickList"></div>
         <button type="button" class="btn btn-primary" id="saveVendorsBtn">儲存本案廠商</button>
-      </div>
-      <div class="card">
-        <h3 style="margin:0 0 8px">費用明細</h3>
+        </div>
+      </details>
+      <details class="card acct-fold">
+        <summary>費用明細</summary>
+        <div class="fold-body">
         <div id="lineList"></div>
-      </div>
-      <div class="card">
-        <h3 style="margin:0 0 8px">手動新增一筆（只寫毛利）</h3>
+        </div>
+      </details>
+      <details class="card acct-fold">
+        <summary>手動新增一筆（只寫毛利）</summary>
+        <div class="fold-body">
         <p class="hint">支出＝只加在本案毛利，不寫入收支明細。收入＝走追加減／收款確認流程，也不直接寫收支明細</p>
         <div class="row2">
           <div>
@@ -255,7 +292,8 @@
         <label>備註</label>
         <input id="addNote" />
         <button type="button" class="btn btn-primary" id="addBtn">新增</button>
-      </div>
+        </div>
+      </details>
       </div>
     </div>
   </div>
@@ -310,12 +348,7 @@
           }
           if (current && data.overview) {
             var ov = data.overview;
-            var sumEl = document.getElementById('detailSummary');
-            if (sumEl) {
-              sumEl.textContent =
-                '收 ' + fmtMoney(ov.revenue_total) + ' · 支 ' + fmtMoney(ov.expense_total) +
-                ' · 毛利 ' + fmtMoney(ov.gross_profit);
-            }
+            setDetailEarnSummary(ov.revenue_total, ov.expense_total, ov.gross_profit);
             if (ov.revenue_total != null) current.revenue_total = ov.revenue_total;
             if (ov.expense_total != null) current.expense_total = ov.expense_total;
             if (ov.gross_profit != null) current.gross_profit = ov.gross_profit;
@@ -401,6 +434,32 @@
       }
       function fmtMoney(n) {
         return (parseFloat(n) || 0).toLocaleString('zh-TW');
+      }
+      function setDetailEarnSummary(rev, exp, profit) {
+        var sumEl = document.getElementById('detailSummary');
+        if (sumEl) {
+          sumEl.textContent =
+            '收 ' + fmtMoney(rev) + ' · 支 ' + fmtMoney(exp) +
+            ' · 毛利 ' + fmtMoney(profit);
+        }
+        var hero = document.getElementById('detailProfitHero');
+        if (!hero) return;
+        var n = parseFloat(profit) || 0;
+        if (n < 0) {
+          hero.className = 'profit-hero profit-neg';
+          hero.textContent = '這案目前虧 ' + fmtMoney(Math.abs(n));
+        } else if (n > 0) {
+          hero.className = 'profit-hero profit-pos';
+          hero.textContent = '這案毛利 ' + fmtMoney(n);
+        } else {
+          hero.className = 'profit-hero';
+          hero.textContent = '這案毛利 0';
+        }
+      }
+      function collapseDetailFolds() {
+        document.querySelectorAll('#detailPanels details.acct-fold').forEach(function (d) {
+          d.open = false;
+        });
       }
       function escHtml(s) {
         return String(s == null ? '' : s)
@@ -1584,13 +1643,7 @@
         var duration = data.duration || {};
         var overview = data.overview || {};
 
-        // 開詳情／寫入後：上方摘要與三角核對一律用重算後的總覽數字
-        var sumEl = document.getElementById('detailSummary');
-        if (sumEl) {
-          sumEl.textContent =
-            '收 ' + fmtMoney(overview.revenue_total) + ' · 支 ' + fmtMoney(overview.expense_total) +
-            ' · 毛利 ' + fmtMoney(overview.gross_profit);
-        }
+        setDetailEarnSummary(overview.revenue_total, overview.expense_total, overview.gross_profit);
         if (current) {
           if (overview.revenue_total != null) current.revenue_total = overview.revenue_total;
           if (overview.expense_total != null) current.expense_total = overview.expense_total;
@@ -1681,9 +1734,8 @@
         document.getElementById('viewDetail').classList.remove('hidden');
         document.getElementById('detailTitle').textContent =
           (it.project_no || '') + ' ' + (it.client_name || '');
-        document.getElementById('detailSummary').textContent =
-          '收 ' + fmtMoney(it.revenue_total) + ' · 支 ' + fmtMoney(it.expense_total) +
-          ' · 毛利 ' + fmtMoney(it.gross_profit);
+        setDetailEarnSummary(it.revenue_total, it.expense_total, it.gross_profit);
+        collapseDetailFolds();
         var cfLink = document.getElementById('cfManageLink');
         if (cfLink) {
           cfLink.innerHTML = '<a href="designer-customer-finance.html?project_no=' +

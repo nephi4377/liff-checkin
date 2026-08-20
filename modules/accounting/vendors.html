@@ -22,16 +22,41 @@
     .page-layout {
       display: grid;
       grid-template-columns: 1fr;
+      grid-template-areas: "list" "form";
       gap: 0 20px;
       align-items: start;
     }
+    .page-col-list { grid-area: list; }
+    .page-col-form { grid-area: form; }
     @media (min-width: 960px) {
-      .page-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+      .page-layout {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        grid-template-areas: "list form";
+      }
       .page-col-list { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
     }
     @media (min-width: 1200px) {
       .page-layout { grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); }
     }
+    details.adv-fold > summary {
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 16px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      list-style: none;
+    }
+    details.adv-fold > summary::-webkit-details-marker { display: none; }
+    details.adv-fold > summary::after {
+      content: '展開';
+      margin-left: auto;
+      font-size: 13px;
+      font-weight: 600;
+      color: #1a73e8;
+    }
+    details.adv-fold[open] > summary::after { content: '收合'; }
+    #createVendorBar .btn { min-height: 44px; }
     .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
     label { display: block; margin-top: 8px; font-weight: 600; font-size: 14px; }
     label.req::after { content: ' *'; color: #c5221f; }
@@ -188,18 +213,13 @@
       <span id="feedbackText"></span>
     </div>
 
-    <div class="card" id="commonOcrHintCard">
-      <h3 style="margin:0 0 8px">請款辨識－通用指令</h3>
-      <p class="sub" style="margin:0 0 8px">全公司共用，會加在每次請款辨識上。各廠特殊樣式請寫在下方「專用辨識說明」。權限 ≥3 可儲存。</p>
-      <label>通用辨識指令</label>
-      <textarea id="commonOcrHint" placeholder="例：買方若為添心設計／添鑫創意不要當廠商；對帳單請用本期合計，不要用本期應收…"></textarea>
-      <p class="sub" id="commonOcrHintMeta" style="margin:4px 0 8px"></p>
-      <button type="button" class="btn btn-secondary" id="saveCommonOcrHintBtn" style="width:auto">儲存通用指令</button>
-    </div>
-
     <div class="page-layout">
     <div class="page-col page-col-form">
-    <div class="card form-card" id="formCard">
+    <div class="card" id="createVendorBar">
+      <button type="button" class="btn btn-primary btn-block" id="showCreateVendorBtn">新增廠商</button>
+      <p class="sub" style="margin:8px 0 0">平常請先搜列表或點「編輯」。要建新廠商再點這裡。</p>
+    </div>
+    <div class="card form-card hidden" id="formCard">
       <div class="form-title-row">
         <h3 id="formTitle">新增廠商</h3>
         <span class="mode-badge create" id="modeBadge">新增模式</span>
@@ -385,6 +405,15 @@
     </div>
     </div>
     </div>
+
+    <details class="card adv-fold" id="commonOcrHintCard">
+      <summary>進階：請款辨識－通用指令</summary>
+      <p class="sub" style="margin:8px 0">全公司共用，會加在每次請款辨識上。各廠特殊樣式請寫在廠商資料的「專用辨識說明」。權限 ≥3 可儲存。</p>
+      <label>通用辨識指令</label>
+      <textarea id="commonOcrHint" placeholder="例：買方若為添心設計／添鑫創意不要當廠商；對帳單請用本期合計，不要用本期應收…"></textarea>
+      <p class="sub" id="commonOcrHintMeta" style="margin:4px 0 8px"></p>
+      <button type="button" class="btn btn-secondary" id="saveCommonOcrHintBtn" style="width:auto">儲存通用指令</button>
+    </details>
   </div>
   <script>
     (function () {
@@ -422,17 +451,27 @@
       function setOk(t) { if (t) showFeedback('ok', t); }
       function setWarn(t) { if (t) showFeedback('warn', t); }
 
+      function setFormExpanded(open) {
+        var form = $('formCard');
+        var bar = $('createVendorBar');
+        if (!form || !bar) return;
+        form.classList.toggle('hidden', !open);
+        bar.classList.toggle('hidden', !!open);
+      }
+
       function setFormMode(isEdit, opts) {
         opts = opts || {};
         var card = $('formCard');
         $('formTitle').textContent = isEdit ? '編輯廠商' : '新增廠商';
         $('modeBadge').textContent = isEdit ? '編輯模式' : '新增模式';
         $('modeBadge').className = 'mode-badge ' + (isEdit ? 'edit' : 'create');
-        $('cancelEditBtn').classList.toggle('hidden', !isEdit);
+        $('cancelEditBtn').textContent = isEdit ? '取消編輯' : '收合';
+        $('cancelEditBtn').classList.remove('hidden');
         $('saveBtn').textContent = isEdit ? '更新' : '儲存';
         card.classList.toggle('is-editing', !!isEdit);
         setBindEditorVisible(!!isEdit);
         $('payHistorySection').classList.toggle('hidden', !isEdit);
+        if (isEdit) setFormExpanded(true);
         if (!isEdit) {
           resetPayHistoryUi();
         }
@@ -1460,9 +1499,14 @@
         });
       });
 
+      $('showCreateVendorBtn').addEventListener('click', function () {
+        setFormExpanded(true);
+        clearForm({ focusName: true });
+      });
       $('cancelEditBtn').addEventListener('click', function () {
         showFeedback('', '');
-        clearForm();
+        clearForm({ focusName: false });
+        setFormExpanded(false);
       });
       $('filterBtn').addEventListener('click', renderList);
       $('payHistoryReloadBtn').addEventListener('click', function () {

@@ -53,6 +53,10 @@ var AccountingTaxMode = (function () {
     var amt = parseAmount(row.amount);
     if (isNaN(amt)) return 0;
     if (amt < 0) return amt;
+    if (row._base_amount != null && String(row._base_amount) !== '') {
+      var stored = parseAmount(row._base_amount);
+      if (!isNaN(stored)) return stored;
+    }
     var mode = normalizeMode(prevMode) || 'inclusive';
     if (mode === 'per_row' && (row.tax_add_applied || row.tax_inclusive)) {
       return removeTax(amt);
@@ -60,10 +64,29 @@ var AccountingTaxMode = (function () {
     if (mode === 'prorate' && row.tax_inclusive && !row.ocr_tax_inclusive) {
       return removeTax(amt);
     }
-    if (row._base_amount != null && !isNaN(parseAmount(row._base_amount))) {
-      return parseAmount(row._base_amount);
-    }
     return amt;
+  }
+
+  /** 未稅合計、稅金、含稅合計（給畫面合計列） */
+  function summarize(rows, mode) {
+    var payable = 0;
+    var pretax = 0;
+    (rows || []).forEach(function (r) {
+      var amt = parseAmount(r.amount);
+      if (isNaN(amt)) amt = 0;
+      payable += amt;
+      if (amt < 0) {
+        pretax += amt;
+        return;
+      }
+      var base = rowBaseAmount(r, mode);
+      pretax += isNaN(base) ? amt : base;
+    });
+    var m = normalizeMode(mode) || 'inclusive';
+    if (m === 'inclusive') {
+      return { pretax: payable, tax: 0, payable: payable };
+    }
+    return { pretax: pretax, tax: payable - pretax, payable: payable };
   }
 
   function prorateTax(rows, taxAmount) {
@@ -112,6 +135,22 @@ var AccountingTaxMode = (function () {
     opts = opts || {};
     var mode = normalizeMode(nextMode) || 'inclusive';
     var prev = normalizeMode(opts.prevMode) || '';
+
+    if (mode === 'inclusive') {
+      return (rows || []).map(function (r) {
+        var amt = parseAmount(r.amount);
+        if (isNaN(amt)) amt = 0;
+        var mark = amt > 0;
+        return Object.assign({}, r, {
+          amount: amt,
+          _base_amount: amt,
+          tax_inclusive: mark,
+          tax_add_applied: false,
+          item_desc: applyTaxTag(r.item_desc, mark)
+        });
+      });
+    }
+
     var bases = (rows || []).map(function (r) {
       var base = rowBaseAmount(r, prev || (r.tax_add_applied ? 'per_row' : 'inclusive'));
       return Object.assign({}, r, {
@@ -122,18 +161,6 @@ var AccountingTaxMode = (function () {
         item_desc: applyTaxTag(r.item_desc, false)
       });
     });
-
-    if (mode === 'inclusive') {
-      return bases.map(function (r) {
-        var amt = parseAmount(r.amount);
-        var mark = !isNaN(amt) && amt > 0;
-        return Object.assign({}, r, {
-          tax_inclusive: mark,
-          tax_add_applied: false,
-          item_desc: applyTaxTag(r.item_desc, mark)
-        });
-      });
-    }
 
     if (mode === 'per_row') {
       return bases.map(function (r) {
@@ -201,6 +228,8 @@ var AccountingTaxMode = (function () {
     normalizeMode: normalizeMode,
     modeLabel: modeLabel,
     applyModeToRows: applyModeToRows,
+    rowBaseAmount: rowBaseAmount,
+    summarize: summarize,
     prorateTax: prorateTax,
     suggestModeFromOcr: suggestModeFromOcr,
     syncModeNote: syncModeNote,

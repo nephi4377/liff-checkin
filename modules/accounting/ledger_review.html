@@ -6,14 +6,14 @@
   <title>請款審核</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_tax_mode.js?v=1"></script>
+  <script src="../../shared/js/accounting_tax_mode.js?v=2"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=51"></script>
+  <script src="../../shared/js/accounting_api.js?v=58"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=17"></script>
-  <script src="../../shared/js/accounting_ui.js?v=20"></script>
+  <script src="../../shared/js/accounting_ui.js?v=21"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=9"></script>
   <style>
@@ -68,6 +68,7 @@
     .tab-btn.active { background: #1a73e8; color: #fff; }
     .tab-btn.is-busy { opacity: 0.65; cursor: wait; }
     .tag.cash { background: #fef7e0; color: #b06000; }
+    #listLive { margin-left: 8px; font-weight: 600; color: #1a73e8; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -114,7 +115,7 @@
         <p class="sub" id="bulkSummary">—</p>
         <button type="button" class="btn btn-ok" id="bulkApproveBtn">全部核准（資料完整）</button>
       </div>
-      <h3 style="margin:0 0 8px">待審列表</h3>
+      <h3 style="margin:0 0 8px">待審列表<span id="listLive" class="sub"></span></h3>
       <div id="list"></div>
     </div>
   </div>
@@ -360,7 +361,12 @@
         var host = panel.querySelector('.tax-mode-host');
         if (!host || typeof AccountingTaxMode === 'undefined') return;
         var mode = getPanelTaxMode(panel);
+        var keptTax = '';
+        var oldTax = host.querySelector('.inp-tax-amount');
+        if (oldTax) keptTax = oldTax.value;
         host.innerHTML = AccountingTaxMode.segHtml(mode, 'review');
+        var taxInpRestore = host.querySelector('.inp-tax-amount');
+        if (taxInpRestore && keptTax !== '') taxInpRestore.value = keptTax;
         host.querySelectorAll('[data-tax-mode]').forEach(function (btn) {
           btn.addEventListener('click', function () {
             setPanelTaxMode(panel, btn.getAttribute('data-tax-mode'));
@@ -465,7 +471,7 @@
             amount: el.querySelector('.inp-amt').value,
             item_desc: el.querySelector('.inp-desc').value.trim(),
             tax_inclusive: taxCb ? taxCb.checked : false,
-            tax_add_applied: false,
+            tax_add_applied: el.getAttribute('data-tax-add-applied') === '1',
             ocr_tax_inclusive: el.getAttribute('data-ocr-tax-inclusive') === '1',
             _base_amount: baseRaw !== null && baseRaw !== '' ? baseRaw : undefined
           });
@@ -490,11 +496,27 @@
         return '';
       }
       function updatePanelTotal(panel) {
-        var sum = readAllocRowsFromPanel(panel).reduce(function (s, r) {
+        var rows = readAllocRowsFromPanel(panel);
+        var sum = rows.reduce(function (s, r) {
           return s + (parseInt(r.amount, 10) || 0);
         }, 0);
         var el = panel.querySelector('.alloc-total');
         if (el) el.textContent = sum.toLocaleString('zh-TW');
+        var br = panel.querySelector('.tax-breakdown');
+        if (br && typeof AccountingTaxMode !== 'undefined') {
+          var mode = getPanelTaxMode(panel);
+          var s = AccountingTaxMode.summarize(rows, mode);
+          if (mode === 'inclusive') {
+            br.textContent = sum > 0 ? '已含稅，不再另加 5%' : '';
+          } else if (s.tax > 0) {
+            br.textContent = '未稅 $' + s.pretax.toLocaleString('zh-TW') +
+              ' ＋ 稅 $' + s.tax.toLocaleString('zh-TW');
+          } else if (sum > 0) {
+            br.textContent = '尚未加稅：金額欄請填未稅，填完會自動加 5%';
+          } else {
+            br.textContent = '';
+          }
+        }
       }
       function setTaxControlsDisabled(row, disabled) {
         var taxCb = row.querySelector('.inp-tax');
@@ -513,10 +535,18 @@
               var a = parseAllocAmount(inp.value);
               setTaxControlsDisabled(row, !isNaN(a) && a < 0);
               if (!isNaN(a)) row.setAttribute('data-base-amount', String(a));
+              row.setAttribute('data-tax-add-applied', '0');
             }
             syncTaxNoteForPanel(panel);
             updatePanelTotal(panel);
           };
+          if (inp.classList.contains('inp-amt')) {
+            inp.onchange = function () {
+              var mode = getPanelTaxMode(panel);
+              if (mode === 'inclusive') return;
+              setPanelTaxMode(panel, mode, { force: true, confirm: false });
+            };
+          }
         });
         panel.querySelectorAll('.inp-tax').forEach(function (cb) {
           cb.onchange = function () {
@@ -548,7 +578,7 @@
           };
         }
       }
-      function allocRowHtml(idx, row) {
+      function allocRowHtml(idx, row, taxMode) {
         row = row || {};
         var checked = !!row.tax_inclusive;
         var amt = parseAllocAmount(row.amount);
@@ -559,12 +589,14 @@
           pretaxText = '未稅 $' + removeTaxAmount(amt).toLocaleString('zh-TW');
         }
         var baseAttr = (row._base_amount != null && row._base_amount !== '') ? String(row._base_amount) : '';
+        var amtLabel = (taxMode && taxMode !== 'inclusive') ? '金額（未稅）' : '金額';
         return '<div class="alloc-row" data-idx="' + idx + '"' +
           ' data-ocr-tax-inclusive="' + (row.ocr_tax_inclusive ? '1' : '0') + '"' +
+          ' data-tax-add-applied="' + (row.tax_add_applied ? '1' : '0') + '"' +
           ' data-base-amount="' + baseAttr + '">' +
           '<button type="button" class="alloc-rm" data-rm="' + idx + '">刪除</button>' +
           '<div class="row2"><div><label>案號</label><input class="inp-pn" placeholder="752" /></div>' +
-          '<div><label>金額</label><input class="inp-amt" type="number" inputmode="numeric" placeholder="扣款填負數" /></div></div>' +
+          '<div><label>' + amtLabel + '</label><input class="inp-amt" type="number" inputmode="numeric" placeholder="扣款填負數" /></div></div>' +
           '<label>品項</label><input class="inp-desc" placeholder="摘要；扣款請註明如廠商借支" />' +
           '<div class="tax-row">' +
           '<label><input type="checkbox" class="inp-tax"' +
@@ -581,7 +613,7 @@
         }
         rows.forEach(function (row, idx) {
           var el = document.createElement('div');
-          el.innerHTML = allocRowHtml(idx, row);
+          el.innerHTML = allocRowHtml(idx, row, getPanelTaxMode(panel));
           var rowEl = el.firstChild;
           rowEl.querySelector('.inp-pn').value = row.project_no || '';
           rowEl.querySelector('.inp-amt').value = row.amount || '';
@@ -593,7 +625,16 @@
         updatePanelTotal(panel);
       }
       function readPatchFromPanel(panel) {
-        var patch = { allocations: readAllocRowsFromPanel(panel) };
+        var rows = readAllocRowsFromPanel(panel);
+        var mode = getPanelTaxMode(panel);
+        if (rows.length && mode !== 'inclusive' && typeof AccountingTaxMode !== 'undefined') {
+          var taxInp = panel.querySelector('.inp-tax-amount');
+          rows = AccountingTaxMode.applyModeToRows(rows, mode, {
+            prevMode: mode,
+            taxAmount: taxInp ? taxInp.value : ''
+          });
+        }
+        var patch = { allocations: rows };
         var noteEl = panel.querySelector('.inp-note');
         if (noteEl) patch.note = noteEl.value.trim();
         return patch;
@@ -617,8 +658,8 @@
       }
 
       async function rejectVendor(item, reason) {
-        var data = await AccountingApi.vendorPaymentReject(session, item.payment_request_id, reason || '主管退回');
-        if (!data.success) { setMsg(data.message || '退回失敗'); return false; }
+        var data = await AccountingApi.vendorPaymentReject(session, item.payment_request_id, reason || '');
+        if (!data.success) { setMsg(data.message || '退回失敗，請再試'); return false; }
         return true;
       }
 
@@ -632,9 +673,52 @@
       }
 
       async function rejectIncome(item, reason) {
-        var data = await AccountingApi.cfRecIncomeReject(session, item.receipt_id, reason || '主管退回');
-        if (!data.success) { setMsg(data.message || '退回失敗'); return false; }
+        var data = await AccountingApi.cfRecIncomeReject(session, item.receipt_id, reason || '');
+        if (!data.success) { setMsg(data.message || '退回失敗，請再試'); return false; }
         return true;
+      }
+
+      function humanErr(e) {
+        var msg = (e && e.message) || String(e || '發生錯誤');
+        if (/abort|AbortError|逾時|timeout/i.test(msg)) return '連線逾時，請再試一次';
+        if (/過期|重新從 LINE|登入憑證|未登入/i.test(msg)) return '登入已過期，請從主控台重新開啟會計';
+        return msg;
+      }
+      function setUpdating(on) {
+        var el = document.getElementById('listLive');
+        if (el) el.textContent = on ? '更新中…' : '';
+      }
+      function itemRejectLabel(item) {
+        if (isCustomerReceiptItem(item)) return item.receipt_no || item.project_no || '這筆收款';
+        return item.party_name || item.project_no || '這筆請款';
+      }
+      async function runRejectAction(item, btn, kind, presetFn) {
+        var cacheId = itemCacheId(item);
+        if (itemQueueBusy(cacheId)) return;
+        var preset = typeof presetFn === 'function' ? String(presetFn() || '') : String(presetFn || '');
+        var picked = (typeof AccountingUi !== 'undefined' && AccountingUi.confirmReject)
+          ? await AccountingUi.confirmReject({ summary: itemRejectLabel(item), reason: preset })
+          : null;
+        if (!picked) return;
+        await AccountingUi.runAsync(btn, {
+          busyLabel: '退回中…',
+          queue: true,
+          queueId: 'ledger_review',
+          itemId: cacheId,
+          toastOnOk: false,
+          toastOnFail: false
+        }, async function () {
+          ui.clear();
+          var ok = kind === 'income'
+            ? await rejectIncome(item, picked.reason)
+            : await rejectVendor(item, picked.reason);
+          if (ok) {
+            setOk('已退回「' + itemRejectLabel(item) + '」');
+            removeItemFromView(cacheId);
+          }
+        }).catch(function (e) {
+          setMsg(humanErr(e) || '退回失敗，請再試');
+        });
       }
 
       async function signFinanceReceipt(item) {
@@ -678,8 +762,8 @@
           (item.income_review_note ? '<p class="sub">審核備註：' + item.income_review_note + '</p>' : '') +
           '<label>核准備註（選填）</label>' +
           '<input type="text" class="inp-approve-note" placeholder="核准入帳時可填" />' +
-          '<label>退回原因（選填）</label>' +
-          '<input type="text" class="inp-reject" placeholder="退回時填寫" />' +
+          '<label>退回原因（選填，按退回後仍會再確認）</label>' +
+          '<input type="text" class="inp-reject" placeholder="可不填，下一步可用現成原因" />' +
           '<div class="actions" style="margin-top:12px">' +
           '<button type="button" class="btn btn-ok btn-confirm-approve">確認核准入帳</button>' +
           '<button type="button" class="btn btn-warn btn-confirm-reject">退回</button>' +
@@ -711,19 +795,8 @@
           var cacheId = itemCacheId(item);
           if (!canApproveIncome || itemQueueBusy(cacheId)) return;
           var btn = panel.querySelector('.btn-confirm-reject');
-          await AccountingUi.runAsync(btn, {
-            busyLabel: '退回中…',
-            queue: true,
-            queueId: 'ledger_review',
-            itemId: cacheId
-          }, async function () {
-            ui.clear();
-            var reason = panel.querySelector('.inp-reject').value.trim() || '主管退回';
-            var ok = await rejectIncome(item, reason);
-            if (ok) {
-              setOk('已退回「' + (item.receipt_no || item.project_no) + '」');
-              removeItemFromView(cacheId);
-            }
+          await runRejectAction(item, btn, 'income', function () {
+            return panel.querySelector('.inp-reject').value.trim();
           });
         });
         return panel;
@@ -742,18 +815,20 @@
           '<label>分攤明細（案號＋金額，可多案；扣款填負數）' +
           (ready ? '' : ' <span class="need">需補齊</span>') + '</label>' +
           '<label style="margin-top:10px">稅別模式（整張統一）</label>' +
+          '<p class="sub" style="margin:4px 0 6px">「已含稅」不另加稅。未稅兩種：金額欄填未稅，合計會自動加 5%。</p>' +
           '<div class="tax-mode-host"></div>' +
           '<div class="alloc-list"></div>' +
           '<button type="button" class="btn-ghost btn-add-alloc">＋ 新增一列</button>' +
           '<div class="total-line">合計 $<span class="alloc-total">0</span></div>' +
+          '<p class="sub tax-breakdown" style="margin:4px 0 0;text-align:right;color:#555;font-size:13px;"></p>' +
           (item.bank_code || item.account_no
             ? '<p class="bank-line">匯款：' + (item.bank_code || '—') + ' / ' + (item.account_no || '—') +
               ' / ' + (item.account_name || item.party_name || '—') + '</p>'
             : '') +
           '<input type="hidden" class="inp-note" value="" />' +
           '<p class="sub note-line hidden">備註：<span class="note-text"></span></p>' +
-          '<label>退回原因（選填）</label>' +
-          '<input type="text" class="inp-reject" placeholder="退回時填寫" />' +
+          '<label>退回原因（選填，按退回後仍會再確認）</label>' +
+          '<input type="text" class="inp-reject" placeholder="可不填，下一步可用現成原因" />' +
           '<div class="actions" style="margin-top:12px">' +
           '<button type="button" class="btn btn-ok btn-confirm-approve">確認核准</button>' +
           '<button type="button" class="btn btn-warn btn-confirm-reject">退回</button>' +
@@ -792,19 +867,8 @@
         panel.querySelector('.btn-confirm-reject').addEventListener('click', async function () {
           if (!canApproveVendor || itemQueueBusy(item.payment_request_id)) return;
           var btn = panel.querySelector('.btn-confirm-reject');
-          await AccountingUi.runAsync(btn, {
-            busyLabel: '退回中…',
-            queue: true,
-            queueId: 'ledger_review',
-            itemId: item.payment_request_id
-          }, async function () {
-            ui.clear();
-            var reason = panel.querySelector('.inp-reject').value.trim() || '主管退回';
-            var ok = await rejectVendor(item, reason);
-            if (ok) {
-              setOk('已退回「' + (item.party_name || '') + '」');
-              removeItemFromView(item.payment_request_id);
-            }
+          await runRejectAction(item, btn, 'vendor', function () {
+            return panel.querySelector('.inp-reject').value.trim();
           });
         });
         return panel;
@@ -925,20 +989,7 @@
           btnIncomeReject.textContent = '退回';
           btnIncomeReject.addEventListener('click', async function () {
             if (itemQueueBusy(cacheId)) return;
-            var reason = prompt('退回原因（選填）', '主管退回') || '主管退回';
-            await AccountingUi.runAsync(btnIncomeReject, {
-              busyLabel: '退回中…',
-              queue: true,
-              queueId: 'ledger_review',
-              itemId: cacheId
-            }, async function () {
-              ui.clear();
-              var ok = await rejectIncome(item, reason);
-              if (ok) {
-                setOk('已退回「' + (item.receipt_no || item.project_no) + '」');
-                removeItemFromView(cacheId);
-              }
-            });
+            await runRejectAction(item, btnIncomeReject, 'income');
           });
           actions.appendChild(btnIncomeReject);
         } else if (pending && isIncome && !canApproveIncome) {
@@ -994,20 +1045,7 @@
           btnReject.textContent = '退回';
           btnReject.addEventListener('click', async function () {
             if (itemQueueBusy(item.payment_request_id)) return;
-            var reason = prompt('退回原因（選填）', '主管退回') || '主管退回';
-            await AccountingUi.runAsync(btnReject, {
-              busyLabel: '退回中…',
-              queue: true,
-              queueId: 'ledger_review',
-              itemId: item.payment_request_id
-            }, async function () {
-              ui.clear();
-              var ok = await rejectVendor(item, reason);
-              if (ok) {
-                setOk('已退回「' + (item.party_name || '') + '」');
-                removeItemFromView(item.payment_request_id);
-              }
-            });
+            await runRejectAction(item, btnReject, 'vendor');
           });
           actions.appendChild(btnReject);
         } else if (pending && isRequest && !canApproveVendor) {
@@ -1120,6 +1158,8 @@
             if (fail) setMsg('完成：已核准 ' + okCount + ' 筆，' + fail + ' 案失敗');
             else setOk('已全部核准入帳 ' + okCount + ' 筆');
             updateBulkBar();
+          }).catch(function (e) {
+            setMsg(humanErr(e) || '批次核准失敗，請再試');
           });
           updateBulkBar();
           return;
@@ -1158,44 +1198,92 @@
           if (fail) setMsg('完成：成功 ' + okCount + ' 筆，失敗 ' + fail + ' 筆');
           else setOk('已全部核准 ' + okCount + ' 筆，進入待匯款');
           updateBulkBar();
+        }).catch(function (e) {
+          setMsg(humanErr(e) || '批次核准失敗，請再試');
         });
+        updateBulkBar();
+      }
+
+      function applyListData(data, keepExisting) {
+        if (!data || !data.success) {
+          var failMsg = (data && data.message) || '載入失敗，請再試';
+          if (keepExisting && listItems.length) {
+            setMsg(failMsg + '（仍顯示先前內容）');
+            return;
+          }
+          setMsg(failMsg);
+          listItems = [];
+          document.getElementById('list').innerHTML = '<p class="sub">載入失敗，請再按「重新載入最新」。</p>';
+          updateBulkBar();
+          return;
+        }
+        canApproveVendor = !!data.can_approve_vendor;
+        canApproveIncome = !!(data.can_approve_income || data.can_approve_customer_receipt);
+        listItems = data.items || [];
+        var box = document.getElementById('list');
+        box.innerHTML = '';
+        listItems.forEach(function (row) { box.appendChild(renderItem(row)); });
+        if (!listItems.length) box.innerHTML = '<p class="sub">沒有符合的紀錄</p>';
         updateBulkBar();
       }
 
       async function loadList(silent, force) {
         var run = async function () {
-          if (!silent) ui.clear();
-          var data;
-          if (typeof AccountingListCache !== 'undefined') {
-            data = await AccountingListCache.load(session, listCacheKey(), function () {
-              return AccountingApi.ledgerReviewBundle(session, buildFilter());
-            }, { force: !!force });
-          } else {
-            data = await AccountingApi.ledgerReviewBundle(session, buildFilter());
+          setUpdating(true);
+          try {
+            if (!silent) ui.clear();
+            var peeked = null;
+            if (!force && typeof AccountingListCache !== 'undefined') {
+              peeked = AccountingListCache.peek(session, listCacheKey());
+              if (peeked && peeked.success) applyListData(peeked, false);
+            }
+            var data;
+            if (typeof AccountingListCache !== 'undefined') {
+              data = await AccountingListCache.load(session, listCacheKey(), function () {
+                return AccountingApi.ledgerReviewBundle(session, buildFilter());
+              }, {
+                force: !!force,
+                alwaysRevalidate: !force,
+                onUpdate: function (fresh, err) {
+                  setUpdating(false);
+                  if (fresh && fresh.success) applyListData(fresh, true);
+                  else if (err) setMsg(humanErr(err) + '（仍顯示先前內容，可再載）');
+                }
+              });
+            } else {
+              data = await AccountingApi.ledgerReviewBundle(session, buildFilter());
+            }
+            if (data) applyListData(data, !!(peeked && peeked.success));
+          } catch (e) {
+            setMsg(humanErr(e));
+            var box = document.getElementById('list');
+            if (!listItems.length && box) {
+              box.innerHTML = '<p class="sub">載入失敗，請再按「重新載入最新」。</p>';
+            }
+          } finally {
+            setUpdating(false);
           }
-          var box = document.getElementById('list');
-          box.innerHTML = '';
-          if (!data.success) { setMsg(data.message); listItems = []; updateBulkBar(); return; }
-          canApproveVendor = !!data.can_approve_vendor;
-          canApproveIncome = !!(data.can_approve_income || data.can_approve_customer_receipt);
-          listItems = data.items || [];
-          listItems.forEach(function (row) { box.appendChild(renderItem(row)); });
-          if (!listItems.length) box.innerHTML = '<p class="sub">沒有符合的紀錄</p>';
-          updateBulkBar();
         };
         if (silent) return run();
         var reloadBtn = document.getElementById('reloadBtn');
-        return AccountingUi.runAsync(reloadBtn, { busyLabel: '載入中…', clear: false }, run);
+        return AccountingUi.runAsync(reloadBtn, {
+          busyLabel: '載入中…',
+          clear: false,
+          toastOnOk: false,
+          toastOnFail: false
+        }, run).catch(function (e) {
+          setMsg(humanErr(e));
+        });
       }
 
       document.getElementById('reloadBtn').addEventListener('click', function () { loadList(false, true); });
       ['filterReview', 'filterPay', 'filterKw'].forEach(function (id) {
         var el = document.getElementById(id);
         if (!el) return;
-        el.addEventListener('change', function () { loadList(false, true); });
+        el.addEventListener('change', function () { loadList(false, false); });
         if (id === 'filterKw') {
           el.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') loadList(false, true);
+            if (e.key === 'Enter') loadList(false, false);
           });
         }
       });
@@ -1206,9 +1294,7 @@
           if (next === activeTab) return;
           activeTab = next;
           updateTabUi();
-          loadList(false, false).then(function () {
-            loadList(true, true);
-          });
+          loadList(false, false);
         });
       });
 
@@ -1217,10 +1303,7 @@
           onReady: async function (sess) {
             session = sess;
             updateTabUi();
-            if (typeof AccountingListCache !== 'undefined') {
-              AccountingListCache.invalidatePrefix(session, 'ledger_review:');
-            }
-            await loadList(false, true);
+            await loadList(false, false);
           }
         });
       })();

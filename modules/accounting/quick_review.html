@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>單據快審</title>
+  <title>單據與存檔</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=51"></script>
+  <script src="../../shared/js/accounting_api.js?v=58"></script>
   <script src="../../shared/js/accounting_cache.js?v=32"></script>
-  <script src="../../shared/js/accounting_ui.js?v=20"></script>
+  <script src="../../shared/js/accounting_ui.js?v=22"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=9"></script>
   <style>
@@ -110,6 +111,33 @@
     .dlg p { margin: 0 0 14px; font-size: 14px; color: #3c4043; line-height: 1.45; }
     .dlg-actions { display: flex; gap: 8px; justify-content: flex-end; }
     .dlg-actions .btn { flex: 1; }
+    .seg { display: flex; gap: 6px; margin: 10px 0 12px; }
+    .seg button {
+      flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 8px;
+      background: #fff; font-weight: 600; cursor: pointer; min-height: 44px; font-size: 15px;
+    }
+    .seg button.active { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; }
+    .drop-zone {
+      margin-top: 8px; padding: 20px 14px; border: 2px dashed #b0b8c4; border-radius: 12px;
+      background: #f8fafc; text-align: center; cursor: pointer;
+    }
+    .drop-zone:hover, .drop-zone.drag-over { border-color: #1a73e8; background: #e8f0fe; }
+    .drop-zone p { margin: 0; font-size: 15px; color: #333; }
+    .drop-zone .hint { margin-top: 6px; font-size: 13px; color: #666; line-height: 1.45; }
+    .drop-zone input[type="file"] { display: none; }
+    .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+    .photo-tile { border: 1px solid #ddd; border-radius: 8px; padding: 6px; background: #fafafa; text-align: center; }
+    .photo-tile img { width: 100%; height: 72px; object-fit: cover; border-radius: 4px; }
+    .photo-tile .file-thumb {
+      width: 100%; height: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      border-radius: 4px; background: #eef2f7; color: #444; font-size: 12px; padding: 4px; box-sizing: border-box; word-break: break-all;
+    }
+    .photo-tile .del { border: none; background: none; color: #c5221f; font-size: 11px; cursor: pointer; margin-top: 2px; }
+    .archive-item { border-bottom: 1px solid #eee; padding: 10px 0; }
+    .archive-item:last-child { border-bottom: none; }
+    .archive-item-meta { font-size: 12px; color: #666; margin-top: 4px; }
+    .btn-warn { background: #fce8e6; color: #c5221f; border: 1px solid #f5c6c2; padding: 6px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; margin-top: 6px; }
+    .vendor-filter-label { font-size: 13px; font-weight: 600; color: #555; margin-top: 8px; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -117,17 +145,26 @@
   <div id="app" class="hidden acct-main">
     <p class="nav acct-shell-hide"><a href="index.html">← 會計功能選單</a></p>
     <div class="page-head">
-      <h2>單據快審</h2>
+      <h2>單據與存檔</h2>
       <span id="liveStatus" class="status-live" aria-live="polite">更新中…</span>
     </div>
     <p class="sub" id="userLine">—</p>
-    <p class="hint">
+    <div class="seg" id="workTabSeg" role="tablist">
+      <button type="button" data-tab="review" class="active">待審單據</button>
+      <button type="button" data-tab="archive">手動存檔</button>
+    </div>
+    <p class="hint" id="reviewHint">
       點五類之一即可；「請款」會開待付款申請並帶附件（請盡快完成載入）。
       <br />標錯了？切上方「已分類」再點一次分類即可。廢棄會再問一次確認。
+    </p>
+    <p class="hint hidden" id="archiveHint">
+      報價、合約、型錄等：選廠商後上傳，會進該廠資料夾。不必走請款審核。
+      新廠商請先到「廠商名冊」建檔。
     </p>
     <div id="msg" role="alert"></div>
     <div id="ok" aria-live="polite"></div>
 
+    <div id="reviewPanel">
     <div class="card">
       <div class="filters">
         <div class="field">
@@ -154,6 +191,34 @@
       <p class="list-summary" id="listSummary">更新中…</p>
       <div id="list"></div>
     </div>
+    </div>
+
+    <div id="archivePanel" class="hidden">
+      <div class="card">
+        <label class="vendor-filter-label" for="filterVendorTrade">① 工項分類</label>
+        <select id="filterVendorTrade"><option value="">請選工項分類</option></select>
+        <label class="vendor-filter-label" for="pickVendorSelect">② 廠商</label>
+        <select id="pickVendorSelect" disabled><option value="">請先選工項分類</option></select>
+        <label class="vendor-filter-label" for="archiveDocType">檔案類型</label>
+        <select id="archiveDocType"></select>
+        <label class="vendor-filter-label" for="archiveProjectNo">案號（選填）</label>
+        <input type="text" id="archiveProjectNo" placeholder="例：752" />
+        <label class="vendor-filter-label" for="archiveTitle">備註（選填）</label>
+        <input type="text" id="archiveTitle" placeholder="例：第三版報價、含安裝費" />
+        <p class="sub" id="photoCountLine" style="margin:10px 0 0">已 0 / 30 個</p>
+        <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="加入檔案">
+          <p>拖曳檔案到這裡，或點一下選擇</p>
+          <p class="hint">支援圖片、PDF、Word、Excel；手機可拍照、相簿或選檔案；單檔最多 10 MB</p>
+          <input type="file" id="photoInput" accept="*/*" multiple />
+        </div>
+        <div class="photo-grid" id="photoGrid"></div>
+        <button type="button" class="btn btn-primary" id="archiveSubmitBtn" disabled style="width:100%;margin-top:10px">上傳至廠商資料夾</button>
+      </div>
+      <div class="card">
+        <p class="list-summary">最近上傳（此廠商）</p>
+        <div id="archiveList">請先選擇廠商</div>
+      </div>
+    </div>
   </div>
 
   <div id="dropDlg" class="dlg-mask hidden" role="dialog" aria-modal="true" aria-labelledby="dropDlgTitle">
@@ -177,6 +242,13 @@
       var pendingDrop = null;
       var refreshTimer = null;
       var reloadBusy = false;
+      var workTab = 'review';
+      var archivePhotos = [];
+      var archiveBusy = false;
+      var canArchiveDelete = false;
+      var MAX_PHOTOS_ARCHIVE = 30;
+      var MAX_BYTES = 10 * 1024 * 1024;
+      var BLOCKED_EXT = { exe: 1, bat: 1, cmd: 1, com: 1, msi: 1, scr: 1, ps1: 1, vbs: 1, js: 1, jar: 1 };
 
       function setMsg(t) {
         document.getElementById('msg').textContent = t || '';
@@ -233,6 +305,300 @@
             items: list || []
           }));
         } catch (e) {}
+      }
+
+      function fileExt(name) {
+        var n = String(name || '').toLowerCase();
+        var dot = n.lastIndexOf('.');
+        return dot > 0 ? n.slice(dot + 1) : '';
+      }
+      function isAllowedFile(file) {
+        if (!file) return false;
+        var ext = fileExt(file.name);
+        if (ext && BLOCKED_EXT[ext]) return false;
+        return true;
+      }
+      function guessMime(file) {
+        var t = String((file && file.type) || '').toLowerCase();
+        if (t) return t;
+        var n = String((file && file.name) || '').toLowerCase();
+        if (n.slice(-4) === '.pdf') return 'application/pdf';
+        if (n.slice(-5) === '.docx') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        if (n.slice(-4) === '.doc') return 'application/msword';
+        if (n.slice(-5) === '.xlsx') return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        if (n.slice(-4) === '.xls') return 'application/vnd.ms-excel';
+        return 'application/octet-stream';
+      }
+      function fileLabel(file) {
+        var n = String((file && file.name) || '');
+        return n.length > 28 ? n.slice(0, 12) + '…' + n.slice(-12) : n;
+      }
+      function uid() {
+        return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      }
+      function fillArchiveDocTypes() {
+        var sel = document.getElementById('archiveDocType');
+        if (!sel || sel.options.length) return;
+        (typeof AccountingMasterData !== 'undefined' ? (AccountingMasterData.vendor_doc_types || []) : []).forEach(function (t) {
+          var opt = document.createElement('option');
+          opt.value = t;
+          opt.textContent = t;
+          sel.appendChild(opt);
+        });
+      }
+      function fillVendorTradeFilter() {
+        var sel = document.getElementById('filterVendorTrade');
+        if (!sel) return;
+        var prev = sel.value;
+        var cats = (typeof AccountingMasterData !== 'undefined' && AccountingMasterData.vendor_trade_categories)
+          ? AccountingMasterData.vendor_trade_categories.slice()
+          : [];
+        sel.innerHTML = '<option value="">請選工項分類</option>';
+        cats.forEach(function (c) {
+          var opt = document.createElement('option');
+          opt.value = c;
+          opt.textContent = c;
+          sel.appendChild(opt);
+        });
+        if (prev && Array.prototype.some.call(sel.options, function (o) { return o.value === prev; })) {
+          sel.value = prev;
+        }
+      }
+      function getFilteredVendors() {
+        var trade = document.getElementById('filterVendorTrade').value;
+        var list = vendors || [];
+        if (!trade) return list;
+        return list.filter(function (v) {
+          var tc = (typeof AccountingMasterData !== 'undefined' && AccountingMasterData.normalizeVendorTradeCategory)
+            ? AccountingMasterData.normalizeVendorTradeCategory(v.trade_category)
+            : String(v.trade_category || '').trim();
+          return tc === trade;
+        });
+      }
+      function fillVendorDropdown() {
+        var sel = document.getElementById('pickVendorSelect');
+        var tradeSel = document.getElementById('filterVendorTrade');
+        if (!sel) return;
+        var prev = sel.value;
+        var trade = tradeSel ? tradeSel.value : '';
+        sel.innerHTML = '';
+        if (!trade) {
+          sel.disabled = true;
+          var ph = document.createElement('option');
+          ph.value = '';
+          ph.textContent = '請先選工項分類';
+          sel.appendChild(ph);
+          return;
+        }
+        sel.disabled = false;
+        var empty = document.createElement('option');
+        empty.value = '';
+        empty.textContent = '請選廠商';
+        sel.appendChild(empty);
+        getFilteredVendors().slice().sort(function (a, b) {
+          return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant');
+        }).forEach(function (v) {
+          var opt = document.createElement('option');
+          opt.value = v.vendor_id;
+          opt.textContent = v.name || v.vendor_id;
+          sel.appendChild(opt);
+        });
+        if (prev && Array.prototype.some.call(sel.options, function (o) { return o.value === prev; })) {
+          sel.value = prev;
+        }
+      }
+      function updateArchiveUploadUi() {
+        document.getElementById('photoCountLine').textContent =
+          '已 ' + archivePhotos.length + ' / ' + MAX_PHOTOS_ARCHIVE + ' 個';
+        var vid = document.getElementById('pickVendorSelect').value;
+        document.getElementById('archiveSubmitBtn').disabled =
+          archiveBusy || archivePhotos.length < 1 || !vid;
+      }
+      function renderArchivePhotos() {
+        var grid = document.getElementById('photoGrid');
+        grid.innerHTML = '';
+        archivePhotos.forEach(function (p) {
+          var tile = document.createElement('div');
+          tile.className = 'photo-tile';
+          var isImg = String(p.mimeType || '').indexOf('image/') === 0;
+          if (isImg) {
+            tile.innerHTML = '<img alt="預覽" /><button type="button" class="del">刪除</button>';
+            tile.querySelector('img').src = 'data:' + p.mimeType + ';base64,' + p.dataBase64;
+          } else {
+            tile.innerHTML = '<div class="file-thumb"><strong>' +
+              esc((fileExt(p.filename) || '檔').toUpperCase()) + '</strong></div>' +
+              '<button type="button" class="del">刪除</button>';
+          }
+          tile.querySelector('.del').onclick = function () {
+            archivePhotos = archivePhotos.filter(function (x) { return x.photo_id !== p.photo_id; });
+            renderArchivePhotos();
+          };
+          grid.appendChild(tile);
+        });
+        updateArchiveUploadUi();
+      }
+      function readFileB64(file) {
+        return new Promise(function (resolve, reject) {
+          if (!isAllowedFile(file)) {
+            reject(new Error('不支援的檔案類型：' + file.name));
+            return;
+          }
+          if (file.size > MAX_BYTES) {
+            reject(new Error('單檔不可超過 10 MB：' + file.name));
+            return;
+          }
+          var mimeType = guessMime(file);
+          var r = new FileReader();
+          r.onload = function () {
+            resolve({
+              photo_id: uid(),
+              filename: file.name,
+              mimeType: mimeType,
+              dataBase64: r.result.split(',')[1]
+            });
+          };
+          r.onerror = reject;
+          r.readAsDataURL(file);
+        });
+      }
+      async function addArchiveFiles(fileList) {
+        setMsg('');
+        for (var i = 0; i < fileList.length; i++) {
+          if (archivePhotos.length >= MAX_PHOTOS_ARCHIVE) {
+            setMsg('最多 ' + MAX_PHOTOS_ARCHIVE + ' 個檔案');
+            break;
+          }
+          try {
+            var p = await readFileB64(fileList[i]);
+            if (p) archivePhotos.push(p);
+          } catch (e) {
+            setMsg(e.message || String(e));
+          }
+        }
+        renderArchivePhotos();
+        document.getElementById('photoInput').value = '';
+      }
+      function renderArchiveList(rows) {
+        var box = document.getElementById('archiveList');
+        var vendorId = document.getElementById('pickVendorSelect').value;
+        if (!vendorId) {
+          box.textContent = '請先選擇廠商';
+          return;
+        }
+        if (!rows.length) {
+          box.textContent = '尚無紀錄';
+          return;
+        }
+        box.innerHTML = '';
+        rows.forEach(function (r) {
+          var div = document.createElement('div');
+          div.className = 'archive-item';
+          var parts = [r.doc_type || '—'];
+          if (r.project_no) parts.push('案' + r.project_no);
+          if (r.title) parts.push(r.title);
+          div.innerHTML =
+            '<div><a href="' + esc(r.drive_url || '#') + '" target="_blank" rel="noopener">' +
+            esc(r.filename || '開啟檔案') + '</a></div>' +
+            '<div class="archive-item-meta">' + esc(parts.join(' · ')) +
+            (r.uploaded_at ? ' · ' + esc(r.uploaded_at) : '') + '</div>';
+          if (canArchiveDelete && r.vendor_doc_id) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn-warn';
+            btn.textContent = '刪除檔案';
+            btn.addEventListener('click', function () { deleteArchiveDoc(r.vendor_doc_id, btn); });
+            div.appendChild(btn);
+          }
+          box.appendChild(div);
+        });
+      }
+      async function loadArchiveList() {
+        var vendorId = document.getElementById('pickVendorSelect').value;
+        if (!vendorId) {
+          renderArchiveList([]);
+          return;
+        }
+        var data = await AccountingApi.vendorDocList(session, {
+          vendor_id: vendorId,
+          page_size: 20
+        });
+        if (!data.success) {
+          document.getElementById('archiveList').textContent = data.message || '無法載入列表';
+          return;
+        }
+        renderArchiveList(data.data || []);
+      }
+      async function deleteArchiveDoc(vendorDocId, btn) {
+        if (!confirm('確定刪除此檔案？\n\n檔案會移入雲端硬碟垃圾桶，30 天內可還原。')) return;
+        btn.disabled = true;
+        try {
+          var data = await AccountingApi.vendorDocDeactivate(session, vendorDocId);
+          if (!data.success) throw new Error(data.message || '刪除失敗');
+          setOk(data.message || '已刪除');
+          await loadArchiveList();
+        } catch (e) {
+          setMsg(e.message || '刪除失敗');
+          btn.disabled = false;
+        }
+      }
+      async function submitArchive() {
+        if (archiveBusy) return;
+        var vendorId = document.getElementById('pickVendorSelect').value;
+        var trade = document.getElementById('filterVendorTrade').value;
+        if (!trade) { setMsg('請先選工項分類'); return; }
+        if (!vendorId) { setMsg('請從下拉選擇廠商'); return; }
+        if (!archivePhotos.length) { setMsg('請選擇至少一個檔案'); return; }
+        if (!document.getElementById('archiveDocType').value) { setMsg('請選檔案類型'); return; }
+        var btn = document.getElementById('archiveSubmitBtn');
+        archiveBusy = true;
+        updateArchiveUploadUi();
+        btn.textContent = '上傳中…';
+        AccountingUi.action('上傳至廠商資料夾', 'start');
+        try {
+          var data = await AccountingApi.vendorDocSubmit(session, {
+            vendor_id: vendorId,
+            doc_type: document.getElementById('archiveDocType').value,
+            project_no: document.getElementById('archiveProjectNo').value.trim(),
+            order_no: '',
+            title: document.getElementById('archiveTitle').value.trim(),
+            files: archivePhotos.map(function (p) {
+              return { filename: p.filename, mimeType: p.mimeType, dataBase64: p.dataBase64 };
+            })
+          });
+          if (!data.success) throw new Error(data.message || '上傳失敗');
+          var folderNote = (data.folder && data.folder.drive_folder_url)
+            ? ' · 已存進廠商資料夾'
+            : '';
+          setOk((data.message || '上傳成功') + folderNote);
+          archivePhotos = [];
+          renderArchivePhotos();
+          await loadArchiveList();
+          AccountingUi.action('上傳至廠商資料夾', 'ok');
+        } catch (e) {
+          setMsg(e.message || '上傳失敗');
+          AccountingUi.action('上傳至廠商資料夾', 'fail');
+        } finally {
+          archiveBusy = false;
+          btn.textContent = '上傳至廠商資料夾';
+          updateArchiveUploadUi();
+        }
+      }
+      function setWorkTab(tab, fromUser) {
+        workTab = tab === 'archive' ? 'archive' : 'review';
+        document.querySelectorAll('#workTabSeg button').forEach(function (btn) {
+          btn.classList.toggle('active', btn.getAttribute('data-tab') === workTab);
+        });
+        document.getElementById('reviewPanel').classList.toggle('hidden', workTab === 'archive');
+        document.getElementById('archivePanel').classList.toggle('hidden', workTab !== 'archive');
+        document.getElementById('reviewHint').classList.toggle('hidden', workTab === 'archive');
+        document.getElementById('archiveHint').classList.toggle('hidden', workTab !== 'archive');
+        if (fromUser) AccountingUi.tap(workTab === 'archive' ? '手動存檔' : '待審單據');
+        if (workTab === 'archive') {
+          fillArchiveDocTypes();
+          fillVendorTradeFilter();
+          fillVendorDropdown();
+          loadArchiveList().catch(function () {});
+        }
       }
 
       function vendorOptionsHtml(selectedId) {
@@ -491,6 +857,47 @@
 
       document.getElementById('reloadBtn').addEventListener('click', function () { reload(); });
       document.getElementById('filterStatus').addEventListener('change', function () { reload(); });
+      document.getElementById('workTabSeg').addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-tab]');
+        if (!btn) return;
+        setWorkTab(btn.getAttribute('data-tab'), true);
+      });
+      document.getElementById('filterVendorTrade').addEventListener('change', function () {
+        fillVendorDropdown();
+        loadArchiveList().catch(function () {});
+        updateArchiveUploadUi();
+      });
+      document.getElementById('pickVendorSelect').addEventListener('change', function () {
+        loadArchiveList().catch(function () {});
+        updateArchiveUploadUi();
+      });
+      document.getElementById('archiveSubmitBtn').addEventListener('click', function () { submitArchive(); });
+      document.getElementById('photoInput').addEventListener('change', function (e) {
+        addArchiveFiles(e.target.files || []);
+      });
+      var dropZone = document.getElementById('dropZone');
+      dropZone.addEventListener('click', function (e) {
+        if (e.target && e.target.id === 'photoInput') return;
+        document.getElementById('photoInput').click();
+      });
+      dropZone.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          document.getElementById('photoInput').click();
+        }
+      });
+      ['dragenter', 'dragover'].forEach(function (ev) {
+        dropZone.addEventListener(ev, function (e) {
+          e.preventDefault();
+          dropZone.classList.add('drag-over');
+        });
+      });
+      dropZone.addEventListener('dragleave', function () { dropZone.classList.remove('drag-over'); });
+      dropZone.addEventListener('drop', function (e) {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        addArchiveFiles(e.dataTransfer.files || []);
+      });
 
       var kwTimer = null;
       document.getElementById('filterKw').addEventListener('input', function () {
@@ -509,15 +916,21 @@
         }
         if (typeof AccountingNav !== 'undefined') AccountingNav.init();
         try {
-          AccountingUi.action('開啟單據快審', 'start');
+          AccountingUi.action('開啟單據與存檔', 'start');
           session = await AccountingApi.initSession({
             minPermission: AccountingApi.INGEST_MIN_PERMISSION
           });
           if (!session) return;
+          canArchiveDelete = (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION;
           document.getElementById('userLine').textContent =
             (session.auth.display_name || session.profile.displayName) +
             ' · 權限 ' + session.auth.permission +
             (session.fromHub ? ' · 主控台' : (session.devBypass ? ' · 測試模式（無登入）' : ''));
+          fillArchiveDocTypes();
+          fillVendorTradeFilter();
+          var tabQ = '';
+          try { tabQ = new URLSearchParams(window.location.search).get('tab') || ''; } catch (eTab) {}
+          setWorkTab(tabQ === 'archive' ? 'archive' : 'review', false);
           // 先出殼：不要等主檔／清單，避免整頁卡在「載入中」
           showApp();
           setLive('更新中…', true);
@@ -533,19 +946,21 @@
           if (typeof AccountingCache !== 'undefined') {
             try {
               vendors = AccountingCache.vendors(session) || AccountingCache.peekVendors() || [];
+              if (vendors.length) fillVendorDropdown();
               if (!vendors.length && AccountingCache.needsStaffBootstrap(session)) {
                 AccountingCache.load(session, false).then(function () {
                   vendors = AccountingCache.vendors(session) || [];
                   if (vendors.length && items.length) renderList();
+                  fillVendorDropdown();
                 }).catch(function () {});
               }
             } catch (eCache) {}
           }
-          AccountingUi.action('開啟單據快審', 'ok');
+          AccountingUi.action('開啟單據與存檔', 'ok');
         } catch (e) {
           document.getElementById('loading').textContent = humanApiMsg(e.message || String(e));
           document.getElementById('loading').classList.remove('hidden');
-          AccountingUi.action('開啟單據快審', 'fail');
+          AccountingUi.action('開啟單據與存檔', 'fail');
         }
       })();
     })();

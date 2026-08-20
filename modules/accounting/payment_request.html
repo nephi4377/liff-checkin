@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>廠商存檔或待付款</title>
+  <title>待付款請款</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
-  <script src="../../shared/js/accounting_tax_mode.js?v=1"></script>
+  <script src="../../shared/js/accounting_tax_mode.js?v=2"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=51"></script>
+  <script src="../../shared/js/accounting_api.js?v=58"></script>
   <script src="../../shared/js/accounting_cache.js?v=32"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=5"></script>
-  <script src="../../shared/js/accounting_ui.js?v=20"></script>
+  <script src="../../shared/js/accounting_ui.js?v=22"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <style>
     h2 { margin: 0 0 8px; }
@@ -113,13 +113,13 @@
   <div id="loading">載入中…</div>
   <div id="app" class="hidden acct-main">
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
-    <h2>廠商存檔或待付款</h2>
+    <h2>待付款請款</h2>
     <p class="sub" id="userLine">—</p>
-    <div class="seg" id="pageModeSeg" style="margin:10px 0 6px">
-      <button type="button" data-page-mode="archive" class="active">存檔歸檔</button>
-      <button type="button" data-page-mode="payment">待付款請款</button>
+    <div class="seg hidden" id="pageModeSeg" style="margin:10px 0 6px">
+      <button type="button" data-page-mode="archive">存檔歸檔</button>
+      <button type="button" data-page-mode="payment" class="active">待付款請款</button>
     </div>
-    <p class="sub" id="modeHint">報價、合約等檔案存入廠商 Drive 資料夾並建立索引；不必走請款審核。</p>
+    <p class="sub" id="modeHint">錢還沒付才用這頁：傳單據給 AI 讀取，或手填後送審。報價／合約請改走「單據與存檔」。</p>
     <div class="steps" id="stepsBar" aria-hidden="true">
       <span class="on">① 傳單據</span><span>② 辨識</span><span>③ 確認收款人</span><span>④ 送出</span>
     </div>
@@ -128,7 +128,7 @@
       <div class="acct-pay-layout">
       <div class="acct-pay-col-upload">
       <label id="uploadLabel">檔案（可多檔、可拖曳）</label>
-      <p class="sub" id="photoCountLine">已 0 / 30 個</p>
+      <p class="sub" id="photoCountLine">已 0 / 20 個</p>
       <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="加入檔案">
         <p>拖曳檔案到這裡，或點一下選擇</p>
         <p class="hint" id="uploadHint">支援圖片、PDF、Word、Excel 等；手機可拍照、相簿或選檔案；單檔最多 10 MB</p>
@@ -168,7 +168,7 @@
         </div>
       </div>
 
-      <div id="archiveFieldsBlock">
+      <div id="archiveFieldsBlock" class="hidden">
         <label>檔案類型</label>
         <select id="archiveDocType"></select>
         <div class="row2">
@@ -185,7 +185,7 @@
         <p class="sub">存檔模式：檔案寫入廠商 Drive 並建立索引，不走請款審核。</p>
       </div>
 
-      <div id="paymentFieldsBlock" class="hidden">
+      <div id="paymentFieldsBlock">
       <label>單據類型</label>
       <select id="docType">
         <option value="請款">請款</option>
@@ -240,11 +240,13 @@
       <label>明細（案號＋金額，至少一列）</label>
       <div class="tax-mode-block" id="taxModeBlock">
         <label>稅別模式（整張統一）</label>
+        <p class="sub" id="taxModeHint" style="margin:4px 0 6px">「已含稅」金額不另加稅。另外兩種請在金額欄填<strong>未稅</strong>，合計會自動加 5%。</p>
         <div id="taxModeSegHost"></div>
       </div>
       <div id="allocList"></div>
       <button type="button" class="btn btn-ghost" id="addAllocBtn">＋ 新增一列</button>
       <div class="total-line">合計 $<span id="totalAmt">0</span></div>
+      <p class="sub" id="taxBreakdown" style="margin:4px 0 0;text-align:right;color:#555;font-size:13px;"></p>
       <p class="sub" id="remitFeeHint" style="margin:4px 0 0;text-align:right;color:#555;font-size:13px;"></p>
 
       <label>備註（選填）</label>
@@ -259,7 +261,7 @@
       </div>
     </div>
 
-    <div id="archiveListCard" class="card">
+    <div id="archiveListCard" class="card hidden">
       <h3 style="margin:0 0 8px">最近上傳（存檔）</h3>
       <div class="row2">
         <div>
@@ -284,6 +286,15 @@
   </div>
   <script>
     (function () {
+      try {
+        var bootQ = new URLSearchParams(window.location.search);
+        if (bootQ.get('mode') === 'archive') {
+          bootQ.delete('mode');
+          bootQ.set('tab', 'archive');
+          location.replace('quick_review.html?' + bootQ.toString());
+          return;
+        }
+      } catch (eRedirect) {}
       AccountingUi.init();
       var fb = AccountingUi.feedback();
       var MAX_PHOTOS_ARCHIVE = 30;
@@ -311,11 +322,12 @@
       var canSaveVendor = false;
       var isVendorSelf = false;
       var vendorSelf = null;
-      var pageMode = 'archive';
+      var pageMode = 'payment';
       var lastArchiveOcr = null;
       var canArchiveDelete = false;
       var taxMode = 'inclusive';
       var taxModeTouched = false;
+      var taxApplyBusy = false;
       var lastOcrTaxAmount = 0;
       var ocrForceVendorHint = false;
       var lastOcrNeedVendorRetry = false;
@@ -355,6 +367,17 @@
 
       function setPageMode(mode, fromUser) {
         if (isVendorSelf && mode === 'archive') mode = 'payment';
+        if (mode === 'archive') {
+          try {
+            var q = new URLSearchParams(window.location.search);
+            q.delete('mode');
+            q.set('tab', 'archive');
+            location.replace('quick_review.html?' + q.toString());
+          } catch (eGo) {
+            location.replace('quick_review.html?tab=archive');
+          }
+          return;
+        }
         pageMode = mode;
         if (fromUser) AccountingUi.tap('模式 → ' + (mode === 'archive' ? '存檔歸檔' : '待付款請款'));
         document.querySelectorAll('#pageModeSeg button').forEach(function (btn) {
@@ -863,10 +886,11 @@
         var baseAttr = (row._base_amount != null && row._base_amount !== '') ? String(row._base_amount) : '';
         return '<div class="alloc-row" data-idx="' + idx + '" data-source="' + (row.source || '') + '"' +
           ' data-ocr-tax-inclusive="' + (row.ocr_tax_inclusive ? '1' : '0') + '"' +
+          ' data-tax-add-applied="' + (row.tax_add_applied ? '1' : '0') + '"' +
           ' data-base-amount="' + baseAttr + '">' +
           '<button type="button" class="rm" data-rm="' + idx + '">刪除</button>' +
           '<div class="row2"><div><label>案號' + src + '</label><input class="inp-pn" value="' + (row.project_no || '') + '" placeholder="752" /></div>' +
-          '<div><label>金額</label><input class="inp-amt" type="number" inputmode="numeric" placeholder="折讓填負數" value="' + (row.amount || '') + '" /></div></div>' +
+          '<div><label>' + (taxMode === 'inclusive' ? '金額' : '金額（未稅）') + '</label><input class="inp-amt" type="number" inputmode="numeric" placeholder="折讓填負數" value="' + (row.amount || '') + '" /></div></div>' +
           '<label>品項</label><input class="inp-desc" value="' + (row.item_desc || '') + '" placeholder="摘要" />' +
           '<div class="tax-row">' +
           '<label><input type="checkbox" class="inp-tax"' +
@@ -901,7 +925,7 @@
             item_desc: el.querySelector('.inp-desc').value.trim(),
             source: el.getAttribute('data-source') || 'manual',
             tax_inclusive: taxCb ? taxCb.checked : false,
-            tax_add_applied: false,
+            tax_add_applied: el.getAttribute('data-tax-add-applied') === '1',
             ocr_tax_inclusive: el.getAttribute('data-ocr-tax-inclusive') === '1',
             _base_amount: baseRaw !== null && baseRaw !== '' ? baseRaw : undefined
           });
@@ -922,8 +946,10 @@
       function renderTaxModeSeg() {
         var host = document.getElementById('taxModeSegHost');
         if (!host || typeof AccountingTaxMode === 'undefined') return;
+        var keptTax = getProrateTaxInput();
         host.innerHTML = AccountingTaxMode.segHtml(taxMode, 'payment');
-        setProrateTaxInput(lastOcrTaxAmount > 0 ? lastOcrTaxAmount : '');
+        if (keptTax !== '') setProrateTaxInput(keptTax);
+        else if (lastOcrTaxAmount > 0) setProrateTaxInput(lastOcrTaxAmount);
         host.querySelectorAll('[data-tax-mode]').forEach(function (btn) {
           btn.addEventListener('click', function () {
             var next = btn.getAttribute('data-tax-mode');
@@ -985,15 +1011,41 @@
         renderAllocRows(applied);
         renderTaxModeSeg();
         syncTaxModeFormNote();
-        AccountingUi.tap('稅別模式：' + AccountingTaxMode.modeLabel(next));
+        if (!opts.silent) AccountingUi.tap('稅別模式：' + AccountingTaxMode.modeLabel(next));
       }
 
       function setTaxModeQuiet(nextMode) {
-        taxMode = (typeof AccountingTaxMode !== 'undefined')
+        var next = (typeof AccountingTaxMode !== 'undefined')
           ? (AccountingTaxMode.normalizeMode(nextMode) || 'inclusive')
           : 'inclusive';
+        var rows = readAllocRows();
+        if (rows.length && (next === 'per_row' || next === 'prorate') && next !== taxMode) {
+          applyTaxMode(next, { force: true, silent: true });
+          return;
+        }
+        taxMode = next;
         renderTaxModeSeg();
         syncTaxModeFormNote();
+      }
+
+      function refreshTaxFromCurrentBases() {
+        if (taxApplyBusy || taxMode === 'inclusive') return;
+        if (!readAllocRows().length) return;
+        taxApplyBusy = true;
+        try {
+          applyTaxMode(taxMode, { force: true, silent: true });
+        } finally {
+          taxApplyBusy = false;
+        }
+      }
+
+      function finalizedAllocRows() {
+        var rows = readAllocRows();
+        if (!rows.length || typeof AccountingTaxMode === 'undefined' || taxMode === 'inclusive') return rows;
+        return AccountingTaxMode.applyModeToRows(rows, taxMode, {
+          prevMode: taxMode,
+          taxAmount: getProrateTaxInput()
+        });
       }
 
       function remitFeePreview(sum) {
@@ -1010,10 +1062,25 @@
       }
 
       function updateTotal() {
-        var sum = readAllocRows().reduce(function (s, r) {
+        var rows = readAllocRows();
+        var sum = rows.reduce(function (s, r) {
           return s + (parseInt(r.amount, 10) || 0);
         }, 0);
         document.getElementById('totalAmt').textContent = sum.toLocaleString('zh-TW');
+        var br = document.getElementById('taxBreakdown');
+        if (br && typeof AccountingTaxMode !== 'undefined') {
+          var s = AccountingTaxMode.summarize(rows, taxMode);
+          if (taxMode === 'inclusive') {
+            br.textContent = sum > 0 ? '已含稅，不再另加 5%' : '';
+          } else if (s.tax > 0) {
+            br.textContent = '未稅 $' + s.pretax.toLocaleString('zh-TW') +
+              ' ＋ 稅 $' + s.tax.toLocaleString('zh-TW');
+          } else if (sum > 0) {
+            br.textContent = '尚未加稅：請確認已選未稅模式，金額欄填未稅（填完會自動加 5%）';
+          } else {
+            br.textContent = '';
+          }
+        }
         var hint = document.getElementById('remitFeeHint');
         var preview = remitFeePreview(sum);
         var deduct = selectedVendorRemitFeeDefault();
@@ -1056,11 +1123,15 @@
                 var a = parseAllocAmount(inp.value);
                 setTaxControlsDisabled(row, !isNaN(a) && a < 0);
                 if (!isNaN(a)) row.setAttribute('data-base-amount', String(a));
+                row.setAttribute('data-tax-add-applied', '0');
               }
             }
             syncTaxFormNote();
             updateTotal();
           };
+          if (inp.classList.contains('inp-amt')) {
+            inp.onchange = function () { refreshTaxFromCurrentBases(); };
+          }
         });
         document.querySelectorAll('#allocList .inp-tax').forEach(function (cb) {
           cb.onchange = function () {
@@ -1602,8 +1673,20 @@
           box.innerHTML = '';
           return;
         }
-        var target = suggestPayment ? 'payment' : 'archive';
-        var label = target === 'payment' ? '待付款請款' : '存檔歸檔';
+        if (suggestArchive) {
+          box.innerHTML = '辨識結果較像「存檔」（報價／合約），不是請款。' +
+            '<button type="button" class="btn btn-secondary" id="modeSuggestBtn">改去單據與存檔</button>';
+          box.classList.remove('hidden');
+          document.getElementById('modeSuggestBtn').onclick = function () {
+            var q = new URLSearchParams(window.location.search);
+            q.delete('mode');
+            q.set('tab', 'archive');
+            location.href = 'quick_review.html?' + q.toString();
+          };
+          return;
+        }
+        var target = 'payment';
+        var label = '待付款請款';
         box.innerHTML = '辨識結果較像「' + label + '」，要切換模式嗎？' +
           '<button type="button" class="btn btn-secondary" id="modeSuggestBtn">切換至' + label + '</button>';
         box.classList.remove('hidden');
@@ -1904,6 +1987,7 @@
         if (submitting) return;
         var err = validateForm();
         if (err) { setMsg(err); return; }
+        refreshTaxFromCurrentBases();
         var label = mode === 'finance_direct' ? '財務直送待匯款' : '送出請款';
         var btn = mode === 'finance_direct'
           ? document.getElementById('financeBtn')
@@ -1915,7 +1999,7 @@
           order_no: '',
           txn_date: document.getElementById('txnDate').value,
           note: document.getElementById('note').value.trim(),
-          allocations: readAllocRows(),
+          allocations: finalizedAllocRows(),
           photos: photosPayload(),
           from_line: queryParams.from === 'line' || queryParams.from === 'ocr'
         });
@@ -2160,7 +2244,7 @@
       }
 
       function finishPaymentRequestBoot() {
-        var initialMode = 'archive';
+        var initialMode = 'payment';
         if (queryParams.mode === 'payment' || queryParams.pending || queryParams.draft || queryParams.from) {
           initialMode = 'payment';
         }
@@ -2200,7 +2284,7 @@
         queryParams = readQuery();
         if (typeof AccountingNav !== 'undefined') AccountingNav.init();
         try {
-          AccountingUi.action('載入廠商存檔或待付款', 'start');
+          AccountingUi.action('載入待付款請款', 'start');
           session = await AccountingApi.initPaymentRequestSession();
           if (!session) return;
           isVendorSelf = String(session.auth.status || '') === '廠商';
@@ -2227,10 +2311,10 @@
               can_finance_direct: (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION
             });
             canArchiveDelete = (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION;
-            AccountingUi.action('載入廠商存檔或待付款', 'ok');
+            AccountingUi.action('載入待付款請款', 'ok');
           } else {
             AccountingApi.paymentRequestContext(session).then(function (ctx) {
-              if (applyPaymentRequestContext(ctx)) AccountingUi.action('載入廠商存檔或待付款', 'ok');
+              if (applyPaymentRequestContext(ctx)) AccountingUi.action('載入待付款請款', 'ok');
               else if (ctx && ctx.message) setMsg(ctx.message);
               if (queryParams.vendor_id && !isVendorSelf) {
                 var qVid2 = String(queryParams.vendor_id).trim();
