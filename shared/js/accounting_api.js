@@ -1310,13 +1310,21 @@ var AccountingApi = (function () {
       return post(body);
     },
     vendorRegisterOcr: function (session, photo, kind) {
+      var auth = resolveAuth(session);
       var body = {
         action: 'vendor_register_ocr',
-        liff_id_token: session.idToken || '',
         photo: photo || {},
-        kind: kind || (photo && photo.kind) || 'passbook'
+        kind: kind || (photo && photo.kind) || 'passbook',
+        auth: auth
       };
-      if (session.devBypass) body.dev_bypass = true;
+      if (auth.liff_id_token) body.liff_id_token = auth.liff_id_token;
+      else if (session && session.idToken) body.liff_id_token = session.idToken;
+      if (auth.user_id) body.user_id = auth.user_id;
+      if (auth.dev_bypass || (session && session.devBypass)) {
+        body.dev_bypass = true;
+        if (auth.dev_permission) body.dev_permission = auth.dev_permission;
+        if (auth.dev_user_id) body.dev_user_id = auth.dev_user_id;
+      }
       return post(body);
     },
     employeeBankOcr: function (sessionOrToken, photo, kind, operatorUserId) {
