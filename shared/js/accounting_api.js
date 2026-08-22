@@ -133,7 +133,9 @@ var AccountingApi = (function () {
       if (trackUi && typeof AccountingUi !== 'undefined' && AccountingUi.apiEnd) {
         var extra = parsed && parsed.success === false && parsed.message ? parsed.message : '';
         if (parsed && parsed.gas_cached) extra = (extra ? extra + ' · ' : '') + (apiLabel || 'GAS') + ' 快取';
-        AccountingUi.apiEnd(actionName, Date.now() - t0, !!(parsed && parsed.success !== false), extra);
+        try {
+          AccountingUi.apiEnd(actionName, Date.now() - t0, !!(parsed && parsed.success !== false), extra);
+        } catch (eEnd) {}
       }
       if (parsed && parsed.success === false) {
         logApiFailure_(actionName, { message: parsed.message || '失敗' }, false);
@@ -146,7 +148,9 @@ var AccountingApi = (function () {
         err = new Error('連線逾時，請再試一次');
       }
       if (trackUi && typeof AccountingUi !== 'undefined' && AccountingUi.apiEnd) {
-        AccountingUi.apiEnd(actionName, Date.now() - t0, false, err.message || raw);
+        try {
+          AccountingUi.apiEnd(actionName, Date.now() - t0, false, err.message || raw);
+        } catch (eEnd) {}
       }
       logApiFailure_(actionName, err, false);
       throw err;
@@ -1093,7 +1097,7 @@ var AccountingApi = (function () {
         allocations: payload.allocations || [],
         photos: payload.photos || [],
         from_line: payload.from_line
-      });
+      }, 180000);
     },
     vendorPaymentUpdate: function (sessionOrToken, paymentRequestId, patch) {
       return post({

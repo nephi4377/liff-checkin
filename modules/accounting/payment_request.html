@@ -11,10 +11,10 @@
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=58"></script>
+  <script src="../../shared/js/accounting_api.js?v=62"></script>
   <script src="../../shared/js/accounting_cache.js?v=32"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=5"></script>
-  <script src="../../shared/js/accounting_ui.js?v=22"></script>
+  <script src="../../shared/js/accounting_ui.js?v=23"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <style>
     h2 { margin: 0 0 8px; }
@@ -256,6 +256,7 @@
         <button type="button" class="btn btn-primary" id="submitBtn">送出請款（待主管審核）</button>
         <button type="button" class="btn btn-finance hidden" id="financeBtn">進階：財務直送待匯款（跳過審核）</button>
       </div>
+      <div id="submitErrorHost"></div>
       </div>
       </div>
       </div>
@@ -2008,7 +2009,8 @@
         updateOcrBtn();
         await AccountingUi.runAsync(btn, {
           busyLabel: '送出中…',
-          actionLabel: label
+          actionLabel: label,
+          toastOnFail: false
         }, async function () {
           if (useOverlay) setFormSubmitOverlay(true, '送出中…');
           AccountingUi.tap(label);
@@ -2026,8 +2028,14 @@
             : '主管會在「請款審核」處理；核准後才進待匯款。') + feeNote;
           setOk('請款已送出');
           clearPaymentFormData();
+          var errHost = document.getElementById('submitErrorHost');
+          if (errHost) { errHost.innerHTML = ''; errHost.className = ''; }
         }).catch(function (e) {
-          setMsg(e.message || '送出失敗');
+          var human = e.message || '送出失敗';
+          AccountingUi.showErrorReport(document.getElementById('submitErrorHost'), {
+            action: label,
+            message: human
+          });
         }).finally(function () {
           submitting = false;
           updateOcrBtn();

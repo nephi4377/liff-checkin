@@ -116,6 +116,26 @@ var AccountingUi = (function () {
       '.acct-toast-err{background:#c5221f;color:#fff}',
       '.acct-toast-warn{background:#b06000;color:#fff}',
       '.acct-toast-info{background:#1a73e8;color:#fff}',
+      '.acct-toast-report{display:flex;flex-direction:column;align-items:stretch;gap:8px;text-align:left}',
+      '.acct-toast-report .acct-toast-hd{display:flex;align-items:flex-start;gap:8px}',
+      '.acct-toast-report .acct-toast-body{flex:1;font-weight:600}',
+      '.acct-toast-report .acct-toast-x{border:none;background:transparent;color:#fff;font-size:18px;',
+      'line-height:1;cursor:pointer;padding:0 2px;opacity:.85}',
+      '.acct-toast-report .acct-toast-btns{display:flex;flex-wrap:wrap;gap:6px}',
+      '.acct-toast-report .acct-toast-btns .btn{min-height:36px;padding:6px 10px;border-radius:8px;',
+      'border:1px solid rgba(255,255,255,.55);background:rgba(255,255,255,.18);color:#fff;',
+      'font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}',
+      '.acct-err-host{margin-top:10px;padding:12px;border:1px solid #fecaca;background:#fef2f2;border-radius:12px}',
+      '.acct-err-host .acct-err-msg{margin:0 0 8px;font-size:15px;font-weight:600;color:#991b1b;line-height:1.45}',
+      '.acct-err-host .acct-err-hint{margin:0 0 10px;font-size:13px;color:#7f1d1d;line-height:1.4}',
+      '.acct-err-host .err-actions{display:flex;flex-wrap:wrap;gap:8px}',
+      '.acct-err-host .err-actions .btn{min-height:40px;padding:8px 12px;border-radius:10px;border:1px solid #cbd5e1;',
+      'background:#fff;color:#0f172a;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none}',
+      '.acct-err-host .err-actions .btn-mail{background:#1d4ed8;border-color:#1d4ed8;color:#fff}',
+      '.acct-err-host .err-actions .btn-cursor{background:#0f172a;border-color:#0f172a;color:#fff}',
+      '.acct-err-host .err-fallback{margin:10px 0 0;padding:10px;background:#fff;border:1px solid #fecaca;border-radius:8px;',
+      'font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:160px;overflow:auto}',
+      '.acct-err-host .err-fallback.hidden{display:none}',
       '#acctMsgDock{position:fixed;z-index:10040;background:#1e293b;color:#e2e8f0;',
       'font-size:13px;line-height:1.4;display:flex;flex-direction:column;box-shadow:0 -4px 24px rgba(0,0,0,.2)}',
       '#acctMsgDock .acct-dock-hd{padding:8px 12px;font-weight:700;font-size:12px;letter-spacing:.04em;',
@@ -144,6 +164,7 @@ var AccountingUi = (function () {
       'background:#fff;color:#0f172a;font-size:14px;font-weight:600;cursor:pointer}',
       '.acct-fatal-err .err-actions .btn-primary{background:#0f766e;border-color:#0f766e;color:#fff}',
       '.acct-fatal-err .err-actions .btn-mail{background:#1d4ed8;border-color:#1d4ed8;color:#fff}',
+      '.acct-fatal-err .err-actions .btn-cursor{background:#0f172a;border-color:#0f172a;color:#fff}',
       '.acct-fatal-err .err-fallback{margin:0;padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;',
       'font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:180px;overflow:auto}',
       '.acct-fatal-err .err-fallback.hidden{display:none}',
@@ -529,7 +550,7 @@ var AccountingUi = (function () {
     var allowToast = opts.toast !== false;
     if (!allowToast) return;
     if (status === 'ok') toast('ok', msg, TOAST_MS_DEFAULT);
-    else if (status === 'fail') toast('err', msg, TOAST_MS_DEFAULT);
+    else if (status === 'fail') toastErrorReport(msg, { action: label, message: detail || msg });
     else if (status === 'start' && isDebugMode()) toast('info', msg, 4000);
   }
 
@@ -556,21 +577,21 @@ var AccountingUi = (function () {
     return API_LABELS[action] || ('API ' + action);
   }
 
-  function apiStart(action) {
+  function apiStart(actionName) {
     _apiInflight += 1;
-    var label = apiLabel(action);
+    var label = apiLabel(actionName);
     setProgress(label + '…' + (_apiInflight > 1 ? '（' + _apiInflight + ' 項進行中）' : ''));
     if (isDebugMode()) action(label, 'start');
   }
 
-  function apiEnd(action, ms, ok, extra) {
+  function apiEnd(actionName, ms, ok, extra) {
     _apiInflight = Math.max(0, _apiInflight - 1);
-    var label = apiLabel(action);
+    var label = apiLabel(actionName);
     var slow = ms >= 1200;
     var detail = (extra || '') + (extra ? ' · ' : '') + formatMs(ms);
     if (_apiInflight <= 0) clearProgress();
     else setProgress('還有 ' + _apiInflight + ' 項資料載入中…');
-    if (isDebugMode() || slow || action === 'accounting_bootstrap' || action === 'accounting_auth_me') {
+    if (isDebugMode() || slow || actionName === 'accounting_bootstrap' || actionName === 'accounting_auth_me') {
       var tag = (extra && extra.indexOf('GAS 快取') >= 0) ? '（GAS 快取）' : '';
       if (ok) step(label + (slow ? '（偏慢）' : '') + tag, detail);
       else action(label, 'fail', detail);
@@ -728,6 +749,154 @@ var AccountingUi = (function () {
       '&body=' + encodeURIComponent(body);
   }
 
+  function buildCursorHandoffText(ctx, reportText) {
+    return [
+      '請依這份添心會計錯誤回報排查並修復。',
+      '（從畫面「複製給 Cursor」貼上）',
+      '',
+      String(reportText || buildErrorReportText(ctx))
+    ].join('\n');
+  }
+
+  function persistLastError_(reportText) {
+    try { localStorage.setItem('tanxin_acct_last_error_v1', String(reportText || '').slice(0, 8000)); } catch (eStore) {}
+  }
+
+  function bindCopyButton_(btn, text, okLabel) {
+    btn.addEventListener('click', function () {
+      var orig = btn.textContent;
+      setBtnBusy(btn, true, '複製中…');
+      copyText(text, { okToast: okLabel || '已複製' }).then(function (ok) {
+        setBtnBusy(btn, false);
+        if (ok) {
+          btn.textContent = '已複製';
+          setTimeout(function () { btn.textContent = orig; }, 1600);
+        }
+      });
+    });
+  }
+
+  function appendErrorReportActions_(wrap, ctx, report, opts) {
+    opts = opts || {};
+    var cursorText = buildCursorHandoffText(ctx, report);
+    persistLastError_(cursorText);
+    var actions = document.createElement('div');
+    actions.className = 'err-actions';
+
+    var copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'btn';
+    copyBtn.textContent = '複製錯誤';
+    bindCopyButton_(copyBtn, report, '已複製錯誤內容');
+    actions.appendChild(copyBtn);
+
+    var mailBtn = document.createElement('a');
+    mailBtn.className = 'btn btn-mail';
+    mailBtn.textContent = opts.mailLabel || '開信寄出';
+    mailBtn.href = buildErrorMailtoUrl(report, ctx);
+    mailBtn.addEventListener('click', function () { tap('傳送到信箱（錯誤回報）'); });
+    actions.appendChild(mailBtn);
+
+    var cursorBtn = document.createElement('button');
+    cursorBtn.type = 'button';
+    cursorBtn.className = 'btn btn-cursor';
+    cursorBtn.textContent = '複製給 Cursor';
+    bindCopyButton_(cursorBtn, cursorText, '已複製，請貼到 Cursor 對話');
+    actions.appendChild(cursorBtn);
+
+    wrap.appendChild(actions);
+    return mailBtn;
+  }
+
+  function dismissToastEl_(el) {
+    if (!el || !el.parentNode) return;
+    el.classList.remove('acct-toast-show');
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 320);
+  }
+
+  function toastErrorReport(headline, ctx) {
+    ctx = ctx || {};
+    ensureMount();
+    var report = buildErrorReportText(ctx);
+    persistLastError_(buildCursorHandoffText(ctx, report));
+    var el = document.createElement('div');
+    el.className = 'acct-toast acct-toast-err acct-toast-report';
+    el.setAttribute('role', 'alert');
+
+    var hd = document.createElement('div');
+    hd.className = 'acct-toast-hd';
+    var body = document.createElement('div');
+    body.className = 'acct-toast-body';
+    body.textContent = headline || ctx.message || '發生錯誤';
+    var closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'acct-toast-x';
+    closeBtn.setAttribute('aria-label', '關閉');
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', function () { dismissToastEl_(el); });
+    hd.appendChild(body);
+    hd.appendChild(closeBtn);
+    el.appendChild(hd);
+
+    var btns = document.createElement('div');
+    btns.className = 'acct-toast-btns';
+    var copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'btn';
+    copyBtn.textContent = '複製錯誤';
+    bindCopyButton_(copyBtn, report, '已複製錯誤內容');
+    var mailBtn = document.createElement('a');
+    mailBtn.className = 'btn';
+    mailBtn.textContent = '開信寄出';
+    mailBtn.href = buildErrorMailtoUrl(report, ctx);
+    mailBtn.addEventListener('click', function () { tap('傳送到信箱（錯誤回報）'); });
+    var cursorBtn = document.createElement('button');
+    cursorBtn.type = 'button';
+    cursorBtn.className = 'btn';
+    cursorBtn.textContent = '複製給 Cursor';
+    bindCopyButton_(cursorBtn, buildCursorHandoffText(ctx, report), '已複製，請貼到 Cursor 對話');
+    btns.appendChild(copyBtn);
+    btns.appendChild(mailBtn);
+    btns.appendChild(cursorBtn);
+    el.appendChild(btns);
+    toastStack.appendChild(el);
+    requestAnimationFrame(function () { el.classList.add('acct-toast-show'); });
+    var hideAt = setTimeout(function () { dismissToastEl_(el); }, 60000);
+    el.addEventListener('mouseenter', function () { clearTimeout(hideAt); });
+  }
+
+  /**
+   * 表單內常駐錯誤列：人話 + 複製 / 開信 / 複製給 Cursor
+   */
+  function showErrorReport(target, ctx) {
+    ctx = ctx || {};
+    var el = typeof target === 'string' ? document.getElementById(target) : target;
+    if (!el) {
+      toastErrorReport(ctx.message || '發生錯誤', ctx);
+      return null;
+    }
+    el.classList.remove('hidden');
+    el.innerHTML = '';
+    el.className = (el.className ? el.className + ' ' : '') + 'acct-err-host';
+    var msg = document.createElement('p');
+    msg.className = 'acct-err-msg';
+    msg.textContent = ctx.message || '發生錯誤';
+    el.appendChild(msg);
+    var hint = document.createElement('p');
+    hint.className = 'acct-err-hint';
+    hint.textContent = '可複製錯誤、開信寄出，或「複製給 Cursor」貼到對話給我。網頁無法直接傳到 Cursor。';
+    el.appendChild(hint);
+    var report = buildErrorReportText(ctx);
+    appendErrorReportActions_(el, ctx, report);
+    var fallback = document.createElement('pre');
+    fallback.className = 'err-fallback hidden';
+    fallback.textContent = report;
+    el.appendChild(fallback);
+    reportFailure(ctx);
+    try { el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (eScr) {}
+    return el;
+  }
+
   /**
    * 致命／開頁失敗：人話說明 + 再試 + 複製 + 開信寄到信箱
    * @param {HTMLElement|string} target - 容器或 id（預設 #loading）
@@ -822,23 +991,31 @@ var AccountingUi = (function () {
     });
     actions.appendChild(mailBtn);
 
+    var cursorBtn = document.createElement('button');
+    cursorBtn.type = 'button';
+    cursorBtn.className = 'btn btn-cursor';
+    cursorBtn.textContent = '複製給 Cursor';
+    bindCopyButton_(cursorBtn, buildCursorHandoffText(ctx, report), '已複製，請貼到 Cursor 對話');
+    actions.appendChild(cursorBtn);
+
     wrap.appendChild(actions);
     wrap.appendChild(fallback);
     el.appendChild(wrap);
+    persistLastError_(buildCursorHandoffText(ctx, report));
     pushLog('err', ctx.message || '無法繼續');
     reportPersistentError(ctx).then(function (res) {
       if (res && (res.emailed || res.deduped)) {
-        hint.textContent = '錯誤已記錄並寄到 ' + ERROR_REPORT_EMAIL + '。可再試一次，或按「複製錯誤」。';
+        hint.textContent = '錯誤已記錄並寄到 ' + ERROR_REPORT_EMAIL + '。可再試、複製錯誤，或「複製給 Cursor」貼到對話。';
         mailBtn.textContent = res.deduped ? '稍早已寄過' : '已寄到信箱';
       } else if (res && res.logged && !res.emailed) {
-        hint.textContent = '錯誤已寫入紀錄。寄信未送出時，請按「複製錯誤」或開信寄出。';
+        hint.textContent = '錯誤已寫入紀錄。寄信未送出時，請按「複製錯誤」、「開信寄出」或「複製給 Cursor」。';
         mailBtn.textContent = '開信寄出';
       } else {
-        hint.textContent = '請按「複製錯誤」；也可開信寄到 ' + ERROR_REPORT_EMAIL + '。';
+        hint.textContent = '請按「複製錯誤」；也可開信寄到 ' + ERROR_REPORT_EMAIL + '，或「複製給 Cursor」貼到對話。';
         mailBtn.textContent = '開信寄出';
       }
     }).catch(function () {
-      hint.textContent = '請按「複製錯誤」，或開信寄到 ' + ERROR_REPORT_EMAIL + '。';
+      hint.textContent = '請按「複製錯誤」，開信寄出，或「複製給 Cursor」貼到對話。';
       mailBtn.textContent = '開信寄出';
     });
     return wrap;
@@ -1025,6 +1202,8 @@ var AccountingUi = (function () {
     buildErrorReportText: buildErrorReportText,
     buildErrorMailtoUrl: buildErrorMailtoUrl,
     showFatalError: showFatalError,
+    showErrorReport: showErrorReport,
+    buildCursorHandoffText: buildCursorHandoffText,
     confirmReject: confirmReject,
     REJECT_CHIPS: REJECT_CHIPS,
     reportPersistentError: reportPersistentError,
