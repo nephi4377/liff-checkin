@@ -3,6 +3,8 @@
 專案細節與操作手冊見 `README.md`、`README_CODING.md`、`PROJECT_MAP.md`、`SPEC/`，
 以及 `.agents/skills/Cloud-Agent-Runbook/`（本地開站、測試、LIFF bypass）。
 
+TOS（添心營運管理系統）盤點文件一律在 `TOS/`（主紀錄 `TOS/TOS_AUDIT.md`）。不要把 `TOS_AUDIT*.md` 寫回倉庫根目錄。發現新模組、資料流、技術債或 schema 問題可補充 TOS 文件；不要刪既有盤點內容。案件識別長期朝 `project_id`，legacy 欄位先不要大量改名。
+
 ## Cursor Cloud specific instructions
 
 此段給「環境已由 update script 安裝好依賴」的後續 cloud agent，只記非顯而易見的啟動／執行注意事項。
