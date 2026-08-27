@@ -15,5 +15,6 @@ Google Search Console 影片報表：頁面有索引，但影片索引為 0；Vi
 
 ## 部署
 - 備份：`../BAK/CODING_20260828_0046_*`
-- 僅 commit：`modules/info/cases/*.html`（25 頁 VideoObject）+ 本 LOG
+- 僅 commit：`modules/info/cases/*.html`（VideoObject duration）+ 本 LOG
+- rebase 後另補遠端新增案例：157／195／232／243／548／600
 - 未納入：`.agents`、其他 LOG、草稿 md（已 stash／略過）
