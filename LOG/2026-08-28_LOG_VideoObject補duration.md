@@ -13,8 +13,7 @@ Google Search Console 影片報表：頁面有索引，但影片索引為 0；Vi
 ## SPEC
 公開案例頁無獨立 SPEC 契約；僅 JSON-LD 欄位補強，未改 API／字典。
 
-## 部署
-- 備份：`../BAK/CODING_20260828_0046_*`
-- 僅 commit：`modules/info/cases/*.html`（VideoObject duration）+ 本 LOG
-- rebase 後另補遠端新增案例：157／195／232／243／548／600
-- 未納入：`.agents`、其他 LOG、草稿 md（已 stash／略過）
+## #658 單支影片（同日）
+- 改為 `Ew03kbqkfAU` 嵌入 + VideoObject（`PT13M47S`）
+- sitemap `lastmod` → 2026-08-28；案例列表縮圖改官方影片圖
+- 部署後請 GSC「網址檢查」請求編入索引
