@@ -16,4 +16,5 @@ Google Search Console 影片報表：頁面有索引，但影片索引為 0；Vi
 ## #658 單支影片（同日）
 - 改為 `Ew03kbqkfAU` 嵌入 + VideoObject（`PT13M47S`）
 - sitemap `lastmod` → 2026-08-28；案例列表縮圖改官方影片圖
-- 部署後請 GSC「網址檢查」請求編入索引
+- 已 push：`fbec67d`；線上已確認含單支影片與 duration
+- GSC：請對 `…/cases/658.html` 做「網址檢查 → 請求編入索引」（本輪瀏覽器 MCP 無法代點）

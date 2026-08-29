@@ -65,6 +65,16 @@ function computeReportLateEarly(checkInTime, checkOutTime, shiftStart, shiftEnd,
   return { lateMinutes, earlyMinutes };
 }
 
+/** 模擬 backend _computeFlexOffTimeOneWay_（Date 版，與 Logic_SystemUtils.js 對齊） */
+function computeFlexOffTimeOneWay(checkIn, shiftStart, shiftEnd, flexibleMinutes = 0) {
+  const flex = Math.max(0, Number(flexibleMinutes) || 0);
+  const ci = parseTimeToMinutes(checkIn);
+  const ss = parseTimeToMinutes(shiftStart);
+  const se = parseTimeToMinutes(shiftEnd);
+  const lateWithinFlex = Math.max(0, Math.min(flex, ci - ss));
+  return formatMinutesToTime(se + lateWithinFlex);
+}
+
 const shiftStart = '08:30';
 const shiftEnd = '17:30';
 const flex = 30;
@@ -93,6 +103,7 @@ const cases = [
 let failed = 0;
 for (const c of cases) {
   const expectedOff = computeExpectedOffTime(c.checkIn, shiftStart, shiftEnd, flex);
+  const backendOff = computeFlexOffTimeOneWay(c.checkIn, shiftStart, shiftEnd, flex);
   const report = computeReportLateEarly(c.checkIn, c.checkOut, shiftStart, shiftEnd, flex);
   const early = c.checkOut
     ? computeEarlyMinutes(c.checkOut, c.checkIn, shiftStart, shiftEnd, flex)
@@ -101,6 +112,7 @@ for (const c of cases) {
 
   const ok =
     expectedOff === c.expect.expectedOff &&
+    backendOff === c.expect.expectedOff &&
     report.lateMinutes === c.expect.lateMinutes &&
     (c.checkOut ? report.earlyMinutes === c.expect.earlyMinutes : true) &&
     (c.checkOut ? early === c.expect.earlyMinutes : true) &&

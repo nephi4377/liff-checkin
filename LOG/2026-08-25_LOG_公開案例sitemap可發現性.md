@@ -16,9 +16,12 @@
 
 ## 部署
 - 目標：CODING／`liff-checkin` GitHub Pages（`info.tanxin.space`）
-- 方式：`upload.bat`（NONINTERACTIVE）→ push `main`
+- 方式：`upload.bat`（備份）→ rebase 合併遠端新案例 → push `main`
 - 日期：2026-08-26
+- commit：`065efa9`
+- 備份：`BAK/CODING_20260826_2234_NEPHI筆電001`
 - 上線後請到 Google Search Console 提交 `https://info.tanxin.space/sitemap.xml`，並對案例列表／代表案例「請編入索引」。
 
 ## 未做
 - 未改正式業務程式、未部署 GAS、未自動提交 GSC。
+- 後端僅本機 LOG 變更，本次未部署 Backend_GAS。
