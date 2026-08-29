@@ -134,7 +134,7 @@
 | **員工名單** | 在職員工 `userId`、`userName`、`permission`… | `localStorage` **`tanxin_ref_v1:employees`**（相容 legacy `spa_hub_employees`） | `window.__tanxinRef.employees`；父層 `spaAllEmployees` | **3 天** TTL；**24h SWR** 背景重抓 | HUB、`AccountingContext`、收支登錄快選 |
 | **案場列表** | 案號、客戶名、店別… | **`tanxin_ref_v1:projects`**（相容 `spa_hub_projects`） | `window.__tanxinRef.projects`；父層 `spaAllProjects` | **3 天**；**24h SWR** | HUB、`AccountingContext`、記帳案號快選 |
 | **官方顧客名冊** | `official_customer_search` 整包 | **`tanxin_ref_v1:customers`**（全公司共用，**不分 userId**） | `window.__tanxinRef.customers` | **24 小時** | `AccountingListCache.searchMasterList`、客戶財務綁定 |
-| **當月班表** | HUB 排程 | `spa_hub_schedule_{YYYY}_{MM}` | — | **7 天** | HUB 主控台（會計較少直接用） |
+| **當月班表** | HUB 排程 | `spa_hub_schedule_{YYYY}_{MM}` | — | **7 天**；**僅成功才寫入**；失敗不把空班表當成大家都上班 | HUB 主控台（會計較少直接用） |
 | **會計 bootstrap** | 廠商、收款帳戶、列舉… | `sessionStorage` `tanxin_accounting_bootstrap_v4:{userId}` | 模組內 `_mem` | **3 天** | `AccountingCache`；**依 operator userId 分 key**；CRUD 成功優先 patch |
 
 **讀寫責任（參考主檔）**

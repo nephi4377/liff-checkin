@@ -10,6 +10,7 @@ export default {
         'allEmployees',
         'monthSchedule',       // { schedule: {uid: {日期: 狀態 或 '日期:類別': '狀態[時段]'}}, holidays: [...] }
         'scheduleLoading',     // 班表是否正在向後端更新中（快取優先 + 背景更新）
+        'scheduleError',       // 班表讀失敗（不可把空班表當成大家都上班）
         'presenceLoading',     // 今日燈號是否正在背景更新中
         'pendingRequestsRaw',  // [{userName, recordType, leaveType, startTime, endTime, status, ...}]
         'todayPresence',       // { [userId]: { light, label, reasons, hasCheckIn, checkInTime, ... } }
@@ -18,7 +19,7 @@ export default {
         'canViewStaffStatusBoard',
         'currentUser'
     ],
-    emits: ['notification-action', 'clear-notifications'],
+    emits: ['notification-action', 'clear-notifications', 'retry-schedule'],
     setup(props, { emit }) {
         const projectIdInput = ref('');
         const PROJECT_CONSOLE_LIFF_ID = '2007974938-7yKM9EqL';
@@ -413,6 +414,9 @@ export default {
             return !!s && Object.keys(s).length > 0;
         });
 
+        const scheduleLoadFailed = computed(() => !!props.scheduleError);
+        const showScheduleRetry = computed(() => scheduleLoadFailed.value && !props.scheduleLoading);
+
         return {
             projectIdInput,
             openProjectConsole,
@@ -453,6 +457,8 @@ export default {
             hasOverdueNotification,
             attendanceDays,
             hasAnyScheduleData,
+            scheduleLoadFailed,
+            showScheduleRetry,
         };
     },
     template: `
@@ -475,7 +481,8 @@ export default {
                     <div class="flex items-center gap-2 flex-wrap">
                         <a v-if="canViewStaffStatusBoard" :href="staffStatusBoardUrl"
                             class="text-[10px] text-blue-600 hover:underline font-medium">全員燈號看板（今／明／後天）→</a>
-                        <span v-if="!hasAnyScheduleData" class="text-[10px] text-gray-400">載入班表中…</span>
+                        <span v-if="scheduleLoading && !hasAnyScheduleData" class="text-[10px] text-gray-400">載入班表中…</span>
+                        <span v-else-if="scheduleLoadFailed" class="text-[10px] text-red-600">班表讀不到</span>
                         <span v-else-if="scheduleLoading || presenceLoading" class="text-[10px] text-blue-500 animate-pulse" title="正在取得最新排班或燈號">更新中…</span>
                     </div>
                 </div>
@@ -487,6 +494,17 @@ export default {
                     <span class="text-gray-400">（燈號僅今天）</span>
                 </div>
 
+                <div v-if="scheduleLoadFailed && !hasAnyScheduleData" class="text-sm text-amber-800 py-2 px-1">
+                    <p>{{ scheduleError || '班表讀不到，不是沒人休假。請再試。' }}</p>
+                    <button v-if="showScheduleRetry" type="button" @click="emit('retry-schedule')"
+                        class="mt-2 min-h-[44px] px-4 rounded-lg bg-white border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">再試一次</button>
+                </div>
+                <template v-else>
+                <p v-if="scheduleLoadFailed" class="text-[11px] text-amber-800 mb-2">
+                    最新班表讀不到，以下先留著上次內容。
+                    <button v-if="showScheduleRetry" type="button" @click="emit('retry-schedule')"
+                        class="ml-1 font-semibold text-blue-600 hover:underline">再試一次</button>
+                </p>
                 <div v-for="day in attendanceDays" :key="day.key" class="mb-4 last:mb-0 pb-3 last:pb-0 border-b border-gray-100 last:border-0">
                     <div class="text-xs font-bold text-gray-600 mb-2">{{ day.title }} · {{ day.dayLabel }}</div>
                     <div v-if="day.scheduledByGroup.length > 0" class="space-y-2">
@@ -520,6 +538,7 @@ export default {
                         </ul>
                     </div>
                 </div>
+                </template>
             </div>
 
             <!-- 智慧通知中心（預設摺疊；有事才亮燈） -->
