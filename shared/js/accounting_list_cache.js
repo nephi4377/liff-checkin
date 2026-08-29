@@ -121,6 +121,10 @@ var AccountingListCache = (function () {
     });
   }
 
+  function isUsablePortalPayload(data) {
+    return !!(data && data.success);
+  }
+
   return {
     SINGLE_USER: SINGLE_USER,
     MULTI_USER: MULTI_USER,
@@ -276,6 +280,8 @@ var AccountingListCache = (function () {
       invalidateMasterRef(listKey);
       clearKey(masterKey(session, listKey));
     },
+    /** 只有後端明確成功才可寫進客人收款快取；失敗不可當成「沒收款」。 */
+    isUsablePortalPayload: isUsablePortalPayload,
     /** 客戶 portal 案號資料 — 7 天快取 + 背景重讀 */
     loadPortalData: async function (session, projectNo, fetchFn, opts) {
       opts = opts || {};
@@ -287,17 +293,17 @@ var AccountingListCache = (function () {
       var key = MASTER_PREFIX + uid + ':portal:' + pno;
       if (!force) {
         var cached = readRaw(key, ttl, 'local');
-        if (cached) {
+        if (cached && isUsablePortalPayload(cached.data)) {
           if (Date.now() - cached.ts > swr) {
             Promise.resolve(fetchFn()).then(function (data) {
-              write(key, data, 'local');
+              if (isUsablePortalPayload(data)) write(key, data, 'local');
             }).catch(function () {});
           }
           return cached.data;
         }
       }
       var data = await Promise.resolve(fetchFn());
-      write(key, data, 'local');
+      if (isUsablePortalPayload(data)) write(key, data, 'local');
       return data;
     },
     invalidatePortalData: function (session, projectNo) {
@@ -306,3 +312,6 @@ var AccountingListCache = (function () {
     }
   };
 })();
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = AccountingListCache;
+}
