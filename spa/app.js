@@ -2,6 +2,7 @@ import Dashboard from './Dashboard.js?v=26.07.28.1';
 import ProjectBoard from './ProjectBoard.js';
 import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.07.24.1';
 import HubLeftSidebar from './HubLeftSidebar.js?v=26.08.29.1';
+import { mergeHubPaymentTodosFetch } from './hubPaymentTodos.js?v=26.08.29.1';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
 import { saveCache, loadCache, loadHubPresenceCache, saveHubPresenceCache, loadDailyCache, saveDailyCache, purgeStaleDailyCaches, hubSidebarDailyCacheKey, hubPresenceTodayStr } from '../shared/js/utils.js?v=26.07.24.1';
@@ -103,7 +104,13 @@ const App = {
         }
         const cachedPaymentTodos = loadDailyCache(hubSidebarDailyCacheKey('spa_hub_payment_todos'));
         if (cachedPaymentTodos && typeof cachedPaymentTodos === 'object') {
-            paymentTodos.value = cachedPaymentTodos;
+            paymentTodos.value = {
+                pendingReview: cachedPaymentTodos.pendingReview || [],
+                pendingPayment: cachedPaymentTodos.pendingPayment || []
+            };
+        } else {
+            // 無日快取時先標「更新中」，避免員工／案場快取讓整頁先亮、側欄卻顯示「目前沒有待辦」
+            paymentTodosLoading.value = true;
         }
         // --- 快取策略結束 ---
 
@@ -449,57 +456,91 @@ const App = {
 
         const fetchPaymentTodos = async () => {
             const perm = Number(currentUser.value?.permission || 0);
-            if (perm < 4) return { ok: true, skipped: true };
+            if (perm < 4) {
+                return { ok: true, skipped: true, pendingReview: [], pendingPayment: [] };
+            }
             let idToken = '';
             try {
                 if (typeof liff !== 'undefined' && liff.getIDToken) {
                     idToken = liff.getIDToken() || '';
                 }
             } catch (e) { /* 本地測試略過 */ }
-            if (!idToken) return { ok: false, message: '尚未取得登入憑證' };
+            if (!idToken) {
+                return {
+                    ok: false,
+                    message: '還沒登入完成，款項待辦暫時無法更新',
+                    pendingReview: [],
+                    pendingPayment: []
+                };
+            }
             const auth = { liff_id_token: idToken };
-            const todos = { pendingReview: [], pendingPayment: [] };
-            let anyFail = false;
+            const tasks = [];
             if (perm >= 5) {
-                const rv = await accountingPost({ action: 'vendor_payment_list', auth, status: 'pending_review' });
-                if (rv && rv.success) todos.pendingReview = rv.items || [];
-                else anyFail = true;
+                tasks.push(
+                    accountingPost({ action: 'vendor_payment_list', auth, status: 'pending_review' })
+                        .then((rv) => ({ key: 'review', rv }))
+                        .catch((e) => ({ key: 'review', rv: { success: false, message: (e && e.message) || '待審列表讀取失敗' } }))
+                );
             }
-            if (perm >= 4) {
-                const pay = await accountingPost({ action: 'vendor_payment_list', auth, status: 'pending_payment' });
-                if (pay && pay.success) todos.pendingPayment = pay.items || [];
-                else anyFail = true;
-            }
-            if (anyFail) return { ok: false, message: '款項待辦讀取失敗', todos };
-            return { ok: true, todos };
-        };
-
-        const applyPaymentTodosResult = (result) => {
-            if (result && result.ok && result.todos) {
-                if (JSON.stringify(paymentTodos.value) !== JSON.stringify(result.todos)) {
-                    paymentTodos.value = result.todos;
+            tasks.push(
+                accountingPost({ action: 'vendor_payment_list', auth, status: 'pending_payment' })
+                    .then((pay) => ({ key: 'pay', rv: pay }))
+                    .catch((e) => ({ key: 'pay', rv: { success: false, message: (e && e.message) || '待匯列表讀取失敗' } }))
+            );
+            const parts = await Promise.all(tasks);
+            const todos = { pendingReview: [], pendingPayment: [] };
+            const failures = [];
+            parts.forEach((part) => {
+                if (part.key === 'review') {
+                    if (part.rv && part.rv.success) todos.pendingReview = part.rv.items || [];
+                    else failures.push((part.rv && part.rv.message) || '待審列表讀取失敗');
+                } else if (part.rv && part.rv.success) {
+                    todos.pendingPayment = part.rv.items || [];
+                } else {
+                    failures.push((part.rv && part.rv.message) || '待匯列表讀取失敗');
                 }
-                saveDailyCache(hubSidebarDailyCacheKey('spa_hub_payment_todos'), result.todos);
-                paymentTodosError.value = '';
-                return true;
+            });
+            if (failures.length) {
+                return {
+                    ok: false,
+                    message: failures.join('；'),
+                    pendingReview: todos.pendingReview,
+                    pendingPayment: todos.pendingPayment
+                };
             }
-            return false;
+            return { ok: true, pendingReview: todos.pendingReview, pendingPayment: todos.pendingPayment };
         };
 
         const refreshPaymentTodosInBackground = () => {
-            if (Number(currentUser.value?.permission || 0) < 4) return Promise.resolve();
+            const perm = Number(currentUser.value?.permission || 0);
+            if (perm < 4) {
+                paymentTodosLoading.value = false;
+                paymentTodosError.value = '';
+                return Promise.resolve();
+            }
             paymentTodosLoading.value = true;
-            const tryOnce = () => fetchPaymentTodos().then(applyPaymentTodosResult).catch((e) => {
+            const applyResult = (result) => {
+                const merged = mergeHubPaymentTodosFetch(paymentTodos.value, result);
+                if (JSON.stringify(paymentTodos.value) !== JSON.stringify(merged.todos)) {
+                    paymentTodos.value = merged.todos;
+                }
+                paymentTodosError.value = merged.error;
+                if (merged.saveCache) {
+                    saveDailyCache(hubSidebarDailyCacheKey('spa_hub_payment_todos'), merged.todos);
+                }
+                return !merged.error;
+            };
+            const tryOnce = () => fetchPaymentTodos().then(applyResult).catch((e) => {
                 console.warn('[Hub] 背景更新款項待辦失敗（維持快取）:', e);
+                applyResult({
+                    ok: false,
+                    message: (e && e.message) || '款項待辦載入失敗，請再試'
+                });
                 return false;
             });
             return tryOnce().then((ok) => {
                 if (ok) return true;
                 return new Promise((resolve) => setTimeout(resolve, 800)).then(tryOnce);
-            }).then((ok) => {
-                if (!ok) {
-                    paymentTodosError.value = '款項待辦暫時讀不到。這不代表目前沒有待審或待匯。';
-                }
             }).finally(() => {
                 paymentTodosLoading.value = false;
             });

@@ -160,7 +160,7 @@
 | 資料 | 說明 | 壽命 |
 |------|------|------|
 | **LIFF `id_token`** | 方案 A 下員工以 **HUB 官方 LIFF** 為準；會計 LINE（廠商用）token **不能**當員工登入 | 記憶體；過期需重新 `liff.login` |
-| **款項待辦摘要** | HUB 側邊欄 `pendingReview` | `localStorage` 日快取 `spa_hub_payment_todos_{date}`，當日 |
+| **款項待辦摘要** | HUB 側邊欄待審／待匯 | `localStorage` 日快取 `spa_hub_payment_todos_{date}`，**僅成功讀取才寫入**；失敗保留先前內容並顯示「再試一次」，不可把空列表當成沒事 |
 | **篩選條件** | 審核列表關鍵字等 | 可選 `sessionStorage`，實作未定 |
 
 ---

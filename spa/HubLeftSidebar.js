@@ -452,7 +452,7 @@ export default {
                     </div>
                     <p class="text-xs text-gray-500 mt-0.5">
                         <span v-if="paymentTodosLoading" class="text-blue-500 animate-pulse">更新中…</span>
-                        <span v-else-if="paymentTodosError">待辦讀不到</span>
+                        <span v-else-if="paymentTodosError" class="text-red-600">無法更新</span>
                         <span v-else>
                             待審 {{ pendingReview.length }} · 待匯 {{ pendingPayment.length }}
                         </span>
@@ -493,13 +493,17 @@ export default {
                         <a v-if="pendingPayment.length > 5" :href="vendorPaymentUrl"
                             class="block text-xs text-blue-600 hover:underline px-1 mt-1">還有 {{ pendingPayment.length - 5 }} 筆…</a>
                     </div>
-                    <p v-if="paymentTodosError && !paymentTodosLoading"
-                        class="text-sm text-amber-800 text-center py-4 px-2">
-                        {{ paymentTodosError }}
-                        <button type="button" @click="retryPayments"
-                            class="block mx-auto mt-2 text-sm font-semibold text-blue-600 hover:underline">再試一次</button>
-                    </p>
-                    <p v-else-if="!paymentTodosLoading && pendingReview.length === 0 && pendingPayment.length === 0"
+                    <div v-if="paymentTodosError" class="px-1 py-2">
+                        <p class="text-sm text-red-700">{{ paymentTodosError }}</p>
+                        <p v-if="pendingReview.length || pendingPayment.length" class="text-xs text-gray-500 mt-1">仍顯示先前內容</p>
+                        <button type="button"
+                            class="mt-2 w-full text-sm font-semibold bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded hover:bg-gray-50 disabled:opacity-50"
+                            :disabled="paymentTodosLoading"
+                            @click="retryPayments">
+                            {{ paymentTodosLoading ? '載入中…' : '再試一次' }}
+                        </button>
+                    </div>
+                    <p v-if="!paymentTodosLoading && !paymentTodosError && pendingReview.length === 0 && pendingPayment.length === 0"
                         class="text-gray-500 text-center py-4 text-sm">目前沒有待辦款項</p>
                 </div>
             </section>
