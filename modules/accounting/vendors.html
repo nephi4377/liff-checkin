@@ -379,7 +379,7 @@
 
     <div class="page-col page-col-list">
     <div class="card">
-      <h3 style="margin:0 0 8px">廠商列表 <span class="sub" id="listCount"></span></h3>
+      <h3 style="margin:0 0 8px">廠商列表 <span class="sub" id="listCount"></span> <span class="sub hidden" id="listLive"></span></h3>
       <div class="list-filters">
         <div class="row2">
           <div>
@@ -399,6 +399,7 @@
         <label>關鍵字</label>
         <input id="filterKw" placeholder="名稱、別名、統編、電話…" />
         <button type="button" class="btn btn-secondary btn-block" id="filterBtn">套用篩選</button>
+        <button type="button" class="btn btn-secondary btn-block" id="reloadVendorsBtn" title="略過暫存，立刻向後端重抓最新名冊">重新載入最新</button>
         <button type="button" class="btn btn-secondary btn-block" id="syncDriveBtn" title="將 ~裝潢建材廠商 資料夾連結到廠商主檔">同步 Drive 舊資料夾</button>
       </div>
       <div id="list"></div>
@@ -422,6 +423,8 @@
         return AccountingFormHelpers.normalizeTaiwanPhone(v);
       }
       var allVendors = [];
+      var listLoading = false;
+      var listLoadFailed = false;
       var cardFile = null;
       var passbookFile = null;
       var cardUploaded = false;
@@ -1303,11 +1306,31 @@
         box.appendChild(filesBox);
       }
 
+      function setListLive(text) {
+        var el = $('listLive');
+        if (!el) return;
+        if (text) {
+          el.textContent = text;
+          el.classList.remove('hidden');
+        } else {
+          el.textContent = '';
+          el.classList.add('hidden');
+        }
+      }
+
       function renderList() {
         var rows = sortVendorsForList(filterLocal(allVendors));
-        $('listCount').textContent = '(' + rows.length + ' 家)';
+        $('listCount').textContent = allVendors.length ? '(' + rows.length + ' 家)' : '';
         var box = $('list');
         box.innerHTML = '';
+        if (listLoadFailed && !allVendors.length) {
+          box.innerHTML = '<p class="pay-empty">廠商名冊載入失敗，請再按「重新載入最新」。</p>';
+          return;
+        }
+        if (listLoading && !allVendors.length) {
+          box.innerHTML = '<p class="pay-empty">載入廠商名冊中…</p>';
+          return;
+        }
         rows.forEach(function (v) {
           var div = document.createElement('div');
           div.className = 'vendor-card' + (v.coop_status === '暫停合作' ? ' paused' : '');
@@ -1369,17 +1392,56 @@
           renderFiles(div, v);
           box.appendChild(div);
         });
-        if (!rows.length) box.textContent = '沒有符合的廠商';
+        if (!rows.length) {
+          box.textContent = allVendors.length
+            ? '沒有符合篩選的廠商'
+            : '目前沒有廠商。可按「新增廠商」建第一筆。';
+        }
+      }
+
+      async function loadVendorList(opts) {
+        opts = opts || {};
+        var force = !!opts.force;
+        if (!force && typeof AccountingCache.needsStaffBootstrap === 'function'
+            && AccountingCache.needsStaffBootstrap(session)) {
+          force = true;
+        }
+        var had = allVendors.length;
+        listLoading = !had;
+        if (had && opts.showUpdating) setListLive('更新中…');
+        if (!had) renderList();
+        try {
+          var boot = await AccountingCache.load(session, force);
+          allVendors = (boot && boot.masters && boot.masters.vendors) || AccountingCache.vendors(session) || [];
+          if (boot) mergeEnumsFromCache(boot);
+          listLoadFailed = false;
+          listLoading = false;
+          setListLive('');
+          if (opts.clearFeedback) showFeedback('', '');
+          renderList();
+        } catch (e) {
+          listLoading = false;
+          listLoadFailed = !had;
+          setListLive('');
+          var msg = (e && e.message) || '廠商名冊載入失敗，請再試';
+          if (had) setMsg(msg + '（仍顯示先前內容）');
+          else {
+            setMsg(msg);
+            renderList();
+          }
+          throw e;
+        }
       }
 
       async function refreshVendors(fromCache) {
-        if (!fromCache) {
-          var boot = await AccountingCache.load(session, true);
-          allVendors = (boot.masters && boot.masters.vendors) || [];
-        } else {
+        if (fromCache) {
           allVendors = AccountingCache.vendors(session);
+          listLoadFailed = false;
+          listLoading = false;
+          renderList();
+          return;
         }
-        renderList();
+        return loadVendorList({ force: true, showUpdating: true });
       }
 
       $('saveBtn').addEventListener('click', async function () {
@@ -1509,6 +1571,21 @@
         setFormExpanded(false);
       });
       $('filterBtn').addEventListener('click', renderList);
+      $('reloadVendorsBtn').addEventListener('click', function () {
+        AccountingUi.runAsync($('reloadVendorsBtn'), { busyLabel: '載入中…', clear: false }, function () {
+          return loadVendorList({ force: true, showUpdating: true, clearFeedback: true });
+        }).catch(function () {});
+      });
+      window.addEventListener('accounting-bootstrap-updated', function () {
+        if (!session) return;
+        var next = AccountingCache.vendors(session) || [];
+        if (!next.length && listLoadFailed) return;
+        allVendors = next;
+        if (next.length) listLoadFailed = false;
+        var cachedBoot = AccountingCache.get(session);
+        if (cachedBoot) mergeEnumsFromCache(cachedBoot);
+        renderList();
+      });
       $('payHistoryReloadBtn').addEventListener('click', function () {
         var vid = $('editId').value.trim();
         if (!vid) return;
@@ -1619,13 +1696,14 @@
             if (cached) mergeEnumsFromCache(cached);
             allVendors = cached ? AccountingCache.vendors(session) : AccountingCache.peekVendors();
             if (allVendors.length) renderList();
-            if (!cached) {
-              AccountingCache.load(session).then(function () {
-                allVendors = AccountingCache.vendors(session);
-                mergeEnumsFromCache(AccountingCache.get(session));
-                renderList();
-              }).catch(function (e) { setMsg(e.message || String(e)); });
+            else {
+              listLoading = true;
+              renderList();
             }
+            loadVendorList({
+              force: !allVendors.length,
+              showUpdating: false
+            }).catch(function () {});
           }
         });
       })();
