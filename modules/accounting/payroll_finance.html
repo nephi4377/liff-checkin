@@ -9,7 +9,7 @@
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/accounting_api.js?v=51"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
-  <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
+  <script src="../../shared/js/accounting_list_cache.js?v=7"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
   <script src="../../shared/js/accounting_ui.js?v=23"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
@@ -32,6 +32,7 @@
     .tag.warn { background: #fce8e6; color: #c5221f; }
     #msg { color: #c5221f; font-size: 14px; white-space: pre-wrap; }
     #ok { color: #137333; font-size: 14px; white-space: pre-wrap; }
+    #listLive { margin-left: 8px; font-weight: 600; color: #1a73e8; }
     .hidden { display: none; }
     .nav { margin-bottom: 12px; font-size: 14px; }
     .nav a { color: #1a73e8; text-decoration: none; }
@@ -67,7 +68,7 @@
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 8px">待匯款清單</h3>
+      <h3 style="margin:0 0 8px">待匯款清單<span id="listLive" class="sub"></span></h3>
       <div id="list"></div>
       <p id="emptyMsg" class="sub hidden">目前沒有待匯款薪資。</p>
     </div>
@@ -229,30 +230,78 @@
 
       async function loadList(silent, force) {
         var run = async function () {
-          if (!silent) { setMsg(''); setOk(''); renderEmailDrafts([]); }
           var list = document.getElementById('list');
-          if (!silent) list.innerHTML = '<p class="sub">載入中…</p>';
-          function applyListData(data) {
-            if (!data || !data.success) throw new Error((data && data.message) || '載入失敗');
+          var emptyMsg = document.getElementById('emptyMsg');
+          function hasItems() { return !!document.querySelector('#list .item'); }
+          function setUpdating(on) {
+            var el = document.getElementById('listLive');
+            if (el) el.textContent = on ? '更新中…' : '';
+          }
+          function applyListData(data, keepExisting) {
+            if (!data || !data.success) {
+              var failMsg = (data && data.message) || '載入失敗，請再試';
+              emptyMsg.classList.add('hidden');
+              if (keepExisting && hasItems()) {
+                setMsg(failMsg + '（仍顯示先前內容）');
+                return;
+              }
+              setMsg(failMsg);
+              list.innerHTML = '<p class="sub">載入失敗，請再按「重新載入最新」。</p>';
+              return;
+            }
+            setMsg('');
             list.innerHTML = '';
             var items = (data.items || []).filter(function (r) {
               return String(r.review_status) === '已審' && String(r.payment_status) !== '已匯款';
             });
-            document.getElementById('emptyMsg').classList.toggle('hidden', items.length > 0);
+            emptyMsg.classList.toggle('hidden', items.length > 0);
             items.forEach(function (row) { list.appendChild(renderItem(row)); });
           }
-          var data;
-          if (typeof AccountingListCache !== 'undefined') {
-            data = await AccountingListCache.load(session, listCacheKey(), function () {
-              return AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
-            }, { force: !!force, onUpdate: force ? null : function (fresh) { try { applyListData(fresh); } catch (e) {} } });
-          } else {
-            data = await AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
+          setUpdating(true);
+          try {
+            if (!silent) { setMsg(''); setOk(''); renderEmailDrafts([]); }
+            var peeked = null;
+            if (!force && typeof AccountingListCache !== 'undefined') {
+              peeked = AccountingListCache.peek(session, listCacheKey());
+              if (peeked && peeked.success) applyListData(peeked, false);
+            }
+            if (!hasItems() && !(peeked && peeked.success) && !silent) {
+              list.innerHTML = '<p class="sub">載入中…</p>';
+              emptyMsg.classList.add('hidden');
+            }
+            var data;
+            if (typeof AccountingListCache !== 'undefined') {
+              data = await AccountingListCache.load(session, listCacheKey(), function () {
+                return AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
+              }, {
+                force: !!force,
+                alwaysRevalidate: !force,
+                onUpdate: function (fresh, err) {
+                  setUpdating(false);
+                  if (fresh && fresh.success) applyListData(fresh, true);
+                  else if (err) setMsg((err.message || String(err)) + '（仍顯示先前內容，可再載）');
+                  else applyListData(fresh, true);
+                }
+              });
+            } else {
+              data = await AccountingApi.payrollRequestList(session, { status: 'pending_payment' });
+            }
+            if (data) applyListData(data, hasItems() || !!(peeked && peeked.success));
+          } catch (e) {
+            applyListData({ success: false, message: e.message || String(e) }, true);
+          } finally {
+            setUpdating(false);
           }
-          applyListData(data);
         };
         if (silent) return run();
-        return AccountingUi.runAsync(document.getElementById('reloadBtn'), { busyLabel: '載入中…' }, run);
+        return AccountingUi.runAsync(document.getElementById('reloadBtn'), {
+          busyLabel: '載入中…',
+          clear: false,
+          toastOnOk: false,
+          toastOnFail: false
+        }, run).catch(function (e) {
+          setMsg(e.message || String(e));
+        });
       }
 
       function selectedIds() {

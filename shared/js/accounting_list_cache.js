@@ -32,15 +32,26 @@ var AccountingListCache = (function () {
     return wrapped && wrapped.data != null && (Date.now() - wrapped.ts <= ttlMs);
   }
 
+  /** 失敗回應不當成快取：否則下一輪會把「載入失敗」當成已有資料、甚至顯示成空清單 */
+  function isUsableListPayload_(data) {
+    if (data == null) return false;
+    if (typeof data === 'object' && !Array.isArray(data) && data.success === false) return false;
+    return true;
+  }
+
   function readRaw(key, ttlMs, storage) {
     storage = storage || 'session';
-    if (_mem[key] && isFresh(_mem[key], ttlMs)) return _mem[key];
+    if (_mem[key] && isFresh(_mem[key], ttlMs) && isUsableListPayload_(_mem[key].data)) return _mem[key];
+    if (_mem[key] && !isUsableListPayload_(_mem[key].data)) delete _mem[key];
     try {
       var store = storage === 'local' ? localStorage : sessionStorage;
       var raw = store.getItem(key);
       if (!raw) return null;
       var parsed = JSON.parse(raw);
-      if (!isFresh(parsed, ttlMs)) return null;
+      if (!isFresh(parsed, ttlMs) || !isUsableListPayload_(parsed.data)) {
+        if (parsed && !isUsableListPayload_(parsed.data)) clearKey(key);
+        return null;
+      }
       _mem[key] = parsed;
       return parsed;
     } catch (e) {
@@ -49,6 +60,7 @@ var AccountingListCache = (function () {
   }
 
   function write(key, data, storage) {
+    if (!isUsableListPayload_(data)) return;
     storage = storage || 'session';
     var wrapped = { ts: Date.now(), data: data };
     _mem[key] = wrapped;
