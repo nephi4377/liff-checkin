@@ -25,7 +25,9 @@
     .tag.ok { background: #e6f4ea; color: #137333; }
     .tag.bad { background: #fce8e6; color: #c5221f; }
     .photos a { display: inline-block; font-size: 13px; margin-right: 8px; color: #1a73e8; }
-    #msg { color: #c5221f; font-size: 14px; }
+    #msg { color: #c5221f; font-size: 14px; font-weight: 600; }
+    .list-status { font-size: 13px; font-weight: 600; color: #1a73e8; margin-left: 8px; }
+    .list-status.err { color: #c5221f; }
     .hidden { display: none; }
     .nav { margin-bottom: 12px; font-size: 14px; }
     .nav a { color: #1a73e8; text-decoration: none; }
@@ -40,7 +42,7 @@
   <div id="loading">載入中…</div>
   <div id="app" class="hidden acct-main">
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
-    <h2>款項進度</h2>
+    <h2>款項進度 <span id="listStatus" class="list-status hidden"></span></h2>
     <p class="sub" id="userLine">—</p>
     <div id="msg"></div>
     <button type="button" class="btn btn-primary btn-block" id="reloadBtn">重新整理</button>
@@ -49,6 +51,7 @@
   <script>
     (function () {
       var session = null;
+      var lastSuccessData = null;
       var STAGE_ORDER = ['請款待審', '待匯款', '已匯款', '已退回', '收支紀錄'];
       var STAGE_LABEL = {
         '請款待審': '待審核',
@@ -58,7 +61,25 @@
         '收支紀錄': '其他收支'
       };
 
-      function setMsg(t) { if (t) AccountingUi.notify('err', t); }
+      function humanErr(e) {
+        return (e && e.message) || String(e) || '載入失敗，請再試';
+      }
+      function setMsg(t) {
+        var el = document.getElementById('msg');
+        if (el) el.textContent = t || '';
+        if (t) AccountingUi.notify('err', t);
+      }
+      function setListStatus(text, isErr) {
+        var el = document.getElementById('listStatus');
+        if (!el) return;
+        el.textContent = text || '';
+        el.classList.toggle('hidden', !text);
+        el.classList.toggle('err', !!isErr);
+      }
+      function bindRetry(btn) {
+        if (!btn) return;
+        btn.addEventListener('click', function () { loadList(true); });
+      }
       function showApp() {
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
@@ -101,13 +122,9 @@
           renderPhotos(it.attachment_urls) +
           '</div>';
       }
-      function renderItems(data) {
+      function renderOkItems(data) {
         var box = document.getElementById('list');
         box.innerHTML = '';
-        if (!data.success) {
-          box.innerHTML = '<div class="card">' + (data.message || '查詢失敗') + '</div>';
-          return;
-        }
         if (data.vendor && data.vendor.name) {
           var head = document.createElement('p');
           head.className = 'sub';
@@ -116,7 +133,10 @@
         }
         var items = data.items || [];
         if (!items.length) {
-          box.innerHTML += '<div class="card empty">目前沒有符合的款項紀錄</div>';
+          var empty = document.createElement('div');
+          empty.className = 'card empty';
+          empty.textContent = '目前沒有符合的款項紀錄';
+          box.appendChild(empty);
           return;
         }
         var groups = {};
@@ -137,23 +157,100 @@
           box.appendChild(card);
         });
       }
-      async function loadList(force) {
-        var data;
-        if (typeof AccountingListCache !== 'undefined') {
-          data = await AccountingListCache.load(session, 'vendor_status', function () {
-            return AccountingApi.vendorPaymentStatus(session);
-          }, { force: !!force });
-        } else {
-          data = await AccountingApi.vendorPaymentStatus(session);
+      function renderFail(message, keepItems) {
+        var msg = message || '載入失敗，請再試';
+        setMsg(msg);
+        setListStatus('讀不到', true);
+        var box = document.getElementById('list');
+        var retryBtn = document.createElement('button');
+        retryBtn.type = 'button';
+        retryBtn.className = 'btn btn-primary';
+        retryBtn.textContent = '再試一次';
+        bindRetry(retryBtn);
+        if (keepItems && lastSuccessData && (lastSuccessData.items || []).length) {
+          renderOkItems(lastSuccessData);
+          var banner = document.createElement('div');
+          banner.className = 'card';
+          var p = document.createElement('p');
+          p.className = 'sub';
+          p.style.color = '#c5221f';
+          p.style.margin = '0 0 8px';
+          p.textContent = msg + '（仍顯示先前內容）';
+          banner.appendChild(p);
+          banner.appendChild(retryBtn);
+          box.insertBefore(banner, box.firstChild);
+          return;
         }
-        renderItems(data);
+        box.innerHTML = '';
+        var card = document.createElement('div');
+        card.className = 'card';
+        var p2 = document.createElement('p');
+        p2.style.margin = '0 0 10px';
+        p2.textContent = msg;
+        card.appendChild(p2);
+        card.appendChild(retryBtn);
+        box.appendChild(card);
+      }
+      function applySuccess(data) {
+        lastSuccessData = data;
+        setMsg('');
+        setListStatus('');
+        renderOkItems(data);
+      }
+      async function fetchStatusOnce() {
+        var data = await AccountingApi.vendorPaymentStatus(session);
+        if (!data || !data.success) {
+          throw new Error((data && data.message) || '查詢失敗，請再試');
+        }
+        return data;
+      }
+      async function fetchStatusRetry() {
+        try {
+          return await fetchStatusOnce();
+        } catch (e1) {
+          return await fetchStatusOnce();
+        }
+      }
+      async function loadList(force) {
+        var peeked = (typeof AccountingListCache !== 'undefined')
+          ? AccountingListCache.peek(session, 'vendor_status') : null;
+        if (peeked && peeked.success) {
+          lastSuccessData = peeked;
+          renderOkItems(peeked);
+          setListStatus(force ? '強制更新中…' : '更新中…', false);
+        } else {
+          var box = document.getElementById('list');
+          if (!box.innerHTML) {
+            box.innerHTML = '<div class="card empty">載入中…</div>';
+          }
+          setListStatus('載入中…', false);
+        }
+        var useForce = !!force || !!(peeked && !peeked.success);
+        try {
+          var data;
+          if (typeof AccountingListCache !== 'undefined') {
+            data = await AccountingListCache.load(session, 'vendor_status', fetchStatusRetry, {
+              force: useForce,
+              onUpdate: function (fresh, err) {
+                if (fresh && fresh.success) applySuccess(fresh);
+                else if (err) renderFail(humanErr(err), true);
+              }
+            });
+          } else {
+            data = await fetchStatusRetry();
+          }
+          if (data && data.success) applySuccess(data);
+          else renderFail((data && data.message) || '查詢失敗，請再試', !!lastSuccessData);
+        } catch (e) {
+          renderFail(humanErr(e), !!lastSuccessData);
+        }
       }
       document.getElementById('reloadBtn').addEventListener('click', function () {
         var btn = document.getElementById('reloadBtn');
         AccountingUi.runAsync(btn, { busyLabel: '載入中…', clear: false }, function () {
           return loadList(true);
         }).catch(function (e) {
-          setMsg(e.message || String(e));
+          renderFail(humanErr(e), !!lastSuccessData);
         });
       });
       (async function boot() {
@@ -181,7 +278,7 @@
             try {
               await loadList(false);
             } catch (e) {
-              setMsg(e.message || String(e));
+              renderFail(humanErr(e), !!lastSuccessData);
             }
           }
         });
