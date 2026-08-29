@@ -160,7 +160,8 @@ export default {
         'todayPresence',
         'presenceLoading',
         'scheduleLoading',
-        'pendingRequestsRaw'
+        'pendingRequestsRaw',
+        'employeesError'
     ],
     setup(props) {
         const today = new Date();
@@ -309,6 +310,7 @@ export default {
                         </ul>
                     </div>
                 </template>
+                <p v-else-if="employeesError" class="text-sm text-amber-800 text-center py-8 px-2">{{ employeesError }}</p>
                 <p v-else class="text-sm text-gray-500 text-center py-8">載入員工資料中…</p>
             </div>
         </aside>

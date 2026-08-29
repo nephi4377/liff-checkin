@@ -10,6 +10,8 @@ export default {
         'allEmployees',
         'monthSchedule',       // { schedule: {uid: {日期: 狀態 或 '日期:類別': '狀態[時段]'}}, holidays: [...] }
         'scheduleLoading',     // 班表是否正在向後端更新中（快取優先 + 背景更新）
+        'scheduleError',
+        'employeesError',
         'presenceLoading',     // 今日燈號是否正在背景更新中
         'pendingRequestsRaw',  // [{userName, recordType, leaveType, startTime, endTime, status, ...}]
         'todayPresence',       // { [userId]: { light, label, reasons, hasCheckIn, checkInTime, ... } }
@@ -18,7 +20,7 @@ export default {
         'canViewStaffStatusBoard',
         'currentUser'
     ],
-    emits: ['notification-action', 'clear-notifications'],
+    emits: ['notification-action', 'clear-notifications', 'retry-schedule'],
     setup(props, { emit }) {
         const projectIdInput = ref('');
         const PROJECT_CONSOLE_LIFF_ID = '2007974938-7yKM9EqL';
@@ -453,6 +455,7 @@ export default {
             hasOverdueNotification,
             attendanceDays,
             hasAnyScheduleData,
+            retrySchedule: () => emit('retry-schedule'),
         };
     },
     template: `
@@ -475,7 +478,11 @@ export default {
                     <div class="flex items-center gap-2 flex-wrap">
                         <a v-if="canViewStaffStatusBoard" :href="staffStatusBoardUrl"
                             class="text-[10px] text-blue-600 hover:underline font-medium">全員燈號看板（今／明／後天）→</a>
-                        <span v-if="!hasAnyScheduleData" class="text-[10px] text-gray-400">載入班表中…</span>
+                        <span v-if="scheduleLoading && !hasAnyScheduleData" class="text-[10px] text-gray-400">載入班表中…</span>
+                        <span v-else-if="scheduleError" class="text-[10px] text-amber-700">
+                            {{ scheduleError }}
+                            <button type="button" @click="retrySchedule" class="ml-1 text-blue-600 hover:underline font-medium">再試</button>
+                        </span>
                         <span v-else-if="scheduleLoading || presenceLoading" class="text-[10px] text-blue-500 animate-pulse" title="正在取得最新排班或燈號">更新中…</span>
                     </div>
                 </div>
@@ -489,7 +496,13 @@ export default {
 
                 <div v-for="day in attendanceDays" :key="day.key" class="mb-4 last:mb-0 pb-3 last:pb-0 border-b border-gray-100 last:border-0">
                     <div class="text-xs font-bold text-gray-600 mb-2">{{ day.title }} · {{ day.dayLabel }}</div>
-                    <div v-if="day.scheduledByGroup.length > 0" class="space-y-2">
+                    <div v-if="!hasAnyScheduleData" class="text-xs text-gray-500 py-1">
+                        <template v-if="scheduleLoading">班表載入中，先不要用這區判斷誰該來。</template>
+                        <template v-else-if="scheduleError">{{ scheduleError }}</template>
+                        <template v-else-if="employeesError">{{ employeesError }}</template>
+                        <template v-else>目前沒有排班制員工資料。</template>
+                    </div>
+                    <div v-else-if="day.scheduledByGroup.length > 0" class="space-y-2">
                         <div v-for="g in day.scheduledByGroup" :key="day.key + '-' + g.group">
                             <div class="text-[10px] text-gray-500 font-semibold mb-1">{{ g.group }}</div>
                             <div class="flex flex-wrap gap-1.5">
@@ -506,7 +519,7 @@ export default {
                         </div>
                     </div>
                     <div v-else class="text-xs text-gray-500 py-1">目前沒有排班制員工資料。</div>
-                    <div v-if="day.standardAnomalies.length > 0" class="mt-2 pt-2 border-t border-dashed border-gray-100">
+                    <div v-if="hasAnyScheduleData && day.standardAnomalies.length > 0" class="mt-2 pt-2 border-t border-dashed border-gray-100">
                         <div class="text-[10px] text-gray-500 font-semibold mb-1">標準制員工 · 異動</div>
                         <ul class="space-y-0.5">
                             <li v-for="(row, idx) in day.standardAnomalies" :key="day.key + '-std-' + idx" class="flex items-center gap-1.5 text-xs flex-wrap">

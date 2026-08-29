@@ -1,6 +1,6 @@
-import Dashboard from './Dashboard.js?v=26.07.28.1';
+import Dashboard from './Dashboard.js?v=26.08.29.1';
 import ProjectBoard from './ProjectBoard.js';
-import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.07.24.1';
+import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.08.29.1';
 import HubLeftSidebar from './HubLeftSidebar.js?v=26.08.29.1';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
@@ -29,6 +29,8 @@ const App = {
         const monthSchedule = ref({ schedule: {}, holidays: [] });
         // 班表是否正在向後端更新中（用於「快取優先 + 更新中 + 最新資訊」的狀態顯示）
         const scheduleLoading = ref(false);
+        const scheduleError = ref('');
+        const employeesError = ref('');
         // 待審核假勤原始清單（包含 startTime/endTime），用於今日出勤的「待審核」標記
         const pendingRequestsRaw = ref([]);
         const todayPresence = ref({});
@@ -577,6 +579,38 @@ const App = {
             }
         };
 
+        const refreshScheduleInBackground = () => {
+            scheduleLoading.value = true;
+            return fetchLatestScheduleForThisMonth().then(scheduleResult => {
+                if (scheduleResult && scheduleResult.schedule && Object.keys(scheduleResult.schedule).length > 0) {
+                    const latest = {
+                        schedule: scheduleResult.schedule || {},
+                        holidays: scheduleResult.holidays || []
+                    };
+                    if (JSON.stringify(monthSchedule.value) !== JSON.stringify(latest)) {
+                        monthSchedule.value = latest;
+                    }
+                    saveCache(scheduleCacheKey(), latest, 7);
+                    scheduleError.value = '';
+                    return;
+                }
+                const hasCache = monthSchedule.value?.schedule && Object.keys(monthSchedule.value.schedule).length > 0;
+                if (!hasCache) {
+                    scheduleError.value = '班表暫時讀不到。請勿當成全員都要上班。';
+                } else {
+                    scheduleError.value = '最新班表讀不到，以下仍是先前資料。';
+                }
+            }).catch((e) => {
+                console.warn('[Hub] 背景更新班表失敗（維持快取）:', e);
+                const hasCache = monthSchedule.value?.schedule && Object.keys(monthSchedule.value.schedule).length > 0;
+                scheduleError.value = hasCache
+                    ? '最新班表讀不到，以下仍是先前資料。'
+                    : '班表暫時讀不到。請勿當成全員都要上班。';
+            }).finally(() => {
+                scheduleLoading.value = false;
+            });
+        };
+
         const fetchHubProjectsData = async () => {
             if (!userProfile.value) return { success: false };
             const user = currentUser.value || { userId: userProfile.value.userId, userName: userProfile.value.displayName, permission: 1, group: '未分類' };
@@ -687,6 +721,9 @@ const App = {
                         todayPresence.value = attendanceResult.todayPresence;
                         saveHubPresenceCache(attendanceResult.todayPresence);
                     }
+                    employeesError.value = '';
+                } else if (!(allEmployees.value && allEmployees.value.length)) {
+                    employeesError.value = '員工名單暫時讀不到。這不代表今天沒人上班。';
                 }
 
                 // 今日燈號：SWR（先顯示快取／核心資料，背景抓最新；主控台另每 30 分更新）
@@ -695,25 +732,7 @@ const App = {
                 // 主控台側欄：今日回報、款項待辦（SWR + 每日快取）
                 refreshTodayReportsInBackground();
                 refreshPaymentTodosInBackground();
-
-                // 背景抓當月班表（SWR 策略：先顯示快取，背景更新後無縫替換，TTL 7 天）。
-                // 有無快取都會打 API；失敗時卡片維持快取內容。
-                scheduleLoading.value = true;
-                fetchLatestScheduleForThisMonth().then(scheduleResult => {
-                    if (scheduleResult && scheduleResult.schedule) {
-                        const latest = {
-                            schedule: scheduleResult.schedule || {},
-                            holidays: scheduleResult.holidays || []
-                        };
-                        // 有變動才更新，避免觸發不必要的 re-render
-                        if (JSON.stringify(monthSchedule.value) !== JSON.stringify(latest)) {
-                            monthSchedule.value = latest;
-                        }
-                        saveCache(scheduleCacheKey(), latest, 7); // 快取 7 天
-                    }
-                }).finally(() => {
-                    scheduleLoading.value = false;
-                });
+                refreshScheduleInBackground();
 
                 if (projectsResult.success && projectsResult.data) {
                     const newProjects = projectsResult.data.projects || [];
@@ -860,6 +879,9 @@ const App = {
             refreshPaymentTodosInBackground,
             monthSchedule,
             scheduleLoading,
+            scheduleError,
+            employeesError,
+            refreshScheduleInBackground,
             hasAdminRights,
             canViewStaffStatusBoard,
             handleNotificationAction,
@@ -934,7 +956,7 @@ const App = {
                     @retry-payments="refreshPaymentTodosInBackground" />
                 <main :class="['flex-grow overflow-y-auto min-w-0', { 'container mx-auto max-w-2xl px-4 sm:px-6 lg:px-8': currentView.name !== 'iframe' }]">
                     <div v-if="currentView.name === 'dashboard'" class="py-6">
-                        <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :presenceLoading="presenceLoading" :pendingRequestsRaw="pendingRequestsRaw" :todayPresence="todayPresence" :hasAdminRights="hasAdminRights" :canViewStaffStatusBoard="canViewStaffStatusBoard" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" />
+                        <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :scheduleError="scheduleError" :employeesError="employeesError" :presenceLoading="presenceLoading" :pendingRequestsRaw="pendingRequestsRaw" :todayPresence="todayPresence" :hasAdminRights="hasAdminRights" :canViewStaffStatusBoard="canViewStaffStatusBoard" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" @retry-schedule="refreshScheduleInBackground" />
                         <div v-if="hasAdminRights" id="task-sender-container" class="mt-4"></div>
                         <div class="mt-4 bg-emerald-50/90 px-4 py-3 rounded-lg border border-emerald-200 flex flex-wrap items-center justify-between gap-3">
                             <p class="text-sm text-gray-800 m-0 max-w-full">
@@ -973,6 +995,7 @@ const App = {
                     :todayPresence="todayPresence"
                     :presenceLoading="presenceLoading"
                     :scheduleLoading="scheduleLoading"
+                    :employeesError="employeesError"
                     :pendingRequestsRaw="pendingRequestsRaw" />
             </div>
         </div>
