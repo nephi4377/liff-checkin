@@ -9,6 +9,12 @@ TOS（添心營運管理系統）盤點文件一律在 `TOS/`（主紀錄 `TOS/T
 
 此段給「環境已由 update script 安裝好依賴」的後續 cloud agent，只記非顯而易見的啟動／執行注意事項。
 
+### 多 repo 雲端環境（前端＋後端）
+- 自動排程／Cloud Agent 若需改 GAS，環境必須同時掛 **`nephi4377/liff-checkin`** 與 **`nephi4377/Backend_GAS`**（Cursor Dashboard → Cloud Agents → Environments）。
+- 後端目錄名通常為 **`Backend_GAS`**，與本 repo 同層；找不到時用 `ls` 確認同工作區的 sibling repo。
+- 本 repo 根目錄 **不要** `npm install`（根 `package.json` 含 Playwright，會拖慢 Build）；靜態站用 `npx --yes serve@14` 即可。
+- 後端部署用 `npx @google/clasp`（各子目錄有 `.clasp.json`）；未明說部署不要 `clasp deploy`。
+
 ### 這是什麼
 - 純靜態前端：Vue 3 SPA + iframe 模組（`modules/`），從 **repo 根目錄** 用 `serve` 開站。
 - 後端是另一個 repo 的 Google Apps Script（`shared/js/config.js` 指定 URL），本 repo 不含後端程式。
