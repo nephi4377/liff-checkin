@@ -63,13 +63,15 @@ export default {
         'currentUser',
         'todayReports',
         'todayReportsLoading',
+        'todayReportsError',
         'todayPresence',
         'paymentTodos',
-        'paymentTodosLoading'
+        'paymentTodosLoading',
+        'paymentTodosError'
     ],
-    emits: ['reports-updated'],
+    emits: ['reports-updated', 'retry-reports', 'retry-payments'],
     setup(props, { emit }) {
-        const { todayReportsLoading, paymentTodosLoading } = toRefs(props);
+        const { todayReportsLoading, todayReportsError, paymentTodosLoading, paymentTodosError } = toRefs(props);
         const reportUrl = '#/report';
         const dailyReportUrl = '#/daily-report';
         const accountingHubUrl = '#/accounting';
@@ -140,6 +142,8 @@ export default {
         });
 
         const missingProjects = computed(() => {
+            // 回報讀失敗時不要用空名單去算「未回報」，以免假紅字
+            if (String(props.todayReportsError || '').trim()) return [];
             const ids = [...checkedInProjectIdsToday.value].filter(id => !reportedTodayProjectIds.value.has(id));
             return ids.map(id => {
                 const p = activeProjects.value.find(x => x.id === id)
@@ -261,7 +265,11 @@ export default {
             sortedReports,
             missingProjects,
             todayReportsLoading,
+            todayReportsError,
             paymentTodosLoading,
+            paymentTodosError,
+            retryReports: () => emit('retry-reports'),
+            retryPayments: () => emit('retry-payments'),
             pendingReview,
             pendingPayment,
             hasPaymentSection,
@@ -298,8 +306,9 @@ export default {
                         </div>
                     </div>
                     <p class="text-xs text-gray-500 mt-0.5">
-                        未讀 {{ sortedReports.length }} 筆
-                        <span v-if="missingProjects.length > 0"> · 今日案場未回報 {{ missingProjects.length }} 案</span>
+                        <template v-if="todayReportsError">回報讀不到</template>
+                        <template v-else>未讀 {{ sortedReports.length }} 筆</template>
+                        <span v-if="!todayReportsError && missingProjects.length > 0"> · 今日案場未回報 {{ missingProjects.length }} 案</span>
                         <span v-if="todayReportsLoading" class="text-blue-500 animate-pulse"> · 更新中</span>
                     </p>
                 </div>
@@ -408,8 +417,13 @@ export default {
                             </div>
                         </article>
                     </template>
-                    <p v-else-if="!todayReportsLoading" class="text-gray-500 text-center py-6 text-sm">近三日無未讀回報</p>
-                    <p v-else class="text-gray-500 text-center py-6 text-sm">載入回報中…</p>
+                    <p v-if="todayReportsError && !todayReportsLoading" class="text-sm text-amber-800 text-center py-6 px-2">
+                        {{ todayReportsError }}
+                        <button type="button" @click="retryReports"
+                            class="block mx-auto mt-2 text-sm font-semibold text-blue-600 hover:underline">再試一次</button>
+                    </p>
+                    <p v-else-if="!todayReportsLoading && sortedReports.length === 0" class="text-gray-500 text-center py-6 text-sm">近三日無未讀回報</p>
+                    <p v-else-if="todayReportsLoading && sortedReports.length === 0" class="text-gray-500 text-center py-6 text-sm">載入回報中…</p>
 
                     <details v-if="missingProjects.length > 0" class="mt-2 px-1">
                         <summary class="text-xs font-semibold text-red-600 cursor-pointer select-none">
@@ -438,6 +452,7 @@ export default {
                     </div>
                     <p class="text-xs text-gray-500 mt-0.5">
                         <span v-if="paymentTodosLoading" class="text-blue-500 animate-pulse">更新中…</span>
+                        <span v-else-if="paymentTodosError">待辦讀不到</span>
                         <span v-else>
                             待審 {{ pendingReview.length }} · 待匯 {{ pendingPayment.length }}
                         </span>
@@ -478,7 +493,13 @@ export default {
                         <a v-if="pendingPayment.length > 5" :href="vendorPaymentUrl"
                             class="block text-xs text-blue-600 hover:underline px-1 mt-1">還有 {{ pendingPayment.length - 5 }} 筆…</a>
                     </div>
-                    <p v-if="!paymentTodosLoading && pendingReview.length === 0 && pendingPayment.length === 0"
+                    <p v-if="paymentTodosError && !paymentTodosLoading"
+                        class="text-sm text-amber-800 text-center py-4 px-2">
+                        {{ paymentTodosError }}
+                        <button type="button" @click="retryPayments"
+                            class="block mx-auto mt-2 text-sm font-semibold text-blue-600 hover:underline">再試一次</button>
+                    </p>
+                    <p v-else-if="!paymentTodosLoading && pendingReview.length === 0 && pendingPayment.length === 0"
                         class="text-gray-500 text-center py-4 text-sm">目前沒有待辦款項</p>
                 </div>
             </section>

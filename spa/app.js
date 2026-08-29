@@ -1,7 +1,7 @@
 import Dashboard from './Dashboard.js?v=26.07.28.1';
 import ProjectBoard from './ProjectBoard.js';
 import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.07.24.1';
-import HubLeftSidebar from './HubLeftSidebar.js?v=26.06.21.5';
+import HubLeftSidebar from './HubLeftSidebar.js?v=26.08.29.1';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
 import { saveCache, loadCache, loadHubPresenceCache, saveHubPresenceCache, loadDailyCache, saveDailyCache, purgeStaleDailyCaches, hubSidebarDailyCacheKey, hubPresenceTodayStr } from '../shared/js/utils.js?v=26.07.24.1';
@@ -35,8 +35,10 @@ const App = {
         const presenceLoading = ref(false);
         const todayReports = ref([]);
         const todayReportsLoading = ref(false);
+        const todayReportsError = ref('');
         const paymentTodos = ref({ pendingReview: [], pendingPayment: [] });
         const paymentTodosLoading = ref(false);
+        const paymentTodosError = ref('');
         const currentView = ref({ name: 'dashboard' });
         const lightbox = ref({
             visible: false,
@@ -403,17 +405,31 @@ const App = {
             return response.json();
         };
 
+        const applyTodayReportsPayload = (result) => {
+            if (result && result.success && Array.isArray(result.data)) {
+                if (JSON.stringify(todayReports.value) !== JSON.stringify(result.data)) {
+                    todayReports.value = result.data;
+                }
+                saveDailyCache(hubSidebarDailyCacheKey('spa_hub_today_reports'), result.data);
+                todayReportsError.value = '';
+                return true;
+            }
+            return false;
+        };
+
         const refreshTodayReportsInBackground = () => {
             todayReportsLoading.value = true;
-            return fetchTodayReports().then((result) => {
-                if (result && result.success && Array.isArray(result.data)) {
-                    if (JSON.stringify(todayReports.value) !== JSON.stringify(result.data)) {
-                        todayReports.value = result.data;
-                    }
-                    saveDailyCache(hubSidebarDailyCacheKey('spa_hub_today_reports'), result.data);
-                }
-            }).catch((e) => {
+            const tryOnce = () => fetchTodayReports().then(applyTodayReportsPayload).catch((e) => {
                 console.warn('[Hub] 背景更新今日回報失敗（維持快取）:', e);
+                return false;
+            });
+            return tryOnce().then((ok) => {
+                if (ok) return true;
+                return new Promise((resolve) => setTimeout(resolve, 800)).then(tryOnce);
+            }).then((ok) => {
+                if (!ok) {
+                    todayReportsError.value = '施工回報暫時讀不到。這不代表今天沒人回報。';
+                }
             }).finally(() => {
                 todayReportsLoading.value = false;
             });
@@ -433,39 +449,57 @@ const App = {
 
         const fetchPaymentTodos = async () => {
             const perm = Number(currentUser.value?.permission || 0);
-            if (perm < 4) return { pendingReview: [], pendingPayment: [] };
+            if (perm < 4) return { ok: true, skipped: true };
             let idToken = '';
             try {
                 if (typeof liff !== 'undefined' && liff.getIDToken) {
                     idToken = liff.getIDToken() || '';
                 }
             } catch (e) { /* 本地測試略過 */ }
-            if (!idToken) return null;
+            if (!idToken) return { ok: false, message: '尚未取得登入憑證' };
             const auth = { liff_id_token: idToken };
             const todos = { pendingReview: [], pendingPayment: [] };
+            let anyFail = false;
             if (perm >= 5) {
                 const rv = await accountingPost({ action: 'vendor_payment_list', auth, status: 'pending_review' });
                 if (rv && rv.success) todos.pendingReview = rv.items || [];
+                else anyFail = true;
             }
             if (perm >= 4) {
                 const pay = await accountingPost({ action: 'vendor_payment_list', auth, status: 'pending_payment' });
                 if (pay && pay.success) todos.pendingPayment = pay.items || [];
+                else anyFail = true;
             }
-            return todos;
+            if (anyFail) return { ok: false, message: '款項待辦讀取失敗', todos };
+            return { ok: true, todos };
+        };
+
+        const applyPaymentTodosResult = (result) => {
+            if (result && result.ok && result.todos) {
+                if (JSON.stringify(paymentTodos.value) !== JSON.stringify(result.todos)) {
+                    paymentTodos.value = result.todos;
+                }
+                saveDailyCache(hubSidebarDailyCacheKey('spa_hub_payment_todos'), result.todos);
+                paymentTodosError.value = '';
+                return true;
+            }
+            return false;
         };
 
         const refreshPaymentTodosInBackground = () => {
             if (Number(currentUser.value?.permission || 0) < 4) return Promise.resolve();
             paymentTodosLoading.value = true;
-            return fetchPaymentTodos().then((todos) => {
-                if (todos && typeof todos === 'object') {
-                    if (JSON.stringify(paymentTodos.value) !== JSON.stringify(todos)) {
-                        paymentTodos.value = todos;
-                    }
-                    saveDailyCache(hubSidebarDailyCacheKey('spa_hub_payment_todos'), todos);
-                }
-            }).catch((e) => {
+            const tryOnce = () => fetchPaymentTodos().then(applyPaymentTodosResult).catch((e) => {
                 console.warn('[Hub] 背景更新款項待辦失敗（維持快取）:', e);
+                return false;
+            });
+            return tryOnce().then((ok) => {
+                if (ok) return true;
+                return new Promise((resolve) => setTimeout(resolve, 800)).then(tryOnce);
+            }).then((ok) => {
+                if (!ok) {
+                    paymentTodosError.value = '款項待辦暫時讀不到。這不代表目前沒有待審或待匯。';
+                }
             }).finally(() => {
                 paymentTodosLoading.value = false;
             });
@@ -817,9 +851,13 @@ const App = {
             presenceLoading,
             todayReports,
             todayReportsLoading,
+            todayReportsError,
+            refreshTodayReportsInBackground,
             onTodayReportsUpdated,
             paymentTodos,
             paymentTodosLoading,
+            paymentTodosError,
+            refreshPaymentTodosInBackground,
             monthSchedule,
             scheduleLoading,
             hasAdminRights,
@@ -886,10 +924,14 @@ const App = {
                     :currentUser="currentUser"
                     :todayReports="todayReports"
                     :todayReportsLoading="todayReportsLoading"
+                    :todayReportsError="todayReportsError"
                     :todayPresence="todayPresence"
                     :paymentTodos="paymentTodos"
                     :paymentTodosLoading="paymentTodosLoading"
-                    @reports-updated="onTodayReportsUpdated" />
+                    :paymentTodosError="paymentTodosError"
+                    @reports-updated="onTodayReportsUpdated"
+                    @retry-reports="refreshTodayReportsInBackground"
+                    @retry-payments="refreshPaymentTodosInBackground" />
                 <main :class="['flex-grow overflow-y-auto min-w-0', { 'container mx-auto max-w-2xl px-4 sm:px-6 lg:px-8': currentView.name !== 'iframe' }]">
                     <div v-if="currentView.name === 'dashboard'" class="py-6">
                         <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :presenceLoading="presenceLoading" :pendingRequestsRaw="pendingRequestsRaw" :todayPresence="todayPresence" :hasAdminRights="hasAdminRights" :canViewStaffStatusBoard="canViewStaffStatusBoard" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" />
