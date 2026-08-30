@@ -50,6 +50,18 @@ var CustomerFinanceUi = (function () {
     }
   }
 
+  function humanCustomerFail(errOrMsg, fallback) {
+    var failMsg = '';
+    if (typeof errOrMsg === 'string') failMsg = errOrMsg;
+    else if (errOrMsg && errOrMsg.message) failMsg = String(errOrMsg.message);
+    var fallbackText = fallback || '暫時連不上，請再試一次';
+    failMsg = failMsg || fallbackText;
+    if (/Failed to fetch|NetworkError|Load failed|Network request failed/i.test(failMsg)) {
+      return fallbackText;
+    }
+    return failMsg;
+  }
+
   function runBtnAsync(btn, fn, opts) {
     opts = opts || {};
     if (btn && (btn.disabled || btn.getAttribute('aria-busy') === 'true')) {
@@ -70,5 +82,9 @@ var CustomerFinanceUi = (function () {
     });
   }
 
-  return { runBtnAsync: runBtnAsync, applyBtnBusy: applyBtnBusy };
+  return {
+    runBtnAsync: runBtnAsync,
+    applyBtnBusy: applyBtnBusy,
+    humanCustomerFail: humanCustomerFail
+  };
 })();
