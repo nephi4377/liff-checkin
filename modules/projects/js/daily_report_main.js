@@ -30,6 +30,10 @@ let searchTerm = ''; // [人員檢索] 搜尋關鍵字
 let userProfile = null;
 let allFetchedEmployees = [];
 let allFetchedReports = [];
+/** 上次成功讀到的整包；失敗時留下，避免繳交率／缺交裝成真的 */
+let lastGoodSnapshot = null;
+/** 這次（或沿用上次成功）哪些資料可信；不可信就不要拿空資料去算 0 人／全員缺交 */
+let loadTrust = { employees: false, reports: false, attendance: false, schedule: false };
 
 /**
  * 根據圖片網址，自動轉換為支援直連或縮圖免登入的網址（完美相容 Google Drive 與 Dropbox）
@@ -95,20 +99,36 @@ function initializeUser() {
     return true;
 }
 
-async function fetchEmployees() {
+async function retryOnce(fn) {
     try {
-        const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
-        url.searchParams.append('page', 'attendance_api');
-        url.searchParams.append('action', 'get_employees');
-        const response = await fetch(url);
-        const result = await response.json();
-        if (!result.success) throw new Error(result.message || '後端未回傳員工資料');
-        return result.data.filter(emp => emp.permission === 2 || emp.permission === 3);
-    } catch (error) {
-        console.error('獲取員工列表失敗:', error);
-        showError(`獲取員工列表失敗: ${error.message}`);
-        return [];
+        return await fn();
+    } catch (e1) {
+        return await fn();
     }
+}
+
+function asSettled(promise) {
+    return promise.then((data) => ({ ok: true, data })).catch((err) => ({ ok: false, err }));
+}
+
+function humanLoadError(err) {
+    const raw = (err && err.message) ? String(err.message) : String(err || '');
+    if (!raw || raw === 'undefined') return '暫時讀不到';
+    return raw;
+}
+
+async function fetchEmployees() {
+    const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
+    url.searchParams.append('page', 'attendance_api');
+    url.searchParams.append('action', 'get_employees');
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`員工名單讀不到（HTTP ${response.status}）`);
+    const result = await response.json();
+    if (!result || result.success === false) {
+        throw new Error((result && result.message) || '後端未回傳員工資料');
+    }
+    const list = Array.isArray(result.data) ? result.data : [];
+    return list.filter(emp => emp.permission === 2 || emp.permission === 3);
 }
 
 function renderGroupFilters(employees) {
@@ -177,7 +197,10 @@ export function main() {
     endDatePicker.value = today.toLocaleDateString('sv');
 
     if (initializeUser()) {
-        queryBtn.addEventListener('click', () => fetchAndRenderReports(startDatePicker.value, endDatePicker.value));
+        queryBtn.addEventListener('click', () => {
+            if (queryBtn.disabled) return;
+            fetchAndRenderReports(startDatePicker.value, endDatePicker.value);
+        });
         fetchAndRenderReports(startDatePicker.value, endDatePicker.value);
 
         const sliderContainer = document.getElementById('thumbnail-slider-container');
@@ -220,78 +243,188 @@ export function main() {
 }
 
 async function fetchAttendanceData(startDateStr, endDateStr) {
-    try {
-        const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
-        url.searchParams.append('page', 'attendance_api');
-        url.searchParams.append('action', 'get_report');
-        url.searchParams.append('startDate', startDateStr);
-        url.searchParams.append('endDate', endDateStr);
-        const response = await fetch(url);
-        const result = await response.json();
-        return result.records || {};
-    } catch (error) {
-        console.error('獲取打卡紀錄失敗:', error);
-        return {};
+    const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
+    url.searchParams.append('page', 'attendance_api');
+    url.searchParams.append('action', 'get_report');
+    url.searchParams.append('startDate', startDateStr);
+    url.searchParams.append('endDate', endDateStr);
+    if (userProfile && userProfile.userId) {
+        url.searchParams.append('operatorId', userProfile.userId);
+    }
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`出勤資料讀不到（HTTP ${response.status}）`);
+    const result = await response.json();
+    if (result && result.success === false) {
+        throw new Error(result.message || '出勤資料讀不到');
+    }
+    if (!result || typeof result.records !== 'object') {
+        throw new Error('出勤資料格式異常');
+    }
+    return result.records;
+}
+
+async function fetchDailyReports(startDateStr, endDateStr) {
+    const url = new URL(CONFIG.GAS_WEB_APP_URL);
+    url.searchParams.append('page', 'get_daily_reports');
+    url.searchParams.append('startDate', startDateStr);
+    url.searchParams.append('endDate', endDateStr);
+    url.searchParams.append('userName', userProfile.userName);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`日報讀不到（HTTP ${response.status}）`);
+    const result = await response.json();
+    if (!result || result.success === false) {
+        throw new Error((result && result.message) || '日報暫時讀不到');
+    }
+    return Array.isArray(result.data) ? result.data : [];
+}
+
+function setQueryBusy(busy) {
+    if (!queryBtn) return;
+    queryBtn.disabled = !!busy;
+    queryBtn.textContent = busy ? '載入中…' : '查詢';
+}
+
+function hideKpi() {
+    const kpiDashboard = document.getElementById('kpi-dashboard');
+    if (kpiDashboard) kpiDashboard.classList.add('hidden');
+}
+
+function setLoadBanner(message, isErr) {
+    let banner = document.getElementById('load-status-banner');
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'load-status-banner';
+        banner.setAttribute('role', 'status');
+        if (reportsContainer && reportsContainer.parentNode) {
+            reportsContainer.parentNode.insertBefore(banner, reportsContainer);
+        }
+    }
+    if (!message) {
+        banner.className = 'hidden';
+        banner.innerHTML = '';
+        return;
+    }
+    banner.className = isErr
+        ? 'mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 text-sm'
+        : 'mb-4 p-3 rounded-lg border border-blue-200 bg-blue-50 text-blue-800 text-sm';
+    banner.replaceChildren();
+    const p = document.createElement('p');
+    p.textContent = message;
+    banner.appendChild(p);
+    if (isErr) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'mt-2 min-h-[44px] px-4 rounded-lg bg-white border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50';
+        btn.textContent = '再試一次';
+        btn.addEventListener('click', () => {
+            fetchAndRenderReports(startDatePicker.value, endDatePicker.value);
+        });
+        banner.appendChild(btn);
     }
 }
 
+function applySnapshot(employees, reports, scheduleData, attendanceData) {
+    allFetchedEmployees = employees || [];
+    allFetchedReports = reports || [];
+    window.currentScheduleData = scheduleData || { schedule: {}, holidays: new Set() };
+    window.currentAttendanceData = attendanceData || {};
+    renderGroupFilters(allFetchedEmployees);
+    renderMainReports();
+}
+
 async function fetchAndRenderReports(startDateStr, endDateStr) {
-    showLoading();
     if (!userProfile) {
-        showError('使用者資訊尚未初始化，無法查詢。');
+        showError('還不能確認你是誰，請從主控台再進一次。');
         return;
     }
 
-    try {
-        const url = new URL(CONFIG.GAS_WEB_APP_URL);
-        url.searchParams.append('page', 'get_daily_reports');
-        url.searchParams.append('startDate', startDateStr);
-        url.searchParams.append('endDate', endDateStr);
-        url.searchParams.append('userName', userProfile.userName);
+    showLoading();
+    setQueryBusy(true);
+    setLoadBanner('', false);
 
-        // [第一階段] 解析年份月份以獲取排班資料
+    try {
         const startDate = new Date(startDateStr);
         const queryYear = startDate.getFullYear();
         const queryMonth = startDate.getMonth() + 1;
 
-        // [v1.0.7] 同時獲取打卡紀錄與日報，並採用健全的錯誤防禦機制
-        const [employees, reportsResult, scheduleData, attendanceData] = await Promise.all([
-            fetchEmployees().catch(err => {
-                console.error('[降級警告] 獲取員工列表失敗:', err);
-                return [];
-            }),
-            fetch(url).then(res => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                return res.json();
-            }).catch(err => {
-                console.error('[降級警告] 獲取日誌失敗:', err);
-                return { success: false, data: [], message: err.message };
-            }),
-            window.dailyReportApp.getScheduleDataForMonth(queryYear, queryMonth).catch(err => {
-                console.error('[降級警告] 獲取排班資料失敗:', err);
-                return { schedule: {}, holidays: new Set() };
-            }),
-            fetchAttendanceData(startDateStr, endDateStr).catch(err => {
-                console.error('[降級警告] 獲取考勤數據失敗:', err);
-                return {};
-            })
+        const [empRes, reportsRes, scheduleRes, attendanceRes] = await Promise.all([
+            asSettled(retryOnce(() => fetchEmployees())),
+            asSettled(retryOnce(() => fetchDailyReports(startDateStr, endDateStr))),
+            asSettled(retryOnce(() => window.dailyReportApp.getScheduleDataForMonth(queryYear, queryMonth))),
+            asSettled(retryOnce(() => fetchAttendanceData(startDateStr, endDateStr)))
         ]);
 
-        if (reportsResult && !reportsResult.success) {
-            console.warn('[降級警告] 日報數據載入異常，將進行空白陣列降級:', reportsResult.message);
+        const employeesOk = empRes.ok;
+        const reportsOk = reportsRes.ok;
+        const scheduleOk = scheduleRes.ok;
+        const attendanceOk = attendanceRes.ok;
+        const hasLastGood = !!(lastGoodSnapshot && lastGoodSnapshot.employees && lastGoodSnapshot.reports);
+
+        if (!employeesOk && !hasLastGood) {
+            showError('員工名單暫時讀不到。這不代表沒有人要交日報。');
+            return;
+        }
+        if (!reportsOk && !hasLastGood) {
+            showError('日報暫時讀不到。這不代表今天沒人交、也還不能算繳交率。');
+            return;
         }
 
-        allFetchedEmployees = employees || [];
-        allFetchedReports = reportsResult?.data || [];
-        window.currentScheduleData = scheduleData || { schedule: {}, holidays: new Set() };
-        window.currentAttendanceData = attendanceData || {};
+        const employees = employeesOk ? empRes.data : lastGoodSnapshot.employees;
+        const reports = reportsOk ? reportsRes.data : lastGoodSnapshot.reports;
+        const scheduleData = scheduleOk
+            ? (scheduleRes.data || { schedule: {}, holidays: new Set() })
+            : (lastGoodSnapshot && lastGoodSnapshot.scheduleData) || { schedule: {}, holidays: new Set() };
+        const attendanceData = attendanceOk
+            ? attendanceRes.data
+            : (lastGoodSnapshot && lastGoodSnapshot.attendanceTrusted && lastGoodSnapshot.attendanceData) || {};
 
-        renderGroupFilters(allFetchedEmployees);
-        renderMainReports();
+        loadTrust = {
+            employees: employeesOk || hasLastGood,
+            reports: reportsOk || hasLastGood,
+            attendance: attendanceOk || !!(lastGoodSnapshot && lastGoodSnapshot.attendanceTrusted),
+            schedule: scheduleOk || !!(lastGoodSnapshot && lastGoodSnapshot.scheduleTrusted)
+        };
 
+        if (employeesOk && reportsOk) {
+            lastGoodSnapshot = {
+                employees,
+                reports,
+                scheduleData,
+                attendanceData,
+                attendanceTrusted: loadTrust.attendance,
+                scheduleTrusted: loadTrust.schedule
+            };
+        }
+
+        applySnapshot(employees, reports, scheduleData, attendanceData);
+
+        const failBits = [];
+        if (!reportsOk) failBits.push('日報');
+        if (!employeesOk) failBits.push('員工名單');
+        if (!attendanceOk) failBits.push('出勤打卡');
+        if (!scheduleOk) failBits.push('班表');
+        if (failBits.length) {
+            const usedStale = hasLastGood || (loadTrust.attendance && !attendanceOk) || (loadTrust.schedule && !scheduleOk);
+            const suffix = usedStale
+                ? '畫面仍是上次成功的資料。這不代表沒人交日報或大家都沒打卡。'
+                : '這不代表沒人交日報或大家都沒打卡。上方人數先不要當真。';
+            setLoadBanner(failBits.join('、') + '這次讀不到。' + suffix, true);
+        }
     } catch (error) {
         console.error('載入回報失敗:', error);
-        showError(`載入資料失敗：${error.message}`);
+        if (lastGoodSnapshot) {
+            applySnapshot(
+                lastGoodSnapshot.employees,
+                lastGoodSnapshot.reports,
+                lastGoodSnapshot.scheduleData,
+                lastGoodSnapshot.attendanceData
+            );
+            setLoadBanner('這次讀不到，畫面仍是上次成功的資料。這不代表沒人交日報。', true);
+        } else {
+            showError(`載入資料失敗：${humanLoadError(error)}。這不代表今天沒人交日報。`);
+        }
+    } finally {
+        setQueryBusy(false);
     }
 }
 
@@ -449,7 +582,10 @@ function renderReportsByEmployee(employees, allReports, scheduleData) {
 
                 const leaveInfo = window.dailyReportApp.getLeaveStatus(employee.userId, dateStr, scheduleData);
                 const userAttendance = window.currentAttendanceData[employee.userId]?.dailyData?.[dateStr];
-                const hasClockedIn = !!(userAttendance && userAttendance.checkIn && userAttendance.checkIn !== '---');
+                const hasClockedIn = !!(loadTrust.attendance && userAttendance && userAttendance.checkIn && userAttendance.checkIn !== '---');
+                if (!loadTrust.attendance && !(leaveInfo && leaveInfo.isFullDay)) {
+                    return '';
+                }
 
                 if (leaveInfo && leaveInfo.isFullDay && !hasClockedIn) {
                     return `
@@ -545,6 +681,33 @@ function updateKPIDashboard(employees, reportsByUserIdAndDate, scheduleData) {
         if (missingTitleEl) missingTitleEl.textContent = "昨日缺交統計";
     } else {
         if (missingTitleEl) missingTitleEl.textContent = "當日缺交統計";
+    }
+
+    if (!loadTrust.attendance) {
+        let leaveNamesOnly = [];
+        employees.forEach(emp => {
+            const leaveInfo = window.dailyReportApp.getLeaveStatus(emp.userId, displayDateStr, scheduleData);
+            if (leaveInfo && leaveInfo.isFullDay) leaveNamesOnly.push(emp.userName);
+        });
+        document.getElementById('kpi-attendance-count').textContent = '—';
+        document.getElementById('kpi-total-expected').textContent = '—';
+        document.getElementById('kpi-attendance-names').innerHTML = '<span class="text-amber-700">出勤這次讀不到，人數先不要當真</span>';
+        document.getElementById('kpi-leave-count').textContent = String(leaveNamesOnly.length);
+        document.getElementById('kpi-leave-names').innerHTML = leaveNamesOnly.length > 0
+            ? `<span class="text-amber-700">${leaveNamesOnly.join(', ')}</span>`
+            : '<span class="text-gray-400 italic">班表上未看到休假（出勤未對上）</span>';
+        document.getElementById('kpi-submission-rate').textContent = '—';
+        document.getElementById('kpi-submitted-count').textContent = '—';
+        document.getElementById('kpi-missing-names').innerHTML = '<span class="text-amber-700">出勤這次讀不到，缺交名單先不算</span>';
+        kpiDashboard.classList.remove('hidden');
+        return;
+    }
+    if (!loadTrust.reports) {
+        document.getElementById('kpi-submission-rate').textContent = '—';
+        document.getElementById('kpi-submitted-count').textContent = '—';
+        document.getElementById('kpi-missing-names').innerHTML = '<span class="text-amber-700">日報這次讀不到，不能算繳交率</span>';
+        kpiDashboard.classList.remove('hidden');
+        return;
     }
 
     let attendanceNames = [];
@@ -769,8 +932,25 @@ function showLoading() {
 }
 
 function showError(message) {
+    hideKpi();
     reportsContainer.innerHTML = '';
-    placeholder.innerHTML = `<p class="text-red-500 font-semibold">${message}</p>`;
+    placeholder.replaceChildren();
+    const p = document.createElement('p');
+    p.className = 'text-red-600 font-semibold';
+    p.textContent = message || '載入失敗';
+    placeholder.appendChild(p);
+    const hint = document.createElement('p');
+    hint.className = 'text-sm text-gray-600 mt-2';
+    hint.textContent = '請再試一次。不要把這畫面當成「沒人交日報」。';
+    placeholder.appendChild(hint);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'mt-4 min-h-[44px] px-4 rounded-lg bg-white border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50';
+    btn.textContent = '再試一次';
+    btn.addEventListener('click', () => {
+        fetchAndRenderReports(startDatePicker.value, endDatePicker.value);
+    });
+    placeholder.appendChild(btn);
     placeholder.classList.remove('hidden');
     reportsContainer.appendChild(placeholder);
 }

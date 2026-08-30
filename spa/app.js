@@ -209,7 +209,7 @@ const App = {
             // [v413.0 SPA化] 擴充路由表，將更多獨立頁面以 iframe 方式整合進來
             '#/new-site': { name: 'iframe', src: 'modules/projects/NewSiteForm.html', title: '新增／修改案場資料' }, // [v515.0 修正] 改為絕對路徑；標題與表單「可選既有案場更新」一致
             '#/faq': { name: 'iframe', src: 'modules/info/FAQ.html', title: '客戶常見問答' }, // [v518.0 修正]
-            '#/daily-report': { name: 'iframe', src: 'modules/projects/daily_report.html', title: '團隊工作總覽' }, // [v515.0 修正] 改為絕對路徑
+            '#/daily-report': { name: 'iframe', src: 'modules/projects/daily_report.html?v=26.08.30.4', title: '團隊工作總覽' }, // 日報讀失敗≠沒人交
             '#/onboarding-flow': { name: 'iframe', src: 'modules/info/onboardingflow.html', title: '客戶接洽流程' }, // [v518.0 修正]
             '#/attendance-report': { name: 'iframe', src: 'modules/attendance/attendance_report.html', title: '出勤儀表板' }, // [v515.0 修正] 改為絕對路徑
             '#/my-personal': { name: 'iframe', src: 'modules/attendance/attendance_report.html', title: '我的出勤與假勤', params: '&mode=personal' },
