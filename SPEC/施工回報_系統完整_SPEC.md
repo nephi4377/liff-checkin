@@ -112,6 +112,7 @@ flowchart LR
 - Firebase：`signInAnonymously`；送出前 `ensureAuthBeforeSubmit()` 確認已登入。
 - LIFF 或**查詢參數** `uid`+`name` 覆寫、或本機測試（`ENABLE_LOCAL_TEST_BYPASS` 僅限 localhost／127 且建議關閉以逼真相）。
 - 開發用 `?devSim=1` 可開啟失敗模擬 UI（GAS/網路/第一張圖/IDB 等路徑）。
+- **身分未就緒前不可送出：** 提交鈕先鎖住並寫「確認身分中…」；表單 `submit` 一律先攔住，避免瀏覽器整頁重載把已填內容清掉。身分失敗時人話說明＋「再試一次確認身分」（自動再試一次後仍失敗才出現）。身分成功才解鎖「提交回報」。
 
 ### 3.3 提交流程（精簡）
 

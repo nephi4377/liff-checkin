@@ -31,7 +31,7 @@
       PHOTO_UNIT_MAX_RETRIES: 3,  // 單張相片重試次數
       PHOTO_UNIT_RETRY_BASE_MS: 400,  // 單張相片重試間隔
       GAS_FETCH_TIMEOUT_MS: 120000,  // GAS 連線逾時  
-      CLIENT_VER: '2026.07.13-V3.15',  // 版本號
+      CLIENT_VER: '2026.08.29-V3.16',  // 版本號
       LIFF_INIT_TIMEOUT_MS: 15000,  // LIFF 初始化逾時（逾時仍保留表單 UI）
       FAILURE_REPORT_PREFIX: 'failure-report',  // 失敗報告前綴
       MAX_FAILURE_REPORT_JSON_BYTES: 480000,  // 失敗報告 JSON 大小上限
@@ -227,10 +227,14 @@
 
         <div id="status-message" class="text-center mb-4 min-h-[24px]"></div>
 
-        <button type="submit" id="submit-button"
+        <button type="submit" id="submit-button" disabled
           class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-lg hover:bg-blue-700 disabled:bg-gray-400">
-          <span id="button-text">提交回報</span>
+          <span id="button-text">確認身分中…</span>
           <div id="button-spinner" class="spinner w-6 h-6 border-4 border-white rounded-full mx-auto hidden"></div>
+        </button>
+        <button type="button" id="btn-liff-retry"
+          class="hidden w-full mt-2 bg-white border border-blue-300 text-blue-800 font-bold py-3 px-6 rounded-lg text-lg">
+          再試一次確認身分
         </button>
 
         <div id="error-list-container" class="mt-4 p-4 bg-red-50 border border-red-200 rounded-md hidden">
@@ -923,6 +927,47 @@
       let restoredPhotoInfos = null;
       let staticUiBound = false;
       let submitFlowBound = false;
+      let identityReady = false;
+      let identityAttemptRunning = false;
+      const btnLiffRetry = document.getElementById('btn-liff-retry');
+
+      function setSubmitIdleLabel(text) {
+        buttonText.textContent = text;
+        buttonText.classList.remove('hidden');
+        buttonSpinner.classList.add('hidden');
+      }
+
+      function hideLiffRetry() {
+        if (btnLiffRetry) btnLiffRetry.classList.add('hidden');
+      }
+
+      function showLiffRetry() {
+        if (btnLiffRetry) btnLiffRetry.classList.remove('hidden');
+      }
+
+      function setIdentityPending() {
+        identityReady = false;
+        submitButton.disabled = true;
+        setSubmitIdleLabel('確認身分中…');
+        hideLiffRetry();
+        updateStatus('正在確認您的身分，請稍候。表單可以先填。', 'info');
+      }
+
+      function setIdentityReady() {
+        identityReady = true;
+        submitButton.disabled = false;
+        setSubmitIdleLabel('提交回報');
+        hideLiffRetry();
+        updateStatus('', 'info');
+      }
+
+      function setIdentityFailed() {
+        identityReady = false;
+        submitButton.disabled = true;
+        setSubmitIdleLabel('提交回報');
+        showLiffRetry();
+        updateStatus('身分還沒確認成功。請按「再試一次確認身分」。您填的內容還在，不會送出。', 'error');
+      }
 
       async function ensureAuthBeforeSubmit() {
         if (auth.currentUser) return;
@@ -946,34 +991,76 @@
         ]);
       }
 
-      async function main() {
+      async function tryResolveLiffIdentity() {
+        try {
+          await initLiffWithTimeout();
+        } catch (e) {
+          const msg = String((e && e.message) || e);
+          if (!/already|initialized/i.test(msg)) throw e;
+        }
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return false;
+        }
+        userProfile = await liff.getProfile();
+        return true;
+      }
+
+      async function resolveIdentity() {
+        if (identityAttemptRunning) return;
+        identityAttemptRunning = true;
+        setIdentityPending();
         const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
         const urlParams = new URLSearchParams(window.location.search);
         const uid = urlParams.get('uid');
         const name = urlParams.get('name');
 
-        if (ENABLE_LOCAL_TEST_BYPASS && isLocalTest && !uid) {
-          console.warn('[V3] 本地測試模式（ENABLE_LOCAL_TEST_BYPASS=true）');
-          document.getElementById('v3-local-banner').classList.remove('hidden');
-          userProfile = { userId: 'Ud58333430513b7527106fa71d2e30151', displayName: '本地測試員' };
-          bindSubmitFlow();
-        } else if (uid && name) {
-          let displayName = name;
-          try { displayName = decodeURIComponent(name); } catch (_) { /* 保持原字串 */ }
-          userProfile = { userId: uid, displayName };
-          bindSubmitFlow();
-        } else {
-          try {
-            await initLiffWithTimeout();
-            if (!liff.isLoggedIn()) { liff.login(); return; }
-            userProfile = await liff.getProfile();
-            bindSubmitFlow();
-          } catch (error) {
-            console.error('LIFF 初始化失敗:', error);
-            updateStatus('身分驗證尚未完成，請關閉後在 LINE 重新開啟；表單可先填寫與選照片。', 'error');
-            submitButton.disabled = true;
+        try {
+          if (ENABLE_LOCAL_TEST_BYPASS && isLocalTest && !uid) {
+            console.warn('[V3] 本地測試模式（ENABLE_LOCAL_TEST_BYPASS=true）');
+            document.getElementById('v3-local-banner').classList.remove('hidden');
+            userProfile = { userId: 'Ud58333430513b7527106fa71d2e30151', displayName: '本地測試員' };
+          } else if (uid && name) {
+            let displayName = name;
+            try { displayName = decodeURIComponent(name); } catch (_) { /* 保持原字串 */ }
+            userProfile = { userId: uid, displayName };
+          } else {
+            let ok = false;
+            try {
+              ok = await tryResolveLiffIdentity();
+            } catch (firstErr) {
+              console.warn('[V3] LIFF 第一次失敗，將再試一次', firstErr);
+              updateStatus('身分確認不順，正在再試一次…', 'info');
+              await sleep(800);
+              ok = await tryResolveLiffIdentity();
+            }
+            if (!ok) {
+              // 導向 LINE 登入中，維持「確認身分中」
+              return;
+            }
           }
+          bindSubmitFlow();
+          setIdentityReady();
+        } catch (error) {
+          console.error('LIFF 初始化失敗:', error);
+          setIdentityFailed();
+        } finally {
+          identityAttemptRunning = false;
         }
+      }
+
+      function onFormSubmit(event) {
+        event.preventDefault();
+        if (!identityReady || !userProfile) {
+          updateStatus(
+            identityAttemptRunning
+              ? '身分還在確認，請稍候再送。您填的內容還在。'
+              : '身分還沒確認，請先按「再試一次確認身分」。您填的內容還在。',
+            'error'
+          );
+          return;
+        }
+        return handleFormSubmit(event);
       }
 
       function bindStaticUI() {
@@ -998,13 +1085,19 @@
 
         document.getElementById('sitePhotos').addEventListener('change', () => { restoredPhotoInfos = null; });
         document.getElementById('problemPhotos').addEventListener('change', () => { restoredPhotoInfos = null; });
+
+        form.addEventListener('submit', onFormSubmit);
+        if (btnLiffRetry) {
+          btnLiffRetry.addEventListener('click', () => {
+            if (identityAttemptRunning) return;
+            resolveIdentity();
+          });
+        }
       }
 
       function bindSubmitFlow() {
         if (submitFlowBound) return;
         submitFlowBound = true;
-
-        form.addEventListener('submit', handleFormSubmit);
 
         document.getElementById('btn-copy-debug-log').addEventListener('click', async () => {
           const text = getDeveloperDiagnosticReport();
@@ -1591,7 +1684,7 @@
       }
 
       bindStaticUI();
-      main();
+      resolveIdentity();
     });
   </script>
 </body>
