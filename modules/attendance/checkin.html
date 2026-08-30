@@ -8,6 +8,7 @@
     <!-- 引入系統必要框架：Tailwind CSS 用於高品質 UI，LIFF SDK 用於 Google/LINE 身分介接 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script src="checkinResult.js?v=1"></script>
 
     <script>
         /** 
@@ -18,7 +19,7 @@
         const CONSTANTS = {
             LIFF_ID: '2007974938-jVxn6y37',
             GAS_URL: 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec',
-            VERSION: 'v26.08.30.0300',
+            VERSION: 'v26.08.30.1200',
             OFF_SITE_VALID_METERS: 200,
             ANOMALY_MISSING: '離場未填說明',
             SITE_BG_RETRY_MS: 30000,
@@ -1249,8 +1250,13 @@
                 try {
                     const result = await AppAPI.dispatch(payload);
                     AppActionLog.log('送出成功');
-                    if (result.status !== 'success' || (result.message && result.message.includes('失敗'))) {
+                    if (result.status === 'busy') {
                         AppCore.finalize(result);
+                        return;
+                    }
+                    if (CheckinResult.isCheckinBusinessFailure(result)) {
+                        AppActionLog.log('打卡未完成');
+                        AppCore.finalize(Object.assign({}, result, { status: 'error' }));
                         return;
                     }
 
@@ -1354,8 +1360,9 @@
             finalize: (res, isSilentInit = false) => {
                 AppUI.setLoading(false);
                 const btn = document.getElementById('checkin-button');
-                const isOff = res.status === 'success' && res.message.includes('離線');
-                if (res.status === 'success') {
+                const looksFailed = CheckinResult.isCheckinBusinessFailure(res);
+                const isOff = res.status === 'success' && !looksFailed && String(res.message || '').includes('離線');
+                if (res.status === 'success' && !looksFailed) {
                     if (!isSilentInit) {
                         AppStorage.addHistory({ message: res.message, isOffline: isOff, pageInstance: AppCore.pageInstance });
                     }
@@ -1397,7 +1404,21 @@
                         ),
                         'text-red-800'
                     );
-                } else if (res.status === 'error') {
+                } else if (res.status === 'error' || looksFailed) {
+                    if (CheckinResult.isUnregisteredCheckin(res)) {
+                        AppCore.endPageSession(
+                            AppCore.formatFailMessage(
+                                '打卡未完成',
+                                '您的 LINE 還沒有登記在出勤名單裡，這次沒有寫入打卡。',
+                                [
+                                    '請聯絡行政或主管，請他們把您加進員工資料',
+                                    '加好後，關閉此視窗，從選單重開「打卡」'
+                                ]
+                            ),
+                            'text-red-800'
+                        );
+                        return;
+                    }
                     const code = res.errorCode || 'E001';
                     const msg = res.message || '伺服器暫時無法處理';
                     AppCore.endPageSession(
