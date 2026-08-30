@@ -897,6 +897,34 @@ var AccountingUi = (function () {
     return el;
   }
 
+  function isGuestFacingPageForInbox_() {
+    var p = '';
+    try { p = String((location.pathname || '') + ' ' + (location.href || '')).toLowerCase(); } catch (eP) {}
+    return /client-progress|fb-bind|landingpage|customer-finance-portal|curtain/.test(p);
+  }
+
+  function reportStaffFatalToInbox_(ctx) {
+    if (isGuestFacingPageForInbox_()) return;
+    ctx = ctx || {};
+    var uid = String(operator.userId || '').trim();
+    if (!uid) return;
+    var title = String(ctx.message || '無法繼續').replace(/\s+/g, ' ').trim().slice(0, 80);
+    var dedupeKey = 'ai_inbox_fatal_' + title.slice(0, 48);
+    try {
+      if (sessionStorage.getItem(dedupeKey) === '1') return;
+      sessionStorage.setItem(dedupeKey, '1');
+    } catch (eDup) {}
+    if (typeof AccountingApi === 'undefined' || typeof AccountingApi.reportStaffFatalInbox !== 'function') return;
+    AccountingApi.reportStaffFatalInbox({
+      userId: uid,
+      title: title || '無法繼續',
+      summary: [ctx.tech, ctx.action ? ('動作：' + ctx.action) : ''].filter(Boolean).join('\n').slice(0, 1500),
+      page: ctx.page || (location.pathname || ''),
+      action: ctx.action || '',
+      link: location.href || ''
+    }).catch(function () {});
+  }
+
   /**
    * 致命／開頁失敗：人話說明 + 再試 + 複製 + 開信寄到信箱
    * @param {HTMLElement|string} target - 容器或 id（預設 #loading）
@@ -1003,6 +1031,7 @@ var AccountingUi = (function () {
     el.appendChild(wrap);
     persistLastError_(buildCursorHandoffText(ctx, report));
     pushLog('err', ctx.message || '無法繼續');
+    try { reportStaffFatalToInbox_(ctx); } catch (eInbox) {}
     reportPersistentError(ctx).then(function (res) {
       if (res && (res.emailed || res.deduped)) {
         hint.textContent = '錯誤已記錄並寄到 ' + ERROR_REPORT_EMAIL + '。可再試、複製錯誤，或「複製給 Cursor」貼到對話。';

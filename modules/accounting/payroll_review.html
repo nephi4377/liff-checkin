@@ -7,11 +7,11 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=51"></script>
+  <script src="../../shared/js/accounting_api.js?v=52"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
-  <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
+  <script src="../../shared/js/accounting_list_cache.js?v=7"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
-  <script src="../../shared/js/accounting_ui.js?v=23"></script>
+  <script src="../../shared/js/accounting_ui.js?v=24"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=9"></script>
   <style>
@@ -36,6 +36,7 @@
     #msg { color: #c5221f; font-size: 14px; margin: 8px 0; }
     #ok { color: #137333; font-size: 14px; margin: 8px 0; }
     .hidden { display: none; }
+    #listLive { margin-left: 8px; font-weight: 600; color: #1a73e8; }
     .nav { margin-bottom: 12px; font-size: 14px; }
     .nav a { color: #1a73e8; text-decoration: none; }
   </style>
@@ -70,7 +71,7 @@
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 8px">待審列表</h3>
+      <h3 style="margin:0 0 8px">待審列表<span id="listLive" class="sub"></span></h3>
       <div id="list"></div>
       <p id="emptyMsg" class="sub hidden">目前沒有待審薪資。</p>
     </div>
@@ -78,6 +79,7 @@
   <script>
     (function () {
       var session = null;
+      var lastRenderedCacheKey = '';
       var ui = AccountingUi.feedback();
       function setMsg(t) { ui.setMsg(t); }
       function setOk(t) { ui.setOk(t); }
@@ -248,13 +250,33 @@
           document.getElementById('filterKw').value.trim();
       }
 
-      function renderListFromData(data) {
+      function hasRenderedItems() {
+        return !!document.querySelector('#list .item');
+      }
+
+      function setUpdating(on) {
+        var el = document.getElementById('listLive');
+        if (el) el.textContent = on ? '更新中…' : '';
+      }
+
+      function applyListData(data, keepExisting) {
         var list = document.getElementById('list');
+        var emptyMsg = document.getElementById('emptyMsg');
+        if (!data || !data.success) {
+          var failMsg = (data && data.message) || '載入失敗，請再試';
+          emptyMsg.classList.add('hidden');
+          if (keepExisting && hasRenderedItems()) {
+            setMsg(failMsg + '（仍顯示先前內容）');
+            return;
+          }
+          setMsg(failMsg);
+          list.innerHTML = '<p class="sub">載入失敗，請按「重新載入最新」再試。</p>';
+          return;
+        }
+        setMsg('');
         list.innerHTML = '';
-        if (!data.success) throw new Error(data.message || '載入失敗');
         var filterVal = document.getElementById('filterReview').value || 'pending_review';
         var items = data.items || [];
-        document.getElementById('emptyMsg').classList.toggle('hidden', items.length > 0);
         items.forEach(function (row) {
           if (filterVal === 'pending_review' && String(row.review_status) === '待審') {
             list.appendChild(renderItem(row));
@@ -262,39 +284,68 @@
             list.appendChild(renderReadOnlyItem(row));
           }
         });
-        if (!list.children.length) document.getElementById('emptyMsg').classList.remove('hidden');
+        emptyMsg.classList.toggle('hidden', hasRenderedItems());
+        emptyMsg.textContent = filterVal === 'pending_review' ? '目前沒有待審薪資。' : '目前沒有符合條件的薪資單。';
+        lastRenderedCacheKey = listCacheKey();
       }
 
       async function loadList(force) {
-        setMsg(''); setOk('');
-        var list = document.getElementById('list');
-        list.innerHTML = '<p class="sub">載入中…</p>';
-        try {
-          var filterVal = document.getElementById('filterReview').value || 'pending_review';
-          var data;
-          if (typeof AccountingListCache !== 'undefined') {
-            data = await AccountingListCache.load(session, listCacheKey(), function () {
-              return AccountingApi.payrollRequestList(session, {
+        var run = async function () {
+          setUpdating(true);
+          try {
+            if (!force) setMsg('');
+            setOk('');
+            var peeked = null;
+            var cacheKey = listCacheKey();
+            if (!force && typeof AccountingListCache !== 'undefined') {
+              peeked = AccountingListCache.peek(session, cacheKey);
+              if (peeked && peeked.success) applyListData(peeked, false);
+            }
+            var canKeep = (cacheKey === lastRenderedCacheKey) && hasRenderedItems();
+            if (!canKeep && !(peeked && peeked.success)) {
+              document.getElementById('list').innerHTML = '<p class="sub">載入中…</p>';
+              document.getElementById('emptyMsg').classList.add('hidden');
+            }
+            var filterVal = document.getElementById('filterReview').value || 'pending_review';
+            var data;
+            if (typeof AccountingListCache !== 'undefined') {
+              data = await AccountingListCache.load(session, listCacheKey(), function () {
+                return AccountingApi.payrollRequestList(session, {
+                  status: filterVal,
+                  keyword: document.getElementById('filterKw').value.trim()
+                });
+              }, {
+                force: !!force,
+                alwaysRevalidate: !force,
+                onUpdate: function (fresh, err) {
+                  setUpdating(false);
+                  if (fresh && fresh.success) applyListData(fresh, true);
+                  else if (err) setMsg((err.message || String(err)) + '（仍顯示先前內容，可再試）');
+                  else applyListData(fresh, true);
+                }
+              });
+            } else {
+              data = await AccountingApi.payrollRequestList(session, {
                 status: filterVal,
                 keyword: document.getElementById('filterKw').value.trim()
               });
-            }, {
-              force: !!force,
-              onUpdate: force ? null : function (fresh) {
-                try { renderListFromData(fresh); } catch (e) {}
-              }
-            });
-          } else {
-            data = await AccountingApi.payrollRequestList(session, {
-              status: filterVal,
-              keyword: document.getElementById('filterKw').value.trim()
-            });
+            }
+            if (data) applyListData(data, hasRenderedItems() || !!(peeked && peeked.success));
+          } catch (e) {
+            applyListData({ success: false, message: e.message || String(e) }, true);
+          } finally {
+            setUpdating(false);
           }
-          renderListFromData(data);
-        } catch (e) {
-          list.innerHTML = '';
-          setMsg(e.message || String(e));
-        }
+        };
+        var reloadBtn = document.getElementById('reloadBtn');
+        return AccountingUi.runAsync(reloadBtn, {
+          busyLabel: '載入中…',
+          clear: false,
+          toastOnOk: false,
+          toastOnFail: false
+        }, run).catch(function (e) {
+          applyListData({ success: false, message: e.message || String(e) }, true);
+        });
       }
 
       document.getElementById('list').addEventListener('input', function (e) {
@@ -376,6 +427,16 @@
       });
 
       document.getElementById('reloadBtn').addEventListener('click', function () { loadList(true); });
+      ['filterReview', 'filterKw'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('change', function () { loadList(false); });
+        if (id === 'filterKw') {
+          el.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') loadList(false);
+          });
+        }
+      });
 
       AccountingBoot.run({
         minPermission: 5,

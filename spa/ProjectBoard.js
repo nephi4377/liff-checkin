@@ -14,6 +14,20 @@ export default {
             window.location.hash = `#/project-console?id=${projectId}`;
         };
 
+        const latestProgressMs = (project) => {
+            let best = 0;
+            (project.logSummary || []).forEach((log) => {
+                const t = log && log.Timestamp ? new Date(log.Timestamp).getTime() : NaN;
+                if (!Number.isNaN(t) && t > best) best = t;
+            });
+            (project.scheduleSummary || []).forEach((task) => {
+                const raw = task && (task['預計開始日'] || task['預計完成日']);
+                const t = raw ? new Date(raw).getTime() : NaN;
+                if (!Number.isNaN(t) && t > best) best = t;
+            });
+            return best;
+        };
+
         const projectsToShow = computed(() => {
             if (!props.projects || !props.currentUser) return [];
             const permission = props.currentUser.permission || 1;
@@ -32,7 +46,7 @@ export default {
                 // 專案負責人欄位可能包含多個以逗號分隔的 ID
                 filtered = props.projects.filter(p => (p['專案負責人'] || '').split(',').map(id => id.trim()).includes(userId));
             }
-            return filtered.sort((a, b) => (new Date(b.logSummary?.[0]?.Timestamp) || 0) - (new Date(a.logSummary?.[0]?.Timestamp) || 0));
+            return filtered.slice().sort((a, b) => latestProgressMs(b) - latestProgressMs(a));
         });
 
         const hasVisibleProjects = computed(() => Array.isArray(projectsToShow.value) && projectsToShow.value.length > 0);

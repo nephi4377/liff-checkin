@@ -27,7 +27,7 @@ var AccountingApi = (function () {
   /** 一般讀寫逾時；OCR 等長操作請自行傳 0（不限）或更長毫秒 */
   var DEFAULT_TIMEOUT_MS = 60000;
   function logApiFailure_(actionName, err, notify) {
-    if (actionName === 'accounting_error_report' || actionName === 'accounting_client_log') return;
+    if (actionName === 'accounting_error_report' || actionName === 'accounting_client_log' || actionName === 'agent_inbox_staff_error') return;
     if (typeof AccountingUi === 'undefined' || !AccountingUi.reportFailure) return;
     try {
       AccountingUi.reportFailure({
@@ -98,7 +98,7 @@ var AccountingApi = (function () {
 
   async function postToUrl_(apiUrl, body, timeoutMs, apiLabel) {
     var actionName = (body && body.action) || 'api';
-    var trackUi = actionName !== 'accounting_client_log' && actionName !== 'accounting_error_report';
+    var trackUi = actionName !== 'accounting_client_log' && actionName !== 'accounting_error_report' && actionName !== 'agent_inbox_staff_error';
     var t0 = Date.now();
     if (trackUi && typeof AccountingUi !== 'undefined' && AccountingUi.apiStart) {
       AccountingUi.apiStart(actionName);
@@ -1771,7 +1771,23 @@ var AccountingApi = (function () {
       return session;
     },
     primeHubIdentityFromUrl: primeHubIdentityFromUrl_,
-    requestParentHubLiffToken: requestParentHubLiffToken_
+    requestParentHubLiffToken: requestParentHubLiffToken_,
+    reportStaffFatalInbox: function (opts) {
+      opts = opts || {};
+      var uid = String(opts.userId || opts.user_id || '').trim();
+      if (!uid) return Promise.resolve({ success: false });
+      return postToUrl_(PROJECT_CONSOLE_API, {
+        action: 'agent_inbox_staff_error',
+        userId: uid,
+        title: opts.title || '',
+        summary: opts.summary || '',
+        page: opts.page || '',
+        failedAction: opts.action || '',
+        link: opts.link || ''
+      }, 20000, '主控台').catch(function () {
+        return { success: false };
+      });
+    }
   };
 })();
 if (typeof OperatorContext === 'undefined') {
