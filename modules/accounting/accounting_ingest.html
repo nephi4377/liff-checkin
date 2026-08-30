@@ -30,7 +30,7 @@
     #statusBar { font-size: 14px; padding: 8px 10px; background: #e8f0fe; border-radius: 8px; margin-bottom: 10px; }
     #msg { color: #c5221f; font-size: 14px; }
     #ok { color: #137333; font-size: 14px; }
-    #loading { text-align: center; padding: 48px 16px; color: #666; }
+    #loading { text-align: center; padding: 48px 16px; color: #333; font-size: 20px; line-height: 1.5; }
     #pendingPreview img { max-width: 100%; border-radius: 8px; margin-top: 6px; }
     #recent { font-size: 13px; padding-left: 18px; }
     .hint { font-size: 12px; color: #777; margin-top: 4px; }
@@ -711,6 +711,9 @@
         AccountingUi.init();
         if (typeof AccountingNav !== 'undefined') AccountingNav.init();
         queryParams = readQueryParams();
+        if (queryParams.liff_id && String(queryParams.liff_id).indexOf('2010425298') !== 0) {
+          CONSTANTS.LIFF_ID = queryParams.liff_id;
+        }
         seedProfileFromOperatorContext();
         document.getElementById('txn_date').value = todayRoc();
         document.getElementById('txn_date_b').value = todayRoc();
@@ -803,7 +806,7 @@
         try {
           setLoading('連線 LINE…');
           await Promise.race([
-            liff.init({ liffId: CONSTANTS.LIFF_ID }),
+            liff.init({ liffId: CONSTANTS.LIFF_ID, withLoginOnExternalBrowser: true }),
             new Promise(function (_, rej) { setTimeout(function () { rej(new Error('逾時')); }, CONSTANTS.INIT_TIMEOUT_MS); })
           ]);
           if (!liff.isLoggedIn()) {
