@@ -80,6 +80,7 @@
   <div id="app" class="hidden acct-main">
     <h2>收支登錄</h2>
     <p class="sub" id="userLine">—</p>
+    <p class="hint" id="doorNote">登入門：載入中…</p>
     <p class="sub hidden" id="photoHint">已帶入 LINE 傳的照片。關閉視窗＝不送出。</p>
     <div id="contextBar" class="hidden"></div>
     <div id="statusBar">本輪已記 <strong id="sessionCount">0</strong> 筆 · 可連續填多筆</div>
@@ -189,6 +190,47 @@
 
       var payPickerA = initPaymentPicker(document.getElementById('payTagsA'), document.getElementById('payment_method'));
       var payPickerB = initPaymentPicker(document.getElementById('payTagsB'), document.getElementById('payment_method_b'));
+
+      function doorName(idOrUrl) {
+        var s = String(idOrUrl || '');
+        if (s.indexOf('2010425298') >= 0) return '渲染工作室門 2010425298（不對）';
+        if (s.indexOf('2007974938') >= 0) return '員工官方記帳門 2007974938（正確）';
+        if (s.indexOf('2010424425') >= 0) return '會計 Bot 門 2010424425';
+        return s ? ('未知 ' + s.slice(0, 48)) : '（還沒讀到）';
+      }
+
+      function tokenAud(token) {
+        try {
+          var parts = String(token || '').split('.');
+          if (parts.length < 2) return '';
+          var b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          while (b64.length % 4) b64 += '=';
+          var json = JSON.parse(decodeURIComponent(Array.prototype.map.call(atob(b64), function (c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+          }).join('')));
+          return json && json.aud != null ? String(json.aud) : '';
+        } catch (e) {
+          return '';
+        }
+      }
+
+      function updateDoorNote(token) {
+        var el = document.getElementById('doorNote');
+        if (!el) return;
+        var planned = doorName(CONSTANTS.LIFF_ID);
+        var page = (location.href.indexOf('2010425298') >= 0 || location.href.indexOf('2007974938') >= 0)
+          ? doorName(location.href)
+          : '';
+        var aud = tokenAud(token || idToken);
+        var actual = aud ? doorName(aud) : '';
+        var lines = ['這頁設定要走：' + planned];
+        if (page) lines.push('網址像是：' + page);
+        if (actual) lines.push('通行證實際是：' + actual);
+        el.textContent = lines.join(' · ');
+        el.style.color = (aud && aud.indexOf('2010425298') >= 0) || String(CONSTANTS.LIFF_ID).indexOf('2010425298') >= 0
+          ? '#c5221f'
+          : '#137333';
+      }
 
       function todayRoc() {
         var d = new Date();
@@ -634,6 +676,7 @@
             CONSTANTS.LIFF_ID = policy.liffId;
           }
           devBypass = false;
+          updateDoorNote();
         } catch (e) {}
       }
 
@@ -772,6 +815,7 @@
           profile.userId = p.userId;
           profile.displayName = p.displayName;
           idToken = liff.getIDToken();
+          updateDoorNote(idToken);
           var tokenSession = { idToken: idToken };
           var ctxCached = AccountingContext.load();
           var inHubIframe = window.parent && window.parent !== window;
