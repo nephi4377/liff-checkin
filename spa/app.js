@@ -212,7 +212,7 @@ const App = {
             '#/attendance-report': { name: 'iframe', src: 'modules/attendance/attendance_report.html', title: '出勤儀表板' }, // [v515.0 修正] 改為絕對路徑
             '#/my-personal': { name: 'iframe', src: 'modules/attendance/attendance_report.html', title: '我的出勤與假勤', params: '&mode=personal' },
             '#/staff-status-board': { name: 'iframe', src: 'modules/attendance/staff_status_board.html', title: '全員出勤燈號看板' },
-            '#/approval-dashboard': { name: 'iframe', src: 'modules/attendance/approval_dashboard.html', title: '假勤審核儀表板' }, // [v515.0 修正] 改為絕對路徑
+            '#/approval-dashboard': { name: 'iframe', src: 'modules/attendance/approval_dashboard.html?v=26.08.29.2', title: '假勤審核儀表板' }, // 巡檢P0：失敗不顯示成空
             '#/leave-request': { name: 'iframe', src: 'modules/attendance/leave_request.html', title: '線上假勤申請' }, // [v515.0 修正] 改為絕對路徑
             '#/shift-schedule': { name: 'iframe', src: 'modules/attendance/shift_schedule.html', title: '員工排班系統' }, // [v515.0 修正] 改為絕對路徑
             // [v424.0 架構優化] 將專案工作區與施工回報改為內嵌 iframe

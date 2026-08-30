@@ -99,7 +99,9 @@
     <div id="viewList">
       <div class="card">
         <label><input type="checkbox" id="showClosed" /> 顯示已結案</label>
+        <button type="button" class="btn btn-secondary" id="reloadOverviewBtn" title="立刻向後端重抓案件列表">重新載入最新</button>
         <div id="todoBox"></div>
+        <p class="sub hidden" id="overviewLive" aria-live="polite"></p>
         <div id="overviewList">載入中…</div>
       </div>
     </div>
@@ -128,6 +130,15 @@
     var detailData = null;
     var activeTab = 'adj';
     var detailBusy = false;
+    var lastOverviewItems = null;
+    var lastTodosItems = null;
+    var localMockMode = '';
+    (function detectLocalMock_() {
+      var host = window.location.hostname;
+      if (host === '127.0.0.1' || host === 'localhost') {
+        localMockMode = new URLSearchParams(window.location.search).get('mock') || '';
+      }
+    })();
 
     function $(id) { return document.getElementById(id); }
     function friendlyApiError(t) {
@@ -140,6 +151,41 @@
     }
     function showMsg(t) { $('msg').textContent = friendlyApiError(t); $('ok').textContent = ''; }
     function showOk(t) { $('ok').textContent = t || ''; $('msg').textContent = ''; }
+    function escapeHtml(s) {
+      return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+    }
+    function setOverviewLive(text) {
+      var el = $('overviewLive');
+      if (!el) return;
+      if (text) {
+        el.textContent = text;
+        el.classList.remove('hidden');
+      } else {
+        el.textContent = '';
+        el.classList.add('hidden');
+      }
+    }
+    function bindRetryOverview() {
+      var btn = $('btnRetryOverview');
+      if (btn) btn.onclick = function () {
+        loadOverview();
+        loadTodos();
+      };
+    }
+    async function fetchOverview_() {
+      if (localMockMode === 'fail') {
+        return { success: false, message: '（本機模擬）案件列表讀取失敗' };
+      }
+      if (localMockMode === 'empty') return { success: true, items: [] };
+      return AccountingApi.cfOverview(session, $('showClosed').checked);
+    }
+    async function fetchTodos_() {
+      if (localMockMode === 'fail') {
+        return { success: false, message: '（本機模擬）待辦讀取失敗' };
+      }
+      if (localMockMode === 'empty') return { success: true, items: [] };
+      return AccountingApi.cfTodos(session, true);
+    }
 
     function statusLabel(st) {
       var map = {
@@ -169,18 +215,15 @@
       });
     }
 
-    async function loadOverview() {
-      showMsg('');
-      var res = await AccountingApi.cfOverview(session, $('showClosed').checked);
-      if (!res.success) { showMsg(res.message); return; }
-      var html = (res.items || []).map(function (p) {
+    function renderOverviewItems(items) {
+      var html = (items || []).map(function (p) {
         var badges = '';
         if (p.pending_customer_adj) badges += '<span class="tag warn">客戶待確認 ' + p.pending_customer_adj + '</span>';
         if (p.pending_company_adj) badges += '<span class="tag warn">待公司確認 ' + p.pending_company_adj + '</span>';
         if (p.pending_cash_sign) badges += '<span class="tag warn">現金待簽 ' + p.pending_cash_sign + '</span>';
         if (p.pending_income_review) badges += '<span class="tag warn">收入待審 ' + p.pending_income_review + '</span>';
-        return '<div class="project-card" role="button" tabindex="0" data-pno="' + p.project_no + '">' +
-          '<div class="card-head"><div><strong>' + p.project_no + '</strong> ' + (p.client_name || '') +
+        return '<div class="project-card" role="button" tabindex="0" data-pno="' + escapeHtml(p.project_no) + '">' +
+          '<div class="card-head"><div><strong>' + escapeHtml(p.project_no) + '</strong> ' + escapeHtml(p.client_name || '') +
           (p.is_closed ? ' <span class="tag">已結案</span>' : '') + '</div>' +
           '<span class="chevron" aria-hidden="true">›</span></div>' +
           '<div class="hint">' + badges + '已收確認 $' + (p.receipts_confirmed_total || 0) + '</div></div>';
@@ -189,12 +232,29 @@
       bindOverviewCards();
     }
 
-    async function loadTodos() {
-      var res = await AccountingApi.cfTodos(session, true);
-      if (!res.success || !(res.items || []).length) { $('todoBox').innerHTML = ''; return; }
-      $('todoBox').innerHTML = (res.items || []).slice(0, 5).map(function (t) {
-        return '<div class="todo-highlight">待辦：' + t.type + ' · 案號 ' + t.project_no +
-          ' <a href="#" data-pno="' + t.project_no + '">查看</a></div>';
+    function showOverviewError(message) {
+      setOverviewLive('');
+      var msg = friendlyApiError(message) || '案件列表載入失敗';
+      var keep = lastOverviewItems && lastOverviewItems.length;
+      if (keep) {
+        showMsg(msg + '。仍顯示先前內容，請再試。');
+        setOverviewLive('更新失敗，可按「重新載入最新」');
+        return;
+      }
+      $('overviewList').innerHTML =
+        '<p>案件列表載入失敗。' + escapeHtml(msg) + '</p>' +
+        '<button type="button" class="btn btn-secondary" id="btnRetryOverview">再試一次</button>';
+      bindRetryOverview();
+    }
+
+    function renderTodosItems(items) {
+      if (!(items || []).length) {
+        $('todoBox').innerHTML = '';
+        return;
+      }
+      $('todoBox').innerHTML = items.slice(0, 5).map(function (t) {
+        return '<div class="todo-highlight">待辦：' + escapeHtml(t.type) + ' · 案號 ' + escapeHtml(t.project_no) +
+          ' <a href="#" data-pno="' + escapeHtml(t.project_no) + '">查看</a></div>';
       }).join('');
       $('todoBox').querySelectorAll('a').forEach(function (a) {
         a.onclick = function (e) {
@@ -203,6 +263,56 @@
           openDetail(a.getAttribute('data-pno'));
         };
       });
+    }
+
+    function showTodosError(message) {
+      var msg = friendlyApiError(message) || '待辦載入失敗';
+      if (lastTodosItems && lastTodosItems.length) {
+        showMsg(msg + '。待辦仍顯示先前內容。');
+        return;
+      }
+      $('todoBox').innerHTML =
+        '<div class="todo-highlight">待辦載入失敗：' + escapeHtml(msg) +
+        ' <a href="#" id="retryTodos">再試一次</a></div>';
+      var retry = $('retryTodos');
+      if (retry) retry.onclick = function (e) {
+        e.preventDefault();
+        loadTodos();
+      };
+    }
+
+    async function loadOverview() {
+      showMsg('');
+      setOverviewLive('載入案件列表中…');
+      if (!lastOverviewItems || !lastOverviewItems.length) {
+        $('overviewList').innerHTML = '<p>載入案件列表中…</p>';
+      }
+      try {
+        var res = await fetchOverview_();
+        if (!res || !res.success) {
+          showOverviewError((res && res.message) || '案件列表載入失敗');
+          return;
+        }
+        lastOverviewItems = res.items || [];
+        renderOverviewItems(lastOverviewItems);
+        setOverviewLive('');
+      } catch (e) {
+        showOverviewError((e && e.message) || '案件列表載入失敗');
+      }
+    }
+
+    async function loadTodos() {
+      try {
+        var res = await fetchTodos_();
+        if (!res || !res.success) {
+          showTodosError((res && res.message) || '待辦載入失敗');
+          return;
+        }
+        lastTodosItems = res.items || [];
+        renderTodosItems(lastTodosItems);
+      } catch (e) {
+        showTodosError((e && e.message) || '待辦載入失敗');
+      }
     }
 
     function mergeCreatedAdj(adj) {
@@ -534,21 +644,41 @@
       loadTodos();
     };
     $('showClosed').onchange = loadOverview;
+    if ($('reloadOverviewBtn')) {
+      $('reloadOverviewBtn').onclick = function () {
+        lastOverviewItems = null;
+        lastTodosItems = null;
+        loadOverview();
+        loadTodos();
+      };
+    }
 
-    AccountingBoot.run({
-      minPermission: 2,
-      deniedMsg: AccountingApi.CUSTOMER_FINANCE_DENIED_MSG,
-      initSession: function () { return AccountingApi.initCustomerFinanceSession(); },
-      onReady: async function (sess) {
-        session = sess;
-        var q = new URLSearchParams(location.search);
-        await Promise.all([loadTodos(), loadOverview()]);
-        if (q.get('project_no')) {
-          if (q.get('tab') === 'mat') activeTab = 'mat';
-          openDetail(q.get('project_no'));
+    if (localMockMode) {
+      session = {
+        auth: { permission: 5, display_name: '本機模擬', user_id: 'local-mock' },
+        profile: { displayName: '本機模擬' },
+        devBypass: true
+      };
+      $('loading').classList.add('hidden');
+      $('app').classList.remove('hidden');
+      $('userLine').textContent = '本機模擬 · 不連後端';
+      Promise.all([loadTodos(), loadOverview()]);
+    } else {
+      AccountingBoot.run({
+        minPermission: 2,
+        deniedMsg: AccountingApi.CUSTOMER_FINANCE_DENIED_MSG,
+        initSession: function () { return AccountingApi.initCustomerFinanceSession(); },
+        onReady: async function (sess) {
+          session = sess;
+          var q = new URLSearchParams(location.search);
+          await Promise.all([loadTodos(), loadOverview()]);
+          if (q.get('project_no')) {
+            if (q.get('tab') === 'mat') activeTab = 'mat';
+            openDetail(q.get('project_no'));
+          }
         }
-      }
-    });
+      });
+    }
   })();
   </script>
 </body>
