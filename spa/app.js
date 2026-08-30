@@ -1,9 +1,8 @@
-import Dashboard from './Dashboard.js?v=26.08.29.2';
-import ProjectBoard from './ProjectBoard.js';
-import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.08.29.2';
+import Dashboard from './Dashboard.js?v=26.07.28.1';
+import ProjectBoard from './ProjectBoard.js?v=26.08.30.1';
+import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.07.24.1';
 import HubLeftSidebar from './HubLeftSidebar.js?v=26.08.29.1';
 import { mergeHubPaymentTodosFetch } from './hubPaymentTodos.js?v=26.08.29.1';
-import { isValidSchedulePayload, mergeHubScheduleFetch } from './hubSchedule.js?v=26.08.29.2';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
 import { saveCache, loadCache, loadHubPresenceCache, saveHubPresenceCache, loadDailyCache, saveDailyCache, purgeStaleDailyCaches, hubSidebarDailyCacheKey, hubPresenceTodayStr } from '../shared/js/utils.js?v=26.07.24.1';
@@ -31,7 +30,6 @@ const App = {
         const monthSchedule = ref({ schedule: {}, holidays: [] });
         // 班表是否正在向後端更新中（用於「快取優先 + 更新中 + 最新資訊」的狀態顯示）
         const scheduleLoading = ref(false);
-        const scheduleError = ref('');
         // 待審核假勤原始清單（包含 startTime/endTime），用於今日出勤的「待審核」標記
         const pendingRequestsRaw = ref([]);
         const todayPresence = ref({});
@@ -42,6 +40,8 @@ const App = {
         const paymentTodos = ref({ pendingReview: [], pendingPayment: [] });
         const paymentTodosLoading = ref(false);
         const paymentTodosError = ref('');
+        const projectsLoading = ref(false);
+        const projectsError = ref('');
         const currentView = ref({ name: 'dashboard' });
         const lightbox = ref({
             visible: false,
@@ -214,7 +214,7 @@ const App = {
             '#/attendance-report': { name: 'iframe', src: 'modules/attendance/attendance_report.html', title: '出勤儀表板' }, // [v515.0 修正] 改為絕對路徑
             '#/my-personal': { name: 'iframe', src: 'modules/attendance/attendance_report.html', title: '我的出勤與假勤', params: '&mode=personal' },
             '#/staff-status-board': { name: 'iframe', src: 'modules/attendance/staff_status_board.html', title: '全員出勤燈號看板' },
-            '#/approval-dashboard': { name: 'iframe', src: 'modules/attendance/approval_dashboard.html?v=26.08.29.2', title: '假勤審核儀表板' }, // 巡檢P0：失敗不顯示成空
+            '#/approval-dashboard': { name: 'iframe', src: 'modules/attendance/approval_dashboard.html', title: '假勤審核儀表板' }, // [v515.0 修正] 改為絕對路徑
             '#/leave-request': { name: 'iframe', src: 'modules/attendance/leave_request.html', title: '線上假勤申請' }, // [v515.0 修正] 改為絕對路徑
             '#/shift-schedule': { name: 'iframe', src: 'modules/attendance/shift_schedule.html', title: '員工排班系統' }, // [v515.0 修正] 改為絕對路徑
             // [v424.0 架構優化] 將專案工作區與施工回報改為內嵌 iframe
@@ -588,33 +588,24 @@ const App = {
                 url.searchParams.append('userId', userProfile.value.userId);
                 url.searchParams.append('userName', userProfile.value.displayName);
                 const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error('班表載入失敗，請再試');
-                }
                 return response.json();
             };
 
             try {
                 const first = await fetchOne(y, m);
-                if (first && first.success === false) {
-                    return { ok: false, message: first.message || '班表載入失敗，請再試' };
-                }
-                if (!isValidSchedulePayload(first)) {
-                    return { ok: false, message: '班表載入失敗，請再試' };
+                if (!first || !first.schedule) {
+                    return first || { success: false };
                 }
                 let merged = {
-                    ok: true,
+                    success: first.success,
                     schedule: first.schedule || {},
                     holidays: first.holidays || []
                 };
                 if (ty !== y || tm !== m) {
                     const second = await fetchOne(ty, tm);
-                    if (second && second.success === false) {
-                        return { ok: false, message: second.message || '班表載入失敗，請再試' };
-                    }
-                    if (isValidSchedulePayload(second)) {
+                    if (second && second.schedule) {
                         merged = {
-                            ok: true,
+                            success: merged.success && second.success !== false,
                             ...mergeSchedulePayloads(
                                 { schedule: merged.schedule, holidays: merged.holidays },
                                 { schedule: second.schedule, holidays: second.holidays || [] }
@@ -624,42 +615,67 @@ const App = {
                 }
                 return merged;
             } catch (e) {
-                console.warn('[Hub] 取得班表失敗:', e);
-                return { ok: false, message: (e && e.message) || '班表載入失敗，請再試' };
+                console.warn('[Hub] 取得班表失敗（出席區塊將退回基本顯示）:', e);
+                return { success: false };
             }
-        };
-
-        const applyScheduleResult = (result) => {
-            const merged = mergeHubScheduleFetch(monthSchedule.value, result);
-            monthSchedule.value = merged.schedule;
-            scheduleError.value = merged.error;
-            if (merged.saveCache) {
-                saveCache(scheduleCacheKey(), merged.schedule, 7);
-            }
-            return !merged.error;
-        };
-
-        const refreshScheduleInBackground = () => {
-            if (!userProfile.value) return Promise.resolve(false);
-            scheduleLoading.value = true;
-            const tryOnce = () => fetchLatestScheduleForThisMonth().then(applyScheduleResult);
-            return tryOnce().then((ok) => {
-                if (ok) return true;
-                return new Promise((resolve) => setTimeout(resolve, 800)).then(tryOnce);
-            }).finally(() => {
-                scheduleLoading.value = false;
-            });
         };
 
         const fetchHubProjectsData = async () => {
-            if (!userProfile.value) return { success: false };
-            const user = currentUser.value || { userId: userProfile.value.userId, userName: userProfile.value.displayName, permission: 1, group: '未分類' };
-            const url = new URL(CONFIG.GAS_WEB_APP_URL);
-            url.searchParams.append('page', 'get_hub_projects_data');
-            url.searchParams.append('userId', userProfile.value.userId);
-            url.searchParams.append('userProfile', JSON.stringify(user));
-            const response = await fetch(url); // 移除手動設定的 header
-            return response.json();
+            if (!userProfile.value) return { success: false, message: '尚未取得使用者資料' };
+            try {
+                const user = currentUser.value || { userId: userProfile.value.userId, userName: userProfile.value.displayName, permission: 1, group: '未分類' };
+                const url = new URL(CONFIG.GAS_WEB_APP_URL);
+                url.searchParams.append('page', 'get_hub_projects_data');
+                url.searchParams.append('userId', userProfile.value.userId);
+                url.searchParams.append('userProfile', JSON.stringify(user));
+                const response = await fetch(url); // 移除手動設定的 header
+                const text = await response.text();
+                const trimmed = (text || '').trim();
+                if (!trimmed || trimmed.charAt(0) === '<') {
+                    return { success: false, message: '專案清單暫時讀不到' };
+                }
+                try {
+                    return JSON.parse(trimmed);
+                } catch (e) {
+                    return { success: false, message: '專案清單回傳格式異常' };
+                }
+            } catch (e) {
+                console.warn('[Hub] 取得專案清單失敗（維持快取）:', e);
+                return { success: false, message: (e && e.message) || '讀取專案清單失敗' };
+            }
+        };
+
+        const applyHubProjectsPayload = (projectsResult) => {
+            if (projectsResult && projectsResult.success && projectsResult.data) {
+                const newProjects = projectsResult.data.projects || [];
+                if (hubRef()) hubRef().set('projects', newProjects);
+                else saveCache('spa_hub_projects', newProjects, 3);
+                window.spaAllProjects = newProjects;
+                if (JSON.stringify(allProjects.value) !== JSON.stringify(newProjects)) {
+                    allProjects.value = newProjects;
+                }
+                if (projectsResult.data.notifications) {
+                    notifications.value = projectsResult.data.notifications;
+                }
+                projectsError.value = '';
+                return true;
+            }
+            return false;
+        };
+
+        const refreshHubProjects = () => {
+            projectsLoading.value = true;
+            const tryOnce = () => fetchHubProjectsData().then(applyHubProjectsPayload);
+            return tryOnce().then((ok) => {
+                if (ok) return true;
+                return new Promise((resolve) => setTimeout(resolve, 800)).then(tryOnce);
+            }).then((ok) => {
+                if (!ok) {
+                    projectsError.value = '專案清單暫時讀不到。這不代表你沒有案子。';
+                }
+            }).finally(() => {
+                projectsLoading.value = false;
+            });
         };
 
         const processNotificationAction = async (payload) => {
@@ -738,7 +754,13 @@ const App = {
                     refreshHubIdToken();
                 }
 
-                const [attendanceResult, projectsResult] = await Promise.all([fetchAttendanceData(), fetchHubProjectsData()]);
+                const [attendanceResult, projectsResult] = await Promise.all([
+                    fetchAttendanceData().catch((e) => {
+                        console.warn('[Hub] 取得出勤核心資料失敗（維持快取）:', e);
+                        return { success: false };
+                    }),
+                    fetchHubProjectsData()
+                ]);
 
                 if (attendanceResult.success && attendanceResult.employees) {
                     const emps = attendanceResult.employees;
@@ -770,21 +792,35 @@ const App = {
                 refreshTodayReportsInBackground();
                 refreshPaymentTodosInBackground();
 
-                // 背景抓當月班表（SWR：先顯示快取；失敗不寫空快取、不把大家都顯示成上班）。
-                refreshScheduleInBackground();
-
-                if (projectsResult.success && projectsResult.data) {
-                    const newProjects = projectsResult.data.projects || [];
-                    if (hubRef()) hubRef().set('projects', newProjects);
-                    else saveCache('spa_hub_projects', newProjects, 3);
-                    window.spaAllProjects = newProjects;
-                    if (JSON.stringify(allProjects.value) !== JSON.stringify(newProjects)) {
-                        allProjects.value = newProjects;
+                // 背景抓當月班表（SWR 策略：先顯示快取，背景更新後無縫替換，TTL 7 天）。
+                // 有無快取都會打 API；失敗時卡片維持快取內容。
+                scheduleLoading.value = true;
+                fetchLatestScheduleForThisMonth().then(scheduleResult => {
+                    if (scheduleResult && scheduleResult.schedule) {
+                        const latest = {
+                            schedule: scheduleResult.schedule || {},
+                            holidays: scheduleResult.holidays || []
+                        };
+                        // 有變動才更新，避免觸發不必要的 re-render
+                        if (JSON.stringify(monthSchedule.value) !== JSON.stringify(latest)) {
+                            monthSchedule.value = latest;
+                        }
+                        saveCache(scheduleCacheKey(), latest, 7); // 快取 7 天
                     }
-                    notifications.value = projectsResult.data.notifications || [];
+                }).finally(() => {
+                    scheduleLoading.value = false;
+                });
+
+                if (!applyHubProjectsPayload(projectsResult)) {
+                    const retry = await new Promise((resolve) => setTimeout(resolve, 800)).then(() => fetchHubProjectsData());
+                    if (!applyHubProjectsPayload(retry)) {
+                        projectsError.value = '專案清單暫時讀不到。這不代表你沒有案子。';
+                    }
                 }
+                projectsLoading.value = false;
             } catch (error) {
                 console.error('Initialization Error:', error);
+                projectsLoading.value = false;
                 // [v605.0 專家級防禦] 解決 invalid authorization code 導致的初始化死循環
                 // 當 code 已被使用或過期時，liff.init 會噴出此錯誤。
                 // 解決方案：偵測 URL 是否包含 code 且發生錯誤，若是則清空 URL 重新嘗試。
@@ -819,20 +855,7 @@ const App = {
                     if (hubRef()) hubRef().invalidate('projects');
                     else localStorage.removeItem('spa_hub_projects');
                 } catch (e) { /* ignore */ }
-                fetchHubProjectsData().then((projectsResult) => {
-                    if (projectsResult && projectsResult.success && projectsResult.data) {
-                        const newProjects = projectsResult.data.projects || [];
-                        allProjects.value = newProjects;
-                        if (hubRef()) hubRef().set('projects', newProjects);
-                        else saveCache('spa_hub_projects', newProjects, 3);
-                        window.spaAllProjects = newProjects;
-                        if (projectsResult.data.notifications) {
-                            notifications.value = projectsResult.data.notifications;
-                        }
-                    }
-                }).catch((err) => {
-                    console.warn('[Hub] 案場快取重抓失敗:', err);
-                });
+                refreshHubProjects();
                 return;
             }
             if (type === 'openLightbox' && payload) {
@@ -902,6 +925,9 @@ const App = {
             userProfile,
             allEmployees,
             allProjects,
+            projectsLoading,
+            projectsError,
+            refreshHubProjects,
             notifications,
             pendingApprovals,
             pendingRequestsRaw,
@@ -918,8 +944,6 @@ const App = {
             refreshPaymentTodosInBackground,
             monthSchedule,
             scheduleLoading,
-            scheduleError,
-            refreshScheduleInBackground,
             hasAdminRights,
             canViewStaffStatusBoard,
             handleNotificationAction,
@@ -994,7 +1018,7 @@ const App = {
                     @retry-payments="refreshPaymentTodosInBackground" />
                 <main :class="['flex-grow overflow-y-auto min-w-0', { 'container mx-auto max-w-2xl px-4 sm:px-6 lg:px-8': currentView.name !== 'iframe' }]">
                     <div v-if="currentView.name === 'dashboard'" class="py-6">
-                        <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :scheduleError="scheduleError" :presenceLoading="presenceLoading" :pendingRequestsRaw="pendingRequestsRaw" :todayPresence="todayPresence" :hasAdminRights="hasAdminRights" :canViewStaffStatusBoard="canViewStaffStatusBoard" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" @retry-schedule="refreshScheduleInBackground" />
+                        <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :presenceLoading="presenceLoading" :pendingRequestsRaw="pendingRequestsRaw" :todayPresence="todayPresence" :hasAdminRights="hasAdminRights" :canViewStaffStatusBoard="canViewStaffStatusBoard" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" />
                         <div v-if="hasAdminRights" id="task-sender-container" class="mt-4"></div>
                         <div class="mt-4 bg-emerald-50/90 px-4 py-3 rounded-lg border border-emerald-200 flex flex-wrap items-center justify-between gap-3">
                             <p class="text-sm text-gray-800 m-0 max-w-full">
@@ -1012,7 +1036,9 @@ const App = {
                         </div>
                     </div>
                     <div v-else-if="currentView.name === 'project-board'" class="py-6">
-                         <ProjectBoard :projects="allProjects" :userProfile="userProfile" :currentUser="currentUser" />
+                         <ProjectBoard :projects="allProjects" :userProfile="userProfile" :currentUser="currentUser"
+                            :projectsLoading="projectsLoading" :projectsError="projectsError"
+                            @retry="refreshHubProjects" />
                     </div>
                     <div v-else-if="currentView.name === 'iframe' && iframeMountReady" class="h-full min-h-[70vh]">
                         <IframeView :src="currentView.src + 
@@ -1033,9 +1059,7 @@ const App = {
                     :todayPresence="todayPresence"
                     :presenceLoading="presenceLoading"
                     :scheduleLoading="scheduleLoading"
-                    :scheduleError="scheduleError"
-                    :pendingRequestsRaw="pendingRequestsRaw"
-                    @retry-schedule="refreshScheduleInBackground" />
+                    :pendingRequestsRaw="pendingRequestsRaw" />
             </div>
         </div>
     `
