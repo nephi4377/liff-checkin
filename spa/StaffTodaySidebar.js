@@ -160,9 +160,11 @@ export default {
         'todayPresence',
         'presenceLoading',
         'scheduleLoading',
+        'scheduleError',
         'pendingRequestsRaw'
     ],
-    setup(props) {
+    emits: ['retry-schedule'],
+    setup(props, { emit }) {
         const today = new Date();
         const todayStr = formatDateStr(today);
         const dayLabel = formatDayLabel(today);
@@ -237,6 +239,12 @@ export default {
         };
 
         const isUpdating = computed(() => props.scheduleLoading || props.presenceLoading);
+        const hasAnyScheduleData = computed(() => {
+            const s = props.monthSchedule?.schedule;
+            return !!s && Object.keys(s).length > 0;
+        });
+        const scheduleLoadFailed = computed(() => !!props.scheduleError);
+        const showScheduleRetry = computed(() => scheduleLoadFailed.value && !props.scheduleLoading);
 
         return {
             dayLabel,
@@ -247,7 +255,11 @@ export default {
             presenceLocationLabel,
             presenceMapUrl,
             openMap,
-            isUpdating
+            isUpdating,
+            hasAnyScheduleData,
+            scheduleLoadFailed,
+            showScheduleRetry,
+            emit
         };
     },
     template: `
@@ -262,6 +274,7 @@ export default {
                 </div>
                 <p class="text-xs text-gray-500 mt-0.5">{{ dayLabel }}
                     <span v-if="isUpdating" class="text-blue-500 animate-pulse"> · 更新中</span>
+                    <span v-else-if="scheduleLoadFailed" class="text-red-600"> · 班表讀不到</span>
                 </p>
                 <div class="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5 text-[11px] text-gray-500">
                     <span class="inline-flex items-center gap-0.5"><span class="presence-dot presence-red"></span>未打卡</span>
@@ -271,7 +284,17 @@ export default {
                 </div>
             </div>
             <div class="flex-grow overflow-y-auto px-2 py-2 space-y-3">
-                <template v-if="groupedRows.length > 0">
+                <div v-if="scheduleLoadFailed && !hasAnyScheduleData" class="text-sm text-amber-800 text-center py-6 px-2">
+                    <p>{{ scheduleError || '班表讀不到，不是沒人休假。請再試。' }}</p>
+                    <button v-if="showScheduleRetry" type="button" @click="emit('retry-schedule')"
+                        class="mt-2 min-h-[44px] px-4 rounded-lg bg-white border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50">再試一次</button>
+                </div>
+                <template v-else-if="groupedRows.length > 0">
+                    <p v-if="scheduleLoadFailed" class="text-[11px] text-amber-800 px-1">
+                        最新班表讀不到，以下先留著上次內容。
+                        <button v-if="showScheduleRetry" type="button" @click="emit('retry-schedule')"
+                            class="font-semibold text-blue-600 hover:underline">再試一次</button>
+                    </p>
                     <div v-for="g in groupedRows" :key="g.group">
                         <div class="text-xs text-gray-500 font-semibold px-1 mb-1 sticky top-0 bg-gray-50/95 py-0.5">{{ g.group }}</div>
                         <ul class="space-y-1">

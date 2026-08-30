@@ -183,6 +183,11 @@
             </div>
 
             <div id="calendar-container">
+                <div id="schedule-error-banner" class="hidden mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p id="schedule-error-text" class="text-sm text-amber-900">班表讀不到，不是沒人休假。請再試。</p>
+                    <button type="button" id="schedule-error-retry"
+                        class="mt-2 min-h-[44px] px-4 rounded-lg bg-white border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">再試一次</button>
+                </div>
                 <div id="loading-spinner" class="text-center py-10">
                     <div class="spinner w-10 h-10 border-4 border-gray-200 rounded-full mx-auto"></div>
                     <p class="mt-2 text-gray-600">載入中...</p>
@@ -275,6 +280,25 @@
         let currentViewMode = DEFAULT_VIEW_MODE;
 
         // 【v32.0 核心改造】將 loadJsonp 升級為現代的 fetch API
+        function isValidSchedulePayload(data) {
+            return !!(data && typeof data === 'object' && data.schedule && typeof data.schedule === 'object' && !Array.isArray(data.schedule));
+        }
+
+        function showScheduleError(message, hasCache) {
+            const banner = document.getElementById('schedule-error-banner');
+            const text = document.getElementById('schedule-error-text');
+            if (!banner || !text) return;
+            text.textContent = hasCache
+                ? (message || '最新班表讀不到，畫面先留著上次的。可再試。')
+                : (message || '班表讀不到，不是沒人休假。請再試。');
+            banner.classList.remove('hidden');
+        }
+
+        function hideScheduleError() {
+            const banner = document.getElementById('schedule-error-banner');
+            if (banner) banner.classList.add('hidden');
+        }
+
         async function fetchApi(params) {
             const url = new URL(API_BASE_URL);
             // 將 params 物件的所有鍵值對附加到 URL 上
@@ -286,7 +310,16 @@
             if (!response.ok) {
                 throw new Error(`後端伺服器錯誤: ${response.status} ${response.statusText}`);
             }
-            return response.json(); // 自動解析 JSON
+            let data;
+            try {
+                data = await response.json();
+            } catch (e) {
+                throw new Error('班表讀不到（回傳不是資料）');
+            }
+            if (data && data.success === false) {
+                throw new Error(data.message || '讀取失敗，請再試');
+            }
+            return data;
         }
 
         // --- [v12.0 新增] 快取管理 ---
@@ -583,6 +616,27 @@
             const requestCacheKey = getCacheKeyForDate(currentDate);
             const year = currentDate.getFullYear();
             const month = currentDate.getMonth() + 1;
+            const retryBtn = document.getElementById('schedule-error-retry');
+            const setRetryBusy = (busy) => {
+                if (!retryBtn) return;
+                retryBtn.disabled = busy;
+                retryBtn.textContent = busy ? '載入中…' : '再試一次';
+            };
+
+            const requestOnce = async () => {
+                const data = await fetchApi({
+                    page: 'attendance_api',
+                    action: 'get_latest_schedule',
+                    year: year,
+                    month: month,
+                    userId: currentUser.userId,
+                    userName: currentUser.userName
+                });
+                if (!isValidSchedulePayload(data)) {
+                    throw new Error('班表讀不到（格式不對）');
+                }
+                return data;
+            };
 
             try {
                 // 【您的要求】只有在非背景更新且日曆尚未顯示時，才顯示載入動畫
@@ -591,25 +645,15 @@
                     calendarWrapper.style.display = 'none';
                 }
                 console.log(`向後端請求 ${requestCacheKey} 的資料...`);
-                const data = await fetchApi({
-                    page: 'attendance_api',
-                    action: 'get_latest_schedule',
-                    year: year,
-                    month: month,
-                    // [v383.0 核心修正] 補上遺失的使用者資訊，以便後端日誌能正確記錄請求者。
-                    userId: currentUser.userId,
-                    userName: currentUser.userName
-                });
-
-                // [v15.0 改造] 根據您的要求，如果後端沒有回傳資料，則不進行任何更新
-                if (!data || !data.schedule) {
-                    console.log(`後端未回傳 ${requestCacheKey} 的有效資料，不更新快取與畫面。`);
-                    if (!scheduleCache[requestCacheKey]) { // 如果連前端快取都沒有，才顯示空日曆
-                        scheduleCache[requestCacheKey] = { schedule: {}, holidays: new Set() };
-                        renderCalendar();
-                    }
-                    return; // [v16.0 修正] 確保在沒有資料時也返回
+                setRetryBusy(true);
+                let data;
+                try {
+                    data = await requestOnce();
+                } catch (firstErr) {
+                    await new Promise((resolve) => setTimeout(resolve, 800));
+                    data = await requestOnce();
                 }
+                hideScheduleError();
 
                 // 【v24.0 核心修正】宣告並初始化 newScheduleData 和 newHolidays 變數。
                 // 這是解決 "newScheduleData is not defined" 錯誤的關鍵。
@@ -679,12 +723,13 @@
 
             } catch (error) {
                 console.error("載入排班資料失敗:", error);
-                // [v15.0 改造] 根據您的要求，載入失敗時不報錯，也不更新畫面
-                console.log(`後端資料請求失敗 (${error.message})，將繼續使用現有快取資料。`);
-                if (!scheduleCache[requestCacheKey]) { // 只有在連快取都沒有時才顯示錯誤
-                    showGlobalNotification("無法載入排班資料，請檢查網路連線。", 8000, 'error');
+                const hasCache = !!scheduleCache[requestCacheKey];
+                showScheduleError(error.message, hasCache);
+                if (!hasCache) {
+                    renderCalendarFrame();
                 }
             } finally {
+                setRetryBusy(false);
                 // 確保最終畫面是可見的
                 if (loadingSpinner.style.display !== 'none') {
                     loadingSpinner.style.display = 'none';
@@ -1261,6 +1306,10 @@
                 toggleViewBtn.textContent = (currentViewMode === 'show_on') ? '模式: 顯示上班' : '模式: 顯示排休';
                 updateCalendarContent();
             });
+            const scheduleRetryBtn = document.getElementById('schedule-error-retry');
+            if (scheduleRetryBtn) {
+                scheduleRetryBtn.addEventListener('click', () => fetchScheduleData(false));
+            }
             // [核心修改] 將事件監聽器綁定到父元素，以處理動態生成的儲存格
             // [核心修正] 簡化點擊邏輯
             calendarBody.addEventListener('click', (e) => {

@@ -1,8 +1,9 @@
-import Dashboard from './Dashboard.js?v=26.07.28.1';
+import Dashboard from './Dashboard.js?v=26.08.29.2';
 import ProjectBoard from './ProjectBoard.js';
-import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.07.24.1';
+import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.08.29.2';
 import HubLeftSidebar from './HubLeftSidebar.js?v=26.08.29.1';
 import { mergeHubPaymentTodosFetch } from './hubPaymentTodos.js?v=26.08.29.1';
+import { isValidSchedulePayload, mergeHubScheduleFetch } from './hubSchedule.js?v=26.08.29.2';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
 import { saveCache, loadCache, loadHubPresenceCache, saveHubPresenceCache, loadDailyCache, saveDailyCache, purgeStaleDailyCaches, hubSidebarDailyCacheKey, hubPresenceTodayStr } from '../shared/js/utils.js?v=26.07.24.1';
@@ -30,6 +31,7 @@ const App = {
         const monthSchedule = ref({ schedule: {}, holidays: [] });
         // 班表是否正在向後端更新中（用於「快取優先 + 更新中 + 最新資訊」的狀態顯示）
         const scheduleLoading = ref(false);
+        const scheduleError = ref('');
         // 待審核假勤原始清單（包含 startTime/endTime），用於今日出勤的「待審核」標記
         const pendingRequestsRaw = ref([]);
         const todayPresence = ref({});
@@ -586,24 +588,33 @@ const App = {
                 url.searchParams.append('userId', userProfile.value.userId);
                 url.searchParams.append('userName', userProfile.value.displayName);
                 const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error('班表載入失敗，請再試');
+                }
                 return response.json();
             };
 
             try {
                 const first = await fetchOne(y, m);
-                if (!first || !first.schedule) {
-                    return first || { success: false };
+                if (first && first.success === false) {
+                    return { ok: false, message: first.message || '班表載入失敗，請再試' };
+                }
+                if (!isValidSchedulePayload(first)) {
+                    return { ok: false, message: '班表載入失敗，請再試' };
                 }
                 let merged = {
-                    success: first.success,
+                    ok: true,
                     schedule: first.schedule || {},
                     holidays: first.holidays || []
                 };
                 if (ty !== y || tm !== m) {
                     const second = await fetchOne(ty, tm);
-                    if (second && second.schedule) {
+                    if (second && second.success === false) {
+                        return { ok: false, message: second.message || '班表載入失敗，請再試' };
+                    }
+                    if (isValidSchedulePayload(second)) {
                         merged = {
-                            success: merged.success && second.success !== false,
+                            ok: true,
                             ...mergeSchedulePayloads(
                                 { schedule: merged.schedule, holidays: merged.holidays },
                                 { schedule: second.schedule, holidays: second.holidays || [] }
@@ -613,9 +624,31 @@ const App = {
                 }
                 return merged;
             } catch (e) {
-                console.warn('[Hub] 取得班表失敗（出席區塊將退回基本顯示）:', e);
-                return { success: false };
+                console.warn('[Hub] 取得班表失敗:', e);
+                return { ok: false, message: (e && e.message) || '班表載入失敗，請再試' };
             }
+        };
+
+        const applyScheduleResult = (result) => {
+            const merged = mergeHubScheduleFetch(monthSchedule.value, result);
+            monthSchedule.value = merged.schedule;
+            scheduleError.value = merged.error;
+            if (merged.saveCache) {
+                saveCache(scheduleCacheKey(), merged.schedule, 7);
+            }
+            return !merged.error;
+        };
+
+        const refreshScheduleInBackground = () => {
+            if (!userProfile.value) return Promise.resolve(false);
+            scheduleLoading.value = true;
+            const tryOnce = () => fetchLatestScheduleForThisMonth().then(applyScheduleResult);
+            return tryOnce().then((ok) => {
+                if (ok) return true;
+                return new Promise((resolve) => setTimeout(resolve, 800)).then(tryOnce);
+            }).finally(() => {
+                scheduleLoading.value = false;
+            });
         };
 
         const fetchHubProjectsData = async () => {
@@ -737,24 +770,8 @@ const App = {
                 refreshTodayReportsInBackground();
                 refreshPaymentTodosInBackground();
 
-                // 背景抓當月班表（SWR 策略：先顯示快取，背景更新後無縫替換，TTL 7 天）。
-                // 有無快取都會打 API；失敗時卡片維持快取內容。
-                scheduleLoading.value = true;
-                fetchLatestScheduleForThisMonth().then(scheduleResult => {
-                    if (scheduleResult && scheduleResult.schedule) {
-                        const latest = {
-                            schedule: scheduleResult.schedule || {},
-                            holidays: scheduleResult.holidays || []
-                        };
-                        // 有變動才更新，避免觸發不必要的 re-render
-                        if (JSON.stringify(monthSchedule.value) !== JSON.stringify(latest)) {
-                            monthSchedule.value = latest;
-                        }
-                        saveCache(scheduleCacheKey(), latest, 7); // 快取 7 天
-                    }
-                }).finally(() => {
-                    scheduleLoading.value = false;
-                });
+                // 背景抓當月班表（SWR：先顯示快取；失敗不寫空快取、不把大家都顯示成上班）。
+                refreshScheduleInBackground();
 
                 if (projectsResult.success && projectsResult.data) {
                     const newProjects = projectsResult.data.projects || [];
@@ -901,6 +918,8 @@ const App = {
             refreshPaymentTodosInBackground,
             monthSchedule,
             scheduleLoading,
+            scheduleError,
+            refreshScheduleInBackground,
             hasAdminRights,
             canViewStaffStatusBoard,
             handleNotificationAction,
@@ -975,7 +994,7 @@ const App = {
                     @retry-payments="refreshPaymentTodosInBackground" />
                 <main :class="['flex-grow overflow-y-auto min-w-0', { 'container mx-auto max-w-2xl px-4 sm:px-6 lg:px-8': currentView.name !== 'iframe' }]">
                     <div v-if="currentView.name === 'dashboard'" class="py-6">
-                        <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :presenceLoading="presenceLoading" :pendingRequestsRaw="pendingRequestsRaw" :todayPresence="todayPresence" :hasAdminRights="hasAdminRights" :canViewStaffStatusBoard="canViewStaffStatusBoard" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" />
+                        <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :scheduleError="scheduleError" :presenceLoading="presenceLoading" :pendingRequestsRaw="pendingRequestsRaw" :todayPresence="todayPresence" :hasAdminRights="hasAdminRights" :canViewStaffStatusBoard="canViewStaffStatusBoard" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" @retry-schedule="refreshScheduleInBackground" />
                         <div v-if="hasAdminRights" id="task-sender-container" class="mt-4"></div>
                         <div class="mt-4 bg-emerald-50/90 px-4 py-3 rounded-lg border border-emerald-200 flex flex-wrap items-center justify-between gap-3">
                             <p class="text-sm text-gray-800 m-0 max-w-full">
@@ -1014,7 +1033,9 @@ const App = {
                     :todayPresence="todayPresence"
                     :presenceLoading="presenceLoading"
                     :scheduleLoading="scheduleLoading"
-                    :pendingRequestsRaw="pendingRequestsRaw" />
+                    :scheduleError="scheduleError"
+                    :pendingRequestsRaw="pendingRequestsRaw"
+                    @retry-schedule="refreshScheduleInBackground" />
             </div>
         </div>
     `
