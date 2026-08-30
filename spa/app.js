@@ -1,5 +1,5 @@
 import Dashboard from './Dashboard.js?v=26.07.28.1';
-import ProjectBoard from './ProjectBoard.js';
+import ProjectBoard from './ProjectBoard.js?v=26.08.30.1';
 import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.07.24.1';
 import HubLeftSidebar from './HubLeftSidebar.js?v=26.08.29.1';
 import { mergeHubPaymentTodosFetch } from './hubPaymentTodos.js?v=26.08.29.1';
@@ -40,6 +40,8 @@ const App = {
         const paymentTodos = ref({ pendingReview: [], pendingPayment: [] });
         const paymentTodosLoading = ref(false);
         const paymentTodosError = ref('');
+        const projectsLoading = ref(false);
+        const projectsError = ref('');
         const currentView = ref({ name: 'dashboard' });
         const lightbox = ref({
             visible: false,
@@ -619,14 +621,61 @@ const App = {
         };
 
         const fetchHubProjectsData = async () => {
-            if (!userProfile.value) return { success: false };
-            const user = currentUser.value || { userId: userProfile.value.userId, userName: userProfile.value.displayName, permission: 1, group: '未分類' };
-            const url = new URL(CONFIG.GAS_WEB_APP_URL);
-            url.searchParams.append('page', 'get_hub_projects_data');
-            url.searchParams.append('userId', userProfile.value.userId);
-            url.searchParams.append('userProfile', JSON.stringify(user));
-            const response = await fetch(url); // 移除手動設定的 header
-            return response.json();
+            if (!userProfile.value) return { success: false, message: '尚未取得使用者資料' };
+            try {
+                const user = currentUser.value || { userId: userProfile.value.userId, userName: userProfile.value.displayName, permission: 1, group: '未分類' };
+                const url = new URL(CONFIG.GAS_WEB_APP_URL);
+                url.searchParams.append('page', 'get_hub_projects_data');
+                url.searchParams.append('userId', userProfile.value.userId);
+                url.searchParams.append('userProfile', JSON.stringify(user));
+                const response = await fetch(url); // 移除手動設定的 header
+                const text = await response.text();
+                const trimmed = (text || '').trim();
+                if (!trimmed || trimmed.charAt(0) === '<') {
+                    return { success: false, message: '專案清單暫時讀不到' };
+                }
+                try {
+                    return JSON.parse(trimmed);
+                } catch (e) {
+                    return { success: false, message: '專案清單回傳格式異常' };
+                }
+            } catch (e) {
+                console.warn('[Hub] 取得專案清單失敗（維持快取）:', e);
+                return { success: false, message: (e && e.message) || '讀取專案清單失敗' };
+            }
+        };
+
+        const applyHubProjectsPayload = (projectsResult) => {
+            if (projectsResult && projectsResult.success && projectsResult.data) {
+                const newProjects = projectsResult.data.projects || [];
+                if (hubRef()) hubRef().set('projects', newProjects);
+                else saveCache('spa_hub_projects', newProjects, 3);
+                window.spaAllProjects = newProjects;
+                if (JSON.stringify(allProjects.value) !== JSON.stringify(newProjects)) {
+                    allProjects.value = newProjects;
+                }
+                if (projectsResult.data.notifications) {
+                    notifications.value = projectsResult.data.notifications;
+                }
+                projectsError.value = '';
+                return true;
+            }
+            return false;
+        };
+
+        const refreshHubProjects = () => {
+            projectsLoading.value = true;
+            const tryOnce = () => fetchHubProjectsData().then(applyHubProjectsPayload);
+            return tryOnce().then((ok) => {
+                if (ok) return true;
+                return new Promise((resolve) => setTimeout(resolve, 800)).then(tryOnce);
+            }).then((ok) => {
+                if (!ok) {
+                    projectsError.value = '專案清單暫時讀不到。這不代表你沒有案子。';
+                }
+            }).finally(() => {
+                projectsLoading.value = false;
+            });
         };
 
         const processNotificationAction = async (payload) => {
@@ -705,7 +754,13 @@ const App = {
                     refreshHubIdToken();
                 }
 
-                const [attendanceResult, projectsResult] = await Promise.all([fetchAttendanceData(), fetchHubProjectsData()]);
+                const [attendanceResult, projectsResult] = await Promise.all([
+                    fetchAttendanceData().catch((e) => {
+                        console.warn('[Hub] 取得出勤核心資料失敗（維持快取）:', e);
+                        return { success: false };
+                    }),
+                    fetchHubProjectsData()
+                ]);
 
                 if (attendanceResult.success && attendanceResult.employees) {
                     const emps = attendanceResult.employees;
@@ -756,18 +811,16 @@ const App = {
                     scheduleLoading.value = false;
                 });
 
-                if (projectsResult.success && projectsResult.data) {
-                    const newProjects = projectsResult.data.projects || [];
-                    if (hubRef()) hubRef().set('projects', newProjects);
-                    else saveCache('spa_hub_projects', newProjects, 3);
-                    window.spaAllProjects = newProjects;
-                    if (JSON.stringify(allProjects.value) !== JSON.stringify(newProjects)) {
-                        allProjects.value = newProjects;
+                if (!applyHubProjectsPayload(projectsResult)) {
+                    const retry = await new Promise((resolve) => setTimeout(resolve, 800)).then(() => fetchHubProjectsData());
+                    if (!applyHubProjectsPayload(retry)) {
+                        projectsError.value = '專案清單暫時讀不到。這不代表你沒有案子。';
                     }
-                    notifications.value = projectsResult.data.notifications || [];
                 }
+                projectsLoading.value = false;
             } catch (error) {
                 console.error('Initialization Error:', error);
+                projectsLoading.value = false;
                 // [v605.0 專家級防禦] 解決 invalid authorization code 導致的初始化死循環
                 // 當 code 已被使用或過期時，liff.init 會噴出此錯誤。
                 // 解決方案：偵測 URL 是否包含 code 且發生錯誤，若是則清空 URL 重新嘗試。
@@ -802,20 +855,7 @@ const App = {
                     if (hubRef()) hubRef().invalidate('projects');
                     else localStorage.removeItem('spa_hub_projects');
                 } catch (e) { /* ignore */ }
-                fetchHubProjectsData().then((projectsResult) => {
-                    if (projectsResult && projectsResult.success && projectsResult.data) {
-                        const newProjects = projectsResult.data.projects || [];
-                        allProjects.value = newProjects;
-                        if (hubRef()) hubRef().set('projects', newProjects);
-                        else saveCache('spa_hub_projects', newProjects, 3);
-                        window.spaAllProjects = newProjects;
-                        if (projectsResult.data.notifications) {
-                            notifications.value = projectsResult.data.notifications;
-                        }
-                    }
-                }).catch((err) => {
-                    console.warn('[Hub] 案場快取重抓失敗:', err);
-                });
+                refreshHubProjects();
                 return;
             }
             if (type === 'openLightbox' && payload) {
@@ -885,6 +925,9 @@ const App = {
             userProfile,
             allEmployees,
             allProjects,
+            projectsLoading,
+            projectsError,
+            refreshHubProjects,
             notifications,
             pendingApprovals,
             pendingRequestsRaw,
@@ -993,7 +1036,9 @@ const App = {
                         </div>
                     </div>
                     <div v-else-if="currentView.name === 'project-board'" class="py-6">
-                         <ProjectBoard :projects="allProjects" :userProfile="userProfile" :currentUser="currentUser" />
+                         <ProjectBoard :projects="allProjects" :userProfile="userProfile" :currentUser="currentUser"
+                            :projectsLoading="projectsLoading" :projectsError="projectsError"
+                            @retry="refreshHubProjects" />
                     </div>
                     <div v-else-if="currentView.name === 'iframe' && iframeMountReady" class="h-full min-h-[70vh]">
                         <IframeView :src="currentView.src + 

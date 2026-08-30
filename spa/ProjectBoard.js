@@ -2,10 +2,9 @@ const { computed } = Vue;
 
 export default {
     name: 'ProjectBoard',
-    props: ['projects', 'userProfile', 'currentUser'],
-    setup(props) {
-        const PROJECT_CONSOLE_LIFF_ID = '2007974938-7yKM9EqL';
-
+    props: ['projects', 'userProfile', 'currentUser', 'projectsLoading', 'projectsError'],
+    emits: ['retry'],
+    setup(props, { emit }) {
         const openProjectConsole = (projectId) => {
             if (!props.userProfile?.userId) {
                 alert('無法取得您的使用者資訊，請重新載入頁面。');
@@ -36,11 +35,38 @@ export default {
             return filtered.sort((a, b) => (new Date(b.logSummary?.[0]?.Timestamp) || 0) - (new Date(a.logSummary?.[0]?.Timestamp) || 0));
         });
 
-        return { projectsToShow, openProjectConsole };
+        const hasVisibleProjects = computed(() => Array.isArray(projectsToShow.value) && projectsToShow.value.length > 0);
+        const retryProjects = () => emit('retry');
+
+        return { projectsToShow, hasVisibleProjects, openProjectConsole, retryProjects };
     },
     template: `
         <div>
-            <div v-if="!projectsToShow || projectsToShow.length === 0" class="text-center text-gray-500 py-12"><p>正在載入專案資料或沒有符合您權限的專案。</p></div>
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <h2 class="text-lg font-bold text-gray-800">專案看板</h2>
+                <span v-if="projectsLoading" class="text-sm text-blue-500 animate-pulse">更新中…</span>
+            </div>
+            <p v-if="projectsError && hasVisibleProjects" class="mb-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                {{ projectsError }}
+                <button type="button" @click="retryProjects" :disabled="projectsLoading"
+                    class="ml-2 font-semibold text-blue-600 hover:underline disabled:opacity-50">再試一次</button>
+            </p>
+            <div v-if="projectsError && !hasVisibleProjects" class="text-center text-amber-900 py-12 px-4 bg-amber-50 border border-amber-200 rounded-xl">
+                <p class="font-medium">{{ projectsError }}</p>
+                <button type="button" @click="retryProjects" :disabled="projectsLoading"
+                    class="mt-3 inline-flex items-center text-sm font-semibold bg-white text-blue-700 border border-blue-300 py-2 px-4 rounded-lg hover:bg-blue-50 disabled:opacity-50">再試一次</button>
+            </div>
+            <div v-else-if="projectsLoading && !hasVisibleProjects" class="text-center text-gray-500 py-12">
+                <p>載入專案中…</p>
+            </div>
+            <div v-else-if="!currentUser" class="text-center text-gray-600 py-12 px-4">
+                <p>還不能確認你的身分，所以無法列出你負責的案子。</p>
+                <button type="button" @click="retryProjects" :disabled="projectsLoading"
+                    class="mt-3 inline-flex items-center text-sm font-semibold text-blue-600 hover:underline disabled:opacity-50">再試一次</button>
+            </div>
+            <div v-else-if="!hasVisibleProjects" class="text-center text-gray-500 py-12">
+                <p>目前沒有你負責的專案。</p>
+            </div>
             <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div v-for="p in projectsToShow" :key="p.id" class="bg-white p-4 rounded-lg shadow-md border border-gray-200 flex flex-col gap-4">
                     <div class="flex flex-wrap justify-between items-center gap-2">
