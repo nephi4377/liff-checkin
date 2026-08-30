@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=59"></script>
+  <script src="../../shared/js/accounting_api.js?v=60"></script>
   <script src="../../shared/js/accounting_cache.js?v=32"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=5"></script>
   <script src="../../shared/js/accounting_ui.js?v=24"></script>
@@ -30,7 +30,7 @@
     #statusBar { font-size: 14px; padding: 8px 10px; background: #e8f0fe; border-radius: 8px; margin-bottom: 10px; }
     #msg { color: #c5221f; font-size: 14px; }
     #ok { color: #137333; font-size: 14px; }
-    #loading { text-align: center; padding: 48px 16px; color: #666; }
+    #loading { text-align: center; padding: 48px 16px; color: #333; font-size: 20px; line-height: 1.5; }
     #pendingPreview img { max-width: 100%; border-radius: 8px; margin-top: 6px; }
     #recent { font-size: 13px; padding-left: 18px; }
     .hint { font-size: 12px; color: #777; margin-top: 4px; }
@@ -80,6 +80,7 @@
   <div id="app" class="hidden acct-main">
     <h2>收支登錄</h2>
     <p class="sub" id="userLine">—</p>
+    <p class="hint" id="doorNote">登入門：載入中…</p>
     <p class="sub hidden" id="photoHint">已帶入 LINE 傳的照片。關閉視窗＝不送出。</p>
     <div id="contextBar" class="hidden"></div>
     <div id="statusBar">本輪已記 <strong id="sessionCount">0</strong> 筆 · 可連續填多筆</div>
@@ -166,7 +167,7 @@
   <script>
     var CONSTANTS = {
       GAS_API: 'https://script.google.com/macros/s/AKfycbyibVTQk2eYEYXX5vb-TUFYsLIKWEg1bADR-7w1QFSg6kly3gyDAG3GkKuvQ0PBur05DA/exec',
-      LIFF_ID: '',
+      LIFF_ID: '2007974938-2sM5jlVL',
       INIT_TIMEOUT_MS: 10000
     };
 
@@ -189,6 +190,47 @@
 
       var payPickerA = initPaymentPicker(document.getElementById('payTagsA'), document.getElementById('payment_method'));
       var payPickerB = initPaymentPicker(document.getElementById('payTagsB'), document.getElementById('payment_method_b'));
+
+      function doorName(idOrUrl) {
+        var s = String(idOrUrl || '');
+        if (s.indexOf('2010425298') >= 0) return '渲染工作室門 2010425298（不對）';
+        if (s.indexOf('2007974938') >= 0) return '員工官方記帳門 2007974938（正確）';
+        if (s.indexOf('2010424425') >= 0) return '會計 Bot 門 2010424425';
+        return s ? ('未知 ' + s.slice(0, 48)) : '（還沒讀到）';
+      }
+
+      function tokenAud(token) {
+        try {
+          var parts = String(token || '').split('.');
+          if (parts.length < 2) return '';
+          var b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          while (b64.length % 4) b64 += '=';
+          var json = JSON.parse(decodeURIComponent(Array.prototype.map.call(atob(b64), function (c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+          }).join('')));
+          return json && json.aud != null ? String(json.aud) : '';
+        } catch (e) {
+          return '';
+        }
+      }
+
+      function updateDoorNote(token) {
+        var el = document.getElementById('doorNote');
+        if (!el) return;
+        var planned = doorName(CONSTANTS.LIFF_ID);
+        var page = (location.href.indexOf('2010425298') >= 0 || location.href.indexOf('2007974938') >= 0)
+          ? doorName(location.href)
+          : '';
+        var aud = tokenAud(token || idToken);
+        var actual = aud ? doorName(aud) : '';
+        var lines = ['這頁設定要走：' + planned];
+        if (page) lines.push('網址像是：' + page);
+        if (actual) lines.push('通行證實際是：' + actual);
+        el.textContent = lines.join(' · ');
+        el.style.color = (aud && aud.indexOf('2010425298') >= 0) || String(CONSTANTS.LIFF_ID).indexOf('2010425298') >= 0
+          ? '#c5221f'
+          : '#137333';
+      }
 
       function todayRoc() {
         var d = new Date();
@@ -630,8 +672,11 @@
       async function loadPolicy() {
         try {
           var policy = await AccountingApi.loadPolicy();
-          if (policy.liffId) CONSTANTS.LIFF_ID = policy.liffId;
+          if (policy.liffId && String(policy.liffId).indexOf('2010425298') !== 0) {
+            CONSTANTS.LIFF_ID = policy.liffId;
+          }
           devBypass = false;
+          updateDoorNote();
         } catch (e) {}
       }
 
@@ -666,6 +711,9 @@
         AccountingUi.init();
         if (typeof AccountingNav !== 'undefined') AccountingNav.init();
         queryParams = readQueryParams();
+        if (queryParams.liff_id && String(queryParams.liff_id).indexOf('2010425298') !== 0) {
+          CONSTANTS.LIFF_ID = queryParams.liff_id;
+        }
         seedProfileFromOperatorContext();
         document.getElementById('txn_date').value = todayRoc();
         document.getElementById('txn_date_b').value = todayRoc();
@@ -763,30 +811,54 @@
           ]);
           if (!liff.isLoggedIn()) {
             setLoading('登入中…');
-            liff.login({ redirectUri: window.location.href });
+            liff.login({ redirectUri: 'https://liff.line.me/' + CONSTANTS.LIFF_ID });
             return;
           }
           var p = await liff.getProfile();
           profile.userId = p.userId;
           profile.displayName = p.displayName;
           idToken = liff.getIDToken();
+          updateDoorNote(idToken);
           var tokenSession = { idToken: idToken };
           var ctxCached = AccountingContext.load();
           var inHubIframe = window.parent && window.parent !== window;
           var needFormCtx = !inHubIframe && !ctxCached.projects.length && !ctxCached.employees.length;
-          var formCtxPromise = needFormCtx ? AccountingApi.formContext(tokenSession) : null;
-          authMe = await AccountingApi.authMe(idToken);
-          if (!authMe.success || (authMe.permission || 0) < AccountingApi.INGEST_MIN_PERMISSION) {
-            setLoading(AccountingApi.INGEST_PERM_DENIED_MSG);
+          var formCtxPromise = null;
+          authMe = await AccountingApi.authMe({
+            idToken: idToken,
+            profile: { userId: p.userId, displayName: p.displayName }
+          });
+          if (!authMe.success) {
+            if (sessionRef && sessionRef.auth
+                && (sessionRef.auth.permission || 0) >= AccountingApi.INGEST_MIN_PERMISSION) {
+              document.getElementById('userLine').textContent = '你好，' + p.displayName;
+            } else {
+              setLoading(authMe.message || '驗證失敗');
+              return;
+            }
+          } else if ((authMe.permission || 0) < AccountingApi.INGEST_MIN_PERMISSION) {
+            setLoading(AccountingApi.INGEST_PERM_DENIED_MSG + '（目前是 ' + (authMe.permission || 0) + '）');
             return;
+          } else {
+            document.getElementById('userLine').textContent = '你好，' + p.displayName;
           }
-          document.getElementById('userLine').textContent = '你好，' + p.displayName;
         } catch (e) {
           setLoading('載入失敗：' + (e.message || e));
           return;
         }
-        sessionRef = { devBypass: false, idToken: idToken, auth: authMe, profile: profile };
+        if (authMe && authMe.success) {
+          sessionRef = { devBypass: false, idToken: idToken, auth: authMe, profile: profile };
+        } else if (sessionRef) {
+          sessionRef.idToken = idToken;
+          sessionRef.profile = profile;
+        } else {
+          sessionRef = { devBypass: false, idToken: idToken, auth: authMe, profile: profile };
+        }
         showApp();
+        if (needFormCtx && idToken && sessionRef && sessionRef.auth
+            && (sessionRef.auth.permission || 0) >= AccountingApi.INGEST_MIN_PERMISSION) {
+          formCtxPromise = AccountingApi.formContext(sessionRef);
+        }
         var skippedFormCtx = false;
         var inHubIframe = window.parent && window.parent !== window;
         if (inHubIframe && typeof AccountingContext.waitForHubData === 'function') {

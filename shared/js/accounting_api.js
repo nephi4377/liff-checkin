@@ -521,7 +521,18 @@ var AccountingApi = (function () {
         return post({ action: 'accounting_auth_me', user_id: hubUid, auth: { user_id: hubUid } });
       }
       var token = typeof sessionOrToken === 'string' ? sessionOrToken : (sessionOrToken && sessionOrToken.idToken);
-      return post({ action: 'accounting_auth_me', liff_id_token: token });
+      var uidHint = '';
+      if (typeof sessionOrToken === 'object' && sessionOrToken) {
+        uidHint = (sessionOrToken.profile && sessionOrToken.profile.userId)
+          || (sessionOrToken.auth && sessionOrToken.auth.user_id)
+          || '';
+      }
+      var meBody = { action: 'accounting_auth_me', liff_id_token: token };
+      if (uidHint) {
+        meBody.user_id = uidHint;
+        meBody.auth = { user_id: uidHint };
+      }
+      return post(meBody);
     },
     crudList: function (sessionOrToken, entity, filter) {
       return post({ action: 'crud_list', entity: entity, auth: resolveAuth(sessionOrToken), filter: filter || {} });

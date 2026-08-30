@@ -83,9 +83,9 @@
     <!-- ===== LINE 支出 ===== -->
     <section id="line-expense" class="help-section">
       <h2><span class="help-mode-badge line">LINE</span> 支出（格式 B）</h2>
-      <p>在進出群貼<strong>格式 B</strong>；欄位與收入不同，須含廠商與案號分攤。</p>
+      <p>在進出群貼<strong>格式 B</strong>（支出日期、廠商名稱、購買品名、支付金額）；欄位與收入不同。也可在 <code>#格式</code> 點「在 LINE 開表單」填完送出。</p>
       <div class="help-flow">
-        <div class="help-flow-step is-start">貼格式 B 或 #格式 複製支出範本</div>
+        <div class="help-flow-step is-start">貼格式 B、#格式 複製支出範本，或開表單</div>
         <div class="help-flow-arrow">↓</div>
         <div class="help-flow-step">Bot 解析：日期、廠商、金額、分攤</div>
         <div class="help-flow-arrow">↓</div>
@@ -200,6 +200,7 @@
         <li><strong>已付款</strong>用收支登錄；<strong>還沒付款</strong>用待付款申請。</li>
         <li>有案號（收入）或分攤案號（支出）會進案件毛利。</li>
         <li>收入登錄後可能推送客戶確認（與請款審核不同）。</li>
+        <li>LINE 聊天室<strong>不能</strong>直接填表格格子；<code>#格式</code> 可開既有收支表單，填完仍在 LINE 裡送出。</li>
         <li>LINE 內開表單須通過身分驗證；關閉視窗＝不送出。</li>
       </ul>
     </section>
