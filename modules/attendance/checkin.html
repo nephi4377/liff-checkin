@@ -18,7 +18,7 @@
         const CONSTANTS = {
             LIFF_ID: '2007974938-jVxn6y37',
             GAS_URL: 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec',
-            VERSION: 'v26.07.23.2330',
+            VERSION: 'v26.08.30.0300',
             OFF_SITE_VALID_METERS: 200,
             ANOMALY_MISSING: '離場未填說明',
             SITE_BG_RETRY_MS: 30000,
@@ -1055,6 +1055,21 @@
                 const tail = `<br><br><span class="text-[11px] text-gray-500 block leading-relaxed border-t border-gray-200 pt-3 mt-1">${CONSTANTS.PAGE_SESSION_END_MSG}</span>`;
                 AppUI.updateMessage(body + tail, colorClass);
             },
+            /** 定位逾時／訊號弱：尚未送出打卡，本頁可再按，不必關 LINE */
+            restoreReadyToPunch: (detailHtml, colorClass = 'text-red-800') => {
+                AppCore.pageFlowStarted = false;
+                AppCore.isLocked = false;
+                AppCore.pageSessionEnded = false;
+                AppUI.setLoading(false);
+                const btn = document.getElementById('checkin-button');
+                if (btn) {
+                    btn.textContent = '立即打卡';
+                    btn.className = 'w-full bg-blue-600 text-white font-black py-5 px-6 rounded-xl text-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all transform hover:scale-105 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none btn-pulse';
+                    btn.disabled = false;
+                    btn.classList.add('btn-pulse');
+                }
+                AppUI.updateMessage(detailHtml, colorClass);
+            },
             tryEnableCheckinButton: () => {
                 const btn = document.getElementById('checkin-button');
                 if (!btn || !AppCore.user || AppCore.pageSessionEnded) return;
@@ -1184,24 +1199,29 @@
                                 '重新開啟「打卡」後再按「立即打卡」'
                             ]
                         );
+                        AppCore.endPageSession(detail, 'text-red-800');
                     } else if (String(err.message || '').includes('無回應') || err.code === 3) {
                         detail = AppCore.formatFailMessage(
                             '打卡未完成',
-                            '定位逾時，可能是訊號弱或 GPS 尚未就緒。',
+                            '定位逾時，可能是訊號弱或 GPS 尚未就緒。尚未送出打卡，不必關視窗。',
                             [
-                                '到戶外或窗邊讓訊號好一點',
-                                '關閉此 LINE 視窗後重新開啟「打卡」',
-                                '再按一次「立即打卡」'
+                                '走到戶外或窗邊讓訊號好一點',
+                                '再按一次「立即打卡」',
+                                '仍失敗才關閉視窗、從選單重開'
                             ]
                         );
+                        AppCore.restoreReadyToPunch(detail, 'text-red-800');
                     } else {
                         detail = AppCore.formatFailMessage(
                             '打卡未完成',
-                            '無法取得定位座標。',
-                            CONSTANTS.FAIL_REOPEN_STEPS
+                            '無法取得定位座標。尚未送出打卡，不必關視窗。',
+                            [
+                                '再按一次「立即打卡」',
+                                '仍失敗才關閉視窗、從選單重開'
+                            ]
                         );
+                        AppCore.restoreReadyToPunch(detail, 'text-red-800');
                     }
-                    AppCore.endPageSession(detail, 'text-red-800');
                 }
             },
             /** 第一次傳送：定位後立即打卡（不含離場原因，離場時僅標記未填） */
