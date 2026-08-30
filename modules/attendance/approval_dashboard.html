@@ -72,11 +72,21 @@
             </div>
 
             <div id="leave-panel">
+                <p id="leave-loading-message" class="text-center text-gray-500 py-8">載入待審假勤中…</p>
+                <div id="leave-error-message" class="hidden mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-center">
+                    <p id="leave-error-text" class="text-sm text-red-700">假勤待審載入失敗，請再試</p>
+                    <button type="button" id="leave-error-retry" class="mt-2 min-h-[44px] px-4 rounded-lg bg-white border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">再試一次</button>
+                </div>
                 <div id="requests-container" class="space-y-4"></div>
                 <p id="no-requests-message" class="text-center text-gray-500 py-12 hidden">太棒了！目前沒有任何待審核的假勤項目。</p>
             </div>
 
             <div id="appeal-panel" class="hidden">
+                <p id="appeals-loading-message" class="text-center text-gray-500 py-8 hidden">載入出勤申訴中…</p>
+                <div id="appeals-error-message" class="hidden mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-center">
+                    <p id="appeals-error-text" class="text-sm text-red-700">出勤申訴載入失敗，請再試</p>
+                    <button type="button" id="appeals-error-retry" class="mt-2 min-h-[44px] px-4 rounded-lg bg-white border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">再試一次</button>
+                </div>
                 <div id="appeals-container" class="space-y-4"></div>
                 <p id="no-appeals-message" class="text-center text-gray-500 py-12 hidden">目前沒有待處理的出勤申訴。</p>
             </div>
@@ -94,11 +104,13 @@
 <script type="module">
     import { showGlobalNotification } from '../../shared/js/utils.js';
     import { initLightbox } from '../../shared/js/lightbox.js';
+    import { classifyAttendanceListFetch } from './attendanceListFetch.js';
 
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
     let userProfile = null;
     let activeTab = 'leave';
     let userPermission = 1;
+    let localMockMode = '';
 
     function escapeHtml(s) {
         if (s == null) return '';
@@ -200,6 +212,7 @@
         const urlParams = new URLSearchParams(window.location.search);
         const isLocalTest = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
         userPermission = parseInt(urlParams.get('permission') || urlParams.get('perm') || '5', 10);
+        localMockMode = isLocalTest ? (urlParams.get('mock') || '') : '';
 
         if (isLocalTest) {
             userProfile = {
@@ -351,71 +364,127 @@
     }
 
     async function fetchAllPending() {
-        const [leaveCount, appealCount] = await Promise.all([
+        const [leaveRes, appealRes] = await Promise.all([
             fetchPendingRequests(),
             fetchPendingAppeals()
         ]);
-        updateTabBadges(leaveCount, appealCount);
-        if (leaveCount === 0 && appealCount > 0) {
+        updateTabBadges(leaveRes.count, appealRes.count);
+        if (!leaveRes.error && leaveRes.count === 0 && appealRes.count > 0) {
             switchApprovalTab('appeal');
         }
     }
 
+    function setListBusy(retryBtn, busy) {
+        if (!retryBtn) return;
+        retryBtn.disabled = busy;
+        retryBtn.textContent = busy ? '載入中…' : '再試一次';
+    }
+
     async function fetchPendingRequests() {
-        let count = 0;
+        const container = document.getElementById('requests-container');
+        const emptyEl = document.getElementById('no-requests-message');
+        const loadingEl = document.getElementById('leave-loading-message');
+        const errorWrap = document.getElementById('leave-error-message');
+        const errorText = document.getElementById('leave-error-text');
+        const retryBtn = document.getElementById('leave-error-retry');
+        emptyEl.classList.add('hidden');
+        errorWrap.classList.add('hidden');
+        loadingEl.classList.remove('hidden');
+        setListBusy(retryBtn, true);
+
         try {
-            const url = new URL(API_BASE_URL);
-            url.searchParams.append('page', 'attendance_api');
-            url.searchParams.append('action', 'get_pending_requests');
-            url.searchParams.append('userId', userProfile.userId);
-
-            const response = await fetch(url);
-            const result = await response.json();
-            console.log('後端回傳的待審核項目:', result);
-
-            const container = document.getElementById('requests-container');
-            container.innerHTML = '';
-            document.getElementById('no-requests-message').classList.add('hidden');
-
-            if (result.success && result.data.length > 0) {
-                count = result.data.length;
-                result.data.forEach(req => {
-                    container.appendChild(createRequestCard(req));
-                });
+            let result;
+            if (localMockMode === 'fail') {
+                result = { success: false, message: '（本機模擬）假勤待審讀取失敗' };
+            } else if (localMockMode === 'empty') {
+                result = { success: true, data: [] };
             } else {
-                document.getElementById('no-requests-message').classList.remove('hidden');
+                const url = new URL(API_BASE_URL);
+                url.searchParams.append('page', 'attendance_api');
+                url.searchParams.append('action', 'get_pending_requests');
+                url.searchParams.append('userId', userProfile.userId);
+
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('假勤待審暫時讀不到，請再試');
+                result = await response.json();
             }
+            const classified = classifyAttendanceListFetch(result, '假勤待審載入失敗，請再試');
+
+            if (classified.kind === 'error') {
+                errorText.textContent = classified.message;
+                errorWrap.classList.remove('hidden');
+                return { count: container.children.length, error: true };
+            }
+
+            container.innerHTML = '';
+            if (classified.kind === 'ok') {
+                classified.items.forEach((req) => container.appendChild(createRequestCard(req)));
+                return { count: classified.items.length, error: false };
+            }
+            emptyEl.classList.remove('hidden');
+            return { count: 0, error: false };
         } catch (error) {
-            document.getElementById('loading-screen').innerHTML = `<p class="text-red-500 font-semibold">載入失敗: ${error.message}</p>`;
+            errorText.textContent = error.message || '假勤待審載入失敗，請再試';
+            errorWrap.classList.remove('hidden');
+            return { count: container.children.length, error: true };
+        } finally {
+            loadingEl.classList.add('hidden');
+            setListBusy(retryBtn, false);
         }
-        return count;
     }
 
     async function fetchPendingAppeals() {
-        let count = 0;
+        const container = document.getElementById('appeals-container');
+        const emptyEl = document.getElementById('no-appeals-message');
+        const loadingEl = document.getElementById('appeals-loading-message');
+        const errorWrap = document.getElementById('appeals-error-message');
+        const errorText = document.getElementById('appeals-error-text');
+        const retryBtn = document.getElementById('appeals-error-retry');
+        emptyEl.classList.add('hidden');
+        errorWrap.classList.add('hidden');
+        loadingEl.classList.remove('hidden');
+        setListBusy(retryBtn, true);
+
         try {
-            const url = new URL(API_BASE_URL);
-            url.searchParams.append('page', 'attendance_api');
-            url.searchParams.append('action', 'attendance_appeal');
-            url.searchParams.append('mode', 'pending');
-            url.searchParams.append('operatorId', userProfile.userId);
-
-            const response = await fetch(url);
-            const result = await response.json();
-            const container = document.getElementById('appeals-container');
-            container.innerHTML = '';
-            document.getElementById('no-appeals-message').classList.add('hidden');
-
-            if (result.success && result.data.length > 0) {
-                count = result.data.length;
-                result.data.forEach((appeal) => container.appendChild(createAppealCard(appeal)));
+            let result;
+            if (localMockMode === 'fail') {
+                result = { success: false, message: '（本機模擬）出勤申訴讀取失敗' };
+            } else if (localMockMode === 'empty') {
+                result = { success: true, data: [] };
             } else {
-                document.getElementById('no-appeals-message').classList.remove('hidden');
+                const url = new URL(API_BASE_URL);
+                url.searchParams.append('page', 'attendance_api');
+                url.searchParams.append('action', 'attendance_appeal');
+                url.searchParams.append('mode', 'pending');
+                url.searchParams.append('operatorId', userProfile.userId);
+
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('出勤申訴暫時讀不到，請再試');
+                result = await response.json();
             }
+            const classified = classifyAttendanceListFetch(result, '出勤申訴載入失敗，請再試');
+
+            if (classified.kind === 'error') {
+                errorText.textContent = classified.message;
+                errorWrap.classList.remove('hidden');
+                return { count: container.children.length, error: true };
+            }
+
+            container.innerHTML = '';
+            if (classified.kind === 'ok') {
+                classified.items.forEach((appeal) => container.appendChild(createAppealCard(appeal)));
+                return { count: classified.items.length, error: false };
+            }
+            emptyEl.classList.remove('hidden');
+            return { count: 0, error: false };
         } catch (error) {
-            document.getElementById('appeals-container').innerHTML = `<p class="text-red-500 text-center py-8">載入申訴失敗：${escapeHtml(error.message)}</p>`;
+            errorText.textContent = error.message || '出勤申訴載入失敗，請再試';
+            errorWrap.classList.remove('hidden');
+            return { count: container.children.length, error: true };
+        } finally {
+            loadingEl.classList.add('hidden');
+            setListBusy(retryBtn, false);
         }
-        return count;
     }
 
     function createAppealCard(appeal) {
@@ -724,6 +793,8 @@
         document.getElementById('appeals-container').addEventListener('click', handleAppealAction);
         document.getElementById('tab-leave-approval').addEventListener('click', () => switchApprovalTab('leave'));
         document.getElementById('tab-appeal-approval').addEventListener('click', () => switchApprovalTab('appeal'));
+        document.getElementById('leave-error-retry').addEventListener('click', () => fetchAllPending());
+        document.getElementById('appeals-error-retry').addEventListener('click', () => fetchAllPending());
     });
 </script>    
 </body>
