@@ -774,7 +774,7 @@
           var ctxCached = AccountingContext.load();
           var inHubIframe = window.parent && window.parent !== window;
           var needFormCtx = !inHubIframe && !ctxCached.projects.length && !ctxCached.employees.length;
-          var formCtxPromise = needFormCtx ? AccountingApi.formContext(tokenSession) : null;
+          var formCtxPromise = null;
           authMe = await AccountingApi.authMe({
             idToken: idToken,
             profile: { userId: p.userId, displayName: p.displayName }
@@ -806,6 +806,10 @@
           sessionRef = { devBypass: false, idToken: idToken, auth: authMe, profile: profile };
         }
         showApp();
+        if (needFormCtx && idToken && sessionRef && sessionRef.auth
+            && (sessionRef.auth.permission || 0) >= AccountingApi.INGEST_MIN_PERMISSION) {
+          formCtxPromise = AccountingApi.formContext(sessionRef);
+        }
         var skippedFormCtx = false;
         var inHubIframe = window.parent && window.parent !== window;
         if (inHubIframe && typeof AccountingContext.waitForHubData === 'function') {
