@@ -1100,7 +1100,15 @@
       try {
         var res = await AccountingApi.materialAuditLog(session, { project_no: pno });
         if (gen !== auditLoadGen_) return;
-        if (!res.success || !res.logs || !res.logs.length) {
+        if (!res.success) {
+          $('auditList').innerHTML = '歷程載入失敗，請稍後再試。' +
+            (res.message ? '（' + escapeHtml(res.message) + '）' : '') +
+            ' <button type="button" class="btn btn-sm btn-secondary" id="btnRetryAudit">再試一次</button>';
+          var retryAudit = $('btnRetryAudit');
+          if (retryAudit) retryAudit.onclick = function () { loadAudit(); };
+          return;
+        }
+        if (!res.logs || !res.logs.length) {
           $('auditList').innerHTML = '（尚無變更紀錄）';
           return;
         }
@@ -1113,7 +1121,12 @@
         }).join('');
       } catch (e) {
         if (gen !== auditLoadGen_) return;
-        if (!hadContent) $('auditList').innerHTML = '歷程載入失敗，請稍後再試';
+        if (!hadContent) {
+          $('auditList').innerHTML = '歷程載入失敗，請稍後再試。' +
+            ' <button type="button" class="btn btn-sm btn-secondary" id="btnRetryAudit">再試一次</button>';
+          var retryAuditCatch = $('btnRetryAudit');
+          if (retryAuditCatch) retryAuditCatch.onclick = function () { loadAudit(); };
+        }
       }
     }
 

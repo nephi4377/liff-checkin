@@ -103,11 +103,19 @@
                     <!-- 【您的要求】我的假單分頁內容 -->
                     <div id="tab-content-history" class="tab-content">
                         <div id="history-loading" class="text-center text-gray-500 py-4">載入中...</div>
+                        <div id="history-error" class="hidden text-center py-4">
+                            <p id="history-error-text" class="text-red-600">假單載入失敗，請再試</p>
+                            <button type="button" id="history-retry" class="mt-2 min-h-[44px] px-4 rounded-lg bg-white border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">再試一次</button>
+                        </div>
                         <div id="history-list" class="space-y-3"></div>
                     </div>
                     <!-- 【您的要求】新增假單管理分頁內容 -->
                     <div id="tab-content-management" class="tab-content">
                         <div id="management-loading" class="text-center text-gray-500 py-4">載入中...</div>
+                        <div id="management-error" class="hidden text-center py-4">
+                            <p id="management-error-text" class="text-red-600">假單載入失敗，請再試</p>
+                            <button type="button" id="management-retry" class="mt-2 min-h-[44px] px-4 rounded-lg bg-white border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">再試一次</button>
+                        </div>
                         <div id="management-list" class="space-y-3"></div>
                     </div>
                 </div>
@@ -651,7 +659,6 @@ thumbnail.src = '';
                     // 【您的要求】修正：當切換到請假頁時，才更新事由的 placeholder
                     if (clickedButton.dataset.tab === 'leave') {
                         const reasonTextarea = document.getElementById('reason');
-                        // 當切換到請假頁時，檢查預設假別
                         const defaultLeaveType = document.querySelector('input[name="leaveType"]:checked').value;
                         if (defaultLeaveType === '病假') {
                             reasonTextarea.placeholder = '可先送出申請完成報備，請於3日內向行政部門補交證明文件。';
@@ -661,6 +668,9 @@ thumbnail.src = '';
                     }
                 });
             });
+
+            document.getElementById('history-retry')?.addEventListener('click', () => fetchMyLeaveRequests());
+            document.getElementById('management-retry')?.addEventListener('click', () => fetchManageableLeaveRequests());
         }
 
         /**
@@ -679,28 +689,48 @@ thumbnail.src = '';
             statusMessage.innerHTML = '';
         }
 
+        function localMockMode() {
+            const host = window.location.hostname;
+            if (host !== '127.0.0.1' && host !== 'localhost') return '';
+            return new URLSearchParams(window.location.search).get('mock') || '';
+        }
+
         /**
          * 【您的要求】從後端取得「我的假單」歷史紀錄
          */
         async function fetchMyLeaveRequests() {
             const listContainer = document.getElementById('history-list');
             const loadingEl = document.getElementById('history-loading');
+            const errorEl = document.getElementById('history-error');
+            const errorText = document.getElementById('history-error-text');
+            const retryBtn = document.getElementById('history-retry');
+            if (errorEl) errorEl.classList.add('hidden');
             listContainer.innerHTML = '';
-            // 【您的要求】修正：在每次載入前，先清除舊的事件監聽器，避免重複綁定導致假單重複顯示
             const newContainer = listContainer.cloneNode(false);
             listContainer.parentNode.replaceChild(newContainer, listContainer);
             loadingEl.textContent = '載入中...';
             loadingEl.style.display = 'block';
+            if (retryBtn) {
+                retryBtn.disabled = true;
+                retryBtn.textContent = '載入中…';
+            }
 
             try {
-                const url = new URL(API_BASE_URL);
-                url.searchParams.append('page', 'attendance_api');
-                url.searchParams.append('action', 'get_my_leave_requests');
-                // 【您的要求】修正：傳入權限參數，讓後端能根據權限回傳對應的假單列表
-                url.searchParams.append('userId', userProfile.userId);
-                url.searchParams.append('permission', userProfile.permission || 1);
-                const fetchResponse = await fetch(url);
-                const response = await fetchResponse.json();
+                let response;
+                const mock = localMockMode();
+                if (mock === 'fail') {
+                    throw new Error('（本機模擬）假單讀取失敗');
+                } else if (mock === 'empty') {
+                    response = { success: true, data: [] };
+                } else {
+                    const url = new URL(API_BASE_URL);
+                    url.searchParams.append('page', 'attendance_api');
+                    url.searchParams.append('action', 'get_my_leave_requests');
+                    url.searchParams.append('userId', userProfile.userId);
+                    url.searchParams.append('permission', userProfile.permission || 1);
+                    const fetchResponse = await fetch(url);
+                    response = await fetchResponse.json();
+                }
 
                 if (response && response.success && Array.isArray(response.data)) {
                     renderMyLeaveRequests(response.data);
@@ -709,9 +739,14 @@ thumbnail.src = '';
                 }
             } catch (error) {
                 console.error('無法載入假單:', error);
-                listContainer.innerHTML = `<p class="text-center text-red-500 py-4">載入失敗: ${error.message}</p>`;
+                if (errorText) errorText.textContent = error.message || '假單載入失敗，請再試';
+                if (errorEl) errorEl.classList.remove('hidden');
             } finally {
                 loadingEl.style.display = 'none';
+                if (retryBtn) {
+                    retryBtn.disabled = false;
+                    retryBtn.textContent = '再試一次';
+                }
             }
         }
 
@@ -721,32 +756,52 @@ thumbnail.src = '';
         async function fetchManageableLeaveRequests() {
             const listContainer = document.getElementById('management-list');
             const loadingEl = document.getElementById('management-loading');
+            const errorEl = document.getElementById('management-error');
+            const errorText = document.getElementById('management-error-text');
+            const retryBtn = document.getElementById('management-retry');
+            if (errorEl) errorEl.classList.add('hidden');
             listContainer.innerHTML = '';
             const newContainer = listContainer.cloneNode(false);
             listContainer.parentNode.replaceChild(newContainer, listContainer);
             loadingEl.textContent = '載入中...';
             loadingEl.style.display = 'block';
+            if (retryBtn) {
+                retryBtn.disabled = true;
+                retryBtn.textContent = '載入中…';
+            }
 
             try {
-                const url = new URL(API_BASE_URL);
-                url.searchParams.append('page', 'attendance_api');
-                url.searchParams.append('action', 'get_my_leave_requests'); // 【您的要求】複用現有路由
-                url.searchParams.append('mode', 'management'); // 【您的要求】增加 mode 參數以區分模式
-                url.searchParams.append('userId', userProfile.userId); // 傳入管理者 ID 以供日誌記錄
-                // 【您的要求】核心修正：補上遺失的 permission 參數，後端才能正確識別管理者身分
-                url.searchParams.append('permission', userProfile.permission);
-                const fetchResponse = await fetch(url);
-                const response = await fetchResponse.json();
+                let response;
+                const mock = localMockMode();
+                if (mock === 'fail') {
+                    throw new Error('（本機模擬）假單讀取失敗');
+                } else if (mock === 'empty') {
+                    response = { success: true, data: [] };
+                } else {
+                    const url = new URL(API_BASE_URL);
+                    url.searchParams.append('page', 'attendance_api');
+                    url.searchParams.append('action', 'get_my_leave_requests');
+                    url.searchParams.append('mode', 'management');
+                    url.searchParams.append('userId', userProfile.userId);
+                    url.searchParams.append('permission', userProfile.permission);
+                    const fetchResponse = await fetch(url);
+                    response = await fetchResponse.json();
+                }
 
                 if (response && response.success && Array.isArray(response.data)) {
-                    renderMyLeaveRequests(response.data, 'management-list'); // 複用渲染函式
+                    renderMyLeaveRequests(response.data, 'management-list');
                 } else {
                     throw new Error(response.message || '無法取得假單資料');
                 }
             } catch (error) {
-                newContainer.innerHTML = `<p class="text-center text-red-500 py-4">載入失敗: ${error.message}</p>`;
+                if (errorText) errorText.textContent = error.message || '假單載入失敗，請再試';
+                if (errorEl) errorEl.classList.remove('hidden');
             } finally {
                 loadingEl.style.display = 'none';
+                if (retryBtn) {
+                    retryBtn.disabled = false;
+                    retryBtn.textContent = '再試一次';
+                }
             }
         }
 
