@@ -107,6 +107,11 @@
     .archive-item-meta { font-size: 12px; color: #666; margin-top: 4px; }
     .btn-warn { background: #fce8e6; color: #c5221f; border: 1px solid #f5c6c2; padding: 6px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; margin-top: 6px; }
     .ocr-badge { font-size: 10px; color: #137333; margin-top: 2px; }
+    .line-carry-err {
+      background: #fce8e6; color: #5f2120; border-radius: 8px;
+      padding: 10px; margin: 8px 0; font-size: 14px; line-height: 1.45;
+    }
+    .line-carry-err .btn { width: auto; margin-top: 8px; padding: 8px 14px; min-width: 120px; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -135,6 +140,8 @@
         <input type="file" id="photoInput" accept="*/*" multiple />
       </div>
       <div class="photo-grid" id="photoGrid"></div>
+      <div id="pendingPhotoError" class="line-carry-err hidden" role="alert"></div>
+      <div id="ocrDraftError" class="line-carry-err hidden" role="alert"></div>
       <button type="button" class="btn btn-secondary" id="ocrBtn" disabled>辨識勾選的檔案（選用）</button>
       <button type="button" class="btn btn-ghost hidden" id="ocrVendorRetryBtn" style="margin-top:8px">用此廠商規則再辨一次</button>
       <p class="ocr-status" id="ocrStatus">尚未辨識</p>
@@ -319,6 +326,8 @@
       var lastOcrAmount = 0;
       var queryParams = {};
       var submitting = false;
+      var pendingPhotoBusy = false;
+      var ocrDraftBusy = false;
       var canFinanceDirect = false;
       var canSaveVendor = false;
       var isVendorSelf = false;
@@ -2043,33 +2052,146 @@
         });
       }
 
-      async function loadPendingPhotos(token) {
-        var auth = AccountingApi.buildAuth(session);
-        var body = Object.assign({ action: 'accounting_pending_photos', token: token, user_id: session.profile.userId }, auth);
-        var data = await AccountingApi.post(body);
-        if (!data.success) { setMsg(data.message || '無法帶入 LINE 照片'); return; }
-        (data.photos || []).forEach(function (p) {
-          if (photos.length >= maxPhotos()) return;
-          photos.push({
-            photo_id: uid(),
-            mimeType: p.mimeType || 'image/jpeg',
-            dataBase64: p.dataBase64,
-            filename: p.filename || 'line.jpg',
-            selected: true
-          });
+      function humanLineCarryErr(e, fallback) {
+        var msg = (e && e.message) || String(e || '') || fallback;
+        if (/abort|AbortError|timeout|逾時/i.test(msg)) {
+          return fallback + '（連線逾時）';
+        }
+        return msg;
+      }
+      function showLineCarryError(boxId, message, onRetry, retryLabel) {
+        var box = document.getElementById(boxId);
+        if (!box) {
+          setMsg(message);
+          return;
+        }
+        box.classList.remove('hidden');
+        box.innerHTML = '';
+        var p = document.createElement('p');
+        p.style.margin = '0';
+        p.textContent = message;
+        box.appendChild(p);
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-primary';
+        btn.textContent = retryLabel || '再試一次';
+        btn.addEventListener('click', function () {
+          if (typeof onRetry === 'function') onRetry();
         });
-        renderPhotoGrid();
+        box.appendChild(btn);
+      }
+      function clearLineCarryError(boxId) {
+        var box = document.getElementById(boxId);
+        if (!box) return;
+        box.classList.add('hidden');
+        box.innerHTML = '';
+      }
+      async function fetchPendingPhotosOnce(token) {
+        var auth = AccountingApi.buildAuth(session);
+        var body = Object.assign({
+          action: 'accounting_pending_photos',
+          token: token,
+          user_id: session.profile.userId
+        }, auth);
+        var data = await AccountingApi.post(body);
+        if (!data || !data.success) {
+          throw new Error((data && data.message) || '無法帶入 LINE 照片');
+        }
+        return data;
+      }
+      async function fetchPendingPhotosRetry(token) {
+        try {
+          return await fetchPendingPhotosOnce(token);
+        } catch (e1) {
+          return await fetchPendingPhotosOnce(token);
+        }
+      }
+      async function loadPendingPhotos(token, opts) {
+        if (!token || pendingPhotoBusy) return;
+        opts = opts || {};
+        pendingPhotoBusy = true;
+        clearLineCarryError('pendingPhotoError');
+        var countLine = document.getElementById('photoCountLine');
+        var prevCount = countLine ? countLine.textContent : '';
+        if (countLine) countLine.textContent = '正在帶入 LINE 照片…';
+        try {
+          var data = opts.force
+            ? await fetchPendingPhotosOnce(token)
+            : await fetchPendingPhotosRetry(token);
+          var incoming = data.photos || [];
+          var before = photos.length;
+          incoming.forEach(function (p) {
+            if (photos.length >= maxPhotos()) return;
+            photos.push({
+              photo_id: uid(),
+              mimeType: p.mimeType || 'image/jpeg',
+              dataBase64: p.dataBase64,
+              filename: p.filename || 'line.jpg',
+              selected: true
+            });
+          });
+          renderPhotoGrid();
+          if (!incoming.length && photos.length === before) {
+            showLineCarryError(
+              'pendingPhotoError',
+              'LINE 傳來的照片這次沒帶進來。這不代表你沒傳圖，可再帶一次，或改從下方手動加入。',
+              function () { return loadPendingPhotos(token, { force: true }); },
+              '再帶一次照片'
+            );
+          }
+        } catch (e) {
+          if (countLine && !photos.length) countLine.textContent = prevCount || '已 0 / 20 個';
+          renderPhotoGrid();
+          showLineCarryError(
+            'pendingPhotoError',
+            humanLineCarryErr(e, '無法帶入 LINE 照片') + '。這不代表你沒傳圖，可再帶一次，或改手動加入。',
+            function () { return loadPendingPhotos(token, { force: true }); },
+            '再帶一次照片'
+          );
+        } finally {
+          pendingPhotoBusy = false;
+        }
       }
 
-      async function loadOcrDraft(token) {
+      async function fetchOcrDraftOnce(token) {
         var data = await AccountingApi.paymentRequestComposeDraft(session, token);
-        if (!data.success || !data.draft) return;
-        var d = data.draft;
-        if (d.doc_type) document.getElementById('docType').value = d.doc_type;
-        if (d.allocations && d.allocations.length) {
-          renderAllocRows(d.allocations.map(function (r) {
-            return buildAiAllocRow(r, d.ocr || {});
-          }));
+        if (!data || !data.success || !data.draft) {
+          throw new Error((data && data.message) || '無法帶入辨識草稿');
+        }
+        return data;
+      }
+      async function fetchOcrDraftRetry(token) {
+        try {
+          return await fetchOcrDraftOnce(token);
+        } catch (e1) {
+          return await fetchOcrDraftOnce(token);
+        }
+      }
+      async function loadOcrDraft(token, opts) {
+        if (!token || ocrDraftBusy) return;
+        opts = opts || {};
+        ocrDraftBusy = true;
+        clearLineCarryError('ocrDraftError');
+        try {
+          var data = opts.force
+            ? await fetchOcrDraftOnce(token)
+            : await fetchOcrDraftRetry(token);
+          var d = data.draft;
+          if (d.doc_type) document.getElementById('docType').value = d.doc_type;
+          if (d.allocations && d.allocations.length) {
+            renderAllocRows(d.allocations.map(function (r) {
+              return buildAiAllocRow(r, d.ocr || {});
+            }));
+          }
+        } catch (e) {
+          showLineCarryError(
+            'ocrDraftError',
+            humanLineCarryErr(e, '無法帶入辨識草稿') + '。這不代表沒有草稿，可再試或改手動填明細。',
+            function () { return loadOcrDraft(token, { force: true }); },
+            '再帶一次草稿'
+          );
+        } finally {
+          ocrDraftBusy = false;
         }
       }
 
@@ -2275,7 +2397,7 @@
             archiveSel.value = queryParams.doc_type;
           }
         }
-        if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
+        if (queryParams.pending) loadPendingPhotos(queryParams.pending);
         if (queryParams.vendor_id && !isVendorSelf) {
           var qVid = String(queryParams.vendor_id).trim();
           var qVendor = vendors.find(function (x) { return x.vendor_id === qVid; });
@@ -2284,7 +2406,7 @@
         }
         if (queryParams.draft) {
           setPageMode('payment', false);
-          loadOcrDraft(queryParams.draft).catch(function () {});
+          loadOcrDraft(queryParams.draft);
         }
       }
 
