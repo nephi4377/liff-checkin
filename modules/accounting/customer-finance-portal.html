@@ -12,7 +12,7 @@
   <script src="../../shared/js/accounting_api.js?v=60"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
-  <script src="../../shared/js/customer_finance_ui.js?v=2"></script>
+  <script src="../../shared/js/customer_finance_ui.js?v=3"></script>
   <!-- 客戶專用 LIFF（與員工會計 policy.liffId 分開）。LINE Developers Endpoint URL：
        https://info.tanxin.space/modules/accounting/customer-finance-portal.html
        申請綁定：?bind=1。尚未綁定時即使沒帶參數也會看到申請畫面。
@@ -203,6 +203,32 @@
 
     function $(id) { return document.getElementById(id); }
     function showMsg(t) { $('msg').textContent = t || ''; }
+
+    function isLocalHost() {
+      return location.hostname === '127.0.0.1' || location.hostname === 'localhost';
+    }
+    function portalMockMode() {
+      if (!isLocalHost()) return '';
+      try {
+        return String(new URLSearchParams(location.search).get('mock') || '');
+      } catch (eMock) {
+        return '';
+      }
+    }
+    function humanBindFail(errOrMsg) {
+      var fallback = '綁定暫時送不出去，請再試一次。這不代表沒綁成功，只是這次沒送到。';
+      if (typeof CustomerFinanceUi !== 'undefined' && CustomerFinanceUi.humanCustomerFail) {
+        return CustomerFinanceUi.humanCustomerFail(errOrMsg, fallback);
+      }
+      return fallback;
+    }
+    function humanMatBootFail(errOrMsg) {
+      var fallback = '選材暫時打不開，請再試一次。這不代表沒有選材資料。';
+      if (typeof CustomerFinanceUi !== 'undefined' && CustomerFinanceUi.humanCustomerFail) {
+        return CustomerFinanceUi.humanCustomerFail(errOrMsg, fallback);
+      }
+      return fallback;
+    }
 
     function parsePortalDeepLink() {
       var params = new URLSearchParams(window.location.search);
@@ -565,30 +591,43 @@
       if (!ownerName && !last4) { showBindMsg('請填寫業主姓名或手機末四碼，其中一項即可', 'err'); return; }
       CustomerFinanceUi.runBtnAsync($('btnBindSubmit'), async function () {
         showBindMsg('處理中，請稍候…', '');
-        var res = await AccountingApi.cfPortalSelfBind(session, {
-          project_no: projectNo,
-          address: address,
-          owner_name: ownerName,
-          phone_last4: last4
-        });
-        if (!res || !res.success) {
-          showBindMsg((res && res.message) || '綁定未完成，請稍後再試', 'err');
-          return;
-        }
-        var portal = await AccountingApi.cfPortalAuth(session);
-        if (portal && portal.success) {
-          session.portal = portal;
-          fillProjects(portal.projects || []);
-          if (res.project_no) $('projectSelect').value = res.project_no;
-        }
-        $('bindFormCard').classList.add('hidden');
-        $('bindDoneCard').classList.remove('hidden');
-        var extra = res.already_bound ? '這一戶本來就已綁定。' : '這一戶已經連上您的 LINE。';
-        $('bindDoneText').textContent = extra +
-          '請關掉本頁回到聊天室，下方選單會換成會員功能（收款確認、我的案場）。若還沒換，請把 LINE 完全關掉再開一次。';
-        if ($('btnBindEnter')) {
-          var hasNow = (session.portal && session.portal.projects && session.portal.projects.length);
-          $('btnBindEnter').classList.toggle('hidden', !hasNow);
+        try {
+          var res;
+          if (portalMockMode() === 'bindfail') {
+            throw new Error('Failed to fetch');
+          } else {
+            res = await AccountingApi.cfPortalSelfBind(session, {
+              project_no: projectNo,
+              address: address,
+              owner_name: ownerName,
+              phone_last4: last4
+            });
+          }
+          if (!res || !res.success) {
+            showBindMsg((res && res.message) || '綁定未完成，請稍後再試', 'err');
+            return;
+          }
+          try {
+            var portal = await AccountingApi.cfPortalAuth(session);
+            if (portal && portal.success) {
+              session.portal = portal;
+              fillProjects(portal.projects || []);
+              if (res.project_no) $('projectSelect').value = res.project_no;
+            }
+          } catch (eAuth) {
+            /* 綁定已成功；刷新案號失敗仍顯示完成卡 */
+          }
+          $('bindFormCard').classList.add('hidden');
+          $('bindDoneCard').classList.remove('hidden');
+          var extra = res.already_bound ? '這一戶本來就已綁定。' : '這一戶已經連上您的 LINE。';
+          $('bindDoneText').textContent = extra +
+            '請關掉本頁回到聊天室，下方選單會換成會員功能（收款確認、我的案場）。若還沒換，請把 LINE 完全關掉再開一次。';
+          if ($('btnBindEnter')) {
+            var hasNow = (session.portal && session.portal.projects && session.portal.projects.length);
+            $('btnBindEnter').classList.toggle('hidden', !hasNow);
+          }
+        } catch (eBind) {
+          showBindMsg(humanBindFail(eBind), 'err');
         }
       }, { busyLabel: '處理中…', lockRoot: $('bindFormCard') });
     };
@@ -783,9 +822,24 @@
       }, { busyLabel: '提交中…', lockRoot: $('signModal') });
     };
 
+    function showMaterialBootFail(errOrMsg) {
+      showMaterialOnlyView();
+      $('userLine').textContent = '無法確認身分';
+      $('matList').innerHTML =
+        '<p>' + humanMatBootFail(errOrMsg) + '</p>' +
+        '<p class="sub">這不代表沒有選材資料，只是這次沒打開。</p>' +
+        '<button type="button" class="btn btn-secondary" id="btnRetryBootMat">再試一次</button>' +
+        '<button type="button" class="btn btn-secondary" id="btnBootReloginMat">重新登入 LINE</button>';
+      var retryMat = $('btnRetryBootMat');
+      if (retryMat) retryMat.onclick = function () { location.reload(); };
+      var reloginMat = $('btnBootReloginMat');
+      if (reloginMat) reloginMat.onclick = function () { $('btnLiffRelogin').click(); };
+    }
+
     (async function boot() {
       var bindIntent = !!deepLink.bind;
-      if (bindIntent && !staffPreview) {
+      var mock = portalMockMode();
+      if (bindIntent && !staffPreview && mock !== 'bindfail') {
         $('loading').classList.add('hidden');
         $('app').classList.remove('hidden');
         showBindView(false);
@@ -793,6 +847,21 @@
         $('bindStatus').textContent = '請稍候，正在確認您的 LINE…';
       }
       try {
+        if (mock === 'bindfail') {
+          session = { portal: { display_name: '本機測試', projects: [] } };
+          $('loading').classList.add('hidden');
+          $('app').classList.remove('hidden');
+          showBindView(false);
+          $('btnBindSubmit').disabled = false;
+          $('bindStatus').textContent = '（本機模擬）送出會假裝連線失敗，用來確認不會停在「處理中」。';
+          return;
+        }
+        if (mock === 'matbootfail') {
+          $('loading').classList.add('hidden');
+          $('app').classList.remove('hidden');
+          showMaterialBootFail(new Error('Failed to fetch'));
+          return;
+        }
         session = await AccountingApi.initCustomerPortalSession({
           liffId: staffPreview ? undefined : CUSTOMER_FINANCE_LIFF_ID,
           staffPreview: staffPreview,
@@ -849,6 +918,8 @@
           $('btnBindSubmit').disabled = true;
           $('btnLiffRelogin').classList.remove('hidden');
           showBindMsg((e.message || '載入失敗') + '。請按「重新登入 LINE」，或用手機官方 LINE 打開。', 'err');
+        } else if (deepLink.entity === 'material') {
+          showMaterialBootFail(e);
         } else {
           $('loading').classList.remove('hidden');
           $('app').classList.add('hidden');
