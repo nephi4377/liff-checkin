@@ -773,13 +773,15 @@
         if ($('gasUrlInput')) $('gasUrlInput').value = CONFIG.apiUrl;
       }
       if (policy && policy.authBypass) CONFIG.authBypass = true;
-      if (policy && policy.liffId) CONFIG.liffId = policy.liffId;
-
+      if (policy && policy.sketchupLiffId) CONFIG.liffId = policy.sketchupLiffId;
+      else if (policy && policy.liffId && String(policy.liffId).indexOf('2010425298') === 0) {
+        CONFIG.liffId = policy.liffId;
+      }
+      if (!CONFIG.liffId && CFG.LIFF_ID) CONFIG.liffId = CFG.LIFF_ID;
       if (!CONFIG.apiUrl) {
         var q = new URLSearchParams(location.search);
         CONFIG.apiUrl = q.get('api') || CFG.GAS_URL || '';
       }
-      if (!CONFIG.liffId && CFG.LIFF_ID) CONFIG.liffId = CFG.LIFF_ID;
 
       if (CONFIG.authBypass || ($('devBypassInput') && $('devBypassInput').checked)) {
         CONFIG.authBypass = true;

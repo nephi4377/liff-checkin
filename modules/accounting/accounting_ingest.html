@@ -166,7 +166,7 @@
   <script>
     var CONSTANTS = {
       GAS_API: 'https://script.google.com/macros/s/AKfycbyibVTQk2eYEYXX5vb-TUFYsLIKWEg1bADR-7w1QFSg6kly3gyDAG3GkKuvQ0PBur05DA/exec',
-      LIFF_ID: '',
+      LIFF_ID: '2007974938-2sM5jlVL',
       INIT_TIMEOUT_MS: 10000
     };
 
@@ -630,7 +630,9 @@
       async function loadPolicy() {
         try {
           var policy = await AccountingApi.loadPolicy();
-          if (policy.liffId) CONSTANTS.LIFF_ID = policy.liffId;
+          if (policy.liffId && String(policy.liffId).indexOf('2010425298') !== 0) {
+            CONSTANTS.LIFF_ID = policy.liffId;
+          }
           devBypass = false;
         } catch (e) {}
       }
