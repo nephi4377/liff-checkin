@@ -810,19 +810,8 @@
             new Promise(function (_, rej) { setTimeout(function () { rej(new Error('逾時')); }, CONSTANTS.INIT_TIMEOUT_MS); })
           ]);
           if (!liff.isLoggedIn()) {
-            if (typeof liff.isInClient === 'function' && liff.isInClient()) {
-              liff.login({ redirectUri: 'https://liff.line.me/' + CONSTANTS.LIFF_ID });
-              return;
-            }
-            var loadEl = document.getElementById('loading');
-            loadEl.innerHTML = '';
-            var pOpen = document.createElement('p');
-            pOpen.textContent = '請從 LINE 群組打 #格式，點「在 LINE 開表單」。直接在瀏覽器登入會出現 400 BAD REQUEST。';
-            var aOpen = document.createElement('a');
-            aOpen.href = 'https://liff.line.me/' + CONSTANTS.LIFF_ID;
-            aOpen.textContent = '在 LINE 開啟記帳表單';
-            loadEl.appendChild(pOpen);
-            loadEl.appendChild(aOpen);
+            setLoading('登入中…');
+            liff.login({ redirectUri: 'https://liff.line.me/' + CONSTANTS.LIFF_ID });
             return;
           }
           var p = await liff.getProfile();
