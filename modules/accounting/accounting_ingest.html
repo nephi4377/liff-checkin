@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=59"></script>
+  <script src="../../shared/js/accounting_api.js?v=60"></script>
   <script src="../../shared/js/accounting_cache.js?v=32"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=5"></script>
   <script src="../../shared/js/accounting_ui.js?v=24"></script>
@@ -775,17 +775,36 @@
           var inHubIframe = window.parent && window.parent !== window;
           var needFormCtx = !inHubIframe && !ctxCached.projects.length && !ctxCached.employees.length;
           var formCtxPromise = needFormCtx ? AccountingApi.formContext(tokenSession) : null;
-          authMe = await AccountingApi.authMe(idToken);
-          if (!authMe.success || (authMe.permission || 0) < AccountingApi.INGEST_MIN_PERMISSION) {
-            setLoading(AccountingApi.INGEST_PERM_DENIED_MSG);
+          authMe = await AccountingApi.authMe({
+            idToken: idToken,
+            profile: { userId: p.userId, displayName: p.displayName }
+          });
+          if (!authMe.success) {
+            if (sessionRef && sessionRef.auth
+                && (sessionRef.auth.permission || 0) >= AccountingApi.INGEST_MIN_PERMISSION) {
+              document.getElementById('userLine').textContent = '你好，' + p.displayName;
+            } else {
+              setLoading(authMe.message || '驗證失敗');
+              return;
+            }
+          } else if ((authMe.permission || 0) < AccountingApi.INGEST_MIN_PERMISSION) {
+            setLoading(AccountingApi.INGEST_PERM_DENIED_MSG + '（目前是 ' + (authMe.permission || 0) + '）');
             return;
+          } else {
+            document.getElementById('userLine').textContent = '你好，' + p.displayName;
           }
-          document.getElementById('userLine').textContent = '你好，' + p.displayName;
         } catch (e) {
           setLoading('載入失敗：' + (e.message || e));
           return;
         }
-        sessionRef = { devBypass: false, idToken: idToken, auth: authMe, profile: profile };
+        if (authMe && authMe.success) {
+          sessionRef = { devBypass: false, idToken: idToken, auth: authMe, profile: profile };
+        } else if (sessionRef) {
+          sessionRef.idToken = idToken;
+          sessionRef.profile = profile;
+        } else {
+          sessionRef = { devBypass: false, idToken: idToken, auth: authMe, profile: profile };
+        }
         showApp();
         var skippedFormCtx = false;
         var inHubIframe = window.parent && window.parent !== window;
