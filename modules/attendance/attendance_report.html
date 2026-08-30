@@ -473,12 +473,22 @@
             url.searchParams.append(key, params[key]);
         }
 
-        const response = await fetch(url);
-        if (!response.ok) {
-            // 增加超時處理
-            throw new Error(`後端伺服器錯誤: ${response.status} ${response.statusText}`);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 45000);
+        try {
+            const response = await fetch(url, { signal: controller.signal });
+            if (!response.ok) {
+                throw new Error(`後端伺服器錯誤: ${response.status} ${response.statusText}`);
+            }
+            return await response.json();
+        } catch (e) {
+            if (e && e.name === 'AbortError') {
+                throw new Error('連線等待過久，請再試一次');
+            }
+            throw e;
+        } finally {
+            clearTimeout(timer);
         }
-        return response.json();
     }
 
     /**
@@ -1231,7 +1241,11 @@
                 spinner.style.display = 'none';
                 console.error("查詢報表資料失敗:", error);
                 document.getElementById('report-table-container').innerHTML =
-                    `<p class="text-center text-red-500">查詢資料失敗：${escapeHtml(error.message)}</p>`;
+                    `<p class="text-center text-red-600 font-medium">查詢失敗：${escapeHtml(error.message)}</p>`
+                    + `<p class="text-center text-sm text-gray-500 mt-1">這不代表您沒有出勤紀錄。</p>`
+                    + `<p class="text-center mt-3"><button type="button" id="report-retry-btn" class="text-blue-600 font-semibold underline">再試一次</button></p>`;
+                const retryBtn = document.getElementById('report-retry-btn');
+                if (retryBtn) retryBtn.onclick = fetchReportData;
             });
     }
 
