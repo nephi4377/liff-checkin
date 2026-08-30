@@ -461,13 +461,9 @@ const App = {
             if (perm < 4) {
                 return { ok: true, skipped: true, pendingReview: [], pendingPayment: [] };
             }
-            let idToken = '';
-            try {
-                if (typeof liff !== 'undefined' && liff.getIDToken) {
-                    idToken = liff.getIDToken() || '';
-                }
-            } catch (e) { /* 本地測試略過 */ }
-            if (!idToken) {
+            const uid = String(currentUser.value?.userId || userProfile.value?.userId || '').trim();
+            const idToken = refreshHubIdToken() || '';
+            if (!idToken && !uid) {
                 return {
                     ok: false,
                     message: '還沒登入完成，款項待辦暫時無法更新',
@@ -475,7 +471,9 @@ const App = {
                     pendingPayment: []
                 };
             }
-            const auth = { liff_id_token: idToken };
+            const auth = {};
+            if (idToken) auth.liff_id_token = idToken;
+            if (uid) auth.user_id = uid;
             const tasks = [];
             if (perm >= 5) {
                 tasks.push(
@@ -492,14 +490,21 @@ const App = {
             const parts = await Promise.all(tasks);
             const todos = { pendingReview: [], pendingPayment: [] };
             const failures = [];
+            const friendlyHubPaymentFail = (raw) => {
+                const s = String(raw || '').trim();
+                if (/LIFF 驗證失敗/.test(s)) {
+                    return '款項待辦暫時無法核對身分，請重新整理主控台再試';
+                }
+                return s;
+            };
             parts.forEach((part) => {
                 if (part.key === 'review') {
                     if (part.rv && part.rv.success) todos.pendingReview = part.rv.items || [];
-                    else failures.push((part.rv && part.rv.message) || '待審列表讀取失敗');
+                    else failures.push(friendlyHubPaymentFail((part.rv && part.rv.message) || '待審列表讀取失敗'));
                 } else if (part.rv && part.rv.success) {
                     todos.pendingPayment = part.rv.items || [];
                 } else {
-                    failures.push((part.rv && part.rv.message) || '待匯列表讀取失敗');
+                    failures.push(friendlyHubPaymentFail((part.rv && part.rv.message) || '待匯列表讀取失敗'));
                 }
             });
             if (failures.length) {
