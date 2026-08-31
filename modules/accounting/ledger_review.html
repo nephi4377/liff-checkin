@@ -6,7 +6,7 @@
   <title>請款審核</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_tax_mode.js?v=2"></script>
+  <script src="../../shared/js/accounting_tax_mode.js?v=4"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/accounting_api.js?v=59"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
@@ -293,17 +293,28 @@
           tax_uncheck_free: uncheckFree
         };
       }
-      function updatePretaxHint(rowEl) {
+      function updatePretaxHint(rowEl, panel) {
         var cb = rowEl.querySelector('.inp-tax');
         var hintEl = rowEl.querySelector('.pretax-hint');
         if (!hintEl || !cb) return;
-        var amt = parseAllocAmount(rowEl.querySelector('.inp-amt').value);
+        var amtInp = rowEl.querySelector('.inp-amt');
+        var amt = parseAllocAmount(amtInp ? amtInp.value : '');
         if (!cb.checked || isNaN(amt) || amt === 0 || amt < 0) {
           hintEl.textContent = '';
           return;
         }
-        var pretax = removeTaxAmount(Math.abs(amt)) * (amt < 0 ? -1 : 1);
-        hintEl.textContent = '未稅 $' + pretax.toLocaleString('zh-TW');
+        if (typeof AccountingTaxMode === 'undefined') {
+          hintEl.textContent = '未稅 $' + removeTaxAmount(amt).toLocaleString('zh-TW');
+          return;
+        }
+        var mode = panel ? getPanelTaxMode(panel) : 'inclusive';
+        hintEl.textContent = AccountingTaxMode.rowHintText({
+          amount: amt,
+          tax_inclusive: true,
+          tax_add_applied: rowEl.getAttribute('data-tax-add-applied') === '1',
+          ocr_tax_inclusive: rowEl.getAttribute('data-ocr-tax-inclusive') === '1',
+          _base_amount: rowEl.getAttribute('data-base-amount')
+        }, mode);
       }
       function syncTaxNoteForPanel(panel) {
         var noteEl = panel.querySelector('.inp-note');
@@ -329,7 +340,7 @@
         var descInp = rowEl.querySelector('.inp-desc');
         if (!cb || !amtInp || !descInp) return;
         descInp.value = applyTaxTag(descInp.value, cb.checked);
-        updatePretaxHint(rowEl);
+        updatePretaxHint(rowEl, panel);
         syncTaxNoteForPanel(panel);
         updatePanelTotal(panel);
       }
@@ -346,10 +357,12 @@
         }
         var rows = readAllocRowsFromPanel(panel);
         var taxInp = panel.querySelector('.inp-tax-amount');
-        var applied = AccountingTaxMode.applyModeToRows(rows, next, {
-          prevMode: prev,
-          taxAmount: taxInp ? taxInp.value : ''
-        });
+        var applied = next === 'prorate'
+          ? AccountingTaxMode.applyModeToRows(rows, next, { prevMode: prev, displayOnly: true })
+          : AccountingTaxMode.applyModeToRows(rows, next, {
+            prevMode: prev,
+            taxAmount: taxInp ? taxInp.value : ''
+          });
         panel.setAttribute('data-tax-mode', next);
         renderAllocRowsInPanel(panel, applied);
         renderPanelTaxModeSeg(panel);
@@ -375,27 +388,23 @@
         var btn5 = host.querySelector('.btn-tax-5pct');
         if (btn5) {
           btn5.addEventListener('click', function () {
-            var bases = AccountingTaxMode.applyModeToRows(readAllocRowsFromPanel(panel), 'inclusive', {
-              prevMode: getPanelTaxMode(panel)
-            });
             var pretax = 0;
-            bases.forEach(function (r) {
+            readAllocRowsFromPanel(panel).forEach(function (r) {
               var a = parseAllocAmount(r.amount);
               if (!isNaN(a) && a > 0) pretax += a;
             });
-            var taxInp = host.querySelector('.inp-tax-amount');
-            if (taxInp) taxInp.value = Math.round(pretax * 0.05);
-            panel.setAttribute('data-tax-mode', 'inclusive');
-            renderAllocRowsInPanel(panel, bases);
-            setPanelTaxMode(panel, 'prorate', { force: true, confirm: false });
+            var taxInp2 = host.querySelector('.inp-tax-amount');
+            if (taxInp2) taxInp2.value = Math.round(pretax * 0.05);
+            updatePanelTotal(panel);
           });
         }
         var taxInp = host.querySelector('.inp-tax-amount');
         if (taxInp) {
+          taxInp.addEventListener('input', function () {
+            if (getPanelTaxMode(panel) === 'prorate') updatePanelTotal(panel);
+          });
           taxInp.addEventListener('change', function () {
-            if (getPanelTaxMode(panel) === 'prorate') {
-              setPanelTaxMode(panel, 'prorate', { force: true, confirm: false });
-            }
+            if (getPanelTaxMode(panel) === 'prorate') updatePanelTotal(panel);
           });
         }
       }
@@ -501,21 +510,37 @@
           return s + (parseInt(r.amount, 10) || 0);
         }, 0);
         var el = panel.querySelector('.alloc-total');
-        if (el) el.textContent = sum.toLocaleString('zh-TW');
         var br = panel.querySelector('.tax-breakdown');
+        var mode = getPanelTaxMode(panel);
+        var taxInp = panel.querySelector('.inp-tax-amount');
         if (br && typeof AccountingTaxMode !== 'undefined') {
-          var mode = getPanelTaxMode(panel);
-          var s = AccountingTaxMode.summarize(rows, mode);
+          var s = AccountingTaxMode.summarize(rows, mode, taxInp ? taxInp.value : '');
+          if (el) el.textContent = (mode === 'prorate' ? s.payable : sum).toLocaleString('zh-TW');
           if (mode === 'inclusive') {
             br.textContent = sum > 0 ? '已含稅，不再另加 5%' : '';
-          } else if (s.tax > 0) {
+            br.style.color = '';
+          } else if (mode === 'prorate' && (sum > 0 || s.tax > 0)) {
+            var warnP = AccountingTaxMode.taxSanityMessage(s.pretax, s.tax, mode);
             br.textContent = '未稅 $' + s.pretax.toLocaleString('zh-TW') +
-              ' ＋ 稅 $' + s.tax.toLocaleString('zh-TW');
+              ' ＋ 稅 $' + s.tax.toLocaleString('zh-TW') +
+              ' ＝ 寫入各案 $' + s.payable.toLocaleString('zh-TW') +
+              (warnP ? '。' + warnP : '');
+            br.style.color = warnP ? '#b45309' : '';
+          } else if (s.tax > 0) {
+            var warn = AccountingTaxMode.taxSanityMessage(s.pretax, s.tax, mode);
+            br.textContent = '未稅 $' + s.pretax.toLocaleString('zh-TW') +
+              ' ＋ 稅 $' + s.tax.toLocaleString('zh-TW') +
+              (warn ? '。' + warn : '');
+            br.style.color = warn ? '#b45309' : '';
           } else if (sum > 0) {
             br.textContent = '尚未加稅：金額欄請填未稅，填完會自動加 5%';
+            br.style.color = '';
           } else {
             br.textContent = '';
+            br.style.color = '';
           }
+        } else if (el) {
+          el.textContent = sum.toLocaleString('zh-TW');
         }
       }
       function setTaxControlsDisabled(row, disabled) {
@@ -531,7 +556,7 @@
           inp.oninput = function () {
             var row = inp.closest('.alloc-row');
             if (row && inp.classList.contains('inp-amt')) {
-              updatePretaxHint(row);
+              updatePretaxHint(row, panel);
               var a = parseAllocAmount(inp.value);
               setTaxControlsDisabled(row, !isNaN(a) && a < 0);
               if (!isNaN(a)) row.setAttribute('data-base-amount', String(a));
@@ -543,7 +568,7 @@
           if (inp.classList.contains('inp-amt')) {
             inp.onchange = function () {
               var mode = getPanelTaxMode(panel);
-              if (mode === 'inclusive') return;
+              if (mode === 'inclusive' || mode === 'prorate') return;
               setPanelTaxMode(panel, mode, { force: true, confirm: false });
             };
           }
@@ -586,10 +611,19 @@
         if (taxDisabled) checked = false;
         var pretaxText = '';
         if (checked && !isNaN(amt) && amt !== 0 && amt > 0) {
-          pretaxText = '未稅 $' + removeTaxAmount(amt).toLocaleString('zh-TW');
+          pretaxText = (typeof AccountingTaxMode !== 'undefined')
+            ? AccountingTaxMode.rowHintText(row, taxMode)
+            : ('未稅 $' + removeTaxAmount(amt).toLocaleString('zh-TW'));
         }
         var baseAttr = (row._base_amount != null && row._base_amount !== '') ? String(row._base_amount) : '';
-        var amtLabel = (taxMode && taxMode !== 'inclusive') ? '金額（未稅）' : '金額';
+        var amtLabel = (taxMode === 'prorate' || (taxMode && taxMode !== 'inclusive' && !checked)) ? '金額（未稅）' : '金額';
+        var taxRowHtml = '';
+        if (taxMode !== 'prorate') {
+          taxRowHtml = '<div class="tax-row">' +
+            '<label><input type="checkbox" class="inp-tax"' +
+            (checked ? ' checked' : '') + (taxDisabled ? ' disabled' : '') + ' />含稅</label>' +
+            '<span class="pretax-hint">' + pretaxText + '</span></div>';
+        }
         return '<div class="alloc-row" data-idx="' + idx + '"' +
           ' data-ocr-tax-inclusive="' + (row.ocr_tax_inclusive ? '1' : '0') + '"' +
           ' data-tax-add-applied="' + (row.tax_add_applied ? '1' : '0') + '"' +
@@ -598,10 +632,7 @@
           '<div class="row2"><div><label>案號</label><input class="inp-pn" placeholder="752" /></div>' +
           '<div><label>' + amtLabel + '</label><input class="inp-amt" type="number" inputmode="numeric" placeholder="扣款填負數" /></div></div>' +
           '<label>品項</label><input class="inp-desc" placeholder="摘要；扣款請註明如廠商借支" />' +
-          '<div class="tax-row">' +
-          '<label><input type="checkbox" class="inp-tax"' +
-          (checked ? ' checked' : '') + (taxDisabled ? ' disabled' : '') + ' />含稅</label>' +
-          '<span class="pretax-hint">' + pretaxText + '</span></div></div>';
+          taxRowHtml + '</div>';
       }
       function renderAllocRowsInPanel(panel, rows) {
         var box = panel.querySelector('.alloc-list');
@@ -680,6 +711,7 @@
 
       function humanErr(e) {
         var msg = (e && e.message) || String(e || '發生錯誤');
+        if (/等太久|重新整理列表/.test(msg)) return msg;
         if (/abort|AbortError|逾時|timeout/i.test(msg)) return '連線逾時，請再試一次';
         if (/過期|重新從 LINE|登入憑證|未登入/i.test(msg)) return '登入已過期，請從主控台重新開啟會計';
         return msg;
@@ -815,7 +847,7 @@
           '<label>分攤明細（案號＋金額，可多案；扣款填負數）' +
           (ready ? '' : ' <span class="need">需補齊</span>') + '</label>' +
           '<label style="margin-top:10px">稅別模式（整張統一）</label>' +
-          '<p class="sub" style="margin:4px 0 6px">「已含稅」不另加稅。未稅兩種：金額欄填未稅，合計會自動加 5%。</p>' +
+          '<p class="sub" style="margin:4px 0 6px">「已含稅」＝金額已含稅、不再加。整張加稅＝上面填未稅、下面算稅；核准後才把稅分進各案與毛利。</p>' +
           '<div class="tax-mode-host"></div>' +
           '<div class="alloc-list"></div>' +
           '<button type="button" class="btn-ghost btn-add-alloc">＋ 新增一列</button>' +
@@ -833,7 +865,11 @@
           '<button type="button" class="btn btn-ok btn-confirm-approve">確認核准</button>' +
           '<button type="button" class="btn btn-warn btn-confirm-reject">退回</button>' +
           '</div>';
-        renderAllocRowsInPanel(panel, allocRowsFromItem(item));
+        var initRows = allocRowsFromItem(item);
+        if (initMode === 'prorate' && typeof AccountingTaxMode !== 'undefined') {
+          initRows = AccountingTaxMode.toPretaxRows(initRows, 'prorate');
+        }
+        renderAllocRowsInPanel(panel, initRows);
         renderPanelTaxModeSeg(panel);
         var noteEl = panel.querySelector('.inp-note');
         if (noteEl) {

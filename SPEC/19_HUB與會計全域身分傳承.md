@@ -264,7 +264,7 @@
 | 會計導覽保留 query | ✅ `accounting_nav.js` `hubQueryString()` |
 | 會計全頁 bootstrap 收斂 | ✅ `accounting_boot.js` + `modules/accounting/*.html` |
 | bypass 時用 `dev_user_id` 查 Checkin 真實權限 | ✅ `AuthBridge.getDevBypassAuth_` |
-| 收支登錄讀 HUB 員工／案場 | ✅ `AccountingContext` → `HubRefCache` |
+| 收支登錄讀廠商名冊 | ✅ 有快取不重抓；失敗自動再試。案號手填，不載案場 |
 | 官方顧客名冊共用快取 | ✅ `AccountingListCache` + `tanxin_ref_v1:customers` |
 | 會計 bootstrap 依 `userId` 分 key | ✅ `AccountingCache` |
 | HUB 傳 `group` 進 operator 快取 | ⏳ |
