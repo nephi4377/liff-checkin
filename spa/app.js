@@ -1,4 +1,4 @@
-import Dashboard from './Dashboard.js?v=26.07.28.1';
+import Dashboard from './Dashboard.js?v=26.08.31.3';
 import ProjectBoard from './ProjectBoard.js?v=26.08.30.1';
 import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.07.24.1';
 import HubLeftSidebar from './HubLeftSidebar.js?v=26.08.31.2';

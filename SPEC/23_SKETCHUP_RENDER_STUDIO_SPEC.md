@@ -22,7 +22,7 @@
 | `tools/sketchup-render-studio/app.js` | 前端邏輯（LIFF／dev bypass、批次 API） |
 | `tools/sketchup-render-studio/config.js` | `GAS_URL`、`PUBLIC_URL`、`MAX_IMAGES` |
 | `tools/sketchup-render-studio/styles.css` | 版面樣式 |
-| `spa/Dashboard.js` | HUB 卡片（權限 ≥ 2；外連） |
+| `spa/Dashboard.js` | HUB 卡片（權限 ≥ 2；外連並帶 `?uid=`） |
 
 ---
 
@@ -45,7 +45,7 @@
 
 ## API（accounting-gas）
 
-認證：LIFF 權限 ≥ 2，或 `secret`／`dev_bypass`（後端 `resolveSketchupRenderAuth_`；與 AI 實驗室門檻分開）。
+認證：權限 ≥ 2（`resolveSketchupRenderAuth_`，與 AI 實驗室門檻分開）。正式站從主控台開啟時帶 `?uid=`（員工 LINE userId），以 `user_id` 連線，**不在外部瀏覽器跑 LIFF**（否則會 400）。無 uid 才嘗試 LIFF。本機可用 `?dev=1`。
 
 | action | 說明 |
 |--------|------|
@@ -54,7 +54,7 @@
 | `sketchup_render` | 單張渲染 |
 | `sketchup_render_batch` | 多圖批次（≤8） |
 
-POST `Content-Type: text/plain;charset=utf-8`，body 為 JSON。
+POST `Content-Type: text/plain`（勿加 charset，與會計 API 一致），body 為 JSON。`sketchup_render_ping` 成功時可帶 `display_name`。
 
 ---
 
@@ -62,3 +62,4 @@ POST `Content-Type: text/plain;charset=utf-8`，body 為 JSON。
 
 - 本機：`?dev=1` 或勾選進階「開發 bypass」
 - 可覆寫 GAS：`?api=<exec_url>` 或進階設定欄位
+- 正式站請從主控台「開啟網站」（網址應有 `?uid=`）；勿只貼無參數的工具網址再硬登 LINE

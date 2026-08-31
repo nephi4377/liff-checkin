@@ -10,6 +10,7 @@
 
   var state = {
     idToken: '',
+    staffUserId: '',
     userName: '',
     stylePresets: [],
     lightingPresets: [],
@@ -120,8 +121,13 @@
     payload = payload || {};
     payload.action = action;
     if (state.idToken) payload.liff_id_token = state.idToken;
+    if (state.staffUserId) {
+      payload.user_id = state.staffUserId;
+      payload.auth = payload.auth || {};
+      payload.auth.user_id = state.staffUserId;
+    }
     var wantBypass = CONFIG.authBypass || ($('devBypassInput') && $('devBypassInput').checked);
-    if (wantBypass && !state.idToken) {
+    if (wantBypass && !state.idToken && !state.staffUserId) {
       payload.dev_bypass = true;
     }
     if ($('ingestSecretInput')) {
@@ -132,11 +138,22 @@
     if (!url) return Promise.reject(new Error('尚未設定 GAS URL'));
     return fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(payload)
     }).then(function (res) {
-      return res.json().catch(function () {
-        throw new Error('後端回應不是 JSON（HTTP ' + res.status + '）');
+      return res.text().then(function (text) {
+        var trimmed = String(text || '').trim();
+        if (res.status === 400 || /400 Bad Request/i.test(trimmed)) {
+          throw new Error('連線失敗。請從主控台再開一次渲染工作室。');
+        }
+        if (!trimmed || trimmed.charAt(0) === '<') {
+          throw new Error('後端回應不是 JSON（HTTP ' + res.status + '）');
+        }
+        try {
+          return JSON.parse(trimmed);
+        } catch (eParse) {
+          throw new Error('後端回應不是 JSON（HTTP ' + res.status + '）');
+        }
       });
     });
   }
@@ -1071,12 +1088,20 @@
     if (cached) return Promise.resolve(cached);
     return fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({ action: 'accounting_policy' })
-    }).then(function (r) { return r.json(); })
-      .then(function (data) {
+    }).then(function (r) { return r.text(); })
+      .then(function (text) {
+        var trimmed = String(text || '').trim();
+        if (!trimmed || trimmed.charAt(0) === '<') return tryLoadPolicyCache() || {};
+        var data = JSON.parse(trimmed);
         var policy = (data && data.policy) || data || {};
-        if (policy && (policy.liffId || policy.accountingGasWebAppUrl)) savePolicyCache(policy);
+        if (policy && (policy.liffId || policy.accountingGasWebAppUrl || policy.gasApiUrl)) {
+          if (policy.gasApiUrl && !policy.accountingGasWebAppUrl) {
+            policy.accountingGasWebAppUrl = policy.gasApiUrl;
+          }
+          savePolicyCache(policy);
+        }
         return policy;
       })
       .catch(function () { return tryLoadPolicyCache() || {}; });
@@ -1098,6 +1123,8 @@
       }
       if (!CONFIG.liffId && CFG.LIFF_ID) CONFIG.liffId = CFG.LIFF_ID;
 
+      state.staffUserId = pickStaffUidFromUrl();
+
       if ((CONFIG.authBypass || ($('devBypassInput') && $('devBypassInput').checked)) && isLocalOrDevBypassAllowed()) {
         CONFIG.authBypass = true;
         state.userName = '開發模式';
@@ -1106,8 +1133,15 @@
         return apiPost('sketchup_render_ping', {});
       }
 
+      if (state.staffUserId) {
+        state.userName = state.staffUserId;
+        $('userLine').textContent = '主控台身分';
+        setLoadingMsg('正在確認服務…');
+        return apiPost('sketchup_render_ping', {});
+      }
+
       if (!CONFIG.liffId) {
-        throw new Error('尚未設定 LIFF（請從 LINE 開啟，或稍後再試）');
+        throw new Error('請從主控台開啟渲染工作室');
       }
       if (typeof liff === 'undefined') {
         throw new Error('LINE 登入元件未載入，請重新整理');
@@ -1123,9 +1157,16 @@
           state.userName = p.displayName || p.userId;
           $('userLine').textContent = state.userName;
           state.idToken = liff.getIDToken();
+          if (p.userId) state.staffUserId = p.userId;
           setLoadingMsg('正在確認服務…');
           return apiPost('sketchup_render_ping', {});
         });
+      }).catch(function (err) {
+        var m = String((err && err.message) || err);
+        if (/400|Bad Request/i.test(m)) {
+          throw new Error('請從主控台開啟渲染工作室（外部瀏覽器無法用 LINE 登入）');
+        }
+        throw err;
       });
     });
   }
@@ -1135,6 +1176,11 @@
     return qs.get('dev') === '1'
       || location.hostname === 'localhost'
       || location.hostname === '127.0.0.1';
+  }
+
+  function pickStaffUidFromUrl() {
+    var qs = new URLSearchParams(location.search);
+    return String(qs.get('uid') || qs.get('user_id') || qs.get('userId') || '').trim();
   }
 
   function boot() {
@@ -1157,6 +1203,10 @@
     loadPolicyAndSession()
       .then(function (ping) {
         if (!ping || !ping.success) throw new Error((ping && ping.message) || '連線失敗');
+        if (ping.display_name) {
+          state.userName = ping.display_name;
+          $('userLine').textContent = ping.display_name;
+        }
         initFromPing(ping);
         showApp();
         setStatus('就緒');

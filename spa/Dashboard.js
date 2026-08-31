@@ -98,7 +98,12 @@ export default {
         let sketchupRenderStudioCopyTimer = null;
         /** LINE 內 target=_blank 常無反應；優先用 openWindow 開外部瀏覽器 */
         const openSketchupRenderStudio = () => {
-            const url = sketchupRenderStudioPublicUrl;
+            const uid = (props.currentUser && props.currentUser.userId)
+                || (props.userProfile && props.userProfile.userId)
+                || '';
+            const url = uid
+                ? (sketchupRenderStudioPublicUrl + '?uid=' + encodeURIComponent(uid))
+                : sketchupRenderStudioPublicUrl;
             try {
                 if (typeof liff !== 'undefined' && typeof liff.openWindow === 'function') {
                     liff.openWindow({ url: url, external: true });
@@ -108,7 +113,12 @@ export default {
             window.open(url, '_blank', 'noopener,noreferrer');
         };
         const copySketchupRenderStudioUrl = () => {
-            const url = sketchupRenderStudioPublicUrl;
+            const uid = (props.currentUser && props.currentUser.userId)
+                || (props.userProfile && props.userProfile.userId)
+                || '';
+            const url = uid
+                ? (sketchupRenderStudioPublicUrl + '?uid=' + encodeURIComponent(uid))
+                : sketchupRenderStudioPublicUrl;
             if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
                 window.prompt('請長按或全選複製以下網址：', url);
                 return;
