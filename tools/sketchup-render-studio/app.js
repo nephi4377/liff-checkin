@@ -20,14 +20,29 @@
       style: '',
       lighting: '',
       extraNotes: '',
-      lightSourceTags: []
+      lightSourceTags: [],
+      lightCustomNote: '',
+      allowAddLights: false,
+      colorNotes: [],
+      cabinetBodyMaterial: '',
+      cabinetDoorMaterial: ''
     },
     items: [],
     activeIndex: 0,
     busy: false,
     suppressControlSync: false,
-    paintEnabled: false
+    paintEnabled: false,
+    paintLightboxOpen: false,
+    brushSize: 6,
+    brushColor: '#ff4d4f',
+    brushTool: 'pen'
   };
+
+  var BUILTIN_LIGHT_TAGS = [
+    '窗戶自然光', '間接照明', '嵌燈', '投射燈', '櫃內燈光', '燈帶', '吊燈主光', '檯燈氛圍',
+    '壁燈', '軌道燈', '落地燈', '鏡前燈', '吸頂燈', '其他（自行描述）'
+  ];
+  var CUSTOM_LIGHT_TAG = '其他（自行描述）';
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -174,6 +189,17 @@
     });
   }
 
+  function mergeLightTagList(fromPing) {
+    var seen = {};
+    var out = [];
+    (fromPing || []).concat(BUILTIN_LIGHT_TAGS).forEach(function (t) {
+      if (!t || seen[t] || t === '允許加燈') return;
+      seen[t] = true;
+      out.push(t);
+    });
+    return out;
+  }
+
   function renderLightTagChips(selectedTags) {
     var wrap = $('lightTagChips');
     var active = selectedTags || (getEditingPrompt().lightSourceTags || []);
@@ -190,9 +216,50 @@
         if (idx >= 0) target.lightSourceTags.splice(idx, 1);
         else target.lightSourceTags.push(tag);
         renderLightTagChips(target.lightSourceTags);
+        syncLightCustomVisibility(target);
       });
       wrap.appendChild(btn);
     });
+  }
+
+  function syncLightCustomVisibility(prompt) {
+    var wrap = $('lightCustomWrap');
+    if (!wrap) return;
+    var tags = (prompt && prompt.lightSourceTags) || [];
+    wrap.classList.toggle('hidden', tags.indexOf(CUSTOM_LIGHT_TAG) < 0);
+  }
+
+  function renderColorNoteChips(notes) {
+    var wrap = $('colorNoteChips');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    (notes || []).forEach(function (n, idx) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chip color-note-chip';
+      btn.innerHTML = '<span class="color-swatch" style="background:' + escapeHtml(n.color) + '"></span>' +
+        escapeHtml(n.area + ' ' + n.color) + ' ×';
+      btn.addEventListener('click', function () {
+        var target = getEditingPrompt();
+        target.colorNotes.splice(idx, 1);
+        renderColorNoteChips(target.colorNotes);
+      });
+      wrap.appendChild(btn);
+    });
+  }
+
+  function addColorNote() {
+    var place = ($('colorNotePlace') && $('colorNotePlace').value.trim()) || '';
+    var color = ($('colorNotePicker') && $('colorNotePicker').value) || '';
+    if (!place) {
+      setStatus('請先填要上色的位置', 'error');
+      return;
+    }
+    var target = getEditingPrompt();
+    if (!target.colorNotes) target.colorNotes = [];
+    target.colorNotes.push({ area: place, color: color });
+    $('colorNotePlace').value = '';
+    renderColorNoteChips(target.colorNotes);
   }
 
   function emptyPrompt() {
@@ -201,7 +268,12 @@
       style: '',
       lighting: '',
       extraNotes: '',
-      lightSourceTags: []
+      lightSourceTags: [],
+      lightCustomNote: '',
+      allowAddLights: false,
+      colorNotes: [],
+      cabinetBodyMaterial: '',
+      cabinetDoorMaterial: ''
     };
   }
 
@@ -212,7 +284,14 @@
       style: p.style || '',
       lighting: p.lighting || '',
       extraNotes: p.extraNotes || '',
-      lightSourceTags: (p.lightSourceTags || []).slice()
+      lightSourceTags: (p.lightSourceTags || []).slice(),
+      lightCustomNote: p.lightCustomNote || '',
+      allowAddLights: !!p.allowAddLights,
+      colorNotes: (p.colorNotes || []).map(function (n) {
+        return { area: n.area, color: n.color };
+      }),
+      cabinetBodyMaterial: p.cabinetBodyMaterial || '',
+      cabinetDoorMaterial: p.cabinetDoorMaterial || ''
     };
   }
 
@@ -239,8 +318,14 @@
     target.style = $('styleSelect').value;
     target.lighting = $('lightingSelect').value;
     target.extraNotes = $('extraNotes').value.trim();
+    if ($('lightCustomNote')) target.lightCustomNote = $('lightCustomNote').value.trim();
+    if ($('allowAddLights')) target.allowAddLights = !!$('allowAddLights').checked;
+    if ($('cabinetBodyMaterial')) target.cabinetBodyMaterial = $('cabinetBodyMaterial').value.trim();
+    if ($('cabinetDoorMaterial')) target.cabinetDoorMaterial = $('cabinetDoorMaterial').value.trim();
     var chips = $('lightTagChips').querySelectorAll('.chip.active');
-    target.lightSourceTags = Array.prototype.map.call(chips, function (el) { return el.textContent; });
+    target.lightSourceTags = Array.prototype.map.call(chips, function (el) {
+      return el.textContent.replace(/\s×$/, '');
+    }).filter(function (t) { return t && t !== '允許加燈'; });
   }
 
   function writePromptToControls(prompt) {
@@ -250,7 +335,13 @@
     $('styleSelect').value = prompt.style || '';
     $('lightingSelect').value = prompt.lighting || '';
     $('extraNotes').value = prompt.extraNotes || '';
+    if ($('lightCustomNote')) $('lightCustomNote').value = prompt.lightCustomNote || '';
+    if ($('allowAddLights')) $('allowAddLights').checked = !!prompt.allowAddLights;
+    if ($('cabinetBodyMaterial')) $('cabinetBodyMaterial').value = prompt.cabinetBodyMaterial || '';
+    if ($('cabinetDoorMaterial')) $('cabinetDoorMaterial').value = prompt.cabinetDoorMaterial || '';
     renderLightTagChips(prompt.lightSourceTags || []);
+    syncLightCustomVisibility(prompt);
+    renderColorNoteChips(prompt.colorNotes || []);
     updatePromptScopeUi();
     state.suppressControlSync = false;
   }
@@ -288,7 +379,14 @@
       extraNotes: c.extraNotes || g.extraNotes,
       lightSourceTags: (c.lightSourceTags && c.lightSourceTags.length)
         ? c.lightSourceTags.slice()
-        : (g.lightSourceTags || []).slice()
+        : (g.lightSourceTags || []).slice(),
+      lightCustomNote: c.lightCustomNote || g.lightCustomNote || '',
+      allowAddLights: c.allowAddLights != null ? !!c.allowAddLights : !!g.allowAddLights,
+      colorNotes: (c.colorNotes && c.colorNotes.length)
+        ? c.colorNotes.slice()
+        : (g.colorNotes || []).slice(),
+      cabinetBodyMaterial: c.cabinetBodyMaterial || g.cabinetBodyMaterial || '',
+      cabinetDoorMaterial: c.cabinetDoorMaterial || g.cabinetDoorMaterial || ''
     };
   }
 
@@ -368,11 +466,49 @@
     item.sendSource = key;
     item.markupCanvas = null;
     item.markupHasStrokes = false;
+    item.markupUndo = [];
     if (key !== 'original' && key != null) {
       var idx = parseInt(key, 10);
       if (!isNaN(idx)) item.activeVersionIndex = idx;
     }
+    closePaintLightbox(true);
     updateCompareView();
+  }
+
+  function brushLineWidth(canvas) {
+    var r = canvas.getBoundingClientRect();
+    var scale = r.width ? (canvas.width / r.width) : 1;
+    return Math.max(1, (state.brushSize || 6) * scale);
+  }
+
+  function pushMarkupUndo(item, canvas) {
+    if (!item || !canvas || !canvas.width) return;
+    try {
+      var ctx = canvas.getContext('2d');
+      var snap = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      item.markupUndo = item.markupUndo || [];
+      item.markupUndo.push(snap);
+      if (item.markupUndo.length > 8) item.markupUndo.shift();
+    } catch (e) { /* 圖太大時略過還原 */ }
+  }
+
+  function undoMarkup(item) {
+    if (!item || !item.markupCanvas || !item.markupUndo || !item.markupUndo.length) return;
+    var canvas = item.markupCanvas;
+    var ctx = canvas.getContext('2d');
+    ctx.putImageData(item.markupUndo.pop(), 0, 0);
+    item.markupHasStrokes = true;
+    updateSendNowLine();
+  }
+
+  function clearMarkup(item) {
+    if (!item || !item.markupCanvas) return;
+    var ctx = item.markupCanvas.getContext('2d');
+    ctx.clearRect(0, 0, item.markupCanvas.width, item.markupCanvas.height);
+    item.markupHasStrokes = false;
+    item.markupUndo = [];
+    updateSendNowLine();
+    setStatus('已清除筆跡');
   }
 
   function bindPaintCanvas(canvas, item) {
@@ -393,14 +529,21 @@
     function strokeTo(p) {
       if (!state.paintEnabled || !last || !p) return;
       var ctx = canvas.getContext('2d');
-      ctx.strokeStyle = '#ff4d4f';
-      ctx.lineWidth = Math.max(8, Math.min(canvas.width, canvas.height) * 0.014);
+      ctx.lineWidth = brushLineWidth(canvas);
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
+      if (state.brushTool === 'eraser') {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.strokeStyle = 'rgba(0,0,0,1)';
+      } else {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = state.brushColor || '#ff4d4f';
+      }
       ctx.beginPath();
       ctx.moveTo(last.x, last.y);
       ctx.lineTo(p.x, p.y);
       ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over';
       last = p;
       item.markupHasStrokes = true;
       item.markupCanvas = canvas;
@@ -410,6 +553,7 @@
     function start(e) {
       if (!state.paintEnabled) return;
       e.preventDefault();
+      pushMarkupUndo(item, canvas);
       last = pos(e);
     }
     function move(e) {
@@ -417,7 +561,9 @@
       e.preventDefault();
       strokeTo(pos(e));
     }
-    function end() { last = null; }
+    function end() {
+      last = null;
+    }
 
     canvas.addEventListener('mousedown', start);
     canvas.addEventListener('mousemove', move);
@@ -427,11 +573,56 @@
     canvas.addEventListener('touchend', end);
   }
 
+  function openPaintLightbox() {
+    var item = getActiveItem();
+    if (!item) {
+      setStatus('請先加入圖片', 'error');
+      return;
+    }
+    state.paintEnabled = true;
+    state.paintLightboxOpen = false;
+    renderSendUi();
+    state.paintLightboxOpen = true;
+    var wrap = $('sendStage') && $('sendStage').querySelector('.send-img-wrap');
+    var lb = $('paintLightbox');
+    var stage = $('paintLbStage');
+    if (!wrap || !lb || !stage) return;
+    stage.appendChild(wrap);
+    lb.classList.remove('hidden');
+    lb.setAttribute('aria-hidden', 'false');
+    if ($('btnPaint')) $('btnPaint').classList.add('active');
+    syncBrushToolButtons();
+  }
+
+  function closePaintLightbox(keepEnabled) {
+    var lb = $('paintLightbox');
+    var stage = $('paintLbStage');
+    var send = $('sendStage');
+    var wrap = stage && stage.querySelector('.send-img-wrap');
+    if (wrap && send) send.appendChild(wrap);
+    if (lb) {
+      lb.classList.add('hidden');
+      lb.setAttribute('aria-hidden', 'true');
+    }
+    state.paintLightboxOpen = false;
+    if (!keepEnabled) state.paintEnabled = false;
+    if ($('btnPaint')) $('btnPaint').classList.toggle('active', !!state.paintEnabled);
+  }
+
+  function syncBrushToolButtons() {
+    if ($('btnBrushPen')) $('btnBrushPen').classList.toggle('active', state.brushTool === 'pen');
+    if ($('btnBrushEraser')) $('btnBrushEraser').classList.toggle('active', state.brushTool === 'eraser');
+  }
+
   function renderSendUi() {
     var chips = $('sendSourceChips');
     var stage = $('sendStage');
     var btnPaint = $('btnPaint');
     if (!chips || !stage) return;
+    if (state.paintLightboxOpen) {
+      if (btnPaint) btnPaint.classList.add('active');
+      return;
+    }
     var item = getActiveItem();
     chips.innerHTML = '';
     if (item && item.markupCanvas && item.markupCanvas.parentNode) {
@@ -688,7 +879,12 @@
       style: prompt.style,
       lighting: prompt.lighting,
       extra_notes: prompt.extraNotes,
-      light_source_tags: prompt.lightSourceTags.slice()
+      light_source_tags: prompt.lightSourceTags.slice(),
+      light_custom_note: prompt.lightCustomNote || '',
+      allow_add_lights: !!prompt.allowAddLights,
+      color_notes: (prompt.colorNotes || []).slice(),
+      cabinet_body_material: prompt.cabinetBodyMaterial || '',
+      cabinet_door_material: prompt.cabinetDoorMaterial || ''
     };
     var settings = collectRenderSettings(modeOverride);
     payload.render_mode = settings.render_mode;
@@ -707,7 +903,12 @@
       style: g.style,
       lighting: g.lighting,
       extra_notes: g.extraNotes,
-      light_source_tags: g.lightSourceTags.slice()
+      light_source_tags: g.lightSourceTags.slice(),
+      light_custom_note: g.lightCustomNote || '',
+      allow_add_lights: !!g.allowAddLights,
+      color_notes: (g.colorNotes || []).slice(),
+      cabinet_body_material: g.cabinetBodyMaterial || '',
+      cabinet_door_material: g.cabinetDoorMaterial || ''
     };
     var settings = collectRenderSettings(modeOverride);
     payload.render_mode = settings.render_mode;
@@ -756,6 +957,10 @@
       lighting: p.lighting,
       extra: p.extra_notes,
       tags: p.light_source_tags,
+      customLight: p.light_custom_note,
+      allowAdd: p.allow_add_lights,
+      colors: p.color_notes,
+      cabinet: [p.cabinet_body_material, p.cabinet_door_material],
       mode: p.render_mode,
       preserve: p.preserve,
       aspect: p.aspect_ratio || ''
@@ -939,7 +1144,12 @@
         render_mode: settings.render_mode,
         preserve: settings.preserve,
         source_kind: send.kind === 'render' ? 'render' : 'sketchup',
-        has_markup: !!send.hasMarkup
+        has_markup: !!send.hasMarkup,
+        light_custom_note: prompt.lightCustomNote || '',
+        allow_add_lights: !!prompt.allowAddLights,
+        color_notes: (prompt.colorNotes || []).slice(),
+        cabinet_body_material: prompt.cabinetBodyMaterial || '',
+        cabinet_door_material: prompt.cabinetDoorMaterial || ''
       });
     }).then(function (res) {
       if (!res.success) throw new Error(res.message || '分析失敗');
@@ -1026,19 +1236,62 @@
     $('btnAnalyze').addEventListener('click', analyzeCurrent);
     if ($('btnPaint')) {
       $('btnPaint').addEventListener('click', function () {
-        state.paintEnabled = !state.paintEnabled;
-        updateCompareView();
+        if (state.paintLightboxOpen) closePaintLightbox(false);
+        else openPaintLightbox();
       });
     }
     if ($('btnClearMarkup')) {
       $('btnClearMarkup').addEventListener('click', function () {
-        var item = getActiveItem();
-        if (!item || !item.markupCanvas) return;
-        var ctx = item.markupCanvas.getContext('2d');
-        ctx.clearRect(0, 0, item.markupCanvas.width, item.markupCanvas.height);
-        item.markupHasStrokes = false;
-        updateSendNowLine();
-        setStatus('已清除筆跡');
+        clearMarkup(getActiveItem());
+      });
+    }
+    if ($('btnClearMarkupLb')) {
+      $('btnClearMarkupLb').addEventListener('click', function () {
+        clearMarkup(getActiveItem());
+      });
+    }
+    if ($('btnPaintDone')) {
+      $('btnPaintDone').addEventListener('click', function () { closePaintLightbox(false); });
+    }
+    if ($('btnBrushPen')) {
+      $('btnBrushPen').addEventListener('click', function () {
+        state.brushTool = 'pen';
+        syncBrushToolButtons();
+      });
+    }
+    if ($('btnBrushEraser')) {
+      $('btnBrushEraser').addEventListener('click', function () {
+        state.brushTool = 'eraser';
+        syncBrushToolButtons();
+      });
+    }
+    if ($('btnBrushUndo')) {
+      $('btnBrushUndo').addEventListener('click', function () { undoMarkup(getActiveItem()); });
+    }
+    if ($('brushSize')) {
+      $('brushSize').addEventListener('input', function () {
+        state.brushSize = parseInt(this.value, 10) || 6;
+        if ($('brushSizeLabel')) $('brushSizeLabel').textContent = String(state.brushSize);
+      });
+    }
+    if ($('brushColor')) {
+      $('brushColor').addEventListener('input', function () {
+        state.brushColor = this.value || '#ff4d4f';
+      });
+    }
+    if ($('btnAddColorNote')) {
+      $('btnAddColorNote').addEventListener('click', addColorNote);
+    }
+    if ($('allowAddLights')) {
+      $('allowAddLights').addEventListener('change', function () {
+        if (state.suppressControlSync) return;
+        saveControlsToTarget();
+      });
+    }
+    if ($('lightCustomNote')) {
+      $('lightCustomNote').addEventListener('input', function () {
+        if (state.suppressControlSync) return;
+        saveControlsToTarget();
       });
     }
 
@@ -1057,7 +1310,7 @@
       renderThumbRow();
     });
 
-    ['roomTypeInput', 'styleSelect', 'lightingSelect', 'extraNotes'].forEach(function (id) {
+    ['roomTypeInput', 'styleSelect', 'lightingSelect', 'extraNotes', 'cabinetBodyMaterial', 'cabinetDoorMaterial'].forEach(function (id) {
       $(id).addEventListener('input', function () {
         if (state.suppressControlSync) return;
         saveControlsToTarget();
@@ -1074,7 +1327,7 @@
   function initFromPing(data) {
     state.stylePresets = data.style_presets || [];
     state.lightingPresets = data.lighting_presets || [];
-    state.lightSourceTags = data.light_source_tags || [];
+    state.lightSourceTags = mergeLightTagList(data.light_source_tags || []);
     renderSelectOptions($('styleSelect'), state.stylePresets, '（依原圖，不另改風格）');
     renderSelectOptions($('lightingSelect'), state.lightingPresets, '（依原圖光線）');
     renderLightTagChips(state.globalPrompt.lightSourceTags);

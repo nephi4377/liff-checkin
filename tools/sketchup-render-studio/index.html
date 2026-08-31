@@ -62,8 +62,36 @@
         <select id="lightingSelect"></select>
       </div>
       <div class="control-block">
-        <label>燈光來源標籤 <span class="hint">（可多選；櫃內燈請自行勾選，預設不加）</span></label>
+        <label>燈光來源標籤 <span class="hint">（可多選＝允許的燈種；未勾選的不要畫。數量預設不加）</span></label>
         <div id="lightTagChips" class="chips"></div>
+        <div id="lightCustomWrap" class="control-row hidden">
+          <label>其他燈具描述</label>
+          <input type="text" id="lightCustomNote" placeholder="例：餐廳三頭吊燈、床頭兩盞壁燈…" />
+        </div>
+        <label class="inline-check">
+          <input type="checkbox" id="allowAddLights" />
+          允許加燈（含增加盞數；未勾選則禁止自行加燈）
+        </label>
+      </div>
+      <div class="control-block">
+        <label>櫃體／門片 <span class="hint">配色優先延用原圖；櫃體多為同色，門片可跳色但禁止亂換。材質名稱可選填</span></label>
+        <div class="control-row">
+          <label>櫃體材質</label>
+          <input type="text" id="cabinetBodyMaterial" placeholder="例：灰橡木皮、白色美耐板（可留空＝跟原圖）" />
+        </div>
+        <div class="control-row">
+          <label>門片材質</label>
+          <input type="text" id="cabinetDoorMaterial" placeholder="例：同櫃體、黑玻、跳色烤漆（可留空）" />
+        </div>
+      </div>
+      <div class="control-block">
+        <label>指定某處顏色 <span class="hint">未指定時天花與牆同色、單色（忽略 SketchUp 視角色差）</span></label>
+        <div class="color-note-row">
+          <input type="text" id="colorNotePlace" placeholder="例如：沙發背牆、天花板" />
+          <input type="color" id="colorNotePicker" value="#e8e0d4" />
+          <button type="button" id="btnAddColorNote" class="btn btn-secondary">加入</button>
+        </div>
+        <div id="colorNoteChips" class="chips"></div>
       </div>
       <div class="control-row">
         <label>補充說明</label>
@@ -98,10 +126,10 @@
       <div class="send-head">
         <div>
           <label class="block-label">這次送出哪一張去改</label>
-          <p class="hint">先選圖，需要時再開畫筆圈出要改的地方；沒畫的地方會盡量維持。</p>
+          <p class="hint">先選圖，再開畫筆放大標示；沒畫的地方會盡量維持。</p>
         </div>
         <div class="send-tools">
-          <button type="button" id="btnPaint" class="btn btn-secondary">畫筆</button>
+          <button type="button" id="btnPaint" class="btn btn-secondary">畫筆標示</button>
           <button type="button" id="btnClearMarkup" class="btn btn-secondary">清除筆跡</button>
         </div>
       </div>
@@ -139,6 +167,25 @@
         <div id="versionThumbs" class="version-thumbs"></div>
       </div>
     </section>
+  </div>
+
+  <div id="paintLightbox" class="paint-lb hidden" aria-hidden="true">
+    <div class="paint-lb-bar">
+      <strong>標示要改的地方</strong>
+      <label class="paint-tool">粗細
+        <input type="range" id="brushSize" min="2" max="28" value="6" />
+        <span id="brushSizeLabel">6</span>
+      </label>
+      <label class="paint-tool">顏色
+        <input type="color" id="brushColor" value="#ff4d4f" />
+      </label>
+      <button type="button" id="btnBrushPen" class="btn btn-secondary active">筆</button>
+      <button type="button" id="btnBrushEraser" class="btn btn-secondary">擦</button>
+      <button type="button" id="btnBrushUndo" class="btn btn-secondary">上一步</button>
+      <button type="button" id="btnClearMarkupLb" class="btn btn-secondary">清除</button>
+      <button type="button" id="btnPaintDone" class="btn btn-primary">完成</button>
+    </div>
+    <div id="paintLbStage" class="paint-lb-stage"></div>
   </div>
 
   <script src="config.js"></script>
