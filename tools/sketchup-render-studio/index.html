@@ -38,7 +38,7 @@
           <label class="inline-check"><input type="checkbox" id="preserveBeam" checked /> 樑柱顏色</label>
           <label class="inline-check"><input type="checkbox" id="preserveWall" checked /> 牆面油漆</label>
           <label class="inline-check"><input type="checkbox" id="preserveLines" checked /> 線條／開口</label>
-          <label class="inline-check"><input type="checkbox" id="preserveLayout" checked /> 家具擺位</label>
+          <label class="inline-check"><input type="checkbox" id="preserveLayout" checked /> 家具擺位（不要增減）</label>
         </div>
       </div>
       <div id="analyzeSummary" class="analyze-summary hidden" aria-live="polite"></div>
@@ -62,7 +62,7 @@
         <select id="lightingSelect"></select>
       </div>
       <div class="control-block">
-        <label>燈光來源標籤 <span class="hint">（可多選，會對應窗戶／坎燈／櫃內燈等位置）</span></label>
+        <label>燈光來源標籤 <span class="hint">（可多選；櫃內燈請自行勾選，預設不加）</span></label>
         <div id="lightTagChips" class="chips"></div>
       </div>
       <div class="control-row">
@@ -76,6 +76,7 @@
         <button type="button" id="btnRenderAll" class="btn btn-primary">批次渲染全部</button>
       </div>
       <p id="statusMsg" class="status-msg"></p>
+      <p id="sendNowLine" class="send-now-line">這次送出：尚未選圖</p>
       <details class="dev-panel">
         <summary>進階／測試設定</summary>
         <div class="control-row">
@@ -91,6 +92,23 @@
           <input type="password" id="ingestSecretInput" placeholder="（可選）" />
         </div>
       </details>
+    </section>
+
+    <section class="send-card card" id="sendCard">
+      <div class="send-head">
+        <div>
+          <label class="block-label">這次送出哪一張去改</label>
+          <p class="hint">先選圖，需要時再開畫筆圈出要改的地方；沒畫的地方會盡量維持。</p>
+        </div>
+        <div class="send-tools">
+          <button type="button" id="btnPaint" class="btn btn-secondary">畫筆</button>
+          <button type="button" id="btnClearMarkup" class="btn btn-secondary">清除筆跡</button>
+        </div>
+      </div>
+      <div id="sendSourceChips" class="chips send-chips"></div>
+      <div class="send-stage" id="sendStage">
+        <div class="placeholder">請先加入圖片</div>
+      </div>
     </section>
 
     <section class="compare-wrap">

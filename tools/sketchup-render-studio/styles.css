@@ -199,6 +199,74 @@ textarea { resize: vertical; min-height: 56px; }
   color: #f6e2c9;
 }
 
+.send-now-line {
+  margin: 6px 0 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.send-card {
+  padding: 12px 16px;
+}
+
+.send-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.send-tools {
+  display: flex;
+  gap: 8px;
+}
+
+.send-chips { margin-bottom: 10px; }
+
+.send-stage {
+  min-height: 180px;
+  background: #0b0d11;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.send-img-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.send-img-wrap img {
+  max-width: 100%;
+  max-height: 42vh;
+  display: block;
+}
+
+.send-img-wrap canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.send-img-wrap.paint-on canvas {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+#btnPaint.active {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  color: var(--accent);
+}
+
 .control-actions {
   display: flex;
   flex-wrap: wrap;

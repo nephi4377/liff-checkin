@@ -24,7 +24,8 @@
     items: [],
     activeIndex: 0,
     busy: false,
-    suppressControlSync: false
+    suppressControlSync: false,
+    paintEnabled: false
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -119,7 +120,8 @@
     payload = payload || {};
     payload.action = action;
     if (state.idToken) payload.liff_id_token = state.idToken;
-    if (CONFIG.authBypass || ($('devBypassInput') && $('devBypassInput').checked)) {
+    var wantBypass = CONFIG.authBypass || ($('devBypassInput') && $('devBypassInput').checked);
+    if (wantBypass && !state.idToken) {
       payload.dev_bypass = true;
     }
     if ($('ingestSecretInput')) {
@@ -296,6 +298,220 @@
     return item.versions[item.activeVersionIndex] || item.versions[item.versions.length - 1];
   }
 
+  function getSendSource(item) {
+    if (!item) return null;
+    if (item.sendSource === 'original' || item.sendSource == null) {
+      return {
+        kind: 'sketchup',
+        key: 'original',
+        label: '原圖（SketchUp）',
+        previewUrl: item.previewUrl,
+        photo: item.photo
+      };
+    }
+    var idx = parseInt(item.sendSource, 10);
+    var ver = item.versions[idx];
+    if (!ver) {
+      return {
+        kind: 'sketchup',
+        key: 'original',
+        label: '原圖（SketchUp）',
+        previewUrl: item.previewUrl,
+        photo: item.photo
+      };
+    }
+    var img = ver.image || {};
+    return {
+      kind: 'render',
+      key: 'v' + idx,
+      label: '版本 ' + (idx + 1),
+      previewUrl: ver.previewUrl,
+      photo: {
+        mime_type: img.mimeType || img.mime_type || 'image/png',
+        data_base64: img.dataBase64 || img.data_base64 || ''
+      },
+      versionIndex: idx
+    };
+  }
+
+  function updateSendNowLine() {
+    var el = $('sendNowLine');
+    if (!el) return;
+    var item = getActiveItem();
+    if (!item) {
+      el.textContent = '這次送出：尚未選圖';
+      return;
+    }
+    var src = getSendSource(item);
+    el.textContent = '這次送出：' + src.label + (item.markupHasStrokes ? '（含畫筆標示）' : '');
+  }
+
+  function setSendSource(item, key) {
+    if (!item) return;
+    item.sendSource = key;
+    item.markupCanvas = null;
+    item.markupHasStrokes = false;
+    if (key !== 'original' && key != null) {
+      var idx = parseInt(key, 10);
+      if (!isNaN(idx)) item.activeVersionIndex = idx;
+    }
+    updateCompareView();
+  }
+
+  function bindPaintCanvas(canvas, item) {
+    if (canvas.getAttribute('data-paint-bound') === '1') return;
+    canvas.setAttribute('data-paint-bound', '1');
+    var last = null;
+
+    function pos(e) {
+      var r = canvas.getBoundingClientRect();
+      var pt = (e.touches && e.touches[0]) || e;
+      if (!r.width || !r.height) return null;
+      return {
+        x: (pt.clientX - r.left) * (canvas.width / r.width),
+        y: (pt.clientY - r.top) * (canvas.height / r.height)
+      };
+    }
+
+    function strokeTo(p) {
+      if (!state.paintEnabled || !last || !p) return;
+      var ctx = canvas.getContext('2d');
+      ctx.strokeStyle = '#ff4d4f';
+      ctx.lineWidth = Math.max(8, Math.min(canvas.width, canvas.height) * 0.014);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(last.x, last.y);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      last = p;
+      item.markupHasStrokes = true;
+      item.markupCanvas = canvas;
+      updateSendNowLine();
+    }
+
+    function start(e) {
+      if (!state.paintEnabled) return;
+      e.preventDefault();
+      last = pos(e);
+    }
+    function move(e) {
+      if (!state.paintEnabled || last == null) return;
+      e.preventDefault();
+      strokeTo(pos(e));
+    }
+    function end() { last = null; }
+
+    canvas.addEventListener('mousedown', start);
+    canvas.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', end);
+    canvas.addEventListener('touchstart', start, { passive: false });
+    canvas.addEventListener('touchmove', move, { passive: false });
+    canvas.addEventListener('touchend', end);
+  }
+
+  function renderSendUi() {
+    var chips = $('sendSourceChips');
+    var stage = $('sendStage');
+    var btnPaint = $('btnPaint');
+    if (!chips || !stage) return;
+    var item = getActiveItem();
+    chips.innerHTML = '';
+    if (item && item.markupCanvas && item.markupCanvas.parentNode) {
+      item.markupCanvas.parentNode.removeChild(item.markupCanvas);
+    }
+    stage.innerHTML = '';
+    if (btnPaint) btnPaint.classList.toggle('active', !!state.paintEnabled);
+
+    if (!item) {
+      stage.innerHTML = '<div class="placeholder">請先加入圖片</div>';
+      updateSendNowLine();
+      return;
+    }
+
+    function addChip(label, key, active) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chip' + (active ? ' active' : '');
+      btn.textContent = label;
+      btn.addEventListener('click', function () { setSendSource(item, key); });
+      chips.appendChild(btn);
+    }
+
+    var src = getSendSource(item);
+    addChip('原圖', 'original', src.key === 'original');
+    item.versions.forEach(function (ver, idx) {
+      addChip('版本 ' + (idx + 1), String(idx), src.key === ('v' + idx));
+    });
+
+    var wrap = document.createElement('div');
+    wrap.className = 'send-img-wrap' + (state.paintEnabled ? ' paint-on' : '');
+    var img = document.createElement('img');
+    img.alt = src.label;
+    img.src = src.previewUrl;
+
+    var canvas = item.markupCanvas;
+    if (!canvas || canvas.getAttribute('data-src') !== src.previewUrl) {
+      canvas = document.createElement('canvas');
+      canvas.setAttribute('data-src', src.previewUrl);
+      item.markupCanvas = canvas;
+      item.markupHasStrokes = false;
+    }
+
+    function sizeCanvas() {
+      if (!img.naturalWidth) return;
+      if (!canvas.width) {
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+      }
+    }
+    img.addEventListener('load', sizeCanvas);
+    if (img.complete) sizeCanvas();
+
+    wrap.appendChild(img);
+    wrap.appendChild(canvas);
+    stage.appendChild(wrap);
+    bindPaintCanvas(canvas, item);
+    updateSendNowLine();
+  }
+
+  function resolveSendPhoto(item) {
+    var src = getSendSource(item);
+    if (!src) return Promise.reject(new Error('請先加入圖片'));
+    if (!item.markupHasStrokes || !item.markupCanvas) {
+      return Promise.resolve({
+        photo: src.photo,
+        kind: src.kind,
+        hasMarkup: false,
+        label: src.label
+      });
+    }
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onload = function () {
+        var c = document.createElement('canvas');
+        c.width = img.naturalWidth;
+        c.height = img.naturalHeight;
+        var ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        ctx.drawImage(item.markupCanvas, 0, 0, c.width, c.height);
+        var dataUrl = c.toDataURL('image/jpeg', 0.92);
+        var comma = dataUrl.indexOf(',');
+        resolve({
+          photo: {
+            mime_type: 'image/jpeg',
+            data_base64: dataUrl.slice(comma + 1)
+          },
+          kind: src.kind,
+          hasMarkup: true,
+          label: src.label
+        });
+      };
+      img.onerror = function () { reject(new Error('無法合成畫筆圖')); };
+      img.src = src.previewUrl;
+    });
+  }
+
   function updateCompareView() {
     var item = getActiveItem();
     var origPane = $('paneOriginal');
@@ -333,6 +549,7 @@
     $('filmMeta').textContent = (state.activeIndex + 1) + ' / ' + state.items.length;
     renderThumbRow();
     renderVersionRow();
+    renderSendUi();
   }
 
   function selectItem(idx) {
@@ -445,7 +662,7 @@
     el.classList.remove('hidden');
   }
 
-  function collectRenderPayload(item, referencePhoto, modeOverride) {
+  function collectRenderPayload(item, referencePhoto, modeOverride, variantIndex) {
     saveControlsToTarget();
     var prompt = getEffectivePromptForItem(item);
     var payload = {
@@ -459,6 +676,7 @@
     var settings = collectRenderSettings(modeOverride);
     payload.render_mode = settings.render_mode;
     payload.preserve = settings.preserve;
+    if (variantIndex > 0) payload.variant_index = variantIndex;
     if (item.aspectRatio) payload.aspect_ratio = item.aspectRatio;
     if (referencePhoto) payload.reference_photo = referencePhoto;
     return payload;
@@ -497,10 +715,55 @@
     item.activeVersionIndex = item.versions.length - 1;
   }
 
-  function renderOneItem(item, referencePhoto, modeOverride) {
+  function hashStr(s) {
+    var h = 5381;
+    var i;
+    s = String(s || '');
+    for (i = 0; i < s.length; i++) h = ((h << 5) + h) + s.charCodeAt(i);
+    return (h >>> 0).toString(16);
+  }
+
+  function fingerprintPhoto(photo) {
+    var b64 = (photo && (photo.data_base64 || photo.dataBase64)) || '';
+    return String(b64.length) + ':' + b64.slice(0, 96) + ':' + b64.slice(-96);
+  }
+
+  function buildRenderCacheKey(item, modeOverride) {
+    var p = collectRenderPayload(item, null, modeOverride, 0);
+    return hashStr(JSON.stringify({
+      photo: fingerprintPhoto(item.photo),
+      send: item.sendSource == null ? 'original' : String(item.sendSource),
+      markup: !!item.markupHasStrokes,
+      room: p.room_type,
+      style: p.style,
+      lighting: p.lighting,
+      extra: p.extra_notes,
+      tags: p.light_source_tags,
+      mode: p.render_mode,
+      preserve: p.preserve,
+      aspect: p.aspect_ratio || ''
+    }));
+  }
+
+  var renderResultCache = {};
+  var SINGLE_VERSION_COUNT = 3;
+
+  function applyCachedVersions(item, cached) {
+    (cached || []).forEach(function (v) {
+      addVersionToItem(item, v.image, v.note);
+    });
+  }
+
+  function renderOneItem(item, referencePhoto, modeOverride, variantIndex) {
     item.rendering = true;
     updateCompareView();
-    return apiPost('sketchup_render', collectRenderPayload(item, referencePhoto, modeOverride))
+    return resolveSendPhoto(item).then(function (send) {
+      var payload = collectRenderPayload(item, referencePhoto, modeOverride, variantIndex);
+      payload.photo = send.photo;
+      payload.source_kind = send.kind === 'render' ? 'render' : 'sketchup';
+      payload.has_markup = !!send.hasMarkup;
+      return apiPost('sketchup_render', payload);
+    })
       .then(function (res) {
         item.rendering = false;
         if (!res.success) throw new Error(res.message || '渲染失敗');
@@ -530,18 +793,46 @@
       return;
     }
     var mode = modeOverride || readRenderModeFromControls();
-    var statusLabel = mode === 'fidelity' ? '保真渲染中…' : '美化渲染中…';
+    var send = getSendSource(item);
+    var cacheKey = buildRenderCacheKey(item, mode);
+    if (renderResultCache[cacheKey] && renderResultCache[cacheKey].length && !item.markupHasStrokes) {
+      applyCachedVersions(item, renderResultCache[cacheKey]);
+      setStatus('同一張圖與設定已有結果，未再呼叫模型', 'ok');
+      updateCompareView();
+      return;
+    }
+    var statusLabel = mode === 'fidelity' ? '保真渲染中' : '美化渲染中';
     state.busy = true;
-    setStatus(statusLabel + '（第 ' + (state.activeIndex + 1) + ' 張）');
     disableButtons(true);
     var anchor = getStyleAnchorImage();
     var ref = anchor && anchor !== (getActiveVersion(item) && getActiveVersion(item).image) ? anchor : null;
-    renderOneItem(item, ref, mode)
+    var collected = [];
+    var chain = Promise.resolve();
+    var n = (send.kind === 'render' || item.markupHasStrokes) ? 1 : SINGLE_VERSION_COUNT;
+    var i;
+    for (i = 0; i < n; i++) {
+      chain = chain.then((function (idx) {
+        return function () {
+          setStatus(
+            statusLabel + '…' +
+            (n > 1 ? ('版本 ' + (idx + 1) + ' / ' + n + '，') : '') +
+            '送出「' + send.label + '」'
+          );
+          return renderOneItem(item, ref, mode, idx).then(function (res) {
+            collected.push({ image: res.image, note: res.note });
+            updateCompareView();
+          });
+        };
+      })(i));
+    }
+    chain
       .then(function () {
-        setStatus('渲染完成', 'ok');
+        renderResultCache[cacheKey] = collected;
+        setStatus('已產出 ' + collected.length + ' 個版本', 'ok');
         updateCompareView();
       })
       .catch(function (err) {
+        if (collected.length) renderResultCache[cacheKey] = collected;
         setStatus(err.message || String(err), 'error');
         updateCompareView();
       })
@@ -559,9 +850,10 @@
     var chain = Promise.resolve();
     state.items.forEach(function (item, idx) {
       chain = chain.then(function () {
-        setStatus('批次渲染中 ' + (idx + 1) + ' / ' + state.items.length + '…');
+        setStatus('批次渲染中 ' + (idx + 1) + ' / ' + state.items.length + '…（出一張顯示一張）');
         state.activeIndex = idx;
-        return renderOneItem(item, anchor, readRenderModeFromControls()).then(function (res) {
+        loadControlsForActiveItem();
+        return renderOneItem(item, anchor, readRenderModeFromControls(), 0).then(function (res) {
           if (!anchor && res && res.image) anchor = res.image;
           updateCompareView();
         }).catch(function (err) {
@@ -615,19 +907,23 @@
     if (!item || state.busy) return;
     state.busy = true;
     disableButtons(true);
-    setStatus('分析中…');
+    setStatus('分析中…（送出「' + (getSendSource(item) && getSendSource(item).label) + '」）');
     saveControlsToTarget();
     var prompt = getEffectivePromptForItem(item);
     var settings = collectRenderSettings();
-    apiPost('sketchup_render_analyze', {
-      photo: item.photo,
-      room_type: prompt.roomType,
-      style: prompt.style,
-      lighting: prompt.lighting,
-      light_source_tags: prompt.lightSourceTags.slice(),
-      extra_notes: prompt.extraNotes,
-      render_mode: settings.render_mode,
-      preserve: settings.preserve
+    resolveSendPhoto(item).then(function (send) {
+      return apiPost('sketchup_render_analyze', {
+        photo: send.photo,
+        room_type: prompt.roomType,
+        style: prompt.style,
+        lighting: prompt.lighting,
+        light_source_tags: prompt.lightSourceTags.slice(),
+        extra_notes: prompt.extraNotes,
+        render_mode: settings.render_mode,
+        preserve: settings.preserve,
+        source_kind: send.kind === 'render' ? 'render' : 'sketchup',
+        has_markup: !!send.hasMarkup
+      });
     }).then(function (res) {
       if (!res.success) throw new Error(res.message || '分析失敗');
       var d = res.data || {};
@@ -655,8 +951,9 @@
   }
 
   function disableButtons(disabled) {
-    ['btnAnalyze', 'btnRenderFidelity', 'btnRenderStyled', 'btnRenderAll', 'btnAdd'].forEach(function (id) {
-      $(id).disabled = !!disabled;
+    ['btnAnalyze', 'btnRenderFidelity', 'btnRenderStyled', 'btnRenderAll', 'btnAdd', 'btnPaint', 'btnClearMarkup'].forEach(function (id) {
+      var el = $(id);
+      if (el) el.disabled = !!disabled;
     });
   }
 
@@ -681,6 +978,9 @@
             aspectRatio: aspectRatio,
             versions: [],
             activeVersionIndex: 0,
+            sendSource: 'original',
+            markupCanvas: null,
+            markupHasStrokes: false,
             rendering: false,
             useCustomPrompt: false,
             customPrompt: null
@@ -705,8 +1005,25 @@
     });
     $('btnRenderFidelity').addEventListener('click', function () { renderCurrent('fidelity'); });
     $('btnRenderStyled').addEventListener('click', function () { renderCurrent(null); });
-    $('btnRenderAll').addEventListener('click', renderAllViaBatchApi);
+    $('btnRenderAll').addEventListener('click', renderAll);
     $('btnAnalyze').addEventListener('click', analyzeCurrent);
+    if ($('btnPaint')) {
+      $('btnPaint').addEventListener('click', function () {
+        state.paintEnabled = !state.paintEnabled;
+        updateCompareView();
+      });
+    }
+    if ($('btnClearMarkup')) {
+      $('btnClearMarkup').addEventListener('click', function () {
+        var item = getActiveItem();
+        if (!item || !item.markupCanvas) return;
+        var ctx = item.markupCanvas.getContext('2d');
+        ctx.clearRect(0, 0, item.markupCanvas.width, item.markupCanvas.height);
+        item.markupHasStrokes = false;
+        updateSendNowLine();
+        setStatus('已清除筆跡');
+      });
+    }
 
     $('useCustomPrompt').addEventListener('change', function () {
       var item = getActiveItem();
@@ -772,7 +1089,7 @@
         CONFIG.apiUrl = policy.accountingGasWebAppUrl;
         if ($('gasUrlInput')) $('gasUrlInput').value = CONFIG.apiUrl;
       }
-      if (policy && policy.authBypass) CONFIG.authBypass = true;
+      if (policy && policy.authBypass && isLocalOrDevBypassAllowed()) CONFIG.authBypass = true;
       if (policy && policy.liffId) CONFIG.liffId = policy.liffId;
 
       if (!CONFIG.apiUrl) {
@@ -781,7 +1098,7 @@
       }
       if (!CONFIG.liffId && CFG.LIFF_ID) CONFIG.liffId = CFG.LIFF_ID;
 
-      if (CONFIG.authBypass || ($('devBypassInput') && $('devBypassInput').checked)) {
+      if ((CONFIG.authBypass || ($('devBypassInput') && $('devBypassInput').checked)) && isLocalOrDevBypassAllowed()) {
         CONFIG.authBypass = true;
         state.userName = '開發模式';
         $('userLine').textContent = state.userName;
@@ -813,18 +1130,23 @@
     });
   }
 
+  function isLocalOrDevBypassAllowed() {
+    var qs = new URLSearchParams(location.search);
+    return qs.get('dev') === '1'
+      || location.hostname === 'localhost'
+      || location.hostname === '127.0.0.1';
+  }
+
   function boot() {
     bindEvents();
     var qs = new URLSearchParams(location.search);
     if ($('gasUrlInput')) $('gasUrlInput').value = qs.get('api') || CFG.GAS_URL || '';
     if ($('devBypassInput')) {
-      $('devBypassInput').checked = qs.get('dev') === '1'
-        || location.hostname === 'localhost'
-        || location.hostname === '127.0.0.1';
+      $('devBypassInput').checked = isLocalOrDevBypassAllowed();
     }
     CONFIG.apiUrl = ($('gasUrlInput') && $('gasUrlInput').value.trim()) || CFG.GAS_URL || '';
     CONFIG.liffId = CFG.LIFF_ID || '';
-    CONFIG.authBypass = $('devBypassInput') && $('devBypassInput').checked;
+    CONFIG.authBypass = isLocalOrDevBypassAllowed() && $('devBypassInput') && $('devBypassInput').checked;
 
     if (!CONFIG.apiUrl) {
       $('loading').textContent = '請在進階設定填 GAS URL，或網址加 ?api=…';
