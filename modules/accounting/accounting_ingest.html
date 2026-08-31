@@ -8,7 +8,8 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/accounting_api.js?v=59"></script>
-  <script src="../../shared/js/accounting_cache.js?v=32"></script>
+  <script src="../../shared/js/accounting_master_data.js?v=19"></script>
+  <script src="../../shared/js/accounting_cache.js?v=33"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=5"></script>
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
@@ -101,15 +102,12 @@
           </select>
         </div>
       </div>
-      <label id="projectPickWrap" class="hidden">快選案場</label>
-      <select id="projectPick" class="hidden"><option value="">手動填寫</option></select>
-      <p class="hint hidden" id="projectPickHint">選案場會自動帶入客戶名、案號與店別</p>
+      <datalist id="projectNoList"></datalist>
       <div id="blockA">
         <label>收款日期</label><input id="txn_date" type="text" />
         <label>客戶名</label><input id="party_name" type="text" list="clientList" />
         <datalist id="clientList"></datalist>
-        <label>案號</label><input id="project_no" type="text" list="projectNoList" />
-        <datalist id="projectNoList"></datalist>
+        <label>案號</label><input id="project_no" type="text" placeholder="手填案號即可" />
         <label>款項類別</label><input id="item_desc" type="text" />
         <label>金額</label><input id="amount" type="number" inputmode="numeric" />
         <label>是否入零用金</label><select id="petty_cash"><option>否</option><option>是</option></select>
@@ -217,20 +215,16 @@
         profile.displayName = op.displayName || op.userName || profile.displayName;
       }
 
-      function applyProjectPick(projectId) {
-        var p = hubContext.projects.find(function (x) { return x.id === projectId; });
-        if (!p) return;
-        if (kind.value === 'A') {
-          document.getElementById('party_name').value = p.siteName || p.name || '';
-          document.getElementById('project_no').value = p.id;
-        } else if (allocEditor) {
+      function applyProjectNoPrefill(projectId) {
+        var id = String(projectId || '').trim();
+        if (!id) return;
+        document.getElementById('project_no').value = id;
+        if (allocEditor) {
           var rows = allocEditor.read();
           if (!rows.length) rows = [{ project_no: '', item_desc: '', amount: '' }];
-          rows[0].project_no = p.id;
+          if (!String(rows[0].project_no || '').trim()) rows[0].project_no = id;
           allocEditor.setRows(rows);
         }
-        var store = AccountingContext.mapStoreValue(p.store);
-        if (store) document.getElementById('store').value = store;
       }
 
       function setApplicantDefault() {
@@ -262,7 +256,7 @@
         var fromSession = AccountingCache.vendors(session);
         var fromPeek = AccountingCache.peekVendors ? AccountingCache.peekVendors() : [];
         var n = applyVendorsToUi(fromSession.length ? fromSession : fromPeek);
-        updateContextBar(hubContext, n);
+        updateContextBar(n);
         if (n) return;
         var bar = document.getElementById('contextBar');
         if (bar) {
@@ -270,10 +264,12 @@
           bar.classList.remove('warn');
           bar.textContent = '廠商名冊載入中…';
         }
-        AccountingCache.load(session).then(function () {
+        var loadFn = AccountingCache.load(session).then(function () {
           var loaded = applyVendorsToUi(AccountingCache.vendors(session));
-          updateContextBar(hubContext, loaded);
-        }).catch(function () {
+          updateContextBar(loaded);
+          if (!loaded) throw new Error('廠商名冊仍是空的');
+        });
+        loadFn.catch(function () {
           if (cachedVendors.length) return;
           if (bar) {
             bar.classList.add('warn');
@@ -282,140 +278,49 @@
           if (typeof AccountingUi !== 'undefined' && AccountingUi.reportFailure) {
             AccountingUi.reportFailure({
               action: '載入廠商名冊',
-              message: '廠商名冊載入失敗（已等待並重試）',
-              fail_count: 2,
+              message: '廠商名冊載入失敗（已自動重試）',
+              fail_count: 3,
               notify: false
             });
           }
         });
       }
 
-      function updateContextBar(ctx, vendorCount) {
+      function updateContextBar(vendorCount) {
         var bar = document.getElementById('contextBar');
         bar.classList.remove('hidden');
         bar.classList.remove('warn');
-        var parts = [];
-        if (ctx.projects.length || ctx.employees.length) {
-          var src = (ctx.source && (ctx.source.projects === 'api' || ctx.source.employees === 'api')) ? '伺服器' : '快取';
-          parts.push(src + '：' + ctx.projects.length + ' 筆案場、' + ctx.employees.length + ' 位員工');
-        }
-        if (vendorCount) parts.push(vendorCount + ' 家廠商');
-        if (parts.length) {
-          bar.textContent = '已載入 ' + parts.join(' · ');
+        var n = vendorCount != null ? vendorCount : cachedVendors.length;
+        if (n) {
+          bar.textContent = '已載入 ' + n + ' 家廠商';
         } else {
-          bar.textContent = '無快選資料，請手動填寫';
+          bar.textContent = '可先手填廠商與案號';
           bar.classList.add('warn');
         }
       }
 
-      function applyHubContextToUi(ctx, vendorCount) {
-        hubContext.projects = ctx.projects;
-        hubContext.employees = ctx.employees;
-        var pick = document.getElementById('projectPick');
-        var pickWrap = document.getElementById('projectPickWrap');
-        var pickHint = document.getElementById('projectPickHint');
+      function applyHubContextToUi(vendorCount) {
+        hubContext.employees = [];
+        hubContext.projects = [];
         var applicantList = document.getElementById('applicantList');
-        var clientList = document.getElementById('clientList');
-        var projectNoList = document.getElementById('projectNoList');
-
         applicantList.innerHTML = '';
-        ctx.employees.forEach(function (emp) {
-          var name = String(emp.userName || '').trim();
-          if (!name) return;
-          var opt = document.createElement('option');
-          opt.value = name;
-          applicantList.appendChild(opt);
-        });
-
-        clientList.innerHTML = '';
-        projectNoList.innerHTML = '';
-        pick.innerHTML = '<option value="">手動填寫</option>';
-        ctx.projects.forEach(function (p) {
-          var label = p.id + (p.name ? ' · ' + p.name : '');
-          var opt = document.createElement('option');
-          opt.value = p.id;
-          opt.textContent = label;
-          pick.appendChild(opt);
-          if (p.name) {
-            var c = document.createElement('option');
-            c.value = p.name;
-            clientList.appendChild(c);
-          }
-          var n = document.createElement('option');
-          n.value = p.id;
-          projectNoList.appendChild(n);
-        });
-
-        if (ctx.projects.length) {
-          pickWrap.classList.remove('hidden');
-          pick.classList.remove('hidden');
-          pickHint.classList.remove('hidden');
-        }
-        pick.onchange = function () {
-          if (pick.value) applyProjectPick(pick.value);
-        };
-
-        applicantDefault = AccountingFormHelpers.resolveApplicantName(ctx.employees, profile.userId, profile.displayName) || applicantDefault;
         setApplicantDefault();
-
-        var prefillId = queryParams['案號'] || queryParams.project || queryParams.project_no || '';
-        if (prefillId) {
-          pick.value = String(prefillId).trim();
-          if (pick.value) applyProjectPick(pick.value);
-        }
-
-        updateContextBar(ctx, vendorCount != null ? vendorCount : applyVendorsToUi(AccountingCache.peekVendors()));
+        applyProjectNoPrefill(queryParams['案號'] || queryParams.project || queryParams.project_no || '');
+        updateContextBar(vendorCount != null ? vendorCount : applyVendorsToUi(AccountingCache.peekVendors()));
       }
 
-      function setupHubContext(session, skipFormCtx) {
-        var inHubIframe = window.parent && window.parent !== window;
-
-        function finish(ctx, vendorCount) {
-          applyHubContextToUi(ctx, vendorCount);
-        }
-
-        var ctx = AccountingContext.load();
+      function setupHubContext(session) {
         var vendorCount = applyVendorsToUi(AccountingCache.peekVendors());
         if (session && typeof AccountingCache !== 'undefined') {
           var cached = AccountingCache.vendors(session);
           if (cached.length) vendorCount = applyVendorsToUi(cached);
         }
-        finish(ctx, vendorCount);
-
-        var needEmployees = !skipFormCtx && !ctx.projects.length && !ctx.employees.length;
-        var needVendors = !cachedVendors.length;
-        if (!session || (!needEmployees && !needVendors)) return;
-
-        var jobs = [];
-        if (needEmployees && inHubIframe && typeof AccountingContext.waitForHubData === 'function') {
-          jobs.push(AccountingContext.waitForHubData({ timeoutMs: 15000 }).then(function (ready) {
-            if (ready.employees.length || ready.projects.length) {
-              applyHubContextToUi(ready, cachedVendors.length);
-            } else {
-              var bar = document.getElementById('contextBar');
-              if (bar) {
-                bar.textContent = '員工／案場資料尚未載入，請稍候或重新整理主控台';
-                bar.classList.add('warn');
-              }
-            }
-          }));
-        } else if (needEmployees && !inHubIframe) {
-          jobs.push(AccountingApi.formContext(session).then(function (remote) {
-            if (!remote.success) return;
-            applyHubContextToUi(AccountingContext.load({
-              projects: remote.projects || [],
-              employees: remote.employees || []
-            }), cachedVendors.length);
-          }));
-        }
-        if (needVendors && typeof AccountingCache !== 'undefined') {
-          ensureVendorsLoaded(session);
-        }
-        Promise.all(jobs).catch(function (e) { console.warn('context refresh', e); });
+        applyHubContextToUi(vendorCount);
+        if (session && !cachedVendors.length) ensureVendorsLoaded(session);
       }
 
       function primeCachedUi() {
-        applyHubContextToUi(AccountingContext.load(), applyVendorsToUi(AccountingCache.peekVendors()));
+        applyHubContextToUi(applyVendorsToUi(AccountingCache.peekVendors()));
       }
 
       function readQueryParams() {
@@ -643,7 +548,6 @@
           (session.fromHub ? ' · 主控台' : (session.devBypass ? ' · 測試模式' : ''));
         showApp();
         setupHubContext(sessionRef);
-        ensureVendorsLoaded(sessionRef);
         if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
       }
 
@@ -715,9 +619,7 @@
           });
         })();
         var prefillProject = queryParams['案號'] || queryParams.project || queryParams.project_no || '';
-        if (prefillProject && kind.value === 'B' && allocEditor) {
-          applyProjectPick(String(prefillProject).trim());
-        }
+        if (prefillProject) applyProjectNoPrefill(String(prefillProject).trim());
         updatePhotoCountLine();
 
         await loadPolicy();
@@ -770,11 +672,6 @@
           profile.userId = p.userId;
           profile.displayName = p.displayName;
           idToken = liff.getIDToken();
-          var tokenSession = { idToken: idToken };
-          var ctxCached = AccountingContext.load();
-          var inHubIframe = window.parent && window.parent !== window;
-          var needFormCtx = !inHubIframe && !ctxCached.projects.length && !ctxCached.employees.length;
-          var formCtxPromise = needFormCtx ? AccountingApi.formContext(tokenSession) : null;
           authMe = await AccountingApi.authMe(idToken);
           if (!authMe.success || (authMe.permission || 0) < AccountingApi.INGEST_MIN_PERMISSION) {
             setLoading(AccountingApi.INGEST_PERM_DENIED_MSG);
@@ -787,27 +684,7 @@
         }
         sessionRef = { devBypass: false, idToken: idToken, auth: authMe, profile: profile };
         showApp();
-        var skippedFormCtx = false;
-        var inHubIframe = window.parent && window.parent !== window;
-        if (inHubIframe && typeof AccountingContext.waitForHubData === 'function') {
-          skippedFormCtx = true;
-          AccountingContext.waitForHubData({ timeoutMs: 12000 }).then(function (ready) {
-            applyHubContextToUi(ready, cachedVendors.length);
-            setupHubContext(sessionRef, true);
-          });
-        } else if (formCtxPromise) {
-          skippedFormCtx = true;
-          formCtxPromise.then(function (remote) {
-            if (!remote || !remote.success) return;
-            applyHubContextToUi(AccountingContext.load({
-              projects: remote.projects || [],
-              employees: remote.employees || []
-            }), cachedVendors.length);
-          }).catch(function (e) { console.warn('formContext', e); });
-        } else {
-          applyHubContextToUi(AccountingContext.load(), cachedVendors.length);
-        }
-        if (!inHubIframe) setupHubContext(sessionRef, skippedFormCtx);
+        setupHubContext(sessionRef);
         if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
       }
       boot();

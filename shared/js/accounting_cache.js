@@ -234,24 +234,39 @@ var AccountingCache = (function () {
       throw new Error('AccountingApi 未載入，請確認 accounting_api.js 已引入');
     }
     traceUi('主檔', '向後端讀取中…');
-    var res;
-    if (typeof AccountingApi.bootstrap === 'function') {
-      res = await AccountingApi.bootstrap(session, BOOTSTRAP_TIMEOUT_MS);
-    } else if (typeof AccountingApi.post === 'function') {
-      res = await AccountingApi.post({
-        action: 'accounting_bootstrap',
-        auth: AccountingApi.buildAuth ? AccountingApi.buildAuth(session) : { dev_bypass: !!session.devBypass }
-      }, BOOTSTRAP_TIMEOUT_MS);
-    } else {
-      throw new Error('AccountingApi 版本過舊，請強制重新整理（Ctrl+F5）');
+    var lastErr = null;
+    var attempt;
+    for (attempt = 1; attempt <= 3; attempt++) {
+      try {
+        var res;
+        if (typeof AccountingApi.bootstrap === 'function') {
+          res = await AccountingApi.bootstrap(session, BOOTSTRAP_TIMEOUT_MS);
+        } else if (typeof AccountingApi.post === 'function') {
+          res = await AccountingApi.post({
+            action: 'accounting_bootstrap',
+            auth: AccountingApi.buildAuth ? AccountingApi.buildAuth(session) : { dev_bypass: !!session.devBypass }
+          }, BOOTSTRAP_TIMEOUT_MS);
+        } else {
+          throw new Error('AccountingApi 版本過舊，請強制重新整理（Ctrl+F5）');
+        }
+        if (res.success && res.bootstrap) {
+          if (res.gas_cached) traceUi('主檔', '後端快取命中');
+          write(session, res.bootstrap);
+          broadcastBootstrapReady_(session);
+          var vendorCount = ((res.bootstrap.masters && res.bootstrap.masters.vendors) || []).length;
+          traceUi('主檔', '已寫入快取 · 廠商 ' + vendorCount + ' 筆');
+          return mergeEnums(res.bootstrap);
+        }
+        lastErr = new Error((res && res.message) || '載入主檔失敗');
+      } catch (eFetch) {
+        lastErr = eFetch;
+      }
+      if (attempt < 3) {
+        traceUi('主檔', '載入失敗，自動再試（' + attempt + '/3）');
+        await new Promise(function (r) { setTimeout(r, 800 * attempt); });
+      }
     }
-    if (!res.success || !res.bootstrap) throw new Error(res.message || '載入主檔失敗');
-    if (res.gas_cached) traceUi('主檔', '後端快取命中');
-    write(session, res.bootstrap);
-    broadcastBootstrapReady_(session);
-    var vendorCount = ((res.bootstrap.masters && res.bootstrap.masters.vendors) || []).length;
-    traceUi('主檔', '已寫入快取 · 廠商 ' + vendorCount + ' 筆');
-    return mergeEnums(res.bootstrap);
+    throw lastErr || new Error('載入主檔失敗');
   }
 
   function backgroundRevalidate(session) {
@@ -325,14 +340,18 @@ var AccountingCache = (function () {
     clear(session);
   }
 
-  function peekFromStorage_(storage) {
+  function peekFromStorage_(storage, allowStaleVendors) {
     try {
       var prefix = STORAGE_KEY + ':';
       for (var i = 0; i < storage.length; i++) {
         var key = storage.key(i);
         if (!key || key.indexOf(prefix) !== 0) continue;
         var parsed = JSON.parse(storage.getItem(key));
-        if (!isFresh(parsed)) continue;
+        if (!parsed || !parsed.data) continue;
+        if (!isFresh(parsed)) {
+          var staleVendors = ((parsed.data.masters && parsed.data.masters.vendors) || []).length;
+          if (!allowStaleVendors || !staleVendors) continue;
+        }
         return parsed.data;
       }
     } catch (e) {}
@@ -343,8 +362,13 @@ var AccountingCache = (function () {
     return peekFromStorage_(sessionStorage) || peekFromStorage_(localStorage);
   }
 
-  function mastersFromPeek(entity) {
-    var b = peekBootstrapRaw();
+  function peekBootstrapAllowStale_() {
+    return peekFromStorage_(sessionStorage, true) || peekFromStorage_(localStorage, true)
+      || peekBootstrapRaw();
+  }
+
+  function mastersFromPeek(entity, allowStale) {
+    var b = allowStale ? peekBootstrapAllowStale_() : peekBootstrapRaw();
     return (b && b.masters && b.masters[entity]) || [];
   }
 
@@ -361,7 +385,9 @@ var AccountingCache = (function () {
       return peekBootstrapRaw();
     },
     peekVendors: function () {
-      return mastersFromPeek('vendors');
+      var fresh = mastersFromPeek('vendors');
+      if (fresh.length) return fresh;
+      return mastersFromPeek('vendors', true);
     },
     peekPayees: function () {
       return mastersFromPeek('payees');
@@ -369,9 +395,9 @@ var AccountingCache = (function () {
     /** 無快取，或快取裡沒有廠商（舊版 bootstrap／權限不足時可能發生） */
     needsStaffBootstrap: function (session) {
       var cached = read(session);
-      if (!cached) return true;
-      var vendors = (cached.masters && cached.masters.vendors) || [];
-      return vendors.length === 0;
+      var vendors = (cached && cached.masters && cached.masters.vendors) || [];
+      if (vendors.length) return false;
+      return mastersFromPeek('vendors', true).length === 0;
     },
     load: async function (session, force) {
       if (!session) throw new Error('需要登入');
@@ -380,6 +406,10 @@ var AccountingCache = (function () {
         if (wrapped) {
           var age = Date.now() - wrapped.ts;
           var vendorCount = ((wrapped.data.masters && wrapped.data.masters.vendors) || []).length;
+          if (vendorCount > 0) {
+            traceUi('主檔快取', '已有廠商 ' + vendorCount + ' 筆 · 不再重抓');
+            return mergeEnums(wrapped.data);
+          }
           if (age > swrMs()) {
             traceUi('主檔快取', '先顯示 · ' + formatAgeLabel_(age) + ' · 背景更新中');
             backgroundRevalidate(session);
@@ -412,7 +442,9 @@ var AccountingCache = (function () {
     },
     vendors: function (session) {
       var c = read(session);
-      return (c && c.masters && c.masters.vendors) || [];
+      var list = (c && c.masters && c.masters.vendors) || [];
+      if (list.length) return list;
+      return mastersFromPeek('vendors', true);
     },
     payees: function (session) {
       var c = read(session);
