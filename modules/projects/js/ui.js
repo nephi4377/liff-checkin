@@ -126,7 +126,9 @@ function buildPhotoGrid(htmlLinksCsv) {
     const links = Array.isArray(htmlLinksCsv) ? htmlLinksCsv : String(htmlLinksCsv).split(',').filter(Boolean);
 
     links.forEach(link => {
-        const u = (link || '').trim(); if (!u) return;
+        // 照片牆只吃字串網址；物件（上傳中的 {data,type}）略過，避免 .trim 炸掉整頁
+        if (typeof link !== 'string') return;
+        const u = link.trim(); if (!u) return;
         if (u.startsWith('data:image/')) {
             container.appendChild(renderDirectImg(u));
         } else {
@@ -154,7 +156,8 @@ function buildPhotoGridV2(htmlLinksCsv) {
     const visibleLinks = links.slice(0, MAX_VISIBLE);
 
     visibleLinks.forEach((link, index) => {
-        const u = (link || '').trim(); if (!u) return;
+        if (typeof link !== 'string') return;
+        const u = link.trim(); if (!u) return;
         let item;
         if (u.startsWith('data:image/')) {
             item = renderDirectImg(u);

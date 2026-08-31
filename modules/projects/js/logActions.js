@@ -13,6 +13,7 @@ import { logToPage, extractDriveFileId, showGlobalNotification } from '/shared/j
 import { buildPhotoGrid, _buildLogCard } from './ui.js'; // 同一層
 import { buildAiAnalysisHtml } from './siteReportAiUi.js';
 import { request as apiRequest } from './projectApi.js'; // [v317.0 API化] 引入新的統一請求函式
+import { buildOptimisticPhotoLinks } from './photoSavePreview.mjs';
 
 /** 處理文字編輯 */
 export function handleEditText(logId) {
@@ -152,8 +153,26 @@ export function closePhotoModal() {
     }
 }
 
+function bindPhotoGridLightbox(grid) {
+    if (!grid || typeof window.__openLightbox__ !== 'function') return;
+    const images = Array.from(grid.querySelectorAll('img.photo-thumb'));
+    images.forEach((img, index) => {
+        img.addEventListener('click', () => window.__openLightbox__(images.map(i => i.dataset.full), index));
+    });
+}
+
+function restorePhotoGrid(photoContainer, originalGrid, cardToUpdate, originalOpacity) {
+    if (photoContainer && originalGrid) {
+        const currentGrid = photoContainer.querySelector('.photo-grid');
+        if (currentGrid) currentGrid.replaceWith(originalGrid);
+        else photoContainer.appendChild(originalGrid);
+        bindPhotoGridLightbox(originalGrid);
+    }
+    if (cardToUpdate) cardToUpdate.style.opacity = originalOpacity || '';
+}
+
 /**
- * [新增] 處理儲存照片的變更
+ * 施工日誌「管理照片」存檔。失敗必須還原舊圖，不可維持半透明新圖。
  */
 export function handleSavePhotos() {
     const btn = document.getElementById('save-photos-button');
@@ -164,92 +183,95 @@ export function handleSavePhotos() {
 
     const grid = document.getElementById('modal-photo-grid-container');
     if (!grid) {
-        showGlobalNotification('錯誤：找不到照片容器。', 5000, 'error');
+        showGlobalNotification('找不到照片編輯區，請關掉視窗再開一次。', 5000, 'error');
+        btn.disabled = false;
+        btn.textContent = '儲存變更';
         return;
     }
 
-    // 1. 收集要保留的舊照片連結
     const keepLinks = Array.from(grid.querySelectorAll('.modal-photo-item:not(.new-upload):not(.deleted)'))
         .map(item => item.dataset.link);
 
-    // 2. 收集新上傳的 Base64 照片資料
-    // [v603.0 核心修正] 將 Base64 字串轉換為後端 _manageProjectFiles_ 函式預期的物件格式。
-    // 後端預期格式為 { data: string, type: string, name: string }
     const newUploads = Array.from(grid.querySelectorAll('.modal-photo-item.new-upload:not(.deleted)')).map(item => {
         const fullDataUrl = item.dataset.fullUrl;
         if (!fullDataUrl) return null;
         const match = fullDataUrl.match(/^data:(image\/.+);base64,(.+)$/);
         if (!match) return null;
         return {
-            data: match[2], // 純 Base64 資料
-            type: match[1], // MIME 類型, e.g., 'image/jpeg'
-            name: `upload_${Date.now()}.jpg` // 提供一個預設檔名
+            data: match[2],
+            type: match[1],
+            name: `upload_${Date.now()}.jpg`
         };
-    }).filter(Boolean); // 過濾掉解析失敗的 null
+    }).filter(Boolean);
 
-    // [v588.0 新增] 3. 收集要刪除的舊照片的 File ID
     const deleteIds = Array.from(grid.querySelectorAll('.modal-photo-item.deleted:not(.new-upload)'))
         .map(item => extractDriveFileId(item.dataset.link))
-        .filter(Boolean); // 過濾掉無法解析 ID 的連結
+        .filter(Boolean);
 
-    // 3. 取得當前正在編輯的日誌 ID
-    const logIdToUpdate = state.currentEditingLogId; // [v359.0 核心修正] 修正屬性名稱，應為 state.currentEditingLogId
+    const logIdToUpdate = state.currentEditingLogId;
     if (!logIdToUpdate) {
-        showGlobalNotification('錯誤：找不到當前編輯的日誌 ID，無法儲存。', 5000, 'error');
+        showGlobalNotification('找不到這一則日誌，照片沒送出。請關掉視窗再開一次。', 5000, 'error');
         btn.disabled = false;
         btn.textContent = '儲存變更';
         return;
     }
 
-    // 4. 關閉 Modal 並在背景執行後端同步
+    const cardToUpdate = document.getElementById(`log-${logIdToUpdate}`);
+    const photoContainer = cardToUpdate?.querySelector('.photo-grid')?.parentNode || null;
+    const liveGrid = photoContainer?.querySelector('.photo-grid') || null;
+    const originalGrid = liveGrid ? liveGrid.cloneNode(true) : null;
+    const originalOpacity = cardToUpdate ? cardToUpdate.style.opacity : '';
+
     closePhotoModal();
 
-    // [v362.0 核心修正] 執行樂觀更新，立即在畫面上反映變更。
-    const cardToUpdate = document.getElementById(`log-${logIdToUpdate}`);
-    if (cardToUpdate) {
-        const photoContainer = cardToUpdate.querySelector('.photo-grid')?.parentNode;
-        if (photoContainer) {
-            // [v603.0] 樂觀更新時，一樣使用完整的 Data URL 來顯示預覽
-            const optimisticLinks = [...keepLinks, ...newUploads];
-            // 建立一個新的照片牆並替換掉舊的
+    if (cardToUpdate && photoContainer) {
+        try {
+            const optimisticLinks = buildOptimisticPhotoLinks(keepLinks, newUploads);
             const newPhotoGrid = buildPhotoGrid(optimisticLinks);
-            photoContainer.innerHTML = ''; // 清空舊照片
-            photoContainer.appendChild(newPhotoGrid);
-            // 為新照片綁定燈箱事件
-            const images = Array.from(newPhotoGrid.querySelectorAll('img.photo-thumb'));
-            images.forEach((img, index) => img.addEventListener('click', () => window.__openLightbox__(images.map(i => i.dataset.full), index)));
+            const oldGrid = photoContainer.querySelector('.photo-grid');
+            if (oldGrid) oldGrid.replaceWith(newPhotoGrid);
+            else photoContainer.appendChild(newPhotoGrid);
+            bindPhotoGridLightbox(newPhotoGrid);
+        } catch (previewErr) {
+            console.warn('[logActions] 照片預覽失敗，仍送出儲存', previewErr);
         }
-        cardToUpdate.style.opacity = '0.7'; // 讓卡片半透明，表示正在處理中
+        cardToUpdate.style.opacity = '0.7';
     }
 
+    const payload = {
+        logId: logIdToUpdate,
+        existingLinksCsv: keepLinks.join(','),
+        photos: newUploads,
+        fileIdsToDelete: deleteIds,
+        projectId: state.projectId,
+        projectName: state.overview.siteName || state.overview['案場名稱'] || '',
+        userId: state.currentUserId,
+        userName: state.currentUserName
+    };
+
     apiRequest({
-        // [核心修正] 回歸正確的 "更新" 模型，不再改變 LogID。
         action: 'updateLogPhotosWithUploads',
-        payload: {
-            logId: logIdToUpdate, // 明確指定要更新的 LogID
-            existingLinksCsv: keepLinks.join(','), // 要保留的舊連結
-            photos: newUploads, // [v603.0] 使用新的 key 'photos' 並傳遞物件陣列
-            fileIdsToDelete: deleteIds, // [v588.0 新增] 將待刪除的 ID 列表加入 payload
-            projectId: state.projectId,
-            projectName: state.overview.siteName || state.overview['案場名稱'] || '',
-            userId: state.currentUserId,
-            userName: state.currentUserName
-        }
+        payload
     })
     .then(result => {
         if (result.success) {
             showGlobalNotification(result.message || '照片已成功更新！', 3000, 'success');
-            // [v362.0] 使用後端回傳的最終資料，替換掉整張卡片，確保連結正確。
-            // 由於我們沒有建立臨時卡片，而是直接修改原卡片，這裡的 "replace" 實際上是 "update"。
-            const finalCard = _buildLogCard(result.data, false);
-            if (cardToUpdate) {
+            if (result.data && cardToUpdate && cardToUpdate.parentNode) {
+                const finalCard = _buildLogCard(result.data, false);
                 cardToUpdate.parentNode.replaceChild(finalCard, cardToUpdate);
+            } else if (cardToUpdate) {
+                cardToUpdate.style.opacity = originalOpacity || '';
             }
-        } else {
-            showGlobalNotification(`照片更新失敗: ${result.error || '未知錯誤'}`, 8000, 'error');
+            return;
         }
+        restorePhotoGrid(photoContainer, originalGrid, cardToUpdate, originalOpacity);
+        showGlobalNotification('照片沒存到。畫面上的圖已還原，不是已經改好了。請再開「管理照片」後重試。', 8000, 'error');
     })
-    .catch(error => showGlobalNotification(`請求失敗: ${error.message}`, 8000, 'error'));
+    .catch(error => {
+        restorePhotoGrid(photoContainer, originalGrid, cardToUpdate, originalOpacity);
+        showGlobalNotification('照片沒存到。畫面上的圖已還原，請再開「管理照片」後重試。', 8000, 'error');
+        console.warn('[logActions] 照片儲存失敗', error);
+    });
 }
 
 /** 發布日誌 */
