@@ -25,4 +25,7 @@
 
 | 項目 | 值 |
 |------|-----|
-| 狀態 | 待本輪 push |
+| 狀態 | **已上線** |
+| commit | `2b77f3a` |
+| 備份 | `BAK/CODING_20260831_1149_*` |
+| URL | `https://info.tanxin.space/tools/sketchup-render-studio/` |
