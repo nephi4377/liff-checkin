@@ -277,11 +277,60 @@
         }
         return t;
       }
-      function showLoadFailedEmpty(detail) {
-        if (items.length) return;
-        document.getElementById('listSummary').textContent = '無法載入清單';
-        document.getElementById('list').innerHTML =
-          '<p class="sub">' + esc(detail || '請稍後再試。') + '</p>';
+      function bindListRetry(btn) {
+        if (!btn) return;
+        btn.addEventListener('click', function () { reload(); });
+      }
+      function renderFailList(detail) {
+        var msg = detail || '讀不到單據清單，請再試。這不是「目前沒單據」。';
+        setMsg(msg);
+        setLive('載入失敗', false);
+        document.getElementById('listSummary').textContent = '讀不到清單';
+        var box = document.getElementById('list');
+        var retryBtn = document.createElement('button');
+        retryBtn.type = 'button';
+        retryBtn.className = 'btn btn-primary';
+        retryBtn.textContent = '再試一次';
+        bindListRetry(retryBtn);
+        if (items.length) {
+          renderList();
+          var banner = document.createElement('div');
+          banner.className = 'card';
+          banner.style.marginBottom = '10px';
+          var p = document.createElement('p');
+          p.className = 'sub';
+          p.style.color = '#c5221f';
+          p.style.margin = '0 0 8px';
+          p.textContent = msg + '（仍顯示先前內容）';
+          banner.appendChild(p);
+          banner.appendChild(retryBtn);
+          box.insertBefore(banner, box.firstChild);
+          return;
+        }
+        box.innerHTML = '';
+        var p2 = document.createElement('p');
+        p2.className = 'sub';
+        p2.textContent = msg;
+        box.appendChild(p2);
+        box.appendChild(retryBtn);
+      }
+      async function fetchListOnce() {
+        var status = document.getElementById('filterStatus').value;
+        var data = await AccountingApi.quickReviewList(session, {
+          status: status,
+          keyword: document.getElementById('filterKw').value.trim()
+        });
+        if (!data || !data.success) {
+          throw new Error(humanApiMsg((data && data.message) || '載入失敗'));
+        }
+        return data;
+      }
+      async function fetchListRetry() {
+        try {
+          return await fetchListOnce();
+        } catch (e1) {
+          return await fetchListOnce();
+        }
       }
 
       function esc(s) {
@@ -486,7 +535,7 @@
           return;
         }
         if (!rows.length) {
-          box.textContent = '尚無紀錄';
+          box.textContent = '此廠商目前沒有存檔紀錄';
           return;
         }
         box.innerHTML = '';
@@ -512,21 +561,50 @@
           box.appendChild(div);
         });
       }
+      function renderArchiveFail(detail) {
+        var box = document.getElementById('archiveList');
+        var msg = detail || '讀不到此廠商的存檔，請再試。這不是「還沒選廠商」。';
+        box.innerHTML = '';
+        var p = document.createElement('p');
+        p.className = 'sub';
+        p.style.color = '#c5221f';
+        p.style.margin = '0 0 8px';
+        p.textContent = msg;
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-primary';
+        btn.textContent = '再試一次';
+        btn.addEventListener('click', function () { loadArchiveList(); });
+        box.appendChild(p);
+        box.appendChild(btn);
+      }
+      async function fetchArchiveOnce(vendorId) {
+        var data = await AccountingApi.vendorDocList(session, {
+          vendor_id: vendorId,
+          page_size: 20
+        });
+        if (!data || !data.success) {
+          throw new Error((data && data.message) || '無法載入列表');
+        }
+        return data;
+      }
       async function loadArchiveList() {
         var vendorId = document.getElementById('pickVendorSelect').value;
         if (!vendorId) {
           renderArchiveList([]);
           return;
         }
-        var data = await AccountingApi.vendorDocList(session, {
-          vendor_id: vendorId,
-          page_size: 20
-        });
-        if (!data.success) {
-          document.getElementById('archiveList').textContent = data.message || '無法載入列表';
-          return;
+        try {
+          var data;
+          try {
+            data = await fetchArchiveOnce(vendorId);
+          } catch (e1) {
+            data = await fetchArchiveOnce(vendorId);
+          }
+          renderArchiveList(data.data || []);
+        } catch (e) {
+          renderArchiveFail((e && e.message) || '無法載入列表');
         }
-        renderArchiveList(data.data || []);
       }
       async function deleteArchiveDoc(vendorDocId, btn) {
         if (!confirm('確定刪除此檔案？\n\n檔案會移入雲端硬碟垃圾桶，30 天內可還原。')) return;
@@ -597,7 +675,7 @@
           fillArchiveDocTypes();
           fillVendorTradeFilter();
           fillVendorDropdown();
-          loadArchiveList().catch(function () {});
+          loadArchiveList();
         }
       }
 
@@ -703,21 +781,9 @@
           items.length ? ('共 ' + items.length + ' 筆（更新中…）') : '更新中…';
         AccountingUi.action('載入快審清單', 'start');
         try {
-          var status = document.getElementById('filterStatus').value;
-          var data = await AccountingApi.quickReviewList(session, {
-            status: status,
-            keyword: document.getElementById('filterKw').value.trim()
-          });
-          if (!data.success) {
-            var failMsg = humanApiMsg(data.message || '載入失敗');
-            setMsg(failMsg);
-            setLive('載入失敗', false);
-            showLoadFailedEmpty(failMsg);
-            AccountingUi.action('載入快審清單', 'fail');
-            return;
-          }
+          var data = await fetchListRetry();
           items = data.items || [];
-          cacheWrite(items, status);
+          cacheWrite(items, document.getElementById('filterStatus').value);
           renderList();
           setLive('已更新', false);
           if (refreshTimer) clearTimeout(refreshTimer);
@@ -726,11 +792,9 @@
         } catch (e) {
           var errMsg = humanApiMsg(e.message || String(e));
           if (/abort|timeout|逾時/i.test(errMsg)) {
-            errMsg = '載入逾時，請再按「重新載入」。若持續失敗，可能是後端尚未部署快審。';
+            errMsg = '載入逾時，請再按「再試一次」。若持續失敗，可能是後端尚未部署快審。';
           }
-          setMsg(errMsg);
-          setLive('載入失敗', false);
-          showLoadFailedEmpty(errMsg);
+          renderFailList(errMsg);
           AccountingUi.action('載入快審清單', 'fail');
         } finally {
           reloadBusy = false;
@@ -864,11 +928,11 @@
       });
       document.getElementById('filterVendorTrade').addEventListener('change', function () {
         fillVendorDropdown();
-        loadArchiveList().catch(function () {});
+        loadArchiveList();
         updateArchiveUploadUi();
       });
       document.getElementById('pickVendorSelect').addEventListener('change', function () {
-        loadArchiveList().catch(function () {});
+        loadArchiveList();
         updateArchiveUploadUi();
       });
       document.getElementById('archiveSubmitBtn').addEventListener('click', function () { submitArchive(); });
