@@ -163,6 +163,10 @@
 
         <div id="results-container" class="bg-white p-5 md:p-6 rounded-xl shadow-sm border border-gray-100">
              <h2 id="results-section-title" class="text-lg font-semibold mb-4">每人小計</h2>
+             <div id="appeal-status-error" class="hidden mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-center">
+                <p id="appeal-status-error-text" class="text-sm text-red-700">讀不到申訴狀態，請再試。這不代表您沒有送過說明。</p>
+                <button type="button" id="appeal-status-retry" class="mt-2 min-h-[44px] px-4 rounded-lg bg-white border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">再試一次</button>
+             </div>
              <div id="loading-spinner" class="text-center py-10 text-gray-500" style="display: none;">載入中…</div>
              <div id="report-table-container"></div>
              <div id="map-container" style="display: none;">
@@ -408,6 +412,7 @@
     import { initPayrollReviewPanel, initPayrollAdminPreview } from '/modules/attendance/payroll_review_panel.js';
     import { initLeaveYearStatsManager } from '/modules/attendance/leave_year_stats_manager.js?v=20260723';
     import { initLeaveYearStatsPanel } from '/modules/attendance/leave_year_stats_panel.js?v=20260723';
+    import { classifyAttendanceListFetch } from '/modules/attendance/attendanceListFetch.js';
 
     // 【您的要求】新增全域變數，用於儲存當前報表資料以供匯出
     let currentReportData = {};
@@ -415,6 +420,9 @@
     let lastReportHolidays = new Set();
     let expandedUserIds = new Set();
     let employeeShiftData = {};
+    let appealStatusMap = {};
+    let appealStatusError = '';
+    let appealStatusRetrying = false;
 
     const urlParamsInit = new URLSearchParams(window.location.search);
     const permFromUrl = parseInt(urlParamsInit.get('permission') || '1', 10);
@@ -436,7 +444,6 @@
     let leaveYearStatsPanel = null;
     let activePersonalTab = 'attendance';
     let activeManagerTab = 'attendance';
-    let appealStatusMap = {};
     let pendingAppealContext = null;
 
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
@@ -750,6 +757,9 @@
             const title = appealStatusTitle(appeal);
             return `<td class="px-4 py-2 text-center text-xs ${cls} font-medium"${title ? ` title="${escapeAttr(title)}"` : ''}>${escapeHtml(formatAppealStatusLabel(appeal))}</td>`;
         }
+        if (appealStatusError) {
+            return '<td class="px-4 py-2 text-center text-xs text-red-600 font-medium">讀不到</td>';
+        }
         const snapshot = JSON.stringify({
             checkIn: day.checkIn, checkOut: day.checkOut, status: day.status,
             late: day.late, early: day.early, anomalyTags: getDayAnomalyTags(day)
@@ -757,20 +767,127 @@
         return `<td class="px-4 py-2 text-center"><button type="button" class="text-xs px-2 py-1 bg-amber-100 text-amber-800 rounded hover:bg-amber-200 font-medium" data-appeal-action="open" data-date="${escapeAttr(dateStr)}" data-anomaly="${escapeAttr(anomalyType)}" data-snapshot="${escapeAttr(snapshot)}">提出說明</button></td>`;
     }
 
-    async function fetchPersonalAppeals(startDate, endDate) {
-        if (!IS_PERSONAL || !personalUserId) return;
-        try {
-            const data = await fetchApi({
-                page: 'attendance_api', action: 'attendance_appeal', mode: 'mine',
-                operatorId: personalUserId, startDate, endDate
-            });
-            appealStatusMap = {};
-            (data?.data || []).forEach((a) => {
-                appealStatusMap[appealMapKey(a.targetDate, a.anomalyType)] = a;
-            });
-        } catch (err) {
-            console.warn('載入申訴狀態失敗', err);
+    function isAttendanceMockAllowed() {
+        const h = window.location.hostname;
+        return h === '127.0.0.1' || h === 'localhost';
+    }
+
+    function getAttendanceMock() {
+        if (!isAttendanceMockAllowed()) return '';
+        return new URLSearchParams(window.location.search).get('mock') || '';
+    }
+
+    function syncAppealStatusErrorBanner() {
+        const wrap = document.getElementById('appeal-status-error');
+        const text = document.getElementById('appeal-status-error-text');
+        const retryBtn = document.getElementById('appeal-status-retry');
+        if (!wrap) return;
+        if (!IS_PERSONAL || !appealStatusError) {
+            wrap.classList.add('hidden');
+            return;
         }
+        wrap.classList.remove('hidden');
+        if (text) {
+            text.textContent = appealStatusError + '。這不代表您沒有送過說明。';
+        }
+        if (retryBtn) retryBtn.disabled = appealStatusRetrying;
+    }
+
+    function applyAppealRows(rows) {
+        const next = {};
+        (rows || []).forEach((a) => {
+            if (!a) return;
+            next[appealMapKey(a.targetDate, a.anomalyType)] = a;
+        });
+        appealStatusMap = next;
+        appealStatusError = '';
+    }
+
+    async function fetchPersonalAppealsOnce(startDate, endDate) {
+        const mock = getAttendanceMock();
+        if (mock === 'appeals_fail') {
+            throw new Error('讀不到申訴狀態，請再試');
+        }
+        if (mock === 'appeals_empty') {
+            return [];
+        }
+        const data = await fetchApi({
+            page: 'attendance_api', action: 'attendance_appeal', mode: 'mine',
+            operatorId: personalUserId, startDate, endDate
+        });
+        const classified = classifyAttendanceListFetch(data, '讀不到申訴狀態，請再試');
+        if (classified.kind === 'error') {
+            throw new Error(classified.message || '讀不到申訴狀態，請再試');
+        }
+        return classified.items;
+    }
+
+    async function fetchPersonalAppeals(startDate, endDate) {
+        if (!IS_PERSONAL) return;
+        if (!personalUserId && !getAttendanceMock()) return;
+        const prevMap = { ...appealStatusMap };
+        let lastError = null;
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+                const rows = await fetchPersonalAppealsOnce(startDate, endDate);
+                applyAppealRows(rows);
+                syncAppealStatusErrorBanner();
+                return;
+            } catch (err) {
+                lastError = err;
+                if (attempt === 1) await new Promise((r) => setTimeout(r, 800));
+            }
+        }
+        appealStatusMap = prevMap;
+        appealStatusError = (lastError && lastError.message) || '讀不到申訴狀態，請再試';
+        console.warn('載入申訴狀態失敗', lastError);
+        syncAppealStatusErrorBanner();
+    }
+
+    async function retryPersonalAppeals() {
+        if (appealStatusRetrying) return;
+        const startDate = document.getElementById('start-date').value;
+        const endDate = document.getElementById('end-date').value;
+        const retryBtn = document.getElementById('appeal-status-retry');
+        appealStatusRetrying = true;
+        if (retryBtn) {
+            retryBtn.disabled = true;
+            retryBtn.textContent = '載入中…';
+        }
+        try {
+            await fetchPersonalAppeals(startDate, endDate);
+            if (currentReportData && Object.keys(currentReportData).length) {
+                renderReportView(currentReportData, lastReportHolidays);
+            }
+        } finally {
+            appealStatusRetrying = false;
+            if (retryBtn) {
+                retryBtn.disabled = false;
+                retryBtn.textContent = '再試一次';
+            }
+            syncAppealStatusErrorBanner();
+        }
+    }
+
+    function buildMockPersonalReport() {
+        const uid = personalUserId || 'mock-user';
+        const dayKey = document.getElementById('end-date')?.value
+            || document.getElementById('start-date')?.value
+            || new Date().toLocaleDateString('sv');
+        return {
+            [uid]: {
+                userName: personalUserName || '測試員工',
+                dailyData: {
+                    [dayKey]: {
+                        checkIn: '08:40',
+                        checkOut: '17:30',
+                        status: '遲到',
+                        late: 10,
+                        early: 0
+                    }
+                }
+            }
+        };
     }
 
     const APPEAL_REASON_TAGS = {
@@ -876,6 +993,15 @@
             });
             const result = await response.json();
             if (!result.success) throw new Error(result.message || '送出失敗');
+            const submittedType = document.getElementById('appeal-anomaly-type').value;
+            const submittedDate = pendingAppealContext.targetDate;
+            appealStatusMap[appealMapKey(submittedDate, submittedType)] = {
+                targetDate: submittedDate,
+                anomalyType: submittedType,
+                status: '待審',
+                isLateSubmit: !!result.isLateSubmit
+            };
+            appealStatusError = '';
             document.getElementById('appeal-modal').classList.remove('is-open');
             showGlobalNotification(result.message || '申訴已送出', 5000, 'success');
             const startDate = document.getElementById('start-date').value;
@@ -956,6 +1082,7 @@
 
         // 【⭐️ 核心修正：將所有事件綁定移至此處，確保 DOM 已載入 ⭐️】
         document.getElementById('query-btn').onclick = fetchReportData;
+        document.getElementById('appeal-status-retry')?.addEventListener('click', () => retryPersonalAppeals());
         document.getElementById('btn-range-this-month').onclick = () => setMonthRange(0);
         document.getElementById('btn-range-last-month').onclick = () => setMonthRange(-1);
         // 【您的要求】為匯出按鈕綁定事件
@@ -1191,6 +1318,23 @@
         // 【您的要求】查詢時先隱藏匯出按鈕
         document.getElementById('export-csv-btn').classList.add('hidden');
         document.getElementById('map-container').style.display = 'none';
+        appealStatusError = '';
+        syncAppealStatusErrorBanner();
+
+        const mock = getAttendanceMock();
+        if (mock === 'appeals_fail' || mock === 'appeals_empty') {
+            const fake = buildMockPersonalReport();
+            currentReportData = fake;
+            lastReportHolidays = new Set();
+            lastGlobalSummary = {};
+            expandedUserIds.clear();
+            Object.keys(fake).forEach((id) => expandedUserIds.add(id));
+            fetchPersonalAppeals(startDate, endDate).then(() => {
+                spinner.style.display = 'none';
+                renderReportView(fake, lastReportHolidays);
+            });
+            return;
+        }
 
         // 【v175.0 核心修正】在查詢報表時，也附上當前操作者的資訊
         const urlParams = new URLSearchParams(window.location.search);
