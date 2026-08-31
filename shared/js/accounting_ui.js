@@ -513,12 +513,25 @@ var AccountingUi = (function () {
     bindParentLogListener();
   }
 
+  function looksLikeFieldHint_(text) {
+    return /請(先|填|選|輸入|勾選)|必填|至少一/.test(String(text || ''));
+  }
+
   function notify(kind, text, options) {
     options = options || {};
     kind = normalizeKind(kind);
     if (!text) return;
     pushLog(kind, text);
     if (options.logOnly) return;
+    if (kind === 'err' && !options.simple && !looksLikeFieldHint_(text)) {
+      toastErrorReport(text, {
+        message: text,
+        action: options.action || pageLabel(),
+        page: options.page || pageLabel(),
+        tech: options.tech || ''
+      });
+      return;
+    }
     toast(kind, text, options.ms != null ? options.ms : TOAST_MS_DEFAULT);
   }
 
@@ -752,10 +765,71 @@ var AccountingUi = (function () {
   function buildCursorHandoffText(ctx, reportText) {
     return [
       '請依這份添心會計錯誤回報排查並修復。',
-      '（從畫面「複製給 Cursor」貼上）',
+      '（從畫面「送到 AI」）',
       '',
       String(reportText || buildErrorReportText(ctx))
     ].join('\n');
+  }
+
+  function inferAccountingInboxRepo_(ctx, report) {
+    var t = [
+      ctx && ctx.message,
+      ctx && ctx.tech,
+      ctx && ctx.action,
+      report
+    ].join(' ');
+    if (/DriveApp|SpreadsheetApp|googleapis\.com\/auth|Apps Script|clasp|試算表|雲端硬碟/i.test(t)) {
+      return 'backend';
+    }
+    return 'frontend';
+  }
+
+  function sendErrorToAiInbox_(ctx, report) {
+    ctx = ctx || {};
+    if (isGuestFacingPageForInbox_()) {
+      return Promise.resolve({ success: false, message: '客頁不送' });
+    }
+    var uid = String(operator.userId || '').trim();
+    if (!uid) return Promise.resolve({ success: false, message: '尚未從主控台帶入身分' });
+    if (typeof AccountingApi === 'undefined' || typeof AccountingApi.reportStaffFatalInbox !== 'function') {
+      return Promise.resolve({ success: false, message: '無法連到信箱' });
+    }
+    var title = String(ctx.message || '會計錯誤').replace(/\s+/g, ' ').trim().slice(0, 80);
+    return AccountingApi.reportStaffFatalInbox({
+      userId: uid,
+      title: title || '會計錯誤',
+      summary: String(report || buildErrorReportText(ctx) || '').slice(0, 1500),
+      page: ctx.page || (typeof location !== 'undefined' ? location.pathname : ''),
+      action: ctx.action || '',
+      link: typeof location !== 'undefined' ? (location.href || '') : '',
+      repo: inferAccountingInboxRepo_(ctx, report)
+    });
+  }
+
+  function bindSendToAiButton_(btn, ctx, report) {
+    btn.addEventListener('click', function () {
+      var orig = btn.textContent;
+      setBtnBusy(btn, true, '送出中…');
+      tap('送到 AI 信箱');
+      sendErrorToAiInbox_(ctx, report).then(function (res) {
+        setBtnBusy(btn, false);
+        if (res && res.success) {
+          var launched = res.cloud && res.cloud.launched;
+          btn.textContent = launched ? '雲端已開工' : '已送到 AI';
+          notify('ok', launched
+            ? '已送到 AI 信箱，雲端已開工（不會出現在你電腦這則對話）'
+            : '已送到 AI 信箱');
+          setTimeout(function () { btn.textContent = orig; }, 2400);
+        } else {
+          btn.textContent = orig;
+          notify('err', (res && res.message) ? String(res.message) : '沒送到 AI，請改按「複製錯誤」');
+        }
+      }).catch(function () {
+        setBtnBusy(btn, false);
+        btn.textContent = orig;
+        notify('err', '沒送到 AI，請改按「複製錯誤」');
+      });
+    });
   }
 
   function persistLastError_(reportText) {
@@ -800,8 +874,8 @@ var AccountingUi = (function () {
     var cursorBtn = document.createElement('button');
     cursorBtn.type = 'button';
     cursorBtn.className = 'btn btn-cursor';
-    cursorBtn.textContent = '複製給 Cursor';
-    bindCopyButton_(cursorBtn, cursorText, '已複製，請貼到 Cursor 對話');
+    cursorBtn.textContent = '送到 AI';
+    bindSendToAiButton_(cursorBtn, ctx, report);
     actions.appendChild(cursorBtn);
 
     wrap.appendChild(actions);
@@ -853,8 +927,8 @@ var AccountingUi = (function () {
     var cursorBtn = document.createElement('button');
     cursorBtn.type = 'button';
     cursorBtn.className = 'btn';
-    cursorBtn.textContent = '複製給 Cursor';
-    bindCopyButton_(cursorBtn, buildCursorHandoffText(ctx, report), '已複製，請貼到 Cursor 對話');
+    cursorBtn.textContent = '送到 AI';
+    bindSendToAiButton_(cursorBtn, ctx, report);
     btns.appendChild(copyBtn);
     btns.appendChild(mailBtn);
     btns.appendChild(cursorBtn);
@@ -866,7 +940,7 @@ var AccountingUi = (function () {
   }
 
   /**
-   * 表單內常駐錯誤列：人話 + 複製 / 開信 / 複製給 Cursor
+   * 表單內常駐錯誤列：人話 + 複製 / 開信 / 送到 AI
    */
   function showErrorReport(target, ctx) {
     ctx = ctx || {};
@@ -884,7 +958,7 @@ var AccountingUi = (function () {
     el.appendChild(msg);
     var hint = document.createElement('p');
     hint.className = 'acct-err-hint';
-    hint.textContent = '可複製錯誤、開信寄出，或「複製給 Cursor」貼到對話給我。網頁無法直接傳到 Cursor。';
+    hint.textContent = '可複製錯誤、開信寄出，或按「送到 AI」寫進 AI 信箱（可叫雲端開工）。';
     el.appendChild(hint);
     var report = buildErrorReportText(ctx);
     appendErrorReportActions_(el, ctx, report);
@@ -1022,8 +1096,8 @@ var AccountingUi = (function () {
     var cursorBtn = document.createElement('button');
     cursorBtn.type = 'button';
     cursorBtn.className = 'btn btn-cursor';
-    cursorBtn.textContent = '複製給 Cursor';
-    bindCopyButton_(cursorBtn, buildCursorHandoffText(ctx, report), '已複製，請貼到 Cursor 對話');
+    cursorBtn.textContent = '送到 AI';
+    bindSendToAiButton_(cursorBtn, ctx, report);
     actions.appendChild(cursorBtn);
 
     wrap.appendChild(actions);
@@ -1034,17 +1108,17 @@ var AccountingUi = (function () {
     try { reportStaffFatalToInbox_(ctx); } catch (eInbox) {}
     reportPersistentError(ctx).then(function (res) {
       if (res && (res.emailed || res.deduped)) {
-        hint.textContent = '錯誤已記錄並寄到 ' + ERROR_REPORT_EMAIL + '。可再試、複製錯誤，或「複製給 Cursor」貼到對話。';
+        hint.textContent = '錯誤已記錄並寄到 ' + ERROR_REPORT_EMAIL + '。可再試、複製錯誤，或按「送到 AI」。';
         mailBtn.textContent = res.deduped ? '稍早已寄過' : '已寄到信箱';
       } else if (res && res.logged && !res.emailed) {
-        hint.textContent = '錯誤已寫入紀錄。寄信未送出時，請按「複製錯誤」、「開信寄出」或「複製給 Cursor」。';
+        hint.textContent = '錯誤已寫入紀錄。寄信未送出時，請按「複製錯誤」、「開信寄出」或「送到 AI」。';
         mailBtn.textContent = '開信寄出';
       } else {
-        hint.textContent = '請按「複製錯誤」；也可開信寄到 ' + ERROR_REPORT_EMAIL + '，或「複製給 Cursor」貼到對話。';
+        hint.textContent = '請按「複製錯誤」；也可開信寄到 ' + ERROR_REPORT_EMAIL + '，或按「送到 AI」。';
         mailBtn.textContent = '開信寄出';
       }
     }).catch(function () {
-      hint.textContent = '請按「複製錯誤」，開信寄出，或「複製給 Cursor」貼到對話。';
+      hint.textContent = '請按「複製錯誤」，開信寄出，或按「送到 AI」。';
       mailBtn.textContent = '開信寄出';
     });
     return wrap;
@@ -1232,6 +1306,8 @@ var AccountingUi = (function () {
     buildErrorMailtoUrl: buildErrorMailtoUrl,
     showFatalError: showFatalError,
     showErrorReport: showErrorReport,
+    sendErrorToAiInbox: sendErrorToAiInbox_,
+    bindSendToAiButton: bindSendToAiButton_,
     buildCursorHandoffText: buildCursorHandoffText,
     confirmReject: confirmReject,
     REJECT_CHIPS: REJECT_CHIPS,

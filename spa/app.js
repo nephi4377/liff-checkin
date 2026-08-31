@@ -1,7 +1,7 @@
 import Dashboard from './Dashboard.js?v=26.07.28.1';
 import ProjectBoard from './ProjectBoard.js?v=26.08.30.1';
 import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.07.24.1';
-import HubLeftSidebar from './HubLeftSidebar.js?v=26.08.29.1';
+import HubLeftSidebar from './HubLeftSidebar.js?v=26.08.31.2';
 import { mergeHubPaymentTodosFetch } from './hubPaymentTodos.js?v=26.08.29.1';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔

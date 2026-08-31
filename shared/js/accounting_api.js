@@ -1783,7 +1783,8 @@ var AccountingApi = (function () {
         summary: opts.summary || '',
         page: opts.page || '',
         failedAction: opts.action || '',
-        link: opts.link || ''
+        link: opts.link || '',
+        repo: opts.repo || ''
       }, 20000, '主控台').catch(function () {
         return { success: false };
       });

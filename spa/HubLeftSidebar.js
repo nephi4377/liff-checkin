@@ -1,3 +1,4 @@
+import { sendStaffErrorToAi } from '../shared/js/staff_error_ai.js?v=1';
 import { AI_SIGNAL_META, parseAiFindingsJson, isAiReviewedByUser, getAiExpandableDetails } from '../modules/projects/js/siteReportAiUi.js';
 import { request as apiRequest } from '../modules/projects/js/projectApi.js';
 
@@ -257,6 +258,31 @@ export default {
             }
         };
 
+        const aiSendBusy = ref('');
+        const aiSendNote = ref('');
+
+        async function sendSidebarErrorToAi(kind) {
+            const msg = kind === 'payments'
+                ? String(props.paymentTodosError || '').trim()
+                : String(props.todayReportsError || '').trim();
+            if (!msg) return;
+            aiSendBusy.value = kind;
+            aiSendNote.value = '';
+            const res = await sendStaffErrorToAi({
+                userId: currentUserId.value,
+                title: msg,
+                summary: msg,
+                page: '主控台側欄',
+                action: kind === 'payments' ? '款項待辦' : '今日回報'
+            });
+            aiSendBusy.value = '';
+            if (res && res.success) {
+                aiSendNote.value = (res.cloud && res.cloud.launched) ? '雲端已開工' : '已送到 AI';
+            } else {
+                aiSendNote.value = (res && res.message) ? String(res.message) : '沒送到 AI';
+            }
+        }
+
         return {
             reportUrl,
             dailyReportUrl,
@@ -289,7 +315,10 @@ export default {
             markAiFeedback,
             rerunAiAnalysis,
             markingLogId,
-            rerunningLogId
+            rerunningLogId,
+            aiSendBusy,
+            aiSendNote,
+            sendSidebarErrorToAi
         };
     },
     template: `
@@ -421,6 +450,12 @@ export default {
                         {{ todayReportsError }}
                         <button type="button" @click="retryReports"
                             class="block mx-auto mt-2 text-sm font-semibold text-blue-600 hover:underline">再試一次</button>
+                        <button type="button" @click="sendSidebarErrorToAi('reports')"
+                            :disabled="aiSendBusy === 'reports'"
+                            class="block mx-auto mt-2 text-sm font-semibold bg-slate-900 text-white px-3 py-1.5 rounded disabled:opacity-50">
+                            {{ aiSendBusy === 'reports' ? '送出中…' : '送到 AI' }}
+                        </button>
+                        <span v-if="aiSendNote" class="block mt-1 text-xs text-gray-600">{{ aiSendNote }}</span>
                     </p>
                     <p v-else-if="!todayReportsLoading && sortedReports.length === 0" class="text-gray-500 text-center py-6 text-sm">近三日無未讀回報</p>
                     <p v-else-if="todayReportsLoading && sortedReports.length === 0" class="text-gray-500 text-center py-6 text-sm">載入回報中…</p>
@@ -502,6 +537,13 @@ export default {
                             @click="retryPayments">
                             {{ paymentTodosLoading ? '載入中…' : '再試一次' }}
                         </button>
+                        <button type="button"
+                            class="mt-2 w-full text-sm font-semibold bg-slate-900 text-white px-3 py-2 rounded disabled:opacity-50"
+                            :disabled="aiSendBusy === 'payments'"
+                            @click="sendSidebarErrorToAi('payments')">
+                            {{ aiSendBusy === 'payments' ? '送出中…' : '送到 AI' }}
+                        </button>
+                        <p v-if="aiSendNote" class="text-xs text-gray-600 mt-1">{{ aiSendNote }}</p>
                     </div>
                     <p v-if="!paymentTodosLoading && !paymentTodosError && pendingReview.length === 0 && pendingPayment.length === 0"
                         class="text-gray-500 text-center py-4 text-sm">目前沒有待辦款項</p>

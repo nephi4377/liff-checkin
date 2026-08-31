@@ -106,6 +106,7 @@
                         <div id="history-error" class="hidden text-center py-4">
                             <p id="history-error-text" class="text-red-600">假單載入失敗，請再試</p>
                             <button type="button" id="history-retry" class="mt-2 min-h-[44px] px-4 rounded-lg bg-white border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">再試一次</button>
+                            <button type="button" id="history-send-ai" class="mt-2 min-h-[44px] px-4 rounded-lg bg-slate-900 text-white text-sm font-semibold disabled:opacity-50">送到 AI</button>
                         </div>
                         <div id="history-list" class="space-y-3"></div>
                     </div>
@@ -115,6 +116,7 @@
                         <div id="management-error" class="hidden text-center py-4">
                             <p id="management-error-text" class="text-red-600">假單載入失敗，請再試</p>
                             <button type="button" id="management-retry" class="mt-2 min-h-[44px] px-4 rounded-lg bg-white border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">再試一次</button>
+                            <button type="button" id="management-send-ai" class="mt-2 min-h-[44px] px-4 rounded-lg bg-slate-900 text-white text-sm font-semibold disabled:opacity-50">送到 AI</button>
                         </div>
                         <div id="management-list" class="space-y-3"></div>
                     </div>
@@ -181,6 +183,7 @@
 <script type="module">
     // 【v143.0 核心改造】引入共用工具函式庫
     import { readFileAsBase64, compressImage } from '../../shared/js/utils.js'; // [v516.0 修正] 更新共用模組 utils.js 的路徑
+    import { bindStaffErrorAiButton } from '../../shared/js/staff_error_ai.js?v=1';
 
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
     const APP_SETTINGS = {
@@ -671,6 +674,24 @@ thumbnail.src = '';
 
             document.getElementById('history-retry')?.addEventListener('click', () => fetchMyLeaveRequests());
             document.getElementById('management-retry')?.addEventListener('click', () => fetchManageableLeaveRequests());
+            bindStaffErrorAiButton(document.getElementById('history-send-ai'), function () {
+                var el = document.getElementById('history-error-text');
+                return {
+                    userId: userProfile && userProfile.userId,
+                    title: (el && el.textContent) || '假單載入失敗',
+                    page: '假勤申請',
+                    action: '我的假單'
+                };
+            });
+            bindStaffErrorAiButton(document.getElementById('management-send-ai'), function () {
+                var el = document.getElementById('management-error-text');
+                return {
+                    userId: userProfile && userProfile.userId,
+                    title: (el && el.textContent) || '假單載入失敗',
+                    page: '假勤申請',
+                    action: '假單管理'
+                };
+            });
         }
 
         /**
