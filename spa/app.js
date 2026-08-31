@@ -3,6 +3,7 @@ import ProjectBoard from './ProjectBoard.js?v=26.08.30.1';
 import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.07.24.1';
 import HubLeftSidebar from './HubLeftSidebar.js?v=26.08.31.2';
 import { mergeHubPaymentTodosFetch } from './hubPaymentTodos.js?v=26.08.29.1';
+import { removeNotificationById, removeInfoNotifications, notificationsAfterAction } from './hubNotificationActions.js?v=26.08.31.4';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
 import { saveCache, loadCache, loadHubPresenceCache, saveHubPresenceCache, loadDailyCache, saveDailyCache, purgeStaleDailyCaches, hubSidebarDailyCacheKey, hubPresenceTodayStr } from '../shared/js/utils.js?v=26.07.24.1';
@@ -694,15 +695,15 @@ const App = {
                     body: formData,
                 });
                 const result = await response.json();
-                if (!result.success) throw new Error(result.message);
-                return result;
+                if (!result || !result.success) throw new Error((result && result.message) || '處理失敗');
+                return { ok: true };
             } catch (error) {
                 console.error('[API] 處理通知動作失敗:', error);
-                alert(`操作失敗: ${error.message}`);
+                return { ok: false, message: (error && error.message) || '操作失敗，請再試' };
             }
         };
 
-        const handleNotificationAction = ({ action, notificationId, content }) => {
+        const handleNotificationAction = async ({ action, notificationId, content }) => {
             const notification = notifications.value.find(n => n.NotificationID === notificationId);
             if (!notification) return;
 
@@ -717,22 +718,34 @@ const App = {
                 subAction = 'complete';
             }
 
-            if (subAction) {
-                // 樂觀更新：立即從畫面上移除
-                notifications.value = notifications.value.filter(n => n.NotificationID !== notificationId);
-                processNotificationAction({ subAction, notificationId, content, userName: userProfile.value.displayName });
+            if (!subAction) return;
+
+            const { snapshot, next } = removeNotificationById(notifications.value, notificationId);
+            notifications.value = next;
+            const result = await processNotificationAction({
+                subAction, notificationId, content, userName: userProfile.value.displayName
+            });
+            notifications.value = notificationsAfterAction(result.ok, snapshot, notifications.value);
+            if (!result.ok) {
+                alert(result.message || '還沒記下，通知已放回畫面上，請再試。');
             }
         };
 
-        const clearAllNotifications = () => {
+        const clearAllNotifications = async () => {
             const idsToMarkRead = notifications.value
                 .filter(n => n.ActionType === 'None')
                 .map(n => n.NotificationID);
 
-            if (idsToMarkRead.length > 0) {
-                // 樂觀更新
-                notifications.value = notifications.value.filter(n => n.ActionType !== 'None');
-                processNotificationAction({ subAction: 'mark_read', notificationIds: idsToMarkRead.join(',') });
+            if (idsToMarkRead.length === 0) return;
+
+            const { snapshot, next } = removeInfoNotifications(notifications.value);
+            notifications.value = next;
+            const result = await processNotificationAction({
+                subAction: 'mark_read', notificationIds: idsToMarkRead.join(',')
+            });
+            notifications.value = notificationsAfterAction(result.ok, snapshot, notifications.value);
+            if (!result.ok) {
+                alert(result.message || '還沒清掉，通知已放回畫面上，請再試。');
             }
         };
 
