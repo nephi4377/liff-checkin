@@ -15,7 +15,7 @@
 - `tools/sketchup-render-studio/styles.css`：開頁失敗排版
 - `SPEC/23_SKETCHUP_RENDER_STUDIO_SPEC.md`
 
-未改 GAS。Cloud 無法 `upload.bat`；合 main 後才算正式站。
+Cloud 無法 `upload.bat`；合 main 後才算正式站。PR：https://github.com/nephi4377/liff-checkin/pull/47
 
 ## 驗證
 
