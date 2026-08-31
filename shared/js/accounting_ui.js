@@ -607,7 +607,11 @@ var AccountingUi = (function () {
     if (isDebugMode() || slow || actionName === 'accounting_bootstrap' || actionName === 'accounting_auth_me') {
       var tag = (extra && extra.indexOf('GAS 快取') >= 0) ? '（GAS 快取）' : '';
       if (ok) step(label + (slow ? '（偏慢）' : '') + tag, detail);
-      else action(label, 'fail', detail);
+      else {
+        var skipDupToast = /vendor_payment_approve|vendor_payment_mark_paid/.test(String(actionName || '')) &&
+          /逾時|等太久/.test(String(extra || ''));
+        action(label, 'fail', detail, { toast: skipDupToast ? false : undefined });
+      }
     }
   }
 
@@ -778,7 +782,7 @@ var AccountingUi = (function () {
       ctx && ctx.action,
       report
     ].join(' ');
-    if (/DriveApp|SpreadsheetApp|googleapis\.com\/auth|Apps Script|clasp|試算表|雲端硬碟/i.test(t)) {
+    if (/DriveApp|SpreadsheetApp|googleapis\.com\/auth|Apps Script|clasp|試算表|雲端硬碟|vendor_payment_|ledger_review|連線逾時/i.test(t)) {
       return 'backend';
     }
     return 'frontend';

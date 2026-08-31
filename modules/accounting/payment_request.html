@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
-  <script src="../../shared/js/accounting_tax_mode.js?v=2"></script>
+  <script src="../../shared/js/accounting_tax_mode.js?v=4"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_context.js?v=3"></script>
@@ -240,7 +240,7 @@
       <label>明細（案號＋金額，至少一列）</label>
       <div class="tax-mode-block" id="taxModeBlock">
         <label>稅別模式（整張統一）</label>
-        <p class="sub" id="taxModeHint" style="margin:4px 0 6px">「已含稅」金額不另加稅。另外兩種請在金額欄填<strong>未稅</strong>，合計會自動加 5%。</p>
+        <p class="sub" id="taxModeHint" style="margin:4px 0 6px">「已含稅」＝金額已含稅、不再加。整張加稅＝上面填未稅、下面算稅；送出後才把稅分進各案與毛利。</p>
         <div id="taxModeSegHost"></div>
       </div>
       <div id="allocList"></div>
@@ -882,21 +882,27 @@
         if (taxDisabled) checked = false;
         var pretaxText = '';
         if (checked && !isNaN(amt) && amt !== 0 && amt > 0) {
-          pretaxText = '未稅 $' + removeTaxAmount(amt).toLocaleString('zh-TW');
+          pretaxText = (typeof AccountingTaxMode !== 'undefined')
+            ? AccountingTaxMode.rowHintText(row, taxMode)
+            : ('未稅 $' + removeTaxAmount(amt).toLocaleString('zh-TW'));
         }
         var baseAttr = (row._base_amount != null && row._base_amount !== '') ? String(row._base_amount) : '';
+        var taxRowHtml = '';
+        if (taxMode !== 'prorate') {
+          taxRowHtml = '<div class="tax-row">' +
+            '<label><input type="checkbox" class="inp-tax"' +
+            (checked ? ' checked' : '') + (taxDisabled ? ' disabled' : '') + ' />含稅</label>' +
+            '<span class="pretax-hint">' + pretaxText + '</span></div>';
+        }
         return '<div class="alloc-row" data-idx="' + idx + '" data-source="' + (row.source || '') + '"' +
           ' data-ocr-tax-inclusive="' + (row.ocr_tax_inclusive ? '1' : '0') + '"' +
           ' data-tax-add-applied="' + (row.tax_add_applied ? '1' : '0') + '"' +
           ' data-base-amount="' + baseAttr + '">' +
           '<button type="button" class="rm" data-rm="' + idx + '">刪除</button>' +
           '<div class="row2"><div><label>案號' + src + '</label><input class="inp-pn" value="' + (row.project_no || '') + '" placeholder="752" /></div>' +
-          '<div><label>' + (taxMode === 'inclusive' ? '金額' : '金額（未稅）') + '</label><input class="inp-amt" type="number" inputmode="numeric" placeholder="折讓填負數" value="' + (row.amount || '') + '" /></div></div>' +
+          '<div><label>' + (taxMode === 'inclusive' || (checked && taxMode !== 'prorate') ? '金額' : '金額（未稅）') + '</label><input class="inp-amt" type="number" inputmode="numeric" placeholder="折讓填負數" value="' + (row.amount || '') + '" /></div></div>' +
           '<label>品項</label><input class="inp-desc" value="' + (row.item_desc || '') + '" placeholder="摘要" />' +
-          '<div class="tax-row">' +
-          '<label><input type="checkbox" class="inp-tax"' +
-          (checked ? ' checked' : '') + (taxDisabled ? ' disabled' : '') + ' />含稅</label>' +
-          '<span class="pretax-hint">' + pretaxText + '</span></div></div>';
+          taxRowHtml + '</div>';
       }
 
       function renderAllocRows(rows) {
@@ -962,22 +968,22 @@
         var btn5 = host.querySelector('.btn-tax-5pct');
         if (btn5) {
           btn5.addEventListener('click', function () {
-            var bases = AccountingTaxMode.applyModeToRows(readAllocRows(), 'inclusive', { prevMode: taxMode });
             var pretax = 0;
-            bases.forEach(function (r) {
+            readAllocRows().forEach(function (r) {
               var a = parseAllocAmount(r.amount);
               if (!isNaN(a) && a > 0) pretax += a;
             });
             setProrateTaxInput(Math.round(pretax * 0.05));
-            taxMode = 'inclusive';
-            renderAllocRows(bases);
-            applyTaxMode('prorate', { force: true });
+            updateTotal();
           });
         }
         var taxInp = host.querySelector('.inp-tax-amount');
         if (taxInp) {
+          taxInp.addEventListener('input', function () {
+            if (taxMode === 'prorate') updateTotal();
+          });
           taxInp.addEventListener('change', function () {
-            if (taxMode === 'prorate') applyTaxMode('prorate', { force: true });
+            if (taxMode === 'prorate') updateTotal();
           });
         }
       }
@@ -1003,10 +1009,12 @@
           syncTaxModeFormNote();
           return;
         }
-        var applied = AccountingTaxMode.applyModeToRows(rows, next, {
-          prevMode: prev,
-          taxAmount: getProrateTaxInput()
-        });
+        var applied = next === 'prorate'
+          ? AccountingTaxMode.applyModeToRows(rows, next, { prevMode: prev, displayOnly: true })
+          : AccountingTaxMode.applyModeToRows(rows, next, {
+            prevMode: prev,
+            taxAmount: getProrateTaxInput()
+          });
         taxMode = next;
         taxModeTouched = true;
         renderAllocRows(applied);
@@ -1030,7 +1038,7 @@
       }
 
       function refreshTaxFromCurrentBases() {
-        if (taxApplyBusy || taxMode === 'inclusive') return;
+        if (taxApplyBusy || taxMode === 'inclusive' || taxMode === 'prorate') return;
         if (!readAllocRows().length) return;
         taxApplyBusy = true;
         try {
@@ -1067,41 +1075,58 @@
         var sum = rows.reduce(function (s, r) {
           return s + (parseInt(r.amount, 10) || 0);
         }, 0);
-        document.getElementById('totalAmt').textContent = sum.toLocaleString('zh-TW');
+        var payable = sum;
         var br = document.getElementById('taxBreakdown');
         if (br && typeof AccountingTaxMode !== 'undefined') {
-          var s = AccountingTaxMode.summarize(rows, taxMode);
+          var s = AccountingTaxMode.summarize(rows, taxMode, getProrateTaxInput());
+          payable = taxMode === 'prorate' ? s.payable : sum;
+          document.getElementById('totalAmt').textContent = payable.toLocaleString('zh-TW');
           if (taxMode === 'inclusive') {
             br.textContent = sum > 0 ? '已含稅，不再另加 5%' : '';
-          } else if (s.tax > 0) {
+            br.style.color = '';
+          } else if (taxMode === 'prorate' && (sum > 0 || s.tax > 0)) {
+            var warnP = AccountingTaxMode.taxSanityMessage(s.pretax, s.tax, taxMode);
             br.textContent = '未稅 $' + s.pretax.toLocaleString('zh-TW') +
-              ' ＋ 稅 $' + s.tax.toLocaleString('zh-TW');
+              ' ＋ 稅 $' + s.tax.toLocaleString('zh-TW') +
+              ' ＝ 寫入各案 $' + s.payable.toLocaleString('zh-TW') +
+              (warnP ? '。' + warnP : '');
+            br.style.color = warnP ? '#b45309' : '';
+          } else if (s.tax > 0) {
+            var warn = AccountingTaxMode.taxSanityMessage(s.pretax, s.tax, taxMode);
+            br.textContent = '未稅 $' + s.pretax.toLocaleString('zh-TW') +
+              ' ＋ 稅 $' + s.tax.toLocaleString('zh-TW') +
+              (warn ? '。' + warn : '');
+            br.style.color = warn ? '#b45309' : '';
           } else if (sum > 0) {
             br.textContent = '尚未加稅：請確認已選未稅模式，金額欄填未稅（填完會自動加 5%）';
+            br.style.color = '';
           } else {
             br.textContent = '';
+            br.style.color = '';
           }
+        } else {
+          document.getElementById('totalAmt').textContent = sum.toLocaleString('zh-TW');
         }
         var hint = document.getElementById('remitFeeHint');
-        var preview = remitFeePreview(sum);
+        var preview = remitFeePreview(payable);
         var deduct = selectedVendorRemitFeeDefault();
         if (preview.fee > 0) {
           if (deduct) {
             hint.textContent = '依廠商預設「扣匯費」：中信實匯 $' + preview.net.toLocaleString('zh-TW') +
-              '；入帳／分攤先依請款全額 $' + sum.toLocaleString('zh-TW') +
+              '；入帳／分攤先依請款全額 $' + payable.toLocaleString('zh-TW') +
               '（待匯款可改為公司出匯費，那時入帳才＋$30）。';
           } else {
-            hint.textContent = '依廠商預設「公司出匯費」：中信實匯 $' + sum.toLocaleString('zh-TW') +
+            hint.textContent = '依廠商預設「公司出匯費」：中信實匯 $' + payable.toLocaleString('zh-TW') +
               '；入帳＝全額＋$' + REMIT_FEE_AMOUNT +
               '（待匯款可改為扣匯費）。';
           }
-        } else if (sum > 0) {
+        } else if (payable > 0) {
           hint.textContent = '合計須大於 $' + REMIT_FEE_AMOUNT + ' 才適用匯費選項';
         } else {
           hint.textContent = '';
         }
-        if (lastOcrAmount > 0 && sum !== lastOcrAmount) {
-          AccountingUi.notify('warn', '合計 $' + sum.toLocaleString('zh-TW') + ' 與單據總額 $' + lastOcrAmount.toLocaleString('zh-TW') + ' 不同；確認後仍可送出', { logOnly: true });
+        if (lastOcrAmount > 0 && payable !== lastOcrAmount) {
+          AccountingUi.notify('warn', '合計 $' + payable.toLocaleString('zh-TW') + ' 與單據總額 $' + lastOcrAmount.toLocaleString('zh-TW') + ' 不同；確認後仍可送出', { logOnly: true });
         }
       }
 
@@ -1476,8 +1501,17 @@
           hintEl.textContent = '';
           return;
         }
-        var pretax = removeTaxAmount(Math.abs(amt)) * (amt < 0 ? -1 : 1);
-        hintEl.textContent = '未稅 $' + pretax.toLocaleString('zh-TW');
+        if (typeof AccountingTaxMode === 'undefined') {
+          hintEl.textContent = '未稅 $' + removeTaxAmount(Math.abs(amt)).toLocaleString('zh-TW');
+          return;
+        }
+        hintEl.textContent = AccountingTaxMode.rowHintText({
+          amount: amt,
+          tax_inclusive: true,
+          tax_add_applied: rowEl.getAttribute('data-tax-add-applied') === '1',
+          ocr_tax_inclusive: rowEl.getAttribute('data-ocr-tax-inclusive') === '1',
+          _base_amount: rowEl.getAttribute('data-base-amount')
+        }, taxMode);
       }
 
       function syncTaxFormNote() {

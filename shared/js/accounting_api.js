@@ -145,7 +145,11 @@ var AccountingApi = (function () {
       var err = e;
       var raw = (e && e.message) || String(e || '');
       if ((e && e.name === 'AbortError') || /abort/i.test(raw)) {
-        err = new Error('連線逾時，請再試一次');
+        if (actionName === 'vendor_payment_approve' || actionName === 'vendor_payment_mark_paid') {
+          err = new Error('等太久了。請重新整理列表，確認是否已完成，先不要再按一次。');
+        } else {
+          err = new Error('連線逾時，請再試一次');
+        }
       }
       if (trackUi && typeof AccountingUi !== 'undefined' && AccountingUi.apiEnd) {
         try {
@@ -973,7 +977,7 @@ var AccountingApi = (function () {
         body.allocations = patch.allocations;
       }
       if (patch && patch.note != null) body.note = patch.note;
-      return post(body);
+      return post(body, 120000);
     },
     vendorPaymentReject: function (sessionOrToken, paymentRequestId, reason) {
       return post({
@@ -1140,7 +1144,7 @@ var AccountingApi = (function () {
         mark_all: options.mark_all === true,
         line_push: options.line_push !== false,
         repair_missing_ledger: options.repair_missing_ledger === true
-      });
+      }, 180000);
     },
     /** 已匯款但缺收支列 → 補寫（不推播） */
     vendorPaymentRepairLedger: function (sessionOrToken, opts) {
