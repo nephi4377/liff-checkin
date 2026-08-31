@@ -148,7 +148,13 @@
           </div>
         </div>
         <div class="compare-pane">
-          <div class="pane-label">渲染結果</div>
+          <div class="pane-label pane-label-row">
+            <span>渲染結果</span>
+            <span class="pane-dl">
+              <button type="button" id="btnDownloadOne" class="btn btn-secondary" disabled>下載這張</button>
+              <button type="button" id="btnDownloadAll" class="btn btn-secondary" disabled>下載全部版本</button>
+            </span>
+          </div>
           <div class="pane-media" id="paneRendered">
             <div class="placeholder" id="renderPlaceholder">選擇圖片後按「渲染」</div>
           </div>

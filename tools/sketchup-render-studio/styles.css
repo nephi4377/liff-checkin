@@ -425,6 +425,25 @@ textarea { resize: vertical; min-height: 56px; }
   padding: 0 4px;
 }
 
+.pane-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pane-dl {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pane-dl .btn {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}
+
 .pane-media {
   position: relative;
   min-height: 0;

@@ -720,6 +720,76 @@
     });
   }
 
+  function safeDownloadName(name) {
+    return String(name || '渲染').replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '_').slice(0, 40);
+  }
+
+  function extFromDataUrl(url) {
+    return String(url || '').indexOf('image/jpeg') >= 0 ? '.jpg' : '.png';
+  }
+
+  function downloadDataUrl(url, filename) {
+    if (!url) return;
+    var a = document.createElement('a');
+    try {
+      var parts = String(url).split(',');
+      var mime = (parts[0].match(/:(.*?);/) || [])[1] || 'image/png';
+      var bin = atob(parts[1] || '');
+      var arr = new Uint8Array(bin.length);
+      var i;
+      for (i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      var blobUrl = URL.createObjectURL(new Blob([arr], { type: mime }));
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(blobUrl); }, 2000);
+    } catch (e) {
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  }
+
+  function syncDownloadButtons(item) {
+    var one = $('btnDownloadOne');
+    var all = $('btnDownloadAll');
+    var hasVer = !!(item && getActiveVersion(item));
+    var n = item && item.versions ? item.versions.length : 0;
+    if (one) one.disabled = !hasVer;
+    if (all) all.disabled = n < 1;
+  }
+
+  function downloadActiveRender() {
+    var item = getActiveItem();
+    var ver = getActiveVersion(item);
+    if (!ver || !ver.previewUrl) {
+      setStatus('還沒有渲染結果可下載', 'error');
+      return;
+    }
+    var n = (item.activeVersionIndex || 0) + 1;
+    downloadDataUrl(ver.previewUrl, safeDownloadName(item.name) + '-版本' + n + extFromDataUrl(ver.previewUrl));
+    setStatus('已下載版本 ' + n, 'ok');
+  }
+
+  function downloadAllVersions() {
+    var item = getActiveItem();
+    if (!item || !item.versions.length) {
+      setStatus('還沒有渲染結果可下載', 'error');
+      return;
+    }
+    var base = safeDownloadName(item.name);
+    item.versions.forEach(function (ver, i) {
+      setTimeout(function () {
+        downloadDataUrl(ver.previewUrl, base + '-版本' + (i + 1) + extFromDataUrl(ver.previewUrl));
+      }, i * 350);
+    });
+    setStatus('正在下載 ' + item.versions.length + ' 張', 'ok');
+  }
+
   function updateCompareView() {
     var item = getActiveItem();
     var origPane = $('paneOriginal');
@@ -732,6 +802,7 @@
       rendPane.innerHTML = '<div class="placeholder" id="renderPlaceholder">選擇圖片後按「渲染」</div>';
       $('versionRow').classList.add('hidden');
       $('filmMeta').textContent = '';
+      syncDownloadButtons(null);
       return;
     }
 
@@ -753,6 +824,7 @@
       rendPane.innerHTML = '<div class="placeholder">尚未渲染</div>';
     }
     rendPane.classList.toggle('rendering', !!item.rendering);
+    syncDownloadButtons(item);
 
     $('filmMeta').textContent = (state.activeIndex + 1) + ' / ' + state.items.length;
     renderThumbRow();
@@ -1234,6 +1306,8 @@
     $('btnRenderStyled').addEventListener('click', function () { renderCurrent(null); });
     $('btnRenderAll').addEventListener('click', renderAll);
     $('btnAnalyze').addEventListener('click', analyzeCurrent);
+    if ($('btnDownloadOne')) $('btnDownloadOne').addEventListener('click', downloadActiveRender);
+    if ($('btnDownloadAll')) $('btnDownloadAll').addEventListener('click', downloadAllVersions);
     if ($('btnPaint')) {
       $('btnPaint').addEventListener('click', function () {
         if (state.paintLightboxOpen) closePaintLightbox(false);
