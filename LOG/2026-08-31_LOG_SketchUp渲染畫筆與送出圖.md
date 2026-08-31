@@ -23,5 +23,6 @@
 
 | 項目 | 值 |
 |------|-----|
-| 狀態 | 待 `upload.bat` |
+| 狀態 | **已上線** |
+| commit | `2145689`（push 後 HEAD `2686a07`） |
 | URL | `https://info.tanxin.space/tools/sketchup-render-studio/` |
