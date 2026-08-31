@@ -30,6 +30,10 @@ let searchTerm = ''; // [人員檢索] 搜尋關鍵字
 let userProfile = null;
 let allFetchedEmployees = [];
 let allFetchedReports = [];
+/** 上次成功讀到的名單／回報；失敗時留下，不可用空陣列去算缺交 */
+let lastGoodEmployees = [];
+let lastGoodReports = [];
+let lastLoadFlags = { employeesOk: false, reportsOk: false, attendanceOk: false, scheduleOk: false };
 
 /**
  * 根據圖片網址，自動轉換為支援直連或縮圖免登入的網址（完美相容 Google Drive 與 Dropbox）
@@ -95,20 +99,32 @@ function initializeUser() {
     return true;
 }
 
-async function fetchEmployees() {
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function tryTwice(fn) {
     try {
-        const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
-        url.searchParams.append('page', 'attendance_api');
-        url.searchParams.append('action', 'get_employees');
-        const response = await fetch(url);
-        const result = await response.json();
-        if (!result.success) throw new Error(result.message || '後端未回傳員工資料');
-        return result.data.filter(emp => emp.permission === 2 || emp.permission === 3);
-    } catch (error) {
-        console.error('獲取員工列表失敗:', error);
-        showError(`獲取員工列表失敗: ${error.message}`);
-        return [];
+        return { ok: true, value: await fn() };
+    } catch (firstErr) {
+        await sleep(800);
+        try {
+            return { ok: true, value: await fn() };
+        } catch (secondErr) {
+            return { ok: false, error: secondErr };
+        }
     }
+}
+
+async function fetchEmployeesOnce() {
+    const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
+    url.searchParams.append('page', 'attendance_api');
+    url.searchParams.append('action', 'get_employees');
+    const response = await fetch(url);
+    const result = await response.json();
+    if (!result || !result.success) throw new Error((result && result.message) || '後端未回傳員工資料');
+    if (!Array.isArray(result.data)) throw new Error('員工名單回傳格式異常');
+    return result.data.filter(emp => emp.permission === 2 || emp.permission === 3);
 }
 
 function renderGroupFilters(employees) {
@@ -220,78 +236,143 @@ export function main() {
 }
 
 async function fetchAttendanceData(startDateStr, endDateStr) {
-    try {
-        const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
-        url.searchParams.append('page', 'attendance_api');
-        url.searchParams.append('action', 'get_report');
-        url.searchParams.append('startDate', startDateStr);
-        url.searchParams.append('endDate', endDateStr);
-        const response = await fetch(url);
-        const result = await response.json();
-        return result.records || {};
-    } catch (error) {
-        console.error('獲取打卡紀錄失敗:', error);
-        return {};
+    const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
+    url.searchParams.append('page', 'attendance_api');
+    url.searchParams.append('action', 'get_report');
+    url.searchParams.append('startDate', startDateStr);
+    url.searchParams.append('endDate', endDateStr);
+    const response = await fetch(url);
+    const result = await response.json();
+    if (result && result.success === false) {
+        throw new Error(result.message || '打卡紀錄讀取失敗');
     }
+    return result.records || {};
+}
+
+async function fetchDailyReportsOnce(startDateStr, endDateStr) {
+    const url = new URL(CONFIG.GAS_WEB_APP_URL);
+    url.searchParams.append('page', 'get_daily_reports');
+    url.searchParams.append('startDate', startDateStr);
+    url.searchParams.append('endDate', endDateStr);
+    url.searchParams.append('userName', userProfile.userName);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const result = await response.json();
+    if (!result || result.success === false) {
+        throw new Error(result?.message || '施工回報讀取失敗');
+    }
+    if (!Array.isArray(result.data)) throw new Error('施工回報回傳格式異常');
+    return result.data;
+}
+
+function bindRetryButton() {
+    const btn = document.getElementById('daily-report-retry');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+        fetchAndRenderReports(startDatePicker.value, endDatePicker.value);
+    });
+}
+
+function setBoardStatus(kind, message, canRetry) {
+    const el = document.getElementById('daily-report-status');
+    if (!el) return;
+    if (!message) {
+        el.className = 'hidden';
+        el.innerHTML = '';
+        return;
+    }
+    const kindClass = {
+        error: 'mb-4 rounded-lg border px-3 py-2 text-sm text-amber-900 bg-amber-50 border-amber-200',
+        loading: 'mb-4 rounded-lg border px-3 py-2 text-sm text-blue-900 bg-blue-50 border-blue-200'
+    };
+    el.className = kindClass[kind] || kindClass.error;
+    const retryHtml = canRetry
+        ? '<button type="button" id="daily-report-retry" class="ml-2 font-semibold text-blue-700 hover:underline min-h-[44px] px-2">再試一次</button>'
+        : '';
+    el.innerHTML = `<span>${message}</span>${retryHtml}`;
+    bindRetryButton();
 }
 
 async function fetchAndRenderReports(startDateStr, endDateStr) {
-    showLoading();
     if (!userProfile) {
-        showError('使用者資訊尚未初始化，無法查詢。');
+        showError('使用者資訊尚未初始化，無法查詢。', false);
         return;
     }
 
-    try {
-        const url = new URL(CONFIG.GAS_WEB_APP_URL);
-        url.searchParams.append('page', 'get_daily_reports');
-        url.searchParams.append('startDate', startDateStr);
-        url.searchParams.append('endDate', endDateStr);
-        url.searchParams.append('userName', userProfile.userName);
+    queryBtn.disabled = true;
+    const hasPrior = lastGoodEmployees.length > 0 || lastGoodReports.length > 0;
+    if (hasPrior) {
+        setBoardStatus('loading', '更新中…', false);
+    } else {
+        showLoading();
+        setBoardStatus(null);
+        const kpi = document.getElementById('kpi-dashboard');
+        if (kpi) kpi.classList.add('hidden');
+    }
 
-        // [第一階段] 解析年份月份以獲取排班資料
+    try {
         const startDate = new Date(startDateStr);
         const queryYear = startDate.getFullYear();
         const queryMonth = startDate.getMonth() + 1;
 
-        // [v1.0.7] 同時獲取打卡紀錄與日報，並採用健全的錯誤防禦機制
-        const [employees, reportsResult, scheduleData, attendanceData] = await Promise.all([
-            fetchEmployees().catch(err => {
-                console.error('[降級警告] 獲取員工列表失敗:', err);
-                return [];
-            }),
-            fetch(url).then(res => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                return res.json();
-            }).catch(err => {
-                console.error('[降級警告] 獲取日誌失敗:', err);
-                return { success: false, data: [], message: err.message };
-            }),
-            window.dailyReportApp.getScheduleDataForMonth(queryYear, queryMonth).catch(err => {
-                console.error('[降級警告] 獲取排班資料失敗:', err);
-                return { schedule: {}, holidays: new Set() };
-            }),
-            fetchAttendanceData(startDateStr, endDateStr).catch(err => {
-                console.error('[降級警告] 獲取考勤數據失敗:', err);
-                return {};
-            })
+        const [empR, repR, schR, attR] = await Promise.all([
+            tryTwice(fetchEmployeesOnce),
+            tryTwice(() => fetchDailyReportsOnce(startDateStr, endDateStr)),
+            tryTwice(() => window.dailyReportApp.getScheduleDataForMonth(queryYear, queryMonth)),
+            tryTwice(() => fetchAttendanceData(startDateStr, endDateStr))
         ]);
 
-        if (reportsResult && !reportsResult.success) {
-            console.warn('[降級警告] 日報數據載入異常，將進行空白陣列降級:', reportsResult.message);
+        lastLoadFlags = {
+            employeesOk: empR.ok,
+            reportsOk: repR.ok,
+            scheduleOk: schR.ok,
+            attendanceOk: attR.ok
+        };
+
+        if (empR.ok) lastGoodEmployees = empR.value || [];
+        if (repR.ok) lastGoodReports = repR.value || [];
+        if (schR.ok) {
+            window.currentScheduleData = schR.value || { schedule: {}, holidays: new Set() };
+        } else if (!window.currentScheduleData) {
+            window.currentScheduleData = { schedule: {}, holidays: new Set() };
+        }
+        if (attR.ok) {
+            window.currentAttendanceData = attR.value || {};
+        } else if (!window.currentAttendanceData) {
+            window.currentAttendanceData = {};
         }
 
-        allFetchedEmployees = employees || [];
-        allFetchedReports = reportsResult?.data || [];
-        window.currentScheduleData = scheduleData || { schedule: {}, holidays: new Set() };
-        window.currentAttendanceData = attendanceData || {};
+        allFetchedEmployees = lastLoadFlags.employeesOk ? (empR.value || []) : lastGoodEmployees;
+        allFetchedReports = lastLoadFlags.reportsOk ? (repR.value || []) : lastGoodReports;
+
+        if (!lastLoadFlags.employeesOk && allFetchedEmployees.length === 0) {
+            showError('員工名單暫時讀不到，無法判斷誰缺交。這不代表全員已交日報。', true);
+            setKpiUnavailable('員工名單讀不到');
+            return;
+        }
 
         renderGroupFilters(allFetchedEmployees);
         renderMainReports();
 
+        const failParts = [];
+        if (!lastLoadFlags.reportsOk) {
+            failParts.push(allFetchedReports.length
+                ? '施工回報這次沒更新成功，下面是剛才看到的；缺交先不算'
+                : '施工回報暫時讀不到。這不代表大家都沒交；缺交先不算');
+        }
+        if (!lastLoadFlags.employeesOk) failParts.push('員工名單這次沒更新成功');
+        if (!lastLoadFlags.attendanceOk) failParts.push('打卡紀錄讀不到，出勤人數先不算');
+        if (!lastLoadFlags.scheduleOk) failParts.push('班表讀不到，請假／缺交可能不準');
+        if (failParts.length) {
+            setBoardStatus('error', failParts.join('。') + '。', true);
+        } else {
+            setBoardStatus(null);
+        }
     } catch (error) {
         console.error('載入回報失敗:', error);
-        showError(`載入資料失敗：${error.message}`);
+        showError(`載入資料失敗：${error.message}`, true);
+    } finally {
+        queryBtn.disabled = false;
     }
 }
 
@@ -446,6 +527,8 @@ function renderReportsByEmployee(employees, allReports, scheduleData) {
             } else {
                 // 無報告的情況，判斷假勤 (設計為超緊湊高質感卡片樣式)
                 if (dateStr > todayStr) return ''; // 未來不顯示
+                // 回報讀失敗時不可把空名單畫成缺交（假紅字）
+                if (!lastLoadFlags.reportsOk) return '';
 
                 const leaveInfo = window.dailyReportApp.getLeaveStatus(employee.userId, dateStr, scheduleData);
                 const userAttendance = window.currentAttendanceData[employee.userId]?.dailyData?.[dateStr];
@@ -517,15 +600,33 @@ function renderReportsByEmployee(employees, allReports, scheduleData) {
     updateKPIDashboard(employees, reportsByUserIdAndDate, scheduleData);
 }
 
-/**
- * [第二階段] 計算並更新 KPI 看板數據
- */
+function setKpiUnavailable(reason) {
+    const kpiDashboard = document.getElementById('kpi-dashboard');
+    if (!kpiDashboard) return;
+    kpiDashboard.classList.remove('hidden');
+    const dash = '—';
+    const note = `<span class="text-amber-700">${reason}</span>`;
+    document.getElementById('kpi-attendance-count').textContent = dash;
+    document.getElementById('kpi-total-expected').textContent = dash;
+    document.getElementById('kpi-attendance-names').innerHTML = note;
+    document.getElementById('kpi-leave-count').textContent = dash;
+    document.getElementById('kpi-leave-names').innerHTML = note;
+    document.getElementById('kpi-submission-rate').textContent = dash;
+    document.getElementById('kpi-submitted-count').textContent = dash;
+    document.getElementById('kpi-missing-names').innerHTML = `<span class="text-amber-700 font-semibold">缺交先不算：${reason}</span>`;
+}
+
 /**
  * [第二階段] 計算並更新 KPI 看板數據 (優化為高階主管質感)
  */
 function updateKPIDashboard(employees, reportsByUserIdAndDate, scheduleData) {
     const kpiDashboard = document.getElementById('kpi-dashboard');
     if (!kpiDashboard) return;
+
+    if (!employees || employees.length === 0) {
+        setKpiUnavailable('員工名單讀不到');
+        return;
+    }
 
     const displayDateStr = startDatePicker.value; // 當前選擇日期
     const now = new Date();
@@ -574,7 +675,7 @@ function updateKPIDashboard(employees, reportsByUserIdAndDate, scheduleData) {
         // 取得該員工於目標日期的日報列表
         const reportCount = reportsByUserIdAndDate[emp.userId]?.[targetMissingDate]?.length || 0;
 
-        if (shouldHaveWorked && reportCount === 0) {
+        if (lastLoadFlags.reportsOk && shouldHaveWorked && reportCount === 0) {
             missingNames.push(emp.userName);
         }
     });
@@ -599,25 +700,43 @@ function updateKPIDashboard(employees, reportsByUserIdAndDate, scheduleData) {
         ? Math.round(((expectedForMissingDate - missingNames.length) / expectedForMissingDate) * 100) 
         : 100;
 
-    // 更新 DOM 內容
-    document.getElementById('kpi-attendance-count').textContent = attendanceNames.length;
-    document.getElementById('kpi-total-expected').textContent = totalExpected;
-    document.getElementById('kpi-attendance-names').innerHTML = attendanceNames.length > 0 
-        ? `<span class="text-blue-700">${attendanceNames.join(', ')}</span>` 
-        : '<span class="text-gray-400 italic">無出勤打卡記錄</span>';
+    kpiDashboard.classList.remove('hidden');
 
-    document.getElementById('kpi-leave-count').textContent = leaveNames.length;
-    document.getElementById('kpi-leave-names').innerHTML = leaveNames.length > 0 
-        ? `<span class="text-amber-700">${leaveNames.join(', ')}</span>` 
-        : '<span class="text-gray-400 italic">無人休假/請假</span>';
+    if (!lastLoadFlags.attendanceOk) {
+        document.getElementById('kpi-attendance-count').textContent = '—';
+        document.getElementById('kpi-total-expected').textContent = lastLoadFlags.scheduleOk ? String(totalExpected) : '—';
+        document.getElementById('kpi-attendance-names').innerHTML = '<span class="text-amber-700">打卡紀錄讀不到，不是沒人出勤</span>';
+        document.getElementById('kpi-leave-count').textContent = lastLoadFlags.scheduleOk ? String(leaveNames.length) : '—';
+        document.getElementById('kpi-leave-names').innerHTML = lastLoadFlags.scheduleOk
+            ? (leaveNames.length > 0
+                ? `<span class="text-amber-700">${leaveNames.join(', ')}</span>`
+                : '<span class="text-gray-400 italic">無人休假/請假</span>')
+            : '<span class="text-amber-700">班表讀不到，請假人數先不算</span>';
+    } else {
+        document.getElementById('kpi-attendance-count').textContent = attendanceNames.length;
+        document.getElementById('kpi-total-expected').textContent = totalExpected;
+        document.getElementById('kpi-attendance-names').innerHTML = attendanceNames.length > 0 
+            ? `<span class="text-blue-700">${attendanceNames.join(', ')}</span>` 
+            : '<span class="text-gray-400 italic">無出勤打卡記錄</span>';
+
+        document.getElementById('kpi-leave-count').textContent = leaveNames.length;
+        document.getElementById('kpi-leave-names').innerHTML = leaveNames.length > 0 
+            ? `<span class="text-amber-700">${leaveNames.join(', ')}</span>` 
+            : '<span class="text-gray-400 italic">無人休假/請假</span>';
+    }
+
+    if (!lastLoadFlags.reportsOk) {
+        document.getElementById('kpi-submission-rate').textContent = '—';
+        document.getElementById('kpi-submitted-count').textContent = '—';
+        document.getElementById('kpi-missing-names').innerHTML = '<span class="text-amber-700 font-semibold">回報讀不到，缺交先不算（不是全員已交）</span>';
+        return;
+    }
 
     document.getElementById('kpi-submission-rate').textContent = `${submissionRate}%`;
     document.getElementById('kpi-submitted-count').textContent = (expectedForMissingDate - missingNames.length);
     document.getElementById('kpi-missing-names').innerHTML = missingNames.length > 0 
         ? `<span class="text-red-500 font-bold">🚨 缺交 (${missingNames.length}人): ${missingNames.join(', ')}</span>` 
         : '<span class="text-emerald-600 italic">🎉 全員已完成回報</span>';
-
-    kpiDashboard.classList.remove('hidden');
 }
 
 /**
@@ -669,6 +788,11 @@ function renderReportsByProject(employees, allReports, scheduleData) {
     const projectNames = Object.keys(reportsByProject).sort();
 
     if (projectNames.length === 0) {
+        if (!lastLoadFlags.reportsOk) {
+            reportsContainer.innerHTML = '';
+            updateKPIDashboard(employees, reportsByUserIdAndDate, scheduleData);
+            return;
+        }
         showEmpty();
         return;
     }
@@ -768,11 +892,15 @@ function showLoading() {
     reportsContainer.appendChild(placeholder);
 }
 
-function showError(message) {
+function showError(message, canRetry = true) {
     reportsContainer.innerHTML = '';
-    placeholder.innerHTML = `<p class="text-red-500 font-semibold">${message}</p>`;
+    const retryHtml = canRetry
+        ? '<button type="button" id="daily-report-retry" class="mt-3 inline-flex items-center text-sm font-semibold bg-white text-blue-700 border border-blue-300 py-2 px-4 rounded-lg hover:bg-blue-50 min-h-[44px]">再試一次</button>'
+        : '';
+    placeholder.innerHTML = `<p class="text-red-600 font-semibold">${message}</p>${retryHtml}`;
     placeholder.classList.remove('hidden');
     reportsContainer.appendChild(placeholder);
+    bindRetryButton();
 }
 
 function showEmpty() {
