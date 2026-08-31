@@ -114,6 +114,7 @@
                     <select id="employee-select" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                         <option value="">所有員工</option>
                     </select>
+                    <div id="employee-list-error" class="hidden mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert"></div>
                     <!-- 【您的要求】新增「顯示所有歷史員工」的核取方塊 -->
                     <div class="mt-2 flex flex-col gap-1">
                         <div class="flex items-center">
@@ -345,7 +346,11 @@
       <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <h3 class="text-lg font-semibold">手動補打卡</h3>
         <div class="mt-4 space-y-4">
-          <div><label for="modal-employee-select" class="block text-sm font-medium text-gray-700">員工</label><select id="modal-employee-select" class="mt-1 block w-full rounded-md border-gray-300"></select></div>
+          <div>
+            <label for="modal-employee-select" class="block text-sm font-medium text-gray-700">員工</label>
+            <select id="modal-employee-select" class="mt-1 block w-full rounded-md border-gray-300"></select>
+            <p id="modal-employee-empty-hint" class="hidden mt-2 text-sm text-red-700">還沒讀到員工名單，這不代表公司沒有人。請關閉此窗後按「再試一次」。</p>
+          </div>
           <div><label for="modal-date" class="block text-sm font-medium text-gray-700">日期</label><input type="date" id="modal-date" class="mt-1 block w-full rounded-md border-gray-300"></div>
           <div><label for="modal-time" class="block text-sm font-medium text-gray-700">時間 (HH:mm)</label><input type="time" id="modal-time" class="mt-1 block w-full rounded-md border-gray-300"></div>
           <!-- 【⭐️ 核心新增：快速帶入時間按鈕 ⭐️】 -->
@@ -415,6 +420,10 @@
     let lastReportHolidays = new Set();
     let expandedUserIds = new Set();
     let employeeShiftData = {};
+    let employeeListReady = false;
+    let employeeListLoading = false;
+    let employeeListFailed = false;
+    let loadAndRenderEmployees = function () {};
 
     const urlParamsInit = new URLSearchParams(window.location.search);
     const permFromUrl = parseInt(urlParamsInit.get('permission') || '1', 10);
@@ -489,6 +498,49 @@
         } finally {
             clearTimeout(timer);
         }
+    }
+
+    function localMockMode() {
+        try {
+            return new URLSearchParams(window.location.search).get('mock') || '';
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function hideEmployeeListError() {
+        const el = document.getElementById('employee-list-error');
+        if (!el) return;
+        el.classList.add('hidden');
+        el.innerHTML = '';
+    }
+
+    function showEmployeeListError(message, opts) {
+        const keepCache = !!(opts && opts.keepCache);
+        const isEmpty = !!(opts && opts.empty);
+        const el = document.getElementById('employee-list-error');
+        if (!el) return;
+        let lead;
+        if (keepCache) {
+            lead = '員工名單更新失敗，目前顯示的是先前存下的名單。';
+        } else if (isEmpty) {
+            lead = '目前沒有可選的在職員工，無法補打卡。';
+        } else {
+            lead = '員工名單讀不到。這不代表公司沒有員工。';
+        }
+        const extra = (!isEmpty && message) ? `<p class="mt-1">${escapeHtml(message)}</p>` : '';
+        el.classList.remove('hidden');
+        el.innerHTML =
+            `<p class="font-medium">${lead}</p>` +
+            extra +
+            `<p class="mt-2"><button type="button" id="employee-list-retry-btn" class="text-blue-700 font-semibold underline">再試一次</button></p>`;
+        const retryBtn = document.getElementById('employee-list-retry-btn');
+        if (retryBtn) retryBtn.onclick = () => loadAndRenderEmployees();
+    }
+
+    function modalEmployeeCount() {
+        const modalSelect = document.getElementById('modal-employee-select');
+        return modalSelect ? modalSelect.options.length : 0;
     }
 
     /**
@@ -961,6 +1013,19 @@
         // 【您的要求】為匯出按鈕綁定事件
         document.getElementById('export-csv-btn').onclick = exportToCsv;
         document.getElementById('add-checkin-btn').onclick = () => {
+            const emptyHint = document.getElementById('modal-employee-empty-hint');
+            if (!employeeListReady && modalEmployeeCount() === 0) {
+                const failMsg = employeeListFailed
+                    ? '還沒有員工名單，請先再試一次再補打卡。'
+                    : '目前沒有可選的在職員工，無法補打卡。';
+                showEmployeeListError(failMsg, { empty: !employeeListFailed });
+                if (employeeListFailed && !employeeListLoading) loadAndRenderEmployees();
+                const banner = document.getElementById('employee-list-error');
+                if (banner) banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (emptyHint) emptyHint.classList.remove('hidden');
+                return;
+            }
+            if (emptyHint) emptyHint.classList.add('hidden');
             document.getElementById('checkin-modal').classList.add('is-open');
             // 【⭐️ 核心新增：打開視窗時，設定預設日期與時間 ⭐️】
             const today = new Date();
@@ -983,7 +1048,7 @@
 
         // 【v175.0 核心改造】將 API 請求移至此處，並統一附上使用者資訊
         // 【您的要求】為「顯示所有歷史員工」核取方塊綁定事件
-        document.getElementById('show-all-employees-checkbox').addEventListener('change', loadAndRenderEmployees);
+        document.getElementById('show-all-employees-checkbox').addEventListener('change', () => loadAndRenderEmployees());
         document.getElementById('show-all-absent-checkbox').addEventListener('change', () => {
             if (currentReportData && Object.keys(currentReportData).length) {
                 renderReportView(currentReportData, lastReportHolidays);
@@ -1011,73 +1076,16 @@
                 }
             });
 
-        // 獨立載入員工列表
-        if (!IS_PERSONAL) {
-            loadAndRenderEmployees();
-            initManagerModeTabs(uid);
-            if (personalPermission >= 5) {
-                payrollAdminPreview = initPayrollAdminPreview({
-                    apiBaseUrl: API_BASE_URL,
-                    operatorId: uid,
-                    operatorPermission: personalPermission,
-                    showGlobalNotification,
-                    fetchApi
-                });
-            }
-        } else {
-            fetchReportData();
-        }
-
-        function loadAndRenderEmployees() {
-            const showAll = document.getElementById('show-all-employees-checkbox').checked;
-            const filter = showAll ? 'attendance_all' : 'attendance_active_with_recent_resigned';
-            const cacheKey = `employees_cache_${filter}`;
-
-            // 快取優先策略
-            const cachedData = loadCache(cacheKey);
-            if (cachedData) {
-                console.log(`⚡️ 從快取載入員工列表 (模式: ${filter})...`);
-                renderEmployeeSelect(cachedData);
-            }
-
-            // 無論是否有快取，都在背景請求最新資料
-            console.log(`🔄 正在從後端請求員工列表 (模式: ${filter})...`);
-            fetchApi({ page: 'attendance_api', action: 'get_employees', filter: filter, ...userParams })
-                .then(response => {
-                    if (response && response.success) {
-                        const newData = response.data;
-                        // 只有在新舊資料不同時，才更新畫面與快取
-                        if (JSON.stringify(cachedData) !== JSON.stringify(newData)) {
-                            console.log(`🔄 偵測到員工資料已更新 (模式: ${filter})，正在刷新下拉選單...`);
-                            saveCache(cacheKey, newData, 1); // 快取 1 天
-                            renderEmployeeSelect(newData);
-                            if (cachedData) { // 只有在是背景更新時才跳通知
-                                showGlobalNotification('員工列表已自動更新。', 3000, 'info');
-                            }
-                        } else {
-                            console.log(`✅ 背景資料與快取一致 (模式: ${filter})，無需更新。`);
-                        }
-                    } else {
-                        throw new Error(response.message || '後端未回傳有效資料');
-                    }
-                })
-                .catch(error => {
-                    console.error(`載入員工列表 (模式: ${filter}) 失敗:`, error);
-                    if (!cachedData) { // 如果連快取都沒有，才顯示錯誤
-                        showGlobalNotification(`載入員工列表失敗: ${error.message}`, 8000, 'error');
-                    }
-                });
-        }
-
         function renderEmployeeSelect(employees) {
+            const list = Array.isArray(employees) ? employees : [];
             const mainSelect = document.getElementById('employee-select');
             const modalSelect = document.getElementById('modal-employee-select');
             mainSelect.innerHTML = '<option value="">所有員工</option>';
             modalSelect.innerHTML = '';
             employeeShiftData = {};
 
-            const activeEmployees = employees.filter(emp => emp.status !== '離職');
-            const resignedEmployees = employees.filter(emp => emp.status === '離職');
+            const activeEmployees = list.filter(emp => emp.status !== '離職');
+            const resignedEmployees = list.filter(emp => emp.status === '離職');
 
             const activeGroup = document.createElement('optgroup');
             activeGroup.label = '在職員工';
@@ -1097,6 +1105,92 @@
                 });
                 mainSelect.appendChild(resignedGroup);
             }
+            employeeListReady = modalSelect.options.length > 0;
+            const emptyHint = document.getElementById('modal-employee-empty-hint');
+            if (emptyHint) emptyHint.classList.toggle('hidden', employeeListReady);
+            employeeListFailed = false;
+        }
+
+        async function fetchEmployeeListOnce(filter) {
+            const mock = localMockMode();
+            if (mock === 'employees_fail') {
+                throw new Error('（本機模擬）員工名單讀取失敗');
+            }
+            if (mock === 'employees_empty') {
+                return [];
+            }
+            const response = await fetchApi({ page: 'attendance_api', action: 'get_employees', filter: filter, ...userParams });
+            if (response && response.success) {
+                return Array.isArray(response.data) ? response.data : [];
+            }
+            throw new Error((response && response.message) || '後端未回傳有效資料');
+        }
+
+        loadAndRenderEmployees = async function () {
+            if (employeeListLoading) return;
+            const showAll = document.getElementById('show-all-employees-checkbox').checked;
+            const filter = showAll ? 'attendance_all' : 'attendance_active_with_recent_resigned';
+            const cacheKey = `employees_cache_${filter}`;
+            const mock = localMockMode();
+            const skipCache = mock === 'employees_fail' || mock === 'employees_empty';
+
+            employeeListLoading = true;
+            hideEmployeeListError();
+
+            const cachedData = skipCache ? null : loadCache(cacheKey);
+            if (cachedData) {
+                renderEmployeeSelect(cachedData);
+            }
+
+            try {
+                let newData;
+                try {
+                    newData = await fetchEmployeeListOnce(filter);
+                } catch (_firstErr) {
+                    newData = await fetchEmployeeListOnce(filter);
+                }
+                if (JSON.stringify(cachedData) !== JSON.stringify(newData)) {
+                    saveCache(cacheKey, newData, 1);
+                    renderEmployeeSelect(newData);
+                    if (cachedData) {
+                        showGlobalNotification('員工列表已自動更新。', 3000, 'info');
+                    }
+                }
+                hideEmployeeListError();
+                if (!newData.length && !cachedData) {
+                    employeeListReady = false;
+                }
+            } catch (error) {
+                console.error(`載入員工列表 (模式: ${filter}) 失敗:`, error);
+                if (cachedData) {
+                    employeeListFailed = true;
+                    showEmployeeListError(error.message, { keepCache: true });
+                } else {
+                    employeeListReady = false;
+                    employeeListFailed = true;
+                    showEmployeeListError(error.message);
+                    showGlobalNotification(`載入員工列表失敗: ${error.message}`, 8000, 'error');
+                }
+            } finally {
+                employeeListLoading = false;
+            }
+        };
+
+        // 獨立載入員工列表
+        if (!IS_PERSONAL) {
+            loadAndRenderEmployees();
+            initManagerModeTabs(uid);
+            if (personalPermission >= 5) {
+                payrollAdminPreview = initPayrollAdminPreview({
+                    apiBaseUrl: API_BASE_URL,
+                    operatorId: uid,
+                    operatorPermission: personalPermission,
+                    showGlobalNotification,
+                    fetchApi
+                });
+            }
+        } else {
+            fetchReportData();
         }
     });
 
