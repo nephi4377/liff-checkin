@@ -22,6 +22,9 @@
     .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .inline-chk { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-weight: 600; font-size: 14px; }
     .inline-chk input { width: auto; margin: 0; }
+    .emp-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 0; }
+    .emp-head label { margin-top: 0; }
+    #retryEmpBtn { width: auto; margin-top: 0; padding: 8px 12px; }
     #msg { color: #c5221f; font-size: 14px; white-space: pre-wrap; }
     #ok { color: #137333; font-size: 14px; }
     .hidden { display: none; }
@@ -42,8 +45,11 @@
     <div id="emailDraft" class="card hidden"></div>
 
     <div class="card">
-      <label>員工</label>
-      <select id="bfEmployee"><option value="">載入中…</option></select>
+      <div class="emp-head">
+        <label for="bfEmployee">員工</label>
+        <button type="button" class="btn btn-link hidden" id="retryEmpBtn">再載員工名單</button>
+      </div>
+      <select id="bfEmployee" disabled><option value="">載入中…</option></select>
       <div class="row2">
         <div><label>期別</label><input id="bfPeriod" placeholder="115/06" /></div>
         <div><label>發薪日</label><input id="bfPayDate" type="date" /></div>
@@ -56,15 +62,70 @@
       <input id="bfNote" placeholder="例：已現金發放，補登歷史紀錄" />
       <label class="inline-chk"><input type="checkbox" id="bfEmail" checked /> EMAIL 通知員工（需員工資料有 email）</label>
       <label class="inline-chk"><input type="checkbox" id="bfAllowDup" /> 允許同期別已有紀錄時重複補登</label>
-      <button type="button" class="btn btn-primary" id="backfillBtn">送出補登</button>
+      <button type="button" class="btn btn-primary" id="backfillBtn" disabled>送出補登</button>
     </div>
   </div>
   <script>
     (function () {
       var session = null;
+      var employeesLoaded = false;
       var ui = AccountingUi.feedback();
       function setMsg(t) { ui.setMsg(t); }
       function setOk(t) { ui.setOk(t); }
+      function sleep(ms) {
+        return new Promise(function (r) { setTimeout(r, ms); });
+      }
+      /** 後端 success:false 不丟錯；不可當成「沒人可選」 */
+      function interpretEmployeeContext(ctx) {
+        if (!ctx || ctx.success !== true) {
+          return { state: 'fail', message: (ctx && ctx.message) || '員工名單讀不到' };
+        }
+        var employees = ctx.employees || [];
+        if (!employees.length) return { state: 'empty' };
+        return { state: 'ok', employees: employees };
+      }
+      function setRetryVisible(on) {
+        document.getElementById('retryEmpBtn').classList.toggle('hidden', !on);
+      }
+      function setEmployeeSelect(opts) {
+        var sel = document.getElementById('bfEmployee');
+        sel.innerHTML = '';
+        var opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = opts.placeholder || '— 請選擇 —';
+        sel.appendChild(opt);
+        (opts.employees || []).forEach(function (e) {
+          var o = document.createElement('option');
+          o.value = e.userId;
+          o.textContent = (e.userName || e.displayName || e.userId);
+          sel.appendChild(o);
+        });
+        sel.disabled = !!opts.disabled;
+        document.getElementById('backfillBtn').disabled = !employeesLoaded;
+      }
+      function showEmployeeLoading() {
+        employeesLoaded = false;
+        setRetryVisible(false);
+        setEmployeeSelect({ placeholder: '載入中…', disabled: true });
+      }
+      function showEmployeeFail(message) {
+        employeesLoaded = false;
+        setEmployeeSelect({ placeholder: '員工名單讀不到', disabled: true });
+        setRetryVisible(true);
+        setMsg((message || '員工名單讀不到') + '。請再載，不要當成沒有員工。');
+      }
+      function showEmployeeEmpty() {
+        employeesLoaded = false;
+        setEmployeeSelect({ placeholder: '目前沒有員工可選', disabled: true });
+        setRetryVisible(true);
+        setMsg('目前沒有員工可選。若剛才連線不穩，可再載一次。');
+      }
+      function showEmployeeOk(employees) {
+        employeesLoaded = true;
+        setMsg('');
+        setRetryVisible(false);
+        setEmployeeSelect({ placeholder: '— 請選擇 —', employees: employees, disabled: false });
+      }
 
       function showEmailDraft(draft) {
         var box = document.getElementById('emailDraft');
@@ -84,23 +145,35 @@
         box.appendChild(mailBtn);
       }
 
-      async function loadEmployees() {
-        try {
-          var ctx = await AccountingApi.paymentRequestContext(session);
-          var sel = document.getElementById('bfEmployee');
-          sel.innerHTML = '<option value="">— 請選擇 —</option>';
-          (ctx.employees || []).forEach(function (e) {
-            var opt = document.createElement('option');
-            opt.value = e.userId;
-            opt.textContent = (e.userName || e.displayName || e.userId);
-            sel.appendChild(opt);
-          });
-        } catch (e) {
-          document.getElementById('bfEmployee').innerHTML = '<option value="">無法載入員工</option>';
+      async function fetchEmployeeContext() {
+        var last = { state: 'fail', message: '員工名單讀不到' };
+        for (var attempt = 0; attempt < 2; attempt++) {
+          try {
+            var ctx = await AccountingApi.paymentRequestContext(session);
+            var interpreted = interpretEmployeeContext(ctx);
+            if (interpreted.state !== 'fail') return interpreted;
+            last = interpreted;
+          } catch (e) {
+            last = { state: 'fail', message: (e && e.message) || String(e) };
+          }
+          if (attempt === 0) await sleep(800);
         }
+        return last;
+      }
+      async function loadEmployees() {
+        showEmployeeLoading();
+        var result = await fetchEmployeeContext();
+        if (result.state === 'ok') showEmployeeOk(result.employees);
+        else if (result.state === 'empty') showEmployeeEmpty();
+        else showEmployeeFail(result.message);
       }
 
+      document.getElementById('retryEmpBtn').addEventListener('click', function () {
+        setMsg('');
+        loadEmployees();
+      });
       document.getElementById('backfillBtn').addEventListener('click', async function () {
+        if (!employeesLoaded) { setMsg('員工名單還沒載好，請先再載。'); return; }
         var uid = document.getElementById('bfEmployee').value;
         var period = document.getElementById('bfPeriod').value.trim();
         var total = Number(document.getElementById('bfTotal').value) || 0;
