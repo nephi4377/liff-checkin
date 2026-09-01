@@ -7,7 +7,7 @@ import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元�
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
 import { saveCache, loadCache, loadHubPresenceCache, saveHubPresenceCache, loadDailyCache, saveDailyCache, purgeStaleDailyCaches, hubSidebarDailyCacheKey, hubPresenceTodayStr } from '../shared/js/utils.js?v=26.07.24.1';
 import { request as apiRequest } from '../modules/projects/js/projectApi.js'; // [重構] 改為引入統一的 projectApi 模組
-import { initializeTaskSender } from '../shared/js/taskSender.js'; // [v509.0 修正] 更新共用模組路徑
+import { initializeTaskSender } from '../shared/js/taskSender.js?v=26.09.01.1'; // [v509.0 修正] 更新共用模組路徑
 
 const { createApp, ref, onMounted, onUnmounted, computed, watch, nextTick } = Vue;
 

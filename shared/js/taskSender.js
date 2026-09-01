@@ -294,6 +294,36 @@ function _injectConsoleStyles(container) {
 }
 
 /**
+ * 勾「發送給所有員工」時，收件人必須是每位在職員工的 ID，不可只傳字面 ALL。
+ * 後端若把 RecipientID 寫成 ALL，智慧通知中心對不到任何人。
+ */
+export function resolveHubStaffRecipientIds(employees, { sendToAll, selectedIds } = {}) {
+    const isStaff = (emp) => {
+        if (!emp) return false;
+        const st = String(emp.status || emp['身份'] || '員工').trim();
+        if (st === '離職' || st === '廠商') return false;
+        return Number(emp.permission || emp['權限'] || 0) >= 2;
+    };
+    if (sendToAll) {
+        const ids = (employees || [])
+            .filter(isStaff)
+            .map((emp) => String(emp.userId || emp['userId'] || '').trim())
+            .filter(Boolean);
+        return {
+            ok: ids.length > 0,
+            recipients: ids,
+            error: ids.length ? '' : '員工名單還沒載入或沒有可發送的員工，無法發送給所有人。請重新整理後再試。'
+        };
+    }
+    const selected = (selectedIds || []).map((id) => String(id || '').trim()).filter(Boolean);
+    return {
+        ok: selected.length > 0,
+        recipients: selected,
+        error: selected.length ? '' : '錯誤：請至少選擇一位收件人。'
+    };
+}
+
+/**
  * [內部] 建立要發送給後端的 payload 物件。
  * @param {object} state - 從 config 傳入的 state 物件。
  * @param {string} styleType - 當前的 UI 樣式 ('hub' 或 'console')。
@@ -306,6 +336,13 @@ function _buildPayload(state, styleType) {
     const sendToAll = sendToAllCheckbox ? sendToAllCheckbox.checked : false;
     // 【您的要求】核心修正：改為從 .selected 標籤讀取收件人 ID，解決無法發送的問題
     const selectedRecipients = Array.from(document.querySelectorAll('#task-sender-recipient-list .recipient-tag.selected')).map(tag => tag.dataset.userId);
+    const resolved = resolveHubStaffRecipientIds(state.allEmployees, {
+        sendToAll,
+        selectedIds: selectedRecipients
+    });
+    if (!resolved.ok) {
+        return { _recipientError: resolved.error, recipients: [], content };
+    }
 
     let actionType = 'None';
     if (styleType === 'console') {
@@ -328,7 +365,7 @@ function _buildPayload(state, styleType) {
         // [v558.0] 'action' 已移至 handleSend 中處理，此處不再需要
         senderId: state.currentUserId,
         senderName: state.currentUserName,
-        recipients: sendToAll ? ['ALL'] : selectedRecipients,
+        recipients: resolved.recipients,
         content: content,
         projectId: state.projectId || document.getElementById('task-sender-related-project-id').value,
         actionType: actionType,
@@ -344,10 +381,10 @@ function _buildPayload(state, styleType) {
  * @returns {object} - 一個模擬的通知物件。
  */
 function _createOptimisticNotification(payload, state) {
-    const recipientNames = (payload.recipients[0] === 'ALL')
-        ? ['所有員工']
+    const recipientNames = payload.recipients.length > 5
+        ? [`${payload.recipients.length} 位員工`]
         : payload.recipients.map(id => {
-            const emp = state.allEmployees.find(e => e.userId === id);
+            const emp = (state.allEmployees || []).find(e => e.userId === id);
             return emp ? emp.userName : id;
         });
 
@@ -395,8 +432,8 @@ async function handleSend(event, config, styleType, recipientSelector) {
     const payload = _buildPayload(state, styleType);
     console.log('[TaskSender] 建立的 payload:', payload);
     // 驗證輸入
-    if (payload.recipients.length === 0 && !payload.recipients.includes('ALL')) {
-        statusEl.textContent = '錯誤：請至少選擇一位收件人。';
+    if (payload._recipientError || payload.recipients.length === 0) {
+        statusEl.textContent = payload._recipientError || '錯誤：請至少選擇一位收件人。';
         return;
     }
     console.log('[TaskSender] 收件人驗證通過');
