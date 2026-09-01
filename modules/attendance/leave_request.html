@@ -1119,35 +1119,47 @@ thumbnail.src = '';
             }
 
             try {
+                const mock = localMockMode();
+                if (mock === 'approvefail') {
+                    throw new Error('（本機模擬）審核沒送到。這不代表已經核准。');
+                }
                 const url = new URL(API_BASE_URL);
                 url.searchParams.append('page', 'attendance_api');
                 url.searchParams.append('action', 'handle_approval');
                 url.searchParams.append('decision', finalDecision);
                 url.searchParams.append('recordId', recordId);
                 url.searchParams.append('approverName', userProfile.displayName);
-                url.searchParams.append('applicantId', applicantId); // 傳遞申請人ID
+                url.searchParams.append('applicantId', applicantId);
 
                 if (reason) url.searchParams.append('reason', reason);
 
-                // 使用 no-cors 模式發送請求，避免 CORS 錯誤
-                await fetch(url, { mode: 'no-cors' });
+                const response = await fetch(url);
+                let result;
+                try {
+                    result = await response.json();
+                } catch (parseErr) {
+                    throw new Error('審核結果讀不到，請再試。這不代表已經核准。');
+                }
+                if (!result || result.success !== true) {
+                    throw new Error((result && result.message) || '審核沒完成，請再試。這不代表已經核准。');
+                }
 
-                // 樂觀更新 UI
                 const card = document.getElementById(`req-${recordId}`);
                 if (card) {
                     card.style.opacity = '0';
                     card.style.transform = 'translateX(50px)';
                     setTimeout(() => {
-                        // 重新載入列表以取得最新狀態
                         if (document.querySelector('.tab-button.active').dataset.tab === 'management') {
                             fetchManageableLeaveRequests();
                         }
                     }, 500);
                 }
             } catch (error) {
-                alert(`操作失敗: ${error.message}`);
+                alert(error.message || '審核沒完成');
                 button.disabled = false;
-                button.textContent = button.dataset.decision === 'approved' ? '批准' : '駁回';
+                if (button.dataset.decision === 'approved') button.textContent = '批准';
+                else if (button.dataset.decision === 'confirm-reject') button.textContent = '確認駁回';
+                else button.textContent = '駁回';
             }
         }
 

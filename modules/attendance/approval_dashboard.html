@@ -398,6 +398,22 @@
                 result = { success: false, message: '（本機模擬）假勤待審讀取失敗' };
             } else if (localMockMode === 'empty') {
                 result = { success: true, data: [] };
+            } else if (localMockMode === 'approvefail') {
+                const now = new Date();
+                const later = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+                result = {
+                    success: true,
+                    data: [{
+                        timestamp: 999000001,
+                        userName: '測試同事',
+                        recordType: '請假',
+                        leaveType: '事假',
+                        reason: '本機模擬：按批准應失敗、卡片要留著',
+                        startTime: now.toISOString(),
+                        endTime: later.toISOString(),
+                        status: '待審核'
+                    }]
+                };
             } else {
                 const url = new URL(API_BASE_URL);
                 url.searchParams.append('page', 'attendance_api');
@@ -449,7 +465,7 @@
             let result;
             if (localMockMode === 'fail') {
                 result = { success: false, message: '（本機模擬）出勤申訴讀取失敗' };
-            } else if (localMockMode === 'empty') {
+            } else if (localMockMode === 'empty' || localMockMode === 'approvefail') {
                 result = { success: true, data: [] };
             } else {
                 const url = new URL(API_BASE_URL);
@@ -717,9 +733,61 @@
                 <button data-decision="rejected" data-record-id="${req.timestamp}" class="px-4 py-2 text-sm font-bold text-white bg-red-500 rounded-md hover:bg-red-600">駁回</button>
                 <button data-decision="approved" data-record-id="${req.timestamp}" class="px-4 py-2 text-sm font-bold text-white bg-green-500 rounded-md hover:bg-green-600">批准</button>
             </div>
+            <p id="approval-card-error-${req.timestamp}" class="hidden mt-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-2"></p>
         `;
 
         return card;
+    }
+
+    function restoreApprovalButtons(card) {
+        if (!card) return;
+        const approveBtn = card.querySelector('[data-decision="approved"]');
+        const rejectBtn = card.querySelector('[data-decision="rejected"]');
+        const confirmBtn = card.querySelector('[data-decision="confirm-reject"]');
+        if (approveBtn) {
+            approveBtn.disabled = false;
+            approveBtn.textContent = '批准';
+        }
+        if (rejectBtn) {
+            rejectBtn.disabled = false;
+            rejectBtn.textContent = '駁回';
+        }
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = '確認駁回';
+        }
+    }
+
+    function showApprovalCardError(recordId, message) {
+        const el = document.getElementById(`approval-card-error-${recordId}`);
+        if (!el) return;
+        el.textContent = message || '這次沒審成，卡片還在，可再按一次。';
+        el.classList.remove('hidden');
+    }
+
+    async function postLeaveApproval(recordId, decision, reason) {
+        if (localMockMode === 'approvefail') {
+            throw new Error('（本機模擬）審核沒送到。這不代表已經核准。');
+        }
+        const url = new URL(API_BASE_URL);
+        url.searchParams.append('page', 'attendance_api');
+        url.searchParams.append('action', 'handle_approval');
+        url.searchParams.append('decision', decision);
+        url.searchParams.append('recordId', recordId);
+        url.searchParams.append('approverName', userProfile.displayName);
+        if (reason) url.searchParams.append('reason', reason);
+
+        const response = await fetch(url);
+        let result;
+        try {
+            result = await response.json();
+        } catch (e) {
+            throw new Error('審核結果讀不到，請再試。這不代表已經核准。');
+        }
+        if (!result || result.success !== true) {
+            throw new Error((result && result.message) || '審核沒完成，請再試。這不代表已經核准。');
+        }
+        return result;
     }
 
     async function handleApproval(event) {
@@ -740,49 +808,35 @@
         button.disabled = true;
         button.textContent = '處理中...';
 
-        // 【v36.0 核心改造】處理批准與確認駁回的邏輯
         let reason = '';
         let finalDecision = decision;
 
         if (decision === 'confirm-reject') {
-            finalDecision = 'rejected'; // 將動作轉換為後端可識別的 'rejected'
+            finalDecision = 'rejected';
             const reasonInput = document.getElementById(`reject-reason-${recordId}`);
             reason = reasonInput ? reasonInput.value : '';
         }
 
+        const card = document.getElementById(`req-${recordId}`);
+        const errEl = document.getElementById(`approval-card-error-${recordId}`);
+        if (errEl) errEl.classList.add('hidden');
+
         try {
-            // 【v43.0 核心改造】為了解決 CORS 問題，且不修改後端，改用 no-cors 模式發送 GET 請求。
-            // 這是一種「發射後不理」的策略，前端無法讀取後端的回應內容，但請求會成功送達。
-            const url = new URL(API_BASE_URL);
-            url.searchParams.append('page', 'attendance_api');
-            url.searchParams.append('action', 'handle_approval');
-            url.searchParams.append('decision', finalDecision);
-            url.searchParams.append('recordId', recordId);
-            url.searchParams.append('approverName', userProfile.displayName);
-            if (reason) url.searchParams.append('reason', reason);
-
-            const response = await fetch(url, { mode: 'no-cors' });
-            console.log('已使用 no-cors 模式發送審核請求。注意：前端無法讀取後端回應。');
-
-            // 在 no-cors 模式下，我們無法得知 response.ok 的真實狀態，
-            // 但只要 fetch 沒有拋出網路錯誤，我們就樂觀地假設後端已成功處理。
-            if (true) { // 樂觀更新 UI
-                const card = document.getElementById(`req-${recordId}`);
-                if (card) {
-                    card.style.opacity = '0';
-                    card.style.transform = 'translateX(50px)';
-                    // 更新 Hub 頁面的計數
-                    const currentCount = parseInt(document.getElementById('approval-badge')?.textContent || '1', 10);
-                    if (window.opener && window.opener.updateApprovalBadge) {
-                        window.opener.updateApprovalBadge(Math.max(0, currentCount - 1));
-                    }
-                    setTimeout(() => card.remove(), 500);
+            const result = await postLeaveApproval(recordId, finalDecision, reason);
+            if (card) {
+                card.style.opacity = '0';
+                card.style.transform = 'translateX(50px)';
+                const currentCount = parseInt(document.getElementById('approval-badge')?.textContent || '1', 10);
+                if (window.opener && window.opener.updateApprovalBadge) {
+                    window.opener.updateApprovalBadge(Math.max(0, currentCount - 1));
                 }
-            } else {
-                throw new Error(`伺服器回應錯誤: ${response.status}`);
+                setTimeout(() => card.remove(), 500);
             }
+            showGlobalNotification(result.message || '已完成審核', 4000, 'success');
         } catch (error) {
-            alert(`操作失敗: ${error.message}`);
+            restoreApprovalButtons(card);
+            showApprovalCardError(recordId, error.message);
+            showGlobalNotification(error.message || '審核沒完成', 8000, 'error');
         }
     }
 
