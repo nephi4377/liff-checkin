@@ -364,6 +364,41 @@
 
     let currentWorkbook = null;
     let processedData = null;
+    window.__budgetWebDidWrite = false;
+
+    function isLocalBudgetWebHost() {
+        const h = location.hostname;
+        return h === '127.0.0.1' || h === 'localhost';
+    }
+    const localMockMode = isLocalBudgetWebHost()
+        ? (new URLSearchParams(location.search).get('mock') || '')
+        : '';
+
+    if (localMockMode === 'syncreadfail') {
+        processedData = {
+            items: [{
+                type: 'item',
+                data: {
+                    id: 'MOCK1',
+                    zone: '測試',
+                    name: '測試工項',
+                    spec: '',
+                    qty: '1',
+                    unit: '式',
+                    price: '',
+                    category_tag: '其他',
+                    sheet_source: 'mock',
+                    raw_line: 'mock'
+                }
+            }],
+            total_summary: {}
+        };
+        if (projectNoInput && !projectNoInput.value.trim()) projectNoInput.value = '999';
+        const infoBox = document.getElementById('projectInfoBox');
+        if (infoBox) infoBox.style.display = 'block';
+        const statusEl = document.getElementById('status');
+        if (statusEl) statusEl.innerText = '本機模擬：讀雲端失敗（按同步不應寫入）';
+    }
 
     /** 依案號記憶「分區取消／移除工項」，下次同案號解析時自動套用 */
     const PARSER_PREFS_KEY_PREFIX = 'budget_parser_prefs_v1_';
@@ -949,15 +984,32 @@
     document.getElementById('syncCloudBtn').addEventListener('click', async () => {
         const projectNo = document.getElementById('projectNoInput').value.trim();
         if (!projectNo) { alert("請填寫案號！"); return; }
+        if (!processedData || !Array.isArray(processedData.items)) {
+            status.innerText = "請先完成解析，再同步到雲端。";
+            return;
+        }
         const syncBtn = document.getElementById('syncCloudBtn');
         syncBtn.innerText = "⏳ 同步中...";
         syncBtn.disabled = true;
+        window.__budgetWebDidWrite = false;
         try {
             let existingData = null;
-            try {
-                const snapshot = await db.ref(`quotations/${projectNo}`).once('value');
-                existingData = snapshot.val();
-            } catch (e) {}
+            let existingReadFailed = false;
+            if (localMockMode === 'syncreadfail') {
+                existingReadFailed = true;
+            } else {
+                try {
+                    const snapshot = await db.ref(`quotations/${projectNo}`).once('value');
+                    existingData = snapshot.val();
+                } catch (e) {
+                    existingReadFailed = true;
+                    console.error('[Sync] 讀既有雲端失敗:', e);
+                }
+            }
+            if (existingReadFailed) {
+                status.innerText = "❌ 讀不到此案現有雲端資料，這次沒寫上去，以免把已記錄的驗收進度蓋掉。請檢查網路後再試。";
+                return;
+            }
 
             const exportItems = processedData.items.filter(r => r.type === 'item').map(r => {
                 const d = r.data;
@@ -995,6 +1047,7 @@
                 last_updated: new Date().toLocaleString(),
                 sync_by: "AI_PREPROCESSOR"
             });
+            window.__budgetWebDidWrite = true;
 
             if (confirm("☁️ 同步成功！是否啟動驗收表？")) {
                 window.open(`BudgetAuditor_Standalone_V2.html?projectNo=${projectNo}`, '_blank');
