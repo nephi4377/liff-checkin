@@ -31,7 +31,7 @@ import * as LogActions from './logActions.js';
 import * as ScheduleActions from './scheduleActions.js';
 import { state } from './state.js';
 import { CONFIG } from '/shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
-import { initializeTaskSender, addRecipient } from '/shared/js/taskSender.js'; // [v544.0 修正] 改為絕對路徑
+import { initializeTaskSender, addRecipient } from '/shared/js/taskSender.js?v=26.09.01.1'; // [v544.0 修正] 改為絕對路徑
 
 /** 排程範本：僅「工程排程」頁的空狀態按鈕，只註冊一次 */
 function ensureScheduleTemplateImportDelegation() {

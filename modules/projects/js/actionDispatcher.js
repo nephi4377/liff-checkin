@@ -11,7 +11,7 @@
 
 import * as LogActions from './logActions.js';
 import * as ScheduleActions from './scheduleActions.js';
-import { addRecipient } from '../../../shared/js/taskSender.js';
+import { addRecipient } from '../../../shared/js/taskSender.js?v=26.09.01.1';
 import { showGlobalNotification } from '../../../shared/js/utils.js';
 import { state } from './state.js';
 
