@@ -13,6 +13,14 @@ import { logToPage, extractDriveFileId, showGlobalNotification } from '/shared/j
 import { buildPhotoGrid, _buildLogCard } from './ui.js'; // 同一層
 import { buildAiAnalysisHtml } from './siteReportAiUi.js';
 import { request as apiRequest } from './projectApi.js'; // [v317.0 API化] 引入新的統一請求函式
+import {
+    LOG_TEXT_SAVE_FAIL_MESSAGE,
+    snapshotLogText,
+    writeLogText,
+    restoreLogText,
+    snapshotLogTextInList,
+    writeLogTextInList
+} from './logTextRollback.mjs';
 
 /** 處理文字編輯 */
 export function handleEditText(logId) {
@@ -47,46 +55,74 @@ function handleSaveText(logId, originalButtons) {
     if (!contentDiv) return;
 
     const newText = contentDiv.innerText.trim();
+    const previousDisplayText = contentDiv.dataset.originalContent != null
+        ? contentDiv.dataset.originalContent
+        : contentDiv.innerText;
     const btnBox = contentDiv.closest('.card')?.querySelector('.button-group');
+    const card = contentDiv.closest('.card');
 
-    // 【⭐️ 核心修正 1/3：執行樂觀更新，立即還原 UI ⭐️】
-    // 1. 立即將新內容更新到畫面上
+    const CACHE_KEY = `project_data_${state.projectId}_${state.currentUserId}`;
+    let cacheData = null;
+    let cacheSnap = { found: false, previousText: null };
+    try {
+        const cachedItem = localStorage.getItem(CACHE_KEY);
+        if (cachedItem) cacheData = JSON.parse(cachedItem);
+    } catch (e) {
+        cacheData = null;
+    }
+    if (cacheData) cacheSnap = snapshotLogText(cacheData, logId);
+    const listSnap = snapshotLogTextInList(state.currentLogsData, logId);
+
     contentDiv.innerText = newText;
-    // 2. 立刻將 UI 切換回正常瀏覽模式
     contentDiv.contentEditable = false;
     contentDiv.style.cssText = 'white-space: pre-wrap; margin-top: 0.75rem;';
     if (btnBox) {
         btnBox.innerHTML = '';
         originalButtons.forEach(b => btnBox.appendChild(b));
     }
+    if (card) card.style.opacity = '0.7';
 
-    // 【⭐️ 核心修正 2/3：立即更新本地快取 ⭐️】
-    const CACHE_KEY = `project_data_${state.projectId}_${state.currentUserId}`;
-    const cachedItem = localStorage.getItem(CACHE_KEY);
-    if (cachedItem) {
-        const cacheData = JSON.parse(cachedItem);
-        const logToUpdate = cacheData.data.dailyLogs.find(log => log.LogID === logId);
-        if (logToUpdate) {
-            logToUpdate.Content = newText;
+    if (cacheData && writeLogText(cacheData, logId, newText)) {
+        try {
             localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
             logToPage(`[Cache] 已樂觀更新日誌 ${logId} 的文字內容。`);
-        }
+        } catch (e) { /* 快取寫不進去仍繼續送後端 */ }
     }
+    writeLogTextInList(state.currentLogsData, logId, newText);
 
-    // 【⭐️ 核心修正 3/3：在背景執行後端同步 ⭐️】
-    // [架構重構 v5.0] 統一呼叫 postTask
-    apiRequest({ // [v317.0 API化] 改為使用統一請求函式
+    const rollbackText = () => {
+        contentDiv.innerText = previousDisplayText;
+        contentDiv.contentEditable = false;
+        contentDiv.style.cssText = 'white-space: pre-wrap; margin-top: 0.75rem;';
+        if (card) card.style.opacity = '1';
+        if (cacheSnap.found && cacheData) {
+            restoreLogText(cacheData, logId, cacheSnap.previousText);
+            try {
+                localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+            } catch (e) { /* 略 */ }
+        }
+        if (listSnap.found) {
+            writeLogTextInList(state.currentLogsData, logId, listSnap.previousText);
+        }
+    };
+
+    apiRequest({
         action: 'updateLogText',
         payload: { id: logId, content: newText, userId: state.currentUserId, userName: state.currentUserName }
     })
         .then(result => {
             if (result.success) {
+                if (card) card.style.opacity = '1';
                 showGlobalNotification(result.message || '文字已成功更新！', 5000, 'success');
             } else {
-                showGlobalNotification(`文字更新失敗: ${result.error || '未知錯誤'}`, 8000, 'error');
+                rollbackText();
+                showGlobalNotification(LOG_TEXT_SAVE_FAIL_MESSAGE, 8000, 'error');
             }
         })
-        .catch(error => showGlobalNotification(`請求失敗: ${error.message}`, 8000, 'error'));
+        .catch(() => {
+            rollbackText();
+            showGlobalNotification(LOG_TEXT_SAVE_FAIL_MESSAGE, 8000, 'error');
+        });
 }
 
 /** 開啟照片管理視窗 */

@@ -52,11 +52,11 @@
        以便後續的模組腳本 (main.js) 可以透過 window.API_BASE_URL 存取。 -->
   <script>
     var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    var FRONTEND_VERSION = 'v26.07.01.1'; // SPEC19 HUB hubLiffId + index 快取破除
+    var FRONTEND_VERSION = 'v26.09.01.1'; // 巡檢：編輯文字失敗還原舊文
   </script>
   <!-- [v2026.02.28 核心修正] 更新版本號以強制瀏覽器下載最新的 JavaScript 檔案。
        這可以解決因瀏覽器快取舊版 api.js，導致輪詢任務狀態時發送錯誤 POST 請求的問題。 -->
-  <script type="module" src="./js/main.js?v=26.05.05.1"></script>
+  <script type="module" src="./js/main.js?v=26.09.01.1"></script>
 </head>
 
 <body>
