@@ -74,6 +74,11 @@
     .drop-zone p { margin: 0; font-size: 15px; color: #333; }
     .drop-zone .hint { margin-top: 6px; font-size: 13px; color: #666; line-height: 1.45; }
     .drop-zone input[type="file"] { display: none; }
+    .line-carry-err {
+      background: #fce8e6; color: #5f2120; border-radius: 8px;
+      padding: 10px; margin: 8px 0; font-size: 14px; line-height: 1.45;
+    }
+    .line-carry-err .btn { width: auto; margin-top: 8px; padding: 8px 14px; min-width: 120px; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -148,6 +153,7 @@
         <input type="file" id="photoInput" accept="image/*" capture="environment" multiple />
       </div>
       <p class="hint" id="photoCountLine">已 0 張</p>
+      <div id="pendingPhotoError" class="line-carry-err hidden" role="alert"></div>
       <div id="pendingPreview" class="hidden"></div>
     </div>
 
@@ -173,6 +179,8 @@
       var sessionRef = null;
       var sessionCount = 0, idToken = '', devBypass = false;
       var pendingPhotos = [], localPhotos = [], queryParams = {}, hubContext = { projects: [], employees: [] };
+      var pendingPhotoBusy = false;
+      var pendingPhotosLoadedOk = false;
       var applicantDefault = '';
       var cachedVendors = [];
       var vendorCombobox = null;
@@ -464,7 +472,50 @@
         if (tok) body.liff_id_token = tok;
       }
 
-      async function loadPendingPhotos(token) {
+      function humanLineCarryErr(e, fallback) {
+        var msg = (e && e.message) || String(e || '') || fallback;
+        if (/abort|AbortError|timeout|逾時/i.test(msg)) {
+          return fallback + '（連線逾時）';
+        }
+        return msg;
+      }
+      function showLineCarryError(message, onRetry) {
+        var box = document.getElementById('pendingPhotoError');
+        if (!box) {
+          setMsg(message);
+          return;
+        }
+        box.classList.remove('hidden');
+        box.innerHTML = '';
+        var p = document.createElement('p');
+        p.style.margin = '0';
+        p.textContent = message;
+        box.appendChild(p);
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-primary';
+        btn.textContent = '再帶一次照片';
+        btn.addEventListener('click', function () {
+          if (typeof onRetry === 'function') onRetry();
+        });
+        box.appendChild(btn);
+      }
+      function clearLineCarryError() {
+        var box = document.getElementById('pendingPhotoError');
+        if (!box) return;
+        box.classList.add('hidden');
+        box.innerHTML = '';
+      }
+      function applyIncomingPendingPhotos(incoming) {
+        var before = pendingPhotos.length;
+        (incoming || []).forEach(function (p) {
+          if (!p || !p.dataBase64) return;
+          pendingPhotos.push(p);
+        });
+        showPendingPreviews(pendingPhotos);
+        return pendingPhotos.length - before;
+      }
+      async function fetchPendingPhotosOnce(token) {
         var body = {
           action: 'accounting_pending_photos',
           token: token,
@@ -472,9 +523,56 @@
         };
         attachIngestAuth(body);
         var data = await AccountingApi.post(body);
-        if (!data.success) { setMsg(data.message || '無法帶入照片'); return; }
-        pendingPhotos = data.photos || [];
-        showPendingPreviews(pendingPhotos);
+        if (!data || !data.success) {
+          throw new Error((data && data.message) || '無法帶入 LINE 照片');
+        }
+        return data;
+      }
+      async function fetchPendingPhotosRetry(token) {
+        try {
+          return await fetchPendingPhotosOnce(token);
+        } catch (e1) {
+          return await fetchPendingPhotosOnce(token);
+        }
+      }
+      async function loadPendingPhotos(token, opts) {
+        if (!token || pendingPhotoBusy) return;
+        if (pendingPhotosLoadedOk && !(opts && opts.force)) return;
+        opts = opts || {};
+        pendingPhotoBusy = true;
+        clearLineCarryError();
+        var countLine = document.getElementById('photoCountLine');
+        var prevCount = countLine ? countLine.textContent : '';
+        if (countLine) countLine.textContent = '正在帶入 LINE 照片…';
+        try {
+          var data = opts.force
+            ? await fetchPendingPhotosOnce(token)
+            : await fetchPendingPhotosRetry(token);
+          var added = applyIncomingPendingPhotos(data.photos || []);
+          if (added > 0) {
+            pendingPhotosLoadedOk = true;
+            return;
+          }
+          if (!pendingPhotos.length) {
+            showLineCarryError(
+              'LINE 傳來的照片這次沒帶進來。這不代表你沒傳圖，可再帶一次，或改從下方手動加入。',
+              function () { return loadPendingPhotos(token, { force: true }); }
+            );
+          }
+        } catch (e) {
+          if (countLine && !pendingPhotos.length && !localPhotos.length) {
+            countLine.textContent = prevCount || '已 0 張';
+          } else {
+            updatePhotoCountLine();
+          }
+          showPendingPreviews(pendingPhotos);
+          showLineCarryError(
+            humanLineCarryErr(e, '無法帶入 LINE 照片') + '。這不代表你沒傳圖，可再帶一次，或改手動加入。',
+            function () { return loadPendingPhotos(token, { force: true }); }
+          );
+        } finally {
+          pendingPhotoBusy = false;
+        }
       }
 
       async function submitEntry() {
@@ -548,7 +646,7 @@
           (session.fromHub ? ' · 主控台' : (session.devBypass ? ' · 測試模式' : ''));
         showApp();
         setupHubContext(sessionRef);
-        if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
+        if (queryParams.pending) await loadPendingPhotos(queryParams.pending);
       }
 
       async function bootDevBypass() {
@@ -685,7 +783,7 @@
         sessionRef = { devBypass: false, idToken: idToken, auth: authMe, profile: profile };
         showApp();
         setupHubContext(sessionRef);
-        if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
+        if (queryParams.pending) await loadPendingPhotos(queryParams.pending);
       }
       boot();
     })();
