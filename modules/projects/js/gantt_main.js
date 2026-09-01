@@ -26,6 +26,17 @@ function handleDataResponse(data) {
         return;
     }
 
+    if (data && data.scheduleLoadError) {
+        const msg = String(data.scheduleLoadError);
+        showGlobalNotification(msg, 8000, 'error');
+        const wrap = document.getElementById('gantt-chart-wrapper') || document.getElementById('main-content');
+        if (wrap) {
+            wrap.innerHTML = `<div class="text-red-600 p-4">${msg}<br><button type="button" id="btn-retry-gantt" class="btn btn-primary mt-3">再載入</button></div>`;
+            document.getElementById('btn-retry-gantt')?.addEventListener('click', () => location.reload());
+        }
+        return;
+    }
+
     // 更新全域狀態
     state.overview = data.overview || {};
     state.currentScheduleData = data.schedule || [];
@@ -129,6 +140,14 @@ async function initializeApp() {
 
             if (!result.success) throw new Error(result.error);
             const freshData = result.data;
+            if (freshData && freshData.scheduleLoadError) {
+                if (cachedData && Array.isArray(cachedData.schedule) && cachedData.schedule.length) {
+                    logToPage('⚠️ 排程更新失敗，保留快取畫面。', 'error');
+                    showGlobalNotification('工程排程這次沒更新成功，仍顯示先前內容。', 6000, 'error');
+                    return;
+                }
+                throw new Error(freshData.scheduleLoadError);
+            }
             
             // 【優化】只有在新舊資料不同時才更新畫面和快取
             const oldDataSignature = JSON.stringify(loadCache(state.cacheKey) || {});
