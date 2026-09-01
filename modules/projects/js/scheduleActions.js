@@ -21,6 +21,36 @@ export function renderSchedulePage(overview, schedule) {
     const container = document.getElementById('schedule-container');
     if (!container) return;
     container.innerHTML = '';
+    container.style.display = '';
+
+    if (state.scheduleLoadError) {
+        const msg = String(state.scheduleLoadError);
+        container.innerHTML = `
+          <div class="card schedule-load-error mb-4" style="padding:1rem 1.1rem;border:1px solid #fca5a5;background:#fef2f2">
+            <p style="margin:0 0 0.75rem;font-size:0.95rem;line-height:1.45;color:#991b1b">
+              <strong>工程排程讀不到</strong><br>
+              ${msg.replace(/</g, '&lt;')}
+            </p>
+            <button type="button" id="btn-retry-schedule" class="btn btn-primary" style="width:100%">再載入排程</button>
+          </div>`;
+        const retryBtn = document.getElementById('btn-retry-schedule');
+        if (retryBtn) {
+            retryBtn.addEventListener('click', () => {
+                retryBtn.disabled = true;
+                retryBtn.textContent = '載入中…';
+                const done = () => {
+                    retryBtn.disabled = false;
+                    retryBtn.textContent = '再載入排程';
+                };
+                if (typeof window.refreshProjectData === 'function') {
+                    Promise.resolve(window.refreshProjectData(false)).then(done, done);
+                } else {
+                    location.reload();
+                }
+            });
+        }
+        return;
+    }
 
     if (!overview || !Array.isArray(schedule)) {
         container.style.display = 'none';

@@ -15,6 +15,8 @@ export const state = {
     currentEditingLogId: null,
     currentLogsData: [],
     currentScheduleData: [],
+    /** 排程讀失敗人話（有值時不可顯示「尚無排程」） */
+    scheduleLoadError: '',
     templateTasks: [],
     currentUserName: '未知使用者',
     currentPage: 1,

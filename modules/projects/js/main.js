@@ -113,6 +113,24 @@ function normalizeOverview(overview) {
   return normalized;
 }
 
+/** 套用後端專案資料裡的排程：讀失敗不可裝成空表。回傳 'ok' | 'error' | 'kept' */
+function applyScheduleFromServer(freshData, { keepPreviousOnError } = {}) {
+  const err = freshData && freshData.scheduleLoadError;
+  if (err) {
+    const hasPrev = keepPreviousOnError && Array.isArray(state.currentScheduleData) && state.currentScheduleData.length > 0;
+    if (hasPrev) {
+      showGlobalNotification('工程排程這次沒更新成功，仍顯示先前內容。可再試一次。', 6000, 'error');
+      return 'kept';
+    }
+    state.scheduleLoadError = String(err);
+    state.currentScheduleData = [];
+    return 'error';
+  }
+  state.scheduleLoadError = '';
+  state.currentScheduleData = (freshData && freshData.schedule) || [];
+  return 'ok';
+}
+
 function handleDataResponse(data) {
   const logsContainer = document.getElementById('logs-container');
   // [核心修正] 在重新渲染前，先移除所有樂觀更新的臨時卡片，避免重複顯示。
@@ -179,7 +197,7 @@ function handleDataResponse(data) {
   // [v303.0 核心修正] 調整資料處理順序，確保 overview 和 schedule 的 dataReady 旗標能被一同觸發。
   // 舊的寫法將 overview 的處理放在函式末尾，可能導致依賴 'projectOverview' 的元件無法即時渲染。
   state.overview = data.overview || {};
-  state.currentScheduleData = data.schedule || [];
+  applyScheduleFromServer(data, { keepPreviousOnError: false });
   state.currentLogsData = data.dailyLogs || [];
   state.communicationHistory = data.communicationHistory || {};
 
@@ -478,7 +496,7 @@ async function refreshProjectData(showNotification = false) {
 
     // 更新 state
     state.overview = normalizeOverview(freshData.overview);
-    state.currentScheduleData = freshData.schedule || [];
+    applyScheduleFromServer(freshData, { keepPreviousOnError: true });
     state.currentLogsData = freshData.dailyLogs || [];
     state.communicationHistory = freshData.communicationHistory || {};
 
@@ -924,10 +942,23 @@ async function loadDataAndRender(projectId, userId, pageLoadId) {
   // [v249.0 重構] 移除 includeEmployees 參數，因為員工資料已由前端獨立獲取
   try {
     logToPage('🔄 正在從後端請求專案資料...');
-    const result = await apiRequest({ // [v317.0 API化] 改為使用統一請求函式
+    let result = await apiRequest({ // [v317.0 API化] 改為使用統一請求函式
       action: 'project',
       payload: { id: projectId, userId: userId }
     });
+
+    if (result.success && result.data && result.data.scheduleLoadError) {
+      logToPage('⚠️ 工程排程讀取失敗，自動再試一次…');
+      try {
+        const retryResult = await apiRequest({
+          action: 'project',
+          payload: { id: projectId, userId: userId }
+        });
+        if (retryResult && retryResult.success) result = retryResult;
+      } catch (retryErr) {
+        logToPage('⚠️ 工程排程重試仍失敗: ' + (retryErr && retryErr.message ? retryErr.message : retryErr), 'error');
+      }
+    }
 
     // [v201.0 核心修正] 在處理任何資料前，先檢查後端是否回傳錯誤。
     if (!result.success) {
@@ -952,11 +983,21 @@ async function loadDataAndRender(projectId, userId, pageLoadId) {
 
     freshData.ownerId = userId;
 
+    if (freshData.scheduleLoadError && hasRenderedFromCache) {
+      applyScheduleFromServer(freshData, { keepPreviousOnError: true });
+      if (freshData.dailyLogs) state.currentLogsData = freshData.dailyLogs;
+      if (freshData.communicationHistory) state.communicationHistory = freshData.communicationHistory;
+      logToPage('⚠️ 排程更新失敗，保留快取中的排程畫面。');
+      return;
+    }
+
     if (!hasRenderedFromCache) {
-      // 情況一：沒有快取，這是第一次載入。直接渲染畫面並設定快取。
+      // 情況一：沒有快取，這是第一次載入。直接渲染畫面並建立快取。
       logToPage('✅ 首次載入資料，正在渲染畫面並建立快取...');
       handleDataResponse(freshData);
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData }));
+      if (!freshData.scheduleLoadError) {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData }));
+      }
     } else {
       // 情況二：畫面已由快取渲染，在背景比對新舊資料。
       const cachedItem = localStorage.getItem(CACHE_KEY);
@@ -982,8 +1023,10 @@ async function loadDataAndRender(projectId, userId, pageLoadId) {
           // 確保畫面的一致性。
           handleDataResponse(freshData);
 
-          // 將新資料寫入快取
-          localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData }));
+          // 將新資料寫入快取（排程讀失敗不寫成空表）
+          if (!freshData.scheduleLoadError) {
+            localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: freshData }));
+          }
 
           showGlobalNotification('偵測到專案資料更新，畫面已自動刷新。', 3000, 'info');
         }
