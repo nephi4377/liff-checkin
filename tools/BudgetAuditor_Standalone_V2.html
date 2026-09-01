@@ -2969,6 +2969,15 @@
         syncToFirebase();
     };
 
+    let progressCloudSyncTimer = null;
+    function scheduleProgressCloudSync() {
+        if (progressCloudSyncTimer) clearTimeout(progressCloudSyncTimer);
+        progressCloudSyncTimer = setTimeout(function () {
+            progressCloudSyncTimer = null;
+            syncToFirebase();
+        }, 800);
+    }
+
     window.updateProgress = (id, val) => {
         const item = appData.items.find(it => it.id === id);
         if (!item) return;
@@ -2998,6 +3007,7 @@
             }
         }
         refreshOverall();
+        scheduleProgressCloudSync();
     };
 
     window.toggleVerify = (id) => {
