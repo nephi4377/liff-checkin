@@ -1,6 +1,13 @@
 /**
  * 個人頁 — 薪資出勤核對申請（Phase B1）
  */
+import { classifyAttendanceListFetch } from './attendanceListFetch.js';
+
+const PAYSLIP_HISTORY_FAIL_MSG = '發放紀錄讀不到，請再試';
+
+export function classifyPayslipHistoryFetch(result) {
+    return classifyAttendanceListFetch(result, PAYSLIP_HISTORY_FAIL_MSG);
+}
 
 function escPayrollHtml(s) {
     if (s == null) return '';
@@ -800,6 +807,11 @@ export function initPayrollReviewPanel(ctx) {
     function loadPayslipHistoryLocal() {
         return loadPayslipHistoryForPanel(historyCtx);
     }
+    const historyRetryBtn = document.getElementById('payroll-history-retry');
+    if (historyRetryBtn && !historyRetryBtn.dataset.bound) {
+        historyRetryBtn.dataset.bound = '1';
+        historyRetryBtn.addEventListener('click', () => loadPayslipHistoryLocal());
+    }
 
     return {
         loadIfNeeded() {
@@ -844,63 +856,145 @@ function renderPayslipDetailHtml(detail, esc) {
     `;
 }
 
+function friendlyPayslipHistoryError(err) {
+    if (!err) return PAYSLIP_HISTORY_FAIL_MSG;
+    const msg = err.message || String(err);
+    if (msg === 'Failed to fetch' || /failed to fetch/i.test(msg)) {
+        return '無法連線後端，請稍後再按「再試一次」';
+    }
+    return msg || PAYSLIP_HISTORY_FAIL_MSG;
+}
+
+function readPayslipHistoryMock() {
+    try {
+        return new URLSearchParams(window.location.search).get('mock') || '';
+    } catch (e) {
+        return '';
+    }
+}
+
+async function fetchPayslipHistoryJson(ctx) {
+    const { apiBaseUrl, userId, fetchApi } = ctx;
+    const mock = readPayslipHistoryMock();
+    if (mock === 'payslip-fail') {
+        return { success: false, message: '（本機模擬）發放紀錄讀取失敗' };
+    }
+    if (mock === 'payslip-empty') {
+        return { success: true, data: [] };
+    }
+    const params = {
+        page: 'attendance_api',
+        action: 'payroll_review',
+        mode: 'history',
+        operatorId: userId,
+        months: 12
+    };
+    if (fetchApi) return fetchApi(params);
+    const url = new URL(apiBaseUrl);
+    Object.entries(params).forEach(([k, v]) => url.searchParams.append(k, v));
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`伺服器回應 ${res.status}`);
+    return res.json();
+}
+
 async function loadPayslipHistoryForPanel(ctx) {
     const { apiBaseUrl, userId, fetchApi } = ctx;
     const listEl = document.getElementById('payroll-history-list');
     const loadingEl = document.getElementById('payroll-history-loading');
     const detailEl = document.getElementById('payroll-payslip-detail');
     const emptyEl = document.getElementById('payroll-history-empty');
+    const errorEl = document.getElementById('payroll-history-error');
+    const errorText = document.getElementById('payroll-history-error-text');
+    const retryBtn = document.getElementById('payroll-history-retry');
     if (!listEl || !userId) return;
 
     function esc(s) { return escPayrollHtml(s); }
 
+    function showHistoryError(message) {
+        if (errorText) errorText.textContent = message || PAYSLIP_HISTORY_FAIL_MSG;
+        errorEl?.classList.remove('hidden');
+        emptyEl?.classList.add('hidden');
+        if (emptyEl) emptyEl.textContent = '尚無發放紀錄';
+        listEl.innerHTML = '';
+        if (retryBtn) {
+            retryBtn.disabled = false;
+            retryBtn.textContent = '再試一次';
+        }
+    }
+
     loadingEl?.classList.remove('hidden');
+    errorEl?.classList.add('hidden');
+    emptyEl?.classList.add('hidden');
+    if (emptyEl) emptyEl.textContent = '尚無發放紀錄';
     listEl.innerHTML = '';
     detailEl?.classList.add('hidden');
-    try {
-        const params = {
-            page: 'attendance_api',
-            action: 'payroll_review',
-            mode: 'history',
-            operatorId: userId,
-            months: 12
-        };
-        const json = fetchApi
-            ? await fetchApi(params)
-            : await (async () => {
-                const url = new URL(apiBaseUrl);
-                Object.entries(params).forEach(([k, v]) => url.searchParams.append(k, v));
-                const res = await fetch(url);
-                return res.json();
-            })();
-        if (!json.success) throw new Error(json.message || '載入失敗');
-        const items = json.data || [];
-        emptyEl?.classList.toggle('hidden', items.length > 0);
-        listEl.innerHTML = items.map((row) => `
+    if (retryBtn) {
+        retryBtn.disabled = true;
+        retryBtn.textContent = '載入中…';
+    }
+
+    const mock = readPayslipHistoryMock();
+    const maxAttempts = mock ? 1 : 2;
+    let classified = { kind: 'error', message: PAYSLIP_HISTORY_FAIL_MSG, items: [] };
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            const json = await fetchPayslipHistoryJson(ctx);
+            classified = classifyPayslipHistoryFetch(json);
+            if (classified.kind !== 'error') break;
+        } catch (err) {
+            classified = {
+                kind: 'error',
+                message: friendlyPayslipHistoryError(err),
+                items: []
+            };
+        }
+    }
+
+    loadingEl?.classList.add('hidden');
+    if (retryBtn) {
+        retryBtn.disabled = false;
+        retryBtn.textContent = '再試一次';
+    }
+
+    if (classified.kind === 'error') {
+        showHistoryError(classified.message);
+        return;
+    }
+    if (classified.kind === 'empty') {
+        emptyEl?.classList.remove('hidden');
+        errorEl?.classList.add('hidden');
+        return;
+    }
+
+    errorEl?.classList.add('hidden');
+    emptyEl?.classList.add('hidden');
+    listEl.innerHTML = classified.items.map((row) => `
             <button type="button" class="w-full text-left px-3 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 flex justify-between items-center gap-2 payroll-history-item" data-payslip-id="${esc(row.payslipId)}">
                 <span><strong>${esc(row.periodLabel)}</strong><span class="text-xs text-gray-500 block">${esc(row.periodStart)}～${esc(row.periodEnd)} · 發薪 ${esc(row.payDate || '')}</span></span>
                 <span class="font-bold text-indigo-700">${Number(row.finalAmount || 0).toLocaleString()} 元</span>
             </button>
         `).join('');
-        listEl.querySelectorAll('.payroll-history-item').forEach((btn) => {
-            btn.addEventListener('click', async () => {
-                const payslipId = btn.dataset.payslipId;
-                if (!detailEl) return;
-                detailEl.classList.remove('hidden');
-                detailEl.innerHTML = '<p class="text-gray-500 text-sm py-2">載入明細…</p>';
-                const dParams = {
-                    page: 'attendance_api',
-                    action: 'payroll_review',
-                    mode: 'payslip',
-                    operatorId: userId,
-                    payslipId
-                };
+    listEl.querySelectorAll('.payroll-history-item').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const payslipId = btn.dataset.payslipId;
+            if (!detailEl) return;
+            detailEl.classList.remove('hidden');
+            detailEl.innerHTML = '<p class="text-gray-500 text-sm py-2">載入明細…</p>';
+            const dParams = {
+                page: 'attendance_api',
+                action: 'payroll_review',
+                mode: 'payslip',
+                operatorId: userId,
+                payslipId
+            };
+            try {
                 const dJson = fetchApi
                     ? await fetchApi(dParams)
                     : await (async () => {
                         const url = new URL(apiBaseUrl);
                         Object.entries(dParams).forEach(([k, v]) => url.searchParams.append(k, v));
                         const res = await fetch(url);
+                        if (!res.ok) throw new Error(`伺服器回應 ${res.status}`);
                         return res.json();
                     })();
                 if (!dJson.success || !dJson.data) {
@@ -908,16 +1002,11 @@ async function loadPayslipHistoryForPanel(ctx) {
                     return;
                 }
                 detailEl.innerHTML = renderPayslipDetailHtml(dJson.data, esc);
-            });
+            } catch (err) {
+                detailEl.innerHTML = `<p class="text-red-600 text-sm">${esc(friendlyPayslipHistoryError(err))}</p>`;
+            }
         });
-    } catch (err) {
-        if (emptyEl) {
-            emptyEl.textContent = err.message || '載入發放紀錄失敗';
-            emptyEl.classList.remove('hidden');
-        }
-    } finally {
-        loadingEl?.classList.add('hidden');
-    }
+    });
 }
 
 export function initPayrollReviewApproval(ctx) {
