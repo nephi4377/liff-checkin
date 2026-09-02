@@ -64,20 +64,33 @@
         .emp-pill.selected { border-color: var(--tanxin-gold); background: var(--tanxin-gold-light); }
 
         .loading-tip { text-align: center; padding: 15px; color: var(--tanxin-gold); font-weight: 700; font-size: 0.8rem; }
-        #debug-console { position: fixed; bottom: 10px; right: 10px; width: 280px; max-height: 120px; background: rgba(0,0,0,0.85); color: #55FF55; font-size: 9px; padding: 8px; border-radius: 8px; z-index: 1000; pointer-events: none; overflow-y: auto; }
+        #plan-status { font-size: 0.8rem; color: #64748B; margin-left: 12px; }
+        #plan-status.is-busy { color: var(--tanxin-gold); font-weight: 700; }
+        #plan-error {
+            display: none; margin: 12px 20px 0; padding: 12px 16px; border-radius: 10px;
+            background: #FEF3C7; border: 1px solid #F59E0B; color: #92400E; font-size: 0.9rem;
+        }
+        #plan-error.visible { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        #plan-error button { border: 1px solid #B45309; background: #FFF; color: #92400E; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-weight: 700; }
+        #debug-console { display: none; position: fixed; bottom: 10px; right: 10px; width: 280px; max-height: 120px; background: rgba(0,0,0,0.85); color: #55FF55; font-size: 9px; padding: 8px; border-radius: 8px; z-index: 1000; pointer-events: none; overflow-y: auto; }
+        body.debug #debug-console { display: block; }
     </style>
 </head>
 <body>
 
 <div class="app">
     <header>
-        <div class="logo">添心 <strong>排程矩陣 v3.2</strong></div>
+        <div class="logo">添心 <strong>排程矩陣 v3.2</strong><span id="plan-status"></span></div>
         <div class="toolbar">
             <button class="btn" onclick="App.openEmpSettings()">👥 人員管理</button>
             <button class="btn" onclick="App.scrollToToday()">📅 今天</button>
             <button class="btn btn-primary" onclick="App.openBatchModal()">✨ 批次預排</button>
         </div>
     </header>
+    <div id="plan-error" role="alert">
+        <span id="plan-error-text"></span>
+        <button type="button" id="plan-error-retry">再試一次</button>
+    </div>
 
     <div class="matrix-wrapper" id="viewport">
         <div id="top-trigger" class="loading-tip">▲ 向上捲動載入上個月</div>
@@ -112,7 +125,7 @@
         </div>
         <div style="text-align:right; display:flex; gap:10px; justify-content:flex-end;">
             <button class="btn" onclick="App.closeBatchModal()">取消</button>
-            <button class="btn btn-primary" onclick="App.submitBatch()">確認提交</button>
+            <button class="btn btn-primary" id="batch-submit-btn" onclick="App.submitBatch()">確認提交</button>
         </div>
     </div>
 </div>
@@ -133,6 +146,41 @@
         if(c) { c.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`; c.scrollTop = c.scrollHeight; }
     }
 
+    function setStatus(text, busy) {
+        const el = document.getElementById('plan-status');
+        if (!el) return;
+        el.textContent = text || '';
+        el.classList.toggle('is-busy', !!busy);
+    }
+
+    function hideError() {
+        const box = document.getElementById('plan-error');
+        if (box) box.classList.remove('visible');
+    }
+
+    function showError(text, retryFn) {
+        const box = document.getElementById('plan-error');
+        const msg = document.getElementById('plan-error-text');
+        const btn = document.getElementById('plan-error-retry');
+        if (!box || !msg) return;
+        msg.textContent = text;
+        box.classList.add('visible');
+        if (btn) btn.onclick = typeof retryFn === 'function' ? retryFn : null;
+    }
+
+    async function readJson(res) {
+        const text = await res.text();
+        const trimmed = (text || '').trim();
+        if (!trimmed || trimmed.charAt(0) === '<') {
+            throw new Error('伺服器沒回排程資料');
+        }
+        try {
+            return JSON.parse(trimmed);
+        } catch (e) {
+            throw new Error('排程資料格式異常');
+        }
+    }
+
     function getCaseColor(no) {
         if (!no) return null;
         let h = 0; for(let i=0; i<no.length; i++) h = no.charCodeAt(i) + ((h << 5) - h);
@@ -141,6 +189,7 @@
 
     const App = {
         async init() {
+            if (/\bdebug=1\b/.test(location.search || '')) document.body.classList.add('debug');
             log('正在初始載入...');
             const now = new Date();
             const y = now.getFullYear(), m = now.getMonth() + 1;
@@ -157,42 +206,54 @@
             if(isFetching) return;
             isFetching = true;
             log(`請求 ${y}/${m}...`);
+            setStatus(`正在讀 ${y}/${m}…`, true);
             try {
                 const res = await fetch(`${API}?page=attendance_api&action=get_plan_schedule_chunk&year=${y}&month=${m}`);
-                const data = await res.json();
-                if(data.success) {
-                    // 這裡也加入過濾，確保矩陣中不出現廠商
-                    data.employees = (data.employees || []).filter(e => {
-                        const g = e.group || '';
-                        return !g.includes('廠商') && (g.includes('施工') || g.includes('店'));
-                    });
-                    this.mergeData(data, mode);
-                    this.render();
-                    if(mode==='append'){ tailY=y; tailM=m; } else { headY=y; headM=m; }
+                const data = await readJson(res);
+                if(!data || data.success !== true) {
+                    throw new Error((data && data.message) || '排程讀不到');
                 }
-            } catch(e) { log(e.message); }
+                // 這裡也加入過濾，確保矩陣中不出現廠商
+                data.employees = (data.employees || []).filter(e => {
+                    const g = e.group || '';
+                    return !g.includes('廠商') && (g.includes('施工') || g.includes('店'));
+                });
+                this.mergeData(data, mode);
+                this.render();
+                if(mode==='append'){ tailY=y; tailM=m; } else { headY=y; headM=m; }
+                hideError();
+                setStatus('');
+            } catch(e) {
+                log(e.message);
+                setStatus('');
+                showError('人員排程暫時讀不到。這不代表這個月沒人排班。', () => this.loadChunk(y, m, mode));
+            }
             finally { isFetching = false; }
         },
 
         async loadAllEmployees() {
             try {
                 const res = await fetch(`${API}?page=attendance_api&action=get_employees&filter=active`);
-                const json = await res.json();
+                const json = await readJson(res);
+                if (!json || json.success === false || !Array.isArray(json.data)) {
+                    throw new Error((json && json.message) || '員工清單讀不到');
+                }
                 // 嚴格過濾：必須包含施工/店，且絕不能包含廠商
                 allActiveEmps = json.data.filter(e => {
                     const g = e.group || '';
                     return !g.includes('廠商') && (g.includes('施工') || g.includes('店'));
                 });
                 log(`[員工] 已載入 ${allActiveEmps.length} 位非廠商員工`);
-            } catch(e) { log('員工清單載入失敗', 'error'); }
+            } catch(e) { log('員工清單載入失敗: ' + (e.message || '')); }
         },
 
         async loadSites() {
             try {
                 const res = await fetch(`${API}?page=attendance_api&action=get_all_sites`);
-                const json = await res.json();
+                const json = await readJson(res);
+                if (!json || json.success === false || !Array.isArray(json.data)) return;
                 document.getElementById('site-dl').innerHTML = json.data.map(s => `<option value="${s['案號']} ${s.siteName}">`).join('');
-            } catch(e) {}
+            } catch(e) { log('案場清單載入失敗: ' + (e.message || '')); }
         },
 
         mergeData(data, mode) {
@@ -301,7 +362,10 @@
         },
         openBatchModal() {
             const picker = document.getElementById('batchEmpPicker');
-            if(!allActiveEmps.length) { log('尚未載入員工清單', 'error'); return; }
+            if(!allActiveEmps.length) {
+                alert('員工名單還沒載到，請稍後再開批次預排，或重新整理頁面。');
+                return;
+            }
             picker.innerHTML = allActiveEmps.map(e => {
                 const name = e.displayName || e.userName || '未知';
                 return `<div class="emp-pill ${selectedBatchEmps.has(e.userName)?'selected':''}" onclick="App.toggleBatchEmp('${e.userName}', this)">${name}</div>`;
@@ -311,13 +375,38 @@
         closeBatchModal() { document.getElementById('batchModal').classList.remove('open'); },
         toggleBatchEmp(u, el) { if(selectedBatchEmps.has(u)){selectedBatchEmps.delete(u); el.classList.remove('selected');}else{selectedBatchEmps.add(u); el.classList.add('selected');} },
         async submitBatch() {
+            const btn = document.getElementById('batch-submit-btn');
+            const start = document.getElementById('b-start').value;
+            const end = document.getElementById('b-end').value;
+            const site = document.getElementById('b-site').value;
+            if (!start || !end || !site || selectedBatchEmps.size === 0) {
+                alert('請填開始／結束日期、案場，並至少選一位人員。');
+                return;
+            }
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = '處理中…';
+            }
             const payload = { action:'manage_plan_schedule', year:new Date().getFullYear(), payload:{
-                batchMode:true, start:document.getElementById('b-start').value, end:document.getElementById('b-end').value,
-                site:document.getElementById('b-site').value, employees:[...selectedBatchEmps]
+                batchMode:true, start, end, site, employees:[...selectedBatchEmps]
             }};
-            const res = await fetch(API, { method:'POST', body:JSON.stringify(payload) });
-            const json = await res.json();
-            if(json.success) { alert('✅ 成功'); location.reload(); }
+            try {
+                const res = await fetch(API, { method:'POST', body:JSON.stringify(payload) });
+                const json = await readJson(res);
+                if(json && json.success) {
+                    alert('已排好。頁面會重新載入。');
+                    location.reload();
+                    return;
+                }
+                alert((json && json.message) || '沒排進去，請再試。');
+            } catch (e) {
+                alert('沒送到，請再試。' + (e.message ? '（' + e.message + '）' : ''));
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '確認提交';
+                }
+            }
         }
     };
     window.onload = () => App.init();
