@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=62"></script>
+  <script src="../../shared/js/accounting_api.js?v=63"></script>
   <script src="../../shared/js/accounting_cache.js?v=32"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
@@ -211,6 +211,20 @@
 
       function setMsg(t) { ui.setMsg(t); }
       function setOk(t) { ui.setOk(t); }
+      function humanMarkPaidErr(e) {
+        var msg = (e && e.message) || String(e || '標記失敗，請再試');
+        if (/等太久|重新整理列表|連線中斷|可能已處理完/.test(msg)) return msg;
+        if (/Failed to fetch|NetworkError|Load failed|Network request failed/i.test(msg)) {
+          return '連線中斷。後端可能已處理完，請重新整理列表確認，先不要再按一次。';
+        }
+        if (/abort|AbortError|逾時|timeout/i.test(msg)) return '連線逾時，請再試一次';
+        if (/過期|重新從 LINE|登入憑證|未登入/i.test(msg)) return '登入已過期，請從主控台重新開啟會計';
+        return msg;
+      }
+      function onMarkPaidFail(e) {
+        setMsg(humanMarkPaidErr(e));
+        loadList(true, true).catch(function () {});
+      }
       function showApp() {
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
@@ -462,7 +476,8 @@
             busyLabel: '處理中…',
             queue: true,
             queueId: 'vendor_payment',
-            itemId: row.payment_request_id
+            itemId: row.payment_request_id,
+            toastOnFail: false
           }, async function () {
             ui.clear();
             var data = await AccountingApi.vendorPaymentMarkPaid(session, [row.payment_request_id]);
@@ -475,7 +490,7 @@
             }
             setOk(msg);
             removeItemFromView(row.payment_request_id);
-          });
+          }).catch(onMarkPaidFail);
         });
         actions.appendChild(okBtn);
 
@@ -698,7 +713,8 @@
         if (!confirm('確認銀行已匯款？將標記 ' + countLabel + ' 為已匯款、寫收支，並 LINE 通知廠商。\n入帳日＝今日。')) return;
         await AccountingUi.runAsync(btn, {
           busyLabel: '處理中…',
-          startMessage: '正在寫入收支並通知廠商，明細多時可能要一兩分鐘…'
+          startMessage: '正在寫入收支並通知廠商，明細多時可能要一兩分鐘…',
+          toastOnFail: false
         }, async function () {
           ui.clear();
           var data = await AccountingApi.vendorPaymentMarkPaid(session, ids, {
@@ -730,7 +746,7 @@
           }
           setOk(msg);
           removeItemsFromView(data.payment_request_ids || ids);
-        });
+        }).catch(onMarkPaidFail);
       }
 
       document.getElementById('markPaidBtn').addEventListener('click', function () {
