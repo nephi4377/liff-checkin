@@ -8,13 +8,13 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=62"></script>
+  <script src="../../shared/js/accounting_api.js?v=63"></script>
   <script src="../../shared/js/accounting_cache.js?v=32"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=17"></script>
-  <script src="../../shared/js/accounting_ui.js?v=25"></script>
+  <script src="../../shared/js/accounting_ui.js?v=26"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=9"></script>
   <style>
@@ -462,7 +462,8 @@
             busyLabel: '處理中…',
             queue: true,
             queueId: 'vendor_payment',
-            itemId: row.payment_request_id
+            itemId: row.payment_request_id,
+            toastOnFail: false
           }, async function () {
             ui.clear();
             var data = await AccountingApi.vendorPaymentMarkPaid(session, [row.payment_request_id]);
@@ -475,6 +476,8 @@
             }
             setOk(msg);
             removeItemFromView(row.payment_request_id);
+          }).catch(function (e) {
+            afterMarkPaidFailure(e);
           });
         });
         actions.appendChild(okBtn);
@@ -688,21 +691,43 @@
         return lines.join('\n');
       }
 
+      function markPaidFailureMessage(err) {
+        var msg = (err && err.message) || String(err || '標記失敗');
+        if (/連線中斷|可能仍在後端處理|等太久|逾時|Load failed|Failed to fetch/i.test(msg)) {
+          return msg + ' 已重新載入列表，請確認哪些已完成。';
+        }
+        return msg;
+      }
+
+      async function afterMarkPaidFailure(err) {
+        setMsg(markPaidFailureMessage(err));
+        if (typeof AccountingListCache !== 'undefined') {
+          AccountingListCache.invalidate(session, listCacheKey());
+        }
+        try {
+          await loadList(true, true);
+        } catch (eReload) {}
+      }
+
       async function runMarkPaid(ids, btn, opts) {
         opts = opts || {};
-        if (!ids.length && !opts.markAll) {
-          setMsg('請先勾選要標記的項目');
+        if (opts.markAll) {
+          ids = items.map(function (row) { return row.payment_request_id; }).filter(Boolean);
+        }
+        if (!ids.length) {
+          setMsg(opts.markAll ? '目前沒有待匯款項目' : '請先勾選要標記的項目');
           return;
         }
-        var countLabel = opts.markAll ? ('列表全部 ' + items.length + ' 筆') : (ids.length + ' 筆');
+        var countLabel = opts.markAll ? ('列表全部 ' + ids.length + ' 筆') : (ids.length + ' 筆');
         if (!confirm('確認銀行已匯款？將標記 ' + countLabel + ' 為已匯款、寫收支，並 LINE 通知廠商。\n入帳日＝今日。')) return;
         await AccountingUi.runAsync(btn, {
           busyLabel: '處理中…',
-          startMessage: '正在寫入收支並通知廠商，明細多時可能要一兩分鐘…'
+          startMessage: '正在寫入收支並通知廠商，筆數多時會分批處理…',
+          toastOnFail: false
         }, async function () {
           ui.clear();
           var data = await AccountingApi.vendorPaymentMarkPaid(session, ids, {
-            mark_all: !!opts.markAll,
+            mark_all: false,
             line_push: true
           });
           if (!data.success) {
@@ -730,6 +755,8 @@
           }
           setOk(msg);
           removeItemsFromView(data.payment_request_ids || ids);
+        }).catch(function (e) {
+          afterMarkPaidFailure(e);
         });
       }
 

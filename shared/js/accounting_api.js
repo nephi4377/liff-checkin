@@ -26,6 +26,94 @@ var AccountingApi = (function () {
   var HUB_RELOGIN_MSG = '請從主控台重新開啟會計';
   /** 一般讀寫逾時；OCR 等長操作請自行傳 0（不限）或更長毫秒 */
   var DEFAULT_TIMEOUT_MS = 60000;
+  /** LINE 內建瀏覽器常見 ~50s 斷線；mark_paid 分批上限 */
+  var VENDOR_MARK_PAID_CHUNK = 3;
+  var LONG_VENDOR_PAYMENT_ACTIONS_ = {
+    vendor_payment_approve: true,
+    vendor_payment_mark_paid: true
+  };
+
+  function longVendorPaymentWaitMsg_() {
+    return '連線中斷（可能仍在後端處理）。請重新整理列表，確認是否已完成，先不要再按一次。';
+  }
+
+  function isLongVendorPaymentAction_(actionName) {
+    return !!LONG_VENDOR_PAYMENT_ACTIONS_[actionName];
+  }
+
+  function isLongOpNetworkDrop_(actionName, raw) {
+    if (!isLongVendorPaymentAction_(actionName)) return false;
+    return /Load failed|Failed to fetch|NetworkError|Network request failed/i.test(String(raw || ''));
+  }
+
+  function mergeMarkPaidResults_(acc, data) {
+    if (!acc) return data;
+    if (!data || !data.success) return data;
+    var marked = parseInt(data.marked, 10);
+    if (!marked && data.payment_request_ids && data.payment_request_ids.length) {
+      marked = data.payment_request_ids.length;
+    }
+    acc.marked = (parseInt(acc.marked, 10) || 0) + (marked || 0);
+    acc.payment_request_ids = (acc.payment_request_ids || []).concat(data.payment_request_ids || []);
+    if (data.warnings && data.warnings.length) {
+      acc.warnings = (acc.warnings || []).concat(data.warnings);
+    }
+    if (data.unlinked_vendors && data.unlinked_vendors.length) {
+      acc.unlinked_vendors = (acc.unlinked_vendors || []).concat(data.unlinked_vendors);
+    }
+    if (data.push_results && data.push_results.length) {
+      acc.push_results = (acc.push_results || []).concat(data.push_results);
+    }
+    if (data.email_drafts && data.email_drafts.length) {
+      acc.email_drafts = (acc.email_drafts || []).concat(data.email_drafts);
+    }
+    if (data.remit_date && !acc.remit_date) acc.remit_date = data.remit_date;
+    return acc;
+  }
+
+  async function vendorPaymentMarkPaidOnce_(sessionOrToken, paymentRequestIds, options) {
+    options = options || {};
+    return post({
+      action: 'vendor_payment_mark_paid',
+      auth: resolveAuth(sessionOrToken),
+      payment_request_ids: paymentRequestIds || [],
+      mark_all: options.mark_all === true,
+      line_push: options.line_push !== false,
+      repair_missing_ledger: options.repair_missing_ledger === true
+    }, 180000);
+  }
+
+  async function vendorPaymentMarkPaidChunked_(sessionOrToken, paymentRequestIds, options) {
+    options = options || {};
+    var ids = (paymentRequestIds || []).slice();
+    if (options.mark_all === true && !ids.length) {
+      return vendorPaymentMarkPaidOnce_(sessionOrToken, ids, options);
+    }
+    if (ids.length <= VENDOR_MARK_PAID_CHUNK) {
+      return vendorPaymentMarkPaidOnce_(sessionOrToken, ids, options);
+    }
+    var merged = {
+      success: true,
+      marked: 0,
+      payment_request_ids: [],
+      warnings: [],
+      unlinked_vendors: [],
+      push_results: [],
+      email_drafts: []
+    };
+    for (var i = 0; i < ids.length; i += VENDOR_MARK_PAID_CHUNK) {
+      var chunk = ids.slice(i, i + VENDOR_MARK_PAID_CHUNK);
+      var isLast = i + VENDOR_MARK_PAID_CHUNK >= ids.length;
+      var data = await vendorPaymentMarkPaidOnce_(sessionOrToken, chunk, {
+        mark_all: false,
+        line_push: isLast ? options.line_push !== false : false,
+        repair_missing_ledger: options.repair_missing_ledger === true
+      });
+      if (!data || !data.success) return data;
+      mergeMarkPaidResults_(merged, data);
+    }
+    return merged;
+  }
   function logApiFailure_(actionName, err, notify) {
     if (actionName === 'accounting_error_report' || actionName === 'accounting_client_log' || actionName === 'agent_inbox_staff_error') return;
     if (typeof AccountingUi === 'undefined' || !AccountingUi.reportFailure) return;
@@ -145,11 +233,13 @@ var AccountingApi = (function () {
       var err = e;
       var raw = (e && e.message) || String(e || '');
       if ((e && e.name === 'AbortError') || /abort/i.test(raw)) {
-        if (actionName === 'vendor_payment_approve' || actionName === 'vendor_payment_mark_paid') {
-          err = new Error('等太久了。請重新整理列表，確認是否已完成，先不要再按一次。');
+        if (isLongVendorPaymentAction_(actionName)) {
+          err = new Error(longVendorPaymentWaitMsg_());
         } else {
           err = new Error('連線逾時，請再試一次');
         }
+      } else if (isLongOpNetworkDrop_(actionName, raw)) {
+        err = new Error(longVendorPaymentWaitMsg_());
       }
       if (trackUi && typeof AccountingUi !== 'undefined' && AccountingUi.apiEnd) {
         try {
@@ -1136,15 +1226,7 @@ var AccountingApi = (function () {
       });
     },
     vendorPaymentMarkPaid: function (sessionOrToken, paymentRequestIds, options) {
-      options = options || {};
-      return post({
-        action: 'vendor_payment_mark_paid',
-        auth: resolveAuth(sessionOrToken),
-        payment_request_ids: paymentRequestIds || [],
-        mark_all: options.mark_all === true,
-        line_push: options.line_push !== false,
-        repair_missing_ledger: options.repair_missing_ledger === true
-      }, 180000);
+      return vendorPaymentMarkPaidChunked_(sessionOrToken, paymentRequestIds, options || {});
     },
     /** 已匯款但缺收支列 → 補寫（不推播） */
     vendorPaymentRepairLedger: function (sessionOrToken, opts) {

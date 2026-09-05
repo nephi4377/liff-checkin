@@ -609,7 +609,7 @@ var AccountingUi = (function () {
       if (ok) step(label + (slow ? '（偏慢）' : '') + tag, detail);
       else {
         var skipDupToast = /vendor_payment_approve|vendor_payment_mark_paid/.test(String(actionName || '')) &&
-          /逾時|等太久/.test(String(extra || ''));
+          /逾時|等太久|連線中斷|可能仍在後端處理/.test(String(extra || ''));
         action(label, 'fail', detail, { toast: skipDupToast ? false : undefined });
       }
     }
