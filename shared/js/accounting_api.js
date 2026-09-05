@@ -144,12 +144,15 @@ var AccountingApi = (function () {
     } catch (e) {
       var err = e;
       var raw = (e && e.message) || String(e || '');
+      var isVendorPayWrite = actionName === 'vendor_payment_approve' || actionName === 'vendor_payment_mark_paid';
       if ((e && e.name === 'AbortError') || /abort/i.test(raw)) {
-        if (actionName === 'vendor_payment_approve' || actionName === 'vendor_payment_mark_paid') {
+        if (isVendorPayWrite) {
           err = new Error('等太久了。請重新整理列表，確認是否已完成，先不要再按一次。');
         } else {
           err = new Error('連線逾時，請再試一次');
         }
+      } else if (isVendorPayWrite && /Failed to fetch|NetworkError|Load failed|Network request failed/i.test(raw)) {
+        err = new Error('連線中斷。後端可能已處理完，請重新整理列表確認，先不要再按一次。');
       }
       if (trackUi && typeof AccountingUi !== 'undefined' && AccountingUi.apiEnd) {
         try {
