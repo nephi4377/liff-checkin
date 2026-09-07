@@ -22,6 +22,12 @@ BAK 內既有備份原則上只讀，不覆寫、不刪除。
 紀錄檔：modules/info/BAK/onboardingflow-v2.1-pre-decision-cards-20260907.txt
 用途：11 個簡化情境升級成完整助理決策卡之前的可還原版本。
 
+2026-09-07｜v2.2 分支式決策系統升級前還原點
+正式檔：modules/info/onboardingflow.html
+還原 Commit：ca6c7b20833fd946bf01189ada84a8e312d08881
+紀錄檔：modules/info/BAK/onboardingflow-v2.2-pre-branching-20260907.txt
+用途：線性 SOP 升級為分支式助理接洽決策系統、加入缺項提醒與接洽摘要產生器之前的可還原版本。
+
 備份規則
 ----------------------------------------
 1. 重要結構修改前，先建立備份或記錄可還原 Commit。
