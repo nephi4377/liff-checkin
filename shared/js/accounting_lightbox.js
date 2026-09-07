@@ -76,17 +76,39 @@ var AccountingLightbox = (function () {
     idx = 0;
   }
 
+  function mapAttachmentUrls_(data) {
+    return (data && data.data ? data.data : []).map(function (r) {
+      return String(r.drive_url || '').trim();
+    }).filter(Boolean);
+  }
+
+  async function fetchAttachmentUrlsOnce_(session, filter) {
+    var data = await AccountingApi.crudList(session, 'attachment', filter);
+    if (!data || !data.success) {
+      throw new Error((data && data.message) || '單據讀不到，請再試');
+    }
+    return mapAttachmentUrls_(data);
+  }
+
   async function fetchAttachmentUrls(session, ref) {
     ref = ref || {};
     if (ref.attachment_urls && ref.attachment_urls.length) return ref.attachment_urls;
-    if (!session || typeof AccountingApi === 'undefined') return [];
+    if (!session || typeof AccountingApi === 'undefined') {
+      throw new Error('單據暫時讀不到，請再試');
+    }
     var filter = {};
     if (ref.payment_request_id) filter.payment_request_id = ref.payment_request_id;
     else if (ref.ingest_id) filter.ingest_id = ref.ingest_id;
     else return [];
-    var data = await AccountingApi.crudList(session, 'attachment', filter);
-    if (!data.success) return [];
-    return (data.data || []).map(function (r) { return String(r.drive_url || '').trim(); }).filter(Boolean);
+    try {
+      return await fetchAttachmentUrlsOnce_(session, filter);
+    } catch (e1) {
+      try {
+        return await fetchAttachmentUrlsOnce_(session, filter);
+      } catch (e2) {
+        throw new Error((e2 && e2.message) || (e1 && e1.message) || '單據讀不到，請再試');
+      }
+    }
   }
 
   async function openForRef(session, ref) {
@@ -101,12 +123,44 @@ var AccountingLightbox = (function () {
     btn.className = 'btn btn-muted acct-lb-trigger';
     btn.textContent = label;
     btn.style.display = 'none';
+    var clickBound = false;
+
+    function bindOpen(list) {
+      btn.disabled = false;
+      btn.textContent = label;
+      btn.style.display = '';
+      if (clickBound) return;
+      clickBound = true;
+      btn.addEventListener('click', function () { open(list); });
+    }
+
+    function showRetry() {
+      btn.disabled = false;
+      btn.style.display = '';
+      btn.textContent = '單據讀不到，再試';
+      btn.onclick = function () {
+        btn.onclick = null;
+        btn.disabled = true;
+        btn.textContent = '讀取中…';
+        fetchAttachmentUrls(session, ref).then(function (list) {
+          if (!list.length) {
+            btn.disabled = true;
+            btn.textContent = '沒有單據';
+            return;
+          }
+          bindOpen(list);
+          open(list);
+        }).catch(function () {
+          showRetry();
+        });
+      };
+    }
+
     fetchAttachmentUrls(session, ref).then(function (list) {
-      if (list.length) {
-        btn.style.display = '';
-        btn.addEventListener('click', function () { open(list); });
-      }
-    }).catch(function () {});
+      if (list.length) bindOpen(list);
+    }).catch(function () {
+      showRetry();
+    });
     return btn;
   }
 
