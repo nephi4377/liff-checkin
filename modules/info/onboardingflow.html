@@ -5,79 +5,48 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>添心設計｜客戶接洽流程</title>
 <style>
-:root{--bg:#f5f6f8;--card:#fff;--text:#20242a;--muted:#6b7280;--line:#e5e7eb;--brand:#166534;--brand2:#dcfce7;--warn:#92400e;--warnbg:#fef3c7;--stop:#991b1b;--stopbg:#fee2e2;--go:#166534;--gobg:#dcfce7;--shadow:0 2px 12px rgba(0,0,0,.06)}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;line-height:1.6}.wrap{max-width:980px;margin:auto;padding:18px 14px 50px}.hero{background:linear-gradient(135deg,#14532d,#166534);color:#fff;border-radius:18px;padding:22px;box-shadow:var(--shadow)}.hero h1{font-size:24px;margin:0 0 6px}.hero p{margin:0;opacity:.9}.status{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.pill{font-size:12px;padding:5px 9px;border-radius:999px;background:rgba(255,255,255,.14)}.notice{margin:14px 0;background:#fff;border-left:4px solid #166534;border-radius:12px;padding:12px 14px;box-shadow:var(--shadow);font-size:14px}.section-title{font-size:18px;margin:24px 2px 10px}.step{background:var(--card);border:1px solid var(--line);border-radius:15px;margin:10px 0;box-shadow:var(--shadow);overflow:hidden}.step-head{width:100%;border:0;background:#fff;padding:15px;text-align:left;display:flex;gap:12px;align-items:flex-start;cursor:pointer;color:inherit}.num{flex:0 0 32px;height:32px;border-radius:50%;display:grid;place-items:center;background:#111827;color:#fff;font-weight:700}.head-copy{flex:1}.head-copy strong{display:block;font-size:16px}.head-copy span{font-size:13px;color:var(--muted)}.chev{font-size:18px;color:var(--muted);transition:.2s}.step.open .chev{transform:rotate(90deg)}.body{display:none;border-top:1px solid var(--line);padding:15px}.step.open .body{display:block}.goal{background:#f9fafb;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:14px}.question{border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0}.qtop{display:flex;justify-content:space-between;gap:10px;align-items:center}.qtitle{font-weight:700}.script{margin-top:8px;background:#f8fafc;border-radius:9px;padding:10px;font-size:14px}.copy{border:1px solid #d1d5db;background:#fff;border-radius:8px;padding:6px 9px;font-size:12px;cursor:pointer;white-space:nowrap}.copy:active{transform:scale(.98)}.decision{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:12px 0}.decision div{border-radius:10px;padding:10px;font-size:13px}.go{background:var(--gobg);color:var(--go)}.hold{background:var(--warnbg);color:var(--warn)}.stop{background:var(--stopbg);color:var(--stop)}.cases{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.case{background:#fff;border:1px solid var(--line);border-radius:13px;padding:13px}.case h3{font-size:15px;margin:0 0 5px}.case p{font-size:13px;color:var(--muted);margin:5px 0}.case .answer{color:var(--text);background:#f9fafb;border-radius:9px;padding:8px;margin-top:8px}.footer{font-size:12px;color:var(--muted);text-align:center;margin-top:26px}@media(max-width:680px){.decision,.cases{grid-template-columns:1fr}.hero h1{font-size:21px}.wrap{padding:12px 10px 38px}}
+:root{--bg:#f5f6f8;--card:#fff;--text:#20242a;--muted:#6b7280;--line:#e5e7eb;--brand:#166534;--brand2:#dcfce7;--warn:#92400e;--warnbg:#fef3c7;--stop:#991b1b;--stopbg:#fee2e2;--go:#166534;--gobg:#dcfce7;--shadow:0 2px 12px rgba(0,0,0,.06)}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;line-height:1.6}.wrap{max-width:980px;margin:auto;padding:18px 14px 50px}.hero{background:linear-gradient(135deg,#14532d,#166534);color:#fff;border-radius:18px;padding:22px;box-shadow:var(--shadow)}.hero h1{font-size:24px;margin:0 0 6px}.hero p{margin:0;opacity:.9}.status{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.pill{font-size:12px;padding:5px 9px;border-radius:999px;background:rgba(255,255,255,.14)}.notice{margin:14px 0;background:#fff;border-left:4px solid #166534;border-radius:12px;padding:12px 14px;box-shadow:var(--shadow);font-size:14px}.section-title{font-size:18px;margin:24px 2px 10px}.step,.case{background:var(--card);border:1px solid var(--line);border-radius:15px;margin:10px 0;box-shadow:var(--shadow);overflow:hidden}.step-head,.case-head{width:100%;border:0;background:#fff;padding:15px;text-align:left;display:flex;gap:12px;align-items:flex-start;cursor:pointer;color:inherit}.num{flex:0 0 32px;height:32px;border-radius:50%;display:grid;place-items:center;background:#111827;color:#fff;font-weight:700}.head-copy{flex:1}.head-copy strong{display:block;font-size:16px}.head-copy span{font-size:13px;color:var(--muted)}.chev{font-size:18px;color:var(--muted);transition:.2s}.step.open .chev,.case.open .chev{transform:rotate(90deg)}.body,.case-body{display:none;border-top:1px solid var(--line);padding:15px}.step.open .body,.case.open .case-body{display:block}.goal{background:#f9fafb;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:14px}.question{border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0}.qtop{display:flex;justify-content:space-between;gap:10px;align-items:center}.qtitle{font-weight:700}.script,.block{margin-top:8px;background:#f8fafc;border-radius:9px;padding:10px;font-size:14px;white-space:pre-line}.copy{border:1px solid #d1d5db;background:#fff;border-radius:8px;padding:6px 9px;font-size:12px;cursor:pointer;white-space:nowrap}.decision{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:12px 0}.decision div{border-radius:10px;padding:10px;font-size:13px}.go{background:var(--gobg);color:var(--go)}.hold{background:var(--warnbg);color:var(--warn)}.stop{background:var(--stopbg);color:var(--stop)}.cases{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.case{margin:0}.case-body h4{font-size:13px;margin:12px 0 4px}.tagrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.tag{font-size:12px;padding:3px 8px;border-radius:999px;background:#eef2ff;color:#3730a3}.tag.a{background:var(--gobg);color:var(--go)}.tag.b{background:var(--warnbg);color:var(--warn)}.tag.c{background:var(--stopbg);color:var(--stop)}.footer{font-size:12px;color:var(--muted);text-align:center;margin-top:26px}@media(max-width:680px){.decision,.cases{grid-template-columns:1fr}.hero h1{font-size:21px}.wrap{padding:12px 10px 38px}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <section class="hero">
-    <h1>添心設計｜客戶接洽流程</h1>
-    <p>助理專用：先收集必要資訊、判斷案件成熟度，再決定轉設計師或安排下一步。</p>
-    <div class="status"><span class="pill">零外部 CDN</span><span class="pill">主控台 iframe 可用</span><span class="pill">手機優先</span><span class="pill">可複製話術</span></div>
-  </section>
-
-  <div class="notice"><strong>使用原則：</strong>助理的任務不是在第一輪完成設計諮詢，而是把「地點、屋況、坪數、範圍、預算、時程、資料完整度」問清楚，避免資訊不足就直接安排丈量。</div>
-
-  <h2 class="section-title">第一輪接洽 SOP</h2>
-  <div id="steps"></div>
-
-  <h2 class="section-title">快速判斷</h2>
-  <div class="decision">
-    <div class="go"><strong>可以轉設計師</strong><br>需求、區域、預算與時程大致合理，且客戶願意提供資料。</div>
-    <div class="hold"><strong>先補問，不急丈量</strong><br>需求存在，但預算、時程、範圍或屋況仍不清楚。</div>
-    <div class="stop"><strong>暫不安排丈量</strong><br>只問最低價、需求極模糊、預算明顯不符，或時程不具可行性。</div>
-  </div>
-
-  <h2 class="section-title">常見客戶情境</h2>
-  <div class="cases" id="cases"></div>
-  <div class="footer">添心設計內部工具 · 客戶接洽流程 v2.1</div>
+<section class="hero"><h1>添心設計｜客戶接洽流程</h1><p>助理專用：先收集必要資訊、完成初步判斷，再決定補問、轉設計師或暫緩丈量。</p><div class="status"><span class="pill">零外部 CDN</span><span class="pill">主控台 iframe 可用</span><span class="pill">手機優先</span><span class="pill">可複製話術</span></div></section>
+<div class="notice"><strong>使用原則：</strong>助理不是第一輪就完成設計諮詢，也不要因為客戶有意願就直接承諾免費丈量或出圖。先把地點、屋況、坪數、範圍、預算、時程、圖面與主要決策者問清楚。</div>
+<h2 class="section-title">第一輪接洽 SOP</h2><div id="steps"></div>
+<h2 class="section-title">快速判斷</h2><div class="decision"><div class="go"><strong>A｜可以轉設計師</strong><br>需求、區域、預算與時程大致合理，資料願意提供。</div><div class="hold"><strong>B｜先補問</strong><br>案件有機會，但預算、範圍、圖面、時程或決策狀態尚未完整。</div><div class="stop"><strong>C｜暫不安排丈量</strong><br>只問最低價、長期拒絕提供資料、條件明顯不符或時程不可行。</div></div>
+<h2 class="section-title">助理決策案例</h2><div class="cases" id="cases"></div>
+<div class="footer">添心設計內部工具 · 客戶接洽流程 v2.2</div>
 </div>
 <script>
-(function(){
-'use strict';
+(function(){'use strict';
 const steps=[
- {title:'先確認基本案件',note:'不要一開始就丟很多問題；先取得最基本的案件輪廓。',goal:'目標：確認服務區域、房屋類型與目前階段。',qs:[
-  ['開場','您好，謝謝您聯繫添心設計，我是今天協助接洽的助理。想先簡單了解一下，這次案場是在什麼地區？是新成屋、舊屋翻新，還是局部裝修呢？'],
-  ['尚未交屋','沒問題，尚未交屋也可以先了解。方便請問預計交屋時間，以及手邊是否已有建商格局圖呢？'] ]},
- {title:'確認坪數與裝修範圍',note:'區分全室設計、局部工程與單純系統櫃需求。',goal:'目標：知道案子大約多大、要做多少，而不是直接估價。',qs:[
-  ['標準問法','方便請問室內大約幾坪？這次預計是全室重新規劃，還是主要針對特定空間或系統櫃呢？'],
-  ['需求模糊時','如果目前還沒有完整清單也沒關係，可以先告訴我「一定想處理」的空間，例如客廳、廚房、主臥、收納或衛浴。'] ]},
- {title:'取得格局圖與現況資料',note:'有圖才容易判斷，避免助理與設計師只靠文字猜。',goal:'目標：至少拿到格局圖或現況照片其中一種。',qs:[
-  ['請客戶提供資料','如果方便的話，可以先傳格局圖或幾張現況照片給我們。建商 PDF、手機拍紙本都可以，我們先了解空間狀況就好。'],
-  ['客戶沒有圖','沒有格局圖也沒關係，可以先提供主要空間照片，以及大約坪數；後續若案件條件合適，再由設計師確認是否需要丈量。'] ]},
- {title:'確認預算區間',note:'用區間協助客戶回答，不要求客戶精準報一個數字。',goal:'目標：確認期待與可投入成本是否落差過大。',qs:[
-  ['預算問法','為了先判斷需求跟預算配置是否適合，想了解您希望控制的大概裝修區間。可以用區間回答即可，例如 100～150、150～200、200～300 萬，或您心裡其他範圍。'],
-  ['客戶不願透露','了解，預算還沒確定很正常。那我們先以您「一定要完成的項目」來判斷，設計師後續也比較能告訴您哪些項目需要優先配置。'] ]},
- {title:'確認時程與決策狀態',note:'入住時間、交屋時間、是否夫妻共同決策，會直接影響案件成熟度。',goal:'目標：確認時程是不是可執行，以及主要決策者是否已參與。',qs:[
-  ['時程','請問預計什麼時候希望入住或完工？如果尚未交屋，也請告訴我大約交屋月份，我們比較好判斷規劃時程。'],
-  ['共同決策','這次裝修主要會由您決定，還是會和家人一起討論呢？如果後續安排諮詢，建議主要決策者一起參與，會比較有效率。'] ]},
- {title:'助理完成初步分級',note:'不是每一位詢問者都立即安排現場丈量。',goal:'目標：依完整度與適配度決定下一步。',qs:[
-  ['A｜可轉設計師','資料大致完整、預算與需求可行、時程明確：整理摘要後轉設計師，由設計師決定諮詢／丈量。'],
-  ['B｜需要補問','案件有機會，但缺預算、圖面、時程或範圍：先補足資料，再轉設計師。'],
-  ['C｜暫緩','只詢問最低價格、資訊極少且不願提供、預算或時程明顯不合理：先提供基本說明，不立即占用丈量時段。'] ]},
- {title:'轉交設計師前整理摘要',note:'不要只把整串 LINE 對話丟給設計師。',goal:'目標：讓設計師 30 秒內知道這位客戶值不值得接、要問什麼。',qs:[
-  ['轉交格式','【新客戶摘要】\n地區：\n新成屋／舊屋：\n室內坪數：\n裝修範圍：\n預算區間：\n交屋／入住時間：\n已提供：格局圖／照片／無\n主要需求：\n特殊問題：\n主要決策者：\n助理判斷：A／B／C'] ]}
+{title:'先確認基本案件',note:'不要一開始丟很多問題；先取得案件輪廓。',goal:'確認服務地區、房屋類型與目前階段。',qs:[['開場','您好，謝謝您聯繫添心設計，我是今天協助接洽的助理。想先簡單了解一下，這次案場是在什麼地區？是新成屋、舊屋翻新，還是局部裝修呢？'],['尚未交屋','沒問題，尚未交屋也可以先了解。方便請問預計交屋時間，以及手邊是否已有建商格局圖呢？']]},
+{title:'確認坪數與裝修範圍',note:'區分全室、局部與單純系統櫃需求。',goal:'知道案子大約多大、要做多少，而不是直接估價。',qs:[['標準問法','方便請問室內大約幾坪？這次預計是全室重新規劃，還是主要針對特定空間或系統櫃呢？'],['需求模糊時','如果目前還沒有完整清單也沒關係，可以先告訴我「一定想處理」的空間，例如客廳、廚房、主臥、收納或衛浴。']]},
+{title:'取得格局圖與現況資料',note:'有圖才容易判斷，避免只靠文字猜。',goal:'至少取得格局圖或現況照片其中一種。',qs:[['請客戶提供資料','如果方便的話，可以先傳格局圖或幾張現況照片給我們。建商 PDF、手機拍紙本都可以，我們先了解空間狀況就好。'],['客戶沒有圖','沒有格局圖也沒關係，可以先提供主要空間照片，以及大約坪數；後續若案件條件合適，再由設計師確認是否需要丈量。']]},
+{title:'確認預算區間',note:'用區間協助客戶回答，不要求精準報一個數字。',goal:'確認期待與可投入成本是否落差過大。',qs:[['預算問法','為了先判斷需求跟預算配置是否適合，想了解您希望控制的大概裝修區間。可以用區間回答即可，例如 100～150、150～200、200～300 萬，或您心裡其他範圍。'],['客戶不願透露','了解，預算還沒確定很正常。那我們先以您「一定要完成的項目」來判斷，設計師後續也比較能告訴您哪些項目需要優先配置。']]},
+{title:'確認時程與決策狀態',note:'入住、交屋時間與主要決策者會影響成熟度。',goal:'確認時程可不可執行，以及主要決策者是否參與。',qs:[['時程','請問預計什麼時候希望入住或完工？如果尚未交屋，也請告訴我大約交屋月份，我們比較好判斷規劃時程。'],['共同決策','這次裝修主要會由您決定，還是會和家人一起討論呢？如果後續安排諮詢，建議主要決策者一起參與，會比較有效率。']]},
+{title:'助理完成初步分級',note:'不是每一位詢問者都立即安排丈量。',goal:'依完整度與適配度決定下一步。',qs:[['A｜可轉設計師','資料大致完整、預算與需求可行、時程明確：整理摘要後轉設計師，由設計師決定諮詢／丈量。'],['B｜需要補問','案件有機會，但缺預算、圖面、時程、範圍或決策者資訊：先補足再轉設計師。'],['C｜暫緩','只問最低價格、資訊極少且不願提供、預算或時程明顯不合理：先提供基本說明，不立即占用丈量時段。']]},
+{title:'轉交設計師前整理摘要',note:'不要只把整串 LINE 對話丟給設計師。',goal:'讓設計師 30 秒內知道案件輪廓與下一步。',qs:[['轉交格式','【新客戶摘要】\n地區：\n新成屋／舊屋：\n室內坪數：\n裝修範圍：\n預算區間：\n交屋／入住時間：\n已提供：格局圖／照片／無\n主要需求：\n特殊問題：\n主要決策者：\n助理判斷：A／B／C\n建議下一步：']]}
 ];
 const cases=[
- {t:'只問「一坪多少？」',d:'不要立刻報單坪價。',a:'先確認新成屋／舊屋、坪數、施作範圍與預算期待，再說明裝修無法只用單坪價準確判斷。'},
- {t:'預算明顯不足',d:'不要直接否定，也不要先承諾丈量。',a:'先確認必要項目與可刪減項目；若核心需求與預算仍有大落差，標記 B/C，由設計師決定是否續談。'},
- {t:'老屋全室翻修',d:'優先取得屋齡、坪數、格局與現況照片。',a:'特別註記水電、漏水、壁癌、格局變更、衛浴與外牆等問題，通常直接列為需設計師判斷案件。'},
- {t:'尚未交屋的新成屋',d:'不代表不能接洽。',a:'取得建商格局圖、預計交屋時間、客變狀況與預算；條件成熟可先安排諮詢，不必等交屋才開始。'},
- {t:'客戶要求很趕',d:'不要先答應完工日。',a:'記錄希望入住日期與目前房屋狀態，交由設計師／工務評估設計、備料與施工是否來得及。'},
- {t:'只做局部或單一櫃體',d:'先確認是否符合公司目前承接型態。',a:'問清楚空間、尺寸概況、施工內容與地區；不要因為金額看似小就直接安排設計師到場。'},
- {t:'需求很模糊，只說「想裝潢」',d:'不要一次問十幾題，也不要直接約丈量。',a:'先從地區、屋型、坪數與最想改善的 2～3 個空間開始；能逐步補齊資料列 B，持續不願提供基本資訊則列 C。'},
- {t:'案場在主要服務區之外',d:'不要直接答應跨區服務或現場丈量。',a:'先記錄完整地址、案型、規模、預算與時程，再由設計師或主管判斷交通成本、管理可行性與是否承接。'},
- {t:'主要決策者沒有參與',d:'避免只和無決策權的家人反覆確認設計與預算。',a:'先完成基本資料蒐集；若進一步諮詢涉及預算、風格與範圍，建議主要決策者一起參與後再往下一階段。'},
- {t:'客戶一開始就要求免費丈量／出圖',d:'不要為了留客先承諾免費服務。',a:'先說明會先了解需求、預算與案件條件，資料完整且適合後再由設計師判斷下一步；丈量或設計安排依公司正式流程進行。'},
- {t:'資料完整、預算與時程合理',d:'這類案件不要卡在助理端過久。',a:'整理新客戶摘要，標記 A 級並轉設計師；由設計師確認諮詢方式，以及是否進一步安排丈量。'}
+{t:'只問「一坪多少？」',quote:'客戶：「你們裝潢一坪多少？」',ask:'房屋類型、室內坪數、預計施作範圍、預算期待。',judge:'願意補資料＝B；只追問最低單價且拒絕提供基本資料＝C。',say:'裝修內容會因屋況、工程範圍與材料不同而差很多，所以我們不會只用單坪價直接判斷。可以先告訴我房屋類型、坪數和主要想做的空間，我先幫您把案件條件整理起來。',avoid:'不要直接報一個「每坪最低價」吸引客戶，也不要保證最後一定落在某個單坪區間。',next:'資料補齊後再判斷是否轉設計師；未補齊不安排丈量。',grade:'B/C',transfer:'資料完整且條件合理後才轉。'},
+{t:'預算明顯不足',quote:'客戶：「30 坪全室重做，我預算 60 萬可以嗎？」',ask:'必要工程、可刪項目、屋況、是否含廚衛水電、實際預算上限。',judge:'願意調整需求或預算＝B；核心需求與預算仍明顯不匹配＝C。',say:'我先幫您把「一定要做」和「可以後做」的項目分開，這樣比較能判斷預算怎麼配置。若核心需求和目前預算差距比較大，我們也會先說明，不會先安排您跑一趟丈量。',avoid:'不要用「這預算做不起來」直接結束，也不要為了成交先承諾一定能做。',next:'整理必要項目與預算差距，必要時交主管/設計師判斷是否續談。',grade:'B/C',transfer:'有調整空間再轉。'},
+{t:'老屋全室翻修',quote:'客戶：「屋子 30 年了，想整間翻新。」',ask:'屋齡、坪數、樓層、漏水壁癌、水電、衛浴、外牆、格局變更、現況照片。',judge:'資料越完整越接近 A；有重大屋況但資訊不足先列 B。',say:'老屋我們會特別先了解水電、漏水、壁癌、衛浴與格局狀況。方便先傳格局圖和現況照片嗎？有看到明顯問題的地方也請一起拍，我會先整理給設計師判斷。',avoid:'不要先說一定只需做表面裝修，也不要對漏水或結構問題做未查證保證。',next:'完成屋況摘要後優先轉設計師判斷。',grade:'A/B',transfer:'通常需要設計師較早介入。'},
+{t:'尚未交屋的新成屋',quote:'客戶：「房子還沒交屋，現在可以先問嗎？」',ask:'預計交屋時間、建商格局圖、客變狀況、室內坪數、預算、入住期待。',judge:'圖面與時程清楚、預算合理＝A；只知道買房但其他皆未定＝B。',say:'可以先開始了解，不用等交屋。您若有建商格局圖，可以先傳給我，再告訴我預計交屋時間與大概預算，我們就能先判斷規劃節奏。',avoid:'不要說一定要等交屋後才能談，也不要未確認就承諾丈量時間。',next:'條件成熟先轉設計師諮詢；丈量由設計師依交屋狀況決定。',grade:'A/B',transfer:'成熟即可轉。'},
+{t:'客戶要求很趕',quote:'客戶：「下個月一定要入住，可以接嗎？」',ask:'房屋目前狀態、工程範圍、希望入住日、是否可分階段、材料需求。',judge:'工程簡單且時程可評估＝A/B；明顯無法合理完成＝C 或主管判斷。',say:'我先把您希望入住的日期和目前房屋狀況記下來，工期要一起看設計、備料和施工內容，這部分我不會先替現場答應，會請設計師/工務確認後再回覆。',avoid:'不要說「來得及」或直接承諾完工日。',next:'標記急件，轉設計師/工務確認可行性。',grade:'A/B/C',transfer:'需專業端確認時程。'},
+{t:'只做局部或單一櫃體',quote:'客戶：「我只想做一面櫃子，你們有接嗎？」',ask:'地區、空間、尺寸概況、施作內容、現場照片、預算。',judge:'符合目前承接型態且資料完整＝A/B；規模或區域不合＝C。',say:'可以先讓我了解一下位置、空間照片、想做的櫃體類型和大概尺寸，我先幫您確認這類型是否符合目前的承接方式，再決定下一步。',avoid:'不要因為工程小就直接叫設計師到場，也不要先保證一定承接。',next:'先內部確認承接條件，再回覆是否轉設計師。',grade:'B/C',transfer:'確認符合承接型態後。'},
+{t:'需求很模糊，只說「想裝潢」',quote:'客戶：「新家想裝潢，但我也不知道要做什麼。」',ask:'地區、屋型、坪數、最想改善的 2～3 個空間、預算、入住時間。',judge:'願意逐步回答＝B；長期只想「先去看看」且不提供資料＝C。',say:'沒關係，不用一次想得很完整。我先從幾個最簡單的開始：案場在哪裡、幾坪，以及目前最想改善的 2～3 個空間是哪些？我再一步一步幫您整理。',avoid:'不要一次丟十幾個問題，也不要因需求模糊就直接安排丈量。',next:'先完成最小必要資料，再進入預算與時程確認。',grade:'B/C',transfer:'補齊核心資料後。'},
+{t:'案場在主要服務區之外',quote:'客戶：「我在外縣市，你們可以來嗎？」',ask:'完整地址、案型、坪數、規模、預算、時程。',judge:'規模與預算足以支撐跨區管理＝A/B；成本與規模不合＝C。',say:'跨區案件我們會先看地點、規模和工程內容，再確認交通與現場管理是否合適。麻煩您先提供完整地區、坪數、需求與預算，我幫您整理後由主管判斷。',avoid:'不要直接答應一定跨區服務或先約丈量。',next:'整理跨區條件交主管/設計師決定。',grade:'B/C',transfer:'由主管或設計師確認後。'},
+{t:'主要決策者沒有參與',quote:'客戶：「我先問問看，預算要回去問另一半。」',ask:'誰是主要決策者、誰負責預算、是否能共同參與下一次諮詢。',judge:'願意讓主要決策者加入＝B→A；反覆轉述又無法確認預算＝B。',say:'可以，我先把基本資料整理起來。後續若要談預算、風格與工程範圍，建議主要決策者一起參與，這樣比較不會因轉述造成資訊落差。',avoid:'不要只和無決策權的人一路談到報價/設計階段。',next:'在正式深入諮詢前確認主要決策者參與。',grade:'B',transfer:'資訊完整可先轉，但須註記決策者狀態。'},
+{t:'一開始就要求免費丈量／出圖',quote:'客戶：「你們先來量、先畫一版，我再決定要不要做。」',ask:'地點、坪數、需求、預算、時程、已有圖面。',judge:'願意接受正式流程並先提供資料＝B；只接受免費前置服務＝C。',say:'我們會先了解需求、預算與案件條件，資料完整且適合後，再由設計師判斷下一步。丈量或設計會依公司的正式流程安排，不會在資訊不足時先承諾免費出圖。',avoid:'不要為了留客先答應免費丈量、免費提案或出圖。',next:'先完成初篩；接受流程再轉設計師。',grade:'B/C',transfer:'接受正式流程後。'},
+{t:'資料完整、預算與時程合理',quote:'客戶已提供地點、格局圖、坪數、需求、預算與入住時間。',ask:'最後確認主要決策者、特殊限制、是否還有必要補充資料。',judge:'核心資料完整、條件可行、願意配合流程＝A。',say:'資料很完整，我這邊會直接整理成案件摘要轉給設計師，請設計師接著確認諮詢方式，以及是否需要安排丈量。',avoid:'不要讓成熟案件長時間卡在助理端，也不要由助理自行承諾丈量日期。',next:'整理摘要、標記 A、立即轉設計師。',grade:'A',transfer:'是。'}
 ];
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function fallback(text,done){const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done();}catch(e){window.prompt('請手動複製：',text);}ta.remove();}
 function copyText(text,btn){const done=()=>{const old=btn.textContent;btn.textContent='已複製';setTimeout(()=>btn.textContent=old,1200)};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done).catch(()=>fallback(text,done));}else fallback(text,done)}
-function fallback(text,done){const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.opacity='0';document.body.appendChild(t);t.select();try{document.execCommand('copy');done();}catch(e){window.prompt('請複製以下內容：',text)}document.body.removeChild(t)}
-const stepHost=document.getElementById('steps');
-steps.forEach((s,i)=>{const el=document.createElement('section');el.className='step';el.innerHTML=`<button class="step-head" type="button"><span class="num">${i+1}</span><span class="head-copy"><strong>${esc(s.title)}</strong><span>${esc(s.note)}</span></span><span class="chev">›</span></button><div class="body"><div class="goal">${esc(s.goal)}</div>${s.qs.map((q,j)=>`<div class="question"><div class="qtop"><div class="qtitle">${esc(q[0])}</div><button class="copy" type="button" data-i="${i}" data-j="${j}">複製話術</button></div><div class="script">${esc(q[1]).replace(/\n/g,'<br>')}</div></div>`).join('')}</div>`;el.querySelector('.step-head').onclick=()=>el.classList.toggle('open');el.querySelectorAll('.copy').forEach(b=>b.onclick=()=>copyText(steps[+b.dataset.i].qs[+b.dataset.j][1],b));stepHost.appendChild(el)});
-const caseHost=document.getElementById('cases');cases.forEach(c=>{const e=document.createElement('article');e.className='case';e.innerHTML=`<h3>${esc(c.t)}</h3><p>${esc(c.d)}</p><div class="answer">${esc(c.a)}</div>`;caseHost.appendChild(e)});
-window.__onboardingFlowReady=true;
+const stepsEl=document.getElementById('steps');steps.forEach((s,i)=>{const el=document.createElement('section');el.className='step'+(i===0?' open':'');el.innerHTML='<button class="step-head" type="button"><span class="num">'+(i+1)+'</span><span class="head-copy"><strong>'+esc(s.title)+'</strong><span>'+esc(s.note)+'</span></span><span class="chev">›</span></button><div class="body"><div class="goal">'+esc(s.goal)+'</div>'+s.qs.map(q=>'<div class="question"><div class="qtop"><div class="qtitle">'+esc(q[0])+'</div><button class="copy" type="button" data-copy="'+esc(q[1])+'">複製話術</button></div><div class="script">'+esc(q[1])+'</div></div>').join('')+'</div>';el.querySelector('.step-head').onclick=()=>el.classList.toggle('open');stepsEl.appendChild(el)});
+const casesEl=document.getElementById('cases');cases.forEach((c,i)=>{const el=document.createElement('section');el.className='case';const gradeClass=c.grade.indexOf('A')>=0&&!c.grade.includes('C')?'a':c.grade==='C'?'c':'b';el.innerHTML='<button class="case-head" type="button"><span class="num">'+(i+1)+'</span><span class="head-copy"><strong>'+esc(c.t)+'</strong><span>'+esc(c.quote)+'</span><span class="tagrow"><span class="tag '+gradeClass+'">建議分級 '+esc(c.grade)+'</span></span></span><span class="chev">›</span></button><div class="case-body"><h4>客戶原話／情境</h4><div class="block">'+esc(c.quote)+'</div><h4>必問資料</h4><div class="block">'+esc(c.ask)+'</div><h4>判斷條件</h4><div class="block">'+esc(c.judge)+'</div><h4>建議話術</h4><div class="qtop"><div></div><button class="copy" type="button" data-copy="'+esc(c.say)+'">複製話術</button></div><div class="block">'+esc(c.say)+'</div><h4>避免話術／行為</h4><div class="block">'+esc(c.avoid)+'</div><h4>下一步</h4><div class="block">'+esc(c.next)+'</div><h4>轉設計師判斷</h4><div class="block">'+esc(c.transfer)+'</div></div>';el.querySelector('.case-head').onclick=()=>el.classList.toggle('open');casesEl.appendChild(el)});
+document.addEventListener('click',e=>{const b=e.target.closest('[data-copy]');if(b)copyText(b.getAttribute('data-copy')||'',b)});
 })();
 </script>
 </body>
