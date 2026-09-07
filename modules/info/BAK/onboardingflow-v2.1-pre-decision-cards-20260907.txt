@@ -1,0 +1,9 @@
+添心設計｜客戶接洽流程 v2.1 重構前還原點
+
+正式檔：modules/info/onboardingflow.html
+建立日期：2026-09-07
+還原 Commit：0fd71d38a2e1fdda2606abc02469ab344880e6d4
+用途：在將 11 個簡化情境升級為完整助理決策卡之前，保留不可變還原點。
+
+如新版案例卡發生問題，可由上述 Commit 取回 modules/info/onboardingflow.html。
+本檔為歷史紀錄，禁止自動覆寫或刪除。
