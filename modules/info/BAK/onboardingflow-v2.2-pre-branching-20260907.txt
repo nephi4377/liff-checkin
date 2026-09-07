@@ -1,0 +1,11 @@
+添心設計｜客戶接洽流程 v2.2 分支式決策升級前還原點
+
+正式檔：modules/info/onboardingflow.html
+還原 Commit：ca6c7b20833fd946bf01189ada84a8e312d08881
+記錄日期：2026-09-07
+
+用途：在將線性 SOP 升級為分支式助理接洽決策系統、加入缺項提醒與接洽摘要產生器前，保留不可變 Commit 參照。
+
+還原方式：將 modules/info/onboardingflow.html 還原至上述 Commit 的版本即可。
+
+注意：本檔位於 BAK 歷史備份區，後續不得覆寫或刪除。
