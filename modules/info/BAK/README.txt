@@ -16,6 +16,12 @@ BAK 內既有備份原則上只讀，不覆寫、不刪除。
 新版改為原生 HTML / CSS / JavaScript，移除 React、Babel、Tailwind CDN 等外部執行依賴。
 正式檔仍為：modules/info/onboardingflow.html
 
+2026-09-07｜v2.1 決策卡升級前還原點
+正式檔：modules/info/onboardingflow.html
+還原 Commit：0fd71d38a2e1fdda2606abc02469ab344880e6d4
+紀錄檔：modules/info/BAK/onboardingflow-v2.1-pre-decision-cards-20260907.txt
+用途：11 個簡化情境升級成完整助理決策卡之前的可還原版本。
+
 備份規則
 ----------------------------------------
 1. 重要結構修改前，先建立備份或記錄可還原 Commit。
