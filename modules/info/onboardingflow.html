@@ -77,7 +77,7 @@ const cases=[
 {t:'資料完整、預算與時程合理',quote:'客戶已提供地點、格局圖、坪數、需求、預算與入住時間。',ask:'最後確認主要決策者、特殊限制、是否還有必要補充資料。',judge:'核心資料完整、條件可行、願意配合流程＝A。',say:'資料很完整，我這邊會直接整理成案件摘要轉給設計師，請設計師接著確認諮詢方式，以及是否需要安排丈量。',avoid:'不要讓成熟案件長時間卡在助理端，也不要由助理自行承諾丈量日期。',next:'整理摘要、標記 A、立即轉設計師。',grade:'A',transfer:'是。'}
 ];
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function fallback(text,done){const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done();}catch(e){window.prompt('請手動複製：',text);}ta.remove();}
+function fallback(text,done){const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{if(document.execCommand('copy'))done();else window.prompt('請手動複製：',text);}catch(e){window.prompt('請手動複製：',text);}ta.remove();}
 function copyText(text,btn){const done=()=>{if(!btn)return;const old=btn.textContent;btn.textContent='已複製';setTimeout(()=>btn.textContent=old,1200)};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done).catch(()=>fallback(text,done));}else fallback(text,done)}
 let selectedBranch='';
 function val(id){return document.getElementById(id).value.trim()}
