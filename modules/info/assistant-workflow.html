@@ -9,7 +9,9 @@
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;line-height:1.55}.wrap{max-width:980px;margin:auto;padding:18px 14px 54px}.hero{background:linear-gradient(135deg,#134e4a,#0f766e);color:#fff;border-radius:20px;padding:22px;box-shadow:var(--shadow)}.hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}.hero h1{font-size:25px;margin:0 0 5px}.hero p{margin:0;opacity:.92}.case-no{flex:0 0 auto;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);border-radius:14px;padding:8px 12px;font-weight:800}.pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}.pill{font-size:12px;padding:5px 9px;border-radius:999px;background:rgba(255,255,255,.14)}.overview,.workflow,.summary-card{background:var(--card);border:1px solid var(--line);border-radius:17px;box-shadow:var(--shadow)}.overview{margin:14px 0;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:14px}.overview strong{display:block}.overview span{color:var(--muted);font-size:13px}.progress-track{width:180px;height:9px;background:#e5e7eb;border-radius:99px;overflow:hidden}.progress-bar{height:100%;width:0;background:var(--brand);transition:width .25s}.section-title{font-size:18px;margin:24px 2px 10px}.workflow{padding:16px;margin:11px 0}.workflow-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px}.icon{width:42px;height:42px;border-radius:13px;background:var(--brand-soft);color:var(--brand-dark);display:grid;place-items:center;font-size:21px;flex:0 0 auto}.workflow h2{font-size:18px;margin:0}.workflow-head p{font-size:13px;color:var(--muted);margin:3px 0 0}.step-list{display:grid;gap:10px}.step{display:grid;grid-template-columns:32px 1fr;gap:10px;position:relative}.step:not(:last-child)::after{content:"";position:absolute;left:15px;top:35px;bottom:-8px;width:2px;background:#dbe4e8}.step.done:not(:last-child)::after{background:#5eead4}.check{width:32px;height:32px;border:2px solid #aeb8c4;border-radius:50%;background:#fff;cursor:pointer;display:grid;place-items:center;font-weight:800;color:transparent;z-index:1}.step.done .check{background:var(--brand);border-color:var(--brand);color:#fff}.step.locked .check{background:#edf0f3;border-color:#d8dde3;cursor:not-allowed}.step-body{border:1px solid var(--line);border-radius:13px;padding:11px 12px;background:#fff}.step.done .step-body{background:#f0fdfa;border-color:#99f6e4}.step.locked .step-body{background:#f8fafc;color:#84909d}.step-title{font-weight:750}.step-note{font-size:13px;color:var(--muted);margin-top:3px}.step.locked .step-note{color:#98a1ab}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:9px}.field{display:flex;flex-direction:column;gap:4px}.field.full{grid-column:1/-1}.field label{font-size:12px;color:var(--muted);font-weight:700}.field input,.field textarea{width:100%;border:1px solid #cfd6dd;border-radius:9px;padding:8px 9px;background:#fff;color:var(--text);font:inherit;font-size:14px}.field textarea{min-height:62px;resize:vertical}.step.locked input,.step.locked textarea{background:#f2f4f6;pointer-events:none}.dependency{margin-top:8px;padding:7px 9px;border-radius:8px;background:var(--amber-soft);color:var(--amber);font-size:12px}.script-box{margin-top:10px;background:var(--blue-soft);color:#1e3a8a;border-radius:10px;padding:10px 11px;font-size:13px}.script-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px}.copy{border:1px solid #bfdbfe;background:#fff;color:var(--blue);border-radius:8px;padding:5px 8px;cursor:pointer;font-size:12px}.summary-card{padding:16px;margin-top:11px}.summary-card p{font-size:13px;color:var(--muted);margin:0 0 10px}.summary{background:#111827;color:#f8fafc;border-radius:12px;padding:13px;white-space:pre-line;font-size:13px;min-height:130px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.primary,.secondary{border-radius:9px;padding:9px 12px;cursor:pointer;font-weight:700}.primary{border:0;background:var(--brand);color:#fff}.secondary{border:1px solid #cfd6dd;background:#fff;color:#1f2937}.save-note{font-size:12px;color:var(--muted);margin-top:9px}.toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,18px);background:#111827;color:#fff;border-radius:10px;padding:9px 13px;font-size:13px;opacity:0;pointer-events:none;transition:.2s}.toast.show{opacity:1;transform:translate(-50%,0)}.footer{text-align:center;color:var(--muted);font-size:12px;margin-top:24px}@media(max-width:650px){.wrap{padding:11px 9px 38px}.hero{padding:18px}.hero h1{font-size:21px}.hero-top{display:block}.case-no{display:inline-block;margin-top:12px}.overview{align-items:flex-start;flex-direction:column}.progress-track{width:100%}.workflow{padding:12px}.fields{grid-template-columns:1fr}.field.full{grid-column:auto}}
 .identity,.workflow-manager{background:var(--card);border:1px solid var(--line);border-radius:17px;box-shadow:var(--shadow);padding:14px 16px;margin:14px 0}.identity h2,.workflow-manager h2{font-size:16px;margin:0}.identity p,.workflow-manager p{font-size:12px;color:var(--muted);margin:2px 0 10px}.manager-create{border-top:1px solid var(--line);margin-top:12px;padding-top:12px}.manager-create strong{font-size:14px}.field select{width:100%;border:1px solid #cfd6dd;border-radius:9px;padding:8px 9px;background:#fff;color:var(--text);font:inherit;font-size:14px}.progress-bar{width:100%;height:100%;accent-color:var(--brand);border:0}.step.done:not(:last-child)::after,.step.approved:not(:last-child)::after{background:#5eead4}.step.approved .check{background:var(--brand);border-color:var(--brand);color:#fff}.step.rework .step-body{background:#fff7ed;border-color:#fdba74}.step.assigned input,.step.assigned textarea,.step.reported input,.step.reported textarea,.step.approved input,.step.approved textarea{background:#f2f4f6;pointer-events:none}.step-title-row{display:flex;align-items:center;justify-content:space-between;gap:8px}.status{font-size:12px;font-weight:750;border-radius:999px;padding:3px 8px;background:#e5e7eb;color:#475569;white-space:nowrap}.status.in_progress{background:#eff6ff;color:#1d4ed8}.status.reported{background:#fef3c7;color:#92400e}.status.approved{background:#dcfce7;color:#166534}.status.rework{background:#fee2e2;color:#b91c1c}.task-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.task-actions button{border-radius:8px;padding:7px 10px;cursor:pointer;font-weight:700;border:1px solid #cfd6dd;background:#fff}.task-actions .advance{border-color:var(--brand);background:var(--brand);color:#fff}.task-actions .reject{border-color:#fecaca;color:#b91c1c}.event-log{margin:9px 0 0;padding:8px 10px;background:#f8fafc;border-radius:9px;font-size:12px;color:var(--muted)}.event-log summary{cursor:pointer;font-weight:750;color:#475569}.event-list{display:grid;gap:8px;margin-top:8px}.event-item{border-left:3px solid #cbd5e1;padding:5px 8px;background:#fff;border-radius:0 7px 7px 0}.event-item strong{display:block;color:#334155}.event-state,.event-fields,.event-reason,.event-evidence{margin-top:3px}.event-evidence a{color:var(--blue);word-break:break-all}.event-fields{display:grid;gap:2px}.event-fields span{word-break:break-word}
 .event-reason{color:#b91c1c}.event-evidence a{font-weight:700}
+.my-work{background:var(--card);border:1px solid var(--line);border-radius:17px;box-shadow:var(--shadow);padding:14px 16px;margin:14px 0}.my-work h2{font-size:16px;margin:0}.my-work>p{font-size:12px;color:var(--muted);margin:2px 0 10px}.my-work-list{display:grid;gap:8px;margin-top:10px}.work-item{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:11px;padding:10px}.work-item.actionable{border-color:#5eead4;background:#f0fdfa}.work-item strong{display:block}.work-meta,.work-reason{font-size:12px;color:var(--muted);margin-top:2px}.work-item button{border:1px solid var(--brand);background:#fff;color:var(--brand-dark);border-radius:8px;padding:7px 9px;cursor:pointer;font-weight:700}.empty-state{font-size:13px;color:var(--muted);padding:10px 0}
 @media(max-width:650px){.step-title-row{align-items:flex-start;flex-direction:column}.task-actions button{flex:1 1 120px}}
+@media(max-width:480px){.work-item{grid-template-columns:1fr}.work-item button{width:100%}}
 </style>
 </head>
 <body>
@@ -25,6 +27,12 @@
   <section class="overview">
     <div><strong id="progressText">尚未開始</strong><span id="nextText">下一步：詢問承辦人可安裝時間</span></div>
     <div class="progress-track"><progress class="progress-bar" id="progressBar" max="100" value="0" aria-label="完成進度"></progress></div>
+  </section>
+
+  <section class="my-work">
+    <h2>我的工作</h2><p>以 canonical employee_id 彙整本裝置上的待辦；可執行任務優先顯示。</p>
+    <div class="field"><label for="myEmployeeFilter">執行者 employee_id</label><input id="myEmployeeFilter" type="text" autocomplete="off" placeholder="輸入 employee_id 查看工作"></div>
+    <div class="my-work-list" id="myWorkList" aria-live="polite"></div>
   </section>
 
   <section class="workflow-manager">
@@ -92,7 +100,7 @@
 
   <h2 class="section-title">交辦進度摘要</h2>
   <section class="summary-card"><p>可直接複製到內部 LINE，未完成步驟會列出下一步。</p><div class="summary" id="summary"></div><div class="actions"><button class="primary" id="copySummary" type="button">複製進度摘要</button><button class="secondary" id="resetAll" type="button">重設目前工作流</button></div><div class="save-note">目前為 P0 原型，各工作流只保存在此裝置；正式版將改由後端依 project_id 共用。</div></section>
-  <div class="footer">添心設計內部工具 · 助理工作流程 v1.3</div>
+  <div class="footer">添心設計內部工具 · 助理工作流程 v1.4</div>
 </main>
 <div class="toast" id="toast" role="status" aria-live="polite">已複製</div>
 <script>
@@ -108,6 +116,8 @@ const steps=[...document.querySelectorAll('.step')];
 const identity={projectId:document.getElementById('projectId'),employeeId:document.getElementById('employeeId'),reviewerId:document.getElementById('reviewerId')};
 const workflowPicker=document.getElementById('workflowPicker');
 const templatePicker=document.getElementById('templatePicker');
+const myEmployeeFilter=document.getElementById('myEmployeeFilter');
+const myWorkList=document.getElementById('myWorkList');
 const STATUS_LABEL={assigned:'已指派',in_progress:'執行中',reported:'待審核',approved:'已通過',rework:'已退回'};
 const EVENT_LABEL={assigned:'指派',started:'開始執行',reported:'提交回報',approved:'審核通過',rework_requested:'退回補正'};
 
@@ -195,6 +205,29 @@ function renderEventLog(step){
   });log.append(list);
 }
 
+function workflowSteps(workflow){const template=TEMPLATES[workflow.meta.template_id]||TEMPLATES['installation-logistics'];return steps.filter(step=>template.flows.includes(flowOf(step)))}
+function openWorkflow(id){if(!store.workflows[id])return;syncState();persist();state=store.workflows[id];hydrate();render();toast(`已開啟案件 ${state.meta.project_id||'未填'}`)}
+function renderMyWork(){
+  const employeeId=escapeText(myEmployeeFilter.value);myWorkList.innerHTML='';
+  if(!employeeId){const empty=document.createElement('div');empty.className='empty-state';empty.textContent='請輸入 employee_id。';myWorkList.append(empty);return}
+  const items=[];
+  Object.values(store.workflows).filter(workflow=>escapeText(workflow.meta.employee_id)===employeeId).forEach(workflow=>workflowSteps(workflow).forEach(step=>{
+    const task=workflow.tasks[step.dataset.step]||{status:'assigned'};if(task.status==='approved')return;
+    const required=step.dataset.requires,blocked=!!required&&(!workflow.tasks[required]||workflow.tasks[required].status!=='approved');
+    items.push({workflow,step,status:task.status,blocked,actionable:!blocked&&['assigned','in_progress','rework'].includes(task.status)});
+  }));
+  items.sort((a,b)=>Number(b.actionable)-Number(a.actionable)||a.workflow.meta.project_id.localeCompare(b.workflow.meta.project_id));
+  if(!items.length){const empty=document.createElement('div');empty.className='empty-state';empty.textContent='目前沒有未完成工作。';myWorkList.append(empty);return}
+  items.forEach(item=>{
+    const card=document.createElement('div');card.className='work-item'+(item.actionable?' actionable':'');
+    const info=document.createElement('div'),title=document.createElement('strong');title.textContent=item.step.dataset.label;info.append(title);
+    appendTextRow(info,'work-meta',`案件 ${item.workflow.meta.project_id||'未填'}｜${(TEMPLATES[item.workflow.meta.template_id]||TEMPLATES['installation-logistics']).title}｜${item.blocked?'等待前置':STATUS_LABEL[item.status]}`);
+    if(item.blocked){const blocker=steps.find(step=>step.dataset.step===item.step.dataset.requires);appendTextRow(info,'work-reason',`阻擋原因：須先通過「${blocker?blocker.dataset.label:item.step.dataset.requires}」`)}
+    else if(item.status==='reported')appendTextRow(info,'work-reason','已提交，等待主管審核');
+    const button=document.createElement('button');button.type='button';button.textContent='開啟';button.addEventListener('click',()=>openWorkflow(item.workflow.meta.workflow_id));card.append(info,button);myWorkList.append(card);
+  });
+}
+
 function render(){
   const identityLocked=state.events.length>0;identity.projectId.disabled=identityLocked;identity.employeeId.disabled=identityLocked;
   const visibleSteps=activeSteps();
@@ -223,6 +256,7 @@ function render(){
   workflowPicker.innerHTML=Object.values(store.workflows).map(item=>`<option value="${item.meta.workflow_id}">${escapeHtml(item.meta.project_id||'未填案件')}｜${escapeHtml((TEMPLATES[item.meta.template_id]||TEMPLATES['installation-logistics']).title)}</option>`).join('');
   workflowPicker.value=state.meta.workflow_id;
   document.getElementById('summary').textContent=buildSummary();
+  renderMyWork();
 }
 
 function escapeHtml(value){const div=document.createElement('div');div.textContent=String(value||'');return div.innerHTML}
@@ -246,13 +280,14 @@ workflowPicker.addEventListener('change',()=>{syncState();persist();state=store.
 document.getElementById('createWorkflow').addEventListener('click',()=>{
   const projectId=escapeText(document.getElementById('newProjectId').value),employeeId=escapeText(document.getElementById('newEmployeeId').value),reviewerId=escapeText(document.getElementById('newReviewerId').value);
   if(!projectId||!employeeId){toast('建立時必須填寫 project_id 與執行者 employee_id');return}
-  syncState();persist();const created=blankWorkflow(templatePicker.value,projectId,employeeId,reviewerId);store.workflows[created.meta.workflow_id]=created;state=created;persist();hydrate();
+  syncState();persist();const created=blankWorkflow(templatePicker.value,projectId,employeeId,reviewerId);store.workflows[created.meta.workflow_id]=created;state=created;persist();hydrate();if(!escapeText(myEmployeeFilter.value))myEmployeeFilter.value=employeeId;
   ['newProjectId','newEmployeeId','newReviewerId'].forEach(id=>document.getElementById(id).value='');render();toast('已建立並切換工作流');
 });
 document.querySelectorAll('[data-copy]').forEach(btn=>btn.addEventListener('click',()=>copyText(btn.dataset.copy)));
 document.getElementById('copySummary').addEventListener('click',()=>copyText(buildSummary()));
 document.getElementById('resetAll').addEventListener('click',()=>{if(!window.confirm('確定重設目前工作流的欄位、狀態與事件紀錄？其他工作流不受影響。'))return;const meta=state.meta;state=blankWorkflow(meta.template_id,meta.project_id,meta.employee_id,meta.reviewer_employee_id,meta.workflow_id);persist();hydrate();render();toast('已重設目前工作流')});
-hydrate();persist();render();
+myEmployeeFilter.addEventListener('input',renderMyWork);
+hydrate();myEmployeeFilter.value=state.meta.employee_id||'';persist();render();
 })();
 </script>
 </body>
