@@ -89,7 +89,7 @@
 
 - 新增前端模組：`modules/info/assistant-workflow.html`，由主控台 `#/assistant-workflow` 開啟。
 - 以窗簾安裝與家具配送案例抽象出相依步驟，實際案件資料不寫入公開前端原始碼。
-- v1.0 僅使用瀏覽器 `localStorage` 保存範例填寫及完成狀態，尚未新增 GAS／Sheet 資料流；不可視為跨裝置共用的正式任務紀錄。
+- v1.1 仍僅使用瀏覽器 `localStorage`，但已補上 `assigned → in_progress → reported → approved / rework` 狀態機；事件以 append-only 保存 `project_id`、操作者 `employee_id`、ISO 時間、狀態轉移與證據網址。尚未新增 GAS／Sheet 資料流，不可視為跨裝置共用的正式任務紀錄。
 - 正式規格見 `SPEC/助理工作流系統_SPEC.md`，生命週期採 `assigned → in_progress → reported → approved / rework`，事件須可追溯。
 
 ## 4. TOS 最終營運主流程
