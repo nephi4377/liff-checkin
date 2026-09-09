@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>添心設計｜助理工作流程</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--text:#20242a;--muted:#68717d;--line:#dfe4ea;--brand:#0f766e;--brand-dark:#115e59;--brand-soft:#ccfbf1;--blue:#1d4ed8;--blue-soft:#eff6ff;--amber:#92400e;--amber-soft:#fef3c7;--green:#166534;--green-soft:#dcfce7;--shadow:0 4px 18px rgba(15,23,42,.07)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;line-height:1.55}.wrap{max-width:980px;margin:auto;padding:18px 14px 54px}.hero{background:linear-gradient(135deg,#134e4a,#0f766e);color:#fff;border-radius:20px;padding:22px;box-shadow:var(--shadow)}.hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}.hero h1{font-size:25px;margin:0 0 5px}.hero p{margin:0;opacity:.92}.case-no{flex:0 0 auto;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);border-radius:14px;padding:8px 12px;font-weight:800}.pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}.pill{font-size:12px;padding:5px 9px;border-radius:999px;background:rgba(255,255,255,.14)}.overview,.workflow,.summary-card{background:var(--card);border:1px solid var(--line);border-radius:17px;box-shadow:var(--shadow)}.overview{margin:14px 0;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:14px}.overview strong{display:block}.overview span{color:var(--muted);font-size:13px}.progress-track{width:180px;height:9px;background:#e5e7eb;border-radius:99px;overflow:hidden}.progress-bar{height:100%;width:0;background:var(--brand);transition:width .25s}.section-title{font-size:18px;margin:24px 2px 10px}.workflow{padding:16px;margin:11px 0}.workflow-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px}.icon{width:42px;height:42px;border-radius:13px;background:var(--brand-soft);color:var(--brand-dark);display:grid;place-items:center;font-size:21px;flex:0 0 auto}.workflow h2{font-size:18px;margin:0}.workflow-head p{font-size:13px;color:var(--muted);margin:3px 0 0}.step-list{display:grid;gap:10px}.step{display:grid;grid-template-columns:32px 1fr;gap:10px;position:relative}.step:not(:last-child)::after{content:"";position:absolute;left:15px;top:35px;bottom:-8px;width:2px;background:#dbe4e8}.step.done:not(:last-child)::after{background:#5eead4}.check{width:32px;height:32px;border:2px solid #aeb8c4;border-radius:50%;background:#fff;cursor:pointer;display:grid;place-items:center;font-weight:800;color:transparent;z-index:1}.step.done .check{background:var(--brand);border-color:var(--brand);color:#fff}.step.locked .check{background:#edf0f3;border-color:#d8dde3;cursor:not-allowed}.step-body{border:1px solid var(--line);border-radius:13px;padding:11px 12px;background:#fff}.step.done .step-body{background:#f0fdfa;border-color:#99f6e4}.step.locked .step-body{background:#f8fafc;color:#84909d}.step-title{font-weight:750}.step-note{font-size:13px;color:var(--muted);margin-top:3px}.step.locked .step-note{color:#98a1ab}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:9px}.field{display:flex;flex-direction:column;gap:4px}.field.full{grid-column:1/-1}.field label{font-size:12px;color:var(--muted);font-weight:700}.field input,.field textarea{width:100%;border:1px solid #cfd6dd;border-radius:9px;padding:8px 9px;background:#fff;color:var(--text);font:inherit;font-size:14px}.field textarea{min-height:62px;resize:vertical}.step.locked input,.step.locked textarea{background:#f2f4f6;pointer-events:none}.dependency{margin-top:8px;padding:7px 9px;border-radius:8px;background:var(--amber-soft);color:var(--amber);font-size:12px}.script-box{margin-top:10px;background:var(--blue-soft);color:#1e3a8a;border-radius:10px;padding:10px 11px;font-size:13px}.script-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px}.copy{border:1px solid #bfdbfe;background:#fff;color:var(--blue);border-radius:8px;padding:5px 8px;cursor:pointer;font-size:12px}.summary-card{padding:16px;margin-top:11px}.summary-card p{font-size:13px;color:var(--muted);margin:0 0 10px}.summary{background:#111827;color:#f8fafc;border-radius:12px;padding:13px;white-space:pre-line;font-size:13px;min-height:130px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.primary,.secondary{border-radius:9px;padding:9px 12px;cursor:pointer;font-weight:700}.primary{border:0;background:var(--brand);color:#fff}.secondary{border:1px solid #cfd6dd;background:#fff;color:#1f2937}.save-note{font-size:12px;color:var(--muted);margin-top:9px}.toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,18px);background:#111827;color:#fff;border-radius:10px;padding:9px 13px;font-size:13px;opacity:0;pointer-events:none;transition:.2s}.toast.show{opacity:1;transform:translate(-50%,0)}.footer{text-align:center;color:var(--muted);font-size:12px;margin-top:24px}@media(max-width:650px){.wrap{padding:11px 9px 38px}.hero{padding:18px}.hero h1{font-size:21px}.hero-top{display:block}.case-no{display:inline-block;margin-top:12px}.overview{align-items:flex-start;flex-direction:column}.progress-track{width:100%}.workflow{padding:12px}.fields{grid-template-columns:1fr}.field.full{grid-column:auto}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <section class="hero">
+    <div class="hero-top">
+      <div><h1>助理工作流程</h1><p>依順序完成確認、對時與客戶回報，不跳步、不先承諾。</p></div>
+      <div class="case-no">P0 流程原型</div>
+    </div>
+    <div class="pills"><span class="pill">指派 → 執行 → 回報 → 審核</span><span class="pill">範例流程</span><span class="pill">共 6 個步驟</span></div>
+  </section>
+
+  <section class="overview">
+    <div><strong id="progressText">尚未開始</strong><span id="nextText">下一步：詢問承辦人可安裝時間</span></div>
+    <div class="progress-track" aria-label="完成進度"><div class="progress-bar" id="progressBar"></div></div>
+  </section>
+
+  <h2 class="section-title">一、窗簾安裝</h2>
+  <section class="workflow" data-flow="curtain">
+    <div class="workflow-head"><div class="icon">▥</div><div><h2>先確認安裝時間，再回報客戶</h2><p>不要先替承辦人或客戶承諾日期。</p></div></div>
+    <div class="step-list">
+      <div class="step" data-step="curtain-time" data-label="詢問承辦人可安裝時間">
+        <button class="check" type="button" aria-label="完成：詢問承辦人可安裝時間">✓</button>
+        <div class="step-body"><div class="step-title">詢問窗簾承辦人可安裝時間</div><div class="step-note">至少取得一個可安裝日期與時段；有多個時段更方便客戶選擇。</div>
+          <div class="fields"><div class="field"><label>承辦人可安裝日期</label><input data-field="curtainDate" placeholder="例如：9/12（六）"></div><div class="field"><label>可安裝時段</label><input data-field="curtainSlot" placeholder="例如：14:00～16:00"></div><div class="field full"><label>施工限制／備註</label><textarea data-field="curtainNote" placeholder="例如：需有人在場、預計施工多久"></textarea></div></div>
+          <div class="script-box"><div class="script-top"><strong>詢問範本</strong><button class="copy" type="button" data-copy="請問這次窗簾最近可安排安裝的日期與時段有哪些？也請告訴我預計施工時間及現場需要配合的事項，謝謝。">複製</button></div>請問這次窗簾最近可安排安裝的日期與時段有哪些？也請告訴我預計施工時間及現場需要配合的事項，謝謝。</div>
+        </div>
+      </div>
+      <div class="step locked" data-step="curtain-client" data-requires="curtain-time" data-label="向客戶確認窗簾安裝時間">
+        <button class="check" type="button" aria-label="完成：向客戶確認窗簾安裝時間">✓</button>
+        <div class="step-body"><div class="step-title">回報客戶並確認</div><div class="step-note">提供承辦人確認過的時段，待客戶同意後才算完成。</div><div class="dependency">須先完成：詢問窗簾承辦人可安裝時間</div>
+          <div class="fields"><div class="field full"><label>客戶確認結果</label><textarea data-field="curtainClientResult" placeholder="例如：客戶確認 9/12 14:00 可安裝"></textarea></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <h2 class="section-title">二、家具配送</h2>
+  <section class="workflow" data-flow="furniture">
+    <div class="workflow-head"><div class="icon">▤</div><div><h2>先確認品項，再串接廠商與外車</h2><p>品項、到貨時間與司機時段三者一致後，才回報客戶。</p></div></div>
+    <div class="step-list">
+      <div class="step" data-step="furniture-items" data-label="向內部負責人確認家具項目">
+        <button class="check" type="button" aria-label="完成：向內部負責人確認家具項目">✓</button>
+        <div class="step-body"><div class="step-title">先向內部負責人確認配送項目</div><div class="step-note">確認家具名稱、數量、是否已完成，以及有沒有搬運或組裝限制。</div>
+          <div class="fields"><div class="field full"><label>確認後的家具品項與數量</label><textarea data-field="furnitureItems" placeholder="逐項填寫：品名 × 數量"></textarea></div><div class="field full"><label>搬運／組裝備註</label><textarea data-field="furnitureHandling" placeholder="例如：樓層、電梯尺寸、需現場組裝"></textarea></div></div>
+          <div class="script-box"><div class="script-top"><strong>詢問範本</strong><button class="copy" type="button" data-copy="請幫我確認這次要配送的家具品項、數量，以及是否都已完成可出貨；若有搬運或現場組裝限制也請一併告訴我，謝謝。">複製</button></div>請幫我確認這次要配送的家具品項、數量，以及是否都已完成可出貨；若有搬運或現場組裝限制也請一併告訴我，謝謝。</div>
+        </div>
+      </div>
+      <div class="step locked" data-step="vendor-arrival" data-requires="furniture-items" data-label="向廠商詢問到貨時間">
+        <button class="check" type="button" aria-label="完成：向廠商詢問到貨時間">✓</button>
+        <div class="step-body"><div class="step-title">向廠商詢問到貨時間</div><div class="step-note">用已確認的完整品項詢問，避免部分到貨卻排了整車。</div><div class="dependency">須先完成：向內部負責人確認家具項目</div>
+          <div class="fields"><div class="field"><label>可到貨日期</label><input data-field="vendorDate" placeholder="例如：9/13（日）"></div><div class="field"><label>可到貨時段</label><input data-field="vendorSlot" placeholder="例如：上午"></div><div class="field full"><label>廠商回覆／未到齊項目</label><textarea data-field="vendorResult" placeholder="記錄廠商承諾與缺項"></textarea></div></div>
+        </div>
+      </div>
+      <div class="step locked" data-step="driver-time" data-requires="vendor-arrival" data-label="與外車司機約定配送時間">
+        <button class="check" type="button" aria-label="完成：與外車司機約定配送時間">✓</button>
+        <div class="step-body"><div class="step-title">與外車司機約定配送時間</div><div class="step-note">提供完整品項、取貨地、案場地址與搬運限制，再取得司機確認。</div><div class="dependency">須先完成：向廠商詢問到貨時間</div>
+          <div class="fields"><div class="field"><label>司機確認日期</label><input data-field="driverDate" placeholder="例如：9/13（日）"></div><div class="field"><label>抵達案場時段</label><input data-field="driverSlot" placeholder="例如：14:00～15:00"></div><div class="field full"><label>司機／車趟備註</label><textarea data-field="driverResult" placeholder="姓名、電話、車型或其他約定"></textarea></div></div>
+        </div>
+      </div>
+      <div class="step locked" data-step="furniture-client" data-requires="driver-time" data-label="向客戶回報家具配送安排">
+        <button class="check" type="button" aria-label="完成：向客戶回報家具配送安排">✓</button>
+        <div class="step-body"><div class="step-title">回報客戶並確認</div><div class="step-note">清楚說明配送日期、抵達時段、品項及客戶需配合事項。</div><div class="dependency">須先完成：與外車司機約定配送時間</div>
+          <div class="fields"><div class="field full"><label>客戶確認結果</label><textarea data-field="furnitureClientResult" placeholder="例如：客戶確認當日下午有人在場"></textarea></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <h2 class="section-title">交辦進度摘要</h2>
+  <section class="summary-card"><p>可直接複製到內部 LINE，未完成步驟會列出下一步。</p><div class="summary" id="summary"></div><div class="actions"><button class="primary" id="copySummary" type="button">複製進度摘要</button><button class="secondary" id="resetAll" type="button">清除範例紀錄</button></div><div class="save-note">目前為 P0 原型，勾選與填寫內容只保存在此裝置；正式版將改由後端依 project_id 共用。</div></section>
+  <div class="footer">添心設計內部工具 · 助理工作流程 v1.0</div>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite">已複製</div>
+<script>
+(function(){'use strict';
+const KEY='tanxin_assistant_workflow_prototype_v1';
+const steps=[...document.querySelectorAll('.step')];
+const fields=[...document.querySelectorAll('[data-field]')];
+let state={done:{},fields:{}};
+try{state=Object.assign(state,JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){}
+
+function escapeText(v){return String(v||'').trim()}
+function save(){fields.forEach(el=>state.fields[el.dataset.field]=el.value);localStorage.setItem(KEY,JSON.stringify(state));render()}
+function isDone(id){return !!state.done[id]}
+function toast(text){const el=document.getElementById('toast');el.textContent=text;el.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('show'),1600)}
+async function copyText(text){try{if(!navigator.clipboard||typeof navigator.clipboard.writeText!=='function')throw new Error('clipboard unavailable');await navigator.clipboard.writeText(text);toast('已複製')}catch(e){window.prompt('請全選複製以下內容：',text)}}
+
+function render(){
+  steps.forEach(step=>{const id=step.dataset.step,req=step.dataset.requires;const locked=!!req&&!isDone(req);step.classList.toggle('locked',locked);step.classList.toggle('done',isDone(id));step.querySelector('.check').disabled=locked;step.querySelectorAll('input,textarea').forEach(el=>el.disabled=locked)});
+  const doneCount=steps.filter(step=>isDone(step.dataset.step)).length;
+  const pct=Math.round(doneCount/steps.length*100);
+  document.getElementById('progressBar').style.width=pct+'%';
+  document.getElementById('progressText').textContent=doneCount===steps.length?'本案安排已完成':`已完成 ${doneCount}／${steps.length} 步`;
+  const next=steps.find(step=>!isDone(step.dataset.step)&&!step.classList.contains('locked'));
+  document.getElementById('nextText').textContent=next?'下一步：'+next.dataset.label:'窗簾與家具配送皆已完成回報';
+  document.getElementById('summary').textContent=buildSummary();
+}
+
+function buildSummary(){
+  const v=name=>escapeText(state.fields[name])||'未填';
+  const mark=id=>isDone(id)?'✅':'⬜';
+  const next=steps.find(step=>!isDone(step.dataset.step)&&!step.classList.contains('locked'));
+  return [
+    '【助理工作流｜範例進度】','',
+    '一、窗簾',
+    `${mark('curtain-time')} 承辦人可安裝：${v('curtainDate')} ${v('curtainSlot')}`,
+    `備註：${v('curtainNote')}`,
+    `${mark('curtain-client')} 客戶確認：${v('curtainClientResult')}`,'',
+    '二、家具配送',
+    `${mark('furniture-items')} 內部確認品項：${v('furnitureItems')}`,
+    `搬運／組裝：${v('furnitureHandling')}`,
+    `${mark('vendor-arrival')} 廠商到貨：${v('vendorDate')} ${v('vendorSlot')}`,
+    `廠商回覆：${v('vendorResult')}`,
+    `${mark('driver-time')} 外車司機：${v('driverDate')} ${v('driverSlot')}`,
+    `車趟備註：${v('driverResult')}`,
+    `${mark('furniture-client')} 客戶確認：${v('furnitureClientResult')}`,'',
+    '下一步：'+(next?next.dataset.label:'全部完成')
+  ].join('\n');
+}
+
+fields.forEach(el=>{el.value=state.fields[el.dataset.field]||'';el.addEventListener('input',save)});
+steps.forEach(step=>step.querySelector('.check').addEventListener('click',()=>{const id=step.dataset.step;if(step.classList.contains('locked'))return;state.done[id]=!isDone(id);if(!state.done[id]){let changed=true;while(changed){changed=false;steps.forEach(s=>{const req=s.dataset.requires;if(req&&!isDone(req)&&state.done[s.dataset.step]){state.done[s.dataset.step]=false;changed=true}})}}save()}));
+document.querySelectorAll('[data-copy]').forEach(btn=>btn.addEventListener('click',()=>copyText(btn.dataset.copy)));
+document.getElementById('copySummary').addEventListener('click',()=>copyText(buildSummary()));
+document.getElementById('resetAll').addEventListener('click',()=>{if(!window.confirm('確定清除此裝置上的全部範例勾選與填寫內容？'))return;state={done:{},fields:{}};fields.forEach(el=>el.value='');localStorage.removeItem(KEY);render();toast('已清除')});
+render();
+})();
+</script>
+</body>
+</html>
