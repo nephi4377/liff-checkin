@@ -41,6 +41,14 @@
     .message-card{background:#fff;border:1px solid #dbeafe;border-radius:.55rem;padding:.65rem;min-width:0}
     .message-card h5{margin:0 0 .35rem;color:#1e40af;font-size:.85rem}
     .message-card pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:.78rem;line-height:1.55;color:#334155}
+    .example-guide{margin-top:.9rem;border:1px solid #c7d2fe;background:#f8faff;border-radius:.65rem;padding:.8rem}
+    .example-guide h4{margin:0;color:#3730a3;font-size:.92rem}
+    .example-guide>p{margin:.25rem 0 .7rem;font-size:.82rem;color:#475569}
+    .example-timeline{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}
+    .example-step{background:#fff;border-left:3px solid #6366f1;border-radius:0 .5rem .5rem 0;padding:.6rem .7rem}
+    .example-step strong{display:block;color:#312e81;font-size:.82rem;margin-bottom:.15rem}
+    .example-step span{display:block;color:#475569;font-size:.78rem;line-height:1.55}
+    .example-result{margin-top:.6rem;padding:.55rem .65rem;background:#eef2ff;border-radius:.5rem;color:#3730a3;font-size:.8rem;line-height:1.55}
     @media(max-width:640px){.workflow-principle,.workflow-meta{grid-template-columns:1fr}}
     @media(max-width:640px){.exception-grid,.message-grid{grid-template-columns:1fr}}
   </style>
@@ -183,6 +191,18 @@ B. {日期／時段}
 請告知可接受的選項或不可安排時段。收到您的回覆後，我們會再向相關人員完成最後確認，並以最後通知的日期時段為準。</pre>
             </section>
           </div>
+        </div>
+        <div class="example-guide" aria-labelledby="site-example-title">
+          <h4 id="site-example-title">去識別化實例｜客戶不接受第一個安裝時段</h4>
+          <p>以下為虛構教學資料，不對應真實案件、人員或附件。canonical <code>project_id</code>：<code>DEMO-SITE-01</code>。</p>
+          <ol class="example-timeline">
+            <li class="example-step"><strong>1．指派｜2026/09/10 9:00</strong><span>操作者 <code>EMP-D01</code> 指派 <code>EMP-A02</code> 協調窗簾安裝，期限 2026/09/16 17:00；狀態 <code>assigned</code>。證據：<code>demo_assignment_note.pdf</code>。</span></li>
+            <li class="example-step"><strong>2．開始執行｜2026/09/10 9:20</strong><span><code>EMP-A02</code> 確認施工範圍、現場鑰匙及管委會時段後開始聯絡；狀態改為 <code>in_progress</code>。證據：<code>demo_site_checklist.pdf</code>。</span></li>
+            <li class="example-step"><strong>3．異常／重新協調｜2026/09/10 11:05</strong><span>廠商先提供 9/14 下午，但客戶明確表示無法配合。助理記錄原時段失效、客戶可接受區間及下一次追蹤時間；狀態維持 <code>in_progress</code>，不標示已確認。證據：<code>demo_customer_reply.png</code>。</span></li>
+            <li class="example-step"><strong>4．提交回報｜2026/09/10 15:30</strong><span>重新核對後，廠商、現場與客戶皆書面同意 9/16 上午；<code>EMP-A02</code> 附上三方回覆及現場限制摘要送審，狀態改為 <code>reported</code>。證據：<code>demo_confirmation_bundle.pdf</code>。</span></li>
+            <li class="example-step"><strong>5．審核通過｜2026/09/10 16:10</strong><span>審核者 <code>EMP-R03</code> 確認日期、時段、現場條件與通知對象一致，狀態改為 <code>approved</code>；若資料不一致，應改為 <code>rework</code> 並留下退回原因。</span></li>
+          </ol>
+          <div class="example-result"><strong>完成判斷：</strong>不是「已問過客戶」，而是三方同意同一時段、證據完整，且指定審核者已通過。所有事件均保留操作者、時間、狀態與證據。</div>
         </div>
       </article>
 
