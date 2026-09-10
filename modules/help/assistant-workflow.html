@@ -65,7 +65,7 @@
     <nav class="help-nav">
       <p>跳到段落</p>
       <div class="help-nav-links">
-        <a href="#rules">共同原則</a><a href="#priority">更新優先序</a><a href="#material-sample">選材與樣品</a><a href="#document-version">文件版本</a><a href="#change-payment">追加減與款項</a><a href="#site-log">照片與日誌</a><a href="#site">進場與安裝</a><a href="#delivery">家具配送</a><a href="#estimate">報價前置</a><a href="#exception">進度異常</a><a href="#backlog">其他事務</a>
+        <a href="#rules">共同原則</a><a href="#priority">更新優先序</a><a href="#material-sample">選材與樣品</a><a href="#document-version">文件版本</a><a href="#change-payment">追加減與款項</a><a href="#site-log">照片與日誌</a><a href="#survey-meeting">丈量與會議</a><a href="#site">進場與安裝</a><a href="#delivery">家具配送</a><a href="#estimate">報價前置</a><a href="#exception">進度異常</a><a href="#backlog">其他事務</a>
       </div>
     </nav>
 
@@ -644,6 +644,28 @@ B. {選項、影響與條件}
       </article>
     </section>
 
+    <section id="survey-meeting" class="help-section">
+      <h2>P2｜丈量與會議前後準備</h2>
+      <p>適用初次丈量、複丈、設計討論及施工協調會議。助理負責把預約、行前資料、現場紀錄與會後待辦交接完整；尺寸可用性、設計判斷及對客承諾仍由指定設計師確認。</p>
+      <article class="workflow-card">
+        <h3>丈量與會議交接 <span>P2</span></h3>
+        <div class="workflow-meta"><div><strong>開始前要有</strong>project_id、目的與範圍、日期地點、參與人、負責設計師 employee_id、目前有效文件版次</div><div><strong>最後要產出</strong>可追溯丈量紀錄／會議紀要、確認事項、待辦責任人與期限、歸檔及審核紀錄</div></div>
+        <ol class="help-steps">
+          <li><strong>確認目的與範圍：</strong>向交辦者確認本次是初丈、複丈或會議，列出要查看的空間、要回答的問題、預期決策與不在本次範圍的事項；交辦者及執行者均以 <code>employee_id</code> 留痕。</li>
+          <li><strong>完成預約確認：</strong>交叉確認日期、時間、地址、集合點、參與人、現場聯絡窗口、門禁／鑰匙、停車或電梯限制；只有取得必要對象明確答覆才能標示「已確認」，未回覆須設追蹤時間。</li>
+          <li><strong>準備有效資料：</strong>依 <code>project_id</code> 整理目前核准圖面與版次、既有尺寸、照片、客戶需求、前次決議及待確認清單；最新收到不等於有效版，有版本疑義先請指定設計師判定。</li>
+          <li><strong>完成行前檢查：</strong>依任務準備丈量工具、備用電力、紀錄表、拍攝設備與必要樣品，出發前再次確認人員、時段、現場可進入及資料可離線開啟；異動須立即同步受影響者。</li>
+          <li><strong>記錄現場事實：</strong>簽到並記錄實際到場時間；每筆尺寸綁定空間／位置、數值、單位、量測者 <code>employee_id</code>、時間、方法及照片或草圖證據，遮蔽、無法量測或待複丈項目不得猜填。</li>
+          <li><strong>區分決議與待確認：</strong>會議內容分為「已確認事實」「已決議」「提案」「待確認」四類；逐項記錄決策者、依據與影響，助理不得把討論方向、現場推測或廠商預估寫成公司承諾。</li>
+          <li><strong>形成會後交接：</strong>整理紀要與尺寸清單，為每個待辦指定負責人 <code>employee_id</code>、期限、狀態及所需證據；發給指定設計師及必要參與人校對，修正時保留版本與原因。</li>
+          <li><strong>歸檔、回報與送審：</strong>將確認回覆、有效文件、原始丈量紀錄、照片、紀要、校對回覆及待辦清單歸入案件固定位置，回報完成項、待複丈／待決策項及下一步；退回後補正再送審。</li>
+        </ol>
+        <div class="done-rule"><strong>完成條件：</strong>預約與現場條件已有明確確認；尺寸均可追溯位置、單位、量測者、時間與證據，不能確認者已標待複丈；紀要清楚區分決議與待確認，待辦都有責任人、期限及狀態，並經指定審核者通過。</div>
+        <div class="risk-rule"><strong>不可直接完成：</strong>只憑口頭記憶預約、使用未核准版次、尺寸缺位置或單位、遮蔽處猜填、把提案寫成決議、會後待辦沒有責任人／期限，或檔案尚未依 <code>project_id</code> 歸檔。</div>
+        <div class="trace-rule"><strong>全程留痕：</strong>依「指派 <code>assigned</code> → 執行 <code>in_progress</code> → 回報 <code>reported</code> → 審核通過 <code>approved</code>／退回 <code>rework</code>」保存 canonical <code>project_id</code>、交辦／量測／紀錄／決策／審核者 <code>employee_id</code>、預約／到場／量測／校對／補正時間、狀態、文件版次、尺寸與照片／草圖證據、確認回覆、紀要版本、待辦及退回原因。</div>
+      </article>
+    </section>
+
     <section id="backlog" class="help-section">
       <h2>待逐項建立的助理事務</h2>
       <table class="help-table">
@@ -653,7 +675,7 @@ B. {選項、影響與條件}
           <tr><td>圖面、報價與文件版本</td><td>基本流程已建立；下一輪補版本衝突、錯版發出、撤回與補發分支</td><td>P1｜進行中</td></tr>
           <tr><td>追加減、請款與收款前置</td><td>基本流程已建立；下一輪補未簽認施工、金額爭議、短付與重複請款分支</td><td>P1｜進行中</td></tr>
           <tr><td>施工照片與日誌</td><td>基本流程已建立；下一輪補逾時未回、無法補拍、錯案與原檔遺失分支</td><td>P1｜進行中</td></tr>
-          <tr><td>丈量／會議準備</td><td>確認對象 → 整理資料 → 行前檢查 → 會後待辦與期限</td><td>P2</td></tr>
+          <tr><td>丈量／會議準備</td><td>基本流程已建立；下一輪補改期、無法進場、資料缺漏、需複丈與決議爭議分支</td><td>P2｜進行中</td></tr>
           <tr><td>驗收與結案</td><td>缺失彙整 → 責任分派 → 改善追蹤 → 複驗 → 文件交接</td><td>P2</td></tr>
           <tr><td>保固與維修</td><td>確認保固 → 蒐集狀況 → 判斷責任 → 約修 → 完成回報</td><td>P2</td></tr>
           <tr><td>一般行政協助</td><td>交辦確認 → 資料蒐集 → 執行 → 核對 → 回報與歸檔</td><td>P2</td></tr>
@@ -662,7 +684,7 @@ B. {選項、影響與條件}
       <div class="help-callout"><strong>更新原則：</strong>先新增真正反覆發生的工作，不追求一次列完。每個流程至少要回答：何時開始、先問誰、哪些資料必填、何時算完成、卡住時回報誰。</div>
     </section>
 
-    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.16</footer>
+    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.17</footer>
   </div>
   <script src="/modules/help/help.js"></script>
 </body>
