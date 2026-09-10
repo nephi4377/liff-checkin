@@ -34,8 +34,15 @@
     .exception-card li{font-size:.8rem;line-height:1.5;margin-bottom:.2rem}
     .exception-card .status{display:block;margin-top:.4rem;padding-top:.4rem;border-top:1px dashed #fecaca;color:#7f1d1d;font-size:.76rem;line-height:1.45}
     .trace-rule{margin-top:.6rem;background:#f8fafc;border:1px solid #cbd5e1;border-radius:.5rem;padding:.55rem .65rem;color:#334155;font-size:.79rem;line-height:1.55}
+    .message-guide{margin-top:.9rem;border:1px solid #bfdbfe;background:#f8fbff;border-radius:.65rem;padding:.8rem}
+    .message-guide h4{margin:0;color:#1e3a8a;font-size:.92rem}
+    .message-guide>p{margin:.25rem 0 .7rem;font-size:.82rem;color:#475569}
+    .message-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.55rem}
+    .message-card{background:#fff;border:1px solid #dbeafe;border-radius:.55rem;padding:.65rem;min-width:0}
+    .message-card h5{margin:0 0 .35rem;color:#1e40af;font-size:.85rem}
+    .message-card pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:.78rem;line-height:1.55;color:#334155}
     @media(max-width:640px){.workflow-principle,.workflow-meta{grid-template-columns:1fr}}
-    @media(max-width:640px){.exception-grid{grid-template-columns:1fr}}
+    @media(max-width:640px){.exception-grid,.message-grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body class="help-page">
@@ -140,6 +147,42 @@
             </section>
           </div>
           <div class="trace-rule"><strong>每次異常留痕：</strong>保存 canonical <code>project_id</code>、承辦／操作者 <code>employee_id</code>、發生與聯絡時間、目前狀態、對話或文件證據、待誰決定及下一次追蹤時間。流程仍依「指派 → 執行 → 回報 → 審核／退回」交接，不以口頭轉述取代紀錄。</div>
+        </div>
+        <div class="message-guide" aria-labelledby="site-message-title">
+          <h4 id="site-message-title">可直接使用的訊息範本</h4>
+          <p>先替換大括號內容再送出；未確認的日期、費用或規格不得自行補值。對外訊息送出後，仍須把回覆與證據帶回內部紀錄。</p>
+          <div class="message-grid">
+            <section class="message-card">
+              <h5>內部｜執行回報與送審</h5>
+              <pre>【進場協調回報｜{project_id}】
+執行人：{employee_id}
+項目／範圍：{施工項目}
+目前狀態：{待外部回覆／重新協調／待客戶確認／可送審}
+已確認：{廠商、現場、客戶的明確答覆}
+卡點／待決策：{內容與決策人}
+下一步／追蹤時間：{yyyy/mm/dd h:mm}
+證據：{對話、文件或照片位置}
+請 {reviewer_employee_id} 審核；若退回，請註明補正原因。</pre>
+            </section>
+            <section class="message-card">
+              <h5>廠商｜取得可進場選項</h5>
+              <pre>您好，想確認 {案件簡稱} 的 {施工項目}：
+1. 可進場日期與時段
+2. 預估工時與人數
+3. 現場需先完成的條件
+4. 車輛、電梯或材料搬運需求
+希望完成期限為 {日期}。請於 {回覆期限} 前書面回覆可行選項；目前尚未向客戶承諾時段，收到回覆後仍會交叉核對現場與客戶時間。</pre>
+            </section>
+            <section class="message-card">
+              <h5>客戶｜提供已核對的選項</h5>
+              <pre>您好，關於 {案件簡稱} 的 {施工項目}，我們已先向執行廠商與現場核對，目前可提供：
+A. {日期／時段}
+B. {日期／時段}
+預估作業時間：{工時}
+現場配合事項：{開門／淨空／管委會等}
+請告知可接受的選項或不可安排時段。收到您的回覆後，我們會再向相關人員完成最後確認，並以最後通知的日期時段為準。</pre>
+            </section>
+          </div>
         </div>
       </article>
 
