@@ -65,7 +65,7 @@
     <nav class="help-nav">
       <p>跳到段落</p>
       <div class="help-nav-links">
-        <a href="#rules">共同原則</a><a href="#priority">更新優先序</a><a href="#material-sample">選材與樣品</a><a href="#site">進場與安裝</a><a href="#delivery">家具配送</a><a href="#estimate">報價前置</a><a href="#exception">進度異常</a><a href="#backlog">其他事務</a>
+        <a href="#rules">共同原則</a><a href="#priority">更新優先序</a><a href="#material-sample">選材與樣品</a><a href="#document-version">文件版本</a><a href="#site">進場與安裝</a><a href="#delivery">家具配送</a><a href="#estimate">報價前置</a><a href="#exception">進度異常</a><a href="#backlog">其他事務</a>
       </div>
     </nav>
 
@@ -581,13 +581,33 @@ B. {選項、影響與條件}
       </article>
     </section>
 
+    <section id="document-version" class="help-section">
+      <h2>P1｜圖面、報價與文件版本管理</h2>
+      <p>適用平面圖、施工圖、估價單、報價單、合約附件、選材表及會議紀錄。助理負責比對、命名、歸檔、送審與通知，不得自行把最新收到的檔案認定為正式施工或對客版本。</p>
+      <article class="workflow-card">
+        <h3>唯一有效版本與發行紀錄 <span>P1</span></h3>
+        <div class="workflow-meta"><div><strong>開始前要有</strong>project_id、文件類型、來源、收到時間、預定用途、內部確認者 employee_id</div><div><strong>最後要產出</strong>唯一有效版本、檔案位置、舊版作廢標示、收件人與通知回執</div></div>
+        <ol class="help-steps">
+          <li><strong>收件綁定：</strong>核對 canonical <code>project_id</code>、文件類型、來源與收到時間；附件未標案件時先釐清，不依客戶姓名或群組名稱猜測案件。</li>
+          <li><strong>命名編版：</strong>依 <code>{project_id}_{文件類型}_{主題}_V{版次}_{yyyyMMdd}_{狀態}</code> 命名；版次、日期或狀態缺一時先標示「待確認」，不得自行補號。</li>
+          <li><strong>差異比對：</strong>與目前有效版逐項核對頁數、金額、尺寸、材質、備註與附件，列出新增、刪除及變更處，不只看檔案日期。</li>
+          <li><strong>內部送審：</strong>由指定設計師或負責人確認用途及唯一有效版本；未通過前維持「待審核」，不得傳給客戶、現場或廠商作為執行依據。</li>
+          <li><strong>歸檔作廢：</strong>有效版存入案件固定位置並保留原檔；舊版移至歷史區、標示「已作廢／由 V{版次} 取代」，不可刪除既有紀錄。</li>
+          <li><strong>發行回執：</strong>記錄發送者、時間、對象、用途與檔案連結，要求受影響人員回覆已收到及使用版次；回收錯版或失效連結後再送審結案。</li>
+        </ol>
+        <div class="done-rule"><strong>完成條件：</strong>同一用途只有一個經核准的有效版本；檔案可由 <code>project_id</code> 找回，舊版有取代關係，所有受影響收件人已確認收到正確版次，並由指定審核者通過。</div>
+        <div class="risk-rule"><strong>不可直接完成：</strong>只把檔案丟進群組、以「最後修改日期」猜最新版、同時存在兩個施工版、舊版未標作廢，或收件人尚未回覆使用版次。</div>
+        <div class="trace-rule"><strong>全程留痕：</strong>依「指派 <code>assigned</code> → 執行 <code>in_progress</code> → 回報 <code>reported</code> → 審核通過 <code>approved</code>／退回 <code>rework</code>」保存 canonical <code>project_id</code>、指派／執行／審核者 <code>employee_id</code>、收件與發行時間、文件狀態、版本差異、檔案證據、通知回執及退回原因。</div>
+      </article>
+    </section>
+
     <section id="backlog" class="help-section">
       <h2>待逐項建立的助理事務</h2>
       <table class="help-table">
         <thead><tr><th>事務</th><th>流程重點</th><th>優先序</th></tr></thead>
         <tbody>
           <tr><td>選材／借樣／送樣／歸還</td><td>基本流程已建立；下一輪補等待、遺失、損壞、逾期與更換樣品分支</td><td>P1｜進行中</td></tr>
-          <tr><td>圖面與文件版本</td><td>收件 → 核對版本 → 命名歸檔 → 通知相關人 → 作廢舊版</td><td>P1</td></tr>
+          <tr><td>圖面、報價與文件版本</td><td>基本流程已建立；下一輪補版本衝突、錯版發出、撤回與補發分支</td><td>P1｜進行中</td></tr>
           <tr><td>追加減／請款協助</td><td>確認事實 → 收集依據 → 交設計師核價 → 對客確認 → 送會計</td><td>P1</td></tr>
           <tr><td>施工照片與日誌</td><td>收集 → 案件／日期分類 → 缺漏追問 → 異常標記 → 歸檔</td><td>P1</td></tr>
           <tr><td>丈量／會議準備</td><td>確認對象 → 整理資料 → 行前檢查 → 會後待辦與期限</td><td>P2</td></tr>
@@ -599,7 +619,7 @@ B. {選項、影響與條件}
       <div class="help-callout"><strong>更新原則：</strong>先新增真正反覆發生的工作，不追求一次列完。每個流程至少要回答：何時開始、先問誰、哪些資料必填、何時算完成、卡住時回報誰。</div>
     </section>
 
-    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.13</footer>
+    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.14</footer>
   </div>
   <script src="/modules/help/help.js"></script>
 </body>
