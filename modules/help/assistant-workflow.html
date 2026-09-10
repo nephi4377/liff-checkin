@@ -157,6 +157,67 @@
         </ol>
         <div class="done-rule"><strong>完成條件：</strong>品項正確送達指定位置並完成簽收，異常已記錄且有明確處理責任人。</div>
         <div class="risk-rule"><strong>不可跳步：</strong>品項尚未確認或供應商未確認到貨，就先向客戶承諾配送時間。</div>
+        <div class="exception-guide" aria-labelledby="delivery-exception-title">
+          <h4 id="delivery-exception-title">配送異常怎麼處理</h4>
+          <p>先停止簽收或搬運到下一階段，保留現場證據並通知內部承辦人。責任、費用與新時段尚未確認前，不替供應商、司機或客戶做決定。</p>
+          <div class="exception-grid">
+            <section class="exception-card">
+              <h5>缺件或數量不符</h5>
+              <ol>
+                <li>依送貨單逐項清點，拍攝已到品項、包裝標示及缺少位置。</li>
+                <li>請供應商確認缺件原因、補件內容與最早可補送時間。</li>
+                <li>回報內部承辦人，由其確認可否先簽收已到品項及是否影響安裝。</li>
+              </ol>
+              <span class="status"><strong>狀態：</strong>部分到貨／待補件；補件到場並再次清點前不可標示配送完成。</span>
+            </section>
+            <section class="exception-card">
+              <h5>破損、髒污或規格不符</h5>
+              <ol>
+                <li>先不要拆除標籤或繼續安裝，拍攝全景、瑕疵近照、外箱與品項標示。</li>
+                <li>在簽收單註記異常；是否拒收、暫放或退回，由內部承辦人與供應商確認。</li>
+                <li>記錄換貨、修補或重製方案、責任窗口及預計完成日。</li>
+              </ol>
+              <span class="status"><strong>狀態：</strong>異常待判定／待改善；未複查合格前不可視為完成。</span>
+            </section>
+            <section class="exception-card">
+              <h5>超材或尺寸無法搬運</h5>
+              <ol>
+                <li>停止強行搬運，量測貨物、門洞、轉角、樓梯與電梯的實際淨尺寸並拍照。</li>
+                <li>請供應商確認能否拆件、現場組裝或改用吊車；不得自行拆改成品。</li>
+                <li>將安全、費用、管委會申請及工期影響交由內部承辦人決定。</li>
+              </ol>
+              <span class="status"><strong>狀態：</strong>無法搬運／待方案確認；新方案核准前暫停進場。</span>
+            </section>
+            <section class="exception-card">
+              <h5>無電梯或電梯不可用</h5>
+              <ol>
+                <li>確認樓層、樓梯淨寬、轉角、搬運距離及電梯停用原因與可恢復時間。</li>
+                <li>請司機／搬運方重新評估人力、樓層費、工時與是否能安全搬運。</li>
+                <li>新增費用或改期先回報內部承辦人，核准後才能向客戶確認。</li>
+              </ol>
+              <span class="status"><strong>狀態：</strong>待搬運條件確認；不可要求現場人員臨時冒險搬運。</span>
+            </section>
+            <section class="exception-card">
+              <h5>現場無法進場或收貨</h5>
+              <ol>
+                <li>確認原因是無人開門、地址／入口錯誤、管制、無停車位或其他工種阻擋。</li>
+                <li>立即聯絡現場窗口與內部承辦人，記錄抵達時間、等待時間及現場照片。</li>
+                <li>由內部承辦人決定等待、改送暫存點、退回或另約，不自行留置貨物。</li>
+              </ol>
+              <span class="status"><strong>狀態：</strong>到場未交付；貨物去向與保管責任必須明確。</span>
+            </section>
+            <section class="exception-card">
+              <h5>需要二次配送</h5>
+              <ol>
+                <li>整理第一次未完成原因、已送／未送品項、貨物現況及目前保管地點。</li>
+                <li>確認二次車趟、人力、費用與責任歸屬，再重新核對供應商及現場條件。</li>
+                <li>依「供應商 → 司機／搬運 → 現場 → 客戶」順序取得新時段的一致確認。</li>
+              </ol>
+              <span class="status"><strong>狀態：</strong>待二次配送；第二次完成簽收與異常複查後才能結案。</span>
+            </section>
+          </div>
+          <div class="trace-rule"><strong>每次異常留痕：</strong>保存 canonical <code>project_id</code>、承辦／操作者 <code>employee_id</code>、到場與發現時間、品項及數量、目前狀態、照片／送貨單／對話證據、貨物保管位置、待誰決定與下一次追蹤時間。流程仍依「指派 → 執行 → 回報 → 審核／退回」交接；異常處理完成後須由指定審核者確認，不以司機離場或貨物留置視為完成。</div>
+        </div>
       </article>
 
       <article id="estimate" class="workflow-card">
@@ -206,7 +267,7 @@
       <div class="help-callout"><strong>更新原則：</strong>先新增真正反覆發生的工作，不追求一次列完。每個流程至少要回答：何時開始、先問誰、哪些資料必填、何時算完成、卡住時回報誰。</div>
     </section>
 
-    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.1</footer>
+    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.2</footer>
   </div>
   <script src="/modules/help/help.js"></script>
 </body>
