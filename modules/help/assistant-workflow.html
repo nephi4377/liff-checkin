@@ -65,7 +65,7 @@
     <nav class="help-nav">
       <p>跳到段落</p>
       <div class="help-nav-links">
-        <a href="#rules">共同原則</a><a href="#priority">更新優先序</a><a href="#material-sample">選材與樣品</a><a href="#document-version">文件版本</a><a href="#change-payment">追加減與款項</a><a href="#site">進場與安裝</a><a href="#delivery">家具配送</a><a href="#estimate">報價前置</a><a href="#exception">進度異常</a><a href="#backlog">其他事務</a>
+        <a href="#rules">共同原則</a><a href="#priority">更新優先序</a><a href="#material-sample">選材與樣品</a><a href="#document-version">文件版本</a><a href="#change-payment">追加減與款項</a><a href="#site-log">照片與日誌</a><a href="#site">進場與安裝</a><a href="#delivery">家具配送</a><a href="#estimate">報價前置</a><a href="#exception">進度異常</a><a href="#backlog">其他事務</a>
       </div>
     </nav>
 
@@ -622,6 +622,28 @@ B. {選項、影響與條件}
       </article>
     </section>
 
+    <section id="site-log" class="help-section">
+      <h2>P1｜施工照片與日誌收集、缺漏追問與歸檔</h2>
+      <p>適用每日施工、隱蔽工程、材料進場、異常、改善及完工紀錄。助理負責把照片與事實整理成可查證紀錄，不只收一批圖片，也不依照片自行推定責任或完成比例。</p>
+      <article class="workflow-card">
+        <h3>照片證據與施工日誌 <span>P1</span></h3>
+        <div class="workflow-meta"><div><strong>開始前要有</strong>project_id、日期、工項、應拍清單、回報人 employee_id、回報期限</div><div><strong>最後要產出</strong>完整照片組、缺漏處理結果、事實日誌、歸檔位置與審核紀錄</div></div>
+        <ol class="help-steps">
+          <li><strong>確認應拍項目：</strong>依當日工項列出必要的現場總覽、施工過程、關鍵細節、隱蔽前紀錄、異常處及完工前後對照；不適用項目須註明原因。</li>
+          <li><strong>收集原始資料：</strong>每組照片綁定 canonical <code>project_id</code>、拍攝日期時間、區域／樓層、工項、拍攝者 <code>employee_id</code> 與簡短說明；保留原始檔，不以聊天室壓縮圖取代。</li>
+          <li><strong>檢查可用性：</strong>逐張排除模糊、過暗、重複、拍錯案件或無法辨認位置的照片，確認關鍵尺寸、材料標示與異常細節可讀；有疑義先標「待查證」。</li>
+          <li><strong>精準追問缺漏：</strong>列明缺少的區域、工項、角度或時間點，指定回覆人與期限；無法補拍時記錄原因、替代證據及由誰核准，不以「照片不足」一句帶過。</li>
+          <li><strong>撰寫事實日誌：</strong>記錄當日施作內容、到場人員、材料、進度事實、異常、暫停事項、待決策人與下一步；未經確認不得寫成責任判定、完成百分比或公司承諾。</li>
+          <li><strong>命名與歸檔：</strong>依 <code>{project_id}_{yyyyMMdd}_{區域}_{工項}_{序號}</code> 命名，照片與日誌存入案件固定位置並互相連結；更正時保留舊版及更正原因，不覆蓋原始證據。</li>
+          <li><strong>隱私與分享：</strong>內部原始證據依權限保存；對客戶或公開使用前，檢查並遮蔽非必要的人臉、電話、地址、車牌、門牌及文件個資。</li>
+          <li><strong>回報與送審：</strong>彙整已收、缺漏、無法補拍、異常與歸檔連結，提交指定審核者；退回時依缺項補正，再重新回報。</li>
+        </ol>
+        <div class="done-rule"><strong>完成條件：</strong>應拍項目均有可辨識證據，或已有核准的「不適用／無法補拍」說明；日誌只記錄已確認事實，照片與日誌可由 <code>project_id</code> 找回、連結可開啟，並由指定審核者通過。</div>
+        <div class="risk-rule"><strong>不可直接完成：</strong>只有照片沒有日期／工項說明、只用群組壓縮圖、隱蔽工程未留證、缺漏未追問、以照片猜測責任或進度，或檔案存在個人手機卻未歸檔。</div>
+        <div class="trace-rule"><strong>全程留痕：</strong>依「指派 <code>assigned</code> → 執行 <code>in_progress</code> → 回報 <code>reported</code> → 審核通過 <code>approved</code>／退回 <code>rework</code>」保存 canonical <code>project_id</code>、指派／回報／追問／審核者 <code>employee_id</code>、拍攝／追問／補正時間、照片與日誌狀態、原始檔及替代證據、歸檔連結與退回原因。</div>
+      </article>
+    </section>
+
     <section id="backlog" class="help-section">
       <h2>待逐項建立的助理事務</h2>
       <table class="help-table">
@@ -630,7 +652,7 @@ B. {選項、影響與條件}
           <tr><td>選材／借樣／送樣／歸還</td><td>基本流程已建立；下一輪補等待、遺失、損壞、逾期與更換樣品分支</td><td>P1｜進行中</td></tr>
           <tr><td>圖面、報價與文件版本</td><td>基本流程已建立；下一輪補版本衝突、錯版發出、撤回與補發分支</td><td>P1｜進行中</td></tr>
           <tr><td>追加減、請款與收款前置</td><td>基本流程已建立；下一輪補未簽認施工、金額爭議、短付與重複請款分支</td><td>P1｜進行中</td></tr>
-          <tr><td>施工照片與日誌</td><td>收集 → 案件／日期分類 → 缺漏追問 → 異常標記 → 歸檔</td><td>P1</td></tr>
+          <tr><td>施工照片與日誌</td><td>基本流程已建立；下一輪補逾時未回、無法補拍、錯案與原檔遺失分支</td><td>P1｜進行中</td></tr>
           <tr><td>丈量／會議準備</td><td>確認對象 → 整理資料 → 行前檢查 → 會後待辦與期限</td><td>P2</td></tr>
           <tr><td>驗收與結案</td><td>缺失彙整 → 責任分派 → 改善追蹤 → 複驗 → 文件交接</td><td>P2</td></tr>
           <tr><td>保固與維修</td><td>確認保固 → 蒐集狀況 → 判斷責任 → 約修 → 完成回報</td><td>P2</td></tr>
@@ -640,7 +662,7 @@ B. {選項、影響與條件}
       <div class="help-callout"><strong>更新原則：</strong>先新增真正反覆發生的工作，不追求一次列完。每個流程至少要回答：何時開始、先問誰、哪些資料必填、何時算完成、卡住時回報誰。</div>
     </section>
 
-    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.15</footer>
+    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.16</footer>
   </div>
   <script src="/modules/help/help.js"></script>
 </body>
