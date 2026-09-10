@@ -24,7 +24,18 @@
     .workflow-meta div{background:#f8fafc;border-radius:.5rem;padding:.55rem .65rem;font-size:.8rem;color:#475569}.workflow-meta strong{display:block;color:#334155;margin-bottom:.12rem}
     .done-rule{border-left:3px solid #10b981;background:#ecfdf5;padding:.55rem .7rem;border-radius:0 .45rem .45rem 0;color:#065f46;font-size:.84rem;margin-top:.65rem}
     .risk-rule{border-left:3px solid #f59e0b;background:#fffbeb;padding:.55rem .7rem;border-radius:0 .45rem .45rem 0;color:#92400e;font-size:.84rem;margin-top:.45rem}
+    .exception-guide{margin-top:.9rem;border:1px solid #fecaca;background:#fffafa;border-radius:.65rem;padding:.8rem}
+    .exception-guide h4{margin:0;color:#991b1b;font-size:.92rem}
+    .exception-guide>p{margin:.25rem 0 .7rem;font-size:.82rem}
+    .exception-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem}
+    .exception-card{background:#fff;border:1px solid #fee2e2;border-radius:.55rem;padding:.65rem}
+    .exception-card h5{margin:0 0 .25rem;color:#7f1d1d;font-size:.85rem}
+    .exception-card ol{margin:.25rem 0;padding-left:1.1rem}
+    .exception-card li{font-size:.8rem;line-height:1.5;margin-bottom:.2rem}
+    .exception-card .status{display:block;margin-top:.4rem;padding-top:.4rem;border-top:1px dashed #fecaca;color:#7f1d1d;font-size:.76rem;line-height:1.45}
+    .trace-rule{margin-top:.6rem;background:#f8fafc;border:1px solid #cbd5e1;border-radius:.5rem;padding:.55rem .65rem;color:#334155;font-size:.79rem;line-height:1.55}
     @media(max-width:640px){.workflow-principle,.workflow-meta{grid-template-columns:1fr}}
+    @media(max-width:640px){.exception-grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body class="help-page">
@@ -87,6 +98,49 @@
         </ol>
         <div class="done-rule"><strong>完成條件：</strong>客戶與執行者確認同一日期時段，現場限制已排除，相關人員都收到一致資訊。</div>
         <div class="risk-rule"><strong>不可直接完成：</strong>只有詢問、只有單方答應，或仍寫「時間再確認」。</div>
+        <div class="exception-guide" aria-labelledby="site-exception-title">
+          <h4 id="site-exception-title">卡住或變更時怎麼處理</h4>
+          <p>異常發生後回到「重新確認」，原本時段不能沿用為有效承諾；未再次取得各方一致答覆前，狀態都不是「已確認」。</p>
+          <div class="exception-grid">
+            <section class="exception-card">
+              <h5>廠商未回覆</h5>
+              <ol>
+                <li>記錄聯絡時間、方式及詢問內容，不自行推定可進場。</li>
+                <li>設定下一次追蹤時間；若已影響期限，立即回報內部承辦人。</li>
+                <li>由內部承辦人決定改找窗口、備選廠商或調整目標日期。</li>
+              </ol>
+              <span class="status"><strong>狀態：</strong>待外部回覆。取得明確日期前不可對客承諾。</span>
+            </section>
+            <section class="exception-card">
+              <h5>任何一方要求改期</h5>
+              <ol>
+                <li>先記錄提出者、原因及原時段，明確標示原約定已失效。</li>
+                <li>重新核對廠商、現場與客戶，不可只通知其中一方。</li>
+                <li>新時段三方確認後，再同步設計師及所有受影響人員。</li>
+              </ol>
+              <span class="status"><strong>狀態：</strong>重新協調。新時段確認後才可改為已確認。</span>
+            </section>
+            <section class="exception-card">
+              <h5>施工或安裝取消</h5>
+              <ol>
+                <li>確認是暫停、延後或確定取消，以及由誰做成決定。</li>
+                <li>通知廠商、客戶、現場及內部承辦人，取消車趟或管委會申請。</li>
+                <li>記錄已發生成本、影響範圍與後續是否需要重新安排。</li>
+              </ol>
+              <span class="status"><strong>狀態：</strong>已取消或待重新安排，不可標成已完成。</span>
+            </section>
+            <section class="exception-card">
+              <h5>客戶不同意提供的時段</h5>
+              <ol>
+                <li>詢問客戶可接受的日期區間與不可安排條件，不要求勉強接受。</li>
+                <li>將客戶條件帶回廠商及現場重新媒合，必要時請內部承辦人取捨。</li>
+                <li>只回覆重新核對後可行的選項，直到各方同意同一時段。</li>
+              </ol>
+              <span class="status"><strong>狀態：</strong>待客戶確認或重新協調，不把拒絕視為取消。</span>
+            </section>
+          </div>
+          <div class="trace-rule"><strong>每次異常留痕：</strong>保存 canonical <code>project_id</code>、承辦／操作者 <code>employee_id</code>、發生與聯絡時間、目前狀態、對話或文件證據、待誰決定及下一次追蹤時間。流程仍依「指派 → 執行 → 回報 → 審核／退回」交接，不以口頭轉述取代紀錄。</div>
+        </div>
       </article>
 
       <article id="delivery" class="workflow-card">
@@ -152,7 +206,7 @@
       <div class="help-callout"><strong>更新原則：</strong>先新增真正反覆發生的工作，不追求一次列完。每個流程至少要回答：何時開始、先問誰、哪些資料必填、何時算完成、卡住時回報誰。</div>
     </section>
 
-    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.0</footer>
+    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.1</footer>
   </div>
   <script src="/modules/help/help.js"></script>
 </body>
