@@ -1,4 +1,4 @@
-import Dashboard from './Dashboard.js?v=26.09.09.1';
+import Dashboard from './Dashboard.js?v=26.09.10.1';
 import ProjectBoard from './ProjectBoard.js?v=26.08.30.1';
 import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.07.24.1';
 import HubLeftSidebar from './HubLeftSidebar.js?v=26.08.31.2';
@@ -211,7 +211,6 @@ const App = {
             '#/faq': { name: 'iframe', src: 'modules/info/SQAQ2.html', title: '客戶常見問答' },
             '#/daily-report': { name: 'iframe', src: 'modules/projects/daily_report.html', title: '團隊工作總覽' }, // [v515.0 修正] 改為絕對路徑
             '#/onboarding-flow': { name: 'iframe', src: 'modules/info/onboardingflow.html', title: '客戶接洽流程' }, // [v518.0 修正]
-            '#/assistant-workflow': { name: 'iframe', src: 'modules/info/assistant-workflow.html', title: '助理工作流程' },
             '#/attendance-report': { name: 'iframe', src: 'modules/attendance/attendance_report.html', title: '出勤儀表板' }, // [v515.0 修正] 改為絕對路徑
             '#/my-personal': { name: 'iframe', src: 'modules/attendance/attendance_report.html', title: '我的出勤與假勤', params: '&mode=personal' },
             '#/staff-status-board': { name: 'iframe', src: 'modules/attendance/staff_status_board.html', title: '全員出勤燈號看板' },
@@ -252,6 +251,7 @@ const App = {
             '#/help/projects': { name: 'iframe', src: 'modules/help/projects.html', title: '案場與施工回報說明' },
             '#/help/design-tools': { name: 'iframe', src: 'modules/help/design-tools.html', title: '設計工具說明' },
             '#/help/budget': { name: 'iframe', src: 'modules/help/budget.html', title: '報價與驗收說明' },
+            '#/help/assistant-workflow': { name: 'iframe', src: 'modules/help/assistant-workflow.html', title: '助理工作流程說明' },
         };
         // [v513.0 新增] 補上員工資料編輯頁面的路由
         routes['#/employee-editor'] = { name: 'iframe', src: 'modules/attendance/employee_editor.html', title: '員工資料編輯' }; // [v515.0 修正] 改為絕對路徑

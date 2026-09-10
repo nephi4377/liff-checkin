@@ -833,17 +833,7 @@ export default {
                     </div>
                 </a>
 
-                <!-- 14. 助理工作流程 -->
-                <a v-if="currentUser && currentUser.permission >= 2" href="#/assistant-workflow"
-                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-teal-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center text-xl">✅</div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">助理工作流程</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">依順序執行、回報與審核案件任務。</p>
-                    </div>
-                </a>
-
-                <!-- 15. 客戶接洽流程 -->
+                <!-- 14. 客戶接洽流程 -->
                 <a href="#/onboarding-flow"
                     class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-emerald-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">🤝</div>
@@ -853,7 +843,7 @@ export default {
                     </div>
                 </a>
 
-                <!-- 16. 客戶常見問答 FAQ -->
+                <!-- 15. 客戶常見問答 FAQ -->
                 <a href="#/faq"
                     class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-emerald-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">❓</div>

@@ -92,6 +92,12 @@
 - v1.4 仍僅使用瀏覽器 `localStorage`，但已可從窗簾、家具或組合範本建立多個獨立工作流；每個實例以 `workflow_id` 隔離任務、欄位與 append-only 事件，並可依執行者 `employee_id` 在「我的工作」跨工作流彙整待辦、顯示阻擋原因及切回對應 `project_id`。時間軸保留操作者、ISO 時間、狀態轉移、回報快照、退回原因與證據連結。尚未新增 GAS／Sheet 資料流，不可視為跨裝置共用的正式任務紀錄。
 - 正式規格見 `SPEC/助理工作流系統_SPEC.md`，生命週期採 `assigned → in_progress → reported → approved / rework`，事件須可追溯。
 
+### R-040｜助理工作流改為流程說明優先（2026-09-10）
+
+- 依產品決策移除整合主控台首頁的助理工作流卡片及 `#/assistant-workflow` 操作路由；`modules/info/assistant-workflow.html` 原型保留但不提供入口，避免被誤認為正式跨裝置任務系統。
+- 新增 `modules/help/assistant-workflow.html`，由使用教學 `#/help/assistant-workflow` 開啟；定位為助理常見事務的流程說明與訓練頁，不產生案件任務資料。
+- 優先規格改為 `SPEC/助理工作流程說明頁_SPEC.md`；先深化進場／安裝、家具配送、報價前置、案場異常追蹤，再依序補選材、版本、款項、日誌、驗收與保固。
+
 ## 4. TOS 最終營運主流程
 
 預計整併為：

@@ -1,9 +1,16 @@
 # 添心設計｜助理工作流系統 SPEC
 
-> 狀態：Draft / Incremental implementation  
+> 狀態：Paused / Prototype retained without Hub route
 > 建立日期：2026-09-10  
-> 前端入口：`#/assistant-workflow`  
-> 前端模組：`modules/info/assistant-workflow.html`
+> 原型模組：`modules/info/assistant-workflow.html`（保留程式，主控台不提供入口）
+> 現行優先規格：`SPEC/助理工作流程說明頁_SPEC.md`
+
+## 0. 目前決策（2026-09-10）
+
+- 移除整合主控台 `#/assistant-workflow` 操作路由與首頁入口。
+- 現有 P0 操作原型僅供日後研究，不再列為自動迭代的優先工作。
+- 現階段先建立助理常見事務的流程說明與訓練內容，再決定哪些流程值得系統化。
+- 後續自動迭代以 `SPEC/助理工作流程說明頁_SPEC.md` 的優先序為準；不得自行恢復操作入口或接後端。
 
 ## 1. 產品定位
 
@@ -176,9 +183,9 @@ KPI 用於找流程瓶頸，不以單一數字直接判定員工表現。
 
 ## 12. 分階段實作
 
-### P0｜前端原型
+### P0｜前端原型（已暫停）
 
-- [x] 主控台新增助理工作流入口（權限 2+）。
+- [x] 曾新增主控台助理工作流入口（2026-09-10 已依決策移除）。
 - [x] 建立步驟依賴、進度、結構化欄位與摘要原型。
 - [x] 將單一參考案例改為可建立多工作流的範本原型。
 - [x] 補上 assigned → in_progress → reported → approved / rework 狀態操作。
@@ -219,7 +226,9 @@ KPI 用於找流程瓶頸，不以單一數字直接判定員工表現。
 
 ## 14. 自動迭代規則
 
-每次自動迭代只完成一個可驗證的小項目：
+本系統原型已暫停自動擴充。若未收到豪哥再次明確指示，不得繼續 P1～P3、恢復 `#/assistant-workflow` 或將原型當成正式任務資料庫。
+
+若未來恢復開發，每次自動迭代只完成一個可驗證的小項目：
 
 1. 先拉取最新 `main`，閱讀本 SPEC、`AGENTS.md` 與 `TOS/TOS_AUDIT.md`。
 2. 不修改 `modules/info/onboardingflow.html` v2.4、`modules/info/cases/`、`modules/info/BAK/`。
@@ -236,3 +245,4 @@ KPI 用於找流程瓶頸，不以單一數字直接判定員工表現。
 - 2026-09-10：P0 v1.2 新增窗簾、家具及組合範本，可依 `project_id` 與執行者／審核者 `employee_id` 建立、切換多個獨立工作流；各實例分離保存任務、欄位與 append-only 事件，並相容遷移 v1.1 本機資料。
 - 2026-09-10：P2 v1.3 補齊每項任務的完整事件時間軸，依序呈現狀態轉移、操作者 `employee_id`、台灣時間、結構化回報快照、退回原因與安全的證據連結；不同 `workflow_id`／`project_id` 的紀錄維持隔離。
 - 2026-09-10：P2 v1.4 新增「我的工作」原型，依 canonical `employee_id` 跨工作流彙整未完成任務，可執行步驟優先、等待前置時顯示阻擋原因，並可直接切回對應 `project_id` 工作流。
+- 2026-09-10：依產品方向移除主控台首頁卡片與 `#/assistant-workflow` 操作路由；保留原型檔供參考，優先工作改為助理常見事務的說明與訓練頁。

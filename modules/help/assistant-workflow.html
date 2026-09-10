@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>助理工作流程 — 使用說明</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/modules/help/help.css">
+  <style>
+    .workflow-principle{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem;margin-top:.8rem}
+    .workflow-principle div{border:1px solid #ccfbf1;background:#f0fdfa;border-radius:.65rem;padding:.75rem}
+    .workflow-principle strong{display:block;color:#115e59;font-size:.88rem;margin-bottom:.15rem}
+    .workflow-principle span{display:block;color:#475569;font-size:.8rem;line-height:1.5}
+    .priority-grid{display:grid;gap:.65rem;margin-top:.8rem}
+    .priority-card{border:1px solid #e2e8f0;border-left:4px solid #94a3b8;border-radius:.65rem;padding:.8rem;background:#fff}
+    .priority-card.p0{border-left-color:#dc2626;background:#fff7f7}.priority-card.p1{border-left-color:#d97706;background:#fffbeb}.priority-card.p2{border-left-color:#0284c7;background:#f0f9ff}
+    .priority-card h3{margin:0 0 .2rem}.priority-card p{margin:.15rem 0}.priority-card small{display:block;color:#64748b;line-height:1.5;margin-top:.35rem}
+    .workflow-card{border-top:1px solid #e2e8f0;padding-top:1rem;margin-top:1rem}.workflow-card:first-of-type{border-top:0;padding-top:.25rem;margin-top:.25rem}
+    .workflow-card h3{display:flex;align-items:center;gap:.45rem;margin:.1rem 0 .35rem}.workflow-card h3 span{font-size:.68rem;padding:.12rem .4rem;border-radius:999px;background:#eff6ff;color:#1d4ed8}
+    .workflow-meta{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin:.55rem 0}
+    .workflow-meta div{background:#f8fafc;border-radius:.5rem;padding:.55rem .65rem;font-size:.8rem;color:#475569}.workflow-meta strong{display:block;color:#334155;margin-bottom:.12rem}
+    .done-rule{border-left:3px solid #10b981;background:#ecfdf5;padding:.55rem .7rem;border-radius:0 .45rem .45rem 0;color:#065f46;font-size:.84rem;margin-top:.65rem}
+    .risk-rule{border-left:3px solid #f59e0b;background:#fffbeb;padding:.55rem .7rem;border-radius:0 .45rem .45rem 0;color:#92400e;font-size:.84rem;margin-top:.45rem}
+    @media(max-width:640px){.workflow-principle,.workflow-meta{grid-template-columns:1fr}}
+  </style>
+</head>
+<body class="help-page">
+  <div class="help-wrap wide">
+    <p class="help-back"><a href="#/help" data-hub-route="#/help">← 使用說明目錄</a></p>
+    <header class="help-header">
+      <p style="font-size:.8rem;color:#0f766e;margin:0 0 .25rem;font-weight:700;">添心設計 · 助理作業標準</p>
+      <h1>助理工作流程說明</h1>
+      <p class="lead">先知道<strong>為什麼、問誰、依什麼順序、做到什麼程度</strong>，再執行。這是流程說明與訓練頁，不是正式任務派工或排程系統。</p>
+    </header>
+
+    <nav class="help-nav">
+      <p>跳到段落</p>
+      <div class="help-nav-links">
+        <a href="#rules">共同原則</a><a href="#priority">更新優先序</a><a href="#site">進場與安裝</a><a href="#delivery">家具配送</a><a href="#estimate">報價前置</a><a href="#exception">進度異常</a><a href="#backlog">其他事務</a>
+      </div>
+    </nav>
+
+    <section id="rules" class="help-section">
+      <h2>所有助理事務共用的六個確認點</h2>
+      <div class="help-flow help-flow-horizontal help-flow-wide" aria-label="助理工作共同流程">
+        <div class="help-flow-step is-start">收到交辦<small>確認案件與目標</small></div><div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step">向內確認<small>範圍、品項、責任人</small></div><div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step">向外確認<small>供貨、工期、可行時間</small></div><div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step">交叉核對<small>現場與人員不衝突</small></div><div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step">對客確認<small>提供已確認的選項</small></div><div class="help-flow-arrow">↓</div>
+        <div class="help-flow-step is-end">同步留痕<small>結果、證據、下一步</small></div>
+      </div>
+      <div class="workflow-principle">
+        <div><strong>不替別人先承諾</strong><span>廠商、司機或客戶尚未確認前，不把預估時間說成確定時間。</span></div>
+        <div><strong>聯絡過不等於完成</strong><span>必須取得明確答覆；未回覆要留下追問時間與下一次追蹤點。</span></div>
+        <div><strong>回報要能接著做</strong><span>不要只寫「已詢問」，要寫對方回覆、卡點、建議方案與待誰決定。</span></div>
+        <div><strong>案件一律可追溯</strong><span>使用正確 project_id，保存對話、照片、報價或文件位置與版本。</span></div>
+      </div>
+    </section>
+
+    <section id="priority" class="help-section">
+      <h2>目前更新優先序</h2>
+      <p>先把高頻、跨多人、容易漏接的流程寫完整；每次迭代只深化一種事務並加入完成條件與異常分支。</p>
+      <div class="priority-grid">
+        <div class="priority-card p0"><h3>P0｜優先建立完整流程</h3><p>進場／安裝協調、家具配送、報價前置資料、案場進度與異常追蹤。</p><small>先補齊：觸發條件、必要輸入、逐步作法、訊息範本、完成條件、逾時與取消處理。</small></div>
+        <div class="priority-card p1"><h3>P1｜第二階段</h3><p>選材送樣、圖面與文件版本、追加減／請款協助、施工照片與日誌歸檔。</p></div>
+        <div class="priority-card p2"><h3>P2｜後續擴充</h3><p>驗收結案、保固維修、會議／丈量準備、跨案共用行政事項。</p></div>
+      </div>
+    </section>
+
+    <section class="help-section">
+      <h2>P0 常用流程</h2>
+
+      <article id="site" class="workflow-card">
+        <h3>進場／安裝時間協調 <span>P0</span></h3>
+        <p>適用窗簾、家電、五金、設備安裝及需與客戶約時間的收尾工作。</p>
+        <div class="workflow-meta"><div><strong>開始前要有</strong>project_id、施工項目、內部承辦人、希望完成期限</div><div><strong>最後要產出</strong>各方確認的日期時段、現場配合事項、對客回報紀錄</div></div>
+        <ol class="help-steps">
+          <li>向設計師或內部承辦人確認本次施工範圍、現況及不可安排時段。</li>
+          <li>詢問執行廠商至少一個可進場日期、時間、預估工時與人數。</li>
+          <li>核對現場是否可施工：鑰匙、人員、其他工種、電梯或管委會限制。</li>
+          <li>把已確認的可行選項提供客戶，不先指定客戶必須接受某一時段。</li>
+          <li>客戶確認後，同步廠商、設計師與現場相關人員，並記錄最後版本。</li>
+        </ol>
+        <div class="done-rule"><strong>完成條件：</strong>客戶與執行者確認同一日期時段，現場限制已排除，相關人員都收到一致資訊。</div>
+        <div class="risk-rule"><strong>不可直接完成：</strong>只有詢問、只有單方答應，或仍寫「時間再確認」。</div>
+      </article>
+
+      <article id="delivery" class="workflow-card">
+        <h3>家具／材料／設備配送 <span>P0</span></h3>
+        <p>適用成品家具、訂製品、材料與設備送到案場，包含外車與搬運協調。</p>
+        <div class="workflow-meta"><div><strong>開始前要有</strong>品項、數量、規格、收貨地點、內部確認人</div><div><strong>最後要產出</strong>到貨日、車趟、人力、客戶時段、簽收與異常紀錄</div></div>
+        <ol class="help-steps">
+          <li>先向內部確認正確品項、數量、尺寸、組裝需求及是否可拆件搬運。</li>
+          <li>向供應商確認實際完成／到貨時間；未完成前不可先約外車。</li>
+          <li>確認案場收貨條件：地址、樓層、電梯、停車、保護、進場限制與聯絡人。</li>
+          <li>依貨量與限制向外車司機確認車型、人力、日期、時段與費用。</li>
+          <li>整合供應商、司機及現場可行時間後，再向客戶確認。</li>
+          <li>配送完成後取得照片或簽收結果；缺件、破損或無法入場要立刻回報。</li>
+        </ol>
+        <div class="done-rule"><strong>完成條件：</strong>品項正確送達指定位置並完成簽收，異常已記錄且有明確處理責任人。</div>
+        <div class="risk-rule"><strong>不可跳步：</strong>品項尚未確認或供應商未確認到貨，就先向客戶承諾配送時間。</div>
+      </article>
+
+      <article id="estimate" class="workflow-card">
+        <h3>報價／估價前置資料整理 <span>P0</span></h3>
+        <p>協助設計師把零散資料整理成可估價、可追問、可核對的完整輸入。</p>
+        <div class="workflow-meta"><div><strong>開始前要有</strong>project_id、最新圖面／丈量、客戶需求與預算資訊</div><div><strong>最後要產出</strong>缺項清單、詢價狀態、版本日期、待設計師決定項目</div></div>
+        <ol class="help-steps">
+          <li>確認使用的是最新版本圖面、丈量資料與需求紀錄，舊版不可混用。</li>
+          <li>依空間或工種拆出項目、尺寸、數量、材質與施工條件。</li>
+          <li>把缺尺寸、未選材、範圍不明或責任歸屬不清的項目列成缺項。</li>
+          <li>依設計師指示詢價，保留廠商、日期、有效期限與報價附件。</li>
+          <li>彙整價差、未回覆與可能追加項目，交設計師判斷，不自行決定規格。</li>
+        </ol>
+        <div class="done-rule"><strong>完成條件：</strong>設計師能直接看出已齊資料、尚缺資料、誰未回覆及下一個決策。</div>
+      </article>
+
+      <article id="exception" class="workflow-card">
+        <h3>案場進度與異常追蹤 <span>P0</span></h3>
+        <p>將施工回報、照片與訊息中的異常，轉成有人負責、有期限、有後續的追蹤項目。</p>
+        <div class="workflow-meta"><div><strong>開始前要有</strong>project_id、異常內容、發現時間、照片或對話證據</div><div><strong>最後要產出</strong>影響、責任人、處理期限、對客說法、複查結果</div></div>
+        <ol class="help-steps">
+          <li>確認異常事實與位置，不把推測當成原因；保留原始照片與回報。</li>
+          <li>整理影響範圍：是否擋後續工種、影響交期、費用或客戶使用。</li>
+          <li>回報設計師／工務，由負責人決定處理方案及是否需要對客說明。</li>
+          <li>向相關廠商確認可處理時間，記錄承諾與下一次追蹤點。</li>
+          <li>處理後取得完成證據並複查；未解決就續列追蹤，不可先結案。</li>
+        </ol>
+        <div class="done-rule"><strong>完成條件：</strong>異常已排除並複查，或主管明確決定接受現況；過程與決策都有留痕。</div>
+      </article>
+    </section>
+
+    <section id="backlog" class="help-section">
+      <h2>待逐項建立的助理事務</h2>
+      <table class="help-table">
+        <thead><tr><th>事務</th><th>流程重點</th><th>優先序</th></tr></thead>
+        <tbody>
+          <tr><td>選材／送樣</td><td>確認需求 → 借樣 → 標示案件 → 送達 → 客戶決定 → 歸還／留樣</td><td>P1</td></tr>
+          <tr><td>圖面與文件版本</td><td>收件 → 核對版本 → 命名歸檔 → 通知相關人 → 作廢舊版</td><td>P1</td></tr>
+          <tr><td>追加減／請款協助</td><td>確認事實 → 收集依據 → 交設計師核價 → 對客確認 → 送會計</td><td>P1</td></tr>
+          <tr><td>施工照片與日誌</td><td>收集 → 案件／日期分類 → 缺漏追問 → 異常標記 → 歸檔</td><td>P1</td></tr>
+          <tr><td>丈量／會議準備</td><td>確認對象 → 整理資料 → 行前檢查 → 會後待辦與期限</td><td>P2</td></tr>
+          <tr><td>驗收與結案</td><td>缺失彙整 → 責任分派 → 改善追蹤 → 複驗 → 文件交接</td><td>P2</td></tr>
+          <tr><td>保固與維修</td><td>確認保固 → 蒐集狀況 → 判斷責任 → 約修 → 完成回報</td><td>P2</td></tr>
+          <tr><td>一般行政協助</td><td>交辦確認 → 資料蒐集 → 執行 → 核對 → 回報與歸檔</td><td>P2</td></tr>
+        </tbody>
+      </table>
+      <div class="help-callout"><strong>更新原則：</strong>先新增真正反覆發生的工作，不追求一次列完。每個流程至少要回答：何時開始、先問誰、哪些資料必填、何時算完成、卡住時回報誰。</div>
+    </section>
+
+    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.0</footer>
+  </div>
+  <script src="/modules/help/help.js"></script>
+</body>
+</html>
