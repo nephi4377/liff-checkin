@@ -431,6 +431,19 @@ B. {日期／時段}
             </section>
           </div>
         </div>
+        <div class="example-guide" aria-labelledby="estimate-example-title">
+          <h4 id="estimate-example-title">去識別化實例｜圖面版本衝突後重新詢價</h4>
+          <p>以下為虛構教學資料，不對應真實案件、人員、金額或附件。canonical <code>project_id</code>：<code>DEMO-ESTIMATE-01</code>。</p>
+          <ol class="example-timeline">
+            <li class="example-step"><strong>1．指派｜2026/09/12 8:50</strong><span>操作者 <code>EMP-D05</code> 指派 <code>EMP-A06</code> 整理系統櫃估價前置資料，期限 2026/09/16 17:00；狀態 <code>assigned</code>。證據：<code>demo_estimate_assignment.pdf</code>。</span></li>
+            <li class="example-step"><strong>2．開始執行與發現衝突｜2026/09/12 9:15</strong><span><code>EMP-A06</code> 發現廠商舊報價依圖面 V2，但共用資料夾另有 V3；立即停止受影響櫃體項目，不沿用舊尺寸或價格，狀態改為 <code>in_progress</code>。證據：<code>demo_version_diff.pdf</code>。</span></li>
+            <li class="example-step"><strong>3．確認唯一有效版本｜2026/09/12 11:30</strong><span>設計師 <code>EMP-D05</code> 書面指定 V3 為唯一有效版本，註記 V2 失效及差異項目；助理依 V3 重整尺寸、數量、材質與施工條件後重新詢價。證據：<code>demo_drawing_v3.pdf</code>、<code>demo_version_decision.png</code>。</span></li>
+            <li class="example-step"><strong>4．首次回報｜2026/09/13 15:10</strong><span>廠商依 V3 回覆分項價格，助理附上版本、缺項清單及詢價對話送審，狀態改為 <code>reported</code>。證據：<code>demo_quote_v3_draft.pdf</code>。</span></li>
+            <li class="example-step"><strong>5．審核退回｜2026/09/13 15:45</strong><span>審核者 <code>EMP-R04</code> 發現報價未註明有效期限，狀態改為 <code>rework</code>，退回原因為「取得書面有效期限，不可自行推定」。</span></li>
+            <li class="example-step"><strong>6．補正、重新回報與通過｜2026/09/14 9:20～10:05</strong><span><code>EMP-A06</code> 回到 <code>in_progress</code>，取得廠商書面確認有效至 2026/09/30，更新附件後再改為 <code>reported</code>；<code>EMP-R04</code> 核對 V3、分項內容、有效期限與證據一致後改為 <code>approved</code>。證據：<code>demo_quote_v3_final.pdf</code>。</span></li>
+          </ol>
+          <div class="example-result"><strong>完成判斷：</strong>不是取得一份價格就完成，而是唯一有效圖面已確認、廠商依同一版本分項報價、缺項及有效期限清楚，且指定審核者已通過。</div>
+        </div>
       </article>
 
       <article id="exception" class="workflow-card">
