@@ -65,7 +65,7 @@
     <nav class="help-nav">
       <p>跳到段落</p>
       <div class="help-nav-links">
-        <a href="#rules">共同原則</a><a href="#priority">更新優先序</a><a href="#site">進場與安裝</a><a href="#delivery">家具配送</a><a href="#estimate">報價前置</a><a href="#exception">進度異常</a><a href="#backlog">其他事務</a>
+        <a href="#rules">共同原則</a><a href="#priority">更新優先序</a><a href="#material-sample">選材與樣品</a><a href="#site">進場與安裝</a><a href="#delivery">家具配送</a><a href="#estimate">報價前置</a><a href="#exception">進度異常</a><a href="#backlog">其他事務</a>
       </div>
     </nav>
 
@@ -561,12 +561,32 @@ B. {選項、影響與條件}
       </article>
     </section>
 
+    <section id="material-sample" class="help-section">
+      <h2>P1｜選材／借樣／送樣／歸還</h2>
+      <p>適用磁磚、木皮、布料、色板、五金及設備樣品。助理負責建立可追溯的交接紀錄，不替設計師選定材料，也不把客戶口頭偏好直接當成定案。</p>
+      <article class="workflow-card">
+        <h3>樣品交接與追蹤 <span>P1</span></h3>
+        <div class="workflow-meta"><div><strong>開始前要有</strong>project_id、需求項目、設計師 employee_id、樣品來源、需要日期</div><div><strong>最後要產出</strong>樣品清單、每次交接證據、客戶決定紀錄、歸還或留樣結果</div></div>
+        <ol class="help-steps">
+          <li><strong>確認需求：</strong>由設計師書面確認品類、用途、數量、預算或規格範圍、需要日期及是否可提供替代品。</li>
+          <li><strong>借樣登記：</strong>取得供應商樣品編號、名稱、數量、借出時間、歸還期限、押金或損壞責任；拍攝借出時外觀。</li>
+          <li><strong>案件標示：</strong>每件樣品標示 canonical <code>project_id</code>，另記操作者 <code>employee_id</code> 與保管位置，不以客戶姓名作為唯一識別。</li>
+          <li><strong>送達交接：</strong>送至設計師、案場或客戶前逐件點交；記錄接收人、時間、地點、數量與照片。無人簽收時不得自行放置後標成已送達。</li>
+          <li><strong>決定回收：</strong>只記錄客戶明確選擇、保留比較或未決定；涉及價格、規格與可供貨性仍交由設計師確認。</li>
+          <li><strong>歸還結案：</strong>依清單點收數量與外觀，取得供應商收回證明；若核准留樣，記錄核准人、保管人、位置與下次檢查日。</li>
+        </ol>
+        <div class="done-rule"><strong>完成條件：</strong>每件樣品都有來源與樣品編號、借出與歸還／留樣狀態、交接對象、時間、保管位置及證據；客戶決定已由設計師確認，並由指定審核者完成審核。</div>
+        <div class="risk-rule"><strong>不可直接完成：</strong>只有「已送樣」、樣品仍在客戶或車上但沒有保管人、供應商未確認收回，或僅有客戶口頭偏好而未完成內部確認。</div>
+        <div class="trace-rule"><strong>全程留痕：</strong>依「指派 <code>assigned</code> → 執行 <code>in_progress</code> → 回報 <code>reported</code> → 審核通過 <code>approved</code>／退回 <code>rework</code>」保存 canonical <code>project_id</code>、指派／執行／審核者 <code>employee_id</code>、每次交接時間、狀態、樣品清單、照片或簽收證據及退回原因。</div>
+      </article>
+    </section>
+
     <section id="backlog" class="help-section">
       <h2>待逐項建立的助理事務</h2>
       <table class="help-table">
         <thead><tr><th>事務</th><th>流程重點</th><th>優先序</th></tr></thead>
         <tbody>
-          <tr><td>選材／送樣</td><td>確認需求 → 借樣 → 標示案件 → 送達 → 客戶決定 → 歸還／留樣</td><td>P1</td></tr>
+          <tr><td>選材／借樣／送樣／歸還</td><td>基本流程已建立；下一輪補等待、遺失、損壞、逾期與更換樣品分支</td><td>P1｜進行中</td></tr>
           <tr><td>圖面與文件版本</td><td>收件 → 核對版本 → 命名歸檔 → 通知相關人 → 作廢舊版</td><td>P1</td></tr>
           <tr><td>追加減／請款協助</td><td>確認事實 → 收集依據 → 交設計師核價 → 對客確認 → 送會計</td><td>P1</td></tr>
           <tr><td>施工照片與日誌</td><td>收集 → 案件／日期分類 → 缺漏追問 → 異常標記 → 歸檔</td><td>P1</td></tr>
@@ -579,7 +599,7 @@ B. {選項、影響與條件}
       <div class="help-callout"><strong>更新原則：</strong>先新增真正反覆發生的工作，不追求一次列完。每個流程至少要回答：何時開始、先問誰、哪些資料必填、何時算完成、卡住時回報誰。</div>
     </section>
 
-    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.4</footer>
+    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.13</footer>
   </div>
   <script src="/modules/help/help.js"></script>
 </body>
