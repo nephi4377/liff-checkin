@@ -290,6 +290,50 @@
           <li>處理後取得完成證據並複查；未解決就續列追蹤，不可先結案。</li>
         </ol>
         <div class="done-rule"><strong>完成條件：</strong>異常已排除並複查，或主管明確決定接受現況；過程與決策都有留痕。</div>
+        <div class="risk-rule"><strong>不可直接完成：</strong>只有轉傳廠商說法、尚未確認影響、責任仍在釐清，或客戶尚未做成必要決定。</div>
+        <div class="exception-guide" aria-labelledby="progress-exception-title">
+          <h4 id="progress-exception-title">進度卡住或原因未明時怎麼回報</h4>
+          <p>助理先確認事實、影響與下一個決策點，不自行認定責任或承諾完工日。未排除的異常持續列為追蹤中，不能因已轉達就結案。</p>
+          <div class="exception-grid">
+            <section class="exception-card">
+              <h5>擋工，後續工種無法進行</h5>
+              <ol>
+                <li>記錄被擋工項、位置、發現時間及目前停在哪一步，保存全景與細部照片。</li>
+                <li>向現場相關人員確認「要先完成什麼」及最晚決策時間，不先推定是哪一方責任。</li>
+                <li>立即回報設計師／工務受影響工種、可能停工天數與可選方案，由負責人排定處理順序。</li>
+              </ol>
+              <span class="status"><strong>狀態：</strong>擋工待排除；前置條件完成且後續工種確認可復工後，才可解除。</span>
+            </section>
+            <section class="exception-card">
+              <h5>進度延誤或承諾日失效</h5>
+              <ol>
+                <li>比對原承諾日、目前完成量與未完成項目，取得廠商可留存的延誤原因及新預估。</li>
+                <li>整理對總工期、其他工種、交屋或客戶使用的影響，不把廠商預估直接當公司承諾。</li>
+                <li>由設計師／工務確認調整方案與可對外日期後，再同步相關人員並設定追蹤點。</li>
+              </ol>
+              <span class="status"><strong>狀態：</strong>已延誤／待調整；新日期完成內部核准與受影響對象確認前，不標示已改期完成。</span>
+            </section>
+            <section class="exception-card">
+              <h5>原因或責任歸屬未明</h5>
+              <ol>
+                <li>分開記錄已確認事實、各方說法與尚待查證事項，保留原始照片、圖面版本及對話。</li>
+                <li>請設計師／工務指定需要會勘、量測或提供文件的人員與期限；助理只追蹤資料到齊。</li>
+                <li>責任確認前，對內外都使用「待釐清」，不得在群組或對客訊息中指責任一方。</li>
+              </ol>
+              <span class="status"><strong>狀態：</strong>待釐清；責任、處理方案與核定者都有書面紀錄後，才能轉入改善。</span>
+            </section>
+            <section class="exception-card">
+              <h5>需要客戶決定才能續辦</h5>
+              <ol>
+                <li>先由設計師確認可提供的選項，各列影響、費用、工期與最晚回覆時間，不由助理自行取捨。</li>
+                <li>對客說明目前事實、可選方案及不決定的影響，避免使用責任未明的歸咎說法。</li>
+                <li>保存客戶明確選擇；未回覆時依約定追蹤並回報內部，不把沉默視為同意。</li>
+              </ol>
+              <span class="status"><strong>狀態：</strong>待客戶決定；收到明確選擇並由內部承辦人確認執行內容後，才可續辦。</span>
+            </section>
+          </div>
+          <div class="trace-rule"><strong>每次異常留痕：</strong>保存 canonical <code>project_id</code>、承辦／操作者 <code>employee_id</code>、發現與回報時間、事實與各方說法、受影響工項／期限、目前狀態、照片／圖面／對話證據、決策者及下一次追蹤時間。流程仍依「指派 → 執行 → 回報 → 審核／退回」交接；改善完成後須由指定審核者複查，不以已通知或廠商口頭承諾視為完成。</div>
+        </div>
       </article>
     </section>
 
@@ -311,7 +355,7 @@
       <div class="help-callout"><strong>更新原則：</strong>先新增真正反覆發生的工作，不追求一次列完。每個流程至少要回答：何時開始、先問誰、哪些資料必填、何時算完成、卡住時回報誰。</div>
     </section>
 
-    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.3</footer>
+    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.4</footer>
   </div>
   <script src="/modules/help/help.js"></script>
 </body>
