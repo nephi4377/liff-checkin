@@ -65,7 +65,7 @@
     <nav class="help-nav">
       <p>跳到段落</p>
       <div class="help-nav-links">
-        <a href="#rules">共同原則</a><a href="#priority">更新優先序</a><a href="#material-sample">選材與樣品</a><a href="#document-version">文件版本</a><a href="#site">進場與安裝</a><a href="#delivery">家具配送</a><a href="#estimate">報價前置</a><a href="#exception">進度異常</a><a href="#backlog">其他事務</a>
+        <a href="#rules">共同原則</a><a href="#priority">更新優先序</a><a href="#material-sample">選材與樣品</a><a href="#document-version">文件版本</a><a href="#change-payment">追加減與款項</a><a href="#site">進場與安裝</a><a href="#delivery">家具配送</a><a href="#estimate">報價前置</a><a href="#exception">進度異常</a><a href="#backlog">其他事務</a>
       </div>
     </nav>
 
@@ -601,6 +601,27 @@ B. {選項、影響與條件}
       </article>
     </section>
 
+    <section id="change-payment" class="help-section">
+      <h2>P1｜追加減、請款與收款前置協助</h2>
+      <p>適用施工中新增、取消、數量增減、規格更換及階段請款。助理負責整理事實、依據與確認紀錄，不自行決定單價、折扣、付款條件，也不代替會計認定款項已入帳。</p>
+      <article class="workflow-card">
+        <h3>變更確認與款項交接 <span>P1</span></h3>
+        <div class="workflow-meta"><div><strong>開始前要有</strong>project_id、變更提出人與時間、原合約／報價版本、受影響工項、設計師 employee_id</div><div><strong>最後要產出</strong>核准追加減版本、客戶書面確認、施工依據、請款明細與會計交接紀錄</div></div>
+        <ol class="help-steps">
+          <li><strong>記錄變更事實：</strong>以 canonical <code>project_id</code> 建立項次，記錄誰在何時提出、原內容、變更內容、數量、位置、原因及希望完成時間；口頭交辦須補成可保存的文字紀錄。</li>
+          <li><strong>蒐集依據：</strong>附上原合約／報價版次、圖面、現場照片、丈量、廠商書面資料或取消證明，並將項目標示為「新增／減項／不計價／待確認」，不得用空白或零元代替未知資料。</li>
+          <li><strong>交設計師核價：</strong>由指定設計師確認範圍、成本、售價、稅額、折扣、工期與是否可先施工；助理只彙整，不自行推估價格或承諾免費。</li>
+          <li><strong>內審與編版：</strong>產出唯一有效的追加減版本，列出原金額、各項增減、調整後總額、付款節點及有效期限；核准前維持「待內審」，舊版標示已取代但保留。</li>
+          <li><strong>取得客戶確認：</strong>將核准版本提供客戶書面確認，清楚標示金額、範圍、工期影響與付款條件；未確認項目維持「待客戶確認」，若現場急迫則回報設計師決定，不自行視為同意。</li>
+          <li><strong>施工與請款核對：</strong>施工或交付後，逐項核對已核准、實際完成與可請款範圍；將簽認版本、完工證據、請款期別、應收金額、期限及發票資料交給會計。</li>
+          <li><strong>收款結果交接：</strong>收到客戶付款訊息或截圖時，只記錄來源與時間並轉交會計；以會計確認的入帳金額、日期及差額處理結果作為收款狀態，不由助理自行銷帳。</li>
+        </ol>
+        <div class="done-rule"><strong>完成條件：</strong>每個追加減項目均有原始依據、核價者、唯一有效版本、客戶確認與完成證據；請款資料已交會計，收款狀態與差額由會計確認，最後由指定審核者通過。</div>
+        <div class="risk-rule"><strong>不可直接完成：</strong>只有 LINE 口頭同意、價格仍空白、追加減與原合約重複計價、尚未完成卻列入請款，或僅憑匯款截圖標示「已收款」。</div>
+        <div class="trace-rule"><strong>全程留痕：</strong>依「指派 <code>assigned</code> → 執行 <code>in_progress</code> → 回報 <code>reported</code> → 審核通過 <code>approved</code>／退回 <code>rework</code>」保存 canonical <code>project_id</code>、指派／執行／核價／審核者 <code>employee_id</code>、提出／確認／交接時間、變更與款項狀態、版本、客戶簽認、完工與入帳證據及退回原因。</div>
+      </article>
+    </section>
+
     <section id="backlog" class="help-section">
       <h2>待逐項建立的助理事務</h2>
       <table class="help-table">
@@ -608,7 +629,7 @@ B. {選項、影響與條件}
         <tbody>
           <tr><td>選材／借樣／送樣／歸還</td><td>基本流程已建立；下一輪補等待、遺失、損壞、逾期與更換樣品分支</td><td>P1｜進行中</td></tr>
           <tr><td>圖面、報價與文件版本</td><td>基本流程已建立；下一輪補版本衝突、錯版發出、撤回與補發分支</td><td>P1｜進行中</td></tr>
-          <tr><td>追加減／請款協助</td><td>確認事實 → 收集依據 → 交設計師核價 → 對客確認 → 送會計</td><td>P1</td></tr>
+          <tr><td>追加減、請款與收款前置</td><td>基本流程已建立；下一輪補未簽認施工、金額爭議、短付與重複請款分支</td><td>P1｜進行中</td></tr>
           <tr><td>施工照片與日誌</td><td>收集 → 案件／日期分類 → 缺漏追問 → 異常標記 → 歸檔</td><td>P1</td></tr>
           <tr><td>丈量／會議準備</td><td>確認對象 → 整理資料 → 行前檢查 → 會後待辦與期限</td><td>P2</td></tr>
           <tr><td>驗收與結案</td><td>缺失彙整 → 責任分派 → 改善追蹤 → 複驗 → 文件交接</td><td>P2</td></tr>
@@ -619,7 +640,7 @@ B. {選項、影響與條件}
       <div class="help-callout"><strong>更新原則：</strong>先新增真正反覆發生的工作，不追求一次列完。每個流程至少要回答：何時開始、先問誰、哪些資料必填、何時算完成、卡住時回報誰。</div>
     </section>
 
-    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.14</footer>
+    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.15</footer>
   </div>
   <script src="/modules/help/help.js"></script>
 </body>
