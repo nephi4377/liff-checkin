@@ -232,6 +232,50 @@
           <li>彙整價差、未回覆與可能追加項目，交設計師判斷，不自行決定規格。</li>
         </ol>
         <div class="done-rule"><strong>完成條件：</strong>設計師能直接看出已齊資料、尚缺資料、誰未回覆及下一個決策。</div>
+        <div class="risk-rule"><strong>不可直接完成：</strong>尺寸仍以猜測值代替、圖面版本未統一、廠商尚未回覆，或報價已超過有效期限。</div>
+        <div class="exception-guide" aria-labelledby="estimate-exception-title">
+          <h4 id="estimate-exception-title">報價資料不完整或失效時怎麼處理</h4>
+          <p>先停止受影響項目的估價或送出，不用推測值補空白，也不把舊報價當成現行價格。未受影響且資料完整的項目可繼續整理，但必須清楚區隔。</p>
+          <div class="exception-grid">
+            <section class="exception-card">
+              <h5>缺尺寸或尺寸來源不明</h5>
+              <ol>
+                <li>標出缺少的寬、深、高、數量或施工面尺寸，以及受影響的報價項目。</li>
+                <li>回查最新丈量、圖面與現場照片；仍無法確認時，列出需要由誰補量或覆核。</li>
+                <li>將缺項與期限回報設計師，取得正式尺寸後再送詢價，不自行估算填入。</li>
+              </ol>
+              <span class="status"><strong>狀態：</strong>待補尺寸；正式來源與覆核人確認前，該項不得標示可報價。</span>
+            </section>
+            <section class="exception-card">
+              <h5>圖面版本不一致</h5>
+              <ol>
+                <li>暫停使用衝突圖面，列出檔名、版次、日期、來源及差異位置。</li>
+                <li>交由設計師指定唯一有效版本；助理不得依檔案日期自行判定哪份正確。</li>
+                <li>通知已收過舊版的廠商與內部人員作廢舊版，重新確認新版本的收件結果。</li>
+              </ol>
+              <span class="status"><strong>狀態：</strong>待版本確認；有效版指定且受影響對象完成換版後，才可續辦。</span>
+            </section>
+            <section class="exception-card">
+              <h5>廠商未報價</h5>
+              <ol>
+                <li>保存詢價時間、完整範圍、附件版本、指定回覆期限及廠商收件證據。</li>
+                <li>到追蹤點仍未回覆時再次確認，記錄對方原因與承諾回覆時間。</li>
+                <li>若影響對客期限，立即回報設計師；是否改詢其他廠商由設計師決定。</li>
+              </ol>
+              <span class="status"><strong>狀態：</strong>待廠商報價／已逾回覆期限；不可將未回覆項目填為零元或視為不施作。</span>
+            </section>
+            <section class="exception-card">
+              <h5>報價已逾有效期限</h5>
+              <ol>
+                <li>標示原報價日期、有效期限、廠商及受影響項目，不直接複製舊金額。</li>
+                <li>請廠商重新確認價格、稅額、運費、工期與適用條件，取得新版報價或可留存的書面確認。</li>
+                <li>比較新舊差異並交設計師判斷；未確認前不得用舊價格向客戶承諾。</li>
+              </ol>
+              <span class="status"><strong>狀態：</strong>待更新報價；新版或書面展延確認完成後，才能改為有效。</span>
+            </section>
+          </div>
+          <div class="trace-rule"><strong>每次異常留痕：</strong>保存 canonical <code>project_id</code>、承辦／操作者 <code>employee_id</code>、交辦與處理時間、目前狀態、缺項或差異、圖面／報價版本、詢價與回覆證據、待誰決定及下一次追蹤時間。流程仍依「指派 → 執行 → 回報 → 審核／退回」交接；補齊或更新後須由指定審核者確認，不以助理自行補值視為完成。</div>
+        </div>
       </article>
 
       <article id="exception" class="workflow-card">
@@ -267,7 +311,7 @@
       <div class="help-callout"><strong>更新原則：</strong>先新增真正反覆發生的工作，不追求一次列完。每個流程至少要回答：何時開始、先問誰、哪些資料必填、何時算完成、卡住時回報誰。</div>
     </section>
 
-    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.2</footer>
+    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.3</footer>
   </div>
   <script src="/modules/help/help.js"></script>
 </body>
