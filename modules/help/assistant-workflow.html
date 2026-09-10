@@ -320,6 +320,19 @@ B. {日期／時段}
             </section>
           </div>
         </div>
+        <div class="example-guide" aria-labelledby="delivery-example-title">
+          <h4 id="delivery-example-title">去識別化實例｜缺件後完成二次配送</h4>
+          <p>以下為虛構教學資料，不對應真實案件、人員、地址或附件。canonical <code>project_id</code>：<code>DEMO-DELIVERY-01</code>。</p>
+          <ol class="example-timeline">
+            <li class="example-step"><strong>1．指派｜2026/09/11 8:40</strong><span>操作者 <code>EMP-D02</code> 指派 <code>EMP-A04</code> 協調 3 件成品家具配送，期限 2026/09/15 17:00；狀態 <code>assigned</code>。證據：<code>demo_delivery_assignment.pdf</code>。</span></li>
+            <li class="example-step"><strong>2．開始執行｜2026/09/11 9:10</strong><span><code>EMP-A04</code> 核對品項、數量、尺寸、樓層、電梯與收貨窗口，並確認供應商及車趟；狀態改為 <code>in_progress</code>。證據：<code>demo_delivery_checklist.pdf</code>。</span></li>
+            <li class="example-step"><strong>3．缺件回報｜2026/09/12 14:25</strong><span>現場僅收到 2 件，助理依送貨單清點、拍攝包裝標示，記錄已到品項存放於指定保護區；狀態改為 <code>reported</code>。證據：<code>demo_delivery_receipt_01.pdf</code>、<code>demo_missing_item_photos.zip</code>。</span></li>
+            <li class="example-step"><strong>4．審核退回｜2026/09/12 15:05</strong><span>審核者 <code>EMP-R02</code> 發現尚缺供應商責任窗口、補件日期及保管確認，狀態改為 <code>rework</code>，退回原因逐項列明；不得把「已簽收 2 件」當成整批完成。</span></li>
+            <li class="example-step"><strong>5．補正與二次配送｜2026/09/12 16:20～2026/09/15 11:30</strong><span><code>EMP-A04</code> 回到 <code>in_progress</code>，取得供應商書面補件安排，重新確認司機、現場與客戶時段；第 3 件到場後再次清點並更新貨物位置。證據：<code>demo_redelivery_confirmation.pdf</code>、<code>demo_delivery_receipt_02.pdf</code>。</span></li>
+            <li class="example-step"><strong>6．重新回報與通過｜2026/09/15 13:00～14:10</strong><span>助理提交應到／實到 3 件、兩次送貨單、完整照片及異常處理摘要，狀態改為 <code>reported</code>；<code>EMP-R02</code> 複查品項與證據後改為 <code>approved</code>。</span></li>
+          </ol>
+          <div class="example-result"><strong>完成判斷：</strong>不是部分簽收或司機離場，而是缺件已補送、3 件全數核對、貨物位置明確、證據完整，且指定審核者已通過。</div>
+        </div>
       </article>
 
       <article id="estimate" class="workflow-card">
