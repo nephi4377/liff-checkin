@@ -65,7 +65,7 @@
     <nav class="help-nav">
       <p>跳到段落</p>
       <div class="help-nav-links">
-        <a href="#rules">共同原則</a><a href="#priority">更新優先序</a><a href="#material-sample">選材與樣品</a><a href="#document-version">文件版本</a><a href="#change-payment">追加減與款項</a><a href="#site-log">照片與日誌</a><a href="#survey-meeting">丈量與會議</a><a href="#site">進場與安裝</a><a href="#delivery">家具配送</a><a href="#estimate">報價前置</a><a href="#exception">進度異常</a><a href="#backlog">其他事務</a>
+        <a href="#rules">共同原則</a><a href="#priority">更新優先序</a><a href="#material-sample">選材與樣品</a><a href="#document-version">文件版本</a><a href="#change-payment">追加減與款項</a><a href="#site-log">照片與日誌</a><a href="#survey-meeting">丈量與會議</a><a href="#inspection-closeout">驗收與結案</a><a href="#site">進場與安裝</a><a href="#delivery">家具配送</a><a href="#estimate">報價前置</a><a href="#exception">進度異常</a><a href="#backlog">其他事務</a>
       </div>
     </nav>
 
@@ -666,6 +666,28 @@ B. {選項、影響與條件}
       </article>
     </section>
 
+    <section id="inspection-closeout" class="help-section">
+      <h2>P2｜驗收、缺失改善與結案交接</h2>
+      <p>適用階段驗收、完工驗收、缺失改善追蹤及結案文件交接。助理負責整理標準、編號蒐證、追蹤與交接；是否符合設計、責任歸屬及例外結案，仍由指定設計師或主管審核。</p>
+      <article class="workflow-card">
+        <h3>驗收至結案交接 <span>P2</span></h3>
+        <div class="workflow-meta"><div><strong>開始前要有</strong>project_id、驗收範圍與依據、有效圖面／合約版次、驗收人與審核者 employee_id、預定日期</div><div><strong>最後要產出</strong>驗收紀錄、缺失清單與改善證據、複驗結果、例外核准、結案文件清單與簽收紀錄</div></div>
+        <ol class="help-steps">
+          <li><strong>確認驗收範圍與標準：</strong>依 <code>project_id</code> 列出本次空間、工項、設備與不在範圍內的項目，綁定核准圖面、合約、追加減及樣品版次；版本或標準有疑義時，先由指定設計師確認。</li>
+          <li><strong>檢查驗收就緒：</strong>向案件負責人確認工項已可檢查，整理必要測試、操作條件、清潔與保護狀況；尚未完工、被遮蔽或無法測試的項目標記「未驗」，不得當成通過。</li>
+          <li><strong>安排參與與現場條件：</strong>確認日期、地點、必要參與人、現場窗口、進入方式、工具與文件；只有相關人員明確回覆後才標示已確認，異動須保留通知與新時段證據。</li>
+          <li><strong>逐項驗收與缺失建檔：</strong>依清單記錄通過、缺失、未驗或待確認；每筆缺失建立唯一 <code>defect_id</code>，保存位置、工項、事實描述、發現時間、記錄者 <code>employee_id</code>、照片／影片及對應標準，不以助理推測寫責任。</li>
+          <li><strong>確認改善交接：</strong>由指定設計師或主管判定處理方式與責任界面，再為缺失指定內部追蹤者 <code>employee_id</code>、外部聯絡節點、期限、狀態與所需回報證據；無人負責或無期限不得進入改善完成。</li>
+          <li><strong>追蹤改善回報：</strong>依 <code>defect_id</code> 保存開始處理、卡點、改期、完成回報與前後照片；廠商口頭表示完成只可標「待複驗」，助理不得據此直接關閉缺失。</li>
+          <li><strong>依原標準複驗：</strong>由指定驗收者核對原缺失、改善範圍與測試結果，記錄複驗時間、操作者 <code>employee_id</code> 及前後證據；未通過則退回原缺失繼續補正，不另建一筆掩蓋歷史。</li>
+          <li><strong>結案交接與送審：</strong>彙整已通過、核准保留及未結事項，交接有效圖面、設備清單、操作文件、保固資料、鑰匙／物品及歸檔連結；取得接收人簽認後送審，退回則補齊再回報。</li>
+        </ol>
+        <div class="done-rule"><strong>完成條件：</strong>驗收範圍均有結果；缺失已依原標準複驗通過，或有指定主管核准的保留原因、責任人與期限；有效文件及物品完成交接並有接收證據，最後由指定審核者通過。</div>
+        <div class="risk-rule"><strong>不可直接完成：</strong>未完工或不可見項目當作通過、缺失只有照片沒有位置／標準、助理自行判責、只憑口頭回報關閉、複驗另建新項目掩蓋原紀錄、仍有未核准缺失，或結案文件與物品未簽收。</div>
+        <div class="trace-rule"><strong>全程留痕：</strong>依「指派 <code>assigned</code> → 執行 <code>in_progress</code> → 回報 <code>reported</code> → 審核通過 <code>approved</code>／退回 <code>rework</code>」保存 canonical <code>project_id</code>、各缺失 <code>defect_id</code>、交辦／記錄／追蹤／複驗／審核者 <code>employee_id</code>、驗收／改善／複驗／交接時間、狀態、依據版次、前後證據、例外核准、簽收及退回原因。</div>
+      </article>
+    </section>
+
     <section id="backlog" class="help-section">
       <h2>待逐項建立的助理事務</h2>
       <table class="help-table">
@@ -676,7 +698,7 @@ B. {選項、影響與條件}
           <tr><td>追加減、請款與收款前置</td><td>基本流程已建立；下一輪補未簽認施工、金額爭議、短付與重複請款分支</td><td>P1｜進行中</td></tr>
           <tr><td>施工照片與日誌</td><td>基本流程已建立；下一輪補逾時未回、無法補拍、錯案與原檔遺失分支</td><td>P1｜進行中</td></tr>
           <tr><td>丈量／會議準備</td><td>基本流程已建立；下一輪補改期、無法進場、資料缺漏、需複丈與決議爭議分支</td><td>P2｜進行中</td></tr>
-          <tr><td>驗收與結案</td><td>缺失彙整 → 責任分派 → 改善追蹤 → 複驗 → 文件交接</td><td>P2</td></tr>
+          <tr><td>驗收與結案</td><td>基本流程已建立；下一輪補無法驗收、改善逾期、複驗未過、爭議與保留結案分支</td><td>P2｜進行中</td></tr>
           <tr><td>保固與維修</td><td>確認保固 → 蒐集狀況 → 判斷責任 → 約修 → 完成回報</td><td>P2</td></tr>
           <tr><td>一般行政協助</td><td>交辦確認 → 資料蒐集 → 執行 → 核對 → 回報與歸檔</td><td>P2</td></tr>
         </tbody>
@@ -684,7 +706,7 @@ B. {選項、影響與條件}
       <div class="help-callout"><strong>更新原則：</strong>先新增真正反覆發生的工作，不追求一次列完。每個流程至少要回答：何時開始、先問誰、哪些資料必填、何時算完成、卡住時回報誰。</div>
     </section>
 
-    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.17</footer>
+    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.18</footer>
   </div>
   <script src="/modules/help/help.js"></script>
 </body>
