@@ -65,7 +65,7 @@
     <nav class="help-nav">
       <p>跳到段落</p>
       <div class="help-nav-links">
-        <a href="#rules">共同原則</a><a href="#priority">更新優先序</a><a href="#material-sample">選材與樣品</a><a href="#document-version">文件版本</a><a href="#change-payment">追加減與款項</a><a href="#site-log">照片與日誌</a><a href="#survey-meeting">丈量與會議</a><a href="#inspection-closeout">驗收與結案</a><a href="#warranty-service">保固與維修</a><a href="#site">進場與安裝</a><a href="#delivery">家具配送</a><a href="#estimate">報價前置</a><a href="#exception">進度異常</a><a href="#backlog">其他事務</a>
+        <a href="#rules">共同原則</a><a href="#priority">更新優先序</a><a href="#material-sample">選材與樣品</a><a href="#document-version">文件版本</a><a href="#change-payment">追加減與款項</a><a href="#site-log">照片與日誌</a><a href="#survey-meeting">丈量與會議</a><a href="#inspection-closeout">驗收與結案</a><a href="#warranty-service">保固與維修</a><a href="#cross-project-admin">一般行政</a><a href="#site">進場與安裝</a><a href="#delivery">家具配送</a><a href="#estimate">報價前置</a><a href="#exception">進度異常</a><a href="#backlog">其他事務</a>
       </div>
     </nav>
 
@@ -710,6 +710,28 @@ B. {選項、影響與條件}
       </article>
     </section>
 
+    <section id="cross-project-admin" class="help-section">
+      <h2>P2｜跨案件一般行政協助</h2>
+      <p>適用同一批次中彙整多個案件的文件、資料核對、狀態追問與交接。批次可共用 <code>admin_batch_id</code>，但每筆案件仍以 canonical <code>project_id</code> 獨立追蹤；純公司行政不在本流程，也不得借用假案號。</p>
+      <article class="workflow-card">
+        <h3>跨案件行政批次 <span>P2</span></h3>
+        <div class="workflow-meta"><div><strong>開始前要有</strong>admin_batch_id、交辦者與執行者 employee_id、目的、截止時間、案件 project_id 清單、允許動作與輸出格式</div><div><strong>最後要產出</strong>逐案處理清單、來源與版本、完成／卡點狀態、證據連結、交接對象與逐案審核結果</div></div>
+        <ol class="help-steps">
+          <li><strong>確認批次範圍：</strong>向交辦者確認目的、優先順序、截止時間、輸出格式、允許聯絡對象及不可代決事項；建立 <code>admin_batch_id</code>，保存交辦者與執行者 <code>employee_id</code>。</li>
+          <li><strong>拆成逐案項目：</strong>每個項目只綁定一個 canonical <code>project_id</code>，列出工作內容、負責人、期限與預期證據；同一文件涉及多案時也須分列，避免更新甲案卻覆蓋乙案。</li>
+          <li><strong>檢查權限與最小資料：</strong>確認執行者可查看及處理各案，只蒐集本次必要的客戶、合約、金額或聯絡資料；無權限、案件不明或收件人不確定時停止該列並回報，不跨案複製敏感資訊。</li>
+          <li><strong>取得有效來源：</strong>逐案記錄資料來源、檔名／連結、版次、取得時間及提供者 <code>employee_id</code>；聊天室轉述、舊表或檔名相似不能直接當最新資料，有衝突須請案件負責人指定有效版。</li>
+          <li><strong>依授權執行：</strong>按逐案清單整理文件、追問缺項、更新核准欄位或準備交接；助理不得自行修改價格、合約、付款狀態、設計決議或對外承諾，需決策項目標記「待指定人確認」。</li>
+          <li><strong>逐案交叉核對：</strong>檢查 <code>project_id</code>、客戶／案件識別、版次、日期、金額、附件、收件人與動作是否一致，並確認沒有重複、漏列或跨案附件；核對者以 <code>employee_id</code> 留痕。</li>
+          <li><strong>分列回報與交接：</strong>每案分別標示完成、待回覆、受阻或退回，附結果、證據、卡點、下一位負責人 <code>employee_id</code> 與期限；不得只報「整批完成」，未完成項目須清楚列出追蹤點。</li>
+          <li><strong>審核與歸檔：</strong>指定審核者逐案通過或退回；退回只補正該 <code>project_id</code> 項目並保留原因與舊版，全部項目通過、經授權取消或完成責任交接後，才能關閉批次。</li>
+        </ol>
+        <div class="done-rule"><strong>完成條件：</strong>批次內每個項目都有真實 <code>project_id</code>、有效來源、處理結果、操作者、時間、狀態與證據；待辦已指定下一位負責人及期限，各案均通過審核、經授權取消或完成明確交接。</div>
+        <div class="risk-rule"><strong>不可直接完成：</strong>用假案號收納公司行政、把多案資料放在同一列、未確認權限即匯出、沿用舊版、跨案貼錯附件、助理代改金額／決議、只寫「整批完成」，或以部分案件通過掩蓋其餘未完成項目。</div>
+        <div class="trace-rule"><strong>全程留痕：</strong>批次與每個案件項目均依「指派 <code>assigned</code> → 執行 <code>in_progress</code> → 回報 <code>reported</code> → 審核通過 <code>approved</code>／退回 <code>rework</code>」保存 canonical <code>project_id</code>、<code>admin_batch_id</code>、交辦／執行／提供／核對／審核者 <code>employee_id</code>、各步時間與狀態、來源版次、輸出、證據、交接對象及退回原因。</div>
+      </article>
+    </section>
+
     <section id="backlog" class="help-section">
       <h2>待逐項建立的助理事務</h2>
       <table class="help-table">
@@ -722,13 +744,13 @@ B. {選項、影響與條件}
           <tr><td>丈量／會議準備</td><td>基本流程已建立；下一輪補改期、無法進場、資料缺漏、需複丈與決議爭議分支</td><td>P2｜進行中</td></tr>
           <tr><td>驗收與結案</td><td>基本流程已建立；下一輪補無法驗收、改善逾期、複驗未過、爭議與保留結案分支</td><td>P2｜進行中</td></tr>
           <tr><td>保固與維修</td><td>基本流程已建立；下一輪補保固資料不足、緊急風險、無法重現、改期、復發與保固外分支</td><td>P2｜進行中</td></tr>
-          <tr><td>一般行政協助</td><td>交辦確認 → 資料蒐集 → 執行 → 核對 → 回報與歸檔</td><td>P2</td></tr>
+          <tr><td>一般行政協助</td><td>基本流程已建立；下一輪補權限不足、案件不明、資料衝突、跨案誤植、部分失敗與逾期分支</td><td>P2｜進行中</td></tr>
         </tbody>
       </table>
       <div class="help-callout"><strong>更新原則：</strong>先新增真正反覆發生的工作，不追求一次列完。每個流程至少要回答：何時開始、先問誰、哪些資料必填、何時算完成、卡住時回報誰。</div>
     </section>
 
-    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.19</footer>
+    <footer class="help-footer">添心設計 · 助理工作流程說明 v1.20</footer>
   </div>
   <script src="/modules/help/help.js"></script>
 </body>
