@@ -1543,7 +1543,7 @@ var AccountingApi = (function () {
         material_id: payload.material_id,
         project_no: payload.project_no,
         photos: payload.photos || []
-      }));
+      }), 120000);
     },
     materialDesignerList: function (sessionOrToken, projectNo) {
       return postMaterial(buildMaterialPostBody_(sessionOrToken, { action: 'margin_material_designer_list', project_no: projectNo }));

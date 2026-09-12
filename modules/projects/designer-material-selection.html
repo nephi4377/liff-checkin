@@ -9,7 +9,7 @@
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
-  <script src="../../shared/js/accounting_api.js?v=60"></script>
+  <script src="../../shared/js/accounting_api.js?v=64"></script>
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
   <style>
     :root {
@@ -1337,6 +1337,49 @@
       }
     };
 
+    /** 照片上傳：失敗／逾時自動再試一次；仍失敗回 { success:false } 不拋出 */
+    async function uploadPhotosWithRetry_(mid, photos) {
+      var pno = $('projectSelect').value;
+      var lastErr = '照片上傳失敗';
+      var attempt;
+      for (attempt = 0; attempt < 2; attempt++) {
+        try {
+          var upRes = await AccountingApi.materialUploadPhoto(session, {
+            material_id: mid,
+            project_no: pno,
+            photos: photos
+          });
+          if (upRes && upRes.success) return upRes;
+          lastErr = (upRes && upRes.message) || lastErr;
+        } catch (upErr) {
+          lastErr = (upErr && upErr.message) || lastErr;
+        }
+      }
+      return { success: false, message: lastErr };
+    }
+
+    /** 新建已寫入但照片沒傳成：作廢，避免客人看到沒圖的「照片載入中」 */
+    async function abortCreatedMaterial_(mid, reason) {
+      var voided = true;
+      try {
+        var vr = await AccountingApi.materialVoid(session, mid);
+        if (vr && vr.success === false) voided = false;
+      } catch (voidErr) {
+        voided = false;
+      }
+      if (voided) {
+        showMsg('照片沒傳成功，已取消這筆選材：' + (reason || '請檢查網路後再試') + '。請再存一次。');
+      } else {
+        showMsg('照片沒傳成功，且取消失敗。請到列表把沒有照片的那筆按「作廢」後再新建。' +
+          (reason ? '（' + reason + '）' : ''));
+      }
+      $('formView').classList.add('hidden');
+      $('listView').classList.remove('hidden');
+      invalidateMaterialListCache_($('projectSelect').value);
+      loadList();
+      loadAudit();
+    }
+
     $('btnSave').onclick = async function () {
       var btn = $('btnSave');
       if (btn.disabled) return;
@@ -1344,6 +1387,7 @@
       var isEdit = !!editingMaterialId;
       btn.textContent = '處理中…';
       showMsg('');
+      var createdMid = '';
       try {
         var spaces = getCheckedFromGrid('spaceGrid');
         if (!spaces.length) { showMsg('請至少選一個空間標籤（可點常用，或自己打字加入）'); return; }
@@ -1382,25 +1426,16 @@
         };
         var res = await AccountingApi.materialCreate(session, payload);
         if (!res.success) { showMsg(res.message || '儲存失敗，請稍後再試'); return; }
-        var mid = res.material_id;
+        createdMid = res.material_id || '';
 
         var photos = [];
         for (var i = 0; i < files.length; i++) {
           photos.push(await readFileAsBase64_(files[i]));
         }
-        var upRes = await AccountingApi.materialUploadPhoto(session, {
-          material_id: mid,
-          project_no: $('projectSelect').value,
-          photos: photos
-        });
-        if (!upRes.success) {
-          try { await AccountingApi.materialVoid(session, mid); } catch (voidErr) { /* 盡力作廢 */ }
-          showMsg('照片上傳失敗，已取消這筆選材：' + (upRes.message || '請檢查網路後再試'));
-          $('formView').classList.add('hidden');
-          $('listView').classList.remove('hidden');
-          invalidateMaterialListCache_($('projectSelect').value);
-          loadList();
-          loadAudit();
+        var upRes = await uploadPhotosWithRetry_(createdMid, photos);
+        if (!upRes || !upRes.success) {
+          await abortCreatedMaterial_(createdMid, (upRes && upRes.message) || '請檢查網路後再試');
+          createdMid = '';
           return;
         }
         showMsg('已儲存，客人立刻可見', true);
@@ -1411,7 +1446,11 @@
         loadList();
         loadAudit();
       } catch (e) {
-        showMsg('儲存失敗：' + ((e && e.message) || '請檢查網路後再試'));
+        if (createdMid) {
+          await abortCreatedMaterial_(createdMid, (e && e.message) || '請檢查網路後再試');
+        } else {
+          showMsg('儲存失敗：' + ((e && e.message) || '請檢查網路後再試'));
+        }
       } finally {
         btn.disabled = false;
         btn.textContent = editingMaterialId ? '儲存修改' : '儲存（客人立刻可見）';
