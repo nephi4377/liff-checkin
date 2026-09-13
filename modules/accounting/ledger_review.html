@@ -6,7 +6,7 @@
   <title>請款審核</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_tax_mode.js?v=4"></script>
+  <script src="../../shared/js/accounting_tax_mode.js?v=6"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/accounting_api.js?v=59"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
@@ -353,7 +353,9 @@
         var next = AccountingTaxMode.normalizeMode(mode) || 'inclusive';
         var prev = getPanelTaxMode(panel);
         if (!opts.force && next !== prev && opts.confirm !== false) {
-          if (!window.confirm('切換稅別模式會依新模式重算明細金額，確定？')) return;
+          if (!window.confirm(next === 'prorate'
+            ? '改成整張加稅後，各列維持未稅，稅只在底下一次加。確定？'
+            : '切換稅別模式會依新模式重算明細金額，確定？')) return;
         }
         var rows = readAllocRowsFromPanel(panel);
         var taxInp = panel.querySelector('.inp-tax-amount');
@@ -515,15 +517,16 @@
         var taxInp = panel.querySelector('.inp-tax-amount');
         if (br && typeof AccountingTaxMode !== 'undefined') {
           var s = AccountingTaxMode.summarize(rows, mode, taxInp ? taxInp.value : '');
-          if (el) el.textContent = (mode === 'prorate' ? s.payable : sum).toLocaleString('zh-TW');
+          var lab = panel.querySelector('.total-label');
+          if (lab) lab.textContent = mode === 'prorate' ? '未稅合計' : '合計';
+          if (el) el.textContent = (mode === 'prorate' ? s.pretax : sum).toLocaleString('zh-TW');
           if (mode === 'inclusive') {
-            br.textContent = sum > 0 ? '已含稅，不再另加 5%' : '';
+            br.textContent = sum > 0 ? '各列自選未稅或含稅，金額照填、不另加 5%' : '';
             br.style.color = '';
           } else if (mode === 'prorate' && (sum > 0 || s.tax > 0)) {
             var warnP = AccountingTaxMode.taxSanityMessage(s.pretax, s.tax, mode);
-            br.textContent = '未稅 $' + s.pretax.toLocaleString('zh-TW') +
-              ' ＋ 稅 $' + s.tax.toLocaleString('zh-TW') +
-              ' ＝ 寫入各案 $' + s.payable.toLocaleString('zh-TW') +
+            br.textContent = '整張稅 $' + s.tax.toLocaleString('zh-TW') +
+              ' → 核准後各案合計 $' + s.payable.toLocaleString('zh-TW') +
               (warnP ? '。' + warnP : '');
             br.style.color = warnP ? '#b45309' : '';
           } else if (s.tax > 0) {
@@ -616,7 +619,7 @@
             : ('未稅 $' + removeTaxAmount(amt).toLocaleString('zh-TW'));
         }
         var baseAttr = (row._base_amount != null && row._base_amount !== '') ? String(row._base_amount) : '';
-        var amtLabel = (taxMode === 'prorate' || (taxMode && taxMode !== 'inclusive' && !checked)) ? '金額（未稅）' : '金額';
+        var amtLabel = (!taxDisabled && (taxMode === 'prorate' || !checked)) ? '金額（未稅）' : '金額';
         var taxRowHtml = '';
         if (taxMode !== 'prorate') {
           taxRowHtml = '<div class="tax-row">' +
@@ -847,11 +850,11 @@
           '<label>分攤明細（案號＋金額，可多案；扣款填負數）' +
           (ready ? '' : ' <span class="need">需補齊</span>') + '</label>' +
           '<label style="margin-top:10px">稅別模式（整張統一）</label>' +
-          '<p class="sub" style="margin:4px 0 6px">「已含稅」＝金額已含稅、不再加。整張加稅＝上面填未稅、下面算稅；核准後才把稅分進各案與毛利。</p>' +
+          '<p class="sub" style="margin:4px 0 6px">「未稅／含稅自選」：各列自己勾含稅，金額不改。整張加稅：各列只填未稅，稅在底下一次加。不要用「逐筆加 5%」除非要逐列改金額。</p>' +
           '<div class="tax-mode-host"></div>' +
           '<div class="alloc-list"></div>' +
           '<button type="button" class="btn-ghost btn-add-alloc">＋ 新增一列</button>' +
-          '<div class="total-line">合計 $<span class="alloc-total">0</span></div>' +
+          '<div class="total-line"><span class="total-label">合計</span> $<span class="alloc-total">0</span></div>' +
           '<p class="sub tax-breakdown" style="margin:4px 0 0;text-align:right;color:#555;font-size:13px;"></p>' +
           (item.bank_code || item.account_no
             ? '<p class="bank-line">匯款：' + (item.bank_code || '—') + ' / ' + (item.account_no || '—') +

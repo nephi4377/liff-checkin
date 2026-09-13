@@ -296,7 +296,7 @@
       <label>預設稅別模式</label>
       <select id="tax_mode_default">
         <option value="">（不強制，交給辨識／人工）</option>
-        <option value="inclusive">已含稅</option>
+        <option value="inclusive">未稅／含稅自選</option>
         <option value="per_row">未稅・逐筆加 5%</option>
         <option value="prorate">未稅・整張加稅分攤</option>
       </select>
@@ -1211,7 +1211,7 @@
         rows.push({ label: '匯費', text: feeDef });
         var taxDef = String(v.tax_mode_default || '').trim();
         if (taxDef) {
-          var taxLabel = taxDef === 'per_row' ? '逐筆加 5%' : (taxDef === 'prorate' ? '整張分攤' : (taxDef === 'inclusive' ? '已含稅' : taxDef));
+          var taxLabel = taxDef === 'per_row' ? '逐筆加 5%' : (taxDef === 'prorate' ? '整張分攤' : (taxDef === 'inclusive' ? '未稅／含稅自選' : taxDef));
           rows.push({ label: '稅別', text: taxLabel });
         }
         if (String(v.ocr_hint || '').trim()) rows.push({ label: '辨識', text: '有專用說明' });

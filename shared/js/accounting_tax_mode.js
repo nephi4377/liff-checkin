@@ -1,10 +1,10 @@
 /**
  * 待付款稅別三模式（請款／審核共用）
- * inclusive＝已含稅只標不改；per_row＝逐筆×1.05；prorate＝整張稅比例分攤
+ * inclusive＝未稅／含稅自選（金額不改，各列自己勾）；per_row＝逐筆×1.05；prorate＝整張稅比例分攤
  */
 var AccountingTaxMode = (function () {
   var MODES = [
-    { id: 'inclusive', label: '已含稅' },
+    { id: 'inclusive', label: '未稅／含稅自選' },
     { id: 'per_row', label: '未稅・逐筆加 5%' },
     { id: 'prorate', label: '未稅・整張加稅分攤' }
   ];
@@ -34,7 +34,7 @@ var AccountingTaxMode = (function () {
 
   function normalizeMode(raw) {
     var m = String(raw || '').trim();
-    if (m === 'inclusive' || m === '已含稅') return 'inclusive';
+    if (m === 'inclusive' || m === '已含稅' || m === '未稅／含稅自選' || m === '未稅/含稅自選' || m === '自選') return 'inclusive';
     if (m === 'per_row' || m === '逐筆' || m === '未稅逐筆' || m === '未稅・逐筆加 5%') return 'per_row';
     if (m === 'prorate' || m === '整張' || m === '整張分攤' || m === '未稅・整張加稅分攤') return 'prorate';
     return '';
@@ -219,7 +219,7 @@ var AccountingTaxMode = (function () {
       return (rows || []).map(function (r) {
         var amt = parseAmount(r.amount);
         if (isNaN(amt)) amt = 0;
-        var mark = amt > 0;
+        var mark = amt > 0 && !!r.tax_inclusive;
         return Object.assign({}, r, {
           amount: amt,
           _base_amount: amt,
@@ -283,7 +283,7 @@ var AccountingTaxMode = (function () {
     });
     html += '</div>';
     html += '<div class="tax-mode-prorate-row' + (cur === 'prorate' ? '' : ' hidden') + '" data-tax-prorate-wrap="1">' +
-      '<label>稅金（上面填未稅；這裡算整張。空白＝未稅合計×5%。核准才分進各案）</label>' +
+      '<label>稅金（填的時候各列都是未稅；稅只在這裡一次加。空白＝未稅合計×5%）</label>' +
       '<div class="row2"><input type="number" inputmode="numeric" class="inp-tax-amount" placeholder="可空白" />' +
       '<button type="button" class="btn btn-secondary btn-tax-5pct" style="margin-top:4px">未稅合計×5%</button></div></div>';
     return html;

@@ -167,7 +167,12 @@
         div.id = 'pf-' + id;
         var xfer = transferDefault(row);
         var extra = extraDefault(row);
+        var approved = parseInt(row.final_amount, 10) || xfer || 0;
         var est = parseInt(row.estimated_net, 10) || 0;
+        var amountSummary = '<div class="sub">核准實發 $' + approved.toLocaleString('zh-TW') + '</div>';
+        if (est > 0 && est !== approved) {
+          amountSummary += '<div class="sub" style="color:#888;font-size:12px">送審試算 $' + est.toLocaleString('zh-TW') + '（審核後已調整）</div>';
+        }
         var incomplete = row.bank_incomplete;
         var head = document.createElement('div');
         head.className = 'actions';
@@ -184,7 +189,7 @@
         info.style.flex = '1';
         info.innerHTML =
           '<div><strong>' + esc(row.employee_name) + '</strong> <span class="tag">' + esc(row.period_label) + '</span></div>' +
-          '<div class="sub">試算實發 $' + est.toLocaleString('zh-TW') + '</div>' +
+          amountSummary +
           (incomplete ? '<div class="tag warn">銀行帳戶不完整，無法匯出薪轉</div>' :
             '<div class="bank">銀行 ' + esc(row.bank_code) + ' · 末四碼 ' + esc(tail) + '</div>');
         head.appendChild(info);

@@ -22,6 +22,12 @@ function formatInsuranceHtml(ins, isDaily) {
 }
 
 const PAYROLL_MONTHLY_DAYS = 30;
+const PAYROLL_NATURAL_DISASTER_DEDUCTION_LABEL = '天然災害停班';
+
+function isNaturalDisasterLeaveDeductionLabel(label) {
+    const s = String(label || '');
+    return s === PAYROLL_NATURAL_DISASTER_DEDUCTION_LABEL || s === '颱風假' || s.indexOf('天然災害') >= 0;
+}
 const PAYROLL_DAILY_HOURS = 8;
 
 function parsePayrollYmd(value) {
@@ -309,6 +315,7 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
         personalLeaveDeduction = calcPersonalLeaveDeduction(base, personalLeave, payType);
         const specialLeaveDeduction = calcPersonalLeaveDeduction(base, specialUnpaid, payType);
         sickLeaveDeduction = calcSickLeaveDeduction(base, sickForDeduction, payType);
+        const typhoonLeaveDeduction = calcPersonalLeaveDeduction(base, typhoon, payType);
         const prorate = calcProratedMonthlyBaseSalary(
             base,
             period && period.periodStart,
@@ -389,13 +396,11 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
                 note: `特別假 ${fmtPayrollDay(specialPaid)} 日；本薪照給、不扣出勤獎金`
             });
         }
-        if (typhoon > 0) {
+        if (typhoon > 0 || typhoonLeaveDeduction > 0) {
             deductions.push({
-                label: '颱風假',
-                amount: 0,
-                note: policy === 'v2'
-                    ? `颱風假 ${fmtPayrollDay(typhoon)} 日；本薪照給、不扣出勤獎金`
-                    : `颱風假 ${fmtPayrollDay(typhoon)} 日；扣款規則待主管確認`
+                label: PAYROLL_NATURAL_DISASTER_DEDUCTION_LABEL,
+                amount: typhoonLeaveDeduction,
+                note: `${PAYROLL_NATURAL_DISASTER_DEDUCTION_LABEL} ${fmtPayrollDay(typhoon)} 日（不支薪；底薪÷30）`
             });
         }
     }
@@ -450,13 +455,24 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
             note: `事假 ${fmtPayrollDay(personalLeave)} 日（日薪×天數）`
         });
     }
+    const typhoonDaily = Number(st.typhoonLeave) || 0;
+    if (payType === 'daily' && typhoonDaily > 0) {
+        const typhoonDailyDed = calcPersonalLeaveDeduction(base, typhoonDaily, payType);
+        if (typhoonDailyDed > 0) {
+            deductions.push({
+                label: PAYROLL_NATURAL_DISASTER_DEDUCTION_LABEL,
+                amount: typhoonDailyDed,
+                note: `${PAYROLL_NATURAL_DISASTER_DEDUCTION_LABEL} ${fmtPayrollDay(typhoonDaily)} 日（不支薪；日薪×天數）`
+            });
+        }
+    }
     deductions.push({ label: '其他扣款', amount: 0, note: '主管審核時填入（員工送審時為 0）' });
 
     const addTotal = additions.reduce((s, x) => s + (x.amount || 0), 0);
     const dedTotal = deductions.reduce((s, x) => s + (x.amount || 0), 0);
     const estimatedNet = Math.round(addTotal - dedTotal);
     const autoRemarkParts = deductions
-        .filter((d) => d.label !== '其他扣款' && d.label !== '勞健保／勞退' && (d.amount > 0 || d.label === '颱風假' || d.label === '生理假' || d.label === '特別假（不扣薪）' || (d.label === '出勤獎金' && d.amount === 0)))
+        .filter((d) => d.label !== '其他扣款' && d.label !== '勞健保／勞退' && (d.amount > 0 || isNaturalDisasterLeaveDeductionLabel(d.label) || d.label === '生理假' || d.label === '特別假（不扣薪）' || (d.label === '出勤獎金' && d.amount === 0)))
         .map((d) => {
             if (d.amount > 0) return `${d.label} −${d.amount.toLocaleString()}`;
             return d.note || d.label;
@@ -696,7 +712,7 @@ export function initPayrollReviewPanel(ctx) {
                 <p><strong>實休（系統）：</strong>${fmtPayrollDay(snapshot.rest?.actualRestDays)} 天</p>
                 <p><strong>特休／病假／事假／補休：</strong>${fmtPayrollDay(st.annualLeave)}／${fmtPayrollDay(st.sickLeave)}／${fmtPayrollDay(st.personalLeave)}／${fmtPayrollDay(st.compensatoryLeave)}</p>
                 ${(Number(st.menstrualLeave) > 0) ? `<p><strong>生理假：</strong>${fmtPayrollDay(st.menstrualLeave)} 天</p>` : ''}
-                ${(Number(st.typhoonLeave) > 0) ? `<p><strong>颱風假：</strong>${fmtPayrollDay(st.typhoonLeave)} 天</p>` : ''}
+                ${(Number(st.typhoonLeave) > 0) ? `<p><strong>${PAYROLL_NATURAL_DISASTER_DEDUCTION_LABEL}：</strong>${fmtPayrollDay(st.typhoonLeave)} 天（不支薪）</p>` : ''}
                 <p><strong>遲到／早退：</strong>${st.lateMinutes ?? 0}／${st.earlyMinutes ?? 0} 分</p>
                 ${(st.lateMinutesHeldSinglePunch || st.earlyMinutesHeldSinglePunch) ? `<p class="text-xs text-amber-700">僅單次打卡日 ${st.lateMinutesHeldSinglePunch || 0}／${st.earlyMinutesHeldSinglePunch || 0} 分暫不計入薪資試算，請先於出勤頁申訴調整</p>` : ''}
                 <p><strong>缺勤／異常：</strong>${fmtPayrollDay(st.absent)}／${st.anomalyDays ?? 0} 天</p>
@@ -812,6 +828,13 @@ export function initPayrollReviewPanel(ctx) {
     };
 }
 
+function formatPayslipDisplayDate(detail) {
+    const paid = String(detail.paidAt || (detail.snapshot && detail.snapshot.paidAt) || '').slice(0, 10);
+    if (paid) return '入帳 ' + paid;
+    const scheduled = String(detail.displayPayDate || detail.payDate || '').slice(0, 10);
+    return scheduled ? '發薪 ' + scheduled : '';
+}
+
 function renderPayslipDetailHtml(detail, esc) {
     const snap = detail.snapshot || {};
     const earnings = snap.earnings || [];
@@ -820,7 +843,7 @@ function renderPayslipDetailHtml(detail, esc) {
         const note = e.note ? `<span class="text-gray-500 text-xs">（${esc(e.note)}）</span>` : '';
         return `<li class="flex justify-between gap-2"><span>${esc(e.label)}${note}</span><span class="text-green-700">+${Number(e.amount).toLocaleString()}</span></li>`;
     }).join('') || '<li class="text-gray-400">—</li>';
-    const dedRows = deductions.filter((d) => (d.amount || 0) > 0 || String(d.label || '').indexOf('颱風') >= 0).map((d) => {
+    const dedRows = deductions.filter((d) => (d.amount || 0) > 0 || isNaturalDisasterLeaveDeductionLabel(d.label)).map((d) => {
         const note = d.note ? `<span class="block text-gray-500 text-xs">${esc(d.note)}</span>` : '';
         const amtText = (d.amount || 0) > 0 ? `−${Number(d.amount).toLocaleString()}` : '—';
         return `<li class="py-1"><div class="flex justify-between gap-2"><span>${esc(d.label)}</span><span class="text-red-600">${amtText}</span></div>${note}</li>`;
@@ -830,7 +853,7 @@ function renderPayslipDetailHtml(detail, esc) {
             <div class="flex justify-between items-start gap-2">
                 <div>
                     <p class="font-bold text-gray-800">${esc(detail.periodLabel)} 薪資明細</p>
-                    <p class="text-xs text-gray-500">${esc(detail.periodStart)}～${esc(detail.periodEnd)} · 發薪 ${esc(detail.payDate)}</p>
+                    <p class="text-xs text-gray-500">${esc(detail.periodStart)}～${esc(detail.periodEnd)} · ${esc(formatPayslipDisplayDate(detail))}</p>
                 </div>
                 <span class="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800">已發放</span>
             </div>
@@ -878,7 +901,7 @@ async function loadPayslipHistoryForPanel(ctx) {
         emptyEl?.classList.toggle('hidden', items.length > 0);
         listEl.innerHTML = items.map((row) => `
             <button type="button" class="w-full text-left px-3 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 flex justify-between items-center gap-2 payroll-history-item" data-payslip-id="${esc(row.payslipId)}">
-                <span><strong>${esc(row.periodLabel)}</strong><span class="text-xs text-gray-500 block">${esc(row.periodStart)}～${esc(row.periodEnd)} · 發薪 ${esc(row.payDate || '')}</span></span>
+                <span><strong>${esc(row.periodLabel)}</strong><span class="text-xs text-gray-500 block">${esc(row.periodStart)}～${esc(row.periodEnd)} · ${esc(formatPayslipDisplayDate(row))}</span></span>
                 <span class="font-bold text-indigo-700">${Number(row.finalAmount || 0).toLocaleString()} 元</span>
             </button>
         `).join('');
@@ -1142,7 +1165,7 @@ export function initPayrollAdminPreview(ctx) {
                    <p class="text-xs text-gray-500">本薪＝日薪×計薪天數；假別／缺勤另列減項</p>
                    ${anomalyBlock}`
                 : `<p><strong>實際出勤：</strong>${st.checkInDays ?? '—'} 天 · 遲早退 ${st.lateMinutes ?? 0}／${st.earlyMinutes ?? 0} 分</p>
-                   <p><strong>缺勤／事假／病假／颱風：</strong>${fmtPayrollDay(st.absent)}／${fmtPayrollDay(st.personalLeave)}／${fmtPayrollDay(st.sickLeave)}／${fmtPayrollDay(st.typhoonLeave)}</p>
+                   <p><strong>缺勤／事假／病假／天然災害停班：</strong>${fmtPayrollDay(st.absent)}／${fmtPayrollDay(st.personalLeave)}／${fmtPayrollDay(st.sickLeave)}／${fmtPayrollDay(st.typhoonLeave)}</p>
                    ${anomalyBlock}`;
             const preview = buildPayrollBreakdown(
                 adminContext.settings,
