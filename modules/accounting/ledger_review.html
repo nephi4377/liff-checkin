@@ -12,7 +12,7 @@
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
-  <script src="../../shared/js/accounting_lightbox.js?v=17"></script>
+  <script src="../../shared/js/accounting_lightbox.js?v=18"></script>
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=9"></script>
@@ -1070,10 +1070,15 @@
             btnReview.textContent = open ? '審核' : '收合';
             div.classList.toggle('focus', !open);
             if (!open) {
-              var urls = item.attachment_urls && item.attachment_urls.length
-                ? item.attachment_urls
-                : await AccountingLightbox.fetchAttachmentUrls(session, item);
-              if (urls.length) AccountingLightbox.open(urls);
+              try {
+                var urls = item.attachment_urls && item.attachment_urls.length
+                  ? item.attachment_urls
+                  : await AccountingLightbox.fetchAttachmentUrls(session, item);
+                if (urls.length) AccountingLightbox.open(urls);
+                else setMsg('這筆沒有上傳單據');
+              } catch (eAtt) {
+                setMsg((eAtt && eAtt.message) || '附件讀不到，請再試');
+              }
             }
           });
           actions.appendChild(btnReview);
@@ -1103,9 +1108,13 @@
           btnAtt.textContent = '查附件';
           btnAtt.addEventListener('click', async function () {
             await AccountingUi.runAsync(btnAtt, { busyLabel: '查詢中…', clear: false }, async function () {
-              var urls = await AccountingLightbox.fetchAttachmentUrls(session, item);
-              if (!urls.length) { setMsg('這筆沒有上傳單據'); return; }
-              AccountingLightbox.open(urls);
+              try {
+                var urls = await AccountingLightbox.fetchAttachmentUrls(session, item);
+                if (!urls.length) { setMsg('這筆沒有上傳單據'); return; }
+                AccountingLightbox.open(urls);
+              } catch (eAtt) {
+                setMsg((eAtt && eAtt.message) || '附件讀不到，請再試');
+              }
             });
           });
           actions.appendChild(btnAtt);
