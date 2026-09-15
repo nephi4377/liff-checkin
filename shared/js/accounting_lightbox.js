@@ -15,7 +15,7 @@ var AccountingLightbox = (function () {
       '.acct-lb-btn{background:#fff;border:none;border-radius:8px;padding:8px 12px;font-weight:600;cursor:pointer}' +
       '.acct-lb-img{max-width:100%;max-height:78vh;border-radius:8px;background:#111}' +
       '.acct-lb-link{color:#8ab4f8;font-size:14px;text-decoration:none;margin-top:8px}' +
-      '.acct-lb-trigger.acct-lb-error{background:#fce8e6;color:#c5221f;border:1px solid #f5c2c0}';
+      '.btn.acct-lb-trigger.acct-lb-error,.acct-lb-trigger.acct-lb-error{background:#fce8e6!important;color:#c5221f!important;border:1px solid #f5c2c0!important}';
     document.head.appendChild(style);
 
     overlay = document.createElement('div');
