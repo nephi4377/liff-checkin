@@ -31,6 +31,8 @@
     details.adv { margin-top: 12px; font-size: 14px; color: #555; }
     details.adv summary { cursor: pointer; font-weight: 600; color: #1a73e8; }
     details.adv .adv-body { margin-top: 4px; }
+    .list-fail { color: #c5221f; margin: 0 0 10px; }
+    .btn-retry { width: auto; min-width: 120px; margin-top: 0; padding: 10px 16px; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -109,6 +111,23 @@
           box.appendChild(div);
         });
       }
+      function renderFail(message) {
+        var box = document.getElementById('list');
+        var msg = message || '讀不到附件，請再試';
+        box.innerHTML = '';
+        var p = document.createElement('p');
+        p.className = 'list-fail';
+        p.textContent = msg;
+        var retryBtn = document.createElement('button');
+        retryBtn.type = 'button';
+        retryBtn.className = 'btn btn-retry';
+        retryBtn.textContent = '再查一次';
+        retryBtn.addEventListener('click', function () {
+          document.getElementById('searchBtn').click();
+        });
+        box.appendChild(p);
+        box.appendChild(retryBtn);
+      }
       document.getElementById('searchBtn').addEventListener('click', async function () {
         var searchBtn = document.getElementById('searchBtn');
         await AccountingUi.runAsync(searchBtn, { busyLabel: '查詢中…', clear: false }, async function () {
@@ -128,9 +147,18 @@
             setMsg('請至少填案號或廠商名（或展開進階條件）');
             return;
           }
-          var data = await AccountingApi.crudList(session, 'attachment', filter);
-          if (!data.success) { setMsg(data.message || '查詢失敗'); return; }
-          renderList(data.data || []);
+          var box = document.getElementById('list');
+          box.textContent = '查詢中…';
+          try {
+            var data = await AccountingApi.crudList(session, 'attachment', filter);
+            if (!data || !data.success) {
+              renderFail((data && data.message) || '讀不到附件，請再試');
+              return;
+            }
+            renderList(data.data || []);
+          } catch (e) {
+            renderFail((e && e.message) || '讀不到附件，請再試');
+          }
         });
       });
       (async function boot() {
