@@ -344,13 +344,8 @@ var AccountingFormHelpers = (function () {
       return rows;
     }
 
-    function updateSum() {
+    function refreshSumHint() {
       var rows = readRows();
-      var last = rows[rows.length - 1];
-      if (last && allocRowTriggersNext_(last)) {
-        renderRows(rows.concat([emptyRow()]));
-        return;
-      }
       var filled = filledRows(rows);
       var sum = sumRows(filled);
       if (sumEl) sumEl.textContent = sum.toLocaleString('zh-TW');
@@ -371,10 +366,7 @@ var AccountingFormHelpers = (function () {
       }
     }
 
-    function bindRowEvents() {
-      containerEl.querySelectorAll('.alloc-pn, .alloc-amt, .alloc-desc').forEach(function (inp) {
-        inp.oninput = updateSum;
-      });
+    function bindDeleteButtons() {
       containerEl.querySelectorAll('.alloc-rm').forEach(function (btn) {
         btn.onclick = function () {
           var rows = readRows();
@@ -386,6 +378,56 @@ var AccountingFormHelpers = (function () {
       });
     }
 
+    /** 多列時補刪除鈕／更新 index；不重繪既有 input，避免打字失焦 */
+    function syncRowChrome() {
+      var rowEls = containerEl.querySelectorAll('.alloc-row');
+      var showDel = rowEls.length > 1;
+      rowEls.forEach(function (el, idx) {
+        el.setAttribute('data-idx', String(idx));
+        var existing = el.querySelector('.alloc-rm');
+        if (showDel && !existing) {
+          el.insertAdjacentHTML('afterbegin',
+            '<button type="button" class="alloc-rm" data-rm="' + idx + '">刪除</button>');
+        } else if (!showDel && existing) {
+          existing.remove();
+        } else if (existing) {
+          existing.setAttribute('data-rm', String(idx));
+        }
+      });
+      bindDeleteButtons();
+    }
+
+    /**
+     * 末列已填案號／金額時追加空白列。
+     * 只 insertAdjacentHTML，不整表 innerHTML，焦點與游標保留。
+     */
+    function ensureTrailingEmptyRow() {
+      var rows = readRows();
+      var last = rows[rows.length - 1];
+      if (!last || !allocRowTriggersNext_(last)) return;
+      var idx = rows.length;
+      containerEl.insertAdjacentHTML('beforeend', allocRowHtml(idx, emptyRow(), true));
+      var newRow = containerEl.querySelector('.alloc-row:last-child');
+      if (newRow) {
+        newRow.querySelectorAll('.alloc-pn, .alloc-amt, .alloc-desc').forEach(function (inp) {
+          inp.oninput = updateSum;
+        });
+      }
+      syncRowChrome();
+    }
+
+    function updateSum() {
+      ensureTrailingEmptyRow();
+      refreshSumHint();
+    }
+
+    function bindRowEvents() {
+      containerEl.querySelectorAll('.alloc-pn, .alloc-amt, .alloc-desc').forEach(function (inp) {
+        inp.oninput = updateSum;
+      });
+      bindDeleteButtons();
+    }
+
     function renderRows(rows) {
       if (!rows || !rows.length) rows = [emptyRow()];
       containerEl.innerHTML = '';
@@ -394,23 +436,7 @@ var AccountingFormHelpers = (function () {
         containerEl.insertAdjacentHTML('beforeend', allocRowHtml(idx, row, showDel));
       });
       bindRowEvents();
-      var filled = filledRows(rows);
-      var sum = sumRows(filled);
-      if (sumEl) sumEl.textContent = sum.toLocaleString('zh-TW');
-      if (hintEl && amountEl) {
-        var total = parseInt(amountEl.value, 10) || 0;
-        if (!filled.length) {
-          hintEl.textContent = '每筆支出至少填一列：案號、品項、金額；加總須等於支付金額。';
-          hintEl.classList.remove('warn');
-        } else if (total > 0 && sum !== total) {
-          hintEl.textContent = '分攤合計 $' + sum.toLocaleString('zh-TW') + '，與支付金額 $' +
-            total.toLocaleString('zh-TW') + ' 不同';
-          hintEl.classList.add('warn');
-        } else {
-          hintEl.textContent = filled.length + ' 案，合計 $' + sum.toLocaleString('zh-TW');
-          hintEl.classList.remove('warn');
-        }
-      }
+      refreshSumHint();
     }
 
     if (amountEl) amountEl.addEventListener('input', updateSum);
