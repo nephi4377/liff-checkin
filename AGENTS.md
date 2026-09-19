@@ -3,6 +3,14 @@
 專案細節與操作手冊見 `README.md`、`README_CODING.md`、`PROJECT_MAP.md`、`SPEC/`，
 以及 `.agents/skills/Cloud-Agent-Runbook/`（本地開站、測試、LIFF bypass）。
 
+## 多工具共同開發
+
+- Cursor、ChatGPT、Codex 與人工開發共用根目錄 `SHARED_DEV_LOG.md` 作為唯一交接紀錄。
+- 開始修改前先 `git pull --ff-only origin main`，並完整閱讀 `SHARED_DEV_LOG.md`。
+- 先檢查「目前進行中」是否有人正在修改相同檔案；有重疊時不要覆蓋，先向使用者說明。
+- 完成後更新該檔的「最近完成」與「待處理」，並附上驗證方式及 commit。
+- 禁止強制推送或使用會覆蓋他人工作的 destructive git 操作。
+
 TOS（添心營運管理系統）盤點文件一律在 `TOS/`（主紀錄 `TOS/TOS_AUDIT.md`）。不要把 `TOS_AUDIT*.md` 寫回倉庫根目錄。發現新模組、資料流、技術債或 schema 問題可補充 TOS 文件；不要刪既有盤點內容。案件識別長期朝 `project_id`，legacy 欄位先不要大量改名。
 
 ## Cursor Cloud specific instructions
