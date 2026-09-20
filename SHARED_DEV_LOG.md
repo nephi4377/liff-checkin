@@ -26,6 +26,14 @@
 
 ## 最近完成
 
+### 2026-09-20｜Cursor｜會計分攤明細打字不失焦（部署）
+
+- 修改範圍：`shared/js/accounting_form_helpers.js`、`modules/accounting/accounting_ingest.html`；SPEC／LOG
+- 完成內容：分攤案號／金額連打不再整表重繪失焦；helpers `?v=6`；合 PR #74 並上 Pages
+- 驗證：PR 內單元／GUI；正式站請硬重整後抽測收支登錄→支出→分攤
+- Commit：merge `9bb97cd`（PR #74）；文件補推見同日 LOG
+- 待處理／風險：無（後端未動）
+
 ### 2026-09-19｜Codex｜舊作品集轉址與 sitemap 整理
 
 - 修改範圍：`modules/info/cases/*.html`、`modules/info/cases/index.html`、`sitemap.xml`
