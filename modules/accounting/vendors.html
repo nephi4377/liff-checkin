@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=63"></script>
+  <script src="../../shared/js/accounting_api.js?v=64"></script>
   <script src="../../shared/js/accounting_cache.js?v=32"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
@@ -314,8 +314,8 @@
       <label>備註</label>
       <textarea id="note" placeholder="服務區域、施工品質、配合度或其他注意事項可寫在這裡"></textarea>
 
-      <p class="section-title">LINE 身份綁定（請款辨識用）</p>
-      <p class="sub" style="margin:0 0 8px">搜尋來源：<strong>會計 LINE</strong> ＋ <strong>官方 LINE</strong>（兩邊 UID 不同，必須分開綁）。資料存在廠商主檔兩欄，舊「廠商LINE綁定」分頁部署後可刪。暫停合作整廠不認；綁錯請「移除」。</p>
+      <p class="section-title">LINE 身份綁定（請款辨識＋匯款通知）</p>
+      <p class="sub" style="margin:0 0 8px">搜尋來源：<strong>會計 LINE</strong> ＋ <strong>官方 LINE</strong>（兩邊 UID 不同，必須分開綁）。資料存在廠商主檔兩欄，舊「廠商LINE綁定」分頁部署後可刪。暫停合作整廠不認；綁錯請「移除」。匯款通知會推到已綁的<strong>私訊或群組</strong>（同一通道的 Bot）；只綁群組也能收到匯款文字通知（不是卡片）。</p>
       <div id="bindEditor" class="hidden">
         <label>搜尋顧客（名稱／案號／UID）</label>
         <input id="lineSearchKw" placeholder="例：木作老王、752、U 開頭 UID" />
@@ -549,6 +549,11 @@
         var title = label;
         if (it.last_notify_at) title += ' · ' + String(it.last_notify_at).replace('T', ' ').slice(0, 16);
         if (it.last_notify_resend) title += '（補通知）';
+        if (it.last_notify_line_id) {
+          var lid = String(it.last_notify_line_id);
+          title += ' → ' + (lid.indexOf('C') === 0 ? '群組 ' : '私訊 ') + lid.slice(0, 10) + '…';
+        }
+        if (it.last_notify_line_channel) title += '／' + (it.last_notify_line_channel === 'official' ? '官方 LINE' : '會計 LINE');
         return '<span class="' + cls + '" title="' + title + '" style="margin-left:6px">' + label + '</span>';
       }
 
@@ -591,9 +596,16 @@
         if (notified) lines.push('已通知 ' + notified + ' 筆');
         if (failed) lines.push('失敗 ' + failed + ' 筆');
         if (unlinked) lines.push('未綁 LINE ' + unlinked + ' 筆（可用 EMAIL 草稿）');
-        records.filter(function (r) { return r.outcome === 'notify_failed'; }).forEach(function (r) {
-          lines.push('失敗：' + (r.vendor_name || r.payment_request_id || '') +
-            (r.message ? '（' + r.message + '）' : ''));
+        records.forEach(function (r) {
+          if (r.outcome === 'notified' && r.line_id) {
+            var kind = String(r.line_id).indexOf('C') === 0 ? '群組' : '私訊';
+            lines.push('已推到' + kind + ' ' + r.line_id +
+              (r.line_channel === 'official' ? '（官方 LINE）' : '（會計 LINE）'));
+          }
+          if (r.outcome === 'notify_failed') {
+            lines.push('失敗：' + (r.vendor_name || r.payment_request_id || '') +
+              (r.message ? '（' + r.message + '）' : ''));
+          }
         });
         return lines.join('\n') || '補通知已送出';
       }
