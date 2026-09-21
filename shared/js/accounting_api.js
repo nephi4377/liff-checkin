@@ -1143,8 +1143,17 @@ var AccountingApi = (function () {
         payment_request_ids: paymentRequestIds || [],
         mark_all: options.mark_all === true,
         line_push: options.line_push !== false,
+        notify_by_id: options.notify_by_id || undefined,
         repair_missing_ledger: options.repair_missing_ledger === true
       }, 180000);
+    },
+    /** 標記已匯後置（毛利／附件）；成功後背景呼叫即可 */
+    vendorPaymentFlushDeferred: function (sessionOrToken, deferredToken) {
+      return post({
+        action: 'vendor_payment_flush_deferred',
+        auth: resolveAuth(sessionOrToken),
+        deferred_token: deferredToken || ''
+      }, 120000);
     },
     /** 已匯款但缺收支列 → 補寫（不推播） */
     vendorPaymentRepairLedger: function (sessionOrToken, opts) {

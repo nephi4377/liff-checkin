@@ -53,9 +53,11 @@
       <ol class="help-steps">
         <li>會計系統 →「廠商待匯款」，或 <code>#/accounting/vendor-payment-finance</code>。</li>
         <li>檢查廠商銀行帳號是否完整（紅字警示須先補）。</li>
-        <li>勾選要匯的項目，匯出<strong>中信 TAB 分隔轉帳檔</strong>。</li>
+        <li>勾選要匯的項目；每筆可改「LINE 通知」（預設開）。</li>
+        <li>匯出<strong>中信整批匯款轉帳檔</strong>（BIG-5）。</li>
         <li>上傳至網銀完成匯款；或無 TXT 時直接「標記已匯款」。</li>
-        <li>系統自動以支出格式寫入收支試算表，請款單結案。</li>
+        <li>確認摘要會顯示：N 筆入帳、其中 M 筆會通知。系統寫收支並結案；多筆看得出進度。</li>
+        <li>通知結果（已通知／失敗／使用者略過）會留下紀錄；入帳成功但通知失敗仍算已匯。</li>
       </ol>
       <figure class="help-img-ph" data-img="/assets/help/payment-request/06-finance-list.svg" data-alt="待匯款清單">
         <div class="help-img-placeholder">📷 <code>06-finance-list.png</code><br>廠商待匯款清單與勾選</div>
@@ -71,7 +73,7 @@
       <ul>
         <li>「款項進度」可查看各筆從待審到已匯款狀態。</li>
         <li>「單據附件」可依請款單編號搜尋附件與 ingest 關聯。</li>
-        <li>廠商若已綁定 LINE，匯款後可收到查收通知（規劃中／依部署）。</li>
+        <li>廠商若已綁定 LINE，且當筆有勾「LINE 通知」，匯款後可收到查收通知；結果可在稽核查「已通知／失敗／略過」。</li>
       </ul>
       <figure class="help-img-ph" data-img="/assets/help/payment-request/07-vendor-status.svg" data-alt="款項進度">
         <div class="help-img-placeholder">📷 <code>07-vendor-status.png</code><br>款項進度查詢畫面</div>

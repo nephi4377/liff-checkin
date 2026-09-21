@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=62"></script>
+  <script src="../../shared/js/accounting_api.js?v=64"></script>
   <script src="../../shared/js/accounting_cache.js?v=32"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
@@ -49,6 +49,8 @@
     .inline-chk input { width: auto; margin: 0; }
     .fee-preview { margin: 4px 0 0 28px; color: #555; font-size: 13px; }
     .fee-chk { margin-top: 8px; font-weight: 600; font-size: 13px; }
+    .line-chk { margin-top: 6px; font-weight: 600; font-size: 13px; }
+    #progressLine { color: #555; font-size: 14px; margin: 8px 0; min-height: 1.2em; }
     #ocrInput { display: none; }
   </style>
 </head>
@@ -62,6 +64,7 @@
     <p class="sub" style="margin-top:6px">每月<strong>員工薪資</strong>請至「<a href="payroll_finance.html">薪資待匯款</a>」，勿用此頁匯出。</p>
     <div id="msg"></div>
     <div id="ok"></div>
+    <div id="progressLine" class="sub" aria-live="polite"></div>
     <div id="emailDrafts" class="card hidden" style="margin-top:12px"></div>
 
     <div class="card">
@@ -125,7 +128,7 @@
       </div>
       <p class="sub"><strong>① 匯出轉帳檔</strong>：只下載中信整批匯款 .txt，不改狀態、不寫收支、不推播。<br />
         <strong>② 上傳中信網銀</strong>：選「整批匯款」、編碼 <strong>BIG-5</strong>。<br />
-        <strong>③ 標記已匯款</strong>：確認銀行已匯出後，勾選項目按「標記已匯款」→ 寫收支、標已匯款、LINE 推播廠商（已綁定 UID）。入帳日＝標記當日。<br />
+        <strong>③ 標記已匯款</strong>：確認銀行已匯出後，勾選項目按「標記已匯款」→ 寫收支、標已匯款。每筆可勾<strong>LINE 通知</strong>（預設開）；入帳成功但通知失敗仍算已匯。入帳日＝標記當日。<br />
         每筆可勾選<strong>是否扣匯費 $30</strong>（新建時依廠商名冊「預設扣匯費」帶入，可再改）：<br />
         ・<strong>有勾</strong>＝中信實匯少 $30（廠商少收）；分攤／收支／毛利<strong>不加</strong>匯費<br />
         ・<strong>沒勾</strong>＝公司幫出匯費；收支金額＋$30，加在<strong>金額最大</strong>那一案（不另開匯費列、不另標「匯費」）</p>
@@ -211,6 +214,34 @@
 
       function setMsg(t) { ui.setMsg(t); }
       function setOk(t) { ui.setOk(t); }
+      function setProgress(t) {
+        var el = document.getElementById('progressLine');
+        if (el) el.textContent = t || '';
+      }
+
+      function flushDeferredInBackground(token) {
+        if (!token || !AccountingApi.vendorPaymentFlushDeferred) return;
+        AccountingApi.vendorPaymentFlushDeferred(session, token).catch(function (e) {
+          console.warn('[vendor_payment] flush deferred', e);
+        });
+      }
+
+      function buildNotifyById(ids) {
+        var map = {};
+        (ids || []).forEach(function (id) {
+          var cb = document.querySelector('#list input.line-notify[data-id="' + id + '"]');
+          map[id] = cb ? !!cb.checked : true;
+        });
+        return map;
+      }
+
+      function countNotifyOn(notifyById) {
+        var n = 0;
+        Object.keys(notifyById || {}).forEach(function (k) {
+          if (notifyById[k]) n++;
+        });
+        return n;
+      }
       function showApp() {
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
@@ -444,6 +475,17 @@
           div.appendChild(smallFee);
         }
 
+        var lineWrap = document.createElement('label');
+        lineWrap.className = 'inline-chk line-chk';
+        var lineCb = document.createElement('input');
+        lineCb.type = 'checkbox';
+        lineCb.className = 'line-notify';
+        lineCb.dataset.id = row.payment_request_id;
+        lineCb.checked = true;
+        lineWrap.appendChild(lineCb);
+        lineWrap.appendChild(document.createTextNode(' LINE 通知廠商（預設開）'));
+        div.appendChild(lineWrap);
+
         var actions = document.createElement('div');
         actions.className = 'actions';
         actions.appendChild(AccountingLightbox.makeButton(session, {
@@ -455,7 +497,11 @@
         okBtn.className = 'btn btn-ok';
         okBtn.textContent = '標記已匯款';
         okBtn.addEventListener('click', async function () {
-          if (!confirm('確認銀行已匯款？將寫收支、標已匯款並 LINE 通知廠商。')) return;
+          var notifyOn = lineCb.checked;
+          if (!confirm(
+            '確認銀行已匯款？將寫收支並標已匯款。\n' +
+            (notifyOn ? '會 LINE 通知廠商。' : '已關閉這筆的 LINE 通知。')
+          )) return;
           if (itemQueueBusy(row.payment_request_id)) return;
           var btn = okBtn;
           await AccountingUi.runAsync(btn, {
@@ -465,8 +511,15 @@
             itemId: row.payment_request_id
           }, async function () {
             ui.clear();
-            var data = await AccountingApi.vendorPaymentMarkPaid(session, [row.payment_request_id]);
-            if (!data.success) { setMsg(data.message || '失敗'); return; }
+            setProgress('正在標記第 1／1 筆…');
+            var notifyById = {};
+            notifyById[row.payment_request_id] = notifyOn;
+            var data = await AccountingApi.vendorPaymentMarkPaid(session, [row.payment_request_id], {
+              notify_by_id: notifyById,
+              line_push: notifyOn
+            });
+            if (!data.success) { setMsg(data.message || '失敗'); setProgress(''); return; }
+            flushDeferredInBackground(data.deferred_token);
             var msg = '已標記已匯款';
             var pushSummary = summarizePushResults(data);
             if (pushSummary) msg += '\n' + pushSummary;
@@ -474,6 +527,7 @@
               setMsg('未綁 LINE：' + data.unlinked_vendors.map(function (u) { return u.vendor_name; }).join('、'));
             }
             setOk(msg);
+            setProgress('');
             removeItemFromView(row.payment_request_id);
           });
         });
@@ -667,23 +721,41 @@
       function summarizePushResults(data) {
         var lines = [];
         if (data.remit_date) lines.push('入帳日：' + data.remit_date);
-        var unlinked = data.unlinked_vendors || [];
-        if (unlinked.length) {
-          lines.push('未綁 LINE（無法推播）：' + unlinked.map(function (u) {
-            return u.vendor_name || u.vendor_id || '—';
-          }).join('、'));
-        }
-        var pushes = data.push_results || [];
-        if (pushes.length) {
-          var ok = pushes.filter(function (p) { return p.ok; }).length;
-          lines.push('LINE 推播：' + ok + '/' + pushes.length + ' 成功（同窗口多筆已合併成一則）');
-          pushes.filter(function (p) { return !p.ok; }).forEach(function (p) {
-            var chLabel = p.line_channel === 'official' ? '官方 LINE' : '會計 LINE';
-            var why = p.message || (p.channel === 'no_token' ? 'token 未設定' : '');
-            lines.push('推播失敗 ' + (p.vendor_name || '') + '（' + chLabel + (why ? '：' + why : '') + '）');
+        var records = data.notify_records || [];
+        if (records.length) {
+          var notified = records.filter(function (r) { return r.outcome === 'notified'; }).length;
+          var failed = records.filter(function (r) { return r.outcome === 'notify_failed'; }).length;
+          var skipped = records.filter(function (r) { return r.outcome === 'skipped'; }).length;
+          var unlinked = records.filter(function (r) { return r.outcome === 'unlinked'; }).length;
+          lines.push('通知紀錄：已通知 ' + notified +
+            '／失敗 ' + failed +
+            '／使用者略過 ' + skipped +
+            (unlinked ? '／未綁 LINE ' + unlinked : ''));
+          records.filter(function (r) { return r.outcome === 'notify_failed'; }).forEach(function (r) {
+            lines.push('通知失敗：' + (r.vendor_name || r.payment_request_id || '') +
+              (r.message ? '（' + r.message + '）' : ''));
           });
-        } else if (data.line_push !== false && !unlinked.length) {
-          lines.push('LINE 推播：無需推播的廠商');
+        } else {
+          var unlinkedList = data.unlinked_vendors || [];
+          if (unlinkedList.length) {
+            lines.push('未綁 LINE（無法推播）：' + unlinkedList.map(function (u) {
+              return u.vendor_name || u.vendor_id || '—';
+            }).join('、'));
+          }
+          var pushes = data.push_results || [];
+          if (pushes.length) {
+            var ok = pushes.filter(function (p) { return p.ok; }).length;
+            lines.push('LINE 推播：' + ok + '/' + pushes.length + ' 成功');
+            pushes.filter(function (p) { return !p.ok; }).forEach(function (p) {
+              var chLabel = p.line_channel === 'official' ? '官方 LINE' : '會計 LINE';
+              var why = p.message || (p.channel === 'no_token' ? 'token 未設定' : '');
+              lines.push('推播失敗 ' + (p.vendor_name || '') + '（' + chLabel + (why ? '：' + why : '') + '）');
+            });
+          } else if (data.notify_wanted > 0) {
+            lines.push('LINE 推播：無需推播的廠商');
+          } else if (data.notify_skipped > 0) {
+            lines.push('已依勾選略過 LINE 通知 ' + data.notify_skipped + ' 筆（有紀錄）');
+          }
         }
         return lines.join('\n');
       }
@@ -694,42 +766,86 @@
           setMsg('請先勾選要標記的項目');
           return;
         }
-        var countLabel = opts.markAll ? ('列表全部 ' + items.length + ' 筆') : (ids.length + ' 筆');
-        if (!confirm('確認銀行已匯款？將標記 ' + countLabel + ' 為已匯款、寫收支，並 LINE 通知廠商。\n入帳日＝今日。')) return;
+        if (opts.markAll) {
+          ids = items.map(function (r) { return r.payment_request_id; }).filter(Boolean);
+        }
+        if (!ids.length) {
+          setMsg('目前沒有待匯款項目');
+          return;
+        }
+        var notifyById = buildNotifyById(ids);
+        var notifyCount = countNotifyOn(notifyById);
+        var confirmMsg = '確認銀行已匯款？\n' +
+          '將標記 ' + ids.length + ' 筆入帳；其中 ' + notifyCount + ' 筆會 LINE 通知。\n' +
+          '入帳日＝今日。';
+        if (!confirm(confirmMsg)) return;
+
         await AccountingUi.runAsync(btn, {
           busyLabel: '處理中…',
-          startMessage: '正在寫入收支並通知廠商，明細多時可能要一兩分鐘…'
+          startMessage: '正在標記已匯款…'
         }, async function () {
           ui.clear();
-          var data = await AccountingApi.vendorPaymentMarkPaid(session, ids, {
-            mark_all: !!opts.markAll,
-            line_push: true
-          });
-          if (!data.success) {
-            setMsg(data.message || '標記失敗');
-            return;
+          var markedIds = [];
+          var failLines = [];
+          var allNotifyRecords = [];
+          var allDrafts = [];
+          var allUnlinked = [];
+          var markedCount = 0;
+          var remDate = '';
+
+          for (var i = 0; i < ids.length; i++) {
+            var id = ids[i];
+            setProgress('正在標記第 ' + (i + 1) + '／' + ids.length + ' 筆…');
+            var oneNotify = {};
+            oneNotify[id] = notifyById[id] !== false;
+            try {
+              var data = await AccountingApi.vendorPaymentMarkPaid(session, [id], {
+                notify_by_id: oneNotify,
+                line_push: oneNotify[id]
+              });
+              if (!data.success) {
+                failLines.push((data.message || '標記失敗') + '（' + id + '）');
+                continue;
+              }
+              markedCount += data.marked || 1;
+              remDate = data.remit_date || remDate;
+              (data.payment_request_ids || [id]).forEach(function (pid) { markedIds.push(pid); });
+              (data.notify_records || []).forEach(function (r) { allNotifyRecords.push(r); });
+              (data.email_drafts || []).forEach(function (d) { allDrafts.push(d); });
+              (data.push_results || []).forEach(function (p) {
+                if (p.email_draft && !p.ok) allDrafts.push(p.email_draft);
+              });
+              (data.unlinked_vendors || []).forEach(function (u) {
+                allUnlinked.push(u);
+                if (u.email_draft) allDrafts.push(u.email_draft);
+              });
+              if (data.warnings && data.warnings.length) {
+                data.warnings.forEach(function (w) { failLines.push(w); });
+              }
+              flushDeferredInBackground(data.deferred_token);
+              removeItemsFromView(data.payment_request_ids || [id]);
+            } catch (eMark) {
+              failLines.push((eMark && eMark.message ? eMark.message : String(eMark)) + '（' + id + '）');
+            }
           }
-          var msg = '已標記 ' + (data.marked || ids.length) + ' 筆已匯款';
-          var pushSummary = summarizePushResults(data);
+
+          setProgress('');
+          var summaryData = {
+            remit_date: remDate,
+            notify_records: allNotifyRecords,
+            unlinked_vendors: allUnlinked,
+            notify_wanted: notifyCount,
+            notify_skipped: ids.length - notifyCount
+          };
+          var msg = '已標記 ' + markedCount + '／' + ids.length + ' 筆已匯款';
+          var pushSummary = summarizePushResults(summaryData);
           if (pushSummary) msg += '\n' + pushSummary;
-          var drafts = (data.email_drafts || []).slice();
-          (data.push_results || []).forEach(function (p) {
-            if (p.email_draft && (!p.ok)) drafts.push(p.email_draft);
-          });
-          (data.unlinked_vendors || []).forEach(function (u) {
-            if (u.email_draft) drafts.push(u.email_draft);
-          });
-          if (drafts.length) renderVendorEmailDrafts(drafts);
-          if (data.warnings && data.warnings.length) {
-            setMsg('以下項目未標記：' + data.warnings.join('；'));
-            msg += '（另有 ' + data.warnings.length + ' 筆略過，見上方紅字）';
-          }
-          if ((data.unlinked_vendors || []).length) {
-            setMsg(((document.getElementById('msg').textContent || '') ? document.getElementById('msg').textContent + '\n' : '') +
-              '未綁 LINE：' + data.unlinked_vendors.map(function (u) { return u.vendor_name; }).join('、'));
+          if (allDrafts.length) renderVendorEmailDrafts(allDrafts);
+          if (failLines.length) {
+            setMsg('以下未完成：' + failLines.join('；'));
+            msg += '（另有 ' + failLines.length + ' 筆問題，見上方紅字）';
           }
           setOk(msg);
-          removeItemsFromView(data.payment_request_ids || ids);
         });
       }
 
