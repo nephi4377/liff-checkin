@@ -26,13 +26,13 @@
 
 ## 最近完成
 
-### 2026-09-21｜Cursor｜名冊已匯款補通知＋通知標記（draft）
+### 2026-09-21｜Cursor｜名冊已匯款補通知＋通知標記（已部署）
 
 - 修改範圍：`vendors.html`、`accounting_api.js`、SPEC／LOG；後端 Backend_GAS accounting-gas
 - 完成內容：已匯款列通知小標記；≥4「補通知」只重送 LINE；status 帶回 last_notify_*
-- 驗證：store `internal/vendor-resend-notify-verify.md`；媒體 `media/vendor-resend-notify/`
-- Commit／PR：前端 `ccdab5f`／[#76](https://github.com/nephi4377/liff-checkin/pull/76)；後端 `d086ce3`／[#51](https://github.com/nephi4377/Backend_GAS/pull/51)
-- 待處理／風險：**未部署**；需前後端同批上線後正式站抽測
+- 驗證：store `internal/vendor-resend-notify-verify.md`；正式站 `vendors.html` 已含補通知／標記；請硬重整後抽測
+- Commit：前端 merge `6e9a58f`（PR #76）／Pages run `35580821976`；後端 merge `22d440c`（PR #51）／accounting-gas **@335**
+- 待處理／風險：無（前後端已一併上線）；真人抽測：名冊→已匯款列看標記→補通知
 
 
 ### 2026-09-21｜Cursor｜標記已匯款加速第 1 刀（已部署）
