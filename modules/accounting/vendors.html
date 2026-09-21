@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=62"></script>
+  <script src="../../shared/js/accounting_api.js?v=63"></script>
   <script src="../../shared/js/accounting_cache.js?v=32"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
@@ -158,10 +158,15 @@
     .tag.warn { background: #fef7e0; color: #b06000; }
     .tag.bad { background: #fce8e6; color: #c5221f; }
     .tag.muted { background: #f1f3f4; color: #5f6368; }
+    .tag.notify-ok { background: #e6f4ea; color: #137333; }
+    .tag.notify-fail { background: #fce8e6; color: #c5221f; }
+    .tag.notify-skip { background: #fef7e0; color: #b06000; }
+    .tag.notify-none { background: #f1f3f4; color: #5f6368; }
     .pay-history-list { margin-top: 10px; }
     .pay-history-item { border: 1px solid #e8eaed; border-radius: 10px; padding: 10px 12px; margin: 8px 0; background: #fafafa; }
     .pay-history-item .pay-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
     .pay-history-item .btn-sm { padding: 6px 10px; font-size: 13px; margin-top: 0; }
+    .pay-notify-email { background: #f8f9fa; border-radius: 8px; padding: 10px; margin-top: 8px; font-size: 13px; }
     .pay-history-edit {
       margin-top: 10px; padding: 12px; border: 1px solid #c2d7f7; border-radius: 10px; background: #f8fbff;
     }
@@ -332,7 +337,7 @@
 
       <div id="payHistorySection" class="hidden">
         <p class="section-title">請款／匯款紀錄（近 12 個月）</p>
-        <p class="sub" style="margin:0 0 8px">看這家廠商近 12 個月的請款申請（待審／待匯／已匯／退回），含待付款與「收支登錄支出有對到這家廠商」補上的已匯款。新增請款會帶入這家廠商；待匯款可於此編輯或刪除（需財務權限 ≥4）。已匯款僅供查看。</p>
+        <p class="sub" style="margin:0 0 8px">看這家廠商近 12 個月的請款申請（待審／待匯／已匯／退回），含待付款與「收支登錄支出有對到這家廠商」補上的已匯款。新增請款會帶入這家廠商；待匯款可於此編輯或刪除（需財務權限 ≥4）。已匯款可看上次 LINE 通知小標記；財務 ≥4 可「補通知」（只重送通知，不改入帳）。</p>
         <div class="form-actions" style="margin-top:0">
           <a class="btn btn-primary" id="payHistoryAddBtn" href="payment_request.html" target="_blank" rel="noopener">新增請款</a>
           <button type="button" class="btn btn-secondary" id="payHistoryReloadBtn">重新整理</button>
@@ -525,6 +530,106 @@
         return 'tag muted';
       }
 
+      var NOTIFY_OUTCOME_LABEL = {
+        notified: '已通知',
+        notify_failed: '失敗',
+        skipped: '略過',
+        unlinked: '未綁 LINE',
+        none: '尚無紀錄'
+      };
+
+      function notifyOutcomeTag(it) {
+        if (!it || it.stage !== '已匯款') return '';
+        var outcome = String(it.last_notify_outcome || '').trim() || 'none';
+        var label = NOTIFY_OUTCOME_LABEL[outcome] || outcome;
+        var cls = 'tag notify-none';
+        if (outcome === 'notified') cls = 'tag notify-ok';
+        else if (outcome === 'notify_failed') cls = 'tag notify-fail';
+        else if (outcome === 'skipped' || outcome === 'unlinked') cls = 'tag notify-skip';
+        var title = label;
+        if (it.last_notify_at) title += ' · ' + String(it.last_notify_at).replace('T', ' ').slice(0, 16);
+        if (it.last_notify_resend) title += '（補通知）';
+        return '<span class="' + cls + '" title="' + title + '" style="margin-left:6px">' + label + '</span>';
+      }
+
+      function renderPayEmailDrafts(drafts, host) {
+        if (!drafts || !drafts.length || !host) return;
+        drafts.forEach(function (d) {
+          var div = document.createElement('div');
+          div.className = 'pay-notify-email';
+          div.innerHTML = '<strong>' + (d.vendor_name || d.subject || '匯款通知') + '</strong>' +
+            (d.to ? (' → ' + d.to) : '（無廠商 email，寄至會計）') +
+            '<div class="sub" style="margin-top:4px">這家廠商沒綁 LINE，無法推播。可複製下方內容改用 EMAIL 通知。</div>';
+          var copyBtn = document.createElement('button');
+          copyBtn.type = 'button';
+          copyBtn.className = 'btn btn-secondary btn-sm';
+          copyBtn.style.marginTop = '6px';
+          copyBtn.textContent = '複製內容';
+          copyBtn.onclick = function () {
+            navigator.clipboard.writeText(d.body || '').then(function () { setOk('已複製 EMAIL 草稿'); });
+          };
+          var mailBtn = document.createElement('a');
+          mailBtn.className = 'btn btn-secondary btn-sm';
+          mailBtn.style.display = 'inline-block';
+          mailBtn.style.marginLeft = '6px';
+          mailBtn.style.marginTop = '6px';
+          mailBtn.textContent = 'mailto 開信';
+          mailBtn.href = d.mailto_url || '#';
+          div.appendChild(copyBtn);
+          div.appendChild(mailBtn);
+          host.appendChild(div);
+        });
+      }
+
+      function summarizeResendNotify(data) {
+        var lines = [];
+        var records = (data && data.notify_records) || [];
+        if (!records.length) return '補通知已送出';
+        var notified = records.filter(function (r) { return r.outcome === 'notified'; }).length;
+        var failed = records.filter(function (r) { return r.outcome === 'notify_failed'; }).length;
+        var unlinked = records.filter(function (r) { return r.outcome === 'unlinked'; }).length;
+        if (notified) lines.push('已通知 ' + notified + ' 筆');
+        if (failed) lines.push('失敗 ' + failed + ' 筆');
+        if (unlinked) lines.push('未綁 LINE ' + unlinked + ' 筆（可用 EMAIL 草稿）');
+        records.filter(function (r) { return r.outcome === 'notify_failed'; }).forEach(function (r) {
+          lines.push('失敗：' + (r.vendor_name || r.payment_request_id || '') +
+            (r.message ? '（' + r.message + '）' : ''));
+        });
+        return lines.join('\n') || '補通知已送出';
+      }
+
+      function resendPayNotify(it, btn) {
+        if (!canEditPayments()) {
+          setMsg('補通知需財務權限（≥4）');
+          return;
+        }
+        if (!it || !it.payment_request_id) return;
+        var amt = Number(it.amount || 0).toLocaleString('zh-TW');
+        var confirmMsg =
+          '確定要再傳一次匯款 LINE 通知？\n\n' +
+          (it.summary || it.item_desc || '請款') + ' · $' + amt + '\n' +
+          '會再傳一次給廠商（同一套匯款摘要），不會改入帳狀態。';
+        if (!window.confirm(confirmMsg)) return;
+        AccountingUi.runAsync(btn, { busyLabel: '補通知中…', clear: false }, async function () {
+          var data = await AccountingApi.vendorPaymentResendNotify(session, [it.payment_request_id]);
+          if (!data || !data.success) throw new Error((data && data.message) || '補通知失敗');
+          setOk(summarizeResendNotify(data));
+          await loadPayHistory($('editId').value, true);
+          var drafts = data.email_drafts || [];
+          if (drafts.length) {
+            var box = $('payHistoryList');
+            var note = document.createElement('div');
+            note.className = 'pay-notify-email';
+            note.style.marginTop = '10px';
+            note.innerHTML = '<strong>EMAIL 備援草稿</strong>';
+            box.insertBefore(note, box.firstChild);
+            renderPayEmailDrafts(drafts, box);
+          }
+        }).catch(function (e) {
+          setMsg(e.message || String(e));
+        });
+      }
+
       function renderPayPhotos(urls) {
         if (!urls || !urls.length) return '';
         var html = '<div class="sub" style="margin-top:4px">';
@@ -559,7 +664,8 @@
           (it.store ? ' · ' + it.store : '') +
           ' · $' + amt;
         var tags = '<span class="' + payTagClass(it.stage) + '">' +
-          (PAY_STAGE_LABEL[it.stage] || it.stage || '—') + '</span>';
+          (PAY_STAGE_LABEL[it.stage] || it.stage || '—') + '</span>' +
+          notifyOutcomeTag(it);
         if (it.reject_reason) {
           tags += '<div class="sub" style="color:#c5221f;margin-top:4px">' + it.reject_reason + '</div>';
         }
@@ -585,6 +691,16 @@
           actions.appendChild(editBtn);
           actions.appendChild(delBtn);
           wrap.appendChild(actions);
+        } else if (it.stage === '已匯款' && it.payment_request_id && canEditPayments()) {
+          var resendRow = document.createElement('div');
+          resendRow.className = 'pay-actions';
+          var resendBtn = document.createElement('button');
+          resendBtn.type = 'button';
+          resendBtn.className = 'btn btn-secondary btn-sm';
+          resendBtn.textContent = '補通知';
+          resendBtn.addEventListener('click', function () { resendPayNotify(it, resendBtn); });
+          resendRow.appendChild(resendBtn);
+          wrap.appendChild(resendRow);
         } else if (it.stage === '請款待審' && it.payment_request_id) {
           var linkRow = document.createElement('div');
           linkRow.className = 'pay-actions';
