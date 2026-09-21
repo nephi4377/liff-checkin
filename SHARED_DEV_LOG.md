@@ -22,7 +22,7 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| — | — | 目前無進行中工作 | — | — |
+| 2026-09-21 04:23 UTC | Cursor｜YY worker | 會計提交變快第 1 刀：標記已匯款（defer 後置、逐筆 LINE 勾選、通知紀錄、多筆進度） | `modules/accounting/vendor_payment_finance.html`、`shared/js/accounting_api.js`、SPEC／LOG；後端 `Backend_GAS/accounting-gas` | 進行中 |
 
 ## 最近完成
 
