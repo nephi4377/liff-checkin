@@ -31,7 +31,7 @@
 - 修改範圍：`vendors.html`、`accounting_api.js`、SPEC／LOG；後端 Backend_GAS accounting-gas
 - 完成內容：已匯款列通知小標記；≥4「補通知」只重送 LINE；status 帶回 last_notify_*
 - 驗證：store `internal/vendor-resend-notify-verify.md`；正式站 `vendors.html` 已含補通知／標記；請硬重整後抽測
-- Commit：前端 merge `6e9a58f`（PR #76）／Pages run `35580821976`；後端 merge `22d440c`（PR #51）／accounting-gas **@335**
+- Commit：前端 merge `6e9a58f`（PR #76）／Pages run `35580821976`；後端 merge `22d440c`（PR #51）／accounting-gas **@335**→LOG 後 **@336**
 - 待處理／風險：無（前後端已一併上線）；真人抽測：名冊→已匯款列看標記→補通知
 
 
