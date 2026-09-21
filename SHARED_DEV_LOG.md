@@ -26,6 +26,14 @@
 
 ## 最近完成
 
+### 2026-09-21｜Cursor｜匯款通知改推群組＋佇列不算已通知（已部署）
+
+- 修改範圍：`vendors.html`（綁定／補通知摘要顯示 UID／GID）；後端 `VendorLineBinding`／`LineMessaging`／稽核
+- 完成內容：綁定群組 GID 也可收【匯款通知】純文字；進 Reply 佇列改為失敗（名冊不標假「已通知」）
+- 驗證：正式站 `vendors.html` 已含群組文案／`?v=64`；請真人：名冊懋桔→已匯款→補通知→**手機群組**找【匯款通知】
+- Commit：前端 merge `f4e4bf7`（PR #77）／Pages run `35582996609`；後端 merge `be8671a`（PR #55）／accounting-gas **@337**
+- 待處理／風險：無（前後端已一併上線）
+
 ### 2026-09-21｜Cursor｜名冊已匯款補通知＋通知標記（已部署）
 
 - 修改範圍：`vendors.html`、`accounting_api.js`、SPEC／LOG；後端 Backend_GAS accounting-gas
