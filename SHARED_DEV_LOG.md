@@ -22,9 +22,18 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-09-21 | Cursor｜YY | 名冊已匯款補通知＋通知標記 | `vendors.html`、`accounting_api.js`、SPEC／LOG | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-09-21｜Cursor｜名冊已匯款補通知＋通知標記（draft）
+
+- 修改範圍：`vendors.html`、`accounting_api.js`、SPEC／LOG；後端 Backend_GAS accounting-gas
+- 完成內容：已匯款列通知小標記；≥4「補通知」只重送 LINE；status 帶回 last_notify_*
+- 驗證：store `internal/vendor-resend-notify-verify.md`；媒體 `media/vendor-resend-notify/`
+- Commit／PR：前端 `ccdab5f`／[#76](https://github.com/nephi4377/liff-checkin/pull/76)；後端 `d086ce3`／[#51](https://github.com/nephi4377/Backend_GAS/pull/51)
+- 待處理／風險：**未部署**；需前後端同批上線後正式站抽測
+
 
 ### 2026-09-21｜Cursor｜標記已匯款加速第 1 刀（已部署）
 
