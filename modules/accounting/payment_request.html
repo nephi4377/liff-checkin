@@ -141,7 +141,7 @@
       <div id="ocrPanel" class="ocr-panel hidden">
         <strong>辨識結果</strong>
         <pre id="ocrPreview"></pre>
-        <button type="button" class="btn btn-secondary" id="applyOcrBtn" style="margin-top:8px">套用至表單</button>
+        <button type="button" class="btn btn-secondary hidden" id="applyOcrBtn" style="margin-top:8px">套用至表單</button>
         <div id="modeSuggest" class="mode-suggest hidden"></div>
       </div>
       </div>
@@ -390,6 +390,7 @@
         document.getElementById('archiveListCard').classList.toggle('hidden', !isArchive);
         document.getElementById('stepsBar').classList.toggle('hidden', isArchive);
         document.getElementById('vendorArchiveHint').classList.toggle('hidden', !isArchive);
+        document.getElementById('applyOcrBtn').classList.toggle('hidden', !isArchive);
         document.getElementById('modeHint').textContent = isArchive
           ? '報價、合約等檔案存入廠商 Drive 資料夾並建立索引；不必走請款審核。'
           : '錢還沒付出去才用這模式：傳單據給 AI 讀取，或手填後送審。';
@@ -2212,7 +2213,7 @@
           setOk('已套用辨識結果至表單');
           return;
         }
-        setMsg('請款模式會自動帶入辨識結果；若要重填請再按「開始辨識」');
+        setWarn('請款模式已自動帶入辨識結果；若要重新辨識，請再按「開始辨識」');
       });
       document.getElementById('archiveSubmitBtn').addEventListener('click', function () { submitArchive(); });
       document.getElementById('reloadArchiveBtn').addEventListener('click', function () {

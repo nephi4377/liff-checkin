@@ -26,6 +26,14 @@
 
 ## 最近完成
 
+### 2026-09-21｜Codex｜待付款請款辨識提醒不再誤報為錯誤
+
+- 修改範圍：`modules/accounting/payment_request.html`
+- 完成內容：待付款請款模式隱藏多餘的「套用至表單」按鈕；舊快取或特殊狀況觸發時改為一般提醒，不再產生正式錯誤回報。
+- 驗證：確認請款模式初始化會隱藏按鈕，備援點擊路徑使用 `setWarn`，不會進入錯誤回報流程。
+- Commit：見本紀錄所在提交。
+- 待處理／風險：存檔歸檔已轉往 `quick_review.html`，原有 archive 分支保留相容性。
+
 ### 2026-09-20｜Cursor｜會計分攤明細打字不失焦（部署）
 
 - 修改範圍：`shared/js/accounting_form_helpers.js`、`modules/accounting/accounting_ingest.html`；SPEC／LOG
