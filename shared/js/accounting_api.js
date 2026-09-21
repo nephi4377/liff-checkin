@@ -1155,6 +1155,14 @@ var AccountingApi = (function () {
         deferred_token: deferredToken || ''
       }, 120000);
     },
+    /** 已匯款補通知：只重送匯款 LINE，不改入帳 */
+    vendorPaymentResendNotify: function (sessionOrToken, paymentRequestIds) {
+      return post({
+        action: 'vendor_payment_resend_notify',
+        auth: resolveAuth(sessionOrToken),
+        payment_request_ids: paymentRequestIds || []
+      }, 120000);
+    },
     /** 已匯款但缺收支列 → 補寫（不推播） */
     vendorPaymentRepairLedger: function (sessionOrToken, opts) {
       opts = opts || {};
