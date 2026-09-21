@@ -22,9 +22,17 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-09-21 04:23 UTC | Cursor｜YY worker | 會計提交變快第 1 刀：標記已匯款（defer 後置、逐筆 LINE 勾選、通知紀錄、多筆進度） | `modules/accounting/vendor_payment_finance.html`、`shared/js/accounting_api.js`、SPEC／LOG；後端 `Backend_GAS/accounting-gas` | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-09-21｜Cursor｜標記已匯款加速第 1 刀（draft PR・未部署）
+
+- 修改範圍：`modules/accounting/vendor_payment_finance.html`、`shared/js/accounting_api.js`、SPEC／LOG／help；後端見 Backend_GAS 同名分支
+- 完成內容：逐筆 LINE 勾選（預設開）、確認 N／M、多筆進度、通知結果摘要；標記後背景 flush 後置 token
+- 驗證：本機 UI／單元 notify prefs；正式站需部署後測。見 store `internal/mark-paid-phase1-verify.md`
+- Commit：見本分支 PR
+- 待處理／風險：**未 clasp deploy／未合 main**；前後端需一併上線
 
 ### 2026-09-21｜Codex｜待付款請款辨識提醒不再誤報為錯誤
 
