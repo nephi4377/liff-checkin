@@ -12,7 +12,7 @@
   <script src="../../shared/js/accounting_cache.js?v=32"></script>
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
-  <script src="../../shared/js/accounting_boot.js?v=9"></script>
+  <script src="../../shared/js/accounting_boot.js?v=10"></script>
   <style>
     h2 { margin: 0; font-size: 22px; font-weight: 700; color: #202124; }
     .page-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin-bottom: 6px; }
@@ -905,63 +905,65 @@
         kwTimer = setTimeout(function () { reload({ silent: true }); }, 400);
       });
 
-      (async function boot() {
-        if (typeof AccountingUi !== 'undefined' && AccountingUi.init) {
-          AccountingUi.init();
-          // 本頁用 #msg／#ok 當常駐說明；不要被 UI 套件藏掉
-          ['msg', 'ok'].forEach(function (id) {
-            var el = document.getElementById(id);
-            if (el) el.classList.remove('acct-ui-hide-legacy');
-          });
-        }
-        if (typeof AccountingNav !== 'undefined') AccountingNav.init();
-        try {
-          AccountingUi.action('開啟單據與存檔', 'start');
-          session = await AccountingApi.initSession({
-            minPermission: AccountingApi.INGEST_MIN_PERMISSION
-          });
-          if (!session) return;
-          canArchiveDelete = (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION;
-          document.getElementById('userLine').textContent =
-            (session.auth.display_name || session.profile.displayName) +
-            ' · 權限 ' + session.auth.permission +
-            (session.fromHub ? ' · 主控台' : (session.devBypass ? ' · 測試模式（無登入）' : ''));
-          fillArchiveDocTypes();
-          fillVendorTradeFilter();
-          var tabQ = '';
-          try { tabQ = new URLSearchParams(window.location.search).get('tab') || ''; } catch (eTab) {}
-          setWorkTab(tabQ === 'archive' ? 'archive' : 'review', false);
-          // 先出殼：不要等主檔／清單，避免整頁卡在「載入中」
-          showApp();
+      function keepLegacyMsgOkVisible_() {
+        // 本頁用 #msg／#ok 當常駐說明；不要被 UI 套件藏掉
+        ['msg', 'ok'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) el.classList.remove('acct-ui-hide-legacy');
+        });
+      }
+
+      function applySessionGates_(sess) {
+        session = sess;
+        canArchiveDelete = (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION;
+      }
+
+      async function afterAuthReady_() {
+        keepLegacyMsgOkVisible_();
+        fillArchiveDocTypes();
+        fillVendorTradeFilter();
+        var tabQ = '';
+        try { tabQ = new URLSearchParams(window.location.search).get('tab') || ''; } catch (eTab) {}
+        setWorkTab(tabQ === 'archive' ? 'archive' : 'review', false);
+        // AccountingBoot 已先出殼；此處補清單／主檔，勿再卡「載入中」
+        setLive('更新中…', true);
+        var cached = cacheRead();
+        var curStatus = document.getElementById('filterStatus').value;
+        if (cached && cached.items && cached.status === curStatus) {
+          items = cached.items;
+          renderList();
           setLive('更新中…', true);
-          var cached = cacheRead();
-          var curStatus = document.getElementById('filterStatus').value;
-          if (cached && cached.items && cached.status === curStatus) {
-            items = cached.items;
-            renderList();
-            setLive('更新中…', true);
-          }
-          // 先載清單；主檔（廠商）背景補，避免跟清單搶連線拖慢
-          await reload({ silent: !!(cached && cached.items && cached.items.length) });
-          if (typeof AccountingCache !== 'undefined') {
-            try {
-              vendors = AccountingCache.vendors(session) || AccountingCache.peekVendors() || [];
-              if (vendors.length) fillVendorDropdown();
-              if (!vendors.length && AccountingCache.needsStaffBootstrap(session)) {
-                AccountingCache.load(session, false).then(function () {
-                  vendors = AccountingCache.vendors(session) || [];
-                  if (vendors.length && items.length) renderList();
-                  fillVendorDropdown();
-                }).catch(function () {});
-              }
-            } catch (eCache) {}
-          }
-          AccountingUi.action('開啟單據與存檔', 'ok');
-        } catch (e) {
-          document.getElementById('loading').textContent = humanApiMsg(e.message || String(e));
-          document.getElementById('loading').classList.remove('hidden');
-          AccountingUi.action('開啟單據與存檔', 'fail');
         }
+        // 先載清單；主檔（廠商）背景補，避免跟清單搶連線拖慢
+        await reload({ silent: !!(cached && cached.items && cached.items.length) });
+        if (typeof AccountingCache !== 'undefined') {
+          try {
+            vendors = AccountingCache.vendors(session) || AccountingCache.peekVendors() || [];
+            if (vendors.length) fillVendorDropdown();
+            if (!vendors.length && AccountingCache.needsStaffBootstrap(session)) {
+              AccountingCache.load(session, false).then(function () {
+                vendors = AccountingCache.vendors(session) || [];
+                if (vendors.length && items.length) renderList();
+                fillVendorDropdown();
+              }).catch(function () {});
+            }
+          } catch (eCache) {}
+        }
+      }
+
+      // 主控台帶 uid 時先暫用身分出殼，背景再驗證；避免 accounting_auth_me 逾時整頁卡死
+      (async function boot() {
+        await AccountingBoot.run({
+          minPermission: AccountingApi.INGEST_MIN_PERMISSION,
+          onReady: async function (sess) {
+            applySessionGates_(sess);
+            await afterAuthReady_();
+          },
+          onRevalidate: async function (fresh) {
+            applySessionGates_(fresh);
+          }
+        });
+        keepLegacyMsgOkVisible_();
       })();
     })();
   </script>
