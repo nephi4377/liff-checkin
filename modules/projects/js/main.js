@@ -24,9 +24,9 @@
  */
 
 // [v521.0 修正] 移除多餘的 api.js 和 handlers.js 引入，並修正所有模組的相對路徑。
-import { request as apiRequest } from './projectApi.js';
+import { request as apiRequest } from './projectApi.js?v=26.09.22.1';
 import { logToPage, showGlobalNotification } from '/shared/js/utils.js'; // [v544.0 修正] 改為絕對路徑
-import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, renderPostCreator, _buildLogCard, renderCommunicationHistory, lazyLoadImages } from './ui.js';
+import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, renderPostCreator, _buildLogCard, renderCommunicationHistory, lazyLoadImages } from './ui.js?v=26.09.22.1';
 import * as LogActions from './logActions.js';
 import * as ScheduleActions from './scheduleActions.js';
 import { state } from './state.js';
@@ -931,11 +931,27 @@ async function loadDataAndRender(projectId, userId, pageLoadId) {
 
     // [v201.0 核心修正] 在處理任何資料前，先檢查後端是否回傳錯誤。
     if (!result.success) {
-      const freshData = result.data || {}; // 即使失敗，也嘗試從 data 中取錯誤訊息
-      // 如果後端回傳錯誤，則不進行任何渲染或快取操作，直接顯示錯誤。
-      logToPage(`❌ 後端回傳錯誤: ${freshData.error}`, 'error');
-      displayError({ message: freshData.error });
-      return;
+      const failMsg = result.message || result.error || (result.data && result.data.error) || '後端回傳失敗';
+      logToPage(`❌ 後端回傳錯誤: ${failMsg}`, 'error');
+      // 配額類：自動再試一次（間隔約 2 秒），減少「有的手機打不開」
+      if (/quota/i.test(String(failMsg)) && !window.__projectQuotaRetried) {
+        window.__projectQuotaRetried = true;
+        logToPage('⏳ 配額忙碌，2 秒後自動再試…');
+        await new Promise(function (r) { setTimeout(r, 2000); });
+        const retry = await apiRequest({
+          action: 'project',
+          payload: { id: projectId, userId: userId }
+        });
+        if (retry.success && retry.data) {
+          result = retry;
+        } else {
+          displayError({ message: (retry && (retry.message || retry.error)) || failMsg });
+          return;
+        }
+      } else {
+        displayError({ message: failMsg });
+        return;
+      }
     }
 
     // 【⭐️ 核心修正：使用後端傳來的使用者名稱 ⭐️】

@@ -26,6 +26,14 @@
 
 ## 最近完成
 
+### 2026-09-22｜Cursor｜LINE 開案場遇 quota（分支待合／待部署）
+
+- 修改範圍：前端 `projectApi`／`ui`／`main`／`managementconsole`；後端 project-console Drive 門牌＋快取＋page=project 容錯
+- 完成內容：配額錯誤人話＋再試；GET 接 success:false；後端少驗 Drive、快取寫入不拋、子步驟失敗仍出殼
+- 驗證：Playwright 模擬 quota → 人話「忙不過來」＋「再試一次」
+- Commit／PR：前端 `64ac523`／PR #79；後端 `24b0cd1`／PR #65
+- 待處理／風險：未部署；需前後端一併上線
+
 ### 2026-09-21｜Cursor｜匯款通知改推群組＋佇列不算已通知（已部署）
 
 - 修改範圍：`vendors.html`（綁定／補通知摘要顯示 UID／GID）；後端 `VendorLineBinding`／`LineMessaging`／稽核
