@@ -192,9 +192,11 @@
         let originalHTML = '';
 
         function renderFAQs(filter = '') {
+            const prevHtml = faqContainer.innerHTML;
             faqContainer.innerHTML = '';
             let found = false;
 
+            try {
             categories.forEach(category => {
                 const sectionWrapper = document.createElement('section');
                 sectionWrapper.id = 'category-' + category.replace(/\s+/g, '-');
@@ -221,7 +223,7 @@
                         
                         const questionText = document.createElement('span');
                         questionText.className = 'font-semibold text-stone-700';
-                        questionText.innerHTML = highlight(item.question, filter);
+                        questionText.innerHTML = faqDisplayHtml(item.question, filter);
                         
                         const icon = document.createElement('div');
                         icon.className = 'icon-plus text-amber-700 transition-transform duration-300';
@@ -234,7 +236,7 @@
                         content.className = 'accordion-content px-4';
                         const contentInner = document.createElement('div');
                         contentInner.className = 'prose-custom py-4 text-stone-600';
-                        contentInner.innerHTML = highlight(item.answer, filter);
+                        contentInner.innerHTML = faqDisplayHtml(item.answer, filter);
                         content.appendChild(contentInner);
 
                         accordionItem.appendChild(button);
@@ -248,12 +250,33 @@
             originalHTML = faqContainer.innerHTML;
             
             noResults.classList.toggle('hidden', found);
+            } catch (e) {
+                faqContainer.innerHTML = prevHtml || originalHTML;
+                noResults.classList.add('hidden');
+            }
+        }
+
+        function escapeRegExp(s) {
+            return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        /** 文案裡的 **粗體** 變成真正加粗，不要讓客人看到星號。 */
+        function formatFaqEmphasis(text) {
+            return String(text || '').replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
         }
 
         function highlight(text, filter) {
             if (!filter) return text;
-            const regex = new RegExp(`(${filter})`, 'gi');
-            return text.replace(regex, '<mark>$1</mark>');
+            try {
+                const regex = new RegExp('(' + escapeRegExp(filter) + ')', 'gi');
+                return text.replace(regex, '<mark>$1</mark>');
+            } catch (e) {
+                return text;
+            }
+        }
+
+        function faqDisplayHtml(raw, filter) {
+            return highlight(formatFaqEmphasis(raw), filter);
         }
 
         renderFAQs();
