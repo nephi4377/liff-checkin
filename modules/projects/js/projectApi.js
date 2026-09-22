@@ -92,6 +92,10 @@ export async function request({ action, payload = {} }) {
             if (result.error) {
                 throw new Error(result.error);
             }
+            // 後端 doGet 失敗回 { success:false, message }，不可當成成功
+            if (result.success === false) {
+                throw new Error(result.message || result.error || '後端回傳失敗');
+            }
 
         } else if (WRITE_ACTIONS.has(action)) {
             // --- 處理寫入型請求 (POST + 非同步任務) ---

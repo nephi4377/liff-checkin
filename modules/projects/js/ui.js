@@ -46,22 +46,52 @@ export function displaySkeletonLoader() {
  */
 /** 顯示錯誤訊息 */
 export function displayError(err) {
-    const msg = (err && err.message) ? err.message : '發生未知錯誤。';
-    console.error('PAGE ERROR: ' + msg); // Log to console instead
-    const statusContainer = document.getElementById('main-content'); // This might be null
-    const errorHtml = `<div id="status-message" style="border:1px solid red;background:#ffebee;color:#c62828;padding:1rem;white-space:pre-wrap;margin:1rem;">
-            <strong>載入失敗！</strong>\n\n
-            <strong>錯誤訊息：</strong>\n${msg}\n\n
-            <strong>建議：</strong>請檢查 Apps Script 後端日誌與路由設定（project）。
+    const raw = (err && err.message) ? err.message : (typeof err === 'string' ? err : '發生未知錯誤。');
+    const msg = humanizeProjectLoadError_(raw);
+    console.error('PAGE ERROR: ' + raw);
+    const statusContainer = document.getElementById('main-content');
+    const errorHtml = `<div id="status-message" style="border:1px solid #c62828;background:#ffebee;color:#c62828;padding:1rem;border-radius:8px;margin:1rem;">
+            <strong style="font-size:1.05rem;">暫時打不開這個案場</strong>
+            <p style="margin:0.75rem 0 0;line-height:1.5;white-space:pre-wrap;">${escapeHtmlForError_(msg)}</p>
+            <p style="margin:0.75rem 0 0;font-size:0.9rem;color:#6d4c41;">這不代表案場資料消失了，多半是後端暫時忙不過來。請再試一次。</p>
+            <button type="button" id="project-load-retry" style="margin-top:1rem;min-height:44px;padding:0.6rem 1.2rem;border:none;border-radius:8px;background:#1a73e8;color:#fff;font-weight:600;font-size:1rem;cursor:pointer;">再試一次</button>
             </div>`;
 
-    // 【您的要求】修正錯誤顯示邏輯，增加防禦性程式碼
     if (statusContainer) {
         statusContainer.innerHTML = errorHtml;
     } else {
-        // 如果主容器不存在，直接將錯誤訊息寫入 body，確保使用者能看到
         document.body.innerHTML = errorHtml;
     }
+    const retryBtn = document.getElementById('project-load-retry');
+    if (retryBtn) {
+        retryBtn.addEventListener('click', function () {
+            retryBtn.disabled = true;
+            retryBtn.textContent = '重試中…';
+            location.reload();
+        });
+    }
+}
+
+function humanizeProjectLoadError_(raw) {
+    const t = String(raw || '');
+    if (/quota has been exceeded|Quota exceeded|quota/i.test(t)) {
+        return '系統暫時忙不過來（配額用盡）。請等約半分鐘再按「再試一次」。若多人同時開案場較容易出現。';
+    }
+    if (/timeout|逾時|AbortError|Failed to fetch|NetworkError/i.test(t)) {
+        return '連線不穩或等太久。請確認網路後再試一次。';
+    }
+    if (/Unauthorized|找不到您的使用者/i.test(t)) {
+        return '找不到您的員工資料。請從 LINE 主控台重新進入，或連絡管理員。';
+    }
+    return t || '發生未知錯誤。';
+}
+
+function escapeHtmlForError_(s) {
+    return String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 }
 
 /**

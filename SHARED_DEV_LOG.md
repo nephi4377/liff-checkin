@@ -22,7 +22,7 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| — | — | 目前無進行中工作 | — | — |
+| 2026-09-22 | Cursor | LINE 開案場／回報遇 quota：前端人話重試＋API 接 success:false；後端 Drive 門牌少驗、快取寫入不拋錯 | `projectApi.js`／`ui.js`／`main.js`；`config_.js`／`ProjectLogic.js` | 進行中 |
 
 ## 最近完成
 
