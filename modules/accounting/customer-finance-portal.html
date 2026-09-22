@@ -12,7 +12,8 @@
   <script src="../../shared/js/accounting_api.js?v=60"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
-  <script src="../../shared/js/customer_finance_ui.js?v=3"></script>
+  <script src="../../shared/js/customer_finance_ui.js?v=4"></script>
+  <script type="module" src="./js/recConfirmFail.mjs?v=1"></script>
   <!-- 客戶專用 LIFF（與員工會計 policy.liffId 分開）。LINE Developers Endpoint URL：
        https://info.tanxin.space/modules/accounting/customer-finance-portal.html
        申請綁定：?bind=1。尚未綁定時即使沒帶參數也會看到申請畫面。
@@ -229,6 +230,31 @@
       }
       return fallback;
     }
+    function humanRecConfirmFail(errOrMsg) {
+      if (typeof CustomerFinanceUi !== 'undefined' && CustomerFinanceUi.humanReceiptConfirmFail) {
+        return CustomerFinanceUi.humanReceiptConfirmFail(errOrMsg);
+      }
+      if (typeof RecConfirmFail !== 'undefined' && RecConfirmFail.humanReceiptConfirmFail) {
+        return RecConfirmFail.humanReceiptConfirmFail(errOrMsg);
+      }
+      return '這次沒送到，還沒幫您記下確認。請再按一次。這不代表款項有問題。';
+    }
+    function showRecConfirmFail(errOrMsg) {
+      var text = humanRecConfirmFail(errOrMsg);
+      showMsg(text);
+      var host = $('recList');
+      if (!host) return;
+      var old = host.querySelector('[data-rec-confirm-fail]');
+      if (old) old.remove();
+      var p = document.createElement('p');
+      p.setAttribute('data-rec-confirm-fail', '1');
+      p.setAttribute('role', 'status');
+      p.style.color = '#c5221f';
+      p.style.fontSize = '14px';
+      p.style.lineHeight = '1.5';
+      p.textContent = text;
+      host.insertBefore(p, host.firstChild);
+    }
 
     function parsePortalDeepLink() {
       var params = new URLSearchParams(window.location.search);
@@ -358,6 +384,9 @@
     function showRecStage2Locally(receiptId) {
       var row = document.querySelector('[data-rec-id="' + receiptId + '"]');
       if (!row) return;
+      var failNote = $('recList') && $('recList').querySelector('[data-rec-confirm-fail]');
+      if (failNote) failNote.remove();
+      showMsg('');
       var stage2Hint = '確認後此收款紀錄將寫入您的案件紀錄，請再次核對金額、日期與階段名稱。款項相關請務必謹慎確認。';
       var tag = row.querySelector('.tag');
       if (tag) tag.textContent = statusLabel('customer_stage1');
@@ -365,10 +394,31 @@
       oldBtns.forEach(function (b) { b.remove(); });
       if (row.querySelector('[data-rec-s2]')) return;
       var wrap = document.createElement('div');
-      wrap.innerHTML = '<div class="warn-box">' + stage2Hint + '</div>' +
+      wrap.innerHTML = '<p data-rec-confirm-ok="1" style="color:#137333;font-size:14px;margin:8px 0">已記下第一次確認，請再核對後按下面按鈕。</p>' +
+        '<div class="warn-box">' + stage2Hint + '</div>' +
         '<button class="btn btn-primary" data-rec-s2="' + receiptId + '">② 我確認已收到此收款紀錄</button>';
       row.appendChild(wrap);
       bindRecStage2Button(wrap.querySelector('[data-rec-s2]'));
+    }
+
+    function showRecConfirmedLocally(receiptId) {
+      var row = document.querySelector('[data-rec-id="' + receiptId + '"]');
+      if (!row) return;
+      var failNote = $('recList') && $('recList').querySelector('[data-rec-confirm-fail]');
+      if (failNote) failNote.remove();
+      var tag = row.querySelector('.tag');
+      if (tag) tag.textContent = statusLabel('customer_confirmed');
+      row.querySelectorAll('[data-rec-s2], .warn-box, [data-rec-confirm-ok]').forEach(function (el) {
+        el.remove();
+      });
+      if (!row.querySelector('[data-rec-confirmed-ok]')) {
+        var note = document.createElement('p');
+        note.setAttribute('data-rec-confirmed-ok', '1');
+        note.style.cssText = 'color:#137333;font-size:14px;margin:8px 0';
+        note.textContent = '已記下您確認收到。';
+        row.appendChild(note);
+      }
+      showMsg('已記下您確認收到。');
     }
 
     function bindRecStage2Button(btn) {
@@ -378,13 +428,29 @@
       btn.onclick = function () {
         if (!confirm(stage2Hint + '\n\n確定要提交？提交後不可取消。')) return;
         CustomerFinanceUi.runBtnAsync(btn, async function () {
-          var res = await AccountingApi.cfRecCustomerStage2(session, btn.getAttribute('data-rec-s2'));
-          if (!res.success) showMsg(res.message);
-          else {
+          try {
+            var rid = btn.getAttribute('data-rec-s2');
+            var res;
+            if (portalMockMode() === 'recconfirmfail') {
+              throw new Error('Failed to fetch');
+            } else {
+              res = await AccountingApi.cfRecCustomerStage2(session, rid);
+            }
+            if (!res || !res.success) {
+              showRecConfirmFail((res && res.message) || '確認未完成');
+              return;
+            }
             if (typeof AccountingListCache !== 'undefined') {
               AccountingListCache.invalidatePortalData(session, $('projectSelect').value);
             }
-            return loadData(true);
+            showRecConfirmedLocally(rid);
+            try {
+              return await loadData(true);
+            } catch (eReload) {
+              showMsg('已記下您確認收到。列表暫時更新不到，畫面仍顯示剛才的結果。');
+            }
+          } catch (eStage2) {
+            showRecConfirmFail(eStage2);
           }
         }, { busyLabel: '處理中…', lockRoot: $('recList') });
       };
@@ -502,14 +568,24 @@
       $('recList').querySelectorAll('[data-rec-s1]').forEach(function (btn) {
         btn.onclick = function () {
           CustomerFinanceUi.runBtnAsync(btn, async function () {
-            var rid = btn.getAttribute('data-rec-s1');
-            var res = await AccountingApi.cfRecCustomerStage1(session, rid);
-            if (!res.success) showMsg(res.message);
-            else {
+            try {
+              var rid = btn.getAttribute('data-rec-s1');
+              var res;
+              if (portalMockMode() === 'recconfirmfail') {
+                throw new Error('Failed to fetch');
+              } else {
+                res = await AccountingApi.cfRecCustomerStage1(session, rid);
+              }
+              if (!res || !res.success) {
+                showRecConfirmFail((res && res.message) || '確認未完成');
+                return;
+              }
               if (typeof AccountingListCache !== 'undefined') {
                 AccountingListCache.invalidatePortalData(session, $('projectSelect').value);
               }
               showRecStage2Locally(rid);
+            } catch (eStage1) {
+              showRecConfirmFail(eStage1);
             }
           }, { busyLabel: '處理中…', lockRoot: $('recList') });
         };
@@ -860,6 +936,24 @@
           $('loading').classList.add('hidden');
           $('app').classList.remove('hidden');
           showMaterialBootFail(new Error('Failed to fetch'));
+          return;
+        }
+        if (mock === 'recconfirmfail') {
+          session = { portal: { display_name: '本機測試', projects: [{ project_no: '999', site_name: '本機模擬' }] } };
+          $('loading').classList.add('hidden');
+          $('app').classList.remove('hidden');
+          fillProjects(session.portal.projects);
+          $('projectSelect').value = '999';
+          showReceiptView();
+          $('userLine').textContent = '（本機模擬）按第一次確認會假裝連線失敗，用來確認不會以為已記下。';
+          renderRec([{
+            receipt_id: 'mock-rec-1',
+            receipt_no: 'TEST-001',
+            stage_label: '本機測試款',
+            amount: 1000,
+            received_at: '2026-08-31',
+            status: 'pending_customer'
+          }]);
           return;
         }
         session = await AccountingApi.initCustomerPortalSession({
