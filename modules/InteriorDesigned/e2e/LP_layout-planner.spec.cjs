@@ -54,4 +54,12 @@ test.describe('LayoutPlanner E2E', () => {
     await page.locator('#budget-modal-close-btn').click();
     await expect(page.locator('#budget-modal')).toBeHidden();
   });
+
+  test('元件表讀失敗時分類區顯示再試，不可裝成還沒載入', async ({ page }) => {
+    await page.route('**/spreadsheets/**', (route) => route.abort());
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#btnRetrySheetLoadLayer')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('#layer-visibility-list')).toContainText('元件表讀不到');
+    await expect(page.locator('#layer-visibility-list')).not.toContainText('載入元件後顯示分類');
+  });
 });
