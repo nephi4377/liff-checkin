@@ -229,6 +229,13 @@
       }
       return fallback;
     }
+    function humanReceiptFail(errOrMsg) {
+      var fallback = '收款紀錄暫時讀不到，請再試一次。這不代表沒有收款。';
+      if (typeof CustomerFinanceUi !== 'undefined' && CustomerFinanceUi.humanCustomerFail) {
+        return CustomerFinanceUi.humanCustomerFail(errOrMsg, fallback);
+      }
+      return fallback;
+    }
 
     function parsePortalDeepLink() {
       var params = new URLSearchParams(window.location.search);
@@ -324,13 +331,36 @@
       box.style.pointerEvents = on ? 'none' : '';
     }
 
+    var recLoadAutoTried_ = false;
+    function showReceiptLoadFail(errOrMsg, hadRows) {
+      var msg = humanReceiptFail(errOrMsg);
+      if (hadRows) {
+        showMsg(msg);
+        return;
+      }
+      $('recList').innerHTML =
+        '<p>' + msg + '</p>' +
+        '<p class="sub">這不代表沒有收款，只是這次沒讀到。</p>' +
+        '<button type="button" class="btn btn-secondary" id="btnRetryRec">再試一次</button>';
+      var retry = $('btnRetryRec');
+      if (retry) retry.onclick = function () { loadData(true); };
+    }
+
     async function loadData(forceRefresh) {
       var pno = $('projectSelect').value;
       if (!pno) return;
       showMsg('');
       setContentBusy(true);
       $('projectSelect').disabled = true;
+      var hadRows = !!$('recList').querySelector('[data-rec-id]');
+      if (!hadRows) {
+        $('recList').innerHTML = '<p>載入中…</p>';
+      }
       try {
+        if (portalMockMode() === 'recfail') {
+          recLoadAutoTried_ = true;
+          throw new Error('Failed to fetch');
+        }
         var portalOpts = staffPreview ? { staffPreview: true } : {};
         var fetchFn = function () { return AccountingApi.cfPortalData(session, pno, portalOpts); };
         var res;
@@ -342,13 +372,27 @@
             AccountingListCache.loadPortalData(session, pno, function () { return Promise.resolve(res); }, { force: true });
           }
         }
-        if (!res.success) { showMsg(res.message); return; }
+        if (!res || !res.success) {
+          if (!forceRefresh && !recLoadAutoTried_) {
+            recLoadAutoTried_ = true;
+            return loadData(true);
+          }
+          showReceiptLoadFail((res && res.message) || '載入失敗', hadRows);
+          return;
+        }
+        recLoadAutoTried_ = false;
         // 【未來待確認】先不看追加減：略過前端繪製，仍照常顯示收款
         if (SHOW_CUSTOMER_ADJUSTMENTS) {
           renderAdj(res.adjustments || []);
         }
         renderRec(res.receipts || []);
         focusDeepLinkEntity();
+      } catch (eRec) {
+        if (!forceRefresh && !recLoadAutoTried_) {
+          recLoadAutoTried_ = true;
+          return loadData(true);
+        }
+        showReceiptLoadFail(eRec, hadRows);
       } finally {
         setContentBusy(false);
         $('projectSelect').disabled = false;
@@ -836,6 +880,20 @@
       if (reloginMat) reloginMat.onclick = function () { $('btnLiffRelogin').click(); };
     }
 
+    function showReceiptBootFail(errOrMsg) {
+      showReceiptView();
+      $('userLine').textContent = '無法確認身分';
+      $('recList').innerHTML =
+        '<p>' + humanReceiptFail(errOrMsg) + '</p>' +
+        '<p class="sub">這不代表沒有收款，只是這次沒打開。</p>' +
+        '<button type="button" class="btn btn-secondary" id="btnRetryBootRec">再試一次</button>' +
+        '<button type="button" class="btn btn-secondary" id="btnBootReloginRec">重新登入 LINE</button>';
+      var retryRec = $('btnRetryBootRec');
+      if (retryRec) retryRec.onclick = function () { location.reload(); };
+      var reloginRec = $('btnBootReloginRec');
+      if (reloginRec) reloginRec.onclick = function () { $('btnLiffRelogin').click(); };
+    }
+
     (async function boot() {
       var bindIntent = !!deepLink.bind;
       var mock = portalMockMode();
@@ -860,6 +918,27 @@
           $('loading').classList.add('hidden');
           $('app').classList.remove('hidden');
           showMaterialBootFail(new Error('Failed to fetch'));
+          return;
+        }
+        if (mock === 'recbootfail') {
+          $('loading').classList.add('hidden');
+          $('app').classList.remove('hidden');
+          showReceiptBootFail(new Error('Failed to fetch'));
+          return;
+        }
+        if (mock === 'recfail') {
+          session = {
+            portal: {
+              display_name: '本機測試',
+              projects: [{ project_no: '999', site_name: '測試案' }]
+            }
+          };
+          $('loading').classList.add('hidden');
+          $('app').classList.remove('hidden');
+          $('userLine').textContent = '本機測試';
+          fillProjects(session.portal.projects);
+          showReceiptView();
+          loadData();
           return;
         }
         session = await AccountingApi.initCustomerPortalSession({
@@ -921,9 +1000,7 @@
         } else if (deepLink.entity === 'material') {
           showMaterialBootFail(e);
         } else {
-          $('loading').classList.remove('hidden');
-          $('app').classList.add('hidden');
-          $('loading').textContent = e.message || '載入失敗';
+          showReceiptBootFail(e);
         }
       }
     })();
