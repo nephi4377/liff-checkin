@@ -31,7 +31,7 @@
       PHOTO_UNIT_MAX_RETRIES: 3,  // 單張相片重試次數
       PHOTO_UNIT_RETRY_BASE_MS: 400,  // 單張相片重試間隔
       GAS_FETCH_TIMEOUT_MS: 120000,  // GAS 連線逾時  
-      CLIENT_VER: '2026.08.29-V3.16',  // 版本號
+      CLIENT_VER: '2026.08.30-V3.17',  // 版本號
       LIFF_INIT_TIMEOUT_MS: 15000,  // LIFF 初始化逾時（逾時仍保留表單 UI）
       FAILURE_REPORT_PREFIX: 'failure-report',  // 失敗報告前綴
       MAX_FAILURE_REPORT_JSON_BYTES: 480000,  // 失敗報告 JSON 大小上限
@@ -681,6 +681,21 @@
       return /Failed to fetch|NetworkError|Load failed|aborted|AbortError/i.test(msg);
     }
 
+    /** 後端回 success 但實際沒收下這包（空 POST／探測／忙碌）— 不可當施工回報已送出 */
+    function isGasSuccessWithoutAccept(result) {
+      if (!result) return true;
+      if (result.ignored === true) return true;
+      if (result.retryable === true && !result.logId) return true;
+      const msg = String(result.message || '');
+      return /empty post|unknown payload/i.test(msg);
+    }
+
+    /** 極速路徑：沒照片時後端回「無相片需處理」且不寫佇列 */
+    function isFastReportNotQueued(result) {
+      const msg = String((result && result.message) || '');
+      return msg.indexOf('無相片需處理') !== -1;
+    }
+
     /** 整張相片管線失敗時，是否值得在同一輪送出內再試（與「本輪放棄、稍後整批重傳」區隔） */
     function isTransientPhotoPipelineError(err) {
       if (!err) return false;
@@ -842,6 +857,19 @@
           }
 
           if (response.ok && result.success) {
+            if (isGasSuccessWithoutAccept(result)) {
+              reportTrace(`[GAS] 回 success 但未收下 ignored=${result.ignored} retryable=${result.retryable} msg=${result.message || ''}`);
+              if (attempt < GAS_POST_MAX_RETRIES) {
+                window.logGlobalError('GAS', `第 ${attempt} 次：後端沒有收下這包，將重試`);
+                await sleep(700 * attempt);
+                continue;
+              }
+              throw new Error('後端沒有收下這次回報。內容還在此裝置，請再按「提交回報」。');
+            }
+            if (isFastReportNotQueued(result)) {
+              reportTrace('[GAS] 無相片需處理，未寫入佇列');
+              throw new Error('這次回報沒有照片，後端沒有記下。請加至少一張現場照片再送。');
+            }
             reportTrace(`GAS 回應成功（第 ${attempt} 次嘗試）`);
             console.log('[V3] GAS 成功', result, attempt > 1 ? `(第 ${attempt} 次嘗試)` : '');
             return { response, result };
@@ -849,6 +877,11 @@
 
           if (response.ok && result.success === false) {
             reportTrace(`[GAS] success=false（業務拒絕）msg=${result.message || ''}`);
+            if (result.retryable === true && attempt < GAS_POST_MAX_RETRIES) {
+              window.logGlobalError('GAS', `第 ${attempt} 次：${result.message || '系統忙碌'}，將重試`);
+              await sleep(1000 * attempt);
+              continue;
+            }
             throw new Error(result.message || '後端回報失敗');
           }
 
