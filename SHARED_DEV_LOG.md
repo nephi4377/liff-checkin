@@ -22,9 +22,17 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-09-22 | Cursor | 單據與存檔驗證身分逾時：改 AccountingBoot 暫用身分；後端 auth 短快取＋稽核節流 | `quick_review.html`；Backend_GAS `AuthBridge.js` | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-09-22｜Cursor｜單據與存檔驗證身分逾時（分支待合／待部署）
+
+- 修改範圍：前端 `quick_review.html`；後端 `AuthBridge.js`（另 repo）
+- 完成內容：單據與存檔改 `AccountingBoot` 暫用身分先出殼；後端員工快取 5 分＋login 稽核節流
+- 驗證：本機 hub 參數開頁殼 <1s；Playwright 掛死 `accounting_auth_me` 仍 982ms 出殼（`HangTest · 權限 3 · 主控台`）
+- Commit／PR：前端 `d56a368`／PR #78；後端 `9c3bbdb`／PR #64
+- 待處理／風險：未部署；合 PR 後需 Pages＋accounting-gas clasp 才進正式站
 
 ### 2026-09-21｜Cursor｜匯款通知改推群組＋佇列不算已通知（已部署）
 
