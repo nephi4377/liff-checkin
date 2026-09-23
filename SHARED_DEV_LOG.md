@@ -26,6 +26,14 @@
 
 ## 最近完成
 
+### 2026-09-23｜Cursor｜表單疑重確認＋送出清空（PR／未部署）
+
+- 修改範圍：`modules/accounting/accounting_ingest.html`；後端見 Backend_GAS accounting-gas
+- 完成內容：疑重時確認框（文案對齊群組「看起來和剛才一樣」）；確認才 `force_duplicate`；**送出成功後清空**金額／品名／分攤／附件／零用金／款項月份
+- 驗證：`node modules/accounting/tools/test-form-dedup-clear.js`；後端 `node accounting-gas/tools/test-form-dedup-ttl.js`；store `internal/ledger-form-dedup-clear-verify.md`
+- Commit／線上：見 PR #80／Backend #66（未 Pages／未 clasp deploy）
+- 待處理／風險：第 77 列是否作廢請人工；正式部署另說
+
 ### 2026-09-23｜Cursor｜表單記帳疑重確認（PR／未部署）
 
 - 修改範圍：`modules/accounting/accounting_ingest.html`；後端見 Backend_GAS accounting-gas

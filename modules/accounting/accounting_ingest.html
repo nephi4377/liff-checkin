@@ -394,10 +394,11 @@
           ['party_name', 'project_no', 'item_desc', 'amount'].forEach(function (id) {
             document.getElementById(id).value = '';
           });
+          document.getElementById('petty_cash').value = '否';
           payPickerA.clear();
         } else {
           if (!keepDate) document.getElementById('txn_date_b').value = todayRoc();
-          ['party_name_b', 'amount_b'].forEach(function (id) {
+          ['party_name_b', 'amount_b', 'expense_month'].forEach(function (id) {
             document.getElementById(id).value = '';
           });
           if (vendorCombobox) vendorCombobox.clearVendorId();
@@ -405,9 +406,10 @@
           setApplicantDefault();
           if (allocEditor) allocEditor.clear();
         }
+        pendingPhotos = [];
         localPhotos = [];
         document.getElementById('photoInput').value = '';
-        showPendingPreviews(pendingPhotos);
+        showPendingPreviews([]);
       }
 
       function updatePhotoCountLine() {
@@ -505,7 +507,7 @@
           var data = await AccountingApi.post(body);
           if (!data.success && data.needs_dup_confirm) {
             var dupMsg = data.message ||
-              '看起來和稍早一筆相同。若只是重送請按「取消」；確定是另一筆再按「確定」。';
+              '看起來和剛才一樣（同對象、同金額）。是重複點擊／重送請按「取消」；今天真的有兩筆再按「確定」。';
             var forceOk = window.confirm(dupMsg);
             if (!forceOk) throw new Error('已取消，沒有再記一筆');
             body.force_duplicate = true;
@@ -519,11 +521,9 @@
           li.textContent = (kind.value === 'A' ? '收入' : '支出') + ' ' + fields.party_name + ' → ' + data.sheet + ' 第' + data.row + '列';
           ul.insertBefore(li, ul.firstChild);
           document.getElementById('recentCard').classList.remove('hidden');
-          setOk('記好了！第 ' + sessionCount + ' 筆（' + data.sheet + ' 第 ' + data.row + ' 列）');
-          if (data.groupNotified) setOk(document.getElementById('ok').textContent + ' · 已同步通知');
-          pendingPhotos = [];
-          localPhotos = [];
-          showPendingPreviews([]);
+          var okLine = '記好了！第 ' + sessionCount + ' 筆（' + data.sheet + ' 第 ' + data.row + ' 列）。表單已清空，可再填下一筆。';
+          if (data.groupNotified) okLine += ' · 已同步通知';
+          setOk(okLine);
           clearVolatileFields(true);
           document.getElementById('nextBtn').classList.remove('hidden');
           document.getElementById('doneBtn').classList.remove('hidden');
