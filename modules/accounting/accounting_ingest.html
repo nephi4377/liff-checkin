@@ -503,6 +503,14 @@
           };
           attachIngestAuth(body);
           var data = await AccountingApi.post(body);
+          if (!data.success && data.needs_dup_confirm) {
+            var dupMsg = data.message ||
+              '看起來和稍早一筆相同。若只是重送請按「取消」；確定是另一筆再按「確定」。';
+            var forceOk = window.confirm(dupMsg);
+            if (!forceOk) throw new Error('已取消，沒有再記一筆');
+            body.force_duplicate = true;
+            data = await AccountingApi.post(body);
+          }
           if (!data.success) throw new Error(data.message || '送出失敗');
           sessionCount++;
           document.getElementById('sessionCount').textContent = String(sessionCount);

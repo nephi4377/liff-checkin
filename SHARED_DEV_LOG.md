@@ -26,6 +26,15 @@
 
 ## 最近完成
 
+### 2026-09-23｜Cursor｜表單記帳疑重確認（PR／未部署）
+
+- 修改範圍：`modules/accounting/accounting_ingest.html`；後端見 Backend_GAS accounting-gas
+- 完成內容：LIFF 送出若判定與稍早同對象同金額，先確認再強制第二筆；搭配後端去重 TTL 加長
+- 驗證：對照「115年9月」76／77 稽核為兩次 liff_form；程式邏輯檢視
+- Commit／線上：見 PR（未 Pages／未 clasp deploy）
+- 待處理／風險：第 77 列是否作廢請人工；正式部署另說
+
+
 ### 2026-09-22｜Cursor｜LINE 開案場遇 quota（已部署）
 
 - 修改範圍：前端 `projectApi`／`ui`／`main`／`managementconsole`；後端 project-console Drive 門牌＋快取＋page=project 容錯
