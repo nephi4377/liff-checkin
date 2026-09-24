@@ -26,13 +26,13 @@
 
 ## 最近完成
 
-### 2026-09-24｜Cursor｜表單假失敗防重送＋三種結果畫面（部署中）
+### 2026-09-24｜Cursor｜表單假失敗防重送＋三種結果畫面（已部署）
 
 - 修改範圍：`accounting_ingest.html`、`shared/js/accounting_api.js`、SPEC 15 v1.34；後端 accounting-gas 表單 ingest／flush
 - 完成內容：主列寫入即成功、後置背景補；三種畫面（成功／已記入但後置失敗／未成功請重試）；保留疑重確認＋成功後清空；逾時勿盲目重送
-- 驗證：`node modules/accounting/tools/test-form-dedup-clear.js`；後端 `node accounting-gas/tools/test-form-dedup-ttl.js`；store `docs/duplicate-ledger-false-fail.md`
-- Commit／線上：PR #80／Backend #66 → merge main → Pages／accounting-gas Actions（版號合併後補）
-- 待處理／風險：76／77 作廢仍請人工
+- 驗證：單元 smoke；正式站已含 flush／三種文案／120s；store `docs/deploy-ledger-false-fail.md`
+- Commit／線上：前端 merge `3f680b8`（PR #80）／Pages `35946245702`；後端 merge `6f8b439`（PR #66）／accounting-gas **@342**
+- 待處理／風險：76／77 作廢仍請人工；請硬重整後抽測收支登錄
 
 ### 2026-09-23｜Cursor｜表單疑重確認＋送出清空（PR／未部署）
 
