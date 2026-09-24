@@ -147,6 +147,8 @@ var AccountingApi = (function () {
       if ((e && e.name === 'AbortError') || /abort/i.test(raw)) {
         if (actionName === 'vendor_payment_approve' || actionName === 'vendor_payment_mark_paid') {
           err = new Error('等太久了。請重新整理列表，確認是否已完成，先不要再按一次。');
+        } else if (actionName === 'accounting_form_submit') {
+          err = new Error('等太久了。請先看進出群有沒有「記好了」、或到試算表確認是否已入帳，先不要再按一次。');
         } else {
           err = new Error('連線逾時，請再試一次');
         }
@@ -165,6 +167,9 @@ var AccountingApi = (function () {
 
   async function post(body, timeoutMs) {
     var ms = timeoutMs === undefined ? DEFAULT_TIMEOUT_MS : timeoutMs;
+    if (timeoutMs === undefined && body && body.action === 'accounting_form_submit') {
+      ms = 120000;
+    }
     return postToUrl_(GAS_API, body, ms, '會計');
   }
 
@@ -1154,6 +1159,26 @@ var AccountingApi = (function () {
         auth: resolveAuth(sessionOrToken),
         deferred_token: deferredToken || ''
       }, 120000);
+    },
+    /** 收支登錄表單後置（毛利／附件）；主列已成功後背景呼叫即可 */
+    accountingFormFlushDeferred: function (sessionOrToken, deferredToken) {
+      var body = {
+        action: 'accounting_form_flush_deferred',
+        deferred_token: deferredToken || ''
+      };
+      if (sessionOrToken && typeof resolveAuth === 'function') {
+        try {
+          var auth = resolveAuth(sessionOrToken);
+          if (auth) body.auth = auth;
+          if (sessionOrToken.devBypass) body.dev_bypass = true;
+          if (sessionOrToken.idToken) body.liff_id_token = sessionOrToken.idToken;
+          if (sessionOrToken.auth && sessionOrToken.auth.user_id) {
+            body.user_id = sessionOrToken.auth.user_id;
+            body.auth = body.auth || { user_id: sessionOrToken.auth.user_id };
+          }
+        } catch (eAuth) {}
+      }
+      return post(body, 120000);
     },
     /** 已匯款補通知：只重送匯款 LINE，不改入帳 */
     vendorPaymentResendNotify: function (sessionOrToken, paymentRequestIds) {

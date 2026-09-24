@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=59"></script>
+  <script src="../../shared/js/accounting_api.js?v=65"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/accounting_cache.js?v=33"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=6"></script>
@@ -31,6 +31,13 @@
     #statusBar { font-size: 14px; padding: 8px 10px; background: #e8f0fe; border-radius: 8px; margin-bottom: 10px; }
     #msg { color: #c5221f; font-size: 14px; }
     #ok { color: #137333; font-size: 14px; }
+    #submitResult {
+      margin-top: 12px; padding: 12px 14px; border-radius: 10px; font-size: 15px; line-height: 1.45;
+      font-weight: 600; display: none;
+    }
+    #submitResult.is-ok { display: block; color: #137333; background: #e6f4ea; border: 1px solid #ceead6; }
+    #submitResult.is-warn { display: block; color: #7a4f00; background: #fef7e0; border: 1px solid #f9e3a5; }
+    #submitResult.is-err { display: block; color: #c5221f; background: #fce8e6; border: 1px solid #f5c2c0; }
     #loading { text-align: center; padding: 48px 16px; color: #666; }
     #pendingPreview img { max-width: 100%; border-radius: 8px; margin-top: 6px; }
     #recent { font-size: 13px; padding-left: 18px; }
@@ -154,6 +161,7 @@
     <button type="button" class="btn btn-primary" id="submit">送出這一筆</button>
     <button type="button" class="btn btn-secondary hidden" id="nextBtn">清空，再記一筆</button>
     <button type="button" class="btn btn-done hidden" id="doneBtn">完成離開</button>
+    <div id="submitResult" role="status" aria-live="polite"></div>
     <div id="msg"></div>
     <div id="ok"></div>
     <div class="card hidden" id="recentCard"><strong>剛剛記的</strong><ul id="recent"></ul></div>
@@ -336,11 +344,72 @@
       }
 
       function setLoading(t) { document.getElementById('loading').textContent = t; }
-      function setMsg(t) { if (t) AccountingUi.notify('err', t); }
-      function setOk(t) { if (t) AccountingUi.notify('ok', t); }
+      function setSubmitResult(kind, text) {
+        var el = document.getElementById('submitResult');
+        if (!el) return;
+        el.className = '';
+        el.id = 'submitResult';
+        if (!text) {
+          el.textContent = '';
+          el.style.display = 'none';
+          return;
+        }
+        el.textContent = text;
+        el.classList.add(kind === 'ok' ? 'is-ok' : (kind === 'warn' ? 'is-warn' : 'is-err'));
+      }
+      function setMsg(t) {
+        setSubmitResult(t ? 'err' : '', t || '');
+        if (t) AccountingUi.notify('err', t, { simple: true, ms: 12000 });
+      }
+      function setOk(t) {
+        setSubmitResult(t ? 'ok' : '', t || '');
+        if (t) AccountingUi.notify('ok', t, { ms: 10000 });
+      }
+      function setWarn(t) {
+        setSubmitResult(t ? 'warn' : '', t || '');
+        if (t) AccountingUi.notify('warn', t, { ms: 14000 });
+      }
       function showApp() {
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
+      }
+
+      function appendRecentLine(kindVal, partyName, sheet, row) {
+        sessionCount++;
+        document.getElementById('sessionCount').textContent = String(sessionCount);
+        var ul = document.getElementById('recent');
+        var li = document.createElement('li');
+        li.textContent = (kindVal === 'A' ? '收入' : '支出') + ' ' + partyName + ' → ' + sheet + ' 第' + row + '列';
+        ul.insertBefore(li, ul.firstChild);
+        document.getElementById('recentCard').classList.remove('hidden');
+        document.getElementById('nextBtn').classList.remove('hidden');
+        document.getElementById('doneBtn').classList.remove('hidden');
+      }
+
+      function flushFormDeferredInBackground(token, sheet, row) {
+        if (!token || typeof AccountingApi.accountingFormFlushDeferred !== 'function') return;
+        var sess = sessionRef || {
+          auth: { user_id: profile.userId },
+          idToken: idToken,
+          devBypass: !!(sessionRef && sessionRef.devBypass)
+        };
+        AccountingApi.accountingFormFlushDeferred(sess, token).then(function (flushRes) {
+          if (flushRes && flushRes.after_error) {
+            setWarn('已記入「' + (sheet || '') + '」第 ' + (row || '?') +
+              ' 列，但後續補資料失敗。帳已留下，請勿再送同一筆；需要時再請資訊協助補齊。');
+          }
+        }).catch(function () {
+          setWarn('已記入「' + (sheet || '') + '」第 ' + (row || '?') +
+            ' 列，但後續補資料失敗。帳已留下，請勿再送同一筆；需要時再請資訊協助補齊。');
+        });
+      }
+
+      function humanFailMessage(raw) {
+        var msg = String(raw || '').trim();
+        if (!msg) return '未成功，請重試。';
+        if (/等太久了|已取消|看起來和剛才一樣/.test(msg)) return msg;
+        if (/未成功/.test(msg)) return msg;
+        return '未成功，請重試。' + (msg && msg !== '送出失敗' ? '（' + msg + '）' : '');
       }
 
       function readFileB64(file) {
@@ -394,10 +463,11 @@
           ['party_name', 'project_no', 'item_desc', 'amount'].forEach(function (id) {
             document.getElementById(id).value = '';
           });
+          document.getElementById('petty_cash').value = '否';
           payPickerA.clear();
         } else {
           if (!keepDate) document.getElementById('txn_date_b').value = todayRoc();
-          ['party_name_b', 'amount_b'].forEach(function (id) {
+          ['party_name_b', 'amount_b', 'expense_month'].forEach(function (id) {
             document.getElementById(id).value = '';
           });
           if (vendorCombobox) vendorCombobox.clearVendorId();
@@ -405,9 +475,10 @@
           setApplicantDefault();
           if (allocEditor) allocEditor.clear();
         }
+        pendingPhotos = [];
         localPhotos = [];
         document.getElementById('photoInput').value = '';
-        showPendingPreviews(pendingPhotos);
+        showPendingPreviews([]);
       }
 
       function updatePhotoCountLine() {
@@ -478,18 +549,21 @@
       }
 
       async function submitEntry() {
-        setMsg(''); setOk('');
+        setMsg(''); setOk(''); setWarn('');
+        setSubmitResult('', '');
         if (kind.value === 'B' && allocEditor) {
           var allocErr = allocEditor.validate();
           if (!allocErr.ok) {
-            setMsg(allocErr.message);
+            setMsg(allocErr.message || '未成功，請重試。請先檢查分攤是否填完整。');
             return;
           }
         }
         var btn = document.getElementById('submit');
         await AccountingUi.runAsync(btn, {
           actionLabel: '送出這一筆',
-          busyLabel: '送出中…'
+          busyLabel: '送出中…',
+          toastOnOk: false,
+          toastOnFail: false
         }, async function () {
           AccountingUi.tap('送出這一筆');
           var fields = collectFields();
@@ -503,30 +577,43 @@
           };
           attachIngestAuth(body);
           var data = await AccountingApi.post(body);
-          if (!data.success) throw new Error(data.message || '送出失敗');
-          sessionCount++;
-          document.getElementById('sessionCount').textContent = String(sessionCount);
-          var ul = document.getElementById('recent');
-          var li = document.createElement('li');
-          li.textContent = (kind.value === 'A' ? '收入' : '支出') + ' ' + fields.party_name + ' → ' + data.sheet + ' 第' + data.row + '列';
-          ul.insertBefore(li, ul.firstChild);
-          document.getElementById('recentCard').classList.remove('hidden');
-          setOk('記好了！第 ' + sessionCount + ' 筆（' + data.sheet + ' 第 ' + data.row + ' 列）');
-          if (data.groupNotified) setOk(document.getElementById('ok').textContent + ' · 已同步通知');
-          pendingPhotos = [];
-          localPhotos = [];
-          showPendingPreviews([]);
+          if (!data.success && data.needs_dup_confirm) {
+            var dupMsg = data.message ||
+              '看起來和剛才一樣（同對象、同金額）。是重複點擊／重送請按「取消」；今天真的有兩筆再按「確定」。';
+            var forceOk = window.confirm(dupMsg);
+            if (!forceOk) throw new Error('已取消，沒有再記一筆');
+            body.force_duplicate = true;
+            data = await AccountingApi.post(body);
+          }
+          if (!data || data.success === false) {
+            throw new Error((data && data.message) || '未成功，請重試。');
+          }
+          if (!data.sheet || !data.row) {
+            throw new Error('未成功，請重試。後端沒有回傳列號。');
+          }
+          appendRecentLine(kind.value, fields.party_name, data.sheet, data.row);
           clearVolatileFields(true);
-          document.getElementById('nextBtn').classList.remove('hidden');
-          document.getElementById('doneBtn').classList.remove('hidden');
+          if (data.after_error) {
+            setWarn('已記入「' + data.sheet + '」第 ' + data.row +
+              ' 列，但後續補資料失敗。帳已留下，請勿再送同一筆；需要時再請資訊協助補齊。');
+          } else {
+            var okLine = '記好了！第 ' + sessionCount + ' 筆（' + data.sheet + ' 第 ' + data.row +
+              ' 列）。表單已清空，可再填下一筆。';
+            if (data.groupNotified) okLine += ' · 已同步通知';
+            setOk(okLine);
+          }
+          if (data.deferred_token) {
+            flushFormDeferredInBackground(data.deferred_token, data.sheet, data.row);
+          }
         }).catch(function (e) {
-          setMsg(e.message || String(e));
+          setMsg(humanFailMessage(e && e.message ? e.message : e));
         });
       }
 
       document.getElementById('submit').addEventListener('click', submitEntry);
       document.getElementById('nextBtn').addEventListener('click', function () {
-        setOk(''); setMsg(''); clearVolatileFields(false);
+        setOk(''); setMsg(''); setWarn(''); setSubmitResult('', '');
+        clearVolatileFields(false);
       });
       document.getElementById('doneBtn').addEventListener('click', function () {
         if (typeof liff !== 'undefined' && liff.isInClient && liff.isInClient()) liff.closeWindow();

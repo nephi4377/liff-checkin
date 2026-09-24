@@ -26,6 +26,31 @@
 
 ## 最近完成
 
+### 2026-09-24｜Cursor｜表單假失敗防重送＋三種結果畫面（部署中）
+
+- 修改範圍：`accounting_ingest.html`、`shared/js/accounting_api.js`、SPEC 15 v1.34；後端 accounting-gas 表單 ingest／flush
+- 完成內容：主列寫入即成功、後置背景補；三種畫面（成功／已記入但後置失敗／未成功請重試）；保留疑重確認＋成功後清空；逾時勿盲目重送
+- 驗證：`node modules/accounting/tools/test-form-dedup-clear.js`；後端 `node accounting-gas/tools/test-form-dedup-ttl.js`；store `docs/duplicate-ledger-false-fail.md`
+- Commit／線上：PR #80／Backend #66 → merge main → Pages／accounting-gas Actions（版號合併後補）
+- 待處理／風險：76／77 作廢仍請人工
+
+### 2026-09-23｜Cursor｜表單疑重確認＋送出清空（PR／未部署）
+
+- 修改範圍：`modules/accounting/accounting_ingest.html`；後端見 Backend_GAS accounting-gas
+- 完成內容：疑重時確認框（文案對齊群組「看起來和剛才一樣」）；確認才 `force_duplicate`；**送出成功後清空**金額／品名／分攤／附件／零用金／款項月份
+- 驗證：`node modules/accounting/tools/test-form-dedup-clear.js`；後端 `node accounting-gas/tools/test-form-dedup-ttl.js`；store `internal/ledger-form-dedup-clear-verify.md`
+- Commit／線上：見 PR #80／Backend #66（未 Pages／未 clasp deploy）
+- 待處理／風險：第 77 列是否作廢請人工；正式部署另說
+
+### 2026-09-23｜Cursor｜表單記帳疑重確認（PR／未部署）
+
+- 修改範圍：`modules/accounting/accounting_ingest.html`；後端見 Backend_GAS accounting-gas
+- 完成內容：LIFF 送出若判定與稍早同對象同金額，先確認再強制第二筆；搭配後端去重 TTL 加長
+- 驗證：對照「115年9月」76／77 稽核為兩次 liff_form；程式邏輯檢視
+- Commit／線上：見 PR（未 Pages／未 clasp deploy）
+- 待處理／風險：第 77 列是否作廢請人工；正式部署另說
+
+
 ### 2026-09-22｜Cursor｜LINE 開案場遇 quota（已部署）
 
 - 修改範圍：前端 `projectApi`／`ui`／`main`／`managementconsole`；後端 project-console Drive 門牌＋快取＋page=project 容錯
