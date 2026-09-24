@@ -201,6 +201,24 @@ export function initializeTaskSender(container, config, options = {}) {
         const replyButton = document.querySelector(`#task-sender-action-type-group .action-btn[data-value="${options.defaultAction}"]`);
         if (replyButton) handleActionTypeChange_Button({ target: replyButton });
     }
+
+    // 回傳可預填 API（對話重點板「再交辦」用）
+    return {
+        prefill({ content, projectId, title, recipientNames } = {}) {
+            const contentEl = document.getElementById('task-sender-content');
+            if (contentEl && content != null) contentEl.value = String(content);
+            const projectEl = document.getElementById('task-sender-related-project-id');
+            if (projectEl && projectId != null) projectEl.value = String(projectId);
+            const titleEl = document.getElementById('task-sender-title');
+            if (titleEl && title != null) titleEl.value = String(title);
+            if (Array.isArray(recipientNames)) {
+                recipientNames.forEach((name) => recipientSelector.addByName(name));
+            }
+        },
+        addRecipient(userName) {
+            recipientSelector.addByName(userName);
+        }
+    };
 }
 
 function populateTimeSelect() {
