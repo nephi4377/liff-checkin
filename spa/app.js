@@ -255,6 +255,7 @@ const App = {
         };
         // [v513.0 新增] 補上員工資料編輯頁面的路由
         routes['#/employee-editor'] = { name: 'iframe', src: 'modules/attendance/employee_editor.html', title: '員工資料編輯' }; // [v515.0 修正] 改為絕對路徑
+        routes['#/director-hr-notes'] = { name: 'iframe', src: 'modules/attendance/director_hr_notes.html', title: '總監人事筆記' };
 
         const handleRouteChange = () => {
             const hash = window.location.hash || '#';
