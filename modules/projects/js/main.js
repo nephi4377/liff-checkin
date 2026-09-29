@@ -26,7 +26,7 @@
 // [v521.0 修正] 移除多餘的 api.js 和 handlers.js 引入，並修正所有模組的相對路徑。
 import { request as apiRequest } from './projectApi.js?v=26.09.22.1';
 import { logToPage, showGlobalNotification } from '/shared/js/utils.js'; // [v544.0 修正] 改為絕對路徑
-import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, renderPostCreator, _buildLogCard, renderCommunicationHistory, lazyLoadImages } from './ui.js?v=26.09.22.1';
+import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, renderPostCreator, _buildLogCard, renderCommunicationHistory, lazyLoadImages } from './ui.js?v=26.09.29.1';
 import * as LogActions from './logActions.js';
 import * as ScheduleActions from './scheduleActions.js';
 import { state } from './state.js';
@@ -273,6 +273,28 @@ ${notes || '無'}`;
     });
     copyBtn.dataset.listenerAttached = 'true';
   });
+
+  // 右欄「編輯案場資料」→ HUB #/new-site（可帶案號預選；委派綁定，右欄重渲後仍有效）
+  const projectInfoPanel = document.getElementById('project-info-panel');
+  if (projectInfoPanel && !projectInfoPanel.dataset.editSiteDelegated) {
+    projectInfoPanel.addEventListener('click', (ev) => {
+      const btn = ev.target && ev.target.closest && ev.target.closest('#edit-site-info-btn');
+      if (!btn) return;
+      const code = String(state.projectId || state.overview?.['案號'] || '').trim();
+      const hash = code
+        ? `#/new-site?project=${encodeURIComponent(code)}`
+        : '#/new-site';
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.location.hash = hash;
+          return;
+        }
+      } catch (e) { /* ignore cross-origin */ }
+      const qs = code ? `?project=${encodeURIComponent(code)}` : '';
+      window.location.href = `/modules/projects/NewSiteForm.html${qs}`;
+    });
+    projectInfoPanel.dataset.editSiteDelegated = 'true';
+  }
 
   // [v199.0 新增] 結案按鈕功能
   const closeBtn = document.getElementById('close-project-btn');

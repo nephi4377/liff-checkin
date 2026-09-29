@@ -480,6 +480,8 @@ export function displayProjectInfo(overview, schedule) {
         <p class="project-info-line"><strong>業主手機</strong>　${ownerPhoneHtml}</p>
         <button type="button" id="copy-project-info-btn" class="btn btn-info btn-copy-site-info w-full"
           aria-label="複製案場資訊全文到剪貼簿，可貼到 LINE 或其他 App">📋 複製案場資訊</button>
+        <button type="button" id="edit-site-info-btn" class="btn btn-primary w-full mt-2"
+          aria-label="開啟案場資料表單以修改本案資訊">✏️ 編輯案場資料</button>
       </div>
       <div class="project-info-section">
         <h4 class="info-header">團隊成員</h4>

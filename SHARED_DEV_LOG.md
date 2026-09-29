@@ -26,6 +26,14 @@
 
 ## 最近完成
 
+### 2026-09-29｜Cursor｜案場資訊編輯入口可發現性（PR／未部署）
+
+- 修改範圍：`spa/Dashboard.js`、`spa/app.js`、`index.html`、`modules/projects/js/ui.js`、`main.js`、`managementconsole.html`、`NewSiteForm.html`；store `docs/site-info-edit-missing.md`
+- 完成內容：調查結論為未刪除、HUB 卡片被工作室／選材擠下＋工作區右欄唯讀；HUB 卡片移回施工回報後；右欄加「編輯案場資料」帶案號；表單 `?project=` 預選
+- 驗證：本地 serve 資產 200；卡片順序與按鈕字串靜態檢查；`get_all_sites` 正式 API success
+- Commit／線上：見 PR（未 Pages）
+- 待處理／風險：需合併後 Pages 部署才上正式站
+
 ### 2026-09-24｜Cursor｜表單假失敗防重送＋三種結果畫面（已部署）
 
 - 修改範圍：`accounting_ingest.html`、`shared/js/accounting_api.js`、SPEC 15 v1.34；後端 accounting-gas 表單 ingest／flush

@@ -636,6 +636,16 @@ export default {
                     </div>
                 </a>
 
+                <!-- 3a. 新增／修改案場資料（案場主檔編輯；置於施工日常後，避免被工作室卡片擠到下方） -->
+                <a :href="addSiteUrl"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-indigo-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl">🏗️</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">新增／修改案場資料</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">可建立新案場，或從下拉選單選既有案場後更新基本資訊。</p>
+                    </div>
+                </a>
+
                 <!-- 3b. 選材（專案／設計線；非會計） -->
                 <a v-if="currentUser && currentUser.permission >= 2" :href="materialSelectionUrl"
                     class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-sky-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
@@ -719,16 +729,6 @@ export default {
                         </div>
                     </div>
                 </div>
-
-                <!-- 5. 新增／修改案場資料 -->
-                <a :href="addSiteUrl"
-                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-indigo-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl">🏗️</div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">新增／修改案場資料</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">可建立新案場，或從下拉選單選既有案場後更新基本資訊。</p>
-                    </div>
-                </a>
 
                 <!-- 6. 互動式設計規劃工具 -->
                 <a :href="layoutPlannerUrl"

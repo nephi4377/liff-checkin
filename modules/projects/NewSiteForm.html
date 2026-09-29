@@ -403,6 +403,23 @@
 
           // 【v110.3 偵錯】檢查最終下拉選單中的選項數量
           console.log(`[NewSiteForm] 下拉選單已成功填入 ${projectSelector.options.length - 1} 個案場。`);
+
+          // URL ?project= / ?id= 預選既有案場（主控台「編輯案場資料」帶入）
+          const preselectParams = new URLSearchParams(window.location.search);
+          const preselect = String(
+            preselectParams.get('project') || preselectParams.get('id') || ''
+          ).trim();
+          if (preselect) {
+            const match = Array.from(projectSelector.options).find(
+              (opt) => String(opt.value) === preselect
+            );
+            if (match) {
+              projectSelector.value = preselect;
+              projectSelector.dispatchEvent(new Event('change'));
+            } else {
+              console.warn('[NewSiteForm] URL 案號不在列表中，無法預選:', preselect);
+            }
+          }
         } else {
           // 【v110.3 偵錯】如果回應格式不符，也印出錯誤訊息
           console.error('[NewSiteForm] 錯誤：從後端收到的案場列表格式不正確或為空。', response);
