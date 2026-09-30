@@ -361,6 +361,31 @@
         if (prId) recalcFinalAmount(prId);
       });
 
+      function isAlreadySettledReviewMsg_(msg) {
+        var m = String(msg || '');
+        return m === '此筆已審核過' ||
+          m.indexOf('先前已核准') >= 0 ||
+          m.indexOf('先前已退回') >= 0 ||
+          m.indexOf('無法再核准') >= 0 ||
+          m.indexOf('無法退回') >= 0;
+      }
+
+      function removeReviewedItem_(id) {
+        if (typeof AccountingListCache !== 'undefined') {
+          AccountingListCache.patch(session, listCacheKey(), function (data) {
+            if (!data || !data.items) return;
+            data.items = data.items.filter(function (row) {
+              return row.payroll_request_id !== id;
+            });
+          });
+        }
+        var el = document.getElementById('pr-' + id);
+        if (el) el.remove();
+        if (!document.querySelector('#list .item')) {
+          document.getElementById('emptyMsg').classList.remove('hidden');
+        }
+      }
+
       document.getElementById('list').addEventListener('click', async function (e) {
         var approveId = e.target.getAttribute('data-approve');
         var rejectId = e.target.getAttribute('data-reject');
@@ -381,8 +406,11 @@
             var rj = await AccountingApi.payrollRequestReject(session, {
               payroll_request_id: id, reject_reason: reason
             });
-            if (!rj.success) throw new Error(rj.message);
-            setOk(rj.message || '已退回');
+            // 舊版後端可能回 success:false +「此筆已審核過」；新版冪等回 already_rejected
+            if (!rj.success && !isAlreadySettledReviewMsg_(rj.message)) {
+              throw new Error(rj.message || '退回失敗');
+            }
+            setOk(rj.message || (rj.already_rejected ? '此筆先前已退回' : '已退回'));
           } else {
             var overrides = collectDeductionOverrides(id);
             var noteVal = document.getElementById('note-' + id).value.trim();
@@ -406,23 +434,22 @@
               note: noteVal,
               deduction_overrides: overrides
             });
-            if (!ap.success) throw new Error(ap.message);
-            setOk(ap.message || '已核准，會計可至薪資待匯款匯出');
+            // 舊版：success:false +「此筆已審核過」；新版：success + already_reviewed
+            if (!ap.success && !isAlreadySettledReviewMsg_(ap.message)) {
+              throw new Error(ap.message || '核准失敗');
+            }
+            setOk(ap.message || (ap.already_reviewed ? '此筆先前已核准' : '已核准，會計可至薪資待匯款匯出'));
           }
-          if (typeof AccountingListCache !== 'undefined') {
-            AccountingListCache.patch(session, listCacheKey(), function (data) {
-              if (!data || !data.items) return;
-              data.items = data.items.filter(function (row) {
-                return row.payroll_request_id !== id;
-              });
-            });
-          }
-          document.getElementById('pr-' + id)?.remove();
-          if (!document.getElementById('list').children.length) {
-            document.getElementById('emptyMsg').classList.remove('hidden');
-          }
+          removeReviewedItem_(id);
         }).catch(function (err) {
-          if (err && err.message && err.message !== '此項目已在處理中') setMsg(err.message);
+          if (err && err.message && err.message !== '此項目已在處理中') {
+            if (isAlreadySettledReviewMsg_(err.message)) {
+              removeReviewedItem_(id);
+              setOk(err.message);
+              return;
+            }
+            setMsg(err.message);
+          }
         });
       });
 

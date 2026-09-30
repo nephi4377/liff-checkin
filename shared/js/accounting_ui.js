@@ -517,19 +517,29 @@ var AccountingUi = (function () {
     return /請(先|填|選|輸入|勾選)|必填|至少一/.test(String(text || ''));
   }
 
+  /** 業務冪等／已完成提示：勿當系統錯誤開「錯誤回報」 */
+  function looksLikeBenignAlreadyDone_(text) {
+    var t = String(text || '');
+    return /此筆已審核過|先前已核准|先前已退回|此項目已在處理中/.test(t);
+  }
+
   function notify(kind, text, options) {
     options = options || {};
     kind = normalizeKind(kind);
     if (!text) return;
     pushLog(kind, text);
     if (options.logOnly) return;
-    if (kind === 'err' && !options.simple && !looksLikeFieldHint_(text)) {
+    if (kind === 'err' && !options.simple && !looksLikeFieldHint_(text) && !looksLikeBenignAlreadyDone_(text)) {
       toastErrorReport(text, {
         message: text,
         action: options.action || pageLabel(),
         page: options.page || pageLabel(),
         tech: options.tech || ''
       });
+      return;
+    }
+    if (kind === 'err' && looksLikeBenignAlreadyDone_(text)) {
+      toast('warn', text, options.ms != null ? options.ms : TOAST_MS_DEFAULT);
       return;
     }
     toast(kind, text, options.ms != null ? options.ms : TOAST_MS_DEFAULT);
@@ -563,7 +573,14 @@ var AccountingUi = (function () {
     var allowToast = opts.toast !== false;
     if (!allowToast) return;
     if (status === 'ok') toast('ok', msg, TOAST_MS_DEFAULT);
-    else if (status === 'fail') toastErrorReport(msg, { action: label, message: detail || msg });
+    else if (status === 'fail') {
+      var failDetail = detail || msg;
+      if (looksLikeBenignAlreadyDone_(failDetail) || looksLikeBenignAlreadyDone_(detail)) {
+        toast('warn', failDetail, TOAST_MS_DEFAULT);
+      } else {
+        toastErrorReport(msg, { action: label, message: failDetail });
+      }
+    }
     else if (status === 'start' && isDebugMode()) toast('info', msg, 4000);
   }
 
