@@ -26,13 +26,13 @@
 
 ## 最近完成
 
-### 2026-09-30｜Cursor｜案件毛利 margin_list_overview 逾時（PR／未部署）
+### 2026-09-30｜Cursor｜案件毛利 margin_list_overview 逾時（已部署）
 
 - 修改範圍：後端 `MarginModule.js`；前端 `accounting_api.js`／`project_margin.html`；SPEC 15 v1.35
 - 完成內容：列表不再每次全表逐列校正分頁名（改 6h 節流＋最多 40 列批次寫）；前端逾時 120s
-- 驗證：`node accounting-gas/tools/test-margin-tab-sync-plan.js`；store `docs/margin-list-overview-timeout.md`
-- Commit／線上：見 draft PR（未 clasp／未 Pages）
-- 待處理／風險：需明確「部署」才上線 accounting-gas＋前端
+- 驗證：`node accounting-gas/tools/test-margin-tab-sync-plan.js`；正式站已含 120s／`?v=60`；store `docs/deploy-margin-list-timeout.md`
+- Commit／線上：前端 merge `e32b0a8`（PR #83）／Pages `36734580646`；後端 merge `8610f1b`（PR #67）／accounting-gas **@344**
+- 待處理／風險：無；請硬重整後抽測案件毛利列表
 
 ### 2026-09-24｜Cursor｜表單假失敗防重送＋三種結果畫面（已部署）
 
