@@ -726,11 +726,12 @@ var AccountingApi = (function () {
     },
     marginListOverview: function (sessionOrToken, opts) {
       opts = opts || {};
+      // 後端若仍做殘留分頁名校正，偶發超過預設 60s；列表給 120s（對齊 bootstrap／表單）
       return post({
         action: 'margin_list_overview',
         auth: resolveAuth(sessionOrToken),
         backfill_missing_status: !!opts.backfill_missing_status
-      });
+      }, 120000);
     },
     marginBackfillOverviewStatus: function (sessionOrToken) {
       return post({
