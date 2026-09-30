@@ -26,6 +26,14 @@
 
 ## 最近完成
 
+### 2026-09-30｜Cursor｜薪資審核「此筆已審核過」冪等（PR／未部署）
+
+- 修改範圍：`payroll_review.html`、`accounting_ui.js`；Backend `PayrollSettlementModule.js`
+- 完成內容：後端已審改冪等成功；退回不可覆寫已審；前端當軟成功並移出待審列，勿開錯誤回報
+- 驗證：`node modules/accounting/tools/test-payroll-already-reviewed.js`；後端對應 smoke
+- Commit／線上：見 PR（未 Pages／未 clasp deploy）
+- 待處理／風險：需前後端一併部署後，才不會再跳出「此筆已審核過」錯誤回報
+
 ### 2026-09-30｜Cursor｜案件毛利 margin_list_overview 逾時（已部署）
 
 - 修改範圍：後端 `MarginModule.js`；前端 `accounting_api.js`／`project_margin.html`；SPEC 15 v1.35
