@@ -80,6 +80,8 @@
     (function () {
       var session = null;
       var lastRenderedCacheKey = '';
+      /** 本頁已核准／退回的 id：擋住 SWR 背景重抓把卡片又刷回待審 */
+      var dismissedPendingIds = Object.create(null);
       var ui = AccountingUi.feedback();
       function setMsg(t) { ui.setMsg(t); }
       function setOk(t) { ui.setOk(t); }
@@ -278,6 +280,8 @@
         var filterVal = document.getElementById('filterReview').value || 'pending_review';
         var items = data.items || [];
         items.forEach(function (row) {
+          var rid = String(row.payroll_request_id || '');
+          if (filterVal === 'pending_review' && dismissedPendingIds[rid]) return;
           if (filterVal === 'pending_review' && String(row.review_status) === '待審') {
             list.appendChild(renderItem(row));
           } else if (filterVal !== 'pending_review') {
@@ -293,6 +297,7 @@
         var run = async function () {
           setUpdating(true);
           try {
+            if (force) dismissedPendingIds = Object.create(null);
             if (!force) setMsg('');
             setOk('');
             var peeked = null;
@@ -371,15 +376,17 @@
       }
 
       function removeReviewedItem_(id) {
+        var rid = String(id || '');
+        if (rid) dismissedPendingIds[rid] = true;
         if (typeof AccountingListCache !== 'undefined') {
           AccountingListCache.patch(session, listCacheKey(), function (data) {
             if (!data || !data.items) return;
             data.items = data.items.filter(function (row) {
-              return row.payroll_request_id !== id;
+              return String(row.payroll_request_id) !== rid;
             });
           });
         }
-        var el = document.getElementById('pr-' + id);
+        var el = document.getElementById('pr-' + rid);
         if (el) el.remove();
         if (!document.querySelector('#list .item')) {
           document.getElementById('emptyMsg').classList.remove('hidden');
