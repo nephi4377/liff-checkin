@@ -125,7 +125,12 @@
           });
           if (!data.success) throw new Error(data.message || '補登失敗');
           setOk(data.message || '已補登');
-          showEmailDraft(data.email_draft || (data.email_notify && data.email_notify.draft));
+          var en = data.email_notify || {};
+          if (en.manual_required || en.success === false) {
+            showEmailDraft(data.email_draft || en.draft);
+          } else {
+            showEmailDraft(null);
+          }
         }).catch(function (e) { setMsg(e.message || String(e)); });
       });
 
