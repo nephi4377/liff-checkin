@@ -95,6 +95,28 @@
         if (el) el.textContent = '總實發 $' + (transfer + extra).toLocaleString('zh-TW');
       }
 
+      /** 只取「自動寄失敗／需手動」的草稿；成功寄出時後端也可能帶 draft，不可當失敗。 */
+      function collectManualEmailDrafts(emailResults) {
+        var drafts = [];
+        var reasons = [];
+        (emailResults || []).forEach(function (r) {
+          if (!r) return;
+          var en = r.email_notify || {};
+          var needManual = en.manual_required === true ||
+            en.success === false ||
+            (!!r.error && en.success !== true);
+          if (!needManual) return;
+          var draft = r.draft || en.draft;
+          if (!draft || !draft.body) return;
+          drafts.push(draft);
+          var why = en.message || r.error;
+          if (why) {
+            reasons.push((r.employee_name || draft.to || 'EMAIL') + '：' + why);
+          }
+        });
+        return { drafts: drafts, reasons: reasons };
+      }
+
       function renderEmailDrafts(drafts) {
         var box = document.getElementById('emailDrafts');
         box.innerHTML = '';
@@ -346,17 +368,20 @@
           if (!data.success) throw new Error(data.message || '標記失敗');
           var msg = '已標記 ' + (data.marked || ids.length) + ' 筆已發薪';
           if (data.remit_date) msg += '（入帳日 ' + data.remit_date + '）';
-          var drafts = [];
+          var emailed = 0;
           (data.email_results || []).forEach(function (r) {
-            if (r.draft) drafts.push(r.draft);
-            else if (r.email_notify && r.email_notify.draft) drafts.push(r.email_notify.draft);
+            if (r && r.email_notify && r.email_notify.success) emailed++;
           });
-          if (drafts.length) {
-            setMsg('部分 EMAIL 需手動寄送（見下方）');
-            renderEmailDrafts(drafts);
+          if (emailed) msg += '；已 EMAIL ' + emailed + ' 筆';
+          var manual = collectManualEmailDrafts(data.email_results);
+          if (manual.drafts.length) {
+            var warnText = '部分 EMAIL 需手動寄送（見下方）';
+            if (manual.reasons.length) warnText += '\n' + manual.reasons.join('\n');
+            ui.setWarn(warnText);
+            renderEmailDrafts(manual.drafts);
           }
           if (data.warnings && data.warnings.length) {
-            setMsg((document.getElementById('msg').textContent ? document.getElementById('msg').textContent + '\n' : '') + data.warnings.join('；'));
+            setMsg(data.warnings.join('；'));
           }
           setOk(msg);
           removeItemsFromView(data.payroll_request_ids || ids);

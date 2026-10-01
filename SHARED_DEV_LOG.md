@@ -26,13 +26,22 @@
 
 ## 最近完成
 
-### 2026-09-30｜Cursor｜薪資審核「此筆已審核過」冪等（PR／未部署）
+### 2026-10-01｜Cursor｜薪資審核「此筆已審核過」冪等（部署中）
 
 - 修改範圍：`payroll_review.html`、`accounting_ui.js`；Backend `PayrollSettlementModule.js`
 - 完成內容：後端已審改冪等成功；退回不可覆寫已審；前端軟成功刷掉待審；`dismissedPendingIds` 擋 SWR 把卡片刷回
 - 驗證：`node modules/accounting/tools/test-payroll-already-reviewed.js`；後端對應 smoke
-- Commit／線上：見 [liff-checkin#84](https://github.com/nephi4377/liff-checkin/pull/84)、[Backend_GAS#68](https://github.com/nephi4377/Backend_GAS/pull/68)（未 Pages／未 clasp）
+- Commit／線上：見 [liff-checkin#84](https://github.com/nephi4377/liff-checkin/pull/84)、[Backend_GAS#68](https://github.com/nephi4377/Backend_GAS/pull/68)（部署中）
 - 待處理／風險：需前後端一併部署；截圖陳世勇 115/09 屬正式站舊行為
+
+### 2026-10-01｜Cursor｜薪資 EMAIL 手動寄送誤報（已部署）
+
+- 修改範圍：`payroll_finance.html`、`payroll_backfill.html`、測試；後端 `PayrollPayslipModule`／`PayrollSettlementModule`
+- 完成內容：僅 `manual_required`／寄信失敗才顯示「EMAIL 待手動寄送」；改 warn 避免錯誤回報／送到 AI；成功摘要顯示已 EMAIL 筆數；後端成功不回 draft
+- 驗證：`node modules/accounting/tools/test-payroll-email-manual-drafts.js`；後端 `test-payroll-email-draft-gate.js`；store `docs/deploy-payroll-email-manual-send.md`
+- Commit／線上：前端 merge `7148042`（PR #85）／Pages `36882750487`；後端 merge `1679565`（PR #69）／accounting-gas **@346**
+- 待處理／風險：無；請硬重整薪資待匯款後抽測「標記已發薪」
+
 ### 2026-09-30｜Cursor｜案件毛利 margin_list_overview 逾時（已部署）
 
 - 修改範圍：後端 `MarginModule.js`；前端 `accounting_api.js`／`project_margin.html`；SPEC 15 v1.35
