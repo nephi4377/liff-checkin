@@ -22,7 +22,7 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| — | — | 目前無進行中工作 | — | — |
+| 2026-10-01 | Cursor | 薪資 EMAIL 手動寄送誤報 | `payroll_finance.html`／`payroll_backfill.html`；Backend_GAS PayrollPayslip／Settlement | 進行中 |
 
 ## 最近完成
 
