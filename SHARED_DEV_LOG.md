@@ -26,13 +26,13 @@
 
 ## 最近完成
 
-### 2026-10-01｜Cursor｜薪資審核「此筆已審核過」冪等（部署中）
+### 2026-10-01｜Cursor｜薪資審核「此筆已審核過」冪等（已部署）
 
 - 修改範圍：`payroll_review.html`、`accounting_ui.js`；Backend `PayrollSettlementModule.js`
 - 完成內容：後端已審改冪等成功；退回不可覆寫已審；前端軟成功刷掉待審；`dismissedPendingIds` 擋 SWR 把卡片刷回
-- 驗證：`node modules/accounting/tools/test-payroll-already-reviewed.js`；後端對應 smoke
-- Commit／線上：見 [liff-checkin#84](https://github.com/nephi4377/liff-checkin/pull/84)、[Backend_GAS#68](https://github.com/nephi4377/Backend_GAS/pull/68)（部署中）
-- 待處理／風險：需前後端一併部署；截圖陳世勇 115/09 屬正式站舊行為
+- 驗證：`node modules/accounting/tools/test-payroll-already-reviewed.js`；正式站已含 `dismissedPendingIds`；store `docs/deploy-payroll-already-reviewed.md`
+- Commit／線上：前端 merge `f5c8a5d`（PR #84）／Pages `36887155416`；後端 merge `648e0f8`（PR #68）／accounting-gas **@348**
+- 待處理／風險：無；請硬重整薪資審核後抽測核准／已審再按
 
 ### 2026-10-01｜Cursor｜薪資 EMAIL 手動寄送誤報（已部署）
 
