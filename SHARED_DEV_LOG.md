@@ -22,9 +22,17 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-10-01 | Cursor | 薪資 EMAIL 手動寄送誤報 | `payroll_finance.html`／`payroll_backfill.html`；Backend_GAS PayrollPayslip／Settlement | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-10-01｜Cursor｜薪資 EMAIL 手動寄送誤報（PR／未部署）
+
+- 修改範圍：`payroll_finance.html`、`payroll_backfill.html`、測試；後端見 Backend_GAS #69
+- 完成內容：僅 `manual_required`／寄信失敗才顯示「EMAIL 待手動寄送」；改 warn 避免錯誤回報／送到 AI；成功摘要顯示已 EMAIL 筆數
+- 驗證：`node modules/accounting/tools/test-payroll-email-manual-drafts.js`；store `docs/payroll-email-manual-send.md`
+- Commit／線上：前端 PR [#85](https://github.com/nephi4377/liff-checkin/pull/85)（`cursor/payroll-email-manual-send-2e8e`）；後端 [#69](https://github.com/nephi4377/Backend_GAS/pull/69)；**未 Pages／未 clasp**
+- 待處理／風險：正式站仍舊行為；請先查 yung970 是否已收到 115/09 明細再決定是否手動寄
 
 ### 2026-09-30｜Cursor｜案件毛利 margin_list_overview 逾時（已部署）
 
