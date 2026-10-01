@@ -26,6 +26,14 @@
 
 ## 最近完成
 
+### 2026-10-01｜Cursor｜薪資待匯款 EMAIL 手動寄送誤觸錯誤回報（PR／未部署）
+
+- 修改範圍：`modules/accounting/payroll_finance.html`；`modules/accounting/tools/test-payroll-finance-email-warn.js`
+- 完成內容：標記已發薪成功、僅 EMAIL 需手動寄送時改 `setWarn`，不再 `setMsg` 觸發 AI 信箱／錯誤回報；後端 warnings 同改警告
+- 驗證：`node modules/accounting/tools/test-payroll-finance-email-warn.js`
+- Commit／線上：見 PR（未 Pages）
+- 待處理／風險：若 EMAIL 本應自動寄出卻仍出現草稿，需另查 accounting-gas 寄信設定（非本 PR）
+
 ### 2026-09-30｜Cursor｜案件毛利 margin_list_overview 逾時（已部署）
 
 - 修改範圍：後端 `MarginModule.js`；前端 `accounting_api.js`／`project_margin.html`；SPEC 15 v1.35
