@@ -221,6 +221,7 @@ const App = {
             '#/project-console': { name: 'iframe', src: 'modules/projects/managementconsole.html', title: '專案工作區' }, // [v543.0 修正] 改為正確的模組路徑
             '#/report': { name: 'iframe', src: 'modules/projects/reportV3.html', title: '施工回報' }, // [v605.3] 修正相容性後重新啟用 V3 版本
             '#/material-selection': { name: 'iframe', src: 'modules/projects/designer-material-selection.html', title: '選材管理' },
+            '#/digest-board': { name: 'iframe', src: 'modules/projects/digest_board.html', title: '對話重點板' },
             // 【您的要求】新增互動式室內設計規劃工具與平面圖校正工具的路由
             '#/layout-planner': { name: 'iframe', src: 'modules/InteriorDesigned/LP_LayoutPlanner.html', title: '互動式室內設計規劃工具' },
             '#/floorplan-straightener': { name: 'iframe', src: 'modules/InteriorDesigned/floorplan-straightener.html', title: '平面圖校正工具' },
@@ -885,6 +886,15 @@ const App = {
                 }
                 if (event.source && typeof event.source.postMessage === 'function') {
                     event.source.postMessage({ type: 'hub_liff_token', token: tok }, event.origin || '*');
+                }
+                return;
+            }
+            if (type === 'digest_board_request_employees') {
+                if (event.source && typeof event.source.postMessage === 'function') {
+                    event.source.postMessage({
+                        type: 'digest_board_employees',
+                        employees: allEmployees.value || []
+                    }, event.origin || '*');
                 }
                 return;
             }

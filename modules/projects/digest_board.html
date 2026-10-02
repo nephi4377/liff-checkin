@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>對話重點板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+    <div id="app" class="max-w-3xl mx-auto p-4 pb-24">
+        <header class="mb-4">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <h1 class="text-xl font-bold text-slate-900">對話重點板</h1>
+                <p class="text-xs text-slate-500">
+                    <span v-if="refreshing" class="text-blue-600 animate-pulse">更新中…</span>
+                    <span v-else-if="mockMode" class="text-amber-700">本機示範（mock）</span>
+                    <span v-else class="text-slate-400">管理權限可填可看</span>
+                </p>
+            </div>
+            <p class="text-sm text-slate-600 mt-1">助理填對話重點／待辦；你點狀態處理。失敗不會假裝成功。</p>
+        </header>
+
+        <div v-if="denied" class="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-4 mb-4">
+            <p class="font-medium">權限不足或尚未登入</p>
+            <p class="text-sm mt-1">請從主控台以管理身分開啟，或本機加 <code class="text-xs bg-white px-1 rounded">?mock=1</code> 示範。</p>
+        </div>
+
+        <div v-if="bannerError" class="bg-red-50 border border-red-200 text-red-800 rounded-lg p-3 mb-4 flex flex-wrap items-center justify-between gap-2">
+            <p class="text-sm">{{ bannerError }}</p>
+            <button type="button" class="text-sm font-medium px-3 py-1.5 bg-white border border-red-300 rounded-md" @click="refreshList">再試一次</button>
+        </div>
+
+        <div v-if="toast" class="fixed top-3 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
+            {{ toast }}
+        </div>
+
+        <!-- 新增 -->
+        <section class="bg-white border border-slate-200 rounded-xl p-4 mb-4 shadow-sm">
+            <div class="flex items-center justify-between gap-2 mb-3">
+                <h2 class="text-base font-bold">新增一筆</h2>
+                <button type="button" class="text-sm text-blue-700 font-medium" @click="showForm = !showForm">
+                    {{ showForm ? '收合' : '展開' }}
+                </button>
+            </div>
+            <form v-show="showForm" class="space-y-3" @submit.prevent="submitCreate">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">來源群 <span class="text-red-500">*</span></label>
+                    <div class="flex flex-wrap gap-2">
+                        <select v-model="form.sourcePreset" class="flex-1 min-w-[10rem] border border-slate-300 rounded-md px-2 py-2 text-sm bg-white">
+                            <option value="">請選擇</option>
+                            <option v-for="g in sourcePresets" :key="g" :value="g">{{ g }}</option>
+                            <option value="__other__">其他（手填）</option>
+                        </select>
+                        <input v-if="form.sourcePreset === '__other__'" v-model="form.sourceOther" type="text"
+                            class="flex-1 min-w-[8rem] border border-slate-300 rounded-md px-2 py-2 text-sm" placeholder="手填群名">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">案號（可空）</label>
+                    <input v-model="form.projectNo" type="text" class="w-full border border-slate-300 rounded-md px-2 py-2 text-sm" placeholder="有案就填；無案可留空">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">重點 <span class="text-red-500">*</span></label>
+                    <textarea v-model="form.summary" rows="3" required class="w-full border border-slate-300 rounded-md px-2 py-2 text-sm" placeholder="要對方知道／要辦的事"></textarea>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">對象 <span class="text-red-500">*</span></label>
+                    <input v-model="form.assignee" type="text" required class="w-full border border-slate-300 rounded-md px-2 py-2 text-sm" placeholder="例：Nephi、工地負責人">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">類型 <span class="text-red-500">*</span></label>
+                    <div class="flex flex-wrap gap-2">
+                        <label v-for="t in typeOptions" :key="t" class="inline-flex items-center gap-1.5 text-sm border rounded-md px-2.5 py-1.5 cursor-pointer"
+                            :class="form.itemType === t ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-300 bg-white'">
+                            <input type="radio" class="sr-only" :value="t" v-model="form.itemType">{{ t }}
+                        </label>
+                    </div>
+                </div>
+                <p v-if="formError" class="text-sm text-red-700">{{ formError }}</p>
+                <button type="submit" :disabled="creating"
+                    class="w-full sm:w-auto bg-blue-600 text-white font-bold py-2.5 px-5 rounded-md text-sm disabled:opacity-60">
+                    {{ creating ? '送出中…' : '送出' }}
+                </button>
+            </form>
+        </section>
+
+        <!-- 待處理列表 -->
+        <section class="mb-4">
+            <h2 class="text-base font-bold mb-2">待處理</h2>
+            <div v-if="!bootstrapped && refreshing" class="bg-white border border-slate-200 rounded-xl p-6 text-sm text-slate-500">
+                正在載入上次與最新資料…
+            </div>
+            <div v-else-if="openItems.length === 0 && emptyConfirmed && !bannerError" class="bg-white border border-dashed border-slate-300 rounded-xl p-6 text-sm text-slate-500 text-center">
+                目前沒有待處理
+            </div>
+            <div v-else-if="openItems.length === 0 && bannerError" class="bg-white border border-slate-200 rounded-xl p-6 text-sm text-slate-600">
+                暫時讀不到列表。若你曾看過舊資料，不會被清空成「沒有項目」。
+            </div>
+            <ul v-else class="space-y-3">
+                <li v-for="item in openItems" :key="item.item_id"
+                    class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm"
+                    :class="{ 'opacity-60': item.status === '暫擱' || item._optimistic }">
+                    <div class="flex flex-wrap items-start justify-between gap-2 mb-2">
+                        <div>
+                            <span class="inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 mr-1">{{ item.item_type }}</span>
+                            <span class="inline-block text-[11px] px-2 py-0.5 rounded-full border border-slate-200 text-slate-600">{{ item.status }}</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400">{{ formatTime(item.created_at) }} · {{ item.created_by_name || '—' }}</p>
+                    </div>
+                    <p class="text-sm font-medium text-slate-900 whitespace-pre-wrap">{{ item.summary }}</p>
+                    <p class="text-xs text-slate-500 mt-1">來源：{{ item.source_group || '—' }} · 對象：{{ item.assignee || '—' }}
+                        <span v-if="item.project_no"> · 案號：{{ item.project_no }}</span>
+                    </p>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <button type="button" class="text-xs font-semibold px-2.5 py-1.5 rounded-md bg-emerald-600 text-white disabled:opacity-50"
+                            :disabled="!!busyId" @click="setStatus(item, '已回覆')">已回覆</button>
+                        <button type="button" class="text-xs font-semibold px-2.5 py-1.5 rounded-md bg-blue-600 text-white disabled:opacity-50"
+                            :disabled="!!busyId" @click="openReassign(item)">再交辦</button>
+                        <button type="button" class="text-xs font-semibold px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-slate-700 disabled:opacity-50"
+                            :disabled="!!busyId" @click="setStatus(item, '暫擱')">暫擱</button>
+                        <button type="button" class="text-xs font-semibold px-2.5 py-1.5 rounded-md border border-red-200 bg-red-50 text-red-800 disabled:opacity-50"
+                            :disabled="!!busyId" @click="confirmCancel(item)">取消</button>
+                    </div>
+                </li>
+            </ul>
+        </section>
+
+        <details class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm mb-4">
+            <summary class="cursor-pointer font-bold text-sm text-slate-700">已完成／取消（{{ closedItems.length }}）</summary>
+            <ul class="mt-3 space-y-2">
+                <li v-for="item in closedItems" :key="item.item_id" class="text-sm border-t border-slate-100 pt-2 text-slate-600">
+                    <span class="text-[11px] text-slate-400">{{ item.status }}</span>
+                    {{ item.summary }}
+                </li>
+                <li v-if="closedItems.length === 0" class="text-xs text-slate-400">尚無</li>
+            </ul>
+        </details>
+
+        <!-- 再交辦面板 -->
+        <div v-if="reassignItem" class="fixed inset-0 z-40 bg-black/40 flex items-end sm:items-center justify-center p-3" @click.self="closeReassign">
+            <div class="bg-white w-full max-w-lg rounded-xl shadow-xl max-h-[90vh] overflow-y-auto p-4">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="font-bold text-base">再交辦</h3>
+                    <button type="button" class="text-sm text-slate-500" @click="closeReassign">關閉</button>
+                </div>
+                <p class="text-xs text-slate-500 mb-3">會走內部交辦通知（任務交辦中心）。送出成功後，這一列才改成「再交辦」。</p>
+                <div id="digest-task-sender"></div>
+                <p v-if="reassignHint" class="text-sm text-amber-800 mt-2">{{ reassignHint }}</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script type="module">
+        import { CONFIG } from '../../shared/js/config.js';
+        import { loadDailyCache, saveDailyCache, hubSidebarDailyCacheKey, purgeStaleDailyCaches } from '../../shared/js/utils.js';
+        import {
+            mergeDigestBoardListFetch,
+            applyOptimisticStatus,
+            rollbackOptimisticStatus,
+            partitionOpenAndClosed
+        } from './js/digestBoardCache.js';
+        import { initializeTaskSender } from '../../shared/js/taskSender.js';
+
+        const { createApp, ref, computed, onMounted, nextTick } = Vue;
+
+        const CACHE_PREFIX = 'spa_digest_board';
+        const SOURCE_PRESETS = ['公司群', '案場群', '設計群', '行政群', '非案件'];
+        const TYPE_OPTIONS = ['待回覆', '提醒', '交辦'];
+
+        const MOCK_SEED = [
+            {
+                item_id: 'db_mock_1',
+                created_at: new Date().toISOString(),
+                created_by: 'mock',
+                created_by_name: '行政助理',
+                source_group: '公司群',
+                project_no: 'TX-DEMO',
+                summary: '客戶問材料到貨日，請回覆預計時程',
+                assignee: 'Nephi',
+                item_type: '待回覆',
+                status: '待處理',
+                updated_at: new Date().toISOString(),
+                updated_by: 'mock',
+                updated_by_name: '行政助理',
+                task_id: '',
+                note: ''
+            },
+            {
+                item_id: 'db_mock_2',
+                created_at: new Date(Date.now() - 86400000).toISOString(),
+                created_by: 'mock',
+                created_by_name: '行政助理',
+                source_group: '案場群',
+                project_no: '',
+                summary: '提醒週五要帶鑰匙給師傅',
+                assignee: '工地負責人',
+                item_type: '提醒',
+                status: '暫擱',
+                updated_at: new Date(Date.now() - 3600000).toISOString(),
+                updated_by: 'mock',
+                updated_by_name: 'Nephi',
+                task_id: '',
+                note: ''
+            }
+        ];
+
+        createApp({
+            setup() {
+                const params = new URLSearchParams(window.location.search);
+                const mockMode = ref(params.get('mock') === '1' || params.get('mock') === 'true');
+                const uid = ref(params.get('uid') || params.get('userId') || '');
+                const userName = ref(params.get('name') || params.get('userName') || '');
+                const permission = ref(Number(params.get('permission') || 0));
+
+                const items = ref([]);
+                const refreshing = ref(false);
+                const bootstrapped = ref(false);
+                const bannerError = ref('');
+                const emptyConfirmed = ref(false);
+                const denied = ref(false);
+                const toast = ref('');
+                const showForm = ref(true);
+                const creating = ref(false);
+                const formError = ref('');
+                const busyId = ref('');
+                const reassignItem = ref(null);
+                const reassignHint = ref('');
+                let taskSenderApi = null;
+                let toastTimer = null;
+
+                const form = ref({
+                    sourcePreset: '',
+                    sourceOther: '',
+                    projectNo: '',
+                    summary: '',
+                    assignee: '',
+                    itemType: '待回覆'
+                });
+
+                const openItems = computed(() => partitionOpenAndClosed(items.value).open);
+                const closedItems = computed(() => partitionOpenAndClosed(items.value).closed);
+
+                const showToast = (msg) => {
+                    toast.value = msg;
+                    clearTimeout(toastTimer);
+                    toastTimer = setTimeout(() => { toast.value = ''; }, 2200);
+                };
+
+                const formatTime = (iso) => {
+                    if (!iso) return '';
+                    try {
+                        const d = new Date(iso);
+                        if (Number.isNaN(d.getTime())) return String(iso);
+                        return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                    } catch (_) {
+                        return String(iso);
+                    }
+                };
+
+                const resolveSourceGroup = () => {
+                    if (form.value.sourcePreset === '__other__') return form.value.sourceOther.trim();
+                    return form.value.sourcePreset.trim();
+                };
+
+                const postAction = async (action, payload) => {
+                    const body = { ...payload, action, userId: uid.value, userName: userName.value };
+                    const formData = new FormData();
+                    formData.append('payload', JSON.stringify(body));
+                    const res = await fetch(CONFIG.GAS_WEB_APP_URL, { method: 'POST', body: formData });
+                    const text = await res.text();
+                    const trimmed = (text || '').trim();
+                    if (!trimmed || trimmed.charAt(0) === '<') {
+                        return { success: false, message: '後端暫時沒回應' };
+                    }
+                    try {
+                        return JSON.parse(trimmed);
+                    } catch (_) {
+                        return { success: false, message: '後端回傳格式異常' };
+                    }
+                };
+
+                const fetchListRemote = async () => {
+                    const url = new URL(CONFIG.GAS_WEB_APP_URL);
+                    url.searchParams.set('page', 'digest_board_list');
+                    url.searchParams.set('userId', uid.value);
+                    url.searchParams.set('include_closed', '1');
+                    const res = await fetch(url.toString());
+                    const text = await res.text();
+                    const trimmed = (text || '').trim();
+                    if (!trimmed || trimmed.charAt(0) === '<') {
+                        return { ok: false, message: '列表讀取失敗（網路或後端）' };
+                    }
+                    let json;
+                    try { json = JSON.parse(trimmed); } catch (_) {
+                        return { ok: false, message: '列表回傳格式異常' };
+                    }
+                    if (!json || json.success !== true || !Array.isArray(json.data)) {
+                        return { ok: false, message: (json && json.message) || '列表讀取失敗' };
+                    }
+                    return { ok: true, items: json.data };
+                };
+
+                const applyMerge = (result) => {
+                    const merged = mergeDigestBoardListFetch(items.value, result);
+                    items.value = merged.items;
+                    bannerError.value = merged.error;
+                    emptyConfirmed.value = merged.emptyConfirmed;
+                    if (merged.saveCache) {
+                        saveDailyCache(hubSidebarDailyCacheKey(CACHE_PREFIX), merged.items);
+                    }
+                    bootstrapped.value = true;
+                };
+
+                const refreshList = async () => {
+                    if (denied.value && !mockMode.value) return;
+                    refreshing.value = true;
+                    try {
+                        if (mockMode.value) {
+                            await new Promise((r) => setTimeout(r, 200));
+                            applyMerge({ ok: true, items: items.value.length ? items.value : MOCK_SEED.slice() });
+                            return;
+                        }
+                        const result = await fetchListRemote();
+                        applyMerge(result);
+                    } catch (e) {
+                        applyMerge({ ok: false, message: e.message || '更新失敗，可再試' });
+                    } finally {
+                        refreshing.value = false;
+                    }
+                };
+
+                const resetForm = () => {
+                    form.value = {
+                        sourcePreset: '',
+                        sourceOther: '',
+                        projectNo: '',
+                        summary: '',
+                        assignee: '',
+                        itemType: '待回覆'
+                    };
+                    formError.value = '';
+                };
+
+                const submitCreate = async () => {
+                    formError.value = '';
+                    const source_group = resolveSourceGroup();
+                    if (!source_group) {
+                        formError.value = '請填寫來源群';
+                        return;
+                    }
+                    if (!form.value.summary.trim()) {
+                        formError.value = '請填寫重點';
+                        return;
+                    }
+                    if (!form.value.assignee.trim()) {
+                        formError.value = '請填寫對象';
+                        return;
+                    }
+                    creating.value = true;
+                    try {
+                        if (mockMode.value) {
+                            await new Promise((r) => setTimeout(r, 250));
+                            const now = new Date().toISOString();
+                            const item = {
+                                item_id: 'db_mock_' + Date.now(),
+                                created_at: now,
+                                created_by: uid.value || 'mock',
+                                created_by_name: userName.value || '本機測試',
+                                source_group,
+                                project_no: form.value.projectNo.trim(),
+                                summary: form.value.summary.trim(),
+                                assignee: form.value.assignee.trim(),
+                                item_type: form.value.itemType,
+                                status: '待處理',
+                                updated_at: now,
+                                updated_by: uid.value || 'mock',
+                                updated_by_name: userName.value || '本機測試',
+                                task_id: '',
+                                note: ''
+                            };
+                            items.value = [item, ...items.value];
+                            emptyConfirmed.value = false;
+                            saveDailyCache(hubSidebarDailyCacheKey(CACHE_PREFIX), items.value);
+                            resetForm();
+                            showToast('已加入');
+                            return;
+                        }
+                        const result = await postAction('digest_board_create', {
+                            source_group,
+                            project_no: form.value.projectNo.trim(),
+                            summary: form.value.summary.trim(),
+                            assignee: form.value.assignee.trim(),
+                            item_type: form.value.itemType
+                        });
+                        if (!result.success) {
+                            formError.value = result.message || '送出失敗，請再試';
+                            return;
+                        }
+                        if (result.data) {
+                            items.value = [result.data, ...items.value.filter((x) => x.item_id !== result.data.item_id)];
+                            emptyConfirmed.value = false;
+                            saveDailyCache(hubSidebarDailyCacheKey(CACHE_PREFIX), items.value);
+                        }
+                        resetForm();
+                        showToast('已加入');
+                    } catch (e) {
+                        formError.value = e.message || '送出失敗，請再試';
+                    } finally {
+                        creating.value = false;
+                    }
+                };
+
+                const setStatus = async (item, status, extra = {}) => {
+                    if (!item || busyId.value) return;
+                    busyId.value = item.item_id;
+                    const { items: next, snapshot } = applyOptimisticStatus(items.value, item.item_id, status);
+                    items.value = next;
+                    try {
+                        if (mockMode.value) {
+                            await new Promise((r) => setTimeout(r, 200));
+                            if (extra._forceFail) throw new Error('模擬失敗');
+                            const idx = items.value.findIndex((x) => x.item_id === item.item_id);
+                            if (idx >= 0) {
+                                const copy = { ...items.value[idx], status, _optimistic: undefined, ...extra };
+                                delete copy._optimistic;
+                                items.value = items.value.slice();
+                                items.value[idx] = copy;
+                            }
+                            saveDailyCache(hubSidebarDailyCacheKey(CACHE_PREFIX), items.value);
+                            showToast('已更新');
+                            return;
+                        }
+                        const result = await postAction('digest_board_update_status', {
+                            item_id: item.item_id,
+                            status,
+                            task_id: extra.task_id || ''
+                        });
+                        if (!result.success) {
+                            items.value = rollbackOptimisticStatus(items.value, snapshot);
+                            bannerError.value = result.message || '沒存成功，請再試';
+                            return;
+                        }
+                        if (result.data) {
+                            const idx = items.value.findIndex((x) => x.item_id === item.item_id);
+                            if (idx >= 0) {
+                                items.value = items.value.slice();
+                                items.value[idx] = result.data;
+                            }
+                        }
+                        saveDailyCache(hubSidebarDailyCacheKey(CACHE_PREFIX), items.value);
+                        bannerError.value = '';
+                    } catch (e) {
+                        items.value = rollbackOptimisticStatus(items.value, snapshot);
+                        bannerError.value = e.message || '沒存成功，請再試';
+                    } finally {
+                        busyId.value = '';
+                    }
+                };
+
+                const confirmCancel = (item) => {
+                    if (!window.confirm('確定不用辦了？')) return;
+                    setStatus(item, '取消');
+                };
+
+                const closeReassign = () => {
+                    reassignItem.value = null;
+                    reassignHint.value = '';
+                    const el = document.getElementById('digest-task-sender');
+                    if (el) el.innerHTML = '';
+                    taskSenderApi = null;
+                };
+
+                const openReassign = async (item) => {
+                    if (mockMode.value) {
+                        reassignItem.value = item;
+                        reassignHint.value = '本機 mock：交辦表單需正式後端員工名單。示範改直接標成再交辦。';
+                        await nextTick();
+                        const el = document.getElementById('digest-task-sender');
+                        if (el) {
+                            el.innerHTML = `<button type="button" id="mock-reassign-ok" class="w-full bg-blue-600 text-white font-bold py-2 rounded-md text-sm">示範：標為再交辦</button>`;
+                            el.querySelector('#mock-reassign-ok').onclick = async () => {
+                                await setStatus(item, '再交辦');
+                                closeReassign();
+                            };
+                        }
+                        return;
+                    }
+                    reassignItem.value = item;
+                    reassignHint.value = '';
+                    await nextTick();
+                    const container = document.getElementById('digest-task-sender');
+                    if (!container) return;
+                    // 員工名單：向父層主控台要（若在 iframe）；否則空名單仍可開表單但難選人
+                    let employees = [];
+                    try {
+                        if (window.parent && window.parent !== window) {
+                            window.parent.postMessage({ type: 'digest_board_request_employees' }, '*');
+                        }
+                    } catch (_) { /* ignore */ }
+                    taskSenderApi = initializeTaskSender(container, {
+                        state: {
+                            allEmployees: employees,
+                            currentUserId: uid.value,
+                            currentUserName: userName.value,
+                            projectId: item.project_no || ''
+                        },
+                        callbacks: {
+                            onSuccess: async (result) => {
+                                const taskId = (result && (result.taskId || result.data?.taskId || result.data?.NotificationID)) || '';
+                                await setStatus(item, '再交辦', { task_id: taskId });
+                                closeReassign();
+                                showToast('已交辦');
+                            },
+                            onError: () => {
+                                reassignHint.value = '交辦沒送出，重點列不會偷偷改成再交辦';
+                            }
+                        }
+                    }, { style: 'console', defaultAction: 'ConfirmCompletion', collapsible: true });
+                    if (taskSenderApi && typeof taskSenderApi.prefill === 'function') {
+                        taskSenderApi.prefill({
+                            content: item.summary,
+                            projectId: item.project_no || '',
+                            title: '【對話重點再交辦】'
+                        });
+                    }
+                };
+
+                // 父層回傳員工名單
+                window.addEventListener('message', (ev) => {
+                    const data = ev.data || {};
+                    if (data.type === 'digest_board_employees' && Array.isArray(data.employees) && taskSenderApi) {
+                        taskSenderApi = initializeTaskSender(document.getElementById('digest-task-sender'), {
+                            state: {
+                                allEmployees: data.employees,
+                                currentUserId: uid.value,
+                                currentUserName: userName.value,
+                                projectId: reassignItem.value?.project_no || ''
+                            },
+                            callbacks: {
+                                onSuccess: async (result) => {
+                                    const item = reassignItem.value;
+                                    if (!item) return;
+                                    const taskId = (result && (result.taskId || result.data?.taskId)) || '';
+                                    await setStatus(item, '再交辦', { task_id: taskId });
+                                    closeReassign();
+                                    showToast('已交辦');
+                                },
+                                onError: () => {
+                                    reassignHint.value = '交辦沒送出，重點列不會偷偷改成再交辦';
+                                }
+                            }
+                        }, { style: 'console', defaultAction: 'ConfirmCompletion', collapsible: true });
+                        if (reassignItem.value && taskSenderApi?.prefill) {
+                            taskSenderApi.prefill({
+                                content: reassignItem.value.summary,
+                                projectId: reassignItem.value.project_no || ''
+                            });
+                        }
+                    }
+                });
+
+                // 模擬失敗測試：?failStatus=1 時第一次改狀態會失敗
+                const forceFailOnce = params.get('failStatus') === '1';
+                let failUsed = false;
+                const setStatusWrapped = async (item, status, extra = {}) => {
+                    if (forceFailOnce && !failUsed && mockMode.value) {
+                        failUsed = true;
+                        return setStatus(item, status, { ...extra, _forceFail: true });
+                    }
+                    return setStatus(item, status, extra);
+                };
+
+                onMounted(() => {
+                    purgeStaleDailyCaches(CACHE_PREFIX + '_');
+                    const cached = loadDailyCache(hubSidebarDailyCacheKey(CACHE_PREFIX));
+                    if (Array.isArray(cached) && cached.length) {
+                        items.value = cached;
+                        bootstrapped.value = true;
+                        emptyConfirmed.value = false;
+                    }
+
+                    if (mockMode.value) {
+                        denied.value = false;
+                        if (!items.value.length) items.value = MOCK_SEED.slice();
+                        bootstrapped.value = true;
+                        emptyConfirmed.value = items.value.length === 0;
+                        refreshing.value = false;
+                        return;
+                    }
+
+                    if (!uid.value || permission.value < 4) {
+                        denied.value = true;
+                        return;
+                    }
+                    refreshList();
+                });
+
+                return {
+                    mockMode,
+                    denied,
+                    refreshing,
+                    bootstrapped,
+                    bannerError,
+                    emptyConfirmed,
+                    toast,
+                    showForm,
+                    creating,
+                    formError,
+                    form,
+                    sourcePresets: SOURCE_PRESETS,
+                    typeOptions: TYPE_OPTIONS,
+                    openItems,
+                    closedItems,
+                    busyId,
+                    reassignItem,
+                    reassignHint,
+                    formatTime,
+                    refreshList,
+                    submitCreate,
+                    setStatus: setStatusWrapped,
+                    confirmCancel,
+                    openReassign,
+                    closeReassign
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

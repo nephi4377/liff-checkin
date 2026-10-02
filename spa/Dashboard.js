@@ -53,6 +53,7 @@ export default {
         const budgetAuditUrl = computed(() => `#/budget-audit`);
         const accountingHubUrl = computed(() => '#/accounting');
         const materialSelectionUrl = computed(() => '#/material-selection');
+        const digestBoardUrl = computed(() => '#/digest-board');
 
         /** 副本文字冒險：外部靜態站（非 iframe）；完整 URL 供開啟／複製 */
         const storyAdventurePublicUrl = 'https://info.tanxin.space/tools/story-adventure/';
@@ -442,6 +443,7 @@ export default {
             employeeEditorUrl,
             reportUrl,
             materialSelectionUrl,
+            digestBoardUrl,
             layoutPlannerUrl,
             floorplanStraightenerUrl,
             budgetWebUrl,
@@ -643,6 +645,16 @@ export default {
                     <div class="min-w-0 flex-1">
                         <h2 class="text-base font-bold text-gray-800 leading-tight">選材</h2>
                         <p class="text-xs text-gray-500 mt-1 leading-snug">登記案場材料照片與空間；客人立刻可見。</p>
+                    </div>
+                </a>
+
+                <!-- 3c. 對話重點板（管理） -->
+                <a v-if="hasAdminRights" :href="digestBoardUrl"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-amber-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center text-xl">📌</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">對話重點板</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">助理填對話重點／待辦；點狀態處理（已回覆／再交辦）。</p>
                     </div>
                 </a>
 
