@@ -13,9 +13,10 @@ var html = fs.readFileSync(
 assert(html.indexOf('needs_dup_confirm') >= 0, 'handles needs_dup_confirm');
 assert(html.indexOf('force_duplicate') >= 0, 'resubmits with force_duplicate');
 assert(
-  html.indexOf('看起來和剛才一樣') >= 0,
-  'confirm copy aligns with group「看起來和剛才一樣」'
+  html.indexOf('疑似重複記帳') >= 0 && html.indexOf('同類型、同金額、同日期') >= 0,
+  'confirm copy states type+amount+date'
 );
+assert(html.indexOf('duplicate_prior') >= 0, 'uses prior detail for confirm');
 assert(html.indexOf('window.confirm') >= 0, 'uses confirm dialog');
 assert(
   /clearVolatileFields\s*\(\s*true\s*\)/.test(html),
