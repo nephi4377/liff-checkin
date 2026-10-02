@@ -31,7 +31,7 @@
 - 修改範圍：`accounting_ingest.html`、SPEC 15；Backend `SheetWriter`／`AccountingLineIngest`
 - 完成內容：送出前掃當月試算表，同類型＋同金額＋同日期 → 確認框顯示既有列細節；確定才 `force_duplicate`；保留指紋 TTL
 - 驗證：`node modules/accounting/tools/test-form-dedup-clear.js`；後端 `test-form-dedup-type-amount-date.js`／`test-form-dedup-ttl.js`；store `docs/duplicate-ledger-type-amount-date.md`
-- Commit／線上：draft PR（未 Pages／未 clasp deploy）
+- Commit／線上：前端 draft [PR #86](https://github.com/nephi4377/liff-checkin/pull/86)；後端 draft [Backend_GAS#70](https://github.com/nephi4377/Backend_GAS/pull/70)（未 Pages／未 clasp deploy）
 - 待處理／風險：需前後端一併部署才完整生效
 
 
