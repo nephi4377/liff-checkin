@@ -26,13 +26,13 @@
 
 ## 最近完成
 
-### 2026-10-02｜Cursor｜記帳疑重同類型＋同金額＋同日期（draft／未部署）
+### 2026-10-02｜Cursor｜記帳疑重同類型＋同金額＋同日期（已部署）
 
 - 修改範圍：`accounting_ingest.html`、SPEC 15；Backend `SheetWriter`／`AccountingLineIngest`
 - 完成內容：送出前掃當月試算表，同類型＋同金額＋同日期 → 確認框顯示既有列細節；確定才 `force_duplicate`；保留指紋 TTL
-- 驗證：`node modules/accounting/tools/test-form-dedup-clear.js`；後端 `test-form-dedup-type-amount-date.js`／`test-form-dedup-ttl.js`；store `docs/duplicate-ledger-type-amount-date.md`
-- Commit／線上：前端 draft [PR #86](https://github.com/nephi4377/liff-checkin/pull/86)；後端 draft [Backend_GAS#70](https://github.com/nephi4377/Backend_GAS/pull/70)（未 Pages／未 clasp deploy）
-- 待處理／風險：需前後端一併部署才完整生效
+- 驗證：`node modules/accounting/tools/test-form-dedup-clear.js`；後端 `test-form-dedup-type-amount-date.js`／`test-form-dedup-ttl.js`；正式站已含「同類型、同金額、同日期」；store `docs/deploy-duplicate-ledger-type-amount-date.md`
+- Commit／線上：前端 merge `ce44c7f`（[PR #86](https://github.com/nephi4377/liff-checkin/pull/86)）／Pages `36982270430`；後端 merge `94c9888`（[Backend_GAS#70](https://github.com/nephi4377/Backend_GAS/pull/70)）／accounting-gas **@350**
+- 待處理／風險：無；請硬重整收支登錄後抽測疑重確認
 
 
 ### 2026-10-01｜Cursor｜薪資審核「此筆已審核過」冪等（已部署）
