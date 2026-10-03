@@ -1,4 +1,4 @@
-import Dashboard from './Dashboard.js?v=26.09.10.1';
+import Dashboard from './Dashboard.js?v=26.10.03.1';
 import ProjectBoard from './ProjectBoard.js?v=26.08.30.1';
 import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.07.24.1';
 import HubLeftSidebar from './HubLeftSidebar.js?v=26.08.31.2';
@@ -132,6 +132,8 @@ const App = {
         const hasAdminRights = computed(() => Number(currentUser.value?.permission || 0) >= 4);
         /** 全員出勤燈號看板／右側今日燈號：權限 ≥ 3 可見（其餘管理功能仍 ≥ 4） */
         const canViewStaffStatusBoard = computed(() => Number(currentUser.value?.permission || 0) >= 3);
+        /** 公司知識庫（#/kb）：權限 ≥ 3 顯示入口；實際授權由知識庫 API 以 LIFF token＋員工資料驗證 */
+        const canUseKnowledgeBase = computed(() => Number(currentUser.value?.permission || 0) >= 3);
         const isHelpActive = computed(() => {
             const hash = window.location.hash || '#';
             const path = hash.split('?')[0];
@@ -255,6 +257,8 @@ const App = {
         };
         // [v513.0 新增] 補上員工資料編輯頁面的路由
         routes['#/employee-editor'] = { name: 'iframe', src: 'modules/attendance/employee_editor.html', title: '員工資料編輯' }; // [v515.0 修正] 改為絕對路徑
+        // 公司知識庫（注意：#/knowledge 已被 index.html 轉去公開 FAQ 頁，故用 #/kb）
+        routes['#/kb'] = { name: 'iframe', src: 'modules/kb/index.html', title: '公司知識庫' };
 
         const handleRouteChange = () => {
             const hash = window.location.hash || '#';
@@ -271,6 +275,11 @@ const App = {
             if (path === '#/attendance-report' && Number(currentUser.value?.permission || 0) > 0
                 && Number(currentUser.value?.permission || 0) < 4) {
                 window.location.replace('#/my-personal');
+                return;
+            }
+            if (path === '#/kb' && Number(currentUser.value?.permission || 0) > 0
+                && Number(currentUser.value?.permission || 0) < 3) {
+                window.location.replace('#/dashboard');
                 return;
             }
             console.log(`[Router] Navigated to: ${hash}`, route);
@@ -952,6 +961,7 @@ const App = {
             scheduleLoading,
             hasAdminRights,
             canViewStaffStatusBoard,
+            canUseKnowledgeBase,
             handleNotificationAction,
             clearAllNotifications,
             currentUser,
@@ -996,6 +1006,7 @@ const App = {
                          <nav class="-mb-px flex gap-6" aria-label="Tabs">
                              <a href="#/dashboard" :class="['py-1.5 px-1 text-base font-bold', currentView.name === 'dashboard' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:border-gray-300']">主控台</a>
                              <a href="#/project-board" :class="['py-1.5 px-1 text-base font-bold', currentView.name === 'project-board' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:border-gray-300']">專案看板</a>
+                             <a v-if="canUseKnowledgeBase" href="#/kb" :class="['py-1.5 px-1 text-base font-bold', (currentView.name === 'iframe' && currentView.src === 'modules/kb/index.html') ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:border-gray-300']">📚 知識庫</a>
                              <a href="#/help" :class="[
                                  'inline-flex items-center gap-1.5 py-1.5 px-3 rounded-lg text-base font-bold transition-colors border',
                                  isHelpActive

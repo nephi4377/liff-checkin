@@ -26,6 +26,15 @@
 
 ## 最近完成
 
+### 2026-10-03｜Grok Bot（代 Nephi）｜公司知識庫 #/kb（PR／未部署）
+
+- 修改範圍：新增 `modules/kb/index.html`；`shared/js/config.js`（`KB_API_BASE`）；`spa/app.js`（路由 `#/kb`、權限 ≥3 頂部分頁、權限 <3 導回主控台）；`spa/Dashboard.js`（權限 ≥3 卡片）；`index.html` 版本 `v26.10.03.1`
+- 完成內容：iframe 頁向主控台索取 LIFF token（`request_hub_liff_token`，只收同源回覆）→ 呼叫 TX34 知識庫 API（ngrok 固定網域）`/api/me`、`/api/ask` → 輪詢 `/api/jobs/{id}`；只顯示答案＋來源摘錄。授權全在 API：LINE verify（Channel 2007974938）＋會計 GAS `accounting_auth_me`（只送 token，不送 user_id）→ 權限 ≥3 且非離職；網址 uid／permission 不作授權依據
+- 注意：`#/knowledge` 已被 index.html 轉去公開 FAQ（SQAQ2），故用 `#/kb`
+- 驗證：本機 headless Chrome（模擬主控台送 token＋真 kb_api 程式碼、模擬登入）提問→輪詢→顯示答案／來源；直接開頁顯示「請從主控台開啟」；`node --check` app.js／Dashboard.js／config.js；正式 ngrok 網址：無 token → 401、假 token → 401、CORS 只允許 https://info.tanxin.space
+- Commit／線上：PR（未 merge、未上 Pages）
+- 待處理／風險：TX34 需開機並登入（工作排程器 TanxinKB-API 自動開 API＋ngrok）；首次正式用 LINE 帳號實測 `/api/me`（真 token 路徑尚未以真人帳號驗證）
+
 ### 2026-10-02｜Cursor｜記帳疑重同類型＋同金額＋同日期（已部署）
 
 - 修改範圍：`accounting_ingest.html`、SPEC 15；Backend `SheetWriter`／`AccountingLineIngest`
