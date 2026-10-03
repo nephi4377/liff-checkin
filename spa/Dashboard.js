@@ -646,8 +646,8 @@ export default {
                     </div>
                 </a>
 
-                <!-- 3c. 公司知識庫（權限 ≥ 3；TX34 本機 AI，依公司文件回答） -->
-                <a v-if="currentUser && currentUser.permission >= 3" href="#/kb"
+                <!-- 3c. 公司知識庫（權限 ≥ 2；TX34 本機 AI，依公司資料回答；廠商報價需 ≥ 3 由 API 過濾） -->
+                <a v-if="currentUser && currentUser.permission >= 2" href="#/kb"
                     class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-sky-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center text-xl">📚</div>
                     <div class="min-w-0 flex-1">
