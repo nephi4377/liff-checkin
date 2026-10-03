@@ -192,6 +192,57 @@ const App = {
             return '';
         };
 
+        /**
+         * 重新取得 HUB LIFF ID token（LINE ID token 只有約 1 小時效期，且 LIFF SDK 會把舊 token 留在
+         * localStorage、不會自動更新；getIDToken() 可能一直回傳過期的那張）。
+         * 做法同客戶入口 accounting_api.js：liff.logout() 清掉舊 token，再重新登入：
+         *   - LINE 內（LIFF browser）：不能呼叫 liff.login()，改 reload → liff.init() 自動登入取新 token
+         *   - 桌機／外部瀏覽器：liff.login({ redirectUri }) 走 LINE Login 再回來
+         * 自動重登 2 分鐘內只做一次（避免無限重整）；使用者按「重新登入」時 force=true 不受限。
+         */
+        const HUB_RELOGIN_AT_KEY = 'hub_liff_relogin_at';
+        const HUB_RETURN_HASH_KEY = 'hub_liff_return_hash';
+        const reloginHubLiff = (opts = {}) => {
+            try {
+                const last = parseInt(sessionStorage.getItem(HUB_RELOGIN_AT_KEY) || '0', 10) || 0;
+                if (!opts.force && last && (Date.now() - last) < 2 * 60 * 1000) return false;
+                sessionStorage.setItem(HUB_RELOGIN_AT_KEY, String(Date.now()));
+                if (window.location.hash && window.location.hash !== '#') {
+                    sessionStorage.setItem(HUB_RETURN_HASH_KEY, window.location.hash);
+                }
+            } catch (e) { /* sessionStorage 不可用時仍嘗試重登 */ }
+            hubIdTokenRef.value = '';
+            try {
+                if (typeof liff === 'undefined') {
+                    window.location.reload();
+                    return true;
+                }
+                try { if (liff.isLoggedIn && liff.isLoggedIn()) liff.logout(); } catch (eOut) { /* ignore */ }
+                let inClient = false;
+                try { inClient = !!(liff.isInClient && liff.isInClient()); } catch (eIn) { /* ignore */ }
+                if (inClient) {
+                    window.location.reload();
+                } else {
+                    liff.login({ redirectUri: window.location.href });
+                }
+            } catch (e) {
+                console.warn('[Hub] reloginHubLiff:', e);
+                window.location.reload();
+            }
+            return true;
+        };
+        /** 重新登入回來後，若網址的 #/路由 遺失（LINE Login 轉址），還原到重登前的頁面 */
+        const restoreHashAfterRelogin = () => {
+            try {
+                const back = sessionStorage.getItem(HUB_RETURN_HASH_KEY);
+                if (!back) return;
+                sessionStorage.removeItem(HUB_RETURN_HASH_KEY);
+                if (/^#\/[\w\-\/?=&%.]*$/.test(back) && (!window.location.hash || window.location.hash === '#')) {
+                    window.location.hash = back;
+                }
+            } catch (e) { /* ignore */ }
+        };
+
         /** 會計 iframe 須等員工名單就緒再掛載，避免 permission 更新導致整頁重載 */
         const iframeMountReady = computed(() => {
             if (!userProfile.value?.userId) return false;
@@ -767,6 +818,7 @@ const App = {
                     }
                     userProfile.value = await liff.getProfile();
                     refreshHubIdToken();
+                    restoreHashAfterRelogin();
                 }
 
                 const [attendanceResult, projectsResult] = await Promise.all([
@@ -894,6 +946,15 @@ const App = {
                 }
                 if (event.source && typeof event.source.postMessage === 'function') {
                     event.source.postMessage({ type: 'hub_liff_token', token: tok }, event.origin || '*');
+                }
+                return;
+            }
+            // iframe（如 #/kb）拿到過期／空的 token 或 API 回 401 → 請主控台重新登入取新 token（只接受同網站 iframe）
+            if (type === 'request_hub_liff_relogin') {
+                if (event.origin !== window.location.origin) return;
+                const started = reloginHubLiff({ force: !!(event.data && event.data.force) });
+                if (event.source && typeof event.source.postMessage === 'function') {
+                    event.source.postMessage({ type: 'hub_liff_relogin_result', started }, event.origin);
                 }
                 return;
             }

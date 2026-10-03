@@ -26,6 +26,14 @@
 
 ## 最近完成
 
+### 2026-10-03｜Grok Bot（代 Nephi）｜公司知識庫 #/kb 登入憑證過期自動重新登入（PR／未部署）
+
+- 修改範圍：`modules/kb/index.html`（每次呼叫 API 前向主控台重新索取 token 並解 JWT `exp`，剩 ≤60 秒視同過期；token 空／過期或 API 回 401 → `request_hub_liff_relogin` 自動重登一次，重新載入後自動重送剛才的問題；仍失敗才顯示錯誤＋「🔄 重新登入」按鈕；直接開頁加「用這個瀏覽器開啟主控台」連結）；`spa/app.js`（新增 `reloginHubLiff`：`liff.logout()` 後 LINE 內 reload、外部／桌機瀏覽器 `liff.login({ redirectUri })`，自動重登 2 分鐘內只一次防迴圈，按鈕 `force` 不受限；回應 iframe `request_hub_liff_relogin` → `hub_liff_relogin_result`（只收同源）；重登回來還原 `#/路由`）；`index.html` 版本 `v26.10.03.3`、`app.js?v=26.10.03.3`
+- 根因：Nephi 看到的「登入憑證已過期，請關閉後從 LINE 重新開啟主控台」是前端字串（`modules/kb/index.html` 拿不到 token 時丟出），不是 API 回應（API 401 文字為「登入憑證無效或已過期…」）。主控台 `refreshHubIdToken()` 發現 `liff.getIDToken()` 已過期（LINE ID token 約 1 小時、LIFF SDK 存在 localStorage 不會自動更新）就回空字串，KB 頁直接報錯、沒有任何刷新機制；TX34 `kb_api_log.txt`／ngrok 紀錄當時無真人請求，後端（LINE verify＋GAS `accounting_auth_me`）未參與、無需修改
+- 驗證：`node --check` app.js／kb 模組 script；本機 headless Chrome 模擬主控台＋模擬 API：token 空→自動重登→成功、token 剩 30 秒→重登、API 401→重登→成功、提問中過期→重登後自動重送並顯示答案、重登後仍過期→顯示「重新登入」按鈕→按下 force 重登
+- Commit／線上：PR（未 merge、未上 Pages）
+- 待處理／風險：真實 LINE App（LIFF browser）與桌機外部瀏覽器的 `liff.logout()`→重登流程尚未以真人帳號實測；merge 部署後請在主控台開著超過 1 小時再進 #/kb 驗證
+
 ### 2026-10-03｜Grok Bot（代 Nephi）｜公司知識庫 #/kb 權限 ≥3 → ≥2（PR／未部署）
 
 - 修改範圍：`spa/app.js`（`canUseKnowledgeBase` ≥2、`#/kb` 路由守門 <2 導回主控台）；`spa/Dashboard.js`（卡片 ≥2）；`modules/kb/index.html`（說明文字、範例問題改真實資料）；`shared/js/config.js` 註解；`index.html` 版本 `v26.10.03.2`
