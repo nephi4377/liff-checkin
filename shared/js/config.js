@@ -20,5 +20,7 @@ export const CONFIG = {
 
     // Google Apps Script Web App URL 設定
     GAS_WEB_APP_URL: 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec', // 主 API
+    // 公司知識庫 API（TX34 本機 kb_api.py 經 ngrok 固定網域對外；只接受 info.tanxin.space＋LIFF token＋權限≥3）
+    KB_API_BASE: 'https://lapping-goofball-rehab.ngrok-free.dev',
     ATTENDANCE_GAS_WEB_APP_URL: 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec', // 出勤 API
 };

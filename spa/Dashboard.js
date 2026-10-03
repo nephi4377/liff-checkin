@@ -646,6 +646,16 @@ export default {
                     </div>
                 </a>
 
+                <!-- 3c. 公司知識庫（權限 ≥ 3；TX34 本機 AI，依公司文件回答） -->
+                <a v-if="currentUser && currentUser.permission >= 3" href="#/kb"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-sky-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center text-xl">📚</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">公司知識庫</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">用問的查報價、工期、合約、SOP 與財務報表；附來源。</p>
+                    </div>
+                </a>
+
                 <!-- 3. 案場驗收表 -->
                 <a :href="budgetAuditUrl"
                     class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-indigo-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
