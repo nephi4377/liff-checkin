@@ -15,7 +15,8 @@
 <!--
   公司知識庫（#/kb）— 只能從「整合主控台」內開啟。
   身分：向最外層主控台索取 LIFF ID token（request_hub_liff_token → hub_liff_token，同會計模組），
-        每次呼叫 API 都帶 Authorization: Bearer <token>；權限（≥2、非離職；廠商報價需 ≥3）由 TX34 上的知識庫 API 向 LINE＋員工資料驗證。
+        每次呼叫 API 前都重新索取並檢查 JWT exp（剩 >60 秒才用），帶 Authorization: Bearer <token>；
+        token 過期或 API 回 401 → request_hub_liff_relogin 請主控台重新登入（自動一次，失敗才顯示「重新登入」按鈕）；權限（≥2、非離職；廠商報價需 ≥3）由 TX34 上的知識庫 API 向 LINE＋員工資料驗證。
   網址上的 uid／permission 參數僅供顯示，不作為授權依據。
   API 位址：shared/js/config.js 的 CONFIG.KB_API_BASE。
 -->
@@ -78,43 +79,103 @@ function setStatus(html, tone) {
     el.innerHTML = html;
 }
 
-/* ---------- 向主控台索取 LIFF token（同 accounting_api.js 的作法） ---------- */
+/* ---------- 向主控台索取 LIFF token（同 accounting_api.js 的作法） ----------
+ * LINE ID token 只有約 1 小時效期，LIFF SDK 不會自動更新（主控台開久了、或桌機瀏覽器留著舊登入都會過期）。
+ * 每次呼叫 API 前都向主控台要「當下」的 token，並自行解 JWT exp，剩不到 60 秒視同過期。
+ * 過期／API 回 401 → 請主控台重新登入取新 token（自動一次；頁面重新載入後自動重試剛才的動作）；
+ * 自動重登仍失敗才顯示錯誤與「重新登入」按鈕。
+ */
+const TOKEN_MIN_LEFT_SEC = 60;
+const PENDING_KEY = 'kb_pending_question';
+const PENDING_MAX_AGE_MS = 10 * 60 * 1000;
+
 function hubTarget() {
     try { if (window.top && window.top !== window) return window.top; } catch (e) {}
     return (window.parent && window.parent !== window) ? window.parent : null;
 }
+function tokenExp(token) {
+    try {
+        const parts = String(token || '').split('.');
+        if (parts.length !== 3) return 0;
+        let b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        while (b64.length % 4) b64 += '=';
+        const payload = JSON.parse(atob(b64));
+        return parseInt(payload && payload.exp, 10) || 0;
+    } catch (e) { return 0; }
+}
+function isTokenFresh(token) {
+    return tokenExp(token) > Math.floor(Date.now() / 1000) + TOKEN_MIN_LEFT_SEC;
+}
+/** 回傳 { replied, token }：replied=false 代表主控台沒回應（逾時），replied=true 且 token 空＝主控台的 token 已過期 */
 function requestTokenOnce() {
     const target = hubTarget();
-    if (!target) return Promise.resolve('');
+    if (!target) return Promise.resolve({ replied: false, token: '' });
     return new Promise((resolve) => {
         let done = false;
-        const timer = setTimeout(() => { if (!done) { done = true; window.removeEventListener('message', onMsg); resolve(''); } }, 4000);
+        const finish = (v) => { if (done) return; done = true; clearTimeout(timer); window.removeEventListener('message', onMsg); resolve(v); };
+        const timer = setTimeout(() => finish({ replied: false, token: '' }), 4000);
         function onMsg(e) {
             if (e.origin !== window.location.origin) return;          // 只接受同網站主控台的回覆
-            if (!e.data || e.data.type !== 'hub_liff_token' || done) return;
-            done = true; clearTimeout(timer); window.removeEventListener('message', onMsg);
-            resolve(e.data.token || '');
+            if (!e.data || e.data.type !== 'hub_liff_token') return;
+            finish({ replied: true, token: e.data.token || '' });
         }
         window.addEventListener('message', onMsg);
         try { target.postMessage({ type: 'request_hub_liff_token' }, window.location.origin); }
-        catch (err) { clearTimeout(timer); window.removeEventListener('message', onMsg); resolve(''); }
+        catch (err) { finish({ replied: false, token: '' }); }
     });
 }
-async function getToken() {
-    for (let i = 0; i < 4; i++) {
-        const t = await requestTokenOnce();
-        if (t) return t;
-        if (i < 3) await new Promise((r) => setTimeout(r, 800));
+/** 取得「至少還有 60 秒效期」的 token；拿不到回傳 '' */
+async function getFreshToken() {
+    for (let i = 0; i < 3; i++) {
+        const r = await requestTokenOnce();
+        if (r.token && isTokenFresh(r.token)) return r.token;
+        if (r.replied) return '';                                     // 主控台有回但 token 空／過期 → 需重新登入，不必再等
+        if (i < 2) await new Promise((res) => setTimeout(res, 800));  // 主控台還沒準備好 → 稍候再問
     }
     return '';
 }
 
-class ApiError extends Error {
-    constructor(status, message) { super(message); this.status = status; }
+/** 請主控台重新登入。force=false：自動重登（主控台 2 分鐘內只做一次）；force=true：使用者按「重新登入」 */
+function requestHubRelogin(force) {
+    const target = hubTarget();
+    if (!target) return Promise.resolve(false);
+    return new Promise((resolve) => {
+        let done = false;
+        const finish = (v) => { if (done) return; done = true; clearTimeout(timer); window.removeEventListener('message', onMsg); resolve(v); };
+        const timer = setTimeout(() => finish(false), 3000);
+        function onMsg(e) {
+            if (e.origin !== window.location.origin) return;
+            if (!e.data || e.data.type !== 'hub_liff_relogin_result') return;
+            finish(!!e.data.started);
+        }
+        window.addEventListener('message', onMsg);
+        try { target.postMessage({ type: 'request_hub_liff_relogin', force: !!force }, window.location.origin); }
+        catch (err) { finish(false); }
+    });
 }
+const AUTH_FAIL_MSG = '登入憑證已過期，自動重新登入沒有成功。請按「重新登入」再試一次。';
+const AUTH_RELOGIN_MSG = '登入憑證已過期，正在重新登入…（頁面會自動重新載入）';
+
+class ApiError extends Error {
+    constructor(status, message, code) { super(message); this.status = status; this.code = code || ''; }
+}
+/** token 過期／401：自動請主控台重新登入一次（頁面會重新載入），否則丟出可顯示「重新登入」按鈕的錯誤 */
+async function handleAuthExpired(pendingQuestion) {
+    if (pendingQuestion) {
+        try { sessionStorage.setItem(PENDING_KEY, JSON.stringify(Object.assign({ at: Date.now() }, pendingQuestion))); } catch (e) {}
+    }
+    setStatus(`<span class="inline-block align-middle w-4 h-4 mr-2 border-2 border-gray-200 rounded-full spinner"></span>${esc(AUTH_RELOGIN_MSG)}`, 'info');
+    const started = await requestHubRelogin(false);
+    if (started) {
+        await new Promise((r) => setTimeout(r, 15000));               // 主控台正在重新載入／轉去 LINE 登入，這頁會被換掉；15 秒還在才當失敗
+    }
+    try { sessionStorage.removeItem(PENDING_KEY); } catch (e) {}
+    throw new ApiError(401, AUTH_FAIL_MSG, 'auth');
+}
+
 async function api(path, opts = {}) {
-    const token = await getToken();
-    if (!token) throw new ApiError(401, '登入憑證已過期，請關閉後從 LINE 重新開啟主控台');
+    const token = await getFreshToken();
+    if (!token) return handleAuthExpired(opts.pending);
     let res;
     try {
         res = await fetch(API + path, {
@@ -131,12 +192,31 @@ async function api(path, opts = {}) {
     }
     let data = null;
     try { data = await res.json(); } catch (e) {}
+    if (res.status === 401) return handleAuthExpired(opts.pending);  // API 判定 token 無效／過期 → 重新登入一次後重試
     if (!res.ok) {
         const msg = (data && data.detail && typeof data.detail === 'string') ? data.detail : ('知識庫主機回應異常（HTTP ' + res.status + '）');
         throw new ApiError(res.status, msg);
     }
     return data;
 }
+
+function reloginButtonHtml() {
+    return ' <button type="button" data-kb-relogin class="ml-2 align-middle bg-sky-600 text-white text-sm font-semibold px-3 py-1 rounded-md hover:bg-sky-700">🔄 重新登入</button>';
+}
+async function manualRelogin() {
+    setStatus(`<span class="inline-block align-middle w-4 h-4 mr-2 border-2 border-gray-200 rounded-full spinner"></span>正在重新登入…`, 'info');
+    const started = await requestHubRelogin(true);
+    if (!started) {
+        setStatus('❌ 無法自動重新登入。請關閉主控台後，從 LINE 重新開啟（主控台 → 知識庫）。', 'err');
+    }
+}
+document.addEventListener('click', (ev) => {
+    const btn = ev.target && ev.target.closest && ev.target.closest('[data-kb-relogin]');
+    if (!btn) return;
+    ev.preventDefault();
+    btn.disabled = true;
+    manualRelogin();
+});
 
 /* ---------- 畫面 ---------- */
 function renderCard(item) {
@@ -154,7 +234,7 @@ function renderCard(item) {
             ${srcs ? `<p class="text-sm font-semibold mt-3 mb-1">📎 參考來源</p><div class="space-y-1">${srcs}</div>` : ''}
             <p class="text-[11px] text-gray-400 mt-2">${esc(r.model)}${r.route_label ? '（' + esc(r.route_label) + '）' : ''}${r.total_s != null ? '｜' + esc(r.total_s) + ' 秒' : ''}</p>`;
     } else if (item.state === 'error') {
-        body = `<p class="text-red-700 text-sm">❌ ${esc(item.error)}</p>`;
+        body = `<p class="text-red-700 text-sm">❌ ${esc(item.error)}${item.authError ? reloginButtonHtml() : ''}</p>`;
     } else {
         body = `<p class="text-sm text-gray-500"><span class="inline-block align-middle w-4 h-4 mr-2 border-2 border-gray-200 rounded-full spinner"></span>${esc(item.progress || '送出中…')}</p>`;
     }
@@ -169,11 +249,11 @@ async function ask(question, mode) {
     history.unshift(item); renderHistory();
     $('submit').disabled = true;
     try {
-        const job = await api('/api/ask', { method: 'POST', body: { question, mode } });
+        const job = await api('/api/ask', { method: 'POST', body: { question, mode }, pending: { question, mode } });
         const t0 = Date.now();
         while (Date.now() - t0 < MAX_WAIT_MS) {
             await new Promise((r) => setTimeout(r, POLL_MS));
-            const st = await api('/api/jobs/' + encodeURIComponent(job.job_id));
+            const st = await api('/api/jobs/' + encodeURIComponent(job.job_id), { pending: { question, mode } });
             if (st.status === 'done') { item.state = 'done'; item.result = st.result; break; }
             if (st.status === 'error') { item.state = 'error'; item.error = st.error || '處理失敗'; break; }
             const secs = Math.round((Date.now() - t0) / 1000);
@@ -184,23 +264,41 @@ async function ask(question, mode) {
         }
         if (item.state === 'pending') { item.state = 'error'; item.error = '等候逾時，請稍後再試'; }
     } catch (e) {
-        item.state = 'error'; item.error = e.message || String(e);
+        item.state = 'error'; item.error = e.message || String(e); item.authError = !!(e && e.code === 'auth');
+        if (item.authError) setStatus('❌ ' + esc(item.error) + reloginButtonHtml(), 'err');
     } finally {
         $('submit').disabled = false;
         renderHistory();
     }
 }
 
+function takePendingQuestion() {
+    try {
+        const raw = sessionStorage.getItem(PENDING_KEY);
+        sessionStorage.removeItem(PENDING_KEY);
+        if (!raw) return null;
+        const p = JSON.parse(raw);
+        if (!p || !p.question || !(Date.now() - (p.at || 0) < PENDING_MAX_AGE_MS)) return null;
+        return { question: String(p.question).slice(0, 500), mode: /^(auto|fast|smart)$/.test(p.mode) ? p.mode : 'auto' };
+    } catch (e) { return null; }
+}
+
 async function init() {
     if (!API) { setStatus('知識庫尚未設定連線位址（CONFIG.KB_API_BASE）。', 'warn'); return; }
-    if (!hubTarget()) { setStatus('請從 LINE「整合主控台」開啟知識庫（主控台 → 知識庫）。', 'warn'); return; }
+    if (!hubTarget()) {
+        setStatus('請從 LINE「整合主控台」開啟知識庫（主控台 → 知識庫）。<a href="../../index.html#/kb" target="_top" class="ml-1 underline text-sky-700">用這個瀏覽器開啟主控台</a>', 'warn');
+        return;
+    }
     try {
         const me = await api('/api/me');
         setStatus(`✅ ${esc(me.display_name || '已登入')}，可以開始提問。${me.index_built_at ? '<span class="text-xs text-gray-500 ml-1">（資料更新：' + esc(me.index_built_at) + '）</span>' : ''}`, 'ok');
         $('ask-form').classList.remove('hidden');
-        $('q').focus();
+        const pending = takePendingQuestion();                       // 重新登入前沒問完的問題 → 自動重送一次
+        if (pending) { $('mode').value = pending.mode; ask(pending.question, pending.mode); }
+        else $('q').focus();
     } catch (e) {
-        setStatus('❌ ' + esc(e.message), e.status === 403 ? 'warn' : 'err');
+        const isAuth = e && e.code === 'auth';
+        setStatus('❌ ' + esc(e.message) + (isAuth ? reloginButtonHtml() : ''), e.status === 403 ? 'warn' : 'err');
     }
 }
 
