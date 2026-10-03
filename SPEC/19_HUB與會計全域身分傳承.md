@@ -338,6 +338,7 @@
 
 | 日期 | 變更 |
 |------|------|
+| 2026-10-03 | v1.9.1：HUB 開頁 `get_hub_core_data`／`get_hub_projects_data` 同頁 single-flight；有快取改背景更新；session **20 秒**內剛成功或上一輪仍在飛且已有快取則略過本輪（手動重試／`spa_hub_invalidate_projects` 仍立刻重抓）。API 契約不變。 |
 | 2026-08-13 | v1.9：選材請求必帶員工編號；後端認 `uid`／`userId` |
 | 2026-07-12 | v1.5.1：GAS Tier1 `warmHotMasterCaches_`（CheckinSystem 員工；project-console 案場／顧客／員工）；前端 HubRefCache |
 | 2026-07-12 | v1.5：§2.2 參考主檔收斂 `HubRefCache`（`tanxin_ref_v1:*`）；§9 模組規格；§7 對照表；顧客名冊全站共用 |
