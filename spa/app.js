@@ -12,6 +12,14 @@ import { initializeTaskSender } from '../shared/js/taskSender.js'; // [v509.0 �
 const { createApp, ref, onMounted, onUnmounted, computed, watch, nextTick } = Vue;
 
 const HUB_PRESENCE_POLL_MS = 30 * 60 * 1000;
+/** 同一分頁短時間內連開／LIFF 重整時，略過立刻再打一輪核心＋專案（有快取才略過） */
+const HUB_BOOT_COALESCE_MS = 20 * 1000;
+const HUB_BOOT_FETCHED_AT_KEY = 'hub_boot_fetched_at';
+const HUB_BOOT_INFLIGHT_AT_KEY = 'hub_boot_inflight_at';
+
+/** 同頁面內進行中的請求合併（避免 watch／重入再打一輪） */
+let hubAttendanceInflight = null;
+let hubProjectsInflight = null;
 
 const App = {
     components: { Dashboard, ProjectBoard, StaffTodaySidebar, HubLeftSidebar, IframeView }, // [v411.0 SPA化] 註冊 Iframe 元件
@@ -386,13 +394,19 @@ const App = {
         };
         const fetchAttendanceData = async () => {
             if (!userProfile.value) return { success: false };
-            const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
-            url.searchParams.append('page', 'attendance_api');
-            url.searchParams.append('action', 'get_hub_core_data');
-            url.searchParams.append('userId', userProfile.value.userId);
-            url.searchParams.append('userName', userProfile.value.displayName);
-            const response = await fetch(url);
-            return response.json();
+            if (hubAttendanceInflight) return hubAttendanceInflight;
+            hubAttendanceInflight = (async () => {
+                const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
+                url.searchParams.append('page', 'attendance_api');
+                url.searchParams.append('action', 'get_hub_core_data');
+                url.searchParams.append('userId', userProfile.value.userId);
+                url.searchParams.append('userName', userProfile.value.displayName);
+                const response = await fetch(url);
+                return response.json();
+            })().finally(() => {
+                hubAttendanceInflight = null;
+            });
+            return hubAttendanceInflight;
         };
 
         /** 今日打卡燈號（輕量 API，供快取＋背景更新） */
@@ -688,27 +702,95 @@ const App = {
 
         const fetchHubProjectsData = async () => {
             if (!userProfile.value) return { success: false, message: '尚未取得使用者資料' };
-            try {
-                const user = currentUser.value || { userId: userProfile.value.userId, userName: userProfile.value.displayName, permission: 1, group: '未分類' };
-                const url = new URL(CONFIG.GAS_WEB_APP_URL);
-                url.searchParams.append('page', 'get_hub_projects_data');
-                url.searchParams.append('userId', userProfile.value.userId);
-                url.searchParams.append('userProfile', JSON.stringify(user));
-                const response = await fetch(url); // 移除手動設定的 header
-                const text = await response.text();
-                const trimmed = (text || '').trim();
-                if (!trimmed || trimmed.charAt(0) === '<') {
-                    return { success: false, message: '專案清單暫時讀不到' };
-                }
+            if (hubProjectsInflight) return hubProjectsInflight;
+            hubProjectsInflight = (async () => {
                 try {
-                    return JSON.parse(trimmed);
+                    const user = currentUser.value || { userId: userProfile.value.userId, userName: userProfile.value.displayName, permission: 1, group: '未分類' };
+                    const url = new URL(CONFIG.GAS_WEB_APP_URL);
+                    url.searchParams.append('page', 'get_hub_projects_data');
+                    url.searchParams.append('userId', userProfile.value.userId);
+                    url.searchParams.append('userProfile', JSON.stringify(user));
+                    const response = await fetch(url); // 移除手動設定的 header
+                    const text = await response.text();
+                    const trimmed = (text || '').trim();
+                    if (!trimmed || trimmed.charAt(0) === '<') {
+                        return { success: false, message: '專案清單暫時讀不到' };
+                    }
+                    try {
+                        return JSON.parse(trimmed);
+                    } catch (e) {
+                        return { success: false, message: '專案清單回傳格式異常' };
+                    }
                 } catch (e) {
-                    return { success: false, message: '專案清單回傳格式異常' };
+                    console.warn('[Hub] 取得專案清單失敗（維持快取）:', e);
+                    return { success: false, message: (e && e.message) || '讀取專案清單失敗' };
                 }
+            })().finally(() => {
+                hubProjectsInflight = null;
+            });
+            return hubProjectsInflight;
+        };
+
+        const hasWarmHubBootstrapCache = () => {
+            const hasEmp = !!(cachedEmployees && cachedEmployees.length);
+            const hasProj = Array.isArray(cachedProjects); // 空陣列也算有效（真的沒案子）
+            return hasEmp && hasProj;
+        };
+
+        /** 同 session 20 秒內剛成功抓過、或另一輪還在飛 → 連背景也不再打（擋 LIFF／連點造成的重複 GET） */
+        const wasHubBootstrapFetchedRecently = () => {
+            try {
+                const now = Date.now();
+                const fetchedAt = parseInt(sessionStorage.getItem(HUB_BOOT_FETCHED_AT_KEY) || '0', 10) || 0;
+                if (fetchedAt && (now - fetchedAt) < HUB_BOOT_COALESCE_MS) return true;
+                const inflightAt = parseInt(sessionStorage.getItem(HUB_BOOT_INFLIGHT_AT_KEY) || '0', 10) || 0;
+                if (inflightAt && (now - inflightAt) < HUB_BOOT_COALESCE_MS) return true;
+                return false;
             } catch (e) {
-                console.warn('[Hub] 取得專案清單失敗（維持快取）:', e);
-                return { success: false, message: (e && e.message) || '讀取專案清單失敗' };
+                return false;
             }
+        };
+
+        const markHubBootstrapInflight = () => {
+            try {
+                sessionStorage.setItem(HUB_BOOT_INFLIGHT_AT_KEY, String(Date.now()));
+            } catch (e) { /* ignore */ }
+        };
+
+        const clearHubBootstrapInflight = () => {
+            try {
+                sessionStorage.removeItem(HUB_BOOT_INFLIGHT_AT_KEY);
+            } catch (e) { /* ignore */ }
+        };
+
+        const markHubBootstrapFetched = () => {
+            try {
+                sessionStorage.setItem(HUB_BOOT_FETCHED_AT_KEY, String(Date.now()));
+                sessionStorage.removeItem(HUB_BOOT_INFLIGHT_AT_KEY);
+            } catch (e) { /* ignore */ }
+        };
+
+        const applyAttendancePayload = (attendanceResult) => {
+            if (!(attendanceResult && attendanceResult.success && attendanceResult.employees)) return false;
+            const emps = attendanceResult.employees;
+            if (hubRef()) hubRef().set('employees', emps);
+            else saveCache('spa_hub_employees', emps, 3);
+            window.spaAllEmployees = emps;
+            if (JSON.stringify(allEmployees.value) !== JSON.stringify(emps)) {
+                allEmployees.value = emps;
+            }
+            if (attendanceResult.operator) {
+                operatorProfile.value = attendanceResult.operator;
+            }
+            pendingApprovals.value =
+                (attendanceResult.pendingRequests?.length || 0) +
+                (attendanceResult.pendingAppeals?.length || 0);
+            pendingRequestsRaw.value = attendanceResult.pendingRequests || [];
+            if (attendanceResult.todayPresence && typeof attendanceResult.todayPresence === 'object') {
+                todayPresence.value = attendanceResult.todayPresence;
+                saveHubPresenceCache(attendanceResult.todayPresence);
+            }
+            return true;
         };
 
         const applyHubProjectsPayload = (projectsResult) => {
@@ -821,35 +903,56 @@ const App = {
                     restoreHashAfterRelogin();
                 }
 
-                const [attendanceResult, projectsResult] = await Promise.all([
-                    fetchAttendanceData().catch((e) => {
-                        console.warn('[Hub] 取得出勤核心資料失敗（維持快取）:', e);
-                        return { success: false };
-                    }),
-                    fetchHubProjectsData()
-                ]);
+                // 核心＋專案：
+                // - 有快取 → 先畫面、背景更新（不擋「正在驗證…」）
+                // - 同 session 20 秒內剛抓過 → 整輪略過（LIFF 連開／重整不會疊很多 GET）
+                // - 無快取 → 仍 await 一輪（失敗專案再 retry 一次）
+                // 手動重試／iframe invalidate 仍走 refreshHubProjects（不受 20 秒略過影響）
+                if (wasHubBootstrapFetchedRecently() && hasWarmHubBootstrapCache()) {
+                    console.log('⚡️ 主控台核心／專案 20 秒內剛更新過，略過本輪重抓');
+                    projectsLoading.value = false;
+                } else if (hasWarmHubBootstrapCache()) {
+                    console.log('⚡️ 主控台沿用快取畫面，背景更新核心／專案');
+                    projectsLoading.value = false;
+                    markHubBootstrapInflight();
+                    Promise.all([
+                        fetchAttendanceData().catch((e) => {
+                            console.warn('[Hub] 背景更新出勤核心失敗（維持快取）:', e);
+                            return { success: false };
+                        }),
+                        fetchHubProjectsData()
+                    ]).then(([attendanceResult, projectsResult]) => {
+                        let ok = false;
+                        if (applyAttendancePayload(attendanceResult)) ok = true;
+                        if (applyHubProjectsPayload(projectsResult)) ok = true;
+                        if (ok) markHubBootstrapFetched();
+                        else clearHubBootstrapInflight();
+                    });
+                } else {
+                    projectsLoading.value = true;
+                    markHubBootstrapInflight();
+                    const [attendanceResult, projectsResult] = await Promise.all([
+                        fetchAttendanceData().catch((e) => {
+                            console.warn('[Hub] 取得出勤核心資料失敗（維持快取）:', e);
+                            return { success: false };
+                        }),
+                        fetchHubProjectsData()
+                    ]);
 
-                if (attendanceResult.success && attendanceResult.employees) {
-                    const emps = attendanceResult.employees;
-                    if (hubRef()) hubRef().set('employees', emps);
-                    else saveCache('spa_hub_employees', emps, 3);
-                    window.spaAllEmployees = emps;
-                    if (JSON.stringify(allEmployees.value) !== JSON.stringify(emps)) {
-                        allEmployees.value = emps;
+                    if (applyAttendancePayload(attendanceResult)) markHubBootstrapFetched();
+
+                    if (!applyHubProjectsPayload(projectsResult)) {
+                        const retry = await new Promise((resolve) => setTimeout(resolve, 800)).then(() => fetchHubProjectsData());
+                        if (!applyHubProjectsPayload(retry)) {
+                            projectsError.value = '專案清單暫時讀不到。這不代表你沒有案子。';
+                            clearHubBootstrapInflight();
+                        } else {
+                            markHubBootstrapFetched();
+                        }
+                    } else {
+                        markHubBootstrapFetched();
                     }
-                    if (attendanceResult.operator) {
-                        operatorProfile.value = attendanceResult.operator;
-                    }
-                    pendingApprovals.value =
-                        (attendanceResult.pendingRequests?.length || 0) +
-                        (attendanceResult.pendingAppeals?.length || 0);
-                    // 將待審核假單原始資料留給「今日出勤」卡片使用（含 startTime/endTime）
-                    pendingRequestsRaw.value = attendanceResult.pendingRequests || [];
-                    // 核心資料已含今日燈號；先套用，避免權限 2 尚未背景更新時誤顯紅燈
-                    if (attendanceResult.todayPresence && typeof attendanceResult.todayPresence === 'object') {
-                        todayPresence.value = attendanceResult.todayPresence;
-                        saveHubPresenceCache(attendanceResult.todayPresence);
-                    }
+                    projectsLoading.value = false;
                 }
 
                 // 今日燈號：SWR（先顯示快取／核心資料，背景抓最新；主控台另每 30 分更新）
@@ -877,14 +980,6 @@ const App = {
                 }).finally(() => {
                     scheduleLoading.value = false;
                 });
-
-                if (!applyHubProjectsPayload(projectsResult)) {
-                    const retry = await new Promise((resolve) => setTimeout(resolve, 800)).then(() => fetchHubProjectsData());
-                    if (!applyHubProjectsPayload(retry)) {
-                        projectsError.value = '專案清單暫時讀不到。這不代表你沒有案子。';
-                    }
-                }
-                projectsLoading.value = false;
             } catch (error) {
                 console.error('Initialization Error:', error);
                 projectsLoading.value = false;

@@ -22,9 +22,19 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-10-03 | Cursor Cloud | 主控台登入重複 GET／店長偏慢：SWR＋single-flight | `spa/app.js`、`index.html`、SHARED_DEV_LOG | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-10-03｜Cursor Cloud｜主控台登入重複 GET／店長偏慢（PR／未部署）
+
+- 修改範圍：`spa/app.js`、`index.html`（`v26.10.03.4`）、SHARED_DEV_LOG
+- 根因：`get_hub_core_data` 只在整頁初始化打；日誌大量重複＝LIFF／連開多次完整載入。單次 0.6–3.5s 正常；店長權限清單約 43 案較重，連開＋GAS 排隊拉長體感。舊程式有快取仍每輪重抓、無 single-flight／短時間合併。
+- 完成內容：核心／專案同頁 single-flight；有快取改背景更新不擋驗證畫面；session 20 秒內剛抓過或上一輪仍在飛則略過本輪（有快取才略過）；手動重試／invalidate 仍立刻重抓
+- 驗證：`node --check spa/app.js`；合併策略單元情境（cold／warm／剛抓過／inflight 重整）
+- Commit／線上：PR（未 merge、未上 Pages）
+- 待處理／風險：真人店長帳號對 DEBUG 確認連開不再疊多輪；單次專案仍慢再考慮後端瘦身
+
 
 ### 2026-10-03｜Grok Bot（代 Nephi）｜公司知識庫 #/kb 登入憑證過期自動重新登入（PR／未部署）
 
