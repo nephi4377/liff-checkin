@@ -22,7 +22,7 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| — | — | 目前無進行中工作 | — | — |
+| 2026-10-03 | Cursor Cloud | 主控台登入重複 GET／店長偏慢：SWR＋single-flight | `spa/app.js`、`index.html`、SHARED_DEV_LOG | 進行中 |
 
 ## 最近完成
 
