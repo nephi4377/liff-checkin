@@ -132,8 +132,8 @@ const App = {
         const hasAdminRights = computed(() => Number(currentUser.value?.permission || 0) >= 4);
         /** 全員出勤燈號看板／右側今日燈號：權限 ≥ 3 可見（其餘管理功能仍 ≥ 4） */
         const canViewStaffStatusBoard = computed(() => Number(currentUser.value?.permission || 0) >= 3);
-        /** 公司知識庫（#/kb）：權限 ≥ 3 顯示入口；實際授權由知識庫 API 以 LIFF token＋員工資料驗證 */
-        const canUseKnowledgeBase = computed(() => Number(currentUser.value?.permission || 0) >= 3);
+        /** 公司知識庫（#/kb）：權限 ≥ 2 顯示入口；實際授權由知識庫 API 以 LIFF token＋員工資料驗證（廠商報價另需 ≥ 3，由 API 過濾） */
+        const canUseKnowledgeBase = computed(() => Number(currentUser.value?.permission || 0) >= 2);
         const isHelpActive = computed(() => {
             const hash = window.location.hash || '#';
             const path = hash.split('?')[0];
@@ -278,7 +278,7 @@ const App = {
                 return;
             }
             if (path === '#/kb' && Number(currentUser.value?.permission || 0) > 0
-                && Number(currentUser.value?.permission || 0) < 3) {
+                && Number(currentUser.value?.permission || 0) < 2) {
                 window.location.replace('#/dashboard');
                 return;
             }

@@ -15,7 +15,7 @@
 <!--
   公司知識庫（#/kb）— 只能從「整合主控台」內開啟。
   身分：向最外層主控台索取 LIFF ID token（request_hub_liff_token → hub_liff_token，同會計模組），
-        每次呼叫 API 都帶 Authorization: Bearer <token>；權限（≥3、非離職）由 TX34 上的知識庫 API 向 LINE＋員工資料驗證。
+        每次呼叫 API 都帶 Authorization: Bearer <token>；權限（≥2、非離職；廠商報價需 ≥3）由 TX34 上的知識庫 API 向 LINE＋員工資料驗證。
   網址上的 uid／permission 參數僅供顯示，不作為授權依據。
   API 位址：shared/js/config.js 的 CONFIG.KB_API_BASE。
 -->
@@ -24,7 +24,7 @@
         <div class="w-10 h-10 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center text-xl">📚</div>
         <div>
             <h1 class="text-xl font-bold">公司知識庫</h1>
-            <p class="text-xs text-gray-500">依公司文件回答（報價、工期、合約、SOP、財務報表）。答案由 AI 整理，重要數字請核對來源。</p>
+            <p class="text-xs text-gray-500">依公司資料回答（案場施工回報、報價／簽約／選材文件、公司 SOP）。答案由 AI 整理，重要數字請核對來源。</p>
         </div>
     </div>
 
@@ -36,7 +36,7 @@
         <label for="q" class="block text-sm font-semibold mb-1">你的問題</label>
         <textarea id="q" rows="3" maxlength="500" required
             class="w-full border border-gray-300 rounded-lg p-2 text-base focus:outline-none focus:ring-2 focus:ring-sky-400"
-            placeholder="例如：木作廠商的尾款條件是什麼？保固期多久？"></textarea>
+            placeholder="例如：785 最近的施工進度？782 報價單總價多少？"></textarea>
         <div class="flex flex-wrap items-center justify-between gap-2 mt-2">
             <label class="text-sm text-gray-600">模式
                 <select id="mode" class="ml-1 border border-gray-300 rounded-md px-2 py-1 text-sm">
@@ -196,7 +196,7 @@ async function init() {
     if (!hubTarget()) { setStatus('請從 LINE「整合主控台」開啟知識庫（主控台 → 知識庫）。', 'warn'); return; }
     try {
         const me = await api('/api/me');
-        setStatus(`✅ ${esc(me.display_name || '已登入')}，可以開始提問。${me.index_built_at ? '<span class="text-xs text-gray-500 ml-1">（文件更新：' + esc(me.index_built_at) + '）</span>' : ''}`, 'ok');
+        setStatus(`✅ ${esc(me.display_name || '已登入')}，可以開始提問。${me.index_built_at ? '<span class="text-xs text-gray-500 ml-1">（資料更新：' + esc(me.index_built_at) + '）</span>' : ''}`, 'ok');
         $('ask-form').classList.remove('hidden');
         $('q').focus();
     } catch (e) {

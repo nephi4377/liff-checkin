@@ -26,6 +26,14 @@
 
 ## 最近完成
 
+### 2026-10-03｜Grok Bot（代 Nephi）｜公司知識庫 #/kb 權限 ≥3 → ≥2（PR／未部署）
+
+- 修改範圍：`spa/app.js`（`canUseKnowledgeBase` ≥2、`#/kb` 路由守門 <2 導回主控台）；`spa/Dashboard.js`（卡片 ≥2）；`modules/kb/index.html`（說明文字、範例問題改真實資料）；`shared/js/config.js` 註解；`index.html` 版本 `v26.10.03.2`
+- 完成內容：入口與路由守門改為權限 ≥2；實際授權仍在 TX34 知識庫 API（`kb_api.ini` `min_permission = 2`、非離職）。API 端另外：廠商報價（topic 廠商報價）僅權限 ≥3 可檢索；電話／帳號／身分證一律遮蔽、統編權限 <3 遮蔽；知識庫改用 Hermes tanxin-kb 真實資料（不含 webhook 外部進線與只有檔名的圖片），範例假資料已移出正式索引
+- 驗證：`node --check` app.js／Dashboard.js／config.js；TX34 API 真資料測試（權限 2／3 對照）
+- Commit／線上：PR（未 merge、未上 Pages）
+- 待處理／風險：merge 後 Pages 部署才生效；API 端（TX34）已先改為 ≥2，舊前端權限 2 的人暫時看不到入口直到部署
+
 ### 2026-10-03｜Grok Bot（代 Nephi）｜公司知識庫 #/kb（PR／未部署）
 
 - 修改範圍：新增 `modules/kb/index.html`；`shared/js/config.js`（`KB_API_BASE`）；`spa/app.js`（路由 `#/kb`、權限 ≥3 頂部分頁、權限 <3 導回主控台）；`spa/Dashboard.js`（權限 ≥3 卡片）；`index.html` 版本 `v26.10.03.1`
