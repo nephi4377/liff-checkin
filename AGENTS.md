@@ -13,6 +13,27 @@
 
 TOS（添心營運管理系統）盤點文件一律在 `TOS/`（主紀錄 `TOS/TOS_AUDIT.md`）。不要把 `TOS_AUDIT*.md` 寫回倉庫根目錄。發現新模組、資料流、技術債或 schema 問題可補充 TOS 文件；不要刪既有盤點內容。案件識別長期朝 `project_id`，legacy 欄位先不要大量改名。
 
+
+## 多工作線接續規則
+
+`SHARED_DEV_LOG.md` 繼續保留為全專案共同歷史，但「正在做到哪裡」改由各任務自己的 `tasks/TASK-xxx/STATE.md` 管理；總覽見 `TASKS.md`。
+
+開始工作前：
+1. `git pull --ff-only origin main`，若正在既有 task branch，先 fetch 並確認該 branch 最新狀態。
+2. 讀 `TASKS.md`。
+3. 找到要處理的 Task，完整閱讀其 `STATE.md`。
+4. 檢查 branch、`git status`、最近 commits；STATE 與實際程式衝突時，以程式與 Git 狀態為準並修正 STATE。
+5. 若該 Task 已有其他 Agent ACTIVE 且修改範圍重疊，不得覆蓋。
+
+工作切換／暫停／結束 session 前：
+1. 更新該 Task 的 `STATE.md`：已完成、目前做到哪、下一步、已知問題、重要檔案與驗證方式。
+2. 即使功能未完成，也要建立 WIP commit。
+3. push task branch；不要用 `git stash` 當跨電腦交接。
+4. 更新 `TASKS.md` 狀態與摘要。
+5. 若這次工作形成全專案可追溯紀錄，再同步補 `SHARED_DEV_LOG.md`。
+
+同一 repo 可同時存在多個 Task branch。單一電腦若要同時保留多條工作線，優先使用 `git worktree`，避免不同 Agent 共用同一 working tree。
+
 ## Cursor Cloud specific instructions
 
 此段給「環境已由 update script 安裝好依賴」的後續 cloud agent，只記非顯而易見的啟動／執行注意事項。
