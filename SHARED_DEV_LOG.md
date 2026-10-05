@@ -26,13 +26,13 @@
 
 ## 最近完成
 
-### 2026-10-05｜Cursor Cloud｜歷史記帳紀錄查詢篩選（follow-up PR／部署中）
+### 2026-10-05｜Cursor Cloud｜歷史記帳紀錄查詢篩選（已部署）
 
 - 修改範圍：`accounting_ingest.html`、`index.html`、`accounting_api.js`；Backend `SheetWriter`／`AccountingLineIngest`／SPEC
-- 完成內容：選單／區塊改名「歷史記帳紀錄」；篩選日期區間／類型／關鍵字／金額；權限 ≥3
-- 驗證：後端 smoke；`node --check` api
-- Commit／線上：follow-up PR #94／Backend_GAS#72（#93／#71 已上線）
-- 待處理：合併後 clasp + Pages
+- 完成內容：選單／區塊改名「歷史記帳紀錄」；篩選日期區間／類型／關鍵字／金額／只看我記的；權限 ≥3
+- 驗證：後端 smoke；`node --check` api；正式站 HTML 已含「歷史記帳紀錄」與查詢控件
+- Commit／線上：Backend_GAS#72 `655bb2e` → Actions → **@354**；liff-checkin#94 `fa4b5b8` → Pages 綠燈
+- 待處理：真人權限 ≥3 抽測篩選；權限 2 應看不到查詢區
 
 
 ### 2026-10-05｜Cursor Cloud｜記帳歷史：會計選單／登錄頁近期紀錄（已部署）
