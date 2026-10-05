@@ -26,6 +26,14 @@
 
 ## 最近完成
 
+### 2026-10-05｜Cursor Cloud｜歷史記帳排版＋空白列表補推（draft／未部署）
+
+- 修改範圍：`ledger_history.html`（篩選／列表分開、≥900px 側欄詳情、金額右對齊、截斷、空白／逾時人話）、`accounting_layout.css`（`acct-page-browse` 全寬）、API `?v=73`；Backend `SheetWriter` 本人篩選不提早停掃、`empty_hint`／`mine_user_id`
+- 完成內容：補齊先前 token 失效未 push 的 layout／空白列表修；仍叠在 `cursor/ledger-history-timeout-273e`
+- 驗證：`node accounting-gas/tools/test-ledger-recent-history.js`／`test-ledger-detail-history.js`；前端結構標記檢查
+- Commit／PR：liff-checkin#99、Backend_GAS#77（draft／未部署）
+- 待處理：部署後楊婕妤真人抽測；原 #98／#76 可標 superseded 關閉
+
 ### 2026-10-05｜Cursor Cloud｜歷史記帳逾時＋近7天＋本人（draft／未部署）
 
 - 修改範圍：`accounting_api.js`（90s）、`ledger_history.html` `?v=71`、SPEC 15 v1.39、LOG；Backend 尾端分塊＋7 天硬上限＋強制本人
