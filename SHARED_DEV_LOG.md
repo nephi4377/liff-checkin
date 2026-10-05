@@ -22,9 +22,18 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-10-05 | Cursor Cloud｜ledger-history | 記帳歷史：收支登錄頁近期紀錄＋API | modules/accounting/accounting_ingest.html、shared/js/accounting_api.js、index/shell；Backend accounting-gas | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-10-05｜Cursor Cloud｜記帳歷史：收支登錄頁近期紀錄（PR／未部署）
+
+- 修改範圍：`modules/accounting/accounting_ingest.html`、`index.html`、`shared/js/accounting_api.js`／`accounting_shell.js`／`accounting_ui.js`；LOG；Backend 另 PR `accounting_ledger_recent`
+- 完成內容：送出後「剛剛記的」補日期／金額／事由／列號；同頁「近期收支紀錄」＋選單「收支歷史」入口；殼層保留 `history=1`
+- 驗證：`node --check` api／shell／ui；靜態標記檢查；後端 `node tools/test-ledger-recent-history.js`
+- Commit／線上：draft PR（未 merge、未部署 Pages／clasp）
+- 待處理：合併後需部署 accounting-gas 新 action，前端才讀得到真資料
+
 
 ### 2026-10-05｜Cursor（TX34 本機）｜Hermes 本機知識包：MCP＋官方 LINE 進知識庫（本機／無 repo 程式改動）
 
