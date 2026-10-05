@@ -22,9 +22,17 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-10-05 | Cursor Cloud | 待付款請款 pending 照片「驗證失敗」（Hub 身分） | Backend `accounting_pending_photos`；前端 `payment_request.html` 提示 | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-10-05｜Cursor Cloud｜待付款請款 pending 照片「驗證失敗」（草稿 PR／未部署）
+
+- 修改範圍：`payment_request.html`（帶圖失敗改警告）；Backend_GAS `accounting_pending_photos` 接受 Hub `user_id`
+- 完成內容：根因＝主控台身分帶圖 API 不認員工編號；後端修通＋前端失敗不開致命回報
+- 驗證：邏輯模擬 Hub／LIFF；未部署真人路徑
+- Commit／PR：liff-checkin#96 `6faf44c`；Backend_GAS#74 `f8e5665`
+- 待處理：明確指示後部署 accounting-gas；真人快審→請款抽測自動帶圖
 
 ### 2026-10-05｜Cursor Cloud｜歷史記帳獨立頁＋點列詳情（已部署）
 
