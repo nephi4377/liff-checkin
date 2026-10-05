@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=66"></script>
+  <script src="../../shared/js/accounting_api.js?v=67"></script>
   <script src="../../shared/js/accounting_cache.js?v=33"></script>
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
@@ -92,8 +92,8 @@
       <a class="card" href="accounting_ingest.html?history=1" id="linkLedgerHistory">
         <span class="card-icon teal">🕘</span>
         <span class="card-body">
-          <h3>收支歷史</h3>
-          <p>看最近寫進試算表的收支（日期、金額、對象、列號）；也可在登錄頁下方查看。</p>
+          <h3>歷史記帳紀錄</h3>
+          <p>查詢試算表已入帳列（日期、類型、金額、對象）；也可在登錄頁下方查看。</p>
           <span class="tag admin">主管 ≥3</span>
         </span>
       </a>
@@ -254,7 +254,7 @@
           document.getElementById('linkCustomerFinance').classList.remove('hidden');
         }
 
-        // 收支歷史：主管 ≥3（與 API accounting_ledger_recent 一致）
+        // 歷史記帳紀錄：主管 ≥3（與 API accounting_ledger_recent 一致）
         if (perm < supervisorMin || isVendor) {
           document.getElementById('linkLedgerHistory').classList.add('hidden');
         } else {

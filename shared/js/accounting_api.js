@@ -1161,7 +1161,7 @@ var AccountingApi = (function () {
         deferred_token: deferredToken || ''
       }, 120000);
     },
-    /** 收支近期歷史（表單頁「近期收支紀錄」） */
+    /** 歷史記帳紀錄查詢（權限 ≥3；可篩日期／類型／關鍵字／金額） */
     accountingLedgerRecent: function (sessionOrToken, opts) {
       opts = opts || {};
       var body = {
@@ -1170,6 +1170,13 @@ var AccountingApi = (function () {
         months: opts.months != null ? opts.months : 2,
         mine_only: !!opts.mine_only
       };
+      if (opts.date_from) body.date_from = opts.date_from;
+      if (opts.date_to) body.date_to = opts.date_to;
+      if (opts.type) body.type = opts.type;
+      if (opts.keyword) body.keyword = opts.keyword;
+      if (opts.amount !== undefined && opts.amount !== null && opts.amount !== '') {
+        body.amount = opts.amount;
+      }
       if (sessionOrToken && typeof resolveAuth === 'function') {
         try {
           var auth = resolveAuth(sessionOrToken);

@@ -26,6 +26,15 @@
 
 ## 最近完成
 
+### 2026-10-05｜Cursor Cloud｜歷史記帳紀錄查詢篩選（follow-up PR／未部署）
+
+- 修改範圍：`accounting_ingest.html`、`index.html`、`accounting_api.js`；Backend `SheetWriter`／`AccountingLineIngest`／SPEC
+- 完成內容：選單／區塊改名「歷史記帳紀錄」；篩選日期區間／類型／關鍵字／金額；權限 ≥3
+- 驗證：後端 smoke；`node --check` api
+- Commit／線上：follow-up draft PR（#93／#71 已 merge，需部署 worker 第二輪）
+- 待處理：合併後再 clasp + Pages
+
+
 ### 2026-10-05｜Cursor Cloud｜記帳歷史：收支登錄頁近期紀錄（PR／未部署）
 
 - 修改範圍：`modules/accounting/accounting_ingest.html`、`index.html`、`shared/js/accounting_api.js`／`accounting_shell.js`／`accounting_ui.js`；LOG；Backend 另 PR `accounting_ledger_recent`
