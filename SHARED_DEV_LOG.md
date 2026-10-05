@@ -22,9 +22,18 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-10-05 | Cursor Cloud | 歷史記帳僅本人（draft PR） | `ledger_history.html`、`accounting_api.js`；Backend `AccountingLineIngest`／`SheetWriter` | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-10-05｜Cursor Cloud｜歷史記帳紀錄僅本人（draft／未部署）
+
+- 修改範圍：`ledger_history.html`、`accounting_api.js`、SPEC 15、LOG；Backend `AccountingLineIngest`／`SheetWriter`／SPEC／tests
+- 完成內容：列表／詳情強制本人（備註 `LINE_UID`）；移除「只看我記的」；進頁權限仍 ≥3
+- 驗證：後端 smoke；`node --check` api／頁內 script
+- Commit／線上：draft PR（本分支）；**未部署**
+- 待處理：合併後再部署 accounting-gas＋Pages
+
 
 ### 2026-10-05｜Codex｜WordPress 案例追蹤與新頁檢查規範（已更新）
 
