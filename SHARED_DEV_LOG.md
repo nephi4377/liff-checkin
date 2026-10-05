@@ -26,6 +26,19 @@
 
 ## 最近完成
 
+### 2026-10-05｜Cursor（TX34 本機）｜Hermes 本機知識包：MCP＋官方 LINE 進知識庫（本機／無 repo 程式改動）
+
+- 修改範圍：僅 TX34 本機（不含 repo 程式）。本機 MCP server「tanxin」：`C:\Users\a9999\AppData\Local\hermes\mcp\tanxin-mcp\`；Cursor 使用者層 `~/.cursor/mcp.json`、Hermes `config.yaml` 註冊；Hermes tanxin-kb 匯入流程；Hermes 記憶／skill
+- 原因：讓 TX34 上的 agent 能直接查公司知識（報價單、廠商報價、案件文件、官方 LINE 對話、客戶提供圖片），不必每次手動翻資料夾或 LINE 後台
+- 完成內容：
+  - MCP「tanxin」：stdio、只讀、6 個工具——`kb_search`（知識庫，含報價單／廠商報價／案件文件／官方 LINE 對話；問句帶「官方LINE」只搜 LINE）、`case_overview`、`find_customer_images`（Dropbox 客戶提供圖路徑）、`line_oa_digest`、`local_llm`（Ollama qwen3:8b）、`describe_image`（qwen2.5vl:7b）
+  - 只有 TX34 上的 agent 能用 MCP；不在 TX34 的 agent 改走 KnowledgeBase API（ngrok）＋金鑰。備用指令列：`C:\Users\a9999\AppData\Local\hermes\kb-ask.bat "問題"`（AppData 為隱藏資料夾，搜尋要加 `-Force`）
+  - 官方 LINE 對話進 Hermes tanxin-kb：source_type `line_oa`，同對話同天合併一筆；每小時（排程 Hermes LINE OA Watch 第二動作）＋每日 10:00 增量匯入。LINE 監看為只讀（Playwright 讀 chat.line.biz 後台），不回訊、不標已讀
+  - Hermes 記憶／skill 補齊：LINE 監看、Camera Uploads 分類工作流、客人圖片 LINE→GAS→Dropbox 路徑
+- 驗證：MCP 6 工具以 stdio client 實測成功；`hermes mcp test tanxin` 成功；Hermes 問答實際呼叫工具
+- Commit／線上：僅本紀錄（docs）；無部署
+- 待處理／風險：KnowledgeBase API（`C:\Users\a9999\KnowledgeBase`）加收 `line_oa` 另一工作進行中（權限 ≥2 可見），完成前 API 端查不到官方 LINE 對話；TX34 需開機登入，MCP／排程才會運作
+
 ### 2026-10-03｜Cursor Cloud｜主控台登入減少重複 GET（已部署）
 
 - 修改範圍：`spa/app.js`、`index.html`（`v26.10.03.4`）、SPEC 19 v1.9.1、`LOG/2026-10-03_LOG_主控台登入減少重複GET.md`
