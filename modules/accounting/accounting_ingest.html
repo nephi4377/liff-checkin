@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=65"></script>
+  <script src="../../shared/js/accounting_api.js?v=66"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/accounting_cache.js?v=33"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=6"></script>
@@ -40,7 +40,25 @@
     #submitResult.is-err { display: block; color: #c5221f; background: #fce8e6; border: 1px solid #f5c2c0; }
     #loading { text-align: center; padding: 48px 16px; color: #666; }
     #pendingPreview img { max-width: 100%; border-radius: 8px; margin-top: 6px; }
-    #recent { font-size: 13px; padding-left: 18px; }
+    #recent { font-size: 13px; padding-left: 18px; margin: 8px 0 0; }
+    #recent li { margin: 6px 0; line-height: 1.4; }
+    #historyCard .hist-head {
+      display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px;
+    }
+    #historyCard .hist-head strong { font-size: 15px; }
+    #historyList { display: flex; flex-direction: column; gap: 8px; }
+    .hist-item {
+      border: 1px solid #e8eaed; border-radius: 10px; padding: 10px 12px; background: #fafafa;
+      font-size: 13px; line-height: 1.45;
+    }
+    .hist-item .hist-top { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+    .hist-item .hist-type { font-weight: 700; }
+    .hist-item .hist-type.income { color: #137333; }
+    .hist-item .hist-type.expense { color: #c5221f; }
+    .hist-item .hist-amt { font-weight: 700; font-size: 15px; }
+    .hist-item .hist-meta { color: #555; margin-top: 4px; }
+    .hist-item .hist-loc { color: #777; font-size: 12px; margin-top: 4px; font-family: ui-monospace, monospace; }
+    #historyStatus { font-size: 13px; color: #666; margin: 0; }
     .hint { font-size: 12px; color: #777; margin-top: 4px; }
     #contextBar { font-size: 13px; color: #137333; background: #e6f4ea; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; }
     #contextBar.warn { color: #b06000; background: #fef7e0; }
@@ -164,7 +182,19 @@
     <div id="submitResult" role="status" aria-live="polite"></div>
     <div id="msg"></div>
     <div id="ok"></div>
-    <div class="card hidden" id="recentCard"><strong>剛剛記的</strong><ul id="recent"></ul></div>
+    <div class="card hidden" id="recentCard"><strong>剛剛記的（本輪）</strong><ul id="recent"></ul></div>
+    <div class="card hidden" id="historyCard">
+      <div class="hist-head">
+        <strong>近期收支紀錄</strong>
+        <button type="button" class="btn-ghost" id="historyRefreshBtn">重新整理</button>
+      </div>
+      <p class="hint" style="margin-top:0">試算表最近寫入的列（預設近 2 個月）。可用來確認剛送出的有沒有進去。需權限 ≥3。</p>
+      <label class="hint" style="font-weight:500;display:flex;align-items:center;gap:6px;margin:8px 0">
+        <input type="checkbox" id="historyMineOnly" /> 只看我記的
+      </label>
+      <p id="historyStatus">載入中…</p>
+      <div id="historyList"></div>
+    </div>
   </div>
 
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
@@ -374,16 +404,133 @@
         document.getElementById('app').classList.remove('hidden');
       }
 
-      function appendRecentLine(kindVal, partyName, sheet, row) {
+      function formatMoney(n) {
+        var v = Number(n);
+        if (!isFinite(v)) return String(n == null ? '' : n);
+        return '$' + Math.round(v).toLocaleString('zh-TW');
+      }
+
+      function appendRecentLine(entry) {
+        entry = entry || {};
         sessionCount++;
         document.getElementById('sessionCount').textContent = String(sessionCount);
         var ul = document.getElementById('recent');
         var li = document.createElement('li');
-        li.textContent = (kindVal === 'A' ? '收入' : '支出') + ' ' + partyName + ' → ' + sheet + ' 第' + row + '列';
+        var typeLabel = entry.type || (entry.kindVal === 'A' ? '收入' : '支出');
+        var bits = [
+          typeLabel,
+          entry.txn_date || '',
+          formatMoney(entry.amount),
+          entry.party_name || '',
+          entry.desc || entry.item_desc || ''
+        ].filter(Boolean);
+        var loc = (entry.sheet || '') + ' 第' + (entry.row || '?') + '列';
+        if (entry.ingest_id) loc += ' · ' + String(entry.ingest_id).slice(0, 8);
+        li.textContent = bits.join('｜') + ' → ' + loc;
         ul.insertBefore(li, ul.firstChild);
         document.getElementById('recentCard').classList.remove('hidden');
         document.getElementById('nextBtn').classList.remove('hidden');
         document.getElementById('doneBtn').classList.remove('hidden');
+      }
+
+      function escHtml(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function renderHistoryItems(items) {
+        var box = document.getElementById('historyList');
+        var status = document.getElementById('historyStatus');
+        box.innerHTML = '';
+        if (!items || !items.length) {
+          status.textContent = '最近沒有找到收支列（可改「只看我記的」或再整理）。';
+          return;
+        }
+        status.textContent = '共 ' + items.length + ' 筆（新到舊）';
+        items.forEach(function (it) {
+          var div = document.createElement('div');
+          div.className = 'hist-item';
+          var typeClass = it.type === '收入' ? 'income' : 'expense';
+          var meta = [];
+          if (it.party_name) meta.push(it.party_name);
+          if (it.desc && it.desc !== it.party_name) meta.push(it.desc);
+          if (it.project_no) meta.push('案號 ' + it.project_no);
+          if (it.payment_method) meta.push(it.payment_method);
+          if (it.note) meta.push(it.note);
+          var loc = (it.sheet || '—') + ' 第' + (it.row || '?') + '列';
+          if (it.ingest_id) loc += ' · ' + String(it.ingest_id).slice(0, 8);
+          div.innerHTML =
+            '<div class="hist-top">' +
+              '<span class="hist-type ' + typeClass + '">' + escHtml(it.type || '—') + '</span>' +
+              '<span>' + escHtml(it.txn_date_display || it.txn_date || '—') + '</span>' +
+              '<span class="hist-amt">' + escHtml(formatMoney(it.amount)) + '</span>' +
+            '</div>' +
+            '<div class="hist-meta">' + escHtml(meta.join(' · ') || '—') + '</div>' +
+            '<div class="hist-loc">' + escHtml(loc) + '</div>';
+          box.appendChild(div);
+        });
+      }
+
+      function shouldFocusHistory() {
+        try {
+          if (queryParams.history === '1' || queryParams.history === 'true') return true;
+          if ((window.location.hash || '').replace(/^#/, '') === 'history') return true;
+        } catch (e) {}
+        return false;
+      }
+
+      function scrollToHistory() {
+        var el = document.getElementById('historyCard');
+        if (!el) return;
+        try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {
+          el.scrollIntoView(true);
+        }
+      }
+
+      function canViewLedgerHistory() {
+        var perm = Number((sessionRef && sessionRef.auth && sessionRef.auth.permission) || 0);
+        var need = (typeof AccountingApi !== 'undefined' && AccountingApi.SUPERVISOR_MIN_PERMISSION) || 3;
+        return perm >= need;
+      }
+
+      function setHistoryVisible(show) {
+        var card = document.getElementById('historyCard');
+        if (!card) return;
+        if (show) card.classList.remove('hidden');
+        else card.classList.add('hidden');
+      }
+
+      function loadLedgerHistory(opts) {
+        opts = opts || {};
+        var status = document.getElementById('historyStatus');
+        if (!canViewLedgerHistory()) {
+          setHistoryVisible(false);
+          return Promise.resolve();
+        }
+        setHistoryVisible(true);
+        var mineOnly = !!document.getElementById('historyMineOnly').checked;
+        status.textContent = '載入中…';
+        if (!sessionRef || typeof AccountingApi.accountingLedgerRecent !== 'function') {
+          status.textContent = '尚無法載入歷史（請從主控台／LINE 登入後再試）。';
+          return Promise.resolve();
+        }
+        return AccountingApi.accountingLedgerRecent(sessionRef, {
+          limit: 40,
+          months: 2,
+          mine_only: mineOnly
+        }).then(function (data) {
+          if (!data || data.success === false) {
+            status.textContent = (data && data.message) || '讀不到近期紀錄';
+            document.getElementById('historyList').innerHTML = '';
+            return;
+          }
+          renderHistoryItems(data.items || []);
+          if (opts.scroll) scrollToHistory();
+        }).catch(function (e) {
+          status.textContent = (e && e.message) || '讀不到近期紀錄';
+          document.getElementById('historyList').innerHTML = '';
+        });
       }
 
       function flushFormDeferredInBackground(token, sheet, row) {
@@ -607,20 +754,31 @@
           if (!data.sheet || !data.row) {
             throw new Error('未成功，請重試。後端沒有回傳列號。');
           }
-          appendRecentLine(kind.value, fields.party_name, data.sheet, data.row);
+          appendRecentLine({
+            kindVal: kind.value,
+            type: kind.value === 'A' ? '收入' : '支出',
+            txn_date: fields.txn_date,
+            amount: fields.amount,
+            party_name: fields.party_name,
+            item_desc: fields.item_desc,
+            sheet: data.sheet,
+            row: data.row,
+            ingest_id: data.ingest_id || ''
+          });
           clearVolatileFields(true);
           if (data.after_error) {
             setWarn('已記入「' + data.sheet + '」第 ' + data.row +
               ' 列，但後續補資料失敗。帳已留下，請勿再送同一筆；需要時再請資訊協助補齊。');
           } else {
             var okLine = '記好了！第 ' + sessionCount + ' 筆（' + data.sheet + ' 第 ' + data.row +
-              ' 列）。表單已清空，可再填下一筆。';
+              ' 列）。表單已清空，可再填下一筆；下方也可對近期紀錄。';
             if (data.groupNotified) okLine += ' · 已同步通知';
             setOk(okLine);
           }
           if (data.deferred_token) {
             flushFormDeferredInBackground(data.deferred_token, data.sheet, data.row);
           }
+          if (canViewLedgerHistory()) loadLedgerHistory();
         }).catch(function (e) {
           setMsg(humanFailMessage(e && e.message ? e.message : e));
         });
@@ -652,6 +810,11 @@
         showApp();
         setupHubContext(sessionRef);
         if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
+        if (canViewLedgerHistory()) {
+          loadLedgerHistory({ scroll: shouldFocusHistory() });
+        } else {
+          setHistoryVisible(false);
+        }
       }
 
       async function bootDevBypass() {
@@ -674,6 +837,12 @@
         if (typeof AccountingNav !== 'undefined') AccountingNav.init();
         queryParams = readQueryParams();
         seedProfileFromOperatorContext();
+        document.getElementById('historyRefreshBtn').addEventListener('click', function () {
+          loadLedgerHistory({ scroll: true });
+        });
+        document.getElementById('historyMineOnly').addEventListener('change', function () {
+          loadLedgerHistory();
+        });
         document.getElementById('txn_date').value = todayRoc();
         document.getElementById('txn_date_b').value = todayRoc();
         document.getElementById('expense_month').value = String(new Date().getMonth() + 1);
@@ -785,10 +954,12 @@
           setLoading('載入失敗：' + (e.message || e));
           return;
         }
-        sessionRef = { devBypass: false, idToken: idToken, auth: authMe, profile: profile };
-        showApp();
-        setupHubContext(sessionRef);
-        if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
+        await finishBoot({
+          devBypass: false,
+          idToken: idToken,
+          auth: authMe,
+          profile: profile
+        });
       }
       boot();
     })();

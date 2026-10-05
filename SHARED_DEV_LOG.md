@@ -26,6 +26,15 @@
 
 ## 最近完成
 
+### 2026-10-05｜Cursor Cloud｜記帳歷史：收支登錄頁近期紀錄（PR／未部署）
+
+- 修改範圍：`modules/accounting/accounting_ingest.html`、`index.html`、`shared/js/accounting_api.js`／`accounting_shell.js`／`accounting_ui.js`；LOG；Backend 另 PR `accounting_ledger_recent`
+- 完成內容：送出後「剛剛記的」補日期／金額／事由／列號；同頁「近期收支紀錄」＋選單「收支歷史」入口；殼層保留 `history=1`
+- 驗證：`node --check` api／shell／ui；靜態標記檢查；後端 `node tools/test-ledger-recent-history.js`
+- Commit／線上：draft PR（未 merge、未部署 Pages／clasp）
+- 待處理：合併後需部署 accounting-gas 新 action，前端才讀得到真資料
+
+
 ### 2026-10-05｜Cursor（TX34 本機）｜Hermes 本機知識包：MCP＋官方 LINE 進知識庫（本機／無 repo 程式改動）
 
 - 修改範圍：僅 TX34 本機（不含 repo 程式）。本機 MCP server「tanxin」：`C:\Users\a9999\AppData\Local\hermes\mcp\tanxin-mcp\`；Cursor 使用者層 `~/.cursor/mcp.json`、Hermes `config.yaml` 註冊；Hermes tanxin-kb 匯入流程；Hermes 記憶／skill

@@ -65,8 +65,24 @@ var AccountingShell = (function () {
     }
   }
 
-  function buildFrameSrc(page) {
-    var base = page + (page.indexOf('?') >= 0 ? '&' : '?') + 'embed=1' + readShellForwardQuery();
+  function extractPageQuery(href) {
+    try {
+      var q = String(href || '').split('?')[1] || '';
+      q = q.split('#')[0];
+      if (!q) return '';
+      var params = new URLSearchParams(q);
+      params.delete('embed');
+      params.delete('route');
+      var s = params.toString();
+      return s ? '&' + s : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function buildFrameSrc(page, pageQuery) {
+    var base = page + (page.indexOf('?') >= 0 ? '&' : '?') + 'embed=1' +
+      (pageQuery || '') + readShellForwardQuery();
     if (typeof AccountingNav !== 'undefined') return AccountingNav.withHubQuery(base);
     return base;
   }
@@ -84,13 +100,13 @@ var AccountingShell = (function () {
     setTitle('');
   }
 
-  function showFrame(page) {
+  function showFrame(page, pageQuery) {
     if (!frameEl || !page) {
       showMenu();
       return;
     }
     currentPage = page;
-    var src = buildFrameSrc(page);
+    var src = buildFrameSrc(page, pageQuery);
     if (frameEl.getAttribute('src') !== src) frameEl.setAttribute('src', src);
     if (menuEl) menuEl.classList.add('hidden');
     frameEl.classList.remove('hidden');
@@ -106,7 +122,7 @@ var AccountingShell = (function () {
       setHash('');
       return;
     }
-    showFrame(page);
+    showFrame(page, extractPageQuery(href));
     setHash(page);
   }
 
