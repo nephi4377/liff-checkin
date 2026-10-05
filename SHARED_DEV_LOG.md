@@ -22,7 +22,7 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| — | — | 目前無進行中工作 | — | — |
+| 2026-10-05 | Cursor Cloud｜ledger-history | 記帳歷史：收支登錄頁近期紀錄＋API | modules/accounting/accounting_ingest.html、shared/js/accounting_api.js、index/shell；Backend accounting-gas | 進行中 |
 
 ## 最近完成
 
