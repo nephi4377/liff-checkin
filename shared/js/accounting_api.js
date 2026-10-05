@@ -1106,7 +1106,8 @@ var AccountingApi = (function () {
         account_name: payload.account_name,
         allocations: payload.allocations || [],
         photos: payload.photos || [],
-        from_line: payload.from_line
+        from_line: payload.from_line,
+        quick_review_id: payload.quick_review_id || ''
       }, 180000);
     },
     vendorPaymentUpdate: function (sessionOrToken, paymentRequestId, patch) {

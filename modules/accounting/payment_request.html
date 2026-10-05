@@ -2044,7 +2044,8 @@
           note: document.getElementById('note').value.trim(),
           allocations: finalizedAllocRows(),
           photos: photosPayload(),
-          from_line: queryParams.from === 'line' || queryParams.from === 'ocr'
+          from_line: queryParams.from === 'line' || queryParams.from === 'ocr',
+          quick_review_id: queryParams.quick_review_id || ''
         });
         var useOverlay = hasLargePhotoPayload();
         submitting = true;
@@ -2102,10 +2103,12 @@
         var data = await AccountingApi.post(body);
         if (!data.success) {
           // 帶圖失敗仍可手動上傳；勿當致命「驗證失敗」開錯誤回報
+          // 快審單此時為「請款中」仍在待處理，不會因失敗消失
           var failHint = data.message || '無法帶入單據照片';
           if (/驗證失敗/.test(failHint)) {
             failHint = '無法自動帶入快審單據照片（身分驗證）。請手動上傳同一張單據後繼續請款。';
           }
+          failHint += ' 單據仍在「單據與存檔→待處理」（請款中），可回去再點「繼續請款」。';
           setWarn(failHint);
           return;
         }
