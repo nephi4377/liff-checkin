@@ -183,12 +183,12 @@
     <div id="msg"></div>
     <div id="ok"></div>
     <div class="card hidden" id="recentCard"><strong>剛剛記的（本輪）</strong><ul id="recent"></ul></div>
-    <div class="card" id="historyCard">
+    <div class="card hidden" id="historyCard">
       <div class="hist-head">
         <strong>近期收支紀錄</strong>
         <button type="button" class="btn-ghost" id="historyRefreshBtn">重新整理</button>
       </div>
-      <p class="hint" style="margin-top:0">試算表最近寫入的列（預設近 2 個月）。可用來確認剛送出的有沒有進去。</p>
+      <p class="hint" style="margin-top:0">試算表最近寫入的列（預設近 2 個月）。可用來確認剛送出的有沒有進去。需權限 ≥3。</p>
       <label class="hint" style="font-weight:500;display:flex;align-items:center;gap:6px;margin:8px 0">
         <input type="checkbox" id="historyMineOnly" /> 只看我記的
       </label>
@@ -488,9 +488,27 @@
         }
       }
 
+      function canViewLedgerHistory() {
+        var perm = Number((sessionRef && sessionRef.auth && sessionRef.auth.permission) || 0);
+        var need = (typeof AccountingApi !== 'undefined' && AccountingApi.SUPERVISOR_MIN_PERMISSION) || 3;
+        return perm >= need;
+      }
+
+      function setHistoryVisible(show) {
+        var card = document.getElementById('historyCard');
+        if (!card) return;
+        if (show) card.classList.remove('hidden');
+        else card.classList.add('hidden');
+      }
+
       function loadLedgerHistory(opts) {
         opts = opts || {};
         var status = document.getElementById('historyStatus');
+        if (!canViewLedgerHistory()) {
+          setHistoryVisible(false);
+          return Promise.resolve();
+        }
+        setHistoryVisible(true);
         var mineOnly = !!document.getElementById('historyMineOnly').checked;
         status.textContent = '載入中…';
         if (!sessionRef || typeof AccountingApi.accountingLedgerRecent !== 'function') {
@@ -760,7 +778,7 @@
           if (data.deferred_token) {
             flushFormDeferredInBackground(data.deferred_token, data.sheet, data.row);
           }
-          loadLedgerHistory();
+          if (canViewLedgerHistory()) loadLedgerHistory();
         }).catch(function (e) {
           setMsg(humanFailMessage(e && e.message ? e.message : e));
         });
@@ -792,7 +810,11 @@
         showApp();
         setupHubContext(sessionRef);
         if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
-        loadLedgerHistory({ scroll: shouldFocusHistory() });
+        if (canViewLedgerHistory()) {
+          loadLedgerHistory({ scroll: shouldFocusHistory() });
+        } else {
+          setHistoryVisible(false);
+        }
       }
 
       async function bootDevBypass() {

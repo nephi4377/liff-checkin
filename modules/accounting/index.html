@@ -94,7 +94,7 @@
         <span class="card-body">
           <h3>收支歷史</h3>
           <p>看最近寫進試算表的收支（日期、金額、對象、列號）；也可在登錄頁下方查看。</p>
-          <span class="tag staff">權限 ≥2</span>
+          <span class="tag admin">主管 ≥3</span>
         </span>
       </a>
 
@@ -248,12 +248,17 @@
 
         if (perm < staffMin || isVendor) {
           document.getElementById('linkIngest').classList.add('hidden');
-          document.getElementById('linkLedgerHistory').classList.add('hidden');
           document.getElementById('linkCustomerFinance').classList.add('hidden');
         } else {
           document.getElementById('linkIngest').classList.remove('hidden');
-          document.getElementById('linkLedgerHistory').classList.remove('hidden');
           document.getElementById('linkCustomerFinance').classList.remove('hidden');
+        }
+
+        // 收支歷史：主管 ≥3（與 API accounting_ledger_recent 一致）
+        if (perm < supervisorMin || isVendor) {
+          document.getElementById('linkLedgerHistory').classList.add('hidden');
+        } else {
+          document.getElementById('linkLedgerHistory').classList.remove('hidden');
         }
 
         if (perm < supervisorMin) {
