@@ -2088,9 +2088,27 @@
 
       async function loadPendingPhotos(token) {
         var auth = AccountingApi.buildAuth(session);
-        var body = Object.assign({ action: 'accounting_pending_photos', token: token, user_id: session.profile.userId }, auth);
+        var hubUid = (session.auth && session.auth.user_id) || (session.profile && session.profile.userId) || '';
+        var body = Object.assign({
+          action: 'accounting_pending_photos',
+          token: token,
+          user_id: hubUid
+        }, auth);
+        if (hubUid) {
+          body.user_id = hubUid;
+          if (!body.auth) body.auth = {};
+          if (typeof body.auth === 'object') body.auth.user_id = hubUid;
+        }
         var data = await AccountingApi.post(body);
-        if (!data.success) { setMsg(data.message || '無法帶入 LINE 照片'); return; }
+        if (!data.success) {
+          // 帶圖失敗仍可手動上傳；勿當致命「驗證失敗」開錯誤回報
+          var failHint = data.message || '無法帶入單據照片';
+          if (/驗證失敗/.test(failHint)) {
+            failHint = '無法自動帶入快審單據照片（身分驗證）。請手動上傳同一張單據後繼續請款。';
+          }
+          setWarn(failHint);
+          return;
+        }
         (data.photos || []).forEach(function (p) {
           if (photos.length >= maxPhotos()) return;
           photos.push({
@@ -2102,6 +2120,7 @@
           });
         });
         renderPhotoGrid();
+        if (photos.length) setOk('已帶入快審單據照片（' + photos.length + ' 張）');
       }
 
       async function loadOcrDraft(token) {

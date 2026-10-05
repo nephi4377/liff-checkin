@@ -22,7 +22,7 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| — | — | 目前無進行中工作 | — | — |
+| 2026-10-05 | Cursor Cloud | 待付款請款 pending 照片「驗證失敗」（Hub 身分） | Backend `accounting_pending_photos`；前端 `payment_request.html` 提示 | 進行中 |
 
 ## 最近完成
 
