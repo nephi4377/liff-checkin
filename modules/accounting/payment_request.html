@@ -281,7 +281,8 @@
     <div id="successCard" class="card hidden">
       <h3 style="margin:0 0 8px" id="successTitle">請款已送出</h3>
       <p class="sub" id="successHint">—</p>
-      <a class="btn btn-secondary" href="ledger_review.html">開啟請款審核</a>
+      <a class="btn btn-secondary" id="successReviewLink" href="ledger_review.html">開啟請款審核</a>
+      <a class="btn btn-secondary hidden" id="successHistoryLink" href="ledger_history.html">查看歷史記帳紀錄</a>
       <button type="button" class="btn btn-primary" id="anotherBtn">再建一筆</button>
     </div>
   </div>
@@ -1406,11 +1407,13 @@
         document.getElementById('bankHint').textContent = '銀行資料來自您的廠商登記，若要修改請聯絡財務。';
         document.querySelector('.nav a').href = 'vendor_status.html';
         document.querySelector('.nav a').textContent = '← 款項進度';
-        var succLink = document.querySelector('#successCard a.btn-secondary');
+        var succLink = document.getElementById('successReviewLink');
         if (succLink) {
           succLink.href = 'vendor_status.html';
           succLink.textContent = '查看款項進度';
         }
+        var histLink = document.getElementById('successHistoryLink');
+        if (histLink) histLink.classList.add('hidden');
       }
 
       function buildPayeePayload(payload) {
@@ -2065,6 +2068,7 @@
           document.getElementById('successHint').textContent = (mode === 'finance_direct'
             ? '已進入待匯款清單。'
             : '主管會在「請款審核」處理；核准後才進待匯款。') + feeNote;
+          syncSuccessHistoryLink();
           setOk('請款已送出');
           clearPaymentFormData();
           var errHost = document.getElementById('submitErrorHost');
@@ -2110,6 +2114,17 @@
             return buildAiAllocRow(r, d.ocr || {});
           }));
         }
+      }
+
+      /** 請款已送出畫面：主管 ≥3 顯示「查看歷史記帳紀錄」→ 獨立頁 */
+      function syncSuccessHistoryLink() {
+        var histLink = document.getElementById('successHistoryLink');
+        if (!histLink) return;
+        var need = (typeof AccountingApi !== 'undefined' && AccountingApi.SUPERVISOR_MIN_PERMISSION) || 3;
+        var perm = Number((session && session.auth && session.auth.permission) || 0);
+        var show = !isVendorSelf && perm >= need;
+        if (show) histLink.classList.remove('hidden');
+        else histLink.classList.add('hidden');
       }
 
       /** 送出成功或再建一筆時清掉單據／明細，避免同一包內容再送一次。 */
