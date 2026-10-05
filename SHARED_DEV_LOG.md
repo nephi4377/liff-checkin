@@ -31,7 +31,7 @@
 - 修改範圍：`accounting_ingest.html`、`index.html`、`accounting_api.js`；Backend `SheetWriter`／`AccountingLineIngest`／SPEC
 - 完成內容：選單／區塊改名「歷史記帳紀錄」；篩選日期區間／類型／關鍵字／金額／只看我記的；權限 ≥3
 - 驗證：後端 smoke；`node --check` api；正式站 HTML 已含「歷史記帳紀錄」與查詢控件
-- Commit／線上：Backend_GAS#72 `655bb2e` → Actions → **@354**；liff-checkin#94 `fa4b5b8` → Pages 綠燈
+- Commit／線上：Backend_GAS#72 `655bb2e` → Actions → **@354**／LOG **@355**；liff-checkin#94 `fa4b5b8` → Pages 綠燈
 - 待處理：真人權限 ≥3 抽測篩選；權限 2 應看不到查詢區
 
 
