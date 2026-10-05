@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=70"></script>
+  <script src="../../shared/js/accounting_api.js?v=71"></script>
   <script src="../../shared/js/accounting_cache.js?v=33"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=18"></script>
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
@@ -83,7 +83,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub">查詢試算表已入帳列。點一筆可看案號、圖片集等詳情。需權限 ≥3。</p>
+    <p class="sub">只顯示你自己近 7 天內記的帳。點一筆可看案號、圖片集等詳情。需權限 ≥3。</p>
 
     <div class="card" id="historyCard">
       <div class="hist-head">
@@ -116,12 +116,10 @@
           <input id="histKeyword" type="text" placeholder="例：廠商名、訂金" autocomplete="off" />
         </div>
         <div class="full">
-          <label class="hint" style="font-weight:500;display:flex;align-items:center;gap:6px;margin:0">
-            <input type="checkbox" id="historyMineOnly" /> 只看我記的
-          </label>
+          <p class="hint" style="margin:0 0 4px">日期區間最多 7 天；預設近 7 天。</p>
           <div class="hist-actions">
             <button type="button" class="btn-ghost" id="historySearchBtn">查詢</button>
-            <button type="button" class="btn-ghost" id="historyClearBtn">清空條件</button>
+            <button type="button" class="btn-ghost" id="historyClearBtn">重設為近 7 天</button>
           </div>
         </div>
       </div>
@@ -374,37 +372,93 @@
         });
       }
 
-      function readHistoryFilters() {
+      var HISTORY_MAX_DAYS = 7;
+
+      function toIsoLocal(d) {
+        var y = d.getFullYear();
+        var m = String(d.getMonth() + 1);
+        var day = String(d.getDate());
+        if (m.length < 2) m = '0' + m;
+        if (day.length < 2) day = '0' + day;
+        return y + '-' + m + '-' + day;
+      }
+
+      function addDaysIso(iso, delta) {
+        var p = String(iso || '').split('-');
+        if (p.length < 3) return '';
+        var dt = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+        dt.setDate(dt.getDate() + delta);
+        return toIsoLocal(dt);
+      }
+
+      function inclusiveDays(from, to) {
+        var a = String(from || '').split('-');
+        var b = String(to || '').split('-');
+        if (a.length < 3 || b.length < 3) return 0;
+        var da = new Date(parseInt(a[0], 10), parseInt(a[1], 10) - 1, parseInt(a[2], 10));
+        var db = new Date(parseInt(b[0], 10), parseInt(b[1], 10) - 1, parseInt(b[2], 10));
+        return Math.floor((db - da) / 86400000) + 1;
+      }
+
+      function defaultHistoryWindow() {
+        var to = toIsoLocal(new Date());
+        var from = addDaysIso(to, -(HISTORY_MAX_DAYS - 1));
+        return { from: from, to: to };
+      }
+
+      function applyDefaultHistoryDates() {
+        var w = defaultHistoryWindow();
+        document.getElementById('histDateFrom').value = w.from;
+        document.getElementById('histDateTo').value = w.to;
+      }
+
+      function clampHistoryDatesInInputs() {
         var dateFrom = (document.getElementById('histDateFrom').value || '').trim();
         var dateTo = (document.getElementById('histDateTo').value || '').trim();
+        var w = defaultHistoryWindow();
+        if (!dateTo) dateTo = w.to;
+        if (!dateFrom) dateFrom = addDaysIso(dateTo, -(HISTORY_MAX_DAYS - 1));
+        if (dateFrom > dateTo) {
+          var tmp = dateFrom;
+          dateFrom = dateTo;
+          dateTo = tmp;
+        }
+        if (inclusiveDays(dateFrom, dateTo) > HISTORY_MAX_DAYS) {
+          dateFrom = addDaysIso(dateTo, -(HISTORY_MAX_DAYS - 1));
+        }
+        document.getElementById('histDateFrom').value = dateFrom;
+        document.getElementById('histDateTo').value = dateTo;
+        return { from: dateFrom, to: dateTo };
+      }
+
+      function readHistoryFilters() {
+        var dates = clampHistoryDatesInInputs();
         var type = (document.getElementById('histType').value || '').trim();
         var keyword = (document.getElementById('histKeyword').value || '').trim();
         var amountRaw = (document.getElementById('histAmount').value || '').trim();
-        var mineOnly = !!document.getElementById('historyMineOnly').checked;
+        var months = 1;
+        if (dates.from.slice(0, 7) !== dates.to.slice(0, 7)) months = 2;
         var filters = {
           limit: 50,
-          months: 2,
-          mine_only: mineOnly
+          months: months,
+          mine_only: true,
+          date_from: dates.from,
+          date_to: dates.to
         };
-        if (dateFrom) filters.date_from = dateFrom;
-        if (dateTo) filters.date_to = dateTo;
         if (type) filters.type = type;
         if (keyword) filters.keyword = keyword;
         if (amountRaw !== '') {
           var amt = parseInt(amountRaw, 10);
           if (!isNaN(amt)) filters.amount = amt;
         }
-        if (dateFrom) filters.months = 12;
         return filters;
       }
 
       function clearHistoryFilters() {
-        document.getElementById('histDateFrom').value = '';
-        document.getElementById('histDateTo').value = '';
+        applyDefaultHistoryDates();
         document.getElementById('histType').value = '';
         document.getElementById('histKeyword').value = '';
         document.getElementById('histAmount').value = '';
-        document.getElementById('historyMineOnly').checked = false;
       }
 
       function loadLedgerHistory() {
@@ -422,17 +476,16 @@
             return;
           }
           var n = (data.items || []).length;
-          var bits = [];
+          var bits = ['本人', '近7天內'];
           if (filters.date_from || filters.date_to) {
             bits.push((filters.date_from || '…') + '～' + (filters.date_to || '…'));
           }
           if (filters.type) bits.push(filters.type);
           if (filters.keyword) bits.push('「' + filters.keyword + '」');
           if (filters.amount != null) bits.push('$' + filters.amount);
-          if (filters.mine_only) bits.push('只看我的');
           status.textContent = n
-            ? ('共 ' + n + ' 筆（新到舊）' + (bits.length ? ' · ' + bits.join(' · ') : ''))
-            : ('沒有符合的紀錄' + (bits.length ? '（' + bits.join(' · ') + '）' : ''));
+            ? ('共 ' + n + ' 筆（新到舊） · ' + bits.join(' · '))
+            : ('沒有符合的紀錄（' + bits.join(' · ') + '）');
           renderHistoryItems(data.items || []);
         }).catch(function (e) {
           status.textContent = (e && e.message) || '讀不到歷史記帳紀錄';
@@ -451,9 +504,6 @@
           clearHistoryFilters();
           loadLedgerHistory();
         });
-        document.getElementById('historyMineOnly').addEventListener('change', function () {
-          loadLedgerHistory();
-        });
         document.getElementById('histKeyword').addEventListener('keydown', function (e) {
           if (e.key === 'Enter') {
             e.preventDefault();
@@ -463,6 +513,7 @@
       }
 
       (async function boot() {
+        applyDefaultHistoryDates();
         bindFilters();
         await AccountingBoot.run({
           minPermission: AccountingApi.SUPERVISOR_MIN_PERMISSION,

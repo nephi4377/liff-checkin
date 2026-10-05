@@ -1162,14 +1162,15 @@ var AccountingApi = (function () {
         deferred_token: deferredToken || ''
       }, 120000);
     },
-    /** 歷史記帳紀錄查詢（權限 ≥3；可篩日期／類型／關鍵字／金額） */
+    /** 歷史記帳紀錄查詢（權限 ≥3；一律本人；預設／上限近 7 天） */
     accountingLedgerRecent: function (sessionOrToken, opts) {
       opts = opts || {};
       var body = {
         action: 'accounting_ledger_recent',
         limit: opts.limit != null ? opts.limit : 40,
-        months: opts.months != null ? opts.months : 2,
-        mine_only: !!opts.mine_only
+        months: opts.months != null ? opts.months : 1,
+        // 後端強制本人；客戶端開關無效，仍一律傳 true
+        mine_only: true
       };
       if (opts.date_from) body.date_from = opts.date_from;
       if (opts.date_to) body.date_to = opts.date_to;
