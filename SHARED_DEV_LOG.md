@@ -26,6 +26,14 @@
 
 ## 最近完成
 
+### 2026-10-05｜Cursor Cloud｜待付款請款 pending 照片「驗證失敗」（草稿 PR／未部署）
+
+- 修改範圍：`payment_request.html`（帶圖失敗改警告）；Backend_GAS `accounting_pending_photos` 接受 Hub `user_id`
+- 完成內容：根因＝主控台身分帶圖 API 不認員工編號；後端修通＋前端失敗不開致命回報
+- 驗證：邏輯模擬 Hub／LIFF；未部署真人路徑
+- Commit／PR：liff-checkin#96 `6faf44c`；Backend_GAS#74 `f8e5665`
+- 待處理：明確指示後部署 accounting-gas；真人快審→請款抽測自動帶圖
+
 ### 2026-10-05｜Cursor Cloud｜歷史記帳獨立頁＋點列詳情（已部署）
 
 - 修改範圍：新增 `ledger_history.html`；選單改連；`accounting_ingest.html` 移除歷史區；`payment_request.html` 已送出卡加歷史按鈕；api／shell／ui；SPEC 15；Backend `accounting_ledger_detail`
