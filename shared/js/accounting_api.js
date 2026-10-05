@@ -1161,6 +1161,29 @@ var AccountingApi = (function () {
         deferred_token: deferredToken || ''
       }, 120000);
     },
+    /** 收支近期歷史（表單頁「近期收支紀錄」） */
+    accountingLedgerRecent: function (sessionOrToken, opts) {
+      opts = opts || {};
+      var body = {
+        action: 'accounting_ledger_recent',
+        limit: opts.limit != null ? opts.limit : 40,
+        months: opts.months != null ? opts.months : 2,
+        mine_only: !!opts.mine_only
+      };
+      if (sessionOrToken && typeof resolveAuth === 'function') {
+        try {
+          var auth = resolveAuth(sessionOrToken);
+          if (auth) body.auth = auth;
+          if (sessionOrToken.devBypass) body.dev_bypass = true;
+          if (sessionOrToken.idToken) body.liff_id_token = sessionOrToken.idToken;
+          if (sessionOrToken.auth && sessionOrToken.auth.user_id) {
+            body.user_id = sessionOrToken.auth.user_id;
+            body.auth = body.auth || { user_id: sessionOrToken.auth.user_id };
+          }
+        } catch (eAuth) {}
+      }
+      return post(body);
+    },
     /** 收支登錄表單後置（毛利／附件）；主列已成功後背景呼叫即可 */
     accountingFormFlushDeferred: function (sessionOrToken, deferredToken) {
       var body = {

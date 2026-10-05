@@ -8,12 +8,12 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=59"></script>
+  <script src="../../shared/js/accounting_api.js?v=66"></script>
   <script src="../../shared/js/accounting_cache.js?v=33"></script>
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=9"></script>
-  <script src="../../shared/js/accounting_shell.js?v=7"></script>
+  <script src="../../shared/js/accounting_shell.js?v=8"></script>
   <style>
     h2 { margin: 0 0 4px; }
     .sub { color: #555; font-size: 14px; margin: 0 0 16px; }
@@ -86,6 +86,15 @@
           <h3>收支登錄</h3>
           <p>已付款／已收款記帳；可帶案號與照片。</p>
           <span class="tag staff">權限 ≥2</span>
+        </span>
+      </a>
+
+      <a class="card" href="accounting_ingest.html?history=1" id="linkLedgerHistory">
+        <span class="card-icon teal">🕘</span>
+        <span class="card-body">
+          <h3>收支歷史</h3>
+          <p>看最近寫進試算表的收支（日期、金額、對象、列號）；也可在登錄頁下方查看。</p>
+          <span class="tag admin">主管 ≥3</span>
         </span>
       </a>
 
@@ -243,6 +252,13 @@
         } else {
           document.getElementById('linkIngest').classList.remove('hidden');
           document.getElementById('linkCustomerFinance').classList.remove('hidden');
+        }
+
+        // 收支歷史：主管 ≥3（與 API accounting_ledger_recent 一致）
+        if (perm < supervisorMin || isVendor) {
+          document.getElementById('linkLedgerHistory').classList.add('hidden');
+        } else {
+          document.getElementById('linkLedgerHistory').classList.remove('hidden');
         }
 
         if (perm < supervisorMin) {
