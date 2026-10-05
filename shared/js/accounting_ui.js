@@ -598,6 +598,7 @@ var AccountingUi = (function () {
     accounting_bootstrap: '載入主檔',
     accounting_form_context: '表單資料',
     accounting_ledger_recent: '近期收支',
+    accounting_ledger_detail: '記帳詳情',
     payment_request_auth_me: '請款身分',
     crud_list: '讀取列表',
     vendor_payment_list: '讀取請款',

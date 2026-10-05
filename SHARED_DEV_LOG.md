@@ -22,9 +22,17 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-10-05 | Cursor Cloud (bc-009e3968) | 歷史記帳點列詳情（案號／圖片集） | modules/accounting/accounting_ingest.html、shared/js/accounting_api.js；Backend accounting_ledger_detail | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-10-05｜Cursor Cloud｜歷史記帳點列詳情（案號／圖片集）（PR／未部署）
+
+- 修改範圍：`accounting_ingest.html`、`accounting_api.js`、`accounting_ui.js`；LOG；Backend `accounting_ledger_detail`
+- 完成內容：歷史列可點開詳情（案號／備註／付款／店別／圖片集燈箱）；API ≥3；附件沿用 lightbox／附件索引
+- 驗證：`node --check`；後端 smoke；本機 serve HTML 含詳情控件
+- Commit／線上：draft PRs（未 merge、未部署）
+- 待處理：merge＋部署 accounting-gas 後真人 ≥3 點列抽測
 
 ### 2026-10-05｜Cursor Cloud｜歷史記帳紀錄查詢篩選（已部署）
 
