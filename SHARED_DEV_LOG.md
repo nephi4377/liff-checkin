@@ -26,13 +26,13 @@
 
 ## 最近完成
 
-### 2026-10-05｜Cursor Cloud｜歷史記帳點列詳情（案號／圖片集）（PR／未部署）
+### 2026-10-05｜Cursor Cloud｜歷史記帳獨立頁＋點列詳情（PR／未部署）
 
-- 修改範圍：`accounting_ingest.html`、`accounting_api.js`、`accounting_ui.js`；LOG；Backend `accounting_ledger_detail`
-- 完成內容：歷史列可點開詳情（案號／備註／付款／店別／圖片集燈箱）；API ≥3；附件沿用 lightbox／附件索引
-- 驗證：`node --check`；後端 smoke；本機 serve HTML 含詳情控件
-- Commit／線上：draft PRs（未 merge、未部署）
-- 待處理：merge＋部署 accounting-gas 後真人 ≥3 點列抽測
+- 修改範圍：新增 `ledger_history.html`；`index.html` 選單改連；`accounting_ingest.html` 移除歷史區（`?history=1` 轉址）；api／shell／ui；SPEC 15；Backend `accounting_ledger_detail`
+- 完成內容：歷史查詢獨立頁（無登錄表單）；點列案號／圖片集；權限 ≥3
+- 驗證：serve 抽測選單／獨立頁／ingest 無查詢控件；`node --check`；後端 smoke
+- Commit／線上：draft [liff-checkin#95](https://github.com/nephi4377/liff-checkin/pull/95)、[Backend_GAS#73](https://github.com/nephi4377/Backend_GAS/pull/73)（未部署）
+- 待處理：merge＋部署後真人 ≥3 抽測
 
 ### 2026-10-05｜Cursor Cloud｜歷史記帳紀錄查詢篩選（已部署）
 

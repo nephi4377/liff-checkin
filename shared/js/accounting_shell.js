@@ -12,6 +12,7 @@ var AccountingShell = (function () {
 
   var PAGE_TITLES = {
     'accounting_ingest.html': '收支登錄',
+    'ledger_history.html': '歷史記帳紀錄',
     'payment_request.html': '待付款請款',
     'quick_review.html': '單據與存檔',
     'payment_request_compose.html': '精細請款建單',

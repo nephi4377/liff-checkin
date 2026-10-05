@@ -67,6 +67,7 @@ var AccountingUi = (function () {
     'quick_review.html': '單據與存檔',
     'vendor_docs.html': '單據與存檔',
     'accounting_ingest.html': '收支登錄',
+    'ledger_history.html': '歷史記帳紀錄',
     'ledger_review.html': '請款審核',
     'vendor_payment_finance.html': '廠商待匯款',
     'vendors.html': '廠商名冊',

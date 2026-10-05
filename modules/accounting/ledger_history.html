@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>歷史記帳紀錄</title>
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/operator_context.js?v=3"></script>
+  <script src="../../shared/js/accounting_api.js?v=68"></script>
+  <script src="../../shared/js/accounting_cache.js?v=33"></script>
+  <script src="../../shared/js/accounting_lightbox.js?v=18"></script>
+  <script src="../../shared/js/accounting_ui.js?v=25"></script>
+  <script src="../../shared/js/accounting_nav.js?v=2"></script>
+  <script src="../../shared/js/accounting_boot.js?v=9"></script>
+  <style>
+    h2 { margin: 0 0 4px; }
+    .sub { color: #555; font-size: 14px; margin: 0 0 12px; }
+    .card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    label { display: block; margin-top: 0; font-weight: 600; font-size: 13px; }
+    .hidden { display: none; }
+    .nav { margin-bottom: 12px; font-size: 14px; }
+    .nav a { color: #1a73e8; text-decoration: none; }
+    .hist-head {
+      display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px;
+    }
+    .hist-head strong { font-size: 15px; }
+    #historyFilters {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin: 10px 0;
+    }
+    #historyFilters .full { grid-column: 1 / -1; }
+    #historyFilters input, #historyFilters select {
+      width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box;
+      border: 1px solid #ccc; border-radius: 8px; font-size: 15px;
+    }
+    #historyFilters .hist-actions {
+      display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px;
+    }
+    .btn-ghost {
+      width: auto; padding: 8px 12px; font-size: 14px; background: #e8eaed; color: #333;
+      border: none; border-radius: 8px; cursor: pointer; margin-top: 0;
+    }
+    #historyList { display: flex; flex-direction: column; gap: 8px; }
+    .hist-item {
+      border: 1px solid #e8eaed; border-radius: 10px; padding: 10px 12px; background: #fafafa;
+      font-size: 13px; line-height: 1.45; cursor: pointer; text-align: left; width: 100%;
+      box-sizing: border-box; font-family: inherit;
+    }
+    .hist-item:hover, .hist-item:focus { border-color: #1a73e8; background: #f5f9ff; outline: none; }
+    .hist-item.is-open { border-color: #1a73e8; background: #fff; box-shadow: 0 1px 4px rgba(26,115,232,.12); }
+    .hist-item .hist-top { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+    .hist-item .hist-type { font-weight: 700; }
+    .hist-item .hist-type.income { color: #137333; }
+    .hist-item .hist-type.expense { color: #c5221f; }
+    .hist-item .hist-amt { font-weight: 700; font-size: 15px; }
+    .hist-item .hist-meta { color: #555; margin-top: 4px; }
+    .hist-item .hist-loc { color: #777; font-size: 12px; margin-top: 4px; font-family: ui-monospace, monospace; }
+    .hist-item .hist-hint { color: #1a73e8; font-size: 12px; margin-top: 6px; }
+    .hist-detail {
+      margin-top: 10px; padding-top: 10px; border-top: 1px solid #e8eaed;
+      font-size: 13px; line-height: 1.5; color: #333;
+    }
+    .hist-detail dl {
+      margin: 0; display: grid; grid-template-columns: 5.5em 1fr; gap: 4px 8px;
+    }
+    .hist-detail dt { color: #777; font-weight: 600; margin: 0; }
+    .hist-detail dd { margin: 0; word-break: break-word; }
+    .hist-detail .hist-detail-status { color: #666; font-size: 12px; margin: 0 0 8px; }
+    .hist-att-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+    .hist-att-thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
+    .hist-att-thumbs button {
+      border: 1px solid #dadce0; border-radius: 8px; padding: 0; background: #fff;
+      width: 56px; height: 56px; overflow: hidden; cursor: pointer;
+    }
+    .hist-att-thumbs img { width: 56px; height: 56px; object-fit: cover; display: block; }
+    #historyStatus { font-size: 13px; color: #666; margin: 0; }
+    .hint { font-size: 12px; color: #777; margin-top: 4px; }
+  </style>
+</head>
+<body class="acct-page acct-page-form">
+  <div id="loading">載入中…</div>
+  <div id="app" class="hidden acct-main">
+    <p class="nav"><a href="index.html">← 會計功能選單</a></p>
+    <h2>歷史記帳紀錄</h2>
+    <p class="sub" id="userLine">—</p>
+    <p class="sub">查詢試算表已入帳列。點一筆可看案號、圖片集等詳情。需權限 ≥3。</p>
+
+    <div class="card" id="historyCard">
+      <div class="hist-head">
+        <strong>查詢條件</strong>
+        <button type="button" class="btn-ghost" id="historyRefreshBtn">重新整理</button>
+      </div>
+      <div id="historyFilters">
+        <div>
+          <label for="histDateFrom">日期起</label>
+          <input id="histDateFrom" type="date" />
+        </div>
+        <div>
+          <label for="histDateTo">日期迄</label>
+          <input id="histDateTo" type="date" />
+        </div>
+        <div>
+          <label for="histType">類型</label>
+          <select id="histType">
+            <option value="">全部</option>
+            <option value="收入">收入</option>
+            <option value="支出">支出</option>
+          </select>
+        </div>
+        <div>
+          <label for="histAmount">金額（選填）</label>
+          <input id="histAmount" type="number" inputmode="numeric" placeholder="完全相符" />
+        </div>
+        <div class="full">
+          <label for="histKeyword">關鍵字（對象／事由／備註）</label>
+          <input id="histKeyword" type="text" placeholder="例：廠商名、訂金" autocomplete="off" />
+        </div>
+        <div class="full">
+          <label class="hint" style="font-weight:500;display:flex;align-items:center;gap:6px;margin:0">
+            <input type="checkbox" id="historyMineOnly" /> 只看我記的
+          </label>
+          <div class="hist-actions">
+            <button type="button" class="btn-ghost" id="historySearchBtn">查詢</button>
+            <button type="button" class="btn-ghost" id="historyClearBtn">清空條件</button>
+          </div>
+        </div>
+      </div>
+      <p id="historyStatus">載入中…</p>
+      <div id="historyList"></div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var sessionRef = null;
+      var openHistoryKey = '';
+
+      function formatMoney(n) {
+        var v = Number(n);
+        if (!isFinite(v)) return String(n == null ? '' : n);
+        return '$' + Math.round(v).toLocaleString('zh-TW');
+      }
+
+      function escHtml(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function historyItemKey(it) {
+        if (!it) return '';
+        if (it.sheet && it.row) return String(it.sheet) + '#' + String(it.row);
+        return String(it.ingest_id || '');
+      }
+
+      function driveThumbUrl(url) {
+        var m = String(url || '').match(/\/d\/([^/]+)/);
+        if (m) return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w200';
+        return url;
+      }
+
+      function renderHistoryDetailFields(detail) {
+        detail = detail || {};
+        var rows = [
+          ['類型', detail.type || '—'],
+          ['日期', detail.txn_date_display || detail.txn_date || '—'],
+          ['金額', formatMoney(detail.amount)],
+          ['對象', detail.party_name || '—'],
+          ['事由', detail.desc || '—'],
+          ['案號', detail.project_no || '（未填）'],
+          ['付款方式', detail.payment_method || '—']
+        ];
+        if (detail.stores && detail.stores.length) {
+          rows.push(['店別', detail.stores.map(function (s) {
+            return s.store + (s.amount != null && s.amount !== '' ? ' ' + formatMoney(s.amount) : '');
+          }).join('、')]);
+        }
+        if (detail.note) rows.push(['備註', detail.note]);
+        var loc = (detail.sheet || '—') + ' 第' + (detail.row || '?') + '列';
+        if (detail.ingest_id) loc += ' · ' + detail.ingest_id;
+        rows.push(['位置', loc]);
+
+        var dl = '<dl>';
+        rows.forEach(function (pair) {
+          dl += '<dt>' + escHtml(pair[0]) + '</dt><dd>' + escHtml(pair[1]) + '</dd>';
+        });
+        dl += '</dl>';
+        return dl;
+      }
+
+      function renderHistoryAttachments(container, detail) {
+        var urls = (detail && detail.attachment_urls) || [];
+        if ((!urls || !urls.length) && detail && detail.attachments) {
+          urls = detail.attachments.map(function (a) { return a && a.drive_url; }).filter(Boolean);
+        }
+        var row = document.createElement('div');
+        row.className = 'hist-att-row';
+        var label = document.createElement('strong');
+        label.textContent = '圖片集';
+        row.appendChild(label);
+
+        if (!urls.length) {
+          var empty = document.createElement('span');
+          empty.className = 'hint';
+          empty.style.margin = '0';
+          empty.textContent = '這筆沒有上傳單據';
+          row.appendChild(empty);
+          container.appendChild(row);
+          return;
+        }
+
+        var thumbs = document.createElement('div');
+        thumbs.className = 'hist-att-thumbs';
+        urls.forEach(function (u, i) {
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.title = '第 ' + (i + 1) + ' 張';
+          btn.innerHTML = '<img src="' + escHtml(driveThumbUrl(u)) + '" alt="單據 ' + (i + 1) + '" />';
+          btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (typeof AccountingLightbox !== 'undefined') AccountingLightbox.open(urls);
+          });
+          thumbs.appendChild(btn);
+        });
+        row.appendChild(thumbs);
+
+        var openBtn = document.createElement('button');
+        openBtn.type = 'button';
+        openBtn.className = 'btn-ghost';
+        openBtn.textContent = '看圖片集（' + urls.length + '）';
+        openBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (typeof AccountingLightbox !== 'undefined') AccountingLightbox.open(urls);
+        });
+        row.appendChild(openBtn);
+        container.appendChild(row);
+      }
+
+      function fillHistoryDetailPanel(panel, summaryItem, detail) {
+        panel.innerHTML = '';
+        var status = document.createElement('p');
+        status.className = 'hist-detail-status';
+        status.textContent = '';
+        panel.appendChild(status);
+
+        var merged = Object.assign({}, summaryItem || {}, detail || {});
+        var fields = document.createElement('div');
+        fields.innerHTML = renderHistoryDetailFields(merged);
+        panel.appendChild(fields);
+        renderHistoryAttachments(panel, merged);
+      }
+
+      function loadHistoryDetailForItem(div, it) {
+        var panel = div.querySelector('.hist-detail');
+        if (!panel) return;
+        var status = panel.querySelector('.hist-detail-status');
+        if (status) status.textContent = '載入詳情…';
+
+        function apply(detail) {
+          fillHistoryDetailPanel(panel, it, detail);
+        }
+
+        function fallbackAttachments() {
+          if (!sessionRef || typeof AccountingLightbox === 'undefined' || !it.ingest_id) {
+            apply(it);
+            return;
+          }
+          AccountingLightbox.fetchAttachmentUrls(sessionRef, { ingest_id: it.ingest_id }).then(function (urls) {
+            apply(Object.assign({}, it, {
+              attachment_urls: urls || [],
+              has_attachments: !!(urls && urls.length)
+            }));
+          }).catch(function () {
+            apply(it);
+            var st = panel.querySelector('.hist-detail-status');
+            if (st) st.textContent = '詳情已顯示；圖片集讀不到時可稍後再點開。';
+          });
+        }
+
+        if (!sessionRef || typeof AccountingApi.accountingLedgerDetail !== 'function') {
+          fallbackAttachments();
+          return;
+        }
+
+        AccountingApi.accountingLedgerDetail(sessionRef, {
+          sheet: it.sheet,
+          row: it.row,
+          ingest_id: it.ingest_id
+        }).then(function (data) {
+          if (data && data.success && data.item) {
+            apply(data.item);
+            return;
+          }
+          fallbackAttachments();
+          var st = panel.querySelector('.hist-detail-status');
+          if (st && data && data.message) st.textContent = data.message;
+        }).catch(function () {
+          fallbackAttachments();
+        });
+      }
+
+      function toggleHistoryDetail(div, it) {
+        var key = historyItemKey(it);
+        var wasOpen = div.classList.contains('is-open');
+        var box = document.getElementById('historyList');
+        Array.prototype.forEach.call(box.querySelectorAll('.hist-item.is-open'), function (el) {
+          el.classList.remove('is-open');
+          var d = el.querySelector('.hist-detail');
+          if (d) d.classList.add('hidden');
+          var hint = el.querySelector('.hist-hint');
+          if (hint) hint.textContent = '點開看詳情（案號／圖片集）';
+        });
+        if (wasOpen && openHistoryKey === key) {
+          openHistoryKey = '';
+          return;
+        }
+        openHistoryKey = key;
+        div.classList.add('is-open');
+        var hint = div.querySelector('.hist-hint');
+        if (hint) hint.textContent = '再點一次收合';
+        var panel = div.querySelector('.hist-detail');
+        if (!panel) {
+          panel = document.createElement('div');
+          panel.className = 'hist-detail';
+          div.appendChild(panel);
+        }
+        panel.classList.remove('hidden');
+        fillHistoryDetailPanel(panel, it, null);
+        var st = panel.querySelector('.hist-detail-status');
+        if (st) st.textContent = '載入詳情…';
+        loadHistoryDetailForItem(div, it);
+      }
+
+      function renderHistoryItems(items) {
+        var box = document.getElementById('historyList');
+        box.innerHTML = '';
+        openHistoryKey = '';
+        if (!items || !items.length) return;
+        items.forEach(function (it) {
+          var div = document.createElement('div');
+          div.className = 'hist-item';
+          div.setAttribute('role', 'button');
+          div.tabIndex = 0;
+          var typeClass = it.type === '收入' ? 'income' : 'expense';
+          var meta = [];
+          if (it.party_name) meta.push(it.party_name);
+          if (it.desc && it.desc !== it.party_name) meta.push(it.desc);
+          if (it.project_no) meta.push('案號 ' + it.project_no);
+          if (it.payment_method) meta.push(it.payment_method);
+          if (it.note) meta.push(it.note);
+          var loc = (it.sheet || '—') + ' 第' + (it.row || '?') + '列';
+          if (it.ingest_id) loc += ' · ' + String(it.ingest_id).slice(0, 8);
+          div.innerHTML =
+            '<div class="hist-top">' +
+              '<span class="hist-type ' + typeClass + '">' + escHtml(it.type || '—') + '</span>' +
+              '<span>' + escHtml(it.txn_date_display || it.txn_date || '—') + '</span>' +
+              '<span class="hist-amt">' + escHtml(formatMoney(it.amount)) + '</span>' +
+            '</div>' +
+            '<div class="hist-meta">' + escHtml(meta.join(' · ') || '—') + '</div>' +
+            '<div class="hist-loc">' + escHtml(loc) + '</div>' +
+            '<div class="hist-hint">點開看詳情（案號／圖片集）</div>' +
+            '<div class="hist-detail hidden"></div>';
+          div.addEventListener('click', function (e) {
+            if (e.target.closest && (e.target.closest('.hist-att-row') || e.target.closest('.btn-ghost'))) return;
+            toggleHistoryDetail(div, it);
+          });
+          div.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              toggleHistoryDetail(div, it);
+            }
+          });
+          box.appendChild(div);
+        });
+      }
+
+      function readHistoryFilters() {
+        var dateFrom = (document.getElementById('histDateFrom').value || '').trim();
+        var dateTo = (document.getElementById('histDateTo').value || '').trim();
+        var type = (document.getElementById('histType').value || '').trim();
+        var keyword = (document.getElementById('histKeyword').value || '').trim();
+        var amountRaw = (document.getElementById('histAmount').value || '').trim();
+        var mineOnly = !!document.getElementById('historyMineOnly').checked;
+        var filters = {
+          limit: 50,
+          months: 2,
+          mine_only: mineOnly
+        };
+        if (dateFrom) filters.date_from = dateFrom;
+        if (dateTo) filters.date_to = dateTo;
+        if (type) filters.type = type;
+        if (keyword) filters.keyword = keyword;
+        if (amountRaw !== '') {
+          var amt = parseInt(amountRaw, 10);
+          if (!isNaN(amt)) filters.amount = amt;
+        }
+        if (dateFrom) filters.months = 12;
+        return filters;
+      }
+
+      function clearHistoryFilters() {
+        document.getElementById('histDateFrom').value = '';
+        document.getElementById('histDateTo').value = '';
+        document.getElementById('histType').value = '';
+        document.getElementById('histKeyword').value = '';
+        document.getElementById('histAmount').value = '';
+        document.getElementById('historyMineOnly').checked = false;
+      }
+
+      function loadLedgerHistory() {
+        var status = document.getElementById('historyStatus');
+        status.textContent = '查詢中…';
+        if (!sessionRef || typeof AccountingApi.accountingLedgerRecent !== 'function') {
+          status.textContent = '尚無法載入歷史（請從主控台／LINE 登入後再試）。';
+          return Promise.resolve();
+        }
+        var filters = readHistoryFilters();
+        return AccountingApi.accountingLedgerRecent(sessionRef, filters).then(function (data) {
+          if (!data || data.success === false) {
+            status.textContent = (data && data.message) || '讀不到歷史記帳紀錄';
+            document.getElementById('historyList').innerHTML = '';
+            return;
+          }
+          var n = (data.items || []).length;
+          var bits = [];
+          if (filters.date_from || filters.date_to) {
+            bits.push((filters.date_from || '…') + '～' + (filters.date_to || '…'));
+          }
+          if (filters.type) bits.push(filters.type);
+          if (filters.keyword) bits.push('「' + filters.keyword + '」');
+          if (filters.amount != null) bits.push('$' + filters.amount);
+          if (filters.mine_only) bits.push('只看我的');
+          status.textContent = n
+            ? ('共 ' + n + ' 筆（新到舊）' + (bits.length ? ' · ' + bits.join(' · ') : ''))
+            : ('沒有符合的紀錄' + (bits.length ? '（' + bits.join(' · ') + '）' : ''));
+          renderHistoryItems(data.items || []);
+        }).catch(function (e) {
+          status.textContent = (e && e.message) || '讀不到歷史記帳紀錄';
+          document.getElementById('historyList').innerHTML = '';
+        });
+      }
+
+      function bindFilters() {
+        document.getElementById('historyRefreshBtn').addEventListener('click', function () {
+          loadLedgerHistory();
+        });
+        document.getElementById('historySearchBtn').addEventListener('click', function () {
+          loadLedgerHistory();
+        });
+        document.getElementById('historyClearBtn').addEventListener('click', function () {
+          clearHistoryFilters();
+          loadLedgerHistory();
+        });
+        document.getElementById('historyMineOnly').addEventListener('change', function () {
+          loadLedgerHistory();
+        });
+        document.getElementById('histKeyword').addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            loadLedgerHistory();
+          }
+        });
+      }
+
+      (async function boot() {
+        bindFilters();
+        await AccountingBoot.run({
+          minPermission: AccountingApi.SUPERVISOR_MIN_PERMISSION,
+          deniedMsg: '歷史記帳紀錄需主管權限（≥3）',
+          preloadBootstrap: false,
+          onReady: async function (sess) {
+            sessionRef = sess;
+            await loadLedgerHistory();
+          }
+        });
+      })();
+    })();
+  </script>
+</body>
+</html>
