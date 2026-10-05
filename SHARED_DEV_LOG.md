@@ -26,6 +26,14 @@
 
 ## 最近完成
 
+### 2026-10-05｜Cursor Cloud｜歷史記帳近期收支逾時（draft／未部署）
+
+- 修改範圍：`accounting_api.js`（90s）、`ledger_history.html` `?v=70`、SPEC 15 v1.38、LOG；Backend `SheetWriter` 尾端分塊
+- 完成內容：根因＝整月 getValues＋getFormulas 拖過 60s；後端改分塊／窄欄；前端安全網 90s（低於毛利 120s）
+- 驗證：後端 `node tools/test-ledger-recent-history.js`；`node --check` api
+- Commit／PR：見 draft（未部署）；與 own-only #98／#76 分開，部署 own-only 前應先上本修
+- 待處理：真人楊婕妤開歷史頁「近期收支」
+
 ### 2026-10-05｜Cursor Cloud｜快審請款失敗消失＋畫面直覺（已部署）
 
 - 修改範圍：`quick_review.html`、`payment_request.html`、`accounting_api.js`、SPEC／LOG；Backend `VendorQuickReview.js`、`PaymentRequestUnified.js`、`AccountingLineIngest.js`
