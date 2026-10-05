@@ -22,7 +22,7 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| — | — | 目前無進行中工作 | — | — |
+| 2026-10-05 | Cursor Cloud (bc-009e3968) | 歷史記帳點列詳情（案號／圖片集） | modules/accounting/accounting_ingest.html、shared/js/accounting_api.js；Backend accounting_ledger_detail | 進行中 |
 
 ## 最近完成
 
