@@ -26,13 +26,13 @@
 
 ## 最近完成
 
-### 2026-10-05｜Cursor Cloud｜快審請款失敗消失＋畫面直覺（草稿 PR／未部署）
+### 2026-10-05｜Cursor Cloud｜快審請款失敗消失＋畫面直覺（已部署）
 
 - 修改範圍：`quick_review.html`、`payment_request.html`、`accounting_api.js`、SPEC／LOG；Backend `VendorQuickReview.js`、`PaymentRequestUnified.js`、`AccountingLineIngest.js`
 - 完成內容：請款→「請款中」仍待處理、送出成功才已分類；快捷篩選「請款還沒送完」／綠框徽章／橫幅；待付款失敗條＋回列表；pending 成功才銷票
-- 驗證：後端單元煙測；UX 文案煙測；demo 截圖
-- Commit／線上：[Backend_GAS#75](https://github.com/nephi4377/Backend_GAS/pull/75)、[liff-checkin#97](https://github.com/nephi4377/liff-checkin/pull/97)（未 merge／未部署）
-- 待處理／風險：合併後部署 accounting-gas＋Pages；部署前舊誤標用「已分類」捷徑找回
+- 驗證：後端單元煙測；正式站 HTML 已含「請款還沒送完」等字串；真人抽測待做
+- Commit／線上：Backend_GAS#75 `e38ca22` → Actions → **@362**；liff-checkin#97 `3f36ab0` → Pages
+- 待處理／風險：真人快審→請款失敗／未送完應見「請款還沒送完」；舊誤標仍用「已分類」捷徑
 
 ### 2026-10-05｜Codex｜WordPress 案例追蹤與新頁檢查規範（已更新）
 
