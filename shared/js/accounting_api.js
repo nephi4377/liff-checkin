@@ -1189,6 +1189,13 @@ var AccountingApi = (function () {
             body.user_id = sessionOrToken.auth.user_id;
             body.auth = body.auth || { user_id: sessionOrToken.auth.user_id };
           }
+          var dn = (sessionOrToken.auth && sessionOrToken.auth.display_name)
+            || (sessionOrToken.profile && sessionOrToken.profile.displayName)
+            || '';
+          if (dn) {
+            body.display_name = dn;
+            if (body.auth) body.auth.display_name = body.auth.display_name || dn;
+          }
         } catch (eAuth) {}
       }
       // 後端已改尾端分塊；本人／區間篩選仍可能多掃幾個月。給 90s（低於毛利 120s，避免自己掃更慢時硬撐太久）
