@@ -60,6 +60,10 @@
       margin-bottom: 10px; background: #fff; align-items: start;
     }
     .item.unclaimed { border-color: #f9ab00; background: #fffbf0; }
+    .item.pay-pending {
+      border-color: #34a853; background: #f0faf3;
+      box-shadow: inset 3px 0 0 #34a853;
+    }
     .item.removing { opacity: .45; pointer-events: none; }
     .item-main { min-width: 0; grid-column: 2; }
     .item-media {
@@ -81,7 +85,45 @@
       background: #e8f0fe; color: #174ea6;
     }
     .tag.warn { background: #fef7e0; color: #b06000; }
+    .tag.pay {
+      background: #ceead6; color: #0d652d; font-weight: 700;
+    }
+    .pay-help {
+      margin: 6px 0 0; font-size: 13px; color: #0d652d; line-height: 1.4;
+      font-weight: 600;
+    }
     .time-line { margin: 4px 0 0; font-size: 13px; color: #5f6368; }
+    .flow-banner {
+      margin: 0 0 12px; padding: 12px 14px; border-radius: 10px;
+      font-size: 14px; line-height: 1.5; color: #174ea6;
+      background: #e8f0fe; border: 1px solid #aecbfa;
+    }
+    .flow-banner.warn {
+      color: #7a4f01; background: #fef7e0; border-color: #fdd663;
+    }
+    .flow-banner.ok {
+      color: #0d652d; background: #e6f4ea; border-color: #a8dab5;
+    }
+    .flow-banner .banner-actions {
+      margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .status-chips {
+      display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px;
+    }
+    .status-chips button {
+      min-height: 40px; padding: 8px 12px; border-radius: 999px;
+      border: 1px solid #dadce0; background: #fff; font-size: 14px;
+      font-weight: 600; color: #3c4043; cursor: pointer;
+    }
+    .status-chips button.active {
+      background: #e8f0fe; border-color: #1a73e8; color: #174ea6;
+    }
+    .status-chips button.has-pay {
+      border-color: #34a853; color: #0d652d;
+    }
+    .status-chips button.has-pay.active {
+      background: #e6f4ea; border-color: #34a853; color: #0d652d;
+    }
     .mono {
       margin: 2px 0 0; font-family: ui-monospace, monospace;
       font-size: 12px; color: #80868b; word-break: break-all;
@@ -154,25 +196,32 @@
       <button type="button" data-tab="archive">手動存檔</button>
     </div>
     <p class="hint" id="reviewHint">
-      點五類之一即可；「請款」會開待付款申請並帶附件（請盡快完成載入）。
-      <br />標錯了？切上方「已分類」再點一次分類即可。廢棄會再問一次確認。
+      點分類即可。「請款」會開填表頁；<strong>沒送出成功前，單據會留在這裡並標「請款中」</strong>，不會不見。
+      報價等其他類標完會移出；廢棄會再問一次確認。
     </p>
     <p class="hint hidden" id="archiveHint">
       報價、合約、型錄等：選廠商後上傳，會進該廠資料夾。不必走請款審核。
       新廠商請先到「廠商名冊」建檔。
     </p>
+    <div id="flowBanner" class="flow-banner hidden" role="status" aria-live="polite"></div>
     <div id="msg" role="alert"></div>
     <div id="ok" aria-live="polite"></div>
 
     <div id="reviewPanel">
     <div class="card">
+      <div class="status-chips" id="statusChips" role="toolbar" aria-label="快速篩選">
+        <button type="button" data-status="open" class="active">待處理</button>
+        <button type="button" data-status="請款中" class="has-pay">請款還沒送完</button>
+        <button type="button" data-status="已分類">已分類</button>
+      </div>
       <div class="filters">
         <div class="field">
-          <label for="filterStatus">狀態</label>
+          <label for="filterStatus">狀態（進階）</label>
           <select id="filterStatus">
-            <option value="open" selected>待處理（待審＋待認領）</option>
+            <option value="open" selected>待處理（待審＋待認領＋請款中）</option>
             <option value="待審">待審</option>
             <option value="待認領">待認領</option>
+            <option value="請款中">請款中（還沒送出）</option>
             <option value="已分類">已分類</option>
           </select>
         </div>
@@ -234,7 +283,8 @@
 
   <script>
     (function () {
-      var CACHE_KEY = 'acct_quick_review_list_v1';
+      var CACHE_KEY = 'acct_quick_review_list_v2';
+      var PAY_RESUME_KEY = 'acct_quick_review_pay_resume_v1';
       var session = null;
       var items = [];
       var vendors = [];
@@ -257,6 +307,63 @@
       function setOk(t) {
         document.getElementById('ok').textContent = t || '';
         if (t) document.getElementById('msg').textContent = '';
+      }
+      function setFlowBanner(kind, html) {
+        var el = document.getElementById('flowBanner');
+        if (!el) return;
+        if (!html) {
+          el.className = 'flow-banner hidden';
+          el.innerHTML = '';
+          return;
+        }
+        el.className = 'flow-banner' + (kind === 'warn' ? ' warn' : (kind === 'ok' ? ' ok' : ''));
+        el.innerHTML = html;
+      }
+      function rememberPayResume(payload) {
+        try {
+          sessionStorage.setItem(PAY_RESUME_KEY, JSON.stringify(Object.assign({
+            t: Date.now()
+          }, payload || {})));
+        } catch (eMem) {}
+      }
+      function consumePayResume() {
+        try {
+          var raw = sessionStorage.getItem(PAY_RESUME_KEY);
+          if (!raw) return null;
+          sessionStorage.removeItem(PAY_RESUME_KEY);
+          var obj = JSON.parse(raw);
+          if (!obj || !obj.t) return null;
+          if (Date.now() - obj.t > 2 * 60 * 60 * 1000) return null;
+          return obj;
+        } catch (eR) { return null; }
+      }
+      function syncStatusChips() {
+        var cur = document.getElementById('filterStatus').value;
+        var payCount = items.filter(function (x) { return x.status === '請款中'; }).length;
+        document.querySelectorAll('#statusChips [data-status]').forEach(function (btn) {
+          var st = btn.getAttribute('data-status');
+          var active = st === cur || (st === 'open' && (cur === '待審' || cur === '待認領'));
+          if (st === '請款中') active = cur === '請款中';
+          if (st === 'open') active = cur === 'open' || cur === '待審' || cur === '待認領';
+          btn.classList.toggle('active', active);
+          if (st === '請款中') {
+            btn.textContent = payCount > 0
+              ? ('請款還沒送完（' + payCount + '）')
+              : '請款還沒送完';
+            btn.classList.toggle('has-pay', payCount > 0 || cur === '請款中');
+          }
+        });
+      }
+      function setFilterStatus(status, opts) {
+        var sel = document.getElementById('filterStatus');
+        if (!sel) return;
+        var next = status || 'open';
+        if (!Array.prototype.some.call(sel.options, function (o) { return o.value === next; })) {
+          next = 'open';
+        }
+        if (sel.value !== next) sel.value = next;
+        syncStatusChips();
+        if (!opts || opts.reload !== false) reload(opts);
       }
       function setLive(text, refreshing) {
         var el = document.getElementById('liveStatus');
@@ -641,24 +748,47 @@
       function renderList() {
         var box = document.getElementById('list');
         var summary = document.getElementById('listSummary');
+        var filterStatus = document.getElementById('filterStatus').value;
+        var payCount = items.filter(function (x) { return x.status === '請款中'; }).length;
+        syncStatusChips();
         if (!items.length) {
-          summary.textContent = '目前沒有符合條件的單據。';
-          box.innerHTML = '<p class="sub">傳圖後會出現在這裡。</p>';
+          if (filterStatus === '請款中') {
+            summary.textContent = '目前沒有「請款還沒送完」的單據。';
+            box.innerHTML = '<p class="sub">點「待處理」看全部；若以前點過請款、畫面卻空了，可切「已分類」找舊單再點請款。</p>';
+          } else if (filterStatus === '已分類') {
+            summary.textContent = '目前沒有已分類單據。';
+            box.innerHTML = '<p class="sub">這裡可找回以前標錯過或已處理的單；找到後可再點「請款」。</p>';
+          } else {
+            summary.textContent = '目前沒有符合條件的單據。';
+            box.innerHTML = '<p class="sub">傳圖後會出現在這裡。若剛從請款頁回來卻看不到，按上方「請款還沒送完」。</p>';
+          }
           return;
         }
-        summary.textContent = '共 ' + items.length + ' 筆（分類後會立刻從清單移除）';
+        summary.textContent = payCount
+          ? ('共 ' + items.length + ' 筆（其中 ' + payCount + ' 筆請款還沒送完，綠框標示）')
+          : ('共 ' + items.length + ' 筆（請款須送出成功才移出；報價等標完會移出）');
         box.innerHTML = items.map(function (it) {
           var unclaimed = it.status === '待認領';
+          var payPending = it.status === '請款中';
+          var payBtnLabel = payPending ? '繼續請款' : '請款';
+          var statusLabel = payPending ? '請款中・還沒送出' : (it.status || '');
+          var itemClass = 'item' +
+            (unclaimed ? ' unclaimed' : '') +
+            (payPending ? ' pay-pending' : '');
           return (
-            '<div class="item' + (unclaimed ? ' unclaimed' : '') + '" data-id="' + esc(it.quick_review_id) + '">' +
+            '<div class="' + itemClass + '" data-id="' + esc(it.quick_review_id) + '">' +
               mediaHtml(it) +
               '<div class="item-main">' +
                 '<div class="headline">' + esc(it.vendor_name || '（未對廠商）') + '</div>' +
                 '<div class="meta-row">' +
-                  '<span class="tag' + (unclaimed ? ' warn' : '') + '">' + esc(it.status || '') + '</span>' +
-                  (it.category ? ('<span class="tag">' + esc(it.category) + '</span>') : '') +
+                  '<span class="tag' + (payPending ? ' pay' : (unclaimed ? ' warn' : '')) + '">' +
+                    esc(statusLabel) + '</span>' +
+                  (it.category && !payPending ? ('<span class="tag">' + esc(it.category) + '</span>') : '') +
                   '<span class="tag">' + esc(it.source || '') + '</span>' +
                 '</div>' +
+                (payPending
+                  ? '<p class="pay-help">單據還在這裡。按「繼續請款」填表送出；送出成功後才會移走。</p>'
+                  : '') +
                 '<p class="time-line">' + esc(shortTime(it.created_at)) +
                   (it.created_by ? (' · ' + esc(it.created_by)) : '') + '</p>' +
                 '<p class="mono">' + esc(it.filename || '') + '</p>' +
@@ -669,7 +799,7 @@
                   '<select class="claim-vendor">' + vendorOptionsHtml(it.vendor_id || '') + '</select>' +
                 '</div>' +
                 '<div class="actions" data-actions>' +
-                  '<button type="button" class="btn btn-cat pay" data-cat="請款">請款</button>' +
+                  '<button type="button" class="btn btn-cat pay" data-cat="請款">' + payBtnLabel + '</button>' +
                   '<button type="button" class="btn btn-cat" data-cat="報價">報價</button>' +
                   '<button type="button" class="btn btn-cat" data-cat="出貨">出貨</button>' +
                   '<button type="button" class="btn btn-cat" data-cat="其他">其他</button>' +
@@ -753,6 +883,7 @@
         var unclaimed = row && row.status === '待認領';
         if ((category === '請款' || unclaimed) && !vendorId) {
           setMsg(unclaimed ? '待認領請先選擇廠商再分類' : '請款前請先選擇廠商');
+          setFlowBanner('warn', '請先選好廠商，再點請款。單據還在這一頁，沒有消失。');
           return;
         }
         busyId = id;
@@ -761,15 +892,23 @@
         if (btn) btn.textContent = '處理中…';
         setMsg('');
         setOk('');
+        if (category === '請款') {
+          setFlowBanner('', '正在標成「請款中」並開啟填表頁…單據會留在待處理，不會不見。');
+        }
 
         var prevItems = items.slice();
         var filterStatus = document.getElementById('filterStatus').value;
-        var leaveList = filterStatus === 'open' || filterStatus === '待審' || filterStatus === '待認領';
+        // 請款只標「請款中」、仍留待處理；其他類才從待處理移出
+        var leaveList = category !== '請款' &&
+          (filterStatus === 'open' || filterStatus === '待審' || filterStatus === '待認領' ||
+            filterStatus === '請款中');
         if (leaveList) {
           itemEl.classList.add('removing');
           items = items.filter(function (x) { return x.quick_review_id !== id; });
           document.getElementById('listSummary').textContent =
-            items.length ? ('共 ' + items.length + ' 筆（分類後會立刻從清單移除）') : '目前沒有符合條件的單據。';
+            items.length
+              ? ('共 ' + items.length + ' 筆（已標「' + category + '」，從待處理移出）')
+              : '目前沒有符合條件的單據。';
         }
 
         AccountingUi.action('快審分類 ' + category, 'start');
@@ -782,27 +921,53 @@
           if (!data.success) {
             items = prevItems;
             renderList();
-            setMsg(humanApiMsg(data.message || '分類失敗'));
+            var failHuman = humanApiMsg(data.message || '分類失敗');
+            setMsg(failHuman);
+            setFlowBanner('warn',
+              '這次沒標成功：' + esc(failHuman) +
+              '<br />單據還在列表裡，可再試一次。');
             AccountingUi.action('快審分類 ' + category, 'fail');
             return;
           }
-          setOk('已標為「' + category + '」');
           AccountingUi.action('快審分類 ' + category, 'ok');
-          cacheWrite(items, filterStatus);
-          if (category === '請款' && data.payment_url) {
-            var href = data.payment_url;
-            try {
-              var u = new URL(href, window.location.href);
-              href = u.pathname.replace(/^.*\/modules\/accounting\//, '') + u.search;
-            } catch (eUrl) {
-              href = 'payment_request.html?mode=payment&from=quick_review' +
-                (data.pending_token ? ('&pending=' + encodeURIComponent(data.pending_token)) : '') +
-                (vendorId ? ('&vendor_id=' + encodeURIComponent(vendorId)) : '');
+          if (category === '請款') {
+            if (row) {
+              row.status = '請款中';
+              row.category = '請款';
+              if (vendorId) row.vendor_id = vendorId;
             }
-            setOk('已標為請款，前往待付款申請（請盡快完成載入）…');
-            window.location.href = href;
+            cacheWrite(items, filterStatus);
+            renderList();
+            rememberPayResume({
+              quick_review_id: id,
+              vendor_id: vendorId || '',
+              vendor_name: (row && row.vendor_name) || ''
+            });
+            setOk('已標「請款中」：單據還在待處理，接著填請款表');
+            setFlowBanner('ok',
+              '已標成<strong>請款中・還沒送出</strong>。單據留在這一頁的待處理；' +
+              '接著開填表頁。若出錯或中途離開，回來按「請款還沒送完」或「繼續請款」即可。');
+            if (data.payment_url) {
+              var href = data.payment_url;
+              try {
+                var u = new URL(href, window.location.href);
+                href = u.pathname.replace(/^.*\/modules\/accounting\//, '') + u.search;
+              } catch (eUrl) {
+                href = 'payment_request.html?mode=payment&from=quick_review' +
+                  (data.pending_token ? ('&pending=' + encodeURIComponent(data.pending_token)) : '') +
+                  (vendorId ? ('&vendor_id=' + encodeURIComponent(vendorId)) : '') +
+                  ('&quick_review_id=' + encodeURIComponent(id));
+              }
+              window.setTimeout(function () { window.location.href = href; }, 280);
+            }
             return;
           }
+          setOk('已標為「' + category + '」' + (leaveList ? '（已從待處理移出）' : ''));
+          setFlowBanner(leaveList ? 'ok' : '',
+            leaveList
+              ? ('已標「' + esc(category) + '」，這筆已從待處理移出。標錯了可按上方「已分類」找回再重標。')
+              : '');
+          cacheWrite(items, filterStatus);
           if (!leaveList) {
             if (row) {
               row.status = '已分類';
@@ -813,11 +978,16 @@
             renderList();
           } else {
             itemEl.remove();
+            syncStatusChips();
           }
         } catch (e) {
           items = prevItems;
           renderList();
-          setMsg(humanApiMsg(e.message || String(e)));
+          var errHuman = humanApiMsg(e.message || String(e));
+          setMsg(errHuman);
+          setFlowBanner('warn',
+            '這次沒標成功：' + esc(errHuman) +
+            '<br />單據還在列表裡，可再試一次。');
           AccountingUi.action('快審分類 ' + category, 'fail');
         } finally {
           busyId = '';
@@ -856,7 +1026,23 @@
       });
 
       document.getElementById('reloadBtn').addEventListener('click', function () { reload(); });
-      document.getElementById('filterStatus').addEventListener('change', function () { reload(); });
+      document.getElementById('filterStatus').addEventListener('change', function () {
+        syncStatusChips();
+        reload();
+      });
+      document.getElementById('statusChips').addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-status]');
+        if (!btn) return;
+        var st = btn.getAttribute('data-status');
+        if (st === '請款中') {
+          setFlowBanner('', '這裡只顯示<strong>請款還沒送完</strong>的單。按「繼續請款」可再開填表頁。');
+        } else if (st === '已分類') {
+          setFlowBanner('', '「已分類」可找回以前標過的單（含部署前點請款就移走的）。找到後再點「請款」即可。');
+        } else {
+          setFlowBanner('', '');
+        }
+        setFilterStatus(st);
+      });
       document.getElementById('workTabSeg').addEventListener('click', function (e) {
         var btn = e.target.closest('[data-tab]');
         if (!btn) return;
@@ -929,7 +1115,32 @@
           fillArchiveDocTypes();
           fillVendorTradeFilter();
           var tabQ = '';
-          try { tabQ = new URLSearchParams(window.location.search).get('tab') || ''; } catch (eTab) {}
+          var statusQ = '';
+          var noticeQ = '';
+          try {
+            var bootParams = new URLSearchParams(window.location.search);
+            tabQ = bootParams.get('tab') || '';
+            statusQ = bootParams.get('status') || '';
+            noticeQ = bootParams.get('notice') || '';
+          } catch (eTab) {}
+          var resume = consumePayResume();
+          if (!statusQ && resume) statusQ = '請款中';
+          if (statusQ) {
+            var selBoot = document.getElementById('filterStatus');
+            if (Array.prototype.some.call(selBoot.options, function (o) { return o.value === statusQ; })) {
+              selBoot.value = statusQ;
+            }
+          }
+          if (noticeQ === 'pay_fail' || noticeQ === 'pay_back' || resume) {
+            var who = (resume && resume.vendor_name) ? ('（' + esc(resume.vendor_name) + '）') : '';
+            var failedBack = noticeQ === 'pay_fail' || (resume && resume.failed);
+            setFlowBanner(failedBack ? 'warn' : 'ok',
+              failedBack
+                ? '剛從請款頁回來' + who + '：填表還沒送出成功。<strong>單據沒消失</strong>，看下方綠框「請款中・還沒送出」，按「繼續請款」即可。'
+                : '歡迎回來' + who + '。還沒送出的請款會標<strong>請款中</strong>，按「繼續請款」接著做。');
+          } else if (statusQ === '請款中') {
+            setFlowBanner('', '正在顯示「請款還沒送完」的單據。');
+          }
           setWorkTab(tabQ === 'archive' ? 'archive' : 'review', false);
           // 先出殼：不要等主檔／清單，避免整頁卡在「載入中」
           showApp();
@@ -941,6 +1152,7 @@
             renderList();
             setLive('更新中…', true);
           }
+          syncStatusChips();
           // 先載清單；主檔（廠商）背景補，避免跟清單搶連線拖慢
           await reload({ silent: !!(cached && cached.items && cached.items.length) });
           if (typeof AccountingCache !== 'undefined') {
