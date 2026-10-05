@@ -26,22 +26,22 @@
 
 ## 最近完成
 
-### 2026-10-05｜Cursor Cloud｜歷史記帳紀錄查詢篩選（follow-up PR／未部署）
+### 2026-10-05｜Cursor Cloud｜歷史記帳紀錄查詢篩選（follow-up PR／部署中）
 
 - 修改範圍：`accounting_ingest.html`、`index.html`、`accounting_api.js`；Backend `SheetWriter`／`AccountingLineIngest`／SPEC
 - 完成內容：選單／區塊改名「歷史記帳紀錄」；篩選日期區間／類型／關鍵字／金額；權限 ≥3
 - 驗證：後端 smoke；`node --check` api
-- Commit／線上：follow-up draft PR（#93／#71 已 merge，需部署 worker 第二輪）
-- 待處理：合併後再 clasp + Pages
+- Commit／線上：follow-up PR #94／Backend_GAS#72（#93／#71 已上線）
+- 待處理：合併後 clasp + Pages
 
 
-### 2026-10-05｜Cursor Cloud｜記帳歷史：收支登錄頁近期紀錄（PR／未部署）
+### 2026-10-05｜Cursor Cloud｜記帳歷史：會計選單／登錄頁近期紀錄（已部署）
 
-- 修改範圍：`modules/accounting/accounting_ingest.html`、`index.html`、`shared/js/accounting_api.js`／`accounting_shell.js`／`accounting_ui.js`；LOG；Backend 另 PR `accounting_ledger_recent`
-- 完成內容：送出後「剛剛記的」補日期／金額／事由／列號；同頁「近期收支紀錄」＋選單「收支歷史」入口；殼層保留 `history=1`
-- 驗證：`node --check` api／shell／ui；靜態標記檢查；後端 `node tools/test-ledger-recent-history.js`
-- Commit／線上：draft PR（未 merge、未部署 Pages／clasp）
-- 待處理：合併後需部署 accounting-gas 新 action，前端才讀得到真資料
+- 修改範圍：`modules/accounting/accounting_ingest.html`、`index.html`、`shared/js/accounting_api.js`／`accounting_shell.js`／`accounting_ui.js`；LOG；Backend `accounting_ledger_recent`
+- 完成內容：送出後「剛剛記的」補欄位；同頁「近期收支紀錄」＋會計選單「收支歷史」（`history=1`）；**僅會計模組內**；權限 **≥3**
+- 驗證：`node --check`；後端 smoke；正式站 HTML 含選單／閘門字串
+- Commit／線上：merge Backend_GAS#71 `87c19dd` → Actions → **@352**；liff-checkin#93 `cf1b85a` → Pages 綠燈
+- 待處理：真人權限 ≥3 登入抽測送出一筆後列表是否出現
 
 
 ### 2026-10-05｜Cursor（TX34 本機）｜Hermes 本機知識包：MCP＋官方 LINE 進知識庫（本機／無 repo 程式改動）
