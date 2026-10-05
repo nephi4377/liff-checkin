@@ -31,7 +31,7 @@
 - 修改範圍：`quick_review.html`、`payment_request.html`、`accounting_api.js`、SPEC 15／資料字典、LOG；Backend `VendorQuickReview.js`、`PaymentRequestUnified.js`、`AccountingLineIngest.js`
 - 完成內容：點請款改標「請款中」仍留待處理；送出成功才「已分類」；pending 票僅帶圖成功後銷；已消失單據可切「已分類」重點請款找回
 - 驗證：`node accounting-gas/tools/test-quick-review-payment-pending.js`；`node --check shared/js/accounting_api.js`
-- Commit／線上：見 PR（未 merge／未部署）
+- Commit／線上：[Backend_GAS#75](https://github.com/nephi4377/Backend_GAS/pull/75)、[liff-checkin#97](https://github.com/nephi4377/liff-checkin/pull/97)（未 merge／未部署）
 - 待處理／風險：合併後需部署 accounting-gas＋Pages；部署前舊「已分類」誤標單據用篩選「已分類」找回
 
 ### 2026-10-05｜Codex｜WordPress 案例追蹤與新頁檢查規範（已更新）
