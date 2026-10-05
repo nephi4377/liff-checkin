@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=68"></script>
+  <script src="../../shared/js/accounting_api.js?v=69"></script>
   <script src="../../shared/js/accounting_cache.js?v=33"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=18"></script>
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
@@ -83,7 +83,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub">查詢試算表已入帳列。點一筆可看案號、圖片集等詳情。需權限 ≥3。</p>
+    <p class="sub">只顯示你自己記的帳。點一筆可看案號、圖片集等詳情。需權限 ≥3。</p>
 
     <div class="card" id="historyCard">
       <div class="hist-head">
@@ -116,9 +116,6 @@
           <input id="histKeyword" type="text" placeholder="例：廠商名、訂金" autocomplete="off" />
         </div>
         <div class="full">
-          <label class="hint" style="font-weight:500;display:flex;align-items:center;gap:6px;margin:0">
-            <input type="checkbox" id="historyMineOnly" /> 只看我記的
-          </label>
           <div class="hist-actions">
             <button type="button" class="btn-ghost" id="historySearchBtn">查詢</button>
             <button type="button" class="btn-ghost" id="historyClearBtn">清空條件</button>
@@ -380,11 +377,11 @@
         var type = (document.getElementById('histType').value || '').trim();
         var keyword = (document.getElementById('histKeyword').value || '').trim();
         var amountRaw = (document.getElementById('histAmount').value || '').trim();
-        var mineOnly = !!document.getElementById('historyMineOnly').checked;
+        // 後端強制本人；前端一律傳 mine_only（無開關）
         var filters = {
           limit: 50,
           months: 2,
-          mine_only: mineOnly
+          mine_only: true
         };
         if (dateFrom) filters.date_from = dateFrom;
         if (dateTo) filters.date_to = dateTo;
@@ -404,7 +401,6 @@
         document.getElementById('histType').value = '';
         document.getElementById('histKeyword').value = '';
         document.getElementById('histAmount').value = '';
-        document.getElementById('historyMineOnly').checked = false;
       }
 
       function loadLedgerHistory() {
@@ -422,17 +418,16 @@
             return;
           }
           var n = (data.items || []).length;
-          var bits = [];
+          var bits = ['本人'];
           if (filters.date_from || filters.date_to) {
             bits.push((filters.date_from || '…') + '～' + (filters.date_to || '…'));
           }
           if (filters.type) bits.push(filters.type);
           if (filters.keyword) bits.push('「' + filters.keyword + '」');
           if (filters.amount != null) bits.push('$' + filters.amount);
-          if (filters.mine_only) bits.push('只看我的');
           status.textContent = n
-            ? ('共 ' + n + ' 筆（新到舊）' + (bits.length ? ' · ' + bits.join(' · ') : ''))
-            : ('沒有符合的紀錄' + (bits.length ? '（' + bits.join(' · ') + '）' : ''));
+            ? ('共 ' + n + ' 筆（新到舊） · ' + bits.join(' · '))
+            : ('沒有符合的紀錄（' + bits.join(' · ') + '）');
           renderHistoryItems(data.items || []);
         }).catch(function (e) {
           status.textContent = (e && e.message) || '讀不到歷史記帳紀錄';
@@ -449,9 +444,6 @@
         });
         document.getElementById('historyClearBtn').addEventListener('click', function () {
           clearHistoryFilters();
-          loadLedgerHistory();
-        });
-        document.getElementById('historyMineOnly').addEventListener('change', function () {
           loadLedgerHistory();
         });
         document.getElementById('histKeyword').addEventListener('keydown', function (e) {
