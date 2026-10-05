@@ -22,7 +22,7 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| — | — | 目前無進行中工作 | — | — |
+| 2026-10-05 14:21 | Codex | WordPress 案例 GA4 追蹤與新頁檢查規範 | `SPEC/PORTFOLIO_GA4_TRACKING.md`、`AGENTS.md`、`SHARED_DEV_LOG.md` | 進行中 |
 
 ## 最近完成
 
