@@ -4,10 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>歷史記帳紀錄</title>
-  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=72"></script>
+  <script src="../../shared/js/accounting_api.js?v=73"></script>
   <script src="../../shared/js/accounting_cache.js?v=33"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=18"></script>
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
@@ -15,57 +15,114 @@
   <script src="../../shared/js/accounting_boot.js?v=9"></script>
   <style>
     h2 { margin: 0 0 4px; }
-    .sub { color: #555; font-size: 14px; margin: 0 0 12px; }
-    .card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .sub { color: #555; font-size: 14px; margin: 0 0 12px; line-height: 1.45; }
+    .card {
+      background: #fff; border-radius: 12px; padding: 14px;
+      margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      box-sizing: border-box; min-width: 0;
+    }
     label { display: block; margin-top: 0; font-weight: 600; font-size: 13px; }
-    .hidden { display: none; }
+    .hidden { display: none !important; }
     .nav { margin-bottom: 12px; font-size: 14px; }
     .nav a { color: #1a73e8; text-decoration: none; }
+    .hint { font-size: 12px; color: #777; margin-top: 4px; line-height: 1.4; }
+
     .hist-head {
-      display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px;
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 8px; margin-bottom: 10px; flex-wrap: wrap;
     }
     .hist-head strong { font-size: 15px; }
+
     #historyFilters {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin: 10px 0;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 12px;
+      margin: 0 0 10px;
     }
+    #historyFilters > * { min-width: 0; }
     #historyFilters .full { grid-column: 1 / -1; }
-    #historyFilters input, #historyFilters select {
-      width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box;
+    #historyFilters input,
+    #historyFilters select {
+      width: 100%; max-width: 100%; min-width: 0;
+      padding: 8px; margin-top: 4px; box-sizing: border-box;
       border: 1px solid #ccc; border-radius: 8px; font-size: 15px;
     }
-    #historyFilters .hist-actions {
-      display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px;
+    .hist-actions {
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 2px;
     }
     .btn-ghost {
-      width: auto; padding: 8px 12px; font-size: 14px; background: #e8eaed; color: #333;
-      border: none; border-radius: 8px; cursor: pointer; margin-top: 0;
+      width: auto; flex: 0 0 auto; padding: 8px 12px; font-size: 14px;
+      background: #e8eaed; color: #333; border: none; border-radius: 8px;
+      cursor: pointer; margin-top: 0; white-space: nowrap;
     }
-    #historyList { display: flex; flex-direction: column; gap: 8px; }
+    .btn-primary-hist {
+      background: #1a73e8; color: #fff;
+    }
+
+    #historyStatus {
+      font-size: 13px; color: #555; margin: 0 0 10px; line-height: 1.45;
+      padding: 8px 10px; background: #f8fafc; border-radius: 8px;
+      border: 1px solid #e8eaed;
+    }
+    #historyStatus.is-empty { color: #8a5a00; background: #fff8e8; border-color: #f0d9a8; }
+    #historyStatus.is-error { color: #8b1a1a; background: #fdecea; border-color: #f5c6c2; }
+    #historyStatus.is-ok { color: #1e3a5f; }
+
+    .hist-workspace {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+    .hist-list-card, .hist-detail-card { margin-bottom: 0; }
+
+    #historyList { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+
     .hist-item {
       border: 1px solid #e8eaed; border-radius: 10px; padding: 10px 12px; background: #fafafa;
       font-size: 13px; line-height: 1.45; cursor: pointer; text-align: left; width: 100%;
-      box-sizing: border-box; font-family: inherit;
+      box-sizing: border-box; font-family: inherit; min-width: 0;
     }
     .hist-item:hover, .hist-item:focus { border-color: #1a73e8; background: #f5f9ff; outline: none; }
     .hist-item.is-open { border-color: #1a73e8; background: #fff; box-shadow: 0 1px 4px rgba(26,115,232,.12); }
-    .hist-item .hist-top { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+    .hist-item .hist-top {
+      display: flex; flex-wrap: nowrap; gap: 8px; align-items: baseline;
+      justify-content: space-between; min-width: 0;
+    }
+    .hist-item .hist-top-left {
+      display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; min-width: 0;
+    }
     .hist-item .hist-type { font-weight: 700; }
     .hist-item .hist-type.income { color: #137333; }
     .hist-item .hist-type.expense { color: #c5221f; }
-    .hist-item .hist-amt { font-weight: 700; font-size: 15px; }
-    .hist-item .hist-meta { color: #555; margin-top: 4px; }
-    .hist-item .hist-loc { color: #777; font-size: 12px; margin-top: 4px; font-family: ui-monospace, monospace; }
+    .hist-item .hist-amt { font-weight: 700; font-size: 15px; flex: 0 0 auto; white-space: nowrap; }
+    .hist-item .hist-meta {
+      color: #555; margin-top: 4px;
+      overflow: hidden; text-overflow: ellipsis;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    }
+    .hist-item .hist-loc {
+      color: #777; font-size: 12px; margin-top: 4px;
+      font-family: ui-monospace, monospace; word-break: break-all;
+    }
     .hist-item .hist-hint { color: #1a73e8; font-size: 12px; margin-top: 6px; }
+
     .hist-detail {
       margin-top: 10px; padding-top: 10px; border-top: 1px solid #e8eaed;
       font-size: 13px; line-height: 1.5; color: #333;
     }
-    .hist-detail dl {
-      margin: 0; display: grid; grid-template-columns: 5.5em 1fr; gap: 4px 8px;
+    .hist-detail dl,
+    #historyDetailBody dl {
+      margin: 0;
+      display: grid;
+      grid-template-columns: minmax(4.5em, 6.5em) minmax(0, 1fr);
+      gap: 6px 10px;
     }
-    .hist-detail dt { color: #777; font-weight: 600; margin: 0; }
-    .hist-detail dd { margin: 0; word-break: break-word; }
-    .hist-detail .hist-detail-status { color: #666; font-size: 12px; margin: 0 0 8px; }
+    .hist-detail dt,
+    #historyDetailBody dt { color: #777; font-weight: 600; margin: 0; }
+    .hist-detail dd,
+    #historyDetailBody dd { margin: 0; word-break: break-word; min-width: 0; }
+    .hist-detail-status { color: #666; font-size: 12px; margin: 0 0 8px; }
     .hist-att-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
     .hist-att-thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
     .hist-att-thumbs button {
@@ -73,11 +130,42 @@
       width: 56px; height: 56px; overflow: hidden; cursor: pointer;
     }
     .hist-att-thumbs img { width: 56px; height: 56px; object-fit: cover; display: block; }
-    #historyStatus { font-size: 13px; color: #666; margin: 0; }
-    .hint { font-size: 12px; color: #777; margin-top: 4px; }
+
+    .hist-detail-placeholder {
+      margin: 0; color: #777; font-size: 14px; line-height: 1.5;
+    }
+    .hist-detail-card-title {
+      font-size: 15px; font-weight: 700; margin: 0 0 10px;
+    }
+
+    /* 手機：詳情嵌在列內；側欄隱藏 */
+    .hist-detail-card { display: none; }
+    .hist-item .hist-detail.hidden { display: none !important; }
+
+    @media (max-width: 559px) {
+      #historyFilters { grid-template-columns: 1fr; }
+    }
+
+    /* 桌機：列表＋側欄詳情 */
+    @media (min-width: 900px) {
+      .hist-workspace {
+        grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+        gap: 14px;
+      }
+      .hist-detail-card {
+        display: block;
+        position: sticky;
+        top: 12px;
+        max-height: calc(100vh - 24px);
+        overflow: auto;
+      }
+      /* 桌機用側欄，列內詳情收起 */
+      .hist-item .hist-detail,
+      .hist-item .hist-hint { display: none !important; }
+    }
   </style>
 </head>
-<body class="acct-page acct-page-form">
+<body class="acct-page acct-page-form acct-page-browse">
   <div id="loading">載入中…</div>
   <div id="app" class="hidden acct-main">
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
@@ -85,7 +173,7 @@
     <p class="sub" id="userLine">—</p>
     <p class="sub">只顯示你自己近 7 天內記的帳。點一筆可看案號、圖片集等詳情。需權限 ≥3。</p>
 
-    <div class="card" id="historyCard">
+    <div class="card" id="historyFiltersCard">
       <div class="hist-head">
         <strong>查詢條件</strong>
         <button type="button" class="btn-ghost" id="historyRefreshBtn">重新整理</button>
@@ -116,15 +204,28 @@
           <input id="histKeyword" type="text" placeholder="例：廠商名、訂金" autocomplete="off" />
         </div>
         <div class="full">
-          <p class="hint" style="margin:0 0 4px">日期區間最多 7 天；預設近 7 天。</p>
+          <p class="hint" style="margin:0 0 8px">日期區間最多 7 天；預設近 7 天。只看你本人記入的列。</p>
           <div class="hist-actions">
-            <button type="button" class="btn-ghost" id="historySearchBtn">查詢</button>
+            <button type="button" class="btn-ghost btn-primary-hist" id="historySearchBtn">查詢</button>
             <button type="button" class="btn-ghost" id="historyClearBtn">重設為近 7 天</button>
           </div>
         </div>
       </div>
-      <p id="historyStatus">載入中…</p>
-      <div id="historyList"></div>
+    </div>
+
+    <div class="hist-workspace">
+      <div class="card hist-list-card" id="historyListCard">
+        <div class="hist-head">
+          <strong>紀錄列表</strong>
+        </div>
+        <p id="historyStatus" class="is-ok">載入中…</p>
+        <div id="historyList"></div>
+      </div>
+      <aside class="card hist-detail-card" id="historyDetailCard" aria-live="polite">
+        <p class="hist-detail-card-title">明細</p>
+        <p class="hist-detail-placeholder" id="historyDetailPlaceholder">點左側一筆看案號、備註與圖片集。</p>
+        <div id="historyDetailBody" class="hidden"></div>
+      </aside>
     </div>
   </div>
 
@@ -132,6 +233,7 @@
     (function () {
       var sessionRef = null;
       var openHistoryKey = '';
+      var itemsByKey = {};
 
       function formatMoney(n) {
         var v = Number(n);
@@ -151,10 +253,31 @@
         return String(it.ingest_id || '');
       }
 
+      function isDesktopDetail() {
+        return window.matchMedia && window.matchMedia('(min-width: 900px)').matches;
+      }
+
       function driveThumbUrl(url) {
         var m = String(url || '').match(/\/d\/([^/]+)/);
         if (m) return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w200';
         return url;
+      }
+
+      function setStatus(text, kind) {
+        var status = document.getElementById('historyStatus');
+        status.textContent = text;
+        status.classList.remove('is-ok', 'is-empty', 'is-error');
+        status.classList.add(kind === 'error' ? 'is-error' : (kind === 'empty' ? 'is-empty' : 'is-ok'));
+      }
+
+      function clearSideDetail() {
+        var ph = document.getElementById('historyDetailPlaceholder');
+        var body = document.getElementById('historyDetailBody');
+        if (ph) ph.classList.remove('hidden');
+        if (body) {
+          body.classList.add('hidden');
+          body.innerHTML = '';
+        }
       }
 
       function renderHistoryDetailFields(detail) {
@@ -248,8 +371,26 @@
         renderHistoryAttachments(panel, merged);
       }
 
-      function loadHistoryDetailForItem(div, it) {
-        var panel = div.querySelector('.hist-detail');
+      function activeDetailPanel(rowEl) {
+        if (isDesktopDetail()) {
+          var ph = document.getElementById('historyDetailPlaceholder');
+          var body = document.getElementById('historyDetailBody');
+          if (ph) ph.classList.add('hidden');
+          if (body) body.classList.remove('hidden');
+          return body;
+        }
+        var panel = rowEl.querySelector('.hist-detail');
+        if (!panel) {
+          panel = document.createElement('div');
+          panel.className = 'hist-detail';
+          rowEl.appendChild(panel);
+        }
+        panel.classList.remove('hidden');
+        return panel;
+      }
+
+      function loadHistoryDetailForItem(rowEl, it) {
+        var panel = activeDetailPanel(rowEl);
         if (!panel) return;
         var status = panel.querySelector('.hist-detail-status');
         if (status) status.textContent = '載入詳情…';
@@ -297,9 +438,7 @@
         });
       }
 
-      function toggleHistoryDetail(div, it) {
-        var key = historyItemKey(it);
-        var wasOpen = div.classList.contains('is-open');
+      function clearRowSelection() {
         var box = document.getElementById('historyList');
         Array.prototype.forEach.call(box.querySelectorAll('.hist-item.is-open'), function (el) {
           el.classList.remove('is-open');
@@ -308,21 +447,22 @@
           var hint = el.querySelector('.hist-hint');
           if (hint) hint.textContent = '點開看詳情（案號／圖片集）';
         });
+      }
+
+      function toggleHistoryDetail(div, it) {
+        var key = historyItemKey(it);
+        var wasOpen = div.classList.contains('is-open');
+        clearRowSelection();
         if (wasOpen && openHistoryKey === key) {
           openHistoryKey = '';
+          clearSideDetail();
           return;
         }
         openHistoryKey = key;
         div.classList.add('is-open');
         var hint = div.querySelector('.hist-hint');
         if (hint) hint.textContent = '再點一次收合';
-        var panel = div.querySelector('.hist-detail');
-        if (!panel) {
-          panel = document.createElement('div');
-          panel.className = 'hist-detail';
-          div.appendChild(panel);
-        }
-        panel.classList.remove('hidden');
+        var panel = activeDetailPanel(div);
         fillHistoryDetailPanel(panel, it, null);
         var st = panel.querySelector('.hist-detail-status');
         if (st) st.textContent = '載入詳情…';
@@ -333,12 +473,17 @@
         var box = document.getElementById('historyList');
         box.innerHTML = '';
         openHistoryKey = '';
+        itemsByKey = {};
+        clearSideDetail();
         if (!items || !items.length) return;
         items.forEach(function (it) {
+          var key = historyItemKey(it);
+          itemsByKey[key] = it;
           var div = document.createElement('div');
           div.className = 'hist-item';
           div.setAttribute('role', 'button');
           div.tabIndex = 0;
+          div.dataset.key = key;
           var typeClass = it.type === '收入' ? 'income' : 'expense';
           var meta = [];
           if (it.party_name) meta.push(it.party_name);
@@ -350,8 +495,10 @@
           if (it.ingest_id) loc += ' · ' + String(it.ingest_id).slice(0, 8);
           div.innerHTML =
             '<div class="hist-top">' +
-              '<span class="hist-type ' + typeClass + '">' + escHtml(it.type || '—') + '</span>' +
-              '<span>' + escHtml(it.txn_date_display || it.txn_date || '—') + '</span>' +
+              '<div class="hist-top-left">' +
+                '<span class="hist-type ' + typeClass + '">' + escHtml(it.type || '—') + '</span>' +
+                '<span>' + escHtml(it.txn_date_display || it.txn_date || '—') + '</span>' +
+              '</div>' +
               '<span class="hist-amt">' + escHtml(formatMoney(it.amount)) + '</span>' +
             '</div>' +
             '<div class="hist-meta">' + escHtml(meta.join(' · ') || '—') + '</div>' +
@@ -462,33 +609,41 @@
       }
 
       function loadLedgerHistory() {
-        var status = document.getElementById('historyStatus');
-        status.textContent = '查詢中…';
+        setStatus('查詢中…', 'ok');
+        document.getElementById('historyList').innerHTML = '';
+        clearSideDetail();
         if (!sessionRef || typeof AccountingApi.accountingLedgerRecent !== 'function') {
-          status.textContent = '尚無法載入歷史（請從主控台／LINE 登入後再試）。';
+          setStatus('尚無法載入歷史（請從主控台／LINE 登入後再試）。', 'error');
           return Promise.resolve();
         }
         var filters = readHistoryFilters();
         return AccountingApi.accountingLedgerRecent(sessionRef, filters).then(function (data) {
           if (!data || data.success === false) {
-            status.textContent = (data && data.message) || '讀不到歷史記帳紀錄';
+            setStatus((data && data.message) || '讀不到歷史記帳紀錄', 'error');
             document.getElementById('historyList').innerHTML = '';
             return;
           }
           var n = (data.items || []).length;
-          var bits = ['本人', '近7天內'];
-          if (filters.date_from || filters.date_to) {
-            bits.push((filters.date_from || '…') + '～' + (filters.date_to || '…'));
-          }
+          var from = data.date_from || filters.date_from || '…';
+          var to = data.date_to || filters.date_to || '…';
+          var bits = ['本人', from + '～' + to];
           if (filters.type) bits.push(filters.type);
           if (filters.keyword) bits.push('「' + filters.keyword + '」');
           if (filters.amount != null) bits.push('$' + filters.amount);
-          status.textContent = n
-            ? ('共 ' + n + ' 筆（新到舊） · ' + bits.join(' · '))
-            : ('沒有符合的紀錄（' + bits.join(' · ') + '）');
+          if (n) {
+            setStatus('共 ' + n + ' 筆（新到舊） · ' + bits.join(' · '), 'ok');
+          } else {
+            var hint = (data.empty_hint && String(data.empty_hint).trim())
+              || ('近 ' + HISTORY_MAX_DAYS + ' 天內沒有你記的帳。可改日期後再查，或確認剛記入的日期落在區間內。');
+            setStatus(hint + '（' + bits.join(' · ') + '）', 'empty');
+          }
           renderHistoryItems(data.items || []);
         }).catch(function (e) {
-          status.textContent = (e && e.message) || '讀不到歷史記帳紀錄';
+          var msg = (e && e.message) || '讀不到歷史記帳紀錄';
+          if (/逾時|timeout|Abort|abort|等太久/i.test(msg)) {
+            msg = '查詢逾時。請稍後再按「查詢」；若仍失敗請回報（正式站修復部署後會較快）。';
+          }
+          setStatus(msg, 'error');
           document.getElementById('historyList').innerHTML = '';
         });
       }
@@ -510,10 +665,24 @@
             loadLedgerHistory();
           }
         });
+        if (window.matchMedia) {
+          window.matchMedia('(min-width: 900px)').addEventListener('change', function () {
+            if (!openHistoryKey) return;
+            var it = itemsByKey[openHistoryKey];
+            if (!it) return;
+            var row = null;
+            Array.prototype.forEach.call(document.querySelectorAll('.hist-item'), function (el) {
+              if (el.dataset.key === openHistoryKey) row = el;
+            });
+            if (row) {
+              clearRowSelection();
+              row.classList.add('is-open');
+              loadHistoryDetailForItem(row, it);            }
+          });
+        }
       }
 
-      (async function boot() {
-        applyDefaultHistoryDates();
+      (async function boot() {        applyDefaultHistoryDates();
         bindFilters();
         await AccountingBoot.run({
           minPermission: AccountingApi.SUPERVISOR_MIN_PERMISSION,
