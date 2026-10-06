@@ -32,15 +32,14 @@
     <p id="assertLine">—</p>
   </div>
   <div class="card">
-    <strong>列表（模擬）</strong>
+    <strong>列表（模擬：請款＋收支每一列都有鈕）</strong>
     <div id="list"></div>
   </div>
   <div class="card">
-    <strong>詳情置頂（模擬藍標收支）</strong>
+    <strong>詳情置頂（模擬新弘待付款請款）</strong>
     <div id="detail"></div>
   </div>
   <script>
-    // Mirror production gating (ledger_history.html hotfix)
     function isPaymentRequestItem(it) {
       return !!(it && (it.record_kind === 'payment_request' || it.payment_request_id) &&
         it.record_kind !== 'ledger');
@@ -50,7 +49,6 @@
     };
     function sessionPerm() { return Number(sessionRef.auth.permission || 0); }
     function sessionCanFlagDetail(detail) {
-      if (isPaymentRequestItem(detail)) return false;
       if (!sessionRef || !sessionRef.auth) return false;
       if (detail && detail.error_flagged) return false;
       if (sessionPerm() >= 3) return true;
@@ -62,19 +60,20 @@
       record_kind: 'ledger', record_kind_label: '收支登錄', type: '支出',
       amount: 1200, party_name: '測試廠商', desc: '測試／證明用',
       sheet: '2026-10', row: 9, ingest_id: 'lm_proof',
-      can_flag: false // even with API false, ≥3 must still show
+      can_flag: false
     };
     var payment = {
       record_kind: 'payment_request', record_kind_label: '待付款請款',
-      payment_request_id: 'PR_PROOF', type: '支出', amount: 5000,
-      party_name: '請款廠商', can_flag: false
+      payment_request_id: '568e45d0-6315-4f1d-b94c-13d84b717fe7',
+      type: '支出', amount: 2413, project_no: '726',
+      party_name: '新弘', can_flag: false
     };
 
     document.getElementById('permLine').textContent =
-      '模擬身分：Yang · 權限 ' + sessionPerm() + ' · ledger can_flag API=false 仍應顯示錯誤記帳標示';
+      '模擬身分：Yang · 權限 ' + sessionPerm() + ' · 請款＋收支 can_flag API=false 仍應顯示錯誤記帳標示';
 
     var list = document.getElementById('list');
-    [ledger, payment].forEach(function (it) {
+    [payment, ledger].forEach(function (it) {
       var kind = isPaymentRequestItem(it) ? 'payment' : 'ledger';
       var can = sessionCanFlagDetail(it);
       var div = document.createElement('div');
@@ -82,9 +81,10 @@
       div.innerHTML =
         '<span class="hist-kind-badge is-' + kind + '">' + it.record_kind_label + '</span> ' +
         it.party_name + ' · $' + it.amount +
+        (it.project_no ? (' · 案' + it.project_no) : '') +
         (can
           ? '<div class="hist-list-flag"><button type="button" class="btn-flag-warn" data-role="list-flag">錯誤記帳標示</button></div>'
-          : '<div style="margin-top:8px;color:#777;font-size:12px">（請款唯讀，無標示鈕）</div>');
+          : '');
       list.appendChild(div);
     });
 
@@ -93,18 +93,16 @@
     bar.className = 'hist-mod-bar';
     bar.innerHTML = '<button type="button" class="btn-flag-warn" data-role="flag-error">錯誤記帳標示</button>';
     detail.appendChild(bar);
-    detail.insertAdjacentHTML('beforeend', '<p>來源：收支登錄 · 金額 $1200 ·（欄位在按鈕下方）</p>');
+    detail.insertAdjacentHTML('beforeend',
+      '<p>來源：待付款請款 · 新弘 · $2,413 · 案726 · 請款單 568e45d0…</p>');
 
     var listFlags = document.querySelectorAll('[data-role="list-flag"]').length;
     var detailFlag = document.querySelectorAll('[data-role="flag-error"]').length;
-    var payHasFlag = false;
-    Array.prototype.forEach.call(list.children, function (el, i) {
-      if (i === 1 && el.querySelector('[data-role="list-flag"]')) payHasFlag = true;
-    });
-    var ok = listFlags === 1 && detailFlag === 1 && !payHasFlag && sessionCanFlagDetail(ledger);
+    var ok = listFlags === 2 && detailFlag === 1 &&
+      sessionCanFlagDetail(payment) && sessionCanFlagDetail(ledger);
     document.getElementById('assertLine').innerHTML = ok
-      ? '<span class="ok">PASS</span>：收支列表 1 顆「錯誤記帳標示」；詳情置頂 1 顆；請款 0 顆'
-      : '<span class="bad">FAIL</span> listFlags=' + listFlags + ' detailFlag=' + detailFlag + ' payHasFlag=' + payHasFlag;
+      ? '<span class="ok">PASS</span>：請款＋收支列表各 1 顆「錯誤記帳標示」；請款詳情置頂 1 顆'
+      : '<span class="bad">FAIL</span> listFlags=' + listFlags + ' detailFlag=' + detailFlag;
     document.title = ok ? 'PASS flag DOM proof' : 'FAIL flag DOM proof';
   </script>
 </body>

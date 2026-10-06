@@ -6,11 +6,11 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <title>歷史記帳紀錄</title>
-  <!-- cache-bust 2026-10-06-flag-btn：錯誤記帳標示鈕置頂＋頁內原因（勿用 prompt） -->
+  <!-- cache-bust 2026-10-06-pay-flag：待付款請款＋收支每一列錯誤記帳標示；勿框選 -->
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=93"></script>
+  <script src="../../shared/js/accounting_api.js?v=94"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <script src="../../shared/js/accounting_ui.js?v=32"></script>
@@ -340,7 +340,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub" id="pageModeHint">權限 ≥3 可查<strong>區間內全部人</strong>的<strong>待付款請款</strong>與<strong>收支登錄</strong>。預設近 7 天；列表<strong>只依新增／送出時間</strong>新→舊，<strong>不是交易日</strong>。「只看我記的」為選用篩選（暫不強制）。<strong>「錯誤記帳標示」只在收支登錄</strong>（列表上方橘色區／列內大鈕／詳情置頂）；黃標請款唯讀。刪除 ≥4；修改 &gt;4。</p>
+    <p class="sub" id="pageModeHint">權限 ≥3 可查<strong>區間內全部人</strong>的<strong>待付款請款</strong>與<strong>收支登錄</strong>。預設近 7 天；列表<strong>只依新增／送出時間</strong>新→舊。<strong>每一列</strong>（請款＋收支）都可按「錯誤記帳標示」並填原因——由你決定哪筆錯，系統不先框選。刪除已標示 ≥4；修改收支 &gt;4。</p>
 
     <div class="card" id="historyFiltersCard">
       <div class="hist-head">
@@ -419,7 +419,7 @@
   <div id="histFlagReasonMask" class="hist-flag-reason-mask hidden" role="dialog" aria-modal="true" aria-labelledby="histFlagReasonTitle">
     <div class="hist-flag-reason-sheet">
       <h3 id="histFlagReasonTitle">錯誤記帳標示</h3>
-      <p>請填寫錯誤記帳原因（必填）。標示後權限 4 才能刪除已標示的帳。請款列不能標示。</p>
+      <p>請填寫錯誤記帳原因（必填）。待付款請款與收支登錄皆可標示；標示後權限 ≥4 才能刪除已標示的收支帳。</p>
       <label for="histFlagReasonInput" class="hidden">錯誤記帳原因</label>
       <textarea id="histFlagReasonInput" maxlength="120" placeholder="例：金額打錯、對象選錯" autocomplete="off"></textarea>
       <div class="hist-flag-reason-actions">
@@ -580,10 +580,9 @@
       }
 
       function sessionCanFlagDetail(detail) {
-        if (isPaymentRequestItem(detail)) return false;
+        // 老闆：請款＋收支每一筆 ≥3 都可「錯誤記帳標示」（已標示除外）；不要系統先框選
         if (!sessionRef || !sessionRef.auth) return false;
         if (detail && detail.error_flagged) return false;
-        // 優先信任本機／HUB 權限 ≥3；勿因 API can_flag:false（身分軟失敗／舊欄位）把鈕藏掉
         if (sessionPerm() >= 3) return true;
         if (detail && detail.can_flag === true) return true;
         return false;
@@ -690,11 +689,15 @@
         }
 
         function locOpts() {
-          return {
+          var o = {
             sheet: merged.sheet || (summaryItem && summaryItem.sheet),
             row: merged.row != null ? merged.row : (summaryItem && summaryItem.row),
-            ingest_id: merged.ingest_id || (summaryItem && summaryItem.ingest_id)
+            ingest_id: merged.ingest_id || (summaryItem && summaryItem.ingest_id),
+            payment_request_id: merged.payment_request_id ||
+              (summaryItem && summaryItem.payment_request_id) || '',
+            record_kind: isPaymentRequestItem(merged) ? 'payment_request' : 'ledger'
           };
+          return o;
         }
 
         if (canFlag) {
@@ -1064,15 +1067,16 @@
         panel.appendChild(status);
 
         var merged = Object.assign({}, summaryItem || {}, detail || {});
-        // 請款唯讀：無標註鈕（避免與收支混淆）
+        // 請款＋收支：先放「錯誤記帳標示」（≥3 置頂可按）；請款仍無刪除／改帳
         if (isPaymentRequestItem(merged)) {
+          buildModerationActions(panel, summaryItem, detail || merged);
           var fieldsPay = document.createElement('div');
           fieldsPay.innerHTML = renderHistoryDetailFields(merged);
           panel.appendChild(fieldsPay);
           var payHint = document.createElement('p');
           payHint.className = 'hint';
           payHint.style.margin = '10px 0 0';
-          payHint.textContent = '這是待付款請款（尚未入收支帳）。審核／匯款請到「請款審核」或「廠商待匯款」；此頁只供查閱，不能標示／刪除／修改。「錯誤記帳標示」請改點收支登錄列（列表上方橘色區）。';
+          payHint.textContent = '這是待付款請款。可按上方「錯誤記帳標示」並填原因；審核／匯款仍走「請款審核」或「廠商待匯款」。';
           panel.appendChild(payHint);
           var links = document.createElement('div');
           links.className = 'hist-edit-actions';
@@ -1091,7 +1095,6 @@
           panel.appendChild(links);
           return;
         }
-        // 收支：先放錯誤記帳標示／刪除／修改（置頂可按），再放欄位與圖片
         buildEditForm(panel, summaryItem, detail || merged);
         var fields = document.createElement('div');
         fields.innerHTML = renderHistoryDetailFields(merged);
@@ -1125,9 +1128,13 @@
         var status = panel.querySelector('.hist-detail-status');
         var reqKey = historyItemKey(it);
 
-        // 待付款請款：列表欄位即詳情；不打收支詳情 API
+        // 待付款請款：列表欄位即詳情；不打收支詳情 API（仍可錯誤記帳標示）
         if (isPaymentRequestItem(it)) {
-          if (status) status.textContent = '待付款請款（唯讀）';
+          if (status) {
+            status.textContent = sessionCanFlagDetail(it)
+              ? '待付款請款 · 可按「錯誤記帳標示」'
+              : (it.error_flagged ? '待付款請款 · 已標示錯誤' : '待付款請款');
+          }
           return;
         }
         if (status) status.textContent = '載入詳情…';
@@ -1244,7 +1251,7 @@
       }
 
       function bindHistoryItemRow(div, it) {
-        var canListFlag = !isPaymentRequestItem(it) && sessionCanFlagDetail(it);
+        var canListFlag = sessionCanFlagDetail(it);
         if (canListFlag) {
           var listFlagBtn = div.querySelector('[data-role="list-flag"]');
           if (listFlagBtn) {
@@ -1260,12 +1267,18 @@
                   listFlagBtn.disabled = false;
                   return null;
                 }
-                return AccountingApi.accountingLedgerFlag(sessionRef, {
-                  sheet: it.sheet,
-                  row: it.row,
-                  ingest_id: it.ingest_id,
-                  reason: reason
-                }).then(function (data) {
+                var payload = {
+                  reason: reason,
+                  record_kind: isPaymentRequestItem(it) ? 'payment_request' : 'ledger'
+                };
+                if (isPaymentRequestItem(it)) {
+                  payload.payment_request_id = it.payment_request_id;
+                } else {
+                  payload.sheet = it.sheet;
+                  payload.row = it.row;
+                  payload.ingest_id = it.ingest_id;
+                }
+                return AccountingApi.accountingLedgerFlag(sessionRef, payload).then(function (data) {
                   listFlagBtn.disabled = false;
                   if (!data || !data.success) {
                     window.alert((data && data.message) || '標示失敗');
@@ -1292,12 +1305,11 @@
         });
       }
 
-      function buildHistoryItemEl(it, opts) {
-        opts = opts || {};
+      function buildHistoryItemEl(it) {
         var key = historyItemKey(it);
         itemsByKey[key] = it;
         var div = document.createElement('div');
-        div.className = 'hist-item' + (opts.pin ? ' is-flag-pin-row' : '');
+        div.className = 'hist-item';
         div.setAttribute('role', 'button');
         div.tabIndex = 0;
         div.dataset.key = key;
@@ -1320,7 +1332,7 @@
         }
         var recorded = it.recorded_at_display || it.recorded_at || '';
         if (it.error_flagged) div.classList.add('is-flagged');
-        var canListFlag = !isPaymentRequestItem(it) && sessionCanFlagDetail(it);
+        var canListFlag = sessionCanFlagDetail(it);
         div.innerHTML =
           '<div class="hist-top">' +
             '<div class="hist-top-left">' +
@@ -1349,40 +1361,13 @@
           (canListFlag
             ? ('<div class="hist-list-flag">' +
               '<button type="button" class="btn-flag-warn" data-role="list-flag">錯誤記帳標示</button>' +
-              '<span class="hist-list-flag-hint">點這顆 → 填原因 → 確認（請款列沒有這顆）</span>' +
+              '<span class="hist-list-flag-hint">點這顆 → 填原因 → 確認</span>' +
               '</div>')
             : '') +
-          '<div class="hist-hint">' +
-            (kind === 'payment' ? '點開看詳情（請款唯讀，無標示）' : '點開看詳情（上方也可錯誤記帳標示）') +
-          '</div>' +
+          '<div class="hist-hint">點開看詳情（上方也可錯誤記帳標示）</div>' +
           '<div class="hist-detail hidden"></div>';
         bindHistoryItemRow(div, it);
         return div;
-      }
-
-      function renderFlagPin(flaggable) {
-        var pin = document.getElementById('historyFlagPin');
-        if (!pin) return;
-        pin.innerHTML = '';
-        if (!flaggable || !flaggable.length) {
-          pin.classList.add('hidden');
-          return;
-        }
-        pin.classList.remove('hidden');
-        var title = document.createElement('p');
-        title.className = 'hist-flag-pin-title';
-        title.textContent = '錯誤記帳標示（' + flaggable.length + ' 筆收支可按）';
-        var sub = document.createElement('p');
-        sub.className = 'hist-flag-pin-sub';
-        sub.textContent = '請款列沒有這顆鈕。要標示錯誤請按下面橘色「錯誤記帳標示」大鈕，填原因後確認。';
-        var list = document.createElement('div');
-        list.className = 'hist-flag-pin-list';
-        flaggable.forEach(function (it) {
-          list.appendChild(buildHistoryItemEl(it, { pin: true }));
-        });
-        pin.appendChild(title);
-        pin.appendChild(sub);
-        pin.appendChild(list);
       }
 
       function renderHistoryItems(items) {
@@ -1391,32 +1376,15 @@
         openHistoryKey = '';
         itemsByKey = {};
         clearSideDetail();
+        // 不置頂／不框選：每一列依 recorded_at 原序顯示，請款＋收支都有「錯誤記帳標示」
         var pin = document.getElementById('historyFlagPin');
         if (pin) {
           pin.innerHTML = '';
           pin.classList.add('hidden');
         }
         if (!items || !items.length) return;
-        var flaggable = [];
-        var seenFlagKey = {};
         items.forEach(function (it) {
-          if (!isPaymentRequestItem(it) && sessionCanFlagDetail(it)) {
-            var fk = historyItemKey(it);
-            if (!seenFlagKey[fk]) {
-              seenFlagKey[fk] = true;
-              flaggable.push(it);
-            }
-          }
-        });
-        // 置頂可標示區：避免「全部」被請款列淹沒時找不到橘色大鈕
-        renderFlagPin(flaggable);
-        items.forEach(function (it) {
-          var key = historyItemKey(it);
-          // 已在置頂區出現的可標示列，下方列表略過避免重複兩顆鈕
-          if (seenFlagKey[key] && !isPaymentRequestItem(it) && sessionCanFlagDetail(it)) {
-            return;
-          }
-          box.appendChild(buildHistoryItemEl(it, {}));
+          box.appendChild(buildHistoryItemEl(it));
         });
       }
 
@@ -1515,7 +1483,7 @@
         if (hint) {
           hint.innerHTML = on
             ? '目前為<strong>只看我記的</strong>（選用篩選）＋近 7 天區間。列表含<strong>待付款請款</strong>與<strong>收支登錄</strong>，<strong>只依新增／送出時間</strong>新→舊。需權限 ≥3。'
-            : '權限 ≥3 可查<strong>區間內全部人</strong>的<strong>待付款請款</strong>與<strong>收支登錄</strong>。預設近 7 天；列表<strong>只依新增／送出時間</strong>新→舊。「錯誤記帳標示」／刪除／修改只適用收支登錄。';
+            : '權限 ≥3 可查<strong>區間內全部人</strong>的<strong>待付款請款</strong>與<strong>收支登錄</strong>。預設近 7 天；列表<strong>只依新增／送出時間</strong>新→舊。<strong>每一列</strong>（請款＋收支）都可「錯誤記帳標示」並填原因；刪除已標示 ≥4；修改收支 &gt;4。';
         }
       }
 
@@ -1635,22 +1603,13 @@
             bits.push('藍' + (data.ledger_count != null ? data.ledger_count : '?') +
               '/黃' + (data.payment_count != null ? data.payment_count : '?'));
           }
-          var flaggableN = data.flaggable_count;
-          if (flaggableN == null) {
-            flaggableN = (data.items || []).filter(function (it) {
-              return !isPaymentRequestItem(it) && sessionCanFlagDetail(it);
-            }).length;
-          }
-          if (flaggableN > 0) bits.push('可標示' + flaggableN);
           if (data.elapsed_ms != null && isFinite(Number(data.elapsed_ms))) {
             bits.push((Number(data.elapsed_ms) / 1000).toFixed(1) + 's');
           }
           var listEl = document.getElementById('historyList');
           if (n) {
             setStatus(
-              (flaggableN > 0
-                ? ('共 ' + n + ' 筆 · 列表上方橘色區有「錯誤記帳標示」大鈕（' + flaggableN + '）· ')
-                : ('共 ' + n + ' 筆（此區間無可標示的收支；請款列不能標示）· ')) +
+              '共 ' + n + ' 筆 · 每一列可按「錯誤記帳標示」（請款＋收支；填原因）· ' +
               bits.join(' · '),
               'ok'
             );
