@@ -6,11 +6,11 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <title>歷史記帳紀錄</title>
-  <!-- cache-bust 2026-10-06-recent-timeout：近期收支掃表加速；排序仍只依 recorded_at；≥3 全部人 -->
+  <!-- cache-bust 2026-10-06-mixed-history：歷史同時顯示待付款請款＋收支登錄；排序仍只依 recorded_at；≥3 全部人 -->
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=88"></script>
+  <script src="../../shared/js/accounting_api.js?v=89"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <script src="../../shared/js/accounting_ui.js?v=32"></script>
@@ -96,6 +96,39 @@
     }
     .hist-mine-toggle.is-on:focus {
       box-shadow: inset 4px 0 0 #1a73e8, 0 0 0 3px rgba(26,115,232,.35);
+    }
+
+    .hist-item .hist-kind-badge {
+      display: inline-block; font-size: 11px; font-weight: 700; line-height: 1.2;
+      padding: 2px 7px; border-radius: 6px; white-space: nowrap;
+    }
+    .hist-item .hist-kind-badge.is-ledger {
+      background: #e8f0fe; color: #174ea6; border: 1px solid #aecbfa;
+    }
+    .hist-item .hist-kind-badge.is-payment {
+      background: #fef7e0; color: #8a5a00; border: 1px solid #f9ab00;
+    }
+    .hist-item .hist-status-badge {
+      display: inline-block; font-size: 11px; font-weight: 600; color: #5f6368;
+      padding: 2px 6px; border-radius: 6px; background: #f1f3f4;
+    }
+    .hist-kind-tabs {
+      grid-column: 1 / -1;
+      display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 2px;
+    }
+    .hist-kind-tab {
+      flex: 1 1 auto; min-width: 5.5em; padding: 10px 12px;
+      border: 1px solid #dadce0; border-radius: 10px; background: #fff;
+      font-size: 14px; font-weight: 700; color: #3c4043; cursor: pointer;
+      font-family: inherit; text-align: center;
+    }
+    .hist-kind-tab.is-active {
+      border-color: #1a73e8; background: #e8f0fe; color: #174ea6;
+      box-shadow: inset 0 -3px 0 #1a73e8;
+    }
+    .hist-kind-tab:focus { outline: none; box-shadow: 0 0 0 3px rgba(26,115,232,.28); }
+    .hist-kind-tab.is-active:focus {
+      box-shadow: inset 0 -3px 0 #1a73e8, 0 0 0 3px rgba(26,115,232,.28);
     }
 
     #historyStatus {
@@ -248,7 +281,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub" id="pageModeHint">權限 ≥3 可查<strong>區間內全部人</strong>的帳。預設近 7 天；列表<strong>只依新增時間（你按下送出的時間）</strong>新→舊，<strong>不是交易日</strong>。「只看我記的」為選用篩選（暫不強制）。點一筆可看案號、圖片集。權限：標註錯誤 ≥3；刪除已標註 ≥4；修改記帳需 &gt;4。</p>
+    <p class="sub" id="pageModeHint">權限 ≥3 可查<strong>區間內全部人</strong>的<strong>待付款請款</strong>與<strong>收支登錄</strong>。預設近 7 天；列表<strong>只依新增／送出時間</strong>新→舊，<strong>不是交易日</strong>。「只看我記的」為選用篩選（暫不強制）。點一筆可看詳情。標註／刪除／修改<strong>只適用收支登錄</strong>（標註 ≥3；刪除 ≥4；修改 &gt;4）。</p>
 
     <div class="card" id="historyFiltersCard">
       <div class="hist-head">
@@ -256,6 +289,12 @@
         <button type="button" class="btn-ghost" id="historyRefreshBtn">重新整理</button>
       </div>
       <div id="historyFilters">
+        <div class="hist-kind-tabs" role="tablist" aria-label="紀錄類型">
+          <button type="button" class="hist-kind-tab is-active" data-kind="all" role="tab" aria-selected="true">全部</button>
+          <button type="button" class="hist-kind-tab" data-kind="payment_request" role="tab" aria-selected="false">待付款請款</button>
+          <button type="button" class="hist-kind-tab" data-kind="ledger" role="tab" aria-selected="false">收支登錄</button>
+        </div>
+        <input type="hidden" id="histRecordKind" value="all" />
         <button type="button" class="hist-mine-toggle" id="historyMineToggle"
           aria-pressed="false" title="選用：只顯示本人記入的帳（預設關＝看全部）">
           <span class="hist-mine-copy">
@@ -290,7 +329,7 @@
           <input id="histKeyword" type="text" placeholder="例：廠商名、訂金" autocomplete="off" />
         </div>
         <div class="full">
-          <p class="hint" style="margin:0 0 8px">近 7／30 天<strong>只顯示有「新增時間」戳記</strong>的帳（你送出的時間），不是交易日；列表依新增時間新到舊。戳記上線前的舊列不會出現在此區間。</p>
+          <p class="hint" style="margin:0 0 8px">近 7／30 天依<strong>新增／送出時間</strong>（不是交易日）。列表標籤可分辨「待付款請款」與「收支登錄」。請款時間戳＝主檔最後更新（送出／審核更新）。</p>
           <div class="hist-actions">
             <button type="button" class="btn-ghost btn-primary-hist" id="historySearchBtn">查詢</button>
             <button type="button" class="btn-ghost" id="historyClearBtn">重設為近 7 天</button>
@@ -337,8 +376,21 @@
 
       function historyItemKey(it) {
         if (!it) return '';
+        if (it.record_kind === 'payment_request' || it.payment_request_id) {
+          return 'pr:' + String(it.payment_request_id || it.ingest_id || '');
+        }
         if (it.sheet && it.row) return String(it.sheet) + '#' + String(it.row);
         return String(it.ingest_id || '');
+      }
+
+      function isPaymentRequestItem(it) {
+        return !!(it && (it.record_kind === 'payment_request' || it.payment_request_id) &&
+          it.record_kind !== 'ledger');
+      }
+
+      function recordKindLabel(it) {
+        if (isPaymentRequestItem(it)) return it.record_kind_label || '待付款請款';
+        return (it && it.record_kind_label) || '收支登錄';
       }
 
       function isDesktopDetail() {
@@ -370,18 +422,26 @@
 
       function renderHistoryDetailFields(detail) {
         detail = detail || {};
+        var isPay = isPaymentRequestItem(detail);
         var rows = [
-          ['類型', detail.type || '—'],
+          ['來源', recordKindLabel(detail)],
+          ['類型', detail.type || (isPay ? '支出' : '—')],
           ['交易日', detail.txn_date_display || detail.txn_date || '—'],
-          ['新增時間', detail.recorded_at_display || detail.recorded_at || '—'],
+          [isPay ? '送出／更新' : '新增時間', detail.recorded_at_display || detail.recorded_at || '—'],
           ['金額', formatMoney(detail.amount)],
           ['對象', detail.party_name || '—'],
-          ['事由', detail.desc || '—'],
-          ['案號', detail.project_no || '（未填）'],
-          ['付款方式', detail.payment_method || '—']
+          ['事由', detail.desc || detail.item_desc || '—'],
+          ['案號', detail.project_no || '（未填）']
         ];
+        if (isPay) {
+          rows.splice(2, 0, ['請款狀態', detail.status_label || detail.review_status || '—']);
+          if (detail.doc_type) rows.push(['單據類型', detail.doc_type]);
+          if (detail.payment_status) rows.push(['匯款狀態', detail.payment_status]);
+        } else {
+          rows.push(['付款方式', detail.payment_method || '—']);
+        }
         if (detail.edited_at_display || detail.edited_at) {
-          rows.splice(3, 0, ['上次修改', detail.edited_at_display || detail.edited_at]);
+          rows.splice(isPay ? 4 : 3, 0, ['上次修改', detail.edited_at_display || detail.edited_at]);
         }
         if (detail.error_flagged) {
           var flagLabel = '已標註錯誤';
@@ -397,9 +457,14 @@
           }).join('、')]);
         }
         if (detail.note) rows.push(['備註', detail.note]);
-        var loc = (detail.sheet || '—') + ' 第' + (detail.row || '?') + '列';
-        if (detail.ingest_id) loc += ' · ' + detail.ingest_id;
-        rows.push(['位置', loc]);
+        if (isPay) {
+          var pid = detail.payment_request_id || '—';
+          rows.push(['請款單', pid]);
+        } else {
+          var loc = (detail.sheet || '—') + ' 第' + (detail.row || '?') + '列';
+          if (detail.ingest_id) loc += ' · ' + detail.ingest_id;
+          rows.push(['位置', loc]);
+        }
 
         var dl = '<dl>';
         rows.forEach(function (pair) {
@@ -414,6 +479,7 @@
       }
 
       function sessionCanEditDetail(detail) {
+        if (isPaymentRequestItem(detail)) return false;
         if (!sessionRef || !sessionRef.auth) return false;
         if (detail && detail.can_edit === true) return true;
         if (detail && detail.can_edit === false) return false;
@@ -422,6 +488,7 @@
       }
 
       function sessionCanFlagDetail(detail) {
+        if (isPaymentRequestItem(detail)) return false;
         if (!sessionRef || !sessionRef.auth) return false;
         if (detail && detail.can_flag === true) return true;
         if (detail && detail.can_flag === false) return false;
@@ -430,6 +497,7 @@
       }
 
       function sessionCanDeleteDetail(detail) {
+        if (isPaymentRequestItem(detail)) return false;
         if (!sessionRef || !sessionRef.auth) return false;
         if (detail && detail.can_delete === true) return true;
         if (detail && detail.can_delete === false) return false;
@@ -833,6 +901,29 @@
         var fields = document.createElement('div');
         fields.innerHTML = renderHistoryDetailFields(merged);
         panel.appendChild(fields);
+        if (isPaymentRequestItem(merged)) {
+          var payHint = document.createElement('p');
+          payHint.className = 'hint';
+          payHint.style.margin = '10px 0 0';
+          payHint.textContent = '這是待付款請款（尚未入收支帳）。審核／匯款請到「請款審核」或「廠商待匯款」；此頁只供查閱，不能標註／刪除／修改。';
+          panel.appendChild(payHint);
+          var links = document.createElement('div');
+          links.className = 'hist-edit-actions';
+          var reviewA = document.createElement('a');
+          reviewA.className = 'btn-ghost';
+          reviewA.href = 'ledger_review.html';
+          reviewA.textContent = '開啟請款審核';
+          links.appendChild(reviewA);
+          if (String(merged.review_status || '') === '已審') {
+            var finA = document.createElement('a');
+            finA.className = 'btn-ghost';
+            finA.href = 'vendor_payment_finance.html';
+            finA.textContent = '開啟廠商待匯款';
+            links.appendChild(finA);
+          }
+          panel.appendChild(links);
+          return;
+        }
         renderHistoryAttachments(panel, merged);
         buildEditForm(panel, summaryItem, detail || merged);
       }
@@ -861,8 +952,14 @@
         // 點列立刻用列表摘要（案號／金額／事由已在列表）；勿乾等詳情 API
         fillHistoryDetailPanel(panel, it, null);
         var status = panel.querySelector('.hist-detail-status');
-        if (status) status.textContent = '載入詳情…';
         var reqKey = historyItemKey(it);
+
+        // 待付款請款：列表欄位即詳情；不打收支詳情 API
+        if (isPaymentRequestItem(it)) {
+          if (status) status.textContent = '待付款請款（唯讀）';
+          return;
+        }
+        if (status) status.textContent = '載入詳情…';
 
         function stillCurrent() {
           return openHistoryKey === reqKey && panel.isConnected;
@@ -991,23 +1088,36 @@
           div.tabIndex = 0;
           div.dataset.key = key;
           var typeClass = it.type === '收入' ? 'income' : 'expense';
+          var kind = isPaymentRequestItem(it) ? 'payment' : 'ledger';
+          var kindLabel = recordKindLabel(it);
           var meta = [];
           if (it.party_name) meta.push(it.party_name);
           if (it.desc && it.desc !== it.party_name) meta.push(it.desc);
           if (it.project_no) meta.push('案號 ' + it.project_no);
           if (it.payment_method) meta.push(it.payment_method);
           if (it.note) meta.push(it.note);
-          var loc = (it.sheet || '—') + ' 第' + (it.row || '?') + '列';
-          if (it.ingest_id) loc += ' · ' + String(it.ingest_id).slice(0, 8);
+          var loc = '';
+          if (kind === 'payment') {
+            loc = '請款單 ' + String(it.payment_request_id || '').slice(0, 8);
+            if (it.status_label) loc += ' · ' + it.status_label;
+          } else {
+            loc = (it.sheet || '—') + ' 第' + (it.row || '?') + '列';
+            if (it.ingest_id) loc += ' · ' + String(it.ingest_id).slice(0, 8);
+          }
           var recorded = it.recorded_at_display || it.recorded_at || '';
           if (it.error_flagged) div.classList.add('is-flagged');
           div.innerHTML =
             '<div class="hist-top">' +
               '<div class="hist-top-left">' +
-                '<span class="hist-type ' + typeClass + '">' + escHtml(it.type || '—') + '</span>' +
+                '<span class="hist-kind-badge is-' + kind + '">' + escHtml(kindLabel) + '</span>' +
+                '<span class="hist-type ' + typeClass + '">' + escHtml(it.type || (kind === 'payment' ? '支出' : '—')) + '</span>' +
+                (kind === 'payment' && it.status_label
+                  ? ('<span class="hist-status-badge">' + escHtml(it.status_label) + '</span>')
+                  : '') +
                 (it.error_flagged ? '<span class="hist-flag-badge">錯誤標註</span>' : '') +
                 (recorded
-                  ? ('<span style="color:#174ea6;font-weight:600">新增 ' + escHtml(recorded) + '</span>')
+                  ? ('<span style="color:#174ea6;font-weight:600">' +
+                    (kind === 'payment' ? '送出 ' : '新增 ') + escHtml(recorded) + '</span>')
                   : ('<span style="color:#5f6368">新增時間（舊資料無戳記）</span>')) +
               '</div>' +
               '<span class="hist-amt">' + escHtml(formatMoney(it.amount)) + '</span>' +
@@ -1015,7 +1125,7 @@
             '<div class="hist-loc">交易日 ' + escHtml(it.txn_date_display || it.txn_date || '—') + '</div>' +
             '<div class="hist-meta">' + escHtml(meta.join(' · ') || '—') + '</div>' +
             '<div class="hist-loc">' + escHtml(loc) + '</div>' +
-            '<div class="hist-hint">點開看詳情（案號／圖片集）</div>' +
+            '<div class="hist-hint">點開看詳情</div>' +
             '<div class="hist-detail hidden"></div>';
           div.addEventListener('click', function (e) {
             if (e.target.closest && (e.target.closest('.hist-att-row') || e.target.closest('.btn-ghost') || e.target.closest('.hist-edit-form') || e.target.closest('.btn-edit-primary') || e.target.closest('.btn-flag-warn') || e.target.closest('.btn-delete-danger') || e.target.closest('.hist-edit-actions'))) return;
@@ -1120,14 +1230,24 @@
         if (state) state.textContent = on ? '開' : '關';
         if (sub) {
           sub.textContent = on
-            ? '開啟中：只顯示登入帳號本人記入的帳。關閉後回到區間內全部人。'
-            : '關閉中：顯示區間內全部人記入的帳。需要時再開啟只看本人。';
+            ? '開啟中：只顯示登入帳號本人送出的請款／記入的帳。關閉後回到區間內全部人。'
+            : '關閉中：顯示區間內全部人的請款與收支。需要時再開啟只看本人。';
         }
         if (hint) {
           hint.innerHTML = on
-            ? '目前為<strong>只看我記的</strong>（選用篩選）＋近 7 天區間。列表<strong>只依新增時間（按下送出）</strong>新→舊，不是交易日。需權限 ≥3。'
-            : '權限 ≥3 可查<strong>區間內全部人</strong>的帳。預設近 7 天；列表<strong>只依新增時間（按下送出）</strong>新→舊，不是交易日。「只看我記的」為選用篩選（暫不強制）。點一筆可看案號、圖片集。';
+            ? '目前為<strong>只看我記的</strong>（選用篩選）＋近 7 天區間。列表含<strong>待付款請款</strong>與<strong>收支登錄</strong>，<strong>只依新增／送出時間</strong>新→舊。需權限 ≥3。'
+            : '權限 ≥3 可查<strong>區間內全部人</strong>的<strong>待付款請款</strong>與<strong>收支登錄</strong>。預設近 7 天；列表<strong>只依新增／送出時間</strong>新→舊。「只看我記的」為選用篩選（暫不強制）。標註／刪除／修改只適用收支登錄。';
         }
+      }
+
+      function syncRecordKindTabs() {
+        var kind = (document.getElementById('histRecordKind').value || 'all').trim() || 'all';
+        Array.prototype.forEach.call(document.querySelectorAll('.hist-kind-tab'), function (btn) {
+          var k = btn.getAttribute('data-kind') || 'all';
+          var on = k === kind;
+          btn.classList.toggle('is-active', on);
+          btn.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
       }
 
       function readHistoryFilters() {
@@ -1136,12 +1256,14 @@
         var keyword = (document.getElementById('histKeyword').value || '').trim();
         var amountRaw = (document.getElementById('histAmount').value || '').trim();
         var mineOnly = !!document.getElementById('historyMineOnly').checked;
+        var recordKind = (document.getElementById('histRecordKind').value || 'all').trim() || 'all';
         // 不傳 months：分頁依交易日存放，掃幾個月由後端依記帳時間窗決定（避免近7天只掃1月漏倒填）
         var filters = {
           limit: 50,
           mine_only: mineOnly,
           date_from: dates.from,
-          date_to: dates.to
+          date_to: dates.to,
+          record_kind: recordKind
         };
         if (type) filters.type = type;
         if (keyword) filters.keyword = keyword;
@@ -1157,6 +1279,8 @@
         document.getElementById('histType').value = '';
         document.getElementById('histKeyword').value = '';
         document.getElementById('histAmount').value = '';
+        document.getElementById('histRecordKind').value = 'all';
+        syncRecordKindTabs();
         resetMineOnlyDefault();
       }
 
@@ -1220,20 +1344,24 @@
           var to = data.date_to || filters.date_to || '…';
           // 空狀態標籤必須跟後端實際 mine_only 一致，避免誤寫「全部人／所有人」
           var mineOnly = data.mine_only !== undefined ? !!data.mine_only : !!filters.mine_only;
-          var bits = [mineOnly ? '只看我記的' : '所有人紀錄', from + '～' + to];
+          var kind = data.record_kind || filters.record_kind || 'all';
+          var kindLabel = kind === 'payment_request'
+            ? '待付款請款'
+            : (kind === 'ledger' ? '收支登錄' : '全部來源');
+          var bits = [kindLabel, mineOnly ? '只看我記的' : '所有人紀錄', from + '～' + to];
           if (filters.type) bits.push(filters.type);
           if (filters.keyword) bits.push('「' + filters.keyword + '」');
           if (filters.amount != null) bits.push('$' + filters.amount);
           var listEl = document.getElementById('historyList');
           if (n) {
-            setStatus('共 ' + n + ' 筆（依新增時間＝你送出的時間，新到舊；不是交易日） · ' + bits.join(' · '), 'ok');
+            setStatus('共 ' + n + ' 筆（依送出／新增時間新到舊；標籤可辨來源） · ' + bits.join(' · '), 'ok');
             // 只依 recorded_at：後端已排；前端再防禦一次（LINE 舊 JS／誤排兜底）。禁止 txn_date。
             renderHistoryItems(sortHistoryByRecordedAtOnly(data.items || []));
           } else {
             var hint = (data.empty_hint && String(data.empty_hint).trim())
               || (mineOnly
-                ? ('這段記帳時間沒有你送出的帳。可改查近 ' + HISTORY_MAX_DAYS + ' 天，或（需要時）開啟所有人紀錄。')
-                : ('這段記帳時間沒有符合條件的帳。可改查近 ' + HISTORY_MAX_DAYS + ' 天，或改關鍵字後再查。'));
+                ? ('這段時間沒有你的' + kindLabel + '。可改查近 ' + HISTORY_MAX_DAYS + ' 天，或（需要時）開啟所有人紀錄。')
+                : ('這段時間沒有符合條件的' + kindLabel + '。可改查近 ' + HISTORY_MAX_DAYS + ' 天，或改關鍵字後再查。'));
             setStatus(hint + '（' + bits.join(' · ') + '）', 'empty');
             listEl.innerHTML = '';
             listEl.appendChild(renderEmptyExpandActions(mineOnly, from, to));
@@ -1254,6 +1382,14 @@
           box.checked = !box.checked;
           syncMineToggleUi();
           loadLedgerHistory();
+        });
+        Array.prototype.forEach.call(document.querySelectorAll('.hist-kind-tab'), function (btn) {
+          btn.addEventListener('click', function () {
+            var kind = btn.getAttribute('data-kind') || 'all';
+            document.getElementById('histRecordKind').value = kind;
+            syncRecordKindTabs();
+            loadLedgerHistory();
+          });
         });
         document.getElementById('historyRefreshBtn').addEventListener('click', function () {
           loadLedgerHistory();
@@ -1296,6 +1432,7 @@
       (async function boot() {
         applyDefaultHistoryDates();
         resetMineOnlyDefault();
+        syncRecordKindTabs();
         bindFilters();
         await AccountingBoot.run({
           minPermission: AccountingApi.SUPERVISOR_MIN_PERMISSION,
