@@ -22,7 +22,7 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| — | — | 目前無進行中工作 | — | — |
+| 2026-10-06 | Cursor Cloud | 歷史記帳「錯誤記帳標示」鈕要讓 Yang≥3 一眼可見可按 | `ledger_history.html`、`accounting_api.js?v=93`、smoke；Backend 回傳 flaggable_count | 進行中 |
 
 ## 最近完成
 
