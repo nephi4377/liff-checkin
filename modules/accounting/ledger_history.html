@@ -7,10 +7,10 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=79"></script>
+  <script src="../../shared/js/accounting_api.js?v=80"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
-  <script src="../../shared/js/accounting_ui.js?v=26"></script>
+  <script src="../../shared/js/accounting_ui.js?v=27"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=11"></script>
   <style>
@@ -439,49 +439,71 @@
       function loadHistoryDetailForItem(rowEl, it) {
         var panel = activeDetailPanel(rowEl);
         if (!panel) return;
+        // 點列立刻用列表摘要（案號／金額／事由已在列表）；勿乾等詳情 API
+        fillHistoryDetailPanel(panel, it, null);
         var status = panel.querySelector('.hist-detail-status');
         if (status) status.textContent = '載入詳情…';
+        var reqKey = historyItemKey(it);
+
+        function stillCurrent() {
+          return openHistoryKey === reqKey && panel.isConnected;
+        }
 
         function apply(detail) {
+          if (!stillCurrent()) return;
           fillHistoryDetailPanel(panel, it, detail);
         }
 
-        function fallbackAttachments() {
+        function loadAttachmentsSoft(baseDetail) {
+          if (!stillCurrent()) return;
           if (!sessionRef || typeof AccountingLightbox === 'undefined' || !it.ingest_id) {
-            apply(it);
+            apply(baseDetail || it);
             return;
           }
+          if (baseDetail && baseDetail.attachment_urls && baseDetail.attachment_urls.length) {
+            apply(baseDetail);
+            return;
+          }
+          // 圖片集另載；失敗不噴錯誤回報、不擋已顯示的摘要
           AccountingLightbox.fetchAttachmentUrls(sessionRef, { ingest_id: it.ingest_id }).then(function (urls) {
-            apply(Object.assign({}, it, {
+            if (!stillCurrent()) return;
+            apply(Object.assign({}, baseDetail || it, {
               attachment_urls: urls || [],
               has_attachments: !!(urls && urls.length)
             }));
           }).catch(function () {
-            apply(it);
+            if (!stillCurrent()) return;
+            apply(baseDetail || it);
             var st = panel.querySelector('.hist-detail-status');
             if (st) st.textContent = '詳情已顯示；圖片集讀不到時可稍後再點開。';
           });
         }
 
         if (!sessionRef || typeof AccountingApi.accountingLedgerDetail !== 'function') {
-          fallbackAttachments();
+          loadAttachmentsSoft(it);
           return;
         }
 
+        // lean 詳情：補完整備註／店別，不掃附件索引（15s；逾時軟失敗）
         AccountingApi.accountingLedgerDetail(sessionRef, {
           sheet: it.sheet,
           row: it.row,
-          ingest_id: it.ingest_id
+          ingest_id: it.ingest_id,
+          skip_attachments: true
         }).then(function (data) {
+          if (!stillCurrent()) return;
           if (data && data.success && data.item) {
-            apply(data.item);
+            loadAttachmentsSoft(data.item);
             return;
           }
-          fallbackAttachments();
+          loadAttachmentsSoft(it);
           var st = panel.querySelector('.hist-detail-status');
           if (st && data && data.message) st.textContent = data.message;
         }).catch(function () {
-          fallbackAttachments();
+          if (!stillCurrent()) return;
+          loadAttachmentsSoft(it);
+          var st = panel.querySelector('.hist-detail-status');
+          if (st) st.textContent = '已用列表摘要顯示；完整備註稍後再試。';
         });
       }
 

@@ -28,6 +28,8 @@ var AccountingApi = (function () {
   var DEFAULT_TIMEOUT_MS = 60000;
   /** 驗證身分專用：主控台已帶 uid 時不應乾等 60 秒 */
   var AUTH_ME_TIMEOUT_MS = 20000;
+  /** 記帳詳情：列表已有摘要；逾時應軟失敗，勿乾等 60s */
+  var LEDGER_DETAIL_TIMEOUT_MS = 15000;
   function logApiFailure_(actionName, err, notify) {
     if (actionName === 'accounting_error_report' || actionName === 'accounting_client_log' || actionName === 'agent_inbox_staff_error') return;
     if (typeof AccountingUi === 'undefined' || !AccountingUi.reportFailure) return;
@@ -160,7 +162,10 @@ var AccountingApi = (function () {
           AccountingUi.apiEnd(actionName, Date.now() - t0, false, err.message || raw);
         } catch (eEnd) {}
       }
-      logApiFailure_(actionName, err, false);
+      // 記帳詳情逾時：列表摘要已顯示，勿再打錯誤回報 API
+      var softDetailAbort = actionName === 'accounting_ledger_detail' &&
+        ((e && e.name === 'AbortError') || /abort|逾時/i.test(raw + ' ' + ((err && err.message) || '')));
+      if (!softDetailAbort) logApiFailure_(actionName, err, false);
       throw err;
     } finally {
       if (timer) clearTimeout(timer);
@@ -178,6 +183,9 @@ var AccountingApi = (function () {
       body.action === 'vendor_register_auth_me'
     )) {
       ms = AUTH_ME_TIMEOUT_MS;
+    }
+    if (timeoutMs === undefined && body && body.action === 'accounting_ledger_detail') {
+      ms = LEDGER_DETAIL_TIMEOUT_MS;
     }
     return postToUrl_(GAS_API, body, ms, '會計');
   }
@@ -1254,7 +1262,7 @@ var AccountingApi = (function () {
       // 後端已改尾端分塊；本人／區間篩選仍可能多掃幾個月。給 90s（低於毛利 120s，避免自己掃更慢時硬撐太久）
       return post(body, 90000);
     },
-    /** 歷史記帳單筆詳情（權限 ≥3；sheet+row 或 ingest_id） */
+    /** 歷史記帳單筆詳情（權限 ≥3；sheet+row 或 ingest_id；預設略過附件索引） */
     accountingLedgerDetail: function (sessionOrToken, opts) {
       opts = opts || {};
       var body = {
@@ -1263,6 +1271,10 @@ var AccountingApi = (function () {
       if (opts.sheet) body.sheet = opts.sheet;
       if (opts.row != null && opts.row !== '') body.row = opts.row;
       if (opts.ingest_id) body.ingest_id = opts.ingest_id;
+      // 預設 lean：點列先用列表＋精簡詳情；圖片集另載
+      if (opts.include_attachments) body.include_attachments = true;
+      else if (opts.skip_attachments === false) body.skip_attachments = false;
+      else body.skip_attachments = true;
       if (sessionOrToken && typeof resolveAuth === 'function') {
         try {
           var auth = resolveAuth(sessionOrToken);
@@ -1275,7 +1287,7 @@ var AccountingApi = (function () {
           }
         } catch (eAuth) {}
       }
-      return post(body);
+      return post(body, opts.timeoutMs != null ? opts.timeoutMs : LEDGER_DETAIL_TIMEOUT_MS);
     },
     /** 收支登錄表單後置（毛利／附件）；主列已成功後背景呼叫即可 */
     accountingFormFlushDeferred: function (sessionOrToken, deferredToken) {
