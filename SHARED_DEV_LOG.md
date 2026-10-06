@@ -22,9 +22,18 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-10-06 | Cursor Cloud | 歷史記帳混合來源 90s／無藍標 hotfix | ledger_history／accounting_api；Backend SheetWriter／Ingest／VendorPayment | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-10-06｜Cursor Cloud｜歷史記帳混合來源逾時／無藍標 hotfix（已上線 @396）
+
+- 修改範圍：`ledger_history.html`、`accounting_api.js`、SPEC 15、LOG；Backend SheetWriter／Ingest／VendorPayment／SPEC／test
+- 根因：雙來源先掃 12 月收支（可到 50s）再讀請款主檔兩次 → 破前端 90s Abort；藍標收支進不來（只剩黃標或整頁逾時）
+- 完成內容：請款主檔先讀一次；收支共用 ~28s／軟截止 18s／每頁 2 塊；前端不重試 HTML 404；`api?v=92`；狀態列藍／黃筆數
+- 驗證：單元煙測 OK；auth-fail `ledger_recent` ~2.1s（先前同呼叫可卡 ~59s）；正式站含 `v=92`／藍黃 badge
+- Commit／線上：[liff#129](https://github.com/nephi4377/liff-checkin/pull/129) → Pages [`37437189549`](https://github.com/nephi4377/liff-checkin/actions/runs/37437189549)；[GAS#108](https://github.com/nephi4377/Backend_GAS/pull/108) → [`37437184427`](https://github.com/nephi4377/Backend_GAS/actions/runs/37437184427) clasp **@396**
+- 待處理：Yang 關舊分頁重開 → 全部 → 應見黃標＋藍標；狀態列有藍N/黃M；點藍標列可開詳情／標註錯誤
 
 ### 2026-10-06｜Cursor Cloud｜歷史記帳「標註錯誤」可見＋必填原因 hotfix
 
