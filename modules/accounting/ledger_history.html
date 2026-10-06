@@ -6,16 +6,16 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <title>歷史記帳紀錄</title>
-  <!-- cache-bust 2026-10-06-recorded-at-only：LINE WebView 勿留舊 sorter -->
+  <!-- cache-bust 2026-10-06-query-remake：≥3 可看全部；排序只依 recorded_at；勿強制 mine_only -->
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=84"></script>
+  <script src="../../shared/js/accounting_api.js?v=85"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
-  <script src="../../shared/js/accounting_ui.js?v=30"></script>
+  <script src="../../shared/js/accounting_ui.js?v=31"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
-  <script src="../../shared/js/accounting_boot.js?v=13"></script>
+  <script src="../../shared/js/accounting_boot.js?v=14"></script>
   <style>
     h2 { margin: 0 0 4px; }
     .sub { color: #555; font-size: 14px; margin: 0 0 12px; line-height: 1.45; }
@@ -232,7 +232,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub" id="pageModeHint">預設<strong>只看我記的</strong>＋近 7 天（依<strong>新增時間＝你送出的時間</strong>，不是交易日）。列表<strong>依新增時間</strong>新→舊。「所有人紀錄」需手動開啟。點一筆可看案號、圖片集；有權限可<strong>修改已送出</strong>的帳。需權限 ≥3。</p>
+    <p class="sub" id="pageModeHint">權限 ≥3 可查<strong>區間內全部人</strong>的帳。預設近 7 天；列表<strong>只依新增時間（你按下送出的時間）</strong>新→舊，<strong>不是交易日</strong>。「只看我記的」為選用篩選（暫不強制）。點一筆可看案號、圖片集；有權限可<strong>修改已送出</strong>的帳。</p>
 
     <div class="card" id="historyFiltersCard">
       <div class="hist-head">
@@ -240,15 +240,15 @@
         <button type="button" class="btn-ghost" id="historyRefreshBtn">重新整理</button>
       </div>
       <div id="historyFilters">
-        <button type="button" class="hist-mine-toggle is-on" id="historyMineToggle"
-          aria-pressed="true" title="預設只看本人；點此才開啟所有人紀錄">
+        <button type="button" class="hist-mine-toggle" id="historyMineToggle"
+          aria-pressed="false" title="選用：只顯示本人記入的帳（預設關＝看全部）">
           <span class="hist-mine-copy">
-            <span class="hist-mine-title">只看我記的</span>
-            <span class="hist-mine-sub" id="historyMineSub">開啟中：只顯示登入帳號本人記入的帳。若要看其他人，請關閉此開關（開啟所有人紀錄）。</span>
+            <span class="hist-mine-title">只看我記的（選用）</span>
+            <span class="hist-mine-sub" id="historyMineSub">關閉中：顯示區間內全部人記入的帳。需要時再開啟只看本人。</span>
           </span>
-          <span class="hist-mine-state" id="historyMineState" aria-hidden="true">開</span>
+          <span class="hist-mine-state" id="historyMineState" aria-hidden="true">關</span>
         </button>
-        <input type="checkbox" id="historyMineOnly" class="hidden" checked tabindex="-1" aria-hidden="true" />
+        <input type="checkbox" id="historyMineOnly" class="hidden" tabindex="-1" aria-hidden="true" />
         <div>
           <label for="histDateFrom">記帳時間起</label>
           <input id="histDateFrom" type="date" />
@@ -277,7 +277,7 @@
           <p class="hint" style="margin:0 0 8px">近 7／30 天<strong>只顯示有「新增時間」戳記</strong>的帳（你送出的時間），不是交易日；列表依新增時間新到舊。戳記上線前的舊列不會出現在此區間。</p>
           <div class="hist-actions">
             <button type="button" class="btn-ghost btn-primary-hist" id="historySearchBtn">查詢</button>
-            <button type="button" class="btn-ghost" id="historyClearBtn">重設為近 7 天＋本人</button>
+            <button type="button" class="btn-ghost" id="historyClearBtn">重設為近 7 天</button>
             <button type="button" class="btn-ghost" id="historyExpand30Btn">近 30 天</button>
           </div>
         </div>
@@ -924,8 +924,9 @@
         return applyHistoryDates(HISTORY_DEFAULT_DAYS);
       }
 
-      function forceMineOnlyOn() {
-        document.getElementById('historyMineOnly').checked = true;
+      /** 暫緩強制僅限個人：預設關＝≥3 可看全部；開關為選用篩選 */
+      function resetMineOnlyDefault() {
+        document.getElementById('historyMineOnly').checked = false;
         syncMineToggleUi();
       }
 
@@ -961,13 +962,13 @@
         if (state) state.textContent = on ? '開' : '關';
         if (sub) {
           sub.textContent = on
-            ? '開啟中：只顯示登入帳號本人記入的帳。若要看其他人，請關閉此開關（開啟所有人紀錄）。'
-            : '已開啟「所有人紀錄」：區間內含其他人記入的帳。可再點此列改回只看本人。';
+            ? '開啟中：只顯示登入帳號本人記入的帳。關閉後回到區間內全部人。'
+            : '關閉中：顯示區間內全部人記入的帳。需要時再開啟只看本人。';
         }
         if (hint) {
           hint.innerHTML = on
-            ? '預設<strong>只看我記的</strong>＋近 7 天（依<strong>新增時間＝你送出的時間</strong>，不是交易日）。列表<strong>依新增時間</strong>新→舊。「所有人紀錄」需手動開啟。點一筆可看案號、圖片集。需權限 ≥3。'
-            : '目前為<strong>所有人紀錄</strong>（已手動開啟）。區間與排序仍依新增時間（你送出的時間），不是交易日。可點上方「只看我記的」改回本人。需權限 ≥3。';
+            ? '目前為<strong>只看我記的</strong>（選用篩選）＋近 7 天區間。列表<strong>只依新增時間（按下送出）</strong>新→舊，不是交易日。需權限 ≥3。'
+            : '權限 ≥3 可查<strong>區間內全部人</strong>的帳。預設近 7 天；列表<strong>只依新增時間（按下送出）</strong>新→舊，不是交易日。「只看我記的」為選用篩選（暫不強制）。';
         }
       }
 
@@ -998,7 +999,7 @@
         document.getElementById('histType').value = '';
         document.getElementById('histKeyword').value = '';
         document.getElementById('histAmount').value = '';
-        forceMineOnlyOn();
+        resetMineOnlyDefault();
       }
 
       function renderEmptyExpandActions(mineOnly, from, to) {
@@ -1032,7 +1033,7 @@
         var btnReset = document.createElement('button');
         btnReset.type = 'button';
         btnReset.className = 'btn-ghost';
-        btnReset.textContent = '重設近 7 天＋本人';
+        btnReset.textContent = '重設近 7 天';
         btnReset.addEventListener('click', function () {
           clearHistoryFilters();
           loadLedgerHistory();
@@ -1136,7 +1137,7 @@
 
       (async function boot() {
         applyDefaultHistoryDates();
-        forceMineOnlyOn();
+        resetMineOnlyDefault();
         bindFilters();
         await AccountingBoot.run({
           minPermission: AccountingApi.SUPERVISOR_MIN_PERMISSION,
@@ -1144,7 +1145,7 @@
           preloadBootstrap: false,
           onReady: async function (sess) {
             sessionRef = sess;
-            forceMineOnlyOn();
+            resetMineOnlyDefault();
             await loadLedgerHistory();
           }
         });
