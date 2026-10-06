@@ -9,7 +9,7 @@ var root = path.join(__dirname, '..');
 var html = fs.readFileSync(path.join(root, 'ledger_history.html'), 'utf8');
 var api = fs.readFileSync(path.join(root, '../../shared/js/accounting_api.js'), 'utf8');
 
-assert(html.indexOf('accounting_api.js?v=89') >= 0, 'cache bust v=89');
+assert(html.indexOf('accounting_api.js?v=91') >= 0, 'cache bust v=91');
 assert(html.indexOf('data-kind="all"') >= 0, 'tab all');
 assert(html.indexOf('data-kind="payment_request"') >= 0, 'tab payment_request');
 assert(html.indexOf('data-kind="ledger"') >= 0, 'tab ledger');

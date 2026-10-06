@@ -1335,13 +1335,18 @@ var AccountingApi = (function () {
       }
       return post(body, opts.timeoutMs != null ? opts.timeoutMs : 60000);
     },
-    /** 標註錯誤記帳（權限 ≥3） */
+    /** 標註錯誤記帳（權限 ≥3；必填 reason／error_reason） */
     accountingLedgerFlag: function (sessionOrToken, opts) {
       opts = opts || {};
       var body = { action: 'accounting_ledger_flag' };
       if (opts.sheet) body.sheet = opts.sheet;
       if (opts.row != null && opts.row !== '') body.row = opts.row;
       if (opts.ingest_id) body.ingest_id = opts.ingest_id;
+      var reason = String(opts.reason || opts.error_reason || opts.flag_reason || '').trim();
+      if (reason) {
+        body.reason = reason;
+        body.error_reason = reason;
+      }
       if (sessionOrToken && typeof resolveAuth === 'function') {
         try {
           var auth = resolveAuth(sessionOrToken);

@@ -26,6 +26,15 @@
 
 ## 最近完成
 
+### 2026-10-06｜Cursor Cloud｜歷史記帳「標註錯誤」可見＋必填原因 hotfix
+
+- 修改範圍：`ledger_history.html`、`accounting_api.js`、`accounting_nav.js`、`index.html`、SPEC 15、LOG、smoke test；Backend SheetWriter／Ingest
+- 完成內容：藍標列表／詳情置頂可按「標註錯誤」；必填錯誤原因寫入 `[error_flag:… reason:…]`；列表／詳情顯示原因；`api?v=91`
+- 驗證：flag／mixed／GAS flag smoke OK
+- Commit／線上：liff#128／GAS#107 → 待 merge 部署
+- 待處理：Yang 重開 → 收支登錄 → 標註錯誤 → 輸入原因
+
+
 ### 2026-10-06｜Cursor Cloud｜歷史記帳雙來源：待付款請款＋收支登錄（已上線 @393）
 
 - 修改範圍：`ledger_history.html`、`accounting_api.js`、SPEC 15；Backend `VendorPaymentModule`／`AccountingLineIngest`／SPEC
