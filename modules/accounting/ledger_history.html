@@ -10,12 +10,12 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=85"></script>
+  <script src="../../shared/js/accounting_api.js?v=86"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
-  <script src="../../shared/js/accounting_ui.js?v=31"></script>
+  <script src="../../shared/js/accounting_ui.js?v=32"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
-  <script src="../../shared/js/accounting_boot.js?v=14"></script>
+  <script src="../../shared/js/accounting_boot.js?v=15"></script>
   <style>
     h2 { margin: 0 0 4px; }
     .sub { color: #555; font-size: 14px; margin: 0 0 12px; line-height: 1.45; }
@@ -232,7 +232,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub" id="pageModeHint">權限 ≥3 可查<strong>區間內全部人</strong>的帳。預設近 7 天；列表<strong>只依新增時間（你按下送出的時間）</strong>新→舊，<strong>不是交易日</strong>。「只看我記的」為選用篩選（暫不強制）。點一筆可看案號、圖片集；有權限可<strong>修改已送出</strong>的帳。</p>
+    <p class="sub" id="pageModeHint">權限 ≥3 可查<strong>區間內全部人</strong>的帳。預設近 7 天；列表<strong>只依新增時間（你按下送出的時間）</strong>新→舊，<strong>不是交易日</strong>。「只看我記的」為選用篩選（暫不強制）。點一筆可看案號、圖片集。</p>
 
     <div class="card" id="historyFiltersCard">
       <div class="hist-head">
@@ -392,11 +392,7 @@
         var perm = Number(sessionRef.auth.permission || 0);
         if (perm >= 4) return true;
         if (perm >= 3 && detail && detail.is_mine) return true;
-        // 列表摘要尚無 can_edit：本人模式預設可試改（後端仍把關）
-        if (perm >= 3 && document.getElementById('historyMineOnly') &&
-            document.getElementById('historyMineOnly').checked) {
-          return true;
-        }
+        // 勿用 mine_only 開關推斷可改帳（老闆：改帳 >4；標註／刪除另案）
         return false;
       }
 
@@ -968,7 +964,7 @@
         if (hint) {
           hint.innerHTML = on
             ? '目前為<strong>只看我記的</strong>（選用篩選）＋近 7 天區間。列表<strong>只依新增時間（按下送出）</strong>新→舊，不是交易日。需權限 ≥3。'
-            : '權限 ≥3 可查<strong>區間內全部人</strong>的帳。預設近 7 天；列表<strong>只依新增時間（按下送出）</strong>新→舊，不是交易日。「只看我記的」為選用篩選（暫不強制）。';
+            : '權限 ≥3 可查<strong>區間內全部人</strong>的帳。預設近 7 天；列表<strong>只依新增時間（按下送出）</strong>新→舊，不是交易日。「只看我記的」為選用篩選（暫不強制）。點一筆可看案號、圖片集。';
         }
       }
 
