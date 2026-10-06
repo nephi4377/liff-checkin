@@ -14,3 +14,9 @@
 
 - `node modules/accounting/tools/test-hub-auth-provisional.js`
 - 正式站 auth_me 量測：單次常 10～20s（修前會阻塞進門）；修後應先出選單
+
+## 部署
+
+- liff#103 → Pages 37419660623
+- Backend#81 → clasp **@369**（Actions 37419647847）
+- 正式站已含 `accounting_api.js?v=77`；auth_me 抽測約 2.8s
