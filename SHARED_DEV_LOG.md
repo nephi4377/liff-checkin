@@ -22,7 +22,7 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| — | — | 目前無進行中工作 | — | — |
+| 2026-10-06T06:01Z | Cursor Cloud (bc-30b7ca3d) | Codex P1：recorded_at 窗勿用交易月 months 限掃表 | Backend `SheetWriter.js`／`AccountingLineIngest.js`；前端 `ledger_history.html`／`accounting_api.js`（停傳誤導 months） | 進行中 |
 
 ## 最近完成
 
