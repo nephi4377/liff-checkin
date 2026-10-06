@@ -22,9 +22,18 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-10-06 | Cursor Cloud (bc-66fb3934) | 記帳詳情 60s 逾時 hotfix | ledger_history／accounting_api／ui；Backend lean detail | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-10-06｜Cursor Cloud｜記帳詳情 60s 逾時 hotfix（已上線 @381）
+
+- 修改範圍：`ledger_history.html`、`accounting_api.js`／`accounting_ui.js`、SPEC 15；Backend SheetWriter／LedgerPostIngest／Ingest
+- 根因：點列 `accounting_ledger_detail` 預設 Abort **60s**；尖峰掃附件索引（曾雙次全表）＋GAS 排隊拖到逾時 → 錯誤回報「記帳詳情 · 60.0 秒」
+- 完成內容：點列先用**列表摘要**；詳情預設 lean（`skip_attachments`）；15s 軟失敗不噴錯誤回報；圖片集另載；後端單次欄位定向掃附件
+- 驗證：單元測試；正式站 `api?v=81`／`ui?v=27`；probe lean `attachments_deferred=true` ~3s；Pages＋clasp **@381**
+- Commit／線上：[liff#112](https://github.com/nephi4377/liff-checkin/pull/112) → Pages [`37423041183`](https://github.com/nephi4377/liff-checkin/actions/runs/37423041183)；[GAS#92](https://github.com/nephi4377/Backend_GAS/pull/92) → Actions [`37423048868`](https://github.com/nephi4377/Backend_GAS/actions/runs/37423048868) → **@381**
+- 待處理：楊婕妤從主控台重開歷史記帳→點任一列；應秒見案號，不應再出現 60s 錯誤回報
 
 ### 2026-10-06｜Cursor Cloud｜歷史依新增時間嚴格新→舊（已上線 @379）
 
