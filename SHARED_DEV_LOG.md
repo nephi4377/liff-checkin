@@ -22,9 +22,17 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-10-06 | Cursor Cloud bc-9ebde005 | 歷史近7/30天改依記帳時間（recorded_at）篩，非交易日 | accounting-gas SheetWriter／Ingest；ledger_history.html；SPEC/LOG | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-10-06｜Cursor Cloud｜歷史近N天改依送出／寫入時間（已上線 @373）
+
+- 修改範圍：Backend SheetWriter／Ingest／SPEC；前端 ledger_history／accounting_api／SPEC 15
+- 完成內容：近7／30天窗＋排序＝按下送出時間（recorded_at），不是交易日；舊列無戳記仍納入；UI 文案釐清
+- 驗證：單元測試；bound proof（倒填交易日仍入窗）；正式站文案＋v=78；clasp **@373**
+- Commit／線上：[GAS#85](https://github.com/nephi4377/Backend_GAS/pull/85) → Actions [`37421112662`](https://github.com/nephi4377/Backend_GAS/actions/runs/37421112662) → **@373**；[liff#105](https://github.com/nephi4377/liff-checkin/pull/105) → Pages [`37421116022`](https://github.com/nephi4377/liff-checkin/actions/runs/37421116022)
+- 待處理：老闆／Yang 真人抽測本人近七天（應見剛送出、交易日可更早的列）
 
 ### 2026-10-06｜Cursor Cloud｜會計驗證身分 60s 逾時 hotfix（已上線 @369）
 
