@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=78"></script>
+  <script src="../../shared/js/accounting_api.js?v=79"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
@@ -674,13 +674,10 @@
         var keyword = (document.getElementById('histKeyword').value || '').trim();
         var amountRaw = (document.getElementById('histAmount').value || '').trim();
         var mineOnly = !!document.getElementById('historyMineOnly').checked;
-        var months = 1;
-        var span = inclusiveDays(dates.from, dates.to);
-        if (dates.from.slice(0, 7) !== dates.to.slice(0, 7)) months = 2;
-        if (span > 28) months = 3;
+        // 不傳 months：分頁依「交易日」月存放，但篩窗是記帳時間。
+        // 若用日期窗的日曆跨月（常為 1）當掃表深度，倒填交易日會漏列；掃表深度改由後端決定。
         var filters = {
           limit: 50,
-          months: months,
           mine_only: mineOnly,
           date_from: dates.from,
           date_to: dates.to
