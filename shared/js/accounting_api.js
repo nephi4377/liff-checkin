@@ -1207,13 +1207,14 @@ var AccountingApi = (function () {
         deferred_token: deferredToken || ''
       }, 120000);
     },
-    /** 歷史記帳紀錄查詢（權限 ≥3；mine_only 預設 true＝登入者本人；日期預設近 7、上限 30 天） */
+    /** 歷史記帳紀錄查詢（權限 ≥3；mine_only 預設 true；近 N 天＝記帳時間／送出時間，不是交易日） */
     accountingLedgerRecent: function (sessionOrToken, opts) {
       opts = opts || {};
       var body = {
         action: 'accounting_ledger_recent',
         limit: opts.limit != null ? opts.limit : 40,
-        months: opts.months != null ? opts.months : 1,
+        // 分頁依交易日存放；記帳時間窗須多掃近月（後端亦會 clamp 最多 3）
+        months: opts.months != null ? opts.months : 3,
         // 預設本人（登入帳號）；僅當頁面明確關閉「只看我記的」／開啟所有人紀錄時傳 false
         mine_only: opts.mine_only === undefined ? true : !!opts.mine_only
       };
