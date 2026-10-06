@@ -31,7 +31,7 @@
 - 修改範圍：`ledger_history.html`、`accounting_api.js`、`accounting_nav.js`、`index.html`、SPEC 15、LOG、smoke test；Backend SheetWriter／Ingest
 - 完成內容：藍標列表／詳情置頂可按「標註錯誤」；必填錯誤原因寫入 `[error_flag:… reason:…]`；列表／詳情顯示原因；`api?v=91`
 - 驗證：flag／mixed／GAS flag smoke OK
-- Commit／線上：liff#128／GAS#107 → 待 merge 部署
+- Commit／線上：[liff#128](https://github.com/nephi4377/liff-checkin/pull/128) → Pages [`37431449649`](https://github.com/nephi4377/liff-checkin/actions/runs/37431449649) `api?v=91`；[GAS#107](https://github.com/nephi4377/Backend_GAS/pull/107) → [`37431455841`](https://github.com/nephi4377/Backend_GAS/actions/runs/37431455841) clasp **@395**
 - 待處理：Yang 重開 → 收支登錄 → 標註錯誤 → 輸入原因
 
 
