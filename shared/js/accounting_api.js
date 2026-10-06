@@ -1292,7 +1292,7 @@ var AccountingApi = (function () {
       return post(body, opts.timeoutMs != null ? opts.timeoutMs : LEDGER_DETAIL_TIMEOUT_MS);
     },
     /**
-     * 修改已送出記帳（≥3 本人；≥4 可改他人）
+     * 修改已送出記帳（權限 >4）
      * 可改 amount／party_name／item_desc／note／txn_date／payment_method／project_no／store；photos 追加
      * 保留 recorded_at；回傳 edited_at
      */
@@ -1331,6 +1331,62 @@ var AccountingApi = (function () {
         } catch (eAuth) {}
       }
       return post(body, opts.timeoutMs != null ? opts.timeoutMs : 60000);
+    },
+    /** 標註錯誤記帳（權限 ≥3） */
+    accountingLedgerFlag: function (sessionOrToken, opts) {
+      opts = opts || {};
+      var body = { action: 'accounting_ledger_flag' };
+      if (opts.sheet) body.sheet = opts.sheet;
+      if (opts.row != null && opts.row !== '') body.row = opts.row;
+      if (opts.ingest_id) body.ingest_id = opts.ingest_id;
+      if (sessionOrToken && typeof resolveAuth === 'function') {
+        try {
+          var auth = resolveAuth(sessionOrToken);
+          if (auth) body.auth = auth;
+          if (sessionOrToken.devBypass) body.dev_bypass = true;
+          if (sessionOrToken.idToken) body.liff_id_token = sessionOrToken.idToken;
+          if (sessionOrToken.auth && sessionOrToken.auth.user_id) {
+            body.user_id = sessionOrToken.auth.user_id;
+            body.auth = body.auth || { user_id: sessionOrToken.auth.user_id };
+          }
+          var dn = (sessionOrToken.auth && sessionOrToken.auth.display_name)
+            || (sessionOrToken.profile && sessionOrToken.profile.displayName)
+            || '';
+          if (dn) {
+            body.display_name = dn;
+            if (body.auth) body.auth.display_name = body.auth.display_name || dn;
+          }
+        } catch (eAuth) {}
+      }
+      return post(body, opts.timeoutMs != null ? opts.timeoutMs : 30000);
+    },
+    /** 刪除已標註錯誤記帳（權限 ≥4） */
+    accountingLedgerDeleteFlagged: function (sessionOrToken, opts) {
+      opts = opts || {};
+      var body = { action: 'accounting_ledger_delete_flagged' };
+      if (opts.sheet) body.sheet = opts.sheet;
+      if (opts.row != null && opts.row !== '') body.row = opts.row;
+      if (opts.ingest_id) body.ingest_id = opts.ingest_id;
+      if (sessionOrToken && typeof resolveAuth === 'function') {
+        try {
+          var auth = resolveAuth(sessionOrToken);
+          if (auth) body.auth = auth;
+          if (sessionOrToken.devBypass) body.dev_bypass = true;
+          if (sessionOrToken.idToken) body.liff_id_token = sessionOrToken.idToken;
+          if (sessionOrToken.auth && sessionOrToken.auth.user_id) {
+            body.user_id = sessionOrToken.auth.user_id;
+            body.auth = body.auth || { user_id: sessionOrToken.auth.user_id };
+          }
+          var dn = (sessionOrToken.auth && sessionOrToken.auth.display_name)
+            || (sessionOrToken.profile && sessionOrToken.profile.displayName)
+            || '';
+          if (dn) {
+            body.display_name = dn;
+            if (body.auth) body.auth.display_name = body.auth.display_name || dn;
+          }
+        } catch (eAuth) {}
+      }
+      return post(body, opts.timeoutMs != null ? opts.timeoutMs : 30000);
     },
     /** 收支登錄表單後置（毛利／附件）；主列已成功後背景呼叫即可 */
     accountingFormFlushDeferred: function (sessionOrToken, deferredToken) {
