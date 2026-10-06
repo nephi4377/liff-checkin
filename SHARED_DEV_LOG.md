@@ -22,9 +22,18 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-10-06 | Cursor Cloud | 歷史依新增時間嚴格新→舊 | ledger_history／SheetWriter／SPEC | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-10-06｜Cursor Cloud｜歷史依新增時間嚴格新→舊（已上線 @379）
+
+- 修改範圍：Backend `SheetWriter`／Ingest／SPEC／測試；前端 `ledger_history.html`、SPEC 15
+- 根因：掃表途中用回傳 limit 提早停 → 倒填舊交易日的新送出可能被擠掉
+- 完成內容：先收齊窗內候選再依 `recorded_at` 新→舊截斷；UI「依新增時間」；前端不依交易日重排
+- 驗證：單元 proof（晚送出＋舊交易日置頂）；正式站文案＋`api?v=80`；clasp **@379**
+- Commit／線上：[GAS#91](https://github.com/nephi4377/Backend_GAS/pull/91) → Actions [`37422828383`](https://github.com/nephi4377/Backend_GAS/actions/runs/37422828383) → **@379**；[liff#111](https://github.com/nephi4377/liff-checkin/pull/111) → Pages [`37422832681`](https://github.com/nephi4377/liff-checkin/actions/runs/37422832681)
+- 待處理：老闆抽測：剛送出（交易日可更早）應在列表最上方
 
 ### 2026-10-06｜Cursor Cloud｜請款驗證身分 20s 逾時 hotfix（已上線 @376）
 
