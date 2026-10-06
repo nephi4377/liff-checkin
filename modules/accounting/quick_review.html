@@ -9,7 +9,7 @@
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/accounting_api.js?v=59"></script>
-  <script src="../../shared/js/accounting_cache.js?v=32"></script>
+  <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=9"></script>
@@ -312,6 +312,7 @@
   <script>
     (function () {
       var CACHE_KEY = 'acct_quick_review_list_v2';
+      var CACHE_TTL_MS = 90 * 1000; // 與 AccountingListCache 多人模式對齊；過期不沿用舊清單
       var PAY_RESUME_KEY = 'acct_quick_review_pay_resume_v1';
       var session = null;
       var items = [];
@@ -429,7 +430,12 @@
         try {
           var raw = sessionStorage.getItem(CACHE_KEY);
           if (!raw) return null;
-          return JSON.parse(raw);
+          var parsed = JSON.parse(raw);
+          if (!parsed || !parsed.at || (Date.now() - parsed.at) > CACHE_TTL_MS) {
+            try { sessionStorage.removeItem(CACHE_KEY); } catch (eClr) {}
+            return null;
+          }
+          return parsed;
         } catch (e) { return null; }
       }
       function cacheWrite(list, filterStatus) {

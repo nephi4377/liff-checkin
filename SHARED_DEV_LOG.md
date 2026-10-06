@@ -26,6 +26,22 @@
 
 ## 最近完成
 
+### 2026-10-06｜Cursor Cloud｜待付款請款可直接搜廠商＋顯示分類
+
+- 修改範圍：`payment_request.html`、`accounting_form_helpers.js`
+- 完成內容：待付款請款廠商區改為優先「直接搜尋廠商名稱」；選中後顯示工項分類並同步分類下拉；搜尋掃全部名冊
+- 驗證：字串／結構檢查；本地 serve 抽測
+- Commit／線上：見本分支 PR（未部署）
+- 待處理：真人抽測搜廠商名稱與分類顯示
+
+### 2026-10-06｜Cursor Cloud｜只看我記的大開關＋快取整理＋歷史加速
+
+- 修改範圍：`ledger_history.html`（整列「只看我記的」開關）、`accounting_api.js`（尊重 mine_only）、`accounting_cache.js`（清 v1–v5 舊 bootstrap）、`quick_review.html`（清單快取 90s TTL）；Backend #78 併入分塊／7 天
+- 完成內容：正式站舊 checkbox 擠查詢鈕改為獨立大開關；預設本人可關；清過期主檔舊 key；單據列表不快取到過期；歷史掃表分塊＋7 天硬上限
+- 驗證：字串／節點檢查；後端 smoke；正式站仍為舊版直至 merge＋Pages／clasp
+- Commit／線上：見本分支 PR（未部署）
+- 待處理：merge＋部署後 Boss 真人確認「只看我記的」外觀與速度
+
 ### 2026-10-06｜Cursor Cloud｜歷史記帳：只看我記的排版＋近七天＋已記帳時間排序
 
 - 修改範圍：`ledger_history.html`；Backend `SheetWriter.js`／SPEC／LOG（另 PR）
