@@ -22,9 +22,18 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-10-06 | Cursor Cloud bc-73f7c710 | 請款驗證身分 20s 逾時 hotfix | payment_request／accounting_api／ui／boot；Backend AuthBridge | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-10-06｜Cursor Cloud｜請款驗證身分 20s 逾時 hotfix（已上線 @376）
+
+- 修改範圍：`payment_request.html`（AccountingBoot＋cache-bust）、`accounting_api.js`／`accounting_boot.js`／`accounting_ui.js`、SPEC 19；Backend AuthBridge
+- 根因：正式站請款頁仍鎖舊 `api?v=63`；選單背景 auth_me 逾時仍噴錯誤回報；payment_request_auth_me 仍清快取／稽核可擋
+- 完成內容：hub uid 暫用進門不乾等 20s；auth 逾時軟性 log；後端對齊 @369
+- 驗證：單元煙測 OK；正式站 `payment_request` 含 `api?v=79`／`boot?v=11`；Pages＋clasp **@376**
+- Commit／線上：[liff#109](https://github.com/nephi4377/liff-checkin/pull/109) → Pages [`37421658336`](https://github.com/nephi4377/liff-checkin/actions/runs/37421658336)；[GAS#89](https://github.com/nephi4377/Backend_GAS/pull/89) → Actions [`37421664569`](https://github.com/nephi4377/Backend_GAS/actions/runs/37421664569) → **@376**
+- 待處理：老闆從主控台重開會計→待付款請款應秒開（勿乾等驗證身分）
 
 ### 2026-10-06｜Cursor Cloud｜Codex P1 記帳時間窗掃月（跟進 #85/#105）
 
