@@ -4,12 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>歷史記帳紀錄</title>
-  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/accounting_api.js?v=68"></script>
   <script src="../../shared/js/accounting_cache.js?v=33"></script>
-  <script src="../../shared/js/accounting_lightbox.js?v=18"></script>
+  <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=9"></script>
@@ -33,12 +33,34 @@
       width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box;
       border: 1px solid #ccc; border-radius: 8px; font-size: 15px;
     }
-    #historyFilters .hist-actions {
-      display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px;
+    /* 「只看我記的」獨立一列，不跟查詢鈕擠在一起 */
+    .hist-mine-row {
+      grid-column: 1 / -1;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+      margin-top: 4px; padding: 12px 14px;
+      background: #f8fafc; border: 1px solid #e8eaed; border-radius: 10px;
+    }
+    .hist-mine-row.is-on {
+      background: #e8f0fe; border-color: #aecbfa;
+    }
+    .hist-mine-check {
+      display: flex; align-items: center; gap: 10px;
+      margin: 0; font-size: 15px; font-weight: 700; color: #202124; cursor: pointer;
+      min-height: 44px;
+    }
+    .hist-mine-check input[type="checkbox"] {
+      width: 20px; height: 20px; margin: 0; flex: 0 0 auto; accent-color: #1a73e8;
+    }
+    .hist-mine-hint {
+      flex: 1 1 160px; margin: 0; font-size: 12px; color: #5f6368; line-height: 1.4; font-weight: 500;
+    }
+    .hist-actions {
+      grid-column: 1 / -1;
+      display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px;
     }
     .btn-ghost {
       width: auto; padding: 8px 12px; font-size: 14px; background: #e8eaed; color: #333;
-      border: none; border-radius: 8px; cursor: pointer; margin-top: 0;
+      border: none; border-radius: 8px; cursor: pointer; margin-top: 0; min-height: 40px;
     }
     #historyList { display: flex; flex-direction: column; gap: 8px; }
     .hist-item {
@@ -54,6 +76,7 @@
     .hist-item .hist-type.expense { color: #c5221f; }
     .hist-item .hist-amt { font-weight: 700; font-size: 15px; }
     .hist-item .hist-meta { color: #555; margin-top: 4px; }
+    .hist-item .hist-recorded { color: #174ea6; font-size: 12px; margin-top: 4px; font-weight: 600; }
     .hist-item .hist-loc { color: #777; font-size: 12px; margin-top: 4px; font-family: ui-monospace, monospace; }
     .hist-item .hist-hint { color: #1a73e8; font-size: 12px; margin-top: 6px; }
     .hist-detail {
@@ -70,11 +93,12 @@
     .hist-att-thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
     .hist-att-thumbs button {
       border: 1px solid #dadce0; border-radius: 8px; padding: 0; background: #fff;
-      width: 56px; height: 56px; overflow: hidden; cursor: pointer;
+      width: 56px; height: 56px; overflow: hidden; cursor: zoom-in;
     }
-    .hist-att-thumbs img { width: 56px; height: 56px; object-fit: cover; display: block; }
+    .hist-att-thumbs img { width: 56px; height: 56px; object-fit: cover; display: block; pointer-events: none; }
     #historyStatus { font-size: 13px; color: #666; margin: 0; }
     .hint { font-size: 12px; color: #777; margin-top: 4px; }
+    .range-hint { margin: 0 0 8px; font-size: 12px; color: #5f6368; line-height: 1.4; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -90,13 +114,14 @@
         <strong>查詢條件</strong>
         <button type="button" class="btn-ghost" id="historyRefreshBtn">重新整理</button>
       </div>
+      <p class="range-hint">預設<strong>近七天</strong>（交易日）加快載入；列表依<strong>已記帳時間</strong>新到舊。要查更久請改下方日期。</p>
       <div id="historyFilters">
         <div>
-          <label for="histDateFrom">日期起</label>
+          <label for="histDateFrom">交易日起</label>
           <input id="histDateFrom" type="date" />
         </div>
         <div>
-          <label for="histDateTo">日期迄</label>
+          <label for="histDateTo">交易日迄</label>
           <input id="histDateTo" type="date" />
         </div>
         <div>
@@ -115,14 +140,16 @@
           <label for="histKeyword">關鍵字（對象／事由／備註）</label>
           <input id="histKeyword" type="text" placeholder="例：廠商名、訂金" autocomplete="off" />
         </div>
-        <div class="full">
-          <label class="hint" style="font-weight:500;display:flex;align-items:center;gap:6px;margin:0">
-            <input type="checkbox" id="historyMineOnly" /> 只看我記的
+        <div class="hist-mine-row" id="historyMineRow">
+          <label class="hist-mine-check" for="historyMineOnly">
+            <input type="checkbox" id="historyMineOnly" />
+            <span>只看我記的</span>
           </label>
-          <div class="hist-actions">
-            <button type="button" class="btn-ghost" id="historySearchBtn">查詢</button>
-            <button type="button" class="btn-ghost" id="historyClearBtn">清空條件</button>
-          </div>
+          <p class="hist-mine-hint">開啟後只列你本人寫入的帳。仍套用上方日期（預設近七天）。</p>
+        </div>
+        <div class="hist-actions">
+          <button type="button" class="btn-ghost" id="historySearchBtn">查詢</button>
+          <button type="button" class="btn-ghost" id="historyClearBtn">恢復近七天</button>
         </div>
       </div>
       <p id="historyStatus">載入中…</p>
@@ -163,7 +190,8 @@
         detail = detail || {};
         var rows = [
           ['類型', detail.type || '—'],
-          ['日期', detail.txn_date_display || detail.txn_date || '—'],
+          ['交易日', detail.txn_date_display || detail.txn_date || '—'],
+          ['已記帳時間', detail.recorded_at_display || detail.recorded_at || '—'],
           ['金額', formatMoney(detail.amount)],
           ['對象', detail.party_name || '—'],
           ['事由', detail.desc || '—'],
@@ -218,7 +246,7 @@
           btn.innerHTML = '<img src="' + escHtml(driveThumbUrl(u)) + '" alt="單據 ' + (i + 1) + '" />';
           btn.addEventListener('click', function (e) {
             e.stopPropagation();
-            if (typeof AccountingLightbox !== 'undefined') AccountingLightbox.open(urls);
+            if (typeof AccountingLightbox !== 'undefined') AccountingLightbox.open(urls, i);
           });
           thumbs.appendChild(btn);
         });
@@ -350,12 +378,16 @@
           if (it.note) meta.push(it.note);
           var loc = (it.sheet || '—') + ' 第' + (it.row || '?') + '列';
           if (it.ingest_id) loc += ' · ' + String(it.ingest_id).slice(0, 8);
+          var recorded = it.recorded_at_display || it.recorded_at || '';
           div.innerHTML =
             '<div class="hist-top">' +
               '<span class="hist-type ' + typeClass + '">' + escHtml(it.type || '—') + '</span>' +
-              '<span>' + escHtml(it.txn_date_display || it.txn_date || '—') + '</span>' +
+              '<span>交易日 ' + escHtml(it.txn_date_display || it.txn_date || '—') + '</span>' +
               '<span class="hist-amt">' + escHtml(formatMoney(it.amount)) + '</span>' +
             '</div>' +
+            (recorded
+              ? ('<div class="hist-recorded">已記帳時間 ' + escHtml(recorded) + '</div>')
+              : '') +
             '<div class="hist-meta">' + escHtml(meta.join(' · ') || '—') + '</div>' +
             '<div class="hist-loc">' + escHtml(loc) + '</div>' +
             '<div class="hist-hint">點開看詳情（案號／圖片集）</div>' +
@@ -371,6 +403,41 @@
             }
           });
           box.appendChild(div);
+        });
+      }
+
+      function isoDateLocal(d) {
+        var y = d.getFullYear();
+        var m = d.getMonth() + 1;
+        var day = d.getDate();
+        return y + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
+      }
+
+      /** 預設近七天（含今天）加快載入 */
+      function applyDefaultSevenDayRange() {
+        var to = new Date();
+        var from = new Date();
+        from.setDate(from.getDate() - 6);
+        document.getElementById('histDateFrom').value = isoDateLocal(from);
+        document.getElementById('histDateTo').value = isoDateLocal(to);
+      }
+
+      function syncMineRowUi() {
+        var on = !!document.getElementById('historyMineOnly').checked;
+        var row = document.getElementById('historyMineRow');
+        if (row) row.classList.toggle('is-on', on);
+      }
+
+      function historySortKey(it) {
+        var rec = String((it && it.recorded_at) || '').trim();
+        if (rec) return 'R:' + rec;
+        return 'S:' + String((it && it.sheet) || '') + '#' +
+          ('000000' + String((it && it.row) || 0)).slice(-6);
+      }
+
+      function sortHistoryByRecordedAt(items) {
+        return (items || []).slice().sort(function (a, b) {
+          return historySortKey(b).localeCompare(historySortKey(a), 'zh-Hant');
         });
       }
 
@@ -394,22 +461,32 @@
           var amt = parseInt(amountRaw, 10);
           if (!isNaN(amt)) filters.amount = amt;
         }
-        if (dateFrom) filters.months = 12;
+        if (dateFrom) {
+          var coverMonths = 2;
+          try {
+            var fromD = new Date(dateFrom + 'T00:00:00');
+            var now = new Date();
+            coverMonths = Math.max(1, (now.getFullYear() - fromD.getFullYear()) * 12 +
+              (now.getMonth() - fromD.getMonth()) + 1);
+          } catch (eCover) {}
+          filters.months = Math.min(12, Math.max(2, coverMonths));
+        }
         return filters;
       }
 
       function clearHistoryFilters() {
-        document.getElementById('histDateFrom').value = '';
-        document.getElementById('histDateTo').value = '';
         document.getElementById('histType').value = '';
         document.getElementById('histKeyword').value = '';
         document.getElementById('histAmount').value = '';
         document.getElementById('historyMineOnly').checked = false;
+        applyDefaultSevenDayRange();
+        syncMineRowUi();
       }
 
       function loadLedgerHistory() {
         var status = document.getElementById('historyStatus');
         status.textContent = '查詢中…';
+        syncMineRowUi();
         if (!sessionRef || typeof AccountingApi.accountingLedgerRecent !== 'function') {
           status.textContent = '尚無法載入歷史（請從主控台／LINE 登入後再試）。';
           return Promise.resolve();
@@ -421,19 +498,20 @@
             document.getElementById('historyList').innerHTML = '';
             return;
           }
-          var n = (data.items || []).length;
+          var items = sortHistoryByRecordedAt(data.items || []);
+          var n = items.length;
           var bits = [];
           if (filters.date_from || filters.date_to) {
-            bits.push((filters.date_from || '…') + '～' + (filters.date_to || '…'));
+            bits.push('交易日 ' + (filters.date_from || '…') + '～' + (filters.date_to || '…'));
           }
           if (filters.type) bits.push(filters.type);
           if (filters.keyword) bits.push('「' + filters.keyword + '」');
           if (filters.amount != null) bits.push('$' + filters.amount);
-          if (filters.mine_only) bits.push('只看我的');
+          if (filters.mine_only) bits.push('只看我記的');
           status.textContent = n
-            ? ('共 ' + n + ' 筆（新到舊）' + (bits.length ? ' · ' + bits.join(' · ') : ''))
+            ? ('共 ' + n + ' 筆（依已記帳時間新到舊）' + (bits.length ? ' · ' + bits.join(' · ') : ''))
             : ('沒有符合的紀錄' + (bits.length ? '（' + bits.join(' · ') + '）' : ''));
-          renderHistoryItems(data.items || []);
+          renderHistoryItems(items);
         }).catch(function (e) {
           status.textContent = (e && e.message) || '讀不到歷史記帳紀錄';
           document.getElementById('historyList').innerHTML = '';
@@ -452,6 +530,7 @@
           loadLedgerHistory();
         });
         document.getElementById('historyMineOnly').addEventListener('change', function () {
+          syncMineRowUi();
           loadLedgerHistory();
         });
         document.getElementById('histKeyword').addEventListener('keydown', function (e) {
@@ -463,6 +542,8 @@
       }
 
       (async function boot() {
+        applyDefaultSevenDayRange();
+        syncMineRowUi();
         bindFilters();
         await AccountingBoot.run({
           minPermission: AccountingApi.SUPERVISOR_MIN_PERMISSION,
