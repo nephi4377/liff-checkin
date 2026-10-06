@@ -22,9 +22,17 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-10-06 07:11 UTC | Cursor Cloud | 歷史記帳雙來源：待付款請款＋收支登錄 | ledger_history.html、accounting_api.js、SPEC 15；Backend accounting_ledger_recent／VendorPaymentModule | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-10-06｜Cursor Cloud｜歷史記帳雙來源：待付款請款＋收支登錄（已上線 @393）
+
+- 修改範圍：`ledger_history.html`、`accounting_api.js`、SPEC 15；Backend `VendorPaymentModule`／`AccountingLineIngest`／SPEC
+- 完成內容：歷史預設混排兩種來源；分頁篩選；列表標籤可辨；請款唯讀 ≥3；標註／改／刪仍只適用收支
+- 驗證：單元測試 OK；Pages 含 `v=89`／來源分頁；clasp **@393**
+- Commit／線上：[GAS#105](https://github.com/nephi4377/Backend_GAS/pull/105) → Actions [`37428487693`](https://github.com/nephi4377/Backend_GAS/actions/runs/37428487693) → **@393**；[liff#126](https://github.com/nephi4377/liff-checkin/pull/126) → Pages [`37428493563`](https://github.com/nephi4377/liff-checkin/actions/runs/37428493563)
+- 待處理：Yang（權限 3）抽測混合列表與請款唯讀
 
 ### 2026-10-06｜Cursor Cloud｜歷史記帳近期收支 90s 逾時 hotfix（已上線 @391）
 
