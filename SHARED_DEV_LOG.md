@@ -30,8 +30,9 @@
 
 - 修改範圍：ledger_history 不傳 months；api 不預設 months；Backend LEDGER_HISTORY_SHEET_MONTHS_=12
 - 完成內容：倒填交易日仍可被記帳時間近7天掃到（最多12個交易月分頁）
-- 驗證：單元測試；待 clasp／Pages
-- 待處理：merge 後補 @N
+- 驗證：單元測試；正式站 v=79 不傳 months；clasp **@375**
+- Commit／線上：[GAS#87](https://github.com/nephi4377/Backend_GAS/pull/87) → **@375**；[liff#107](https://github.com/nephi4377/liff-checkin/pull/107) → Pages
+- 待處理：無
 
 ### 2026-10-06｜Cursor Cloud｜歷史近N天改依送出／寫入時間（已上線 @373）
 
