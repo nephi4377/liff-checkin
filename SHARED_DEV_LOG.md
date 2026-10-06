@@ -22,7 +22,7 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| — | — | 目前無進行中工作 | — | — |
+| 2026-10-06 07:11 UTC | Cursor Cloud | 歷史記帳雙來源：待付款請款＋收支登錄 | ledger_history.html、accounting_api.js、SPEC 15；Backend accounting_ledger_recent／VendorPaymentModule | 進行中 |
 
 ## 最近完成
 
