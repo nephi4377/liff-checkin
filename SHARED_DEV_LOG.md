@@ -20,11 +20,17 @@
 
 ## 目前進行中
 
-| 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
-|---|---|---|---|---|
-| 2026-10-06 | Cursor Cloud | 歷史記帳「錯誤記帳標示」鈕要讓 Yang≥3 一眼可見可按 | `ledger_history.html`、`accounting_api.js?v=93`、smoke；Backend 回傳 flaggable_count | 進行中 |
+（無）
 
 ## 最近完成
+
+### 2026-10-06｜Cursor Cloud｜待付款請款「錯誤記帳標示」＋勿框選（待 merge／部署）
+
+- 修改範圍：`ledger_history.html`、`accounting_api.js?v=94`、SPEC 15、LOG、smoke；Backend `AccountingLineIngest`／`VendorPaymentModule`／SPEC／test
+- 完成內容：老闆「不是框選」——拿掉置頂可標示區與截斷優先 `can_flag`；**請款＋收支每一列** ≥3 都有「錯誤記帳標示」＋頁內必填原因；請款寫主檔 note `[error_flag:]`（例：新弘 $2413 案726／`568e45d0-…`）
+- 驗證：`node modules/accounting/tools/test-ledger-flag-button-visible.js`；GAS `test-ledger-recent-history`／`test-ledger-flag-delete-perms` OK
+- Commit／線上：見本輪 PR（merge main 後 Pages `v=94`＋clasp）
+- 待處理：Yang 重開歷史記帳 → 點黃標新弘列「錯誤記帳標示」→ 填原因 → 確認
 
 ### 2026-10-06｜Cursor Cloud｜歷史記帳混合來源逾時／無藍標 hotfix（已上線 @396）
 

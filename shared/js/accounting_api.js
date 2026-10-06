@@ -124,7 +124,7 @@ var AccountingApi = (function () {
       var attempt = 0;
       var maxAttempts = 3;
       // 歷史記帳：GAS 慢／404 時重試只會把 Abort 疊滿 90s；一次失敗即可（後端已有軟截止）
-      // cache-bust companions: ledger_history.html loads this as ?v=93（錯誤記帳標示鈕／頁內原因）
+      // cache-bust companions: ledger_history.html loads this as ?v=94（請款＋收支每列可標示）
       if (actionName === 'accounting_ledger_recent') maxAttempts = 1;
       while (attempt < maxAttempts) {
         attempt += 1;
@@ -1338,13 +1338,15 @@ var AccountingApi = (function () {
       }
       return post(body, opts.timeoutMs != null ? opts.timeoutMs : 60000);
     },
-    /** 標註錯誤記帳（權限 ≥3；必填 reason／error_reason） */
+    /** 標註錯誤記帳／請款（權限 ≥3；必填 reason；請款傳 payment_request_id） */
     accountingLedgerFlag: function (sessionOrToken, opts) {
       opts = opts || {};
       var body = { action: 'accounting_ledger_flag' };
       if (opts.sheet) body.sheet = opts.sheet;
       if (opts.row != null && opts.row !== '') body.row = opts.row;
       if (opts.ingest_id) body.ingest_id = opts.ingest_id;
+      if (opts.payment_request_id) body.payment_request_id = opts.payment_request_id;
+      if (opts.record_kind) body.record_kind = opts.record_kind;
       var reason = String(opts.reason || opts.error_reason || opts.flag_reason || '').trim();
       if (reason) {
         body.reason = reason;
