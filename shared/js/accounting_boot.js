@@ -129,6 +129,32 @@ var AccountingBoot = (function () {
       }
     }
 
+    // 主控台網址已帶 uid／permission：即使暫用函式舊版，也不要卡死在驗證身分
+    if (!cached && typeof OperatorContext !== 'undefined') {
+      try {
+        var urlOp = typeof OperatorContext.readPreferUrl === 'function'
+          ? OperatorContext.readPreferUrl()
+          : OperatorContext.mergeFromUrl();
+        if (urlOp && urlOp.userId && (urlOp.hubLiffId || urlOp.source === 'hub_iframe' || urlOp.source === 'hub')) {
+          if ((urlOp.permission || 0) >= minPerm) {
+            cached = {
+              fromHub: true,
+              provisional: true,
+              profile: { userId: urlOp.userId, displayName: urlOp.displayName || urlOp.userName || '' },
+              idToken: '',
+              auth: {
+                user_id: urlOp.userId,
+                display_name: urlOp.displayName || urlOp.userName || '',
+                permission: urlOp.permission || 0,
+                status: '員工'
+              }
+            };
+            traceStep('暫用身分', '主控台網址身分');
+          }
+        }
+      } catch (eUrl) {}
+    }
+
     if (cached) {
       try {
         if ((cached.auth.permission || 0) < minPerm) {

@@ -22,9 +22,18 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-10-06 | Cursor Cloud | 會計驗證身分 60s 逾時 hotfix | accounting_api/boot、operator_context、AuthBridge | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-10-06｜Cursor Cloud｜會計驗證身分 60s 逾時 hotfix（待 merge／部署）
+
+- 修改範圍：`operator_context.js`、`accounting_api.js`、`accounting_boot.js`、`index.html`／`ledger_history.html`、SPEC 19；Backend AuthBridge／AuditLog
+- 完成內容：主控台網址身分先暫用進門；auth_me 逾時 20s 可降級；後端不再每次清員工快取；稽核失敗不擋登入
+- 驗證：`node modules/accounting/tools/test-hub-auth-provisional.js` OK；正式站 auth_me 量測常 10～20s（修前會阻塞）
+- Commit／線上：待 PR merge＋Pages／clasp
+- 待處理：merge 後部署；請老闆從主控台重開會計抽測
+
 
 ### 2026-10-06｜Cursor Cloud｜歷史記帳又慢又空 hotfix（已上線 @367）
 
