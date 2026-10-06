@@ -22,9 +22,14 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-10-06 | Cursor Cloud | 歷史停用交易日排序 fallback（只依 recorded_at） | Backend SheetWriter＋測試；前端 ledger_history／api v82；SPEC／LOG | 進行中 |
+| 2026-10-06 | Cursor Cloud | 可修改已送出記帳（edit） | 前後端 ledger update；ledger_history 詳情表單；SPEC／LOG | 進行中 |
 
 ## 最近完成
+
+### 2026-10-06｜Cursor Cloud｜老闆：查詢重做排隊（edit 上線後）
+
+- 規則已存 Project store：權限≥3 可看；暫緩只看個人；排序＝送出時間 recorded_at 新→舊
+- 待處理：edit merge＋Pages＋clasp 後再開查詢重做
 
 ### 2026-10-06｜Cursor Cloud｜記帳詳情 60s 逾時 hotfix（已上線 @381）
 

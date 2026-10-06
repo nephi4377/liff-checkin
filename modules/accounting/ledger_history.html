@@ -10,10 +10,10 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=83"></script>
+  <script src="../../shared/js/accounting_api.js?v=84"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
-  <script src="../../shared/js/accounting_ui.js?v=29"></script>
+  <script src="../../shared/js/accounting_ui.js?v=30"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=13"></script>
   <style>
@@ -170,6 +170,28 @@
     }
     .hist-att-thumbs img { width: 56px; height: 56px; object-fit: cover; display: block; }
 
+    .hist-edit-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .hist-edit-form {
+      margin-top: 12px; padding: 12px; border: 1px solid #dadce0; border-radius: 10px;
+      background: #f8fafc;
+    }
+    .hist-edit-form label { margin-top: 8px; }
+    .hist-edit-form label:first-child { margin-top: 0; }
+    .hist-edit-form input, .hist-edit-form select, .hist-edit-form textarea {
+      width: 100%; max-width: 100%; box-sizing: border-box;
+      padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 8px; font-size: 15px;
+    }
+    .hist-edit-form textarea { min-height: 64px; resize: vertical; }
+    .hist-edit-form .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .hist-edit-form .hist-edit-msg { font-size: 13px; margin: 8px 0 0; }
+    .hist-edit-form .hist-edit-msg.is-ok { color: #137333; }
+    .hist-edit-form .hist-edit-msg.is-err { color: #c5221f; }
+    .btn-edit-primary {
+      background: #1a73e8; color: #fff; border: none; border-radius: 8px;
+      padding: 8px 12px; font-size: 14px; cursor: pointer;
+    }
+    .btn-edit-primary:disabled { opacity: .5; cursor: default; }
+
     .hist-detail-placeholder {
       margin: 0; color: #777; font-size: 14px; line-height: 1.5;
     }
@@ -210,7 +232,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub" id="pageModeHint">預設<strong>只看我記的</strong>＋近 7 天（依<strong>新增時間＝你送出的時間</strong>，不是交易日）。列表<strong>依新增時間</strong>新→舊。「所有人紀錄」需手動開啟。點一筆可看案號、圖片集。需權限 ≥3。</p>
+    <p class="sub" id="pageModeHint">預設<strong>只看我記的</strong>＋近 7 天（依<strong>新增時間＝你送出的時間</strong>，不是交易日）。列表<strong>依新增時間</strong>新→舊。「所有人紀錄」需手動開啟。點一筆可看案號、圖片集；有權限可<strong>修改已送出</strong>的帳。需權限 ≥3。</p>
 
     <div class="card" id="historyFiltersCard">
       <div class="hist-head">
@@ -342,6 +364,9 @@
           ['案號', detail.project_no || '（未填）'],
           ['付款方式', detail.payment_method || '—']
         ];
+        if (detail.edited_at_display || detail.edited_at) {
+          rows.splice(3, 0, ['上次修改', detail.edited_at_display || detail.edited_at]);
+        }
         if (detail.stores && detail.stores.length) {
           rows.push(['店別', detail.stores.map(function (s) {
             return s.store + (s.amount != null && s.amount !== '' ? ' ' + formatMoney(s.amount) : '');
@@ -358,6 +383,239 @@
         });
         dl += '</dl>';
         return dl;
+      }
+
+      function sessionCanEditDetail(detail) {
+        if (!sessionRef || !sessionRef.auth) return false;
+        if (detail && detail.can_edit === true) return true;
+        if (detail && detail.can_edit === false) return false;
+        var perm = Number(sessionRef.auth.permission || 0);
+        if (perm >= 4) return true;
+        if (perm >= 3 && detail && detail.is_mine) return true;
+        // 列表摘要尚無 can_edit：本人模式預設可試改（後端仍把關）
+        if (perm >= 3 && document.getElementById('historyMineOnly') &&
+            document.getElementById('historyMineOnly').checked) {
+          return true;
+        }
+        return false;
+      }
+
+      function fileToPhotoPayload(file) {
+        return new Promise(function (resolve, reject) {
+          var reader = new FileReader();
+          reader.onload = function () {
+            var dataUrl = String(reader.result || '');
+            var comma = dataUrl.indexOf(',');
+            var b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+            resolve({
+              dataBase64: b64,
+              mimeType: file.type || 'image/jpeg',
+              filename: file.name || 'edit.jpg'
+            });
+          };
+          reader.onerror = function () { reject(reader.error || new Error('讀圖失敗')); };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      function buildEditForm(panel, summaryItem, detail) {
+        var merged = Object.assign({}, summaryItem || {}, detail || {});
+        if (!sessionCanEditDetail(merged)) return;
+
+        var actions = document.createElement('div');
+        actions.className = 'hist-edit-actions';
+        var editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'btn-ghost btn-edit-primary';
+        editBtn.textContent = '修改這一筆';
+        actions.appendChild(editBtn);
+        panel.appendChild(actions);
+
+        var form = document.createElement('div');
+        form.className = 'hist-edit-form hidden';
+        form.innerHTML =
+          '<div class="row2">' +
+            '<div><label>交易日</label><input type="text" data-f="txn_date" /></div>' +
+            '<div><label>金額</label><input type="number" inputmode="numeric" data-f="amount" /></div>' +
+          '</div>' +
+          '<label>對象（客戶／廠商）</label><input type="text" data-f="party_name" />' +
+          '<label>事由／品項</label><input type="text" data-f="item_desc" />' +
+          '<div class="row2">' +
+            '<div><label>案號</label><input type="text" data-f="project_no" /></div>' +
+            '<div><label>付款方式</label><input type="text" data-f="payment_method" /></div>' +
+          '</div>' +
+          '<label>店別</label>' +
+          '<select data-f="store">' +
+            '<option value="">（不填）</option>' +
+            '<option value="台南">台南</option>' +
+            '<option value="高雄">高雄</option>' +
+            '<option value="工廠">工廠</option>' +
+            '<option value="行政">行政</option>' +
+          '</select>' +
+          '<label>備註（可改使用者文字；系統戳記會保留）</label>' +
+          '<textarea data-f="note"></textarea>' +
+          '<label>追加單據照片（選填）</label>' +
+          '<input type="file" data-f="photos" accept="image/*" multiple />' +
+          '<p class="hint" style="margin:6px 0 0">新增時間（送出時間）不會變；儲存後會留下「上次修改」時間。</p>' +
+          '<div class="hist-edit-actions" style="margin-top:10px">' +
+            '<button type="button" class="btn-edit-primary" data-act="save">儲存修改</button>' +
+            '<button type="button" class="btn-ghost" data-act="cancel">取消</button>' +
+          '</div>' +
+          '<p class="hist-edit-msg" data-role="msg"></p>';
+        panel.appendChild(form);
+
+        function fillForm() {
+          var txn = merged.txn_date_display || merged.txn_date || '';
+          form.querySelector('[data-f="txn_date"]').value = txn;
+          form.querySelector('[data-f="amount"]').value =
+            merged.amount != null ? merged.amount : '';
+          form.querySelector('[data-f="party_name"]').value = merged.party_name || '';
+          var item = merged.item_desc || '';
+          if (!item && merged.desc) {
+            var d = String(merged.desc);
+            var i = d.indexOf('／');
+            if (i < 0) i = d.indexOf('/');
+            if (i >= 0) item = d.slice(i + 1).trim();
+          }
+          form.querySelector('[data-f="item_desc"]').value = item;
+          form.querySelector('[data-f="project_no"]').value = merged.project_no || '';
+          form.querySelector('[data-f="payment_method"]').value = merged.payment_method || '';
+          var store = merged.store || '';
+          if (!store && merged.stores && merged.stores.length === 1) {
+            store = merged.stores[0].store || '';
+          }
+          form.querySelector('[data-f="store"]').value = store;
+          form.querySelector('[data-f="note"]').value = merged.note || '';
+        }
+
+        editBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          fillForm();
+          form.classList.remove('hidden');
+          editBtn.classList.add('hidden');
+        });
+
+        form.querySelector('[data-act="cancel"]').addEventListener('click', function (e) {
+          e.stopPropagation();
+          form.classList.add('hidden');
+          editBtn.classList.remove('hidden');
+          var msg = form.querySelector('[data-role="msg"]');
+          if (msg) {
+            msg.textContent = '';
+            msg.className = 'hist-edit-msg';
+          }
+        });
+
+        form.querySelector('[data-act="save"]').addEventListener('click', function (e) {
+          e.stopPropagation();
+          saveHistoryEdit(panel, summaryItem, merged, form, editBtn);
+        });
+
+        form.addEventListener('click', function (e) { e.stopPropagation(); });
+      }
+
+      function saveHistoryEdit(panel, summaryItem, merged, form, editBtn) {
+        var msg = form.querySelector('[data-role="msg"]');
+        var saveBtn = form.querySelector('[data-act="save"]');
+        function setMsg(text, ok) {
+          if (!msg) return;
+          msg.textContent = text || '';
+          msg.className = 'hist-edit-msg ' + (ok ? 'is-ok' : 'is-err');
+        }
+        if (!sessionRef || typeof AccountingApi.accountingLedgerUpdate !== 'function') {
+          setMsg('修改功能尚未就緒', false);
+          return;
+        }
+        var fields = {
+          txn_date: form.querySelector('[data-f="txn_date"]').value.trim(),
+          amount: form.querySelector('[data-f="amount"]').value,
+          party_name: form.querySelector('[data-f="party_name"]').value.trim(),
+          item_desc: form.querySelector('[data-f="item_desc"]').value.trim(),
+          project_no: form.querySelector('[data-f="project_no"]').value.trim(),
+          payment_method: form.querySelector('[data-f="payment_method"]').value.trim(),
+          store: form.querySelector('[data-f="store"]').value,
+          note: form.querySelector('[data-f="note"]').value
+        };
+        if (!fields.txn_date) {
+          setMsg('請填交易日', false);
+          return;
+        }
+        if (!fields.amount || Number(fields.amount) <= 0) {
+          setMsg('請填有效金額', false);
+          return;
+        }
+        if (saveBtn) saveBtn.disabled = true;
+        setMsg('儲存中…', true);
+
+        var fileInput = form.querySelector('[data-f="photos"]');
+        var files = fileInput && fileInput.files ? Array.prototype.slice.call(fileInput.files, 0) : [];
+        var photoPromise = files.length
+          ? Promise.all(files.map(fileToPhotoPayload))
+          : Promise.resolve([]);
+
+        photoPromise.then(function (photos) {
+          return AccountingApi.accountingLedgerUpdate(sessionRef, {
+            sheet: merged.sheet || (summaryItem && summaryItem.sheet),
+            row: merged.row != null ? merged.row : (summaryItem && summaryItem.row),
+            ingest_id: merged.ingest_id || (summaryItem && summaryItem.ingest_id),
+            fields: fields,
+            photos: photos
+          });
+        }).then(function (data) {
+          if (saveBtn) saveBtn.disabled = false;
+          if (!data || !data.success) {
+            setMsg((data && data.message) || '修改失敗', false);
+            return;
+          }
+          setMsg(data.message || '已修改', true);
+          var updated = data.item || Object.assign({}, merged, fields, {
+            sheet: data.sheet,
+            row: data.row,
+            edited_at: data.edited_at,
+            edited_at_display: data.edited_at
+              ? String(data.edited_at).replace('T', ' ').slice(0, 16)
+              : '',
+            recorded_at: data.recorded_at || merged.recorded_at,
+            can_edit: true
+          });
+          if (updated.party_name || updated.item_desc) {
+            updated.desc = updated.party_name && updated.item_desc
+              ? (updated.party_name + '／' + updated.item_desc)
+              : (updated.party_name || updated.item_desc || updated.desc);
+          }
+          var key = historyItemKey(summaryItem) || historyItemKey(updated);
+          if (key && itemsByKey[key]) {
+            Object.assign(itemsByKey[key], {
+              amount: updated.amount,
+              party_name: updated.party_name,
+              desc: updated.desc,
+              txn_date: updated.txn_date,
+              txn_date_display: updated.txn_date_display || updated.txn_date,
+              project_no: updated.project_no,
+              payment_method: updated.payment_method,
+              note: updated.note,
+              sheet: updated.sheet,
+              row: updated.row,
+              edited_at: updated.edited_at,
+              edited_at_display: updated.edited_at_display
+            });
+            // 換月搬列時更新 key
+            if (data.relocated) {
+              var newKey = historyItemKey(updated);
+              if (newKey && newKey !== key) {
+                itemsByKey[newKey] = itemsByKey[key];
+                delete itemsByKey[key];
+                openHistoryKey = newKey;
+              }
+            }
+          }
+          // 重新渲染詳情＋輕刷列表列
+          fillHistoryDetailPanel(panel, itemsByKey[openHistoryKey] || updated, updated);
+          try { loadLedgerHistory(); } catch (eReload) {}
+        }).catch(function (err) {
+          if (saveBtn) saveBtn.disabled = false;
+          setMsg((err && err.message) || '修改失敗，請稍後再試', false);
+        });
       }
 
       function renderHistoryAttachments(container, detail) {
@@ -420,6 +678,7 @@
         fields.innerHTML = renderHistoryDetailFields(merged);
         panel.appendChild(fields);
         renderHistoryAttachments(panel, merged);
+        buildEditForm(panel, summaryItem, detail || merged);
       }
 
       function activeDetailPanel(rowEl) {
@@ -601,7 +860,7 @@
             '<div class="hist-hint">點開看詳情（案號／圖片集）</div>' +
             '<div class="hist-detail hidden"></div>';
           div.addEventListener('click', function (e) {
-            if (e.target.closest && (e.target.closest('.hist-att-row') || e.target.closest('.btn-ghost'))) return;
+            if (e.target.closest && (e.target.closest('.hist-att-row') || e.target.closest('.btn-ghost') || e.target.closest('.hist-edit-form') || e.target.closest('.btn-edit-primary'))) return;
             toggleHistoryDetail(div, it);
           });
           div.addEventListener('keydown', function (e) {
