@@ -26,6 +26,8 @@ var AccountingApi = (function () {
   var HUB_RELOGIN_MSG = '請從主控台重新開啟會計';
   /** 一般讀寫逾時；OCR 等長操作請自行傳 0（不限）或更長毫秒 */
   var DEFAULT_TIMEOUT_MS = 60000;
+  /** 驗證身分專用：主控台已帶 uid 時不應乾等 60 秒 */
+  var AUTH_ME_TIMEOUT_MS = 20000;
   function logApiFailure_(actionName, err, notify) {
     if (actionName === 'accounting_error_report' || actionName === 'accounting_client_log' || actionName === 'agent_inbox_staff_error') return;
     if (typeof AccountingUi === 'undefined' || !AccountingUi.reportFailure) return;
@@ -170,7 +172,26 @@ var AccountingApi = (function () {
     if (timeoutMs === undefined && body && body.action === 'accounting_form_submit') {
       ms = 120000;
     }
+    if (timeoutMs === undefined && body && (
+      body.action === 'accounting_auth_me' ||
+      body.action === 'payment_request_auth_me' ||
+      body.action === 'vendor_register_auth_me'
+    )) {
+      ms = AUTH_ME_TIMEOUT_MS;
+    }
     return postToUrl_(GAS_API, body, ms, '會計');
+  }
+
+  function buildHubAuthFromOperator_(hubOp) {
+    if (!hubOp || !hubOp.userId) return null;
+    return {
+      success: true,
+      user_id: hubOp.userId,
+      display_name: hubOp.displayName || hubOp.userName || '',
+      permission: hubOp.permission || 0,
+      status: '員工',
+      hub_provisional: true
+    };
   }
 
   /** 選材專用 — 打 project-console，不再經 accounting-gas */
@@ -183,13 +204,26 @@ var AccountingApi = (function () {
     var hubOp = readHubOperator_();
     if (hubOp) {
       var action = opts.authAction || 'accounting_auth_me';
-      var auth = await post({
-        action: action,
-        user_id: hubOp.userId,
-        auth: { user_id: hubOp.userId }
-      });
-      if (!auth.success) throw new Error(auth.message || '驗證失敗');
-      return buildHubSession_(auth);
+      try {
+        var auth = await post({
+          action: action,
+          user_id: hubOp.userId,
+          auth: { user_id: hubOp.userId }
+        });
+        if (!auth.success) throw new Error(auth.message || '驗證失敗');
+        return buildHubSession_(auth);
+      } catch (eHubAuth) {
+        // 主控台已帶 uid／permission：後端慢或逾時時先用網址身分進門，背景再核對
+        var fallback = buildHubAuthFromOperator_(hubOp);
+        if (fallback) {
+          var sess = buildHubSession_(fallback);
+          sess.provisional = true;
+          sess.authDegraded = true;
+          sess.authDegradedMessage = (eHubAuth && eHubAuth.message) || String(eHubAuth || '');
+          return sess;
+        }
+        throw eHubAuth;
+      }
     }
     return AccountingApi.initLiff(opts);
   }
@@ -419,9 +453,15 @@ var AccountingApi = (function () {
   }
 
   function readHubOperator_() {
-    primeHubIdentityFromUrl_();
     if (typeof OperatorContext === 'undefined') return null;
-    var op = OperatorContext.read();
+    var op = null;
+    try {
+      op = typeof OperatorContext.readPreferUrl === 'function'
+        ? OperatorContext.readPreferUrl()
+        : OperatorContext.mergeFromUrl();
+    } catch (ePref) {
+      try { op = OperatorContext.read(); } catch (eRead) { op = null; }
+    }
     if (!op || !op.userId) return null;
     var fromHub = isInHubIframe_() || op.source === 'hub_iframe' || op.source === 'hub' || !!op.hubLiffId;
     if (!fromHub) return null;
@@ -883,7 +923,6 @@ var AccountingApi = (function () {
     tryCachedSession: function (opts) {
       opts = opts || {};
       var minPerm = opts.minPermission != null ? opts.minPermission : MIN_PERMISSION;
-      primeHubIdentityFromUrl_();
       var hubOp = readHubOperator_();
       if (hubOp) {
         var authUid = readSessionWrapped_(SESSION_AUTH_PREFIX + 'uid:' + hubOp.userId, AUTH_TTL_MS);
@@ -910,12 +949,18 @@ var AccountingApi = (function () {
         auth: authHub
       };
     },
-    /** 從主控台進來：先用本分頁記住的人顯示畫面，背景再向後端核對員工表 */
+    /** 從主控台進來：先用網址／本分頁身分顯示畫面，背景再向後端核對員工表 */
     tryProvisionalSession: function (opts) {
       opts = opts || {};
       if (typeof OperatorContext === 'undefined') return null;
-      primeHubIdentityFromUrl_();
-      var op = OperatorContext.read();
+      var op = null;
+      try {
+        op = typeof OperatorContext.readPreferUrl === 'function'
+          ? OperatorContext.readPreferUrl()
+          : OperatorContext.mergeFromUrl();
+      } catch (eOp) {
+        try { op = OperatorContext.read(); } catch (eRead) { op = null; }
+      }
       if (!op || !op.userId) return null;
       var minPerm = opts.minPermission != null ? opts.minPermission : 0;
       if ((op.permission || 0) < minPerm) return null;
@@ -1281,13 +1326,24 @@ var AccountingApi = (function () {
       if (isInHubIframe_()) {
         var hubOpInline = readHubOperator_();
         if (hubOpInline) {
-          var authInline = await post({
-            action: 'accounting_auth_me',
-            user_id: hubOpInline.userId,
-            auth: { user_id: hubOpInline.userId }
-          });
-          if (!authInline.success) throw new Error(authInline.message || '驗證失敗');
-          return buildHubSession_(authInline);
+          try {
+            var authInline = await post({
+              action: 'accounting_auth_me',
+              user_id: hubOpInline.userId,
+              auth: { user_id: hubOpInline.userId }
+            });
+            if (!authInline.success) throw new Error(authInline.message || '驗證失敗');
+            return buildHubSession_(authInline);
+          } catch (eInline) {
+            var fb = buildHubAuthFromOperator_(hubOpInline);
+            if (fb) {
+              var sessInline = buildHubSession_(fb);
+              sessInline.provisional = true;
+              sessInline.authDegraded = true;
+              return sessInline;
+            }
+            throw eInline;
+          }
         }
         throw new Error(HUB_RELOGIN_MSG);
       }
@@ -1341,13 +1397,21 @@ var AccountingApi = (function () {
       var hubOpPr = readHubOperator_();
       var session;
       if (hubOpPr) {
-        var authPr = await post({
-          action: 'payment_request_auth_me',
-          user_id: hubOpPr.userId,
-          auth: { user_id: hubOpPr.userId }
-        });
-        if (!authPr.success) throw new Error(authPr.message || '驗證失敗');
-        session = buildHubSession_(authPr);
+        try {
+          var authPr = await post({
+            action: 'payment_request_auth_me',
+            user_id: hubOpPr.userId,
+            auth: { user_id: hubOpPr.userId }
+          });
+          if (!authPr.success) throw new Error(authPr.message || '驗證失敗');
+          session = buildHubSession_(authPr);
+        } catch (ePr) {
+          var fbPr = buildHubAuthFromOperator_(hubOpPr);
+          if (!fbPr) throw ePr;
+          session = buildHubSession_(fbPr);
+          session.provisional = true;
+          session.authDegraded = true;
+        }
       } else {
         session = await AccountingApi.initLiff(opts);
         if (!session) return null;

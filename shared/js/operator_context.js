@@ -51,28 +51,56 @@ var OperatorContext = (function () {
     } catch (e) {}
   }
 
-  function mergeFromUrl() {
+  /** 只解析網址參數（不依賴 sessionStorage；寫入失敗仍回傳身分） */
+  function peekFromUrl() {
     try {
       var q = new URLSearchParams(window.location.search);
       var uid = q.get('uid') || q.get('dev_user_id') || q.get('dev_user') || '';
       var name = q.get('name') || '';
       var permStr = q.get('permission') || q.get('perm') || q.get('dev_perm') || '';
       var hubLiff = q.get('hub_liff_id') || q.get('hub_liff') || '';
-      if (!uid && !name && !permStr && !hubLiff) return read();
+      if (!uid && !name && !permStr && !hubLiff) return null;
+      return {
+        userId: String(uid || '').trim(),
+        userName: String(name || '').trim(),
+        displayName: String(name || '').trim(),
+        permission: permStr ? (parseInt(permStr, 10) || 0) : 0,
+        hubLiffId: String(hubLiff || '').trim(),
+        source: 'hub_iframe',
+        ts: Date.now()
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function mergeFromUrl() {
+    try {
+      var fromUrl = peekFromUrl();
+      if (!fromUrl) return read();
       var prev = read() || {};
       var op = {
-        userId: uid || prev.userId || '',
-        userName: name || prev.userName || '',
-        displayName: name || prev.displayName || '',
-        permission: permStr ? parseInt(permStr, 10) : (prev.permission || 0),
-        hubLiffId: hubLiff || prev.hubLiffId || '',
-        source: 'hub_iframe'
+        userId: fromUrl.userId || prev.userId || '',
+        userName: fromUrl.userName || prev.userName || '',
+        displayName: fromUrl.displayName || prev.displayName || '',
+        permission: fromUrl.permission || prev.permission || 0,
+        hubLiffId: fromUrl.hubLiffId || prev.hubLiffId || '',
+        source: 'hub_iframe',
+        ts: Date.now()
       };
       if (op.userId) write(op);
+      // 即使 sessionStorage 寫入失敗，仍回傳網址上的身分（避免卡在驗證身分 60 秒）
       return op.userId ? op : read();
     } catch (e) {
       return read();
     }
+  }
+
+  /** 優先網址，其次本分頁記憶；供會計啟動／主控台進門使用 */
+  function readPreferUrl() {
+    var merged = mergeFromUrl();
+    if (merged && merged.userId) return merged;
+    return read();
   }
 
   function devBypassPayload() {
@@ -134,7 +162,9 @@ var OperatorContext = (function () {
   return {
     read: read,
     write: write,
+    peekFromUrl: peekFromUrl,
     mergeFromUrl: mergeFromUrl,
+    readPreferUrl: readPreferUrl,
     devBypassPayload: devBypassPayload,
     applySession: applySession,
     hubQueryString: hubQueryString,
