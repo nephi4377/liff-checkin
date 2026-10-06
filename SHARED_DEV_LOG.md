@@ -22,7 +22,7 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| — | — | 目前無進行中工作 | — | — |
+| 2026-10-06 | Cursor Cloud | 請款中頁排版＋點圖放大＋已完成篩選 | `payment_request.html`、`quick_review.html`、`accounting_lightbox.js` | 進行中 |
 
 ## 最近完成
 
