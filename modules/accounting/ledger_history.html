@@ -6,11 +6,11 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <title>歷史記帳紀錄</title>
-  <!-- cache-bust 2026-10-06-query-remake：≥3 可看全部；排序只依 recorded_at；勿強制 mine_only -->
+  <!-- cache-bust 2026-10-06-flag-delete：標註≥3／刪除≥4／改帳>4；排序仍只依 recorded_at -->
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=86"></script>
+  <script src="../../shared/js/accounting_api.js?v=87"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <script src="../../shared/js/accounting_ui.js?v=32"></script>
@@ -191,6 +191,22 @@
       padding: 8px 12px; font-size: 14px; cursor: pointer;
     }
     .btn-edit-primary:disabled { opacity: .5; cursor: default; }
+    .btn-flag-warn {
+      background: #fef7e0; color: #b06000; border: 1px solid #f9ab00;
+      border-radius: 8px; padding: 8px 12px; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    .btn-delete-danger {
+      background: #fce8e6; color: #c5221f; border: 1px solid #f28b82;
+      border-radius: 8px; padding: 8px 12px; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    .hist-flag-badge {
+      display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px;
+      border-radius: 6px; background: #fef7e0; color: #b06000; margin-left: 6px;
+    }
+    .hist-item.is-flagged { border-color: #f9ab00; background: #fffbf0; }
+    .hist-mod-msg { font-size: 13px; margin: 8px 0 0; }
+    .hist-mod-msg.is-ok { color: #137333; }
+    .hist-mod-msg.is-err { color: #c5221f; }
 
     .hist-detail-placeholder {
       margin: 0; color: #777; font-size: 14px; line-height: 1.5;
@@ -232,7 +248,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub" id="pageModeHint">權限 ≥3 可查<strong>區間內全部人</strong>的帳。預設近 7 天；列表<strong>只依新增時間（你按下送出的時間）</strong>新→舊，<strong>不是交易日</strong>。「只看我記的」為選用篩選（暫不強制）。點一筆可看案號、圖片集。</p>
+    <p class="sub" id="pageModeHint">權限 ≥3 可查<strong>區間內全部人</strong>的帳。預設近 7 天；列表<strong>只依新增時間（你按下送出的時間）</strong>新→舊，<strong>不是交易日</strong>。「只看我記的」為選用篩選（暫不強制）。點一筆可看案號、圖片集。權限：標註錯誤 ≥3；刪除已標註 ≥4；修改記帳需 &gt;4。</p>
 
     <div class="card" id="historyFiltersCard">
       <div class="hist-head">
@@ -367,6 +383,14 @@
         if (detail.edited_at_display || detail.edited_at) {
           rows.splice(3, 0, ['上次修改', detail.edited_at_display || detail.edited_at]);
         }
+        if (detail.error_flagged) {
+          var flagLabel = '已標註錯誤';
+          if (detail.error_flagged_by) flagLabel += '（' + detail.error_flagged_by + '）';
+          if (detail.error_flagged_at) {
+            flagLabel += ' ' + String(detail.error_flagged_at).replace('T', ' ').slice(0, 16);
+          }
+          rows.splice(1, 0, ['狀態', flagLabel]);
+        }
         if (detail.stores && detail.stores.length) {
           rows.push(['店別', detail.stores.map(function (s) {
             return s.store + (s.amount != null && s.amount !== '' ? ' ' + formatMoney(s.amount) : '');
@@ -385,15 +409,31 @@
         return dl;
       }
 
+      function sessionPerm() {
+        return Number((sessionRef && sessionRef.auth && sessionRef.auth.permission) || 0);
+      }
+
       function sessionCanEditDetail(detail) {
         if (!sessionRef || !sessionRef.auth) return false;
         if (detail && detail.can_edit === true) return true;
         if (detail && detail.can_edit === false) return false;
-        var perm = Number(sessionRef.auth.permission || 0);
-        if (perm >= 4) return true;
-        if (perm >= 3 && detail && detail.is_mine) return true;
-        // 勿用 mine_only 開關推斷可改帳（老闆：改帳 >4；標註／刪除另案）
-        return false;
+        // 老闆：修改記帳需權限大於 4（Yang=3 只能標註）
+        return sessionPerm() > 4;
+      }
+
+      function sessionCanFlagDetail(detail) {
+        if (!sessionRef || !sessionRef.auth) return false;
+        if (detail && detail.can_flag === true) return true;
+        if (detail && detail.can_flag === false) return false;
+        if (detail && detail.error_flagged) return false;
+        return sessionPerm() >= 3;
+      }
+
+      function sessionCanDeleteDetail(detail) {
+        if (!sessionRef || !sessionRef.auth) return false;
+        if (detail && detail.can_delete === true) return true;
+        if (detail && detail.can_delete === false) return false;
+        return sessionPerm() >= 4 && !!(detail && detail.error_flagged);
       }
 
       function fileToPhotoPayload(file) {
@@ -414,18 +454,134 @@
         });
       }
 
-      function buildEditForm(panel, summaryItem, detail) {
+      function buildModerationActions(panel, summaryItem, detail) {
         var merged = Object.assign({}, summaryItem || {}, detail || {});
-        if (!sessionCanEditDetail(merged)) return;
+        var canEdit = sessionCanEditDetail(merged);
+        var canFlag = sessionCanFlagDetail(merged);
+        var canDelete = sessionCanDeleteDetail(merged);
+        if (!canEdit && !canFlag && !canDelete) return;
 
         var actions = document.createElement('div');
         actions.className = 'hist-edit-actions';
-        var editBtn = document.createElement('button');
-        editBtn.type = 'button';
-        editBtn.className = 'btn-ghost btn-edit-primary';
-        editBtn.textContent = '修改這一筆';
-        actions.appendChild(editBtn);
+        var modMsg = document.createElement('p');
+        modMsg.className = 'hist-mod-msg';
+        modMsg.setAttribute('data-role', 'mod-msg');
+
+        function setModMsg(text, ok) {
+          modMsg.textContent = text || '';
+          modMsg.className = 'hist-mod-msg ' + (ok ? 'is-ok' : (text ? 'is-err' : ''));
+        }
+
+        function locOpts() {
+          return {
+            sheet: merged.sheet || (summaryItem && summaryItem.sheet),
+            row: merged.row != null ? merged.row : (summaryItem && summaryItem.row),
+            ingest_id: merged.ingest_id || (summaryItem && summaryItem.ingest_id)
+          };
+        }
+
+        if (canFlag) {
+          var flagBtn = document.createElement('button');
+          flagBtn.type = 'button';
+          flagBtn.className = 'btn-flag-warn';
+          flagBtn.textContent = '標註錯誤';
+          flagBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (!sessionRef || typeof AccountingApi.accountingLedgerFlag !== 'function') {
+              setModMsg('標註功能尚未就緒', false);
+              return;
+            }
+            if (!window.confirm('標註這筆為錯誤記帳？\n（權限 4 之後才能刪除已標註的帳）')) return;
+            flagBtn.disabled = true;
+            setModMsg('標註中…', true);
+            AccountingApi.accountingLedgerFlag(sessionRef, locOpts()).then(function (data) {
+              flagBtn.disabled = false;
+              if (!data || !data.success) {
+                setModMsg((data && data.message) || '標註失敗', false);
+                return;
+              }
+              setModMsg(data.message || '已標註', true);
+              var updated = data.item || Object.assign({}, merged, {
+                error_flagged: true,
+                can_flag: false,
+                can_delete: sessionPerm() >= 4,
+                can_edit: sessionPerm() > 4
+              });
+              var key = historyItemKey(summaryItem) || historyItemKey(updated);
+              if (key && itemsByKey[key]) {
+                Object.assign(itemsByKey[key], {
+                  error_flagged: true,
+                  error_flagged_at: updated.error_flagged_at,
+                  error_flagged_by: updated.error_flagged_by
+                });
+              }
+              fillHistoryDetailPanel(panel, itemsByKey[openHistoryKey] || updated, updated);
+              try { loadLedgerHistory(); } catch (eReload) {}
+            }).catch(function (err) {
+              flagBtn.disabled = false;
+              setModMsg((err && err.message) || '標註失敗', false);
+            });
+          });
+          actions.appendChild(flagBtn);
+        }
+
+        if (canDelete) {
+          var delBtn = document.createElement('button');
+          delBtn.type = 'button';
+          delBtn.className = 'btn-delete-danger';
+          delBtn.textContent = '刪除錯誤帳';
+          delBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (!sessionRef || typeof AccountingApi.accountingLedgerDeleteFlagged !== 'function') {
+              setModMsg('刪除功能尚未就緒', false);
+              return;
+            }
+            if (!window.confirm('確定刪除這筆已標註的錯誤記帳？\n刪除後無法從列表還原。')) return;
+            delBtn.disabled = true;
+            setModMsg('刪除中…', true);
+            AccountingApi.accountingLedgerDeleteFlagged(sessionRef, locOpts()).then(function (data) {
+              delBtn.disabled = false;
+              if (!data || !data.success) {
+                setModMsg((data && data.message) || '刪除失敗', false);
+                return;
+              }
+              setModMsg(data.message || '已刪除', true);
+              var key = historyItemKey(summaryItem) || historyItemKey(merged);
+              if (key && itemsByKey[key]) delete itemsByKey[key];
+              openHistoryKey = '';
+              try { loadLedgerHistory(); } catch (eReload) {}
+              if (isDesktopDetail()) {
+                var ph = document.getElementById('historyDetailPlaceholder');
+                var body = document.getElementById('historyDetailBody');
+                if (body) {
+                  body.classList.add('hidden');
+                  body.innerHTML = '';
+                }
+                if (ph) {
+                  ph.classList.remove('hidden');
+                  ph.textContent = '已刪除錯誤記帳。請再點列表一筆。';
+                }
+              }
+            }).catch(function (err) {
+              delBtn.disabled = false;
+              setModMsg((err && err.message) || '刪除失敗', false);
+            });
+          });
+          actions.appendChild(delBtn);
+        }
+
+        var editBtn = null;
+        if (canEdit) {
+          editBtn = document.createElement('button');
+          editBtn.type = 'button';
+          editBtn.className = 'btn-ghost btn-edit-primary';
+          editBtn.textContent = '修改這一筆';
+          actions.appendChild(editBtn);
+        }
+
         panel.appendChild(actions);
+        panel.appendChild(modMsg);
+        if (!canEdit || !editBtn) return;
 
         var form = document.createElement('div');
         form.className = 'hist-edit-form hidden';
@@ -508,6 +664,10 @@
         });
 
         form.addEventListener('click', function (e) { e.stopPropagation(); });
+      }
+
+      function buildEditForm(panel, summaryItem, detail) {
+        buildModerationActions(panel, summaryItem, detail);
       }
 
       function saveHistoryEdit(panel, summaryItem, merged, form, editBtn) {
@@ -840,10 +1000,12 @@
           var loc = (it.sheet || '—') + ' 第' + (it.row || '?') + '列';
           if (it.ingest_id) loc += ' · ' + String(it.ingest_id).slice(0, 8);
           var recorded = it.recorded_at_display || it.recorded_at || '';
+          if (it.error_flagged) div.classList.add('is-flagged');
           div.innerHTML =
             '<div class="hist-top">' +
               '<div class="hist-top-left">' +
                 '<span class="hist-type ' + typeClass + '">' + escHtml(it.type || '—') + '</span>' +
+                (it.error_flagged ? '<span class="hist-flag-badge">錯誤標註</span>' : '') +
                 (recorded
                   ? ('<span style="color:#174ea6;font-weight:600">新增 ' + escHtml(recorded) + '</span>')
                   : ('<span style="color:#5f6368">新增時間（舊資料無戳記）</span>')) +
@@ -856,7 +1018,7 @@
             '<div class="hist-hint">點開看詳情（案號／圖片集）</div>' +
             '<div class="hist-detail hidden"></div>';
           div.addEventListener('click', function (e) {
-            if (e.target.closest && (e.target.closest('.hist-att-row') || e.target.closest('.btn-ghost') || e.target.closest('.hist-edit-form') || e.target.closest('.btn-edit-primary'))) return;
+            if (e.target.closest && (e.target.closest('.hist-att-row') || e.target.closest('.btn-ghost') || e.target.closest('.hist-edit-form') || e.target.closest('.btn-edit-primary') || e.target.closest('.btn-flag-warn') || e.target.closest('.btn-delete-danger') || e.target.closest('.hist-edit-actions'))) return;
             toggleHistoryDetail(div, it);
           });
           div.addEventListener('keydown', function (e) {
