@@ -4,12 +4,21 @@
  */
 var AccountingCache = (function () {
   var STORAGE_KEY = 'tanxin_accounting_bootstrap_v6';
+  /** 舊版 bootstrap key（v1～v5）僅佔空間、會干擾枚舉合併；載入時清掉，不動現行 v6 */
+  var LEGACY_BOOTSTRAP_PREFIXES = [
+    'tanxin_accounting_bootstrap_v1:',
+    'tanxin_accounting_bootstrap_v2:',
+    'tanxin_accounting_bootstrap_v3:',
+    'tanxin_accounting_bootstrap_v4:',
+    'tanxin_accounting_bootstrap_v5:'
+  ];
   var BOOTSTRAP_TIMEOUT_MS = 120000;
   var DEFAULT_SWR_MS = 24 * 60 * 60 * 1000;
   var _mem = {};
   var _inflight = {};
   var _swrInflight = {};
   var INFLIGHT_STORAGE_PREFIX = 'tanxin_bootstrap_inflight_v1:';
+  var _legacyPurged = false;
 
   /** 寫入 bootstrap.masters 的 entity；CRUD 後優先 patch，無法 patch 才整包清除 */
   var BOOTSTRAP_INVALIDATE_ENTITIES = {
@@ -290,6 +299,38 @@ var AccountingCache = (function () {
     try { localStorage.removeItem(key); } catch (e2) {}
   }
 
+  /** 只清舊版 bootstrap／過期 inflight 標記；保留 v6 主檔與列表快取（近七天體驗依賴它們） */
+  function purgeLegacyKeys_() {
+    if (_legacyPurged) return;
+    _legacyPurged = true;
+    function sweep(store) {
+      if (!store) return;
+      var toRemove = [];
+      try {
+        for (var i = 0; i < store.length; i++) {
+          var k = store.key(i);
+          if (!k) continue;
+          var legacy = false;
+          for (var p = 0; p < LEGACY_BOOTSTRAP_PREFIXES.length; p++) {
+            if (k.indexOf(LEGACY_BOOTSTRAP_PREFIXES[p]) === 0) { legacy = true; break; }
+          }
+          if (legacy) toRemove.push(k);
+          else if (k.indexOf(INFLIGHT_STORAGE_PREFIX) === 0) {
+            var ts = parseInt(store.getItem(k) || '', 10);
+            if (!ts || Date.now() - ts > BOOTSTRAP_TIMEOUT_MS + 60000) toRemove.push(k);
+          }
+        }
+      } catch (eScan) {}
+      for (var r = 0; r < toRemove.length; r++) {
+        try { store.removeItem(toRemove[r]); } catch (eRm) {}
+      }
+    }
+    try { sweep(localStorage); } catch (eL) {}
+    try { sweep(sessionStorage); } catch (eS) {}
+  }
+
+  try { purgeLegacyKeys_(); } catch (eBootPurge) {}
+
   function upsertMasterRow_(masters, masterKey, idField, row) {
     if (!masters || !masterKey || !row) return false;
     if (!masters[masterKey]) masters[masterKey] = [];
@@ -375,6 +416,7 @@ var AccountingCache = (function () {
   return {
     SWR_MS: DEFAULT_SWR_MS,
     clear: clear,
+    purgeLegacyKeys: purgeLegacyKeys_,
     patchMaster: patchMaster,
     patchVendorFields: patchVendorFields,
     afterCrudSuccess: afterCrudSuccess,
@@ -401,6 +443,7 @@ var AccountingCache = (function () {
     },
     load: async function (session, force) {
       if (!session) throw new Error('需要登入');
+      try { purgeLegacyKeys_(); } catch (ePurge) {}
       if (!force) {
         var wrapped = readWrapped(session);
         if (wrapped) {

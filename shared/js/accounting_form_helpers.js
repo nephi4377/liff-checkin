@@ -180,8 +180,8 @@ var AccountingFormHelpers = (function () {
         var tax = String(v.tax_id || '').trim();
         var trade = String(v.trade_category || '').trim();
         var label = vendorDisplayName(v);
-        if (trade) label += ' · ' + trade;
-        if (tax) label += '（' + tax + '）';
+        if (trade) label += ' · 分類：' + trade;
+        if (tax) label += '（統編 ' + tax + '）';
         btn.textContent = label;
         btn.addEventListener('mousedown', function (e) {
           e.preventDefault();

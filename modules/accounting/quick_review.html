@@ -4,15 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>單據與存檔</title>
-  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/accounting_api.js?v=59"></script>
-  <script src="../../shared/js/accounting_cache.js?v=32"></script>
+  <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=9"></script>
+  <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <style>
     h2 { margin: 0; font-size: 22px; font-weight: 700; color: #202124; }
     .page-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin-bottom: 6px; }
@@ -54,8 +55,11 @@
     }
     .btn-cat.pay { background: #e6f4ea; color: #137333; }
     .btn-cat.drop { background: #fce8e6; color: #c5221f; }
+    /* 縮圖｜說明｜操作：同一列對齊，避免按鈕擠到縮圖底下 */
     .item {
-      display: grid; grid-template-columns: 72px 1fr; gap: 10px 12px;
+      display: grid;
+      grid-template-columns: 80px minmax(0, 1fr);
+      gap: 8px 12px;
       border: 1px solid #e8eaed; border-radius: 10px; padding: 12px;
       margin-bottom: 10px; background: #fff; align-items: start;
     }
@@ -64,20 +68,31 @@
       border-color: #34a853; background: #f0faf3;
       box-shadow: inset 3px 0 0 #34a853;
     }
+    .item.done {
+      border-color: #dadce0; background: #fafafa;
+    }
     .item.removing { opacity: .45; pointer-events: none; }
-    .item-main { min-width: 0; grid-column: 2; }
     .item-media {
-      grid-column: 1; grid-row: 1 / span 2; width: 72px; height: 72px;
+      grid-column: 1; grid-row: 1;
+      width: 80px; height: 80px;
       border-radius: 8px; overflow: hidden; background: #f1f3f4;
       display: flex; align-items: center; justify-content: center;
       text-decoration: none; color: #5f6368; font-size: 11px; font-weight: 600;
-      border: none; padding: 0; cursor: pointer;
+      border: 1px solid #e8eaed; padding: 0; cursor: zoom-in; position: relative;
     }
     .item-media img {
       width: 100%; height: 100%; object-fit: cover; display: block;
+      pointer-events: none;
     }
-    .item-media.pdf { background: #e8eaed; }
-    .item-body { grid-column: 1 / -1; }
+    .item-media.pdf { background: #e8eaed; cursor: pointer; }
+    .item-media .zoom-hint {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      background: rgba(32,33,36,.55); color: #fff;
+      font-size: 10px; line-height: 1.2; padding: 3px 0; text-align: center;
+      font-weight: 600;
+    }
+    .item-main { min-width: 0; grid-column: 2; grid-row: 1; }
+    .item-body { grid-column: 1 / -1; grid-row: 2; min-width: 0; }
     .headline { font-size: 16px; font-weight: 700; color: #202124; line-height: 1.3; }
     .meta-row { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .tag {
@@ -88,11 +103,24 @@
     .tag.pay {
       background: #ceead6; color: #0d652d; font-weight: 700;
     }
+    .tag.done {
+      background: #e8eaed; color: #3c4043; font-weight: 600;
+    }
     .pay-help {
       margin: 6px 0 0; font-size: 13px; color: #0d652d; line-height: 1.4;
       font-weight: 600;
     }
     .time-line { margin: 4px 0 0; font-size: 13px; color: #5f6368; }
+    @media (min-width: 720px) {
+      .item {
+        grid-template-columns: 96px minmax(0, 1fr) minmax(220px, 280px);
+        gap: 10px 16px;
+      }
+      .item-media { width: 96px; height: 96px; }
+      .item-body { grid-column: 3; grid-row: 1; align-self: center; }
+      .actions { margin-top: 0; }
+      .claim-row { margin-top: 0; margin-bottom: 8px; }
+    }
     .flow-banner {
       margin: 0 0 12px; padding: 12px 14px; border-radius: 10px;
       font-size: 14px; line-height: 1.5; color: #174ea6;
@@ -212,7 +240,7 @@
       <div class="status-chips" id="statusChips" role="toolbar" aria-label="快速篩選">
         <button type="button" data-status="open" class="active">待處理</button>
         <button type="button" data-status="請款中" class="has-pay">請款還沒送完</button>
-        <button type="button" data-status="已分類">已分類</button>
+        <button type="button" data-status="已分類">已完成</button>
       </div>
       <div class="filters">
         <div class="field">
@@ -222,7 +250,7 @@
             <option value="待審">待審</option>
             <option value="待認領">待認領</option>
             <option value="請款中">請款中（還沒送出）</option>
-            <option value="已分類">已分類</option>
+            <option value="已分類">已完成</option>
           </select>
         </div>
         <div class="field">
@@ -273,7 +301,7 @@
   <div id="dropDlg" class="dlg-mask hidden" role="dialog" aria-modal="true" aria-labelledby="dropDlgTitle">
     <div class="dlg">
       <h3 id="dropDlgTitle">確定標為廢棄？</h3>
-      <p>會從待處理移出。若只是標錯，請改切「已分類」再重標，不必廢棄。</p>
+      <p>會從待處理移出。若只是標錯，請改切「已完成」再重標，不必廢棄。</p>
       <div class="dlg-actions">
         <button type="button" class="btn btn-ghost" id="dropCancelBtn" autofocus>取消</button>
         <button type="button" class="btn btn-danger" id="dropOkBtn">確定廢棄</button>
@@ -284,6 +312,7 @@
   <script>
     (function () {
       var CACHE_KEY = 'acct_quick_review_list_v2';
+      var CACHE_TTL_MS = 90 * 1000; // 與 AccountingListCache 多人模式對齊；過期不沿用舊清單
       var PAY_RESUME_KEY = 'acct_quick_review_pay_resume_v1';
       var session = null;
       var items = [];
@@ -401,7 +430,12 @@
         try {
           var raw = sessionStorage.getItem(CACHE_KEY);
           if (!raw) return null;
-          return JSON.parse(raw);
+          var parsed = JSON.parse(raw);
+          if (!parsed || !parsed.at || (Date.now() - parsed.at) > CACHE_TTL_MS) {
+            try { sessionStorage.removeItem(CACHE_KEY); } catch (eClr) {}
+            return null;
+          }
+          return parsed;
         } catch (e) { return null; }
       }
       function cacheWrite(list, filterStatus) {
@@ -729,20 +763,34 @@
         var isPdf = String(it.mime_type || '').toLowerCase().indexOf('pdf') >= 0 ||
           String(it.filename || '').toLowerCase().indexOf('.pdf') >= 0;
         var openUrl = it.drive_url || '';
+        var previewUrl = '';
         if (it.drive_file_id && !isPdf) {
+          previewUrl = 'https://drive.google.com/thumbnail?id=' +
+            encodeURIComponent(it.drive_file_id) + '&sz=w1600';
           var thumb = 'https://drive.google.com/thumbnail?id=' +
             encodeURIComponent(it.drive_file_id) + '&sz=w200';
           return (
-            '<button type="button" class="item-media" data-open="' + esc(openUrl) + '" title="開啟原圖">' +
-              '<img src="' + esc(thumb) + '" alt="" loading="lazy" decoding="async" width="72" height="72" />' +
+            '<button type="button" class="item-media" data-preview="' + esc(previewUrl) + '"' +
+              (openUrl ? (' data-open="' + esc(openUrl) + '"') : '') +
+              ' title="點圖放大查看">' +
+              '<img src="' + esc(thumb) + '" alt="" loading="lazy" decoding="async" width="80" height="80" />' +
+              '<span class="zoom-hint">放大</span>' +
             '</button>'
           );
         }
         return (
-          '<button type="button" class="item-media pdf" data-open="' + esc(openUrl) + '" title="開啟檔案">' +
+          '<button type="button" class="item-media pdf"' +
+            (openUrl ? (' data-open="' + esc(openUrl) + '"') : '') +
+            ' title="開啟檔案">' +
             (isPdf ? 'PDF' : '檔案') +
           '</button>'
         );
+      }
+
+      function statusDisplayLabel(st) {
+        if (st === '請款中') return '請款中・還沒送出';
+        if (st === '已分類') return '已完成';
+        return st || '';
       }
 
       function renderList() {
@@ -754,10 +802,10 @@
         if (!items.length) {
           if (filterStatus === '請款中') {
             summary.textContent = '目前沒有「請款還沒送完」的單據。';
-            box.innerHTML = '<p class="sub">點「待處理」看全部；若以前點過請款、畫面卻空了，可切「已分類」找舊單再點請款。</p>';
+            box.innerHTML = '<p class="sub">點「待處理」看全部；若以前點過請款、畫面卻空了，可切「已完成」找舊單再點請款。</p>';
           } else if (filterStatus === '已分類') {
-            summary.textContent = '目前沒有已分類單據。';
-            box.innerHTML = '<p class="sub">這裡可找回以前標錯過或已處理的單；找到後可再點「請款」。</p>';
+            summary.textContent = '目前沒有已完成單據。';
+            box.innerHTML = '<p class="sub">這裡是送出成功或已標完的單；找到後可再點「請款」重做。</p>';
           } else {
             summary.textContent = '目前沒有符合條件的單據。';
             box.innerHTML = '<p class="sub">傳圖後會出現在這裡。若剛從請款頁回來卻看不到，按上方「請款還沒送完」。</p>';
@@ -766,28 +814,32 @@
         }
         summary.textContent = payCount
           ? ('共 ' + items.length + ' 筆（其中 ' + payCount + ' 筆請款還沒送完，綠框標示）')
-          : ('共 ' + items.length + ' 筆（請款須送出成功才移出；報價等標完會移出）');
+          : (filterStatus === '已分類'
+            ? ('共 ' + items.length + ' 筆已完成（請款送出成功或已標報價／出貨等）')
+            : ('共 ' + items.length + ' 筆（請款須送出成功才移出；報價等標完會移出）'));
         box.innerHTML = items.map(function (it) {
           var unclaimed = it.status === '待認領';
           var payPending = it.status === '請款中';
+          var done = it.status === '已分類';
           var payBtnLabel = payPending ? '繼續請款' : '請款';
-          var statusLabel = payPending ? '請款中・還沒送出' : (it.status || '');
+          var statusLabel = statusDisplayLabel(it.status);
+          var tagClass = payPending ? ' pay' : (unclaimed ? ' warn' : (done ? ' done' : ''));
           var itemClass = 'item' +
             (unclaimed ? ' unclaimed' : '') +
-            (payPending ? ' pay-pending' : '');
+            (payPending ? ' pay-pending' : '') +
+            (done ? ' done' : '');
           return (
             '<div class="' + itemClass + '" data-id="' + esc(it.quick_review_id) + '">' +
               mediaHtml(it) +
               '<div class="item-main">' +
                 '<div class="headline">' + esc(it.vendor_name || '（未對廠商）') + '</div>' +
                 '<div class="meta-row">' +
-                  '<span class="tag' + (payPending ? ' pay' : (unclaimed ? ' warn' : '')) + '">' +
-                    esc(statusLabel) + '</span>' +
+                  '<span class="tag' + tagClass + '">' + esc(statusLabel) + '</span>' +
                   (it.category && !payPending ? ('<span class="tag">' + esc(it.category) + '</span>') : '') +
                   '<span class="tag">' + esc(it.source || '') + '</span>' +
                 '</div>' +
                 (payPending
-                  ? '<p class="pay-help">單據還在這裡。按「繼續請款」填表送出；送出成功後才會移走。</p>'
+                  ? '<p class="pay-help">單據還在這裡。按「繼續請款」填表送出；送出成功後才會移到「已完成」。</p>'
                   : '') +
                 '<p class="time-line">' + esc(shortTime(it.created_at)) +
                   (it.created_by ? (' · ' + esc(it.created_by)) : '') + '</p>' +
@@ -965,7 +1017,7 @@
           setOk('已標為「' + category + '」' + (leaveList ? '（已從待處理移出）' : ''));
           setFlowBanner(leaveList ? 'ok' : '',
             leaveList
-              ? ('已標「' + esc(category) + '」，這筆已從待處理移出。標錯了可按上方「已分類」找回再重標。')
+              ? ('已標「' + esc(category) + '」，這筆已從待處理移出。標錯了可按上方「已完成」找回再重標。')
               : '');
           cacheWrite(items, filterStatus);
           if (!leaveList) {
@@ -995,6 +1047,17 @@
       }
 
       document.getElementById('list').addEventListener('click', function (ev) {
+        var previewBtn = ev.target.closest('[data-preview]');
+        if (previewBtn) {
+          var preview = previewBtn.getAttribute('data-preview');
+          if (preview && typeof AccountingLightbox !== 'undefined') {
+            AccountingLightbox.open([preview]);
+          } else {
+            var fallback = previewBtn.getAttribute('data-open') || preview;
+            if (fallback) window.open(fallback, '_blank', 'noopener');
+          }
+          return;
+        }
         var openBtn = ev.target.closest('[data-open]');
         if (openBtn) {
           var url = openBtn.getAttribute('data-open');
@@ -1037,7 +1100,7 @@
         if (st === '請款中') {
           setFlowBanner('', '這裡只顯示<strong>請款還沒送完</strong>的單。按「繼續請款」可再開填表頁。');
         } else if (st === '已分類') {
-          setFlowBanner('', '「已分類」可找回以前標過的單（含部署前點請款就移走的）。找到後再點「請款」即可。');
+          setFlowBanner('', '「已完成」是送出成功或已標完的單（含部署前點請款就移走的）。找到後再點「請款」即可。');
         } else {
           setFlowBanner('', '');
         }

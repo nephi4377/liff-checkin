@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>待付款請款</title>
-  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/accounting_tax_mode.js?v=6"></script>
@@ -12,10 +12,11 @@
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_context.js?v=3"></script>
   <script src="../../shared/js/accounting_api.js?v=63"></script>
-  <script src="../../shared/js/accounting_cache.js?v=32"></script>
-  <script src="../../shared/js/accounting_form_helpers.js?v=5"></script>
+  <script src="../../shared/js/accounting_cache.js?v=34"></script>
+  <script src="../../shared/js/accounting_form_helpers.js?v=6"></script>
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
+  <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <style>
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; line-height: 1.5; }
@@ -58,13 +59,30 @@
     .tax-mode-prorate-row.hidden { display: none; }
     .pretax-hint { font-size: 12px; color: #666; }
     .total-line { font-size: 18px; font-weight: 700; margin-top: 10px; text-align: right; }
-    .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
-    .photo-tile { border: 1px solid #ddd; border-radius: 8px; padding: 6px; background: #fafafa; text-align: center; }
-    .photo-tile img { width: 100%; height: 72px; object-fit: cover; border-radius: 4px; }
-    .photo-tile .file-thumb { width: 100%; height: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 4px; background: #eef2f7; color: #444; font-size: 12px; line-height: 1.3; padding: 4px; box-sizing: border-box; word-break: break-all; }
+    .photo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
+    .photo-tile {
+      border: 1px solid #dadce0; border-radius: 10px; padding: 8px; background: #fafafa;
+      text-align: center; display: flex; flex-direction: column; gap: 4px; min-width: 0;
+    }
+    .photo-tile img {
+      width: 100%; height: 120px; object-fit: cover; border-radius: 6px;
+      cursor: zoom-in; display: block; background: #eef2f7;
+    }
+    .photo-tile .file-thumb {
+      width: 100%; height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      border-radius: 6px; background: #eef2f7; color: #444; font-size: 12px; line-height: 1.3; padding: 6px;
+      box-sizing: border-box; word-break: break-all;
+    }
     .photo-tile .file-thumb strong { font-size: 13px; color: #c5221f; }
-    .photo-tile label { font-weight: normal; font-size: 12px; margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 4px; }
-    .photo-tile .del { border: none; background: none; color: #c5221f; font-size: 11px; cursor: pointer; margin-top: 2px; }
+    .photo-tile .zoom-hint { font-size: 11px; color: #5f6368; margin: 0; }
+    .photo-tile label {
+      font-weight: normal; font-size: 12px; margin-top: 2px;
+      display: flex; align-items: center; justify-content: center; gap: 4px;
+    }
+    .photo-tile .del {
+      border: none; background: #fce8e6; color: #c5221f; font-size: 12px; cursor: pointer;
+      margin-top: 2px; border-radius: 6px; padding: 6px 8px; min-height: 36px;
+    }
     .drop-zone { margin-top: 8px; padding: 20px 14px; border: 2px dashed #b0b8c4; border-radius: 12px; background: #f8fafc; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
     .drop-zone:hover, .drop-zone.drag-over { border-color: #1a73e8; background: #e8f0fe; }
     .drop-zone p { margin: 0; font-size: 15px; color: #333; }
@@ -74,6 +92,20 @@
     .btn-primary:disabled, .btn-secondary:disabled { opacity: .55; cursor: not-allowed; }
     .btn-row { display: flex; flex-direction: column; gap: 0; }
     .vendor-filter-label { font-size: 13px; font-weight: 600; color: #555; margin-top: 8px; }
+    .vendor-search-first { margin-top: 4px; }
+    .vendor-category-hit {
+      margin: 8px 0 0; padding: 8px 10px; border-radius: 8px;
+      background: #e8f0fe; border: 1px solid #c6dafc; color: #174ea6;
+      font-size: 13px; line-height: 1.4; font-weight: 600;
+    }
+    .vendor-category-hit.is-empty { background: #f8fafc; border-color: #e8eaed; color: #5f6368; font-weight: 500; }
+    .vendor-or-divider {
+      display: flex; align-items: center; gap: 8px; margin: 12px 0 4px;
+      color: #80868b; font-size: 12px; font-weight: 600;
+    }
+    .vendor-or-divider::before, .vendor-or-divider::after {
+      content: ''; flex: 1; height: 1px; background: #dadce0;
+    }
     .link-btn {
       background: none; border: none; color: #1a73e8; font-size: 13px; padding: 6px 0;
       cursor: pointer; text-align: left; width: auto; font-weight: 600; margin-top: 4px;
@@ -115,8 +147,18 @@
     .qr-banner.warn {
       color: #7a4f01; background: #fef7e0; border-color: #fdd663;
     }
-    .qr-banner .qr-actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
-    .qr-banner a.btn, .qr-banner button.btn { text-decoration: none; display: inline-flex; align-items: center; }
+    .qr-banner .qr-actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .qr-banner a.btn,
+    .qr-banner button.btn {
+      text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
+      width: auto; min-width: 0; margin-top: 0; padding: 10px 14px; flex: 0 1 auto;
+    }
+    .acct-pay-col-upload,
+    .acct-pay-col-fields { min-width: 0; }
+    .acct-pay-col-fields > label:first-of-type { margin-top: 0; }
+    @media (min-width: 560px) {
+      .photo-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -159,17 +201,19 @@
 
       <div class="acct-pay-col-fields">
       <label>廠商</label>
-      <p class="sub" id="vendorArchiveHint" style="margin:4px 0 6px">先選工項分類，再從下拉選廠商。</p>
+      <p class="sub" id="vendorArchiveHint" style="margin:4px 0 6px">可直接搜尋廠商名稱；找到後會顯示所屬工項分類。也可先選分類再從清單挑。</p>
       <div id="vendorPickBlock">
+        <div id="vendorManualBlock" class="vendor-search-first">
+          <label class="vendor-filter-label" for="pickVendorInput">直接搜尋廠商名稱</label>
+          <input type="text" id="pickVendorInput" placeholder="打 1～2 字搜尋名冊（結果會顯示分類）" autocomplete="off" />
+          <p class="vendor-category-hit is-empty" id="vendorCategoryHit" role="status">尚未選廠商。搜尋選取後會顯示「屬於哪個分類」。</p>
+        </div>
+        <div class="vendor-or-divider" aria-hidden="true">或先選分類</div>
         <label class="vendor-filter-label" for="filterVendorTrade">① 工項分類</label>
         <select id="filterVendorTrade"><option value="">請選工項分類</option></select>
-        <label class="vendor-filter-label" for="pickVendorSelect">② 廠商</label>
-        <select id="pickVendorSelect" disabled><option value="">請先選工項分類</option></select>
+        <label class="vendor-filter-label" for="pickVendorSelect">② 廠商清單</label>
+        <select id="pickVendorSelect"><option value="">全部／請選或改上方搜尋</option></select>
         <input type="hidden" id="pickVendor" value="" />
-        <div id="vendorManualBlock" class="hidden">
-          <label for="pickVendorInput">搜尋或輸入廠商名稱</label>
-          <input type="text" id="pickVendorInput" placeholder="打 1～2 字搜尋名冊" autocomplete="off" />
-        </div>
         <button type="button" class="link-btn" id="pickNewVendorBtn">不在名冊 → 新建廠商</button>
         <div id="newVendorBlock" class="hidden">
           <label>新廠商名稱</label>
@@ -205,7 +249,7 @@
       </select>
 
       <label>付給誰？</label>
-      <p class="sub" id="payeeHint" style="margin:4px 0 6px">廠商請款：先選工項分類，再從下拉選廠商；也可手動搜尋或新建廠商。</p>
+      <p class="sub" id="payeeHint" style="margin:4px 0 6px">廠商請款：直接搜尋名稱即可；結果會顯示該廠商工項分類。也可先選分類再從清單挑，或新建廠商。</p>
       <div class="seg" id="payeeSeg">
         <button type="button" data-mode="vendor" class="active">廠商</button>
         <button type="button" data-mode="employee">員工</button>
@@ -468,7 +512,7 @@
             '<br />別擔心——單據<strong>沒消失</strong>，仍在「單據與存檔」的<strong>請款中</strong>。' +
             '可在這頁手動上傳同一張後送出，或回列表再點「繼續請款」。')
           : ('這張單從「單據與存檔」過來，狀態是<strong>請款中・還沒送出</strong>。' +
-            '在這頁<strong>送出成功</strong>後才會移走；中途離開或失敗，回列表都還找得到。');
+            '在這頁<strong>送出成功</strong>後才會移到「已完成」；中途離開或失敗，回列表都還找得到。');
         body += '<div class="qr-actions">' +
           '<a class="btn btn-secondary" href="' + quickReviewListHref(extraWarn ? 'pay_fail' : 'pay_back') +
           '">回單據列表（請款還沒送完）</a></div>';
@@ -513,20 +557,70 @@
       }
 
       function isManualVendorSearch() {
-        var sel = document.getElementById('pickVendorSelect');
-        return sel && sel.value === MANUAL_VENDOR_PICK;
+        return false;
       }
 
       function updateVendorManualBlock() {
-        var show = isManualVendorSearch() && !isNewVendorPick();
         var block = document.getElementById('vendorManualBlock');
-        if (block) block.classList.toggle('hidden', !show);
+        if (block) block.classList.remove('hidden');
+      }
+
+      function normalizeTradeCategory(raw) {
+        if (typeof AccountingMasterData !== 'undefined' && AccountingMasterData.normalizeVendorTradeCategory) {
+          return AccountingMasterData.normalizeVendorTradeCategory(raw);
+        }
+        return String(raw || '').trim();
+      }
+
+      function findVendorById(id) {
+        id = String(id || '').trim();
+        if (!id || id === NEW_VENDOR_ID || id === MANUAL_VENDOR_PICK) return null;
+        return (vendors || []).find(function (x) { return String(x.vendor_id) === id; }) || null;
+      }
+
+      function updateVendorCategoryHint(vOrId) {
+        var el = document.getElementById('vendorCategoryHit');
+        if (!el) return;
+        var v = vOrId;
+        if (v && typeof v === 'string') v = findVendorById(v);
+        if (!v || !v.vendor_id) {
+          el.className = 'vendor-category-hit is-empty';
+          el.textContent = '尚未選廠商。搜尋選取後會顯示「屬於哪個分類」。';
+          return;
+        }
+        var name = v.name || v.vendor_id;
+        var trade = normalizeTradeCategory(v.trade_category);
+        el.className = 'vendor-category-hit';
+        el.textContent = trade
+          ? ('已選「' + name + '」→ 工項分類：' + trade)
+          : ('已選「' + name + '」→ 名冊尚未填工項分類（可手動選下方分類）');
+      }
+
+      function syncTradeFilterFromVendor(v) {
+        if (!v) return;
+        var trade = normalizeTradeCategory(v.trade_category);
+        var tradeSel = document.getElementById('filterVendorTrade');
+        if (!tradeSel || !trade) return;
+        if (!Array.prototype.some.call(tradeSel.options, function (o) { return o.value === trade; })) {
+          var opt = document.createElement('option');
+          opt.value = trade;
+          opt.textContent = trade;
+          tradeSel.appendChild(opt);
+        }
+        if (tradeSel.value !== trade) {
+          tradeSel.value = trade;
+          fillVendorDropdown();
+        }
       }
 
       function vendorSelectLabel(v) {
         var name = (v && (v.name || v.vendor_id)) || '';
         var tax = String((v && v.tax_id) || '').trim();
-        return tax ? name + '（' + tax + '）' : name;
+        var trade = normalizeTradeCategory(v && v.trade_category);
+        var label = name;
+        if (trade) label += ' · ' + trade;
+        if (tax) label += '（' + tax + '）';
+        return label;
       }
 
       function fillVendorDropdown() {
@@ -535,22 +629,11 @@
         if (!sel) return;
         var trade = tradeSel ? tradeSel.value : '';
         var prevId = getVendorPickId();
-        var wasManual = sel.value === MANUAL_VENDOR_PICK;
         sel.innerHTML = '';
-        if (!trade) {
-          sel.disabled = true;
-          var ph = document.createElement('option');
-          ph.value = '';
-          ph.textContent = '請先選工項分類';
-          sel.appendChild(ph);
-          document.getElementById('pickVendor').value = '';
-          updateVendorManualBlock();
-          return;
-        }
         sel.disabled = false;
         var empty = document.createElement('option');
         empty.value = '';
-        empty.textContent = '請選廠商';
+        empty.textContent = trade ? '請選廠商' : '（未選分類：請用上方搜尋，或先選分類）';
         sel.appendChild(empty);
         var list = getFilteredVendors().slice().sort(function (a, b) {
           return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant');
@@ -561,22 +644,19 @@
           opt.textContent = vendorSelectLabel(v);
           sel.appendChild(opt);
         });
-        if (!list.length) {
+        if (trade && !list.length) {
           var none = document.createElement('option');
           none.value = '';
-          none.textContent = '（此分類尚無廠商，請手動搜尋或新建）';
+          none.textContent = '（此分類尚無廠商，請改上方搜尋或新建）';
           none.disabled = true;
           sel.insertBefore(none, sel.options[1] || null);
         }
-        var manual = document.createElement('option');
-        manual.value = MANUAL_VENDOR_PICK;
-        manual.textContent = '手動輸入或搜尋其他…';
-        sel.appendChild(manual);
         if (prevId && prevId !== NEW_VENDOR_ID && list.some(function (v) { return v.vendor_id === prevId; })) {
           sel.value = prevId;
           document.getElementById('pickVendor').value = prevId;
-        } else if (wasManual || (prevId && prevId !== NEW_VENDOR_ID && !list.some(function (v) { return v.vendor_id === prevId; }))) {
-          sel.value = MANUAL_VENDOR_PICK;
+        } else if (prevId && prevId !== NEW_VENDOR_ID) {
+          // 搜尋選到的廠商可能不在目前分類清單；保留 hidden id，下拉顯示空白
+          sel.value = '';
         } else {
           sel.value = '';
         }
@@ -592,28 +672,36 @@
           if (inp) inp.value = '';
           if (vendorCombobox) vendorCombobox.clearVendorId();
           updateVendorManualBlock();
+          updateVendorCategoryHint(null);
           onArchiveVendorChanged();
           return;
         }
+        var found = findVendorById(id);
+        if (found) syncTradeFilterFromVendor(found);
         if (id && sel && Array.prototype.some.call(sel.options, function (o) { return o.value === id; })) {
           sel.value = id;
-          if (inp) inp.value = '';
-          if (vendorCombobox) vendorCombobox.clearVendorId();
+          if (inp) inp.value = displayName != null ? displayName : (found ? (found.name || id) : (displayName || ''));
+          if (vendorCombobox && found) vendorCombobox.setVendor(found);
+          else if (vendorCombobox && displayName !== undefined) {
+            vendorCombobox.setVendor({ vendor_id: id, name: displayName, trade_category: found && found.trade_category });
+          }
           updateVendorManualBlock();
+          updateVendorCategoryHint(found || { vendor_id: id, name: displayName || id });
           onArchiveVendorChanged();
           return;
         }
         if (id) {
-          if (sel) sel.value = MANUAL_VENDOR_PICK;
-          if (inp && displayName !== undefined) inp.value = displayName || '';
+          if (sel) sel.value = '';
+          if (inp) inp.value = displayName != null ? displayName : (found ? (found.name || id) : '');
           if (!vendorCombobox) {
+            updateVendorCategoryHint(found || { vendor_id: id, name: displayName || id });
             onArchiveVendorChanged();
             return;
           }
-          var v = vendors.find(function (x) { return x.vendor_id === id; });
-          if (v) vendorCombobox.setVendor(v);
+          if (found) vendorCombobox.setVendor(found);
           else if (displayName !== undefined) vendorCombobox.setVendor({ vendor_id: id, name: displayName });
           updateVendorManualBlock();
+          updateVendorCategoryHint(found || { vendor_id: id, name: displayName || id });
           onArchiveVendorChanged();
           return;
         }
@@ -621,6 +709,7 @@
         if (inp && displayName !== undefined) inp.value = displayName || '';
         if (vendorCombobox) vendorCombobox.clearVendorId();
         updateVendorManualBlock();
+        updateVendorCategoryHint(null);
         onArchiveVendorChanged();
       }
 
@@ -631,10 +720,7 @@
         var list = vendors || [];
         if (!trade) return list;
         return list.filter(function (v) {
-          var tc = (typeof AccountingMasterData !== 'undefined' && AccountingMasterData.normalizeVendorTradeCategory)
-            ? AccountingMasterData.normalizeVendorTradeCategory(v.trade_category)
-            : String(v.trade_category || '').trim();
-          return tc === trade;
+          return normalizeTradeCategory(v.trade_category) === trade;
         });
       }
 
@@ -664,23 +750,38 @@
         if (vendorCombobox) return;
         var inp = document.getElementById('pickVendorInput');
         if (!inp) return;
+        // 搜尋掃全部名冊（不限當前分類），結果列會帶 trade_category
         vendorCombobox = AccountingFormHelpers.initVendorCombobox(
           inp,
-          function () { return getFilteredVendors(); },
+          function () { return vendors || []; },
           { minChars: 1, maxItems: 12 }
         );
         inp.addEventListener('change', function () {
           if (isNewVendorPick()) return;
           syncHiddenVendorPickFromCombobox();
+          var vid = getVendorPickId();
+          var v = findVendorById(vid);
+          if (v) {
+            syncTradeFilterFromVendor(v);
+            updateVendorCategoryHint(v);
+          } else {
+            updateVendorCategoryHint(null);
+          }
           onPayeePick();
         });
         inp.addEventListener('input', function () {
           if (isNewVendorPick()) return;
           if (!inp.value.trim()) {
             document.getElementById('pickVendor').value = '';
+            updateVendorCategoryHint(null);
             return;
           }
           syncHiddenVendorPickFromCombobox();
+          var v = findVendorById(getVendorPickId());
+          if (v) {
+            syncTradeFilterFromVendor(v);
+            updateVendorCategoryHint(v);
+          }
         });
         var tradeSel = document.getElementById('filterVendorTrade');
         if (tradeSel) {
@@ -690,6 +791,7 @@
             if (vendorCombobox) vendorCombobox.clearVendorId();
             var manualInp = document.getElementById('pickVendorInput');
             if (manualInp) manualInp.value = '';
+            updateVendorCategoryHint(null);
             onPayeePick();
           });
         }
@@ -697,20 +799,15 @@
         if (vendorSel) {
           vendorSel.addEventListener('change', function () {
             var val = vendorSel.value;
-            if (val === MANUAL_VENDOR_PICK) {
-              document.getElementById('pickVendor').value = '';
-              if (vendorCombobox) vendorCombobox.clearVendorId();
-              updateVendorManualBlock();
-              updateNewVendorBlock();
-              var manualInp = document.getElementById('pickVendorInput');
-              if (manualInp) manualInp.focus();
-              return;
-            }
             if (val === NEW_VENDOR_ID) return;
             document.getElementById('pickVendor').value = val || '';
+            var v = findVendorById(val);
             var manualInp = document.getElementById('pickVendorInput');
-            if (manualInp) manualInp.value = '';
-            if (vendorCombobox) vendorCombobox.clearVendorId();
+            if (manualInp) manualInp.value = v ? (v.name || '') : '';
+            if (v && vendorCombobox) vendorCombobox.setVendor(v);
+            else if (vendorCombobox) vendorCombobox.clearVendorId();
+            if (v) syncTradeFilterFromVendor(v);
+            updateVendorCategoryHint(v);
             updateVendorManualBlock();
             updateNewVendorBlock();
             onPayeePick(true);
@@ -1301,6 +1398,9 @@
       function renderPhotoGrid() {
         var grid = document.getElementById('photoGrid');
         grid.innerHTML = '';
+        var imageUrls = photos
+          .filter(function (p) { return String(p.mimeType || '').indexOf('image/') === 0; })
+          .map(function (p) { return 'data:' + p.mimeType + ';base64,' + p.dataBase64; });
         photos.forEach(function (p) {
           var tile = document.createElement('div');
           tile.className = 'photo-tile';
@@ -1309,7 +1409,8 @@
           var ocrable = isOcrableMime(p.mimeType, p.filename);
           var thumbHtml = '';
           if (isImg) {
-            thumbHtml = '<img alt="檔案預覽" />';
+            thumbHtml = '<img alt="檔案預覽（點一下放大）" title="點圖放大查看" />' +
+              '<p class="zoom-hint">點圖放大</p>';
           } else {
             var ext = (isPdf ? 'PDF' : fileExt(p.filename).toUpperCase()) || '檔案';
             thumbHtml = '<div class="file-thumb"><strong>' + ext + '</strong><span></span></div>';
@@ -1320,7 +1421,14 @@
               : '') +
             '<button type="button" class="del">刪除</button>';
           if (isImg) {
-            tile.querySelector('img').src = 'data:' + p.mimeType + ';base64,' + p.dataBase64;
+            var imgEl = tile.querySelector('img');
+            var dataUrl = 'data:' + p.mimeType + ';base64,' + p.dataBase64;
+            imgEl.src = dataUrl;
+            imgEl.addEventListener('click', function () {
+              if (typeof AccountingLightbox === 'undefined') return;
+              var start = Math.max(0, imageUrls.indexOf(dataUrl));
+              AccountingLightbox.open(imageUrls, start);
+            });
           } else {
             tile.querySelector('.file-thumb span').textContent = fileLabel({ name: p.filename });
           }
@@ -2126,8 +2234,10 @@
           setOk('請款已送出');
           try { sessionStorage.removeItem(PAY_RESUME_KEY); } catch (eClr) {}
           setQuickReviewBanner('',
-            '請款已送出，這張單會從「請款中」移出。' +
-            '<div class="qr-actions"><a class="btn btn-secondary" href="quick_review.html">回單據列表</a></div>');
+            '請款已送出，這張單已進「已完成」。' +
+            '<div class="qr-actions">' +
+            '<a class="btn btn-secondary" href="quick_review.html?status=' +
+            encodeURIComponent('已分類') + '">回單據列表（已完成）</a></div>');
           clearPaymentFormData();
           var errHost = document.getElementById('submitErrorHost');
           if (errHost) { errHost.innerHTML = ''; errHost.className = ''; }

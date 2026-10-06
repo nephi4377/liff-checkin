@@ -1162,14 +1162,15 @@ var AccountingApi = (function () {
         deferred_token: deferredToken || ''
       }, 120000);
     },
-    /** 歷史記帳紀錄查詢（權限 ≥3；可篩日期／類型／關鍵字／金額） */
+    /** 歷史記帳紀錄查詢（權限 ≥3；可 mine_only；預設／上限近 7 天） */
     accountingLedgerRecent: function (sessionOrToken, opts) {
       opts = opts || {};
       var body = {
         action: 'accounting_ledger_recent',
         limit: opts.limit != null ? opts.limit : 40,
-        months: opts.months != null ? opts.months : 2,
-        mine_only: !!opts.mine_only
+        months: opts.months != null ? opts.months : 1,
+        // 預設本人；頁面「只看我記的」關掉時傳 false
+        mine_only: opts.mine_only === undefined ? true : !!opts.mine_only
       };
       if (opts.date_from) body.date_from = opts.date_from;
       if (opts.date_to) body.date_to = opts.date_to;
@@ -1188,9 +1189,17 @@ var AccountingApi = (function () {
             body.user_id = sessionOrToken.auth.user_id;
             body.auth = body.auth || { user_id: sessionOrToken.auth.user_id };
           }
+          var dn = (sessionOrToken.auth && sessionOrToken.auth.display_name)
+            || (sessionOrToken.profile && sessionOrToken.profile.displayName)
+            || '';
+          if (dn) {
+            body.display_name = dn;
+            if (body.auth) body.auth.display_name = body.auth.display_name || dn;
+          }
         } catch (eAuth) {}
       }
-      return post(body);
+      // 後端已改尾端分塊；本人／區間篩選仍可能多掃幾個月。給 90s（低於毛利 120s，避免自己掃更慢時硬撐太久）
+      return post(body, 90000);
     },
     /** 歷史記帳單筆詳情（權限 ≥3；sheet+row 或 ingest_id） */
     accountingLedgerDetail: function (sessionOrToken, opts) {

@@ -4,68 +4,161 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>歷史記帳紀錄</title>
-  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=68"></script>
-  <script src="../../shared/js/accounting_cache.js?v=33"></script>
-  <script src="../../shared/js/accounting_lightbox.js?v=18"></script>
+  <script src="../../shared/js/accounting_api.js?v=75"></script>
+  <script src="../../shared/js/accounting_cache.js?v=34"></script>
+  <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=9"></script>
   <style>
     h2 { margin: 0 0 4px; }
-    .sub { color: #555; font-size: 14px; margin: 0 0 12px; }
-    .card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .sub { color: #555; font-size: 14px; margin: 0 0 12px; line-height: 1.45; }
+    .card {
+      background: #fff; border-radius: 12px; padding: 14px;
+      margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      box-sizing: border-box; min-width: 0;
+    }
     label { display: block; margin-top: 0; font-weight: 600; font-size: 13px; }
-    .hidden { display: none; }
+    .hidden { display: none !important; }
     .nav { margin-bottom: 12px; font-size: 14px; }
     .nav a { color: #1a73e8; text-decoration: none; }
+    .hint { font-size: 12px; color: #777; margin-top: 4px; line-height: 1.4; }
+
     .hist-head {
-      display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px;
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 8px; margin-bottom: 10px; flex-wrap: wrap;
     }
     .hist-head strong { font-size: 15px; }
+
     #historyFilters {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin: 10px 0;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 12px;
+      margin: 0 0 10px;
     }
+    #historyFilters > * { min-width: 0; }
     #historyFilters .full { grid-column: 1 / -1; }
-    #historyFilters input, #historyFilters select {
-      width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box;
+    #historyFilters input,
+    #historyFilters select {
+      width: 100%; max-width: 100%; min-width: 0;
+      padding: 8px; margin-top: 4px; box-sizing: border-box;
       border: 1px solid #ccc; border-radius: 8px; font-size: 15px;
     }
-    #historyFilters .hist-actions {
-      display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px;
+    .hist-actions {
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 2px;
     }
     .btn-ghost {
-      width: auto; padding: 8px 12px; font-size: 14px; background: #e8eaed; color: #333;
-      border: none; border-radius: 8px; cursor: pointer; margin-top: 0;
+      width: auto; flex: 0 0 auto; padding: 8px 12px; font-size: 14px;
+      background: #e8eaed; color: #333; border: none; border-radius: 8px;
+      cursor: pointer; margin-top: 0; white-space: nowrap;
     }
-    #historyList { display: flex; flex-direction: column; gap: 8px; }
+    .btn-primary-hist {
+      background: #1a73e8; color: #fff;
+    }
+
+    /* 「只看我記的」：整列開關，與正式站舊版（checkbox 擠查詢鈕）明顯不同 */
+    .hist-mine-toggle {
+      grid-column: 1 / -1;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      width: 100%; box-sizing: border-box;
+      margin: 0 0 4px; padding: 14px 16px;
+      border: 2px solid #dadce0; border-radius: 12px;
+      background: #fff; cursor: pointer; text-align: left;
+      font-family: inherit; min-height: 56px;
+    }
+    .hist-mine-toggle.is-on {
+      border-color: #1a73e8; background: #e8f0fe;
+      box-shadow: inset 4px 0 0 #1a73e8;
+    }
+    .hist-mine-toggle .hist-mine-copy { min-width: 0; flex: 1 1 auto; }
+    .hist-mine-toggle .hist-mine-title {
+      display: block; font-size: 16px; font-weight: 800; color: #202124; line-height: 1.3;
+    }
+    .hist-mine-toggle .hist-mine-sub {
+      display: block; margin-top: 4px; font-size: 12px; color: #5f6368; line-height: 1.4; font-weight: 500;
+    }
+    .hist-mine-toggle .hist-mine-state {
+      flex: 0 0 auto; min-width: 3.2em; padding: 8px 12px; border-radius: 999px;
+      font-size: 14px; font-weight: 800; text-align: center;
+      background: #e8eaed; color: #5f6368;
+    }
+    .hist-mine-toggle.is-on .hist-mine-state {
+      background: #1a73e8; color: #fff;
+    }
+    .hist-mine-toggle:focus {
+      outline: none; box-shadow: 0 0 0 3px rgba(26,115,232,.35);
+    }
+    .hist-mine-toggle.is-on:focus {
+      box-shadow: inset 4px 0 0 #1a73e8, 0 0 0 3px rgba(26,115,232,.35);
+    }
+
+    #historyStatus {
+      font-size: 13px; color: #555; margin: 0 0 10px; line-height: 1.45;
+      padding: 8px 10px; background: #f8fafc; border-radius: 8px;
+      border: 1px solid #e8eaed;
+    }
+    #historyStatus.is-empty { color: #8a5a00; background: #fff8e8; border-color: #f0d9a8; }
+    #historyStatus.is-error { color: #8b1a1a; background: #fdecea; border-color: #f5c6c2; }
+    #historyStatus.is-ok { color: #1e3a5f; }
+
+    .hist-workspace {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+    .hist-list-card, .hist-detail-card { margin-bottom: 0; }
+
+    #historyList { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+
     .hist-item {
       border: 1px solid #e8eaed; border-radius: 10px; padding: 10px 12px; background: #fafafa;
       font-size: 13px; line-height: 1.45; cursor: pointer; text-align: left; width: 100%;
-      box-sizing: border-box; font-family: inherit;
+      box-sizing: border-box; font-family: inherit; min-width: 0;
     }
     .hist-item:hover, .hist-item:focus { border-color: #1a73e8; background: #f5f9ff; outline: none; }
     .hist-item.is-open { border-color: #1a73e8; background: #fff; box-shadow: 0 1px 4px rgba(26,115,232,.12); }
-    .hist-item .hist-top { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+    .hist-item .hist-top {
+      display: flex; flex-wrap: nowrap; gap: 8px; align-items: baseline;
+      justify-content: space-between; min-width: 0;
+    }
+    .hist-item .hist-top-left {
+      display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; min-width: 0;
+    }
     .hist-item .hist-type { font-weight: 700; }
     .hist-item .hist-type.income { color: #137333; }
     .hist-item .hist-type.expense { color: #c5221f; }
-    .hist-item .hist-amt { font-weight: 700; font-size: 15px; }
-    .hist-item .hist-meta { color: #555; margin-top: 4px; }
-    .hist-item .hist-loc { color: #777; font-size: 12px; margin-top: 4px; font-family: ui-monospace, monospace; }
+    .hist-item .hist-amt { font-weight: 700; font-size: 15px; flex: 0 0 auto; white-space: nowrap; }
+    .hist-item .hist-meta {
+      color: #555; margin-top: 4px;
+      overflow: hidden; text-overflow: ellipsis;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    }
+    .hist-item .hist-loc {
+      color: #777; font-size: 12px; margin-top: 4px;
+      font-family: ui-monospace, monospace; word-break: break-all;
+    }
     .hist-item .hist-hint { color: #1a73e8; font-size: 12px; margin-top: 6px; }
+
     .hist-detail {
       margin-top: 10px; padding-top: 10px; border-top: 1px solid #e8eaed;
       font-size: 13px; line-height: 1.5; color: #333;
     }
-    .hist-detail dl {
-      margin: 0; display: grid; grid-template-columns: 5.5em 1fr; gap: 4px 8px;
+    .hist-detail dl,
+    #historyDetailBody dl {
+      margin: 0;
+      display: grid;
+      grid-template-columns: minmax(4.5em, 6.5em) minmax(0, 1fr);
+      gap: 6px 10px;
     }
-    .hist-detail dt { color: #777; font-weight: 600; margin: 0; }
-    .hist-detail dd { margin: 0; word-break: break-word; }
-    .hist-detail .hist-detail-status { color: #666; font-size: 12px; margin: 0 0 8px; }
+    .hist-detail dt,
+    #historyDetailBody dt { color: #777; font-weight: 600; margin: 0; }
+    .hist-detail dd,
+    #historyDetailBody dd { margin: 0; word-break: break-word; min-width: 0; }
+    .hist-detail-status { color: #666; font-size: 12px; margin: 0 0 8px; }
     .hist-att-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
     .hist-att-thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
     .hist-att-thumbs button {
@@ -73,30 +166,70 @@
       width: 56px; height: 56px; overflow: hidden; cursor: pointer;
     }
     .hist-att-thumbs img { width: 56px; height: 56px; object-fit: cover; display: block; }
-    #historyStatus { font-size: 13px; color: #666; margin: 0; }
-    .hint { font-size: 12px; color: #777; margin-top: 4px; }
+
+    .hist-detail-placeholder {
+      margin: 0; color: #777; font-size: 14px; line-height: 1.5;
+    }
+    .hist-detail-card-title {
+      font-size: 15px; font-weight: 700; margin: 0 0 10px;
+    }
+
+    /* 手機：詳情嵌在列內；側欄隱藏 */
+    .hist-detail-card { display: none; }
+    .hist-item .hist-detail.hidden { display: none !important; }
+
+    @media (max-width: 559px) {
+      #historyFilters { grid-template-columns: 1fr; }
+    }
+
+    /* 桌機：列表＋側欄詳情 */
+    @media (min-width: 900px) {
+      .hist-workspace {
+        grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+        gap: 14px;
+      }
+      .hist-detail-card {
+        display: block;
+        position: sticky;
+        top: 12px;
+        max-height: calc(100vh - 24px);
+        overflow: auto;
+      }
+      /* 桌機用側欄，列內詳情收起 */
+      .hist-item .hist-detail,
+      .hist-item .hist-hint { display: none !important; }
+    }
   </style>
 </head>
-<body class="acct-page acct-page-form">
+<body class="acct-page acct-page-form acct-page-browse">
   <div id="loading">載入中…</div>
   <div id="app" class="hidden acct-main">
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub">查詢試算表已入帳列。點一筆可看案號、圖片集等詳情。需權限 ≥3。</p>
+    <p class="sub" id="pageModeHint">預設<strong>只看我記的</strong>＋近 7 天。點一筆可看案號、圖片集。需權限 ≥3。</p>
 
-    <div class="card" id="historyCard">
+    <div class="card" id="historyFiltersCard">
       <div class="hist-head">
         <strong>查詢條件</strong>
         <button type="button" class="btn-ghost" id="historyRefreshBtn">重新整理</button>
       </div>
       <div id="historyFilters">
+        <button type="button" class="hist-mine-toggle is-on" id="historyMineToggle"
+          aria-pressed="true" title="切換是否只看自己記入的列">
+          <span class="hist-mine-copy">
+            <span class="hist-mine-title">只看我記的</span>
+            <span class="hist-mine-sub" id="historyMineSub">開啟中：列表只含你本人寫入的帳（可點此列關閉看全部）。</span>
+          </span>
+          <span class="hist-mine-state" id="historyMineState" aria-hidden="true">開</span>
+        </button>
+        <input type="checkbox" id="historyMineOnly" class="hidden" checked tabindex="-1" aria-hidden="true" />
         <div>
-          <label for="histDateFrom">日期起</label>
+          <label for="histDateFrom">交易日起</label>
           <input id="histDateFrom" type="date" />
         </div>
         <div>
-          <label for="histDateTo">日期迄</label>
+          <label for="histDateTo">交易日迄</label>
           <input id="histDateTo" type="date" />
         </div>
         <div>
@@ -116,17 +249,28 @@
           <input id="histKeyword" type="text" placeholder="例：廠商名、訂金" autocomplete="off" />
         </div>
         <div class="full">
-          <label class="hint" style="font-weight:500;display:flex;align-items:center;gap:6px;margin:0">
-            <input type="checkbox" id="historyMineOnly" /> 只看我記的
-          </label>
+          <p class="hint" style="margin:0 0 8px">日期區間最多 7 天；預設近 7 天。列表依<strong>已記帳時間</strong>新到舊。</p>
           <div class="hist-actions">
-            <button type="button" class="btn-ghost" id="historySearchBtn">查詢</button>
-            <button type="button" class="btn-ghost" id="historyClearBtn">清空條件</button>
+            <button type="button" class="btn-ghost btn-primary-hist" id="historySearchBtn">查詢</button>
+            <button type="button" class="btn-ghost" id="historyClearBtn">重設為近 7 天</button>
           </div>
         </div>
       </div>
-      <p id="historyStatus">載入中…</p>
-      <div id="historyList"></div>
+    </div>
+
+    <div class="hist-workspace">
+      <div class="card hist-list-card" id="historyListCard">
+        <div class="hist-head">
+          <strong>紀錄列表</strong>
+        </div>
+        <p id="historyStatus" class="is-ok">載入中…</p>
+        <div id="historyList"></div>
+      </div>
+      <aside class="card hist-detail-card" id="historyDetailCard" aria-live="polite">
+        <p class="hist-detail-card-title">明細</p>
+        <p class="hist-detail-placeholder" id="historyDetailPlaceholder">點左側一筆看案號、備註與圖片集。</p>
+        <div id="historyDetailBody" class="hidden"></div>
+      </aside>
     </div>
   </div>
 
@@ -134,6 +278,7 @@
     (function () {
       var sessionRef = null;
       var openHistoryKey = '';
+      var itemsByKey = {};
 
       function formatMoney(n) {
         var v = Number(n);
@@ -153,17 +298,39 @@
         return String(it.ingest_id || '');
       }
 
+      function isDesktopDetail() {
+        return window.matchMedia && window.matchMedia('(min-width: 900px)').matches;
+      }
+
       function driveThumbUrl(url) {
         var m = String(url || '').match(/\/d\/([^/]+)/);
         if (m) return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w200';
         return url;
       }
 
+      function setStatus(text, kind) {
+        var status = document.getElementById('historyStatus');
+        status.textContent = text;
+        status.classList.remove('is-ok', 'is-empty', 'is-error');
+        status.classList.add(kind === 'error' ? 'is-error' : (kind === 'empty' ? 'is-empty' : 'is-ok'));
+      }
+
+      function clearSideDetail() {
+        var ph = document.getElementById('historyDetailPlaceholder');
+        var body = document.getElementById('historyDetailBody');
+        if (ph) ph.classList.remove('hidden');
+        if (body) {
+          body.classList.add('hidden');
+          body.innerHTML = '';
+        }
+      }
+
       function renderHistoryDetailFields(detail) {
         detail = detail || {};
         var rows = [
           ['類型', detail.type || '—'],
-          ['日期', detail.txn_date_display || detail.txn_date || '—'],
+          ['交易日', detail.txn_date_display || detail.txn_date || '—'],
+          ['已記帳時間', detail.recorded_at_display || detail.recorded_at || '—'],
           ['金額', formatMoney(detail.amount)],
           ['對象', detail.party_name || '—'],
           ['事由', detail.desc || '—'],
@@ -218,7 +385,7 @@
           btn.innerHTML = '<img src="' + escHtml(driveThumbUrl(u)) + '" alt="單據 ' + (i + 1) + '" />';
           btn.addEventListener('click', function (e) {
             e.stopPropagation();
-            if (typeof AccountingLightbox !== 'undefined') AccountingLightbox.open(urls);
+            if (typeof AccountingLightbox !== 'undefined') AccountingLightbox.open(urls, i);
           });
           thumbs.appendChild(btn);
         });
@@ -250,8 +417,26 @@
         renderHistoryAttachments(panel, merged);
       }
 
-      function loadHistoryDetailForItem(div, it) {
-        var panel = div.querySelector('.hist-detail');
+      function activeDetailPanel(rowEl) {
+        if (isDesktopDetail()) {
+          var ph = document.getElementById('historyDetailPlaceholder');
+          var body = document.getElementById('historyDetailBody');
+          if (ph) ph.classList.add('hidden');
+          if (body) body.classList.remove('hidden');
+          return body;
+        }
+        var panel = rowEl.querySelector('.hist-detail');
+        if (!panel) {
+          panel = document.createElement('div');
+          panel.className = 'hist-detail';
+          rowEl.appendChild(panel);
+        }
+        panel.classList.remove('hidden');
+        return panel;
+      }
+
+      function loadHistoryDetailForItem(rowEl, it) {
+        var panel = activeDetailPanel(rowEl);
         if (!panel) return;
         var status = panel.querySelector('.hist-detail-status');
         if (status) status.textContent = '載入詳情…';
@@ -299,9 +484,7 @@
         });
       }
 
-      function toggleHistoryDetail(div, it) {
-        var key = historyItemKey(it);
-        var wasOpen = div.classList.contains('is-open');
+      function clearRowSelection() {
         var box = document.getElementById('historyList');
         Array.prototype.forEach.call(box.querySelectorAll('.hist-item.is-open'), function (el) {
           el.classList.remove('is-open');
@@ -310,21 +493,22 @@
           var hint = el.querySelector('.hist-hint');
           if (hint) hint.textContent = '點開看詳情（案號／圖片集）';
         });
+      }
+
+      function toggleHistoryDetail(div, it) {
+        var key = historyItemKey(it);
+        var wasOpen = div.classList.contains('is-open');
+        clearRowSelection();
         if (wasOpen && openHistoryKey === key) {
           openHistoryKey = '';
+          clearSideDetail();
           return;
         }
         openHistoryKey = key;
         div.classList.add('is-open');
         var hint = div.querySelector('.hist-hint');
         if (hint) hint.textContent = '再點一次收合';
-        var panel = div.querySelector('.hist-detail');
-        if (!panel) {
-          panel = document.createElement('div');
-          panel.className = 'hist-detail';
-          div.appendChild(panel);
-        }
-        panel.classList.remove('hidden');
+        var panel = activeDetailPanel(div);
         fillHistoryDetailPanel(panel, it, null);
         var st = panel.querySelector('.hist-detail-status');
         if (st) st.textContent = '載入詳情…';
@@ -335,12 +519,17 @@
         var box = document.getElementById('historyList');
         box.innerHTML = '';
         openHistoryKey = '';
+        itemsByKey = {};
+        clearSideDetail();
         if (!items || !items.length) return;
         items.forEach(function (it) {
+          var key = historyItemKey(it);
+          itemsByKey[key] = it;
           var div = document.createElement('div');
           div.className = 'hist-item';
           div.setAttribute('role', 'button');
           div.tabIndex = 0;
+          div.dataset.key = key;
           var typeClass = it.type === '收入' ? 'income' : 'expense';
           var meta = [];
           if (it.party_name) meta.push(it.party_name);
@@ -350,12 +539,18 @@
           if (it.note) meta.push(it.note);
           var loc = (it.sheet || '—') + ' 第' + (it.row || '?') + '列';
           if (it.ingest_id) loc += ' · ' + String(it.ingest_id).slice(0, 8);
+          var recorded = it.recorded_at_display || it.recorded_at || '';
           div.innerHTML =
             '<div class="hist-top">' +
-              '<span class="hist-type ' + typeClass + '">' + escHtml(it.type || '—') + '</span>' +
-              '<span>' + escHtml(it.txn_date_display || it.txn_date || '—') + '</span>' +
+              '<div class="hist-top-left">' +
+                '<span class="hist-type ' + typeClass + '">' + escHtml(it.type || '—') + '</span>' +
+                '<span>交易日 ' + escHtml(it.txn_date_display || it.txn_date || '—') + '</span>' +
+              '</div>' +
               '<span class="hist-amt">' + escHtml(formatMoney(it.amount)) + '</span>' +
             '</div>' +
+            (recorded
+              ? ('<div class="hist-loc" style="color:#174ea6;font-weight:600">已記帳時間 ' + escHtml(recorded) + '</div>')
+              : '') +
             '<div class="hist-meta">' + escHtml(meta.join(' · ') || '—') + '</div>' +
             '<div class="hist-loc">' + escHtml(loc) + '</div>' +
             '<div class="hist-hint">點開看詳情（案號／圖片集）</div>' +
@@ -374,73 +569,170 @@
         });
       }
 
-      function readHistoryFilters() {
+      var HISTORY_MAX_DAYS = 7;
+
+      function toIsoLocal(d) {
+        var y = d.getFullYear();
+        var m = String(d.getMonth() + 1);
+        var day = String(d.getDate());
+        if (m.length < 2) m = '0' + m;
+        if (day.length < 2) day = '0' + day;
+        return y + '-' + m + '-' + day;
+      }
+
+      function addDaysIso(iso, delta) {
+        var p = String(iso || '').split('-');
+        if (p.length < 3) return '';
+        var dt = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+        dt.setDate(dt.getDate() + delta);
+        return toIsoLocal(dt);
+      }
+
+      function inclusiveDays(from, to) {
+        var a = String(from || '').split('-');
+        var b = String(to || '').split('-');
+        if (a.length < 3 || b.length < 3) return 0;
+        var da = new Date(parseInt(a[0], 10), parseInt(a[1], 10) - 1, parseInt(a[2], 10));
+        var db = new Date(parseInt(b[0], 10), parseInt(b[1], 10) - 1, parseInt(b[2], 10));
+        return Math.floor((db - da) / 86400000) + 1;
+      }
+
+      function defaultHistoryWindow() {
+        var to = toIsoLocal(new Date());
+        var from = addDaysIso(to, -(HISTORY_MAX_DAYS - 1));
+        return { from: from, to: to };
+      }
+
+      function applyDefaultHistoryDates() {
+        var w = defaultHistoryWindow();
+        document.getElementById('histDateFrom').value = w.from;
+        document.getElementById('histDateTo').value = w.to;
+      }
+
+      function clampHistoryDatesInInputs() {
         var dateFrom = (document.getElementById('histDateFrom').value || '').trim();
         var dateTo = (document.getElementById('histDateTo').value || '').trim();
+        var w = defaultHistoryWindow();
+        if (!dateTo) dateTo = w.to;
+        if (!dateFrom) dateFrom = addDaysIso(dateTo, -(HISTORY_MAX_DAYS - 1));
+        if (dateFrom > dateTo) {
+          var tmp = dateFrom;
+          dateFrom = dateTo;
+          dateTo = tmp;
+        }
+        if (inclusiveDays(dateFrom, dateTo) > HISTORY_MAX_DAYS) {
+          dateFrom = addDaysIso(dateTo, -(HISTORY_MAX_DAYS - 1));
+        }
+        document.getElementById('histDateFrom').value = dateFrom;
+        document.getElementById('histDateTo').value = dateTo;
+        return { from: dateFrom, to: dateTo };
+      }
+
+      function syncMineToggleUi() {
+        var on = !!document.getElementById('historyMineOnly').checked;
+        var btn = document.getElementById('historyMineToggle');
+        var state = document.getElementById('historyMineState');
+        var sub = document.getElementById('historyMineSub');
+        var hint = document.getElementById('pageModeHint');
+        if (btn) {
+          btn.classList.toggle('is-on', on);
+          btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        }
+        if (state) state.textContent = on ? '開' : '關';
+        if (sub) {
+          sub.textContent = on
+            ? '開啟中：列表只含你本人寫入的帳（可點此列關閉看全部）。'
+            : '已關閉：列表含區間內所有人記入的帳（可點此列改回只看自己）。';
+        }
+        if (hint) {
+          hint.innerHTML = on
+            ? '預設<strong>只看我記的</strong>＋近 7 天。點一筆可看案號、圖片集。需權限 ≥3。'
+            : '目前看<strong>全部人</strong>＋近 7 天。點上方「只看我記的」可改回本人。需權限 ≥3。';
+        }
+      }
+
+      function readHistoryFilters() {
+        var dates = clampHistoryDatesInInputs();
         var type = (document.getElementById('histType').value || '').trim();
         var keyword = (document.getElementById('histKeyword').value || '').trim();
         var amountRaw = (document.getElementById('histAmount').value || '').trim();
         var mineOnly = !!document.getElementById('historyMineOnly').checked;
+        var months = 1;
+        if (dates.from.slice(0, 7) !== dates.to.slice(0, 7)) months = 2;
         var filters = {
           limit: 50,
-          months: 2,
-          mine_only: mineOnly
+          months: months,
+          mine_only: mineOnly,
+          date_from: dates.from,
+          date_to: dates.to
         };
-        if (dateFrom) filters.date_from = dateFrom;
-        if (dateTo) filters.date_to = dateTo;
         if (type) filters.type = type;
         if (keyword) filters.keyword = keyword;
         if (amountRaw !== '') {
           var amt = parseInt(amountRaw, 10);
           if (!isNaN(amt)) filters.amount = amt;
         }
-        if (dateFrom) filters.months = 12;
         return filters;
       }
 
       function clearHistoryFilters() {
-        document.getElementById('histDateFrom').value = '';
-        document.getElementById('histDateTo').value = '';
+        applyDefaultHistoryDates();
         document.getElementById('histType').value = '';
         document.getElementById('histKeyword').value = '';
         document.getElementById('histAmount').value = '';
-        document.getElementById('historyMineOnly').checked = false;
+        document.getElementById('historyMineOnly').checked = true;
+        syncMineToggleUi();
       }
 
       function loadLedgerHistory() {
-        var status = document.getElementById('historyStatus');
-        status.textContent = '查詢中…';
+        setStatus('查詢中…', 'ok');
+        document.getElementById('historyList').innerHTML = '';
+        clearSideDetail();
         if (!sessionRef || typeof AccountingApi.accountingLedgerRecent !== 'function') {
-          status.textContent = '尚無法載入歷史（請從主控台／LINE 登入後再試）。';
+          setStatus('尚無法載入歷史（請從主控台／LINE 登入後再試）。', 'error');
           return Promise.resolve();
         }
         var filters = readHistoryFilters();
         return AccountingApi.accountingLedgerRecent(sessionRef, filters).then(function (data) {
           if (!data || data.success === false) {
-            status.textContent = (data && data.message) || '讀不到歷史記帳紀錄';
+            setStatus((data && data.message) || '讀不到歷史記帳紀錄', 'error');
             document.getElementById('historyList').innerHTML = '';
             return;
           }
           var n = (data.items || []).length;
-          var bits = [];
-          if (filters.date_from || filters.date_to) {
-            bits.push((filters.date_from || '…') + '～' + (filters.date_to || '…'));
-          }
+          var from = data.date_from || filters.date_from || '…';
+          var to = data.date_to || filters.date_to || '…';
+          var bits = [filters.mine_only ? '只看我記的' : '全部人', from + '～' + to];
           if (filters.type) bits.push(filters.type);
           if (filters.keyword) bits.push('「' + filters.keyword + '」');
           if (filters.amount != null) bits.push('$' + filters.amount);
-          if (filters.mine_only) bits.push('只看我的');
-          status.textContent = n
-            ? ('共 ' + n + ' 筆（新到舊）' + (bits.length ? ' · ' + bits.join(' · ') : ''))
-            : ('沒有符合的紀錄' + (bits.length ? '（' + bits.join(' · ') + '）' : ''));
+          if (n) {
+            setStatus('共 ' + n + ' 筆（依已記帳時間新到舊） · ' + bits.join(' · '), 'ok');
+          } else {
+            var hint = (data.empty_hint && String(data.empty_hint).trim())
+              || (filters.mine_only
+                ? ('近 ' + HISTORY_MAX_DAYS + ' 天內沒有你記的帳。可改日期後再查，或關閉「只看我記的」看全部。')
+                : ('近 ' + HISTORY_MAX_DAYS + ' 天內沒有符合條件的帳。可改日期或關鍵字後再查。'));
+            setStatus(hint + '（' + bits.join(' · ') + '）', 'empty');
+          }
           renderHistoryItems(data.items || []);
         }).catch(function (e) {
-          status.textContent = (e && e.message) || '讀不到歷史記帳紀錄';
+          var msg = (e && e.message) || '讀不到歷史記帳紀錄';
+          if (/逾時|timeout|Abort|abort|等太久/i.test(msg)) {
+            msg = '查詢逾時。請稍後再按「查詢」；若仍失敗請回報（正式站修復部署後會較快）。';
+          }
+          setStatus(msg, 'error');
           document.getElementById('historyList').innerHTML = '';
         });
       }
 
       function bindFilters() {
+        document.getElementById('historyMineToggle').addEventListener('click', function () {
+          var box = document.getElementById('historyMineOnly');
+          box.checked = !box.checked;
+          syncMineToggleUi();
+          loadLedgerHistory();
+        });
         document.getElementById('historyRefreshBtn').addEventListener('click', function () {
           loadLedgerHistory();
         });
@@ -451,18 +743,33 @@
           clearHistoryFilters();
           loadLedgerHistory();
         });
-        document.getElementById('historyMineOnly').addEventListener('change', function () {
-          loadLedgerHistory();
-        });
         document.getElementById('histKeyword').addEventListener('keydown', function (e) {
           if (e.key === 'Enter') {
             e.preventDefault();
             loadLedgerHistory();
           }
         });
+        if (window.matchMedia) {
+          window.matchMedia('(min-width: 900px)').addEventListener('change', function () {
+            if (!openHistoryKey) return;
+            var it = itemsByKey[openHistoryKey];
+            if (!it) return;
+            var row = null;
+            Array.prototype.forEach.call(document.querySelectorAll('.hist-item'), function (el) {
+              if (el.dataset.key === openHistoryKey) row = el;
+            });
+            if (row) {
+              clearRowSelection();
+              row.classList.add('is-open');
+              loadHistoryDetailForItem(row, it);
+            }
+          });
+        }
       }
 
       (async function boot() {
+        applyDefaultHistoryDates();
+        syncMineToggleUi();
         bindFilters();
         await AccountingBoot.run({
           minPermission: AccountingApi.SUPERVISOR_MIN_PERMISSION,
