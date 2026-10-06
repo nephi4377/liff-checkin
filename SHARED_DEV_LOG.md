@@ -26,14 +26,14 @@
 
 ## 最近完成
 
-### 2026-10-06｜Cursor Cloud｜歷史記帳又慢又空 hotfix（待 merge 部署）
+### 2026-10-06｜Cursor Cloud｜歷史記帳又慢又空 hotfix（已上線 @367）
 
 - 修改範圍：`ledger_history.html`、`accounting_api.js`；Backend `VendorPortal.js`／`SheetWriter.js`／`AccountingLineIngest.js`
 - 根因：民國分頁名字串排序把 9 月排在 10 月前 → 近七天跨月掃錯月整表空轉；本人模式不提早停 → 又慢又空
 - 完成內容：數值年月排序；預設本人強制 ON、「所有人紀錄」opt-in；預設 7／上限 30；交易日篩選、記帳時間只排序；空狀態擴查按鈕
-- 驗證：`node tools/test-ledger-recent-history.js`；bound proof JSON
-- Commit／線上：待 PR merge → Pages＋clasp
-- 待處理：merge 後正式站抽測本人近七天應見本月帳
+- 驗證：後端單元測試；正式站 HTML 含所有人紀錄／v=76；bound proof（修前掃9+8、修後10+9）
+- Commit／線上：[liff#101](https://github.com/nephi4377/liff-checkin/pull/101) `4529cfc` → Pages [`37418214431`](https://github.com/nephi4377/liff-checkin/actions/runs/37418214431)；[GAS#79](https://github.com/nephi4377/Backend_GAS/pull/79) `d1f76d5` → Actions [`37418207375`](https://github.com/nephi4377/Backend_GAS/actions/runs/37418207375) → **@367**
+- 待處理：老闆真人抽測本人近七天應見本月帳且明顯變快
 
 ### 2026-10-06｜Cursor Cloud｜請款／歷史記帳 PR 合併部署（已上線）
 
