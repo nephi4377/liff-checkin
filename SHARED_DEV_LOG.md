@@ -22,14 +22,22 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-10-06 | Cursor Cloud | 可修改已送出記帳（edit） | 前後端 ledger update；ledger_history 詳情表單；SPEC／LOG | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-10-06｜Cursor Cloud｜可修改已送出的記帳（已上線 @385）
+
+- 修改範圍：`ledger_history.html`、`accounting_api.js`／`ui`；Backend SheetWriter／Ingest／WebApp／SPEC／測試
+- 完成內容：歷史詳情「修改這一筆」——金額／對象／事由／備註／交易日／付款／案號／店別／追加照片；保留新增時間 `recorded_at`；寫入上次修改 `edited_at`；≥3 本人、≥4 可改他人；換月搬列
+- 驗證：單元測試；正式站 HTML 含「修改這一筆」／`api?v=84`；Pages＋clasp **@385**
+- Commit／線上：[liff#117](https://github.com/nephi4377/liff-checkin/pull/117) → Pages [`37425046756`](https://github.com/nephi4377/liff-checkin/actions/runs/37425046756)；[GAS#97](https://github.com/nephi4377/Backend_GAS/pull/97) → Actions [`37425040465`](https://github.com/nephi4377/Backend_GAS/actions/runs/37425040465) → **@385**
+- 待處理：老闆真人抽測修改流程；查詢重做（≥3 可看、暫緩只看個人、嚴格 recorded_at 排序）下一步
 
 ### 2026-10-06｜Cursor Cloud｜老闆：查詢重做排隊（edit 上線後）
 
 - 規則已存 Project store：權限≥3 可看；暫緩只看個人；排序＝送出時間 recorded_at 新→舊
-- 待處理：edit merge＋Pages＋clasp 後再開查詢重做
+- 待處理：edit 已上線 → 可開查詢重做
 
 ### 2026-10-06｜Cursor Cloud｜記帳詳情 60s 逾時 hotfix（已上線 @381）
 
