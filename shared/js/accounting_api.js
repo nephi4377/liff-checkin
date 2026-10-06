@@ -1261,7 +1261,7 @@ var AccountingApi = (function () {
           }
         } catch (eAuth) {}
       }
-      // 後端已改尾端分塊；本人／區間篩選仍可能多掃幾個月。給 90s（低於毛利 120s，避免自己掃更慢時硬撐太久）
+      // 後端：尾端分塊＋無戳記／窗外 early-stop＋軟截止~50s。前端維持 90s Abort（勿再加長；修慢路徑）。
       return post(body, 90000);
     },
     /** 歷史記帳單筆詳情（權限 ≥3；sheet+row 或 ingest_id；預設略過附件索引） */

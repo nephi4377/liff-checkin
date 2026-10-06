@@ -22,7 +22,7 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| — | — | 目前無進行中工作 | — | — |
+| 2026-10-06 | Cursor Cloud | 歷史記帳近期收支 90s 逾時 hotfix | Backend SheetWriter／SPEC／test；前端 ledger_history api?v=88 | 進行中 |
 
 ## 最近完成
 
