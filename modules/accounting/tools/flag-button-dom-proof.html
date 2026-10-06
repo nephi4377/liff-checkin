@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>標註錯誤 DOM proof (perm=3)</title>
+  <title>錯誤記帳標示 DOM proof (perm=3)</title>
   <style>
     body { font-family: system-ui, sans-serif; margin: 16px; background: #f5f5f5; }
     .card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
@@ -27,7 +27,7 @@
 </head>
 <body>
   <div class="card">
-    <h2>DOM proof · Yang permission=3</h2>
+    <h2>錯誤記帳標示 DOM proof · Yang permission=3</h2>
     <p id="permLine">—</p>
     <p id="assertLine">—</p>
   </div>
@@ -71,7 +71,7 @@
     };
 
     document.getElementById('permLine').textContent =
-      '模擬身分：Yang · 權限 ' + sessionPerm() + ' · ledger can_flag API=false 仍應顯示標註';
+      '模擬身分：Yang · 權限 ' + sessionPerm() + ' · ledger can_flag API=false 仍應顯示錯誤記帳標示';
 
     var list = document.getElementById('list');
     [ledger, payment].forEach(function (it) {
@@ -83,15 +83,15 @@
         '<span class="hist-kind-badge is-' + kind + '">' + it.record_kind_label + '</span> ' +
         it.party_name + ' · $' + it.amount +
         (can
-          ? '<div class="hist-list-flag"><button type="button" class="btn-flag-warn" data-role="list-flag">標註錯誤</button></div>'
-          : '<div style="margin-top:8px;color:#777;font-size:12px">（請款唯讀，無標註鈕）</div>');
+          ? '<div class="hist-list-flag"><button type="button" class="btn-flag-warn" data-role="list-flag">錯誤記帳標示</button></div>'
+          : '<div style="margin-top:8px;color:#777;font-size:12px">（請款唯讀，無標示鈕）</div>');
       list.appendChild(div);
     });
 
     var detail = document.getElementById('detail');
     var bar = document.createElement('div');
     bar.className = 'hist-mod-bar';
-    bar.innerHTML = '<button type="button" class="btn-flag-warn" data-role="flag-error">標註錯誤</button>';
+    bar.innerHTML = '<button type="button" class="btn-flag-warn" data-role="flag-error">錯誤記帳標示</button>';
     detail.appendChild(bar);
     detail.insertAdjacentHTML('beforeend', '<p>來源：收支登錄 · 金額 $1200 ·（欄位在按鈕下方）</p>');
 
@@ -103,7 +103,7 @@
     });
     var ok = listFlags === 1 && detailFlag === 1 && !payHasFlag && sessionCanFlagDetail(ledger);
     document.getElementById('assertLine').innerHTML = ok
-      ? '<span class="ok">PASS</span>：藍標列表 1 顆標註鈕；詳情置頂 1 顆；黃標請款 0 顆'
+      ? '<span class="ok">PASS</span>：收支列表 1 顆「錯誤記帳標示」；詳情置頂 1 顆；請款 0 顆'
       : '<span class="bad">FAIL</span> listFlags=' + listFlags + ' detailFlag=' + detailFlag + ' payHasFlag=' + payHasFlag;
     document.title = ok ? 'PASS flag DOM proof' : 'FAIL flag DOM proof';
   </script>

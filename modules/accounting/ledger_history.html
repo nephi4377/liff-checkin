@@ -6,11 +6,11 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <title>歷史記帳紀錄</title>
-  <!-- cache-bust 2026-10-06-flag-reason：標註錯誤必填原因；列表／詳情可見可按 -->
+  <!-- cache-bust 2026-10-06-flag-btn：錯誤記帳標示鈕置頂＋頁內原因（勿用 prompt） -->
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=92"></script>
+  <script src="../../shared/js/accounting_api.js?v=93"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <script src="../../shared/js/accounting_ui.js?v=32"></script>
@@ -213,14 +213,56 @@
     }
     .hist-mod-bar .hist-mod-msg { margin: 0; flex: 1 1 100%; }
     .hist-list-flag {
-      display: inline-flex; align-items: center; gap: 6px; margin-top: 8px;
+      display: flex; flex-direction: column; align-items: stretch; gap: 4px;
+      margin-top: 10px; padding: 10px; border-radius: 10px;
+      background: #fff8e8; border: 1px solid #f9ab00;
     }
     .hist-list-flag .btn-flag-warn {
-      padding: 6px 10px; font-size: 13px;
+      width: 100%; padding: 12px 14px; font-size: 16px; font-weight: 800;
+      min-height: 48px;
     }
     .hist-list-flag-hint {
       font-size: 12px; color: #8a5a00; font-weight: 600;
     }
+    .hist-flag-pin {
+      margin: 0 0 12px; padding: 12px; border-radius: 12px;
+      background: #fff8e8; border: 2px solid #f9ab00;
+    }
+    .hist-flag-pin-title {
+      margin: 0 0 6px; font-size: 15px; font-weight: 800; color: #8a5a00;
+    }
+    .hist-flag-pin-sub {
+      margin: 0 0 10px; font-size: 12px; color: #5f6368; line-height: 1.4;
+    }
+    .hist-flag-pin-list { display: flex; flex-direction: column; gap: 8px; }
+    .hist-flag-reason-mask {
+      position: fixed; inset: 0; z-index: 10050;
+      background: rgba(32, 33, 36, .45);
+      display: flex; align-items: flex-end; justify-content: center;
+      padding: 16px; box-sizing: border-box;
+    }
+    .hist-flag-reason-mask.hidden { display: none !important; }
+    .hist-flag-reason-sheet {
+      width: 100%; max-width: 440px; background: #fff; border-radius: 14px;
+      padding: 16px; box-shadow: 0 8px 28px rgba(0,0,0,.18);
+      box-sizing: border-box;
+    }
+    .hist-flag-reason-sheet h3 {
+      margin: 0 0 8px; font-size: 17px; font-weight: 800; color: #202124;
+    }
+    .hist-flag-reason-sheet p {
+      margin: 0 0 10px; font-size: 13px; color: #5f6368; line-height: 1.45;
+    }
+    .hist-flag-reason-sheet textarea {
+      width: 100%; min-height: 88px; box-sizing: border-box;
+      padding: 10px; border: 1px solid #dadce0; border-radius: 10px;
+      font-size: 16px; font-family: inherit; resize: vertical;
+    }
+    .hist-flag-reason-actions {
+      display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;
+    }
+    .hist-flag-reason-actions .btn-flag-warn { flex: 1 1 auto; min-height: 44px; }
+    .hist-flag-reason-actions .btn-ghost { flex: 0 0 auto; }
     .hist-edit-form {
       margin-top: 12px; padding: 12px; border: 1px solid #dadce0; border-radius: 10px;
       background: #f8fafc;
@@ -298,7 +340,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub" id="pageModeHint">權限 ≥3 可查<strong>區間內全部人</strong>的<strong>待付款請款</strong>與<strong>收支登錄</strong>。預設近 7 天；列表<strong>只依新增／送出時間</strong>新→舊，<strong>不是交易日</strong>。「只看我記的」為選用篩選（暫不強制）。<strong>標註錯誤只在藍標「收支登錄」</strong>（列表按鈕或詳情上方）；黃標「待付款請款」唯讀。刪除 ≥4；修改 &gt;4。</p>
+    <p class="sub" id="pageModeHint">權限 ≥3 可查<strong>區間內全部人</strong>的<strong>待付款請款</strong>與<strong>收支登錄</strong>。預設近 7 天；列表<strong>只依新增／送出時間</strong>新→舊，<strong>不是交易日</strong>。「只看我記的」為選用篩選（暫不強制）。<strong>「錯誤記帳標示」只在收支登錄</strong>（列表上方橘色區／列內大鈕／詳情置頂）；黃標請款唯讀。刪除 ≥4；修改 &gt;4。</p>
 
     <div class="card" id="historyFiltersCard">
       <div class="hist-head">
@@ -363,6 +405,7 @@
           <span class="hist-loc" style="font-weight:600;color:#174ea6">依新增時間</span>
         </div>
         <p id="historyStatus" class="is-ok">載入中…</p>
+        <div id="historyFlagPin" class="hist-flag-pin hidden" aria-live="polite"></div>
         <div id="historyList"></div>
       </div>
       <aside class="card hist-detail-card" id="historyDetailCard" aria-live="polite">
@@ -370,6 +413,19 @@
         <p class="hist-detail-placeholder" id="historyDetailPlaceholder">點左側一筆看案號、備註與圖片集。</p>
         <div id="historyDetailBody" class="hidden"></div>
       </aside>
+    </div>
+  </div>
+
+  <div id="histFlagReasonMask" class="hist-flag-reason-mask hidden" role="dialog" aria-modal="true" aria-labelledby="histFlagReasonTitle">
+    <div class="hist-flag-reason-sheet">
+      <h3 id="histFlagReasonTitle">錯誤記帳標示</h3>
+      <p>請填寫錯誤記帳原因（必填）。標示後權限 4 才能刪除已標示的帳。請款列不能標示。</p>
+      <label for="histFlagReasonInput" class="hidden">錯誤記帳原因</label>
+      <textarea id="histFlagReasonInput" maxlength="120" placeholder="例：金額打錯、對象選錯" autocomplete="off"></textarea>
+      <div class="hist-flag-reason-actions">
+        <button type="button" class="btn-flag-warn" id="histFlagReasonOk">確認標示</button>
+        <button type="button" class="btn-ghost" id="histFlagReasonCancel">取消</button>
+      </div>
     </div>
   </div>
 
@@ -542,20 +598,58 @@
         return false;
       }
 
-      /** 標註錯誤必填原因；取消回 null；空白則提示重填 */
+      /**
+       * 錯誤記帳原因（頁內對話框；勿用瀏覽器原生 prompt——LINE／iframe 常被擋＝按了沒反應）
+       * @returns {Promise<string|null>}
+       */
       function promptFlagReason() {
-        var reason = window.prompt(
-          '請輸入錯誤記帳原因（必填）\n標註後權限 4 才能刪除已標註的帳。',
-          ''
-        );
-        if (reason == null) return null;
-        reason = String(reason).replace(/\s+/g, ' ').trim();
-        if (!reason) {
-          window.alert('請填寫錯誤記帳原因後再標註。');
-          return null;
-        }
-        if (reason.length > 120) reason = reason.slice(0, 120);
-        return reason;
+        return new Promise(function (resolve) {
+          var mask = document.getElementById('histFlagReasonMask');
+          var input = document.getElementById('histFlagReasonInput');
+          var okBtn = document.getElementById('histFlagReasonOk');
+          var cancelBtn = document.getElementById('histFlagReasonCancel');
+          if (!mask || !input || !okBtn || !cancelBtn) {
+            resolve(null);
+            return;
+          }
+          var settled = false;
+          function finish(val) {
+            if (settled) return;
+            settled = true;
+            mask.classList.add('hidden');
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            mask.removeEventListener('click', onMask);
+            document.removeEventListener('keydown', onKey);
+            resolve(val);
+          }
+          function onOk() {
+            var reason = String(input.value || '').replace(/\s+/g, ' ').trim();
+            if (!reason) {
+              window.alert('請填寫錯誤記帳原因後再標示。');
+              try { input.focus(); } catch (eF) {}
+              return;
+            }
+            if (reason.length > 120) reason = reason.slice(0, 120);
+            finish(reason);
+          }
+          function onCancel() { finish(null); }
+          function onMask(e) {
+            if (e.target === mask) finish(null);
+          }
+          function onKey(e) {
+            if (e.key === 'Escape') finish(null);
+          }
+          input.value = '';
+          mask.classList.remove('hidden');
+          okBtn.addEventListener('click', onOk);
+          cancelBtn.addEventListener('click', onCancel);
+          mask.addEventListener('click', onMask);
+          document.addEventListener('keydown', onKey);
+          setTimeout(function () {
+            try { input.focus(); } catch (eFocus) {}
+          }, 30);
+        });
       }
 
       function fileToPhotoPayload(file) {
@@ -608,45 +702,51 @@
           flagBtn.type = 'button';
           flagBtn.className = 'btn-flag-warn';
           flagBtn.setAttribute('data-role', 'flag-error');
-          flagBtn.textContent = '標註錯誤';
+          flagBtn.textContent = '錯誤記帳標示';
           flagBtn.addEventListener('click', function (e) {
             e.stopPropagation();
             if (!sessionRef || typeof AccountingApi.accountingLedgerFlag !== 'function') {
-              setModMsg('標註功能尚未就緒', false);
+              setModMsg('標示功能尚未就緒', false);
               return;
             }
-            var reason = promptFlagReason();
-            if (!reason) return;
             flagBtn.disabled = true;
-            setModMsg('標註中…', true);
-            AccountingApi.accountingLedgerFlag(sessionRef, Object.assign({}, locOpts(), { reason: reason })).then(function (data) {
-              flagBtn.disabled = false;
-              if (!data || !data.success) {
-                setModMsg((data && data.message) || '標註失敗', false);
+            setModMsg('請填寫原因…', true);
+            promptFlagReason().then(function (reason) {
+              if (!reason) {
+                flagBtn.disabled = false;
+                setModMsg('', true);
                 return;
               }
-              setModMsg(data.message || '已標註', true);
-              var updated = data.item || Object.assign({}, merged, {
-                error_flagged: true,
-                error_flag_reason: reason,
-                can_flag: false,
-                can_delete: sessionPerm() >= 4,
-                can_edit: sessionPerm() > 4
-              });
-              var key = historyItemKey(summaryItem) || historyItemKey(updated);
-              if (key && itemsByKey[key]) {
-                Object.assign(itemsByKey[key], {
+              setModMsg('標示中…', true);
+              return AccountingApi.accountingLedgerFlag(sessionRef, Object.assign({}, locOpts(), { reason: reason })).then(function (data) {
+                flagBtn.disabled = false;
+                if (!data || !data.success) {
+                  setModMsg((data && data.message) || '標示失敗', false);
+                  return;
+                }
+                setModMsg(data.message || '已標示錯誤記帳', true);
+                var updated = data.item || Object.assign({}, merged, {
                   error_flagged: true,
-                  error_flagged_at: updated.error_flagged_at,
-                  error_flagged_by: updated.error_flagged_by,
-                  error_flag_reason: updated.error_flag_reason || reason
+                  error_flag_reason: reason,
+                  can_flag: false,
+                  can_delete: sessionPerm() >= 4,
+                  can_edit: sessionPerm() > 4
                 });
-              }
-              fillHistoryDetailPanel(panel, itemsByKey[openHistoryKey] || updated, updated);
-              try { loadLedgerHistory(); } catch (eReload) {}
+                var key = historyItemKey(summaryItem) || historyItemKey(updated);
+                if (key && itemsByKey[key]) {
+                  Object.assign(itemsByKey[key], {
+                    error_flagged: true,
+                    error_flagged_at: updated.error_flagged_at,
+                    error_flagged_by: updated.error_flagged_by,
+                    error_flag_reason: updated.error_flag_reason || reason
+                  });
+                }
+                fillHistoryDetailPanel(panel, itemsByKey[openHistoryKey] || updated, updated);
+                try { loadLedgerHistory(); } catch (eReload) {}
+              });
             }).catch(function (err) {
               flagBtn.disabled = false;
-              setModMsg((err && err.message) || '標註失敗', false);
+              setModMsg((err && err.message) || '標示失敗', false);
             });
           });
           actions.appendChild(flagBtn);
@@ -972,7 +1072,7 @@
           var payHint = document.createElement('p');
           payHint.className = 'hint';
           payHint.style.margin = '10px 0 0';
-          payHint.textContent = '這是待付款請款（尚未入收支帳）。審核／匯款請到「請款審核」或「廠商待匯款」；此頁只供查閱，不能標註／刪除／修改。標註錯誤請改點藍標「收支登錄」。';
+          payHint.textContent = '這是待付款請款（尚未入收支帳）。審核／匯款請到「請款審核」或「廠商待匯款」；此頁只供查閱，不能標示／刪除／修改。「錯誤記帳標示」請改點收支登錄列（列表上方橘色區）。';
           panel.appendChild(payHint);
           var links = document.createElement('div');
           links.className = 'hist-edit-actions';
@@ -991,7 +1091,7 @@
           panel.appendChild(links);
           return;
         }
-        // 收支：先放標註／刪除／修改（置頂可按），再放欄位與圖片
+        // 收支：先放錯誤記帳標示／刪除／修改（置頂可按），再放欄位與圖片
         buildEditForm(panel, summaryItem, detail || merged);
         var fields = document.createElement('div');
         fields.innerHTML = renderHistoryDetailFields(merged);
@@ -1143,89 +1243,24 @@
         return list;
       }
 
-      function renderHistoryItems(items) {
-        var box = document.getElementById('historyList');
-        box.innerHTML = '';
-        openHistoryKey = '';
-        itemsByKey = {};
-        clearSideDetail();
-        if (!items || !items.length) return;
-        items.forEach(function (it) {
-          var key = historyItemKey(it);
-          itemsByKey[key] = it;
-          var div = document.createElement('div');
-          div.className = 'hist-item';
-          div.setAttribute('role', 'button');
-          div.tabIndex = 0;
-          div.dataset.key = key;
-          var typeClass = it.type === '收入' ? 'income' : 'expense';
-          var kind = isPaymentRequestItem(it) ? 'payment' : 'ledger';
-          var kindLabel = recordKindLabel(it);
-          var meta = [];
-          if (it.party_name) meta.push(it.party_name);
-          if (it.desc && it.desc !== it.party_name) meta.push(it.desc);
-          if (it.project_no) meta.push('案號 ' + it.project_no);
-          if (it.payment_method) meta.push(it.payment_method);
-          if (it.note) meta.push(it.note);
-          var loc = '';
-          if (kind === 'payment') {
-            loc = '請款單 ' + String(it.payment_request_id || '').slice(0, 8);
-            if (it.status_label) loc += ' · ' + it.status_label;
-          } else {
-            loc = (it.sheet || '—') + ' 第' + (it.row || '?') + '列';
-            if (it.ingest_id) loc += ' · ' + String(it.ingest_id).slice(0, 8);
-          }
-          var recorded = it.recorded_at_display || it.recorded_at || '';
-          if (it.error_flagged) div.classList.add('is-flagged');
-          var canListFlag = !isPaymentRequestItem(it) && sessionCanFlagDetail(it);
-          div.innerHTML =
-            '<div class="hist-top">' +
-              '<div class="hist-top-left">' +
-                '<span class="hist-kind-badge is-' + kind + '">' + escHtml(kindLabel) + '</span>' +
-                '<span class="hist-type ' + typeClass + '">' + escHtml(it.type || (kind === 'payment' ? '支出' : '—')) + '</span>' +
-                (kind === 'payment' && it.status_label
-                  ? ('<span class="hist-status-badge">' + escHtml(it.status_label) + '</span>')
-                  : '') +
-                (it.error_flagged ? '<span class="hist-flag-badge">錯誤標註</span>' : '') +
-                (it.error_flagged && it.error_flag_reason
-                  ? ('<span class="hist-list-flag-hint" title="' + escHtml(it.error_flag_reason) + '">原因：' +
-                    escHtml(it.error_flag_reason.length > 24
-                      ? (it.error_flag_reason.slice(0, 24) + '…')
-                      : it.error_flag_reason) + '</span>')
-                  : '') +
-                (recorded
-                  ? ('<span style="color:#174ea6;font-weight:600">' +
-                    (kind === 'payment' ? '送出 ' : '新增 ') + escHtml(recorded) + '</span>')
-                  : ('<span style="color:#5f6368">新增時間（舊資料無戳記）</span>')) +
-              '</div>' +
-              '<span class="hist-amt">' + escHtml(formatMoney(it.amount)) + '</span>' +
-            '</div>' +
-            '<div class="hist-loc">交易日 ' + escHtml(it.txn_date_display || it.txn_date || '—') + '</div>' +
-            '<div class="hist-meta">' + escHtml(meta.join(' · ') || '—') + '</div>' +
-            '<div class="hist-loc">' + escHtml(loc) + '</div>' +
-            (canListFlag
-              ? ('<div class="hist-list-flag">' +
-                '<button type="button" class="btn-flag-warn" data-role="list-flag">標註錯誤</button>' +
-                '<span class="hist-list-flag-hint">需填錯誤原因</span>' +
-                '</div>')
-              : '') +
-            '<div class="hist-hint">' +
-              (kind === 'payment' ? '點開看詳情（請款唯讀，無標註）' : '點開看詳情（上方也可標註錯誤）') +
-            '</div>' +
-            '<div class="hist-detail hidden"></div>';
-          if (canListFlag) {
-            var listFlagBtn = div.querySelector('[data-role="list-flag"]');
-            if (listFlagBtn) {
-              listFlagBtn.addEventListener('click', function (e) {
-                e.stopPropagation();
-                if (!sessionRef || typeof AccountingApi.accountingLedgerFlag !== 'function') {
-                  window.alert('標註功能尚未就緒');
-                  return;
+      function bindHistoryItemRow(div, it) {
+        var canListFlag = !isPaymentRequestItem(it) && sessionCanFlagDetail(it);
+        if (canListFlag) {
+          var listFlagBtn = div.querySelector('[data-role="list-flag"]');
+          if (listFlagBtn) {
+            listFlagBtn.addEventListener('click', function (e) {
+              e.stopPropagation();
+              if (!sessionRef || typeof AccountingApi.accountingLedgerFlag !== 'function') {
+                window.alert('標示功能尚未就緒');
+                return;
+              }
+              listFlagBtn.disabled = true;
+              promptFlagReason().then(function (reason) {
+                if (!reason) {
+                  listFlagBtn.disabled = false;
+                  return null;
                 }
-                var reason = promptFlagReason();
-                if (!reason) return;
-                listFlagBtn.disabled = true;
-                AccountingApi.accountingLedgerFlag(sessionRef, {
+                return AccountingApi.accountingLedgerFlag(sessionRef, {
                   sheet: it.sheet,
                   row: it.row,
                   ingest_id: it.ingest_id,
@@ -1233,28 +1268,155 @@
                 }).then(function (data) {
                   listFlagBtn.disabled = false;
                   if (!data || !data.success) {
-                    window.alert((data && data.message) || '標註失敗');
+                    window.alert((data && data.message) || '標示失敗');
                     return;
                   }
                   try { loadLedgerHistory(); } catch (eReload) {}
-                }).catch(function (err) {
-                  listFlagBtn.disabled = false;
-                  window.alert((err && err.message) || '標註失敗');
                 });
+              }).catch(function (err) {
+                listFlagBtn.disabled = false;
+                window.alert((err && err.message) || '標示失敗');
               });
+            });
+          }
+        }
+        div.addEventListener('click', function (e) {
+          if (e.target.closest && (e.target.closest('.hist-att-row') || e.target.closest('.btn-ghost') || e.target.closest('.hist-edit-form') || e.target.closest('.btn-edit-primary') || e.target.closest('.btn-flag-warn') || e.target.closest('.btn-delete-danger') || e.target.closest('.hist-edit-actions') || e.target.closest('.hist-list-flag') || e.target.closest('.hist-mod-bar'))) return;
+          toggleHistoryDetail(div, it);
+        });
+        div.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleHistoryDetail(div, it);
+          }
+        });
+      }
+
+      function buildHistoryItemEl(it, opts) {
+        opts = opts || {};
+        var key = historyItemKey(it);
+        itemsByKey[key] = it;
+        var div = document.createElement('div');
+        div.className = 'hist-item' + (opts.pin ? ' is-flag-pin-row' : '');
+        div.setAttribute('role', 'button');
+        div.tabIndex = 0;
+        div.dataset.key = key;
+        var typeClass = it.type === '收入' ? 'income' : 'expense';
+        var kind = isPaymentRequestItem(it) ? 'payment' : 'ledger';
+        var kindLabel = recordKindLabel(it);
+        var meta = [];
+        if (it.party_name) meta.push(it.party_name);
+        if (it.desc && it.desc !== it.party_name) meta.push(it.desc);
+        if (it.project_no) meta.push('案號 ' + it.project_no);
+        if (it.payment_method) meta.push(it.payment_method);
+        if (it.note) meta.push(it.note);
+        var loc = '';
+        if (kind === 'payment') {
+          loc = '請款單 ' + String(it.payment_request_id || '').slice(0, 8);
+          if (it.status_label) loc += ' · ' + it.status_label;
+        } else {
+          loc = (it.sheet || '—') + ' 第' + (it.row || '?') + '列';
+          if (it.ingest_id) loc += ' · ' + String(it.ingest_id).slice(0, 8);
+        }
+        var recorded = it.recorded_at_display || it.recorded_at || '';
+        if (it.error_flagged) div.classList.add('is-flagged');
+        var canListFlag = !isPaymentRequestItem(it) && sessionCanFlagDetail(it);
+        div.innerHTML =
+          '<div class="hist-top">' +
+            '<div class="hist-top-left">' +
+              '<span class="hist-kind-badge is-' + kind + '">' + escHtml(kindLabel) + '</span>' +
+              '<span class="hist-type ' + typeClass + '">' + escHtml(it.type || (kind === 'payment' ? '支出' : '—')) + '</span>' +
+              (kind === 'payment' && it.status_label
+                ? ('<span class="hist-status-badge">' + escHtml(it.status_label) + '</span>')
+                : '') +
+              (it.error_flagged ? '<span class="hist-flag-badge">已標示錯誤</span>' : '') +
+              (it.error_flagged && it.error_flag_reason
+                ? ('<span class="hist-list-flag-hint" title="' + escHtml(it.error_flag_reason) + '">原因：' +
+                  escHtml(it.error_flag_reason.length > 24
+                    ? (it.error_flag_reason.slice(0, 24) + '…')
+                    : it.error_flag_reason) + '</span>')
+                : '') +
+              (recorded
+                ? ('<span style="color:#174ea6;font-weight:600">' +
+                  (kind === 'payment' ? '送出 ' : '新增 ') + escHtml(recorded) + '</span>')
+                : ('<span style="color:#5f6368">新增時間（舊資料無戳記）</span>')) +
+            '</div>' +
+            '<span class="hist-amt">' + escHtml(formatMoney(it.amount)) + '</span>' +
+          '</div>' +
+          '<div class="hist-loc">交易日 ' + escHtml(it.txn_date_display || it.txn_date || '—') + '</div>' +
+          '<div class="hist-meta">' + escHtml(meta.join(' · ') || '—') + '</div>' +
+          '<div class="hist-loc">' + escHtml(loc) + '</div>' +
+          (canListFlag
+            ? ('<div class="hist-list-flag">' +
+              '<button type="button" class="btn-flag-warn" data-role="list-flag">錯誤記帳標示</button>' +
+              '<span class="hist-list-flag-hint">點這顆 → 填原因 → 確認（請款列沒有這顆）</span>' +
+              '</div>')
+            : '') +
+          '<div class="hist-hint">' +
+            (kind === 'payment' ? '點開看詳情（請款唯讀，無標示）' : '點開看詳情（上方也可錯誤記帳標示）') +
+          '</div>' +
+          '<div class="hist-detail hidden"></div>';
+        bindHistoryItemRow(div, it);
+        return div;
+      }
+
+      function renderFlagPin(flaggable) {
+        var pin = document.getElementById('historyFlagPin');
+        if (!pin) return;
+        pin.innerHTML = '';
+        if (!flaggable || !flaggable.length) {
+          pin.classList.add('hidden');
+          return;
+        }
+        pin.classList.remove('hidden');
+        var title = document.createElement('p');
+        title.className = 'hist-flag-pin-title';
+        title.textContent = '錯誤記帳標示（' + flaggable.length + ' 筆收支可按）';
+        var sub = document.createElement('p');
+        sub.className = 'hist-flag-pin-sub';
+        sub.textContent = '請款列沒有這顆鈕。要標示錯誤請按下面橘色「錯誤記帳標示」大鈕，填原因後確認。';
+        var list = document.createElement('div');
+        list.className = 'hist-flag-pin-list';
+        flaggable.forEach(function (it) {
+          list.appendChild(buildHistoryItemEl(it, { pin: true }));
+        });
+        pin.appendChild(title);
+        pin.appendChild(sub);
+        pin.appendChild(list);
+      }
+
+      function renderHistoryItems(items) {
+        var box = document.getElementById('historyList');
+        box.innerHTML = '';
+        openHistoryKey = '';
+        itemsByKey = {};
+        clearSideDetail();
+        var pin = document.getElementById('historyFlagPin');
+        if (pin) {
+          pin.innerHTML = '';
+          pin.classList.add('hidden');
+        }
+        if (!items || !items.length) return;
+        var flaggable = [];
+        var seenFlagKey = {};
+        items.forEach(function (it) {
+          if (!isPaymentRequestItem(it) && sessionCanFlagDetail(it)) {
+            var fk = historyItemKey(it);
+            if (!seenFlagKey[fk]) {
+              seenFlagKey[fk] = true;
+              flaggable.push(it);
             }
           }
-          div.addEventListener('click', function (e) {
-            if (e.target.closest && (e.target.closest('.hist-att-row') || e.target.closest('.btn-ghost') || e.target.closest('.hist-edit-form') || e.target.closest('.btn-edit-primary') || e.target.closest('.btn-flag-warn') || e.target.closest('.btn-delete-danger') || e.target.closest('.hist-edit-actions') || e.target.closest('.hist-list-flag') || e.target.closest('.hist-mod-bar'))) return;
-            toggleHistoryDetail(div, it);
-          });
-          div.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              toggleHistoryDetail(div, it);
-            }
-          });
-          box.appendChild(div);
+        });
+        // 置頂可標示區：避免「全部」被請款列淹沒時找不到橘色大鈕
+        renderFlagPin(flaggable);
+        items.forEach(function (it) {
+          var key = historyItemKey(it);
+          // 已在置頂區出現的可標示列，下方列表略過避免重複兩顆鈕
+          if (seenFlagKey[key] && !isPaymentRequestItem(it) && sessionCanFlagDetail(it)) {
+            return;
+          }
+          box.appendChild(buildHistoryItemEl(it, {}));
         });
       }
 
@@ -1353,7 +1515,7 @@
         if (hint) {
           hint.innerHTML = on
             ? '目前為<strong>只看我記的</strong>（選用篩選）＋近 7 天區間。列表含<strong>待付款請款</strong>與<strong>收支登錄</strong>，<strong>只依新增／送出時間</strong>新→舊。需權限 ≥3。'
-            : '權限 ≥3 可查<strong>區間內全部人</strong>的<strong>待付款請款</strong>與<strong>收支登錄</strong>。預設近 7 天；列表<strong>只依新增／送出時間</strong>新→舊。「只看我記的」為選用篩選（暫不強制）。標註／刪除／修改只適用收支登錄。';
+            : '權限 ≥3 可查<strong>區間內全部人</strong>的<strong>待付款請款</strong>與<strong>收支登錄</strong>。預設近 7 天；列表<strong>只依新增／送出時間</strong>新→舊。「錯誤記帳標示」／刪除／修改只適用收支登錄。';
         }
       }
 
@@ -1473,12 +1635,25 @@
             bits.push('藍' + (data.ledger_count != null ? data.ledger_count : '?') +
               '/黃' + (data.payment_count != null ? data.payment_count : '?'));
           }
+          var flaggableN = data.flaggable_count;
+          if (flaggableN == null) {
+            flaggableN = (data.items || []).filter(function (it) {
+              return !isPaymentRequestItem(it) && sessionCanFlagDetail(it);
+            }).length;
+          }
+          if (flaggableN > 0) bits.push('可標示' + flaggableN);
           if (data.elapsed_ms != null && isFinite(Number(data.elapsed_ms))) {
             bits.push((Number(data.elapsed_ms) / 1000).toFixed(1) + 's');
           }
           var listEl = document.getElementById('historyList');
           if (n) {
-            setStatus('共 ' + n + ' 筆（依送出／新增時間新到舊；標籤可辨來源） · ' + bits.join(' · '), 'ok');
+            setStatus(
+              (flaggableN > 0
+                ? ('共 ' + n + ' 筆 · 列表上方橘色區有「錯誤記帳標示」大鈕（' + flaggableN + '）· ')
+                : ('共 ' + n + ' 筆（此區間無可標示的收支；請款列不能標示）· ')) +
+              bits.join(' · '),
+              'ok'
+            );
             // 只依 recorded_at：後端已排；前端再防禦一次（LINE 舊 JS／誤排兜底）。禁止 txn_date。
             renderHistoryItems(sortHistoryByRecordedAtOnly(data.items || []));
           } else {
