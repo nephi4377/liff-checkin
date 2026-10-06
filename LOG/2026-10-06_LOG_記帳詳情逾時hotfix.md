@@ -20,3 +20,9 @@
 ## 部署
 
 待 PR merge → Pages
+
+## 部署
+
+- Pages：[`37423041183`](https://github.com/nephi4377/liff-checkin/actions/runs/37423041183)
+- 正式站：`accounting_api.js?v=81`／`accounting_ui.js?v=27`
+- 配對 clasp：**@381**
