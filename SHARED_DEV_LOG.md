@@ -26,13 +26,13 @@
 
 ## 最近完成
 
-### 2026-10-06｜Cursor Cloud｜會計驗證身分 60s 逾時 hotfix（待 merge／部署）
+### 2026-10-06｜Cursor Cloud｜會計驗證身分 60s 逾時 hotfix（已上線 @369）
 
 - 修改範圍：`operator_context.js`、`accounting_api.js`、`accounting_boot.js`、`index.html`／`ledger_history.html`、SPEC 19；Backend AuthBridge／AuditLog
 - 完成內容：主控台網址身分先暫用進門；auth_me 逾時 20s 可降級；後端不再每次清員工快取；稽核失敗不擋登入
-- 驗證：`node modules/accounting/tools/test-hub-auth-provisional.js` OK；正式站 auth_me 量測常 10～20s（修前會阻塞）
-- Commit／線上：待 PR merge＋Pages／clasp
-- 待處理：merge 後部署；請老闆從主控台重開會計抽測
+- 驗證：單元煙測 OK；正式站 HTML `accounting_api.js?v=77`；Pages＋clasp **@369**
+- Commit／線上：[liff#103](https://github.com/nephi4377/liff-checkin/pull/103) → Pages [`37419660623`](https://github.com/nephi4377/liff-checkin/actions/runs/37419660623)；[GAS#81](https://github.com/nephi4377/Backend_GAS/pull/81) → Actions [`37419647847`](https://github.com/nephi4377/Backend_GAS/actions/runs/37419647847) → **@369**
+- 待處理：請老闆從主控台重開會計抽測（選單應秒開）
 
 
 ### 2026-10-06｜Cursor Cloud｜歷史記帳又慢又空 hotfix（已上線 @367）
