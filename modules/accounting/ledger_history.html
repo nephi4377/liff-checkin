@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=91"></script>
+  <script src="../../shared/js/accounting_api.js?v=92"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <script src="../../shared/js/accounting_ui.js?v=32"></script>
@@ -1469,6 +1469,13 @@
           if (filters.type) bits.push(filters.type);
           if (filters.keyword) bits.push('「' + filters.keyword + '」');
           if (filters.amount != null) bits.push('$' + filters.amount);
+          if (data.ledger_count != null || data.payment_count != null) {
+            bits.push('藍' + (data.ledger_count != null ? data.ledger_count : '?') +
+              '/黃' + (data.payment_count != null ? data.payment_count : '?'));
+          }
+          if (data.elapsed_ms != null && isFinite(Number(data.elapsed_ms))) {
+            bits.push((Number(data.elapsed_ms) / 1000).toFixed(1) + 's');
+          }
           var listEl = document.getElementById('historyList');
           if (n) {
             setStatus('共 ' + n + ' 筆（依送出／新增時間新到舊；標籤可辨來源） · ' + bits.join(' · '), 'ok');

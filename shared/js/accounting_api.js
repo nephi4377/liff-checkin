@@ -123,6 +123,8 @@ var AccountingApi = (function () {
       var text = '';
       var attempt = 0;
       var maxAttempts = 3;
+      // 歷史記帳：GAS 慢／404 時重試只會把 Abort 疊滿 90s；一次失敗即可（後端已有軟截止）
+      if (actionName === 'accounting_ledger_recent') maxAttempts = 1;
       while (attempt < maxAttempts) {
         attempt += 1;
         res = await fetch(apiUrl, opts);
@@ -1263,8 +1265,8 @@ var AccountingApi = (function () {
           }
         } catch (eAuth) {}
       }
-      // 後端：尾端分塊＋無戳記／窗外 early-stop＋軟截止~50s；請款只讀主檔不掃月表。
-      // 前端維持 90s Abort（勿再加長；修慢路徑）。
+      // 後端：請款主檔先讀＋收支掃表共用 ~28s 預算（軟截止~18s、每頁≤2塊）；勿再加長 timeout。
+      // 前端維持 90s Abort；歷史查詢不重試 GAS HTML 404（見 postToUrl_）。
       return post(body, 90000);
     },
     /** 歷史記帳單筆詳情（權限 ≥3；sheet+row 或 ingest_id；預設略過附件索引） */
