@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=75"></script>
+  <script src="../../shared/js/accounting_api.js?v=76"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
@@ -207,7 +207,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub" id="pageModeHint">預設<strong>只看我記的</strong>＋近 7 天。點一筆可看案號、圖片集。需權限 ≥3。</p>
+    <p class="sub" id="pageModeHint">預設<strong>只看我記的</strong>（登入帳號本人）＋近 7 天。「所有人紀錄」需手動開啟。點一筆可看案號、圖片集。需權限 ≥3。</p>
 
     <div class="card" id="historyFiltersCard">
       <div class="hist-head">
@@ -216,10 +216,10 @@
       </div>
       <div id="historyFilters">
         <button type="button" class="hist-mine-toggle is-on" id="historyMineToggle"
-          aria-pressed="true" title="切換是否只看自己記入的列">
+          aria-pressed="true" title="預設只看本人；點此才開啟所有人紀錄">
           <span class="hist-mine-copy">
             <span class="hist-mine-title">只看我記的</span>
-            <span class="hist-mine-sub" id="historyMineSub">開啟中：列表只含你本人寫入的帳（可點此列關閉看全部）。</span>
+            <span class="hist-mine-sub" id="historyMineSub">開啟中：只顯示登入帳號本人記入的帳。若要看其他人，請關閉此開關（開啟所有人紀錄）。</span>
           </span>
           <span class="hist-mine-state" id="historyMineState" aria-hidden="true">開</span>
         </button>
@@ -249,10 +249,11 @@
           <input id="histKeyword" type="text" placeholder="例：廠商名、訂金" autocomplete="off" />
         </div>
         <div class="full">
-          <p class="hint" style="margin:0 0 8px">日期區間最多 7 天；預設近 7 天。列表依<strong>已記帳時間</strong>新到舊。</p>
+          <p class="hint" style="margin:0 0 8px">預設近 7 天（交易日）；最多可查 30 天。列表依<strong>已記帳時間</strong>新到舊（舊列無時間戳仍會顯示）。</p>
           <div class="hist-actions">
             <button type="button" class="btn-ghost btn-primary-hist" id="historySearchBtn">查詢</button>
-            <button type="button" class="btn-ghost" id="historyClearBtn">重設為近 7 天</button>
+            <button type="button" class="btn-ghost" id="historyClearBtn">重設為近 7 天＋本人</button>
+            <button type="button" class="btn-ghost" id="historyExpand30Btn">近 30 天</button>
           </div>
         </div>
       </div>
@@ -569,7 +570,8 @@
         });
       }
 
-      var HISTORY_MAX_DAYS = 7;
+      var HISTORY_DEFAULT_DAYS = 7;
+      var HISTORY_MAX_DAYS = 30;
 
       function toIsoLocal(d) {
         var y = d.getFullYear();
@@ -597,16 +599,31 @@
         return Math.floor((db - da) / 86400000) + 1;
       }
 
-      function defaultHistoryWindow() {
+      function historyWindowForDays(days) {
+        var span = Math.max(1, Math.min(parseInt(days, 10) || HISTORY_DEFAULT_DAYS, HISTORY_MAX_DAYS));
         var to = toIsoLocal(new Date());
-        var from = addDaysIso(to, -(HISTORY_MAX_DAYS - 1));
-        return { from: from, to: to };
+        var from = addDaysIso(to, -(span - 1));
+        return { from: from, to: to, days: span };
+      }
+
+      function defaultHistoryWindow() {
+        return historyWindowForDays(HISTORY_DEFAULT_DAYS);
+      }
+
+      function applyHistoryDates(days) {
+        var w = historyWindowForDays(days == null ? HISTORY_DEFAULT_DAYS : days);
+        document.getElementById('histDateFrom').value = w.from;
+        document.getElementById('histDateTo').value = w.to;
+        return w;
       }
 
       function applyDefaultHistoryDates() {
-        var w = defaultHistoryWindow();
-        document.getElementById('histDateFrom').value = w.from;
-        document.getElementById('histDateTo').value = w.to;
+        return applyHistoryDates(HISTORY_DEFAULT_DAYS);
+      }
+
+      function forceMineOnlyOn() {
+        document.getElementById('historyMineOnly').checked = true;
+        syncMineToggleUi();
       }
 
       function clampHistoryDatesInInputs() {
@@ -614,7 +631,7 @@
         var dateTo = (document.getElementById('histDateTo').value || '').trim();
         var w = defaultHistoryWindow();
         if (!dateTo) dateTo = w.to;
-        if (!dateFrom) dateFrom = addDaysIso(dateTo, -(HISTORY_MAX_DAYS - 1));
+        if (!dateFrom) dateFrom = addDaysIso(dateTo, -(HISTORY_DEFAULT_DAYS - 1));
         if (dateFrom > dateTo) {
           var tmp = dateFrom;
           dateFrom = dateTo;
@@ -641,13 +658,13 @@
         if (state) state.textContent = on ? '開' : '關';
         if (sub) {
           sub.textContent = on
-            ? '開啟中：列表只含你本人寫入的帳（可點此列關閉看全部）。'
-            : '已關閉：列表含區間內所有人記入的帳（可點此列改回只看自己）。';
+            ? '開啟中：只顯示登入帳號本人記入的帳。若要看其他人，請關閉此開關（開啟所有人紀錄）。'
+            : '已開啟「所有人紀錄」：區間內含其他人記入的帳。可再點此列改回只看本人。';
         }
         if (hint) {
           hint.innerHTML = on
-            ? '預設<strong>只看我記的</strong>＋近 7 天。點一筆可看案號、圖片集。需權限 ≥3。'
-            : '目前看<strong>全部人</strong>＋近 7 天。點上方「只看我記的」可改回本人。需權限 ≥3。';
+            ? '預設<strong>只看我記的</strong>（登入帳號本人）＋近 7 天。「所有人紀錄」需手動開啟。點一筆可看案號、圖片集。需權限 ≥3。'
+            : '目前為<strong>所有人紀錄</strong>（已手動開啟）。可點上方「只看我記的」改回本人。需權限 ≥3。';
         }
       }
 
@@ -658,7 +675,9 @@
         var amountRaw = (document.getElementById('histAmount').value || '').trim();
         var mineOnly = !!document.getElementById('historyMineOnly').checked;
         var months = 1;
+        var span = inclusiveDays(dates.from, dates.to);
         if (dates.from.slice(0, 7) !== dates.to.slice(0, 7)) months = 2;
+        if (span > 28) months = 3;
         var filters = {
           limit: 50,
           months: months,
@@ -680,8 +699,47 @@
         document.getElementById('histType').value = '';
         document.getElementById('histKeyword').value = '';
         document.getElementById('histAmount').value = '';
-        document.getElementById('historyMineOnly').checked = true;
-        syncMineToggleUi();
+        forceMineOnlyOn();
+      }
+
+      function renderEmptyExpandActions(mineOnly, from, to) {
+        var span = inclusiveDays(from, to);
+        var actions = document.createElement('div');
+        actions.className = 'hist-actions';
+        actions.style.marginTop = '8px';
+        if (span < HISTORY_MAX_DAYS) {
+          var btn30 = document.createElement('button');
+          btn30.type = 'button';
+          btn30.className = 'btn-ghost btn-primary-hist';
+          btn30.textContent = '改查近 ' + HISTORY_MAX_DAYS + ' 天';
+          btn30.addEventListener('click', function () {
+            applyHistoryDates(HISTORY_MAX_DAYS);
+            loadLedgerHistory();
+          });
+          actions.appendChild(btn30);
+        }
+        if (mineOnly) {
+          var btnAll = document.createElement('button');
+          btnAll.type = 'button';
+          btnAll.className = 'btn-ghost';
+          btnAll.textContent = '開啟所有人紀錄';
+          btnAll.addEventListener('click', function () {
+            document.getElementById('historyMineOnly').checked = false;
+            syncMineToggleUi();
+            loadLedgerHistory();
+          });
+          actions.appendChild(btnAll);
+        }
+        var btnReset = document.createElement('button');
+        btnReset.type = 'button';
+        btnReset.className = 'btn-ghost';
+        btnReset.textContent = '重設近 7 天＋本人';
+        btnReset.addEventListener('click', function () {
+          clearHistoryFilters();
+          loadLedgerHistory();
+        });
+        actions.appendChild(btnReset);
+        return actions;
       }
 
       function loadLedgerHistory() {
@@ -702,20 +760,25 @@
           var n = (data.items || []).length;
           var from = data.date_from || filters.date_from || '…';
           var to = data.date_to || filters.date_to || '…';
-          var bits = [filters.mine_only ? '只看我記的' : '全部人', from + '～' + to];
+          // 空狀態標籤必須跟後端實際 mine_only 一致，避免誤寫「全部人／所有人」
+          var mineOnly = data.mine_only !== undefined ? !!data.mine_only : !!filters.mine_only;
+          var bits = [mineOnly ? '只看我記的' : '所有人紀錄', from + '～' + to];
           if (filters.type) bits.push(filters.type);
           if (filters.keyword) bits.push('「' + filters.keyword + '」');
           if (filters.amount != null) bits.push('$' + filters.amount);
+          var listEl = document.getElementById('historyList');
           if (n) {
             setStatus('共 ' + n + ' 筆（依已記帳時間新到舊） · ' + bits.join(' · '), 'ok');
+            renderHistoryItems(data.items || []);
           } else {
             var hint = (data.empty_hint && String(data.empty_hint).trim())
-              || (filters.mine_only
-                ? ('近 ' + HISTORY_MAX_DAYS + ' 天內沒有你記的帳。可改日期後再查，或關閉「只看我記的」看全部。')
-                : ('近 ' + HISTORY_MAX_DAYS + ' 天內沒有符合條件的帳。可改日期或關鍵字後再查。'));
+              || (mineOnly
+                ? ('這段期間沒有你記的帳。可改查近 ' + HISTORY_MAX_DAYS + ' 天，或（需要時）開啟所有人紀錄。')
+                : ('這段期間沒有符合條件的帳。可改查近 ' + HISTORY_MAX_DAYS + ' 天，或改關鍵字後再查。'));
             setStatus(hint + '（' + bits.join(' · ') + '）', 'empty');
+            listEl.innerHTML = '';
+            listEl.appendChild(renderEmptyExpandActions(mineOnly, from, to));
           }
-          renderHistoryItems(data.items || []);
         }).catch(function (e) {
           var msg = (e && e.message) || '讀不到歷史記帳紀錄';
           if (/逾時|timeout|Abort|abort|等太久/i.test(msg)) {
@@ -741,6 +804,10 @@
         });
         document.getElementById('historyClearBtn').addEventListener('click', function () {
           clearHistoryFilters();
+          loadLedgerHistory();
+        });
+        document.getElementById('historyExpand30Btn').addEventListener('click', function () {
+          applyHistoryDates(HISTORY_MAX_DAYS);
           loadLedgerHistory();
         });
         document.getElementById('histKeyword').addEventListener('keydown', function (e) {
@@ -769,7 +836,7 @@
 
       (async function boot() {
         applyDefaultHistoryDates();
-        syncMineToggleUi();
+        forceMineOnlyOn();
         bindFilters();
         await AccountingBoot.run({
           minPermission: AccountingApi.SUPERVISOR_MIN_PERMISSION,
@@ -777,6 +844,7 @@
           preloadBootstrap: false,
           onReady: async function (sess) {
             sessionRef = sess;
+            forceMineOnlyOn();
             await loadLedgerHistory();
           }
         });
