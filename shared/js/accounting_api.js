@@ -1213,11 +1213,11 @@ var AccountingApi = (function () {
       var body = {
         action: 'accounting_ledger_recent',
         limit: opts.limit != null ? opts.limit : 40,
-        // 分頁依交易日存放；記帳時間窗須多掃近月（後端亦會 clamp 最多 3）
-        months: opts.months != null ? opts.months : 3,
         // 預設本人（登入帳號）；僅當頁面明確關閉「只看我記的」／開啟所有人紀錄時傳 false
         mine_only: opts.mine_only === undefined ? true : !!opts.mine_only
       };
+      // 不預設傳 months：分頁依交易日；掃月數由後端依記帳時間窗決定（避免日曆跨月誤縮）
+      if (opts.months != null) body.months = opts.months;
       if (opts.date_from) body.date_from = opts.date_from;
       if (opts.date_to) body.date_to = opts.date_to;
       if (opts.type) body.type = opts.type;
