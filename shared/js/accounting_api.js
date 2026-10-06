@@ -204,6 +204,13 @@ var AccountingApi = (function () {
     var hubOp = readHubOperator_();
     if (hubOp) {
       var action = opts.authAction || 'accounting_auth_me';
+      var fallbackFast = buildHubAuthFromOperator_(hubOp);
+      // 非 forceAuth：主控台網址身分先回（AccountingBoot 暫用進門）；背景請傳 forceAuth
+      if (fallbackFast && !opts.forceAuth) {
+        var sessFast = buildHubSession_(fallbackFast);
+        sessFast.provisional = true;
+        return sessFast;
+      }
       try {
         var auth = await post({
           action: action,
@@ -214,7 +221,7 @@ var AccountingApi = (function () {
         return buildHubSession_(auth);
       } catch (eHubAuth) {
         // 主控台已帶 uid／permission：後端慢或逾時時先用網址身分進門，背景再核對
-        var fallback = buildHubAuthFromOperator_(hubOp);
+        var fallback = fallbackFast || buildHubAuthFromOperator_(hubOp);
         if (fallback) {
           var sess = buildHubSession_(fallback);
           sess.provisional = true;
@@ -1398,20 +1405,28 @@ var AccountingApi = (function () {
       var hubOpPr = readHubOperator_();
       var session;
       if (hubOpPr) {
-        try {
-          var authPr = await post({
-            action: 'payment_request_auth_me',
-            user_id: hubOpPr.userId,
-            auth: { user_id: hubOpPr.userId }
-          });
-          if (!authPr.success) throw new Error(authPr.message || '驗證失敗');
-          session = buildHubSession_(authPr);
-        } catch (ePr) {
-          var fbPr = buildHubAuthFromOperator_(hubOpPr);
-          if (!fbPr) throw ePr;
+        var fbPr = buildHubAuthFromOperator_(hubOpPr);
+        // 主控台已帶 uid／permission：預設先暫用進門（與 AccountingBoot 一致），
+        // 避免 payment_request 冷路徑乾等 auth_me 20s；背景核對請傳 forceAuth:true
+        if (fbPr && !opts.forceAuth) {
           session = buildHubSession_(fbPr);
           session.provisional = true;
-          session.authDegraded = true;
+        } else {
+          try {
+            var authPr = await post({
+              action: 'payment_request_auth_me',
+              user_id: hubOpPr.userId,
+              auth: { user_id: hubOpPr.userId }
+            });
+            if (!authPr.success) throw new Error(authPr.message || '驗證失敗');
+            session = buildHubSession_(authPr);
+          } catch (ePr) {
+            if (!fbPr) throw ePr;
+            session = buildHubSession_(fbPr);
+            session.provisional = true;
+            session.authDegraded = true;
+            session.authDegradedMessage = (ePr && ePr.message) || String(ePr || '');
+          }
         }
       } else {
         session = await AccountingApi.initLiff(opts);

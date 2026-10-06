@@ -8,14 +8,15 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/accounting_tax_mode.js?v=6"></script>
-  <script src="../../shared/js/operator_context.js?v=3"></script>
+  <script src="../../shared/js/operator_context.js?v=4"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=63"></script>
+  <script src="../../shared/js/accounting_api.js?v=79"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=6"></script>
-  <script src="../../shared/js/accounting_ui.js?v=25"></script>
+  <script src="../../shared/js/accounting_ui.js?v=26"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
+  <script src="../../shared/js/accounting_boot.js?v=11"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <style>
     h2 { margin: 0 0 8px; }
@@ -2546,65 +2547,87 @@
         }
       }
 
+      async function afterPaymentRequestSession(sess) {
+        session = sess;
+        if (!session) return;
+        isVendorSelf = String(session.auth.status || '') === '廠商';
+        canSaveVendor = !isVendorSelf && (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION;
+        document.getElementById('userLine').textContent =
+          (session.auth.display_name || session.profile.displayName) +
+          (isVendorSelf ? ' · 廠商' : (' · 權限 ' + session.auth.permission));
+        if (!isVendorSelf) {
+          vendors = primeVendorsFromCache(session);
+          await primeEmployeesFromHub();
+          initVendorPicker();
+          if (vendors.length) fillVendorSelect();
+          if (employees.length) fillSelect('pickEmployee', employees, 'userId', function (e) {
+            return (e.userName || '') + ((e.bank_code && e.account_no) ? '' : '（帳戶待補）');
+          }, '— 請選擇員工 —');
+        }
+        showApp();
+        finishPaymentRequestBoot();
+        if (!shouldFetchPaymentContext()) {
+          applyPaymentRequestContext({
+            success: true,
+            vendors: vendors,
+            employees: employees,
+            can_finance_direct: (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION
+          });
+          canArchiveDelete = (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION;
+          AccountingUi.action('載入待付款請款', 'ok');
+        } else {
+          AccountingApi.paymentRequestContext(session).then(function (ctx) {
+            if (applyPaymentRequestContext(ctx)) AccountingUi.action('載入待付款請款', 'ok');
+            else if (ctx && ctx.message) setMsg(ctx.message);
+            if (queryParams.vendor_id && !isVendorSelf) {
+              var qVid2 = String(queryParams.vendor_id).trim();
+              var qVendor2 = vendors.find(function (x) { return x.vendor_id === qVid2; });
+              if (qVendor2) setVendorPickId(qVid2, qVendor2.name || qVid2);
+            }
+          }).catch(function (e) {
+            if (!vendors.length) setMsg(e.message || String(e));
+          });
+        }
+        if (!isVendorSelf && typeof AccountingCache !== 'undefined' && AccountingCache.needsStaffBootstrap(session)) {
+          var hadBootstrap = !!AccountingCache.get(session);
+          AccountingCache.load(session, hadBootstrap).then(function () {
+            if (isVendorSelf) return;
+            var fresh = AccountingCache.vendors(session);
+            if (fresh.length) {
+              vendors = fresh;
+              fillVendorSelect();
+            }
+          }).catch(function () {});
+        }
+      }
+
       (async function boot() {
         queryParams = readQuery();
         if (typeof AccountingNav !== 'undefined') AccountingNav.init();
-        try {
-          AccountingUi.action('載入待付款請款', 'start');
-          session = await AccountingApi.initPaymentRequestSession();
-          if (!session) return;
-          isVendorSelf = String(session.auth.status || '') === '廠商';
-          canSaveVendor = !isVendorSelf && (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION;
-          document.getElementById('userLine').textContent =
-            (session.auth.display_name || session.profile.displayName) +
-            (isVendorSelf ? ' · 廠商' : (' · 權限 ' + session.auth.permission));
-          if (!isVendorSelf) {
-            vendors = primeVendorsFromCache(session);
-            await primeEmployeesFromHub();
-            initVendorPicker();
-            if (vendors.length) fillVendorSelect();
-            if (employees.length) fillSelect('pickEmployee', employees, 'userId', function (e) {
-              return (e.userName || '') + ((e.bank_code && e.account_no) ? '' : '（帳戶待補）');
-            }, '— 請選擇員工 —');
-          }
-          showApp();
-          finishPaymentRequestBoot();
-          if (!shouldFetchPaymentContext()) {
-            applyPaymentRequestContext({
-              success: true,
-              vendors: vendors,
-              employees: employees,
-              can_finance_direct: (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION
-            });
+        AccountingUi.action('載入待付款請款', 'start');
+        // 與歷史記帳相同：主控台 uid／permission 先暫用進門，不乾等 auth_me 20s
+        await AccountingBoot.run({
+          minPermission: 0,
+          deniedMsg: AccountingApi.PAYMENT_REQUEST_DENIED_MSG,
+          preloadBootstrap: false,
+          initSession: function (bootOpts) {
+            return AccountingApi.initPaymentRequestSession(bootOpts);
+          },
+          onReady: afterPaymentRequestSession,
+          onRevalidate: async function (fresh) {
+            // 只更新身分／權限，勿重跑 finishPaymentRequestBoot（避免清掉已填表單）
+            session = fresh;
+            isVendorSelf = String(session.auth.status || '') === '廠商';
+            canSaveVendor = !isVendorSelf && (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION;
             canArchiveDelete = (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION;
-            AccountingUi.action('載入待付款請款', 'ok');
-          } else {
-            AccountingApi.paymentRequestContext(session).then(function (ctx) {
-              if (applyPaymentRequestContext(ctx)) AccountingUi.action('載入待付款請款', 'ok');
-              else if (ctx && ctx.message) setMsg(ctx.message);
-              if (queryParams.vendor_id && !isVendorSelf) {
-                var qVid2 = String(queryParams.vendor_id).trim();
-                var qVendor2 = vendors.find(function (x) { return x.vendor_id === qVid2; });
-                if (qVendor2) setVendorPickId(qVid2, qVendor2.name || qVid2);
-              }
-            }).catch(function (e) {
-              if (!vendors.length) setMsg(e.message || String(e));
-            });
+            canFinanceDirect = !isVendorSelf && (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION;
+            document.getElementById('userLine').textContent =
+              (session.auth.display_name || session.profile.displayName) +
+              (isVendorSelf ? ' · 廠商' : (' · 權限 ' + session.auth.permission));
+            if (canFinanceDirect) document.getElementById('financeBtn').classList.remove('hidden');
+            syncSuccessHistoryLink();
           }
-          if (!isVendorSelf && typeof AccountingCache !== 'undefined' && AccountingCache.needsStaffBootstrap(session)) {
-            var hadBootstrap = !!AccountingCache.get(session);
-            AccountingCache.load(session, hadBootstrap).then(function () {
-              if (isVendorSelf) return;
-              var fresh = AccountingCache.vendors(session);
-              if (fresh.length) {
-                vendors = fresh;
-                fillVendorSelect();
-              }
-            }).catch(function () {});
-          }
-        } catch (e) {
-          document.getElementById('loading').textContent = e.message || String(e);
-        }
+        });
       })();
     })();
   </script>

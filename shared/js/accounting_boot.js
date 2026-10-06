@@ -104,6 +104,10 @@ var AccountingBoot = (function () {
     var initOpts = { minPermission: minPerm, deniedMsg: opts.deniedMsg, authAction: opts.authAction };
     var initFn = opts.initSession || function (bootOpts) { return AccountingApi.initSession(bootOpts); };
     var runInit = function () { return initFn(initOpts); };
+    // 背景核對必須打後端（請款頁 hub 暫用路徑否則會一直回 provisional）
+    var runInitForce = function () {
+      return initFn(Object.assign({}, initOpts, { forceAuth: true }));
+    };
 
     var cached = null;
     if (typeof AccountingApi.tryCachedSession === 'function') {
@@ -178,7 +182,7 @@ var AccountingBoot = (function () {
           }
         });
         traceProgress('背景重新驗證身分…');
-        backgroundRevalidate(runInit, cached, revalOpts);
+        backgroundRevalidate(runInitForce, cached, revalOpts);
         return cached;
       } catch (eCachedRun) {
         var msgCache = eCachedRun.message || String(eCachedRun);
