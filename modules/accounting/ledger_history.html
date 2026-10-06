@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=77"></script>
+  <script src="../../shared/js/accounting_api.js?v=78"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
@@ -207,7 +207,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub" id="pageModeHint">預設<strong>只看我記的</strong>（登入帳號本人）＋近 7 天。「所有人紀錄」需手動開啟。點一筆可看案號、圖片集。需權限 ≥3。</p>
+    <p class="sub" id="pageModeHint">預設<strong>只看我記的</strong>＋近 7 天（依<strong>記帳時間＝你送出的時間</strong>，不是交易日）。「所有人紀錄」需手動開啟。點一筆可看案號、圖片集。需權限 ≥3。</p>
 
     <div class="card" id="historyFiltersCard">
       <div class="hist-head">
@@ -225,11 +225,11 @@
         </button>
         <input type="checkbox" id="historyMineOnly" class="hidden" checked tabindex="-1" aria-hidden="true" />
         <div>
-          <label for="histDateFrom">交易日起</label>
+          <label for="histDateFrom">記帳時間起</label>
           <input id="histDateFrom" type="date" />
         </div>
         <div>
-          <label for="histDateTo">交易日迄</label>
+          <label for="histDateTo">記帳時間迄</label>
           <input id="histDateTo" type="date" />
         </div>
         <div>
@@ -249,7 +249,7 @@
           <input id="histKeyword" type="text" placeholder="例：廠商名、訂金" autocomplete="off" />
         </div>
         <div class="full">
-          <p class="hint" style="margin:0 0 8px">預設近 7 天（交易日）；最多可查 30 天。列表依<strong>已記帳時間</strong>新到舊（舊列無時間戳仍會顯示）。</p>
+          <p class="hint" style="margin:0 0 8px">近 7／30 天依<strong>記帳時間（你送出的時間）</strong>，不是交易日。列表依記帳時間新到舊；舊列無時間戳仍會顯示（寫入順序近似）。</p>
           <div class="hist-actions">
             <button type="button" class="btn-ghost btn-primary-hist" id="historySearchBtn">查詢</button>
             <button type="button" class="btn-ghost" id="historyClearBtn">重設為近 7 天＋本人</button>
@@ -550,8 +550,8 @@
               '<span class="hist-amt">' + escHtml(formatMoney(it.amount)) + '</span>' +
             '</div>' +
             (recorded
-              ? ('<div class="hist-loc" style="color:#174ea6;font-weight:600">已記帳時間 ' + escHtml(recorded) + '</div>')
-              : '') +
+              ? ('<div class="hist-loc" style="color:#174ea6;font-weight:600">記帳時間 ' + escHtml(recorded) + '</div>')
+              : ('<div class="hist-loc" style="color:#5f6368">記帳時間（舊資料無戳記，依寫入順序近似）</div>')) +
             '<div class="hist-meta">' + escHtml(meta.join(' · ') || '—') + '</div>' +
             '<div class="hist-loc">' + escHtml(loc) + '</div>' +
             '<div class="hist-hint">點開看詳情（案號／圖片集）</div>' +
@@ -663,8 +663,8 @@
         }
         if (hint) {
           hint.innerHTML = on
-            ? '預設<strong>只看我記的</strong>（登入帳號本人）＋近 7 天。「所有人紀錄」需手動開啟。點一筆可看案號、圖片集。需權限 ≥3。'
-            : '目前為<strong>所有人紀錄</strong>（已手動開啟）。可點上方「只看我記的」改回本人。需權限 ≥3。';
+            ? '預設<strong>只看我記的</strong>＋近 7 天（依<strong>記帳時間＝你送出的時間</strong>，不是交易日）。「所有人紀錄」需手動開啟。點一筆可看案號、圖片集。需權限 ≥3。'
+            : '目前為<strong>所有人紀錄</strong>（已手動開啟）。區間仍依記帳時間（你送出的時間），不是交易日。可點上方「只看我記的」改回本人。需權限 ≥3。';
         }
       }
 
@@ -768,13 +768,13 @@
           if (filters.amount != null) bits.push('$' + filters.amount);
           var listEl = document.getElementById('historyList');
           if (n) {
-            setStatus('共 ' + n + ' 筆（依已記帳時間新到舊） · ' + bits.join(' · '), 'ok');
+            setStatus('共 ' + n + ' 筆（依記帳時間＝你送出的時間，新到舊；不是交易日） · ' + bits.join(' · '), 'ok');
             renderHistoryItems(data.items || []);
           } else {
             var hint = (data.empty_hint && String(data.empty_hint).trim())
               || (mineOnly
-                ? ('這段期間沒有你記的帳。可改查近 ' + HISTORY_MAX_DAYS + ' 天，或（需要時）開啟所有人紀錄。')
-                : ('這段期間沒有符合條件的帳。可改查近 ' + HISTORY_MAX_DAYS + ' 天，或改關鍵字後再查。'));
+                ? ('這段記帳時間沒有你送出的帳。可改查近 ' + HISTORY_MAX_DAYS + ' 天，或（需要時）開啟所有人紀錄。')
+                : ('這段記帳時間沒有符合條件的帳。可改查近 ' + HISTORY_MAX_DAYS + ' 天，或改關鍵字後再查。'));
             setStatus(hint + '（' + bits.join(' · ') + '）', 'empty');
             listEl.innerHTML = '';
             listEl.appendChild(renderEmptyExpandActions(mineOnly, from, to));
