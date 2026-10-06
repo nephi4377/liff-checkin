@@ -22,9 +22,17 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-10-06 | Cursor Cloud | 歷史記帳查詢重做（≥3／暫緩 mine_only／recorded_at） | ledger_history／api；Backend Ingest／SPEC／測試 | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-10-06｜Cursor Cloud｜歷史記帳查詢重做（已上線 @387）
+
+- 修改範圍：`ledger_history.html`、`accounting_api.js`、SPEC 15；Backend Ingest／SPEC／測試；文案對齊 PR#120
+- 完成內容：≥3 可看全部；**暫緩**強制 mine_only（選用）；嚴格 `recorded_at` 新→舊（Boss 例：10:00 中和基電 > 09:00 弘基傢俱）；勿用交易日排序；查詢頁不暗示 ≥3 可改帳（改帳>4 由 sibling）
+- 驗證：單元測試；正式站 `api?v=86`／選用／無 forceMineOnlyOn／`sortHistoryByRecordedAtOnly`；Pages＋clasp **@387**
+- Commit／線上：[liff#119](https://github.com/nephi4377/liff-checkin/pull/119)＋[#120](https://github.com/nephi4377/liff-checkin/pull/120) → Pages [`37426257926`](https://github.com/nephi4377/liff-checkin/actions/runs/37426257926)；[GAS#99](https://github.com/nephi4377/Backend_GAS/pull/99) → Actions [`37425723319`](https://github.com/nephi4377/Backend_GAS/actions/runs/37425723319) → **@387**
+- 待處理：老闆真人抽測排序；標註／刪除／改帳>4（sibling）
 
 ### 2026-10-06｜Cursor Cloud｜可修改已送出的記帳（已上線 @385）
 
