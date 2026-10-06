@@ -639,6 +639,14 @@ var AccountingUi = (function () {
           pushLog('warn', '✕ ' + label + ' — ' + detail + '（已用主控台身分繼續）');
           return;
         }
+        // 點列詳情：列表已有摘要；逾時只記 log，勿開「錯誤回報」
+        var softDetailTimeout = String(actionName || '') === 'accounting_ledger_detail' &&
+          /逾時|timeout|Abort|abort|等太久/i.test(failExtra);
+        if (softDetailTimeout) {
+          action(label, 'fail', detail, { toast: false });
+          pushLog('warn', '✕ ' + label + ' — ' + detail + '（已用列表摘要繼續）');
+          return;
+        }
         action(label, 'fail', detail, { toast: skipDupToast ? false : undefined });
       }
     }
