@@ -1222,7 +1222,8 @@ var AccountingApi = (function () {
         deferred_token: deferredToken || ''
       }, 120000);
     },
-    /** 歷史記帳紀錄查詢（權限 ≥3；mine_only 預設 true；近 N 天＝記帳時間／送出時間，不是交易日） */
+    /** 歷史記帳紀錄查詢（權限 ≥3；mine_only 預設 true；近 N 天＝記帳時間／送出時間，不是交易日）
+     * 排序契約：後端 sort_basis=recorded_at；前端亦只依 recorded_at 渲染（v82+）。 */
     accountingLedgerRecent: function (sessionOrToken, opts) {
       opts = opts || {};
       var body = {

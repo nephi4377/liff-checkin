@@ -22,7 +22,7 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| — | — | 目前無進行中工作 | — | — |
+| 2026-10-06 | Cursor Cloud | 歷史停用交易日排序 fallback（只依 recorded_at） | Backend SheetWriter＋測試；前端 ledger_history／api v82；SPEC／LOG | 進行中 |
 
 ## 最近完成
 
