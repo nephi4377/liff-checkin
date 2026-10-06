@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>待付款請款</title>
-  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/accounting_tax_mode.js?v=6"></script>
@@ -16,6 +16,7 @@
   <script src="../../shared/js/accounting_form_helpers.js?v=5"></script>
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
+  <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <style>
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; line-height: 1.5; }
@@ -58,13 +59,30 @@
     .tax-mode-prorate-row.hidden { display: none; }
     .pretax-hint { font-size: 12px; color: #666; }
     .total-line { font-size: 18px; font-weight: 700; margin-top: 10px; text-align: right; }
-    .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
-    .photo-tile { border: 1px solid #ddd; border-radius: 8px; padding: 6px; background: #fafafa; text-align: center; }
-    .photo-tile img { width: 100%; height: 72px; object-fit: cover; border-radius: 4px; }
-    .photo-tile .file-thumb { width: 100%; height: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 4px; background: #eef2f7; color: #444; font-size: 12px; line-height: 1.3; padding: 4px; box-sizing: border-box; word-break: break-all; }
+    .photo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
+    .photo-tile {
+      border: 1px solid #dadce0; border-radius: 10px; padding: 8px; background: #fafafa;
+      text-align: center; display: flex; flex-direction: column; gap: 4px; min-width: 0;
+    }
+    .photo-tile img {
+      width: 100%; height: 120px; object-fit: cover; border-radius: 6px;
+      cursor: zoom-in; display: block; background: #eef2f7;
+    }
+    .photo-tile .file-thumb {
+      width: 100%; height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      border-radius: 6px; background: #eef2f7; color: #444; font-size: 12px; line-height: 1.3; padding: 6px;
+      box-sizing: border-box; word-break: break-all;
+    }
     .photo-tile .file-thumb strong { font-size: 13px; color: #c5221f; }
-    .photo-tile label { font-weight: normal; font-size: 12px; margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 4px; }
-    .photo-tile .del { border: none; background: none; color: #c5221f; font-size: 11px; cursor: pointer; margin-top: 2px; }
+    .photo-tile .zoom-hint { font-size: 11px; color: #5f6368; margin: 0; }
+    .photo-tile label {
+      font-weight: normal; font-size: 12px; margin-top: 2px;
+      display: flex; align-items: center; justify-content: center; gap: 4px;
+    }
+    .photo-tile .del {
+      border: none; background: #fce8e6; color: #c5221f; font-size: 12px; cursor: pointer;
+      margin-top: 2px; border-radius: 6px; padding: 6px 8px; min-height: 36px;
+    }
     .drop-zone { margin-top: 8px; padding: 20px 14px; border: 2px dashed #b0b8c4; border-radius: 12px; background: #f8fafc; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
     .drop-zone:hover, .drop-zone.drag-over { border-color: #1a73e8; background: #e8f0fe; }
     .drop-zone p { margin: 0; font-size: 15px; color: #333; }
@@ -115,8 +133,18 @@
     .qr-banner.warn {
       color: #7a4f01; background: #fef7e0; border-color: #fdd663;
     }
-    .qr-banner .qr-actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
-    .qr-banner a.btn, .qr-banner button.btn { text-decoration: none; display: inline-flex; align-items: center; }
+    .qr-banner .qr-actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .qr-banner a.btn,
+    .qr-banner button.btn {
+      text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
+      width: auto; min-width: 0; margin-top: 0; padding: 10px 14px; flex: 0 1 auto;
+    }
+    .acct-pay-col-upload,
+    .acct-pay-col-fields { min-width: 0; }
+    .acct-pay-col-fields > label:first-of-type { margin-top: 0; }
+    @media (min-width: 560px) {
+      .photo-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -468,7 +496,7 @@
             '<br />別擔心——單據<strong>沒消失</strong>，仍在「單據與存檔」的<strong>請款中</strong>。' +
             '可在這頁手動上傳同一張後送出，或回列表再點「繼續請款」。')
           : ('這張單從「單據與存檔」過來，狀態是<strong>請款中・還沒送出</strong>。' +
-            '在這頁<strong>送出成功</strong>後才會移走；中途離開或失敗，回列表都還找得到。');
+            '在這頁<strong>送出成功</strong>後才會移到「已完成」；中途離開或失敗，回列表都還找得到。');
         body += '<div class="qr-actions">' +
           '<a class="btn btn-secondary" href="' + quickReviewListHref(extraWarn ? 'pay_fail' : 'pay_back') +
           '">回單據列表（請款還沒送完）</a></div>';
@@ -1301,6 +1329,9 @@
       function renderPhotoGrid() {
         var grid = document.getElementById('photoGrid');
         grid.innerHTML = '';
+        var imageUrls = photos
+          .filter(function (p) { return String(p.mimeType || '').indexOf('image/') === 0; })
+          .map(function (p) { return 'data:' + p.mimeType + ';base64,' + p.dataBase64; });
         photos.forEach(function (p) {
           var tile = document.createElement('div');
           tile.className = 'photo-tile';
@@ -1309,7 +1340,8 @@
           var ocrable = isOcrableMime(p.mimeType, p.filename);
           var thumbHtml = '';
           if (isImg) {
-            thumbHtml = '<img alt="檔案預覽" />';
+            thumbHtml = '<img alt="檔案預覽（點一下放大）" title="點圖放大查看" />' +
+              '<p class="zoom-hint">點圖放大</p>';
           } else {
             var ext = (isPdf ? 'PDF' : fileExt(p.filename).toUpperCase()) || '檔案';
             thumbHtml = '<div class="file-thumb"><strong>' + ext + '</strong><span></span></div>';
@@ -1320,7 +1352,14 @@
               : '') +
             '<button type="button" class="del">刪除</button>';
           if (isImg) {
-            tile.querySelector('img').src = 'data:' + p.mimeType + ';base64,' + p.dataBase64;
+            var imgEl = tile.querySelector('img');
+            var dataUrl = 'data:' + p.mimeType + ';base64,' + p.dataBase64;
+            imgEl.src = dataUrl;
+            imgEl.addEventListener('click', function () {
+              if (typeof AccountingLightbox === 'undefined') return;
+              var start = Math.max(0, imageUrls.indexOf(dataUrl));
+              AccountingLightbox.open(imageUrls, start);
+            });
           } else {
             tile.querySelector('.file-thumb span').textContent = fileLabel({ name: p.filename });
           }
@@ -2126,8 +2165,10 @@
           setOk('請款已送出');
           try { sessionStorage.removeItem(PAY_RESUME_KEY); } catch (eClr) {}
           setQuickReviewBanner('',
-            '請款已送出，這張單會從「請款中」移出。' +
-            '<div class="qr-actions"><a class="btn btn-secondary" href="quick_review.html">回單據列表</a></div>');
+            '請款已送出，這張單已進「已完成」。' +
+            '<div class="qr-actions">' +
+            '<a class="btn btn-secondary" href="quick_review.html?status=' +
+            encodeURIComponent('已分類') + '">回單據列表（已完成）</a></div>');
           clearPaymentFormData();
           var errHost = document.getElementById('submitErrorHost');
           if (errHost) { errHost.innerHTML = ''; errHost.className = ''; }

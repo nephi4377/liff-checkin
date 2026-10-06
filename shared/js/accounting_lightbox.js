@@ -46,20 +46,42 @@ var AccountingLightbox = (function () {
     return url;
   }
 
+  function onKey(e) {
+    if (!overlay || overlay.classList.contains('hidden')) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+    } else if (e.key === 'ArrowLeft') {
+      if (idx > 0) { idx--; render(); }
+    } else if (e.key === 'ArrowRight') {
+      if (idx < urls.length - 1) { idx++; render(); }
+    }
+  }
+
   function render() {
     if (!urls.length) return;
     var u = urls[idx];
     document.getElementById('acctLbImg').src = thumbUrl(u);
-    document.getElementById('acctLbOpen').href = u;
+    var link = document.getElementById('acctLbOpen');
+    if (/^https?:\/\//i.test(String(u || ''))) {
+      link.href = u;
+      link.style.display = '';
+      link.textContent = '在新分頁開啟';
+    } else {
+      link.removeAttribute('href');
+      link.style.display = 'none';
+    }
     document.getElementById('acctLbTitle').textContent = '單據 ' + (idx + 1) + ' / ' + urls.length;
     document.getElementById('acctLbPrev').disabled = idx <= 0;
     document.getElementById('acctLbNext').disabled = idx >= urls.length - 1;
+    document.getElementById('acctLbPrev').style.display = urls.length > 1 ? '' : 'none';
+    document.getElementById('acctLbNext').style.display = urls.length > 1 ? '' : 'none';
   }
 
-  function open(urlList) {
+  function open(urlList, startIndex) {
     urls = (urlList || []).filter(Boolean);
     if (!urls.length) return false;
-    idx = 0;
+    idx = Math.max(0, Math.min(Number(startIndex) || 0, urls.length - 1));
     ensureOverlay();
     overlay.classList.remove('hidden');
     render();
@@ -69,11 +91,14 @@ var AccountingLightbox = (function () {
     overlay.querySelector('#acctLbNext').onclick = function () {
       if (idx < urls.length - 1) { idx++; render(); }
     };
+    document.removeEventListener('keydown', onKey);
+    document.addEventListener('keydown', onKey);
     return true;
   }
 
   function close() {
     if (overlay) overlay.classList.add('hidden');
+    document.removeEventListener('keydown', onKey);
     urls = [];
     idx = 0;
   }

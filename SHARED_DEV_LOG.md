@@ -22,9 +22,18 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-10-06 | Cursor Cloud | 請款中頁排版＋點圖放大＋已完成篩選 | `payment_request.html`、`quick_review.html`、`accounting_lightbox.js` | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-10-06｜Cursor Cloud｜請款中排版＋點圖放大＋已完成篩選
+
+- 修改範圍：`quick_review.html`、`payment_request.html`、`shared/js/accounting_lightbox.js`、`shared/css/accounting_layout.css`、SPEC 15／資料字典、LOG
+- 完成內容：列表卡／請款頁排版整理；點縮圖燈箱放大；快捷篩選「已分類」改稱「已完成」（status 仍 `已分類`）；送出成功才移出請款中的邏輯不變
+- 驗證：靜態字串／節點檢查；本地 serve UI 抽測
+- Commit／線上：見本分支 PR（未部署）
+- 待處理：真人 LINE／主控台抽測點圖與已完成篩選
+
 
 ### 2026-10-05｜Cursor Cloud｜快審請款失敗消失＋畫面直覺（已部署）
 
