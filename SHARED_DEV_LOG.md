@@ -22,9 +22,17 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-10-06 | Cursor Cloud | 歷史記帳：標註≥3／刪除≥4／改帳>4 | ledger_history／api；GAS SheetWriter／Ingest／SPEC | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-10-06｜Cursor Cloud｜歷史記帳標註／刪除／改帳>4（已上線 @389）
+
+- 修改範圍：`ledger_history.html`、`accounting_api.js`、SPEC 15；Backend SheetWriter／Ingest／WebApp／SPEC／測試
+- 完成內容：**僅歷史記帳**——標註錯誤 ≥3；刪除已標註 ≥4；修改記帳需 **>4**（Yang=3 可標不可改）。備註 `[error_flag:]`；刪除作廢 `[void:]`
+- 驗證：單元測試；正式站應含「標註錯誤」／`api?v=87`；Pages＋clasp **@389**
+- Commit／線上：[liff#122](https://github.com/nephi4377/liff-checkin/pull/122) → Pages [`37426660019`](https://github.com/nephi4377/liff-checkin/actions/runs/37426660019)；[GAS#101](https://github.com/nephi4377/Backend_GAS/pull/101) → Actions [`37426581759`](https://github.com/nephi4377/Backend_GAS/actions/runs/37426581759) → **@389**
+- 待處理：老闆抽測：權限3標註、權限4刪已標、權限>4改帳
 
 ### 2026-10-06｜Cursor Cloud｜歷史記帳查詢重做（已上線 @387）
 
