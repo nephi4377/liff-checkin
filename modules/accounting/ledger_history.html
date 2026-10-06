@@ -10,12 +10,12 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=82"></script>
+  <script src="../../shared/js/accounting_api.js?v=83"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
-  <script src="../../shared/js/accounting_ui.js?v=28"></script>
+  <script src="../../shared/js/accounting_ui.js?v=29"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
-  <script src="../../shared/js/accounting_boot.js?v=12"></script>
+  <script src="../../shared/js/accounting_boot.js?v=13"></script>
   <style>
     h2 { margin: 0 0 4px; }
     .sub { color: #555; font-size: 14px; margin: 0 0 12px; line-height: 1.45; }
@@ -252,7 +252,7 @@
           <input id="histKeyword" type="text" placeholder="例：廠商名、訂金" autocomplete="off" />
         </div>
         <div class="full">
-          <p class="hint" style="margin:0 0 8px">近 7／30 天依<strong>新增時間（你送出的時間）</strong>，不是交易日。列表<strong>依新增時間</strong>新到舊；舊列無時間戳仍會顯示（寫入順序近似）。</p>
+          <p class="hint" style="margin:0 0 8px">近 7／30 天<strong>只顯示有「新增時間」戳記</strong>的帳（你送出的時間），不是交易日；列表依新增時間新到舊。戳記上線前的舊列不會出現在此區間。</p>
           <div class="hist-actions">
             <button type="button" class="btn-ghost btn-primary-hist" id="historySearchBtn">查詢</button>
             <button type="button" class="btn-ghost" id="historyClearBtn">重設為近 7 天＋本人</button>

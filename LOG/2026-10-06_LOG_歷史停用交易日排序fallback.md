@@ -8,3 +8,7 @@
 | 驗證 | 正式 HTML 部署後應含 `api?v=82` 與 `sortHistoryByRecordedAtOnly`；列表頂＝最新 `recorded_at`。 |
 | 部署 | 待 merge → Pages |
 
+
+## Follow-up
+
+文案改為「只顯示有新增時間戳記」；`api?v=83` 再刷一次快取。搭配後端排除無戳記舊列。
