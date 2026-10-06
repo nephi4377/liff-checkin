@@ -22,9 +22,18 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| 2026-10-06 | Cursor Cloud | 歷史記帳近期收支 90s 逾時 hotfix | Backend SheetWriter／SPEC／test；前端 ledger_history api?v=88 | 進行中 |
+| — | — | 目前無進行中工作 | — | — |
 
 ## 最近完成
+
+### 2026-10-06｜Cursor Cloud｜歷史記帳近期收支 90s 逾時 hotfix（已上線 @391）
+
+- 修改範圍：Backend `SheetWriter.js`／SPEC／test；前端 `ledger_history.html`／`accounting_api.js`／LOG
+- 根因：≥3 全部人掃 12 月時，無「記帳時間」舊月塊不 early-stop → 整月空轉拖到前端 90s Abort
+- 完成內容：無戳記資料塊停月；每頁最多 4 塊；掃表軟截止 50s；`COLLECT_CAP` 200；正式站 `api?v=88`；**不加長** timeout
+- 驗證：`node accounting-gas/tools/test-ledger-recent-history.js`；正式站 HTML 含 `api?v=88`／recent-timeout
+- Commit／線上：[GAS#103](https://github.com/nephi4377/Backend_GAS/pull/103) → Actions [`37427760840`](https://github.com/nephi4377/Backend_GAS/actions/runs/37427760840) → **@391**；[liff#124](https://github.com/nephi4377/liff-checkin/pull/124) → Pages [`37427765423`](https://github.com/nephi4377/liff-checkin/actions/runs/37427765423)
+- 待處理：Yang／老闆重開歷史記帳抽測「近期收支」應數秒內出列表
 
 ### 2026-10-06｜Cursor Cloud｜歷史記帳標註／刪除／改帳>4（已上線 @389）
 
