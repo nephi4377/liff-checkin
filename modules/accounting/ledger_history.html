@@ -3,16 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
   <title>歷史記帳紀錄</title>
+  <!-- cache-bust 2026-10-06-recorded-at-only：LINE WebView 勿留舊 sorter -->
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=81"></script>
+  <script src="../../shared/js/accounting_api.js?v=82"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
-  <script src="../../shared/js/accounting_ui.js?v=27"></script>
+  <script src="../../shared/js/accounting_ui.js?v=28"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
-  <script src="../../shared/js/accounting_boot.js?v=11"></script>
+  <script src="../../shared/js/accounting_boot.js?v=12"></script>
   <style>
     h2 { margin: 0 0 4px; }
     .sub { color: #555; font-size: 14px; margin: 0 0 12px; line-height: 1.45; }
@@ -539,6 +542,24 @@
         loadHistoryDetailForItem(div, it);
       }
 
+      /**
+       * 列表只依新增時間（recorded_at）新→舊；無戳記排最後。
+       * 絕不用 txn_date／date_iso／分頁名——那會看起來像依交易日排。
+       */
+      function sortHistoryByRecordedAtOnly(items) {
+        var list = (items || []).slice();
+        list.sort(function (a, b) {
+          var ra = String((a && a.recorded_at) || '').trim();
+          var rb = String((b && b.recorded_at) || '').trim();
+          if (ra && rb) return rb.localeCompare(ra);
+          if (ra && !rb) return -1;
+          if (!ra && rb) return 1;
+          // 無戳記：保持後端給的相對序（掃表寫入近似），不要改用交易日
+          return 0;
+        });
+        return list;
+      }
+
       function renderHistoryItems(items) {
         var box = document.getElementById('historyList');
         box.innerHTML = '';
@@ -788,8 +809,8 @@
           var listEl = document.getElementById('historyList');
           if (n) {
             setStatus('共 ' + n + ' 筆（依新增時間＝你送出的時間，新到舊；不是交易日） · ' + bits.join(' · '), 'ok');
-            // 禁止依交易日重排：後端已依 recorded_at 新→舊；原樣渲染
-            renderHistoryItems(data.items || []);
+            // 只依 recorded_at：後端已排；前端再防禦一次（LINE 舊 JS／誤排兜底）。禁止 txn_date。
+            renderHistoryItems(sortHistoryByRecordedAtOnly(data.items || []));
           } else {
             var hint = (data.empty_hint && String(data.empty_hint).trim())
               || (mineOnly
