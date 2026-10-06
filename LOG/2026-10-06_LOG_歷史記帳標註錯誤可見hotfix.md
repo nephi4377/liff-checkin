@@ -7,3 +7,9 @@
 | 驗證 | `node modules/accounting/tools/test-ledger-flag-button-visible.js`；本地 serve 以 Yang uid／permission=3 開頁 DOM 確認有 `data-role=list-flag`／`flag-error` |
 | 部署 | Pages 待 push main；對齊 Backend list `can_flag` |
 
+
+## 追加：必填錯誤原因（同日）
+
+- 標註時 `prompt` 必填「錯誤記帳原因」；寫入備註 `[error_flag:… reason:…]`
+- 列表／詳情顯示 `error_flag_reason`；API `accounting_ledger_flag` 無 reason 拒收
+- cache-bust `api?v=91`

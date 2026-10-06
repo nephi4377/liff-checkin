@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>標註錯誤 DOM proof (perm=3)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 16px; background: #f5f5f5; }
+    .card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .hist-item { border: 1px solid #e8eaed; border-radius: 10px; padding: 10px 12px; background: #fafafa; margin-bottom: 8px; }
+    .hist-kind-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; }
+    .is-ledger { background: #e8f0fe; color: #174ea6; border: 1px solid #aecbfa; }
+    .is-payment { background: #fef7e0; color: #8a5a00; border: 1px solid #f9ab00; }
+    .btn-flag-warn {
+      background: #fef7e0; color: #b06000; border: 1px solid #f9ab00;
+      border-radius: 8px; padding: 8px 12px; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    .hist-mod-bar {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      margin: 0 0 12px; padding: 10px 12px;
+      border: 1px solid #f9ab00; border-radius: 10px; background: #fff8e8;
+    }
+    .hist-list-flag { margin-top: 8px; }
+    .ok { color: #137333; font-weight: 700; }
+    .bad { color: #c5221f; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>DOM proof · Yang permission=3</h2>
+    <p id="permLine">—</p>
+    <p id="assertLine">—</p>
+  </div>
+  <div class="card">
+    <strong>列表（模擬）</strong>
+    <div id="list"></div>
+  </div>
+  <div class="card">
+    <strong>詳情置頂（模擬藍標收支）</strong>
+    <div id="detail"></div>
+  </div>
+  <script>
+    // Mirror production gating (ledger_history.html hotfix)
+    function isPaymentRequestItem(it) {
+      return !!(it && (it.record_kind === 'payment_request' || it.payment_request_id) &&
+        it.record_kind !== 'ledger');
+    }
+    var sessionRef = {
+      auth: { user_id: 'U6e5d8f132e02d6de182ff460fae73fab', display_name: 'Yang', permission: 3 }
+    };
+    function sessionPerm() { return Number(sessionRef.auth.permission || 0); }
+    function sessionCanFlagDetail(detail) {
+      if (isPaymentRequestItem(detail)) return false;
+      if (!sessionRef || !sessionRef.auth) return false;
+      if (detail && detail.error_flagged) return false;
+      if (sessionPerm() >= 3) return true;
+      if (detail && detail.can_flag === true) return true;
+      return false;
+    }
+
+    var ledger = {
+      record_kind: 'ledger', record_kind_label: '收支登錄', type: '支出',
+      amount: 1200, party_name: '測試廠商', desc: '測試／證明用',
+      sheet: '2026-10', row: 9, ingest_id: 'lm_proof',
+      can_flag: false // even with API false, ≥3 must still show
+    };
+    var payment = {
+      record_kind: 'payment_request', record_kind_label: '待付款請款',
+      payment_request_id: 'PR_PROOF', type: '支出', amount: 5000,
+      party_name: '請款廠商', can_flag: false
+    };
+
+    document.getElementById('permLine').textContent =
+      '模擬身分：Yang · 權限 ' + sessionPerm() + ' · ledger can_flag API=false 仍應顯示標註';
+
+    var list = document.getElementById('list');
+    [ledger, payment].forEach(function (it) {
+      var kind = isPaymentRequestItem(it) ? 'payment' : 'ledger';
+      var can = sessionCanFlagDetail(it);
+      var div = document.createElement('div');
+      div.className = 'hist-item';
+      div.innerHTML =
+        '<span class="hist-kind-badge is-' + kind + '">' + it.record_kind_label + '</span> ' +
+        it.party_name + ' · $' + it.amount +
+        (can
+          ? '<div class="hist-list-flag"><button type="button" class="btn-flag-warn" data-role="list-flag">標註錯誤</button></div>'
+          : '<div style="margin-top:8px;color:#777;font-size:12px">（請款唯讀，無標註鈕）</div>');
+      list.appendChild(div);
+    });
+
+    var detail = document.getElementById('detail');
+    var bar = document.createElement('div');
+    bar.className = 'hist-mod-bar';
+    bar.innerHTML = '<button type="button" class="btn-flag-warn" data-role="flag-error">標註錯誤</button>';
+    detail.appendChild(bar);
+    detail.insertAdjacentHTML('beforeend', '<p>來源：收支登錄 · 金額 $1200 ·（欄位在按鈕下方）</p>');
+
+    var listFlags = document.querySelectorAll('[data-role="list-flag"]').length;
+    var detailFlag = document.querySelectorAll('[data-role="flag-error"]').length;
+    var payHasFlag = false;
+    Array.prototype.forEach.call(list.children, function (el, i) {
+      if (i === 1 && el.querySelector('[data-role="list-flag"]')) payHasFlag = true;
+    });
+    var ok = listFlags === 1 && detailFlag === 1 && !payHasFlag && sessionCanFlagDetail(ledger);
+    document.getElementById('assertLine').innerHTML = ok
+      ? '<span class="ok">PASS</span>：藍標列表 1 顆標註鈕；詳情置頂 1 顆；黃標請款 0 顆'
+      : '<span class="bad">FAIL</span> listFlags=' + listFlags + ' detailFlag=' + detailFlag + ' payHasFlag=' + payHasFlag;
+    document.title = ok ? 'PASS flag DOM proof' : 'FAIL flag DOM proof';
+  </script>
+</body>
+</html>

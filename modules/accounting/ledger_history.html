@@ -6,11 +6,11 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <title>歷史記帳紀錄</title>
-  <!-- cache-bust 2026-10-06-flag-visible：標註錯誤置頂＋列表可按；權限取 hub/session 較高者 -->
+  <!-- cache-bust 2026-10-06-flag-reason：標註錯誤必填原因；列表／詳情可見可按 -->
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=90"></script>
+  <script src="../../shared/js/accounting_api.js?v=91"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <script src="../../shared/js/accounting_ui.js?v=32"></script>
@@ -467,6 +467,9 @@
             flagLabel += ' ' + String(detail.error_flagged_at).replace('T', ' ').slice(0, 16);
           }
           rows.splice(1, 0, ['狀態', flagLabel]);
+          if (detail.error_flag_reason) {
+            rows.splice(2, 0, ['錯誤原因', detail.error_flag_reason]);
+          }
         }
         if (detail.stores && detail.stores.length) {
           rows.push(['店別', detail.stores.map(function (s) {
@@ -539,6 +542,22 @@
         return false;
       }
 
+      /** 標註錯誤必填原因；取消回 null；空白則提示重填 */
+      function promptFlagReason() {
+        var reason = window.prompt(
+          '請輸入錯誤記帳原因（必填）\n標註後權限 4 才能刪除已標註的帳。',
+          ''
+        );
+        if (reason == null) return null;
+        reason = String(reason).replace(/\s+/g, ' ').trim();
+        if (!reason) {
+          window.alert('請填寫錯誤記帳原因後再標註。');
+          return null;
+        }
+        if (reason.length > 120) reason = reason.slice(0, 120);
+        return reason;
+      }
+
       function fileToPhotoPayload(file) {
         return new Promise(function (resolve, reject) {
           var reader = new FileReader();
@@ -596,10 +615,11 @@
               setModMsg('標註功能尚未就緒', false);
               return;
             }
-            if (!window.confirm('標註這筆為錯誤記帳？\n（權限 4 之後才能刪除已標註的帳）')) return;
+            var reason = promptFlagReason();
+            if (!reason) return;
             flagBtn.disabled = true;
             setModMsg('標註中…', true);
-            AccountingApi.accountingLedgerFlag(sessionRef, locOpts()).then(function (data) {
+            AccountingApi.accountingLedgerFlag(sessionRef, Object.assign({}, locOpts(), { reason: reason })).then(function (data) {
               flagBtn.disabled = false;
               if (!data || !data.success) {
                 setModMsg((data && data.message) || '標註失敗', false);
@@ -608,6 +628,7 @@
               setModMsg(data.message || '已標註', true);
               var updated = data.item || Object.assign({}, merged, {
                 error_flagged: true,
+                error_flag_reason: reason,
                 can_flag: false,
                 can_delete: sessionPerm() >= 4,
                 can_edit: sessionPerm() > 4
@@ -617,7 +638,8 @@
                 Object.assign(itemsByKey[key], {
                   error_flagged: true,
                   error_flagged_at: updated.error_flagged_at,
-                  error_flagged_by: updated.error_flagged_by
+                  error_flagged_by: updated.error_flagged_by,
+                  error_flag_reason: updated.error_flag_reason || reason
                 });
               }
               fillHistoryDetailPanel(panel, itemsByKey[openHistoryKey] || updated, updated);
@@ -1165,6 +1187,12 @@
                   ? ('<span class="hist-status-badge">' + escHtml(it.status_label) + '</span>')
                   : '') +
                 (it.error_flagged ? '<span class="hist-flag-badge">錯誤標註</span>' : '') +
+                (it.error_flagged && it.error_flag_reason
+                  ? ('<span class="hist-list-flag-hint" title="' + escHtml(it.error_flag_reason) + '">原因：' +
+                    escHtml(it.error_flag_reason.length > 24
+                      ? (it.error_flag_reason.slice(0, 24) + '…')
+                      : it.error_flag_reason) + '</span>')
+                  : '') +
                 (recorded
                   ? ('<span style="color:#174ea6;font-weight:600">' +
                     (kind === 'payment' ? '送出 ' : '新增 ') + escHtml(recorded) + '</span>')
@@ -1178,7 +1206,7 @@
             (canListFlag
               ? ('<div class="hist-list-flag">' +
                 '<button type="button" class="btn-flag-warn" data-role="list-flag">標註錯誤</button>' +
-                '<span class="hist-list-flag-hint">收支登錄可標</span>' +
+                '<span class="hist-list-flag-hint">需填錯誤原因</span>' +
                 '</div>')
               : '') +
             '<div class="hist-hint">' +
@@ -1194,12 +1222,14 @@
                   window.alert('標註功能尚未就緒');
                   return;
                 }
-                if (!window.confirm('標註這筆為錯誤記帳？\n（權限 4 之後才能刪除已標註的帳）')) return;
+                var reason = promptFlagReason();
+                if (!reason) return;
                 listFlagBtn.disabled = true;
                 AccountingApi.accountingLedgerFlag(sessionRef, {
                   sheet: it.sheet,
                   row: it.row,
-                  ingest_id: it.ingest_id
+                  ingest_id: it.ingest_id,
+                  reason: reason
                 }).then(function (data) {
                   listFlagBtn.disabled = false;
                   if (!data || !data.success) {
