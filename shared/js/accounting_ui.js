@@ -624,12 +624,21 @@ var AccountingUi = (function () {
     var detail = (extra || '') + (extra ? ' · ' : '') + formatMs(ms);
     if (_apiInflight <= 0) clearProgress();
     else setProgress('還有 ' + _apiInflight + ' 項資料載入中…');
-    if (isDebugMode() || slow || actionName === 'accounting_bootstrap' || actionName === 'accounting_auth_me') {
+    var isAuthMe = /_auth_me$/.test(String(actionName || ''));
+    if (isDebugMode() || slow || actionName === 'accounting_bootstrap' || isAuthMe) {
       var tag = (extra && extra.indexOf('GAS 快取') >= 0) ? '（GAS 快取）' : '';
       if (ok) step(label + (slow ? '（偏慢）' : '') + tag, detail);
       else {
+        var failExtra = String(extra || '');
         var skipDupToast = /vendor_payment_approve|vendor_payment_mark_paid/.test(String(actionName || '')) &&
-          /逾時|等太久/.test(String(extra || ''));
+          /逾時|等太久/.test(failExtra);
+        // 主控台已可暫用網址身分進門：背景 auth_me 逾時勿噴「錯誤回報」嚇到使用者
+        var softAuthTimeout = isAuthMe && /逾時|timeout|Abort|abort|等太久/i.test(failExtra);
+        if (softAuthTimeout) {
+          action(label, 'fail', detail, { toast: false });
+          pushLog('warn', '✕ ' + label + ' — ' + detail + '（已用主控台身分繼續）');
+          return;
+        }
         action(label, 'fail', detail, { toast: skipDupToast ? false : undefined });
       }
     }

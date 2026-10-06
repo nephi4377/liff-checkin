@@ -22,7 +22,7 @@
 
 | 開始時間 | 工具／開發者 | 工作內容 | 預計修改範圍 | 狀態 |
 |---|---|---|---|---|
-| — | — | 目前無進行中工作 | — | — |
+| 2026-10-06 | Cursor Cloud bc-73f7c710 | 請款驗證身分 20s 逾時 hotfix | payment_request／accounting_api／ui／boot；Backend AuthBridge | 進行中 |
 
 ## 最近完成
 

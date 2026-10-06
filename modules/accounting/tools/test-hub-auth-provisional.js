@@ -50,4 +50,16 @@ var AUTH_ME_TIMEOUT_MS = 20000;
 var DEFAULT_TIMEOUT_MS = 60000;
 assert(AUTH_ME_TIMEOUT_MS < DEFAULT_TIMEOUT_MS, 'auth timeout shorter than default');
 
+// payment_request：主控台 hub query 應可暫用（門檻 0／1），勿等 auth_me
+assert(canProvisional(op, 1), 'payment_request staff minPermission 1');
+assert(canProvisional(op, 0), 'payment_request AccountingBoot minPermission 0');
+
+function softAuthTimeoutToast(actionName, extra) {
+  var isAuthMe = /_auth_me$/.test(String(actionName || ''));
+  return isAuthMe && /逾時|timeout|Abort|abort|等太久/i.test(String(extra || ''));
+}
+assert(softAuthTimeoutToast('accounting_auth_me', '連線逾時，請再試一次 · 20.0 秒'), 'index auth soft');
+assert(softAuthTimeoutToast('payment_request_auth_me', '連線逾時，請再試一次'), 'payment auth soft');
+assert(!softAuthTimeoutToast('accounting_bootstrap', '連線逾時'), 'bootstrap still reports');
+
 console.log('test-hub-auth-provisional: OK');
