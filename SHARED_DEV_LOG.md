@@ -26,6 +26,15 @@
 
 ## 最近完成
 
+### 2026-10-06｜Cursor Cloud｜歷史記帳「標註錯誤」可見／可按 hotfix
+
+- 修改範圍：`ledger_history.html`、`accounting_nav.js`、`index.html`、SPEC 15、LOG、smoke test
+- 完成內容：藍標列表列內＋詳情置頂「標註錯誤」；權限取 hub/session max；≥3 不因 API can_flag:false 藏鈕；nav 合併 permission 去重；`api?v=90`
+- 驗證：`test-ledger-flag-button-visible.js` OK；本地／正式站抽測見 PR
+- Commit／線上：待 PR merge → Pages
+- 待處理：Yang 重開歷史 → 選「收支登錄」或點藍標列上「標註錯誤」
+
+
 ### 2026-10-06｜Cursor Cloud｜歷史記帳雙來源：待付款請款＋收支登錄（已上線 @393）
 
 - 修改範圍：`ledger_history.html`、`accounting_api.js`、SPEC 15；Backend `VendorPaymentModule`／`AccountingLineIngest`／SPEC

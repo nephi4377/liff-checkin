@@ -29,7 +29,38 @@ var AccountingNav = (function () {
     var qs = (typeof OperatorContext !== 'undefined') ? OperatorContext.hubQueryString() : '';
     if (!qs && href.indexOf('uid=') >= 0) return href;
     if (!qs) return href;
-    return href + (href.indexOf('?') >= 0 ? '&' : '?') + qs;
+    // 已帶 uid／permission 時：合併為較高權限，避免重複參數讓 .get() 吃到舊的第一個
+    try {
+      var parts = String(href).split('?');
+      var path = parts[0];
+      var hash = '';
+      var search = parts[1] || '';
+      var hashIdx = search.indexOf('#');
+      if (hashIdx >= 0) {
+        hash = search.slice(hashIdx);
+        search = search.slice(0, hashIdx);
+      }
+      var cur = new URLSearchParams(search);
+      var hub = new URLSearchParams(qs);
+      var uid = cur.get('uid') || hub.get('uid') || '';
+      var name = cur.get('name') || hub.get('name') || '';
+      var hubLiff = cur.get('hub_liff_id') || cur.get('hub_liff') || hub.get('hub_liff_id') || '';
+      var perm = Math.max(
+        parseInt(cur.get('permission') || cur.get('perm') || '0', 10) || 0,
+        parseInt(hub.get('permission') || hub.get('perm') || '0', 10) || 0
+      );
+      if (uid) cur.set('uid', uid);
+      if (name) cur.set('name', name);
+      if (perm > 0) cur.set('permission', String(perm));
+      if (hubLiff) cur.set('hub_liff_id', hubLiff);
+      // 清掉重複別名，只留一份
+      cur.delete('perm');
+      cur.delete('hub_liff');
+      var out = path + '?' + cur.toString() + hash;
+      return out;
+    } catch (eMerge) {
+      return href + (href.indexOf('?') >= 0 ? '&' : '?') + qs;
+    }
   }
 
   function isMenuLink(href) {

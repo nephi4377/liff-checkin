@@ -6,15 +6,15 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <title>歷史記帳紀錄</title>
-  <!-- cache-bust 2026-10-06-mixed-history：歷史同時顯示待付款請款＋收支登錄；排序仍只依 recorded_at；≥3 全部人 -->
+  <!-- cache-bust 2026-10-06-flag-visible：標註錯誤置頂＋列表可按；權限取 hub/session 較高者 -->
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=89"></script>
+  <script src="../../shared/js/accounting_api.js?v=90"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <script src="../../shared/js/accounting_ui.js?v=32"></script>
-  <script src="../../shared/js/accounting_nav.js?v=2"></script>
+  <script src="../../shared/js/accounting_nav.js?v=3"></script>
   <script src="../../shared/js/accounting_boot.js?v=15"></script>
   <style>
     h2 { margin: 0 0 4px; }
@@ -204,6 +204,23 @@
     .hist-att-thumbs img { width: 56px; height: 56px; object-fit: cover; display: block; }
 
     .hist-edit-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    /* 標註／刪除置頂，避免被圖片集／長詳情擠到摺疊下方「找不到」 */
+    .hist-mod-bar {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      margin: 0 0 12px; padding: 10px 12px;
+      border: 1px solid #f9ab00; border-radius: 10px; background: #fff8e8;
+      position: sticky; top: 0; z-index: 2;
+    }
+    .hist-mod-bar .hist-mod-msg { margin: 0; flex: 1 1 100%; }
+    .hist-list-flag {
+      display: inline-flex; align-items: center; gap: 6px; margin-top: 8px;
+    }
+    .hist-list-flag .btn-flag-warn {
+      padding: 6px 10px; font-size: 13px;
+    }
+    .hist-list-flag-hint {
+      font-size: 12px; color: #8a5a00; font-weight: 600;
+    }
     .hist-edit-form {
       margin-top: 12px; padding: 12px; border: 1px solid #dadce0; border-radius: 10px;
       background: #f8fafc;
@@ -281,7 +298,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub" id="pageModeHint">權限 ≥3 可查<strong>區間內全部人</strong>的<strong>待付款請款</strong>與<strong>收支登錄</strong>。預設近 7 天；列表<strong>只依新增／送出時間</strong>新→舊，<strong>不是交易日</strong>。「只看我記的」為選用篩選（暫不強制）。點一筆可看詳情。標註／刪除／修改<strong>只適用收支登錄</strong>（標註 ≥3；刪除 ≥4；修改 &gt;4）。</p>
+    <p class="sub" id="pageModeHint">權限 ≥3 可查<strong>區間內全部人</strong>的<strong>待付款請款</strong>與<strong>收支登錄</strong>。預設近 7 天；列表<strong>只依新增／送出時間</strong>新→舊，<strong>不是交易日</strong>。「只看我記的」為選用篩選（暫不強制）。<strong>標註錯誤只在藍標「收支登錄」</strong>（列表按鈕或詳情上方）；黃標「待付款請款」唯讀。刪除 ≥4；修改 &gt;4。</p>
 
     <div class="card" id="historyFiltersCard">
       <div class="hist-head">
@@ -475,33 +492,51 @@
       }
 
       function sessionPerm() {
-        return Number((sessionRef && sessionRef.auth && sessionRef.auth.permission) || 0);
+        var authPerm = Number((sessionRef && sessionRef.auth && sessionRef.auth.permission) || 0);
+        var hubPerm = 0;
+        try {
+          if (typeof OperatorContext !== 'undefined') {
+            var op = typeof OperatorContext.readPreferUrl === 'function'
+              ? OperatorContext.readPreferUrl()
+              : OperatorContext.read();
+            var sessUid = String((sessionRef && sessionRef.auth && sessionRef.auth.user_id) ||
+              (sessionRef && sessionRef.profile && sessionRef.profile.userId) || '');
+            if (op && op.userId && (!sessUid || String(op.userId) === sessUid)) {
+              hubPerm = Number(op.permission || 0);
+            }
+          }
+        } catch (eHub) {}
+        // 與會計選單一致：取 HUB／驗證較高者，避免 auth soft timeout／舊快取把 ≥3 降成 0 後藏標註鈕
+        return Math.max(authPerm, hubPerm);
       }
 
       function sessionCanEditDetail(detail) {
         if (isPaymentRequestItem(detail)) return false;
         if (!sessionRef || !sessionRef.auth) return false;
-        if (detail && detail.can_edit === true) return true;
-        if (detail && detail.can_edit === false) return false;
+        if (detail && detail.error_flagged) return false;
         // 老闆：修改記帳需權限大於 4（Yang=3 只能標註）
-        return sessionPerm() > 4;
+        if (sessionPerm() > 4) return true;
+        if (detail && detail.can_edit === true) return true;
+        return false;
       }
 
       function sessionCanFlagDetail(detail) {
         if (isPaymentRequestItem(detail)) return false;
         if (!sessionRef || !sessionRef.auth) return false;
-        if (detail && detail.can_flag === true) return true;
-        if (detail && detail.can_flag === false) return false;
         if (detail && detail.error_flagged) return false;
-        return sessionPerm() >= 3;
+        // 優先信任本機／HUB 權限 ≥3；勿因 API can_flag:false（身分軟失敗／舊欄位）把鈕藏掉
+        if (sessionPerm() >= 3) return true;
+        if (detail && detail.can_flag === true) return true;
+        return false;
       }
 
       function sessionCanDeleteDetail(detail) {
         if (isPaymentRequestItem(detail)) return false;
         if (!sessionRef || !sessionRef.auth) return false;
+        if (!(detail && detail.error_flagged)) return false;
+        if (sessionPerm() >= 4) return true;
         if (detail && detail.can_delete === true) return true;
-        if (detail && detail.can_delete === false) return false;
-        return sessionPerm() >= 4 && !!(detail && detail.error_flagged);
+        return false;
       }
 
       function fileToPhotoPayload(file) {
@@ -530,7 +565,8 @@
         if (!canEdit && !canFlag && !canDelete) return;
 
         var actions = document.createElement('div');
-        actions.className = 'hist-edit-actions';
+        actions.className = 'hist-edit-actions hist-mod-bar';
+        actions.setAttribute('data-role', 'mod-actions');
         var modMsg = document.createElement('p');
         modMsg.className = 'hist-mod-msg';
         modMsg.setAttribute('data-role', 'mod-msg');
@@ -552,6 +588,7 @@
           var flagBtn = document.createElement('button');
           flagBtn.type = 'button';
           flagBtn.className = 'btn-flag-warn';
+          flagBtn.setAttribute('data-role', 'flag-error');
           flagBtn.textContent = '標註錯誤';
           flagBtn.addEventListener('click', function (e) {
             e.stopPropagation();
@@ -647,8 +684,15 @@
           actions.appendChild(editBtn);
         }
 
-        panel.appendChild(actions);
-        panel.appendChild(modMsg);
+        actions.appendChild(modMsg);
+        // 置頂插入（status 之後），勿排在圖片集後面
+        var statusEl = panel.querySelector('.hist-detail-status');
+        if (statusEl && statusEl.parentNode === panel) {
+          if (statusEl.nextSibling) panel.insertBefore(actions, statusEl.nextSibling);
+          else panel.appendChild(actions);
+        } else {
+          panel.insertBefore(actions, panel.firstChild);
+        }
         if (!canEdit || !editBtn) return;
 
         var form = document.createElement('div');
@@ -898,14 +942,15 @@
         panel.appendChild(status);
 
         var merged = Object.assign({}, summaryItem || {}, detail || {});
-        var fields = document.createElement('div');
-        fields.innerHTML = renderHistoryDetailFields(merged);
-        panel.appendChild(fields);
+        // 請款唯讀：無標註鈕（避免與收支混淆）
         if (isPaymentRequestItem(merged)) {
+          var fieldsPay = document.createElement('div');
+          fieldsPay.innerHTML = renderHistoryDetailFields(merged);
+          panel.appendChild(fieldsPay);
           var payHint = document.createElement('p');
           payHint.className = 'hint';
           payHint.style.margin = '10px 0 0';
-          payHint.textContent = '這是待付款請款（尚未入收支帳）。審核／匯款請到「請款審核」或「廠商待匯款」；此頁只供查閱，不能標註／刪除／修改。';
+          payHint.textContent = '這是待付款請款（尚未入收支帳）。審核／匯款請到「請款審核」或「廠商待匯款」；此頁只供查閱，不能標註／刪除／修改。標註錯誤請改點藍標「收支登錄」。';
           panel.appendChild(payHint);
           var links = document.createElement('div');
           links.className = 'hist-edit-actions';
@@ -924,8 +969,12 @@
           panel.appendChild(links);
           return;
         }
-        renderHistoryAttachments(panel, merged);
+        // 收支：先放標註／刪除／修改（置頂可按），再放欄位與圖片
         buildEditForm(panel, summaryItem, detail || merged);
+        var fields = document.createElement('div');
+        fields.innerHTML = renderHistoryDetailFields(merged);
+        panel.appendChild(fields);
+        renderHistoryAttachments(panel, merged);
       }
 
       function activeDetailPanel(rowEl) {
@@ -1106,6 +1155,7 @@
           }
           var recorded = it.recorded_at_display || it.recorded_at || '';
           if (it.error_flagged) div.classList.add('is-flagged');
+          var canListFlag = !isPaymentRequestItem(it) && sessionCanFlagDetail(it);
           div.innerHTML =
             '<div class="hist-top">' +
               '<div class="hist-top-left">' +
@@ -1125,10 +1175,47 @@
             '<div class="hist-loc">交易日 ' + escHtml(it.txn_date_display || it.txn_date || '—') + '</div>' +
             '<div class="hist-meta">' + escHtml(meta.join(' · ') || '—') + '</div>' +
             '<div class="hist-loc">' + escHtml(loc) + '</div>' +
-            '<div class="hist-hint">點開看詳情</div>' +
+            (canListFlag
+              ? ('<div class="hist-list-flag">' +
+                '<button type="button" class="btn-flag-warn" data-role="list-flag">標註錯誤</button>' +
+                '<span class="hist-list-flag-hint">收支登錄可標</span>' +
+                '</div>')
+              : '') +
+            '<div class="hist-hint">' +
+              (kind === 'payment' ? '點開看詳情（請款唯讀，無標註）' : '點開看詳情（上方也可標註錯誤）') +
+            '</div>' +
             '<div class="hist-detail hidden"></div>';
+          if (canListFlag) {
+            var listFlagBtn = div.querySelector('[data-role="list-flag"]');
+            if (listFlagBtn) {
+              listFlagBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                if (!sessionRef || typeof AccountingApi.accountingLedgerFlag !== 'function') {
+                  window.alert('標註功能尚未就緒');
+                  return;
+                }
+                if (!window.confirm('標註這筆為錯誤記帳？\n（權限 4 之後才能刪除已標註的帳）')) return;
+                listFlagBtn.disabled = true;
+                AccountingApi.accountingLedgerFlag(sessionRef, {
+                  sheet: it.sheet,
+                  row: it.row,
+                  ingest_id: it.ingest_id
+                }).then(function (data) {
+                  listFlagBtn.disabled = false;
+                  if (!data || !data.success) {
+                    window.alert((data && data.message) || '標註失敗');
+                    return;
+                  }
+                  try { loadLedgerHistory(); } catch (eReload) {}
+                }).catch(function (err) {
+                  listFlagBtn.disabled = false;
+                  window.alert((err && err.message) || '標註失敗');
+                });
+              });
+            }
+          }
           div.addEventListener('click', function (e) {
-            if (e.target.closest && (e.target.closest('.hist-att-row') || e.target.closest('.btn-ghost') || e.target.closest('.hist-edit-form') || e.target.closest('.btn-edit-primary') || e.target.closest('.btn-flag-warn') || e.target.closest('.btn-delete-danger') || e.target.closest('.hist-edit-actions'))) return;
+            if (e.target.closest && (e.target.closest('.hist-att-row') || e.target.closest('.btn-ghost') || e.target.closest('.hist-edit-form') || e.target.closest('.btn-edit-primary') || e.target.closest('.btn-flag-warn') || e.target.closest('.btn-delete-danger') || e.target.closest('.hist-edit-actions') || e.target.closest('.hist-list-flag') || e.target.closest('.hist-mod-bar'))) return;
             toggleHistoryDetail(div, it);
           });
           div.addEventListener('keydown', function (e) {
