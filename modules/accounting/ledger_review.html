@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_tax_mode.js?v=6"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=97"></script>
+  <script src="../../shared/js/accounting_api.js?v=98"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
@@ -40,6 +40,30 @@
     .tag.income { background: #e6f4ea; color: #137333; }
     .tag.error-flag { background: #fef7e0; color: #b06000; font-weight: 700; }
     .error-flag-reason { color: #b06000; font-size: 13px; margin-top: 4px; }
+    .btn-flag-warn {
+      background: #fef7e0; color: #b06000; border: 1px solid #f9ab00;
+      border-radius: 6px; padding: 8px 12px; font-size: 13px; font-weight: 700;
+      cursor: pointer; min-height: 36px; line-height: 1.2;
+    }
+    .btn-flag-warn:disabled { opacity: .55; cursor: not-allowed; }
+    .flag-reason-mask {
+      position: fixed; inset: 0; z-index: 80; background: rgba(32,33,36,.45);
+      display: flex; align-items: flex-end; justify-content: center; padding: 16px;
+    }
+    .flag-reason-mask.hidden { display: none !important; }
+    .flag-reason-sheet {
+      width: 100%; max-width: 420px; background: #fff; border-radius: 14px;
+      padding: 16px; box-shadow: 0 8px 24px rgba(0,0,0,.18);
+    }
+    .flag-reason-sheet h3 { margin: 0 0 8px; font-size: 17px; font-weight: 800; }
+    .flag-reason-sheet p { margin: 0 0 10px; font-size: 13px; color: #5f6368; line-height: 1.45; }
+    .flag-reason-sheet textarea {
+      width: 100%; min-height: 88px; box-sizing: border-box;
+      padding: 10px; border: 1px solid #dadce0; border-radius: 10px;
+      font-size: 16px; font-family: inherit; resize: vertical;
+    }
+    .flag-reason-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .flag-reason-actions .btn-flag-warn { flex: 1 1 auto; }
     .actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     #msg { color: #c5221f; font-size: 14px; margin: 8px 0; }
     #ok { color: #137333; font-size: 14px; margin: 8px 0; }
@@ -84,7 +108,7 @@
       <button type="button" class="tab-btn active" data-tab="vendor">廠商請款</button>
       <button type="button" class="tab-btn" data-tab="customer_receipt">客戶收款核準</button>
     </div>
-    <p class="sub" id="tabDesc">只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改分攤（可多案）。歷史記帳已標「錯誤記帳」的請款會黃框＋標籤置頂。</p>
+    <p class="sub" id="tabDesc">只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改分攤（可多案）。權限 ≥3 可按「錯誤記帳標示」填原因（不改審核狀態）。</p>
     <div id="msg" role="alert"></div>
     <div id="ok" aria-live="polite"></div>
 
@@ -128,23 +152,38 @@
       <div id="list"></div>
     </div>
   </div>
+
+  <div id="reviewFlagReasonMask" class="flag-reason-mask hidden" role="dialog" aria-modal="true" aria-labelledby="reviewFlagReasonTitle">
+    <div class="flag-reason-sheet">
+      <h3 id="reviewFlagReasonTitle">錯誤記帳標示</h3>
+      <p>請填寫錯誤記帳原因（必填）。標示後不改變審核／匯款狀態；核准／退回仍需較高權限。</p>
+      <label for="reviewFlagReasonInput" class="hidden">錯誤記帳原因</label>
+      <textarea id="reviewFlagReasonInput" maxlength="120" placeholder="例：金額打錯、對象選錯" autocomplete="off"></textarea>
+      <div class="flag-reason-actions">
+        <button type="button" class="btn-flag-warn" id="reviewFlagReasonOk">確認標示</button>
+        <button type="button" class="btn btn-muted" id="reviewFlagReasonCancel">取消</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     (function () {
       var session = null;
       var activeTab = 'vendor';
       var canApproveVendor = false;
       var canApproveIncome = false;
+      var canFlagError = false;
       var listItems = [];
       var ui = AccountingUi.feedback();
       var TAX_RATE = 0.05;
       var TAX_NOTE_MARKER = '【稅別】';
 
       var TAB_DESC = {
-        vendor: '只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改分攤（可多案）。歷史記帳已標「錯誤記帳」的請款會<strong>黃框＋標籤置頂</strong>。',
+        vendor: '只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改分攤（可多案）。權限 ≥3 可按「<strong>錯誤記帳標示</strong>」填原因（不改審核狀態）；已標示黃框置頂。',
         customer_receipt: '審核<strong>現金收款財務簽核</strong>與<strong>案件收入／客戶收款</strong>（收支登錄收入登錄後<strong>直接推送客戶確認</strong>並寫入案件毛利；財務可選擇性覆核，不阻擋客戶確認）。'
       };
       var TAB_DESC_VIEW_ONLY = {
-        vendor: '檢視「待付款申請」待審列表與詳情（唯讀）。核准／退回／改分攤需權限 ≥ 5。已標「錯誤記帳」的請款會黃框＋標籤置頂。',
+        vendor: '檢視「待付款申請」列表與詳情。核准／退回／改分攤需權限 ≥ 5；權限 ≥3 仍可「錯誤記帳標示」填原因。已標示黃框置頂。',
         customer_receipt: '檢視現金收款與客戶收款待審列表（唯讀）。財務簽核／核准入帳需權限 ≥ 4。'
       };
 
@@ -250,6 +289,155 @@
       }
       function errorFlagReason(item) {
         return String((item && item.error_flag_reason) || '').trim();
+      }
+      function sessionPerm() {
+        return Number((session && session.auth && session.auth.permission) || 0);
+      }
+      function canFlagItem(item) {
+        if (!isPaymentRequest(item)) return false;
+        if (!String(item.payment_request_id || '').trim()) return false;
+        if (isErrorFlagged(item)) return false;
+        if (item.can_flag === false) return false;
+        if (item.can_flag === true) return true;
+        return canFlagError || sessionPerm() >= AccountingApi.SUPERVISOR_MIN_PERMISSION;
+      }
+      /** 頁內填原因（勿用 window.prompt——LINE／iframe 常被擋） */
+      function promptFlagReason() {
+        return new Promise(function (resolve) {
+          var mask = document.getElementById('reviewFlagReasonMask');
+          var input = document.getElementById('reviewFlagReasonInput');
+          var okBtn = document.getElementById('reviewFlagReasonOk');
+          var cancelBtn = document.getElementById('reviewFlagReasonCancel');
+          if (!mask || !input || !okBtn || !cancelBtn) {
+            resolve(null);
+            return;
+          }
+          var settled = false;
+          function finish(val) {
+            if (settled) return;
+            settled = true;
+            mask.classList.add('hidden');
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            mask.removeEventListener('click', onMask);
+            document.removeEventListener('keydown', onKey);
+            resolve(val);
+          }
+          function onOk() {
+            var reason = String(input.value || '').replace(/\s+/g, ' ').trim();
+            if (!reason) {
+              window.alert('請填寫錯誤記帳原因後再標示。');
+              try { input.focus(); } catch (eF) {}
+              return;
+            }
+            if (reason.length > 120) reason = reason.slice(0, 120);
+            finish(reason);
+          }
+          function onCancel() { finish(null); }
+          function onMask(e) {
+            if (e.target === mask) finish(null);
+          }
+          function onKey(e) {
+            if (e.key === 'Escape') finish(null);
+          }
+          input.value = '';
+          mask.classList.remove('hidden');
+          okBtn.addEventListener('click', onOk);
+          cancelBtn.addEventListener('click', onCancel);
+          mask.addEventListener('click', onMask);
+          document.addEventListener('keydown', onKey);
+          setTimeout(function () {
+            try { input.focus(); } catch (eFocus) {}
+          }, 30);
+        });
+      }
+      function applyFlaggedToListItem(item, reason, data) {
+        var id = String(item.payment_request_id || '');
+        var patch = {
+          error_flagged: true,
+          error_flagged_at: (data && data.error_flagged_at) || '',
+          error_flagged_by: (data && data.error_flagged_by) ||
+            ((session && session.auth && session.auth.display_name) || ''),
+          error_flag_reason: (data && data.error_flag_reason) || reason,
+          can_flag: false
+        };
+        if (data && data.item) {
+          if (data.item.error_flagged_at) patch.error_flagged_at = data.item.error_flagged_at;
+          if (data.item.error_flagged_by) patch.error_flagged_by = data.item.error_flagged_by;
+          if (data.item.error_flag_reason) patch.error_flag_reason = data.item.error_flag_reason;
+        }
+        Object.assign(item, patch);
+        for (var i = 0; i < listItems.length; i++) {
+          if (String(listItems[i].payment_request_id || '') === id) {
+            Object.assign(listItems[i], patch);
+            break;
+          }
+        }
+        if (typeof AccountingListCache !== 'undefined') {
+          AccountingListCache.patch(session, listCacheKey(), function (cached) {
+            if (!cached || !cached.items) return;
+            cached.items.forEach(function (it) {
+              if (String(it.payment_request_id || '') === id) Object.assign(it, patch);
+            });
+          });
+        }
+        var box = document.getElementById('list');
+        if (!box) return;
+        box.innerHTML = '';
+        listItems.forEach(function (row) { box.appendChild(renderItem(row)); });
+        if (!listItems.length) box.innerHTML = '<p class="sub">沒有符合的紀錄</p>';
+        updateBulkBar();
+      }
+      async function runFlagError(item, btn) {
+        if (!canFlagItem(item)) return;
+        if (typeof AccountingApi.accountingLedgerFlag !== 'function') {
+          setMsg('標示功能尚未就緒');
+          return;
+        }
+        var pid = String(item.payment_request_id || '').trim();
+        if (!pid) {
+          setMsg('找不到請款單編號，無法標示');
+          return;
+        }
+        if (btn) btn.disabled = true;
+        try {
+          var reason = await promptFlagReason();
+          if (!reason) {
+            if (btn) btn.disabled = false;
+            return;
+          }
+          ui.clear();
+          setOk('標示中…');
+          var data = await AccountingApi.accountingLedgerFlag(session, {
+            record_kind: 'payment_request',
+            payment_request_id: pid,
+            reason: reason
+          });
+          if (!data || !data.success) {
+            setMsg((data && data.message) || '標示失敗，請再試');
+            if (btn) btn.disabled = false;
+            return;
+          }
+          setOk(data.message || '已標示錯誤記帳');
+          applyFlaggedToListItem(item, reason, data);
+        } catch (e) {
+          setMsg((e && e.message) || '標示失敗，請再試');
+          if (btn) btn.disabled = false;
+        }
+      }
+      function appendFlagButton(actions, item) {
+        if (!canFlagItem(item)) return;
+        var flagBtn = document.createElement('button');
+        flagBtn.type = 'button';
+        flagBtn.className = 'btn-flag-warn';
+        flagBtn.textContent = '錯誤記帳標示';
+        flagBtn.title = '權限 ≥3 可標示；必填原因；不改審核狀態';
+        flagBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (itemQueueBusy(itemCacheId(item))) return;
+          runFlagError(item, flagBtn);
+        });
+        actions.appendChild(flagBtn);
       }
       function fmtMoney(n) {
         return (parseInt(n, 10) || 0).toLocaleString('zh-TW');
@@ -1214,9 +1402,12 @@
           actions.appendChild(btnView);
           var hint = document.createElement('span');
           hint.className = 'sub';
-          hint.textContent = '（檢視模式：核准需權限 ≥ 5）';
+          hint.textContent = '（檢視模式：核准需權限 ≥ 5；仍可錯誤記帳標示）';
           actions.appendChild(hint);
         }
+
+        // 錯誤記帳標示：≥3（含唯讀檢視）可填；核准／退回另設門檻
+        if (isRequest) appendFlagButton(actions, item);
 
         if (item.has_attachments || (item.attachment_urls && item.attachment_urls.length)) {
           actions.appendChild(AccountingLightbox.makeButton(session, item, '看請款單'));
@@ -1386,6 +1577,9 @@
         }
         canApproveVendor = !!data.can_approve_vendor;
         canApproveIncome = !!(data.can_approve_income || data.can_approve_customer_receipt);
+        canFlagError = data.can_flag_error != null
+          ? !!data.can_flag_error
+          : (sessionPerm() >= AccountingApi.SUPERVISOR_MIN_PERMISSION);
         updateTabUi();
         listItems = data.items || [];
         var box = document.getElementById('list');
@@ -1475,9 +1669,10 @@
 
       function viewOnlyUserExtra(sess) {
         var perm = Number((sess && sess.auth && sess.auth.permission) || 0);
-        return perm < AccountingApi.VENDOR_PAYMENT_APPROVE_MIN_PERMISSION
-          ? '請款核准需 ≥5；本頁可檢視'
-          : '';
+        if (perm < AccountingApi.VENDOR_PAYMENT_APPROVE_MIN_PERMISSION) {
+          return '請款核准需 ≥5；≥3 可錯誤記帳標示';
+        }
+        return '';
       }
       function paintUserLine(sess) {
         var ul = document.getElementById('userLine');

@@ -20,7 +20,7 @@
 
 ## 目前進行中
 
-（無）
+- Cursor Cloud｜請款審核 ≥3 可填「錯誤記帳標示」｜延續 #136／#118｜`ledger_review.html`／`LedgerReviewModule`
 
 ## 最近完成
 
