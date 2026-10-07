@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=95"></script>
+  <script src="../../shared/js/accounting_api.js?v=101"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <script src="../../shared/js/accounting_ui.js?v=32"></script>
@@ -344,7 +344,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub" id="pageModeHint">權限 ≥3 可查<strong>區間內全部人</strong>的<strong>待付款請款</strong>與<strong>收支登錄</strong>。預設近 7 天；列表<strong>只依新增／送出時間</strong>新→舊。<strong>每一列</strong>（請款＋收支）都可按「錯誤記帳標示」並填原因——由你決定哪筆錯，系統不先框選。刪除已標示 ≥4；修改收支 &gt;4。</p>
+    <p class="sub" id="pageModeHint">權限 ≥3 可查<strong>區間內全部人</strong>的<strong>待付款請款</strong>與<strong>收支登錄</strong>。預設近 30 天，可自訂更早區間；列表<strong>只依新增／送出時間</strong>新→舊。<strong>每一列</strong>（請款＋收支）都可按「錯誤記帳標示」並填原因——由你決定哪筆錯，系統不先框選。刪除已標示 ≥4；修改收支 &gt;4。</p>
 
     <div class="card" id="historyFiltersCard">
       <div class="hist-head">
@@ -392,11 +392,11 @@
           <input id="histKeyword" type="text" placeholder="例：廠商名、訂金" autocomplete="off" />
         </div>
         <div class="full">
-          <p class="hint" style="margin:0 0 8px">近 7／30 天依<strong>新增／送出時間</strong>（不是交易日）。列表標籤可分辨「待付款請款」與「收支登錄」。請款時間戳＝主檔最後更新（送出／審核更新）。</p>
+          <p class="hint" style="margin:0 0 8px">日期區間依<strong>新增／送出時間</strong>（不是交易日）；預設近 30 天，可自訂更早。列表標籤可分辨「待付款請款」與「收支登錄」。請款時間戳＝主檔最後更新（送出／審核更新）。</p>
           <div class="hist-actions">
             <button type="button" class="btn-ghost btn-primary-hist" id="historySearchBtn">查詢</button>
-            <button type="button" class="btn-ghost" id="historyClearBtn">重設為近 7 天</button>
-            <button type="button" class="btn-ghost" id="historyExpand30Btn">近 30 天</button>
+            <button type="button" class="btn-ghost" id="historyClearBtn">重設為近 30 天</button>
+            <button type="button" class="btn-ghost" id="historyExpand90Btn">近 90 天</button>
           </div>
         </div>
       </div>
@@ -1437,8 +1437,10 @@
         });
       }
 
-      var HISTORY_DEFAULT_DAYS = 7;
-      var HISTORY_MAX_DAYS = 30;
+      /** 預設載入區間（天）；非硬上限——使用者可自訂更早 date_from */
+      var HISTORY_DEFAULT_DAYS = 30;
+      /** 空狀態／快捷「再拉長」建議天數（非硬擋） */
+      var HISTORY_EXPAND_DAYS = 90;
 
       function toIsoLocal(d) {
         var y = d.getFullYear();
@@ -1467,7 +1469,7 @@
       }
 
       function historyWindowForDays(days) {
-        var span = Math.max(1, Math.min(parseInt(days, 10) || HISTORY_DEFAULT_DAYS, HISTORY_MAX_DAYS));
+        var span = Math.max(1, parseInt(days, 10) || HISTORY_DEFAULT_DAYS);
         var to = toIsoLocal(new Date());
         var from = addDaysIso(to, -(span - 1));
         return { from: from, to: to, days: span };
@@ -1505,9 +1507,7 @@
           dateFrom = dateTo;
           dateTo = tmp;
         }
-        if (inclusiveDays(dateFrom, dateTo) > HISTORY_MAX_DAYS) {
-          dateFrom = addDaysIso(dateTo, -(HISTORY_MAX_DAYS - 1));
-        }
+        // 不硬裁區間：歷史不侷限於 7／30 天；逾時靠後端分塊／軟截止
         document.getElementById('histDateFrom').value = dateFrom;
         document.getElementById('histDateTo').value = dateTo;
         return { from: dateFrom, to: dateTo };
@@ -1531,8 +1531,8 @@
         }
         if (hint) {
           hint.innerHTML = on
-            ? '目前為<strong>只看我記的</strong>（選用篩選）＋近 7 天區間。列表含<strong>待付款請款</strong>與<strong>收支登錄</strong>，<strong>只依新增／送出時間</strong>新→舊。需權限 ≥3。'
-            : '權限 ≥3 可查<strong>區間內全部人</strong>的<strong>待付款請款</strong>與<strong>收支登錄</strong>。預設近 7 天；列表<strong>只依新增／送出時間</strong>新→舊。<strong>每一列</strong>（請款＋收支）都可「錯誤記帳標示」並填原因；刪除已標示 ≥4；修改收支 &gt;4。';
+            ? '目前為<strong>只看我記的</strong>（選用篩選）。預設近 30 天，可自訂更早區間。列表含<strong>待付款請款</strong>與<strong>收支登錄</strong>，<strong>只依新增／送出時間</strong>新→舊。需權限 ≥3。'
+            : '權限 ≥3 可查<strong>區間內全部人</strong>的<strong>待付款請款</strong>與<strong>收支登錄</strong>。預設近 30 天，可自訂更早區間；列表<strong>只依新增／送出時間</strong>新→舊。<strong>每一列</strong>（請款＋收支）都可「錯誤記帳標示」並填原因；刪除已標示 ≥4；修改收支 &gt;4。';
         }
       }
 
@@ -1553,7 +1553,7 @@
         var amountRaw = (document.getElementById('histAmount').value || '').trim();
         var mineOnly = !!document.getElementById('historyMineOnly').checked;
         var recordKind = (document.getElementById('histRecordKind').value || 'all').trim() || 'all';
-        // 不傳 months：分頁依交易日存放，掃幾個月由後端依記帳時間窗決定（避免近7天只掃1月漏倒填）
+        // 不傳 months：分頁依交易日存放，掃幾個月由後端依記帳時間窗決定（避免只掃1月漏倒填）
         var filters = {
           limit: 50,
           mine_only: mineOnly,
@@ -1585,16 +1585,16 @@
         var actions = document.createElement('div');
         actions.className = 'hist-actions';
         actions.style.marginTop = '8px';
-        if (span < HISTORY_MAX_DAYS) {
-          var btn30 = document.createElement('button');
-          btn30.type = 'button';
-          btn30.className = 'btn-ghost btn-primary-hist';
-          btn30.textContent = '改查近 ' + HISTORY_MAX_DAYS + ' 天';
-          btn30.addEventListener('click', function () {
-            applyHistoryDates(HISTORY_MAX_DAYS);
+        if (span < HISTORY_EXPAND_DAYS) {
+          var btnExpand = document.createElement('button');
+          btnExpand.type = 'button';
+          btnExpand.className = 'btn-ghost btn-primary-hist';
+          btnExpand.textContent = '改查近 ' + HISTORY_EXPAND_DAYS + ' 天';
+          btnExpand.addEventListener('click', function () {
+            applyHistoryDates(HISTORY_EXPAND_DAYS);
             loadLedgerHistory();
           });
-          actions.appendChild(btn30);
+          actions.appendChild(btnExpand);
         }
         if (mineOnly) {
           var btnAll = document.createElement('button');
@@ -1611,7 +1611,7 @@
         var btnReset = document.createElement('button');
         btnReset.type = 'button';
         btnReset.className = 'btn-ghost';
-        btnReset.textContent = '重設近 7 天';
+        btnReset.textContent = '重設近 30 天';
         btnReset.addEventListener('click', function () {
           clearHistoryFilters();
           loadLedgerHistory();
@@ -1667,8 +1667,8 @@
           } else {
             var hint = (data.empty_hint && String(data.empty_hint).trim())
               || (mineOnly
-                ? ('這段時間沒有你的' + kindLabel + '。可改查近 ' + HISTORY_MAX_DAYS + ' 天，或（需要時）開啟所有人紀錄。')
-                : ('這段時間沒有符合條件的' + kindLabel + '。可改查近 ' + HISTORY_MAX_DAYS + ' 天，或改關鍵字後再查。'));
+                ? ('這段時間沒有你的' + kindLabel + '。可改查近 ' + HISTORY_EXPAND_DAYS + ' 天，或自訂更早區間，或（需要時）開啟所有人紀錄。')
+                : ('這段時間沒有符合條件的' + kindLabel + '。可改查近 ' + HISTORY_EXPAND_DAYS + ' 天，或自訂更早區間／關鍵字後再查。'));
             setStatus(hint + '（' + bits.join(' · ') + '）', 'empty');
             listEl.innerHTML = '';
             listEl.appendChild(renderEmptyExpandActions(mineOnly, from, to));
@@ -1708,8 +1708,8 @@
           clearHistoryFilters();
           loadLedgerHistory();
         });
-        document.getElementById('historyExpand30Btn').addEventListener('click', function () {
-          applyHistoryDates(HISTORY_MAX_DAYS);
+        document.getElementById('historyExpand90Btn').addEventListener('click', function () {
+          applyHistoryDates(HISTORY_EXPAND_DAYS);
           loadLedgerHistory();
         });
         document.getElementById('histKeyword').addEventListener('keydown', function (e) {
