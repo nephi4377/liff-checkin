@@ -29,7 +29,7 @@
 - 修改範圍：`ledger_review.html`、`accounting_api.js?v=100`、SPEC 15 v1.60、LOG、smoke；Backend `LedgerReviewModule`／`VendorPaymentModule`／SPEC／LOG／smoke
 - 完成內容：審核**顯示**歷史錯誤標示；≥3 可改**廠商／分攤／稅別／備註**並儲存、**刪除**未匯款；**無**審核頁「錯誤記帳標示」寫入；`vendor_payment_update` 可帶 `vendor_id`；核准／退回仍 ≥5
 - 驗證：煙測 OK；正式站 curl `api?v=100`／「廠商／分攤／稅別／備註」／無「錯誤記帳標示」
-- Commit／線上：[liff#136](https://github.com/nephi4377/liff-checkin/pull/136) → Pages [`37568963068`](https://github.com/nephi4377/liff-checkin/actions/runs/37568963068)；[GAS#118](https://github.com/nephi4377/Backend_GAS/pull/118) → [`37568960655`](https://github.com/nephi4377/Backend_GAS/actions/runs/37568960655) clasp **@404**
+- Commit／線上：[liff#136](https://github.com/nephi4377/liff-checkin/pull/136) → Pages [`37568963068`](https://github.com/nephi4377/liff-checkin/actions/runs/37568963068)；[GAS#118](https://github.com/nephi4377/Backend_GAS/pull/118) → clasp **@404**（LOG 補推 **@405** 同程式）
 - 待處理：權限 3 抽測改／刪；標示仍走歷史記帳；≥5 核准；已匯款不可刪
 
 ### 2026-10-07｜Cursor Cloud｜權限3僅檢視請款審核（已上線 @402）
