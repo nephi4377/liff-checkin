@@ -20,7 +20,7 @@
 
 ## 目前進行中
 
-（無）
+- Cursor Cloud｜請款錯誤標示送出 payload＋按鈕縮小（`ledger_history.html`／`accounting_api.js`／GAS flag）；分支 `cursor/payment-flag-submit-fix-8a21`
 
 ## 最近完成
 
