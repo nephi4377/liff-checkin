@@ -8,7 +8,9 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_tax_mode.js?v=6"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=96"></script>
+  <script src="../../shared/js/accounting_api.js?v=100"></script>
+  <script src="../../shared/js/accounting_cache.js?v=34"></script>
+  <script src="../../shared/js/accounting_form_helpers.js?v=6"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
@@ -32,11 +34,27 @@
     .btn-block { width: 100%; margin-top: 10px; padding: 12px; }
     .item { border: 1px solid #e8eaed; border-radius: 10px; padding: 12px; margin-bottom: 10px; background: #fff; }
     .item.focus { border-color: #1a73e8; background: #f8f9ff; }
+    .item.is-error-flagged { border-color: #f9ab00; background: #fffbf0; }
     .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin-right: 6px; margin-top: 4px; }
     .tag.vendor { background: #fef7e0; color: #b06000; }
     .tag.pay { background: #e6f4ea; }
     .tag.expense { background: #fce8e6; color: #c5221f; }
     .tag.income { background: #e6f4ea; color: #137333; }
+    .tag.error-flag { background: #fef7e0; color: #b06000; font-weight: 700; }
+    .error-flag-reason { color: #b06000; font-size: 13px; margin-top: 4px; }
+    .btn-danger { background: #fce8e6; color: #c5221f; border: 1px solid #f28b82; }
+    .vendor-combo-wrap { position: relative; }
+    .vendor-combo-panel {
+      position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 20;
+      background: #fff; border: 1px solid #ccc; border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.12); max-height: 220px; overflow: auto;
+    }
+    .vendor-combo-item {
+      display: block; width: 100%; text-align: left; border: none; background: #fff;
+      padding: 10px 12px; font-size: 15px; cursor: pointer;
+    }
+    .vendor-combo-item:hover, .vendor-combo-item.active { background: #e8f0fe; }
+    .vendor-combo-empty { padding: 10px 12px; font-size: 13px; color: #777; }
     .actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     #msg { color: #c5221f; font-size: 14px; margin: 8px 0; }
     #ok { color: #137333; font-size: 14px; margin: 8px 0; }
@@ -81,7 +99,7 @@
       <button type="button" class="tab-btn active" data-tab="vendor">廠商請款</button>
       <button type="button" class="tab-btn" data-tab="customer_receipt">客戶收款核準</button>
     </div>
-    <p class="sub" id="tabDesc">只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改分攤（可多案）。</p>
+    <p class="sub" id="tabDesc">只審「待付款申請」（未實現）。權限 ≥3 可改廠商／分攤／稅別／備註並儲存、刪除未匯款單；核准／退回需 ≥5。</p>
     <div id="msg" role="alert"></div>
     <div id="ok" aria-live="polite"></div>
 
@@ -105,8 +123,14 @@
           </select>
         </div>
       </div>
-      <label id="filterKwLabel">關鍵字（對象／案號／品項）</label>
-      <input id="filterKw" placeholder="例：磁磚、752" />
+      <label id="filterErrorLabel">錯誤記帳</label>
+      <select id="filterErrorFlag">
+        <option value="" selected>全部（已標示置頂）</option>
+        <option value="only">只看已標示錯誤</option>
+        <option value="exclude">隱藏已標示錯誤</option>
+      </select>
+      <label id="filterKwLabel">關鍵字（對象／案號／品項／錯誤原因）</label>
+      <input id="filterKw" placeholder="例：磁磚、752、金額打錯" />
       <button type="button" class="btn btn-primary btn-block" id="reloadBtn" title="略過暫存，立刻向後端重抓最新清單">重新載入最新</button>
     </div>
 
@@ -119,23 +143,27 @@
       <div id="list"></div>
     </div>
   </div>
+
   <script>
     (function () {
       var session = null;
       var activeTab = 'vendor';
       var canApproveVendor = false;
       var canApproveIncome = false;
+      var canEditContent = false;
+      var canDeletePayment = false;
       var listItems = [];
+      var vendorCatalog = [];
       var ui = AccountingUi.feedback();
       var TAX_RATE = 0.05;
       var TAX_NOTE_MARKER = '【稅別】';
 
       var TAB_DESC = {
-        vendor: '只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改分攤（可多案）。',
+        vendor: '只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>。權限 ≥3 可改<strong>廠商／分攤／稅別／備註</strong>並<strong>儲存修改</strong>、<strong>刪除</strong>未匯款；核准／退回 ≥5。',
         customer_receipt: '審核<strong>現金收款財務簽核</strong>與<strong>案件收入／客戶收款</strong>（收支登錄收入登錄後<strong>直接推送客戶確認</strong>並寫入案件毛利；財務可選擇性覆核，不阻擋客戶確認）。'
       };
       var TAB_DESC_VIEW_ONLY = {
-        vendor: '檢視「待付款申請」待審列表與詳情（唯讀）。核准／退回／改分攤需權限 ≥ 5。',
+        vendor: '可改<strong>廠商／分攤／稅別／備註</strong>並<strong>儲存修改</strong>、刪除未匯款（≥3）。核准／退回需權限 ≥ 5。',
         customer_receipt: '檢視現金收款與客戶收款待審列表（唯讀）。財務簽核／核准入帳需權限 ≥ 4。'
       };
 
@@ -160,6 +188,8 @@
         var paySel = document.getElementById('filterPay');
         var payLabel = document.getElementById('filterPayLabel');
         var kwLabel = document.getElementById('filterKwLabel');
+        var errSel = document.getElementById('filterErrorFlag');
+        var errLabel = document.getElementById('filterErrorLabel');
         if (activeTab === 'customer_receipt') {
           if (payLabel) payLabel.textContent = '入帳狀態';
           if (kwLabel) kwLabel.textContent = '關鍵字（案號／收據編號／階段）';
@@ -167,13 +197,17 @@
             '<option value="">全部</option>' +
             '<option value="未入帳">待入帳</option>' +
             '<option value="已入帳">已入帳</option>';
+          if (errSel) errSel.classList.add('hidden');
+          if (errLabel) errLabel.classList.add('hidden');
         } else {
           if (payLabel) payLabel.textContent = '付款狀態';
-          if (kwLabel) kwLabel.textContent = '關鍵字（對象／案號／品項）';
+          if (kwLabel) kwLabel.textContent = '關鍵字（對象／案號／品項／錯誤原因）';
           if (paySel) paySel.innerHTML =
             '<option value="">全部</option>' +
             '<option value="未匯款">待匯款</option>' +
             '<option value="已匯款">已匯款</option>';
+          if (errSel) errSel.classList.remove('hidden');
+          if (errLabel) errLabel.classList.remove('hidden');
         }
         document.getElementById('bulkApproveBtn').textContent =
           activeTab === 'customer_receipt' ? '全部核准入帳' : '全部核准（資料完整）';
@@ -222,10 +256,146 @@
         var rs = document.getElementById('filterReview').value;
         var ps = document.getElementById('filterPay').value;
         var kw = document.getElementById('filterKw').value.trim();
+        var errEl = document.getElementById('filterErrorFlag');
+        var errMode = errEl && activeTab === 'vendor' ? String(errEl.value || '').trim() : '';
         f.review_status = rs;
         if (ps) f.payment_status = ps;
         if (kw) f.keyword = kw;
+        if (errMode) f.error_flagged = errMode;
         return f;
+      }
+      function isErrorFlagged(item) {
+        return !!(item && item.error_flagged);
+      }
+      function errorFlagReason(item) {
+        return String((item && item.error_flag_reason) || '').trim();
+      }
+      function sessionPerm() {
+        return Number((session && session.auth && session.auth.permission) || 0);
+      }
+      function isUnpaidPayment(item) {
+        return isPaymentRequest(item) && String(item.payment_status || '') !== '已匯款';
+      }
+      function canEditItem(item) {
+        if (!isUnpaidPayment(item)) return false;
+        if (item.can_edit === false) return false;
+        if (item.can_edit === true) return true;
+        return canEditContent || sessionPerm() >= AccountingApi.SUPERVISOR_MIN_PERMISSION;
+      }
+      function canDeleteItem(item) {
+        if (!isUnpaidPayment(item)) return false;
+        if (item.can_delete === false) return false;
+        if (item.can_delete === true) return true;
+        return canDeletePayment || sessionPerm() >= AccountingApi.SUPERVISOR_MIN_PERMISSION;
+      }
+      function ensureVendorCatalog() {
+        if (typeof AccountingCache === 'undefined') return vendorCatalog;
+        try {
+          var list = AccountingCache.vendors(session) || AccountingCache.peekVendors() || [];
+          if (list && list.length) vendorCatalog = list;
+        } catch (eV) {}
+        return vendorCatalog;
+      }
+      function bindVendorCombobox(panel, item) {
+        var inp = panel.querySelector('.inp-vendor');
+        if (!inp || typeof AccountingFormHelpers === 'undefined' ||
+            !AccountingFormHelpers.initVendorCombobox) return;
+        ensureVendorCatalog();
+        inp.value = String(item.party_name || item.vendor_name || '').trim();
+        if (item.vendor_id) inp.dataset.vendorId = String(item.vendor_id);
+        AccountingFormHelpers.initVendorCombobox(inp, function () {
+          return ensureVendorCatalog();
+        }, { minChars: 1, maxItems: 10 });
+        if (typeof AccountingCache !== 'undefined' && AccountingCache.needsStaffBootstrap &&
+            AccountingCache.needsStaffBootstrap(session)) {
+          AccountingCache.load(session, true).then(function () {
+            ensureVendorCatalog();
+          }).catch(function () {});
+        }
+      }
+      async function saveVendorContent(item, patch) {
+        patch = patch || {};
+        if (patch.allocations) {
+          var err = validateAllocRows(patch.allocations);
+          if (err) { setMsg((item.party_name || '請款') + '：' + err); return false; }
+        }
+        var data = await AccountingApi.vendorPaymentUpdate(session, item.payment_request_id, patch);
+        if (!data || !data.success) {
+          setMsg((item.party_name || '請款') + '：' + ((data && data.message) || '儲存失敗'));
+          return false;
+        }
+        if (data.amount != null) item.amount = data.amount;
+        if (data.project_no != null) item.project_no = data.project_no;
+        if (data.item_desc != null) {
+          item.summary = data.item_desc;
+          item.item_desc = data.item_desc;
+        }
+        if (data.vendor_name != null) item.party_name = data.vendor_name;
+        if (data.vendor_id != null) item.vendor_id = data.vendor_id;
+        if (patch.vendor_id) item.vendor_id = patch.vendor_id;
+        if (patch.vendor_name) item.party_name = patch.vendor_name;
+        if (patch.note != null) item.note = patch.note;
+        if (patch.allocations) {
+          item.allocations = patch.allocations.slice();
+          item.has_allocations = patch.allocations.length > 0;
+        }
+        for (var i = 0; i < listItems.length; i++) {
+          if (String(listItems[i].payment_request_id || '') === String(item.payment_request_id || '')) {
+            Object.assign(listItems[i], {
+              amount: item.amount,
+              project_no: item.project_no,
+              summary: item.summary,
+              note: item.note,
+              party_name: item.party_name,
+              vendor_id: item.vendor_id,
+              allocations: item.allocations,
+              has_allocations: item.has_allocations
+            });
+            break;
+          }
+        }
+        return true;
+      }
+      async function deleteVendorPayment(item) {
+        var data = await AccountingApi.vendorPaymentDelete(session, item.payment_request_id);
+        if (!data || !data.success) {
+          setMsg((item.party_name || '請款') + '：' + ((data && data.message) || '刪除失敗'));
+          return false;
+        }
+        return true;
+      }
+      function appendDeleteButton(actions, item) {
+        if (!canDeleteItem(item)) return;
+        var delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'btn btn-danger';
+        delBtn.textContent = '刪除';
+        delBtn.title = '刪除未匯款請款（≥3）；已匯款不可刪';
+        delBtn.addEventListener('click', async function (e) {
+          e.stopPropagation();
+          var cacheId = itemCacheId(item);
+          if (itemQueueBusy(cacheId)) return;
+          if (!window.confirm('確定刪除「' + (item.party_name || '這筆請款') + '」$' +
+            fmtMoney(item.amount) + '？\n刪除後無法從列表還原。')) return;
+          await AccountingUi.runAsync(delBtn, {
+            busyLabel: '刪除中…',
+            queue: true,
+            queueId: 'ledger_review',
+            itemId: cacheId,
+            toastOnOk: false,
+            toastOnFail: false
+          }, async function () {
+            ui.clear();
+            var ok = await deleteVendorPayment(item);
+            if (ok) {
+              setOk('已刪除「' + (item.party_name || '') + '」');
+              removeItemFromView(cacheId);
+            }
+          }).catch(function (err) {
+            setMsg(humanErr(err) || '刪除失敗，請再試');
+          });
+        });
+        actions.appendChild(delBtn);
       }
       function fmtMoney(n) {
         return (parseInt(n, 10) || 0).toLocaleString('zh-TW');
@@ -685,6 +855,13 @@
         var patch = { allocations: rows };
         var noteEl = panel.querySelector('.inp-note');
         if (noteEl) patch.note = noteEl.value.trim();
+        var vendorInp = panel.querySelector('.inp-vendor');
+        if (vendorInp) {
+          var vid = String(vendorInp.dataset.vendorId || '').trim();
+          var vname = String(vendorInp.value || '').trim();
+          if (vid) patch.vendor_id = vid;
+          if (vname) patch.vendor_name = vname;
+        }
         return patch;
       }
 
@@ -798,6 +975,9 @@
           ps = '待匯款';
         }
         html += '<span class="tag pay">' + ps + '</span>';
+        if (isErrorFlagged(item)) {
+          html += '<span class="tag error-flag">已標示錯誤記帳</span>';
+        }
         return html;
       }
 
@@ -886,38 +1066,62 @@
         var panel = document.createElement('div');
         panel.className = 'review-panel hidden';
         var ready = itemReady(item);
-        var viewOnly = !canApproveVendor;
+        var allowEdit = canEditItem(item);
+        var allowApprove = !!canApproveVendor;
         var initMode = 'inclusive';
         if (typeof AccountingTaxMode !== 'undefined') {
           initMode = AccountingTaxMode.parseModeFromNote(item.note) || 'inclusive';
         }
         panel.setAttribute('data-tax-mode', initMode);
+        var actionHtml = '<div class="actions" style="margin-top:12px">';
+        if (allowEdit) {
+          actionHtml += '<button type="button" class="btn btn-primary btn-save-content">儲存修改</button>';
+        }
+        if (allowApprove) {
+          actionHtml +=
+            '<button type="button" class="btn btn-ok btn-confirm-approve">確認核准</button>' +
+            '<button type="button" class="btn btn-warn btn-confirm-reject">退回</button>';
+        }
+        actionHtml += '</div>';
         panel.innerHTML =
-          '<label>分攤明細（案號＋金額，可多案；扣款填負數）' +
-          (ready || viewOnly ? '' : ' <span class="need">需補齊</span>') + '</label>' +
+          (allowEdit
+            ? ('<label>廠商</label>' +
+              '<input type="text" class="inp-vendor" placeholder="搜尋名冊廠商" autocomplete="off" />')
+            : '') +
+          '<label' + (allowEdit ? ' style="margin-top:10px"' : '') + '>分攤明細（案號＋金額，可多案；扣款填負數）' +
+          (ready || !allowEdit ? '' : ' <span class="need">需補齊</span>') + '</label>' +
           '<label style="margin-top:10px">稅別模式（整張統一）</label>' +
-          (viewOnly
-            ? '<p class="sub" style="margin:4px 0 6px">目前為檢視模式，分攤與稅別不可改。</p>'
-            : '<p class="sub" style="margin:4px 0 6px">「未稅／含稅自選」：各列自己勾含稅，金額不改。整張加稅：各列只填未稅，稅在底下一次加。不要用「逐筆加 5%」除非要逐列改金額。</p>') +
+          (allowEdit
+            ? '<p class="sub" style="margin:4px 0 6px">≥3 可改<strong>廠商／分攤／稅別／備註</strong>並<strong>儲存修改</strong>（不核准）。核准／退回仍 ≥5。</p>'
+            : '<p class="sub" style="margin:4px 0 6px">目前無法修改內容。</p>') +
           '<div class="tax-mode-host"></div>' +
           '<div class="alloc-list"></div>' +
-          (viewOnly ? '' : '<button type="button" class="btn-ghost btn-add-alloc">＋ 新增一列</button>') +
+          (allowEdit ? '<button type="button" class="btn-ghost btn-add-alloc">＋ 新增一列</button>' : '') +
           '<div class="total-line"><span class="total-label">合計</span> $<span class="alloc-total">0</span></div>' +
           '<p class="sub tax-breakdown" style="margin:4px 0 0;text-align:right;color:#555;font-size:13px;"></p>' +
           (item.bank_code || item.account_no
             ? '<p class="bank-line">匯款：' + (item.bank_code || '—') + ' / ' + (item.account_no || '—') +
               ' / ' + (item.account_name || item.party_name || '—') + '</p>'
             : '') +
-          '<input type="hidden" class="inp-note" value="" />' +
-          '<p class="sub note-line hidden">備註：<span class="note-text"></span></p>' +
-          (viewOnly ? '' : (
-            '<label>退回原因（選填，按退回後仍會再確認）</label>' +
-            '<input type="text" class="inp-reject" placeholder="可不填，下一步可用現成原因" />' +
-            '<div class="actions" style="margin-top:12px">' +
-            '<button type="button" class="btn btn-ok btn-confirm-approve">確認核准</button>' +
-            '<button type="button" class="btn btn-warn btn-confirm-reject">退回</button>' +
-            '</div>'
-          ));
+          (allowEdit
+            ? ('<label style="margin-top:10px">備註</label>' +
+              '<textarea class="inp-note" rows="2" placeholder="選填備註"></textarea>')
+            : ('<input type="hidden" class="inp-note" value="" />' +
+              '<p class="sub note-line hidden">備註：<span class="note-text"></span></p>')) +
+          (isErrorFlagged(item)
+            ? ('<p class="error-flag-reason">歷史已標錯誤' +
+              (item.error_flagged_by ? '（' + item.error_flagged_by + '）' : '') +
+              (errorFlagReason(item) ? '：' + errorFlagReason(item) : '') +
+              '</p>')
+            : '') +
+          (allowApprove
+            ? ('<label>退回原因（選填，按退回後仍會再確認）</label>' +
+              '<input type="text" class="inp-reject" placeholder="可不填，下一步可用現成原因" />')
+            : '') +
+          actionHtml +
+          (!allowApprove
+            ? '<p class="sub" style="margin-top:8px">（核准／退回需權限 ≥ 5）</p>'
+            : '');
         var initRows = allocRowsFromItem(item);
         if (initMode === 'prorate' && typeof AccountingTaxMode !== 'undefined') {
           initRows = AccountingTaxMode.toPretaxRows(initRows, 'prorate');
@@ -932,10 +1136,44 @@
           }
         }
         syncTaxNoteForPanel(panel);
+        if (allowEdit) bindVendorCombobox(panel, item);
 
-        if (viewOnly) {
-          applyPanelViewOnly(panel, '（檢視模式：核准／退回／改分攤需權限 ≥ 5）');
+        if (!allowEdit) {
+          applyPanelViewOnly(panel, '（無法修改：需權限 ≥ 3 且未匯款）');
         } else {
+          var saveBtn = panel.querySelector('.btn-save-content');
+          if (saveBtn) {
+            saveBtn.addEventListener('click', async function () {
+              if (!canEditItem(item) || itemQueueBusy(item.payment_request_id)) return;
+              await AccountingUi.runAsync(saveBtn, {
+                busyLabel: '儲存中…',
+                queue: true,
+                queueId: 'ledger_review',
+                itemId: item.payment_request_id,
+                toastOnOk: false,
+                toastOnFail: false
+              }, async function () {
+                ui.clear();
+                var patch = readPatchFromPanel(panel);
+                var err = validateAllocRows(patch.allocations);
+                if (err) { setMsg(err); return; }
+                var ok = await saveVendorContent(item, patch);
+                if (ok) {
+                  setOk('已儲存「' + (item.party_name || '') + '」的修改（尚未核准）');
+                  var box = document.getElementById('list');
+                  if (box) {
+                    box.innerHTML = '';
+                    listItems.forEach(function (row) { box.appendChild(renderItem(row)); });
+                    updateBulkBar();
+                  }
+                }
+              }).catch(function (e) {
+                setMsg(humanErr(e) || '儲存失敗，請再試');
+              });
+            });
+          }
+        }
+        if (allowApprove) {
           panel.querySelector('.btn-confirm-approve').addEventListener('click', async function () {
             if (!canApproveVendor || itemQueueBusy(item.payment_request_id)) return;
             var btn = panel.querySelector('.btn-confirm-approve');
@@ -969,7 +1207,7 @@
 
       function renderItem(item) {
         var div = document.createElement('div');
-        div.className = 'item';
+        div.className = 'item' + (isErrorFlagged(item) ? ' is-error-flagged' : '');
         var isRequest = isPaymentRequest(item);
         var isIncome = isCustomerReceiptIncome(item);
         var isCashSign = isCustomerReceiptCashSign(item);
@@ -996,6 +1234,10 @@
             : '') +
           (isRequest && vendorHintForItem(item)
             ? '<div class="sub" style="color:#b06000">' + vendorHintForItem(item) + '</div>'
+            : '') +
+          (isErrorFlagged(item)
+            ? ('<div class="error-flag-reason">錯誤原因：' +
+              (errorFlagReason(item) || '（已標示，未填原因）') + '</div>')
             : '') +
           '<div class="mono">' + ((isIncome || isCashSign)
             ? (item.receipt_id ? item.receipt_id.slice(0, 8) + '…' : '')
@@ -1160,10 +1402,11 @@
           var btnView = document.createElement('button');
           btnView.type = 'button';
           btnView.className = 'btn btn-primary';
-          btnView.textContent = '查看詳情';
+          btnView.textContent = canEditItem(item) ? '修改內容' : '查看詳情';
           btnView.addEventListener('click', async function () {
             var open = reviewPanel.classList.toggle('hidden');
-            btnView.textContent = open ? '查看詳情' : '收合';
+            var closedLabel = canEditItem(item) ? '修改內容' : '查看詳情';
+            btnView.textContent = open ? closedLabel : '收合';
             div.classList.toggle('focus', !open);
             if (!open) {
               try {
@@ -1171,14 +1414,30 @@
                   ? item.attachment_urls
                   : await AccountingLightbox.fetchAttachmentUrls(session, item);
                 if (urls.length) AccountingLightbox.open(urls);
-              } catch (eAtt) { /* 檢視模式附件失敗不擋詳情 */ }
+              } catch (eAtt) { /* 附件失敗不擋詳情 */ }
             }
           });
           actions.appendChild(btnView);
           var hint = document.createElement('span');
           hint.className = 'sub';
-          hint.textContent = '（檢視模式：核准需權限 ≥ 5）';
+          hint.textContent = '（核准需 ≥5；≥3 可改廠商／分攤／稅別／備註／刪除）';
           actions.appendChild(hint);
+        } else if (!pending && isRequest && canEditItem(item) && reviewPanel) {
+          var btnEditDone = document.createElement('button');
+          btnEditDone.type = 'button';
+          btnEditDone.className = 'btn btn-primary';
+          btnEditDone.textContent = '修改內容';
+          btnEditDone.addEventListener('click', function () {
+            var open = reviewPanel.classList.toggle('hidden');
+            btnEditDone.textContent = open ? '修改內容' : '收合';
+            div.classList.toggle('focus', !open);
+          });
+          actions.appendChild(btnEditDone);
+        }
+
+        // ≥3：刪除未匯款；核准／退回另設門檻
+        if (isRequest) {
+          appendDeleteButton(actions, item);
         }
 
         if (item.has_attachments || (item.attachment_urls && item.attachment_urls.length)) {
@@ -1349,12 +1608,25 @@
         }
         canApproveVendor = !!data.can_approve_vendor;
         canApproveIncome = !!(data.can_approve_income || data.can_approve_customer_receipt);
+        canEditContent = data.can_edit_content != null
+          ? !!data.can_edit_content
+          : (sessionPerm() >= AccountingApi.SUPERVISOR_MIN_PERMISSION);
+        canDeletePayment = data.can_delete_payment != null
+          ? !!data.can_delete_payment
+          : (sessionPerm() >= AccountingApi.SUPERVISOR_MIN_PERMISSION);
         updateTabUi();
         listItems = data.items || [];
         var box = document.getElementById('list');
         box.innerHTML = '';
         listItems.forEach(function (row) { box.appendChild(renderItem(row)); });
-        if (!listItems.length) box.innerHTML = '<p class="sub">沒有符合的紀錄</p>';
+        if (!listItems.length) {
+          var errMode = (document.getElementById('filterErrorFlag') || {}).value || '';
+          var emptyHint = '沒有符合的紀錄';
+          if (errMode === 'only') {
+            emptyHint = '目前篩選下沒有已標示「錯誤記帳」的請款。可改審核狀態為「全部」，或到「歷史記帳」確認是否已標示。';
+          }
+          box.innerHTML = '<p class="sub">' + emptyHint + '</p>';
+        }
         updateBulkBar();
       }
 
@@ -1408,7 +1680,7 @@
       }
 
       document.getElementById('reloadBtn').addEventListener('click', function () { loadList(false, true); });
-      ['filterReview', 'filterPay', 'filterKw'].forEach(function (id) {
+      ['filterReview', 'filterPay', 'filterKw', 'filterErrorFlag'].forEach(function (id) {
         var el = document.getElementById(id);
         if (!el) return;
         el.addEventListener('change', function () { loadList(false, false); });
@@ -1431,9 +1703,10 @@
 
       function viewOnlyUserExtra(sess) {
         var perm = Number((sess && sess.auth && sess.auth.permission) || 0);
-        return perm < AccountingApi.VENDOR_PAYMENT_APPROVE_MIN_PERMISSION
-          ? '請款核准需 ≥5；本頁可檢視'
-          : '';
+        if (perm < AccountingApi.VENDOR_PAYMENT_APPROVE_MIN_PERMISSION) {
+          return '核准需 ≥5；≥3 可改廠商／分攤／稅別／備註／刪除';
+        }
+        return '';
       }
       function paintUserLine(sess) {
         var ul = document.getElementById('userLine');

@@ -24,6 +24,21 @@
 
 ## 最近完成
 
+### 2026-10-07｜Cursor Cloud｜請款審核 ≥3 改廠商／分攤／稅別／備註＋刪除（draft／未部署）
+
+- 修改範圍：`ledger_review.html`、`accounting_api.js?v=100`、SPEC 15 v1.60、LOG、smoke；Backend `LedgerReviewModule`／`VendorPaymentModule`／SPEC／LOG／smoke；store `docs/payment-review-missing-error-ledger.md`
+- 完成內容：審核**顯示**歷史錯誤標示；≥3 可改**廠商／分攤／稅別／備註**並儲存、**刪除**未匯款；**拿掉**審核頁「錯誤記帳標示」寫入；bundle `can_flag_error=false`；`vendor_payment_update` 可帶 `vendor_id`；核准／退回仍 ≥5
+- 驗證：`test-ledger-review-error-flag.js`、`test-ledger-review-perm3-view.js`（FE＋GAS）
+- Commit／分支：`cursor/payment-review-show-error-flag-886d`；draft [liff#136](https://github.com/nephi4377/liff-checkin/pull/136)、[GAS#118](https://github.com/nephi4377/Backend_GAS/pull/118)
+- 待處理：部署後權限 3 抽測改廠商／分攤／刪除；標示仍走歷史記帳；≥5 核准仍可用；已匯款仍不可刪
+
+### 2026-10-07｜Cursor Cloud｜請款審核 ≥3 標示／改內容／刪除（draft／已修正）
+
+- 修改範圍：同分支先前版本（曾含審核頁錯誤記帳標示寫入）
+- 完成內容：已被下一筆取代——標示寫入不進審核 ≥3 功能集
+- Commit／分支：同 #136／#118
+- 待處理：—
+
 ### 2026-10-07｜Cursor Cloud｜權限3僅檢視請款審核（已上線 @402）
 
 - 修改範圍：`ledger_review.html`、`index.html`、`spa/app.js`、`HubLeftSidebar.js`、SPEC 15／19／流程、help；Backend `LedgerReviewModule`／`VendorPaymentModule`／SPEC／LOG
