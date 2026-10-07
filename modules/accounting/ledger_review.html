@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_tax_mode.js?v=6"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=96"></script>
+  <script src="../../shared/js/accounting_api.js?v=97"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
@@ -32,11 +32,14 @@
     .btn-block { width: 100%; margin-top: 10px; padding: 12px; }
     .item { border: 1px solid #e8eaed; border-radius: 10px; padding: 12px; margin-bottom: 10px; background: #fff; }
     .item.focus { border-color: #1a73e8; background: #f8f9ff; }
+    .item.is-error-flagged { border-color: #f9ab00; background: #fffbf0; }
     .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin-right: 6px; margin-top: 4px; }
     .tag.vendor { background: #fef7e0; color: #b06000; }
     .tag.pay { background: #e6f4ea; }
     .tag.expense { background: #fce8e6; color: #c5221f; }
     .tag.income { background: #e6f4ea; color: #137333; }
+    .tag.error-flag { background: #fef7e0; color: #b06000; font-weight: 700; }
+    .error-flag-reason { color: #b06000; font-size: 13px; margin-top: 4px; }
     .actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     #msg { color: #c5221f; font-size: 14px; margin: 8px 0; }
     #ok { color: #137333; font-size: 14px; margin: 8px 0; }
@@ -81,7 +84,7 @@
       <button type="button" class="tab-btn active" data-tab="vendor">廠商請款</button>
       <button type="button" class="tab-btn" data-tab="customer_receipt">客戶收款核準</button>
     </div>
-    <p class="sub" id="tabDesc">只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改分攤（可多案）。</p>
+    <p class="sub" id="tabDesc">只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改分攤（可多案）。歷史記帳已標「錯誤記帳」的請款會黃框＋標籤置頂。</p>
     <div id="msg" role="alert"></div>
     <div id="ok" aria-live="polite"></div>
 
@@ -105,8 +108,14 @@
           </select>
         </div>
       </div>
-      <label id="filterKwLabel">關鍵字（對象／案號／品項）</label>
-      <input id="filterKw" placeholder="例：磁磚、752" />
+      <label id="filterErrorLabel">錯誤記帳</label>
+      <select id="filterErrorFlag">
+        <option value="" selected>全部（已標示置頂）</option>
+        <option value="only">只看已標示錯誤</option>
+        <option value="exclude">隱藏已標示錯誤</option>
+      </select>
+      <label id="filterKwLabel">關鍵字（對象／案號／品項／錯誤原因）</label>
+      <input id="filterKw" placeholder="例：磁磚、752、金額打錯" />
       <button type="button" class="btn btn-primary btn-block" id="reloadBtn" title="略過暫存，立刻向後端重抓最新清單">重新載入最新</button>
     </div>
 
@@ -131,11 +140,11 @@
       var TAX_NOTE_MARKER = '【稅別】';
 
       var TAB_DESC = {
-        vendor: '只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改分攤（可多案）。',
+        vendor: '只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改分攤（可多案）。歷史記帳已標「錯誤記帳」的請款會<strong>黃框＋標籤置頂</strong>。',
         customer_receipt: '審核<strong>現金收款財務簽核</strong>與<strong>案件收入／客戶收款</strong>（收支登錄收入登錄後<strong>直接推送客戶確認</strong>並寫入案件毛利；財務可選擇性覆核，不阻擋客戶確認）。'
       };
       var TAB_DESC_VIEW_ONLY = {
-        vendor: '檢視「待付款申請」待審列表與詳情（唯讀）。核准／退回／改分攤需權限 ≥ 5。',
+        vendor: '檢視「待付款申請」待審列表與詳情（唯讀）。核准／退回／改分攤需權限 ≥ 5。已標「錯誤記帳」的請款會黃框＋標籤置頂。',
         customer_receipt: '檢視現金收款與客戶收款待審列表（唯讀）。財務簽核／核准入帳需權限 ≥ 4。'
       };
 
@@ -160,6 +169,8 @@
         var paySel = document.getElementById('filterPay');
         var payLabel = document.getElementById('filterPayLabel');
         var kwLabel = document.getElementById('filterKwLabel');
+        var errSel = document.getElementById('filterErrorFlag');
+        var errLabel = document.getElementById('filterErrorLabel');
         if (activeTab === 'customer_receipt') {
           if (payLabel) payLabel.textContent = '入帳狀態';
           if (kwLabel) kwLabel.textContent = '關鍵字（案號／收據編號／階段）';
@@ -167,13 +178,17 @@
             '<option value="">全部</option>' +
             '<option value="未入帳">待入帳</option>' +
             '<option value="已入帳">已入帳</option>';
+          if (errSel) errSel.classList.add('hidden');
+          if (errLabel) errLabel.classList.add('hidden');
         } else {
           if (payLabel) payLabel.textContent = '付款狀態';
-          if (kwLabel) kwLabel.textContent = '關鍵字（對象／案號／品項）';
+          if (kwLabel) kwLabel.textContent = '關鍵字（對象／案號／品項／錯誤原因）';
           if (paySel) paySel.innerHTML =
             '<option value="">全部</option>' +
             '<option value="未匯款">待匯款</option>' +
             '<option value="已匯款">已匯款</option>';
+          if (errSel) errSel.classList.remove('hidden');
+          if (errLabel) errLabel.classList.remove('hidden');
         }
         document.getElementById('bulkApproveBtn').textContent =
           activeTab === 'customer_receipt' ? '全部核准入帳' : '全部核准（資料完整）';
@@ -222,10 +237,19 @@
         var rs = document.getElementById('filterReview').value;
         var ps = document.getElementById('filterPay').value;
         var kw = document.getElementById('filterKw').value.trim();
+        var errEl = document.getElementById('filterErrorFlag');
+        var errMode = errEl && activeTab === 'vendor' ? String(errEl.value || '').trim() : '';
         f.review_status = rs;
         if (ps) f.payment_status = ps;
         if (kw) f.keyword = kw;
+        if (errMode) f.error_flagged = errMode;
         return f;
+      }
+      function isErrorFlagged(item) {
+        return !!(item && item.error_flagged);
+      }
+      function errorFlagReason(item) {
+        return String((item && item.error_flag_reason) || '').trim();
       }
       function fmtMoney(n) {
         return (parseInt(n, 10) || 0).toLocaleString('zh-TW');
@@ -798,6 +822,9 @@
           ps = '待匯款';
         }
         html += '<span class="tag pay">' + ps + '</span>';
+        if (isErrorFlagged(item)) {
+          html += '<span class="tag error-flag">已標示錯誤記帳</span>';
+        }
         return html;
       }
 
@@ -910,6 +937,12 @@
             : '') +
           '<input type="hidden" class="inp-note" value="" />' +
           '<p class="sub note-line hidden">備註：<span class="note-text"></span></p>' +
+          (isErrorFlagged(item)
+            ? ('<p class="error-flag-reason"><strong>錯誤記帳</strong>' +
+              (item.error_flagged_by ? '（' + item.error_flagged_by + '）' : '') +
+              (errorFlagReason(item) ? '：' + errorFlagReason(item) : '（已標示）') +
+              '</p>')
+            : '') +
           (viewOnly ? '' : (
             '<label>退回原因（選填，按退回後仍會再確認）</label>' +
             '<input type="text" class="inp-reject" placeholder="可不填，下一步可用現成原因" />' +
@@ -969,7 +1002,7 @@
 
       function renderItem(item) {
         var div = document.createElement('div');
-        div.className = 'item';
+        div.className = 'item' + (isErrorFlagged(item) ? ' is-error-flagged' : '');
         var isRequest = isPaymentRequest(item);
         var isIncome = isCustomerReceiptIncome(item);
         var isCashSign = isCustomerReceiptCashSign(item);
@@ -996,6 +1029,10 @@
             : '') +
           (isRequest && vendorHintForItem(item)
             ? '<div class="sub" style="color:#b06000">' + vendorHintForItem(item) + '</div>'
+            : '') +
+          (isErrorFlagged(item)
+            ? ('<div class="error-flag-reason">錯誤原因：' +
+              (errorFlagReason(item) || '（已標示，未填原因）') + '</div>')
             : '') +
           '<div class="mono">' + ((isIncome || isCashSign)
             ? (item.receipt_id ? item.receipt_id.slice(0, 8) + '…' : '')
@@ -1354,7 +1391,14 @@
         var box = document.getElementById('list');
         box.innerHTML = '';
         listItems.forEach(function (row) { box.appendChild(renderItem(row)); });
-        if (!listItems.length) box.innerHTML = '<p class="sub">沒有符合的紀錄</p>';
+        if (!listItems.length) {
+          var errMode = (document.getElementById('filterErrorFlag') || {}).value || '';
+          var emptyHint = '沒有符合的紀錄';
+          if (errMode === 'only') {
+            emptyHint = '目前篩選下沒有已標示「錯誤記帳」的請款。可改審核狀態為「全部」，或到「歷史記帳」確認是否已標示。';
+          }
+          box.innerHTML = '<p class="sub">' + emptyHint + '</p>';
+        }
         updateBulkBar();
       }
 
@@ -1408,7 +1452,7 @@
       }
 
       document.getElementById('reloadBtn').addEventListener('click', function () { loadList(false, true); });
-      ['filterReview', 'filterPay', 'filterKw'].forEach(function (id) {
+      ['filterReview', 'filterPay', 'filterKw', 'filterErrorFlag'].forEach(function (id) {
         var el = document.getElementById(id);
         if (!el) return;
         el.addEventListener('change', function () { loadList(false, false); });
