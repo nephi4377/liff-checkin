@@ -11,18 +11,31 @@
     .hist-kind-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; }
     .is-ledger { background: #e8f0fe; color: #174ea6; border: 1px solid #aecbfa; }
     .is-payment { background: #fef7e0; color: #8a5a00; border: 1px solid #f9ab00; }
+    /* 對齊 ledger_history.html v95：小鈕仍可點 */
     .btn-flag-warn {
       background: #fef7e0; color: #b06000; border: 1px solid #f9ab00;
-      border-radius: 8px; padding: 8px 12px; font-size: 14px; font-weight: 600; cursor: pointer;
+      border-radius: 6px; padding: 5px 10px; font-size: 12px; font-weight: 600;
+      cursor: pointer; min-height: 32px; line-height: 1.2;
     }
     .hist-mod-bar {
-      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
-      margin: 0 0 12px; padding: 10px 12px;
-      border: 1px solid #f9ab00; border-radius: 10px; background: #fff8e8;
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+      margin: 0 0 10px; padding: 6px 8px;
+      border: 1px solid #f9ab00; border-radius: 8px; background: #fff8e8;
     }
-    .hist-list-flag { margin-top: 8px; }
+    .hist-mod-bar .btn-flag-warn {
+      padding: 5px 10px; font-size: 12px; font-weight: 700; min-height: 32px;
+    }
+    .hist-list-flag {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      margin-top: 8px; padding: 0; background: transparent; border: none;
+    }
+    .hist-list-flag .btn-flag-warn {
+      width: auto; padding: 5px 10px; font-size: 12px; font-weight: 700;
+      min-height: 32px; line-height: 1.2;
+    }
     .ok { color: #137333; font-weight: 700; }
     .bad { color: #c5221f; font-weight: 700; }
+    #payloadLine { font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; }
   </style>
 </head>
 <body>
@@ -30,9 +43,10 @@
     <h2>錯誤記帳標示 DOM proof · Yang permission=3</h2>
     <p id="permLine">—</p>
     <p id="assertLine">—</p>
+    <p id="payloadLine">—</p>
   </div>
   <div class="card">
-    <strong>列表（模擬：請款＋收支每一列都有鈕）</strong>
+    <strong>列表（模擬：請款＋收支每一列都有小鈕）</strong>
     <div id="list"></div>
   </div>
   <div class="card">
@@ -43,6 +57,19 @@
     function isPaymentRequestItem(it) {
       return !!(it && (it.record_kind === 'payment_request' || it.payment_request_id) &&
         it.record_kind !== 'ledger');
+    }
+    function buildFlagSubmitPayload(it, reason) {
+      var payload = { reason: String(reason || '').trim() };
+      if (isPaymentRequestItem(it)) {
+        payload.record_kind = 'payment_request';
+        payload.payment_request_id = String(it.payment_request_id || '').trim();
+        return payload;
+      }
+      payload.record_kind = 'ledger';
+      if (it && it.sheet) payload.sheet = it.sheet;
+      if (it && it.row != null && Number(it.row) > 0) payload.row = it.row;
+      if (it && it.ingest_id) payload.ingest_id = it.ingest_id;
+      return payload;
     }
     var sessionRef = {
       auth: { user_id: 'U6e5d8f132e02d6de182ff460fae73fab', display_name: 'Yang', permission: 3 }
@@ -66,11 +93,11 @@
       record_kind: 'payment_request', record_kind_label: '待付款請款',
       payment_request_id: '568e45d0-6315-4f1d-b94c-13d84b717fe7',
       type: '支出', amount: 2413, project_no: '726',
-      party_name: '新弘', can_flag: false
+      party_name: '新弘', can_flag: false, sheet: '', row: 0
     };
 
     document.getElementById('permLine').textContent =
-      '模擬身分：Yang · 權限 ' + sessionPerm() + ' · 請款＋收支 can_flag API=false 仍應顯示錯誤記帳標示';
+      '模擬身分：Yang · 權限 ' + sessionPerm() + ' · 小鈕 12px／min-height 32px；請款送 UUID';
 
     var list = document.getElementById('list');
     [payment, ledger].forEach(function (it) {
@@ -96,13 +123,26 @@
     detail.insertAdjacentHTML('beforeend',
       '<p>來源：待付款請款 · 新弘 · $2,413 · 案726 · 請款單 568e45d0…</p>');
 
+    var payPayload = buildFlagSubmitPayload(payment, '金額打錯');
     var listFlags = document.querySelectorAll('[data-role="list-flag"]').length;
     var detailFlag = document.querySelectorAll('[data-role="flag-error"]').length;
+    var btn = document.querySelector('[data-role="list-flag"]');
+    var cs = btn ? window.getComputedStyle(btn) : null;
+    var fontOk = cs && parseFloat(cs.fontSize) <= 13;
+    var h = btn ? btn.getBoundingClientRect().height : 0;
+    var heightOk = h > 0 && h <= 40;
+    var payloadOk = payPayload.payment_request_id === '568e45d0-6315-4f1d-b94c-13d84b717fe7' &&
+      payPayload.sheet == null && payPayload.row == null;
     var ok = listFlags === 2 && detailFlag === 1 &&
-      sessionCanFlagDetail(payment) && sessionCanFlagDetail(ledger);
+      sessionCanFlagDetail(payment) && sessionCanFlagDetail(ledger) &&
+      fontOk && heightOk && payloadOk;
+    document.getElementById('payloadLine').textContent =
+      'submit payload: ' + JSON.stringify(payPayload) +
+      '\nbtn font=' + (cs && cs.fontSize) + ' height=' + Math.round(h) + 'px';
     document.getElementById('assertLine').innerHTML = ok
-      ? '<span class="ok">PASS</span>：請款＋收支列表各 1 顆「錯誤記帳標示」；請款詳情置頂 1 顆'
-      : '<span class="bad">FAIL</span> listFlags=' + listFlags + ' detailFlag=' + detailFlag;
+      ? '<span class="ok">PASS</span>：小鈕＋請款 UUID payload（無 sheet/row）'
+      : '<span class="bad">FAIL</span> listFlags=' + listFlags + ' detailFlag=' + detailFlag +
+        ' fontOk=' + fontOk + ' heightOk=' + heightOk + ' payloadOk=' + payloadOk;
     document.title = ok ? 'PASS flag DOM proof' : 'FAIL flag DOM proof';
   </script>
 </body>
