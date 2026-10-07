@@ -30,7 +30,7 @@
 - 根因：標示寫 note `[error_flag:]`，審核 bundle／UI 從未解析顯示——**不是**被濾掉，也**非** perm3 造成
 - 完成內容：回傳 `error_flagged*`；黃框＋標籤＋原因置頂；篩選只看／隱藏；`api?v=97`
 - 驗證：`node modules/accounting/tools/test-ledger-review-error-flag.js`；GAS 同名煙測 OK
-- Commit／分支：`cursor/payment-review-show-error-flag-886d`（draft PR）
+- Commit／分支：`cursor/payment-review-show-error-flag-886d`；draft [liff#136](https://github.com/nephi4377/liff-checkin/pull/136)、[GAS#118](https://github.com/nephi4377/Backend_GAS/pull/118)
 - 待處理：部署後抽測；勿與 perm3 混淆
 
 ### 2026-10-07｜Cursor Cloud｜權限3僅檢視請款審核（已上線 @402）
