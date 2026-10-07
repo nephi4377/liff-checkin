@@ -20,7 +20,7 @@
 
 ## 目前進行中
 
-- Cursor Cloud｜請款審核讀取審核包逾時（N+1 memo＋FE 90s）｜draft
+- Cursor Cloud｜請款審核讀取審核包逾時（N+1 memo＋FE 90s）｜draft [liff#137](https://github.com/nephi4377/liff-checkin/pull/137)／[GAS#119](https://github.com/nephi4377/Backend_GAS/pull/119)
 
 ## 最近完成
 
