@@ -124,7 +124,7 @@ var AccountingApi = (function () {
       var attempt = 0;
       var maxAttempts = 3;
       // 歷史記帳：GAS 慢／404 時重試只會把 Abort 疊滿 90s；一次失敗即可（後端已有軟截止）
-      // cache-bust companions: ledger_history.html loads this as ?v=94（請款＋收支每列可標示）
+      // cache-bust companions: accounting_ingest.html loads this as ?v=95（疑重頁內確認）
       if (actionName === 'accounting_ledger_recent') maxAttempts = 1;
       while (attempt < maxAttempts) {
         attempt += 1;
@@ -137,14 +137,26 @@ var AccountingApi = (function () {
         break;
       }
       var parsed = parseJsonResponse_(res, text);
+      // 疑重確認：業務上要使用者再決定，不當 API 失敗（勿錯誤回報／紅 toast 蓋掉提醒）
+      var softDupConfirm = !!(parsed && parsed.needs_dup_confirm);
       if (trackUi && typeof AccountingUi !== 'undefined' && AccountingUi.apiEnd) {
-        var extra = parsed && parsed.success === false && parsed.message ? parsed.message : '';
+        var extra = '';
+        if (softDupConfirm) {
+          extra = '疑重確認';
+        } else if (parsed && parsed.success === false && parsed.message) {
+          extra = parsed.message;
+        }
         if (parsed && parsed.gas_cached) extra = (extra ? extra + ' · ' : '') + (apiLabel || 'GAS') + ' 快取';
         try {
-          AccountingUi.apiEnd(actionName, Date.now() - t0, !!(parsed && parsed.success !== false), extra);
+          AccountingUi.apiEnd(
+            actionName,
+            Date.now() - t0,
+            softDupConfirm || !!(parsed && parsed.success !== false),
+            extra
+          );
         } catch (eEnd) {}
       }
-      if (parsed && parsed.success === false) {
+      if (parsed && parsed.success === false && !softDupConfirm) {
         logApiFailure_(actionName, { message: parsed.message || '失敗' }, false);
       }
       return parsed;

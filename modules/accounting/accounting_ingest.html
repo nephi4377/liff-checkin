@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=68"></script>
+  <script src="../../shared/js/accounting_api.js?v=95"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=6"></script>
@@ -82,9 +82,36 @@
     .drop-zone p { margin: 0; font-size: 15px; color: #333; }
     .drop-zone .hint { margin-top: 6px; font-size: 13px; color: #666; line-height: 1.45; }
     .drop-zone input[type="file"] { display: none; }
+    /* 疑重確認：頁內對話（勿用 window.confirm——巢狀 iframe／await 後常被瀏覽器擋掉） */
+    #dupConfirmOverlay {
+      position: fixed; inset: 0; z-index: 9999; display: none;
+      align-items: center; justify-content: center;
+      background: rgba(32, 33, 36, 0.45); padding: 16px; box-sizing: border-box;
+    }
+    #dupConfirmOverlay.is-open { display: flex; }
+    #dupConfirmPanel {
+      width: min(100%, 420px); background: #fff; border-radius: 14px;
+      padding: 18px 16px 14px; box-shadow: 0 8px 28px rgba(0,0,0,.18);
+    }
+    #dupConfirmPanel h3 { margin: 0 0 10px; font-size: 18px; color: #b06000; }
+    #dupConfirmMsg { margin: 0 0 14px; font-size: 15px; line-height: 1.5; color: #333; white-space: pre-wrap; }
+    #dupConfirmActions { display: flex; gap: 8px; }
+    #dupConfirmActions .btn { margin-top: 0; flex: 1; }
+    #dupConfirmCancel { background: #e8eaed; color: #333; }
+    #dupConfirmOk { background: #b06000; color: #fff; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
+  <div id="dupConfirmOverlay" role="dialog" aria-modal="true" aria-labelledby="dupConfirmTitle">
+    <div id="dupConfirmPanel">
+      <h3 id="dupConfirmTitle">疑似重複記帳</h3>
+      <p id="dupConfirmMsg"></p>
+      <div id="dupConfirmActions">
+        <button type="button" class="btn" id="dupConfirmCancel">取消（不記）</button>
+        <button type="button" class="btn" id="dupConfirmOk">確定（真的第二筆）</button>
+      </div>
+    </div>
+  </div>
   <div id="loading">載入中…</div>
   <div id="app" class="hidden acct-main">
     <h2>收支登錄</h2>
@@ -570,6 +597,37 @@
         showPendingPreviews(pendingPhotos);
       }
 
+      function askDupConfirm(message) {
+        var overlay = document.getElementById('dupConfirmOverlay');
+        var msgEl = document.getElementById('dupConfirmMsg');
+        var btnOk = document.getElementById('dupConfirmOk');
+        var btnCancel = document.getElementById('dupConfirmCancel');
+        if (!overlay || !msgEl || !btnOk || !btnCancel) {
+          // 後備：極少數載入異常才用原生 confirm
+          return Promise.resolve(window.confirm(String(message || '')));
+        }
+        msgEl.textContent = String(message || '');
+        overlay.classList.add('is-open');
+        return new Promise(function (resolve) {
+          function finish(ok) {
+            overlay.classList.remove('is-open');
+            btnOk.removeEventListener('click', onOk);
+            btnCancel.removeEventListener('click', onCancel);
+            overlay.removeEventListener('click', onBackdrop);
+            resolve(!!ok);
+          }
+          function onOk() { finish(true); }
+          function onCancel() { finish(false); }
+          function onBackdrop(e) {
+            if (e.target === overlay) finish(false);
+          }
+          btnOk.addEventListener('click', onOk);
+          btnCancel.addEventListener('click', onCancel);
+          overlay.addEventListener('click', onBackdrop);
+          try { btnCancel.focus(); } catch (eFocus) {}
+        });
+      }
+
       async function submitEntry() {
         setMsg(''); setOk(''); setWarn('');
         setSubmitResult('', '');
@@ -618,7 +676,7 @@
               else dupMsg += '，可能已在 ' + where;
               dupMsg += '。是重複點擊／重送請按「取消」；今天真的有兩筆再按「確定」。';
             }
-            var forceOk = window.confirm(dupMsg);
+            var forceOk = await askDupConfirm(dupMsg);
             if (!forceOk) throw new Error('已取消，沒有再記一筆');
             body.force_duplicate = true;
             data = await AccountingApi.post(body);

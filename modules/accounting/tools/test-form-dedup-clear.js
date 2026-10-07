@@ -17,7 +17,17 @@ assert(
   'confirm copy states type+amount+date'
 );
 assert(html.indexOf('duplicate_prior') >= 0, 'uses prior detail for confirm');
-assert(html.indexOf('window.confirm') >= 0, 'uses confirm dialog');
+assert(html.indexOf('askDupConfirm') >= 0, 'uses in-page dup confirm helper');
+assert(html.indexOf('dupConfirmOverlay') >= 0, 'has page modal overlay');
+assert(html.indexOf('accounting_api.js?v=95') >= 0, 'cache-bust api v=95');
+assert(
+  /needs_dup_confirm[\s\S]*softDupConfirm|softDupConfirm[\s\S]*needs_dup_confirm/.test(
+    fs.readFileSync(path.join(__dirname, '..', '..', '..', 'shared', 'js', 'accounting_api.js'), 'utf8')
+  ) ||
+    fs.readFileSync(path.join(__dirname, '..', '..', '..', 'shared', 'js', 'accounting_api.js'), 'utf8')
+      .indexOf('softDupConfirm') >= 0,
+  'API treats needs_dup_confirm as soft (no error toast)'
+);
 assert(
   /clearVolatileFields\s*\(\s*true\s*\)/.test(html),
   'clears form after successful submit'
