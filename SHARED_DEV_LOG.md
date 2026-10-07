@@ -24,6 +24,15 @@
 
 ## 最近完成
 
+### 2026-10-07｜Cursor Cloud｜請款錯誤標示送出修復＋按鈕縮小
+
+- 修改範圍：`ledger_history.html`、`accounting_api.js?v=95`、SPEC 15、LOG、smoke；Backend `AccountingLineIngest`／CI prune／SPEC／test
+- 完成內容：填原因送出時請款只帶 UUID（例 `568e45d0-…`），不帶空 sheet/row；按鈕改小仍可點；友善提示若後端仍 @397
+- 驗證：`node modules/accounting/tools/test-ledger-flag-button-visible.js`；GAS flag／recent smoke OK
+- Commit／線上：見 PR `cursor/payment-flag-submit-fix-8a21`；**clasp deploy 仍可能卡 200 versions**
+- 待處理：Nephi 刪 ≥25 舊 version → deploy 新 @N → 點 新弘 請款詳情「錯誤記帳標示」填原因確認
+
+
 ### 2026-10-06｜Cursor Cloud｜待付款請款「錯誤記帳標示」＋勿框選（待 merge／部署）
 
 - 修改範圍：`ledger_history.html`、`accounting_api.js?v=94`、SPEC 15、LOG、smoke；Backend `AccountingLineIngest`／`VendorPaymentModule`／SPEC／test
