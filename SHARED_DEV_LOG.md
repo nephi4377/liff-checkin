@@ -24,6 +24,14 @@
 
 ## 最近完成
 
+### 2026-10-07｜Cursor Cloud｜權限3僅檢視請款審核（draft PR，未部署）
+
+- 修改範圍：`ledger_review.html`、`index.html`、`spa/app.js`、`HubLeftSidebar.js`、SPEC 15／19／流程、help；Backend `LedgerReviewModule`／`VendorPaymentModule`／SPEC／LOG
+- 完成內容：≥3 可開請款審核列表／詳情／附件；隱藏核准／退回／改分攤；後端 list／bundle 檢視 ≥3，approve／reject 仍 ≥5
+- 驗證：`node modules/accounting/tools/test-ledger-review-perm3-view.js`；GAS `tools/test-ledger-review-perm3-view.js`
+- Commit／線上：見 PR `cursor/perm3-view-only-payment-review-d209`；**未部署**
+- 待處理：merge 後 Pages＋clasp；權限 3 抽測可看不可核准
+
 ### 2026-10-07｜Cursor Cloud｜重複記帳提醒頁內確認（FE 已上線；GAS 待版號）
 
 - 修改範圍：`accounting_ingest.html`（頁內 `#dupConfirmOverlay`）、`accounting_api.js?v=95` soft `needs_dup_confirm`、SPEC 15 v1.39、LOG；Backend `SheetWriter` 日期正規化＋`skipDedup`（[GAS#116](https://github.com/nephi4377/Backend_GAS/pull/116)）

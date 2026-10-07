@@ -165,8 +165,9 @@ export default {
         const perm = computed(() => Number(props.currentUser?.permission || 0));
         const pendingReview = computed(() => (props.paymentTodos?.pendingReview || []));
         const pendingPayment = computed(() => (props.paymentTodos?.pendingPayment || []));
-        const hasPaymentSection = computed(() => perm.value >= 4);
-        const showPendingReview = computed(() => perm.value >= 5);
+        // ≥3 可看待審（請款審核唯讀）；≥4 才看待匯
+        const hasPaymentSection = computed(() => perm.value >= 3);
+        const showPendingReview = computed(() => perm.value >= 3);
 
         const formatAmount = (n) => {
             const v = parseInt(n, 10);
@@ -489,7 +490,9 @@ export default {
                         <span v-if="paymentTodosLoading" class="text-blue-500 animate-pulse">更新中…</span>
                         <span v-else-if="paymentTodosError" class="text-red-600">無法更新</span>
                         <span v-else>
-                            待審 {{ pendingReview.length }} · 待匯 {{ pendingPayment.length }}
+                            待審 {{ pendingReview.length }}
+                            <template v-if="perm >= 4"> · 待匯 {{ pendingPayment.length }}</template>
+                            <template v-else-if="perm >= 3"> · 檢視</template>
                         </span>
                     </p>
                 </div>

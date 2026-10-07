@@ -533,7 +533,8 @@ const App = {
 
         const fetchPaymentTodos = async () => {
             const perm = Number(currentUser.value?.permission || 0);
-            if (perm < 4) {
+            // ≥3 可看待審；≥4 才看待匯（與請款審核檢視／財務待匯對齊）
+            if (perm < 3) {
                 return { ok: true, skipped: true, pendingReview: [], pendingPayment: [] };
             }
             const uid = String(currentUser.value?.userId || userProfile.value?.userId || '').trim();
@@ -550,18 +551,20 @@ const App = {
             if (idToken) auth.liff_id_token = idToken;
             if (uid) auth.user_id = uid;
             const tasks = [];
-            if (perm >= 5) {
+            if (perm >= 3) {
                 tasks.push(
                     accountingPost({ action: 'vendor_payment_list', auth, status: 'pending_review' })
                         .then((rv) => ({ key: 'review', rv }))
                         .catch((e) => ({ key: 'review', rv: { success: false, message: (e && e.message) || '待審列表讀取失敗' } }))
                 );
             }
-            tasks.push(
-                accountingPost({ action: 'vendor_payment_list', auth, status: 'pending_payment' })
-                    .then((pay) => ({ key: 'pay', rv: pay }))
-                    .catch((e) => ({ key: 'pay', rv: { success: false, message: (e && e.message) || '待匯列表讀取失敗' } }))
-            );
+            if (perm >= 4) {
+                tasks.push(
+                    accountingPost({ action: 'vendor_payment_list', auth, status: 'pending_payment' })
+                        .then((pay) => ({ key: 'pay', rv: pay }))
+                        .catch((e) => ({ key: 'pay', rv: { success: false, message: (e && e.message) || '待匯列表讀取失敗' } }))
+                );
+            }
             const parts = await Promise.all(tasks);
             const todos = { pendingReview: [], pendingPayment: [] };
             const failures = [];
@@ -595,7 +598,7 @@ const App = {
 
         const refreshPaymentTodosInBackground = () => {
             const perm = Number(currentUser.value?.permission || 0);
-            if (perm < 4) {
+            if (perm < 3) {
                 paymentTodosLoading.value = false;
                 paymentTodosError.value = '';
                 return Promise.resolve();

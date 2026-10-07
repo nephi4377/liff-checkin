@@ -151,7 +151,7 @@
         <span class="card-body">
           <h3>請款審核</h3>
           <p>廠商／員工待付款申請待審；核准後進待匯款。狀態在此與待匯款／款項進度查看。</p>
-          <span class="tag admin">財務 ≥4</span>
+          <span class="tag admin">檢視 ≥3 · 核准 ≥5</span>
         </span>
       </a>
 
@@ -265,7 +265,10 @@
           financeSection.classList.add('hidden');
         } else {
           financeSection.classList.remove('hidden');
-          var financeOnlyIds = ['linkLedgerReview', 'linkPayrollFinance', 'linkVendorPaymentFinance'];
+          // 請款審核：≥3 可檢視（核准仍 ≥5）；待匯款／薪資待匯仍僅財務 ≥4
+          var reviewLink = document.getElementById('linkLedgerReview');
+          if (reviewLink) reviewLink.classList.remove('hidden');
+          var financeOnlyIds = ['linkPayrollFinance', 'linkVendorPaymentFinance'];
           financeOnlyIds.forEach(function (id) {
             var el = document.getElementById(id);
             if (!el) return;

@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_tax_mode.js?v=6"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=59"></script>
+  <script src="../../shared/js/accounting_api.js?v=96"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
@@ -134,15 +134,29 @@
         vendor: '只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>看單據並改分攤（可多案）。',
         customer_receipt: '審核<strong>現金收款財務簽核</strong>與<strong>案件收入／客戶收款</strong>（收支登錄收入登錄後<strong>直接推送客戶確認</strong>並寫入案件毛利；財務可選擇性覆核，不阻擋客戶確認）。'
       };
+      var TAB_DESC_VIEW_ONLY = {
+        vendor: '檢視「待付款申請」待審列表與詳情（唯讀）。核准／退回／改分攤需權限 ≥ 5。',
+        customer_receipt: '檢視現金收款與客戶收款待審列表（唯讀）。財務簽核／核准入帳需權限 ≥ 4。'
+      };
 
       function setMsg(t) { ui.setMsg(t); }
       function setOk(t) { ui.setOk(t); }
+      function isVendorViewOnly() {
+        return !canApproveVendor;
+      }
+      function isIncomeViewOnly() {
+        return !canApproveIncome;
+      }
       function updateTabUi() {
         document.querySelectorAll('.tab-btn').forEach(function (btn) {
           btn.classList.toggle('active', btn.getAttribute('data-tab') === activeTab);
         });
         var desc = document.getElementById('tabDesc');
-        if (desc) desc.innerHTML = TAB_DESC[activeTab] || TAB_DESC.vendor;
+        if (desc) {
+          var viewOnly = activeTab === 'customer_receipt' ? isIncomeViewOnly() : isVendorViewOnly();
+          var src = viewOnly ? TAB_DESC_VIEW_ONLY : TAB_DESC;
+          desc.innerHTML = src[activeTab] || src.vendor;
+        }
         var paySel = document.getElementById('filterPay');
         var payLabel = document.getElementById('filterPayLabel');
         var kwLabel = document.getElementById('filterKwLabel');
@@ -787,53 +801,84 @@
         return html;
       }
 
+      function applyPanelViewOnly(panel, hintText) {
+        if (!panel) return;
+        panel.setAttribute('data-view-only', '1');
+        panel.querySelectorAll('input, textarea, select, button.btn-ghost, button.alloc-rm').forEach(function (el) {
+          el.disabled = true;
+          if (el.tagName === 'BUTTON') el.classList.add('hidden');
+        });
+        panel.querySelectorAll('.btn-confirm-approve, .btn-confirm-reject').forEach(function (el) {
+          el.classList.add('hidden');
+          el.disabled = true;
+        });
+        panel.querySelectorAll('label').forEach(function (lab) {
+          var t = lab.textContent || '';
+          if (/核准備註|退回原因/.test(t)) lab.classList.add('hidden');
+        });
+        panel.querySelectorAll('.inp-approve-note, .inp-reject').forEach(function (el) {
+          el.classList.add('hidden');
+        });
+        var note = document.createElement('p');
+        note.className = 'sub view-only-hint';
+        note.style.marginTop = '10px';
+        note.textContent = hintText || '（檢視模式：不可核准／退回／修改）';
+        panel.appendChild(note);
+      }
+
       function renderIncomeReviewPanel(item) {
         var panel = document.createElement('div');
         panel.className = 'review-panel hidden';
+        var viewOnly = !canApproveIncome;
         panel.innerHTML =
           '<p class="sub">收據編號 ' + (item.receipt_no || '—') + ' · ' + (item.stage_label || item.summary || '') +
           ' · ' + (item.method || '') + '</p>' +
           (item.note ? '<p class="sub">備註：' + item.note + '</p>' : '') +
           (item.income_review_note ? '<p class="sub">審核備註：' + item.income_review_note + '</p>' : '') +
-          '<label>核准備註（選填）</label>' +
-          '<input type="text" class="inp-approve-note" placeholder="核准入帳時可填" />' +
-          '<label>退回原因（選填，按退回後仍會再確認）</label>' +
-          '<input type="text" class="inp-reject" placeholder="可不填，下一步可用現成原因" />' +
-          '<div class="actions" style="margin-top:12px">' +
-          '<button type="button" class="btn btn-ok btn-confirm-approve">確認核准入帳</button>' +
-          '<button type="button" class="btn btn-warn btn-confirm-reject">退回</button>' +
-          '</div>' +
+          (viewOnly ? '' : (
+            '<label>核准備註（選填）</label>' +
+            '<input type="text" class="inp-approve-note" placeholder="核准入帳時可填" />' +
+            '<label>退回原因（選填，按退回後仍會再確認）</label>' +
+            '<input type="text" class="inp-reject" placeholder="可不填，下一步可用現成原因" />' +
+            '<div class="actions" style="margin-top:12px">' +
+            '<button type="button" class="btn btn-ok btn-confirm-approve">確認核准入帳</button>' +
+            '<button type="button" class="btn btn-warn btn-confirm-reject">退回</button>' +
+            '</div>'
+          )) +
           '<p class="sub" style="margin-top:8px"><a href="designer-customer-finance.html?project_no=' +
-          encodeURIComponent(item.project_no || '') + '">查看追加減與收款詳情 →</a></p>';
+          encodeURIComponent(item.project_no || '') + '">查看追加減與收款詳情 →</a></p>' +
+          (viewOnly ? '<p class="sub" style="margin-top:8px">（檢視模式：核准入帳／退回需權限 ≥ 4）</p>' : '');
 
-        panel.querySelector('.btn-confirm-approve').addEventListener('click', async function () {
-          var cacheId = itemCacheId(item);
-          if (!canApproveIncome || itemQueueBusy(cacheId)) return;
-          if (!confirm('確定核準此收款並寫入案件收支（收入列）？')) return;
-          var btn = panel.querySelector('.btn-confirm-approve');
-          await AccountingUi.runAsync(btn, {
-            busyLabel: '核准中…',
-            queue: true,
-            queueId: 'ledger_review',
-            itemId: cacheId
-          }, async function () {
-            ui.clear();
-            var note = panel.querySelector('.inp-approve-note').value.trim();
-            var ok = await approveIncome(item, note);
-            if (ok) {
-              setOk('已核准入帳「' + (item.receipt_no || item.project_no) + '」');
-              removeItemFromView(cacheId);
-            }
+        if (!viewOnly) {
+          panel.querySelector('.btn-confirm-approve').addEventListener('click', async function () {
+            var cacheId = itemCacheId(item);
+            if (!canApproveIncome || itemQueueBusy(cacheId)) return;
+            if (!confirm('確定核準此收款並寫入案件收支（收入列）？')) return;
+            var btn = panel.querySelector('.btn-confirm-approve');
+            await AccountingUi.runAsync(btn, {
+              busyLabel: '核准中…',
+              queue: true,
+              queueId: 'ledger_review',
+              itemId: cacheId
+            }, async function () {
+              ui.clear();
+              var note = panel.querySelector('.inp-approve-note').value.trim();
+              var ok = await approveIncome(item, note);
+              if (ok) {
+                setOk('已核准入帳「' + (item.receipt_no || item.project_no) + '」');
+                removeItemFromView(cacheId);
+              }
+            });
           });
-        });
-        panel.querySelector('.btn-confirm-reject').addEventListener('click', async function () {
-          var cacheId = itemCacheId(item);
-          if (!canApproveIncome || itemQueueBusy(cacheId)) return;
-          var btn = panel.querySelector('.btn-confirm-reject');
-          await runRejectAction(item, btn, 'income', function () {
-            return panel.querySelector('.inp-reject').value.trim();
+          panel.querySelector('.btn-confirm-reject').addEventListener('click', async function () {
+            var cacheId = itemCacheId(item);
+            if (!canApproveIncome || itemQueueBusy(cacheId)) return;
+            var btn = panel.querySelector('.btn-confirm-reject');
+            await runRejectAction(item, btn, 'income', function () {
+              return panel.querySelector('.inp-reject').value.trim();
+            });
           });
-        });
+        }
         return panel;
       }
 
@@ -841,6 +886,7 @@
         var panel = document.createElement('div');
         panel.className = 'review-panel hidden';
         var ready = itemReady(item);
+        var viewOnly = !canApproveVendor;
         var initMode = 'inclusive';
         if (typeof AccountingTaxMode !== 'undefined') {
           initMode = AccountingTaxMode.parseModeFromNote(item.note) || 'inclusive';
@@ -848,12 +894,14 @@
         panel.setAttribute('data-tax-mode', initMode);
         panel.innerHTML =
           '<label>分攤明細（案號＋金額，可多案；扣款填負數）' +
-          (ready ? '' : ' <span class="need">需補齊</span>') + '</label>' +
+          (ready || viewOnly ? '' : ' <span class="need">需補齊</span>') + '</label>' +
           '<label style="margin-top:10px">稅別模式（整張統一）</label>' +
-          '<p class="sub" style="margin:4px 0 6px">「未稅／含稅自選」：各列自己勾含稅，金額不改。整張加稅：各列只填未稅，稅在底下一次加。不要用「逐筆加 5%」除非要逐列改金額。</p>' +
+          (viewOnly
+            ? '<p class="sub" style="margin:4px 0 6px">目前為檢視模式，分攤與稅別不可改。</p>'
+            : '<p class="sub" style="margin:4px 0 6px">「未稅／含稅自選」：各列自己勾含稅，金額不改。整張加稅：各列只填未稅，稅在底下一次加。不要用「逐筆加 5%」除非要逐列改金額。</p>') +
           '<div class="tax-mode-host"></div>' +
           '<div class="alloc-list"></div>' +
-          '<button type="button" class="btn-ghost btn-add-alloc">＋ 新增一列</button>' +
+          (viewOnly ? '' : '<button type="button" class="btn-ghost btn-add-alloc">＋ 新增一列</button>') +
           '<div class="total-line"><span class="total-label">合計</span> $<span class="alloc-total">0</span></div>' +
           '<p class="sub tax-breakdown" style="margin:4px 0 0;text-align:right;color:#555;font-size:13px;"></p>' +
           (item.bank_code || item.account_no
@@ -862,12 +910,14 @@
             : '') +
           '<input type="hidden" class="inp-note" value="" />' +
           '<p class="sub note-line hidden">備註：<span class="note-text"></span></p>' +
-          '<label>退回原因（選填，按退回後仍會再確認）</label>' +
-          '<input type="text" class="inp-reject" placeholder="可不填，下一步可用現成原因" />' +
-          '<div class="actions" style="margin-top:12px">' +
-          '<button type="button" class="btn btn-ok btn-confirm-approve">確認核准</button>' +
-          '<button type="button" class="btn btn-warn btn-confirm-reject">退回</button>' +
-          '</div>';
+          (viewOnly ? '' : (
+            '<label>退回原因（選填，按退回後仍會再確認）</label>' +
+            '<input type="text" class="inp-reject" placeholder="可不填，下一步可用現成原因" />' +
+            '<div class="actions" style="margin-top:12px">' +
+            '<button type="button" class="btn btn-ok btn-confirm-approve">確認核准</button>' +
+            '<button type="button" class="btn btn-warn btn-confirm-reject">退回</button>' +
+            '</div>'
+          ));
         var initRows = allocRowsFromItem(item);
         if (initMode === 'prorate' && typeof AccountingTaxMode !== 'undefined') {
           initRows = AccountingTaxMode.toPretaxRows(initRows, 'prorate');
@@ -883,33 +933,37 @@
         }
         syncTaxNoteForPanel(panel);
 
-        panel.querySelector('.btn-confirm-approve').addEventListener('click', async function () {
-          if (!canApproveVendor || itemQueueBusy(item.payment_request_id)) return;
-          var btn = panel.querySelector('.btn-confirm-approve');
-          await AccountingUi.runAsync(btn, {
-            busyLabel: '核准中…',
-            queue: true,
-            queueId: 'ledger_review',
-            itemId: item.payment_request_id
-          }, async function () {
-            ui.clear();
-            var patch = readPatchFromPanel(panel);
-            var err = validateAllocRows(patch.allocations);
-            if (err) { setMsg(err); return; }
-            var ok = await approveVendor(item, patch);
-            if (ok) {
-              setOk('已核准「' + (item.party_name || '') + '」，進入待匯款');
-              removeItemFromView(item.payment_request_id);
-            }
+        if (viewOnly) {
+          applyPanelViewOnly(panel, '（檢視模式：核准／退回／改分攤需權限 ≥ 5）');
+        } else {
+          panel.querySelector('.btn-confirm-approve').addEventListener('click', async function () {
+            if (!canApproveVendor || itemQueueBusy(item.payment_request_id)) return;
+            var btn = panel.querySelector('.btn-confirm-approve');
+            await AccountingUi.runAsync(btn, {
+              busyLabel: '核准中…',
+              queue: true,
+              queueId: 'ledger_review',
+              itemId: item.payment_request_id
+            }, async function () {
+              ui.clear();
+              var patch = readPatchFromPanel(panel);
+              var err = validateAllocRows(patch.allocations);
+              if (err) { setMsg(err); return; }
+              var ok = await approveVendor(item, patch);
+              if (ok) {
+                setOk('已核准「' + (item.party_name || '') + '」，進入待匯款');
+                removeItemFromView(item.payment_request_id);
+              }
+            });
           });
-        });
-        panel.querySelector('.btn-confirm-reject').addEventListener('click', async function () {
-          if (!canApproveVendor || itemQueueBusy(item.payment_request_id)) return;
-          var btn = panel.querySelector('.btn-confirm-reject');
-          await runRejectAction(item, btn, 'vendor', function () {
-            return panel.querySelector('.inp-reject').value.trim();
+          panel.querySelector('.btn-confirm-reject').addEventListener('click', async function () {
+            if (!canApproveVendor || itemQueueBusy(item.payment_request_id)) return;
+            var btn = panel.querySelector('.btn-confirm-reject');
+            await runRejectAction(item, btn, 'vendor', function () {
+              return panel.querySelector('.inp-reject').value.trim();
+            });
           });
-        });
+        }
         return panel;
       }
 
@@ -1032,9 +1086,19 @@
           });
           actions.appendChild(btnIncomeReject);
         } else if (pending && isIncome && !canApproveIncome) {
+          var btnIncomeView = document.createElement('button');
+          btnIncomeView.type = 'button';
+          btnIncomeView.className = 'btn btn-primary';
+          btnIncomeView.textContent = '查看詳情';
+          btnIncomeView.addEventListener('click', function () {
+            var open = reviewPanel.classList.toggle('hidden');
+            btnIncomeView.textContent = open ? '查看詳情' : '收合';
+            div.classList.toggle('focus', !open);
+          });
+          actions.appendChild(btnIncomeView);
           var incomeHint = document.createElement('span');
           incomeHint.className = 'sub';
-          incomeHint.textContent = '（核准入帳需權限 ≥ 4）';
+          incomeHint.textContent = '（檢視模式：核准入帳需權限 ≥ 4）';
           actions.appendChild(incomeHint);
         } else if (pending && isRequest && canApproveVendor) {
           var btnQuick = document.createElement('button');
@@ -1093,9 +1157,27 @@
           });
           actions.appendChild(btnReject);
         } else if (pending && isRequest && !canApproveVendor) {
+          var btnView = document.createElement('button');
+          btnView.type = 'button';
+          btnView.className = 'btn btn-primary';
+          btnView.textContent = '查看詳情';
+          btnView.addEventListener('click', async function () {
+            var open = reviewPanel.classList.toggle('hidden');
+            btnView.textContent = open ? '查看詳情' : '收合';
+            div.classList.toggle('focus', !open);
+            if (!open) {
+              try {
+                var urls = item.attachment_urls && item.attachment_urls.length
+                  ? item.attachment_urls
+                  : await AccountingLightbox.fetchAttachmentUrls(session, item);
+                if (urls.length) AccountingLightbox.open(urls);
+              } catch (eAtt) { /* 檢視模式附件失敗不擋詳情 */ }
+            }
+          });
+          actions.appendChild(btnView);
           var hint = document.createElement('span');
           hint.className = 'sub';
-          hint.textContent = '（核准需權限 ≥ 5）';
+          hint.textContent = '（檢視模式：核准需權限 ≥ 5）';
           actions.appendChild(hint);
         }
 
@@ -1267,6 +1349,7 @@
         }
         canApproveVendor = !!data.can_approve_vendor;
         canApproveIncome = !!(data.can_approve_income || data.can_approve_customer_receipt);
+        updateTabUi();
         listItems = data.items || [];
         var box = document.getElementById('list');
         box.innerHTML = '';
@@ -1346,12 +1429,30 @@
         });
       });
 
+      function viewOnlyUserExtra(sess) {
+        var perm = Number((sess && sess.auth && sess.auth.permission) || 0);
+        return perm < AccountingApi.VENDOR_PAYMENT_APPROVE_MIN_PERMISSION
+          ? '請款核准需 ≥5；本頁可檢視'
+          : '';
+      }
+      function paintUserLine(sess) {
+        var ul = document.getElementById('userLine');
+        if (!ul || typeof AccountingBoot === 'undefined' || !AccountingBoot.formatUserLine) return;
+        ul.textContent = AccountingBoot.formatUserLine(sess, viewOnlyUserExtra(sess));
+      }
       (async function boot() {
         await AccountingBoot.run({
+          minPermission: AccountingApi.SUPERVISOR_MIN_PERMISSION,
+          deniedMsg: AccountingApi.SUPERVISOR_DENIED_MSG,
           onReady: async function (sess) {
             session = sess;
+            paintUserLine(sess);
             updateTabUi();
             await loadList(false, false);
+          },
+          onRevalidate: async function (fresh) {
+            session = fresh;
+            paintUserLine(fresh);
           }
         });
       })();
