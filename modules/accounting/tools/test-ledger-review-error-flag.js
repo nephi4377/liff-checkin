@@ -22,13 +22,22 @@ assert(/隱藏已標示錯誤/.test(html), 'filter option: exclude flagged');
 assert(/已標示錯誤記帳/.test(html), 'list badge copy');
 assert(/is-error-flagged/.test(html), 'flagged row highlight class');
 assert(/error_flagged/.test(html) && /buildFilter/.test(html), 'passes error_flagged in filter');
-assert(/accounting_api\.js\?v=98/.test(html), 'api cache bust v=98');
+assert(/accounting_api\.js\?v=99/.test(html), 'api cache bust v=99');
 assert(/錯誤原因：/.test(html), 'shows error reason on list/detail');
 assert(/沒有已標示「錯誤記帳」的請款/.test(html), 'empty hint for only-flagged filter');
 assert(/reviewFlagReasonMask/.test(html), 'perm≥3 flag reason dialog');
 assert(/appendFlagButton/.test(html) && /canFlagItem/.test(html), 'flag button for ≥3');
 assert(/accountingLedgerFlag/.test(html), 'calls accountingLedgerFlag API');
-assert(/仍可錯誤記帳標示/.test(html) || /錯誤記帳標示/.test(html),
-  'view-only copy allows marking');
+assert(/錯誤記帳標示/.test(html), 'flag button label present');
+assert(/btn-save-content/.test(html) && /儲存修改/.test(html), 'perm≥3 save content button');
+assert(/saveVendorContent/.test(html) && /vendorPaymentUpdate/.test(html), 'save via vendorPaymentUpdate');
+assert(/appendDeleteButton/.test(html) && /vendorPaymentDelete/.test(html), 'delete unpaid via API');
+assert(/修改內容/.test(html), 'edit content entry for non-approvers');
+assert(/核准需 ≥5；≥3 可改/.test(html) || /核准\/退回需權限 ≥ 5/.test(html),
+  'approve stays ≥5 while edit ≥3');
+
+var api = fs.readFileSync(path.join(root, 'shared/js/accounting_api.js'), 'utf8');
+assert(/allocations:\s*patch\.allocations/.test(api) || /body\.allocations = patch\.allocations/.test(api),
+  'API update passes allocations');
 
 console.log('\nAll ledger-review error-flag FE checks passed.');

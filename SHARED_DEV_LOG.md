@@ -20,18 +20,17 @@
 
 ## 目前進行中
 
-- Cursor Cloud｜請款審核 ≥3 可填「錯誤記帳標示」｜延續 #136／#118｜`ledger_review.html`／`LedgerReviewModule`
+（無）
 
 ## 最近完成
 
-### 2026-10-07｜Cursor Cloud｜請款審核顯示「錯誤記帳」標示（draft／未部署）
+### 2026-10-07｜Cursor Cloud｜請款審核 ≥3 標示／改內容／刪除（draft／未部署）
 
-- 修改範圍：`ledger_review.html`、SPEC 15 v1.57、LOG、smoke；Backend `LedgerReviewModule`／SPEC／LOG／smoke
-- 根因：標示寫 note `[error_flag:]`，審核 bundle／UI 從未解析顯示——**不是**被濾掉，也**非** perm3 造成
-- 完成內容：回傳 `error_flagged*`；黃框＋標籤＋原因置頂；篩選只看／隱藏；`api?v=97`
-- 驗證：`node modules/accounting/tools/test-ledger-review-error-flag.js`；GAS 同名煙測 OK
+- 修改範圍：`ledger_review.html`、`accounting_api.js`、SPEC 15 v1.59、LOG、smoke；Backend `LedgerReviewModule`／`VendorPaymentModule`／SPEC／LOG／smoke
+- 完成內容：錯誤記帳顯示＋≥3 標示；**儲存修改**分攤（`vendor_payment_update` 待審可寫）；**刪除**未匯款（delete ≥3）；bundle `can_edit`／`can_delete`；核准／退回仍 ≥5；`api?v=99`
+- 驗證：`test-ledger-review-error-flag.js`、`test-ledger-review-perm3-view.js`（FE＋GAS）OK
 - Commit／分支：`cursor/payment-review-show-error-flag-886d`；draft [liff#136](https://github.com/nephi4377/liff-checkin/pull/136)、[GAS#118](https://github.com/nephi4377/Backend_GAS/pull/118)
-- 待處理：部署後抽測；勿與 perm3 混淆
+- 待處理：部署後權限 3 抽測改／刪／標示；≥5 核准仍可用；已匯款仍不可刪
 
 ### 2026-10-07｜Cursor Cloud｜權限3僅檢視請款審核（已上線 @402）
 

@@ -1186,7 +1186,8 @@ var AccountingApi = (function () {
       }, 180000);
     },
     vendorPaymentUpdate: function (sessionOrToken, paymentRequestId, patch) {
-      return post({
+      patch = patch || {};
+      var body = {
         action: 'vendor_payment_update',
         auth: resolveAuth(sessionOrToken),
         payment_request_id: paymentRequestId,
@@ -1196,11 +1197,17 @@ var AccountingApi = (function () {
         txn_date: patch.txn_date,
         note: patch.note,
         bank_code: patch.bank_code,
+        branch_name: patch.branch_name,
         account_no: patch.account_no,
         account_name: patch.account_name,
         doc_type: patch.doc_type,
         remit_fee_apply: patch.remit_fee_apply
-      });
+      };
+      // 請款審核 ≥3 儲存分攤（不核准）
+      if (patch.allocations && patch.allocations.length) {
+        body.allocations = patch.allocations;
+      }
+      return post(body);
     },
     vendorPaymentExportCtbc: function (sessionOrToken, paymentRequestIds, options) {
       options = options || {};

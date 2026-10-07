@@ -21,9 +21,10 @@ var app = fs.readFileSync(path.join(root, 'spa/app.js'), 'utf8');
 var api = fs.readFileSync(path.join(root, 'shared/js/accounting_api.js'), 'utf8');
 
 assert(/minPermission:\s*AccountingApi\.SUPERVISOR_MIN_PERMISSION/.test(review), 'ledger_review boot ≥3');
-assert(/查看詳情/.test(review), 'ledger_review has view-only detail button');
-assert(/檢視模式：核准需權限 ≥ 5/.test(review), 'ledger_review vendor view-only hint');
-assert(/applyPanelViewOnly/.test(review), 'ledger_review disables write controls in view-only');
+assert(/修改內容|查看詳情/.test(review), 'ledger_review has detail/edit button for non-approvers');
+assert(/核准.退回需權限 ≥ 5|核准需 ≥5/.test(review), 'ledger_review vendor approve still ≥5 hint');
+assert(/儲存修改/.test(review), 'ledger_review allows ≥3 save content');
+assert(/applyPanelViewOnly/.test(review), 'ledger_review still has view-only helper for locked cases');
 assert(/檢視 ≥3 · 核准 ≥5/.test(index), 'menu tag shows view ≥3 / approve ≥5');
 assert(/linkLedgerReview/.test(index) && /reviewLink\.classList\.remove\('hidden'\)/.test(index),
   'menu shows ledger review for supervisor section');
