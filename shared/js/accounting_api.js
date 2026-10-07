@@ -1338,15 +1338,23 @@ var AccountingApi = (function () {
       }
       return post(body, opts.timeoutMs != null ? opts.timeoutMs : 60000);
     },
-    /** 標註錯誤記帳／請款（權限 ≥3；必填 reason；請款傳 payment_request_id） */
+    /** 標註錯誤記帳／請款（權限 ≥3；必填 reason；請款只傳 payment_request_id，勿帶空 sheet/row） */
     accountingLedgerFlag: function (sessionOrToken, opts) {
       opts = opts || {};
       var body = { action: 'accounting_ledger_flag' };
-      if (opts.sheet) body.sheet = opts.sheet;
-      if (opts.row != null && opts.row !== '') body.row = opts.row;
-      if (opts.ingest_id) body.ingest_id = opts.ingest_id;
-      if (opts.payment_request_id) body.payment_request_id = opts.payment_request_id;
-      if (opts.record_kind) body.record_kind = opts.record_kind;
+      var paymentRequestId = String(opts.payment_request_id || '').trim();
+      var kind = String(opts.record_kind || '').trim().toLowerCase();
+      var isPayment = !!paymentRequestId || kind === 'payment_request' || kind === 'payment';
+      if (isPayment) {
+        body.record_kind = 'payment_request';
+        if (paymentRequestId) body.payment_request_id = paymentRequestId;
+      } else {
+        if (opts.sheet) body.sheet = opts.sheet;
+        var rowNum = opts.row != null && opts.row !== '' ? Number(opts.row) : 0;
+        if (rowNum > 0) body.row = rowNum;
+        if (opts.ingest_id) body.ingest_id = opts.ingest_id;
+        if (opts.record_kind) body.record_kind = opts.record_kind;
+      }
       var reason = String(opts.reason || opts.error_reason || opts.flag_reason || '').trim();
       if (reason) {
         body.reason = reason;

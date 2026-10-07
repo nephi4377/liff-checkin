@@ -6,11 +6,11 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <title>歷史記帳紀錄</title>
-  <!-- cache-bust 2026-10-06-pay-flag：待付款請款＋收支每一列錯誤記帳標示；勿框選 -->
+  <!-- cache-bust 2026-10-07-pay-flag-submit：請款 flag 送 UUID；按鈕縮小 -->
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=94"></script>
+  <script src="../../shared/js/accounting_api.js?v=95"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <script src="../../shared/js/accounting_ui.js?v=32"></script>
@@ -206,23 +206,23 @@
     .hist-edit-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
     /* 標註／刪除置頂，避免被圖片集／長詳情擠到摺疊下方「找不到」 */
     .hist-mod-bar {
-      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
-      margin: 0 0 12px; padding: 10px 12px;
-      border: 1px solid #f9ab00; border-radius: 10px; background: #fff8e8;
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+      margin: 0 0 10px; padding: 6px 8px;
+      border: 1px solid #f9ab00; border-radius: 8px; background: #fff8e8;
       position: sticky; top: 0; z-index: 2;
     }
     .hist-mod-bar .hist-mod-msg { margin: 0; flex: 1 1 100%; }
     .hist-list-flag {
-      display: flex; flex-direction: column; align-items: stretch; gap: 4px;
-      margin-top: 10px; padding: 10px; border-radius: 10px;
-      background: #fff8e8; border: 1px solid #f9ab00;
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      margin-top: 8px; padding: 0; border-radius: 0;
+      background: transparent; border: none;
     }
     .hist-list-flag .btn-flag-warn {
-      width: 100%; padding: 12px 14px; font-size: 16px; font-weight: 800;
-      min-height: 48px;
+      width: auto; padding: 5px 10px; font-size: 12px; font-weight: 700;
+      min-height: 32px; line-height: 1.2;
     }
     .hist-list-flag-hint {
-      font-size: 12px; color: #8a5a00; font-weight: 600;
+      font-size: 11px; color: #8a5a00; font-weight: 600;
     }
     .hist-flag-pin {
       margin: 0 0 12px; padding: 12px; border-radius: 12px;
@@ -261,7 +261,7 @@
     .hist-flag-reason-actions {
       display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;
     }
-    .hist-flag-reason-actions .btn-flag-warn { flex: 1 1 auto; min-height: 44px; }
+    .hist-flag-reason-actions .btn-flag-warn { flex: 1 1 auto; min-height: 40px; font-size: 14px; }
     .hist-flag-reason-actions .btn-ghost { flex: 0 0 auto; }
     .hist-edit-form {
       margin-top: 12px; padding: 12px; border: 1px solid #dadce0; border-radius: 10px;
@@ -285,7 +285,11 @@
     .btn-edit-primary:disabled { opacity: .5; cursor: default; }
     .btn-flag-warn {
       background: #fef7e0; color: #b06000; border: 1px solid #f9ab00;
-      border-radius: 8px; padding: 8px 12px; font-size: 14px; font-weight: 600; cursor: pointer;
+      border-radius: 6px; padding: 5px 10px; font-size: 12px; font-weight: 600;
+      cursor: pointer; min-height: 32px; line-height: 1.2;
+    }
+    .hist-mod-bar .btn-flag-warn {
+      padding: 5px 10px; font-size: 12px; font-weight: 700; min-height: 32px;
     }
     .btn-delete-danger {
       background: #fce8e6; color: #c5221f; border: 1px solid #f28b82;
@@ -459,6 +463,42 @@
       function isPaymentRequestItem(it) {
         return !!(it && (it.record_kind === 'payment_request' || it.payment_request_id) &&
           it.record_kind !== 'ledger');
+      }
+
+      /** 請款 UUID：欄位優先，其次 pr:… 鍵（勿把空 sheet/row 當定位） */
+      function resolvePaymentRequestId(it) {
+        if (!it) return '';
+        var pid = String(it.payment_request_id || '').trim();
+        if (pid) return pid;
+        var key = historyItemKey(it);
+        if (key && key.indexOf('pr:') === 0) {
+          pid = key.slice(3).trim();
+          if (pid) return pid;
+        }
+        return '';
+      }
+
+      /** 填完原因後送出的 flag payload：請款只帶 UUID；收支帶分頁列／ingest */
+      function buildFlagSubmitPayload(it, reason) {
+        var payload = { reason: String(reason || '').trim() };
+        if (isPaymentRequestItem(it)) {
+          payload.record_kind = 'payment_request';
+          payload.payment_request_id = resolvePaymentRequestId(it);
+          return payload;
+        }
+        payload.record_kind = 'ledger';
+        if (it && it.sheet) payload.sheet = it.sheet;
+        if (it && it.row != null && it.row !== '' && Number(it.row) > 0) payload.row = it.row;
+        if (it && it.ingest_id) payload.ingest_id = it.ingest_id;
+        return payload;
+      }
+
+      function friendlyFlagErrorMessage(data, it) {
+        var msg = (data && data.message) || '標示失敗';
+        if (isPaymentRequestItem(it) && /分頁列號|記帳編號/.test(String(msg))) {
+          return '這筆請款標示後端尚未上線（需更新 Web App）。請通知工程師刪除舊 version 後重新部署。';
+        }
+        return msg;
       }
 
       function recordKindLabel(it) {
@@ -689,14 +729,22 @@
         }
 
         function locOpts() {
+          if (isPaymentRequestItem(merged) || isPaymentRequestItem(summaryItem)) {
+            var src = isPaymentRequestItem(merged) ? merged : summaryItem;
+            return {
+              record_kind: 'payment_request',
+              payment_request_id: resolvePaymentRequestId(src) ||
+                resolvePaymentRequestId(merged) ||
+                resolvePaymentRequestId(summaryItem)
+            };
+          }
+          var rowVal = merged.row != null ? merged.row : (summaryItem && summaryItem.row);
           var o = {
             sheet: merged.sheet || (summaryItem && summaryItem.sheet),
-            row: merged.row != null ? merged.row : (summaryItem && summaryItem.row),
             ingest_id: merged.ingest_id || (summaryItem && summaryItem.ingest_id),
-            payment_request_id: merged.payment_request_id ||
-              (summaryItem && summaryItem.payment_request_id) || '',
-            record_kind: isPaymentRequestItem(merged) ? 'payment_request' : 'ledger'
+            record_kind: 'ledger'
           };
+          if (rowVal != null && rowVal !== '' && Number(rowVal) > 0) o.row = rowVal;
           return o;
         }
 
@@ -720,11 +768,17 @@
                 setModMsg('', true);
                 return;
               }
+              var flagPayload = buildFlagSubmitPayload(merged, reason);
+              if (flagPayload.record_kind === 'payment_request' && !flagPayload.payment_request_id) {
+                flagBtn.disabled = false;
+                setModMsg('找不到請款單編號，無法標示', false);
+                return;
+              }
               setModMsg('標示中…', true);
-              return AccountingApi.accountingLedgerFlag(sessionRef, Object.assign({}, locOpts(), { reason: reason })).then(function (data) {
+              return AccountingApi.accountingLedgerFlag(sessionRef, flagPayload).then(function (data) {
                 flagBtn.disabled = false;
                 if (!data || !data.success) {
-                  setModMsg((data && data.message) || '標示失敗', false);
+                  setModMsg(friendlyFlagErrorMessage(data, merged), false);
                   return;
                 }
                 setModMsg(data.message || '已標示錯誤記帳', true);
@@ -1267,21 +1321,16 @@
                   listFlagBtn.disabled = false;
                   return null;
                 }
-                var payload = {
-                  reason: reason,
-                  record_kind: isPaymentRequestItem(it) ? 'payment_request' : 'ledger'
-                };
-                if (isPaymentRequestItem(it)) {
-                  payload.payment_request_id = it.payment_request_id;
-                } else {
-                  payload.sheet = it.sheet;
-                  payload.row = it.row;
-                  payload.ingest_id = it.ingest_id;
+                var payload = buildFlagSubmitPayload(it, reason);
+                if (payload.record_kind === 'payment_request' && !payload.payment_request_id) {
+                  listFlagBtn.disabled = false;
+                  window.alert('找不到請款單編號，無法標示');
+                  return null;
                 }
                 return AccountingApi.accountingLedgerFlag(sessionRef, payload).then(function (data) {
                   listFlagBtn.disabled = false;
                   if (!data || !data.success) {
-                    window.alert((data && data.message) || '標示失敗');
+                    window.alert(friendlyFlagErrorMessage(data, it));
                     return;
                   }
                   try { loadLedgerHistory(); } catch (eReload) {}
