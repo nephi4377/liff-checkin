@@ -24,6 +24,8 @@ assert(/minPermission:\s*AccountingApi\.SUPERVISOR_MIN_PERMISSION/.test(review),
 assert(/修改內容|查看詳情/.test(review), 'ledger_review has detail/edit button for non-approvers');
 assert(/核准.退回需權限 ≥ 5|核准需 ≥5/.test(review), 'ledger_review vendor approve still ≥5 hint');
 assert(/儲存修改/.test(review), 'ledger_review allows ≥3 save content');
+assert(/廠商／分攤／稅別／備註/.test(review), 'ledger_review ≥3 edits vendor/alloc/tax/note');
+assert(!/錯誤記帳標示/.test(review), 'ledger_review has no flag-write UI');
 assert(/applyPanelViewOnly/.test(review), 'ledger_review still has view-only helper for locked cases');
 assert(/檢視 ≥3 · 核准 ≥5/.test(index), 'menu tag shows view ≥3 / approve ≥5');
 assert(/linkLedgerReview/.test(index) && /reviewLink\.classList\.remove\('hidden'\)/.test(index),

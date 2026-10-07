@@ -8,7 +8,9 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_tax_mode.js?v=6"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=99"></script>
+  <script src="../../shared/js/accounting_api.js?v=100"></script>
+  <script src="../../shared/js/accounting_cache.js?v=34"></script>
+  <script src="../../shared/js/accounting_form_helpers.js?v=6"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
@@ -40,31 +42,19 @@
     .tag.income { background: #e6f4ea; color: #137333; }
     .tag.error-flag { background: #fef7e0; color: #b06000; font-weight: 700; }
     .error-flag-reason { color: #b06000; font-size: 13px; margin-top: 4px; }
-    .btn-flag-warn {
-      background: #fef7e0; color: #b06000; border: 1px solid #f9ab00;
-      border-radius: 6px; padding: 8px 12px; font-size: 13px; font-weight: 700;
-      cursor: pointer; min-height: 36px; line-height: 1.2;
-    }
-    .btn-flag-warn:disabled { opacity: .55; cursor: not-allowed; }
     .btn-danger { background: #fce8e6; color: #c5221f; border: 1px solid #f28b82; }
-    .flag-reason-mask {
-      position: fixed; inset: 0; z-index: 80; background: rgba(32,33,36,.45);
-      display: flex; align-items: flex-end; justify-content: center; padding: 16px;
+    .vendor-combo-wrap { position: relative; }
+    .vendor-combo-panel {
+      position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 20;
+      background: #fff; border: 1px solid #ccc; border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.12); max-height: 220px; overflow: auto;
     }
-    .flag-reason-mask.hidden { display: none !important; }
-    .flag-reason-sheet {
-      width: 100%; max-width: 420px; background: #fff; border-radius: 14px;
-      padding: 16px; box-shadow: 0 8px 24px rgba(0,0,0,.18);
+    .vendor-combo-item {
+      display: block; width: 100%; text-align: left; border: none; background: #fff;
+      padding: 10px 12px; font-size: 15px; cursor: pointer;
     }
-    .flag-reason-sheet h3 { margin: 0 0 8px; font-size: 17px; font-weight: 800; }
-    .flag-reason-sheet p { margin: 0 0 10px; font-size: 13px; color: #5f6368; line-height: 1.45; }
-    .flag-reason-sheet textarea {
-      width: 100%; min-height: 88px; box-sizing: border-box;
-      padding: 10px; border: 1px solid #dadce0; border-radius: 10px;
-      font-size: 16px; font-family: inherit; resize: vertical;
-    }
-    .flag-reason-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-    .flag-reason-actions .btn-flag-warn { flex: 1 1 auto; }
+    .vendor-combo-item:hover, .vendor-combo-item.active { background: #e8f0fe; }
+    .vendor-combo-empty { padding: 10px 12px; font-size: 13px; color: #777; }
     .actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     #msg { color: #c5221f; font-size: 14px; margin: 8px 0; }
     #ok { color: #137333; font-size: 14px; margin: 8px 0; }
@@ -109,7 +99,7 @@
       <button type="button" class="tab-btn active" data-tab="vendor">廠商請款</button>
       <button type="button" class="tab-btn" data-tab="customer_receipt">客戶收款核準</button>
     </div>
-    <p class="sub" id="tabDesc">只審「待付款申請」（未實現）。權限 ≥3 可改分攤／儲存、錯誤記帳標示、刪除未匯款單；核准／退回需 ≥5。</p>
+    <p class="sub" id="tabDesc">只審「待付款申請」（未實現）。權限 ≥3 可改廠商／分攤／稅別／備註並儲存、刪除未匯款單；核准／退回需 ≥5。</p>
     <div id="msg" role="alert"></div>
     <div id="ok" aria-live="polite"></div>
 
@@ -154,39 +144,26 @@
     </div>
   </div>
 
-  <div id="reviewFlagReasonMask" class="flag-reason-mask hidden" role="dialog" aria-modal="true" aria-labelledby="reviewFlagReasonTitle">
-    <div class="flag-reason-sheet">
-      <h3 id="reviewFlagReasonTitle">錯誤記帳標示</h3>
-      <p>請填寫錯誤記帳原因（必填）。標示後不改變審核／匯款狀態；核准／退回仍需較高權限。</p>
-      <label for="reviewFlagReasonInput" class="hidden">錯誤記帳原因</label>
-      <textarea id="reviewFlagReasonInput" maxlength="120" placeholder="例：金額打錯、對象選錯" autocomplete="off"></textarea>
-      <div class="flag-reason-actions">
-        <button type="button" class="btn-flag-warn" id="reviewFlagReasonOk">確認標示</button>
-        <button type="button" class="btn btn-muted" id="reviewFlagReasonCancel">取消</button>
-      </div>
-    </div>
-  </div>
-
   <script>
     (function () {
       var session = null;
       var activeTab = 'vendor';
       var canApproveVendor = false;
       var canApproveIncome = false;
-      var canFlagError = false;
       var canEditContent = false;
       var canDeletePayment = false;
       var listItems = [];
+      var vendorCatalog = [];
       var ui = AccountingUi.feedback();
       var TAX_RATE = 0.05;
       var TAX_NOTE_MARKER = '【稅別】';
 
       var TAB_DESC = {
-        vendor: '只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>改分攤。權限 ≥3 可<strong>儲存修改</strong>／<strong>錯誤記帳標示</strong>／<strong>刪除</strong>未匯款單；核准／退回 ≥5。已標示黃框置頂。',
+        vendor: '只審「待付款申請」（未實現）。資料沒問題可<strong>快速核准</strong>；有疑慮請點<strong>審核</strong>。權限 ≥3 可改<strong>廠商／分攤／稅別／備註</strong>並<strong>儲存修改</strong>、<strong>刪除</strong>未匯款；核准／退回 ≥5。',
         customer_receipt: '審核<strong>現金收款財務簽核</strong>與<strong>案件收入／客戶收款</strong>（收支登錄收入登錄後<strong>直接推送客戶確認</strong>並寫入案件毛利；財務可選擇性覆核，不阻擋客戶確認）。'
       };
       var TAB_DESC_VIEW_ONLY = {
-        vendor: '可改分攤並<strong>儲存修改</strong>、錯誤記帳標示、刪除未匯款（≥3）。核准／退回需權限 ≥ 5。已標示黃框置頂。',
+        vendor: '可改<strong>廠商／分攤／稅別／備註</strong>並<strong>儲存修改</strong>、刪除未匯款（≥3）。核准／退回需權限 ≥ 5。',
         customer_receipt: '檢視現金收款與客戶收款待審列表（唯讀）。財務簽核／核准入帳需權限 ≥ 4。'
       };
 
@@ -296,14 +273,6 @@
       function sessionPerm() {
         return Number((session && session.auth && session.auth.permission) || 0);
       }
-      function canFlagItem(item) {
-        if (!isPaymentRequest(item)) return false;
-        if (!String(item.payment_request_id || '').trim()) return false;
-        if (isErrorFlagged(item)) return false;
-        if (item.can_flag === false) return false;
-        if (item.can_flag === true) return true;
-        return canFlagError || sessionPerm() >= AccountingApi.SUPERVISOR_MIN_PERMISSION;
-      }
       function isUnpaidPayment(item) {
         return isPaymentRequest(item) && String(item.payment_status || '') !== '已匯款';
       }
@@ -319,143 +288,30 @@
         if (item.can_delete === true) return true;
         return canDeletePayment || sessionPerm() >= AccountingApi.SUPERVISOR_MIN_PERMISSION;
       }
-      /** 頁內填原因（勿用 window.prompt——LINE／iframe 常被擋） */
-      function promptFlagReason() {
-        return new Promise(function (resolve) {
-          var mask = document.getElementById('reviewFlagReasonMask');
-          var input = document.getElementById('reviewFlagReasonInput');
-          var okBtn = document.getElementById('reviewFlagReasonOk');
-          var cancelBtn = document.getElementById('reviewFlagReasonCancel');
-          if (!mask || !input || !okBtn || !cancelBtn) {
-            resolve(null);
-            return;
-          }
-          var settled = false;
-          function finish(val) {
-            if (settled) return;
-            settled = true;
-            mask.classList.add('hidden');
-            okBtn.removeEventListener('click', onOk);
-            cancelBtn.removeEventListener('click', onCancel);
-            mask.removeEventListener('click', onMask);
-            document.removeEventListener('keydown', onKey);
-            resolve(val);
-          }
-          function onOk() {
-            var reason = String(input.value || '').replace(/\s+/g, ' ').trim();
-            if (!reason) {
-              window.alert('請填寫錯誤記帳原因後再標示。');
-              try { input.focus(); } catch (eF) {}
-              return;
-            }
-            if (reason.length > 120) reason = reason.slice(0, 120);
-            finish(reason);
-          }
-          function onCancel() { finish(null); }
-          function onMask(e) {
-            if (e.target === mask) finish(null);
-          }
-          function onKey(e) {
-            if (e.key === 'Escape') finish(null);
-          }
-          input.value = '';
-          mask.classList.remove('hidden');
-          okBtn.addEventListener('click', onOk);
-          cancelBtn.addEventListener('click', onCancel);
-          mask.addEventListener('click', onMask);
-          document.addEventListener('keydown', onKey);
-          setTimeout(function () {
-            try { input.focus(); } catch (eFocus) {}
-          }, 30);
-        });
-      }
-      function applyFlaggedToListItem(item, reason, data) {
-        var id = String(item.payment_request_id || '');
-        var patch = {
-          error_flagged: true,
-          error_flagged_at: (data && data.error_flagged_at) || '',
-          error_flagged_by: (data && data.error_flagged_by) ||
-            ((session && session.auth && session.auth.display_name) || ''),
-          error_flag_reason: (data && data.error_flag_reason) || reason,
-          can_flag: false
-        };
-        if (data && data.item) {
-          if (data.item.error_flagged_at) patch.error_flagged_at = data.item.error_flagged_at;
-          if (data.item.error_flagged_by) patch.error_flagged_by = data.item.error_flagged_by;
-          if (data.item.error_flag_reason) patch.error_flag_reason = data.item.error_flag_reason;
-        }
-        Object.assign(item, patch);
-        for (var i = 0; i < listItems.length; i++) {
-          if (String(listItems[i].payment_request_id || '') === id) {
-            Object.assign(listItems[i], patch);
-            break;
-          }
-        }
-        if (typeof AccountingListCache !== 'undefined') {
-          AccountingListCache.patch(session, listCacheKey(), function (cached) {
-            if (!cached || !cached.items) return;
-            cached.items.forEach(function (it) {
-              if (String(it.payment_request_id || '') === id) Object.assign(it, patch);
-            });
-          });
-        }
-        var box = document.getElementById('list');
-        if (!box) return;
-        box.innerHTML = '';
-        listItems.forEach(function (row) { box.appendChild(renderItem(row)); });
-        if (!listItems.length) box.innerHTML = '<p class="sub">沒有符合的紀錄</p>';
-        updateBulkBar();
-      }
-      async function runFlagError(item, btn) {
-        if (!canFlagItem(item)) return;
-        if (typeof AccountingApi.accountingLedgerFlag !== 'function') {
-          setMsg('標示功能尚未就緒');
-          return;
-        }
-        var pid = String(item.payment_request_id || '').trim();
-        if (!pid) {
-          setMsg('找不到請款單編號，無法標示');
-          return;
-        }
-        if (btn) btn.disabled = true;
+      function ensureVendorCatalog() {
+        if (typeof AccountingCache === 'undefined') return vendorCatalog;
         try {
-          var reason = await promptFlagReason();
-          if (!reason) {
-            if (btn) btn.disabled = false;
-            return;
-          }
-          ui.clear();
-          setOk('標示中…');
-          var data = await AccountingApi.accountingLedgerFlag(session, {
-            record_kind: 'payment_request',
-            payment_request_id: pid,
-            reason: reason
-          });
-          if (!data || !data.success) {
-            setMsg((data && data.message) || '標示失敗，請再試');
-            if (btn) btn.disabled = false;
-            return;
-          }
-          setOk(data.message || '已標示錯誤記帳');
-          applyFlaggedToListItem(item, reason, data);
-        } catch (e) {
-          setMsg((e && e.message) || '標示失敗，請再試');
-          if (btn) btn.disabled = false;
-        }
+          var list = AccountingCache.vendors(session) || AccountingCache.peekVendors() || [];
+          if (list && list.length) vendorCatalog = list;
+        } catch (eV) {}
+        return vendorCatalog;
       }
-      function appendFlagButton(actions, item) {
-        if (!canFlagItem(item)) return;
-        var flagBtn = document.createElement('button');
-        flagBtn.type = 'button';
-        flagBtn.className = 'btn-flag-warn';
-        flagBtn.textContent = '錯誤記帳標示';
-        flagBtn.title = '權限 ≥3 可標示；必填原因；不改審核狀態';
-        flagBtn.addEventListener('click', function (e) {
-          e.stopPropagation();
-          if (itemQueueBusy(itemCacheId(item))) return;
-          runFlagError(item, flagBtn);
-        });
-        actions.appendChild(flagBtn);
+      function bindVendorCombobox(panel, item) {
+        var inp = panel.querySelector('.inp-vendor');
+        if (!inp || typeof AccountingFormHelpers === 'undefined' ||
+            !AccountingFormHelpers.initVendorCombobox) return;
+        ensureVendorCatalog();
+        inp.value = String(item.party_name || item.vendor_name || '').trim();
+        if (item.vendor_id) inp.dataset.vendorId = String(item.vendor_id);
+        AccountingFormHelpers.initVendorCombobox(inp, function () {
+          return ensureVendorCatalog();
+        }, { minChars: 1, maxItems: 10 });
+        if (typeof AccountingCache !== 'undefined' && AccountingCache.needsStaffBootstrap &&
+            AccountingCache.needsStaffBootstrap(session)) {
+          AccountingCache.load(session, true).then(function () {
+            ensureVendorCatalog();
+          }).catch(function () {});
+        }
       }
       async function saveVendorContent(item, patch) {
         patch = patch || {};
@@ -474,6 +330,10 @@
           item.summary = data.item_desc;
           item.item_desc = data.item_desc;
         }
+        if (data.vendor_name != null) item.party_name = data.vendor_name;
+        if (data.vendor_id != null) item.vendor_id = data.vendor_id;
+        if (patch.vendor_id) item.vendor_id = patch.vendor_id;
+        if (patch.vendor_name) item.party_name = patch.vendor_name;
         if (patch.note != null) item.note = patch.note;
         if (patch.allocations) {
           item.allocations = patch.allocations.slice();
@@ -486,6 +346,8 @@
               project_no: item.project_no,
               summary: item.summary,
               note: item.note,
+              party_name: item.party_name,
+              vendor_id: item.vendor_id,
               allocations: item.allocations,
               has_allocations: item.has_allocations
             });
@@ -993,6 +855,13 @@
         var patch = { allocations: rows };
         var noteEl = panel.querySelector('.inp-note');
         if (noteEl) patch.note = noteEl.value.trim();
+        var vendorInp = panel.querySelector('.inp-vendor');
+        if (vendorInp) {
+          var vid = String(vendorInp.dataset.vendorId || '').trim();
+          var vname = String(vendorInp.value || '').trim();
+          if (vid) patch.vendor_id = vid;
+          if (vname) patch.vendor_name = vname;
+        }
         return patch;
       }
 
@@ -1215,11 +1084,15 @@
         }
         actionHtml += '</div>';
         panel.innerHTML =
-          '<label>分攤明細（案號＋金額，可多案；扣款填負數）' +
+          (allowEdit
+            ? ('<label>廠商</label>' +
+              '<input type="text" class="inp-vendor" placeholder="搜尋名冊廠商" autocomplete="off" />')
+            : '') +
+          '<label' + (allowEdit ? ' style="margin-top:10px"' : '') + '>分攤明細（案號＋金額，可多案；扣款填負數）' +
           (ready || !allowEdit ? '' : ' <span class="need">需補齊</span>') + '</label>' +
           '<label style="margin-top:10px">稅別模式（整張統一）</label>' +
           (allowEdit
-            ? '<p class="sub" style="margin:4px 0 6px">「未稅／含稅自選」：各列自己勾含稅，金額不改。整張加稅：各列只填未稅，稅在底下一次加。不要用「逐筆加 5%」除非要逐列改金額。≥3 可先<strong>儲存修改</strong>；核准仍 ≥5。</p>'
+            ? '<p class="sub" style="margin:4px 0 6px">≥3 可改<strong>廠商／分攤／稅別／備註</strong>並<strong>儲存修改</strong>（不核准）。核准／退回仍 ≥5。</p>'
             : '<p class="sub" style="margin:4px 0 6px">目前無法修改內容。</p>') +
           '<div class="tax-mode-host"></div>' +
           '<div class="alloc-list"></div>' +
@@ -1230,12 +1103,15 @@
             ? '<p class="bank-line">匯款：' + (item.bank_code || '—') + ' / ' + (item.account_no || '—') +
               ' / ' + (item.account_name || item.party_name || '—') + '</p>'
             : '') +
-          '<input type="hidden" class="inp-note" value="" />' +
-          '<p class="sub note-line hidden">備註：<span class="note-text"></span></p>' +
+          (allowEdit
+            ? ('<label style="margin-top:10px">備註</label>' +
+              '<textarea class="inp-note" rows="2" placeholder="選填備註"></textarea>')
+            : ('<input type="hidden" class="inp-note" value="" />' +
+              '<p class="sub note-line hidden">備註：<span class="note-text"></span></p>')) +
           (isErrorFlagged(item)
-            ? ('<p class="error-flag-reason"><strong>錯誤記帳</strong>' +
+            ? ('<p class="error-flag-reason">歷史已標錯誤' +
               (item.error_flagged_by ? '（' + item.error_flagged_by + '）' : '') +
-              (errorFlagReason(item) ? '：' + errorFlagReason(item) : '（已標示）') +
+              (errorFlagReason(item) ? '：' + errorFlagReason(item) : '') +
               '</p>')
             : '') +
           (allowApprove
@@ -1260,6 +1136,7 @@
           }
         }
         syncTaxNoteForPanel(panel);
+        if (allowEdit) bindVendorCombobox(panel, item);
 
         if (!allowEdit) {
           applyPanelViewOnly(panel, '（無法修改：需權限 ≥ 3 且未匯款）');
@@ -1543,7 +1420,7 @@
           actions.appendChild(btnView);
           var hint = document.createElement('span');
           hint.className = 'sub';
-          hint.textContent = '（核准需 ≥5；≥3 可改／刪／標示）';
+          hint.textContent = '（核准需 ≥5；≥3 可改廠商／分攤／稅別／備註／刪除）';
           actions.appendChild(hint);
         } else if (!pending && isRequest && canEditItem(item) && reviewPanel) {
           var btnEditDone = document.createElement('button');
@@ -1558,9 +1435,8 @@
           actions.appendChild(btnEditDone);
         }
 
-        // ≥3：錯誤記帳標示／刪除未匯款；核准／退回另設門檻
+        // ≥3：刪除未匯款；核准／退回另設門檻
         if (isRequest) {
-          appendFlagButton(actions, item);
           appendDeleteButton(actions, item);
         }
 
@@ -1732,9 +1608,6 @@
         }
         canApproveVendor = !!data.can_approve_vendor;
         canApproveIncome = !!(data.can_approve_income || data.can_approve_customer_receipt);
-        canFlagError = data.can_flag_error != null
-          ? !!data.can_flag_error
-          : (sessionPerm() >= AccountingApi.SUPERVISOR_MIN_PERMISSION);
         canEditContent = data.can_edit_content != null
           ? !!data.can_edit_content
           : (sessionPerm() >= AccountingApi.SUPERVISOR_MIN_PERMISSION);
@@ -1831,7 +1704,7 @@
       function viewOnlyUserExtra(sess) {
         var perm = Number((sess && sess.auth && sess.auth.permission) || 0);
         if (perm < AccountingApi.VENDOR_PAYMENT_APPROVE_MIN_PERMISSION) {
-          return '核准需 ≥5；≥3 可改／刪／標示';
+          return '核准需 ≥5；≥3 可改廠商／分攤／稅別／備註／刪除';
         }
         return '';
       }

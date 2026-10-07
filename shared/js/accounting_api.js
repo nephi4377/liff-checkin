@@ -124,7 +124,7 @@ var AccountingApi = (function () {
       var attempt = 0;
       var maxAttempts = 3;
       // 歷史記帳：GAS 慢／404 時重試只會把 Abort 疊滿 90s；一次失敗即可（後端已有軟截止）
-      // cache-bust companions: accounting_ingest.html loads this as ?v=95（疑重頁內確認）
+      // cache-bust companions: ledger_review.html loads this as ?v=100（≥3 改廠商／分攤）
       if (actionName === 'accounting_ledger_recent') maxAttempts = 1;
       while (attempt < maxAttempts) {
         attempt += 1;
@@ -1203,7 +1203,9 @@ var AccountingApi = (function () {
         doc_type: patch.doc_type,
         remit_fee_apply: patch.remit_fee_apply
       };
-      // 請款審核 ≥3 儲存分攤（不核准）
+      // 請款審核 ≥3：改廠商／分攤／備註（不核准；不當錯誤記帳標示入口）
+      if (patch.vendor_id) body.vendor_id = patch.vendor_id;
+      if (patch.vendor_name) body.vendor_name = patch.vendor_name;
       if (patch.allocations && patch.allocations.length) {
         body.allocations = patch.allocations;
       }
