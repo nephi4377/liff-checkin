@@ -1246,7 +1246,8 @@ var AccountingApi = (function () {
         deferred_token: deferredToken || ''
       }, 120000);
     },
-    /** 歷史記帳紀錄查詢（權限 ≥3；mine_only 預設 false＝全部人；近 N 天＝記帳時間／送出時間，不是交易日）
+    /** 歷史記帳紀錄查詢（權限 ≥3；mine_only 預設 false＝全部人；日期窗＝記帳時間／送出時間，不是交易日）
+     * 預設近 30 天；可自訂更早區間（無 7／30 天硬上限）。逾時靠後端分塊／軟截止＋本呼叫 90s Abort。
      * 排序契約：後端 sort_basis=recorded_at；前端亦只依 recorded_at 渲染（v85+）。
      * record_kind：all（預設＝待付款請款＋收支登錄）｜ledger｜payment_request。
      * 暫緩強制僅限個人（老闆：已用 ≥3 閘門，勿再強制 mine_only）。 */
