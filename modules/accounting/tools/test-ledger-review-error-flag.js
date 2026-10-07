@@ -22,7 +22,7 @@ assert(/隱藏已標示錯誤/.test(html), 'filter option: exclude flagged');
 assert(/已標示錯誤記帳/.test(html), 'list badge copy');
 assert(/is-error-flagged/.test(html), 'flagged row highlight class');
 assert(/error_flagged/.test(html) && /buildFilter/.test(html), 'passes error_flagged in filter');
-assert(/accounting_api\.js\?v=100/.test(html), 'api cache bust v=100');
+assert(/accounting_api\.js\?v=101/.test(html), 'api cache bust v=101');
 assert(/錯誤原因：/.test(html) || /歷史已標錯誤/.test(html), 'shows error reason on list/detail');
 assert(/沒有已標示「錯誤記帳」的請款/.test(html), 'empty hint for only-flagged filter');
 assert(!/reviewFlagReasonMask/.test(html), 'no flag-reason dialog on review');

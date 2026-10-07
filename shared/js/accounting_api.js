@@ -124,7 +124,7 @@ var AccountingApi = (function () {
       var attempt = 0;
       var maxAttempts = 3;
       // 歷史記帳：GAS 慢／404 時重試只會把 Abort 疊滿 90s；一次失敗即可（後端已有軟截止）
-      // cache-bust companions: ledger_review.html loads this as ?v=100（≥3 改廠商／分攤）
+      // cache-bust companions: ledger_review.html loads this as ?v=101（審核包 timeout／N+1）
       if (actionName === 'accounting_ledger_recent') maxAttempts = 1;
       while (attempt < maxAttempts) {
         attempt += 1;
@@ -201,6 +201,10 @@ var AccountingApi = (function () {
     }
     if (timeoutMs === undefined && body && body.action === 'accounting_ledger_detail') {
       ms = LEDGER_DETAIL_TIMEOUT_MS;
+    }
+    // 審核包：後端已去 N+1；仍給 90s 餘裕（Sheets 冷啟動／待審筆數多）
+    if (timeoutMs === undefined && body && body.action === 'ledger_review_bundle') {
+      ms = 90000;
     }
     return postToUrl_(GAS_API, body, ms, '會計');
   }

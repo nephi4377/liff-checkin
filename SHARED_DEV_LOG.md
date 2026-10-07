@@ -20,7 +20,7 @@
 
 ## 目前進行中
 
-（無）
+- Cursor Cloud｜請款審核讀取審核包逾時（N+1 memo＋FE 90s）｜draft
 
 ## 最近完成
 
