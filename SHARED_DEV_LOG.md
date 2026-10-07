@@ -20,7 +20,7 @@
 
 ## 目前進行中
 
-（無）
+- Cursor Cloud｜重複記帳提醒失效：`accounting_ingest.html`／`accounting_api.js`（頁內確認＋勿當 API 失敗）；Backend `SheetWriter` 疑重日期正規化
 
 ## 最近完成
 
