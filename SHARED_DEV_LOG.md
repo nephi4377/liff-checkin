@@ -29,7 +29,7 @@
 - 修改範圍：`ledger_history.html`、`accounting_api.js?v=101`、SPEC 15、LOG；Backend `SheetWriter`／`AccountingLineIngest`／SPEC／test／LOG
 - 完成內容：預設近 **30** 天；取消 7／30 天硬上限（可自訂更早）；空狀態／快捷建議近 90 天；保留分塊／軟截止／FE 90s Abort
 - 驗證：`node tools/test-ledger-recent-history.js` OK
-- Commit／線上：見 PR `cursor/ledger-history-no-7day-cap-9a71`（#77／#99 已合，另開修正 PR）
+- Commit／線上：[liff#138](https://github.com/nephi4377/liff-checkin/pull/138)、[GAS#120](https://github.com/nephi4377/Backend_GAS/pull/120)（#77／#99 已合，另開修正）
 - 待處理：等你說部署；抽測自訂 >30 天區間
 
 
