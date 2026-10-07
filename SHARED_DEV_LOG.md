@@ -24,29 +24,29 @@
 
 ## 最近完成
 
-### 2026-10-07｜Cursor Cloud｜權限3僅檢視請款審核（draft PR，未部署）
+### 2026-10-07｜Cursor Cloud｜權限3僅檢視請款審核（已上線 @402）
 
 - 修改範圍：`ledger_review.html`、`index.html`、`spa/app.js`、`HubLeftSidebar.js`、SPEC 15／19／流程、help；Backend `LedgerReviewModule`／`VendorPaymentModule`／SPEC／LOG
 - 完成內容：≥3 可開請款審核列表／詳情／附件；隱藏核准／退回／改分攤；後端 list／bundle 檢視 ≥3，approve／reject 仍 ≥5
-- 驗證：`node modules/accounting/tools/test-ledger-review-perm3-view.js`；GAS `tools/test-ledger-review-perm3-view.js`
-- Commit／線上：見 PR `cursor/perm3-view-only-payment-review-d209`；**未部署**
-- 待處理：merge 後 Pages＋clasp；權限 3 抽測可看不可核准
+- 驗證：`node modules/accounting/tools/test-ledger-review-perm3-view.js`；GAS 同名煙測；正式站 curl「查看詳情」「檢視 ≥3 · 核准 ≥5」
+- Commit／線上：[liff#135](https://github.com/nephi4377/liff-checkin/pull/135) → Pages [`37564166303`](https://github.com/nephi4377/liff-checkin/actions/runs/37564166303)；[GAS#117](https://github.com/nephi4377/Backend_GAS/pull/117) → [`37564150322`](https://github.com/nephi4377/Backend_GAS/actions/runs/37564150322) clasp **@402**
+- 待處理：權限 3 抽測可看不可核准；權限 5 核准仍可用
 
-### 2026-10-07｜Cursor Cloud｜重複記帳提醒頁內確認（FE 已上線；GAS 待版號）
+### 2026-10-07｜Cursor Cloud｜重複記帳提醒頁內確認（FE 已上線；GAS 隨 @402）
 
 - 修改範圍：`accounting_ingest.html`（頁內 `#dupConfirmOverlay`）、`accounting_api.js?v=95` soft `needs_dup_confirm`、SPEC 15 v1.39、LOG；Backend `SheetWriter` 日期正規化＋`skipDedup`（[GAS#116](https://github.com/nephi4377/Backend_GAS/pull/116)）
 - 根因：`window.confirm` 在主控台巢狀 iframe＋await 後常被擋；疑重回應被當 API 失敗噴錯誤回報
 - 驗證：`test-form-dedup-clear.js` OK；正式站已含 `askDupConfirm`／`api?v=95`
-- Commit／線上：FE merge [PR #134](https://github.com/nephi4377/liff-checkin/pull/134)／Pages `37557772079`；GAS merge #116、`clasp push` 已進 HEAD，但 **200 versions 滿** → deploy @397 未更新（DELETE API 404；需人工清版號後再 clasp deploy）
-- 待處理：人工刪舊 Apps Script versions 後重跑 accounting-gas clasp；抽測同類型＋金額＋日期再送
+- Commit／線上：FE merge [PR #134](https://github.com/nephi4377/liff-checkin/pull/134)／Pages `37557772079`；GAS merge #116 後隨 [#117](https://github.com/nephi4377/Backend_GAS/pull/117) clasp **@402** 一併上線（先前卡 200 versions 已解）
+- 待處理：抽測同類型＋金額＋日期再送
 
-### 2026-10-07｜Cursor Cloud｜請款錯誤標示送出修復＋按鈕縮小
+### 2026-10-07｜Cursor Cloud｜請款錯誤標示送出修復＋按鈕縮小（隨 @402）
 
 - 修改範圍：`ledger_history.html`、`accounting_api.js?v=95`、SPEC 15、LOG、smoke；Backend `AccountingLineIngest`／CI prune／SPEC／test
-- 完成內容：填原因送出時請款只帶 UUID（例 `568e45d0-…`），不帶空 sheet/row；按鈕改小仍可點；友善提示若後端仍 @397
+- 完成內容：填原因送出時請款只帶 UUID（例 `568e45d0-…`），不帶空 sheet/row；按鈕改小仍可點
 - 驗證：`node modules/accounting/tools/test-ledger-flag-button-visible.js`；GAS flag／recent smoke OK
-- Commit／線上：見 PR `cursor/payment-flag-submit-fix-8a21`；**clasp deploy 仍可能卡 200 versions**
-- 待處理：Nephi 刪 ≥25 舊 version → deploy 新 @N → 點 新弘 請款詳情「錯誤記帳標示」填原因確認
+- Commit／線上：見 PR `cursor/payment-flag-submit-fix-8a21`；GAS 隨 **@402** 上線
+- 待處理：點 新弘 請款詳情「錯誤記帳標示」填原因確認
 
 
 ### 2026-10-06｜Cursor Cloud｜待付款請款「錯誤記帳標示」＋勿框選（待 merge／部署）
