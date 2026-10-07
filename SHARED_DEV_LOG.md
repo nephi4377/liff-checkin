@@ -20,9 +20,17 @@
 
 ## 目前進行中
 
-- Cursor Cloud｜重複記帳提醒失效：`accounting_ingest.html`／`accounting_api.js`（頁內確認＋勿當 API 失敗）；Backend `SheetWriter` 疑重日期正規化
+（無）
 
 ## 最近完成
+
+### 2026-10-07｜Cursor Cloud｜重複記帳提醒頁內確認（FE 已上線；GAS 待版號）
+
+- 修改範圍：`accounting_ingest.html`（頁內 `#dupConfirmOverlay`）、`accounting_api.js?v=95` soft `needs_dup_confirm`、SPEC 15 v1.39、LOG；Backend `SheetWriter` 日期正規化＋`skipDedup`（[GAS#116](https://github.com/nephi4377/Backend_GAS/pull/116)）
+- 根因：`window.confirm` 在主控台巢狀 iframe＋await 後常被擋；疑重回應被當 API 失敗噴錯誤回報
+- 驗證：`test-form-dedup-clear.js` OK；正式站已含 `askDupConfirm`／`api?v=95`
+- Commit／線上：FE merge [PR #134](https://github.com/nephi4377/liff-checkin/pull/134)／Pages `37557772079`；GAS merge #116、`clasp push` 已進 HEAD，但 **200 versions 滿** → deploy @397 未更新（DELETE API 404；需人工清版號後再 clasp deploy）
+- 待處理：人工刪舊 Apps Script versions 後重跑 accounting-gas clasp；抽測同類型＋金額＋日期再送
 
 ### 2026-10-07｜Cursor Cloud｜請款錯誤標示送出修復＋按鈕縮小
 
