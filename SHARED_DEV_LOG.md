@@ -20,7 +20,11 @@
 
 ## 目前進行中
 
-（無）
+### Cursor Cloud｜歷史記帳拿掉 7 日產品上限
+- 範圍：`ledger_history.html`、`accounting_api.js`、SPEC 15；Backend `SheetWriter`／`AccountingLineIngest`／SPEC／test
+- 目的：預設改近 30 天、取消 7／30 天硬擋；保留分塊與軟截止；不部署
+- 分支：`cursor/ledger-history-no-7day-cap-9a71`
+
 
 ## 最近完成
 
