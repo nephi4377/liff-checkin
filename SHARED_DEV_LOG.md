@@ -29,7 +29,7 @@
 - 修改範圍：`payroll_finance.html`（已發薪·補寄區塊）、煙測、SPEC 15、help、LOG
 - 完成內容：近 60 天已發薪可按「補寄 EMAIL」呼叫既有 `payroll_request_notify_payslip`；未填 email 仍出手動草稿
 - 驗證：`node modules/accounting/tools/test-payroll-resend-email.js`；manual-drafts 煙測 OK
-- Commit／線上：branch `cursor/payroll-resend-payslip-email-190b`（待 PR／Pages）
+- Commit／線上：[liff#139](https://github.com/nephi4377/liff-checkin/pull/139) draft（`cursor/payroll-resend-payslip-email-190b`）；未部署
 - 待處理：部署後抽測蔡宜芳／張慈真／李恩德（先補 email 再補寄，或用手動草稿）
 
 ### 2026-10-07｜Cursor Cloud｜請款審核 ≥3 改廠商／分攤／稅別／備註＋刪除（已上線 @404）
