@@ -24,13 +24,13 @@
 
 ## 最近完成
 
-### 2026-10-10｜Cursor Cloud｜薪資待匯款補寄 EMAIL（draft，未部署）
+### 2026-10-10｜Cursor Cloud｜薪資待匯款補寄 EMAIL（已上線 Pages）
 
 - 修改範圍：`payroll_finance.html`（已發薪·補寄區塊）、煙測、SPEC 15、help、LOG
 - 完成內容：近 60 天已發薪可按「補寄 EMAIL」呼叫既有 `payroll_request_notify_payslip`；未填 email 仍出手動草稿
-- 驗證：`node modules/accounting/tools/test-payroll-resend-email.js`；manual-drafts 煙測 OK
-- Commit／線上：[liff#139](https://github.com/nephi4377/liff-checkin/pull/139) draft（`cursor/payroll-resend-payslip-email-190b`）；未部署
-- 待處理：部署後抽測蔡宜芳／張慈真／李恩德（先補 email 再補寄，或用手動草稿）
+- 驗證：煙測 OK；正式站 curl 已含「已發薪 · 補寄 EMAIL」／`api?v=101`
+- Commit／線上：[liff#139](https://github.com/nephi4377/liff-checkin/pull/139) → merge `470855f`；Pages [`38055065538`](https://github.com/nephi4377/liff-checkin/actions/runs/38055065538) success
+- 待處理：蔡宜芳／張慈真補 email 後按補寄（李恩德本輪略）；雲端無法代 Hub 登入補寄
 
 ### 2026-10-07｜Cursor Cloud｜請款審核 ≥3 改廠商／分攤／稅別／備註＋刪除（已上線 @404）
 
