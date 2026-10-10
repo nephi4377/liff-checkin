@@ -302,6 +302,13 @@
 - Commit／線上：僅本紀錄（docs）；無部署
 - 待處理／風險：KnowledgeBase API（`C:\Users\a9999\KnowledgeBase`）加收 `line_oa` 另一工作進行中（權限 ≥2 可見），完成前 API 端查不到官方 LINE 對話；TX34 需開機登入，MCP／排程才會運作
 
+### 2026-10-03｜Cursor Cloud｜公司知識庫 #/kb 身分確認重試／逾時（PR #91／未部署）
+
+- 修改範圍：`modules/kb/index.html`（`/api/me` 130 秒 AbortController；等待 8 秒加長提示；503／網路／逾時顯示「🔁 重試」並防併發重跑 `init()`；auth 仍用「🔄 重新登入」）；`index.html` 版本 `v26.10.03.5`
+- 驗證：`node --check` kb 模組 script；Playwright 模擬主控台 token＋503→重試→200
+- Commit／線上：PR #91（未 merge、未上 Pages）
+- 待處理／風險：merge 後 Pages 部署才生效；真實 GAS 冷啟動 100+ 秒路徑建議部署後真人抽測
+
 ### 2026-10-03｜Cursor Cloud｜主控台登入減少重複 GET（已部署）
 
 - 修改範圍：`spa/app.js`、`index.html`（`v26.10.03.4`）、SPEC 19 v1.9.1、`LOG/2026-10-03_LOG_主控台登入減少重複GET.md`

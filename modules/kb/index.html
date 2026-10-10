@@ -62,6 +62,8 @@ import { CONFIG } from '../../shared/js/config.js';
 const API = String(CONFIG.KB_API_BASE || '').replace(/\/+$/, '');
 const POLL_MS = 2000;
 const MAX_WAIT_MS = 10 * 60 * 1000;
+const ME_FETCH_TIMEOUT_MS = 130 * 1000;
+const IDENTITY_SLOW_HINT_MS = 8000;
 const $ = (id) => document.getElementById(id);
 
 function esc(s) {
@@ -177,6 +179,10 @@ async function api(path, opts = {}) {
     const token = await getFreshToken();
     if (!token) return handleAuthExpired(opts.pending);
     let res;
+    const timeoutMs = opts.timeoutMs || 0;
+    const ac = timeoutMs > 0 ? new AbortController() : null;
+    let fetchTimer = null;
+    if (ac) fetchTimer = setTimeout(() => ac.abort(), timeoutMs);
     try {
         res = await fetch(API + path, {
             method: opts.method || 'GET',
@@ -185,10 +191,16 @@ async function api(path, opts = {}) {
                 'ngrok-skip-browser-warning': '1'
             }, opts.body ? { 'Content-Type': 'application/json' } : {}),
             body: opts.body ? JSON.stringify(opts.body) : undefined,
-            cache: 'no-store'
+            cache: 'no-store',
+            signal: ac ? ac.signal : undefined
         });
     } catch (e) {
+        if (ac && e && e.name === 'AbortError') {
+            throw new ApiError(0, '確認身分逾時（會計系統可能仍在啟動），請按「重試」或稍後再試', 'timeout');
+        }
         throw new ApiError(0, '連不到知識庫主機（公司電腦可能關機或網路中斷），請稍後再試');
+    } finally {
+        if (fetchTimer) clearTimeout(fetchTimer);
     }
     let data = null;
     try { data = await res.json(); } catch (e) {}
@@ -203,6 +215,18 @@ async function api(path, opts = {}) {
 function reloginButtonHtml() {
     return ' <button type="button" data-kb-relogin class="ml-2 align-middle bg-sky-600 text-white text-sm font-semibold px-3 py-1 rounded-md hover:bg-sky-700">🔄 重新登入</button>';
 }
+function retryButtonHtml() {
+    return ' <button type="button" data-kb-retry class="ml-2 align-middle bg-sky-600 text-white text-sm font-semibold px-3 py-1 rounded-md hover:bg-sky-700">🔁 重試</button>';
+}
+function identityCheckingStatusHtml() {
+    return '<span class="inline-block align-middle w-4 h-4 mr-2 border-2 border-gray-200 rounded-full spinner"></span>正在確認身分…';
+}
+function isRetryableInitError(e) {
+    if (!e || e.code === 'auth') return false;
+    if (e.code === 'timeout') return true;
+    const st = e.status;
+    return st === 0 || st >= 500;
+}
 async function manualRelogin() {
     setStatus(`<span class="inline-block align-middle w-4 h-4 mr-2 border-2 border-gray-200 rounded-full spinner"></span>正在重新登入…`, 'info');
     const started = await requestHubRelogin(true);
@@ -211,11 +235,20 @@ async function manualRelogin() {
     }
 }
 document.addEventListener('click', (ev) => {
-    const btn = ev.target && ev.target.closest && ev.target.closest('[data-kb-relogin]');
-    if (!btn) return;
+    const reloginBtn = ev.target && ev.target.closest && ev.target.closest('[data-kb-relogin]');
+    if (reloginBtn) {
+        ev.preventDefault();
+        reloginBtn.disabled = true;
+        manualRelogin();
+        return;
+    }
+    const retryBtn = ev.target && ev.target.closest && ev.target.closest('[data-kb-retry]');
+    if (!retryBtn) return;
     ev.preventDefault();
-    btn.disabled = true;
-    manualRelogin();
+    if (initInProgress) return;
+    retryBtn.disabled = true;
+    setStatus(identityCheckingStatusHtml(), 'info');
+    init();
 });
 
 /* ---------- 畫面 ---------- */
@@ -283,14 +316,21 @@ function takePendingQuestion() {
     } catch (e) { return null; }
 }
 
+let initInProgress = false;
 async function init() {
+    if (initInProgress) return;
     if (!API) { setStatus('知識庫尚未設定連線位址（CONFIG.KB_API_BASE）。', 'warn'); return; }
     if (!hubTarget()) {
         setStatus('請從 LINE「整合主控台」開啟知識庫（主控台 → 知識庫）。<a href="../../index.html#/kb" target="_top" class="ml-1 underline text-sky-700">用這個瀏覽器開啟主控台</a>', 'warn');
         return;
     }
+    initInProgress = true;
+    let slowHintTimer = null;
     try {
-        const me = await api('/api/me');
+        slowHintTimer = setTimeout(() => {
+            setStatus(identityCheckingStatusHtml() + '（會計系統可能剛啟動，最久約 1–2 分鐘）', 'info');
+        }, IDENTITY_SLOW_HINT_MS);
+        const me = await api('/api/me', { timeoutMs: ME_FETCH_TIMEOUT_MS });
         setStatus(`✅ ${esc(me.display_name || '已登入')}，可以開始提問。${me.index_built_at ? '<span class="text-xs text-gray-500 ml-1">（資料更新：' + esc(me.index_built_at) + '）</span>' : ''}`, 'ok');
         $('ask-form').classList.remove('hidden');
         const pending = takePendingQuestion();                       // 重新登入前沒問完的問題 → 自動重送一次
@@ -298,7 +338,11 @@ async function init() {
         else $('q').focus();
     } catch (e) {
         const isAuth = e && e.code === 'auth';
-        setStatus('❌ ' + esc(e.message) + (isAuth ? reloginButtonHtml() : ''), e.status === 403 ? 'warn' : 'err');
+        const retry = isRetryableInitError(e);
+        setStatus('❌ ' + esc(e.message) + (isAuth ? reloginButtonHtml() : (retry ? retryButtonHtml() : '')), e.status === 403 ? 'warn' : 'err');
+    } finally {
+        if (slowHintTimer) clearTimeout(slowHintTimer);
+        initInProgress = false;
     }
 }
 
