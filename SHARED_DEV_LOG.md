@@ -20,7 +20,7 @@
 
 ## 目前進行中
 
-（無）
+- Cursor Cloud｜薪資待匯款「補寄 EMAIL」區塊（`payroll_finance.html`）｜branch `cursor/payroll-resend-payslip-email-190b`
 
 ## 最近完成
 
