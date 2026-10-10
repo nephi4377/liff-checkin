@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=52"></script>
+  <script src="../../shared/js/accounting_api.js?v=101"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=7"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
@@ -71,6 +71,16 @@
       <h3 style="margin:0 0 8px">待匯款清單<span id="listLive" class="sub"></span></h3>
       <div id="list"></div>
       <p id="emptyMsg" class="sub hidden">目前沒有待匯款薪資。</p>
+    </div>
+
+    <div class="card" id="resendCard">
+      <h3 style="margin:0 0 8px">已發薪 · 補寄 EMAIL<span id="resendLive" class="sub"></span></h3>
+      <p class="sub" style="margin:0 0 8px">
+        近 60 天已標記發薪的項目可再寄明細。<br />
+        員工沒有 email：請先到 HUB「員工資料編輯」填好，再按補寄；或按補寄後用下方「複製／用 Email 開啟」手動寄。
+      </p>
+      <div id="resendList"></div>
+      <p id="resendEmpty" class="sub hidden">近 60 天沒有可補寄的已發薪項目。</p>
     </div>
   </div>
   <script>
@@ -145,6 +155,92 @@
           div.appendChild(mailBtn);
           box.appendChild(div);
         });
+      }
+
+      var RESEND_WINDOW_MS = 60 * 24 * 60 * 60 * 1000;
+      var RESEND_MAX = 30;
+
+      function paidAtMs(row) {
+        var raw = row && (row.paid_at || row.updated_at || '');
+        if (!raw) return 0;
+        if (raw instanceof Date) return raw.getTime();
+        var t = Date.parse(String(raw).replace(' ', 'T'));
+        return isNaN(t) ? 0 : t;
+      }
+
+      function renderResendItem(row) {
+        var id = row.payroll_request_id;
+        var div = document.createElement('div');
+        div.className = 'item';
+        div.setAttribute('data-id', id);
+        var paid = String(row.paid_at || '').slice(0, 10);
+        var amt = parseInt(row.final_amount, 10) || 0;
+        div.innerHTML =
+          '<div><strong>' + esc(row.employee_name || '') + '</strong> ' +
+          '<span class="tag">' + esc(row.period_label || '') + '</span>' +
+          (paid ? '<span class="tag">入帳 ' + esc(paid) + '</span>' : '') +
+          '</div>' +
+          '<div class="bank">實發 $' + amt.toLocaleString('zh-TW') + '</div>';
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-link';
+        btn.textContent = '補寄 EMAIL';
+        btn.addEventListener('click', function () { runResendPayslip(id, row.employee_name, btn); });
+        div.appendChild(btn);
+        return div;
+      }
+
+      async function loadResendList() {
+        var list = document.getElementById('resendList');
+        var empty = document.getElementById('resendEmpty');
+        var live = document.getElementById('resendLive');
+        if (!list || !session) return;
+        if (live) live.textContent = '載入中…';
+        try {
+          var data = await AccountingApi.payrollRequestList(session, { payment_status: '已匯款' });
+          if (!data || !data.success) {
+            if (live) live.textContent = '';
+            list.innerHTML = '<p class="sub">' + esc((data && data.message) || '補寄清單載入失敗') + '</p>';
+            if (empty) empty.classList.add('hidden');
+            return;
+          }
+          var cutoff = Date.now() - RESEND_WINDOW_MS;
+          var items = (data.items || []).filter(function (r) {
+            return String(r.payment_status) === '已匯款' && paidAtMs(r) >= cutoff;
+          });
+          items.sort(function (a, b) { return paidAtMs(b) - paidAtMs(a); });
+          if (items.length > RESEND_MAX) items = items.slice(0, RESEND_MAX);
+          list.innerHTML = '';
+          items.forEach(function (row) { list.appendChild(renderResendItem(row)); });
+          if (empty) empty.classList.toggle('hidden', items.length > 0);
+          if (live) live.textContent = items.length ? '（' + items.length + '）' : '';
+        } catch (e) {
+          if (live) live.textContent = '';
+          list.innerHTML = '<p class="sub">' + esc(e.message || String(e)) + '</p>';
+          if (empty) empty.classList.add('hidden');
+        }
+      }
+
+      async function runResendPayslip(payrollRequestId, employeeName, btn) {
+        var name = employeeName || '員工';
+        if (!confirm('確定補寄「' + name + '」的薪資明細 EMAIL？\n（已有 email 會自動寄；沒有則出現手動草稿）')) return;
+        await AccountingUi.runAsync(btn, { busyLabel: '補寄中…', startMessage: '正在補寄 EMAIL…' }, async function () {
+          setMsg(''); setOk('');
+          var data = await AccountingApi.payrollRequestNotifyPayslip(session, payrollRequestId);
+          if (!data) throw new Error('補寄無回應');
+          if (data.success) {
+            setOk('已補寄 ' + name + (data.emailed_to ? ' → ' + data.emailed_to : ''));
+            renderEmailDrafts([]);
+            return;
+          }
+          if (data.manual_required && data.draft && data.draft.body) {
+            var warnText = (data.message || 'EMAIL 待手動寄送') + '（' + name + '）';
+            ui.setWarn(warnText);
+            renderEmailDrafts([data.draft]);
+            return;
+          }
+          throw new Error(data.message || '補寄失敗');
+        }).catch(function (e) { setMsg(e.message || String(e)); });
       }
 
       async function downloadCtbcBig5(filename, content) {
@@ -337,7 +433,10 @@
         return Array.prototype.slice.call(document.querySelectorAll('#list .chk:checked')).map(function (c) { return c.value; });
       }
 
-      document.getElementById('reloadBtn').addEventListener('click', function () { loadList(false, true); });
+      document.getElementById('reloadBtn').addEventListener('click', function () {
+        loadList(false, true);
+        loadResendList();
+      });
 
       document.getElementById('exportBtn').addEventListener('click', async function () {
         var ids = selectedIds();
@@ -385,6 +484,7 @@
           }
           setOk(msg);
           removeItemsFromView(data.payroll_request_ids || ids);
+          loadResendList();
         }).catch(function (e) { setMsg(e.message || String(e)); });
       }
 
@@ -403,6 +503,7 @@
           document.getElementById('app').classList.remove('hidden');
           document.getElementById('userLine').textContent = (s.profile && s.profile.displayName) || '—';
           await loadList();
+          loadResendList();
         }
       });
     })();
