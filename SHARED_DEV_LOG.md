@@ -18,19 +18,25 @@
 3. 記錄日期、工具／開發者、修改範圍、結果、驗證方式與 commit。
 4. 有未完成事項或風險時，寫進「待處理」。
 
+**穩定共享知識（給 Agent／多工具）：** 跨對話仍有效的連線方式、產品鎖定、本機／ngrok／Cowork 慣例，**寫進本檔**（最近完成或下方「穩定備註」），並 push；不要只留在 Cursor Project store 或 chat。Cursor store 的 `docs/project-context.md` 是執行期摘要，**GitHub 正規來源＝本檔**。
+
 ## 目前進行中
 
 （無）
 
 ## 最近完成
 
-### 2026-10-11｜Cursor Cloud｜待付款報價對應查核（draft／未部署）
+### 2026-10-11｜Cursor Cloud｜待付款報價對應查核＋Cowork／ngrok 備註（draft／未部署）
 
 - 修改範圍：`ledger_review.html`、`accounting_api.js?v=103`、SPEC 15 v1.63、LOG、smoke；Backend `VendorPaymentQuoteAudit`／`報價本機快取`／WebApp／SPEC／smoke
-- 完成內容：審核詳情「報價對應查核」—本機報價 JSON 快取＋Gemini（G1→L1）對品項、利潤率／信心／連結；**R0 不寫分攤**；雲端不讀 TX34，需 upsert
-- 驗證：`node modules/accounting/tools/test-vendor-payment-quote-audit-ui.js`；`node accounting-gas/tools/test-vendor-payment-quote-audit.js`
+- 完成內容：審核詳情「報價對應查核」—本機報價 JSON 快取＋Gemini 對品項、利潤率／信心／連結；**R0 不寫分攤**
+- **產品鎖定：** LLM **G1→L1**（先 Gemini，再本機 Ollama）；報價來源＝**本機材料**（非 live Firebase、不等 ContractBaseline）；結果只顯示
+- **Cowork＝Cursor self-hosted worker**（非 repo 字串）：常用 **TX34**、**home-pc**（approved）。雲端 VM **不能**直接掃 TX34 碟；要讀本機報價／Hermes／Ollama 檔 → **把工作派到 TX34**。亦可用 upsert 把結構化 JSON 寫入 GAS「報價本機快取」
+- **ngrok 公司知識庫：** `CONFIG.KB_API_BASE`（`shared/js/config.js`，例 `https://lapping-goofball-rehab.ngrok-free.dev`）→ TX34 `kb_api`。健康檢查：`GET /api/health`（免登入，期望 `{"ok":true}`）；正式問答：`/api/me`、`POST /api/ask`、`/api/jobs/{id}`（需 LIFF Bearer＋`ngrok-skip-browser-warning: 1`）。**尚未**對外 `/v1/chat`（Ollama）；accounting-gas 尚未呼叫 KB_API。隧道網域會變，以當下 `KB_API_BASE`／TX34 ngrok 為準
+- **Agent 慣例：** 穩定共享知識寫**本檔**並 push（見上方「使用方式」）；Cursor store 僅摘要
+- 驗證：`node modules/accounting/tools/test-vendor-payment-quote-audit-ui.js`；`node accounting-gas/tools/test-vendor-payment-quote-audit.js`；雲端 curl `/api/health` → 200
 - Commit／PR：[liff#140](https://github.com/nephi4377/liff-checkin/pull/140)、[GAS#121](https://github.com/nephi4377/Backend_GAS/pull/121)
-- 待處理：Nephi 提供本機報價 JSON upsert → 核准部署後抽測
+- 待處理：TX34 worker 或人手 upsert 至少一案本機報價 → 核准部署後審核頁抽測；L1 需另開 Ollama HTTP
 
 ### 2026-10-10｜Cursor Cloud｜薪資待匯款補寄 EMAIL（已上線 Pages）
 
