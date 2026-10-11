@@ -241,27 +241,78 @@ function autoFixSvgGeometry(svgStr) {
     return svgStr;
 }
 
+function showComponentSheetLoadError_(message) {
+    const human = message || '請檢查網路後再試';
+    const hasItems = Object.keys(cabinetCategories).length > 0;
+
+    const container = document.getElementById('cabinet-components');
+    if (container && !hasItems) {
+        container.innerHTML = '';
+        const wrap = document.createElement('div');
+        wrap.className = 'col-span-2 text-xs text-red-800 bg-red-50 border border-red-200 rounded p-2';
+        const strong = document.createElement('strong');
+        strong.textContent = '元件表讀不到';
+        const p = document.createElement('p');
+        p.className = 'mt-1 text-gray-600';
+        p.textContent = human;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.id = 'btnRetrySheetLoad';
+        btn.className = 'mt-2 w-full py-1.5 bg-red-600 text-white rounded text-xs';
+        btn.textContent = '再試一次';
+        btn.addEventListener('click', () => loadFromSheets());
+        wrap.appendChild(strong);
+        wrap.appendChild(p);
+        wrap.appendChild(btn);
+        container.appendChild(wrap);
+    }
+
+    const list = document.getElementById('layer-visibility-list');
+    if (list && !hasItems) {
+        list.innerHTML = '';
+        const p = document.createElement('p');
+        p.className = 'text-[10px] text-red-700';
+        p.textContent = '元件表讀不到';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.id = 'btnRetrySheetLoadLayer';
+        btn.className = 'text-[10px] text-blue-600 hover:underline mt-1 block';
+        btn.textContent = '再試一次';
+        btn.addEventListener('click', () => loadFromSheets());
+        list.appendChild(p);
+        list.appendChild(btn);
+    }
+}
+
 // Google Sheets 載入
 async function loadFromSheets() {
     // 將您的 Sheet ID 直接寫在程式碼中
     const sheetId = '1y8iD3Pe8AvYxDYFGYVOZ0afsdW10j1GSnDXqUCyEh-Q';
-
-    // [修正] 每次載入前清空分類，避免重複或資料殘留
-    cabinetCategories = {};
+    const container = document.getElementById('cabinet-components');
+    const layerList = document.getElementById('layer-visibility-list');
+    let abortTimer = null;
+    if (Object.keys(cabinetCategories).length === 0) {
+        if (container) container.innerHTML = '<p class="col-span-2 text-[10px] text-gray-500">正在載入元件表…</p>';
+        if (layerList) layerList.innerHTML = '<p class="text-[10px] text-gray-400">正在載入分類…</p>';
+    }
 
     try {
         const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=0`;
-        const response = await fetch(url);
+        const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        abortTimer = ac ? setTimeout(() => ac.abort(), 10000) : null;
+        const response = await fetch(url, ac ? { signal: ac.signal } : undefined);
+        if (!response.ok) throw new Error('元件表暫時連不上');
         const text = await response.text();
         
         // [修正] 使用更穩健的方式擷取 JSON 字串，不依賴固定長度 (解決資料截斷或解析錯誤問題)
         const start = text.indexOf('{');
         const end = text.lastIndexOf('}');
-        if (start === -1 || end === -1) throw new Error('無法解析 Google Sheets 回傳的資料格式');
+        if (start === -1 || end === -1) throw new Error('無法解析元件表資料格式');
         const jsonString = text.substring(start, end + 1);
         
         const data = JSON.parse(jsonString);
         const rows = data.table.rows;
+        const nextCategories = {};
 
         for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
@@ -299,11 +350,11 @@ async function loadFromSheets() {
 
             if (name && width && depth) {
                 // 如果該組別還不存在，就建立一個空陣列
-                if (!cabinetCategories[group]) {
-                    cabinetCategories[group] = [];
+                if (!nextCategories[group]) {
+                    nextCategories[group] = [];
                 }
 
-                cabinetCategories[group].push({
+                nextCategories[group].push({
                     id: `sheets-${Date.now()}-${i}`,
                     name: String(name),
                     width: parseInt(width),
@@ -323,13 +374,22 @@ async function loadFromSheets() {
             }
         }
 
+        cabinetCategories = nextCategories;
         renderComponentList();
         renderLayerVisibilityPanel();
         showGlobalNotification(`✅ 成功載入 ${Object.values(cabinetCategories).flat().length} 個元件`, 3000, 'success');
         dbgLog(`[Input] 成功載入 ${Object.values(cabinetCategories).flat().length} 個元件`);
     } catch (error) {
         console.error('載入錯誤:', error);
-        showGlobalNotification(`❌ 載入失敗: ${error.message}`, 8000, 'error');
+        const aborted = error && (error.name === 'AbortError' || /aborted/i.test(String(error.message || '')));
+        const rawMsg = String((error && error.message) || '');
+        const human = aborted
+            ? '連線逾時'
+            : (/failed to fetch|networkerror|load failed/i.test(rawMsg) ? '請檢查網路後再試' : (rawMsg || '請檢查網路後再試'));
+        showGlobalNotification(`❌ 載入失敗: ${human}`, 8000, 'error');
+        showComponentSheetLoadError_(human);
+    } finally {
+        if (abortTimer) clearTimeout(abortTimer);
     }
 }
 
