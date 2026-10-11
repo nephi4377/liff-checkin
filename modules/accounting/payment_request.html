@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
-  <script src="../../shared/js/accounting_tax_mode.js?v=6"></script>
+  <script src="../../shared/js/accounting_tax_mode.js?v=7"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_context.js?v=3"></script>
@@ -1031,10 +1031,8 @@
         var src = row.source === 'manual' ? '<span class="tag-src">手動</span>' : (row.source === 'ai' ? '<span class="tag-src">AI</span>' : '');
         var checked = !!row.tax_inclusive;
         var amt = parseAllocAmount(row.amount);
-        var taxDisabled = !isNaN(amt) && amt < 0;
-        if (taxDisabled) checked = false;
         var pretaxText = '';
-        if (checked && !isNaN(amt) && amt !== 0 && amt > 0) {
+        if (checked && !isNaN(amt) && amt !== 0) {
           pretaxText = (typeof AccountingTaxMode !== 'undefined')
             ? AccountingTaxMode.rowHintText(row, taxMode)
             : ('未稅 $' + removeTaxAmount(amt).toLocaleString('zh-TW'));
@@ -1044,7 +1042,7 @@
         if (taxMode !== 'prorate') {
           taxRowHtml = '<div class="tax-row">' +
             '<label><input type="checkbox" class="inp-tax"' +
-            (checked ? ' checked' : '') + (taxDisabled ? ' disabled' : '') + ' />含稅</label>' +
+            (checked ? ' checked' : '') + ' />含稅</label>' +
             '<span class="pretax-hint">' + pretaxText + '</span></div>';
         }
         return '<div class="alloc-row" data-idx="' + idx + '" data-source="' + (row.source || '') + '"' +
@@ -1053,7 +1051,7 @@
           ' data-base-amount="' + baseAttr + '">' +
           '<button type="button" class="rm" data-rm="' + idx + '">刪除</button>' +
           '<div class="row2"><div><label>案號' + src + '</label><input class="inp-pn" value="' + (row.project_no || '') + '" placeholder="752" /></div>' +
-          '<div><label>' + (!taxDisabled && (taxMode === 'prorate' || !checked) ? '金額（未稅）' : '金額') + '</label><input class="inp-amt" type="number" inputmode="numeric" placeholder="折讓填負數" value="' + (row.amount || '') + '" /></div></div>' +
+          '<div><label>' + (taxMode === 'prorate' || !checked ? '金額（未稅）' : '金額') + '</label><input class="inp-amt" type="number" inputmode="numeric" placeholder="折讓填負數" value="' + (row.amount || '') + '" /></div></div>' +
           '<label>品項</label><input class="inp-desc" value="' + (row.item_desc || '') + '" placeholder="摘要" />' +
           taxRowHtml + '</div>';
       }
@@ -1287,14 +1285,6 @@
         }
       }
 
-      function setTaxControlsDisabled(row, disabled) {
-        var taxCb = row.querySelector('.inp-tax');
-        if (taxCb) {
-          taxCb.disabled = disabled;
-          if (disabled) taxCb.checked = false;
-        }
-      }
-
       function bindAllocEvents() {
         document.querySelectorAll('#allocList .inp-amt, #allocList .inp-pn, #allocList .inp-desc').forEach(function (inp) {
           inp.oninput = function () {
@@ -1304,7 +1294,6 @@
               if (inp.classList.contains('inp-amt')) {
                 updatePretaxHint(row);
                 var a = parseAllocAmount(inp.value);
-                setTaxControlsDisabled(row, !isNaN(a) && a < 0);
                 if (!isNaN(a)) row.setAttribute('data-base-amount', String(a));
                 row.setAttribute('data-tax-add-applied', '0');
               }
@@ -1667,12 +1656,12 @@
         var hintEl = rowEl.querySelector('.pretax-hint');
         if (!hintEl || !cb) return;
         var amt = parseAllocAmount(rowEl.querySelector('.inp-amt').value);
-        if (!cb.checked || isNaN(amt) || amt === 0 || amt < 0) {
+        if (!cb.checked || isNaN(amt) || amt === 0) {
           hintEl.textContent = '';
           return;
         }
         if (typeof AccountingTaxMode === 'undefined') {
-          hintEl.textContent = '未稅 $' + removeTaxAmount(Math.abs(amt)).toLocaleString('zh-TW');
+          hintEl.textContent = '未稅 $' + removeTaxAmount(amt).toLocaleString('zh-TW');
           return;
         }
         hintEl.textContent = AccountingTaxMode.rowHintText({
