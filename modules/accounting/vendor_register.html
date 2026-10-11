@@ -384,6 +384,42 @@
         }
       });
 
+      function applyVendorPayload(payload) {
+        if (payload && payload.enums) initFormOptions(payload.enums);
+        if (payload && payload.vendor) {
+          fillForm(payload.vendor);
+          renderStatus(payload.vendor);
+        } else {
+          renderStatus(null);
+        }
+        renderBindings();
+        showApp();
+      }
+
+      function showBootFail(message) {
+        var msg = message || '開啟失敗，請再試';
+        if (session && session.vendor) {
+          applyVendorPayload({ vendor: session.vendor, enums: session.auth && session.auth.enums });
+          setMsg(msg + '（先顯示上次讀到的資料，可再整理頁面）');
+          return;
+        }
+        if (typeof AccountingUi !== 'undefined' && AccountingUi.showFatalError) {
+          AccountingUi.showFatalError('loading', {
+            message: msg,
+            action: '開啟廠商資料登記',
+            onRetry: function () { location.reload(); }
+          });
+          return;
+        }
+        $('loading').textContent = msg;
+      }
+
+      async function loadVendorRecord() {
+        var data = await AccountingApi.vendorRegisterGet(session);
+        if (!data || !data.success) throw new Error((data && data.message) || '載入失敗');
+        return data;
+      }
+
       (async function boot() {
         if (typeof AccountingNav !== 'undefined') AccountingNav.init();
         try {
@@ -393,20 +429,15 @@
           var mode = session.devBypass ? ' · 測試模式' : '';
           $('userLine').textContent = session.profile.displayName + mode;
 
-          var data = await AccountingApi.vendorRegisterGet(session);
-          if (!data.success) throw new Error(data.message || '載入失敗');
-          if (data.enums) initFormOptions(data.enums);
-
-          if (data.vendor) {
-            fillForm(data.vendor);
-            renderStatus(data.vendor);
-          } else {
-            renderStatus(null);
+          var data;
+          try {
+            data = await loadVendorRecord();
+          } catch (e1) {
+            data = await loadVendorRecord();
           }
-          renderBindings();
-          showApp();
+          applyVendorPayload(data);
         } catch (e) {
-          $('loading').textContent = e.message || String(e);
+          showBootFail((e && e.message) || '開啟失敗，請再試');
         }
       })();
     })();
