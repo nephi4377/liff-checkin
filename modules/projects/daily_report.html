@@ -140,6 +140,7 @@
             </div>
         </div>
 
+        <div id="daily-report-status" class="hidden" role="status"></div>
         <div id="reports-container" class="space-y-6">
             <div id="placeholder" class="text-center text-gray-500 py-16">
                 <div class="spinner w-10 h-10 border-4 border-gray-200 rounded-full mx-auto"></div>
@@ -152,7 +153,7 @@
     <!-- [v625.0 核心改造] 根據您的要求，將排休資料的讀取邏輯直接整合進來 -->
     <script type="module">
         // 引入主應用程式邏輯
-        import { main as initializeDailyReport } from './js/daily_report_main.js';
+        import { main as initializeDailyReport } from './js/daily_report_main.js?v=26.08.31.4';
 
         // [v625.0 新增] 假勤系統的 API URL
         const ATTENDANCE_API_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
@@ -230,8 +231,7 @@
                 }
             } catch (error) {
                 console.error(`[排班] 獲取 ${monthStr} 的排班資料失敗:`, error);
-                // 即使失敗也回傳空物件，讓主流程繼續
-                return { schedule: {}, holidays: new Set() };
+                throw error;
             }
         }
 
