@@ -19,7 +19,7 @@ assert(
 assert(html.indexOf('duplicate_prior') >= 0, 'uses prior detail for confirm');
 assert(html.indexOf('askDupConfirm') >= 0, 'uses in-page dup confirm helper');
 assert(html.indexOf('dupConfirmOverlay') >= 0, 'has page modal overlay');
-assert(html.indexOf('accounting_api.js?v=95') >= 0, 'cache-bust api v=95');
+assert(html.indexOf('accounting_api.js?v=102') >= 0, 'cache-bust api v=102');
 assert(
   /needs_dup_confirm[\s\S]*softDupConfirm|softDupConfirm[\s\S]*needs_dup_confirm/.test(
     fs.readFileSync(path.join(__dirname, '..', '..', '..', 'shared', 'js', 'accounting_api.js'), 'utf8')

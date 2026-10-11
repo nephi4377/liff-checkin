@@ -20,20 +20,25 @@
 
 ## 目前進行中
 
-（無）
+- Cursor Cloud｜請款審核讀取審核包逾時（N+1 memo＋FE 90s）｜draft [liff#137](https://github.com/nephi4377/liff-checkin/pull/137)／[GAS#119](https://github.com/nephi4377/Backend_GAS/pull/119)
 
 ## 最近完成
 
+### 2026-10-10｜Cursor Cloud｜薪資待匯款補寄 EMAIL（已上線 Pages）
+
+- 修改範圍：`payroll_finance.html`（已發薪·補寄區塊）、煙測、SPEC 15、help、LOG
+- 完成內容：近 60 天已發薪可按「補寄 EMAIL」呼叫既有 `payroll_request_notify_payslip`；未填 email 仍出手動草稿
+- 驗證：煙測 OK；正式站 curl 已含「已發薪 · 補寄 EMAIL」／`api?v=101`
+- Commit／線上：[liff#139](https://github.com/nephi4377/liff-checkin/pull/139) → merge `470855f`；Pages [`38055065538`](https://github.com/nephi4377/liff-checkin/actions/runs/38055065538) success
+- 待處理：蔡宜芳／張慈真補 email 後按補寄（李恩德本輪略）；雲端無法代 Hub 登入補寄
+
 ### 2026-10-07｜Cursor Cloud｜歷史記帳拿掉 7 日產品上限（draft／未部署）
 
-- 修改範圍：`ledger_history.html`、`accounting_api.js?v=101`、SPEC 15、LOG；Backend `SheetWriter`／`AccountingLineIngest`／SPEC／test／LOG
+- 修改範圍：`ledger_history.html`、`accounting_api.js?v=102`、SPEC 15、LOG；Backend `SheetWriter`／`AccountingLineIngest`／SPEC／test／LOG
 - 完成內容：預設近 **30** 天；取消 7／30 天硬上限（可自訂更早）；空狀態／快捷建議近 90 天；保留分塊／軟截止／FE 90s Abort
 - 驗證：`node tools/test-ledger-recent-history.js` OK
 - Commit／線上：[liff#138](https://github.com/nephi4377/liff-checkin/pull/138)、[GAS#120](https://github.com/nephi4377/Backend_GAS/pull/120)（#77／#99 已合，另開修正）
 - 待處理：等你說部署；抽測自訂 >30 天區間
-
-
-## 最近完成
 
 ### 2026-10-07｜Cursor Cloud｜請款審核 ≥3 改廠商／分攤／稅別／備註＋刪除（已上線 @404）
 
@@ -304,6 +309,13 @@
 - 驗證：MCP 6 工具以 stdio client 實測成功；`hermes mcp test tanxin` 成功；Hermes 問答實際呼叫工具
 - Commit／線上：僅本紀錄（docs）；無部署
 - 待處理／風險：KnowledgeBase API（`C:\Users\a9999\KnowledgeBase`）加收 `line_oa` 另一工作進行中（權限 ≥2 可見），完成前 API 端查不到官方 LINE 對話；TX34 需開機登入，MCP／排程才會運作
+
+### 2026-10-03｜Cursor Cloud｜公司知識庫 #/kb 身分確認重試／逾時（PR #91／未部署）
+
+- 修改範圍：`modules/kb/index.html`（`/api/me` 130 秒 AbortController；等待 8 秒加長提示；503／網路／逾時顯示「🔁 重試」並防併發重跑 `init()`；auth 仍用「🔄 重新登入」）；`index.html` 版本 `v26.10.03.5`
+- 驗證：`node --check` kb 模組 script；Playwright 模擬主控台 token＋503→重試→200
+- Commit／線上：PR #91（未 merge、未上 Pages）
+- 待處理／風險：merge 後 Pages 部署才生效；真實 GAS 冷啟動 100+ 秒路徑建議部署後真人抽測
 
 ### 2026-10-03｜Cursor Cloud｜主控台登入減少重複 GET（已部署）
 
