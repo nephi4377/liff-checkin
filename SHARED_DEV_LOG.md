@@ -24,6 +24,14 @@
 
 ## 最近完成
 
+### 2026-10-11｜Cursor Cloud｜AI 預審 Telegram／Ollama／觸發器（draft／未部署）
+
+- 修改範圍：GAS Ollama 橋接＋runbook；`runAiPreAuditConfigStatus`；Telegram 分塊／ngrok header；觸發器 list／install 清理 hourly；SPEC／LOG
+- 完成內容：正式 Ollama 路徑入庫；Nephi 必填鍵名文件化（token 不進 git）；09:00／12:30 可裝
+- 驗證：`test-vendor-payment-ai-preaudit.js` OK；TX34 本機啟動仍待你在 TX34 跑 ps1
+- Commit／線上：[GAS#123](https://github.com/nephi4377/Backend_GAS/pull/123)、[liff#144](https://github.com/nephi4377/liff-checkin/pull/144)
+- 待處理：Nephi 填 Telegram token／chat、`TX34_LLM_AUDIT_URL`；TX34 啟 Ollama 橋接；等你說部署後 clasp＋`installAiPreAuditDigestTriggers`
+
 ### 2026-10-11｜Cursor Cloud｜待付款 AI 預審 123.2／123.3（draft／未部署）
 
 - 修改範圍：GAS `evidence_rows`／`ai_override_reason`；FE 並排表＋跳紅列＋覆寫原因；`api?v=105`；SPEC／LOG／煙測
