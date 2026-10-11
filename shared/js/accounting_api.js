@@ -1480,6 +1480,35 @@ var AccountingApi = (function () {
         filter: filter || {}
       });
     },
+    /** 待付款報價對應查核（本機報價快取＋Gemini；R0 不寫分攤） */
+    vendorPaymentQuoteAudit: function (sessionOrToken, paymentRequestId, opts) {
+      opts = opts || {};
+      return post({
+        action: 'vendor_payment_quote_audit',
+        auth: resolveAuth(sessionOrToken),
+        payment_request_id: paymentRequestId,
+        force_heuristic: !!opts.force_heuristic
+      }, opts.timeoutMs != null ? opts.timeoutMs : 90000);
+    },
+    quoteLocalCacheUpsert: function (sessionOrToken, payload) {
+      payload = payload || {};
+      return post({
+        action: 'quote_local_cache_upsert',
+        auth: resolveAuth(sessionOrToken),
+        project_no: payload.project_no,
+        items: payload.items || [],
+        contract_amount: payload.contract_amount,
+        source_label: payload.source_label || '',
+        source_path: payload.source_path || ''
+      });
+    },
+    quoteLocalCacheGet: function (sessionOrToken, projectNo) {
+      return post({
+        action: 'quote_local_cache_get',
+        auth: resolveAuth(sessionOrToken),
+        project_no: projectNo
+      });
+    },
     cleanupTestData: function (sessionOrToken, confirm) {
       return post({
         action: 'accounting_cleanup_test',

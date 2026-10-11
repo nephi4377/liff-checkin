@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_tax_mode.js?v=6"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=102"></script>
+  <script src="../../shared/js/accounting_api.js?v=103"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=6"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
@@ -87,6 +87,26 @@
     .tab-btn.is-busy { opacity: 0.65; cursor: wait; }
     .tag.cash { background: #fef7e0; color: #b06000; }
     #listLive { margin-left: 8px; font-weight: 600; color: #1a73e8; }
+    .quote-audit {
+      margin-top: 14px; padding: 12px; border-radius: 10px;
+      background: #f8fafc; border: 1px solid #e2e8f0;
+    }
+    .quote-audit h4 { margin: 0 0 6px; font-size: 15px; }
+    .quote-audit .qa-meta { font-size: 12px; color: #555; margin-bottom: 8px; }
+    .quote-audit table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    .quote-audit th, .quote-audit td {
+      border-bottom: 1px solid #e8eaed; padding: 6px 4px; text-align: left; vertical-align: top;
+    }
+    .quote-audit th { color: #555; font-weight: 600; }
+    .conf-pill {
+      display: inline-block; font-size: 12px; font-weight: 700;
+      padding: 2px 8px; border-radius: 999px;
+    }
+    .conf-pill.high { background: #e6f4ea; color: #137333; }
+    .conf-pill.mid { background: #fef7e0; color: #b06000; }
+    .conf-pill.low { background: #fce8e6; color: #c5221f; }
+    .qa-links a { color: #1a73e8; margin-right: 10px; font-size: 13px; }
+    .qa-empty { color: #666; font-size: 13px; margin: 6px 0; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -1062,6 +1082,140 @@
         return panel;
       }
 
+      function confPillClass(c) {
+        var n = parseFloat(c);
+        if (!(n >= 0)) return 'low';
+        if (n >= 0.8) return 'high';
+        if (n >= 0.5) return 'mid';
+        return 'low';
+      }
+      function fmtPct(v) {
+        if (v == null || v === '' || isNaN(Number(v))) return '—';
+        return Number(v).toFixed(1) + '%';
+      }
+      function escapeHtmlQa(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+      function renderQuoteAuditInto(host, data) {
+        if (!host) return;
+        if (!data || !data.success) {
+          host.innerHTML = '<p class="qa-empty">' +
+            escapeHtmlQa((data && data.message) || '查核失敗，請再試') + '</p>';
+          return;
+        }
+        var conf = data.overall_confidence;
+        var pill = confPillClass(conf);
+        var html = '<h4>報價對應查核</h4>' +
+          '<div class="qa-meta">整體信心 <span class="conf-pill ' + pill + '">' +
+          (conf != null ? Number(conf).toFixed(2) : '—') + '</span>' +
+          ' · 模型 ' + escapeHtmlQa(data.model || 'gemini') +
+          ' · ' + escapeHtmlQa(data.match_method || '') +
+          ' · 只顯示不寫回</div>';
+
+        if (data.ingest_help && data.ingest_help.project_nos && data.ingest_help.project_nos.length) {
+          html += '<p class="qa-empty" style="color:#b06000">尚無本機報價快取：案 ' +
+            escapeHtmlQa(data.ingest_help.project_nos.join('、')) +
+            '。請從 TX34／本機匯出 JSON 後呼叫 <code>quote_local_cache_upsert</code>。</p>';
+        }
+
+        (data.projects || []).forEach(function (p) {
+          var mg = p.margin || {};
+          html += '<div class="sub" style="margin-top:8px"><strong>案 ' +
+            escapeHtmlQa(p.project_no) + '</strong>' +
+            (p.quote_found ? ' · 本機報價 ' + (p.quote_lines || []).length + ' 列' : ' · 缺本機報價') +
+            '</div>';
+          html += '<div class="sub">合約 $' + fmtMoney(mg.contract_amount) +
+            ' · 毛利 $' + fmtMoney(mg.gross_profit) +
+            '（' + fmtPct(mg.gross_margin_pct) + '）' +
+            ' · 含本筆後粗估 ' + fmtPct(mg.gross_margin_pct_after_pending) + '</div>';
+          var links = p.links || {};
+          html += '<div class="qa-links" style="margin-top:4px">';
+          if (links.budget_audit) {
+            html += '<a href="' + escapeHtmlQa(links.budget_audit) +
+              '" target="_top" rel="noopener">驗收／報價</a>';
+          }
+          if (links.project_margin) {
+            html += '<a href="' + escapeHtmlQa(links.project_margin) +
+              '" target="_blank" rel="noopener">案件毛利</a>';
+          }
+          if (links.customer_finance) {
+            html += '<a href="' + escapeHtmlQa(links.customer_finance) +
+              '" target="_top" rel="noopener">追加減與收款</a>';
+          }
+          (links.attachments || []).slice(0, 3).forEach(function (u, i) {
+            html += '<a href="' + escapeHtmlQa(u) + '" target="_blank" rel="noopener">附件' +
+              (i + 1) + '</a>';
+          });
+          html += '</div>';
+        });
+
+        var maps = data.mappings || [];
+        if (!maps.length) {
+          html += '<p class="qa-empty">沒有可對應的成本列</p>';
+        } else {
+          html += '<table><thead><tr>' +
+            '<th>請款品項</th><th>→ 報價工項</th><th>報價</th><th>成本</th><th>利潤率</th><th>信心</th>' +
+            '</tr></thead><tbody>';
+          maps.forEach(function (m) {
+            var cp = confPillClass(m.confidence);
+            html += '<tr>' +
+              '<td>' + escapeHtmlQa(m.cost_text) +
+              (m.project_no ? '<div class="mono">#' + escapeHtmlQa(m.project_no) + '</div>' : '') +
+              '</td>' +
+              '<td>' + (m.quote_line_name
+                ? escapeHtmlQa((m.quote_zone ? m.quote_zone + ' · ' : '') + m.quote_line_name)
+                : '（未對到）') +
+              (m.rationale ? '<div class="sub">' + escapeHtmlQa(m.rationale) + '</div>' : '') +
+              '</td>' +
+              '<td>$' + fmtMoney(m.quote_price) + '</td>' +
+              '<td>$' + fmtMoney(m.cost_amount) + '</td>' +
+              '<td>' + fmtPct(m.line_margin_pct) + '</td>' +
+              '<td><span class="conf-pill ' + cp + '">' +
+              (m.confidence != null ? Number(m.confidence).toFixed(2) : '—') +
+              '</span></td>' +
+              '</tr>';
+          });
+          html += '</tbody></table>';
+        }
+        html += '<button type="button" class="btn btn-muted btn-quote-audit" style="margin-top:10px">重新查核</button>';
+        host.innerHTML = html;
+      }
+      function bindQuoteAuditButton(item, host) {
+        if (!host) return;
+        var qaBtn = host.querySelector('.btn-quote-audit');
+        if (!qaBtn) return;
+        qaBtn.addEventListener('click', async function () {
+          await loadQuoteAuditForItem(item, host, qaBtn);
+        });
+      }
+      async function loadQuoteAuditForItem(item, host, btn) {
+        if (!session || !item || !item.payment_request_id || !AccountingApi.vendorPaymentQuoteAudit) {
+          if (host) {
+            host.innerHTML = '<p class="qa-empty">無法載入查核（API 未就緒）</p>' +
+              '<button type="button" class="btn btn-muted btn-quote-audit" style="margin-top:6px">重試</button>';
+            bindQuoteAuditButton(item, host);
+          }
+          return;
+        }
+        await AccountingUi.runAsync(btn || host, {
+          busyLabel: '對應報價中…',
+          clear: false
+        }, async function () {
+          var res = await AccountingApi.vendorPaymentQuoteAudit(session, item.payment_request_id);
+          renderQuoteAuditInto(host, res);
+          bindQuoteAuditButton(item, host);
+        }).catch(function (e) {
+          if (host) {
+            host.innerHTML = '<p class="qa-empty">' +
+              escapeHtmlQa((e && e.message) || '查核逾時或失敗') + '</p>' +
+              '<button type="button" class="btn btn-muted btn-quote-audit" style="margin-top:6px">重試</button>';
+            bindQuoteAuditButton(item, host);
+          }
+        });
+      }
+
       function renderReviewPanel(item) {
         var panel = document.createElement('div');
         panel.className = 'review-panel hidden';
@@ -1121,7 +1275,12 @@
           actionHtml +
           (!allowApprove
             ? '<p class="sub" style="margin-top:8px">（核准／退回需權限 ≥ 5）</p>'
-            : '');
+            : '') +
+          '<div class="quote-audit" data-qa-host="1">' +
+          '<h4>報價對應查核</h4>' +
+          '<p class="qa-empty">開啟詳情後按下方按鈕，以本機報價快取＋AI 對應（不寫回分攤）。</p>' +
+          '<button type="button" class="btn btn-muted btn-quote-audit" style="margin-top:6px">載入報價對應</button>' +
+          '</div>';
         var initRows = allocRowsFromItem(item);
         if (initMode === 'prorate' && typeof AccountingTaxMode !== 'undefined') {
           initRows = AccountingTaxMode.toPretaxRows(initRows, 'prorate');
@@ -1202,6 +1361,8 @@
             });
           });
         }
+        var qaHost = panel.querySelector('[data-qa-host]');
+        if (qaHost) bindQuoteAuditButton(item, qaHost);
         return panel;
       }
 

@@ -21,6 +21,7 @@
 ## 目前進行中
 
 - Cursor Cloud｜請款審核讀取審核包逾時（N+1 memo＋FE 90s）｜draft [liff#137](https://github.com/nephi4377/liff-checkin/pull/137)／[GAS#119](https://github.com/nephi4377/Backend_GAS/pull/119)
+- Cursor Cloud｜待付款報價對應查核（本機快取＋Gemini G1／R0；`ledger_review` 面板）｜branch `cursor/pending-payment-quote-audit-2725`（與 #137 同檔加成，勿互蓋 N+1）
 
 ## 最近完成
 
