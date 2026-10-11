@@ -1,5 +1,7 @@
 # 共用開發紀錄
 
+階段記憶／持續摘要（可選）：[tanxin-dev-kb](https://github.com/nephi4377/tanxin-dev-kb) — agent 僅在 Nephi 要求時連，不必每次 pull。
+
 這是 Cursor、ChatGPT、Codex 與人工開發共同使用的唯一交接紀錄。
 
 ## 使用方式
