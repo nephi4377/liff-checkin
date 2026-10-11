@@ -274,6 +274,10 @@
             gap: 18px;
         }
 
+        .dashboard-grid > .empty-state {
+            grid-column: 1 / -1;
+        }
+
         .project-card {
             background: white;
             border-radius: var(--radius-lg);
@@ -1863,6 +1867,75 @@
     const DASHBOARD_SNAPSHOT_KEY = 'audit_dashboard_snapshot';
     let _dashboardRefreshSeq = 0;
 
+    function escapeHtmlDash_(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (ch) {
+            return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+        });
+    }
+
+    function readAuditorMock_() {
+        try {
+            return String(new URLSearchParams(location.search).get('mock') || '').trim();
+        } catch {
+            return '';
+        }
+    }
+
+    function renderDashboardSkeletons_() {
+        const container = document.getElementById('dashboard-list');
+        if (!container) return;
+        container.innerHTML =
+            '<div class="project-card"><div class="skeleton" style="height:120px;"></div></div>' +
+            '<div class="project-card"><div class="skeleton" style="height:120px;"></div></div>' +
+            '<div class="project-card"><div class="skeleton" style="height:120px;"></div></div>';
+    }
+
+    function renderDashboardError_(message) {
+        const container = document.getElementById('dashboard-list');
+        if (!container) return;
+        const msg = escapeHtmlDash_(message || '請檢查網路後再試');
+        container.innerHTML =
+            '<div class="empty-state dash-load-error">' +
+            '<i data-lucide="wifi-off"></i>' +
+            '<p><strong>讀不到案場概覽</strong></p>' +
+            '<p>不是沒有案子，是這次沒連上。' + (msg ? '（' + msg + '）' : '') + '</p>' +
+            '<p style="margin-top:14px"><button type="button" class="btn btn-primary" id="btnRetryDashboard">再試一次</button></p>' +
+            '</div>';
+        try { lucide.createIcons(); } catch {}
+        const btn = document.getElementById('btnRetryDashboard');
+        if (btn) btn.onclick = function () { refreshDashboard(); };
+    }
+
+    function clearAuditorFetchError_() {
+        const banner = document.getElementById('auditor-load-error');
+        if (banner && banner.parentNode) banner.parentNode.removeChild(banner);
+    }
+
+    function showAuditorFetchError_(projectNo, message) {
+        const dz = document.getElementById('drop-zone');
+        if (!dz) return;
+        dz.classList.remove('hidden');
+        let banner = document.getElementById('auditor-load-error');
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'auditor-load-error';
+            banner.className = 'empty-state';
+            banner.style.cssText = 'padding:20px 12px 8px;';
+            dz.insertBefore(banner, dz.firstChild);
+        }
+        const no = escapeHtmlDash_(projectNo);
+        const msg = escapeHtmlDash_(message || '');
+        banner.innerHTML =
+            '<p><strong>讀不到這案的驗收表</strong></p>' +
+            '<p>案號 ' + no + ' 這次沒連上' + (msg ? '（' + msg + '）' : '') + '，不是沒有這張表。</p>' +
+            '<p style="margin-top:12px"><button type="button" class="btn btn-primary" id="btnRetryAuditorLoad">再試一次</button></p>';
+        const btn = document.getElementById('btnRetryAuditorLoad');
+        if (btn) {
+            btn.onclick = function () { jumpToProject(projectNo); };
+        }
+        try { lucide.createIcons(); } catch {}
+    }
+
     function loadDashboardSnapshot() {
         try {
             const raw = localStorage.getItem(DASHBOARD_SNAPSHOT_KEY);
@@ -1920,19 +1993,35 @@
         dbStats.innerHTML = `<span class="sync-dot dot-syncing"></span> 快取${staleTag} · 上次畫面: ${t} · 共 ${total} 個使用中案場${pendingSuffix}`;
     }
 
-    window.refreshDashboard = async () => {
+    window.refreshDashboard = async (isRetry) => {
         const mySeq = ++_dashboardRefreshSeq;
         const still = () => mySeq === _dashboardRefreshSeq;
         const dbStats = document.getElementById('dashboard-stats');
+        const mock = readAuditorMock_();
 
-        const cachedDash = loadDashboardSnapshot();
+        const cachedDash = (mock === 'dashboard_fail' || mock === 'dashboard_empty')
+            ? null
+            : loadDashboardSnapshot();
         if (cachedDash) {
             applyDashboardFromSnapshot(cachedDash, true);
         } else {
             dbStats.innerHTML = `<span class="sync-dot dot-syncing"></span> 同步中...`;
+            renderDashboardSkeletons_();
         }
 
         try {
+            if (mock === 'dashboard_fail') {
+                throw new Error('模擬：雲端讀取失敗');
+            }
+            if (mock === 'dashboard_empty') {
+                globalProjects = {};
+                updateDashboardStatElements();
+                renderDashboardList();
+                const syncTimeDisplay = new Date().toLocaleTimeString();
+                dbStats.innerHTML = `<span class="sync-dot dot-online"></span> 最後同步: ${syncTimeDisplay} · 共 0 個使用中案場`;
+                return;
+            }
+
             await reconcileClosedProjectsFromSheet();
             const snap     = await db.ref('quotations').once('value');
             if (!still()) return;
@@ -1973,12 +2062,19 @@
         } catch (e) {
             console.error('[Dashboard] 同步失敗', e);
             if (!still()) return;
+            if (!cachedDash && !isRetry) {
+                dbStats.innerHTML = `<span class="sync-dot dot-syncing"></span> 再試一次…`;
+                await new Promise(function (r) { setTimeout(r, 700); });
+                if (!still()) return;
+                return refreshDashboard(true);
+            }
             if (cachedDash) {
                 applyDashboardFromSnapshot(cachedDash, false);
                 dbStats.innerHTML = `<span class="sync-dot dot-offline"></span> 雲端失敗 · 已顯示本地快取（${cachedDash.syncTimeDisplay || '—'}）`;
                 showToast('概覽：雲端失敗，已顯示上次快取', 'warning');
             } else {
                 dbStats.innerHTML = `<span class="sync-dot dot-offline"></span> 同步失敗，請檢查網路`;
+                renderDashboardError_((e && e.message) || '請檢查網路後再試');
                 showToast('Dashboard 同步失敗', 'error');
             }
         }
@@ -1987,6 +2083,15 @@
     function renderDashboardList() {
         const container = document.getElementById('dashboard-list');
         const ids = Object.keys(globalProjects).sort((a, b) => b.localeCompare(a));
+        if (!ids.length) {
+            container.innerHTML =
+                '<div class="empty-state">' +
+                '<i data-lucide="inbox"></i>' +
+                '<p>目前沒有使用中的驗收案場</p>' +
+                '</div>';
+            try { lucide.createIcons(); } catch {}
+            return;
+        }
         container.innerHTML = ids.map(id => {
             const p     = globalProjects[id];
             const name  = p.name ? p.name : '未命名案場';
@@ -2159,14 +2264,15 @@
         }
     }
 
-    async function loadFromFirebase(projectNo) {
+    async function loadFromFirebase(projectNo, isRetry) {
         if (!fbConfig.databaseURL) { showToast('未設定 Database URL，無法連線雲端。', 'warning'); return; }
 
         const mySeq = ++_firebaseLoadSeq;
         const stillThisLoad = () => mySeq === _firebaseLoadSeq;
 
         showToast(`載入案號 ${projectNo}...`, 'info', 2000);
-        const cached = loadFromCache(projectNo);
+        const mock = readAuditorMock_();
+        const cached = mock === 'project_fail' ? null : loadFromCache(projectNo);
         let showedCache = false;
 
         if (cached) {
@@ -2182,6 +2288,9 @@
         }
 
         try {
+            if (readAuditorMock_() === 'project_fail') {
+                throw new Error('模擬：雲端讀取失敗');
+            }
             if (!firebase.apps.length) { firebase.initializeApp(buildFirebaseInitOptions()); tryAnonymousSignIn(); }
             const snap = await firebase.database().ref(`quotations/${projectNo}`).once('value');
             if (!stillThisLoad()) return;
@@ -2196,6 +2305,7 @@
                     contextData.closed_at = data.closed_at || contextData.closed_at || null;
                     contextData.closed_by = data.closed_by || contextData.closed_by || null;
                 }
+                clearAuditorFetchError_();
                 loadData(contextData, hubMap);
                 const hSync = document.getElementById('h-sync');
                 if (hSync) hSync.innerText = data.last_updated || '剛剛';
@@ -2205,14 +2315,38 @@
                 if (ctxNo && ctxNo !== 'UNKNOWN_NO') fetchProjectMetadata(ctxNo);
             } else if (!showedCache) {
                 showToast(`找不到案號 ${projectNo} 的雲端資料`, 'error');
+                const dz = document.getElementById('drop-zone');
+                if (dz) {
+                    dz.classList.remove('hidden');
+                    let banner = document.getElementById('auditor-load-error');
+                    if (!banner) {
+                        banner = document.createElement('div');
+                        banner.id = 'auditor-load-error';
+                        banner.className = 'empty-state';
+                        banner.style.cssText = 'padding:20px 12px 8px;';
+                        dz.insertBefore(banner, dz.firstChild);
+                    }
+                    banner.innerHTML =
+                        '<p><strong>雲端沒有這案的驗收表</strong></p>' +
+                        '<p>案號 ' + escapeHtmlDash_(projectNo) + ' 還沒有寫入工項，或案號打錯。可改案號再查，或先用報價單解析器同步。</p>';
+                }
             } else {
                 console.warn('[Firebase] 無遠端資料，沿用本地快取');
                 if (stillThisLoad()) showToast('雲端尚無此案，已顯示本地快取', 'warning', 3500);
             }
         } catch (err) {
             console.error(err);
-            if (!showedCache) showToast('雲端載入失敗: ' + err.message, 'error');
-            else if (stillThisLoad()) showToast('雲端暫時無法更新，已保留本地快取', 'warning', 3500);
+            if (!stillThisLoad()) return;
+            if (!showedCache && !isRetry) {
+                showToast('再試一次…', 'info', 1500);
+                await new Promise(function (r) { setTimeout(r, 700); });
+                if (!stillThisLoad()) return;
+                return loadFromFirebase(projectNo, true);
+            }
+            if (!showedCache) {
+                showToast('雲端載入失敗: ' + err.message, 'error');
+                showAuditorFetchError_(projectNo, err.message);
+            } else if (stillThisLoad()) showToast('雲端暫時無法更新，已保留本地快取', 'warning', 3500);
         }
         if (stillThisLoad()) await applySheetClosureIfNeeded(projectNo);
     }
@@ -2456,6 +2590,7 @@
             refreshPriceDisplay();
             refreshPermissionBanner();
             refreshCloseProjectButton();
+            clearAuditorFetchError_();
 
             renderList();
         } catch (err) {
