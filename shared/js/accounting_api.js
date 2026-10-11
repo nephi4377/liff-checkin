@@ -124,7 +124,7 @@ var AccountingApi = (function () {
       var attempt = 0;
       var maxAttempts = 3;
       // 歷史記帳：GAS 慢／404 時重試只會把 Abort 疊滿 90s；一次失敗即可（後端已有軟截止）
-      // cache-bust companions: ledger_review.html loads this as ?v=101（審核包 timeout／N+1）
+      // cache-bust companions: ledger_review.html loads this as ?v=104（AI 預審橫幅）
       if (actionName === 'accounting_ledger_recent') maxAttempts = 1;
       while (attempt < maxAttempts) {
         attempt += 1;

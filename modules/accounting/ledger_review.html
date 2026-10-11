@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_tax_mode.js?v=6"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=102"></script>
+  <script src="../../shared/js/accounting_api.js?v=104"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=6"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
@@ -87,6 +87,15 @@
     .tab-btn.is-busy { opacity: 0.65; cursor: wait; }
     .tag.cash { background: #fef7e0; color: #b06000; }
     #listLive { margin-left: 8px; font-weight: 600; color: #1a73e8; }
+    .ai-preaudit {
+      margin-top: 8px; padding: 8px 10px; border-radius: 8px; font-size: 13px; line-height: 1.4;
+      border: 1px solid #e0e0e0; background: #f8f9fa; color: #444;
+    }
+    .ai-preaudit.lamp-red { border-color: #f28b82; background: #fce8e6; color: #c5221f; }
+    .ai-preaudit.lamp-yellow { border-color: #f9ab00; background: #fef7e0; color: #b06000; }
+    .ai-preaudit.lamp-green { border-color: #81c995; background: #e6f4ea; color: #137333; }
+    .ai-preaudit.lamp-pending { border-color: #dadce0; background: #f1f3f4; color: #5f6368; }
+    .ai-preaudit .ai-title { font-weight: 700; margin-right: 4px; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -1205,6 +1214,33 @@
         return panel;
       }
 
+      function aiPreauditBannerHtml(item) {
+        if (!isPaymentRequest(item)) return '';
+        var ai = item.ai_preaudit || null;
+        var st = ai && ai.status ? String(ai.status) : 'missing';
+        var color = ai && ai.color ? String(ai.color) : '';
+        var label = (ai && ai.label) || '預審尚未完成，可直接審';
+        var lampClass = 'lamp-pending';
+        if (st === 'done') {
+          if (color === 'red') lampClass = 'lamp-red';
+          else if (color === 'yellow') lampClass = 'lamp-yellow';
+          else if (color === 'green') lampClass = 'lamp-green';
+        } else if (st === 'failed') {
+          lampClass = 'lamp-yellow';
+        }
+        // 永不因預審鎖操作；文案固定提示可直接審
+        return '<div class="ai-preaudit ' + lampClass + '" data-ai-status="' + st + '">' +
+          '<span class="ai-title">AI 預審</span>' +
+          escapeHtml(label) +
+          '</div>';
+      }
+
+      function escapeHtml(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
       function renderItem(item) {
         var div = document.createElement('div');
         div.className = 'item' + (isErrorFlagged(item) ? ' is-error-flagged' : '');
@@ -1239,6 +1275,7 @@
             ? ('<div class="error-flag-reason">錯誤原因：' +
               (errorFlagReason(item) || '（已標示，未填原因）') + '</div>')
             : '') +
+          aiPreauditBannerHtml(item) +
           '<div class="mono">' + ((isIncome || isCashSign)
             ? (item.receipt_id ? item.receipt_id.slice(0, 8) + '…' : '')
             : (item.payment_request_id ? item.payment_request_id.slice(0, 8) + '…' : '')) + '</div>' +
