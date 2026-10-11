@@ -6,7 +6,7 @@
   <title>請款審核</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_tax_mode.js?v=6"></script>
+  <script src="../../shared/js/accounting_tax_mode.js?v=7"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/accounting_api.js?v=105"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
@@ -514,7 +514,7 @@
         if (!hintEl || !cb) return;
         var amtInp = rowEl.querySelector('.inp-amt');
         var amt = parseAllocAmount(amtInp ? amtInp.value : '');
-        if (!cb.checked || isNaN(amt) || amt === 0 || amt < 0) {
+        if (!cb.checked || isNaN(amt) || amt === 0) {
           hintEl.textContent = '';
           return;
         }
@@ -761,14 +761,6 @@
           el.textContent = sum.toLocaleString('zh-TW');
         }
       }
-      function setTaxControlsDisabled(row, disabled) {
-        var taxCb = row.querySelector('.inp-tax');
-        if (taxCb) {
-          taxCb.disabled = disabled;
-          if (disabled) taxCb.checked = false;
-        }
-      }
-
       function bindAllocPanelEvents(panel) {
         panel.querySelectorAll('.inp-amt, .inp-pn, .inp-desc').forEach(function (inp) {
           inp.oninput = function () {
@@ -776,7 +768,6 @@
             if (row && inp.classList.contains('inp-amt')) {
               updatePretaxHint(row, panel);
               var a = parseAllocAmount(inp.value);
-              setTaxControlsDisabled(row, !isNaN(a) && a < 0);
               if (!isNaN(a)) row.setAttribute('data-base-amount', String(a));
               row.setAttribute('data-tax-add-applied', '0');
             }
@@ -825,21 +816,19 @@
         row = row || {};
         var checked = !!row.tax_inclusive;
         var amt = parseAllocAmount(row.amount);
-        var taxDisabled = !isNaN(amt) && amt < 0;
-        if (taxDisabled) checked = false;
         var pretaxText = '';
-        if (checked && !isNaN(amt) && amt !== 0 && amt > 0) {
+        if (checked && !isNaN(amt) && amt !== 0) {
           pretaxText = (typeof AccountingTaxMode !== 'undefined')
             ? AccountingTaxMode.rowHintText(row, taxMode)
             : ('未稅 $' + removeTaxAmount(amt).toLocaleString('zh-TW'));
         }
         var baseAttr = (row._base_amount != null && row._base_amount !== '') ? String(row._base_amount) : '';
-        var amtLabel = (!taxDisabled && (taxMode === 'prorate' || !checked)) ? '金額（未稅）' : '金額';
+        var amtLabel = (taxMode === 'prorate' || !checked) ? '金額（未稅）' : '金額';
         var taxRowHtml = '';
         if (taxMode !== 'prorate') {
           taxRowHtml = '<div class="tax-row">' +
             '<label><input type="checkbox" class="inp-tax"' +
-            (checked ? ' checked' : '') + (taxDisabled ? ' disabled' : '') + ' />含稅</label>' +
+            (checked ? ' checked' : '') + ' />含稅</label>' +
             '<span class="pretax-hint">' + pretaxText + '</span></div>';
         }
         return '<div class="alloc-row" data-idx="' + idx + '"' +

@@ -5,10 +5,10 @@
 
 ## 多工具共同開發
 
-- Cursor、ChatGPT、Codex 與人工開發共用根目錄 `SHARED_DEV_LOG.md` 作為唯一交接紀錄。
-- 開始修改前先 `git pull --ff-only origin main`，並完整閱讀 `SHARED_DEV_LOG.md`。
-- 先檢查「目前進行中」是否有人正在修改相同檔案；有重疊時不要覆蓋，先向使用者說明。
-- 完成後更新該檔的「最近完成」與「待處理」，並附上驗證方式及 commit。
+- 交接與階段記憶在 **[tanxin-dev-kb](https://github.com/nephi4377/tanxin-dev-kb)**（`goals/`＋`categories/*/LOG/`）。本 repo `SHARED_DEV_LOG.md` 只是短指標。
+- 開始修改前先 `git pull --ff-only origin main`；**自行判斷**是否連讀 tanxin-dev-kb（相關任務／需要階段記憶時就連）。
+- 先檢查知識庫或同事是否標示正在修改相同檔案；有重疊時不要覆蓋，先向使用者說明。
+- 完成後更新 tanxin-dev-kb 對應分類 `LOG/`（驗證方式及 commit）；大方向更新 `goals/CURRENT.md`。
 - 禁止強制推送或使用會覆蓋他人工作的 destructive git 操作。
 - 新增或改版 WordPress 作品集案例頁時，依 `SPEC/PORTFOLIO_GA4_TRACKING.md` 核對頁面階層、案例事件與發佈後驗證；影片封面或 CTA 結構改動時要重新檢查追蹤。
 
