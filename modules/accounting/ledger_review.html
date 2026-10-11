@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_tax_mode.js?v=7"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=102"></script>
+  <script src="../../shared/js/accounting_api.js?v=105"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=6"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
@@ -87,6 +87,37 @@
     .tab-btn.is-busy { opacity: 0.65; cursor: wait; }
     .tag.cash { background: #fef7e0; color: #b06000; }
     #listLive { margin-left: 8px; font-weight: 600; color: #1a73e8; }
+    .ai-preaudit {
+      margin-top: 8px; padding: 8px 10px; border-radius: 8px; font-size: 13px; line-height: 1.4;
+      border: 1px solid #e0e0e0; background: #f8f9fa; color: #444;
+    }
+    .ai-preaudit.lamp-red { border-color: #f28b82; background: #fce8e6; color: #c5221f; }
+    .ai-preaudit.lamp-yellow { border-color: #f9ab00; background: #fef7e0; color: #b06000; }
+    .ai-preaudit.lamp-green { border-color: #81c995; background: #e6f4ea; color: #137333; }
+    .ai-preaudit.lamp-pending { border-color: #dadce0; background: #f1f3f4; color: #5f6368; }
+    .ai-preaudit .ai-title { font-weight: 700; margin-right: 4px; }
+    .ai-preaudit .btn-jump-red {
+      margin-left: 8px; padding: 4px 8px; font-size: 12px; border: 1px solid #f28b82;
+      background: #fff; color: #c5221f; border-radius: 6px; cursor: pointer; font-weight: 600;
+    }
+    .ai-evidence { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #ddd; }
+    .ai-evidence h4 { margin: 0 0 6px; font-size: 14px; }
+    .ai-evidence .ai-ev-hint { font-size: 12px; color: #666; margin: 0 0 8px; }
+    .ai-ev-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .ai-ev-table th, .ai-ev-table td {
+      border: 1px solid #e8eaed; padding: 8px 6px; vertical-align: top; text-align: left;
+    }
+    .ai-ev-table th { background: #f8f9fa; color: #555; font-weight: 600; }
+    .ai-ev-table tr.is-red { background: #fce8e6; }
+    .ai-ev-table tr.is-yellow { background: #fef7e0; }
+    .ai-ev-table tr.is-green { background: #e6f4ea; }
+    .ai-ev-table .sev { font-weight: 700; white-space: nowrap; }
+    .ai-ev-table .sev-red { color: #c5221f; }
+    .ai-ev-table .sev-yellow { color: #b06000; }
+    .ai-ev-table .sev-green { color: #137333; }
+    @media (max-width: 640px) {
+      .ai-ev-table th:nth-child(1), .ai-ev-table td:nth-child(1) { display: none; }
+    }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -854,11 +885,41 @@
         return patch;
       }
 
-      async function approveVendor(item, patch) {
+      function aiPreauditDisagrees(item, decision) {
+        var ai = item && item.ai_preaudit;
+        if (!ai || String(ai.status || '') !== 'done') return false;
+        var color = String(ai.color || '');
+        if (decision === 'approve' && color === 'red') return true;
+        if (decision === 'reject' && color === 'green') return true;
+        return false;
+      }
+
+      function maybeAskAiOverrideReason(item, decision, preset) {
+        var filled = String(preset || '').trim();
+        if (filled) return filled;
+        if (!aiPreauditDisagrees(item, decision)) return '';
+        var hint = decision === 'approve'
+          ? 'AI 預審偏紅，你仍要核准。可填短原因（選填，直接確定可略過）：'
+          : 'AI 預審偏綠，你仍要退回。可填短原因（選填，直接確定可略過）：';
+        var ans = window.prompt(hint, '');
+        if (ans == null) return null; // 取消整次操作
+        return String(ans || '').trim().slice(0, 200);
+      }
+
+      async function approveVendor(item, patch, opts) {
         patch = patch || defaultPatchForItem(item);
+        opts = opts || {};
         if (patch.allocations) {
           var err = validateAllocRows(patch.allocations);
           if (err) { setMsg((item.party_name || '請款') + '：' + err); return false; }
+        }
+        if (!opts.skipOverridePrompt && patch.ai_override_reason == null) {
+          var ov = maybeAskAiOverrideReason(item, 'approve', '');
+          if (ov === null) return false;
+          if (ov) patch.ai_override_reason = ov;
+        }
+        if (patch.ai_override_reason != null && !String(patch.ai_override_reason).trim()) {
+          delete patch.ai_override_reason;
         }
         var data = await AccountingApi.vendorPaymentApprove(session, item.payment_request_id, patch);
         if (!data.success) {
@@ -871,8 +932,17 @@
         return true;
       }
 
-      async function rejectVendor(item, reason) {
-        var data = await AccountingApi.vendorPaymentReject(session, item.payment_request_id, reason || '');
+      async function rejectVendor(item, reason, overrideReason, opts) {
+        opts = opts || {};
+        var ov = overrideReason;
+        if (!opts.skipOverridePrompt && (ov == null || ov === undefined)) {
+          ov = maybeAskAiOverrideReason(item, 'reject', '');
+          if (ov === null) return false;
+        }
+        var data = await AccountingApi.vendorPaymentReject(
+          session, item.payment_request_id, reason || '',
+          (ov && String(ov).trim()) ? { ai_override_reason: String(ov).trim() } : undefined
+        );
         if (!data.success) { setMsg(data.message || '退回失敗，請再試'); return false; }
         return true;
       }
@@ -907,7 +977,7 @@
         if (isCustomerReceiptItem(item)) return item.receipt_no || item.project_no || '這筆收款';
         return item.party_name || item.project_no || '這筆請款';
       }
-      async function runRejectAction(item, btn, kind, presetFn) {
+      async function runRejectAction(item, btn, kind, presetFn, aiOverridePreset) {
         var cacheId = itemCacheId(item);
         if (itemQueueBusy(cacheId)) return;
         var preset = typeof presetFn === 'function' ? String(presetFn() || '') : String(presetFn || '');
@@ -915,6 +985,11 @@
           ? await AccountingUi.confirmReject({ summary: itemRejectLabel(item), reason: preset })
           : null;
         if (!picked) return;
+        var overrideReason = aiOverridePreset;
+        if (kind !== 'income' && (overrideReason == null || overrideReason === '')) {
+          overrideReason = maybeAskAiOverrideReason(item, 'reject', '');
+          if (overrideReason === null) return;
+        }
         await AccountingUi.runAsync(btn, {
           busyLabel: '退回中…',
           queue: true,
@@ -926,7 +1001,7 @@
           ui.clear();
           var ok = kind === 'income'
             ? await rejectIncome(item, picked.reason)
-            : await rejectVendor(item, picked.reason);
+            : await rejectVendor(item, picked.reason, overrideReason, { skipOverridePrompt: true });
           if (ok) {
             setOk('已退回「' + itemRejectLabel(item) + '」');
             removeItemFromView(cacheId);
@@ -1103,9 +1178,14 @@
               (errorFlagReason(item) ? '：' + errorFlagReason(item) : '') +
               '</p>')
             : '') +
+          aiEvidenceTableHtml(item) +
           (allowApprove
             ? ('<label>退回原因（選填，按退回後仍會再確認）</label>' +
-              '<input type="text" class="inp-reject" placeholder="可不填，下一步可用現成原因" />')
+              '<input type="text" class="inp-reject" placeholder="可不填，下一步可用現成原因" />' +
+              '<label style="margin-top:10px">與 AI 判斷不同時的短原因（選填）</label>' +
+              '<input type="text" class="inp-ai-override" maxlength="200" ' +
+              'placeholder="例如：圖上金額對、報價另案已談妥" />' +
+              '<p class="sub" style="margin:4px 0 0">核准偏紅或退回偏綠時可填；不填也能送。</p>')
             : '') +
           actionHtml +
           (!allowApprove
@@ -1176,7 +1256,18 @@
               var patch = readPatchFromPanel(panel);
               var err = validateAllocRows(patch.allocations);
               if (err) { setMsg(err); return; }
-              var ok = await approveVendor(item, patch);
+              var ovEl = panel.querySelector('.inp-ai-override');
+              var presetOv = ovEl ? ovEl.value.trim() : '';
+              if (presetOv) {
+                patch.ai_override_reason = presetOv;
+              } else if (aiPreauditDisagrees(item, 'approve')) {
+                var asked = maybeAskAiOverrideReason(item, 'approve', '');
+                if (asked === null) return;
+                patch.ai_override_reason = asked; // 可為空字串＝略過
+              } else {
+                patch.ai_override_reason = null;
+              }
+              var ok = await approveVendor(item, patch, { skipOverridePrompt: true });
               if (ok) {
                 setOk('已核准「' + (item.party_name || '') + '」，進入待匯款');
                 removeItemFromView(item.payment_request_id);
@@ -1186,12 +1277,99 @@
           panel.querySelector('.btn-confirm-reject').addEventListener('click', async function () {
             if (!canApproveVendor || itemQueueBusy(item.payment_request_id)) return;
             var btn = panel.querySelector('.btn-confirm-reject');
+            var ovEl = panel.querySelector('.inp-ai-override');
+            var presetOverride = ovEl ? ovEl.value.trim() : '';
             await runRejectAction(item, btn, 'vendor', function () {
               return panel.querySelector('.inp-reject').value.trim();
-            });
+            }, presetOverride === '' ? undefined : presetOverride);
           });
         }
         return panel;
+      }
+
+      function aiEvidenceRows(item) {
+        var ai = item && item.ai_preaudit;
+        if (!ai) return [];
+        return Array.isArray(ai.evidence_rows) ? ai.evidence_rows : [];
+      }
+
+      function aiRedCount(item) {
+        var ai = item && item.ai_preaudit;
+        if (ai && ai.red_count != null) return parseInt(ai.red_count, 10) || 0;
+        return aiEvidenceRows(item).filter(function (r) { return r && r.severity === 'red'; }).length;
+      }
+
+      function aiEvidenceTableHtml(item) {
+        var rows = aiEvidenceRows(item);
+        if (!rows.length) {
+          return '<div class="ai-evidence" data-ai-evidence="1">' +
+            '<h4>手填 vs 圖／報價</h4>' +
+            '<p class="ai-ev-hint">尚無可對照列（預審未完成或無分攤／附件）。不影響核准。</p>' +
+            '</div>';
+        }
+        var body = rows.map(function (r) {
+          var sev = String(r.severity || '');
+          var trClass = sev === 'red' ? 'is-red' : (sev === 'yellow' ? 'is-yellow' : (sev === 'green' ? 'is-green' : ''));
+          var sevLabel = sev === 'red' ? '紅' : (sev === 'yellow' ? '黃' : (sev === 'green' ? '綠' : '—'));
+          var sevClass = sev ? ('sev-' + sev) : '';
+          return '<tr class="' + trClass + '" data-ai-sev="' + sev + '" id="ai-ev-' +
+            escapeHtml(item.payment_request_id || '') + '-' + escapeHtml(r.id || '') + '">' +
+            '<td class="sev ' + sevClass + '">' + sevLabel + '</td>' +
+            '<td>' + escapeHtml(r.field || '') + '</td>' +
+            '<td>' + escapeHtml(r.assistant || '') + '</td>' +
+            '<td>' + escapeHtml(r.evidence || '') +
+            (r.evidence_kind ? '<div class="mono">' + escapeHtml(r.evidence_kind) + '</div>' : '') +
+            '</td>' +
+            '<td>' + escapeHtml(r.note || '') + '</td>' +
+            '</tr>';
+        }).join('');
+        return '<div class="ai-evidence" data-ai-evidence="1">' +
+          '<h4>手填 vs 圖／報價</h4>' +
+          '<p class="ai-ev-hint">左欄助理填的，右欄圖／報價證據。紅列優先；不擋核准。</p>' +
+          '<table class="ai-ev-table"><thead><tr>' +
+          '<th>燈</th><th>欄位</th><th>助理手填</th><th>圖／報價證據</th><th>說明</th>' +
+          '</tr></thead><tbody>' + body + '</tbody></table></div>';
+      }
+
+      function jumpToAiRedRows(host) {
+        if (!host) return;
+        var red = host.querySelector('tr.is-red, .ai-ev-table tr[data-ai-sev="red"]');
+        if (red && typeof red.scrollIntoView === 'function') {
+          red.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          red.style.outline = '2px solid #c5221f';
+          setTimeout(function () { red.style.outline = ''; }, 1600);
+        }
+      }
+
+      function aiPreauditBannerHtml(item) {
+        if (!isPaymentRequest(item)) return '';
+        var ai = item.ai_preaudit || null;
+        var st = ai && ai.status ? String(ai.status) : 'missing';
+        var color = ai && ai.color ? String(ai.color) : '';
+        var label = (ai && ai.label) || '預審尚未完成，可直接審';
+        var lampClass = 'lamp-pending';
+        if (st === 'done') {
+          if (color === 'red') lampClass = 'lamp-red';
+          else if (color === 'yellow') lampClass = 'lamp-yellow';
+          else if (color === 'green') lampClass = 'lamp-green';
+        } else if (st === 'failed') {
+          lampClass = 'lamp-yellow';
+        }
+        var redN = aiRedCount(item);
+        var jump = redN > 0
+          ? (' <button type="button" class="btn-jump-red" data-jump-red="1">跳到紅列（' + redN + '）</button>')
+          : '';
+        // 永不因預審鎖操作；文案固定提示可直接審
+        return '<div class="ai-preaudit ' + lampClass + '" data-ai-status="' + st + '">' +
+          '<span class="ai-title">AI 預審</span>' +
+          escapeHtml(label) + jump +
+          '</div>';
+      }
+
+      function escapeHtml(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
       }
 
       function renderItem(item) {
@@ -1228,6 +1406,7 @@
             ? ('<div class="error-flag-reason">錯誤原因：' +
               (errorFlagReason(item) || '（已標示，未填原因）') + '</div>')
             : '') +
+          aiPreauditBannerHtml(item) +
           '<div class="mono">' + ((isIncome || isCashSign)
             ? (item.receipt_id ? item.receipt_id.slice(0, 8) + '…' : '')
             : (item.payment_request_id ? item.payment_request_id.slice(0, 8) + '…' : '')) + '</div>' +
@@ -1236,6 +1415,28 @@
         var actions = document.createElement('div');
         actions.className = 'actions';
         var reviewPanel = isIncome ? renderIncomeReviewPanel(item) : (isCashSign ? null : renderReviewPanel(item));
+
+        function openReviewAndJumpRed() {
+          if (!reviewPanel) return;
+          reviewPanel.classList.remove('hidden');
+          div.classList.add('focus');
+          setTimeout(function () { jumpToAiRedRows(reviewPanel); }, 80);
+        }
+        var jumpBtn = div.querySelector('[data-jump-red]');
+        if (jumpBtn) {
+          jumpBtn.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            openReviewAndJumpRed();
+            // 同步外層「審核／查看詳情」按鈕文案
+            var toggleBtns = actions.querySelectorAll('button.btn-primary');
+            toggleBtns.forEach(function (b) {
+              if (/審核|查看詳情|修改內容|收合/.test(b.textContent || '')) {
+                b.textContent = '收合';
+              }
+            });
+          });
+        }
 
         if (pending && isCashSign && canApproveIncome) {
           var btnCashSign = document.createElement('button');
@@ -1365,6 +1566,7 @@
             btnReview.textContent = open ? '審核' : '收合';
             div.classList.toggle('focus', !open);
             if (!open) {
+              if (aiRedCount(item) > 0) setTimeout(function () { jumpToAiRedRows(reviewPanel); }, 80);
               try {
                 var urls = item.attachment_urls && item.attachment_urls.length
                   ? item.attachment_urls
@@ -1398,6 +1600,7 @@
             btnView.textContent = open ? closedLabel : '收合';
             div.classList.toggle('focus', !open);
             if (!open) {
+              if (aiRedCount(item) > 0) setTimeout(function () { jumpToAiRedRows(reviewPanel); }, 80);
               try {
                 var urls = item.attachment_urls && item.attachment_urls.length
                   ? item.attachment_urls

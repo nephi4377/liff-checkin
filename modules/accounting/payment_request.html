@@ -11,7 +11,7 @@
   <script src="../../shared/js/operator_context.js?v=4"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=102"></script>
+  <script src="../../shared/js/accounting_api.js?v=104"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=6"></script>
   <script src="../../shared/js/accounting_ui.js?v=26"></script>
@@ -310,7 +310,7 @@
 
       <div class="btn-row">
         <button type="button" class="btn btn-primary" id="submitBtn">送出請款（待主管審核）</button>
-        <button type="button" class="btn btn-finance hidden" id="financeBtn">進階：財務直送待匯款（跳過審核）</button>
+        <button type="button" class="btn btn-finance hidden" id="financeBtn">進階：直送待匯款（略過 AI／人審・需 ≥5）</button>
       </div>
       <div id="submitErrorHost"></div>
       </div>
@@ -2609,11 +2609,14 @@
             isVendorSelf = String(session.auth.status || '') === '廠商';
             canSaveVendor = !isVendorSelf && (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION;
             canArchiveDelete = (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION;
-            canFinanceDirect = !isVendorSelf && (session.auth.permission || 0) >= AccountingApi.MIN_PERMISSION;
+            canFinanceDirect = !isVendorSelf &&
+              (session.auth.permission || 0) >= AccountingApi.VENDOR_PAYMENT_APPROVE_MIN_PERMISSION;
             document.getElementById('userLine').textContent =
               (session.auth.display_name || session.profile.displayName) +
               (isVendorSelf ? ' · 廠商' : (' · 權限 ' + session.auth.permission));
-            if (canFinanceDirect) document.getElementById('financeBtn').classList.remove('hidden');
+            var financeBtnEl = document.getElementById('financeBtn');
+            if (canFinanceDirect) financeBtnEl.classList.remove('hidden');
+            else financeBtnEl.classList.add('hidden');
             syncSuccessHistoryLink();
           }
         });
