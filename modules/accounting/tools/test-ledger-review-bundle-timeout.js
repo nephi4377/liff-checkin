@@ -22,7 +22,7 @@ assert(/ledger_review_bundle:\s*'讀取審核包'/.test(ui), 'UI maps action to 
 assert(/action === 'ledger_review_bundle'[\s\S]*90000/.test(api) ||
   /ledger_review_bundle'\)[\s\S]{0,80}ms = 90000/.test(api),
   'ledger_review_bundle timeout 90s');
-assert(/accounting_api\.js\?v=101/.test(html), 'api cache bust v=101');
+assert(/accounting_api\.js\?v=102/.test(html), 'api cache bust v=102');
 assert(/ledgerReviewBundle/.test(html) && /ledger_review_bundle/.test(api),
   'page loads via ledgerReviewBundle');
 
