@@ -292,18 +292,12 @@ export function initLeaveYearStatsPanel(opts) {
             refreshBtn.disabled = true;
             refreshBtn.textContent = mode === 'refresh' ? '重新計算中…' : '載入中…';
         }
-        setState('loading');
+        if (!(currentRow && mode === 'mine')) setState('loading');
         if (errorEl) errorEl.innerHTML = '';
 
         const year = parseInt(yearSelect?.value || String(new Date().getFullYear()), 10);
         try {
-            const res = await fetchApi({
-                page: 'attendance_api',
-                action: 'leave_year_stats',
-                mode: mode,
-                year,
-                operatorId
-            });
+            const res = await fetchMineWithRetry(mode, year);
             if (!res || res.success === false) {
                 throw new Error(res?.message || '無法取得年度統計');
             }
@@ -328,10 +322,13 @@ export function initLeaveYearStatsPanel(opts) {
             const msg = err?.message || '載入失敗';
             if (errorEl) {
                 errorEl.innerHTML = `
-                    <p class="font-medium">載入失敗</p>
+                    <p class="font-medium">讀不到年度統計，不是沒有假勤</p>
                     <p class="mt-1 text-sm">${esc(msg)}</p>
-                    <p class="mt-2 text-sm text-gray-600">請檢查網路後再試；若後端尚未部署新版 API，請聯絡管理者。</p>`;
+                    <p class="mt-2 text-sm text-gray-600">請檢查網路後再試。按「再試一次」會重新讀取已算好的統計，不會立刻重算全年。</p>
+                    <button type="button" id="lysp-error-retry" class="mt-3 min-h-[44px] px-4 rounded-lg bg-white border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50">再試一次</button>`;
+                document.getElementById('lysp-error-retry')?.addEventListener('click', () => load('mine'));
             }
+            if (currentRow && contentEl) contentEl.classList.remove('hidden');
         } finally {
             loading = false;
             if (refreshBtn) {
@@ -348,8 +345,32 @@ export function initLeaveYearStatsPanel(opts) {
         emptyEl.innerHTML = '<p class="font-medium text-gray-700">請選擇年度後載入</p><p class="text-sm text-gray-500 mt-1">統計範圍為曆年 1/1～12/31；僅顯示已有快取紀錄的年度。</p>';
     }
 
+    async function fetchMineOnce(mode, year) {
+        return fetchApi({
+            page: 'attendance_api',
+            action: 'leave_year_stats',
+            mode: mode,
+            year,
+            operatorId
+        });
+    }
+
+    async function fetchMineWithRetry(mode, year) {
+        let first;
+        try {
+            first = await fetchMineOnce(mode, year);
+        } catch (err) {
+            if (mode !== 'mine') throw err;
+            await new Promise((resolve) => setTimeout(resolve, 800));
+            return fetchMineOnce(mode, year);
+        }
+        if (mode !== 'mine' || (first && first.success !== false)) return first;
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        return fetchMineOnce(mode, year);
+    }
+
     refreshBtn?.addEventListener('click', () => load('refresh'));
-    yearSelect?.addEventListener('change', () => { if (loadedOnce) load('mine'); });
+    yearSelect?.addEventListener('change', () => load('mine'));
     goLeaveBtn?.addEventListener('click', () => onGoLeaveTab?.());
 
     return {
