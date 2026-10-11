@@ -20,6 +20,7 @@
 
 ## 目前進行中
 
+- Cursor Cloud｜待付款 AI 預審 123.2／123.3（並排證據＋覆寫原因）｜[liff#144](https://github.com/nephi4377/liff-checkin/pull/144)／[GAS#123](https://github.com/nephi4377/Backend_GAS/pull/123)
 - Cursor Cloud｜請款審核讀取審核包逾時（N+1 memo＋FE 90s）｜draft [liff#137](https://github.com/nephi4377/liff-checkin/pull/137)／[GAS#119](https://github.com/nephi4377/Backend_GAS/pull/119)
 
 ## 最近完成
