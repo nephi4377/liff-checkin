@@ -74,8 +74,23 @@
   }
 
   function setLoadingMsg(msg) {
-    var el = $('loading');
-    if (el && !el.classList.contains('hidden')) el.textContent = msg || '載入中…';
+    var el = $('loadingMsg') || $('loading');
+    if (!el) return;
+    if (el.id === 'loading' && el.classList.contains('hidden')) return;
+    el.textContent = msg || '載入中…';
+  }
+
+  function showBootRetry(show) {
+    var btn = $('btnBootRetry');
+    if (!btn) return;
+    btn.classList.toggle('hidden', !show);
+    btn.disabled = false;
+  }
+
+  function isRetryableBootError(err) {
+    var m = String((err && err.message) || err || '');
+    if (/導向登入/.test(m)) return false;
+    return true;
   }
 
   var POLICY_CACHE_KEY = 'sketchup_render_policy_v1';
@@ -171,6 +186,41 @@
         }
       });
     });
+  }
+
+  function pingStudio() {
+    return apiPostWithTimeout('sketchup_render_ping', {}, 10000).catch(function (err) {
+      if (!isRetryableBootError(err)) throw err;
+      setLoadingMsg('連線不穩，再試一次…');
+      return apiPostWithTimeout('sketchup_render_ping', {}, 10000);
+    });
+  }
+
+  function apiPostWithTimeout(action, payload, timeoutMs) {
+    return Promise.race([
+      apiPost(action, payload),
+      new Promise(function (_, reject) {
+        setTimeout(function () {
+          reject(new Error('連線等待過久，請再試一次'));
+        }, timeoutMs || 10000);
+      })
+    ]);
+  }
+
+  function describeBatchFinish(okCount, failCount) {
+    if (failCount <= 0) {
+      return { text: '批次渲染結束，共 ' + okCount + ' 張', type: 'ok' };
+    }
+    if (okCount <= 0) {
+      return {
+        text: '批次渲染全部失敗（' + failCount + ' 張）。請檢查網路後再按「批次渲染全部」。',
+        type: 'error'
+      };
+    }
+    return {
+      text: '批次完成 ' + okCount + ' 張，失敗 ' + failCount + ' 張。失敗的圖可再單張渲染。',
+      type: 'error'
+    };
   }
 
   function renderSelectOptions(selectEl, options, placeholder) {
@@ -1141,6 +1191,7 @@
     state.busy = true;
     disableButtons(true);
     var anchor = null;
+    var failCount = 0;
     var chain = Promise.resolve();
     state.items.forEach(function (item, idx) {
       chain = chain.then(function () {
@@ -1151,6 +1202,7 @@
           if (!anchor && res && res.image) anchor = res.image;
           updateCompareView();
         }).catch(function (err) {
+          failCount += 1;
           setStatus('第 ' + (idx + 1) + ' 張失敗：' + (err.message || err), 'error');
           updateCompareView();
         });
@@ -1159,7 +1211,8 @@
     chain.finally(function () {
       state.busy = false;
       disableButtons(false);
-      setStatus('批次渲染結束', 'ok');
+      var finish = describeBatchFinish(state.items.length - failCount, failCount);
+      setStatus(finish.text, finish.type);
     });
   }
 
@@ -1306,6 +1359,14 @@
     $('btnRenderStyled').addEventListener('click', function () { renderCurrent(null); });
     $('btnRenderAll').addEventListener('click', renderAll);
     $('btnAnalyze').addEventListener('click', analyzeCurrent);
+    if ($('btnBootRetry')) {
+      $('btnBootRetry').addEventListener('click', function () {
+        $('btnBootRetry').disabled = true;
+        showBootRetry(false);
+        setLoadingMsg('正在連線後端…');
+        startSession();
+      });
+    }
     if ($('btnDownloadOne')) $('btnDownloadOne').addEventListener('click', downloadActiveRender);
     if ($('btnDownloadAll')) $('btnDownloadAll').addEventListener('click', downloadAllVersions);
     if ($('btnPaint')) {
@@ -1408,7 +1469,13 @@
     updatePromptScopeUi();
   }
 
+  function explicitApiFromUrl() {
+    return String(new URLSearchParams(location.search).get('api') || '').trim();
+  }
+
   function fetchAccountingPolicy() {
+    var explicitApi = explicitApiFromUrl();
+    if (explicitApi) return Promise.resolve({});
     var url = ($('gasUrlInput') && $('gasUrlInput').value.trim()) || CONFIG.apiUrl || CFG.GAS_URL || '';
     if (!url) return Promise.resolve({});
     var cached = tryLoadPolicyCache();
@@ -1437,7 +1504,7 @@
   function loadPolicyAndSession() {
     return fetchAccountingPolicy().then(function (policy) {
       policy = policy || {};
-      if (policy && policy.accountingGasWebAppUrl) {
+      if (policy && policy.accountingGasWebAppUrl && !explicitApiFromUrl()) {
         CONFIG.apiUrl = policy.accountingGasWebAppUrl;
         if ($('gasUrlInput')) $('gasUrlInput').value = CONFIG.apiUrl;
       }
@@ -1457,14 +1524,14 @@
         state.userName = '開發模式';
         $('userLine').textContent = state.userName;
         setLoadingMsg('正在確認服務…');
-        return apiPost('sketchup_render_ping', {});
+        return pingStudio();
       }
 
       if (state.staffUserId) {
         state.userName = state.staffUserId;
         $('userLine').textContent = '主控台身分';
         setLoadingMsg('正在確認服務…');
-        return apiPost('sketchup_render_ping', {});
+        return pingStudio();
       }
 
       if (!CONFIG.liffId) {
@@ -1486,7 +1553,7 @@
           state.idToken = liff.getIDToken();
           if (p.userId) state.staffUserId = p.userId;
           setLoadingMsg('正在確認服務…');
-          return apiPost('sketchup_render_ping', {});
+          return pingStudio();
         });
       }).catch(function (err) {
         var m = String((err && err.message) || err);
@@ -1510,23 +1577,22 @@
     return String(qs.get('uid') || qs.get('user_id') || qs.get('userId') || '').trim();
   }
 
-  function boot() {
-    bindEvents();
-    var qs = new URLSearchParams(location.search);
-    if ($('gasUrlInput')) $('gasUrlInput').value = qs.get('api') || CFG.GAS_URL || '';
-    if ($('devBypassInput')) {
-      $('devBypassInput').checked = isLocalOrDevBypassAllowed();
+  function humanBootError(err) {
+    var m = String((err && err.message) || err || '');
+    if (/Failed to fetch|NetworkError|ERR_|等待過久|Load failed/i.test(m)) {
+      return '連不上後端。可再試一次，或從主控台重新開啟。';
     }
-    CONFIG.apiUrl = ($('gasUrlInput') && $('gasUrlInput').value.trim()) || CFG.GAS_URL || '';
-    CONFIG.liffId = CFG.LIFF_ID || '';
-    CONFIG.authBypass = isLocalOrDevBypassAllowed() && $('devBypassInput') && $('devBypassInput').checked;
+    return '載入失敗：' + m + '。可再試一次，或從主控台重新開啟。';
+  }
 
+  function startSession() {
     if (!CONFIG.apiUrl) {
-      $('loading').textContent = '請在進階設定填 GAS URL，或網址加 ?api=…';
+      setLoadingMsg('請在進階設定填 GAS URL，或網址加 ?api=…');
+      showBootRetry(true);
       return;
     }
-
     setLoadingMsg('正在連線後端…');
+    showBootRetry(false);
     loadPolicyAndSession()
       .then(function (ping) {
         if (!ping || !ping.success) throw new Error((ping && ping.message) || '連線失敗');
@@ -1540,8 +1606,22 @@
       })
       .catch(function (err) {
         if (String(err.message || err).indexOf('導向登入') >= 0) return;
-        $('loading').textContent = '載入失敗：' + (err.message || err);
+        setLoadingMsg(humanBootError(err));
+        showBootRetry(true);
       });
+  }
+
+  function boot() {
+    bindEvents();
+    var qs = new URLSearchParams(location.search);
+    if ($('gasUrlInput')) $('gasUrlInput').value = qs.get('api') || CFG.GAS_URL || '';
+    if ($('devBypassInput')) {
+      $('devBypassInput').checked = isLocalOrDevBypassAllowed();
+    }
+    CONFIG.apiUrl = ($('gasUrlInput') && $('gasUrlInput').value.trim()) || CFG.GAS_URL || '';
+    CONFIG.liffId = CFG.LIFF_ID || '';
+    CONFIG.authBypass = isLocalOrDevBypassAllowed() && $('devBypassInput') && $('devBypassInput').checked;
+    startSession();
   }
 
   boot();
