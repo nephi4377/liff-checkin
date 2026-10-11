@@ -124,7 +124,7 @@ var AccountingApi = (function () {
       var attempt = 0;
       var maxAttempts = 3;
       // 歷史記帳：GAS 慢／404 時重試只會把 Abort 疊滿 90s；一次失敗即可（後端已有軟截止）
-      // cache-bust companions: ledger_review.html loads this as ?v=104（AI 預審橫幅）
+      // cache-bust companions: ledger_review.html loads this as ?v=105（AI 預審 123.2／123.3）
       if (actionName === 'accounting_ledger_recent') maxAttempts = 1;
       while (attempt < maxAttempts) {
         attempt += 1;
@@ -1062,15 +1062,22 @@ var AccountingApi = (function () {
         body.allocations = patch.allocations;
       }
       if (patch && patch.note != null) body.note = patch.note;
+      if (patch && patch.ai_override_reason != null && String(patch.ai_override_reason).trim()) {
+        body.ai_override_reason = String(patch.ai_override_reason).trim();
+      }
       return post(body, 120000);
     },
-    vendorPaymentReject: function (sessionOrToken, paymentRequestId, reason) {
-      return post({
+    vendorPaymentReject: function (sessionOrToken, paymentRequestId, reason, extra) {
+      var body = {
         action: 'vendor_payment_reject',
         auth: resolveAuth(sessionOrToken),
         payment_request_id: paymentRequestId,
         reject_reason: reason || ''
-      });
+      };
+      if (extra && extra.ai_override_reason != null && String(extra.ai_override_reason).trim()) {
+        body.ai_override_reason = String(extra.ai_override_reason).trim();
+      }
+      return post(body);
     },
     vendorPaymentCreate: function (sessionOrToken, payload) {
       return post({
