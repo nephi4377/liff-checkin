@@ -10,6 +10,11 @@
 import { CONFIG } from '/shared/js/config.js';
 import { extractDriveFileId } from '/shared/js/utils.js';
 import { buildPhotoGridV2, lazyLoadImages } from './ui.js';
+import {
+  humanLogsFail,
+  humanAuditFail,
+  retryOnce,
+} from './clientProgressLoadUi.mjs';
 
 /** @todo 正式對客上線前：改為 false，並完成客戶 LIFF／綁定 API */
 const __DEV_CLIENT_DEFAULTS = {
@@ -33,9 +38,15 @@ const manualUserId = (qs.get('userId') || qs.get('uid') || '').trim();
 
 const subhead = document.getElementById('subhead');
 const errorBanner = document.getElementById('error-banner');
+const retryBtn = document.getElementById('retry-btn');
 const logList = document.getElementById('log-list');
 const emptyHint = document.getElementById('empty-hint');
 const syncHint = document.getElementById('sync-hint');
+
+function mockMode() {
+  if (!isLocal) return '';
+  return String(qs.get('mock') || '').trim();
+}
 
 // ---------- 客戶端快取：GAS 專案與 Firebase quotations，7 天內可先用舊資料，背景再更新 ----------
 const CLIENT_PROGRESS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -370,8 +381,11 @@ function buildAuditPanelHtml(overview, ctx) {
 }
 
 async function fetchFirebaseQuotationContext(projectNo) {
-  if (!window.firebase) return null;
-  if (!ensureFirebaseApp()) return null;
+  const mock = mockMode();
+  if (mock === 'auditfail') throw new Error('（本機模擬）施工項目讀取失敗');
+  if (mock === 'fail' || mock === 'empty') return null;
+  if (!window.firebase) throw new Error('施工項目暫時連不上');
+  if (!ensureFirebaseApp()) throw new Error('施工項目暫時連不上');
   const snap = await window.firebase.database().ref(`quotations/${String(projectNo).trim()}`).once('value');
   return extractQuotationContext(snap.val());
 }
@@ -382,10 +396,34 @@ function paintAuditPanel(overview, ctx) {
   panel.innerHTML = buildAuditPanelHtml(overview || {}, ctx);
 }
 
-function showError(msg) {
+function hideError() {
+  errorBanner.textContent = '';
+  errorBanner.classList.add('hidden');
+  if (retryBtn) retryBtn.classList.add('hidden');
+}
+
+function showError(msg, opts) {
+  opts = opts || {};
   errorBanner.textContent = msg;
   errorBanner.classList.remove('hidden');
-  subhead.textContent = '無法載入';
+  if (retryBtn) retryBtn.classList.remove('hidden');
+  if (emptyHint) emptyHint.classList.add('hidden');
+  if (!opts.keepContent) subhead.textContent = '無法載入';
+}
+
+function paintAuditFail(msg) {
+  const panel = document.getElementById('client-audit-panel');
+  if (!panel) return;
+  panel.innerHTML = `<details class="client-audit-collapse-root" open>
+      <summary class="client-audit-collapse-summary">
+        <span class="client-audit-collapse-title">施工項目</span>
+        <span class="client-audit-collapse-counts muted" style="font-weight:500">這次沒載到</span>
+      </summary>
+      <div class="client-audit-collapse-body">
+        <p class="m-0 text-sm">${escapeHtml(msg)}</p>
+        <p class="muted text-sm m-0 mt-2">這不代表沒有施工項目，只是這次沒載進來。</p>
+      </div>
+    </details>`;
 }
 
 /** 與 main.js initializeLightbox 一致，供 buildPhotoGridV2 點擊與鍵盤切換 */
@@ -581,6 +619,25 @@ async function resolveUserId() {
 }
 
 async function fetchProject(userId) {
+  const mock = mockMode();
+  if (mock === 'fail') throw new Error('（本機模擬）施工紀錄讀取失敗');
+  if (mock === 'empty') return { dailyLogs: [], overview: {} };
+  if (mock === 'auditfail') {
+    return {
+      dailyLogs: [
+        {
+          LogID: 'mock-auditfail',
+          Title: '本機模擬紀錄',
+          Content: '用來確認施工項目讀失敗不會被畫成沒有項目。',
+          Status: '已發布',
+          UserName: '本機',
+          Timestamp: Date.now(),
+        },
+      ],
+      overview: {},
+    };
+  }
+
   const url = new URL(CONFIG.GAS_WEB_APP_URL);
   url.searchParams.set('page', 'project');
   url.searchParams.set('id', projectId);
@@ -594,23 +651,13 @@ async function fetchProject(userId) {
   return data;
 }
 
-async function main() {
-  setupLightbox();
-  subhead.textContent = `案號 ${projectId}`;
-
-  let userId;
-  try {
-    userId = await resolveUserId();
-  } catch (e) {
-    showError(e.message || String(e));
-    return;
-  }
-  if (!userId) return;
-
+async function loadProgress(userId) {
+  hideError();
   const kGas = cacheKeyGas(userId, projectId);
   const kFb = cacheKeyFb(projectId);
-  const gasEntry = getValidCache(kGas);
-  const fbEntry = getValidCache(kFb);
+  const skipCache = !!mockMode();
+  const gasEntry = skipCache ? null : getValidCache(kGas);
+  const fbEntry = skipCache ? null : getValidCache(kFb);
   const auditPanel = document.getElementById('client-audit-panel');
 
   let usedCache = false;
@@ -633,30 +680,39 @@ async function main() {
       auditPanel.innerHTML = '<p class="muted text-sm m-0">載入施工項目…</p>';
     }
 
-    const data = await fetchProject(userId);
+    const data = await retryOnce(() => fetchProject(userId));
     writeCacheEntry(kGas, data);
 
-    let ctx;
+    let auditOk = true;
+    let ctx = null;
     try {
-      ctx = await fetchFirebaseQuotationContext(projectId);
+      ctx = await retryOnce(() => fetchFirebaseQuotationContext(projectId));
       writeCacheEntry(kFb, { ctx });
     } catch (e) {
+      auditOk = false;
       console.warn('[client-audit]', e);
-      const prev = getValidCache(kFb);
-      ctx =
-        prev && prev.payload && Object.prototype.hasOwnProperty.call(prev.payload, 'ctx')
-          ? prev.payload.ctx
-          : null;
+      const prev = skipCache ? null : getValidCache(kFb);
+      if (prev && prev.payload && Object.prototype.hasOwnProperty.call(prev.payload, 'ctx')) {
+        ctx = prev.payload.ctx;
+        paintAuditPanel(data.overview || {}, ctx);
+        showError(humanAuditFail(e) + '（仍顯示稍早的施工項目）', { keepContent: true });
+      } else {
+        paintAuditFail(humanAuditFail(e));
+        showError(humanAuditFail(e), { keepContent: true });
+      }
     }
 
     setSyncHint(false);
-    paintAuditPanel(data.overview || {}, ctx);
+    if (auditOk) {
+      paintAuditPanel(data.overview || {}, ctx);
+    }
 
     const logs = filterPublishedLogs(data.dailyLogs || []);
     renderLogs(logs);
     subhead.textContent = `案號 ${projectId} · 已發布紀錄 ${logs.length} 則`;
   } catch (e) {
     setSyncHint(false);
+    const msg = humanLogsFail(e);
     if (usedCache && gasEntry && gasEntry.payload) {
       const d = gasEntry.payload;
       if (fbEntry && fbEntry.payload && Object.prototype.hasOwnProperty.call(fbEntry.payload, 'ctx')) {
@@ -664,11 +720,35 @@ async function main() {
       } else {
         paintAuditPanel(d.overview || {}, null);
       }
-      console.warn('[client-progress] 背景更新失敗，仍顯示快取', e);
+      showError(msg + '（仍顯示稍早資料）', { keepContent: true });
       return;
     }
-    showError(e.message || String(e));
+    if (emptyHint) emptyHint.classList.add('hidden');
+    if (logList) logList.innerHTML = '';
+    paintAuditFail(msg);
+    showError(msg);
   }
+}
+
+async function main() {
+  setupLightbox();
+  subhead.textContent = `案號 ${projectId}`;
+  if (retryBtn) {
+    retryBtn.onclick = function () {
+      main();
+    };
+  }
+
+  let userId;
+  try {
+    userId = await resolveUserId();
+  } catch (e) {
+    showError(humanLogsFail(e));
+    return;
+  }
+  if (!userId) return;
+
+  await loadProgress(userId);
 }
 
 main();
