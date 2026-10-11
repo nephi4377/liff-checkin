@@ -20,10 +20,17 @@
 
 ## 目前進行中
 
-- Cursor Cloud｜請款審核讀取審核包逾時（N+1 memo＋FE 90s）｜draft [liff#137](https://github.com/nephi4377/liff-checkin/pull/137)／[GAS#119](https://github.com/nephi4377/Backend_GAS/pull/119)
-- Cursor Cloud｜待付款報價對應查核（本機快取＋Gemini G1／R0；`ledger_review` 面板）｜branch `cursor/pending-payment-quote-audit-2725`（與 #137 同檔加成，勿互蓋 N+1）
+（無）
 
 ## 最近完成
+
+### 2026-10-11｜Cursor Cloud｜待付款報價對應查核（draft／未部署）
+
+- 修改範圍：`ledger_review.html`、`accounting_api.js?v=103`、SPEC 15 v1.63、LOG、smoke；Backend `VendorPaymentQuoteAudit`／`報價本機快取`／WebApp／SPEC／smoke
+- 完成內容：審核詳情「報價對應查核」—本機報價 JSON 快取＋Gemini（G1→L1）對品項、利潤率／信心／連結；**R0 不寫分攤**；雲端不讀 TX34，需 upsert
+- 驗證：`node modules/accounting/tools/test-vendor-payment-quote-audit-ui.js`；`node accounting-gas/tools/test-vendor-payment-quote-audit.js`
+- Commit／PR：[liff#140](https://github.com/nephi4377/liff-checkin/pull/140)、[GAS#121](https://github.com/nephi4377/Backend_GAS/pull/121)
+- 待處理：Nephi 提供本機報價 JSON upsert → 核准部署後抽測
 
 ### 2026-10-10｜Cursor Cloud｜薪資待匯款補寄 EMAIL（已上線 Pages）
 
