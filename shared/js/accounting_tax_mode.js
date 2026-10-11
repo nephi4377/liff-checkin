@@ -17,12 +17,14 @@ var AccountingTaxMode = (function () {
   }
 
   function addTax(amt) {
+    // 逐筆加稅：折讓負數不動（SPEC 23）
     if (isNaN(amt) || amt <= 0) return amt;
     return Math.round(amt * (1 + TAX_RATE));
   }
 
   function removeTax(amt) {
-    if (isNaN(amt) || amt <= 0) return amt;
+    // 含稅反推未稅：正負都適用（例 −285 → −271）
+    if (isNaN(amt) || amt === 0) return amt;
     return Math.round(amt / (1 + TAX_RATE));
   }
 
@@ -52,12 +54,16 @@ var AccountingTaxMode = (function () {
   function rowBaseAmount(row, prevMode) {
     var amt = parseAmount(row.amount);
     if (isNaN(amt)) return 0;
-    if (amt < 0) return amt;
+    var mode = normalizeMode(prevMode) || 'inclusive';
+    if (amt < 0) {
+      // 折讓含稅：自選模式下反推未稅；逐筆／整張分攤則金額不動
+      if (mode === 'inclusive' && row.tax_inclusive) return removeTax(amt);
+      return amt;
+    }
     if (row._base_amount != null && String(row._base_amount) !== '') {
       var stored = parseAmount(row._base_amount);
       if (!isNaN(stored)) return stored;
     }
-    var mode = normalizeMode(prevMode) || 'inclusive';
     if (mode === 'per_row' && (row.tax_add_applied || row.tax_inclusive)) {
       return removeTax(amt);
     }
@@ -76,11 +82,13 @@ var AccountingTaxMode = (function () {
       var amt = parseAmount(r.amount);
       if (isNaN(amt)) amt = 0;
       var base = amt;
-      if (amt > 0) {
+      if (amt !== 0) {
         if (prev === 'inclusive' && r.tax_inclusive) {
           base = removeTax(amt);
-        } else {
+        } else if (amt > 0) {
           base = rowBaseAmount(r, prev || (r.tax_add_applied ? 'per_row' : 'inclusive'));
+        } else {
+          base = rowBaseAmount(r, prev || 'inclusive');
         }
       }
       return Object.assign({}, r, {
@@ -118,6 +126,7 @@ var AccountingTaxMode = (function () {
         return;
       }
       if (amt < 0) {
+        // 折讓列：合計用填入金額（含稅折讓填 −285）；未稅反推只在列旁 hint
         pretax += amt;
         return;
       }
@@ -141,10 +150,13 @@ var AccountingTaxMode = (function () {
   function rowHintText(row, mode) {
     row = row || {};
     var amt = parseAmount(row.amount);
-    if (isNaN(amt) || amt <= 0) return '';
+    if (isNaN(amt) || amt === 0) return '';
     var m = normalizeMode(mode) || 'inclusive';
     if (m === 'prorate') return '';
     if (!row.tax_inclusive && !row.tax_add_applied) return '';
+    if (amt < 0) {
+      return '未稅 $' + removeTax(amt).toLocaleString('zh-TW');
+    }
     if (m === 'per_row') {
       var base = rowBaseAmount(row, m);
       if (isNaN(base) || base <= 0) base = removeTax(amt);
@@ -219,7 +231,8 @@ var AccountingTaxMode = (function () {
       return (rows || []).map(function (r) {
         var amt = parseAmount(r.amount);
         if (isNaN(amt)) amt = 0;
-        var mark = amt > 0 && !!r.tax_inclusive;
+        // 正負列都可標含稅（折讓現金折扣同廠商對帳單）
+        var mark = amt !== 0 && !!r.tax_inclusive;
         return Object.assign({}, r, {
           amount: amt,
           _base_amount: amt,
