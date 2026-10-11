@@ -1,12 +1,15 @@
 ---
-description: 多工具共同開發交接規則
+description: 多工具共同開發交接規則（指向 tanxin-dev-kb）
 alwaysApply: true
 ---
 
-# 共用開發紀錄
+# 共用開發紀錄 → tanxin-dev-kb
 
-- 開始任何修改前，先執行 `git pull --ff-only origin main`，並完整閱讀根目錄 `SHARED_DEV_LOG.md`。
-- 檢查「目前進行中」是否有人正在修改相同檔案或功能；有重疊時不要覆蓋，先向使用者說明。
-- 超過 10 分鐘、跨多檔或高衝突風險的工作，開始時先在「目前進行中」登記並推送。
-- 完成後更新 `SHARED_DEV_LOG.md`：清除自己的進行中項目，在「最近完成」最上方記錄修改範圍、結果、驗證、commit 與待處理事項。
+交接已遷至 **[tanxin-dev-kb](https://github.com/nephi4377/tanxin-dev-kb)**。本 repo 根目錄 `SHARED_DEV_LOG.md` 僅為短指標，不要再寫完整長文。
+
+- 開始修改前：對**本產品 repo** 執行 `git pull --ff-only origin main`。
+- **自行判斷**是否連讀 tanxin-dev-kb：任務相關、需要階段記憶或分類脈絡時就讀（`goals/CURRENT.md` → `categories/_index.md` → 相關 `LOG/`）；無關可跳過。
+- 檢查知識庫／同事是否標示正在改相同檔案或功能；有重疊時不要覆蓋，先向使用者說明。
+- 超過 10 分鐘、跨多檔或高衝突風險的工作：在 tanxin-dev-kb 對應分類 `LOG/` 或 `goals/CURRENT.md`（若屬大方向）登記並推送該庫。
+- 完成後：更新 tanxin-dev-kb 分類 `LOG/`（結果、驗證、commit）；階段完成則寫「完成階段」摘要並從 `goals/CURRENT.md` 移除該目標。
 - 不使用強制推送、`git reset --hard` 或會覆蓋他人尚未整合工作的操作。
