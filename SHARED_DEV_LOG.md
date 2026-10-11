@@ -24,6 +24,14 @@
 
 ## 最近完成
 
+### 2026-10-11｜Cursor Cloud｜折讓負數可勾含稅（draft／未部署）
+
+- 修改範圍：`accounting_tax_mode.js?v=7`、`payment_request.html`、`ledger_review.html`、SPEC 23、煙測；Backend `VendorPaymentAllocation`／SPEC／test／LOG
+- 完成內容：負數折讓不再禁用「含稅」；含稅反推保留負號（−285→−271）；自選模式標記與正數相同
+- 驗證：`node modules/accounting/tools/test-tax-mode-negative.js`；GAS `node tools/test-tax-alloc.js`
+- Commit／線上：draft PR（見分支 `cursor/pending-payment-negative-tax-64cc`）
+- 待處理：等你說部署 Pages／clasp；嘉義大林單抽測 −285 含稅
+
 ### 2026-10-10｜Cursor Cloud｜薪資待匯款補寄 EMAIL（已上線 Pages）
 
 - 修改範圍：`payroll_finance.html`（已發薪·補寄區塊）、煙測、SPEC 15、help、LOG
