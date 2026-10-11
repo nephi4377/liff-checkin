@@ -29,7 +29,7 @@
 - 修改範圍：Backend `VendorPaymentAiPreAudit.js`／schema／submit enqueue／bundle `ai_preaudit`／digest 骨架；FE `ledger_review` 橫幅、`payment_request` 直送 ≥5、`api?v=104`；SPEC／LOG／煙測
 - 完成內容：助理送審 enqueue 本機 LLM（離線 WAIT）；R0；審核不擋；digest 09:00／12:30 觸發函式；#140 按鈕 UX 不納入
 - 驗證：`node accounting-gas/tools/test-vendor-payment-ai-preaudit.js`；`node modules/accounting/tools/test-ai-preaudit-review-banner.js`
-- Commit／線上：分支 `cursor/ai-prereview-mvp-8fbf`（PRs 見討論）
+- Commit／線上：[liff#144](https://github.com/nephi4377/liff-checkin/pull/144)、[GAS#123](https://github.com/nephi4377/Backend_GAS/pull/123)；#140 已標 superseded
 - 待處理：123.2／123.3；Telegram 正式接線；TX34 stub／Ollama；等你說部署
 
 ### 2026-10-10｜Cursor Cloud｜薪資待匯款補寄 EMAIL（已上線 Pages）
