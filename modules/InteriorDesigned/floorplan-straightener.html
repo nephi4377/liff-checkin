@@ -28,16 +28,23 @@
     <!-- 預先定義 OpenCV 回呼函數，確保在腳本載入前已存在 -->
     <script>
         window.cvLoaded = false;
+        window.cvLoadFailed = false;
         window.onOpenCvReady = function () {
             window.cvLoaded = true;
-            // 觸發自定義事件通知 React
+            window.cvLoadFailed = false;
             window.dispatchEvent(new Event('opencv-ready'));
             console.log("OpenCV.js is ready.");
+        };
+        window.onOpenCvError = function () {
+            if (window.cvLoaded) return;
+            window.cvLoadFailed = true;
+            window.dispatchEvent(new Event('opencv-error'));
         };
     </script>
 
     <!-- OpenCV.js (電腦視覺核心庫 - 非同步載入) -->
     <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady();"
+        onerror="window.onOpenCvError && window.onOpenCvError();"
         type="text/javascript"></script>
 
     <style>
@@ -484,6 +491,7 @@
         // 主應用程式元件
         function App() {
             const [isOpenCvReady, setIsOpenCvReady] = useState(window.cvLoaded);
+            const [cvLoadFailed, setCvLoadFailed] = useState(!!window.cvLoadFailed);
             const [imageSrc, setImageSrc] = useState(null);
             const [processedImage, setProcessedImage] = useState(null);
             const [points, setPoints] = useState([]);
@@ -508,12 +516,38 @@
             const containerRef = useRef(null);
 
             useEffect(() => {
+                let mockFail = false;
+                try {
+                    mockFail = new URLSearchParams(location.search).get('mock') === 'opencv_fail';
+                } catch (e) { /* ignore */ }
+                if (mockFail) {
+                    window.cvLoadFailed = true;
+                    setCvLoadFailed(true);
+                    return;
+                }
                 if (window.cvLoaded) {
                     setIsOpenCvReady(true);
+                    setCvLoadFailed(false);
+                    return;
                 }
-                const handleCvReady = () => setIsOpenCvReady(true);
+                const handleCvReady = () => {
+                    setIsOpenCvReady(true);
+                    setCvLoadFailed(false);
+                };
+                const handleCvError = () => setCvLoadFailed(true);
                 window.addEventListener('opencv-ready', handleCvReady);
-                return () => window.removeEventListener('opencv-ready', handleCvReady);
+                window.addEventListener('opencv-error', handleCvError);
+                const t = setTimeout(() => {
+                    if (!window.cvLoaded) {
+                        window.cvLoadFailed = true;
+                        setCvLoadFailed(true);
+                    }
+                }, 12000);
+                return () => {
+                    window.removeEventListener('opencv-ready', handleCvReady);
+                    window.removeEventListener('opencv-error', handleCvError);
+                    clearTimeout(t);
+                };
             }, []);
 
             const friendlyErrorMessage = (err) => {
@@ -1049,7 +1083,17 @@
                                 <h3 className="text-xl font-semibold text-stone-700 mb-2">上傳平面圖照片</h3>
                                 <p className="text-stone-500 max-w-md">
                                     支援 JPG, PNG 格式。
-                                    {!isOpenCvReady && <span className="block mt-2 text-amber-500 text-sm font-medium">請稍候，引擎載入中...</span>}
+                                    {cvLoadFailed && !isOpenCvReady && (
+                                        <span className="block mt-3 text-red-700 text-sm font-medium">
+                                            影像引擎沒載入成功，不是沒有上傳功能。請檢查網路後重新整理再試。
+                                            <button
+                                                type="button"
+                                                onClick={() => location.reload()}
+                                                className="ml-2 underline font-semibold"
+                                            >重新整理</button>
+                                        </span>
+                                    )}
+                                    {!isOpenCvReady && !cvLoadFailed && <span className="block mt-2 text-amber-500 text-sm font-medium">請稍候，引擎載入中...</span>}
                                 </p>
                             </div>
                         ) : !processedImage ? (
@@ -1133,9 +1177,9 @@
                                     </div>
                                     <div className="flex items-center justify-between mb-1">
                                         <h3 className="text-lg font-bold text-stone-800">操作面板</h3>
-                                        <div className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border font-medium ${isOpenCvReady ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-amber-50 border-amber-200 text-amber-600'}`} title={isOpenCvReady ? "引擎已就緒" : "載入中..."}>
-                                            <div className={`w-1.5 h-1.5 rounded-full ${isOpenCvReady ? 'bg-emerald-500' : 'bg-amber-500 animate-spin'}`}></div>
-                                            {isOpenCvReady ? "CV 就緒" : "載入中"}
+                                        <div className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border font-medium ${isOpenCvReady ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : cvLoadFailed ? 'bg-red-50 border-red-200 text-red-700' : 'bg-amber-50 border-amber-200 text-amber-600'}`} title={isOpenCvReady ? "引擎已就緒" : cvLoadFailed ? "引擎載入失敗" : "載入中..."}>
+                                            <div className={`w-1.5 h-1.5 rounded-full ${isOpenCvReady ? 'bg-emerald-500' : cvLoadFailed ? 'bg-red-500' : 'bg-amber-500 animate-spin'}`}></div>
+                                            {isOpenCvReady ? "CV 就緒" : cvLoadFailed ? "載入失敗" : "載入中"}
                                         </div>
                                     </div>
 
