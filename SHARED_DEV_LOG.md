@@ -36,7 +36,10 @@
 - **Agent 慣例：** 穩定共享知識寫**本檔**並 push（見上方「使用方式」）；Cursor store 僅摘要
 - 驗證：`node modules/accounting/tools/test-vendor-payment-quote-audit-ui.js`；`node accounting-gas/tools/test-vendor-payment-quote-audit.js`；雲端 curl `/api/health` → 200
 - Commit／PR：[liff#140](https://github.com/nephi4377/liff-checkin/pull/140)、[GAS#121](https://github.com/nephi4377/Backend_GAS/pull/121)
-- 待處理：TX34 worker 或人手 upsert 至少一案本機報價 → 核准部署後審核頁抽測；L1 需另開 Ollama HTTP
+- 待處理：核准 **部署** GAS#121＋Pages#140 後，TX34 一鍵 upsert 至少一案 → 審核頁「載入報價對應」；L1 另開 Ollama HTTP
+- **TX34 一鍵（寫在 GAS SPEC，#142 改指標後仍可查）：**  
+  `node accounting-gas/tools/quote-local-cache-upsert.js --file <報價.json> --dry-run`  
+  部署後加 `--user-id <LINE uid>`（或 `TANXIN_LIFF_ID_TOKEN`）。接受 Firebase／BudgetWeb 匯出或 ingest JSON。詳見 Backend `VENDOR_PAYMENT_QUOTE_AUDIT_SPEC.md`
 
 ### 2026-10-10｜Cursor Cloud｜薪資待匯款補寄 EMAIL（已上線 Pages）
 
