@@ -229,6 +229,45 @@
       }
       return fallback;
     }
+    function humanReceiptFail(errOrMsg) {
+      var fallback = '收款紀錄暫時載入不到，請再試一次';
+      if (typeof CustomerFinanceUi !== 'undefined' && CustomerFinanceUi.humanCustomerFail) {
+        return CustomerFinanceUi.humanCustomerFail(errOrMsg, fallback);
+      }
+      var failMsg = '';
+      if (typeof errOrMsg === 'string') failMsg = errOrMsg;
+      else if (errOrMsg && errOrMsg.message) failMsg = String(errOrMsg.message);
+      failMsg = failMsg || fallback;
+      if (/Failed to fetch|NetworkError|Load failed/i.test(failMsg)) return fallback;
+      return failMsg;
+    }
+    function hasReceiptCards() {
+      return !!($('recList') && $('recList').querySelector('[data-rec-id]'));
+    }
+    function showReceiptLoadFail(msg) {
+      var text = humanReceiptFail(msg);
+      showMsg(text);
+      if (hasReceiptCards()) return;
+      $('recList').innerHTML =
+        '<p>' + text + '</p>' +
+        '<p class="sub">這不代表沒有收款，只是這次沒載進來。</p>' +
+        '<button type="button" class="btn btn-secondary" id="btnRetryRec">再試一次</button>';
+      var retry = $('btnRetryRec');
+      if (retry) retry.onclick = function () { loadData(true); };
+    }
+    function showReceiptBootFail(errOrMsg) {
+      showReceiptView();
+      $('userLine').textContent = '無法確認身分';
+      $('recList').innerHTML =
+        '<p>' + humanReceiptFail(errOrMsg) + '</p>' +
+        '<p class="sub">這不代表沒有收款，只是這次沒打開。</p>' +
+        '<button type="button" class="btn btn-secondary" id="btnRetryBoot">再試一次</button>' +
+        '<button type="button" class="btn btn-secondary" id="btnBootRelogin">重新登入 LINE</button>';
+      var retryBoot = $('btnRetryBoot');
+      if (retryBoot) retryBoot.onclick = function () { location.reload(); };
+      var bootRelogin = $('btnBootRelogin');
+      if (bootRelogin) bootRelogin.onclick = function () { $('btnLiffRelogin').click(); };
+    }
 
     function parsePortalDeepLink() {
       var params = new URLSearchParams(window.location.search);
@@ -330,11 +369,24 @@
       showMsg('');
       setContentBusy(true);
       $('projectSelect').disabled = true;
+      if (!hasReceiptCards()) {
+        $('recList').innerHTML = '<p>載入收款紀錄中…</p>';
+      }
       try {
+        var mock = portalMockMode();
         var portalOpts = staffPreview ? { staffPreview: true } : {};
-        var fetchFn = function () { return AccountingApi.cfPortalData(session, pno, portalOpts); };
+        var fetchFn = function () {
+          if (mock === 'fail') {
+            return Promise.resolve({ success: false, message: '（本機模擬）收款紀錄讀取失敗' });
+          }
+          if (mock === 'empty') {
+            return Promise.resolve({ success: true, receipts: [], adjustments: [] });
+          }
+          return AccountingApi.cfPortalData(session, pno, portalOpts);
+        };
+        var skipCache = mock === 'fail' || mock === 'empty';
         var res;
-        if (typeof AccountingListCache !== 'undefined' && !forceRefresh) {
+        if (typeof AccountingListCache !== 'undefined' && !forceRefresh && !skipCache) {
           res = await AccountingListCache.loadPortalData(session, pno, fetchFn);
         } else {
           res = await fetchFn();
@@ -342,13 +394,18 @@
             AccountingListCache.loadPortalData(session, pno, function () { return Promise.resolve(res); }, { force: true });
           }
         }
-        if (!res.success) { showMsg(res.message); return; }
+        if (!res || !res.success) {
+          showReceiptLoadFail((res && res.message) || '收款紀錄暫時載入不到，請再試一次');
+          return;
+        }
         // 【未來待確認】先不看追加減：略過前端繪製，仍照常顯示收款
         if (SHOW_CUSTOMER_ADJUSTMENTS) {
           renderAdj(res.adjustments || []);
         }
         renderRec(res.receipts || []);
         focusDeepLinkEntity();
+      } catch (e) {
+        showReceiptLoadFail(e);
       } finally {
         setContentBusy(false);
         $('projectSelect').disabled = false;
@@ -862,6 +919,27 @@
           showMaterialBootFail(new Error('Failed to fetch'));
           return;
         }
+        if (mock === 'recbootfail') {
+          $('loading').classList.add('hidden');
+          $('app').classList.remove('hidden');
+          showReceiptBootFail(new Error('Failed to fetch'));
+          return;
+        }
+        if (mock === 'fail' || mock === 'empty') {
+          session = {
+            portal: {
+              display_name: '本機測試',
+              projects: [{ project_no: '999', site_name: '測試案' }]
+            }
+          };
+          $('userLine').textContent = '本機測試';
+          fillProjects(session.portal.projects);
+          $('projectSelect').value = '999';
+          $('loading').classList.add('hidden');
+          $('app').classList.remove('hidden');
+          showReceiptView();
+          return loadData(true);
+        }
         session = await AccountingApi.initCustomerPortalSession({
           liffId: staffPreview ? undefined : CUSTOMER_FINANCE_LIFF_ID,
           staffPreview: staffPreview,
@@ -921,9 +999,7 @@
         } else if (deepLink.entity === 'material') {
           showMaterialBootFail(e);
         } else {
-          $('loading').classList.remove('hidden');
-          $('app').classList.add('hidden');
-          $('loading').textContent = e.message || '載入失敗';
+          showReceiptBootFail(e);
         }
       }
     })();
