@@ -337,8 +337,9 @@
     <div id="successCard" class="card hidden">
       <h3 style="margin:0 0 8px" id="successTitle">請款已送出</h3>
       <p class="sub" id="successHint">—</p>
+      <!-- 管線：請款 → 送出紀錄 → 審核；歷史記帳（收支）不放此卡 -->
+      <a class="btn btn-secondary hidden" id="successSubmitRecordsLink" href="submit_records.html">送出紀錄</a>
       <a class="btn btn-secondary" id="successReviewLink" href="ledger_review.html">開啟請款審核</a>
-      <a class="btn btn-secondary hidden" id="successHistoryLink" href="submit_records.html">查看送出紀錄</a>
       <button type="button" class="btn btn-primary" id="anotherBtn">再建一筆</button>
     </div>
   </div>
@@ -1563,8 +1564,8 @@
           succLink.href = 'vendor_status.html';
           succLink.textContent = '查看款項進度';
         }
-        var histLink = document.getElementById('successHistoryLink');
-        if (histLink) histLink.classList.add('hidden');
+        var srLink = document.getElementById('successSubmitRecordsLink');
+        if (srLink) srLink.classList.add('hidden');
       }
 
       function buildPayeePayload(payload) {
@@ -2220,7 +2221,7 @@
           document.getElementById('successHint').textContent = (mode === 'finance_direct'
             ? '已進入待匯款清單。'
             : '主管會在「請款審核」處理；核准後才進待匯款。') + feeNote;
-          syncSuccessHistoryLink();
+          syncSuccessSubmitRecordsLink();
           setOk('請款已送出');
           try { sessionStorage.removeItem(PAY_RESUME_KEY); } catch (eClr) {}
           setQuickReviewBanner('',
@@ -2302,17 +2303,17 @@
         }
       }
 
-      /** 請款已送出畫面：主管 ≥3 顯示「查看送出紀錄」→ 管線第 2 站 */
-      function syncSuccessHistoryLink() {
-        var histLink = document.getElementById('successHistoryLink');
-        if (!histLink) return;
-        histLink.href = 'submit_records.html';
-        histLink.textContent = '查看送出紀錄';
+      /** 請款已送出畫面：主管 ≥3 顯示「送出紀錄」（管線第 2 站；SPA #/accounting/submit-records） */
+      function syncSuccessSubmitRecordsLink() {
+        var link = document.getElementById('successSubmitRecordsLink');
+        if (!link) return;
+        link.href = 'submit_records.html';
+        link.textContent = '送出紀錄';
         var need = (typeof AccountingApi !== 'undefined' && AccountingApi.SUPERVISOR_MIN_PERMISSION) || 3;
         var perm = Number((session && session.auth && session.auth.permission) || 0);
         var show = !isVendorSelf && perm >= need;
-        if (show) histLink.classList.remove('hidden');
-        else histLink.classList.add('hidden');
+        if (show) link.classList.remove('hidden');
+        else link.classList.add('hidden');
       }
 
       /** 送出成功或再建一筆時清掉單據／明細，避免同一包內容再送一次。 */
@@ -2653,7 +2654,7 @@
             var financeBtnEl = document.getElementById('financeBtn');
             if (canFinanceDirect) financeBtnEl.classList.remove('hidden');
             else financeBtnEl.classList.add('hidden');
-            syncSuccessHistoryLink();
+            syncSuccessSubmitRecordsLink();
           }
         });
       })();

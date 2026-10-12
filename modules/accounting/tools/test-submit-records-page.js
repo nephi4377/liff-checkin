@@ -30,8 +30,12 @@ assert(index.indexOf('linkSubmitRecords') >= 0, 'hub link id');
 assert(index.indexOf('>送出紀錄<') >= 0, 'hub label');
 
 assert(pay.indexOf('submit_records.html') >= 0, 'success card href');
-assert(pay.indexOf('查看送出紀錄') >= 0, 'success card label');
-assert(pay.indexOf('查看歷史記帳紀錄') < 0, 'no old success history label');
+assert(pay.indexOf('successSubmitRecordsLink') >= 0, 'success card submit-records id');
+assert(pay.indexOf('>送出紀錄<') >= 0 || /textContent\s*=\s*'送出紀錄'/.test(pay), 'success card label 送出紀錄');
+assert(pay.indexOf('successSubmitRecordsLink') < pay.indexOf('successReviewLink'), '送出紀錄 before 審核 on card');
+assert(pay.indexOf('查看歷史記帳紀錄') < 0, 'no ledger history on success card');
+assert(pay.indexOf('查看送出紀錄') < 0, 'no 查看送出紀錄 wording');
+assert(pay.indexOf('successHistoryLink') < 0, 'old history link id removed');
 
 assert(hist.indexOf('histRecordKind" value="ledger"') >= 0 ||
   hist.indexOf("id=\"histRecordKind\" value=\"ledger\"") >= 0, 'history ledger-only');
