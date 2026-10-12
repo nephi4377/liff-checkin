@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <title>送出紀錄</title>
-  <!-- 由原歷史記帳頁演進：請款管線第 2 站；收支歷史仍見 ledger_history.html -->
+  <!-- 新介面：請款管線第 2 站＝改送審資料（vendor_payment_update）；非歷史記帳瀏覽 -->
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
@@ -192,11 +192,11 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>送出紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub" id="pageModeHint">請款管線第 2 站：查已送出請款（單號／廠商／案場／金額／時間／狀態）。權限 ≥3 可改<strong>待審／退回／待匯</strong>內容（寫回同一請款主檔，審核／匯款會看到）；<strong>已匯款鎖定</strong>。收支查詢請用「歷史記帳紀錄」。</p>
+    <p class="sub" id="pageModeHint">請款管線第 2 站：<strong>修改已送出的送審資料</strong>（廠商／分攤／事由／備註）。點一筆 → 改 → 儲存，寫回同一請款主檔（審核／匯款會看到）。可改：<strong>待審／退回／待匯</strong>；<strong>已匯款鎖定</strong>。本頁不是收支「歷史記帳」。</p>
 
     <div class="card" id="srFiltersCard">
       <div class="sr-head">
-        <strong>查詢條件</strong>
+        <strong>找出要改的單</strong>
         <button type="button" class="btn-ghost" id="srRefreshBtn">重新整理</button>
       </div>
       <div id="srFilters">
@@ -234,9 +234,9 @@
           <input id="srKeyword" type="text" placeholder="例：廠商名、案號" autocomplete="off" />
         </div>
         <div class="full">
-          <p class="hint" style="margin:0 0 8px">時間依主檔最後更新（送出／改單）。預設「待審」；改內容會同步審核／匯款同一筆。</p>
+          <p class="hint" style="margin:0 0 8px">預設「待審」。點開標「可修改」的單即可改送審內容；儲存後同步審核／匯款同一筆。</p>
           <div class="sr-actions">
-            <button type="button" class="btn-ghost btn-primary-sr" id="srSearchBtn">查詢</button>
+            <button type="button" class="btn-ghost btn-primary-sr" id="srSearchBtn">載入清單</button>
             <button type="button" class="btn-ghost" id="srClearBtn">重設為近 30 天</button>
             <button type="button" class="btn-ghost" id="srExpand90Btn">近 90 天</button>
           </div>
@@ -247,15 +247,15 @@
     <div class="sr-workspace">
       <div class="card" id="srListCard">
         <div class="sr-head">
-          <strong>送出列表</strong>
-          <span class="sr-loc" style="font-weight:600;color:#0f766e">依送出／更新時間</span>
+          <strong>送審清單</strong>
+          <span class="sr-loc" style="font-weight:600;color:#0f766e">點開 → 修改 → 儲存</span>
         </div>
         <p id="srStatus" class="is-ok">載入中…</p>
         <div id="srList"></div>
       </div>
       <aside class="card sr-detail-card" id="srDetailCard" aria-live="polite">
-        <p class="sr-detail-card-title">明細／修改</p>
-        <p class="sr-detail-placeholder" id="srDetailPlaceholder">點左側一筆查看或修改（寫回同一請款主檔）。</p>
+        <p class="sr-detail-card-title">修改送審內容</p>
+        <p class="sr-detail-placeholder" id="srDetailPlaceholder">點左側一筆，在此修改送審資料並儲存（寫回同一請款主檔）。</p>
         <div id="srDetailBody" class="hidden"></div>
       </aside>
     </div>
@@ -501,8 +501,8 @@
         var form = document.createElement('div');
         form.className = 'sr-edit-form';
         form.innerHTML =
-          '<strong>修改請款（同步主檔）</strong>' +
-          '<p class="hint" style="margin:6px 0 0">儲存後審核／匯款頁會看到同一筆更新。已匯款不可改。</p>' +
+          '<strong>修改送審（儲存同步主檔）</strong>' +
+          '<p class="hint" style="margin:6px 0 0">這是本頁主操作。儲存後審核／匯款會看到同一筆；已匯款不可改。</p>' +
           '<label>廠商</label><input type="text" class="inp-vendor" placeholder="搜尋名冊廠商" autocomplete="off" />' +
           '<label style="margin-top:10px">分攤（案號＋金額；可多案）</label>' +
           '<div class="alloc-host"></div>' +
@@ -640,7 +640,7 @@
           var d = el.querySelector('.sr-detail');
           if (d) d.classList.add('hidden');
           var hint = el.querySelector('.sr-hint');
-          if (hint) hint.textContent = canEditItem(itemsByKey[el.dataset.key]) ? '點開可修改' : '點開看詳情';
+          if (hint) hint.textContent = canEditItem(itemsByKey[el.dataset.key]) ? '點開 → 修改送審' : '點開看詳情（不可改）';
         });
       }
       function toggleDetail(div, it) {
@@ -689,7 +689,7 @@
           '<div class="sr-loc">單號 ' + escHtml(shortId(it.payment_request_id)) +
             (it.submitted_by || it.updated_by ? (' · 送出人 ' + escHtml(it.submitted_by || it.updated_by)) : '') +
             '</div>' +
-          '<div class="sr-hint">' + (canEditItem(it) ? '點開可修改（同步審核／匯款）' : '點開看詳情（' + escHtml(lockReason(it)) + '）') + '</div>' +
+          '<div class="sr-hint">' + (canEditItem(it) ? '點開 → 修改送審 → 儲存（同步主檔）' : '點開看詳情（' + escHtml(lockReason(it)) + '）') + '</div>' +
           '<div class="sr-detail hidden"></div>';
         div.addEventListener('click', function (e) {
           if (e.target.closest && (e.target.closest('.sr-edit-form') || e.target.closest('.btn-ghost') ||
@@ -714,7 +714,7 @@
         (items || []).forEach(function (it) { box.appendChild(buildItemEl(it)); });
       }
       function loadList() {
-        setStatus('查詢中…', 'ok');
+        setStatus('載入送審清單…', 'ok');
         document.getElementById('srList').innerHTML = '';
         clearSideDetail();
         if (!sessionRef || typeof AccountingApi.accountingLedgerRecent !== 'function') {
@@ -724,7 +724,7 @@
         var filters = readFilters();
         return AccountingApi.accountingLedgerRecent(sessionRef, filters).then(function (data) {
           if (!data || data.success === false) {
-            setStatus((data && data.message) || '讀不到送出紀錄', 'error');
+            setStatus((data && data.message) || '載入失敗', 'error');
             return;
           }
           var items = (data.items || []).filter(function (it) {
@@ -737,19 +737,19 @@
             (data.date_from || filters.date_from) + '～' + (data.date_to || filters.date_to)
           ];
           if (n) {
-            setStatus('共 ' + n + ' 筆 · ' + bits.join(' · ') + ' · 可改階段會標「可修改」', 'ok');
+            setStatus('共 ' + n + ' 筆 · ' + bits.join(' · ') + ' · 標「可修改」＝點開改送審', 'ok');
             renderItems(items);
           } else {
             setStatus(
               ((data.empty_hint && String(data.empty_hint).trim()) ||
-                ('這段時間沒有符合條件的送出紀錄。')) + '（' + bits.join(' · ') + '）',
+                ('這段時間沒有可改／可看的送審單。')) + '（' + bits.join(' · ') + '）',
               'empty'
             );
           }
         }).catch(function (e) {
-          var msg = (e && e.message) || '讀不到送出紀錄';
+          var msg = (e && e.message) || '載入失敗';
           if (/逾時|timeout|Abort|abort|等太久/i.test(msg)) {
-            msg = '查詢逾時。請稍後再按「查詢」。';
+            msg = '載入逾時。請稍後再按「載入清單」。';
           }
           setStatus(msg, 'error');
         });

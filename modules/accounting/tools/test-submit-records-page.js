@@ -1,5 +1,5 @@
 /**
- * Smoke: 送出紀錄頁（由歷史記帳請款側演進）
+ * Smoke: 送出紀錄＝改送審新介面（非歷史記帳瀏覽）
  * node modules/accounting/tools/test-submit-records-page.js
  */
 var fs = require('fs');
@@ -17,6 +17,11 @@ var ui = fs.readFileSync(path.join(root, '../../shared/js/accounting_ui.js'), 'u
 var shell = fs.readFileSync(path.join(root, '../../shared/js/accounting_shell.js'), 'utf8');
 
 assert(html.indexOf('<title>送出紀錄</title>') >= 0, 'page title');
+assert(html.indexOf('修改已送出的送審資料') >= 0, 'page hint leads with edit');
+assert(html.indexOf('修改送審內容') >= 0, 'detail panel title edit-first');
+assert(html.indexOf('找出要改的單') >= 0, 'filter card edit framing');
+assert(html.indexOf('送審清單') >= 0, 'list card edit framing');
+assert(html.indexOf('查已送出請款') < 0, 'no history-browser lead copy');
 assert(html.indexOf('record_kind: \'payment_request\'') >= 0, 'forces payment_request');
 assert(html.indexOf('status_scope') >= 0, 'status_scope filter');
 assert(html.indexOf('vendorPaymentUpdate') >= 0, 'edit via vendorPaymentUpdate');
@@ -28,14 +33,21 @@ assert(html.indexOf('accounting_api.js?v=106') >= 0, 'api cache bust');
 assert(index.indexOf('submit_records.html') >= 0, 'hub menu card');
 assert(index.indexOf('linkSubmitRecords') >= 0, 'hub link id');
 assert(index.indexOf('>送出紀錄<') >= 0, 'hub label');
+assert(index.indexOf('修改已送出、待審核的請款內容') >= 0, 'hub card edit-first blurb');
 
 assert(pay.indexOf('submit_records.html') >= 0, 'success card href');
 assert(pay.indexOf('successSubmitRecordsLink') >= 0, 'success card submit-records id');
 assert(pay.indexOf('>送出紀錄<') >= 0 || /textContent\s*=\s*'送出紀錄'/.test(pay), 'success card label 送出紀錄');
 assert(pay.indexOf('successSubmitRecordsLink') < pay.indexOf('successReviewLink'), '送出紀錄 before 審核 on card');
+assert(/id="successSubmitRecordsLink"[^>]*btn-primary|btn-primary[^>]*id="successSubmitRecordsLink"/.test(pay) ||
+  pay.indexOf('id="successSubmitRecordsLink" href="submit_records.html">送出紀錄</a>') >= 0 &&
+  /successSubmitRecordsLink[\s\S]{0,120}btn-primary/.test(pay) ||
+  /btn-primary hidden" id="successSubmitRecordsLink"/.test(pay),
+  'success card 送出紀錄 is primary CTA');
 assert(pay.indexOf('查看歷史記帳紀錄') < 0, 'no ledger history on success card');
 assert(pay.indexOf('查看送出紀錄') < 0, 'no 查看送出紀錄 wording');
 assert(pay.indexOf('successHistoryLink') < 0, 'old history link id removed');
+assert(pay.indexOf('下一步到「送出紀錄」可改送審內容') >= 0, 'success hint points to edit');
 
 assert(hist.indexOf('histRecordKind" value="ledger"') >= 0 ||
   hist.indexOf("id=\"histRecordKind\" value=\"ledger\"") >= 0, 'history ledger-only');
