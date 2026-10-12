@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>待付款請款</title>
-  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=7" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/accounting_tax_mode.js?v=8"></script>
@@ -15,7 +15,7 @@
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=6"></script>
   <script src="../../shared/js/accounting_ui.js?v=26"></script>
-  <script src="../../shared/js/accounting_nav.js?v=2"></script>
+  <script src="../../shared/js/accounting_nav.js?v=4"></script>
   <script src="../../shared/js/accounting_boot.js?v=11"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <style>
@@ -165,7 +165,7 @@
 <body class="acct-page acct-page-form">
   <div id="loading">載入中…</div>
   <div id="app" class="hidden acct-main">
-    <p class="nav"><a href="index.html">← 會計功能選單</a> · <a href="submit_records.html" id="navSubmitRecordsLink">送出紀錄</a></p>
+    <p class="nav"><a class="acct-nav-back" href="index.html">← 會計功能選單</a><span class="acct-nav-back"> · </span><a href="submit_records.html" id="navSubmitRecordsLink">送出紀錄</a></p>
     <h2>待付款請款</h2>
     <p class="sub" id="userLine">—</p>
     <div class="seg hidden" id="pageModeSeg" style="margin:10px 0 6px">
@@ -1558,8 +1558,17 @@
         document.getElementById('accountName').value = v.account_name || v.name || '';
         setBankReadonly(true);
         document.getElementById('bankHint').textContent = '銀行資料來自您的廠商登記，若要修改請聯絡財務。';
-        document.querySelector('.nav a').href = 'vendor_status.html';
-        document.querySelector('.nav a').textContent = '← 款項進度';
+        var navBack = document.querySelector('.nav a.acct-nav-back') || document.querySelector('.nav a');
+        if (navBack) {
+          navBack.href = 'vendor_status.html';
+          navBack.textContent = '← 款項進度';
+        }
+        var navSr = document.getElementById('navSubmitRecordsLink');
+        if (navSr) {
+          var sep = navSr.previousElementSibling;
+          if (sep && sep.classList.contains('acct-nav-back')) sep.classList.add('hidden');
+          navSr.classList.add('hidden');
+        }
         var succLink = document.getElementById('successReviewLink');
         if (succLink) {
           succLink.href = 'vendor_status.html';

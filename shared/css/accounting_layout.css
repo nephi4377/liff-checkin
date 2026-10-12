@@ -145,8 +145,8 @@ body.acct-embed {
   min-height: 0;
 }
 
+/* 不整條藏 .nav：內嵌時仍要保留「送出紀錄」等交叉連結；回選單用 .acct-shell-hide / .acct-nav-back */
 body.acct-embed .acct-shell-hide,
-body.acct-embed .nav,
 body.acct-embed #userLine {
   display: none !important;
 }
