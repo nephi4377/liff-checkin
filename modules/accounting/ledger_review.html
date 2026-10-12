@@ -1388,7 +1388,11 @@
             ? ('現金收款 · ' + (item.receipt_no || '—'))
             : (isIncome ? ('客戶收款 · ' + (item.receipt_no || '—')) : (item.party_name || '—'))) + '</div>' +
           '<div class="amount">$' + fmtMoney(item.amount) + '</div>' +
-          '<div class="sub">案號 ' + (item.project_no || '—') + ' · ' + (item.txn_date || '—') + '</div>' +
+          '<div class="sub">案號 ' + (item.project_no || '—') + ' · 請款 ' +
+          (item.request_date_display || item.request_date || item.txn_date || '—') +
+          (item.doc_date || item.doc_date_display
+            ? (' · 單據 ' + (item.doc_date_display || item.doc_date))
+            : '') + '</div>' +
           '<div class="sub">' + (item.summary || '') + '</div>' +
           (item.has_allocations && item.allocations && item.allocations.length
             ? '<div class="sub">分攤：' + item.allocations.map(function (a) {
