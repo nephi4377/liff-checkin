@@ -1089,6 +1089,11 @@
       });
 
       document.getElementById('reloadBtn').addEventListener('click', function () { reload(); });
+      // bfcache／從請款頁返回：強制重抓，避免 session 清單快取看起來「沒更新」
+      window.addEventListener('pageshow', function (ev) {
+        if (!session) return;
+        if (ev.persisted) reload({ silent: true });
+      });
       document.getElementById('filterStatus').addEventListener('change', function () {
         syncStatusChips();
         reload();

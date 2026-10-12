@@ -102,14 +102,44 @@ var AccountingShell = (function () {
     setTitle('');
   }
 
-  function showFrame(page, pageQuery) {
+  /** iframe 目前實際頁（子頁 location.href 跳轉後，src 屬性不會跟著變） */
+  function frameActualPage_() {
+    try {
+      if (!frameEl || !frameEl.contentWindow) return '';
+      var loc = frameEl.contentWindow.location;
+      if (!loc || !loc.href || loc.href.indexOf('about:blank') === 0) return '';
+      return normalizePage(loc.pathname || loc.href);
+    } catch (e) {
+      return '';
+    }
+  }
+
+  /**
+   * 載入子頁。forceRemount：選單再點同一功能也重抓（避免清單／狀態過期）。
+   * 另：子頁內跳轉後殼層 src 屬性仍舊時，必須重掛，否則會卡在請款成功頁等舊畫面。
+   */
+  function showFrame(page, pageQuery, opts) {
     if (!frameEl || !page) {
       showMenu();
       return;
     }
-    currentPage = page;
+    opts = opts || {};
     var src = buildFrameSrc(page, pageQuery);
-    if (frameEl.getAttribute('src') !== src) frameEl.setAttribute('src', src);
+    var attr = frameEl.getAttribute('src') || '';
+    var actual = frameActualPage_();
+    var mustLoad = !!opts.forceRemount || attr !== src || (actual && actual !== page);
+    currentPage = page;
+    if (mustLoad) {
+      if (attr === src) {
+        // 同 URL 瀏覽器可能不重載：先 blank 再設回
+        frameEl.setAttribute('src', 'about:blank');
+        setTimeout(function () {
+          if (currentPage === page) frameEl.setAttribute('src', src);
+        }, 0);
+      } else {
+        frameEl.setAttribute('src', src);
+      }
+    }
     if (menuEl) menuEl.classList.add('hidden');
     frameEl.classList.remove('hidden');
     if (backEl) backEl.classList.remove('hidden');
@@ -124,13 +154,15 @@ var AccountingShell = (function () {
       setHash('');
       return;
     }
-    showFrame(page, extractPageQuery(href));
+    // 選單點進來一律重掛，確保單據清單等會重打 API
+    showFrame(page, extractPageQuery(href), { forceRemount: true });
     setHash(page);
   }
 
   function onHashChange() {
     var page = pageFromHash();
     if (!page) showMenu();
+    // 僅 hash 變化：若子頁已自行跳走，仍要纠正；已在正確頁則不強制重掛
     else showFrame(page);
   }
 
