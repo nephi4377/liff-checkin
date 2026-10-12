@@ -1280,6 +1280,8 @@ var AccountingApi = (function () {
         body.amount = opts.amount;
       }
       if (opts.record_kind) body.record_kind = opts.record_kind;
+      if (opts.status_scope) body.status_scope = opts.status_scope;
+      if (opts.include_allocations != null) body.include_allocations = !!opts.include_allocations;
       if (sessionOrToken && typeof resolveAuth === 'function') {
         try {
           var auth = resolveAuth(sessionOrToken);

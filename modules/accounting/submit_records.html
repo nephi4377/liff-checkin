@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <title>送出紀錄</title>
+  <!-- 新介面（請款管線第 2 站）：主職＝修改已送審請款資料並同步審核／匯款。非歷史記帳改名；收支查詢見 ledger_history.html -->
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/operator_context.js?v=4"></script>
+  <script src="../../shared/js/accounting_api.js?v=106"></script>
+  <script src="../../shared/js/accounting_cache.js?v=34"></script>
+  <script src="../../shared/js/accounting_form_helpers.js?v=6"></script>
+  <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
+  <script src="../../shared/js/accounting_ui.js?v=33"></script>
+  <script src="../../shared/js/accounting_nav.js?v=3"></script>
+  <script src="../../shared/js/accounting_boot.js?v=15"></script>
+  <style>
+    h2 { margin: 0 0 4px; }
+    .sub { color: #555; font-size: 14px; margin: 0 0 12px; line-height: 1.45; }
+    .card {
+      background: #fff; border-radius: 12px; padding: 14px;
+      margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      box-sizing: border-box; min-width: 0;
+    }
+    label { display: block; margin-top: 0; font-weight: 600; font-size: 13px; }
+    .hidden { display: none !important; }
+    .nav { margin-bottom: 12px; font-size: 14px; }
+    .nav a { color: #1a73e8; text-decoration: none; }
+    .hint { font-size: 12px; color: #777; margin-top: 4px; line-height: 1.4; }
+    .sr-head {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 8px; margin-bottom: 10px; flex-wrap: wrap;
+    }
+    .sr-head strong { font-size: 15px; }
+    #srFilters {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 12px;
+      margin: 0 0 10px;
+    }
+    #srFilters > * { min-width: 0; }
+    #srFilters .full { grid-column: 1 / -1; }
+    #srFilters input, #srFilters select {
+      width: 100%; max-width: 100%; min-width: 0;
+      padding: 8px; margin-top: 4px; box-sizing: border-box;
+      border: 1px solid #ccc; border-radius: 8px; font-size: 15px;
+    }
+    .sr-actions {
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 2px;
+    }
+    .btn-ghost {
+      width: auto; flex: 0 0 auto; padding: 8px 12px; font-size: 14px;
+      background: #e8eaed; color: #333; border: none; border-radius: 8px;
+      cursor: pointer; margin-top: 0; white-space: nowrap;
+    }
+    .btn-primary-sr { background: #1a73e8; color: #fff; }
+    .btn-save { background: #1a73e8; color: #fff; border: none; border-radius: 8px;
+      padding: 10px 14px; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .btn-save:disabled { opacity: .5; cursor: default; }
+    .sr-status-tabs {
+      grid-column: 1 / -1;
+      display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 2px;
+    }
+    .sr-status-tab {
+      flex: 1 1 auto; min-width: 4.5em; padding: 10px 12px;
+      border: 1px solid #dadce0; border-radius: 10px; background: #fff;
+      font-size: 14px; font-weight: 700; color: #3c4043; cursor: pointer;
+      font-family: inherit; text-align: center;
+    }
+    .sr-status-tab.is-active {
+      border-color: #0f766e; background: #ccfbf1; color: #0f766e;
+      box-shadow: inset 0 -3px 0 #0f766e;
+    }
+    .sr-mine-toggle {
+      grid-column: 1 / -1;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      width: 100%; box-sizing: border-box;
+      margin: 0 0 4px; padding: 12px 14px;
+      border: 2px solid #dadce0; border-radius: 12px;
+      background: #fff; cursor: pointer; text-align: left;
+      font-family: inherit; min-height: 52px;
+    }
+    .sr-mine-toggle.is-on {
+      border-color: #0f766e; background: #f0fdfa;
+      box-shadow: inset 4px 0 0 #0f766e;
+    }
+    .sr-mine-toggle .sr-mine-title { display: block; font-size: 15px; font-weight: 800; }
+    .sr-mine-toggle .sr-mine-sub { display: block; margin-top: 4px; font-size: 12px; color: #5f6368; }
+    .sr-mine-state {
+      flex: 0 0 auto; min-width: 3.2em; padding: 8px 12px; border-radius: 999px;
+      font-size: 14px; font-weight: 800; text-align: center; background: #e8eaed; color: #5f6368;
+    }
+    .sr-mine-toggle.is-on .sr-mine-state { background: #0f766e; color: #fff; }
+    #srStatus {
+      font-size: 13px; color: #555; margin: 0 0 10px; line-height: 1.45;
+      padding: 8px 10px; background: #f8fafc; border-radius: 8px; border: 1px solid #e8eaed;
+    }
+    #srStatus.is-empty { color: #8a5a00; background: #fff8e8; border-color: #f0d9a8; }
+    #srStatus.is-error { color: #8b1a1a; background: #fdecea; border-color: #f5c6c2; }
+    .sr-workspace {
+      display: grid; grid-template-columns: 1fr; gap: 12px; align-items: start;
+    }
+    #srList { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    .sr-item {
+      border: 1px solid #e8eaed; border-radius: 10px; padding: 10px 12px; background: #fafafa;
+      font-size: 13px; line-height: 1.45; cursor: pointer; text-align: left; width: 100%;
+      box-sizing: border-box; font-family: inherit; min-width: 0;
+    }
+    .sr-item:hover, .sr-item:focus { border-color: #0f766e; background: #f0fdfa; outline: none; }
+    .sr-item.is-open { border-color: #0f766e; background: #fff; box-shadow: 0 1px 4px rgba(15,118,110,.12); }
+    .sr-item.is-locked { opacity: .92; }
+    .sr-item .sr-top {
+      display: flex; flex-wrap: nowrap; gap: 8px; align-items: baseline;
+      justify-content: space-between; min-width: 0;
+    }
+    .sr-item .sr-top-left {
+      display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; min-width: 0;
+    }
+    .sr-item .sr-amt { font-weight: 700; font-size: 15px; flex: 0 0 auto; white-space: nowrap; }
+    .sr-badge {
+      display: inline-block; font-size: 11px; font-weight: 700; line-height: 1.2;
+      padding: 2px 7px; border-radius: 6px; white-space: nowrap;
+      background: #fef7e0; color: #8a5a00; border: 1px solid #f9ab00;
+    }
+    .sr-badge.is-paid { background: #e6f4ea; color: #137333; border-color: #81c995; }
+    .sr-badge.is-locked { background: #f1f3f4; color: #5f6368; border-color: #dadce0; }
+    .sr-meta { color: #555; margin-top: 4px; }
+    .sr-loc { color: #777; font-size: 12px; margin-top: 4px; font-family: ui-monospace, monospace; word-break: break-all; }
+    .sr-hint { color: #0f766e; font-size: 12px; margin-top: 6px; }
+    .sr-detail {
+      margin-top: 10px; padding-top: 10px; border-top: 1px solid #e8eaed;
+      font-size: 13px; line-height: 1.5; color: #333;
+    }
+    .sr-detail dl, #srDetailBody dl {
+      margin: 0; display: grid;
+      grid-template-columns: minmax(4.5em, 6.5em) minmax(0, 1fr);
+      gap: 6px 10px;
+    }
+    .sr-detail dt, #srDetailBody dt { color: #777; font-weight: 600; margin: 0; }
+    .sr-detail dd, #srDetailBody dd { margin: 0; word-break: break-word; min-width: 0; }
+    .sr-edit-form {
+      margin-top: 12px; padding: 12px; border: 1px solid #99f6e4; border-radius: 10px;
+      background: #f0fdfa;
+    }
+    .sr-edit-form label { margin-top: 8px; }
+    .sr-edit-form label:first-child { margin-top: 0; }
+    .sr-edit-form input, .sr-edit-form textarea {
+      width: 100%; max-width: 100%; box-sizing: border-box;
+      padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 8px; font-size: 15px;
+    }
+    .sr-edit-form textarea { min-height: 64px; resize: vertical; }
+    .sr-edit-form .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .sr-edit-msg { font-size: 13px; margin: 8px 0 0; }
+    .sr-edit-msg.is-ok { color: #137333; }
+    .sr-edit-msg.is-err { color: #c5221f; }
+    .sr-lock-banner {
+      margin: 0 0 10px; padding: 10px 12px; border-radius: 8px;
+      background: #f1f3f4; border: 1px solid #dadce0; color: #5f6368; font-size: 13px;
+    }
+    .sr-lock-banner.is-paid { background: #e6f4ea; border-color: #81c995; color: #137333; }
+    .sr-detail-card { display: none; }
+    .sr-detail-placeholder { margin: 0; color: #777; font-size: 14px; line-height: 1.5; }
+    .sr-detail-card-title { font-size: 15px; font-weight: 700; margin: 0 0 10px; }
+    .sr-alloc-row {
+      display: grid; grid-template-columns: 1.1fr 0.7fr 1fr auto; gap: 6px;
+      margin-top: 6px; align-items: center;
+    }
+    .sr-alloc-row input { margin-top: 0; }
+    @media (max-width: 559px) {
+      #srFilters { grid-template-columns: 1fr; }
+      .sr-alloc-row { grid-template-columns: 1fr; }
+    }
+    @media (min-width: 900px) {
+      .sr-workspace {
+        grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+        gap: 14px;
+      }
+      .sr-detail-card {
+        display: block; position: sticky; top: 12px;
+        max-height: calc(100vh - 24px); overflow: auto;
+      }
+      .sr-item .sr-detail, .sr-item .sr-hint { display: none !important; }
+    }
+  </style>
+</head>
+<body class="acct-page acct-page-form acct-page-browse">
+  <div id="loading">載入中…</div>
+  <div id="app" class="hidden acct-main">
+    <p class="nav"><a href="index.html">← 會計功能選單</a></p>
+    <h2>送出紀錄</h2>
+    <p class="sub" id="userLine">—</p>
+    <p class="sub" id="pageModeHint">請款管線第 2 站（<strong>新介面</strong>）：主職是<strong>修改已送出的送審資料</strong>（廠商／分攤／事由／備註）。點一筆 → 改 → 儲存，寫回同一請款主檔（審核／匯款會看到）。可改：<strong>待審／退回／待匯</strong>；<strong>已匯款鎖定</strong>。不是歷史記帳；收支查詢用「歷史記帳紀錄」。</p>
+
+    <div class="card" id="srFiltersCard">
+      <div class="sr-head">
+        <strong>找出要改的單</strong>
+        <button type="button" class="btn-ghost" id="srRefreshBtn">重新整理</button>
+      </div>
+      <div id="srFilters">
+        <div class="sr-status-tabs" role="tablist" aria-label="請款狀態">
+          <button type="button" class="sr-status-tab is-active" data-scope="pending" role="tab" aria-selected="true">待審</button>
+          <button type="button" class="sr-status-tab" data-scope="rejected" role="tab" aria-selected="false">退回</button>
+          <button type="button" class="sr-status-tab" data-scope="awaiting_pay" role="tab" aria-selected="false">待匯</button>
+          <button type="button" class="sr-status-tab" data-scope="pipeline" role="tab" aria-selected="false">管線中</button>
+          <button type="button" class="sr-status-tab" data-scope="all" role="tab" aria-selected="false">全部</button>
+        </div>
+        <input type="hidden" id="srStatusScope" value="pending" />
+        <button type="button" class="sr-mine-toggle" id="srMineToggle"
+          aria-pressed="false" title="選用：只顯示本人送出">
+          <span>
+            <span class="sr-mine-title">只看我送的（選用）</span>
+            <span class="sr-mine-sub" id="srMineSub">關閉中：顯示區間內全部人的送出紀錄。</span>
+          </span>
+          <span class="sr-mine-state" id="srMineState" aria-hidden="true">關</span>
+        </button>
+        <input type="checkbox" id="srMineOnly" class="hidden" tabindex="-1" aria-hidden="true" />
+        <div>
+          <label for="srDateFrom">送出時間起</label>
+          <input id="srDateFrom" type="date" />
+        </div>
+        <div>
+          <label for="srDateTo">送出時間迄</label>
+          <input id="srDateTo" type="date" />
+        </div>
+        <div>
+          <label for="srAmount">金額（選填）</label>
+          <input id="srAmount" type="number" inputmode="numeric" placeholder="完全相符" />
+        </div>
+        <div class="full">
+          <label for="srKeyword">關鍵字（廠商／案號／單號／備註）</label>
+          <input id="srKeyword" type="text" placeholder="例：廠商名、案號" autocomplete="off" />
+        </div>
+        <div class="full">
+          <p class="hint" style="margin:0 0 8px">預設「待審」。點開標「可修改」的單即可改送審內容；儲存後同步審核／匯款同一筆。</p>
+          <div class="sr-actions">
+            <button type="button" class="btn-ghost btn-primary-sr" id="srSearchBtn">載入清單</button>
+            <button type="button" class="btn-ghost" id="srClearBtn">重設為近 30 天</button>
+            <button type="button" class="btn-ghost" id="srExpand90Btn">近 90 天</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sr-workspace">
+      <div class="card" id="srListCard">
+        <div class="sr-head">
+          <strong>送審清單</strong>
+          <span class="sr-loc" style="font-weight:600;color:#0f766e">點開 → 修改 → 儲存</span>
+        </div>
+        <p id="srStatus" class="is-ok">載入中…</p>
+        <div id="srList"></div>
+      </div>
+      <aside class="card sr-detail-card" id="srDetailCard" aria-live="polite">
+        <p class="sr-detail-card-title">修改送審內容</p>
+        <p class="sr-detail-placeholder" id="srDetailPlaceholder">點左側一筆，在此修改送審資料並儲存（寫回同一請款主檔）。</p>
+        <div id="srDetailBody" class="hidden"></div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var sessionRef = null;
+      var openKey = '';
+      var itemsByKey = {};
+      var DEFAULT_DAYS = 30;
+      var EXPAND_DAYS = 90;
+
+      function formatMoney(n) {
+        var v = Number(n);
+        if (!isFinite(v)) return String(n == null ? '' : n);
+        return '$' + Math.round(v).toLocaleString('zh-TW');
+      }
+      function escHtml(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+      function itemKey(it) {
+        return 'pr:' + String((it && (it.payment_request_id || it.ingest_id)) || '');
+      }
+      function shortId(pid) {
+        return String(pid || '').slice(0, 8) || '—';
+      }
+      function sessionPerm() {
+        var authPerm = Number((sessionRef && sessionRef.auth && sessionRef.auth.permission) || 0);
+        var hubPerm = 0;
+        try {
+          if (typeof OperatorContext !== 'undefined') {
+            var op = typeof OperatorContext.readPreferUrl === 'function'
+              ? OperatorContext.readPreferUrl() : OperatorContext.read();
+            var sessUid = String((sessionRef && sessionRef.auth && sessionRef.auth.user_id) || '');
+            if (op && op.userId && (!sessUid || String(op.userId) === sessUid)) {
+              hubPerm = Number(op.permission || 0);
+            }
+          }
+        } catch (eHub) {}
+        return Math.max(authPerm, hubPerm);
+      }
+      function isPaid(it) {
+        return String((it && it.payment_status) || '') === '已匯款';
+      }
+      function canEditItem(it) {
+        if (!it || isPaid(it)) return false;
+        if (it.can_edit === false) return false;
+        if (it.can_edit === true) return sessionPerm() >= 3;
+        var rs = String(it.review_status || '').trim();
+        var ps = String(it.payment_status || '').trim();
+        var biz = rs === '待審' || rs === '退回' || (rs === '已審' && ps === '未匯款');
+        return biz && sessionPerm() >= 3;
+      }
+      function lockReason(it) {
+        if (!it) return '';
+        if (it.edit_locked_reason) return it.edit_locked_reason;
+        if (isPaid(it)) return '已匯款不可修改';
+        if (sessionPerm() < 3) return '需主管權限 ≥3';
+        return '此狀態不可修改';
+      }
+      function isDesktopDetail() {
+        return window.matchMedia && window.matchMedia('(min-width: 900px)').matches;
+      }
+      function setStatus(text, kind) {
+        var el = document.getElementById('srStatus');
+        el.textContent = text;
+        el.classList.remove('is-ok', 'is-empty', 'is-error');
+        el.classList.add(kind === 'error' ? 'is-error' : (kind === 'empty' ? 'is-empty' : 'is-ok'));
+      }
+      function clearSideDetail() {
+        var ph = document.getElementById('srDetailPlaceholder');
+        var body = document.getElementById('srDetailBody');
+        if (ph) ph.classList.remove('hidden');
+        if (body) { body.classList.add('hidden'); body.innerHTML = ''; }
+      }
+      function toIsoLocal(d) {
+        var y = d.getFullYear();
+        var m = String(d.getMonth() + 1);
+        var day = String(d.getDate());
+        if (m.length < 2) m = '0' + m;
+        if (day.length < 2) day = '0' + day;
+        return y + '-' + m + '-' + day;
+      }
+      function addDaysIso(iso, delta) {
+        var p = String(iso || '').split('-');
+        var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+        d.setDate(d.getDate() + delta);
+        return toIsoLocal(d);
+      }
+      function applyDates(days) {
+        var to = toIsoLocal(new Date());
+        document.getElementById('srDateTo').value = to;
+        document.getElementById('srDateFrom').value = addDaysIso(to, -(days - 1));
+      }
+      function syncMineUi() {
+        var on = !!document.getElementById('srMineOnly').checked;
+        var btn = document.getElementById('srMineToggle');
+        var state = document.getElementById('srMineState');
+        var sub = document.getElementById('srMineSub');
+        if (btn) {
+          btn.classList.toggle('is-on', on);
+          btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        }
+        if (state) state.textContent = on ? '開' : '關';
+        if (sub) {
+          sub.textContent = on
+            ? '開啟中：只顯示登入帳號本人送出的請款。'
+            : '關閉中：顯示區間內全部人的送出紀錄。';
+        }
+      }
+      function syncScopeTabs() {
+        var scope = (document.getElementById('srStatusScope').value || 'pending').trim();
+        Array.prototype.forEach.call(document.querySelectorAll('.sr-status-tab'), function (btn) {
+          var on = (btn.getAttribute('data-scope') || '') === scope;
+          btn.classList.toggle('is-active', on);
+          btn.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+      }
+      function readFilters() {
+        var dateFrom = (document.getElementById('srDateFrom').value || '').trim();
+        var dateTo = (document.getElementById('srDateTo').value || '').trim();
+        if (!dateTo) dateTo = toIsoLocal(new Date());
+        if (!dateFrom) dateFrom = addDaysIso(dateTo, -(DEFAULT_DAYS - 1));
+        if (dateFrom > dateTo) {
+          var tmp = dateFrom; dateFrom = dateTo; dateTo = tmp;
+        }
+        document.getElementById('srDateFrom').value = dateFrom;
+        document.getElementById('srDateTo').value = dateTo;
+        var keyword = (document.getElementById('srKeyword').value || '').trim();
+        var amountRaw = (document.getElementById('srAmount').value || '').trim();
+        var filters = {
+          limit: 50,
+          mine_only: !!document.getElementById('srMineOnly').checked,
+          date_from: dateFrom,
+          date_to: dateTo,
+          record_kind: 'payment_request',
+          status_scope: (document.getElementById('srStatusScope').value || 'pending').trim(),
+          include_allocations: true
+        };
+        if (keyword) filters.keyword = keyword;
+        if (amountRaw !== '') {
+          var amt = parseInt(amountRaw, 10);
+          if (!isNaN(amt)) filters.amount = amt;
+        }
+        return filters;
+      }
+      function scopeLabel(scope) {
+        return ({
+          pending: '待審',
+          rejected: '退回',
+          awaiting_pay: '待匯',
+          pipeline: '管線中',
+          all: '全部'
+        })[scope] || scope;
+      }
+      function renderDetailFields(it) {
+        var rows = [
+          ['狀態', it.status_label || it.review_status || '—'],
+          ['單號', it.payment_request_id || '—'],
+          ['廠商', it.party_name || it.vendor_name || '—'],
+          ['案場／案號', it.project_no || '（未填）'],
+          ['金額', formatMoney(it.amount)],
+          ['事由', it.item_desc || it.desc || '—'],
+          ['送出／更新', it.recorded_at_display || it.recorded_at || '—'],
+          ['送出人', it.submitted_by || it.updated_by || '—'],
+          ['匯款狀態', it.payment_status || '—']
+        ];
+        if (it.note) rows.push(['備註', it.note]);
+        var dl = '<dl>';
+        rows.forEach(function (pair) {
+          dl += '<dt>' + escHtml(pair[0]) + '</dt><dd>' + escHtml(pair[1]) + '</dd>';
+        });
+        dl += '</dl>';
+        return dl;
+      }
+      function ensureVendorCatalog() {
+        if (typeof AccountingCache === 'undefined') return [];
+        try {
+          return AccountingCache.vendors(sessionRef) || AccountingCache.peekVendors() || [];
+        } catch (e) { return []; }
+      }
+      function bindVendorInput(inp, it) {
+        if (!inp) return;
+        inp.value = String(it.party_name || it.vendor_name || '').trim();
+        if (it.vendor_id) inp.dataset.vendorId = String(it.vendor_id);
+        if (typeof AccountingFormHelpers !== 'undefined' && AccountingFormHelpers.initVendorCombobox) {
+          AccountingFormHelpers.initVendorCombobox(inp, ensureVendorCatalog, { minChars: 1, maxItems: 10 });
+        }
+        if (typeof AccountingCache !== 'undefined' && AccountingCache.needsStaffBootstrap &&
+            AccountingCache.needsStaffBootstrap(sessionRef)) {
+          AccountingCache.load(sessionRef, true).then(function () {}).catch(function () {});
+        }
+      }
+      function renderAllocEditor(container, allocations) {
+        var list = document.createElement('div');
+        list.className = 'sr-alloc-list';
+        function addRow(row) {
+          row = row || { project_no: '', amount: '', item_desc: '' };
+          var wrap = document.createElement('div');
+          wrap.className = 'sr-alloc-row';
+          wrap.innerHTML =
+            '<input type="text" data-f="project_no" placeholder="案號" value="' + escHtml(row.project_no || '') + '" />' +
+            '<input type="number" data-f="amount" inputmode="numeric" placeholder="金額" value="' +
+              escHtml(row.amount != null && row.amount !== '' ? row.amount : '') + '" />' +
+            '<input type="text" data-f="item_desc" placeholder="品項（選填）" value="' + escHtml(row.item_desc || '') + '" />' +
+            '<button type="button" class="btn-ghost" data-act="rm">刪</button>';
+          wrap.querySelector('[data-act="rm"]').addEventListener('click', function () {
+            wrap.remove();
+          });
+          list.appendChild(wrap);
+        }
+        var rows = (allocations && allocations.length)
+          ? allocations
+          : [{ project_no: '', amount: '', item_desc: '' }];
+        rows.forEach(addRow);
+        container.appendChild(list);
+        var addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'btn-ghost';
+        addBtn.textContent = '＋ 新增分攤列';
+        addBtn.style.marginTop = '8px';
+        addBtn.addEventListener('click', function () { addRow({}); });
+        container.appendChild(addBtn);
+        return list;
+      }
+      function readAllocations(form) {
+        var out = [];
+        Array.prototype.forEach.call(form.querySelectorAll('.sr-alloc-row'), function (row) {
+          var project_no = (row.querySelector('[data-f="project_no"]').value || '').trim();
+          var amountRaw = (row.querySelector('[data-f="amount"]').value || '').trim();
+          var item_desc = (row.querySelector('[data-f="item_desc"]').value || '').trim();
+          if (!project_no && !amountRaw && !item_desc) return;
+          var amount = parseInt(amountRaw, 10);
+          if (!project_no || !isFinite(amount) || amount === 0) return;
+          out.push({ project_no: project_no, amount: amount, item_desc: item_desc });
+        });
+        return out;
+      }
+      function buildEditForm(panel, it) {
+        var form = document.createElement('div');
+        form.className = 'sr-edit-form';
+        form.innerHTML =
+          '<strong>修改送審（儲存同步主檔）</strong>' +
+          '<p class="hint" style="margin:6px 0 0">這是本頁主操作。寫回同一請款主檔；審核／匯款會看到更新。已匯款不可改。</p>' +
+          '<label>廠商</label><input type="text" class="inp-vendor" placeholder="搜尋名冊廠商" autocomplete="off" />' +
+          '<label style="margin-top:10px">分攤（案號＋金額；可多案）</label>' +
+          '<div class="alloc-host"></div>' +
+          '<label style="margin-top:10px">事由摘要（選填）</label>' +
+          '<input type="text" class="inp-desc" />' +
+          '<label style="margin-top:10px">備註</label>' +
+          '<textarea class="inp-note" rows="2"></textarea>' +
+          '<div class="sr-actions" style="margin-top:12px">' +
+            '<button type="button" class="btn-save" data-act="save">儲存修改</button>' +
+            '<a class="btn-ghost" href="ledger_review.html">開啟請款審核</a>' +
+          '</div>' +
+          '<p class="sr-edit-msg" data-role="msg"></p>';
+        panel.appendChild(form);
+        var vendorInp = form.querySelector('.inp-vendor');
+        bindVendorInput(vendorInp, it);
+        form.querySelector('.inp-desc').value = String(it.item_desc || it.desc || '');
+        form.querySelector('.inp-note').value = String(it.note_raw || it.note || '');
+        var allocSeed = (it.allocations && it.allocations.length)
+          ? it.allocations
+          : [{ project_no: it.project_no || '', amount: it.amount || '', item_desc: it.item_desc || '' }];
+        renderAllocEditor(form.querySelector('.alloc-host'), allocSeed);
+        var saveBtn = form.querySelector('[data-act="save"]');
+        var msg = form.querySelector('[data-role="msg"]');
+        saveBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (!canEditItem(it)) {
+            msg.className = 'sr-edit-msg is-err';
+            msg.textContent = lockReason(it);
+            return;
+          }
+          var allocations = readAllocations(form);
+          if (!allocations.length) {
+            msg.className = 'sr-edit-msg is-err';
+            msg.textContent = '請至少一列分攤（案號＋金額）';
+            return;
+          }
+          var patch = {
+            allocations: allocations,
+            item_desc: (form.querySelector('.inp-desc').value || '').trim(),
+            note: (form.querySelector('.inp-note').value || '').trim()
+          };
+          var vid = (vendorInp.dataset.vendorId || '').trim();
+          var vname = (vendorInp.value || '').trim();
+          if (vid) patch.vendor_id = vid;
+          if (vname) patch.vendor_name = vname;
+          saveBtn.disabled = true;
+          msg.className = 'sr-edit-msg';
+          msg.textContent = '儲存中…';
+          AccountingApi.vendorPaymentUpdate(sessionRef, it.payment_request_id, patch).then(function (data) {
+            saveBtn.disabled = false;
+            if (!data || !data.success) {
+              msg.className = 'sr-edit-msg is-err';
+              msg.textContent = (data && data.message) || '儲存失敗';
+              return;
+            }
+            msg.className = 'sr-edit-msg is-ok';
+            msg.textContent = data.message || '已儲存（審核／匯款會看到同一筆）';
+            Object.assign(it, {
+              amount: data.amount != null ? data.amount : it.amount,
+              project_no: data.project_no != null ? data.project_no : allocations[0].project_no,
+              item_desc: data.item_desc != null ? data.item_desc : patch.item_desc,
+              desc: data.item_desc != null ? data.item_desc : patch.item_desc,
+              party_name: data.vendor_name || patch.vendor_name || it.party_name,
+              vendor_name: data.vendor_name || patch.vendor_name || it.vendor_name,
+              vendor_id: data.vendor_id || patch.vendor_id || it.vendor_id,
+              note: patch.note,
+              note_raw: patch.note,
+              allocations: allocations,
+              has_allocations: true
+            });
+            var key = itemKey(it);
+            if (itemsByKey[key]) Object.assign(itemsByKey[key], it);
+            try { loadList(); } catch (eReload) {}
+          }).catch(function (err) {
+            saveBtn.disabled = false;
+            msg.className = 'sr-edit-msg is-err';
+            msg.textContent = (err && err.message) || '儲存失敗';
+          });
+        });
+      }
+      function fillDetailPanel(panel, it) {
+        panel.innerHTML = '';
+        if (isPaid(it) || !canEditItem(it)) {
+          var banner = document.createElement('p');
+          banner.className = 'sr-lock-banner' + (isPaid(it) ? ' is-paid' : '');
+          banner.textContent = isPaid(it)
+            ? '已匯款：鎖定不可修改。'
+            : ('唯讀：' + lockReason(it));
+          panel.appendChild(banner);
+        }
+        var fields = document.createElement('div');
+        fields.innerHTML = renderDetailFields(it);
+        panel.appendChild(fields);
+        if (canEditItem(it)) {
+          buildEditForm(panel, it);
+        } else {
+          var links = document.createElement('div');
+          links.className = 'sr-actions';
+          links.style.marginTop = '12px';
+          var a = document.createElement('a');
+          a.className = 'btn-ghost';
+          a.href = 'ledger_review.html';
+          a.textContent = '開啟請款審核';
+          links.appendChild(a);
+          if (String(it.review_status || '') === '已審' && !isPaid(it)) {
+            var f = document.createElement('a');
+            f.className = 'btn-ghost';
+            f.href = 'vendor_payment_finance.html';
+            f.textContent = '開啟廠商待匯款';
+            links.appendChild(f);
+          }
+          panel.appendChild(links);
+        }
+      }
+      function activeDetailPanel(rowEl) {
+        if (isDesktopDetail()) {
+          var ph = document.getElementById('srDetailPlaceholder');
+          var body = document.getElementById('srDetailBody');
+          if (ph) ph.classList.add('hidden');
+          if (body) body.classList.remove('hidden');
+          return body;
+        }
+        var panel = rowEl.querySelector('.sr-detail');
+        if (!panel) {
+          panel = document.createElement('div');
+          panel.className = 'sr-detail';
+          rowEl.appendChild(panel);
+        }
+        panel.classList.remove('hidden');
+        return panel;
+      }
+      function clearRowSelection() {
+        Array.prototype.forEach.call(document.querySelectorAll('.sr-item.is-open'), function (el) {
+          el.classList.remove('is-open');
+          var d = el.querySelector('.sr-detail');
+          if (d) d.classList.add('hidden');
+          var hint = el.querySelector('.sr-hint');
+          if (hint) hint.textContent = canEditItem(itemsByKey[el.dataset.key]) ? '點開 → 修改送審' : '點開看詳情（不可改）';
+        });
+      }
+      function toggleDetail(div, it) {
+        var key = itemKey(it);
+        var wasOpen = div.classList.contains('is-open');
+        clearRowSelection();
+        if (wasOpen && openKey === key) {
+          openKey = '';
+          clearSideDetail();
+          return;
+        }
+        openKey = key;
+        div.classList.add('is-open');
+        var hint = div.querySelector('.sr-hint');
+        if (hint) hint.textContent = '再點一次收合';
+        var panel = activeDetailPanel(div);
+        fillDetailPanel(panel, it);
+      }
+      function buildItemEl(it) {
+        var key = itemKey(it);
+        itemsByKey[key] = it;
+        var div = document.createElement('div');
+        div.className = 'sr-item' + (isPaid(it) || !canEditItem(it) ? ' is-locked' : '');
+        div.setAttribute('role', 'button');
+        div.tabIndex = 0;
+        div.dataset.key = key;
+        var status = it.status_label || it.review_status || '—';
+        var badgeClass = isPaid(it) ? 'is-paid' : (canEditItem(it) ? '' : 'is-locked');
+        div.innerHTML =
+          '<div class="sr-top">' +
+            '<div class="sr-top-left">' +
+              '<span class="sr-badge ' + badgeClass + '">' + escHtml(status) + '</span>' +
+              (canEditItem(it) ? '<span class="sr-badge">可修改</span>' : '<span class="sr-badge is-locked">鎖定</span>') +
+              (it.recorded_at_display || it.recorded_at
+                ? ('<span style="color:#0f766e;font-weight:600">送出 ' +
+                  escHtml(it.recorded_at_display || it.recorded_at) + '</span>')
+                : '') +
+            '</div>' +
+            '<span class="sr-amt">' + escHtml(formatMoney(it.amount)) + '</span>' +
+          '</div>' +
+          '<div class="sr-meta">' + escHtml([
+            it.party_name || it.vendor_name || '（無廠商）',
+            it.project_no ? ('案場 ' + it.project_no) : '案場（未填）',
+            it.item_desc || it.desc || ''
+          ].filter(Boolean).join(' · ')) + '</div>' +
+          '<div class="sr-loc">單號 ' + escHtml(shortId(it.payment_request_id)) +
+            (it.submitted_by || it.updated_by ? (' · 送出人 ' + escHtml(it.submitted_by || it.updated_by)) : '') +
+            '</div>' +
+          '<div class="sr-hint">' + (canEditItem(it) ? '點開 → 修改送審 → 儲存（同步主檔）' : '點開看詳情（' + escHtml(lockReason(it)) + '）') + '</div>' +
+          '<div class="sr-detail hidden"></div>';
+        div.addEventListener('click', function (e) {
+          if (e.target.closest && (e.target.closest('.sr-edit-form') || e.target.closest('.btn-ghost') ||
+              e.target.closest('.btn-save') || e.target.closest('a') || e.target.closest('input') ||
+              e.target.closest('textarea') || e.target.closest('button'))) return;
+          toggleDetail(div, it);
+        });
+        div.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleDetail(div, it);
+          }
+        });
+        return div;
+      }
+      function renderItems(items) {
+        var box = document.getElementById('srList');
+        box.innerHTML = '';
+        openKey = '';
+        itemsByKey = {};
+        clearSideDetail();
+        (items || []).forEach(function (it) { box.appendChild(buildItemEl(it)); });
+      }
+      function loadList() {
+        setStatus('載入送審清單…', 'ok');
+        document.getElementById('srList').innerHTML = '';
+        clearSideDetail();
+        if (!sessionRef || typeof AccountingApi.accountingLedgerRecent !== 'function') {
+          setStatus('尚無法載入（請從主控台／LINE 登入後再試）。', 'error');
+          return Promise.resolve();
+        }
+        var filters = readFilters();
+        return AccountingApi.accountingLedgerRecent(sessionRef, filters).then(function (data) {
+          if (!data || data.success === false) {
+            setStatus((data && data.message) || '載入失敗', 'error');
+            return;
+          }
+          var items = (data.items || []).filter(function (it) {
+            return it && (it.record_kind === 'payment_request' || it.payment_request_id);
+          });
+          var n = items.length;
+          var bits = [
+            scopeLabel(filters.status_scope),
+            filters.mine_only ? '只看我送的' : '所有人',
+            (data.date_from || filters.date_from) + '～' + (data.date_to || filters.date_to)
+          ];
+          if (n) {
+            setStatus('共 ' + n + ' 筆 · ' + bits.join(' · ') + ' · 標「可修改」＝點開改送審', 'ok');
+            renderItems(items);
+          } else {
+            setStatus(
+              ((data.empty_hint && String(data.empty_hint).trim()) ||
+                ('這段時間沒有可改／可看的送審單。')) + '（' + bits.join(' · ') + '）',
+              'empty'
+            );
+          }
+        }).catch(function (e) {
+          var msg = (e && e.message) || '載入失敗';
+          if (/逾時|timeout|Abort|abort|等太久/i.test(msg)) {
+            msg = '載入逾時。請稍後再按「載入清單」。';
+          }
+          setStatus(msg, 'error');
+        });
+      }
+      function bindFilters() {
+        document.getElementById('srMineToggle').addEventListener('click', function () {
+          var box = document.getElementById('srMineOnly');
+          box.checked = !box.checked;
+          syncMineUi();
+          loadList();
+        });
+        Array.prototype.forEach.call(document.querySelectorAll('.sr-status-tab'), function (btn) {
+          btn.addEventListener('click', function () {
+            document.getElementById('srStatusScope').value = btn.getAttribute('data-scope') || 'pending';
+            syncScopeTabs();
+            loadList();
+          });
+        });
+        document.getElementById('srRefreshBtn').addEventListener('click', loadList);
+        document.getElementById('srSearchBtn').addEventListener('click', loadList);
+        document.getElementById('srClearBtn').addEventListener('click', function () {
+          applyDates(DEFAULT_DAYS);
+          document.getElementById('srKeyword').value = '';
+          document.getElementById('srAmount').value = '';
+          document.getElementById('srStatusScope').value = 'pending';
+          document.getElementById('srMineOnly').checked = false;
+          syncScopeTabs();
+          syncMineUi();
+          loadList();
+        });
+        document.getElementById('srExpand90Btn').addEventListener('click', function () {
+          applyDates(EXPAND_DAYS);
+          loadList();
+        });
+        document.getElementById('srKeyword').addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); loadList(); }
+        });
+      }
+      (async function boot() {
+        applyDates(DEFAULT_DAYS);
+        syncMineUi();
+        syncScopeTabs();
+        bindFilters();
+        await AccountingBoot.run({
+          minPermission: AccountingApi.SUPERVISOR_MIN_PERMISSION,
+          deniedMsg: '送出紀錄需主管權限（≥3）',
+          preloadBootstrap: false,
+          onReady: async function (sess) {
+            sessionRef = sess;
+            await loadList();
+          }
+        });
+      })();
+    })();
+  </script>
+</body>
+</html>

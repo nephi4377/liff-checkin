@@ -10,10 +10,10 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=102"></script>
+  <script src="../../shared/js/accounting_api.js?v=106"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
-  <script src="../../shared/js/accounting_ui.js?v=32"></script>
+  <script src="../../shared/js/accounting_ui.js?v=33"></script>
   <script src="../../shared/js/accounting_nav.js?v=3"></script>
   <script src="../../shared/js/accounting_boot.js?v=15"></script>
   <style>
@@ -344,7 +344,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub" id="pageModeHint">權限 ≥3 可查<strong>區間內全部人</strong>的<strong>待付款請款</strong>與<strong>收支登錄</strong>。預設近 30 天，可自訂更早區間；列表<strong>只依新增／送出時間</strong>新→舊。<strong>每一列</strong>（請款＋收支）都可按「錯誤記帳標示」並填原因——由你決定哪筆錯，系統不先框選。刪除已標示 ≥4；修改收支 &gt;4。</p>
+    <p class="sub" id="pageModeHint">權限 ≥3 可查<strong>區間內全部人</strong>的<strong>收支登錄</strong>（非請款送出站）。預設近 30 天；列表只依新增時間新→舊。可「錯誤記帳標示」；刪除已標示 ≥4；修改收支 &gt;4。已送出請款請用「送出紀錄」。</p>
 
     <div class="card" id="historyFiltersCard">
       <div class="hist-head">
@@ -352,12 +352,8 @@
         <button type="button" class="btn-ghost" id="historyRefreshBtn">重新整理</button>
       </div>
       <div id="historyFilters">
-        <div class="hist-kind-tabs" role="tablist" aria-label="紀錄類型">
-          <button type="button" class="hist-kind-tab is-active" data-kind="all" role="tab" aria-selected="true">全部</button>
-          <button type="button" class="hist-kind-tab" data-kind="payment_request" role="tab" aria-selected="false">待付款請款</button>
-          <button type="button" class="hist-kind-tab" data-kind="ledger" role="tab" aria-selected="false">收支登錄</button>
-        </div>
-        <input type="hidden" id="histRecordKind" value="all" />
+        <p class="hint" style="margin:0 0 8px;grid-column:1/-1">本頁只查<strong>收支登錄</strong>（已收／已付記帳）。已送出請款請到「<a href="submit_records.html">送出紀錄</a>」。</p>
+        <input type="hidden" id="histRecordKind" value="ledger" />
         <button type="button" class="hist-mine-toggle" id="historyMineToggle"
           aria-pressed="false" title="選用：只顯示本人記入的帳（預設關＝看全部）">
           <span class="hist-mine-copy">
@@ -392,7 +388,7 @@
           <input id="histKeyword" type="text" placeholder="例：廠商名、訂金" autocomplete="off" />
         </div>
         <div class="full">
-          <p class="hint" style="margin:0 0 8px">日期區間依<strong>新增／送出時間</strong>（不是交易日）；預設近 30 天，可自訂更早。列表標籤可分辨「待付款請款」與「收支登錄」。請款時間戳＝主檔最後更新（送出／審核更新）。</p>
+          <p class="hint" style="margin:0 0 8px">日期區間依<strong>新增時間</strong>（不是交易日）；預設近 30 天。本頁僅收支登錄；已送出請款見「送出紀錄」。</p>
           <div class="hist-actions">
             <button type="button" class="btn-ghost btn-primary-hist" id="historySearchBtn">查詢</button>
             <button type="button" class="btn-ghost" id="historyClearBtn">重設為近 30 天</button>
@@ -1536,13 +1532,13 @@
         if (state) state.textContent = on ? '開' : '關';
         if (sub) {
           sub.textContent = on
-            ? '開啟中：只顯示登入帳號本人送出的請款／記入的帳。關閉後回到區間內全部人。'
-            : '關閉中：顯示區間內全部人的請款與收支。需要時再開啟只看本人。';
+            ? '開啟中：只顯示登入帳號本人記入的帳。關閉後回到區間內全部人。'
+            : '關閉中：顯示區間內全部人記入的帳。需要時再開啟只看本人。';
         }
         if (hint) {
           hint.innerHTML = on
-            ? '目前為<strong>只看我記的</strong>（選用篩選）。預設近 30 天，可自訂更早區間。列表含<strong>待付款請款</strong>與<strong>收支登錄</strong>，<strong>只依新增／送出時間</strong>新→舊。需權限 ≥3。'
-            : '權限 ≥3 可查<strong>區間內全部人</strong>的<strong>待付款請款</strong>與<strong>收支登錄</strong>。預設近 30 天，可自訂更早區間；列表<strong>只依新增／送出時間</strong>新→舊。<strong>每一列</strong>（請款＋收支）都可「錯誤記帳標示」並填原因；刪除已標示 ≥4；修改收支 &gt;4。';
+            ? '目前為<strong>只看我記的</strong>（選用篩選）。預設近 30 天。本頁僅<strong>收支登錄</strong>；請款請到「送出紀錄」。需權限 ≥3。'
+            : '權限 ≥3 可查<strong>區間內全部人</strong>的<strong>收支登錄</strong>。預設近 30 天；列表只依新增時間。錯誤記帳標示 ≥3；刪除已標示 ≥4；修改收支 &gt;4。請款請用「送出紀錄」。';
         }
       }
 
@@ -1585,7 +1581,7 @@
         document.getElementById('histType').value = '';
         document.getElementById('histKeyword').value = '';
         document.getElementById('histAmount').value = '';
-        document.getElementById('histRecordKind').value = 'all';
+        document.getElementById('histRecordKind').value = 'ledger';
         syncRecordKindTabs();
         resetMineOnlyDefault();
       }
