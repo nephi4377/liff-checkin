@@ -6,7 +6,7 @@
   <title>請款審核</title>
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="../../shared/js/accounting_tax_mode.js?v=7"></script>
+  <script src="../../shared/js/accounting_tax_mode.js?v=8"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/accounting_api.js?v=105"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
@@ -605,13 +605,12 @@
         var btn5 = host.querySelector('.btn-tax-5pct');
         if (btn5) {
           btn5.addEventListener('click', function () {
-            var pretax = 0;
-            readAllocRowsFromPanel(panel).forEach(function (r) {
-              var a = parseAllocAmount(r.amount);
-              if (!isNaN(a) && a > 0) pretax += a;
-            });
+            // 未稅淨合計×5%（含折讓負數；與 AccountingTaxMode.summarize 空白稅金一致）
+            var s = (typeof AccountingTaxMode !== 'undefined')
+              ? AccountingTaxMode.summarize(readAllocRowsFromPanel(panel), 'prorate', '')
+              : { tax: 0 };
             var taxInp2 = host.querySelector('.inp-tax-amount');
-            if (taxInp2) taxInp2.value = Math.round(pretax * 0.05);
+            if (taxInp2) taxInp2.value = String(s.tax || 0);
             updatePanelTotal(panel);
           });
         }

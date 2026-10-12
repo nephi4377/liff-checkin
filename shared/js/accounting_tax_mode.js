@@ -101,11 +101,17 @@ var AccountingTaxMode = (function () {
     });
   }
 
-  function resolveProrateTax(pretaxPositive, taxAmount) {
+  /**
+   * 整張稅：空白＝未稅淨合計×5%（含折讓負數；淨額≤0 則稅＝0）。
+   * 勿只加正數列，否則折讓會被漏算、稅金偏高。
+   */
+  function resolveProrateTax(pretaxNet, taxAmount) {
     var raw = String(taxAmount == null ? '' : taxAmount).trim();
     var tax = parseAmount(raw);
     if (raw === '' || isNaN(tax) || tax < 0) {
-      return Math.round((pretaxPositive || 0) * TAX_RATE);
+      var base = pretaxNet || 0;
+      if (base <= 0) return 0;
+      return Math.round(base * TAX_RATE);
     }
     return tax;
   }
@@ -114,7 +120,6 @@ var AccountingTaxMode = (function () {
   function summarize(rows, mode, taxAmount) {
     var m = normalizeMode(mode) || 'inclusive';
     var pretax = 0;
-    var pretaxPos = 0;
     var payableShown = 0;
     (rows || []).forEach(function (r) {
       var amt = parseAmount(r.amount);
@@ -122,7 +127,6 @@ var AccountingTaxMode = (function () {
       payableShown += amt;
       if (m === 'prorate') {
         pretax += amt;
-        if (amt > 0) pretaxPos += amt;
         return;
       }
       if (amt < 0) {
@@ -132,13 +136,13 @@ var AccountingTaxMode = (function () {
       }
       var base = rowBaseAmount(r, m);
       pretax += isNaN(base) ? amt : base;
-      if (base > 0) pretaxPos += isNaN(base) ? amt : base;
     });
     if (m === 'inclusive') {
       return { pretax: payableShown, tax: 0, payable: payableShown };
     }
     if (m === 'prorate') {
-      var tax = resolveProrateTax(pretaxPos, taxAmount);
+      // 稅基＝未稅淨合計（正數＋折讓負數），與「未稅合計×5%」按鈕一致
+      var tax = resolveProrateTax(pretax, taxAmount);
       return { pretax: pretax, tax: tax, payable: pretax + tax };
     }
     return { pretax: pretax, tax: payableShown - pretax, payable: payableShown };
@@ -183,16 +187,19 @@ var AccountingTaxMode = (function () {
 
   function prorateTax(rows, taxAmount) {
     var positives = [];
-    var subtotal = 0;
+    var positiveSum = 0;
+    var net = 0;
     (rows || []).forEach(function (r, i) {
       var base = parseAmount(r.amount);
       if (isNaN(base)) base = 0;
+      net += base;
       if (base > 0) {
         positives.push({ i: i, base: base });
-        subtotal += base;
+        positiveSum += base;
       }
     });
-    if (!positives.length || subtotal <= 0) {
+    // 淨未稅≤0 或沒有正數列：不加稅；折讓列維持原未稅金額
+    if (!positives.length || positiveSum <= 0 || net <= 0) {
       return (rows || []).map(function (r) {
         return Object.assign({}, r, {
           tax_inclusive: !!r.tax_inclusive,
@@ -200,15 +207,16 @@ var AccountingTaxMode = (function () {
         });
       });
     }
-    var tax = resolveProrateTax(subtotal, taxAmount);
+    var tax = resolveProrateTax(net, taxAmount);
     var distributed = 0;
     var out = (rows || []).map(function (r) {
       return Object.assign({}, r);
     });
+    // 稅池依淨合計算；分攤只進正數列（SPEC：按各案正數比例）
     positives.forEach(function (p, idx) {
       var share = (idx === positives.length - 1)
         ? tax - distributed
-        : Math.round(tax * p.base / subtotal);
+        : Math.round(tax * p.base / positiveSum);
       distributed += share;
       out[p.i].amount = p.base + share;
       out[p.i].item_desc = applyTaxTag(out[p.i].item_desc, true);
