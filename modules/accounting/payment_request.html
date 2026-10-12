@@ -2065,11 +2065,13 @@
           status.textContent = '辨識中…（最長約 3 分鐘）';
           var vid = getVendorPickId();
           if (vid === NEW_VENDOR_ID) vid = '';
+          // 一般辨識不帶上一張選取的 vendor_id，避免單據寫聖黛蘭卻黏住協進；
+          // 僅「用此廠商規則再辨一次」才強制帶入。
           var payload = {
             draft_id: draftId || undefined,
             photo_ids: selected.map(function (p) { return p.photo_id; }),
             photos: photosPayload(),
-            vendor_id: vid || '',
+            vendor_id: (ocrForceVendorHint && vid) ? vid : '',
             force_vendor_hint: !!ocrForceVendorHint
           };
           ocrForceVendorHint = false;

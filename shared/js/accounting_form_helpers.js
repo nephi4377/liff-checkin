@@ -67,6 +67,8 @@ var AccountingFormHelpers = (function () {
     if (!v) return '';
     return [
       vendorDisplayName(v),
+      v.name_aliases,
+      v.account_name,
       v.tax_id,
       v.trade_category,
       v.contact_name,
