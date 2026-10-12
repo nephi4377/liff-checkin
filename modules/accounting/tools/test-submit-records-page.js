@@ -1,5 +1,5 @@
 /**
- * Smoke: 送出紀錄＝改送審新介面（非歷史記帳瀏覽）
+ * Smoke: 送出紀錄＝新介面（主職改送審資料／同步審核；非歷史記帳改名）
  * node modules/accounting/tools/test-submit-records-page.js
  */
 var fs = require('fs');
@@ -17,11 +17,13 @@ var ui = fs.readFileSync(path.join(root, '../../shared/js/accounting_ui.js'), 'u
 var shell = fs.readFileSync(path.join(root, '../../shared/js/accounting_shell.js'), 'utf8');
 
 assert(html.indexOf('<title>送出紀錄</title>') >= 0, 'page title');
+assert(html.indexOf('新介面') >= 0, 'framed as new interface');
 assert(html.indexOf('修改已送出的送審資料') >= 0, 'page hint leads with edit');
 assert(html.indexOf('修改送審內容') >= 0, 'detail panel title edit-first');
 assert(html.indexOf('找出要改的單') >= 0, 'filter card edit framing');
 assert(html.indexOf('送審清單') >= 0, 'list card edit framing');
 assert(html.indexOf('查已送出請款') < 0, 'no history-browser lead copy');
+assert(html.indexOf('不是歷史記帳') >= 0 || html.indexOf('非歷史記帳') >= 0, 'not ledger-history rename');
 assert(html.indexOf('record_kind: \'payment_request\'') >= 0, 'forces payment_request');
 assert(html.indexOf('status_scope') >= 0, 'status_scope filter');
 assert(html.indexOf('vendorPaymentUpdate') >= 0, 'edit via vendorPaymentUpdate');
@@ -33,7 +35,8 @@ assert(html.indexOf('accounting_api.js?v=106') >= 0, 'api cache bust');
 assert(index.indexOf('submit_records.html') >= 0, 'hub menu card');
 assert(index.indexOf('linkSubmitRecords') >= 0, 'hub link id');
 assert(index.indexOf('>送出紀錄<') >= 0, 'hub label');
-assert(index.indexOf('修改已送出、待審核的請款內容') >= 0, 'hub card edit-first blurb');
+assert(index.indexOf('修改已送審請款') >= 0, 'hub card edit-first blurb');
+assert(index.indexOf('不是歷史記帳') >= 0, 'hub card not ledger history');
 
 assert(pay.indexOf('submit_records.html') >= 0, 'success card href');
 assert(pay.indexOf('successSubmitRecordsLink') >= 0, 'success card submit-records id');

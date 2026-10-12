@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <title>送出紀錄</title>
-  <!-- 新介面：請款管線第 2 站＝改送審資料（vendor_payment_update）；非歷史記帳瀏覽 -->
+  <!-- 新介面（請款管線第 2 站）：主職＝修改已送審請款資料並同步審核／匯款。非歷史記帳改名；收支查詢見 ledger_history.html -->
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
@@ -192,7 +192,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>送出紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub" id="pageModeHint">請款管線第 2 站：<strong>修改已送出的送審資料</strong>（廠商／分攤／事由／備註）。點一筆 → 改 → 儲存，寫回同一請款主檔（審核／匯款會看到）。可改：<strong>待審／退回／待匯</strong>；<strong>已匯款鎖定</strong>。本頁不是收支「歷史記帳」。</p>
+    <p class="sub" id="pageModeHint">請款管線第 2 站（<strong>新介面</strong>）：主職是<strong>修改已送出的送審資料</strong>（廠商／分攤／事由／備註）。點一筆 → 改 → 儲存，寫回同一請款主檔（審核／匯款會看到）。可改：<strong>待審／退回／待匯</strong>；<strong>已匯款鎖定</strong>。不是歷史記帳；收支查詢用「歷史記帳紀錄」。</p>
 
     <div class="card" id="srFiltersCard">
       <div class="sr-head">
@@ -502,7 +502,7 @@
         form.className = 'sr-edit-form';
         form.innerHTML =
           '<strong>修改送審（儲存同步主檔）</strong>' +
-          '<p class="hint" style="margin:6px 0 0">這是本頁主操作。儲存後審核／匯款會看到同一筆；已匯款不可改。</p>' +
+          '<p class="hint" style="margin:6px 0 0">這是本頁主操作。寫回同一請款主檔；審核／匯款會看到更新。已匯款不可改。</p>' +
           '<label>廠商</label><input type="text" class="inp-vendor" placeholder="搜尋名冊廠商" autocomplete="off" />' +
           '<label style="margin-top:10px">分攤（案號＋金額；可多案）</label>' +
           '<div class="alloc-host"></div>' +
