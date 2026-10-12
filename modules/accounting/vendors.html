@@ -359,7 +359,7 @@
           <input id="payEditDesc" />
           <div class="row2">
             <div>
-              <label>交易日</label>
+              <label>單據日期</label>
               <input id="payEditTxnDate" type="date" />
             </div>
             <div>
@@ -660,7 +660,7 @@
         $('payEditAmount').value = it.amount || '';
         $('payEditProject').value = it.project_no || '';
         $('payEditDesc').value = it.item_desc || it.summary || '';
-        $('payEditTxnDate').value = String(it.txn_date || '').slice(0, 10);
+        $('payEditTxnDate').value = String(it.doc_date || it.txn_date || '').slice(0, 10);
         $('payEditRemitFee').value = String(it.remit_fee_apply || '').trim() === '否' ? '否' : '是';
         $('payEditNote').value = it.note || '';
         $('payHistoryEdit').classList.remove('hidden');
@@ -671,7 +671,8 @@
         var wrap = document.createElement('div');
         wrap.className = 'pay-history-item';
         var amt = Number(it.amount || 0).toLocaleString('zh-TW');
-        var meta = (it.txn_date || '') +
+        var meta = (it.request_date || it.txn_date || '') +
+          (it.doc_date ? (' · 單據 ' + it.doc_date) : '') +
           (it.project_no ? ' · 案號 ' + it.project_no : '') +
           (it.store ? ' · ' + it.store : '') +
           ' · $' + amt;
@@ -807,7 +808,7 @@
             amount: amount,
             project_no: projectNo,
             item_desc: $('payEditDesc').value.trim(),
-            txn_date: $('payEditTxnDate').value.trim(),
+            doc_date: $('payEditTxnDate').value.trim(),
             note: $('payEditNote').value.trim(),
             remit_fee_apply: $('payEditRemitFee').value
           });

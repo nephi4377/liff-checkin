@@ -290,6 +290,7 @@
         <div>
           <label>單據日期</label>
           <input type="date" id="txnDate" />
+          <p class="sub" style="margin:4px 0 0">請款日＝送出當天（會計月份依此）；單據日僅供對照發票／請款單日期。</p>
         </div>
       </div>
 
@@ -1475,6 +1476,7 @@
         lines.push('單據類型：' + (payload.doc_type || '—'));
         if (payload.project_no) lines.push('案號：' + payload.project_no);
         if (payload.txn_date) lines.push('單據日期：' + payload.txn_date);
+        lines.push('請款日：送出當天（以伺服器時間為準）');
         if (payload.vendor_id) {
           var v = vendors.find(function (x) { return x.vendor_id === payload.vendor_id; });
           lines.push('廠商：' + (v ? v.name : payload.vendor_id));

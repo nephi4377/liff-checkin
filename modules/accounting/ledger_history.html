@@ -539,7 +539,9 @@
         var rows = [
           ['來源', recordKindLabel(detail)],
           ['類型', detail.type || (isPay ? '支出' : '—')],
-          ['交易日', detail.txn_date_display || detail.txn_date || '—'],
+          [isPay ? '請款日' : '交易日', isPay
+            ? (detail.request_date_display || detail.request_date || detail.txn_date_display || detail.txn_date || '—')
+            : (detail.txn_date_display || detail.txn_date || '—')],
           [isPay ? '送出／更新' : '新增時間', detail.recorded_at_display || detail.recorded_at || '—'],
           ['金額', formatMoney(detail.amount)],
           ['對象', detail.party_name || '—'],
@@ -548,6 +550,9 @@
         ];
         if (isPay) {
           rows.splice(2, 0, ['請款狀態', detail.status_label || detail.review_status || '—']);
+          if (detail.doc_date || detail.doc_date_display) {
+            rows.splice(4, 0, ['單據日', detail.doc_date_display || detail.doc_date]);
+          }
           if (detail.doc_type) rows.push(['單據類型', detail.doc_type]);
           if (detail.payment_status) rows.push(['匯款狀態', detail.payment_status]);
         } else {
@@ -1404,7 +1409,12 @@
             '</div>' +
             '<span class="hist-amt">' + escHtml(formatMoney(it.amount)) + '</span>' +
           '</div>' +
-          '<div class="hist-loc">交易日 ' + escHtml(it.txn_date_display || it.txn_date || '—') + '</div>' +
+          '<div class="hist-loc">' + (kind === 'payment'
+            ? ('請款日 ' + escHtml(it.request_date_display || it.request_date || it.txn_date_display || it.txn_date || '—') +
+              ((it.doc_date || it.doc_date_display)
+                ? (' · 單據 ' + escHtml(it.doc_date_display || it.doc_date))
+                : ''))
+            : ('交易日 ' + escHtml(it.txn_date_display || it.txn_date || '—'))) + '</div>' +
           '<div class="hist-meta">' + escHtml(meta.join(' · ') || '—') + '</div>' +
           '<div class="hist-loc">' + escHtml(loc) + '</div>' +
           (canListFlag
