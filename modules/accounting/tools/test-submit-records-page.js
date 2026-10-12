@@ -40,6 +40,7 @@ assert(index.indexOf('不是歷史記帳') >= 0, 'hub card not ledger history');
 
 assert(pay.indexOf('submit_records.html') >= 0, 'success card href');
 assert(pay.indexOf('successSubmitRecordsLink') >= 0, 'success card submit-records id');
+assert(pay.indexOf('id="navSubmitRecordsLink"') >= 0, 'payment_request header nav to 送出紀錄');
 assert(pay.indexOf('>送出紀錄<') >= 0 || /textContent\s*=\s*'送出紀錄'/.test(pay), 'success card label 送出紀錄');
 assert(pay.indexOf('successSubmitRecordsLink') < pay.indexOf('successReviewLink'), '送出紀錄 before 審核 on card');
 assert(/id="successSubmitRecordsLink"[^>]*btn-primary|btn-primary[^>]*id="successSubmitRecordsLink"/.test(pay) ||
@@ -55,7 +56,15 @@ assert(pay.indexOf('下一步到「送出紀錄」可改送審內容') >= 0, 'su
 assert(hist.indexOf('histRecordKind" value="ledger"') >= 0 ||
   hist.indexOf("id=\"histRecordKind\" value=\"ledger\"") >= 0, 'history ledger-only');
 assert(hist.indexOf('submit_records.html') >= 0, 'history points to submit records');
+assert(hist.indexOf('id="navSubmitRecordsLink"') >= 0, 'ledger_history header nav to 送出紀錄');
 assert(hist.indexOf('data-kind="payment_request"') < 0, 'history no payment tab');
+
+var ingest = fs.readFileSync(path.join(root, 'accounting_ingest.html'), 'utf8');
+assert(ingest.indexOf('id="navSubmitRecordsLink"') >= 0, 'ingest header nav to 送出紀錄');
+assert(ingest.indexOf('submit_records.html') >= 0, 'ingest links submit records');
+assert(ingest.indexOf('id="navLedgerHistoryLink"') >= 0 || ingest.indexOf('historyPageLink') >= 0,
+  'ingest keeps 歷史記帳 sibling (not confused with 送出紀錄)');
+assert(html.indexOf('id="navPaymentRequestLink"') >= 0, 'submit_records nav back to 請款');
 
 assert(api.indexOf('opts.status_scope') >= 0, 'api status_scope');
 assert(api.indexOf('opts.include_allocations') >= 0, 'api include_allocations');
