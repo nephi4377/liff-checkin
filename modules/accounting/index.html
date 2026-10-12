@@ -107,15 +107,6 @@
         </span>
       </a>
 
-      <a class="card" href="submit_records.html" id="linkSubmitRecords">
-        <span class="card-icon teal">📤</span>
-        <span class="card-body">
-          <h3>送出紀錄</h3>
-          <p>修改已送審請款（待審／退回／待匯），同步審核與匯款；不是歷史記帳。</p>
-          <span class="tag admin">主管 ≥3</span>
-        </span>
-      </a>
-
       <a class="card" href="quick_review.html" id="linkQuickReview">
         <span class="card-icon amber">📁</span>
         <span class="card-body">
@@ -263,15 +254,11 @@
           document.getElementById('linkCustomerFinance').classList.remove('hidden');
         }
 
-        // 歷史記帳／送出紀錄：主管 ≥3
+        // 歷史記帳：主管 ≥3（送出紀錄改由請款／收支／歷史記帳頁內導覽進入，hub 不顯示卡）
         if (perm < supervisorMin || isVendor) {
           document.getElementById('linkLedgerHistory').classList.add('hidden');
-          var linkSr = document.getElementById('linkSubmitRecords');
-          if (linkSr) linkSr.classList.add('hidden');
         } else {
           document.getElementById('linkLedgerHistory').classList.remove('hidden');
-          var linkSrOn = document.getElementById('linkSubmitRecords');
-          if (linkSrOn) linkSrOn.classList.remove('hidden');
         }
 
         if (perm < supervisorMin) {

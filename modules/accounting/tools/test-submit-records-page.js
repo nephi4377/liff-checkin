@@ -32,11 +32,10 @@ assert(html.indexOf('submitted_by') >= 0, 'shows submitted_by');
 assert(html.indexOf('include_allocations') >= 0, 'loads allocations');
 assert(html.indexOf('accounting_api.js?v=106') >= 0, 'api cache bust');
 
-assert(index.indexOf('submit_records.html') >= 0, 'hub menu card');
-assert(index.indexOf('linkSubmitRecords') >= 0, 'hub link id');
-assert(index.indexOf('>送出紀錄<') >= 0, 'hub label');
-assert(index.indexOf('修改已送審請款') >= 0, 'hub card edit-first blurb');
-assert(index.indexOf('不是歷史記帳') >= 0, 'hub card not ledger history');
+assert(index.indexOf('linkSubmitRecords') < 0, 'hub card removed');
+assert(index.indexOf('>送出紀錄<') < 0, 'hub has no 送出紀錄 label');
+assert(index.indexOf('修改已送審請款') < 0, 'hub has no submit-records blurb');
+assert(index.indexOf('submit_records.html') < 0, 'hub has no submit_records href');
 
 assert(pay.indexOf('submit_records.html') >= 0, 'success card href');
 assert(pay.indexOf('successSubmitRecordsLink') >= 0, 'success card submit-records id');
