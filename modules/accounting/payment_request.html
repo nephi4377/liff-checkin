@@ -2466,6 +2466,38 @@
         return (typeof AccountingCache !== 'undefined' && AccountingCache.peekVendors) ? AccountingCache.peekVendors() : [];
       }
 
+      /** context 精簡名冊若缺 trade_category，用本機快取補上，避免①分類→②清單永遠空 */
+      function mergeVendorsPreferTradeCategory(fromCtx, localList) {
+        var incoming = fromCtx || [];
+        if (!incoming.length) return localList || [];
+        var byId = {};
+        (localList || []).forEach(function (v) {
+          if (v && v.vendor_id) byId[String(v.vendor_id)] = v;
+        });
+        var ctxHasTrade = incoming.some(function (v) {
+          return String((v && v.trade_category) || '').trim();
+        });
+        var localHasTrade = (localList || []).some(function (v) {
+          return String((v && v.trade_category) || '').trim();
+        });
+        // 後端尚未部署 trade_category、但快取已有完整名冊：保留快取，勿被精簡清單蓋掉
+        if (!ctxHasTrade && localHasTrade && (localList || []).length) {
+          return localList;
+        }
+        return incoming.map(function (v) {
+          if (!v) return v;
+          if (String(v.trade_category || '').trim()) return v;
+          var cached = byId[String(v.vendor_id || '')];
+          if (!cached) return v;
+          var out = {};
+          Object.keys(v).forEach(function (k) { out[k] = v[k]; });
+          if (cached.trade_category) out.trade_category = cached.trade_category;
+          if (cached.tax_id && !out.tax_id) out.tax_id = cached.tax_id;
+          if (cached.name_aliases && !out.name_aliases) out.name_aliases = cached.name_aliases;
+          return out;
+        });
+      }
+
       function applyPaymentRequestContext(ctx) {
         if (!ctx || !ctx.success) return false;
         if (ctx.is_vendor_self && ctx.vendor_self) {
@@ -2474,7 +2506,9 @@
           employees = [];
           setupVendorSelfPortal(vendorSelf);
         } else {
-          if (ctx.vendors && ctx.vendors.length) vendors = ctx.vendors;
+          if (ctx.vendors && ctx.vendors.length) {
+            vendors = mergeVendorsPreferTradeCategory(ctx.vendors, vendors);
+          }
           if (ctx.employees && ctx.employees.length) employees = ctx.employees;
           fillVendorSelect();
           fillSelect('pickEmployee', employees, 'userId', function (e) {
