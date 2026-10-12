@@ -338,7 +338,7 @@
       <h3 style="margin:0 0 8px" id="successTitle">請款已送出</h3>
       <p class="sub" id="successHint">—</p>
       <a class="btn btn-secondary" id="successReviewLink" href="ledger_review.html">開啟請款審核</a>
-      <a class="btn btn-secondary hidden" id="successHistoryLink" href="ledger_history.html">查看歷史記帳紀錄</a>
+      <a class="btn btn-secondary hidden" id="successHistoryLink" href="submit_records.html">查看送出紀錄</a>
       <button type="button" class="btn btn-primary" id="anotherBtn">再建一筆</button>
     </div>
   </div>
@@ -2302,10 +2302,12 @@
         }
       }
 
-      /** 請款已送出畫面：主管 ≥3 顯示「查看歷史記帳紀錄」→ 獨立頁 */
+      /** 請款已送出畫面：主管 ≥3 顯示「查看送出紀錄」→ 管線第 2 站 */
       function syncSuccessHistoryLink() {
         var histLink = document.getElementById('successHistoryLink');
         if (!histLink) return;
+        histLink.href = 'submit_records.html';
+        histLink.textContent = '查看送出紀錄';
         var need = (typeof AccountingApi !== 'undefined' && AccountingApi.SUPERVISOR_MIN_PERMISSION) || 3;
         var perm = Number((session && session.auth && session.auth.permission) || 0);
         var show = !isVendorSelf && perm >= need;

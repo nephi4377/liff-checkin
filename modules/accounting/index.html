@@ -8,12 +8,12 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=102"></script>
+  <script src="../../shared/js/accounting_api.js?v=106"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
-  <script src="../../shared/js/accounting_ui.js?v=26"></script>
+  <script src="../../shared/js/accounting_ui.js?v=33"></script>
   <script src="../../shared/js/accounting_nav.js?v=3"></script>
   <script src="../../shared/js/accounting_boot.js?v=11"></script>
-  <script src="../../shared/js/accounting_shell.js?v=8"></script>
+  <script src="../../shared/js/accounting_shell.js?v=9"></script>
   <style>
     h2 { margin: 0 0 4px; }
     .sub { color: #555; font-size: 14px; margin: 0 0 16px; }
@@ -93,7 +93,7 @@
         <span class="card-icon teal">🕘</span>
         <span class="card-body">
           <h3>歷史記帳紀錄</h3>
-          <p>獨立查詢已入帳列；點一筆可看案號、圖片集等詳情。</p>
+          <p>查已入帳的收支登錄列（非請款送出站）；點一筆可看案號、圖片集等詳情。</p>
           <span class="tag admin">主管 ≥3</span>
         </span>
       </a>
@@ -104,6 +104,15 @@
           <h3>待付款請款</h3>
           <p>錢還沒付：上傳發票、填金額與分攤，送主管審核後再匯款。</p>
           <span class="tag staff">權限 ≥2</span>
+        </span>
+      </a>
+
+      <a class="card" href="submit_records.html" id="linkSubmitRecords">
+        <span class="card-icon teal">📤</span>
+        <span class="card-body">
+          <h3>送出紀錄</h3>
+          <p>已送出請款查詢／追蹤；待審／退回／待匯可改內容（同步審核與匯款）。</p>
+          <span class="tag admin">主管 ≥3</span>
         </span>
       </a>
 
@@ -254,11 +263,15 @@
           document.getElementById('linkCustomerFinance').classList.remove('hidden');
         }
 
-        // 歷史記帳紀錄：主管 ≥3（與 API accounting_ledger_recent 一致）
+        // 歷史記帳／送出紀錄：主管 ≥3
         if (perm < supervisorMin || isVendor) {
           document.getElementById('linkLedgerHistory').classList.add('hidden');
+          var linkSr = document.getElementById('linkSubmitRecords');
+          if (linkSr) linkSr.classList.add('hidden');
         } else {
           document.getElementById('linkLedgerHistory').classList.remove('hidden');
+          var linkSrOn = document.getElementById('linkSubmitRecords');
+          if (linkSrOn) linkSrOn.classList.remove('hidden');
         }
 
         if (perm < supervisorMin) {

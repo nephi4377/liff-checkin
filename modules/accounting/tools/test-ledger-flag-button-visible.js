@@ -10,7 +10,7 @@ var html = fs.readFileSync(path.join(root, 'ledger_history.html'), 'utf8');
 var api = fs.readFileSync(path.join(root, '../../shared/js/accounting_api.js'), 'utf8');
 var nav = fs.readFileSync(path.join(root, '../../shared/js/accounting_nav.js'), 'utf8');
 
-assert(html.indexOf('accounting_api.js?v=102') >= 0, 'cache bust v=102');
+assert(html.indexOf('accounting_api.js?v=106') >= 0, 'cache bust v=106');
 assert(html.indexOf('accounting_nav.js?v=3') >= 0, 'nav v=3');
 assert(html.indexOf('hist-mod-bar') >= 0, 'sticky mod bar class');
 assert(html.indexOf("setAttribute('data-role', 'flag-error')") >= 0, 'detail flag button role');

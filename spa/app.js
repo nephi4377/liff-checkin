@@ -295,6 +295,7 @@ const App = {
             '#/accounting/payroll-review': { name: 'iframe', src: 'modules/accounting/index.html', title: '薪資審核', params: '&route=payroll_review.html' },
             '#/accounting/payroll-finance': { name: 'iframe', src: 'modules/accounting/index.html', title: '薪資待匯款', params: '&route=payroll_finance.html' },
             '#/accounting/payment-request': { name: 'iframe', src: 'modules/accounting/index.html', title: '待付款請款', params: '&route=payment_request.html' },
+            '#/accounting/submit-records': { name: 'iframe', src: 'modules/accounting/index.html', title: '送出紀錄', params: '&route=submit_records.html' },
             '#/accounting/vendor-docs': { name: 'iframe', src: 'modules/accounting/index.html', title: '單據與存檔', params: '&route=quick_review.html&tab=archive' },
             '#/accounting/quick-review': { name: 'iframe', src: 'modules/accounting/index.html', title: '單據與存檔', params: '&route=quick_review.html' },
             '#/accounting/customer-finance': { name: 'iframe', src: 'modules/accounting/index.html', title: '追加減與收款', params: '&route=designer-customer-finance.html' },
