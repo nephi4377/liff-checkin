@@ -2236,6 +2236,8 @@
           syncSuccessSubmitRecordsLink();
           setOk('請款已送出');
           try { sessionStorage.removeItem(PAY_RESUME_KEY); } catch (eClr) {}
+          // 清單據列表快取，回「單據與存檔」時不要先畫出仍標「請款中」的舊清單
+          try { sessionStorage.removeItem('acct_quick_review_list_v2'); } catch (eQrCache) {}
           setQuickReviewBanner('',
             '請款已送出，這張單已進「已完成」。' +
             '<div class="qr-actions">' +
