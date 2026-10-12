@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
-  <script src="../../shared/js/accounting_tax_mode.js?v=7"></script>
+  <script src="../../shared/js/accounting_tax_mode.js?v=8"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_context.js?v=3"></script>
@@ -1122,12 +1122,11 @@
         var btn5 = host.querySelector('.btn-tax-5pct');
         if (btn5) {
           btn5.addEventListener('click', function () {
-            var pretax = 0;
-            readAllocRows().forEach(function (r) {
-              var a = parseAllocAmount(r.amount);
-              if (!isNaN(a) && a > 0) pretax += a;
-            });
-            setProrateTaxInput(Math.round(pretax * 0.05));
+            // 未稅淨合計×5%（含折讓負數；與 AccountingTaxMode.summarize 空白稅金一致）
+            var s = (typeof AccountingTaxMode !== 'undefined')
+              ? AccountingTaxMode.summarize(readAllocRows(), 'prorate', '')
+              : { tax: 0 };
+            setProrateTaxInput(s.tax || 0);
             updateTotal();
           });
         }

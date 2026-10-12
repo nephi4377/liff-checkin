@@ -57,6 +57,6 @@ assert(!/taxDisabled\s*=\s*!isNaN\(amt\)\s*&&\s*amt\s*<\s*0/.test(pay), 'payment
 assert(!/taxDisabled\s*=\s*!isNaN\(amt\)\s*&&\s*amt\s*<\s*0/.test(rev), 'ledger_review 不再因負數禁用含稅');
 assert(!/setTaxControlsDisabled\(row,\s*!isNaN\(a\)\s*&&\s*a\s*<\s*0\)/.test(pay), 'payment_request 輸入時不禁用含稅');
 assert(!/setTaxControlsDisabled\(row,\s*!isNaN\(a\)\s*&&\s*a\s*<\s*0\)/.test(rev), 'ledger_review 輸入時不禁用含稅');
-assert(/accounting_tax_mode\.js\?v=7/.test(pay) && /accounting_tax_mode\.js\?v=7/.test(rev), 'cache bust v=7');
+assert(/accounting_tax_mode\.js\?v=8/.test(pay) && /accounting_tax_mode\.js\?v=8/.test(rev), 'cache bust v=8');
 
 console.log('\nAll negative tax-inclusive checks passed.');
