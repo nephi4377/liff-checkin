@@ -7,14 +7,14 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <title>歷史記帳紀錄</title>
   <!-- cache-bust 2026-10-07-pay-flag-submit：請款 flag 送 UUID；按鈕縮小 -->
-  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=6" />
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=7" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
   <script src="../../shared/js/accounting_api.js?v=106"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <script src="../../shared/js/accounting_ui.js?v=33"></script>
-  <script src="../../shared/js/accounting_nav.js?v=3"></script>
+  <script src="../../shared/js/accounting_nav.js?v=4"></script>
   <script src="../../shared/js/accounting_boot.js?v=15"></script>
   <style>
     h2 { margin: 0 0 4px; }
@@ -341,7 +341,7 @@
 <body class="acct-page acct-page-form acct-page-browse">
   <div id="loading">載入中…</div>
   <div id="app" class="hidden acct-main">
-    <p class="nav"><a href="index.html">← 會計功能選單</a> · <a href="submit_records.html" id="navSubmitRecordsLink">送出紀錄</a></p>
+    <p class="nav"><a class="acct-nav-back" href="index.html">← 會計功能選單</a><span class="acct-nav-back"> · </span><a href="submit_records.html" id="navSubmitRecordsLink">送出紀錄</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
     <p class="sub" id="pageModeHint">權限 ≥3 可<strong>查詢</strong>區間內<strong>收支登錄</strong>（唯讀）。可用廠商名／金額篩選；點列看詳情與<strong>圖片集</strong>。預設近 30 天；列表只依新增時間新→舊。本頁不做標記／改帳；已送出請款請用「送出紀錄」。</p>

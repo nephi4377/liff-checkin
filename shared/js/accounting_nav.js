@@ -17,8 +17,29 @@ var AccountingNav = (function () {
   function applyEmbedChrome() {
     if (!isEmbed()) return;
     document.body.classList.add('acct-embed');
-    document.querySelectorAll('.nav, #userLine, .acct-shell-hide').forEach(function (el) {
+    var userLine = document.getElementById('userLine');
+    if (userLine) userLine.classList.add('acct-shell-hide');
+    // 只藏「回功能選單」；同模組交叉連結（送出紀錄／歷史記帳等）在 iframe 內仍要看得見
+    document.querySelectorAll('.acct-shell-hide, .acct-nav-back').forEach(function (el) {
       el.classList.add('acct-shell-hide');
+    });
+    document.querySelectorAll('p.nav').forEach(function (nav) {
+      if (nav.classList.contains('acct-shell-hide')) return;
+      var anchors = nav.querySelectorAll('a[href]');
+      if (!anchors.length) {
+        nav.classList.add('acct-shell-hide');
+        return;
+      }
+      var keepCount = 0;
+      anchors.forEach(function (a) {
+        if (a.classList.contains('acct-nav-back') || a.classList.contains('acct-shell-hide')) return;
+        if (isMenuLink(a.getAttribute('href'))) {
+          a.classList.add('acct-shell-hide');
+        } else {
+          keepCount += 1;
+        }
+      });
+      if (keepCount === 0) nav.classList.add('acct-shell-hide');
     });
   }
 
