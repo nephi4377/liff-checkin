@@ -344,7 +344,7 @@
     <p class="nav"><a href="index.html">← 會計功能選單</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub" id="pageModeHint">權限 ≥3 可查<strong>區間內全部人</strong>的<strong>收支登錄</strong>（非請款送出站）。預設近 30 天；列表只依新增時間新→舊。可「錯誤記帳標示」；刪除已標示 ≥4；修改收支 &gt;4。已送出請款請用「送出紀錄」。</p>
+    <p class="sub" id="pageModeHint">權限 ≥3 可<strong>查詢</strong>區間內<strong>收支登錄</strong>（唯讀）。可用廠商名／金額篩選；點列看詳情與<strong>圖片集</strong>。預設近 30 天；列表只依新增時間新→舊。本頁不做標記／改帳；已送出請款請用「送出紀錄」。</p>
 
     <div class="card" id="historyFiltersCard">
       <div class="hist-head">
@@ -381,11 +381,11 @@
         </div>
         <div>
           <label for="histAmount">金額（選填）</label>
-          <input id="histAmount" type="number" inputmode="numeric" placeholder="完全相符" />
+          <input id="histAmount" type="text" inputmode="numeric" placeholder="例：1500 或 1,500" autocomplete="off" />
         </div>
         <div class="full">
-          <label for="histKeyword">關鍵字（對象／事由／備註）</label>
-          <input id="histKeyword" type="text" placeholder="例：廠商名、訂金" autocomplete="off" />
+          <label for="histKeyword">關鍵字（廠商／對象／事由／備註）</label>
+          <input id="histKeyword" type="text" placeholder="例：廠商名、訂金（可部分符合）" autocomplete="off" />
         </div>
         <div class="full">
           <p class="hint" style="margin:0 0 8px">日期區間依<strong>新增時間</strong>（不是交易日）；預設近 30 天。本頁僅收支登錄；已送出請款見「送出紀錄」。</p>
@@ -439,6 +439,28 @@
         var v = Number(n);
         if (!isFinite(v)) return String(n == null ? '' : n);
         return '$' + Math.round(v).toLocaleString('zh-TW');
+      }
+
+      /** 金額搜尋：對齊後端 ledgerCellAmountIntAg_／列表顯示整數（可含 $、逗號） */
+      function parseHistoryAmountQuery(raw) {
+        if (raw === null || raw === undefined) return null;
+        var s = String(raw).trim();
+        if (!s) return null;
+        s = s.replace(/[,，\s]/g, '');
+        s = s.replace(/^(NT\$|nt\$|NT|nt|\$|＄|￥)/, '');
+        if (/元$/.test(s)) s = s.slice(0, -1);
+        var wan = s.match(/^(\d+(?:\.\d+)?)[萬万]$/);
+        if (wan) {
+          var wn = parseFloat(wan[1]);
+          return isNaN(wn) ? null : Math.round(wn * 10000);
+        }
+        var qian = s.match(/^(\d+(?:\.\d+)?)千$/);
+        if (qian) {
+          var qn = parseFloat(qian[1]);
+          return isNaN(qn) ? null : Math.round(qn * 1000);
+        }
+        var n = parseInt(s, 10);
+        return isNaN(n) ? null : n;
       }
 
       function escHtml(s) {
@@ -610,18 +632,21 @@
         return Math.max(authPerm, hubPerm);
       }
 
+      /** 歷史記帳＝唯讀查詢＋看圖；不提供標示／刪除／改帳（那些走送出紀錄或其他頁） */
+      var HISTORY_READ_ONLY = true;
+
       function sessionCanEditDetail(detail) {
+        if (HISTORY_READ_ONLY) return false;
         if (isPaymentRequestItem(detail)) return false;
         if (!sessionRef || !sessionRef.auth) return false;
         if (detail && detail.error_flagged) return false;
-        // 老闆：修改記帳需權限大於 4（Yang=3 只能標註）
         if (sessionPerm() > 4) return true;
         if (detail && detail.can_edit === true) return true;
         return false;
       }
 
       function sessionCanFlagDetail(detail) {
-        // 老闆：請款＋收支每一筆 ≥3 都可「錯誤記帳標示」（已標示除外）；不要系統先框選
+        if (HISTORY_READ_ONLY) return false;
         if (!sessionRef || !sessionRef.auth) return false;
         if (detail && detail.error_flagged) return false;
         if (sessionPerm() >= 3) return true;
@@ -630,6 +655,7 @@
       }
 
       function sessionCanDeleteDetail(detail) {
+        if (HISTORY_READ_ONLY) return false;
         if (isPaymentRequestItem(detail)) return false;
         if (!sessionRef || !sessionRef.auth) return false;
         if (!(detail && detail.error_flagged)) return false;
@@ -1122,35 +1148,22 @@
         panel.appendChild(status);
 
         var merged = Object.assign({}, summaryItem || {}, detail || {});
-        // 請款＋收支：先放「錯誤記帳標示」（≥3 置頂可按）；請款仍無刪除／改帳
+        // 唯讀：不掛標示／刪除／改帳列；詳情＋圖片集
         if (isPaymentRequestItem(merged)) {
-          buildModerationActions(panel, summaryItem, detail || merged);
           var fieldsPay = document.createElement('div');
           fieldsPay.innerHTML = renderHistoryDetailFields(merged);
           panel.appendChild(fieldsPay);
+          renderHistoryAttachments(panel, merged);
           var payHint = document.createElement('p');
           payHint.className = 'hint';
           payHint.style.margin = '10px 0 0';
-          payHint.textContent = '這是待付款請款。可按上方「錯誤記帳標示」並填原因；審核／匯款仍走「請款審核」或「廠商待匯款」。';
+          payHint.textContent = '這是待付款請款（歷史查詢唯讀）。審核／匯款請到「請款審核」或「廠商待匯款」。';
           panel.appendChild(payHint);
-          var links = document.createElement('div');
-          links.className = 'hist-edit-actions';
-          var reviewA = document.createElement('a');
-          reviewA.className = 'btn-ghost';
-          reviewA.href = 'ledger_review.html';
-          reviewA.textContent = '開啟請款審核';
-          links.appendChild(reviewA);
-          if (String(merged.review_status || '') === '已審') {
-            var finA = document.createElement('a');
-            finA.className = 'btn-ghost';
-            finA.href = 'vendor_payment_finance.html';
-            finA.textContent = '開啟廠商待匯款';
-            links.appendChild(finA);
-          }
-          panel.appendChild(links);
           return;
         }
-        buildEditForm(panel, summaryItem, detail || merged);
+        if (!HISTORY_READ_ONLY) {
+          buildEditForm(panel, summaryItem, detail || merged);
+        }
         var fields = document.createElement('div');
         fields.innerHTML = renderHistoryDetailFields(merged);
         panel.appendChild(fields);
@@ -1183,17 +1196,6 @@
         var status = panel.querySelector('.hist-detail-status');
         var reqKey = historyItemKey(it);
 
-        // 待付款請款：列表欄位即詳情；不打收支詳情 API（仍可錯誤記帳標示）
-        if (isPaymentRequestItem(it)) {
-          if (status) {
-            status.textContent = sessionCanFlagDetail(it)
-              ? '待付款請款 · 可按「錯誤記帳標示」'
-              : (it.error_flagged ? '待付款請款 · 已標示錯誤' : '待付款請款');
-          }
-          return;
-        }
-        if (status) status.textContent = '載入詳情…';
-
         function stillCurrent() {
           return openHistoryKey === reqKey && panel.isConnected;
         }
@@ -1205,7 +1207,7 @@
 
         function loadAttachmentsSoft(baseDetail) {
           if (!stillCurrent()) return;
-          if (!sessionRef || typeof AccountingLightbox === 'undefined' || !it.ingest_id) {
+          if (!sessionRef || typeof AccountingLightbox === 'undefined') {
             apply(baseDetail || it);
             return;
           }
@@ -1213,8 +1215,20 @@
             apply(baseDetail);
             return;
           }
+          var attRef = {};
+          if (isPaymentRequestItem(it)) {
+            var pid = resolvePaymentRequestId(it);
+            if (pid) attRef.payment_request_id = pid;
+            if (it.ingest_id) attRef.ingest_id = it.ingest_id;
+          } else if (it.ingest_id) {
+            attRef.ingest_id = it.ingest_id;
+          }
+          if (!attRef.payment_request_id && !attRef.ingest_id) {
+            apply(baseDetail || it);
+            return;
+          }
           // 圖片集另載；失敗不噴錯誤回報、不擋已顯示的摘要
-          AccountingLightbox.fetchAttachmentUrls(sessionRef, { ingest_id: it.ingest_id }).then(function (urls) {
+          AccountingLightbox.fetchAttachmentUrls(sessionRef, attRef).then(function (urls) {
             if (!stillCurrent()) return;
             apply(Object.assign({}, baseDetail || it, {
               attachment_urls: urls || [],
@@ -1227,6 +1241,18 @@
             if (st) st.textContent = '詳情已顯示；圖片集讀不到時可稍後再點開。';
           });
         }
+
+        // 待付款請款：列表欄位即詳情；另載圖片集（payment_request_id）
+        if (isPaymentRequestItem(it)) {
+          if (status) {
+            status.textContent = it.error_flagged
+              ? '待付款請款 · 已標示錯誤（唯讀）'
+              : '待付款請款 · 載入圖片…';
+          }
+          loadAttachmentsSoft(it);
+          return;
+        }
+        if (status) status.textContent = '載入詳情…';
 
         if (!sessionRef || typeof AccountingApi.accountingLedgerDetail !== 'function') {
           loadAttachmentsSoft(it);
@@ -1306,45 +1332,9 @@
       }
 
       function bindHistoryItemRow(div, it) {
-        var canListFlag = sessionCanFlagDetail(it);
-        if (canListFlag) {
-          var listFlagBtn = div.querySelector('[data-role="list-flag"]');
-          if (listFlagBtn) {
-            listFlagBtn.addEventListener('click', function (e) {
-              e.stopPropagation();
-              if (!sessionRef || typeof AccountingApi.accountingLedgerFlag !== 'function') {
-                window.alert('標示功能尚未就緒');
-                return;
-              }
-              listFlagBtn.disabled = true;
-              promptFlagReason().then(function (reason) {
-                if (!reason) {
-                  listFlagBtn.disabled = false;
-                  return null;
-                }
-                var payload = buildFlagSubmitPayload(it, reason);
-                if (payload.record_kind === 'payment_request' && !payload.payment_request_id) {
-                  listFlagBtn.disabled = false;
-                  window.alert('找不到請款單編號，無法標示');
-                  return null;
-                }
-                return AccountingApi.accountingLedgerFlag(sessionRef, payload).then(function (data) {
-                  listFlagBtn.disabled = false;
-                  if (!data || !data.success) {
-                    window.alert(friendlyFlagErrorMessage(data, it));
-                    return;
-                  }
-                  try { loadLedgerHistory(); } catch (eReload) {}
-                });
-              }).catch(function (err) {
-                listFlagBtn.disabled = false;
-                window.alert((err && err.message) || '標示失敗');
-              });
-            });
-          }
-        }
+        // 唯讀：不綁 list-flag；點列展開詳情／圖片
         div.addEventListener('click', function (e) {
-          if (e.target.closest && (e.target.closest('.hist-att-row') || e.target.closest('.btn-ghost') || e.target.closest('.hist-edit-form') || e.target.closest('.btn-edit-primary') || e.target.closest('.btn-flag-warn') || e.target.closest('.btn-delete-danger') || e.target.closest('.hist-edit-actions') || e.target.closest('.hist-list-flag') || e.target.closest('.hist-mod-bar'))) return;
+          if (e.target.closest && (e.target.closest('.hist-att-row') || e.target.closest('.btn-ghost') || e.target.closest('.hist-edit-form') || e.target.closest('.btn-edit-primary') || e.target.closest('.hist-edit-actions') || e.target.closest('.hist-mod-bar'))) return;
           toggleHistoryDetail(div, it);
         });
         div.addEventListener('keydown', function (e) {
@@ -1382,7 +1372,6 @@
         }
         var recorded = it.recorded_at_display || it.recorded_at || '';
         if (it.error_flagged) div.classList.add('is-flagged');
-        var canListFlag = sessionCanFlagDetail(it);
         div.innerHTML =
           '<div class="hist-top">' +
             '<div class="hist-top-left">' +
@@ -1413,13 +1402,7 @@
             : ('交易日 ' + escHtml(it.txn_date_display || it.txn_date || '—'))) + '</div>' +
           '<div class="hist-meta">' + escHtml(meta.join(' · ') || '—') + '</div>' +
           '<div class="hist-loc">' + escHtml(loc) + '</div>' +
-          (canListFlag
-            ? ('<div class="hist-list-flag">' +
-              '<button type="button" class="btn-flag-warn" data-role="list-flag">錯誤記帳標示</button>' +
-              '<span class="hist-list-flag-hint">點這顆 → 填原因 → 確認</span>' +
-              '</div>')
-            : '') +
-          '<div class="hist-hint">點開看詳情（上方也可錯誤記帳標示）</div>' +
+          '<div class="hist-hint">點開看詳情與圖片</div>' +
           '<div class="hist-detail hidden"></div>';
         bindHistoryItemRow(div, it);
         return div;
@@ -1431,7 +1414,7 @@
         openHistoryKey = '';
         itemsByKey = {};
         clearSideDetail();
-        // 不置頂／不框選：每一列依 recorded_at 原序顯示，請款＋收支都有「錯誤記帳標示」
+        // 唯讀列表：依 recorded_at 原序；不掛標示／改帳按鈕
         var pin = document.getElementById('historyFlagPin');
         if (pin) {
           pin.innerHTML = '';
@@ -1537,8 +1520,8 @@
         }
         if (hint) {
           hint.innerHTML = on
-            ? '目前為<strong>只看我記的</strong>（選用篩選）。預設近 30 天。本頁僅<strong>收支登錄</strong>；請款請到「送出紀錄」。需權限 ≥3。'
-            : '權限 ≥3 可查<strong>區間內全部人</strong>的<strong>收支登錄</strong>。預設近 30 天；列表只依新增時間。錯誤記帳標示 ≥3；刪除已標示 ≥4；修改收支 &gt;4。請款請用「送出紀錄」。';
+            ? '目前為<strong>只看我記的</strong>（選用篩選）。唯讀查詢廠商／金額；點列看詳情與圖片。預設近 30 天。本頁僅<strong>收支登錄</strong>；請款請到「送出紀錄」。需權限 ≥3。'
+            : '權限 ≥3 可<strong>查詢</strong>區間內<strong>收支登錄</strong>（唯讀）。可用廠商名／金額篩選；點列看詳情與<strong>圖片集</strong>。預設近 30 天；列表只依新增時間。本頁不做標記／改帳；請款請用「送出紀錄」。';
         }
       }
 
@@ -1570,8 +1553,8 @@
         if (type) filters.type = type;
         if (keyword) filters.keyword = keyword;
         if (amountRaw !== '') {
-          var amt = parseInt(amountRaw, 10);
-          if (!isNaN(amt)) filters.amount = amt;
+          var amt = parseHistoryAmountQuery(amountRaw);
+          if (amt !== null) filters.amount = amt;
         }
         return filters;
       }
@@ -1664,7 +1647,7 @@
           var listEl = document.getElementById('historyList');
           if (n) {
             setStatus(
-              '共 ' + n + ' 筆 · 每一列可按「錯誤記帳標示」（請款＋收支；填原因）· ' +
+              '共 ' + n + ' 筆 · 唯讀查詢（點列看詳情／圖片）· ' +
               bits.join(' · '),
               'ok'
             );

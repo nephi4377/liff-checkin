@@ -1277,7 +1277,17 @@ var AccountingApi = (function () {
       if (opts.type) body.type = opts.type;
       if (opts.keyword) body.keyword = opts.keyword;
       if (opts.amount !== undefined && opts.amount !== null && opts.amount !== '') {
-        body.amount = opts.amount;
+        // 一律送整數：對齊後端／列表顯示金額（含稅請款主檔 amount；收支收入／支出欄）
+        var amtBody = opts.amount;
+        if (typeof amtBody === 'string') {
+          var cleaned = String(amtBody).trim().replace(/[,，\s]/g, '')
+            .replace(/^(NT\$|nt\$|NT|nt|\$|＄|￥)/, '').replace(/元$/, '');
+          var parsedAmt = parseInt(cleaned, 10);
+          if (!isNaN(parsedAmt)) amtBody = parsedAmt;
+        } else if (typeof amtBody === 'number' && isFinite(amtBody)) {
+          amtBody = Math.round(amtBody);
+        }
+        body.amount = amtBody;
       }
       if (opts.record_kind) body.record_kind = opts.record_kind;
       if (opts.status_scope) body.status_scope = opts.status_scope;
