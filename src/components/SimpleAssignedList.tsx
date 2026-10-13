@@ -174,8 +174,8 @@ export function SimpleAssignedList({
         <h2>{workerName}的任務</h2>
         <p className="section-lead">
           {openCount > 0
-            ? `進行中 ${openCount} 件 · 只能勾是否完成`
-            : '目前沒有進行中任務'}
+            ? `進行中 ${openCount} 件 · 勾一下就完成`
+            : '今天清單清空了'}
         </p>
       </header>
 
