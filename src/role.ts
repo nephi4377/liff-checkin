@@ -1,9 +1,15 @@
-/** Permanent GitHub Pages (org tanxin02). Roles via ?role= (works with base ./) */
+/** 正式站：info.tanxin.space（勿再連 tanxin02 舊 Pages） */
+export const CANONICAL_ORIGIN = 'https://info.tanxin.space/employee-todo/'
+
+/**
+ * 入口連結用相對路徑，留在目前 host（避免 info 總覽點進去又跳回 tanxin02）。
+ * LIFF／對外分享用 CANONICAL_ORIGIN。
+ */
 export const ROLE_URLS = {
-  hub: 'https://tanxin02.github.io/employee-todo/',
-  dispatch: 'https://tanxin02.github.io/employee-todo/?role=paigong',
-  ende: 'https://tanxin02.github.io/employee-todo/?role=ende',
-  ayong: 'https://tanxin02.github.io/employee-todo/?role=ayong',
+  hub: './',
+  dispatch: './?role=paigong',
+  ende: './?role=ende',
+  ayong: './?role=ayong',
 } as const
 
 export type AppPersona = 'hub' | 'assistant' | 'ops-ende' | 'ops-ayong'

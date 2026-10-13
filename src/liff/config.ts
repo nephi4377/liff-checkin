@@ -1,8 +1,10 @@
+import { CANONICAL_ORIGIN } from '../role'
+
 /** LIFF ID from LINE Developers Console → LIFF tab */
 export const LIFF_ID =
   (import.meta.env.VITE_LIFF_ID as string | undefined)?.trim() || ''
 
-export const APP_ORIGIN = 'https://tanxin02.github.io/employee-todo/'
+export const APP_ORIGIN = CANONICAL_ORIGIN
 
 export function hasLiffConfig(): boolean {
   return LIFF_ID.length > 0

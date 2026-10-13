@@ -6,20 +6,19 @@
 
 ## Repo & live URLs
 
-- **GitHub：** https://github.com/tanxin02/employee-todo  
-- **Org：** `tanxin02`  
-- **GitHub Pages（正式）：**
-  - 總覽：https://tanxin02.github.io/employee-todo/
-  - 派工：https://tanxin02.github.io/employee-todo/?role=paigong
-  - 恩德：https://tanxin02.github.io/employee-todo/?role=ende
-  - 阿勇：https://tanxin02.github.io/employee-todo/?role=ayong
+- **原始碼：** `nephi4377/liff-checkin` 分支 `employee-todo-mist`
+- **正式站（請用這個）：**
+  - 總覽：https://info.tanxin.space/employee-todo/
+  - 派工：https://info.tanxin.space/employee-todo/?role=paigong
+  - 恩德：https://info.tanxin.space/employee-todo/?role=ende
+  - 阿勇：https://info.tanxin.space/employee-todo/?role=ayong
 
-舊 Surge（備份，非公司帳）仍可能存在；應用內連結已指向 Pages。
+**勿再用** `https://tanxin02.github.io/employee-todo/`（舊版；本代理無法寫入該 repo）。
 
 ## Open in a new Cursor
 
 ```bash
-git clone https://github.com/tanxin02/employee-todo.git
+git clone -b employee-todo-mist --single-branch https://github.com/nephi4377/liff-checkin.git employee-todo
 cd employee-todo
 npm install
 npm run dev
