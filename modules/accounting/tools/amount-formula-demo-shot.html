@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>金額公式預覽（截圖）</title>
+  <link rel="stylesheet" href="../../../shared/css/accounting_layout.css?v=8" />
+  <script src="../../../shared/js/accounting_amount_formula.js?v=1"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 420px; margin: 24px auto; padding: 0 16px; background: #f5f5f5; }
+    .card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    label { display: block; font-weight: 600; margin-top: 12px; }
+    input { width: 100%; padding: 10px; font-size: 16px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; }
+    .pay-totals { margin-top: 16px; text-align: right; }
+    .pay-total-primary { font-size: 22px; font-weight: 700; color: #1a73e8; }
+    .pay-total-secondary { font-size: 13px; color: #5f6368; margin-top: 4px; }
+    h1 { font-size: 18px; margin: 0 0 8px; }
+    .note { color: #666; font-size: 13px; line-height: 1.45; margin: 0 0 8px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>金額公式＋合計字級</h1>
+    <p class="note">示範：欄位打 <code>=1000+50</code>，下方預覽結果；支付合計為大字。</p>
+    <label>金額（分攤）</label>
+    <input id="amt" type="text" inputmode="decimal" value="=1000+50" />
+    <div class="pay-totals">
+      <div class="pay-total-primary">支付合計 $<span id="pay">0</span></div>
+      <div class="pay-total-secondary">未稅合計 $<span id="pre">1,050</span>（示範次行小字）</div>
+    </div>
+  </div>
+  <script>
+    var inp = document.getElementById('amt');
+    AccountingAmountFormula.bindInput(inp);
+    AccountingAmountFormula.refreshPreview(inp);
+    document.getElementById('pay').textContent =
+      AccountingAmountFormula.parseAmount(inp.value).toLocaleString('zh-TW');
+  </script>
+</body>
+</html>
