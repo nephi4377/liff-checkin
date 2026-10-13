@@ -11,12 +11,15 @@ export function hasLlmKey(): boolean {
   return getOrganizeMode() === 'llm'
 }
 
-const SYSTEM = `你是工地派工小助手。把使用者的雜亂筆記整理成繁體中文「詳細說明」文字，方便貼進派工系統。
+const SYSTEM = `你是工地派工小助手。把雜亂中文派工筆記整理成可直接貼進「詳細說明」的繁體中文。
+輸出格式（務必遵守）：
+1) 第一行：短標題（可含單號如 #786、主要工序、對象）
+2) 空一行後用「・」條列細節
+3) 有提到就寫：對象（恩德／阿勇）、分類（優先／限期／待處理）、緊急、期限、地點、單號、要拍照／確認的人
 規則：
-- 只輸出整理後正文，不要前言、不要 Markdown 代碼塊
-- 盡量標出：對象（恩德／阿勇）、分類（優先／限期／待處理）、緊急程度、期限、地點、材料、注意事項
-- 用精簡條列，保留原意與專有名詞
-- 不要發明沒寫的事實`
+- 只輸出正文，不要前言、不要 Markdown 代碼塊
+- 保留專有名詞與單號；可把「豪哥確認」寫成「請豪哥確認」、「拍照」寫成「拍照存證」
+- 不要發明原文沒有的事實`
 
 export async function llmOrganize(raw: string): Promise<string> {
   const key = (import.meta.env.VITE_OPENAI_API_KEY as string | undefined)?.trim()

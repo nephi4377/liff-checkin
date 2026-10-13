@@ -130,7 +130,7 @@ export function OrganizePanel() {
             <button type="button" className="btn-primary" onClick={() => void copyResult()}>
               {copied ? '已複製' : '複製'}
             </button>
-            {done ? <span className="organize-mode">已整理完成</span> : null}
+            {done ? <span className="organize-mode">已整理</span> : null}
           </div>
         </div>
       ) : null}
