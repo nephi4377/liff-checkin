@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { buildAssignerOptions } from '../assigners'
 import {
   formatDueDateLabel,
   isOverdue,
@@ -19,6 +20,8 @@ interface TaskCardProps {
   onUpdateAssigner?: (id: string, assigner: string) => void
   onUpdateDueDate?: (id: string, dueDate: string) => void
   onUpdateUrgency?: (id: string, urgency: Urgency) => void
+  /** 誰派的下拉選項；未傳則用預設＋目前值 */
+  assignerOptions?: string[]
   dragDisabled?: boolean
   categoryActionLabel?: string
   onCategoryAction?: () => void
@@ -36,6 +39,7 @@ export function TaskCard({
   onUpdateAssigner,
   onUpdateDueDate,
   onUpdateUrgency,
+  assignerOptions,
   dragDisabled,
   categoryActionLabel,
   onCategoryAction,
@@ -54,10 +58,16 @@ export function TaskCard({
   const [draft, setDraft] = useState(task.title)
   const [editingDetail, setEditingDetail] = useState(false)
   const [detailDraft, setDetailDraft] = useState(task.detail ?? '')
-  const [editingAssigner, setEditingAssigner] = useState(false)
-  const [assignerDraft, setAssignerDraft] = useState(task.assigner ?? '')
   const [urgencyOpen, setUrgencyOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const assignerChoices = useMemo(
+    () =>
+      assignerOptions?.length
+        ? buildAssignerOptions([...assignerOptions, task.assigner])
+        : buildAssignerOptions([task.assigner]),
+    [assignerOptions, task.assigner],
+  )
 
   useEffect(() => {
     if (!editing) setDraft(task.title)
@@ -66,10 +76,6 @@ export function TaskCard({
   useEffect(() => {
     if (!editingDetail) setDetailDraft(task.detail ?? '')
   }, [task.detail, editingDetail])
-
-  useEffect(() => {
-    if (!editingAssigner) setAssignerDraft(task.assigner ?? '')
-  }, [task.assigner, editingAssigner])
 
   useEffect(() => {
     if (editing) inputRef.current?.focus()
@@ -86,12 +92,6 @@ export function TaskCard({
     const next = detailDraft.trim()
     if (next !== (task.detail ?? '').trim()) onUpdateDetail?.(task.id, next)
     setEditingDetail(false)
-  }
-
-  const commitAssigner = () => {
-    const next = assignerDraft.trim()
-    if (next !== (task.assigner ?? '').trim()) onUpdateAssigner?.(task.id, next)
-    setEditingAssigner(false)
   }
 
   const style = {
@@ -161,38 +161,23 @@ export function TaskCard({
     <p className="task-detail">{task.detail}</p>
   ) : null
 
-  const assignerBlock = editingAssigner && onUpdateAssigner ? (
-    <input
-      className="task-assigner-edit"
-      value={assignerDraft}
-      onChange={(e) => setAssignerDraft(e.target.value)}
-      onBlur={commitAssigner}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault()
-          commitAssigner()
-        }
-        if (e.key === 'Escape') {
-          setAssignerDraft(task.assigner ?? '')
-          setEditingAssigner(false)
-        }
-      }}
-      aria-label="誰派的"
-      placeholder="誰派的"
-      autoFocus
-    />
-  ) : onUpdateAssigner ? (
-    <button
-      type="button"
-      className="task-assigner-btn"
-      onClick={() => setEditingAssigner(true)}
-    >
-      {task.assigner ? (
-        <span className="task-assigner">派自 {task.assigner}</span>
-      ) : (
-        <span className="task-detail-empty">＋ 誰派的</span>
-      )}
-    </button>
+  const assignerBlock = onUpdateAssigner ? (
+    <label className="task-assigner-field">
+      <span className="sr-only">誰派的</span>
+      <select
+        className="task-assigner-select"
+        value={task.assigner ?? ''}
+        onChange={(e) => onUpdateAssigner(task.id, e.target.value)}
+        aria-label="誰派的"
+      >
+        <option value="">誰派的</option>
+        {assignerChoices.map((name) => (
+          <option key={name} value={name}>
+            {name}
+          </option>
+        ))}
+      </select>
+    </label>
   ) : task.assigner ? (
     <p className="task-assigner">派自 {task.assigner}</p>
   ) : null
@@ -328,11 +313,11 @@ export function TaskCard({
 
         <div className="task-body">
           {titleBlock}
-          {!editing && !editingDetail ? assignerBlock : editingAssigner ? assignerBlock : null}
+          {!editing && !editingDetail ? assignerBlock : null}
           {!editing && !editingDetail ? detailBlock : editingDetail ? detailBlock : null}
           {!editing && !editingDetail ? dueBlock : null}
           {!editing && !editingDetail ? urgencyBlock : null}
-          {showActions && !editingDetail && !editingAssigner ? (
+          {showActions && !editingDetail ? (
             <div className="task-actions-row">
               {showCategory ? (
                 <button
@@ -406,7 +391,7 @@ export function TaskCard({
 
       <div className="task-body">
         {titleBlock}
-        {!editing && !editingDetail ? assignerBlock : editingAssigner ? assignerBlock : null}
+        {!editing && !editingDetail ? assignerBlock : null}
         {!editing && !editingDetail ? detailBlock : editingDetail ? detailBlock : null}
         {!editing && !editingDetail ? dueBlock : null}
         {!editing && !editingDetail ? urgencyBlock : null}

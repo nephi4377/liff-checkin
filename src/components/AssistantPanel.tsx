@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react'
+import { buildAssignerOptions } from '../assigners'
 import type { Task, TaskCategory, Urgency, Worker } from '../types'
 import { AssistantBoard } from './AssistantBoard'
 import { OrganizePanel } from './OrganizePanel'
@@ -54,6 +55,11 @@ export function AssistantPanel({
   const [dueDate, setDueDate] = useState('')
   const [category, setCategory] = useState<TaskCategory>('priority')
   const [showAdd, setShowAdd] = useState(false)
+
+  const assignerOptions = useMemo(
+    () => buildAssignerOptions(tasks.map((t) => t.assigner)),
+    [tasks],
+  )
 
   const focusWorkerIdSafe = tabWorkers.some((w) => w.id === focusWorkerId)
     ? focusWorkerId
@@ -128,6 +134,7 @@ export function AssistantPanel({
         onUpdateAssigner={onUpdateAssigner}
         onUpdateDueDate={onUpdateDueDate}
         onUpdateUrgency={onUpdateUrgency}
+        assignerOptions={assignerOptions}
         simple
       />
 
@@ -143,12 +150,19 @@ export function AssistantPanel({
             />
             <label className="detail-field">
               <span className="detail-field-label">誰派的</span>
-              <input
+              <select
+                className="assigner-select"
                 value={assigner}
                 onChange={(e) => setAssigner(e.target.value)}
-                placeholder="指派人名（可留空）"
-                autoComplete="off"
-              />
+                aria-label="誰派的"
+              >
+                <option value="">未指定</option>
+                {assignerOptions.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="detail-field">
               <span className="detail-field-label">詳細說明</span>

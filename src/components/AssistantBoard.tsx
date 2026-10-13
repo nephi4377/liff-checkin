@@ -36,6 +36,7 @@ interface AssistantBoardProps {
   onUpdateAssigner?: (id: string, assigner: string) => void
   onUpdateDueDate?: (id: string, dueDate: string) => void
   onUpdateUrgency: (id: string, urgency: Urgency) => void
+  assignerOptions?: string[]
   simple?: boolean
 }
 
@@ -56,6 +57,7 @@ function Column({
   onUpdateAssigner,
   onUpdateDueDate,
   onUpdateUrgency,
+  assignerOptions,
   simple,
 }: {
   id: TaskCategory
@@ -68,6 +70,7 @@ function Column({
   onUpdateAssigner?: (id: string, assigner: string) => void
   onUpdateDueDate?: (id: string, dueDate: string) => void
   onUpdateUrgency: (id: string, urgency: Urgency) => void
+  assignerOptions?: string[]
   simple?: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id })
@@ -103,6 +106,7 @@ function Column({
                 onUpdateUrgency={
                   id === 'deadline' ? undefined : onUpdateUrgency
                 }
+                assignerOptions={assignerOptions}
                 categoryActionLabel={moveLabel}
                 onCategoryAction={() => onMoveCategory(task.id, other)}
                 compact={simple}
@@ -159,6 +163,7 @@ export function AssistantBoard({
   onUpdateAssigner,
   onUpdateDueDate,
   onUpdateUrgency,
+  assignerOptions,
   simple,
 }: AssistantBoardProps) {
   const sensors = useSensors(
@@ -301,6 +306,7 @@ export function AssistantBoard({
           onUpdateAssigner={onUpdateAssigner}
           onUpdateDueDate={onUpdateDueDate}
           onUpdateUrgency={onUpdateUrgency}
+          assignerOptions={assignerOptions}
           simple={simple}
         />
         <Column
@@ -314,6 +320,7 @@ export function AssistantBoard({
           onUpdateAssigner={onUpdateAssigner}
           onUpdateDueDate={onUpdateDueDate}
           onUpdateUrgency={onUpdateUrgency}
+          assignerOptions={assignerOptions}
           simple={simple}
         />
         <Column
@@ -327,6 +334,7 @@ export function AssistantBoard({
           onUpdateAssigner={onUpdateAssigner}
           onUpdateDueDate={onUpdateDueDate}
           onUpdateUrgency={onUpdateUrgency}
+          assignerOptions={assignerOptions}
           simple={simple}
         />
         <DoneSection tasks={done} onToggle={onToggle} simple={simple} />

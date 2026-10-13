@@ -1890,6 +1890,18 @@ a.btn-ghost.top-hub-link {
   font-family: inherit;
 }
 
+.detail-field select.assigner-select,
+.assigner-select {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.65rem 0.85rem;
+  font-size: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--ink);
+}
+
 .task-detail-btn {
   display: block;
   width: 100%;
@@ -1914,16 +1926,6 @@ a.btn-ghost.top-hub-link {
   opacity: 0.75;
 }
 
-.task-assigner-btn {
-  display: block;
-  width: 100%;
-  text-align: left;
-  border: none;
-  background: transparent;
-  padding: 0.1rem 0 0;
-  cursor: pointer;
-}
-
 .task-assigner {
   margin: 0.15rem 0 0;
   font-size: 0.85rem;
@@ -1931,13 +1933,22 @@ a.btn-ghost.top-hub-link {
   color: var(--ink-soft);
 }
 
-.task-assigner-edit {
+.task-assigner-field {
+  display: block;
   width: 100%;
-  margin-top: 0.15rem;
+  margin-top: 0.2rem;
+}
+
+.task-assigner-select {
+  width: 100%;
+  min-height: 36px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 0.4rem 0.55rem;
+  padding: 0.35rem 0.55rem;
   font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .cat-toggle {
