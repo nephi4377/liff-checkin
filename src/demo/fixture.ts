@@ -2,13 +2,11 @@ import { STORAGE_KEY } from '../data'
 import { PROFILE_KEY } from '../profile'
 import type { AppState } from '../types'
 
-/** 本機／Try Live 展示用：不連雲端，畫面有完整三區資料 */
+/** 僅 ?demo=1 才用假資料／略過雲端；預設與正式站一樣走 MantleDB */
 export function isDemoHost(): boolean {
   if (typeof window === 'undefined') return false
-  const host = window.location.hostname
   const demo = new URLSearchParams(window.location.search).get('demo')
-  if (demo === '1' || demo === 'true') return true
-  return host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0'
+  return demo === '1' || demo === 'true'
 }
 
 export function buildDemoState(): AppState {
