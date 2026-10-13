@@ -39,10 +39,10 @@ npm run dev
 - 優先／待處理／限期完成；優先依緊急自動排序  
 - 緊急等級：chip 點開選（非三大按鈕）  
 - 詳細說明、誰派的（`assigner`）、限期 `dueDate`  
-- **整理後貼上**：僅派工頁；Cursor 整理 → 貼上 → 預覽勾選 → 加入（無瀏覽器 AI API）  
-- 恩德／阿勇：只勾完成；顯示派自／限期  
+- **AI 整理再貼上**：整理在 Cursor 完成 → 羊貼進派工「詳細說明」（無網頁批次匯入、無瀏覽器 AI）  
+- 恩德／阿勇：只勾完成；顯示派自／限期；**無「回總覽」**（總覽僅 unmarked／選角色）  
 
-貼上格式見 store `docs/paste-format.md` 或 `src/pasteFormat.ts`。
+流程見 store `docs/paste-format.md`。
 
 ## Deploy (GitHub Pages)
 
@@ -59,7 +59,9 @@ rm -f dist/CNAME
 
 - **不要**把 GitHub PAT／密碼寫進 repo、docs、media、HANDOFF  
 - **不要** commit `.env` 真密鑰  
-- **不要**在恩德／阿勇頁加「整理後貼上」  
+- **不要**在恩德／阿勇頁加「回總覽」或批次貼上匯入  
+- **不要**在網頁做 AI 整理；整理只在 Cursor 聊天  
+
 - Linux **無法**簽 iOS IPA（需 Mac + Xcode）
 
 ## Artifacts (Agent Store)

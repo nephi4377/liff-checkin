@@ -159,9 +159,6 @@ export default function App() {
               <span className={`sync-pill sync-${syncStatus}`}>{syncLabel}</span>
             ) : null}
           </div>
-          <a className="btn-ghost top-hub-link" href={ROLE_URLS.hub}>
-            回總覽
-          </a>
         </header>
         <main>
           <SimpleAssignedList

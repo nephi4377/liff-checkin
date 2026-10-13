@@ -1595,6 +1595,12 @@ a.btn-ghost.top-hub-link {
   color: var(--ink-soft);
 }
 
+.detail-ai-hint {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  opacity: 0.85;
+}
+
 .detail-field textarea,
 .task-detail-edit {
   width: 100%;

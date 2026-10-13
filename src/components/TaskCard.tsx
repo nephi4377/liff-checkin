@@ -132,15 +132,19 @@ export function TaskCard({
   )
 
   const detailBlock = editingDetail && onUpdateDetail ? (
-    <textarea
-      className="task-detail-edit"
-      value={detailDraft}
-      onChange={(e) => setDetailDraft(e.target.value)}
-      onBlur={commitDetail}
-      rows={3}
-      aria-label="詳細說明"
-      autoFocus
-    />
+    <div className="detail-field">
+      <textarea
+        className="task-detail-edit"
+        value={detailDraft}
+        onChange={(e) => setDetailDraft(e.target.value)}
+        onBlur={commitDetail}
+        rows={5}
+        aria-label="詳細說明"
+        placeholder="可貼上 AI 整理後的說明"
+        autoFocus
+      />
+      <span className="detail-ai-hint">可先請 AI 整理再貼上</span>
+    </div>
   ) : onUpdateDetail ? (
     <button
       type="button"
