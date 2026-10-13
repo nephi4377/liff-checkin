@@ -1485,6 +1485,104 @@ a.btn-ghost.top-hub-link {
   font-size: 16px;
 }
 
+.paste-import-bar {
+  margin: 0 0 0.75rem;
+}
+
+.paste-toggle {
+  width: 100%;
+  min-height: 44px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+.paste-import {
+  margin: 0 0 0.9rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  display: grid;
+  gap: 0.55rem;
+}
+
+.paste-import-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.paste-import-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.paste-hint,
+.paste-format,
+.paste-preview-label,
+.paste-added {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.paste-textarea {
+  width: 100%;
+  min-height: 120px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  font-size: 14px;
+  line-height: 1.5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  resize: vertical;
+}
+
+.paste-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 0.45rem;
+}
+
+.paste-preview-list {
+  list-style: none;
+  margin: 0.4rem 0 0.7rem;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.paste-row {
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.paste-row.is-bad {
+  border-color: #c45c5c;
+  color: #8a2f2f;
+  background: #fff5f5;
+}
+
+.paste-row-label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.paste-row-detail {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
 .detail-field {
   display: grid;
   gap: 0.35rem;

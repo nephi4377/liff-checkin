@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import type { Task, TaskCategory, Urgency, Worker } from '../types'
 import { AssistantBoard } from './AssistantBoard'
+import { PasteImport } from './PasteImport'
 
 interface AssistantPanelProps {
   workers: Worker[]
@@ -10,6 +11,7 @@ interface AssistantPanelProps {
     assigneeId: string,
     category: TaskCategory,
     detail?: string,
+    urgency?: Urgency,
   ) => void
   onToggle: (id: string) => void
   onReorder: (assigneeId: string, category: TaskCategory, ids: string[]) => void
@@ -92,6 +94,8 @@ export function AssistantPanel({
         <strong>{focusName}</strong>
         {openCount > 0 ? `　還有 ${openCount} 件` : '　已全部勾完'}
       </p>
+
+      <PasteImport onAdd={onAdd} />
 
       <AssistantBoard
         tasks={focused}

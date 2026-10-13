@@ -202,10 +202,17 @@ export function useTasks() {
       assigneeId: string,
       category: TaskCategory,
       detail?: string,
+      urgency?: Urgency,
     ) => {
       const trimmed = title.trim()
       if (!trimmed || !assigneeId) return
       const detailTrim = detail?.trim() || undefined
+      const resolvedUrgency: Urgency =
+        urgency ?? (category === 'priority' ? 'urgent' : 'normal')
+      const safeUrgency: Urgency =
+        category === 'todo' && resolvedUrgency === 'urgent'
+          ? 'normal'
+          : resolvedUrgency
 
       setState((prev) => {
         const siblings = prev.tasks.filter(
@@ -218,7 +225,7 @@ export function useTasks() {
           detail: detailTrim,
           assigneeId,
           category,
-          urgency: category === 'priority' ? 'urgent' : 'normal',
+          urgency: safeUrgency,
           completed: false,
           order: maxOrder + 1,
           createdAt: Date.now(),
