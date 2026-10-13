@@ -169,17 +169,17 @@ export function AssistantPanel({
               </button>
               <button
                 type="button"
-                className={category === 'todo' ? 'is-active' : ''}
-                onClick={() => setCategory('todo')}
-              >
-                待處理
-              </button>
-              <button
-                type="button"
                 className={category === 'deadline' ? 'is-active' : ''}
                 onClick={() => setCategory('deadline')}
               >
                 限期
+              </button>
+              <button
+                type="button"
+                className={category === 'todo' ? 'is-active' : ''}
+                onClick={() => setCategory('todo')}
+              >
+                待處理
               </button>
             </div>
             {category === 'deadline' ? (

@@ -9,9 +9,10 @@ interface SimpleAssignedListProps {
   onToggle: (id: string) => void
 }
 
+/** 優先 → 限期完成 → 待處理 */
 function categoryRank(c: Task['category']): number {
-  if (c === 'deadline') return 0
-  if (c === 'priority') return 1
+  if (c === 'priority') return 0
+  if (c === 'deadline') return 1
   return 2
 }
 

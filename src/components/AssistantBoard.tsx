@@ -73,9 +73,9 @@ function Column({
   const { setNodeRef, isOver } = useDroppable({ id })
   const ids = tasks.map((t) => t.id)
   const other: TaskCategory =
-    id === 'priority' ? 'todo' : id === 'todo' ? 'deadline' : 'priority'
+    id === 'priority' ? 'deadline' : id === 'deadline' ? 'todo' : 'priority'
   const moveLabel =
-    other === 'priority' ? '→ 優先' : other === 'todo' ? '→ 待處理' : '→ 限期'
+    other === 'priority' ? '→ 優先' : other === 'deadline' ? '→ 限期' : '→ 待處理'
 
   return (
     <div
@@ -304,9 +304,9 @@ export function AssistantBoard({
           simple={simple}
         />
         <Column
-          id="todo"
-          title="待處理"
-          tasks={byCategory.todo}
+          id="deadline"
+          title="限期完成"
+          tasks={byCategory.deadline}
           onToggle={onToggle}
           onMoveCategory={onMoveCategory}
           onUpdateTitle={onUpdateTitle}
@@ -317,9 +317,9 @@ export function AssistantBoard({
           simple={simple}
         />
         <Column
-          id="deadline"
-          title="限期完成"
-          tasks={byCategory.deadline}
+          id="todo"
+          title="待處理"
+          tasks={byCategory.todo}
           onToggle={onToggle}
           onMoveCategory={onMoveCategory}
           onUpdateTitle={onUpdateTitle}

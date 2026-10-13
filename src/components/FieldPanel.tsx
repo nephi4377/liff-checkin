@@ -1,3 +1,4 @@
+import { compareDeadlineTasks } from '../dueDate'
 import type { Task } from '../types'
 import { sortPriorityTasks } from '../urgency'
 import { TaskList } from './TaskList'
@@ -13,6 +14,9 @@ export function FieldPanel({ workerName, tasks, onToggle }: FieldPanelProps) {
   const active = tasks.filter((t) => !t.completed)
   const priority = sortPriorityTasks(
     active.filter((t) => t.category === 'priority'),
+  )
+  const deadline = [...active.filter((t) => t.category === 'deadline')].sort(
+    compareDeadlineTasks,
   )
   const todo = active
     .filter((t) => t.category === 'todo')
@@ -43,6 +47,19 @@ export function FieldPanel({ workerName, tasks, onToggle }: FieldPanelProps) {
           <TaskList
             tasks={priority}
             emptyLabel="沒有優先"
+            onToggle={onToggle}
+            onReorder={() => {}}
+            dragDisabled
+          />
+        </div>
+        <div className="list-column list-deadline simple-col">
+          <header className="list-header">
+            <h2>限期完成</h2>
+            <span className="count-pill">{deadline.length}</span>
+          </header>
+          <TaskList
+            tasks={deadline}
+            emptyLabel="沒有限期"
             onToggle={onToggle}
             onReorder={() => {}}
             dragDisabled
