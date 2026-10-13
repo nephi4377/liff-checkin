@@ -2,12 +2,12 @@ import { normalizeDueDate } from './dueDate'
 import type { TaskCategory, Urgency } from './types'
 
 /** 貼上格式（給 Cursor AI／羊複製用）— 僅派工頁 */
-export const PASTE_TEMPLATE = `恩德｜優先｜緊急｜【751】補土｜現場要帶刮刀
-阿勇｜待處理｜一般｜拍照收邊條位置
-恩德｜限期｜2026-12-31｜交驗收資料｜含照片`
+export const PASTE_TEMPLATE = `恩德｜優先｜緊急｜【751】補土｜現場要帶刮刀｜羊
+阿勇｜待處理｜一般｜拍照收邊條位置｜｜羊
+恩德｜限期｜2026-12-31｜交驗收資料｜含照片｜羊`
 
 export const PASTE_FORMAT_HINT =
-  '優先／待處理：人名｜分類｜緊急｜標題｜詳細（可省）。限期：人名｜限期｜YYYY-MM-DD｜標題｜詳細（可省）'
+  '人名｜分類｜緊急或日期｜標題｜詳細｜誰派的'
 
 export interface ParsedPasteLine {
   lineNo: number
@@ -21,6 +21,7 @@ export interface ParsedPasteLine {
   dueDate?: string
   title?: string
   detail?: string
+  assigner?: string
 }
 
 function mapWorker(token: string): {
@@ -50,6 +51,20 @@ function mapUrgency(token: string, category: TaskCategory): Urgency | null {
   return null
 }
 
+function splitDetailAssigner(rest: string[]): {
+  detail?: string
+  assigner?: string
+} {
+  if (rest.length === 0) return {}
+  if (rest.length === 1) {
+    const only = rest[0]?.trim()
+    return only ? { detail: only } : {}
+  }
+  const assigner = rest[rest.length - 1]?.trim() || undefined
+  const detail = rest.slice(0, -1).join('｜').trim() || undefined
+  return { detail, assigner }
+}
+
 /** 解析「整理後貼上」文字（以 ｜ 或 | 分隔） */
 export function parsePasteText(text: string): ParsedPasteLine[] {
   const lines = text.split(/\r?\n/)
@@ -62,12 +77,7 @@ export function parsePasteText(text: string): ParsedPasteLine[] {
 
     const parts = trimmed.split(/｜|\|/).map((p) => p.trim())
     if (parts.length < 4) {
-      out.push({
-        lineNo,
-        raw,
-        ok: false,
-        error: '欄位不足',
-      })
+      out.push({ lineNo, raw, ok: false, error: '欄位不足' })
       return
     }
 
@@ -90,12 +100,7 @@ export function parsePasteText(text: string): ParsedPasteLine[] {
     if (category === 'deadline') {
       const dueDate = normalizeDueDate(parts[2])
       if (!dueDate) {
-        out.push({
-          lineNo,
-          raw,
-          ok: false,
-          error: '限期須為日期 YYYY-MM-DD',
-        })
+        out.push({ lineNo, raw, ok: false, error: '限期須為日期 YYYY-MM-DD' })
         return
       }
       const title = (parts[3] ?? '').trim()
@@ -103,7 +108,7 @@ export function parsePasteText(text: string): ParsedPasteLine[] {
         out.push({ lineNo, raw, ok: false, error: '缺少標題' })
         return
       }
-      const detail = parts.slice(4).join('｜').trim() || undefined
+      const { detail, assigner } = splitDetailAssigner(parts.slice(4))
       out.push({
         lineNo,
         raw,
@@ -115,6 +120,7 @@ export function parsePasteText(text: string): ParsedPasteLine[] {
         dueDate,
         title,
         detail,
+        assigner,
       })
       return
     }
@@ -136,7 +142,7 @@ export function parsePasteText(text: string): ParsedPasteLine[] {
       out.push({ lineNo, raw, ok: false, error: '缺少標題' })
       return
     }
-    const detail = parts.slice(4).join('｜').trim() || undefined
+    const { detail, assigner } = splitDetailAssigner(parts.slice(4))
 
     out.push({
       lineNo,
@@ -148,6 +154,7 @@ export function parsePasteText(text: string): ParsedPasteLine[] {
       urgency,
       title,
       detail,
+      assigner,
     })
   })
 

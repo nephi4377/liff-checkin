@@ -107,6 +107,9 @@ export function SimpleAssignedList({
                       </span>
                     ) : null}
                     <span className="office-title">{t.title}</span>
+                    {t.assigner ? (
+                      <p className="task-assigner">派自 {t.assigner}</p>
+                    ) : null}
                     {t.detail ? (
                       <p className="task-detail">{t.detail}</p>
                     ) : null}

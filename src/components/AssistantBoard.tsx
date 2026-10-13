@@ -33,6 +33,7 @@ interface AssistantBoardProps {
   onMoveCategory: (taskId: string, category: TaskCategory) => void
   onUpdateTitle: (id: string, title: string) => void
   onUpdateDetail: (id: string, detail: string) => void
+  onUpdateAssigner?: (id: string, assigner: string) => void
   onUpdateDueDate?: (id: string, dueDate: string) => void
   onUpdateUrgency: (id: string, urgency: Urgency) => void
   simple?: boolean
@@ -52,6 +53,7 @@ function Column({
   onMoveCategory,
   onUpdateTitle,
   onUpdateDetail,
+  onUpdateAssigner,
   onUpdateDueDate,
   onUpdateUrgency,
   simple,
@@ -63,6 +65,7 @@ function Column({
   onMoveCategory: (taskId: string, category: TaskCategory) => void
   onUpdateTitle: (id: string, title: string) => void
   onUpdateDetail: (id: string, detail: string) => void
+  onUpdateAssigner?: (id: string, assigner: string) => void
   onUpdateDueDate?: (id: string, dueDate: string) => void
   onUpdateUrgency: (id: string, urgency: Urgency) => void
   simple?: boolean
@@ -95,6 +98,7 @@ function Column({
                 onToggle={onToggle}
                 onUpdateTitle={onUpdateTitle}
                 onUpdateDetail={onUpdateDetail}
+                onUpdateAssigner={onUpdateAssigner}
                 onUpdateDueDate={onUpdateDueDate}
                 onUpdateUrgency={
                   id === 'deadline' ? undefined : onUpdateUrgency
@@ -152,6 +156,7 @@ export function AssistantBoard({
   onMoveCategory,
   onUpdateTitle,
   onUpdateDetail,
+  onUpdateAssigner,
   onUpdateDueDate,
   onUpdateUrgency,
   simple,
@@ -293,6 +298,7 @@ export function AssistantBoard({
           onMoveCategory={onMoveCategory}
           onUpdateTitle={onUpdateTitle}
           onUpdateDetail={onUpdateDetail}
+          onUpdateAssigner={onUpdateAssigner}
           onUpdateDueDate={onUpdateDueDate}
           onUpdateUrgency={onUpdateUrgency}
           simple={simple}
@@ -305,6 +311,7 @@ export function AssistantBoard({
           onMoveCategory={onMoveCategory}
           onUpdateTitle={onUpdateTitle}
           onUpdateDetail={onUpdateDetail}
+          onUpdateAssigner={onUpdateAssigner}
           onUpdateDueDate={onUpdateDueDate}
           onUpdateUrgency={onUpdateUrgency}
           simple={simple}
@@ -317,6 +324,7 @@ export function AssistantBoard({
           onMoveCategory={onMoveCategory}
           onUpdateTitle={onUpdateTitle}
           onUpdateDetail={onUpdateDetail}
+          onUpdateAssigner={onUpdateAssigner}
           onUpdateDueDate={onUpdateDueDate}
           onUpdateUrgency={onUpdateUrgency}
           simple={simple}

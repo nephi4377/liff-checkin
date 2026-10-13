@@ -13,12 +13,14 @@ interface AssistantPanelProps {
     detail?: string,
     urgency?: Urgency,
     dueDate?: string,
+    assigner?: string,
   ) => void
   onToggle: (id: string) => void
   onReorder: (assigneeId: string, category: TaskCategory, ids: string[]) => void
   onMoveCategory: (taskId: string, category: TaskCategory) => void
   onUpdateTitle: (id: string, title: string) => void
   onUpdateDetail: (id: string, detail: string) => void
+  onUpdateAssigner: (id: string, assigner: string) => void
   onUpdateDueDate: (id: string, dueDate: string) => void
   onUpdateUrgency: (id: string, urgency: Urgency) => void
 }
@@ -35,6 +37,7 @@ export function AssistantPanel({
   onMoveCategory,
   onUpdateTitle,
   onUpdateDetail,
+  onUpdateAssigner,
   onUpdateDueDate,
   onUpdateUrgency,
 }: AssistantPanelProps) {
@@ -47,6 +50,7 @@ export function AssistantPanel({
   const [focusWorkerId, setFocusWorkerId] = useState(defaultId)
   const [title, setTitle] = useState('')
   const [detail, setDetail] = useState('')
+  const [assigner, setAssigner] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [category, setCategory] = useState<TaskCategory>('priority')
   const [showAdd, setShowAdd] = useState(false)
@@ -66,9 +70,11 @@ export function AssistantPanel({
       detail,
       undefined,
       category === 'deadline' ? dueDate : undefined,
+      assigner,
     )
     setTitle('')
     setDetail('')
+    setAssigner('')
     setDueDate('')
     setShowAdd(false)
   }
@@ -119,6 +125,7 @@ export function AssistantPanel({
         onMoveCategory={onMoveCategory}
         onUpdateTitle={onUpdateTitle}
         onUpdateDetail={onUpdateDetail}
+        onUpdateAssigner={onUpdateAssigner}
         onUpdateDueDate={onUpdateDueDate}
         onUpdateUrgency={onUpdateUrgency}
         simple
@@ -134,6 +141,15 @@ export function AssistantPanel({
               autoFocus
               autoComplete="off"
             />
+            <label className="detail-field">
+              <span className="detail-field-label">誰派的</span>
+              <input
+                value={assigner}
+                onChange={(e) => setAssigner(e.target.value)}
+                placeholder="指派人名（可留空）"
+                autoComplete="off"
+              />
+            </label>
             <label className="detail-field">
               <span className="detail-field-label">詳細說明</span>
               <textarea
@@ -184,6 +200,7 @@ export function AssistantPanel({
                 onClick={() => {
                   setShowAdd(false)
                   setDetail('')
+                  setAssigner('')
                   setDueDate('')
                 }}
               >

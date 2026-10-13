@@ -1631,6 +1631,32 @@ a.btn-ghost.top-hub-link {
   opacity: 0.75;
 }
 
+.task-assigner-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 0.1rem 0 0;
+  cursor: pointer;
+}
+
+.task-assigner {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.task-assigner-edit {
+  width: 100%;
+  margin-top: 0.15rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.9rem;
+}
+
 .cat-toggle {
   display: grid;
   grid-template-columns: 1fr 1fr;

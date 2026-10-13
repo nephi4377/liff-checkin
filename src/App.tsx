@@ -31,6 +31,7 @@ export default function App() {
     moveCategory,
     updateTitle,
     updateDetail,
+    updateAssigner,
     updateDueDate,
     updateUrgency,
     resetDemo,
@@ -137,6 +138,7 @@ export default function App() {
             onMoveCategory={moveCategory}
             onUpdateTitle={updateTitle}
             onUpdateDetail={updateDetail}
+            onUpdateAssigner={updateAssigner}
             onUpdateDueDate={updateDueDate}
             onUpdateUrgency={updateUrgency}
           />

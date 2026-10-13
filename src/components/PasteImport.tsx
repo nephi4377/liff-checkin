@@ -1,11 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { TaskCategory, Urgency } from '../types'
-import {
-  PASTE_FORMAT_HINT,
-  PASTE_TEMPLATE,
-  parsePasteText,
-  type ParsedPasteLine,
-} from '../pasteFormat'
+import { PASTE_TEMPLATE, parsePasteText, type ParsedPasteLine } from '../pasteFormat'
 
 interface PasteImportProps {
   onAdd: (
@@ -15,6 +10,7 @@ interface PasteImportProps {
     detail?: string,
     urgency?: Urgency,
     dueDate?: string,
+    assigner?: string,
   ) => void
 }
 
@@ -66,10 +62,11 @@ export function PasteImport({ onAdd }: PasteImportProps) {
         p.detail,
         p.urgency,
         p.dueDate,
+        p.assigner,
       )
       n += 1
     }
-    setAddedMsg(n > 0 ? `已加入 ${n} 件` : '未勾選任何項目')
+    setAddedMsg(n > 0 ? `已加入 ${n} 件` : '未勾選')
     if (n > 0) {
       setText('')
       setPreview(null)
@@ -99,22 +96,18 @@ export function PasteImport({ onAdd }: PasteImportProps) {
           收合
         </button>
       </header>
-      <p className="paste-hint">
-        在 Cursor 把原始訊息整理成下列格式 → 複製貼上 → 預覽後再決定要加入哪些。
-        網頁<strong>不會</strong>呼叫外部 AI。
-      </p>
-      <p className="paste-format">{PASTE_FORMAT_HINT}</p>
       <textarea
         className="paste-textarea"
         value={text}
         onChange={(e) => setText(e.target.value)}
-        rows={6}
+        rows={5}
         placeholder={PASTE_TEMPLATE}
         spellCheck={false}
+        aria-label="貼上整理後的工作"
       />
       <div className="paste-actions">
         <button type="button" className="btn-ghost" onClick={handleCopyTemplate}>
-          {copied ? '已複製範本' : '複製範本'}
+          {copied ? '已複製' : '複製範本'}
         </button>
         <button
           type="button"
@@ -128,9 +121,6 @@ export function PasteImport({ onAdd }: PasteImportProps) {
 
       {preview ? (
         <div className="paste-preview">
-          <p className="paste-preview-label">
-            預覽（可取消勾選不要的）· 有效 {okLines.length}／共 {preview.length} 行
-          </p>
           <ul className="paste-preview-list">
             {preview.map((p) => (
               <li
@@ -150,31 +140,13 @@ export function PasteImport({ onAdd }: PasteImportProps) {
                       }
                     />
                     <span>
-                      {p.workerName} ·{' '}
-                      {p.category === 'priority'
-                        ? '優先'
-                        : p.category === 'deadline'
-                          ? '限期'
-                          : '待處理'}{' '}
-                      ·{' '}
-                      {p.category === 'deadline'
-                        ? p.dueDate
-                        : p.urgency === 'urgent'
-                          ? '緊急'
-                          : p.urgency === 'low'
-                            ? '不急'
-                            : p.category === 'todo'
-                              ? '一般'
-                              : '普通'}{' '}
-                      · {p.title}
-                      {p.detail ? (
-                        <span className="paste-row-detail"> — {p.detail}</span>
-                      ) : null}
+                      {p.workerName} · {p.title}
+                      {p.assigner ? ` · 派自${p.assigner}` : ''}
                     </span>
                   </label>
                 ) : (
                   <span>
-                    第 {p.lineNo} 行無法解析：{p.error}
+                    第 {p.lineNo} 行：{p.error}
                   </span>
                 )}
               </li>
@@ -186,7 +158,7 @@ export function PasteImport({ onAdd }: PasteImportProps) {
             onClick={handleConfirm}
             disabled={okLines.every((p) => !selected[p.lineNo])}
           >
-            確認加入勾選項目
+            確認加入
           </button>
         </div>
       ) : null}

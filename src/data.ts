@@ -134,17 +134,19 @@ function normalizeTaskFields(t: Task): Task {
   }
   const detail =
     typeof t.detail === 'string' ? t.detail.trim() : ''
+  const assigner =
+    typeof t.assigner === 'string' ? t.assigner.trim() : ''
   const category = normalizeCategory(t.category)
   let dueDate: string | undefined
   if (typeof t.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.dueDate.trim())) {
     dueDate = t.dueDate.trim()
   }
-  if (category !== 'deadline') dueDate = dueDate // keep if set; display mainly for deadline
   return {
     ...t,
     category,
     urgency: normalizeUrgency(t.urgency),
     detail: detail || undefined,
+    assigner: assigner || undefined,
     dueDate,
     completed,
     completedAt,

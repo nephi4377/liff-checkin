@@ -204,11 +204,13 @@ export function useTasks() {
       detail?: string,
       urgency?: Urgency,
       dueDate?: string,
+      assigner?: string,
     ) => {
       const trimmed = title.trim()
       if (!trimmed || !assigneeId) return
       if (category === 'deadline' && !dueDate?.trim()) return
       const detailTrim = detail?.trim() || undefined
+      const assignerTrim = assigner?.trim() || undefined
       const resolvedUrgency: Urgency =
         urgency ??
         (category === 'priority' ? 'urgent' : 'normal')
@@ -232,6 +234,7 @@ export function useTasks() {
           id: uuid(),
           title: trimmed,
           detail: detailTrim,
+          assigner: assignerTrim,
           assigneeId,
           category,
           urgency: safeUrgency,
@@ -309,6 +312,19 @@ export function useTasks() {
         tasks: prev.tasks.map((t) =>
           t.id === taskId
             ? { ...t, detail: trimmed || undefined }
+            : t,
+        ),
+      }),
+    )
+  }, [])
+
+  const updateAssigner = useCallback((taskId: string, assigner: string) => {
+    const trimmed = assigner.trim()
+    setState((prev) =>
+      patchState(prev, {
+        tasks: prev.tasks.map((t) =>
+          t.id === taskId
+            ? { ...t, assigner: trimmed || undefined }
             : t,
         ),
       }),
@@ -456,6 +472,7 @@ export function useTasks() {
     deleteTask,
     updateTitle,
     updateDetail,
+    updateAssigner,
     updateDueDate,
     updateUrgency,
     addOfficeTask,

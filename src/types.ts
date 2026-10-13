@@ -19,6 +19,8 @@ export interface Task {
   title: string
   /** 詳細說明（可選） */
   detail?: string
+  /** 誰派的／指派人（可選自由文字） */
+  assigner?: string
   assigneeId: string
   category: TaskCategory
   urgency: Urgency
