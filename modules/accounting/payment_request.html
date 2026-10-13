@@ -12,7 +12,7 @@
   <script src="../../shared/js/operator_context.js?v=4"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=104"></script>
+  <script src="../../shared/js/accounting_api.js?v=107"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=7"></script>
   <script src="../../shared/js/accounting_ui.js?v=26"></script>
@@ -2669,6 +2669,9 @@
         document.getElementById('userLine').textContent =
           (session.auth.display_name || session.profile.displayName) +
           (isVendorSelf ? ' · 廠商' : (' · 權限 ' + session.auth.permission));
+        // 先進門再補員工名單，避免 waitForHubData 乾等時畫面一直停在載入中
+        showApp();
+        finishPaymentRequestBoot();
         if (!isVendorSelf) {
           vendors = primeVendorsFromCache(session);
           await primeEmployeesFromHub();
@@ -2678,8 +2681,6 @@
             return (e.userName || '') + ((e.bank_code && e.account_no) ? '' : '（帳戶待補）');
           }, '— 請選擇員工 —');
         }
-        showApp();
-        finishPaymentRequestBoot();
         if (!shouldFetchPaymentContext()) {
           applyPaymentRequestContext({
             success: true,

@@ -1533,6 +1533,13 @@ var AccountingApi = (function () {
         throw new Error(HUB_RELOGIN_MSG);
       }
       var policy = await AccountingApi.loadPolicy();
+      // 後端 ACCOUNTING_AUTH_BYPASS：略過 LINE，避免卡在「讀取設定…」後轉登入
+      if (policy && policy.authBypass) {
+        var packLiff = devBypassAuthBody_('accounting_auth_me');
+        var authBypass = await post(packLiff.body);
+        if (!authBypass.success) throw new Error(authBypass.message || '驗證失敗');
+        return buildDevBypassSession_(authBypass, packLiff.opts);
+      }
       var liffId = resolveLiffIdForInit_(opts, policy);
       if (!liffId) throw new Error('LIFF 尚未設定');
       if (typeof liff === 'undefined') throw new Error('請用 LINE 開啟');
@@ -1606,14 +1613,32 @@ var AccountingApi = (function () {
           }
         }
       } else {
-        session = await AccountingApi.initLiff(opts);
-        if (!session) return null;
-        var authBody = isHubStaffSession_(session)
-          ? { action: 'payment_request_auth_me', user_id: session.auth.user_id, auth: { user_id: session.auth.user_id } }
-          : { action: 'payment_request_auth_me', liff_id_token: session.idToken };
-        var authRes = await post(authBody);
-        if (!authRes.success) throw new Error(authRes.message || '驗證失敗');
-        session.auth = authRes;
+        // 冷開／無主控台身分：authBypass 時直接請款身分，勿先 LIFF 再拿空 token
+        var policyPr = await AccountingApi.loadPolicy();
+        if (policyPr && policyPr.authBypass) {
+          var packPr = devBypassAuthBody_('payment_request_auth_me');
+          var authBypassPr = await post(packPr.body);
+          if (!authBypassPr.success) throw new Error(authBypassPr.message || '驗證失敗');
+          session = buildDevBypassSession_(authBypassPr, packPr.opts);
+        } else {
+          session = await AccountingApi.initLiff(opts);
+          if (!session) return null;
+          if (session.devBypass) {
+            var packPr2 = devBypassAuthBody_('payment_request_auth_me');
+            if (session.devPermission) packPr2.body.dev_permission = session.devPermission;
+            if (session.devUserId) packPr2.body.dev_user_id = session.devUserId;
+            var authResDev = await post(packPr2.body);
+            if (!authResDev.success) throw new Error(authResDev.message || '驗證失敗');
+            session.auth = authResDev;
+          } else {
+            var authBody = isHubStaffSession_(session)
+              ? { action: 'payment_request_auth_me', user_id: session.auth.user_id, auth: { user_id: session.auth.user_id } }
+              : { action: 'payment_request_auth_me', liff_id_token: session.idToken };
+            var authRes = await post(authBody);
+            if (!authRes.success) throw new Error(authRes.message || '驗證失敗');
+            session.auth = authRes;
+          }
+        }
       }
       if (!session) return null;
       if (String(session.auth.status || '') === '廠商') {

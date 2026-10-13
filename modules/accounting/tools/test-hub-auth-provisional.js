@@ -54,6 +54,15 @@ assert(AUTH_ME_TIMEOUT_MS < DEFAULT_TIMEOUT_MS, 'auth timeout shorter than defau
 assert(canProvisional(op, 1), 'payment_request staff minPermission 1');
 assert(canProvisional(op, 0), 'payment_request AccountingBoot minPermission 0');
 
+// 冷開無 hub：authBypass 應略過 LINE（字串契約；實作見 accounting_api initLiff／initPaymentRequestSession）
+var apiSrc = require('fs').readFileSync(
+  require('path').join(__dirname, '../../../shared/js/accounting_api.js'),
+  'utf8'
+);
+assert(apiSrc.indexOf('policy.authBypass') >= 0, 'api honors authBypass');
+assert(apiSrc.indexOf("devBypassAuthBody_('payment_request_auth_me')") >= 0,
+  'payment_request cold path can bypass LIFF');
+
 function softAuthTimeoutToast(actionName, extra) {
   var isAuthMe = /_auth_me$/.test(String(actionName || ''));
   return isAuthMe && /逾時|timeout|Abort|abort|等太久/i.test(String(extra || ''));
