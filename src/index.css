@@ -153,7 +153,7 @@ button {
   margin: 0;
   padding: 0.75rem 1rem;
   border-radius: 12px;
-  background: rgba(18, 37, 31, 0.92);
+  background: rgba(42, 28, 20, 0.92);
   color: #f4faf7;
   font-size: 0.85rem;
 }
@@ -194,7 +194,7 @@ button {
   font-weight: 700;
   padding: 0.15rem 0.25rem;
   text-decoration: underline;
-  text-decoration-color: rgba(31, 107, 84, 0.35);
+  text-decoration-color: rgba(192, 106, 46, 0.35);
   text-underline-offset: 0.2em;
 }
 
@@ -261,7 +261,7 @@ button {
   display: grid;
   place-items: center;
   padding: 1rem;
-  background: rgba(18, 37, 31, 0.45);
+  background: rgba(42, 28, 20, 0.45);
   backdrop-filter: blur(4px);
 }
 
@@ -329,7 +329,7 @@ button {
 .hero-sub {
   margin: 0.85rem 0 0;
   max-width: 36ch;
-  color: rgba(18, 37, 31, 0.72);
+  color: rgba(42, 28, 20, 0.72);
   line-height: 1.65;
 }
 
@@ -376,7 +376,7 @@ button {
 }
 
 .role-switch button:hover:not(.is-active) {
-  background: rgba(31, 107, 84, 0.08);
+  background: rgba(192, 106, 46, 0.08);
 }
 
 .panel-grid {
@@ -420,7 +420,7 @@ button {
 .list-hint,
 .status-line {
   margin: 0.45rem 0 0;
-  color: rgba(18, 37, 31, 0.68);
+  color: rgba(42, 28, 20, 0.68);
   line-height: 1.55;
   font-size: 0.95rem;
 }
@@ -460,8 +460,8 @@ button {
 
 .field input:focus,
 .field select:focus {
-  border-color: rgba(31, 107, 84, 0.55);
-  box-shadow: 0 0 0 3px rgba(31, 107, 84, 0.12);
+  border-color: rgba(192, 106, 46, 0.55);
+  box-shadow: 0 0 0 3px rgba(192, 106, 46, 0.12);
 }
 
 .field-row {
@@ -584,22 +584,22 @@ button {
 
 .list-todo {
   background:
-    linear-gradient(180deg, rgba(31, 107, 84, 0.08), transparent 42%),
+    linear-gradient(180deg, rgba(192, 106, 46, 0.08), transparent 42%),
     var(--panel);
 }
 
 .list-column.is-drop-target {
-  outline: 2px solid rgba(31, 107, 84, 0.55);
+  outline: 2px solid rgba(192, 106, 46, 0.55);
   outline-offset: 2px;
 }
 
 .category-move-btn {
   margin-top: 0.35rem;
-  border: 1px solid rgba(31, 107, 84, 0.35);
+  border: 1px solid rgba(192, 106, 46, 0.35);
   border-radius: 8px;
   min-height: 36px;
   padding: 0.35rem 0.65rem;
-  background: rgba(31, 107, 84, 0.08);
+  background: rgba(192, 106, 46, 0.08);
   color: var(--jade-deep);
   font-size: 0.82rem;
   font-weight: 700;
@@ -607,7 +607,7 @@ button {
 }
 
 .category-move-btn:active {
-  background: rgba(31, 107, 84, 0.16);
+  background: rgba(192, 106, 46, 0.16);
 }
 
 .list-todo .category-move-btn {
@@ -619,7 +619,7 @@ button {
 .overlay-card {
   width: min(280px, 80vw);
   padding: 0.85rem 1rem;
-  box-shadow: 0 16px 32px rgba(18, 37, 31, 0.2);
+  box-shadow: 0 16px 32px rgba(42, 28, 20, 0.2);
 }
 
 .list-header {
@@ -635,7 +635,7 @@ button {
   display: inline-grid;
   place-items: center;
   border-radius: 8px;
-  background: rgba(18, 37, 31, 0.08);
+  background: rgba(42, 28, 20, 0.08);
   font-size: 0.85rem;
   font-weight: 700;
 }
@@ -646,7 +646,7 @@ button {
 }
 
 .list-todo .count-pill {
-  background: rgba(31, 107, 84, 0.14);
+  background: rgba(192, 106, 46, 0.14);
   color: var(--jade-deep);
 }
 
@@ -658,9 +658,9 @@ button {
 .empty-list {
   margin: 1.5rem 0 0;
   padding: 1.25rem;
-  border: 1px dashed rgba(18, 37, 31, 0.18);
+  border: 1px dashed rgba(42, 28, 20, 0.18);
   border-radius: 12px;
-  color: rgba(18, 37, 31, 0.55);
+  color: rgba(42, 28, 20, 0.55);
   text-align: center;
 }
 
@@ -687,7 +687,7 @@ button {
 }
 
 .task-card.is-dragging {
-  box-shadow: 0 10px 22px rgba(18, 37, 31, 0.14);
+  box-shadow: 0 10px 22px rgba(42, 28, 20, 0.14);
   opacity: 0.96;
   z-index: 2;
 }
@@ -698,7 +698,7 @@ button {
 
 .task-card.is-done .task-title {
   text-decoration: line-through;
-  color: rgba(18, 37, 31, 0.55);
+  color: rgba(42, 28, 20, 0.55);
 }
 
 .drag-handle {
@@ -708,8 +708,8 @@ button {
   border-radius: 10px;
   min-width: 44px;
   min-height: 44px;
-  background: rgba(18, 37, 31, 0.04);
-  color: rgba(18, 37, 31, 0.45);
+  background: rgba(42, 28, 20, 0.04);
+  color: rgba(42, 28, 20, 0.45);
   padding: 0;
   cursor: grab;
   touch-action: none;
@@ -720,8 +720,8 @@ button {
 
 .drag-handle:active {
   cursor: grabbing;
-  background: rgba(31, 107, 84, 0.12);
-  border-color: rgba(31, 107, 84, 0.2);
+  background: rgba(192, 106, 46, 0.12);
+  border-color: rgba(192, 106, 46, 0.2);
 }
 
 .drag-handle:disabled {
@@ -736,7 +736,7 @@ button {
   letter-spacing: 0;
   line-height: 1;
   font-weight: 700;
-  color: rgba(18, 37, 31, 0.45);
+  color: rgba(42, 28, 20, 0.45);
 }
 
 .task-check {
@@ -761,7 +761,7 @@ button {
 .check-box {
   width: 1.35rem;
   height: 1.35rem;
-  border: 1.5px solid rgba(18, 37, 31, 0.35);
+  border: 1.5px solid rgba(42, 28, 20, 0.35);
   border-radius: 6px;
   background: #fff;
   transition: background 0.15s ease, border-color 0.15s ease;
@@ -775,7 +775,7 @@ button {
 }
 
 .task-check input:focus-visible + .check-box {
-  outline: 3px solid rgba(31, 107, 84, 0.28);
+  outline: 3px solid rgba(192, 106, 46, 0.28);
   outline-offset: 2px;
 }
 
@@ -794,7 +794,7 @@ button {
 .task-meta {
   margin: 0.2rem 0 0;
   font-size: 0.8rem;
-  color: rgba(18, 37, 31, 0.55);
+  color: rgba(42, 28, 20, 0.55);
 }
 
 .task-delete {
@@ -803,7 +803,7 @@ button {
   min-height: 44px;
   border-radius: 10px;
   background: transparent;
-  color: rgba(18, 37, 31, 0.4);
+  color: rgba(42, 28, 20, 0.4);
   font-size: 1.35rem;
   line-height: 1;
 }
@@ -841,7 +841,7 @@ button {
   justify-content: space-between;
   gap: 0.75rem;
   margin-top: 2rem;
-  color: rgba(18, 37, 31, 0.55);
+  color: rgba(42, 28, 20, 0.55);
   font-size: 0.88rem;
 }
 
@@ -941,7 +941,7 @@ button {
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--jade-deep);
-  background: rgba(31, 107, 84, 0.14);
+  background: rgba(192, 106, 46, 0.14);
 }
 
 .entry-btn {
@@ -973,7 +973,7 @@ button {
 }
 
 .more-menu-link:active {
-  background: rgba(31, 107, 84, 0.1);
+  background: rgba(192, 106, 46, 0.1);
 }
 
 a.btn-ghost.top-hub-link {
@@ -1004,8 +1004,8 @@ a.btn-ghost.top-hub-link {
 }
 
 .entry-btn.entry-assistant {
-  border-color: rgba(31, 107, 84, 0.35);
-  background: linear-gradient(160deg, rgba(31, 107, 84, 0.12), rgba(255, 255, 255, 0.9));
+  border-color: rgba(192, 106, 46, 0.35);
+  background: linear-gradient(160deg, rgba(192, 106, 46, 0.12), rgba(255, 255, 255, 0.9));
 }
 
 .entry-btn.entry-ende {
@@ -1014,8 +1014,8 @@ a.btn-ghost.top-hub-link {
 }
 
 .entry-btn.entry-ayong {
-  border-color: rgba(18, 37, 31, 0.2);
-  background: linear-gradient(160deg, rgba(18, 37, 31, 0.06), rgba(255, 255, 255, 0.92));
+  border-color: rgba(42, 28, 20, 0.2);
+  background: linear-gradient(160deg, rgba(42, 28, 20, 0.06), rgba(255, 255, 255, 0.92));
 }
 
 .person-title {
@@ -1041,7 +1041,7 @@ a.btn-ghost.top-hub-link {
   gap: 0;
   padding: 3px;
   border-radius: 12px;
-  background: rgba(18, 37, 31, 0.08);
+  background: rgba(42, 28, 20, 0.08);
   width: fit-content;
   max-width: 100%;
 }
@@ -1182,7 +1182,7 @@ a.btn-ghost.top-hub-link {
   align-items: center;
   gap: 0.35rem 0.5rem;
   font-size: 0.9rem;
-  color: rgba(18, 37, 31, 0.62);
+  color: rgba(42, 28, 20, 0.62);
   font-weight: 600;
 }
 
@@ -1194,7 +1194,7 @@ a.btn-ghost.top-hub-link {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.02em;
-  background: rgba(31, 107, 84, 0.12);
+  background: rgba(192, 106, 46, 0.12);
   color: var(--jade-deep);
 }
 
@@ -1238,7 +1238,7 @@ a.btn-ghost.top-hub-link {
 }
 
 .more-menu button:active {
-  background: rgba(31, 107, 84, 0.1);
+  background: rgba(192, 106, 46, 0.1);
 }
 
 .simple-dispatch {
@@ -1293,7 +1293,7 @@ a.btn-ghost.top-hub-link {
 .simple-status {
   margin: 0;
   font-size: 0.95rem;
-  color: rgba(18, 37, 31, 0.7);
+  color: rgba(42, 28, 20, 0.7);
 }
 
 .lists-panel-simple {
@@ -1381,7 +1381,7 @@ a.btn-ghost.top-hub-link {
   margin-top: 0.15rem;
   padding: 0.15rem 0.45rem;
   border-radius: 6px;
-  background: rgba(31, 107, 84, 0.1);
+  background: rgba(192, 106, 46, 0.1);
   color: var(--jade-deep);
   font-size: 0.72rem;
   font-weight: 700;
@@ -1401,14 +1401,14 @@ a.btn-ghost.top-hub-link {
   font-weight: 600;
   color: var(--ink);
   outline: none;
-  box-shadow: 0 0 0 3px rgba(31, 107, 84, 0.15);
+  box-shadow: 0 0 0 3px rgba(192, 106, 46, 0.15);
   user-select: text;
   -webkit-user-select: text;
   touch-action: manipulation;
 }
 
 .task-card.is-editing {
-  border-color: rgba(31, 107, 84, 0.35);
+  border-color: rgba(192, 106, 46, 0.35);
   background: rgba(255, 255, 255, 0.95);
 }
 
@@ -1861,7 +1861,7 @@ a.btn-ghost.top-hub-link {
 }
 
 .urgency-btn:not(.is-active):active {
-  background: rgba(18, 37, 31, 0.06);
+  background: rgba(42, 28, 20, 0.06);
 }
 
 .urgency-stack {
@@ -1939,7 +1939,7 @@ a.btn-ghost.top-hub-link {
 }
 
 .office-row.urgency-tone-normal {
-  border-color: rgba(31, 107, 84, 0.28);
+  border-color: rgba(192, 106, 46, 0.28);
   box-shadow: inset 3px 0 var(--jade);
 }
 
@@ -1954,7 +1954,7 @@ a.btn-ghost.top-hub-link {
 }
 
 .task-card.urgency-tone-normal {
-  border-color: rgba(31, 107, 84, 0.2);
+  border-color: rgba(192, 106, 46, 0.2);
 }
 
 .task-card.urgency-tone-low {
@@ -1999,18 +1999,18 @@ a.btn-ghost.top-hub-link {
 /* ——— 已完成區 ——— */
 .list-done {
   background:
-    linear-gradient(180deg, rgba(18, 37, 31, 0.03), transparent 40%),
+    linear-gradient(180deg, rgba(42, 28, 20, 0.03), transparent 40%),
     var(--panel);
 }
 
 .list-done .list-header h2 {
-  color: rgba(18, 37, 31, 0.55);
+  color: rgba(42, 28, 20, 0.55);
 }
 
 .done-hint {
   margin: 0.35rem 0 0;
   font-size: 0.8rem;
-  color: rgba(18, 37, 31, 0.5);
+  color: rgba(42, 28, 20, 0.5);
   font-weight: 600;
 }
 
