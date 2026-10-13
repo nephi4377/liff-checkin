@@ -1780,8 +1780,8 @@ a.btn-ghost.top-hub-link {
 
 .urgency-chip.urgency-normal {
   border-color: #c5d4cc;
-  background: #f3f7f4;
-  color: #2a4a40;
+  background: #fbf4eb;
+  color: #5c4030;
 }
 
 .urgency-chip.urgency-low {
@@ -1820,7 +1820,7 @@ a.btn-ghost.top-hub-link {
 
 .urgency-menu-item.is-active,
 .urgency-menu-item:active {
-  background: #e8f1ec;
+  background: #f6ebe0;
 }
 
 .urgency-toggle {
