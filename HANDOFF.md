@@ -2,6 +2,8 @@
 
 給另一個 Cursor／開發者接手用。
 
+**直接可貼給對方 Cursor 的開場稿：** 見根目錄 [`OPEN-IN-CURSOR.md`](./OPEN-IN-CURSOR.md)（與 store `docs/drop-into-cursor.md` 同步）。
+
 ## Repo & live URLs
 
 - **GitHub：** https://github.com/tanxin02/employee-todo  
