@@ -107,6 +107,7 @@ export function buildDemoState(): AppState {
       },
     ],
     officeTasks: [],
+    assigners: ['羊', '豪哥'],
     deletedIds: [],
     updatedAt: now,
   }

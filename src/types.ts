@@ -61,6 +61,8 @@ export interface AppState {
   tasks: Task[]
   /** 工務清單（恩德／阿勇） */
   officeTasks: OfficeTask[]
+  /** 誰派的 — 可新增、雲端同步共用 */
+  assigners: string[]
   /** IDs user deleted — seed/migrate must never recreate these */
   deletedIds: string[]
   /** Wall-clock revision for cloud last-write-wins */

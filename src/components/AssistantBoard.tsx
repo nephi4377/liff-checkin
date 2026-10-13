@@ -34,6 +34,7 @@ interface AssistantBoardProps {
   onUpdateTitle: (id: string, title: string) => void
   onUpdateDetail: (id: string, detail: string) => void
   onUpdateAssigner?: (id: string, assigner: string) => void
+  onAddAssigner?: (name: string) => string | null
   onUpdateDueDate?: (id: string, dueDate: string) => void
   onUpdateUrgency: (id: string, urgency: Urgency) => void
   assignerOptions?: string[]
@@ -55,6 +56,7 @@ function Column({
   onUpdateTitle,
   onUpdateDetail,
   onUpdateAssigner,
+  onAddAssigner,
   onUpdateDueDate,
   onUpdateUrgency,
   assignerOptions,
@@ -68,6 +70,7 @@ function Column({
   onUpdateTitle: (id: string, title: string) => void
   onUpdateDetail: (id: string, detail: string) => void
   onUpdateAssigner?: (id: string, assigner: string) => void
+  onAddAssigner?: (name: string) => string | null
   onUpdateDueDate?: (id: string, dueDate: string) => void
   onUpdateUrgency: (id: string, urgency: Urgency) => void
   assignerOptions?: string[]
@@ -102,6 +105,7 @@ function Column({
                 onUpdateTitle={onUpdateTitle}
                 onUpdateDetail={onUpdateDetail}
                 onUpdateAssigner={onUpdateAssigner}
+                onAddAssigner={onAddAssigner}
                 onUpdateDueDate={onUpdateDueDate}
                 onUpdateUrgency={
                   id === 'deadline' ? undefined : onUpdateUrgency
@@ -161,6 +165,7 @@ export function AssistantBoard({
   onUpdateTitle,
   onUpdateDetail,
   onUpdateAssigner,
+  onAddAssigner,
   onUpdateDueDate,
   onUpdateUrgency,
   assignerOptions,
@@ -304,6 +309,7 @@ export function AssistantBoard({
           onUpdateTitle={onUpdateTitle}
           onUpdateDetail={onUpdateDetail}
           onUpdateAssigner={onUpdateAssigner}
+          onAddAssigner={onAddAssigner}
           onUpdateDueDate={onUpdateDueDate}
           onUpdateUrgency={onUpdateUrgency}
           assignerOptions={assignerOptions}
@@ -318,6 +324,7 @@ export function AssistantBoard({
           onUpdateTitle={onUpdateTitle}
           onUpdateDetail={onUpdateDetail}
           onUpdateAssigner={onUpdateAssigner}
+          onAddAssigner={onAddAssigner}
           onUpdateDueDate={onUpdateDueDate}
           onUpdateUrgency={onUpdateUrgency}
           assignerOptions={assignerOptions}
@@ -332,6 +339,7 @@ export function AssistantBoard({
           onUpdateTitle={onUpdateTitle}
           onUpdateDetail={onUpdateDetail}
           onUpdateAssigner={onUpdateAssigner}
+          onAddAssigner={onAddAssigner}
           onUpdateDueDate={onUpdateDueDate}
           onUpdateUrgency={onUpdateUrgency}
           assignerOptions={assignerOptions}

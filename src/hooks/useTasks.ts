@@ -7,6 +7,7 @@ import {
   loadState,
   saveState,
 } from '../data'
+import { normalizeAssignerName } from '../assigners'
 import { isDemoHost } from '../demo/fixture'
 import { pullCloud, pushCloud } from '../sync/cloud'
 import { SYNC_POLL_MS, SYNC_PUSH_DEBOUNCE_MS } from '../sync/config'
@@ -330,16 +331,34 @@ export function useTasks() {
   }, [])
 
   const updateAssigner = useCallback((taskId: string, assigner: string) => {
-    const trimmed = assigner.trim()
-    setState((prev) =>
-      patchState(prev, {
+    const trimmed = normalizeAssignerName(assigner)
+    setState((prev) => {
+      const assigners = trimmed
+        ? [...new Set([...(prev.assigners ?? []), trimmed])]
+        : prev.assigners ?? []
+      return patchState(prev, {
+        assigners,
         tasks: prev.tasks.map((t) =>
           t.id === taskId
             ? { ...t, assigner: trimmed || undefined }
             : t,
         ),
-      }),
-    )
+      })
+    })
+  }, [])
+
+  const addAssigner = useCallback((name: string): string | null => {
+    const trimmed = normalizeAssignerName(name)
+    if (!trimmed) return null
+    setState((prev) => {
+      if ((prev.assigners ?? []).includes(trimmed)) {
+        return patchState(prev, { assigners: prev.assigners ?? [] })
+      }
+      return patchState(prev, {
+        assigners: [...(prev.assigners ?? []), trimmed],
+      })
+    })
+    return trimmed
   }, [])
 
   const updateDueDate = useCallback((taskId: string, dueDate: string) => {
@@ -479,6 +498,7 @@ export function useTasks() {
     workers: state.workers,
     tasks: state.tasks,
     officeTasks: state.officeTasks ?? [],
+    assigners: state.assigners ?? [],
     syncStatus,
     addTask,
     toggleComplete,
@@ -488,6 +508,7 @@ export function useTasks() {
     updateTitle,
     updateDetail,
     updateAssigner,
+    addAssigner,
     updateDueDate,
     updateUrgency,
     addOfficeTask,

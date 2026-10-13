@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { buildAssignerOptions } from '../assigners'
 import {
   formatDueDateLabel,
   isOverdue,
 } from '../dueDate'
 import type { Task, Urgency } from '../types'
 import { URGENCY_OPTIONS, urgencyLabel } from '../urgency'
+import { AssignerSelect } from './AssignerSelect'
 
 interface TaskCardProps {
   task: Task
@@ -18,6 +18,7 @@ interface TaskCardProps {
   onUpdateTitle?: (id: string, title: string) => void
   onUpdateDetail?: (id: string, detail: string) => void
   onUpdateAssigner?: (id: string, assigner: string) => void
+  onAddAssigner?: (name: string) => string | null
   onUpdateDueDate?: (id: string, dueDate: string) => void
   onUpdateUrgency?: (id: string, urgency: Urgency) => void
   /** 誰派的下拉選項；未傳則用預設＋目前值 */
@@ -37,6 +38,7 @@ export function TaskCard({
   onUpdateTitle,
   onUpdateDetail,
   onUpdateAssigner,
+  onAddAssigner,
   onUpdateDueDate,
   onUpdateUrgency,
   assignerOptions,
@@ -60,14 +62,6 @@ export function TaskCard({
   const [detailDraft, setDetailDraft] = useState(task.detail ?? '')
   const [urgencyOpen, setUrgencyOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-
-  const assignerChoices = useMemo(
-    () =>
-      assignerOptions?.length
-        ? buildAssignerOptions([...assignerOptions, task.assigner])
-        : buildAssignerOptions([task.assigner]),
-    [assignerOptions, task.assigner],
-  )
 
   useEffect(() => {
     if (!editing) setDraft(task.title)
@@ -161,26 +155,17 @@ export function TaskCard({
     <p className="task-detail">{task.detail}</p>
   ) : null
 
-  const assignerBlock = onUpdateAssigner ? (
-    <label className="task-assigner-field">
-      <span className="sr-only">誰派的</span>
-      <select
-        className="task-assigner-select"
+  const assignerBlock =
+    onUpdateAssigner && onAddAssigner ? (
+      <AssignerSelect
         value={task.assigner ?? ''}
-        onChange={(e) => onUpdateAssigner(task.id, e.target.value)}
-        aria-label="誰派的"
-      >
-        <option value="">誰派的</option>
-        {assignerChoices.map((name) => (
-          <option key={name} value={name}>
-            {name}
-          </option>
-        ))}
-      </select>
-    </label>
-  ) : task.assigner ? (
-    <p className="task-assigner">派自 {task.assigner}</p>
-  ) : null
+        options={assignerOptions}
+        onChange={(name) => onUpdateAssigner(task.id, name)}
+        onAddAssigner={onAddAssigner}
+      />
+    ) : task.assigner ? (
+      <p className="task-assigner">派自 {task.assigner}</p>
+    ) : null
 
   const overdue = isOverdue(task.dueDate, task.completed)
   const dueBlock =

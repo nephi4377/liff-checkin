@@ -1,12 +1,14 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { buildAssignerOptions } from '../assigners'
 import type { Task, TaskCategory, Urgency, Worker } from '../types'
+import { AssignerSelect } from './AssignerSelect'
 import { AssistantBoard } from './AssistantBoard'
 import { OrganizePanel } from './OrganizePanel'
 
 interface AssistantPanelProps {
   workers: Worker[]
   tasks: Task[]
+  assigners: string[]
   onAdd: (
     title: string,
     assigneeId: string,
@@ -22,6 +24,7 @@ interface AssistantPanelProps {
   onUpdateTitle: (id: string, title: string) => void
   onUpdateDetail: (id: string, detail: string) => void
   onUpdateAssigner: (id: string, assigner: string) => void
+  onAddAssigner: (name: string) => string | null
   onUpdateDueDate: (id: string, dueDate: string) => void
   onUpdateUrgency: (id: string, urgency: Urgency) => void
 }
@@ -32,6 +35,7 @@ const WORKER_ORDER = ['ops-ende', 'ops-ayong']
 export function AssistantPanel({
   workers,
   tasks,
+  assigners,
   onAdd,
   onToggle,
   onReorder,
@@ -39,6 +43,7 @@ export function AssistantPanel({
   onUpdateTitle,
   onUpdateDetail,
   onUpdateAssigner,
+  onAddAssigner,
   onUpdateDueDate,
   onUpdateUrgency,
 }: AssistantPanelProps) {
@@ -57,8 +62,12 @@ export function AssistantPanel({
   const [showAdd, setShowAdd] = useState(false)
 
   const assignerOptions = useMemo(
-    () => buildAssignerOptions(tasks.map((t) => t.assigner)),
-    [tasks],
+    () =>
+      buildAssignerOptions([
+        ...assigners,
+        ...tasks.map((t) => t.assigner),
+      ]),
+    [assigners, tasks],
   )
 
   const focusWorkerIdSafe = tabWorkers.some((w) => w.id === focusWorkerId)
@@ -132,6 +141,7 @@ export function AssistantPanel({
         onUpdateTitle={onUpdateTitle}
         onUpdateDetail={onUpdateDetail}
         onUpdateAssigner={onUpdateAssigner}
+        onAddAssigner={onAddAssigner}
         onUpdateDueDate={onUpdateDueDate}
         onUpdateUrgency={onUpdateUrgency}
         assignerOptions={assignerOptions}
@@ -150,19 +160,14 @@ export function AssistantPanel({
             />
             <label className="detail-field">
               <span className="detail-field-label">誰派的</span>
-              <select
-                className="assigner-select"
+              <AssignerSelect
                 value={assigner}
-                onChange={(e) => setAssigner(e.target.value)}
-                aria-label="誰派的"
-              >
-                <option value="">未指定</option>
-                {assignerOptions.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
+                options={assignerOptions}
+                onChange={setAssigner}
+                onAddAssigner={onAddAssigner}
+                emptyLabel="未指定"
+                selectClassName="assigner-select"
+              />
             </label>
             <label className="detail-field">
               <span className="detail-field-label">詳細說明</span>

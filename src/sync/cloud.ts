@@ -29,6 +29,9 @@ export async function pullCloud(opts: PullOpts = {}): Promise<AppState | null> {
     workers: data.workers,
     tasks: data.tasks,
     officeTasks: Array.isArray(data.officeTasks) ? data.officeTasks : [],
+    assigners: Array.isArray((data as AppState).assigners)
+      ? (data as AppState).assigners
+      : [],
     deletedIds: Array.isArray(data.deletedIds) ? data.deletedIds : [],
     updatedAt: incomingUpdatedAt,
   })

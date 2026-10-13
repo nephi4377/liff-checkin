@@ -24,6 +24,7 @@ export default function App() {
   const {
     workers,
     tasks,
+    assigners,
     syncStatus,
     addTask,
     toggleComplete,
@@ -32,6 +33,7 @@ export default function App() {
     updateTitle,
     updateDetail,
     updateAssigner,
+    addAssigner,
     updateDueDate,
     updateUrgency,
     resetDemo,
@@ -132,6 +134,7 @@ export default function App() {
           <AssistantPanel
             workers={workers}
             tasks={tasks}
+            assigners={assigners}
             onAdd={addTask}
             onToggle={toggleComplete}
             onReorder={reorder}
@@ -139,6 +142,7 @@ export default function App() {
             onUpdateTitle={updateTitle}
             onUpdateDetail={updateDetail}
             onUpdateAssigner={updateAssigner}
+            onAddAssigner={addAssigner}
             onUpdateDueDate={updateDueDate}
             onUpdateUrgency={updateUrgency}
           />
@@ -165,6 +169,7 @@ export default function App() {
             workerName={workerName}
             tasks={myTasks}
             onToggle={toggleComplete}
+            onUpdateDetail={updateDetail}
           />
         </main>
       </div>

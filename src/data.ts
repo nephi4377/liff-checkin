@@ -1,3 +1,4 @@
+import { BASE_ASSIGNERS, normalizeAssignerName } from './assigners'
 import type {
   AppState,
   OfficeTask,
@@ -245,7 +246,9 @@ export function purgeStaleCompleted(
     deletedIds: [
       ...new Set([
         ...normalizeDeletedIds(state.deletedIds),
-        ...purged.map((id) => LEGACY_TASK_IDS[id] ?? id),
+        ...purged.map(
+          (id) => LEGACY_TASK_IDS[id] ?? LEGACY_OFFICE_IDS[id] ?? id,
+        ),
       ]),
     ],
     updatedAt: now,
@@ -365,12 +368,24 @@ export function ensureDispatchState(state: AppState): AppState {
     tombstones.add(LEGACY_OFFICE_IDS[id] ?? id)
   }
 
+  const assignerSet = new Set<string>()
+  for (const name of BASE_ASSIGNERS) assignerSet.add(name)
+  for (const raw of state.assigners ?? []) {
+    const n = normalizeAssignerName(String(raw ?? ''))
+    if (n) assignerSet.add(n)
+  }
+  for (const t of tasksById.values()) {
+    const n = normalizeAssignerName(t.assigner ?? '')
+    if (n) assignerSet.add(n)
+  }
+
   const normalized: AppState = {
     workers: WORKERS.map((w) => ({ ...w })),
     tasks: Array.from(tasksById.values()),
     officeTasks: Array.from(officeById.values()).sort(
       (a, b) => a.order - b.order,
     ),
+    assigners: [...assignerSet],
     deletedIds: [...tombstones],
     updatedAt: typeof state.updatedAt === 'number' ? state.updatedAt : now,
   }
@@ -382,6 +397,7 @@ export function createSeedState(): AppState {
     workers: WORKERS,
     tasks: seedTasks(),
     officeTasks: [],
+    assigners: [...BASE_ASSIGNERS],
     deletedIds: [],
     updatedAt: Date.now(),
   })
@@ -401,6 +417,7 @@ export function loadState(): AppState {
           officeTasks: Array.isArray(parsed.officeTasks)
             ? parsed.officeTasks
             : [],
+          assigners: Array.isArray(parsed.assigners) ? parsed.assigners : [],
           deletedIds: normalizeDeletedIds(parsed.deletedIds),
           updatedAt:
             typeof parsed.updatedAt === 'number' ? parsed.updatedAt : Date.now(),
@@ -429,6 +446,7 @@ export function toSyncPayload(state: AppState): AppState {
     workers: WORKERS.map((w) => ({ ...w })),
     tasks: normalized.tasks,
     officeTasks: normalized.officeTasks,
+    assigners: normalized.assigners,
     deletedIds: normalized.deletedIds,
     updatedAt: normalized.updatedAt,
   }

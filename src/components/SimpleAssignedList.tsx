@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { compareDeadlineTasks, formatDueDateLabel, isOverdue } from '../dueDate'
 import type { Task, TaskCategory } from '../types'
 import { sortPriorityTasks, urgencyLabel } from '../urgency'
@@ -7,6 +7,7 @@ interface SimpleAssignedListProps {
   workerName: string
   tasks: Task[]
   onToggle: (id: string) => void
+  onUpdateDetail: (id: string, detail: string) => void
 }
 
 const CATEGORY_META: {
@@ -55,14 +56,97 @@ function TaskMeta({ task }: { task: Task }) {
   return null
 }
 
+function WorkerNote({
+  task,
+  onUpdateDetail,
+}: {
+  task: Task
+  onUpdateDetail: (id: string, detail: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(task.detail ?? '')
+
+  const openEdit = () => {
+    setDraft(task.detail ?? '')
+    setEditing(true)
+  }
+
+  const commit = () => {
+    onUpdateDetail(task.id, draft)
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <div className="worker-note is-editing">
+        <textarea
+          className="worker-note-input"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          rows={3}
+          placeholder="進度、材料、注意事項…"
+          autoFocus
+          aria-label="任務說明"
+        />
+        <div className="worker-note-actions">
+          <button
+            type="button"
+            className="btn-ghost worker-note-cancel"
+            onClick={() => {
+              setDraft(task.detail ?? '')
+              setEditing(false)
+            }}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            className="btn-primary worker-note-save"
+            onClick={commit}
+          >
+            儲存說明
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (task.detail?.trim()) {
+    return (
+      <button
+        type="button"
+        className="worker-note has-text"
+        onClick={openEdit}
+        aria-label="編輯說明"
+      >
+        <span className="worker-note-label">說明</span>
+        <span className="worker-note-body">{task.detail}</span>
+      </button>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      className="worker-note is-empty"
+      onClick={openEdit}
+      aria-label="新增說明"
+    >
+      ＋ 新增說明
+    </button>
+  )
+}
+
 function AssignedRow({
   task,
   checked,
   onToggle,
+  onUpdateDetail,
 }: {
   task: Task
   checked: boolean
   onToggle: (id: string) => void
+  onUpdateDetail: (id: string, detail: string) => void
 }) {
   const overdue = isOverdue(task.dueDate, task.completed)
   const tone =
@@ -89,10 +173,10 @@ function AssignedRow({
       <div className="office-body">
         {!checked ? <TaskMeta task={task} /> : null}
         <span className="office-title">{task.title}</span>
-        {!checked && task.assigner ? (
+        {task.assigner ? (
           <p className="task-assigner">派自 {task.assigner}</p>
         ) : null}
-        {task.detail ? <p className="task-detail">{task.detail}</p> : null}
+        <WorkerNote task={task} onUpdateDetail={onUpdateDetail} />
       </div>
     </li>
   )
@@ -104,12 +188,14 @@ function CategoryBlock({
   empty,
   tasks,
   onToggle,
+  onUpdateDetail,
 }: {
   category: TaskCategory
   title: string
   empty: string
   tasks: Task[]
   onToggle: (id: string) => void
+  onUpdateDetail: (id: string, detail: string) => void
 }): ReactNode {
   return (
     <section
@@ -132,6 +218,7 @@ function CategoryBlock({
               task={t}
               checked={false}
               onToggle={onToggle}
+              onUpdateDetail={onUpdateDetail}
             />
           ))}
         </ul>
@@ -140,11 +227,12 @@ function CategoryBlock({
   )
 }
 
-/** Personal zone: check-only; 優先／限期件／待處理用顏色分區 */
+/** 工務：四大區塊＋每任務下方說明區（可編輯、同步） */
 export function SimpleAssignedList({
   workerName,
   tasks,
   onToggle,
+  onUpdateDetail,
 }: SimpleAssignedListProps) {
   const byCategory = useMemo(() => {
     const map = {
@@ -188,19 +276,23 @@ export function SimpleAssignedList({
             empty={c.empty}
             tasks={byCategory[c.id]}
             onToggle={onToggle}
+            onUpdateDetail={onUpdateDetail}
           />
         ))}
       </div>
 
-      {done.length > 0 ? (
-        <section
-          className="worker-cat worker-cat-done"
-          aria-labelledby="assigned-done"
-        >
-          <header className="worker-cat-head">
-            <h3 id="assigned-done">已完成</h3>
-            <span className="worker-cat-count">{done.length}</span>
-          </header>
+      <section
+        className="worker-cat worker-cat-done"
+        aria-labelledby="assigned-done"
+      >
+        <header className="worker-cat-head">
+          <h3 id="assigned-done">已完成</h3>
+          <span className="worker-cat-count">{done.length}</span>
+        </header>
+        <p className="done-hint">取消勾選可復原 · 超過 10 天自動清除</p>
+        {done.length === 0 ? (
+          <p className="worker-cat-empty">沒有已完成</p>
+        ) : (
           <ul className="office-list">
             {done.map((t) => (
               <AssignedRow
@@ -208,11 +300,12 @@ export function SimpleAssignedList({
                 task={t}
                 checked
                 onToggle={onToggle}
+                onUpdateDetail={onUpdateDetail}
               />
             ))}
           </ul>
-        </section>
-      ) : null}
+        )}
+      </section>
     </div>
   )
 }
