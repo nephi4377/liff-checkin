@@ -4,13 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>添心收支登錄</title>
-  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=7" />
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=8" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
+  <script src="../../shared/js/accounting_amount_formula.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=102"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
-  <script src="../../shared/js/accounting_form_helpers.js?v=6"></script>
+  <script src="../../shared/js/accounting_form_helpers.js?v=7"></script>
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
   <script src="../../shared/js/accounting_nav.js?v=4"></script>
   <style>
@@ -145,7 +146,7 @@
         <datalist id="clientList"></datalist>
         <label>案號</label><input id="project_no" type="text" placeholder="手填案號即可" />
         <label>款項類別</label><input id="item_desc" type="text" />
-        <label>金額</label><input id="amount" type="number" inputmode="numeric" />
+        <label>金額</label><input id="amount" type="text" inputmode="decimal" data-amount-formula placeholder="數字或 =1000+50" />
         <label>是否入零用金</label><select id="petty_cash"><option>否</option><option>是</option></select>
         <label>付款方式</label>
         <div class="pay-tags" id="payTagsA">
@@ -157,7 +158,7 @@
       <div id="blockB" class="hidden">
         <label>支出日期</label><input id="txn_date_b" type="text" />
         <label>廠商名稱</label><input id="party_name_b" type="text" placeholder="打 1～2 字搜尋名冊，或手動輸入" />
-        <label>支付金額</label><input id="amount_b" type="number" inputmode="numeric" />
+        <label>支付金額</label><input id="amount_b" type="text" inputmode="decimal" data-amount-formula placeholder="數字或 =1000+50" />
         <div class="alloc-block" id="allocBlock">
           <div class="alloc-head">
             <strong>分攤明細</strong>
@@ -475,14 +476,23 @@
         });
       }
 
+      function resolveAmountField(raw) {
+        if (typeof AccountingAmountFormula !== 'undefined') {
+          var n = AccountingAmountFormula.parseAmount(raw);
+          return isNaN(n) ? String(raw || '').trim() : String(n);
+        }
+        return String(raw || '').trim();
+      }
+
       function collectFields() {
         var isA = kind.value === 'A';
+        var amountRaw = isA ? document.getElementById('amount').value : document.getElementById('amount_b').value;
         var fields = {
           store: document.getElementById('store').value,
           txn_date: isA ? document.getElementById('txn_date').value : document.getElementById('txn_date_b').value,
           party_name: isA ? document.getElementById('party_name').value : document.getElementById('party_name_b').value,
           item_desc: isA ? document.getElementById('item_desc').value : '',
-          amount: isA ? document.getElementById('amount').value : document.getElementById('amount_b').value,
+          amount: resolveAmountField(amountRaw),
           payment_method: isA ? document.getElementById('payment_method').value : document.getElementById('payment_method_b').value
         };
         if (isA) {
@@ -795,6 +805,10 @@
           sumEl: document.getElementById('allocSum'),
           hintEl: document.getElementById('allocHint')
         });
+        if (typeof AccountingAmountFormula !== 'undefined') {
+          AccountingAmountFormula.bindInput(document.getElementById('amount'));
+          AccountingAmountFormula.bindInput(document.getElementById('amount_b'));
+        }
         document.getElementById('photoInput').addEventListener('change', function (e) {
           addLocalPhotos(e.target.files || []);
         });
