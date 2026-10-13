@@ -7,6 +7,7 @@ import {
   loadState,
   saveState,
 } from '../data'
+import { isDemoHost } from '../demo/fixture'
 import { pullCloud, pushCloud } from '../sync/cloud'
 import { SYNC_POLL_MS, SYNC_PUSH_DEBOUNCE_MS } from '../sync/config'
 import type {
@@ -64,8 +65,11 @@ export function useTasks() {
     setSyncStatus((prev) => (prev === next ? prev : next))
   }, [])
 
+  const demoMode = typeof window !== 'undefined' && isDemoHost()
+
   const pushSoon = useCallback(
     (next?: AppState) => {
+      if (demoMode) return
       const payload = next ?? stateRef.current
       if (pushTimerRef.current) window.clearTimeout(pushTimerRef.current)
       pushTimerRef.current = window.setTimeout(async () => {
@@ -84,21 +88,28 @@ export function useTasks() {
         }
       }, SYNC_PUSH_DEBOUNCE_MS)
     },
-    [setSyncStatusSafe],
+    [demoMode, setSyncStatusSafe],
   )
 
   // Local edits → cloud (ignore the render that applied a pull)
   useEffect(() => {
+    if (demoMode) return
     if (!hydratedRef.current) return
     if (applyFromCloudRef.current) {
       applyFromCloudRef.current = false
       return
     }
     pushSoon()
-  }, [state.updatedAt, pushSoon])
+  }, [demoMode, state.updatedAt, pushSoon])
 
-  // Initial pull + poll
+  // Initial pull + poll（demo 本機略過雲端）
   useEffect(() => {
+    if (demoMode) {
+      hydratedRef.current = true
+      setSyncStatusSafe('ok')
+      return
+    }
+
     let cancelled = false
 
     const applyRemoteIfNewer = (remote: AppState) => {
@@ -194,7 +205,7 @@ export function useTasks() {
       document.removeEventListener('visibilitychange', onVisibility)
       if (pushTimerRef.current) window.clearTimeout(pushTimerRef.current)
     }
-  }, [pushSoon, setSyncStatusSafe])
+  }, [demoMode, pushSoon, setSyncStatusSafe])
 
   const addTask = useCallback(
     (
@@ -455,10 +466,14 @@ export function useTasks() {
     clearStoredState()
     const next = createSeedState()
     setState(next)
+    if (demoMode) {
+      setSyncStatusSafe('ok')
+      return
+    }
     void pushCloud(next)
       .then(() => setSyncStatusSafe('ok'))
       .catch(() => setSyncStatusSafe('error'))
-  }, [setSyncStatusSafe])
+  }, [demoMode, setSyncStatusSafe])
 
   return {
     workers: state.workers,
