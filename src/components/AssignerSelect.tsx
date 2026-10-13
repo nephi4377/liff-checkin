@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import {
   ASSIGNER_ADD_VALUE,
   buildAssignerOptions,
+  isRemovedAssigner,
   normalizeAssignerName,
 } from '../assigners'
 
@@ -27,11 +28,13 @@ export function AssignerSelect({
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
   const choices = buildAssignerOptions([...options, value])
+  // 已移除名不進下拉；任務歷史可仍是「羊」，select 顯示空白
+  const selectValue = isRemovedAssigner(value) ? '' : value
 
   const commitAdd = (e?: FormEvent) => {
     e?.preventDefault()
     const name = normalizeAssignerName(draft)
-    if (!name) return
+    if (!name || isRemovedAssigner(name)) return
     const saved = onAddAssigner(name) ?? name
     onChange(saved)
     setDraft('')
@@ -70,7 +73,7 @@ export function AssignerSelect({
       ) : (
         <select
           className={selectClassName}
-          value={value}
+          value={selectValue}
           aria-label="誰派的"
           onChange={(e) => {
             const v = e.target.value

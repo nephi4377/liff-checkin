@@ -7,7 +7,7 @@ import {
   loadState,
   saveState,
 } from '../data'
-import { normalizeAssignerName } from '../assigners'
+import { isRemovedAssigner, normalizeAssignerName } from '../assigners'
 import { isDemoHost } from '../demo/fixture'
 import { pullCloud, pushCloud } from '../sync/cloud'
 import { SYNC_POLL_MS, SYNC_PUSH_DEBOUNCE_MS } from '../sync/config'
@@ -345,10 +345,17 @@ export function useTasks() {
 
   const updateAssigner = useCallback((taskId: string, assigner: string) => {
     const trimmed = normalizeAssignerName(assigner)
+    if (isRemovedAssigner(trimmed)) return
     setState((prev) => {
       const assigners = trimmed
-        ? [...new Set([...(prev.assigners ?? []), trimmed])]
-        : prev.assigners ?? []
+        ? [
+            ...new Set(
+              [...(prev.assigners ?? []), trimmed].filter(
+                (n) => !isRemovedAssigner(n),
+              ),
+            ),
+          ]
+        : (prev.assigners ?? []).filter((n) => !isRemovedAssigner(n))
       return patchState(prev, {
         assigners,
         tasks: prev.tasks.map((t) =>
@@ -362,13 +369,14 @@ export function useTasks() {
 
   const addAssigner = useCallback((name: string): string | null => {
     const trimmed = normalizeAssignerName(name)
-    if (!trimmed) return null
+    if (!trimmed || isRemovedAssigner(trimmed)) return null
     setState((prev) => {
-      if ((prev.assigners ?? []).includes(trimmed)) {
-        return patchState(prev, { assigners: prev.assigners ?? [] })
+      const cleaned = (prev.assigners ?? []).filter((n) => !isRemovedAssigner(n))
+      if (cleaned.includes(trimmed)) {
+        return patchState(prev, { assigners: cleaned })
       }
       return patchState(prev, {
-        assigners: [...(prev.assigners ?? []), trimmed],
+        assigners: [...cleaned, trimmed],
       })
     })
     return trimmed

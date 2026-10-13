@@ -1,4 +1,8 @@
-import { BASE_ASSIGNERS, normalizeAssignerName } from './assigners'
+import {
+  BASE_ASSIGNERS,
+  isRemovedAssigner,
+  normalizeAssignerName,
+} from './assigners'
 import type {
   AppState,
   OfficeTask,
@@ -374,15 +378,25 @@ export function ensureDispatchState(state: AppState): AppState {
   }
 
   const assignerSet = new Set<string>()
-  for (const name of BASE_ASSIGNERS) assignerSet.add(name)
+  for (const name of BASE_ASSIGNERS) {
+    if (!isRemovedAssigner(name)) assignerSet.add(name)
+  }
   for (const raw of state.assigners ?? []) {
     const n = normalizeAssignerName(String(raw ?? ''))
-    if (n) assignerSet.add(n)
+    if (n && !isRemovedAssigner(n)) assignerSet.add(n)
   }
   for (const t of tasksById.values()) {
     const n = normalizeAssignerName(t.assigner ?? '')
-    if (n) assignerSet.add(n)
+    // 任務上的「羊」可留歷史，但不進下拉／同步名單
+    if (n && !isRemovedAssigner(n)) assignerSet.add(n)
   }
+
+  const nextAssigners = [...assignerSet]
+  const hadRemovedAssigner = (state.assigners ?? []).some((a) =>
+    isRemovedAssigner(String(a)),
+  )
+  const baseUpdatedAt =
+    typeof state.updatedAt === 'number' ? state.updatedAt : now
 
   const normalized: AppState = {
     workers: WORKERS.map((w) => ({ ...w })),
@@ -390,9 +404,12 @@ export function ensureDispatchState(state: AppState): AppState {
     officeTasks: Array.from(officeById.values()).sort(
       (a, b) => a.order - b.order,
     ),
-    assigners: [...assignerSet],
+    assigners: nextAssigners,
     deletedIds: [...tombstones],
-    updatedAt: typeof state.updatedAt === 'number' ? state.updatedAt : now,
+    // 清掉同步名單裡的已移除名時抬 revision，boot 會寫回雲端
+    updatedAt: hadRemovedAssigner
+      ? Math.max(baseUpdatedAt + 1, now)
+      : baseUpdatedAt,
   }
   return purgeStaleCompleted(normalized, now)
 }
