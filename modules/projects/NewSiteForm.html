@@ -534,8 +534,17 @@ ${notes || '無'}`;
       // 7. 處理後端的回應
       function handleFormResponse(response) {
         const ok = response.status === 'success' || response.success === true;
-        statusDiv.className = ok ? 'alert alert-success' : 'alert alert-danger';
-        statusDiv.innerText = response.message || (ok ? '儲存成功' : '儲存失敗');
+        const folders = response.folders || null;
+        const folderWarn = ok && folders && folders.ok === false;
+        statusDiv.className = !ok
+          ? 'alert alert-danger'
+          : (folderWarn ? 'alert alert-warning' : 'alert alert-success');
+        let msg = response.message || (ok ? '儲存成功' : '儲存失敗');
+        if (ok && folders && folders.ok && folders.path) {
+          msg = (response.message || '案場已新增') +
+            '\n雲端標準資料夾已就緒（PIC／參考圖／施工照／完工照／選材／出圖／BAK）。';
+        }
+        statusDiv.innerText = msg;
         if (ok) {
           try {
             if (typeof HubRefCache !== 'undefined') HubRefCache.invalidate('projects');
@@ -547,7 +556,7 @@ ${notes || '無'}`;
             } catch (e) { /* ignore */ }
           }
           // [v75.1 修正] 成功後，延遲更長時間再重新載入，確保使用者能看到成功訊息。
-          setTimeout(() => location.reload(), 2500);
+          setTimeout(() => location.reload(), folderWarn ? 4000 : 2500);
         } else {
           submitBtn.disabled = false;
           submitBtn.innerText = (currentMode === 'update') ? '更新資料' : '提交';
