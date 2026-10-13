@@ -542,7 +542,7 @@ ${notes || '無'}`;
         let msg = response.message || (ok ? '儲存成功' : '儲存失敗');
         if (ok && folders && folders.ok && folders.path) {
           msg = (response.message || '案場已新增') +
-            '\n雲端標準資料夾已就緒（PIC／參考圖／施工照／完工照／各式表單／材料／出圖／備份）。';
+            '\n雲端標準資料夾已就緒（PIC／參考圖／施工照／完工照／選材／出圖／BAK）。';
         }
         statusDiv.innerText = msg;
         if (ok) {
