@@ -1,7 +1,7 @@
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { compareDeadlineTasks, formatDueDateLabel, isOverdue } from '../dueDate'
-import type { Task } from '../types'
-import { urgencyLabel } from '../urgency'
+import type { Task, TaskCategory } from '../types'
+import { sortPriorityTasks, urgencyLabel } from '../urgency'
 
 interface SimpleAssignedListProps {
   workerName: string
@@ -9,43 +9,157 @@ interface SimpleAssignedListProps {
   onToggle: (id: string) => void
 }
 
-/** 優先 → 限期完成 → 待處理 */
-function categoryRank(c: Task['category']): number {
-  if (c === 'priority') return 0
-  if (c === 'deadline') return 1
-  return 2
+const CATEGORY_META: {
+  id: TaskCategory
+  title: string
+  empty: string
+}[] = [
+  { id: 'priority', title: '優先', empty: '沒有優先' },
+  { id: 'deadline', title: '限期件', empty: '沒有限期件' },
+  { id: 'todo', title: '待處理', empty: '沒有待處理' },
+]
+
+function sortOpenInCategory(category: TaskCategory, tasks: Task[]): Task[] {
+  const list = tasks.filter((t) => !t.completed && t.category === category)
+  if (category === 'priority') return sortPriorityTasks(list)
+  if (category === 'deadline') return [...list].sort(compareDeadlineTasks)
+  return [...list].sort((a, b) => {
+    const aLow = a.urgency === 'low' ? 1 : 0
+    const bLow = b.urgency === 'low' ? 1 : 0
+    if (aLow !== bLow) return aLow - bLow
+    return a.order - b.order
+  })
 }
 
-/** Personal zone: check-only; show urgency / due dates */
+function TaskMeta({ task }: { task: Task }) {
+  const overdue = isOverdue(task.dueDate, task.completed)
+  if (task.category === 'deadline' && task.dueDate) {
+    return (
+      <span
+        className={`cat-chip ${overdue ? 'cat-chip-overdue' : 'cat-chip-due'}`}
+      >
+        {overdue ? '已逾期' : formatDueDateLabel(task.dueDate)}
+      </span>
+    )
+  }
+  if (task.category === 'priority') {
+    return (
+      <span className={`cat-chip cat-chip-urgency-${task.urgency}`}>
+        {urgencyLabel(task.urgency)}
+      </span>
+    )
+  }
+  if (task.urgency === 'low') {
+    return <span className="cat-chip cat-chip-urgency-low">不急</span>
+  }
+  return null
+}
+
+function AssignedRow({
+  task,
+  checked,
+  onToggle,
+}: {
+  task: Task
+  checked: boolean
+  onToggle: (id: string) => void
+}) {
+  const overdue = isOverdue(task.dueDate, task.completed)
+  const tone =
+    task.category === 'priority'
+      ? `urgency-tone-${task.urgency}`
+      : task.category === 'todo' && task.urgency === 'low'
+        ? 'urgency-tone-low'
+        : overdue
+          ? 'is-overdue-row'
+          : ''
+
+  return (
+    <li
+      className={`office-row worker-row ${tone}${checked ? ' is-done' : ''}`}
+    >
+      <label className="office-check">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={() => onToggle(task.id)}
+        />
+        <span className="sr-only">完成</span>
+      </label>
+      <div className="office-body">
+        {!checked ? <TaskMeta task={task} /> : null}
+        <span className="office-title">{task.title}</span>
+        {!checked && task.assigner ? (
+          <p className="task-assigner">派自 {task.assigner}</p>
+        ) : null}
+        {task.detail ? <p className="task-detail">{task.detail}</p> : null}
+      </div>
+    </li>
+  )
+}
+
+function CategoryBlock({
+  category,
+  title,
+  empty,
+  tasks,
+  onToggle,
+}: {
+  category: TaskCategory
+  title: string
+  empty: string
+  tasks: Task[]
+  onToggle: (id: string) => void
+}): ReactNode {
+  return (
+    <section
+      className={`worker-cat worker-cat-${category}`}
+      aria-labelledby={`worker-cat-${category}`}
+    >
+      <header className="worker-cat-head">
+        <h3 id={`worker-cat-${category}`}>{title}</h3>
+        <span className="worker-cat-count" aria-label={`${tasks.length} 件`}>
+          {tasks.length}
+        </span>
+      </header>
+      {tasks.length === 0 ? (
+        <p className="worker-cat-empty">{empty}</p>
+      ) : (
+        <ul className="office-list">
+          {tasks.map((t) => (
+            <AssignedRow
+              key={t.id}
+              task={t}
+              checked={false}
+              onToggle={onToggle}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+/** Personal zone: check-only; 優先／限期件／待處理用顏色分區 */
 export function SimpleAssignedList({
   workerName,
   tasks,
   onToggle,
 }: SimpleAssignedListProps) {
-  const open = useMemo(
-    () =>
-      [...tasks]
-        .filter((t) => !t.completed)
-        .sort((a, b) => {
-          const cr = categoryRank(a.category) - categoryRank(b.category)
-          if (cr !== 0) return cr
-          if (a.category === 'deadline' && b.category === 'deadline') {
-            return compareDeadlineTasks(a, b)
-          }
-          if (a.category === 'todo' && b.category === 'todo') {
-            const aLow = a.urgency === 'low' ? 1 : 0
-            const bLow = b.urgency === 'low' ? 1 : 0
-            if (aLow !== bLow) return aLow - bLow
-          }
-          if (a.category === 'priority' && b.category === 'priority') {
-            const rank = { urgent: 0, normal: 1, low: 2 } as const
-            const ur = rank[a.urgency] - rank[b.urgency]
-            if (ur !== 0) return ur
-          }
-          return a.order - b.order
-        }),
-    [tasks],
-  )
+  const byCategory = useMemo(() => {
+    const map = {
+      priority: sortOpenInCategory('priority', tasks),
+      deadline: sortOpenInCategory('deadline', tasks),
+      todo: sortOpenInCategory('todo', tasks),
+    }
+    return map
+  }, [tasks])
+
+  const openCount =
+    byCategory.priority.length +
+    byCategory.deadline.length +
+    byCategory.todo.length
+
   const done = useMemo(
     () =>
       [...tasks]
@@ -58,91 +172,43 @@ export function SimpleAssignedList({
     <div className="office-panel simple-assigned">
       <header className="office-head">
         <h2>{workerName}的任務</h2>
-        <p className="section-lead">由「派工」指派 — 只能勾是否完成</p>
+        <p className="section-lead">
+          {openCount > 0
+            ? `進行中 ${openCount} 件 · 只能勾是否完成`
+            : '目前沒有進行中任務'}
+        </p>
       </header>
 
-      <section className="office-section" aria-labelledby="assigned-open">
-        <h3 id="assigned-open">進行中</h3>
-        {open.length === 0 ? (
-          <p className="empty-list">目前沒有任務</p>
-        ) : (
-          <ul className="office-list">
-            {open.map((t) => {
-              const isPriority = t.category === 'priority'
-              const isDeadline = t.category === 'deadline'
-              const isTodoLow = !isPriority && !isDeadline && t.urgency === 'low'
-              const overdue = isOverdue(t.dueDate, t.completed)
-              const tone = isPriority
-                ? `urgency-tone-${t.urgency}`
-                : isTodoLow
-                  ? 'urgency-tone-low'
-                  : overdue
-                    ? 'is-overdue-row'
-                    : ''
-              return (
-                <li key={t.id} className={`office-row ${tone}`}>
-                  <label className="office-check">
-                    <input
-                      type="checkbox"
-                      checked={false}
-                      onChange={() => onToggle(t.id)}
-                    />
-                    <span className="sr-only">完成</span>
-                  </label>
-                  <div className="office-body">
-                    {isDeadline && t.dueDate ? (
-                      <span
-                        className={`urgency-badge urgency-badge-lg ${overdue ? 'urgency-urgent' : 'urgency-normal'}`}
-                      >
-                        {overdue ? '已逾期' : formatDueDateLabel(t.dueDate)}
-                      </span>
-                    ) : isPriority ? (
-                      <span
-                        className={`urgency-badge urgency-badge-lg urgency-${t.urgency}`}
-                      >
-                        {urgencyLabel(t.urgency)}
-                      </span>
-                    ) : isTodoLow ? (
-                      <span className="urgency-badge urgency-badge-lg urgency-low">
-                        不急
-                      </span>
-                    ) : null}
-                    <span className="office-title">{t.title}</span>
-                    {t.assigner ? (
-                      <p className="task-assigner">派自 {t.assigner}</p>
-                    ) : null}
-                    {t.detail ? (
-                      <p className="task-detail">{t.detail}</p>
-                    ) : null}
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </section>
+      <div className="worker-cat-stack" aria-label={`${workerName}的分類任務`}>
+        {CATEGORY_META.map((c) => (
+          <CategoryBlock
+            key={c.id}
+            category={c.id}
+            title={c.title}
+            empty={c.empty}
+            tasks={byCategory[c.id]}
+            onToggle={onToggle}
+          />
+        ))}
+      </div>
 
       {done.length > 0 ? (
-        <section className="office-section" aria-labelledby="assigned-done">
-          <h3 id="assigned-done">已完成</h3>
+        <section
+          className="worker-cat worker-cat-done"
+          aria-labelledby="assigned-done"
+        >
+          <header className="worker-cat-head">
+            <h3 id="assigned-done">已完成</h3>
+            <span className="worker-cat-count">{done.length}</span>
+          </header>
           <ul className="office-list">
             {done.map((t) => (
-              <li key={t.id} className="office-row is-done">
-                <label className="office-check">
-                  <input
-                    type="checkbox"
-                    checked
-                    onChange={() => onToggle(t.id)}
-                  />
-                  <span className="sr-only">完成</span>
-                </label>
-                <div className="office-body">
-                  <span className="office-title">{t.title}</span>
-                  {t.detail ? (
-                    <p className="task-detail">{t.detail}</p>
-                  ) : null}
-                </div>
-              </li>
+              <AssignedRow
+                key={t.id}
+                task={t}
+                checked
+                onToggle={onToggle}
+              />
             ))}
           </ul>
         </section>
