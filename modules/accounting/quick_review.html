@@ -759,6 +759,27 @@
         return t;
       }
 
+      /** 與後端 quickReviewTimeMs_ 對齊：新→舊；避免舊字串排序把今天的 LINE 圖排到後面 */
+      function createdAtMs(v) {
+        if (v == null || v === '') return 0;
+        if (typeof v === 'number' && isFinite(v)) return v > 1e11 ? v : 0;
+        var s = String(v).trim();
+        var m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+        if (m) {
+          var iso = m[1] + '-' + m[2] + '-' + m[3] + 'T' +
+            (m[4].length === 1 ? '0' + m[4] : m[4]) + ':' + m[5] + ':' + (m[6] || '00');
+          var t = Date.parse(iso);
+          return isNaN(t) ? 0 : t;
+        }
+        var t2 = Date.parse(s);
+        return isNaN(t2) ? 0 : t2;
+      }
+      function sortItemsNewestFirst(list) {
+        return (list || []).slice().sort(function (a, b) {
+          return createdAtMs(b.created_at) - createdAtMs(a.created_at);
+        });
+      }
+
       function mediaHtml(it) {
         var isPdf = String(it.mime_type || '').toLowerCase().indexOf('pdf') >= 0 ||
           String(it.filename || '').toLowerCase().indexOf('.pdf') >= 0;
@@ -898,7 +919,7 @@
             AccountingUi.action('載入快審清單', 'fail');
             return;
           }
-          items = data.items || [];
+          items = sortItemsNewestFirst(data.items || []);
           cacheWrite(items, status);
           renderList();
           setLive('已更新', false);
@@ -1216,7 +1237,7 @@
           var cached = cacheRead();
           var curStatus = document.getElementById('filterStatus').value;
           if (cached && cached.items && cached.status === curStatus) {
-            items = cached.items;
+            items = sortItemsNewestFirst(cached.items);
             renderList();
             setLive('更新中…', true);
           }
