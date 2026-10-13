@@ -24,8 +24,6 @@ interface TaskCardProps {
   /** 誰派的下拉選項；未傳則用預設＋目前值 */
   assignerOptions?: string[]
   dragDisabled?: boolean
-  categoryActionLabel?: string
-  onCategoryAction?: () => void
   compact?: boolean
 }
 
@@ -43,8 +41,6 @@ export function TaskCard({
   onUpdateUrgency,
   assignerOptions,
   dragDisabled,
-  categoryActionLabel,
-  onCategoryAction,
   compact,
 }: TaskCardProps) {
   const {
@@ -271,9 +267,7 @@ export function TaskCard({
     )
   }
 
-  const showCategory =
-    Boolean(categoryActionLabel && onCategoryAction && !dragDisabled)
-  const showActions = !editing && (showCategory || Boolean(onDelete))
+  const showActions = !editing && Boolean(onDelete)
   const toneClass = isPriority
     ? `urgency-tone-${task.urgency}`
     : isTodoLow
@@ -304,15 +298,6 @@ export function TaskCard({
           {!editing && !editingDetail ? urgencyBlock : null}
           {showActions && !editingDetail ? (
             <div className="task-actions-row">
-              {showCategory ? (
-                <button
-                  type="button"
-                  className="category-move-btn"
-                  onClick={onCategoryAction}
-                >
-                  {categoryActionLabel}
-                </button>
-              ) : null}
               {onDelete ? (
                 <button
                   type="button"
@@ -382,15 +367,6 @@ export function TaskCard({
         {!editing && !editingDetail ? urgencyBlock : null}
         {showAssignee && assigneeName && !editing ? (
           <p className="task-meta">指派給 {assigneeName}</p>
-        ) : null}
-        {showCategory && !editing ? (
-          <button
-            type="button"
-            className="category-move-btn"
-            onClick={onCategoryAction}
-          >
-            {categoryActionLabel}
-          </button>
         ) : null}
       </div>
 

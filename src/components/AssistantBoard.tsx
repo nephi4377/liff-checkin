@@ -52,7 +52,6 @@ function Column({
   title,
   tasks,
   onToggle,
-  onMoveCategory,
   onUpdateTitle,
   onUpdateDetail,
   onUpdateAssigner,
@@ -66,7 +65,6 @@ function Column({
   title: string
   tasks: Task[]
   onToggle: (id: string) => void
-  onMoveCategory: (taskId: string, category: TaskCategory) => void
   onUpdateTitle: (id: string, title: string) => void
   onUpdateDetail: (id: string, detail: string) => void
   onUpdateAssigner?: (id: string, assigner: string) => void
@@ -78,10 +76,6 @@ function Column({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id })
   const ids = tasks.map((t) => t.id)
-  const other: TaskCategory =
-    id === 'priority' ? 'deadline' : id === 'deadline' ? 'todo' : 'priority'
-  const moveLabel =
-    other === 'priority' ? '→ 優先' : other === 'deadline' ? '→ 限期' : '→ 待處理'
 
   return (
     <div
@@ -111,8 +105,6 @@ function Column({
                   id === 'deadline' ? undefined : onUpdateUrgency
                 }
                 assignerOptions={assignerOptions}
-                categoryActionLabel={moveLabel}
-                onCategoryAction={() => onMoveCategory(task.id, other)}
                 compact={simple}
               />
             ))}
@@ -305,7 +297,6 @@ export function AssistantBoard({
           title="優先"
           tasks={byCategory.priority}
           onToggle={onToggle}
-          onMoveCategory={onMoveCategory}
           onUpdateTitle={onUpdateTitle}
           onUpdateDetail={onUpdateDetail}
           onUpdateAssigner={onUpdateAssigner}
@@ -320,7 +311,6 @@ export function AssistantBoard({
           title="限期完成"
           tasks={byCategory.deadline}
           onToggle={onToggle}
-          onMoveCategory={onMoveCategory}
           onUpdateTitle={onUpdateTitle}
           onUpdateDetail={onUpdateDetail}
           onUpdateAssigner={onUpdateAssigner}
@@ -335,7 +325,6 @@ export function AssistantBoard({
           title="待處理"
           tasks={byCategory.todo}
           onToggle={onToggle}
-          onMoveCategory={onMoveCategory}
           onUpdateTitle={onUpdateTitle}
           onUpdateDetail={onUpdateDetail}
           onUpdateAssigner={onUpdateAssigner}
