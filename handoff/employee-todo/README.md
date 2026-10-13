@@ -1,6 +1,6 @@
 # employee-todo 轉運 patch
 
-因 Cloud Agent 的 `cursor[bot]` 無法 push 到 `tanxin02/employee-todo`，改動以此 diff 轉運。
+視覺方向：**晨霧工地白板**（冷石灰霧底＋信號色分區：優先紅／限期藍／待處理綠）＋「誰派的」下拉。
 
 ## 套用
 
@@ -12,8 +12,6 @@ curl -L -o worker-ui.diff \
 git checkout -b cursor/worker-category-colors-dbc5
 git apply worker-ui.diff
 git add -A
-git commit -m "Improve worker category colors and assigner dropdown"
+git commit -m "Improve worker category colors, assigner dropdown, and mist UI"
 git push -u origin cursor/worker-category-colors-dbc5
 ```
-
-內容：工務三色分區（優先／限期件／待處理）＋派工「誰派的」下拉。
