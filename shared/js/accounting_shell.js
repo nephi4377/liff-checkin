@@ -114,6 +114,13 @@ var AccountingShell = (function () {
     }
   }
 
+  /** 與 quick_review 同 origin：重掛前清清單快取，避免 iframe 重載仍先畫 90 秒內舊列表 */
+  function bustQuickReviewListCache_() {
+    try {
+      sessionStorage.removeItem('acct_quick_review_list_v2');
+    } catch (eBust) {}
+  }
+
   /**
    * 載入子頁。forceRemount：選單再點同一功能也重抓（避免清單／狀態過期）。
    * 另：子頁內跳轉後殼層 src 屬性仍舊時，必須重掛，否則會卡在請款成功頁等舊畫面。
@@ -130,6 +137,9 @@ var AccountingShell = (function () {
     var mustLoad = !!opts.forceRemount || attr !== src || (actual && actual !== page);
     currentPage = page;
     if (mustLoad) {
+      if (opts.forceRemount || page === 'quick_review.html' || page === 'vendor_docs.html') {
+        bustQuickReviewListCache_();
+      }
       if (attr === src) {
         // 同 URL 瀏覽器可能不重載：先 blank 再設回
         frameEl.setAttribute('src', 'about:blank');

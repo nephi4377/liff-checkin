@@ -1089,10 +1089,18 @@
       });
 
       document.getElementById('reloadBtn').addEventListener('click', function () { reload(); });
-      // bfcache／從請款頁返回：強制重抓，避免 session 清單快取看起來「沒更新」
+      // bfcache／瀏覽器上一頁返回：強制重抓，避免 session 清單快取看起來「沒更新」
       window.addEventListener('pageshow', function (ev) {
         if (!session) return;
-        if (ev.persisted) reload({ silent: true });
+        var backFwd = false;
+        try {
+          var nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+          backFwd = !!(nav && nav.type === 'back_forward');
+        } catch (eNav) {}
+        if (ev.persisted || backFwd) {
+          try { sessionStorage.removeItem(CACHE_KEY); } catch (eClrPs) {}
+          reload({ silent: true });
+        }
       });
       document.getElementById('filterStatus').addEventListener('change', function () {
         syncStatusChips();
@@ -1213,7 +1221,12 @@
           // 先出殼：不要等主檔／清單，避免整頁卡在「載入中」
           showApp();
           setLive('更新中…', true);
-          var cached = cacheRead();
+          // 殼層／主控台 iframe（embed=1）重掛時不要先畫 session 舊清單——否則看起來像「未更新」
+          var isEmbed = false;
+          try {
+            isEmbed = new URLSearchParams(window.location.search).get('embed') === '1';
+          } catch (eEmbed) {}
+          var cached = isEmbed ? null : cacheRead();
           var curStatus = document.getElementById('filterStatus').value;
           if (cached && cached.items && cached.status === curStatus) {
             items = cached.items;
