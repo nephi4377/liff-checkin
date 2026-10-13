@@ -298,7 +298,9 @@ var AccountingTaxMode = (function () {
     var prefix = namePrefix || 'taxMode';
     var cur = normalizeMode(selectedId) || 'inclusive';
     var html = '<div class="tax-mode-seg seg" data-tax-mode-wrap="1" role="radiogroup" aria-label="稅別模式">';
+    // per_row 計算仍保留（舊單／廠商預設）；畫面上不再顯示「未稅・逐筆加 5%」選項
     MODES.forEach(function (m) {
+      if (m.id === 'per_row') return;
       html += '<button type="button" class="' + (m.id === cur ? 'active' : '') + '" data-tax-mode="' + m.id + '" data-tax-mode-btn="' + prefix + '">' +
         m.label + '</button>';
     });

@@ -57,6 +57,11 @@ assert(!/taxDisabled\s*=\s*!isNaN\(amt\)\s*&&\s*amt\s*<\s*0/.test(pay), 'payment
 assert(!/taxDisabled\s*=\s*!isNaN\(amt\)\s*&&\s*amt\s*<\s*0/.test(rev), 'ledger_review 不再因負數禁用含稅');
 assert(!/setTaxControlsDisabled\(row,\s*!isNaN\(a\)\s*&&\s*a\s*<\s*0\)/.test(pay), 'payment_request 輸入時不禁用含稅');
 assert(!/setTaxControlsDisabled\(row,\s*!isNaN\(a\)\s*&&\s*a\s*<\s*0\)/.test(rev), 'ledger_review 輸入時不禁用含稅');
-assert(/accounting_tax_mode\.js\?v=8/.test(pay) && /accounting_tax_mode\.js\?v=8/.test(rev), 'cache bust v=8');
+assert(/accounting_tax_mode\.js\?v=9/.test(pay) && /accounting_tax_mode\.js\?v=9/.test(rev), 'cache bust v=9');
+assert(Tax.segHtml('inclusive', 'payment').indexOf('未稅・逐筆加 5%') < 0, 'segHtml 不顯示逐筆加 5% 選項');
+assert(Tax.segHtml('per_row', 'payment').indexOf('未稅・逐筆加 5%') < 0, '即使目前為 per_row 也不顯示該按鈕');
+assert(Tax.segHtml('inclusive', 'payment').indexOf('未稅／含稅自選') >= 0, '仍顯示自選模式');
+assert(Tax.segHtml('prorate', 'payment').indexOf('未稅・整張加稅分攤') >= 0, '仍顯示整張分攤');
+assert(Tax.addTax(1000) === 1050, 'per_row 計算邏輯仍可用');
 
 console.log('\nAll negative tax-inclusive checks passed.');
