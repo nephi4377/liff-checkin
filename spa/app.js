@@ -1218,7 +1218,10 @@ const App = {
                             @retry="refreshHubProjects" />
                     </div>
                     <div v-else-if="currentView.name === 'iframe' && iframeMountReady" class="h-full min-h-[70vh]">
-                        <IframeView :src="currentView.src + 
+                        <!-- :key 含 route params：會計多頁共用 index.html，僅改 route= 也必須整顆重掛 -->
+                        <IframeView
+                            :key="(currentView.src || '') + (currentView.params || '') + iframeDebugParam"
+                            :src="currentView.src + 
                             (currentView.src.includes('?') ? '&' : '?') + 
                             'uid=' + encodeURIComponent(userProfile.userId) + 
                             '&name=' + encodeURIComponent(userProfile.displayName) +
