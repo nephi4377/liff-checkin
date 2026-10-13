@@ -1,4 +1,4 @@
-export type TaskCategory = 'priority' | 'todo'
+export type TaskCategory = 'priority' | 'todo' | 'deadline'
 
 /** 緊急等級 — 超簡單三檔 */
 export type Urgency = 'urgent' | 'normal' | 'low'
@@ -22,6 +22,8 @@ export interface Task {
   assigneeId: string
   category: TaskCategory
   urgency: Urgency
+  /** 限期完成：截止日期 YYYY-MM-DD */
+  dueDate?: string
   completed: boolean
   /** Set when checked done; used for 10-day auto-purge */
   completedAt?: number

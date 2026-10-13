@@ -19,6 +19,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { useMemo, useState } from 'react'
+import { compareDeadlineTasks } from '../dueDate'
 import type { Task, TaskCategory, Urgency } from '../types'
 import { sortPriorityTasks, urgencyLabel } from '../urgency'
 import { TaskCard } from './TaskCard'
@@ -32,8 +33,15 @@ interface AssistantBoardProps {
   onMoveCategory: (taskId: string, category: TaskCategory) => void
   onUpdateTitle: (id: string, title: string) => void
   onUpdateDetail: (id: string, detail: string) => void
+  onUpdateDueDate?: (id: string, dueDate: string) => void
   onUpdateUrgency: (id: string, urgency: Urgency) => void
   simple?: boolean
+}
+
+function emptyLabel(id: TaskCategory): string {
+  if (id === 'priority') return '沒有優先'
+  if (id === 'deadline') return '沒有限期'
+  return '沒有待處理'
 }
 
 function Column({
@@ -44,6 +52,7 @@ function Column({
   onMoveCategory,
   onUpdateTitle,
   onUpdateDetail,
+  onUpdateDueDate,
   onUpdateUrgency,
   simple,
 }: {
@@ -54,13 +63,16 @@ function Column({
   onMoveCategory: (taskId: string, category: TaskCategory) => void
   onUpdateTitle: (id: string, title: string) => void
   onUpdateDetail: (id: string, detail: string) => void
+  onUpdateDueDate?: (id: string, dueDate: string) => void
   onUpdateUrgency: (id: string, urgency: Urgency) => void
   simple?: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id })
   const ids = tasks.map((t) => t.id)
-  const other: TaskCategory = id === 'priority' ? 'todo' : 'priority'
-  const moveLabel = id === 'todo' ? '→ 優先' : '→ 待處理'
+  const other: TaskCategory =
+    id === 'priority' ? 'todo' : id === 'todo' ? 'deadline' : 'priority'
+  const moveLabel =
+    other === 'priority' ? '→ 優先' : other === 'todo' ? '→ 待處理' : '→ 限期'
 
   return (
     <div
@@ -72,7 +84,7 @@ function Column({
         <span className="count-pill">{tasks.length}</span>
       </header>
       {tasks.length === 0 ? (
-        <p className="empty-list">{id === 'priority' ? '沒有優先' : '沒有待處理'}</p>
+        <p className="empty-list">{emptyLabel(id)}</p>
       ) : (
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           <ul className="task-list">
@@ -83,7 +95,10 @@ function Column({
                 onToggle={onToggle}
                 onUpdateTitle={onUpdateTitle}
                 onUpdateDetail={onUpdateDetail}
-                onUpdateUrgency={onUpdateUrgency}
+                onUpdateDueDate={onUpdateDueDate}
+                onUpdateUrgency={
+                  id === 'deadline' ? undefined : onUpdateUrgency
+                }
                 categoryActionLabel={moveLabel}
                 onCategoryAction={() => onMoveCategory(task.id, other)}
                 compact={simple}
@@ -137,6 +152,7 @@ export function AssistantBoard({
   onMoveCategory,
   onUpdateTitle,
   onUpdateDetail,
+  onUpdateDueDate,
   onUpdateUrgency,
   simple,
 }: AssistantBoardProps) {
@@ -152,11 +168,15 @@ export function AssistantBoard({
   )
 
   const { byCategory, done } = useMemo(() => {
-    const map: Record<TaskCategory, Task[]> = { priority: [], todo: [] }
+    const map: Record<TaskCategory, Task[]> = {
+      priority: [],
+      todo: [],
+      deadline: [],
+    }
     const completed: Task[] = []
     for (const t of tasks) {
       if (t.completed) completed.push(t)
-      else map[t.category].push(t)
+      else (map[t.category] ?? map.todo).push(t)
     }
     map.priority = sortPriorityTasks(map.priority)
     // 代辦：不急永遠沉到最下面，其餘依 order
@@ -166,6 +186,7 @@ export function AssistantBoard({
       if (aLow !== bLow) return aLow - bLow
       return a.order - b.order
     })
+    map.deadline = [...map.deadline].sort(compareDeadlineTasks)
     completed.sort(
       (a, b) => (b.completedAt ?? b.createdAt) - (a.completedAt ?? a.createdAt),
     )
@@ -178,7 +199,7 @@ export function AssistantBoard({
     : null
 
   const findContainer = (id: string): TaskCategory | null => {
-    if (id === 'priority' || id === 'todo') return id
+    if (id === 'priority' || id === 'todo' || id === 'deadline') return id
     const task = tasks.find((t) => t.id === id)
     if (!task || task.completed) return null
     return task.category
@@ -272,6 +293,7 @@ export function AssistantBoard({
           onMoveCategory={onMoveCategory}
           onUpdateTitle={onUpdateTitle}
           onUpdateDetail={onUpdateDetail}
+          onUpdateDueDate={onUpdateDueDate}
           onUpdateUrgency={onUpdateUrgency}
           simple={simple}
         />
@@ -283,6 +305,19 @@ export function AssistantBoard({
           onMoveCategory={onMoveCategory}
           onUpdateTitle={onUpdateTitle}
           onUpdateDetail={onUpdateDetail}
+          onUpdateDueDate={onUpdateDueDate}
+          onUpdateUrgency={onUpdateUrgency}
+          simple={simple}
+        />
+        <Column
+          id="deadline"
+          title="限期完成"
+          tasks={byCategory.deadline}
+          onToggle={onToggle}
+          onMoveCategory={onMoveCategory}
+          onUpdateTitle={onUpdateTitle}
+          onUpdateDetail={onUpdateDetail}
+          onUpdateDueDate={onUpdateDueDate}
           onUpdateUrgency={onUpdateUrgency}
           simple={simple}
         />

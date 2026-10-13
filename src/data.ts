@@ -116,6 +116,11 @@ function normalizeDeletedIds(raw: unknown): string[] {
   return [...new Set(raw.map(String).filter(Boolean))]
 }
 
+function normalizeCategory(value: unknown): Task['category'] {
+  if (value === 'priority' || value === 'todo' || value === 'deadline') return value
+  return 'todo'
+}
+
 function normalizeTaskFields(t: Task): Task {
   const completed = Boolean(t.completed)
   let completedAt = t.completedAt
@@ -129,10 +134,18 @@ function normalizeTaskFields(t: Task): Task {
   }
   const detail =
     typeof t.detail === 'string' ? t.detail.trim() : ''
+  const category = normalizeCategory(t.category)
+  let dueDate: string | undefined
+  if (typeof t.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.dueDate.trim())) {
+    dueDate = t.dueDate.trim()
+  }
+  if (category !== 'deadline') dueDate = dueDate // keep if set; display mainly for deadline
   return {
     ...t,
+    category,
     urgency: normalizeUrgency(t.urgency),
     detail: detail || undefined,
+    dueDate,
     completed,
     completedAt,
   }

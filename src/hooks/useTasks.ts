@@ -203,16 +203,25 @@ export function useTasks() {
       category: TaskCategory,
       detail?: string,
       urgency?: Urgency,
+      dueDate?: string,
     ) => {
       const trimmed = title.trim()
       if (!trimmed || !assigneeId) return
+      if (category === 'deadline' && !dueDate?.trim()) return
       const detailTrim = detail?.trim() || undefined
       const resolvedUrgency: Urgency =
-        urgency ?? (category === 'priority' ? 'urgent' : 'normal')
+        urgency ??
+        (category === 'priority' ? 'urgent' : 'normal')
       const safeUrgency: Urgency =
         category === 'todo' && resolvedUrgency === 'urgent'
           ? 'normal'
-          : resolvedUrgency
+          : category === 'deadline'
+            ? 'normal'
+            : resolvedUrgency
+      const due =
+        category === 'deadline' && dueDate && /^\d{4}-\d{2}-\d{2}$/.test(dueDate)
+          ? dueDate
+          : undefined
 
       setState((prev) => {
         const siblings = prev.tasks.filter(
@@ -226,6 +235,7 @@ export function useTasks() {
           assigneeId,
           category,
           urgency: safeUrgency,
+          dueDate: due,
           completed: false,
           order: maxOrder + 1,
           createdAt: Date.now(),
@@ -305,6 +315,20 @@ export function useTasks() {
     )
   }, [])
 
+  const updateDueDate = useCallback((taskId: string, dueDate: string) => {
+    const next =
+      typeof dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dueDate.trim())
+        ? dueDate.trim()
+        : undefined
+    setState((prev) =>
+      patchState(prev, {
+        tasks: prev.tasks.map((t) =>
+          t.id === taskId ? { ...t, dueDate: next } : t,
+        ),
+      }),
+    )
+  }, [])
+
   const updateUrgency = useCallback((taskId: string, urgency: Urgency) => {
     setState((prev) => {
       const target = prev.tasks.find((t) => t.id === taskId)
@@ -344,9 +368,13 @@ export function useTasks() {
           : task.urgency === 'low'
             ? 'low'
             : 'normal'
+      const dueDate =
+        category === 'deadline'
+          ? task.dueDate ?? new Date().toISOString().slice(0, 10)
+          : task.dueDate
       let tasks = prev.tasks.map((t) =>
         t.id === taskId
-          ? { ...t, category, order: maxOrder + 1, urgency }
+          ? { ...t, category, order: maxOrder + 1, urgency, dueDate }
           : t,
       )
       if (category === 'priority') {
@@ -428,6 +456,7 @@ export function useTasks() {
     deleteTask,
     updateTitle,
     updateDetail,
+    updateDueDate,
     updateUrgency,
     addOfficeTask,
     toggleOfficeComplete,

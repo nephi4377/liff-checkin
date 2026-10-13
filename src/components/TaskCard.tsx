@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import {
+  formatDueDateLabel,
+  isOverdue,
+} from '../dueDate'
 import type { Task, Urgency } from '../types'
 import { URGENCY_OPTIONS, urgencyLabel } from '../urgency'
 
@@ -12,6 +16,7 @@ interface TaskCardProps {
   onDelete?: (id: string) => void
   onUpdateTitle?: (id: string, title: string) => void
   onUpdateDetail?: (id: string, detail: string) => void
+  onUpdateDueDate?: (id: string, dueDate: string) => void
   onUpdateUrgency?: (id: string, urgency: Urgency) => void
   dragDisabled?: boolean
   categoryActionLabel?: string
@@ -27,6 +32,7 @@ export function TaskCard({
   onDelete,
   onUpdateTitle,
   onUpdateDetail,
+  onUpdateDueDate,
   onUpdateUrgency,
   dragDisabled,
   categoryActionLabel,
@@ -46,6 +52,7 @@ export function TaskCard({
   const [draft, setDraft] = useState(task.title)
   const [editingDetail, setEditingDetail] = useState(false)
   const [detailDraft, setDetailDraft] = useState(task.detail ?? '')
+  const [urgencyOpen, setUrgencyOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -136,32 +143,84 @@ export function TaskCard({
     <p className="task-detail">{task.detail}</p>
   ) : null
 
-  /** 優先：緊急／普通／不急；代辦：僅一般／不急（不急沉底） */
+  const overdue = isOverdue(task.dueDate, task.completed)
+  const dueBlock =
+    task.category === 'deadline' || task.dueDate ? (
+      onUpdateDueDate ? (
+        <label className={`due-date-field ${overdue ? 'is-overdue' : ''}`}>
+          <span className="due-date-label">限期</span>
+          <input
+            type="date"
+            value={task.dueDate ?? ''}
+            onChange={(e) => onUpdateDueDate(task.id, e.target.value)}
+          />
+          {overdue ? <span className="due-overdue-tag">已逾期</span> : null}
+        </label>
+      ) : task.dueDate ? (
+        <p className={`due-date-read ${overdue ? 'is-overdue' : ''}`}>
+          {formatDueDateLabel(task.dueDate)}
+          {overdue ? ' · 已逾期' : ''}
+        </p>
+      ) : null
+    ) : null
+
+  /** 優先：緊急／普通／不急；待處理：一般／不急 — 精簡 chip，點開再選 */
   const isPriority = task.category === 'priority'
-  const isTodoLow = !isPriority && task.urgency === 'low'
-  const todoLevel: 'normal' | 'low' =
-    task.urgency === 'low' ? 'low' : 'normal'
+  const isDeadline = task.category === 'deadline'
+  const isTodoLow = !isPriority && !isDeadline && task.urgency === 'low'
+  const todoOptions = [
+    { id: 'normal' as const, label: '一般' },
+    { id: 'low' as const, label: '不急' },
+  ]
+  const currentUrgencyLabel = isPriority
+    ? urgencyLabel(task.urgency)
+    : task.urgency === 'low'
+      ? '不急'
+      : '一般'
 
   let urgencyBlock: ReactNode = null
-  if (isPriority) {
+  if (isDeadline) {
+    urgencyBlock = null
+  } else if (onUpdateUrgency) {
+    const options = isPriority ? URGENCY_OPTIONS : todoOptions
     urgencyBlock = (
-      <div className="urgency-stack">
-        <span
-          className={`urgency-badge urgency-badge-lg urgency-${task.urgency}`}
-          aria-label={`緊急等級：${urgencyLabel(task.urgency)}`}
+      <div className={`urgency-compact ${urgencyOpen ? 'is-open' : ''}`}>
+        <button
+          type="button"
+          className={`urgency-chip urgency-${task.urgency === 'urgent' ? 'urgent' : task.urgency === 'low' ? 'low' : 'normal'}`}
+          aria-expanded={urgencyOpen}
+          aria-haspopup="listbox"
+          onClick={() => setUrgencyOpen((v) => !v)}
         >
-          {urgencyLabel(task.urgency)}
-        </span>
-        {onUpdateUrgency ? (
-          <div className="urgency-toggle" role="group" aria-label="緊急等級">
-            {URGENCY_OPTIONS.map((opt) => (
+          {currentUrgencyLabel}
+          <span className="urgency-chip-caret" aria-hidden>
+            {urgencyOpen ? '▴' : '▾'}
+          </span>
+        </button>
+        {urgencyOpen ? (
+          <div className="urgency-menu" role="listbox" aria-label="選擇緊急等級">
+            {options.map((opt) => (
               <button
                 key={opt.id}
                 type="button"
-                className={`urgency-btn urgency-${opt.id} ${task.urgency === opt.id ? 'is-active' : ''}`}
-                aria-pressed={task.urgency === opt.id}
+                role="option"
+                aria-selected={
+                  isPriority
+                    ? task.urgency === opt.id
+                    : (task.urgency === 'low' ? 'low' : 'normal') === opt.id
+                }
+                className={`urgency-menu-item ${
+                  (
+                    isPriority
+                      ? task.urgency === opt.id
+                      : (task.urgency === 'low' ? 'low' : 'normal') === opt.id
+                  )
+                    ? 'is-active'
+                    : ''
+                }`}
                 onClick={() => {
                   if (task.urgency !== opt.id) onUpdateUrgency(task.id, opt.id)
+                  setUrgencyOpen(false)
                 }}
               >
                 {opt.label}
@@ -171,35 +230,18 @@ export function TaskCard({
         ) : null}
       </div>
     )
-  } else if (onUpdateUrgency) {
+  } else if (isPriority) {
     urgencyBlock = (
-      <div className="urgency-stack">
-        {isTodoLow ? (
-          <span className="urgency-badge urgency-badge-lg urgency-low">不急</span>
-        ) : null}
-        <div className="todo-pace-toggle" role="group" aria-label="待處理節奏">
-          <button
-            type="button"
-            className={`todo-pace-btn ${todoLevel === 'normal' ? 'is-active' : ''}`}
-            aria-pressed={todoLevel === 'normal'}
-            onClick={() => onUpdateUrgency(task.id, 'normal')}
-          >
-            一般
-          </button>
-          <button
-            type="button"
-            className={`todo-pace-btn todo-pace-low ${todoLevel === 'low' ? 'is-active' : ''}`}
-            aria-pressed={todoLevel === 'low'}
-            onClick={() => onUpdateUrgency(task.id, 'low')}
-          >
-            不急
-          </button>
-        </div>
-      </div>
+      <span
+        className={`urgency-badge urgency-${task.urgency}`}
+        aria-label={`緊急等級：${urgencyLabel(task.urgency)}`}
+      >
+        {urgencyLabel(task.urgency)}
+      </span>
     )
   } else if (isTodoLow) {
     urgencyBlock = (
-      <span className="urgency-badge urgency-badge-lg urgency-low" aria-label="不急">
+      <span className="urgency-badge urgency-low" aria-label="不急">
         不急
       </span>
     )
@@ -233,6 +275,7 @@ export function TaskCard({
         <div className="task-body">
           {titleBlock}
           {!editing && !editingDetail ? detailBlock : editingDetail ? detailBlock : null}
+          {!editing && !editingDetail ? dueBlock : null}
           {!editing && !editingDetail ? urgencyBlock : null}
           {showActions && !editingDetail ? (
             <div className="task-actions-row">
@@ -309,6 +352,7 @@ export function TaskCard({
       <div className="task-body">
         {titleBlock}
         {!editing && !editingDetail ? detailBlock : editingDetail ? detailBlock : null}
+        {!editing && !editingDetail ? dueBlock : null}
         {!editing && !editingDetail ? urgencyBlock : null}
         {showAssignee && assigneeName && !editing ? (
           <p className="task-meta">指派給 {assigneeName}</p>

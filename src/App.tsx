@@ -31,6 +31,7 @@ export default function App() {
     moveCategory,
     updateTitle,
     updateDetail,
+    updateDueDate,
     updateUrgency,
     resetDemo,
   } = useTasks()
@@ -136,6 +137,7 @@ export default function App() {
             onMoveCategory={moveCategory}
             onUpdateTitle={updateTitle}
             onUpdateDetail={updateDetail}
+            onUpdateDueDate={updateDueDate}
             onUpdateUrgency={updateUrgency}
           />
         </main>

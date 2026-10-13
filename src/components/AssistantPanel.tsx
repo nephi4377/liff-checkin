@@ -12,12 +12,14 @@ interface AssistantPanelProps {
     category: TaskCategory,
     detail?: string,
     urgency?: Urgency,
+    dueDate?: string,
   ) => void
   onToggle: (id: string) => void
   onReorder: (assigneeId: string, category: TaskCategory, ids: string[]) => void
   onMoveCategory: (taskId: string, category: TaskCategory) => void
   onUpdateTitle: (id: string, title: string) => void
   onUpdateDetail: (id: string, detail: string) => void
+  onUpdateDueDate: (id: string, dueDate: string) => void
   onUpdateUrgency: (id: string, urgency: Urgency) => void
 }
 
@@ -33,6 +35,7 @@ export function AssistantPanel({
   onMoveCategory,
   onUpdateTitle,
   onUpdateDetail,
+  onUpdateDueDate,
   onUpdateUrgency,
 }: AssistantPanelProps) {
   const tabWorkers = useMemo(() => {
@@ -44,6 +47,7 @@ export function AssistantPanel({
   const [focusWorkerId, setFocusWorkerId] = useState(defaultId)
   const [title, setTitle] = useState('')
   const [detail, setDetail] = useState('')
+  const [dueDate, setDueDate] = useState('')
   const [category, setCategory] = useState<TaskCategory>('priority')
   const [showAdd, setShowAdd] = useState(false)
 
@@ -54,9 +58,18 @@ export function AssistantPanel({
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     if (!title.trim()) return
-    onAdd(title, focusWorkerIdSafe, category, detail)
+    if (category === 'deadline' && !dueDate) return
+    onAdd(
+      title,
+      focusWorkerIdSafe,
+      category,
+      detail,
+      undefined,
+      category === 'deadline' ? dueDate : undefined,
+    )
     setTitle('')
     setDetail('')
+    setDueDate('')
     setShowAdd(false)
   }
 
@@ -106,6 +119,7 @@ export function AssistantPanel({
         onMoveCategory={onMoveCategory}
         onUpdateTitle={onUpdateTitle}
         onUpdateDetail={onUpdateDetail}
+        onUpdateDueDate={onUpdateDueDate}
         onUpdateUrgency={onUpdateUrgency}
         simple
       />
@@ -129,7 +143,7 @@ export function AssistantPanel({
                 rows={3}
               />
             </label>
-            <div className="cat-toggle" role="group" aria-label="分類">
+            <div className="cat-toggle cat-toggle-3" role="group" aria-label="分類">
               <button
                 type="button"
                 className={category === 'priority' ? 'is-active' : ''}
@@ -144,7 +158,25 @@ export function AssistantPanel({
               >
                 待處理
               </button>
+              <button
+                type="button"
+                className={category === 'deadline' ? 'is-active' : ''}
+                onClick={() => setCategory('deadline')}
+              >
+                限期
+              </button>
             </div>
+            {category === 'deadline' ? (
+              <label className="detail-field">
+                <span className="detail-field-label">完成期限</span>
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  required
+                />
+              </label>
+            ) : null}
             <div className="simple-add-actions">
               <button
                 type="button"
@@ -152,6 +184,7 @@ export function AssistantPanel({
                 onClick={() => {
                   setShowAdd(false)
                   setDetail('')
+                  setDueDate('')
                 }}
               >
                 取消

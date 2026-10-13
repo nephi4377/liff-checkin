@@ -14,6 +14,7 @@ interface PasteImportProps {
     category: TaskCategory,
     detail?: string,
     urgency?: Urgency,
+    dueDate?: string,
   ) => void
 }
 
@@ -58,7 +59,14 @@ export function PasteImport({ onAdd }: PasteImportProps) {
     for (const p of okLines) {
       if (!selected[p.lineNo]) continue
       if (!p.assigneeId || !p.category || !p.title || !p.urgency) continue
-      onAdd(p.title, p.assigneeId, p.category, p.detail, p.urgency)
+      onAdd(
+        p.title,
+        p.assigneeId,
+        p.category,
+        p.detail,
+        p.urgency,
+        p.dueDate,
+      )
       n += 1
     }
     setAddedMsg(n > 0 ? `已加入 ${n} 件` : '未勾選任何項目')
@@ -142,14 +150,22 @@ export function PasteImport({ onAdd }: PasteImportProps) {
                       }
                     />
                     <span>
-                      {p.workerName} · {p.category === 'priority' ? '優先' : '待處理'} ·{' '}
-                      {p.urgency === 'urgent'
-                        ? '緊急'
-                        : p.urgency === 'low'
-                          ? '不急'
-                          : p.category === 'todo'
-                            ? '一般'
-                            : '普通'}{' '}
+                      {p.workerName} ·{' '}
+                      {p.category === 'priority'
+                        ? '優先'
+                        : p.category === 'deadline'
+                          ? '限期'
+                          : '待處理'}{' '}
+                      ·{' '}
+                      {p.category === 'deadline'
+                        ? p.dueDate
+                        : p.urgency === 'urgent'
+                          ? '緊急'
+                          : p.urgency === 'low'
+                            ? '不急'
+                            : p.category === 'todo'
+                              ? '一般'
+                              : '普通'}{' '}
                       · {p.title}
                       {p.detail ? (
                         <span className="paste-row-detail"> — {p.detail}</span>

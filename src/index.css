@@ -1637,6 +1637,50 @@ a.btn-ghost.top-hub-link {
   gap: 0.4rem;
 }
 
+.cat-toggle-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.due-date-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.due-date-field input[type='date'] {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.9rem;
+}
+
+.due-date-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.due-date-read {
+  margin: 0.25rem 0 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.due-date-field.is-overdue,
+.due-date-read.is-overdue,
+.office-row.is-overdue-row {
+  color: #8a2f2f;
+}
+
+.due-overdue-tag {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #b42318;
+}
+
 .cat-toggle button {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -1678,6 +1722,80 @@ a.btn-ghost.top-hub-link {
 }
 
 /* ——— Urgency (緊急／普通／不急) ——— */
+.urgency-compact {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  margin-top: 0.2rem;
+}
+
+.urgency-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.2;
+  background: #fff;
+  cursor: pointer;
+}
+
+.urgency-chip.urgency-urgent {
+  border-color: #e8a0a0;
+  background: #fff1f0;
+  color: #a32020;
+}
+
+.urgency-chip.urgency-normal {
+  border-color: #c5d4cc;
+  background: #f3f7f4;
+  color: #2a4a40;
+}
+
+.urgency-chip.urgency-low {
+  border-color: #d5d0c4;
+  background: #f7f5ef;
+  color: #6b6558;
+}
+
+.urgency-chip-caret {
+  font-size: 0.65rem;
+  opacity: 0.7;
+}
+
+.urgency-menu {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 6.5rem;
+  padding: 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  z-index: 5;
+}
+
+.urgency-menu-item {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.urgency-menu-item.is-active,
+.urgency-menu-item:active {
+  background: #e8f1ec;
+}
+
 .urgency-toggle {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;

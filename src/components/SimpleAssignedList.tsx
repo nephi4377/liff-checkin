@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { compareDeadlineTasks, formatDueDateLabel, isOverdue } from '../dueDate'
 import type { Task } from '../types'
 import { urgencyLabel } from '../urgency'
 
@@ -8,7 +9,13 @@ interface SimpleAssignedListProps {
   onToggle: (id: string) => void
 }
 
-/** Personal zone: check-only; show urgency on 優先 / 不急 on 待處理 */
+function categoryRank(c: Task['category']): number {
+  if (c === 'deadline') return 0
+  if (c === 'priority') return 1
+  return 2
+}
+
+/** Personal zone: check-only; show urgency / due dates */
 export function SimpleAssignedList({
   workerName,
   tasks,
@@ -19,9 +26,11 @@ export function SimpleAssignedList({
       [...tasks]
         .filter((t) => !t.completed)
         .sort((a, b) => {
-          const ac = a.category === 'priority' ? 0 : 1
-          const bc = b.category === 'priority' ? 0 : 1
-          if (ac !== bc) return ac - bc
+          const cr = categoryRank(a.category) - categoryRank(b.category)
+          if (cr !== 0) return cr
+          if (a.category === 'deadline' && b.category === 'deadline') {
+            return compareDeadlineTasks(a, b)
+          }
           if (a.category === 'todo' && b.category === 'todo') {
             const aLow = a.urgency === 'low' ? 1 : 0
             const bLow = b.urgency === 'low' ? 1 : 0
@@ -59,12 +68,16 @@ export function SimpleAssignedList({
           <ul className="office-list">
             {open.map((t) => {
               const isPriority = t.category === 'priority'
-              const isTodoLow = !isPriority && t.urgency === 'low'
+              const isDeadline = t.category === 'deadline'
+              const isTodoLow = !isPriority && !isDeadline && t.urgency === 'low'
+              const overdue = isOverdue(t.dueDate, t.completed)
               const tone = isPriority
                 ? `urgency-tone-${t.urgency}`
                 : isTodoLow
                   ? 'urgency-tone-low'
-                  : ''
+                  : overdue
+                    ? 'is-overdue-row'
+                    : ''
               return (
                 <li key={t.id} className={`office-row ${tone}`}>
                   <label className="office-check">
@@ -76,7 +89,13 @@ export function SimpleAssignedList({
                     <span className="sr-only">完成</span>
                   </label>
                   <div className="office-body">
-                    {isPriority ? (
+                    {isDeadline && t.dueDate ? (
+                      <span
+                        className={`urgency-badge urgency-badge-lg ${overdue ? 'urgency-urgent' : 'urgency-normal'}`}
+                      >
+                        {overdue ? '已逾期' : formatDueDateLabel(t.dueDate)}
+                      </span>
+                    ) : isPriority ? (
                       <span
                         className={`urgency-badge urgency-badge-lg urgency-${t.urgency}`}
                       >
