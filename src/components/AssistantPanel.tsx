@@ -170,7 +170,7 @@ export function AssistantPanel({
               />
             </label>
             <label className="detail-field">
-              <span className="detail-field-label">詳細說明</span>
+              <span className="detail-field-label">派工說明</span>
               <textarea
                 value={detail}
                 onChange={(e) => setDetail(e.target.value)}

@@ -17,8 +17,10 @@ export interface Worker {
 export interface Task {
   id: string
   title: string
-  /** 詳細說明（可選） */
+  /** 派工說明：派工端寫的任務說明（交代做什麼／注意什麼） */
   detail?: string
+  /** 工務說明：工務端回報（無材料、待補貨、預計何時前往…） */
+  workerNote?: string
   /** 誰派的／指派人（可選自由文字） */
   assigner?: string
   assigneeId: string

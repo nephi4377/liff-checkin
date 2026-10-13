@@ -91,7 +91,7 @@ export function OrganizePanel() {
     <section className="organize-panel" aria-label="AI 整理">
       <h2 className="organize-title">AI 整理</h2>
       <p className="organize-lead">
-        貼上或說出雜記 → 整理 → 複製 → 貼進下方「詳細說明」
+        貼上或說出雜記 → 整理 → 複製 → 貼進下方「派工說明」
       </p>
       <textarea
         className="organize-input"

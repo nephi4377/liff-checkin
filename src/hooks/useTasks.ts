@@ -330,6 +330,19 @@ export function useTasks() {
     )
   }, [])
 
+  const updateWorkerNote = useCallback((taskId: string, workerNote: string) => {
+    const trimmed = workerNote.trim()
+    setState((prev) =>
+      patchState(prev, {
+        tasks: prev.tasks.map((t) =>
+          t.id === taskId
+            ? { ...t, workerNote: trimmed || undefined }
+            : t,
+        ),
+      }),
+    )
+  }, [])
+
   const updateAssigner = useCallback((taskId: string, assigner: string) => {
     const trimmed = normalizeAssignerName(assigner)
     setState((prev) => {
@@ -507,6 +520,7 @@ export function useTasks() {
     deleteTask,
     updateTitle,
     updateDetail,
+    updateWorkerNote,
     updateAssigner,
     addAssigner,
     updateDueDate,

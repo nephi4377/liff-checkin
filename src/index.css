@@ -1406,6 +1406,45 @@ a.btn-ghost.top-hub-link {
   animation: row-settle 0.35s ease both;
 }
 
+.dispatch-note {
+  display: block;
+  width: 100%;
+  margin-top: 0.4rem;
+  text-align: left;
+  border: 1px solid rgba(30, 42, 50, 0.08);
+  border-radius: 8px;
+  background: rgba(244, 247, 246, 0.75);
+  padding: 0.4rem 0.6rem;
+}
+
+.dispatch-note-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: rgba(30, 42, 50, 0.45);
+  margin-bottom: 0.15rem;
+}
+
+.dispatch-note-body {
+  display: block;
+  white-space: pre-wrap;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.worker-note-readonly {
+  display: block;
+  width: 100%;
+  margin-top: 0.4rem;
+  text-align: left;
+  border: 1px solid rgba(31, 95, 139, 0.18);
+  border-radius: 8px;
+  background: rgba(231, 242, 248, 0.7);
+  padding: 0.4rem 0.6rem;
+}
+
 .worker-note {
   display: block;
   width: 100%;
@@ -2202,13 +2241,18 @@ a.btn-ghost.top-hub-link {
 }
 
 .task-detail-btn {
-  display: block;
+  display: grid;
+  gap: 0.15rem;
   width: 100%;
   text-align: left;
   border: none;
   background: transparent;
   padding: 0.15rem 0 0;
   cursor: pointer;
+}
+
+.task-detail-btn .detail-field-label {
+  margin: 0;
 }
 
 .task-detail {

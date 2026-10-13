@@ -7,7 +7,7 @@ interface SimpleAssignedListProps {
   workerName: string
   tasks: Task[]
   onToggle: (id: string) => void
-  onUpdateDetail: (id: string, detail: string) => void
+  onUpdateWorkerNote: (id: string, workerNote: string) => void
 }
 
 const CATEGORY_META: {
@@ -56,44 +56,54 @@ function TaskMeta({ task }: { task: Task }) {
   return null
 }
 
+function DispatchNote({ detail }: { detail: string }) {
+  return (
+    <div className="dispatch-note" aria-label="派工說明">
+      <span className="dispatch-note-label">派工說明</span>
+      <span className="dispatch-note-body">{detail}</span>
+    </div>
+  )
+}
+
 function WorkerNote({
   task,
-  onUpdateDetail,
+  onUpdateWorkerNote,
 }: {
   task: Task
-  onUpdateDetail: (id: string, detail: string) => void
+  onUpdateWorkerNote: (id: string, workerNote: string) => void
 }) {
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(task.detail ?? '')
+  const [draft, setDraft] = useState(task.workerNote ?? '')
 
   const openEdit = () => {
-    setDraft(task.detail ?? '')
+    setDraft(task.workerNote ?? '')
     setEditing(true)
   }
 
   const commit = () => {
-    onUpdateDetail(task.id, draft)
+    onUpdateWorkerNote(task.id, draft)
     setEditing(false)
   }
 
   if (editing) {
     return (
       <div className="worker-note is-editing">
+        <span className="worker-note-label">工務說明</span>
         <textarea
           className="worker-note-input"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           rows={3}
-          placeholder="進度、材料、注意事項…"
+          placeholder="無材料、待補貨、預計何時前往…"
           autoFocus
-          aria-label="任務說明"
+          aria-label="工務說明"
         />
         <div className="worker-note-actions">
           <button
             type="button"
             className="btn-ghost worker-note-cancel"
             onClick={() => {
-              setDraft(task.detail ?? '')
+              setDraft(task.workerNote ?? '')
               setEditing(false)
             }}
           >
@@ -104,23 +114,23 @@ function WorkerNote({
             className="btn-primary worker-note-save"
             onClick={commit}
           >
-            儲存說明
+            儲存
           </button>
         </div>
       </div>
     )
   }
 
-  if (task.detail?.trim()) {
+  if (task.workerNote?.trim()) {
     return (
       <button
         type="button"
         className="worker-note has-text"
         onClick={openEdit}
-        aria-label="編輯說明"
+        aria-label="編輯工務說明"
       >
-        <span className="worker-note-label">說明</span>
-        <span className="worker-note-body">{task.detail}</span>
+        <span className="worker-note-label">工務說明</span>
+        <span className="worker-note-body">{task.workerNote}</span>
       </button>
     )
   }
@@ -130,9 +140,9 @@ function WorkerNote({
       type="button"
       className="worker-note is-empty"
       onClick={openEdit}
-      aria-label="新增說明"
+      aria-label="新增工務說明"
     >
-      ＋ 新增說明
+      ＋ 工務說明
     </button>
   )
 }
@@ -141,12 +151,12 @@ function AssignedRow({
   task,
   checked,
   onToggle,
-  onUpdateDetail,
+  onUpdateWorkerNote,
 }: {
   task: Task
   checked: boolean
   onToggle: (id: string) => void
-  onUpdateDetail: (id: string, detail: string) => void
+  onUpdateWorkerNote: (id: string, workerNote: string) => void
 }) {
   const overdue = isOverdue(task.dueDate, task.completed)
   const tone =
@@ -176,7 +186,8 @@ function AssignedRow({
         {task.assigner ? (
           <p className="task-assigner">派自 {task.assigner}</p>
         ) : null}
-        <WorkerNote task={task} onUpdateDetail={onUpdateDetail} />
+        {task.detail?.trim() ? <DispatchNote detail={task.detail} /> : null}
+        <WorkerNote task={task} onUpdateWorkerNote={onUpdateWorkerNote} />
       </div>
     </li>
   )
@@ -188,14 +199,14 @@ function CategoryBlock({
   empty,
   tasks,
   onToggle,
-  onUpdateDetail,
+  onUpdateWorkerNote,
 }: {
   category: TaskCategory
   title: string
   empty: string
   tasks: Task[]
   onToggle: (id: string) => void
-  onUpdateDetail: (id: string, detail: string) => void
+  onUpdateWorkerNote: (id: string, workerNote: string) => void
 }): ReactNode {
   return (
     <section
@@ -218,7 +229,7 @@ function CategoryBlock({
               task={t}
               checked={false}
               onToggle={onToggle}
-              onUpdateDetail={onUpdateDetail}
+              onUpdateWorkerNote={onUpdateWorkerNote}
             />
           ))}
         </ul>
@@ -227,12 +238,12 @@ function CategoryBlock({
   )
 }
 
-/** 工務：四大區塊＋每任務下方說明區（可編輯、同步） */
+/** 工務：四大區塊＋派工說明（只讀）＋工務說明（可編輯、同步） */
 export function SimpleAssignedList({
   workerName,
   tasks,
   onToggle,
-  onUpdateDetail,
+  onUpdateWorkerNote,
 }: SimpleAssignedListProps) {
   const byCategory = useMemo(() => {
     const map = {
@@ -276,7 +287,7 @@ export function SimpleAssignedList({
             empty={c.empty}
             tasks={byCategory[c.id]}
             onToggle={onToggle}
-            onUpdateDetail={onUpdateDetail}
+            onUpdateWorkerNote={onUpdateWorkerNote}
           />
         ))}
       </div>
@@ -300,7 +311,7 @@ export function SimpleAssignedList({
                 task={t}
                 checked
                 onToggle={onToggle}
-                onUpdateDetail={onUpdateDetail}
+                onUpdateWorkerNote={onUpdateWorkerNote}
               />
             ))}
           </ul>

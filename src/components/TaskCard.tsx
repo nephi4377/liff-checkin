@@ -123,13 +123,14 @@ export function TaskCard({
 
   const detailBlock = editingDetail && onUpdateDetail ? (
     <div className="detail-field">
+      <span className="detail-field-label">派工說明</span>
       <textarea
         className="task-detail-edit"
         value={detailDraft}
         onChange={(e) => setDetailDraft(e.target.value)}
         onBlur={commitDetail}
         rows={5}
-        aria-label="詳細說明"
+        aria-label="派工說明"
         placeholder="可貼上上方 AI 整理後的說明"
         autoFocus
       />
@@ -142,13 +143,26 @@ export function TaskCard({
       onClick={() => setEditingDetail(true)}
     >
       {task.detail ? (
-        <span className="task-detail">{task.detail}</span>
+        <>
+          <span className="detail-field-label">派工說明</span>
+          <span className="task-detail">{task.detail}</span>
+        </>
       ) : (
-        <span className="task-detail-empty">＋ 詳細說明</span>
+        <span className="task-detail-empty">＋ 派工說明</span>
       )}
     </button>
   ) : task.detail ? (
-    <p className="task-detail">{task.detail}</p>
+    <div className="detail-field">
+      <span className="detail-field-label">派工說明</span>
+      <p className="task-detail">{task.detail}</p>
+    </div>
+  ) : null
+
+  const workerNoteBlock = task.workerNote?.trim() ? (
+    <div className="worker-note-readonly" aria-label="工務說明">
+      <span className="worker-note-label">工務說明</span>
+      <span className="worker-note-body">{task.workerNote}</span>
+    </div>
   ) : null
 
   const assignerBlock =
@@ -294,6 +308,7 @@ export function TaskCard({
           {titleBlock}
           {!editing && !editingDetail ? assignerBlock : null}
           {!editing && !editingDetail ? detailBlock : editingDetail ? detailBlock : null}
+          {!editing && !editingDetail ? workerNoteBlock : null}
           {!editing && !editingDetail ? dueBlock : null}
           {!editing && !editingDetail ? urgencyBlock : null}
           {showActions && !editingDetail ? (
@@ -363,6 +378,7 @@ export function TaskCard({
         {titleBlock}
         {!editing && !editingDetail ? assignerBlock : null}
         {!editing && !editingDetail ? detailBlock : editingDetail ? detailBlock : null}
+        {!editing && !editingDetail ? workerNoteBlock : null}
         {!editing && !editingDetail ? dueBlock : null}
         {!editing && !editingDetail ? urgencyBlock : null}
         {showAssignee && assigneeName && !editing ? (

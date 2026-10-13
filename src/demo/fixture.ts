@@ -28,6 +28,7 @@ export function buildDemoState(): AppState {
         createdAt: now,
         assigner: '羊',
         detail: '客廳窗邊先補，乾了再磨。',
+        workerNote: '無材料，預計明日下午補貨後前往。',
       },
       {
         id: 'demo-p2',

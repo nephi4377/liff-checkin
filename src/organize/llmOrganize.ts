@@ -11,7 +11,7 @@ export function hasLlmKey(): boolean {
   return getOrganizeMode() === 'llm'
 }
 
-const SYSTEM = `你是工地派工小助手。把雜亂中文派工筆記整理成可直接貼進「詳細說明」的繁體中文。
+const SYSTEM = `你是工地派工小助手。把雜亂中文派工筆記整理成可直接貼進「派工說明」的繁體中文。
 輸出格式（務必遵守）：
 1) 第一行：短標題（可含單號如 #786、主要工序、對象）
 2) 空一行後用「・」條列細節

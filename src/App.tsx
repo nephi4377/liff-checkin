@@ -32,6 +32,7 @@ export default function App() {
     moveCategory,
     updateTitle,
     updateDetail,
+    updateWorkerNote,
     updateAssigner,
     addAssigner,
     updateDueDate,
@@ -169,7 +170,7 @@ export default function App() {
             workerName={workerName}
             tasks={myTasks}
             onToggle={toggleComplete}
-            onUpdateDetail={updateDetail}
+            onUpdateWorkerNote={updateWorkerNote}
           />
         </main>
       </div>

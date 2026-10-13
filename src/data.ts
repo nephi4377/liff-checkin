@@ -135,6 +135,8 @@ function normalizeTaskFields(t: Task): Task {
   }
   const detail =
     typeof t.detail === 'string' ? t.detail.trim() : ''
+  const workerNote =
+    typeof t.workerNote === 'string' ? t.workerNote.trim() : ''
   const assigner =
     typeof t.assigner === 'string' ? t.assigner.trim() : ''
   const category = normalizeCategory(t.category)
@@ -147,6 +149,7 @@ function normalizeTaskFields(t: Task): Task {
     category,
     urgency: normalizeUrgency(t.urgency),
     detail: detail || undefined,
+    workerNote: workerNote || undefined,
     assigner: assigner || undefined,
     dueDate,
     completed,
@@ -283,6 +286,8 @@ export function ensureDispatchState(state: AppState): AppState {
         ...existing,
         completed: existing.completed || t.completed,
         title: existing.title || t.title,
+        detail: existing.detail || t.detail,
+        workerNote: existing.workerNote || t.workerNote,
         urgency: normalizeUrgency(existing.urgency ?? t.urgency),
         completedAt: existing.completedAt ?? t.completedAt,
       })
