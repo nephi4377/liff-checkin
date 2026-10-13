@@ -653,6 +653,223 @@ index a8a135d..bc7cb3d 100644
          {!editing && !editingDetail ? detailBlock : editingDetail ? detailBlock : null}
          {!editing && !editingDetail ? dueBlock : null}
          {!editing && !editingDetail ? urgencyBlock : null}
+diff --git a/src/demo/fixture.ts b/src/demo/fixture.ts
+new file mode 100644
+index 0000000..24ca00a
+--- /dev/null
++++ b/src/demo/fixture.ts
+@@ -0,0 +1,130 @@
++import { STORAGE_KEY } from '../data'
++import { PROFILE_KEY } from '../profile'
++import type { AppState } from '../types'
++
++/** 僅 ?demo=1 才用假資料／略過雲端；預設與正式站一樣走 MantleDB */
++export function isDemoHost(): boolean {
++  if (typeof window === 'undefined') return false
++  const demo = new URLSearchParams(window.location.search).get('demo')
++  return demo === '1' || demo === 'true'
++}
++
++export function buildDemoState(): AppState {
++  const now = Date.now()
++  return {
++    workers: [
++      { id: 'ops-ende', name: '恩德' },
++      { id: 'ops-ayong', name: '阿勇' },
++    ],
++    tasks: [
++      {
++        id: 'demo-p1',
++        title: '【751】補土',
++        assigneeId: 'ops-ende',
++        category: 'priority',
++        urgency: 'urgent',
++        order: 0,
++        completed: false,
++        createdAt: now,
++        assigner: '羊',
++        detail: '客廳窗邊先補，乾了再磨。',
++      },
++      {
++        id: 'demo-p2',
++        title: '【786】帶 PP 板',
++        assigneeId: 'ops-ende',
++        category: 'priority',
++        urgency: 'normal',
++        order: 1,
++        completed: false,
++        createdAt: now - 1,
++        assigner: '羊',
++      },
++      {
++        id: 'demo-d1',
++        title: '本週交現場照片',
++        assigneeId: 'ops-ende',
++        category: 'deadline',
++        urgency: 'normal',
++        dueDate: '2026-10-20',
++        order: 0,
++        completed: false,
++        createdAt: now - 2,
++        assigner: '羊',
++      },
++      {
++        id: 'demo-d2',
++        title: '逾期：補交測量紀錄',
++        assigneeId: 'ops-ende',
++        category: 'deadline',
++        urgency: 'normal',
++        dueDate: '2026-10-01',
++        order: 1,
++        completed: false,
++        createdAt: now - 3,
++        assigner: '羊',
++      },
++      {
++        id: 'demo-t1',
++        title: '拍照：收邊條放置位置',
++        assigneeId: 'ops-ende',
++        category: 'todo',
++        urgency: 'normal',
++        order: 0,
++        completed: false,
++        createdAt: now - 4,
++      },
++      {
++        id: 'demo-t2',
++        title: '整理工具車（不急）',
++        assigneeId: 'ops-ende',
++        category: 'todo',
++        urgency: 'low',
++        order: 1,
++        completed: false,
++        createdAt: now - 5,
++      },
++      {
++        id: 'demo-ay1',
++        title: '取修邊刀一支',
++        assigneeId: 'ops-ayong',
++        category: 'priority',
++        urgency: 'urgent',
++        order: 0,
++        completed: false,
++        createdAt: now - 6,
++        assigner: '羊',
++      },
++      {
++        id: 'demo-ay2',
++        title: '清運紙箱',
++        assigneeId: 'ops-ayong',
++        category: 'todo',
++        urgency: 'normal',
++        order: 0,
++        completed: false,
++        createdAt: now - 7,
++      },
++    ],
++    officeTasks: [],
++    deletedIds: [],
++    updatedAt: now,
++  }
++}
++
++/** 在 React 掛載前寫入 demo 資料；回傳是否為 demo 模式 */
++export function bootstrapDemoIfNeeded(): boolean {
++  if (!isDemoHost()) return false
++  const state = buildDemoState()
++  localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
++  localStorage.setItem(
++    PROFILE_KEY,
++    JSON.stringify({
++      displayName: '羊',
++      role: 'assistant',
++      fieldPin: '2468',
++      linkedAt: Date.now(),
++    }),
++  )
++  return true
++}
+diff --git a/src/hooks/useTasks.ts b/src/hooks/useTasks.ts
+index 5603174..cb3a470 100644
+--- a/src/hooks/useTasks.ts
++++ b/src/hooks/useTasks.ts
+@@ -7,6 +7,7 @@ import {
+   loadState,
+   saveState,
+ } from '../data'
++import { isDemoHost } from '../demo/fixture'
+ import { pullCloud, pushCloud } from '../sync/cloud'
+ import { SYNC_POLL_MS, SYNC_PUSH_DEBOUNCE_MS } from '../sync/config'
+ import type {
+@@ -64,8 +65,11 @@ export function useTasks() {
+     setSyncStatus((prev) => (prev === next ? prev : next))
+   }, [])
+ 
++  const demoMode = typeof window !== 'undefined' && isDemoHost()
++
+   const pushSoon = useCallback(
+     (next?: AppState) => {
++      if (demoMode) return
+       const payload = next ?? stateRef.current
+       if (pushTimerRef.current) window.clearTimeout(pushTimerRef.current)
+       pushTimerRef.current = window.setTimeout(async () => {
+@@ -84,21 +88,28 @@ export function useTasks() {
+         }
+       }, SYNC_PUSH_DEBOUNCE_MS)
+     },
+-    [setSyncStatusSafe],
++    [demoMode, setSyncStatusSafe],
+   )
+ 
+   // Local edits → cloud (ignore the render that applied a pull)
+   useEffect(() => {
++    if (demoMode) return
+     if (!hydratedRef.current) return
+     if (applyFromCloudRef.current) {
+       applyFromCloudRef.current = false
+       return
+     }
+     pushSoon()
+-  }, [state.updatedAt, pushSoon])
++  }, [demoMode, state.updatedAt, pushSoon])
+ 
+-  // Initial pull + poll
++  // Initial pull + poll（demo 本機略過雲端）
+   useEffect(() => {
++    if (demoMode) {
++      hydratedRef.current = true
++      setSyncStatusSafe('ok')
++      return
++    }
++
+     let cancelled = false
+ 
+     const applyRemoteIfNewer = (remote: AppState) => {
+@@ -194,7 +205,7 @@ export function useTasks() {
+       document.removeEventListener('visibilitychange', onVisibility)
+       if (pushTimerRef.current) window.clearTimeout(pushTimerRef.current)
+     }
+-  }, [pushSoon, setSyncStatusSafe])
++  }, [demoMode, pushSoon, setSyncStatusSafe])
+ 
+   const addTask = useCallback(
+     (
+@@ -455,10 +466,14 @@ export function useTasks() {
+     clearStoredState()
+     const next = createSeedState()
+     setState(next)
++    if (demoMode) {
++      setSyncStatusSafe('ok')
++      return
++    }
+     void pushCloud(next)
+       .then(() => setSyncStatusSafe('ok'))
+       .catch(() => setSyncStatusSafe('error'))
+-  }, [setSyncStatusSafe])
++  }, [demoMode, setSyncStatusSafe])
+ 
+   return {
+     workers: state.workers,
 diff --git a/src/index.css b/src/index.css
 index 4f779c7..57a3508 100644
 --- a/src/index.css
@@ -1218,6 +1435,22 @@ index 4f779c7..57a3508 100644
  }
  
  .cat-toggle {
+diff --git a/src/main.tsx b/src/main.tsx
+index fab1219..bee4f2a 100644
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@ -1,8 +1,11 @@
+ import { StrictMode } from 'react'
+ import { createRoot } from 'react-dom/client'
+ import App from './App'
++import { bootstrapDemoIfNeeded } from './demo/fixture'
+ import './index.css'
+ 
++bootstrapDemoIfNeeded()
++
+ createRoot(document.getElementById('root')!).render(
+   <StrictMode>
+     <App />
 diff --git a/vite.config.ts b/vite.config.ts
 index 7960147..44fc542 100644
 --- a/vite.config.ts
