@@ -12,6 +12,9 @@ var AccountingTaxMode = (function () {
   var TAX_RATE = 0.05;
 
   function parseAmount(v) {
+    if (typeof AccountingAmountFormula !== 'undefined') {
+      return AccountingAmountFormula.parseAmount(v);
+    }
     var n = parseInt(String(v == null ? '' : v).replace(/[,，\s]/g, ''), 10);
     return isNaN(n) ? NaN : n;
   }

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>金額公式預覽（本機示範）</title>
+  <link rel="stylesheet" href="../../../shared/css/accounting_layout.css?v=8" />
+  <script src="../../../shared/js/accounting_amount_formula.js?v=1"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 420px; margin: 24px auto; padding: 0 16px; }
+    label { display: block; font-weight: 600; margin-top: 12px; }
+    input { width: 100%; padding: 10px; font-size: 16px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; }
+    .pay-totals { margin-top: 16px; text-align: right; }
+    .pay-total-primary { font-size: 22px; font-weight: 700; color: #1a73e8; }
+    .pay-total-secondary { font-size: 13px; color: #5f6368; margin-top: 4px; }
+    .note { color: #666; font-size: 13px; line-height: 1.45; }
+  </style>
+</head>
+<body>
+  <h1 style="font-size:18px">金額公式＋合計字級（示範）</h1>
+  <p class="note">不需登入。金額欄打 <code>=1000+50</code>，下方會出現結果小字；右側合計以「支付合計」為大字。</p>
+  <label>金額（分攤）</label>
+  <input id="amt" type="text" inputmode="decimal" data-amount-formula placeholder="數字或 =1000+50" />
+  <div class="pay-totals">
+    <div class="pay-total-primary">支付合計 $<span id="pay">0</span></div>
+    <div class="pay-total-secondary" id="sec" hidden>未稅合計 $<span id="pre">0</span></div>
+  </div>
+  <script>
+    (function () {
+      var inp = document.getElementById('amt');
+      AccountingAmountFormula.bindInput(inp, {
+        onResolved: function (n) {
+          document.getElementById('pay').textContent = isNaN(n) ? '—' : n.toLocaleString('zh-TW');
+        }
+      });
+      inp.addEventListener('input', function () {
+        var n = AccountingAmountFormula.parseAmount(inp.value);
+        document.getElementById('pay').textContent = isNaN(n) ? '—' : n.toLocaleString('zh-TW');
+      });
+    })();
+  </script>
+</body>
+</html>

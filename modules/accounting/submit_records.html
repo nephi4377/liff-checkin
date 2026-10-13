@@ -7,12 +7,13 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <title>送出紀錄</title>
   <!-- 新介面（請款管線第 2 站）：主職＝修改已送審請款資料並同步審核／匯款。非歷史記帳改名；收支查詢見 ledger_history.html -->
-  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=7" />
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=8" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
+  <script src="../../shared/js/accounting_amount_formula.js?v=1"></script>
   <script src="../../shared/js/accounting_api.js?v=106"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
-  <script src="../../shared/js/accounting_form_helpers.js?v=6"></script>
+  <script src="../../shared/js/accounting_form_helpers.js?v=7"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=19"></script>
   <script src="../../shared/js/accounting_ui.js?v=33"></script>
   <script src="../../shared/js/accounting_nav.js?v=4"></script>
@@ -461,13 +462,16 @@
           wrap.className = 'sr-alloc-row';
           wrap.innerHTML =
             '<input type="text" data-f="project_no" placeholder="案號" value="' + escHtml(row.project_no || '') + '" />' +
-            '<input type="number" data-f="amount" inputmode="numeric" placeholder="金額" value="' +
+            '<input type="text" data-f="amount" inputmode="decimal" data-amount-formula placeholder="金額或 =1000+50" value="' +
               escHtml(row.amount != null && row.amount !== '' ? row.amount : '') + '" />' +
             '<input type="text" data-f="item_desc" placeholder="品項（選填）" value="' + escHtml(row.item_desc || '') + '" />' +
             '<button type="button" class="btn-ghost" data-act="rm">刪</button>';
           wrap.querySelector('[data-act="rm"]').addEventListener('click', function () {
             wrap.remove();
           });
+          if (typeof AccountingAmountFormula !== 'undefined') {
+            AccountingAmountFormula.bindInput(wrap.querySelector('[data-f="amount"]'));
+          }
           list.appendChild(wrap);
         }
         var rows = (allocations && allocations.length)
@@ -491,7 +495,9 @@
           var amountRaw = (row.querySelector('[data-f="amount"]').value || '').trim();
           var item_desc = (row.querySelector('[data-f="item_desc"]').value || '').trim();
           if (!project_no && !amountRaw && !item_desc) return;
-          var amount = parseInt(amountRaw, 10);
+          var amount = (typeof AccountingAmountFormula !== 'undefined')
+            ? AccountingAmountFormula.parseAmount(amountRaw)
+            : parseInt(String(amountRaw).replace(/[,，\s]/g, ''), 10);
           if (!project_no || !isFinite(amount) || amount === 0) return;
           out.push({ project_no: project_no, amount: amount, item_desc: item_desc });
         });

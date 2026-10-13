@@ -4,16 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>待付款請款</title>
-  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=7" />
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=8" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
-  <script src="../../shared/js/accounting_tax_mode.js?v=9"></script>
+  <script src="../../shared/js/accounting_amount_formula.js?v=1"></script>
+  <script src="../../shared/js/accounting_tax_mode.js?v=10"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_context.js?v=3"></script>
   <script src="../../shared/js/accounting_api.js?v=104"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
-  <script src="../../shared/js/accounting_form_helpers.js?v=6"></script>
+  <script src="../../shared/js/accounting_form_helpers.js?v=7"></script>
   <script src="../../shared/js/accounting_ui.js?v=26"></script>
   <script src="../../shared/js/accounting_nav.js?v=4"></script>
   <script src="../../shared/js/accounting_boot.js?v=11"></script>
@@ -59,6 +60,10 @@
     .tax-mode-prorate-row { margin-top: 8px; }
     .tax-mode-prorate-row.hidden { display: none; }
     .pretax-hint { font-size: 12px; color: #666; }
+    .pay-totals { margin-top: 12px; text-align: right; }
+    .pay-total-primary { font-size: 22px; font-weight: 700; color: #1a73e8; line-height: 1.3; }
+    .pay-total-secondary { font-size: 13px; font-weight: 500; color: #5f6368; margin-top: 4px; line-height: 1.35; }
+    .pay-total-secondary.hidden { display: none; }
     .total-line { font-size: 18px; font-weight: 700; margin-top: 10px; text-align: right; }
     .photo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
     .photo-tile {
@@ -302,9 +307,12 @@
       </div>
       <div id="allocList"></div>
       <button type="button" class="btn btn-ghost" id="addAllocBtn">＋ 新增一列</button>
-      <div class="total-line"><span id="totalLabel">合計</span> $<span id="totalAmt">0</span></div>
-      <p class="sub" id="taxBreakdown" style="margin:4px 0 0;text-align:right;color:#555;font-size:13px;"></p>
-      <p class="sub" id="remitFeeHint" style="margin:4px 0 0;text-align:right;color:#555;font-size:13px;"></p>
+      <div class="pay-totals" id="payTotals">
+        <div class="pay-total-primary"><span id="payableLabel">支付合計</span> $<span id="payableAmt">0</span></div>
+        <div class="pay-total-secondary hidden" id="pretaxLine">未稅合計 $<span id="pretaxAmt">0</span><span id="taxAmtPart"></span></div>
+        <p class="sub" id="taxBreakdown" style="margin:4px 0 0;color:#555;font-size:12px;"></p>
+        <p class="sub" id="remitFeeHint" style="margin:4px 0 0;color:#555;font-size:12px;"></p>
+      </div>
 
       <label>備註（選填）</label>
       <input type="text" id="note" />
@@ -1053,7 +1061,7 @@
           ' data-base-amount="' + baseAttr + '">' +
           '<button type="button" class="rm" data-rm="' + idx + '">刪除</button>' +
           '<div class="row2"><div><label>案號' + src + '</label><input class="inp-pn" value="' + (row.project_no || '') + '" placeholder="752" /></div>' +
-          '<div><label>' + (taxMode === 'prorate' || !checked ? '金額（未稅）' : '金額') + '</label><input class="inp-amt" type="number" inputmode="numeric" placeholder="折讓填負數" value="' + (row.amount || '') + '" /></div></div>' +
+          '<div><label>' + (taxMode === 'prorate' || !checked ? '金額（未稅）' : '金額') + '</label><input class="inp-amt" type="text" inputmode="decimal" data-amount-formula placeholder="折讓填負數或 =1000+50" value="' + (row.amount || '') + '" /></div></div>' +
           '<label>品項</label><input class="inp-desc" value="' + (row.item_desc || '') + '" placeholder="摘要" />' +
           taxRowHtml + '</div>';
       }
@@ -1204,7 +1212,12 @@
       }
 
       function finalizedAllocRows() {
-        var rows = readAllocRows();
+        var rows = readAllocRows().map(function (r) {
+          var copy = Object.assign({}, r);
+          var n = parseAllocAmount(r.amount);
+          if (!isNaN(n)) copy.amount = n;
+          return copy;
+        });
         if (!rows.length || typeof AccountingTaxMode === 'undefined' || taxMode === 'inclusive') return rows;
         return AccountingTaxMode.applyModeToRows(rows, taxMode, {
           prevMode: taxMode,
@@ -1228,41 +1241,73 @@
       function updateTotal() {
         var rows = readAllocRows();
         var sum = rows.reduce(function (s, r) {
-          return s + (parseInt(r.amount, 10) || 0);
+          var n = parseAllocAmount(r.amount);
+          return s + (isNaN(n) ? 0 : n);
         }, 0);
         var payable = sum;
+        var pretax = sum;
+        var taxAmt = 0;
         var br = document.getElementById('taxBreakdown');
+        var payableLabel = document.getElementById('payableLabel');
+        var payableAmt = document.getElementById('payableAmt');
+        var pretaxLine = document.getElementById('pretaxLine');
+        var pretaxAmt = document.getElementById('pretaxAmt');
+        var taxAmtPart = document.getElementById('taxAmtPart');
         if (br && typeof AccountingTaxMode !== 'undefined') {
           var s = AccountingTaxMode.summarize(rows, taxMode, getProrateTaxInput());
           payable = taxMode === 'prorate' ? s.payable : sum;
-          var lab = document.getElementById('totalLabel');
-          if (lab) lab.textContent = taxMode === 'prorate' ? '未稅合計' : '合計';
-          document.getElementById('totalAmt').textContent = (taxMode === 'prorate' ? s.pretax : sum).toLocaleString('zh-TW');
+          pretax = taxMode === 'prorate' ? s.pretax : sum;
+          taxAmt = s.tax || 0;
           if (taxMode === 'inclusive') {
+            if (payableLabel) payableLabel.textContent = '支付合計';
             br.textContent = sum > 0 ? '各列自選未稅或含稅，金額照填、不另加 5%' : '';
             br.style.color = '';
-          } else if (taxMode === 'prorate' && (sum > 0 || s.tax > 0)) {
+            if (pretaxLine) pretaxLine.classList.add('hidden');
+          } else if (taxMode === 'prorate') {
+            if (payableLabel) payableLabel.textContent = '支付合計';
+            if (pretaxLine) {
+              pretaxLine.classList.toggle('hidden', !(sum > 0 || taxAmt > 0));
+              if (pretaxAmt) pretaxAmt.textContent = pretax.toLocaleString('zh-TW');
+              if (taxAmtPart) {
+                taxAmtPart.textContent = taxAmt > 0
+                  ? ' · 稅 $' + taxAmt.toLocaleString('zh-TW')
+                  : '';
+              }
+            }
             var warnP = AccountingTaxMode.taxSanityMessage(s.pretax, s.tax, taxMode);
-            br.textContent = '整張稅 $' + s.tax.toLocaleString('zh-TW') +
-              ' → 送出後各案合計 $' + s.payable.toLocaleString('zh-TW') +
-              (warnP ? '。' + warnP : '');
+            br.textContent = (sum > 0 || taxAmt > 0)
+              ? ('整張加稅後實付；未稅見上方小字' + (warnP ? '。' + warnP : ''))
+              : '';
             br.style.color = warnP ? '#b45309' : '';
           } else if (s.tax > 0) {
+            if (payableLabel) payableLabel.textContent = '支付合計';
+            payable = s.payable != null ? s.payable : sum;
+            if (pretaxLine) {
+              pretaxLine.classList.remove('hidden');
+              if (pretaxAmt) pretaxAmt.textContent = s.pretax.toLocaleString('zh-TW');
+              if (taxAmtPart) taxAmtPart.textContent = ' · 稅 $' + s.tax.toLocaleString('zh-TW');
+            }
             var warn = AccountingTaxMode.taxSanityMessage(s.pretax, s.tax, taxMode);
-            br.textContent = '未稅 $' + s.pretax.toLocaleString('zh-TW') +
-              ' ＋ 稅 $' + s.tax.toLocaleString('zh-TW') +
-              (warn ? '。' + warn : '');
+            br.textContent = warn || '';
             br.style.color = warn ? '#b45309' : '';
           } else if (sum > 0) {
+            if (payableLabel) payableLabel.textContent = '支付合計';
+            if (pretaxLine) pretaxLine.classList.add('hidden');
             br.textContent = '尚未加稅：請確認已選未稅模式，金額欄填未稅（填完會自動加 5%）';
             br.style.color = '';
           } else {
+            if (payableLabel) payableLabel.textContent = '支付合計';
+            if (pretaxLine) pretaxLine.classList.add('hidden');
             br.textContent = '';
             br.style.color = '';
           }
-        } else {
-          document.getElementById('totalAmt').textContent = sum.toLocaleString('zh-TW');
+        } else if (pretaxLine) {
+          pretaxLine.classList.add('hidden');
         }
+        if (payableAmt) payableAmt.textContent = payable.toLocaleString('zh-TW');
+        /* 相容舊測試／腳本若仍查 totalAmt */
+        var legacyTotal = document.getElementById('totalAmt');
+        if (legacyTotal) legacyTotal.textContent = payable.toLocaleString('zh-TW');
         var hint = document.getElementById('remitFeeHint');
         var preview = remitFeePreview(payable);
         var deduct = selectedVendorRemitFeeDefault();
@@ -1287,12 +1332,18 @@
       }
 
       function bindAllocEvents() {
+        if (typeof AccountingAmountFormula !== 'undefined') {
+          AccountingAmountFormula.enhanceContainer(document.getElementById('allocList'), '.inp-amt');
+        }
         document.querySelectorAll('#allocList .inp-amt, #allocList .inp-pn, #allocList .inp-desc').forEach(function (inp) {
           inp.oninput = function () {
             var row = inp.closest('.alloc-row');
             if (row) {
               row.setAttribute('data-source', 'manual');
               if (inp.classList.contains('inp-amt')) {
+                if (typeof AccountingAmountFormula !== 'undefined') {
+                  AccountingAmountFormula.refreshPreview(inp);
+                }
                 updatePretaxHint(row);
                 var a = parseAllocAmount(inp.value);
                 if (!isNaN(a)) row.setAttribute('data-base-amount', String(a));
@@ -1595,6 +1646,9 @@
       }
 
       function parseAllocAmount(val) {
+        if (typeof AccountingAmountFormula !== 'undefined') {
+          return AccountingAmountFormula.parseAmount(val);
+        }
         var s = String(val || '').trim().replace(/[,，\s]/g, '');
         if (!s) return NaN;
         var n = parseInt(s, 10);

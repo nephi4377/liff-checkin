@@ -278,7 +278,7 @@ var AccountingFormHelpers = (function () {
     return '<div class="alloc-row" data-idx="' + idx + '">' + delBtn +
       '<div class="row2">' +
       '<div><label>案號</label><input class="alloc-pn" list="projectNoList" value="' + escapeAttr_(row.project_no) + '" placeholder="752" /></div>' +
-      '<div><label>金額</label><input class="alloc-amt" type="number" inputmode="numeric" value="' + escapeAttr_(row.amount) + '" /></div>' +
+      '<div><label>金額</label><input class="alloc-amt" type="text" inputmode="decimal" data-amount-formula placeholder="數字或 =1000+50" value="' + escapeAttr_(row.amount) + '" /></div>' +
       '</div>' +
       '<label>品項</label><input class="alloc-desc" type="text" value="' + escapeAttr_(row.item_desc) + '" placeholder="例：油漆、五金" />' +
       '</div>';
@@ -329,9 +329,17 @@ var AccountingFormHelpers = (function () {
       return rows;
     }
 
+    function parseAmt_(val) {
+      if (typeof AccountingAmountFormula !== 'undefined') {
+        var n = AccountingAmountFormula.parseAmount(val);
+        return isNaN(n) ? 0 : n;
+      }
+      return parseInt(String(val || '').replace(/[,，\s]/g, ''), 10) || 0;
+    }
+
     function sumRows(rows) {
       return rows.reduce(function (s, r) {
-        return s + (parseInt(r.amount, 10) || 0);
+        return s + parseAmt_(r.amount);
       }, 0);
     }
 
@@ -352,7 +360,7 @@ var AccountingFormHelpers = (function () {
       var sum = sumRows(filled);
       if (sumEl) sumEl.textContent = sum.toLocaleString('zh-TW');
       if (!hintEl || !amountEl) return;
-      var total = parseInt(amountEl.value, 10) || 0;
+      var total = parseAmt_(amountEl.value);
       if (!filled.length) {
         hintEl.textContent = '每筆支出至少填一列：案號、品項、金額；加總須等於支付金額。';
         hintEl.classList.remove('warn');
@@ -414,6 +422,9 @@ var AccountingFormHelpers = (function () {
         newRow.querySelectorAll('.alloc-pn, .alloc-amt, .alloc-desc').forEach(function (inp) {
           inp.oninput = updateSum;
         });
+        if (typeof AccountingAmountFormula !== 'undefined') {
+          AccountingAmountFormula.enhanceContainer(newRow, '.alloc-amt');
+        }
       }
       syncRowChrome();
     }
@@ -424,8 +435,16 @@ var AccountingFormHelpers = (function () {
     }
 
     function bindRowEvents() {
+      if (typeof AccountingAmountFormula !== 'undefined') {
+        AccountingAmountFormula.enhanceContainer(containerEl, '.alloc-amt');
+      }
       containerEl.querySelectorAll('.alloc-pn, .alloc-amt, .alloc-desc').forEach(function (inp) {
-        inp.oninput = updateSum;
+        inp.oninput = function () {
+          if (inp.classList.contains('alloc-amt') && typeof AccountingAmountFormula !== 'undefined') {
+            AccountingAmountFormula.refreshPreview(inp);
+          }
+          updateSum();
+        };
       });
       bindDeleteButtons();
     }
@@ -454,11 +473,17 @@ var AccountingFormHelpers = (function () {
           return { ok: false, message: '請至少填一筆分攤明細（案號、品項、金額）' };
         }
         var sum = sumRows(rows);
-        var total = amountEl ? (parseInt(amountEl.value, 10) || 0) : sum;
+        var total = amountEl ? parseAmt_(amountEl.value) : sum;
         for (var i = 0; i < rows.length; i++) {
           if (!rows[i].project_no) return { ok: false, message: '分攤第 ' + (i + 1) + ' 列請填案號' };
           if (!String(rows[i].item_desc || '').trim()) return { ok: false, message: '分攤第 ' + (i + 1) + ' 列請填品項' };
-          if ((parseInt(rows[i].amount, 10) || 0) <= 0) return { ok: false, message: '分攤第 ' + (i + 1) + ' 列請填金額' };
+          var rowAmt = (typeof AccountingAmountFormula !== 'undefined')
+            ? AccountingAmountFormula.parseAmount(rows[i].amount)
+            : (parseInt(rows[i].amount, 10) || 0);
+          if (isNaN(rowAmt) || rowAmt <= 0) {
+            return { ok: false, message: '分攤第 ' + (i + 1) + ' 列請填有效金額（可用 =1000+50）' };
+          }
+          rows[i].amount = rowAmt;
         }
         if (total > 0 && sum !== total) {
           return { ok: false, message: '分攤合計須等於支付金額（$' + total.toLocaleString('zh-TW') + '）' };
