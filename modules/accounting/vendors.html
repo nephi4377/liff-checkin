@@ -302,7 +302,6 @@
       <select id="tax_mode_default">
         <option value="">（不強制，交給辨識／人工）</option>
         <option value="inclusive">未稅／含稅自選</option>
-        <option value="per_row">未稅・逐筆加 5%</option>
         <option value="prorate">未稅・整張加稅分攤</option>
       </select>
       <p class="sub" style="margin:4px 0 10px">選這家廠商請款時，若尚未手動改過稅別，會自動帶此模式。</p>
@@ -1268,7 +1267,9 @@
         $('account_name').value = v.account_name || '';
         $('payment_terms').value = v.payment_terms || '';
         $('remit_fee_default').value = String(v.remit_fee_default || '').trim() === '否' ? '否' : '是';
-        $('tax_mode_default').value = String(v.tax_mode_default || '').trim();
+        // per_row 已自 UI 拿掉；舊預設進編輯時改為「不強制」避免無對應 option
+        var taxDefLoad = String(v.tax_mode_default || '').trim();
+        $('tax_mode_default').value = taxDefLoad === 'per_row' ? '' : taxDefLoad;
         $('ocr_hint').value = v.ocr_hint || '';
         $('coop_status').value = v.coop_status || '合作中';
         var noteLines = [];

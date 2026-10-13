@@ -61,7 +61,7 @@ assert(multi[2].amount === -500, '多案折讓維持 −500');
 
 var pay = fs.readFileSync(path.join(root, 'modules/accounting/payment_request.html'), 'utf8');
 var rev = fs.readFileSync(path.join(root, 'modules/accounting/ledger_review.html'), 'utf8');
-assert(/accounting_tax_mode\.js\?v=8/.test(pay) && /accounting_tax_mode\.js\?v=8/.test(rev), 'cache bust v=8');
+assert(/accounting_tax_mode\.js\?v=9/.test(pay) && /accounting_tax_mode\.js\?v=9/.test(rev), 'cache bust v=9');
 assert(!/a\s*>\s*0\)\s*pretax\s*\+=/.test(pay), 'payment_request ×5% 不再只加正數');
 assert(!/a\s*>\s*0\)\s*pretax\s*\+=/.test(rev), 'ledger_review ×5% 不再只加正數');
 assert(/summarize\(readAllocRows\(\),\s*'prorate',\s*''\)/.test(pay), 'payment ×5% 走 summarize');

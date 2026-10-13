@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=7" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
-  <script src="../../shared/js/accounting_tax_mode.js?v=8"></script>
+  <script src="../../shared/js/accounting_tax_mode.js?v=9"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_context.js?v=3"></script>
@@ -297,7 +297,7 @@
       <label>明細（案號＋金額，至少一列）</label>
       <div class="tax-mode-block" id="taxModeBlock">
         <label>稅別模式（整張統一）</label>
-        <p class="sub" id="taxModeHint" style="margin:4px 0 6px">「未稅／含稅自選」：各列自己勾含稅，金額不改。整張加稅：各列只填未稅，稅在底下一次加。逐筆加 5% 才會逐列改金額。</p>
+        <p class="sub" id="taxModeHint" style="margin:4px 0 6px">「未稅／含稅自選」：各列自己勾含稅，金額不改。整張加稅：各列只填未稅，稅在底下一次加。</p>
         <div id="taxModeSegHost"></div>
       </div>
       <div id="allocList"></div>
