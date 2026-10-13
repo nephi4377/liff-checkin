@@ -1247,6 +1247,120 @@ a.btn-ghost.top-hub-link {
   padding-bottom: 0.5rem;
 }
 
+.organize-panel {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 248, 240, 0.9);
+}
+
+.organize-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.organize-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.organize-engine {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent, #8c3f1c);
+  opacity: 0.9;
+}
+
+.organize-lead {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  line-height: 1.4;
+}
+
+.organize-input {
+  width: 100%;
+  min-height: 88px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.65rem 0.85rem;
+  font-size: 15px;
+  line-height: 1.45;
+  resize: vertical;
+  font-family: inherit;
+  background: #fff;
+}
+
+.organize-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: flex-end;
+}
+
+.organize-actions .btn-ghost.is-listening {
+  border-color: var(--accent, #8c3f1c);
+  color: var(--accent, #8c3f1c);
+}
+
+.organize-result-wrap {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.organize-result {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 0.65rem 0.85rem;
+  border-radius: 10px;
+  border: 1px dashed var(--line);
+  background: rgba(255, 255, 255, 0.85);
+  font-family: inherit;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.organize-result-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.organize-mode {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.organize-warn {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #9a3412;
+  opacity: 0.9;
+}
+
+.organize-hint {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+  line-height: 1.4;
+}
+
+.organize-hint code {
+  font-size: 0.72rem;
+  padding: 0.05rem 0.25rem;
+  border-radius: 4px;
+  background: rgba(140, 63, 28, 0.08);
+}
+
 .worker-tabs {
   display: flex;
   gap: 0.45rem;

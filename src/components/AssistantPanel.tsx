@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import type { Task, TaskCategory, Urgency, Worker } from '../types'
 import { AssistantBoard } from './AssistantBoard'
+import { OrganizePanel } from './OrganizePanel'
 
 interface AssistantPanelProps {
   workers: Worker[]
@@ -113,6 +114,8 @@ export function AssistantPanel({
         {openCount > 0 ? `　還有 ${openCount} 件` : '　已全部勾完'}
       </p>
 
+      <OrganizePanel />
+
       <AssistantBoard
         tasks={focused}
         focusName={focusName}
@@ -152,10 +155,10 @@ export function AssistantPanel({
               <textarea
                 value={detail}
                 onChange={(e) => setDetail(e.target.value)}
-                placeholder="在 Cursor 整理後貼上（地點、材料、注意事項…）"
+                placeholder="把上方 AI 整理結果貼進來（地點、材料、注意事項…）"
                 rows={5}
               />
-              <span className="detail-ai-hint">整理在 Cursor 完成，再貼到這裡</span>
+              <span className="detail-ai-hint">先用上方「AI 整理」再複製貼上</span>
             </label>
             <div className="cat-toggle cat-toggle-3" role="group" aria-label="分類">
               <button

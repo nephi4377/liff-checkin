@@ -140,10 +140,10 @@ export function TaskCard({
         onBlur={commitDetail}
         rows={5}
         aria-label="詳細說明"
-        placeholder="可貼上 AI 整理後的說明"
+        placeholder="可貼上上方 AI 整理後的說明"
         autoFocus
       />
-      <span className="detail-ai-hint">可先請 AI 整理再貼上</span>
+      <span className="detail-ai-hint">用派工頁「AI 整理」後複製貼上</span>
     </div>
   ) : onUpdateDetail ? (
     <button
