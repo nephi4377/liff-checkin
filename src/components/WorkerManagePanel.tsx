@@ -91,7 +91,9 @@ export function WorkerManagePanel({
       <header className="worker-manage-head">
         <div>
           <h2 id="worker-manage-heading">工務名單</h2>
-          <p className="worker-manage-lead">可新增、改名、刪除；網址綁 id，改名不會壞連結。</p>
+          <p className="worker-manage-lead">
+            可新增、編輯改名、刪除（非只讀）。網址綁 id，改名不會壞連結。
+          </p>
         </div>
         {mode === 'idle' ? (
           <button type="button" className="btn-primary worker-manage-add-btn" onClick={startAdd}>

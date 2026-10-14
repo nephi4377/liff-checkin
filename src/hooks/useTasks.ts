@@ -137,13 +137,19 @@ export function useTasks() {
 
     let cancelled = false
 
+    /** 工務名單一律與雲端聯集，避免 localStorage 殘留只有恩德／阿勇時蓋掉其他人 */
+    const mergeWorkersFromRemote = (local: AppState, remote: AppState) =>
+      mergeWorkersKeepingLocalExtras(local.workers, remote.workers)
+
+    const workersMissingFromLocal = (local: AppState, remote: AppState) => {
+      const localIds = new Set(mergeWorkers(local.workers).map((w) => w.id))
+      return mergeWorkers(remote.workers).some((w) => !localIds.has(w.id))
+    }
+
     const applyRemoteIfNewer = (remote: AppState) => {
       const local = stateRef.current
       if (remote.updatedAt > local.updatedAt) {
-        const workers = mergeWorkersKeepingLocalExtras(
-          local.workers,
-          remote.workers,
-        )
+        const workers = mergeWorkersFromRemote(local, remote)
         const hasLocalExtras =
           workers.length > mergeWorkers(remote.workers).length
         const merged: AppState = {
@@ -153,14 +159,37 @@ export function useTasks() {
             ? Math.max(remote.updatedAt + 1, Date.now())
             : remote.updatedAt,
         }
-        // 有本地多出的工務時不要跳過 push
         applyFromCloudRef.current = !hasLocalExtras
         setState(merged)
         if (hasLocalExtras) pushSoon(merged, true)
         return
       }
       if (remote.updatedAt < local.updatedAt) {
+        const workers = mergeWorkersFromRemote(local, remote)
+        if (workersMissingFromLocal(local, remote)) {
+          const merged: AppState = {
+            ...local,
+            workers,
+            updatedAt: Math.max(local.updatedAt, Date.now()),
+          }
+          applyFromCloudRef.current = true
+          setState(merged)
+          pushSoon(merged, true)
+          return
+        }
         pushSoon(local, true)
+        return
+      }
+      // 同 revision：仍補齊雲端有、本地沒有的工務
+      if (workersMissingFromLocal(local, remote)) {
+        const merged: AppState = {
+          ...local,
+          workers: mergeWorkersFromRemote(local, remote),
+          updatedAt: Math.max(local.updatedAt + 1, Date.now()),
+        }
+        applyFromCloudRef.current = true
+        setState(merged)
+        pushSoon(merged, true)
       }
     }
 
@@ -171,21 +200,16 @@ export function useTasks() {
         if (cancelled) return
         if (!remote || !remote.updatedAt) {
           await pushCloud(stateRef.current)
-        } else if (!sameRevision(remote, stateRef.current)) {
+        } else {
           const local = stateRef.current
           if (remote.updatedAt > local.updatedAt) {
             applyRemoteIfNewer(remote)
-          } else {
-            const merged: AppState = {
-              ...local,
-              workers: mergeWorkersKeepingLocalExtras(
-                local.workers,
-                remote.workers,
-              ),
-            }
-            applyFromCloudRef.current = true
-            setState(merged)
-            pushSoon(merged, true)
+          } else if (remote.updatedAt < local.updatedAt) {
+            applyRemoteIfNewer(remote)
+          } else if (workersMissingFromLocal(local, remote)) {
+            applyRemoteIfNewer(remote)
+          } else if (!sameRevision(remote, local)) {
+            applyRemoteIfNewer(remote)
           }
         }
         if (!cancelled) {

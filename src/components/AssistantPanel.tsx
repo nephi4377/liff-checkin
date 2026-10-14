@@ -74,7 +74,8 @@ export function AssistantPanel({
   const [showAdd, setShowAdd] = useState(false)
   const [createdWorker, setCreatedWorker] = useState<Worker | null>(null)
   const [showUrls, setShowUrls] = useState(false)
-  const [showManage, setShowManage] = useState(true)
+  /** 工務名單／網址預設收起，點擊再展開 */
+  const [showManage, setShowManage] = useState(false)
 
   const assignerOptions = useMemo(
     () =>
@@ -130,13 +131,17 @@ export function AssistantPanel({
           type="button"
           className={`btn-primary worker-manage-open ${showManage ? 'is-open' : ''}`}
           onClick={() => setShowManage((v) => !v)}
+          aria-expanded={showManage}
         >
-          {showManage ? '收起工務名單' : '＋ 新增／編輯工務'}
+          {showManage
+            ? '收起工務名單'
+            : `工務名單（新增／編輯／刪除）· ${tabWorkers.length} 人`}
         </button>
         <button
           type="button"
           className="btn-ghost"
           onClick={() => setShowUrls((v) => !v)}
+          aria-expanded={showUrls}
         >
           {showUrls ? '收起網址' : '複製工務網址'}
         </button>
@@ -157,6 +162,7 @@ export function AssistantPanel({
           onCreated={(w) => {
             setCreatedWorker(w)
             setShowUrls(true)
+            setShowManage(true)
           }}
           onFocusWorker={setFocusWorkerId}
         />
