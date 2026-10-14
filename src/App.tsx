@@ -37,6 +37,9 @@ export default function App() {
     addAssigner,
     updateDueDate,
     updateUrgency,
+    trashTask,
+    restoreTask,
+    togglePin,
     resetDemo,
   } = useTasks()
 
@@ -64,7 +67,10 @@ export default function App() {
   const workerName = workerId ? WORKER_NAMES[workerId] : ''
 
   const myTasks = useMemo(
-    () => (workerId ? tasks.filter((t) => t.assigneeId === workerId) : []),
+    () =>
+      workerId
+        ? tasks.filter((t) => t.assigneeId === workerId && !t.trashedAt)
+        : [],
     [tasks, workerId],
   )
 
@@ -146,6 +152,9 @@ export default function App() {
             onAddAssigner={addAssigner}
             onUpdateDueDate={updateDueDate}
             onUpdateUrgency={updateUrgency}
+            onTrash={trashTask}
+            onRestore={restoreTask}
+            onTogglePin={togglePin}
           />
         </main>
       </div>

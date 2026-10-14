@@ -19,7 +19,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { useMemo, useState } from 'react'
-import { compareDeadlineTasks } from '../dueDate'
+import { isActiveTask, isTrashedTask } from '../data'
 import type { Task, TaskCategory, Urgency } from '../types'
 import { sortPriorityTasks, urgencyLabel } from '../urgency'
 import { TaskCard } from './TaskCard'
@@ -37,13 +37,16 @@ interface AssistantBoardProps {
   onAddAssigner?: (name: string) => string | null
   onUpdateDueDate?: (id: string, dueDate: string) => void
   onUpdateUrgency: (id: string, urgency: Urgency) => void
+  onTrash: (id: string) => void
+  onRestore: (id: string) => void
+  onTogglePin: (id: string) => void
   assignerOptions?: string[]
   simple?: boolean
 }
 
 function emptyLabel(id: TaskCategory): string {
   if (id === 'priority') return '沒有優先'
-  if (id === 'deadline') return '沒有限期'
+  if (id === 'reminder') return '沒有提醒'
   return '沒有待處理'
 }
 
@@ -58,6 +61,8 @@ function Column({
   onAddAssigner,
   onUpdateDueDate,
   onUpdateUrgency,
+  onTrash,
+  onTogglePin,
   assignerOptions,
   simple,
 }: {
@@ -71,6 +76,8 @@ function Column({
   onAddAssigner?: (name: string) => string | null
   onUpdateDueDate?: (id: string, dueDate: string) => void
   onUpdateUrgency: (id: string, urgency: Urgency) => void
+  onTrash: (id: string) => void
+  onTogglePin?: (id: string) => void
   assignerOptions?: string[]
   simple?: boolean
 }) {
@@ -101,9 +108,9 @@ function Column({
                 onUpdateAssigner={onUpdateAssigner}
                 onAddAssigner={onAddAssigner}
                 onUpdateDueDate={onUpdateDueDate}
-                onUpdateUrgency={
-                  id === 'deadline' ? undefined : onUpdateUrgency
-                }
+                onUpdateUrgency={onUpdateUrgency}
+                onDelete={onTrash}
+                onTogglePin={id === 'priority' ? onTogglePin : undefined}
                 assignerOptions={assignerOptions}
                 compact={simple}
               />
@@ -118,10 +125,12 @@ function Column({
 function DoneSection({
   tasks,
   onToggle,
+  onTrash,
   simple,
 }: {
   tasks: Task[]
   onToggle: (id: string) => void
+  onTrash: (id: string) => void
   simple?: boolean
 }) {
   if (tasks.length === 0) return null
@@ -139,11 +148,57 @@ function DoneSection({
             key={task.id}
             task={task}
             onToggle={onToggle}
+            onDelete={onTrash}
             dragDisabled
             compact={simple}
           />
         ))}
       </ul>
+    </div>
+  )
+}
+
+function TrashSection({
+  tasks,
+  onRestore,
+  simple,
+}: {
+  tasks: Task[]
+  onRestore: (id: string) => void
+  simple?: boolean
+}) {
+  return (
+    <div className={`list-column list-trash ${simple ? 'simple-col' : ''}`}>
+      <header className="list-header">
+        <h2>已刪</h2>
+        <span className="count-pill">{tasks.length}</span>
+      </header>
+      <p className="done-hint">按復原可救回 · 不會出現在工務清單</p>
+      {tasks.length === 0 ? (
+        <p className="empty-list">沒有已刪任務</p>
+      ) : (
+        <ul className="task-list trash-list">
+          {tasks.map((task) => (
+            <li key={task.id} className="task-card task-card-compact is-trashed">
+              <div className="task-body">
+                <p className="task-title">{task.title}</p>
+                {task.assigner ? (
+                  <p className="task-assigner">派自 {task.assigner}</p>
+                ) : null}
+                <div className="task-actions-row">
+                  <button
+                    type="button"
+                    className="btn-primary task-restore-btn"
+                    onClick={() => onRestore(task.id)}
+                  >
+                    復原
+                  </button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
@@ -160,13 +215,15 @@ export function AssistantBoard({
   onAddAssigner,
   onUpdateDueDate,
   onUpdateUrgency,
+  onTrash,
+  onRestore,
+  onTogglePin,
   assignerOptions,
   simple,
 }: AssistantBoardProps) {
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, {
-      // Longer delay so normal scrolling doesn't fight drag
       activationConstraint: { delay: 220, tolerance: 10 },
     }),
     useSensor(KeyboardSensor, {
@@ -174,42 +231,50 @@ export function AssistantBoard({
     }),
   )
 
-  const { byCategory, done } = useMemo(() => {
+  const { byCategory, done, trashed } = useMemo(() => {
     const map: Record<TaskCategory, Task[]> = {
       priority: [],
+      reminder: [],
       todo: [],
-      deadline: [],
     }
     const completed: Task[] = []
+    const trash: Task[] = []
     for (const t of tasks) {
+      if (isTrashedTask(t)) {
+        trash.push(t)
+        continue
+      }
+      if (!isActiveTask(t)) continue
       if (t.completed) completed.push(t)
       else (map[t.category] ?? map.todo).push(t)
     }
     map.priority = sortPriorityTasks(map.priority)
-    // 代辦：不急永遠沉到最下面，其餘依 order
+    map.reminder = [...map.reminder].sort((a, b) => a.order - b.order)
     map.todo = [...map.todo].sort((a, b) => {
       const aLow = a.urgency === 'low' ? 1 : 0
       const bLow = b.urgency === 'low' ? 1 : 0
       if (aLow !== bLow) return aLow - bLow
       return a.order - b.order
     })
-    map.deadline = [...map.deadline].sort(compareDeadlineTasks)
     completed.sort(
       (a, b) => (b.completedAt ?? b.createdAt) - (a.completedAt ?? a.createdAt),
     )
-    return { byCategory: map, done: completed }
+    trash.sort((a, b) => (b.trashedAt ?? 0) - (a.trashedAt ?? 0))
+    return { byCategory: map, done: completed, trashed: trash }
   }, [tasks])
 
   const [activeId, setActiveId] = useState<string | null>(null)
   const activeTask = activeId
-    ? (tasks.find((t) => t.id === activeId) ?? null)
+    ? (tasks.find((t) => t.id === activeId && isActiveTask(t)) ?? null)
     : null
 
   const findContainer = (id: string): TaskCategory | null => {
-    if (id === 'priority' || id === 'todo' || id === 'deadline') return id
+    if (id === 'priority' || id === 'reminder' || id === 'todo') return id
     const task = tasks.find((t) => t.id === id)
-    if (!task || task.completed) return null
-    return task.category
+    if (!task || task.completed || isTrashedTask(task)) return null
+    if (task.category === 'priority') return 'priority'
+    if (task.category === 'reminder') return 'reminder'
+    return 'todo'
   }
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -303,20 +368,23 @@ export function AssistantBoard({
           onAddAssigner={onAddAssigner}
           onUpdateDueDate={onUpdateDueDate}
           onUpdateUrgency={onUpdateUrgency}
+          onTrash={onTrash}
+          onTogglePin={onTogglePin}
           assignerOptions={assignerOptions}
           simple={simple}
         />
         <Column
-          id="deadline"
-          title="限期完成"
-          tasks={byCategory.deadline}
+          id="reminder"
+          title="提醒"
+          tasks={byCategory.reminder}
           onToggle={onToggle}
           onUpdateTitle={onUpdateTitle}
           onUpdateDetail={onUpdateDetail}
           onUpdateAssigner={onUpdateAssigner}
           onAddAssigner={onAddAssigner}
-          onUpdateDueDate={onUpdateDueDate}
+          onUpdateDueDate={undefined}
           onUpdateUrgency={onUpdateUrgency}
+          onTrash={onTrash}
           assignerOptions={assignerOptions}
           simple={simple}
         />
@@ -331,10 +399,21 @@ export function AssistantBoard({
           onAddAssigner={onAddAssigner}
           onUpdateDueDate={onUpdateDueDate}
           onUpdateUrgency={onUpdateUrgency}
+          onTrash={onTrash}
           assignerOptions={assignerOptions}
           simple={simple}
         />
-        <DoneSection tasks={done} onToggle={onToggle} simple={simple} />
+        <DoneSection
+          tasks={done}
+          onToggle={onToggle}
+          onTrash={onTrash}
+          simple={simple}
+        />
+        <TrashSection
+          tasks={trashed}
+          onRestore={onRestore}
+          simple={simple}
+        />
       </section>
 
       <DragOverlay>

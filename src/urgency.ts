@@ -15,7 +15,7 @@ export function urgencyLabel(urgency: Urgency): string {
   return URGENCY_OPTIONS.find((o) => o.id === urgency)?.label ?? '普通'
 }
 
-/** 優先區：緊急 → 普通 → 不急，同級再依 order */
+/** 優先區：釘選置頂 → 緊急 → 普通 → 不急，同級再依 order */
 export const URGENCY_RANK: Record<Urgency, number> = {
   urgent: 0,
   normal: 1,
@@ -23,17 +23,20 @@ export const URGENCY_RANK: Record<Urgency, number> = {
 }
 
 export function comparePriorityTasks(
-  a: Pick<Task, 'urgency' | 'order'>,
-  b: Pick<Task, 'urgency' | 'order'>,
+  a: Pick<Task, 'urgency' | 'order' | 'pinned'>,
+  b: Pick<Task, 'urgency' | 'order' | 'pinned'>,
 ): number {
+  const aPin = a.pinned ? 0 : 1
+  const bPin = b.pinned ? 0 : 1
+  if (aPin !== bPin) return aPin - bPin
   const byUrgency = URGENCY_RANK[a.urgency] - URGENCY_RANK[b.urgency]
   if (byUrgency !== 0) return byUrgency
   return a.order - b.order
 }
 
-export function sortPriorityTasks<T extends Pick<Task, 'urgency' | 'order'>>(
-  tasks: T[],
-): T[] {
+export function sortPriorityTasks<
+  T extends Pick<Task, 'urgency' | 'order' | 'pinned'>,
+>(tasks: T[]): T[] {
   return [...tasks].sort(comparePriorityTasks)
 }
 

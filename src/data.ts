@@ -122,7 +122,10 @@ function normalizeDeletedIds(raw: unknown): string[] {
 }
 
 function normalizeCategory(value: unknown): Task['category'] {
-  if (value === 'priority' || value === 'todo' || value === 'deadline') return value
+  // 舊「限期件」分區併入優先（保留 dueDate）
+  if (value === 'deadline' || value === 'priority') return 'priority'
+  if (value === 'reminder') return 'reminder'
+  if (value === 'todo') return 'todo'
   return 'todo'
 }
 
@@ -148,6 +151,9 @@ function normalizeTaskFields(t: Task): Task {
   if (typeof t.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.dueDate.trim())) {
     dueDate = t.dueDate.trim()
   }
+  const trashedAt =
+    typeof t.trashedAt === 'number' && t.trashedAt > 0 ? t.trashedAt : undefined
+  const pinned = Boolean(t.pinned) && category === 'priority' && !trashedAt
   return {
     ...t,
     category,
@@ -158,7 +164,18 @@ function normalizeTaskFields(t: Task): Task {
     dueDate,
     completed,
     completedAt,
+    trashedAt,
+    pinned: pinned || undefined,
   }
+}
+
+/** 進行中／已完成清單用（排除垃圾桶） */
+export function isActiveTask(t: Task): boolean {
+  return !(typeof t.trashedAt === 'number' && t.trashedAt > 0)
+}
+
+export function isTrashedTask(t: Task): boolean {
+  return typeof t.trashedAt === 'number' && t.trashedAt > 0
 }
 
 function isStaleCompleted(

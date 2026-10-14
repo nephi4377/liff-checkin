@@ -220,26 +220,34 @@ export function useTasks() {
     ) => {
       const trimmed = title.trim()
       if (!trimmed || !assigneeId) return
-      if (category === 'deadline' && !dueDate?.trim()) return
       const detailTrim = detail?.trim() || undefined
       const assignerTrim = assigner?.trim() || undefined
+      const safeCategory: TaskCategory =
+        category === 'todo'
+          ? 'todo'
+          : category === 'reminder'
+            ? 'reminder'
+            : 'priority'
       const resolvedUrgency: Urgency =
         urgency ??
-        (category === 'priority' ? 'urgent' : 'normal')
+        (safeCategory === 'priority' ? 'urgent' : 'normal')
       const safeUrgency: Urgency =
-        category === 'todo' && resolvedUrgency === 'urgent'
-          ? 'normal'
-          : category === 'deadline'
-            ? 'normal'
-            : resolvedUrgency
+        safeCategory === 'priority'
+          ? resolvedUrgency
+          : resolvedUrgency === 'low'
+            ? 'low'
+            : 'normal'
       const due =
-        category === 'deadline' && dueDate && /^\d{4}-\d{2}-\d{2}$/.test(dueDate)
-          ? dueDate
+        dueDate && /^\d{4}-\d{2}-\d{2}$/.test(dueDate.trim())
+          ? dueDate.trim()
           : undefined
 
       setState((prev) => {
         const siblings = prev.tasks.filter(
-          (t) => t.assigneeId === assigneeId && t.category === category,
+          (t) =>
+            t.assigneeId === assigneeId &&
+            t.category === safeCategory &&
+            !t.trashedAt,
         )
         const maxOrder = siblings.reduce((m, t) => Math.max(m, t.order), -1)
         const task: Task = {
@@ -248,7 +256,7 @@ export function useTasks() {
           detail: detailTrim,
           assigner: assignerTrim,
           assigneeId,
-          category,
+          category: safeCategory,
           urgency: safeUrgency,
           dueDate: due,
           completed: false,
@@ -296,6 +304,46 @@ export function useTasks() {
     [],
   )
 
+  /** Soft-delete → 派工垃圾桶（可復原）；不寫 deletedIds */
+  const trashTask = useCallback((taskId: string) => {
+    setState((prev) =>
+      patchState(prev, {
+        tasks: prev.tasks.map((t) =>
+          t.id === taskId
+            ? { ...t, trashedAt: t.trashedAt ?? Date.now() }
+            : t,
+        ),
+      }),
+    )
+  }, [])
+
+  const restoreTask = useCallback((taskId: string) => {
+    setState((prev) =>
+      patchState(prev, {
+        tasks: prev.tasks.map((t) =>
+          t.id === taskId ? { ...t, trashedAt: undefined } : t,
+        ),
+      }),
+    )
+  }, [])
+
+  const togglePin = useCallback((taskId: string) => {
+    setState((prev) => {
+      const target = prev.tasks.find((t) => t.id === taskId)
+      if (!target || target.category !== 'priority' || target.trashedAt) {
+        return prev
+      }
+      return patchState(prev, {
+        tasks: prev.tasks.map((t) =>
+          t.id === taskId
+            ? { ...t, pinned: t.pinned ? undefined : true }
+            : t,
+        ),
+      })
+    })
+  }, [])
+
+  /** 永久刪除（tombstone）；通常給清空垃圾桶用 */
   const deleteTask = useCallback((taskId: string) => {
     setState((prev) =>
       patchState(prev, {
@@ -431,17 +479,23 @@ export function useTasks() {
       const maxOrder = siblings.reduce((m, t) => Math.max(m, t.order), -1)
       const urgency: Urgency =
         category === 'priority'
-          ? 'normal'
+          ? task.urgency === 'urgent'
+            ? 'urgent'
+            : task.urgency === 'low'
+              ? 'low'
+              : 'normal'
           : task.urgency === 'low'
             ? 'low'
             : 'normal'
-      const dueDate =
-        category === 'deadline'
-          ? task.dueDate ?? new Date().toISOString().slice(0, 10)
-          : task.dueDate
       let tasks = prev.tasks.map((t) =>
         t.id === taskId
-          ? { ...t, category, order: maxOrder + 1, urgency, dueDate }
+          ? {
+              ...t,
+              category,
+              order: maxOrder + 1,
+              urgency,
+              pinned: category === 'priority' ? t.pinned : undefined,
+            }
           : t,
       )
       if (category === 'priority') {
@@ -525,6 +579,9 @@ export function useTasks() {
     toggleComplete,
     reorder,
     moveCategory,
+    trashTask,
+    restoreTask,
+    togglePin,
     deleteTask,
     updateTitle,
     updateDetail,

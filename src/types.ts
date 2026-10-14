@@ -1,4 +1,8 @@
-export type TaskCategory = 'priority' | 'todo' | 'deadline'
+/**
+ * 畫面分區：優先（可含限期）／提醒／待處理。
+ * legacy `deadline` 讀入時會併入 priority。
+ */
+export type TaskCategory = 'priority' | 'reminder' | 'todo'
 
 /** 緊急等級 — 超簡單三檔 */
 export type Urgency = 'urgent' | 'normal' | 'low'
@@ -31,6 +35,10 @@ export interface Task {
   completed: boolean
   /** Set when checked done; used for 10-day auto-purge */
   completedAt?: number
+  /** Soft-delete (派工垃圾桶)；有值＝已刪，可復原；同步 MantleDB */
+  trashedAt?: number
+  /** 優先區釘選；釘選後排在優先區頂部；同步 MantleDB */
+  pinned?: boolean
   order: number
   createdAt: number
 }

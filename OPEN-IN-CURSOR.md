@@ -29,7 +29,6 @@ npm run dev
 ## 重點
 - 派工可指派給恩德／阿勇；優先／限期完成／待處理／已完成
 - 優先緊急等級可展開選；依緊急自動排序
-- 派工頁有「AI 整理」→ 複製貼到詳細說明
 - 恩德／阿勇只能勾完成、無回總覽、無 AI 面板
 - MantleDB 多機同步；晨霧 UI
 - 部署：build 後把 `dist/` 推到 `liff-checkin` `main` 的 `employee-todo/`

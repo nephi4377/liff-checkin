@@ -3,7 +3,6 @@ import { buildAssignerOptions } from '../assigners'
 import type { Task, TaskCategory, Urgency, Worker } from '../types'
 import { AssignerSelect } from './AssignerSelect'
 import { AssistantBoard } from './AssistantBoard'
-import { OrganizePanel } from './OrganizePanel'
 
 interface AssistantPanelProps {
   workers: Worker[]
@@ -27,6 +26,9 @@ interface AssistantPanelProps {
   onAddAssigner: (name: string) => string | null
   onUpdateDueDate: (id: string, dueDate: string) => void
   onUpdateUrgency: (id: string, urgency: Urgency) => void
+  onTrash: (id: string) => void
+  onRestore: (id: string) => void
+  onTogglePin: (id: string) => void
 }
 
 /** 工務僅恩德、阿勇 */
@@ -46,6 +48,9 @@ export function AssistantPanel({
   onAddAssigner,
   onUpdateDueDate,
   onUpdateUrgency,
+  onTrash,
+  onRestore,
+  onTogglePin,
 }: AssistantPanelProps) {
   const tabWorkers = useMemo(() => {
     const byId = new Map(workers.map((w) => [w.id, w]))
@@ -77,14 +82,13 @@ export function AssistantPanel({
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     if (!title.trim()) return
-    if (category === 'deadline' && !dueDate) return
     onAdd(
       title,
       focusWorkerIdSafe,
       category,
       detail,
       undefined,
-      category === 'deadline' ? dueDate : undefined,
+      category === 'priority' && dueDate ? dueDate : undefined,
       assigner,
     )
     setTitle('')
@@ -98,7 +102,7 @@ export function AssistantPanel({
     workers.find((w) => w.id === id)?.name ?? '未知'
 
   const focused = tasks.filter((t) => t.assigneeId === focusWorkerIdSafe)
-  const openCount = focused.filter((t) => !t.completed).length
+  const openCount = focused.filter((t) => !t.completed && !t.trashedAt).length
   const focusName = nameOf(focusWorkerIdSafe)
 
   return (
@@ -106,7 +110,7 @@ export function AssistantPanel({
       <div className="worker-tabs" role="tablist" aria-label="工務">
         {tabWorkers.map((w) => {
           const open = tasks.filter(
-            (t) => t.assigneeId === w.id && !t.completed,
+            (t) => t.assigneeId === w.id && !t.completed && !t.trashedAt,
           ).length
           return (
             <button
@@ -129,8 +133,6 @@ export function AssistantPanel({
         {openCount > 0 ? `　還有 ${openCount} 件` : '　已全部勾完'}
       </p>
 
-      <OrganizePanel />
-
       <AssistantBoard
         tasks={focused}
         focusName={focusName}
@@ -144,6 +146,9 @@ export function AssistantPanel({
         onAddAssigner={onAddAssigner}
         onUpdateDueDate={onUpdateDueDate}
         onUpdateUrgency={onUpdateUrgency}
+        onTrash={onTrash}
+        onRestore={onRestore}
+        onTogglePin={onTogglePin}
         assignerOptions={assignerOptions}
         simple
       />
@@ -174,10 +179,9 @@ export function AssistantPanel({
               <textarea
                 value={detail}
                 onChange={(e) => setDetail(e.target.value)}
-                placeholder="把上方 AI 整理結果貼進來（地點、材料、注意事項…）"
+                placeholder="地點、材料、注意事項…"
                 rows={5}
               />
-              <span className="detail-ai-hint">先用上方「AI 整理」再複製貼上</span>
             </label>
             <div className="cat-toggle cat-toggle-3" role="group" aria-label="分類">
               <button
@@ -189,27 +193,32 @@ export function AssistantPanel({
               </button>
               <button
                 type="button"
-                className={category === 'deadline' ? 'is-active' : ''}
-                onClick={() => setCategory('deadline')}
+                className={category === 'reminder' ? 'is-active' : ''}
+                onClick={() => {
+                  setCategory('reminder')
+                  setDueDate('')
+                }}
               >
-                限期
+                提醒
               </button>
               <button
                 type="button"
                 className={category === 'todo' ? 'is-active' : ''}
-                onClick={() => setCategory('todo')}
+                onClick={() => {
+                  setCategory('todo')
+                  setDueDate('')
+                }}
               >
                 待處理
               </button>
             </div>
-            {category === 'deadline' ? (
+            {category === 'priority' ? (
               <label className="detail-field">
-                <span className="detail-field-label">完成期限</span>
+                <span className="detail-field-label">限期（可選）</span>
                 <input
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  required
                 />
               </label>
             ) : null}

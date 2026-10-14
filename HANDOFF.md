@@ -37,13 +37,10 @@ npm run dev
 ## Key features
 
 - 三角色：派工／恩德／阿勇（繁中 UI）  
-- 優先／待處理／限期完成；優先依緊急自動排序  
-- 緊急等級：chip 點開選（非三大按鈕）  
-- 詳細說明、誰派的（`assigner`）、限期 `dueDate`  
-- **AI 整理**（僅派工頁）：網頁面板整理 → 複製 → 貼「詳細說明」  
-  - LLM：`VITE_OPENAI_API_KEY`（可選 `VITE_OPENAI_BASE_URL` / `VITE_OPENAI_MODEL`）  
-  - 無金鑰：本機規則（對象／分類／緊急／期限＋條列）  
-- 恩德／阿勇：只勾完成；**無「回總覽」、無 AI 面板**  
+- 分區：優先（可含限期／釘選）→ 提醒 → 待處理 → 已完成（派工另有已刪）  
+- 緊急等級：chip 點開選；派工說明／工務說明分欄  
+- 派工：左滑刪除（軟刪可復原）；優先區左滑可選釘選／刪除  
+- 恩德／阿勇：只勾完成；**無「回總覽」**  
 
 流程見 store `docs/paste-format.md`。
 
@@ -62,7 +59,8 @@ rm -f dist/CNAME
 
 - **不要**把 GitHub PAT／密碼寫進 repo、docs、media、HANDOFF  
 - **不要** commit `.env` 真密鑰  
-- **不要**在恩德／阿勇頁加「回總覽」或 AI 整理面板  
+- **不要**在恩德／阿勇頁加「回總覽」  
+
 - **不要**把 API 金鑰 commit 進 repo  
 
 - Linux **無法**簽 iOS IPA（需 Mac + Xcode）

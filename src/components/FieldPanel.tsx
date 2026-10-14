@@ -1,4 +1,4 @@
-import { compareDeadlineTasks } from '../dueDate'
+import { isActiveTask } from '../data'
 import type { Task } from '../types'
 import { sortPriorityTasks } from '../urgency'
 import { TaskList } from './TaskList'
@@ -11,13 +11,13 @@ interface FieldPanelProps {
 
 /** Single-person 派工 view — no worker switcher */
 export function FieldPanel({ workerName, tasks, onToggle }: FieldPanelProps) {
-  const active = tasks.filter((t) => !t.completed)
+  const active = tasks.filter((t) => isActiveTask(t) && !t.completed)
   const priority = sortPriorityTasks(
     active.filter((t) => t.category === 'priority'),
   )
-  const deadline = [...active.filter((t) => t.category === 'deadline')].sort(
-    compareDeadlineTasks,
-  )
+  const reminder = active
+    .filter((t) => t.category === 'reminder')
+    .sort((a, b) => a.order - b.order)
   const todo = active
     .filter((t) => t.category === 'todo')
     .sort((a, b) => {
@@ -26,7 +26,7 @@ export function FieldPanel({ workerName, tasks, onToggle }: FieldPanelProps) {
       if (aLow !== bLow) return aLow - bLow
       return a.order - b.order
     })
-  const done = [...tasks.filter((t) => t.completed)].sort(
+  const done = [...tasks.filter((t) => isActiveTask(t) && t.completed)].sort(
     (a, b) => (b.completedAt ?? b.createdAt) - (a.completedAt ?? a.createdAt),
   )
   const openCount = active.length
@@ -52,14 +52,14 @@ export function FieldPanel({ workerName, tasks, onToggle }: FieldPanelProps) {
             dragDisabled
           />
         </div>
-        <div className="list-column list-deadline simple-col">
+        <div className="list-column list-reminder simple-col">
           <header className="list-header">
-            <h2>限期完成</h2>
-            <span className="count-pill">{deadline.length}</span>
+            <h2>提醒</h2>
+            <span className="count-pill">{reminder.length}</span>
           </header>
           <TaskList
-            tasks={deadline}
-            emptyLabel="沒有限期"
+            tasks={reminder}
+            emptyLabel="沒有提醒"
             onToggle={onToggle}
             onReorder={() => {}}
             dragDisabled

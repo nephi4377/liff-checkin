@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
@@ -14,18 +20,23 @@ interface TaskCardProps {
   assigneeName?: string
   showAssignee?: boolean
   onToggle: (id: string) => void
+  /** Soft-delete（左滑） */
   onDelete?: (id: string) => void
+  /** 優先區釘選（左滑動作列） */
+  onTogglePin?: (id: string) => void
   onUpdateTitle?: (id: string, title: string) => void
   onUpdateDetail?: (id: string, detail: string) => void
   onUpdateAssigner?: (id: string, assigner: string) => void
   onAddAssigner?: (name: string) => string | null
   onUpdateDueDate?: (id: string, dueDate: string) => void
   onUpdateUrgency?: (id: string, urgency: Urgency) => void
-  /** 誰派的下拉選項；未傳則用預設＋目前值 */
   assignerOptions?: string[]
   dragDisabled?: boolean
   compact?: boolean
 }
+
+const SWIPE_OPEN_PX = 148
+const SWIPE_DELETE_END_PX = 200
 
 export function TaskCard({
   task,
@@ -33,6 +44,7 @@ export function TaskCard({
   showAssignee,
   onToggle,
   onDelete,
+  onTogglePin,
   onUpdateTitle,
   onUpdateDetail,
   onUpdateAssigner,
@@ -57,7 +69,20 @@ export function TaskCard({
   const [editingDetail, setEditingDetail] = useState(false)
   const [detailDraft, setDetailDraft] = useState(task.detail ?? '')
   const [urgencyOpen, setUrgencyOpen] = useState(false)
+  const [swipeX, setSwipeX] = useState(0)
+  const [swiping, setSwiping] = useState(false)
+  const [actionsOpen, setActionsOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const trackRef = useRef<HTMLLIElement | null>(null)
+  const pointerIdRef = useRef<number | null>(null)
+  const startXRef = useRef(0)
+  const startYRef = useRef(0)
+  const axisRef = useRef<'undecided' | 'x' | 'y'>('undecided')
+  const swipeXRef = useRef(0)
+
+  const isPriority = task.category === 'priority'
+  const canPin = Boolean(onTogglePin) && isPriority
+  const swipeEnabled = Boolean(onDelete) || canPin
 
   useEffect(() => {
     if (!editing) setDraft(task.title)
@@ -84,9 +109,90 @@ export function TaskCard({
     setEditingDetail(false)
   }
 
+  const setSwipe = (x: number) => {
+    swipeXRef.current = x
+    setSwipeX(x)
+  }
+
+  const closeActions = () => {
+    setActionsOpen(false)
+    setSwipe(0)
+  }
+
+  const onSwipePointerDown = (e: ReactPointerEvent) => {
+    if (!swipeEnabled || editing || editingDetail || isDragging) return
+    if ((e.target as HTMLElement).closest('.drag-handle')) return
+    if ((e.target as HTMLElement).closest('.swipe-actions')) return
+    if (
+      (e.target as HTMLElement).closest(
+        'input, textarea, select, button, a, label',
+      )
+    )
+      return
+    pointerIdRef.current = e.pointerId
+    startXRef.current = e.clientX
+    startYRef.current = e.clientY
+    axisRef.current = 'undecided'
+    setSwiping(true)
+    try {
+      trackRef.current?.setPointerCapture(e.pointerId)
+    } catch {
+      // ignore
+    }
+  }
+
+  const onSwipePointerMove = (e: ReactPointerEvent) => {
+    if (pointerIdRef.current !== e.pointerId) return
+    const dx = e.clientX - startXRef.current
+    const dy = e.clientY - startYRef.current
+    if (axisRef.current === 'undecided') {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return
+      axisRef.current = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'
+      if (axisRef.current === 'y') {
+        pointerIdRef.current = null
+        setSwiping(false)
+        return
+      }
+    }
+    if (axisRef.current !== 'x') return
+    e.preventDefault()
+    const base = actionsOpen ? -SWIPE_OPEN_PX : 0
+    const next = Math.min(0, Math.max(-SWIPE_DELETE_END_PX, base + dx))
+    setSwipe(next)
+  }
+
+  const finishSwipe = (e: ReactPointerEvent) => {
+    if (pointerIdRef.current !== e.pointerId) return
+    pointerIdRef.current = null
+    setSwiping(false)
+    const x = swipeXRef.current
+    axisRef.current = 'undecided'
+
+    if (canPin) {
+      // 優先：滑出動作列（釘選／刪除），不直接刪
+      if (x <= -SWIPE_OPEN_PX * 0.45) {
+        setSwipe(-SWIPE_OPEN_PX)
+        setActionsOpen(true)
+      } else {
+        closeActions()
+      }
+      return
+    }
+
+    // 非優先：左滑到底刪除
+    const width = trackRef.current?.offsetWidth ?? 300
+    const threshold = Math.min(SWIPE_DELETE_END_PX * 0.75, width * 0.5)
+    if (onDelete && Math.abs(x) >= threshold) {
+      setSwipe(-width)
+      window.setTimeout(() => onDelete(task.id), 160)
+    } else {
+      setSwipe(0)
+    }
+  }
+
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    transition: swiping ? undefined : transition,
   }
 
   const titleBlock = editing ? (
@@ -112,13 +218,30 @@ export function TaskCard({
     <button
       type="button"
       className="task-title-btn"
-      onClick={() => setEditing(true)}
+      onClick={() => {
+        closeActions()
+        setEditing(true)
+      }}
     >
-      <span className="task-title">{task.title}</span>
+      <span className="task-title">
+        {task.pinned ? (
+          <span className="pin-badge" aria-label="已釘選">
+            釘
+          </span>
+        ) : null}
+        {task.title}
+      </span>
       <span className="edit-hint">編輯</span>
     </button>
   ) : (
-    <p className="task-title">{task.title}</p>
+    <p className="task-title">
+      {task.pinned ? (
+        <span className="pin-badge" aria-label="已釘選">
+          釘
+        </span>
+      ) : null}
+      {task.title}
+    </p>
   )
 
   const detailBlock = editingDetail && onUpdateDetail ? (
@@ -131,16 +254,18 @@ export function TaskCard({
         onBlur={commitDetail}
         rows={5}
         aria-label="派工說明"
-        placeholder="可貼上上方 AI 整理後的說明"
+        placeholder="地點、材料、注意事項…"
         autoFocus
       />
-      <span className="detail-ai-hint">用派工頁「AI 整理」後複製貼上</span>
     </div>
   ) : onUpdateDetail ? (
     <button
       type="button"
       className="task-detail-btn"
-      onClick={() => setEditingDetail(true)}
+      onClick={() => {
+        closeActions()
+        setEditingDetail(true)
+      }}
     >
       {task.detail ? (
         <>
@@ -179,29 +304,24 @@ export function TaskCard({
 
   const overdue = isOverdue(task.dueDate, task.completed)
   const dueBlock =
-    task.category === 'deadline' || task.dueDate ? (
-      onUpdateDueDate ? (
-        <label className={`due-date-field ${overdue ? 'is-overdue' : ''}`}>
-          <span className="due-date-label">限期</span>
-          <input
-            type="date"
-            value={task.dueDate ?? ''}
-            onChange={(e) => onUpdateDueDate(task.id, e.target.value)}
-          />
-          {overdue ? <span className="due-overdue-tag">已逾期</span> : null}
-        </label>
-      ) : task.dueDate ? (
-        <p className={`due-date-read ${overdue ? 'is-overdue' : ''}`}>
-          {formatDueDateLabel(task.dueDate)}
-          {overdue ? ' · 已逾期' : ''}
-        </p>
-      ) : null
+    onUpdateDueDate && isPriority ? (
+      <label className={`due-date-field ${overdue ? 'is-overdue' : ''}`}>
+        <span className="due-date-label">限期</span>
+        <input
+          type="date"
+          value={task.dueDate ?? ''}
+          onChange={(e) => onUpdateDueDate(task.id, e.target.value)}
+        />
+        {overdue ? <span className="due-overdue-tag">已逾期</span> : null}
+      </label>
+    ) : task.dueDate ? (
+      <p className={`due-date-read ${overdue ? 'is-overdue' : ''}`}>
+        {formatDueDateLabel(task.dueDate)}
+        {overdue ? ' · 已逾期' : ''}
+      </p>
     ) : null
 
-  /** 優先：緊急／普通／不急；待處理：一般／不急 — 精簡 chip，點開再選 */
-  const isPriority = task.category === 'priority'
-  const isDeadline = task.category === 'deadline'
-  const isTodoLow = !isPriority && !isDeadline && task.urgency === 'low'
+  const isTodoLow = !isPriority && task.urgency === 'low'
   const todoOptions = [
     { id: 'normal' as const, label: '一般' },
     { id: 'low' as const, label: '不急' },
@@ -213,9 +333,7 @@ export function TaskCard({
       : '一般'
 
   let urgencyBlock: ReactNode = null
-  if (isDeadline) {
-    urgencyBlock = null
-  } else if (onUpdateUrgency) {
+  if (onUpdateUrgency) {
     const options = isPriority ? URGENCY_OPTIONS : todoOptions
     urgencyBlock = (
       <div className={`urgency-compact ${urgencyOpen ? 'is-open' : ''}`}>
@@ -281,19 +399,72 @@ export function TaskCard({
     )
   }
 
-  const showActions = !editing && Boolean(onDelete)
   const toneClass = isPriority
     ? `urgency-tone-${task.urgency}`
     : isTodoLow
       ? 'urgency-tone-low'
       : ''
 
-  if (compact) {
-    return (
-      <li
-        ref={setNodeRef}
-        style={style}
-        className={`task-card task-card-compact ${toneClass} ${task.completed ? 'is-done' : ''} ${isDragging ? 'is-dragging' : ''} ${editing ? 'is-editing' : ''}`}
+  const bindRef = (node: HTMLLIElement | null) => {
+    trackRef.current = node
+    setNodeRef(node)
+  }
+
+  const swipeHint = !swipeEnabled
+    ? null
+    : canPin
+      ? '← 左滑：釘選／刪除'
+      : '← 左滑到底刪除'
+
+  return (
+    <li
+      ref={bindRef}
+      style={style}
+      className={`task-card ${compact ? 'task-card-compact' : ''} swipe-card ${toneClass} ${task.completed ? 'is-done' : ''} ${task.pinned ? 'is-pinned' : ''} ${isDragging ? 'is-dragging' : ''} ${editing ? 'is-editing' : ''} ${swiping || actionsOpen ? 'is-swiping' : ''}`}
+      onPointerDown={onSwipePointerDown}
+      onPointerMove={onSwipePointerMove}
+      onPointerUp={finishSwipe}
+      onPointerCancel={finishSwipe}
+    >
+      {swipeEnabled ? (
+        <div className="swipe-behind" aria-hidden={!actionsOpen}>
+          {canPin ? (
+            <div className="swipe-actions">
+              <button
+                type="button"
+                className="swipe-action swipe-action-pin"
+                onClick={() => {
+                  onTogglePin?.(task.id)
+                  closeActions()
+                }}
+              >
+                {task.pinned ? '取消釘選' : '釘選'}
+              </button>
+              {onDelete ? (
+                <button
+                  type="button"
+                  className="swipe-action swipe-action-delete"
+                  onClick={() => {
+                    onDelete(task.id)
+                    closeActions()
+                  }}
+                >
+                  刪除
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <span className="swipe-delete-label">刪除</span>
+          )}
+        </div>
+      ) : null}
+
+      <div
+        className="swipe-front"
+        style={{
+          transform: `translateX(${swipeX}px)`,
+          transition: swiping ? 'none' : 'transform 0.2s ease',
+        }}
       >
         <label className="task-check">
           <input
@@ -307,23 +478,19 @@ export function TaskCard({
         <div className="task-body">
           {titleBlock}
           {!editing && !editingDetail ? assignerBlock : null}
-          {!editing && !editingDetail ? detailBlock : editingDetail ? detailBlock : null}
+          {!editing && !editingDetail
+            ? detailBlock
+            : editingDetail
+              ? detailBlock
+              : null}
           {!editing && !editingDetail ? workerNoteBlock : null}
           {!editing && !editingDetail ? dueBlock : null}
           {!editing && !editingDetail ? urgencyBlock : null}
-          {showActions && !editingDetail ? (
-            <div className="task-actions-row">
-              {onDelete ? (
-                <button
-                  type="button"
-                  className="task-delete-inline"
-                  aria-label="刪除"
-                  onClick={() => onDelete(task.id)}
-                >
-                  刪除
-                </button>
-              ) : null}
-            </div>
+          {showAssignee && assigneeName && !editing && !compact ? (
+            <p className="task-meta">指派給 {assigneeName}</p>
+          ) : null}
+          {swipeHint && !editing && !editingDetail ? (
+            <p className="swipe-hint">{swipeHint}</p>
           ) : null}
         </div>
 
@@ -342,60 +509,7 @@ export function TaskCard({
         ) : (
           <span className="drag-spacer" aria-hidden />
         )}
-      </li>
-    )
-  }
-
-  return (
-    <li
-      ref={setNodeRef}
-      style={style}
-      className={`task-card ${toneClass} ${task.completed ? 'is-done' : ''} ${isDragging ? 'is-dragging' : ''}`}
-    >
-      <button
-        type="button"
-        className="drag-handle"
-        aria-label="長按拖曳排序"
-        disabled={dragDisabled}
-        {...attributes}
-        {...listeners}
-      >
-        <span className="drag-dots" aria-hidden>
-          ⋮
-        </span>
-      </button>
-
-      <label className="task-check">
-        <input
-          type="checkbox"
-          checked={task.completed}
-          onChange={() => onToggle(task.id)}
-        />
-        <span className="check-box" aria-hidden />
-      </label>
-
-      <div className="task-body">
-        {titleBlock}
-        {!editing && !editingDetail ? assignerBlock : null}
-        {!editing && !editingDetail ? detailBlock : editingDetail ? detailBlock : null}
-        {!editing && !editingDetail ? workerNoteBlock : null}
-        {!editing && !editingDetail ? dueBlock : null}
-        {!editing && !editingDetail ? urgencyBlock : null}
-        {showAssignee && assigneeName && !editing ? (
-          <p className="task-meta">指派給 {assigneeName}</p>
-        ) : null}
       </div>
-
-      {onDelete ? (
-        <button
-          type="button"
-          className="task-delete"
-          aria-label="刪除任務"
-          onClick={() => onDelete(task.id)}
-        >
-          ×
-        </button>
-      ) : null}
     </li>
   )
 }

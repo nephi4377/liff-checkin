@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { compareDeadlineTasks, formatDueDateLabel, isOverdue } from '../dueDate'
+import { isActiveTask } from '../data'
+import { formatDueDateLabel, isOverdue } from '../dueDate'
 import type { Task, TaskCategory } from '../types'
 import { sortPriorityTasks, urgencyLabel } from '../urgency'
 
@@ -16,14 +17,16 @@ const CATEGORY_META: {
   empty: string
 }[] = [
   { id: 'priority', title: '優先', empty: '沒有優先' },
-  { id: 'deadline', title: '限期件', empty: '沒有限期件' },
+  { id: 'reminder', title: '提醒', empty: '沒有提醒' },
   { id: 'todo', title: '待處理', empty: '沒有待處理' },
 ]
 
 function sortOpenInCategory(category: TaskCategory, tasks: Task[]): Task[] {
-  const list = tasks.filter((t) => !t.completed && t.category === category)
+  const list = tasks.filter(
+    (t) => isActiveTask(t) && !t.completed && t.category === category,
+  )
   if (category === 'priority') return sortPriorityTasks(list)
-  if (category === 'deadline') return [...list].sort(compareDeadlineTasks)
+  if (category === 'reminder') return [...list].sort((a, b) => a.order - b.order)
   return [...list].sort((a, b) => {
     const aLow = a.urgency === 'low' ? 1 : 0
     const bLow = b.urgency === 'low' ? 1 : 0
@@ -32,26 +35,55 @@ function sortOpenInCategory(category: TaskCategory, tasks: Task[]): Task[] {
   })
 }
 
+function DueChip({
+  dueDate,
+  completed,
+}: {
+  dueDate: string
+  completed: boolean
+}) {
+  const overdue = isOverdue(dueDate, completed)
+  return (
+    <span
+      className={`cat-chip ${overdue ? 'cat-chip-overdue' : 'cat-chip-due'}`}
+      aria-label={overdue ? `已逾期 ${formatDueDateLabel(dueDate)}` : formatDueDateLabel(dueDate)}
+    >
+      {overdue
+        ? `已逾期 · ${formatDueDateLabel(dueDate)}`
+        : formatDueDateLabel(dueDate)}
+    </span>
+  )
+}
+
 function TaskMeta({ task }: { task: Task }) {
-  const overdue = isOverdue(task.dueDate, task.completed)
-  if (task.category === 'deadline' && task.dueDate) {
-    return (
-      <span
-        className={`cat-chip ${overdue ? 'cat-chip-overdue' : 'cat-chip-due'}`}
-      >
-        {overdue ? '已逾期' : formatDueDateLabel(task.dueDate)}
-      </span>
-    )
-  }
+  const dueChip = task.dueDate ? (
+    <DueChip dueDate={task.dueDate} completed={task.completed} />
+  ) : null
+
   if (task.category === 'priority') {
     return (
-      <span className={`cat-chip cat-chip-urgency-${task.urgency}`}>
-        {urgencyLabel(task.urgency)}
+      <span className="cat-chip-row">
+        {task.pinned ? (
+          <span className="cat-chip cat-chip-pinned">釘選</span>
+        ) : null}
+        <span className={`cat-chip cat-chip-urgency-${task.urgency}`}>
+          {urgencyLabel(task.urgency)}
+        </span>
+        {dueChip}
       </span>
     )
   }
-  if (task.urgency === 'low') {
-    return <span className="cat-chip cat-chip-urgency-low">不急</span>
+
+  // 其他分區若有 dueDate 也要給工務看到
+  if (dueChip || task.urgency === 'low') {
+    return (
+      <span className="cat-chip-row">
+        {task.urgency === 'low' ? (
+          <span className="cat-chip cat-chip-urgency-low">不急</span>
+        ) : null}
+        {dueChip}
+      </span>
+    )
   }
   return null
 }
@@ -170,7 +202,7 @@ function AssignedRow({
 
   return (
     <li
-      className={`office-row worker-row ${tone}${checked ? ' is-done' : ''}`}
+      className={`office-row worker-row ${tone}${checked ? ' is-done' : ''}${task.pinned ? ' is-pinned' : ''}`}
     >
       <label className="office-check">
         <input
@@ -183,6 +215,14 @@ function AssignedRow({
       <div className="office-body">
         {!checked ? <TaskMeta task={task} /> : null}
         <span className="office-title">{task.title}</span>
+        {!checked && task.dueDate ? (
+          <p
+            className={`worker-due-line ${isOverdue(task.dueDate, task.completed) ? 'is-overdue' : ''}`}
+          >
+            限期 {formatDueDateLabel(task.dueDate)}
+            {isOverdue(task.dueDate, task.completed) ? ' · 已逾期' : ''}
+          </p>
+        ) : null}
         {task.assigner ? (
           <p className="task-assigner">派自 {task.assigner}</p>
         ) : null}
@@ -238,33 +278,38 @@ function CategoryBlock({
   )
 }
 
-/** 工務：四大區塊＋派工說明（只讀）＋工務說明（可編輯、同步） */
+/** 工務：優先（可含限期／釘選）／待處理／已完成 */
 export function SimpleAssignedList({
   workerName,
   tasks,
   onToggle,
   onUpdateWorkerNote,
 }: SimpleAssignedListProps) {
-  const byCategory = useMemo(() => {
-    const map = {
-      priority: sortOpenInCategory('priority', tasks),
-      deadline: sortOpenInCategory('deadline', tasks),
-      todo: sortOpenInCategory('todo', tasks),
-    }
-    return map
-  }, [tasks])
+  const activeTasks = useMemo(
+    () => tasks.filter((t) => isActiveTask(t)),
+    [tasks],
+  )
+
+  const byCategory = useMemo(
+    () => ({
+      priority: sortOpenInCategory('priority', activeTasks),
+      reminder: sortOpenInCategory('reminder', activeTasks),
+      todo: sortOpenInCategory('todo', activeTasks),
+    }),
+    [activeTasks],
+  )
 
   const openCount =
     byCategory.priority.length +
-    byCategory.deadline.length +
+    byCategory.reminder.length +
     byCategory.todo.length
 
   const done = useMemo(
     () =>
-      [...tasks]
+      [...activeTasks]
         .filter((t) => t.completed)
         .sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0)),
-    [tasks],
+    [activeTasks],
   )
 
   return (
