@@ -30,6 +30,8 @@ var AccountingApi = (function () {
   var AUTH_ME_TIMEOUT_MS = 20000;
   /** 記帳詳情：列表已有摘要；逾時應軟失敗，勿乾等 60s */
   var LEDGER_DETAIL_TIMEOUT_MS = 15000;
+  /** 讀取設定：卡住時應快失敗並顯示錯誤，勿乾等 60s */
+  var POLICY_TIMEOUT_MS = 15000;
   function logApiFailure_(actionName, err, notify) {
     if (actionName === 'accounting_error_report' || actionName === 'accounting_client_log' || actionName === 'agent_inbox_staff_error') return;
     if (typeof AccountingUi === 'undefined' || !AccountingUi.reportFailure) return;
@@ -202,6 +204,9 @@ var AccountingApi = (function () {
     if (timeoutMs === undefined && body && body.action === 'accounting_ledger_detail') {
       ms = LEDGER_DETAIL_TIMEOUT_MS;
     }
+    if (timeoutMs === undefined && body && body.action === 'accounting_policy') {
+      ms = POLICY_TIMEOUT_MS;
+    }
     // 審核包：後端已去 N+1；仍給 90s 餘裕（Sheets 冷啟動／待審筆數多）
     if (timeoutMs === undefined && body && body.action === 'ledger_review_bundle') {
       ms = 90000;
@@ -309,6 +314,30 @@ var AccountingApi = (function () {
       if (op && op.userId && op.hubLiffId) return true;
     }
     return !!readHubLiffIdFromQuery_();
+  }
+
+  /** 本機冷開（127.0.0.1／localhost）；正式站一律不算 */
+  function isLocalDevHost_() {
+    try {
+      var h = String((window.location && window.location.hostname) || '').toLowerCase();
+      return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '0.0.0.0';
+    } catch (eHost) {
+      return false;
+    }
+  }
+
+  /**
+   * 測試身分僅允許：本機 + 無主控台員工 uid + 非 embed。
+   * 正式站／主控台進門即使 authBypass=true 也不可當稽核身分。
+   */
+  function allowLocalAuthBypassDemo_() {
+    if (!isLocalDevHost_()) return false;
+    if (isInHubIframe_()) return false;
+    if (typeof AccountingNav !== 'undefined' && AccountingNav.isEmbed && AccountingNav.isEmbed()) return false;
+    var hubOp = null;
+    try { hubOp = readHubOperator_(); } catch (eOp) { hubOp = null; }
+    if (hubOp && hubOp.userId) return false;
+    return true;
   }
 
   /** 會計殼層內嵌 iframe 須向最外層 HUB 要 token，不可只找直接 parent */
@@ -1533,6 +1562,13 @@ var AccountingApi = (function () {
         throw new Error(HUB_RELOGIN_MSG);
       }
       var policy = await AccountingApi.loadPolicy();
+      // 正式寫入必須是真實員工／LINE；測試身分僅本機冷開 demo（見 allowLocalAuthBypassDemo_）
+      if (policy && policy.authBypass && allowLocalAuthBypassDemo_()) {
+        var packLiff = devBypassAuthBody_('accounting_auth_me');
+        var authBypass = await post(packLiff.body);
+        if (!authBypass.success) throw new Error(authBypass.message || '驗證失敗');
+        return buildDevBypassSession_(authBypass, packLiff.opts);
+      }
       var liffId = resolveLiffIdForInit_(opts, policy);
       if (!liffId) throw new Error('LIFF 尚未設定');
       if (typeof liff === 'undefined') throw new Error('請用 LINE 開啟');
@@ -1606,14 +1642,36 @@ var AccountingApi = (function () {
           }
         }
       } else {
-        session = await AccountingApi.initLiff(opts);
-        if (!session) return null;
-        var authBody = isHubStaffSession_(session)
-          ? { action: 'payment_request_auth_me', user_id: session.auth.user_id, auth: { user_id: session.auth.user_id } }
-          : { action: 'payment_request_auth_me', liff_id_token: session.idToken };
-        var authRes = await post(authBody);
-        if (!authRes.success) throw new Error(authRes.message || '驗證失敗');
-        session.auth = authRes;
+        // 主控台 iframe 卻沒帶 uid：不可退成測試身分（稽核對不到人）
+        if (isInHubIframe_() || (typeof AccountingNav !== 'undefined' && AccountingNav.isEmbed && AccountingNav.isEmbed())) {
+          throw new Error(HUB_RELOGIN_MSG);
+        }
+        // 僅本機冷開＋authBypass：demo 用；正式站改走 LINE 真實身分
+        var policyPr = await AccountingApi.loadPolicy();
+        if (policyPr && policyPr.authBypass && allowLocalAuthBypassDemo_()) {
+          var packPr = devBypassAuthBody_('payment_request_auth_me');
+          var authBypassPr = await post(packPr.body);
+          if (!authBypassPr.success) throw new Error(authBypassPr.message || '驗證失敗');
+          session = buildDevBypassSession_(authBypassPr, packPr.opts);
+        } else {
+          session = await AccountingApi.initLiff(opts);
+          if (!session) return null;
+          if (session.devBypass) {
+            var packPr2 = devBypassAuthBody_('payment_request_auth_me');
+            if (session.devPermission) packPr2.body.dev_permission = session.devPermission;
+            if (session.devUserId) packPr2.body.dev_user_id = session.devUserId;
+            var authResDev = await post(packPr2.body);
+            if (!authResDev.success) throw new Error(authResDev.message || '驗證失敗');
+            session.auth = authResDev;
+          } else {
+            var authBody = isHubStaffSession_(session)
+              ? { action: 'payment_request_auth_me', user_id: session.auth.user_id, auth: { user_id: session.auth.user_id } }
+              : { action: 'payment_request_auth_me', liff_id_token: session.idToken };
+            var authRes = await post(authBody);
+            if (!authRes.success) throw new Error(authRes.message || '驗證失敗');
+            session.auth = authRes;
+          }
+        }
       }
       if (!session) return null;
       if (String(session.auth.status || '') === '廠商') {
