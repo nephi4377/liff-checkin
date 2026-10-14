@@ -9,6 +9,15 @@ export const BASE_WORKERS: readonly Worker[] = [
 
 const BASE_IDS = new Set(BASE_WORKERS.map((w) => w.id))
 
+/** 舊工務 id → 新 id（僅相容轉址／指派） */
+export const WORKER_ID_ALIASES: Record<string, string> = {
+  'ops-w-mv7pnmxdvhx4': 'ops-w-yifang',
+}
+
+export function canonicalWorkerId(id: string): string {
+  return WORKER_ID_ALIASES[id] ?? id
+}
+
 export function isBaseWorkerId(id: string): boolean {
   return BASE_IDS.has(id)
 }
@@ -41,7 +50,8 @@ export function mergeWorkers(raw: unknown): Worker[] {
   if (Array.isArray(raw)) {
     for (const item of raw) {
       if (!item || typeof item !== 'object') continue
-      const id = String((item as Worker).id ?? '').trim().slice(0, 40)
+      const rawId = String((item as Worker).id ?? '').trim().slice(0, 40)
+      const id = canonicalWorkerId(rawId)
       const name = normalizeWorkerName(String((item as Worker).name ?? ''))
       if (!id.startsWith('ops-') || !name) continue
       const archived = Boolean((item as Worker).archived)

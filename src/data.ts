@@ -12,7 +12,12 @@ import type {
   Worker,
 } from './types'
 import { normalizeUrgency } from './urgency'
-import { BASE_WORKERS, mergeWorkers, workerIdsOf } from './workers'
+import {
+  BASE_WORKERS,
+  canonicalWorkerId,
+  mergeWorkers,
+  workerIdsOf,
+} from './workers'
 
 /** @deprecated 請用 BASE_WORKERS／mergeWorkers；保留匯出給舊引用 */
 export const WORKERS: Worker[] = BASE_WORKERS.map((w) => ({ ...w }))
@@ -407,7 +412,7 @@ export function ensureDispatchState(state: AppState): AppState {
     const nextId = LEGACY_TASK_IDS[t.id] ?? t.id
     if (deleted.has(t.id) || deleted.has(nextId)) continue
 
-    let assigneeId = t.assigneeId
+    let assigneeId = canonicalWorkerId(t.assigneeId)
     if (LEGACY_TO_AYONG.has(assigneeId) || t.id === 'task-renkai-trim-knife') {
       assigneeId = 'ops-ayong'
     }

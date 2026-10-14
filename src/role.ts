@@ -36,8 +36,9 @@ export function resolvePersona(): AppPersona {
   if (host.startsWith('yang-ayong.') || path.endsWith('/ayong') || role === 'ayong') {
     return 'ops-ayong'
   }
-  // 自訂工務：?role=ops-… 或 ?role=ops-w-…
+  // 自訂工務：?role=ops-…（舊宜芳 id 轉成 ops-w-yifang）
   if (role && role.startsWith('ops-') && role.length <= 40) {
+    if (role === 'ops-w-mv7pnmxdvhx4') return 'ops-w-yifang'
     return role
   }
   return 'hub'
