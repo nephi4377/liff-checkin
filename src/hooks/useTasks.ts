@@ -261,6 +261,7 @@ export function useTasks() {
           assigner: assignerTrim,
           assigneeId,
           category: safeCategory,
+          isReminder: safeCategory === 'reminder' ? true : undefined,
           urgency: safeUrgency,
           dueDate: due,
           completed: false,
@@ -507,6 +508,7 @@ export function useTasks() {
           ? {
               ...t,
               category,
+              isReminder: category === 'reminder' ? true : undefined,
               order: maxOrder + 1,
               urgency,
               pinned: category === 'priority' ? t.pinned : undefined,

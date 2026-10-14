@@ -154,11 +154,46 @@ function normalizeDeletedIds(raw: unknown): string[] {
   return [...new Set(raw.map(String).filter(Boolean))]
 }
 
-function normalizeCategory(value: unknown): Task['category'] {
+/** 從 category／type／section／isReminder 等別名還原分區 */
+export function normalizeCategory(
+  valueOrTask: unknown,
+  maybeTask?: Record<string, unknown>,
+): Task['category'] {
+  const task =
+    valueOrTask &&
+    typeof valueOrTask === 'object' &&
+    !Array.isArray(valueOrTask) &&
+    maybeTask === undefined
+      ? (valueOrTask as Record<string, unknown>)
+      : { category: valueOrTask, ...(maybeTask ?? {}) }
+
+  const tokens = [task.category, task.type, task.section]
+    .filter((x): x is string => typeof x === 'string')
+    .map((s) => s.trim().toLowerCase())
+
+  // 提醒優先：避免舊版把 category 改成 todo 後丢掉分區
+  if (
+    tokens.includes('reminder') ||
+    tokens.includes('提醒') ||
+    task.isReminder === true
+  ) {
+    return 'reminder'
+  }
   // 舊「限期件」分區併入優先（保留 dueDate）
-  if (value === 'deadline' || value === 'priority') return 'priority'
-  if (value === 'reminder') return 'reminder'
-  if (value === 'todo') return 'todo'
+  if (
+    tokens.includes('deadline') ||
+    tokens.includes('priority') ||
+    tokens.includes('優先')
+  ) {
+    return 'priority'
+  }
+  if (
+    tokens.includes('todo') ||
+    tokens.includes('待處理') ||
+    tokens.includes('pending')
+  ) {
+    return 'todo'
+  }
   return 'todo'
 }
 
@@ -179,7 +214,7 @@ function normalizeTaskFields(t: Task): Task {
     typeof t.workerNote === 'string' ? t.workerNote.trim() : ''
   const assigner =
     typeof t.assigner === 'string' ? t.assigner.trim() : ''
-  const category = normalizeCategory(t.category)
+  const category = normalizeCategory(t as unknown as Record<string, unknown>)
   let dueDate: string | undefined
   if (typeof t.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.dueDate.trim())) {
     dueDate = t.dueDate.trim()
@@ -202,6 +237,7 @@ function normalizeTaskFields(t: Task): Task {
     caseNo,
     title,
     category,
+    isReminder: category === 'reminder' ? true : undefined,
     urgency: normalizeUrgency(t.urgency),
     detail: detail || undefined,
     workerNote: workerNote || undefined,
@@ -472,6 +508,29 @@ export function ensureDispatchState(state: AppState): AppState {
   const baseUpdatedAt =
     typeof state.updatedAt === 'number' ? state.updatedAt : now
 
+  // 提醒分區修復／補寫 isReminder 時抬 revision，boot／pull 會寫回 MantleDB
+  const beforeMeta = new Map(
+    (state.tasks ?? []).map((t) => [
+      String(t.id),
+      {
+        category: t.category,
+        isReminder: Boolean(t.isReminder),
+      },
+    ]),
+  )
+  let reminderMetaRepaired = false
+  for (const t of tasksById.values()) {
+    const prev = beforeMeta.get(t.id)
+    if (!prev) continue
+    if (
+      prev.category !== t.category ||
+      prev.isReminder !== Boolean(t.isReminder)
+    ) {
+      reminderMetaRepaired = true
+      break
+    }
+  }
+
   const normalized: AppState = {
     workers: WORKERS.map((w) => ({ ...w })),
     tasks: Array.from(tasksById.values()),
@@ -480,10 +539,11 @@ export function ensureDispatchState(state: AppState): AppState {
     ),
     assigners: nextAssigners,
     deletedIds: [...tombstones],
-    // 清掉同步名單裡的已移除名時抬 revision，boot 會寫回雲端
-    updatedAt: hadRemovedAssigner
-      ? Math.max(baseUpdatedAt + 1, now)
-      : baseUpdatedAt,
+    // 清掉同步名單裡的已移除名／修復提醒分區時抬 revision，boot 會寫回雲端
+    updatedAt:
+      hadRemovedAssigner || reminderMetaRepaired
+        ? Math.max(baseUpdatedAt + 1, now)
+        : baseUpdatedAt,
   }
   return purgeStaleCompleted(normalized, now)
 }

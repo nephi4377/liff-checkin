@@ -32,6 +32,11 @@ export interface Task {
   assigner?: string
   assigneeId: string
   category: TaskCategory
+  /**
+   * 提醒區備份標記（與 category:'reminder' 雙寫）。
+   * 舊版客戶端若不識 reminder、把 category 改成 todo 時，新版可靠此還原。
+   */
+  isReminder?: boolean
   urgency: Urgency
   /** 限期完成：截止日期 YYYY-MM-DD */
   dueDate?: string
