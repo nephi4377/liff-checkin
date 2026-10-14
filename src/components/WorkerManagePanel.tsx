@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import type { Worker } from '../types'
-import { isBaseWorkerId, workerShareUrl } from '../workers'
+import { workerShareUrl } from '../workers'
 
 interface WorkerManagePanelProps {
   workers: Worker[]
@@ -75,7 +75,6 @@ export function WorkerManagePanel({
   }
 
   const handleRemove = (w: Worker) => {
-    if (isBaseWorkerId(w.id)) return
     const openUrl = workerShareUrl(w.id)
     const ok = window.confirm(
       `確定刪除工務「${w.name}」？\n專屬網址將不再列出（任務仍保留）：\n${openUrl}`,
@@ -92,7 +91,7 @@ export function WorkerManagePanel({
         <div>
           <h2 id="worker-manage-heading">工務名單</h2>
           <p className="worker-manage-lead">
-            可新增、編輯改名、刪除（非只讀）。網址綁 id，改名不會壞連結。
+            所有工務（含恩德／阿勇）皆可新增、編輯改名、刪除。網址綁 id，改名不會壞連結。
           </p>
         </div>
         {mode === 'idle' ? (
@@ -135,23 +134,18 @@ export function WorkerManagePanel({
           <li key={w.id} className="worker-manage-row">
             <div className="worker-manage-meta">
               <span className="worker-manage-name">{w.name}</span>
-              {isBaseWorkerId(w.id) ? (
-                <span className="worker-manage-tag">內建</span>
-              ) : null}
             </div>
             <div className="worker-manage-actions">
               <button type="button" className="btn-ghost" onClick={() => startEdit(w)}>
                 編輯
               </button>
-              {!isBaseWorkerId(w.id) ? (
-                <button
-                  type="button"
-                  className="btn-ghost worker-manage-delete"
-                  onClick={() => handleRemove(w)}
-                >
-                  刪除
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="btn-ghost worker-manage-delete"
+                onClick={() => handleRemove(w)}
+              >
+                刪除
+              </button>
             </div>
           </li>
         ))}

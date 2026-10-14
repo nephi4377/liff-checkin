@@ -22,7 +22,6 @@ import type {
   Worker,
 } from '../types'
 import {
-  isBaseWorkerId,
   makeWorkerId,
   mergeWorkers,
   mergeWorkersKeepingLocalExtras,
@@ -589,10 +588,10 @@ export function useTasks() {
     [pushSoon],
   )
 
-  /** 軟刪自訂工務；內建不可刪。任務仍掛原 id，顯示舊名 */
+  /** 軟刪工務（恩德／阿勇與其他人相同）。任務仍掛原 id，顯示舊名 */
   const removeWorker = useCallback(
     (id: string): boolean => {
-      if (isBaseWorkerId(id)) return false
+      if (!id.startsWith('ops-')) return false
       let ok = false
       let toPush: AppState | null = null
       setState((prev) => {
