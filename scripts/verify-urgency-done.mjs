@@ -41,7 +41,7 @@ await page.screenshot({
   fullPage: true,
 })
 
-// Complete a 代辦 task → 已完成
+// Complete a 待辦 task → 已完成
 const todoCard = page.locator('.list-todo .task-card').first()
 const activeTitle = (
   await todoCard.locator('.task-title').textContent()
@@ -57,7 +57,7 @@ if (!inDone) throw new Error('completed task not in 已完成 section')
 const stillActive = await page
   .locator('.list-todo .task-title', { hasText: activeTitle || '' })
   .count()
-if (stillActive) throw new Error('completed task still in 代辦')
+if (stillActive) throw new Error('completed task still in 待辦')
 
 await page.screenshot({ path: `${OUT}/done-section-ende.png`, fullPage: true })
 

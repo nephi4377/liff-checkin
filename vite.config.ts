@@ -16,8 +16,8 @@ export default defineConfig({
         'pwa-512.png',
       ],
       manifest: {
-        name: '員工代辦事項',
-        short_name: '員工代辦',
+        name: '員工待辦事項',
+        short_name: '員工待辦',
         description: '派工給恩德／阿勇：優先／待處理、勾選完成、調整順序',
         theme_color: '#1e2a32',
         background_color: '#e7ecea',
