@@ -54,14 +54,16 @@ assert(AUTH_ME_TIMEOUT_MS < DEFAULT_TIMEOUT_MS, 'auth timeout shorter than defau
 assert(canProvisional(op, 1), 'payment_request staff minPermission 1');
 assert(canProvisional(op, 0), 'payment_request AccountingBoot minPermission 0');
 
-// 冷開無 hub：authBypass 應略過 LINE（字串契約；實作見 accounting_api initLiff／initPaymentRequestSession）
+// 正式／主控台必須用真實 uid；authBypass 僅本機冷開（見 allowLocalAuthBypassDemo_）
 var apiSrc = require('fs').readFileSync(
   require('path').join(__dirname, '../../../shared/js/accounting_api.js'),
   'utf8'
 );
-assert(apiSrc.indexOf('policy.authBypass') >= 0, 'api honors authBypass');
+assert(apiSrc.indexOf('allowLocalAuthBypassDemo_') >= 0, 'local-only bypass gate');
+assert(apiSrc.indexOf('policy.authBypass && allowLocalAuthBypassDemo_()') >= 0,
+  'authBypass not used as live audit identity');
 assert(apiSrc.indexOf("devBypassAuthBody_('payment_request_auth_me')") >= 0,
-  'payment_request cold path can bypass LIFF');
+  'local cold-open demo path still exists');
 
 function softAuthTimeoutToast(actionName, extra) {
   var isAuthMe = /_auth_me$/.test(String(actionName || ''));
