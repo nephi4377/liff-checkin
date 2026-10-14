@@ -214,6 +214,9 @@ function AssignedRow({
       </label>
       <div className="office-body">
         {!checked ? <TaskMeta task={task} /> : null}
+        {task.caseNo ? (
+          <span className="case-no-badge">案號 {task.caseNo}</span>
+        ) : null}
         <span className="office-title">{task.title}</span>
         {!checked && task.dueDate ? (
           <p

@@ -16,11 +16,13 @@ interface AssistantPanelProps {
     urgency?: Urgency,
     dueDate?: string,
     assigner?: string,
+    caseNo?: string,
   ) => void
   onToggle: (id: string) => void
   onReorder: (assigneeId: string, category: TaskCategory, ids: string[]) => void
   onMoveCategory: (taskId: string, category: TaskCategory) => void
   onUpdateTitle: (id: string, title: string) => void
+  onUpdateCaseNo: (id: string, caseNo: string) => void
   onUpdateDetail: (id: string, detail: string) => void
   onUpdateAssigner: (id: string, assigner: string) => void
   onAddAssigner: (name: string) => string | null
@@ -43,6 +45,7 @@ export function AssistantPanel({
   onReorder,
   onMoveCategory,
   onUpdateTitle,
+  onUpdateCaseNo,
   onUpdateDetail,
   onUpdateAssigner,
   onAddAssigner,
@@ -59,6 +62,7 @@ export function AssistantPanel({
 
   const defaultId = tabWorkers[0]?.id ?? ''
   const [focusWorkerId, setFocusWorkerId] = useState(defaultId)
+  const [caseNo, setCaseNo] = useState('')
   const [title, setTitle] = useState('')
   const [detail, setDetail] = useState('')
   const [assigner, setAssigner] = useState('')
@@ -90,7 +94,9 @@ export function AssistantPanel({
       undefined,
       category === 'priority' && dueDate ? dueDate : undefined,
       assigner,
+      caseNo,
     )
+    setCaseNo('')
     setTitle('')
     setDetail('')
     setAssigner('')
@@ -141,6 +147,7 @@ export function AssistantPanel({
         onReorder={(cat, ids) => onReorder(focusWorkerIdSafe, cat, ids)}
         onMoveCategory={onMoveCategory}
         onUpdateTitle={onUpdateTitle}
+        onUpdateCaseNo={onUpdateCaseNo}
         onUpdateDetail={onUpdateDetail}
         onUpdateAssigner={onUpdateAssigner}
         onAddAssigner={onAddAssigner}
@@ -156,13 +163,27 @@ export function AssistantPanel({
       <div className="simple-add-bar">
         {showAdd ? (
           <form className="simple-add-form" onSubmit={handleSubmit}>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={`給${focusName}加一件…`}
-              autoFocus
-              autoComplete="off"
-            />
+            <label className="detail-field">
+              <span className="detail-field-label">案號</span>
+              <input
+                value={caseNo}
+                onChange={(e) => setCaseNo(e.target.value)}
+                placeholder="例：751（可空）"
+                autoComplete="off"
+                inputMode="numeric"
+              />
+            </label>
+            <label className="detail-field">
+              <span className="detail-field-label">標題</span>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={`給${focusName}加一件…`}
+                autoFocus
+                autoComplete="off"
+                required
+              />
+            </label>
             <label className="detail-field">
               <span className="detail-field-label">誰派的</span>
               <AssignerSelect
@@ -228,6 +249,7 @@ export function AssistantPanel({
                 className="btn-ghost"
                 onClick={() => {
                   setShowAdd(false)
+                  setCaseNo('')
                   setDetail('')
                   setAssigner('')
                   setDueDate('')

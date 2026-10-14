@@ -25,6 +25,7 @@ interface TaskCardProps {
   /** 優先區釘選（左滑動作列） */
   onTogglePin?: (id: string) => void
   onUpdateTitle?: (id: string, title: string) => void
+  onUpdateCaseNo?: (id: string, caseNo: string) => void
   onUpdateDetail?: (id: string, detail: string) => void
   onUpdateAssigner?: (id: string, assigner: string) => void
   onAddAssigner?: (name: string) => string | null
@@ -46,6 +47,7 @@ export function TaskCard({
   onDelete,
   onTogglePin,
   onUpdateTitle,
+  onUpdateCaseNo,
   onUpdateDetail,
   onUpdateAssigner,
   onAddAssigner,
@@ -66,6 +68,7 @@ export function TaskCard({
 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(task.title)
+  const [caseDraft, setCaseDraft] = useState(task.caseNo ?? '')
   const [editingDetail, setEditingDetail] = useState(false)
   const [detailDraft, setDetailDraft] = useState(task.detail ?? '')
   const [urgencyOpen, setUrgencyOpen] = useState(false)
@@ -85,8 +88,11 @@ export function TaskCard({
   const swipeEnabled = Boolean(onDelete) || canPin
 
   useEffect(() => {
-    if (!editing) setDraft(task.title)
-  }, [task.title, editing])
+    if (!editing) {
+      setDraft(task.title)
+      setCaseDraft(task.caseNo ?? '')
+    }
+  }, [task.title, task.caseNo, editing])
 
   useEffect(() => {
     if (!editingDetail) setDetailDraft(task.detail ?? '')
@@ -100,6 +106,12 @@ export function TaskCard({
     const next = draft.trim()
     if (next && next !== task.title) onUpdateTitle?.(task.id, next)
     else setDraft(task.title)
+    if (onUpdateCaseNo) {
+      const nextCase = caseDraft.trim()
+      if (nextCase !== (task.caseNo ?? '').trim()) {
+        onUpdateCaseNo(task.id, nextCase)
+      }
+    }
     setEditing(false)
   }
 
@@ -196,24 +208,37 @@ export function TaskCard({
   }
 
   const titleBlock = editing ? (
-    <input
-      ref={inputRef}
-      className="task-edit-input"
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commitEdit}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault()
-          commitEdit()
-        }
-        if (e.key === 'Escape') {
-          setDraft(task.title)
-          setEditing(false)
-        }
-      }}
-      aria-label="編輯工作內容"
-    />
+    <div className="task-edit-stack">
+      {onUpdateCaseNo ? (
+        <input
+          className="task-edit-input task-case-edit"
+          value={caseDraft}
+          onChange={(e) => setCaseDraft(e.target.value)}
+          placeholder="案號"
+          aria-label="編輯案號"
+        />
+      ) : null}
+      <input
+        ref={inputRef}
+        className="task-edit-input"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commitEdit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            commitEdit()
+          }
+          if (e.key === 'Escape') {
+            setDraft(task.title)
+            setCaseDraft(task.caseNo ?? '')
+            setEditing(false)
+          }
+        }}
+        aria-label="編輯標題"
+        placeholder="標題"
+      />
+    </div>
   ) : onUpdateTitle ? (
     <button
       type="button"
@@ -223,6 +248,9 @@ export function TaskCard({
         setEditing(true)
       }}
     >
+      {task.caseNo ? (
+        <span className="case-no-badge">案號 {task.caseNo}</span>
+      ) : null}
       <span className="task-title">
         {task.pinned ? (
           <span className="pin-badge" aria-label="已釘選">
@@ -234,14 +262,19 @@ export function TaskCard({
       <span className="edit-hint">編輯</span>
     </button>
   ) : (
-    <p className="task-title">
-      {task.pinned ? (
-        <span className="pin-badge" aria-label="已釘選">
-          釘
-        </span>
+    <div className="task-title-stack">
+      {task.caseNo ? (
+        <span className="case-no-badge">案號 {task.caseNo}</span>
       ) : null}
-      {task.title}
-    </p>
+      <p className="task-title">
+        {task.pinned ? (
+          <span className="pin-badge" aria-label="已釘選">
+            釘
+          </span>
+        ) : null}
+        {task.title}
+      </p>
+    </div>
   )
 
   const detailBlock = editingDetail && onUpdateDetail ? (

@@ -19,7 +19,8 @@ export function buildDemoState(): AppState {
     tasks: [
       {
         id: 'demo-p1',
-        title: '【751】補土',
+        caseNo: '751',
+        title: '補土',
         assigneeId: 'ops-ende',
         category: 'priority',
         urgency: 'urgent',
@@ -32,7 +33,8 @@ export function buildDemoState(): AppState {
       },
       {
         id: 'demo-p2',
-        title: '【786】帶 PP 板',
+        caseNo: '786',
+        title: '帶 PP 板',
         assigneeId: 'ops-ende',
         category: 'priority',
         urgency: 'normal',

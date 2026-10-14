@@ -20,6 +20,9 @@ export interface Worker {
 
 export interface Task {
   id: string
+  /** 案號（獨立欄位，例：751）；舊資料可能從標題 【751】 拆出 */
+  caseNo?: string
+  /** 標題（不含案號括號前綴） */
   title: string
   /** 派工說明：派工端寫的任務說明（交代做什麼／注意什麼） */
   detail?: string

@@ -31,6 +31,7 @@ export default function App() {
     reorder,
     moveCategory,
     updateTitle,
+    updateCaseNo,
     updateDetail,
     updateWorkerNote,
     updateAssigner,
@@ -147,6 +148,7 @@ export default function App() {
             onReorder={reorder}
             onMoveCategory={moveCategory}
             onUpdateTitle={updateTitle}
+            onUpdateCaseNo={updateCaseNo}
             onUpdateDetail={updateDetail}
             onUpdateAssigner={updateAssigner}
             onAddAssigner={addAssigner}

@@ -1855,6 +1855,37 @@ a.btn-ghost.top-hub-link {
   vertical-align: middle;
 }
 
+.case-no-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin: 0 0 0.15rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 6px;
+  background: rgba(31, 95, 139, 0.12);
+  color: #174a6d;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.task-title-btn {
+  display: grid;
+  gap: 0.15rem;
+  justify-items: start;
+}
+
+.task-title-stack,
+.task-edit-stack {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.task-case-edit {
+  max-width: 7.5rem;
+  font-weight: 700;
+}
+
 .cat-chip-row {
   display: inline-flex;
   flex-wrap: wrap;

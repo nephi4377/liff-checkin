@@ -27,6 +27,7 @@ const LEGACY_TO_AYONG = new Set(['ops-renkai'])
 type TaskSpec = {
   id: string
   title: string
+  caseNo?: string
   assigneeId: string
   category: TaskCategory
   urgency: Urgency
@@ -34,11 +35,34 @@ type TaskSpec = {
   completed?: boolean
 }
 
+/** 從舊合併標題拆案號：【751】補土 → { caseNo: '751', title: '補土' } */
+export function splitCaseFromTitle(rawTitle: string): {
+  caseNo?: string
+  title: string
+} {
+  const text = String(rawTitle ?? '').trim()
+  const m = text.match(/^【\s*([^】]+?)\s*】\s*(.*)$/)
+  if (!m) return { title: text || '未命名' }
+  const caseNo = m[1].trim()
+  const rest = (m[2] ?? '').trim()
+  return {
+    caseNo: caseNo || undefined,
+    title: rest || text,
+  }
+}
+
+export function normalizeCaseNo(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined
+  const n = raw.replace(/^【|】$/g, '').trim().slice(0, 24)
+  return n || undefined
+}
+
 /** Stable IDs so redeploy / migrate 不會重複塞同一筆 */
 const DISPATCH_TASKS: TaskSpec[] = [
   {
     id: 'task-ende-751-putu',
-    title: '【751】補土',
+    caseNo: '751',
+    title: '補土',
     assigneeId: 'ops-ende',
     category: 'priority',
     urgency: 'urgent',
@@ -46,7 +70,8 @@ const DISPATCH_TASKS: TaskSpec[] = [
   },
   {
     id: 'task-ende-786-pp',
-    title: '【786】帶 PP 板',
+    caseNo: '786',
+    title: '帶 PP 板',
     assigneeId: 'ops-ende',
     category: 'priority',
     urgency: 'normal',
@@ -92,9 +117,13 @@ const LEGACY_TASK_IDS: Record<string, string> = {
 }
 
 function specToTask(spec: TaskSpec, createdAt: number): Task {
+  const split = spec.caseNo
+    ? { caseNo: normalizeCaseNo(spec.caseNo), title: spec.title }
+    : splitCaseFromTitle(spec.title)
   return {
     id: spec.id,
-    title: spec.title,
+    caseNo: split.caseNo,
+    title: split.title,
     assigneeId: spec.assigneeId,
     category: spec.category,
     urgency: spec.urgency,
@@ -115,6 +144,10 @@ const LEGACY_KEYS = ['employee-todo-v1', 'employee-todo-v2']
 /** 已完成超過此天數自動刪除（tombstone + sync） */
 export const COMPLETED_KEEP_DAYS = 10
 export const COMPLETED_TTL_MS = COMPLETED_KEEP_DAYS * 24 * 60 * 60 * 1000
+
+/** 已刪（軟刪）超過此天數永久清除（tombstone + sync） */
+export const TRASHED_KEEP_DAYS = 3
+export const TRASHED_TTL_MS = TRASHED_KEEP_DAYS * 24 * 60 * 60 * 1000
 
 function normalizeDeletedIds(raw: unknown): string[] {
   if (!Array.isArray(raw)) return []
@@ -154,8 +187,20 @@ function normalizeTaskFields(t: Task): Task {
   const trashedAt =
     typeof t.trashedAt === 'number' && t.trashedAt > 0 ? t.trashedAt : undefined
   const pinned = Boolean(t.pinned) && category === 'priority' && !trashedAt
+
+  let caseNo = normalizeCaseNo(t.caseNo)
+  let title = typeof t.title === 'string' ? t.title.trim() : ''
+  if (!caseNo && title) {
+    const split = splitCaseFromTitle(title)
+    caseNo = split.caseNo
+    title = split.title
+  }
+  if (!title) title = '未命名'
+
   return {
     ...t,
+    caseNo,
+    title,
     category,
     urgency: normalizeUrgency(t.urgency),
     detail: detail || undefined,
@@ -241,7 +286,12 @@ const LEGACY_OFFICE_IDS: Record<string, string> = {
   'office-invoice-check': 'office-ende-invoice',
 }
 
-/** Remove completed tasks older than 10 days; tombstone so seed won't revive them */
+function isStaleTrashed(trashedAt: number | undefined, now: number): boolean {
+  if (typeof trashedAt !== 'number' || trashedAt <= 0) return false
+  return trashedAt < now - TRASHED_TTL_MS
+}
+
+/** Remove completed (>10d) and soft-deleted (>3d); tombstone so seed won't revive */
 export function purgeStaleCompleted(
   state: AppState,
   now = Date.now(),
@@ -249,7 +299,14 @@ export function purgeStaleCompleted(
   const cutoff = now - COMPLETED_TTL_MS
   const purged: string[] = []
   const tasks = state.tasks.filter((t) => {
-    if (isStaleCompleted(t.completed, t.completedAt, t.createdAt, cutoff)) {
+    if (isStaleTrashed(t.trashedAt, now)) {
+      purged.push(t.id)
+      return false
+    }
+    if (
+      !t.trashedAt &&
+      isStaleCompleted(t.completed, t.completedAt, t.createdAt, cutoff)
+    ) {
       purged.push(t.id)
       return false
     }

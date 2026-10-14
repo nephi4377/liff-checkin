@@ -8,9 +8,16 @@ export function normalizeDueDate(value: unknown): string | undefined {
   return t
 }
 
+const WEEKDAY_ZH = ['日', '一', '二', '三', '四', '五', '六'] as const
+
+/** 例：2026/10/13（一）前 */
 export function formatDueDateLabel(dueDate: string): string {
   const [y, m, day] = dueDate.split('-')
-  return `${y}/${m}/${day} 前`
+  const d = new Date(`${dueDate}T12:00:00`)
+  const wd = Number.isNaN(d.getTime())
+    ? ''
+    : `（${WEEKDAY_ZH[d.getDay()]}）`
+  return `${y}/${m}/${day}${wd}前`
 }
 
 /** Local calendar day YYYY-MM-DD */

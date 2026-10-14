@@ -32,6 +32,7 @@ interface AssistantBoardProps {
   onReorder: (category: TaskCategory, orderedIds: string[]) => void
   onMoveCategory: (taskId: string, category: TaskCategory) => void
   onUpdateTitle: (id: string, title: string) => void
+  onUpdateCaseNo: (id: string, caseNo: string) => void
   onUpdateDetail: (id: string, detail: string) => void
   onUpdateAssigner?: (id: string, assigner: string) => void
   onAddAssigner?: (name: string) => string | null
@@ -56,6 +57,7 @@ function Column({
   tasks,
   onToggle,
   onUpdateTitle,
+  onUpdateCaseNo,
   onUpdateDetail,
   onUpdateAssigner,
   onAddAssigner,
@@ -71,6 +73,7 @@ function Column({
   tasks: Task[]
   onToggle: (id: string) => void
   onUpdateTitle: (id: string, title: string) => void
+  onUpdateCaseNo: (id: string, caseNo: string) => void
   onUpdateDetail: (id: string, detail: string) => void
   onUpdateAssigner?: (id: string, assigner: string) => void
   onAddAssigner?: (name: string) => string | null
@@ -104,6 +107,7 @@ function Column({
                 task={task}
                 onToggle={onToggle}
                 onUpdateTitle={onUpdateTitle}
+                onUpdateCaseNo={onUpdateCaseNo}
                 onUpdateDetail={onUpdateDetail}
                 onUpdateAssigner={onUpdateAssigner}
                 onAddAssigner={onAddAssigner}
@@ -173,7 +177,7 @@ function TrashSection({
         <h2>已刪</h2>
         <span className="count-pill">{tasks.length}</span>
       </header>
-      <p className="done-hint">按復原可救回 · 不會出現在工務清單</p>
+      <p className="done-hint">按復原可救回 · 超過 3 天永久清除</p>
       {tasks.length === 0 ? (
         <p className="empty-list">沒有已刪任務</p>
       ) : (
@@ -181,6 +185,9 @@ function TrashSection({
           {tasks.map((task) => (
             <li key={task.id} className="task-card task-card-compact is-trashed">
               <div className="task-body">
+                {task.caseNo ? (
+                  <span className="case-no-badge">案號 {task.caseNo}</span>
+                ) : null}
                 <p className="task-title">{task.title}</p>
                 {task.assigner ? (
                   <p className="task-assigner">派自 {task.assigner}</p>
@@ -210,6 +217,7 @@ export function AssistantBoard({
   onReorder,
   onMoveCategory,
   onUpdateTitle,
+  onUpdateCaseNo,
   onUpdateDetail,
   onUpdateAssigner,
   onAddAssigner,
@@ -363,6 +371,7 @@ export function AssistantBoard({
           tasks={byCategory.priority}
           onToggle={onToggle}
           onUpdateTitle={onUpdateTitle}
+          onUpdateCaseNo={onUpdateCaseNo}
           onUpdateDetail={onUpdateDetail}
           onUpdateAssigner={onUpdateAssigner}
           onAddAssigner={onAddAssigner}
@@ -379,6 +388,7 @@ export function AssistantBoard({
           tasks={byCategory.reminder}
           onToggle={onToggle}
           onUpdateTitle={onUpdateTitle}
+          onUpdateCaseNo={onUpdateCaseNo}
           onUpdateDetail={onUpdateDetail}
           onUpdateAssigner={onUpdateAssigner}
           onAddAssigner={onAddAssigner}
@@ -394,6 +404,7 @@ export function AssistantBoard({
           tasks={byCategory.todo}
           onToggle={onToggle}
           onUpdateTitle={onUpdateTitle}
+          onUpdateCaseNo={onUpdateCaseNo}
           onUpdateDetail={onUpdateDetail}
           onUpdateAssigner={onUpdateAssigner}
           onAddAssigner={onAddAssigner}
@@ -425,6 +436,9 @@ export function AssistantBoard({
               <span className={`urgency-badge urgency-${activeTask.urgency}`}>
                 {urgencyLabel(activeTask.urgency)}
               </span>
+            ) : null}
+            {activeTask.caseNo ? (
+              <span className="case-no-badge">案號 {activeTask.caseNo}</span>
             ) : null}
             <p className="task-title">{activeTask.title}</p>
           </div>

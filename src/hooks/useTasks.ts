@@ -5,6 +5,7 @@ import {
   createSeedState,
   ensureDispatchState,
   loadState,
+  normalizeCaseNo,
   saveState,
 } from '../data'
 import { isRemovedAssigner, normalizeAssignerName } from '../assigners'
@@ -217,11 +218,13 @@ export function useTasks() {
       urgency?: Urgency,
       dueDate?: string,
       assigner?: string,
+      caseNo?: string,
     ) => {
       const trimmed = title.trim()
       if (!trimmed || !assigneeId) return
       const detailTrim = detail?.trim() || undefined
       const assignerTrim = assigner?.trim() || undefined
+      const caseNoTrim = normalizeCaseNo(caseNo)
       const safeCategory: TaskCategory =
         category === 'todo'
           ? 'todo'
@@ -252,6 +255,7 @@ export function useTasks() {
         const maxOrder = siblings.reduce((m, t) => Math.max(m, t.order), -1)
         const task: Task = {
           id: uuid(),
+          caseNo: caseNoTrim,
           title: trimmed,
           detail: detailTrim,
           assigner: assignerTrim,
@@ -360,6 +364,17 @@ export function useTasks() {
       patchState(prev, {
         tasks: prev.tasks.map((t) =>
           t.id === taskId ? { ...t, title: trimmed } : t,
+        ),
+      }),
+    )
+  }, [])
+
+  const updateCaseNo = useCallback((taskId: string, caseNo: string) => {
+    const next = normalizeCaseNo(caseNo)
+    setState((prev) =>
+      patchState(prev, {
+        tasks: prev.tasks.map((t) =>
+          t.id === taskId ? { ...t, caseNo: next } : t,
         ),
       }),
     )
@@ -584,6 +599,7 @@ export function useTasks() {
     togglePin,
     deleteTask,
     updateTitle,
+    updateCaseNo,
     updateDetail,
     updateWorkerNote,
     updateAssigner,
