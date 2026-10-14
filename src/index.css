@@ -2968,17 +2968,14 @@ a.btn-ghost.top-hub-link {
 }
 
 /* ——— 工務 CRUD 管理 ——— */
-.worker-manage-toggle-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  margin-bottom: 0.55rem;
+.worker-tool-panel {
+  display: grid;
+  gap: 0.35rem;
 }
 
-.worker-manage-open {
-  flex: 1 1 auto;
-  min-height: 48px;
-  font-weight: 800;
+.worker-tool-panel-bar {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .worker-manage {

@@ -11,6 +11,11 @@ interface AssistantPanelProps {
   workers: Worker[]
   tasks: Task[]
   assigners: string[]
+  /** 由右上 ⋯ 選單控制；主畫面不放入口按鈕 */
+  showManage: boolean
+  showUrls: boolean
+  onShowManageChange: (open: boolean) => void
+  onShowUrlsChange: (open: boolean) => void
   onAdd: (
     title: string,
     assigneeId: string,
@@ -43,6 +48,10 @@ export function AssistantPanel({
   workers,
   tasks,
   assigners,
+  showManage,
+  showUrls,
+  onShowManageChange,
+  onShowUrlsChange,
   onAdd,
   onAddWorker,
   onUpdateWorker,
@@ -90,9 +99,6 @@ export function AssistantPanel({
   const [category, setCategory] = useState<TaskCategory>('priority')
   const [showAdd, setShowAdd] = useState(false)
   const [createdWorker, setCreatedWorker] = useState<Worker | null>(null)
-  const [showUrls, setShowUrls] = useState(false)
-  /** 工務名單／網址預設收起，點擊再展開 */
-  const [showManage, setShowManage] = useState(false)
 
   const assignerOptions = useMemo(
     () =>
@@ -143,49 +149,52 @@ export function AssistantPanel({
         />
       ) : null}
 
-      <div className="worker-manage-toggle-row">
-        <button
-          type="button"
-          className={`btn-primary worker-manage-open ${showManage ? 'is-open' : ''}`}
-          onClick={() => setShowManage((v) => !v)}
-          aria-expanded={showManage}
-        >
-          {showManage
-            ? '收起工務名單'
-            : `工務名單（新增／編輯／刪除）· ${tabWorkers.length} 人`}
-        </button>
-        <button
-          type="button"
-          className="btn-ghost"
-          onClick={() => setShowUrls((v) => !v)}
-          aria-expanded={showUrls}
-        >
-          {showUrls ? '收起網址' : '複製工務網址'}
-        </button>
-      </div>
-
       {showManage ? (
-        <WorkerManagePanel
-          workers={workers}
-          onAdd={onAddWorker}
-          onUpdate={onUpdateWorker}
-          onRemove={(id) => {
-            const ok = onRemoveWorker(id)
-            if (ok && focusWorkerId === id) {
-              setFocusWorkerId(defaultId)
-            }
-            return ok
-          }}
-          onCreated={(w) => {
-            setCreatedWorker(w)
-            setShowUrls(true)
-            setShowManage(true)
-          }}
-          onFocusWorker={setFocusWorkerId}
-        />
+        <div className="worker-tool-panel">
+          <div className="worker-tool-panel-bar">
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => onShowManageChange(false)}
+            >
+              收起名單
+            </button>
+          </div>
+          <WorkerManagePanel
+            workers={workers}
+            onAdd={onAddWorker}
+            onUpdate={onUpdateWorker}
+            onRemove={(id) => {
+              const ok = onRemoveWorker(id)
+              if (ok && focusWorkerId === id) {
+                setFocusWorkerId(defaultId)
+              }
+              return ok
+            }}
+            onCreated={(w) => {
+              setCreatedWorker(w)
+              onShowUrlsChange(true)
+              onShowManageChange(true)
+            }}
+            onFocusWorker={setFocusWorkerId}
+          />
+        </div>
       ) : null}
 
-      {showUrls ? <WorkerUrlsPanel workers={tabWorkers} /> : null}
+      {showUrls ? (
+        <div className="worker-tool-panel">
+          <div className="worker-tool-panel-bar">
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => onShowUrlsChange(false)}
+            >
+              收起網址
+            </button>
+          </div>
+          <WorkerUrlsPanel workers={tabWorkers} />
+        </div>
+      ) : null}
 
       <div className="worker-tabs" role="tablist" aria-label="工務">
         {tabWorkers.map((w) => {

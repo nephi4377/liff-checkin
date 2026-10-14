@@ -7,6 +7,7 @@ import { useTasks } from './hooks/useTasks'
 import { linkAssistant, loadProfile } from './profile'
 import { isWorkerPersona, ROLE_URLS, resolvePersona } from './role'
 import type { AssistantProfile } from './types'
+import { activeWorkers } from './workers'
 
 export default function App() {
   const {
@@ -49,6 +50,9 @@ export default function App() {
   const [profile, setProfile] = useState<AssistantProfile | null>(() => loadProfile())
   const [persona] = useState(() => resolvePersona())
   const [showMore, setShowMore] = useState(false)
+  const [showManage, setShowManage] = useState(false)
+  const [showUrls, setShowUrls] = useState(false)
+  const workerCount = useMemo(() => activeWorkers(workers).length, [workers])
 
   const isWorker = isWorkerPersona(persona)
   const workerId = isWorker ? persona : null
@@ -121,12 +125,35 @@ export default function App() {
         </header>
 
         {showMore ? (
-          <div className="more-menu">
-            <a className="more-menu-link" href={ROLE_URLS.hub}>
+          <div className="more-menu" role="menu" aria-label="更多">
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setShowManage((v) => !v)
+                setShowMore(false)
+              }}
+            >
+              {showManage
+                ? '收起工務名單'
+                : `工務名單（新增／編輯／刪除）· ${workerCount} 人`}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setShowUrls((v) => !v)
+                setShowMore(false)
+              }}
+            >
+              {showUrls ? '收起網址' : '複製工務網址'}
+            </button>
+            <a className="more-menu-link" href={ROLE_URLS.hub} role="menuitem">
               回總覽
             </a>
             <button
               type="button"
+              role="menuitem"
               onClick={() => {
                 setShowMore(false)
                 resetDemo()
@@ -142,6 +169,10 @@ export default function App() {
             workers={workers}
             tasks={tasks}
             assigners={assigners}
+            showManage={showManage}
+            showUrls={showUrls}
+            onShowManageChange={setShowManage}
+            onShowUrlsChange={setShowUrls}
             onAdd={addTask}
             onAddWorker={addWorker}
             onUpdateWorker={updateWorker}
