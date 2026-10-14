@@ -61,7 +61,24 @@ export function AssistantPanel({
   onRestore,
   onTogglePin,
 }: AssistantPanelProps) {
-  const tabWorkers = useMemo(() => activeWorkers(workers), [workers])
+  /** 工務 pill：依最近派任時間（任務 createdAt）由新到舊；從未派過的排後面 */
+  const tabWorkers = useMemo(() => {
+    const active = activeWorkers(workers)
+    const lastAssignedAt = new Map<string, number>()
+    for (const t of tasks) {
+      if (t.trashedAt) continue
+      const ts = typeof t.createdAt === 'number' ? t.createdAt : 0
+      if (!ts) continue
+      const prev = lastAssignedAt.get(t.assigneeId) ?? 0
+      if (ts > prev) lastAssignedAt.set(t.assigneeId, ts)
+    }
+    return [...active].sort((a, b) => {
+      const ta = lastAssignedAt.get(a.id) ?? 0
+      const tb = lastAssignedAt.get(b.id) ?? 0
+      if (tb !== ta) return tb - ta
+      return a.name.localeCompare(b.name, 'zh-Hant')
+    })
+  }, [workers, tasks])
 
   const defaultId = tabWorkers[0]?.id ?? ''
   const [focusWorkerId, setFocusWorkerId] = useState(defaultId)
