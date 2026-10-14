@@ -1,9 +1,11 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { buildAssignerOptions } from '../assigners'
 import type { Task, TaskCategory, Urgency, Worker } from '../types'
+import { activeWorkers, workerDisplayName } from '../workers'
 import { AssignerSelect } from './AssignerSelect'
 import { AssistantBoard } from './AssistantBoard'
 import { WorkerCreatedBanner, WorkerUrlsPanel } from './WorkerUrlsPanel'
+import { WorkerManagePanel } from './WorkerManagePanel'
 
 interface AssistantPanelProps {
   workers: Worker[]
@@ -20,6 +22,8 @@ interface AssistantPanelProps {
     caseNo?: string,
   ) => void
   onAddWorker: (name: string) => Worker | null
+  onUpdateWorker: (id: string, name: string) => Worker | null
+  onRemoveWorker: (id: string) => boolean
   onToggle: (id: string) => void
   onReorder: (assigneeId: string, category: TaskCategory, ids: string[]) => void
   onMoveCategory: (taskId: string, category: TaskCategory) => void
@@ -41,6 +45,8 @@ export function AssistantPanel({
   assigners,
   onAdd,
   onAddWorker,
+  onUpdateWorker,
+  onRemoveWorker,
   onToggle,
   onReorder,
   onMoveCategory,
@@ -55,7 +61,7 @@ export function AssistantPanel({
   onRestore,
   onTogglePin,
 }: AssistantPanelProps) {
-  const tabWorkers = workers
+  const tabWorkers = useMemo(() => activeWorkers(workers), [workers])
 
   const defaultId = tabWorkers[0]?.id ?? ''
   const [focusWorkerId, setFocusWorkerId] = useState(defaultId)
@@ -66,10 +72,9 @@ export function AssistantPanel({
   const [dueDate, setDueDate] = useState('')
   const [category, setCategory] = useState<TaskCategory>('priority')
   const [showAdd, setShowAdd] = useState(false)
-  const [showAddWorker, setShowAddWorker] = useState(false)
-  const [newWorkerName, setNewWorkerName] = useState('')
   const [createdWorker, setCreatedWorker] = useState<Worker | null>(null)
   const [showUrls, setShowUrls] = useState(false)
+  const [showManage, setShowManage] = useState(true)
 
   const assignerOptions = useMemo(
     () =>
@@ -105,19 +110,7 @@ export function AssistantPanel({
     setShowAdd(false)
   }
 
-  const handleAddWorker = (e: FormEvent) => {
-    e.preventDefault()
-    const w = onAddWorker(newWorkerName)
-    if (!w) return
-    setNewWorkerName('')
-    setShowAddWorker(false)
-    setFocusWorkerId(w.id)
-    setCreatedWorker(w)
-    setShowUrls(true)
-  }
-
-  const nameOf = (id: string) =>
-    workers.find((w) => w.id === id)?.name ?? '未知'
+  const nameOf = (id: string) => workerDisplayName(workers, id)
 
   const focused = tasks.filter((t) => t.assigneeId === focusWorkerIdSafe)
   const openCount = focused.filter((t) => !t.completed && !t.trashedAt).length
@@ -131,6 +124,45 @@ export function AssistantPanel({
           onClose={() => setCreatedWorker(null)}
         />
       ) : null}
+
+      <div className="worker-manage-toggle-row">
+        <button
+          type="button"
+          className={`btn-primary worker-manage-open ${showManage ? 'is-open' : ''}`}
+          onClick={() => setShowManage((v) => !v)}
+        >
+          {showManage ? '收起工務名單' : '＋ 新增／編輯工務'}
+        </button>
+        <button
+          type="button"
+          className="btn-ghost"
+          onClick={() => setShowUrls((v) => !v)}
+        >
+          {showUrls ? '收起網址' : '複製工務網址'}
+        </button>
+      </div>
+
+      {showManage ? (
+        <WorkerManagePanel
+          workers={workers}
+          onAdd={onAddWorker}
+          onUpdate={onUpdateWorker}
+          onRemove={(id) => {
+            const ok = onRemoveWorker(id)
+            if (ok && focusWorkerId === id) {
+              setFocusWorkerId(defaultId)
+            }
+            return ok
+          }}
+          onCreated={(w) => {
+            setCreatedWorker(w)
+            setShowUrls(true)
+          }}
+          onFocusWorker={setFocusWorkerId}
+        />
+      ) : null}
+
+      {showUrls ? <WorkerUrlsPanel workers={tabWorkers} /> : null}
 
       <div className="worker-tabs" role="tablist" aria-label="工務">
         {tabWorkers.map((w) => {
@@ -151,63 +183,12 @@ export function AssistantPanel({
             </button>
           )
         })}
-        <button
-          type="button"
-          className="worker-tab worker-tab-add"
-          onClick={() => {
-            setShowAddWorker(true)
-            setCreatedWorker(null)
-          }}
-        >
-          ＋ 新增工務
-        </button>
       </div>
-
-      {showAddWorker ? (
-        <form className="simple-add-form worker-add-form" onSubmit={handleAddWorker}>
-          <label className="detail-field">
-            <span className="detail-field-label">工務名字</span>
-            <input
-              value={newWorkerName}
-              onChange={(e) => setNewWorkerName(e.target.value)}
-              placeholder="例：小明"
-              autoFocus
-              autoComplete="off"
-              required
-              maxLength={24}
-            />
-          </label>
-          <div className="simple-add-actions">
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={() => {
-                setShowAddWorker(false)
-                setNewWorkerName('')
-              }}
-            >
-              取消
-            </button>
-            <button type="submit" className="btn-primary">
-              新增
-            </button>
-          </div>
-        </form>
-      ) : null}
 
       <p className="simple-status">
         <strong>{focusName}</strong>
         {openCount > 0 ? `　還有 ${openCount} 件` : '　已全部勾完'}
-        <button
-          type="button"
-          className="linkish-btn"
-          onClick={() => setShowUrls((v) => !v)}
-        >
-          {showUrls ? '收起網址' : '查詢／複製工務網址'}
-        </button>
       </p>
-
-      {showUrls ? <WorkerUrlsPanel workers={tabWorkers} /> : null}
 
       <AssistantBoard
         tasks={focused}
@@ -337,6 +318,7 @@ export function AssistantPanel({
             type="button"
             className="btn-primary btn-xl"
             onClick={() => setShowAdd(true)}
+            disabled={!focusWorkerIdSafe}
           >
             ＋ 給{focusName}加工作
           </button>

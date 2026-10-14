@@ -2920,3 +2920,106 @@ a.btn-ghost.top-hub-link {
 .entry-btn.entry-worker {
   background: rgba(31, 95, 139, 0.08);
 }
+
+/* ——— 工務 CRUD 管理 ——— */
+.worker-manage-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+}
+
+.worker-manage-open {
+  flex: 1 1 auto;
+  min-height: 48px;
+  font-weight: 800;
+}
+
+.worker-manage {
+  display: grid;
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+  padding: 0.9rem 0.95rem;
+  border: 1px solid rgba(15, 107, 92, 0.22);
+  border-radius: 14px;
+  background: rgba(15, 107, 92, 0.06);
+}
+
+.worker-manage-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.worker-manage-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.worker-manage-lead {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  color: rgba(30, 42, 50, 0.58);
+}
+
+.worker-manage-add-btn {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0.45rem 0.9rem;
+  white-space: nowrap;
+}
+
+.worker-manage-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.worker-manage-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.worker-manage-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.worker-manage-name {
+  font-weight: 800;
+}
+
+.worker-manage-tag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: rgba(30, 42, 50, 0.45);
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+  background: rgba(30, 42, 50, 0.06);
+}
+
+.worker-manage-actions {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.worker-manage-delete {
+  color: #a33b2c !important;
+}
+
+.worker-manage-error {
+  margin: 0;
+  color: #a33b2c;
+  font-size: 0.85rem;
+  font-weight: 700;
+}

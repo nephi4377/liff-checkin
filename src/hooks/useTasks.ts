@@ -22,8 +22,10 @@ import type {
   Worker,
 } from '../types'
 import {
+  isBaseWorkerId,
   makeWorkerId,
   mergeWorkers,
+  mergeWorkersKeepingLocalExtras,
   normalizeWorkerName,
 } from '../workers'
 import { reindexPriorityOrdersForAssignee } from '../urgency'
@@ -76,24 +78,39 @@ export function useTasks() {
   const demoMode = typeof window !== 'undefined' && isDemoHost()
 
   const pushSoon = useCallback(
-    (next?: AppState) => {
+    (next?: AppState, immediate = false) => {
       if (demoMode) return
       const payload = next ?? stateRef.current
       if (pushTimerRef.current) window.clearTimeout(pushTimerRef.current)
-      pushTimerRef.current = window.setTimeout(async () => {
-        if (pushingRef.current) return
+      const run = async () => {
+        if (pushingRef.current) {
+          // 進行中的 push 結束後再推一次，避免手機新增工務被丟掉
+          pushTimerRef.current = window.setTimeout(() => {
+            void pushSoon(stateRef.current, true)
+          }, 400)
+          return
+        }
         pushingRef.current = true
         setSyncStatusSafe('syncing')
         try {
-          await pushCloud(stateRef.current.updatedAt >= payload.updatedAt
-            ? stateRef.current
-            : payload)
+          await pushCloud(
+            stateRef.current.updatedAt >= payload.updatedAt
+              ? stateRef.current
+              : payload,
+          )
           setSyncStatusSafe('ok')
         } catch {
           setSyncStatusSafe('error')
         } finally {
           pushingRef.current = false
         }
+      }
+      if (immediate) {
+        void run()
+        return
+      }
+      pushTimerRef.current = window.setTimeout(() => {
+        void run()
       }, SYNC_PUSH_DEBOUNCE_MS)
     },
     [demoMode, setSyncStatusSafe],
@@ -123,12 +140,27 @@ export function useTasks() {
     const applyRemoteIfNewer = (remote: AppState) => {
       const local = stateRef.current
       if (remote.updatedAt > local.updatedAt) {
-        applyFromCloudRef.current = true
-        setState(remote)
+        const workers = mergeWorkersKeepingLocalExtras(
+          local.workers,
+          remote.workers,
+        )
+        const hasLocalExtras =
+          workers.length > mergeWorkers(remote.workers).length
+        const merged: AppState = {
+          ...remote,
+          workers,
+          updatedAt: hasLocalExtras
+            ? Math.max(remote.updatedAt + 1, Date.now())
+            : remote.updatedAt,
+        }
+        // 有本地多出的工務時不要跳過 push
+        applyFromCloudRef.current = !hasLocalExtras
+        setState(merged)
+        if (hasLocalExtras) pushSoon(merged, true)
         return
       }
       if (remote.updatedAt < local.updatedAt) {
-        pushSoon(local)
+        pushSoon(local, true)
       }
     }
 
@@ -140,8 +172,21 @@ export function useTasks() {
         if (!remote || !remote.updatedAt) {
           await pushCloud(stateRef.current)
         } else if (!sameRevision(remote, stateRef.current)) {
-          applyFromCloudRef.current = true
-          setState(remote)
+          const local = stateRef.current
+          if (remote.updatedAt > local.updatedAt) {
+            applyRemoteIfNewer(remote)
+          } else {
+            const merged: AppState = {
+              ...local,
+              workers: mergeWorkersKeepingLocalExtras(
+                local.workers,
+                remote.workers,
+              ),
+            }
+            applyFromCloudRef.current = true
+            setState(merged)
+            pushSoon(merged, true)
+          }
         }
         if (!cancelled) {
           hydratedRef.current = true
@@ -452,29 +497,98 @@ export function useTasks() {
     return trimmed
   }, [])
 
-  /** 新增工務；同名則回傳既有。回傳 Worker 供顯示專屬網址 */
-  const addWorker = useCallback((name: string): Worker | null => {
-    const trimmed = normalizeWorkerName(name)
-    if (!trimmed) return null
-    let created: Worker | null = null
-    setState((prev) => {
-      const current = mergeWorkers(prev.workers)
-      const existing = current.find((w) => w.name === trimmed)
-      if (existing) {
-        created = existing
-        return prev
-      }
-      let id = makeWorkerId(trimmed)
-      if (current.some((w) => w.id === id)) {
-        id = `ops-w-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
-      }
-      created = { id, name: trimmed }
-      return patchState(prev, {
-        workers: mergeWorkers([...current, created]),
+  /** 新增工務；同名未刪則回傳既有。回傳 Worker 供顯示專屬網址 */
+  const addWorker = useCallback(
+    (name: string): Worker | null => {
+      const trimmed = normalizeWorkerName(name)
+      if (!trimmed) return null
+      let created: Worker | null = null
+      let toPush: AppState | null = null
+      setState((prev) => {
+        const current = mergeWorkers(prev.workers)
+        const existing = current.find((w) => w.name === trimmed && !w.archived)
+        if (existing) {
+          created = existing
+          return prev
+        }
+        const revive = current.find((w) => w.name === trimmed && w.archived)
+        if (revive) {
+          created = { ...revive, archived: undefined }
+          toPush = patchState(prev, {
+            workers: mergeWorkers(
+              current.map((w) => (w.id === revive.id ? created! : w)),
+            ),
+          })
+          return toPush
+        }
+        let id = makeWorkerId(trimmed)
+        if (current.some((w) => w.id === id)) {
+          id = `ops-w-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
+        }
+        created = { id, name: trimmed }
+        toPush = patchState(prev, {
+          workers: mergeWorkers([...current, created]),
+        })
+        return toPush
       })
-    })
-    return created
-  }, [])
+      if (toPush) pushSoon(toPush, true)
+      return created
+    },
+    [pushSoon],
+  )
+
+  /** 改名（id 不變 → 專屬網址不變） */
+  const updateWorker = useCallback(
+    (id: string, name: string): Worker | null => {
+      const trimmed = normalizeWorkerName(name)
+      if (!trimmed || !id.startsWith('ops-')) return null
+      let next: Worker | null = null
+      let toPush: AppState | null = null
+      setState((prev) => {
+        const current = mergeWorkers(prev.workers)
+        const clash = current.find(
+          (w) => w.name === trimmed && w.id !== id && !w.archived,
+        )
+        if (clash) return prev
+        const workers = current.map((w) => {
+          if (w.id !== id) return w
+          next = { ...w, name: trimmed }
+          return next
+        })
+        if (!next) return prev
+        toPush = patchState(prev, { workers: mergeWorkers(workers) })
+        return toPush
+      })
+      if (toPush) pushSoon(toPush, true)
+      return next
+    },
+    [pushSoon],
+  )
+
+  /** 軟刪自訂工務；內建不可刪。任務仍掛原 id，顯示舊名 */
+  const removeWorker = useCallback(
+    (id: string): boolean => {
+      if (isBaseWorkerId(id)) return false
+      let ok = false
+      let toPush: AppState | null = null
+      setState((prev) => {
+        const current = mergeWorkers(prev.workers)
+        if (!current.some((w) => w.id === id)) return prev
+        ok = true
+        toPush = patchState(prev, {
+          workers: mergeWorkers(
+            current.map((w) =>
+              w.id === id ? { ...w, archived: true } : w,
+            ),
+          ),
+        })
+        return toPush
+      })
+      if (toPush) pushSoon(toPush, true)
+      return ok
+    },
+    [pushSoon],
+  )
 
   const updateDueDate = useCallback((taskId: string, dueDate: string) => {
     const next =
@@ -637,6 +751,8 @@ export function useTasks() {
     updateAssigner,
     addAssigner,
     addWorker,
+    updateWorker,
+    removeWorker,
     updateDueDate,
     updateUrgency,
     addOfficeTask,

@@ -1,12 +1,12 @@
 import { ROLE_URLS } from '../role'
 import type { Worker } from '../types'
-import { workerLocalHref } from '../workers'
+import { activeWorkers, workerLocalHref } from '../workers'
 
 /** 總覽頁：派工＋各工務入口 */
 export function EntryChooser({ workers = [] }: { workers?: Worker[] }) {
   const list =
     workers.length > 0
-      ? workers
+      ? activeWorkers(workers)
       : [
           { id: 'ops-ende', name: '恩德' },
           { id: 'ops-ayong', name: '阿勇' },

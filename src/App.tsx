@@ -16,6 +16,8 @@ export default function App() {
     syncStatus,
     addTask,
     addWorker,
+    updateWorker,
+    removeWorker,
     toggleComplete,
     reorder,
     moveCategory,
@@ -142,6 +144,8 @@ export default function App() {
             assigners={assigners}
             onAdd={addTask}
             onAddWorker={addWorker}
+            onUpdateWorker={updateWorker}
+            onRemoveWorker={removeWorker}
             onToggle={toggleComplete}
             onReorder={reorder}
             onMoveCategory={moveCategory}

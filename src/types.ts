@@ -16,6 +16,8 @@ export type WorkMode = 'dispatch' | 'office'
 export interface Worker {
   id: string
   name: string
+  /** 軟刪：名單隱藏，任務仍可依 id 顯示舊名；網址 role 仍綁 id */
+  archived?: boolean
 }
 
 export interface Task {

@@ -557,7 +557,11 @@ export function ensureDispatchState(state: AppState): AppState {
     workers.length !== workersFromState.length ||
     workers.some((w) => {
       const prev = workersFromState.find((p) => p.id === w.id)
-      return !prev || prev.name !== w.name
+      return (
+        !prev ||
+        prev.name !== w.name ||
+        Boolean(prev.archived) !== Boolean(w.archived)
+      )
     })
 
   const normalized: AppState = {
