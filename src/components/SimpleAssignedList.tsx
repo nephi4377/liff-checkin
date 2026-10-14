@@ -3,6 +3,7 @@ import { isActiveTask } from '../data'
 import { formatDueDateLabel, isOverdue } from '../dueDate'
 import type { Task, TaskCategory } from '../types'
 import { sortPriorityTasks, urgencyLabel } from '../urgency'
+import { PinIcon } from './PinIcon'
 
 interface SimpleAssignedListProps {
   workerName: string
@@ -64,7 +65,9 @@ function TaskMeta({ task }: { task: Task }) {
     return (
       <span className="cat-chip-row">
         {task.pinned ? (
-          <span className="cat-chip cat-chip-pinned">釘選</span>
+          <span className="cat-chip cat-chip-pinned" aria-label="已釘選">
+            <PinIcon className="cat-pin-icon" />
+          </span>
         ) : null}
         <span className={`cat-chip cat-chip-urgency-${task.urgency}`}>
           {urgencyLabel(task.urgency)}

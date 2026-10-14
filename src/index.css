@@ -1810,7 +1810,19 @@ a.btn-ghost.top-hub-link {
 }
 
 .swipe-action-pin {
+  display: grid;
+  place-items: center;
+  min-width: 3.6rem;
   background: #0f6b5c;
+}
+
+.swipe-action-pin.is-pinned-action {
+  background: #0a5246;
+}
+
+.swipe-pin-icon {
+  width: 1.45rem;
+  height: 1.45rem;
 }
 
 .swipe-action-delete {
@@ -1844,15 +1856,26 @@ a.btn-ghost.top-hub-link {
 }
 
 .pin-badge {
-  display: inline-block;
-  margin-right: 0.35rem;
-  padding: 0.05rem 0.35rem;
-  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.3rem;
+  padding: 0.12rem;
+  border-radius: 6px;
   background: rgba(15, 107, 92, 0.14);
   color: #0f6b5c;
-  font-size: 0.72rem;
-  font-weight: 800;
+  font-size: 0.95rem;
   vertical-align: middle;
+  line-height: 0;
+}
+
+.pin-badge svg {
+  display: block;
+}
+
+.cat-pin-icon {
+  width: 0.95rem;
+  height: 0.95rem;
 }
 
 .case-no-badge {
@@ -1899,6 +1922,11 @@ a.btn-ghost.top-hub-link {
 }
 
 .cat-chip-pinned {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.7rem;
+  padding-inline: 0.35rem;
   background: rgba(15, 107, 92, 0.14);
   color: #0f6b5c;
 }

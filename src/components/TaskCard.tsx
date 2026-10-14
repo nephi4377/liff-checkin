@@ -15,6 +15,7 @@ import {
 import type { Task, Urgency } from '../types'
 import { URGENCY_OPTIONS, urgencyLabel } from '../urgency'
 import { AssignerSelect } from './AssignerSelect'
+import { PinIcon } from './PinIcon'
 
 interface TaskCardProps {
   task: Task
@@ -332,7 +333,7 @@ export function TaskCard({
       <span className="task-title">
         {task.pinned ? (
           <span className="pin-badge" aria-label="已釘選">
-            釘
+            <PinIcon />
           </span>
         ) : null}
         {task.title}
@@ -349,7 +350,7 @@ export function TaskCard({
       <p className="task-title">
         {task.pinned ? (
           <span className="pin-badge" aria-label="已釘選">
-            釘
+            <PinIcon />
           </span>
         ) : null}
         {task.title}
@@ -526,7 +527,7 @@ export function TaskCard({
   const swipeHint = !swipeEnabled
     ? null
     : canPin
-      ? '← 左滑：釘選／刪除'
+      ? '← 左滑：置頂／刪除'
       : '← 左滑到底刪除'
 
   return (
@@ -545,13 +546,14 @@ export function TaskCard({
             <div className="swipe-actions">
               <button
                 type="button"
-                className="swipe-action swipe-action-pin"
+                className={`swipe-action swipe-action-pin ${task.pinned ? 'is-pinned-action' : ''}`}
+                aria-label={task.pinned ? '取消釘選' : '釘選'}
                 onClick={() => {
                   onTogglePin?.(task.id)
                   closeActions()
                 }}
               >
-                {task.pinned ? '取消釘選' : '釘選'}
+                <PinIcon className="swipe-pin-icon" />
               </button>
               {onDelete ? (
                 <button
