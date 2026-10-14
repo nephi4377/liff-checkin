@@ -170,7 +170,7 @@ function customerGuestSvg() {
   const labels = [
     { title: "申請綁定專案", sub: "把案子跟您連在一起", fill: "cgSand", row: 0, col: 0 },
     { title: "了解添心", sub: "看看我們怎麼做家", fill: "cgSage", row: 0, col: 1 },
-    { title: "常見問題", sub: "先幫您解惑", fill: "cgLinen", row: 1, col: 0 },
+    { title: "作品集", sub: "看完工案例", fill: "cgLinen", row: 1, col: 0 },
     { title: "Facebook", sub: "看作品日常", fill: "cgStone", row: 1, col: 1 },
   ];
   const cards = labels.map((lb) => {
@@ -222,7 +222,7 @@ function customerMemberSvg() {
     { title: "我的案場", sub: "選材與案子紀錄", fill: fills[1], row: 0, col: 1 },
     { title: "綁定新專案", sub: "再加一個案子", fill: fills[2], row: 0, col: 2 },
     { title: "了解添心", sub: "看看我們怎麼做家", fill: fills[3], row: 1, col: 0 },
-    { title: "常見問題", sub: "先幫您解惑", fill: fills[4], row: 1, col: 1 },
+    { title: "作品集", sub: "看完工案例", fill: fills[4], row: 1, col: 1 },
     { title: "Facebook", sub: "看作品日常", fill: fills[5], row: 1, col: 2 },
   ];
   const cards = labels.map((lb) => {
@@ -472,7 +472,7 @@ async function main() {
     cells: [
       { row: 0, col: 0, src: bgFile("sand-closet.jpg"), wash: WASH.sand, title: "申請綁定專案", sub: "把案子跟您連在一起" },
       { row: 0, col: 1, src: bgFile("sage-green-sofa.jpg"), wash: WASH.sage, title: "了解添心", sub: "看看我們怎麼做家" },
-      { row: 1, col: 0, src: bgFile("linen-american.jpg"), wash: WASH.linen, title: "常見問題", sub: "先幫您解惑" },
+      { row: 1, col: 0, src: bgFile("linen-american.jpg"), wash: WASH.linen, title: "作品集", sub: "看完工案例" },
       { row: 1, col: 1, src: bgFile("stone-glass.jpg"), wash: WASH.stone, title: "Facebook", sub: "看作品日常" },
     ],
   });
@@ -489,7 +489,7 @@ async function main() {
       { row: 0, col: 1, src: bgFile("sage-living.jpg"), wash: WASH.sage, title: "我的案場", sub: "選材與案子紀錄", fs: 96, subFs: 40 },
       { row: 0, col: 2, src: bgFile("linen-kids.jpg"), wash: WASH.linen, title: "綁定新專案", sub: "再加一個案子", fs: 88, subFs: 40 },
       { row: 1, col: 0, src: bgFile("sage-green-sofa.jpg"), wash: WASH.sage, title: "了解添心", sub: "看看我們怎麼做家", fs: 96, subFs: 40 },
-      { row: 1, col: 1, src: bgFile("linen-american.jpg"), wash: WASH.linen, title: "常見問題", sub: "先幫您解惑", fs: 96, subFs: 40 },
+      { row: 1, col: 1, src: bgFile("linen-american.jpg"), wash: WASH.linen, title: "作品集", sub: "看完工案例", fs: 96, subFs: 40 },
       { row: 1, col: 2, src: bgFile("stone-glass.jpg"), wash: WASH.stone, title: "Facebook", sub: "看作品日常", fs: 96, subFs: 40 },
     ],
   });
