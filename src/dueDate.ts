@@ -10,14 +10,14 @@ export function normalizeDueDate(value: unknown): string | undefined {
 
 const WEEKDAY_ZH = ['日', '一', '二', '三', '四', '五', '六'] as const
 
-/** 例：2026/10/13（一）前 */
+/** 例：2026/10/13（一）— 預設不加「前」 */
 export function formatDueDateLabel(dueDate: string): string {
   const [y, m, day] = dueDate.split('-')
   const d = new Date(`${dueDate}T12:00:00`)
   const wd = Number.isNaN(d.getTime())
     ? ''
     : `（${WEEKDAY_ZH[d.getDay()]}）`
-  return `${y}/${m}/${day}${wd}前`
+  return `${y}/${m}/${day}${wd}`
 }
 
 /** Local calendar day YYYY-MM-DD */
