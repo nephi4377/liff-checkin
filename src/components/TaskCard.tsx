@@ -2,6 +2,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type FocusEvent as ReactFocusEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react'
@@ -76,6 +77,7 @@ export function TaskCard({
   const [swiping, setSwiping] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const editStackRef = useRef<HTMLDivElement | null>(null)
   const trackRef = useRef<HTMLLIElement | null>(null)
   const pointerIdRef = useRef<number | null>(null)
   const startXRef = useRef(0)
@@ -113,6 +115,13 @@ export function TaskCard({
       }
     }
     setEditing(false)
+  }
+
+  /** 案號／標題同屬一組：在兩者之間切換焦點時不要立刻結束編輯 */
+  const handleEditBlur = (e: ReactFocusEvent<HTMLElement>) => {
+    const next = e.relatedTarget as Node | null
+    if (next && editStackRef.current?.contains(next)) return
+    commitEdit()
   }
 
   const commitDetail = () => {
@@ -208,12 +217,24 @@ export function TaskCard({
   }
 
   const titleBlock = editing ? (
-    <div className="task-edit-stack">
+    <div className="task-edit-stack" ref={editStackRef}>
       {onUpdateCaseNo ? (
         <input
           className="task-edit-input task-case-edit"
           value={caseDraft}
           onChange={(e) => setCaseDraft(e.target.value)}
+          onBlur={handleEditBlur}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              commitEdit()
+            }
+            if (e.key === 'Escape') {
+              setDraft(task.title)
+              setCaseDraft(task.caseNo ?? '')
+              setEditing(false)
+            }
+          }}
           placeholder="案號"
           aria-label="編輯案號"
         />
@@ -223,7 +244,7 @@ export function TaskCard({
         className="task-edit-input"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
-        onBlur={commitEdit}
+        onBlur={handleEditBlur}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.preventDefault()
