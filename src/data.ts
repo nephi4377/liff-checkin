@@ -12,14 +12,10 @@ import type {
   Worker,
 } from './types'
 import { normalizeUrgency } from './urgency'
+import { BASE_WORKERS, mergeWorkers, workerIdsOf } from './workers'
 
-/** 現場工務僅限恩德、阿勇 */
-export const WORKERS: Worker[] = [
-  { id: 'ops-ende', name: '恩德' },
-  { id: 'ops-ayong', name: '阿勇' },
-]
-
-const WORKER_IDS = new Set(WORKERS.map((w) => w.id))
+/** @deprecated 請用 BASE_WORKERS／mergeWorkers；保留匯出給舊引用 */
+export const WORKERS: Worker[] = BASE_WORKERS.map((w) => ({ ...w }))
 
 /** Legacy ids remapped onto 阿勇 */
 const LEGACY_TO_AYONG = new Set(['ops-renkai'])
@@ -271,10 +267,13 @@ function isStaleCompleted(
   return at < cutoff
 }
 
-function normalizeOfficeTask(t: OfficeTask & { assigneeId?: string }): OfficeTask {
+function normalizeOfficeTask(
+  t: OfficeTask & { assigneeId?: string },
+  knownWorkers: Set<string>,
+): OfficeTask {
   const completed = Boolean(t.completed)
   let assigneeId = t.assigneeId
-  if (!assigneeId || !WORKER_IDS.has(assigneeId)) {
+  if (!assigneeId || !knownWorkers.has(assigneeId)) {
     // Legacy unassigned → 恩德
     assigneeId = 'ops-ende'
   }
@@ -372,7 +371,7 @@ export function purgeStaleCompleted(
   }
 }
 
-/** Keep only 恩德／阿勇；respect tombstones；仁凱任務改掛阿勇 */
+/** 合併工務名單；尊重 tombstones；仁凱任務改掛阿勇；自訂工務可同步 */
 export function ensureDispatchState(state: AppState): AppState {
   const deletedIds = normalizeDeletedIds(state.deletedIds)
   const deleted = new Set(deletedIds)
@@ -381,6 +380,26 @@ export function ensureDispatchState(state: AppState): AppState {
     if (deleted.has(from)) deleted.add(to)
     if (deleted.has(to)) deleted.add(from)
   }
+
+  // 自任務／工務清單推回遺失的自訂工務（僅 id，名稱後補）
+  const inferred: Worker[] = []
+  for (const t of state.tasks ?? []) {
+    const id = String(t.assigneeId ?? '')
+    if (id.startsWith('ops-') && !inferred.some((w) => w.id === id)) {
+      inferred.push({ id, name: id.replace(/^ops-w-/, '').replace(/^ops-/, '') || id })
+    }
+  }
+  for (const t of state.officeTasks ?? []) {
+    const id = String(t.assigneeId ?? '')
+    if (id.startsWith('ops-') && !inferred.some((w) => w.id === id)) {
+      inferred.push({ id, name: id.replace(/^ops-w-/, '').replace(/^ops-/, '') || id })
+    }
+  }
+
+  // state.workers 後寫入，保留正式姓名覆蓋推論的粗名
+  const workersFromState = mergeWorkers(state.workers ?? [])
+  const workers = mergeWorkers([...inferred, ...(state.workers ?? [])])
+  const knownWorkers = workerIdsOf(workers)
 
   const tasksById = new Map<string, Task>()
 
@@ -392,7 +411,7 @@ export function ensureDispatchState(state: AppState): AppState {
     if (LEGACY_TO_AYONG.has(assigneeId) || t.id === 'task-renkai-trim-knife') {
       assigneeId = 'ops-ayong'
     }
-    if (!WORKER_IDS.has(assigneeId)) continue
+    if (!knownWorkers.has(assigneeId)) continue
 
     const existing = tasksById.get(nextId)
     if (existing) {
@@ -450,11 +469,14 @@ export function ensureDispatchState(state: AppState): AppState {
     if (!raw?.id) continue
     const nextId = LEGACY_OFFICE_IDS[raw.id] ?? raw.id
     if (deletedOffice.has(raw.id) || deletedOffice.has(nextId)) continue
-    const normalized = normalizeOfficeTask({
-      ...(raw as OfficeTask),
-      id: nextId,
-    })
-    if (!WORKER_IDS.has(normalized.assigneeId)) continue
+    const normalized = normalizeOfficeTask(
+      {
+        ...(raw as OfficeTask),
+        id: nextId,
+      },
+      knownWorkers,
+    )
+    if (!knownWorkers.has(normalized.assigneeId)) continue
     const existing = officeById.get(nextId)
     if (existing) {
       officeById.set(nextId, {
@@ -531,17 +553,24 @@ export function ensureDispatchState(state: AppState): AppState {
     }
   }
 
+  const workersChanged =
+    workers.length !== workersFromState.length ||
+    workers.some((w) => {
+      const prev = workersFromState.find((p) => p.id === w.id)
+      return !prev || prev.name !== w.name
+    })
+
   const normalized: AppState = {
-    workers: WORKERS.map((w) => ({ ...w })),
+    workers,
     tasks: Array.from(tasksById.values()),
     officeTasks: Array.from(officeById.values()).sort(
       (a, b) => a.order - b.order,
     ),
     assigners: nextAssigners,
     deletedIds: [...tombstones],
-    // 清掉同步名單裡的已移除名／修復提醒分區時抬 revision，boot 會寫回雲端
+    // 清掉同步名單裡的已移除名／修復提醒分區／補齊工務名單時抬 revision
     updatedAt:
-      hadRemovedAssigner || reminderMetaRepaired
+      hadRemovedAssigner || reminderMetaRepaired || workersChanged
         ? Math.max(baseUpdatedAt + 1, now)
         : baseUpdatedAt,
   }
@@ -550,7 +579,7 @@ export function ensureDispatchState(state: AppState): AppState {
 
 export function createSeedState(): AppState {
   return ensureDispatchState({
-    workers: WORKERS,
+    workers: BASE_WORKERS.map((w) => ({ ...w })),
     tasks: seedTasks(),
     officeTasks: [],
     assigners: [...BASE_ASSIGNERS],
@@ -595,11 +624,11 @@ export function clearStoredState(): void {
   for (const key of LEGACY_KEYS) localStorage.removeItem(key)
 }
 
-/** Serialize for cloud (workers always canonical) */
+/** Serialize for cloud（含自訂工務名單） */
 export function toSyncPayload(state: AppState): AppState {
   const normalized = ensureDispatchState(state)
   return {
-    workers: WORKERS.map((w) => ({ ...w })),
+    workers: normalized.workers,
     tasks: normalized.tasks,
     officeTasks: normalized.officeTasks,
     assigners: normalized.assigners,

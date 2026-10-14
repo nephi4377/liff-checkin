@@ -12,9 +12,10 @@ export const ROLE_URLS = {
   ayong: './?role=ayong',
 } as const
 
-export type AppPersona = 'hub' | 'assistant' | 'ops-ende' | 'ops-ayong'
+/** hub｜派工｜任一工務 id（ops-ende／ops-ayong／ops-w-…） */
+export type AppPersona = 'hub' | 'assistant' | string
 
-/** Resolve role from hostname / path / ?role= (dev) */
+/** Resolve role from hostname / path / ?role= */
 export function resolvePersona(): AppPersona {
   if (typeof window === 'undefined') return 'hub'
   const host = window.location.hostname.toLowerCase()
@@ -35,7 +36,15 @@ export function resolvePersona(): AppPersona {
   if (host.startsWith('yang-ayong.') || path.endsWith('/ayong') || role === 'ayong') {
     return 'ops-ayong'
   }
+  // 自訂工務：?role=ops-… 或 ?role=ops-w-…
+  if (role && role.startsWith('ops-') && role.length <= 40) {
+    return role
+  }
   return 'hub'
+}
+
+export function isWorkerPersona(persona: AppPersona): boolean {
+  return typeof persona === 'string' && persona.startsWith('ops-')
 }
 
 export function isDedicatedRoleSite(persona: AppPersona): boolean {

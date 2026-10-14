@@ -13,8 +13,6 @@ interface OfficePanelProps {
   onSelectWorker?: (id: string) => void
 }
 
-const WORKER_ORDER = ['ops-ende', 'ops-ayong']
-
 function OfficeRow({
   task,
   onToggle,
@@ -47,10 +45,7 @@ export function OfficePanel({
   selectedId,
   onSelectWorker,
 }: OfficePanelProps) {
-  const tabWorkers = useMemo(() => {
-    const byId = new Map(workers.map((w) => [w.id, w]))
-    return WORKER_ORDER.map((id) => byId.get(id)).filter(Boolean) as Worker[]
-  }, [workers])
+  const tabWorkers = useMemo(() => workers, [workers])
 
   const defaultId = lockedWorkerId || tabWorkers[0]?.id || ''
   const [focusWorkerId, setFocusWorkerId] = useState(defaultId)

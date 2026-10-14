@@ -19,7 +19,13 @@ import type {
   Task,
   TaskCategory,
   Urgency,
+  Worker,
 } from '../types'
+import {
+  makeWorkerId,
+  mergeWorkers,
+  normalizeWorkerName,
+} from '../workers'
 import { reindexPriorityOrdersForAssignee } from '../urgency'
 
 /** Light local patch — skip full seed/migrate on every keystroke-level update */
@@ -446,6 +452,30 @@ export function useTasks() {
     return trimmed
   }, [])
 
+  /** 新增工務；同名則回傳既有。回傳 Worker 供顯示專屬網址 */
+  const addWorker = useCallback((name: string): Worker | null => {
+    const trimmed = normalizeWorkerName(name)
+    if (!trimmed) return null
+    let created: Worker | null = null
+    setState((prev) => {
+      const current = mergeWorkers(prev.workers)
+      const existing = current.find((w) => w.name === trimmed)
+      if (existing) {
+        created = existing
+        return prev
+      }
+      let id = makeWorkerId(trimmed)
+      if (current.some((w) => w.id === id)) {
+        id = `ops-w-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
+      }
+      created = { id, name: trimmed }
+      return patchState(prev, {
+        workers: mergeWorkers([...current, created]),
+      })
+    })
+    return created
+  }, [])
+
   const updateDueDate = useCallback((taskId: string, dueDate: string) => {
     const next =
       typeof dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dueDate.trim())
@@ -606,6 +636,7 @@ export function useTasks() {
     updateWorkerNote,
     updateAssigner,
     addAssigner,
+    addWorker,
     updateDueDate,
     updateUrgency,
     addOfficeTask,

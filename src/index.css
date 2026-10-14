@@ -2774,3 +2774,149 @@ a.btn-ghost.top-hub-link {
 .list-done .task-card {
   opacity: 0.78;
 }
+
+/* ——— 新增工務／工務網址 ——— */
+.worker-tab-add {
+  border-style: dashed;
+  color: var(--jade-deep);
+  background: rgba(15, 107, 92, 0.06);
+}
+
+.worker-tab-add:active {
+  background: rgba(15, 107, 92, 0.12);
+}
+
+.worker-add-form {
+  margin: 0.35rem 0 0.5rem;
+}
+
+.linkish-btn {
+  display: inline;
+  margin-left: 0.55rem;
+  border: none;
+  padding: 0;
+  background: none;
+  color: var(--jade-deep);
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.88rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.worker-urls-panel {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.35rem 0 0.75rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid rgba(30, 42, 50, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.worker-urls-head h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.worker-urls-lead {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: rgba(30, 42, 50, 0.55);
+}
+
+.worker-url-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.worker-url-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  background: rgba(231, 236, 234, 0.65);
+}
+
+.worker-url-meta {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.worker-url-name {
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.worker-url-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  color: rgba(30, 42, 50, 0.55);
+}
+
+.worker-url-copy {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0.35rem 0.75rem;
+  font-weight: 800;
+}
+
+.worker-created-banner {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 0.65rem;
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 107, 92, 0.28);
+  background: rgba(15, 107, 92, 0.08);
+}
+
+.worker-created-title {
+  margin: 0;
+  font-weight: 800;
+  font-size: 1.02rem;
+}
+
+.worker-created-lead {
+  margin: 0;
+  font-size: 0.85rem;
+  color: rgba(30, 42, 50, 0.62);
+}
+
+.worker-created-url {
+  display: block;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 0.78rem;
+  word-break: break-all;
+}
+
+.worker-created-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.worker-created-open {
+  display: inline-grid;
+  place-items: center;
+  min-height: 40px;
+  padding: 0.35rem 0.85rem;
+  text-decoration: none;
+}
+
+.entry-btn.entry-worker {
+  background: rgba(31, 95, 139, 0.08);
+}
