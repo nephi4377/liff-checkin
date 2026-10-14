@@ -84,6 +84,11 @@ export function TaskCard({
   const startYRef = useRef(0)
   const axisRef = useRef<'undecided' | 'x' | 'y'>('undecided')
   const swipeXRef = useRef(0)
+  const draftRef = useRef(draft)
+  const caseDraftRef = useRef(caseDraft)
+  const editCommitTimerRef = useRef<number | null>(null)
+  draftRef.current = draft
+  caseDraftRef.current = caseDraft
 
   const isPriority = task.category === 'priority'
   const canPin = Boolean(onTogglePin) && isPriority
@@ -104,12 +109,28 @@ export function TaskCard({
     if (editing) inputRef.current?.focus()
   }, [editing])
 
+  useEffect(() => {
+    return () => {
+      if (editCommitTimerRef.current != null) {
+        window.clearTimeout(editCommitTimerRef.current)
+      }
+    }
+  }, [])
+
+  const cancelEditCommit = () => {
+    if (editCommitTimerRef.current != null) {
+      window.clearTimeout(editCommitTimerRef.current)
+      editCommitTimerRef.current = null
+    }
+  }
+
   const commitEdit = () => {
-    const next = draft.trim()
+    cancelEditCommit()
+    const next = draftRef.current.trim()
     if (next && next !== task.title) onUpdateTitle?.(task.id, next)
     else setDraft(task.title)
     if (onUpdateCaseNo) {
-      const nextCase = caseDraft.trim()
+      const nextCase = caseDraftRef.current.trim()
       if (nextCase !== (task.caseNo ?? '').trim()) {
         onUpdateCaseNo(task.id, nextCase)
       }
@@ -117,11 +138,24 @@ export function TaskCard({
     setEditing(false)
   }
 
-  /** 案號／標題同屬一組：在兩者之間切換焦點時不要立刻結束編輯 */
+  /**
+   * 手機 touch 切換 input 時 relatedTarget 常為 null，立刻 commit 會關掉編輯。
+   * 延遲後看 activeElement 是否仍在案號／標題棧內。
+   */
   const handleEditBlur = (e: ReactFocusEvent<HTMLElement>) => {
     const next = e.relatedTarget as Node | null
     if (next && editStackRef.current?.contains(next)) return
-    commitEdit()
+    cancelEditCommit()
+    editCommitTimerRef.current = window.setTimeout(() => {
+      editCommitTimerRef.current = null
+      const active = document.activeElement
+      if (active && editStackRef.current?.contains(active)) return
+      commitEdit()
+    }, 180)
+  }
+
+  const handleEditFocus = () => {
+    cancelEditCommit()
   }
 
   const commitDetail = () => {
@@ -223,13 +257,20 @@ export function TaskCard({
           className="task-edit-input task-case-edit"
           value={caseDraft}
           onChange={(e) => setCaseDraft(e.target.value)}
+          onFocus={handleEditFocus}
           onBlur={handleEditBlur}
+          onPointerDown={(e) => {
+            // 搶在標題 blur→commit 前取消；並避免父層 swipe 搶 pointer
+            e.stopPropagation()
+            cancelEditCommit()
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
               commitEdit()
             }
             if (e.key === 'Escape') {
+              cancelEditCommit()
               setDraft(task.title)
               setCaseDraft(task.caseNo ?? '')
               setEditing(false)
@@ -237,6 +278,8 @@ export function TaskCard({
           }}
           placeholder="案號"
           aria-label="編輯案號"
+          enterKeyHint="done"
+          inputMode="numeric"
         />
       ) : null}
       <input
@@ -244,13 +287,19 @@ export function TaskCard({
         className="task-edit-input"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
+        onFocus={handleEditFocus}
         onBlur={handleEditBlur}
+        onPointerDown={(e) => {
+          e.stopPropagation()
+          cancelEditCommit()
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.preventDefault()
             commitEdit()
           }
           if (e.key === 'Escape') {
+            cancelEditCommit()
             setDraft(task.title)
             setCaseDraft(task.caseNo ?? '')
             setEditing(false)
@@ -258,6 +307,7 @@ export function TaskCard({
         }}
         aria-label="編輯標題"
         placeholder="標題"
+        enterKeyHint="done"
       />
     </div>
   ) : onUpdateTitle ? (
