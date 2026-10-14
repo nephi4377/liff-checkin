@@ -186,7 +186,9 @@ function TrashSection({
             <li key={task.id} className="task-card task-card-compact is-trashed">
               <div className="task-body">
                 {task.caseNo ? (
-                  <span className="case-no-badge">案號 {task.caseNo}</span>
+                  <span className="case-no-badge" aria-label={`案號 ${task.caseNo}`}>
+                    {task.caseNo}
+                  </span>
                 ) : null}
                 <p className="task-title">{task.title}</p>
                 {task.assigner ? (
@@ -438,7 +440,9 @@ export function AssistantBoard({
               </span>
             ) : null}
             {activeTask.caseNo ? (
-              <span className="case-no-badge">案號 {activeTask.caseNo}</span>
+              <span className="case-no-badge" aria-label={`案號 ${activeTask.caseNo}`}>
+                {activeTask.caseNo}
+              </span>
             ) : null}
             <p className="task-title">{activeTask.title}</p>
           </div>

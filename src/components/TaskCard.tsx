@@ -106,7 +106,12 @@ export function TaskCard({
   }, [task.detail, editingDetail])
 
   useEffect(() => {
-    if (editing) inputRef.current?.focus()
+    if (!editing) return
+    // 手機勿自動 focus 標題：接著點案號會觸發 blur→提早 commit
+    const coarse =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(pointer: coarse)').matches
+    if (!coarse) inputRef.current?.focus()
   }, [editing])
 
   useEffect(() => {
@@ -276,7 +281,7 @@ export function TaskCard({
               setEditing(false)
             }
           }}
-          placeholder="案號"
+          placeholder="751"
           aria-label="編輯案號"
           enterKeyHint="done"
           inputMode="numeric"
@@ -320,7 +325,9 @@ export function TaskCard({
       }}
     >
       {task.caseNo ? (
-        <span className="case-no-badge">案號 {task.caseNo}</span>
+        <span className="case-no-badge" aria-label={`案號 ${task.caseNo}`}>
+          {task.caseNo}
+        </span>
       ) : null}
       <span className="task-title">
         {task.pinned ? (
@@ -335,7 +342,9 @@ export function TaskCard({
   ) : (
     <div className="task-title-stack">
       {task.caseNo ? (
-        <span className="case-no-badge">案號 {task.caseNo}</span>
+        <span className="case-no-badge" aria-label={`案號 ${task.caseNo}`}>
+          {task.caseNo}
+        </span>
       ) : null}
       <p className="task-title">
         {task.pinned ? (

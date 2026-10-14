@@ -164,11 +164,11 @@ export function AssistantPanel({
         {showAdd ? (
           <form className="simple-add-form" onSubmit={handleSubmit}>
             <label className="detail-field">
-              <span className="detail-field-label">案號</span>
               <input
                 value={caseNo}
                 onChange={(e) => setCaseNo(e.target.value)}
-                placeholder="例：751（可空）"
+                placeholder="751（可空）"
+                aria-label="案號"
                 autoComplete="off"
                 inputMode="numeric"
               />
