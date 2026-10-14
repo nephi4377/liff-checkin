@@ -144,6 +144,9 @@ export function TaskCard({
     setEditing(false)
   }
 
+  const commitEditRef = useRef(commitEdit)
+  commitEditRef.current = commitEdit
+
   /**
    * 手機 touch 切換 input 時 relatedTarget 常為 null，立刻 commit 會關掉編輯。
    * 延遲後看 activeElement 是否仍在案號／標題棧內。
@@ -156,13 +159,29 @@ export function TaskCard({
       editCommitTimerRef.current = null
       const active = document.activeElement
       if (active && editStackRef.current?.contains(active)) return
-      commitEdit()
+      commitEditRef.current()
     }, 180)
   }
 
   const handleEditFocus = () => {
     cancelEditCommit()
   }
+
+  /** 手機點空白常不觸發 input blur：在編輯中點案號／標題外＝立刻存檔結束 */
+  useEffect(() => {
+    if (!editing) return
+    const onPointerDownCapture = (e: PointerEvent) => {
+      const t = e.target as Node | null
+      if (t && editStackRef.current?.contains(t)) return
+      commitEditRef.current()
+      const ae = document.activeElement
+      if (ae instanceof HTMLElement) ae.blur()
+    }
+    document.addEventListener('pointerdown', onPointerDownCapture, true)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDownCapture, true)
+    }
+  }, [editing])
 
   const commitDetail = () => {
     const next = detailDraft.trim()
