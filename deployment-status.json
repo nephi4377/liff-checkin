@@ -1,8 +1,8 @@
 {
-  "source_sha": "057ef3f5c92e2822c061647b7e3bf75cb5431c52",
+  "source_sha": "8d3f8973d00ada0a1f7287fb9d19cd905ac33a73",
   "pages": {
     "url": "https://api.github.com/repos/nephi4377/liff-checkin/pages",
-    "status": "building",
+    "status": "errored",
     "cname": "info.tanxin.space",
     "custom_404": false,
     "html_url": "https://info.tanxin.space/",
@@ -25,10 +25,10 @@
     "https_enforced": true
   },
   "build": {
-    "url": "https://api.github.com/repos/nephi4377/liff-checkin/pages/builds/1287308049",
-    "status": "building",
+    "url": "https://api.github.com/repos/nephi4377/liff-checkin/pages/builds/1287309763",
+    "status": "errored",
     "error": {
-      "message": null
+      "message": "Page build failed."
     },
     "pusher": {
       "login": "nephi4377",
@@ -51,10 +51,10 @@
       "user_view_type": "public",
       "site_admin": false
     },
-    "commit": "057ef3f5c92e2822c061647b7e3bf75cb5431c52",
+    "commit": "8d3f8973d00ada0a1f7287fb9d19cd905ac33a73",
     "duration": 0,
-    "created_at": "2026-10-15T16:45:44Z",
-    "updated_at": "2026-10-15T16:45:44Z"
+    "created_at": "2026-10-15T16:46:32Z",
+    "updated_at": "2026-10-15T16:46:37Z"
   },
   "runs": [
     {
@@ -74,6 +74,128 @@
           "conclusion": null
         }
       ]
+    }
+  ],
+  "recent_runs": [
+    {
+      "id": 38771817059,
+      "name": "Record Pages deployment result",
+      "status": "pending",
+      "conclusion": null
+    },
+    {
+      "id": 38771810918,
+      "name": "Record Pages deployment result",
+      "status": "completed",
+      "conclusion": "cancelled"
+    },
+    {
+      "id": 38771805844,
+      "name": "Record Pages deployment result",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 38771804952,
+      "name": "pages build and deployment",
+      "status": "queued",
+      "conclusion": null
+    },
+    {
+      "id": 38771696333,
+      "name": "pages build and deployment",
+      "status": "completed",
+      "conclusion": "cancelled"
+    },
+    {
+      "id": 38771695607,
+      "name": "Record Pages deployment result",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 38771587448,
+      "name": "Record Pages deployment result",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 38771516588,
+      "name": "Record Pages deployment result",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 38771516412,
+      "name": "pages build and deployment",
+      "status": "completed",
+      "conclusion": "cancelled"
+    },
+    {
+      "id": 38771185704,
+      "name": "Record Pages deployment result",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 38771185377,
+      "name": "pages build and deployment",
+      "status": "completed",
+      "conclusion": "cancelled"
+    },
+    {
+      "id": 38771174830,
+      "name": "Record Pages deployment result",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 38771173116,
+      "name": "pages build and deployment",
+      "status": "completed",
+      "conclusion": "cancelled"
+    },
+    {
+      "id": 38771172313,
+      "name": "Publish customer portal Pages",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 38770433915,
+      "name": "pages build and deployment",
+      "status": "completed",
+      "conclusion": "cancelled"
+    },
+    {
+      "id": 38551106498,
+      "name": "pages build and deployment",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 38549072653,
+      "name": "pages build and deployment",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 38549061883,
+      "name": "pages build and deployment",
+      "status": "completed",
+      "conclusion": "cancelled"
+    },
+    {
+      "id": 38535569877,
+      "name": "pages build and deployment",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 38530313267,
+      "name": "pages build and deployment",
+      "status": "completed",
+      "conclusion": "success"
     }
   ],
   "failed_pages_builds": []
