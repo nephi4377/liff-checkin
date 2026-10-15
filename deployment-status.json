@@ -1,5 +1,5 @@
 {
-  "source_sha": "8d3f8973d00ada0a1f7287fb9d19cd905ac33a73",
+  "source_sha": "5691ce4233ca722a630677606c72fe4896ca5181",
   "pages": {
     "url": "https://api.github.com/repos/nephi4377/liff-checkin/pages",
     "status": "errored",
@@ -78,10 +78,16 @@
   ],
   "recent_runs": [
     {
+      "id": 38772285097,
+      "name": "Record Pages deployment result",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
       "id": 38771817059,
       "name": "Record Pages deployment result",
-      "status": "pending",
-      "conclusion": null
+      "status": "completed",
+      "conclusion": "success"
     },
     {
       "id": 38771810918,
@@ -92,14 +98,14 @@
     {
       "id": 38771805844,
       "name": "Record Pages deployment result",
-      "status": "in_progress",
-      "conclusion": null
+      "status": "completed",
+      "conclusion": "success"
     },
     {
       "id": 38771804952,
       "name": "pages build and deployment",
-      "status": "queued",
-      "conclusion": null
+      "status": "completed",
+      "conclusion": "success"
     },
     {
       "id": 38771696333,
@@ -190,12 +196,313 @@
       "name": "pages build and deployment",
       "status": "completed",
       "conclusion": "success"
+    }
+  ],
+  "current_pages_jobs": [
+    {
+      "run_id": 38771804952,
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 116549285553,
+          "name": "build",
+          "status": "completed",
+          "conclusion": "success",
+          "runner_name": "GitHub Actions 1000005165",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-15T16:46:43Z",
+              "completed_at": "2026-10-15T16:46:45Z"
+            },
+            {
+              "name": "Checkout",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-15T16:46:45Z",
+              "completed_at": "2026-10-15T16:46:49Z"
+            },
+            {
+              "name": "Upload artifact",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-15T16:46:49Z",
+              "completed_at": "2026-10-15T16:46:54Z"
+            },
+            {
+              "name": "Post Checkout",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-15T16:46:54Z",
+              "completed_at": "2026-10-15T16:46:54Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-15T16:46:54Z",
+              "completed_at": "2026-10-15T16:46:54Z"
+            }
+          ],
+          "annotations": [
+            {
+              "title": "",
+              "message": "Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/"
+            },
+            {
+              "title": "",
+              "message": "\"The ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026. For more information, see https://github.com/actions/runner-images/issues/14748\""
+            }
+          ]
+        },
+        {
+          "id": 116549415028,
+          "name": "deploy",
+          "status": "completed",
+          "conclusion": "success",
+          "runner_name": "GitHub Actions 1000005168",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-15T16:47:01Z",
+              "completed_at": "2026-10-15T16:47:02Z"
+            },
+            {
+              "name": "Deploy to GitHub Pages",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-15T16:47:02Z",
+              "completed_at": "2026-10-15T16:48:14Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-15T16:48:14Z",
+              "completed_at": "2026-10-15T16:48:14Z"
+            }
+          ],
+          "annotations": [
+            {
+              "title": "",
+              "message": "\"The ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026. For more information, see https://github.com/actions/runner-images/issues/14748\""
+            }
+          ]
+        },
+        {
+          "id": 116549415074,
+          "name": "report-build-status",
+          "status": "completed",
+          "conclusion": "success",
+          "runner_name": "GitHub Actions 1000005167",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-15T16:46:59Z",
+              "completed_at": "2026-10-15T16:46:59Z"
+            },
+            {
+              "name": "Report Build Status",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-15T16:46:59Z",
+              "completed_at": "2026-10-15T16:47:00Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-15T16:47:00Z",
+              "completed_at": "2026-10-15T16:47:00Z"
+            }
+          ],
+          "annotations": [
+            {
+              "title": "",
+              "message": "\"The ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026. For more information, see https://github.com/actions/runner-images/issues/14748\""
+            }
+          ]
+        }
+      ],
+      "pending_deployments": []
     },
     {
-      "id": 38530313267,
-      "name": "pages build and deployment",
+      "run_id": 38771696333,
       "status": "completed",
-      "conclusion": "success"
+      "conclusion": "cancelled",
+      "jobs": [],
+      "pending_deployments": []
+    },
+    {
+      "run_id": 38771516412,
+      "status": "completed",
+      "conclusion": "cancelled",
+      "jobs": [
+        {
+          "id": 116548504723,
+          "name": "build",
+          "status": "completed",
+          "conclusion": "success",
+          "runner_name": "GitHub Actions 1000005160",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-15T16:45:03Z",
+              "completed_at": "2026-10-15T16:45:04Z"
+            },
+            {
+              "name": "Checkout",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-15T16:45:04Z",
+              "completed_at": "2026-10-15T16:45:08Z"
+            },
+            {
+              "name": "Upload artifact",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-15T16:45:08Z",
+              "completed_at": "2026-10-15T16:45:14Z"
+            },
+            {
+              "name": "Post Checkout",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-15T16:45:14Z",
+              "completed_at": "2026-10-15T16:45:14Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-15T16:45:14Z",
+              "completed_at": "2026-10-15T16:45:15Z"
+            }
+          ],
+          "annotations": [
+            {
+              "title": "",
+              "message": "Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/"
+            },
+            {
+              "title": "",
+              "message": "\"The ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026. For more information, see https://github.com/actions/runner-images/issues/14748\""
+            }
+          ]
+        },
+        {
+          "id": 116548634408,
+          "name": "deploy",
+          "status": "completed",
+          "conclusion": "cancelled",
+          "runner_name": "GitHub Actions 1000005162",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-15T16:45:21Z",
+              "completed_at": "2026-10-15T16:45:22Z"
+            },
+            {
+              "name": "Deploy to GitHub Pages",
+              "status": "completed",
+              "conclusion": "cancelled",
+              "number": 2,
+              "started_at": "2026-10-15T16:45:22Z",
+              "completed_at": "2026-10-15T16:46:37Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-15T16:46:37Z",
+              "completed_at": "2026-10-15T16:46:37Z"
+            }
+          ],
+          "annotations": [
+            {
+              "title": "",
+              "message": "Canceling since a higher priority waiting request for pages build and deployment @ main exists"
+            },
+            {
+              "title": "",
+              "message": "The operation was canceled."
+            },
+            {
+              "title": "",
+              "message": "\"The ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026. For more information, see https://github.com/actions/runner-images/issues/14748\""
+            }
+          ]
+        },
+        {
+          "id": 116548634484,
+          "name": "report-build-status",
+          "status": "completed",
+          "conclusion": "success",
+          "runner_name": "GitHub Actions 1000005161",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-15T16:45:20Z",
+              "completed_at": "2026-10-15T16:45:20Z"
+            },
+            {
+              "name": "Report Build Status",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-15T16:45:21Z",
+              "completed_at": "2026-10-15T16:45:23Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-15T16:45:23Z",
+              "completed_at": "2026-10-15T16:45:23Z"
+            }
+          ],
+          "annotations": [
+            {
+              "title": "",
+              "message": "\"The ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026. For more information, see https://github.com/actions/runner-images/issues/14748\""
+            }
+          ]
+        }
+      ],
+      "pending_deployments": []
     }
   ],
   "failed_pages_builds": []
