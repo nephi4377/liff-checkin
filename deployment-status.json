@@ -1,7 +1,9 @@
 {
   "component": "pages",
-  "source_sha": "8d3f8973d00ada0a1f7287fb9d19cd905ac33a73",
+  "source_sha": "cfba4a27625c76cd11c6c83f042ceb314f54b44a",
   "conclusion": "failure",
-  "run_url": "https://github.com/nephi4377/liff-checkin/deployments",
-  "recorded_at": "2026-10-15T16:46:50.967Z"
+  "diagnostic": "Timed out waiting for the selected Pages commit",
+  "build_url": "https://api.github.com/repos/nephi4377/liff-checkin/pages/builds/1287319979",
+  "run_url": "https://github.com/nephi4377/liff-checkin/actions/runs/38771172313",
+  "recorded_at": "2026-10-15T16:54:11.782Z"
 }
