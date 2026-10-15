@@ -1,106 +1,32 @@
 name: Record Pages deployment result
 on:
-  page_build:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/deployment-result.yml']
+  workflow_run:
+    workflows: ["pages build and deployment"]
+    types: [completed]
 permissions:
   contents: write
-  pages: read
-  actions: read
 concurrency:
   group: pages-deployment-result
   cancel-in-progress: false
 jobs:
   record:
-    if: github.event_name == 'page_build'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/github-script@v7
         with:
           script: |
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            let component, sourceSha, conclusion, runUrl;
-            if (context.eventName === 'workflow_run') {
-              const run = context.payload.workflow_run;
-              if (run.head_branch !== 'main' || run.head_repository.full_name !== owner + '/' + repo) return;
-              component = {'project-console clasp':'project-console', 'accounting-gas clasp':'accounting-gas'}[run.name];
-              if (!component) return;
-              sourceSha = run.head_sha;
-              conclusion = run.conclusion;
-              runUrl = run.html_url;
-            } else {
-              const build = context.payload.build;
-              if (!['built','errored'].includes(build.status)) return;
-              component = 'pages';
-              sourceSha = build.commit;
-              conclusion = build.status === 'built' ? 'success' : 'failure';
-              runUrl = context.payload.repository.html_url + '/deployments';
-            }
-            if (!/^[a-f0-9]{40}$/.test(sourceSha || '')) throw new Error('Missing release commit');
-            const branch = 'deployment-status/' + component;
-            try {
-              await github.rest.git.getRef({owner, repo, ref:'heads/' + branch});
-            } catch (error) {
-              if (error.status !== 404) throw error;
-              await github.rest.git.createRef({owner, repo, ref:'refs/heads/' + branch, sha:sourceSha});
-            }
+            const {owner,repo}=context.repo;
+            const run=context.payload.workflow_run;
+            if(run.head_branch!=='main' || run.head_repository.full_name!==owner+'/'+repo)return;
+            const main=await github.rest.repos.getBranch({owner,repo,branch:'main'});
+            if(run.head_sha!==main.data.commit.sha)return;
+            const branch='deployment-status/pages';
+            try{await github.rest.git.getRef({owner,repo,ref:'heads/'+branch});}
+            catch(error){if(error.status!==404)throw error;await github.rest.git.createRef({owner,repo,ref:'refs/heads/'+branch,sha:run.head_sha});}
             let previousSha;
-            try {
-              const response = await github.rest.repos.getContent({owner, repo, path:'deployment-status.json', ref:branch});
-              previousSha = response.data.sha;
-            } catch (error) {
-              if (error.status !== 404) throw error;
-            }
-            const receipt = {component, source_sha:sourceSha, conclusion, run_url:runUrl, recorded_at:new Date().toISOString()};
-            await github.rest.repos.createOrUpdateFileContents({
-              owner, repo, branch, path:'deployment-status.json',
-              message:'Record ' + component + ' deployment ' + sourceSha.slice(0,7),
-              content:Buffer.from(JSON.stringify(receipt,null,2) + '\n').toString('base64'),
-              ...(previousSha ? {sha:previousSha} : {})
-            });
-            core.info(component + ': ' + conclusion + ' at ' + sourceSha);
-  diagnose:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/github-script@v7
-        with:
-          script: |
-            const {owner, repo} = context.repo;
-            const result = {source_sha:context.sha};
-            try { result.pages = (await github.rest.repos.getPages({owner,repo})).data; }
-            catch (error) { result.pages_error = error.message; }
-            try { result.build = (await github.rest.repos.getLatestPagesBuild({owner,repo})).data; }
-            catch (error) { result.build_error = error.message; }
-            const runs = await github.rest.actions.listWorkflowRuns({owner,repo,workflow_id:'publish-customer-portal.yml',per_page:2});
-            result.runs = [];
-            for (const run of runs.data.workflow_runs) {
-              const item = {id:run.id,status:run.status,conclusion:run.conclusion,head_sha:run.head_sha};
-              const jobs = await github.rest.actions.listJobsForWorkflowRun({owner,repo,run_id:run.id});
-              item.steps = jobs.data.jobs.flatMap(job => (job.steps || []).map(step => ({name:step.name,status:step.status,conclusion:step.conclusion})));
-              result.runs.push(item);
-            }
-            const recent = await github.rest.actions.listWorkflowRunsForRepo({owner,repo,per_page:20});
-            result.recent_runs = recent.data.workflow_runs.map(run => ({id:run.id,name:run.name,status:run.status,conclusion:run.conclusion}));
-            result.failed_pages_builds = [];
-            for (const run of recent.data.workflow_runs.filter(run => /pages/i.test(run.name || '') && run.name !== 'Record Pages deployment result' && run.conclusion === 'failure').slice(0,2)) {
-              const item = {id:run.id,name:run.name,head_sha:run.head_sha,diagnostics:[]};
-              const jobs = await github.rest.actions.listJobsForWorkflowRun({owner,repo,run_id:run.id});
-              for (const job of jobs.data.jobs.filter(job => job.conclusion === 'failure')) {
-                item.diagnostics.push('Failed job: '+job.name);
-                const logs=await github.rest.actions.downloadJobLogsForWorkflowRun({owner,repo,job_id:job.id});
-                const text=typeof logs.data==='string'?logs.data:Buffer.from(logs.data).toString('utf8');
-                item.diagnostics.push(...text.split('\n').filter(line=>/error|exception|invalid/i.test(line)).slice(-12).map(line=>line.slice(0,400)));
-              }
-              result.failed_pages_builds.push(item);
-            }
-            const branch='deployment-status/pages-diagnostics';
-            try { await github.rest.git.getRef({owner,repo,ref:'heads/'+branch}); }
-            catch(error) { if(error.status!==404)throw error; await github.rest.git.createRef({owner,repo,ref:'refs/heads/'+branch,sha:context.sha}); }
-            let sha;
-            try { sha=(await github.rest.repos.getContent({owner,repo,path:'deployment-status.json',ref:branch})).data.sha; }
-            catch(error) { if(error.status!==404)throw error; }
+            try{previousSha=(await github.rest.repos.getContent({owner,repo,path:'deployment-status.json',ref:branch})).data.sha;}
+            catch(error){if(error.status!==404)throw error;}
+            const receipt={component:'pages',source_sha:run.head_sha,conclusion:run.conclusion,run_url:run.html_url,recorded_at:new Date().toISOString()};
             await github.rest.repos.createOrUpdateFileContents({owner,repo,branch,path:'deployment-status.json',
-              message:'Record Pages build diagnostics',content:Buffer.from(JSON.stringify(result,null,2)+'\n').toString('base64'),...(sha?{sha}:{})});
+              message:'Record actual Pages deployment '+run.head_sha.slice(0,7),
+              content:Buffer.from(JSON.stringify(receipt,null,2)+'\n').toString('base64'),...(previousSha?{sha:previousSha}:{})});
