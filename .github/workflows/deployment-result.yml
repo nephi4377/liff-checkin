@@ -2,12 +2,13 @@ name: Record Pages deployment result
 on:
   page_build:
   push:
-    branches: [main]
+    branches: [main, codex/pages-diagnostics]
     paths: ['.github/workflows/deployment-result.yml']
 permissions:
   contents: write
   pages: read
   actions: read
+  checks: read
 concurrency:
   group: pages-deployment-result
   cancel-in-progress: false
@@ -84,6 +85,21 @@ jobs:
             }
             const recent = await github.rest.actions.listWorkflowRunsForRepo({owner,repo,per_page:20});
             result.recent_runs = recent.data.workflow_runs.map(run => ({id:run.id,name:run.name,status:run.status,conclusion:run.conclusion}));
+            result.current_pages_jobs = [];
+            for (const run of recent.data.workflow_runs.filter(run => /pages build/i.test(run.name || '')).slice(0,3)) {
+              const data = {run_id:run.id,status:run.status,conclusion:run.conclusion,jobs:[]};
+              const jobs=await github.rest.actions.listJobsForWorkflowRun({owner,repo,run_id:run.id});
+              for(const job of jobs.data.jobs){
+                const item={id:job.id,name:job.name,status:job.status,conclusion:job.conclusion,runner_name:job.runner_name,steps:job.steps};
+                if(job.check_run_url){
+                  const id=Number(job.check_run_url.split('/').pop());
+                  try{item.annotations=(await github.rest.checks.listAnnotations({owner,repo,check_run_id:id})).data.map(a=>({title:a.title,message:a.message}));}catch(error){item.annotation_error=error.message;}
+                }
+                data.jobs.push(item);
+              }
+              try{data.pending_deployments=(await github.rest.actions.getPendingDeploymentsForRun({owner,repo,run_id:run.id})).data.map(d=>({environment:d.environment.name,can_approve:d.current_user_can_approve}));}catch(error){data.pending_error=error.message;}
+              result.current_pages_jobs.push(data);
+            }
             result.failed_pages_builds = [];
             for (const run of recent.data.workflow_runs.filter(run => /pages/i.test(run.name || '') && run.name !== 'Record Pages deployment result' && run.conclusion === 'failure').slice(0,2)) {
               const item = {id:run.id,name:run.name,head_sha:run.head_sha,diagnostics:[]};
