@@ -1,13 +1,13 @@
 name: Record Pages deployment result
 on:
-  workflow_run:
-    workflows: ["pages build and deployment"]
-    types: [completed]
+  push:
+    branches: [main]
 permissions:
   contents: write
+  actions: read
 concurrency:
   group: pages-deployment-result
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   record:
     runs-on: ubuntu-latest
@@ -16,17 +16,24 @@ jobs:
         with:
           script: |
             const {owner,repo}=context.repo;
-            const run=context.payload.workflow_run;
-            if(run.head_branch!=='main' || run.head_repository.full_name!==owner+'/'+repo)return;
+            let deployment;
+            for(let attempt=0;attempt<80;attempt++){
+              const response=await github.rest.actions.listWorkflowRunsForRepo({owner,repo,head_sha:context.sha,per_page:50});
+              const run=response.data.workflow_runs.find(item=>item.name==='pages build and deployment' && item.head_sha===context.sha);
+              if(run?.status==='completed'){deployment=run;break;}
+              await new Promise(resolve=>setTimeout(resolve,15000));
+            }
+            if(!deployment){core.setFailed('No completed Pages deployment found for selected commit');return;}
             const main=await github.rest.repos.getBranch({owner,repo,branch:'main'});
-            if(run.head_sha!==main.data.commit.sha)return;
+            if(main.data.commit.sha!==context.sha)return;
             const branch='deployment-status/pages';
             try{await github.rest.git.getRef({owner,repo,ref:'heads/'+branch});}
-            catch(error){if(error.status!==404)throw error;await github.rest.git.createRef({owner,repo,ref:'refs/heads/'+branch,sha:run.head_sha});}
+            catch(error){if(error.status!==404)throw error;await github.rest.git.createRef({owner,repo,ref:'refs/heads/'+branch,sha:context.sha});}
             let previousSha;
             try{previousSha=(await github.rest.repos.getContent({owner,repo,path:'deployment-status.json',ref:branch})).data.sha;}
             catch(error){if(error.status!==404)throw error;}
-            const receipt={component:'pages',source_sha:run.head_sha,conclusion:run.conclusion,run_url:run.html_url,recorded_at:new Date().toISOString()};
+            const receipt={component:'pages',source_sha:context.sha,conclusion:deployment.conclusion,run_url:deployment.html_url,recorded_at:new Date().toISOString()};
             await github.rest.repos.createOrUpdateFileContents({owner,repo,branch,path:'deployment-status.json',
-              message:'Record actual Pages deployment '+run.head_sha.slice(0,7),
+              message:'Record actual Pages deployment '+context.sha.slice(0,7),
               content:Buffer.from(JSON.stringify(receipt,null,2)+'\n').toString('base64'),...(previousSha?{sha:previousSha}:{})});
+            if(deployment.conclusion!=='success')core.setFailed('Pages deployment: '+deployment.conclusion);
