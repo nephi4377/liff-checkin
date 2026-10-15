@@ -603,8 +603,8 @@
               phone_last4: last4
             });
           }
-          if (!res || !res.success) {
-            showBindMsg((res && res.message) || '綁定未完成，請稍後再試', 'err');
+          if (!res || res.success !== true || !res.rich_menu_sync || res.rich_menu_sync.success !== true || res.rich_menu_sync.verified !== true || !res.rich_menu_sync.richMenuId) {
+            showBindMsg((res && res.message) || '選單尚未確認完成，請稍後再試', 'err');
             return;
           }
           try {
@@ -621,7 +621,7 @@
           $('bindDoneCard').classList.remove('hidden');
           var extra = res.already_bound ? '這一戶本來就已綁定。' : '這一戶已經連上您的 LINE。';
           $('bindDoneText').textContent = extra +
-            '請關掉本頁回到聊天室，下方選單會換成會員功能（收款確認、我的案場）。若還沒換，請把 LINE 完全關掉再開一次。';
+            '會員選單已掛載並確認。請關掉本頁回到聊天室，查看收款確認、我的案場等功能。';
           if ($('btnBindEnter')) {
             var hasNow = (session.portal && session.portal.projects && session.portal.projects.length);
             $('btnBindEnter').classList.toggle('hidden', !hasNow);
