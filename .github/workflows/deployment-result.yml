@@ -82,6 +82,19 @@ jobs:
               item.steps = jobs.data.jobs.flatMap(job => (job.steps || []).map(step => ({name:step.name,status:step.status,conclusion:step.conclusion})));
               result.runs.push(item);
             }
+            const recent = await github.rest.actions.listWorkflowRunsForRepo({owner,repo,per_page:20});
+            result.failed_pages_builds = [];
+            for (const run of recent.data.workflow_runs.filter(run => /pages build/i.test(run.name || '') && run.conclusion === 'failure').slice(0,2)) {
+              const item = {id:run.id,name:run.name,head_sha:run.head_sha,diagnostics:[]};
+              const jobs = await github.rest.actions.listJobsForWorkflowRun({owner,repo,run_id:run.id});
+              for (const job of jobs.data.jobs.filter(job => job.conclusion === 'failure')) {
+                item.diagnostics.push('Failed job: '+job.name);
+                const logs=await github.rest.actions.downloadJobLogsForWorkflowRun({owner,repo,job_id:job.id});
+                const text=typeof logs.data==='string'?logs.data:Buffer.from(logs.data).toString('utf8');
+                item.diagnostics.push(...text.split('\n').filter(line=>/error|exception|invalid/i.test(line)).slice(-12).map(line=>line.slice(0,400)));
+              }
+              result.failed_pages_builds.push(item);
+            }
             const branch='deployment-status/pages-diagnostics';
             try { await github.rest.git.getRef({owner,repo,ref:'heads/'+branch}); }
             catch(error) { if(error.status!==404)throw error; await github.rest.git.createRef({owner,repo,ref:'refs/heads/'+branch,sha:context.sha}); }
