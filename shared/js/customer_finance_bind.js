@@ -53,7 +53,7 @@ var CustomerFinanceBind = (function () {
       var codesHint = b.official_project_codes
         ? '<div class="mono">顧客列表案號：' + esc(b.official_project_codes) + '</div>' : '';
       return '<div class="bind-row">' +
-        '<div><strong>' + title + esc(b.customer_line_user_id || '') + '</strong>' +
+        '<div style="min-width:0;overflow-wrap:anywhere"><strong>' + title + esc(b.customer_line_user_id || '') + '</strong>' +
         codesHint +
         '<div class="mono">綁定於 ' + esc(b.bound_at || '') + '</div>' + menuTools(b) + '</div>' +
         '<button type="button" class="btn btn-danger btn-sm" data-revoke="' + esc(b.binding_id) + '">解除</button></div>';
@@ -64,7 +64,7 @@ var CustomerFinanceBind = (function () {
       warnHtml +
       '<h4 style="margin-top:12px">已綁定</h4>' + listHtml +
       (revoked.length ? '<details style="margin-top:12px"><summary>最近解除的綁定</summary>' + revoked.map(function (b) {
-        return '<div class="bind-row"><div>' + esc(b.customer_name || b.customer_line_user_id) +
+        return '<div class="bind-row"><div style="min-width:0;overflow-wrap:anywhere">' + esc(b.customer_name || b.customer_line_user_id) +
           '<div class="mono">解除於 ' + esc(b.revoked_at || '') + '</div>' + menuTools(b) + '</div></div>';
       }).join('') + '</details>' : '') +
       '<p class="sub">選單依所有有效案件同步：仍有案件保留六格，全部解除後回四格。綁錯客戶或案號時，先解除再建立正確綁定；歷史紀錄保留供查核。</p>' +

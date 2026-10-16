@@ -63,10 +63,13 @@ try {
     await context.close();
   }
 
-  const page = await browser.newPage({viewport: {width: 1280, height: 900}});
-  await page.goto(base + '/modules/accounting/designer-customer-finance.html');
+  const page = await browser.newPage({viewport: {width: 390, height: 844}});
+  await page.route('**/*', route => route.abort());
   // 獨立掛載實際共用綁定元件，避開員工登入；管理 API 全為本地 stub。
   await page.setContent('<div id="mount"></div><div id="message"></div>');
+  const designer = await readFile(path.join(root, 'modules/accounting/designer-customer-finance.html'), 'utf8');
+  await page.addStyleTag({path: path.join(root, 'shared/css/accounting_layout.css')});
+  await page.addStyleTag({content: designer.match(/<style>([\s\S]*?)<\/style>/)[1]});
   await page.addScriptTag({path: path.join(root, 'shared/js/customer_finance_bind.js')});
   await page.evaluate(() => {
     window.__synced = 0;
@@ -80,8 +83,8 @@ try {
     window.confirm = () => true;
     CustomerFinanceBind.render(document.getElementById('mount'), {
       session: {}, projectNo: '123',
-      detail: {portal_bindings: [{binding_id: 'active', customer_line_user_id: 'test-user'}],
-        revoked_portal_bindings: [{binding_id: 'revoked', customer_line_user_id: 'test-user'}]},
+      detail: {portal_bindings: [{binding_id: 'active', customer_line_user_id: 'U' + '1'.repeat(32)}],
+        revoked_portal_bindings: [{binding_id: 'revoked', customer_line_user_id: 'U' + '1'.repeat(32)}]},
       onRefresh: async () => {document.getElementById('message').textContent = '';},
       onMsg: message => {document.getElementById('message').textContent = message;}
     });
@@ -94,6 +97,7 @@ try {
   await page.locator('[data-revoke="active"]').click();
   await page.waitForFunction(() => document.getElementById('message').textContent.includes('選單尚未同步'));
   assert.equal(await page.locator('[data-menu-result="active"]').evaluate(el => el.scrollWidth <= el.clientWidth), true);
+  assert.equal(await page.evaluate(() => document.body.scrollWidth <= window.innerWidth), true);
   console.log('PASS: management shows history, retries revoked menu and preserves partial-failure notice');
 } finally {
   if (browser) await browser.close();
