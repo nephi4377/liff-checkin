@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=102"></script>
+  <script src="../../shared/js/accounting_api.js?v=20261016-customer-menu"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
   <script src="../../shared/js/customer_finance_ui.js?v=3"></script>
@@ -869,6 +869,12 @@
           includeData: !bindIntent && deepLink.entity !== 'material',
           wakeMaterial: deepLink.entity === 'material'
         });
+        // login() 導頁期間不應把 null session 當成登入完成。
+        if (!session) {
+          $('bindStatus').textContent = '正在轉往 LINE 登入；若畫面沒有跳轉，請按「重新登入 LINE」。';
+          $('btnLiffRelogin').classList.remove('hidden');
+          return;
+        }
         if (session && session.staffPreview) staffPreview = true;
         if (staffPreview) {
           $('previewBanner').classList.remove('hidden');
@@ -915,6 +921,7 @@
         $('app').classList.remove('hidden');
         if (bindIntent) {
           showBindView(false);
+          $('bindStatus').textContent = '尚未確認 LINE 身分，請重新登入後再送出。';
           $('btnBindSubmit').disabled = true;
           $('btnLiffRelogin').classList.remove('hidden');
           showBindMsg((e.message || '載入失敗') + '。請按「重新登入 LINE」，或用手機官方 LINE 打開。', 'err');

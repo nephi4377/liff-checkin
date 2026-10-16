@@ -550,7 +550,9 @@ var AccountingApi = (function () {
       var uid = (session.auth && session.auth.user_id) || (session.profile && session.profile.userId) || pickStaffUserId_(session);
       return uid ? { user_id: uid } : {};
     }
-    return { liff_id_token: session.idToken || '' };
+    var tokens = { liff_id_token: session.idToken || '' };
+    if (session.customerAccessToken) tokens.liff_access_token = session.customerAccessToken;
+    return tokens;
   }
 
   function resolveAuth(sessionOrToken) {
@@ -1919,6 +1921,12 @@ var AccountingApi = (function () {
     cfPortalRevoke: function (sessionOrToken, bindingId) {
       return post({ action: 'client_portal_revoke', auth: resolveAuth(sessionOrToken), binding_id: bindingId });
     },
+    cfPortalMenuStatus: function (sessionOrToken, bindingId) {
+      return post({ action: 'client_portal_menu_status', auth: resolveAuth(sessionOrToken), binding_id: bindingId });
+    },
+    cfPortalMenuSync: function (sessionOrToken, bindingId) {
+      return post({ action: 'client_portal_menu_sync', auth: resolveAuth(sessionOrToken), binding_id: bindingId });
+    },
     officialCustomerSearch: function (sessionOrToken, keyword, limit) {
       return post({
         action: 'official_customer_search',
@@ -2164,12 +2172,17 @@ var AccountingApi = (function () {
         return null;
       }
       var idToken = liff.getIDToken();
-      if (!idToken || !isLiffIdTokenFresh_(idToken)) {
+      var accessToken = typeof liff.getAccessToken === 'function' ? liff.getAccessToken() : '';
+      if (idToken && !isLiffIdTokenFresh_(idToken)) idToken = '';
+      if (!idToken && !accessToken) {
+        var tokenRetry = false;
+        try { tokenRetry = sessionStorage.getItem(reloginKey) === '1'; } catch (eRetry) {}
+        if (tokenRetry) throw new Error('LINE 登入憑證未取得，請重新從官方 LINE 選單開啟');
         try { sessionStorage.setItem(reloginKey, '1'); } catch (eSet) {}
         reloginCustomerLiff_();
         return null;
       }
-      var session = { devBypass: false, idToken: idToken, profile: {}, portal: null };
+      var session = { devBypass: false, idToken: idToken || '', customerAccessToken: accessToken || '', profile: {}, portal: null };
       if (opts.wakeMaterial) {
         try {
           fetch(PROJECT_CONSOLE_API + '?page=material_ping', { method: 'GET' }).catch(function () {});

@@ -23,6 +23,7 @@ var CustomerFinanceBind = (function () {
     var projectNo = String(opts.projectNo || '').trim();
     var detail = opts.detail || {};
     var bindings = detail.portal_bindings || [];
+    var revoked = detail.revoked_portal_bindings || [];
     var warnings = detail.unbound_customer_warnings || [];
     var onMsg = opts.onMsg || function () {};
     var onOk = opts.onOk || function () {};
@@ -41,6 +42,12 @@ var CustomerFinanceBind = (function () {
         }).join('<br>') + '</div>'
       : '';
 
+    function menuTools(b) {
+      return '<div style="margin-top:8px">' +
+        '<button type="button" class="btn btn-secondary btn-sm" data-menu-status="' + esc(b.binding_id) + '">查看選單／掛載紀錄</button> ' +
+        '<button type="button" class="btn btn-secondary btn-sm" data-menu-sync="' + esc(b.binding_id) + '">重新同步選單</button>' +
+        '<div class="sub" data-menu-result="' + esc(b.binding_id) + '" style="overflow-wrap:anywhere"></div></div>';
+    }
     var listHtml = bindings.length ? bindings.map(function (b) {
       var title = b.customer_name ? (esc(b.customer_name) + ' · ') : '';
       var codesHint = b.official_project_codes
@@ -48,7 +55,7 @@ var CustomerFinanceBind = (function () {
       return '<div class="bind-row">' +
         '<div><strong>' + title + esc(b.customer_line_user_id || '') + '</strong>' +
         codesHint +
-        '<div class="mono">綁定於 ' + esc(b.bound_at || '') + '</div></div>' +
+        '<div class="mono">綁定於 ' + esc(b.bound_at || '') + '</div>' + menuTools(b) + '</div>' +
         '<button type="button" class="btn btn-danger btn-sm" data-revoke="' + esc(b.binding_id) + '">解除</button></div>';
     }).join('') : '<p class="sub">尚無綁定客戶（客戶無法從 LINE 查看本案追加減／收款）</p>';
 
@@ -56,6 +63,11 @@ var CustomerFinanceBind = (function () {
       '<p class="sub">綁定後客戶才可從 LIFF 查看並確認本案追加減／收款。綁定時會同步追加案號至顧客列表（若尚未存在）。</p>' +
       warnHtml +
       '<h4 style="margin-top:12px">已綁定</h4>' + listHtml +
+      (revoked.length ? '<details style="margin-top:12px"><summary>最近解除的綁定</summary>' + revoked.map(function (b) {
+        return '<div class="bind-row"><div>' + esc(b.customer_name || b.customer_line_user_id) +
+          '<div class="mono">解除於 ' + esc(b.revoked_at || '') + '</div>' + menuTools(b) + '</div></div>';
+      }).join('') + '</details>' : '') +
+      '<p class="sub">選單依所有有效案件同步：仍有案件保留六格，全部解除後回四格。綁錯客戶或案號時，先解除再建立正確綁定；歷史紀錄保留供查核。</p>' +
       '<h4 style="margin-top:16px">新增綁定</h4>' +
       '<label>搜尋官方 LINE 顧客列表（名稱／案號／UID）</label>' +
       '<div style="display:flex;gap:8px;margin-top:4px">' +
@@ -72,10 +84,56 @@ var CustomerFinanceBind = (function () {
         if (!confirm('確定解除這位客戶的綁定？解除後客戶將無法查看本案。')) return;
         runLocked(btn, function () {
           return AccountingApi.cfPortalRevoke(session, btn.getAttribute('data-revoke'))
-            .then(function (res) {
+            .then(async function (res) {
               if (!res.success) onMsg(res.message);
-              else { onOk('已解除綁定'); return onRefresh(); }
+              else {
+                await onRefresh();
+                if (res.rich_menu_sync && res.rich_menu_sync.success === true) onOk('已解除綁定並確認選單');
+                else onMsg('綁定已解除，選單尚未同步。請展開「最近解除的綁定」重新同步選單。');
+              }
             });
+        }, { busyLabel: '處理中…', lockRoot: container });
+      };
+    });
+
+    var outcomeNames = { attempted: '嘗試掛載', verified: '已確認', failed: '失敗', unknown_menu: '未知選單，待人工核對',
+      unreachable: '無法取得個人資料，請確認已加官方好友且未封鎖' };
+    var stageNames = { message_check: '私訊檢查', group_message_check: '客戶群組發言檢查', follow_check: '加好友檢查', guest_precondition: '四格前置',
+      existing_member: '既有六格', member_after_binding: '綁定升六格', guest_rollout: '批次補四格',
+      guest_inventory: '批次盤點', member_reconcile: '同步六格', guest_after_revoke: '解除後同步四格' };
+    container.querySelectorAll('[data-menu-status], [data-menu-sync]').forEach(function (btn) {
+      btn.onclick = function () {
+        if (!session) { onMsg('尚未登入會計權限'); return; }
+        var sync = btn.hasAttribute('data-menu-sync');
+        var id = btn.getAttribute(sync ? 'data-menu-sync' : 'data-menu-status');
+        var box = Array.prototype.find.call(container.querySelectorAll('[data-menu-result]'), function (el) {
+          return el.getAttribute('data-menu-result') === id;
+        });
+        if (sync && !confirm('依這位客戶所有有效案件重新同步選單？仍有案件使用六格，全部解除則使用四格。')) return;
+        runLocked(btn, async function () {
+          box.textContent = sync ? '正在同步選單…' : '正在讀取選單…';
+          try {
+            if (sync) {
+              var written = await AccountingApi.cfPortalMenuSync(session, id);
+              if (!written.success || written.verified !== true) {
+                box.textContent = written.message || '選單尚未同步完成，請稍後重試。';
+                return;
+              }
+            }
+            var res = await AccountingApi.cfPortalMenuStatus(session, id);
+            if (!res.success) { box.textContent = res.message || '無法讀取選單'; return; }
+            var names = { guest: '四格', member: '六格', none: '未掛載', unknown: '未知選單，待人工核對' };
+            box.innerHTML = '<p>目前選單：' + esc(names[res.variant] || res.variant) + '；有效綁定：' +
+              esc(String(res.active_binding_count)) + ' 筆' + (sync ? '（本次同步已確認）' : '') + '</p>' +
+              '<div class="mono">' + esc(res.richMenuId || '') + '</div>' +
+              '<details><summary>掛載紀錄（最新 50 筆）</summary>' +
+              ((res.history || []).map(function (row) {
+                return '<div style="margin:8px 0">' + esc(row.timestamp) + ' · ' + esc(stageNames[row.stage] || row.stage) +
+                  ' · ' + esc(outcomeNames[row.outcome] || row.outcome) + '<div class="mono">' +
+                  esc(row.previous_menu_id || '未掛載') + ' → ' + esc(row.target_menu_id || '未掛載') + '</div></div>';
+              }).join('') || '<p>目前查詢範圍內無紀錄</p>') +
+              (res.history_limited ? '<p>此處僅查最近 2,000 列，並顯示此客戶最新 50 筆；完整歷史請查 CustomerRichMenuAudit。</p>' : '') + '</details>';
+          } catch (e) { box.textContent = '選單服務暫時無法連線，請稍後重試。'; }
         }, { busyLabel: '處理中…', lockRoot: container });
       };
     });
