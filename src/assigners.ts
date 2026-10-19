@@ -3,8 +3,8 @@ import { loadProfile } from './profile'
 /** 已自「誰派的」名單移除；下拉與同步 assigners 都不再出現 */
 export const REMOVED_ASSIGNERS = new Set(['羊'])
 
-/** 公司常用「誰派的」選項（下拉）；歷史自由文字會另外併入 */
-export const BASE_ASSIGNERS: readonly string[] = []
+/** 公司常用「誰派的」固定人員（下拉預設）；仍可用「＋ 新增派工人」擴充並同步 */
+export const BASE_ASSIGNERS: readonly string[] = ['豪哥', '雯姐']
 
 /** select 內「新增」佔位值 */
 export const ASSIGNER_ADD_VALUE = '__add_assigner__'
