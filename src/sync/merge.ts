@@ -1,17 +1,118 @@
 import type { AppState, OfficeTask, Task, Worker } from '../types'
 import { mergeWorkersKeepingLocalExtras } from '../workers'
 
+function collectDeleted(...states: AppState[]): Set<string> {
+  const deleted = new Set<string>()
+  for (const s of states) {
+    for (const id of s.deletedIds ?? []) deleted.add(id)
+  }
+  return deleted
+}
+
+export type ReconcileOpts = {
+  /**
+   * pull 時開：同 id 一律以雲端為準（只補本機多出的新 id）。
+   * 斷開「派工本機殘留舊房標題」與「工務已拉到 v2」各顯示各的。
+   */
+  remoteWinsSameId?: boolean
+}
+
+/**
+ * 雙向和解：兩邊活任務 id 全留。
+ * 預設同 id 跟較新 revision；pull 可改 remoteWinsSameId。
+ */
+export function reconcileCloudState(
+  local: AppState,
+  remote: AppState,
+  opts: ReconcileOpts = {},
+): AppState {
+  const deleted = collectDeleted(local, remote)
+  const localRev =
+    typeof local.updatedAt === 'number' && local.updatedAt > 0
+      ? local.updatedAt
+      : 0
+  const remoteRev =
+    typeof remote.updatedAt === 'number' && remote.updatedAt > 0
+      ? remote.updatedAt
+      : 0
+  const remoteWinsSameId =
+    opts.remoteWinsSameId === true || remoteRev >= localRev
+
+  const tasksById = new Map<string, Task>()
+  if (remoteWinsSameId) {
+    for (const t of remote.tasks ?? []) {
+      if (t?.id && !deleted.has(t.id)) tasksById.set(t.id, t)
+    }
+    for (const t of local.tasks ?? []) {
+      if (!t?.id || deleted.has(t.id) || tasksById.has(t.id)) continue
+      tasksById.set(t.id, t)
+    }
+  } else {
+    for (const t of local.tasks ?? []) {
+      if (t?.id && !deleted.has(t.id)) tasksById.set(t.id, t)
+    }
+    for (const t of remote.tasks ?? []) {
+      if (!t?.id || deleted.has(t.id) || tasksById.has(t.id)) continue
+      tasksById.set(t.id, t)
+    }
+  }
+
+  const officeById = new Map<string, OfficeTask>()
+  if (remoteWinsSameId) {
+    for (const t of remote.officeTasks ?? []) {
+      if (t?.id && !deleted.has(t.id)) officeById.set(t.id, t)
+    }
+    for (const t of local.officeTasks ?? []) {
+      if (!t?.id || deleted.has(t.id) || officeById.has(t.id)) continue
+      officeById.set(t.id, t)
+    }
+  } else {
+    for (const t of local.officeTasks ?? []) {
+      if (t?.id && !deleted.has(t.id)) officeById.set(t.id, t)
+    }
+    for (const t of remote.officeTasks ?? []) {
+      if (!t?.id || deleted.has(t.id) || officeById.has(t.id)) continue
+      officeById.set(t.id, t)
+    }
+  }
+
+  const base = remoteWinsSameId ? remote : local
+  const workers = mergeWorkersKeepingLocalExtras(local.workers, remote.workers)
+  const assigners = [
+    ...new Set([...(local.assigners ?? []), ...(remote.assigners ?? [])]),
+  ]
+  const liveCount = tasksById.size
+  const remoteLive = (remote.tasks ?? []).filter(
+    (t) => t?.id && !deleted.has(t.id),
+  ).length
+  const localLive = (local.tasks ?? []).filter(
+    (t) => t?.id && !deleted.has(t.id),
+  ).length
+  const mustBump = liveCount > remoteLive || liveCount > localLive
+
+  return {
+    ...base,
+    workers,
+    tasks: [...tasksById.values()],
+    officeTasks: [...officeById.values()],
+    assigners,
+    deletedIds: [...deleted],
+    updatedAt: mustBump
+      ? Math.max(localRev + 1, remoteRev + 1, Date.now())
+      : Math.max(localRev, remoteRev),
+  }
+}
+
 /**
  * 推上雲端前：把遠端仍活著、本地未 tombstone 的任務併回來。
  * 擋住「本地種子／精簡狀態」整包 LWW 清空雲端真實派工。
+ * 同 id 保留本地（呼叫端已用較新 revision）；只補遠端多出的 id。
  */
 export function mergeCloudTaskExtras(
   local: AppState,
   remote: AppState,
 ): AppState {
-  const deleted = new Set(local.deletedIds ?? [])
-  // 遠端 tombstone 併入；但不讓「本地空刪除清單」清掉遠端已刪（由遠端 deleted 為準補）
-  for (const id of remote.deletedIds ?? []) deleted.add(id)
+  const deleted = collectDeleted(local, remote)
 
   const tasksById = new Map<string, Task>()
   for (const t of local.tasks ?? []) {

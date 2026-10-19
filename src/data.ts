@@ -139,9 +139,17 @@ const seedTasks = (): Task[] => {
   return DISPATCH_TASKS.map((s, i) => specToTask(s, now - i * 1000))
 }
 
-/** v4：換 Mantle 房間後清掉舊 localStorage 高 updatedAt，避免舊種子再打贏雲端 */
-export const STORAGE_KEY = 'employee-todo-v4'
-const LEGACY_KEYS = ['employee-todo-v1', 'employee-todo-v2', 'employee-todo-v3']
+/**
+ * v5：雙房分裂後強制再 hydrate。
+ * 從 v4 遷入時把 updatedAt 歸 0，讓首次 pull 以雲端同 id 為準（保留本機多出的新 id）。
+ */
+export const STORAGE_KEY = 'employee-todo-v5'
+const LEGACY_KEYS = [
+  'employee-todo-v1',
+  'employee-todo-v2',
+  'employee-todo-v3',
+  'employee-todo-v4',
+]
 
 /** 已完成超過此天數自動刪除（tombstone + sync） */
 export const COMPLETED_KEEP_DAYS = 10
@@ -620,10 +628,13 @@ export function createSeedState(): AppState {
 
 export function loadState(): AppState {
   try {
-    const raw =
-      localStorage.getItem(STORAGE_KEY) ??
+    const current = localStorage.getItem(STORAGE_KEY)
+    const legacyRaw =
+      localStorage.getItem('employee-todo-v4') ??
       localStorage.getItem('employee-todo-v3') ??
       localStorage.getItem('employee-todo-v2')
+    const fromLegacy = !current && Boolean(legacyRaw)
+    const raw = current ?? legacyRaw
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<AppState>
       if (parsed.workers?.length && Array.isArray(parsed.tasks)) {
@@ -635,8 +646,12 @@ export function loadState(): AppState {
             : [],
           assigners: Array.isArray(parsed.assigners) ? parsed.assigners : [],
           deletedIds: normalizeDeletedIds(parsed.deletedIds),
-          updatedAt:
-            typeof parsed.updatedAt === 'number' ? parsed.updatedAt : Date.now(),
+          // v4→v5：丢掉本機高 updatedAt，避免舊房標題繼續壓過 v2
+          updatedAt: fromLegacy
+            ? 0
+            : typeof parsed.updatedAt === 'number'
+              ? parsed.updatedAt
+              : Date.now(),
         })
       }
     }

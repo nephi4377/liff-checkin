@@ -9,7 +9,7 @@ import {
   SYNC_NAMESPACE_LEGACY,
   syncUrl,
 } from './config'
-import { mergeCloudTaskExtras, wouldDropRemoteLiveTasks } from './merge'
+import { mergeCloudTaskExtras, reconcileCloudState } from './merge'
 import { mergeWorkersKeepingLocalExtras } from '../workers'
 
 function isAppState(value: unknown): value is AppState {
@@ -48,6 +48,18 @@ export async function pullRaw(
   }
 }
 
+async function postRoom(ns: string, payload: AppState): Promise<void> {
+  const res = await fetch(syncUrl(ns), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Mantle-Key': SYNC_KEY,
+    },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error(`push ${ns} ${res.status}`)
+}
+
 /**
  * 舊房只貢獻「v2 沒有的 task id」；同 id 一律以 v2 為準（避免舊 PWA 改壞真實派工）。
  */
@@ -80,6 +92,18 @@ function absorbLegacyExtras(primary: AppState, legacy: AppState): AppState {
   }
 }
 
+/**
+ * 把 v2 權威狀態鏡像到舊房，讓仍讀舊 namespace 的 PWA 與派工／工務同一組任務。
+ * 失敗不擋主房（舊房只是保險）。
+ */
+async function mirrorToLegacy(payload: AppState): Promise<void> {
+  try {
+    await postRoom(SYNC_NAMESPACE_LEGACY, payload)
+  } catch {
+    // ignore
+  }
+}
+
 export async function pullCloud(opts: PullOpts = {}): Promise<AppState | null> {
   const data = await pullRaw()
   if (!data) return null
@@ -105,6 +129,9 @@ export async function pullCloud(opts: PullOpts = {}): Promise<AppState | null> {
   const normalized = ensureDispatchState(merged)
   if (!opts.light && normalized.updatedAt > incomingUpdatedAt) {
     await pushCloud(normalized)
+  } else if (!opts.light) {
+    // 即使沒多 id，也把 v2 鏡回舊房，收斂雙房標題分裂
+    await mirrorToLegacy(toSyncPayload(normalized))
   }
   return normalized
 }
@@ -112,6 +139,7 @@ export async function pullCloud(opts: PullOpts = {}): Promise<AppState | null> {
 /**
  * 強制協議：禁止裸 LWW。
  * 每次 POST 前必先 GET；種子狀態不得覆蓋雲端任務；會丟掉遠端活任務則 merge。
+ * 成功後鏡像舊房，斷開派工／工務各讀各房。
  */
 export async function pushCloud(state: AppState): Promise<AppState> {
   let next = ensureDispatchState(state)
@@ -127,20 +155,15 @@ export async function pushCloud(state: AppState): Promise<AppState> {
           updatedAt: Math.max(remote.updatedAt + 1, Date.now()),
         })
       } else {
-        const dropping = wouldDropRemoteLiveTasks(next, remote)
-        if (
-          dropping.length > 0 ||
-          (remote.tasks?.length ?? 0) > (next.tasks?.length ?? 0) ||
-          remote.updatedAt > next.updatedAt
-        ) {
-          next = ensureDispatchState(mergeCloudTaskExtras(next, remote))
-        } else {
-          // 即使本地較新，仍強制併入遠端多出的活任務（防漏）
-          next = ensureDispatchState(mergeCloudTaskExtras(next, remote))
-        }
+        // 一律和解：補遠端多出的 id；同 id 本機較新時保留本機（剛編輯）
+        next = ensureDispatchState(
+          reconcileCloudState(next, remote, {
+            remoteWinsSameId: remote.updatedAt > next.updatedAt,
+          }),
+        )
+        next = ensureDispatchState(mergeCloudTaskExtras(next, remote))
       }
     } else if (isSeedOnlyTaskState(next)) {
-      // 空房＋種子：允許初始化，但不裝成「現在」權威（updatedAt=0→toSync 後 ensure 可能抬升）
       next = { ...next, updatedAt: Math.max(next.updatedAt, 1) }
     }
   } catch {
@@ -159,6 +182,7 @@ export async function pushCloud(state: AppState): Promise<AppState> {
     body: JSON.stringify(payload),
   })
   if (!res.ok) throw new Error(`push ${res.status}`)
+  await mirrorToLegacy(payload)
   return ensureDispatchState(payload)
 }
 

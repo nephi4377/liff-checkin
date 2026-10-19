@@ -14,7 +14,7 @@ import { isRemovedAssigner, normalizeAssignerName } from '../assigners'
 import { isDemoHost } from '../demo/fixture'
 import { pullCloud, pushCloud } from '../sync/cloud'
 import { SYNC_POLL_MS, SYNC_PUSH_DEBOUNCE_MS } from '../sync/config'
-import { mergeCloudTaskExtras } from '../sync/merge'
+import { reconcileCloudState } from '../sync/merge'
 import type {
   AppState,
   OfficeTask,
@@ -162,54 +162,46 @@ export function useTasks() {
         return
       }
 
-      if (remoteRev > localRev) {
-        const workers = mergeWorkersFromRemote(local, remote)
-        const hasLocalExtras =
-          workers.length > mergeWorkers(remote.workers).length
-        const merged: AppState = {
-          ...remote,
-          workers,
-          updatedAt: hasLocalExtras
-            ? Math.max(remote.updatedAt + 1, Date.now())
-            : remote.updatedAt,
-        }
-        applyFromCloudRef.current = !hasLocalExtras
-        setState(merged)
-        if (hasLocalExtras) pushSoon(merged, true)
-        return
-      }
-      if (remoteRev < localRev) {
-        const workers = mergeWorkersFromRemote(local, remote)
-        const base: AppState = {
-          ...local,
-          workers,
-          updatedAt: Math.max(local.updatedAt, Date.now()),
-        }
-        const merged = mergeCloudTaskExtras(base, remote)
-        applyFromCloudRef.current = true
-        setState(merged)
-        pushSoon(merged, true)
-        return
-      }
-      if (
-        workersMissingFromLocal(local, remote) ||
-        (remote.tasks ?? []).some(
-          (t) =>
-            t?.id &&
-            !(local.deletedIds ?? []).includes(t.id) &&
-            !(local.tasks ?? []).some((x) => x.id === t.id),
-        )
-      ) {
-        const base: AppState = {
+      // 一律雙向和解：pull 時同 id 以雲端為準，本機只保留雲端沒有的新 id。
+      // 擋住「派工本機舊房標題」與「工務 v2 標題」各顯示各的。
+      const merged = reconcileCloudState(
+        {
           ...local,
           workers: mergeWorkersFromRemote(local, remote),
-          updatedAt: Math.max(local.updatedAt + 1, Date.now()),
-        }
-        const merged = mergeCloudTaskExtras(base, remote)
-        applyFromCloudRef.current = true
-        setState(merged)
-        pushSoon(merged, true)
-      }
+        },
+        remote,
+        { remoteWinsSameId: true },
+      )
+      const localIds = new Set((local.tasks ?? []).map((t) => t.id))
+      const remoteIds = new Set((remote.tasks ?? []).map((t) => t.id))
+      const idsChanged =
+        merged.tasks.length !== local.tasks.length ||
+        merged.tasks.some((t) => !localIds.has(t.id)) ||
+        [...remoteIds].some((id) => !localIds.has(id))
+      const titleDrift = (remote.tasks ?? []).some((rt) => {
+        const lt = (local.tasks ?? []).find((x) => x.id === rt.id)
+        return (
+          !!lt &&
+          (lt.title !== rt.title ||
+            lt.caseNo !== rt.caseNo ||
+            Boolean(lt.completed) !== Boolean(rt.completed))
+        )
+      })
+      const needApply =
+        remoteRev !== localRev ||
+        idsChanged ||
+        titleDrift ||
+        workersMissingFromLocal(local, remote)
+      if (!needApply) return
+
+      const shouldPush =
+        merged.updatedAt > remoteRev ||
+        idsChanged ||
+        titleDrift ||
+        workersMissingFromLocal(local, remote)
+      applyFromCloudRef.current = !shouldPush
+      setState(merged)
+      if (shouldPush) pushSoon(merged, true)
     }
 
     const boot = async () => {
