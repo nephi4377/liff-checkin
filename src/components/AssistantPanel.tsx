@@ -137,8 +137,24 @@ export function AssistantPanel({
   const nameOf = (id: string) => workerDisplayName(workers, id)
 
   const focused = tasks.filter((t) => t.assigneeId === focusWorkerIdSafe)
-  const openCount = focused.filter((t) => !t.completed && !t.trashedAt).length
+  const openFocused = focused.filter((t) => !t.completed && !t.trashedAt)
+  const openCount = openFocused.length
+  const openPriority = openFocused.filter((t) => t.category === 'priority').length
+  const openReminder = openFocused.filter((t) => t.category === 'reminder').length
+  const openTodo = openFocused.filter(
+    (t) => t.category !== 'priority' && t.category !== 'reminder',
+  ).length
   const focusName = nameOf(focusWorkerIdSafe)
+  const openBreakdown =
+    openCount > 0
+      ? [
+          openPriority ? `優先 ${openPriority}` : '',
+          openTodo ? `待處理 ${openTodo}` : '',
+          openReminder ? `提醒 ${openReminder}` : '',
+        ]
+          .filter(Boolean)
+          .join('・')
+      : ''
 
   return (
     <div className="simple-dispatch">
@@ -219,7 +235,9 @@ export function AssistantPanel({
 
       <p className="simple-status">
         <strong>{focusName}</strong>
-        {openCount > 0 ? `　還有 ${openCount} 件` : '　已全部勾完'}
+        {openCount > 0
+          ? `　還有 ${openCount} 件${openBreakdown ? `（${openBreakdown}）` : ''}`
+          : '　已全部勾完'}
       </p>
 
       <AssistantBoard

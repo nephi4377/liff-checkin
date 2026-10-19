@@ -4,7 +4,11 @@ import {
   isSeedOnlyTaskState,
   toSyncPayload,
 } from '../data'
-import { SYNC_KEY, syncUrl } from './config'
+import {
+  SYNC_KEY,
+  SYNC_NAMESPACE_LEGACY,
+  syncUrl,
+} from './config'
 import { mergeCloudTaskExtras, wouldDropRemoteLiveTasks } from './merge'
 import { mergeWorkersKeepingLocalExtras } from '../workers'
 
@@ -20,8 +24,10 @@ type PullOpts = {
 }
 
 /** 裸 GET，不做 ensure／write-back（給 push 前對照用） */
-export async function pullRaw(): Promise<AppState | null> {
-  const res = await fetch(syncUrl(), {
+export async function pullRaw(
+  ns?: string,
+): Promise<AppState | null> {
+  const res = await fetch(syncUrl(ns), {
     method: 'GET',
     headers: { Accept: 'application/json' },
     cache: 'no-store',
@@ -42,11 +48,61 @@ export async function pullRaw(): Promise<AppState | null> {
   }
 }
 
+/**
+ * 舊房只貢獻「v2 沒有的 task id」；同 id 一律以 v2 為準（避免舊 PWA 改壞真實派工）。
+ */
+function absorbLegacyExtras(primary: AppState, legacy: AppState): AppState {
+  const primaryIds = new Set((primary.tasks ?? []).map((t) => t.id))
+  const deleted = new Set([
+    ...(primary.deletedIds ?? []),
+    ...(legacy.deletedIds ?? []),
+  ])
+  const extras = (legacy.tasks ?? []).filter(
+    (t) => t?.id && !primaryIds.has(t.id) && !deleted.has(t.id),
+  )
+  if (!extras.length) {
+    return {
+      ...primary,
+      workers: mergeWorkersKeepingLocalExtras(primary.workers, legacy.workers),
+      assigners: [
+        ...new Set([...(primary.assigners ?? []), ...(legacy.assigners ?? [])]),
+      ],
+    }
+  }
+  return {
+    ...primary,
+    tasks: [...(primary.tasks ?? []), ...extras],
+    workers: mergeWorkersKeepingLocalExtras(primary.workers, legacy.workers),
+    assigners: [
+      ...new Set([...(primary.assigners ?? []), ...(legacy.assigners ?? [])]),
+    ],
+    updatedAt: Math.max(primary.updatedAt + 1, Date.now()),
+  }
+}
+
 export async function pullCloud(opts: PullOpts = {}): Promise<AppState | null> {
   const data = await pullRaw()
   if (!data) return null
-  const incomingUpdatedAt = data.updatedAt
-  const normalized = ensureDispatchState(data)
+  let incomingUpdatedAt = data.updatedAt
+  let merged = data
+
+  // 開機／完整 pull：撈舊房只合併新 id（修雙腦）
+  if (!opts.light) {
+    try {
+      const legacy = await pullRaw(SYNC_NAMESPACE_LEGACY)
+      if (legacy) {
+        const before = merged.tasks?.length ?? 0
+        merged = absorbLegacyExtras(merged, legacy)
+        if ((merged.tasks?.length ?? 0) > before) {
+          incomingUpdatedAt = data.updatedAt // 強制下面 write-back
+        }
+      }
+    } catch {
+      // 舊房失敗不擋主房
+    }
+  }
+
+  const normalized = ensureDispatchState(merged)
   if (!opts.light && normalized.updatedAt > incomingUpdatedAt) {
     await pushCloud(normalized)
   }

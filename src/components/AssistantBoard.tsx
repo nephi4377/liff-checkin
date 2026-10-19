@@ -384,22 +384,7 @@ export function AssistantBoard({
           assignerOptions={assignerOptions}
           simple={simple}
         />
-        <Column
-          id="reminder"
-          title="提醒"
-          tasks={byCategory.reminder}
-          onToggle={onToggle}
-          onUpdateTitle={onUpdateTitle}
-          onUpdateCaseNo={onUpdateCaseNo}
-          onUpdateDetail={onUpdateDetail}
-          onUpdateAssigner={onUpdateAssigner}
-          onAddAssigner={onAddAssigner}
-          onUpdateDueDate={undefined}
-          onUpdateUrgency={onUpdateUrgency}
-          onTrash={onTrash}
-          assignerOptions={assignerOptions}
-          simple={simple}
-        />
+        {/* 待處理緊接優先：避免空「提醒」把第三件隔到螢幕外造成「還有 N 件但看不到」 */}
         <Column
           id="todo"
           title="待處理"
@@ -411,6 +396,22 @@ export function AssistantBoard({
           onUpdateAssigner={onUpdateAssigner}
           onAddAssigner={onAddAssigner}
           onUpdateDueDate={onUpdateDueDate}
+          onUpdateUrgency={onUpdateUrgency}
+          onTrash={onTrash}
+          assignerOptions={assignerOptions}
+          simple={simple}
+        />
+        <Column
+          id="reminder"
+          title="提醒"
+          tasks={byCategory.reminder}
+          onToggle={onToggle}
+          onUpdateTitle={onUpdateTitle}
+          onUpdateCaseNo={onUpdateCaseNo}
+          onUpdateDetail={onUpdateDetail}
+          onUpdateAssigner={onUpdateAssigner}
+          onAddAssigner={onAddAssigner}
+          onUpdateDueDate={undefined}
           onUpdateUrgency={onUpdateUrgency}
           onTrash={onTrash}
           assignerOptions={assignerOptions}
