@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { buildAssignerOptions } from '../assigners'
 import type { Task, TaskCategory, Urgency, Worker } from '../types'
 import { activeWorkers, workerDisplayName } from '../workers'
@@ -112,6 +112,31 @@ export function AssistantPanel({
   const focusWorkerIdSafe = tabWorkers.some((w) => w.id === focusWorkerId)
     ? focusWorkerId
     : defaultId
+
+  // 刷新／同步後內容變長時，瀏覽器常停在頁底（已完成半張卡＋空白）；強制回頂看優先
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
+    } catch {
+      // ignore
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }, [focusWorkerIdSafe])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const onLoad = () => window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    // 雲端 hydrate 後再頂一次（內容高度剛撐開）
+    const t1 = window.setTimeout(onLoad, 0)
+    const t2 = window.setTimeout(onLoad, 600)
+    const t3 = window.setTimeout(onLoad, 1800)
+    return () => {
+      window.clearTimeout(t1)
+      window.clearTimeout(t2)
+      window.clearTimeout(t3)
+    }
+  }, [])
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()

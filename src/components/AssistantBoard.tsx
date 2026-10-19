@@ -18,11 +18,56 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { isActiveTask, isTrashedTask } from '../data'
 import type { Task, TaskCategory, Urgency } from '../types'
 import { sortPriorityTasks, urgencyLabel } from '../urgency'
 import { TaskCard } from './TaskCard'
+
+/** 已完成／已刪預設收合，避免刷新後捲在頁底只剩半張完成卡＋大片空白 */
+function CollapsibleSection({
+  title,
+  count,
+  hint,
+  simple,
+  className,
+  defaultOpen = false,
+  children,
+}: {
+  title: string
+  count: number
+  hint?: string
+  simple?: boolean
+  className: string
+  defaultOpen?: boolean
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className={`list-column ${className} ${simple ? 'simple-col' : ''}`}>
+      <header className="list-header">
+        <button
+          type="button"
+          className="list-header-toggle"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <h2>{title}</h2>
+          <span className="count-pill">{count}</span>
+          <span className="list-header-chevron" aria-hidden>
+            {open ? '▾' : '▸'}
+          </span>
+        </button>
+      </header>
+      {open ? (
+        <>
+          {hint ? <p className="done-hint">{hint}</p> : null}
+          {children}
+        </>
+      ) : null}
+    </div>
+  )
+}
 
 interface AssistantBoardProps {
   tasks: Task[]
@@ -140,12 +185,13 @@ function DoneSection({
   if (tasks.length === 0) return null
 
   return (
-    <div className={`list-column list-done ${simple ? 'simple-col' : ''}`}>
-      <header className="list-header">
-        <h2>已完成</h2>
-        <span className="count-pill">{tasks.length}</span>
-      </header>
-      <p className="done-hint">取消勾選可復原 · 超過 10 天自動清除</p>
+    <CollapsibleSection
+      title="已完成"
+      count={tasks.length}
+      hint="取消勾選可復原 · 超過 10 天自動清除"
+      simple={simple}
+      className="list-done"
+    >
       <ul className="task-list">
         {tasks.map((task) => (
           <TaskCard
@@ -158,7 +204,7 @@ function DoneSection({
           />
         ))}
       </ul>
-    </div>
+    </CollapsibleSection>
   )
 }
 
@@ -171,44 +217,44 @@ function TrashSection({
   onRestore: (id: string) => void
   simple?: boolean
 }) {
+  // 空的已刪不佔版面（避免刷新後捲到底只見大片空白＋加工作鈕）
+  if (tasks.length === 0) return null
+
   return (
-    <div className={`list-column list-trash ${simple ? 'simple-col' : ''}`}>
-      <header className="list-header">
-        <h2>已刪</h2>
-        <span className="count-pill">{tasks.length}</span>
-      </header>
-      <p className="done-hint">按復原可救回 · 超過 3 天永久清除</p>
-      {tasks.length === 0 ? (
-        <p className="empty-list">沒有已刪任務</p>
-      ) : (
-        <ul className="task-list trash-list">
-          {tasks.map((task) => (
-            <li key={task.id} className="task-card task-card-compact is-trashed">
-              <div className="task-body">
-                {task.caseNo ? (
-                  <span className="case-no-badge" aria-label={`案號 ${task.caseNo}`}>
-                    {task.caseNo}
-                  </span>
-                ) : null}
-                <p className="task-title">{task.title}</p>
-                {task.assigner ? (
-                  <p className="task-assigner">派自 {task.assigner}</p>
-                ) : null}
-                <div className="task-actions-row">
-                  <button
-                    type="button"
-                    className="btn-primary task-restore-btn"
-                    onClick={() => onRestore(task.id)}
-                  >
-                    復原
-                  </button>
-                </div>
+    <CollapsibleSection
+      title="已刪"
+      count={tasks.length}
+      hint="按復原可救回 · 超過 3 天永久清除"
+      simple={simple}
+      className="list-trash"
+    >
+      <ul className="task-list trash-list">
+        {tasks.map((task) => (
+          <li key={task.id} className="task-card task-card-compact is-trashed">
+            <div className="task-body">
+              {task.caseNo ? (
+                <span className="case-no-badge" aria-label={`案號 ${task.caseNo}`}>
+                  {task.caseNo}
+                </span>
+              ) : null}
+              <p className="task-title">{task.title}</p>
+              {task.assigner ? (
+                <p className="task-assigner">派自 {task.assigner}</p>
+              ) : null}
+              <div className="task-actions-row">
+                <button
+                  type="button"
+                  className="btn-primary task-restore-btn"
+                  onClick={() => onRestore(task.id)}
+                >
+                  復原
+                </button>
               </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </CollapsibleSection>
   )
 }
 

@@ -436,6 +436,30 @@ button {
   letter-spacing: 0.02em;
 }
 
+.list-header-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.list-header-toggle h2 {
+  margin: 0;
+}
+
+.list-header-chevron {
+  margin-left: auto;
+  font-size: 0.9rem;
+  opacity: 0.65;
+}
+
 .section-lead,
 .list-hint,
 .status-line {
