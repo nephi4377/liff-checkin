@@ -59,7 +59,7 @@ export function normalizeCaseNo(raw: unknown): string | undefined {
 }
 
 /** Stable IDs so redeploy / migrate 不會重複塞同一筆 */
-const DISPATCH_TASKS: TaskSpec[] = [
+export const DISPATCH_TASKS: TaskSpec[] = [
   {
     id: 'task-ende-751-putu',
     caseNo: '751',
@@ -139,8 +139,9 @@ const seedTasks = (): Task[] => {
   return DISPATCH_TASKS.map((s, i) => specToTask(s, now - i * 1000))
 }
 
-export const STORAGE_KEY = 'employee-todo-v3'
-const LEGACY_KEYS = ['employee-todo-v1', 'employee-todo-v2']
+/** v4：換 Mantle 房間後清掉舊 localStorage 高 updatedAt，避免舊種子再打贏雲端 */
+export const STORAGE_KEY = 'employee-todo-v4'
+const LEGACY_KEYS = ['employee-todo-v1', 'employee-todo-v2', 'employee-todo-v3']
 
 /** 已完成超過此天數自動刪除（tombstone + sync） */
 export const COMPLETED_KEEP_DAYS = 10
@@ -586,6 +587,25 @@ export function ensureDispatchState(state: AppState): AppState {
   return purgeStaleCompleted(normalized, now)
 }
 
+const SEED_TASK_IDS = new Set(DISPATCH_TASKS.map((s) => s.id))
+
+/** 本機只有派工種子任務（無任何自訂 UUID 派工） */
+export function isSeedOnlyTaskState(state: AppState): boolean {
+  const deleted = new Set(normalizeDeletedIds(state.deletedIds))
+  const live = (state.tasks ?? []).filter((t) => t?.id && !deleted.has(t.id))
+  if (live.length === 0) return true
+  return live.every((t) => SEED_TASK_IDS.has(t.id))
+}
+
+/**
+ * 種子狀態的「有效 revision」永遠視為極低，不能靠 Date.now() 打贏雲端。
+ * 使用者真正編輯過（含自訂任務）才用真實 updatedAt。
+ */
+export function effectiveSyncRevision(state: AppState): number {
+  if (isSeedOnlyTaskState(state)) return 0
+  return typeof state.updatedAt === 'number' ? state.updatedAt : 0
+}
+
 export function createSeedState(): AppState {
   return ensureDispatchState({
     workers: BASE_WORKERS.map((w) => ({ ...w })),
@@ -593,7 +613,8 @@ export function createSeedState(): AppState {
     officeTasks: [],
     assigners: [...BASE_ASSIGNERS],
     deletedIds: [],
-    updatedAt: Date.now(),
+    // 種子不得帶「現在」時間戳去蓋雲端；真正編輯時 patchState 會抬升
+    updatedAt: 0,
   })
 }
 
@@ -601,6 +622,7 @@ export function loadState(): AppState {
   try {
     const raw =
       localStorage.getItem(STORAGE_KEY) ??
+      localStorage.getItem('employee-todo-v3') ??
       localStorage.getItem('employee-todo-v2')
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<AppState>

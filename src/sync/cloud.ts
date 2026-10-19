@@ -1,6 +1,12 @@
 import type { AppState } from '../types'
-import { ensureDispatchState, toSyncPayload } from '../data'
+import {
+  ensureDispatchState,
+  isSeedOnlyTaskState,
+  toSyncPayload,
+} from '../data'
 import { SYNC_KEY, syncUrl } from './config'
+import { mergeCloudTaskExtras, wouldDropRemoteLiveTasks } from './merge'
+import { mergeWorkersKeepingLocalExtras } from '../workers'
 
 function isAppState(value: unknown): value is AppState {
   if (!value || typeof value !== 'object') return false
@@ -13,7 +19,8 @@ type PullOpts = {
   light?: boolean
 }
 
-export async function pullCloud(opts: PullOpts = {}): Promise<AppState | null> {
+/** 裸 GET，不做 ensure／write-back（給 push 前對照用） */
+export async function pullRaw(): Promise<AppState | null> {
   const res = await fetch(syncUrl(), {
     method: 'GET',
     headers: { Accept: 'application/json' },
@@ -23,9 +30,7 @@ export async function pullCloud(opts: PullOpts = {}): Promise<AppState | null> {
   if (!res.ok) throw new Error(`pull ${res.status}`)
   const data: unknown = await res.json()
   if (!isAppState(data)) return null
-  const incomingUpdatedAt =
-    typeof data.updatedAt === 'number' ? data.updatedAt : 0
-  const normalized = ensureDispatchState({
+  return {
     workers: data.workers,
     tasks: data.tasks,
     officeTasks: Array.isArray(data.officeTasks) ? data.officeTasks : [],
@@ -33,17 +38,62 @@ export async function pullCloud(opts: PullOpts = {}): Promise<AppState | null> {
       ? (data as AppState).assigners
       : [],
     deletedIds: Array.isArray(data.deletedIds) ? data.deletedIds : [],
-    updatedAt: incomingUpdatedAt,
-  })
-  // Full boot: write back if purge bumped revision
+    updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : 0,
+  }
+}
+
+export async function pullCloud(opts: PullOpts = {}): Promise<AppState | null> {
+  const data = await pullRaw()
+  if (!data) return null
+  const incomingUpdatedAt = data.updatedAt
+  const normalized = ensureDispatchState(data)
   if (!opts.light && normalized.updatedAt > incomingUpdatedAt) {
     await pushCloud(normalized)
   }
   return normalized
 }
 
-export async function pushCloud(state: AppState): Promise<void> {
-  const payload = toSyncPayload(state)
+/**
+ * 強制協議：禁止裸 LWW。
+ * 每次 POST 前必先 GET；種子狀態不得覆蓋雲端任務；會丟掉遠端活任務則 merge。
+ */
+export async function pushCloud(state: AppState): Promise<AppState> {
+  let next = ensureDispatchState(state)
+
+  try {
+    const remote = await pullRaw()
+    if (remote) {
+      if (isSeedOnlyTaskState(next)) {
+        // 種子永遠輸：雲端任務／tombstone 全保留，只聯集本地工務
+        next = ensureDispatchState({
+          ...remote,
+          workers: mergeWorkersKeepingLocalExtras(next.workers, remote.workers),
+          updatedAt: Math.max(remote.updatedAt + 1, Date.now()),
+        })
+      } else {
+        const dropping = wouldDropRemoteLiveTasks(next, remote)
+        if (
+          dropping.length > 0 ||
+          (remote.tasks?.length ?? 0) > (next.tasks?.length ?? 0) ||
+          remote.updatedAt > next.updatedAt
+        ) {
+          next = ensureDispatchState(mergeCloudTaskExtras(next, remote))
+        } else {
+          // 即使本地較新，仍強制併入遠端多出的活任務（防漏）
+          next = ensureDispatchState(mergeCloudTaskExtras(next, remote))
+        }
+      }
+    } else if (isSeedOnlyTaskState(next)) {
+      // 空房＋種子：允許初始化，但不裝成「現在」權威（updatedAt=0→toSync 後 ensure 可能抬升）
+      next = { ...next, updatedAt: Math.max(next.updatedAt, 1) }
+    }
+  } catch {
+    if (isSeedOnlyTaskState(next)) {
+      next = { ...next, updatedAt: 0 }
+    }
+  }
+
+  const payload = toSyncPayload(next)
   const res = await fetch(syncUrl(), {
     method: 'POST',
     headers: {
@@ -53,4 +103,19 @@ export async function pushCloud(state: AppState): Promise<void> {
     body: JSON.stringify(payload),
   })
   if (!res.ok) throw new Error(`push ${res.status}`)
+  return ensureDispatchState(payload)
+}
+
+/** 測試／診斷用：模擬舊客戶端裸 LWW POST（新協議不會走這條） */
+export async function pushCloudRawUnsafeForTests(state: AppState): Promise<void> {
+  const payload = toSyncPayload(state)
+  const res = await fetch(syncUrl(), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Mantle-Key': SYNC_KEY,
+    },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error(`push raw ${res.status}`)
 }

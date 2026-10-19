@@ -3,7 +3,9 @@ import { v4 as uuid } from 'uuid'
 import {
   clearStoredState,
   createSeedState,
+  effectiveSyncRevision,
   ensureDispatchState,
+  isSeedOnlyTaskState,
   loadState,
   normalizeCaseNo,
   saveState,
@@ -12,6 +14,7 @@ import { isRemovedAssigner, normalizeAssignerName } from '../assigners'
 import { isDemoHost } from '../demo/fixture'
 import { pullCloud, pushCloud } from '../sync/cloud'
 import { SYNC_POLL_MS, SYNC_PUSH_DEBOUNCE_MS } from '../sync/config'
+import { mergeCloudTaskExtras } from '../sync/merge'
 import type {
   AppState,
   OfficeTask,
@@ -35,54 +38,6 @@ function patchState(prev: AppState, patch: Partial<AppState>): AppState {
     ...prev,
     ...patch,
     updatedAt: Date.now(),
-  }
-}
-
-function sameRevision(a: AppState, b: AppState): boolean {
-  return a.updatedAt === b.updatedAt
-}
-
-/**
- * 本地將 push 覆蓋雲端時，保留雲端多出、且未 tombstone 的任務／辦公室件。
- * 避免 localStorage 種子狀態 LWW 把已派工真實任務蓋掉。
- */
-function mergeCloudTaskExtras(local: AppState, remote: AppState): AppState {
-  const deleted = new Set(local.deletedIds ?? [])
-  for (const id of remote.deletedIds ?? []) deleted.add(id)
-
-  const tasksById = new Map<string, Task>()
-  for (const t of local.tasks ?? []) {
-    if (t?.id && !deleted.has(t.id)) tasksById.set(t.id, t)
-  }
-  let added = 0
-  for (const t of remote.tasks ?? []) {
-    if (!t?.id || deleted.has(t.id) || tasksById.has(t.id)) continue
-    tasksById.set(t.id, t)
-    added += 1
-  }
-
-  const officeById = new Map<string, OfficeTask>()
-  for (const t of local.officeTasks ?? []) {
-    if (t?.id && !deleted.has(t.id)) officeById.set(t.id, t)
-  }
-  for (const t of remote.officeTasks ?? []) {
-    if (!t?.id || deleted.has(t.id) || officeById.has(t.id)) continue
-    officeById.set(t.id, t)
-    added += 1
-  }
-
-  if (added === 0) {
-    return {
-      ...local,
-      deletedIds: [...deleted],
-    }
-  }
-  return {
-    ...local,
-    tasks: [...tasksById.values()],
-    officeTasks: [...officeById.values()],
-    deletedIds: [...deleted],
-    updatedAt: Math.max(local.updatedAt + 1, Date.now()),
   }
 }
 
@@ -191,11 +146,26 @@ export function useTasks() {
 
     const applyRemoteIfNewer = (remote: AppState) => {
       const local = stateRef.current
-      if (remote.updatedAt > local.updatedAt) {
+      const localRev = effectiveSyncRevision(local)
+      const remoteRev = remote.updatedAt || 0
+
+      // 種子本機：永遠以雲端任務為準
+      if (isSeedOnlyTaskState(local) && (remote.tasks?.length ?? 0) > 0) {
+        const workers = mergeWorkersFromRemote(local, remote)
+        const merged: AppState = {
+          ...remote,
+          workers,
+          updatedAt: remote.updatedAt,
+        }
+        applyFromCloudRef.current = true
+        setState(merged)
+        return
+      }
+
+      if (remoteRev > localRev) {
         const workers = mergeWorkersFromRemote(local, remote)
         const hasLocalExtras =
           workers.length > mergeWorkers(remote.workers).length
-        // 遠端較新：以遠端任務為準，只聯集本地多出的工務
         const merged: AppState = {
           ...remote,
           workers,
@@ -208,8 +178,7 @@ export function useTasks() {
         if (hasLocalExtras) pushSoon(merged, true)
         return
       }
-      if (remote.updatedAt < local.updatedAt) {
-        // 本地較新：仍先併入雲端多出的任務，再 push（防種子 LWW 蓋掉真實派工）
+      if (remoteRev < localRev) {
         const workers = mergeWorkersFromRemote(local, remote)
         const base: AppState = {
           ...local,
@@ -222,7 +191,6 @@ export function useTasks() {
         pushSoon(merged, true)
         return
       }
-      // 同 revision：補齊工務＋雲端多出的任務
       if (
         workersMissingFromLocal(local, remote) ||
         (remote.tasks ?? []).some(
@@ -250,18 +218,10 @@ export function useTasks() {
         const remote = await pullCloud()
         if (cancelled) return
         if (!remote || !remote.updatedAt) {
+          // 空房才允許 push；種子走安全 pushCloud
           await pushCloud(stateRef.current)
         } else {
-          const local = stateRef.current
-          if (remote.updatedAt > local.updatedAt) {
-            applyRemoteIfNewer(remote)
-          } else if (remote.updatedAt < local.updatedAt) {
-            applyRemoteIfNewer(remote)
-          } else if (workersMissingFromLocal(local, remote)) {
-            applyRemoteIfNewer(remote)
-          } else if (!sameRevision(remote, local)) {
-            applyRemoteIfNewer(remote)
-          }
+          applyRemoteIfNewer(remote)
         }
         if (!cancelled) {
           hydratedRef.current = true
@@ -792,17 +752,29 @@ export function useTasks() {
     )
   }, [])
 
+  /** 從雲端重載；禁止再用種子整包蓋掉真實派工 */
   const resetDemo = useCallback(() => {
     clearStoredState()
-    const next = createSeedState()
-    setState(next)
     if (demoMode) {
+      setState(createSeedState())
       setSyncStatusSafe('ok')
       return
     }
-    void pushCloud(next)
-      .then(() => setSyncStatusSafe('ok'))
-      .catch(() => setSyncStatusSafe('error'))
+    setSyncStatusSafe('syncing')
+    void pullCloud()
+      .then((remote) => {
+        if (remote) {
+          applyFromCloudRef.current = true
+          setState(remote)
+        } else {
+          setState(createSeedState())
+        }
+        setSyncStatusSafe('ok')
+      })
+      .catch(() => {
+        setState(createSeedState())
+        setSyncStatusSafe('error')
+      })
   }, [demoMode, setSyncStatusSafe])
 
   return {
