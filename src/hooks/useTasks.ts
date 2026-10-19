@@ -42,6 +42,50 @@ function sameRevision(a: AppState, b: AppState): boolean {
   return a.updatedAt === b.updatedAt
 }
 
+/**
+ * 本地將 push 覆蓋雲端時，保留雲端多出、且未 tombstone 的任務／辦公室件。
+ * 避免 localStorage 種子狀態 LWW 把已派工真實任務蓋掉。
+ */
+function mergeCloudTaskExtras(local: AppState, remote: AppState): AppState {
+  const deleted = new Set(local.deletedIds ?? [])
+  for (const id of remote.deletedIds ?? []) deleted.add(id)
+
+  const tasksById = new Map<string, Task>()
+  for (const t of local.tasks ?? []) {
+    if (t?.id && !deleted.has(t.id)) tasksById.set(t.id, t)
+  }
+  let added = 0
+  for (const t of remote.tasks ?? []) {
+    if (!t?.id || deleted.has(t.id) || tasksById.has(t.id)) continue
+    tasksById.set(t.id, t)
+    added += 1
+  }
+
+  const officeById = new Map<string, OfficeTask>()
+  for (const t of local.officeTasks ?? []) {
+    if (t?.id && !deleted.has(t.id)) officeById.set(t.id, t)
+  }
+  for (const t of remote.officeTasks ?? []) {
+    if (!t?.id || deleted.has(t.id) || officeById.has(t.id)) continue
+    officeById.set(t.id, t)
+    added += 1
+  }
+
+  if (added === 0) {
+    return {
+      ...local,
+      deletedIds: [...deleted],
+    }
+  }
+  return {
+    ...local,
+    tasks: [...tasksById.values()],
+    officeTasks: [...officeById.values()],
+    deletedIds: [...deleted],
+    updatedAt: Math.max(local.updatedAt + 1, Date.now()),
+  }
+}
+
 export function useTasks() {
   const [state, setState] = useState<AppState>(() => loadState())
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle')
@@ -151,6 +195,7 @@ export function useTasks() {
         const workers = mergeWorkersFromRemote(local, remote)
         const hasLocalExtras =
           workers.length > mergeWorkers(remote.workers).length
+        // 遠端較新：以遠端任務為準，只聯集本地多出的工務
         const merged: AppState = {
           ...remote,
           workers,
@@ -164,28 +209,35 @@ export function useTasks() {
         return
       }
       if (remote.updatedAt < local.updatedAt) {
+        // 本地較新：仍先併入雲端多出的任務，再 push（防種子 LWW 蓋掉真實派工）
         const workers = mergeWorkersFromRemote(local, remote)
-        if (workersMissingFromLocal(local, remote)) {
-          const merged: AppState = {
-            ...local,
-            workers,
-            updatedAt: Math.max(local.updatedAt, Date.now()),
-          }
-          applyFromCloudRef.current = true
-          setState(merged)
-          pushSoon(merged, true)
-          return
+        const base: AppState = {
+          ...local,
+          workers,
+          updatedAt: Math.max(local.updatedAt, Date.now()),
         }
-        pushSoon(local, true)
+        const merged = mergeCloudTaskExtras(base, remote)
+        applyFromCloudRef.current = true
+        setState(merged)
+        pushSoon(merged, true)
         return
       }
-      // 同 revision：仍補齊雲端有、本地沒有的工務
-      if (workersMissingFromLocal(local, remote)) {
-        const merged: AppState = {
+      // 同 revision：補齊工務＋雲端多出的任務
+      if (
+        workersMissingFromLocal(local, remote) ||
+        (remote.tasks ?? []).some(
+          (t) =>
+            t?.id &&
+            !(local.deletedIds ?? []).includes(t.id) &&
+            !(local.tasks ?? []).some((x) => x.id === t.id),
+        )
+      ) {
+        const base: AppState = {
           ...local,
           workers: mergeWorkersFromRemote(local, remote),
           updatedAt: Math.max(local.updatedAt + 1, Date.now()),
         }
+        const merged = mergeCloudTaskExtras(base, remote)
         applyFromCloudRef.current = true
         setState(merged)
         pushSoon(merged, true)
