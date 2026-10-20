@@ -40,10 +40,13 @@ var AccountingLightbox = (function () {
   var urls = [];
   var idx = 0;
 
+  /** Drive 網址才轉縮圖；data:/blob: 原樣用（base64 常含 "/d/"，誤判會放大空白）。 */
   function thumbUrl(url) {
-    var m = String(url || '').match(/\/d\/([^/]+)/);
-    if (m) return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1200';
-    return url;
+    var s = String(url || '');
+    if (!s || /^data:/i.test(s) || /^blob:/i.test(s)) return s;
+    var m = s.match(/\/d\/([^/?#]+)/);
+    if (m) return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(m[1]) + '&sz=w1200';
+    return s;
   }
 
   function onKey(e) {
@@ -61,9 +64,21 @@ var AccountingLightbox = (function () {
   function render() {
     if (!urls.length) return;
     var u = urls[idx];
-    document.getElementById('acctLbImg').src = thumbUrl(u);
+    var img = document.getElementById('acctLbImg');
+    var src = thumbUrl(u);
+    img.onerror = function () {
+      img.alt = '單據圖片載入失敗';
+      img.removeAttribute('src');
+      notifyErr('單據圖片載入失敗，請關閉後重試或改在新分頁開啟');
+    };
+    img.alt = '單據';
+    img.src = src;
     var link = document.getElementById('acctLbOpen');
     if (/^https?:\/\//i.test(String(u || ''))) {
+      link.href = u;
+      link.style.display = '';
+      link.textContent = '在新分頁開啟';
+    } else if (/^data:/i.test(String(u || ''))) {
       link.href = u;
       link.style.display = '';
       link.textContent = '在新分頁開啟';
