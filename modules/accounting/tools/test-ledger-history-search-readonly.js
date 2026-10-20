@@ -15,6 +15,9 @@ assert(html.indexOf('parseHistoryAmountQuery') >= 0, 'amount query normalizer');
 assert(html.indexOf('廠商名／金額') >= 0 || html.indexOf('廠商／金額') >= 0, 'vendor/amount copy');
 assert(html.indexOf('本頁不做標記') >= 0 || html.indexOf('不做標記') >= 0, 'no mark copy');
 assert(html.indexOf('點開看詳情與圖片') >= 0, 'detail+image hint');
+assert(html.indexOf('只看我記的') < 0, 'no mine-only toggle copy');
+assert(html.indexOf('historyMineToggle') < 0, 'no mine toggle');
+assert(html.indexOf('mine_only: false') >= 0, 'always all users');
 assert(html.indexOf('attRef.payment_request_id') >= 0 ||
   html.indexOf('payment_request_id = pid') >= 0, 'payment attachments via payment_request_id');
 assert(html.indexOf('renderHistoryAttachments(panel, merged)') >= 0, 'payment detail shows attachments');
