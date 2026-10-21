@@ -743,9 +743,10 @@ var AccountingApi = (function () {
         confirm: !!options.confirm
       };
       if (options.limit != null) body.limit = options.limit;
-      if (options.offset != null) body.offset = options.offset;
       if (options.payment_uid_check && typeof options.payment_uid_check === 'object') {
         body.payment_uid_check = options.payment_uid_check;
+      } else {
+        body.after_vendor_id = options.after_vendor_id != null ? String(options.after_vendor_id) : '';
       }
       return post(body, VENDOR_ALIAS_SCAN_TIMEOUT_MS).then(function (res) {
         if (res && res.success && options.confirm) {
