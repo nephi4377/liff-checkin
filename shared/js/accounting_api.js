@@ -734,6 +734,27 @@ var AccountingApi = (function () {
         return res;
       });
     },
+    vendorAliasProfileScan: function (sessionOrToken, options) {
+      options = options || {};
+      var VENDOR_ALIAS_SCAN_TIMEOUT_MS = 300000;
+      var body = {
+        action: 'vendor_alias_profile_scan',
+        auth: resolveAuth(sessionOrToken),
+        confirm: !!options.confirm
+      };
+      if (options.limit != null) body.limit = options.limit;
+      if (options.payment_uid_check && typeof options.payment_uid_check === 'object') {
+        body.payment_uid_check = options.payment_uid_check;
+      } else {
+        body.after_vendor_id = options.after_vendor_id != null ? String(options.after_vendor_id) : '';
+      }
+      return post(body, VENDOR_ALIAS_SCAN_TIMEOUT_MS).then(function (res) {
+        if (res && res.success && options.confirm) {
+          invalidateBootstrapAfterCrud_(sessionOrToken, 'vendor', res);
+        }
+        return res;
+      });
+    },
     lineContactSearch: function (sessionOrToken, keyword, limit) {
       return post({
         action: 'line_contact_search',

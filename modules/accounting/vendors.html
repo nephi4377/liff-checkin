@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=102"></script>
+  <script src="../../shared/js/accounting_api.js?v=103"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
@@ -205,6 +205,19 @@
     }
     .list-filters label:first-child { margin-top: 0; }
     .step-num { display: inline-block; background: #1a73e8; color: #fff; font-size: 12px; padding: 2px 8px; border-radius: 6px; margin-right: 6px; vertical-align: middle; }
+    .alias-scan-bar { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .alias-scan-table-wrap { overflow: auto; max-height: min(52vh, 520px); margin-top: 10px; border: 1px solid #e8eaed; border-radius: 10px; }
+    table.alias-scan-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.alias-scan-table th,
+    table.alias-scan-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eee; vertical-align: top; }
+    table.alias-scan-table th { background: #f8f9fa; font-weight: 700; position: sticky; top: 0; z-index: 1; }
+    table.alias-scan-table tr:last-child td { border-bottom: none; }
+    .alias-status { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 600; }
+    .alias-status.same { background: #e6f4ea; color: #137333; }
+    .alias-status.diff { background: #fef7e0; color: #b06000; }
+    .alias-status.no_uid { background: #f1f3f4; color: #5f6368; }
+    .alias-status.unreadable { background: #fce8e6; color: #c5221f; }
+    .alias-status.retryable { background: #e8f0fe; color: #174ea6; }
   </style>
 </head>
 <body class="acct-page acct-page-wide">
@@ -405,6 +418,37 @@
         <button type="button" class="btn btn-secondary btn-block" id="filterBtn">套用篩選</button>
         <button type="button" class="btn btn-secondary btn-block" id="reloadVendorsBtn" title="略過暫存，立刻向後端重抓最新名冊">重新載入最新</button>
         <button type="button" class="btn btn-secondary btn-block" id="syncDriveBtn" title="將 ~裝潢建材廠商 資料夾連結到廠商主檔">同步 Drive 舊資料夾</button>
+        <div id="vendorAliasScanBar" class="alias-scan-bar hidden">
+          <button type="button" class="btn btn-secondary btn-block" id="vendorAliasScanBtn" title="比對 LINE 暱稱與名冊顯示名（不寫入）">掃描暱稱（只看）</button>
+          <button type="button" class="btn btn-secondary btn-block hidden" id="vendorAliasScanMoreBtn" title="尚有未掃描的廠商">繼續下一批</button>
+          <button type="button" class="btn btn-primary btn-block" id="vendorAliasWriteBtn" disabled title="請先對本批執行「掃描暱稱（只看）」再寫入">確認寫入</button>
+        </div>
+        <div id="vendorAliasUidCheckBar" class="hidden" style="margin-top:10px;padding-top:10px;border-top:1px dashed #e0e0e0">
+          <p class="section-title" style="margin-top:0">請款 UID 對照（除錯）</p>
+          <label>廠商名稱</label>
+          <input id="vendorAliasUidCheckName" value="宋仁凱" autocomplete="off" />
+          <label>請款 ID 前綴</label>
+          <input id="vendorAliasUidCheckPrefix" value="7133913065be" autocomplete="off" />
+          <button type="button" class="btn btn-secondary btn-block" id="vendorAliasUidCheckBtn" style="margin-top:8px">檢查仁凱 UID（只看）</button>
+          <pre id="vendorAliasUidCheckResult" class="sub" style="margin:8px 0 0;padding:10px;background:#f8f9fa;border-radius:8px;white-space:pre-wrap;word-break:break-word;font-size:12px;max-height:240px;overflow:auto"></pre>
+        </div>
+        <div id="vendorAliasScanResult" class="hidden" style="margin-top:12px">
+          <p class="section-title" style="margin-top:0">LINE 暱稱掃描結果</p>
+          <p class="sub" id="vendorAliasScanSummary" style="margin:0 0 8px;white-space:pre-wrap"></p>
+          <div class="alias-scan-table-wrap">
+            <table class="alias-scan-table" aria-label="廠商暱稱掃描">
+              <thead>
+                <tr>
+                  <th>名冊名稱</th>
+                  <th>LINE 顯示名</th>
+                  <th>UID 末四碼</th>
+                  <th>狀態</th>
+                </tr>
+              </thead>
+              <tbody id="vendorAliasScanTableBody"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
       <div id="list"></div>
     </div>
@@ -502,6 +546,227 @@
 
       function canEditPayments() {
         return session && session.auth && (session.auth.permission || 0) >= 4;
+      }
+
+      var VENDOR_ALIAS_ADMIN_MIN = 5;
+      var VENDOR_ALIAS_SCAN_LIMIT = 25;
+      var aliasScanNextAfterVendorId = null;
+      var aliasScanCurrentAfterVendorId = '';
+      var aliasScanDryRunForAfterVendorId = null;
+
+      function canVendorAliasAdmin() {
+        return session && session.auth && (session.auth.permission || 0) >= VENDOR_ALIAS_ADMIN_MIN;
+      }
+
+      function updateVendorAliasAdminUi() {
+        var on = canVendorAliasAdmin();
+        $('vendorAliasScanBar').classList.toggle('hidden', !on);
+        $('vendorAliasUidCheckBar').classList.toggle('hidden', !on);
+        if (!on) {
+          $('vendorAliasScanResult').classList.add('hidden');
+          $('vendorAliasScanMoreBtn').classList.add('hidden');
+          aliasScanDryRunForAfterVendorId = null;
+        }
+        updateAliasScanWriteButton();
+      }
+
+      function updateAliasScanWriteButton() {
+        var btn = $('vendorAliasWriteBtn');
+        if (!btn) return;
+        var ready = aliasScanDryRunForAfterVendorId != null &&
+          String(aliasScanDryRunForAfterVendorId) === String(aliasScanCurrentAfterVendorId);
+        btn.disabled = !ready;
+      }
+
+      function escAliasCell(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      var ALIAS_STATUS_LABEL = {
+        same: '相同',
+        diff: '不同',
+        no_uid: '無 UID',
+        unreadable: '無法讀取',
+        retryable: '可重試'
+      };
+
+      function aliasScanRowsFromResponse(data) {
+        if (!data || !data.items) return [];
+        return Array.isArray(data.items) ? data.items : [];
+      }
+
+      function aliasScanSummaryFromResponse(data) {
+        if (!data) return {};
+        return data.summary && typeof data.summary === 'object' ? data.summary : {};
+      }
+
+      function shouldOfferAliasScanContinue(data) {
+        if (data && data.partial === true) return true;
+        var next = data && data.next_after_vendor_id;
+        return next != null && String(next) !== '';
+      }
+
+      function aliasApplyCount(val) {
+        if (val == null) return 0;
+        if (Array.isArray(val)) return val.length;
+        if (typeof val === 'number' && !isNaN(val)) return val;
+        return 0;
+      }
+
+      function formatAliasScanSummary(data) {
+        var s = aliasScanSummaryFromResponse(data);
+        var lines = [];
+        if (data && data.message) lines.push(String(data.message));
+        if (data && data.scanned != null) lines.push('已掃描：' + data.scanned);
+        if (data && data.total_candidates != null) lines.push('候選總數：' + data.total_candidates);
+        if (data && data.partial === true) lines.push('partial: true');
+        var sumKeys = ['same', 'diff', 'no_uid', 'unreadable', 'retryable'];
+        var sumLine = sumKeys
+          .filter(function (k) { return s[k] != null && s[k] !== ''; })
+          .map(function (k) {
+            return (ALIAS_STATUS_LABEL[k] || k) + ' ' + s[k];
+          })
+          .join(' · ');
+        if (sumLine) lines.push('本批摘要 — ' + sumLine);
+        var ap = data && data.apply;
+        if (ap && typeof ap === 'object') {
+          lines.push(
+            '寫入結果 — 已套用 ' + aliasApplyCount(ap.applied) +
+            ' · 略過 ' + aliasApplyCount(ap.skipped) +
+            ' · 錯誤 ' + aliasApplyCount(ap.errors)
+          );
+        }
+        lines.push('本批 after_vendor_id：' + (aliasScanCurrentAfterVendorId === '' ? '（起點）' : aliasScanCurrentAfterVendorId));
+        lines.push('每批上限：' + VENDOR_ALIAS_SCAN_LIMIT);
+        return lines.filter(Boolean).join('\n') || '（無摘要）';
+      }
+
+      function renderAliasScanTable(rows) {
+        var tbody = $('vendorAliasScanTableBody');
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="4" class="sub">本批無資料</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows.map(function (r) {
+          var st = String(r.status || '').trim();
+          var stLabel = ALIAS_STATUS_LABEL[st] || st || '—';
+          var stClass = /^[a-z_]+$/.test(st) ? st : 'no_uid';
+          return '<tr>' +
+            '<td>' + escAliasCell(r.registry_name || '—') + '</td>' +
+            '<td>' + escAliasCell(r.display_name || '—') + '</td>' +
+            '<td>' + escAliasCell(r.uid_last4 || '—') + '</td>' +
+            '<td><span class="alias-status ' + stClass + '">' + escAliasCell(stLabel) + '</span></td>' +
+            '</tr>';
+        }).join('');
+      }
+
+      function applyAliasScanResponse(data, opts) {
+        opts = opts || {};
+        var rows = aliasScanRowsFromResponse(data);
+        $('vendorAliasScanResult').classList.remove('hidden');
+        $('vendorAliasScanSummary').textContent = formatAliasScanSummary(data);
+        renderAliasScanTable(rows);
+        aliasScanNextAfterVendorId = data.hasOwnProperty('next_after_vendor_id') ? data.next_after_vendor_id : null;
+        $('vendorAliasScanMoreBtn').classList.toggle('hidden', !shouldOfferAliasScanContinue(data));
+        if (!opts.confirm) {
+          aliasScanDryRunForAfterVendorId = aliasScanCurrentAfterVendorId;
+        } else {
+          aliasScanDryRunForAfterVendorId = null;
+        }
+        updateAliasScanWriteButton();
+      }
+
+      function runVendorAliasScan(opts) {
+        opts = opts || {};
+        if (!canVendorAliasAdmin()) {
+          setMsg('暱稱掃描需權限 ≥' + VENDOR_ALIAS_ADMIN_MIN);
+          return Promise.resolve();
+        }
+        if (opts.confirm) {
+          if (aliasScanDryRunForAfterVendorId == null ||
+            String(aliasScanDryRunForAfterVendorId) !== String(aliasScanCurrentAfterVendorId)) {
+            setMsg('請先對本批執行「掃描暱稱（只看）」再寫入');
+            return Promise.resolve();
+          }
+        }
+        var requestAfter;
+        if (opts.confirm) {
+          requestAfter = aliasScanCurrentAfterVendorId;
+        } else if (opts.continueBatch) {
+          if (aliasScanNextAfterVendorId == null || String(aliasScanNextAfterVendorId) === '') {
+            setMsg('沒有下一批可掃描');
+            return Promise.resolve();
+          }
+          requestAfter = String(aliasScanNextAfterVendorId);
+          aliasScanDryRunForAfterVendorId = null;
+        } else {
+          requestAfter = '';
+          aliasScanNextAfterVendorId = null;
+          aliasScanDryRunForAfterVendorId = null;
+        }
+        if (!opts.confirm) aliasScanCurrentAfterVendorId = requestAfter;
+        updateAliasScanWriteButton();
+        var apiOpts = {
+          confirm: !!opts.confirm,
+          limit: VENDOR_ALIAS_SCAN_LIMIT,
+          after_vendor_id: requestAfter
+        };
+        var btn = opts.button || $('vendorAliasScanBtn');
+        return AccountingUi.runAsync(btn, {
+          busyLabel: opts.confirm ? '寫入中…' : '掃描中…',
+          clear: false
+        }, function () {
+          return AccountingApi.vendorAliasProfileScan(session, apiOpts);
+        }).then(function (data) {
+          if (!data || !data.success) throw new Error((data && data.message) || (opts.confirm ? '寫入失敗' : '掃描失敗'));
+          applyAliasScanResponse(data, { confirm: !!opts.confirm });
+          if (opts.confirm) {
+            setOk(data.message || '已寫入本批暱稱');
+            refreshVendors(true);
+          } else {
+            setOk(data.message || '掃描完成（僅預覽）');
+          }
+          return data;
+        }).catch(function (e) {
+          setMsg(e.message || String(e));
+        });
+      }
+
+      function runVendorAliasUidCheck(btn) {
+        if (!canVendorAliasAdmin()) {
+          setMsg('UID 檢查需權限 ≥' + VENDOR_ALIAS_ADMIN_MIN);
+          return Promise.resolve();
+        }
+        var vendorName = $('vendorAliasUidCheckName').value.trim();
+        var prefix = $('vendorAliasUidCheckPrefix').value.trim();
+        if (!vendorName || !prefix) {
+          setMsg('請填廠商名稱與請款 ID 前綴');
+          return Promise.resolve();
+        }
+        return AccountingUi.runAsync(btn, { busyLabel: '檢查中…', clear: false }, function () {
+          return AccountingApi.vendorAliasProfileScan(session, {
+            limit: 1,
+            confirm: false,
+            payment_uid_check: {
+              vendor_name: vendorName,
+              payment_request_id_prefix: prefix
+            }
+          });
+        }).then(function (data) {
+          if (!data || !data.success) throw new Error((data && data.message) || '檢查失敗');
+          var puc = data.payment_uid_check;
+          $('vendorAliasUidCheckResult').textContent = puc
+            ? JSON.stringify(puc, null, 2)
+            : JSON.stringify({ note: '回應無 payment_uid_check 欄位', summary: data.summary || null }, null, 2);
+          setOk('UID 檢查完成');
+        }).catch(function (e) {
+          $('vendorAliasUidCheckResult').textContent = '';
+          setMsg(e.message || String(e));
+        });
       }
 
       function resetPayHistoryUi() {
@@ -1761,6 +2026,33 @@
       $('bank_code').addEventListener('blur', checkBranchHint);
       $('branch_name').addEventListener('blur', checkBranchHint);
 
+      $('vendorAliasScanBtn').addEventListener('click', function () {
+        showFeedback('', '');
+        runVendorAliasScan({ confirm: false, continueBatch: false, button: $('vendorAliasScanBtn') });
+      });
+      $('vendorAliasScanMoreBtn').addEventListener('click', function () {
+        showFeedback('', '');
+        runVendorAliasScan({ confirm: false, continueBatch: true, button: $('vendorAliasScanMoreBtn') });
+      });
+      $('vendorAliasWriteBtn').addEventListener('click', function () {
+        if (!canVendorAliasAdmin()) {
+          setMsg('寫入需權限 ≥' + VENDOR_ALIAS_ADMIN_MIN);
+          return;
+        }
+        var afterLabel = aliasScanCurrentAfterVendorId === '' ? '（起點）' : aliasScanCurrentAfterVendorId;
+        var msg =
+          '確定要依「本批」掃描結果寫回廠商 LINE 顯示名？\n\n' +
+          '每批最多 ' + VENDOR_ALIAS_SCAN_LIMIT + ' 家；after_vendor_id ' + afterLabel + '。\n' +
+          '僅會寫入剛才預覽的同一批。';
+        if (!window.confirm(msg)) return;
+        showFeedback('', '');
+        runVendorAliasScan({ confirm: true, button: $('vendorAliasWriteBtn') });
+      });
+      $('vendorAliasUidCheckBtn').addEventListener('click', function () {
+        showFeedback('', '');
+        runVendorAliasUidCheck($('vendorAliasUidCheckBtn'));
+      });
+
       $('syncDriveBtn').addEventListener('click', async function () {
         showFeedback('', '');
         try {
@@ -1820,6 +2112,7 @@
           minPermission: AccountingApi.SUPERVISOR_MIN_PERMISSION,
           onReady: async function (sess) {
             session = sess;
+            updateVendorAliasAdminUi();
             initFormOptions();
             await loadCommonOcrHint();
             var cached = AccountingCache.get(session);
