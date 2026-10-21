@@ -27,7 +27,7 @@ assert(/aliasScanDryRunForAfterVendorId/.test(vendors), 'dry-run gate for write'
 assert(/next_after_vendor_id/.test(vendors), 'uses next_after_vendor_id cursor');
 assert(!/aliasScanNextOffset|aliasScanCurrentOffset/.test(vendors), 'no offset state');
 assert(/total_candidates/.test(vendors), 'shows total_candidates');
-assert(/data\.apply/.test(vendors), 'shows apply block');
+assert(/aliasApplyCount\(ap\.applied\)/.test(vendors), 'apply counts use aliasApplyCount');
 assert(/vendorAliasScanMoreBtn/.test(vendors), 'continue batch button');
 assert(/VENDOR_ALIAS_SCAN_LIMIT = 25/.test(vendors), 'batch limit 25');
 

@@ -610,6 +610,13 @@
         return next != null && String(next) !== '';
       }
 
+      function aliasApplyCount(val) {
+        if (val == null) return 0;
+        if (Array.isArray(val)) return val.length;
+        if (typeof val === 'number' && !isNaN(val)) return val;
+        return 0;
+      }
+
       function formatAliasScanSummary(data) {
         var s = aliasScanSummaryFromResponse(data);
         var lines = [];
@@ -628,9 +635,9 @@
         var ap = data && data.apply;
         if (ap && typeof ap === 'object') {
           lines.push(
-            '寫入結果 — 已套用 ' + (ap.applied != null ? ap.applied : 0) +
-            ' · 略過 ' + (ap.skipped != null ? ap.skipped : 0) +
-            ' · 錯誤 ' + (ap.errors != null ? ap.errors : 0)
+            '寫入結果 — 已套用 ' + aliasApplyCount(ap.applied) +
+            ' · 略過 ' + aliasApplyCount(ap.skipped) +
+            ' · 錯誤 ' + aliasApplyCount(ap.errors)
           );
         }
         lines.push('本批 after_vendor_id：' + (aliasScanCurrentAfterVendorId === '' ? '（起點）' : aliasScanCurrentAfterVendorId));
