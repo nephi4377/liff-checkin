@@ -83,9 +83,7 @@ function maybeReloginOnExpired_(opts) {
   const raw = readLiffIdTokenRaw_();
   const expired = !!raw && !isLiffIdTokenFresh(raw);
   if (isConsoleEmbeddedInHub_()) {
-    if (expired || !isLiffIdTokenFresh(cachedToken)) {
-      return requestConsoleLiffRelogin(opts);
-    }
+    if (expired) return requestConsoleLiffRelogin(opts);
     return false;
   }
   if (expired) return requestConsoleLiffRelogin(opts);

@@ -73,10 +73,37 @@ const sessionSrc = fs.readFileSync(path.join(root, 'shared/js/console_liff_sessi
 assert(reportV3.includes('mergeConsoleLiffAuth'), 'reportV3 submit token');
 assert(reportV3.includes('allowParent: true'), 'reportV3 hub iframe parent token');
 assert(reportV3.includes('RELOGIN_APPLY_KEY'), 'reportV3 relogin draft flag');
+assert(!reportV3.includes('RELLOGIN'), 'reportV3 must not use misspelled RELLOGIN');
+assert(
+  reportV3.includes('attemptReloginOnExpired: isConsoleEmbeddedInHub_()'),
+  'standalone submit defers relogin to draft handler'
+);
+assert(reportV3.includes('shouldAutoApplyPendingRecord'), 'reportV3 project-scoped auto apply');
+assert(reportV3.includes('if (expired)') && !reportV3.includes('isConsoleEmbeddedInHub_() && raw)'),
+  'reportV3 iframe path uses expired only'
+);
 assert(!reportV3.includes('reportV3IdToken'), 'removed stale reportV3IdToken cache');
 assert(sessionSrc.includes('attemptReloginOnExpired !== true'), 'relogin opt-in only on write');
 assert(sessionSrc.includes('isTrustedHubMessageOrigin'), 'origin guard helper');
 assert(sessionSrc.includes('PARENT_TOKEN_ATTEMPTS = 2'), 'faster parent retry');
 assert(sessionSrc.includes('GAS doGet') || sessionSrc.includes('doGet'), 'GET query rationale documented');
 
-console.log('test-console-liff-session: OK');
+async function loadConsoleLiffModule() {
+  const { pathToFileURL } = require('url');
+  const sessionPath = pathToFileURL(path.join(root, 'shared/js/console_liff_session.js')).href;
+  return import(sessionPath);
+}
+
+(async () => {
+  const mod = await loadConsoleLiffModule();
+  assert(typeof mod.isLiffIdTokenFresh === 'function', 'module exports isLiffIdTokenFresh');
+  assert(typeof mod.mergeConsoleLiffAuth === 'function', 'module exports mergeConsoleLiffAuth');
+  assert(mod.isLiffIdTokenFresh(makeJwt(future)), 'module fresh token');
+  assert(!mod.isLiffIdTokenFresh(makeJwt(past)), 'module expired token');
+  const mergedMod = mod.mergeConsoleLiffAuth({ action: 'ping' }, makeJwt(future));
+  assert(mergedMod.liff_id_token && mergedMod.action === 'ping', 'module mergeConsoleLiffAuth');
+  console.log('test-console-liff-session: OK');
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

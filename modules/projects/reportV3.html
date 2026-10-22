@@ -42,7 +42,7 @@
       IDB_VER: 1,  // IDB 版本
       IDB_STORE: 'pending',  // IDB 儲存空間
       IDB_KEY: 'lastFailedSubmit',  // IDB 鍵
-      RELLOGIN_APPLY_KEY: 'reportV3_apply_after_relogin',
+      RELOGIN_APPLY_KEY: 'reportV3_apply_after_relogin',
       MAX_LOG_LINES: 220  // 最大記錄行數
     };
   </script>
@@ -305,7 +305,7 @@
       IDB_VER,
       IDB_STORE,
       IDB_KEY,
-      RELLOGIN_APPLY_KEY,
+      RELOGIN_APPLY_KEY,
       MAX_LOG_LINES,
       LIFF_INIT_TIMEOUT_MS,
     } = window.__REPORT_V3_CONFIG__;
@@ -972,8 +972,12 @@
           sessionStorage.removeItem(RELOGIN_APPLY_KEY);
           const rec = await idbLoadPending();
           if (rec && userProfile && rec.userId === userProfile.userId) {
-            applyPendingRecord(rec);
-            updateStatus('已從草稿恢復表單內容，請確認後再提交。', 'info');
+            if (shouldAutoApplyPendingRecord(rec)) {
+              applyPendingRecord(rec);
+              updateStatus('已從草稿恢復表單內容，請確認後再提交。', 'info');
+            } else {
+              updateStatus('草稿案號與目前表單案號不同，請在橫幅按「一鍵帶入」或先改案號。', 'info');
+            }
           }
           await initPendingFromIdb();
         } catch (e) {
@@ -1184,6 +1188,20 @@
         void initPendingFromIdb();
       }
 
+      function normalizeProjectIdForMatch(id) {
+        return String(id || '').replace(/\D/g, '');
+      }
+
+      /** 自動帶入草稿時：僅當表單案號與暫存案號一致（或表單尚未填案號） */
+      function shouldAutoApplyPendingRecord(rec) {
+        if (!rec || !rec.form) return false;
+        const stored = normalizeProjectIdForMatch(rec.form.projectId);
+        const current = normalizeProjectIdForMatch(document.getElementById('projectId').value);
+        if (!stored) return true;
+        if (!current) return true;
+        return stored === current;
+      }
+
       function applyPendingRecord(rec) {
         if (!rec || !rec.form) return;
         document.getElementById('projectId').value = rec.form.projectId || '';
@@ -1229,7 +1247,7 @@
         const failN = ((rec.schema || 0) >= 2 && Array.isArray(rec.failureChain)) ? rec.failureChain.length : (rec.failure ? 1 : 0);
         sum.textContent = `案號 ${rec.form?.projectId || '—'} · 共 ${(rec.photos || []).length} 張圖 · 累積失敗 ${failN} 筆 · 暫存於 ${new Date(rec.savedAt).toLocaleString('zh-TW')}。請按「一鍵帶入上次內容」後再提交。`;
         banner.classList.remove('hidden');
-        if (AUTO_APPLY_PENDING_ON_LOAD) {
+        if (AUTO_APPLY_PENDING_ON_LOAD && shouldAutoApplyPendingRecord(rec)) {
           applyPendingRecord(rec);
         }
       }
@@ -1523,7 +1541,10 @@
 
           const prevFail = idbSnapshotForPayload ? compactFailureForPayload(idbSnapshotForPayload) : null;
           const sim = isDevSimAllowed() ? getDevSimMode() : 'none';
-          const idToken = await getConsoleLiffIdToken({ allowParent: true, attemptReloginOnExpired: true });
+          const idToken = await getConsoleLiffIdToken({
+            allowParent: true,
+            attemptReloginOnExpired: isConsoleEmbeddedInHub_(),
+          });
           const isLocalHost = ['127.0.0.1', 'localhost'].includes(window.location.hostname);
           if (!idToken && userProfile && !(ENABLE_LOCAL_TEST_BYPASS && isLocalHost)) {
             let raw = '';
@@ -1531,7 +1552,7 @@
               raw = (typeof liff !== 'undefined' && liff.getIDToken) ? (liff.getIDToken() || '') : '';
             } catch (eRaw) { /* ignore */ }
             const expired = !!raw && !isLiffIdTokenFresh(raw);
-            if (expired || (isConsoleEmbeddedInHub_() && raw)) {
+            if (expired) {
               await handleIdentityExpiredBeforeGasSubmit({
                 cleanProjectId,
                 batchId,
