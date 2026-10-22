@@ -7,9 +7,11 @@
 1. 以 Playwright `route` 將 `cdn.tailwindcss.com` 換成本地釘選腳本 `fixtures/tailwindcss.cdn.pinned.js`（避免 CDN 版本漂移與離線失敗）
 2. 注入 **Noto Sans CJK** 字型堆疊（與 CI 安裝 `fonts-noto-cjk` 一致）
 3. 載入 `LP_LayoutPlanner.html`，匯入示範配置 `fixtures/lp-walk-keyguard.json`
-4. **2D**：對 `#design-canvas` 在「地板多邊形＋櫃體」外框 **clip** 截圖；**mask** 工具箱、預算面板、底列、toast、頂列說明與尺寸標籤
+4. **2D**：`expect(page).toHaveScreenshot` 以「地板多邊形＋櫃體」viewport **clip** 截圖（locator 截圖不支援 clip）；**mask** 工具箱、預算面板、底列、toast、頂列說明與尺寸標籤
 5. **3D**：開啟環繞檢視，等 `#lp-3d-viewport canvas` 出現後 **連續兩次 `requestAnimationFrame`** 再截 `#lp-3d-viewport`
-6. 整段流程結束時確認 **無** `pageerror` 與 `console.error`（訊息含 CDN 網域者排除，見 `lp-visual-helpers.cjs`）
+6. 整段流程結束時確認 **無** `pageerror` 與 `console.error`（僅略過 CDN **載入失敗** 類訊息，見 `lp-visual-helpers.cjs`）
+
+示範 JSON 的 `drawnAreas` 須含 **`areaInPing`**（與繪製完成時相同算法）；缺欄位時標籤會顯示「NaN 坪」，屬匯入資料不完整；`loadLayoutFromData` 目前不會自動重算坪數。
 
 ## 執行
 

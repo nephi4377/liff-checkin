@@ -50,13 +50,12 @@ test.describe('LayoutPlanner 畫面回歸', () => {
 
     await loadDemoLayout(page);
 
-    const canvas2d = page.locator('#design-canvas');
-    await expect(canvas2d).toBeVisible();
+    await expect(page.locator('#design-canvas')).toBeVisible();
 
     const clip2d = await getDemoGeometryClip(page);
     expect(clip2d, '示範幾何 clip 應可計算').not.toBeNull();
 
-    await expect(canvas2d).toHaveScreenshot('lp-demo-2d.png', {
+    await expect(page).toHaveScreenshot('lp-demo-2d.png', {
       animations: 'disabled',
       maxDiffPixels: 150,
       mask: visualRegressionMasks(page),
