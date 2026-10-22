@@ -50,6 +50,7 @@ async function runToggleCycle(page) {
   const diagClosed = await page.evaluate(() => document.getElementById('lp-3d-viewport')?.__lp3dGetDiagnostics?.());
   expect(diagClosed?.isOpen).toBe(false);
   expect(diagClosed?.animationFrameScheduled).toBe(false);
+  expect(diagClosed?.walkCreateCount ?? 1).toBe(1);
 
   return frame.avgMs;
 }

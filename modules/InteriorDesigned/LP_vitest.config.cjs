@@ -12,6 +12,7 @@ module.exports = defineConfig({
             'LP_3D_walk.test.js',
             'LP_3D_walk_collision.test.js',
             'LP_LayoutPlanner_3d_lazy.test.js',
+            'LP_3DViewer_lifecycle.test.js',
         ],
     },
 });

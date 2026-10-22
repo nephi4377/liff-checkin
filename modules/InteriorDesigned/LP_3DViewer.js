@@ -124,6 +124,7 @@ export function createLayoutPlanner3DViewer(options) {
     let lastTick = performance.now();
     let orbitBookmark = null;
     let rebuildCount = 0;
+    let walkCreateCount = 0;
 
     const contentGroup = { current: null };
     const ceilingGroup = { current: null };
@@ -153,12 +154,12 @@ export function createLayoutPlanner3DViewer(options) {
     function applyViewMode() {
         if (!controls || !walk || !camera) return;
         if (viewMode === 'orbit') {
-            walk.setActive(false);
+            walk?.setActive(false);
             controls.enabled = true;
             setHint('鳥瞰：左鍵旋轉 · 右鍵平移 · 滾輪縮放');
         } else {
             controls.enabled = false;
-            walk.setActive(true);
+            walk?.setActive(true);
             camera.rotation.order = 'YXZ';
             walk.syncFromCamera();
             setHint('室內：WASD 移動 · 按住左鍵轉向 · 手機左半拖移動、右半轉向');
@@ -191,6 +192,7 @@ export function createLayoutPlanner3DViewer(options) {
 
     function ensureWalk() {
         if (walk) return;
+        walkCreateCount += 1;
         walk = createWalkController({
             camera,
             domElement: renderer.domElement,
@@ -450,18 +452,32 @@ export function createLayoutPlanner3DViewer(options) {
             isOpen = false;
             overlayEl?.removeAttribute('data-lp-3d-open');
             walk?.setActive(false);
-            walk?.dispose();
-            walk = null;
             if (animationId) {
                 cancelAnimationFrame(animationId);
                 animationId = null;
             }
+        },
+        dispose() {
+            viewer.close();
+            resizeObserver?.disconnect();
+            resizeObserver = null;
+            walk?.dispose();
+            walk = null;
+            if (renderer) {
+                renderer.dispose();
+                renderer.domElement?.remove();
+                renderer = null;
+            }
+            controls = null;
+            scene = null;
+            camera = null;
         },
         getDiagnostics() {
             return {
                 isOpen,
                 animationFrameScheduled: animationId !== null,
                 rebuildCount,
+                walkCreateCount,
                 rendererChildCount: mountEl.childElementCount,
                 sceneChildCount: scene?.children?.length ?? 0,
             };
