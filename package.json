@@ -1,4 +1,10 @@
 {
+  "scripts": {
+    "test:layout-planner": "npm test --prefix modules/InteriorDesigned",
+    "test:layout-planner:unit": "npm run test:unit --prefix modules/InteriorDesigned",
+    "test:layout-planner:e2e": "npm run test:e2e --prefix modules/InteriorDesigned",
+    "test:layout-planner:ci": "bash scripts/test-layout-planner-ci.sh"
+  },
   "dependencies": {
     "firebase": "^12.10.0",
     "playwright": "^1.60.0"

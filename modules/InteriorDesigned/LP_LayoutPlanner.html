@@ -90,6 +90,18 @@
             border-color: #14b8a6;
         }
 
+        #lp-3d-toolbar .lp-3d-tb-btn.lp-3d-accent {
+            background: #7c3aed;
+            border-color: #a78bfa;
+        }
+
+        #lp-3d-toolbar .lp-3d-tb-sep {
+            width: 1px;
+            height: 22px;
+            background: #475569;
+            margin: 0 2px;
+        }
+
         #lp-3d-toolbar label {
             display: flex;
             align-items: center;
@@ -97,6 +109,54 @@
             font-size: 12px;
             color: #e2e8f0;
             margin-left: auto;
+        }
+
+        /* 預設視角／儲存圖片：僅 ?lpPreview=1 顯示（正式版待核准） */
+        #lp-3d-toolbar .lp-3d-snapshot-gated {
+            display: none !important;
+        }
+
+        html.lp-url-preview #lp-3d-toolbar .lp-3d-snapshot-gated.lp-3d-tb-btn {
+            display: inline-block !important;
+        }
+
+        html.lp-url-preview #lp-3d-toolbar .lp-3d-snapshot-gated.lp-3d-tb-sep {
+            display: block !important;
+        }
+
+        /* 匯出報價明細：僅 ?lpPreview=1 顯示（正式版待核准，定價規則未定） */
+        #export-quote-draft-btn.lp-preview-gated {
+            display: none !important;
+        }
+
+        html.lp-url-preview #export-quote-draft-btn.lp-preview-gated {
+            display: inline-block !important;
+        }
+
+        #lp-3d-toolbar .lp-3d-tb-select {
+            display: none;
+            border: 1px solid #475569;
+            background: #334155;
+            color: #f8fafc;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 8px;
+            border-radius: 8px;
+            max-width: 7.5rem;
+        }
+
+        @media (max-width: 420px) {
+            html.lp-url-preview #lp-3d-toolbar .lp-3d-preset-btn.lp-3d-snapshot-gated {
+                display: none !important;
+            }
+
+            html.lp-url-preview #lp-3d-toolbar #lp-3d-preset-select.lp-3d-snapshot-gated {
+                display: inline-block !important;
+            }
+
+            #lp-3d-toolbar label {
+                margin-left: 0;
+            }
         }
 
         #lp-3d-hint {
@@ -1037,6 +1097,18 @@
                         </select>
                         <p class="text-[10px] text-gray-500 mt-1">變更後僅影響可編輯範圍；已擺好的物件不會自動搬移。</p>
                     </div>
+                    <div class="mt-2">
+                        <label class="flex items-center gap-2 text-xs font-bold text-gray-700">
+                            <input type="checkbox" id="show-grid-toggle" checked> 顯示背景格線（50cm，僅視覺）
+                        </label>
+                        <p class="text-[10px] text-gray-500">關閉格線不會停用拖曳步距或物件邊緣吸附；按住 Shift 可暫時關閉吸附。</p>
+                        <label for="snap-grid-step-select" class="text-xs font-bold text-gray-700 mt-2 block">拖曳格線吸附步距 (cm)</label>
+                        <select id="snap-grid-step-select" class="w-full text-xs border rounded p-1.5 mt-1 bg-white">
+                            <option value="2">2（預設，與現行相同）</option>
+                            <option value="5">5</option>
+                            <option value="10">10</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -1071,6 +1143,8 @@
                 <polyline id="drawing-preview-polyline" fill="none" stroke="#3b82f6" stroke-width="2" />
                 <!-- [您的要求] 新增：繪圖時顯示的頂點標記 -->
                 <g id="drawing-preview-vertices"></g>
+                <text id="drawing-preview-segment-label" fill="#1d4ed8" font-size="14" font-weight="700"
+                    text-anchor="middle" style="display: none; pointer-events: none;"></text>
             </svg>
             <!-- [您的要求] 核心修正：將繪圖圖層的 pointer-events 徹底設為 none，避免攔截事件 -->
             <svg id="drawn-areas-layer"
@@ -1103,6 +1177,10 @@
                             class="p-1.5 bg-gray-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-gray-600">↑</button>
                         <button id="selected-layer-down-btn" title="下移一層"
                             class="p-1.5 bg-gray-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-gray-600">↓</button>
+                        <button id="selected-group-btn" title="群組 (Ctrl+G)" style="display:none"
+                            class="p-1.5 bg-indigo-500 text-white rounded-full h-7 px-2 flex items-center justify-center text-xs hover:bg-indigo-600">群組</button>
+                        <button id="selected-ungroup-btn" title="取消群組 (Ctrl+Shift+G)" style="display:none"
+                            class="p-1.5 bg-indigo-400 text-white rounded-full h-7 px-2 flex items-center justify-center text-xs hover:bg-indigo-500">解群</button>
                         <button id="selected-rotate-btn" title="旋轉 (R)"
                             class="p-1.5 bg-blue-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-blue-600">↻</button>
                         <button id="selected-mirror-btn" title="鏡像 (M)"
@@ -1286,6 +1364,9 @@
                 <button id="print-budget-btn" class="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700">列印 / 儲存 PDF</button>
                 <button id="export-csv-btn"
                     class="bg-green-700 text-white px-3 py-1 rounded text-sm hover:bg-green-800">匯出 CSV</button>
+                <button id="export-quote-draft-btn" type="button"
+                    class="bg-teal-700 text-white px-3 py-1 rounded text-sm hover:bg-teal-800 lp-preview-gated"
+                    title="產生 BudgetWeb 相容草稿（不寫入雲端）">匯出報價明細</button>
             </div>
             <p class="budget-edit-only mt-2 text-xs text-gray-500">編輯模式：可改項目、數量、總價、備註；按 ✕ 可隱藏該列。修改會隨佈局一起儲存。</p>
             <!-- [新增] 諮詢詳細報價區塊 -->
@@ -1439,11 +1520,57 @@
             <button type="button" id="lp-3d-btn-orbit" class="lp-3d-tb-btn lp-3d-active">鳥瞰</button>
             <button type="button" id="lp-3d-btn-walk" class="lp-3d-tb-btn">室內</button>
             <button type="button" id="lp-3d-btn-reset" class="lp-3d-tb-btn">重置視角</button>
+            <span class="lp-3d-tb-sep lp-3d-snapshot-gated" aria-hidden="true"></span>
+            <button type="button" id="lp-3d-btn-preset-top" class="lp-3d-tb-btn lp-3d-preset-btn lp-3d-snapshot-gated" title="俯視整個空間">俯視</button>
+            <button type="button" id="lp-3d-btn-preset-front" class="lp-3d-tb-btn lp-3d-preset-btn lp-3d-snapshot-gated" title="正面斜角">正面斜角</button>
+            <button type="button" id="lp-3d-btn-preset-corner" class="lp-3d-tb-btn lp-3d-preset-btn lp-3d-snapshot-gated" title="角落斜角">角落斜角</button>
+            <select id="lp-3d-preset-select" class="lp-3d-tb-select lp-3d-snapshot-gated" aria-label="預設視角">
+                <option value="" selected disabled>視角</option>
+                <option value="top">俯視</option>
+                <option value="front_iso">正面斜角</option>
+                <option value="corner_iso">角落斜角</option>
+            </select>
+            <button type="button" id="lp-3d-btn-save-png" class="lp-3d-tb-btn lp-3d-accent lp-3d-snapshot-gated" title="下載目前 3D 畫面 PNG">儲存圖片</button>
             <button type="button" id="lp-3d-btn-exit-2d" class="lp-3d-tb-btn lp-3d-primary">返回 2D</button>
             <label><input type="checkbox" id="lp-3d-ceiling-toggle" checked> 顯示天花</label>
         </div>
         <div id="lp-3d-hint">鳥瞰：左鍵旋轉 · 右鍵平移 · 滾輪縮放</div>
         <div id="lp-3d-viewport" role="img" aria-label="平面圖三維預覽"></div>
+    </div>
+
+    <!-- 報價明細草稿預覽（FLOORPLAN-QUOTE-1 原型；不寫後端） -->
+    <div id="quote-export-draft-modal" class="modal" style="display: none;" role="dialog"
+        aria-labelledby="quote-export-draft-title">
+        <div class="modal-content max-w-4xl w-[95vw]">
+            <span id="quote-export-draft-close" class="absolute top-2 right-4 text-2xl cursor-pointer"
+                role="button" tabindex="0" aria-label="關閉">&times;</span>
+            <h2 id="quote-export-draft-title" class="text-lg font-bold mb-2">匯出報價明細（草稿）</h2>
+            <p id="quote-export-draft-summary" class="text-sm text-gray-600 mb-3"></p>
+            <p class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
+                此為 LayoutPlanner 自動計價轉出的<strong>草稿</strong>，欄位對齊 BudgetWeb 工項 JSON；請在 BudgetWeb 補案號後再同步雲端，勿直接當正式合約報價。
+            </p>
+            <div class="overflow-auto max-h-[50vh] border rounded">
+                <table class="min-w-full text-left">
+                    <thead class="bg-gray-100 text-xs sticky top-0">
+                        <tr>
+                            <th class="p-2">區段</th>
+                            <th class="p-2">品項</th>
+                            <th class="p-2">單位</th>
+                            <th class="p-2 text-right">數量</th>
+                            <th class="p-2 text-right">總價</th>
+                            <th class="p-2">規格備註</th>
+                        </tr>
+                    </thead>
+                    <tbody id="quote-export-draft-tbody"></tbody>
+                </table>
+            </div>
+            <div class="mt-4 flex flex-wrap justify-end gap-2">
+                <button id="quote-export-draft-csv-btn" type="button"
+                    class="bg-green-700 text-white px-3 py-1 rounded text-sm hover:bg-green-800">下載 CSV</button>
+                <button id="quote-export-draft-json-btn" type="button"
+                    class="bg-teal-700 text-white px-3 py-1 rounded text-sm hover:bg-teal-800">下載 JSON</button>
+            </div>
+        </div>
     </div>
 
     <!-- [新增] 繪圖模式遮罩 -->
