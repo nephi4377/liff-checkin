@@ -90,6 +90,18 @@
             border-color: #14b8a6;
         }
 
+        #lp-3d-toolbar .lp-3d-tb-btn.lp-3d-accent {
+            background: #7c3aed;
+            border-color: #a78bfa;
+        }
+
+        #lp-3d-toolbar .lp-3d-tb-sep {
+            width: 1px;
+            height: 22px;
+            background: #475569;
+            margin: 0 2px;
+        }
+
         #lp-3d-toolbar label {
             display: flex;
             align-items: center;
@@ -1439,6 +1451,11 @@
             <button type="button" id="lp-3d-btn-orbit" class="lp-3d-tb-btn lp-3d-active">鳥瞰</button>
             <button type="button" id="lp-3d-btn-walk" class="lp-3d-tb-btn">室內</button>
             <button type="button" id="lp-3d-btn-reset" class="lp-3d-tb-btn">重置視角</button>
+            <span class="lp-3d-tb-sep" aria-hidden="true"></span>
+            <button type="button" id="lp-3d-btn-preset-top" class="lp-3d-tb-btn" title="俯視整個空間">俯視</button>
+            <button type="button" id="lp-3d-btn-preset-front" class="lp-3d-tb-btn" title="正面斜角">正面斜角</button>
+            <button type="button" id="lp-3d-btn-preset-corner" class="lp-3d-tb-btn" title="角落斜角">角落斜角</button>
+            <button type="button" id="lp-3d-btn-save-png" class="lp-3d-tb-btn lp-3d-accent" title="下載目前 3D 畫面 PNG">儲存圖片</button>
             <button type="button" id="lp-3d-btn-exit-2d" class="lp-3d-tb-btn lp-3d-primary">返回 2D</button>
             <label><input type="checkbox" id="lp-3d-ceiling-toggle" checked> 顯示天花</label>
         </div>

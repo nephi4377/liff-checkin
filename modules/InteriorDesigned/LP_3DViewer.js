@@ -12,6 +12,13 @@ import {
     createLabelSprite,
 } from './LP_3D_furniture.js';
 import { createWalkController } from './LP_3D_walk.js';
+import {
+    ORBIT_CAMERA_PRESETS,
+    computeOrbitPresetCamera,
+    renderSceneToPngBlob,
+    downloadBlobAsFile,
+    formatLayout3DPngFilename,
+} from './LP_3D_snapshot.js';
 
 function makeShapeFromRing(outer, inner) {
     const shape = new THREE.Shape();
@@ -117,6 +124,10 @@ export function createLayoutPlanner3DViewer(options) {
     const btnReset = overlayEl?.querySelector('#lp-3d-btn-reset');
     const btnExit = overlayEl?.querySelector('#lp-3d-btn-exit-2d');
     const ceilingToggle = overlayEl?.querySelector('#lp-3d-ceiling-toggle');
+    const btnPresetTop = overlayEl?.querySelector('#lp-3d-btn-preset-top');
+    const btnPresetFront = overlayEl?.querySelector('#lp-3d-btn-preset-front');
+    const btnPresetCorner = overlayEl?.querySelector('#lp-3d-btn-preset-corner');
+    const btnSavePng = overlayEl?.querySelector('#lp-3d-btn-save-png');
 
     function setHint(text) {
         if (hintEl) hintEl.textContent = text;
@@ -179,6 +190,27 @@ export function createLayoutPlanner3DViewer(options) {
         else resetWalkCamera(lastDesc);
     }
 
+    function applyOrbitPreset(presetId) {
+        if (!lastDesc || !camera || !controls) return;
+        viewMode = 'orbit';
+        applyViewMode();
+        const { position, target } = computeOrbitPresetCamera(presetId, lastDesc, LP_3D_DEFAULTS);
+        camera.position.set(position.x, position.y, position.z);
+        controls.target.set(target.x, target.y, target.z);
+        controls.update();
+        orbitBookmark = {
+            pos: camera.position.clone(),
+            target: controls.target.clone(),
+        };
+    }
+
+    async function saveCurrentViewPng() {
+        if (!renderer || !scene || !camera) return;
+        renderer.render(scene, camera);
+        const blob = await renderSceneToPngBlob(THREE, renderer, scene, camera);
+        downloadBlobAsFile(blob, formatLayout3DPngFilename());
+    }
+
     function ensureScene() {
         if (renderer) {
             ensureWalk();
@@ -237,6 +269,12 @@ export function createLayoutPlanner3DViewer(options) {
         ceilingToggle?.addEventListener('change', () => {
             showCeiling = ceilingToggle.checked;
             if (ceilingGroup.current) ceilingGroup.current.visible = showCeiling;
+        });
+        btnPresetTop?.addEventListener('click', () => applyOrbitPreset(ORBIT_CAMERA_PRESETS.TOP));
+        btnPresetFront?.addEventListener('click', () => applyOrbitPreset(ORBIT_CAMERA_PRESETS.FRONT_ISO));
+        btnPresetCorner?.addEventListener('click', () => applyOrbitPreset(ORBIT_CAMERA_PRESETS.CORNER_ISO));
+        btnSavePng?.addEventListener('click', () => {
+            saveCurrentViewPng().catch((err) => console.error('[LP 3D save PNG]', err));
         });
 
         updateToolbarActive();
