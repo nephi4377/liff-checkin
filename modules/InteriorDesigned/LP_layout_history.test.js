@@ -28,6 +28,18 @@ describe('createHistoryGestureCoalescer', () => {
         expect(sink.commitCount).toBe(1);
     });
 
+    it('reset 清除手勢深度與 pending，避免 undo 載入後誤合併', () => {
+        let n = 0;
+        const g = createHistoryGestureCoalescer(() => { n += 1; });
+        g.begin();
+        g.requestSave();
+        g.reset();
+        g.end();
+        expect(n).toBe(0);
+        g.requestSave();
+        expect(n).toBe(1);
+    });
+
     it('嵌套手勢僅在最外層 end 時 commit', () => {
         let n = 0;
         const g = createHistoryGestureCoalescer(() => { n += 1; });

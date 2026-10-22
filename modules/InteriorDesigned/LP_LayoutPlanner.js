@@ -12,6 +12,7 @@ import {
     snapTranslationToGrid,
     computeCabinetResizeGeometry,
     rotateCabinetAroundPivot,
+    mirrorCabinetsAsGroupAboutVerticalAxis,
 } from './LP_core.js';
 import { createHistoryGestureCoalescer } from './LP_layout_history.js';
 
@@ -140,6 +141,13 @@ const LP_SHOW_GRID_KEY = 'lp_show_grid';
 const LP_SNAP_GRID_STEP_KEY = 'lp_snap_grid_step_cm';
 /** 拖曳位移格線吸附步距（cm）；預設 2 與改版前行為一致 */
 let snapGridStepCm = 2;
+let layoutGroupIdCounter = 0;
+
+function createLayoutGroupId() {
+    layoutGroupIdCounter += 1;
+    const suffix = Math.random().toString(36).slice(2, 10);
+    return `grp-${layoutGroupIdCounter}-${suffix}`;
+}
 const svgStyle = 'width="100%" height="100%" preserveAspectRatio="none"';
 const svgs = {
     sofa3: `<svg ${svgStyle} viewBox="0 0 210 90"><rect width="210" height="90" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/><rect x="10" y="10" width="190" height="20" fill="#d1d5db"/><rect x="10" y="35" width="60" height="45" rx="5" fill="#fff"/><rect x="75" y="35" width="60" height="45" rx="5" fill="#fff"/><rect x="140" y="35" width="60" height="45" rx="5" fill="#fff"/></svg>`,
@@ -1733,7 +1741,31 @@ function rotateSelectedCab() {
     saveState();
 }
 
-// [新增] 鏡像選取的元件
+function collectLayoutGroupsForMirror(targets) {
+    const groups = new Map();
+    const singles = [];
+    for (const cab of targets) {
+        if (cab.layoutGroupId) {
+            if (!groups.has(cab.layoutGroupId)) {
+                groups.set(cab.layoutGroupId, getLayoutGroupMembers(cab));
+            }
+        } else {
+            singles.push(cab);
+        }
+    }
+    return { groups: [...groups.values()], singles };
+}
+
+function applyGroupVerticalMirror(members) {
+    const updates = mirrorCabinetsAsGroupAboutVerticalAxis(members, getVertices);
+    members.forEach((cab, idx) => {
+        cab.x = updates[idx].x;
+        cab.y = updates[idx].y;
+        cab.mirrored = updates[idx].mirrored;
+    });
+}
+
+// [新增] 鏡像選取的元件（群組：以外框垂直中心線鏡像整組）
 function mirrorSelectedCab() {
     const targets = getSelectedCabinetObjects();
     if (!targets.length && selectedCabId) {
@@ -1741,7 +1773,12 @@ function mirrorSelectedCab() {
         if (cab) targets.push(cab);
     }
     if (!targets.length) return;
-    targets.forEach((cab) => {
+
+    const { groups, singles } = collectLayoutGroupsForMirror(targets);
+    for (const group of groups) {
+        applyGroupVerticalMirror(group);
+    }
+    singles.forEach((cab) => {
         cab.mirrored = !cab.mirrored;
     });
     renderAllCabinets();
@@ -1754,7 +1791,7 @@ function groupSelectedCabinets() {
         showGlobalNotification('請先選取至少兩個元件再群組', 2500, 'info');
         return;
     }
-    const groupId = `grp-${Date.now()}`;
+    const groupId = createLayoutGroupId();
     targets.forEach((cab) => {
         cab.layoutGroupId = groupId;
     });
@@ -3966,6 +4003,7 @@ function commitSaveState() {
  * @param {object} state - 要載入的狀態物件
  */
 function loadState(state) {
+    historyGesture.reset();
     placedCabinets = JSON.parse(JSON.stringify(state.placedCabinets));
     drawnAreas = JSON.parse(JSON.stringify(state.drawnAreas));
     placedAnnotations = state.placedAnnotations ? JSON.parse(JSON.stringify(state.placedAnnotations)) : []; // [新增]

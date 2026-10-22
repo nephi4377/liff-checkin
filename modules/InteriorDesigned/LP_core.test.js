@@ -11,6 +11,7 @@ import {
     mirrorAwareResizeDirection,
     computeCabinetResizeGeometry,
     rotateCabinetAroundPivot,
+    mirrorCabinetsAsGroupAboutVerticalAxis,
 } from './LP_core.js';
 
 describe('cmToFeet', () => {
@@ -141,6 +142,38 @@ describe('computeCabinetResizeGeometry', () => {
             localDy: 25,
         });
         expect(r.currentW).toBe(225);
+    });
+});
+
+describe('mirrorCabinetsAsGroupAboutVerticalAxis', () => {
+    const rectVerts = (cab) => [
+        { x: cab.x, y: cab.y },
+        { x: cab.x + cab.currentW, y: cab.y },
+        { x: cab.x + cab.currentW, y: cab.y + cab.currentH },
+        { x: cab.x, y: cab.y + cab.currentH },
+    ];
+
+    it('兩物件以外框垂直中心線交換位置並切換 mirrored', () => {
+        const a = { x: 100, y: 50, currentW: 40, currentH: 20, mirrored: false };
+        const b = { x: 200, y: 50, currentW: 40, currentH: 20, mirrored: true };
+        const out = mirrorCabinetsAsGroupAboutVerticalAxis([a, b], rectVerts);
+        expect(out[0].x).toBe(200);
+        expect(out[1].x).toBe(100);
+        expect(out[0].mirrored).toBe(true);
+        expect(out[1].mirrored).toBe(false);
+    });
+
+    it('連續兩次群組鏡像回到原位與 mirrored', () => {
+        const a = { x: 100, y: 50, currentW: 40, currentH: 20, mirrored: false };
+        const b = { x: 200, y: 50, currentW: 40, currentH: 20, mirrored: false };
+        const once = mirrorCabinetsAsGroupAboutVerticalAxis([a, b], rectVerts);
+        const a2 = { ...a, x: once[0].x, mirrored: once[0].mirrored };
+        const b2 = { ...b, x: once[1].x, mirrored: once[1].mirrored };
+        const twice = mirrorCabinetsAsGroupAboutVerticalAxis([a2, b2], rectVerts);
+        expect(twice[0].x).toBe(100);
+        expect(twice[1].x).toBe(200);
+        expect(twice[0].mirrored).toBe(false);
+        expect(twice[1].mirrored).toBe(false);
     });
 });
 
