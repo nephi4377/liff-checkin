@@ -46,6 +46,7 @@ const { items, taxInclusiveTotal } = parser.parseSheetRows(json, sheet, {
   metadataKeywords: ['住址', '電話', '簽名', '定金', '支付', '發票', '尾款', '估價單']
 });
 const counts = parser.classifyItemCounts(items);
+const adjustSum = parser.sumAdjustItemPrices(items);
 
 const result = {
   sheet,
@@ -53,12 +54,14 @@ const result = {
   workItems: counts.work,
   suggestItems: counts.suggest,
   adjustItems: counts.adjust,
+  adjustSum,
   totalItems: counts.total,
   taxInclusiveTotal,
   expected: {
     workItems: 100,
     suggestItems: 2,
     adjustItems: 23,
+    adjustSum: 116480,
     taxInclusiveTotal: 1592099
   }
 };
@@ -69,6 +72,7 @@ const ok =
   counts.work === 100 &&
   counts.suggest === 2 &&
   counts.adjust === 23 &&
+  adjustSum === 116480 &&
   taxInclusiveTotal === 1592099;
 
 if (!ok) {
