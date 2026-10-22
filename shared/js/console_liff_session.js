@@ -189,7 +189,6 @@ export function requestConsoleLiffRelogin(opts = {}) {
     if (inClient) {
       window.location.reload();
     } else {
-      const liffId = CONFIG.PROJECT_CONSOLE_LIFF_ID;
       liff.login({ redirectUri: window.location.href });
     }
   } catch (e) {
