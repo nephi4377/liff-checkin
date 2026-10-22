@@ -77,12 +77,19 @@ function refreshFromLiffSdk_() {
   return '';
 }
 
-function maybeReloginOnExpiredStandalone_(opts) {
-  if (opts.attemptReloginOnExpired === false) return false;
-  if (isConsoleEmbeddedInHub_()) return false;
+/** 僅在寫入路徑明確傳 attemptReloginOnExpired: true 時才觸發重登 */
+function maybeReloginOnExpired_(opts) {
+  if (opts.attemptReloginOnExpired !== true) return false;
   const raw = readLiffIdTokenRaw_();
-  if (!raw || isLiffIdTokenFresh(raw)) return false;
-  return requestConsoleLiffRelogin();
+  const expired = !!raw && !isLiffIdTokenFresh(raw);
+  if (isConsoleEmbeddedInHub_()) {
+    if (expired || !isLiffIdTokenFresh(cachedToken)) {
+      return requestConsoleLiffRelogin(opts);
+    }
+    return false;
+  }
+  if (expired) return requestConsoleLiffRelogin(opts);
+  return false;
 }
 
 function getHubMessageTarget_() {
@@ -164,7 +171,7 @@ export async function getConsoleLiffIdToken(opts = {}) {
     if (retryLiff) return retryLiff;
   }
 
-  maybeReloginOnExpiredStandalone_(opts);
+  maybeReloginOnExpired_(opts);
   return '';
 }
 

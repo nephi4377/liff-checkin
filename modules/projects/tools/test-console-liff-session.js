@@ -70,7 +70,10 @@ assert(projectApi.includes('mergeConsoleLiffAuth'), 'projectApi merge on write')
 assert(spaApp.includes('get_hub_projects_data') && spaApp.includes('appendConsoleLiffToUrl'), 'hub projects GET token');
 assert(spaApp.includes('process_notification_action') && spaApp.includes('mergeConsoleLiffAuth'), 'hub notification POST token');
 assert(reportV3.includes('mergeConsoleLiffAuth'), 'reportV3 submit token');
-assert(reportV3.includes('attemptReloginOnExpired'), 'reportV3 refresh on expired');
+assert(reportV3.includes('allowParent: true'), 'reportV3 hub iframe parent token');
+assert(reportV3.includes('RELOGIN_APPLY_KEY'), 'reportV3 relogin draft flag');
+assert(!reportV3.includes('reportV3IdToken'), 'removed stale reportV3IdToken cache');
+assert(sessionSrc.includes('attemptReloginOnExpired !== true'), 'relogin opt-in only on write');
 
 const sessionSrc = fs.readFileSync(path.join(root, 'shared/js/console_liff_session.js'), 'utf8');
 assert(sessionSrc.includes('isTrustedHubMessageOrigin'), 'origin guard helper');

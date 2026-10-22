@@ -42,6 +42,7 @@
       IDB_VER: 1,  // IDB 版本
       IDB_STORE: 'pending',  // IDB 儲存空間
       IDB_KEY: 'lastFailedSubmit',  // IDB 鍵
+      RELLOGIN_APPLY_KEY: 'reportV3_apply_after_relogin',
       MAX_LOG_LINES: 220  // 最大記錄行數
     };
   </script>
@@ -276,6 +277,7 @@
       mergeConsoleLiffAuth,
       isConsoleLiffSessionError,
       isLiffIdTokenFresh,
+      isConsoleEmbeddedInHub_,
       requestConsoleLiffRelogin,
     } from '../../shared/js/console_liff_session.js';
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
@@ -303,6 +305,7 @@
       IDB_VER,
       IDB_STORE,
       IDB_KEY,
+      RELLOGIN_APPLY_KEY,
       MAX_LOG_LINES,
       LIFF_INIT_TIMEOUT_MS,
     } = window.__REPORT_V3_CONFIG__;
@@ -933,7 +936,6 @@
       let progressInterval = null;
       let currentFakeProgress = 0;
       let userProfile = null;
-      let reportV3IdToken = '';
       /** 從 IndexedDB 還原的照片（無法寫回 input，改由程式直接送） */
       let restoredPhotoInfos = null;
       let staticUiBound = false;
@@ -964,12 +966,28 @@
         updateStatus('正在確認您的身分，請稍候。表單可以先填。', 'info');
       }
 
+      async function restoreFormDraftAfterRelogin() {
+        try {
+          if (sessionStorage.getItem(RELOGIN_APPLY_KEY) !== '1') return;
+          sessionStorage.removeItem(RELOGIN_APPLY_KEY);
+          const rec = await idbLoadPending();
+          if (rec && userProfile && rec.userId === userProfile.userId) {
+            applyPendingRecord(rec);
+            updateStatus('已從草稿恢復表單內容，請確認後再提交。', 'info');
+          }
+          await initPendingFromIdb();
+        } catch (e) {
+          reportTrace('[IDB] 重登後恢復草稿失敗: ' + (e.message || e));
+        }
+      }
+
       function setIdentityReady() {
         identityReady = true;
         submitButton.disabled = false;
         setSubmitIdleLabel('提交回報');
         hideLiffRetry();
         updateStatus('', 'info');
+        void restoreFormDraftAfterRelogin();
       }
 
       function setIdentityFailed() {
@@ -1014,10 +1032,6 @@
           return false;
         }
         userProfile = await liff.getProfile();
-        try {
-          const tok = liff.getIDToken && liff.getIDToken();
-          if (tok && isLiffIdTokenFresh(tok)) reportV3IdToken = tok;
-        } catch (eTok) { /* ignore */ }
         return true;
       }
 
@@ -1316,6 +1330,46 @@
       }
 
       let uploadedChunksBytes = 0;
+
+      async function handleIdentityExpiredBeforeGasSubmit(ctx) {
+        const {
+          cleanProjectId,
+          batchId,
+          allPhotosInfo,
+          shouldCompress,
+          idbPriorSnapshot,
+          statsTimer,
+        } = ctx;
+        try {
+          await writeSessionPayloadToIdbBegin({
+            cleanProjectId,
+            batchId,
+            userProfile,
+            allPhotosInfo,
+            shouldCompress,
+            workType: document.getElementById('workType').value,
+            workDescription: document.getElementById('workDescription').value,
+            problemDescription: document.getElementById('problemDescription').value,
+            idbPriorSnapshot,
+          });
+          sessionStorage.setItem(RELOGIN_APPLY_KEY, '1');
+          reportTrace('[IDB] 身分過期：已寫入草稿並標記重登後自動帶入');
+        } catch (e) {
+          reportTrace('[IDB] 身分過期草稿寫入失敗: ' + (e.message || e));
+        }
+        requestConsoleLiffRelogin();
+        clearInterval(statsTimer);
+        clearV3SubmitSession();
+        setLoadingState(false);
+        progressContainer.classList.add('hidden');
+        updateStatus(
+          isConsoleEmbeddedInHub_()
+            ? '登入已過期，已向主控台請求更新身分；完成後會自動帶入草稿。'
+            : '登入已過期，正在重新取得身分；完成後會自動帶入草稿。',
+          'info'
+        );
+      }
+
       /** 處理表單提交 
        * @param {Event} event - 表單提交事件
        * @returns {Promise<void>} - 無返回值
@@ -1469,16 +1523,24 @@
 
           const prevFail = idbSnapshotForPayload ? compactFailureForPayload(idbSnapshotForPayload) : null;
           const sim = isDevSimAllowed() ? getDevSimMode() : 'none';
-          const idToken = await getConsoleLiffIdToken({ allowParent: false, attemptReloginOnExpired: true });
+          const idToken = await getConsoleLiffIdToken({ allowParent: true, attemptReloginOnExpired: true });
           const isLocalHost = ['127.0.0.1', 'localhost'].includes(window.location.hostname);
           if (!idToken && userProfile && !(ENABLE_LOCAL_TEST_BYPASS && isLocalHost)) {
-            let rawExpired = false;
+            let raw = '';
             try {
-              const raw = (typeof liff !== 'undefined' && liff.getIDToken) ? (liff.getIDToken() || '') : '';
-              rawExpired = !!raw && !isLiffIdTokenFresh(raw);
+              raw = (typeof liff !== 'undefined' && liff.getIDToken) ? (liff.getIDToken() || '') : '';
             } catch (eRaw) { /* ignore */ }
-            if (rawExpired) {
-              throw new Error('登入已過期，正在重新取得身分；完成後請再按提交（表單內容已保留）');
+            const expired = !!raw && !isLiffIdTokenFresh(raw);
+            if (expired || (isConsoleEmbeddedInHub_() && raw)) {
+              await handleIdentityExpiredBeforeGasSubmit({
+                cleanProjectId,
+                batchId,
+                allPhotosInfo,
+                shouldCompress,
+                idbPriorSnapshot: idbSnapshotForPayload,
+                statsTimer,
+              });
+              return;
             }
           }
           const finalFormData = mergeConsoleLiffAuth({
