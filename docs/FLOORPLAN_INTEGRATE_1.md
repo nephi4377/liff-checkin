@@ -5,11 +5,11 @@
 ## 獨立測試連結（jsDelivr，指向本分支）
 
 - **一鍵 3D 室內漫遊預覽**（釘選 commit，與驗收 SHA 一致）：  
-  `https://cdn.jsdelivr.net/gh/nephi4377/liff-checkin@5e67024dc9fd4b13e9dc40d360ec444afd81d42c/modules/InteriorDesigned/LP_LayoutPlanner_3d_walk_preview.html`
+  `https://cdn.jsdelivr.net/gh/nephi4377/liff-checkin@9bb08678377e041a4f767fb62366e8b9a00dd5e0/modules/InteriorDesigned/LP_LayoutPlanner_3d_walk_preview.html`
 - **3D 鳥瞰＋快照／預設角度**（`lp3d=orbit`）：  
-  `https://cdn.jsdelivr.net/gh/nephi4377/liff-checkin@5e67024dc9fd4b13e9dc40d360ec444afd81d42c/modules/InteriorDesigned/LP_LayoutPlanner?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=orbit`
+  `https://cdn.jsdelivr.net/gh/nephi4377/liff-checkin@9bb08678377e041a4f767fb62366e8b9a00dd5e0/modules/InteriorDesigned/LP_LayoutPlanner?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=orbit`
 - **完整 LayoutPlanner（2D＋3D）**：  
-  `https://cdn.jsdelivr.net/gh/nephi4377/liff-checkin@5e67024dc9fd4b13e9dc40d360ec444afd81d42c/modules/InteriorDesigned/LP_LayoutPlanner?lpPreview=1`
+  `https://cdn.jsdelivr.net/gh/nephi4377/liff-checkin@9bb08678377e041a4f767fb62366e8b9a00dd5e0/modules/InteriorDesigned/LP_LayoutPlanner?lpPreview=1`
 
 本機：`npx --yes serve@14 -l 8080 .` 後開  
 `http://127.0.0.1:8080/modules/InteriorDesigned/LP_LayoutPlanner_3d_walk_preview.html`
