@@ -43,7 +43,9 @@ function bootContext(extra) {
   return vm.createContext(Object.assign({
     window: win,
     document: win.document,
-    URLSearchParams
+    URLSearchParams,
+    setTimeout,
+    clearTimeout
   }, extra || {}));
 }
 
@@ -71,7 +73,7 @@ test('fetchAttachmentUrls throws after retry when API keeps failing', async () =
     );
   } catch (e) {
     threw = true;
-    assert.ok(e instanceof Error);
+    assert.equal(e && e.code, 'ATTACH_FETCH_FAILED');
   }
   assert.equal(threw, true, 'fetchAttachmentUrls should throw on persistent API failure');
   assert.equal(calls, 2, 'should auto-retry once');
@@ -87,7 +89,7 @@ test('makeButton shows retry label on failure, not hidden empty state', async ()
     'AccountingLightbox.makeButton({ auth: {} }, { payment_request_id: "pr1" }, "看單據")',
     ctx
   );
-  await new Promise((r) => setTimeout(r, 20));
+  await new Promise((r) => setTimeout(r, 500));
   assert.equal(btn.textContent, '單據讀不到，再試');
   assert.notEqual(btn.style.display, 'none');
 });
@@ -102,7 +104,7 @@ test('makeButton shows 沒有單據 only when API succeeds with empty list', asy
     'AccountingLightbox.makeButton({ auth: {} }, { payment_request_id: "pr1" }, "看單據")',
     ctx
   );
-  await new Promise((r) => setTimeout(r, 20));
+  await new Promise((r) => setTimeout(r, 50));
   assert.equal(btn.textContent, '沒有單據');
   assert.equal(btn.disabled, true);
 });

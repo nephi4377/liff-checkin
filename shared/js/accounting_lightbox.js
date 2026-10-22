@@ -78,7 +78,7 @@ var AccountingLightbox = (function () {
       link.href = u;
       link.style.display = '';
       link.textContent = '在新分頁開啟';
-    } else if (/^data:/i.test(String(u || ''))) {
+    } else if (/^data:image\//i.test(String(u || ''))) {
       link.href = u;
       link.style.display = '';
       link.textContent = '在新分頁開啟';
@@ -184,6 +184,7 @@ var AccountingLightbox = (function () {
     try {
       return await fetchAttachmentUrlsOnce_(session, filter);
     } catch (e1) {
+      await new Promise(function (r) { setTimeout(r, 400); });
       try {
         return await fetchAttachmentUrlsOnce_(session, filter);
       } catch (e2) {
