@@ -4078,10 +4078,28 @@ function initLayoutPlanner3D() {
     });
 }
 
+function bindGlobalPointerEndForDrag() {
+    const finish = () => endDrag();
+    window.addEventListener('mouseup', finish);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+    window.addEventListener('blur', () => {
+        if (
+            isDraggingCab
+            || isResizing
+            || isDraggingVertex
+            || isDraggingAnnotation
+            || isDraggingBg
+        ) {
+            finish();
+        }
+    });
+}
+
 function bindEventListeners() {
     initLayoutPlanner3D();
-    // 全域事件
-    document.addEventListener('mouseup', endDrag);
+    // 全域事件（含視窗外放開，避免 undo 手勢卡住）
+    bindGlobalPointerEndForDrag();
     document.addEventListener('mousemove', handleGlobalMove);
     document.addEventListener('keydown', handleKeyDown);
     document.body.addEventListener('click', handleGlobalClick);

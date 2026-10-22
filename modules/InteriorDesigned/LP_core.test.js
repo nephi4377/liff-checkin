@@ -48,12 +48,12 @@ describe('computeObjectSnapDelta', () => {
         expect(dx).toBe(-2);
         expect(dy).toBe(0);
     });
-    it('中心吸附至參考中心（需有實際位移）', () => {
-        const moving = { minX: 47, minY: 47, maxX: 151, maxY: 151 };
+    it('中心吸附至參考中心（52–152 vs 0–100，閾值 5）', () => {
+        const moving = { minX: 52, minY: 0, maxX: 152, maxY: 100 };
         const refs = [{ minX: 0, minY: 0, maxX: 100, maxY: 100 }];
         const { dx, dy } = computeObjectSnapDelta(moving, refs, 5);
-        expect(dx).toBe(1);
-        expect(dy).toBe(1);
+        expect(dx).toBe(-2);
+        expect(dy).toBe(0);
     });
     it('超出閾值不吸附', () => {
         const moving = { minX: 120, minY: 0, maxX: 220, maxY: 100 };
