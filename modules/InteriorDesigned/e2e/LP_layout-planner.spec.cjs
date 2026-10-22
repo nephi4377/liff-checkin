@@ -1,4 +1,33 @@
 const { test, expect } = require('@playwright/test');
+const path = require('path');
+
+const ARTIFACTS = process.env.LP_E2E_ARTIFACTS || '/opt/cursor/artifacts';
+
+async function get3dCanvasCoverage(page) {
+  return page.evaluate(() => {
+    const overlay = document.getElementById('lp-3d-overlay');
+    const canvas = document.querySelector('#lp-3d-viewport canvas');
+    if (!overlay || !canvas) return null;
+    const or = overlay.getBoundingClientRect();
+    const cr = canvas.getBoundingClientRect();
+    const blockers = ['left-rail', 'right-rail', 'canvas-header', 'minimized-bar'];
+    const overlaps = blockers.map((id) => {
+      const el = document.getElementById(id);
+      if (!el) return null;
+      const style = window.getComputedStyle(el);
+      if (style.visibility === 'hidden' || style.display === 'none') return null;
+      const r = el.getBoundingClientRect();
+      const hit = !(cr.right < r.left || cr.left > r.right || cr.bottom < r.top || cr.top > r.bottom);
+      return hit ? id : null;
+    }).filter(Boolean);
+    return {
+      overlay: { w: or.width, h: or.height },
+      canvas: { w: cr.width, h: cr.height, top: cr.top, left: cr.left },
+      viewport: { w: window.innerWidth, h: window.innerHeight },
+      overlaps,
+    };
+  });
+}
 
 test.describe('LayoutPlanner E2E', () => {
   test('頁面載入：工具箱可見、非手機遮罩、施工面積欄位存在', async ({ page }) => {
@@ -91,6 +120,40 @@ test.describe('LayoutPlanner E2E', () => {
     await expect(page.locator('#lp-3d-viewport canvas')).toHaveCount(1);
   });
 
+  test('3D 畫布全螢幕不被側欄或底列遮住（桌機）', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#toggle-3d-view-btn').click();
+    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/);
+    await page.waitForTimeout(2500);
+
+    const cov = await get3dCanvasCoverage(page);
+    expect(cov).not.toBeNull();
+    expect(cov.overlaps).toEqual([]);
+    expect(cov.canvas.w).toBeGreaterThan(cov.viewport.w * 0.92);
+    expect(cov.canvas.h).toBeGreaterThan(cov.viewport.h * 0.55);
+
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-orbit-desktop.png'), fullPage: false });
+    await page.locator('#lp-3d-btn-walk').click();
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-walk-desktop.png'), fullPage: false });
+  });
+
+  test('3D 畫布在小視窗仍佔滿可視區（手機寬度）', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => document.getElementById('toggle-3d-view-btn')?.click());
+    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/);
+    await page.waitForTimeout(2500);
+
+    const cov = await get3dCanvasCoverage(page);
+    expect(cov).not.toBeNull();
+    expect(cov.overlaps).toEqual([]);
+    expect(cov.canvas.w).toBeGreaterThan(360);
+
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-orbit-mobile.png'), fullPage: false });
+  });
+
   test('3D 檢視切換不造成頁面錯誤', async ({ page }) => {
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
@@ -102,7 +165,7 @@ test.describe('LayoutPlanner E2E', () => {
     await page.waitForTimeout(3000);
     expect(errors, `頁面錯誤: ${errors.join('; ')}`).toHaveLength(0);
 
-    await page.locator('#toggle-3d-view-btn').click();
+    await page.locator('#lp-3d-btn-exit-2d').click();
     await expect(page.locator('body')).not.toHaveClass(/lp-3d-mode/);
   });
 

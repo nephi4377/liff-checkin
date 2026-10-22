@@ -1,0 +1,222 @@
+import * as THREE from 'three';
+import { pointInPolygonXZ } from './LP_3D_scene.js';
+
+const MOVE_SPEED_CM_S = 220;
+const LOOK_SENS = 0.0022;
+const PITCH_LIMIT = Math.PI / 2 - 0.08;
+
+/**
+ * @param {{ camera: import('three').PerspectiveCamera, domElement: HTMLElement, eyeHeightCm: number, getWalkBounds: () => { ring?: {x:number,z:number}[] }|null }} opts
+ */
+export function createWalkController(opts) {
+    const { camera, domElement, eyeHeightCm, getWalkBounds } = opts;
+    let active = false;
+    let yaw = 0;
+    let pitch = 0;
+    const keys = new Set();
+    let pointerDown = false;
+    let lastX = 0;
+    let lastY = 0;
+    let touchMoveId = null;
+    let touchLookId = null;
+    const touchMove = { x: 0, y: 0 };
+    const touchLook = { dx: 0, dy: 0 };
+
+    function clampInsideBounds(x, z) {
+        const bounds = getWalkBounds();
+        const ring = bounds?.ring;
+        if (!ring || ring.length < 3) return { x, z };
+        if (pointInPolygonXZ(x, z, ring)) return { x, z };
+        let best = { x, z };
+        let bestD = Infinity;
+        for (let i = 0; i < ring.length; i++) {
+            const a = ring[i];
+            const b = ring[(i + 1) % ring.length];
+            const t = Math.max(0, Math.min(1,
+                ((x - a.x) * (b.x - a.x) + (z - a.z) * (b.z - a.z))
+                / (Math.max((b.x - a.x) ** 2 + (b.z - a.z) ** 2, 1e-6)),
+            ));
+            const px = a.x + t * (b.x - a.x);
+            const pz = a.z + t * (b.z - a.z);
+            const d = (x - px) ** 2 + (z - pz) ** 2;
+            if (d < bestD) {
+                bestD = d;
+                best = { x: px, z: pz };
+            }
+        }
+        const shrink = 8;
+        const cx = ring.reduce((s, p) => s + p.x, 0) / ring.length;
+        const cz = ring.reduce((s, p) => s + p.z, 0) / ring.length;
+        const dx = cx - best.x;
+        const dz = cz - best.z;
+        const len = Math.hypot(dx, dz) || 1;
+        return { x: best.x + (dx / len) * shrink, z: best.z + (dz / len) * shrink };
+    }
+
+    function applyCameraRotation() {
+        camera.rotation.order = 'YXZ';
+        camera.rotation.y = yaw;
+        camera.rotation.x = pitch;
+    }
+
+    function onKeyDown(e) {
+        if (!active) return;
+        if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+            keys.add(e.code);
+            e.preventDefault();
+        }
+    }
+
+    function onKeyUp(e) {
+        keys.delete(e.code);
+    }
+
+    function onMouseDown(e) {
+        if (!active || e.button !== 0) return;
+        pointerDown = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+    }
+
+    function onMouseUp() {
+        pointerDown = false;
+    }
+
+    function onMouseMove(e) {
+        if (!active || !pointerDown) return;
+        yaw -= (e.clientX - lastX) * LOOK_SENS;
+        pitch -= (e.clientY - lastY) * LOOK_SENS;
+        pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch));
+        lastX = e.clientX;
+        lastY = e.clientY;
+        applyCameraRotation();
+    }
+
+    function onTouchStart(e) {
+        if (!active) return;
+        for (const t of e.changedTouches) {
+            if (t.clientX < domElement.clientWidth * 0.45 && touchMoveId === null) {
+                touchMoveId = t.identifier;
+                touchMove.x = t.clientX;
+                touchMove.y = t.clientY;
+            } else if (touchLookId === null) {
+                touchLookId = t.identifier;
+                touchLook.dx = 0;
+                touchLook.dy = 0;
+                lastX = t.clientX;
+                lastY = t.clientY;
+            }
+        }
+    }
+
+    function onTouchMove(e) {
+        if (!active) return;
+        for (const t of e.changedTouches) {
+            if (t.identifier === touchMoveId) {
+                const dx = t.clientX - touchMove.x;
+                const dy = t.clientY - touchMove.y;
+                touchMove.x = t.clientX;
+                touchMove.y = t.clientY;
+                const forward = new THREE.Vector3(0, 0, -1).applyEuler(camera.rotation);
+                const right = new THREE.Vector3(1, 0, 0).applyEuler(camera.rotation);
+                forward.y = 0;
+                right.y = 0;
+                forward.normalize();
+                right.normalize();
+                const step = 0.35;
+                camera.position.addScaledVector(forward, -dy * step);
+                camera.position.addScaledVector(right, dx * step);
+            } else if (t.identifier === touchLookId) {
+                yaw -= (t.clientX - lastX) * LOOK_SENS * 1.4;
+                pitch -= (t.clientY - lastY) * LOOK_SENS * 1.4;
+                pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch));
+                lastX = t.clientX;
+                lastY = t.clientY;
+                applyCameraRotation();
+            }
+        }
+        e.preventDefault();
+    }
+
+    function onTouchEnd(e) {
+        for (const t of e.changedTouches) {
+            if (t.identifier === touchMoveId) touchMoveId = null;
+            if (t.identifier === touchLookId) touchLookId = null;
+        }
+    }
+
+    function update(deltaSec) {
+        if (!active) return;
+        const forward = new THREE.Vector3(0, 0, -1).applyEuler(camera.rotation);
+        const right = new THREE.Vector3(1, 0, 0).applyEuler(camera.rotation);
+        forward.y = 0;
+        right.y = 0;
+        forward.normalize();
+        right.normalize();
+        let moveX = 0;
+        let moveZ = 0;
+        if (keys.has('KeyW') || keys.has('ArrowUp')) moveZ += 1;
+        if (keys.has('KeyS') || keys.has('ArrowDown')) moveZ -= 1;
+        if (keys.has('KeyA') || keys.has('ArrowLeft')) moveX -= 1;
+        if (keys.has('KeyD') || keys.has('ArrowRight')) moveX += 1;
+        if (moveX !== 0 || moveZ !== 0) {
+            const len = Math.hypot(moveX, moveZ) || 1;
+            moveX /= len;
+            moveZ /= len;
+            const dist = MOVE_SPEED_CM_S * deltaSec;
+            camera.position.addScaledVector(forward, moveZ * dist);
+            camera.position.addScaledVector(right, moveX * dist);
+        }
+        const clamped = clampInsideBounds(camera.position.x, camera.position.z);
+        camera.position.x = clamped.x;
+        camera.position.z = clamped.z;
+        camera.position.y = eyeHeightCm;
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    domElement.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('mousemove', onMouseMove);
+    domElement.addEventListener('touchstart', onTouchStart, { passive: false });
+    domElement.addEventListener('touchmove', onTouchMove, { passive: false });
+    domElement.addEventListener('touchend', onTouchEnd);
+    domElement.addEventListener('touchcancel', onTouchEnd);
+
+    return {
+        setActive(on) {
+            active = on;
+            if (!on) keys.clear();
+        },
+        isActive: () => active,
+        syncFromCamera() {
+            const e = new THREE.Euler(0, 0, 0, 'YXZ');
+            e.setFromQuaternion(camera.quaternion);
+            yaw = e.y;
+            pitch = e.x;
+        },
+        setPosition(x, z) {
+            const c = clampInsideBounds(x, z);
+            camera.position.set(c.x, eyeHeightCm, c.z);
+        },
+        lookAt(x, z) {
+            const dx = x - camera.position.x;
+            const dz = z - camera.position.z;
+            yaw = Math.atan2(-dx, -dz);
+            pitch = 0;
+            applyCameraRotation();
+        },
+        update,
+        dispose() {
+            window.removeEventListener('keydown', onKeyDown);
+            window.removeEventListener('keyup', onKeyUp);
+            domElement.removeEventListener('mousedown', onMouseDown);
+            window.removeEventListener('mouseup', onMouseUp);
+            window.removeEventListener('mousemove', onMouseMove);
+            domElement.removeEventListener('touchstart', onTouchStart);
+            domElement.removeEventListener('touchmove', onTouchMove);
+            domElement.removeEventListener('touchend', onTouchEnd);
+            domElement.removeEventListener('touchcancel', onTouchEnd);
+        },
+    };
+}

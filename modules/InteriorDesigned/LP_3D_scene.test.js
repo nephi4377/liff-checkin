@@ -114,6 +114,40 @@ describe('buildLayout3DDescriptor', () => {
         expect(desc.walls).toHaveLength(1);
         expect(desc.fixtures).toHaveLength(2);
         expect(desc.fixtures.find((f) => f.id === 'x1')).toBeUndefined();
+        expect(desc.floors).toEqual([]);
+        expect(desc.ceilings).toEqual([]);
+    });
+
+    it('包含地板與天花區域', () => {
+        const desc = buildLayout3DDescriptor({
+            workspaceSize: 2000,
+            drawnAreas: [
+                {
+                    id: 'f1',
+                    type: 'floor',
+                    points: [
+                        { x: 100, y: 100 },
+                        { x: 200, y: 100 },
+                        { x: 200, y: 200 },
+                        { x: 100, y: 200 },
+                    ],
+                },
+                {
+                    id: 'c1',
+                    type: 'ceiling',
+                    points: [
+                        { x: 100, y: 100 },
+                        { x: 200, y: 100 },
+                        { x: 200, y: 200 },
+                        { x: 100, y: 200 },
+                    ],
+                },
+            ],
+            placedCabinets: [],
+        });
+        expect(desc.floors).toHaveLength(1);
+        expect(desc.ceilings).toHaveLength(1);
+        expect(desc.walkBounds?.ring).toBeDefined();
     });
 });
 

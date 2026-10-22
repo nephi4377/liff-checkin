@@ -2,6 +2,11 @@
  * LayoutPlanner 2D → 3D 場景描述（無 Three.js 依賴，可單元測試）
  */
 
+import {
+    resolveFixtureDisplayCategory,
+    resolveFixtureDisplayHeightCm,
+} from './LP_3D_furniture.js';
+
 export const LP_3D_DEFAULTS = {
     WALL_HEIGHT_CM: 280,
     CABINET_HEIGHT_CM: 90,
@@ -12,6 +17,9 @@ export const LP_3D_DEFAULTS = {
     WALL_CUT_MARGIN_W_CM: 6,
     WALL_CUT_MARGIN_H_CM: 4,
     WALL_CUT_DEPTH_CM: 36,
+    FLOOR_THICKNESS_CM: 2,
+    CEILING_THICKNESS_CM: 2,
+    WALK_EYE_HEIGHT_CM: 160,
 };
 
 const DOOR_WINDOW_GROUPS = new Set(['門窗工程', '門片']);
@@ -52,6 +60,17 @@ export function resolvePlacedCabinet3DKind(cab) {
 }
 
 /** 畫布座標 → 以工作區中心為原點的 XZ（cm） */
+export function ringCentroidXZ(ring) {
+    if (!ring?.length) return { x: 0, z: 0 };
+    let x = 0;
+    let z = 0;
+    for (const p of ring) {
+        x += p.x;
+        z += p.z;
+    }
+    return { x: x / ring.length, z: z / ring.length };
+}
+
 export function canvasToSceneXZ(x, y, workspaceSize) {
     const half = workspaceSize / 2;
     return { x: x - half, z: y - half };
@@ -155,17 +174,42 @@ function fixtureVerticalExtents(kind, defaults, cab) {
     return { baseYCm: 0, heightCm: customH };
 }
 
+function mapAreaRingToScene(area, workspaceSize) {
+    return mapRingToScene(area.points, workspaceSize);
+}
+
 /**
- * @returns {{ workspaceSize: number, walls: object[], fixtures: object[] }}
+ * @returns {{ workspaceSize: number, walls: object[], fixtures: object[], floors: object[], ceilings: object[], walkBounds: object|null }}
  */
 export function buildLayout3DDescriptor(layout, options = {}) {
     const defaults = { ...LP_3D_DEFAULTS, ...options };
     const workspaceSize = layout.workspaceSize || 2000;
     const walls = [];
     const fixtures = [];
+    const floors = [];
+    const ceilings = [];
+    const wallHeight = defaults.WALL_HEIGHT_CM;
 
     for (const area of layout.drawnAreas || []) {
-        if (area.type !== 'wall' || !area.points || area.points.length < 3) continue;
+        if (!area.points || area.points.length < 3) continue;
+        if (area.type === 'floor') {
+            floors.push({
+                id: area.id,
+                ring: mapAreaRingToScene(area, workspaceSize),
+                thicknessCm: defaults.FLOOR_THICKNESS_CM,
+            });
+            continue;
+        }
+        if (area.type === 'ceiling') {
+            ceilings.push({
+                id: area.id,
+                ring: mapAreaRingToScene(area, workspaceSize),
+                baseYCm: wallHeight,
+                thicknessCm: defaults.CEILING_THICKNESS_CM,
+            });
+            continue;
+        }
+        if (area.type !== 'wall') continue;
         const thickness = area.thickness || 15;
         const signed = signedPolygonArea(area.points);
         const dist = signed < 0 ? -thickness : thickness;
@@ -184,13 +228,18 @@ export function buildLayout3DDescriptor(layout, options = {}) {
         if (w <= 0 || d <= 0) continue;
         const kind = resolvePlacedCabinet3DKind(cab);
         if (!kind) continue;
-        const { baseYCm, heightCm } = fixtureVerticalExtents(kind, defaults, cab);
+        const displayCategory = resolveFixtureDisplayCategory(cab, kind);
+        let { baseYCm, heightCm } = fixtureVerticalExtents(kind, defaults, cab);
+        if (kind === 'cabinet') {
+            heightCm = resolveFixtureDisplayHeightCm(displayCategory, cab, defaults.CABINET_HEIGHT_CM);
+        }
         const cx = cab.x + w / 2;
         const cy = cab.y + d / 2;
         const center = canvasToSceneXZ(cx, cy, workspaceSize);
         fixtures.push({
             id: cab.id,
             kind,
+            displayCategory,
             widthCm: w,
             depthCm: d,
             heightCm,
@@ -202,5 +251,12 @@ export function buildLayout3DDescriptor(layout, options = {}) {
         });
     }
 
-    return { workspaceSize, walls, fixtures };
+    let walkBounds = null;
+    if (floors.length > 0) {
+        walkBounds = { ring: floors[0].ring };
+    } else if (walls.length > 0) {
+        walkBounds = { ring: walls[0].inner };
+    }
+
+    return { workspaceSize, walls, fixtures, floors, ceilings, walkBounds };
 }

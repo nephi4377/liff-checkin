@@ -61,6 +61,9 @@ async function ensureLp3dViewer() {
                     placedCabinets,
                     drawnAreas,
                 }),
+                onRequestClose: () => {
+                    document.getElementById('toggle-3d-view-btn')?.click();
+                },
             });
             lp3dViewer = viewer;
             return viewer;
