@@ -117,6 +117,116 @@ function snapAlongAxis(min, max, targets, threshold) {
     return bestDelta;
 }
 
+/**
+ * 鏡像後 DOM 控點方向與視覺邊不一致時，將 w/e 對調（n/s 不受 scaleX 影響）。
+ * @param {'w'|'e'|'n'|'s'|string|null} direction
+ * @param {boolean} mirrored
+ */
+export function mirrorAwareResizeDirection(direction, mirrored) {
+    if (!mirrored || !direction) return direction;
+    if (direction === 'w') return 'e';
+    if (direction === 'e') return 'w';
+    return direction;
+}
+
+/**
+ * 依旋轉後的局部滑鼠位移，計算櫃體縮放後的 top-left 與尺寸（純函式，供 Vitest／鏡像修正）。
+ * @param {{
+ *   startX: number, startY: number, startW: number, startH: number,
+ *   rotationDeg: number, mirrored?: boolean, direction: string,
+ *   localDx: number, localDy: number, adjustable?: string, minSize?: number
+ * }} params
+ * @returns {{ x: number, y: number, currentW: number, currentH: number }}
+ */
+export function computeCabinetResizeGeometry(params) {
+    const {
+        startX,
+        startY,
+        startW,
+        startH,
+        rotationDeg,
+        mirrored = false,
+        direction,
+        localDx,
+        localDy,
+        adjustable = 'both',
+        minSize = 20,
+    } = params;
+
+    const rad = (rotationDeg * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const projDx = localDx * cos + localDy * sin;
+    const projDy = -localDx * sin + localDy * cos;
+
+    const effectiveDir = mirrorAwareResizeDirection(direction, mirrored);
+    let newW = startW;
+    let newH = startH;
+    let localShiftX = 0;
+    let localShiftY = 0;
+
+    switch (effectiveDir) {
+        case 'w':
+            newW = Math.max(minSize, startW - projDx);
+            localShiftX = -(newW - startW) / 2;
+            break;
+        case 'e':
+            newW = Math.max(minSize, startW + projDx);
+            localShiftX = (newW - startW) / 2;
+            break;
+        case 'n':
+            newH = Math.max(minSize, startH - projDy);
+            localShiftY = -(newH - startH) / 2;
+            break;
+        case 's':
+            newH = Math.max(minSize, startH + projDy);
+            localShiftY = (newH - startH) / 2;
+            break;
+        default:
+            break;
+    }
+
+    if (adjustable === 'width' && (effectiveDir === 'n' || effectiveDir === 's')) newH = startH;
+    if (adjustable === 'depth' && (effectiveDir === 'w' || effectiveDir === 'e')) newW = startW;
+
+    const globalShiftX = localShiftX * cos - localShiftY * sin;
+    const globalShiftY = localShiftX * sin + localShiftY * cos;
+    const oldCx = startX + startW / 2;
+    const oldCy = startY + startH / 2;
+    const newCx = oldCx + globalShiftX;
+    const newCy = oldCy + globalShiftY;
+
+    return {
+        x: newCx - newW / 2,
+        y: newCy - newH / 2,
+        currentW: Math.round(newW),
+        currentH: Math.round(newH),
+    };
+}
+
+/**
+ * 將櫃體繞畫布點旋轉 deltaDeg，回傳新位置與角度（不變更尺寸）。
+ * @param {{ x: number, y: number, currentW: number, currentH: number, rotation: number }} cab
+ */
+export function rotateCabinetAroundPivot(cab, pivotX, pivotY, deltaDeg) {
+    const cx = cab.x + cab.currentW / 2;
+    const cy = cab.y + cab.currentH / 2;
+    const rad = (deltaDeg * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const dx = cx - pivotX;
+    const dy = cy - pivotY;
+    const ncx = pivotX + dx * cos - dy * sin;
+    const ncy = pivotY + dx * sin + dy * cos;
+    let rotation = (cab.rotation + deltaDeg) % 360;
+    if (rotation < 0) rotation += 360;
+    return {
+        x: ncx - cab.currentW / 2,
+        y: ncy - cab.currentH / 2,
+        rotation,
+    };
+}
+
 // --- SVG 消毒 -------------------------------------------------------------
 
 /**

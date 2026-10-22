@@ -8,6 +8,9 @@ import {
     axisAlignedBoundsFromPoints,
     computeObjectSnapDelta,
     snapTranslationToGrid,
+    mirrorAwareResizeDirection,
+    computeCabinetResizeGeometry,
+    rotateCabinetAroundPivot,
 } from './LP_core.js';
 
 describe('cmToFeet', () => {
@@ -45,11 +48,12 @@ describe('computeObjectSnapDelta', () => {
         expect(dx).toBe(-2);
         expect(dy).toBe(0);
     });
-    it('中心吸附至參考中心', () => {
-        const moving = { minX: 48, minY: 48, maxX: 152, maxY: 152 };
+    it('中心吸附至參考中心（需有實際位移）', () => {
+        const moving = { minX: 47, minY: 47, maxX: 151, maxY: 151 };
         const refs = [{ minX: 0, minY: 0, maxX: 100, maxY: 100 }];
-        const { dx } = computeObjectSnapDelta(moving, refs, 5);
-        expect(dx).toBe(0);
+        const { dx, dy } = computeObjectSnapDelta(moving, refs, 5);
+        expect(dx).toBe(1);
+        expect(dy).toBe(1);
     });
     it('超出閾值不吸附', () => {
         const moving = { minX: 120, minY: 0, maxX: 220, maxY: 100 };
@@ -75,6 +79,78 @@ describe('axisAlignedBoundsFromPoints', () => {
     it('計算旋轉後點集外框', () => {
         const b = axisAlignedBoundsFromPoints([{ x: 10, y: 5 }, { x: 30, y: 25 }]);
         expect(b).toEqual({ minX: 10, minY: 5, maxX: 30, maxY: 25 });
+    });
+});
+
+describe('mirrorAwareResizeDirection', () => {
+    it('鏡像時 w/e 對調', () => {
+        expect(mirrorAwareResizeDirection('w', true)).toBe('e');
+        expect(mirrorAwareResizeDirection('e', true)).toBe('w');
+        expect(mirrorAwareResizeDirection('n', true)).toBe('n');
+    });
+});
+
+describe('computeCabinetResizeGeometry', () => {
+    const base = {
+        startX: 100,
+        startY: 50,
+        startW: 200,
+        startH: 80,
+        rotationDeg: 0,
+        adjustable: 'both',
+    };
+
+    it('未鏡像：拉東側控點增加寬度', () => {
+        const r = computeCabinetResizeGeometry({
+            ...base,
+            mirrored: false,
+            direction: 'e',
+            localDx: 20,
+            localDy: 0,
+        });
+        expect(r.currentW).toBe(220);
+        expect(r.x).toBe(100);
+    });
+
+    it('已鏡像：DOM 西側控點對應視覺東側，加寬與未鏡像拉東一致', () => {
+        const normal = computeCabinetResizeGeometry({
+            ...base,
+            mirrored: false,
+            direction: 'e',
+            localDx: 20,
+            localDy: 0,
+        });
+        const mirrored = computeCabinetResizeGeometry({
+            ...base,
+            mirrored: true,
+            direction: 'w',
+            localDx: 20,
+            localDy: 0,
+        });
+        expect(mirrored.currentW).toBe(normal.currentW);
+        expect(mirrored.x).toBe(normal.x);
+    });
+
+    it('旋轉 90° 且鏡像：DOM 西控點拖曳加寬', () => {
+        const r = computeCabinetResizeGeometry({
+            ...base,
+            rotationDeg: 90,
+            mirrored: true,
+            direction: 'w',
+            localDx: 0,
+            localDy: 25,
+        });
+        expect(r.currentW).toBe(225);
+    });
+});
+
+describe('rotateCabinetAroundPivot', () => {
+    it('繞自身中心旋轉 90° 位置不變', () => {
+        const cab = { x: 10, y: 20, currentW: 100, currentH: 40, rotation: 0 };
+        const next = rotateCabinetAroundPivot(cab, 60, 40, 90);
+        expect(Math.round(next.x)).toBe(10);
+        expect(Math.round(next.y)).toBe(20);
+        expect(next.rotation).toBe(90);
     });
 });
 
