@@ -56,9 +56,8 @@ function buildMockSheet() {
 
   rows.push(['簽約後續增減', '', '', '', '', '', '', '', '', '', '']);
 
-  const adjustAmounts = [-71400, 5000, 3200, 1000, 1100, 1200, 1300, 800, 900, 400, 410, 420, 430, 440, 300, 310, 320, 2000, 2100, 2200, 1500, 1600];
-  const lastAdjust = TARGET_ADJUST_SUM - adjustAmounts.reduce((a, b) => a + b, 0);
-  adjustAmounts.push(lastAdjust);
+  const adjustAmounts = [-71400, 5000, 3200, 1000, 1100, 1200, 1300, 800, 900, 400, 410, 420, 430, 440, 300, 310, 320, 2000, 2100, 2200, 1500];
+  adjustAmounts.push(TARGET_ADJUST_SUM - adjustAmounts.reduce((a, b) => a + b, 0));
 
   const names = [
     '拆除工程重新評估',
@@ -83,9 +82,8 @@ function buildMockSheet() {
     '陽台封窗2',
     '陽台封窗3',
     '客浴增項1',
-    '客浴增項2',
   ];
-  assert(names.length === 23 && adjustAmounts.length === 23, 'adjust 應 23 筆');
+  assert(names.length === 22 && adjustAmounts.length === 22, 'adjust 應 22 筆');
 
   pushAdjustSubHeader(rows, '餐廳');
   pushAdjustCompactRow(rows, names[0], '式', 1, adjustAmounts[0]);

@@ -5,7 +5,7 @@
  * 用法：
  *   node tools/run-budget-parse-778-local.mjs --xlsx "D:\path\quote.xlsx" --sheet 0818
  *
- * 預期（0818 真實案）：工項 100、建議 2、增減 23、含稅總計 1,592,099
+ * 預期（0818 真實案）：工項 100、建議 2、增減 22、增減加總 116,480、含稅總計 1,592,099
  */
 import { createRequire } from 'module';
 import { dirname, join, resolve } from 'path';
