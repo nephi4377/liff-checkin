@@ -1,0 +1,23 @@
+{
+  "success": true,
+  "employees": [
+    {
+      "userId": "Ud58333430513b7527106fa71d2e30151",
+      "userName": "測試管理員",
+      "displayName": "測試管理員",
+      "permission": 4,
+      "group": "台北",
+      "shiftStart": "08:30",
+      "shiftEnd": "17:30"
+    }
+  ],
+  "operator": {
+    "userId": "Ud58333430513b7527106fa71d2e30151",
+    "userName": "測試管理員",
+    "permission": 4,
+    "group": "台北"
+  },
+  "pendingRequests": [],
+  "pendingAppeals": [],
+  "todayPresence": {}
+}
