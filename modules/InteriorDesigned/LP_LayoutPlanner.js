@@ -120,6 +120,8 @@ let isDrawing = false;
 let currentDrawingType = null; // [v8.23 修復] 補回遺失的 global 變數
 let drawingType = null;
 let currentDrawingPoints = [];
+/** 進入繪圖模式時快取的既有區域頂點（供吸附） */
+let drawingSnapVertices = [];
 let drawnAreas = [];
 /** 報價單手動覆寫（lineKey → 欄位）；隨佈局儲存 */
 let quotationManualOverrides = {};
@@ -2013,7 +2015,7 @@ function handleGlobalMove(e) {
             y: mouseY,
             altKey: e.altKey,
             currentDrawingPoints,
-            areaVertices: collectVerticesFromDrawnAreas(drawnAreas),
+            areaVertices: drawingSnapVertices,
         });
         updateDrawingPreview({ x: resolved.x, y: resolved.y });
         return;
@@ -3470,6 +3472,7 @@ function startDrawing(type) {
     isDrawing = true;
     currentDrawingType = type;
     currentDrawingPoints = [];
+    drawingSnapVertices = collectVerticesFromDrawnAreas(drawnAreas);
     document.getElementById('drawing-overlay').style.display = 'block';
     document.getElementById('design-canvas').style.cursor = 'crosshair';
     document.getElementById('design-canvas').style.zIndex = '99';
@@ -3504,7 +3507,7 @@ function handleDrawingClick(e) {
             y,
             altKey: e.altKey,
             currentDrawingPoints,
-            areaVertices: collectVerticesFromDrawnAreas(drawnAreas),
+            areaVertices: drawingSnapVertices,
         });
         if (resolved.snapToStart && currentDrawingPoints.length > 2) {
             finishDrawing();
@@ -3700,6 +3703,7 @@ function finishDrawing() {
 function cancelDrawing(silent = false) {
     isDrawing = false;
     currentDrawingPoints = [];
+    drawingSnapVertices = [];
     document.getElementById('drawing-overlay').style.display = 'none';
     canvas.style.cursor = 'default';
     // [您的要求] 新增：清除並隱藏預覽圖層

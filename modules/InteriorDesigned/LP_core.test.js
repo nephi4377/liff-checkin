@@ -108,6 +108,19 @@ describe('drawing assist', () => {
         expect(r.y).toBe(100);
     });
 
+    it('resolveDrawingPointerPosition 頂點不在同軸時吸附後不套用正交鎖定', () => {
+        const r = resolveDrawingPointerPosition({
+            x: 207,
+            y: 108,
+            altKey: false,
+            currentDrawingPoints: [{ x: 50, y: 50 }],
+            areaVertices: [{ x: 200, y: 100 }],
+            vertexSnapThreshold: 12,
+        });
+        expect(r.x).toBe(200);
+        expect(r.y).toBe(100);
+    });
+
     it('segmentLengthCmRounded', () => {
         expect(segmentLengthCmRounded({ x: 0, y: 0 }, { x: 100, y: 0 })).toBe(100);
     });

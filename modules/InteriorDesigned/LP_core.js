@@ -169,7 +169,7 @@ export function segmentLengthCmRounded(p1, p2) {
 }
 
 /**
- * 繪製區域時：起點閉合吸附 → 既有頂點吸附 → 正交鎖定（Alt 跳過後兩者）。
+ * 繪製區域時：起點閉合吸附 → 既有頂點吸附（成功則跳過正交鎖定）→ 正交鎖定（Alt 跳過頂點與正交）。
  * @param {object} opts
  * @returns {{ x: number, y: number, snapToStart: boolean }}
  */
@@ -198,6 +198,7 @@ export function resolveDrawingPointerPosition(opts) {
         }
     }
 
+    let vertexSnapped = false;
     if (!snapToStart && !altKey && areaVertices.length > 0) {
         const last = currentDrawingPoints.length > 0
             ? currentDrawingPoints[currentDrawingPoints.length - 1]
@@ -210,9 +211,10 @@ export function resolveDrawingPointerPosition(opts) {
         );
         px = snapped.x;
         py = snapped.y;
+        vertexSnapped = snapped.snapped;
     }
 
-    if (!snapToStart && !altKey && currentDrawingPoints.length > 0) {
+    if (!snapToStart && !altKey && !vertexSnapped && currentDrawingPoints.length > 0) {
         const last = currentDrawingPoints[currentDrawingPoints.length - 1];
         const dx = Math.abs(px - last.x);
         const dy = Math.abs(py - last.y);
