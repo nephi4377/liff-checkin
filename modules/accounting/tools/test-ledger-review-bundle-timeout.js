@@ -23,7 +23,7 @@ assert(/action === 'ledger_review_bundle'[\s\S]*90000/.test(api) ||
   /ledger_review_bundle'\)[\s\S]{0,80}ms = 90000/.test(api),
   'ledger_review_bundle timeout 90s');
 var apiVer = (html.match(/accounting_api\.js\?v=(\d+)/) || [])[1];
-assert(apiVer && /^\d+$/.test(apiVer), 'ledger_review links accounting_api.js with ?v= cache bust');
+assert(apiVer && Number(apiVer) >= 105, 'ledger_review links accounting_api.js with ?v= cache bust (min 105)');
 assert(/ledgerReviewBundle/.test(html) && /ledger_review_bundle/.test(api),
   'page loads via ledgerReviewBundle');
 
