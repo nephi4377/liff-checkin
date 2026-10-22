@@ -31,6 +31,65 @@ let startPos = { x: 0, y: 0 };
 let dragStartMouse = { x: 0, y: 0 }; // [v9.13 新增] 記錄拖曳開始時的滑鼠位置
 // [v8.12 修復] 明確宣告 canvas 變數，避免依賴隱式全域變數導致的潛在錯誤
 const canvas = document.getElementById('design-canvas');
+/** @type {{ open: () => void, close: () => void, rebuild: () => void } | null} */
+let lp3dViewer = null;
+let lp3dMode = false;
+let lp3dRebuildTimer = null;
+/** @type {Promise<{ open: () => void, close: () => void, rebuild: () => void }> | null} */
+let lp3dViewerPromise = null;
+let lp3dOpening = false;
+/** 載入失敗後遞增，避免瀏覽器快取 rejected 的 dynamic import 無法重試 */
+let lp3dViewerLoadNonce = 0;
+
+function lp3dViewerModuleUrl() {
+    return lp3dViewerLoadNonce
+        ? `./LP_3DViewer.js?retry=${lp3dViewerLoadNonce}`
+        : './LP_3DViewer.js';
+}
+
+async function ensureLp3dViewer() {
+    if (lp3dViewer) return lp3dViewer;
+    if (!lp3dViewerPromise) {
+        lp3dViewerPromise = (async () => {
+            const mount = document.getElementById('lp-3d-viewport');
+            if (!mount) throw new Error('3D viewport missing');
+            const mod = await import(lp3dViewerModuleUrl());
+            const viewer = mod.createLayoutPlanner3DViewer({
+                mountEl: mount,
+                getData: () => ({
+                    workspaceSize: getWorkspaceCanvasPx(),
+                    placedCabinets,
+                    drawnAreas,
+                }),
+            });
+            lp3dViewer = viewer;
+            return viewer;
+        })().catch((err) => {
+            resetLp3dViewerAfterLoadFailure();
+            throw err;
+        });
+    }
+    return lp3dViewerPromise;
+}
+
+function resetLp3dViewerAfterLoadFailure() {
+    lp3dViewer = null;
+    lp3dViewerPromise = null;
+    lp3dOpening = false;
+    lp3dViewerLoadNonce += 1;
+}
+
+function scheduleLp3dRebuild() {
+    if (!lp3dMode || !lp3dViewer) return;
+    clearTimeout(lp3dRebuildTimer);
+    lp3dRebuildTimer = setTimeout(() => {
+        try {
+            lp3dViewer.rebuild();
+        } catch (err) {
+            console.warn('[LP 3D] rebuild failed:', err);
+        }
+    }, 200);
+}
 // [v8.9 修復] 補回遺失的變數宣告
 let isResizing = false;
 let resizeTarget = null;
@@ -1180,6 +1239,9 @@ function selectCabinet(id) {
             }
         }
         document.getElementById('selected-price').innerText = priceText;
+
+        const model3dSel = document.getElementById('selected-model3d-kind');
+        if (model3dSel) model3dSel.value = cab.model3dKind || 'auto';
 
         document.getElementById('opacity-slider').value = cab.opacity;
         document.getElementById('opacity-value').innerText = cab.opacity + '%';
@@ -3667,6 +3729,7 @@ function saveState() {
 
     historyIndex = history.length - 1;
     updateUndoRedoButtons();
+    scheduleLp3dRebuild();
 }
 
 /**
@@ -3689,6 +3752,7 @@ function loadState(state) {
     updateQuotation();
     deselectAll();
     deselectAllAreas();
+    scheduleLp3dRebuild();
 }
 
 function undo() {
@@ -3721,7 +3785,63 @@ function closeHelpModal() {
     document.getElementById('help-modal').style.display = 'none';
 }
 
+function initLayoutPlanner3D() {
+    const toggleBtn = document.getElementById('toggle-3d-view-btn');
+    if (!document.getElementById('lp-3d-viewport') || !toggleBtn) return;
+
+    const model3dSel = document.getElementById('selected-model3d-kind');
+    if (model3dSel && !model3dSel.dataset.lpBound) {
+        model3dSel.dataset.lpBound = '1';
+        model3dSel.addEventListener('change', () => {
+            const cab = placedCabinets.find((c) => c.id === selectedCabId);
+            if (!cab) return;
+            cab.model3dKind = model3dSel.value;
+            saveState();
+        });
+    }
+
+    toggleBtn.addEventListener('click', async () => {
+        const overlay = document.getElementById('lp-3d-overlay');
+        if (!lp3dMode) {
+            if (lp3dOpening) return;
+            lp3dOpening = true;
+            toggleBtn.disabled = true;
+            try {
+                const viewer = await ensureLp3dViewer();
+                lp3dMode = true;
+                document.body.classList.add('lp-3d-mode');
+                if (overlay) overlay.setAttribute('aria-hidden', 'false');
+                toggleBtn.textContent = '📐 2D 平面';
+                toggleBtn.title = '返回 2D 平面編輯';
+                viewer.open();
+                viewer.rebuild();
+            } catch (err) {
+                console.error('[LP 3D]', err);
+                resetLp3dViewerAfterLoadFailure();
+                lp3dMode = false;
+                document.body.classList.remove('lp-3d-mode');
+                if (overlay) overlay.setAttribute('aria-hidden', 'true');
+                toggleBtn.textContent = '🧊 3D 檢視';
+                toggleBtn.title = '將牆體與櫃體以 3D 預覽（不影響 2D 編輯）';
+                showGlobalNotification('3D 模組載入失敗，平面編輯仍可使用', 6000, 'error');
+            } finally {
+                lp3dOpening = false;
+                toggleBtn.disabled = false;
+            }
+            return;
+        }
+
+        lp3dMode = false;
+        document.body.classList.remove('lp-3d-mode');
+        if (overlay) overlay.setAttribute('aria-hidden', 'true');
+        toggleBtn.textContent = '🧊 3D 檢視';
+        toggleBtn.title = '將牆體與櫃體以 3D 預覽（不影響 2D 編輯）';
+        if (lp3dViewer) lp3dViewer.close();
+    });
+}
+
 function bindEventListeners() {
+    initLayoutPlanner3D();
     // 全域事件
     document.addEventListener('mouseup', endDrag);
     document.addEventListener('mousemove', handleGlobalMove);

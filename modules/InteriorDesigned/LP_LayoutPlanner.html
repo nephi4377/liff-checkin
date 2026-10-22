@@ -10,6 +10,14 @@
     <!-- [錯誤修正] 增加此行可避免瀏覽器嘗試載入 favicon.ico 而產生 404 錯誤 -->
     <link rel="icon" href="data:,">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/build/three.module.js",
+        "three-mesh-bvh": "./vendor/three-mesh-bvh/index.module.js"
+      }
+    }
+    </script>
     <!-- [核心修正] 重新引入已分離的 JavaScript 主檔案，並設定為 module -->
     <script type="module" src="./LP_LayoutPlanner.js"></script>
     <!-- [新增] JSZip 函式庫，用於打包多個檔案成 ZIP -->
@@ -18,6 +26,41 @@
         body {
             overflow: hidden;
             user-select: none;
+        }
+
+        #lp-3d-overlay {
+            display: none;
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            top: 50px;
+            z-index: 180;
+            background: #f8fafc;
+            flex-direction: column;
+        }
+
+        body.lp-3d-mode #lp-3d-overlay {
+            display: flex;
+        }
+
+        body.lp-3d-mode #design-canvas {
+            pointer-events: none;
+        }
+
+        #lp-3d-viewport {
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+        }
+
+        #lp-3d-hint {
+            flex-shrink: 0;
+            padding: 6px 12px;
+            font-size: 11px;
+            color: #475569;
+            background: #e2e8f0;
+            border-bottom: 1px solid #cbd5e1;
         }
 
         :root {
@@ -945,6 +988,10 @@
 
     <!-- 畫布（主工作區）：置於左欄工具箱與右欄預算之間 -->
     <main id="canvas-wrapper">
+        <div id="lp-3d-overlay" aria-hidden="true">
+            <div id="lp-3d-hint">3D：左鍵旋轉 · 右鍵平移 · 滾輪縮放 · 再按「2D 平面」返回編輯</div>
+            <div id="lp-3d-viewport" role="img" aria-label="平面圖三維預覽"></div>
+        </div>
         <!-- [新增] 工作區說明與快捷鍵提示 -->
         <div id="canvas-header"
             style="position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(to right, #f3f4f6, #ffffff); border-bottom: 1px solid #e5e7eb; padding: 12px 20px; z-index: 50; font-size: 12px; color: #4b5563;">
@@ -1026,6 +1073,19 @@
                     </datalist>
                 </div>
 
+                <div class="mb-2">
+                    <label for="selected-model3d-kind" class="text-xs text-gray-600">3D 類型</label>
+                    <select id="selected-model3d-kind" class="w-full text-xs border rounded p-1 mt-1">
+                        <option value="auto">自動判斷</option>
+                        <option value="cabinet">櫃體／家具</option>
+                        <option value="door">門</option>
+                        <option value="window">窗</option>
+                        <option value="wallSegment">牆片</option>
+                        <option value="ignore">3D 不顯示</option>
+                    </select>
+                    <p class="text-[10px] text-gray-500 mt-0.5">分類不明時可手動指定；門／窗會在牆上開洞。</p>
+                </div>
+
                 <!-- 透明度控制 -->
                 <div class="mb-2">
                     <label class="text-xs text-gray-600">透明度: <span id="opacity-value">80%</span></label>
@@ -1102,6 +1162,7 @@
 
         <button id="toggle-toolbox-btn" class="toggle-btn">🛠️ 工具箱</button>
         <button id="toggle-info-btn" class="toggle-btn">💰 預算</button>
+        <button id="toggle-3d-view-btn" class="toggle-btn" title="將牆體與櫃體以 3D 預覽（不影響 2D 編輯）">🧊 3D 檢視</button>
         <!-- [新增] LINE 聯繫按鈕 -->
         <button id="contact-designer-btn" class="contact-btn">💬 聯繫設計師</button>
         <!-- [修改] 復原/重做按鈕：只顯示符號，放在下載按鈕左側 -->
