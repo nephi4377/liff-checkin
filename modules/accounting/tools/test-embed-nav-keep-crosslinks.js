@@ -47,10 +47,7 @@ embedPages.forEach(function (name) {
 });
 
 assert(new Set(navVers).size === 1, 'embed-nav pages share one accounting_nav.js ?v= (' + navVers.join(',') + ')');
-// layout ?v= may lag on individual pages; smoke only requires numeric bust on each page
-layoutVers.forEach(function (v, i) {
-  assert(/^\d+$/.test(v), embedPages[i] + ' layout cache bust must be numeric');
-});
+assert(new Set(layoutVers).size === 1, 'embed-nav pages share one accounting_layout.css ?v= (' + layoutVers.join(',') + ')');
 
 var pay = fs.readFileSync(path.join(root, 'payment_request.html'), 'utf8');
 assert(pay.indexOf('id="navSubmitRecordsLink"') >= 0, 'payment_request keeps 送出紀錄 id');
