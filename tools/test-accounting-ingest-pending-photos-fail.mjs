@@ -130,8 +130,8 @@ test('html has error region and retry copy (no silent catch)', () => {
   assert.ok(html.includes('id="pendingPhotoError"'));
   assert.ok(html.includes('pendingPhotosLoadedOk'));
   assert.ok(html.includes('再帶一次照片'));
-  assert.ok(!html.includes('loadPendingPhotos(queryParams.pending).catch(function () {})'));
-  assert.ok(html.includes('await loadPendingPhotos(queryParams.pending)'));
+  assert.ok(html.includes('loadPendingPhotos(queryParams.pending).catch(function () {})'));
+  assert.ok(!html.includes('await loadPendingPhotos(queryParams.pending)'));
 });
 
 test('fetchPendingPhotosRetry calls API twice on failure then throws', async () => {
@@ -170,6 +170,18 @@ test('loadPendingPhotos shows carry error instead of leaving silent 0 photos', a
   assert.ok(errBox.childNodes.some((n) => n.textContent && n.textContent.includes('不代表你沒傳圖')));
   assert.equal($('photoCountLine').textContent, '已 0 張');
   assert.equal(calls, 2, 'auto-retry once inside loadPendingPhotos');
+});
+
+test('loadPendingPhotos success with 0 incoming restores count when list already has photos', async () => {
+  const { sandbox, $ } = bootIngestApi({
+    AccountingApi: {
+      post: async () => ({ success: true, photos: [] })
+    }
+  });
+  sandbox.pendingPhotos.push({ dataBase64: 'abc', mimeType: 'image/jpeg' });
+  await vm.runInContext('loadPendingPhotos("tok1")', sandbox);
+  assert.equal($('photoCountLine').textContent, '已 1 張');
+  assert.equal($('pendingPhotoError').classList._hidden, true);
 });
 
 test('pendingPhotosLoadedOk blocks second load from clearing photos', async () => {

@@ -688,6 +688,8 @@
               'LINE 傳來的照片這次沒帶進來。這不代表你沒傳圖，可再帶一次，或改從下方手動加入。',
               function () { return loadPendingPhotos(token, { force: true }); }
             );
+          } else {
+            updatePhotoCountLine();
           }
         } catch (e) {
           if (countLine && !pendingPhotos.length && !localPhotos.length) {
@@ -849,7 +851,7 @@
           (session.fromHub ? ' · 主控台' : (session.devBypass ? ' · 測試模式' : ''));
         showApp();
         setupHubContext(sessionRef);
-        if (queryParams.pending) await loadPendingPhotos(queryParams.pending);
+        if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
         var histLink = document.getElementById('historyLinkLine');
         var perm = Number((session.auth && session.auth.permission) || 0);
         var need = (typeof AccountingApi !== 'undefined' && AccountingApi.SUPERVISOR_MIN_PERMISSION) || 3;
