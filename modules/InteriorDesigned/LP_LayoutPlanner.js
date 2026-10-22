@@ -19,7 +19,14 @@ import {
     resolveDrawingPointerPosition,
     segmentLengthCmRounded,
 } from './LP_core.js';
+<<<<<<< HEAD
 import { createHistoryGestureCoalescer } from './LP_layout_history.js';
+=======
+import {
+    buildLayoutPlannerQuoteDraft,
+    budgetWebDraftToCsvWithBom,
+} from './LP_quotation_budgetweb_export.js';
+>>>>>>> origin/cursor/floorplan-quote-import-6bf6
 
 /** 開啟時於 console 輸出除錯訊息（元件載入、渲染、縮放、繪圖等） */
 const DEBUG = false;
@@ -3361,6 +3368,78 @@ function exportBudgetAsCSV() {
     showGlobalNotification('CSV 已開始下載！', 'success');
 }
 
+/** 最近一次「匯出報價明細」草稿（供預覽 Modal 下載） */
+let lastQuoteExportDraft = null;
+
+function renderQuoteExportDraftModal(draft) {
+    const modal = document.getElementById('quote-export-draft-modal');
+    const tbody = document.getElementById('quote-export-draft-tbody');
+    const summary = document.getElementById('quote-export-draft-summary');
+    if (!modal || !tbody) return;
+    tbody.innerHTML = '';
+    (draft.items || []).forEach((it) => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-b border-gray-100 text-sm';
+        tr.innerHTML = `
+            <td class="py-1 pr-2">${escapeHtml(it.zone)}</td>
+            <td class="py-1 pr-2">${escapeHtml(it.name)}</td>
+            <td class="py-1 pr-2">${escapeHtml(it.unit)}</td>
+            <td class="py-1 pr-2 text-right">${escapeHtml(it.qty)}</td>
+            <td class="py-1 pr-2 text-right">${escapeHtml(it.price)}</td>
+            <td class="py-1 text-gray-600">${escapeHtml(it.spec)}</td>`;
+        tbody.appendChild(tr);
+    });
+    if (summary) {
+        const n = (draft.items || []).length;
+        const total = draft.total_summary?.grand_total ?? 0;
+        summary.textContent = `共 ${n} 筆工項草稿 · 合計約 $${Number(total).toLocaleString()}（未含稅／未寫雲端）`;
+    }
+    modal.style.display = 'flex';
+}
+
+function closeQuoteExportDraftModal() {
+    const modal = document.getElementById('quote-export-draft-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+function exportQuoteDraftDetails() {
+    const quotation = getQuotationForDisplay();
+    const lineItems = quotation.lineItems.map((item) => {
+        if (item.isHeader) return item;
+        return { ...item, specNote: quotationDisplaySpecNote(item) };
+    });
+    lastQuoteExportDraft = buildLayoutPlannerQuoteDraft({
+        lineItems,
+        grandTotal: quotation.grandTotal,
+        meta: { exportedAt: new Date().toISOString() },
+    });
+    renderQuoteExportDraftModal(lastQuoteExportDraft);
+    showGlobalNotification('已產生報價明細草稿（可下載 JSON／CSV）', 'success');
+}
+
+function downloadQuoteExportDraftJson() {
+    if (!lastQuoteExportDraft) return;
+    const blob = new Blob([JSON.stringify(lastQuoteExportDraft, null, 2)], { type: 'application/json' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    const dateString = new Date().toISOString().slice(0, 10);
+    link.download = `layout-quote-draft-${dateString}.json`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+}
+
+function downloadQuoteExportDraftCsv() {
+    if (!lastQuoteExportDraft) return;
+    const bytes = budgetWebDraftToCsvWithBom(lastQuoteExportDraft);
+    const blob = new Blob([bytes], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    const dateString = new Date().toISOString().slice(0, 10);
+    link.download = `layout-quote-draft-${dateString}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+}
+
 // [錯誤修正] 新增遺漏的 updateQuotation 函式
 function updateQuotation() {
     const quotation = getQuotationForDisplay();
@@ -4264,6 +4343,14 @@ function bindEventListeners() {
     // 預算明細 Modal
     document.getElementById('budget-modal-close-btn').addEventListener('click', closeBudgetModal);
     document.getElementById('export-csv-btn').addEventListener('click', exportBudgetAsCSV);
+    const exportQuoteDraftBtn = document.getElementById('export-quote-draft-btn');
+    if (exportQuoteDraftBtn) exportQuoteDraftBtn.addEventListener('click', exportQuoteDraftDetails);
+    const quoteDraftClose = document.getElementById('quote-export-draft-close');
+    if (quoteDraftClose) quoteDraftClose.addEventListener('click', closeQuoteExportDraftModal);
+    const quoteDraftJsonBtn = document.getElementById('quote-export-draft-json-btn');
+    if (quoteDraftJsonBtn) quoteDraftJsonBtn.addEventListener('click', downloadQuoteExportDraftJson);
+    const quoteDraftCsvBtn = document.getElementById('quote-export-draft-csv-btn');
+    if (quoteDraftCsvBtn) quoteDraftCsvBtn.addEventListener('click', downloadQuoteExportDraftCsv);
     const budgetEditBtn = document.getElementById('budget-edit-toggle-btn');
     if (budgetEditBtn) budgetEditBtn.addEventListener('click', toggleBudgetEditMode);
     const budgetResetBtn = document.getElementById('budget-reset-auto-btn');
