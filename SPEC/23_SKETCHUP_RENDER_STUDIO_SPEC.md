@@ -19,7 +19,7 @@
 | 檔案 | 說明 |
 |------|------|
 | `tools/sketchup-render-studio/index.html` | 主頁：左右對照、控制列、進階設定 |
-| `tools/sketchup-render-studio/app.js` | 前端邏輯（LIFF／dev bypass、批次 API） |
+| `tools/sketchup-render-studio/app.js` | 前端邏輯（主控台 `?uid=`／LIFF、批次 API） |
 | `tools/sketchup-render-studio/config.js` | `GAS_URL`、`PUBLIC_URL`、`MAX_IMAGES` |
 | `tools/sketchup-render-studio/styles.css` | 版面樣式 |
 | `spa/Dashboard.js` | HUB 卡片（權限 ≥ 2；外連並帶 `?uid=`） |
@@ -48,7 +48,7 @@
 
 ## API（accounting-gas）
 
-認證：權限 ≥ 2（`resolveSketchupRenderAuth_`，與 AI 實驗室門檻分開）。正式站從主控台開啟時帶 `?uid=`（員工 LINE userId），以 `user_id` 連線，**不在外部瀏覽器跑 LIFF**（否則會 400）。無 uid 才嘗試 LIFF。本機可用 `?dev=1`。
+認證：權限 ≥ 2（`resolveSketchupRenderAuth_`，與 AI 實驗室門檻分開）。正式站從主控台開啟時帶 `?uid=`（員工 LINE userId），以 `user_id` 連線，**不在外部瀏覽器跑 LIFF**（否則會 400）。無 uid 才嘗試 LIFF。**已移除** `?dev=1` 與前端 dev bypass（DEVBYPASS-FE-1）。
 
 | action | 說明 |
 |--------|------|
@@ -63,6 +63,6 @@ POST `Content-Type: text/plain`（勿加 charset，與會計 API 一致），bod
 
 ## 測試
 
-- 本機：`?dev=1` 或勾選進階「開發 bypass」
+- 本機：主控台開啟（`?uid=`）或在 LIFF 可登入的環境測；勿再用 `?dev=1`
 - 可覆寫 GAS：`?api=<exec_url>` 或進階設定欄位
 - 正式站請從主控台「開啟網站」（網址應有 `?uid=`）；勿只貼無參數的工具網址再硬登 LINE

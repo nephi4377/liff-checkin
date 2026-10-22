@@ -253,7 +253,7 @@ var AccountingCache = (function () {
         } else if (typeof AccountingApi.post === 'function') {
           res = await AccountingApi.post({
             action: 'accounting_bootstrap',
-            auth: AccountingApi.buildAuth ? AccountingApi.buildAuth(session) : { dev_bypass: !!session.devBypass }
+            auth: AccountingApi.buildAuth ? AccountingApi.buildAuth(session) : {}
           }, BOOTSTRAP_TIMEOUT_MS);
         } else {
           throw new Error('AccountingApi 版本過舊，請強制重新整理（Ctrl+F5）');
