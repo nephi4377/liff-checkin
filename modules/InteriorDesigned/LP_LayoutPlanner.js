@@ -10,6 +10,7 @@ import {
     axisAlignedBoundsFromPoints,
     computeObjectSnapDelta,
 } from './LP_core.js';
+import { createHistoryGestureCoalescer } from './LP_layout_history.js';
 
 /** 開啟時於 console 輸出除錯訊息（元件載入、渲染、縮放、繪圖等） */
 const DEBUG = false;
@@ -127,6 +128,7 @@ let viewScale = 1.0;
 let history = [];
 let historyIndex = -1;
 const MAX_HISTORY_STATES = 50;
+const historyGesture = createHistoryGestureCoalescer(() => commitSaveState());
 const svgStyle = 'width="100%" height="100%" preserveAspectRatio="none"';
 const svgs = {
     sofa3: `<svg ${svgStyle} viewBox="0 0 210 90"><rect width="210" height="90" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/><rect x="10" y="10" width="190" height="20" fill="#d1d5db"/><rect x="10" y="35" width="60" height="45" rx="5" fill="#fff"/><rect x="75" y="35" width="60" height="45" rx="5" fill="#fff"/><rect x="140" y="35" width="60" height="45" rx="5" fill="#fff"/></svg>`,
@@ -813,6 +815,7 @@ function renderVertexHandles(area) {
         // 為每個控點綁定 mousedown 事件
         handle.addEventListener('mousedown', (e) => {
             e.stopPropagation();
+            historyGesture.begin();
             isDraggingVertex = true;
             draggedAreaId = area.id;
             draggedVertexIndex = index;
@@ -2061,6 +2064,8 @@ function endDrag() {
     }
     isDraggingAnnotation = false;
     currentDragAnnotationId = null;
+
+    historyGesture.end();
 
     const bgLayer = document.getElementById('bg-layer');
     if (bgLayer) bgLayer.style.cursor = isBgEditMode ? 'grab' : 'default';
@@ -3492,6 +3497,7 @@ function cancelDrawing(silent = false) {
 function startCabDrag(e, cab) {
     if (e.button !== 0 || isBgEditMode || isDrawing) return;
     e.stopPropagation();
+    historyGesture.begin();
     isDraggingCab = true;
     currentDragCab = cab;
     selectCabinet(cab.id);
@@ -3517,6 +3523,7 @@ function startCabDrag(e, cab) {
 function startResize(id, e, direction = null) {
     if (e.button !== 0) return;
     e.stopPropagation();
+    historyGesture.begin();
     isResizing = true;
     resizeDirection = direction; // [v9.0] 記錄拉伸方向
 
@@ -3538,6 +3545,7 @@ function startResize(id, e, direction = null) {
 function startAnnotationDrag(e, anno, type) {
     if (e.button !== 0) return;
     e.stopPropagation();
+    historyGesture.begin();
     isDraggingAnnotation = true;
     currentDragAnnotationId = anno.id;
     annotationDragType = type;
@@ -3707,10 +3715,14 @@ function handleCaiQtyChange() {
 }
 
 // [您的要求] 新增復原/重做相關函式
-/**
- * 儲存當前的畫布狀態到歷史紀錄中
- */
 function saveState() {
+    historyGesture.requestSave();
+}
+
+/**
+ * 儲存當前的畫布狀態到歷史紀錄中（實際寫入 history 堆疊）
+ */
+function commitSaveState() {
     // 如果當前指針不在歷史紀錄的末尾 (表示已經執行過 undo)，
     // 則移除後續的所有 "redo" 狀態
     if (historyIndex < history.length - 1) {
@@ -3966,7 +3978,10 @@ function bindEventListeners() {
     document.getElementById('tab-btn-components').addEventListener('click', () => switchTab('components'));
 
     // 資訊視窗
-    document.getElementById('opacity-slider').addEventListener('input', (e) => updateOpacity(e.target.value));
+    const opacitySlider = document.getElementById('opacity-slider');
+    opacitySlider.addEventListener('pointerdown', () => historyGesture.begin());
+    opacitySlider.addEventListener('pointerup', () => historyGesture.end());
+    opacitySlider.addEventListener('input', (e) => updateOpacity(e.target.value));
     document.getElementById('note-input').addEventListener('input', updateNote);
     // [您的要求] 為新的尺寸輸入框綁定 change 事件 (在失焦或按 Enter 時觸發)
     document.getElementById('selected-group-input').addEventListener('change', updateSelectedGroup); // [新增]
