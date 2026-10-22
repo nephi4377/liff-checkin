@@ -94,6 +94,11 @@
     .drop-zone p { margin: 0; font-size: 15px; color: #333; }
     .drop-zone .hint { margin-top: 6px; font-size: 13px; color: #666; line-height: 1.45; }
     .drop-zone input[type="file"] { display: none; }
+    .line-carry-err {
+      background: #fce8e6; color: #5f2120; border-radius: 8px;
+      padding: 10px; margin: 8px 0; font-size: 14px; line-height: 1.45;
+    }
+    .line-carry-err .btn { width: auto; margin-top: 8px; padding: 8px 14px; min-width: 120px; }
     .ocr-status { font-size: 13px; color: #555; margin: 8px 0; min-height: 18px; }
     .btn-primary:disabled, .btn-secondary:disabled { opacity: .55; cursor: not-allowed; }
     .btn-row { display: flex; flex-direction: column; gap: 0; }
@@ -188,6 +193,7 @@
       <div class="acct-pay-col-upload">
       <label id="uploadLabel">檔案（可多檔、可拖曳）</label>
       <p class="sub" id="photoCountLine">已 0 / 20 個</p>
+      <div id="pendingPhotoError" class="line-carry-err hidden" role="alert"></div>
       <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="加入檔案">
         <p>拖曳檔案到這裡，或點一下選擇</p>
         <p class="hint" id="uploadHint">支援圖片、PDF、Word、Excel 等；手機可拍照、相簿或選檔案；單檔最多 10 MB</p>
@@ -381,6 +387,8 @@
       var payeeMode = 'vendor';
       var vendorCombobox = null;
       var photos = [];
+      var pendingPhotoBusy = false;
+      var pendingPhotosLoadedOk = false;
       var draftId = '';
       var ocrAttempt = 0;
       var lastOcrAmount = 0;
@@ -2315,7 +2323,73 @@
         });
       }
 
-      async function loadPendingPhotos(token) {
+      function humanizePendingPhotoFail(message) {
+        var failHint = message || '無法帶入單據照片';
+        if (/驗證失敗/.test(failHint)) {
+          failHint = '身分驗證沒過，系統無法自動帶圖';
+        } else if (/過期/.test(failHint)) {
+          failHint = '自動帶圖連結已過期';
+        } else if (/無法讀取雲端|無法讀取照片/.test(failHint)) {
+          failHint = '讀不到雲端單據檔';
+        }
+        return failHint;
+      }
+      function humanLineCarryErr(e, fallback) {
+        var msg = (e && e.message) || String(e || '') || fallback;
+        if (/abort|AbortError|timeout|逾時/i.test(msg)) {
+          return fallback + '（連線逾時）';
+        }
+        return humanizePendingPhotoFail(msg);
+      }
+      function showPendingPhotoCarryError(message, onRetry) {
+        var box = document.getElementById('pendingPhotoError');
+        if (!box) {
+          setMsg(message);
+          return;
+        }
+        box.classList.remove('hidden');
+        box.innerHTML = '';
+        var p = document.createElement('p');
+        p.style.margin = '0';
+        p.textContent = message;
+        box.appendChild(p);
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-primary';
+        btn.textContent = '再帶一次照片';
+        btn.addEventListener('click', function () {
+          if (typeof onRetry === 'function') onRetry();
+        });
+        box.appendChild(btn);
+      }
+      function clearPendingPhotoCarryError() {
+        var box = document.getElementById('pendingPhotoError');
+        if (!box) return;
+        box.classList.add('hidden');
+        box.innerHTML = '';
+      }
+      function notifyPendingPhotoFail(failHint) {
+        markPayResumeFailed();
+        showQuickReviewStayBanner(failHint);
+        setWarn(failHint + '。單據還在「請款中」，可手動上傳或回列表繼續。');
+      }
+      function applyIncomingPendingPhotos(incoming) {
+        var before = photos.length;
+        (incoming || []).forEach(function (p) {
+          if (!p || !p.dataBase64) return;
+          if (photos.length >= maxPhotos()) return;
+          photos.push({
+            photo_id: uid(),
+            mimeType: p.mimeType || 'image/jpeg',
+            dataBase64: p.dataBase64,
+            filename: p.filename || 'line.jpg',
+            selected: true
+          });
+        });
+        renderPhotoGrid();
+        return photos.length - before;
+      }
+      async function fetchPendingPhotosOnce(token) {
         var auth = AccountingApi.buildAuth(session);
         var hubUid = (session.auth && session.auth.user_id) || (session.profile && session.profile.userId) || '';
         var body = Object.assign({
@@ -2329,34 +2403,60 @@
           if (typeof body.auth === 'object') body.auth.user_id = hubUid;
         }
         var data = await AccountingApi.post(body);
-        if (!data.success) {
-          // 帶圖失敗仍可手動上傳；勿當致命「驗證失敗」開錯誤回報
-          // 快審單此時為「請款中」仍在待處理，不會因失敗消失
-          var failHint = data.message || '無法帶入單據照片';
-          if (/驗證失敗/.test(failHint)) {
-            failHint = '身分驗證沒過，系統無法自動帶圖';
-          } else if (/過期/.test(failHint)) {
-            failHint = '自動帶圖連結已過期';
-          } else if (/無法讀取雲端|無法讀取照片/.test(failHint)) {
-            failHint = '讀不到雲端單據檔';
-          }
-          markPayResumeFailed();
-          showQuickReviewStayBanner(failHint);
-          setWarn(failHint + '。單據還在「請款中」，可手動上傳或回列表繼續。');
-          return;
+        if (!data || !data.success) {
+          throw new Error(humanizePendingPhotoFail((data && data.message) || '無法帶入單據照片'));
         }
-        (data.photos || []).forEach(function (p) {
-          if (photos.length >= maxPhotos()) return;
-          photos.push({
-            photo_id: uid(),
-            mimeType: p.mimeType || 'image/jpeg',
-            dataBase64: p.dataBase64,
-            filename: p.filename || 'line.jpg',
-            selected: true
-          });
-        });
-        renderPhotoGrid();
-        if (photos.length) setOk('已帶入快審單據照片（' + photos.length + ' 張）');
+        return data;
+      }
+      async function fetchPendingPhotosRetry(token) {
+        try {
+          return await fetchPendingPhotosOnce(token);
+        } catch (e1) {
+          return await fetchPendingPhotosOnce(token);
+        }
+      }
+      async function loadPendingPhotos(token, opts) {
+        if (!token || pendingPhotoBusy) return;
+        if (pendingPhotosLoadedOk && !(opts && opts.force)) return;
+        opts = opts || {};
+        pendingPhotoBusy = true;
+        clearPendingPhotoCarryError();
+        var countLine = document.getElementById('photoCountLine');
+        var prevCount = countLine ? countLine.textContent : '';
+        if (countLine) countLine.textContent = '正在帶入 LINE 照片…';
+        try {
+          var data = opts.force
+            ? await fetchPendingPhotosOnce(token)
+            : await fetchPendingPhotosRetry(token);
+          var added = applyIncomingPendingPhotos(data.photos || []);
+          if (added > 0) {
+            pendingPhotosLoadedOk = true;
+            setOk('已帶入快審單據照片（' + photos.length + ' 張）');
+            return;
+          }
+          if (!photos.length) {
+            var emptyMsg = 'LINE 傳來的照片這次沒帶進來。這不代表你沒傳圖，可再帶一次，或改從下方手動加入。';
+            notifyPendingPhotoFail('自動帶圖失敗');
+            showPendingPhotoCarryError(emptyMsg, function () {
+              return loadPendingPhotos(token, { force: true });
+            });
+          }
+        } catch (e) {
+          if (countLine && !photos.length) {
+            countLine.textContent = prevCount || ('已 0 / ' + maxPhotos() + ' 個');
+          } else {
+            updateUploadUi();
+          }
+          renderPhotoGrid();
+          var failHint = humanLineCarryErr(e, '無法帶入 LINE 照片');
+          notifyPendingPhotoFail(failHint);
+          showPendingPhotoCarryError(
+            failHint + '。這不代表你沒傳圖，可再帶一次，或改手動加入。',
+            function () { return loadPendingPhotos(token, { force: true }); }
+          );
+        } finally {
+          pendingPhotoBusy = false;
+        }
       }
 
       async function loadOcrDraft(token) {
@@ -2644,10 +2744,7 @@
           showQuickReviewStayBanner('');
         }
         if (queryParams.pending) {
-          loadPendingPhotos(queryParams.pending).catch(function () {
-            markPayResumeFailed();
-            showQuickReviewStayBanner('自動帶圖失敗');
-          });
+          loadPendingPhotos(queryParams.pending);
         }
         if (queryParams.vendor_id && !isVendorSelf) {
           var qVid = String(queryParams.vendor_id).trim();
