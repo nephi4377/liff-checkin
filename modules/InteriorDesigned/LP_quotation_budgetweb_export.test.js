@@ -96,6 +96,14 @@ describe('formatCsvCell', () => {
         expect(formatCsvCell('\tmalicious')).toBe("'\tmalicious");
         expect(formatCsvCell('\rlead')).toBe('"\'\rlead"');
     });
+
+    it('qty／price 純數字欄不套公式前綴（含負數）', () => {
+        const num = { numericQuantityOrPrice: true };
+        expect(formatCsvCell('-50', num)).toBe('-50');
+        expect(formatCsvCell('3.5', num)).toBe('3.5');
+        expect(formatCsvCell('-100', num)).toBe('-100');
+        expect(formatCsvCell('+123', num)).toBe("'+123");
+    });
 });
 
 describe('budgetWebDraftToCsv', () => {
@@ -112,7 +120,7 @@ describe('budgetWebDraftToCsv', () => {
         });
         const csv = budgetWebDraftToCsv(draft);
         expect(csv).toContain("'=cmd|");
-        expect(csv).toContain("'-50");
+        expect(csv).toMatch(/,1,-50,/);
     });
 });
 

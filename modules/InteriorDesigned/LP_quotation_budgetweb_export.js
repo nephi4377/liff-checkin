@@ -42,14 +42,19 @@ export function sumDraftLinePrices(items) {
     return (items || []).reduce((s, it) => s + (parseFloat(it.price) || 0), 0);
 }
 
+/** 純數字（含負數、小數）— qty／price 欄不套公式前綴，Excel 可當數值 */
+export const CSV_PURE_NUMERIC_RE = /^-?\d+(\.\d+)?$/;
+
 /**
  * 單一 CSV 欄位：公式注入防護 + RFC4180 引號
  * @param {*} v
+ * @param {{ numericQuantityOrPrice?: boolean }} [options]
  * @returns {string}
  */
-export function formatCsvCell(v) {
+export function formatCsvCell(v, options = {}) {
     let s = String(v == null ? '' : v);
-    if (/^[=+\-@\t\r]/.test(s)) {
+    const skipFormulaPrefix = options.numericQuantityOrPrice && CSV_PURE_NUMERIC_RE.test(s);
+    if (!skipFormulaPrefix && /^[=+\-@\t\r]/.test(s)) {
         s = `'${s}`;
     }
     if (/[",\n\r]/.test(s)) {
@@ -169,7 +174,10 @@ export function budgetWebDraftToCsv(draft) {
         it.sheet_source,
         it.id,
     ]);
-    return [headers, ...rows].map((r) => r.map(formatCsvCell).join(',')).join('\n');
+    const formatRow = (r) => r.map((cell, colIdx) => formatCsvCell(cell, {
+        numericQuantityOrPrice: colIdx === 5 || colIdx === 6,
+    })).join(',');
+    return [headers, ...rows].map(formatRow).join('\n');
 }
 
 /** @returns {Uint8Array} BOM + UTF-8 bytes（供下載與測試） */
