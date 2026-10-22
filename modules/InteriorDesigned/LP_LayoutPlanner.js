@@ -10,7 +10,6 @@ import {
 } from './LP_core.js';
 import {
     buildLayoutPlannerQuoteDraft,
-    budgetWebDraftToCsv,
     budgetWebDraftToCsvWithBom,
 } from './LP_quotation_budgetweb_export.js';
 
