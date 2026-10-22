@@ -2,7 +2,7 @@
   "success": true,
   "employees": [
     {
-      "userId": "Ud58333430513b7527106fa71d2e30151",
+      "userId": "U0000000000000000000000000000e2e1",
       "userName": "測試管理員",
       "displayName": "測試管理員",
       "permission": 4,
@@ -12,7 +12,7 @@
     }
   ],
   "operator": {
-    "userId": "Ud58333430513b7527106fa71d2e30151",
+    "userId": "U0000000000000000000000000000e2e1",
     "userName": "測試管理員",
     "permission": 4,
     "group": "台北"

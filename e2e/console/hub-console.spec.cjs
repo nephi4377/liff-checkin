@@ -23,7 +23,7 @@ test('project board lists mocked projects', async ({ page }) => {
 test('open project workspace iframe and switch main tabs', async ({ page }) => {
   await page.goto('/index.html#/project-board');
   await page.getByRole('button', { name: /開啟.*工作區/ }).click();
-  await expect(page).toHaveURL(/#\/project-console\?id=752/);
+  await expect(page).toHaveURL(/#\/project-console\?id=E2E-001/);
 
   const consoleFrame = page.frameLocator('iframe[src*="managementconsole"]');
   await expect(consoleFrame.locator('#project-title')).toContainText('E2E 測試案場', {
@@ -51,7 +51,7 @@ test('hub project list API error shows user-facing message', async ({ page }) =>
 test('project console API error shows friendly error panel', async ({ page }) => {
   mockOptions.failProjectDetail = true;
   await page.goto(
-    '/modules/projects/managementconsole.html?id=752&uid=Ud58333430513b7527106fa71d2e30151&name=E2E'
+    '/modules/projects/managementconsole.html?id=E2E-001&uid=U0000000000000000000000000000e2e1&name=E2E'
   );
   await expect(page.getByText('暫時打不開這個案場')).toBeVisible({ timeout: 25_000 });
   await expect(page.getByText('E2E mock：案場資料失敗')).toBeVisible();
