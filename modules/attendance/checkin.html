@@ -18,7 +18,7 @@
         const CONSTANTS = {
             LIFF_ID: '2007974938-jVxn6y37',
             GAS_URL: 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec',
-            VERSION: 'v26.10.22.1600',
+            VERSION: 'v26.10.22.1625',
             OFF_SITE_VALID_METERS: 200,
             ANOMALY_MISSING: '離場未填說明',
             SITE_BG_RETRY_MS: 30000,
@@ -68,6 +68,23 @@
             const host = window.location.hostname;
             if (host !== 'localhost' && host !== '127.0.0.1') return false;
             return new URLSearchParams(window.location.search).get('mock') === 'offsitereasonfail';
+        }
+
+        /** 離場說明 API throw：僅斷網／網路錯誤／逾時可進離線 queue；4xx／5xx 等讓使用者重送 */
+        function isOffSiteReasonErrorQueueable(err) {
+            const msg = String((err && err.message) || '');
+            if (/HTTP 錯誤:\s*\d+/.test(msg)) return false;
+            if (err instanceof TypeError) return true;
+            if (msg.includes('無回應') || msg.includes('持續斷網') || msg.includes('離線模式')) return true;
+            return false;
+        }
+
+        function escapeHtmlText(s) {
+            return String(s ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
         }
     </script>
 
@@ -1391,10 +1408,21 @@
                     AppCore.restoreOffSiteReasonReady(failHuman);
                     return;
                 } catch (e) {
+                    AppCore.applyOffSiteReasonSubmitError(e, failHuman, payload);
+                }
+            },
+            applyOffSiteReasonSubmitError: (err, failHuman, payload) => {
+                if (isOffSiteReasonErrorQueueable(err)) {
                     AppActionLog.log('離場說明離線暫存');
                     AppStorage.addToQueue({ ...payload, timestamp: Date.now() });
-                    AppCore.completeOffSiteFlow({ reasonNote: '離場說明已暫存，連線後將自動補傳' });
+                    AppCore.completeOffSiteFlow({
+                        reasonNote: '離場說明已暫存，連線後將自動補傳',
+                        completeButtonText: '說明已暫存'
+                    });
+                    return;
                 }
+                AppActionLog.log('離場說明失敗');
+                AppCore.restoreOffSiteReasonReady(failHuman);
             },
             skipOffSiteReason: () => {
                 if (!AppCore.awaitingOffSiteReason || AppCore.pageSessionEnded) return;
@@ -1410,14 +1438,14 @@
                 if (skipBtn) skipBtn.classList.add('hidden');
                 const btn = document.getElementById('checkin-button');
                 if (btn) {
-                    btn.textContent = '打卡完成';
+                    btn.textContent = opts.completeButtonText || '打卡完成';
                     btn.className = 'w-full bg-gray-200 text-gray-400 font-bold py-5 px-6 rounded-xl text-xl cursor-not-allowed transform-none shadow-none';
                     btn.disabled = true;
                 }
                 AppUI.setLoading(false);
                 let reasonHint = '';
                 if (opts.reasonNote) {
-                    reasonHint = `<br><span class="text-[10px] text-amber-800 block mt-1">離場說明：${opts.reasonNote}</span>`;
+                    reasonHint = `<br><span class="text-[10px] text-amber-800 block mt-1">離場說明：${escapeHtmlText(opts.reasonNote)}</span>`;
                 }
                 AppUI.updateMessage(
                     `${AppCore.primaryResultMessage}${reasonHint}<br><span class="text-[9px] text-gray-400 mt-2 block italic font-bold">視窗將於 45 秒後自動關閉，亦可手動關閉視窗</span><br><span class="text-[9px] text-gray-400 block">${CONSTANTS.PAGE_SESSION_END_MSG}</span>`,
