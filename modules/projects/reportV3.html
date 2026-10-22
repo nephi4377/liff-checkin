@@ -271,6 +271,12 @@
 
   <script type="module">
     import { readFileAsBase64 } from '../../shared/js/utils.js?v=20260318';
+    import {
+      getConsoleLiffIdToken,
+      mergeConsoleLiffAuth,
+      isConsoleLiffSessionError,
+      requestConsoleLiffRelogin,
+    } from '../../shared/js/console_liff_session.js';
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
     import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
@@ -849,6 +855,9 @@
 
           if (response.ok && result.success === false) {
             reportTrace(`[GAS] success=false（業務拒絕）msg=${result.message || ''}`);
+            if (isConsoleLiffSessionError(result.message)) {
+              requestConsoleLiffRelogin();
+            }
             throw new Error(result.message || '後端回報失敗');
           }
 
@@ -923,6 +932,7 @@
       let progressInterval = null;
       let currentFakeProgress = 0;
       let userProfile = null;
+      let reportV3IdToken = '';
       /** 從 IndexedDB 還原的照片（無法寫回 input，改由程式直接送） */
       let restoredPhotoInfos = null;
       let staticUiBound = false;
@@ -1003,6 +1013,10 @@
           return false;
         }
         userProfile = await liff.getProfile();
+        try {
+          const tok = liff.getIDToken && liff.getIDToken();
+          if (tok) reportV3IdToken = tok;
+        } catch (eTok) { /* ignore */ }
         return true;
       }
 
@@ -1454,7 +1468,8 @@
 
           const prevFail = idbSnapshotForPayload ? compactFailureForPayload(idbSnapshotForPayload) : null;
           const sim = isDevSimAllowed() ? getDevSimMode() : 'none';
-          const finalFormData = {
+          const idToken = reportV3IdToken || await getConsoleLiffIdToken();
+          const finalFormData = mergeConsoleLiffAuth({
             action: 'submitFastReport',
             batchId,
             totalChunks: 1,
@@ -1474,7 +1489,7 @@
               ...(prevFail ? { previousFailedAttempt: prevFail } : {}),
               ...(sim && sim !== 'none' ? { devSimulate: sim } : {}),
             },
-          };
+          }, idToken);
 
           updateStatus('正在提交到後端（可自動重試）…', 'info');
           gasStartMs = performance.now();

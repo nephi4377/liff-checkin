@@ -7,6 +7,13 @@
 * =============================================================================
 */ // [v602.0 重構] 引入統一設定檔
 import { CONFIG } from '/shared/js/config.js';
+import {
+    getConsoleLiffIdToken,
+    mergeConsoleLiffAuth,
+    appendConsoleLiffToUrl,
+    isConsoleLiffSessionError,
+    requestConsoleLiffRelogin,
+} from '/shared/js/console_liff_session.js';
 import { state } from './state.js';
 
 // [v520.0 修正] 修正導入路徑，直接從根目錄的 api.js 引入，避免循環依賴。
@@ -20,7 +27,7 @@ import { state } from './state.js';
  * @returns {Promise<object>} 一個解析為後端初步回應 (包含 jobId) 的 Promise。
  * 防止任何無效的 Action 被發往後端。
  */
-function postToGas(payload) {
+async function postToGas(payload) {
     // [v2026.02.27 終極攔截] 防止任何無效 Action (空值或任務狀態) 被發往後端。
     const invalidPollingActions = ['requested', 'in_progress', 'completed', 'failed', 'unknown_payload', 'pending'];
     const currentAction = payload ? payload.action : null;
@@ -30,13 +37,22 @@ function postToGas(payload) {
         return Promise.reject(new Error(`拒絕發送無效 API 動作: ${currentAction}`));
     }
 
+    const idToken = await getConsoleLiffIdToken();
+    const body = mergeConsoleLiffAuth(payload, idToken);
+
     const formData = new FormData();
-    formData.append('payload', JSON.stringify(payload));
+    formData.append('payload', JSON.stringify(body));
 
     // [v602.0 重構] 直接從 config.js 讀取 URL，不再依賴 window 物件
     const API_BASE_URL = CONFIG.GAS_WEB_APP_URL;
 
-    return fetch(API_BASE_URL, { method: 'POST', body: formData }).then(response => response.json());
+    return fetch(API_BASE_URL, { method: 'POST', body: formData }).then(async (response) => {
+        const result = await response.json();
+        if (!result.success && isConsoleLiffSessionError(result.message)) {
+            requestConsoleLiffRelogin();
+        }
+        return result;
+    });
 }
 // 定義哪些 action 是讀取型 (用 GET)，哪些是寫入型 (用 POST + 任務佇列)
 // 注意：這裡的 action 名稱必須與後端 WebApp.js 中的 GET_ROUTES 和 processJob 的 switch case 完全對應。
@@ -78,13 +94,15 @@ export async function request({ action, payload = {} }) {
 
         if (READ_ACTIONS.has(action)) {
             // --- 處理讀取型請求 (GET) ---
-            const url = new URL(CONFIG.GAS_WEB_APP_URL);
+            const idToken = await getConsoleLiffIdToken();
+            let url = new URL(CONFIG.GAS_WEB_APP_URL);
             // 根據後端 doGet 路由表，讀取型 action 放在 'page' 參數中
             url.searchParams.append('page', action);
             // [v318.0 核心修正] 將 payload 中的所有參數正確附加到 URL 上。
             for (const key in payload) {
                 url.searchParams.append(key, payload[key]);
             }
+            url = appendConsoleLiffToUrl(url, idToken);
             // [v318.0 API化] 改為使用標準 fetch API，不再使用 loadJsonp
             const response = await fetch(url.toString());
             result = await response.json();
@@ -94,7 +112,11 @@ export async function request({ action, payload = {} }) {
             }
             // 後端 doGet 失敗回 { success:false, message }，不可當成成功
             if (result.success === false) {
-                throw new Error(result.message || result.error || '後端回傳失敗');
+                const msg = result.message || result.error || '後端回傳失敗';
+                if (isConsoleLiffSessionError(msg)) {
+                    requestConsoleLiffRelogin();
+                }
+                throw new Error(msg);
             }
 
         } else if (WRITE_ACTIONS.has(action)) {
