@@ -47,6 +47,23 @@ test.describe('LayoutPlanner E2E', () => {
     await expect(field).toHaveValue('重做測試');
   });
 
+  test('3D 模組載入失敗時 2D 仍可用', async ({ page }) => {
+    await page.route('**/LP_3DViewer.js', (route) => route.abort('failed'));
+
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#toolbox-window')).toBeVisible();
+
+    await page.locator('#toggle-3d-view-btn').click();
+    await page.waitForTimeout(500);
+    await expect(page.locator('body')).not.toHaveClass(/lp-3d-mode/);
+
+    const field = page.locator('#construction-area');
+    await field.fill('2D仍可用');
+    await field.dispatchEvent('change');
+    await expect(field).toHaveValue('2D仍可用');
+    await expect(page.locator('#undo-btn')).not.toBeDisabled();
+  });
+
   test('3D 檢視切換不造成頁面錯誤', async ({ page }) => {
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
