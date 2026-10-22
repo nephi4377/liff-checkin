@@ -84,6 +84,21 @@ export function computeObjectSnapDelta(moving, references, threshold) {
     };
 }
 
+/**
+ * 將拖曳位移吸附至格線步距（畫布 1px ≈ 1cm）。
+ * @param {number} deltaX
+ * @param {number} deltaY
+ * @param {number} gridStepCm 步距（cm）；≤0 時不吸附
+ * @returns {{ dx: number, dy: number }}
+ */
+export function snapTranslationToGrid(deltaX, deltaY, gridStepCm) {
+    const step = gridStepCm > 0 ? gridStepCm : 1;
+    return {
+        dx: Math.round(deltaX / step) * step,
+        dy: Math.round(deltaY / step) * step,
+    };
+}
+
 function snapAlongAxis(min, max, targets, threshold) {
     const center = (min + max) / 2;
     const probes = [min, max, center];

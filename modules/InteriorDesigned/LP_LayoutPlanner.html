@@ -1037,6 +1037,18 @@
                         </select>
                         <p class="text-[10px] text-gray-500 mt-1">變更後僅影響可編輯範圍；已擺好的物件不會自動搬移。</p>
                     </div>
+                    <div class="mt-2">
+                        <label class="flex items-center gap-2 text-xs font-bold text-gray-700">
+                            <input type="checkbox" id="show-grid-toggle" checked> 顯示背景格線（50cm）
+                        </label>
+                        <label for="snap-grid-step-select" class="text-xs font-bold text-gray-700 mt-2 block">拖曳吸附步距 (cm)</label>
+                        <select id="snap-grid-step-select" class="w-full text-xs border rounded p-1.5 mt-1 bg-white">
+                            <option value="2">2（預設，與現行相同）</option>
+                            <option value="5">5</option>
+                            <option value="10">10</option>
+                        </select>
+                        <p class="text-[10px] text-gray-500 mt-1">按住 Shift 可暫時關閉格線與物件吸附。</p>
+                    </div>
                 </div>
             </div>
 

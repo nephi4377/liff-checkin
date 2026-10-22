@@ -7,6 +7,7 @@ import {
     sanitizeSvgString,
     axisAlignedBoundsFromPoints,
     computeObjectSnapDelta,
+    snapTranslationToGrid,
 } from './LP_core.js';
 
 describe('cmToFeet', () => {
@@ -55,6 +56,18 @@ describe('computeObjectSnapDelta', () => {
         const refs = [{ minX: 0, minY: 0, maxX: 100, maxY: 50 }];
         const { dx } = computeObjectSnapDelta(moving, refs, 5);
         expect(dx).toBe(0);
+    });
+});
+
+describe('snapTranslationToGrid', () => {
+    it('預設 2cm 步距與舊版 GRID_SIZE=2 一致', () => {
+        expect(snapTranslationToGrid(7, 13, 2)).toEqual({ dx: 8, dy: 14 });
+    });
+    it('5cm 步距', () => {
+        expect(snapTranslationToGrid(7, 13, 5)).toEqual({ dx: 5, dy: 15 });
+    });
+    it('10cm 步距', () => {
+        expect(snapTranslationToGrid(17, 23, 10)).toEqual({ dx: 20, dy: 20 });
     });
 });
 

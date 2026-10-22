@@ -9,6 +9,7 @@ import {
     getAxes,
     axisAlignedBoundsFromPoints,
     computeObjectSnapDelta,
+    snapTranslationToGrid,
 } from './LP_core.js';
 import { createHistoryGestureCoalescer } from './LP_layout_history.js';
 
@@ -129,6 +130,10 @@ let history = [];
 let historyIndex = -1;
 const MAX_HISTORY_STATES = 50;
 const historyGesture = createHistoryGestureCoalescer(() => commitSaveState());
+const LP_SHOW_GRID_KEY = 'lp_show_grid';
+const LP_SNAP_GRID_STEP_KEY = 'lp_snap_grid_step_cm';
+/** 拖曳位移格線吸附步距（cm）；預設 2 與改版前行為一致 */
+let snapGridStepCm = 2;
 const svgStyle = 'width="100%" height="100%" preserveAspectRatio="none"';
 const svgs = {
     sofa3: `<svg ${svgStyle} viewBox="0 0 210 90"><rect width="210" height="90" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/><rect x="10" y="10" width="190" height="20" fill="#d1d5db"/><rect x="10" y="35" width="60" height="45" rx="5" fill="#fff"/><rect x="75" y="35" width="60" height="45" rx="5" fill="#fff"/><rect x="140" y="35" width="60" height="45" rx="5" fill="#fff"/></svg>`,
@@ -1850,10 +1855,9 @@ function handleGlobalMove(e) {
 
         if (!e.shiftKey) {
             const SNAP_THRESHOLD = 10; // 吸附閾值 (px ≈ cm)
-            const GRID_SIZE = 2;
-
-            snappedDeltaX = Math.round(deltaX / GRID_SIZE) * GRID_SIZE;
-            snappedDeltaY = Math.round(deltaY / GRID_SIZE) * GRID_SIZE;
+            const gridSnapped = snapTranslationToGrid(deltaX, deltaY, snapGridStepCm);
+            snappedDeltaX = gridSnapped.dx;
+            snappedDeltaY = gridSnapped.dy;
             proposedX = startPos.x + snappedDeltaX;
             proposedY = startPos.y + snappedDeltaY;
 
@@ -2453,6 +2457,48 @@ function initWorkspaceAndUiFromStorage() {
     const sel = document.getElementById('workspace-size-select');
     if (sel) sel.value = String(getWorkspaceCanvasPx());
     updateViewZoom(viewScale);
+    initGridAndSnapSettings();
+}
+
+function applyGridLayerVisibility() {
+    const grid = document.getElementById('grid-layer');
+    const showToggle = document.getElementById('show-grid-toggle');
+    if (!grid) return;
+    const show = showToggle ? showToggle.checked : true;
+    grid.style.display = show ? 'block' : 'none';
+}
+
+function initGridAndSnapSettings() {
+    const showToggle = document.getElementById('show-grid-toggle');
+    const stepSel = document.getElementById('snap-grid-step-select');
+    try {
+        const sg = localStorage.getItem(LP_SHOW_GRID_KEY);
+        if (showToggle && sg === '0') showToggle.checked = false;
+        const st = localStorage.getItem(LP_SNAP_GRID_STEP_KEY);
+        if (st) {
+            const n = parseInt(st, 10);
+            if ([2, 5, 10].includes(n)) snapGridStepCm = n;
+        }
+    } catch (_) { /* ignore */ }
+    if (stepSel) stepSel.value = String(snapGridStepCm);
+    applyGridLayerVisibility();
+    if (showToggle) {
+        showToggle.addEventListener('change', () => {
+            applyGridLayerVisibility();
+            try {
+                localStorage.setItem(LP_SHOW_GRID_KEY, showToggle.checked ? '1' : '0');
+            } catch (_) { /* ignore */ }
+        });
+    }
+    if (stepSel) {
+        stepSel.addEventListener('change', (e) => {
+            const n = parseInt(e.target.value, 10);
+            snapGridStepCm = [2, 5, 10].includes(n) ? n : 2;
+            try {
+                localStorage.setItem(LP_SNAP_GRID_STEP_KEY, String(snapGridStepCm));
+            } catch (_) { /* ignore */ }
+        });
+    }
 }
 
 /**

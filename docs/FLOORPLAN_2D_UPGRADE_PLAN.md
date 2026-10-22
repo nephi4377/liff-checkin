@@ -61,7 +61,7 @@
 | **工作量** | M |
 | **風險** | 中：新牆資料模型需與既有 `calculateWallPath`／3D `buildLayout3DDescriptor` 相容或轉換。 |
 
-### 5. 格線與吸附步距（5／10 cm）
+### 5. 格線與吸附步距（5／10 cm） ✅（FLOORPLAN-2D-2）
 
 | 項目 | 說明 |
 |------|------|
@@ -69,6 +69,7 @@
 | **提案** | 工具列：顯示格線、主格 50cm／次格 10cm；吸附步距 1／5／10 cm（與 Shift 停用連動）。 |
 | **工作量** | S |
 | **風險** | 低。 |
+| **狀態** | **已完成（第一版）**：格線顯示開關（localStorage）；吸附步距 2／5／10 cm（預設 2）；`LP_core.snapTranslationToGrid`。次格 10cm 視覺仍待後續。 |
 
 ### 6. Undo 粒度與連續操作 ✅（FLOORPLAN-2D-2）
 
@@ -102,19 +103,23 @@
 
 ## 建議實施順序
 
-1. **本 PR**：物件吸附（S）＋ 文件  
-2. **下一輪**：格線／步距（S）＋ 匯出比例尺（M）  
+1. **#184**：物件吸附（S）＋ 文件  
+2. **FLOORPLAN-2D-2**：Undo 手勢合併（#6）＋ 格線／步距（#5）  
+3. **下一輪**：匯出比例尺（M）  
 3. **再下一輪**：尺寸標註線（M）＋ 牆段工具（M）  
 4. **長期**：平板 2D、效能索引  
 
 ---
 
-## 本 PR 已實作（最高價值 S）
+## 分支已實作
 
-- `LP_core.js`：`axisAlignedBoundsFromPoints`、`computeObjectSnapDelta` + 單元測試  
-- `LP_LayoutPlanner.js`：拖曳櫃體時套用物件吸附（Shift 停用）  
+| 階段 | 內容 |
+|------|------|
+| #184 | 物件吸附、`computeObjectSnapDelta` |
+| FLOORPLAN-2D-2 #6 | Undo 手勢合併（`LP_layout_history`） |
+| FLOORPLAN-2D-2 #5 | 格線開關、吸附步距 2／5／10 cm |
 
-**驗證**：`npm test --prefix modules/InteriorDesigned`（Vitest）；手動：開啟 LayoutPlanner，擺兩個矩形櫃，拖曳其一靠近另一邊緣應「跳齊」。
+**驗證**：`npm run test:unit --prefix modules/InteriorDesigned`；手動見 githack 連結（PR 說明）。
 
 ---
 
