@@ -8,7 +8,7 @@
 - 根目錄：`npm ci`
 - LINE Rich Menu 圖片工具：`npm ci --prefix richmenu-preview`
 - 室內設計工具：`npm ci --prefix modules/InteriorDesigned`
-- 第一次跑瀏覽器測試時，需在 `modules/InteriorDesigned` 或 repo 根目錄執行 `npx playwright install chromium --with-deps`
+- 第一次跑瀏覽器測試時，需在 `modules/InteriorDesigned` 執行 `npx playwright install chromium --with-deps`
 
 ### 啟動
 
@@ -18,4 +18,3 @@
 ### 驗證
 
 - 室內設計工具完整測試：`npm test --prefix modules/InteriorDesigned`
-- 主控台 smoke（Playwright，mock GAS／LIFF，不連正式後端）：在根目錄執行 `npm run test:console-e2e`（會自動 `serve@14` 於 `:8090`）
