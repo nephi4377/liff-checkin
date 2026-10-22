@@ -313,35 +313,79 @@
 <script>
     const projectNoInput = document.getElementById('projectNoInput');
     const projectVerifyStatus = document.getElementById('projectVerifyStatus');
+    const VERIFY_TIMEOUT_MS = 8000;
+    let verifyGen = 0;
 
-    // 自動比對案號是否存在
-    projectNoInput.addEventListener('input', debounce(async (e) => {
-        const no = e.target.value.trim();
+    function setDropZoneUnlocked(unlocked, hint) {
+        const dropZone = document.getElementById('dropZone');
+        const uploadHint = document.getElementById('uploadHint');
+        if (unlocked) dropZone.classList.remove('disabled');
+        else dropZone.classList.add('disabled');
+        if (hint) uploadHint.innerText = hint;
+    }
+
+    function withTimeout(promise, ms, message) {
+        let timer;
+        const timeout = new Promise(function (_, reject) {
+            timer = setTimeout(function () { reject(new Error(message)); }, ms);
+        });
+        return Promise.race([promise, timeout]).finally(function () {
+            if (timer) clearTimeout(timer);
+        });
+    }
+
+    /** 案號雲端檢查：失敗不可停在「檢查中」、不可只寫 console；仍可先解析本機 Excel */
+    async function verifyProjectNo(no) {
+        const gen = ++verifyGen;
         if (!no) {
-            projectVerifyStatus.innerText = "";
+            projectVerifyStatus.textContent = '';
+            setDropZoneUnlocked(false, '請先填寫案號以解鎖上傳功能');
             return;
         }
 
-        projectVerifyStatus.innerText = "⏳ 檢查中...";
-        projectVerifyStatus.style.color = "#666";
+        projectVerifyStatus.textContent = '⏳ 檢查中...';
+        projectVerifyStatus.style.color = '#666';
 
         try {
-            const snap = await db.ref(`quotations/${no}`).once('value');
+            const snap = await withTimeout(
+                db.ref('quotations/' + no).once('value'),
+                VERIFY_TIMEOUT_MS,
+                '連線逾時'
+            );
+            if (gen !== verifyGen) return;
             if (snap.exists()) {
                 const data = snap.val();
                 const itemCount = (data.context && data.context.items) ? data.context.items.length : 0;
-                projectVerifyStatus.innerText = `✅ 雲端已有資料 (${itemCount} 項)，同步時將自動比對差異。`;
-                projectVerifyStatus.style.color = "var(--secondary)";
+                projectVerifyStatus.textContent = '✅ 雲端已有資料 (' + itemCount + ' 項)，同步時將自動比對差異。';
+                projectVerifyStatus.style.color = 'var(--secondary)';
             } else {
-                projectVerifyStatus.innerText = "🆕 此案號在雲端尚無資料 (新專案)。";
-                projectVerifyStatus.style.color = "#3b82f6";
+                projectVerifyStatus.textContent = '🆕 此案號在雲端尚無資料 (新專案)。';
+                projectVerifyStatus.style.color = '#3b82f6';
             }
-            // 解鎖上傳
-            document.getElementById('dropZone').classList.remove('disabled');
-            document.getElementById('uploadHint').innerText = "將報價單 Excel 拖曳至此或點擊選取檔案 (.xlsx)";
+            setDropZoneUnlocked(true, '將報價單 Excel 拖曳至此或點擊選取檔案 (.xlsx)');
         } catch (err) {
             console.error('[Verify] 案號檢查失敗:', err);
+            if (gen !== verifyGen) return;
+            projectVerifyStatus.style.color = '#c5221f';
+            projectVerifyStatus.textContent = '';
+            const msg = document.createElement('span');
+            msg.textContent = '讀不到雲端是否已有此案。仍可先上傳解析；同步時再連一次。';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.id = 'btnRetryVerify';
+            btn.textContent = '再試';
+            btn.style.cssText = 'margin-left:8px;font-size:12px;padding:6px 12px;border:1px solid #c5221f;border-radius:6px;background:#fff;color:#c5221f;cursor:pointer;min-height:32px;';
+            btn.addEventListener('click', function () {
+                verifyProjectNo(projectNoInput.value.trim());
+            });
+            projectVerifyStatus.appendChild(msg);
+            projectVerifyStatus.appendChild(btn);
+            setDropZoneUnlocked(true, '雲端檢查未成功，仍可先選檔解析；同步時才需要連上雲端');
         }
+    }
+
+    projectNoInput.addEventListener('input', debounce(function (e) {
+        verifyProjectNo(e.target.value.trim());
     }, 500));
 
     window.handleUploadClick = () => {
@@ -503,7 +547,13 @@
         authDomain: "",
         projectId: ""
     };
-    let fbConfig = { ...FB_CONFIG_DEFAULT, ...(JSON.parse(localStorage.getItem('fb_audit_config')) || {}) };
+    let storedFbConfig = {};
+    try {
+        storedFbConfig = JSON.parse(localStorage.getItem('fb_audit_config') || 'null') || {};
+    } catch (e) {
+        storedFbConfig = {};
+    }
+    let fbConfig = { ...FB_CONFIG_DEFAULT, ...storedFbConfig };
 
     function firebaseAuthConfigured() {
         const k = (fbConfig.apiKey != null ? String(fbConfig.apiKey) : '').trim();
