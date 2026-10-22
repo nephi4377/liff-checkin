@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=7" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=106"></script>
+  <script src="../../shared/js/accounting_api.js?v=107"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=20"></script>
   <script src="../../shared/js/accounting_ui.js?v=33"></script>
@@ -318,6 +318,13 @@
       <div id="historyFilters">
         <p class="hint" style="margin:0 0 8px;grid-column:1/-1">本頁只查<strong>收支登錄</strong>（已收／已付記帳）。已送出請款請到「<a href="submit_records.html">送出紀錄</a>」。</p>
         <input type="hidden" id="histRecordKind" value="ledger" />
+        <div class="full hidden" id="histScopeRow">
+          <label for="histScope">記帳範圍</label>
+          <select id="histScope">
+            <option value="all">全部</option>
+            <option value="mine">只看我記的</option>
+          </select>
+        </div>
         <div>
           <label for="histDateFrom">記帳時間起</label>
           <input id="histDateFrom" type="date" />
@@ -585,6 +592,33 @@
         } catch (eHub) {}
         // 與會計選單一致：取 HUB／驗證較高者，避免 auth soft timeout／舊快取把 ≥3 降成 0 後藏標註鈕
         return Math.max(authPerm, hubPerm);
+      }
+
+      function canViewAllLedgerHistory() {
+        var min = (typeof AccountingApi !== 'undefined' && AccountingApi.MIN_PERMISSION) || 0;
+        return sessionPerm() >= min;
+      }
+
+      function readHistoryMineOnlyFlag() {
+        if (!canViewAllLedgerHistory()) return true;
+        var scope = document.getElementById('histScope');
+        return scope && (scope.value || 'all') === 'mine';
+      }
+
+      function syncHistoryScopeUi() {
+        var row = document.getElementById('histScopeRow');
+        var hint = document.getElementById('pageModeHint');
+        var canAll = canViewAllLedgerHistory();
+        if (row) row.classList.toggle('hidden', !canAll);
+        if (!hint) return;
+        if (!canAll) {
+          hint.innerHTML = '權限 3 僅能<strong>查自己記的帳</strong>（唯讀）。可用廠商名／金額篩選；點列看詳情與<strong>圖片集</strong>。預設近 30 天。請款請用「送出紀錄」。';
+          return;
+        }
+        var mineOnly = readHistoryMineOnlyFlag();
+        hint.innerHTML = mineOnly
+          ? '目前為<strong>只看我記的</strong>。權限 ≥4 亦可改回「全部」看他人紀錄。唯讀查詢；點列看詳情與<strong>圖片集</strong>。'
+          : '權限 ≥4 可<strong>查全部人</strong>或改選只看我記的。唯讀查詢廠商／金額；點列看詳情與<strong>圖片集</strong>。預設近 30 天。';
       }
 
       /** 歷史記帳＝唯讀查詢＋看圖；不提供標示／刪除／改帳（那些走送出紀錄或其他頁） */
@@ -1468,10 +1502,9 @@
         var amountRaw = (document.getElementById('histAmount').value || '').trim();
         var recordKind = (document.getElementById('histRecordKind').value || 'all').trim() || 'all';
         // 不傳 months：分頁依交易日存放，掃幾個月由後端依記帳時間窗決定（避免只掃1月漏倒填）
-        // 固定全部人（本頁已無「本人」篩選開關）
         var filters = {
           limit: 50,
-          mine_only: false,
+          mine_only: readHistoryMineOnlyFlag(),
           date_from: dates.from,
           date_to: dates.to,
           record_kind: recordKind
@@ -1491,7 +1524,10 @@
         document.getElementById('histKeyword').value = '';
         document.getElementById('histAmount').value = '';
         document.getElementById('histRecordKind').value = 'ledger';
+        var scope = document.getElementById('histScope');
+        if (scope) scope.value = 'all';
         syncRecordKindTabs();
+        syncHistoryScopeUi();
       }
 
       function renderEmptyExpandActions(from, to) {
@@ -1544,7 +1580,8 @@
           var kindLabel = kind === 'payment_request'
             ? '待付款請款'
             : (kind === 'ledger' ? '收支登錄' : '全部來源');
-          var bits = [kindLabel, '所有人紀錄', from + '～' + to];
+          var mineOnly = data.mine_only !== undefined ? !!data.mine_only : !!filters.mine_only;
+          var bits = [kindLabel, mineOnly ? '只看我記的' : '所有人紀錄', from + '～' + to];
           if (filters.type) bits.push(filters.type);
           if (filters.keyword) bits.push('「' + filters.keyword + '」');
           if (filters.amount != null) bits.push('$' + filters.amount);
@@ -1582,6 +1619,13 @@
       }
 
       function bindFilters() {
+        var scope = document.getElementById('histScope');
+        if (scope) {
+          scope.addEventListener('change', function () {
+            syncHistoryScopeUi();
+            loadLedgerHistory();
+          });
+        }
         Array.prototype.forEach.call(document.querySelectorAll('.hist-kind-tab'), function (btn) {
           btn.addEventListener('click', function () {
             var kind = btn.getAttribute('data-kind') || 'all';
@@ -1638,6 +1682,7 @@
           preloadBootstrap: false,
           onReady: async function (sess) {
             sessionRef = sess;
+            syncHistoryScopeUi();
             await loadLedgerHistory();
           }
         });
