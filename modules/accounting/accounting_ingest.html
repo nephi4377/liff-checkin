@@ -225,6 +225,7 @@
       var pendingPhotosLoadedOk = false;
       var pendingPhotoLoadGen = 0;
       var pendingPhotoLoadPromise = null;
+      var submitting = false;
 
       function invalidatePendingPhotoLoads() {
         pendingPhotoLoadGen++;
@@ -727,6 +728,47 @@
         return pendingPhotoLoadPromise;
       }
 
+      function pendingLinePhotoCarryFailed() {
+        if (!queryParams.pending) return false;
+        var box = document.getElementById('pendingPhotoError');
+        return !!(box && !box.classList.contains('hidden'));
+      }
+      function askSubmitWithoutLinePhotos() {
+        var titleEl = document.getElementById('dupConfirmTitle');
+        var okBtn = document.getElementById('dupConfirmOk');
+        var cancelBtn = document.getElementById('dupConfirmCancel');
+        var prevTitle = titleEl ? titleEl.textContent : '';
+        var prevOk = okBtn ? okBtn.textContent : '';
+        var prevCancel = cancelBtn ? cancelBtn.textContent : '';
+        if (titleEl) titleEl.textContent = '照片未帶入';
+        if (okBtn) okBtn.textContent = '仍要送出';
+        if (cancelBtn) cancelBtn.textContent = '先不要';
+        return askDupConfirm('LINE 照片沒帶到，仍要送出？').then(function (ok) {
+          if (titleEl) titleEl.textContent = prevTitle;
+          if (okBtn) okBtn.textContent = prevOk;
+          if (cancelBtn) cancelBtn.textContent = prevCancel;
+          return ok;
+        });
+      }
+      function releaseIngestSubmit(btn) {
+        submitting = false;
+        if (btn && typeof AccountingUi !== 'undefined' && AccountingUi.setBtnBusy) {
+          AccountingUi.setBtnBusy(btn, false);
+        }
+      }
+      async function ingestSubmitPhotoGate(btn) {
+        var waitP = pendingPhotoLoadPromise;
+        if (pendingPhotoBusy && waitP) {
+          AccountingUi.setBtnBusy(btn, true, '照片帶入中…');
+          try {
+            await waitP;
+          } catch (eWait) { /* carry error already surfaced */ }
+        }
+        if (pendingLinePhotoCarryFailed()) {
+          return await askSubmitWithoutLinePhotos();
+        }
+        return true;
+      }
       function askDupConfirm(message) {
         var overlay = document.getElementById('dupConfirmOverlay');
         var msgEl = document.getElementById('dupConfirmMsg');
@@ -768,90 +810,91 @@
             return;
           }
         }
-        if (pendingPhotoBusy && pendingPhotoLoadPromise) {
-          setWarn('照片還在帶入，請稍候');
-          try {
-            await pendingPhotoLoadPromise;
-          } catch (eWait) { /* carry error already surfaced */ }
-          setWarn('');
-        }
+        if (submitting) return;
+        submitting = true;
         var btn = document.getElementById('submit');
-        await AccountingUi.runAsync(btn, {
-          actionLabel: '送出這一筆',
-          busyLabel: '送出中…',
-          toastOnOk: false,
-          toastOnFail: false
-        }, async function () {
-          AccountingUi.tap('送出這一筆');
-          var fields = collectFields();
-          var photos = pendingPhotos.slice().concat(localPhotos);
-          invalidatePendingPhotoLoads();
-          var body = {
-            action: 'accounting_form_submit',
-            source: queryParams.source || ((sessionRef && sessionRef.fromHub) ? 'hub' : 'liff'),
-            user_id: profile.userId,
-            display_name: profile.displayName,
-            payload: { format: kind.value, fields: fields, photos: photos }
-          };
-          attachIngestAuth(body);
-          var data = await AccountingApi.post(body);
-          if (!data.success && data.needs_dup_confirm) {
-            var prior = data.duplicate_prior || {};
-            var dupMsg = data.message || '';
-            if (!dupMsg) {
-              var bits = [];
-              if (prior.type) bits.push(prior.type);
-              if (prior.amount != null) bits.push('$' + prior.amount);
-              if (prior.txn_date_display || prior.txn_date) {
-                bits.push(prior.txn_date_display || prior.txn_date);
+        try {
+          var proceed = await ingestSubmitPhotoGate(btn);
+          if (!proceed) return;
+          await AccountingUi.runAsync(btn, {
+            actionLabel: '送出這一筆',
+            busyLabel: '送出中…',
+            toastOnOk: false,
+            toastOnFail: false
+          }, async function () {
+            AccountingUi.tap('送出這一筆');
+            var fields = collectFields();
+            var photos = pendingPhotos.slice().concat(localPhotos);
+            invalidatePendingPhotoLoads();
+            var body = {
+              action: 'accounting_form_submit',
+              source: queryParams.source || ((sessionRef && sessionRef.fromHub) ? 'hub' : 'liff'),
+              user_id: profile.userId,
+              display_name: profile.displayName,
+              payload: { format: kind.value, fields: fields, photos: photos }
+            };
+            attachIngestAuth(body);
+            var data = await AccountingApi.post(body);
+            if (!data.success && data.needs_dup_confirm) {
+              var prior = data.duplicate_prior || {};
+              var dupMsg = data.message || '';
+              if (!dupMsg) {
+                var bits = [];
+                if (prior.type) bits.push(prior.type);
+                if (prior.amount != null) bits.push('$' + prior.amount);
+                if (prior.txn_date_display || prior.txn_date) {
+                  bits.push(prior.txn_date_display || prior.txn_date);
+                }
+                if (prior.party_name || prior.desc) bits.push(prior.party_name || prior.desc);
+                var where = (prior.sheet && prior.row)
+                  ? ('「' + prior.sheet + '」第 ' + prior.row + ' 列')
+                  : '稍早一筆';
+                dupMsg = '疑似重複記帳（同類型、同金額、同日期）';
+                if (bits.length) dupMsg += '。已有：' + bits.join('｜') + '，在 ' + where;
+                else dupMsg += '，可能已在 ' + where;
+                dupMsg += '。是重複點擊／重送請按「取消」；今天真的有兩筆再按「確定」。';
               }
-              if (prior.party_name || prior.desc) bits.push(prior.party_name || prior.desc);
-              var where = (prior.sheet && prior.row)
-                ? ('「' + prior.sheet + '」第 ' + prior.row + ' 列')
-                : '稍早一筆';
-              dupMsg = '疑似重複記帳（同類型、同金額、同日期）';
-              if (bits.length) dupMsg += '。已有：' + bits.join('｜') + '，在 ' + where;
-              else dupMsg += '，可能已在 ' + where;
-              dupMsg += '。是重複點擊／重送請按「取消」；今天真的有兩筆再按「確定」。';
+              var forceOk = await askDupConfirm(dupMsg);
+              if (!forceOk) throw new Error('已取消，沒有再記一筆');
+              body.force_duplicate = true;
+              data = await AccountingApi.post(body);
             }
-            var forceOk = await askDupConfirm(dupMsg);
-            if (!forceOk) throw new Error('已取消，沒有再記一筆');
-            body.force_duplicate = true;
-            data = await AccountingApi.post(body);
-          }
-          if (!data || data.success === false) {
-            throw new Error((data && data.message) || '未成功，請重試。');
-          }
-          if (!data.sheet || !data.row) {
-            throw new Error('未成功，請重試。後端沒有回傳列號。');
-          }
-          appendRecentLine({
-            kindVal: kind.value,
-            type: kind.value === 'A' ? '收入' : '支出',
-            txn_date: fields.txn_date,
-            amount: fields.amount,
-            party_name: fields.party_name,
-            item_desc: fields.item_desc,
-            sheet: data.sheet,
-            row: data.row,
-            ingest_id: data.ingest_id || ''
+            if (!data || data.success === false) {
+              throw new Error((data && data.message) || '未成功，請重試。');
+            }
+            if (!data.sheet || !data.row) {
+              throw new Error('未成功，請重試。後端沒有回傳列號。');
+            }
+            appendRecentLine({
+              kindVal: kind.value,
+              type: kind.value === 'A' ? '收入' : '支出',
+              txn_date: fields.txn_date,
+              amount: fields.amount,
+              party_name: fields.party_name,
+              item_desc: fields.item_desc,
+              sheet: data.sheet,
+              row: data.row,
+              ingest_id: data.ingest_id || ''
+            });
+            clearVolatileFields(true);
+            if (data.after_error) {
+              setWarn('已記入「' + data.sheet + '」第 ' + data.row +
+                ' 列，但後續補資料失敗。帳已留下，請勿再送同一筆；需要時再請資訊協助補齊。');
+            } else {
+              var okLine = '記好了！第 ' + sessionCount + ' 筆（' + data.sheet + ' 第 ' + data.row +
+                ' 列）。表單已清空，可再填下一筆。';
+              if (data.groupNotified) okLine += ' · 已同步通知';
+              setOk(okLine);
+            }
+            if (data.deferred_token) {
+              flushFormDeferredInBackground(data.deferred_token, data.sheet, data.row);
+            }
           });
-          clearVolatileFields(true);
-          if (data.after_error) {
-            setWarn('已記入「' + data.sheet + '」第 ' + data.row +
-              ' 列，但後續補資料失敗。帳已留下，請勿再送同一筆；需要時再請資訊協助補齊。');
-          } else {
-            var okLine = '記好了！第 ' + sessionCount + ' 筆（' + data.sheet + ' 第 ' + data.row +
-              ' 列）。表單已清空，可再填下一筆。';
-            if (data.groupNotified) okLine += ' · 已同步通知';
-            setOk(okLine);
-          }
-          if (data.deferred_token) {
-            flushFormDeferredInBackground(data.deferred_token, data.sheet, data.row);
-          }
-        }).catch(function (e) {
+        } catch (e) {
           setMsg(humanFailMessage(e && e.message ? e.message : e));
-        });
+        } finally {
+          releaseIngestSubmit(btn);
+        }
       }
 
       document.getElementById('submit').addEventListener('click', submitEntry);

@@ -86,6 +86,84 @@ function makeDom() {
   return { document, $, nodes };
 }
 
+function bootSubmitFlow(extra) {
+  const { document, $ } = makeDom();
+  const pendingPhotos = [];
+  const localPhotos = [];
+  let pendingPhotoBusy = false;
+  let pendingPhotosLoadedOk = false;
+  let pendingPhotoLoadGen = 0;
+  let pendingPhotoLoadPromise = null;
+  let submitting = false;
+  const queryParams = extra.queryParams || { pending: 'tok1' };
+  const profile = { userId: 'u1', displayName: 'Test' };
+  let askSubmitAnswer = extra.askSubmitAnswer !== undefined ? extra.askSubmitAnswer : true;
+  let btnBusyLabel = '';
+
+  const snippet = [
+    'function invalidatePendingPhotoLoads() { pendingPhotoLoadGen++; }',
+    extractFunctionBlock(html, 'humanLineCarryErr'),
+    extractFunctionBlock(html, 'showLineCarryError'),
+    extractFunctionBlock(html, 'clearLineCarryError'),
+    extractFunctionBlock(html, 'applyIncomingPendingPhotos'),
+    extractFunctionBlock(html, 'fetchPendingPhotosOnce'),
+    extractFunctionBlock(html, 'fetchPendingPhotosRetry'),
+    extractFunctionBlock(html, 'loadPendingPhotos'),
+    extractFunctionBlock(html, 'pendingLinePhotoCarryFailed'),
+    extractFunctionBlock(html, 'releaseIngestSubmit'),
+    'function askDupConfirm(msg) { return Promise.resolve(askSubmitAnswer); }',
+    extractFunctionBlock(html, 'askSubmitWithoutLinePhotos'),
+    extractFunctionBlock(html, 'ingestSubmitPhotoGate'),
+    'function showPendingPreviews() {}',
+    'function updatePhotoCountLine() {',
+    '  var n = pendingPhotos.length + localPhotos.length;',
+    '  document.getElementById("photoCountLine").textContent = "已 " + n + " 張";',
+    '}',
+    'function attachIngestAuth(body) { body.user_id = profile.userId; }',
+    'async function simulateIngestSubmit() {',
+    '  if (submitting) return;',
+    '  submitting = true;',
+    '  var btn = document.getElementById("submit");',
+    '  try {',
+    '    var proceed = await ingestSubmitPhotoGate(btn);',
+    '    if (!proceed) return;',
+    '    await AccountingUi.runAsync(btn, {}, async function () {',
+    '      await AccountingApi.post({ action: "accounting_form_submit", user_id: profile.userId });',
+    '    });',
+    '  } finally {',
+    '    releaseIngestSubmit(btn);',
+    '  }',
+    '}'
+  ].join('\n');
+
+  const AccountingUi = {
+    setBtnBusy(btn, on, label) {
+      if (on) btnBusyLabel = label || '';
+      else btnBusyLabel = '';
+    },
+    runAsync: extra.runAsync || (async (btn, _opts, fn) => fn())
+  };
+
+  const sandbox = {
+    document,
+    profile,
+    queryParams,
+    pendingPhotos,
+    localPhotos,
+    pendingPhotoBusy,
+    pendingPhotosLoadedOk,
+    pendingPhotoLoadGen,
+    pendingPhotoLoadPromise,
+    submitting,
+    askSubmitAnswer,
+    AccountingApi: extra.AccountingApi,
+    AccountingUi
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(snippet, sandbox);
+  return { sandbox, $, getBtnBusyLabel: () => btnBusyLabel };
+}
+
 function bootIngestApi(extra) {
   const { document, $ } = makeDom();
   const pendingPhotos = [];
@@ -135,7 +213,8 @@ test('html has error region and retry copy (no silent catch)', () => {
   assert.ok(html.includes('id="pendingPhotoError"'));
   assert.ok(html.includes('pendingPhotosLoadedOk'));
   assert.ok(html.includes('pendingPhotoLoadGen'));
-  assert.ok(html.includes('照片還在帶入，請稍候'));
+  assert.ok(html.includes('照片帶入中'));
+  assert.ok(html.includes('LINE 照片沒帶到，仍要送出'));
   assert.ok(html.includes('再帶一次照片'));
   assert.ok(html.includes('loadPendingPhotos(queryParams.pending).catch(function () {})'));
   assert.ok(!html.includes('await loadPendingPhotos(queryParams.pending)'));
@@ -258,4 +337,82 @@ test('submit-before-load: wait for in-flight load then snapshot includes photos'
   vm.runInContext('invalidatePendingPhotoLoads()', sandbox);
   resolvePost = null;
   assert.equal(sandbox.pendingPhotoLoadGen, 1);
+});
+
+test('double-click during photo wait yields exactly one form submit', async () => {
+  let resolvePending;
+  let formSubmits = 0;
+  const { sandbox } = bootSubmitFlow({
+    queryParams: { pending: 'tok1' },
+    AccountingApi: {
+      post: async (body) => {
+        if (body.action === 'accounting_pending_photos') {
+          return new Promise((resolve) => {
+            resolvePending = resolve;
+          });
+        }
+        if (body.action === 'accounting_form_submit') {
+          formSubmits++;
+          return { success: true, sheet: 'S', row: 1 };
+        }
+        throw new Error('unexpected action ' + body.action);
+      }
+    }
+  });
+  vm.runInContext('loadPendingPhotos("tok1")', sandbox);
+  assert.equal(sandbox.pendingPhotoBusy, true);
+  const first = vm.runInContext('simulateIngestSubmit()', sandbox);
+  const second = vm.runInContext('simulateIngestSubmit()', sandbox);
+  resolvePending({
+    success: true,
+    photos: [{ dataBase64: 'ok', mimeType: 'image/jpeg' }]
+  });
+  await Promise.all([first, second]);
+  assert.equal(formSubmits, 1);
+});
+
+test('failed LINE photo load asks before submit; cancel skips post', async () => {
+  let formSubmits = 0;
+  const { sandbox } = bootSubmitFlow({
+    queryParams: { pending: 'tok1' },
+    askSubmitAnswer: false,
+    AccountingApi: {
+      post: async (body) => {
+        if (body.action === 'accounting_pending_photos') {
+          throw new Error('network');
+        }
+        if (body.action === 'accounting_form_submit') {
+          formSubmits++;
+          return { success: true, sheet: 'S', row: 1 };
+        }
+        throw new Error('unexpected');
+      }
+    }
+  });
+  await vm.runInContext('loadPendingPhotos("tok1")', sandbox);
+  await vm.runInContext('simulateIngestSubmit()', sandbox);
+  assert.equal(formSubmits, 0);
+});
+
+test('failed LINE photo load confirm ok proceeds to submit', async () => {
+  let formSubmits = 0;
+  const { sandbox } = bootSubmitFlow({
+    queryParams: { pending: 'tok1' },
+    askSubmitAnswer: true,
+    AccountingApi: {
+      post: async (body) => {
+        if (body.action === 'accounting_pending_photos') {
+          throw new Error('network');
+        }
+        if (body.action === 'accounting_form_submit') {
+          formSubmits++;
+          return { success: true, sheet: 'S', row: 1 };
+        }
+        throw new Error('unexpected');
+      }
+    }
+  });
+  await vm.runInContext('loadPendingPhotos("tok1")', sandbox);
+  await vm.runInContext('simulateIngestSubmit()', sandbox);
+  assert.equal(formSubmits, 1);
 });
