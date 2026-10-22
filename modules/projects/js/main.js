@@ -25,6 +25,12 @@
 
 // [v521.0 修正] 移除多餘的 api.js 和 handlers.js 引入，並修正所有模組的相對路徑。
 import { request as apiRequest } from './projectApi.js?v=26.09.22.1';
+import {
+  appendConsoleLiffToUrl,
+  getConsoleLiffIdToken,
+  primeConsoleLiffFromParentMessage,
+  restoreConsoleHashAfterRelogin,
+} from '/shared/js/console_liff_session.js';
 import { logToPage, showGlobalNotification } from '/shared/js/utils.js'; // [v544.0 修正] 改為絕對路徑
 import { displaySkeletonLoader, displayError, renderLogPage, displayProjectInfo, renderPostCreator, _buildLogCard, renderCommunicationHistory, lazyLoadImages } from './ui.js?v=26.09.22.1';
 import * as LogActions from './logActions.js';
@@ -418,8 +424,13 @@ function setupScrollListener() {
  */
 async function refreshData(projectId, userId, API_BASE_URL) {
   // [v602.0 重構] 改為使用統一的 apiRequest 函式，不再直接使用 fetch。
-  const fetchUrl = `${CONFIG.GAS_WEB_APP_URL}?page=project&id=${encodeURIComponent(projectId)}&userId=${encodeURIComponent(userId)}`;
-  const response = await fetch(fetchUrl); // 維持 fetch，因為此函式在 apiRequest 之外
+  const idToken = await getConsoleLiffIdToken();
+  let url = new URL(CONFIG.GAS_WEB_APP_URL);
+  url.searchParams.set('page', 'project');
+  url.searchParams.set('id', projectId);
+  url.searchParams.set('userId', userId);
+  url = appendConsoleLiffToUrl(url, idToken);
+  const response = await fetch(url.toString()); // 維持 fetch，因為此函式在 apiRequest 之外
   const freshData = await response.json();
 
   const oldDataSignature = JSON.stringify({ overview: state.overview, schedule: state.currentScheduleData, dailyLogs: state.currentLogsData, communicationHistory: state.communicationHistory });
@@ -684,7 +695,21 @@ window.refreshProjectData = refreshProjectData;
  * - 流程重構為「先認證，後載入」，確保只有通過 LINE LIFF 登入的使用者才能看到頁面內容。
  * - 移除了在認證前顯示快取資料的邏輯，改為在認證成功後才顯示載入動畫並請求資料。
  */
+function setupConsoleLiffParentBridge() {
+  window.addEventListener('message', (event) => {
+    if (!event.data) return;
+    if (event.data.type === 'hub_liff_token') {
+      primeConsoleLiffFromParentMessage(event.data.token || '', event.origin);
+    }
+  });
+  try {
+    getConsoleLiffIdToken().catch(() => {});
+  } catch (e) { /* ignore */ }
+}
+
 async function initializeApp() {
+  setupConsoleLiffParentBridge();
+  restoreConsoleHashAfterRelogin();
   // [v425.0 架構優化] 支援混合模式 (從主控台內嵌 或 直接LIFF開啟)
   const urlParams = new URLSearchParams(window.location.search);
   let projectId = urlParams.get('id');

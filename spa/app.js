@@ -3,6 +3,12 @@ import ProjectBoard from './ProjectBoard.js?v=26.08.30.1';
 import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.07.24.1';
 import HubLeftSidebar from './HubLeftSidebar.js?v=26.08.31.2';
 import { mergeHubPaymentTodosFetch } from './hubPaymentTodos.js?v=26.08.29.1';
+import {
+    appendConsoleLiffToUrl,
+    getConsoleLiffIdToken,
+    mergeConsoleLiffAuth,
+    isConsoleLiffSessionError,
+} from '../shared/js/console_liff_session.js';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
 import { saveCache, loadCache, loadHubPresenceCache, saveHubPresenceCache, loadDailyCache, saveDailyCache, purgeStaleDailyCaches, hubSidebarDailyCacheKey, hubPresenceTodayStr } from '../shared/js/utils.js?v=26.07.24.1';
@@ -710,11 +716,13 @@ const App = {
             hubProjectsInflight = (async () => {
                 try {
                     const user = currentUser.value || { userId: userProfile.value.userId, userName: userProfile.value.displayName, permission: 1, group: '未分類' };
-                    const url = new URL(CONFIG.GAS_WEB_APP_URL);
+                    const idToken = refreshHubIdToken() || '';
+                    let url = new URL(CONFIG.GAS_WEB_APP_URL);
                     url.searchParams.append('page', 'get_hub_projects_data');
                     url.searchParams.append('userId', userProfile.value.userId);
                     url.searchParams.append('userProfile', JSON.stringify(user));
-                    const response = await fetch(url); // 移除手動設定的 header
+                    url = appendConsoleLiffToUrl(url, idToken);
+                    const response = await fetch(url.toString()); // 移除手動設定的 header
                     const text = await response.text();
                     const trimmed = (text || '').trim();
                     if (!trimmed || trimmed.charAt(0) === '<') {
@@ -832,7 +840,8 @@ const App = {
 
         const processNotificationAction = async (payload) => {
             try {
-                const apiPayload = { ...payload, action: 'process_notification_action' };
+                const idToken = refreshHubIdToken() || await getConsoleLiffIdToken({ allowParent: false });
+                const apiPayload = mergeConsoleLiffAuth({ ...payload, action: 'process_notification_action' }, idToken);
                 // [v549.0 CORS 修正] 將請求方式改為 FormData，以繞過 CORS 預檢請求。
                 const formData = new FormData();
                 formData.append('payload', JSON.stringify(apiPayload)); // [v602.0 重構] 改為使用 CONFIG
@@ -841,7 +850,12 @@ const App = {
                     body: formData,
                 });
                 const result = await response.json();
-                if (!result.success) throw new Error(result.message);
+                if (!result.success) {
+                    if (isConsoleLiffSessionError(result.message)) {
+                        reloginHubLiff();
+                    }
+                    throw new Error(result.message);
+                }
                 return result;
             } catch (error) {
                 console.error('[API] 處理通知動作失敗:', error);
@@ -1030,6 +1044,7 @@ const App = {
                 return;
             }
             if (type === 'request_hub_liff_token') {
+                if (event.origin !== window.location.origin) return;
                 let tok = '';
                 try {
                     tok = refreshHubIdToken();

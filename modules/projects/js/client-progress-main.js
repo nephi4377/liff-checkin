@@ -581,10 +581,13 @@ async function resolveUserId() {
 }
 
 async function fetchProject(userId) {
-  const url = new URL(CONFIG.GAS_WEB_APP_URL);
+  const { getConsoleLiffIdToken, appendConsoleLiffToUrl } = await import('/shared/js/console_liff_session.js');
+  const idToken = await getConsoleLiffIdToken();
+  let url = new URL(CONFIG.GAS_WEB_APP_URL);
   url.searchParams.set('page', 'project');
   url.searchParams.set('id', projectId);
   url.searchParams.set('userId', userId);
+  url = appendConsoleLiffToUrl(url, idToken);
 
   const res = await fetch(url.toString());
   const json = await res.json();
