@@ -79,7 +79,7 @@ function nearestPointOnSegmentXZ(x, z, a, b) {
     const px = a.x + t * abx;
     const pz = a.z + t * abz;
     const d2 = (x - px) ** 2 + (z - pz) ** 2;
-    return { x: px, z: pz, d2 };
+    return { x: px, z: pz, d2, t };
 }
 
 /**
@@ -157,6 +157,58 @@ export function pointInPolygonXZ(x, z, ring) {
 /** 是否在牆環帶內（外圈內、內圈外） */
 export function pointInWallBand(x, z, wall) {
     return pointInPolygonXZ(x, z, wall.outer) && !pointInPolygonXZ(x, z, wall.inner);
+}
+
+export function fixtureFootprintSamplePointsXZ(fixture) {
+    const w = fixture.widthCm || 80;
+    const d = fixture.depthCm || 15;
+    const rad = ((fixture.rotationDeg || 0) * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const pts = [{ x: fixture.centerX, z: fixture.centerZ }];
+    for (const [lx, lz] of [
+        [-w / 2, -d / 2],
+        [w / 2, -d / 2],
+        [w / 2, d / 2],
+        [-w / 2, d / 2],
+    ]) {
+        pts.push({
+            x: fixture.centerX + lx * cos - lz * sin,
+            z: fixture.centerZ + lx * sin + lz * cos,
+        });
+    }
+    return pts;
+}
+
+function estimateWallThicknessFromRings(wall) {
+    if (!wall?.inner?.length || !wall?.outer?.length) return 15;
+    const a = wall.inner[0];
+    const o = wall.outer[0];
+    return Math.max(8, Math.hypot(o.x - a.x, o.z - a.z));
+}
+
+const OPENING_WALL_EDGE_MARGIN_CM = 8;
+
+/** 門／窗是否屬於此牆（牆帶內或貼齊此牆 inner 邊，非任意遠距牆邊） */
+export function openingAssociatesWithWall(wall, fixture) {
+    if (!fixture || (fixture.kind !== 'door' && fixture.kind !== 'window')) return false;
+    for (const p of fixtureFootprintSamplePointsXZ(fixture)) {
+        if (pointInWallBand(p.x, p.z, wall)) return true;
+    }
+    const thickness = estimateWallThicknessFromRings(wall);
+    const maxPerp = Math.max(thickness, fixture.depthCm || 15) + OPENING_WALL_EDGE_MARGIN_CM;
+    const maxPerp2 = maxPerp * maxPerp;
+    const inner = wall.inner;
+    if (!inner || inner.length < 3) return false;
+    for (const p of fixtureFootprintSamplePointsXZ(fixture)) {
+        for (let i = 0; i < inner.length; i++) {
+            const a = inner[i];
+            const b = inner[(i + 1) % inner.length];
+            const hit = nearestPointOnSegmentXZ(p.x, p.z, a, b);
+            if (hit.d2 <= maxPerp2) return true;
+        }
+    }
+    return false;
 }
 
 export function openingCutsWall(wall, fixture) {
@@ -312,5 +364,30 @@ export function buildLayout3DDescriptor(layout, options = {}) {
     }
     const walkBounds = walkRings.length ? { rings: walkRings } : null;
 
-    return { workspaceSize, walls, fixtures, floors, ceilings, walkBounds };
+    /** 兩點直線隔間牆（中心線＋厚度），供漫遊碰撞 */
+    const partitionWalls = [];
+    for (const area of layout.drawnAreas || []) {
+        if (area.type !== 'wall' || !area.points || area.points.length !== 2) continue;
+        const thickness = area.thickness || 15;
+        const p0 = canvasToSceneXZ(area.points[0].x, area.points[0].y, workspaceSize);
+        const p1 = canvasToSceneXZ(area.points[1].x, area.points[1].y, workspaceSize);
+        partitionWalls.push({
+            id: area.id,
+            ax: p0.x,
+            az: p0.z,
+            bx: p1.x,
+            bz: p1.z,
+            thicknessCm: thickness,
+        });
+    }
+
+    return {
+        workspaceSize,
+        walls,
+        fixtures,
+        floors,
+        ceilings,
+        walkBounds,
+        partitionWalls,
+    };
 }

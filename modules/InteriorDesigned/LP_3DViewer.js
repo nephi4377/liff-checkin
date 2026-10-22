@@ -12,6 +12,11 @@ import {
     createLabelSprite,
 } from './LP_3D_furniture.js';
 import { createWalkController } from './LP_3D_walk.js';
+import {
+    createWalkCollisionCache,
+    resolveWalkBodyRadiusCm,
+    resolveWalkSpawnXZ,
+} from './LP_3D_walk_collision.js';
 
 function makeShapeFromRing(outer, inner) {
     const shape = new THREE.Shape();
@@ -104,6 +109,7 @@ export function createLayoutPlanner3DViewer(options) {
     let viewMode = 'orbit';
     let showCeiling = true;
     let lastDesc = null;
+    const walkCollisionCache = createWalkCollisionCache();
     let lastTick = performance.now();
     let orbitBookmark = null;
 
@@ -159,8 +165,11 @@ export function createLayoutPlanner3DViewer(options) {
     function resetWalkCamera(desc) {
         const ring = desc.walkBounds?.rings?.[0];
         const c = ring?.length ? ringCentroidXZ(ring) : { x: 0, z: 0 };
-        walk.setPosition(c.x, c.z);
-        walk.lookAt(c.x, c.z - 80);
+        const bodyR = resolveWalkBodyRadiusCm(desc);
+        const collision = walkCollisionCache.get(desc);
+        const spawn = resolveWalkSpawnXZ(c.x, c.z, collision, bodyR);
+        walk.setPosition(spawn.x, spawn.z);
+        walk.lookAt(spawn.x, spawn.z - 80);
     }
 
     function ensureWalk() {
@@ -170,6 +179,8 @@ export function createLayoutPlanner3DViewer(options) {
             domElement: renderer.domElement,
             eyeHeightCm: LP_3D_DEFAULTS.WALK_EYE_HEIGHT_CM,
             getWalkBounds: () => lastDesc?.walkBounds ?? null,
+            getWalkCollision: () => walkCollisionCache.get(lastDesc),
+            getWalkBodyRadiusCm: () => (lastDesc ? resolveWalkBodyRadiusCm(lastDesc) : 20),
         });
     }
 
@@ -265,6 +276,7 @@ export function createLayoutPlanner3DViewer(options) {
             drawnAreas: raw.drawnAreas,
         });
         lastDesc = desc;
+        walkCollisionCache.invalidate();
         const defaults = LP_3D_DEFAULTS;
         const openings = desc.fixtures.filter((f) => f.kind === 'door' || f.kind === 'window');
 
@@ -365,6 +377,19 @@ export function createLayoutPlanner3DViewer(options) {
         animationId = requestAnimationFrame(tick);
     }
 
+    function publishTestHooks() {
+        if (typeof window === 'undefined') return;
+        if (new URLSearchParams(window.location.search).get('lpPreview') !== '1') return;
+        window.__LP3D_TEST_HOOKS__ = {
+            getViewMode: () => viewMode,
+            getEyeHeightCm: () => LP_3D_DEFAULTS.WALK_EYE_HEIGHT_CM,
+            getCameraY: () => camera?.position.y ?? null,
+            getCameraXZ: () => (camera ? { x: camera.position.x, z: camera.position.z } : null),
+            setWalkPosition: (x, z) => walk?.setPosition(x, z),
+            lookWalkAt: (x, z) => walk?.lookAt(x, z),
+        };
+    }
+
     return {
         open() {
             isOpen = true;
@@ -374,6 +399,7 @@ export function createLayoutPlanner3DViewer(options) {
             applyViewMode();
             lastTick = performance.now();
             if (!animationId) animationId = requestAnimationFrame(tick);
+            publishTestHooks();
         },
         close() {
             isOpen = false;
