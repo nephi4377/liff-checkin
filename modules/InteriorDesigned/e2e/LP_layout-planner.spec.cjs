@@ -346,6 +346,9 @@ test.describe('LayoutPlanner E2E', () => {
     await page.locator('#toggle-3d-view-btn').click();
     await expect(page.locator('body')).toHaveClass(/lp-3d-mode/);
     await expect(page.locator('#lp-3d-overlay')).toBeVisible();
+    await expect(page.locator('#lp-3d-btn-save-png')).toBeHidden();
+    await expect(page.locator('#lp-3d-btn-preset-top')).toBeHidden();
+    await expect(page.locator('#lp-3d-preset-select')).toBeHidden();
     await page.waitForTimeout(3000);
     expect(errors, `頁面錯誤: ${errors.join('; ')}`).toHaveLength(0);
 

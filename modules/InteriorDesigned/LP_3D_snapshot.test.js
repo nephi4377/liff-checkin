@@ -1,11 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
     ORBIT_CAMERA_PRESETS,
     computeOrbitPresetCamera,
     flipRgbaRowsToTopLeft,
     formatLayout3DPngFilename,
     scaleDimensionsToMaxSide,
+    scaleDimensionsForPngExport,
+    renderSceneToPngBlob,
     PNG_EXPORT_MAX_SIDE_PX,
+    PNG_EXPORT_MAX_PIXELS,
 } from './LP_3D_snapshot.js';
 import { buildLayout3DDescriptor, LP_3D_DEFAULTS, ringCentroidXZ } from './LP_3D_scene.js';
 
@@ -76,12 +79,60 @@ describe('scaleDimensionsToMaxSide', () => {
     it('長邊超過上限時等比縮小', () => {
         const out = scaleDimensionsToMaxSide(8000, 4000, PNG_EXPORT_MAX_SIDE_PX);
         expect(Math.max(out.width, out.height)).toBe(PNG_EXPORT_MAX_SIDE_PX);
-        expect(out.width).toBe(4096);
-        expect(out.height).toBe(2048);
+        expect(out.width).toBe(3072);
+        expect(out.height).toBe(1536);
     });
 
     it('未超過上限時維持原尺寸', () => {
         expect(scaleDimensionsToMaxSide(1920, 1080)).toEqual({ width: 1920, height: 1080 });
+    });
+});
+
+describe('scaleDimensionsForPngExport', () => {
+    it('長邊與總像素皆在限制內時維持等比縮長邊後尺寸', () => {
+        const out = scaleDimensionsForPngExport(8000, 4000);
+        expect(Math.max(out.width, out.height)).toBe(PNG_EXPORT_MAX_SIDE_PX);
+        expect(out.width * out.height).toBeLessThanOrEqual(PNG_EXPORT_MAX_PIXELS);
+    });
+
+    it('正方形長邊 3072 時再縮到總像素 ≤ 8MP', () => {
+        const out = scaleDimensionsForPngExport(3072, 3072);
+        expect(out.width * out.height).toBeLessThanOrEqual(PNG_EXPORT_MAX_PIXELS);
+        expect(Math.max(out.width, out.height)).toBeLessThanOrEqual(PNG_EXPORT_MAX_SIDE_PX);
+    });
+});
+
+describe('renderSceneToPngBlob', () => {
+    it('readRenderTargetPixels 丟錯時仍還原 aspect、render target 並 dispose', async () => {
+        const dispose = vi.fn();
+        const renderTarget = { dispose };
+        const THREE = {
+            WebGLRenderTarget: vi.fn(() => renderTarget),
+            LinearFilter: 1,
+            NearestFilter: 2,
+            RGBAFormat: 3,
+            UnsignedByteType: 4,
+        };
+        const prevTarget = { id: 'prev' };
+        const renderer = {
+            domElement: { width: 1920, height: 1080 },
+            getRenderTarget: () => prevTarget,
+            setRenderTarget: vi.fn(),
+            render: vi.fn(),
+            readRenderTargetPixels: vi.fn(() => {
+                throw new Error('read fail');
+            }),
+        };
+        const camera = {
+            aspect: 1.5,
+            updateProjectionMatrix: vi.fn(),
+        };
+
+        await expect(renderSceneToPngBlob(THREE, renderer, {}, camera)).rejects.toThrow('read fail');
+        expect(renderer.setRenderTarget).toHaveBeenLastCalledWith(prevTarget);
+        expect(camera.aspect).toBe(1.5);
+        expect(camera.updateProjectionMatrix).toHaveBeenCalled();
+        expect(dispose).toHaveBeenCalled();
     });
 });
 

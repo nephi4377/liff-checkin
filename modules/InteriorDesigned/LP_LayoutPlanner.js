@@ -4552,6 +4552,9 @@ window.onload = () => {
     }
 
     // 只有在電腦版才會執行以下程式碼
+    if (isLayoutPlannerUrlPreview()) {
+        document.documentElement.classList.add('lp-url-preview');
+    }
     bindEventListeners();
     initWorkspaceAndUiFromStorage();
 

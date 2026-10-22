@@ -8,7 +8,8 @@ export const ORBIT_CAMERA_PRESETS = {
     CORNER_ISO: 'corner_iso',
 };
 
-export const PNG_EXPORT_MAX_SIDE_PX = 4096;
+export const PNG_EXPORT_MAX_SIDE_PX = 3072;
+export const PNG_EXPORT_MAX_PIXELS = 8_000_000;
 
 /**
  * @param {number} width
@@ -26,6 +27,23 @@ export function scaleDimensionsToMaxSide(width, height, maxSide = PNG_EXPORT_MAX
         width: Math.max(1, Math.floor(width * scale)),
         height: Math.max(1, Math.floor(height * scale)),
     };
+}
+
+/**
+ * PNG 匯出：最長邊 ≤ 3072，總像素 ≤ 8MP。
+ * @param {number} width
+ * @param {number} height
+ * @returns {{ width: number, height: number }}
+ */
+export function scaleDimensionsForPngExport(width, height) {
+    let { width: w, height: h } = scaleDimensionsToMaxSide(width, height, PNG_EXPORT_MAX_SIDE_PX);
+    let pixels = w * h;
+    if (pixels > PNG_EXPORT_MAX_PIXELS) {
+        const scale = Math.sqrt(PNG_EXPORT_MAX_PIXELS / pixels);
+        w = Math.max(1, Math.floor(w * scale));
+        h = Math.max(1, Math.floor(h * scale));
+    }
+    return { width: w, height: h };
 }
 
 /**
@@ -108,7 +126,7 @@ export async function renderSceneToPngBlob(THREE, renderer, scene, camera) {
         throw new Error('viewport size invalid');
     }
 
-    const { width: w, height: h } = scaleDimensionsToMaxSide(srcW, srcH);
+    const { width: w, height: h } = scaleDimensionsForPngExport(srcW, srcH);
 
     const renderTarget = new THREE.WebGLRenderTarget(w, h, {
         minFilter: THREE.LinearFilter,
@@ -122,33 +140,35 @@ export async function renderSceneToPngBlob(THREE, renderer, scene, camera) {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
 
-    renderer.setRenderTarget(renderTarget);
-    renderer.render(scene, camera);
-    renderer.setRenderTarget(prevTarget);
+    try {
+        renderer.setRenderTarget(renderTarget);
+        renderer.render(scene, camera);
 
-    camera.aspect = prevAspect;
-    camera.updateProjectionMatrix();
+        const pixels = new Uint8Array(w * h * 4);
+        renderer.readRenderTargetPixels(renderTarget, 0, 0, w, h, pixels);
 
-    const pixels = new Uint8Array(w * h * 4);
-    renderer.readRenderTargetPixels(renderTarget, 0, 0, w, h, pixels);
-    renderTarget.dispose();
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('2d context unavailable');
 
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('2d context unavailable');
+        const imageData = ctx.createImageData(w, h);
+        flipRgbaRowsInto(imageData.data, w, h, pixels);
+        ctx.putImageData(imageData, 0, 0);
 
-    const imageData = ctx.createImageData(w, h);
-    flipRgbaRowsInto(imageData.data, w, h, pixels);
-    ctx.putImageData(imageData, 0, 0);
-
-    return new Promise((resolve, reject) => {
-        canvas.toBlob((blob) => {
-            if (blob) resolve(blob);
-            else reject(new Error('PNG encode failed'));
-        }, 'image/png');
-    });
+        return await new Promise((resolve, reject) => {
+            canvas.toBlob((blob) => {
+                if (blob) resolve(blob);
+                else reject(new Error('PNG encode failed'));
+            }, 'image/png');
+        });
+    } finally {
+        renderer.setRenderTarget(prevTarget);
+        camera.aspect = prevAspect;
+        camera.updateProjectionMatrix();
+        renderTarget.dispose();
+    }
 }
 
 /** @param {Blob} blob @param {string} filename */

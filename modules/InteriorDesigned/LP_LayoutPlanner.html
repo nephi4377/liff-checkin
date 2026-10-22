@@ -111,6 +111,19 @@
             margin-left: auto;
         }
 
+        /* 預設視角／儲存圖片：僅 ?lpPreview=1 顯示（正式版待核准） */
+        #lp-3d-toolbar .lp-3d-snapshot-gated {
+            display: none !important;
+        }
+
+        html.lp-url-preview #lp-3d-toolbar .lp-3d-snapshot-gated.lp-3d-tb-btn {
+            display: inline-block !important;
+        }
+
+        html.lp-url-preview #lp-3d-toolbar .lp-3d-snapshot-gated.lp-3d-tb-sep {
+            display: block !important;
+        }
+
         #lp-3d-toolbar .lp-3d-tb-select {
             display: none;
             border: 1px solid #475569;
@@ -124,12 +137,12 @@
         }
 
         @media (max-width: 420px) {
-            #lp-3d-toolbar .lp-3d-preset-btn {
-                display: none;
+            html.lp-url-preview #lp-3d-toolbar .lp-3d-preset-btn.lp-3d-snapshot-gated {
+                display: none !important;
             }
 
-            #lp-3d-toolbar #lp-3d-preset-select {
-                display: inline-block;
+            html.lp-url-preview #lp-3d-toolbar #lp-3d-preset-select.lp-3d-snapshot-gated {
+                display: inline-block !important;
             }
 
             #lp-3d-toolbar label {
@@ -1477,17 +1490,17 @@
             <button type="button" id="lp-3d-btn-orbit" class="lp-3d-tb-btn lp-3d-active">鳥瞰</button>
             <button type="button" id="lp-3d-btn-walk" class="lp-3d-tb-btn">室內</button>
             <button type="button" id="lp-3d-btn-reset" class="lp-3d-tb-btn">重置視角</button>
-            <span class="lp-3d-tb-sep" aria-hidden="true"></span>
-            <button type="button" id="lp-3d-btn-preset-top" class="lp-3d-tb-btn lp-3d-preset-btn" title="俯視整個空間">俯視</button>
-            <button type="button" id="lp-3d-btn-preset-front" class="lp-3d-tb-btn lp-3d-preset-btn" title="正面斜角">正面斜角</button>
-            <button type="button" id="lp-3d-btn-preset-corner" class="lp-3d-tb-btn lp-3d-preset-btn" title="角落斜角">角落斜角</button>
-            <select id="lp-3d-preset-select" class="lp-3d-tb-select" aria-label="預設視角">
+            <span class="lp-3d-tb-sep lp-3d-snapshot-gated" aria-hidden="true"></span>
+            <button type="button" id="lp-3d-btn-preset-top" class="lp-3d-tb-btn lp-3d-preset-btn lp-3d-snapshot-gated" title="俯視整個空間">俯視</button>
+            <button type="button" id="lp-3d-btn-preset-front" class="lp-3d-tb-btn lp-3d-preset-btn lp-3d-snapshot-gated" title="正面斜角">正面斜角</button>
+            <button type="button" id="lp-3d-btn-preset-corner" class="lp-3d-tb-btn lp-3d-preset-btn lp-3d-snapshot-gated" title="角落斜角">角落斜角</button>
+            <select id="lp-3d-preset-select" class="lp-3d-tb-select lp-3d-snapshot-gated" aria-label="預設視角">
                 <option value="" selected disabled>視角</option>
                 <option value="top">俯視</option>
                 <option value="front_iso">正面斜角</option>
                 <option value="corner_iso">角落斜角</option>
             </select>
-            <button type="button" id="lp-3d-btn-save-png" class="lp-3d-tb-btn lp-3d-accent" title="下載目前 3D 畫面 PNG">儲存圖片</button>
+            <button type="button" id="lp-3d-btn-save-png" class="lp-3d-tb-btn lp-3d-accent lp-3d-snapshot-gated" title="下載目前 3D 畫面 PNG">儲存圖片</button>
             <button type="button" id="lp-3d-btn-exit-2d" class="lp-3d-tb-btn lp-3d-primary">返回 2D</button>
             <label><input type="checkbox" id="lp-3d-ceiling-toggle" checked> 顯示天花</label>
         </div>
