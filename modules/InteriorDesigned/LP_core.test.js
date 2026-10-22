@@ -12,6 +12,10 @@ import {
     computeCabinetResizeGeometry,
     rotateCabinetAroundPivot,
     mirrorCabinetsAsGroupAboutVerticalAxis,
+    collectVerticesFromDrawnAreas,
+    snapPointToNearestVertex,
+    resolveDrawingPointerPosition,
+    segmentLengthCmRounded,
 } from './LP_core.js';
 
 describe('cmToFeet', () => {
@@ -73,6 +77,39 @@ describe('snapTranslationToGrid', () => {
     });
     it('10cm 步距', () => {
         expect(snapTranslationToGrid(17, 23, 10)).toEqual({ dx: 20, dy: 20 });
+    });
+});
+
+describe('drawing assist', () => {
+    it('collectVerticesFromDrawnAreas 收集頂點', () => {
+        const verts = collectVerticesFromDrawnAreas([
+            { points: [{ x: 10, y: 20 }, { x: 30, y: 40 }] },
+            { points: null },
+        ]);
+        expect(verts).toHaveLength(2);
+    });
+
+    it('snapPointToNearestVertex 閾值內吸附', () => {
+        const r = snapPointToNearestVertex({ x: 108, y: 100 }, [{ x: 100, y: 100 }], 12);
+        expect(r.snapped).toBe(true);
+        expect(r.x).toBe(100);
+    });
+
+    it('resolveDrawingPointerPosition 首點吸附既有區域頂點', () => {
+        const r = resolveDrawingPointerPosition({
+            x: 205,
+            y: 105,
+            altKey: false,
+            currentDrawingPoints: [],
+            areaVertices: [{ x: 200, y: 100 }],
+            vertexSnapThreshold: 12,
+        });
+        expect(r.x).toBe(200);
+        expect(r.y).toBe(100);
+    });
+
+    it('segmentLengthCmRounded', () => {
+        expect(segmentLengthCmRounded({ x: 0, y: 0 }, { x: 100, y: 0 })).toBe(100);
     });
 });
 

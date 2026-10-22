@@ -290,6 +290,17 @@ test.describe('LayoutPlanner E2E', () => {
     await expect(page.locator('body')).not.toHaveClass(/lp-3d-mode/);
   });
 
+  test('繪製地板：移動游標顯示即時段長 (FLOORPLAN-2D-3)', async ({ page }) => {
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#draw-floor-btn').click();
+    const canvas = page.locator('#design-canvas');
+    await canvas.click({ position: { x: 200, y: 200 } });
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-draw-segment-before-move.png') });
+    await canvas.hover({ position: { x: 350, y: 200 } });
+    await expect(page.locator('#drawing-preview-segment-label')).toHaveText('150 cm', { timeout: 5000 });
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-draw-segment-after-label.png') });
+  });
+
   test('可開啟預算明細 Modal 並關閉', async ({ page }) => {
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
     await page.locator('#show-budget-modal-btn').click();
