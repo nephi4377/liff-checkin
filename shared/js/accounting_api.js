@@ -1233,18 +1233,23 @@ var AccountingApi = (function () {
         deferred_token: deferredToken || ''
       }, 120000);
     },
-    /** 歷史記帳紀錄查詢（權限 ≥3；mine_only 預設 false＝全部人；日期窗＝記帳時間／送出時間，不是交易日）
-     * 預設近 30 天；可自訂更早區間（無 7／30 天硬上限）。逾時靠後端分塊／軟截止＋本呼叫 90s Abort。
-     * 排序契約：後端 sort_basis=recorded_at；前端亦只依 recorded_at 渲染（v85+）。
-     * record_kind：all（預設＝待付款請款＋收支登錄）｜ledger｜payment_request。
-     * 暫緩強制僅限個人（老闆：已用 ≥3 閘門，勿再強制 mine_only）。 */
+    /** 歷史記帳紀錄查詢（權限 ≥3；日期窗＝記帳時間／送出時間，不是交易日）
+     * ACCT-SEC-11：permission < MIN_PERMISSION(4) 一律 mine_only；≥4 預設全部、可選本人。
+     * 預設近 30 天；逾時靠後端分塊／軟截止＋本呼叫 90s Abort。
+     * record_kind：all｜ledger｜payment_request。 */
     accountingLedgerRecent: function (sessionOrToken, opts) {
       opts = opts || {};
+      var authPerm = 0;
+      if (sessionOrToken && sessionOrToken.auth) {
+        authPerm = Number(sessionOrToken.auth.permission || 0);
+      }
+      var mineOnly = authPerm < MIN_PERMISSION
+        ? true
+        : (opts.mine_only === undefined ? false : !!opts.mine_only);
       var body = {
         action: 'accounting_ledger_recent',
         limit: opts.limit != null ? opts.limit : 40,
-        // 預設全部（≥3）；僅當頁面明確開啟「只看我記的」才傳 true
-        mine_only: opts.mine_only === undefined ? false : !!opts.mine_only
+        mine_only: mineOnly
       };
       // 不預設傳 months：分頁依交易日；掃月數由後端依記帳時間窗決定（避免日曆跨月誤縮）
       if (opts.months != null) body.months = opts.months;
