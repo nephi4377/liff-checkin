@@ -4,6 +4,8 @@
 > **基準**：`origin/main` @ 2026-10-22（`46a4c8f` 一帶，含 LayoutPlanner 3D 等近期合併）  
 > **範圍**：#56–#70、#72、#73、#78、#82、#92、#98、#170（**不含** #174–#179；**未**關閉任何 PR、**未**改動那些 PR 的分支）
 
+**統計（22 支）**：**15** 支仍有價值需 rebase｜**2** 支部分已改善（#63、#66）｜**5** 支需 Nephi 決定（#69、#72、#73、#92、#98）。
+
 ## 分類說明
 
 | 分類 | 意義 |
@@ -24,13 +26,13 @@
 | [#59](https://github.com/nephi4377/liff-checkin/pull/59) | 驗收表進度寫上雲 | 仍有價值需 rebase | `updateProgress` 只改 UI，**未** `syncToFirebase` | 高 |
 | [#60](https://github.com/nephi4377/liff-checkin/pull/60) | 報價單同步讀失敗不覆蓋 | 仍有價值需 rebase | `BudgetWeb_Standalone.html` 無讀失敗護欄／mock | 高 |
 | [#61](https://github.com/nephi4377/liff-checkin/pull/61) | 離場說明失敗不裝完成 | 仍有價值需 rebase | 失敗仍 `completeOffSiteFlow()` →「打卡完成」 | 高 |
-| [#62](https://github.com/nephi4377/liff-checkin/pull/62) | 客人收款確認讀失敗 | 部分取代 | 選材區已有再試；**收款**列表失敗文案仍可能像「無待確認」 | 高 |
-| [#63](https://github.com/nephi4377/liff-checkin/pull/63) | 主控台班表失敗接線 | 仍有價值需 rebase | UI 有 `scheduleError` 但 `spa/app.js` **未**傳入 Dashboard | 高 |
+| [#62](https://github.com/nephi4377/liff-checkin/pull/62) | 客人收款確認讀失敗 | 仍有價值需 rebase | 選材區已有再試；**收款**列表失敗文案仍可能像「無待確認」 | 高 |
+| [#63](https://github.com/nephi4377/liff-checkin/pull/63) | 主控台班表失敗接線 | 部分已改善 | `Dashboard.js` 已有班表錯誤 UI；`spa/app.js` 仍**未**傳 `scheduleError`／失敗未設錯 | 高 |
 | [#64](https://github.com/nephi4377/liff-checkin/pull/64) | 看單據讀失敗不裝沒單據 | 仍有價值需 rebase | `ledger_review` 等仍「這筆沒有上傳單據」；lightbox 無「讀不到再試」 | 高 |
 | [#65](https://github.com/nephi4377/liff-checkin/pull/65) | 廠商自填開頁失敗 | 仍有價值需 rebase | `vendor_register.html` 開頁失敗仍易停在「載入中…」 | 高 |
-| [#66](https://github.com/nephi4377/liff-checkin/pull/66) | 病假文案／LINE FAQ | 仍有價值需 rebase | 成功仍多用後端 `result.message`；FAQ「#案號」修正未見於 main | 高 |
-| [#67](https://github.com/nephi4377/liff-checkin/pull/67) | 選材上傳失敗作廢 | 部分取代 | API 失敗已 `materialVoid`；**逾時 throw** 的 catch 可能留幽靈紀錄 | 高 |
-| [#68](https://github.com/nephi4377/liff-checkin/pull/68) | 工作區發佈日誌保留草稿 | 仍有價值需 rebase | `logActions.js` 發佈後**立即**清空表單／假卡片未移除 | 高 |
+| [#66](https://github.com/nephi4377/liff-checkin/pull/66) | 病假文案／LINE FAQ | 部分已改善 | 已有病假補件提醒；「已報備」成功文案／LINE FAQ「#案號」仍未完全對齊 PR | 高 |
+| [#67](https://github.com/nephi4377/liff-checkin/pull/67) | 選材上傳失敗作廢 | 仍有價值需 rebase | API 失敗已 `materialVoid`；**逾時 throw** 的 catch 可能留幽靈紀錄 | 高 |
+| [#68](https://github.com/nephi4377/liff-checkin/pull/68) | [巡檢P1] 工作區發佈日誌保留草稿 | 仍有價值需 rebase | `logActions.js` 發佈後**立即**清空表單；失敗時假卡片未移除 | 高 |
 | [#69](https://github.com/nephi4377/liff-checkin/pull/69) | 客人輪：追加減勿開收款頁 | 需 Nephi 決定 | 前端多為 SPEC／巡檢回報；實作在 Backend_GAS 分支 | 高 |
 | [#70](https://github.com/nephi4377/liff-checkin/pull/70) | 人員排程讀失敗可見 | 仍有價值需 rebase | `tools/SchedulePlan.html` 批次／月分頁錯誤處理仍薄；矩陣未掛 Hub | 高 |
 | [#72](https://github.com/nephi4377/liff-checkin/pull/72) | 總監人事筆記 Phase 1 | 需 Nephi 決定 | main 無 `director_hr_notes`；需對 Backend_GAS #46 與權限策略 | 中 |
@@ -55,7 +57,7 @@
 | **#60** | `tools/BudgetWeb_Standalone.html` Firebase 同步路徑無 PR 的讀失敗阻斷 | **未修** |
 | **#61** | `checkin.html` L1315–1326：離場 API 失敗仍呼叫 `completeOffSiteFlow()` | **未修** |
 | **#62** | `customer-finance-portal.html` 選材有再試（L694+）；收款列表 L501 仍「目前無待確認收款」 | **部分** |
-| **#63** | `Dashboard.js` 有班表錯誤 UI；`spa/app.js` L1198 未傳 `:scheduleError`，抓取失敗無 `.catch` 設錯 | **未完整** |
+| **#63** | `Dashboard.js` 有班表錯誤 UI；`spa/app.js` L1198 未傳 `:scheduleError`，抓取失敗無 `.catch` 設錯 | **部分已改善** |
 | **#64** | `ledger_review.html` L1730/1801；`ledger_history.html` L1065 等：空附件仍「沒有上傳單據」 | **未修** |
 | **#67** | `designer-material-selection.html` L1396–1404 已作廢；L1413 `catch` 未保證作廢 | **部分** |
 
@@ -65,8 +67,8 @@
 |----|-----------|------|
 | **#59** | `BudgetAuditor_Standalone_V2.html` `updateProgress`（L2972+）無 debounced `syncToFirebase` | **未修** |
 | **#65** | `vendor_register.html` 無 boot 重試／mock 路徑 | **未修** |
-| **#66** | `leave_request.html` 有病假補件提醒（L1384+）；「已報備」成功文案／LINE FAQ 案號格式未對齊 PR | **部分** |
-| **#68** | `modules/projects/js/logActions.js` L546–565：未等 API 成功即清空輸入 | **未修** |
+| **#66** | `leave_request.html` 有病假補件提醒（L1384+）；「已報備」成功文案／LINE FAQ 案號格式未對齊 PR | **部分已改善** |
+| **#68**（P1） | `modules/projects/js/logActions.js` L546–565：未等 API 成功即清空輸入 | **未修** |
 | **#69** | 本 repo 以 SPEC／`TOS/巡檢回報.md` 為主；行為依 Backend_GAS | **待決** |
 | **#70** | `shift_schedule.html` 已有班表再試；`SchedulePlan.html` 獨立工具錯誤 UX／Hub 入口仍 PR 待決議題 | **未完整** |
 
@@ -117,7 +119,7 @@
 
 ## 建議後續（本報告不執行）
 
-1. **P0 巡檢類（#56–#64、#61、#67、#68）**：優先 cherry-pick 行為修復到新分支，避免一次 rebase 整包 9 月 LOG/SPEC。
+1. **P0 巡檢類（#56–#64、#67）與 P1（#68 等）**：優先 cherry-pick 行為修復到新分支，避免一次 rebase 整包 9 月 LOG/SPEC。
 2. **需 Nephi（#69、#72、#73、#92、#98）**：開一次決策清單後再關閉或重開 PR。
 3. **#179 派工清單**：依 Nephi 2026-10-22 21:27 **暫緩**，不在本表處理。
 
