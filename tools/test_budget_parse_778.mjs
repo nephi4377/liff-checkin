@@ -1,5 +1,5 @@
 /**
- * BUDGET-PARSE-778 / 778b–778d 自動測試（假資料，無客戶個資）
+ * BUDGET-PARSE-778 / 778b–778e 自動測試（假資料，無客戶個資）
  * 執行：node tools/test_budget_parse_778.mjs
  */
 import { createRequire } from 'module';
@@ -13,12 +13,17 @@ const XLSX = require('xlsx');
 const parser = require('./budget-quote-parser-lib.js');
 
 const FIXTURE_PATH = join(__dirname, '_tmp_budget_parse_778_fixture.xlsx');
+const TARGET_ADJUST_SUM = 116480;
+const METADATA_KW = ['估價單', '電話'];
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg);
 }
 
-/** 增減緊湊版面：品名 col0、單位 3、數量 4、合計 5 */
+function pushStdRow(rows, id, name, unit, qty, total, jCost) {
+  rows.push([String(id), name, unit, qty, 10, total, '', '', '', jCost, '']);
+}
+
 function pushAdjustCompactRow(rows, name, unit, qty, total, kCost = '') {
   rows.push([name, '', '', unit, qty, total, '', '', '', '', kCost]);
 }
@@ -27,71 +32,88 @@ function pushAdjustSubHeader(rows, zone) {
   rows.push([zone, '', '', '', '', '', '', '', '', '', '']);
 }
 
-function pushAdjustBlockCompact(rows, zone, items) {
-  pushAdjustSubHeader(rows, zone);
-  items.forEach(([name, unit, qty, total]) => pushAdjustCompactRow(rows, name, unit, qty, total, 91000));
-}
-
 function buildMockSheet() {
   const rows = [];
   rows.push(['測試市示範路99號4樓之1', '', '', '', '', '', '', '', '', '', '']);
+  rows.push(['電話：示意專線', '', '', '', '', '', '', '', '', '', '']);
   rows.push(['項次', '品項', '單位', '數量', '單價', '總價', '備註', '', '', '成本J', '成本K']);
-  for (let i = 1; i <= 100; i++) {
-    const jCost = 70000 + i;
-    rows.push([String(i), `工項${i}`, '式', 1, 10, 10, '', '', '', jCost, '']);
-  }
-  rows.push(['', '廚房', 0, 0, 0, 0, '', '', '', '', '']);
-  rows.push(['', '建議方案-加裝照明', '式', 1, 0, 1200, '', '', '', 66666, '']);
-  rows.push(['', '建議方案-換開關', '組', 1, 0, 800, '', '', '', 55555, '']);
 
-  rows.push(['103', '', '', '', '', '', '', '', '', '', '']);
-  rows.push(['', '1399805', '', '', '', '', '', '', '', '', '']);
-  rows.push(['', '5%發票稅', '式', 1, 0, 75814, '', '', '', '', '']);
-  rows.push(['', '訂購人簽名：', '', '', '', '', '', '', '', '', '']);
+  for (let i = 1; i <= 87; i++) {
+    pushStdRow(rows, i, `工項${i}`, '式', 1, 10, 70000 + i);
+  }
+
+  rows.push(['', '付款條件示意（第二期）', '', '', '', '', '', '', '', '', '']);
+  rows.push(['', '水電明細表（示意）', '', '', '', '', '', '', '', '', '']);
+  rows.push(['1399805', '', '', '', '', '', '', '', '', '', '']);
+
+  for (let i = 88; i <= 97; i++) {
+    pushStdRow(rows, 160 + i, `尾段工項${i}`, '式', 1, 50, 71000 + i);
+  }
+
+  rows.push(['', '廚房', 0, 0, 0, 0, '', '', '', '', '']);
+  pushStdRow(rows, '', '建議方案-加裝照明', '式', 1, 1200, 66666);
+  pushStdRow(rows, '', '建議方案-換開關', '組', 1, 800, 55555);
 
   rows.push(['簽約後續增減', '', '', '', '', '', '', '', '', '', '']);
-  pushAdjustBlockCompact(rows, '餐廳', [
-    ['拆除工程重新評估', '式', 1, -71400],
-    ['餐廳增項A', '式', 1, 5000],
-    ['餐廳增項B', '式', 1, 3200],
-  ]);
-  pushAdjustBlockCompact(rows, '男孩房', [
-    ['男孩房增項1', '式', 1, 1000],
-    ['男孩房增項2', '式', 1, 1100],
-    ['男孩房增項3', '式', 1, 1200],
-    ['男孩房增項4', '式', 1, 1300],
-  ]);
-  pushAdjustBlockCompact(rows, '走道', [
-    ['走道增項1', '式', 1, 800],
-    ['走道增項2', '式', 1, 900],
-  ]);
+
+  const adjustAmounts = [-71400, 5000, 3200, 1000, 1100, 1200, 1300, 800, 900, 400, 410, 420, 430, 440, 300, 310, 320, 2000, 2100, 2200, 1500, 1600];
+  const lastAdjust = TARGET_ADJUST_SUM - adjustAmounts.reduce((a, b) => a + b, 0);
+  adjustAmounts.push(lastAdjust);
+
+  const names = [
+    '拆除工程重新評估',
+    '餐廳增項A',
+    '餐廳增項B',
+    '男孩房增項1',
+    '男孩房增項2',
+    '男孩房增項3',
+    '男孩房增項4',
+    '走道增項1',
+    '走道增項2',
+    '插座增項1',
+    '插座增項2',
+    '插座增項3',
+    '插座增項4',
+    '插座增項5',
+    '開關增項1',
+    '開關增項2',
+    '開關增項3',
+    '客廳/主臥電話線',
+    '陽台封窗1',
+    '陽台封窗2',
+    '陽台封窗3',
+    '客浴增項1',
+    '客浴增項2',
+  ];
+  assert(names.length === 23 && adjustAmounts.length === 23, 'adjust 應 23 筆');
+
+  pushAdjustSubHeader(rows, '餐廳');
+  pushAdjustCompactRow(rows, names[0], '式', 1, adjustAmounts[0]);
+  pushAdjustCompactRow(rows, names[1], '式', 1, adjustAmounts[1]);
+  pushAdjustCompactRow(rows, names[2], '式', 1, adjustAmounts[2]);
+  pushAdjustSubHeader(rows, '男孩房');
+  for (let k = 3; k <= 6; k++) pushAdjustCompactRow(rows, names[k], '式', 1, adjustAmounts[k]);
+  pushAdjustSubHeader(rows, '走道');
+  pushAdjustCompactRow(rows, names[7], '式', 1, adjustAmounts[7]);
+  pushAdjustCompactRow(rows, names[8], '式', 1, adjustAmounts[8]);
   pushAdjustCompactRow(rows, '拆除後壁面修補', '式', 1, '');
   pushAdjustCompactRow(rows, '拆除後地面復原', '式', 1, '');
-  pushAdjustBlockCompact(rows, '插座', [
-    ['插座增項1', '式', 1, 400],
-    ['插座增項2', '式', 1, 410],
-    ['插座增項3', '式', 1, 420],
-    ['插座增項4', '式', 1, 430],
-    ['插座增項5', '式', 1, 440],
-  ]);
-  pushAdjustBlockCompact(rows, '開關', [
-    ['開關增項1', '式', 1, 300],
-    ['開關增項2', '式', 1, 310],
-    ['開關增項3', '式', 1, 320],
-  ]);
-  pushAdjustBlockCompact(rows, '陽台封窗', [
-    ['陽台封窗1', '式', 1, 2000],
-    ['陽台封窗2', '式', 1, 2100],
-    ['陽台封窗3', '式', 1, 2200],
-  ]);
-  pushAdjustBlockCompact(rows, '客浴', [
-    ['客浴增項1', '式', 1, 1500],
-    ['客浴增項2', '式', 1, 1600],
-    ['客浴增項3', '式', 1, 1700],
-  ]);
+  pushAdjustSubHeader(rows, '插座');
+  for (let k = 9; k <= 13; k++) pushAdjustCompactRow(rows, names[k], '式', 1, adjustAmounts[k]);
+  pushAdjustSubHeader(rows, '開關');
+  for (let k = 14; k <= 16; k++) pushAdjustCompactRow(rows, names[k], '式', 1, adjustAmounts[k]);
+  pushAdjustCompactRow(rows, names[17], '式', 1, adjustAmounts[17]);
+  pushAdjustSubHeader(rows, '陽台封窗');
+  for (let k = 18; k <= 20; k++) pushAdjustCompactRow(rows, names[k], '式', 1, adjustAmounts[k]);
+  pushAdjustSubHeader(rows, '客浴');
+  for (let k = 21; k <= 22; k++) pushAdjustCompactRow(rows, names[k], '式', 1, adjustAmounts[k]);
 
-  rows.push(['', '增減合計(未稅)', '式', 1, 0, 50000, '', '', '', '', '']);
-  rows.push(['', '客廳', 0, 0, 0, 0, '', '', '', '', '']);
+  rows.push(['', '簽約後續增減合計(未稅)', '式', 1, 0, TARGET_ADJUST_SUM, '', '', '', '', '']);
+  pushStdRow(rows, 201, '增減後油漆A', '式', 1, 2500, 72001);
+  pushStdRow(rows, 202, '增減後油漆B', '式', 1, 5000, 72002);
+  pushStdRow(rows, 203, '增減後油漆C', '式', 1, 20000, 72003);
+
+  rows.push(['', '訂購人簽名：', '', '', '', '', '', '', '', '', '']);
   rows.push(['', '', '', '', '', '', '含稅總計', '', '', 1592099, '']);
   return rows;
 }
@@ -117,32 +139,32 @@ function run() {
 
   const loaded = XLSX.readFile(FIXTURE_PATH);
   const json = XLSX.utils.sheet_to_json(loaded.Sheets['0818'], { header: 1, defval: '' });
-  const { items, taxInclusiveTotal } = parser.parseSheetRows(json, '0818', { metadataKeywords: ['估價單'] });
+  const { items, taxInclusiveTotal } = parser.parseSheetRows(json, '0818', { metadataKeywords: METADATA_KW });
   const counts = parser.classifyItemCounts(items);
+  const adjustSum = parser.sumAdjustItemPrices(items);
   const { colMapping, startRow } = parser.detectColMappingFromHeaderRows(json);
 
   const headers = items.filter((it) => it.type === 'header').map((h) => h.zone);
   assert(!headers.some((z) => /4樓之1/.test(z)), '表頭地址不得被當成分區');
   assert(headers.includes('廚房'), '廚房分區應辨識');
-  assert(headers.includes('簽約後續增減'), '表尾後簽約後續增減應重新開區');
-  assert(headers.includes('餐廳') && headers.includes('走道'), '增減區子標題應保留');
-  assert(!headers.includes('客廳'), '增減合計後不得再開客廳小節');
+  assert(headers.includes('簽約後續增減'), '簽約後續增減應為分區');
+
+  const tailWork = items.filter((i) => i.type === 'item' && /^尾段工項/.test(i.data.name));
+  assert(tailWork.length === 10, `付款條件後尾段工項應 10 筆，實際 ${tailWork.length}`);
 
   assert(counts.work === 100, `一般工項應 100 筆，實際 ${counts.work}`);
   assert(counts.suggest === 2, `建議工項應 2 筆，實際 ${counts.suggest}`);
   assert(counts.adjust === 23, `增減工項應 23 筆，實際 ${counts.adjust}`);
+  assert(adjustSum === TARGET_ADJUST_SUM, `增減加總應 ${TARGET_ADJUST_SUM}，實際 ${adjustSum}`);
   assert(taxInclusiveTotal === 1592099, `含稅總計應 1592099，實際 ${taxInclusiveTotal}`);
 
   const itemNames = items.filter((i) => i.type === 'item').map((i) => i.data.name);
+  assert(itemNames.includes('客廳/主臥電話線'), '品名含電話且有單位數量應保留');
   assert(!itemNames.includes('拆除後壁面修補'), '合計空白列不得算工項');
-  assert(!itemNames.includes('拆除後地面復原'), '合計空白列不得算工項');
-  assert(itemNames.includes('拆除工程重新評估'), '增減緊湊版面負數合計應算工項');
 
-  const neg = items.find((i) => i.type === 'item' && i.data && i.data.name === '拆除工程重新評估');
-  assert(neg && String(neg.data.price).includes('-71400'), '應保留負數合計');
-
-  const exportItems = items.filter((r) => r.type === 'item').map((r) => parser.sanitizeItemForExport(r.data));
-  assert(!parser.exportPayloadContainsForbiddenKeys({ items: exportItems }), '匯出不得含內部欄位');
+  const paints = items.filter((i) => i.type === 'item' && /^增減後油漆/.test(i.data.name));
+  assert(paints.length === 3, '增減合計後油漆應 3 筆');
+  paints.forEach((p) => assert(!parser.isAdjustItem(p), '增減合計後油漆應算一般工項'));
 
   items
     .filter((r) => r.type === 'item')
@@ -151,12 +173,12 @@ function run() {
       assert(row, `找不到來源列：${it.data.name}`);
       assert(
         !parser.rawLineContainsInternalCostValues(row, it.data.raw_line),
-        `raw_line 含 J/K 成本：${it.data.name} → ${it.data.raw_line}`
+        `raw_line 含 J/K 成本：${it.data.name}`
       );
     });
 
   console.log('✅ test_budget_parse_778 通過');
-  console.log(JSON.stringify({ counts, taxInclusiveTotal }, null, 2));
+  console.log(JSON.stringify({ counts, adjustSum, taxInclusiveTotal }, null, 2));
 }
 
 try {

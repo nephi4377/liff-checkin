@@ -1,6 +1,6 @@
 /**
  * BudgetWeb 報價單解析核心（Browser + Node 共用）
- * BUDGET-PARSE-778 / 778b / 778c
+ * BUDGET-PARSE-778 / 778b–778e
  */
 (function (root, factory) {
     const lib = factory();
@@ -136,30 +136,49 @@
         return false;
     }
 
+    const METADATA_HEADER_ROW_BAND = 25;
+
     function rowHasAdjustSectionStart(row) {
         if (!row) return false;
         return row.some((c) => ADJUST_SECTION_START_RE.test(String(c ?? '')));
     }
 
-    function rowSignalsFooterBlock(row, colMapping) {
+    function rowHasAdjustSectionEnd(row) {
+        if (!row) return false;
+        const joined = row.map((c) => String(c ?? '')).join('');
+        return ADJUST_SECTION_END_RE.test(joined);
+    }
+
+    /** 僅最終條款／簽名／含稅等鎖表尾；中段付款條件、水電表不鎖 */
+    function rowSignalsFinalFooterBlock(row, colMapping) {
         if (!row) return false;
         if (rowHasAdjustSectionStart(row)) return false;
-        for (const off of [0, 1]) {
-            const name = String(row[colMapping.name + off] ?? '').trim();
-            const id = String(row[colMapping.id + off] ?? '').trim();
-            if (name && !cellIsBlankOrZero(name)) {
-                if (isForbiddenZoneLabel(name)) return true;
-                if (isPureNumericLabel(name) && Math.abs(parseFloat(name.replace(/,/g, ''))) >= 100) return true;
-            } else if (id && !cellIsBlankOrZero(id) && isPureNumericLabel(id) && Math.abs(parseFloat(id.replace(/,/g, ''))) >= 100) {
-                return true;
-            }
-        }
-        const joined = row.map(c => String(c ?? '')).join('');
-        if (/增減合計|含稅總計|含稅/.test(joined) && /合計|含稅/.test(joined)) return true;
+        if (rowHasAdjustSectionEnd(row)) return false;
+        const joined = row.map((c) => String(c ?? '')).join('');
+        const trimmed = joined.trim();
+        if (/含稅總計|含稅/.test(joined) && /含稅|合計/.test(joined)) return true;
         if (/5\s*%.*發票稅|發票稅/.test(joined)) return true;
         if (/訂購人簽名|客戶確認欄?/.test(joined)) return true;
-        if (/^第[0-9０-９]+[點條項]/.test(joined) || /[。；]\s*[0-9]+[、．]/.test(joined)) return true;
+        if (/^第[0-9０-９]+[點條項]/.test(trimmed)) return true;
         return false;
+    }
+
+    function isStandardWorkItemRow(row, colMapping) {
+        const picked = pickItemFieldsFromMapping(row, colMapping);
+        if (!picked) return false;
+        const id = String(picked.indexVal ?? '').trim();
+        return /^\d+$/.test(id);
+    }
+
+    function metadataBlocksItem(picked, rowIndex, startRow, metadataKeywords) {
+        if (!metadataKeywords || !metadataKeywords.length || !picked) return false;
+        const hit = metadataKeywords.some((kw) => picked.name.includes(kw));
+        if (!hit) return false;
+        const hasUnit = picked.unitVal && !cellIsBlankOrZero(picked.unitVal);
+        const hasQty = cellHasMeaningfulNumber(picked.qtyVal);
+        if (hasUnit && hasQty) return false;
+        if (rowIndex < startRow + METADATA_HEADER_ROW_BAND) return true;
+        return !hasUnit && !hasQty;
     }
 
     function isSheetMetadataAddress(name, rowIndex, startRow) {
@@ -335,11 +354,16 @@
                 sheetFooterClosed = false;
             }
 
-            if (rowSignalsFooterBlock(row, colMapping)) {
-                if (ADJUST_SECTION_END_RE.test(row.map(c => String(c ?? '')).join(''))) {
-                    inAdjustSection = false;
-                }
+            if (rowHasAdjustSectionEnd(row)) {
+                inAdjustSection = false;
+            }
+
+            if (rowSignalsFinalFooterBlock(row, colMapping)) {
                 sheetFooterClosed = true;
+            }
+
+            if (isStandardWorkItemRow(row, colMapping)) {
+                sheetFooterClosed = false;
             }
 
             const rawLine = buildRawLine(row);
@@ -351,7 +375,6 @@
                     sheetFooterClosed = false;
                 } else if (ADJUST_SECTION_END_RE.test(zoneName)) {
                     inAdjustSection = false;
-                    sheetFooterClosed = true;
                 }
 
                 const isDuplicate = zoneName === currentZone;
@@ -375,7 +398,7 @@
             }
             if (!picked) continue;
 
-            if (metadataKeywords.some(kw => picked.name.includes(kw))) continue;
+            if (metadataBlocksItem(picked, i, startRow, metadataKeywords)) continue;
 
             items.push({
                 type: 'item',
@@ -410,6 +433,15 @@
             if (result.taxInclusiveTotal != null) taxInclusiveTotal = result.taxInclusiveTotal;
         });
         return { items: allItems, total_summary: { tax_inclusive_total: taxInclusiveTotal } };
+    }
+
+    function sumAdjustItemPrices(items) {
+        let sum = 0;
+        items.filter((it) => it.type === 'item' && isAdjustItem(it)).forEach((it) => {
+            const n = parseMoney(it.data && it.data.price);
+            if (n != null) sum += n;
+        });
+        return Math.round(sum);
     }
 
     function classifyItemCounts(items) {
@@ -484,6 +516,11 @@
         pickAdjustCompactItemFields,
         ADJUST_COMPACT_COL_MAPPING,
         rowHasAdjustSectionStart,
+        rowHasAdjustSectionEnd,
+        rowSignalsFinalFooterBlock,
+        isStandardWorkItemRow,
+        metadataBlocksItem,
+        sumAdjustItemPrices,
         resolveZoneHeaderName,
         isZoneHeaderRow,
         isSuggestItem,
