@@ -267,29 +267,6 @@ var AccountingApi = (function () {
     return AccountingApi.initLiff(opts);
   }
 
-  function readDevBypassQuery_() {
-    if (typeof OperatorContext !== 'undefined') {
-      OperatorContext.mergeFromUrl();
-      return OperatorContext.devBypassPayload();
-    }
-    var perm = 0;
-    var uid = '';
-    try {
-      var q = new URLSearchParams(window.location.search);
-      var permStr = q.get('perm') || q.get('dev_perm') || q.get('permission') || '';
-      uid = q.get('dev_user') || q.get('dev_user_id') || q.get('uid') || '';
-      if (!permStr && !uid) {
-        permStr = sessionStorage.getItem('acct_dev_perm') || '';
-        uid = sessionStorage.getItem('acct_dev_user') || '';
-      } else {
-        if (permStr) sessionStorage.setItem('acct_dev_perm', permStr);
-        if (uid) sessionStorage.setItem('acct_dev_user', uid);
-      }
-      perm = permStr ? parseInt(permStr, 10) : 0;
-    } catch (e) {}
-    return { dev_permission: perm > 0 ? perm : 0, dev_user_id: uid };
-  }
-
   function readHubLiffIdFromQuery_() {
     if (typeof OperatorContext !== 'undefined') {
       var id = OperatorContext.hubLiffId();
@@ -324,20 +301,6 @@ var AccountingApi = (function () {
     } catch (eHost) {
       return false;
     }
-  }
-
-  /**
-   * 測試身分僅允許：本機 + 無主控台員工 uid + 非 embed。
-   * 正式站／主控台進門即使 authBypass=true 也不可當稽核身分。
-   */
-  function allowLocalAuthBypassDemo_() {
-    if (!isLocalDevHost_()) return false;
-    if (isInHubIframe_()) return false;
-    if (typeof AccountingNav !== 'undefined' && AccountingNav.isEmbed && AccountingNav.isEmbed()) return false;
-    var hubOp = null;
-    try { hubOp = readHubOperator_(); } catch (eOp) { hubOp = null; }
-    if (hubOp && hubOp.userId) return false;
-    return true;
   }
 
   /** 會計殼層內嵌 iframe 須向最外層 HUB 要 token，不可只找直接 parent */
@@ -396,15 +359,6 @@ var AccountingApi = (function () {
 
   function primeHubIdentityFromUrl_() {
     if (typeof OperatorContext !== 'undefined') OperatorContext.mergeFromUrl();
-    else readDevBypassQuery_();
-  }
-
-  function devBypassAuthBody_(action) {
-    var opts = readDevBypassQuery_();
-    var body = { action: action, dev_bypass: true };
-    if (opts.dev_permission) body.dev_permission = opts.dev_permission;
-    if (opts.dev_user_id) body.dev_user_id = opts.dev_user_id;
-    return { body: body, opts: opts };
   }
 
   function simpleHash_(s) {
@@ -438,9 +392,6 @@ var AccountingApi = (function () {
 
   function authCacheKey_(sessionOrToken) {
     if (typeof sessionOrToken === 'object' && sessionOrToken) {
-      if (sessionOrToken.devBypass) {
-        return SESSION_AUTH_PREFIX + 'dev:' + (sessionOrToken.devUserId || '') + ':' + (sessionOrToken.devPermission || 0);
-      }
       if (sessionOrToken.fromHub && sessionOrToken.auth && sessionOrToken.auth.user_id) {
         return SESSION_AUTH_PREFIX + 'uid:' + sessionOrToken.auth.user_id;
       }
@@ -461,9 +412,6 @@ var AccountingApi = (function () {
     writeSessionWrapped_(authCacheKey_(session), session.auth, AUTH_TTL_MS);
     if (session.idToken) {
       try { sessionStorage.setItem(SESSION_TOKEN_KEY, session.idToken); } catch (eTok) {}
-    }
-    if (session.devBypass) {
-      writeSessionWrapped_(SESSION_AUTH_PREFIX + 'mode:dev', true, AUTH_TTL_MS);
     }
   }
 
@@ -492,17 +440,6 @@ var AccountingApi = (function () {
         AccountingUi.setOperator(session);
       }
     } catch (e) {}
-  }
-
-  function buildDevBypassSession_(auth, opts) {
-    return {
-      devBypass: true,
-      devPermission: opts.dev_permission || auth.permission || 0,
-      devUserId: opts.dev_user_id || '',
-      profile: { userId: auth.user_id, displayName: auth.display_name },
-      idToken: '',
-      auth: auth
-    };
   }
 
   function buildHubSession_(auth) {
@@ -540,12 +477,6 @@ var AccountingApi = (function () {
 
   function buildAuth(session) {
     if (!session) return {};
-    if (session.devBypass) {
-      var a = { dev_bypass: true };
-      if (session.devPermission) a.dev_permission = session.devPermission;
-      if (session.devUserId) a.dev_user_id = session.devUserId;
-      return a;
-    }
     if (isHubStaffSession_(session)) {
       var uid = (session.auth && session.auth.user_id) || (session.profile && session.profile.userId) || pickStaffUserId_(session);
       return uid ? { user_id: uid } : {};
@@ -582,15 +513,10 @@ var AccountingApi = (function () {
     }
   }
 
-  /** 選材設計師 API：dev_bypass／通行證／員工編號同時寫在 body 頂層（對齊 project-console） */
+  /** 選材設計師 API：LIFF／Hub user_id 寫在 auth 與 body 頂層（對齊 project-console） */
   function buildMaterialPostBody_(sessionOrToken, body) {
     var out = Object.assign({}, body || {}, { auth: resolveAuth(sessionOrToken) });
     var auth = out.auth || {};
-    if (auth.dev_bypass) {
-      out.dev_bypass = true;
-      if (auth.dev_permission) out.dev_permission = auth.dev_permission;
-      if (auth.dev_user_id) out.dev_user_id = auth.dev_user_id;
-    }
     if (auth.liff_id_token) {
       out.liff_id_token = auth.liff_id_token;
     }
@@ -623,12 +549,6 @@ var AccountingApi = (function () {
     postMaterial: postMaterial,
     buildAuth: buildAuth,
     authMe: function (sessionOrToken) {
-      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
-        var pack = devBypassAuthBody_('accounting_auth_me');
-        if (sessionOrToken.devPermission) pack.body.dev_permission = sessionOrToken.devPermission;
-        if (sessionOrToken.devUserId) pack.body.dev_user_id = sessionOrToken.devUserId;
-        return post(pack.body);
-      }
       if (typeof sessionOrToken === 'object' && sessionOrToken && isHubStaffSession_(sessionOrToken)) {
         var hubUid = (sessionOrToken.auth && sessionOrToken.auth.user_id)
           || (sessionOrToken.profile && sessionOrToken.profile.userId) || '';
@@ -1348,7 +1268,6 @@ var AccountingApi = (function () {
         try {
           var auth = resolveAuth(sessionOrToken);
           if (auth) body.auth = auth;
-          if (sessionOrToken.devBypass) body.dev_bypass = true;
           if (sessionOrToken.idToken) body.liff_id_token = sessionOrToken.idToken;
           if (sessionOrToken.auth && sessionOrToken.auth.user_id) {
             body.user_id = sessionOrToken.auth.user_id;
@@ -1384,7 +1303,6 @@ var AccountingApi = (function () {
         try {
           var auth = resolveAuth(sessionOrToken);
           if (auth) body.auth = auth;
-          if (sessionOrToken.devBypass) body.dev_bypass = true;
           if (sessionOrToken.idToken) body.liff_id_token = sessionOrToken.idToken;
           if (sessionOrToken.auth && sessionOrToken.auth.user_id) {
             body.user_id = sessionOrToken.auth.user_id;
@@ -1418,7 +1336,6 @@ var AccountingApi = (function () {
         try {
           var auth = resolveAuth(sessionOrToken);
           if (auth) body.auth = auth;
-          if (sessionOrToken.devBypass) body.dev_bypass = true;
           if (sessionOrToken.idToken) body.liff_id_token = sessionOrToken.idToken;
           if (sessionOrToken.auth && sessionOrToken.auth.user_id) {
             body.user_id = sessionOrToken.auth.user_id;
@@ -1461,7 +1378,6 @@ var AccountingApi = (function () {
         try {
           var auth = resolveAuth(sessionOrToken);
           if (auth) body.auth = auth;
-          if (sessionOrToken.devBypass) body.dev_bypass = true;
           if (sessionOrToken.idToken) body.liff_id_token = sessionOrToken.idToken;
           if (sessionOrToken.auth && sessionOrToken.auth.user_id) {
             body.user_id = sessionOrToken.auth.user_id;
@@ -1489,7 +1405,6 @@ var AccountingApi = (function () {
         try {
           var auth = resolveAuth(sessionOrToken);
           if (auth) body.auth = auth;
-          if (sessionOrToken.devBypass) body.dev_bypass = true;
           if (sessionOrToken.idToken) body.liff_id_token = sessionOrToken.idToken;
           if (sessionOrToken.auth && sessionOrToken.auth.user_id) {
             body.user_id = sessionOrToken.auth.user_id;
@@ -1516,7 +1431,6 @@ var AccountingApi = (function () {
         try {
           var auth = resolveAuth(sessionOrToken);
           if (auth) body.auth = auth;
-          if (sessionOrToken.devBypass) body.dev_bypass = true;
           if (sessionOrToken.idToken) body.liff_id_token = sessionOrToken.idToken;
           if (sessionOrToken.auth && sessionOrToken.auth.user_id) {
             body.user_id = sessionOrToken.auth.user_id;
@@ -1585,13 +1499,6 @@ var AccountingApi = (function () {
         throw new Error(HUB_RELOGIN_MSG);
       }
       var policy = await AccountingApi.loadPolicy();
-      // 正式寫入必須是真實員工／LINE；測試身分僅本機冷開 demo（見 allowLocalAuthBypassDemo_）
-      if (policy && policy.authBypass && allowLocalAuthBypassDemo_()) {
-        var packLiff = devBypassAuthBody_('accounting_auth_me');
-        var authBypass = await post(packLiff.body);
-        if (!authBypass.success) throw new Error(authBypass.message || '驗證失敗');
-        return buildDevBypassSession_(authBypass, packLiff.opts);
-      }
       var liffId = resolveLiffIdForInit_(opts, policy);
       if (!liffId) throw new Error('LIFF 尚未設定');
       if (typeof liff === 'undefined') throw new Error('請用 LINE 開啟');
@@ -1669,32 +1576,14 @@ var AccountingApi = (function () {
         if (isInHubIframe_() || (typeof AccountingNav !== 'undefined' && AccountingNav.isEmbed && AccountingNav.isEmbed())) {
           throw new Error(HUB_RELOGIN_MSG);
         }
-        // 僅本機冷開＋authBypass：demo 用；正式站改走 LINE 真實身分
-        var policyPr = await AccountingApi.loadPolicy();
-        if (policyPr && policyPr.authBypass && allowLocalAuthBypassDemo_()) {
-          var packPr = devBypassAuthBody_('payment_request_auth_me');
-          var authBypassPr = await post(packPr.body);
-          if (!authBypassPr.success) throw new Error(authBypassPr.message || '驗證失敗');
-          session = buildDevBypassSession_(authBypassPr, packPr.opts);
-        } else {
-          session = await AccountingApi.initLiff(opts);
-          if (!session) return null;
-          if (session.devBypass) {
-            var packPr2 = devBypassAuthBody_('payment_request_auth_me');
-            if (session.devPermission) packPr2.body.dev_permission = session.devPermission;
-            if (session.devUserId) packPr2.body.dev_user_id = session.devUserId;
-            var authResDev = await post(packPr2.body);
-            if (!authResDev.success) throw new Error(authResDev.message || '驗證失敗');
-            session.auth = authResDev;
-          } else {
-            var authBody = isHubStaffSession_(session)
-              ? { action: 'payment_request_auth_me', user_id: session.auth.user_id, auth: { user_id: session.auth.user_id } }
-              : { action: 'payment_request_auth_me', liff_id_token: session.idToken };
-            var authRes = await post(authBody);
-            if (!authRes.success) throw new Error(authRes.message || '驗證失敗');
-            session.auth = authRes;
-          }
-        }
+        session = await AccountingApi.initLiff(opts);
+        if (!session) return null;
+        var authBody = isHubStaffSession_(session)
+          ? { action: 'payment_request_auth_me', user_id: session.auth.user_id, auth: { user_id: session.auth.user_id } }
+          : { action: 'payment_request_auth_me', liff_id_token: session.idToken };
+        var authRes = await post(authBody);
+        if (!authRes.success) throw new Error(authRes.message || '驗證失敗');
+        session.auth = authRes;
       }
       if (!session) return null;
       if (String(session.auth.status || '') === '廠商') {
@@ -1711,18 +1600,6 @@ var AccountingApi = (function () {
     initVendorSession: async function (opts) {
       opts = opts || {};
       var policy = await AccountingApi.loadPolicy();
-      if (policy.authBypass) {
-        var auth = await post({ action: 'vendor_register_auth_me', dev_bypass: true });
-        if (!auth.success) throw new Error(auth.message || '驗證失敗');
-        return {
-          devBypass: true,
-          profile: { userId: auth.user_id, displayName: auth.display_name },
-          idToken: '',
-          auth: auth,
-          vendor: auth.vendor || null,
-          bindings: auth.bindings || []
-        };
-      }
       var liffId = opts.liffId || policy.liffId || '';
       if (!liffId) throw new Error('LIFF 尚未設定');
       if (typeof liff === 'undefined') throw new Error('請用 LINE 開啟此頁面');
@@ -1749,7 +1626,6 @@ var AccountingApi = (function () {
     },
     vendorRegisterGet: function (session) {
       var body = { action: 'vendor_register_get', liff_id_token: session.idToken || '' };
-      if (session.devBypass) body.dev_bypass = true;
       return post(body);
     },
     vendorRegisterSubmit: function (session, payload) {
@@ -1758,7 +1634,6 @@ var AccountingApi = (function () {
         liff_id_token: session.idToken || '',
         payload: payload || {}
       };
-      if (session.devBypass) body.dev_bypass = true;
       return post(body);
     },
     vendorRegisterOcr: function (session, photo, kind) {
@@ -1772,11 +1647,6 @@ var AccountingApi = (function () {
       if (auth.liff_id_token) body.liff_id_token = auth.liff_id_token;
       else if (session && session.idToken) body.liff_id_token = session.idToken;
       if (auth.user_id) body.user_id = auth.user_id;
-      if (auth.dev_bypass || (session && session.devBypass)) {
-        body.dev_bypass = true;
-        if (auth.dev_permission) body.dev_permission = auth.dev_permission;
-        if (auth.dev_user_id) body.dev_user_id = auth.dev_user_id;
-      }
       return post(body);
     },
     employeeBankOcr: function (sessionOrToken, photo, kind, operatorUserId) {
@@ -1788,11 +1658,6 @@ var AccountingApi = (function () {
         operatorUserId: operatorUserId || ''
       };
       if (auth.liff_id_token) body.liff_id_token = auth.liff_id_token;
-      if (auth.dev_bypass) {
-        body.dev_bypass = true;
-        if (auth.dev_permission) body.dev_permission = auth.dev_permission;
-        if (auth.dev_user_id) body.dev_user_id = auth.dev_user_id;
-      }
       return post(body);
     },
     payrollRequestList: function (sessionOrToken, filter) {
@@ -1933,10 +1798,6 @@ var AccountingApi = (function () {
     },
     cfPortalSelfBind: function (sessionOrToken, payload) {
       var body = Object.assign({ action: 'client_portal_self_bind', auth: resolveAuth(sessionOrToken) }, payload || {});
-      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
-        body.dev_bypass = true;
-        if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
-      }
       return post(body);
     },
     cfPortalRevoke: function (sessionOrToken, bindingId) {
@@ -2057,30 +1918,16 @@ var AccountingApi = (function () {
       if (opts.staffPreview) body.staff_preview = true;
       if (opts.includeData) body.include_data = true;
       if (opts.projectNo) body.project_no = String(opts.projectNo).trim();
-      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
-        body.dev_bypass = true;
-        if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
-        if (sessionOrToken.devPermission) body.dev_permission = sessionOrToken.devPermission;
-      }
       return post(body);
     },
     cfPortalData: function (sessionOrToken, projectNo, opts) {
       opts = opts || {};
       var body = { action: 'margin_customer_finance_portal_data', auth: resolveAuth(sessionOrToken), project_no: projectNo };
       if (opts.staffPreview) body.staff_preview = true;
-      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
-        body.dev_bypass = true;
-        if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
-        if (sessionOrToken.devPermission) body.dev_permission = sessionOrToken.devPermission;
-      }
       return post(body);
     },
     cfAdjCustomerConfirm: function (sessionOrToken, adjustmentId) {
       var body = { action: 'margin_adjustment_customer_confirm_content', auth: resolveAuth(sessionOrToken), adjustment_id: adjustmentId };
-      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
-        body.dev_bypass = true;
-        if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
-      }
       if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.staffPreview) {
         body.staff_preview = true;
       }
@@ -2088,10 +1935,6 @@ var AccountingApi = (function () {
     },
     cfAdjCustomerSign: function (sessionOrToken, adjustmentId, signData) {
       var body = { action: 'margin_adjustment_customer_sign', auth: resolveAuth(sessionOrToken), adjustment_id: adjustmentId, sign_data_base64: signData || '' };
-      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
-        body.dev_bypass = true;
-        if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
-      }
       if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.staffPreview) {
         body.staff_preview = true;
       }
@@ -2099,10 +1942,6 @@ var AccountingApi = (function () {
     },
     cfRecCustomerStage1: function (sessionOrToken, receiptId) {
       var body = { action: 'margin_receipt_customer_confirm_stage1', auth: resolveAuth(sessionOrToken), receipt_id: receiptId };
-      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
-        body.dev_bypass = true;
-        if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
-      }
       if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.staffPreview) {
         body.staff_preview = true;
       }
@@ -2110,10 +1949,6 @@ var AccountingApi = (function () {
     },
     cfRecCustomerStage2: function (sessionOrToken, receiptId) {
       var body = { action: 'margin_receipt_customer_confirm_stage2', auth: resolveAuth(sessionOrToken), receipt_id: receiptId };
-      if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.devBypass) {
-        body.dev_bypass = true;
-        if (sessionOrToken.devUserId) body.dev_user_id = sessionOrToken.devUserId;
-      }
       if (typeof sessionOrToken === 'object' && sessionOrToken && sessionOrToken.staffPreview) {
         body.staff_preview = true;
       }
@@ -2136,21 +1971,6 @@ var AccountingApi = (function () {
       opts = opts || {};
       var wantStaffPreview = !!opts.staffPreview;
       if (wantStaffPreview) {
-        var policyForPreview = await AccountingApi.loadPolicy();
-        if (policyForPreview && policyForPreview.authBypass) {
-          var packStaff = devBypassAuthBody_('margin_customer_finance_portal_auth');
-          packStaff.body.staff_preview = true;
-          var portalBypass = await post(packStaff.body);
-          if (!portalBypass.success) throw new Error(portalBypass.message || '員工預覽驗證失敗');
-          return {
-            devBypass: true,
-            staffPreview: true,
-            devUserId: packStaff.opts.dev_user_id || '',
-            idToken: '',
-            profile: { userId: portalBypass.user_id, displayName: portalBypass.display_name },
-            portal: portalBypass
-          };
-        }
         var empSession = AccountingApi.tryCachedSession({
           minPermission: CUSTOMER_FINANCE_MIN_PERMISSION,
           authAction: 'accounting_auth_me'

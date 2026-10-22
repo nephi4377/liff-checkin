@@ -151,7 +151,6 @@
 
   function buildAuthPayload() {
     var body = {};
-    if ($('dev-bypass').checked) body.dev_bypass = true;
     var secret = $('ingest-secret').value.trim();
     if (secret) body.secret = secret;
     return body;

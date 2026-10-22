@@ -375,7 +375,6 @@
     $('ollama-url').value = s.ollamaUrl || DEFAULT_OLLAMA_URL;
     $('gas-url').value = s.gasUrl || DEFAULT_GAS_URL;
     $('ingest-secret').value = s.secret || '';
-    $('dev-bypass').checked = s.devBypass !== false;
     $('param-thinking').value = s.thinking != null ? s.thinking : 0;
     $('param-max-tokens').value = s.maxTokens || 4096;
     $('param-temperature').value = s.temperature != null ? s.temperature : 0.1;
@@ -397,7 +396,6 @@
       ollamaUrl: $('ollama-url').value.trim(),
       gasUrl: $('gas-url').value.trim(),
       secret: $('ingest-secret').value.trim(),
-      devBypass: $('dev-bypass').checked,
       model: $('param-model').value,
       thinking: parseInt($('param-thinking').value, 10),
       maxTokens: parseInt($('param-max-tokens').value, 10),
@@ -754,7 +752,6 @@
 
   function buildAuthPayload() {
     var body = {};
-    if ($('dev-bypass').checked) body.dev_bypass = true;
     var secret = $('ingest-secret').value.trim();
     if (secret) body.secret = secret;
     return body;

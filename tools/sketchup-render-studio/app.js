@@ -4,8 +4,7 @@
   var CFG = window.SKETCHUP_RENDER_CONFIG || {};
   var CONFIG = {
     liffId: '',
-    apiUrl: CFG.GAS_URL || '',
-    authBypass: false
+    apiUrl: CFG.GAS_URL || ''
   };
 
   var state = {
@@ -140,10 +139,6 @@
       payload.user_id = state.staffUserId;
       payload.auth = payload.auth || {};
       payload.auth.user_id = state.staffUserId;
-    }
-    var wantBypass = CONFIG.authBypass || ($('devBypassInput') && $('devBypassInput').checked);
-    if (wantBypass && !state.idToken && !state.staffUserId) {
-      payload.dev_bypass = true;
     }
     if ($('ingestSecretInput')) {
       var secret = $('ingestSecretInput').value.trim();
@@ -1441,7 +1436,6 @@
         CONFIG.apiUrl = policy.accountingGasWebAppUrl;
         if ($('gasUrlInput')) $('gasUrlInput').value = CONFIG.apiUrl;
       }
-      if (policy && policy.authBypass && isLocalOrDevBypassAllowed()) CONFIG.authBypass = true;
       if (policy && policy.liffId) CONFIG.liffId = policy.liffId;
 
       if (!CONFIG.apiUrl) {
@@ -1451,14 +1445,6 @@
       if (!CONFIG.liffId && CFG.LIFF_ID) CONFIG.liffId = CFG.LIFF_ID;
 
       state.staffUserId = pickStaffUidFromUrl();
-
-      if ((CONFIG.authBypass || ($('devBypassInput') && $('devBypassInput').checked)) && isLocalOrDevBypassAllowed()) {
-        CONFIG.authBypass = true;
-        state.userName = '開發模式';
-        $('userLine').textContent = state.userName;
-        setLoadingMsg('正在確認服務…');
-        return apiPost('sketchup_render_ping', {});
-      }
 
       if (state.staffUserId) {
         state.userName = state.staffUserId;
@@ -1498,13 +1484,6 @@
     });
   }
 
-  function isLocalOrDevBypassAllowed() {
-    var qs = new URLSearchParams(location.search);
-    return qs.get('dev') === '1'
-      || location.hostname === 'localhost'
-      || location.hostname === '127.0.0.1';
-  }
-
   function pickStaffUidFromUrl() {
     var qs = new URLSearchParams(location.search);
     return String(qs.get('uid') || qs.get('user_id') || qs.get('userId') || '').trim();
@@ -1514,12 +1493,8 @@
     bindEvents();
     var qs = new URLSearchParams(location.search);
     if ($('gasUrlInput')) $('gasUrlInput').value = qs.get('api') || CFG.GAS_URL || '';
-    if ($('devBypassInput')) {
-      $('devBypassInput').checked = isLocalOrDevBypassAllowed();
-    }
     CONFIG.apiUrl = ($('gasUrlInput') && $('gasUrlInput').value.trim()) || CFG.GAS_URL || '';
     CONFIG.liffId = CFG.LIFF_ID || '';
-    CONFIG.authBypass = isLocalOrDevBypassAllowed() && $('devBypassInput') && $('devBypassInput').checked;
 
     if (!CONFIG.apiUrl) {
       $('loading').textContent = '請在進階設定填 GAS URL，或網址加 ?api=…';

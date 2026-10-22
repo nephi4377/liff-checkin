@@ -587,13 +587,11 @@
           body.auth = { user_id: sessionRef.auth.user_id };
           return;
         }
-        if (sessionRef && sessionRef.devBypass) {
-          body.dev_bypass = true;
-          if (sessionRef.devUserId) body.dev_user_id = sessionRef.devUserId;
-          return;
-        }
         var tok = idToken || (sessionRef && sessionRef.idToken) || '';
-        if (tok) body.liff_id_token = tok;
+        if (tok) {
+          body.liff_id_token = tok;
+          body.auth = body.auth || { liff_id_token: tok };
+        }
       }
 
       async function loadPendingPhotos(token) {
