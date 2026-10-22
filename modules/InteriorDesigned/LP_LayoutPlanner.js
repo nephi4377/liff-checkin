@@ -4181,6 +4181,7 @@ const AUTO_SAVE_KEY = 'layoutPlanner_autosave_v1';
 const AUTO_SAVE_INTERVAL = 60000; // 60秒自動儲存一次
 
 function initAutoSave() {
+    if (isLayoutPlannerUrlPreview()) return;
     // 1. 啟動定時器
     setInterval(autoSave, AUTO_SAVE_INTERVAL);
 
@@ -4352,7 +4353,8 @@ function loadLayoutFromData(layoutData, options = {}) {
     deselectAllAreas();
 
     if (options.successMessage !== false) {
-        showGlobalNotification('✅ 已成功還原備份進度', 3000, 'success');
+        const msg = options.successMessage ?? '✅ 已成功還原備份進度';
+        showGlobalNotification(msg, 3000, 'success');
     }
 }
 
@@ -4569,7 +4571,7 @@ window.onload = () => {
     // [v9.13] 初始載入時置中視圖
     setTimeout(centerView, 100);
 
-    maybeInitLayoutPlannerUrlPreview().catch((err) => console.error('[LP preview]', err));
+    maybeInitLayoutPlannerUrlPreview();
 };
 
 // [v9.8 新增] 僅更新資訊面板的價格顯示 (不重繪 DOM，防止焦點跳離)

@@ -19,6 +19,15 @@
       "currentW": 90,
       "currentH": 15,
       "data": { "name": "房門", "group": "門窗工程", "width": 90, "depth": 15 }
+    },
+    {
+      "id": "win-demo-1",
+      "x": 700,
+      "y": 285,
+      "rotation": 0,
+      "currentW": 150,
+      "currentH": 15,
+      "data": { "name": "落地窗", "group": "門窗工程", "width": 150, "depth": 15 }
     }
   ],
   "drawnAreas": [

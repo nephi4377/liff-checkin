@@ -4,6 +4,8 @@ import {
     computeOrbitPresetCamera,
     flipRgbaRowsToTopLeft,
     formatLayout3DPngFilename,
+    scaleDimensionsToMaxSide,
+    PNG_EXPORT_MAX_SIDE_PX,
 } from './LP_3D_snapshot.js';
 import { buildLayout3DDescriptor, LP_3D_DEFAULTS, ringCentroidXZ } from './LP_3D_scene.js';
 
@@ -67,6 +69,19 @@ describe('flipRgbaRowsToTopLeft', () => {
         expect(out[4]).toBe(4);
         expect(out[8]).toBe(1);
         expect(out[12]).toBe(2);
+    });
+});
+
+describe('scaleDimensionsToMaxSide', () => {
+    it('長邊超過上限時等比縮小', () => {
+        const out = scaleDimensionsToMaxSide(8000, 4000, PNG_EXPORT_MAX_SIDE_PX);
+        expect(Math.max(out.width, out.height)).toBe(PNG_EXPORT_MAX_SIDE_PX);
+        expect(out.width).toBe(4096);
+        expect(out.height).toBe(2048);
+    });
+
+    it('未超過上限時維持原尺寸', () => {
+        expect(scaleDimensionsToMaxSide(1920, 1080)).toEqual({ width: 1920, height: 1080 });
     });
 });
 

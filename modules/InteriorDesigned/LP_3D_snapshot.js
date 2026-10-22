@@ -8,6 +8,26 @@ export const ORBIT_CAMERA_PRESETS = {
     CORNER_ISO: 'corner_iso',
 };
 
+export const PNG_EXPORT_MAX_SIDE_PX = 4096;
+
+/**
+ * @param {number} width
+ * @param {number} height
+ * @param {number} [maxSide]
+ * @returns {{ width: number, height: number }}
+ */
+export function scaleDimensionsToMaxSide(width, height, maxSide = PNG_EXPORT_MAX_SIDE_PX) {
+    const longest = Math.max(width, height);
+    if (longest <= maxSide) {
+        return { width, height };
+    }
+    const scale = maxSide / longest;
+    return {
+        width: Math.max(1, Math.floor(width * scale)),
+        height: Math.max(1, Math.floor(height * scale)),
+    };
+}
+
 /**
  * @param {OrbitCameraPresetId} preset
  * @param {{ workspaceSize?: number, walls?: { heightCm?: number }[], walkBounds?: { rings?: { x: number, z: number }[][] } }} desc
@@ -46,6 +66,21 @@ export function computeOrbitPresetCamera(preset, desc, defaults) {
 }
 
 /**
+ * WebGL readRenderTargetPixels 為左下角原點；翻轉成左上角原點並寫入 dest。
+ * @param {Uint8ClampedArray} dest
+ * @param {number} width
+ * @param {number} height
+ * @param {Uint8Array} rgbaBottomLeft
+ */
+export function flipRgbaRowsInto(dest, width, height, rgbaBottomLeft) {
+    const rowBytes = width * 4;
+    for (let y = 0; y < height; y++) {
+        const srcStart = (height - 1 - y) * rowBytes;
+        dest.set(rgbaBottomLeft.subarray(srcStart, srcStart + rowBytes), y * rowBytes);
+    }
+}
+
+/**
  * WebGL readRenderTargetPixels 為左下角原點；轉成 Canvas ImageData（左上角原點）。
  * @param {number} width
  * @param {number} height
@@ -54,11 +89,7 @@ export function computeOrbitPresetCamera(preset, desc, defaults) {
  */
 export function flipRgbaRowsToTopLeft(width, height, rgbaBottomLeft) {
     const out = new Uint8ClampedArray(width * height * 4);
-    const rowBytes = width * 4;
-    for (let y = 0; y < height; y++) {
-        const srcStart = (height - 1 - y) * rowBytes;
-        out.set(rgbaBottomLeft.subarray(srcStart, srcStart + rowBytes), y * rowBytes);
-    }
+    flipRgbaRowsInto(out, width, height, rgbaBottomLeft);
     return out;
 }
 
@@ -71,11 +102,13 @@ export function flipRgbaRowsToTopLeft(width, height, rgbaBottomLeft) {
  * @returns {Promise<Blob>}
  */
 export async function renderSceneToPngBlob(THREE, renderer, scene, camera) {
-    const w = renderer.domElement.width;
-    const h = renderer.domElement.height;
-    if (w < 1 || h < 1) {
+    const srcW = renderer.domElement.width;
+    const srcH = renderer.domElement.height;
+    if (srcW < 1 || srcH < 1) {
         throw new Error('viewport size invalid');
     }
+
+    const { width: w, height: h } = scaleDimensionsToMaxSide(srcW, srcH);
 
     const renderTarget = new THREE.WebGLRenderTarget(w, h, {
         minFilter: THREE.LinearFilter,
@@ -85,9 +118,16 @@ export async function renderSceneToPngBlob(THREE, renderer, scene, camera) {
     });
 
     const prevTarget = renderer.getRenderTarget();
+    const prevAspect = camera.aspect;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+
     renderer.setRenderTarget(renderTarget);
     renderer.render(scene, camera);
     renderer.setRenderTarget(prevTarget);
+
+    camera.aspect = prevAspect;
+    camera.updateProjectionMatrix();
 
     const pixels = new Uint8Array(w * h * 4);
     renderer.readRenderTargetPixels(renderTarget, 0, 0, w, h, pixels);
@@ -100,7 +140,7 @@ export async function renderSceneToPngBlob(THREE, renderer, scene, camera) {
     if (!ctx) throw new Error('2d context unavailable');
 
     const imageData = ctx.createImageData(w, h);
-    imageData.data.set(flipRgbaRowsToTopLeft(w, h, pixels));
+    flipRgbaRowsInto(imageData.data, w, h, pixels);
     ctx.putImageData(imageData, 0, 0);
 
     return new Promise((resolve, reject) => {
@@ -121,7 +161,7 @@ export function downloadBlobAsFile(blob, filename) {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 /** @param {Date} [date] */
