@@ -1,0 +1,1 @@
+用 Cursor Open Folder 選這個 employee-todo 資料夾（要看得到 package.json），然後終端機執行 npm install。更穩請用 GitHub 複製：https://github.com/tanxin02/employee-todo
