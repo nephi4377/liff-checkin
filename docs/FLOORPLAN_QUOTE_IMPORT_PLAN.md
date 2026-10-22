@@ -67,7 +67,7 @@
 ## 2. Backend_GAS（project-console）— 雲端 Agent 唯讀調查結果
 
 **嘗試**：`git clone https://github.com/nephi4377/Backend_GAS`、 `gh repo view nephi4377/Backend_GAS`  
-**結果**：此環境無法存取該 repo（404／無權限）。以下僅依 **本 repo SPEC 與前端呼叫** 整理後端契約，實作前請在 Backend_GAS 內再對照 `backend/project-console/WebApp.js`。
+**結果**：`Backend_GAS` 為**私有 repo**，Cloud Agent 環境無 clone／讀取權限（非「公開 404」）。以下僅依 **本 repo SPEC 與前端呼叫** 整理後端契約，實作前請在 Backend_GAS 內再對照 `backend/project-console/WebApp.js`。
 
 | action／路徑 | 用途 | 前端來源 |
 |--------------|------|----------|
@@ -93,7 +93,7 @@
 | `lineKey` | `id` 前綴 `LP_{lineKey}` | 追溯用；正式案號匯入時可 remap |
 | — | `sheet_source` | 固定 `LayoutPlanner` |
 | — | `raw_line` | `LayoutPlanner|lineKey|name` |
-| `layoutPlanner.sourceType` 等 | （草稿 JSON 內 `layoutPlanner` 擴充） | **不上傳 Firebase 前應 strip**（見原型模組 `sanitizeDraftItemForBudgetWeb`） |
+| `lineKey`／來源追溯 | 僅於 `raw_line`（`LayoutPlanner\|…`）；**JSON `items[]` 已經 `sanitizeDraftItemForBudgetWeb`，不含 `layoutPlanner` 擴充欄** |
 
 **未自動對應（需 Nephi 決策）**
 
@@ -150,6 +150,7 @@ D 僅作「現場初估」補充，不作平面匯入主線。
 | 模組 | `modules/InteriorDesigned/LP_quotation_budgetweb_export.js` |
 | UI | 預算 Modal → **匯出報價明細**：預覽表 ＋ 下載 JSON／CSV |
 | Schema | `layout-planner-quote-draft-v1` |
+| CSV 安全 | `formatCsvCell`：公式注入（`=+-@\t\r` 前綴 `'`）、RFC4180 引號 |
 | 測試 | `LP_quotation_budgetweb_export.test.js`（Vitest） |
 
 **刻意不做**：Firebase、`案號` 必填、GAS、ZIP 內自動附帶（可下一階段加入佈局 ZIP）。

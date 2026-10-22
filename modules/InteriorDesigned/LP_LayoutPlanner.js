@@ -11,6 +11,7 @@ import {
 import {
     buildLayoutPlannerQuoteDraft,
     budgetWebDraftToCsv,
+    budgetWebDraftToCsvWithBom,
 } from './LP_quotation_budgetweb_export.js';
 
 /** 開啟時於 console 輸出除錯訊息（元件載入、渲染、縮放、繪圖等） */
@@ -3188,7 +3189,7 @@ function exportQuoteDraftDetails() {
     lastQuoteExportDraft = buildLayoutPlannerQuoteDraft({
         lineItems,
         grandTotal: quotation.grandTotal,
-        meta: { layoutSavedAt: new Date().toISOString() },
+        meta: { exportedAt: new Date().toISOString() },
     });
     renderQuoteExportDraftModal(lastQuoteExportDraft);
     showGlobalNotification('已產生報價明細草稿（可下載 JSON／CSV）', 'success');
@@ -3207,9 +3208,8 @@ function downloadQuoteExportDraftJson() {
 
 function downloadQuoteExportDraftCsv() {
     if (!lastQuoteExportDraft) return;
-    const bom = new Uint8Array([0xef, 0xbb, 0xbf]);
-    const csv = budgetWebDraftToCsv(lastQuoteExportDraft);
-    const blob = new Blob([bom, csv], { type: 'text/csv;charset=utf-8;' });
+    const bytes = budgetWebDraftToCsvWithBom(lastQuoteExportDraft);
+    const blob = new Blob([bytes], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     const dateString = new Date().toISOString().slice(0, 10);

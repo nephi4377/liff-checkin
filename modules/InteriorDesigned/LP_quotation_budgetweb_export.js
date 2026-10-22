@@ -5,6 +5,9 @@
 
 export const LP_QUOTE_DRAFT_SCHEMA = 'layout-planner-quote-draft-v1';
 
+/** UTF-8 BOM for Excel（與 LP 下載 CSV 一致） */
+export const UTF8_CSV_BOM = new Uint8Array([0xef, 0xbb, 0xbf]);
+
 /** 與 BudgetWeb_Standalone CATEGORY_RULES 對齊（精簡關鍵字） */
 const CATEGORY_RULES = {
     施工保護: ['保護', 'pp板', '養護'],
@@ -27,6 +30,34 @@ export function inferCategoryTag(name, spec = '') {
     return '其他';
 }
 
+/** 列總價字串：0、負數、正數皆保留，與 grand_total 加總一致 */
+export function formatDraftLinePrice(totalPrice) {
+    if (totalPrice === '' || totalPrice == null) return '';
+    const priceNum = Number(totalPrice);
+    if (Number.isNaN(priceNum)) return '';
+    return String(Math.round(priceNum));
+}
+
+export function sumDraftLinePrices(items) {
+    return (items || []).reduce((s, it) => s + (parseFloat(it.price) || 0), 0);
+}
+
+/**
+ * 單一 CSV 欄位：公式注入防護 + RFC4180 引號
+ * @param {*} v
+ * @returns {string}
+ */
+export function formatCsvCell(v) {
+    let s = String(v == null ? '' : v);
+    if (/^[=+\-@\t\r]/.test(s)) {
+        s = `'${s}`;
+    }
+    if (/[",\n\r]/.test(s)) {
+        return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+}
+
 /**
  * @param {object} row LayoutPlanner 顯示列（含 specNote、group、lineKey 等）
  * @param {string} zone 目前區段（群組標題或 group）
@@ -36,8 +67,7 @@ export function layoutLineToBudgetWebItem(row, zone, seq) {
     const spec = String(row.specNote ?? row.sizeLabel ?? row.note ?? '').trim();
     const qty = row.quantity;
     const qtyStr = qty === '' || qty == null ? '' : String(qty);
-    const priceNum = Number(row.totalPrice);
-    const priceStr = priceNum > 0 ? String(Math.round(priceNum)) : '';
+    const priceStr = formatDraftLinePrice(row.totalPrice);
     const safeKey = String(row.lineKey || `row_${seq}`).replace(/[^a-zA-Z0-9_-]/g, '_');
 
     return {
@@ -65,7 +95,7 @@ export function layoutLineToBudgetWebItem(row, zone, seq) {
 
 /**
  * @param {{ lineItems: Array, grandTotal?: number, meta?: object }} input
- * @returns {object} BudgetWeb 相容草稿（不含 Firebase／案號必填）
+ * @returns {object} BudgetWeb 相容草稿（items 已 sanitize，不含 layoutPlanner 擴充欄）
  */
 export function buildLayoutPlannerQuoteDraft(input) {
     const lineItems = input?.lineItems || [];
@@ -84,10 +114,11 @@ export function buildLayoutPlannerQuoteDraft(input) {
         const specNote = row.specNote != null
             ? row.specNote
             : [row.sizeLabel, row.note].filter(Boolean).join(' ').trim();
-        items.push(layoutLineToBudgetWebItem({ ...row, specNote }, currentZone, seq++));
+        const raw = layoutLineToBudgetWebItem({ ...row, specNote }, currentZone, seq++);
+        items.push(sanitizeDraftItemForBudgetWeb(raw));
     });
 
-    const grandTotal = Number(input?.grandTotal) || items.reduce((s, it) => s + (parseFloat(it.price) || 0), 0);
+    const grandTotal = Math.round(sumDraftLinePrices(items));
 
     return {
         schema: LP_QUOTE_DRAFT_SCHEMA,
@@ -98,7 +129,7 @@ export function buildLayoutPlannerQuoteDraft(input) {
             source: 'LayoutPlanner',
             overall_completion: 0,
             item_count: items.length,
-            grand_total: Math.round(grandTotal),
+            grand_total: grandTotal,
             ...(input?.meta || {}),
         },
         items,
@@ -138,10 +169,15 @@ export function budgetWebDraftToCsv(draft) {
         it.sheet_source,
         it.id,
     ]);
-    const escape = (v) => {
-        const s = String(v == null ? '' : v);
-        if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-        return s;
-    };
-    return [headers, ...rows].map((r) => r.map(escape).join(',')).join('\n');
+    return [headers, ...rows].map((r) => r.map(formatCsvCell).join(',')).join('\n');
+}
+
+/** @returns {Uint8Array} BOM + UTF-8 bytes（供下載與測試） */
+export function budgetWebDraftToCsvWithBom(draft) {
+    const csv = budgetWebDraftToCsv(draft);
+    const body = new TextEncoder().encode(csv);
+    const out = new Uint8Array(UTF8_CSV_BOM.length + body.length);
+    out.set(UTF8_CSV_BOM, 0);
+    out.set(body, UTF8_CSV_BOM.length);
+    return out;
 }
