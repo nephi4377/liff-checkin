@@ -1,0 +1,191 @@
+import { ringCentroidXZ } from './LP_3D_scene.js';
+
+/** @typedef {'top' | 'front_iso' | 'corner_iso'} OrbitCameraPresetId */
+
+export const ORBIT_CAMERA_PRESETS = {
+    TOP: 'top',
+    FRONT_ISO: 'front_iso',
+    CORNER_ISO: 'corner_iso',
+};
+
+export const PNG_EXPORT_MAX_SIDE_PX = 3072;
+export const PNG_EXPORT_MAX_PIXELS = 8_000_000;
+
+/**
+ * @param {number} width
+ * @param {number} height
+ * @param {number} [maxSide]
+ * @returns {{ width: number, height: number }}
+ */
+export function scaleDimensionsToMaxSide(width, height, maxSide = PNG_EXPORT_MAX_SIDE_PX) {
+    const longest = Math.max(width, height);
+    if (longest <= maxSide) {
+        return { width, height };
+    }
+    const scale = maxSide / longest;
+    return {
+        width: Math.max(1, Math.floor(width * scale)),
+        height: Math.max(1, Math.floor(height * scale)),
+    };
+}
+
+/**
+ * PNG 匯出：最長邊 ≤ 3072，總像素 ≤ 8MP。
+ * @param {number} width
+ * @param {number} height
+ * @returns {{ width: number, height: number }}
+ */
+export function scaleDimensionsForPngExport(width, height) {
+    let { width: w, height: h } = scaleDimensionsToMaxSide(width, height, PNG_EXPORT_MAX_SIDE_PX);
+    let pixels = w * h;
+    if (pixels > PNG_EXPORT_MAX_PIXELS) {
+        const scale = Math.sqrt(PNG_EXPORT_MAX_PIXELS / pixels);
+        w = Math.max(1, Math.floor(w * scale));
+        h = Math.max(1, Math.floor(h * scale));
+    }
+    return { width: w, height: h };
+}
+
+/**
+ * @param {OrbitCameraPresetId} preset
+ * @param {{ workspaceSize?: number, walls?: { heightCm?: number }[], walkBounds?: { rings?: { x: number, z: number }[][] } }} desc
+ * @param {{ WALL_HEIGHT_CM: number }} defaults
+ * @returns {{ position: { x: number, y: number, z: number }, target: { x: number, y: number, z: number } }}
+ */
+export function computeOrbitPresetCamera(preset, desc, defaults) {
+    const ws = desc.workspaceSize || 2000;
+    const span = ws * 0.55;
+    const wallH = desc.walls?.[0]?.heightCm ?? defaults.WALL_HEIGHT_CM;
+    const ring = desc.walkBounds?.rings?.[0];
+    const c = ring?.length ? ringCentroidXZ(ring) : { x: 0, z: 0 };
+    const targetY = wallH * 0.45;
+    const target = { x: c.x, y: targetY, z: c.z };
+
+    if (preset === ORBIT_CAMERA_PRESETS.TOP) {
+        return {
+            position: {
+                x: c.x,
+                y: Math.max(span * 1.35, wallH * 2.2),
+                z: c.z,
+            },
+            target: { x: c.x, y: 0, z: c.z },
+        };
+    }
+    if (preset === ORBIT_CAMERA_PRESETS.FRONT_ISO) {
+        return {
+            position: { x: c.x, y: span * 0.72, z: c.z - span * 1.05 },
+            target,
+        };
+    }
+    return {
+        position: { x: c.x + span, y: span * 0.75, z: c.z + span },
+        target,
+    };
+}
+
+/**
+ * WebGL readRenderTargetPixels 為左下角原點；翻轉成左上角原點並寫入 dest。
+ * @param {Uint8ClampedArray} dest
+ * @param {number} width
+ * @param {number} height
+ * @param {Uint8Array} rgbaBottomLeft
+ */
+export function flipRgbaRowsInto(dest, width, height, rgbaBottomLeft) {
+    const rowBytes = width * 4;
+    for (let y = 0; y < height; y++) {
+        const srcStart = (height - 1 - y) * rowBytes;
+        dest.set(rgbaBottomLeft.subarray(srcStart, srcStart + rowBytes), y * rowBytes);
+    }
+}
+
+/**
+ * WebGL readRenderTargetPixels 為左下角原點；轉成 Canvas ImageData（左上角原點）。
+ * @param {number} width
+ * @param {number} height
+ * @param {Uint8Array} rgbaBottomLeft
+ * @returns {Uint8ClampedArray}
+ */
+export function flipRgbaRowsToTopLeft(width, height, rgbaBottomLeft) {
+    const out = new Uint8ClampedArray(width * height * 4);
+    flipRgbaRowsInto(out, width, height, rgbaBottomLeft);
+    return out;
+}
+
+/**
+ * 單次離屏渲染並匯出 PNG（不啟用 preserveDrawingBuffer，不影響常態 frame rate）。
+ * @param {typeof import('three')} THREE
+ * @param {import('three').WebGLRenderer} renderer
+ * @param {import('three').Scene} scene
+ * @param {import('three').Camera} camera
+ * @returns {Promise<Blob>}
+ */
+export async function renderSceneToPngBlob(THREE, renderer, scene, camera) {
+    const srcW = renderer.domElement.width;
+    const srcH = renderer.domElement.height;
+    if (srcW < 1 || srcH < 1) {
+        throw new Error('viewport size invalid');
+    }
+
+    const { width: w, height: h } = scaleDimensionsForPngExport(srcW, srcH);
+
+    const renderTarget = new THREE.WebGLRenderTarget(w, h, {
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.NearestFilter,
+        format: THREE.RGBAFormat,
+        type: THREE.UnsignedByteType,
+    });
+
+    const prevTarget = renderer.getRenderTarget();
+    const prevAspect = camera.aspect;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+
+    try {
+        renderer.setRenderTarget(renderTarget);
+        renderer.render(scene, camera);
+
+        const pixels = new Uint8Array(w * h * 4);
+        renderer.readRenderTargetPixels(renderTarget, 0, 0, w, h, pixels);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('2d context unavailable');
+
+        const imageData = ctx.createImageData(w, h);
+        flipRgbaRowsInto(imageData.data, w, h, pixels);
+        ctx.putImageData(imageData, 0, 0);
+
+        return await new Promise((resolve, reject) => {
+            canvas.toBlob((blob) => {
+                if (blob) resolve(blob);
+                else reject(new Error('PNG encode failed'));
+            }, 'image/png');
+        });
+    } finally {
+        renderer.setRenderTarget(prevTarget);
+        camera.aspect = prevAspect;
+        camera.updateProjectionMatrix();
+        renderTarget.dispose();
+    }
+}
+
+/** @param {Blob} blob @param {string} filename */
+export function downloadBlobAsFile(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+/** @param {Date} [date] */
+export function formatLayout3DPngFilename(date = new Date()) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `layout-3d-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}.png`;
+}

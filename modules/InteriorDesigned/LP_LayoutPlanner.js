@@ -4181,6 +4181,7 @@ const AUTO_SAVE_KEY = 'layoutPlanner_autosave_v1';
 const AUTO_SAVE_INTERVAL = 60000; // 60秒自動儲存一次
 
 function initAutoSave() {
+    if (isLayoutPlannerUrlPreview()) return;
     // 1. 啟動定時器
     setInterval(autoSave, AUTO_SAVE_INTERVAL);
 
@@ -4222,6 +4223,7 @@ function autoSave(silent = false) {
 }
 
 function checkAndRestoreBackup() {
+    if (isLayoutPlannerUrlPreview()) return;
     try {
         const json = localStorage.getItem(AUTO_SAVE_KEY);
         if (!json) return;
@@ -4244,8 +4246,65 @@ function checkAndRestoreBackup() {
     }
 }
 
+const LP_PREVIEW_FIXTURE_RE = /^e2e\/fixtures\/[\w.-]+\.json$/;
+
+function isLayoutPlannerUrlPreview() {
+    return new URLSearchParams(window.location.search).get('lpPreview') === '1';
+}
+
+/** 測試預覽：?lpPreview=1&lpFixture=e2e/fixtures/….json&lp3d=walk|orbit */
+async function maybeInitLayoutPlannerUrlPreview() {
+    if (!isLayoutPlannerUrlPreview()) return;
+    const params = new URLSearchParams(window.location.search);
+    const fixture = params.get('lpFixture');
+    if (!fixture || !LP_PREVIEW_FIXTURE_RE.test(fixture)) {
+        showGlobalNotification('預覽：lpFixture 僅允許 e2e/fixtures/ 內的 JSON', 6000, 'error');
+        return;
+    }
+    try {
+        const res = await fetch(fixture, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        const layoutData = await res.json();
+        loadLayoutFromData(layoutData, { successMessage: false });
+        showGlobalNotification('已載入 3D 示範佈局（測試預覽，不影響正式版）', 3500, 'info');
+    } catch (err) {
+        console.error('[LP preview]', err);
+        showGlobalNotification(`預覽載入失敗：${err.message}`, 8000, 'error');
+        return;
+    }
+    const lp3d = params.get('lp3d');
+    if (lp3d !== 'walk' && lp3d !== 'orbit') return;
+    try {
+        await openLayoutPlanner3DForPreview(lp3d);
+    } catch (err) {
+        console.error('[LP preview 3D]', err);
+        showGlobalNotification('3D 預覽開啟失敗', 6000, 'error');
+    }
+}
+
+async function openLayoutPlanner3DForPreview(viewMode) {
+    const overlay = document.getElementById('lp-3d-overlay');
+    const toggleBtn = document.getElementById('toggle-3d-view-btn');
+    const viewer = await ensureLp3dViewer();
+    if (!lp3dMode) {
+        lp3dMode = true;
+        document.body.classList.add('lp-3d-mode');
+        if (overlay) overlay.setAttribute('aria-hidden', 'false');
+        if (toggleBtn) {
+            toggleBtn.textContent = '📐 2D 平面';
+            toggleBtn.title = '返回 2D 平面編輯';
+        }
+        viewer.open();
+        viewer.rebuild();
+    }
+    const btn = viewMode === 'walk'
+        ? document.getElementById('lp-3d-btn-walk')
+        : document.getElementById('lp-3d-btn-orbit');
+    btn?.click();
+}
+
 // 抽取原本 loadLayout 的核心邏輯，以便重用
-function loadLayoutFromData(layoutData) {
+function loadLayoutFromData(layoutData, options = {}) {
     const rawCabs = layoutData.placedCabinets || [];
     placedCabinets = rawCabs.map((cab) => {
         if (cab.data && cab.data.img && typeof cab.data.img === 'string' && cab.data.img.trim().startsWith('<svg')) {
@@ -4293,7 +4352,10 @@ function loadLayoutFromData(layoutData) {
     deselectAll();
     deselectAllAreas();
 
-    showGlobalNotification('✅ 已成功還原備份進度', 3000, 'success');
+    if (options.successMessage !== false) {
+        const msg = options.successMessage ?? '✅ 已成功還原備份進度';
+        showGlobalNotification(msg, 3000, 'success');
+    }
 }
 
 // ========== [新增] 檔案傳輸功能 ==========
@@ -4490,6 +4552,9 @@ window.onload = () => {
     }
 
     // 只有在電腦版才會執行以下程式碼
+    if (isLayoutPlannerUrlPreview()) {
+        document.documentElement.classList.add('lp-url-preview');
+    }
     bindEventListeners();
     initWorkspaceAndUiFromStorage();
 
@@ -4508,6 +4573,8 @@ window.onload = () => {
     
     // [v9.13] 初始載入時置中視圖
     setTimeout(centerView, 100);
+
+    maybeInitLayoutPlannerUrlPreview();
 };
 
 // [v9.8 新增] 僅更新資訊面板的價格顯示 (不重繪 DOM，防止焦點跳離)

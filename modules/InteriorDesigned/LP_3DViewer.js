@@ -13,6 +13,18 @@ import {
 } from './LP_3D_furniture.js';
 import { createWalkController } from './LP_3D_walk.js';
 import { disposeObject3D, disposeBrushGeometry } from './LP_3D_dispose.js';
+import {
+    ORBIT_CAMERA_PRESETS,
+    computeOrbitPresetCamera,
+    renderSceneToPngBlob,
+    downloadBlobAsFile,
+    formatLayout3DPngFilename,
+} from './LP_3D_snapshot.js';
+import {
+    createWalkCollisionCache,
+    resolveWalkBodyRadiusCm,
+    resolveWalkSpawnXZ,
+} from './LP_3D_walk_collision.js';
 
 function makeShapeFromRing(outer, inner) {
     const shape = new THREE.Shape();
@@ -108,6 +120,7 @@ export function createLayoutPlanner3DViewer(options) {
     let viewMode = 'orbit';
     let showCeiling = true;
     let lastDesc = null;
+    const walkCollisionCache = createWalkCollisionCache();
     let lastTick = performance.now();
     let orbitBookmark = null;
     let rebuildCount = 0;
@@ -122,6 +135,11 @@ export function createLayoutPlanner3DViewer(options) {
     const btnReset = overlayEl?.querySelector('#lp-3d-btn-reset');
     const btnExit = overlayEl?.querySelector('#lp-3d-btn-exit-2d');
     const ceilingToggle = overlayEl?.querySelector('#lp-3d-ceiling-toggle');
+    const btnPresetTop = overlayEl?.querySelector('#lp-3d-btn-preset-top');
+    const btnPresetFront = overlayEl?.querySelector('#lp-3d-btn-preset-front');
+    const btnPresetCorner = overlayEl?.querySelector('#lp-3d-btn-preset-corner');
+    const presetSelect = overlayEl?.querySelector('#lp-3d-preset-select');
+    const btnSavePng = overlayEl?.querySelector('#lp-3d-btn-save-png');
 
     function setHint(text) {
         if (hintEl) hintEl.textContent = text;
@@ -164,8 +182,11 @@ export function createLayoutPlanner3DViewer(options) {
     function resetWalkCamera(desc) {
         const ring = desc.walkBounds?.rings?.[0];
         const c = ring?.length ? ringCentroidXZ(ring) : { x: 0, z: 0 };
-        walk.setPosition(c.x, c.z);
-        walk.lookAt(c.x, c.z - 80);
+        const bodyR = resolveWalkBodyRadiusCm(desc);
+        const collision = walkCollisionCache.get(desc);
+        const spawn = resolveWalkSpawnXZ(c.x, c.z, collision, bodyR);
+        walk.setPosition(spawn.x, spawn.z);
+        walk.lookAt(spawn.x, spawn.z - 80);
     }
 
     function ensureWalk() {
@@ -175,6 +196,8 @@ export function createLayoutPlanner3DViewer(options) {
             domElement: renderer.domElement,
             eyeHeightCm: LP_3D_DEFAULTS.WALK_EYE_HEIGHT_CM,
             getWalkBounds: () => lastDesc?.walkBounds ?? null,
+            getWalkCollision: () => walkCollisionCache.get(lastDesc),
+            getWalkBodyRadiusCm: () => (lastDesc ? resolveWalkBodyRadiusCm(lastDesc) : 20),
         });
     }
 
@@ -182,6 +205,27 @@ export function createLayoutPlanner3DViewer(options) {
         if (!lastDesc) return;
         if (viewMode === 'orbit') resetOrbitCamera(lastDesc);
         else resetWalkCamera(lastDesc);
+    }
+
+    function applyOrbitPreset(presetId) {
+        if (!lastDesc || !camera || !controls) return;
+        viewMode = 'orbit';
+        applyViewMode();
+        const { position, target } = computeOrbitPresetCamera(presetId, lastDesc, LP_3D_DEFAULTS);
+        camera.position.set(position.x, position.y, position.z);
+        controls.target.set(target.x, target.y, target.z);
+        controls.update();
+        orbitBookmark = {
+            pos: camera.position.clone(),
+            target: controls.target.clone(),
+        };
+    }
+
+    async function saveCurrentViewPng() {
+        if (!renderer || !scene || !camera) return;
+        renderer.render(scene, camera);
+        const blob = await renderSceneToPngBlob(THREE, renderer, scene, camera);
+        downloadBlobAsFile(blob, formatLayout3DPngFilename());
     }
 
     function ensureScene() {
@@ -243,6 +287,22 @@ export function createLayoutPlanner3DViewer(options) {
             showCeiling = ceilingToggle.checked;
             if (ceilingGroup.current) ceilingGroup.current.visible = showCeiling;
         });
+        btnPresetTop?.addEventListener('click', () => applyOrbitPreset(ORBIT_CAMERA_PRESETS.TOP));
+        btnPresetFront?.addEventListener('click', () => applyOrbitPreset(ORBIT_CAMERA_PRESETS.FRONT_ISO));
+        btnPresetCorner?.addEventListener('click', () => applyOrbitPreset(ORBIT_CAMERA_PRESETS.CORNER_ISO));
+        presetSelect?.addEventListener('change', () => {
+            const value = presetSelect.value;
+            if (!value) return;
+            if (value === ORBIT_CAMERA_PRESETS.TOP
+                || value === ORBIT_CAMERA_PRESETS.FRONT_ISO
+                || value === ORBIT_CAMERA_PRESETS.CORNER_ISO) {
+                applyOrbitPreset(value);
+            }
+            presetSelect.value = '';
+        });
+        btnSavePng?.addEventListener('click', () => {
+            saveCurrentViewPng().catch((err) => console.error('[LP 3D save PNG]', err));
+        });
 
         updateToolbarActive();
         setHint('鳥瞰：左鍵旋轉 · 右鍵平移 · 滾輪縮放');
@@ -258,6 +318,7 @@ export function createLayoutPlanner3DViewer(options) {
             drawnAreas: raw.drawnAreas,
         });
         lastDesc = desc;
+        walkCollisionCache.invalidate();
         const defaults = LP_3D_DEFAULTS;
         const openings = desc.fixtures.filter((f) => f.kind === 'door' || f.kind === 'window');
 
@@ -359,6 +420,21 @@ export function createLayoutPlanner3DViewer(options) {
         animationId = requestAnimationFrame(tick);
     }
 
+    function publishTestHooks() {
+        if (typeof window === 'undefined') return;
+        if (new URLSearchParams(window.location.search).get('lpPreview') !== '1') return;
+        window.__LP3D_TEST_HOOKS__ = {
+            getViewMode: () => viewMode,
+            getEyeHeightCm: () => LP_3D_DEFAULTS.WALK_EYE_HEIGHT_CM,
+            getCameraY: () => camera?.position.y ?? null,
+            getCameraXZ: () => (camera ? { x: camera.position.x, z: camera.position.z } : null),
+            setWalkPosition: (x, z) => walk?.setPosition(x, z),
+            lookWalkAt: (x, z) => walk?.lookAt(x, z),
+        };
+        mountEl.__lp3dGetDiagnostics = () => viewer.getDiagnostics();
+        mountEl.__lp3dRebuild = () => viewer.rebuild();
+    }
+
     const viewer = {
         open() {
             isOpen = true;
@@ -368,11 +444,14 @@ export function createLayoutPlanner3DViewer(options) {
             applyViewMode();
             lastTick = performance.now();
             if (!animationId) animationId = requestAnimationFrame(tick);
+            publishTestHooks();
         },
         close() {
             isOpen = false;
             overlayEl?.removeAttribute('data-lp-3d-open');
             walk?.setActive(false);
+            walk?.dispose();
+            walk = null;
             if (animationId) {
                 cancelAnimationFrame(animationId);
                 animationId = null;
@@ -393,7 +472,5 @@ export function createLayoutPlanner3DViewer(options) {
             applyViewMode();
         },
     };
-    mountEl.__lp3dGetDiagnostics = () => viewer.getDiagnostics();
-    mountEl.__lp3dRebuild = () => viewer.rebuild();
     return viewer;
 }

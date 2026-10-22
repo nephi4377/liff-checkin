@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const path = require('path');
+const fs = require('fs');
 
 const ARTIFACTS = process.env.LP_E2E_ARTIFACTS || '/opt/cursor/artifacts';
 
@@ -131,6 +132,33 @@ test.describe('LayoutPlanner E2E', () => {
     await expect(page.locator('#lp-3d-viewport canvas')).toHaveCount(1);
   });
 
+  test('3D 示範佈局：牆體／門窗開口／櫃體標籤（FLOORPLAN-3D-5）', async ({ page }) => {
+    const fixture = path.join(__dirname, 'fixtures', 'lp-3d-spec-demo.json');
+    expect(fs.existsSync(fixture)).toBe(true);
+
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#toggle-3d-view-btn').click();
+    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/);
+    await page.waitForTimeout(2000);
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-before-demo-layout.png'), fullPage: false });
+
+    await page.locator('#lp-3d-btn-exit-2d').click();
+    await expect(page.locator('body')).not.toHaveClass(/lp-3d-mode/);
+    await page.locator('#layout-upload').setInputFiles(fixture);
+    await page.waitForTimeout(800);
+
+    await page.locator('#toggle-3d-view-btn').click();
+    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/);
+    await page.waitForTimeout(3000);
+    expect(errors, `頁面錯誤: ${errors.join('; ')}`).toHaveLength(0);
+
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-after-demo-layout.png'), fullPage: false });
+  });
+
   test('3D 畫布全螢幕不被側欄或底列遮住（桌機）', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
@@ -148,6 +176,68 @@ test.describe('LayoutPlanner E2E', () => {
     await page.locator('#lp-3d-btn-walk').click();
     await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-walk-desktop.png'), fullPage: false });
+  });
+
+  test('3D 室內漫遊撞牆不穿透（FLOORPLAN-3D-WALK-2）', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(
+      '/LP_LayoutPlanner?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=walk',
+      { waitUntil: 'domcontentloaded' },
+    );
+    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/, { timeout: 15000 });
+    await page.waitForTimeout(2000);
+
+    const before = await page.evaluate(() => {
+      const h = window.__LP3D_TEST_HOOKS__;
+      h?.setWalkPosition(-250, -650);
+      h?.lookWalkAt(-250, -720);
+      return h?.getCameraXZ();
+    });
+    expect(before).toBeTruthy();
+
+    for (let i = 0; i < 10; i++) {
+      await page.keyboard.press('w');
+      await page.waitForTimeout(80);
+    }
+    await page.waitForTimeout(400);
+
+    const after = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.getCameraXZ());
+    expect(after.z).toBeLessThan(before.z);
+    expect(after.z).toBeGreaterThan(-700 + 18);
+
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-walk-wall-bump.png'), fullPage: false });
+  });
+
+  test('3D 測試預覽連結：自動載入示範並進入室內漫遊（FLOORPLAN-3D-WALK-1）', async ({ page }) => {
+    const fixture = path.join(__dirname, 'fixtures', 'lp-3d-spec-demo.json');
+    expect(fs.existsSync(fixture)).toBe(true);
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(
+      '/LP_LayoutPlanner?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=walk',
+      { waitUntil: 'domcontentloaded' },
+    );
+    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/, { timeout: 15000 });
+    await expect(page.locator('#lp-3d-btn-walk')).toHaveClass(/lp-3d-active/);
+    await page.waitForTimeout(2500);
+
+    const cam = await page.evaluate(() => {
+      const h = window.__LP3D_TEST_HOOKS__;
+      if (!h) return null;
+      return {
+        viewMode: h.getViewMode(),
+        eyeHeightCm: h.getEyeHeightCm(),
+        cameraY: h.getCameraY(),
+      };
+    });
+    expect(cam?.viewMode).toBe('walk');
+    expect(cam?.eyeHeightCm).toBe(160);
+    expect(cam?.cameraY).toBe(160);
+
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-walk-preview-auto.png'), fullPage: false });
+    await page.locator('#lp-3d-btn-orbit').click();
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-orbit-after-walk-toggle.png'), fullPage: false });
   });
 
   test('3D 畫布在小視窗仍佔滿可視區（手機寬度）', async ({ page }) => {
@@ -213,6 +303,41 @@ test.describe('LayoutPlanner E2E', () => {
     expect(after.undoDisabled).toBe(before.undoDisabled);
   });
 
+  test('3D 儲存圖片與預設角度按鈕可操作', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(
+      '/LP_LayoutPlanner?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=orbit',
+      { waitUntil: 'domcontentloaded' },
+    );
+    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/, { timeout: 20000 });
+    await expect(page.locator('#lp-3d-btn-save-png')).toBeVisible();
+    await page.locator('#lp-3d-btn-preset-top').click();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-snap-before-top.png'), fullPage: false });
+    await page.locator('#lp-3d-btn-preset-corner').click();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-snap-after-corner.png'), fullPage: false });
+
+    const downloadPromise = page.waitForEvent('download', { timeout: 15000 });
+    await page.locator('#lp-3d-btn-save-png').click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/^layout-3d-\d{8}-\d{4}\.png$/);
+  });
+
+  test('3D 工具列窄螢幕：預設視角收合為下拉（375px）', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 700 });
+    await page.goto(
+      '/LP_LayoutPlanner?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=orbit',
+      { waitUntil: 'domcontentloaded' },
+    );
+    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/, { timeout: 20000 });
+    await expect(page.locator('#lp-3d-preset-select')).toBeVisible();
+    await expect(page.locator('#lp-3d-btn-preset-top')).toBeHidden();
+    await page.selectOption('#lp-3d-preset-select', 'top');
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-toolbar-mobile-375.png'), fullPage: false });
+  });
+
   test('3D 檢視切換不造成頁面錯誤', async ({ page }) => {
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
@@ -221,6 +346,9 @@ test.describe('LayoutPlanner E2E', () => {
     await page.locator('#toggle-3d-view-btn').click();
     await expect(page.locator('body')).toHaveClass(/lp-3d-mode/);
     await expect(page.locator('#lp-3d-overlay')).toBeVisible();
+    await expect(page.locator('#lp-3d-btn-save-png')).toBeHidden();
+    await expect(page.locator('#lp-3d-btn-preset-top')).toBeHidden();
+    await expect(page.locator('#lp-3d-preset-select')).toBeHidden();
     await page.waitForTimeout(3000);
     expect(errors, `頁面錯誤: ${errors.join('; ')}`).toHaveLength(0);
 

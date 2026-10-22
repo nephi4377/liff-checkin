@@ -58,7 +58,7 @@ test.describe('LayoutPlanner 3D perf / memory', () => {
   test('大型配置反覆 2D↔3D 切換：heap 與 RAF 不洩漏', async ({ page, browserName }) => {
     test.skip(browserName !== 'chromium', 'performance.memory 僅 Chromium');
 
-    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.goto('/LP_LayoutPlanner?lpPreview=1', { waitUntil: 'domcontentloaded' });
     await page.locator('#layout-upload').setInputFiles(LARGE_FIXTURE);
     await page.waitForTimeout(600);
 
