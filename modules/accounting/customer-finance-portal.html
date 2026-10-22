@@ -230,11 +230,7 @@
       return fallback;
     }
     function humanReceiptFail(errOrMsg) {
-      var fallback = '收款紀錄暫時讀不到，請再試一次。這不代表沒有收款。';
-      if (typeof CustomerFinanceUi !== 'undefined' && CustomerFinanceUi.humanCustomerFail) {
-        return CustomerFinanceUi.humanCustomerFail(errOrMsg, fallback);
-      }
-      return fallback;
+      return '收款紀錄暫時讀不到，請再試一次。這不代表沒有收款。';
     }
 
     function parsePortalDeepLink() {
@@ -338,12 +334,22 @@
         showMsg(msg);
         return;
       }
-      $('recList').innerHTML =
-        '<p>' + msg + '</p>' +
-        '<p class="sub">這不代表沒有收款，只是這次沒讀到。</p>' +
-        '<button type="button" class="btn btn-secondary" id="btnRetryRec">再試一次</button>';
-      var retry = $('btnRetryRec');
-      if (retry) retry.onclick = function () { loadData(true); };
+      var box = $('recList');
+      box.innerHTML = '';
+      var p1 = document.createElement('p');
+      p1.textContent = msg;
+      box.appendChild(p1);
+      var p2 = document.createElement('p');
+      p2.className = 'sub';
+      p2.textContent = '這不代表沒有收款，只是這次沒讀到。';
+      box.appendChild(p2);
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-secondary';
+      btn.id = 'btnRetryRec';
+      btn.textContent = '再試一次';
+      btn.onclick = function () { loadData(true); };
+      box.appendChild(btn);
     }
 
     async function loadData(forceRefresh) {
@@ -375,7 +381,9 @@
         if (!res || !res.success) {
           if (!forceRefresh && !recLoadAutoTried_) {
             recLoadAutoTried_ = true;
-            return loadData(true);
+            await new Promise(function (resolve) { setTimeout(resolve, 1000); });
+            await loadData(true);
+            return;
           }
           showReceiptLoadFail((res && res.message) || '載入失敗', hadRows);
           return;
@@ -390,7 +398,9 @@
       } catch (eRec) {
         if (!forceRefresh && !recLoadAutoTried_) {
           recLoadAutoTried_ = true;
-          return loadData(true);
+          await new Promise(function (resolve) { setTimeout(resolve, 1000); });
+          await loadData(true);
+          return;
         }
         showReceiptLoadFail(eRec, hadRows);
       } finally {
@@ -883,15 +893,29 @@
     function showReceiptBootFail(errOrMsg) {
       showReceiptView();
       $('userLine').textContent = '無法確認身分';
-      $('recList').innerHTML =
-        '<p>' + humanReceiptFail(errOrMsg) + '</p>' +
-        '<p class="sub">這不代表沒有收款，只是這次沒打開。</p>' +
-        '<button type="button" class="btn btn-secondary" id="btnRetryBootRec">再試一次</button>' +
-        '<button type="button" class="btn btn-secondary" id="btnBootReloginRec">重新登入 LINE</button>';
-      var retryRec = $('btnRetryBootRec');
-      if (retryRec) retryRec.onclick = function () { location.reload(); };
-      var reloginRec = $('btnBootReloginRec');
-      if (reloginRec) reloginRec.onclick = function () { $('btnLiffRelogin').click(); };
+      var box = $('recList');
+      box.innerHTML = '';
+      var p1 = document.createElement('p');
+      p1.textContent = humanReceiptFail(errOrMsg);
+      box.appendChild(p1);
+      var p2 = document.createElement('p');
+      p2.className = 'sub';
+      p2.textContent = '這不代表沒有收款，只是這次沒打開。';
+      box.appendChild(p2);
+      var retryRec = document.createElement('button');
+      retryRec.type = 'button';
+      retryRec.className = 'btn btn-secondary';
+      retryRec.id = 'btnRetryBootRec';
+      retryRec.textContent = '再試一次';
+      retryRec.onclick = function () { location.reload(); };
+      box.appendChild(retryRec);
+      var reloginRec = document.createElement('button');
+      reloginRec.type = 'button';
+      reloginRec.className = 'btn btn-secondary';
+      reloginRec.id = 'btnBootReloginRec';
+      reloginRec.textContent = '重新登入 LINE';
+      reloginRec.onclick = function () { $('btnLiffRelogin').click(); };
+      box.appendChild(reloginRec);
     }
 
     (async function boot() {

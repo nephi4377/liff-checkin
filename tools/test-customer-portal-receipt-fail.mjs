@@ -48,8 +48,18 @@ function makeDom() {
       value: '999',
       classList: { add() {}, remove() {}, toggle() {} },
       style: {},
+      childNodes: [],
+      appendChild(child) {
+        this.childNodes.push(child);
+        child.parentNode = this;
+        return child;
+      },
       querySelector(sel) {
         if (sel === '[data-rec-id]') return null;
+        if (sel && sel.startsWith('#')) {
+          const want = sel.slice(1);
+          return this.childNodes.find((c) => c.id === want) || null;
+        }
         return null;
       },
       querySelectorAll() { return []; }
@@ -60,34 +70,69 @@ function makeDom() {
     if (!nodes.has(id)) nodes.set(id, makeEl(id));
     return nodes.get(id);
   };
-  return { $, nodes };
+  const document = {
+    createElement(tag) {
+      const el = {
+        tagName: String(tag).toUpperCase(),
+        textContent: '',
+        className: '',
+        type: '',
+        id: '',
+        onclick: null,
+        childNodes: [],
+        appendChild(child) {
+          this.childNodes.push(child);
+          return child;
+        }
+      };
+      return el;
+    }
+  };
+  return { $, nodes, document };
 }
 
 test('humanReceiptFail and showReceiptLoadFail explain failure, not empty receipts', () => {
-  const { $ } = makeDom();
+  const { $, document } = makeDom();
   const src = [
     extractFunctionBlock(html, 'humanReceiptFail'),
     extractFunctionBlock(html, 'showReceiptLoadFail')
   ].join('\n');
-  const sandbox = vm.createContext({ $, showMsg: () => {}, loadData: () => {}, CustomerFinanceUi: undefined });
+  const sandbox = vm.createContext({ $, document, showMsg: () => {}, loadData: () => {}, CustomerFinanceUi: undefined });
   vm.runInContext(src, sandbox);
   vm.runInContext('showReceiptLoadFail(new Error("x"), false);', sandbox);
-  const recHtml = $('recList').innerHTML;
-  assert.match(recHtml, /這不代表沒有收款/);
-  assert.match(recHtml, /再試一次/);
-  assert.doesNotMatch(recHtml, /目前無待確認收款/);
+  const rec = $('recList');
+  const firstP = rec.childNodes[0];
+  assert.equal(firstP.textContent, '收款紀錄暫時讀不到，請再試一次。這不代表沒有收款。');
+  assert.equal(rec.childNodes.find((n) => n.id === 'btnRetryRec')?.textContent, '再試一次');
+  assert.doesNotMatch(rec.innerHTML, /目前無待確認收款/);
   const human = vm.runInContext('humanReceiptFail(new Error("net"))', sandbox);
   assert.equal(human, '收款紀錄暫時讀不到，請再試一次。這不代表沒有收款。');
 });
 
-test('loadData after auto-retry shows failure UI on persistent API fail', async () => {
-  const { $ } = makeDom();
-  const projectSelect = $('projectSelect');
-  projectSelect.value = '999';
-  const content = $('content');
-  content.classList = { _c: new Set(), add(k) { this._c.add(k); }, remove(k) { this._c.delete(k); }, toggle(k, on) { on ? this._c.add(k) : this._c.delete(k); } };
+test('showReceiptLoadFail does not inject API error HTML into recList', () => {
+  const { $, document } = makeDom();
+  const src = [
+    extractFunctionBlock(html, 'humanReceiptFail'),
+    extractFunctionBlock(html, 'showReceiptLoadFail')
+  ].join('\n');
+  const sandbox = vm.createContext({ $, document, showMsg: () => {}, loadData: () => {} });
+  vm.runInContext(src, sandbox);
+  const evil = '<img src=x onerror="alert(1)">';
+  vm.runInContext(`showReceiptLoadFail({ message: ${JSON.stringify(evil)} }, false);`, sandbox);
+  const rec = $('recList');
+  assert.equal(rec.childNodes[0].textContent, '收款紀錄暫時讀不到，請再試一次。這不代表沒有收款。');
+  assert.doesNotMatch(rec.innerHTML, /<img|onerror|alert/);
+});
 
-  const loadDataSrc = extractFunctionBlock(html, 'loadData').replace('async function loadData', 'async function loadDataFn').replace('return loadData(true)', 'return loadDataFn(true)').replace('loadData(true)', 'loadDataFn(true)');
+test('loadData auto-retry: delay, busy state, then failure UI', async () => {
+  const { $, document } = makeDom();
+  $('projectSelect').value = '999';
+  const busyLog = [];
+  const retryDelays = [];
+  const fetchAt = [];
+  const loadDataSrc = extractFunctionBlock(html, 'loadData')
+    .replace('async function loadData', 'async function loadDataFn')
+    .replace(/\bloadData\(/g, 'loadDataFn(');
   const helpers = [
     extractFunctionBlock(html, 'humanReceiptFail'),
     extractFunctionBlock(html, 'showReceiptLoadFail').replace(/\bloadData\b/g, 'loadDataFn'),
@@ -97,7 +142,7 @@ test('loadData after auto-retry shows failure UI on persistent API fail', async 
     'var session = {};',
     'var SHOW_CUSTOMER_ADJUSTMENTS = false;',
     'function showMsg() {}',
-    'function setContentBusy() {}',
+    'function setContentBusy(on) { busyLog.push(!!on); }',
     'function renderAdj() {}',
     'function renderRec(items) {',
     '  $("recList").innerHTML = items.length ? "<div data-rec-id=\\"1\\"></div>" : "<p>目前無待確認收款</p>";',
@@ -109,19 +154,34 @@ test('loadData after auto-retry shows failure UI on persistent API fail', async 
 
   const sandbox = vm.createContext({
     $,
+    document,
+    setTimeout(fn, ms) {
+      retryDelays.push(ms);
+      return setTimeout(fn, ms);
+    },
+    busyLog,
+    fetchAt,
     fetchCalls: 0,
     AccountingApi: {
       cfPortalData: async function () {
+        sandbox.fetchAt.push(Date.now());
         sandbox.fetchCalls++;
         return { success: false, message: 'boom' };
       }
     },
     AccountingListCache: undefined
   });
+  const t0 = Date.now();
   await vm.runInContext('(async function () {\n' + helpers + '\nawait run();\n})()', sandbox);
   assert.equal(sandbox.fetchCalls, 2, 'auto-retry once before showing fail UI');
-  assert.match($('recList').innerHTML, /這不代表沒有收款/);
-  assert.doesNotMatch($('recList').innerHTML, /目前無待確認收款/);
+  assert.equal(retryDelays[0], 1000, 'waits 1s before auto-retry');
+  assert.ok(sandbox.fetchAt[1] - sandbox.fetchAt[0] >= 900, 'second fetch after ~1s delay');
+  assert.ok(Date.now() - t0 >= 900);
+  assert.ok(busyLog.indexOf(false) >= 2, 'busy not cleared until nested loadData finishes');
+  assert.equal(busyLog.at(-1), false);
+  const rec = $('recList');
+  assert.equal(rec.childNodes[0].textContent, '收款紀錄暫時讀不到，請再試一次。這不代表沒有收款。');
+  assert.doesNotMatch(rec.innerHTML, /目前無待確認收款/);
 });
 
 test('showReceiptBootFail is used for non-material boot errors', () => {
