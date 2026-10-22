@@ -42,6 +42,13 @@ assert(html.indexOf('未成功，請重試') >= 0, 'hard-fail copy');
 assert(html.indexOf('已記入') >= 0 && html.indexOf('後續補資料失敗') >= 0, 'partial-success copy');
 assert(html.indexOf('deferred_token') >= 0, 'background flush after main row');
 assert(html.indexOf('toastOnOk: false') >= 0, 'avoids generic ok toast masking outcome');
+assert(html.indexOf('pendingPhotoError') >= 0, 'LINE photo carry error region');
+assert(html.indexOf('pendingPhotosLoadedOk') >= 0, 'guards second identity pass from wiping photos');
+assert(html.indexOf('再帶一次照片') >= 0, 'manual retry for LINE photos');
+assert(html.indexOf('pendingPhotoLoadGen') >= 0, 'load generation invalidates stale LINE photo fetch');
+assert(html.indexOf('照片帶入中') >= 0, 'submit locks button while LINE photos load');
+assert(html.indexOf('LINE 照片沒帶到，仍要送出') >= 0, 'confirm submit when LINE photo carry failed');
+assert(html.indexOf('var submitting = false') >= 0 || html.indexOf('submitting = false') >= 0, 'submit guard flag');
 
 var api = fs.readFileSync(
   path.join(__dirname, '..', '..', '..', 'shared', 'js', 'accounting_api.js'),
