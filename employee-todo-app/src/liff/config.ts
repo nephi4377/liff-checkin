@@ -2,7 +2,7 @@
 export const LIFF_ID =
   (import.meta.env.VITE_LIFF_ID as string | undefined)?.trim() || ''
 
-export const APP_ORIGIN = 'https://tanxin02.github.io/employee-todo/'
+export const APP_ORIGIN = 'https://info.tanxin.space/employee-todo/'
 
 export function hasLiffConfig(): boolean {
   return LIFF_ID.length > 0
