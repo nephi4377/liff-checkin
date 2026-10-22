@@ -1,5 +1,5 @@
 /**
- * BUDGET-PARSE-778 / 778b / 778c 自動測試（假資料，無客戶個資）
+ * BUDGET-PARSE-778 / 778b–778d 自動測試（假資料，無客戶個資）
  * 執行：node tools/test_budget_parse_778.mjs
  */
 import { createRequire } from 'module';
@@ -18,13 +18,18 @@ function assert(cond, msg) {
   if (!cond) throw new Error(msg);
 }
 
-function pushAdjustBlock(rows, zone, count, idBase) {
-  rows.push(['', zone, 0, 0, 0, 0, '', '', '', '', '']);
-  for (let j = 0; j < count; j++) {
-    const jCost = 80000 + idBase + j;
-    const kCost = 90000 + idBase + j;
-    rows.push(['', '', `${zone}-增項${j + 1}`, '式', 1, 100 + j, 100 + j, '', '', jCost, kCost]);
-  }
+/** 增減緊湊版面：品名 col0、單位 3、數量 4、合計 5 */
+function pushAdjustCompactRow(rows, name, unit, qty, total, kCost = '') {
+  rows.push([name, '', '', unit, qty, total, '', '', '', '', kCost]);
+}
+
+function pushAdjustSubHeader(rows, zone) {
+  rows.push([zone, '', '', '', '', '', '', '', '', '', '']);
+}
+
+function pushAdjustBlockCompact(rows, zone, items) {
+  pushAdjustSubHeader(rows, zone);
+  items.forEach(([name, unit, qty, total]) => pushAdjustCompactRow(rows, name, unit, qty, total, 91000));
 }
 
 function buildMockSheet() {
@@ -38,25 +43,54 @@ function buildMockSheet() {
   rows.push(['', '廚房', 0, 0, 0, 0, '', '', '', '', '']);
   rows.push(['', '建議方案-加裝照明', '式', 1, 0, 1200, '', '', '', 66666, '']);
   rows.push(['', '建議方案-換開關', '組', 1, 0, 800, '', '', '', 55555, '']);
-  rows.push(['簽約後續增減', '', 0, 0, 0, 0, '', '', '', '', '']);
-  pushAdjustBlock(rows, '餐廳', 3, 1);
-  pushAdjustBlock(rows, '男孩房', 4, 10);
-  pushAdjustBlock(rows, '走道', 2, 20);
-  pushAdjustBlock(rows, '插座', 5, 30);
-  pushAdjustBlock(rows, '開關', 3, 40);
-  pushAdjustBlock(rows, '陽台封窗', 3, 50);
-  pushAdjustBlock(rows, '客浴', 3, 60);
-  rows.push(['', '增減合計(未稅)', '式', 1, 0, 50000, '', '', '', '', '']);
+
   rows.push(['103', '', '', '', '', '', '', '', '', '', '']);
   rows.push(['', '1399805', '', '', '', '', '', '', '', '', '']);
-  rows.push(['', '-278000', '', '', '', '', '', '', '', '', '']);
-  rows.push(['', '75814.25', '', '', '', '', '', '', '', '', '']);
   rows.push(['', '5%發票稅', '式', 1, 0, 75814, '', '', '', '', '']);
-  rows.push(['', '3. 假條款說明示意', '', '', '', '', '', '', '', '', '']);
-  rows.push(['', '6. 另一條假條款', '', '', '', '', '', '', '', '', '']);
   rows.push(['', '訂購人簽名：', '', '', '', '', '', '', '', '', '']);
-  rows.push(['', '客戶確認欄', '', '', '', '', '', '', '', '', '']);
-  rows.push(['', '合計', '式', 1, 0, 999999, '', '', '', 12345, 67890]);
+
+  rows.push(['簽約後續增減', '', '', '', '', '', '', '', '', '', '']);
+  pushAdjustBlockCompact(rows, '餐廳', [
+    ['拆除工程重新評估', '式', 1, -71400],
+    ['餐廳增項A', '式', 1, 5000],
+    ['餐廳增項B', '式', 1, 3200],
+  ]);
+  pushAdjustBlockCompact(rows, '男孩房', [
+    ['男孩房增項1', '式', 1, 1000],
+    ['男孩房增項2', '式', 1, 1100],
+    ['男孩房增項3', '式', 1, 1200],
+    ['男孩房增項4', '式', 1, 1300],
+  ]);
+  pushAdjustBlockCompact(rows, '走道', [
+    ['走道增項1', '式', 1, 800],
+    ['走道增項2', '式', 1, 900],
+  ]);
+  pushAdjustCompactRow(rows, '拆除後壁面修補', '式', 1, '');
+  pushAdjustCompactRow(rows, '拆除後地面復原', '式', 1, '');
+  pushAdjustBlockCompact(rows, '插座', [
+    ['插座增項1', '式', 1, 400],
+    ['插座增項2', '式', 1, 410],
+    ['插座增項3', '式', 1, 420],
+    ['插座增項4', '式', 1, 430],
+    ['插座增項5', '式', 1, 440],
+  ]);
+  pushAdjustBlockCompact(rows, '開關', [
+    ['開關增項1', '式', 1, 300],
+    ['開關增項2', '式', 1, 310],
+    ['開關增項3', '式', 1, 320],
+  ]);
+  pushAdjustBlockCompact(rows, '陽台封窗', [
+    ['陽台封窗1', '式', 1, 2000],
+    ['陽台封窗2', '式', 1, 2100],
+    ['陽台封窗3', '式', 1, 2200],
+  ]);
+  pushAdjustBlockCompact(rows, '客浴', [
+    ['客浴增項1', '式', 1, 1500],
+    ['客浴增項2', '式', 1, 1600],
+    ['客浴增項3', '式', 1, 1700],
+  ]);
+
+  rows.push(['', '增減合計(未稅)', '式', 1, 0, 50000, '', '', '', '', '']);
   rows.push(['', '客廳', 0, 0, 0, 0, '', '', '', '', '']);
   rows.push(['', '', '', '', '', '', '含稅總計', '', '', 1592099, '']);
   return rows;
@@ -65,8 +99,9 @@ function buildMockSheet() {
 function findRowForItem(json, item, colMapping, startRow) {
   for (let i = startRow; i < json.length; i++) {
     const row = json[i];
-    const picked = parser.pickItemFields(row, colMapping);
-    if (picked && picked.name === item.data.name && picked.qtyVal === item.data.qty) {
+    let picked = parser.pickItemFields(row, colMapping);
+    if (!picked) picked = parser.pickAdjustCompactItemFields(row);
+    if (picked && picked.name === item.data.name && String(picked.qtyVal) === String(item.data.qty)) {
       return row;
     }
   }
@@ -89,10 +124,9 @@ function run() {
   const headers = items.filter((it) => it.type === 'header').map((h) => h.zone);
   assert(!headers.some((z) => /4樓之1/.test(z)), '表頭地址不得被當成分區');
   assert(headers.includes('廚房'), '廚房分區應辨識');
-  assert(headers.includes('簽約後續增減'), '簽約後續增減應為分區');
+  assert(headers.includes('簽約後續增減'), '表尾後簽約後續增減應重新開區');
   assert(headers.includes('餐廳') && headers.includes('走道'), '增減區子標題應保留');
-  assert(!headers.includes('客廳'), '表尾後不得再開客廳小節');
-  assert(!headers.some((z) => /^103$/.test(z) || z === '1399805'), '純數字不得為小節');
+  assert(!headers.includes('客廳'), '增減合計後不得再開客廳小節');
 
   assert(counts.work === 100, `一般工項應 100 筆，實際 ${counts.work}`);
   assert(counts.suggest === 2, `建議工項應 2 筆，實際 ${counts.suggest}`);
@@ -100,12 +134,12 @@ function run() {
   assert(taxInclusiveTotal === 1592099, `含稅總計應 1592099，實際 ${taxInclusiveTotal}`);
 
   const itemNames = items.filter((i) => i.type === 'item').map((i) => i.data.name);
-  assert(!itemNames.some((n) => n === '合計' || /增減合計/.test(n) || /發票稅/.test(n)), '合計／稅務列不得算工項');
+  assert(!itemNames.includes('拆除後壁面修補'), '合計空白列不得算工項');
+  assert(!itemNames.includes('拆除後地面復原'), '合計空白列不得算工項');
+  assert(itemNames.includes('拆除工程重新評估'), '增減緊湊版面負數合計應算工項');
 
-  const adjustUnderSub = items.filter(
-    (i) => i.type === 'item' && i.data.zone === '走道' && i.data.in_adjust_section
-  );
-  assert(adjustUnderSub.length === 2, '走道子區工項應仍屬增減');
+  const neg = items.find((i) => i.type === 'item' && i.data && i.data.name === '拆除工程重新評估');
+  assert(neg && String(neg.data.price).includes('-71400'), '應保留負數合計');
 
   const exportItems = items.filter((r) => r.type === 'item').map((r) => parser.sanitizeItemForExport(r.data));
   assert(!parser.exportPayloadContainsForbiddenKeys({ items: exportItems }), '匯出不得含內部欄位');

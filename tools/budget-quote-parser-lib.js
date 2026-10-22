@@ -23,6 +23,9 @@
     const ADJUST_SECTION_START_RE = /簽約後續增減/;
     const ADJUST_SECTION_END_RE = /增減合計/;
 
+    /** 增減區常見版面：品名 col0、單位 col3、數量 col4、合計 col5（可為負數） */
+    const ADJUST_COMPACT_COL_MAPPING = { id: 0, name: 0, unit: 3, qty: 4, total_price: 5, spec: -1 };
+
     function cellIsBlankOrZero(val) {
         const s = String(val == null ? '' : val).trim();
         if (s === '') return true;
@@ -133,8 +136,14 @@
         return false;
     }
 
+    function rowHasAdjustSectionStart(row) {
+        if (!row) return false;
+        return row.some((c) => ADJUST_SECTION_START_RE.test(String(c ?? '')));
+    }
+
     function rowSignalsFooterBlock(row, colMapping) {
         if (!row) return false;
+        if (rowHasAdjustSectionStart(row)) return false;
         for (const off of [0, 1]) {
             const name = String(row[colMapping.name + off] ?? '').trim();
             const id = String(row[colMapping.id + off] ?? '').trim();
@@ -158,7 +167,12 @@
         return false;
     }
 
-    function pickItemFields(row, colMapping) {
+    function priceQualifiesAsItem(totalPriceVal) {
+        const totalPriceStr = String(totalPriceVal ?? '').trim();
+        return cellHasMeaningfulNumber(totalPriceStr) || totalPriceStr.includes('贈送');
+    }
+
+    function pickItemFieldsFromMapping(row, colMapping) {
         for (const off of [0, 1]) {
             const name = String(row[colMapping.name + off] ?? '').trim();
             if (!name || isNonItemSummaryLabel(name)) continue;
@@ -169,9 +183,7 @@
             if (!unitVal || cellIsBlankOrZero(unitVal)) continue;
             const qtyVal = String(row[colMapping.qty + off] ?? '').trim();
             const totalPriceVal = String(row[colMapping.total_price + off] ?? '').trim();
-            const hasQtyNum = cellHasMeaningfulNumber(qtyVal);
-            const hasPriceNum = cellHasMeaningfulNumber(totalPriceVal) || totalPriceVal.includes('贈送');
-            if (!hasQtyNum && !hasPriceNum) continue;
+            if (!priceQualifiesAsItem(totalPriceVal)) continue;
             return {
                 off,
                 name,
@@ -179,10 +191,19 @@
                 qtyVal,
                 totalPriceVal,
                 indexVal: String(row[colMapping.id + off] ?? '').trim(),
-                spec: String(row[colMapping.spec + off] ?? '').trim()
+                spec: colMapping.spec >= 0 ? String(row[colMapping.spec + off] ?? '').trim() : '',
+                layout: 'standard'
             };
         }
         return null;
+    }
+
+    function pickItemFields(row, colMapping) {
+        return pickItemFieldsFromMapping(row, colMapping);
+    }
+
+    function pickAdjustCompactItemFields(row) {
+        return pickItemFieldsFromMapping(row, ADJUST_COMPACT_COL_MAPPING);
     }
 
     function zoneHeaderAmountsBlank(row, colMapping, off) {
@@ -203,7 +224,8 @@
         if (!name || isNonItemSummaryLabel(name)) return false;
         if (isForbiddenZoneLabel(name)) return false;
         if (looksLikeStreetAddress(name)) return false;
-        if (pickItemFields(row, colMapping)) return false;
+        if (pickItemFieldsFromMapping(row, colMapping)) return false;
+        if (pickAdjustCompactItemFields(row)) return false;
 
         const rawQty = String(row[colMapping.qty + off] ?? '').trim();
         const rawPrice = String(row[colMapping.total_price + off] ?? '').trim();
@@ -222,17 +244,25 @@
         return false;
     }
 
-    /** 分區標題：支援品項欄或項次欄（off 0/1） */
-    function resolveZoneHeaderName(row, colMapping, sheetFooterClosed) {
-        if (sheetFooterClosed) return null;
-        for (const off of [0, 1]) {
-            const fromName = String(row[colMapping.name + off] ?? '').trim();
-            const fromId = String(row[colMapping.id + off] ?? '').trim();
-            const candidates = [];
-            if (fromName) candidates.push(fromName);
-            if (fromId && fromId !== fromName) candidates.push(fromId);
-            for (const text of candidates) {
-                if (isZoneHeaderCandidate(text, row, colMapping, off, sheetFooterClosed)) return text;
+    /** 分區標題：支援品項欄或項次欄（off 0/1）；增減緊湊版面 col0 */
+    function resolveZoneHeaderName(row, colMapping, sheetFooterClosed, inAdjustSection) {
+        const allowDespiteFooter = rowHasAdjustSectionStart(row);
+        if (sheetFooterClosed && !allowDespiteFooter) return null;
+
+        const mappings = [colMapping];
+        if (inAdjustSection || allowDespiteFooter) mappings.push(ADJUST_COMPACT_COL_MAPPING);
+
+        for (const map of mappings) {
+            for (const off of [0, 1]) {
+                const fromName = String(row[map.name + off] ?? '').trim();
+                const fromId = map.id >= 0 ? String(row[map.id + off] ?? '').trim() : '';
+                const candidates = [];
+                if (fromName) candidates.push(fromName);
+                if (fromId && fromId !== fromName) candidates.push(fromId);
+                for (const text of candidates) {
+                    const closed = sheetFooterClosed && !allowDespiteFooter;
+                    if (isZoneHeaderCandidate(text, row, map, off, closed)) return text;
+                }
             }
         }
         return null;
@@ -301,6 +331,10 @@
             if (!row || row.length === 0) continue;
             if (i < startRow) continue;
 
+            if (rowHasAdjustSectionStart(row)) {
+                sheetFooterClosed = false;
+            }
+
             if (rowSignalsFooterBlock(row, colMapping)) {
                 if (ADJUST_SECTION_END_RE.test(row.map(c => String(c ?? '')).join(''))) {
                     inAdjustSection = false;
@@ -310,33 +344,35 @@
 
             const rawLine = buildRawLine(row);
 
-            if (!sheetFooterClosed) {
-                const zoneName = resolveZoneHeaderName(row, colMapping, sheetFooterClosed);
-                if (zoneName) {
-                    if (ADJUST_SECTION_START_RE.test(zoneName)) {
-                        inAdjustSection = true;
-                    } else if (ADJUST_SECTION_END_RE.test(zoneName)) {
-                        inAdjustSection = false;
-                        sheetFooterClosed = true;
-                    } else if (!inAdjustSection) {
-                        inAdjustSection = false;
-                    }
-
-                    const isDuplicate = zoneName === currentZone;
-                    currentZone = zoneName;
-                    items.push({
-                        type: 'header',
-                        zone: currentZone,
-                        raw: rawLine,
-                        sheet_source: sheetName,
-                        is_cancelled: isDuplicate,
-                        in_adjust_section: inAdjustSection
-                    });
-                    continue;
+            const zoneName = resolveZoneHeaderName(row, colMapping, sheetFooterClosed, inAdjustSection);
+            if (zoneName) {
+                if (ADJUST_SECTION_START_RE.test(zoneName)) {
+                    inAdjustSection = true;
+                    sheetFooterClosed = false;
+                } else if (ADJUST_SECTION_END_RE.test(zoneName)) {
+                    inAdjustSection = false;
+                    sheetFooterClosed = true;
                 }
+
+                const isDuplicate = zoneName === currentZone;
+                currentZone = zoneName;
+                items.push({
+                    type: 'header',
+                    zone: currentZone,
+                    raw: rawLine,
+                    sheet_source: sheetName,
+                    is_cancelled: isDuplicate,
+                    in_adjust_section: inAdjustSection
+                });
+                continue;
             }
 
-            const picked = pickItemFields(row, colMapping);
+            if (sheetFooterClosed && !inAdjustSection) continue;
+
+            let picked = pickItemFields(row, colMapping);
+            if (!picked && inAdjustSection) {
+                picked = pickAdjustCompactItemFields(row);
+            }
             if (!picked) continue;
 
             if (metadataKeywords.some(kw => picked.name.includes(kw))) continue;
@@ -445,6 +481,9 @@
         rawLineContainsInternalCostValues,
         detectColMappingFromHeaderRows,
         pickItemFields,
+        pickAdjustCompactItemFields,
+        ADJUST_COMPACT_COL_MAPPING,
+        rowHasAdjustSectionStart,
         resolveZoneHeaderName,
         isZoneHeaderRow,
         isSuggestItem,
