@@ -14,8 +14,15 @@
 
 ## 開發測試
 
+已移除 `?dev=1`／開發 bypass（對齊 ACCT-SEC-3）。本機請：
+
+- 從主控台開啟（網址帶 `?uid=` 員工 LINE userId），或
+- 在可跑 LIFF 的環境用 LINE 登入；無 uid 時由前端走 LIFF。
+
+可覆寫後端部署：
+
 ```
-index.html?dev=1&api=https://script.google.com/macros/s/你的部署ID/exec
+index.html?uid=你的員工uid&api=https://script.google.com/macros/s/你的部署ID/exec
 ```
 
 ## 檔案
