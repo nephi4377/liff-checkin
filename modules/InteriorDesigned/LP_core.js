@@ -39,6 +39,46 @@ export function overlap(p1, p2) {
     return p1.max > p2.min + 0.01 && p2.max > p1.min + 0.01;
 }
 
+/** 多邊形有向面積（畫布座標，1px = 1cm） */
+export function polygonSignedArea(points) {
+    if (!Array.isArray(points) || points.length < 3) return 0;
+    let area = 0;
+    let j = points.length - 1;
+    for (let i = 0; i < points.length; i++) {
+        const p1 = points[i];
+        const p2 = points[j];
+        area += p1.x * p2.y - p2.x * p1.y;
+        j = i;
+    }
+    return area / 2;
+}
+
+/** 由多邊形頂點推算坪數（與繪製／拖頂點後寫入 areaInPing 的公式一致） */
+export function areaInPingFromPolygonPoints(points) {
+    return Math.ceil(Math.abs(polygonSignedArea(points)) / 30000);
+}
+
+/** 地板坪數含 20% 損耗，向上取到 0.5 坪 */
+export function calculateFloorAreaWithLoss(originalPing) {
+    const ping = typeof originalPing === 'number' ? originalPing : Number(originalPing);
+    if (!Number.isFinite(ping) || ping < 0) return 0;
+    const areaWithLoss = ping * 1.2;
+    return Math.ceil(areaWithLoss * 2) / 2;
+}
+
+/** 匯入 JSON 時補齊舊備份缺少的 areaInPing */
+export function normalizeDrawnAreaForImport(area) {
+    if (!area || typeof area !== 'object') return area;
+    if (typeof area.areaInPing === 'number' && Number.isFinite(area.areaInPing)) {
+        return area;
+    }
+    const points = area.points;
+    if (Array.isArray(points) && points.length >= 3) {
+        return { ...area, areaInPing: areaInPingFromPolygonPoints(points) };
+    }
+    return { ...area, areaInPing: 0 };
+}
+
 // --- SVG 消毒 -------------------------------------------------------------
 
 /**

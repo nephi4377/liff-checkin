@@ -7,6 +7,8 @@ import {
     project,
     overlap,
     getAxes,
+    calculateFloorAreaWithLoss,
+    normalizeDrawnAreaForImport,
 } from './LP_core.js';
 
 /** 開啟時於 console 輸出除錯訊息（元件載入、渲染、縮放、繪圖等） */
@@ -2124,13 +2126,6 @@ function getVertices(cab) {
 }
 
 // project／overlap／getAxes 見 LP_core.js
-
-// [v5.0 新增] 計算地板面積含損耗 (乘以1.2，無條件進位到0.5坪)
-function calculateFloorAreaWithLoss(originalPing) {
-    // [您的要求] 修正：先加計 20% 損耗，再向上取到 0.5 坪
-    const areaWithLoss = originalPing * 1.2;
-    return Math.ceil(areaWithLoss * 2) / 2;
-}
 
 // [v3.0 核心新增] 計算多邊形的質心 (用於放置標籤)
 function getPolygonCentroid(points) {
@@ -4253,7 +4248,7 @@ function loadLayoutFromData(layoutData) {
         }
         return cab;
     });
-    drawnAreas = layoutData.drawnAreas || [];
+    drawnAreas = (layoutData.drawnAreas || []).map(normalizeDrawnAreaForImport);
     placedAnnotations = layoutData.placedAnnotations || []; // [新增]
     quotationManualOverrides = layoutData.quotationManualOverrides || {};
     layerVisibility = layoutData.layerVisibility || {};

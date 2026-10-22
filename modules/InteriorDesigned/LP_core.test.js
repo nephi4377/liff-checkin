@@ -1,5 +1,22 @@
 import { describe, it, expect } from 'vitest';
-import { cmToFeet, overlap, project, getAxes, sanitizeSvgString } from './LP_core.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import {
+    cmToFeet,
+    overlap,
+    project,
+    getAxes,
+    sanitizeSvgString,
+    areaInPingFromPolygonPoints,
+    calculateFloorAreaWithLoss,
+    normalizeDrawnAreaForImport,
+} from './LP_core.js';
+
+const fixtureDir = dirname(fileURLToPath(import.meta.url));
+const keyguardFixture = JSON.parse(
+    readFileSync(join(fixtureDir, 'e2e/fixtures/lp-walk-keyguard.json'), 'utf8'),
+);
 
 describe('cmToFeet', () => {
     it('1 尺 = 30cm，進位 0.5 尺', () => {
@@ -25,6 +42,30 @@ describe('SAT 輔助', () => {
         const axis = axes[0];
         const p = project(v, axis);
         expect(p.max).toBeGreaterThan(p.min);
+    });
+});
+
+describe('FLOORPLAN-AREA-NAN-1：匯入舊備份坪數', () => {
+    it('lp-walk-keyguard 地板區僅 points 時可推算 12 坪', () => {
+        const floor = keyguardFixture.drawnAreas.find((a) => a.type === 'floor');
+        expect(floor.areaInPing).toBeUndefined();
+        expect(areaInPingFromPolygonPoints(floor.points)).toBe(12);
+    });
+
+    it('normalizeDrawnAreaForImport 補 areaInPing', () => {
+        const floor = keyguardFixture.drawnAreas[0];
+        const normalized = normalizeDrawnAreaForImport(floor);
+        expect(normalized.areaInPing).toBe(12);
+    });
+
+    it('calculateFloorAreaWithLoss 對非數值回傳 0', () => {
+        expect(calculateFloorAreaWithLoss(undefined)).toBe(0);
+        expect(calculateFloorAreaWithLoss(NaN)).toBe(0);
+        expect(calculateFloorAreaWithLoss('x')).toBe(0);
+    });
+
+    it('calculateFloorAreaWithLoss(12) 含損耗為 14.5 坪', () => {
+        expect(calculateFloorAreaWithLoss(12)).toBe(14.5);
     });
 });
 
