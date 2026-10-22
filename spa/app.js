@@ -1174,6 +1174,7 @@ const App = {
                                      : 'bg-sky-50 text-sky-800 border-sky-300 hover:bg-sky-100 hover:border-sky-400'
                              ]"><span aria-hidden="true">📖</span>使用教學</a>
                          </nav>
+                         <p v-if="currentView.name === 'dashboard'" class="text-sm text-gray-600 m-0">{{ welcomeMessage }}</p>
                      </div>
                 </div>
             </header>

@@ -11,6 +11,7 @@
 import { logToPage, showGlobalNotification } from '/shared/js/utils.js';
 import { state } from './state.js';
 import { request as apiRequest } from './projectApi.js'; // [v508.0 修正] 引入重構後的 projectApi 模組
+import { mountScheduleMissingStartDateHint } from './scheduleRenderHints.js';
 
 /**
  * [重構] 渲染整個排程頁面 (取代 ui.js 中的 displaySchedule)
@@ -43,7 +44,7 @@ export function renderSchedulePage(overview, schedule) {
     }
 
     if (!overview['專案起始日']) {
-        container.style.display = 'none';
+        mountScheduleMissingStartDateHint(container);
         return;
     }
 
