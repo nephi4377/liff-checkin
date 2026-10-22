@@ -11,7 +11,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
   <script src="../../shared/js/accounting_amount_formula.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=106"></script>
+  <script src="../../shared/js/accounting_api.js?v=107"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=7"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=20"></script>
@@ -737,9 +737,10 @@
             return it && (it.record_kind === 'payment_request' || it.payment_request_id);
           });
           var n = items.length;
+          var mineOnly = data.mine_only !== undefined ? !!data.mine_only : !!filters.mine_only;
           var bits = [
             scopeLabel(filters.status_scope),
-            filters.mine_only ? '只看我送的' : '所有人',
+            mineOnly ? '只看我送的' : '所有人',
             (data.date_from || filters.date_from) + '～' + (data.date_to || filters.date_to)
           ];
           if (n) {

@@ -575,8 +575,11 @@
         return dl;
       }
 
-      function sessionPerm() {
-        var authPerm = Number((sessionRef && sessionRef.auth && sessionRef.auth.permission) || 0);
+      function authSessionPerm() {
+        return Number((sessionRef && sessionRef.auth && sessionRef.auth.permission) || 0);
+      }
+
+      function hubSessionPerm() {
         var hubPerm = 0;
         try {
           if (typeof OperatorContext !== 'undefined') {
@@ -590,13 +593,23 @@
             }
           }
         } catch (eHub) {}
+        return hubPerm;
+      }
+
+      function sessionPerm() {
         // 與會計選單一致：取 HUB／驗證較高者，避免 auth soft timeout／舊快取把 ≥3 降成 0 後藏標註鈕
-        return Math.max(authPerm, hubPerm);
+        return Math.max(authSessionPerm(), hubSessionPerm());
       }
 
       function canViewAllLedgerHistory() {
         var min = (typeof AccountingApi !== 'undefined' && AccountingApi.MIN_PERMISSION) || 0;
-        return sessionPerm() >= min;
+        // API 只看 session.auth.permission（ACCT-SEC-11）；勿用 HUB 較高值顯示「全部」
+        return authSessionPerm() >= min;
+      }
+
+      function hubPermissionAheadOfAuth() {
+        var min = (typeof AccountingApi !== 'undefined' && AccountingApi.MIN_PERMISSION) || 0;
+        return hubSessionPerm() >= min && authSessionPerm() < min;
       }
 
       function readHistoryMineOnlyFlag() {
@@ -612,7 +625,11 @@
         if (row) row.classList.toggle('hidden', !canAll);
         if (!hint) return;
         if (!canAll) {
-          hint.innerHTML = '權限 3 僅能<strong>查自己記的帳</strong>（唯讀）。可用廠商名／金額篩選；點列看詳情與<strong>圖片集</strong>。預設近 30 天。請款請用「送出紀錄」。';
+          var base = '權限 3 僅能<strong>查自己記的帳</strong>（唯讀）。可用廠商名／金額篩選；點列看詳情與<strong>圖片集</strong>。預設近 30 天。請款請用「送出紀錄」。';
+          if (hubPermissionAheadOfAuth()) {
+            base += ' <span class="hint">權限更新中，請重新整理</span>';
+          }
+          hint.innerHTML = base;
           return;
         }
         var mineOnly = readHistoryMineOnlyFlag();

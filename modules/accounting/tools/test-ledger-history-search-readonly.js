@@ -18,6 +18,8 @@ assert(html.indexOf('點開看詳情與圖片') >= 0, 'detail+image hint');
 assert(html.indexOf('id="histScope"') >= 0, 'scope select for finance');
 assert(html.indexOf('>全部</option>') >= 0, 'all scope option');
 assert(html.indexOf('canViewAllLedgerHistory') >= 0, 'scope gated by permission');
+assert(html.indexOf('authSessionPerm()') >= 0, 'all-scope uses auth permission only');
+assert(html.indexOf('權限更新中，請重新整理') >= 0, 'hub-ahead refresh hint');
 assert(html.indexOf('readHistoryMineOnlyFlag') >= 0, 'mine_only from scope');
 assert(html.indexOf('AccountingApi.MIN_PERMISSION') >= 0, 'uses MIN_PERMISSION threshold');
 assert(api.indexOf('authPerm < MIN_PERMISSION') >= 0, 'api enforces mine_only below MIN_PERMISSION');
