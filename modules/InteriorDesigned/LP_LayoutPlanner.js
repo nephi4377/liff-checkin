@@ -12,6 +12,9 @@ import {
     axisAlignedBoundsFromPoints,
     computeObjectSnapDelta,
     snapTranslationToGrid,
+    computeCabinetResizeGeometry,
+    rotateCabinetAroundPivot,
+    mirrorCabinetsAsGroupAboutVerticalAxis,
 } from './LP_core.js';
 import { createHistoryGestureCoalescer } from './LP_layout_history.js';
 
@@ -27,6 +30,10 @@ let bgScale = 1.0;
 let bgPosition = { x: 0, y: 0 };
 let placedAnnotations = []; // [新增] 工程標註資料陣列
 let selectedCabId = null;
+/** @type {Set<string>} 多選櫃體（含 layout 群組成員） */
+let selectedCabIds = new Set();
+/** @type {{ cab: object, startX: number, startY: number }[] | null} */
+let dragGroupSnapshot = null;
 
 // [錯誤修正] 宣告遺漏的拖曳與縮放狀態變數
 let isDraggingCab = false;
@@ -136,6 +143,13 @@ const LP_SHOW_GRID_KEY = 'lp_show_grid';
 const LP_SNAP_GRID_STEP_KEY = 'lp_snap_grid_step_cm';
 /** 拖曳位移格線吸附步距（cm）；預設 2 與改版前行為一致 */
 let snapGridStepCm = 2;
+let layoutGroupIdCounter = 0;
+
+function createLayoutGroupId() {
+    layoutGroupIdCounter += 1;
+    const suffix = Math.random().toString(36).slice(2, 10);
+    return `grp-${layoutGroupIdCounter}-${suffix}`;
+}
 const svgStyle = 'width="100%" height="100%" preserveAspectRatio="none"';
 const svgs = {
     sofa3: `<svg ${svgStyle} viewBox="0 0 210 90"><rect width="210" height="90" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/><rect x="10" y="10" width="190" height="20" fill="#d1d5db"/><rect x="10" y="35" width="60" height="45" rx="5" fill="#fff"/><rect x="75" y="35" width="60" height="45" rx="5" fill="#fff"/><rect x="140" y="35" width="60" height="45" rx="5" fill="#fff"/></svg>`,
@@ -1019,8 +1033,95 @@ function renderCabinet(cab) {
     });
 
     canvas.appendChild(el);
-    if (cab.id === selectedCabId) {
+    if (selectedCabIds.has(cab.id)) {
         el.classList.add('selected');
+    }
+}
+
+function getLayoutGroupMembers(cab) {
+    if (!cab?.layoutGroupId) return [cab];
+    return placedCabinets.filter((c) => c.layoutGroupId === cab.layoutGroupId);
+}
+
+function getSelectedCabinetObjects() {
+    const ids = selectedCabIds.size ? [...selectedCabIds] : (selectedCabId ? [selectedCabId] : []);
+    return ids
+        .map((id) => placedCabinets.find((c) => c.id === id))
+        .filter(Boolean);
+}
+
+function syncCabinetSelectionClasses() {
+    document.querySelectorAll('.placed-cabinet').forEach((el) => {
+        el.classList.toggle('selected', selectedCabIds.has(el.id));
+    });
+}
+
+function expandIdsToLayoutGroups(ids) {
+    const expanded = new Set(ids);
+    for (const id of ids) {
+        const cab = placedCabinets.find((c) => c.id === id);
+        if (!cab?.layoutGroupId) continue;
+        for (const member of getLayoutGroupMembers(cab)) {
+            expanded.add(member.id);
+        }
+    }
+    return expanded;
+}
+
+function setCabinetSelection(ids, primaryId = null) {
+    selectedCabIds = expandIdsToLayoutGroups(ids);
+    selectedCabId = primaryId && selectedCabIds.has(primaryId)
+        ? primaryId
+        : (selectedCabIds.size ? [...selectedCabIds][0] : null);
+    syncCabinetSelectionClasses();
+}
+
+function toggleCabinetInSelection(id) {
+    const cab = placedCabinets.find((c) => c.id === id);
+    if (!cab) return;
+    if (cab.layoutGroupId) {
+        const memberIds = getLayoutGroupMembers(cab).map((c) => c.id);
+        const allSelected = memberIds.every((mid) => selectedCabIds.has(mid));
+        if (allSelected) {
+            memberIds.forEach((mid) => selectedCabIds.delete(mid));
+        } else {
+            memberIds.forEach((mid) => selectedCabIds.add(mid));
+        }
+    } else if (selectedCabIds.has(id)) {
+        selectedCabIds.delete(id);
+    } else {
+        selectedCabIds.add(id);
+    }
+    selectedCabId = selectedCabIds.has(id) ? id : ([...selectedCabIds][0] || null);
+    syncCabinetSelectionClasses();
+    if (selectedCabId) {
+        refreshSelectedCabinetPanel(selectedCabId);
+    } else {
+        document.getElementById('selected-info').style.display = 'none';
+    }
+}
+
+function refreshSelectedCabinetPanel(id) {
+    const cab = placedCabinets.find((c) => c.id === id);
+    if (!cab) return;
+    const count = getSelectedCabinetObjects().length;
+    document.getElementById('selected-info').style.display = 'block';
+    document.getElementById('selected-name').style.display = 'block';
+    const nameInput = document.getElementById('selected-name-input');
+    if (nameInput) nameInput.style.display = 'none';
+    document.getElementById('selected-group-input').value = cab.data.group || '未分類';
+    const nameEl = document.getElementById('selected-name');
+    nameEl.innerText = count > 1 ? `${cab.data.name} 等 ${count} 件` : cab.data.name;
+    document.getElementById('selected-width').value = cab.currentW;
+    document.getElementById('selected-height').value = cab.currentH;
+    document.getElementById('selected-size-inputs').style.display = count === 1 ? 'grid' : 'none';
+    document.getElementById('selected-cab-actions').style.display = 'flex';
+    const groupBtn = document.getElementById('selected-group-btn');
+    const ungroupBtn = document.getElementById('selected-ungroup-btn');
+    if (groupBtn) groupBtn.style.display = count >= 2 ? 'flex' : 'none';
+    if (ungroupBtn) {
+        const hasGroup = getSelectedCabinetObjects().some((c) => c.layoutGroupId);
+        ungroupBtn.style.display = hasGroup ? 'flex' : 'none';
     }
 }
 
@@ -1209,35 +1310,29 @@ function renderAddonsPanel(targetId) {
     container.style.display = 'block';
 }
 
-function selectCabinet(id) {
-    // [修正] 只有當選取的 ID 改變時，才執行 deselectAll (避免新增副屬性時畫面閃爍)
-    if (selectedCabId !== id) {
-        deselectAll();
-        deselectAllAreas();
-        deselectAllAnnotations(); // [新增]
+function selectCabinet(id, options = {}) {
+    const { additive = false } = options;
+    if (!additive) {
+        if (selectedCabId !== id || selectedCabIds.size !== expandIdsToLayoutGroups([id]).size) {
+            deselectAllAreas();
+            deselectAllAnnotations();
+        }
+        setCabinetSelection([id], id);
+    } else {
+        toggleCabinetInSelection(id);
+        return;
     }
-    selectedCabId = id;
-    const el = document.getElementById(id);
-    if (el) el.classList.add('selected');
 
     const cab = placedCabinets.find(c => c.id === id);
     if (cab) {
-        document.getElementById('selected-info').style.display = 'block';
+        refreshSelectedCabinetPanel(id);
         
         // [修正] 恢復顯示名稱文字，隱藏輸入框 (避免從標註切換過來時殘留)
         document.getElementById('selected-name').style.display = 'block';
         const nameInput = document.getElementById('selected-name-input');
         if (nameInput) nameInput.style.display = 'none';
 
-        // [新增] 載入分類群組
-        document.getElementById('selected-group-input').value = cab.data.group || '未分類';
-
-        document.getElementById('selected-name').innerText = cab.data.name;
-
-        // [您的要求] 將尺寸填入新的輸入框
-        document.getElementById('selected-width').value = cab.currentW;
-        document.getElementById('selected-height').value = cab.currentH;
-        document.getElementById('selected-size-inputs').style.display = 'grid';
+        const selectionCount = getSelectedCabinetObjects().length;
 
         let priceText = '此項目不計價';
         if (cab.data.pricingType !== 'none' && typeof cab.data.unitPrice === 'number') {
@@ -1275,13 +1370,15 @@ function selectCabinet(id) {
             caiWrapper.style.display = 'none';
         }
 
-        // [新增] 渲染副屬性輸入框
         const addonContainer = document.getElementById('selected-addons');
         if (addonContainer) {
-            addonContainer.innerHTML = '';
-            // [v9.7] 使用統一函式渲染副屬性面板，確保與天花板/地板一致
-            renderAddonsPanel(cab.id);
-            addonContainer.style.display = 'block';
+            if (selectionCount > 1) {
+                addonContainer.style.display = 'none';
+            } else {
+                addonContainer.innerHTML = '';
+                renderAddonsPanel(cab.id);
+                addonContainer.style.display = 'block';
+            }
         }
     }
 }
@@ -1292,6 +1389,7 @@ function selectAnnotation(id) {
         deselectAll();
         deselectAllAreas();
     }
+    selectedCabIds = new Set();
     // 這裡我們借用 selectedCabId 來儲存選取的標註 ID，因為 UI 共用
     selectedCabId = id; 
     renderAllAnnotations(); // 重繪以顯示選取狀態
@@ -1361,6 +1459,7 @@ function selectAnnotation(id) {
 
 function deselectAll() {
     selectedCabId = null;
+    selectedCabIds = new Set();
     document.querySelectorAll('.placed-cabinet.selected').forEach(e => e.classList.remove('selected'));
     document.getElementById('selected-info').style.display = 'none';
     document.getElementById('selected-size-inputs').style.display = 'none';
@@ -1497,6 +1596,17 @@ function handleKeyDown(e) {
         return;
     }
 
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'g') {
+        e.preventDefault();
+        ungroupSelectedCabinets();
+        return;
+    }
+    if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'g') {
+        e.preventDefault();
+        groupSelectedCabinets();
+        return;
+    }
+
     // [您的要求] 複製功能 (Ctrl+D)
     if (e.ctrlKey && e.key.toLowerCase() === 'd') {
         e.preventDefault();
@@ -1548,6 +1658,7 @@ function handleKeyDown(e) {
             newCab.id = `cab-${Date.now()}`;
             newCab.x += 20;
             newCab.y += 20;
+            delete newCab.layoutGroupId;
 
             if (checkCollision(newCab)) {
                 newCab.x += 20;
@@ -1582,9 +1693,7 @@ function handleKeyDown(e) {
 
     if (e.key.toLowerCase() === 'r') {
         e.preventDefault();
-        cab.rotation = (cab.rotation + 90) % 360;
-        saveState(); // [您的要求] 儲存狀態
-        renderAllCabinets();
+        rotateSelectedCab();
         return;
     }
     if (e.key.toLowerCase() === 'd' || e.key === 'Delete') { // [您的要求] 增加 Delete 鍵支援
@@ -1594,7 +1703,7 @@ function handleKeyDown(e) {
         deleteCabById(idToDelete);
         return;
     }
-    const step = e.shiftKey ? 10 : 1;
+    const step = e.shiftKey ? 10 : snapGridStepCm;
     let dx = 0, dy = 0;
     if (e.key === 'ArrowUp') dy = -step;
     if (e.key === 'ArrowDown') dy = step;
@@ -1602,34 +1711,136 @@ function handleKeyDown(e) {
     if (e.key === 'ArrowRight') dx = step;
     if (dx || dy) {
         e.preventDefault();
-        const oldX = cab.x, oldY = cab.y;
-        cab.x += dx; cab.y += dy;
-        if (checkCollision(cab, cab.id)) {
-            cab.x = oldX; cab.y = oldY;
+        const targets = getSelectedCabinetObjects();
+        const moveSet = targets.length ? targets : [cab];
+        const snapshots = moveSet.map((c) => ({ cab: c, x: c.x, y: c.y }));
+        snapshots.forEach(({ cab: c }) => {
+            c.x += dx;
+            c.y += dy;
+        });
+        const blocked = snapshots.some(({ cab: c }) => checkCollision(c, c.id));
+        if (blocked) {
+            snapshots.forEach(({ cab: c, x, y }) => {
+                c.x = x;
+                c.y = y;
+            });
         } else {
             renderAllCabinets();
-            saveState(); // [您的要求] 儲存狀態
+            saveState();
         }
     }
 }
 
 function rotateSelectedCab() {
-    const id = selectedCabId;
-    const cab = placedCabinets.find(c => c.id === id);
-    if (!cab) return;
-    cab.rotation = (cab.rotation + 90) % 360;
-    renderAllCabinets();
-    saveState(); // [您的要求] 儲存狀態
-}
-
-// [新增] 鏡像選取的元件
-function mirrorSelectedCab() {
-    const id = selectedCabId;
-    const cab = placedCabinets.find(c => c.id === id);
-    if (!cab) return;
-    cab.mirrored = !cab.mirrored;
+    const targets = getSelectedCabinetObjects();
+    if (!targets.length && selectedCabId) {
+        const cab = placedCabinets.find((c) => c.id === selectedCabId);
+        if (cab) targets.push(cab);
+    }
+    if (!targets.length) return;
+    rotateCabinetsByDelta(targets, 90);
     renderAllCabinets();
     saveState();
+}
+
+function collectLayoutGroupsForMirror(targets) {
+    const groups = new Map();
+    const singles = [];
+    for (const cab of targets) {
+        if (cab.layoutGroupId) {
+            if (!groups.has(cab.layoutGroupId)) {
+                groups.set(cab.layoutGroupId, getLayoutGroupMembers(cab));
+            }
+        } else {
+            singles.push(cab);
+        }
+    }
+    return { groups: [...groups.values()], singles };
+}
+
+function applyGroupVerticalMirror(members) {
+    const updates = mirrorCabinetsAsGroupAboutVerticalAxis(members, getVertices);
+    members.forEach((cab, idx) => {
+        cab.x = updates[idx].x;
+        cab.y = updates[idx].y;
+        cab.mirrored = updates[idx].mirrored;
+        cab.rotation = updates[idx].rotation;
+    });
+}
+
+// [新增] 鏡像選取的元件（群組：以外框垂直中心線鏡像整組）
+function mirrorSelectedCab() {
+    const targets = getSelectedCabinetObjects();
+    if (!targets.length && selectedCabId) {
+        const cab = placedCabinets.find((c) => c.id === selectedCabId);
+        if (cab) targets.push(cab);
+    }
+    if (!targets.length) return;
+
+    const { groups, singles } = collectLayoutGroupsForMirror(targets);
+    for (const group of groups) {
+        applyGroupVerticalMirror(group);
+    }
+    singles.forEach((cab) => {
+        cab.mirrored = !cab.mirrored;
+    });
+    renderAllCabinets();
+    saveState();
+}
+
+function groupSelectedCabinets() {
+    const targets = getSelectedCabinetObjects();
+    if (targets.length < 2) {
+        showGlobalNotification('請先選取至少兩個元件再群組', 2500, 'info');
+        return;
+    }
+    const groupId = createLayoutGroupId();
+    targets.forEach((cab) => {
+        cab.layoutGroupId = groupId;
+    });
+    setCabinetSelection(targets.map((c) => c.id), selectedCabId);
+    refreshSelectedCabinetPanel(selectedCabId);
+    saveState();
+    showGlobalNotification(`已群組 ${targets.length} 個元件`, 2000, 'success');
+}
+
+function ungroupSelectedCabinets() {
+    const targets = getSelectedCabinetObjects();
+    if (!targets.length) return;
+    const groupIds = new Set(targets.map((c) => c.layoutGroupId).filter(Boolean));
+    if (!groupIds.size) {
+        showGlobalNotification('選取範圍內沒有群組', 2000, 'info');
+        return;
+    }
+    placedCabinets.forEach((cab) => {
+        if (cab.layoutGroupId && groupIds.has(cab.layoutGroupId)) {
+            delete cab.layoutGroupId;
+        }
+    });
+    refreshSelectedCabinetPanel(selectedCabId);
+    saveState();
+    showGlobalNotification('已取消群組', 2000, 'success');
+}
+
+function getLayoutGroupPivot(cabs) {
+    let sx = 0;
+    let sy = 0;
+    for (const cab of cabs) {
+        sx += cab.x + cab.currentW / 2;
+        sy += cab.y + cab.currentH / 2;
+    }
+    return { x: sx / cabs.length, y: sy / cabs.length };
+}
+
+function rotateCabinetsByDelta(cabs, deltaDeg) {
+    if (!cabs.length) return;
+    const pivot = getLayoutGroupPivot(cabs);
+    for (const cab of cabs) {
+        const next = rotateCabinetAroundPivot(cab, pivot.x, pivot.y, deltaDeg);
+        cab.x = next.x;
+        cab.y = next.y;
+        cab.rotation = next.rotation;
+    }
 }
 
 // [您的要求] 新增：複製選取的元件
@@ -1643,8 +1854,9 @@ function duplicateSelectedCab() {
 
     // 給予新 ID 和新位置
     newCab.id = `cab-${Date.now()}`;
-    newCab.x += 20; // 向右偏移 20px
-    newCab.y += 20; // 向下偏移 20px
+    newCab.x += 20;
+    newCab.y += 20;
+    delete newCab.layoutGroupId;
 
     placedCabinets.push(newCab);
     saveState();
@@ -1682,14 +1894,18 @@ function moveSelectedCabLayer(direction) {
 }
 
 function deleteCabById(id) {
-    placedCabinets = placedCabinets.filter(c => c.id !== id);
-    if (selectedCabId === id) {
-        selectedCabId = null;
-        deselectAll();
+    const cab = placedCabinets.find((c) => c.id === id);
+    const idsToRemove = new Set([id]);
+    if (cab?.layoutGroupId) {
+        placedCabinets
+            .filter((c) => c.layoutGroupId === cab.layoutGroupId)
+            .forEach((c) => idsToRemove.add(c.id));
     }
+    placedCabinets = placedCabinets.filter((c) => !idsToRemove.has(c.id));
+    deselectAll();
     renderAllCabinets();
     updateQuotation();
-    saveState(); // [您的要求] 儲存狀態
+    saveState();
     renderLayerVisibilityPanel();
 }
 
@@ -1843,15 +2059,13 @@ function handleGlobalMove(e) {
     // 1. 處理元件拖曳 (Move)
     // --------------------------
     if (isDraggingCab && currentDragCab) {
-        // [v9.13 修正] 改用相對位移計算，避免初始位置非整數時的跳動
         const deltaX = mouseX - dragStartMouse.x;
         const deltaY = mouseY - dragStartMouse.y;
-        
+        const dragUnits = dragGroupSnapshot || [{ cab: currentDragCab, startX: startPos.x, startY: startPos.y }];
+        const dragIds = new Set(dragUnits.map((u) => u.cab.id));
+
         let snappedDeltaX = deltaX;
         let snappedDeltaY = deltaY;
-
-        // [v9.9 新增] 吸附對齊功能 (Snap to Grid/Object)
-        // 按住 Shift 鍵可暫時停用吸附
         let proposedX = startPos.x + snappedDeltaX;
         let proposedY = startPos.y + snappedDeltaY;
 
@@ -1863,11 +2077,17 @@ function handleGlobalMove(e) {
             proposedX = startPos.x + snappedDeltaX;
             proposedY = startPos.y + snappedDeltaY;
 
-            const ghostCab = { ...currentDragCab, x: proposedX, y: proposedY };
-            const movingBounds = axisAlignedBoundsFromPoints(getVertices(ghostCab));
+            const shiftX = proposedX - startPos.x;
+            const shiftY = proposedY - startPos.y;
+            const ghostPoints = [];
+            for (const unit of dragUnits) {
+                const ghost = { ...unit.cab, x: unit.startX + shiftX, y: unit.startY + shiftY };
+                ghostPoints.push(...getVertices(ghost));
+            }
+            const movingBounds = axisAlignedBoundsFromPoints(ghostPoints);
             const referenceBounds = [];
             for (const other of placedCabinets) {
-                if (other.id === currentDragCab.id) continue;
+                if (dragIds.has(other.id)) continue;
                 referenceBounds.push(axisAlignedBoundsFromPoints(getVertices(other)));
             }
             const { dx, dy } = computeObjectSnapDelta(movingBounds, referenceBounds, SNAP_THRESHOLD);
@@ -1875,43 +2095,45 @@ function handleGlobalMove(e) {
             proposedY += dy;
         }
 
-        currentDragCab.x = proposedX;
-        currentDragCab.y = proposedY;
+        const applyShiftX = proposedX - startPos.x;
+        const applyShiftY = proposedY - startPos.y;
+        for (const unit of dragUnits) {
+            unit.cab.x = unit.startX + applyShiftX;
+            unit.cab.y = unit.startY + applyShiftY;
+        }
 
-        // [v6.1 核心升級] 碰撞反應機制
-        // 不只是偵測 true/false，而是計算出 "修正向量" (MTV) 並應用它
         let totalCorrection = { x: 0, y: 0 };
         let hasCollision = false;
-
-        // 檢查與所有其他元件的碰撞
-        for (const other of placedCabinets) {
-            if (other.id === currentDragCab.id) continue;
-            if (currentDragCab.data.allowOverlap || other.data.allowOverlap) continue;
-
-            const mtv = getMTV(currentDragCab, other);
-            if (mtv) {
-                hasCollision = true;
-                // 累積修正量 (簡單處理：直接取最大的修正，避免抖動)
-                if (Math.abs(mtv.x) > Math.abs(totalCorrection.x) || Math.abs(mtv.y) > Math.abs(totalCorrection.y)) {
-                    totalCorrection = mtv;
+        for (const unit of dragUnits) {
+            for (const other of placedCabinets) {
+                if (dragIds.has(other.id)) continue;
+                if (unit.cab.data.allowOverlap || other.data.allowOverlap) continue;
+                const mtv = getMTV(unit.cab, other);
+                if (mtv) {
+                    hasCollision = true;
+                    if (Math.abs(mtv.x) > Math.abs(totalCorrection.x) || Math.abs(mtv.y) > Math.abs(totalCorrection.y)) {
+                        totalCorrection = mtv;
+                    }
                 }
             }
         }
 
-        // 應用修正：將物件「推」出碰撞區域，形成吸附/阻擋效果
         if (hasCollision) {
-            currentDragCab.x += totalCorrection.x;
-            currentDragCab.y += totalCorrection.y;
+            for (const unit of dragUnits) {
+                unit.cab.x += totalCorrection.x;
+                unit.cab.y += totalCorrection.y;
+            }
         }
 
-        const el = document.getElementById(currentDragCab.id);
-        updateCabStyle(el, currentDragCab);
-
-        // 如果修正後仍有碰撞 (例如被夾在兩個物件中間)，才顯示紅框警告
-        if (checkCollision(currentDragCab, currentDragCab.id)) {
-            el.classList.add('collision-warning');
-        } else {
-            el.classList.remove('collision-warning');
+        for (const unit of dragUnits) {
+            const el = document.getElementById(unit.cab.id);
+            if (!el) continue;
+            updateCabStyle(el, unit.cab);
+            if (checkCollision(unit.cab, unit.cab.id)) {
+                el.classList.add('collision-warning');
+            } else {
+                el.classList.remove('collision-warning');
+            }
         }
     }
 
@@ -1928,66 +2150,23 @@ function handleGlobalMove(e) {
         const localDx = dx / safeScale;
         const localDy = dy / safeScale;
 
-        // 旋轉處理：將滑鼠位移投影到元件的局部座標系
-        const rad = toRad(resizeTarget.rotation);
-        const cos = Math.cos(rad);
-        const sin = Math.sin(rad);
+        const geom = computeCabinetResizeGeometry({
+            startX: resizeStart.x,
+            startY: resizeStart.y,
+            startW: resizeStart.w,
+            startH: resizeStart.h,
+            rotationDeg: resizeTarget.rotation,
+            mirrored: !!resizeTarget.mirrored,
+            direction: resizeDirection,
+            localDx,
+            localDy,
+            adjustable: resizeTarget.data.adjustable,
+        });
 
-        // 重新定義 localDx/Dy 為投影後的量
-        const projDx = localDx * cos + localDy * sin;
-        const projDy = -localDx * sin + localDy * cos;
-
-        // 根據方向更新尺寸
-        // 這裡使用 resizeStart 紀錄的原始尺寸
-        let newW = resizeStart.w;
-        let newH = resizeStart.h;
-        let localShiftX = 0;
-        let localShiftY = 0;
-
-        // [v9.0 新增] 根據拉伸方向計算新的尺寸與中心點位移
-        if (resizeDirection) {
-            switch (resizeDirection) {
-                case 'w': // 西 (左) - 寬度增加，中心向左移
-                    newW = Math.max(20, resizeStart.w - projDx);
-                    localShiftX = -(newW - resizeStart.w) / 2;
-                    break;
-                case 'e': // 東 (右) - 寬度增加，中心向右移
-                    newW = Math.max(20, resizeStart.w + projDx);
-                    localShiftX = (newW - resizeStart.w) / 2;
-                    break;
-                case 'n': // 北 (上) - 高度增加，中心向上移
-                    newH = Math.max(20, resizeStart.h - projDy);
-                    localShiftY = -(newH - resizeStart.h) / 2;
-                    break;
-                case 's': // 南 (下) - 高度增加，中心向下移
-                    newH = Math.max(20, resizeStart.h + projDy);
-                    localShiftY = (newH - resizeStart.h) / 2;
-                    break;
-            }
-        }
-
-        // [限制] 根據 adjustable 屬性最後把關
-        const adjustable = resizeTarget.data.adjustable;
-        if (adjustable === 'width' && (resizeDirection === 'n' || resizeDirection === 's')) newH = resizeStart.h;
-        if (adjustable === 'depth' && (resizeDirection === 'w' || resizeDirection === 'e')) newW = resizeStart.w;
-
-        // 3. 計算新的全域中心點
-        // 將局部中心位移轉回全域
-        const globalShiftX = localShiftX * cos - localShiftY * sin;
-        const globalShiftY = localShiftX * sin + localShiftY * cos;
-
-        // 原始中心點 (Start時)
-        const oldCx = resizeStart.x + resizeStart.w / 2;
-        const oldCy = resizeStart.y + resizeStart.h / 2;
-
-        const newCx = oldCx + globalShiftX;
-        const newCy = oldCy + globalShiftY;
-
-        // 4. 更新元件狀態 (Top-Left 座標 = Center - Size/2)
-        resizeTarget.currentW = Math.round(newW);
-        resizeTarget.currentH = Math.round(newH);
-        resizeTarget.x = newCx - resizeTarget.currentW / 2;
-        resizeTarget.y = newCy - resizeTarget.currentH / 2;
+        resizeTarget.currentW = geom.currentW;
+        resizeTarget.currentH = geom.currentH;
+        resizeTarget.x = geom.x;
+        resizeTarget.y = geom.y;
 
         // 與手動輸入寬深一致：若新尺寸會與他物重疊則維持縮放前狀態
         if (checkCollision(resizeTarget, resizeTarget.id)) {
@@ -2057,6 +2236,7 @@ function endDrag() {
 
     isDraggingCab = false;
     currentDragCab = null;
+    dragGroupSnapshot = null;
     isResizing = false;
     resizeTarget = null;
     resizeDirection = null;
@@ -3538,6 +3718,10 @@ function cancelDrawing(silent = false) {
 function startCabDrag(e, cab) {
     if (e.button !== 0 || isBgEditMode || isDrawing) return;
     e.stopPropagation();
+    if (e.shiftKey) {
+        toggleCabinetInSelection(cab.id);
+        return;
+    }
     historyGesture.begin();
     isDraggingCab = true;
     currentDragCab = cab;
@@ -3553,12 +3737,19 @@ function startCabDrag(e, cab) {
 
     if (isNaN(canvasX) || isNaN(canvasY)) {
         console.error('拖曳座標計算錯誤 (NaN)', { clientX: e.clientX, rect, safeScale });
-        return; // 防止錯誤數據污染元件位置
+        isDraggingCab = false;
+        currentDragCab = null;
+        dragGroupSnapshot = null;
+        historyGesture.end();
+        return;
     }
 
     dragOffset = { x: canvasX - cab.x, y: canvasY - cab.y };
     startPos = { x: cab.x, y: cab.y };
     dragStartMouse = { x: canvasX, y: canvasY }; // [v9.13] 記錄起始滑鼠位置
+    const dragMembers = getSelectedCabinetObjects();
+    const dragList = dragMembers.some((c) => c.id === cab.id) ? dragMembers : getLayoutGroupMembers(cab);
+    dragGroupSnapshot = dragList.map((c) => ({ cab: c, startX: c.x, startY: c.y }));
 }
 
 function startResize(id, e, direction = null) {
@@ -3808,6 +3999,7 @@ function commitSaveState() {
  * @param {object} state - 要載入的狀態物件
  */
 function loadState(state) {
+    historyGesture.reset();
     placedCabinets = JSON.parse(JSON.stringify(state.placedCabinets));
     drawnAreas = JSON.parse(JSON.stringify(state.drawnAreas));
     placedAnnotations = state.placedAnnotations ? JSON.parse(JSON.stringify(state.placedAnnotations)) : []; // [新增]
@@ -3920,10 +4112,28 @@ function initLayoutPlanner3D() {
     });
 }
 
+function bindGlobalPointerEndForDrag() {
+    const finish = () => endDrag();
+    window.addEventListener('mouseup', finish);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+    window.addEventListener('blur', () => {
+        if (
+            isDraggingCab
+            || isResizing
+            || isDraggingVertex
+            || isDraggingAnnotation
+            || isDraggingBg
+        ) {
+            finish();
+        }
+    });
+}
+
 function bindEventListeners() {
     initLayoutPlanner3D();
-    // 全域事件
-    document.addEventListener('mouseup', endDrag);
+    // 全域事件（含視窗外放開，避免 undo 手勢卡住）
+    bindGlobalPointerEndForDrag();
     document.addEventListener('mousemove', handleGlobalMove);
     document.addEventListener('keydown', handleKeyDown);
     document.body.addEventListener('click', handleGlobalClick);
@@ -4035,6 +4245,10 @@ function bindEventListeners() {
     document.getElementById('selected-rotate-btn').addEventListener('click', () => rotateSelectedCab());
     // [新增] 綁定鏡像按鈕事件
     document.getElementById('selected-mirror-btn').addEventListener('click', () => mirrorSelectedCab());
+    const groupBtn = document.getElementById('selected-group-btn');
+    const ungroupBtn = document.getElementById('selected-ungroup-btn');
+    if (groupBtn) groupBtn.addEventListener('click', () => groupSelectedCabinets());
+    if (ungroupBtn) ungroupBtn.addEventListener('click', () => ungroupSelectedCabinets());
     // [您的要求] 綁定新的複製按鈕事件
     document.getElementById('selected-duplicate-btn').addEventListener('click', () => duplicateSelectedCab());
     document.getElementById('selected-delete-btn').addEventListener('click', () => deleteCabById(selectedCabId));

@@ -14,6 +14,10 @@ import {
     axisAlignedBoundsFromPoints,
     computeObjectSnapDelta,
     snapTranslationToGrid,
+    mirrorAwareResizeDirection,
+    computeCabinetResizeGeometry,
+    rotateCabinetAroundPivot,
+    mirrorCabinetsAsGroupAboutVerticalAxis,
 } from './LP_core.js';
 
 const fixtureDir = dirname(fileURLToPath(import.meta.url));
@@ -80,11 +84,12 @@ describe('computeObjectSnapDelta', () => {
         expect(dx).toBe(-2);
         expect(dy).toBe(0);
     });
-    it('中心吸附至參考中心', () => {
-        const moving = { minX: 48, minY: 48, maxX: 152, maxY: 152 };
+    it('中心吸附至參考中心（52–152 vs 0–100，閾值 5）', () => {
+        const moving = { minX: 52, minY: 0, maxX: 152, maxY: 100 };
         const refs = [{ minX: 0, minY: 0, maxX: 100, maxY: 100 }];
-        const { dx } = computeObjectSnapDelta(moving, refs, 5);
-        expect(dx).toBe(0);
+        const { dx, dy } = computeObjectSnapDelta(moving, refs, 5);
+        expect(dx).toBe(-2);
+        expect(dy).toBe(0);
     });
     it('超出閾值不吸附', () => {
         const moving = { minX: 120, minY: 0, maxX: 220, maxY: 100 };
@@ -110,6 +115,166 @@ describe('axisAlignedBoundsFromPoints', () => {
     it('計算旋轉後點集外框', () => {
         const b = axisAlignedBoundsFromPoints([{ x: 10, y: 5 }, { x: 30, y: 25 }]);
         expect(b).toEqual({ minX: 10, minY: 5, maxX: 30, maxY: 25 });
+    });
+});
+
+describe('mirrorAwareResizeDirection', () => {
+    it('鏡像時 w/e 對調', () => {
+        expect(mirrorAwareResizeDirection('w', true)).toBe('e');
+        expect(mirrorAwareResizeDirection('e', true)).toBe('w');
+        expect(mirrorAwareResizeDirection('n', true)).toBe('n');
+    });
+});
+
+describe('computeCabinetResizeGeometry', () => {
+    const base = {
+        startX: 100,
+        startY: 50,
+        startW: 200,
+        startH: 80,
+        rotationDeg: 0,
+        adjustable: 'both',
+    };
+
+    it('未鏡像：拉東側控點增加寬度', () => {
+        const r = computeCabinetResizeGeometry({
+            ...base,
+            mirrored: false,
+            direction: 'e',
+            localDx: 20,
+            localDy: 0,
+        });
+        expect(r.currentW).toBe(220);
+        expect(r.x).toBe(100);
+    });
+
+    it('已鏡像：DOM 西側控點對應視覺東側，加寬與未鏡像拉東一致', () => {
+        const normal = computeCabinetResizeGeometry({
+            ...base,
+            mirrored: false,
+            direction: 'e',
+            localDx: 20,
+            localDy: 0,
+        });
+        const mirrored = computeCabinetResizeGeometry({
+            ...base,
+            mirrored: true,
+            direction: 'w',
+            localDx: 20,
+            localDy: 0,
+        });
+        expect(mirrored.currentW).toBe(normal.currentW);
+        expect(mirrored.x).toBe(normal.x);
+    });
+
+    it('旋轉 90° 且鏡像：DOM 西控點拖曳加寬', () => {
+        const r = computeCabinetResizeGeometry({
+            ...base,
+            rotationDeg: 90,
+            mirrored: true,
+            direction: 'w',
+            localDx: 0,
+            localDy: 25,
+        });
+        expect(r.currentW).toBe(225);
+    });
+});
+
+describe('mirrorCabinetsAsGroupAboutVerticalAxis', () => {
+    function rotatePoint(x, y, cx, cy, angleDeg) {
+        const rad = (angleDeg * Math.PI) / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+        const dx = x - cx;
+        const dy = y - cy;
+        return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos };
+    }
+
+    function cabinetVerts(cab) {
+        const w = cab.currentW;
+        const h = cab.currentH;
+        const x = cab.x;
+        const y = cab.y;
+        const cx = x + w / 2;
+        const cy = y + h / 2;
+        const angle = cab.rotation || 0;
+        const points = cab.mirrored ? [
+            { x: x + w, y: y },
+            { x: x, y: y },
+            { x: x, y: y + h },
+            { x: x + w, y: y + h },
+        ] : [
+            { x: x, y: y },
+            { x: x + w, y: y },
+            { x: x + w, y: y + h },
+            { x: x, y: y + h },
+        ];
+        return points.map((p) => rotatePoint(p.x, p.y, cx, cy, angle));
+    }
+
+    it('兩物件以外框垂直中心線交換位置並切換 mirrored', () => {
+        const a = { x: 100, y: 50, currentW: 40, currentH: 20, rotation: 0, mirrored: false };
+        const b = { x: 200, y: 50, currentW: 40, currentH: 20, rotation: 0, mirrored: true };
+        const out = mirrorCabinetsAsGroupAboutVerticalAxis([a, b], cabinetVerts);
+        expect(out[0].x).toBe(200);
+        expect(out[1].x).toBe(100);
+        expect(out[0].rotation).toBe(0);
+        expect(out[1].rotation).toBe(0);
+        expect(out[0].mirrored).toBe(true);
+        expect(out[1].mirrored).toBe(false);
+    });
+
+    it('旋轉 90°：位置、rotation=(360-θ)、mirrored', () => {
+        const a = { x: 80, y: 100, currentW: 60, currentH: 30, rotation: 90, mirrored: false };
+        const b = { x: 180, y: 100, currentW: 60, currentH: 30, rotation: 0, mirrored: false };
+        const out = mirrorCabinetsAsGroupAboutVerticalAxis([a, b], cabinetVerts);
+        expect(out[0].rotation).toBe(270);
+        expect(out[0].mirrored).toBe(true);
+        expect(out[1].rotation).toBe(0);
+        expect(out[1].mirrored).toBe(true);
+        expect(out[0].x).toBe(195);
+        expect(out[1].x).toBe(95);
+        expect(out[0].y).toBe(100);
+        expect(out[1].y).toBe(100);
+    });
+
+    it('旋轉 30°：位置、rotation=(360-θ)、mirrored', () => {
+        const a = { x: 50, y: 200, currentW: 100, currentH: 50, rotation: 30, mirrored: false };
+        const b = { x: 200, y: 200, currentW: 80, currentH: 40, rotation: 0, mirrored: true };
+        const out = mirrorCabinetsAsGroupAboutVerticalAxis([a, b], cabinetVerts);
+        expect(out[0].rotation).toBe(330);
+        expect(out[0].mirrored).toBe(true);
+        expect(out[1].rotation).toBe(0);
+        expect(out[1].mirrored).toBe(false);
+        expect(out[0].x).toBeCloseTo(174.19872981077805, 8);
+        expect(out[1].x).toBeCloseTo(44.19872981077805, 8);
+        expect(out[0].y).toBe(200);
+        expect(out[1].y).toBe(200);
+    });
+
+    it('連續兩次群組鏡像回到原位、rotation 與 mirrored', () => {
+        const a = { x: 100, y: 50, currentW: 40, currentH: 20, rotation: 45, mirrored: false };
+        const b = { x: 200, y: 50, currentW: 40, currentH: 20, rotation: 0, mirrored: false };
+        const once = mirrorCabinetsAsGroupAboutVerticalAxis([a, b], cabinetVerts);
+        const a2 = { ...a, x: once[0].x, rotation: once[0].rotation, mirrored: once[0].mirrored };
+        const b2 = { ...b, x: once[1].x, rotation: once[1].rotation, mirrored: once[1].mirrored };
+        const twice = mirrorCabinetsAsGroupAboutVerticalAxis([a2, b2], cabinetVerts);
+        expect(twice[0].x).toBe(100);
+        expect(twice[1].x).toBe(200);
+        expect(twice[0].rotation).toBe(45);
+        expect(twice[1].rotation).toBe(0);
+        expect(twice[0].mirrored).toBe(false);
+        expect(twice[1].mirrored).toBe(false);
+    });
+});
+
+describe('rotateCabinetAroundPivot', () => {
+    it('繞自身中心旋轉 90° 位置不變', () => {
+        const cab = { x: 10, y: 20, currentW: 100, currentH: 40, rotation: 0 };
+        const next = rotateCabinetAroundPivot(cab, 60, 40, 90);
+        expect(Math.round(next.x)).toBe(10);
+        expect(Math.round(next.y)).toBe(20);
+        expect(next.rotation).toBe(90);
     });
 });
 

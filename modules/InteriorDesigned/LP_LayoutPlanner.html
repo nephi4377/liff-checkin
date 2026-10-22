@@ -1039,15 +1039,15 @@
                     </div>
                     <div class="mt-2">
                         <label class="flex items-center gap-2 text-xs font-bold text-gray-700">
-                            <input type="checkbox" id="show-grid-toggle" checked> 顯示背景格線（50cm）
+                            <input type="checkbox" id="show-grid-toggle" checked> 顯示背景格線（50cm，僅視覺）
                         </label>
-                        <label for="snap-grid-step-select" class="text-xs font-bold text-gray-700 mt-2 block">拖曳吸附步距 (cm)</label>
+                        <p class="text-[10px] text-gray-500">關閉格線不會停用拖曳步距或物件邊緣吸附；按住 Shift 可暫時關閉吸附。</p>
+                        <label for="snap-grid-step-select" class="text-xs font-bold text-gray-700 mt-2 block">拖曳格線吸附步距 (cm)</label>
                         <select id="snap-grid-step-select" class="w-full text-xs border rounded p-1.5 mt-1 bg-white">
                             <option value="2">2（預設，與現行相同）</option>
                             <option value="5">5</option>
                             <option value="10">10</option>
                         </select>
-                        <p class="text-[10px] text-gray-500 mt-1">按住 Shift 可暫時關閉格線與物件吸附。</p>
                     </div>
                 </div>
             </div>
@@ -1115,6 +1115,10 @@
                             class="p-1.5 bg-gray-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-gray-600">↑</button>
                         <button id="selected-layer-down-btn" title="下移一層"
                             class="p-1.5 bg-gray-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-gray-600">↓</button>
+                        <button id="selected-group-btn" title="群組 (Ctrl+G)" style="display:none"
+                            class="p-1.5 bg-indigo-500 text-white rounded-full h-7 px-2 flex items-center justify-center text-xs hover:bg-indigo-600">群組</button>
+                        <button id="selected-ungroup-btn" title="取消群組 (Ctrl+Shift+G)" style="display:none"
+                            class="p-1.5 bg-indigo-400 text-white rounded-full h-7 px-2 flex items-center justify-center text-xs hover:bg-indigo-500">解群</button>
                         <button id="selected-rotate-btn" title="旋轉 (R)"
                             class="p-1.5 bg-blue-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs hover:bg-blue-600">↻</button>
                         <button id="selected-mirror-btn" title="鏡像 (M)"

@@ -61,6 +61,68 @@ test.describe('LayoutPlanner E2E', () => {
     await expect(page.locator('#undo-btn')).toBeDisabled();
   });
 
+  test('拖曳櫃體後單次 Ctrl+Z 回到拖曳前位置', async ({ page }) => {
+    const fixture = path.join(__dirname, 'fixtures', 'lp-walk-keyguard.json');
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#layout-upload').setInputFiles(fixture);
+    await page.waitForTimeout(800);
+
+    const cab = page.locator('#keyguard-cab-1');
+    await expect(cab).toBeVisible();
+    const box = await cab.boundingBox();
+    expect(box).toBeTruthy();
+
+    const startX = box.x + box.width / 2;
+    const startY = box.y + box.height / 2;
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX + 80, startY + 60);
+    await page.mouse.up();
+
+    await page.waitForTimeout(150);
+    const afterDrag = await page.evaluate(() => ({
+      x: document.getElementById('keyguard-cab-1')?.style.left,
+      y: document.getElementById('keyguard-cab-1')?.style.top,
+    }));
+    expect(afterDrag.x).not.toBe('800px');
+    expect(afterDrag.y).not.toBe('800px');
+
+    await page.keyboard.press('Control+z');
+    await expect.poll(async () => page.evaluate(() => document.getElementById('keyguard-cab-1')?.style.left)).toBe('800px');
+    await expect.poll(async () => page.evaluate(() => document.getElementById('keyguard-cab-1')?.style.top)).toBe('800px');
+  });
+
+  test('視窗外放開滑鼠仍結束拖曳手勢，單次復原有效', async ({ page }) => {
+    const fixture = path.join(__dirname, 'fixtures', 'lp-walk-keyguard.json');
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#layout-upload').setInputFiles(fixture);
+    await page.waitForTimeout(800);
+
+    const cab = page.locator('#keyguard-cab-1');
+    const box = await cab.boundingBox();
+    expect(box).toBeTruthy();
+    const startX = box.x + box.width / 2;
+    const startY = box.y + box.height / 2;
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX + 70, startY + 50);
+    const vp = page.viewportSize();
+    await page.mouse.move(-20, vp.height / 2);
+    await page.mouse.up();
+
+    await page.waitForTimeout(150);
+    const afterDrag = await page.evaluate(() => ({
+      x: document.getElementById('keyguard-cab-1')?.style.left,
+      y: document.getElementById('keyguard-cab-1')?.style.top,
+    }));
+    expect(afterDrag.x).not.toBe('800px');
+
+    await page.keyboard.press('Control+z');
+    await expect.poll(async () => page.evaluate(() => document.getElementById('keyguard-cab-1')?.style.left)).toBe('800px');
+    await expect.poll(async () => page.evaluate(() => document.getElementById('keyguard-cab-1')?.style.top)).toBe('800px');
+  });
+
   test('復原後 Ctrl+Y 可重做', async ({ page }) => {
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
 
