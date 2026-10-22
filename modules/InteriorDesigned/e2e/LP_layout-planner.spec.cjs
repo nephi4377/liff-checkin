@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const path = require('path');
+const fs = require('fs');
 
 const ARTIFACTS = process.env.LP_E2E_ARTIFACTS || '/opt/cursor/artifacts';
 
@@ -129,6 +130,33 @@ test.describe('LayoutPlanner E2E', () => {
     await btn.click();
     await expect(page.locator('body')).toHaveClass(/lp-3d-mode/);
     await expect(page.locator('#lp-3d-viewport canvas')).toHaveCount(1);
+  });
+
+  test('3D 示範佈局：牆體／門窗開口／櫃體標籤（FLOORPLAN-3D-5）', async ({ page }) => {
+    const fixture = path.join(__dirname, 'fixtures', 'lp-3d-spec-demo.json');
+    expect(fs.existsSync(fixture)).toBe(true);
+
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#toggle-3d-view-btn').click();
+    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/);
+    await page.waitForTimeout(2000);
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-before-demo-layout.png'), fullPage: false });
+
+    await page.locator('#lp-3d-btn-exit-2d').click();
+    await expect(page.locator('body')).not.toHaveClass(/lp-3d-mode/);
+    await page.locator('#layout-upload').setInputFiles(fixture);
+    await page.waitForTimeout(800);
+
+    await page.locator('#toggle-3d-view-btn').click();
+    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/);
+    await page.waitForTimeout(3000);
+    expect(errors, `頁面錯誤: ${errors.join('; ')}`).toHaveLength(0);
+
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-after-demo-layout.png'), fullPage: false });
   });
 
   test('3D 畫布全螢幕不被側欄或底列遮住（桌機）', async ({ page }) => {

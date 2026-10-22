@@ -52,7 +52,7 @@
 | 門（`classifyPlacedCabinet3DKind` → `door`） | 平面矩形拉高 | **門高 210**；`group` 為「門窗工程／門片」或名稱含「門」 |
 | 窗（→ `window`） | 平面矩形拉高，**窗台離地** | **窗台 90 + 窗高 120**；名稱含「窗／落地窗」等 |
 | 牆片元件 `data.isWall` | 同櫃體盒子 | **高 280、色偏灰** |
-| 地板 | 薄板 | 第二階段；MVP 僅 **GridHelper** |
+| 地板 | 薄板 | **`drawnAreas.floor` 或牆內圈 fallback**（`FLOOR_THICKNESS_CM`）；仍保留 GridHelper |
 
 分類：`classifyPlacedCabinet3DKind`（自動）與 `resolvePlacedCabinet3DKind`（含元件 `model3dKind` 手動覆寫）。**門／窗**在 3D 會以 **CSG 差集**從牆環 mesh 挖洞（`openingCutsWall` 判斷中心是否在牆帶內）。
 
@@ -91,8 +91,8 @@
 
 | 階段 | 內容 | 驗收 |
 |------|------|------|
-| **1（本 PR）** | 設計文件、3D 切換、牆環 + 門／窗／櫃體盒子、Orbit | 2D 不變；可旋轉縮放 |
-| **2** | 地板／天花、材質、層級顯示、編輯後同步 | 與 `layerVisibility` 一致 |
+| **1** | 設計文件、3D 切換、牆環 + 門／窗 CSG、Orbit | 2D 不變；可旋轉縮放 |
+| **2（已部分上線）** | 地板／天花薄板、類別造型與色、櫃體標籤、室內行走、2D 編輯 debounce 重建 | 見 `LP_3DViewer.js`；**`layerVisibility` 同步仍待做** |
 | **3** | 櫃體高度來自 Sheet、3D 截圖匯出、層級過濾 | 與報價元件資料一致 |
 | **4** | 第一人稱、效能上限與 LOD | 大案場可流暢漫遊 |
 
