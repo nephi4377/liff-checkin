@@ -135,8 +135,9 @@ flowchart LR
 
 - 使用 `FormData`：至少包含 `payload` 為**完整 JSON 字串**（內容含 `action`, `batchId`, `userId`, `userName`, `projectId`, `workType`, 欄位文字與**完整 `photos` 陣列**）；並將非 `photos` 之頂層鍵重複 `append`（便於 GAS 除錯及相容）；`chunkIndex` 在表單欄位固定為 `1` 給**首包**邏輯參考。
 - 後端 `doPost` 讀取：`e.postData.contents` **或** `e.parameter.payload` 解析 JSON（`WebApp.js` 註解說明支援 JSON body 與表單 `payload` 兩路）。
+- 若兩路都空，後端會回「已忽略的空包」（仍帶成功旗標）。**前端不可把這當成回報已送出**；應重試，仍空則人話失敗並保留本機暫存。
 
-**成功條件（前端）：** `response.ok && result.success === true`。
+**成功條件（前端）：** HTTP 成功且後端回「已收下」。僅 `success: true` 不夠——若標了「已忽略／空包」、或訊息是「無相片需處理」（沒寫進佇列），畫面要當失敗並可再試，不可出現「送出成功」後關窗。系統忙碌且可再試時，同一輪自動再送。
 
 ### 3.5 Firebase Storage 路徑（前端）
 
