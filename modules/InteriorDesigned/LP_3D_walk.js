@@ -1,12 +1,16 @@
 import * as THREE from 'three';
-import { pointInPolygonXZ } from './LP_3D_scene.js';
+import { clampPointToWalkRings } from './LP_3D_scene.js';
 
 const MOVE_SPEED_CM_S = 220;
 const LOOK_SENS = 0.0022;
 const PITCH_LIMIT = Math.PI / 2 - 0.08;
+const WALK_KEY_CODES = new Set([
+    'KeyW', 'KeyA', 'KeyS', 'KeyD',
+    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+]);
 
 /**
- * @param {{ camera: import('three').PerspectiveCamera, domElement: HTMLElement, eyeHeightCm: number, getWalkBounds: () => { ring?: {x:number,z:number}[] }|null }} opts
+ * @param {{ camera: import('three').PerspectiveCamera, domElement: HTMLElement, eyeHeightCm: number, getWalkBounds: () => { rings?: {x:number,z:number}[][] }|null }} opts
  */
 export function createWalkController(opts) {
     const { camera, domElement, eyeHeightCm, getWalkBounds } = opts;
@@ -20,37 +24,10 @@ export function createWalkController(opts) {
     let touchMoveId = null;
     let touchLookId = null;
     const touchMove = { x: 0, y: 0 };
-    const touchLook = { dx: 0, dy: 0 };
 
     function clampInsideBounds(x, z) {
         const bounds = getWalkBounds();
-        const ring = bounds?.ring;
-        if (!ring || ring.length < 3) return { x, z };
-        if (pointInPolygonXZ(x, z, ring)) return { x, z };
-        let best = { x, z };
-        let bestD = Infinity;
-        for (let i = 0; i < ring.length; i++) {
-            const a = ring[i];
-            const b = ring[(i + 1) % ring.length];
-            const t = Math.max(0, Math.min(1,
-                ((x - a.x) * (b.x - a.x) + (z - a.z) * (b.z - a.z))
-                / (Math.max((b.x - a.x) ** 2 + (b.z - a.z) ** 2, 1e-6)),
-            ));
-            const px = a.x + t * (b.x - a.x);
-            const pz = a.z + t * (b.z - a.z);
-            const d = (x - px) ** 2 + (z - pz) ** 2;
-            if (d < bestD) {
-                bestD = d;
-                best = { x: px, z: pz };
-            }
-        }
-        const shrink = 8;
-        const cx = ring.reduce((s, p) => s + p.x, 0) / ring.length;
-        const cz = ring.reduce((s, p) => s + p.z, 0) / ring.length;
-        const dx = cx - best.x;
-        const dz = cz - best.z;
-        const len = Math.hypot(dx, dz) || 1;
-        return { x: best.x + (dx / len) * shrink, z: best.z + (dz / len) * shrink };
+        return clampPointToWalkRings(x, z, bounds?.rings);
     }
 
     function applyCameraRotation() {
@@ -59,16 +36,24 @@ export function createWalkController(opts) {
         camera.rotation.x = pitch;
     }
 
+    function swallowWalkKey(e) {
+        if (!WALK_KEY_CODES.has(e.code)) return;
+        keys.add(e.code);
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
     function onKeyDown(e) {
         if (!active) return;
-        if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
-            keys.add(e.code);
-            e.preventDefault();
-        }
+        swallowWalkKey(e);
     }
 
     function onKeyUp(e) {
-        keys.delete(e.code);
+        if (!active) return;
+        if (WALK_KEY_CODES.has(e.code)) {
+            keys.delete(e.code);
+            e.stopPropagation();
+        }
     }
 
     function onMouseDown(e) {
@@ -76,6 +61,7 @@ export function createWalkController(opts) {
         pointerDown = true;
         lastX = e.clientX;
         lastY = e.clientY;
+        e.stopPropagation();
     }
 
     function onMouseUp() {
@@ -90,6 +76,7 @@ export function createWalkController(opts) {
         lastX = e.clientX;
         lastY = e.clientY;
         applyCameraRotation();
+        e.stopPropagation();
     }
 
     function onTouchStart(e) {
@@ -101,12 +88,11 @@ export function createWalkController(opts) {
                 touchMove.y = t.clientY;
             } else if (touchLookId === null) {
                 touchLookId = t.identifier;
-                touchLook.dx = 0;
-                touchLook.dy = 0;
                 lastX = t.clientX;
                 lastY = t.clientY;
             }
         }
+        e.stopPropagation();
     }
 
     function onTouchMove(e) {
@@ -136,6 +122,7 @@ export function createWalkController(opts) {
             }
         }
         e.preventDefault();
+        e.stopPropagation();
     }
 
     function onTouchEnd(e) {
@@ -143,6 +130,7 @@ export function createWalkController(opts) {
             if (t.identifier === touchMoveId) touchMoveId = null;
             if (t.identifier === touchLookId) touchLookId = null;
         }
+        e.stopPropagation();
     }
 
     function update(deltaSec) {
@@ -173,8 +161,8 @@ export function createWalkController(opts) {
         camera.position.y = eyeHeightCm;
     }
 
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('keyup', onKeyUp, true);
     domElement.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mouseup', onMouseUp);
     window.addEventListener('mousemove', onMouseMove);
@@ -208,8 +196,8 @@ export function createWalkController(opts) {
         },
         update,
         dispose() {
-            window.removeEventListener('keydown', onKeyDown);
-            window.removeEventListener('keyup', onKeyUp);
+            window.removeEventListener('keydown', onKeyDown, true);
+            window.removeEventListener('keyup', onKeyUp, true);
             domElement.removeEventListener('mousedown', onMouseDown);
             window.removeEventListener('mouseup', onMouseUp);
             window.removeEventListener('mousemove', onMouseMove);

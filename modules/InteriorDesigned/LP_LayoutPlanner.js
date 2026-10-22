@@ -1448,6 +1448,14 @@ function handleKeyDown(e) {
     // [安全修正] 確保 e.key 存在，避免在某些特殊輸入狀態下 (如 IME) 導致 undefined 錯誤
     if (!e.key) return;
 
+    if (lp3dMode) {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            closeLayoutPlanner3D();
+        }
+        return;
+    }
+
     // [新增] 如果按下 Escape 鍵，則取消目前的繪圖（優先於表單欄位略過）
     if (e.key === 'Escape' && isDrawing) {
         cancelDrawing();
@@ -3788,6 +3796,20 @@ function closeHelpModal() {
     document.getElementById('help-modal').style.display = 'none';
 }
 
+function closeLayoutPlanner3D() {
+    if (!lp3dMode) return;
+    const toggleBtn = document.getElementById('toggle-3d-view-btn');
+    const overlay = document.getElementById('lp-3d-overlay');
+    lp3dMode = false;
+    document.body.classList.remove('lp-3d-mode');
+    if (overlay) overlay.setAttribute('aria-hidden', 'true');
+    if (toggleBtn) {
+        toggleBtn.textContent = '🧊 3D 檢視';
+        toggleBtn.title = '將牆體與櫃體以 3D 預覽（不影響 2D 編輯）';
+    }
+    if (lp3dViewer) lp3dViewer.close();
+}
+
 function initLayoutPlanner3D() {
     const toggleBtn = document.getElementById('toggle-3d-view-btn');
     if (!document.getElementById('lp-3d-viewport') || !toggleBtn) return;
@@ -3834,12 +3856,7 @@ function initLayoutPlanner3D() {
             return;
         }
 
-        lp3dMode = false;
-        document.body.classList.remove('lp-3d-mode');
-        if (overlay) overlay.setAttribute('aria-hidden', 'true');
-        toggleBtn.textContent = '🧊 3D 檢視';
-        toggleBtn.title = '將牆體與櫃體以 3D 預覽（不影響 2D 編輯）';
-        if (lp3dViewer) lp3dViewer.close();
+        closeLayoutPlanner3D();
     });
 }
 

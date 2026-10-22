@@ -157,10 +157,20 @@ export function createLayoutPlanner3DViewer(options) {
     }
 
     function resetWalkCamera(desc) {
-        const ring = desc.walkBounds?.ring;
+        const ring = desc.walkBounds?.rings?.[0];
         const c = ring?.length ? ringCentroidXZ(ring) : { x: 0, z: 0 };
         walk.setPosition(c.x, c.z);
         walk.lookAt(c.x, c.z - 80);
+    }
+
+    function ensureWalk() {
+        if (walk) return;
+        walk = createWalkController({
+            camera,
+            domElement: renderer.domElement,
+            eyeHeightCm: LP_3D_DEFAULTS.WALK_EYE_HEIGHT_CM,
+            getWalkBounds: () => lastDesc?.walkBounds ?? null,
+        });
     }
 
     function resetView() {
@@ -170,7 +180,10 @@ export function createLayoutPlanner3DViewer(options) {
     }
 
     function ensureScene() {
-        if (renderer) return;
+        if (renderer) {
+            ensureWalk();
+            return;
+        }
 
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0xe2e8f0);
@@ -188,13 +201,6 @@ export function createLayoutPlanner3DViewer(options) {
         controls.enableDamping = true;
         controls.dampingFactor = 0.08;
         controls.target.set(0, 120, 0);
-
-        walk = createWalkController({
-            camera,
-            domElement: renderer.domElement,
-            eyeHeightCm: LP_3D_DEFAULTS.WALK_EYE_HEIGHT_CM,
-            getWalkBounds: () => lastDesc?.walkBounds ?? null,
-        });
 
         const hemi = new THREE.HemisphereLight(0xffffff, 0x94a3b8, 0.9);
         scene.add(hemi);
@@ -214,6 +220,7 @@ export function createLayoutPlanner3DViewer(options) {
             renderer.setSize(w, h);
         });
         resizeObserver.observe(mountEl);
+        ensureWalk();
 
         btnOrbit?.addEventListener('click', () => {
             viewMode = 'orbit';
@@ -250,6 +257,7 @@ export function createLayoutPlanner3DViewer(options) {
 
     function rebuild() {
         ensureScene();
+        ensureWalk();
         const raw = getData();
         const desc = buildLayout3DDescriptor({
             workspaceSize: raw.workspaceSize,
@@ -371,6 +379,8 @@ export function createLayoutPlanner3DViewer(options) {
             isOpen = false;
             overlayEl?.removeAttribute('data-lp-3d-open');
             walk?.setActive(false);
+            walk?.dispose();
+            walk = null;
             if (animationId) {
                 cancelAnimationFrame(animationId);
                 animationId = null;

@@ -32,7 +32,7 @@
             display: none;
             position: fixed;
             inset: 0;
-            z-index: 30000;
+            z-index: 8000;
             background: #0f172a;
             flex-direction: column;
         }
@@ -119,6 +119,10 @@
             display: block;
             width: 100% !important;
             height: 100% !important;
+        }
+
+        body.lp-3d-mode #global-notification-container {
+            z-index: 10050 !important;
         }
 
         :root {

@@ -71,6 +71,56 @@ export function ringCentroidXZ(ring) {
     return { x: x / ring.length, z: z / ring.length };
 }
 
+function nearestPointOnSegmentXZ(x, z, a, b) {
+    const abx = b.x - a.x;
+    const abz = b.z - a.z;
+    const len2 = abx * abx + abz * abz;
+    const t = len2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((x - a.x) * abx + (z - a.z) * abz) / len2));
+    const px = a.x + t * abx;
+    const pz = a.z + t * abz;
+    const d2 = (x - px) ** 2 + (z - pz) ** 2;
+    return { x: px, z: pz, d2 };
+}
+
+/**
+ * 將 XZ 點限制在可行走區（支援多個地板多邊形；凹多邊形用射線法判定內外）
+ * @param {number} x
+ * @param {number} z
+ * @param {{ x: number, z: number }[][]} rings
+ */
+export function clampPointToWalkRings(x, z, rings) {
+    if (!rings?.length) return { x, z };
+    for (const ring of rings) {
+        if (ring?.length >= 3 && pointInPolygonXZ(x, z, ring)) return { x, z };
+    }
+    let bestPoint = { x, z };
+    let bestD2 = Infinity;
+    let bestRing = null;
+    for (const ring of rings) {
+        if (!ring || ring.length < 3) continue;
+        for (let i = 0; i < ring.length; i++) {
+            const a = ring[i];
+            const b = ring[(i + 1) % ring.length];
+            const hit = nearestPointOnSegmentXZ(x, z, a, b);
+            if (hit.d2 < bestD2) {
+                bestD2 = hit.d2;
+                bestPoint = { x: hit.x, z: hit.z };
+                bestRing = ring;
+            }
+        }
+    }
+    if (!bestRing) return { x, z };
+    const shrink = 8;
+    const c = ringCentroidXZ(bestRing);
+    const dx = c.x - bestPoint.x;
+    const dz = c.z - bestPoint.z;
+    const len = Math.hypot(dx, dz) || 1;
+    return {
+        x: bestPoint.x + (dx / len) * shrink,
+        z: bestPoint.z + (dz / len) * shrink,
+    };
+}
+
 export function canvasToSceneXZ(x, y, workspaceSize) {
     const half = workspaceSize / 2;
     return { x: x - half, z: y - half };
@@ -251,12 +301,16 @@ export function buildLayout3DDescriptor(layout, options = {}) {
         });
     }
 
-    let walkBounds = null;
-    if (floors.length > 0) {
-        walkBounds = { ring: floors[0].ring };
-    } else if (walls.length > 0) {
-        walkBounds = { ring: walls[0].inner };
+    const walkRings = [];
+    for (const f of floors) {
+        if (f.ring?.length >= 3) walkRings.push(f.ring);
     }
+    if (!walkRings.length) {
+        for (const w of walls) {
+            if (w.inner?.length >= 3) walkRings.push(w.inner);
+        }
+    }
+    const walkBounds = walkRings.length ? { rings: walkRings } : null;
 
     return { workspaceSize, walls, fixtures, floors, ceilings, walkBounds };
 }

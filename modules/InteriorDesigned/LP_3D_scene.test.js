@@ -7,6 +7,8 @@ import {
     openingCutsWall,
     pointInWallBand,
     offsetPolygon,
+    clampPointToWalkRings,
+    pointInPolygonXZ,
 } from './LP_3D_scene.js';
 
 describe('canvasToSceneXZ', () => {
@@ -147,7 +149,44 @@ describe('buildLayout3DDescriptor', () => {
         });
         expect(desc.floors).toHaveLength(1);
         expect(desc.ceilings).toHaveLength(1);
-        expect(desc.walkBounds?.ring).toBeDefined();
+        expect(desc.walkBounds?.rings).toHaveLength(1);
+    });
+});
+
+describe('clampPointToWalkRings', () => {
+    it('凹形與多區域地板：內部不位移、外部投影回邊界', () => {
+        const lShape = [
+            { x: 0, z: 0 },
+            { x: 100, z: 0 },
+            { x: 100, z: 40 },
+            { x: 40, z: 40 },
+            { x: 40, z: 100 },
+            { x: 0, z: 100 },
+        ];
+        const inside = clampPointToWalkRings(20, 20, [lShape]);
+        expect(inside.x).toBe(20);
+        expect(inside.z).toBe(20);
+        expect(pointInPolygonXZ(20, 20, lShape)).toBe(true);
+
+        const roomA = [
+            { x: -50, z: -50 },
+            { x: 50, z: -50 },
+            { x: 50, z: 50 },
+            { x: -50, z: 50 },
+        ];
+        const roomB = [
+            { x: 80, z: -30 },
+            { x: 160, z: -30 },
+            { x: 160, z: 30 },
+            { x: 80, z: 30 },
+        ];
+        expect(pointInPolygonXZ(0, 0, roomA)).toBe(true);
+        expect(pointInPolygonXZ(120, 0, roomB)).toBe(true);
+        const outside = clampPointToWalkRings(200, 200, [roomA, roomB]);
+        expect(
+            pointInPolygonXZ(outside.x, outside.z, roomA)
+            || pointInPolygonXZ(outside.x, outside.z, roomB),
+        ).toBe(true);
     });
 });
 
