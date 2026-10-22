@@ -41,9 +41,7 @@ npm run dev
 - 優先／待處理／限期完成；優先依緊急自動排序  
 - 緊急等級：chip 點開選（非三大按鈕）  
 - 詳細說明、誰派的（`assigner`）、限期 `dueDate`  
-- **AI 整理**（僅派工頁）：網頁面板整理 → 複製 → 貼「詳細說明」  
-  - LLM：`VITE_OPENAI_API_KEY`（可選 `VITE_OPENAI_BASE_URL` / `VITE_OPENAI_MODEL`）  
-  - 無金鑰：本機規則（對象／分類／緊急／期限＋條列）  
+- **AI 整理**（僅派工頁）：網頁面板整理 → 複製 → 貼「詳細說明」（僅本機規則；前端不放 API 金鑰）  
 - 恩德／阿勇：只勾完成；**無「回總覽」、無 AI 面板**  
 
 流程見 store `docs/paste-format.md`。

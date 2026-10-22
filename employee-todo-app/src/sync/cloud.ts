@@ -1,9 +1,11 @@
-import { todoList, type TodoListData } from '../api/todoGasClient'
+import { todoList, type TodoListData, type TodoWriteAuth } from '../api/todoGasClient'
 import type { TodoBoard } from '../api/board'
 import { ensureDispatchState } from '../data'
 import type { AppState } from '../types'
+import { isMantleBackend } from './config'
+import { pullMantleCloud, pushMantleCloud } from './mantleCloud'
 
-function listDataToAppState(data: TodoListData): AppState {
+export function listDataToAppState(data: TodoListData): AppState {
   return ensureDispatchState({
     workers: data.workers,
     tasks: data.tasks,
@@ -13,10 +15,25 @@ function listDataToAppState(data: TodoListData): AppState {
   })
 }
 
-/** 從 project-console 讀取單一 board 清單 */
-export async function pullCloud(board: TodoBoard): Promise<AppState | null> {
-  const data = await todoList(board)
+/** GAS：依 board 讀清單（含 liff_id_token）。 */
+export async function pullGasCloud(
+  board: TodoBoard,
+  auth: TodoWriteAuth,
+): Promise<AppState | null> {
+  const data = await todoList(board, auth)
   return listDataToAppState(data)
 }
 
-export { listDataToAppState }
+/** 依 `TODO_SYNC_BACKEND` 拉遠端；Mantle 時忽略 board。 */
+export async function pullCloud(
+  board: TodoBoard | null,
+  auth: TodoWriteAuth,
+): Promise<AppState | null> {
+  if (isMantleBackend()) {
+    return pullMantleCloud()
+  }
+  if (!board) return null
+  return pullGasCloud(board, auth)
+}
+
+export { pushMantleCloud as pushCloud }

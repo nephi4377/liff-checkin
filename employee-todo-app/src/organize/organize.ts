@@ -1,34 +1,13 @@
 import { localOrganize } from './localOrganize'
-import { getOrganizeMode, llmOrganize } from './llmOrganize'
 
 export type OrganizeResult = {
   text: string
-  mode: 'llm' | 'local'
-  /** true when LLM failed and local fallback was used */
-  fellBack?: boolean
-  error?: string
+  mode: 'local'
 }
 
+/** 派工筆記整理（僅本機規則；前端不呼叫外部 LLM／不讀 API 金鑰）。 */
 export async function organizeNotes(raw: string): Promise<OrganizeResult> {
   const trimmed = raw.trim()
-  if (!trimmed) return { text: '', mode: getOrganizeMode() }
-
-  if (getOrganizeMode() === 'llm') {
-    try {
-      const text = await llmOrganize(trimmed)
-      return { text, mode: 'llm' }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'LLM 失敗'
-      return {
-        text: localOrganize(trimmed),
-        mode: 'local',
-        fellBack: true,
-        error: msg,
-      }
-    }
-  }
-
+  if (!trimmed) return { text: '', mode: 'local' }
   return { text: localOrganize(trimmed), mode: 'local' }
 }
-
-export { getOrganizeMode, hasLlmKey } from './llmOrganize'

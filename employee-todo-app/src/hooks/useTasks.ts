@@ -7,7 +7,6 @@ import {
   todoDelete,
   todoReorder,
   todoUpdate,
-  todoUpdateOffice,
   type TodoListData,
   TodoApiError,
 } from '../api/todoGasClient'
@@ -17,7 +16,9 @@ import {
   loadState,
   saveState,
 } from '../data'
+import { useMantleBackendSync } from './useMantleBackendSync'
 import { listDataToAppState, pullCloud } from '../sync/cloud'
+import { isGasBackend, isMantleBackend } from '../sync/config'
 import type {
   AppState,
   OfficeTask,
@@ -67,39 +68,56 @@ export function useTasks({ board, getLiffIdToken }: UseTasksOptions) {
     setSyncStatus((prev) => (prev === next ? prev : next))
   }, [])
 
-  const applyServerData = useCallback((data: TodoListData | null) => {
-    if (!data) return
+  const applyServerData = useCallback((data: TodoListData) => {
+    if (data.tasks === undefined && data.workers === undefined) return
     applyFromCloudRef.current = true
     setState(listDataToAppState(data))
   }, [])
 
+  const resolveAuth = useCallback(async () => {
+    let token = ''
+    if (!TODO_DEV_BYPASS) {
+      token = await getLiffIdToken()
+      if (!token) throw new TodoApiError('缺少 liff_id_token')
+    }
+    return { liff_id_token: token }
+  }, [getLiffIdToken])
+
+  useMantleBackendSync({
+    enabled: isMantleBackend(),
+    localUpdatedAt: state.updatedAt,
+    stateRef,
+    setState,
+    setSyncStatusSafe,
+    hydratedRef,
+    applyFromCloudRef,
+  })
+
   const runWrite = useCallback(
     async (
-      fn: (auth: { liff_id_token: string }) => Promise<TodoListData | null>,
+      fn: (auth: { liff_id_token: string }) => Promise<TodoListData>,
     ) => {
-      if (!board) return
+      if (!board || !isGasBackend()) return
       setSyncStatusSafe('syncing')
       try {
-        let token = ''
-        if (!TODO_DEV_BYPASS) {
-          token = await getLiffIdToken()
-          if (!token) throw new TodoApiError('缺少 liff_id_token')
-        }
-        const data = await fn({ liff_id_token: token })
+        const auth = await resolveAuth()
+        const data = await fn(auth)
         applyServerData(data)
         setSyncStatusSafe('ok')
       } catch {
         setSyncStatusSafe(navigator.onLine ? 'error' : 'offline')
       }
     },
-    [applyServerData, board, getLiffIdToken, setSyncStatusSafe],
+    [applyServerData, board, resolveAuth, setSyncStatusSafe],
   )
 
   const refreshFromServer = useCallback(async () => {
+    if (isMantleBackend()) return
     if (!board) return
     setSyncStatusSafe('syncing')
     try {
-      const remote = await pullCloud(board)
+      const auth = await resolveAuth()
+      const remote = await pullCloud(board, auth)
       if (remote) {
         applyFromCloudRef.current = true
         setState(remote)
@@ -108,9 +126,10 @@ export function useTasks({ board, getLiffIdToken }: UseTasksOptions) {
     } catch {
       setSyncStatusSafe(navigator.onLine ? 'error' : 'offline')
     }
-  }, [board, setSyncStatusSafe])
+  }, [board, resolveAuth, setSyncStatusSafe])
 
   useEffect(() => {
+    if (isMantleBackend()) return
     if (!board) {
       hydratedRef.current = true
       return
@@ -120,7 +139,8 @@ export function useTasks({ board, getLiffIdToken }: UseTasksOptions) {
     const boot = async () => {
       setSyncStatusSafe('syncing')
       try {
-        const remote = await pullCloud(board)
+        const auth = await resolveAuth()
+        const remote = await pullCloud(board, auth)
         if (cancelled) return
         if (remote) {
           applyFromCloudRef.current = true
@@ -149,7 +169,7 @@ export function useTasks({ board, getLiffIdToken }: UseTasksOptions) {
       window.removeEventListener('online', onOnline)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [board, refreshFromServer, setSyncStatusSafe])
+  }, [board, refreshFromServer, resolveAuth, setSyncStatusSafe])
 
   const addTask = useCallback(
     (
@@ -243,12 +263,9 @@ export function useTasks({ board, getLiffIdToken }: UseTasksOptions) {
           }),
         })
       })
+      const orders = orderedIds.map((id, order) => ({ id, order }))
       void runWrite((auth) =>
-        todoReorder(
-          board!,
-          { assigneeId, category, orderedIds },
-          auth,
-        ),
+        todoReorder(board!, { assigneeId, category, orders }, auth),
       )
     },
     [board, runWrite],
@@ -441,9 +458,8 @@ export function useTasks({ board, getLiffIdToken }: UseTasksOptions) {
           deletedIds: prev.deletedIds.filter((id) => id !== task.id),
         }),
       )
-      void runWrite((auth) => todoUpdateOffice(board!, task, auth))
     },
-    [board, runWrite],
+    [],
   )
 
   const toggleOfficeComplete = useCallback(
@@ -462,11 +478,8 @@ export function useTasks({ board, getLiffIdToken }: UseTasksOptions) {
         })
         return patchState(prev, { officeTasks })
       })
-      if (updated) {
-        void runWrite((auth) => todoUpdateOffice(board!, updated!, auth))
-      }
     },
-    [board, runWrite],
+    [],
   )
 
   const updateOfficeTitle = useCallback(
@@ -482,11 +495,8 @@ export function useTasks({ board, getLiffIdToken }: UseTasksOptions) {
         })
         return patchState(prev, { officeTasks })
       })
-      if (updated) {
-        void runWrite((auth) => todoUpdateOffice(board!, updated!, auth))
-      }
     },
-    [board, runWrite],
+    [],
   )
 
   const resetDemo = useCallback(() => {

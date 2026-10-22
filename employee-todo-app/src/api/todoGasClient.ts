@@ -1,16 +1,10 @@
-import type { AppState, OfficeTask, Task, TaskCategory } from '../types'
+import type { AppState, Task, TaskCategory } from '../types'
 import type { TodoBoard } from './board'
 import {
   PROJECT_CONSOLE_EXEC_URL,
   TODO_DEV_BYPASS,
   TODO_DEV_USER_ID,
 } from './config'
-
-export type GasEnvelope<T> = {
-  success: boolean
-  message?: string
-  data?: T
-}
 
 export class TodoApiError extends Error {
   status?: number
@@ -30,6 +24,11 @@ export type TodoWriteAuth = {
   liff_id_token: string
 }
 
+type GasResponse = {
+  success: boolean
+  message?: string
+}
+
 function withDevBypass(body: Record<string, unknown>): Record<string, unknown> {
   if (!TODO_DEV_BYPASS) return body
   const out: Record<string, unknown> = { ...body, dev_bypass: true }
@@ -39,8 +38,15 @@ function withDevBypass(body: Record<string, unknown>): Record<string, unknown> {
   return out
 }
 
-/** 可注入 fetch（單元測試） */
-export async function postProjectConsole<T>(
+function gasPayloadFromSuccess<T extends Record<string, unknown>>(
+  parsed: GasResponse & T,
+): T {
+  const { success: _s, message: _m, ...rest } = parsed
+  return rest as unknown as T
+}
+
+/** 可注入 fetch（單元測試）；成功時回傳 JSON 頂層欄位（不含 success／message）。 */
+export async function postProjectConsole<T extends Record<string, unknown>>(
   body: Record<string, unknown>,
   fetchImpl: typeof fetch = fetch,
 ): Promise<T> {
@@ -54,24 +60,29 @@ export async function postProjectConsole<T>(
     throw new TodoApiError(`HTTP ${res.status}`, res.status)
   }
   const text = await res.text()
-  let parsed: GasEnvelope<T>
+  let parsed: GasResponse & T
   try {
-    parsed = JSON.parse(text) as GasEnvelope<T>
+    parsed = JSON.parse(text) as GasResponse & T
   } catch {
     throw new TodoApiError('回應不是 JSON', res.status)
   }
   if (!parsed.success) {
     throw new TodoApiError(parsed.message || 'API 失敗', res.status)
   }
-  return parsed.data as T
+  return gasPayloadFromSuccess(parsed)
 }
 
 export async function todoList(
   board: TodoBoard,
+  auth: TodoWriteAuth,
   fetchImpl?: typeof fetch,
 ): Promise<TodoListData> {
   return postProjectConsole<TodoListData>(
-    { action: 'todo_list', board },
+    {
+      action: 'todo_list',
+      board,
+      liff_id_token: auth.liff_id_token,
+    },
     fetchImpl,
   )
 }
@@ -81,12 +92,11 @@ export async function todoAdd(
   task: Task,
   auth: TodoWriteAuth,
   fetchImpl?: typeof fetch,
-): Promise<TodoListData | null> {
-  const data = await postProjectConsole<TodoListData | null>(
+): Promise<TodoListData> {
+  return postProjectConsole<TodoListData>(
     { action: 'todo_add', board, task, liff_id_token: auth.liff_id_token },
     fetchImpl,
   )
-  return data ?? null
 }
 
 export async function todoUpdate(
@@ -94,30 +104,11 @@ export async function todoUpdate(
   task: Task,
   auth: TodoWriteAuth,
   fetchImpl?: typeof fetch,
-): Promise<TodoListData | null> {
-  const data = await postProjectConsole<TodoListData | null>(
+): Promise<TodoListData> {
+  return postProjectConsole<TodoListData>(
     { action: 'todo_update', board, task, liff_id_token: auth.liff_id_token },
     fetchImpl,
   )
-  return data ?? null
-}
-
-export async function todoUpdateOffice(
-  board: TodoBoard,
-  officeTask: OfficeTask,
-  auth: TodoWriteAuth,
-  fetchImpl?: typeof fetch,
-): Promise<TodoListData | null> {
-  const data = await postProjectConsole<TodoListData | null>(
-    {
-      action: 'todo_update',
-      board,
-      officeTask,
-      liff_id_token: auth.liff_id_token,
-    },
-    fetchImpl,
-  )
-  return data ?? null
 }
 
 export async function todoDelete(
@@ -125,8 +116,8 @@ export async function todoDelete(
   taskId: string,
   auth: TodoWriteAuth,
   fetchImpl?: typeof fetch,
-): Promise<TodoListData | null> {
-  const data = await postProjectConsole<TodoListData | null>(
+): Promise<TodoListData> {
+  return postProjectConsole<TodoListData>(
     {
       action: 'todo_delete',
       board,
@@ -135,29 +126,29 @@ export async function todoDelete(
     },
     fetchImpl,
   )
-  return data ?? null
 }
+
+export type TodoReorderOrder = { id: string; order: number }
 
 export async function todoReorder(
   board: TodoBoard,
   payload: {
     assigneeId: string
     category: TaskCategory
-    orderedIds: string[]
+    orders: TodoReorderOrder[]
   },
   auth: TodoWriteAuth,
   fetchImpl?: typeof fetch,
-): Promise<TodoListData | null> {
-  const data = await postProjectConsole<TodoListData | null>(
+): Promise<TodoListData> {
+  return postProjectConsole<TodoListData>(
     {
       action: 'todo_reorder',
       board,
       assigneeId: payload.assigneeId,
       category: payload.category,
-      orderedIds: payload.orderedIds,
+      orders: payload.orders,
       liff_id_token: auth.liff_id_token,
     },
     fetchImpl,
   )
-  return data ?? null
 }
