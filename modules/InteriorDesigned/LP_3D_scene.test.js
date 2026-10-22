@@ -60,7 +60,13 @@ describe('openingCutsWall', () => {
         expect(pointInWallBand(0, -45, wall)).toBe(true);
         expect(pointInWallBand(0, 0, wall)).toBe(false);
         expect(openingCutsWall(wall, { kind: 'door', centerX: 0, centerZ: -45 })).toBe(true);
-        expect(openingCutsWall(wall, { kind: 'door', centerX: 0, centerZ: 0 })).toBe(false);
+        expect(openingCutsWall(wall, {
+            kind: 'door',
+            centerX: 0,
+            centerZ: 0,
+            widthCm: 8,
+            depthCm: 8,
+        })).toBe(false);
         expect(openingCutsWall(wall, { kind: 'cabinet', centerX: 0, centerZ: -45 })).toBe(false);
     });
 });

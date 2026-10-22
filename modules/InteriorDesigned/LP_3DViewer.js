@@ -12,7 +12,10 @@ import {
     createLabelSprite,
 } from './LP_3D_furniture.js';
 import { createWalkController } from './LP_3D_walk.js';
-import { buildWalkCollision } from './LP_3D_walk_collision.js';
+import {
+    createWalkCollisionCache,
+    resolveWalkBodyRadiusCm,
+} from './LP_3D_walk_collision.js';
 
 function makeShapeFromRing(outer, inner) {
     const shape = new THREE.Shape();
@@ -105,6 +108,7 @@ export function createLayoutPlanner3DViewer(options) {
     let viewMode = 'orbit';
     let showCeiling = true;
     let lastDesc = null;
+    const walkCollisionCache = createWalkCollisionCache();
     let lastTick = performance.now();
     let orbitBookmark = null;
 
@@ -171,7 +175,8 @@ export function createLayoutPlanner3DViewer(options) {
             domElement: renderer.domElement,
             eyeHeightCm: LP_3D_DEFAULTS.WALK_EYE_HEIGHT_CM,
             getWalkBounds: () => lastDesc?.walkBounds ?? null,
-            getWalkCollision: () => (lastDesc ? buildWalkCollision(lastDesc) : null),
+            getWalkCollision: () => walkCollisionCache.get(lastDesc),
+            getWalkBodyRadiusCm: () => (lastDesc ? resolveWalkBodyRadiusCm(lastDesc) : 20),
         });
     }
 
@@ -267,6 +272,7 @@ export function createLayoutPlanner3DViewer(options) {
             drawnAreas: raw.drawnAreas,
         });
         lastDesc = desc;
+        walkCollisionCache.invalidate();
         const defaults = LP_3D_DEFAULTS;
         const openings = desc.fixtures.filter((f) => f.kind === 'door' || f.kind === 'window');
 

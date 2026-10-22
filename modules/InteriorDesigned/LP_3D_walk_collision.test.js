@@ -1,11 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { buildLayout3DDescriptor } from './LP_3D_scene.js';
+import { buildLayout3DDescriptor, openingCutsWall } from './LP_3D_scene.js';
 import {
     WALK_BODY_RADIUS_CM,
+    WALK_STANDARD_DOOR_MIN_WIDTH_CM,
     buildWalkCollision,
     buildWallInnerCollisionSegments,
+    createWalkCollisionCache,
+    fixtureToObb,
     moveWithWalkCollision,
     openingSpanOnEdge,
+    partitionSegmentToObb,
+    pushCircleOffObb,
+    resolveWalkBodyRadiusCm,
     resolveWalkPosition,
 } from './LP_3D_walk_collision.js';
 
@@ -77,6 +83,7 @@ describe('buildWallInnerCollisionSegments', () => {
             wall.inner[0],
             wall.inner[1],
             Math.hypot(wall.inner[1].x - wall.inner[0].x, wall.inner[1].z - wall.inner[0].z),
+            15,
         );
         expect(doorHit).not.toBeNull();
 
@@ -100,6 +107,199 @@ describe('buildWallInnerCollisionSegments', () => {
         });
         expect(coversWindow).toBe(true);
     });
+
+    it('門只對所屬牆開洞，不誤開相鄰牆邊（openingCutsWall）', () => {
+        const desc = buildLayout3DDescriptor({
+            workspaceSize: 2000,
+            drawnAreas: [
+                {
+                    id: 'w-north',
+                    type: 'wall',
+                    thickness: 15,
+                    points: [
+                        { x: 200, y: 200 },
+                        { x: 800, y: 200 },
+                        { x: 800, y: 600 },
+                        { x: 200, y: 600 },
+                    ],
+                },
+                {
+                    id: 'w-south',
+                    type: 'wall',
+                    thickness: 15,
+                    points: [
+                        { x: 900, y: 200 },
+                        { x: 1400, y: 200 },
+                        { x: 1400, y: 600 },
+                        { x: 900, y: 600 },
+                    ],
+                },
+            ],
+            placedCabinets: [{
+                id: 'door-n',
+                x: 400,
+                y: 185,
+                rotation: 0,
+                currentW: 90,
+                currentH: 15,
+                data: { name: '房門', group: '門窗工程', width: 90, depth: 15 },
+            }],
+        });
+        const door = desc.fixtures.find((f) => f.kind === 'door');
+        const north = desc.walls.find((w) => w.id === 'w-north');
+        const south = desc.walls.find((w) => w.id === 'w-south');
+        expect(openingCutsWall(north, door)).toBe(true);
+        expect(openingCutsWall(south, door)).toBe(false);
+
+        const southSegs = buildWallInnerCollisionSegments(south, desc.fixtures);
+        const doorSpan = openingSpanOnEdge(
+            door,
+            south.inner[0],
+            south.inner[1],
+            Math.hypot(south.inner[1].x - south.inner[0].x, south.inner[1].z - south.inner[0].z),
+            15,
+        );
+        expect(doorSpan).toBeNull();
+        expect(southSegs.length).toBeGreaterThan(0);
+    });
+});
+
+describe('fixture OBB 與隔間牆', () => {
+    it('櫃體 OBB 依寬深與旋轉阻擋（非固定 20cm 圓）', () => {
+        const desc = buildLayout3DDescriptor({
+            workspaceSize: 2000,
+            drawnAreas: [],
+            placedCabinets: [{
+                id: 'cab-rot',
+                x: 900,
+                y: 900,
+                rotation: 90,
+                currentW: 100,
+                currentH: 40,
+                data: { name: '櫃', group: '系統櫃', width: 100, depth: 40 },
+            }],
+        });
+        const cab = desc.fixtures[0];
+        const obb = fixtureToObb(cab);
+        expect(obb.halfW).toBe(50);
+        expect(obb.halfD).toBe(20);
+        expect(obb.halfW).toBe(50);
+        expect(obb.halfD).toBe(20);
+        expect(Math.abs(obb.cos)).toBeLessThan(0.01);
+        expect(Math.abs(obb.sin)).toBeGreaterThan(0.99);
+        const collision = buildWalkCollision(desc);
+        expect(collision.obbs).toHaveLength(1);
+    });
+
+    it('兩點直線隔間牆含厚度可碰撞', () => {
+        const desc = buildLayout3DDescriptor({
+            workspaceSize: 2000,
+            drawnAreas: [{
+                id: 'part-1',
+                type: 'wall',
+                thickness: 20,
+                points: [{ x: 500, y: 500 }, { x: 900, y: 500 }],
+            }],
+            placedCabinets: [],
+        });
+        expect(desc.partitionWalls).toHaveLength(1);
+        const collision = buildWalkCollision(desc);
+        expect(collision.obbs).toHaveLength(1);
+        const before = { x: -300, z: -530 };
+        const after = moveWithWalkCollision(
+            before.x,
+            before.z,
+            0,
+            60,
+            collision,
+            WALK_BODY_RADIUS_CM,
+        );
+        expect(after.z).toBeLessThan(before.z + 45);
+        expect(after.z).toBeLessThan(-500);
+    });
+
+    it('牆片元件（wallSegment）產生 OBB', () => {
+        const desc = buildLayout3DDescriptor({
+            workspaceSize: 2000,
+            drawnAreas: [],
+            placedCabinets: [{
+                id: 'ws1',
+                x: 400,
+                y: 400,
+                rotation: 0,
+                currentW: 200,
+                currentH: 15,
+                data: { isWall: true, name: '隔間', width: 200, depth: 15 },
+            }],
+        });
+        const collision = buildWalkCollision(desc);
+        expect(collision.obbs).toHaveLength(1);
+    });
+});
+
+describe('resolveWalkBodyRadiusCm', () => {
+    it('標準門寬維持 20cm 身體半徑', () => {
+        const desc = buildLayout3DDescriptor(layoutRoomWithDoorAndWindow());
+        expect(resolveWalkBodyRadiusCm(desc)).toBe(WALK_BODY_RADIUS_CM);
+    });
+
+    it('極窄門縮小身體半徑；60cm 門仍可通過', () => {
+        const narrow = buildLayout3DDescriptor({
+            workspaceSize: 2000,
+            drawnAreas: layoutRoomWithDoorAndWindow().drawnAreas,
+            placedCabinets: [{
+                id: 'd-narrow',
+                x: 500,
+                y: 285,
+                rotation: 0,
+                currentW: 28,
+                currentH: 15,
+                data: { name: '房門', group: '門窗工程', width: 28, depth: 15 },
+            }],
+        });
+        const rNarrow = resolveWalkBodyRadiusCm(narrow);
+        expect(rNarrow).toBeLessThan(WALK_BODY_RADIUS_CM);
+        expect(rNarrow).toBeLessThanOrEqual(28 / 2 - 2);
+
+        const normal = buildLayout3DDescriptor({
+            workspaceSize: 2000,
+            drawnAreas: layoutRoomWithDoorAndWindow().drawnAreas,
+            placedCabinets: [{
+                id: 'd-ok',
+                x: 500,
+                y: 285,
+                rotation: 0,
+                currentW: WALK_STANDARD_DOOR_MIN_WIDTH_CM,
+                currentH: 15,
+                data: { name: '房門', group: '門窗工程', width: WALK_STANDARD_DOOR_MIN_WIDTH_CM, depth: 15 },
+            }],
+        });
+        expect(resolveWalkBodyRadiusCm(normal)).toBe(WALK_BODY_RADIUS_CM);
+        const collision = buildWalkCollision(normal);
+        const door = normal.fixtures[0];
+        const r = moveWithWalkCollision(
+            door.centerX,
+            door.centerZ + 80,
+            0,
+            -100,
+            collision,
+            WALK_BODY_RADIUS_CM,
+        );
+        expect(r.z).toBeLessThan(door.centerZ - 20);
+    });
+});
+
+describe('createWalkCollisionCache', () => {
+    it('同一 desc 參考不重算；換物件才重建', () => {
+        const cache = createWalkCollisionCache();
+        const desc = buildLayout3DDescriptor(layoutRoomWithDoorAndWindow());
+        const a = cache.get(desc);
+        const b = cache.get(desc);
+        expect(a).toBe(b);
+        const desc2 = buildLayout3DDescriptor(layoutRoomWithDoorAndWindow());
+        const c = cache.get(desc2);
+        expect(c).not.toBe(a);
+    });
 });
 
 describe('moveWithWalkCollision', () => {
@@ -108,7 +308,7 @@ describe('moveWithWalkCollision', () => {
             segments: [{
                 ax: -100, az: 100, bx: 100, bz: 100, passable: false,
             }],
-            circles: [],
+            obbs: [],
         };
         const r = moveWithWalkCollision(0, 80, 0, 80, collision, WALK_BODY_RADIUS_CM);
         expect(r.z).toBeLessThan(100 - WALK_BODY_RADIUS_CM + 2);
@@ -119,7 +319,7 @@ describe('moveWithWalkCollision', () => {
             segments: [{
                 ax: -100, az: 100, bx: 100, bz: 100, passable: false,
             }],
-            circles: [],
+            obbs: [],
         };
         const r = moveWithWalkCollision(0, 70, 50, 50, collision, WALK_BODY_RADIUS_CM);
         expect(r.x).toBeGreaterThan(35);
@@ -136,18 +336,18 @@ describe('moveWithWalkCollision', () => {
         expect(r.z).toBeLessThan(door.centerZ - 20);
     });
 
-    it('櫃體圓形障礙阻擋前進', () => {
+    it('櫃體 OBB 阻擋前進', () => {
         const desc = buildLayout3DDescriptor(layoutRoomWithDoorAndWindow());
         const collision = buildWalkCollision(desc);
         const cab = desc.fixtures.find((f) => f.kind === 'cabinet');
-        const r = resolveWalkPosition(
-            cab.centerX - 60,
+        const r = moveWithWalkCollision(
+            cab.centerX - 100,
             cab.centerZ,
-            cab.centerX - 5,
-            cab.centerZ,
+            80,
+            0,
             collision,
             WALK_BODY_RADIUS_CM,
         );
-        expect(r.x).toBeLessThan(cab.centerX - 25);
+        expect(r.x).toBeLessThan(cab.centerX - 55);
     });
 });
