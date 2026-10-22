@@ -1,21 +1,13 @@
-import { buildLayout3DDescriptor } from './LP_3D_scene.js';
+import * as THREE from 'three';
+import { OrbitControls } from './vendor/three/examples/jsm/controls/OrbitControls.js';
+import { Brush, Evaluator, SUBTRACTION } from './vendor/three-bvh-csg/index.module.js';
+import {
+    buildLayout3DDescriptor,
+    openingCutsWall,
+    LP_3D_DEFAULTS,
+} from './LP_3D_scene.js';
 
-const THREE_CDN = 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
-const ORBIT_CDN = 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/controls/OrbitControls.js';
-
-let threeModulePromise = null;
-
-function loadThree() {
-    if (!threeModulePromise) {
-        threeModulePromise = Promise.all([
-            import(/* @vite-ignore */ THREE_CDN),
-            import(/* @vite-ignore */ ORBIT_CDN),
-        ]).then(([THREE, { OrbitControls }]) => ({ THREE, OrbitControls }));
-    }
-    return threeModulePromise;
-}
-
-function makeShapeFromRing(outer, inner, THREE) {
+function makeShapeFromRing(outer, inner) {
     const shape = new THREE.Shape();
     outer.forEach((p, i) => {
         if (i === 0) shape.moveTo(p.x, p.z);
@@ -34,6 +26,40 @@ function makeShapeFromRing(outer, inner, THREE) {
     return shape;
 }
 
+function buildWallBrush(THREE, wall, wallMat, openings, defaults) {
+    const shape = makeShapeFromRing(wall.outer, wall.inner);
+    const geo = new THREE.ExtrudeGeometry(shape, {
+        depth: wall.heightCm,
+        bevelEnabled: false,
+    });
+    geo.rotateX(-Math.PI / 2);
+
+    let brush = new Brush(geo, wallMat);
+    brush.updateMatrixWorld();
+
+    const cutters = openings.filter((op) => openingCutsWall(wall, op));
+    if (!cutters.length) return brush;
+
+    const evaluator = new Evaluator();
+    const mw = defaults.WALL_CUT_MARGIN_W_CM;
+    const mh = defaults.WALL_CUT_MARGIN_H_CM;
+    const md = defaults.WALL_CUT_DEPTH_CM;
+
+    for (const op of cutters) {
+        const cutGeo = new THREE.BoxGeometry(
+            op.widthCm + mw,
+            op.heightCm + mh,
+            Math.max(op.depthCm + md, 30),
+        );
+        const cutBrush = new Brush(cutGeo);
+        cutBrush.position.set(op.centerX, op.baseYCm + op.heightCm / 2, op.centerZ);
+        cutBrush.rotation.y = (-op.rotationDeg * Math.PI) / 180;
+        cutBrush.updateMatrixWorld();
+        brush = evaluator.evaluate(brush, cutBrush, SUBTRACTION);
+    }
+    return brush;
+}
+
 /**
  * @param {{ mountEl: HTMLElement, getData: () => { workspaceSize: number, placedCabinets: unknown[], drawnAreas: unknown[] } }} options
  */
@@ -49,9 +75,8 @@ export function createLayoutPlanner3DViewer(options) {
 
     const contentGroup = { current: null };
 
-    async function ensureScene() {
-        const { THREE, OrbitControls } = await loadThree();
-        if (renderer) return { THREE, OrbitControls };
+    function ensureScene() {
+        if (renderer) return;
 
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0xf1f5f9);
@@ -85,8 +110,6 @@ export function createLayoutPlanner3DViewer(options) {
             renderer.setSize(w, h);
         });
         resizeObserver.observe(mountEl);
-
-        return { THREE, OrbitControls };
     }
 
     function disposeGroup(group) {
@@ -100,14 +123,16 @@ export function createLayoutPlanner3DViewer(options) {
         });
     }
 
-    async function rebuild() {
-        const { THREE } = await ensureScene();
+    function rebuild() {
+        ensureScene();
         const raw = getData();
         const desc = buildLayout3DDescriptor({
             workspaceSize: raw.workspaceSize,
             placedCabinets: raw.placedCabinets,
             drawnAreas: raw.drawnAreas,
         });
+        const defaults = LP_3D_DEFAULTS;
+        const openings = desc.fixtures.filter((f) => f.kind === 'door' || f.kind === 'window');
 
         if (contentGroup.current) {
             scene.remove(contentGroup.current);
@@ -117,7 +142,6 @@ export function createLayoutPlanner3DViewer(options) {
         const root = new THREE.Group();
         const ws = desc.workspaceSize;
         const grid = new THREE.GridHelper(ws, Math.round(ws / 100), 0xcbd5e1, 0xe2e8f0);
-        grid.position.y = 0;
         root.add(grid);
 
         const wallMat = new THREE.MeshStandardMaterial({
@@ -126,14 +150,8 @@ export function createLayoutPlanner3DViewer(options) {
             metalness: 0.05,
         });
         for (const wall of desc.walls) {
-            const shape = makeShapeFromRing(wall.outer, wall.inner, THREE);
-            const geo = new THREE.ExtrudeGeometry(shape, {
-                depth: wall.heightCm,
-                bevelEnabled: false,
-            });
-            geo.rotateX(-Math.PI / 2);
-            const mesh = new THREE.Mesh(geo, wallMat);
-            root.add(mesh);
+            const brush = buildWallBrush(THREE, wall, wallMat, openings, defaults);
+            root.add(brush);
         }
 
         const fixtureMaterial = (kind) => {
@@ -181,10 +199,10 @@ export function createLayoutPlanner3DViewer(options) {
     }
 
     return {
-        async open() {
+        open() {
             isOpen = true;
             mountEl.setAttribute('tabindex', '0');
-            await ensureScene();
+            ensureScene();
             if (!animationId) tick();
         },
         close() {

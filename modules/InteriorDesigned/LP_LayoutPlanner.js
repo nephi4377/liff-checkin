@@ -35,6 +35,19 @@ const canvas = document.getElementById('design-canvas');
 /** @type {ReturnType<typeof createLayoutPlanner3DViewer> | null} */
 let lp3dViewer = null;
 let lp3dMode = false;
+let lp3dRebuildTimer = null;
+
+function scheduleLp3dRebuild() {
+    if (!lp3dMode || !lp3dViewer) return;
+    clearTimeout(lp3dRebuildTimer);
+    lp3dRebuildTimer = setTimeout(() => {
+        try {
+            lp3dViewer.rebuild();
+        } catch (err) {
+            console.warn('[LP 3D] rebuild failed:', err);
+        }
+    }, 200);
+}
 // [v8.9 修復] 補回遺失的變數宣告
 let isResizing = false;
 let resizeTarget = null;
@@ -1184,6 +1197,9 @@ function selectCabinet(id) {
             }
         }
         document.getElementById('selected-price').innerText = priceText;
+
+        const model3dSel = document.getElementById('selected-model3d-kind');
+        if (model3dSel) model3dSel.value = cab.model3dKind || 'auto';
 
         document.getElementById('opacity-slider').value = cab.opacity;
         document.getElementById('opacity-value').innerText = cab.opacity + '%';
@@ -3671,6 +3687,7 @@ function saveState() {
 
     historyIndex = history.length - 1;
     updateUndoRedoButtons();
+    scheduleLp3dRebuild();
 }
 
 /**
@@ -3693,6 +3710,7 @@ function loadState(state) {
     updateQuotation();
     deselectAll();
     deselectAllAreas();
+    scheduleLp3dRebuild();
 }
 
 function undo() {
@@ -3730,6 +3748,17 @@ function initLayoutPlanner3D() {
     const toggleBtn = document.getElementById('toggle-3d-view-btn');
     if (!mount || !toggleBtn) return;
 
+    const model3dSel = document.getElementById('selected-model3d-kind');
+    if (model3dSel && !model3dSel.dataset.lpBound) {
+        model3dSel.dataset.lpBound = '1';
+        model3dSel.addEventListener('change', () => {
+            const cab = placedCabinets.find((c) => c.id === selectedCabId);
+            if (!cab) return;
+            cab.model3dKind = model3dSel.value;
+            saveState();
+        });
+    }
+
     lp3dViewer = createLayoutPlanner3DViewer({
         mountEl: mount,
         getData: () => ({
@@ -3750,14 +3779,14 @@ function initLayoutPlanner3D() {
         if (!lp3dViewer) return;
         if (lp3dMode) {
             try {
-                await lp3dViewer.open();
-                await lp3dViewer.rebuild();
+                lp3dViewer.open();
+                lp3dViewer.rebuild();
             } catch (err) {
                 console.error('[LP 3D]', err);
                 lp3dMode = false;
                 document.body.classList.remove('lp-3d-mode');
                 toggleBtn.textContent = '🧊 3D 檢視';
-                showGlobalNotification('3D 檢視載入失敗（請確認網路可連 CDN）', 6000, 'error');
+                showGlobalNotification('3D 檢視載入失敗（請重新整理頁面）', 6000, 'error');
             }
         } else {
             lp3dViewer.close();

@@ -10,6 +10,14 @@
     <!-- [錯誤修正] 增加此行可避免瀏覽器嘗試載入 favicon.ico 而產生 404 錯誤 -->
     <link rel="icon" href="data:,">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/build/three.module.js",
+        "three-mesh-bvh": "./vendor/three-mesh-bvh/index.module.js"
+      }
+    }
+    </script>
     <!-- [核心修正] 重新引入已分離的 JavaScript 主檔案，並設定為 module -->
     <script type="module" src="./LP_LayoutPlanner.js"></script>
     <!-- [新增] JSZip 函式庫，用於打包多個檔案成 ZIP -->
@@ -1063,6 +1071,19 @@
                         <option value="門窗工程">
                         <option value="其他工程">
                     </datalist>
+                </div>
+
+                <div class="mb-2">
+                    <label for="selected-model3d-kind" class="text-xs text-gray-600">3D 類型</label>
+                    <select id="selected-model3d-kind" class="w-full text-xs border rounded p-1 mt-1">
+                        <option value="auto">自動判斷</option>
+                        <option value="cabinet">櫃體／家具</option>
+                        <option value="door">門</option>
+                        <option value="window">窗</option>
+                        <option value="wallSegment">牆片</option>
+                        <option value="ignore">3D 不顯示</option>
+                    </select>
+                    <p class="text-[10px] text-gray-500 mt-0.5">分類不明時可手動指定；門／窗會在牆上開洞。</p>
                 </div>
 
                 <!-- 透明度控制 -->

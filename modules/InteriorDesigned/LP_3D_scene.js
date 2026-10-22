@@ -9,11 +9,15 @@ export const LP_3D_DEFAULTS = {
     DOOR_HEIGHT_CM: 210,
     WINDOW_SILL_HEIGHT_CM: 90,
     WINDOW_HEIGHT_CM: 120,
+    WALL_CUT_MARGIN_W_CM: 6,
+    WALL_CUT_MARGIN_H_CM: 4,
+    WALL_CUT_DEPTH_CM: 36,
 };
 
 const DOOR_WINDOW_GROUPS = new Set(['門窗工程', '門片']);
 const WINDOW_NAME_RE = /窗|落地窗|氣窗|百葉窗/;
 const DOOR_NAME_RE = /門/;
+const MANUAL_KINDS = new Set(['cabinet', 'door', 'window', 'wallSegment']);
 
 /**
  * @param {{ data?: { name?: string, group?: string, isWall?: boolean } }} cab
@@ -36,6 +40,17 @@ export function classifyPlacedCabinet3DKind(cab) {
     return 'cabinet';
 }
 
+/**
+ * @param {{ model3dKind?: string, data?: { model3dKind?: string } }} cab
+ * @returns {'wallSegment'|'door'|'window'|'cabinet'|null} null = 不顯示於 3D
+ */
+export function resolvePlacedCabinet3DKind(cab) {
+    const manual = cab.model3dKind ?? cab.data?.model3dKind;
+    if (manual === 'ignore') return null;
+    if (manual && manual !== 'auto' && MANUAL_KINDS.has(manual)) return manual;
+    return classifyPlacedCabinet3DKind(cab);
+}
+
 /** 畫布座標 → 以工作區中心為原點的 XZ（cm） */
 export function canvasToSceneXZ(x, y, workspaceSize) {
     const half = workspaceSize / 2;
@@ -51,6 +66,33 @@ export function signedPolygonArea(points) {
         sum += p1.x * p2.y - p2.x * p1.y;
     }
     return sum / 2;
+}
+
+/** 場景 XZ 平面：點是否在多邊形內 */
+export function pointInPolygonXZ(x, z, ring) {
+    if (!ring || ring.length < 3) return false;
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const xi = ring[i].x;
+        const zi = ring[i].z;
+        const xj = ring[j].x;
+        const zj = ring[j].z;
+        const denom = zj - zi;
+        const intersect = ((zi > z) !== (zj > z))
+            && (x < (xj - xi) * (z - zi) / (Math.abs(denom) < 1e-9 ? 1e-9 : denom) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
+}
+
+/** 是否在牆環帶內（外圈內、內圈外） */
+export function pointInWallBand(x, z, wall) {
+    return pointInPolygonXZ(x, z, wall.outer) && !pointInPolygonXZ(x, z, wall.inner);
+}
+
+export function openingCutsWall(wall, fixture) {
+    if (!fixture || (fixture.kind !== 'door' && fixture.kind !== 'window')) return false;
+    return pointInWallBand(fixture.centerX, fixture.centerZ, wall);
 }
 
 function lineIntersection(p1, p2, p3, p4) {
@@ -140,7 +182,8 @@ export function buildLayout3DDescriptor(layout, options = {}) {
         const w = cab.currentW ?? cab.data?.width ?? 0;
         const d = cab.currentH ?? cab.data?.depth ?? 0;
         if (w <= 0 || d <= 0) continue;
-        const kind = classifyPlacedCabinet3DKind(cab);
+        const kind = resolvePlacedCabinet3DKind(cab);
+        if (!kind) continue;
         const { baseYCm, heightCm } = fixtureVerticalExtents(kind, defaults, cab);
         const cx = cab.x + w / 2;
         const cy = cab.y + d / 2;

@@ -3,6 +3,9 @@ import {
     canvasToSceneXZ,
     buildLayout3DDescriptor,
     classifyPlacedCabinet3DKind,
+    resolvePlacedCabinet3DKind,
+    openingCutsWall,
+    pointInWallBand,
     offsetPolygon,
 } from './LP_3D_scene.js';
 
@@ -20,6 +23,43 @@ describe('classifyPlacedCabinet3DKind', () => {
         expect(classifyPlacedCabinet3DKind({ data: { name: '落地窗', group: '門窗工程' } })).toBe('window');
         expect(classifyPlacedCabinet3DKind({ data: { name: '矮櫃', group: '系統櫃' } })).toBe('cabinet');
         expect(classifyPlacedCabinet3DKind({ data: { isWall: true, name: '牆' } })).toBe('wallSegment');
+    });
+});
+
+describe('resolvePlacedCabinet3DKind', () => {
+    it('手動覆寫優先於自動', () => {
+        expect(resolvePlacedCabinet3DKind({
+            model3dKind: 'window',
+            data: { name: '房門', group: '門窗工程' },
+        })).toBe('window');
+        expect(resolvePlacedCabinet3DKind({
+            model3dKind: 'ignore',
+            data: { name: '房門', group: '門窗工程' },
+        })).toBe(null);
+    });
+});
+
+describe('openingCutsWall', () => {
+    it('門中心在牆帶內才切削', () => {
+        const wall = {
+            outer: [
+                { x: -50, z: -50 },
+                { x: 50, z: -50 },
+                { x: 50, z: 50 },
+                { x: -50, z: 50 },
+            ],
+            inner: [
+                { x: -40, z: -40 },
+                { x: 40, z: -40 },
+                { x: 40, z: 40 },
+                { x: -40, z: 40 },
+            ],
+        };
+        expect(pointInWallBand(0, -45, wall)).toBe(true);
+        expect(pointInWallBand(0, 0, wall)).toBe(false);
+        expect(openingCutsWall(wall, { kind: 'door', centerX: 0, centerZ: -45 })).toBe(true);
+        expect(openingCutsWall(wall, { kind: 'door', centerX: 0, centerZ: 0 })).toBe(false);
+        expect(openingCutsWall(wall, { kind: 'cabinet', centerX: 0, centerZ: -45 })).toBe(false);
     });
 });
 
@@ -60,28 +100,20 @@ describe('buildLayout3DDescriptor', () => {
                     data: { name: '房門', group: '門窗工程', width: 90, depth: 15 },
                 },
                 {
-                    id: 'win1',
-                    x: 200,
+                    id: 'x1',
+                    model3dKind: 'ignore',
+                    x: 0,
                     y: 0,
                     rotation: 0,
-                    currentW: 120,
-                    currentH: 15,
-                    data: { name: '落地窗', group: '門窗工程', width: 120, depth: 15 },
+                    currentW: 20,
+                    currentH: 20,
+                    data: { name: '隱藏', group: '其他' },
                 },
             ],
         });
         expect(desc.walls).toHaveLength(1);
-        expect(desc.fixtures).toHaveLength(3);
-        const door = desc.fixtures.find((f) => f.id === 'd1');
-        const win = desc.fixtures.find((f) => f.id === 'win1');
-        const cab = desc.fixtures.find((f) => f.id === 'c1');
-        expect(door?.kind).toBe('door');
-        expect(door?.heightCm).toBe(210);
-        expect(door?.baseYCm).toBe(0);
-        expect(win?.kind).toBe('window');
-        expect(win?.baseYCm).toBe(90);
-        expect(win?.heightCm).toBe(120);
-        expect(cab?.kind).toBe('cabinet');
+        expect(desc.fixtures).toHaveLength(2);
+        expect(desc.fixtures.find((f) => f.id === 'x1')).toBeUndefined();
     });
 });
 

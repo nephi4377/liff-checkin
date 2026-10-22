@@ -33,7 +33,7 @@
 
 | 項目 | 決策 |
 |------|------|
-| 函式庫 | **[Three.js](https://threejs.org/)**（r170+），以 **ES module CDN** 載入：`three.module.js` + `OrbitControls.js`（`importmap` 或動態 `import()`），不打包進 repo |
+| 函式庫 | **Three.js r170** + **three-bvh-csg**（牆體開洞），靜態檔在 `modules/InteriorDesigned/vendor/`；`LP_LayoutPlanner.html` 以 **importmap** 解析 `three`／`three-mesh-bvh` |
 | 控制 | **OrbitControls**：左鍵旋轉、右鍵平移、滾輪縮放 |
 | 第一人稱漫遊 | **第二階段**（`PointerLockControls` 或自製 WASD + 碰撞簡化） |
 | 與 2D 隔離 | 全螢幕 overlay `#lp-3d-overlay`，`body.lp-3d-mode` 時停用 2D 畫布指標事件；關閉 3D 後完全恢復 |
@@ -54,7 +54,9 @@
 | 牆片元件 `data.isWall` | 同櫃體盒子 | **高 280、色偏灰** |
 | 地板 | 薄板 | 第二階段；MVP 僅 **GridHelper** |
 
-門窗分類邏輯見 `LP_3D_scene.js` 的 `classifyPlacedCabinet3DKind`（MVP **不挖牆洞**，僅在 3D 疊加門片／窗框盒子；牆體開洞為階段 3）。
+分類：`classifyPlacedCabinet3DKind`（自動）與 `resolvePlacedCabinet3DKind`（含元件 `model3dKind` 手動覆寫）。**門／窗**在 3D 會以 **CSG 差集**從牆環 mesh 挖洞（`openingCutsWall` 判斷中心是否在牆帶內）。
+
+**FLOORPLAN-3D-2**：2D 每次 `saveState`／`loadState`（含 undo）後，若已開 3D 則 **200ms debounce 自動 `rebuild`**。
 
 旋轉：櫃體繞 Y 軸 `-rotation°`；中心為 `(x + currentW/2, y + currentH/2)`。
 
@@ -70,8 +72,7 @@
 
 **後續**
 
-- 編輯 2D 時若已開 3D：debounce 自動 rebuild 或「重新載入 3D」按鈕
-- 門窗開洞（CSG 或替換牆段）
+- 更精細的開洞（弧門、多段牆、與 `layerVisibility` 同步）
 - `floor`/`ceiling` 平面 mesh、材質與層級 `layerVisibility`
 - 第一人稱漫遊、行動裝置觸控手勢優化
 
@@ -81,7 +82,7 @@
 
 - **預期規模**：住宅平面通常 &lt; 200 櫃體、&lt; 20 牆區；Extrude + Box **&lt; 500 mesh** 可即時 Orbit
 - **風險**：整面 `ExtrudeGeometry` 牆環在極複雜多邊形可能三角化較慢；超大 `workspaceSize` 時相機 far 需調大
-- **CDN**：離線或 CSP 阻擋時 3D 無法載入 → 顯示錯誤提示，2D 仍可用
+- **CSG**：極複雜牆形或大量開洞時 rebuild 可能較慢；失敗時 console 警告
 - **不重現客戶資料**：示範僅用文件內假資料範例，不自動上傳真實佈局
 
 ---
@@ -92,7 +93,7 @@
 |------|------|------|
 | **1（本 PR）** | 設計文件、3D 切換、牆環 + 門／窗／櫃體盒子、Orbit | 2D 不變；可旋轉縮放 |
 | **2** | 地板／天花、材質、層級顯示、編輯後同步 | 與 `layerVisibility` 一致 |
-| **3** | 牆體門窗洞（CSG）、櫃體高度來自 Sheet、截圖匯出 | 與報價元件資料一致 |
+| **3** | 櫃體高度來自 Sheet、3D 截圖匯出、層級過濾 | 與報價元件資料一致 |
 | **4** | 第一人稱、效能上限與 LOD | 大案場可流暢漫遊 |
 
 ---
