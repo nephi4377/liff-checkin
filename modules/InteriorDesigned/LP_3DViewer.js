@@ -365,6 +365,16 @@ export function createLayoutPlanner3DViewer(options) {
         animationId = requestAnimationFrame(tick);
     }
 
+    function publishTestHooks() {
+        if (typeof window === 'undefined') return;
+        if (new URLSearchParams(window.location.search).get('lpPreview') !== '1') return;
+        window.__LP3D_TEST_HOOKS__ = {
+            getViewMode: () => viewMode,
+            getEyeHeightCm: () => LP_3D_DEFAULTS.WALK_EYE_HEIGHT_CM,
+            getCameraY: () => camera?.position.y ?? null,
+        };
+    }
+
     return {
         open() {
             isOpen = true;
@@ -374,6 +384,7 @@ export function createLayoutPlanner3DViewer(options) {
             applyViewMode();
             lastTick = performance.now();
             if (!animationId) animationId = requestAnimationFrame(tick);
+            publishTestHooks();
         },
         close() {
             isOpen = false;

@@ -34,8 +34,8 @@
 | 項目 | 決策 |
 |------|------|
 | 函式庫 | **Three.js r170** + **three-bvh-csg**（牆體開洞），靜態檔在 `modules/InteriorDesigned/vendor/`；`LP_LayoutPlanner.html` 以 **importmap** 解析 `three`／`three-mesh-bvh` |
-| 控制 | **OrbitControls**：左鍵旋轉、右鍵平移、滾輪縮放 |
-| 第一人稱漫遊 | **第二階段**（`PointerLockControls` 或自製 WASD + 碰撞簡化） |
+| 控制 | **OrbitControls**（鳥瞰）：左鍵旋轉、右鍵平移、滾輪縮放 |
+| 室內漫遊 | **已上線**（`LP_3D_walk.js`）：眼高 **160cm**；WASD／方向鍵移動；按住左鍵轉向；手機左半拖移動、右半轉向；工具列「鳥瞰」一鍵回到環繞 |
 | 與 2D 隔離 | 全螢幕 overlay `#lp-3d-overlay`，`body.lp-3d-mode` 時停用 2D 畫布指標事件；關閉 3D 後完全恢復 |
 
 ---
