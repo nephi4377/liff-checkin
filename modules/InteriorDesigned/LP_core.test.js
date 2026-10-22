@@ -146,32 +146,88 @@ describe('computeCabinetResizeGeometry', () => {
 });
 
 describe('mirrorCabinetsAsGroupAboutVerticalAxis', () => {
-    const rectVerts = (cab) => [
-        { x: cab.x, y: cab.y },
-        { x: cab.x + cab.currentW, y: cab.y },
-        { x: cab.x + cab.currentW, y: cab.y + cab.currentH },
-        { x: cab.x, y: cab.y + cab.currentH },
-    ];
+    function rotatePoint(x, y, cx, cy, angleDeg) {
+        const rad = (angleDeg * Math.PI) / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+        const dx = x - cx;
+        const dy = y - cy;
+        return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos };
+    }
+
+    function cabinetVerts(cab) {
+        const w = cab.currentW;
+        const h = cab.currentH;
+        const x = cab.x;
+        const y = cab.y;
+        const cx = x + w / 2;
+        const cy = y + h / 2;
+        const angle = cab.rotation || 0;
+        const points = cab.mirrored ? [
+            { x: x + w, y: y },
+            { x: x, y: y },
+            { x: x, y: y + h },
+            { x: x + w, y: y + h },
+        ] : [
+            { x: x, y: y },
+            { x: x + w, y: y },
+            { x: x + w, y: y + h },
+            { x: x, y: y + h },
+        ];
+        return points.map((p) => rotatePoint(p.x, p.y, cx, cy, angle));
+    }
 
     it('兩物件以外框垂直中心線交換位置並切換 mirrored', () => {
-        const a = { x: 100, y: 50, currentW: 40, currentH: 20, mirrored: false };
-        const b = { x: 200, y: 50, currentW: 40, currentH: 20, mirrored: true };
-        const out = mirrorCabinetsAsGroupAboutVerticalAxis([a, b], rectVerts);
+        const a = { x: 100, y: 50, currentW: 40, currentH: 20, rotation: 0, mirrored: false };
+        const b = { x: 200, y: 50, currentW: 40, currentH: 20, rotation: 0, mirrored: true };
+        const out = mirrorCabinetsAsGroupAboutVerticalAxis([a, b], cabinetVerts);
         expect(out[0].x).toBe(200);
         expect(out[1].x).toBe(100);
+        expect(out[0].rotation).toBe(0);
+        expect(out[1].rotation).toBe(0);
         expect(out[0].mirrored).toBe(true);
         expect(out[1].mirrored).toBe(false);
     });
 
-    it('連續兩次群組鏡像回到原位與 mirrored', () => {
-        const a = { x: 100, y: 50, currentW: 40, currentH: 20, mirrored: false };
-        const b = { x: 200, y: 50, currentW: 40, currentH: 20, mirrored: false };
-        const once = mirrorCabinetsAsGroupAboutVerticalAxis([a, b], rectVerts);
-        const a2 = { ...a, x: once[0].x, mirrored: once[0].mirrored };
-        const b2 = { ...b, x: once[1].x, mirrored: once[1].mirrored };
-        const twice = mirrorCabinetsAsGroupAboutVerticalAxis([a2, b2], rectVerts);
+    it('旋轉 90°：位置、rotation=(360-θ)、mirrored', () => {
+        const a = { x: 80, y: 100, currentW: 60, currentH: 30, rotation: 90, mirrored: false };
+        const b = { x: 180, y: 100, currentW: 60, currentH: 30, rotation: 0, mirrored: false };
+        const out = mirrorCabinetsAsGroupAboutVerticalAxis([a, b], cabinetVerts);
+        expect(out[0].rotation).toBe(270);
+        expect(out[0].mirrored).toBe(true);
+        expect(out[1].rotation).toBe(0);
+        expect(out[1].mirrored).toBe(true);
+        expect(out[0].x).toBe(195);
+        expect(out[1].x).toBe(95);
+        expect(out[0].y).toBe(100);
+        expect(out[1].y).toBe(100);
+    });
+
+    it('旋轉 30°：位置、rotation=(360-θ)、mirrored', () => {
+        const a = { x: 50, y: 200, currentW: 100, currentH: 50, rotation: 30, mirrored: false };
+        const b = { x: 200, y: 200, currentW: 80, currentH: 40, rotation: 0, mirrored: true };
+        const out = mirrorCabinetsAsGroupAboutVerticalAxis([a, b], cabinetVerts);
+        expect(out[0].rotation).toBe(330);
+        expect(out[0].mirrored).toBe(true);
+        expect(out[1].rotation).toBe(0);
+        expect(out[1].mirrored).toBe(false);
+        expect(out[0].x).toBeCloseTo(174.19872981077805, 8);
+        expect(out[1].x).toBeCloseTo(44.19872981077805, 8);
+        expect(out[0].y).toBe(200);
+        expect(out[1].y).toBe(200);
+    });
+
+    it('連續兩次群組鏡像回到原位、rotation 與 mirrored', () => {
+        const a = { x: 100, y: 50, currentW: 40, currentH: 20, rotation: 45, mirrored: false };
+        const b = { x: 200, y: 50, currentW: 40, currentH: 20, rotation: 0, mirrored: false };
+        const once = mirrorCabinetsAsGroupAboutVerticalAxis([a, b], cabinetVerts);
+        const a2 = { ...a, x: once[0].x, rotation: once[0].rotation, mirrored: once[0].mirrored };
+        const b2 = { ...b, x: once[1].x, rotation: once[1].rotation, mirrored: once[1].mirrored };
+        const twice = mirrorCabinetsAsGroupAboutVerticalAxis([a2, b2], cabinetVerts);
         expect(twice[0].x).toBe(100);
         expect(twice[1].x).toBe(200);
+        expect(twice[0].rotation).toBe(45);
+        expect(twice[1].rotation).toBe(0);
         expect(twice[0].mirrored).toBe(false);
         expect(twice[1].mirrored).toBe(false);
     });

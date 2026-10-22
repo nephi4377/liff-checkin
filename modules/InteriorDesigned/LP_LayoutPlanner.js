@@ -1762,6 +1762,7 @@ function applyGroupVerticalMirror(members) {
         cab.x = updates[idx].x;
         cab.y = updates[idx].y;
         cab.mirrored = updates[idx].mirrored;
+        cab.rotation = updates[idx].rotation;
     });
 }
 

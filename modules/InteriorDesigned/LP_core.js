@@ -205,14 +205,11 @@ export function computeCabinetResizeGeometry(params) {
 }
 
 /**
- * 將櫃體繞畫布點旋轉 deltaDeg，回傳新位置與角度（不變更尺寸）。
- * @param {{ x: number, y: number, currentW: number, currentH: number, rotation: number }} cab
- */
-/**
- * 以群組外框垂直中心線為軸，鏡像整組：各成員位置反射並切換 mirrored。
- * @param {{ id?: string, x: number, y: number, currentW: number, currentH: number, mirrored?: boolean }[]} cabinets
+ * 以群組外框之**垂直中心線**（畫布 X 軸反射）鏡像整組；不支援水平軸鏡像。
+ * 各成員：位置反射、切換 mirrored、rotation 設為 `(360 - θ) % 360`。
+ * @param {{ id?: string, x: number, y: number, currentW: number, currentH: number, rotation?: number, mirrored?: boolean }[]} cabinets
  * @param {(cab: object) => { x: number, y: number }[]} getWorldPoints
- * @returns {{ x: number, y: number, mirrored: boolean }[]}
+ * @returns {{ x: number, y: number, rotation: number, mirrored: boolean }[]}
  */
 export function mirrorCabinetsAsGroupAboutVerticalAxis(cabinets, getWorldPoints) {
     if (!cabinets.length) return [];
@@ -228,14 +225,22 @@ export function mirrorCabinetsAsGroupAboutVerticalAxis(cabinets, getWorldPoints)
         const cabBounds = axisAlignedBoundsFromPoints(cabPts);
         const cx = (cabBounds.minX + cabBounds.maxX) / 2;
         const dx = (2 * pivotX - cx) - cx;
+        const theta = cab.rotation || 0;
+        let rotation = (360 - theta) % 360;
+        if (rotation < 0) rotation += 360;
         return {
             x: cab.x + dx,
             y: cab.y,
             mirrored: !cab.mirrored,
+            rotation,
         };
     });
 }
 
+/**
+ * 將櫃體繞畫布點旋轉 deltaDeg，回傳新位置與角度（不變更尺寸）。
+ * @param {{ x: number, y: number, currentW: number, currentH: number, rotation: number }} cab
+ */
 export function rotateCabinetAroundPivot(cab, pivotX, pivotY, deltaDeg) {
     const cx = cab.x + cab.currentW / 2;
     const cy = cab.y + cab.currentH / 2;
