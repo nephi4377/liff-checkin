@@ -39,6 +39,69 @@ export function overlap(p1, p2) {
     return p1.max > p2.min + 0.01 && p2.max > p1.min + 0.01;
 }
 
+/**
+ * 由平面點集計算軸對齊外框（畫布座標 1px ≈ 1cm）。
+ * @param {{ x: number, y: number }[]} points
+ * @returns {{ minX: number, minY: number, maxX: number, maxY: number }}
+ */
+export function axisAlignedBoundsFromPoints(points) {
+    if (!points || points.length === 0) {
+        return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    }
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const p of points) {
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x);
+        maxY = Math.max(maxY, p.y);
+    }
+    return { minX, minY, maxX, maxY };
+}
+
+/**
+ * 將移動中物件的外框邊／中心吸附至其他參考外框（邊與中心），在 threshold 內取最近一組。
+ * @param {{ minX: number, minY: number, maxX: number, maxY: number }} moving
+ * @param {{ minX: number, minY: number, maxX: number, maxY: number }[]} references
+ * @param {number} threshold
+ * @returns {{ dx: number, dy: number }}
+ */
+export function computeObjectSnapDelta(moving, references, threshold) {
+    if (!references.length || threshold <= 0) {
+        return { dx: 0, dy: 0 };
+    }
+    const xTargets = [];
+    const yTargets = [];
+    for (const r of references) {
+        xTargets.push(r.minX, r.maxX, (r.minX + r.maxX) / 2);
+        yTargets.push(r.minY, r.maxY, (r.minY + r.maxY) / 2);
+    }
+    return {
+        dx: snapAlongAxis(moving.minX, moving.maxX, xTargets, threshold),
+        dy: snapAlongAxis(moving.minY, moving.maxY, yTargets, threshold),
+    };
+}
+
+function snapAlongAxis(min, max, targets, threshold) {
+    const center = (min + max) / 2;
+    const probes = [min, max, center];
+    let bestDelta = 0;
+    let bestAbs = threshold + 1;
+    for (const edge of probes) {
+        for (const target of targets) {
+            const delta = target - edge;
+            const abs = Math.abs(delta);
+            if (abs <= threshold && abs < bestAbs) {
+                bestAbs = abs;
+                bestDelta = delta;
+            }
+        }
+    }
+    return bestDelta;
+}
+
 // --- SVG 消毒 -------------------------------------------------------------
 
 /**

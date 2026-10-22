@@ -7,6 +7,8 @@ import {
     project,
     overlap,
     getAxes,
+    axisAlignedBoundsFromPoints,
+    computeObjectSnapDelta,
 } from './LP_core.js';
 
 /** 開啟時於 console 輸出除錯訊息（元件載入、渲染、縮放、繪圖等） */
@@ -1840,27 +1842,32 @@ function handleGlobalMove(e) {
 
         // [v9.9 新增] 吸附對齊功能 (Snap to Grid/Object)
         // 按住 Shift 鍵可暫時停用吸附
-        if (!e.shiftKey) {
-            const SNAP_THRESHOLD = 10; // 吸附閾值 (px)
-            const GRID_SIZE = 2;       // [修改] 網格大小改為 1px (原為 10px)，提供更精細的移動
+        let proposedX = startPos.x + snappedDeltaX;
+        let proposedY = startPos.y + snappedDeltaY;
 
-            // 1. 網格吸附 (對位移量進行吸附，而非絕對座標)
+        if (!e.shiftKey) {
+            const SNAP_THRESHOLD = 10; // 吸附閾值 (px ≈ cm)
+            const GRID_SIZE = 2;
+
             snappedDeltaX = Math.round(deltaX / GRID_SIZE) * GRID_SIZE;
             snappedDeltaY = Math.round(deltaY / GRID_SIZE) * GRID_SIZE;
+            proposedX = startPos.x + snappedDeltaX;
+            proposedY = startPos.y + snappedDeltaY;
 
-            // 2. 物件邊緣吸附 (這裡保持絕對座標計算，因為是對齊特定位置)
-            // 注意：若觸發邊緣吸附，會覆蓋網格吸附的結果
-            let tempNx = startPos.x + snappedDeltaX;
-            let tempNy = startPos.y + snappedDeltaY;
-            
-            // ... (保留原有的物件吸附邏輯，若有需要可在此處實作，目前簡化以解決跳動為主)
-            // 為了保持程式碼簡潔且解決跳動，暫時只使用相對網格吸附。
-            // 若需要物件吸附，需計算吸附後的絕對座標，反推 delta。
+            const ghostCab = { ...currentDragCab, x: proposedX, y: proposedY };
+            const movingBounds = axisAlignedBoundsFromPoints(getVertices(ghostCab));
+            const referenceBounds = [];
+            for (const other of placedCabinets) {
+                if (other.id === currentDragCab.id) continue;
+                referenceBounds.push(axisAlignedBoundsFromPoints(getVertices(other)));
+            }
+            const { dx, dy } = computeObjectSnapDelta(movingBounds, referenceBounds, SNAP_THRESHOLD);
+            proposedX += dx;
+            proposedY += dy;
         }
 
-        // 應用位移
-        currentDragCab.x = startPos.x + snappedDeltaX;
-        currentDragCab.y = startPos.y + snappedDeltaY;
+        currentDragCab.x = proposedX;
+        currentDragCab.y = proposedY;
 
         // [v6.1 核心升級] 碰撞反應機制
         // 不只是偵測 true/false，而是計算出 "修正向量" (MTV) 並應用它

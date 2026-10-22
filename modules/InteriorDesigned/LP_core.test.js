@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { cmToFeet, overlap, project, getAxes, sanitizeSvgString } from './LP_core.js';
+import {
+    cmToFeet,
+    overlap,
+    project,
+    getAxes,
+    sanitizeSvgString,
+    axisAlignedBoundsFromPoints,
+    computeObjectSnapDelta,
+} from './LP_core.js';
 
 describe('cmToFeet', () => {
     it('1 尺 = 30cm，進位 0.5 尺', () => {
@@ -25,6 +33,35 @@ describe('SAT 輔助', () => {
         const axis = axes[0];
         const p = project(v, axis);
         expect(p.max).toBeGreaterThan(p.min);
+    });
+});
+
+describe('computeObjectSnapDelta', () => {
+    it('左緣吸附至參考右緣', () => {
+        const moving = { minX: 102, minY: 0, maxX: 200, maxY: 100 };
+        const refs = [{ minX: 0, minY: 0, maxX: 100, maxY: 50 }];
+        const { dx, dy } = computeObjectSnapDelta(moving, refs, 10);
+        expect(dx).toBe(-2);
+        expect(dy).toBe(0);
+    });
+    it('中心吸附至參考中心', () => {
+        const moving = { minX: 48, minY: 48, maxX: 152, maxY: 152 };
+        const refs = [{ minX: 0, minY: 0, maxX: 100, maxY: 100 }];
+        const { dx } = computeObjectSnapDelta(moving, refs, 5);
+        expect(dx).toBe(0);
+    });
+    it('超出閾值不吸附', () => {
+        const moving = { minX: 120, minY: 0, maxX: 220, maxY: 100 };
+        const refs = [{ minX: 0, minY: 0, maxX: 100, maxY: 50 }];
+        const { dx } = computeObjectSnapDelta(moving, refs, 5);
+        expect(dx).toBe(0);
+    });
+});
+
+describe('axisAlignedBoundsFromPoints', () => {
+    it('計算旋轉後點集外框', () => {
+        const b = axisAlignedBoundsFromPoints([{ x: 10, y: 5 }, { x: 30, y: 25 }]);
+        expect(b).toEqual({ minX: 10, minY: 5, maxX: 30, maxY: 25 });
     });
 });
 
