@@ -4587,6 +4587,7 @@ function autoSave(silent = false) {
 }
 
 function checkAndRestoreBackup() {
+    if (isLayoutPlannerUrlPreview()) return;
     try {
         const json = localStorage.getItem(AUTO_SAVE_KEY);
         if (!json) return;
@@ -4915,6 +4916,9 @@ window.onload = () => {
     }
 
     // 只有在電腦版才會執行以下程式碼
+    if (isLayoutPlannerUrlPreview()) {
+        document.documentElement.classList.add('lp-url-preview');
+    }
     bindEventListeners();
     initWorkspaceAndUiFromStorage();
 

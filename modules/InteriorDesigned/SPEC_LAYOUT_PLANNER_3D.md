@@ -149,4 +149,10 @@
 }
 ```
 
-實作檔：`LP_3D_scene.js`（純函式）、`LP_3DViewer.js`（Three 場景）。
+實作檔：`LP_3D_scene.js`（純函式）、`LP_3DViewer.js`（Three 場景）、`LP_3D_snapshot.js`（預設鳥瞰角度與 PNG 匯出）。
+
+### 3D 儲存圖片（客戶展示）
+
+- 工具列 **儲存圖片**（僅 `?lpPreview=1` 顯示，正式版待核准）：以離屏 `WebGLRenderTarget` 單次渲染後下載 PNG；匯出最長邊 ≤ 3072、總像素 ≤ 8MP（常態不啟用 `preserveDrawingBuffer`）。
+- **俯視／正面斜角／角落斜角**：切回鳥瞰模式並套用預設相機；不影響 2D 與室內行走既有行為。
+- 測試預覽：與室內漫遊共用 `LP_LayoutPlanner_3d_walk_preview.html`（`lpPreview=1` + `e2e/fixtures/lp-3d-spec-demo.json`；`lp3d=orbit` 可驗快照／預設角度）。
