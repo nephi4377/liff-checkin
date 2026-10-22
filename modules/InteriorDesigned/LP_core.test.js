@@ -11,6 +11,9 @@ import {
     areaInPingFromPolygonPoints,
     calculateFloorAreaWithLoss,
     normalizeDrawnAreaForImport,
+    axisAlignedBoundsFromPoints,
+    computeObjectSnapDelta,
+    snapTranslationToGrid,
 } from './LP_core.js';
 
 const fixtureDir = dirname(fileURLToPath(import.meta.url));
@@ -66,6 +69,47 @@ describe('FLOORPLAN-AREA-NAN-1：匯入舊備份坪數', () => {
 
     it('calculateFloorAreaWithLoss(12) 含損耗為 14.5 坪', () => {
         expect(calculateFloorAreaWithLoss(12)).toBe(14.5);
+    });
+});
+
+describe('computeObjectSnapDelta', () => {
+    it('左緣吸附至參考右緣', () => {
+        const moving = { minX: 102, minY: 0, maxX: 200, maxY: 100 };
+        const refs = [{ minX: 0, minY: 0, maxX: 100, maxY: 50 }];
+        const { dx, dy } = computeObjectSnapDelta(moving, refs, 10);
+        expect(dx).toBe(-2);
+        expect(dy).toBe(0);
+    });
+    it('中心吸附至參考中心', () => {
+        const moving = { minX: 48, minY: 48, maxX: 152, maxY: 152 };
+        const refs = [{ minX: 0, minY: 0, maxX: 100, maxY: 100 }];
+        const { dx } = computeObjectSnapDelta(moving, refs, 5);
+        expect(dx).toBe(0);
+    });
+    it('超出閾值不吸附', () => {
+        const moving = { minX: 120, minY: 0, maxX: 220, maxY: 100 };
+        const refs = [{ minX: 0, minY: 0, maxX: 100, maxY: 50 }];
+        const { dx } = computeObjectSnapDelta(moving, refs, 5);
+        expect(dx).toBe(0);
+    });
+});
+
+describe('snapTranslationToGrid', () => {
+    it('預設 2cm 步距與舊版 GRID_SIZE=2 一致', () => {
+        expect(snapTranslationToGrid(7, 13, 2)).toEqual({ dx: 8, dy: 14 });
+    });
+    it('5cm 步距', () => {
+        expect(snapTranslationToGrid(7, 13, 5)).toEqual({ dx: 5, dy: 15 });
+    });
+    it('10cm 步距', () => {
+        expect(snapTranslationToGrid(17, 23, 10)).toEqual({ dx: 20, dy: 20 });
+    });
+});
+
+describe('axisAlignedBoundsFromPoints', () => {
+    it('計算旋轉後點集外框', () => {
+        const b = axisAlignedBoundsFromPoints([{ x: 10, y: 5 }, { x: 30, y: 25 }]);
+        expect(b).toEqual({ minX: 10, minY: 5, maxX: 30, maxY: 25 });
     });
 });
 

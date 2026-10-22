@@ -9,7 +9,11 @@ import {
     getAxes,
     calculateFloorAreaWithLoss,
     normalizeDrawnAreaForImport,
+    axisAlignedBoundsFromPoints,
+    computeObjectSnapDelta,
+    snapTranslationToGrid,
 } from './LP_core.js';
+import { createHistoryGestureCoalescer } from './LP_layout_history.js';
 
 /** 開啟時於 console 輸出除錯訊息（元件載入、渲染、縮放、繪圖等） */
 const DEBUG = false;
@@ -127,6 +131,11 @@ let viewScale = 1.0;
 let history = [];
 let historyIndex = -1;
 const MAX_HISTORY_STATES = 50;
+const historyGesture = createHistoryGestureCoalescer(() => commitSaveState());
+const LP_SHOW_GRID_KEY = 'lp_show_grid';
+const LP_SNAP_GRID_STEP_KEY = 'lp_snap_grid_step_cm';
+/** 拖曳位移格線吸附步距（cm）；預設 2 與改版前行為一致 */
+let snapGridStepCm = 2;
 const svgStyle = 'width="100%" height="100%" preserveAspectRatio="none"';
 const svgs = {
     sofa3: `<svg ${svgStyle} viewBox="0 0 210 90"><rect width="210" height="90" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/><rect x="10" y="10" width="190" height="20" fill="#d1d5db"/><rect x="10" y="35" width="60" height="45" rx="5" fill="#fff"/><rect x="75" y="35" width="60" height="45" rx="5" fill="#fff"/><rect x="140" y="35" width="60" height="45" rx="5" fill="#fff"/></svg>`,
@@ -813,6 +822,7 @@ function renderVertexHandles(area) {
         // 為每個控點綁定 mousedown 事件
         handle.addEventListener('mousedown', (e) => {
             e.stopPropagation();
+            historyGesture.begin();
             isDraggingVertex = true;
             draggedAreaId = area.id;
             draggedVertexIndex = index;
@@ -1842,27 +1852,31 @@ function handleGlobalMove(e) {
 
         // [v9.9 新增] 吸附對齊功能 (Snap to Grid/Object)
         // 按住 Shift 鍵可暫時停用吸附
+        let proposedX = startPos.x + snappedDeltaX;
+        let proposedY = startPos.y + snappedDeltaY;
+
         if (!e.shiftKey) {
-            const SNAP_THRESHOLD = 10; // 吸附閾值 (px)
-            const GRID_SIZE = 2;       // [修改] 網格大小改為 1px (原為 10px)，提供更精細的移動
+            const SNAP_THRESHOLD = 10; // 吸附閾值 (px ≈ cm)
+            const gridSnapped = snapTranslationToGrid(deltaX, deltaY, snapGridStepCm);
+            snappedDeltaX = gridSnapped.dx;
+            snappedDeltaY = gridSnapped.dy;
+            proposedX = startPos.x + snappedDeltaX;
+            proposedY = startPos.y + snappedDeltaY;
 
-            // 1. 網格吸附 (對位移量進行吸附，而非絕對座標)
-            snappedDeltaX = Math.round(deltaX / GRID_SIZE) * GRID_SIZE;
-            snappedDeltaY = Math.round(deltaY / GRID_SIZE) * GRID_SIZE;
-
-            // 2. 物件邊緣吸附 (這裡保持絕對座標計算，因為是對齊特定位置)
-            // 注意：若觸發邊緣吸附，會覆蓋網格吸附的結果
-            let tempNx = startPos.x + snappedDeltaX;
-            let tempNy = startPos.y + snappedDeltaY;
-            
-            // ... (保留原有的物件吸附邏輯，若有需要可在此處實作，目前簡化以解決跳動為主)
-            // 為了保持程式碼簡潔且解決跳動，暫時只使用相對網格吸附。
-            // 若需要物件吸附，需計算吸附後的絕對座標，反推 delta。
+            const ghostCab = { ...currentDragCab, x: proposedX, y: proposedY };
+            const movingBounds = axisAlignedBoundsFromPoints(getVertices(ghostCab));
+            const referenceBounds = [];
+            for (const other of placedCabinets) {
+                if (other.id === currentDragCab.id) continue;
+                referenceBounds.push(axisAlignedBoundsFromPoints(getVertices(other)));
+            }
+            const { dx, dy } = computeObjectSnapDelta(movingBounds, referenceBounds, SNAP_THRESHOLD);
+            proposedX += dx;
+            proposedY += dy;
         }
 
-        // 應用位移
-        currentDragCab.x = startPos.x + snappedDeltaX;
-        currentDragCab.y = startPos.y + snappedDeltaY;
+        currentDragCab.x = proposedX;
+        currentDragCab.y = proposedY;
 
         // [v6.1 核心升級] 碰撞反應機制
         // 不只是偵測 true/false，而是計算出 "修正向量" (MTV) 並應用它
@@ -2056,6 +2070,8 @@ function endDrag() {
     }
     isDraggingAnnotation = false;
     currentDragAnnotationId = null;
+
+    historyGesture.end();
 
     const bgLayer = document.getElementById('bg-layer');
     if (bgLayer) bgLayer.style.cursor = isBgEditMode ? 'grab' : 'default';
@@ -2436,6 +2452,48 @@ function initWorkspaceAndUiFromStorage() {
     const sel = document.getElementById('workspace-size-select');
     if (sel) sel.value = String(getWorkspaceCanvasPx());
     updateViewZoom(viewScale);
+    initGridAndSnapSettings();
+}
+
+function applyGridLayerVisibility() {
+    const grid = document.getElementById('grid-layer');
+    const showToggle = document.getElementById('show-grid-toggle');
+    if (!grid) return;
+    const show = showToggle ? showToggle.checked : true;
+    grid.style.display = show ? 'block' : 'none';
+}
+
+function initGridAndSnapSettings() {
+    const showToggle = document.getElementById('show-grid-toggle');
+    const stepSel = document.getElementById('snap-grid-step-select');
+    try {
+        const sg = localStorage.getItem(LP_SHOW_GRID_KEY);
+        if (showToggle && sg === '0') showToggle.checked = false;
+        const st = localStorage.getItem(LP_SNAP_GRID_STEP_KEY);
+        if (st) {
+            const n = parseInt(st, 10);
+            if ([2, 5, 10].includes(n)) snapGridStepCm = n;
+        }
+    } catch (_) { /* ignore */ }
+    if (stepSel) stepSel.value = String(snapGridStepCm);
+    applyGridLayerVisibility();
+    if (showToggle) {
+        showToggle.addEventListener('change', () => {
+            applyGridLayerVisibility();
+            try {
+                localStorage.setItem(LP_SHOW_GRID_KEY, showToggle.checked ? '1' : '0');
+            } catch (_) { /* ignore */ }
+        });
+    }
+    if (stepSel) {
+        stepSel.addEventListener('change', (e) => {
+            const n = parseInt(e.target.value, 10);
+            snapGridStepCm = [2, 5, 10].includes(n) ? n : 2;
+            try {
+                localStorage.setItem(LP_SNAP_GRID_STEP_KEY, String(snapGridStepCm));
+            } catch (_) { /* ignore */ }
+        });
+    }
 }
 
 /**
@@ -3480,6 +3538,7 @@ function cancelDrawing(silent = false) {
 function startCabDrag(e, cab) {
     if (e.button !== 0 || isBgEditMode || isDrawing) return;
     e.stopPropagation();
+    historyGesture.begin();
     isDraggingCab = true;
     currentDragCab = cab;
     selectCabinet(cab.id);
@@ -3505,6 +3564,7 @@ function startCabDrag(e, cab) {
 function startResize(id, e, direction = null) {
     if (e.button !== 0) return;
     e.stopPropagation();
+    historyGesture.begin();
     isResizing = true;
     resizeDirection = direction; // [v9.0] 記錄拉伸方向
 
@@ -3526,6 +3586,7 @@ function startResize(id, e, direction = null) {
 function startAnnotationDrag(e, anno, type) {
     if (e.button !== 0) return;
     e.stopPropagation();
+    historyGesture.begin();
     isDraggingAnnotation = true;
     currentDragAnnotationId = anno.id;
     annotationDragType = type;
@@ -3695,10 +3756,14 @@ function handleCaiQtyChange() {
 }
 
 // [您的要求] 新增復原/重做相關函式
-/**
- * 儲存當前的畫布狀態到歷史紀錄中
- */
 function saveState() {
+    historyGesture.requestSave();
+}
+
+/**
+ * 儲存當前的畫布狀態到歷史紀錄中（實際寫入 history 堆疊）
+ */
+function commitSaveState() {
     // 如果當前指針不在歷史紀錄的末尾 (表示已經執行過 undo)，
     // 則移除後續的所有 "redo" 狀態
     if (historyIndex < history.length - 1) {
@@ -3954,7 +4019,10 @@ function bindEventListeners() {
     document.getElementById('tab-btn-components').addEventListener('click', () => switchTab('components'));
 
     // 資訊視窗
-    document.getElementById('opacity-slider').addEventListener('input', (e) => updateOpacity(e.target.value));
+    const opacitySlider = document.getElementById('opacity-slider');
+    opacitySlider.addEventListener('pointerdown', () => historyGesture.begin());
+    opacitySlider.addEventListener('pointerup', () => historyGesture.end());
+    opacitySlider.addEventListener('input', (e) => updateOpacity(e.target.value));
     document.getElementById('note-input').addEventListener('input', updateNote);
     // [您的要求] 為新的尺寸輸入框綁定 change 事件 (在失焦或按 Enter 時觸發)
     document.getElementById('selected-group-input').addEventListener('change', updateSelectedGroup); // [新增]
