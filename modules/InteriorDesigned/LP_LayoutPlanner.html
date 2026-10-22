@@ -20,6 +20,41 @@
             user-select: none;
         }
 
+        #lp-3d-overlay {
+            display: none;
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            top: 50px;
+            z-index: 180;
+            background: #f8fafc;
+            flex-direction: column;
+        }
+
+        body.lp-3d-mode #lp-3d-overlay {
+            display: flex;
+        }
+
+        body.lp-3d-mode #design-canvas {
+            pointer-events: none;
+        }
+
+        #lp-3d-viewport {
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+        }
+
+        #lp-3d-hint {
+            flex-shrink: 0;
+            padding: 6px 12px;
+            font-size: 11px;
+            color: #475569;
+            background: #e2e8f0;
+            border-bottom: 1px solid #cbd5e1;
+        }
+
         :root {
             --lp-rail-w: 264px;
         }
@@ -945,6 +980,10 @@
 
     <!-- 畫布（主工作區）：置於左欄工具箱與右欄預算之間 -->
     <main id="canvas-wrapper">
+        <div id="lp-3d-overlay" aria-hidden="true">
+            <div id="lp-3d-hint">3D：左鍵旋轉 · 右鍵平移 · 滾輪縮放 · 再按「2D 平面」返回編輯</div>
+            <div id="lp-3d-viewport" role="img" aria-label="平面圖三維預覽"></div>
+        </div>
         <!-- [新增] 工作區說明與快捷鍵提示 -->
         <div id="canvas-header"
             style="position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(to right, #f3f4f6, #ffffff); border-bottom: 1px solid #e5e7eb; padding: 12px 20px; z-index: 50; font-size: 12px; color: #4b5563;">
@@ -1102,6 +1141,7 @@
 
         <button id="toggle-toolbox-btn" class="toggle-btn">🛠️ 工具箱</button>
         <button id="toggle-info-btn" class="toggle-btn">💰 預算</button>
+        <button id="toggle-3d-view-btn" class="toggle-btn" title="將牆體與櫃體以 3D 預覽（不影響 2D 編輯）">🧊 3D 檢視</button>
         <!-- [新增] LINE 聯繫按鈕 -->
         <button id="contact-designer-btn" class="contact-btn">💬 聯繫設計師</button>
         <!-- [修改] 復原/重做按鈕：只顯示符號，放在下載按鈕左側 -->

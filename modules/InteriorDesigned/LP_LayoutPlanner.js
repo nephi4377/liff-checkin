@@ -8,6 +8,7 @@ import {
     overlap,
     getAxes,
 } from './LP_core.js';
+import { createLayoutPlanner3DViewer } from './LP_3DViewer.js';
 
 /** 開啟時於 console 輸出除錯訊息（元件載入、渲染、縮放、繪圖等） */
 const DEBUG = false;
@@ -31,6 +32,9 @@ let startPos = { x: 0, y: 0 };
 let dragStartMouse = { x: 0, y: 0 }; // [v9.13 新增] 記錄拖曳開始時的滑鼠位置
 // [v8.12 修復] 明確宣告 canvas 變數，避免依賴隱式全域變數導致的潛在錯誤
 const canvas = document.getElementById('design-canvas');
+/** @type {ReturnType<typeof createLayoutPlanner3DViewer> | null} */
+let lp3dViewer = null;
+let lp3dMode = false;
 // [v8.9 修復] 補回遺失的變數宣告
 let isResizing = false;
 let resizeTarget = null;
@@ -3721,7 +3725,48 @@ function closeHelpModal() {
     document.getElementById('help-modal').style.display = 'none';
 }
 
+function initLayoutPlanner3D() {
+    const mount = document.getElementById('lp-3d-viewport');
+    const toggleBtn = document.getElementById('toggle-3d-view-btn');
+    if (!mount || !toggleBtn) return;
+
+    lp3dViewer = createLayoutPlanner3DViewer({
+        mountEl: mount,
+        getData: () => ({
+            workspaceSize: getWorkspaceCanvasPx(),
+            placedCabinets,
+            drawnAreas,
+        }),
+    });
+
+    toggleBtn.addEventListener('click', async () => {
+        lp3dMode = !lp3dMode;
+        document.body.classList.toggle('lp-3d-mode', lp3dMode);
+        const overlay = document.getElementById('lp-3d-overlay');
+        if (overlay) overlay.setAttribute('aria-hidden', lp3dMode ? 'false' : 'true');
+        toggleBtn.textContent = lp3dMode ? '📐 2D 平面' : '🧊 3D 檢視';
+        toggleBtn.title = lp3dMode ? '返回 2D 平面編輯' : '將牆體與櫃體以 3D 預覽（不影響 2D 編輯）';
+
+        if (!lp3dViewer) return;
+        if (lp3dMode) {
+            try {
+                await lp3dViewer.open();
+                await lp3dViewer.rebuild();
+            } catch (err) {
+                console.error('[LP 3D]', err);
+                lp3dMode = false;
+                document.body.classList.remove('lp-3d-mode');
+                toggleBtn.textContent = '🧊 3D 檢視';
+                showGlobalNotification('3D 檢視載入失敗（請確認網路可連 CDN）', 6000, 'error');
+            }
+        } else {
+            lp3dViewer.close();
+        }
+    });
+}
+
 function bindEventListeners() {
+    initLayoutPlanner3D();
     // 全域事件
     document.addEventListener('mouseup', endDrag);
     document.addEventListener('mousemove', handleGlobalMove);

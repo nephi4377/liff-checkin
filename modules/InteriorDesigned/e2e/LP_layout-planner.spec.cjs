@@ -47,6 +47,21 @@ test.describe('LayoutPlanner E2E', () => {
     await expect(field).toHaveValue('重做測試');
   });
 
+  test('3D 檢視切換不造成頁面錯誤', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#toggle-3d-view-btn').click();
+    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/);
+    await expect(page.locator('#lp-3d-overlay')).toBeVisible();
+    await page.waitForTimeout(3000);
+    expect(errors, `頁面錯誤: ${errors.join('; ')}`).toHaveLength(0);
+
+    await page.locator('#toggle-3d-view-btn').click();
+    await expect(page.locator('body')).not.toHaveClass(/lp-3d-mode/);
+  });
+
   test('可開啟預算明細 Modal 並關閉', async ({ page }) => {
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
     await page.locator('#show-budget-modal-btn').click();
