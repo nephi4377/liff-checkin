@@ -6,7 +6,35 @@ export const LP_3D_DEFAULTS = {
     WALL_HEIGHT_CM: 280,
     CABINET_HEIGHT_CM: 90,
     WALL_SEGMENT_HEIGHT_CM: 280,
+    DOOR_HEIGHT_CM: 210,
+    WINDOW_SILL_HEIGHT_CM: 90,
+    WINDOW_HEIGHT_CM: 120,
 };
+
+const DOOR_WINDOW_GROUPS = new Set(['門窗工程', '門片']);
+const WINDOW_NAME_RE = /窗|落地窗|氣窗|百葉窗/;
+const DOOR_NAME_RE = /門/;
+
+/**
+ * @param {{ data?: { name?: string, group?: string, isWall?: boolean } }} cab
+ * @returns {'wallSegment'|'door'|'window'|'cabinet'}
+ */
+export function classifyPlacedCabinet3DKind(cab) {
+    if (!cab?.data) return 'cabinet';
+    if (cab.data.isWall) return 'wallSegment';
+    const group = String(cab.data.group || '');
+    const name = String(cab.data.name || '');
+    const inDoorWindowGroup = DOOR_WINDOW_GROUPS.has(group);
+
+    if (WINDOW_NAME_RE.test(name)) return 'window';
+    if (DOOR_NAME_RE.test(name) && !WINDOW_NAME_RE.test(name)) return 'door';
+    if (inDoorWindowGroup) {
+        if (WINDOW_NAME_RE.test(name)) return 'window';
+        if (DOOR_NAME_RE.test(name)) return 'door';
+        return 'door';
+    }
+    return 'cabinet';
+}
 
 /** 畫布座標 → 以工作區中心為原點的 XZ（cm） */
 export function canvasToSceneXZ(x, y, workspaceSize) {
@@ -68,14 +96,31 @@ function mapRingToScene(points, workspaceSize) {
     return points.map((p) => canvasToSceneXZ(p.x, p.y, workspaceSize));
 }
 
+function fixtureVerticalExtents(kind, defaults, cab) {
+    if (kind === 'wallSegment') {
+        return { baseYCm: 0, heightCm: defaults.WALL_SEGMENT_HEIGHT_CM };
+    }
+    if (kind === 'door') {
+        return { baseYCm: 0, heightCm: defaults.DOOR_HEIGHT_CM };
+    }
+    if (kind === 'window') {
+        return {
+            baseYCm: defaults.WINDOW_SILL_HEIGHT_CM,
+            heightCm: defaults.WINDOW_HEIGHT_CM,
+        };
+    }
+    const customH = cab.data?.height > 0 ? cab.data.height : defaults.CABINET_HEIGHT_CM;
+    return { baseYCm: 0, heightCm: customH };
+}
+
 /**
- * @returns {{ walls: object[], cabinets: object[] }}
+ * @returns {{ workspaceSize: number, walls: object[], fixtures: object[] }}
  */
 export function buildLayout3DDescriptor(layout, options = {}) {
     const defaults = { ...LP_3D_DEFAULTS, ...options };
     const workspaceSize = layout.workspaceSize || 2000;
     const walls = [];
-    const cabinets = [];
+    const fixtures = [];
 
     for (const area of layout.drawnAreas || []) {
         if (area.type !== 'wall' || !area.points || area.points.length < 3) continue;
@@ -95,25 +140,24 @@ export function buildLayout3DDescriptor(layout, options = {}) {
         const w = cab.currentW ?? cab.data?.width ?? 0;
         const d = cab.currentH ?? cab.data?.depth ?? 0;
         if (w <= 0 || d <= 0) continue;
-        const isWall = Boolean(cab.data?.isWall);
-        const h = isWall
-            ? defaults.WALL_SEGMENT_HEIGHT_CM
-            : (cab.data?.height > 0 ? cab.data.height : defaults.CABINET_HEIGHT_CM);
+        const kind = classifyPlacedCabinet3DKind(cab);
+        const { baseYCm, heightCm } = fixtureVerticalExtents(kind, defaults, cab);
         const cx = cab.x + w / 2;
         const cy = cab.y + d / 2;
         const center = canvasToSceneXZ(cx, cy, workspaceSize);
-        cabinets.push({
+        fixtures.push({
             id: cab.id,
+            kind,
             widthCm: w,
             depthCm: d,
-            heightCm: h,
+            heightCm,
+            baseYCm,
             centerX: center.x,
             centerZ: center.z,
             rotationDeg: cab.rotation || 0,
-            isWall,
             label: cab.data?.name || '',
         });
     }
 
-    return { workspaceSize, walls, cabinets };
+    return { workspaceSize, walls, fixtures };
 }

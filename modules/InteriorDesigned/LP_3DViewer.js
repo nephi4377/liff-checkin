@@ -136,16 +136,31 @@ export function createLayoutPlanner3DViewer(options) {
             root.add(mesh);
         }
 
-        for (const cab of desc.cabinets) {
-            const geo = new THREE.BoxGeometry(cab.widthCm, cab.heightCm, cab.depthCm);
-            const mat = new THREE.MeshStandardMaterial({
-                color: cab.isWall ? 0x475569 : 0xd97706,
-                roughness: 0.7,
-                metalness: 0.1,
-            });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set(cab.centerX, cab.heightCm / 2, cab.centerZ);
-            mesh.rotation.y = (-cab.rotationDeg * Math.PI) / 180;
+        const fixtureMaterial = (kind) => {
+            if (kind === 'wallSegment') {
+                return new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.85, metalness: 0.05 });
+            }
+            if (kind === 'door') {
+                return new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.75, metalness: 0.05 });
+            }
+            if (kind === 'window') {
+                return new THREE.MeshStandardMaterial({
+                    color: 0x7dd3fc,
+                    roughness: 0.2,
+                    metalness: 0.15,
+                    transparent: true,
+                    opacity: 0.55,
+                });
+            }
+            return new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.7, metalness: 0.1 });
+        };
+
+        for (const fix of desc.fixtures) {
+            const geo = new THREE.BoxGeometry(fix.widthCm, fix.heightCm, fix.depthCm);
+            const mesh = new THREE.Mesh(geo, fixtureMaterial(fix.kind));
+            const centerY = fix.baseYCm + fix.heightCm / 2;
+            mesh.position.set(fix.centerX, centerY, fix.centerZ);
+            mesh.rotation.y = (-fix.rotationDeg * Math.PI) / 180;
             root.add(mesh);
         }
 

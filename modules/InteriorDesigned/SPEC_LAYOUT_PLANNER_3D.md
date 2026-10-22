@@ -49,8 +49,12 @@
 | 高度 | Three `Y` | 向上為正 |
 | 繪製牆 `drawnAreas.wall` | 內圈 + 外擴 `thickness` 形成環狀，**向上拉伸** | **牆高 280**（約 9 尺 2） |
 | 櫃體 `placedCabinets` | `BoxGeometry(w, h, d)` | **櫃高 90**（台面／矮櫃）；若 `data.height` 日後加入 Sheet 則優先 |
+| 門（`classifyPlacedCabinet3DKind` → `door`） | 平面矩形拉高 | **門高 210**；`group` 為「門窗工程／門片」或名稱含「門」 |
+| 窗（→ `window`） | 平面矩形拉高，**窗台離地** | **窗台 90 + 窗高 120**；名稱含「窗／落地窗」等 |
 | 牆片元件 `data.isWall` | 同櫃體盒子 | **高 280、色偏灰** |
 | 地板 | 薄板 | 第二階段；MVP 僅 **GridHelper** |
+
+門窗分類邏輯見 `LP_3D_scene.js` 的 `classifyPlacedCabinet3DKind`（MVP **不挖牆洞**，僅在 3D 疊加門片／窗框盒子；牆體開洞為階段 3）。
 
 旋轉：櫃體繞 Y 軸 `-rotation°`；中心為 `(x + currentW/2, y + currentH/2)`。
 
@@ -86,9 +90,9 @@
 
 | 階段 | 內容 | 驗收 |
 |------|------|------|
-| **1（本 PR）** | 設計文件、3D 切換、牆環 + 櫃體盒子、Orbit | 2D 不變；可旋轉縮放 |
+| **1（本 PR）** | 設計文件、3D 切換、牆環 + 門／窗／櫃體盒子、Orbit | 2D 不變；可旋轉縮放 |
 | **2** | 地板／天花、材質、層級顯示、編輯後同步 | 與 `layerVisibility` 一致 |
-| **3** | 門窗洞、櫃體高度來自 Sheet、截圖匯出 | 與報價元件資料一致 |
+| **3** | 牆體門窗洞（CSG）、櫃體高度來自 Sheet、截圖匯出 | 與報價元件資料一致 |
 | **4** | 第一人稱、效能上限與 LOD | 大案場可流暢漫遊 |
 
 ---
@@ -108,6 +112,24 @@
       "currentW": 120,
       "currentH": 60,
       "data": { "name": "範例矮櫃", "group": "系統櫃", "width": 120, "depth": 60 }
+    },
+    {
+      "id": "door-demo-1",
+      "x": 500,
+      "y": 300,
+      "rotation": 0,
+      "currentW": 90,
+      "currentH": 15,
+      "data": { "name": "房門", "group": "門窗工程", "width": 90, "depth": 15 }
+    },
+    {
+      "id": "win-demo-1",
+      "x": 700,
+      "y": 300,
+      "rotation": 0,
+      "currentW": 150,
+      "currentH": 15,
+      "data": { "name": "落地窗", "group": "門窗工程", "width": 150, "depth": 15 }
     }
   ],
   "drawnAreas": [
