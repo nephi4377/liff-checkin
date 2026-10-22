@@ -8,6 +8,7 @@ import {
     overlap,
     getAxes,
 } from './LP_core.js';
+import { layoutTo3DModel } from './LP_layout3d.js';
 
 /** 開啟時於 console 輸出除錯訊息（元件載入、渲染、縮放、繪圖等） */
 const DEBUG = false;
@@ -59,6 +60,8 @@ let annotationDragType = null; // 'box' or 'target'
 let annotationDragOffset = { x: 0, y: 0 }; // [修正] 補上遺漏的變數宣告
 // [v8.8 新增] 全局畫布縮放比列
 let viewScale = 1.0;
+/** @type {Layout3DPreview | null} */
+let layout3dPreview = null;
 // [v8.8 補回] 歷史紀錄堆疊
 let history = [];
 let historyIndex = -1;
@@ -2232,6 +2235,40 @@ function saveCanvasAsImage() {
     });
 }
 
+function getLayoutSnapshotFor3D() {
+    return {
+        placedCabinets,
+        drawnAreas,
+        workspaceSizeCm: getWorkspaceCanvasPx(),
+    };
+}
+
+async function open3DPreviewModal() {
+    const modal = document.getElementById('lp-3d-modal');
+    const container = document.getElementById('lp-3d-container');
+    if (!modal || !container) return;
+    modal.style.display = 'flex';
+    try {
+        if (!layout3dPreview) {
+            const { Layout3DPreview } = await import('./LP_3dViewer.js');
+            layout3dPreview = new Layout3DPreview(container);
+        }
+        const model = layoutTo3DModel(getLayoutSnapshotFor3D());
+        layout3dPreview.render(model);
+        requestAnimationFrame(() => layout3dPreview.resize());
+    } catch (err) {
+        console.error('3D 預覽載入失敗:', err);
+        showGlobalNotification('3D 預覽載入失敗，請確認網路或稍後再試', 5000, 'error');
+        close3DPreviewModal();
+    }
+}
+
+function close3DPreviewModal() {
+    const modal = document.getElementById('lp-3d-modal');
+    if (modal) modal.style.display = 'none';
+    if (layout3dPreview) layout3dPreview.pause();
+}
+
 function saveLayout() {
     const constructionAreaEl = document.getElementById('construction-area');
     const layoutData = {
@@ -3895,6 +3932,17 @@ function bindEventListeners() {
     if (openLineBtn) openLineBtn.addEventListener('click', openLineOfficialAccount);
     const copyLineBtn = document.getElementById('copy-line-btn');
     if (copyLineBtn) copyLineBtn.addEventListener('click', copyLineId);
+
+    const lp3dOpenBtn = document.getElementById('lp-3d-preview-btn');
+    if (lp3dOpenBtn) lp3dOpenBtn.addEventListener('click', open3DPreviewModal);
+    const lp3dCloseBtn = document.getElementById('lp-3d-modal-close-btn');
+    if (lp3dCloseBtn) lp3dCloseBtn.addEventListener('click', close3DPreviewModal);
+    const lp3dModal = document.getElementById('lp-3d-modal');
+    if (lp3dModal) {
+        lp3dModal.addEventListener('click', (e) => {
+            if (e.target === lp3dModal) close3DPreviewModal();
+        });
+    }
 
     // [新增] 說明 Modal 事件
     const helpBtn = document.getElementById('help-btn');

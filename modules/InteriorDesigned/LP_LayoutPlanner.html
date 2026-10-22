@@ -10,6 +10,15 @@
     <!-- [錯誤修正] 增加此行可避免瀏覽器嘗試載入 favicon.ico 而產生 404 錯誤 -->
     <link rel="icon" href="data:,">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- three.js（僅在開啟 3D 預覽時由 LP_3dViewer.js 使用） -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        }
+    }
+    </script>
     <!-- [核心修正] 重新引入已分離的 JavaScript 主檔案，並設定為 module -->
     <script type="module" src="./LP_LayoutPlanner.js"></script>
     <!-- [新增] JSZip 函式庫，用於打包多個檔案成 ZIP -->
@@ -1111,6 +1120,7 @@
         <button id="download-design-files-btn" class="toggle-btn" title="下載設計圖面、佈局檔案和預算 (ZIP)">📥 下載檔案 (ZIP)</button>
         <!-- [新增] 說明按鈕 (修改文字) -->
         <button id="help-btn" class="toggle-btn font-bold text-blue-600" title="操作說明">使用說明</button>
+        <button id="lp-3d-preview-btn" class="toggle-btn font-bold text-indigo-600" title="唯讀 3D 預覽（不影響 2D 編輯）">3D 預覽</button>
     </div>
 
     <!-- [修正] 將提示文字移出畫布，避免隨畫布縮放 -->
@@ -1311,6 +1321,16 @@
                 </section>
 
             </div>
+        </div>
+    </div>
+
+    <!-- 3D 唯讀預覽 Modal -->
+    <div id="lp-3d-modal" class="modal" style="z-index: 10000;">
+        <div class="modal-content relative flex flex-col" style="max-width: 96vw; width: 960px; height: 85vh;">
+            <span id="lp-3d-modal-close-btn" class="absolute top-2 right-4 text-2xl cursor-pointer z-10">&times;</span>
+            <h2 class="text-xl font-bold mb-2 shrink-0">🏠 3D 預覽（唯讀）</h2>
+            <p class="text-xs text-gray-500 mb-2 shrink-0">左鍵旋轉、右鍵平移、滾輪縮放。高度為系統預設值，與 2D 編輯互不影響。詳見 SPEC_LAYOUT_3D.md</p>
+            <div id="lp-3d-container" class="flex-1 min-h-0 rounded-lg border border-gray-200 bg-gray-100 overflow-hidden"></div>
         </div>
     </div>
 
