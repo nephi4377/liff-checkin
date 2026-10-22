@@ -223,6 +223,12 @@
       var pendingPhotos = [], localPhotos = [], queryParams = {}, hubContext = { projects: [], employees: [] };
       var pendingPhotoBusy = false;
       var pendingPhotosLoadedOk = false;
+      var pendingPhotoLoadGen = 0;
+      var pendingPhotoLoadPromise = null;
+
+      function invalidatePendingPhotoLoads() {
+        pendingPhotoLoadGen++;
+      }
       var applicantDefault = '';
       var cachedVendors = [];
       var vendorCombobox = null;
@@ -544,6 +550,7 @@
           setApplicantDefault();
           if (allocEditor) allocEditor.clear();
         }
+        invalidatePendingPhotoLoads();
         pendingPhotos = [];
         localPhotos = [];
         document.getElementById('photoInput').value = '';
@@ -636,7 +643,8 @@
         box.classList.add('hidden');
         box.innerHTML = '';
       }
-      function applyIncomingPendingPhotos(incoming) {
+      function applyIncomingPendingPhotos(incoming, loadGen) {
+        if (loadGen != null && loadGen !== pendingPhotoLoadGen) return 0;
         var before = pendingPhotos.length;
         (incoming || []).forEach(function (p) {
           if (!p || !p.dataBase64) return;
@@ -666,45 +674,57 @@
         }
       }
       async function loadPendingPhotos(token, opts) {
-        if (!token || pendingPhotoBusy) return;
+        if (!token) return;
         if (pendingPhotosLoadedOk && !(opts && opts.force)) return;
+        if (pendingPhotoBusy && pendingPhotoLoadPromise && !(opts && opts.force)) {
+          return pendingPhotoLoadPromise;
+        }
         opts = opts || {};
+        var loadGen = pendingPhotoLoadGen;
         pendingPhotoBusy = true;
         clearLineCarryError();
         var countLine = document.getElementById('photoCountLine');
         var prevCount = countLine ? countLine.textContent : '';
         if (countLine) countLine.textContent = '正在帶入 LINE 照片…';
-        try {
-          var data = opts.force
-            ? await fetchPendingPhotosOnce(token)
-            : await fetchPendingPhotosRetry(token);
-          var added = applyIncomingPendingPhotos(data.photos || []);
-          if (added > 0) {
-            pendingPhotosLoadedOk = true;
-            return;
-          }
-          if (!pendingPhotos.length) {
+        var run = async function () {
+          try {
+            var data = opts.force
+              ? await fetchPendingPhotosOnce(token)
+              : await fetchPendingPhotosRetry(token);
+            if (loadGen !== pendingPhotoLoadGen) return;
+            var added = applyIncomingPendingPhotos(data.photos || [], loadGen);
+            if (added > 0) {
+              pendingPhotosLoadedOk = true;
+              return;
+            }
+            if (loadGen !== pendingPhotoLoadGen) return;
+            if (!pendingPhotos.length) {
+              showLineCarryError(
+                'LINE 傳來的照片這次沒帶進來。這不代表你沒傳圖，可再帶一次，或改從下方手動加入。',
+                function () { return loadPendingPhotos(token, { force: true }); }
+              );
+            } else {
+              updatePhotoCountLine();
+            }
+          } catch (e) {
+            if (loadGen !== pendingPhotoLoadGen) return;
+            if (countLine && !pendingPhotos.length && !localPhotos.length) {
+              countLine.textContent = prevCount || '已 0 張';
+            } else {
+              updatePhotoCountLine();
+            }
+            showPendingPreviews(pendingPhotos);
             showLineCarryError(
-              'LINE 傳來的照片這次沒帶進來。這不代表你沒傳圖，可再帶一次，或改從下方手動加入。',
+              humanLineCarryErr(e, '無法帶入 LINE 照片') + '。這不代表你沒傳圖，可再帶一次，或改手動加入。',
               function () { return loadPendingPhotos(token, { force: true }); }
             );
-          } else {
-            updatePhotoCountLine();
+          } finally {
+            pendingPhotoBusy = false;
+            pendingPhotoLoadPromise = null;
           }
-        } catch (e) {
-          if (countLine && !pendingPhotos.length && !localPhotos.length) {
-            countLine.textContent = prevCount || '已 0 張';
-          } else {
-            updatePhotoCountLine();
-          }
-          showPendingPreviews(pendingPhotos);
-          showLineCarryError(
-            humanLineCarryErr(e, '無法帶入 LINE 照片') + '。這不代表你沒傳圖，可再帶一次，或改手動加入。',
-            function () { return loadPendingPhotos(token, { force: true }); }
-          );
-        } finally {
-          pendingPhotoBusy = false;
-        }
+        };
+        pendingPhotoLoadPromise = run();
+        return pendingPhotoLoadPromise;
       }
 
       function askDupConfirm(message) {
@@ -748,6 +768,13 @@
             return;
           }
         }
+        if (pendingPhotoBusy && pendingPhotoLoadPromise) {
+          setWarn('照片還在帶入，請稍候');
+          try {
+            await pendingPhotoLoadPromise;
+          } catch (eWait) { /* carry error already surfaced */ }
+          setWarn('');
+        }
         var btn = document.getElementById('submit');
         await AccountingUi.runAsync(btn, {
           actionLabel: '送出這一筆',
@@ -758,6 +785,7 @@
           AccountingUi.tap('送出這一筆');
           var fields = collectFields();
           var photos = pendingPhotos.slice().concat(localPhotos);
+          invalidatePendingPhotoLoads();
           var body = {
             action: 'accounting_form_submit',
             source: queryParams.source || ((sessionRef && sessionRef.fromHub) ? 'hub' : 'liff'),

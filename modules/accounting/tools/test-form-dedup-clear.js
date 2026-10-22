@@ -45,6 +45,8 @@ assert(html.indexOf('toastOnOk: false') >= 0, 'avoids generic ok toast masking o
 assert(html.indexOf('pendingPhotoError') >= 0, 'LINE photo carry error region');
 assert(html.indexOf('pendingPhotosLoadedOk') >= 0, 'guards second identity pass from wiping photos');
 assert(html.indexOf('再帶一次照片') >= 0, 'manual retry for LINE photos');
+assert(html.indexOf('pendingPhotoLoadGen') >= 0, 'load generation invalidates stale LINE photo fetch');
+assert(html.indexOf('照片還在帶入，請稍候') >= 0, 'submit waits while LINE photos load');
 
 var api = fs.readFileSync(
   path.join(__dirname, '..', '..', '..', 'shared', 'js', 'accounting_api.js'),

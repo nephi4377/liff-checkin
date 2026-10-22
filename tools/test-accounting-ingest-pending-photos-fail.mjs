@@ -92,9 +92,12 @@ function bootIngestApi(extra) {
   const localPhotos = [];
   let pendingPhotoBusy = false;
   let pendingPhotosLoadedOk = false;
+  let pendingPhotoLoadGen = 0;
+  let pendingPhotoLoadPromise = null;
   const profile = { userId: 'u1', displayName: 'Test' };
 
   const snippet = [
+    'function invalidatePendingPhotoLoads() { pendingPhotoLoadGen++; }',
     extractFunctionBlock(html, 'humanLineCarryErr'),
     extractFunctionBlock(html, 'showLineCarryError'),
     extractFunctionBlock(html, 'clearLineCarryError'),
@@ -118,6 +121,8 @@ function bootIngestApi(extra) {
     localPhotos,
     pendingPhotoBusy,
     pendingPhotosLoadedOk,
+    pendingPhotoLoadGen,
+    pendingPhotoLoadPromise,
     AccountingApi: extra.AccountingApi,
     setMsg() {}
   };
@@ -129,6 +134,8 @@ function bootIngestApi(extra) {
 test('html has error region and retry copy (no silent catch)', () => {
   assert.ok(html.includes('id="pendingPhotoError"'));
   assert.ok(html.includes('pendingPhotosLoadedOk'));
+  assert.ok(html.includes('pendingPhotoLoadGen'));
+  assert.ok(html.includes('照片還在帶入，請稍候'));
   assert.ok(html.includes('再帶一次照片'));
   assert.ok(html.includes('loadPendingPhotos(queryParams.pending).catch(function () {})'));
   assert.ok(!html.includes('await loadPendingPhotos(queryParams.pending)'));
@@ -203,4 +210,52 @@ test('pendingPhotosLoadedOk blocks second load from clearing photos', async () =
   await vm.runInContext('loadPendingPhotos("tok1")', sandbox);
   assert.equal(sandbox.pendingPhotos.length, 1, 'second boot must not wipe with empty API');
   assert.equal(calls, 1);
+});
+
+test('clear-before-load: stale response does not attach photos to next entry', async () => {
+  let resolvePost;
+  const { sandbox } = bootIngestApi({
+    AccountingApi: {
+      post: () =>
+        new Promise((resolve) => {
+          resolvePost = resolve;
+        })
+    }
+  });
+  const loadP = vm.runInContext('loadPendingPhotos("tok1")', sandbox);
+  assert.equal(sandbox.pendingPhotoBusy, true);
+  vm.runInContext('invalidatePendingPhotoLoads(); pendingPhotos = [];', sandbox);
+  resolvePost({
+    success: true,
+    photos: [{ dataBase64: 'late', mimeType: 'image/jpeg' }]
+  });
+  await loadP;
+  assert.equal(sandbox.pendingPhotos.length, 0, 'late photos discarded after clear');
+});
+
+test('submit-before-load: wait for in-flight load then snapshot includes photos', async () => {
+  let resolvePost;
+  const { sandbox } = bootIngestApi({
+    AccountingApi: {
+      post: () =>
+        new Promise((resolve) => {
+          resolvePost = resolve;
+        })
+    }
+  });
+  const loadP = vm.runInContext('loadPendingPhotos("tok1")', sandbox);
+  assert.equal(sandbox.pendingPhotoBusy, true);
+  const waitP = vm.runInContext('pendingPhotoLoadPromise', sandbox);
+  resolvePost({
+    success: true,
+    photos: [{ dataBase64: 'ok', mimeType: 'image/jpeg' }]
+  });
+  await waitP;
+  await loadP;
+  assert.equal(sandbox.pendingPhotos.length, 1);
+  const snapLen = vm.runInContext('pendingPhotos.slice().length', sandbox);
+  assert.equal(snapLen, 1);
+  vm.runInContext('invalidatePendingPhotoLoads()', sandbox);
+  resolvePost = null;
+  assert.equal(sandbox.pendingPhotoLoadGen, 1);
 });
