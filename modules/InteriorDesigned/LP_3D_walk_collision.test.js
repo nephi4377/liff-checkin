@@ -305,6 +305,28 @@ describe('createWalkCollisionCache', () => {
     });
 });
 
+describe('pushCircleOffObb', () => {
+    it('身體半徑大於櫃半深、圓心在櫃內時仍沿最短軸推出', () => {
+        const obb = {
+            cx: 500,
+            cz: 500,
+            halfW: 10,
+            halfD: 10,
+            cos: 1,
+            sin: 0,
+        };
+        const bodyR = WALK_BODY_RADIUS_CM;
+        const push = pushCircleOffObb(500, 500, bodyR, obb);
+        expect(push).not.toBeNull();
+        const outX = 500 + push.x;
+        const outZ = 500 + push.z;
+        const lx = outX - obb.cx;
+        const lz = outZ - obb.cz;
+        expect(Math.abs(lx)).toBeGreaterThanOrEqual(obb.halfW + bodyR - 0.1);
+        expect(Math.abs(lz)).toBeLessThanOrEqual(obb.halfD + 0.1);
+    });
+});
+
 describe('resolveWalkSpawnXZ', () => {
     it('出生點在小型櫃內時推出櫃外', () => {
         const desc = buildLayout3DDescriptor({
@@ -325,9 +347,9 @@ describe('resolveWalkSpawnXZ', () => {
                 x: 575,
                 y: 525,
                 rotation: 0,
-                currentW: 50,
-                currentH: 50,
-                data: { name: '小茶几', group: '系統櫃', width: 50, depth: 50 },
+                currentW: 20,
+                currentH: 20,
+                data: { name: '小茶几', group: '系統櫃', width: 20, depth: 20 },
             }],
         });
         const collision = buildWalkCollision(desc);

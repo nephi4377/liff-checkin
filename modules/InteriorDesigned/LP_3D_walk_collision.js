@@ -201,7 +201,6 @@ export function pushCircleOffObb(x, z, bodyR, obb) {
         const toNegZ = lz + obb.halfD + bodyR;
         const toPosZ = obb.halfD - lz + bodyR;
         const min = Math.min(toLeft, toRight, toNegZ, toPosZ);
-        if (min > obb.halfW + obb.halfD) return null;
         if (min === toLeft) plx = -toLeft;
         else if (min === toRight) plx = toRight;
         else if (min === toNegZ) plz = -toNegZ;
