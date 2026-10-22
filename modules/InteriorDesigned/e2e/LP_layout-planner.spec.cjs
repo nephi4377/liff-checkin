@@ -1,7 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const fs = require('fs');
 
 const ARTIFACTS = process.env.LP_E2E_ARTIFACTS || '/opt/cursor/artifacts';
 

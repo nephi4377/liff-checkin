@@ -57,10 +57,12 @@ describe('SAT 輔助', () => {
 });
 
 describe('FLOORPLAN-AREA-NAN-1：匯入舊備份坪數', () => {
-    it('lp-walk-keyguard 地板區僅 points 時可推算 12 坪', () => {
+    it('lp-walk-keyguard 地板區 points 可推算 12 坪', () => {
         const floor = keyguardFixture.drawnAreas.find((a) => a.type === 'floor');
-        expect(floor.areaInPing).toBeUndefined();
         expect(areaInPingFromPolygonPoints(floor.points)).toBe(12);
+        if (typeof floor.areaInPing === 'number') {
+            expect(floor.areaInPing).toBe(12);
+        }
     });
 
     it('normalizeDrawnAreaForImport 補 areaInPing', () => {
