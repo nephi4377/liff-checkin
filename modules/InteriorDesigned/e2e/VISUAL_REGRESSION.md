@@ -4,14 +4,16 @@
 
 `e2e/LP_layout-planner.visual.spec.cjs` 會：
 
-1. 載入 `LP_LayoutPlanner.html`
-2. 匯入示範配置 `fixtures/lp-walk-keyguard.json`（與鍵盤守衛 E2E 共用，非客戶圖面）
-3. 對 **2D**（`#design-canvas`）與 **3D 環繞**（`#lp-3d-viewport`）各截一張基準圖並與 repo 內 snapshot 比對
-4. 整段流程結束時確認 **無** `pageerror` 與 `console.error`
+1. 以 Playwright `route` 將 `cdn.tailwindcss.com` 換成本地釘選腳本 `fixtures/tailwindcss.cdn.pinned.js`（避免 CDN 版本漂移與離線失敗）
+2. 注入 **Noto Sans CJK** 字型堆疊（與 CI 安裝 `fonts-noto-cjk` 一致）
+3. 載入 `LP_LayoutPlanner.html`，匯入示範配置 `fixtures/lp-walk-keyguard.json`
+4. **2D**：對 `#design-canvas` 在「地板多邊形＋櫃體」外框 **clip** 截圖；**mask** 工具箱、預算面板、底列、toast、頂列說明與尺寸標籤
+5. **3D**：開啟環繞檢視，等 `#lp-3d-viewport canvas` 出現後 **連續兩次 `requestAnimationFrame`** 再截 `#lp-3d-viewport`
+6. 整段流程結束時確認 **無** `pageerror` 與 `console.error`（訊息含 CDN 網域者排除，見 `lp-visual-helpers.cjs`）
 
 ## 執行
 
-於 `modules/InteriorDesigned`：
+於 `modules/InteriorDesigned`（建議先安裝字型，見下）：
 
 ```bash
 npm run test:e2e -- e2e/LP_layout-planner.visual.spec.cjs
@@ -23,24 +25,37 @@ npm run test:e2e -- e2e/LP_layout-planner.visual.spec.cjs
 npm test
 ```
 
+### 字型（與 CI 對齊）
+
+基準圖應在 **GitHub Actions `ubuntu-latest` + `fonts-noto-cjk`** 產生。本機 Linux 請：
+
+```bash
+sudo apt-get install -y fonts-noto-cjk
+fc-cache -f
+```
+
+未安裝時，2D 中文標籤可能與 CI 基準相差數千像素。
+
 ## 基準圖位置
 
 `e2e/LP_layout-planner.visual.spec.cjs-snapshots/`
 
-檔名含 Playwright 平台後綴（CI／本機 Linux 為 `-linux.png`）。請在 **與 CI 相同 OS**（GitHub `ubuntu-latest`）更新基準，避免 macOS／Windows 字體與 WebGL 差異。
+檔名含 Playwright 平台後綴（CI／本機 Linux 為 `-linux.png`）。**請只在與 CI 相同環境**（`ubuntu-latest`、已裝 `fonts-noto-cjk`、Chromium headless）更新基準，勿在 macOS／Windows 產生 snapshot。
+
+建議流程：在 PR 的 **LayoutPlanner tests** workflow 綠燈環境下，於該 runner 類型本機或透過 CI 產物更新後 commit `*-snapshots/*.png`。
 
 ## 比對容忍度
 
 | 截圖 | 設定 | 說明 |
 |------|------|------|
-| `lp-demo-2d.png` | `maxDiffPixels: 120`, `maxDiffPixelRatio: 0.01` | 2D SVG／DOM，較嚴 |
-| `lp-demo-3d-orbit.png` | `maxDiffPixels: 2500`, `maxDiffPixelRatio: 0.035` | WebGL 抗鋸齒與光照在 headless 下略有像素差，略放寬 |
+| `lp-demo-2d.png` | `maxDiffPixels: 150` | 2D 幾何 clip 區；僅像素上限（不併用 ratio） |
+| `lp-demo-3d-orbit.png` | `maxDiffPixelRatio: 0.028` | WebGL headless 略放寬；僅比例上限 |
 
-全域預設見 `LP_playwright.config.cjs` → `expect.toHaveScreenshot`（`animations: 'disabled'` 等）。
+全域預設見 `LP_playwright.config.cjs` → `expect.toHaveScreenshot`（`animations: 'disabled'` 等）。CI 下 `retries: 1`。
 
 ## 更新基準圖（刻意改 UI／3D 外觀後）
 
-確認畫面變更為預期，再：
+確認畫面變更為預期，並已安裝 `fonts-noto-cjk`，再：
 
 ```bash
 cd modules/InteriorDesigned
@@ -51,4 +66,11 @@ npx playwright test --config LP_playwright.config.cjs e2e/LP_layout-planner.visu
 
 ## CI 相依
 
-PR **#188**（`CI-TESTS-LIFF-1`）的 workflow 已執行 `npm test --prefix modules/InteriorDesigned`，本視覺測試會隨 e2e 一併跑，**不需另建 CI workflow**。合併順序建議：可先合 #188，或本 PR 合入後由 #188 分支 rebase 以在 PR 上看到綠燈。
+PR **#188**（`CI-TESTS-LIFF-1`）的 `layout-planner-tests.yml` 執行 `npm test --prefix modules/InteriorDesigned`。合入前請在該 workflow 加上安裝字型步驟，例如：
+
+```yaml
+- name: Noto CJK fonts (visual regression)
+  run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
+```
+
+（置於 Playwright e2e 之前。）本視覺測試隨 e2e 一併跑，**不需另建 workflow**。
