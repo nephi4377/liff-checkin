@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { clampPointToWalkRings } from './LP_3D_scene.js';
+import { moveWithWalkCollision, WALK_BODY_RADIUS_CM } from './LP_3D_walk_collision.js';
 
 const MOVE_SPEED_CM_S = 220;
 const LOOK_SENS = 0.0022;
@@ -10,10 +11,10 @@ const WALK_KEY_CODES = new Set([
 ]);
 
 /**
- * @param {{ camera: import('three').PerspectiveCamera, domElement: HTMLElement, eyeHeightCm: number, getWalkBounds: () => { rings?: {x:number,z:number}[][] }|null }} opts
+ * @param {{ camera: import('three').PerspectiveCamera, domElement: HTMLElement, eyeHeightCm: number, getWalkBounds: () => { rings?: {x:number,z:number}[][] }|null, getWalkCollision?: () => { segments?: object[], circles?: object[] }|null }} opts
  */
 export function createWalkController(opts) {
-    const { camera, domElement, eyeHeightCm, getWalkBounds } = opts;
+    const { camera, domElement, eyeHeightCm, getWalkBounds, getWalkCollision } = opts;
     let active = false;
     let yaw = 0;
     let pitch = 0;
@@ -28,6 +29,16 @@ export function createWalkController(opts) {
     function clampInsideBounds(x, z) {
         const bounds = getWalkBounds();
         return clampPointToWalkRings(x, z, bounds?.rings);
+    }
+
+    function applyPositionDelta(dx, dz) {
+        const x0 = camera.position.x;
+        const z0 = camera.position.z;
+        const collision = getWalkCollision?.() ?? null;
+        const moved = moveWithWalkCollision(x0, z0, dx, dz, collision, WALK_BODY_RADIUS_CM);
+        const clamped = clampInsideBounds(moved.x, moved.z);
+        camera.position.x = clamped.x;
+        camera.position.z = clamped.z;
     }
 
     function applyCameraRotation() {
@@ -110,8 +121,10 @@ export function createWalkController(opts) {
                 forward.normalize();
                 right.normalize();
                 const step = 0.35;
-                camera.position.addScaledVector(forward, -dy * step);
-                camera.position.addScaledVector(right, dx * step);
+                applyPositionDelta(
+                    forward.x * (-dy * step) + right.x * (dx * step),
+                    forward.z * (-dy * step) + right.z * (dx * step),
+                );
             } else if (t.identifier === touchLookId) {
                 yaw -= (t.clientX - lastX) * LOOK_SENS * 1.4;
                 pitch -= (t.clientY - lastY) * LOOK_SENS * 1.4;
@@ -152,12 +165,11 @@ export function createWalkController(opts) {
             moveX /= len;
             moveZ /= len;
             const dist = MOVE_SPEED_CM_S * deltaSec;
-            camera.position.addScaledVector(forward, moveZ * dist);
-            camera.position.addScaledVector(right, moveX * dist);
+            applyPositionDelta(
+                forward.x * moveZ * dist + right.x * moveX * dist,
+                forward.z * moveZ * dist + right.z * moveX * dist,
+            );
         }
-        const clamped = clampInsideBounds(camera.position.x, camera.position.z);
-        camera.position.x = clamped.x;
-        camera.position.z = clamped.z;
         camera.position.y = eyeHeightCm;
     }
 

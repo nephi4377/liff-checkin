@@ -178,6 +178,36 @@ test.describe('LayoutPlanner E2E', () => {
     await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-walk-desktop.png'), fullPage: false });
   });
 
+  test('3D 室內漫遊撞牆不穿透（FLOORPLAN-3D-WALK-2）', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(
+      '/LP_LayoutPlanner?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=walk',
+      { waitUntil: 'domcontentloaded' },
+    );
+    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/, { timeout: 15000 });
+    await page.waitForTimeout(2000);
+
+    const before = await page.evaluate(() => {
+      const h = window.__LP3D_TEST_HOOKS__;
+      h?.setWalkPosition(-250, -650);
+      h?.lookWalkAt(-250, -720);
+      return h?.getCameraXZ();
+    });
+    expect(before).toBeTruthy();
+
+    for (let i = 0; i < 10; i++) {
+      await page.keyboard.press('w');
+      await page.waitForTimeout(80);
+    }
+    await page.waitForTimeout(400);
+
+    const after = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.getCameraXZ());
+    expect(after.z).toBeLessThan(before.z);
+    expect(after.z).toBeGreaterThan(-700 + 18);
+
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-walk-wall-bump.png'), fullPage: false });
+  });
+
   test('3D 測試預覽連結：自動載入示範並進入室內漫遊（FLOORPLAN-3D-WALK-1）', async ({ page }) => {
     const fixture = path.join(__dirname, 'fixtures', 'lp-3d-spec-demo.json');
     expect(fs.existsSync(fixture)).toBe(true);

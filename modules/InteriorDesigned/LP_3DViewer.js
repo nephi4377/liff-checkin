@@ -12,6 +12,7 @@ import {
     createLabelSprite,
 } from './LP_3D_furniture.js';
 import { createWalkController } from './LP_3D_walk.js';
+import { buildWalkCollision } from './LP_3D_walk_collision.js';
 
 function makeShapeFromRing(outer, inner) {
     const shape = new THREE.Shape();
@@ -170,6 +171,7 @@ export function createLayoutPlanner3DViewer(options) {
             domElement: renderer.domElement,
             eyeHeightCm: LP_3D_DEFAULTS.WALK_EYE_HEIGHT_CM,
             getWalkBounds: () => lastDesc?.walkBounds ?? null,
+            getWalkCollision: () => (lastDesc ? buildWalkCollision(lastDesc) : null),
         });
     }
 
@@ -372,6 +374,9 @@ export function createLayoutPlanner3DViewer(options) {
             getViewMode: () => viewMode,
             getEyeHeightCm: () => LP_3D_DEFAULTS.WALK_EYE_HEIGHT_CM,
             getCameraY: () => camera?.position.y ?? null,
+            getCameraXZ: () => (camera ? { x: camera.position.x, z: camera.position.z } : null),
+            setWalkPosition: (x, z) => walk?.setPosition(x, z),
+            lookWalkAt: (x, z) => walk?.lookAt(x, z),
         };
     }
 
