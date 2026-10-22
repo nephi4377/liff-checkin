@@ -48,7 +48,7 @@ test.describe('LayoutPlanner E2E', () => {
   });
 
   test('3D 模組載入失敗時 2D 仍可用', async ({ page }) => {
-    await page.route('**/LP_3DViewer.js', (route) => route.abort('failed'));
+    await page.route(/LP_3DViewer\.js/, (route) => route.abort('failed'));
 
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#toolbox-window')).toBeVisible();
@@ -62,6 +62,33 @@ test.describe('LayoutPlanner E2E', () => {
     await field.dispatchEvent('change');
     await expect(field).toHaveValue('2D仍可用');
     await expect(page.locator('#undo-btn')).not.toBeDisabled();
+  });
+
+  test('連點 3D 按鈕只建立一個 canvas', async ({ page }) => {
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    const btn = page.locator('#toggle-3d-view-btn');
+    await btn.dblclick();
+    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/);
+    await expect(page.locator('#lp-3d-viewport canvas')).toHaveCount(1);
+  });
+
+  test('3D 模組載入失敗後再按可成功開啟', async ({ page }) => {
+    let blockViewer = true;
+    await page.route(/LP_3DViewer\.js/, (route) => {
+      if (blockViewer) route.abort('failed');
+      else route.continue();
+    });
+
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    const btn = page.locator('#toggle-3d-view-btn');
+    await btn.click();
+    await page.waitForTimeout(500);
+    await expect(page.locator('body')).not.toHaveClass(/lp-3d-mode/);
+
+    blockViewer = false;
+    await btn.click();
+    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/);
+    await expect(page.locator('#lp-3d-viewport canvas')).toHaveCount(1);
   });
 
   test('3D 檢視切換不造成頁面錯誤', async ({ page }) => {

@@ -12,7 +12,9 @@ describe('LP_LayoutPlanner 3D lazy load', () => {
     });
 
     it('以動態 import 載入 LP_3DViewer', () => {
-        expect(plannerSrc).toMatch(/import\s*\(\s*['"]\.\/LP_3DViewer\.js['"]\s*\)/);
+        expect(plannerSrc).toMatch(/import\s*\(\s*lp3dViewerModuleUrl\s*\(\s*\)\s*\)/);
         expect(plannerSrc).toMatch(/resetLp3dViewerAfterLoadFailure/);
+        expect(plannerSrc).toMatch(/lp3dViewerPromise/);
+        expect(plannerSrc).toMatch(/lp3dOpening/);
     });
 });

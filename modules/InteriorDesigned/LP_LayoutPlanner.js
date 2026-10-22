@@ -35,31 +35,48 @@ const canvas = document.getElementById('design-canvas');
 let lp3dViewer = null;
 let lp3dMode = false;
 let lp3dRebuildTimer = null;
-/** @type {Promise<typeof import('./LP_3DViewer.js')> | null} */
-let lp3dViewerImportPromise = null;
+/** @type {Promise<{ open: () => void, close: () => void, rebuild: () => void }> | null} */
+let lp3dViewerPromise = null;
+let lp3dOpening = false;
+/** 載入失敗後遞增，避免瀏覽器快取 rejected 的 dynamic import 無法重試 */
+let lp3dViewerLoadNonce = 0;
+
+function lp3dViewerModuleUrl() {
+    return lp3dViewerLoadNonce
+        ? `./LP_3DViewer.js?retry=${lp3dViewerLoadNonce}`
+        : './LP_3DViewer.js';
+}
 
 async function ensureLp3dViewer() {
     if (lp3dViewer) return lp3dViewer;
-    const mount = document.getElementById('lp-3d-viewport');
-    if (!mount) throw new Error('3D viewport missing');
-    if (!lp3dViewerImportPromise) {
-        lp3dViewerImportPromise = import('./LP_3DViewer.js');
+    if (!lp3dViewerPromise) {
+        lp3dViewerPromise = (async () => {
+            const mount = document.getElementById('lp-3d-viewport');
+            if (!mount) throw new Error('3D viewport missing');
+            const mod = await import(lp3dViewerModuleUrl());
+            const viewer = mod.createLayoutPlanner3DViewer({
+                mountEl: mount,
+                getData: () => ({
+                    workspaceSize: getWorkspaceCanvasPx(),
+                    placedCabinets,
+                    drawnAreas,
+                }),
+            });
+            lp3dViewer = viewer;
+            return viewer;
+        })().catch((err) => {
+            resetLp3dViewerAfterLoadFailure();
+            throw err;
+        });
     }
-    const mod = await lp3dViewerImportPromise;
-    lp3dViewer = mod.createLayoutPlanner3DViewer({
-        mountEl: mount,
-        getData: () => ({
-            workspaceSize: getWorkspaceCanvasPx(),
-            placedCabinets,
-            drawnAreas,
-        }),
-    });
-    return lp3dViewer;
+    return lp3dViewerPromise;
 }
 
 function resetLp3dViewerAfterLoadFailure() {
     lp3dViewer = null;
-    lp3dViewerImportPromise = null;
+    lp3dViewerPromise = null;
+    lp3dOpening = false;
+    lp3dViewerLoadNonce += 1;
 }
 
 function scheduleLp3dRebuild() {
@@ -3786,6 +3803,9 @@ function initLayoutPlanner3D() {
     toggleBtn.addEventListener('click', async () => {
         const overlay = document.getElementById('lp-3d-overlay');
         if (!lp3dMode) {
+            if (lp3dOpening) return;
+            lp3dOpening = true;
+            toggleBtn.disabled = true;
             try {
                 const viewer = await ensureLp3dViewer();
                 lp3dMode = true;
@@ -3804,6 +3824,9 @@ function initLayoutPlanner3D() {
                 toggleBtn.textContent = '🧊 3D 檢視';
                 toggleBtn.title = '將牆體與櫃體以 3D 預覽（不影響 2D 編輯）';
                 showGlobalNotification('3D 模組載入失敗，平面編輯仍可使用', 6000, 'error');
+            } finally {
+                lp3dOpening = false;
+                toggleBtn.disabled = false;
             }
             return;
         }
