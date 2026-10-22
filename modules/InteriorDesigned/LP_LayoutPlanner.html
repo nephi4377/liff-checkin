@@ -1083,6 +1083,8 @@
                 <polyline id="drawing-preview-polyline" fill="none" stroke="#3b82f6" stroke-width="2" />
                 <!-- [您的要求] 新增：繪圖時顯示的頂點標記 -->
                 <g id="drawing-preview-vertices"></g>
+                <text id="drawing-preview-segment-label" fill="#1d4ed8" font-size="14" font-weight="700"
+                    text-anchor="middle" style="display: none; pointer-events: none;"></text>
             </svg>
             <!-- [您的要求] 核心修正：將繪圖圖層的 pointer-events 徹底設為 none，避免攔截事件 -->
             <svg id="drawn-areas-layer"

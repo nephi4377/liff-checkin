@@ -158,6 +158,117 @@ function snapAlongAxis(min, max, targets, threshold) {
 }
 
 /**
+ * 從已繪製區域收集所有頂點（畫布座標 ≈ cm）。
+ * @param {{ points?: { x: number, y: number }[] }[]} drawnAreas
+ * @returns {{ x: number, y: number }[]}
+ */
+export function collectVerticesFromDrawnAreas(drawnAreas) {
+    const out = [];
+    if (!Array.isArray(drawnAreas)) return out;
+    for (const area of drawnAreas) {
+        if (!Array.isArray(area.points)) continue;
+        for (const p of area.points) {
+            if (typeof p.x === 'number' && typeof p.y === 'number') {
+                out.push({ x: p.x, y: p.y });
+            }
+        }
+    }
+    return out;
+}
+
+/**
+ * 將指標吸附至最近頂點（閾值內）。
+ * @param {{ x: number, y: number }} point
+ * @param {{ x: number, y: number }[]} vertices
+ * @param {number} threshold
+ * @param {{ x: number, y: number } | null} [excludeNear]
+ */
+export function snapPointToNearestVertex(point, vertices, threshold, excludeNear = null) {
+    let best = null;
+    let bestDist = threshold + 1;
+    for (const v of vertices) {
+        if (excludeNear) {
+            const skipDist = Math.hypot(v.x - excludeNear.x, v.y - excludeNear.y);
+            if (skipDist < 0.5) continue;
+        }
+        const d = Math.hypot(point.x - v.x, point.y - v.y);
+        if (d <= threshold && d < bestDist) {
+            bestDist = d;
+            best = v;
+        }
+    }
+    if (!best) {
+        return { x: point.x, y: point.y, snapped: false };
+    }
+    return { x: best.x, y: best.y, snapped: true };
+}
+
+/** 兩點距離（cm，四捨五入至整數） */
+export function segmentLengthCmRounded(p1, p2) {
+    return Math.round(Math.hypot(p2.x - p1.x, p2.y - p1.y));
+}
+
+/**
+ * 繪製區域時：起點閉合吸附 → 既有頂點吸附（成功則跳過正交鎖定）→ 正交鎖定（Alt 跳過頂點與正交）。
+ * @param {object} opts
+ * @returns {{ x: number, y: number, snapToStart: boolean }}
+ */
+export function resolveDrawingPointerPosition(opts) {
+    const {
+        x,
+        y,
+        altKey = false,
+        currentDrawingPoints = [],
+        areaVertices = [],
+        startCloseThreshold = 20,
+        vertexSnapThreshold = 12,
+    } = opts;
+
+    let px = x;
+    let py = y;
+    let snapToStart = false;
+
+    if (currentDrawingPoints.length > 2) {
+        const start = currentDrawingPoints[0];
+        const dist = Math.hypot(px - start.x, py - start.y);
+        if (dist < startCloseThreshold) {
+            px = start.x;
+            py = start.y;
+            snapToStart = true;
+        }
+    }
+
+    let vertexSnapped = false;
+    if (!snapToStart && !altKey && areaVertices.length > 0) {
+        const last = currentDrawingPoints.length > 0
+            ? currentDrawingPoints[currentDrawingPoints.length - 1]
+            : null;
+        const snapped = snapPointToNearestVertex(
+            { x: px, y: py },
+            areaVertices,
+            vertexSnapThreshold,
+            last,
+        );
+        px = snapped.x;
+        py = snapped.y;
+        vertexSnapped = snapped.snapped;
+    }
+
+    if (!snapToStart && !altKey && !vertexSnapped && currentDrawingPoints.length > 0) {
+        const last = currentDrawingPoints[currentDrawingPoints.length - 1];
+        const dx = Math.abs(px - last.x);
+        const dy = Math.abs(py - last.y);
+        if (dx > dy) {
+            py = last.y;
+        } else {
+            px = last.x;
+        }
+    }
+
+    return { x: px, y: py, snapToStart };
+}
+
+/**
  * 鏡像後 DOM 控點方向與視覺邊不一致時，將 w/e 對調（n/s 不受 scaleX 影響）。
  * @param {'w'|'e'|'n'|'s'|string|null} direction
  * @param {boolean} mirrored

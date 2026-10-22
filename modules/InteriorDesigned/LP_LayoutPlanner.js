@@ -15,6 +15,9 @@ import {
     computeCabinetResizeGeometry,
     rotateCabinetAroundPivot,
     mirrorCabinetsAsGroupAboutVerticalAxis,
+    collectVerticesFromDrawnAreas,
+    resolveDrawingPointerPosition,
+    segmentLengthCmRounded,
 } from './LP_core.js';
 import { createHistoryGestureCoalescer } from './LP_layout_history.js';
 
@@ -119,6 +122,8 @@ let isDrawing = false;
 let currentDrawingType = null; // [v8.23 修復] 補回遺失的 global 變數
 let drawingType = null;
 let currentDrawingPoints = [];
+/** 進入繪圖模式時快取的既有區域頂點（供吸附） */
+let drawingSnapVertices = [];
 let drawnAreas = [];
 /** 報價單手動覆寫（lineKey → 欄位）；隨佈局儲存 */
 let quotationManualOverrides = {};
@@ -2006,34 +2011,16 @@ function handleGlobalMove(e) {
     let mouseX = (e.clientX - rect.left) / safeScale;
     let mouseY = (e.clientY - rect.top) / safeScale;
 
-    // [v9.1 新增] 繪圖時的即時預覽 (正交鎖定 + 自動吸附起點)
     if (isDrawing) {
-        let snapToStart = false;
-        // 1. 自動吸附起點 (Auto-close loop)
-        if (currentDrawingPoints.length > 2) {
-            const startPoint = currentDrawingPoints[0];
-            const dist = Math.sqrt(Math.pow(mouseX - startPoint.x, 2) + Math.pow(mouseY - startPoint.y, 2));
-            if (dist < 20) { // 20px 吸附半徑
-                mouseX = startPoint.x;
-                mouseY = startPoint.y;
-                snapToStart = true;
-            }
-        }
-
-        // 2. 正交鎖定 (Orthogonal Lock) - 適用於所有繪圖模式 (牆壁/天花/地板)
-        // 如果沒有吸附到起點，且沒有按住 Alt 鍵，則執行正交鎖定
-        if (!snapToStart && !e.altKey && currentDrawingPoints.length > 0) {
-            const lastPoint = currentDrawingPoints[currentDrawingPoints.length - 1];
-            const dx = Math.abs(mouseX - lastPoint.x);
-            const dy = Math.abs(mouseY - lastPoint.y);
-            if (dx > dy) {
-                mouseY = lastPoint.y; // Snap Y (Horizontal)
-            } else {
-                mouseX = lastPoint.x; // Snap X (Vertical)
-            }
-        }
-        updateDrawingPreview({ x: mouseX, y: mouseY });
-        return; // 繪圖模式下不執行後續的拖曳邏輯
+        const resolved = resolveDrawingPointerPosition({
+            x: mouseX,
+            y: mouseY,
+            altKey: e.altKey,
+            currentDrawingPoints,
+            areaVertices: drawingSnapVertices,
+        });
+        updateDrawingPreview({ x: resolved.x, y: resolved.y });
+        return;
     }
 
     // --------------------------
@@ -3480,6 +3467,7 @@ function startDrawing(type) {
     isDrawing = true;
     currentDrawingType = type;
     currentDrawingPoints = [];
+    drawingSnapVertices = collectVerticesFromDrawnAreas(drawnAreas);
     document.getElementById('drawing-overlay').style.display = 'block';
     document.getElementById('design-canvas').style.cursor = 'crosshair';
     document.getElementById('design-canvas').style.zIndex = '99';
@@ -3508,28 +3496,20 @@ function handleDrawingClick(e) {
     let x = (e.clientX - rect.left) / safeScale;
     let y = (e.clientY - rect.top) / safeScale;
 
-    // [v9.1] 點擊時也應用相同的吸附與正交邏輯
     if (isDrawing) {
-        // 1. 吸附起點
-        if (currentDrawingPoints.length > 2) {
-            const startPoint = currentDrawingPoints[0];
-            const dist = Math.sqrt(Math.pow(x - startPoint.x, 2) + Math.pow(y - startPoint.y, 2));
-            if (dist < 20) {
-                finishDrawing(); // 點擊起點直接完成
-                return;
-            }
+        const resolved = resolveDrawingPointerPosition({
+            x,
+            y,
+            altKey: e.altKey,
+            currentDrawingPoints,
+            areaVertices: drawingSnapVertices,
+        });
+        if (resolved.snapToStart && currentDrawingPoints.length > 2) {
+            finishDrawing();
+            return;
         }
-        // 2. 正交鎖定
-        if (!e.altKey && currentDrawingPoints.length > 0) {
-            const lastPoint = currentDrawingPoints[currentDrawingPoints.length - 1];
-            const dx = Math.abs(x - lastPoint.x);
-            const dy = Math.abs(y - lastPoint.y);
-            if (dx > dy) {
-                y = lastPoint.y;
-            } else {
-                x = lastPoint.x;
-            }
-        }
+        x = resolved.x;
+        y = resolved.y;
     }
 
     currentDrawingPoints.push({ x, y });
@@ -3576,6 +3556,23 @@ function updateDrawingPreview(tempNextPoint = null) {
             polygon.style.display = 'none';
         }
     }
+    const segmentLabel = document.getElementById('drawing-preview-segment-label');
+    if (segmentLabel) {
+        if (tempNextPoint && currentDrawingPoints.length > 0) {
+            const last = currentDrawingPoints[currentDrawingPoints.length - 1];
+            const len = segmentLengthCmRounded(last, tempNextPoint);
+            const mx = (last.x + tempNextPoint.x) / 2;
+            const my = (last.y + tempNextPoint.y) / 2 - 10;
+            segmentLabel.setAttribute('x', String(mx));
+            segmentLabel.setAttribute('y', String(my));
+            segmentLabel.textContent = `${len} cm`;
+            segmentLabel.style.display = '';
+        } else {
+            segmentLabel.textContent = '';
+            segmentLabel.style.display = 'none';
+        }
+    }
+
     document.getElementById('drawing-preview-layer').style.display = 'block';
 }
 
@@ -3701,6 +3698,7 @@ function finishDrawing() {
 function cancelDrawing(silent = false) {
     isDrawing = false;
     currentDrawingPoints = [];
+    drawingSnapVertices = [];
     document.getElementById('drawing-overlay').style.display = 'none';
     canvas.style.cursor = 'default';
     // [您的要求] 新增：清除並隱藏預覽圖層
@@ -3708,6 +3706,11 @@ function cancelDrawing(silent = false) {
     document.getElementById('drawing-preview-polyline').setAttribute('points', '');
     document.getElementById('drawing-preview-polygon').setAttribute('points', '');
     document.getElementById('drawing-preview-vertices').innerHTML = '';
+    const segmentLabel = document.getElementById('drawing-preview-segment-label');
+    if (segmentLabel) {
+        segmentLabel.textContent = '';
+        segmentLabel.style.display = 'none';
+    }
     canvas.style.zIndex = 'auto';
 
     // 恢復元件的透明度與點擊事件
