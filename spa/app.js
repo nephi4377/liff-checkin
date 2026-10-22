@@ -1044,6 +1044,7 @@ const App = {
                 return;
             }
             if (type === 'request_hub_liff_token') {
+                if (event.origin !== window.location.origin) return;
                 let tok = '';
                 try {
                     tok = refreshHubIdToken();
