@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildLayout3DDescriptor, openingCutsWall } from './LP_3D_scene.js';
+import { buildLayout3DDescriptor, openingAssociatesWithWall, openingCutsWall } from './LP_3D_scene.js';
 import {
     WALK_BODY_RADIUS_CM,
     WALK_STANDARD_DOOR_MIN_WIDTH_CM,
@@ -13,6 +13,8 @@ import {
     pushCircleOffObb,
     resolveWalkBodyRadiusCm,
     resolveWalkPosition,
+    resolveWalkSpawnXZ,
+    WALK_SPAWN_NUDGE_CABINET_MAX_EXTENT_CM,
 } from './LP_3D_walk_collision.js';
 
 const squareWall = {
@@ -108,7 +110,7 @@ describe('buildWallInnerCollisionSegments', () => {
         expect(coversWindow).toBe(true);
     });
 
-    it('門只對所屬牆開洞，不誤開相鄰牆邊（openingCutsWall）', () => {
+    it('門只對所屬牆開洞，不誤開相鄰牆邊（openingAssociatesWithWall）', () => {
         const desc = buildLayout3DDescriptor({
             workspaceSize: 2000,
             drawnAreas: [
@@ -148,7 +150,8 @@ describe('buildWallInnerCollisionSegments', () => {
         const door = desc.fixtures.find((f) => f.kind === 'door');
         const north = desc.walls.find((w) => w.id === 'w-north');
         const south = desc.walls.find((w) => w.id === 'w-south');
-        expect(openingCutsWall(north, door)).toBe(true);
+        expect(openingAssociatesWithWall(north, door)).toBe(true);
+        expect(openingAssociatesWithWall(south, door)).toBe(false);
         expect(openingCutsWall(south, door)).toBe(false);
 
         const southSegs = buildWallInnerCollisionSegments(south, desc.fixtures);
@@ -299,6 +302,42 @@ describe('createWalkCollisionCache', () => {
         const desc2 = buildLayout3DDescriptor(layoutRoomWithDoorAndWindow());
         const c = cache.get(desc2);
         expect(c).not.toBe(a);
+    });
+});
+
+describe('resolveWalkSpawnXZ', () => {
+    it('出生點在小型櫃內時推出櫃外', () => {
+        const desc = buildLayout3DDescriptor({
+            workspaceSize: 2000,
+            drawnAreas: [{
+                id: 'w1',
+                type: 'wall',
+                thickness: 15,
+                points: [
+                    { x: 300, y: 300 },
+                    { x: 900, y: 300 },
+                    { x: 900, y: 800 },
+                    { x: 300, y: 800 },
+                ],
+            }],
+            placedCabinets: [{
+                id: 'small-cab',
+                x: 575,
+                y: 525,
+                rotation: 0,
+                currentW: 50,
+                currentH: 50,
+                data: { name: '小茶几', group: '系統櫃', width: 50, depth: 50 },
+            }],
+        });
+        const collision = buildWalkCollision(desc);
+        const cab = desc.fixtures[0];
+        expect(cab.widthCm).toBeLessThanOrEqual(WALK_SPAWN_NUDGE_CABINET_MAX_EXTENT_CM);
+        const bodyR = WALK_BODY_RADIUS_CM;
+        const spawn = resolveWalkSpawnXZ(cab.centerX, cab.centerZ, collision, bodyR);
+        const push = pushCircleOffObb(spawn.x, spawn.z, bodyR, collision.obbs[0]);
+        expect(push).toBeNull();
+        expect(Math.hypot(spawn.x - cab.centerX, spawn.z - cab.centerZ)).toBeGreaterThan(5);
     });
 });
 

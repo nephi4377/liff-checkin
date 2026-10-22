@@ -9,6 +9,8 @@ export const WALK_BODY_RADIUS_CM = 20;
 export const WALK_BODY_RADIUS_NARROW_DOOR_CM = 14;
 export const WALK_NARROW_DOOR_WIDTH_CM = 32;
 export const WALK_STANDARD_DOOR_MIN_WIDTH_CM = 60;
+/** 漫遊出生點若落在櫃內，僅對不超過此寬深者推出（避免大櫃體佔滿房間時亂移） */
+export const WALK_SPAWN_NUDGE_CABINET_MAX_EXTENT_CM = 160;
 
 const OPENING_EDGE_PERP_MARGIN_CM = 8;
 
@@ -44,7 +46,7 @@ function subtractTRange(ranges, cut0, cut1) {
 }
 
 /**
- * 門／窗在牆邊上的投影區段；僅當中心垂距落在牆厚帶內（與 openingCutsWall 一致）才回傳。
+ * 門／窗在牆邊上的投影區段；與 openingAssociatesWithWall 同樣允許角點貼齊牆邊。
  * @param {{ centerX: number, centerZ: number, widthCm: number, depthCm: number }} op
  * @param {{ x: number, z: number }} a
  * @param {{ x: number, z: number }} b
@@ -229,7 +231,13 @@ export function buildWalkCollision(descriptor) {
     const obbs = [];
     for (const f of descriptor.fixtures || []) {
         if (f.kind === 'cabinet' || f.kind === 'wallSegment') {
-            obbs.push(fixtureToObb(f));
+            const obb = fixtureToObb(f);
+            if (f.kind === 'cabinet') {
+                const w = f.widthCm || 0;
+                const d = f.depthCm || 0;
+                obb.nudgeSpawn = Math.max(w, d) <= WALK_SPAWN_NUDGE_CABINET_MAX_EXTENT_CM;
+            }
+            obbs.push(obb);
         }
     }
     for (const pw of descriptor.partitionWalls || []) {
@@ -358,6 +366,30 @@ export function resolveWalkPosition(x0, z0, x1, z1, collision, bodyRadius) {
 /**
  * 分軸移動 + 解碰撞，便於沿牆滑動
  */
+/**
+ * 室內漫遊出生點：若身體圓與「小型櫃體」OBB 重疊，沿法向推出。
+ * @param {{ obbs?: { nudgeSpawn?: boolean }[] } | null} collision
+ */
+export function resolveWalkSpawnXZ(x, z, collision, bodyRadius) {
+    if (!collision?.obbs?.length) return { x, z };
+    let px = x;
+    let pz = z;
+    for (let iter = 0; iter < 32; iter++) {
+        let moved = false;
+        for (const obb of collision.obbs) {
+            if (!obb.nudgeSpawn) continue;
+            const push = pushCircleOffObb(px, pz, bodyRadius, obb);
+            if (push) {
+                px += push.x;
+                pz += push.z;
+                moved = true;
+            }
+        }
+        if (!moved) break;
+    }
+    return { x: px, z: pz };
+}
+
 export function moveWithWalkCollision(x0, z0, dx, dz, collision, bodyRadius) {
     if (!dx && !dz) return { x: x0, z: z0 };
     const hasSeg = collision?.segments?.length;

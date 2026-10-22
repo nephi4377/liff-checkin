@@ -15,6 +15,7 @@ import { createWalkController } from './LP_3D_walk.js';
 import {
     createWalkCollisionCache,
     resolveWalkBodyRadiusCm,
+    resolveWalkSpawnXZ,
 } from './LP_3D_walk_collision.js';
 
 function makeShapeFromRing(outer, inner) {
@@ -164,8 +165,11 @@ export function createLayoutPlanner3DViewer(options) {
     function resetWalkCamera(desc) {
         const ring = desc.walkBounds?.rings?.[0];
         const c = ring?.length ? ringCentroidXZ(ring) : { x: 0, z: 0 };
-        walk.setPosition(c.x, c.z);
-        walk.lookAt(c.x, c.z - 80);
+        const bodyR = resolveWalkBodyRadiusCm(desc);
+        const collision = walkCollisionCache.get(desc);
+        const spawn = resolveWalkSpawnXZ(c.x, c.z, collision, bodyR);
+        walk.setPosition(spawn.x, spawn.z);
+        walk.lookAt(spawn.x, spawn.z - 80);
     }
 
     function ensureWalk() {
