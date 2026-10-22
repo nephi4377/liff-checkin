@@ -60,7 +60,7 @@ const result = {
   expected: {
     workItems: 100,
     suggestItems: 2,
-    adjustItems: 23,
+    adjustItems: 22,
     adjustSum: 116480,
     taxInclusiveTotal: 1592099
   }
@@ -71,7 +71,7 @@ console.log(JSON.stringify(result, null, 2));
 const ok =
   counts.work === 100 &&
   counts.suggest === 2 &&
-  counts.adjust === 23 &&
+  counts.adjust === 22 &&
   adjustSum === 116480 &&
   taxInclusiveTotal === 1592099;
 

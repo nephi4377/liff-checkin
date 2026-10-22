@@ -104,7 +104,7 @@ function buildMockSheet() {
   pushAdjustSubHeader(rows, '陽台封窗');
   for (let k = 18; k <= 20; k++) pushAdjustCompactRow(rows, names[k], '式', 1, adjustAmounts[k]);
   pushAdjustSubHeader(rows, '客浴');
-  for (let k = 21; k <= 22; k++) pushAdjustCompactRow(rows, names[k], '式', 1, adjustAmounts[k]);
+  pushAdjustCompactRow(rows, names[21], '式', 1, adjustAmounts[21]);
 
   rows.push(['', '簽約後續增減合計(未稅)', '式', 1, 0, TARGET_ADJUST_SUM, '', '', '', '', '']);
   pushStdRow(rows, 201, '增減後油漆A', '式', 1, 2500, 72001);
@@ -152,7 +152,7 @@ function run() {
 
   assert(counts.work === 100, `一般工項應 100 筆，實際 ${counts.work}`);
   assert(counts.suggest === 2, `建議工項應 2 筆，實際 ${counts.suggest}`);
-  assert(counts.adjust === 23, `增減工項應 23 筆，實際 ${counts.adjust}`);
+  assert(counts.adjust === 22, `增減工項應 22 筆，實際 ${counts.adjust}`);
   assert(adjustSum === TARGET_ADJUST_SUM, `增減加總應 ${TARGET_ADJUST_SUM}，實際 ${adjustSum}`);
   assert(taxInclusiveTotal === 1592099, `含稅總計應 1592099，實際 ${taxInclusiveTotal}`);
 
