@@ -12,6 +12,7 @@ import {
     createLabelSprite,
 } from './LP_3D_furniture.js';
 import { createWalkController } from './LP_3D_walk.js';
+import { disposeObject3D, disposeBrushGeometry } from './LP_3D_dispose.js';
 import {
     ORBIT_CAMERA_PRESETS,
     computeOrbitPresetCamera,
@@ -83,7 +84,10 @@ function buildWallBrush(wall, wallMat, openings, defaults) {
         cutBrush.position.set(op.centerX, op.baseYCm + op.heightCm / 2, op.centerZ);
         cutBrush.rotation.y = (-op.rotationDeg * Math.PI) / 180;
         cutBrush.updateMatrixWorld();
-        brush = evaluator.evaluate(brush, cutBrush, SUBTRACTION);
+        const prev = brush;
+        brush = evaluator.evaluate(prev, cutBrush, SUBTRACTION);
+        if (prev !== brush) disposeBrushGeometry(prev);
+        disposeBrushGeometry(cutBrush);
     }
     return brush;
 }
@@ -119,6 +123,8 @@ export function createLayoutPlanner3DViewer(options) {
     const walkCollisionCache = createWalkCollisionCache();
     let lastTick = performance.now();
     let orbitBookmark = null;
+    let rebuildCount = 0;
+    let walkCreateCount = 0;
 
     const contentGroup = { current: null };
     const ceilingGroup = { current: null };
@@ -148,12 +154,12 @@ export function createLayoutPlanner3DViewer(options) {
     function applyViewMode() {
         if (!controls || !walk || !camera) return;
         if (viewMode === 'orbit') {
-            walk.setActive(false);
+            walk?.setActive(false);
             controls.enabled = true;
             setHint('鳥瞰：左鍵旋轉 · 右鍵平移 · 滾輪縮放');
         } else {
             controls.enabled = false;
-            walk.setActive(true);
+            walk?.setActive(true);
             camera.rotation.order = 'YXZ';
             walk.syncFromCamera();
             setHint('室內：WASD 移動 · 按住左鍵轉向 · 手機左半拖移動、右半轉向');
@@ -186,6 +192,7 @@ export function createLayoutPlanner3DViewer(options) {
 
     function ensureWalk() {
         if (walk) return;
+        walkCreateCount += 1;
         walk = createWalkController({
             camera,
             domElement: renderer.domElement,
@@ -303,18 +310,6 @@ export function createLayoutPlanner3DViewer(options) {
         setHint('鳥瞰：左鍵旋轉 · 右鍵平移 · 滾輪縮放');
     }
 
-    function disposeGroup(group) {
-        if (!group) return;
-        group.traverse((obj) => {
-            if (obj.geometry) obj.geometry.dispose();
-            if (obj.material) {
-                if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
-                else obj.material.dispose();
-            }
-            if (obj.material?.map) obj.material.map.dispose();
-        });
-    }
-
     function rebuild() {
         ensureScene();
         ensureWalk();
@@ -331,12 +326,13 @@ export function createLayoutPlanner3DViewer(options) {
 
         if (contentGroup.current) {
             scene.remove(contentGroup.current);
-            disposeGroup(contentGroup.current);
+            disposeObject3D(contentGroup.current);
         }
         if (labelGroup.current) {
             scene.remove(labelGroup.current);
-            disposeGroup(labelGroup.current);
+            disposeObject3D(labelGroup.current);
         }
+        rebuildCount += 1;
 
         const root = new THREE.Group();
         const labels = new THREE.Group();
@@ -437,9 +433,11 @@ export function createLayoutPlanner3DViewer(options) {
             setWalkPosition: (x, z) => walk?.setPosition(x, z),
             lookWalkAt: (x, z) => walk?.lookAt(x, z),
         };
+        mountEl.__lp3dGetDiagnostics = () => viewer.getDiagnostics();
+        mountEl.__lp3dRebuild = () => viewer.rebuild();
     }
 
-    return {
+    const viewer = {
         open() {
             isOpen = true;
             mountEl.setAttribute('tabindex', '0');
@@ -454,12 +452,35 @@ export function createLayoutPlanner3DViewer(options) {
             isOpen = false;
             overlayEl?.removeAttribute('data-lp-3d-open');
             walk?.setActive(false);
-            walk?.dispose();
-            walk = null;
             if (animationId) {
                 cancelAnimationFrame(animationId);
                 animationId = null;
             }
+        },
+        dispose() {
+            viewer.close();
+            resizeObserver?.disconnect();
+            resizeObserver = null;
+            walk?.dispose();
+            walk = null;
+            if (renderer) {
+                renderer.dispose();
+                renderer.domElement?.remove();
+                renderer = null;
+            }
+            controls = null;
+            scene = null;
+            camera = null;
+        },
+        getDiagnostics() {
+            return {
+                isOpen,
+                animationFrameScheduled: animationId !== null,
+                rebuildCount,
+                walkCreateCount,
+                rendererChildCount: mountEl.childElementCount,
+                sceneChildCount: scene?.children?.length ?? 0,
+            };
         },
         rebuild,
         setViewMode(mode) {
@@ -467,4 +488,5 @@ export function createLayoutPlanner3DViewer(options) {
             applyViewMode();
         },
     };
+    return viewer;
 }
