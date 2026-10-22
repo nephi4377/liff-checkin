@@ -19,14 +19,11 @@ import {
     resolveDrawingPointerPosition,
     segmentLengthCmRounded,
 } from './LP_core.js';
-<<<<<<< HEAD
 import { createHistoryGestureCoalescer } from './LP_layout_history.js';
-=======
 import {
     buildLayoutPlannerQuoteDraft,
     budgetWebDraftToCsvWithBom,
 } from './LP_quotation_budgetweb_export.js';
->>>>>>> origin/cursor/floorplan-quote-import-6bf6
 
 /** 開啟時於 console 輸出除錯訊息（元件載入、渲染、縮放、繪圖等） */
 const DEBUG = false;
