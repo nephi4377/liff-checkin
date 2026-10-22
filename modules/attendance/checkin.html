@@ -18,7 +18,7 @@
         const CONSTANTS = {
             LIFF_ID: '2007974938-jVxn6y37',
             GAS_URL: 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec',
-            VERSION: 'v26.08.30.0300',
+            VERSION: 'v26.09.01.1600',
             OFF_SITE_VALID_METERS: 200,
             ANOMALY_MISSING: '離場未填說明',
             SITE_BG_RETRY_MS: 30000,
@@ -1055,6 +1055,29 @@
                 const tail = `<br><br><span class="text-[11px] text-gray-500 block leading-relaxed border-t border-gray-200 pt-3 mt-1">${CONSTANTS.PAGE_SESSION_END_MSG}</span>`;
                 AppUI.updateMessage(body + tail, colorClass);
             },
+            isLocalOffSiteReasonFailMock: () => {
+                const host = window.location.hostname;
+                if (host !== '127.0.0.1' && host !== 'localhost') return false;
+                return new URLSearchParams(window.location.search).get('mock') === 'offsitereasonfail';
+            },
+            /** 離場說明沒寫上去：打卡已記下，本頁可再送說明，不可裝成完成 */
+            restoreOffSiteReasonReady: (detailHtml, colorClass = 'text-red-800') => {
+                AppCore.awaitingOffSiteReason = true;
+                AppCore.isLocked = false;
+                AppCore.pageSessionEnded = false;
+                AppUI.setLoading(false);
+                AppOffSite.showPanel();
+                const btn = document.getElementById('checkin-button');
+                if (btn) {
+                    btn.textContent = '送出離場說明';
+                    btn.className = 'w-full bg-blue-600 text-white font-black py-5 px-6 rounded-xl text-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all transform hover:scale-105 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none btn-pulse';
+                    btn.disabled = false;
+                    btn.classList.add('btn-pulse');
+                }
+                const skipBtn = document.getElementById('offSiteSkipBtn');
+                if (skipBtn) skipBtn.classList.remove('hidden');
+                AppUI.updateMessage(detailHtml, colorClass);
+            },
             /** 定位逾時／訊號弱：尚未送出打卡，本頁可再按，不必關 LINE */
             restoreReadyToPunch: (detailHtml, colorClass = 'text-red-800') => {
                 AppCore.pageFlowStarted = false;
@@ -1086,6 +1109,28 @@
                 if (skipBtn) skipBtn.onclick = () => AppCore.skipOffSiteReason();
                 const updateNet = () => AppUI.updateIndicator('network', navigator.onLine ? 'success' : 'error', navigator.onLine ? '連線正常' : '已離線');
                 updateNet(); window.ononline = window.onoffline = updateNet;
+
+                if (AppCore.isLocalOffSiteReasonFailMock()) {
+                    AppCore.user = { userId: 'local-mock', displayName: '本地測試員' };
+                    AppUI.updateUserDisplay('本地測試員');
+                    AppUI.updateIndicator('line', 'success', '本機模擬');
+                    AppCore.awaitingOffSiteReason = true;
+                    AppCore.primaryResultMessage = '打卡已記錄（本機模擬）。';
+                    AppCore.checkinClientTimestamp = Date.now();
+                    AppOffSite.showPanel();
+                    const mockBtn = document.getElementById('checkin-button');
+                    if (mockBtn) {
+                        mockBtn.disabled = false;
+                        mockBtn.textContent = '送出離場說明';
+                        mockBtn.classList.add('btn-pulse');
+                    }
+                    if (skipBtn) skipBtn.classList.remove('hidden');
+                    AppUI.updateMessage('本機模擬：按「送出離場說明」會當成沒寫上去，應可再試。', 'text-amber-800');
+                    AppActionLog.log('本機模擬離場說明失敗');
+                    AppUI.renderHistory();
+                    return;
+                }
+
                 AppOffSite.startSiteSyncOnPageLoad();
                 AppUI.renderHistory();
 
@@ -1304,10 +1349,25 @@
                 AppUI.setLoading(true, '正在傳送離場說明...');
                 AppActionLog.log('送出離場說明');
 
+                const failHuman = (reason) => AppCore.formatFailMessage(
+                    '離場說明沒寫上去',
+                    reason,
+                    [
+                        '再按一次「送出離場說明」',
+                        '或按「略過離場說明」關閉（打卡紀錄仍在）'
+                    ]
+                );
+
+                if (AppCore.isLocalOffSiteReasonFailMock()) {
+                    AppActionLog.log('離場說明失敗（本機模擬）');
+                    AppCore.restoreOffSiteReasonReady(failHuman('這是本機模擬：後端沒收到離場說明。打卡本身已記下。'));
+                    return;
+                }
+
                 const payload = {
                     page: 'attendance_api',
                     action: 'update_off_site_reason',
-                    userId: AppCore.user.userId,
+                    userId: AppCore.user && AppCore.user.userId,
                     clientTimestamp: AppCore.checkinClientTimestamp,
                     ...AppOffSite.buildReasonUpdateParams()
                 };
@@ -1316,21 +1376,32 @@
                     const res = await AppAPI.request(payload);
                     if (res && res.success) {
                         AppActionLog.log(res.pending ? '離場說明已排隊' : '離場說明成功');
-                    } else {
-                        AppActionLog.log('離場說明失敗');
+                        AppCore.completeOffSiteFlow({
+                            reasonNote: res.pending
+                                ? '離場說明稍後會自動寫入'
+                                : (res.offSiteReasonDisplay ? `離場說明：${res.offSiteReasonDisplay}` : '離場說明已記下')
+                        });
+                        return;
                     }
+                    AppActionLog.log('離場說明失敗');
+                    AppCore.restoreOffSiteReasonReady(
+                        failHuman((res && res.message) ? res.message : '打卡已記下，但離場說明這次沒送到。')
+                    );
                 } catch (e) {
                     AppActionLog.log('離場說明離線暫存');
                     AppStorage.addToQueue({ ...payload, timestamp: Date.now() });
+                    AppCore.completeOffSiteFlow({
+                        reasonNote: '離場說明已暫存在這支手機，連上網後會自動補傳'
+                    });
                 }
-                AppCore.completeOffSiteFlow();
             },
             skipOffSiteReason: () => {
                 if (!AppCore.awaitingOffSiteReason || AppCore.pageSessionEnded) return;
                 AppActionLog.log('略過離場說明');
                 AppCore.completeOffSiteFlow();
             },
-            completeOffSiteFlow: () => {
+            completeOffSiteFlow: (opts) => {
+                opts = opts || {};
                 AppCore.awaitingOffSiteReason = false;
                 AppCore.pageSessionEnded = true;
                 AppCore.isLocked = true;
@@ -1344,8 +1415,11 @@
                     btn.disabled = true;
                 }
                 AppUI.setLoading(false);
+                const extra = opts.reasonNote
+                    ? `<br><span class="text-[10px] text-amber-800 block mt-1">${opts.reasonNote}</span>`
+                    : '';
                 AppUI.updateMessage(
-                    `${AppCore.primaryResultMessage}<br><span class="text-[9px] text-gray-400 mt-2 block italic font-bold">視窗將於 45 秒後自動關閉，亦可手動關閉視窗</span><br><span class="text-[9px] text-gray-400 block">${CONSTANTS.PAGE_SESSION_END_MSG}</span>`,
+                    `${AppCore.primaryResultMessage}${extra}<br><span class="text-[9px] text-gray-400 mt-2 block italic font-bold">視窗將於 45 秒後自動關閉，亦可手動關閉視窗</span><br><span class="text-[9px] text-gray-400 block">${CONSTANTS.PAGE_SESSION_END_MSG}</span>`,
                     'text-green-800'
                 );
                 setTimeout(() => { if (liff.closeWindow) liff.closeWindow(); }, CONSTANTS.TIMEOUTS.AUTO_CLOSE);
@@ -1425,7 +1499,9 @@
             }
         };
         document.getElementById('checkin-button').onclick = AppCore.execute;
-        AppGeo.turboInit(); // [v2026.3.5] 極速啟動
+        if (!AppCore.isLocalOffSiteReasonFailMock()) {
+            AppGeo.turboInit();
+        }
         window.onload = AppCore.init;
     </script>
 </body>
