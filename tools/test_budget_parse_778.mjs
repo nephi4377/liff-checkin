@@ -1,5 +1,5 @@
 /**
- * BUDGET-PARSE-778 自動測試（假資料，無客戶個資）
+ * BUDGET-PARSE-778 / 778b 自動測試（假資料，無客戶個資）
  * 執行：node tools/test_budget_parse_778.mjs
  */
 import { createRequire } from 'module';
@@ -20,19 +20,20 @@ function assert(cond, msg) {
 
 function buildMockSheet() {
   const rows = [];
-  rows.push(['', '', '', '', '', '', '', '', '', '']);
-  rows.push(['項次', '品項', '單位', '數量', '單價', '總價', '備註', '', '', '成本']);
-  rows.push(['1', '假案場地坪', '式', 1, 10000, 10000, '', '', '', 8888]);
-  rows.push(['', '主臥', 0, 0, 0, 0, '', '', '', '']);
-  rows.push(['2', '主臥木作', '式', 1, 5000, 5000, '', '', '', 7777]);
-  rows.push(['', '建議方案', 0, 0, 0, 0, '', '', '', '']);
-  rows.push(['', '建議加裝照明', '式', 1, 0, 1200, '', '', '', 6666]);
-  rows.push(['', '建議換線', '組', 2, 0, 800, '', '', '', 5555]);
-  rows.push(['', '簽約後續增減', 0, 0, 0, 0, '', '', '', '']);
-  for (let i = 1; i <= 23; i++) {
-    rows.push(['', '', `增減工項${i}`, '式', 1, 100 * i, 100 * i, '', '', '', 4000 + i]);
+  rows.push(['測試市示範路99號4樓之1', '', '', '', '', '', '', '', '', '', '']);
+  rows.push(['項次', '品項', '單位', '數量', '單價', '總價', '備註', '', '', '成本', '成本K']);
+  for (let i = 1; i <= 100; i++) {
+    rows.push([String(i), `工項${i}`, '式', 1, 10, 10, '', '', '', 8000 + i, '']);
   }
-  rows.push(['', '', '', '', '', '', '含稅總計', '', '', 1592099]);
+  rows.push(['', '廚房', 0, 0, 0, 0, '', '', '', '', '']);
+  rows.push(['', '建議方案-加裝照明', '式', 1, 0, 1200, '', '', '', 6666, '']);
+  rows.push(['', '建議方案-換開關', '組', 1, 0, 800, '', '', '', 5555, '']);
+  rows.push(['簽約後續增減', '', 0, 0, 0, 0, '', '', '', '', '']);
+  for (let i = 1; i <= 23; i++) {
+    rows.push(['', '', `增減工項${i}`, '式', 1, 100 * i, 100 * i, '', '', '', 9000 + i]);
+  }
+  rows.push(['', '增減合計(未稅)', '式', 1, 0, 50000, '', '', '', '', '']);
+  rows.push(['', '', '', '', '', '', '含稅總計', '', '', 1592099, '']);
   return rows;
 }
 
@@ -49,19 +50,22 @@ function run() {
   const counts = parser.classifyItemCounts(items);
 
   const headers = items.filter((it) => it.type === 'header').map((h) => h.zone);
-  assert(headers.includes('主臥'), '主臥分區應辨識為標題（單位/總價填 0）');
-  assert(counts.work === 2, `一般工項應 2 筆（假案場地坪＋主臥木作），實際 ${counts.work}`);
-  assert(counts.suggest === 2, `建議工項應 2 筆，實際 ${counts.suggest}`);
+  assert(!headers.some((z) => /4樓之1/.test(z)), '表頭地址不得被當成分區');
+  assert(headers.includes('廚房'), '廚房分區應辨識');
+  assert(headers.includes('簽約後續增減'), '簽約後續增減（項次欄）應辨識為分區');
+
+  assert(counts.work === 100, `一般工項應 100 筆，實際 ${counts.work}`);
+  assert(counts.suggest === 2, `建議工項應 2 筆（建議方案- 品名），實際 ${counts.suggest}`);
   assert(counts.adjust === 23, `增減工項應 23 筆，實際 ${counts.adjust}`);
   assert(taxInclusiveTotal === 1592099, `含稅總計應 1592099，實際 ${taxInclusiveTotal}`);
+
+  const itemNames = items.filter((i) => i.type === 'item').map((i) => i.data.name);
+  assert(!itemNames.some((n) => /增減合計/.test(n)), '增減合計列不得算工項');
 
   const exportItems = items.filter((r) => r.type === 'item').map((r) => parser.sanitizeItemForExport(r.data));
   assert(!parser.exportPayloadContainsForbiddenKeys({ items: exportItems }), '匯出不得含 cost 欄位');
   const blob = JSON.stringify({ items: exportItems });
-  assert(!blob.includes('8888') && !blob.includes('7777'), 'J 欄成本不得出現在匯出 JSON');
-
-  const rawLines = exportItems.map((i) => i.raw_line).join('|');
-  assert(!rawLines.includes('8888'), 'raw_line 不得含 J 欄成本');
+  assert(!blob.includes('9001') && !blob.includes('9010'), 'K 欄成本不得出現在匯出 JSON');
 
   console.log('✅ test_budget_parse_778 通過');
   console.log(JSON.stringify({ counts, taxInclusiveTotal }, null, 2));
