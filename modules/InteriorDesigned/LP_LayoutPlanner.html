@@ -124,6 +124,15 @@
             display: block !important;
         }
 
+        /* 匯出報價明細：僅 ?lpPreview=1 顯示（正式版待核准，定價規則未定） */
+        #export-quote-draft-btn.lp-preview-gated {
+            display: none !important;
+        }
+
+        html.lp-url-preview #export-quote-draft-btn.lp-preview-gated {
+            display: inline-block !important;
+        }
+
         #lp-3d-toolbar .lp-3d-tb-select {
             display: none;
             border: 1px solid #475569;
@@ -1356,7 +1365,7 @@
                 <button id="export-csv-btn"
                     class="bg-green-700 text-white px-3 py-1 rounded text-sm hover:bg-green-800">匯出 CSV</button>
                 <button id="export-quote-draft-btn" type="button"
-                    class="bg-teal-700 text-white px-3 py-1 rounded text-sm hover:bg-teal-800"
+                    class="bg-teal-700 text-white px-3 py-1 rounded text-sm hover:bg-teal-800 lp-preview-gated"
                     title="產生 BudgetWeb 相容草稿（不寫入雲端）">匯出報價明細</button>
             </div>
             <p class="budget-edit-only mt-2 text-xs text-gray-500">編輯模式：可改項目、數量、總價、備註；按 ✕ 可隱藏該列。修改會隨佈局一起儲存。</p>

@@ -439,6 +439,24 @@ test.describe('LayoutPlanner E2E', () => {
     await expect(page.locator('#budget-modal')).toBeHidden();
   });
 
+  test('匯出報價明細僅 lpPreview 顯示且一般模式無法觸發', async ({ page }) => {
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#show-budget-modal-btn').click();
+    await expect(page.locator('#budget-modal')).toBeVisible();
+    await expect(page.locator('#export-quote-draft-btn')).toBeHidden();
+    const draftOpenedInNormal = await page.evaluate(() => {
+      const btn = document.getElementById('export-quote-draft-btn');
+      btn?.click();
+      const modal = document.getElementById('quote-export-draft-modal');
+      return modal && modal.style.display !== 'none';
+    });
+    expect(draftOpenedInNormal).toBe(false);
+
+    await page.goto('/LP_LayoutPlanner?lpPreview=1', { waitUntil: 'domcontentloaded' });
+    await page.locator('#show-budget-modal-btn').click();
+    await expect(page.locator('#export-quote-draft-btn')).toBeVisible();
+  });
+
   test('元件表讀失敗時分類區顯示再試，不可裝成還沒載入', async ({ page }) => {
     await page.route('**/spreadsheets/**', (route) => route.abort());
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });

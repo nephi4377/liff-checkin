@@ -29,7 +29,7 @@
 | #184 2D audit＋吸附 | ✅ | `LP_core`／`LP_LayoutPlanner` import：保留 #192 坪數函式與 #184 吸附 API | — |
 | #187 鏡像＋群組 | ✅ | 無 | — |
 | #194 段長標籤＋頂點吸附 | ✅ | 無 | — |
-| #186 報價／BudgetWeb 草稿 | ✅ | vitest include 合併 history＋quote；雙 import | 原型是否進正式版 |
+| #186 報價／BudgetWeb 草稿 | ✅ | vitest include 合併 history＋quote；雙 import | **匯出報價明細**已 gate（`lpPreview=1`）；手動編輯報價仍待決 |
 | #198 3D 漫遊驗收 | ✅ | vitest 合併 walk 測試檔 | — |
 | #200 3D 快照／預設角度 | ✅ | 無 | `lpPreview=1` 才顯示的工具列是否上線 |
 | #202 3D 效能 | ✅ | vitest 合併 dispose／lifecycle | — |
@@ -45,7 +45,21 @@
 | #40 平面圖校正 OpenCV | 不同頁（`floorplan-straightener`） |
 | 其他非 floorplan 的 open draft | 與本任務無關 |
 
+## 正式版可見、尚未 gate 的新 2D UI／行為（待豪哥決定）
+
+下列功能在一般 URL（無 `?lpPreview=1`）即會出現；**本輪僅文件登記，不加 gate**。
+
+| UI／行為 | 元素或入口 | 來源 PR | 備註 |
+|----------|------------|---------|------|
+| 顯示背景格線勾選 | `#show-grid-toggle`（設定「5. 介面與工作區」） | #184 | 50cm 視覺格線，關閉不影響吸附 |
+| 拖曳格線吸附步距 | `#snap-grid-step-select`（2／5／10 cm） | #184 | 與物件邊緣吸附並存；Shift 暫停吸附 |
+| 群組／解群 | `#selected-group-btn`、`#selected-ungroup-btn`；Ctrl+G、Ctrl+Shift+G | #187 | 多選櫃體時顯示 |
+| 鏡像 | `#selected-mirror-btn`；快捷鍵 M | #187 | 選取單一櫃體 |
+| 繪製地板即時段長標籤 | `#drawing-preview-segment-label`（SVG） | #194 | 畫線游標移動時顯示 cm |
+| 繪製時頂點吸附 | `LP_core` 繪製吸附邏輯（無獨立按鈕） | #194 | 靠近既有頂點／起點閉合 |
+| 預算明細手動編輯 | `#budget-edit-toggle-btn`、`還原自動計算`、表格內編輯欄 | #186 | 與佈局一起儲存；**匯出報價明細**已 gate 至 `lpPreview=1` |
+
 ## 驗證（整合分支 HEAD）
 
 - Vitest：**89/89** 通過  
-- Playwright e2e：**22/22** 通過（含 #190 視覺、#202 perf spec）
+- Playwright e2e：**23/23** 通過（含匯出報價 gate、#190 視覺、#202 perf spec）

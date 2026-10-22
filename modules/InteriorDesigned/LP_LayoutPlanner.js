@@ -4401,7 +4401,9 @@ function bindEventListeners() {
     document.getElementById('budget-modal-close-btn').addEventListener('click', closeBudgetModal);
     document.getElementById('export-csv-btn').addEventListener('click', exportBudgetAsCSV);
     const exportQuoteDraftBtn = document.getElementById('export-quote-draft-btn');
-    if (exportQuoteDraftBtn) exportQuoteDraftBtn.addEventListener('click', exportQuoteDraftDetails);
+    if (exportQuoteDraftBtn && isLayoutPlannerUrlPreview()) {
+        exportQuoteDraftBtn.addEventListener('click', exportQuoteDraftDetails);
+    }
     const quoteDraftClose = document.getElementById('quote-export-draft-close');
     if (quoteDraftClose) quoteDraftClose.addEventListener('click', closeQuoteExportDraftModal);
     const quoteDraftJsonBtn = document.getElementById('quote-export-draft-json-btn');
