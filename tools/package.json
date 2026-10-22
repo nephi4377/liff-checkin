@@ -1,0 +1,8 @@
+{
+  "name": "tanxin-tools-tests",
+  "private": true,
+  "description": "Local-only deps for BudgetWeb parser CLI tests (not used by GitHub Pages)",
+  "devDependencies": {
+    "xlsx": "^0.18.5"
+  }
+}

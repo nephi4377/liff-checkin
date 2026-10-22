@@ -10,6 +10,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <!-- SheetJS (XLSX) -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="budget-quote-parser-lib.js"></script>
     <style>
         :root {
             --primary: #1e3a8a;
@@ -635,103 +636,19 @@
 
         status.innerText = "⏳ 正在建立全案例稽核對照表...";
         processedData = { total_summary: {}, items: [] }; 
-        let allItems = [];
-        let itemCount = 0;
 
         try {
-            selectedSheets.forEach(sheetName => {
+            const sheetPayloads = selectedSheets.map(sheetName => {
                 const ws = currentWorkbook.Sheets[sheetName];
-                const json = XLSX.utils.sheet_to_json(ws, {header: 1, defval: ""}); 
-                if (json.length < 3) return; 
-
-                let currentZone = "未分類";
-                let startRow = 0;
-                let colMapping = { id: -1, name: -1, qty: -1, unit: -1, spec: -1, total_price: -1 }; 
-
-                // 找標題
-                for (let i = 0; i < Math.min(json.length, 35); i++) {
-                    const row = json[i].map(c => String(c).trim());
-                    const nameIdx = row.findIndex(c => (c === '品項' || c === '項目' || c === '內容'));
-                    if (nameIdx !== -1) {
-                        colMapping.name = nameIdx;
-                        colMapping.id = row.findIndex(c => c.includes('項次') || c === 'NO' || c === 'No.');
-                        colMapping.qty = row.findIndex(c => c.includes('數量'));
-                        colMapping.unit = row.findIndex(c => c.includes('單位'));
-                        colMapping.spec = row.findIndex(c => c.includes('備註') || c.includes('規格'));
-                        colMapping.total_price = row.findIndex(c => c.includes('總價') || c.includes('複價') || c.includes('小計'));
-
-                        // 自動補位邏輯 (若找不到則嘗試根據品項相對位置)
-                        if (colMapping.id === -1) colMapping.id = Math.max(0, colMapping.name - 1);
-                        if (colMapping.qty === -1) colMapping.qty = colMapping.name + 2;
-                        if (colMapping.unit === -1) colMapping.unit = colMapping.name + 1;
-                        if (colMapping.total_price === -1) colMapping.total_price = colMapping.name + 4;
-                        
-                        startRow = i + 1;
-                        break;
-                    }
-                }
-
-                for (let i = 0; i < json.length; i++) {
-                    const row = json[i];
-                    if (!row || row.length === 0) continue;
-                    let name = String(row[colMapping.name] || "").trim();
-                    
-                    // 深度除噪：rawLine 僅保留前幾項，切除價格與預算 (後三位通常是 價格/成本/小計)
-                    let cleanRow = row.filter(c => c !== "");
-                    if (cleanRow.length > 5) cleanRow = cleanRow.slice(0, cleanRow.length - 2); 
-                    let rawLine = cleanRow.join(" | ");
-
-                    // 取得數值欄位的純文字內容，用來檢查是否包含數字
-                    const rawQty = String(row[colMapping.qty] || "").trim();
-                    const rawPrice = String(row[colMapping.total_price] || "").trim();
-                    const hasNumber = /\d/.test(rawQty) || /\d/.test(rawPrice);
-
-                    // Zone 識別：
-                    // 1. 含有分區關鍵字
-                    // 2. 單位欄位為空 (如果是工項，通常會有單位)
-                    // 3. [新規則] 如果「數量」或「總價」欄位包含數字，則不應判定為分區 (Header)
-                    const hasZoneKeyword = /樓|廳|房|區|工程|追加|增減|變更|玄關|廚房|衛浴|陽台/.test(name);
-                    const isUnitEmpty = !row[colMapping.unit] || String(row[colMapping.unit]).trim() === "";
-                    
-                    if (name !== "" && ( (name.length <= 8 && hasZoneKeyword) || (isUnitEmpty && hasZoneKeyword) ) && !hasNumber) {
-                        const isDuplicate = (name === currentZone);
-                        currentZone = name;
-                        allItems.push({ type: 'header', zone: currentZone, raw: rawLine, sheet_source: sheetName, is_cancelled: isDuplicate });
-                        continue;
-                    }
-
-                    // [v1.9] 判定是否為工項 (Item): 
-                    // 核心原則：必須具備「項次、項目、單位、數量、總價」五大要素。
-                    // 且「數量」與「總價」欄位中，必須至少有一個包含明確的數字 (\d) 或特定的關鍵字 (如：贈送)。
-                    const indexVal = String(row[colMapping.id] || "").trim();
-                    const nameVal = name; 
-                    const unitVal = String(row[colMapping.unit] || "").trim();
-                    const qtyVal = String(row[colMapping.qty] || "").trim();
-                    const totalPriceVal = String(row[colMapping.total_price] || "").trim();
-
-                    // 取得數值欄位是否包含數字的正則判定
-                    const hasQtyNum = /\d/.test(qtyVal);
-                    const hasPriceNum = /\d/.test(totalPriceVal) || totalPriceVal.includes("贈送");
-
-                    // 5 項滿足才正式視為有效工項 (Item)
-                    // 且為了排除單純的「說明行」(如插座位置)，要求數量或總價必須有數字意義
-                    let isItem = (indexVal !== "" && nameVal !== "" && unitVal !== "" && qtyVal !== "" && totalPriceVal !== "" && i >= startRow && (hasQtyNum || hasPriceNum));
-                    
-                    // 額外排除關鍵字 (如：估價單標題、條款等)
-                    if (METADATA_KEYWORDS.some(kw => nameVal.includes(kw))) isItem = false;
-                    
-                    if (isItem) {
-                        allItems.push({ type: 'item', zone: currentZone, raw: rawLine, data: {
-                            id: `ITEM_${i}`, zone: currentZone, name: nameVal, spec: String(row[colMapping.spec] || "").trim(),
-                            qty: qtyVal, unit: unitVal, price: totalPriceVal, 
-                            category_tag: getCategory(nameVal, String(row[colMapping.spec] || "").trim()),
-                            sheet_source: sheetName, raw_line: rawLine
-                        }});
-                    }
-                }
+                const json = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+                return { sheetName, json };
             });
-
-            processedData.items = allItems;
+            const parsed = BudgetQuoteParser.parseSelectedSheets(sheetPayloads, {
+                getCategory,
+                metadataKeywords: METADATA_KEYWORDS
+            });
+            processedData.items = parsed.items;
+            processedData.total_summary = parsed.total_summary || {};
             findPairs(processedData.items);
             const prefsMeta = applyParserPrefs();
             findPairs(processedData.items);
@@ -924,16 +841,9 @@
     downloadBtn.addEventListener('click', () => {
         const projectNo = document.getElementById('projectNoInput').value.trim();
         if (!projectNo) { alert("請填寫案號！"); return; }
-        const exportItems = processedData.items.filter(r => r.type === 'item').map(r => {
-            const d = r.data;
-            return {
-                id: d.id, zone: d.zone, category_tag: d.category_tag, name: d.name,
-                spec: d.spec, qty: d.qty, unit: d.unit, price: d.price != null && d.price !== '' ? d.price : '',
-                raw_line: d.raw_line,
-                sheet_source: d.sheet_source, status: 'PENDING', completion_percent: 0,
-                verification: { is_ok: false }
-            };
-        });
+        const exportItems = processedData.items.filter(r => r.type === 'item').map(r =>
+            BudgetQuoteParser.sanitizeItemForExport(r.data)
+        );
         const finalExport = {
             案號: projectNo,
             total_summary: { ...processedData.total_summary, siteName: "未命名案場", overall_completion: 0 },
@@ -960,14 +870,7 @@
             } catch (e) {}
 
             const exportItems = processedData.items.filter(r => r.type === 'item').map(r => {
-                const d = r.data;
-                const newItem = {
-                    id: d.id, zone: d.zone, category_tag: d.category_tag, name: d.name,
-                    spec: d.spec, qty: d.qty, unit: d.unit, price: d.price != null && d.price !== '' ? d.price : '',
-                    raw_line: d.raw_line,
-                    sheet_source: d.sheet_source, status: 'PENDING', completion_percent: 0,
-                    verification: { is_ok: false }
-                };
+                const newItem = BudgetQuoteParser.sanitizeItemForExport(r.data);
                 if (existingData && existingData.context && existingData.context.items) {
                     const oldMatch = existingData.context.items.find(old => old.id === newItem.id || (old.name === newItem.name && old.spec === newItem.spec));
                     if (oldMatch) {
