@@ -1,16 +1,32 @@
 /**
  * project-console（主控台）LIFF ID token：讀寫與 Hub 通知 API 頂層帶 liff_id_token。
  * 後端開關 off 時不帶 token 仍可運作；token 過期時觸發既有重登流程。
+ *
+ * GET 讀取為何把 liff_id_token 放在 URL query（暫不改成 header／POST）：
+ * - project-console 讀取走 GAS doGet（page=…），前端用無 preflight 的 GET fetch。
+ * - Authorization 或自訂 header 會觸發 CORS preflight，GAS Web App 對預檢支援不完整，歷史上已改用 FormData POST 避開。
+ * - 讀取若改 POST 需後端新增 doPost 路由並與 #189 範圍分開；短期維持 query，並只帶仍有效的 token。
  */
 import { CONFIG } from './config.js';
 
 const LIFF_TOKEN_SKEW_SEC = 60;
-const PARENT_TOKEN_WAIT_MS = 4000;
+const PARENT_TOKEN_WAIT_MS = 1200;
+const PARENT_TOKEN_ATTEMPTS = 2;
+const PARENT_TOKEN_RETRY_DELAY_MS = 100;
 const RELOGIN_COOLDOWN_MS = 2 * 60 * 1000;
 const RELOGIN_AT_KEY = 'console_liff_relogin_at';
 const RETURN_HASH_KEY = 'console_liff_return_hash';
 
 let cachedToken = '';
+
+/** postMessage 是否來自與本頁相同 origin（Hub／iframe 同源政策） */
+export function isTrustedHubMessageOrigin(origin) {
+  try {
+    return origin === window.location.origin;
+  } catch (e) {
+    return false;
+  }
+}
 
 function decodeJwtPayload_(token) {
   try {
@@ -37,10 +53,18 @@ export function isLiffIdTokenFresh(token) {
   return expSec > (Math.floor(Date.now() / 1000) + LIFF_TOKEN_SKEW_SEC);
 }
 
-function refreshFromLiffSdk_() {
+function readLiffIdTokenRaw_() {
   try {
     if (typeof liff === 'undefined' || !liff.getIDToken) return '';
-    const t = liff.getIDToken() || '';
+    return liff.getIDToken() || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+function refreshFromLiffSdk_() {
+  try {
+    const t = readLiffIdTokenRaw_();
     if (t && isLiffIdTokenFresh(t)) {
       cachedToken = t;
       return t;
@@ -51,6 +75,14 @@ function refreshFromLiffSdk_() {
   }
   if (cachedToken && isLiffIdTokenFresh(cachedToken)) return cachedToken;
   return '';
+}
+
+function maybeReloginOnExpiredStandalone_(opts) {
+  if (opts.attemptReloginOnExpired === false) return false;
+  if (isConsoleEmbeddedInHub_()) return false;
+  const raw = readLiffIdTokenRaw_();
+  if (!raw || isLiffIdTokenFresh(raw)) return false;
+  return requestConsoleLiffRelogin();
 }
 
 function getHubMessageTarget_() {
@@ -79,6 +111,7 @@ function requestParentHubLiffTokenOnce_() {
       if (!done) { done = true; resolve(''); }
     }, PARENT_TOKEN_WAIT_MS);
     function onMsg(e) {
+      if (!isTrustedHubMessageOrigin(e.origin)) return;
       if (!e.data || e.data.type !== 'hub_liff_token') return;
       if (done) return;
       done = true;
@@ -88,7 +121,7 @@ function requestParentHubLiffTokenOnce_() {
     }
     window.addEventListener('message', onMsg);
     try {
-      target.postMessage({ type: 'request_hub_liff_token' }, '*');
+      target.postMessage({ type: 'request_hub_liff_token' }, window.location.origin);
     } catch (err) {
       clearTimeout(timer);
       window.removeEventListener('message', onMsg);
@@ -98,8 +131,8 @@ function requestParentHubLiffTokenOnce_() {
 }
 
 async function requestParentHubLiffToken_(opts = {}) {
-  const attempts = opts.attempts || 3;
-  const delayMs = opts.delayMs || 600;
+  const attempts = opts.attempts ?? PARENT_TOKEN_ATTEMPTS;
+  const delayMs = opts.delayMs ?? PARENT_TOKEN_RETRY_DELAY_MS;
   for (let i = 0; i < attempts; i++) {
     const tok = await requestParentHubLiffTokenOnce_();
     if (tok && isLiffIdTokenFresh(tok)) {
@@ -117,6 +150,8 @@ async function requestParentHubLiffToken_(opts = {}) {
  * 取得可用的 project-console LIFF ID token（不強制；無 token 時回傳空字串）。
  */
 export async function getConsoleLiffIdToken(opts = {}) {
+  if (!isLiffIdTokenFresh(cachedToken)) cachedToken = '';
+
   const fromLiff = refreshFromLiffSdk_();
   if (fromLiff) return fromLiff;
 
@@ -124,8 +159,12 @@ export async function getConsoleLiffIdToken(opts = {}) {
   if (allowParent && isConsoleEmbeddedInHub_()) {
     const fromParent = await requestParentHubLiffToken_(opts.parent || {});
     if (fromParent) return fromParent;
+    // iframe：父頁可能剛刷新 token，再試一次本頁 LIFF
+    const retryLiff = refreshFromLiffSdk_();
+    if (retryLiff) return retryLiff;
   }
 
+  maybeReloginOnExpiredStandalone_(opts);
   return '';
 }
 
@@ -140,6 +179,7 @@ export function mergeConsoleLiffAuth(target, token) {
 export function appendConsoleLiffToUrl(url, token) {
   if (!token || !isLiffIdTokenFresh(token)) return url;
   const u = url instanceof URL ? url : new URL(String(url));
+  // 見檔案頂部說明：讀取 API 暫用 query 帶 token（GAS GET／CORS 限制）
   u.searchParams.set('liff_id_token', token);
   return u;
 }
@@ -209,10 +249,12 @@ export function restoreConsoleHashAfterRelogin() {
   } catch (e) { /* ignore */ }
 }
 
-export function primeConsoleLiffFromParentMessage(token) {
+export function primeConsoleLiffFromParentMessage(token, eventOrigin) {
+  if (eventOrigin != null && !isTrustedHubMessageOrigin(eventOrigin)) return false;
   if (token && isLiffIdTokenFresh(token)) {
     cachedToken = token;
     return true;
   }
+  if (token && !isLiffIdTokenFresh(token)) cachedToken = '';
   return false;
 }

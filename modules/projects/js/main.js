@@ -699,7 +699,7 @@ function setupConsoleLiffParentBridge() {
   window.addEventListener('message', (event) => {
     if (!event.data) return;
     if (event.data.type === 'hub_liff_token') {
-      primeConsoleLiffFromParentMessage(event.data.token || '');
+      primeConsoleLiffFromParentMessage(event.data.token || '', event.origin);
     }
   });
   try {

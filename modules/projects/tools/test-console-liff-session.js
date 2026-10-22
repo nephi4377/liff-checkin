@@ -70,5 +70,11 @@ assert(projectApi.includes('mergeConsoleLiffAuth'), 'projectApi merge on write')
 assert(spaApp.includes('get_hub_projects_data') && spaApp.includes('appendConsoleLiffToUrl'), 'hub projects GET token');
 assert(spaApp.includes('process_notification_action') && spaApp.includes('mergeConsoleLiffAuth'), 'hub notification POST token');
 assert(reportV3.includes('mergeConsoleLiffAuth'), 'reportV3 submit token');
+assert(reportV3.includes('attemptReloginOnExpired'), 'reportV3 refresh on expired');
+
+const sessionSrc = fs.readFileSync(path.join(root, 'shared/js/console_liff_session.js'), 'utf8');
+assert(sessionSrc.includes('isTrustedHubMessageOrigin'), 'origin guard helper');
+assert(sessionSrc.includes('PARENT_TOKEN_ATTEMPTS = 2'), 'faster parent retry');
+assert(sessionSrc.includes('GAS doGet') || sessionSrc.includes('doGet'), 'GET query rationale documented');
 
 console.log('test-console-liff-session: OK');

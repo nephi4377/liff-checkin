@@ -275,6 +275,7 @@
       getConsoleLiffIdToken,
       mergeConsoleLiffAuth,
       isConsoleLiffSessionError,
+      isLiffIdTokenFresh,
       requestConsoleLiffRelogin,
     } from '../../shared/js/console_liff_session.js';
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
@@ -1015,7 +1016,7 @@
         userProfile = await liff.getProfile();
         try {
           const tok = liff.getIDToken && liff.getIDToken();
-          if (tok) reportV3IdToken = tok;
+          if (tok && isLiffIdTokenFresh(tok)) reportV3IdToken = tok;
         } catch (eTok) { /* ignore */ }
         return true;
       }
@@ -1468,7 +1469,18 @@
 
           const prevFail = idbSnapshotForPayload ? compactFailureForPayload(idbSnapshotForPayload) : null;
           const sim = isDevSimAllowed() ? getDevSimMode() : 'none';
-          const idToken = reportV3IdToken || await getConsoleLiffIdToken();
+          const idToken = await getConsoleLiffIdToken({ allowParent: false, attemptReloginOnExpired: true });
+          const isLocalHost = ['127.0.0.1', 'localhost'].includes(window.location.hostname);
+          if (!idToken && userProfile && !(ENABLE_LOCAL_TEST_BYPASS && isLocalHost)) {
+            let rawExpired = false;
+            try {
+              const raw = (typeof liff !== 'undefined' && liff.getIDToken) ? (liff.getIDToken() || '') : '';
+              rawExpired = !!raw && !isLiffIdTokenFresh(raw);
+            } catch (eRaw) { /* ignore */ }
+            if (rawExpired) {
+              throw new Error('登入已過期，正在重新取得身分；完成後請再按提交（表單內容已保留）');
+            }
+          }
           const finalFormData = mergeConsoleLiffAuth({
             action: 'submitFastReport',
             batchId,
