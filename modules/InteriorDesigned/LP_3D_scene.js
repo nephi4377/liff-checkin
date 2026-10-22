@@ -2,6 +2,11 @@
  * LayoutPlanner 2D → 3D 場景描述（無 Three.js 依賴，可單元測試）
  */
 
+import {
+    resolveFixtureDisplayCategory,
+    resolveFixtureDisplayHeightCm,
+} from './LP_3D_furniture.js';
+
 export const LP_3D_DEFAULTS = {
     WALL_HEIGHT_CM: 280,
     CABINET_HEIGHT_CM: 90,
@@ -12,6 +17,9 @@ export const LP_3D_DEFAULTS = {
     WALL_CUT_MARGIN_W_CM: 6,
     WALL_CUT_MARGIN_H_CM: 4,
     WALL_CUT_DEPTH_CM: 36,
+    FLOOR_THICKNESS_CM: 2,
+    CEILING_THICKNESS_CM: 2,
+    WALK_EYE_HEIGHT_CM: 160,
 };
 
 const DOOR_WINDOW_GROUPS = new Set(['門窗工程', '門片']);
@@ -52,6 +60,67 @@ export function resolvePlacedCabinet3DKind(cab) {
 }
 
 /** 畫布座標 → 以工作區中心為原點的 XZ（cm） */
+export function ringCentroidXZ(ring) {
+    if (!ring?.length) return { x: 0, z: 0 };
+    let x = 0;
+    let z = 0;
+    for (const p of ring) {
+        x += p.x;
+        z += p.z;
+    }
+    return { x: x / ring.length, z: z / ring.length };
+}
+
+function nearestPointOnSegmentXZ(x, z, a, b) {
+    const abx = b.x - a.x;
+    const abz = b.z - a.z;
+    const len2 = abx * abx + abz * abz;
+    const t = len2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((x - a.x) * abx + (z - a.z) * abz) / len2));
+    const px = a.x + t * abx;
+    const pz = a.z + t * abz;
+    const d2 = (x - px) ** 2 + (z - pz) ** 2;
+    return { x: px, z: pz, d2 };
+}
+
+/**
+ * 將 XZ 點限制在可行走區（支援多個地板多邊形；凹多邊形用射線法判定內外）
+ * @param {number} x
+ * @param {number} z
+ * @param {{ x: number, z: number }[][]} rings
+ */
+export function clampPointToWalkRings(x, z, rings) {
+    if (!rings?.length) return { x, z };
+    for (const ring of rings) {
+        if (ring?.length >= 3 && pointInPolygonXZ(x, z, ring)) return { x, z };
+    }
+    let bestPoint = { x, z };
+    let bestD2 = Infinity;
+    let bestRing = null;
+    for (const ring of rings) {
+        if (!ring || ring.length < 3) continue;
+        for (let i = 0; i < ring.length; i++) {
+            const a = ring[i];
+            const b = ring[(i + 1) % ring.length];
+            const hit = nearestPointOnSegmentXZ(x, z, a, b);
+            if (hit.d2 < bestD2) {
+                bestD2 = hit.d2;
+                bestPoint = { x: hit.x, z: hit.z };
+                bestRing = ring;
+            }
+        }
+    }
+    if (!bestRing) return { x, z };
+    const shrink = 8;
+    const c = ringCentroidXZ(bestRing);
+    const dx = c.x - bestPoint.x;
+    const dz = c.z - bestPoint.z;
+    const len = Math.hypot(dx, dz) || 1;
+    return {
+        x: bestPoint.x + (dx / len) * shrink,
+        z: bestPoint.z + (dz / len) * shrink,
+    };
+}
+
 export function canvasToSceneXZ(x, y, workspaceSize) {
     const half = workspaceSize / 2;
     return { x: x - half, z: y - half };
@@ -155,17 +224,42 @@ function fixtureVerticalExtents(kind, defaults, cab) {
     return { baseYCm: 0, heightCm: customH };
 }
 
+function mapAreaRingToScene(area, workspaceSize) {
+    return mapRingToScene(area.points, workspaceSize);
+}
+
 /**
- * @returns {{ workspaceSize: number, walls: object[], fixtures: object[] }}
+ * @returns {{ workspaceSize: number, walls: object[], fixtures: object[], floors: object[], ceilings: object[], walkBounds: object|null }}
  */
 export function buildLayout3DDescriptor(layout, options = {}) {
     const defaults = { ...LP_3D_DEFAULTS, ...options };
     const workspaceSize = layout.workspaceSize || 2000;
     const walls = [];
     const fixtures = [];
+    const floors = [];
+    const ceilings = [];
+    const wallHeight = defaults.WALL_HEIGHT_CM;
 
     for (const area of layout.drawnAreas || []) {
-        if (area.type !== 'wall' || !area.points || area.points.length < 3) continue;
+        if (!area.points || area.points.length < 3) continue;
+        if (area.type === 'floor') {
+            floors.push({
+                id: area.id,
+                ring: mapAreaRingToScene(area, workspaceSize),
+                thicknessCm: defaults.FLOOR_THICKNESS_CM,
+            });
+            continue;
+        }
+        if (area.type === 'ceiling') {
+            ceilings.push({
+                id: area.id,
+                ring: mapAreaRingToScene(area, workspaceSize),
+                baseYCm: wallHeight,
+                thicknessCm: defaults.CEILING_THICKNESS_CM,
+            });
+            continue;
+        }
+        if (area.type !== 'wall') continue;
         const thickness = area.thickness || 15;
         const signed = signedPolygonArea(area.points);
         const dist = signed < 0 ? -thickness : thickness;
@@ -184,13 +278,18 @@ export function buildLayout3DDescriptor(layout, options = {}) {
         if (w <= 0 || d <= 0) continue;
         const kind = resolvePlacedCabinet3DKind(cab);
         if (!kind) continue;
-        const { baseYCm, heightCm } = fixtureVerticalExtents(kind, defaults, cab);
+        const displayCategory = resolveFixtureDisplayCategory(cab, kind);
+        let { baseYCm, heightCm } = fixtureVerticalExtents(kind, defaults, cab);
+        if (kind === 'cabinet') {
+            heightCm = resolveFixtureDisplayHeightCm(displayCategory, cab, defaults.CABINET_HEIGHT_CM);
+        }
         const cx = cab.x + w / 2;
         const cy = cab.y + d / 2;
         const center = canvasToSceneXZ(cx, cy, workspaceSize);
         fixtures.push({
             id: cab.id,
             kind,
+            displayCategory,
             widthCm: w,
             depthCm: d,
             heightCm,
@@ -202,5 +301,16 @@ export function buildLayout3DDescriptor(layout, options = {}) {
         });
     }
 
-    return { workspaceSize, walls, fixtures };
+    const walkRings = [];
+    for (const f of floors) {
+        if (f.ring?.length >= 3) walkRings.push(f.ring);
+    }
+    if (!walkRings.length) {
+        for (const w of walls) {
+            if (w.inner?.length >= 3) walkRings.push(w.inner);
+        }
+    }
+    const walkBounds = walkRings.length ? { rings: walkRings } : null;
+
+    return { workspaceSize, walls, fixtures, floors, ceilings, walkBounds };
 }

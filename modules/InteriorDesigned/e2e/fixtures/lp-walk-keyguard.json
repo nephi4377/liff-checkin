@@ -1,0 +1,33 @@
+{
+  "version": "2.0",
+  "workspaceSize": 2000,
+  "placedCabinets": [
+    {
+      "id": "keyguard-cab-1",
+      "x": 800,
+      "y": 800,
+      "rotation": 0,
+      "currentW": 120,
+      "currentH": 60,
+      "data": {
+        "name": "鍵盤測試矮櫃",
+        "group": "系統櫃",
+        "width": 120,
+        "depth": 60,
+        "adjustable": "none"
+      }
+    }
+  ],
+  "drawnAreas": [
+    {
+      "id": "keyguard-floor",
+      "type": "floor",
+      "points": [
+        { "x": 600, "y": 600 },
+        { "x": 1200, "y": 600 },
+        { "x": 1200, "y": 1200 },
+        { "x": 600, "y": 1200 }
+      ]
+    }
+  ]
+}

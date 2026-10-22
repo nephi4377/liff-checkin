@@ -30,13 +30,10 @@
 
         #lp-3d-overlay {
             display: none;
-            position: absolute;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            top: 50px;
-            z-index: 180;
-            background: #f8fafc;
+            position: fixed;
+            inset: 0;
+            z-index: 8000;
+            background: #0f172a;
             flex-direction: column;
         }
 
@@ -44,23 +41,88 @@
             display: flex;
         }
 
+        body.lp-3d-mode #app-shell,
+        body.lp-3d-mode #canvas-header,
+        body.lp-3d-mode #minimized-bar,
+        body.lp-3d-mode #copyright-notice,
+        body.lp-3d-mode #canvas-placeholder {
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+
         body.lp-3d-mode #design-canvas {
             pointer-events: none;
+        }
+
+        #lp-3d-toolbar {
+            flex-shrink: 0;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+        }
+
+        #lp-3d-toolbar .lp-3d-tb-btn {
+            border: 1px solid #475569;
+            background: #334155;
+            color: #f8fafc;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        #lp-3d-toolbar .lp-3d-tb-btn:hover {
+            background: #475569;
+        }
+
+        #lp-3d-toolbar .lp-3d-tb-btn.lp-3d-active {
+            background: #2563eb;
+            border-color: #3b82f6;
+        }
+
+        #lp-3d-toolbar .lp-3d-tb-btn.lp-3d-primary {
+            background: #0f766e;
+            border-color: #14b8a6;
+        }
+
+        #lp-3d-toolbar label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #e2e8f0;
+            margin-left: auto;
+        }
+
+        #lp-3d-hint {
+            flex-shrink: 0;
+            padding: 5px 12px;
+            font-size: 11px;
+            color: #cbd5e1;
+            background: #334155;
         }
 
         #lp-3d-viewport {
             flex: 1;
             min-height: 0;
             width: 100%;
+            position: relative;
+            touch-action: none;
         }
 
-        #lp-3d-hint {
-            flex-shrink: 0;
-            padding: 6px 12px;
-            font-size: 11px;
-            color: #475569;
-            background: #e2e8f0;
-            border-bottom: 1px solid #cbd5e1;
+        #lp-3d-viewport canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        body.lp-3d-mode #global-notification-container {
+            z-index: 10050 !important;
         }
 
         :root {
@@ -988,10 +1050,6 @@
 
     <!-- 畫布（主工作區）：置於左欄工具箱與右欄預算之間 -->
     <main id="canvas-wrapper">
-        <div id="lp-3d-overlay" aria-hidden="true">
-            <div id="lp-3d-hint">3D：左鍵旋轉 · 右鍵平移 · 滾輪縮放 · 再按「2D 平面」返回編輯</div>
-            <div id="lp-3d-viewport" role="img" aria-label="平面圖三維預覽"></div>
-        </div>
         <!-- [新增] 工作區說明與快捷鍵提示 -->
         <div id="canvas-header"
             style="position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(to right, #f3f4f6, #ffffff); border-bottom: 1px solid #e5e7eb; padding: 12px 20px; z-index: 50; font-size: 12px; color: #4b5563;">
@@ -1373,6 +1431,19 @@
 
             </div>
         </div>
+    </div>
+
+    <!-- 3D 全螢幕檢視（固定於視窗，避免被側欄／底列遮住） -->
+    <div id="lp-3d-overlay" aria-hidden="true">
+        <div id="lp-3d-toolbar" role="toolbar" aria-label="3D 檢視控制">
+            <button type="button" id="lp-3d-btn-orbit" class="lp-3d-tb-btn lp-3d-active">鳥瞰</button>
+            <button type="button" id="lp-3d-btn-walk" class="lp-3d-tb-btn">室內</button>
+            <button type="button" id="lp-3d-btn-reset" class="lp-3d-tb-btn">重置視角</button>
+            <button type="button" id="lp-3d-btn-exit-2d" class="lp-3d-tb-btn lp-3d-primary">返回 2D</button>
+            <label><input type="checkbox" id="lp-3d-ceiling-toggle" checked> 顯示天花</label>
+        </div>
+        <div id="lp-3d-hint">鳥瞰：左鍵旋轉 · 右鍵平移 · 滾輪縮放</div>
+        <div id="lp-3d-viewport" role="img" aria-label="平面圖三維預覽"></div>
     </div>
 
     <!-- [新增] 繪圖模式遮罩 -->
