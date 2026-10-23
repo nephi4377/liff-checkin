@@ -16,6 +16,7 @@
 | [#197](https://github.com/nephi4377/liff-checkin/pull/197) | **#64** | `shared/js/accounting_lightbox.js`：附件讀失敗顯示再試，非「沒有單據」 |
 | [#199](https://github.com/nephi4377/liff-checkin/pull/199) | **#57** | `accounting_ingest.html` LINE 待傳照片失敗可見／再試 |
 | [#201](https://github.com/nephi4377/liff-checkin/pull/201) | **#38** | `payment_request.html` LINE 待傳照片失敗可見／再試 |
+| [#208](https://github.com/nephi4377/liff-checkin/pull/208) | **#56** | `taskSenderRecipients.js`／`taskSender.js`：全體發送展開 UID，不送 `ALL`（OLD-PR-CHERRYPICK-LIFF-7） |
 
 合併衝突：**1 處** — `SPEC/18_會計與主檔快取策略.md`（#199 與 #201 各加一行說明，已保留兩行）。
 
@@ -156,7 +157,7 @@
 
 | 舊 PR | 建議動作 | 一句理由與依據 |
 |-------|----------|----------------|
-| [#56](https://github.com/nephi4377/liff-checkin/pull/56) | 仍需 merge commit **P0（最優先）** | `shared/js/taskSender.js` L331 仍 `recipients: ['ALL']`（#180 查證） |
+| [#56](https://github.com/nephi4377/liff-checkin/pull/56) | **已由 [#208](https://github.com/nephi4377/liff-checkin/pull/208) 取代，可關閉** | main 仍 `['ALL']`；#208 `resolveHubStaffRecipientIds` + `test-task-sender-resolve-recipients.mjs` **4/4**（2026-10-23） |
 | [#58](https://github.com/nephi4377/liff-checkin/pull/58) | 仍需 merge commit **P0** | `approval_dashboard.html` 樂觀審核（#180） |
 | [#59](https://github.com/nephi4377/liff-checkin/pull/59) | 仍需 merge commit **P1** | `BudgetAuditor_Standalone_V2.html` 進度未 `syncToFirebase` |
 | [#60](https://github.com/nephi4377/liff-checkin/pull/60) | 仍需 merge commit **P0** | `BudgetWeb_Standalone.html` 同步讀失敗護欄 |
@@ -194,7 +195,7 @@
 2. **功能等同、請人工確認後再關（2）**：**#38**（#201）、**#61**（#185）— 見上文逐行 diff 重點。  
 3. **勿關**：**#28**（本輪未合入；優先下一輪 merge commit）。  
 4. **勿**在未決策前關閉：**#69、#72、#73、#92、#98**。  
-5. 下一輪 merge commit 建議順序：**#28**（與 #44 可併）→ **#56** → **#58** → **#60** → **#67** → **#78** → 其餘 P0 列表。
+5. 下一輪 merge commit 建議順序：**#28**（與 #44 可併）→ **#58** → **#60** → **#67** → **#78** → 其餘 P0 列表。（**#56** 見 [#208](https://github.com/nephi4377/liff-checkin/pull/208)）
 
 ## 驗證方式（本輪）
 
