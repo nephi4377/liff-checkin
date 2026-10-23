@@ -375,6 +375,18 @@ function _createOptimisticNotification(payload, state) {
     };
 }
 
+/** 除錯用摘要：不含收件人／發送人 UID 與交辦全文 */
+function _payloadLogMeta(payload) {
+    if (!payload) return {};
+    return {
+        recipientCount: Array.isArray(payload.recipients) ? payload.recipients.length : 0,
+        actionType: payload.actionType,
+        projectId: payload.projectId || '',
+        contentLength: (payload.content || '').length,
+        hasDeadline: Boolean(payload.deadline)
+    };
+}
+
 /**
  * [內部] 任務發送成功後，重置 UI 介面。
  * @param {string} styleType - 當前的 UI 樣式 ('hub' 或 'console')。
@@ -403,7 +415,7 @@ async function handleSend(event, config, styleType, recipientSelector) {
     const statusEl = document.getElementById('task-sender-status');
     const submitBtn = document.getElementById('task-sender-submit-btn');
     const payload = _buildPayload(state, styleType);
-    console.log('[TaskSender] 建立的 payload:', payload);
+    console.log('[TaskSender] 建立的 payload（摘要）:', _payloadLogMeta(payload));
     // 驗證輸入
     if (payload._recipientError || payload.recipients.length === 0) {
         statusEl.textContent = payload._recipientError || '錯誤：請至少選擇一位收件人。';
@@ -427,13 +439,11 @@ async function handleSend(event, config, styleType, recipientSelector) {
         callbacks.onOptimisticUpdate(optimisticNotification);
         console.log('[TaskSender] 執行樂觀更新回呼');
     }
-    console.log('[TaskSender] 發送 payload 給後端:', payload);
     // 發送請求到後端
     try {
-        console.log('[TaskSender] 發送 payload:', payload);
         // [v554.0 重構] 直接呼叫 apiRequest，不再透過 config.api.sendRequest
         const result = await apiRequest({ action: 'sendNotification', payload: payload });
-        console.log('[TaskSender] 後端回應:', result);
+        console.log('[TaskSender] 後端回應 success:', Boolean(result?.success));
         // [v551.0] 因為後端現在只回傳 "OK" 文字，我們只需檢查回應是否為 "OK"。
         // 如果不是 "OK"，則將整個回應文字視為錯誤訊息。
         if (!result.success) {
