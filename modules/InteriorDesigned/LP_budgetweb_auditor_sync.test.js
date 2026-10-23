@@ -9,6 +9,7 @@ import {
 import {
     normalizeQuotationFirebaseSnapshot,
     buildRemoteQuotationSyncBaseline,
+    remoteQuotationSyncBaselineChanged,
 } from './LP_budgetweb_cloud_sync.js';
 
 describe('resolveAuditorFirebaseWriteGate (Auditor 實際寫入路徑)', () => {
@@ -55,14 +56,49 @@ describe('resolveAuditorFirebaseWriteGate (Auditor 實際寫入路徑)', () => {
         expect(gate.blocked).toBe(false);
     });
 
+    it('BudgetWeb 只改 last_updated（總額）時偵測 remote_changed', () => {
+        const items = [{ id: 'A', name: '工項', qty: '1', unit: '式' }];
+        const baseline = buildRemoteQuotationSyncBaseline({
+            audit_last_updated: 'auditor-session',
+            last_updated: 'budget-web-L1',
+            context: { items },
+        });
+        expect(
+            remoteQuotationSyncBaselineChanged(baseline, {
+                audit_last_updated: 'auditor-session',
+                last_updated: 'budget-web-L2',
+                context: { items },
+            }),
+        ).toBe(true);
+        const gate = resolveAuditorFirebaseWriteGate({
+            remoteExists: true,
+            baseline,
+            freshVal: {
+                audit_last_updated: 'auditor-session',
+                last_updated: 'budget-web-L2',
+                context: { items },
+            },
+        });
+        expect(gate.blocked).toBe(true);
+        expect(gate.reason).toBe('remote_changed');
+    });
+
     it('連續兩次同步：寫入 payload 僅 audit_last_updated，第二次不誤報 remote_changed', () => {
         const items = [{ id: 'A', name: '工項', qty: '1', unit: '式', completion_percent: 10 }];
+        const cloudBeforeFirstWrite = {
+            last_updated: 'legacy-unchanged-last_updated',
+            audit_last_updated: 'prior-audit',
+            context: { items, total_summary: { siteName: '測' } },
+        };
         const payloadAfterFirstWrite = {
             audit_last_updated: '2026/10/23 下午6:00:00',
             context: { items, total_summary: { siteName: '測' } },
             is_closed: false,
         };
-        const baselineAfterWrite = buildAuditorCloudWriteBaselineAfterPayload(payloadAfterFirstWrite);
+        const baselineAfterWrite = buildAuditorCloudWriteBaselineAfterPayload(
+            payloadAfterFirstWrite,
+            cloudBeforeFirstWrite,
+        );
         expect(baselineAfterWrite).not.toBeNull();
         const cloudAsReadBeforeSecondSync = {
             last_updated: 'legacy-unchanged-last_updated',
@@ -80,7 +116,10 @@ describe('resolveAuditorFirebaseWriteGate (Auditor 實際寫入路徑)', () => {
             audit_last_updated: '2026/10/23 下午6:05:00',
             context: { items: [{ ...items[0], completion_percent: 20 }], total_summary: { siteName: '測' } },
         };
-        const baselineSecond = buildAuditorCloudWriteBaselineAfterPayload(payloadAfterSecondWrite);
+        const baselineSecond = buildAuditorCloudWriteBaselineAfterPayload(
+            payloadAfterSecondWrite,
+            cloudAsReadBeforeSecondSync,
+        );
         const cloudBeforeThirdAttempt = {
             last_updated: 'legacy-unchanged-last_updated',
             audit_last_updated: payloadAfterSecondWrite.audit_last_updated,

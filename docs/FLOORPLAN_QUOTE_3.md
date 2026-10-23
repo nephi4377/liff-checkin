@@ -6,7 +6,7 @@
 2. **lpPreview**：`BudgetWeb_Standalone.html?lpPreview=1` 禁用同步按鈕，且 `allowProductionSync: false` 雙重阻擋。
 3. **同步前 id 檢查**：強制 `runLocalQuotationIdDuplicateCheck`（等同 CLI check，不執行 migrate）。
 4. **舊版雲端 id `ITEM_<純數字>`**：以表名+名稱+規格+單位對應本地 `ITEM_<表>_*`；對上合併至新 id 並帶進度；對不上／一對多 **整次 blocking**；雲端獨有 >10% 自訂確認框（Enter 預設取消）。
-5. **BudgetAuditor V2**：`resolveAuditorFirebaseWriteGate`；寫入僅 `audit_last_updated`（不寫 `last_updated`）。寫入後 baseline 用 `buildAuditorCloudWriteBaselineAfterPayload` 與 payload 一致；重讀比對時 `lastUpdated` 優先 `audit_last_updated`，同 session 連續同步不誤報 `remote_changed`。
+5. **BudgetAuditor V2**：寫入僅 `audit_last_updated`；寫入後 baseline 帶 payload + 寫入前雲端 `last_updated`。重讀比對 **`audit_last_updated` 與 `last_updated` 兩欄皆比**（BudgetWeb 只改總額時仍會 `remote_changed`）；同 session 連續 Auditor 同步不誤報。
 
 ## 程式位置
 
@@ -16,9 +16,9 @@
 
 ## 預覽（raw.githack.com，路徑須含 `.html`）
 
-釘選 SHA：`c8b53f4c91f54652aa8066b54a915eacc327e80c`（與 `LP_preview_hosts.js` 同步）
+釘選 SHA：`f5281f190525c54c595d55f0ae46fcb94dc1006f`（與 `LP_preview_hosts.js` 同步）
 
 - LayoutPlanner：  
-  https://raw.githack.com/nephi4377/liff-checkin/c8b53f4c91f54652aa8066b54a915eacc327e80c/modules/InteriorDesigned/LP_LayoutPlanner.html?lpPreview=1
+  https://raw.githack.com/nephi4377/liff-checkin/f5281f190525c54c595d55f0ae46fcb94dc1006f/modules/InteriorDesigned/LP_LayoutPlanner.html?lpPreview=1
 - BudgetWeb：  
-  https://raw.githack.com/nephi4377/liff-checkin/c8b53f4c91f54652aa8066b54a915eacc327e80c/tools/BudgetWeb_Standalone.html?lpPreview=1
+  https://raw.githack.com/nephi4377/liff-checkin/f5281f190525c54c595d55f0ae46fcb94dc1006f/tools/BudgetWeb_Standalone.html?lpPreview=1

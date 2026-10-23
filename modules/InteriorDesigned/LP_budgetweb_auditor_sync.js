@@ -44,13 +44,18 @@ export function buildAuditorCloudWriteBaselineFromFirebaseNode(nodeVal) {
 }
 
 /**
- * 寫入後 baseline：僅含實際 `update()` payload 欄位（Auditor 不寫 last_updated）
+ * 寫入後 baseline：payload 的 audit_last_updated + 寫入前雲端既有的 last_updated（Auditor 不覆寫）
  * @param {{ audit_last_updated?: string, context?: object, is_closed?: boolean, closed_at?: *, closed_by?: * }} payload
+ * @param {object|null} [priorRemoteNodeVal] 寫入前 `snap.val()`，保留 quotation last_updated
  */
-export function buildAuditorCloudWriteBaselineAfterPayload(payload) {
+export function buildAuditorCloudWriteBaselineAfterPayload(payload, priorRemoteNodeVal = null) {
     if (!payload?.context) return null;
+    const priorNorm = priorRemoteNodeVal
+        ? normalizeQuotationFirebaseSnapshot(priorRemoteNodeVal) || priorRemoteNodeVal
+        : null;
     return buildRemoteQuotationSyncBaseline({
         audit_last_updated: payload.audit_last_updated ?? null,
+        last_updated: priorNorm?.last_updated ?? null,
         context: payload.context,
         is_closed: payload.is_closed,
         closed_at: payload.closed_at,

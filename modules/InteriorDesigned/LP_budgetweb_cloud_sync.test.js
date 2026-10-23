@@ -108,6 +108,36 @@ describe('LP_budgetweb_cloud_sync', () => {
         expect(baseline.itemsContentHash).toBeTruthy();
     });
 
+    it('remote baseline：audit_last_updated 與 last_updated 分開比對', () => {
+        const items = [{ id: 'X', name: 'A', qty: '1', unit: '式' }];
+        const baseline = buildRemoteQuotationSyncBaseline({
+            audit_last_updated: 'audit-1',
+            last_updated: 'web-1',
+            context: { items },
+        });
+        expect(
+            remoteQuotationSyncBaselineChanged(baseline, {
+                audit_last_updated: 'audit-1',
+                last_updated: 'web-2',
+                context: { items },
+            }),
+        ).toBe(true);
+        expect(
+            remoteQuotationSyncBaselineChanged(baseline, {
+                audit_last_updated: 'audit-2',
+                last_updated: 'web-1',
+                context: { items },
+            }),
+        ).toBe(true);
+        expect(
+            remoteQuotationSyncBaselineChanged(baseline, {
+                audit_last_updated: 'audit-1',
+                last_updated: 'web-1',
+                context: { items },
+            }),
+        ).toBe(false);
+    });
+
     it('remote baseline 內容 hash：進度／名稱／單價／筆數變動（last_updated 可相同）', () => {
         const base = {
             last_updated: 't1',

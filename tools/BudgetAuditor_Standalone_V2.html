@@ -2328,10 +2328,14 @@
                 closed_at: appData.closed_at || null,
                 closed_by: appData.closed_by || null,
             };
+            const priorRemoteVal = snapBefore.exists() ? snapBefore.val() : null;
             await ref.update(payload);
             try {
                 if (auditorSyncMod) {
-                    auditorCloudWriteBaseline = auditorSyncMod.buildAuditorCloudWriteBaselineAfterPayload(payload);
+                    auditorCloudWriteBaseline = auditorSyncMod.buildAuditorCloudWriteBaselineAfterPayload(
+                        payload,
+                        priorRemoteVal,
+                    );
                 }
             } catch (e) {
                 console.warn('[Auditor] baseline 更新失敗', e);

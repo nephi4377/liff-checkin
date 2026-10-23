@@ -304,7 +304,8 @@ export function buildRemoteQuotationSyncBaseline(existingData) {
     const remoteItems = remoteContext?.items || [];
     return {
         isNewQuotationNode,
-        lastUpdated: node?.audit_last_updated ?? node?.last_updated ?? null,
+        auditLastUpdated: node?.audit_last_updated ?? null,
+        quotationLastUpdated: node?.last_updated ?? null,
         itemCount: remoteItems.length,
         itemsContentHash: fingerprintRemoteItemsForSyncGuard(remoteItems),
     };
@@ -324,7 +325,8 @@ export function remoteQuotationSyncBaselineChanged(baseline, freshExistingData) 
     }
     const fresh = buildRemoteQuotationSyncBaseline(freshExistingData);
     return (
-        fresh.lastUpdated !== baseline.lastUpdated
+        fresh.auditLastUpdated !== baseline.auditLastUpdated
+        || fresh.quotationLastUpdated !== baseline.quotationLastUpdated
         || fresh.itemsContentHash !== baseline.itemsContentHash
         || fresh.itemCount !== baseline.itemCount
     );
