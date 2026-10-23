@@ -4352,9 +4352,21 @@ function initLayoutPlanner2DPrint() {
         toolbarBtn.dataset.lpBound = '1';
         toolbarBtn.addEventListener('click', openFloorplanPrintModal);
     }
-    document.getElementById('lp-2d-print-modal-close')?.addEventListener('click', closeFloorplanPrintModal);
-    document.getElementById('lp-2d-print-png-btn')?.addEventListener('click', () => runFloorplanPrintExport('png'));
-    document.getElementById('lp-2d-print-pdf-btn')?.addEventListener('click', () => runFloorplanPrintExport('pdf'));
+    const printModalClose = document.getElementById('lp-2d-print-modal-close');
+    if (printModalClose && !printModalClose.dataset.lpBound) {
+        printModalClose.dataset.lpBound = '1';
+        printModalClose.addEventListener('click', closeFloorplanPrintModal);
+    }
+    const printPngBtn = document.getElementById('lp-2d-print-png-btn');
+    const printPdfBtn = document.getElementById('lp-2d-print-pdf-btn');
+    if (printPngBtn && !printPngBtn.dataset.lpBound) {
+        printPngBtn.dataset.lpBound = '1';
+        printPngBtn.addEventListener('click', () => runFloorplanPrintExport('png'));
+    }
+    if (printPdfBtn && !printPdfBtn.dataset.lpBound) {
+        printPdfBtn.dataset.lpBound = '1';
+        printPdfBtn.addEventListener('click', () => runFloorplanPrintExport('pdf'));
+    }
     syncPrint2dDimensions();
 }
 

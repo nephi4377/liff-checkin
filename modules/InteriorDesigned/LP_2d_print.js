@@ -29,6 +29,35 @@ export const LP_PRINT_SHEET_SPECS = {
     A3_LANDSCAPE: { id: 'A3_LANDSCAPE', label: 'A3 橫式', widthPx: 1587, heightPx: 1123 },
 };
 
+/** 與 `buildPrintSheetElement` 版面一致，供比例尺與縮放計算 */
+export const LP_PRINT_LAYOUT = {
+    marginPx: 48,
+    titleBlockHeightPx: 120,
+    legendWidthPx: 200,
+    legendGapPx: 16,
+};
+
+/**
+ * @param {string} sheetId
+ * @returns {{ spec: object, drawableW: number, drawableH: number }}
+ */
+export function computePrintDrawableSize(sheetId) {
+    const spec = resolvePrintSheetSpec(sheetId);
+    const { marginPx, titleBlockHeightPx, legendWidthPx, legendGapPx } = LP_PRINT_LAYOUT;
+    const drawableW = spec.widthPx - marginPx * 2 - legendWidthPx - legendGapPx;
+    const drawableH = spec.heightPx - marginPx * 2 - titleBlockHeightPx;
+    return { spec, drawableW, drawableH };
+}
+
+/**
+ * @param {string} sheetId
+ * @param {number} workspacePx
+ */
+export function computePrintSheetContentScale(sheetId, workspacePx) {
+    const { drawableW, drawableH } = computePrintDrawableSize(sheetId);
+    return computePrintContentScale(workspacePx, drawableW, drawableH);
+}
+
 export const LP_PRINT_TITLE_DEFAULTS = {
     projectNo: '案號：＿＿＿＿＿＿',
     projectName: '案名：＿＿＿＿＿＿',

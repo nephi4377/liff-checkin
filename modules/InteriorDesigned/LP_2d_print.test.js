@@ -4,12 +4,15 @@ import {
     buildWallSegmentDimensions,
     buildOpeningDimensions,
     computePrintContentScale,
+    computePrintDrawableSize,
+    computePrintSheetContentScale,
     formatFloorplanPrintPngFilename,
     projectPointOnSegment,
     resolvePrintSheetSpec,
     validatePngBytesNonEmpty,
     staggerDimensionOffsetPx,
 } from './LP_2d_print.js';
+import { assemblePrintSheetOptions } from './LP_2d_print_render.js';
 
 describe('LP_2d_print wall dimensions', () => {
     it('產生牆段長度標註（cm）', () => {
@@ -68,6 +71,23 @@ describe('LP_2d_print helpers', () => {
         expect(s).toBeGreaterThan(0);
     });
 
+    it('computePrintDrawableSize 與 A3/A4 圖紙像素一致', () => {
+        const a4 = computePrintDrawableSize('A4_LANDSCAPE');
+        const a3 = computePrintDrawableSize('A3_LANDSCAPE');
+        expect(a3.drawableW).toBeGreaterThan(a4.drawableW);
+        expect(a3.drawableH).toBeGreaterThan(a4.drawableH);
+    });
+
+    it('computePrintSheetContentScale 使用圖紙可繪區而非固定 600×400', () => {
+        const workspacePx = 2000;
+        const { drawableW, drawableH } = computePrintDrawableSize('A4_LANDSCAPE');
+        const fromSheet = computePrintSheetContentScale('A4_LANDSCAPE', workspacePx);
+        const fromDrawable = computePrintContentScale(workspacePx, drawableW, drawableH);
+        const fromFixed = computePrintContentScale(workspacePx, 600, 400);
+        expect(fromSheet).toBe(fromDrawable);
+        expect(fromSheet).not.toBe(fromFixed);
+    });
+
     it('resolvePrintSheetSpec A3/A4', () => {
         expect(resolvePrintSheetSpec('A3_LANDSCAPE').widthPx).toBeGreaterThan(resolvePrintSheetSpec('A4_LANDSCAPE').widthPx);
     });
@@ -79,6 +99,20 @@ describe('LP_2d_print helpers', () => {
     it('validatePngBytesNonEmpty 拒絕過小', () => {
         const bad = new Uint8Array([1, 2, 3]);
         expect(validatePngBytesNonEmpty(bad).ok).toBe(false);
+    });
+});
+
+describe('assemblePrintSheetOptions', () => {
+    it('A3 可繪區較大時比例尺 bar 像素較 A4 長', () => {
+        const base = {
+            workspacePx: 2000,
+            placedCabinets: [],
+            titleBlock: {},
+            planCloneHtml: '<div></div>',
+        };
+        const a4 = assemblePrintSheetOptions({ ...base, sheetId: 'A4_LANDSCAPE' });
+        const a3 = assemblePrintSheetOptions({ ...base, sheetId: 'A3_LANDSCAPE' });
+        expect(a3.scaleBar.barPx).toBeGreaterThan(a4.scaleBar.barPx);
     });
 });
 

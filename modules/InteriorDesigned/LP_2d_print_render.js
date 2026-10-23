@@ -6,7 +6,8 @@ import {
     buildAllPrintDimensions,
     buildScaleBarLabel,
     categoryColorToCssHex,
-    computePrintContentScale,
+    computePrintDrawableSize,
+    computePrintSheetContentScale,
     formatFloorplanPrintPngFilename,
     LP_PRINT_TITLE_DEFAULTS,
     resolveActiveLegendEntries,
@@ -90,14 +91,9 @@ export function buildPrintSheetElement(root, opts) {
         legendEntries,
         scaleBar,
     } = opts;
-    const spec = resolvePrintSheetSpec(sheetId);
+    const { spec, drawableW, drawableH } = computePrintDrawableSize(sheetId);
     const title = { ...LP_PRINT_TITLE_DEFAULTS, ...titleBlock };
-    const margin = 48;
-    const titleH = 120;
-    const legendW = 200;
-    const drawableW = spec.widthPx - margin * 2 - legendW - 16;
-    const drawableH = spec.heightPx - margin * 2 - titleH;
-    const contentScale = computePrintContentScale(workspacePx, drawableW, drawableH);
+    const contentScale = computePrintSheetContentScale(sheetId, workspacePx);
 
     root.innerHTML = '';
     root.className = 'lp-2d-print-sheet';
@@ -209,7 +205,7 @@ export function assemblePrintSheetOptions(params) {
         scaleLabel,
         planCloneHtml,
     } = params;
-    const pixelsPerCm = computePrintContentScale(workspacePx, 600, 400) * 1;
+    const pixelsPerCm = computePrintSheetContentScale(sheetId, workspacePx);
     const scaleBar = buildScaleBarLabel(Math.max(pixelsPerCm, 0.4), 100);
     return {
         sheetId,
