@@ -11,6 +11,7 @@ import {
     pointInPolygonXZ,
     axisAlignedBoundsXZ,
     boundsXZMatch,
+    computeWalkRoomPreviewPose,
 } from './LP_3D_scene.js';
 
 describe('canvasToSceneXZ', () => {
@@ -246,6 +247,23 @@ describe('lp-3d-spec-demo fixture', () => {
         expect(openingCutsWall(wall, window)).toBe(true);
         const ring = wall.inner;
         expect(pointInPolygonXZ(cab.centerX, cab.centerZ, ring)).toBe(true);
+    });
+});
+
+describe('computeWalkRoomPreviewPose', () => {
+    it('距南牆 standoff 並朝北看', () => {
+        const ring = [
+            { x: -300, z: -250 },
+            { x: 300, z: -250 },
+            { x: 300, z: 250 },
+            { x: -300, z: 250 },
+        ];
+        const pose = computeWalkRoomPreviewPose(ring, 150);
+        expect(pose.x).toBe(0);
+        expect(pose.z).toBe(100);
+        expect(pose.lookX).toBe(-72);
+        expect(pose.lookZ).toBe(-90);
+        expect(pose.pitch).toBeLessThan(0);
     });
 });
 

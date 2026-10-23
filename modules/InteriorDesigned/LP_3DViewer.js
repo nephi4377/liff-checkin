@@ -12,6 +12,7 @@ import {
     pointInWallBand,
     axisAlignedBoundsXZ,
     boundsXZMatch,
+    computeWalkRoomPreviewPose,
 } from './LP_3D_scene.js';
 import {
     buildFixtureMeshGroup,
@@ -233,6 +234,13 @@ export function createLayoutPlanner3DViewer(options) {
 
     function resetWalkCamera(desc) {
         const ring = desc.walkBounds?.rings?.[0];
+        const pose = ring ? computeWalkRoomPreviewPose(ring) : null;
+        if (pose) {
+            walk.setPosition(pose.x, pose.z);
+            walk.lookAt(pose.lookX, pose.lookZ);
+            if (pose.pitch != null) walk.setPitch(pose.pitch);
+            return;
+        }
         const c = ring?.length ? ringCentroidXZ(ring) : { x: 0, z: 0 };
         const bodyR = resolveWalkBodyRadiusCm(desc);
         const collision = walkCollisionCache.get(desc);
@@ -394,6 +402,9 @@ export function createLayoutPlanner3DViewer(options) {
             color: 0xf5f0e8,
             roughness: 0.92,
             metalness: 0.02,
+            polygonOffset: true,
+            polygonOffsetFactor: 1,
+            polygonOffsetUnits: 1,
         });
         const floorRings = desc.floors.length
             ? desc.floors.map((f) => f.ring)
@@ -449,7 +460,8 @@ export function createLayoutPlanner3DViewer(options) {
         const showCabinetLabels = cabinetCount <= 12;
         for (const fix of desc.fixtures) {
             const group = buildFixtureMeshGroup(THREE, fix);
-            group.position.set(fix.centerX, 0, fix.centerZ);
+            const liftY = fix.kind === 'cabinet' ? 0.35 : 0;
+            group.position.set(fix.centerX, liftY, fix.centerZ);
             group.rotation.y = (-fix.rotationDeg * Math.PI) / 180;
             group.userData.lp3dFixtureId = fix.id;
             group.userData.lp3dFixtureKind = fix.kind;
@@ -460,7 +472,7 @@ export function createLayoutPlanner3DViewer(options) {
                 const accent = LP_3D_CATEGORY_COLORS[fix.displayCategory]
                     ?? LP_3D_CATEGORY_COLORS.cabinet;
                 const sprite = createLabelSprite(THREE, fix.label, accent);
-                const topY = fix.baseYCm + fix.heightCm + 18;
+                const topY = fix.baseYCm + fix.heightCm + 18 + liftY;
                 sprite.position.set(fix.centerX, topY, fix.centerZ);
                 labels.add(sprite);
             }
@@ -483,7 +495,7 @@ export function createLayoutPlanner3DViewer(options) {
         const dz = camera.position.z - controls.target.z;
         const dy = camera.position.y - controls.target.y;
         const horiz = Math.hypot(dx, dz);
-        return dy > wallH * 1.05 && horiz < dy * 0.2;
+        return dy > wallH * 0.65 && horiz < dy * 0.42;
     }
 
     let lastOrbitWallCut = null;
@@ -491,10 +503,25 @@ export function createLayoutPlanner3DViewer(options) {
     function applyOrbitWallPresentation() {
         if (!camera || viewMode !== 'orbit' || !wallMeshes.current.length) return;
         const wallH = lastDesc?.walls?.[0]?.heightCm ?? LP_3D_DEFAULTS.WALL_HEIGHT_CM;
-        const cut = !isOrbitTopDownView();
-        if (cut === lastOrbitWallCut) return;
-        lastOrbitWallCut = cut;
+        const topDown = isOrbitTopDownView();
+        const cut = !topDown;
+        const modeKey = topDown ? 'top' : (cut ? 'cut' : 'full');
+        if (modeKey === lastOrbitWallCut && modeKey !== 'top') return;
+        if (modeKey === lastOrbitWallCut && topDown) {
+            for (const mesh of wallMeshes.current) {
+                if (mesh.visible) {
+                    mesh.visible = false;
+                }
+            }
+            return;
+        }
+        lastOrbitWallCut = modeKey;
         for (const mesh of wallMeshes.current) {
+            if (topDown) {
+                mesh.visible = false;
+                continue;
+            }
+            mesh.visible = true;
             mesh.scale.y = cut ? ORBIT_WALL_CUT_HEIGHT_CM / wallH : 1;
             const mat = mesh.material;
             if (!mat) continue;
@@ -524,7 +551,10 @@ export function createLayoutPlanner3DViewer(options) {
         const delta = Math.min((now - lastTick) / 1000, 0.05);
         lastTick = now;
         if (viewMode === 'walk') walk.update(delta);
-        else controls.update();
+        else {
+            controls.update();
+            applyOrbitWallPresentation();
+        }
         updateLabelScreenSizes();
         renderer.render(scene, camera);
         animationId = requestAnimationFrame(tick);
@@ -540,6 +570,59 @@ export function createLayoutPlanner3DViewer(options) {
             }
         });
         return out;
+    }
+
+    function projectWorldBoxToScreen(object3d) {
+        if (!camera || !renderer || !object3d) return null;
+        const box = new THREE.Box3().setFromObject(object3d);
+        if (box.isEmpty()) return null;
+        const w = renderer.domElement.clientWidth;
+        const h = renderer.domElement.clientHeight;
+        const corners = [
+            new THREE.Vector3(box.min.x, box.min.y, box.min.z),
+            new THREE.Vector3(box.min.x, box.min.y, box.max.z),
+            new THREE.Vector3(box.min.x, box.max.y, box.min.z),
+            new THREE.Vector3(box.min.x, box.max.y, box.max.z),
+            new THREE.Vector3(box.max.x, box.min.y, box.min.z),
+            new THREE.Vector3(box.max.x, box.min.y, box.max.z),
+            new THREE.Vector3(box.max.x, box.max.y, box.min.z),
+            new THREE.Vector3(box.max.x, box.max.y, box.max.z),
+        ];
+        let minSx = Infinity;
+        let maxSx = -Infinity;
+        let minSy = Infinity;
+        let maxSy = -Infinity;
+        let anyInFront = false;
+        for (const v of corners) {
+            const p = v.clone().project(camera);
+            if (p.z < 1) anyInFront = true;
+            const sx = (p.x * 0.5 + 0.5) * w;
+            const sy = (-p.y * 0.5 + 0.5) * h;
+            minSx = Math.min(minSx, sx);
+            maxSx = Math.max(maxSx, sx);
+            minSy = Math.min(minSy, sy);
+            maxSy = Math.max(maxSy, sy);
+        }
+        const pixelWidth = Math.max(0, maxSx - minSx);
+        const pixelHeight = Math.max(0, maxSy - minSy);
+        const pixelArea = pixelWidth * pixelHeight;
+        const maxSpan = Math.max(pixelWidth, pixelHeight);
+        return {
+            pixelWidth,
+            pixelHeight,
+            pixelArea,
+            inFrustum: anyInFront && (pixelArea >= 120 || maxSpan >= 14),
+        };
+    }
+
+    function fixtureMeshVisibleOnScreen(group) {
+        if (!group) return false;
+        let meshCount = 0;
+        group.traverse((obj) => {
+            if (obj.isMesh && obj.visible) meshCount += 1;
+        });
+        const screen = projectWorldBoxToScreen(group);
+        return meshCount > 0 && Boolean(screen?.inFrustum);
     }
 
     function floorMeshBoundsXZ() {
@@ -570,11 +653,40 @@ export function createLayoutPlanner3DViewer(options) {
         const openings = lastDesc.fixtures.filter((f) => f.kind === 'door' || f.kind === 'window');
         const cabinets = lastDesc.fixtures.filter((f) => f.kind === 'cabinet');
         const sprite = labelGroup.current?.children?.find((c) => c.userData?.lp3dCabinetLabel);
+        const cabGroup = fixtureGroups.current.get('cab-demo-1')
+            ?? fixtureGroups.current.get(cabinets[0]?.id);
+        const floorMesh = floorMeshes.current[0];
+        const walkRing = floorRing;
+        const walkPose = walkRing ? computeWalkRoomPreviewPose(walkRing) : null;
+        const camX = camera?.position.x;
+        const camZ = camera?.position.z;
+        const camY = camera?.position.y;
+        let walkStandoffSouth = null;
+        if (walkRing && camX != null && camZ != null) {
+            const b = axisAlignedBoundsXZ(walkRing);
+            walkStandoffSouth = b.maxZ - camZ;
+        }
         return {
             ceilingVisible: Boolean(ceilingGroup.current?.visible),
-            floorBoundsMatchInner: Boolean(
-                innerBounds && meshBounds && boundsXZMatch(innerBounds, meshBounds, 2.5),
+            wallsHiddenTopDown: Boolean(
+                viewMode === 'orbit'
+                && isOrbitTopDownView()
+                && wallMeshes.current.every((m) => !m.visible),
             ),
+            floorBoundsMatchInner: Boolean(
+                innerBounds && meshBounds && boundsXZMatch(innerBounds, meshBounds, 2),
+            ),
+            cabinetMeshVisible: fixtureMeshVisibleOnScreen(cabGroup),
+            cabinetMeshScreen: cabGroup ? projectWorldBoxToScreen(cabGroup) : null,
+            floorMeshScreen: floorMesh ? projectWorldBoxToScreen(floorMesh) : null,
+            walkCamera: camX != null ? {
+                x: camX,
+                y: camY,
+                z: camZ,
+                standoffSouthCm: walkStandoffSouth,
+                eyeHeightCm: LP_3D_DEFAULTS.WALK_EYE_HEIGHT_CM,
+            } : null,
+            walkPoseTarget: walkPose,
             innerBounds,
             floorMeshBounds: meshBounds,
             openingWallHits: openings.map((op) => {
@@ -638,8 +750,13 @@ export function createLayoutPlanner3DViewer(options) {
                 if (!walk || !lastDesc) return;
                 viewMode = 'walk';
                 applyViewMode();
-                walk.setPosition(-430, -360);
-                walk.lookAt(-455, -680);
+                const ring = lastDesc.walkBounds?.rings?.[0];
+                const pose = ring ? computeWalkRoomPreviewPose(ring) : null;
+                if (pose) {
+                    walk.setPosition(pose.x, pose.z);
+                    walk.lookAt(pose.lookX, pose.lookZ);
+                    if (pose.pitch != null) walk.setPitch(pose.pitch);
+                }
                 updateLabelScreenSizes();
             },
         };

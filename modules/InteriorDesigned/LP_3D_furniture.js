@@ -200,7 +200,11 @@ export function buildFixtureMeshGroup(THREE, fix) {
     }
 
     const color = LP_3D_CATEGORY_COLORS[cat] ?? LP_3D_CATEGORY_COLORS.cabinet;
-    addBox(group, THREE, w, h, d, mat(THREE, color), base);
+    const body = mat(THREE, color);
+    body.emissive = new THREE.Color(color);
+    body.emissiveIntensity = 0.12;
+    const mesh = addBox(group, THREE, w, h, d, body, base);
+    mesh.renderOrder = 2;
     return group;
 }
 

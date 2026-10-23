@@ -211,6 +211,10 @@ export function createWalkController(opts) {
             pitch = 0;
             applyCameraRotation();
         },
+        setPitch(rad) {
+            pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, rad));
+            applyCameraRotation();
+        },
         update,
         dispose() {
             window.removeEventListener('keydown', onKeyDown, true);

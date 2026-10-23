@@ -448,7 +448,10 @@ test.describe('LayoutPlanner E2E', () => {
 
     const snapshot = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.getRoomAcceptanceSnapshot());
     expect(snapshot?.ceilingVisible).toBe(false);
-    expect(snapshot?.floorBoundsMatchInner, '地板外框應貼齊牆內圈').toBe(true);
+    expect(snapshot?.wallsHiddenTopDown, '鳥瞰應隱藏牆體以免出現牆頂色帶').toBe(true);
+    expect(snapshot?.floorBoundsMatchInner, '地板外框應貼齊牆內圈（≤2cm）').toBe(true);
+    expect(snapshot?.cabinetMeshVisible, '鳥瞰應看見櫃體 mesh（非僅標籤）').toBe(true);
+    expect(snapshot?.cabinetMeshScreen?.pixelArea ?? 0, '櫃體螢幕投影面積應足夠').toBeGreaterThan(100);
     expect(snapshot?.labelCount).toBeGreaterThanOrEqual(1);
     expect(snapshot?.labelScreen?.textReadable, '櫃體標籤應達可讀像素尺寸').toBe(true);
     for (const hit of snapshot?.openingWallHits ?? []) {
@@ -472,6 +475,15 @@ test.describe('LayoutPlanner E2E', () => {
     await page.waitForTimeout(900);
     const walkSnap = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.getRoomAcceptanceSnapshot());
     expect(walkSnap?.labelScreen?.textReadable).toBe(true);
+    expect(walkSnap?.walkCamera?.y, '室內視角眼高').toBeGreaterThan(155);
+    expect(walkSnap?.walkCamera?.y).toBeLessThan(165);
+    expect(
+        Math.abs((walkSnap?.walkCamera?.standoffSouthCm ?? 0) - 150),
+        '應距南牆約 150cm',
+    ).toBeLessThanOrEqual(25);
+    expect(walkSnap?.floorMeshScreen?.inFrustum, '室內應看見地板').toBe(true);
+    expect(walkSnap?.cabinetMeshVisible, '室內應看見櫃體').toBe(true);
+    expect(walkSnap?.cabinetMeshScreen?.inFrustum, '櫃體應在視野內').toBe(true);
     await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-room-preview-walk.png'), fullPage: false });
   });
 

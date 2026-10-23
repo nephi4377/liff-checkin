@@ -79,6 +79,22 @@ export function axisAlignedBoundsXZ(ring) {
 }
 
 /** 兩個 XZ 外框是否在容差內一致 */
+/** 室內預覽：距南牆 standoffCm、朝北牆看過整間（cm／場景 XZ） */
+export function computeWalkRoomPreviewPose(ring, standoffCm = 150) {
+    if (!ring?.length) return null;
+    const bounds = axisAlignedBoundsXZ(ring);
+    const c = ringCentroidXZ(ring);
+    const spanX = bounds.maxX - bounds.minX;
+    const spanZ = bounds.maxZ - bounds.minZ;
+    return {
+        x: c.x,
+        z: bounds.maxZ - standoffCm,
+        lookX: c.x - spanX * 0.12,
+        lookZ: c.z - spanZ * 0.18,
+        pitch: -0.22,
+    };
+}
+
 export function boundsXZMatch(a, b, toleranceCm = 2) {
     const t = toleranceCm;
     return Math.abs(a.minX - b.minX) <= t
