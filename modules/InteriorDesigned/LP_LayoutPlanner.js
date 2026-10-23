@@ -36,6 +36,24 @@ import {
     estimateDataUrlBytes,
     isDataUrlOverAutosaveLimit,
 } from './LP_underlay.js';
+import {
+    LP_PROJECT_FORMAT,
+    LP_LAYOUT_VERSION,
+    LP_LEGACY_AUTOSAVE_KEY,
+    readStorageIndex,
+    saveLayoutSession,
+    loadLayoutSession,
+    tryMigrateFromLegacyLocalStorage,
+    validateProjectFile,
+    buildProjectFileExport,
+    hydrateHistoryEntries,
+    hydrateLayoutBackground,
+    collectHistoryForIndexedDb,
+    persistBackgroundDataUrl,
+    stripBackgroundForPersist,
+    LayoutPlannerStorageError,
+    runStorageWrite,
+} from './LP_storage.js';
 
 /** 開啟時於 console 輸出除錯訊息（元件載入、渲染、縮放、繪圖等） */
 const DEBUG = false;
@@ -49,6 +67,8 @@ let bgScale = 1.0;
 let bgPosition = { x: 0, y: 0 };
 let bgRotationDeg = 0;
 let bgOpacity = 0.75;
+/** IndexedDB 底圖 Blob 參照（history／自動存檔不重複嵌入 data URL） */
+let currentBackgroundBlobId = null;
 let bgLocked = false;
 let bgHidden = false;
 /** @type {'scale' | 'rotate' | null} */
@@ -2629,6 +2649,15 @@ async function applyUnderlayDataUrl(dataUrl) {
     syncUnderlayControlInputs();
     updateBgScale(1.0);
     updateBgTransform();
+    if (!isLayoutPlannerUrlPreview()) {
+        try {
+            currentBackgroundBlobId = await persistBackgroundDataUrl(dataUrl, currentBackgroundBlobId);
+            schedulePersistToIndexedDB();
+        } catch (err) {
+            console.error('[LP storage] 底圖寫入 IndexedDB 失敗', err);
+            notifyStorageError(err);
+        }
+    }
 }
 
 function cancelUnderlayCalibrate() {
@@ -2781,19 +2810,35 @@ function saveCanvasAsImage() {
     });
 }
 
-function saveLayout() {
+function buildCurrentLayoutSnapshot() {
     const constructionAreaEl = document.getElementById('construction-area');
-    const layoutData = {
-        version: '2.0',
-        timestamp: new Date().toISOString(),
-        placedCabinets: placedCabinets,
-        drawnAreas: drawnAreas,
-        placedAnnotations: placedAnnotations, // [修正] 加入標註資料
+    return {
+        version: LP_LAYOUT_VERSION,
+        timestamp: Date.now(),
+        prettyTime: new Date().toLocaleString(),
+        placedCabinets,
+        drawnAreas,
+        placedAnnotations,
         workspaceSize: getWorkspaceCanvasPx(),
         background: getSerializedBackground(),
         constructionArea: constructionAreaEl ? constructionAreaEl.value : '',
-        quotationManualOverrides: quotationManualOverrides,
-        layerVisibility: layerVisibility
+        quotationManualOverrides,
+        layerVisibility,
+    };
+}
+
+function saveLayout() {
+    const layoutData = {
+        version: '2.0',
+        timestamp: new Date().toISOString(),
+        placedCabinets,
+        drawnAreas,
+        placedAnnotations,
+        workspaceSize: getWorkspaceCanvasPx(),
+        background: getSerializedBackground(),
+        constructionArea: document.getElementById('construction-area')?.value ?? '',
+        quotationManualOverrides,
+        layerVisibility,
     };
 
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(layoutData, null, 2));
@@ -2805,21 +2850,60 @@ function saveLayout() {
     downloadAnchorNode.remove();
 }
 
+function exportProjectFile() {
+    const project = buildProjectFileExport(buildCurrentLayoutSnapshot());
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(project, null, 2));
+    const a = document.createElement('a');
+    a.setAttribute('href', dataStr);
+    a.setAttribute('download', `layout-project-${Date.now()}.json`);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    showGlobalNotification('已匯出專案檔（含底圖）', 3000, 'success');
+}
+
+async function importProjectFileFromJson(parsed) {
+    const validated = validateProjectFile(parsed);
+    if (!validated.ok) {
+        throw new Error(validated.message || '專案檔格式不正確');
+    }
+    const layout = validated.layout;
+    if (layout.background?.src?.startsWith('data:image')) {
+        try {
+            currentBackgroundBlobId = await persistBackgroundDataUrl(
+                layout.background.src,
+                currentBackgroundBlobId,
+            );
+        } catch (err) {
+            notifyStorageError(err);
+            throw err;
+        }
+    }
+    loadLayoutFromData(layout);
+    await flushPersistToIndexedDB(true);
+}
+
 function loadLayout(event) {
     const file = event.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
         try {
             const layoutData = JSON.parse(e.target.result);
-            loadLayoutFromData(layoutData);
-            showGlobalNotification('佈局已成功載入！', 3000, 'success');
+            if (layoutData.format === LP_PROJECT_FORMAT) {
+                await importProjectFileFromJson(layoutData);
+                showGlobalNotification('專案檔已成功匯入！', 3000, 'success');
+            } else {
+                loadLayoutFromData(layoutData);
+                showGlobalNotification('佈局已成功載入！', 3000, 'success');
+                schedulePersistToIndexedDB();
+            }
         } catch (error) {
             console.error('載入佈局失敗:', error);
             showGlobalNotification(`載入失敗: ${error.message} `, 8000, 'error');
         } finally {
-            event.target.value = ''; // 清空 input，以便可以再次載入同一個檔案
+            event.target.value = '';
         }
     };
     reader.readAsText(file);
@@ -4394,6 +4478,7 @@ function commitSaveState() {
     historyIndex = history.length - 1;
     updateUndoRedoButtons();
     scheduleLp3dRebuild();
+    schedulePersistToIndexedDB();
 }
 
 /**
@@ -4629,8 +4714,11 @@ function bindEventListeners() {
     });
     document.getElementById('save-canvas-as-image-btn').addEventListener('click', saveCanvasAsImage);
     document.getElementById('save-layout-btn').addEventListener('click', saveLayout);
+    document.getElementById('export-project-btn')?.addEventListener('click', exportProjectFile);
     document.getElementById('layout-upload-label').addEventListener('click', () => document.getElementById('layout-upload').click());
+    document.getElementById('project-upload-label')?.addEventListener('click', () => document.getElementById('project-upload').click());
     document.getElementById('layout-upload').addEventListener('change', loadLayout);
+    document.getElementById('project-upload')?.addEventListener('change', loadLayout);
     const constructionAreaInput = document.getElementById('construction-area');
     if (constructionAreaInput) constructionAreaInput.addEventListener('change', () => saveState());
     document.getElementById('draw-ceiling-btn').addEventListener('click', () => startDrawing('ceiling'));
@@ -4795,7 +4883,7 @@ function bindEventListeners() {
     if (workspaceSizeSelect) {
         workspaceSizeSelect.addEventListener('change', (e) => {
             applyWorkspaceSize(e.target.value);
-            autoSave(true);
+            schedulePersistToIndexedDB();
         });
     }
     const uiLayoutSelect = document.getElementById('ui-layout-mode-select');
@@ -4910,20 +4998,11 @@ function calculateWallPath(points, thickness) {
 
 
 
-// ========== [新增] 自動儲存與防崩潰機制 ==========
+// ========== IndexedDB 自動儲存與防崩潰 ==========
 
-const AUTO_SAVE_KEY = 'layoutPlanner_autosave_v1';
-const AUTO_SAVE_INTERVAL = 60000; // 60秒自動儲存一次
-let autoSaveSrcOmittedWarned = false;
-
-function backgroundForAutosavePersist(bg) {
-    const norm = normalizeLayoutBackground(bg);
-    if (norm.src && norm.src.startsWith('data:image') && isDataUrlOverAutosaveLimit(norm.src)) {
-        const { src, ...rest } = norm;
-        return { ...rest, src: '', srcOmitted: true };
-    }
-    return norm;
-}
+const AUTO_SAVE_INTERVAL = 60000;
+let lpPersistDebounceTimer = null;
+let lpPersistInFlight = null;
 
 function backgroundForClientZipExport(bg) {
     const norm = normalizeLayoutBackground(bg);
@@ -4932,103 +5011,150 @@ function backgroundForClientZipExport(bg) {
     return { ...rest, src: '', hasUnderlay };
 }
 
-function buildAutosaveLayoutData() {
-    const constructionAreaEl = document.getElementById('construction-area');
-    return {
-        version: '2.0',
-        timestamp: new Date().getTime(),
-        prettyTime: new Date().toLocaleString(),
-        placedCabinets,
-        drawnAreas,
-        placedAnnotations,
-        workspaceSize: getWorkspaceCanvasPx(),
-        background: backgroundForAutosavePersist(getSerializedBackground()),
-        constructionArea: constructionAreaEl ? constructionAreaEl.value : '',
-        quotationManualOverrides,
-        layerVisibility,
-    };
+function notifyStorageError(err) {
+    const msg = err instanceof LayoutPlannerStorageError
+        ? err.message
+        : (err?.message || '本機儲存失敗，請匯出專案檔備份。');
+    showGlobalNotification(msg, 8000, 'error');
 }
 
-function isQuotaExceededError(err) {
-    const name = err?.name || '';
-    return name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED';
+function schedulePersistToIndexedDB() {
+    if (isLayoutPlannerUrlPreview()) return;
+    if (lpPersistDebounceTimer) clearTimeout(lpPersistDebounceTimer);
+    lpPersistDebounceTimer = setTimeout(() => {
+        lpPersistDebounceTimer = null;
+        flushPersistToIndexedDB(true);
+    }, 1500);
+}
+
+async function prepareLayoutBackgroundForIdb(bg) {
+    const norm = normalizeLayoutBackground(bg);
+    if (norm.src && norm.src.startsWith('data:image')) {
+        let blobId = currentBackgroundBlobId;
+        if (!blobId) {
+            blobId = await persistBackgroundDataUrl(norm.src);
+            currentBackgroundBlobId = blobId;
+        }
+        return stripBackgroundForPersist({ ...norm, blobId, hasBackground: true });
+    }
+    return stripBackgroundForPersist({ ...norm, blobId: currentBackgroundBlobId });
+}
+
+async function flushPersistToIndexedDB(silent = true) {
+    if (isLayoutPlannerUrlPreview()) return;
+    if (lpPersistInFlight) {
+        await lpPersistInFlight;
+        return;
+    }
+    lpPersistInFlight = (async () => {
+        try {
+            await runStorageWrite(async () => {
+                const layoutState = buildCurrentLayoutSnapshot();
+                layoutState.background = await prepareLayoutBackgroundForIdb(layoutState.background);
+                const historyForDb = await collectHistoryForIndexedDb(history);
+                await saveLayoutSession(layoutState, {
+                    history: historyForDb,
+                    historyIndex,
+                });
+            });
+            if (!silent) {
+                showGlobalNotification('☁️ 進度已自動備份', 1000, 'info');
+            }
+        } catch (err) {
+            console.error('IndexedDB 自動備份失敗:', err);
+            notifyStorageError(err);
+        } finally {
+            lpPersistInFlight = null;
+        }
+    })();
+    await lpPersistInFlight;
+}
+
+function layoutSnapshotHasContent(layout) {
+    if (!layout) return false;
+    const cabs = layout.placedCabinets?.length || 0;
+    const areas = layout.drawnAreas?.length || 0;
+    const ann = layout.placedAnnotations?.length || 0;
+    const bg = layout.background;
+    const hasBg = !!(bg?.src?.startsWith?.('data:image') || bg?.blobId || bg?.hasBackground);
+    return cabs > 0 || areas > 0 || ann > 0 || hasBg;
+}
+
+async function applyIndexedDbSession(session) {
+    const hydratedHistory = await hydrateHistoryEntries(session.history || []);
+    if (hydratedHistory.length > 0) {
+        history = hydratedHistory;
+        historyIndex = Math.min(
+            typeof session.historyIndex === 'number' ? session.historyIndex : hydratedHistory.length - 1,
+            hydratedHistory.length - 1,
+        );
+        historyIndex = Math.max(0, historyIndex);
+        loadState(history[historyIndex]);
+        quotationManualOverrides = history[historyIndex].quotationManualOverrides || {};
+        layerVisibility = history[historyIndex].layerVisibility || {};
+        renderLayerVisibilityPanel();
+        updateUndoRedoButtons();
+        return;
+    }
+    const layout = session.layout || {};
+    const hydratedBg = await hydrateLayoutBackground(layout.background || {});
+    if (hydratedBg?.blobId) currentBackgroundBlobId = hydratedBg.blobId;
+    loadLayoutFromData({ ...layout, background: hydratedBg }, { successMessage: false });
+}
+
+/**
+ * @returns {Promise<boolean>} 是否已從 IndexedDB 還原（略過初始 saveState）
+ */
+async function initLayoutPlannerPersistence() {
+    if (isLayoutPlannerUrlPreview()) return false;
+
+    const mig = await tryMigrateFromLegacyLocalStorage();
+    if (mig.migrated) {
+        showGlobalNotification('已將舊版 localStorage 自動備份搬移至 IndexedDB', 4500, 'success');
+    } else if (mig.error) {
+        showGlobalNotification(
+            `舊資料搬移失敗：${mig.error}（仍保留 localStorage 備份 layoutPlanner_autosave_v1）`,
+            9000,
+            'error',
+        );
+    }
+
+    const legacyRaw = localStorage.getItem(LP_LEGACY_AUTOSAVE_KEY);
+    if (legacyRaw && !mig.migrated && mig.error) {
+        try {
+            const data = JSON.parse(legacyRaw);
+            const ts = data.timestamp || 0;
+            if (Date.now() - ts < 24 * 60 * 60 * 1000 && layoutSnapshotHasContent(data)) {
+                if (confirm(`舊版備份搬移失敗，是否仍從 localStorage 還原 (${data.prettyTime || '未知時間'})？`)) {
+                    loadLayoutFromData(data);
+                    return true;
+                }
+            }
+        } catch (e) {
+            console.error('legacy restore', e);
+        }
+    }
+
+    const session = await loadLayoutSession();
+    if (!session?.layout) return false;
+
+    const index = readStorageIndex();
+    const savedAt = index.lastSavedAt || session.layout.timestamp || 0;
+    if (Date.now() - savedAt > 24 * 60 * 60 * 1000) return false;
+    if (!layoutSnapshotHasContent(session.layout)) return false;
+
+    const pretty = session.layout.prettyTime || new Date(savedAt).toLocaleString();
+    if (confirm(`檢測到 IndexedDB 中有未儲存的進度 (${pretty})，是否還原？\n\n按「確定」還原，按「取消」將忽略。`)) {
+        await applyIndexedDbSession(session);
+        showGlobalNotification('✅ 已還原 IndexedDB 備份', 3000, 'success');
+        return true;
+    }
+    return false;
 }
 
 function initAutoSave() {
     if (isLayoutPlannerUrlPreview()) return;
-    // 1. 啟動定時器
-    setInterval(autoSave, AUTO_SAVE_INTERVAL);
-
-    // 2. 檢查是否有意外中斷的備份
-    checkAndRestoreBackup();
-}
-
-function autoSave(silent = false) {
-    const layoutData = buildAutosaveLayoutData();
-    try {
-        localStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(layoutData));
-        if (!silent) {
-            showGlobalNotification('☁️ 進度已自動備份', 1000, 'info');
-        }
-        return;
-    } catch (e) {
-        if (!isQuotaExceededError(e)) {
-            console.error('自動備份失敗:', e);
-            return;
-        }
-    }
-
-    try {
-        localStorage.removeItem(AUTO_SAVE_KEY);
-        const slim = {
-            ...layoutData,
-            background: backgroundForAutosavePersist({ ...getSerializedBackground(), src: '' }),
-        };
-        slim.background.srcOmitted = true;
-        localStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(slim));
-        if (!autoSaveSrcOmittedWarned) {
-            showGlobalNotification(
-                '底圖過大未能完整自動備份，請按「儲存佈局」下載 JSON 備份。',
-                9000,
-                'warning',
-            );
-            autoSaveSrcOmittedWarned = true;
-        }
-    } catch (e2) {
-        console.error('自動備份失敗 (LocalStorage 已滿):', e2);
-        if (!autoSaveSrcOmittedWarned) {
-            showGlobalNotification(
-                '自動備份失敗（儲存空間不足），請立即下載佈局 JSON。',
-                9000,
-                'error',
-            );
-            autoSaveSrcOmittedWarned = true;
-        }
-    }
-}
-
-function checkAndRestoreBackup() {
-    if (isLayoutPlannerUrlPreview()) return;
-    try {
-        const json = localStorage.getItem(AUTO_SAVE_KEY);
-        if (!json) return;
-
-        const data = JSON.parse(json);
-        // 檢查備份時間，如果距離現在超過 24 小時則忽略 (避免載入太舊的資料)
-        const now = new Date().getTime();
-        if (now - data.timestamp > 24 * 60 * 60 * 1000) {
-            return;
-        }
-
-        // 詢問使用者是否還原
-        if (confirm(`檢測到您有未儲存的進度 (${data.prettyTime})，是否還原？\n\n按「確定」還原，按「取消」將忽略此備份。`)) {
-            loadLayoutFromData(data);
-        } else {
-            // 如果使用者選擇不還原，是否要清除備份？m
-        }
-    } catch (e) {
-        console.error('檢查備份失敗:', e);
-    }
+    setInterval(() => flushPersistToIndexedDB(true), AUTO_SAVE_INTERVAL);
 }
 
 const LP_PREVIEW_FIXTURE_RE = /^e2e\/fixtures\/[\w.-]+\.json$/;
@@ -5310,7 +5436,7 @@ function centerView() {
 }
 
 // 應用程式進入點
-window.onload = () => {
+window.onload = async () => {
     // 【核心修正】修正手機裝置偵測邏輯。
     // 舊邏輯 (window.innerWidth < 768) 在 iframe 中會因寬度不足而被誤判。
     // 新邏輯優先檢查 User Agent 是否包含 'Mobi' 關鍵字，這能更準確地判斷是否為真實的行動裝置，
@@ -5333,13 +5459,11 @@ window.onload = () => {
         ...(window.__LP_TEST_HOOKS__ || {}),
         getSerializedBackground: () => getSerializedBackground(),
         getDrawingPoints: () => JSON.parse(JSON.stringify(currentDrawingPoints)),
-        runAutoSave: (silent) => {
-            autoSave(!!silent);
-        },
-        readAutosaveJson: () => {
-            const raw = localStorage.getItem(AUTO_SAVE_KEY);
-            return raw ? JSON.parse(raw) : null;
-        },
+        flushPersistToIndexedDB: () => flushPersistToIndexedDB(true),
+        readStorageIndex: () => readStorageIndex(),
+        loadLayoutSession: () => loadLayoutSession(),
+        buildProjectFileExport: (layout) => buildProjectFileExport(layout),
+        validateProjectFile: (data) => validateProjectFile(data),
     };
     initWorkspaceAndUiFromStorage();
 
@@ -5351,9 +5475,12 @@ window.onload = () => {
 
     loadFromSheets();
     switchTab('settings'); // 預設顯示設定頁籤
-    saveState(); // [您的要求] 儲存初始狀態
 
-    // [v7.0 新增] 啟動自動儲存機制
+    const restoredFromIdb = await initLayoutPlannerPersistence();
+    if (!restoredFromIdb) {
+        saveState();
+    }
+
     initAutoSave();
     
     // [v9.13] 初始載入時置中視圖

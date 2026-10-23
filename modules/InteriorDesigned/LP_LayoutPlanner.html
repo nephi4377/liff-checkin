@@ -1103,6 +1103,14 @@
                                 class="w-full py-1.5 bg-yellow-200 text-yellow-800 rounded hover:bg-yellow-300 text-center cursor-pointer">載入佈局 (.json)</label>
                             <input type="file" id="layout-upload" accept=".json" class="hidden">
                         </div>
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <button id="export-project-btn" type="button"
+                                class="w-full py-1.5 bg-amber-600 text-white rounded hover:bg-amber-700">匯出專案檔</button>
+                            <label id="project-upload-label" title="layout-planner-project-1 專案檔（含底圖）"
+                                class="w-full py-1.5 bg-amber-600 text-white rounded hover:bg-amber-700 text-center cursor-pointer">匯入專案檔</label>
+                            <input type="file" id="project-upload" accept=".json,application/json" class="hidden">
+                        </div>
+                        <p class="text-[10px] text-yellow-700 mt-1">自動備份改存 IndexedDB；專案檔為完整備份（含底圖）。</p>
                     </div>
                 </div>
 
