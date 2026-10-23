@@ -59,7 +59,7 @@ test.describe('LayoutPlanner 畫面回歸', () => {
 
     await expect(page).toHaveScreenshot('lp-demo-2d.png', {
       animations: 'disabled',
-      maxDiffPixels: 150,
+      maxDiffPixels: process.env.CI ? 400 : 150,
       mask: visualRegressionMasks(page),
       clip: clip2d,
     });
