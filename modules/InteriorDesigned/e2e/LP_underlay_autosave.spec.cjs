@@ -4,38 +4,19 @@ const path = require('path');
 const DEMO_PLAN = path.join(__dirname, 'fixtures', 'demo-floorplan-underlay.png');
 
 test.describe('FLOORPLAN-UNDERLAY autosave', () => {
-  test('QuotaExceeded 時寫入 srcOmitted 備份並提示', async ({ page }) => {
+  test('IndexedDB 備份：底圖 flush 後 session 含 blobId', async ({ page }) => {
     page.on('dialog', (d) => d.dismiss());
-
-    await page.addInitScript(() => {
-      const orig = Storage.prototype.setItem;
-      Storage.prototype.setItem = function (key, value) {
-        if (key === 'layoutPlanner_autosave_v1' && value.includes('data:image')) {
-          const err = new DOMException('quota', 'QuotaExceededError');
-          throw err;
-        }
-        return orig.call(this, key, value);
-      };
-    });
-
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
     await page.locator('#bg-upload').setInputFiles(DEMO_PLAN);
     await page.waitForTimeout(600);
     await page.evaluate(async () => {
-      await window.__LP_TEST_HOOKS__?.runAutoSave?.(true);
+      await window.__LP_TEST_HOOKS__?.flushPersistToIndexedDB?.();
     });
-    await page.waitForTimeout(300);
-
-    const saved = await page.evaluate(() => {
-      const raw = localStorage.getItem('layoutPlanner_autosave_v1');
-      if (!raw) return null;
-      return JSON.parse(raw);
+    const blobId = await page.evaluate(async () => {
+      const session = await window.__LP_TEST_HOOKS__?.loadLayoutSession?.();
+      return session?.layout?.background?.blobId || null;
     });
-    expect(saved?.background?.srcOmitted).toBe(true);
-    expect(saved?.background?.src || '').not.toMatch(/^data:image/);
-
-    const toast = await page.locator('#global-notification-container').textContent().catch(() => '');
-    expect(toast).toMatch(/底圖過大|自動備份/);
+    expect(blobId).toBeTruthy();
   });
 
   test('底圖透明度 undo 後仍保留底圖', async ({ page }) => {
