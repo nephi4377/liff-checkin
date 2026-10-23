@@ -1,0 +1,1103 @@
+{
+  "version": "2.0",
+  "workspaceSize": 2000,
+  "placedCabinets": [
+    {
+      "id": "perf-cab-0",
+      "x": 280,
+      "y": 280,
+      "rotation": 0,
+      "currentW": 80,
+      "currentH": 55,
+      "data": {
+        "name": "開門收納矮櫃",
+        "group": "門窗工程",
+        "width": 80,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-1",
+      "x": 390,
+      "y": 280,
+      "rotation": 90,
+      "currentW": 100,
+      "currentH": 70,
+      "data": {
+        "name": "開門高衣櫃",
+        "group": "門窗工程",
+        "width": 100,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-2",
+      "x": 500,
+      "y": 280,
+      "rotation": 180,
+      "currentW": 120,
+      "currentH": 55,
+      "data": {
+        "name": "三人沙發",
+        "group": "系統櫃",
+        "width": 120,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-3",
+      "x": 610,
+      "y": 280,
+      "rotation": 270,
+      "currentW": 80,
+      "currentH": 70,
+      "data": {
+        "name": "6尺床",
+        "group": "系統櫃",
+        "width": 80,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-4",
+      "x": 720,
+      "y": 280,
+      "rotation": 0,
+      "currentW": 100,
+      "currentH": 55,
+      "data": {
+        "name": "流理臺",
+        "group": "系統櫃",
+        "width": 100,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-5",
+      "x": 280,
+      "y": 375,
+      "rotation": 90,
+      "currentW": 120,
+      "currentH": 70,
+      "data": {
+        "name": "房門90",
+        "group": "門窗工程",
+        "width": 120,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-6",
+      "x": 390,
+      "y": 375,
+      "rotation": 180,
+      "currentW": 80,
+      "currentH": 55,
+      "data": {
+        "name": "落地窗",
+        "group": "門窗工程",
+        "width": 80,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-7",
+      "x": 500,
+      "y": 375,
+      "rotation": 270,
+      "currentW": 100,
+      "currentH": 70,
+      "data": {
+        "name": "開門收納矮櫃",
+        "group": "門窗工程",
+        "width": 100,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-8",
+      "x": 610,
+      "y": 375,
+      "rotation": 0,
+      "currentW": 120,
+      "currentH": 55,
+      "data": {
+        "name": "開門高衣櫃",
+        "group": "門窗工程",
+        "width": 120,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-9",
+      "x": 720,
+      "y": 375,
+      "rotation": 90,
+      "currentW": 80,
+      "currentH": 70,
+      "data": {
+        "name": "三人沙發",
+        "group": "系統櫃",
+        "width": 80,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-10",
+      "x": 280,
+      "y": 470,
+      "rotation": 180,
+      "currentW": 100,
+      "currentH": 55,
+      "data": {
+        "name": "6尺床",
+        "group": "系統櫃",
+        "width": 100,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-11",
+      "x": 390,
+      "y": 470,
+      "rotation": 270,
+      "currentW": 120,
+      "currentH": 70,
+      "data": {
+        "name": "流理臺",
+        "group": "系統櫃",
+        "width": 120,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-12",
+      "x": 500,
+      "y": 470,
+      "rotation": 0,
+      "currentW": 80,
+      "currentH": 55,
+      "data": {
+        "name": "房門90",
+        "group": "門窗工程",
+        "width": 80,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-13",
+      "x": 610,
+      "y": 470,
+      "rotation": 90,
+      "currentW": 100,
+      "currentH": 70,
+      "data": {
+        "name": "落地窗",
+        "group": "門窗工程",
+        "width": 100,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-14",
+      "x": 720,
+      "y": 470,
+      "rotation": 180,
+      "currentW": 120,
+      "currentH": 55,
+      "data": {
+        "name": "開門收納矮櫃",
+        "group": "門窗工程",
+        "width": 120,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-15",
+      "x": 280,
+      "y": 565,
+      "rotation": 270,
+      "currentW": 80,
+      "currentH": 70,
+      "data": {
+        "name": "開門高衣櫃",
+        "group": "門窗工程",
+        "width": 80,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-16",
+      "x": 390,
+      "y": 565,
+      "rotation": 0,
+      "currentW": 100,
+      "currentH": 55,
+      "data": {
+        "name": "三人沙發",
+        "group": "系統櫃",
+        "width": 100,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-17",
+      "x": 500,
+      "y": 565,
+      "rotation": 90,
+      "currentW": 120,
+      "currentH": 70,
+      "data": {
+        "name": "6尺床",
+        "group": "系統櫃",
+        "width": 120,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-18",
+      "x": 610,
+      "y": 565,
+      "rotation": 180,
+      "currentW": 80,
+      "currentH": 55,
+      "data": {
+        "name": "流理臺",
+        "group": "系統櫃",
+        "width": 80,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-19",
+      "x": 720,
+      "y": 565,
+      "rotation": 270,
+      "currentW": 100,
+      "currentH": 70,
+      "data": {
+        "name": "房門90",
+        "group": "門窗工程",
+        "width": 100,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-20",
+      "x": 1080,
+      "y": 280,
+      "rotation": 0,
+      "currentW": 120,
+      "currentH": 55,
+      "data": {
+        "name": "落地窗",
+        "group": "門窗工程",
+        "width": 120,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-21",
+      "x": 1190,
+      "y": 280,
+      "rotation": 90,
+      "currentW": 80,
+      "currentH": 70,
+      "data": {
+        "name": "開門收納矮櫃",
+        "group": "門窗工程",
+        "width": 80,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-22",
+      "x": 1300,
+      "y": 280,
+      "rotation": 180,
+      "currentW": 100,
+      "currentH": 55,
+      "data": {
+        "name": "開門高衣櫃",
+        "group": "門窗工程",
+        "width": 100,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-23",
+      "x": 1410,
+      "y": 280,
+      "rotation": 270,
+      "currentW": 120,
+      "currentH": 70,
+      "data": {
+        "name": "三人沙發",
+        "group": "系統櫃",
+        "width": 120,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-24",
+      "x": 1520,
+      "y": 280,
+      "rotation": 0,
+      "currentW": 80,
+      "currentH": 55,
+      "data": {
+        "name": "6尺床",
+        "group": "系統櫃",
+        "width": 80,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-25",
+      "x": 1080,
+      "y": 375,
+      "rotation": 90,
+      "currentW": 100,
+      "currentH": 70,
+      "data": {
+        "name": "流理臺",
+        "group": "系統櫃",
+        "width": 100,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-26",
+      "x": 1190,
+      "y": 375,
+      "rotation": 180,
+      "currentW": 120,
+      "currentH": 55,
+      "data": {
+        "name": "房門90",
+        "group": "門窗工程",
+        "width": 120,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-27",
+      "x": 1300,
+      "y": 375,
+      "rotation": 270,
+      "currentW": 80,
+      "currentH": 70,
+      "data": {
+        "name": "落地窗",
+        "group": "門窗工程",
+        "width": 80,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-28",
+      "x": 1410,
+      "y": 375,
+      "rotation": 0,
+      "currentW": 100,
+      "currentH": 55,
+      "data": {
+        "name": "開門收納矮櫃",
+        "group": "門窗工程",
+        "width": 100,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-29",
+      "x": 1520,
+      "y": 375,
+      "rotation": 90,
+      "currentW": 120,
+      "currentH": 70,
+      "data": {
+        "name": "開門高衣櫃",
+        "group": "門窗工程",
+        "width": 120,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-30",
+      "x": 1080,
+      "y": 470,
+      "rotation": 180,
+      "currentW": 80,
+      "currentH": 55,
+      "data": {
+        "name": "三人沙發",
+        "group": "系統櫃",
+        "width": 80,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-31",
+      "x": 1190,
+      "y": 470,
+      "rotation": 270,
+      "currentW": 100,
+      "currentH": 70,
+      "data": {
+        "name": "6尺床",
+        "group": "系統櫃",
+        "width": 100,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-32",
+      "x": 1300,
+      "y": 470,
+      "rotation": 0,
+      "currentW": 120,
+      "currentH": 55,
+      "data": {
+        "name": "流理臺",
+        "group": "系統櫃",
+        "width": 120,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-33",
+      "x": 1410,
+      "y": 470,
+      "rotation": 90,
+      "currentW": 80,
+      "currentH": 70,
+      "data": {
+        "name": "房門90",
+        "group": "門窗工程",
+        "width": 80,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-34",
+      "x": 1520,
+      "y": 470,
+      "rotation": 180,
+      "currentW": 100,
+      "currentH": 55,
+      "data": {
+        "name": "落地窗",
+        "group": "門窗工程",
+        "width": 100,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-35",
+      "x": 1080,
+      "y": 565,
+      "rotation": 270,
+      "currentW": 120,
+      "currentH": 70,
+      "data": {
+        "name": "開門收納矮櫃",
+        "group": "門窗工程",
+        "width": 120,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-36",
+      "x": 1190,
+      "y": 565,
+      "rotation": 0,
+      "currentW": 80,
+      "currentH": 55,
+      "data": {
+        "name": "開門高衣櫃",
+        "group": "門窗工程",
+        "width": 80,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-37",
+      "x": 1300,
+      "y": 565,
+      "rotation": 90,
+      "currentW": 100,
+      "currentH": 70,
+      "data": {
+        "name": "三人沙發",
+        "group": "系統櫃",
+        "width": 100,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-38",
+      "x": 1410,
+      "y": 565,
+      "rotation": 180,
+      "currentW": 120,
+      "currentH": 55,
+      "data": {
+        "name": "6尺床",
+        "group": "系統櫃",
+        "width": 120,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-39",
+      "x": 1520,
+      "y": 565,
+      "rotation": 270,
+      "currentW": 80,
+      "currentH": 70,
+      "data": {
+        "name": "流理臺",
+        "group": "系統櫃",
+        "width": 80,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-40",
+      "x": 280,
+      "y": 1080,
+      "rotation": 0,
+      "currentW": 100,
+      "currentH": 55,
+      "data": {
+        "name": "房門90",
+        "group": "門窗工程",
+        "width": 100,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-41",
+      "x": 390,
+      "y": 1080,
+      "rotation": 90,
+      "currentW": 120,
+      "currentH": 70,
+      "data": {
+        "name": "落地窗",
+        "group": "門窗工程",
+        "width": 120,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-42",
+      "x": 500,
+      "y": 1080,
+      "rotation": 180,
+      "currentW": 80,
+      "currentH": 55,
+      "data": {
+        "name": "開門收納矮櫃",
+        "group": "門窗工程",
+        "width": 80,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-43",
+      "x": 610,
+      "y": 1080,
+      "rotation": 270,
+      "currentW": 100,
+      "currentH": 70,
+      "data": {
+        "name": "開門高衣櫃",
+        "group": "門窗工程",
+        "width": 100,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-44",
+      "x": 720,
+      "y": 1080,
+      "rotation": 0,
+      "currentW": 120,
+      "currentH": 55,
+      "data": {
+        "name": "三人沙發",
+        "group": "系統櫃",
+        "width": 120,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-45",
+      "x": 830,
+      "y": 1080,
+      "rotation": 90,
+      "currentW": 80,
+      "currentH": 70,
+      "data": {
+        "name": "6尺床",
+        "group": "系統櫃",
+        "width": 80,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-46",
+      "x": 280,
+      "y": 1175,
+      "rotation": 180,
+      "currentW": 100,
+      "currentH": 55,
+      "data": {
+        "name": "流理臺",
+        "group": "系統櫃",
+        "width": 100,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-47",
+      "x": 390,
+      "y": 1175,
+      "rotation": 270,
+      "currentW": 120,
+      "currentH": 70,
+      "data": {
+        "name": "房門90",
+        "group": "門窗工程",
+        "width": 120,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-48",
+      "x": 500,
+      "y": 1175,
+      "rotation": 0,
+      "currentW": 80,
+      "currentH": 55,
+      "data": {
+        "name": "落地窗",
+        "group": "門窗工程",
+        "width": 80,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-49",
+      "x": 610,
+      "y": 1175,
+      "rotation": 90,
+      "currentW": 100,
+      "currentH": 70,
+      "data": {
+        "name": "開門收納矮櫃",
+        "group": "門窗工程",
+        "width": 100,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-50",
+      "x": 720,
+      "y": 1175,
+      "rotation": 180,
+      "currentW": 120,
+      "currentH": 55,
+      "data": {
+        "name": "開門高衣櫃",
+        "group": "門窗工程",
+        "width": 120,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-51",
+      "x": 830,
+      "y": 1175,
+      "rotation": 270,
+      "currentW": 80,
+      "currentH": 70,
+      "data": {
+        "name": "三人沙發",
+        "group": "系統櫃",
+        "width": 80,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-52",
+      "x": 280,
+      "y": 1270,
+      "rotation": 0,
+      "currentW": 100,
+      "currentH": 55,
+      "data": {
+        "name": "6尺床",
+        "group": "系統櫃",
+        "width": 100,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-53",
+      "x": 390,
+      "y": 1270,
+      "rotation": 90,
+      "currentW": 120,
+      "currentH": 70,
+      "data": {
+        "name": "流理臺",
+        "group": "系統櫃",
+        "width": 120,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-54",
+      "x": 500,
+      "y": 1270,
+      "rotation": 180,
+      "currentW": 80,
+      "currentH": 55,
+      "data": {
+        "name": "房門90",
+        "group": "門窗工程",
+        "width": 80,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-55",
+      "x": 610,
+      "y": 1270,
+      "rotation": 270,
+      "currentW": 100,
+      "currentH": 70,
+      "data": {
+        "name": "落地窗",
+        "group": "門窗工程",
+        "width": 100,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-56",
+      "x": 720,
+      "y": 1270,
+      "rotation": 0,
+      "currentW": 120,
+      "currentH": 55,
+      "data": {
+        "name": "開門收納矮櫃",
+        "group": "門窗工程",
+        "width": 120,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-57",
+      "x": 830,
+      "y": 1270,
+      "rotation": 90,
+      "currentW": 80,
+      "currentH": 70,
+      "data": {
+        "name": "開門高衣櫃",
+        "group": "門窗工程",
+        "width": 80,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-58",
+      "x": 280,
+      "y": 1365,
+      "rotation": 180,
+      "currentW": 100,
+      "currentH": 55,
+      "data": {
+        "name": "三人沙發",
+        "group": "系統櫃",
+        "width": 100,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-59",
+      "x": 390,
+      "y": 1365,
+      "rotation": 270,
+      "currentW": 120,
+      "currentH": 70,
+      "data": {
+        "name": "6尺床",
+        "group": "系統櫃",
+        "width": 120,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-60",
+      "x": 500,
+      "y": 1365,
+      "rotation": 0,
+      "currentW": 80,
+      "currentH": 55,
+      "data": {
+        "name": "流理臺",
+        "group": "系統櫃",
+        "width": 80,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-61",
+      "x": 610,
+      "y": 1365,
+      "rotation": 90,
+      "currentW": 100,
+      "currentH": 70,
+      "data": {
+        "name": "房門90",
+        "group": "門窗工程",
+        "width": 100,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-62",
+      "x": 720,
+      "y": 1365,
+      "rotation": 180,
+      "currentW": 120,
+      "currentH": 55,
+      "data": {
+        "name": "落地窗",
+        "group": "門窗工程",
+        "width": 120,
+        "depth": 55,
+        "adjustable": "none"
+      }
+    },
+    {
+      "id": "perf-cab-63",
+      "x": 830,
+      "y": 1365,
+      "rotation": 270,
+      "currentW": 80,
+      "currentH": 70,
+      "data": {
+        "name": "開門收納矮櫃",
+        "group": "門窗工程",
+        "width": 80,
+        "depth": 70,
+        "adjustable": "none"
+      }
+    }
+  ],
+  "drawnAreas": [
+    {
+      "id": "r1-floor",
+      "type": "floor",
+      "points": [
+        {
+          "x": 200,
+          "y": 200
+        },
+        {
+          "x": 900,
+          "y": 200
+        },
+        {
+          "x": 900,
+          "y": 900
+        },
+        {
+          "x": 200,
+          "y": 900
+        }
+      ]
+    },
+    {
+      "id": "r1-wall",
+      "type": "wall",
+      "thickness": 15,
+      "points": [
+        {
+          "x": 200,
+          "y": 200
+        },
+        {
+          "x": 900,
+          "y": 200
+        },
+        {
+          "x": 900,
+          "y": 900
+        },
+        {
+          "x": 200,
+          "y": 900
+        }
+      ]
+    },
+    {
+      "id": "r2-floor",
+      "type": "floor",
+      "points": [
+        {
+          "x": 1000,
+          "y": 200
+        },
+        {
+          "x": 1700,
+          "y": 200
+        },
+        {
+          "x": 1700,
+          "y": 900
+        },
+        {
+          "x": 1000,
+          "y": 900
+        }
+      ]
+    },
+    {
+      "id": "r2-wall",
+      "type": "wall",
+      "thickness": 15,
+      "points": [
+        {
+          "x": 1000,
+          "y": 200
+        },
+        {
+          "x": 1700,
+          "y": 200
+        },
+        {
+          "x": 1700,
+          "y": 900
+        },
+        {
+          "x": 1000,
+          "y": 900
+        }
+      ]
+    },
+    {
+      "id": "r3-floor",
+      "type": "floor",
+      "points": [
+        {
+          "x": 200,
+          "y": 1000
+        },
+        {
+          "x": 1700,
+          "y": 1000
+        },
+        {
+          "x": 1700,
+          "y": 1700
+        },
+        {
+          "x": 200,
+          "y": 1700
+        }
+      ]
+    },
+    {
+      "id": "r3-wall",
+      "type": "wall",
+      "thickness": 15,
+      "points": [
+        {
+          "x": 200,
+          "y": 1000
+        },
+        {
+          "x": 1700,
+          "y": 1000
+        },
+        {
+          "x": 1700,
+          "y": 1700
+        },
+        {
+          "x": 200,
+          "y": 1700
+        }
+      ]
+    }
+  ]
+}

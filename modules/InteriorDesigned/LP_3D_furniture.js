@@ -31,8 +31,9 @@ export function resolveFixtureDisplayCategory(cab, kind) {
     const name = String(cab?.data?.name || '');
     const group = String(cab?.data?.group || '');
     const hay = `${name} ${group}`;
-    if (/衣櫃|衣櫥|衣帽|衣櫃/.test(hay)) return 'wardrobe';
+    if (/衣櫃|衣櫥|衣帽/.test(hay)) return 'wardrobe';
     if (/電視/.test(hay)) return 'tvCabinet';
+    if (/櫃|臥榻|收納/.test(name)) return 'cabinet';
     if (/沙發/.test(hay)) return 'sofa';
     if (/床/.test(hay) && !/床頭櫃/.test(hay)) return 'bed';
     if (/書桌|辦公桌|餐桌|茶几/.test(hay)) return 'desk';

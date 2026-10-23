@@ -328,10 +328,38 @@
      * @param {string} sheetName
      * @param {{ getCategory?: Function, metadataKeywords?: string[] }} options
      */
+    /** 同表內 id：與 quotation-item-id-migrate.mjs claimUniqueItemIdForSheet 邏輯一致 */
+    function assignUniqueItemIdForSheet(sheetUsedIds, baseId) {
+        const id = String(baseId);
+        if (!sheetUsedIds.has(id)) {
+            sheetUsedIds.add(id);
+            return id;
+        }
+        let n = 2;
+        while (sheetUsedIds.has(`${id}_${n}`)) n += 1;
+        const next = `${id}_${n}`;
+        sheetUsedIds.add(next);
+        return next;
+    }
+
+    function stableItemContentHash(data) {
+        const parts = ['name', 'spec', 'qty', 'unit', 'zone', 'sheet_source'].map((f) =>
+            String(data && data[f] != null ? data[f] : '').trim(),
+        );
+        const s = parts.join('\x1f');
+        let h = 2166136261;
+        for (let i = 0; i < s.length; i++) {
+            h ^= s.charCodeAt(i);
+            h = Math.imul(h, 16777619);
+        }
+        return (h >>> 0).toString(36).padStart(7, '0').slice(0, 7);
+    }
+
     function parseSheetRows(json, sheetName, options) {
         const getCategory = options && options.getCategory ? options.getCategory : () => '其他';
         const metadataKeywords = (options && options.metadataKeywords) || [];
         const items = [];
+        const sheetUsedIds = new Set();
         if (!json || json.length < 3) {
             return { items, taxInclusiveTotal: null };
         }
@@ -400,12 +428,17 @@
 
             if (metadataBlocksItem(picked, i, startRow, metadataKeywords)) continue;
 
+            const baseItemId = picked.indexVal
+                ? `ITEM_${sheetName}_${picked.indexVal}`
+                : `ITEM_${sheetName}_R${i}`;
+            const itemId = assignUniqueItemIdForSheet(sheetUsedIds, baseItemId);
+
             items.push({
                 type: 'item',
                 zone: currentZone,
                 raw: rawLine,
                 data: {
-                    id: picked.indexVal ? `ITEM_${sheetName}_${picked.indexVal}` : `ITEM_${sheetName}_R${i}`,
+                    id: itemId,
                     zone: currentZone,
                     name: picked.name,
                     spec: picked.spec,
@@ -530,6 +563,8 @@
         classifyItemCounts,
         findTaxInclusiveTotal,
         sanitizeItemForExport,
-        exportPayloadContainsForbiddenKeys
+        exportPayloadContainsForbiddenKeys,
+        assignUniqueItemIdForSheet,
+        stableItemContentHash,
     };
 });

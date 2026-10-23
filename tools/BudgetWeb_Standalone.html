@@ -252,6 +252,19 @@
         <p>對齊 11_1 SPEC | 全量分頁掃描 | 自動排除</p>
     </header>
 
+    <div id="lpImportBox" class="sheet-selector" style="display:none; margin-bottom:20px; padding:20px; border-color:#0d9488;">
+        <h3 style="margin-top:0; font-size:16px;">Step 0b: 匯入 LayoutPlanner 櫃體草稿（預覽）</h3>
+        <p style="font-size:12px; color:#444; margin:0 0 10px 0;">
+            選擇平面工具匯出的 <code>layout-quote-draft-*.json</code>。僅<strong>追加</strong>工項至下方列表，不刪除既有 Excel 解析結果；合併前會再次確認。
+        </p>
+        <input type="file" id="lpDraftFileInput" accept=".json,application/json" style="display:block; margin-bottom:8px;">
+        <span id="lpImportStatus" style="font-size:12px; color:#666;"></span><br>
+        <button type="button" id="lpImportMergeBtn" disabled
+            style="margin-top:10px; font-size:13px; padding:8px 14px; border:none; border-radius:6px; background:#0d9488; color:#fff; cursor:pointer;">
+            確認合併至工項列表
+        </button>
+    </div>
+
     <div id="projectNoInitialBox" class="sheet-selector" style="display:block; margin-bottom:20px; padding:20px;">
         <h3 style="margin-top:0; font-size:16px;">Step 0: 填寫案號 (必要)</h3>
         <input type="text" id="projectNoInput" placeholder="案號 (例: 742)" style="padding:8px; margin-right:10px; width:200px;">
@@ -800,7 +813,14 @@
             type: 'item',
             raw: row.raw,
             data: {
-                id: `MANUAL_${index}`,
+                id: `MANUAL_${index}_${BudgetQuoteParser.stableItemContentHash({
+                    name,
+                    spec: '',
+                    qty: String(d[nameIdx + 2] || '1').trim(),
+                    unit: String(d[nameIdx + 1] || '式').trim(),
+                    zone: row.zone || '未分類',
+                    sheet_source: row.sheet_source || '稽核手動',
+                })}`,
                 zone: row.zone || "未分類",
                 name: name,
                 spec: "", 
@@ -816,14 +836,25 @@
         saveParserPrefs();
     };
 
+    const appendIdSeqByHash = new Map();
     window.addNewItem = () => {
         const name = document.getElementById('addName').value.trim();
         if (!name) return;
+        const hash = BudgetQuoteParser.stableItemContentHash({
+            name,
+            spec: document.getElementById('addSpec').value,
+            qty: document.getElementById('addQty').value || '1',
+            unit: document.getElementById('addUnit').value || '式',
+            zone: document.getElementById('addZone').value || '追加項',
+            sheet_source: '手動',
+        });
+        const n = (appendIdSeqByHash.get(hash) || 0) + 1;
+        appendIdSeqByHash.set(hash, n);
         processedData.items.unshift({
             type: 'item',
             raw: "手動新增",
             data: {
-                id: `APPEND_${Date.now().toString().slice(-4)}`,
+                id: `APPEND_${hash}_${n}`,
                 zone: document.getElementById('addZone').value || "追加項",
                 name: name,
                 spec: document.getElementById('addSpec').value,
@@ -856,6 +887,22 @@
         a.click();
     });
 
+    let cloudSyncHelpers = null;
+    async function loadCloudSyncHelpers() {
+        if (cloudSyncHelpers) return cloudSyncHelpers;
+        const modUrl = new URL(
+            '../modules/InteriorDesigned/LP_budgetweb_cloud_sync.js',
+            window.location.href,
+        ).href;
+        const mod = await import(modUrl);
+        cloudSyncHelpers = {
+            prepareCloudQuotationSync: mod.prepareCloudQuotationSync,
+            formatSyncDiffForConfirm: mod.formatSyncDiffForConfirm,
+            buildQuotationFirebaseUpdatePayload: mod.buildQuotationFirebaseUpdatePayload,
+        };
+        return cloudSyncHelpers;
+    }
+
     document.getElementById('syncCloudBtn').addEventListener('click', async () => {
         const projectNo = document.getElementById('projectNoInput').value.trim();
         if (!projectNo) { alert("請填寫案號！"); return; }
@@ -863,41 +910,36 @@
         syncBtn.innerText = "⏳ 同步中...";
         syncBtn.disabled = true;
         try {
-            let existingData = null;
-            try {
-                const snapshot = await db.ref(`quotations/${projectNo}`).once('value');
-                existingData = snapshot.val();
-            } catch (e) {}
+            const syncMod = await loadCloudSyncHelpers();
+            const firebaseModUrl = new URL(
+                '../modules/InteriorDesigned/LP_budgetweb_firebase_sync.js',
+                window.location.href,
+            ).href;
+            const { runBudgetWebQuotationCloudSync } = await import(firebaseModUrl);
 
-            const exportItems = processedData.items.filter(r => r.type === 'item').map(r => {
-                const newItem = BudgetQuoteParser.sanitizeItemForExport(r.data);
-                if (existingData && existingData.context && existingData.context.items) {
-                    const oldMatch = existingData.context.items.find(old => old.id === newItem.id || (old.name === newItem.name && old.spec === newItem.spec));
-                    if (oldMatch) {
-                        newItem.completion_percent = oldMatch.completion_percent || 0;
-                        newItem.verification = oldMatch.verification || { is_ok: false };
-                        newItem.status = newItem.completion_percent === 100 ? 'DONE' : (newItem.completion_percent > 0 ? 'PROCESS' : 'PENDING');
-                        if (!newItem.price && oldMatch.price) newItem.price = oldMatch.price;
-                    }
-                }
-                return newItem;
-            });
+            const localItems = processedData.items.filter(r => r.type === 'item').map(r =>
+                BudgetQuoteParser.sanitizeItemForExport(r.data),
+            );
 
-            const finalExport = {
-                案號: projectNo,
-                total_summary: { 
-                    ...processedData.total_summary, 
-                    siteName: (existingData && existingData.context && existingData.context.total_summary) ? existingData.context.total_summary.siteName : "載入中...",
-                    overall_completion: Math.round(exportItems.reduce((acc, cur) => acc + (cur.completion_percent || 0), 0) / exportItems.length) || 0
+            const result = await runBudgetWebQuotationCloudSync({
+                projectNo,
+                localItems,
+                totalSummary: processedData.total_summary,
+                readQuotationSnapshot: async () => {
+                    const snapshot = await db.ref(`quotations/${projectNo}`).once('value');
+                    return {
+                        exists: () => snapshot.exists(),
+                        val: () => snapshot.val(),
+                    };
                 },
-                items: exportItems
-            };
-
-            await db.ref(`quotations/${projectNo}`).set({
-                context: finalExport,
-                last_updated: new Date().toLocaleString(),
-                sync_by: "AI_PREPROCESSOR"
+                updateQuotation: async (_path, payload) => {
+                    await db.ref(`quotations/${projectNo}`).update(payload);
+                },
+                confirmFn: (msg) => confirm(msg),
+                alertFn: (msg) => alert(msg),
             });
+
+            if (!result.ok) return;
 
             if (confirm("☁️ 同步成功！是否啟動驗收表？")) {
                 window.open(`BudgetAuditor_Standalone_V2.html?projectNo=${projectNo}`, '_blank');
@@ -911,6 +953,83 @@
     });
 
     document.getElementById('floatSyncBtn').addEventListener('click', () => document.getElementById('syncCloudBtn').click());
+
+    // --- LayoutPlanner 草稿匯入（FLOORPLAN-QUOTE-2，僅 ?lpPreview=1）---
+    let pendingLpDraft = null;
+
+    (async function initLpDraftImport() {
+        const params = new URLSearchParams(window.location.search);
+        const preview = params.get('lpPreview') === '1';
+        const box = document.getElementById('lpImportBox');
+        const statusEl = document.getElementById('lpImportStatus');
+        if (!preview || !box) return;
+        box.style.display = 'block';
+
+        let mergeLayoutPlannerDraftIntoProcessedData;
+        let validateLayoutPlannerQuoteDraft;
+        try {
+            const mergeModUrl = new URL(
+                '../modules/InteriorDesigned/LP_budgetweb_import_merge.js',
+                window.location.href,
+            ).href;
+            const mod = await import(mergeModUrl);
+            mergeLayoutPlannerDraftIntoProcessedData = mod.mergeLayoutPlannerDraftIntoProcessedData;
+            validateLayoutPlannerQuoteDraft = mod.validateLayoutPlannerQuoteDraft;
+            window.__lpBudgetWebImportReady = true;
+        } catch (err) {
+            console.error('[LP import]', err);
+            if (statusEl) statusEl.textContent = `❌ 無法載入匯入模組：${err.message}`;
+            return;
+        }
+
+        const fileInput = document.getElementById('lpDraftFileInput');
+        const mergeBtn = document.getElementById('lpImportMergeBtn');
+
+        fileInput.addEventListener('change', async (e) => {
+            pendingLpDraft = null;
+            mergeBtn.disabled = true;
+            const file = e.target.files && e.target.files[0];
+            if (!file) {
+                statusEl.textContent = '';
+                return;
+            }
+            try {
+                const text = await file.text();
+                const draft = JSON.parse(text);
+                const v = validateLayoutPlannerQuoteDraft(draft);
+                if (!v.ok) {
+                    statusEl.textContent = `❌ ${v.error}`;
+                    return;
+                }
+                pendingLpDraft = draft;
+                const n = (draft.items || []).length;
+                statusEl.textContent = `✅ 已讀取 ${n} 筆櫃體草稿（尚未合併）`;
+                mergeBtn.disabled = false;
+            } catch (err) {
+                statusEl.textContent = `❌ 無法解析 JSON：${err.message}`;
+            }
+        });
+
+        mergeBtn.addEventListener('click', () => {
+            if (!pendingLpDraft) return;
+            const prevItems = processedData ? processedData.items.filter((r) => r.type === 'item').length : 0;
+            const incoming = (pendingLpDraft.items || []).length;
+            const msg = `將把 LayoutPlanner 草稿 ${incoming} 筆工項追加至列表。\n\n`
+                + `目前列表約 ${prevItems} 筆工項；合併不會刪除既有資料（相同 id 會略過）。\n\n確定合併？`;
+            if (!confirm(msg)) return;
+
+            const { merged, stats } = mergeLayoutPlannerDraftIntoProcessedData(processedData, pendingLpDraft);
+            processedData = merged;
+            previewArea.style.display = 'block';
+            document.getElementById('addItemBox').style.display = 'block';
+            document.getElementById('floatingToolbar').style.display = 'flex';
+            renderPreview();
+            statusEl.textContent = `✅ 已合併：新增 ${stats.added} 筆，略過重複 ${stats.skippedDuplicate} 筆`;
+            mergeBtn.disabled = true;
+            pendingLpDraft = null;
+            fileInput.value = '';
+        });
+    })();
 </script>
 </body>
 </html>

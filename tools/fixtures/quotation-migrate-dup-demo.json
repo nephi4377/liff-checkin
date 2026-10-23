@@ -1,0 +1,8 @@
+{
+  "context": {
+    "items": [
+      { "id": "ITEM_DEMO_DUP", "name": "第一筆", "spec": "a" },
+      { "id": "ITEM_DEMO_DUP", "name": "第二筆", "spec": "b" }
+    ]
+  }
+}
