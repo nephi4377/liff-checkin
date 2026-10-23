@@ -47,6 +47,7 @@ test.describe('Githack quote smoke', () => {
 
         await page.goto(lpUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
         await passGithackInterstitialIfPresent(page);
+        expect(page.url()).toContain('lpPreview=1');
         await expect(page.locator('#design-canvas')).toBeVisible({ timeout: 60_000 });
         await page.waitForTimeout(2500);
 

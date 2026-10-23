@@ -4531,6 +4531,13 @@ function bindEventListeners() {
     // 視窗拖曳（僅在「傳統浮動」模式由標題列啟用）
     initDraggable('toolbox-window');
     initDraggable('info-window');
+
+    if (isLayoutPlannerUrlPreview()) {
+        window.__lpQuotePreview = {
+            showBudgetModal,
+            exportQuoteDraftDetails,
+        };
+    }
 }
 
 // [牆壁繪製模式修正] 新增輔助函式：計算兩線段的交點
