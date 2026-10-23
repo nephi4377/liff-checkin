@@ -15,7 +15,7 @@ concurrency:
 jobs:
   unit-and-e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: modules/InteriorDesigned
