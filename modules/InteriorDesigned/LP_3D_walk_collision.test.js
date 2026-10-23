@@ -14,6 +14,7 @@ import {
     resolveWalkBodyRadiusCm,
     resolveWalkPosition,
     resolveWalkSpawnXZ,
+    resolveOpeningCutterCenterOnWall,
     WALK_SPAWN_NUDGE_CABINET_MAX_EXTENT_CM,
 } from './LP_3D_walk_collision.js';
 
@@ -71,6 +72,40 @@ function layoutRoomWithDoorAndWindow() {
         ],
     };
 }
+
+describe('resolveOpeningCutterCenterOnWall', () => {
+    it('旋轉門中心在室內時，CSG 中心落在牆內圈邊（SWEEP-2 B6）', () => {
+        const desc = buildLayout3DDescriptor({
+            workspaceSize: 2000,
+            drawnAreas: [{
+                id: 'w1',
+                type: 'wall',
+                thickness: 15,
+                points: [
+                    { x: 300, y: 300 },
+                    { x: 900, y: 300 },
+                    { x: 900, y: 800 },
+                    { x: 300, y: 800 },
+                ],
+            }],
+            placedCabinets: [{
+                id: 'door-rot',
+                x: 500,
+                y: 312,
+                rotation: 90,
+                currentW: 90,
+                currentH: 15,
+                data: { name: '房門', group: '門窗工程', width: 90, depth: 15 },
+            }],
+        });
+        const wall = desc.walls[0];
+        const door = desc.fixtures.find((f) => f.kind === 'door');
+        const cut = resolveOpeningCutterCenterOnWall(wall, door);
+        expect(openingCutsWall(wall, door)).toBe(true);
+        expect(Math.abs(cut.centerZ - wall.inner[0].z)).toBeLessThan(12);
+        expect(Math.abs(cut.centerX - door.centerX)).toBeLessThan(50);
+    });
+});
 
 describe('buildWallInnerCollisionSegments', () => {
     it('門洞區段不產生牆碰撞線，窗洞仍保留', () => {

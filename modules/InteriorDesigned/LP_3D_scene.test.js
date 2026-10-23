@@ -32,6 +32,11 @@ describe('classifyPlacedCabinet3DKind', () => {
         expect(classifyPlacedCabinet3DKind({ data: { name: '矮櫃', group: '系統櫃' } })).toBe('cabinet');
         expect(classifyPlacedCabinet3DKind({ data: { isWall: true, name: '牆' } })).toBe('wallSegment');
     });
+
+    it('系統櫃名稱含「門」字不誤判為門片（SWEEP-2 B4）', () => {
+        expect(classifyPlacedCabinet3DKind({ data: { name: '開門高衣櫃', group: '系統櫃' } })).toBe('cabinet');
+        expect(classifyPlacedCabinet3DKind({ data: { name: '雙開門矮櫃', group: '木作工程' } })).toBe('cabinet');
+    });
 });
 
 describe('resolvePlacedCabinet3DKind', () => {
@@ -162,6 +167,24 @@ describe('buildLayout3DDescriptor', () => {
         expect(desc.fixtures.find((f) => f.id === 'x1')).toBeUndefined();
         expect(desc.floors).toEqual([]);
         expect(desc.ceilings).toEqual([]);
+    });
+
+    it('傳遞 2D 鏡像旗標至 fixture（SWEEP-2 B5）', () => {
+        const desc = buildLayout3DDescriptor({
+            workspaceSize: 2000,
+            drawnAreas: [],
+            placedCabinets: [{
+                id: 'm1',
+                x: 100,
+                y: 100,
+                rotation: 0,
+                mirrored: true,
+                currentW: 80,
+                currentH: 40,
+                data: { name: '矮櫃', group: '系統櫃', width: 80, depth: 40 },
+            }],
+        });
+        expect(desc.fixtures[0].mirrored).toBe(true);
     });
 
     it('包含地板與天花區域', () => {

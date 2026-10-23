@@ -106,12 +106,21 @@ function scheduleLp3dRebuild() {
     if (!lp3dMode || !lp3dViewer) return;
     clearTimeout(lp3dRebuildTimer);
     lp3dRebuildTimer = setTimeout(() => {
+        lp3dRebuildTimer = null;
+        if (!lp3dMode || !lp3dViewer) return;
         try {
             lp3dViewer.rebuild();
         } catch (err) {
             console.warn('[LP 3D] rebuild failed:', err);
         }
     }, 200);
+}
+
+function cancelScheduledLp3dRebuild() {
+    if (lp3dRebuildTimer) {
+        clearTimeout(lp3dRebuildTimer);
+        lp3dRebuildTimer = null;
+    }
 }
 // [v8.9 修復] 補回遺失的變數宣告
 let isResizing = false;
@@ -4198,6 +4207,7 @@ function closeLayoutPlanner3D() {
         toggleBtn.textContent = '🧊 3D 檢視';
         toggleBtn.title = '將牆體與櫃體以 3D 預覽（不影響 2D 編輯）';
     }
+    cancelScheduledLp3dRebuild();
     if (lp3dViewer) lp3dViewer.close();
 }
 
