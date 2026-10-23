@@ -9,6 +9,7 @@ var RE = {
   accountingApi: new RegExp('(?:^|["\'\\/])accounting_api\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
   accountingShell: new RegExp('(?:^|["\'\\/])accounting_shell\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
   accountingTaxMode: new RegExp('(?:^|["\'\\/])accounting_tax_mode\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  accountingLightbox: new RegExp('(?:^|["\'\\/])accounting_lightbox\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
   hubAppJs: new RegExp('(?:^|["\'\\/])app\\.js\\?v=([\\w.+-]+)' + VERSION_LOOKAHEAD, 'g')
 };
 
