@@ -379,10 +379,22 @@ export function createLayoutPlanner3DViewer(options) {
 
         const lpPreview = typeof window !== 'undefined'
             && new URLSearchParams(window.location.search).get('lpPreview') === '1';
-        renderer = new THREE.WebGLRenderer({
-            antialias: true,
-            preserveDrawingBuffer: lpPreview,
-        });
+        try {
+            renderer = new THREE.WebGLRenderer({
+                antialias: true,
+                preserveDrawingBuffer: lpPreview,
+            });
+        } catch (err) {
+            setHint('此裝置無法建立 WebGL 3D 預覽，請更新瀏覽器或顯示驅動後再試');
+            throw err;
+        }
+        const gl = typeof renderer.getContext === 'function' ? renderer.getContext() : null;
+        if (!gl) {
+            renderer.dispose();
+            renderer = null;
+            setHint('此裝置無法建立 WebGL 3D 預覽，請更新瀏覽器或顯示驅動後再試');
+            throw new Error('WebGL context unavailable');
+        }
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.setSize(mountEl.clientWidth, mountEl.clientHeight);
         mountEl.appendChild(renderer.domElement);
@@ -1472,12 +1484,13 @@ export function createLayoutPlanner3DViewer(options) {
             resizeObserver = null;
             walk?.dispose();
             walk = null;
+            controls?.dispose();
+            controls = null;
             if (renderer) {
                 renderer.dispose();
                 renderer.domElement?.remove();
                 renderer = null;
             }
-            controls = null;
             scene = null;
             camera = null;
         },
