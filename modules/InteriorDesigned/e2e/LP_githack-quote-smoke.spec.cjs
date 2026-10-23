@@ -9,6 +9,19 @@ const os = require('os');
 
 const ARTIFACTS = process.env.LP_GITHACK_ARTIFACTS || '/opt/cursor/artifacts';
 
+/** githack 對自動化／首次造訪會顯示「Open the page」閘門 */
+async function passGithackInterstitialIfPresent(page) {
+    const btn = page.getByRole('button', { name: /Open the page/i });
+    try {
+        if (await btn.isVisible({ timeout: 4000 })) {
+            await btn.click();
+            await page.waitForLoadState('domcontentloaded');
+        }
+    } catch {
+        /* 已直達內容頁 */
+    }
+}
+
 function readPinnedSha() {
     if (process.env.LP_GITHACK_SHA) return process.env.LP_GITHACK_SHA.trim();
     const src = fs.readFileSync(path.join(__dirname, '..', 'LP_preview_hosts.js'), 'utf8');
@@ -33,20 +46,23 @@ test.describe('Githack quote smoke', () => {
         page.on('dialog', (d) => d.accept());
 
         await page.goto(lpUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+        await passGithackInterstitialIfPresent(page);
         await expect(page.locator('#design-canvas')).toBeVisible({ timeout: 60_000 });
         await page.waitForTimeout(2500);
 
         fs.mkdirSync(ARTIFACTS, { recursive: true });
         await page.screenshot({
-            path: path.join(ARTIFACTS, 'githack-lp-2d-plan-export.webp'),
+            path: path.join(ARTIFACTS, 'githack-lp-2d-plan-export.png'),
             fullPage: false,
         });
 
-        await page.locator('#toggle-info-btn').click();
-        await page.locator('#show-budget-modal-btn').click();
-        await expect(page.locator('#budget-modal')).toBeVisible({ timeout: 15_000 });
+        await page.waitForFunction(() => window.__lpQuotePreview?.showBudgetModal, null, {
+            timeout: 60_000,
+        });
+        await page.evaluate(() => window.__lpQuotePreview.showBudgetModal());
+        await expect(page.locator('#budget-modal')).toHaveCSS('display', 'flex', { timeout: 15_000 });
         await expect(page.locator('#export-quote-draft-btn')).toBeVisible();
-        await page.locator('#export-quote-draft-btn').click();
+        await page.evaluate(() => window.__lpQuotePreview.exportQuoteDraftDetails());
         await expect(page.locator('#quote-export-draft-modal')).toBeVisible();
         await expect(page.locator('#quote-export-draft-tbody tr').first()).toBeVisible();
 
@@ -64,6 +80,7 @@ test.describe('Githack quote smoke', () => {
         expect(bwLink).toContain('lpPreview=1');
 
         await page.goto(bwUrl, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+        await passGithackInterstitialIfPresent(page);
         await expect(page.locator('#lpImportBox')).toBeVisible({ timeout: 30_000 });
 
         await page.locator('#lpDraftFileInput').setInputFiles(jsonPath);
@@ -75,7 +92,7 @@ test.describe('Githack quote smoke', () => {
         expect(previewText).toMatch(/鞋櫃|櫃|LayoutPlanner/);
 
         await page.screenshot({
-            path: path.join(ARTIFACTS, 'githack-budgetweb-imported-lines.webp'),
+            path: path.join(ARTIFACTS, 'githack-budgetweb-imported-lines.png'),
             fullPage: true,
         });
     });

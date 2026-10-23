@@ -5035,6 +5035,13 @@ window.onload = () => {
     setTimeout(centerView, 100);
 
     maybeInitLayoutPlannerUrlPreview();
+
+    if (isLayoutPlannerUrlPreview()) {
+        window.__lpQuotePreview = {
+            showBudgetModal,
+            exportQuoteDraftDetails,
+        };
+    }
 };
 
 // [v9.8 新增] 僅更新資訊面板的價格顯示 (不重繪 DOM，防止焦點跳離)

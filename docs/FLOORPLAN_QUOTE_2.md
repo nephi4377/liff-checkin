@@ -48,6 +48,8 @@
 主程式載入：`LP_LayoutPlanner.html` 以 `import('./LP_LayoutPlanner.js?v=<commit-prefix>')` 避免 githack 快取舊 JS。  
 從 LayoutPlanner 匯出 modal 的「開啟合併頁」會依**目前主機**推算同源 BudgetWeb URL（githack 或本機 `serve`）。
 
+**首次開啟 githack 連結**時，站台可能顯示「One more step」→ 請點 **Open the page**（第三方 HTML 安全閘門，非本 repo 錯誤）。
+
 ## 計價規則（集中設定）
 
 檔案：`modules/InteriorDesigned/LP_quote_pricing_rules.js`
