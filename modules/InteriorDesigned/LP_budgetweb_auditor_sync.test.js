@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     resolveAuditorFirebaseWriteGate,
     buildAuditorCloudWriteBaselineFromFirebaseNode,
+    buildAuditorCloudWriteBaselineAfterPayload,
     shouldBlockQuotationWriteWithoutBaseline,
     AUDITOR_MISSING_BASELINE_MESSAGE,
 } from './LP_budgetweb_auditor_sync.js';
@@ -52,6 +53,45 @@ describe('resolveAuditorFirebaseWriteGate (Auditor 實際寫入路徑)', () => {
             freshVal: legacy,
         });
         expect(gate.blocked).toBe(false);
+    });
+
+    it('連續兩次同步：寫入 payload 僅 audit_last_updated，第二次不誤報 remote_changed', () => {
+        const items = [{ id: 'A', name: '工項', qty: '1', unit: '式', completion_percent: 10 }];
+        const payloadAfterFirstWrite = {
+            audit_last_updated: '2026/10/23 下午6:00:00',
+            context: { items, total_summary: { siteName: '測' } },
+            is_closed: false,
+        };
+        const baselineAfterWrite = buildAuditorCloudWriteBaselineAfterPayload(payloadAfterFirstWrite);
+        expect(baselineAfterWrite).not.toBeNull();
+        const cloudAsReadBeforeSecondSync = {
+            last_updated: 'legacy-unchanged-last_updated',
+            audit_last_updated: payloadAfterFirstWrite.audit_last_updated,
+            context: payloadAfterFirstWrite.context,
+        };
+        const gateSecondSync = resolveAuditorFirebaseWriteGate({
+            remoteExists: true,
+            baseline: baselineAfterWrite,
+            freshVal: cloudAsReadBeforeSecondSync,
+        });
+        expect(gateSecondSync.blocked).toBe(false);
+
+        const payloadAfterSecondWrite = {
+            audit_last_updated: '2026/10/23 下午6:05:00',
+            context: { items: [{ ...items[0], completion_percent: 20 }], total_summary: { siteName: '測' } },
+        };
+        const baselineSecond = buildAuditorCloudWriteBaselineAfterPayload(payloadAfterSecondWrite);
+        const cloudBeforeThirdAttempt = {
+            last_updated: 'legacy-unchanged-last_updated',
+            audit_last_updated: payloadAfterSecondWrite.audit_last_updated,
+            context: payloadAfterSecondWrite.context,
+        };
+        const gateThird = resolveAuditorFirebaseWriteGate({
+            remoteExists: true,
+            baseline: baselineSecond,
+            freshVal: cloudBeforeThirdAttempt,
+        });
+        expect(gateThird.blocked).toBe(false);
     });
 
     it('fresh 與 baseline 不一致 → remote_changed', () => {

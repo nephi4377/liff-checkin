@@ -2331,11 +2331,7 @@
             await ref.update(payload);
             try {
                 if (auditorSyncMod) {
-                    auditorCloudWriteBaseline = auditorSyncMod.buildAuditorCloudWriteBaselineFromFirebaseNode({
-                        audit_last_updated: nowDisplay,
-                        last_updated: nowDisplay,
-                        context: payload.context,
-                    });
+                    auditorCloudWriteBaseline = auditorSyncMod.buildAuditorCloudWriteBaselineAfterPayload(payload);
                 }
             } catch (e) {
                 console.warn('[Auditor] baseline 更新失敗', e);

@@ -42,3 +42,18 @@ export function buildAuditorCloudWriteBaselineFromFirebaseNode(nodeVal) {
     if (!normalized) return null;
     return buildRemoteQuotationSyncBaseline(normalized);
 }
+
+/**
+ * 寫入後 baseline：僅含實際 `update()` payload 欄位（Auditor 不寫 last_updated）
+ * @param {{ audit_last_updated?: string, context?: object, is_closed?: boolean, closed_at?: *, closed_by?: * }} payload
+ */
+export function buildAuditorCloudWriteBaselineAfterPayload(payload) {
+    if (!payload?.context) return null;
+    return buildRemoteQuotationSyncBaseline({
+        audit_last_updated: payload.audit_last_updated ?? null,
+        context: payload.context,
+        is_closed: payload.is_closed,
+        closed_at: payload.closed_at,
+        closed_by: payload.closed_by,
+    });
+}

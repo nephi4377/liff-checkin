@@ -16,9 +16,9 @@
 
 ## 預覽（raw.githack.com，路徑須含 `.html`）
 
-釘選 SHA：`9c712108abbc2cbcbe13a9024cbcab20085373fc`（與 `LP_preview_hosts.js` 同步）
+釘選 SHA：`c8b53f4c91f54652aa8066b54a915eacc327e80c`（與 `LP_preview_hosts.js` 同步）
 
 - LayoutPlanner：  
-  https://raw.githack.com/nephi4377/liff-checkin/9c712108abbc2cbcbe13a9024cbcab20085373fc/modules/InteriorDesigned/LP_LayoutPlanner.html?lpPreview=1
+  https://raw.githack.com/nephi4377/liff-checkin/c8b53f4c91f54652aa8066b54a915eacc327e80c/modules/InteriorDesigned/LP_LayoutPlanner.html?lpPreview=1
 - BudgetWeb：  
-  https://raw.githack.com/nephi4377/liff-checkin/9c712108abbc2cbcbe13a9024cbcab20085373fc/tools/BudgetWeb_Standalone.html?lpPreview=1
+  https://raw.githack.com/nephi4377/liff-checkin/c8b53f4c91f54652aa8066b54a915eacc327e80c/tools/BudgetWeb_Standalone.html?lpPreview=1

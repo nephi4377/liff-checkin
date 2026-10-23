@@ -304,7 +304,7 @@ export function buildRemoteQuotationSyncBaseline(existingData) {
     const remoteItems = remoteContext?.items || [];
     return {
         isNewQuotationNode,
-        lastUpdated: node?.last_updated ?? node?.audit_last_updated ?? null,
+        lastUpdated: node?.audit_last_updated ?? node?.last_updated ?? null,
         itemCount: remoteItems.length,
         itemsContentHash: fingerprintRemoteItemsForSyncGuard(remoteItems),
     };
