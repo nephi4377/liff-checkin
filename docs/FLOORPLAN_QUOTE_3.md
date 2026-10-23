@@ -12,6 +12,6 @@
 - `LP_budgetweb_firebase_sync.js` — 同步流程
 - `tools/BudgetWeb_Standalone.html` — UI 閘控
 
-## 預覽
+## 預覽（raw.githack.com，路徑須含 `.html`）
 
-見 `LP_preview_hosts.js` 的 `PINNED_GITHACK_COMMIT` 與本文件底部連結（raw.githack.com + 完整 SHA）。
+釘選 SHA 見 `LP_preview_hosts.js` 的 `PINNED_GITHACK_COMMIT`（與本分支最新 push 同步）。
