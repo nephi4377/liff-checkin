@@ -2,8 +2,10 @@
  * 平面底圖（underlay）匯入、比例與旋轉校正（無 LayoutPlanner DOM 依賴部分可單測）
  */
 
-/** 佈局 JSON 內嵌 data URL 建議上限（約 3.5MB） */
+/** 佈局 JSON 內嵌 data URL 建議上限（解碼後 bytes，壓縮用） */
 export const UNDERLAY_MAX_DATA_URL_BYTES = 3_500_000;
+/** localStorage 自動備份：data URL base64 字元上限（約 1.1MB 解碼） */
+export const UNDERLAY_MAX_DATA_URL_B64_CHARS = 1_500_000;
 
 /** JPEG 壓縮預設 */
 export const UNDERLAY_COMPRESS_MAX_EDGE_PX = 2400;
@@ -59,6 +61,22 @@ export function estimateDataUrlBytes(dataUrl) {
     const comma = dataUrl.indexOf(',');
     const b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
     return Math.floor((b64.length * 3) / 4);
+}
+
+/**
+ * @param {string} dataUrl
+ */
+export function dataUrlBase64CharLength(dataUrl) {
+    if (!dataUrl || typeof dataUrl !== 'string') return 0;
+    const comma = dataUrl.indexOf(',');
+    return comma >= 0 ? dataUrl.slice(comma + 1).length : dataUrl.length;
+}
+
+/**
+ * @param {string} dataUrl
+ */
+export function isDataUrlOverAutosaveLimit(dataUrl) {
+    return dataUrlBase64CharLength(dataUrl) > UNDERLAY_MAX_DATA_URL_B64_CHARS;
 }
 
 /**

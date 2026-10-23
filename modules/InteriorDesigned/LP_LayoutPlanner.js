@@ -34,6 +34,7 @@ import {
     renderPdfFirstPageToDataUrl,
     UNDERLAY_MAX_DATA_URL_BYTES,
     estimateDataUrlBytes,
+    isDataUrlOverAutosaveLimit,
 } from './LP_underlay.js';
 
 /** 開啟時於 console 輸出除錯訊息（元件載入、渲染、縮放、繪圖等） */
@@ -2605,7 +2606,13 @@ function readFileAsDataUrl(file) {
 }
 
 async function applyUnderlayDataUrl(dataUrl) {
-    if (estimateDataUrlBytes(dataUrl) > UNDERLAY_MAX_DATA_URL_BYTES) {
+    if (isDataUrlOverAutosaveLimit(dataUrl)) {
+        showGlobalNotification(
+            '底圖過大，無法完整寫入自動備份（請用「儲存佈局」或匯出專案檔）。',
+            8000,
+            'warning',
+        );
+    } else if (estimateDataUrlBytes(dataUrl) > UNDERLAY_MAX_DATA_URL_BYTES) {
         showGlobalNotification('底圖仍超過建議大小，請改用較小圖檔或降低掃描解析度。', 6000, 'warning');
     }
     const bgImg = document.getElementById('bg-img');
@@ -4332,6 +4339,28 @@ function saveState() {
 /**
  * 儲存當前的畫布狀態到歷史紀錄中（實際寫入 history 堆疊）
  */
+function historyBackgroundFieldsEqual(bgA, bgB) {
+    const a = bgA || {};
+    const b = bgB || {};
+    const srcA = a.src || '';
+    const srcB = b.src || '';
+    if (srcA !== srcB) return false;
+    const stripSrc = (bg) => {
+        const { src, ...rest } = bg;
+        return rest;
+    };
+    return JSON.stringify(stripSrc(a)) === JSON.stringify(stripSrc(b));
+}
+
+function historyStatesEquivalent(prev, next) {
+    if (!historyBackgroundFieldsEqual(prev.background, next.background)) return false;
+    const omitBg = (s) => {
+        const { background, ...rest } = s;
+        return rest;
+    };
+    return JSON.stringify(omitBg(prev)) === JSON.stringify(omitBg(next));
+}
+
 function commitSaveState() {
     // 如果當前指針不在歷史紀錄的末尾 (表示已經執行過 undo)，
     // 則移除後續的所有 "redo" 狀態
@@ -4351,8 +4380,7 @@ function commitSaveState() {
         layerVisibility: layerVisibility
     };
 
-    // 避免儲存與上一步完全相同的狀態
-    if (history.length > 0 && JSON.stringify(currentState) === JSON.stringify(history[history.length - 1])) {
+    if (history.length > 0 && historyStatesEquivalent(history[history.length - 1], currentState)) {
         return;
     }
 
@@ -4886,6 +4914,45 @@ function calculateWallPath(points, thickness) {
 
 const AUTO_SAVE_KEY = 'layoutPlanner_autosave_v1';
 const AUTO_SAVE_INTERVAL = 60000; // 60秒自動儲存一次
+let autoSaveSrcOmittedWarned = false;
+
+function backgroundForAutosavePersist(bg) {
+    const norm = normalizeLayoutBackground(bg);
+    if (norm.src && norm.src.startsWith('data:image') && isDataUrlOverAutosaveLimit(norm.src)) {
+        const { src, ...rest } = norm;
+        return { ...rest, src: '', srcOmitted: true };
+    }
+    return norm;
+}
+
+function backgroundForClientZipExport(bg) {
+    const norm = normalizeLayoutBackground(bg);
+    const hasUnderlay = !!(norm.src && norm.src.startsWith('data:image'));
+    const { src, ...rest } = norm;
+    return { ...rest, src: '', hasUnderlay };
+}
+
+function buildAutosaveLayoutData() {
+    const constructionAreaEl = document.getElementById('construction-area');
+    return {
+        version: '2.0',
+        timestamp: new Date().getTime(),
+        prettyTime: new Date().toLocaleString(),
+        placedCabinets,
+        drawnAreas,
+        placedAnnotations,
+        workspaceSize: getWorkspaceCanvasPx(),
+        background: backgroundForAutosavePersist(getSerializedBackground()),
+        constructionArea: constructionAreaEl ? constructionAreaEl.value : '',
+        quotationManualOverrides,
+        layerVisibility,
+    };
+}
+
+function isQuotaExceededError(err) {
+    const name = err?.name || '';
+    return name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED';
+}
 
 function initAutoSave() {
     if (isLayoutPlannerUrlPreview()) return;
@@ -4897,31 +4964,46 @@ function initAutoSave() {
 }
 
 function autoSave(silent = false) {
+    const layoutData = buildAutosaveLayoutData();
     try {
-        // 收集當前狀態
-        const constructionAreaEl = document.getElementById('construction-area');
-        const layoutData = {
-            version: '2.0',
-            timestamp: new Date().getTime(), // 使用 timestamp 方便比較
-            prettyTime: new Date().toLocaleString(), // 易讀的時間格式
-            placedCabinets: placedCabinets,
-            drawnAreas: drawnAreas,
-            placedAnnotations: placedAnnotations, // [新增]
-            workspaceSize: getWorkspaceCanvasPx(),
-            background: getSerializedBackground(),
-            constructionArea: constructionAreaEl ? constructionAreaEl.value : '',
-            quotationManualOverrides: quotationManualOverrides,
-            layerVisibility: layerVisibility
-        };
-
         localStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(layoutData));
-
         if (!silent) {
-            // 使用非侵入式的方式提示 (只顯示 1 秒)
             showGlobalNotification('☁️ 進度已自動備份', 1000, 'info');
         }
+        return;
     } catch (e) {
-        console.error('自動備份失敗 (可能是 LocalStorage 已滿):', e);
+        if (!isQuotaExceededError(e)) {
+            console.error('自動備份失敗:', e);
+            return;
+        }
+    }
+
+    try {
+        localStorage.removeItem(AUTO_SAVE_KEY);
+        const slim = {
+            ...layoutData,
+            background: backgroundForAutosavePersist({ ...getSerializedBackground(), src: '' }),
+        };
+        slim.background.srcOmitted = true;
+        localStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(slim));
+        if (!autoSaveSrcOmittedWarned) {
+            showGlobalNotification(
+                '底圖過大未能完整自動備份，請按「儲存佈局」下載 JSON 備份。',
+                9000,
+                'warning',
+            );
+            autoSaveSrcOmittedWarned = true;
+        }
+    } catch (e2) {
+        console.error('自動備份失敗 (LocalStorage 已滿):', e2);
+        if (!autoSaveSrcOmittedWarned) {
+            showGlobalNotification(
+                '自動備份失敗（儲存空間不足），請立即下載佈局 JSON。',
+                9000,
+                'error',
+            );
+            autoSaveSrcOmittedWarned = true;
+        }
     }
 }
 
@@ -5096,7 +5178,7 @@ async function downloadDesignFilesAsZip() {
             drawnAreas: drawnAreas,
             placedAnnotations: placedAnnotations, // [新增]
             workspaceSize: getWorkspaceCanvasPx(),
-            background: getSerializedBackground(),
+            background: backgroundForClientZipExport(getSerializedBackground()),
             constructionArea: constructionAreaEl ? constructionAreaEl.value : '',
             quotationManualOverrides: quotationManualOverrides,
             layerVisibility: layerVisibility
@@ -5251,6 +5333,13 @@ window.onload = () => {
         ...(window.__LP_TEST_HOOKS__ || {}),
         getSerializedBackground: () => getSerializedBackground(),
         getDrawingPoints: () => JSON.parse(JSON.stringify(currentDrawingPoints)),
+        runAutoSave: (silent) => {
+            autoSave(!!silent);
+        },
+        readAutosaveJson: () => {
+            const raw = localStorage.getItem(AUTO_SAVE_KEY);
+            return raw ? JSON.parse(raw) : null;
+        },
     };
     initWorkspaceAndUiFromStorage();
 
