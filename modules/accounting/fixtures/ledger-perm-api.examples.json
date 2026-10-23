@@ -1,0 +1,93 @@
+{
+  "_source": "Backend_GAS cursor/acct-sec-11-ledger-history-own-ba72 accounting-gas/SPEC/LEDGER_PERM_API.md (example responses for contract tests)",
+  "view_all_min_perm": 5,
+  "actions": {
+    "void": "accounting_ledger_void",
+    "dup_review_clear": "accounting_ledger_dup_review_clear"
+  },
+  "dup_review_tag_regex": "\\[dup_review:([^\\]]+)\\s+pending\\]",
+  "examples": {
+    "ledger_recent_mine_only": {
+      "success": true,
+      "mine_only": true,
+      "view_all_min_perm": 5,
+      "items": [
+        {
+          "sheet": "2026-01",
+          "row": 42,
+          "ingest_id": "ing-demo-001",
+          "recorderUserId": "U_OWNER_DEMO",
+          "type": "支出",
+          "amount": 1500,
+          "note": "廠商試算 [dup_review:ing-demo-001 pending]",
+          "voided": false,
+          "can_edit": true,
+          "can_void": true
+        }
+      ]
+    },
+    "ledger_void_success": {
+      "success": true,
+      "item": {
+        "sheet": "2026-01",
+        "row": 42,
+        "ingest_id": "ing-demo-001",
+        "recorderUserId": "U_OWNER_DEMO",
+        "voided": true,
+        "voided_at": "2026-10-23T09:00:00+08:00",
+        "void_reason": "重複登錄"
+      }
+    },
+    "ledger_update_dup_tagged": {
+      "success": true,
+      "message": "已儲存",
+      "item": {
+        "sheet": "2026-01",
+        "row": 42,
+        "note": "更正金額 [dup_review:ing-demo-001 pending]",
+        "recorderUserId": "U_OWNER_DEMO"
+      }
+    },
+    "dup_review_clear_success": {
+      "success": true,
+      "item": {
+        "sheet": "2026-01",
+        "row": 42,
+        "note": "更正金額",
+        "recorderUserId": "U_OWNER_DEMO"
+      }
+    }
+  },
+  "error_examples": {
+    "LEDGER_DELETE_DISABLED": {
+      "success": false,
+      "error_code": "LEDGER_DELETE_DISABLED",
+      "message": "Delete is disabled; use void."
+    },
+    "LEDGER_VOID_DENIED": {
+      "success": false,
+      "error_code": "LEDGER_VOID_DENIED",
+      "message": "Not allowed to void."
+    },
+    "LEDGER_EDIT_DENIED": {
+      "success": false,
+      "error_code": "LEDGER_EDIT_DENIED",
+      "message": "Not allowed to edit."
+    },
+    "LEDGER_DUP_REVIEW_CLEAR_DENIED": {
+      "success": false,
+      "error_code": "LEDGER_DUP_REVIEW_CLEAR_DENIED",
+      "message": "Requires permission 5."
+    },
+    "LEDGER_NOT_FOUND": {
+      "success": false,
+      "error_code": "LEDGER_NOT_FOUND",
+      "message": "Row not found."
+    },
+    "LEDGER_ALREADY_VOIDED": {
+      "success": false,
+      "error_code": "LEDGER_ALREADY_VOIDED",
+      "message": "Already voided."
+    }
+  }
+}

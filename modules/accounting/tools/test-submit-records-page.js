@@ -30,8 +30,8 @@ assert(html.indexOf('vendorPaymentUpdate') >= 0, 'edit via vendorPaymentUpdate')
 assert(html.indexOf('已匯款') >= 0 && html.indexOf('鎖定') >= 0, 'paid lock copy');
 assert(html.indexOf('submitted_by') >= 0, 'shows submitted_by');
 assert(html.indexOf('include_allocations') >= 0, 'loads allocations');
-assert(html.indexOf('accounting_api.js?v=108') >= 0, 'api cache bust v=108');
-assert(html.indexOf('ledger_entry_map.js?v=1') >= 0, 'ledger map script');
+assert(html.indexOf('accounting_api.js?v=109') >= 0, 'api cache bust v=109');
+assert(html.indexOf('ledger_entry_map.js?v=2') >= 0, 'ledger map script');
 assert(html.indexOf('canViewAllSubmitRecords') >= 0, 'view-all gated at boss perm');
 assert(html.indexOf('readSubmitMineOnlyFlag') >= 0, 'mine_only respects permission');
 assert(html.indexOf('data.mine_only !== undefined') >= 0, 'status label follows api mine_only');

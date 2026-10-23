@@ -9,8 +9,8 @@ var root = path.join(__dirname, '..');
 var html = fs.readFileSync(path.join(root, 'ledger_history.html'), 'utf8');
 var api = fs.readFileSync(path.join(root, '../../shared/js/accounting_api.js'), 'utf8');
 
-assert(html.indexOf('accounting_api.js?v=108') >= 0, 'cache bust v=108');
-assert(html.indexOf('ledger_entry_map.js?v=1') >= 0, 'ledger map');
+assert(html.indexOf('accounting_api.js?v=109') >= 0, 'cache bust v=109');
+assert(html.indexOf('ledger_entry_map.js?v=2') >= 0, 'ledger map');
 assert(html.indexOf('parseHistoryAmountQuery') >= 0, 'amount query normalizer');
 assert(html.indexOf('id="histScope"') >= 0, 'scope select for boss');
 assert(html.indexOf('>全部</option>') >= 0, 'all scope option');
