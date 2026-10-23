@@ -1,5 +1,6 @@
 /**
  * 僅對「同一 id 字串出現多次」的工項，從第 2 筆起補 _2、_3…（跳過已存在的 id）。
+ * usedIds 逐列佔用，與 budget-quote-parser-lib assignUniqueItemIdForSheet 順序一致。
  */
 
 /**
@@ -39,10 +40,6 @@ export function allocateDuplicateGroupSuffixId(usedIds, baseId) {
  */
 export function migrateDuplicateItemIdsOnly(items) {
     const list = (items || []).map((it) => ({ ...it }));
-    const usedIds = new Set();
-    list.forEach((it) => {
-        if (it?.id != null && String(it.id).trim() !== '') usedIds.add(String(it.id));
-    });
 
     const positionsById = new Map();
     list.forEach((it, index) => {
@@ -52,23 +49,48 @@ export function migrateDuplicateItemIdsOnly(items) {
         positionsById.get(id).push(index);
     });
 
+    const usedIds = new Set();
     const changes = [];
-    for (const [id, indices] of positionsById) {
-        if (indices.length <= 1) continue;
-        for (let n = 1; n < indices.length; n++) {
-            const index = indices[n];
-            const prev = String(list[index]?.id);
-            const newId = allocateDuplicateGroupSuffixId(usedIds, id);
-            if (prev !== newId) {
+
+    for (let index = 0; index < list.length; index++) {
+        const id =
+            list[index]?.id != null && String(list[index].id).trim() !== ''
+                ? String(list[index].id)
+                : null;
+        if (!id) continue;
+
+        const group = positionsById.get(id);
+        if (!group || group.length <= 1) {
+            const claimed = claimUniqueItemIdForSheet(usedIds, id);
+            if (claimed !== id) {
                 changes.push({
                     index,
-                    from: prev,
-                    to: newId,
+                    from: id,
+                    to: claimed,
                     name: list[index]?.name,
                 });
+                list[index] = { ...list[index], id: claimed };
             }
-            list[index] = { ...list[index], id: newId };
+            continue;
         }
+
+        const rank = group.indexOf(index);
+        if (rank === 0) {
+            claimUniqueItemIdForSheet(usedIds, id);
+            continue;
+        }
+
+        const prev = String(list[index]?.id);
+        const newId = allocateDuplicateGroupSuffixId(usedIds, id);
+        if (prev !== newId) {
+            changes.push({
+                index,
+                from: prev,
+                to: newId,
+                name: list[index]?.name,
+            });
+        }
+        list[index] = { ...list[index], id: newId };
     }
 
     return { items: list, changes };

@@ -7,6 +7,7 @@ import {
     isCabinetLikeProductName,
 } from './LP_quote_placement_meta.js';
 import { resolveFixtureDisplayCategory } from './LP_3D_furniture.js';
+import { classifyPlacedCabinet3DKind } from './LP_3D_scene.js';
 
 const NON_EXPORT_SOURCE_TYPES = new Set([
     'opening',
@@ -41,10 +42,13 @@ function readModel3dKind(cab) {
     return v ? String(v).trim() : '';
 }
 
+const NON_EXPORT_CLASSIFIED_3D_KINDS = new Set(['wallSegment', 'door', 'window']);
+
 function legacyShouldExcludeFromQuote(cab) {
     if (!cab?.data) return true;
 
     const kind = readModel3dKind(cab);
+    if (kind === 'cabinet' || kind === 'ignore') return false;
     if (kind && OPENING_MODEL_KINDS.has(kind)) return true;
 
     const group = String(cab.data.group || '').trim();
@@ -52,6 +56,9 @@ function legacyShouldExcludeFromQuote(cab) {
 
     const name = String(cab.data.name || '');
     if (isCabinetLikeProductName(name)) return false;
+
+    const classified3d = classifyPlacedCabinet3DKind(cab);
+    if (NON_EXPORT_CLASSIFIED_3D_KINDS.has(classified3d)) return true;
 
     const displayCat = resolveFixtureDisplayCategory(cab, 'cabinet');
     if (displayCat === 'sofa' || displayCat === 'bed' || displayCat === 'appliance') return true;

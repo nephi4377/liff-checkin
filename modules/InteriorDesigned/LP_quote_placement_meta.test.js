@@ -51,5 +51,19 @@ describe('LP_quote_placement_meta', () => {
         };
         const saved = serializePlacedCabinetForLayoutSave(cab);
         expect(saved.quoteExport).toBe(false);
+        expect(saved.quoteFlagsUserSet).toBe(true);
+    });
+
+    it('第二次存檔仍保留 quoteFlagsUserSet', () => {
+        const cab = {
+            id: 'c3',
+            quoteFlagsUserSet: true,
+            quoteExport: true,
+            data: { name: '矮櫃', group: '系統櫃' },
+        };
+        const once = serializePlacedCabinetForLayoutSave(cab);
+        const twice = serializePlacedCabinetForLayoutSave(once);
+        expect(twice.quoteFlagsUserSet).toBe(true);
+        expect(twice.quoteExport).toBe(true);
     });
 });

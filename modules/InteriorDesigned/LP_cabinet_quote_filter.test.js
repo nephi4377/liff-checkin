@@ -46,6 +46,43 @@ describe('isQuoteExportablePlacedCabinet', () => {
         ).toBe(true);
     });
 
+    it('isWall 與仅靠名稱／群組的門窗（model3dKind auto）不匯出', () => {
+        expect(
+            isQuoteExportablePlacedCabinet({
+                id: 'wall-1',
+                data: { isWall: true, name: '牆段', group: '系統櫃' },
+            }),
+        ).toBe(false);
+        expect(
+            isQuoteExportablePlacedCabinet({
+                id: 'd-auto',
+                data: { name: '房門', group: '系統櫃', model3dKind: 'auto' },
+            }),
+        ).toBe(false);
+        expect(
+            isQuoteExportablePlacedCabinet({
+                id: 'w-auto',
+                data: { name: '落地窗', group: '系統櫃', model3dKind: 'auto' },
+            }),
+        ).toBe(false);
+        expect(
+            isQuoteExportablePlacedCabinet({
+                id: 'd-leaf',
+                data: { name: '浴室門', group: '門片', model3dKind: 'auto' },
+            }),
+        ).toBe(false);
+    });
+
+    it('手動 model3dKind cabinet 仍匯出（覆寫門窗名稱）', () => {
+        expect(
+            isQuoteExportablePlacedCabinet({
+                id: 'd-cab',
+                model3dKind: 'cabinet',
+                data: { name: '房門', group: '門片' },
+            }),
+        ).toBe(true);
+    });
+
     it('舊資料無旗標：model3dKind door、門窗工程、純沙發床排除', () => {
         expect(
             isQuoteExportablePlacedCabinet({

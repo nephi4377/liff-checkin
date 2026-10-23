@@ -51,14 +51,15 @@ export function inferQuoteSourceTypeForPlacement(data, cabShell = {}) {
  */
 export function serializePlacedCabinetForLayoutSave(cab) {
     const out = JSON.parse(JSON.stringify(cab));
-    if (!out.quoteFlagsUserSet) {
+    const userSet = Boolean(out.quoteFlagsUserSet);
+    if (!userSet) {
         delete out.quoteSourceType;
         delete out.quoteExport;
+        delete out.quoteFlagsUserSet;
         if (out.data) {
             delete out.data.quoteSourceType;
             delete out.data.quoteExport;
         }
     }
-    delete out.quoteFlagsUserSet;
     return out;
 }

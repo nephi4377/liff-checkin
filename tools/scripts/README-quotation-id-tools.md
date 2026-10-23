@@ -4,7 +4,9 @@
 
 1. `node tools/scripts/check-quotation-duplicate-ids.mjs <context.json>`
 2. 若有重複：`node tools/scripts/migrate-quotation-item-ids.mjs <context.json>`（dry-run）
-3. 確認無誤後：`--write-out` 產出新檔，再匯入 BudgetWeb／上傳
+3. **豪哥核准** dry-run 的 `changeCount`／`changes` 後：  
+   `node tools/scripts/migrate-quotation-item-ids.mjs <context.json> --write-out <out.json>`
+4. 從 BudgetWeb／Firebase 匯出之 **雲端 budget context JSON**（含 `context.items` 或頂層 `items`）以 `<out.json>` 的 `items` **取代**對應陣列；上傳時**只**用 Firebase `update()` 寫回 `context/items`（或等價路徑），**勿** `set()` 整份覆蓋（保留 `is_closed` 等欄位）。**正式寫入雲端前再次須豪哥核准。**
 
 **不先 migrate** 時，778 等同表多列共用 `ITEM_表名_項次` 會讓同步永遠被 id 驗證擋下。
 

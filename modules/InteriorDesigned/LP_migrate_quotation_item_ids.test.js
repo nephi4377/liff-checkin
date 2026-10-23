@@ -6,6 +6,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { migrateDuplicateItemIdsOnly } from '../../tools/quotation-item-id-migrate.mjs';
 import { findDuplicateItemIds } from './LP_budgetweb_cloud_sync.js';
+import BudgetQuoteParser from '../../tools/budget-quote-parser-lib.js';
 
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -98,6 +99,18 @@ describe('migrateDuplicateItemIdsOnly', () => {
         expect(migrated[1].id).toBe('ITEM_X_2');
         expect(migrated[4].id).toBe('UNIQUE_OK');
         expect(changes.map((c) => c.to)).toEqual(['ITEM_X_3', 'ITEM_X_4']);
+    });
+
+    it('[X,X,X_2] 逐列佔用與解析器 assignUniqueItemIdForSheet 一致', () => {
+        const rawIds = ['ITEM_Z', 'ITEM_Z', 'ITEM_Z_2'];
+        const used = new Set();
+        const parserIds = rawIds.map((id) =>
+            BudgetQuoteParser.assignUniqueItemIdForSheet(used, id),
+        );
+        const items = rawIds.map((id, i) => ({ id, name: `row${i}` }));
+        const { items: migrated } = migrateDuplicateItemIdsOnly(items);
+        expect(migrated.map((r) => r.id)).toEqual(parserIds);
+        expect(findDuplicateItemIds(migrated)).toEqual([]);
     });
 });
 
