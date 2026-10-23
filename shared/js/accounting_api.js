@@ -1413,8 +1413,11 @@ var AccountingApi = (function () {
       if (opts.sheet) body.sheet = opts.sheet;
       if (opts.row != null && opts.row !== '') body.row = opts.row;
       if (opts.ingest_id) body.ingest_id = opts.ingest_id;
-      var reason = String(opts.void_reason || '').trim();
-      if (reason) body.void_reason = reason;
+      var reason = String(opts.void_reason || opts.reason || '').trim();
+      if (reason) {
+        body.void_reason = reason;
+        body.reason = reason;
+      }
       if (sessionOrToken && typeof resolveAuth === 'function') {
         try {
           var auth = resolveAuth(sessionOrToken);
