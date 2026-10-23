@@ -26,10 +26,20 @@ test.describe('Githack 主頁 3D smoke（LP_LayoutPlanner.html）', () => {
 
     const topSnap = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.getRoomAcceptanceSnapshot());
     expect(topSnap?.floorWallInnerDelta?.maxEdge ?? 99, '地板 mesh vs 牆內面/cap（≤2cm）').toBeLessThanOrEqual(2);
+    await page.waitForFunction(
+      () => window.__LP3D_TEST_HOOKS__?.isTopDownPresentationReady?.(),
+      { timeout: 15000 },
+    );
     const screenshotGap = await page.evaluate(() => (
       window.__LP3D_TEST_HOOKS__?.verifyTopDownScreenshotWallFloorNoGap?.()
     ));
     expect(screenshotGap?.ok, '俯視截圖牆內緣與地板間不得有 >2px 背景').toBe(true);
+    for (const row of Object.values(screenshotGap?.rows ?? {})) {
+      expect(row.ok, `俯視水平掃描 bg gap ${row.gap}px`).toBe(true);
+    }
+    for (const col of Object.values(screenshotGap?.cols ?? {})) {
+      expect(col.ok, `俯視垂直掃描 bg gap ${col.gap}px`).toBe(true);
+    }
     const cabPx = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.sampleCabinetTopDownPixel?.());
     expect(cabPx?.isCabinetColor, '俯視櫃體中心像素應為櫃體色').toBe(true);
 

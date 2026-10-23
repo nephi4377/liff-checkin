@@ -89,6 +89,34 @@ function addBoxAt(group, THREE, w, h, d, material, x, y, z) {
 }
 
 /**
+ * 俯視貼地門／窗標記（立體 mesh 在斜視／walk 時顯示）
+ * @param {typeof import('three')} THREE
+ * @param {THREE.Group} group
+ * @param {{ displayCategory?: string, widthCm: number, depthCm: number }} fix
+ */
+export function attachDoorWindowPlanMarker(THREE, group, fix) {
+    const cat = fix.displayCategory;
+    if (cat !== 'door' && cat !== 'window') return;
+    const w = fix.widthCm;
+    const d = fix.depthCm;
+    const color = LP_3D_CATEGORY_COLORS[cat] ?? LP_3D_CATEGORY_COLORS.door;
+    const material = new THREE.MeshBasicMaterial({
+        color,
+        transparent: cat === 'window',
+        opacity: cat === 'window' ? 0.55 : 0.92,
+    });
+    const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(w * 0.92, 1.8, Math.max(d, 6)),
+        material,
+    );
+    mesh.position.set(0, 0.15, 0);
+    mesh.renderOrder = 7;
+    mesh.visible = false;
+    mesh.userData.lp3dPlanMarker = true;
+    group.add(mesh);
+}
+
+/**
  * @param {typeof import('three')} THREE
  * @param {object} fix — descriptor fixture（含 displayCategory）
  */

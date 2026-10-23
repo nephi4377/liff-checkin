@@ -18,6 +18,7 @@ import {
 } from './LP_3D_scene.js';
 import {
     buildFixtureMeshGroup,
+    attachDoorWindowPlanMarker,
     createLabelSprite,
     LP_3D_CATEGORY_COLORS,
 } from './LP_3D_furniture.js';
@@ -201,6 +202,8 @@ export function createLayoutPlanner3DViewer(options) {
     let orbitBookmark = null;
     let rebuildCount = 0;
     let walkCreateCount = 0;
+    let topDownPresentationSeq = 0;
+    let topDownPresentationAppliedSeq = 0;
 
     const contentGroup = { current: null };
     const ceilingGroup = { current: null };
@@ -275,7 +278,11 @@ export function createLayoutPlanner3DViewer(options) {
         for (const cap of wallCapMeshes.current) {
             cap.visible = false;
         }
+        for (const ring of wallPlanRingMeshes.current) {
+            ring.visible = false;
+        }
         lastOrbitWallCut = null;
+        applyDoorWindowPlanLayoutForView();
     }
 
     function resetOrbitCamera(desc) {
@@ -532,6 +539,8 @@ export function createLayoutPlanner3DViewer(options) {
         });
         wallMeshes.current = [];
         wallCapMeshes.current = [];
+        wallPlanRingMeshes.current = [];
+        topDownPresentationSeq += 1;
         wallCapMatStandard = new THREE.MeshStandardMaterial({
             color: 0x334155,
             roughness: 0.92,
@@ -564,6 +573,9 @@ export function createLayoutPlanner3DViewer(options) {
             group.userData.lp3dFixtureId = fix.id;
             group.userData.lp3dFixtureKind = fix.kind;
             fixtureGroups.current.set(fix.id, group);
+            if (fix.kind === 'door' || fix.kind === 'window') {
+                attachDoorWindowPlanMarker(THREE, group, fix);
+            }
             root.add(group);
 
             if (showCabinetLabels && fix.label && fix.kind === 'cabinet') {
@@ -595,6 +607,7 @@ export function createLayoutPlanner3DViewer(options) {
             resetWalkCamera(desc);
             restoreSolidWallsForWalk();
         }
+        topDownPresentationAppliedSeq = topDownPresentationSeq;
     }
 
     function isOrbitTopDownView() {
@@ -613,7 +626,10 @@ export function createLayoutPlanner3DViewer(options) {
         if (!camera || viewMode !== 'orbit' || !wallMeshes.current.length) return;
         const topDown = isOrbitTopDownView();
         const modeKey = topDown ? 'top' : 'oblique';
-        if (modeKey === lastOrbitWallCut) return;
+        if (modeKey === lastOrbitWallCut) {
+            topDownPresentationAppliedSeq = topDownPresentationSeq;
+            return;
+        }
         lastOrbitWallCut = modeKey;
         for (const mesh of wallMeshes.current) {
             mesh.visible = !topDown;
@@ -644,6 +660,25 @@ export function createLayoutPlanner3DViewer(options) {
             }
         }
         applyCabinetLabelLayoutForView();
+        applyDoorWindowPlanLayoutForView();
+        topDownPresentationAppliedSeq = topDownPresentationSeq;
+    }
+
+    function applyDoorWindowPlanLayoutForView() {
+        const topDown = viewMode === 'orbit' && isOrbitTopDownView();
+        for (const [, group] of fixtureGroups.current) {
+            const kind = group.userData?.lp3dFixtureKind;
+            if (kind !== 'door' && kind !== 'window') continue;
+            group.traverse((obj) => {
+                if (obj.userData?.lp3dPlanMarker) {
+                    obj.visible = topDown;
+                    return;
+                }
+                if (obj.isMesh || obj.isLineSegments) {
+                    obj.visible = !topDown;
+                }
+            });
+        }
     }
 
     function applyCabinetLabelLayoutForView() {
@@ -840,11 +875,11 @@ export function createLayoutPlanner3DViewer(options) {
         const poly = axisAlignedBoundsXZ(wall.inner);
         const topDown = viewMode === 'orbit' && isOrbitTopDownView();
         if (topDown) {
-            const cap = wallCapMeshes.current[0];
-            const capInner = cap?.visible
-                ? (wallCapInnerBoundsXZFromMesh(cap, wall) ?? poly)
+            const planRing = wallPlanRingMeshes.current[0];
+            const planInner = planRing
+                ? (wallCapInnerBoundsXZFromMesh(planRing, wall) ?? poly)
                 : poly;
-            return { poly, capInner, meshInner: capInner };
+            return { poly, capInner: planInner, meshInner: planInner };
         }
         const brush = wallMeshes.current[0];
         if (!brush) return { poly, capInner: poly, meshInner: poly };
@@ -891,12 +926,15 @@ export function createLayoutPlanner3DViewer(options) {
         const dCap = colorDistanceRgb(rgb, WALL_CAP_SAMPLE_RGB);
         const dWall = colorDistanceRgb(rgb, WALL_SAMPLE_RGB);
         const dFloor = colorDistanceRgb(rgb, FLOOR_SAMPLE_RGB);
+        const dBg = colorDistanceRgb(rgb, SCENE_BG_SAMPLE_RGB);
+        const dMinWall = Math.min(dCap, dWall);
         return dCap < 42
             || dWall < 42
+            || (dMinWall < 68 && dMinWall + 10 < dBg)
             || (
                 dFloor < 62
-                && Math.min(dCap, dWall) < 88
-                && colorDistanceRgb(rgb, SCENE_BG_SAMPLE_RGB) > 25
+                && dMinWall < 88
+                && dBg > 25
             );
     }
 
@@ -908,6 +946,12 @@ export function createLayoutPlanner3DViewer(options) {
         return colorDistanceRgb(rgb, CABINET_SAMPLE_RGB) < 55
             && colorDistanceRgb(rgb, LABEL_BG_SAMPLE_RGB) > 35
             && colorDistanceRgb(rgb, FLOOR_SAMPLE_RGB) > 32;
+    }
+
+    function isDoorWindowPlanMarkerRgb(rgb) {
+        const door = { r: 120, g: 53, b: 15 };
+        const win = { r: 56, g: 189, b: 248 };
+        return colorDistanceRgb(rgb, door) < 58 || colorDistanceRgb(rgb, win) < 58;
     }
 
     function scanTopDownFloorToWallTransition(screenX, screenY, dirX, dirY, maxSteps = 420) {
@@ -924,6 +968,9 @@ export function createLayoutPlanner3DViewer(options) {
                 continue;
             }
             if (!sawFloor) continue;
+            if (isDoorWindowPlanMarkerRgb(rgb)) {
+                continue;
+            }
             if (step - lastFloorStep > 2) {
                 return { ok: false, reason: 'gap_before_wall', step, rgb };
             }
@@ -983,8 +1030,8 @@ export function createLayoutPlanner3DViewer(options) {
         const spanZ = bounds.maxZ - bounds.minZ;
         const insetX = Math.min(40, spanX * 0.07);
         const insetZ = Math.min(40, spanZ * 0.07);
-        const northX = bounds.minX + spanX * 0.18;
-        const southX = bounds.minX + spanX * 0.82;
+        const northX = bounds.minX + spanX * 0.08;
+        const southX = bounds.minX + spanX * 0.08;
         renderer.render(scene, camera);
         const center = projectWorldXZToScreen(cx, cz);
         return {
@@ -1365,6 +1412,37 @@ export function createLayoutPlanner3DViewer(options) {
             },
             verifyTopDownFloorMeetsWallPixels: () => verifyTopDownFloorMeetsWallPixels(),
             verifyTopDownScreenshotWallFloorNoGap: (options) => verifyTopDownScreenshotWallFloorNoGap(options),
+            isTopDownPresentationReady: () => (
+                topDownPresentationSeq === topDownPresentationAppliedSeq
+                && (viewMode !== 'orbit' || !isOrbitTopDownView()
+                    || (wallPlanRingMeshes.current.length > 0
+                        && wallPlanRingMeshes.current.every((m) => m.visible)))
+            ),
+            getWallPlanRingMeshCount: () => wallPlanRingMeshes.current.length,
+            getWallPlanRingMeshesVisible: () => wallPlanRingMeshes.current.some((m) => m.visible),
+            sampleWalkDoorFloorNoPlanRingBand: () => {
+                if (viewMode !== 'walk' || !renderer || !camera) return null;
+                const door = lastDesc?.fixtures?.find((f) => f.kind === 'door');
+                if (!door) return null;
+                renderer.render(scene, camera);
+                const p = new THREE.Vector3(door.centerX, 0.12, door.centerZ).project(camera);
+                const w = renderer.domElement.clientWidth;
+                const h = renderer.domElement.clientHeight;
+                const sx = (p.x * 0.5 + 0.5) * w;
+                const sy = (-p.y * 0.5 + 0.5) * h;
+                const rgb = sampleRendererPixel(sx, sy, true);
+                if (!rgb) return null;
+                const isPlanWall = colorDistanceRgb(rgb, WALL_CAP_SAMPLE_RGB) < 32
+                    && colorDistanceRgb(rgb, FLOOR_SAMPLE_RGB) > 36;
+                return {
+                    screenX: sx,
+                    screenY: sy,
+                    rgb,
+                    planRingsVisible: wallPlanRingMeshes.current.some((m) => m.visible),
+                    isPlanWallColor: isPlanWall,
+                    ok: !wallPlanRingMeshes.current.some((m) => m.visible) && !isPlanWall,
+                };
+            },
             sampleScreenPixel: (screenX, screenY) => sampleRendererPixel(screenX, screenY),
             sampleWalkCenterWallPixels: () => {
                 if (viewMode !== 'walk' || !renderer) return null;
