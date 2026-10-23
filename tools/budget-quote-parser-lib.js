@@ -328,12 +328,18 @@
      * @param {string} sheetName
      * @param {{ getCategory?: Function, metadataKeywords?: string[] }} options
      */
-    /** 同表內重複 id：第 1 筆不變，第 2 筆起加 _2、_3… */
-    function assignUniqueItemIdForSheet(sheetItemIdCounts, baseId) {
-        const n = (sheetItemIdCounts.get(baseId) || 0) + 1;
-        sheetItemIdCounts.set(baseId, n);
-        if (n === 1) return baseId;
-        return `${baseId}_${n}`;
+    /** 同表內 id：與 quotation-item-id-migrate.js claimUniqueItemIdForSheet 邏輯一致 */
+    function assignUniqueItemIdForSheet(sheetUsedIds, baseId) {
+        const id = String(baseId);
+        if (!sheetUsedIds.has(id)) {
+            sheetUsedIds.add(id);
+            return id;
+        }
+        let n = 2;
+        while (sheetUsedIds.has(`${id}_${n}`)) n += 1;
+        const next = `${id}_${n}`;
+        sheetUsedIds.add(next);
+        return next;
     }
 
     function stableItemContentHash(data) {
@@ -353,7 +359,7 @@
         const getCategory = options && options.getCategory ? options.getCategory : () => '其他';
         const metadataKeywords = (options && options.metadataKeywords) || [];
         const items = [];
-        const sheetItemIdCounts = new Map();
+        const sheetUsedIds = new Set();
         if (!json || json.length < 3) {
             return { items, taxInclusiveTotal: null };
         }
@@ -425,7 +431,7 @@
             const baseItemId = picked.indexVal
                 ? `ITEM_${sheetName}_${picked.indexVal}`
                 : `ITEM_${sheetName}_R${i}`;
-            const itemId = assignUniqueItemIdForSheet(sheetItemIdCounts, baseItemId);
+            const itemId = assignUniqueItemIdForSheet(sheetUsedIds, baseItemId);
 
             items.push({
                 type: 'item',

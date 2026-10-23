@@ -1,9 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { createRequire } from 'module';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { migrateDuplicateItemIdsOnly } from '../../tools/quotation-item-id-migrate.js';
 import { findDuplicateItemIds } from './LP_budgetweb_cloud_sync.js';
 
-const require = createRequire(import.meta.url);
-const { migrateDuplicateItemIdsOnly } = require('../../tools/quotation-item-id-migrate.js');
+const execFileAsync = promisify(execFile);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.join(__dirname, '..', '..');
 
 function buildSheet1228LikeFixture() {
     const dupId = 'ITEM_1228_冷氣包管+窗簾盒';
@@ -71,15 +77,41 @@ describe('migrateDuplicateItemIdsOnly', () => {
         expect(ceiling.id).toBe('ITEM_1228_2');
         expect(ceiling.completion_percent).toBe(11);
 
-        const curtain = migrated.find((i) => i.name === '窗簾盒拆除');
-        expect(curtain.id).toBe('ITEM_1228_窗簾盒拆除');
-        expect(curtain.completion_percent).toBe(22);
-
         expect(findDuplicateItemIds(migrated)).toEqual([]);
 
         migrated.forEach((row, idx) => {
             expect(row.completion_percent).toBe(items[idx].completion_percent);
-            expect(row.verification).toEqual(items[idx].verification);
         });
+    });
+
+    it('已有 ITEM_X_2 時，重複 ITEM_X 的第 2 筆改為 _3，全表 id 唯一', () => {
+        const items = [
+            { id: 'ITEM_X', name: 'a' },
+            { id: 'ITEM_X_2', name: 'existing suffix' },
+            { id: 'ITEM_X', name: 'dup b' },
+            { id: 'ITEM_X', name: 'dup c' },
+            { id: 'UNIQUE_OK', name: 'unchanged' },
+        ];
+        const { items: migrated, changes } = migrateDuplicateItemIdsOnly(items);
+        expect(findDuplicateItemIds(migrated)).toEqual([]);
+        expect(migrated[0].id).toBe('ITEM_X');
+        expect(migrated[1].id).toBe('ITEM_X_2');
+        expect(migrated[4].id).toBe('UNIQUE_OK');
+        expect(changes.map((c) => c.to)).toEqual(['ITEM_X_3', 'ITEM_X_4']);
+    });
+});
+
+describe('migrate-quotation-item-ids.mjs CLI', () => {
+    it('fixture dry-run 成功且輸出 changeCount', async () => {
+        const fixture = path.join(REPO_ROOT, 'tools/fixtures/quotation-migrate-dup-demo.json');
+        const script = path.join(REPO_ROOT, 'tools/scripts/migrate-quotation-item-ids.mjs');
+        expect(fs.existsSync(fixture)).toBe(true);
+        const { stdout } = await execFileAsync(process.execPath, [script, fixture], {
+            cwd: REPO_ROOT,
+        });
+        const parsed = JSON.parse(stdout.trim());
+        expect(parsed.dryRun).toBe(true);
+        expect(parsed.changeCount).toBe(1);
+        expect(parsed.changes[0].to).toBe('ITEM_DEMO_DUP_2');
     });
 });

@@ -1,7 +1,37 @@
 /**
- * 僅對「同一 id 字串出現多次」的工項，從第 2 筆起補 _2、_3（第 1 筆 id 不變）。
- * 不剝除既有 id 的數字尾碼（避免 ITEM_1228_2 被誤改）。
+ * 僅對「同一 id 字串出現多次」的工項，從第 2 筆起補 _2、_3…（跳過已存在的 id）。
  */
+
+/**
+ * @param {Set<string>} usedIds
+ * @param {string} baseId
+ * @returns {string}
+ */
+export function claimUniqueItemIdForSheet(usedIds, baseId) {
+    const id = String(baseId);
+    if (!usedIds.has(id)) {
+        usedIds.add(id);
+        return id;
+    }
+    let n = 2;
+    while (usedIds.has(`${id}_${n}`)) n += 1;
+    const next = `${id}_${n}`;
+    usedIds.add(next);
+    return next;
+}
+
+/**
+ * @param {Set<string>} usedIds
+ * @param {string} baseId
+ * @returns {string}
+ */
+export function allocateDuplicateGroupSuffixId(usedIds, baseId) {
+    let n = 2;
+    while (usedIds.has(`${baseId}_${n}`)) n += 1;
+    const next = `${baseId}_${n}`;
+    usedIds.add(next);
+    return next;
+}
 
 /**
  * @param {Array<{ id?: string, name?: string, [key: string]: unknown }>} items
@@ -9,8 +39,12 @@
  */
 export function migrateDuplicateItemIdsOnly(items) {
     const list = (items || []).map((it) => ({ ...it }));
-    const positionsById = new Map();
+    const usedIds = new Set();
+    list.forEach((it) => {
+        if (it?.id != null && String(it.id).trim() !== '') usedIds.add(String(it.id));
+    });
 
+    const positionsById = new Map();
     list.forEach((it, index) => {
         const id = it?.id != null && String(it.id).trim() !== '' ? String(it.id) : null;
         if (!id) return;
@@ -23,8 +57,8 @@ export function migrateDuplicateItemIdsOnly(items) {
         if (indices.length <= 1) continue;
         for (let n = 1; n < indices.length; n++) {
             const index = indices[n];
-            const newId = `${id}_${n + 1}`;
-            const prev = list[index]?.id;
+            const prev = String(list[index]?.id);
+            const newId = allocateDuplicateGroupSuffixId(usedIds, id);
             if (prev !== newId) {
                 changes.push({
                     index,

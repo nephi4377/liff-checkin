@@ -1,13 +1,10 @@
 #!/usr/bin/env node
 /**
- * 一次性補 id：僅處理「真重複」的 id（同字串多筆），第 2 筆起 _2、_3。
+ * 一次性補 id：僅處理「真重複」的 id（同字串多筆），第 2 筆起 _2、_3（跳過已占用）。
  * 預設 dry-run；--write-out 寫檔（不連 Firebase）。執行正式雲端前須豪哥核准。
  */
 import fs from 'fs';
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
-const { migrateDuplicateItemIdsOnly } = require('../quotation-item-id-migrate.js');
+import { migrateDuplicateItemIdsOnly } from '../quotation-item-id-migrate.js';
 
 const args = process.argv.slice(2);
 const inPath = args[0];
