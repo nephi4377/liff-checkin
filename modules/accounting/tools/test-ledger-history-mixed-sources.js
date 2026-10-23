@@ -6,11 +6,12 @@ var fs = require('fs');
 var path = require('path');
 var assert = require('assert');
 
+var cacheBust = require('./test-cache-bust-helper');
 var root = path.join(__dirname, '..');
 var html = fs.readFileSync(path.join(root, 'ledger_history.html'), 'utf8');
 var api = fs.readFileSync(path.join(root, '../../shared/js/accounting_api.js'), 'utf8');
 
-assert(html.indexOf('accounting_api.js?v=106') >= 0, 'cache bust v=106');
+cacheBust.assertNumericCacheBust(html, cacheBust.RE.accountingApi, 'ledger_history accounting_api.js cache bust');
 assert(html.indexOf('histRecordKind') >= 0, 'record kind hidden input');
 assert(html.indexOf('value="ledger"') >= 0, 'forced ledger kind');
 assert(html.indexOf('data-kind="payment_request"') < 0, 'no payment_request tab');

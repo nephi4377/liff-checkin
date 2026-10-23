@@ -6,6 +6,7 @@
 var fs = require('fs');
 var path = require('path');
 
+var cacheBust = require('./test-cache-bust-helper');
 var root = __dirname;
 var shell = fs.readFileSync(path.join(root, '../../../shared/js/accounting_shell.js'), 'utf8');
 var index = fs.readFileSync(path.join(root, '../index.html'), 'utf8');
@@ -32,7 +33,7 @@ assert(shell.indexOf("if (frameEl.getAttribute('src') !== src) frameEl.setAttrib
 assert(shell.indexOf('bustQuickReviewListCache_') >= 0, 'busts quick_review list cache on remount');
 assert(shell.indexOf("removeItem('acct_quick_review_list_v2')") >= 0, 'clears acct_quick_review_list_v2');
 
-assert(index.indexOf('accounting_shell.js?v=11') >= 0, 'shell cache bust v=11');
+cacheBust.assertNumericCacheBust(index, cacheBust.RE.accountingShell, 'accounting index accounting_shell.js cache bust');
 
 assert(pay.indexOf("sessionStorage.removeItem('acct_quick_review_list_v2')") >= 0,
   'payment success clears quick_review list cache');
@@ -46,6 +47,6 @@ assert(iframeView.indexOf('about:blank') >= 0, 'IframeView blank-remount on src 
 assert(iframeView.indexOf('watch(') >= 0, 'IframeView watches src');
 assert(/:key="\(currentView\.src/.test(appJs) || appJs.indexOf(':key="(currentView.src') >= 0,
   'app.js keys IframeView by src+params');
-assert(hubIndex.indexOf('app.js?v=26.10.13.1') >= 0, 'hub app.js cache bust');
+cacheBust.assertCacheBustToken(hubIndex, cacheBust.RE.hubAppJs, 'hub index app.js cache bust');
 
 console.log('test-shell-iframe-remount: ok');
