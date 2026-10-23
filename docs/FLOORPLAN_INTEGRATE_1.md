@@ -4,8 +4,8 @@
 
 ## 獨立測試連結（jsDelivr，指向本分支）
 
-- **一鍵 3D 房間鳥瞰預覽**（FLOORPLAN-3D-ROOM-1，牆／門窗／地板／櫃體；釘選 commit 見本分支最新 SHA）：  
-  `…/modules/InteriorDesigned/LP_LayoutPlanner_3d_room_preview.html`
+- **一鍵 3D 房間鳥瞰預覽**（FLOORPLAN-3D-ROOM-1）：  
+  `https://cdn.jsdelivr.net/gh/nephi4377/liff-checkin@152aff53eadf0fd4fcf0a0355d4ad02af280b8c5/modules/InteriorDesigned/LP_LayoutPlanner_3d_room_preview.html`
 - **一鍵 3D 室內漫遊預覽**（釘選 commit，與驗收 SHA 一致）：  
   `https://cdn.jsdelivr.net/gh/nephi4377/liff-checkin@9bb08678377e041a4f767fb62366e8b9a00dd5e0/modules/InteriorDesigned/LP_LayoutPlanner_3d_walk_preview.html`
 - **3D 鳥瞰＋快照／預設角度**（`lp3d=orbit`）：  
