@@ -457,10 +457,10 @@ test.describe('LayoutPlanner E2E', () => {
     await page.waitForTimeout(700);
     const topSnap = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.getRoomAcceptanceSnapshot());
     expect(topSnap?.floorWallInnerDelta?.maxEdge ?? 99).toBeLessThanOrEqual(2);
-    const floorPx = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.verifyTopDownFloorMeetsWallPixels?.());
-    for (const dir of ['left', 'right', 'up', 'down']) {
-      expect(floorPx?.[dir]?.ok, `俯視地板→牆掃描 ${dir}`).toBe(true);
-    }
+    const screenshotGap = await page.evaluate(() => (
+      window.__LP3D_TEST_HOOKS__?.verifyTopDownScreenshotWallFloorNoGap?.()
+    ));
+    expect(screenshotGap?.ok, '俯視截圖牆內緣與地板間不得有 >2px 背景').toBe(true);
     const cabPx = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.sampleCabinetTopDownPixel?.());
     expect(cabPx?.isCabinetColor).toBe(true);
     expect(snapshot?.doorLeafMeshCount, '每扇門僅一塊門片 mesh').toBe(1);

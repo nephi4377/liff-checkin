@@ -153,6 +153,19 @@ function buildWallTopCapMesh(wall, material, capThicknessCm) {
     return mesh;
 }
 
+/** 俯視平面牆環（與地板同高，避免透視下牆頂 cap 與地板視差空隙） */
+function buildWallPlanRingMesh(wall, material) {
+    const shape = makeShapeFromRing(wall.outer, wall.inner);
+    const geo = new THREE.ShapeGeometry(shape);
+    geo.rotateX(-Math.PI / 2);
+    const mesh = new THREE.Mesh(geo, material);
+    mesh.position.y = 0.13;
+    mesh.renderOrder = 5;
+    mesh.visible = false;
+    mesh.userData.lp3dWallPlanRing = true;
+    return mesh;
+}
+
 /** 俯視填滿牆內圈（ShapeGeometry 避免 Extrude 內縮） */
 function buildFloorTopCoverMesh(ring, material) {
     const shape = makeShapeFromSingleRing(ring);
@@ -194,6 +207,7 @@ export function createLayoutPlanner3DViewer(options) {
     const labelGroup = { current: null };
     const wallMeshes = { current: [] };
     const wallCapMeshes = { current: [] };
+    const wallPlanRingMeshes = { current: [] };
     let wallCapMatStandard = null;
     let wallCapMatTopDown = null;
     const floorMeshes = { current: [] };
@@ -475,7 +489,7 @@ export function createLayoutPlanner3DViewer(options) {
             if (ring?.length >= 3) {
                 const slab = buildSlabMesh(ring, 0, defaults.FLOOR_THICKNESS_CM, floorMat);
                 slab.userData.lp3dFloor = true;
-                const coverRing = expandFloorRingToInnerFace(ring, 6.5);
+                const coverRing = expandFloorRingToInnerFace(ring, 1.2);
                 const topCover = buildFloorTopCoverMesh(coverRing, floorTopMat);
                 topCover.userData.lp3dFloorRing = ring;
                 const floorGroup = new THREE.Group();
@@ -534,6 +548,9 @@ export function createLayoutPlanner3DViewer(options) {
             cap.renderOrder = 1;
             wallCapMeshes.current.push(cap);
             root.add(cap);
+            const planRing = buildWallPlanRingMesh(wall, wallCapMatTopDown);
+            wallPlanRingMeshes.current.push(planRing);
+            root.add(planRing);
         }
 
         fixtureGroups.current = new Map();
@@ -615,11 +632,15 @@ export function createLayoutPlanner3DViewer(options) {
             mat.needsUpdate = true;
         }
         for (const cap of wallCapMeshes.current) {
-            cap.visible = topDown;
-            if (topDown && wallCapMatTopDown) {
-                cap.material = wallCapMatTopDown;
-            } else if (wallCapMatStandard) {
+            cap.visible = false;
+            if (wallCapMatStandard) {
                 cap.material = wallCapMatStandard;
+            }
+        }
+        for (const ring of wallPlanRingMeshes.current) {
+            ring.visible = topDown;
+            if (topDown && wallCapMatTopDown) {
+                ring.material = wallCapMatTopDown;
             }
         }
         applyCabinetLabelLayoutForView();
@@ -1041,9 +1062,9 @@ export function createLayoutPlanner3DViewer(options) {
         return Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
     }
 
-    function sampleRendererPixel(screenX, screenY) {
+    function sampleRendererPixel(screenX, screenY, skipRender = false) {
         if (!renderer || !camera) return null;
-        renderer.render(scene, camera);
+        if (!skipRender) renderer.render(scene, camera);
         const canvas = renderer.domElement;
         const gl = renderer.getContext();
         const dpr = renderer.getPixelRatio();
@@ -1052,6 +1073,108 @@ export function createLayoutPlanner3DViewer(options) {
         const pixels = new Uint8Array(4);
         gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
         return { r: pixels[0], g: pixels[1], b: pixels[2], a: pixels[3] };
+    }
+
+    function classifyTopDownScreenshotPixel(rgb) {
+        if (!rgb || rgb.a === 0) return 'none';
+        if (isBgLikeRgb(rgb)) return 'bg';
+        if (isFloorLikeRgb(rgb)) return 'floor';
+        if (isWallLikeRgb(rgb)) return 'wall';
+        return 'other';
+    }
+
+    function readScreenshotLineLabels(axis, fixedCoord) {
+        const w = renderer.domElement.clientWidth;
+        const h = renderer.domElement.clientHeight;
+        const labels = [];
+        if (axis === 'row') {
+            const sy = fixedCoord;
+            for (let sx = 0; sx < w; sx++) {
+                labels.push(classifyTopDownScreenshotPixel(sampleRendererPixel(sx, sy, true)));
+            }
+        } else {
+            const sx = fixedCoord;
+            for (let sy = 0; sy < h; sy++) {
+                labels.push(classifyTopDownScreenshotPixel(sampleRendererPixel(sx, sy, true)));
+            }
+        }
+        return labels;
+    }
+
+    function maxBgPixelsBetweenWallAndFloor(labels) {
+        let worst = 0;
+        const scan = (seq) => {
+            for (let i = 0; i < seq.length - 2; i++) {
+                if (seq[i] !== 'wall') continue;
+                let j = i + 1;
+                let bgRun = 0;
+                while (j < seq.length && seq[j] === 'bg') {
+                    bgRun += 1;
+                    j += 1;
+                }
+                if (bgRun === 0) continue;
+                let k = j;
+                while (k < seq.length && seq[k] === 'other') k += 1;
+                if (k < seq.length && seq[k] === 'floor') {
+                    worst = Math.max(worst, bgRun);
+                }
+            }
+        };
+        scan(labels);
+        scan([...labels].reverse());
+        return worst;
+    }
+
+    function verifyTopDownScreenshotWallFloorNoGap(options = {}) {
+        if (!isOrbitTopDownView() || !renderer) return null;
+        renderer.render(scene, camera);
+        const w = renderer.domElement.clientWidth;
+        const h = renderer.domElement.clientHeight;
+        const maxGapPx = options.maxGapPx ?? 2;
+        const rows = new Set();
+        const cols = new Set();
+        if (options.scanY != null) rows.add(Math.round(options.scanY));
+        const ring = floorMeshes.current[0]?.userData?.lp3dFloorRing
+            ?? lastDesc?.walls?.[0]?.inner;
+        if (ring?.length >= 3) {
+            const b = axisAlignedBoundsXZ(ring);
+            const cx = (b.minX + b.maxX) / 2;
+            const cz = (b.minZ + b.maxZ) / 2;
+            const center = projectWorldXZToScreen(cx, cz);
+            const floorScreen = floorMeshes.current[0]
+                ? projectWorldBoxToScreen(floorMeshes.current[0])
+                : null;
+            const midY = Math.round(center.sy);
+            const midX = Math.round(center.sx);
+            rows.add(midY);
+            cols.add(midX);
+            if (floorScreen?.pixelHeight) {
+                rows.add(Math.round(midY - floorScreen.pixelHeight * 0.12));
+                rows.add(Math.round(midY + floorScreen.pixelHeight * 0.12));
+            }
+            if (floorScreen?.pixelWidth) {
+                cols.add(Math.round(midX - floorScreen.pixelWidth * 0.12));
+                cols.add(Math.round(midX + floorScreen.pixelWidth * 0.12));
+            }
+        }
+        if (!rows.size) rows.add(Math.round(h * 0.546));
+        if (!cols.size) cols.add(Math.round(w * 0.5));
+        const results = { rows: {}, cols: {}, ok: true, maxGapPx };
+        for (const y of rows) {
+            if (y < 0 || y >= h) continue;
+            const labels = readScreenshotLineLabels('row', y);
+            const gap = maxBgPixelsBetweenWallAndFloor(labels);
+            results.rows[y] = { gap, ok: gap <= maxGapPx };
+            if (gap > maxGapPx) results.ok = false;
+        }
+        for (const x of cols) {
+            if (x < 0 || x >= w) continue;
+            const labels = readScreenshotLineLabels('col', x);
+            const gap = maxBgPixelsBetweenWallAndFloor(labels);
+            results.cols[x] = { gap, ok: gap <= maxGapPx };
+            if (gap > maxGapPx) results.ok = false;
+        }
+        return results;
     }
 
     function sampleCabinetFootprintPixel(cabGroup) {
@@ -1113,8 +1236,8 @@ export function createLayoutPlanner3DViewer(options) {
             wallCapsVisibleTopDown: Boolean(
                 viewMode === 'orbit'
                 && isOrbitTopDownView()
-                && wallCapMeshes.current.length > 0
-                && wallCapMeshes.current.every((m) => m.visible),
+                && wallPlanRingMeshes.current.length > 0
+                && wallPlanRingMeshes.current.every((m) => m.visible),
             ),
             wallsHiddenTopDown: Boolean(
                 viewMode === 'orbit'
@@ -1241,6 +1364,7 @@ export function createLayoutPlanner3DViewer(options) {
                 return sampleCabinetBodyTopDownPixel(cabGroup);
             },
             verifyTopDownFloorMeetsWallPixels: () => verifyTopDownFloorMeetsWallPixels(),
+            verifyTopDownScreenshotWallFloorNoGap: (options) => verifyTopDownScreenshotWallFloorNoGap(options),
             sampleScreenPixel: (screenX, screenY) => sampleRendererPixel(screenX, screenY),
             sampleWalkCenterWallPixels: () => {
                 if (viewMode !== 'walk' || !renderer) return null;
