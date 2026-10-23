@@ -11,7 +11,8 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
   <script src="../../shared/js/accounting_amount_formula.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=107"></script>
+  <script src="../../shared/js/ledger_entry_map.js?v=1"></script>
+  <script src="../../shared/js/accounting_api.js?v=108"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=7"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=20"></script>
@@ -210,7 +211,7 @@
         </div>
         <input type="hidden" id="srStatusScope" value="pending" />
         <button type="button" class="sr-mine-toggle" id="srMineToggle"
-          aria-pressed="false" title="選用：只顯示本人送出">
+          aria-pressed="false" title="選用：只顯示本人送出（權限 5 才可看全部）">
           <span>
             <span class="sr-mine-title">只看我送的（選用）</span>
             <span class="sr-mine-sub" id="srMineSub">關閉中：顯示區間內全部人的送出紀錄。</span>
@@ -354,20 +355,67 @@
         document.getElementById('srDateTo').value = to;
         document.getElementById('srDateFrom').value = addDaysIso(to, -(days - 1));
       }
+      function authSessionPerm() {
+        return Number((sessionRef && sessionRef.auth && sessionRef.auth.permission) || 0);
+      }
+
+      function canViewAllSubmitRecords() {
+        if (typeof LedgerEntryMap !== 'undefined') {
+          return LedgerEntryMap.canViewAllLedger(authSessionPerm());
+        }
+        if (typeof AccountingApi !== 'undefined' && AccountingApi.LEDGER_VIEW_ALL_MIN_PERMISSION) {
+          return authSessionPerm() >= AccountingApi.LEDGER_VIEW_ALL_MIN_PERMISSION;
+        }
+        return authSessionPerm() >= 5;
+      }
+
+      function readSubmitMineOnlyFlag() {
+        if (!canViewAllSubmitRecords()) return true;
+        return !!document.getElementById('srMineOnly').checked;
+      }
+
+      function syncSubmitScopeUi() {
+        var canAll = canViewAllSubmitRecords();
+        var toggle = document.getElementById('srMineToggle');
+        var box = document.getElementById('srMineOnly');
+        if (!canAll) {
+          if (box) box.checked = true;
+          if (toggle) toggle.classList.add('hidden');
+        } else if (toggle) {
+          toggle.classList.remove('hidden');
+        }
+        var hint = document.getElementById('pageModeHint');
+        if (hint && !canAll) {
+          hint.innerHTML =
+            '請款管線第 2 站：主職是<strong>修改已送出的送審資料</strong>。' +
+            '權限 5 以下<strong>只會看到本人送出的請款</strong>（列表依伺服器回傳）。' +
+            '可改：待審／退回／待匯；已匯款鎖定。收支查詢用「歷史記帳紀錄」。';
+        }
+        syncMineUi();
+      }
+
       function syncMineUi() {
-        var on = !!document.getElementById('srMineOnly').checked;
+        var on = readSubmitMineOnlyFlag();
         var btn = document.getElementById('srMineToggle');
         var state = document.getElementById('srMineState');
         var sub = document.getElementById('srMineSub');
-        if (btn) {
+        var canAll = canViewAllSubmitRecords();
+        if (btn && !canAll) {
+          btn.classList.add('hidden');
+        }
+        if (btn && canAll) {
           btn.classList.toggle('is-on', on);
           btn.setAttribute('aria-pressed', on ? 'true' : 'false');
         }
         if (state) state.textContent = on ? '開' : '關';
         if (sub) {
-          sub.textContent = on
-            ? '開啟中：只顯示登入帳號本人送出的請款。'
-            : '關閉中：顯示區間內全部人的送出紀錄。';
+          if (!canAll) {
+            sub.textContent = '僅顯示本人送出的請款（權限 5 才可看全部人）。';
+          } else {
+            sub.textContent = on
+              ? '開啟中：只顯示登入帳號本人送出的請款。'
+              : '關閉中：顯示區間內全部人的送出紀錄（權限 5）。';
+          }
         }
       }
       function syncScopeTabs() {
@@ -392,7 +440,7 @@
         var amountRaw = (document.getElementById('srAmount').value || '').trim();
         var filters = {
           limit: 50,
-          mine_only: !!document.getElementById('srMineOnly').checked,
+          mine_only: readSubmitMineOnlyFlag(),
           date_from: dateFrom,
           date_to: dateTo,
           record_kind: 'payment_request',
@@ -784,7 +832,7 @@
           document.getElementById('srStatusScope').value = 'pending';
           document.getElementById('srMineOnly').checked = false;
           syncScopeTabs();
-          syncMineUi();
+          syncSubmitScopeUi();
           loadList();
         });
         document.getElementById('srExpand90Btn').addEventListener('click', function () {
@@ -797,7 +845,6 @@
       }
       (async function boot() {
         applyDates(DEFAULT_DAYS);
-        syncMineUi();
         syncScopeTabs();
         bindFilters();
         await AccountingBoot.run({
@@ -806,6 +853,7 @@
           preloadBootstrap: false,
           onReady: async function (sess) {
             sessionRef = sess;
+            syncSubmitScopeUi();
             await loadList();
           }
         });
