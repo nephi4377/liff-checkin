@@ -5,6 +5,7 @@ import {
     applyRemoteProgressByExactId,
     shouldSuggestCancelRemoteInflation,
     isLegacyRowNumberQuotationItemId,
+    formatSyncDiffForConfirm,
 } from './LP_budgetweb_cloud_sync.js';
 
 /** 合成資料（非 778 真實內容） */
@@ -35,6 +36,17 @@ describe('legacy quotation id remap (778-style synthetic)', () => {
     it('isLegacyRowNumberQuotationItemId', () => {
         expect(isLegacyRowNumberQuotationItemId('ITEM_6')).toBe(true);
         expect(isLegacyRowNumberQuotationItemId('ITEM_0818_6')).toBe(false);
+    });
+
+    it('778 合成：100 筆舊 ITEM_<列號> → 合併後仍 100 筆（不膨脹）', () => {
+        const local = synthLocal0818(100);
+        const remote = synthLegacyRowIds(100);
+        const prep = prepareCloudQuotationSync({ localItems: local, remoteContext: { items: remote } });
+        expect(prep.blockingErrors).toEqual([]);
+        expect(prep.mergedItems).toHaveLength(100);
+        expect(prep.diff.preservedRemoteOnly).toHaveLength(0);
+        expect(prep.diff.removed).toHaveLength(0);
+        expect(new Set(prep.mergedItems.map((i) => i.id)).size).toBe(100);
     });
 
     it('舊 ITEM_<列號> 對應新 ITEM_0818_*，合併筆數不膨脹', () => {
@@ -84,6 +96,21 @@ describe('legacy quotation id remap (778-style synthetic)', () => {
     it('shouldSuggestCancelRemoteInflation >10%', () => {
         expect(shouldSuggestCancelRemoteInflation(100, 11)).toBe(true);
         expect(shouldSuggestCancelRemoteInflation(100, 10)).toBe(false);
+    });
+
+    it('確認文案含舊版對應與膨脹醒目警告', () => {
+        const local = synthLocal0818(10);
+        const remote = [
+            ...synthLegacyRowIds(10),
+            { id: 'CLOUD_ONLY_1', name: '僅雲端新 id', spec: 'x', unit: '式', sheet_source: '0818' },
+            { id: 'CLOUD_ONLY_2', name: '僅雲端新 id2', spec: 'y', unit: '式', sheet_source: '0818' },
+        ];
+        const prep = prepareCloudQuotationSync({ localItems: local, remoteContext: { items: remote } });
+        expect(prep.blockingErrors).toEqual([]);
+        expect(prep.diff.suggestCancelInflation).toBe(true);
+        const text = formatSyncDiffForConfirm(prep.diff);
+        expect(text).toMatch(/強烈建議按「取消」/);
+        expect(text).toMatch(/舊版 ITEM_<列號>/);
     });
 
     it('多一筆無法對應的舊版 id → blocking', () => {

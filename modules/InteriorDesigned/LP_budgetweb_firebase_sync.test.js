@@ -177,6 +177,89 @@ describe('runBudgetWebQuotationCloudSync', () => {
         expect(update).not.toHaveBeenCalled();
     });
 
+    it('雲端獨有 >10% 時第二次確認拒絕則不寫入', async () => {
+        const update = vi.fn();
+        const local = Array.from({ length: 10 }, (_, i) => ({
+            id: `ITEM_0818_${i + 1}`,
+            name: `工${i}`,
+            spec: `s${i}`,
+            unit: '式',
+            sheet_source: '0818',
+        }));
+        const remoteItems = [
+            ...Array.from({ length: 10 }, (_, i) => ({
+                id: `ITEM_${i + 1}`,
+                name: `工${i}`,
+                spec: `s${i}`,
+                unit: '式',
+                sheet_source: '0818',
+            })),
+            { id: 'ONLY_A', name: '雲端A', spec: 'a', unit: '式' },
+            { id: 'ONLY_B', name: '雲端B', spec: 'b', unit: '式' },
+        ];
+        let confirmCalls = 0;
+        const result = await runBudgetWebQuotationCloudSync({
+            projectNo: 'P778',
+            localItems: local,
+            allowProductionSync: true,
+            localIdDuplicateCheck: runLocalQuotationIdDuplicateCheck(local),
+            readQuotationSnapshot: async () => ({
+                exists: () => true,
+                val: () => ({
+                    last_updated: 't0',
+                    context: { items: remoteItems, total_summary: { siteName: 'x' } },
+                }),
+            }),
+            updateQuotation: update,
+            confirmFn: () => {
+                confirmCalls += 1;
+                return confirmCalls === 1;
+            },
+            confirmInflationFn: () => false,
+        });
+        expect(result.ok).toBe(false);
+        expect(result.reason).toBe('inflation_warning_declined');
+        expect(update).not.toHaveBeenCalled();
+    });
+
+    it('100 筆舊 id 對應後寫入 payload 仍 100 筆', async () => {
+        const update = vi.fn();
+        const n = 100;
+        const local = Array.from({ length: n }, (_, i) => ({
+            id: `ITEM_0818_${i + 1}`,
+            name: `合成工項${i + 1}`,
+            spec: `規格${i + 1}`,
+            unit: '式',
+            sheet_source: '0818',
+        }));
+        const remoteItems = Array.from({ length: n }, (_, i) => ({
+            id: `ITEM_${i + 1}`,
+            name: `合成工項${i + 1}`,
+            spec: `規格${i + 1}`,
+            unit: '式',
+            sheet_source: '0818',
+            completion_percent: 0,
+        }));
+        const result = await runBudgetWebQuotationCloudSync({
+            projectNo: 'P100',
+            localItems: local,
+            allowProductionSync: true,
+            localIdDuplicateCheck: runLocalQuotationIdDuplicateCheck(local),
+            readQuotationSnapshot: async () => ({
+                exists: () => true,
+                val: () => ({
+                    last_updated: 't0',
+                    context: { items: remoteItems, total_summary: { siteName: 'x' } },
+                }),
+            }),
+            updateQuotation: update,
+            confirmFn: () => true,
+        });
+        expect(result.ok).toBe(true);
+        const items = update.mock.calls[0][1]['context/items'];
+        expect(items).toHaveLength(100);
+    });
+
     it('本地 id 重複時未通過檢查，不讀雲端', async () => {
         const read = vi.fn();
         const update = vi.fn();

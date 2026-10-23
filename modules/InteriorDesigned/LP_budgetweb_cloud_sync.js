@@ -503,6 +503,11 @@ export function prepareCloudQuotationSync(input) {
     const mergedItems = mergeQuotationItemsById(localItems, legacyRemap.effectiveRemote);
     const diff = computeQuotationSyncDiff(remoteItems, localItems, mergedItems);
     diff.legacyRemap = legacyRemap;
+    if (legacyRemap.active && legacyRemap.matched?.length) {
+        const legacyIdsRemapped = new Set(legacyRemap.matched.map((m) => String(m.legacyId)));
+        diff.removed = diff.removed.filter((r) => !legacyIdsRemapped.has(String(r.id)));
+        diff.hasChanges = diff.added.length > 0 || diff.removed.length > 0 || diff.changed.length > 0;
+    }
     return { mergedItems, diff, blockingErrors: [], legacyRemap };
 }
 
