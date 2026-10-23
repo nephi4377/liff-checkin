@@ -932,16 +932,28 @@
         const params = new URLSearchParams(window.location.search);
         const preview = params.get('lpPreview') === '1';
         const box = document.getElementById('lpImportBox');
+        const statusEl = document.getElementById('lpImportStatus');
         if (!preview || !box) return;
         box.style.display = 'block';
 
-        const {
-            mergeLayoutPlannerDraftIntoProcessedData,
-            validateLayoutPlannerQuoteDraft,
-        } = await import('../modules/InteriorDesigned/LP_budgetweb_import_merge.js');
+        let mergeLayoutPlannerDraftIntoProcessedData;
+        let validateLayoutPlannerQuoteDraft;
+        try {
+            const mergeModUrl = new URL(
+                '../modules/InteriorDesigned/LP_budgetweb_import_merge.js',
+                window.location.href,
+            ).href;
+            const mod = await import(mergeModUrl);
+            mergeLayoutPlannerDraftIntoProcessedData = mod.mergeLayoutPlannerDraftIntoProcessedData;
+            validateLayoutPlannerQuoteDraft = mod.validateLayoutPlannerQuoteDraft;
+            window.__lpBudgetWebImportReady = true;
+        } catch (err) {
+            console.error('[LP import]', err);
+            if (statusEl) statusEl.textContent = `❌ 無法載入匯入模組：${err.message}`;
+            return;
+        }
 
         const fileInput = document.getElementById('lpDraftFileInput');
-        const statusEl = document.getElementById('lpImportStatus');
         const mergeBtn = document.getElementById('lpImportMergeBtn');
 
         fileInput.addEventListener('change', async (e) => {

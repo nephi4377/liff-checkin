@@ -84,8 +84,12 @@ test.describe('Githack quote smoke', () => {
         await passGithackInterstitialIfPresent(page);
         await expect(page.locator('#lpImportBox')).toBeVisible({ timeout: 30_000 });
 
+        await page.waitForFunction(() => window.__lpBudgetWebImportReady === true, null, {
+            timeout: 60_000,
+        });
         await page.locator('#lpDraftFileInput').setInputFiles(jsonPath);
-        await expect(page.locator('#lpImportMergeBtn')).toBeEnabled({ timeout: 15_000 });
+        await expect(page.locator('#lpImportStatus')).toContainText('已讀取', { timeout: 20_000 });
+        await expect(page.locator('#lpImportMergeBtn')).toBeEnabled({ timeout: 5_000 });
         await page.locator('#lpImportMergeBtn').click();
 
         await expect(page.locator('#previewArea')).toBeVisible({ timeout: 20_000 });
