@@ -163,6 +163,18 @@ function buildWallTopCapMesh(wall, material, capThicknessCm) {
     return mesh;
 }
 
+/** 俯視隔間牆（薄板，與外牆 plan ring 同層） */
+function buildPartitionPlanMesh(obb, material) {
+    const len = obb.halfW * 2;
+    const thick = obb.halfD * 2;
+    const geo = new THREE.BoxGeometry(len, 0.4, thick);
+    const mesh = new THREE.Mesh(geo, material);
+    mesh.position.set(obb.cx, 0.2, obb.cz);
+    mesh.rotation.y = -Math.atan2(obb.sin, obb.cos);
+    mesh.userData.lp3dPartitionPlan = true;
+    return mesh;
+}
+
 /** 俯視平面牆環（與地板同高，避免透視下牆頂 cap 與地板視差空隙） */
 function buildWallPlanRingMesh(wall, material) {
     const shape = makeShapeFromRing(wall.outer, wall.inner);
@@ -245,7 +257,10 @@ export function createLayoutPlanner3DViewer(options) {
     const presetSelect = overlayEl?.querySelector('#lp-3d-preset-select');
     const btnSavePng = overlayEl?.querySelector('#lp-3d-btn-save-png');
 
+    let lastViewerHint = '';
+
     function setHint(text) {
+        lastViewerHint = text;
         if (hintEl) hintEl.textContent = text;
     }
 
@@ -591,10 +606,14 @@ export function createLayoutPlanner3DViewer(options) {
             const geo = new THREE.BoxGeometry(segLen, partitionHeight, thick);
             const mesh = new THREE.Mesh(geo, wallMat);
             mesh.position.set(obb.cx, partitionHeight / 2, obb.cz);
-            mesh.rotation.y = Math.atan2(obb.sin, obb.cos);
+            mesh.rotation.y = -Math.atan2(obb.sin, obb.cos);
             mesh.userData.lp3dPartitionWall = true;
             wallMeshes.current.push(mesh);
             root.add(mesh);
+            const planMat = wallCapMatTopDown || wallCapMatStandard || wallMat;
+            const planMesh = buildPartitionPlanMesh(obb, planMat);
+            wallPlanRingMeshes.current.push(planMesh);
+            root.add(planMesh);
         }
 
         fixtureGroups.current = new Map();
@@ -1535,6 +1554,9 @@ export function createLayoutPlanner3DViewer(options) {
             };
         },
         rebuild,
+        getUserHint() {
+            return lastViewerHint;
+        },
         setViewMode(mode) {
             viewMode = mode === 'walk' ? 'walk' : 'orbit';
             applyViewMode();

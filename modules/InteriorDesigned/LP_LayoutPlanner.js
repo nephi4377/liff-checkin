@@ -4393,13 +4393,18 @@ function initLayoutPlanner3D() {
                 viewer.rebuild();
             } catch (err) {
                 console.error('[LP 3D]', err);
+                const webglHint = lp3dViewer?.getUserHint?.()
+                    || document.getElementById('lp-3d-hint')?.textContent?.trim();
                 resetLp3dViewerAfterLoadFailure();
                 lp3dMode = false;
                 document.body.classList.remove('lp-3d-mode');
                 if (overlay) overlay.setAttribute('aria-hidden', 'true');
                 toggleBtn.textContent = '🧊 3D 檢視';
                 toggleBtn.title = '將牆體與櫃體以 3D 預覽（不影響 2D 編輯）';
-                showGlobalNotification('3D 模組載入失敗，平面編輯仍可使用', 6000, 'error');
+                const notifyMsg = (webglHint && /WebGL/i.test(webglHint))
+                    ? webglHint
+                    : '3D 模組載入失敗，平面編輯仍可使用';
+                showGlobalNotification(notifyMsg, 6000, 'error');
             } finally {
                 lp3dOpening = false;
                 toggleBtn.disabled = false;

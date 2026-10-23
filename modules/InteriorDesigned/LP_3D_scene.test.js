@@ -36,6 +36,8 @@ describe('classifyPlacedCabinet3DKind', () => {
     it('系統櫃名稱含「門」字不誤判為門片（SWEEP-2 B4）', () => {
         expect(classifyPlacedCabinet3DKind({ data: { name: '開門高衣櫃', group: '系統櫃' } })).toBe('cabinet');
         expect(classifyPlacedCabinet3DKind({ data: { name: '雙開門矮櫃', group: '木作工程' } })).toBe('cabinet');
+        expect(classifyPlacedCabinet3DKind({ data: { name: '開門高衣櫃', group: '門片' } })).toBe('cabinet');
+        expect(classifyPlacedCabinet3DKind({ data: { name: '窗邊櫃', group: '門窗工程' } })).toBe('cabinet');
     });
 });
 

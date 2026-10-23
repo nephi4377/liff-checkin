@@ -115,10 +115,24 @@ export function resolveOpeningCutterCenterOnWall(wall, op) {
         const tMid = (span.t0 + span.t1) / 2;
         const cx = a.x + edx * tMid;
         const cz = a.z + edz * tMid;
-        const d2 = (cx - op.centerX) ** 2 + (cz - op.centerZ) ** 2;
+        const oa = wall.outer?.[i] ?? wall.outer?.[0];
+        let nx = (oa?.x ?? a.x) - a.x;
+        let nz = (oa?.z ?? a.z) - a.z;
+        const nLen = Math.hypot(nx, nz);
+        if (nLen > 1e-6) {
+            nx /= nLen;
+            nz /= nLen;
+        } else {
+            nx = -edz / edgeLen;
+            nz = edx / edgeLen;
+        }
+        const inset = wallThicknessCm / 2;
+        const cutX = cx + nx * inset;
+        const cutZ = cz + nz * inset;
+        const d2 = (cutX - op.centerX) ** 2 + (cutZ - op.centerZ) ** 2;
         if (d2 < bestDist2) {
             bestDist2 = d2;
-            best = { centerX: cx, centerZ: cz };
+            best = { centerX: cutX, centerZ: cutZ };
         }
     }
     return best;
