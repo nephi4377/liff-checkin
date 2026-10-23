@@ -10,8 +10,8 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=7" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/ledger_entry_map.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=110"></script>
+  <script src="../../shared/js/ledger_entry_map.js?v=5"></script>
+  <script src="../../shared/js/accounting_api.js?v=111"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=20"></script>
   <script src="../../shared/js/accounting_ui.js?v=33"></script>
@@ -333,7 +333,7 @@
     <p class="nav"><a class="acct-nav-back" href="index.html">← 會計功能選單</a><span class="acct-nav-back"> · </span><a href="submit_records.html" id="navSubmitRecordsLink">送出紀錄</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub" id="pageModeHint">權限 ≥3 可查區間內<strong>收支登錄</strong>；列表依伺服器回傳（非本人僅見自己記的帳）。權限 5 可看全部並審核疑重。本人或權限 5 可改帳／作廢；作廢列仍可看、不計入合計。預設近 30 天。</p>
+    <p class="sub" id="pageModeHint">權限 ≥1 可查<strong>自己記的收支登錄</strong>（列表依伺服器回傳）。權限 5 可看全部並審核疑重。本人或權限 5 可改帳／作廢；作廢列仍可看、不計入合計。預設近 30 天。</p>
 
     <div class="card" id="historyFiltersCard">
       <div class="hist-head">
@@ -573,9 +573,7 @@
             voidLabel += ' ' + String(detail.voided_at).replace('T', ' ').slice(0, 16);
           }
           rows.splice(1, 0, ['狀態', voidLabel]);
-          if (detail.voided_by) {
-            rows.splice(2, 0, ['作廢人', detail.voided_by]);
-          }
+          rows.splice(2, 0, ['作廢人', LedgerEntryMap.voidedByDisplay(detail)]);
           if (detail.void_reason) {
             rows.splice(3, 0, ['作廢原因', detail.void_reason]);
           }
@@ -594,8 +592,7 @@
           }
         }
         if (!isPay && typeof LedgerEntryMap !== 'undefined') {
-          var recId = LedgerEntryMap.recorderUserId(detail);
-          if (recId) rows.push(['記帳人 ID', recId]);
+          rows.push(['記帳人', LedgerEntryMap.recorderDisplay(detail)]);
         }
         if (detail.stores && detail.stores.length) {
           rows.push(['店別', detail.stores.map(function (s) {
@@ -677,7 +674,7 @@
         if (row) row.classList.toggle('hidden', !canAll);
         if (!hint) return;
         if (!canAll) {
-          var base = '權限 3 起可查<strong>自己記的帳</strong>（列表依伺服器回傳）。可用廠商名／金額篩選；本人可改帳／作廢。權限 5 可看全部人。預設近 30 天。';
+          var base = '權限 ≥1 可查<strong>自己記的帳</strong>（列表依伺服器回傳）。可用廠商名／金額篩選；本人可改帳／作廢。權限 5 可看全部人。預設近 30 天。';
           if (hubPermissionAheadOfAuth()) {
             base += ' <span class="hint">權限更新中，請重新整理</span>';
           }
@@ -891,6 +888,7 @@
                   void_reason: data.void_reason || (data.item && data.item.void_reason) || reason || '',
                   voided_at: data.voided_at || (data.item && data.item.voided_at) || '',
                   voided_by: data.voided_by || (data.item && data.item.voided_by) || '',
+                  voided_by_name: data.voided_by_name || (data.item && data.item.voided_by_name) || '',
                   can_void: false,
                   can_edit: false
                 });
@@ -1724,8 +1722,8 @@
         syncRecordKindTabs();
         bindFilters();
         await AccountingBoot.run({
-          minPermission: AccountingApi.SUPERVISOR_MIN_PERMISSION,
-          deniedMsg: '歷史記帳紀錄需主管權限（≥3）',
+          minPermission: AccountingApi.LEDGER_MIN_VIEW_PERMISSION,
+          deniedMsg: AccountingApi.LEDGER_VIEW_DENIED_MSG,
           preloadBootstrap: false,
           onReady: async function (sess) {
             sessionRef = sess;

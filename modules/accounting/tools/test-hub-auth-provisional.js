@@ -39,7 +39,8 @@ assert(op && op.userId.indexOf('U6e5d') === 0, 'uid from query');
 assert(op.permission === 3, 'permission 3');
 assert(op.hubLiffId.indexOf('2007974938') === 0, 'hub_liff_id');
 assert(canProvisional(op, 0), 'index minPermission 0');
-assert(canProvisional(op, 3), 'ledger_history minPermission 3');
+assert(canProvisional(op, 1), 'ledger_history minPermission 1');
+assert(canProvisional(Object.assign({}, op, { permission: 2 }), 1), 'perm2 can open ledger');
 assert(!canProvisional(op, 4), 'finance minPermission 4 blocked');
 
 var noHub = peekFromUrl('uid=Uabc&name=X&permission=3');
