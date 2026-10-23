@@ -109,7 +109,7 @@ describe('runBudgetWebQuotationCloudSync', () => {
         expect(update).toHaveBeenCalledTimes(1);
     });
 
-    it('寫回前重讀發現雲端變動則中止', async () => {
+    it('寫回前重讀發現 last_updated 變動則中止', async () => {
         const update = vi.fn();
         const alerts = [];
         const changed = {
@@ -127,6 +127,41 @@ describe('runBudgetWebQuotationCloudSync', () => {
         expect(result.reason).toBe('remote_changed_since_baseline');
         expect(update).not.toHaveBeenCalled();
         expect(alerts[0]).toMatch(/同步已中止/);
+    });
+
+    function secondReadSameTimestamp(patchItems) {
+        return {
+            ...baseRemote,
+            last_updated: baseRemote.last_updated,
+            context: {
+                ...baseRemote.context,
+                items: patchItems,
+            },
+        };
+    }
+
+    it.each([
+        ['名稱', [{ id: 'R1', name: '工項已改名', qty: '1', unit: '式', completion_percent: 5 }]],
+        ['單價', [{ id: 'R1', name: '工項', qty: '1', unit: '式', price: '999', completion_percent: 5 }]],
+        ['進度', [{ id: 'R1', name: '工項', qty: '1', unit: '式', completion_percent: 88 }]],
+        [
+            '筆數',
+            [
+                { id: 'R1', name: '工項', qty: '1', unit: '式', completion_percent: 5 },
+                { id: 'R2', name: '新增', qty: '1', unit: '式' },
+            ],
+        ],
+    ])('寫回前重讀僅雲端工項%s變動（last_updated 相同）則中止', async (_label, items) => {
+        const update = vi.fn();
+        const result = await runBudgetWebQuotationCloudSync(
+            makeSyncOpts({
+                updateQuotation: update,
+                remoteOnSecondRead: secondReadSameTimestamp(items),
+            }),
+        );
+        expect(result.ok).toBe(false);
+        expect(result.reason).toBe('remote_changed_since_baseline');
+        expect(update).not.toHaveBeenCalled();
     });
 
     it('lpPreview 模式禁止正式同步', async () => {

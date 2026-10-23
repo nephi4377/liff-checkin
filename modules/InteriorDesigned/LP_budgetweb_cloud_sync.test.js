@@ -98,16 +98,43 @@ describe('LP_budgetweb_cloud_sync', () => {
         expect(bad.duplicateIds).toEqual(['A']);
     });
 
-    it('remote baseline 進度指紋變動', () => {
-        const baseline = buildRemoteQuotationSyncBaseline({
+    it('remote baseline 內容 hash：進度／名稱／單價／筆數變動（last_updated 可相同）', () => {
+        const base = {
             last_updated: 't1',
-            context: { items: [{ id: 'X', completion_percent: 0 }] },
-        });
-        const changed = {
-            last_updated: 't1',
-            context: { items: [{ id: 'X', completion_percent: 50 }] },
+            context: {
+                items: [{ id: 'X', name: 'A', qty: '1', unit: '式', price: '10', completion_percent: 0 }],
+            },
         };
-        expect(remoteQuotationSyncBaselineChanged(baseline, changed)).toBe(true);
+        const baseline = buildRemoteQuotationSyncBaseline(base);
+        expect(
+            remoteQuotationSyncBaselineChanged(baseline, {
+                last_updated: 't1',
+                context: { items: [{ id: 'X', name: 'B', qty: '1', unit: '式', price: '10', completion_percent: 0 }] },
+            }),
+        ).toBe(true);
+        expect(
+            remoteQuotationSyncBaselineChanged(baseline, {
+                last_updated: 't1',
+                context: { items: [{ id: 'X', name: 'A', qty: '1', unit: '式', price: '99', completion_percent: 0 }] },
+            }),
+        ).toBe(true);
+        expect(
+            remoteQuotationSyncBaselineChanged(baseline, {
+                last_updated: 't1',
+                context: { items: [{ id: 'X', name: 'A', qty: '1', unit: '式', price: '10', completion_percent: 50 }] },
+            }),
+        ).toBe(true);
+        expect(
+            remoteQuotationSyncBaselineChanged(baseline, {
+                last_updated: 't1',
+                context: {
+                    items: [
+                        { id: 'X', name: 'A', qty: '1', unit: '式', price: '10', completion_percent: 0 },
+                        { id: 'Y', name: 'new', qty: '1', unit: '式', price: '' },
+                    ],
+                },
+            }),
+        ).toBe(true);
     });
 
     it('確認視窗列出保留的雲端獨有列', () => {

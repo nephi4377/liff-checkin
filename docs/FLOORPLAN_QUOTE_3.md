@@ -14,4 +14,9 @@
 
 ## 預覽（raw.githack.com，路徑須含 `.html`）
 
-釘選 SHA 見 `LP_preview_hosts.js` 的 `PINNED_GITHACK_COMMIT`（與本分支最新 push 同步）。
+釘選 SHA：`3486dd384ccfb6abcee9d4f53bdf1a3a2e54de2c`（與 `LP_preview_hosts.js` 同步）
+
+- LayoutPlanner：  
+  https://raw.githack.com/nephi4377/liff-checkin/3486dd384ccfb6abcee9d4f53bdf1a3a2e54de2c/modules/InteriorDesigned/LP_LayoutPlanner.html?lpPreview=1
+- BudgetWeb：  
+  https://raw.githack.com/nephi4377/liff-checkin/3486dd384ccfb6abcee9d4f53bdf1a3a2e54de2c/tools/BudgetWeb_Standalone.html?lpPreview=1

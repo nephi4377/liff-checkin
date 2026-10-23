@@ -69,6 +69,53 @@ export function runLocalQuotationIdDuplicateCheck(localItems) {
  * 寫回前重讀比對：雲端 items 進度指紋 + last_updated
  * @param {object|null} existingData quotations/{projectNo} 節點
  */
+/** FNV-1a 32-bit（瀏覽器／Node 共用，無 crypto 依賴） */
+export function stableHashString(input) {
+    const s = String(input ?? '');
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+/**
+ * 寫回安全閘：單筆工項完整欄位（穩定排序前正規化）
+ * @param {object} it
+ */
+export function normalizeItemForRemoteSyncGuard(it) {
+    if (!it?.id || !normStr(it.id)) return null;
+    const v = it.verification?.is_ok;
+    return {
+        id: normStr(it.id),
+        name: normStr(it.name),
+        spec: normStr(it.spec),
+        qty: normStr(it.qty),
+        unit: normStr(it.unit),
+        price: normStr(it.price),
+        zone: normStr(it.zone),
+        category_tag: normStr(it.category_tag),
+        completion_percent:
+            it.completion_percent === undefined || it.completion_percent === null
+                ? null
+                : Number(it.completion_percent),
+        verification_is_ok: v === true ? true : v === false ? false : null,
+    };
+}
+
+/**
+ * 整份 items 內容 hash（id 排序後 JSON，含名稱／單價／數量／進度等）
+ * @param {Array<object>} items
+ */
+export function fingerprintRemoteItemsForSyncGuard(items) {
+    const normalized = (items || [])
+        .map(normalizeItemForRemoteSyncGuard)
+        .filter(Boolean)
+        .sort((a, b) => a.id.localeCompare(b.id, 'en'));
+    return stableHashString(JSON.stringify(normalized));
+}
+
 export function buildRemoteQuotationSyncBaseline(existingData) {
     const isNewQuotationNode = !existingData;
     const remoteContext = existingData?.context || null;
@@ -77,22 +124,8 @@ export function buildRemoteQuotationSyncBaseline(existingData) {
         isNewQuotationNode,
         lastUpdated: existingData?.last_updated ?? null,
         itemCount: remoteItems.length,
-        itemsFingerprint: fingerprintRemoteItemsForSyncGuard(remoteItems),
+        itemsContentHash: fingerprintRemoteItemsForSyncGuard(remoteItems),
     };
-}
-
-export function fingerprintRemoteItemsForSyncGuard(items) {
-    return (items || [])
-        .map((it) => {
-            const id = normStr(it?.id);
-            if (!id) return '';
-            const cp = it.completion_percent ?? '';
-            const v = it.verification?.is_ok === true ? '1' : it.verification?.is_ok === false ? '0' : '';
-            return `${id}:${cp}:${v}`;
-        })
-        .filter(Boolean)
-        .sort()
-        .join(';');
 }
 
 /**
@@ -110,14 +143,14 @@ export function remoteQuotationSyncBaselineChanged(baseline, freshExistingData) 
     const fresh = buildRemoteQuotationSyncBaseline(freshExistingData);
     return (
         fresh.lastUpdated !== baseline.lastUpdated
-        || fresh.itemsFingerprint !== baseline.itemsFingerprint
+        || fresh.itemsContentHash !== baseline.itemsContentHash
         || fresh.itemCount !== baseline.itemCount
     );
 }
 
 export function formatRemoteChangedAbortMessage() {
     return (
-        '雲端報價資料在您確認後已變更（時間戳或工項進度與初次讀取不同）。\n' +
+        '雲端報價資料在您確認後已變更（last_updated 或工項完整內容與開始同步時的快照不同）。\n' +
         '為避免覆蓋他人更新，同步已中止。\n' +
         '請重新載入雲端資料、再次檢查 id 後再同步。'
     );
