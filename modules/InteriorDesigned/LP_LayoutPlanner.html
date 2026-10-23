@@ -18,8 +18,11 @@
       }
     }
     </script>
-    <!-- [核心修正] 重新引入已分離的 JavaScript 主檔案，並設定為 module -->
-    <script type="module" src="./LP_LayoutPlanner.js"></script>
+    <!-- [核心修正] 主程式 module；?v= 釘選 commit，githack 預覽避免快取舊 JS -->
+    <script type="module">
+        import { getLayoutPlannerModuleUrl } from './LP_preview_hosts.js';
+        await import(getLayoutPlannerModuleUrl());
+    </script>
     <!-- [新增] JSZip 函式庫，用於打包多個檔案成 ZIP -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
@@ -1548,7 +1551,8 @@
             <p id="quote-export-draft-summary" class="text-sm text-gray-600 mb-3"></p>
             <p class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
                 僅匯出平面櫃體（名稱、類別、寬深高、數量、空間）。列總價預設為「待豪哥定價」；請下載 JSON 後至
-                <strong>BudgetWeb 預覽</strong>（<code>tools/BudgetWeb_Standalone.html?lpPreview=1</code>）合併至報價列表，確認後再同步雲端。
+                <strong>BudgetWeb 預覽</strong>（<a id="quote-export-budgetweb-link" href="#" target="_blank" rel="noopener"
+                    class="text-teal-800 underline">開啟合併頁</a>）合併至報價列表，確認後再同步雲端。
             </p>
             <p class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
                 此為 LayoutPlanner 自動計價轉出的<strong>草稿</strong>，欄位對齊 BudgetWeb 工項 JSON；請在 BudgetWeb 補案號後再同步雲端，勿直接當正式合約報價。
@@ -1573,6 +1577,8 @@
                     class="bg-green-700 text-white px-3 py-1 rounded text-sm hover:bg-green-800">下載 CSV</button>
                 <button id="quote-export-draft-json-btn" type="button"
                     class="bg-teal-700 text-white px-3 py-1 rounded text-sm hover:bg-teal-800">下載 JSON</button>
+                <button id="quote-export-open-budgetweb-btn" type="button"
+                    class="bg-indigo-700 text-white px-3 py-1 rounded text-sm hover:bg-indigo-800">開啟 BudgetWeb 預覽</button>
             </div>
         </div>
     </div>

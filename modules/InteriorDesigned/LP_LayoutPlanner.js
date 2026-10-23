@@ -30,6 +30,7 @@ import {
     listPricingDecisionsForOwner,
     PENDING_PRICE_LABEL,
 } from './LP_quote_pricing_rules.js';
+import { buildBudgetWebPreviewUrl } from './LP_preview_hosts.js';
 
 /** 開啟時於 console 輸出除錯訊息（元件載入、渲染、縮放、繪圖等） */
 const DEBUG = false;
@@ -3434,6 +3435,21 @@ function exportBudgetAsCSV() {
 /** 最近一次「匯出報價明細」草稿（供預覽 Modal 下載） */
 let lastQuoteExportDraft = null;
 
+function syncBudgetWebPreviewLinks() {
+    const url = buildBudgetWebPreviewUrl();
+    const link = document.getElementById('quote-export-budgetweb-link');
+    if (link) {
+        link.href = url;
+        link.title = url;
+    }
+    return url;
+}
+
+function openBudgetWebPreviewFromQuoteExport() {
+    const url = syncBudgetWebPreviewLinks();
+    window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 function renderQuoteExportDraftModal(draft) {
     const modal = document.getElementById('quote-export-draft-modal');
     const tbody = document.getElementById('quote-export-draft-tbody');
@@ -3460,6 +3476,7 @@ function renderQuoteExportDraftModal(draft) {
             : '列總價皆待豪哥定價';
         summary.textContent = `共 ${n} 筆櫃體草稿 · ${priceHint}（未含稅／未寫雲端）`;
     }
+    syncBudgetWebPreviewLinks();
     modal.style.display = 'flex';
 }
 
@@ -4425,6 +4442,8 @@ function bindEventListeners() {
     if (quoteDraftJsonBtn) quoteDraftJsonBtn.addEventListener('click', downloadQuoteExportDraftJson);
     const quoteDraftCsvBtn = document.getElementById('quote-export-draft-csv-btn');
     if (quoteDraftCsvBtn) quoteDraftCsvBtn.addEventListener('click', downloadQuoteExportDraftCsv);
+    const quoteOpenBwBtn = document.getElementById('quote-export-open-budgetweb-btn');
+    if (quoteOpenBwBtn) quoteOpenBwBtn.addEventListener('click', openBudgetWebPreviewFromQuoteExport);
     const budgetEditBtn = document.getElementById('budget-edit-toggle-btn');
     if (budgetEditBtn) budgetEditBtn.addEventListener('click', toggleBudgetEditMode);
     const budgetResetBtn = document.getElementById('budget-reset-auto-btn');
